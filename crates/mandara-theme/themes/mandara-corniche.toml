@@ -1,0 +1,22 @@
+id = "mandara-corniche"
+name = "Mandara Corniche"
+description = "Abyssal Mediterranean blue, sea-glass turquoise and sun-warmed limestone."
+signature = true
+
+[dark]
+surface = "#0a1520"
+surface_variant = "#12243a"
+on_surface = "#e4f0f4"
+primary = "#5fe0d4"
+secondary = "#e9c98b"
+tertiary = "#86b6ff"
+error = "#ff7d6e"
+
+[light]
+surface = "#f3f8f8"
+surface_variant = "#e1eded"
+on_surface = "#0c2130"
+primary = "#00757a"
+secondary = "#94650c"
+tertiary = "#2b60b4"
+error = "#b3261e"

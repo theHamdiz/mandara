@@ -1,0 +1,82 @@
+//! Mandara service actors. Actors run as tasks on one shared runtime
+//! ([`runtime`]) over shared D-Bus connections (dedicated threads remain
+//! only for blocking client libraries: PulseAudio, Wayland clipboard, audio
+//! output), and talk to the UI exclusively through channels. Commands may
+//! carry a reply channel so CLI callers receive structured results.
+
+pub mod accounts;
+pub mod app_install;
+pub mod app_uninstall;
+pub mod actor;
+pub mod app_scope;
+pub mod appearance;
+pub mod audio;
+pub mod backlight;
+pub mod bluetooth;
+pub mod bt_agent;
+pub mod calendar;
+pub mod clipboard;
+pub mod containers;
+pub mod cursors;
+pub mod ddc;
+pub mod drives;
+pub mod gamma;
+pub mod night_light;
+pub mod outputs;
+pub mod file_chooser;
+pub mod hooks;
+pub mod idle;
+pub mod keepassxc;
+pub mod keyring_prompt;
+pub mod location;
+pub mod lyrics;
+pub mod offline;
+pub mod sleep;
+pub mod logind;
+pub mod models;
+pub mod polkit;
+pub mod marketplace;
+pub mod mpris;
+pub mod network;
+pub mod notifications;
+pub mod notify_policy;
+pub mod privacy;
+pub mod reaper;
+pub mod sounds;
+pub mod leds;
+pub mod system_events;
+pub mod ocr;
+pub mod power;
+pub mod prayer;
+pub mod processes;
+pub mod screencopy;
+pub mod recording;
+pub mod runtime;
+pub mod screenshot;
+pub mod self_update;
+pub mod session;
+pub mod spectrum;
+pub mod systemd;
+pub mod toplevels;
+pub mod vpointer;
+pub mod tray;
+pub mod updates;
+pub mod wallhaven;
+pub mod weather;
+pub mod window_capture;
+pub mod authenticator;
+pub mod color_picker;
+pub mod net_speed;
+pub mod nm_admin;
+pub mod soundscapes;
+pub mod world_clock;
+
+pub use actor::ServiceHandle;
+pub use audio::{AudioCommand, AudioService, AudioState, spawn_audio_service};
+pub use clipboard::{ClipEntry, ClipboardCommand, ClipboardService, ClipboardState, spawn_clipboard_service};
+pub use bluetooth::{BluetoothCommand, BluetoothService, BluetoothState, spawn_bluetooth_service};
+pub use mpris::{MediaCommand, MediaService, MediaState, PlaybackStatus, spawn_media_service};
+pub use notifications::{Notification, NotificationCommand, NotificationService, NotificationsState, Urgency, spawn_notification_service};
+pub use network::{NetworkCommand, NetworkService, NetworkState, spawn_network_service};
+pub use session::SessionAction;
+pub use weather::{Condition, WeatherCommand, WeatherQuery, WeatherService, WeatherState, spawn_weather_service};

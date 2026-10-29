@@ -1,0 +1,43 @@
+[package]
+name = "mandara-delta"
+description = "Mandara's update format: bsdiff-style binary deltas (zstd-compressed) and the update.json release manifest, for the shell and its plugins"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+authors = ["Mandara Shell contributors"]
+repository = "https://github.com/theHamdiz/mandara"
+publish = false
+
+# Excluded from Mandara's workspace (its own root, own Cargo.lock): plugin
+# authors install the CLI in CI with `cargo install --locked --git
+# https://github.com/theHamdiz/mandara mandara-delta`, which then builds only
+# this crate (not GPUI). Mandara's xtask (patch creation) and
+# mandara-services (the updater, apply side only) use it as a path
+# dependency.
+
+[[bin]]
+name = "mandara-delta"
+required-features = ["create"]
+
+[features]
+default = ["create"]
+# Reading release tarballs (bin/mandara, plugin archives). The updater
+# already links tar + flate2, so this costs it nothing.
+archive = ["dep:tar", "dep:flate2"]
+# Patch creation (release tooling only): bidiff's suffix-array diff and the
+# reference zstd encoder at a high level. Never linked into the shell.
+create = ["archive", "dep:bidiff", "dep:zstd", "dep:toml"]
+
+[dependencies]
+# Apply side (linked into the shell): bipatch is bidiff's tiny pure-Rust
+# patch reader; ruzstd is a pure-Rust zstd decoder.
+bipatch = "1"
+ruzstd = "0.9"
+sha2 = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tar = { version = "0.4", optional = true }
+flate2 = { version = "1.1", optional = true }
+bidiff = { version = "1", optional = true }
+zstd = { version = "0.13", optional = true }
+toml = { version = "1.1", optional = true }

@@ -1,0 +1,115 @@
+# Continuous integration: build, test, lint and package checks on every push
+# and pull request. Releases are made by release.yml.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  test:
+    name: Build & test (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config cmake libxkbcommon-dev libwayland-dev libvulkan-dev \
+            libfontconfig-dev libfreetype-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.arch }}
+
+      - name: Build
+        run: cargo build --workspace --locked
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      # The installer is the binary itself (crates/mandara-install, whose
+      # unit tests run above): a dry run walks every step on the runner,
+      # changing nothing.
+      - name: Installer dry run
+        run: ./target/debug/mandara install --dry-run --no-deps --yes
+
+      # The default build uses the tuned system allocator (pure Rust); the C
+      # allocators (mimalloc, jemalloc — built with the cc toolchain above)
+      # stay selectable and must keep building.
+      - name: Alternative allocators
+        run: |
+          for f in alloc-mimalloc alloc-mimalloc-v2 alloc-jemalloc alloc-system; do
+            cargo check --locked -p mandara-app --no-default-features --features "$f"
+          done
+
+      - name: Clippy (report only)
+        run: cargo clippy --workspace --locked --all-targets
+        continue-on-error: true
+
+      - name: Component versions
+        run: cargo xtask status
+
+  musl:
+    name: Build (x86_64 musl, Alpine)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # The release builds musl tarballs the same way (see release.yml).
+      - name: Build in Alpine
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src -e RUSTFLAGS="-C target-feature=-crt-static" \
+            rust:1-alpine sh -euc '
+              apk add --no-cache build-base pkgconf cmake perl git \
+                wayland-dev libxkbcommon-dev vulkan-loader-dev fontconfig-dev freetype-dev linux-pam-dev
+              git config --global --add safe.directory /src
+              cargo build --locked -p mandara-app
+              ./target/debug/mandara --version
+            '
+
+  plugins:
+    name: Plugins (wasm32-wasip2)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            plugins/examples/moon-phase
+      - run: cargo xtask plugins --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugins
+          path: dist/*.mandara.tar.gz

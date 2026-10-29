@@ -1,0 +1,22 @@
+id = "qaitbay-citadel"
+name = "Qaitbay Citadel"
+description = "Sandstone ramparts at golden hour, harbour water and terracotta."
+signature = true
+
+[dark]
+surface = "#191511"
+surface_variant = "#29221a"
+on_surface = "#f4ece0"
+primary = "#f2b66c"
+secondary = "#72c4db"
+tertiary = "#e48f7b"
+error = "#ff7a6b"
+
+[light]
+surface = "#faf5ed"
+surface_variant = "#eee4d4"
+on_surface = "#2a2015"
+primary = "#985510"
+secondary = "#0b6c88"
+tertiary = "#a2442d"
+error = "#b3261e"

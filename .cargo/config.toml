@@ -1,0 +1,11 @@
+# Build aliases.
+#   cargo dist     → portable maximum-performance release build
+#   cargo native   → same, tuned for the build machine's CPU (target-cpu=native)
+#   cargo profiling → release code with symbols + line tables, for perf/samply
+#   cargo xtask    → dev and release tooling: status, bump, verify, dist, plugins,
+#                    checksums, resource-check, sandbox (docs/development.md)
+[alias]
+xtask = "run --quiet --package xtask --"
+dist = "build --release -p mandara-app"
+profiling = "build --profile profiling -p mandara-app"
+native = "build --profile release-native -p mandara-app --config build.rustflags=['-C','target-cpu=native']"

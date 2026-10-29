@@ -1,0 +1,55 @@
+[package]
+name = "mandara-ui"
+description = "Layer-shell GPUI views: MorphingBar, MediaIsland, NotificationCenter, Launcher, OSD, LockScreen, WallpaperCanvas"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+gpui.workspace = true
+# Font fallback chain for Arabic and other scripts (vendored patch 6).
+gpui_wgpu.workspace = true
+mandara-core.workspace = true
+mandara-theme.workspace = true
+mandara-config.workspace = true
+mandara-i18n.workspace = true
+notify.workspace = true
+mandara-services.workspace = true
+mandara-plugins.workspace = true
+mandara-compositor.workspace = true
+serde.workspace = true
+toml.workspace = true
+smallvec.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+rustix.workspace = true
+image.workspace = true
+# Video wallpapers: demux, AV1 decode, YUV conversion into wl_shm buffers.
+mandara-media.workspace = true
+# The wallpaper generator plugin's engine.
+mandara-wallgen.workspace = true
+tiny-skia.workspace = true
+nucleo-matcher.workspace = true
+pulldown-cmark.workspace = true
+dirs.workspace = true
+serde_json.workspace = true
+async-channel.workspace = true
+# Keyring dialog: password buffers are wiped on drop.
+zeroize = "1"
+ab_glyph = "0.2"
+fontdb = "0.23"
+# Lock screen: libpam is dlopen'ed at runtime; text painted with cosmic-text.
+libc.workspace = true
+cosmic-text = "0.19"
+# Software wallpaper renderer: bundled SVG icons (same resvg as GPUI).
+resvg = { version = "0.46", default-features = false }
+
+[dev-dependencies]
+tempfile.workspace = true
+# tests/video_wallpaper.rs encodes its AV1 clip in pure Rust.
+rav1e.workspace = true
+usvg = { version = "0.46", default-features = false }
+# examples/polkit_dialog.rs
+gpui_platform.workspace = true

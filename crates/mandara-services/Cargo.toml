@@ -1,0 +1,94 @@
+[package]
+name = "mandara-services"
+description = "zbus service actors for Mandara Shell: MPRIS2 media with album-art mood extraction, notifications, tray, power, network, polkit"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+mandara-theme.workspace = true
+mandara-config.workspace = true
+mandara-i18n.workspace = true
+zbus.workspace = true
+async-io.workspace = true
+# One shared executor for every service actor (see runtime.rs).
+async-executor = "1"
+async-lock = "3"
+blocking = "1"
+futures.workspace = true
+async-channel.workspace = true
+ureq.workspace = true
+pure-onnx-ocr.workspace = true
+image.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+parking_lot.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+wayland-client.workspace = true
+# `staging`: ext-idle-notify-v1 (idle.rs).
+wayland-protocols = { workspace = true, features = ["staging"] }
+wayland-protocols-wlr.workspace = true
+wayland-protocols-misc.workspace = true
+wl-clipboard-rs.workspace = true
+tiny-skia.workspace = true
+sha-crypt.workspace = true
+ab_glyph = "0.2"
+fontdb = "0.23"
+rav1e.workspace = true
+pulseaudio.workspace = true
+rustfft.workspace = true
+flate2.workspace = true
+tar.workspace = true
+toml.workspace = true
+rustix = { workspace = true, features = ["event"] }
+serde.workspace = true
+serde_json.workspace = true
+# world clock, net speed, authenticator, color picker plugins
+chrono-tz = "0.10"
+hmac = "0.12"
+sha1 = "0.10"
+sha2.workspace = true
+rqrr = { version = "0.11", default-features = false }
+palette.workspace = true
+libc.workspace = true
+# Notification rules; shell event sounds (pure-Rust Vorbis / WAV decoders).
+regex = "1"
+lewton = "0.10"
+hound = "3.5"
+# Self-update (self_update.rs): the delta format's apply side (pure-Rust
+# bipatch + ruzstd), semver ordering (already in the lock tree), and the
+# running build's version.
+mandara-delta.workspace = true
+semver.workspace = true
+mandara-version.workspace = true
+# Keyring prompter (keyring_prompt/exchange.rs): gcr's sx-aes-1 secret
+# exchange — DH (num-bigint-dig: zeroizable big integers), HKDF-SHA256,
+# AES-128-CBC. All already in the lock tree via gpui's oo7.
+num-bigint-dig = { version = "0.9", features = ["zeroize"] }
+hkdf = "0.12"
+aes = "0.8"
+cbc = { version = "0.1", features = ["zeroize"] }
+base64 = "0.22"
+zeroize = "1"
+getrandom = "0.3"
+# App installer (app_install/): AppImage type-2 payloads are squashfs
+# images, read in-process (never executed) with backhand. Its default
+# xz/zstd codecs link C libraries, so only its pure-Rust gzip and lz4
+# codecs are enabled and xz / zstd blocks are decoded by lzma-rs and
+# ruzstd (both pure Rust; ruzstd is already in the tree via
+# mandara-delta). lzma-rs and ruzstd also unpack .tar.xz / .tar.zst
+# portable apps; zip (deflate only, pure-Rust flate2 backend) reads .zip.
+backhand = { version = "0.25", default-features = false, features = ["gzip", "lz4"] }
+lzma-rs = "0.3"
+ruzstd = "0.9"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# Cursor themes (cursors/): Phinger ships its release as .tar.bz2; bzip2
+# 0.6 decodes with the pure-Rust libbz2-rs-sys by default.
+bzip2 = "0.6"
+
+[dev-dependencies]
+tempfile.workspace = true
+# Tests create real patches (bidiff + zstd), as the release does.
+mandara-delta = { workspace = true, features = ["create"] }

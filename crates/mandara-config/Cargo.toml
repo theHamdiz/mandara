@@ -1,0 +1,24 @@
+[package]
+name = "mandara-config"
+description = "Reactive TOML ConfigStore, file watcher and non-destructive compositor config emitters for Mandara Shell"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+toml.workspace = true
+notify.workspace = true
+dirs.workspace = true
+async-channel.workspace = true
+anyhow.workspace = true
+mandara-theme.workspace = true
+mandara-i18n.workspace = true
+tracing.workspace = true
+
+kdl.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+serde_json.workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "moon-phase"
+version = "0.1.0"
+edition = "2024"
+description = "Example Mandara plugin: the current moon phase"
+license = "GPL-3.0-or-later"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "0.57"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Mandara Studio
+Name[ar]=ستوديو المندرة
+GenericName=Desktop settings
+GenericName[ar]=إعدادات سطح المكتب
+Comment=Design and configure Mandara Shell, live
+Comment[ar]=صمّم واجهة المندرة واضبطها مباشرةً
+Exec=mandara studio
+Icon=org.mandara.studio
+Categories=Settings;DesktopSettings;
+Keywords=mandara;shell;theme;bar;wallpaper;settings;
+Keywords[ar]=المندرة;ستوديو;سمة;شريط;خلفية;إعدادات;
+StartupWMClass=org.mandara.studio

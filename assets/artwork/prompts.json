@@ -1,0 +1,55 @@
+{
+  "tool": "Built-in image_gen.imagegen; three independent generations; no reference images.",
+  "processing": "Original generated artwork cropped proportionally to 1600x900 and stored as RGB PNG. Covers add hand-authored SVG motifs, vector icon renders and unmodified panel interiors, then use NeuQuant 256-color optimization with Floyd–Steinberg dithering.",
+  "plugin_art": {
+    "method": "Hand-authored SVG glyphs in the existing 512-unit glass tile system. Reuses the three original generated backgrounds; no additional image generation. Icons and covers are rendered by cargo xtask art --compose.",
+    "privacy": {
+      "glyph": "Cream eye contour with a gold pupil; system green tile, shared light, rim and shoreline.",
+      "palette": "obsidian",
+      "motif": "watch",
+      "panel": null
+    },
+    "tray": {
+      "glyph": "Three status lozenges within a shallow enclosure; navigation blue tile.",
+      "palette": "corniche",
+      "motif": "peers",
+      "panel": null
+    },
+    "dock": {
+      "glyph": "Three app tiles with a raised center tile and a gold shelf; navigation blue tile.",
+      "palette": "corniche",
+      "motif": "shelf",
+      "panel": "docs/screenshots/dock.png; full 763x96 transparent capture, source corners preserved, no desktop content"
+    },
+    "app-installer": {
+      "glyph": "Open carton receiving a downward arrow; maintenance teal tile, distinct from the closed Containers cube.",
+      "palette": "obsidian",
+      "motif": "package",
+      "panel": null
+    },
+    "screen-time": {
+      "glyph": "Hourglass with gold sand; productivity rose tile, distinct from the round Clock and Pomodoro faces.",
+      "palette": "twilight",
+      "motif": "hourglass",
+      "panel": null
+    },
+    "mini-stats": {
+      "glyph": "Three compact vertical gauges; system green tile, distinct from the Resources chip.",
+      "palette": "obsidian",
+      "motif": "bars",
+      "panel": null,
+      "store": "Listed under More when uncategorized; included in Discover's first shelf."
+    },
+    "wallpaper-generator": {
+      "glyph": "Cream paintbrush with a gold ferrule and four-point sparkle; sea-glass teal tile from #40C8BD to #185D54. The diagonal brush silhouette has no wave or picture frame, distinguishing it from Soundscapes, Wallpaper and Media at small sizes.",
+      "palette": "corniche",
+      "motif": "aurora",
+      "panel": null,
+      "store": "Artwork prepared ahead of plugin registration. Represents procedural still and looping wallpaper generation without depicting an unavailable panel."
+    },
+    "excluded": "Compositor is hidden infrastructure and registers commands only; no marketplace art."
+  },
+  "corniche": "Use case: stylized-concept. Asset type: reusable art background for Mandara Shell plugin marketplace covers, horizontal 16:9. Create one original premium abstract Mediterranean chromatic-glass artwork: wide ribbons of translucent turquoise sea glass flow in a slow S-curve through deep midnight Mediterranean blue, a sliver of warm limestone gold refracted light near the lower-right edge. Evoke water at Alexandria's Corniche without buildings. Perspective almost flat, sculptural frosted glass, soft specular edges, gentle luminous caustics, exquisitely restrained, broad simple shapes and generous dark negative space on the left half for future typesetting. Most visual movement in the right half and bottom edge. Palette deep navy #103C63, sea-glass #40C8BD, limestone #FFE4AB. No text, no logos, no icons, no UI, no devices, no objects other than abstract flowing glass. Avoid generic neon cyberpunk, tiny details, grain and noise. Output single landscape background.",
+  "twilight": "Use case: stylized-concept. Asset type: reusable art background for Mandara Shell marketplace covers, single horizontal 16:9 image. Original abstract 'Montaza Twilight' composition, a broad crescent-like curl of softly frosted indigo and dusk-violet glass suspended against deep royal indigo, with one quiet coral-amber glow at the far right horizon like distant Pharos lighthouse light. Fine subtle specular rim follows the giant arc; luminous lavender translucency; the sense of evening above the Mediterranean. Broad simple forms, minimal, richly colored but restrained premium editorial art direction. Keep the left half mostly calm dark negative space for later typography. Visual weight on the right half and lower edge, no central object. Palette #211C46 #30265E #7063B5 #EE9182 #FFD58A. No text, no logos, no icons, no UI, no planets, no buildings, no grain, no noise, no tiny decorative objects. Single full-bleed landscape background.",
+  "obsidian": "Use case: stylized-concept. Asset type: reusable art background for Mandara Shell marketplace covers, single horizontal 16:9 image. Original abstract 'Mandara Obsidian' study: two very broad rounded sheets of translucent emerald optical glass sweep diagonally upward on the right, over warm near-black onyx. A fine soft gold caustic traces the curved edge like a beam of a coastal lighthouse reflecting through sea glass. Restrained sculptural luxury, clean geometry with rounded corners, shallow depth, subtly luminous edges, polished but not glossy chrome. Left half calm and dark for later typography, right half and bottom edge carry visual form. Palette onyx #101C23 emerald #185D54 #41A18D warm gold #D9B774. Broad soft forms, no fine texture or film grain. No text, no logos, no icons, no UI, no devices or other objects. Single full-bleed landscape image."
+}

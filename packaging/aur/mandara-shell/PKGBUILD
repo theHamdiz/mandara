@@ -1,0 +1,63 @@
+# Maintainer: Ahmad Hamdi <ahmad dot hamdi dot emara at gmail dot com>
+
+pkgname=mandara-shell
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="GPU-accelerated, design-first Wayland desktop shell for MangoWM, Niri and Hyprland, written in Rust"
+arch=('x86_64' 'aarch64')
+url="https://github.com/theHamdiz/mandara"
+license=('GPL-3.0-or-later')
+depends=('fontconfig' 'freetype2' 'gcc-libs' 'glibc' 'libxkbcommon' 'pam' 'vulkan-icd-loader' 'wayland')
+makedepends=('cargo' 'git' 'pkgconf')
+optdepends=('xdg-desktop-portal: open links and follow the system appearance'
+            'pipewire-pulse: sound controls, per-app volume and the visualizer'
+            'noto-fonts: Arabic and fallback glyphs'
+            'inter-font: the default interface font'
+            'greetd: Mandara Login as your login manager'
+            'accountsservice: Studio user management'
+            'udisks2: the Drives panel'
+            'upower: battery details'
+            'power-profiles-daemon: power profiles'
+            'geoclue: location for weather and prayer times'
+            'networkmanager: the Network panel'
+            'sound-theme-freedesktop: shell sounds')
+provides=('mandara')
+conflicts=('mandara' 'mandara-shell-bin' 'mandara-shell-git')
+backup=('etc/pam.d/mandara-lock')
+# Cargo does its own (fat) LTO; makepkg's -flto would also reach the C parts.
+options=('!lto')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('@SHA256_SOURCE@')
+
+prepare() {
+  cd "mandara-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "mandara-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  # Keep the build script from reading the AUR clone's git revision.
+  export GIT_CEILING_DIRECTORIES="$srcdir"
+  cargo build --frozen --release -p mandara-app
+}
+
+check() {
+  cd "mandara-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  export GIT_CEILING_DIRECTORIES="$srcdir"
+  cargo test --frozen --release -p mandara-config -p mandara-theme -p mandara-i18n
+}
+
+package() {
+  cd "mandara-$pkgver"
+  install -Dm755 target/release/mandara "$pkgdir/usr/bin/mandara"
+  install -Dm644 packaging/org.mandara.studio.desktop -t "$pkgdir/usr/share/applications/"
+  install -Dm644 packaging/org.mandara.studio.svg -t "$pkgdir/usr/share/icons/hicolor/scalable/apps/"
+  install -Dm644 packaging/pam/mandara-lock "$pkgdir/etc/pam.d/mandara-lock"
+  install -Dm644 README.md PLUGINS.md -t "$pkgdir/usr/share/doc/$pkgname/"
+  install -Dm644 LICENSE.md COPYRIGHT.md -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

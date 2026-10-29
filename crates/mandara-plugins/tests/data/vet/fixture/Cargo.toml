@@ -1,0 +1,23 @@
+[package]
+name = "vet-fixture"
+version = "0.1.0"
+edition = "2024"
+description = "Test fixture for mandara-plugins' compliance check (see ../README.md)"
+license = "GPL-3.0-or-later"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "0.57"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+panic = "abort"
+codegen-units = 1
+
+# Built on its own, outside the Mandara workspace.
+[workspace]

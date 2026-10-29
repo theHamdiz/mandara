@@ -1,0 +1,21 @@
+[package]
+name = "mandara-install"
+description = "Mandara Shell's installer (`mandara install` / `uninstall`): distribution package tables and the package-manager abstraction shared with Mandara Login"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+mandara-version.workspace = true
+# Release archives: SHA-256, SHA256SUMS lookups, update.json, tar.gz entries.
+mandara-delta.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+ureq.workspace = true
+libc.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+flate2.workspace = true
+tar.workspace = true

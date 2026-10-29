@@ -1,0 +1,93 @@
+[package]
+name = "mandara-app"
+description = "Mandara Shell — design-first Wayland desktop shell"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "mandara"
+path = "src/main.rs"
+
+[dependencies]
+gpui.workspace = true
+gpui_platform.workspace = true
+mandara-core.workspace = true
+mandara-config.workspace = true
+mandara-compositor.workspace = true
+mandara-version.workspace = true
+mandara-theme.workspace = true
+mandara-ui.workspace = true
+mandara-plugins.workspace = true
+mandara-studio.workspace = true
+mandara-greeter.workspace = true
+mandara-install.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+async-channel.workspace = true
+libc.workspace = true
+mandara-services.workspace = true
+# Global allocators (see src/alloc.rs); exactly one `alloc-*` feature.
+mimalloc = { version = "0.1.52", optional = true, default-features = false }
+tikv-jemallocator = { version = "0.7", optional = true, features = ["background_threads"] }
+
+[features]
+default = ["alloc-system-tuned"]
+alloc-mimalloc = ["dep:mimalloc"]
+alloc-mimalloc-v2 = ["dep:mimalloc", "mimalloc/v2"]
+alloc-jemalloc = ["dep:tikv-jemallocator"]
+alloc-system = []
+alloc-system-tuned = []
+
+# ── Distribution packages (built by the release workflow) ──────────────
+[package.metadata.deb]
+name = "mandara"
+maintainer = "Ahmad Hamdi <ahmad.hamdi.emara@gmail.com>"
+copyright = "2026, Ahmad Hamdi (theHamdiz) and contributors"
+license-file = ["../../LICENSE.md", "0"]
+extended-description = "A design-first Wayland desktop shell written in Rust: bar, dynamic island, launcher, sidebar, notifications, wallpaper engine, screenshots and recording, and Mandara Studio. First-class MangoWM, Niri and Hyprland support."
+section = "x11"
+priority = "optional"
+depends = "libc6, libxkbcommon0, libwayland-client0, libvulkan1, libfontconfig1, libfreetype6, libpam0g"
+recommends = "mesa-vulkan-drivers, xdg-desktop-portal, fonts-noto-core"
+suggests = "fonts-inter, fonts-noto-cjk, pipewire-pulse"
+assets = [
+    ["target/release/mandara", "usr/bin/", "755"],
+    ["../../packaging/org.mandara.studio.desktop", "usr/share/applications/", "644"],
+    ["../../packaging/org.mandara.studio.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+    ["../../README.md", "usr/share/doc/mandara/README.md", "644"],
+    ["../../PLUGINS.md", "usr/share/doc/mandara/PLUGINS.md", "644"],
+    ["../../COPYRIGHT.md", "usr/share/doc/mandara/COPYRIGHT.md", "644"],
+    ["../../packaging/pam/mandara-lock", "etc/pam.d/mandara-lock", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "mandara"
+summary = "Design-first Wayland desktop shell"
+assets = [
+    { source = "target/release/mandara", dest = "/usr/bin/mandara", mode = "755" },
+    { source = "../../packaging/org.mandara.studio.desktop", dest = "/usr/share/applications/org.mandara.studio.desktop", mode = "644" },
+    { source = "../../packaging/org.mandara.studio.svg", dest = "/usr/share/icons/hicolor/scalable/apps/org.mandara.studio.svg", mode = "644" },
+    { source = "../../README.md", dest = "/usr/share/doc/mandara/README.md", mode = "644", doc = true },
+    { source = "../../PLUGINS.md", dest = "/usr/share/doc/mandara/PLUGINS.md", mode = "644", doc = true },
+    { source = "../../LICENSE.md", dest = "/usr/share/licenses/mandara/LICENSE.md", mode = "644", doc = true },
+    { source = "../../COPYRIGHT.md", dest = "/usr/share/licenses/mandara/COPYRIGHT.md", mode = "644", doc = true },
+    { source = "../../packaging/pam/mandara-lock", dest = "/etc/pam.d/mandara-lock", mode = "644", config = true },
+]
+
+[package.metadata.generate-rpm.requires]
+libxkbcommon = "*"
+"libwayland-client" = "*"
+"vulkan-loader" = "*"
+fontconfig = "*"
+freetype = "*"
+pam = "*"
+
+[build-dependencies]
+# build.rs reads the glibc version to decide on packed relocations.
+libc.workspace = true

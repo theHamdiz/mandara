@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="160 160 704 704" role="img" aria-labelledby="title desc">
+  <title id="title">Mandara Shell symbolic</title>
+  <desc id="desc">A single-color shoreline and beacon.</desc>
+  <path d="M232 648c0-124 24-224 114-224s86 196 166 196 76-196 166-196 114 100 114 224" fill="none" stroke="currentColor" stroke-width="88" stroke-linecap="round"/>
+  <circle cx="512" cy="320" r="56" fill="currentColor"/>
+  <path d="m354 326 40 22m236 0 40-22" fill="none" stroke="currentColor" stroke-width="24" stroke-linecap="round"/>
+</svg>

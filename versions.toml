@@ -1,0 +1,93 @@
+# Component versions and content hashes — maintained by `cargo xtask bump`.
+# A component whose current hash differs from the one recorded here has
+# changed since its last release and gets its version bumped.
+
+[mandara-app]
+kind = "binary"
+version = "0.1.0"
+hash = "ae1c10c4f5f7fee6e12d02ea263e1dd6"
+
+[mandara-compositor]
+kind = "library"
+version = "0.1.0"
+hash = "694333942876aaea0aaece16ef47420e"
+
+[mandara-config]
+kind = "library"
+version = "0.1.0"
+hash = "0c4c770c238e9b163543f270cc7da38c"
+
+[mandara-core]
+kind = "library"
+version = "0.1.0"
+hash = "c0533f738329ae01a79dde84ad80a967"
+
+[mandara-delta]
+kind = "tool"
+version = "0.1.0"
+hash = "8782ebfddacaaa6f2fa3ea645f2a045e"
+
+[mandara-greeter]
+kind = "library"
+version = "0.1.0"
+hash = "21b574ef887b26985efe0dfa50ed2828"
+
+[mandara-i18n]
+kind = "library"
+version = "0.1.0"
+hash = "63336253742196c417a0d183168abcb7"
+
+[mandara-install]
+kind = "library"
+version = "0.1.0"
+hash = "2cd7b8c59f96ea106b99640d749754c7"
+
+[mandara-media]
+kind = "library"
+version = "0.1.0"
+hash = "286fe45db342e4043831a3dbc61292ee"
+
+[mandara-plugins]
+kind = "library"
+version = "0.1.0"
+hash = "6c8f71f8706ccad4f3dffa8afd8f5030"
+
+[mandara-services]
+kind = "library"
+version = "0.1.0"
+hash = "9eeb7513e836a539e2e11144cb9c5c3c"
+
+[mandara-studio]
+kind = "library"
+version = "0.1.0"
+hash = "0a6d67bed72ea66237676ba90636acdd"
+
+[mandara-theme]
+kind = "library"
+version = "0.1.0"
+hash = "1491254c62478bb18fb4e1cceb0945a2"
+
+[mandara-ui]
+kind = "library"
+version = "0.1.0"
+hash = "d9169ded3705d90b82fb2ecd9b49cbbf"
+
+[mandara-version]
+kind = "library"
+version = "0.1.0"
+hash = "3c4eb4c4f8417e59ea54fdee163aca6b"
+
+[mandara-wallgen]
+kind = "library"
+version = "0.1.0"
+hash = "bcfa2287f328e838ceda2aafc7c13d38"
+
+[plugin-moon-phase]
+kind = "plugin"
+version = "0.1.0"
+hash = "a8abe738d963931ee6feda075de53fae"
+
+[xtask]
+kind = "tool"
+version = "0.1.0"
+hash = "f4d5f152343b087e282b9e0d5c0fc8c6"

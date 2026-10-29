@@ -1,0 +1,47 @@
+# `cargo xtask sandbox up --config demo` (the default): the demo desktop —
+# Papirus icons, the dock with demo apps, a stacked depth clock and the
+# procedural harbour wallpaper. Everything else keeps the shell's defaults.
+
+[appearance]
+icon_theme = "Papirus-Dark"
+
+[desktop.widgets]
+migrated = true
+
+[[desktop.widgets.items]]
+id = "depth-clock"
+kind = "clock"
+enabled = true
+face = "stacked"
+date = true
+weather = true
+audio_ring = true
+ring_progress = "hour"
+seconds = false
+eastern_numerals = false
+
+[desktop.widgets.items.look]
+accent = "accent"
+custom_accent = ""
+custom_color = ""
+effect = "none"
+font = "display"
+tone = "auto"
+
+[desktop.widgets.items.place]
+anchor = "center"
+depth = "behind"
+displays = []
+opacity = 1.0
+scale = 1.0
+x = 0.0
+y = -0.18
+
+[dock]
+pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
+
+[plugins]
+enabled = ["dock"]
+
+[wallpaper]
+path = "~/wall.png"

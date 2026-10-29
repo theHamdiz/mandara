@@ -1,0 +1,34 @@
+id = "moon-phase"
+name = "Moon phase"
+description = "Tonight's moon: phase, illumination and days to the next full moon"
+author = "Mandara examples"
+version = "0.1.0"
+zone = "right"
+entry = "plugin.wasm"
+permissions = []
+
+# Settings Studio shows in this plugin's settings modal. Values are stored in
+# [plugins.settings.moon-phase] and read with `host::setting("<key>")`.
+[[settings]]
+key = "hemisphere"
+type = "choice"
+label = "Hemisphere"
+help = "Where you watch from: it decides which side of the moon is lit"
+default = "north"
+choices = [{ value = "north", label = "Northern" }, { value = "south", label = "Southern" }]
+
+[[settings]]
+key = "show_percent"
+type = "bool"
+label = "Illumination in the bar"
+help = "Show the lit percentage next to the moon icon"
+default = true
+
+# Optional: name and description per language (ISO 639-1 codes).
+[i18n.ar]
+name = "طور القمر"
+description = "قمر الليلة: طوره ونسبة إضاءته والأيام حتى البدر"
+
+[i18n.es]
+name = "Fase lunar"
+description = "La luna de esta noche: fase, iluminación y días hasta la luna llena"

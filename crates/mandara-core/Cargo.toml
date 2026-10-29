@@ -1,0 +1,30 @@
+[package]
+name = "mandara-core"
+description = "GPUI layer-shell surfaces, spring physics, OKLCH tweening and Wayland input-region masking"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+gpui.workspace = true
+palette.workspace = true
+smallvec.workspace = true
+image.workspace = true
+wayland-client.workspace = true
+wayland-protocols = { workspace = true, features = ["staging"] }
+anyhow.workspace = true
+mandara-theme.workspace = true
+serde.workspace = true
+tracing.workspace = true
+# ext-session-lock-v1 lock surfaces (session_lock.rs).
+wayland-protocols-wlr.workspace = true
+xkbcommon = { version = "0.8", default-features = false, features = ["wayland"] }
+tiny-skia.workspace = true
+memmap2 = "0.9"
+rustix = { workspace = true, features = ["fs", "event"] }
+
+[dev-dependencies]
+approx.workspace = true
+# `examples/vram_probe.rs` opens real layer surfaces.
+gpui_platform.workspace = true

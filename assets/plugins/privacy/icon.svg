@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>Privacy</title>
+  <defs>
+    <linearGradient id="tile" x1="64" y1="40" x2="448" y2="496" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#268878"/><stop offset="1" stop-color="#124D4B"/>
+    </linearGradient>
+    <radialGradient id="light" cx="0" cy="0" r="1" gradientTransform="translate(98 48) rotate(45) scale(440 354)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="76" y1="28" x2="446" y2="482" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".72"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".08"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".24"/>
+    </linearGradient>
+    <clipPath id="tile-clip"><rect x="16" y="16" width="480" height="480" rx="108"/></clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#tile)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#light)"/>
+  <g clip-path="url(#tile-clip)">
+    <path d="M-28 324C126 476 349 518 544 274v238H-28z" fill="#FFFFFF" opacity=".045"/>
+  </g>
+  <rect x="19" y="19" width="474" height="474" rx="105" stroke="url(#rim)" stroke-width="2"/>
+  <g stroke="#FFF2D5" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M124 256c32-62 78-96 132-96s100 34 132 96c-32 62-78 96-132 96s-100-34-132-96z" fill="#FFF2D5" fill-opacity=".10"/>
+    <circle cx="256" cy="256" r="46" fill="#FFD58A" stroke="none"/>
+  </g>
+</svg>

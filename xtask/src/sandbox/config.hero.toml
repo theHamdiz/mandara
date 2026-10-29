@@ -1,0 +1,80 @@
+# `cargo xtask sandbox up --config hero`: the README hero shot — floating
+# glass pills, a Today sidebar tab on the left, the media panel in the
+# middle, notifications and the Day block clock down the right edge, light /
+# dark wallpaper variants. Everything else keeps the shell's defaults.
+#
+# The shot: `sandbox audio play`, `sandbox notify`, `sandbox msg sidebar
+# open`, `sandbox msg panel open media`, then `sandbox shot` while all three
+# notifications are up (`sandbox msg theme mode light` for hero-light).
+
+[appearance]
+icon_theme = "Papirus-Dark"
+
+[bar]
+layout = "floating-pills"
+height = 32.0
+edge_gap = 2.0
+side_gap = 10.0
+
+[desktop.widgets]
+migrated = true
+
+[[desktop.widgets.items]]
+id = "day-block"
+kind = "clock"
+enabled = true
+face = "day-block"
+date = true
+weather = true
+audio_ring = false
+ring_progress = "hour"
+seconds = false
+eastern_numerals = false
+
+[desktop.widgets.items.look]
+accent = "accent"
+custom_accent = ""
+custom_color = ""
+effect = "none"
+font = "display"
+tone = "auto"
+
+[desktop.widgets.items.place]
+anchor = "bottom-right"
+depth = "front"
+displays = []
+opacity = 1.0
+scale = 1.0
+x = -0.02
+y = -0.035
+
+[[sidebar.tabs]]
+id = "today"
+name = "Today"
+icon = "sun"
+cards = ["weather", "prayer-times", "resources", "audio"]
+
+[[sidebar.tabs]]
+id = "overview"
+name = "Overview"
+icon = "grid"
+cards = ["quick-settings", "weather", "media", "pomodoro", "todo", "notes", "audio", "resources"]
+
+[dock]
+pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
+
+[location]
+shared = true
+
+[plugins]
+enabled = ["dock", "prayer-times"]
+
+[plugins.settings.media]
+lyrics = false
+
+[wallpaper]
+path = "/home/demo/Pictures/Wallpapers/tide-dark.png"
+
+[wallpaper.variants]
+light = "/home/demo/Pictures/Wallpapers/tide-light.png"
+dark = "/home/demo/Pictures/Wallpapers/tide-dark.png"

@@ -1,0 +1,212 @@
+[workspace]
+resolver = "2"
+# Example plugins build on their own for wasm32-wasip2; the delta-update
+# tool is its own root so plugin authors can `cargo install` it alone.
+exclude = ["plugins", "tools/mandara-delta"]
+members = [
+    "crates/mandara-app",
+    "crates/mandara-compositor",
+    "crates/mandara-core",
+    "crates/mandara-plugins",
+    "crates/mandara-services",
+    "crates/mandara-studio",
+    "crates/mandara-config",
+    "crates/mandara-theme",
+    "crates/mandara-ui",
+    "crates/mandara-i18n",
+    "crates/mandara-greeter",
+    "crates/mandara-media",
+    "crates/mandara-wallgen",
+    "crates/mandara-install",
+    "crates/mandara-version",
+    "xtask",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+authors = ["Mandara Shell contributors"]
+repository = "https://github.com/theHamdiz/mandara"
+
+[workspace.dependencies]
+# Internal crates
+mandara-core = { path = "crates/mandara-core" }
+mandara-config = { path = "crates/mandara-config" }
+mandara-theme = { path = "crates/mandara-theme" }
+mandara-compositor = { path = "crates/mandara-compositor" }
+mandara-services = { path = "crates/mandara-services" }
+mandara-i18n = { path = "crates/mandara-i18n" }
+mandara-version = { path = "crates/mandara-version" }
+mandara-plugins = { path = "crates/mandara-plugins" }
+mandara-ui = { path = "crates/mandara-ui" }
+mandara-studio = { path = "crates/mandara-studio" }
+mandara-greeter = { path = "crates/mandara-greeter" }
+# Pure-Rust video pipeline (WebM / IVF, AV1 via rav1d): wallpapers and the greeter.
+mandara-media = { path = "crates/mandara-media" }
+# Procedural wallpaper engine (styles, palettes, lossless output, AV1 loops).
+mandara-wallgen = { path = "crates/mandara-wallgen" }
+mandara-install = { path = "crates/mandara-install" }
+# Delta-update format (own root so plugin authors can `cargo install` it);
+# the shell uses the apply side only, release tooling adds `create`.
+mandara-delta = { path = "tools/mandara-delta", default-features = false, features = ["archive"] }
+semver = "1"
+
+# UI — upstream Zed GPUI pinned to a revision with native zwlr_layer_shell_v1
+# windows and `Window::set_input_region`.
+gpui = { git = "https://github.com/zed-industries/zed", rev = "ec86047d67acd6fddd81392f44ed6ebcc6e7f531", default-features = false, features = ["wayland", "font-kit"] }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "ec86047d67acd6fddd81392f44ed6ebcc6e7f531", default-features = false, features = ["wayland", "font-kit"] }
+# The renderer itself (patched below): Mandara sets its font fallback chain.
+gpui_wgpu = { git = "https://github.com/zed-industries/zed", rev = "ec86047d67acd6fddd81392f44ed6ebcc6e7f531", default-features = false }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+wayland-protocols-misc = { version = "0.3", features = ["client"] }
+wl-clipboard-rs = "0.9"
+smallvec = { version = "1.16.4", features = ["union", "const_new"] }
+
+# Color science & imaging
+palette = { version = "0.7.7", default-features = false, features = ["std", "approx"] }
+material-colors = { version = "0.5", features = ["std", "quantize"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+
+# Config & serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1.1"
+sha2 = "0.10"
+# SHA-512 crypt ($6$) password hashes for AccountsService.SetPassword.
+sha-crypt = { version = "0.5", default-features = false }
+kdl = { version = "6", features = ["v1"] }
+notify = "8"
+dirs = "7.0.0"
+
+# Wi-Fi share QR codes (hotspot, saved networks): pure Rust, no deps.
+qrcodegen = "1.8"
+
+# Search
+nucleo-matcher = "0.3"
+# Notes: CommonMark + GFM (tables, task lists) with source offsets; pure Rust.
+pulldown-cmark = { version = "0.13", default-features = false }
+pulseaudio = "0.3"
+rustfft = "6.4"
+flate2 = "1.1"
+tar = "0.4"
+
+# System
+rustix = { version = "1", features = ["fs", "param", "process"] }
+libc = "0.2"
+tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
+rav1e = { version = "0.8", default-features = false, features = ["threading"] }
+# Pure-Rust AV1 decoder (dav1d port); `asm` off so no nasm / C toolchain.
+rav1d = { version = "1.1", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
+# Lean: no `parallel-compilation` (a rayon pool for a one-time compile —
+# compiled plugins are cached on disk), no cache/pooling/profiling/WASI-p1.
+wasmtime = { version = "48", default-features = false, features = ["runtime", "cranelift", "component-model", "std"] }
+wasmtime-wasi = { version = "48", default-features = false }
+
+# Async & errors
+zbus = { version = "5", default-features = false, features = ["async-io"] }
+async-io = "2"
+pure-onnx-ocr = "0.3.2"
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+async-channel = "2.5"
+futures = "0.3"
+anyhow = "1"
+thiserror = "2"
+# 0.12: the version GPUI uses, so only one parking_lot / lock_api is linked.
+parking_lot = "0.12"
+
+# Time
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "unstable-locales"] }
+
+# CLI & logging
+clap = { version = "4.6.7", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Test-only
+tempfile = "3"
+approx = "0.5"
+
+# Patches that upstream GPUI's workspace relies on (git deps don't inherit them).
+[patch.crates-io]
+async-task = { git = "https://github.com/zed-industries/async-task.git", rev = "015845a19fc31752c02367567d3b8900a406f9da" }
+calloop = { git = "https://github.com/zed-industries/calloop", rev = "3759371fee14c40066d64777e2a36b6ffcc22590" }
+khronos-egl = { git = "https://github.com/zed-industries/khronos-egl", rev = "42214b36347b108fd9630ca6254b96dde59e04fe" }
+
+# GPUI's wgpu renderer with Mandara's per-window GPU-memory patches (lazy,
+# bounding-box-sized path/MSAA textures, tunable MSAA / present mode, smaller
+# initial atlas + instance buffers): vendor/gpui_wgpu/MANDARA-PATCHES.md.
+[patch."https://github.com/zed-industries/zed"]
+gpui_wgpu = { path = "vendor/gpui_wgpu" }
+# GPUI core with rounded content masks, so `.rounded_*().overflow_hidden()`
+# clips children to the rounded shape: vendor/gpui/MANDARA-PATCHES.md.
+gpui = { path = "vendor/gpui" }
+
+[profile.dev]
+# GPUI is painfully slow unoptimized; keep our code debuggable but deps fast.
+# Line tables only (backtraces, profilers) and split DWARF keep the debug
+# binary and incremental link small: full DWARF for GPUI + wgpu + wasmtime
+# made a 2 GB executable.
+opt-level = 1
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+
+[profile.dev.package."*"]
+# Dependencies: optimized enough that GPUI renders smoothly in debug builds,
+# without the compile time of opt-level 3, and no debug info at all.
+opt-level = 2
+debug = false
+
+# wgpu turns on Vulkan validation layers (and their per-draw CPU cost and
+# memory) whenever `wgpu-types` is built with debug assertions; debug builds
+# should profile like the shipped binary.
+[profile.dev.package.wgpu-types]
+debug-assertions = false
+
+# The AV1 decoder (video wallpapers, login-screen videos) is ~300× slower with debug checks.
+[profile.dev.package.rav1d]
+opt-level = 3
+debug-assertions = false
+overflow-checks = false
+
+# Its YUV conversion runs per pixel of every video frame: optimized in
+# debug builds too, so video wallpapers play smoothly there.
+[profile.dev.package.mandara-media]
+opt-level = 3
+
+[profile.release]
+# Maximum runtime performance: whole-program (fat) LTO, a single codegen
+# unit so LLVM sees every inlining opportunity, and no debug info / symbols
+# in the shipped binary. Panics unwind (not abort): plugin calls
+# (`mandara-plugins::guard`) and the PAM conversation (`lock/pam.rs`) rely on
+# `catch_unwind` so a faulty plugin is caught at its boundary instead of
+# killing the shell.
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "unwind"
+debug = false
+strip = "symbols"
+incremental = false
+overflow-checks = false
+debug-assertions = false
+
+[profile.release.package."*"]
+opt-level = 3
+codegen-units = 1
+
+# `cargo native` (see .cargo/config.toml): release + tuned for this CPU
+# (AVX2/AVX-512, etc.). Not portable to older machines.
+[profile.release-native]
+inherits = "release"
+
+# `cargo profiling`: release code with line tables and symbols kept, for
+# `perf record` / heaptrack / samply. Thin LTO so it links in seconds.
+[profile.profiling]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+debug = "line-tables-only"
+strip = "none"

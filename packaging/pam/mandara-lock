@@ -1,0 +1,5 @@
+#%PAM-1.0
+# Mandara Lock (`mandara lock`): checks your password when unlocking.
+# Install with: sudo install -Dm644 packaging/pam/mandara-lock /etc/pam.d/mandara-lock
+# Without this file Mandara Lock uses the `login` service, which works too.
+auth include login

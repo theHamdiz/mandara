@@ -1,0 +1,28 @@
+[package]
+name = "mandara-media"
+description = "Pure-Rust video pipeline: WebM / Matroska and IVF demuxing, AV1 decoding (rav1d), YUV conversion and threaded players"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+rav1d.workspace = true
+image.workspace = true
+libc.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+# Test clips are encoded in pure Rust (rav1e) and muxed with the screen
+# recorder's WebM writer.
+rav1e.workspace = true
+mandara-services.workspace = true
+tempfile.workspace = true
+
+[[example]]
+name = "make_test_clip"
+path = "examples/make_test_clip.rs"
+
+[[example]]
+name = "decode_bench"
+path = "examples/decode_bench.rs"

@@ -1,0 +1,69 @@
+# Maintainer: Ahmad Hamdi <ahmad dot hamdi dot emara at gmail dot com>
+
+pkgname=mandara-shell-git
+pkgver=0.1.0.r0.g0000000
+pkgrel=1
+pkgdesc="GPU-accelerated, design-first Wayland desktop shell for MangoWM, Niri and Hyprland, written in Rust"
+arch=('x86_64' 'aarch64')
+url="https://github.com/theHamdiz/mandara"
+license=('GPL-3.0-or-later')
+depends=('fontconfig' 'freetype2' 'gcc-libs' 'glibc' 'libxkbcommon' 'pam' 'vulkan-icd-loader' 'wayland')
+makedepends=('cargo' 'git' 'pkgconf')
+optdepends=('xdg-desktop-portal: open links and follow the system appearance'
+            'pipewire-pulse: sound controls, per-app volume and the visualizer'
+            'noto-fonts: Arabic and fallback glyphs'
+            'inter-font: the default interface font'
+            'greetd: Mandara Login as your login manager'
+            'accountsservice: Studio user management'
+            'udisks2: the Drives panel'
+            'upower: battery details'
+            'power-profiles-daemon: power profiles'
+            'geoclue: location for weather and prayer times'
+            'networkmanager: the Network panel'
+            'sound-theme-freedesktop: shell sounds')
+provides=("mandara-shell=${pkgver%%.r*}" 'mandara')
+conflicts=('mandara' 'mandara-shell' 'mandara-shell-bin')
+backup=('etc/pam.d/mandara-lock')
+options=('!lto')
+source=('mandara::git+https://github.com/theHamdiz/mandara.git')
+sha256sums=('SKIP')
+
+pkgver() {
+  cd mandara
+  # Release tags are v<version>; component tags (mandara-core-v…) are ignored.
+  if git describe --long --tags --match 'v[0-9]*' >/dev/null 2>&1; then
+    git describe --long --tags --match 'v[0-9]*' | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+  else
+    printf '0.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+  fi
+}
+
+prepare() {
+  cd mandara
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd mandara
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release -p mandara-app
+}
+
+check() {
+  cd mandara
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo test --frozen --release -p mandara-config -p mandara-theme -p mandara-i18n
+}
+
+package() {
+  cd mandara
+  install -Dm755 target/release/mandara "$pkgdir/usr/bin/mandara"
+  install -Dm644 packaging/org.mandara.studio.desktop -t "$pkgdir/usr/share/applications/"
+  install -Dm644 packaging/org.mandara.studio.svg -t "$pkgdir/usr/share/icons/hicolor/scalable/apps/"
+  install -Dm644 packaging/pam/mandara-lock "$pkgdir/etc/pam.d/mandara-lock"
+  install -Dm644 README.md PLUGINS.md -t "$pkgdir/usr/share/doc/$pkgname/"
+  install -Dm644 LICENSE.md COPYRIGHT.md -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

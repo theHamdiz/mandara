@@ -1,0 +1,102 @@
+// Mandara plugin interface. Plugins are written in Rust, compiled to a
+// WebAssembly component (`cargo build --target wasm32-wasip2`), and run
+// sandboxed: no filesystem, network or environment access, a time budget
+// per call, and any trap disables only that plugin.
+package mandara:plugin@0.1.0;
+
+interface types {
+    /// The live palette, as `#rrggbb` strings.
+    record palette {
+        dark: bool,
+        primary: string,
+        on-primary: string,
+        surface: string,
+        on-surface: string,
+        on-surface-variant: string,
+        container: string,
+        error: string,
+        success: string,
+        warning: string,
+    }
+
+    enum kind {
+        /// Children laid out horizontally / vertically.
+        row,
+        column,
+        /// A rounded surface card around its children (sidebar style).
+        card,
+        /// `text` shown as a label.
+        text,
+        /// `text` names a bundled Mandara icon (e.g. "sun", "timer").
+        icon,
+        /// A clickable pill; `text` is its label, `action` its event.
+        button,
+        /// A progress bar; `value` in 0..=1.
+        meter,
+        /// Flexible empty space.
+        spacer,
+    }
+
+    enum tone { normal, muted, accent, error, success, warning }
+
+    record node {
+        kind: kind,
+        text: string,
+        value: f32,
+        /// Indices into the view's node list.
+        children: list<u32>,
+        /// Sent to `on-event` when the node is clicked ("" = not clickable).
+        action: string,
+        tone: tone,
+        /// Font / icon size in logical px (0 = default).
+        size: f32,
+        /// Spacing between children (row / column / card).
+        gap: f32,
+        bold: bool,
+        /// Take the remaining space in the parent.
+        grow: bool,
+    }
+
+    /// A widget tree as an arena: `nodes[root]` is the top node.
+    record view {
+        nodes: list<node>,
+        root: u32,
+    }
+}
+
+interface host {
+    /// Writes to Mandara's log under the plugin's id.
+    log: func(message: string);
+    /// Milliseconds since the Unix epoch.
+    now-unix-ms: func() -> u64;
+    /// The plugin's setting from `[plugins.settings.<id>]`, as JSON.
+    setting: func(key: string) -> option<string>;
+    /// Queues a Mandara command (as `mandara msg …`). Needs the
+    /// "commands" permission in plugin.toml.
+    command: func(line: string) -> result<_, string>;
+    /// The interface language as an ISO 639-1 code: "en", "ar", "es",
+    /// "fr", "zh", "tr", "ja", "de", "ru" or "hi". Right-to-left for "ar".
+    locale: func() -> string;
+    /// Translates English `text` with the plugin's own catalog
+    /// (`locales/<code>.toml` beside plugin.toml, `"English" = "…"` pairs);
+    /// returns `text` unchanged when there's no translation. Text and
+    /// button labels in returned views are translated this way
+    /// automatically, so plugins only need this for composed strings.
+    translate: func(text: string) -> string;
+}
+
+world plugin {
+    use types.{palette, view};
+    import host;
+
+    /// Called once after loading.
+    export init: func() -> result<_, string>;
+    /// The bar item, panel and sidebar card (none = not provided).
+    export bar: func(theme: palette) -> option<view>;
+    export panel: func(theme: palette) -> option<view>;
+    export sidebar: func(theme: palette) -> option<view>;
+    /// A node with an `action` was clicked.
+    export on-event: func(action: string);
+    /// How often to re-render, in ms (0 = only after events).
+    export refresh-ms: func() -> u32;
+}

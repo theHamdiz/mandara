@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Mandara Studio</title>
+  <desc id="desc">The Mandara shoreline and beacon, with two warm tuning rails.</desc>
+  <defs>
+    <linearGradient id="tile" x1="112" y1="64" x2="824" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#237B88"/>
+      <stop offset=".55" stop-color="#124D67"/>
+      <stop offset="1" stop-color="#103C63"/>
+    </linearGradient>
+    <radialGradient id="glass" cx="152" cy="112" r="920" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C6FFF4" stop-opacity=".22"/>
+      <stop offset=".62" stop-color="#54DDCA" stop-opacity=".02"/>
+      <stop offset="1" stop-color="#40C8BD" stop-opacity=".14"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="176" y1="64" x2="900" y2="992" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E6FFF8" stop-opacity=".72"/>
+      <stop offset=".45" stop-color="#A3F5DF" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#40C8BD" stop-opacity=".3"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="296" y1="424" x2="728" y2="688" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C6F9EA"/>
+      <stop offset=".52" stop-color="#6DDFCB"/>
+      <stop offset="1" stop-color="#40C8BD"/>
+    </linearGradient>
+    <linearGradient id="light" x1="470" y1="270" x2="554" y2="374" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF2CD"/>
+      <stop offset="1" stop-color="#F2C776"/>
+    </linearGradient>
+  </defs>
+  <rect id="tile-shape" x="32" y="32" width="960" height="960" rx="216" fill="url(#tile)"/>
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="url(#glass)"/>
+  <rect x="36" y="36" width="952" height="952" rx="212" fill="none" stroke="url(#rim)" stroke-width="8"/>
+  <path d="M112 280V248c0-75 61-136 136-136h130" fill="none" stroke="#E9FFF8" stroke-opacity=".13" stroke-width="12" stroke-linecap="round"/>
+  <g transform="translate(0 -54)">
+    <path id="shoreline" d="M232 648c0-124 24-224 114-224s86 196 166 196 76-196 166-196 114 100 114 224" fill="none" stroke="url(#sea)" stroke-width="88" stroke-linecap="round"/>
+    <circle id="beacon" cx="512" cy="320" r="56" fill="url(#light)"/>
+    <path d="m354 326 40 22m236 0 40-22" fill="none" stroke="#FFE4AB" stroke-width="24" stroke-linecap="round" opacity=".8"/>
+  </g>
+  <g id="tuning" fill="none" stroke="#FFE4AB" stroke-linecap="round">
+    <path d="M328 756h368m-368 76h368" stroke-width="20" opacity=".54"/>
+    <path d="M428 736v40m168 36v40" stroke-width="40"/>
+  </g>
+</svg>

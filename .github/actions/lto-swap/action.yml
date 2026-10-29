@@ -1,0 +1,46 @@
+# The release profile links the whole shell as one fat-LTO unit
+# (`codegen-units = 1`). That single LLVM step needs more memory than a
+# hosted runner's 16 GB, and when it runs out the runner is killed and the
+# job reports "The runner has received a shutdown signal" (exit code 143).
+# This adds swap so the link finishes instead; the runtime build stays
+# exactly the same.
+name: Swap for the fat-LTO link
+description: Replace the runner's small swap file with a large one.
+inputs:
+  max-gb:
+    description: Largest swap file to create, in GB.
+    default: "32"
+  keep-free-gb:
+    description: Disk space to leave free on the swap file's filesystem, in GB (the build's target directory lives on /).
+    default: "24"
+  min-gb:
+    description: Smallest swap file worth creating, in GB.
+    default: "8"
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        MAX_GB: ${{ inputs.max-gb }}
+        KEEP_FREE_GB: ${{ inputs.keep-free-gb }}
+        MIN_GB: ${{ inputs.min-gb }}
+      run: |
+        set -euo pipefail
+        avail_gb() { df --output=avail -BG "$1" | tail -n 1 | tr -dc '0-9'; }
+        sudo swapoff -a
+        sudo rm -f /mnt/swapfile /swapfile
+        # /mnt is a separate scratch disk on most x86_64 runners; fall back
+        # to / where it is missing or smaller.
+        dir=/
+        if [ -d /mnt ] && [ "$(avail_gb /mnt)" -gt "$(avail_gb /)" ]; then dir=/mnt; fi
+        size=$(( $(avail_gb "$dir") - KEEP_FREE_GB ))
+        [ "$size" -gt "$MAX_GB" ] && size=$MAX_GB
+        if [ "$size" -lt "$MIN_GB" ]; then
+          echo "::warning::only $(avail_gb "$dir") GB free on $dir; no extra swap"
+          exit 0
+        fi
+        sudo fallocate -l "${size}G" "$dir/lto.swap"
+        sudo chmod 600 "$dir/lto.swap"
+        sudo mkswap "$dir/lto.swap" >/dev/null
+        sudo swapon "$dir/lto.swap"
+        free -h

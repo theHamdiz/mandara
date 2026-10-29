@@ -1,0 +1,485 @@
+[
+  {
+    "id": "session",
+    "name": "Session",
+    "palette": "corniche",
+    "motif": "power",
+    "angle": -7,
+    "panel": null
+  },
+  {
+    "id": "launcher",
+    "name": "Launcher",
+    "palette": "corniche",
+    "motif": "orbits",
+    "angle": 6,
+    "panel": null
+  },
+  {
+    "id": "workspaces",
+    "name": "Workspaces",
+    "palette": "corniche",
+    "motif": "tiles",
+    "angle": -6,
+    "panel": null
+  },
+  {
+    "id": "active-window",
+    "name": "Active window",
+    "palette": "corniche",
+    "motif": "frame",
+    "angle": 5,
+    "panel": null
+  },
+  {
+    "id": "clock",
+    "name": "Clock",
+    "palette": "twilight",
+    "motif": "timer",
+    "angle": -7,
+    "panel": null
+  },
+  {
+    "id": "keyboard-layout",
+    "name": "Keyboard layout",
+    "palette": "corniche",
+    "motif": "keys",
+    "angle": 6,
+    "panel": null
+  },
+  {
+    "id": "language",
+    "name": "Language",
+    "palette": "corniche",
+    "motif": "globe",
+    "angle": -1,
+    "panel": "docs/screenshots/language.png",
+    "crop": [
+      2,
+      2,
+      620,
+      923
+    ],
+    "radius": 39
+  },
+  {
+    "id": "media",
+    "name": "Media",
+    "palette": "twilight",
+    "motif": "waves",
+    "angle": 2,
+    "panel": "docs/screenshots/media.png",
+    "crop": [
+      2,
+      2,
+      650,
+      581
+    ],
+    "radius": 39
+  },
+  {
+    "id": "prayer-times",
+    "name": "Prayer times",
+    "palette": "twilight",
+    "motif": "dawn",
+    "angle": -1,
+    "panel": "docs/screenshots/prayer-times.png",
+    "crop": [
+      2,
+      2,
+      578,
+      799
+    ],
+    "radius": 39
+  },
+  {
+    "id": "resources",
+    "name": "Resources",
+    "palette": "obsidian",
+    "motif": "circuit",
+    "angle": 1,
+    "panel": "docs/screenshots/resources.png",
+    "crop": [
+      2,
+      2,
+      614,
+      1257
+    ],
+    "radius": 39
+  },
+  {
+    "id": "processes",
+    "name": "Process hunter",
+    "palette": "obsidian",
+    "motif": "radar",
+    "angle": -1,
+    "panel": "docs/screenshots/processes.png",
+    "crop": [
+      2,
+      2,
+      860,
+      980
+    ],
+    "radius": 39
+  },
+  {
+    "id": "network",
+    "name": "Network",
+    "palette": "corniche",
+    "motif": "signal",
+    "angle": -6,
+    "panel": null
+  },
+  {
+    "id": "bluetooth",
+    "name": "Bluetooth",
+    "palette": "corniche",
+    "motif": "peers",
+    "angle": 2,
+    "panel": "docs/screenshots/bluetooth.png",
+    "crop": [
+      2,
+      2,
+      578,
+      530
+    ],
+    "radius": 39
+  },
+  {
+    "id": "audio",
+    "name": "Audio",
+    "palette": "twilight",
+    "motif": "sound",
+    "angle": -2,
+    "panel": "docs/screenshots/audio.png",
+    "crop": [
+      2,
+      2,
+      590,
+      1019
+    ],
+    "radius": 39
+  },
+  {
+    "id": "quick-settings",
+    "name": "Quick settings",
+    "palette": "obsidian",
+    "motif": "bars",
+    "angle": 6,
+    "panel": null
+  },
+  {
+    "id": "screenshot",
+    "name": "Screenshot",
+    "palette": "corniche",
+    "motif": "capture",
+    "angle": -6,
+    "panel": null
+  },
+  {
+    "id": "clipboard",
+    "name": "Clipboard",
+    "palette": "obsidian",
+    "motif": "clipboard",
+    "angle": 5,
+    "panel": null
+  },
+  {
+    "id": "main-menu",
+    "name": "Main menu",
+    "palette": "corniche",
+    "motif": "menu",
+    "angle": -7,
+    "panel": null
+  },
+  {
+    "id": "notifications",
+    "name": "Notifications",
+    "palette": "twilight",
+    "motif": "bell",
+    "angle": 1,
+    "panel": "docs/screenshots/notifications.png",
+    "crop": [
+      2,
+      2,
+      626,
+      1010
+    ],
+    "radius": 39
+  },
+  {
+    "id": "todo",
+    "name": "To-do",
+    "palette": "obsidian",
+    "motif": "tasks",
+    "angle": -5,
+    "panel": null
+  },
+  {
+    "id": "notes",
+    "name": "Notes",
+    "palette": "twilight",
+    "motif": "paper",
+    "angle": 6,
+    "panel": null
+  },
+  {
+    "id": "pomodoro",
+    "name": "Pomodoro",
+    "palette": "twilight",
+    "motif": "focus",
+    "angle": -2,
+    "panel": "docs/screenshots/pomodoro.png",
+    "crop": [
+      2,
+      2,
+      470,
+      529
+    ],
+    "radius": 39
+  },
+  {
+    "id": "weather",
+    "name": "Weather",
+    "palette": "corniche",
+    "motif": "sun",
+    "angle": 2,
+    "panel": "docs/screenshots/weather.png",
+    "crop": [
+      2,
+      2,
+      650,
+      962
+    ],
+    "radius": 39
+  },
+  {
+    "id": "wallpaper",
+    "name": "Wallpaper",
+    "palette": "corniche",
+    "motif": "landscape",
+    "angle": -6,
+    "panel": null
+  },
+  {
+    "id": "moon-phase",
+    "name": "Moon phase",
+    "palette": "twilight",
+    "motif": "moon",
+    "angle": 5,
+    "panel": null
+  },
+  {
+    "id": "color-picker",
+    "name": "Color picker",
+    "palette": "twilight",
+    "motif": "orbits",
+    "angle": -2,
+    "panel": "docs/screenshots/color-picker.png",
+    "crop": [
+      2,
+      2,
+      626,
+      860
+    ],
+    "radius": 39
+  },
+  {
+    "id": "soundscapes",
+    "name": "Soundscapes",
+    "palette": "twilight",
+    "motif": "waves",
+    "angle": 1,
+    "panel": "docs/screenshots/soundscapes.png",
+    "crop": [
+      2,
+      2,
+      626,
+      923
+    ],
+    "radius": 39
+  },
+  {
+    "id": "world-clock",
+    "name": "World clock",
+    "palette": "twilight",
+    "motif": "globe",
+    "angle": 2,
+    "panel": "docs/screenshots/world-clock.png",
+    "crop": [
+      2,
+      2,
+      626,
+      977
+    ],
+    "radius": 39
+  },
+  {
+    "id": "net-speed",
+    "name": "Network speed",
+    "palette": "corniche",
+    "motif": "signal",
+    "angle": -1,
+    "panel": "docs/screenshots/net-speed.png",
+    "crop": [
+      2,
+      2,
+      626,
+      971
+    ],
+    "radius": 39
+  },
+  {
+    "id": "authenticator",
+    "name": "Authenticator",
+    "palette": "obsidian",
+    "motif": "timer",
+    "angle": 1,
+    "panel": "docs/screenshots/authenticator.png",
+    "crop": [
+      2,
+      2,
+      626,
+      659
+    ],
+    "radius": 39
+  },
+  {
+    "id": "drives",
+    "name": "Drives",
+    "palette": "obsidian",
+    "motif": "bars",
+    "angle": -2,
+    "panel": "docs/screenshots/drives.png",
+    "crop": [
+      2,
+      2,
+      725,
+      590
+    ],
+    "radius": 39
+  },
+  {
+    "id": "containers",
+    "name": "Containers",
+    "palette": "obsidian",
+    "motif": "tiles",
+    "angle": 2,
+    "panel": "docs/screenshots/containers.png",
+    "crop": [
+      2,
+      2,
+      920,
+      704
+    ],
+    "radius": 39
+  },
+  {
+    "id": "services",
+    "name": "Services",
+    "palette": "obsidian",
+    "motif": "circuit",
+    "angle": -1,
+    "panel": "docs/screenshots/services.png",
+    "crop": [
+      2,
+      2,
+      920,
+      933
+    ],
+    "radius": 39
+  },
+  {
+    "id": "power",
+    "name": "Power",
+    "palette": "obsidian",
+    "motif": "power",
+    "angle": 2,
+    "panel": "docs/screenshots/power.png",
+    "crop": [
+      2,
+      2,
+      722,
+      971
+    ],
+    "radius": 39
+  },
+  {
+    "id": "updates",
+    "name": "Updates",
+    "palette": "corniche",
+    "motif": "orbits",
+    "angle": -2,
+    "panel": "docs/screenshots/updates.png",
+    "crop": [
+      2,
+      2,
+      860,
+      972
+    ],
+    "radius": 39
+  },
+  {
+    "id": "privacy",
+    "name": "Privacy",
+    "palette": "obsidian",
+    "motif": "watch",
+    "angle": -5,
+    "panel": null
+  },
+  {
+    "id": "tray",
+    "name": "System tray",
+    "palette": "corniche",
+    "motif": "peers",
+    "angle": 5,
+    "panel": null
+  },
+  {
+    "id": "dock",
+    "name": "Dock",
+    "palette": "corniche",
+    "motif": "shelf",
+    "angle": -2,
+    "panel": "docs/screenshots/dock.png",
+    "crop": [
+      0,
+      0,
+      763,
+      96
+    ],
+    "radius": 1
+  },
+  {
+    "id": "app-installer",
+    "name": "App installer",
+    "palette": "obsidian",
+    "motif": "package",
+    "angle": -6,
+    "panel": null
+  },
+  {
+    "id": "screen-time",
+    "name": "Screen time",
+    "palette": "twilight",
+    "motif": "hourglass",
+    "angle": 5,
+    "panel": null
+  },
+  {
+    "id": "mini-stats",
+    "name": "Mini stats",
+    "palette": "obsidian",
+    "motif": "bars",
+    "angle": -5,
+    "panel": null
+  },
+  {
+    "id": "wallpaper-generator",
+    "name": "Wallpaper generator",
+    "palette": "corniche",
+    "motif": "aurora",
+    "angle": -6,
+    "panel": null
+  }
+]

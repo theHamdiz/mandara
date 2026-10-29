@@ -1,0 +1,392 @@
+# Continuous delivery. On every push to main:
+#   1. `cargo xtask bump` gives each changed component (crate, plugin, the
+#      shell binary) a new semantic version — Conventional Commits pick
+#      patch / minor / major — records the content hashes, commits
+#      "chore(release): …" and tags v<version> (+ <component>-v<version>).
+#   2. If the shell's version changed, it builds release artifacts for every
+#      supported platform, packages them and publishes a GitHub release with
+#      checksums and build provenance.
+#
+# Mandara is a Wayland shell: it runs on Linux (glibc ≥ 2.35) on x86_64 and
+# aarch64. Artifacts:
+#   mandara-<v>-x86_64-linux-gnu.tar.gz           portable x86_64
+#   mandara-<v>-x86_64-linux-gnu-x86-64-v3.tar.gz  tuned for AVX2-era CPUs
+#   mandara-<v>-aarch64-linux-gnu.tar.gz           ARM64
+#   mandara-<v>-{x86_64,aarch64}-linux-musl.tar.gz musl (Alpine, Void musl,
+#                                                  Chimera), built in Alpine
+#   mandara_<v>-1_{amd64,arm64}.deb                Debian / Ubuntu
+#   mandara-<v>-1.{x86_64,aarch64}.rpm             Fedora / openSUSE
+#   PKGBUILD                                       Arch (mandara-shell-bin)
+#   <plugin>.mandara.tar.gz                        bundled example plugins
+#   mandara-<v>-<target>[-<variant>].build.toml   build manifest: source
+#                                                  fingerprint, toolchain,
+#                                                  binary SHA-256, lines of code
+#   mandara-<old>-to-<v>-<target>[-<variant>].patch.zst
+#                                                  delta update from the
+#                                                  previous release (bsdiff-
+#                                                  style, zstd); the updater's
+#                                                  main method
+#   update.json                                    update manifest: per target
+#                                                  the tarball, bin/mandara and
+#                                                  patches, with SHA-256s/sizes
+#   SHA256SUMS                                     checksums of everything
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      rebuild:
+        description: "Publish artifacts for the current version even if nothing changed"
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  version:
+    name: Version
+    # The bump commit itself must not start another release.
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release)') }}
+    runs-on: ubuntu-24.04
+    outputs:
+      released: ${{ steps.result.outputs.released }}
+      version: ${{ steps.result.outputs.version }}
+      tag: ${{ steps.result.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: xtask
+
+      - name: Bump changed components
+        id: bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cargo xtask bump --commit --tag
+          cargo xtask verify
+
+      - name: Push release commit and tags
+        if: steps.bump.outputs.bumped != '0'
+        run: git push --atomic origin HEAD:${{ github.ref_name }} --follow-tags
+
+      # Also releases when the current version has no published GitHub
+      # release yet (a fresh repository, or a release that was deleted to be
+      # rebuilt), so one push publishes without a manual rebuild.
+      - name: Result
+        id: result
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          released="${{ steps.bump.outputs.released }}"
+          version="${{ steps.bump.outputs.version }}"
+          tag="${{ steps.bump.outputs.tag }}"
+          unpublished=false
+          gh release view "v$version" >/dev/null 2>&1 || unpublished=true
+          if [ "${{ inputs.rebuild }}" = "true" ] || [ "$unpublished" = "true" ]; then
+            released=true; tag="v$version"
+            git rev-parse -q --verify "refs/tags/$tag" >/dev/null || { git tag -a "$tag" -m "mandara $version"; git push origin "$tag"; }
+          fi
+          echo "released=$released" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "### Mandara $version — release: $released" >> "$GITHUB_STEP_SUMMARY"
+          cargo xtask status >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build ${{ matrix.target }}${{ matrix.variant && format(' ({0})', matrix.variant) || '' }}
+    needs: version
+    if: needs.version.outputs.released == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-22.04
+            deb_arch: amd64
+            packages: true
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-22.04
+            variant: x86-64-v3
+            rustflags: -C target-cpu=x86-64-v3
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-22.04-arm
+            deb_arch: arm64
+            packages: true
+    runs-on: ${{ matrix.runner }}
+    env:
+      RUSTFLAGS: ${{ matrix.rustflags }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: System libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config cmake libxkbcommon-dev libwayland-dev libvulkan-dev \
+            libfontconfig-dev libfreetype-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}-${{ matrix.variant }}
+
+      - uses: ./.github/actions/lto-swap
+
+      # `xtask build`: release build with the source fingerprint embedded,
+      # then the binary's SHA-256 and lines of code in
+      # dist/mandara-<v>-<target>[-<variant>].build.toml (uploaded with the
+      # release and covered by SHA256SUMS).
+      - name: Build (release, fat LTO, fingerprinted)
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          cargo run --locked --quiet -p xtask -- build --target ${{ matrix.target }} ${{ matrix.variant && format('--variant {0}', matrix.variant) || '' }} --out dist --no-readme
+          ./target/${{ matrix.target }}/release/mandara --version
+          { echo '```toml'; cat dist/*.build.toml; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      # A binary that built but failed its own check: keep it for diagnosis.
+      - name: Failed binary
+        if: failure()
+        run: |
+          bin=./target/${{ matrix.target }}/release/mandara
+          [ -f "$bin" ] || exit 0
+          ldd "$bin" || true
+          "$bin" --version; echo "exit $?"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: failed-${{ matrix.target }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
+          path: target/${{ matrix.target }}/release/mandara
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Tarball
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          cargo xtask dist --target ${{ matrix.target }} ${{ matrix.variant && format('--variant {0}', matrix.variant) || '' }} --out dist
+
+      # Delta update: the previous published release's tarball of this
+      # same target → mandara-<old>-to-<v>-<target>.patch.zst (verified by
+      # applying it with the updater's own decoder) and this target's part
+      # of update.json. The first release, or a target the previous release
+      # didn't have, gets the full download only.
+      - name: Delta update from the previous release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          key="$(echo '${{ matrix.target }}' | sed 's/-unknown-/-/')${{ matrix.variant && format('-{0}', matrix.variant) || '' }}"
+          prev=""
+          if command -v gh >/dev/null 2>&1; then
+            prev="$(gh release list --exclude-drafts --exclude-pre-releases --limit 20 --json tagName --jq '.[].tagName' \
+              | grep -E '^v[0-9]' | grep -vxF '${{ needs.version.outputs.tag }}' | head -n 1 || true)"
+          fi
+          mkdir -p "$RUNNER_TEMP/previous"
+          if [ -n "$prev" ]; then
+            gh release download "$prev" --dir "$RUNNER_TEMP/previous" --pattern "mandara-${prev#v}-${key}.tar.gz" || echo "no ${key} tarball in ${prev}"
+          fi
+          old="$RUNNER_TEMP/previous/mandara-${prev#v}-${key}.tar.gz"
+          if [ -n "$prev" ] && [ -f "$old" ]; then
+            cargo run --locked --quiet -p xtask -- update-part --target ${{ matrix.target }} ${{ matrix.variant && format('--variant {0}', matrix.variant) || '' }} --out dist --previous "$old"
+          else
+            cargo run --locked --quiet -p xtask -- update-part --target ${{ matrix.target }} ${{ matrix.variant && format('--variant {0}', matrix.variant) || '' }} --out dist
+          fi
+          ls -la dist/*.patch.zst 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Install packagers
+        if: matrix.packages
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb,cargo-generate-rpm
+
+      - name: .deb and .rpm
+        if: matrix.packages
+        run: |
+          cargo deb -p mandara-app --no-build --no-strip --target ${{ matrix.target }} --output dist/
+          cargo generate-rpm -p crates/mandara-app --target ${{ matrix.target }} --output dist/
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
+          path: dist/*
+          if-no-files-found: error
+
+  build-musl:
+    name: Build ${{ matrix.target }}
+    needs: version
+    if: needs.version.outputs.released == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-22.04
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      # The host toolchain only runs xtask for the delta step below.
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: ./.github/actions/lto-swap
+
+      # Built inside Alpine so it links musl and Alpine's libraries;
+      # dynamically linked (no crt-static) because the Vulkan loader and
+      # the Wayland libraries are loaded at run time.
+      - name: Build in Alpine (release, fat LTO, fingerprinted) and tarball
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          docker run --rm -v "$PWD:/src" -w /src \
+            -e SOURCE_DATE_EPOCH -e GITHUB_SHA -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+            -e RUSTFLAGS="-C target-feature=-crt-static" \
+            rust:1-alpine sh -euc '
+              apk add --no-cache build-base pkgconf cmake perl git \
+                wayland-dev libxkbcommon-dev vulkan-loader-dev fontconfig-dev freetype-dev linux-pam-dev
+              git config --global --add safe.directory /src
+              cargo run --locked --quiet -p xtask -- build --target ${{ matrix.target }} --out dist --no-readme
+              ./target/${{ matrix.target }}/release/mandara --version
+              cargo run --locked --quiet -p xtask -- dist --target ${{ matrix.target }} --out dist
+              chown -R "$HOST_UID:$HOST_GID" dist target
+            '
+          { echo '```toml'; cat dist/*.build.toml; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delta update from the previous release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          key="$(echo '${{ matrix.target }}' | sed 's/-unknown-/-/')"
+          prev="$(gh release list --exclude-drafts --exclude-pre-releases --limit 20 --json tagName --jq '.[].tagName' \
+            | grep -E '^v[0-9]' | grep -vxF '${{ needs.version.outputs.tag }}' | head -n 1 || true)"
+          mkdir -p "$RUNNER_TEMP/previous"
+          if [ -n "$prev" ]; then
+            gh release download "$prev" --dir "$RUNNER_TEMP/previous" --pattern "mandara-${prev#v}-${key}.tar.gz" || echo "no ${key} tarball in ${prev}"
+          fi
+          old="$RUNNER_TEMP/previous/mandara-${prev#v}-${key}.tar.gz"
+          if [ -n "$prev" ] && [ -f "$old" ]; then
+            cargo run --locked --quiet -p xtask -- update-part --target ${{ matrix.target }} --out dist --previous "$old"
+          else
+            cargo run --locked --quiet -p xtask -- update-part --target ${{ matrix.target }} --out dist
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  plugins:
+    name: Plugins
+    needs: version
+    if: needs.version.outputs.released == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            plugins/examples/moon-phase
+      - run: cargo xtask plugins --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-plugins
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish ${{ needs.version.outputs.tag }}
+    needs: [version, build, build-musl, plugins]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+
+      - name: Arch PKGBUILD
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          sha() { sha256sum "dist/mandara-$v-$1-linux-gnu.tar.gz" | cut -d' ' -f1; }
+          sed -e "s/@VERSION@/$v/g" -e "s#@REPO@#${{ github.repository }}#g" \
+              -e "s/@SHA_X86_64@/$(sha x86_64)/" -e "s/@SHA_AARCH64@/$(sha aarch64)/" \
+              packaging/arch/PKGBUILD.in > dist/PKGBUILD
+
+      # One update.json from the build jobs' per-target parts.
+      - name: Update manifest
+        run: |
+          jq -s --arg v "${{ needs.version.outputs.version }}" \
+            '{schema: 1, name: "mandara", version: $v, targets: (map(.targets) | add)}' \
+            dist/*.update-part.json > dist/update.json
+          rm -f dist/*.update-part.json
+          cat dist/update.json
+
+      # Version-less copies of the tarballs, so
+      # releases/latest/download/mandara-<target>.tar.gz always works
+      # (the README's install command).
+      - name: Stable download names
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          for f in dist/mandara-"$v"-*.tar.gz; do
+            cp "$f" "dist/mandara-${f#dist/mandara-$v-}"
+          done
+          ls -la dist/mandara-*.tar.gz
+
+      - name: Checksums
+        run: |
+          cd dist
+          rm -f ./*.sha256
+          sha256sum -- * | grep -v ' SHA256SUMS$' > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ needs.version.outputs.tag }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/* --clobber
+          else
+            gh release create "$tag" dist/* --verify-tag --title "Mandara ${{ needs.version.outputs.version }}" --generate-notes \
+              --notes "Install with one command: \`sh -c 'cd \"\$(mktemp -d)\" && curl -fsSL \"https://github.com/${{ github.repository }}/releases/latest/download/mandara-\$(uname -m)-linux-gnu.tar.gz\" | tar xz && exec ./mandara-*/bin/mandara install'\`. Or download the tarball for your CPU, \`tar xf\` it and run \`./mandara-*/bin/mandara install\`. Upgrade: \`mandara update\`."
+          fi

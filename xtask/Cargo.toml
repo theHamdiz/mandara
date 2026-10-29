@@ -1,0 +1,38 @@
+[package]
+name = "xtask"
+description = "Mandara dev and release tooling: versioning, fingerprinted builds, packaging, checksums, resource budget, headless demo sandbox"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+mandara-version.workspace = true
+sha2.workspace = true
+tar.workspace = true
+flate2.workspace = true
+# `cargo xtask art`: plugin artwork pipeline (embedding, cover composition, checks).
+image.workspace = true
+resvg = "0.46"
+roxmltree = "0.21"
+ab_glyph = "0.2"
+color_quant = "1.1"
+png = "0.18"
+serde.workspace = true
+serde_json.workspace = true
+# `cargo xtask build`: reads feature lists, writes the build manifest.
+toml.workspace = true
+# `cargo xtask delta` / `update-part` / `plugin-delta`: binary patches and
+# update.json (bidiff + zstd encoder; the shell links only the apply side).
+mandara-delta = { workspace = true, features = ["create"] }
+# `cargo xtask resource-check` / `sandbox`: process control and /proc
+# (kill, setsid, rlimits, parent-death signal, clock ticks).
+rustix.workspace = true
+# `cargo xtask sandbox pointer`: the virtual pointer (shared source with
+# mandara-services' `vpointer`) on the sandbox's own Wayland socket.
+anyhow.workspace = true
+wayland-client.workspace = true
+wayland-protocols-wlr.workspace = true
+# `cargo xtask sandbox audio` / `notify`: the demo MPRIS player and demo
+# notifications on the sandbox's private session bus.
+zbus.workspace = true

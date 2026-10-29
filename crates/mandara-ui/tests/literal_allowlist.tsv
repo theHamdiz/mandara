@@ -1,0 +1,22 @@
+# Bare tunable literals that remain, per file (see tests/no_hardcoded.rs).
+# file	kind	count	reason — counts must match the sources exactly.
+mandara-greeter/src/lib.rs	px	2	greeter layout metric (the greeter's look is set in Studio → Login screen designer)
+mandara-greeter/src/view.rs	px	3	greeter layout metric (the greeter's look is set in Studio → Login screen designer)
+mandara-studio/src/app.rs	px	3	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
+mandara-studio/src/app/designer.rs	px	1	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
+mandara-studio/src/app/diagnostics_page.rs	px	2	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
+mandara-studio/src/app/greeter_page.rs	px	4	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
+mandara-studio/src/app/maint_page.rs	px	2	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
+mandara-studio/src/app/plugin_modal.rs	px	1	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
+mandara-studio/src/app/plugins_local.rs	px	113	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
+mandara-studio/src/app/users_page.rs	px	4	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
+mandara-ui/src/desktop.rs	px	1	desktop widget metric (fixed design; wallpaper clock position/scale are settings)
+mandara-ui/src/icons.rs	px	5	icon glyph metrics (bar icons follow bar.icon_scale)
+mandara-ui/src/overlays.rs	px	12	launcher row geometry (launcher width, layout, columns and compact mode are settings)
+mandara-ui/src/plugins/containers.rs	px	2	container row metrics (fixed design; panels.width_scale applies)
+mandara-ui/src/plugins/mod.rs	px	2	shared plugin chrome metrics (fixed design)
+mandara-ui/src/plugins/screen_time.rs	px	8	screen-time chart geometry (fixed design)
+mandara-ui/src/plugins/updates.rs	px	1	update row metric (fixed design; panels.width_scale applies)
+mandara-ui/src/switcher.rs	px	4	switcher card metrics (thumbnail width and columns are settings)
+mandara-ui/src/text_field.rs	px	6	text field caret / selection metrics (platform convention)
+mandara-ui/src/wallpaper.rs	px	19	wallpaper picker card geometry (picker size / focus are settings: wallpaper.picker_size, picker_focus)
