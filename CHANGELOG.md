@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.2.0 — 2026-10-30
+
 A lock screen that accepts your password, brightness controls for laptops,
 and release notes you can read right inside Mandara.
 
