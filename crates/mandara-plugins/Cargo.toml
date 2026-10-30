@@ -1,7 +1,7 @@
 [package]
 name = "mandara-plugins"
 description = "Mandara Shell plugin runtime: manifests, registry, panel choreography API (WASM/WIT host for third-party plugins)"
-version = "0.1.3"
+version = "0.1.4"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

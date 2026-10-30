@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.3.0 — 2026-10-30
+
 A calmer, tidier Studio, and your clock and your location finally agree
 with each other.
 
