@@ -1008,7 +1008,7 @@ fn place_json(p: &Place, at: DateTime<Utc>) -> serde_json::Value {
 
 pub fn register(r: &mut PluginRegistry) {
     r.register(
-        PluginManifest::builtin(ID, tk("World clock"), tk("Cities around the world with daylight and a meeting planner"), Some(Zone::Right)),
+        PluginManifest::builtin(ID, tk("World clock"), tk("Cities around the world with daylight and a meeting planner"), Some(Zone::Right)).opt_in(),
         |window, cx, panel_cx| {
             let views = ViewSet::default();
             let field_views = views.clone();

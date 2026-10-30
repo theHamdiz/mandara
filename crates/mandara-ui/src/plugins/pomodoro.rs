@@ -150,7 +150,7 @@ fn status(cx: &gpui::App) -> serde_json::Value {
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Pomodoro"), mandara_i18n::tk("Focus timer with breaks and session tracking"),Some(Zone::Right)), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Pomodoro"), mandara_i18n::tk("Focus timer with breaks and session tracking"),Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let bar = fn_view(
             None,
             |palette, _, cx| {

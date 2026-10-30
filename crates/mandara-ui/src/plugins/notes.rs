@@ -805,7 +805,7 @@ fn edit(cx: &mut App, f: impl FnOnce(&mut NoteStore) -> anyhow::Result<serde_jso
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Notes"), mandara_i18n::tk("Markdown notes in topics, saved as .md files"), Some(Zone::Right)), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Notes"), mandara_i18n::tk("Markdown notes in topics, saved as .md files"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let bar = fn_view(None, |palette, _, _| div().flex().items_center().child(icon("note", crate::style::bar_icon(BAR_ICON_PX), palette.on_surface)).into_any_element(), window, cx);
         let panel = surface(PANEL_NOTES, &PANEL_IDS, false, Some(panel_cx.clone()), window, cx);
         let sidebar = surface(CARD_NOTES, &CARD_IDS, true, None, window, cx);

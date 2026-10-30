@@ -82,7 +82,7 @@ fn app_row(app: &AppUse, glyph: &'static str, palette: &MandaraPalette) -> AnyEl
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, tk("Privacy"), tk("Shows when apps use your microphone, camera or screen"), Some(Zone::Right)), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, tk("Privacy"), tk("Shows when apps use your microphone, camera or screen"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let bar = fn_view(
             None,
             |palette, _, cx| {

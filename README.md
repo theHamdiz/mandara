@@ -17,7 +17,7 @@
   <a href="#features"><img src="https://img.shields.io/badge/Wayland-native-FFBC00?logo=wayland&logoColor=black" alt="Wayland native"/></a>
   <a href="#performance"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-5B4FE9" alt="GPU rendered"/></a>
   <a href="#why-mandara"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland-first--class-0A7EA4" alt="MangoWM, Niri, Hyprland"/></a>
-  <a href="#plugins"><img src="https://img.shields.io/badge/plugins-41%20built--in%20%2B%20WebAssembly-8250DF" alt="41 plugins plus WebAssembly"/></a>
+  <a href="#plugins"><img src="https://img.shields.io/badge/plugins-43%20built--in%20%2B%20WebAssembly-8250DF" alt="43 plugins plus WebAssembly"/></a>
   <a href="#languages"><img src="https://img.shields.io/badge/languages-10%20%C2%B7%20RTL%20Arabic-0E7C86" alt="10 languages"/></a>
   <br/>
   <a href="#performance"><img src="https://img.shields.io/badge/RAM-under%20100%20MiB-2EA44F" alt="RAM under 100 MiB"/></a>
@@ -266,7 +266,9 @@ browser tab, without trading away speed. It took deliberate work at every layer:
   look turned on (never ones you had on). Looks never change your wallpaper;
   *Use my wallpaper's colors* keeps its palette.
   `mandara msg look list|apply|restore` scripts them.
-- **Cursor themes:** Studio → Themes → Cursor shows your cursor drawn from
+- **Cursor themes** (opt-in plugin, `cursors`): switched off, Mandara
+  leaves your cursor configuration alone entirely and Studio → Themes shows
+  a one-line card to turn it on. Switched on, Studio → Themes → Cursor shows your cursor drawn from
   its own files at its size, every cursor setting (size with 24 / 32 / 48 /
   64 px chips, hide while typing, hide when idle, Hyprland's software cursor
   and hide on touch) and a gallery of the ten most popular ricing cursor
@@ -468,7 +470,8 @@ anything that must stay fixed is a named, documented constant.
 
 - **Picker** (Ctrl+Shift+W): slanted slices or a floating carousel, type to
   filter, **Match colors** to theme the whole desktop from the wallpaper, and
-  **Wallhaven** browsing when your folder is empty.
+  **Wallhaven** browsing (the opt-in `wallhaven` plugin: switched off, the
+  picker has no Wallhaven source and Mandara makes no request to it).
 - **Engine**: fill / fit / stretch / center / tile, fade / wipe / grow
   transitions, separate **light and dark wallpapers**, **per-display
   wallpapers** and a **slideshow** (interval, random or alphabetical, paused
@@ -733,6 +736,11 @@ scriptable too: `mandara msg apps owner <id>` and
   spring upward.
 - **Panels that morph** out of their pill, with clean concentric corners,
   a 1px specular rim and anti-banding grain.
+- **Liquid tag pills**: every active tag or workspace gets its own indicator
+  that stretches as it travels. Neighbouring tags viewed together on MangoWM
+  (right-click, `toggleview`) melt into one shape with a soft waist (a
+  smooth minimum of their distance fields), and one Oklab gradient runs
+  across them all.
 - **Sidebar** with Overview and Notifications tabs, quick settings, weather
   (animated sky), media, Pomodoro, to-do, notes, sound and more. It opens on
   hover or Super+B and sits left or right (the power dock takes the opposite
@@ -896,10 +904,23 @@ scriptable too: `mandara msg apps owner <id>` and
   greys.
 - **Light and dark** switch manually, **follow the system**, or run on a
   **daily schedule**.
-- **Cross-app theming**: Ghostty, GTK 3/4, Qt5/Qt6 (qt5ct/qt6ct), Kvantum,
-  Zed, Fuzzel, btop, kitty, foot, Alacritty, WezTerm, Helix, Neovim,
-  Vesktop / Vencord and KDE colour schemes follow Mandara live, written
-  non-destructively: Mandara only writes its own theme files. Select them
+- **Cross-app theming** (opt-in, per app): Ghostty, GTK 3/4, Qt5/Qt6
+  (qt5ct/qt6ct), Kvantum, Zed, Fuzzel, btop, kitty, foot, Alacritty,
+  WezTerm, Helix, Neovim, Vesktop / Vencord and KDE colour schemes can
+  follow Mandara live. **Every app is off until you switch it on** in
+  Studio → Themes → Other apps (or `mandara msg config set
+  /integrations/gtk4 true`): until then Mandara writes nothing outside
+  `~/.config/mandara` and `~/.cache/mandara`. Switching an app off takes
+  back exactly what Mandara changed (the import line in `gtk.css`, the
+  `fuzzel.ini` block, the Kvantum link and selection, the theme files it
+  created) and restores any file it had replaced from its
+  `.mandara-backup`; it records what it applied in
+  `~/.config/mandara/generated/app-themes.toml`. Compositor border colours
+  are off by default too (Studio → Compositor). **Upgrading from 0.1:** if
+  you never changed the app list, it is now recorded as off and the files
+  0.1 wrote are left exactly as they are; to keep apps following Mandara,
+  switch them back on (switching one on and off again also removes what
+  0.1 added). A list you had changed is kept as you left it. Select them
   once: kitty `include themes/mandara.conf`, foot
   `include=~/.cache/mandara/themes/foot.ini`, Alacritty
   `general.import = ["~/.cache/mandara/themes/alacritty.toml"]`, WezTerm
@@ -1019,7 +1040,7 @@ handbook) sit beside it.
 </tr>
 </table>
 
-The 41 first-party plugins:
+The 43 first-party plugins (22 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -1034,12 +1055,12 @@ The 41 first-party plugins:
 | **Prayer times** | Islamic daily prayer times and countdown *(opt-in)* |
 | **Resources** | CPU, memory and disk usage |
 | **Mini stats** | CPU, memory, network, temperature and battery as compact numbers in the bar *(opt-in)* |
-| **Process hunter** | Find running processes by name or PID and end them |
-| **Drives** | Mounted filesystems and removable drives: mount, unlock and safely remove |
-| **Containers** | Docker and Podman containers: status, live usage, logs and controls |
-| **Services** | systemd units: failed alerts, start, stop, enable and journal |
+| **Process hunter** | Find running processes by name or PID and end them | *(opt-in)*
+| **Drives** | Mounted filesystems and removable drives: mount, unlock and safely remove | *(opt-in)*
+| **Containers** | Docker and Podman containers: status, live usage, logs and controls | *(opt-in)*
+| **Services** | systemd units: failed alerts, start, stop, enable and journal | *(opt-in)*
 | **Power** | Power profiles, battery health and charge history |
-| **Updates** | Pending package updates from pacman, the AUR, APT, DNF, Zypper and Flatpak |
+| **Updates** | Pending package updates from pacman, the AUR, APT, DNF, Zypper and Flatpak | *(opt-in)*
 | **Network** | Wi-Fi and wired connectivity |
 | **Bluetooth** | Bluetooth devices |
 | **Audio** | Volume and microphone |
@@ -1048,31 +1069,46 @@ The 41 first-party plugins:
 | **Clipboard** | Clipboard history with images |
 | **Main menu** | Right-click empty bar space |
 | **Notifications** | Notification center with history and do-not-disturb |
-| **Privacy** | Shows when apps use your microphone, camera or screen |
-| **To-do** | Tasks grouped into lists, for the sidebar and bar |
-| **Notes** | Markdown notes in topics, saved as .md files |
-| **Pomodoro** | Focus timer with breaks and session tracking |
+| **Privacy** | Shows when apps use your microphone, camera or screen | *(opt-in)*
+| **To-do** | Tasks grouped into lists, for the sidebar and bar | *(opt-in)*
+| **Notes** | Markdown notes in topics, saved as .md files | *(opt-in)*
+| **Pomodoro** | Focus timer with breaks and session tracking | *(opt-in)*
 | **Weather** | Animated current conditions, hourly and 5-day forecast |
 | **Wallpaper** | Wallpaper picker and desktop background |
+| **Wallhaven** | Search and download wallpapers from wallhaven.cc right in the wallpaper picker *(opt-in)* |
 | **Wallpaper generator** | Procedural wallpapers and seamless AV1 video loops at any size up to 8K: twelve styles, every variable adjustable, on a schedule if you want *(opt-in)* |
 | **System tray** | Status icons and menus of background apps |
-| **World clock** | Cities around the world with daylight and a meeting planner |
-| **Network speed** | Live upload and download rates, public IP and a speed test |
-| **Color picker** | Pick colors from the screen, with formats, tonal ramps and contrast |
-| **Authenticator** | Two-factor codes (TOTP / HOTP) stored in your keyring |
-| **Soundscapes** | Ambient sea, rain, wind, café, fire and noise — synthesized live |
+| **World clock** | Cities around the world with daylight and a meeting planner | *(opt-in)*
+| **Network speed** | Live upload and download rates, public IP and a speed test | *(opt-in)*
+| **Color picker** | Pick colors from the screen, with formats, tonal ramps and contrast | *(opt-in)*
+| **Authenticator** | Two-factor codes (TOTP / HOTP) stored in your keyring | *(opt-in)*
+| **Soundscapes** | Ambient sea, rain, wind, café, fire and noise — synthesized live | *(opt-in)*
 | **Dock** | A macOS-style dock: pinned, running and recent apps, stacks and the Trash, with magnification and auto-hide *(opt-in)* |
-| **App installer** | Install apps by dropping AppImages, Flatpaks, archives or packages on the dock or Studio |
+| **App installer** | Install apps by dropping AppImages, Flatpaks, archives or packages on the dock or Studio | *(opt-in)*
 | **Screen time** | How long you spend in each app, per day, with limits *(opt-in)* |
+| **Cursor themes** | Install, preview and apply cursor themes, live, with size and hiding options *(opt-in)* |
 
 Every Mandara plugin can be **switched off**, which stops everything it
 runs (bar item, sidebar card, launcher entries and any background polling),
 or **removed**: taken out of the bar and sidebar and parked under
 *Studio → Plugins → Removed Mandara plugins* until you restore it to where it
 was (`mandara msg plugins disable|enable|remove|restore <id>`). The
-launcher, session menu and main menu are core and stay on. The dock, mini
-stats, screen time, prayer times and the wallpaper generator ship switched off;
-turn them on in Studio → Plugins.
+launcher, session menu and main menu are core and stay on.
+
+Mandara is **composable, not minimal**: a fresh install turns on a calm,
+complete desktop (workspaces, active window, clock, keyboard layout and
+language, network, Bluetooth, audio, tray, notifications, power, resources,
+quick settings, media, weather, wallpaper, screenshot and clipboard, plus
+the core launcher, session and main menus) and everything else ships
+switched off: the dock, mini stats, screen time, prayer times, the wallpaper
+generator, Wallhaven, cursor themes, containers, services, drives, updates,
+the process hunter, the authenticator, soundscapes, world clock, network
+speed, the color picker, Pomodoro, notes, to-do, privacy and the app
+installer. Turn any of them on in Studio → Plugins or with
+`mandara msg plugins enable <id>`. **Upgrading from 0.1 changes nothing you
+had:** a config written before these defaults keeps every plugin it had on
+(the upgrade writes them into `[plugins] enabled`), Wallhaven stays on if it
+was, and cursor themes stay on if you had picked a cursor.
 
 ### The plugin system
 
@@ -1150,7 +1186,7 @@ Mandara is a platform as much as a shell:
 - **Name routines.** Launcher *skills* chain commands into one named step,
   and slash commands (`/g`, `/yt`, `/todo`, your own) turn the launcher into
   a command line.
-- **Theme everything.** One palette drives the shell, your terminal,
+- **Theme everything, if you want.** One palette drives the shell and, for each app you switch on, your terminal,
   editors, GTK and Qt apps, browsers and compositor borders.
 - **Extend it safely.** Sandboxed plugins can add bar items, panels and
   sidebar cards, and reach users through the marketplace the day you tag a

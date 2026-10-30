@@ -481,5 +481,21 @@
     "motif": "aurora",
     "angle": -6,
     "panel": null
+  },
+  {
+    "id": "wallhaven",
+    "name": "Wallhaven",
+    "palette": "twilight",
+    "motif": "landscape",
+    "angle": 5,
+    "panel": null
+  },
+  {
+    "id": "cursors",
+    "name": "Cursor themes",
+    "palette": "obsidian",
+    "motif": "focus",
+    "angle": -5,
+    "panel": null
   }
 ]

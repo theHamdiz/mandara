@@ -305,19 +305,22 @@ impl GreeterPage {
             .border_color(p.primary.with_alpha(ALPHA_50).hsla())
             .bg(p.surface_container.hsla())
             .child(div().font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface.hsla()).child(tf("Switch the login screen to {name}?", &[("name", &name)])))
-            .child(
-                div()
+            .child({
+                let (scroll, bar) = mandara_ui::scrollbar::keyed("lm-plan");
+                let plan = div()
                     .id("lm-plan")
                     .max_h(px(PLAN_MAX_H_PX))
                     .overflow_y_scroll()
+                    .track_scroll(&scroll)
                     .p(px(SPACE_10_PX))
                     .rounded(px(RADIUS_12_PX))
                     .bg(p.surface_container_high.hsla())
                     .font_family(mono)
                     .text_size(px(TEXT_11_5_PX))
                     .text_color(p.on_surface.hsla())
-                    .child(SharedString::from(c.plan.clone())),
-            )
+                    .child(SharedString::from(c.plan.clone()));
+                mandara_ui::scrollbar::with_scrollbar(plan, &scroll, &bar, p)
+            })
             .child(
                 div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(if c.runnable {
                     t("Takes effect the next time you log in or restart. Your current session isn't touched.")

@@ -34,7 +34,7 @@ use mandara_ui::lock::paint::TextPainter;
 use mandara_ui::icons::icon;
 use mandara_ui::state::update_config;
 
-use super::StudioView;
+use super::{StudioView, swatch_list};
 use super::compositor_page::{badge, button, card, chip, group_title, heading};
 use super::themes_page::section_head;
 use crate::registry::system_settings::CURSOR;
@@ -44,6 +44,8 @@ use crate::tokens::*;
 /// Themes settings drawn by the galleries instead of as rows: light / dark
 /// (the gallery's header) and the wallpaper scheme (the wallpaper card).
 const SHOWN_ABOVE: &[&str] = &["/theme/mode", "/theme/source/variant"];
+/// The app-theme switches, drawn as tiles by `app_themes_page.rs`.
+const APP_THEMES_GROUP: &str = "App themes";
 
 /// The looks grid and tile drawing.
 const LOOK_GRID: CardGrid = CardGrid { min_w: 280.0, max_w: 460.0, gap: SPACE_16_PX };
@@ -279,18 +281,50 @@ impl StudioView {
     pub(super) fn themes_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let display = mandara_ui::fonts::fonts(cx).display.clone();
         let preview = self.theme_preview(cfg, p, cx);
-        let looks = self.looks_gallery(cfg, p, display.clone());
+        let looks = self.looks_gallery(cfg, p, display.clone(), cx);
         let themes = self.designed_themes(cfg, p, cx);
         let wallpaper = self.wallpaper_schemes(cfg, p, cx);
+        let apps = self.app_themes_section(cfg, p, cx);
         let cursor = self.cursor_section(cfg, p, cx);
-        let tune_head = section_head(t("Fine-tune"), t("Schedule, tuning, style, icons and the themes Mandara writes for your other apps"), Vec::new(), display, p);
-        // Cursor rows sit in the Cursor section.
-        let rows = self.rows(registry::in_section(Section::Themes).filter(|s| !SHOWN_ABOVE.contains(&s.path) && s.group != CURSOR), cfg, p, cx);
+        let tune_head = section_head(t("Fine-tune"), t("Schedule, tuning, style and icons"), Vec::new(), display, p);
+        // Cursor rows sit in the Cursor section, app themes in their grid.
+        let rows = self.rows(registry::in_section(Section::Themes).filter(|s| !SHOWN_ABOVE.contains(&s.path) && s.group != CURSOR && s.group != APP_THEMES_GROUP), cfg, p, cx);
         let tune = div().row().flex_col().gap(px(SPACE_14_PX)).child(tune_head).child(rows);
-        div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(preview).child(looks).child(themes).child(wallpaper).child(cursor).child(tune).into_any_element()
+        div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(preview).child(looks).child(themes).child(wallpaper).child(apps).child(cursor).child(tune).into_any_element()
     }
 
-    fn looks_gallery(&self, cfg: &ShellConfig, p: &MandaraPalette, display: SharedString) -> AnyElement {
+    /// Looks as a compact list (swatch, name in the look's face, its line,
+    /// a hover preview of its mock), or with "Show previews" the large
+    /// cards.
+    fn looks_list(&self, cfg: &ShellConfig, p: &MandaraPalette) -> AnyElement {
+        let active = cfg.looks.active.as_str();
+        let snapshot = std::sync::Arc::new(cfg.clone());
+        let rows = LOOKS.iter().enumerate().map(|(i, look)| {
+            let lp = look_palette(i);
+            let cfg = snapshot.clone();
+            let tip_palette = lp.clone();
+            swatch_list::row(("look-row", i), &lp, look.name.into(), Some(look.display_font.into()), blurb(look), look.id == active, p)
+                .tooltip(swatch_list::preview_tip(p, move || div().w(px(swatch_list::TIP_MOCK_W_PX)).child(thumbnail(look, &tip_palette, &cfg)).into_any_element()))
+                .on_click(move |_: &ClickEvent, _, cx| apply_look(look, cx))
+                .into_any_element()
+        });
+        let rows: Vec<AnyElement> = rows.collect();
+        super::grid::fit(self.page.column_w, swatch_list::SWATCH_GRID).balanced(rows.len()).render(rows)
+    }
+
+    fn looks_gallery(&mut self, cfg: &ShellConfig, p: &MandaraPalette, display: SharedString, cx: &mut Context<Self>) -> AnyElement {
+        let previews = self.ui.looks_previews;
+        let toggle = swatch_list::previews_chip("looks-previews", previews, p)
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                this.ui.looks_previews = !this.ui.looks_previews;
+                crate::ui_state::save(&this.ui);
+                cx.notify();
+            }))
+            .into_any_element();
+        if !previews {
+            let list = self.looks_list(cfg, p);
+            return self.looks_section(cfg, p, display, list, toggle);
+        }
         let active = cfg.looks.active.as_str();
         let mut tiles = Vec::with_capacity(LOOKS.len());
         for (i, look) in LOOKS.iter().enumerate() {
@@ -336,6 +370,12 @@ impl StudioView {
             );
         }
         let grid = super::grid::fit(self.page.column_w, LOOK_GRID).balanced(tiles.len()).render(tiles);
+        self.looks_section(cfg, p, display, grid, toggle)
+    }
+
+    /// The Looks heading (options, restore, the previews switch) over `body`.
+    fn looks_section(&self, cfg: &ShellConfig, p: &MandaraPalette, display: SharedString, body: AnyElement, toggle: AnyElement) -> AnyElement {
+        let active = cfg.looks.active.as_str();
         let wallpaper_colors = cfg.looks.wallpaper_colors;
         let has_before = !active.is_empty() && mandara_config::profiles::find(looks::BEFORE_PROFILE).is_some();
         let mut options = vec![chip("looks-wallpaper-colors", t("Use my wallpaper's colors"), wallpaper_colors, p)
@@ -345,8 +385,9 @@ impl StudioView {
         if has_before {
             options.push(button("looks-restore", "undo", t("Restore my look"), false, p).on_click(|_, _, cx| restore_look(cx)).into_any_element());
         }
+        options.push(toggle);
         let head = section_head(t("Looks"), t("One click sets the bar, desktop widgets, colors, fonts and roundness together. Your own setup is saved first, so you can always go back. Looks never change your wallpaper."), options, display, p);
-        div().row().flex_col().gap(px(SPACE_14_PX)).child(head).child(grid).into_any_element()
+        div().row().flex_col().gap(px(SPACE_14_PX)).child(head).child(body).into_any_element()
     }
 
     pub(super) fn desktop_cards_section(&self, cfg: &ShellConfig, p: &MandaraPalette) -> AnyElement {

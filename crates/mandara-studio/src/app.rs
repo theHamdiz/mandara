@@ -52,8 +52,11 @@ mod dock_page;
 mod switcher_page;
 mod desktop_widgets_page;
 mod looks_page;
+mod app_themes_page;
 mod themes_page;
 mod cursor_page;
+mod plugin_offer;
+mod swatch_list;
 mod wallgen_logic;
 mod wallgen_page;
 pub(crate) mod grid;
@@ -518,6 +521,11 @@ impl StudioView {
     }
 
     fn rows<'a>(&mut self, settings: impl IntoIterator<Item = &'a Setting>, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        // Rows of an opt-in plugin that is off stay out of the page (the
+        // plugin's store card offers it instead).
+        let registry = cx.try_global::<mandara_plugins::PluginRegistry>();
+        let shown = |s: &&Setting| registry::required_plugin(s.path).is_none_or(|id| registry.is_some_and(|r| r.is_enabled(id, &cfg.plugins)));
+        let settings: Vec<&Setting> = settings.into_iter().filter(shown).collect();
         let groups = group_rows(settings);
         let mut col = div().row().flex_col().gap(px(SPACE_26_PX));
         for (title, list) in groups {
@@ -1553,7 +1561,10 @@ impl Render for StudioView {
                     // The wallpaper generator first (or the card offering it).
                     let generator = self.wallgen_panel(&cfg, &p, cx);
                     let rows = self.rows(registry::in_section(Section::Wallpaper), &cfg, &p, cx);
-                    div().row().flex_col().gap(px(SPACE_26_PX)).child(generator).child(rows).into_any_element()
+                    // Wallhaven's rows show with its plugin on; off, a
+                    // one-line card offers it.
+                    let wallhaven = (!cfg.wallhaven_enabled()).then(|| self.plugin_offer(mandara_ui::plugins::wallhaven::ID, &p, cx));
+                    div().row().flex_col().gap(px(SPACE_26_PX)).child(generator).child(rows).children(wallhaven).into_any_element()
                 }
                 section => {
                     self.rows(registry::in_section(section), &cfg, &p, cx)
@@ -1610,6 +1621,7 @@ impl Render for StudioView {
                 window.request_animation_frame();
             }
         }
+        let content_bar = mandara_ui::scrollbar::keyed_state("studio-content");
         let content = div()
             .id("studio-content")
             .flex_1()
@@ -1635,6 +1647,10 @@ impl Render for StudioView {
                     })
                     .child(body),
             );
+        // The page's overlay scroll bar (it fills the content's place).
+        // Left to right, the page's end edge is the window's border.
+        let edge = if mandara_i18n::language().is_rtl() { px(0.0) } else { px(mandara_ui::scrollbar::WINDOW_EDGE_CLEARANCE_PX) };
+        let content = div().relative().flex_1().min_h(px(0.0)).flex().flex_col().child(content).child(mandara_ui::scrollbar::overlay_scrollbar(&self.content_scroll, &content_bar, &p).end_inset(edge));
 
         let modal = self.plugin_modal_layer(&cfg, &p, window, cx);
         let dock_picker = self.dock_picker_layer(&p, cx);

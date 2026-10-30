@@ -644,7 +644,7 @@ impl View {
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, tk("Color picker"), tk("Pick colors from the screen, with formats, tonal ramps and contrast"), Some(Zone::Right)), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, tk("Color picker"), tk("Pick colors from the screen, with formats, tonal ramps and contrast"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let bar = fn_view(
             None,
             |palette, window, _| {

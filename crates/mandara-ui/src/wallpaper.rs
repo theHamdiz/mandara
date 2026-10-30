@@ -282,6 +282,11 @@ impl Thumbnails {
         self.ready.get(job)
     }
 
+    /// Whether `job` failed (an unreadable or corrupt file).
+    pub fn failed_job(&self, job: &Job) -> bool {
+        self.failed.contains(job)
+    }
+
     /// Queues plain thumbnails (most important last).
     pub fn request(&mut self, paths: impl IntoIterator<Item = PathBuf>, cx: &mut Context<Self>) {
         self.request_jobs(paths.into_iter().map(|p| (p, 0, 0)), cx);
@@ -849,6 +854,10 @@ fn generated_badge(palette: &mandara_theme::MandaraPalette, label: bool) -> gpui
         .when(label, |el| el.child(t("Generated")))
 }
 
+/// The mark on a card whose file can't be read: glyph size and opacity.
+const UNREADABLE_GLYPH: f32 = 22.0;
+const UNREADABLE_ALPHA: f32 = 0.6;
+
 /// Progress fractions are shown as whole percents.
 const PERCENT: f32 = 100.0;
 
@@ -905,6 +914,26 @@ pub struct PickerView {
     generated: HashSet<PathBuf>,
     gen_job: Option<u64>,
     gen_error: Option<String>,
+    /// Images drawn this session (thumbnails, slices, previews): released
+    /// from GPUI's image cache when the picker goes, or every session kept
+    /// its decoded pixels for good.
+    painted: HashSet<PathBuf>,
+    /// Frames spent waiting for the surface to take the expected size.
+    settle_frames: u8,
+}
+
+/// Frames a new picker waits for its surface to take the expected size
+/// before drawing at the size it has (the compositor put it on an output
+/// of another size): without a limit it stayed invisible, holding the
+/// keyboard, and Esc never reached it.
+const SETTLE_FALLBACK_FRAMES: u8 = 6;
+/// Viewport sizes within this many logical px count as the expected one.
+const SETTLE_SLACK_PX: f32 = 2.0;
+
+/// Whether a picker of viewport `viewport` that expected `expected` may
+/// draw, after `waited` frames of waiting.
+fn picker_settled(viewport: (f32, f32), expected: (f32, f32), waited: u8) -> bool {
+    ((viewport.0 - expected.0).abs() <= SETTLE_SLACK_PX && (viewport.1 - expected.1).abs() <= SETTLE_SLACK_PX) || waited >= SETTLE_FALLBACK_FRAMES
 }
 
 impl PickerView {
@@ -925,8 +954,9 @@ impl PickerView {
         let selected = current.and_then(|c| all.iter().position(|p| *p == c)).unwrap_or(0);
         let mut offset = SpringValue::new(selected as f32, PICKER_SPRING);
         offset.set_target(selected as f32);
-        // No local wallpapers: browse Wallhaven instead.
-        let online_first = all.is_empty() && config(cx).read(cx).get().wallpaper.wallhaven;
+        // No local wallpapers: browse Wallhaven instead (only with the
+        // opt-in Wallhaven plugin on; otherwise no request is ever made).
+        let online_first = all.is_empty() && config(cx).read(cx).get().wallhaven_enabled();
         let mut this = Self {
             shell,
             source: Source::Local,
@@ -946,7 +976,17 @@ impl PickerView {
             generated: HashSet::new(),
             gen_job: None,
             gen_error: None,
+            painted: HashSet::new(),
+            settle_frames: 0,
         };
+        // A picker removed without its outro (its output went away) still
+        // lets go of its images.
+        cx.on_release(|this: &mut Self, cx| {
+            for path in this.painted.drain() {
+                crate::image_cache::forget_path(&path, cx);
+            }
+        })
+        .detach();
         if crate::plugins::wallpaper_generator::enabled(cx) {
             this.generated = crate::plugins::wallpaper_generator::model::generated_among(&this.all);
             let generator = crate::plugins::wallpaper_generator::wallgen(cx);
@@ -988,10 +1028,10 @@ impl PickerView {
     /// Fetches a Wallhaven page (and its previews): a fresh search when
     /// `reset`, else the next page appended.
     fn search_online(&mut self, reset: bool, cx: &mut Context<Self>) {
-        if self.online.loading && !reset {
+        let cfg = config(cx).read(cx).snapshot();
+        if (self.online.loading && !reset) || !cfg.wallhaven_enabled() {
             return;
         }
-        let cfg = config(cx).read(cx).snapshot();
         let text = if self.query.trim().is_empty() { cfg.wallpaper.wallhaven_query.clone() } else { self.query.clone() };
         let page = if reset { 1 } else { self.online.page + 1 };
         let q = wallhaven::Query { text, sorting: if self.query.trim().is_empty() { cfg.wallpaper.wallhaven_sorting.clone() } else { "relevance".into() }, atleast: "1920x1080".into(), page };
@@ -1198,7 +1238,7 @@ impl PickerView {
                 self.query.clear();
                 self.query_changed(cx);
             }
-            "tab" if config(cx).read(cx).get().wallpaper.wallhaven => {
+            "tab" if config(cx).read(cx).get().wallhaven_enabled() => {
                 let next = if self.source == Source::Local { Source::Wallhaven } else { Source::Local };
                 self.set_source(next, cx);
             }
@@ -1287,7 +1327,8 @@ impl Render for PickerView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let vp = window.viewport_size();
         let (sw, sh) = (f32::from(vp.width), f32::from(vp.height));
-        if ((sw - self.expected.0).abs() > 2.0 || (sh - self.expected.1).abs() > 2.0) && !self.closing {
+        if !picker_settled((sw, sh), self.expected, self.settle_frames) && !self.closing {
+            self.settle_frames = self.settle_frames.saturating_add(1);
             window.request_animation_frame();
             return div().id("picker-root").size_full().track_focus(&self.focus).into_any_element();
         }
@@ -1301,6 +1342,9 @@ impl Render for PickerView {
         let dt = self.clock.tick(Instant::now());
         let moving = self.appear.step(dt) | self.offset.step(dt);
         if self.closing && self.appear.value() <= 0.01 {
+            for path in self.painted.drain() {
+                crate::image_cache::evict_path(&path, window, cx);
+            }
             window.remove_window();
             return div().id("picker-root").size_full().into_any_element();
         }
@@ -1380,7 +1424,11 @@ impl Render for PickerView {
                 let is_generated = self.generated.contains(path);
                 let slice_img = thumbs.get_job(&(path.clone(), sjw, sjh)).cloned();
                 let big_img = thumbs.get_job(&(path.clone(), bjw, bjh)).cloned();
+                self.painted.extend(slice_img.iter().chain(big_img.iter().filter(|_| e > 0.0)).cloned());
                 let ready = slice_img.is_some() || big_img.is_some();
+                // An unreadable file (corrupt, or not an image despite its
+                // name) says so instead of looking forever like it loads.
+                let unreadable = !ready && thumbs.failed_job(&(path.clone(), sjw, sjh));
                 let placeholder = palette.surface_container_high.with_alpha(0.7);
                 cards.push(
                     div()
@@ -1428,6 +1476,7 @@ impl Render for PickerView {
                             .absolute()
                             .inset_0(),
                         )
+                        .when(unreadable, |el| el.child(div().absolute().inset_0().flex().items_center().justify_center().child(icon("close", UNREADABLE_GLYPH, palette.on_surface_variant.with_alpha(UNREADABLE_ALPHA)))))
                         // Inside the slant: the top edge starts one lean in.
                         .when(is_video, |el| el.child(video_badge(&palette, false).left(px(lean + BADGE_INSET))))
                         .when(is_generated, |el| el.child(generated_badge(&palette, false)))
@@ -1464,6 +1513,7 @@ impl Render for PickerView {
                 let is_video = mandara_media::is_video(path);
                 let is_generated = self.generated.contains(path);
                 let thumb = thumbs.get(path).cloned();
+                self.painted.extend(thumb.iter().cloned());
                 let failed = thumbs.failed(path);
                 cards.push(
                     div()
@@ -1493,7 +1543,7 @@ impl Render for PickerView {
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .child(icon(if failed { "close" } else { "image" }, 22.0, palette.on_surface_variant.with_alpha(0.6)))
+                                .child(icon(if failed { "close" } else { "image" }, UNREADABLE_GLYPH, palette.on_surface_variant.with_alpha(UNREADABLE_ALPHA)))
                                 .into_any_element(),
                         })
                         .when(is_video, |el| el.child(video_badge(&palette, true).left(px(BADGE_INSET))))
@@ -1607,7 +1657,7 @@ impl Render for PickerView {
             )
             .child(div().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).font_features(crate::fonts::tabular_nums()).child(format!("{} / {}", (self.selected + 1).min(self.shown.len()), self.shown.len())))
             .child(div().w(px(1.0)).h(px(18.0)).mx(px(6.0)).bg(palette.on_surface.with_alpha(0.12).hsla()))
-            .when(cfg.wallpaper.wallhaven, |el| {
+            .when(cfg.wallhaven_enabled(), |el| {
                 el.child(pill_btn("wall-source", if online { "cloud" } else { "image" }, Some(if online { "Wallhaven" } else { t("Local") }.into()), online).on_click(cx.listener(|this, _, _, cx| {
                     let next = if this.source == Source::Local { Source::Wallhaven } else { Source::Local };
                     this.set_source(next, cx);
@@ -1709,6 +1759,21 @@ mod tests {
         c.wallpaper.match_colors = false;
         assert!(reconcile_theme(&mut c));
         assert_eq!(c.theme.source, ThemeSource::Preset { preset: "rose-pine".into() });
+    }
+
+    #[test]
+    fn picker_draws_on_an_output_of_another_size_after_a_few_frames() {
+        let first = (1707.0, 960.0);
+        // The expected size (within the slack) draws at once.
+        assert!(picker_settled(first, first, 0));
+        assert!(picker_settled((first.0 + SETTLE_SLACK_PX, first.1), first, 0));
+        // GPUI's first frames use a guess: wait for the real size...
+        let other = (1920.0, 1080.0);
+        assert!(!picker_settled(other, first, 0));
+        assert!(!picker_settled(other, first, SETTLE_FALLBACK_FRAMES - 1));
+        // ...but never forever (it stayed invisible, holding the keyboard).
+        assert!(picker_settled(other, first, SETTLE_FALLBACK_FRAMES));
+        assert!(picker_settled(other, first, u8::MAX));
     }
 
     #[test]

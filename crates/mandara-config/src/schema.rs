@@ -169,10 +169,16 @@ impl ShellConfig {
     /// [`crate::desktop::HotCornersConfig::any_active`]).
     pub fn effective_compositor(&self) -> std::borrow::Cow<'_, crate::compositor::CompositorConfig> {
         let hot_corners = self.hot_corners.any_active();
-        if !self.compositor.look.gaps_follow_bar && !hot_corners {
+        // Cursor themes are a plugin: switched off, Mandara leaves the
+        // cursor configuration entirely to the compositor and the user.
+        let cursor_off = !self.cursors_enabled() && self.compositor.input.cursor != crate::input::CursorInput::default();
+        if !self.compositor.look.gaps_follow_bar && !hot_corners && !cursor_off {
             return std::borrow::Cow::Borrowed(&self.compositor);
         }
         let mut c = self.compositor.clone();
+        if cursor_off {
+            c.input.cursor = crate::input::CursorInput::default();
+        }
         if self.compositor.look.gaps_follow_bar {
             let gap = self.bar.side_gap.max(0.0).round() as u32;
             c.look.gaps_outer = Some(gap);
@@ -180,6 +186,18 @@ impl ShellConfig {
         }
         c.disable_builtin_hot_corners |= hot_corners;
         std::borrow::Cow::Owned(c)
+    }
+
+    /// Whether the opt-in cursor themes plugin is on (its cursor settings
+    /// are emitted and applied only then).
+    pub fn cursors_enabled(&self) -> bool {
+        self.plugins.opted_in(crate::upgrade::CURSORS_ID)
+    }
+
+    /// Whether the opt-in Wallhaven plugin is on (online wallpapers in the
+    /// picker; no Wallhaven request is made otherwise).
+    pub fn wallhaven_enabled(&self) -> bool {
+        self.plugins.opted_in(crate::upgrade::WALLHAVEN_ID)
     }
 
     /// The layout list behind `lane`.
@@ -549,7 +567,7 @@ impl Default for SidebarConfig {
             width: defaults::SIDEBAR_WIDTH_PX,
             mode: SidebarMode::Float,
             unpinned_mode: SidebarMode::Float,
-            tabs: vec![crate::sidebar::SidebarTab::overview(ids(&["quick-settings", "weather", "media", "pomodoro", "todo", "notes", "audio", "resources"]))],
+            tabs: vec![crate::sidebar::SidebarTab::overview(ids(&["quick-settings", "weather", "media", "audio", "resources"]))],
             notifications_tab: true,
             always_first_tab: false,
             add_tab_button: true,
@@ -823,9 +841,15 @@ pub enum WeekStart {
 }
 
 /// Plugin enablement and per-plugin settings.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PluginsConfig {
+    /// The built-in default set this table was written for (see
+    /// [`crate::upgrade`]). Missing in a file written before the field
+    /// existed (0.1: almost every built-in on), so the upgrade can keep
+    /// those plugins on; a fresh config carries the current version.
+    #[serde(default)]
+    pub defaults_version: u32,
     /// Third-party (or default-off) plugins the user switched on.
     pub enabled: Vec<String>,
     /// Plugins the user switched off (including shipped ones).
@@ -881,7 +905,28 @@ impl LayoutSlot {
     }
 }
 
+impl Default for PluginsConfig {
+    fn default() -> Self {
+        Self {
+            defaults_version: crate::upgrade::PLUGIN_DEFAULTS_VERSION,
+            enabled: Vec::new(),
+            disabled: Vec::new(),
+            removed: Vec::new(),
+            removed_places: BTreeMap::new(),
+            settings: BTreeMap::new(),
+        }
+    }
+}
+
 impl PluginsConfig {
+    /// Whether the opt-in plugin `id` is switched on: listed as enabled and
+    /// neither disabled nor removed. Only meaningful for plugins that ship
+    /// switched off (for the rest, ask the plugin registry), and usable
+    /// where the registry isn't, such as the compositor emitters.
+    pub fn opted_in(&self, id: &str) -> bool {
+        self.enabled.iter().any(|e| e == id) && !self.disabled.iter().any(|d| d == id) && !self.is_removed(id)
+    }
+
     /// Whether `id` was removed (see [`PluginsConfig::removed`]).
     pub fn is_removed(&self, id: &str) -> bool {
         self.removed.iter().any(|r| r == id)
@@ -1299,9 +1344,11 @@ pub struct WallpaperConfig {
     /// Foreground subject mask drawn over the clock (depth layer 3).
     pub depth_mask: DepthMask,
     pub crossfade_ms: u64,
-    /// Browse Wallhaven in the picker (automatically when the folder has
-    /// no images; Tab switches sources).
-    pub wallhaven: bool,
+    /// Before 0.2: browse Wallhaven in the picker. Wallhaven is now the
+    /// opt-in `wallhaven` plugin; [`crate::upgrade`] turns a `true` here
+    /// into that plugin being on, then drops the key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wallhaven: Option<bool>,
     /// Default Wallhaven search; empty = the toplist.
     pub wallhaven_query: String,
     /// `toplist`, `date_added`, `views`, `favorites`, `random` or `relevance`.
@@ -1341,7 +1388,7 @@ impl Default for WallpaperConfig {
             audio_ring: true,
             depth_mask: DepthMask::default(),
             crossfade_ms: defaults::WALLPAPER_CROSSFADE_MS,
-            wallhaven: true,
+            wallhaven: None,
             wallhaven_query: String::new(),
             wallhaven_sorting: "toplist".into(),
             fill: crate::desktop::WallpaperFill::default(),
@@ -1488,10 +1535,18 @@ pub struct Skill {
     pub icon: String,
 }
 
-/// Which external apps receive generated theme files.
+/// Which external apps receive generated theme files. Every one is off
+/// until the user turns it on: Mandara writes nothing outside its own
+/// folders (`~/.config/mandara`, `~/.cache/mandara`) unless asked.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct IntegrationsConfig {
+    /// The defaults this table was written for (see [`crate::upgrade`]).
+    /// Missing in a file written before the field existed (0.1, when most
+    /// apps were themed by default); a fresh config carries the current
+    /// version.
+    #[serde(default)]
+    pub version: u32,
     pub ghostty: bool,
     pub gtk4: bool,
     pub qt6: bool,
@@ -1523,7 +1578,41 @@ pub struct IntegrationsConfig {
 
 impl Default for IntegrationsConfig {
     fn default() -> Self {
-        Self { ghostty: true, gtk4: true, qt6: true, zed: true, fuzzel: true, btop: true, compositor_borders: true, kvantum: true, kvantum_apply: false, kitty: true, foot: true, alacritty: true, wezterm: true, helix: true, neovim: true, firefox: false, vesktop: true, kde: true }
+        Self::all(false)
+    }
+}
+
+impl IntegrationsConfig {
+    /// Every integration on or off (the current defaults version).
+    pub fn all(on: bool) -> Self {
+        Self {
+            version: crate::upgrade::INTEGRATIONS_VERSION,
+            ghostty: on,
+            gtk4: on,
+            qt6: on,
+            zed: on,
+            fuzzel: on,
+            btop: on,
+            compositor_borders: on,
+            kvantum: on,
+            kvantum_apply: on,
+            kitty: on,
+            foot: on,
+            alacritty: on,
+            wezterm: on,
+            helix: on,
+            neovim: on,
+            firefox: on,
+            vesktop: on,
+            kde: on,
+        }
+    }
+
+    /// Whether any app outside Mandara is themed (compositor borders live in
+    /// Mandara's own drop-in, so they don't count).
+    pub fn any_app(&self) -> bool {
+        let &Self { version: _, compositor_borders: _, ghostty, gtk4, qt6, zed, fuzzel, btop, kvantum, kvantum_apply, kitty, foot, alacritty, wezterm, helix, neovim, firefox, vesktop, kde } = self;
+        [ghostty, gtk4, qt6, zed, fuzzel, btop, kvantum, kvantum_apply, kitty, foot, alacritty, wezterm, helix, neovim, firefox, vesktop, kde].into_iter().any(|on| on)
     }
 }
 

@@ -1487,7 +1487,7 @@ fn action_command(action: UnitAction) -> (&'static str, &'static str, &'static s
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, tk("Services"), tk("systemd units: failed alerts, start, stop, enable and journal"), None), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, tk("Services"), tk("systemd units: failed alerts, start, stop, enable and journal"), None).opt_in(), |window, cx, panel_cx| {
         let m = model(cx);
         // Typing re-renders this plugin's views only.
         let views = m.borrow().views.clone();

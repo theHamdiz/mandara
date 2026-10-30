@@ -755,7 +755,7 @@ fn parse_install_args(words: &[String]) -> Result<(Vec<PathBuf>, JobOptions), St
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, tk("App installer"), tk("Install apps by dropping AppImages, Flatpaks, archives or packages on the dock or Studio"), None), |_, cx, _| {
+    r.register(PluginManifest::builtin(ID, tk("App installer"), tk("Install apps by dropping AppImages, Flatpaks, archives or packages on the dock or Studio"), None).opt_in(), |_, cx, _| {
         queue(cx);
         mandara_plugins::PluginInstance::empty()
     });

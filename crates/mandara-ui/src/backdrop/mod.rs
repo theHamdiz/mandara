@@ -195,8 +195,10 @@ enum Msg {
 enum Event {
     /// The renderer's outputs (connector names).
     Outputs(Vec<String>),
-    /// A right-click on the desktop: output, logical position.
-    Menu(String, f32, f32),
+    /// A right-click on the desktop: output, logical position, and the
+    /// output's logical size as the canvas knows it (the menu covers
+    /// exactly that output, even one connected after startup).
+    Menu(String, f32, f32, Option<(f32, f32)>),
     /// Painted widget geometry (edit mode).
     Boxes(Vec<OutputBoxes>),
     /// The renderer could not start; the shell falls back to GPUI.
@@ -271,7 +273,7 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
                     }
                     refresh(cx);
                 }
-                Event::Menu(output, x, y) => crate::desktop_menu::open(&output, (x, y), cx),
+                Event::Menu(output, x, y, size) => crate::desktop_menu::open_sized(&output, (x, y), size, cx),
                 Event::Boxes(boxes) => crate::desktop_edit::on_boxes(boxes, cx),
                 Event::Failed(why) => {
                     tracing::warn!("wallpaper: software renderer unavailable ({why}); using GPUI windows");
@@ -707,7 +709,8 @@ impl Renderer {
         for p in host.take_presses() {
             let Some(out) = self.outs.iter().find(|o| o.id == p.output && !o.name.is_empty()) else { continue };
             if p.button == BTN_RIGHT {
-                let _ = events.send_blocking(Event::Menu(out.name.clone(), p.x as f32, p.y as f32));
+                let size = out.geom.map(|g| (g.logical.0 as f32, g.logical.1 as f32));
+                let _ = events.send_blocking(Event::Menu(out.name.clone(), p.x as f32, p.y as f32, size));
             }
         }
     }

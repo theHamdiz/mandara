@@ -400,7 +400,11 @@ impl StudioView {
             .gap(px(SPACE_6_PX))
             .child(div().text_size(px(TEXT_10_5_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface_variant.with_alpha(ALPHA_80).hsla()).child(t("Add a widget")))
             .child(div().child(search))
-            .child(div().id("studio-widget-picker").max_h(px(PICKER_MAX_H_PX)).overflow_y_scroll().row().flex_col().gap(px(SPACE_3_PX)).children(picks))
+            .child({
+                let (scroll, bar) = mandara_ui::scrollbar::keyed("studio-widget-picker");
+                let list = div().id("studio-widget-picker").max_h(px(PICKER_MAX_H_PX)).overflow_y_scroll().track_scroll(&scroll).row().flex_col().gap(px(SPACE_3_PX)).children(picks);
+                mandara_ui::scrollbar::with_scrollbar(list, &scroll, &bar, p)
+            })
             .when(empty, |el| el.child(div().p(px(SPACE_8_PX)).text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(tf("No widgets match “{query}”", &[("query", &query)]))));
         let detail = div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_10_PX)).child(head).children(icon_grid).child(lane).child(picker);
         div()

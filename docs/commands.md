@@ -57,6 +57,8 @@ mandara msg wallpaper render-preview /tmp/desktop.png 3840x2160@1.5   # the desk
 mandara msg language set ar                 # language list
 mandara msg plugins reload                  # plugins list|enable|disable|remove|restore <id>
 mandara msg plugins remove prayer-times     # built-ins: off + out of bar/sidebar until `plugins restore` (core plugins refuse)
+mandara msg plugins enable wallhaven        # opt-in built-ins: wallhaven, cursors, dock, notes, todo, pomodoro, … (README: "ship switched off")
+mandara msg config set /integrations/gtk4 true   # theme an app (all off by default); false takes Mandara's changes back
 mandara msg plugins vet ./my-plugin          # the marketplace's compliance check: {"ok":true} or {"ok":false,"class":"broken|malicious|placeholder","reason":…}
 mandara msg config get /bar/height         # config set /bar/height 30, show, reload, export, import, reset
 mandara msg studio displays                 # open Studio on a page (docs/studio.md)
@@ -281,7 +283,10 @@ mandara msg world-clock add Mecca    # list, remove, search <query>, at <HH:MM>
 mandara msg authenticator code github  # list, copy, add <otpauth://…>, remove <id>, scan, demo on|off
 ```
 
-`cursor install` fetches only from the theme's own GitHub repository, keeps
+The `cursor` commands belong to the opt-in **Cursor themes** plugin
+(`mandara msg plugins enable cursors`); while it is off they answer that the
+plugin is off and change nothing, and Mandara writes no cursor setting at
+all. `cursor install` fetches only from the theme's own GitHub repository, keeps
 the file only when its size and SHA-256 match the catalog, unpacks it with
 pure-Rust readers that refuse paths leaving the folder, and installs just the
 theme folder; it never runs anything from the archive. `cursor apply` checks

@@ -61,9 +61,10 @@ pub(crate) const HIDDEN_PLUGINS: &[&str] = &["compositor"];
 /// plugins get their own group).
 pub(crate) const PLUGIN_CATEGORIES: &[(&str, &[&str])] = &[
     (tk("Bar essentials"), &["workspaces", "active-window", "clock", "language", "keyboard-layout", "main-menu", "session", "quick-settings", "dock"]),
-    (tk("System"), &["network", "bluetooth", "audio", "tray", "resources", "processes", "notifications", "clipboard", "drives", "power"]),
-    (tk("Maintenance"), &["updates", "services", "containers"]),
-    (tk("Media & capture"), &["media", "screenshot", "wallpaper", "wallpaper-generator", "color-picker", "soundscapes"]),
+    (tk("System"), &["network", "bluetooth", "audio", "tray", "resources", "mini-stats", "processes", "notifications", "clipboard", "drives", "power", "privacy"]),
+    (tk("Maintenance"), &["updates", "services", "containers", "app-installer"]),
+    (tk("Media & capture"), &["media", "screenshot", "color-picker", "soundscapes"]),
+    (tk("Look & feel"), &["wallpaper", "wallpaper-generator", "wallhaven", "cursors"]),
     (tk("Productivity"), &["todo", "notes", "pomodoro", "authenticator", "screen-time"]),
     (tk("Everyday info"), &["weather", "prayer-times", "world-clock", "net-speed"]),
     (tk("Third-party"), &[]),
@@ -83,7 +84,8 @@ const SHELVES: &[Shelf] = &[
     Shelf { key: "essentials", title: tk("Essentials"), line: tk("The pieces every Mandara bar is built from"), categories: &[tk("Bar essentials")] },
     Shelf { key: "desk", title: tk("For your desk"), line: tk("Weather, prayer times, world clocks and more at a glance"), categories: &[tk("Everyday info")] },
     Shelf { key: "productivity", title: tk("Productivity"), line: tk("Tasks, notes, focus timers and sign-in codes"), categories: &[tk("Productivity")] },
-    Shelf { key: "media", title: tk("Media & capture"), line: tk("Music, screenshots, wallpapers and color"), categories: &[tk("Media & capture")] },
+    Shelf { key: "media", title: tk("Media & capture"), line: tk("Music, screenshots, color and ambient sound"), categories: &[tk("Media & capture")] },
+    Shelf { key: "look", title: tk("Look & feel"), line: tk("Wallpapers, generated art, online galleries and cursor themes"), categories: &[tk("Look & feel")] },
     Shelf { key: "system", title: tk("System tools"), line: tk("Network, sound, power and upkeep, one click away"), categories: &[tk("System"), tk("Maintenance")] },
 ];
 
@@ -405,6 +407,9 @@ pub(crate) fn plugin_icon(id: &str) -> &'static str {
         "screenshot" => "camera",
         "wallpaper" => "image",
         "wallpaper-generator" => "sparkles",
+        "wallhaven" => "cloud",
+        "cursors" => "arrow",
+        "mini-stats" => "cpu",
         "todo" => "list-check",
         "notes" => "note",
         "pomodoro" => "timer",

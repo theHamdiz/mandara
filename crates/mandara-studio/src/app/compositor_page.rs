@@ -552,11 +552,12 @@ impl StudioView {
                 Self::comp_state(cx).preview_text = Some((tab, effective, borders, text.clone()));
                 text
             });
-            col = col.child(
-                div()
+            let (scroll, bar) = mandara_ui::scrollbar::keyed("dropin-text");
+            let text_box = div()
                     .id("dropin-text")
                     .max_h(px(DIM_320_PX))
                     .overflow_y_scroll()
+                    .track_scroll(&scroll)
                     .rounded(px(RADIUS_14_PX))
                     .bg(p.surface_dim.hsla())
                     .p(px(SPACE_14_PX))
@@ -565,8 +566,8 @@ impl StudioView {
                     .line_height(px(LEADING_16_PX))
                     .text_color(p.on_surface_variant.hsla())
                     // One text element: GPUI lays out each line itself.
-                    .child(text),
-            );
+                    .child(text);
+            col = col.child(mandara_ui::scrollbar::with_scrollbar(text_box, &scroll, &bar, p));
         }
         col.into_any_element()
     }
@@ -795,7 +796,8 @@ impl StudioView {
             Some(Ok(mut clients)) => {
                 // Studio itself last, then by app.
                 clients.sort_by_key(|c| (c.app_id == mandara_core::STUDIO_APP_ID, c.app_id.to_lowercase(), c.title.clone()));
-                let mut col = div().id("picker-list").max_h(px(DIM_360_PX)).overflow_y_scroll().row().flex_col().gap(px(SPACE_4_PX));
+                let (scroll, bar) = mandara_ui::scrollbar::keyed("picker-list");
+                let mut col = div().id("picker-list").max_h(px(DIM_360_PX)).overflow_y_scroll().track_scroll(&scroll).row().flex_col().gap(px(SPACE_4_PX));
                 for (n, c) in clients.into_iter().enumerate() {
                     let name = mandara_ui::apps::name_for_app_id(&c.app_id).unwrap_or_else(|| c.app_id.clone());
                     let (app_id, title) = (c.app_id.clone(), c.title.clone());
@@ -831,7 +833,7 @@ impl StudioView {
                             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.apply_pick(rule, &app_id, None, cx))),
                     );
                 }
-                col.into_any_element()
+                mandara_ui::scrollbar::with_scrollbar(col, &scroll, &bar, p).into_any_element()
             }
         };
         Some(

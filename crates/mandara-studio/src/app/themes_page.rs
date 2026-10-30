@@ -29,7 +29,7 @@ use mandara_ui::bidi::Bidi as _;
 use mandara_ui::icons::icon;
 use mandara_ui::state::update_config;
 
-use super::{StudioView, apps_page, grid};
+use super::{StudioView, apps_page, grid, swatch_list};
 use crate::registry;
 use crate::tokens::*;
 
@@ -389,7 +389,9 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// The designed themes grid (current mode, the other mode inset).
+    /// The designed themes: a compact list (swatch, name, description, a
+    /// hover preview of the shell in it), or with "Show previews" the grid
+    /// of large cards (current mode, the other mode inset).
     pub(super) fn designed_themes(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let fonts = mandara_ui::fonts::fonts(cx);
         let dark = cfg.theme.mode.is_dark();
@@ -399,6 +401,32 @@ impl StudioView {
         };
         let gallery = self.theme_gallery(dark);
         let count = gallery.themes.len();
+        let previews = self.ui.themes_previews;
+        let toggle = swatch_list::previews_chip("themes-previews", previews, p)
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                this.ui.themes_previews = !this.ui.themes_previews;
+                crate::ui_state::save(&this.ui);
+                cx.notify();
+            }))
+            .into_any_element();
+        let folder = apps_page::tilde(&catalog::user_theme_dir());
+        let head = section_head(t("Designed themes"), tf("{count} themes · add your own in {folder}", &[("count", &count), ("folder", &folder)]), vec![toggle], fonts.display.clone(), p);
+        if !previews {
+            let rows: Vec<AnyElement> = gallery
+                .themes
+                .iter()
+                .map(|(def, tp, _)| {
+                    let id = def.id.clone();
+                    let tip_palette = tp.clone();
+                    swatch_list::row(SharedString::from(format!("theme-row-{}", def.id)), tp, def.name.clone().into(), Some(fonts.display.clone()), tr(&def.description), active.as_deref() == Some(def.id.as_str()), p)
+                        .tooltip(swatch_list::preview_tip(p, move || shell_mock(&tip_palette, None, swatch_list::TIP_MOCK_W_PX, swatch_list::TIP_MOCK_H_PX, RADIUS_12_PX, false).into_any_element()))
+                        .on_click(move |_: &ClickEvent, _, cx| apply_theme(id.clone(), cx))
+                        .into_any_element()
+                })
+                .collect();
+            let list = grid::fit(self.page.column_w, swatch_list::SWATCH_GRID).balanced(rows.len()).render(rows);
+            return div().row().flex_col().gap(px(SPACE_14_PX)).child(head).child(list).into_any_element();
+        }
         let fit = grid::fit(self.page.column_w, THEME_GRID);
         let preview_w = (fit.card_w - 2.0 * (SPACE_8_PX + BORDER_2_PX)).max(0.0);
         let preview_h = fit.aspect_h(THEME_PREVIEW_ASPECT, SPACE_8_PX + BORDER_2_PX);
@@ -466,14 +494,7 @@ impl StudioView {
                 )
                 .on_click(move |_: &ClickEvent, _, cx| apply_theme(id.clone(), cx))
         });
-        let folder = apps_page::tilde(&catalog::user_theme_dir());
-        div()
-            .row()
-            .flex_col()
-            .gap(px(SPACE_14_PX))
-            .child(section_head(t("Designed themes"), tf("{count} themes · add your own in {folder}", &[("count", &count), ("folder", &folder)]), Vec::new(), fonts.display.clone(), p))
-            .child(fit.render(cards))
-            .into_any_element()
+        div().row().flex_col().gap(px(SPACE_14_PX)).child(head).child(fit.render(cards)).into_any_element()
     }
 
     /// Material You from the wallpaper: on / off, the thumbnail, the seed

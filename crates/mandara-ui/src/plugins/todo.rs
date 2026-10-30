@@ -815,7 +815,7 @@ fn err(e: crate::todo_lists::ListError) -> String {
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, mandara_i18n::tk("To-do"), mandara_i18n::tk("Tasks grouped into lists, for the sidebar and bar"), Some(Zone::Right)), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, mandara_i18n::tk("To-do"), mandara_i18n::tk("Tasks grouped into lists, for the sidebar and bar"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let bar = fn_view(
             None,
             |palette, _, cx| {

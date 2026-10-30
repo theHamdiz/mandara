@@ -263,7 +263,9 @@ const BUILTIN_ACCESS: &[(&str, &[(Access, &str)])] = &[
             (Access::Files, tk("Saves captures to ~/Pictures/Screenshots")),
         ],
     ),
-    ("wallpaper", &[(Access::Files, tk("Reads images from your wallpaper folder")), (Access::Network, tk("Browses Wallhaven when you ask it to"))]),
+    ("wallpaper", &[(Access::Files, tk("Reads images from your wallpaper folder"))]),
+    ("wallhaven", &[(Access::Network, tk("Searches wallhaven.cc and downloads the wallpapers you pick")), (Access::Files, tk("Saves the wallpapers you pick in Mandara's data folder"))]),
+    ("cursors", &[(Access::Network, tk("Downloads the cursor themes you pick from their GitHub releases")), (Access::Files, tk("Installs them to ~/.local/share/icons")), (Access::Compositor, tk("Sets the cursor in Mandara's compositor drop-in and live"))]),
     ("workspaces", &[(Access::Compositor, tk("Reads and switches tags or workspaces"))]),
     ("active-window", &[(Access::Compositor, tk("Reads the focused window's title"))]),
     ("keyboard-layout", &[(Access::Compositor, tk("Reads and switches keyboard layouts"))]),
@@ -339,6 +341,11 @@ fn declared_settings(m: &PluginManifest) -> Vec<Setting> {
 
 /// Whether the registry setting at `path` belongs to plugin `id`.
 fn owns(id: &str, path: &str) -> bool {
+    // A setting of an opt-in plugin is that plugin's alone (Wallhaven's
+    // options sit under `/wallpaper/` but aren't the wallpaper plugin's).
+    if let Some(owner) = crate::registry::required_plugin(path) {
+        return owner == id;
+    }
     in_own_table(id, path)
         || OWNED_SETTINGS
             .iter()
@@ -651,15 +658,18 @@ impl StudioView {
             })
             .occlude()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .child(
-                div()
+            .child({
+                let (scroll, bar) = mandara_ui::scrollbar::keyed("plugin-modal-scroll");
+                let body = div()
                     .id("plugin-modal-scroll")
                     .flex_1()
                     .min_h(px(0.0))
                     .overflow_y_scroll()
+                    .track_scroll(&scroll)
                     // Content keeps its final width while the card grows (no reflow).
-                    .child(div().w(px(full_w)).mx(px(-(full_w * (1.0 - grow)) / 2.0)).child(body)),
-            )
+                    .child(div().w(px(full_w)).mx(px(-(full_w * (1.0 - grow)) / 2.0)).child(body));
+                mandara_ui::scrollbar::with_scrollbar(body, &scroll, &bar, p).flex_1().min_h(px(0.0)).flex().flex_col()
+            })
             .child(close);
         let focus = self.modal.focus.clone();
         Some(

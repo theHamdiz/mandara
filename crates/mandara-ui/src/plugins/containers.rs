@@ -1885,7 +1885,7 @@ fn register_action(r: &mut PluginRegistry, path: &'static str, summary: &'static
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, tk("Containers"), tk("Docker and Podman containers: status, live usage, logs and controls"), None), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, tk("Containers"), tk("Docker and Podman containers: status, live usage, logs and controls"), None).opt_in(), |window, cx, panel_cx| {
         let sh = shared(cx);
         // Prime the installed-RAM figure off the UI thread.
         cx.background_executor().spawn(async { host_memory() }).detach();

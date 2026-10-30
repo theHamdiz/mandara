@@ -1155,7 +1155,11 @@ impl StudioView {
                                 .flex_col()
                                 .text_color(p.on_surface.hsla())
                                 .child(div().px(px(SPACE_22_PX)).pt(px(SPACE_18_PX)).pb(px(SPACE_10_PX)).text_size(px(TEXT_17_PX)).font_weight(FontWeight::SEMIBOLD).child(tf("Uninstall {app}?", &[("app", &app.app.name)])))
-                                .child(div().id("uninstall-body").flex_1().min_h(px(0.0)).overflow_y_scroll().px(px(SPACE_22_PX)).pb(px(SPACE_8_PX)).child(body))
+                                .child({
+                                    let (scroll, bar) = mandara_ui::scrollbar::keyed("uninstall-body");
+                                    let body = div().id("uninstall-body").flex_1().min_h(px(0.0)).overflow_y_scroll().track_scroll(&scroll).px(px(SPACE_22_PX)).pb(px(SPACE_8_PX)).child(body);
+                                    mandara_ui::scrollbar::with_scrollbar(body, &scroll, &bar, p).flex_1().min_h(px(0.0)).flex().flex_col()
+                                })
                                 .child(div().row().items_center().px(px(SPACE_22_PX)).py(px(SPACE_16_PX)).child(footer)),
                         ),
                 ),

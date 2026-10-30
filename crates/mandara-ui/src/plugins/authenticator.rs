@@ -597,7 +597,7 @@ fn request(command: AuthCommand, cx: &mut App) -> Output {
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, tk("Authenticator"), tk("Two-factor codes (TOTP / HOTP) stored in your keyring"), Some(Zone::Right)), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, tk("Authenticator"), tk("Two-factor codes (TOTP / HOTP) stored in your keyring"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let bar = fn_view(None, |palette, _, _| icon("shield", crate::style::bar_icon(BAR_ICON_PX), palette.on_surface).into_any_element(), window, cx);
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(panel_height(0, DEFAULT_VISIBLE_ROWS as usize, false, false, true)))));
         let view = View { p: panel_cx.clone(), size_cell: size_cell.clone(), flash: Flash::default(), footer: RefCell::default() };

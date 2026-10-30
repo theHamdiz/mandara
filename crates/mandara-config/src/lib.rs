@@ -20,6 +20,7 @@ pub mod schema;
 pub mod sidebar;
 pub mod store;
 pub mod surfaces;
+pub mod upgrade;
 pub mod wallgen;
 pub mod workflow;
 

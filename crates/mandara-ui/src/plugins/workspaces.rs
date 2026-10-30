@@ -2,11 +2,13 @@
 //!
 //! Each tag (MangoWM) or workspace (Niri, Hyprland) is a pill showing its
 //! number and the icons of the apps on it; empty ones show only the number.
-//! Apps without a themed icon get a generated monogram tile. The active
-//! indicator is a liquid capsule whose leading edge springs fast and trailing
-//! edge slow, so it stretches as it travels. Left-click views, right-click
-//! toggles into a composite view (MangoWM `toggleview`), middle-click toggles
-//! the focused window onto the tag.
+//! Apps without a themed icon get a generated monogram tile. Every active tag
+//! carries a liquid capsule whose leading edge springs fast and trailing edge
+//! slow, so it stretches as it travels; capsules on neighbouring active tags
+//! (a MangoWM composite view) melt into one shape through a smooth minimum of
+//! their distance fields, and one Oklab gradient runs across them all.
+//! Left-click views, right-click toggles into a composite view (MangoWM
+//! `toggleview`), middle-click toggles the focused window onto the tag.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -16,10 +18,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use gpui::{
-    AnyElement, InteractiveElement, IntoElement, MouseButton, ObjectFit, ParentElement, SharedString, StatefulInteractiveElement, Styled,
-    StyledImage as _, div, img, px,
+    AnyElement, Background, Bounds, ColorSpace, InteractiveElement, IntoElement, MouseButton, ObjectFit, ParentElement, Pixels, Point, SharedString,
+    StatefulInteractiveElement, Styled, StyledImage as _, Window, div, fill, img, linear_color_stop, linear_gradient, point, px, size,
 };
 use mandara_compositor::{ClientInfo, NavigationModel};
+use mandara_core::liquid::{self, Axis, Capsule, Outline};
 use mandara_core::{FrameClock, SpringConfig, SpringValue, ToGpui};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
 use mandara_theme::{Color, MandaraPalette};
@@ -101,51 +104,282 @@ fn step_visible(spring: &mut SpringValue<f32>, dt: f32, rest: f32) -> bool {
     true
 }
 
-/// The stretchy active indicator, in pixels.
-struct Worm {
-    lead: SpringValue<f32>,
-    trail: SpringValue<f32>,
-    clock: FrameClock,
-    init: bool,
+/// Smooth-minimum blend distance of the indicator blobs, px. Two active
+/// pills [`GAP`] apart fuse into one liquid shape with a soft waist about
+/// three quarters of the pill's thickness (smaller values pinch it into a
+/// sharp notch, larger ones flatten it into a plain bar); with an inactive
+/// pill between them they sit 26 px or more apart, past this reach, and stay
+/// two clean capsules.
+const LIQUID_K_PX: f32 = 14.0;
+/// Outline sample spacing along the strip, logical px: one device pixel or
+/// finer up to 2× scale, and cosine-packed even finer at the round tips.
+const LIQUID_SPACING_PX: f32 = 0.5;
+/// CSS gradient angles that run along a horizontal / vertical strip.
+const ALONG_X_DEG: f32 = 90.0;
+const ALONG_Y_DEG: f32 = 180.0;
+/// Below this length a shape or the gradient run is drawn in one colour
+/// (the gradient's stops would collapse onto each other).
+const MIN_GRADIENT_PX: f32 = 0.5;
+/// Half-width of the anti-aliased ring along a merged outline, logical px.
+/// The fade itself is one device pixel wide whatever this is; the ring only
+/// has to hold it (half a device pixel each side) at every supported scale.
+const FRINGE_PX: f32 = 1.0;
+/// GPUI's path shader anti-aliases a triangle along the curve
+/// `s² − t = 0` of its interpolated `(s, t)` coordinates, at
+/// `alpha = clamp(0.5 − f / |∇f|)` with `f = s² − t`, and only where `s`
+/// varies. Setting `t` to the signed distance from the edge (inside
+/// positive) and `s = FRINGE_S × t` makes `f ≈ −t`, so the shader fades
+/// exactly across the edge; this keeps `s²` negligible while `∇s` stays
+/// above the shader's 0.001-per-pixel cut-off up to 50× scale.
+const FRINGE_S: f32 = 0.05;
+/// Active blobs kept inline before spilling to the heap.
+const BLOBS_INLINE: usize = 9;
+
+/// One active-tag indicator blob: a capsule whose two ends spring
+/// independently.
+struct Blob {
+    /// The pill it rests on, or `None` while it shrinks away.
+    pill: Option<usize>,
+    start: SpringValue<f32>,
+    end: SpringValue<f32>,
 }
 
-impl Worm {
+impl Blob {
+    /// A dot at `at`, about to grow.
+    fn seed(pill: usize, at: f32) -> Self {
+        Self { pill: Some(pill), start: SpringValue::new(at, FAST), end: SpringValue::new(at, FAST) }
+    }
+
+    fn span(&self) -> (f32, f32) {
+        let (a, b) = (self.start.value(), self.end.value());
+        (a.min(b), a.max(b))
+    }
+
+    fn centre(&self) -> f32 {
+        (self.start.value() + self.end.value()) * 0.5
+    }
+
+    fn animating(&self) -> bool {
+        self.start.is_animating() || self.end.is_animating()
+    }
+
+    fn set_targets(&mut self, (start, end): (f32, f32)) {
+        self.start.set_target(start);
+        self.end.set_target(end);
+    }
+
+    /// Picks the springs for this frame. Travelling, the edge in the
+    /// direction of travel leads (fast) and the other trails (slow), so the
+    /// blob stretches like a worm; growing, shrinking or settling, both ends
+    /// move briskly and symmetrically.
+    fn choose_springs(&mut self) {
+        let ds = self.start.target() - self.start.value();
+        let de = self.end.target() - self.end.value();
+        let (start, end) = if ds > WORM_DIRECTION_PX && de > WORM_DIRECTION_PX {
+            (SLOW, FAST)
+        } else if ds < -WORM_DIRECTION_PX && de < -WORM_DIRECTION_PX {
+            (FAST, SLOW)
+        } else {
+            (FAST, FAST)
+        };
+        self.start.set_config(start);
+        self.end.set_config(end);
+    }
+}
+
+/// The active indicator: one blob per active tag, merged with a smooth
+/// minimum where they meet (see [`mandara_core::liquid`]). The shapes are
+/// rebuilt only when a blob moved; idle, it costs one comparison a render.
+struct Liquid {
+    blobs: Vec<Blob>,
+    clock: FrameClock,
+    init: bool,
+    /// Blob spans (sorted) and half-thickness the shapes were built from.
+    spans: SmallVec<[(f32, f32); BLOBS_INLINE]>,
+    half: f32,
+    /// Lone blobs, drawn as exact anti-aliased capsules.
+    quads: SmallVec<[(f32, f32); BLOBS_INLINE]>,
+    /// Merged groups, traced.
+    outline: Outline,
+    /// The gradient runs across this span of the strip, the same for every
+    /// shape, so a blob keeps its colours as it joins or leaves a group.
+    gradient: (f32, f32),
+    caps: SmallVec<[Capsule; BLOBS_INLINE]>,
+}
+
+impl Liquid {
     fn new() -> Self {
         Self {
-            lead: SpringValue::new(0.0, FAST),
-            trail: SpringValue::new(0.0, SLOW),
+            blobs: Vec::new(),
             clock: FrameClock::new(),
             init: false,
+            spans: SmallVec::new(),
+            half: 0.0,
+            quads: SmallVec::new(),
+            outline: Outline::default(),
+            gradient: (0.0, 0.0),
+            caps: SmallVec::new(),
         }
     }
 
-    /// Targets the span `[x0, x1]` and steps; returns the span and whether
-    /// it is still moving.
-    fn step(&mut self, x0: f32, x1: f32) -> (f32, f32, bool) {
+    /// Matches blobs to the `active` pills (sorted indices into `pills`,
+    /// each pill's `(start, end)` along the strip). Blobs on pills that stay
+    /// active keep their place; a pill that turns active takes over the
+    /// nearest blob that lost its pill — so viewing another tag sends the
+    /// indicator travelling there — or else grows a new blob from its centre;
+    /// leftover blobs shrink into their pill's centre and disappear.
+    fn reconcile(&mut self, active: &[usize], pills: &[(f32, f32)]) {
         if !self.init {
-            self.trail.snap_to(x0);
-            self.lead.snap_to(x1);
             self.init = true;
+            self.blobs.extend(active.iter().filter_map(|&i| {
+                let (s, e) = *pills.get(i)?;
+                let mut b = Blob::seed(i, s);
+                b.end.snap_to(e);
+                Some(b)
+            }));
+            return;
         }
-        if !self.lead.is_animating() && !self.trail.is_animating() && self.lead.target() == x1 && self.trail.target() == x0 {
+        let centre = |(s, e): (f32, f32)| (s + e) * 0.5;
+        for b in &mut self.blobs {
+            if b.pill.is_some_and(|i| !active.contains(&i) || i >= pills.len()) {
+                b.pill = None;
+                let c = centre((b.start.target(), b.end.target()));
+                b.set_targets((c, c));
+            }
+        }
+        for &i in active {
+            let Some(&span) = pills.get(i) else { continue };
+            if let Some(b) = self.blobs.iter_mut().find(|b| b.pill == Some(i)) {
+                b.set_targets(span);
+                continue;
+            }
+            let free = self.blobs.iter_mut().filter(|b| b.pill.is_none()).min_by(|a, b| (a.centre() - centre(span)).abs().total_cmp(&(b.centre() - centre(span)).abs()));
+            match free {
+                Some(b) => {
+                    b.pill = Some(i);
+                    b.set_targets(span);
+                }
+                None => {
+                    let mut b = Blob::seed(i, centre(span));
+                    b.set_targets(span);
+                    self.blobs.push(b);
+                }
+            }
+        }
+    }
+
+    /// Steps every blob by `dt`; returns whether any still moves. Blobs that
+    /// finished shrinking are dropped.
+    fn step(&mut self, dt: f32) -> bool {
+        let mut moving = false;
+        for b in &mut self.blobs {
+            b.choose_springs();
+            moving |= step_visible(&mut b.start, dt, WORM_REST_PX) | step_visible(&mut b.end, dt, WORM_REST_PX);
+        }
+        self.blobs.retain(|b| b.pill.is_some() || b.animating());
+        moving
+    }
+
+    /// [`Self::step`] on the frame clock; zero work while everything rests.
+    fn advance(&mut self, now: Instant) -> bool {
+        if !self.blobs.iter().any(Blob::animating) {
+            self.blobs.retain(|b| b.pill.is_some());
             self.clock.idle();
-            let (a, b) = (self.trail.value(), self.lead.value());
-            return (a.min(b), a.max(b), false);
+            return false;
         }
-        // The edge in the direction of travel leads.
-        let moving_right = x1 > self.lead.value() + WORM_DIRECTION_PX;
-        let (lead_cfg, trail_cfg) = if moving_right { (FAST, SLOW) } else { (SLOW, FAST) };
-        self.lead.set_config(lead_cfg);
-        self.trail.set_config(trail_cfg);
-        self.lead.set_target(x1);
-        self.trail.set_target(x0);
-        let dt = self.clock.tick(Instant::now());
-        let moving = step_visible(&mut self.lead, dt, WORM_REST_PX) | step_visible(&mut self.trail, dt, WORM_REST_PX);
+        let dt = self.clock.tick(now);
+        let moving = self.step(dt);
         if !moving {
             self.clock.idle();
         }
-        let (a, b) = (self.trail.value(), self.lead.value());
-        (a.min(b), a.max(b), moving)
+        moving
+    }
+
+    /// Rebuilds the drawn shapes for a strip `2 × half` thick, if any blob
+    /// moved since the last build.
+    fn rebuild(&mut self, half: f32) {
+        let mut spans: SmallVec<[(f32, f32); BLOBS_INLINE]> = self.blobs.iter().map(Blob::span).collect();
+        spans.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+        if spans == self.spans && half == self.half {
+            return;
+        }
+        self.spans = spans;
+        self.half = half;
+        self.caps.clear();
+        self.caps.extend(self.spans.iter().map(|&(s, e)| Capsule::from_span(s, e, half)));
+        self.quads.clear();
+        self.outline.clear();
+        for group in liquid::groups(&self.caps, LIQUID_K_PX) {
+            if group.len() == 1 {
+                self.quads.push(self.spans[group.start]);
+            } else {
+                self.outline.trace(&self.caps[group], LIQUID_K_PX, half, LIQUID_SPACING_PX);
+            }
+        }
+        self.gradient = self.spans.iter().fold((f32::MAX, f32::MIN), |(lo, hi), &(s, e)| (lo.min(s), hi.max(e)));
+    }
+
+    /// Whether `u` (along the strip) lies inside a blob.
+    fn covers(&self, u: f32) -> bool {
+        self.spans.iter().any(|&(s, e)| u >= s && u <= e)
+    }
+
+    /// The fill of a shape spanning `a..b` along the strip: its slice of the
+    /// shared `from → to` gradient, interpolated in Oklab so it never greys.
+    fn fill_between(&self, a: f32, b: f32, from: Color, to: Color, angle: f32) -> Background {
+        let (len, (g0, g1)) = (b - a, self.gradient);
+        if len < MIN_GRADIENT_PX || g1 - g0 < MIN_GRADIENT_PX {
+            return from.hsla().into();
+        }
+        linear_gradient(angle, linear_color_stop(from.hsla(), (g0 - a) / len), linear_color_stop(to.hsla(), (g1 - a) / len)).color_space(ColorSpace::Oklab)
+    }
+
+    /// Paints the shapes with the strip's top-left at `origin`.
+    fn paint(&self, window: &mut Window, origin: Point<Pixels>, axis: Axis, from: Color, to: Color) {
+        let angle = if axis == Axis::Vertical { ALONG_Y_DEG } else { ALONG_X_DEG };
+        let o = [f32::from(origin.x), f32::from(origin.y)];
+        let half = self.half;
+        let at = |p: [f32; 2]| {
+            let [x, y] = axis.to_xy(o, half, p);
+            point(px(x), px(y))
+        };
+        for &(a, b) in &self.quads {
+            let r = ((b - a) * 0.5).min(half);
+            let (along, across) = (b - a, r * 2.0);
+            let size = if axis == Axis::Vertical { size(px(across), px(along)) } else { size(px(along), px(across)) };
+            window.paint_quad(fill(Bounds::new(at([a, -r]), size), self.fill_between(a, b, from, to, angle)).corner_radii(px(r)));
+        }
+        // Each merged piece is a band |v| < e(u), built from raw triangles
+        // (no tessellator, no overlap): a solid strip between its edges inset
+        // by the fringe, and a ring straddling the true edge whose fragments
+        // fade analytically over one device pixel, matching the capsules'
+        // SDF edges instead of the coarser MSAA staircase.
+        let solid = (point(0.0, 1.0), point(0.0, 1.0), point(0.0, 1.0));
+        for contour in self.outline.contours() {
+            let top = liquid::top_edge(contour);
+            let (Some(first), Some(last)) = (top.first(), top.last()) else { continue };
+            let thickness = top.iter().map(|p| p[1].abs()).fold(0.0, f32::max);
+            let d = FRINGE_PX.min(thickness * 0.5);
+            let offset = |i: usize, by: f32| {
+                let ([u, v], [nu, nv]) = (contour[i], liquid::normal(contour, i));
+                [u + nu * by, v + nv * by]
+            };
+            let mut path = gpui::Path::new(at(*first));
+            for i in 0..top.len() - 1 {
+                let ([u0, v0], [u1, v1]) = (offset(i, -d), offset(i + 1, -d));
+                let (t0, t1, b0, b1) = (at([u0, v0]), at([u1, v1]), at([u0, -v0]), at([u1, -v1]));
+                path.push_triangle((t0, t1, b1), solid);
+                path.push_triangle((t0, b1, b0), solid);
+            }
+            let (inner, outer) = (point(FRINGE_S * d, d), point(-FRINGE_S * d, -d));
+            for i in 0..contour.len() {
+                let j = (i + 1) % contour.len();
+                let (i0, i1, o0, o1) = (at(offset(i, -d)), at(offset(j, -d)), at(offset(i, d)), at(offset(j, d)));
+                path.push_triangle((i0, o0, o1), (inner, outer, outer));
+                path.push_triangle((i0, o1, i1), (inner, outer, inner));
+            }
+            window.paint_path(path, self.fill_between(first[0] - d, last[0] + d, from, to, angle));
+        }
     }
 }
 
@@ -386,7 +620,7 @@ fn layout_label(code: &str) -> (&'static str, &'static str) {
 
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Workspaces"), mandara_i18n::tk("Tags / workspaces with their apps"),Some(Zone::Left)), |window, cx, panel_cx| {
-        let worm = Rc::new(RefCell::new(Worm::new()));
+        let liquid = Rc::new(RefCell::new(Liquid::new()));
         // MangoWM layout pill: (layout shown, pop spring, clock).
         let layout_anim = Rc::new(RefCell::new((String::new(), SpringValue::new(1.0, FAST), FrameClock::new())));
         let monitor: SharedString = panel_cx.monitor().to_string().into();
@@ -410,28 +644,27 @@ pub fn register(r: &mut PluginRegistry) {
                     xs.push((x, along(p)));
                     x += along(p) + GAP;
                 }
-                // Active span: contiguous active tags bridge into one capsule.
-                let first = list.iter().position(|p| p.active);
-                let last = list.iter().rposition(|p| p.active);
-                let count = list.iter().filter(|p| p.active).count();
-                let (from, to) = match (first, last) {
-                    (Some(a), Some(b)) if count == b - a + 1 => (a, b),
-                    (Some(a), _) => (a, a),
-                    _ => (0, 0),
-                };
-                let target0 = xs.get(from).map_or(0.0, |p| p.0);
-                let target1 = xs.get(to).map_or(if vertical { PILL_H } else { NUMBER_W }, |p| p.0 + p.1);
-                let (x0, x1, moving) = worm.borrow_mut().step(target0, target1);
-                if moving {
+                // One liquid blob per active tag; neighbours fuse.
+                let spans: SmallVec<[(f32, f32); APPS_INLINE * 2]> = xs.iter().map(|&(x, w)| (x, x + w)).collect();
+                let active: SmallVec<[usize; BLOBS_INLINE]> = list.iter().enumerate().filter(|(_, p)| p.active).map(|(i, _)| i).collect();
+                let strip_len = (x - GAP).max(0.0);
+                let (axis, half) = if vertical { (Axis::Vertical, NUMBER_W / 2.0) } else { (Axis::Horizontal, PILL_H / 2.0) };
+                let mut blobs = liquid.borrow_mut();
+                blobs.reconcile(&active, &spans);
+                if blobs.advance(Instant::now()) {
                     window.request_animation_frame();
                 }
-                let indicator = if vertical {
-                    div().absolute().left_0().top(px(x0)).h(px((x1 - x0).max(PILL_H))).w(px(NUMBER_W))
-                } else {
-                    div().absolute().top_0().left(px(x0)).w(px((x1 - x0).max(NUMBER_W))).h(px(PILL_H))
-                }
-                    .rounded_full()
-                    .bg(palette.primary.hsla());
+                blobs.rebuild(half);
+                let indicator = {
+                    let liquid = liquid.clone();
+                    let (from, to) = (palette.accent_gradient_start, palette.accent_gradient_end);
+                    gpui::canvas(|_, _, _| {}, move |bounds: Bounds<Pixels>, (), window, _| liquid.borrow().paint(window, bounds.origin, axis, from, to))
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .w(px(if vertical { NUMBER_W } else { strip_len }))
+                        .h(px(if vertical { strip_len } else { PILL_H }))
+                };
 
                 let hover = palette.on_surface.with_alpha(alpha(WASH_TRACK, palette)).hsla();
                 let children = list.iter().enumerate().map(|(i, p)| {
@@ -439,7 +672,7 @@ pub fn register(r: &mut PluginRegistry) {
                     let (m1, m2) = (monitor.clone(), monitor.clone());
                     let (px0, pw) = xs[i];
                     let centre = px0 + pw / 2.0;
-                    let under = centre >= x0 && centre <= x1;
+                    let under = blobs.covers(centre);
                     let fg = if under {
                         palette.on_primary
                     } else if p.urgent {
@@ -603,5 +836,100 @@ mod tests {
         assert!(p[1].apps.is_empty());
         assert_eq!(p[1].width(), NUMBER_W, "empty tags show only their number");
         assert!(p[0].width() > NUMBER_W);
+    }
+
+    /// Five number-only pills laid out like the bar does.
+    fn strip() -> Vec<(f32, f32)> {
+        (0..5).map(|i| i as f32 * (NUMBER_W + GAP)).map(|x| (x, x + NUMBER_W)).collect()
+    }
+
+    /// Runs the blobs to rest at 144 Hz.
+    fn settle(l: &mut Liquid) {
+        let mut frames = 0;
+        while l.step(1.0 / 144.0) {
+            frames += 1;
+            assert!(frames < 10_000, "the springs never rest");
+        }
+    }
+
+    fn pills_of(l: &Liquid) -> Vec<Option<usize>> {
+        let mut p: Vec<_> = l.blobs.iter().map(|b| b.pill).collect();
+        p.sort();
+        p
+    }
+
+    #[test]
+    fn active_sets_map_to_blobs() {
+        let s = strip();
+        let half = PILL_H / 2.0;
+        // Contiguous: two blobs that melt into one traced shape.
+        let mut l = Liquid::new();
+        l.reconcile(&[1, 2], &s);
+        assert_eq!(pills_of(&l), [Some(1), Some(2)]);
+        l.rebuild(half);
+        assert!(l.quads.is_empty());
+        assert_eq!(l.outline.contours().count(), 1, "adjacent tags fuse");
+        assert!(l.covers(s[1].0 + NUMBER_W / 2.0) && l.covers(s[2].0 + NUMBER_W / 2.0));
+        assert!(!l.covers(s[3].0 + NUMBER_W / 2.0));
+        // Non-contiguous: two separate exact capsules.
+        let mut l = Liquid::new();
+        l.reconcile(&[0, 2], &s);
+        l.rebuild(half);
+        assert_eq!(l.quads.as_slice(), [s[0], s[2]]);
+        assert!(l.outline.is_empty());
+        assert!(!l.covers(s[1].0 + NUMBER_W / 2.0), "the tag between stays uncovered");
+        // Empty: nothing drawn.
+        let mut l = Liquid::new();
+        l.reconcile(&[], &s);
+        l.rebuild(half);
+        assert!(l.blobs.is_empty() && l.quads.is_empty() && l.outline.is_empty());
+    }
+
+    #[test]
+    fn viewing_another_tag_moves_the_same_blob() {
+        let s = strip();
+        let mut l = Liquid::new();
+        l.reconcile(&[0], &s);
+        l.reconcile(&[3], &s);
+        assert_eq!(pills_of(&l), [Some(3)], "the indicator travels, it doesn't respawn");
+        assert_eq!(l.blobs[0].start.value(), s[0].0, "starting from where it was");
+        l.step(1.0 / 144.0);
+        let (a, b) = l.blobs[0].span();
+        assert!(b - a > NUMBER_W, "it stretches as it travels");
+        settle(&mut l);
+        assert_eq!(l.blobs[0].span(), s[3]);
+    }
+
+    #[test]
+    fn toggled_tags_grow_and_shrink_in_place() {
+        let s = strip();
+        let mut l = Liquid::new();
+        l.reconcile(&[0], &s);
+        l.reconcile(&[0, 2], &s);
+        assert_eq!(pills_of(&l), [Some(0), Some(2)]);
+        let grown = l.blobs.iter().find(|b| b.pill == Some(2)).unwrap();
+        let centre = (s[2].0 + s[2].1) / 2.0;
+        assert_eq!(grown.span(), (centre, centre), "a new blob grows from its pill's centre");
+        settle(&mut l);
+        assert_eq!(l.blobs.iter().find(|b| b.pill == Some(2)).unwrap().span(), s[2]);
+        // Toggling it off shrinks it into its centre, then drops it.
+        l.reconcile(&[0], &s);
+        assert_eq!(pills_of(&l), [None, Some(0)]);
+        settle(&mut l);
+        assert_eq!(pills_of(&l), [Some(0)]);
+        assert_eq!(l.blobs[0].span(), s[0], "the remaining blob never moved");
+    }
+
+    #[test]
+    fn idle_blobs_skip_rebuilds() {
+        let s = strip();
+        let mut l = Liquid::new();
+        l.reconcile(&[1, 2], &s);
+        l.rebuild(PILL_H / 2.0);
+        let before = l.outline.contours().next().unwrap().as_ptr();
+        l.reconcile(&[1, 2], &s);
+        assert!(!l.advance(Instant::now()), "nothing moves");
+        l.rebuild(PILL_H / 2.0);
+        assert_eq!(l.outline.contours().next().unwrap().as_ptr(), before);
     }
 }

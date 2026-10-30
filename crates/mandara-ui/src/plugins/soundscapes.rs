@@ -551,7 +551,7 @@ fn status_json() -> serde_json::Value {
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, tk("Soundscapes"), tk("Ambient sea, rain, wind, café, fire and noise — synthesized live"), Some(Zone::Right)), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, tk("Soundscapes"), tk("Ambient sea, rain, wind, café, fire and noise — synthesized live"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let bar = fn_view(None, bar_view, window, cx);
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(panel_height(false)))));
         let view = View { p: panel_cx.clone(), size_cell: size_cell.clone(), flash: Flash::default(), subtitle: RefCell::default(), countdown: RefCell::default() };

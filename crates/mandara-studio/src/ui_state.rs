@@ -18,6 +18,10 @@ pub struct UiState {
     pub collapsed: BTreeSet<String>,
     /// The Applications page's last tab (`installed`, `defaults`, …).
     pub apps_tab: String,
+    /// Themes → Looks and Designed themes as large preview cards instead of
+    /// the compact list.
+    pub looks_previews: bool,
+    pub themes_previews: bool,
 }
 
 impl UiState {

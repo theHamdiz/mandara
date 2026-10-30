@@ -222,13 +222,14 @@ fn app_theme_toggles_select_their_templates() {
     let (cache, config, data) = (dir.path().join("cache"), dir.path().join("config"), dir.path().join("data"));
     let only_kitty = {
         let mut c = ShellConfig::default();
-        c.integrations = mandara_config::IntegrationsConfig { ghostty: false, gtk4: false, qt6: false, zed: false, fuzzel: false, btop: false, compositor_borders: false, kvantum: false, kvantum_apply: false, kitty: true, foot: false, alacritty: false, wezterm: false, helix: false, neovim: false, firefox: false, vesktop: false, kde: false };
+        c.integrations = mandara_config::IntegrationsConfig { kitty: true, ..mandara_config::IntegrationsConfig::all(false) };
         c
     };
     let (targets, apps) = mandara_ui::state::app_theme_targets(&only_kitty.integrations);
     let p = palette_of(&only_kitty);
-    let mut files = mandara_theme::templates::sync(&p, targets, &cache, &config);
-    files.extend(mandara_theme::templates::sync_apps(&p, apps, &cache, &config, &data));
+    let mut ledger = mandara_theme::templates::Ledger::default();
+    let mut files = mandara_theme::templates::sync(&p, targets, &cache, &config, &mut ledger);
+    files.extend(mandara_theme::templates::sync_apps(&p, apps, &cache, &config, &data, &mut ledger));
     assert_eq!(files, vec![cache.join("kitty.conf"), config.join("kitty/themes/mandara.conf")]);
     assert!(std::fs::read_to_string(&files[0]).unwrap().contains(&p.primary.to_hex()));
 }

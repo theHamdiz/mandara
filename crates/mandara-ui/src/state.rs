@@ -291,8 +291,13 @@ pub fn export_app_themes(palette: mandara_theme::MandaraPalette, cx: &mut App) -
         let config_dir = dirs::config_dir().unwrap_or_default();
         let data_dir = dirs::data_dir().unwrap_or_default();
         let cache = mandara_config::paths::themes_cache_dir();
-        let mut files = mandara_theme::templates::sync(&palette, targets, &cache, &config_dir);
-        files.extend(mandara_theme::templates::sync_apps(&palette, apps, &cache, &config_dir, &data_dir));
+        let ledger_path = mandara_config::paths::app_themes_ledger();
+        let mut ledger = mandara_theme::templates::Ledger::load(&ledger_path);
+        let mut files = mandara_theme::templates::sync(&palette, targets, &cache, &config_dir, &mut ledger);
+        files.extend(mandara_theme::templates::sync_apps(&palette, apps, &cache, &config_dir, &data_dir, &mut ledger));
+        if let Err(err) = ledger.store(&ledger_path) {
+            tracing::warn!("app themes: {}: {err}", ledger_path.display());
+        }
         files
     })
 }
@@ -373,6 +378,7 @@ mod tests {
     #[test]
     fn every_integration_maps_to_its_target() {
         let all_off = mandara_config::IntegrationsConfig {
+            version: mandara_config::upgrade::INTEGRATIONS_VERSION,
             ghostty: false,
             gtk4: false,
             qt6: false,
@@ -399,6 +405,57 @@ mod tests {
         assert!(gtk.gtk && !gtk.qt6);
         let kde = app_theme_targets(&mandara_config::IntegrationsConfig { kde: true, ..all_off }).1;
         assert!(kde.kde && !kde.kitty);
+    }
+
+    #[test]
+    fn default_integrations_write_nothing_outside_mandaras_folders() {
+        let dir = std::env::temp_dir().join(format!("mandara-defaults-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (cache, config, data) = (dir.join("cache/mandara/themes"), dir.join("config"), dir.join("data"));
+        // A user's own configs, as they might have them.
+        let user: &[(&str, &str)] = &[
+            ("gtk-4.0/gtk.css", "@import 'colors.css';\nbutton { color: red; }\n"),
+            ("gtk-3.0/gtk.css", "window { padding: 0; }\n"),
+            ("fuzzel/fuzzel.ini", "[main]\nfont=Inter\n"),
+            ("ghostty/config", "theme = catppuccin\n"),
+            ("kitty/kitty.conf", "font_size 11\n"),
+            ("Kvantum/kvantum.kvconfig", "[General]\ntheme=KvArc\n"),
+        ];
+        for (rel, body) in user {
+            let f = config.join(rel);
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(&f, body).unwrap();
+        }
+        let listing = |root: &std::path::Path| -> Vec<std::path::PathBuf> {
+            fn walk(d: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+                for e in std::fs::read_dir(d).into_iter().flatten().flatten() {
+                    let p = e.path();
+                    out.push(p.clone());
+                    if p.is_dir() {
+                        walk(&p, out);
+                    }
+                }
+            }
+            let mut out = Vec::new();
+            walk(root, &mut out);
+            out.sort();
+            out
+        };
+        let before = listing(&dir);
+        let (targets, apps) = app_theme_targets(&mandara_config::IntegrationsConfig::default());
+        let ledger_path = config.join("mandara/generated/app-themes.toml");
+        let mut ledger = mandara_theme::templates::Ledger::load(&ledger_path);
+        for p in [mandara_theme::engine::default_palette(true), mandara_theme::engine::default_palette(false)] {
+            let mut files = mandara_theme::templates::sync(&p, targets, &cache, &config, &mut ledger);
+            files.extend(mandara_theme::templates::sync_apps(&p, apps, &cache, &config, &data, &mut ledger));
+            assert!(files.is_empty(), "defaults theme no app: {files:?}");
+        }
+        ledger.store(&ledger_path).unwrap();
+        assert_eq!(listing(&dir), before, "no file or folder appeared anywhere");
+        for (rel, body) in user {
+            assert_eq!(std::fs::read_to_string(config.join(rel)).unwrap(), *body, "{rel} changed");
+        }
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

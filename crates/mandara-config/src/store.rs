@@ -159,6 +159,7 @@ fn parse(bytes: &[u8]) -> Result<ShellConfig> {
     let mut cfg: ShellConfig = toml::from_str(text).context("parsing config TOML")?;
     cfg.migrate_legacy();
     crate::desktop_widgets::migrate(&mut cfg);
+    crate::upgrade::upgrade(&mut cfg);
     Ok(cfg)
 }
 

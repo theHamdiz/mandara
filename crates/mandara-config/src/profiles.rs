@@ -328,7 +328,17 @@ pub struct ExportOptions {
 pub fn export_text(cfg: &ShellConfig, opts: ExportOptions) -> Result<(String, Vec<String>)> {
     let mut table = to_table(cfg)?;
     if opts.changes_only {
+        let full = table.clone();
         table = diff(&table, &to_table(&ShellConfig::default())?);
+        // A table that made it into the export says which defaults it was
+        // written for, or importing it would upgrade it as a 0.1 table.
+        for (section, key) in VERSIONED {
+            if let (Some(Value::Table(out)), Some(Value::Table(all))) = (table.get_mut(*section), full.get(*section))
+                && let Some(v) = all.get(*key)
+            {
+                out.insert(key.to_string(), v.clone());
+            }
+        }
     }
     let sensitive = sensitive_paths(&table);
     if opts.redact {
@@ -340,14 +350,21 @@ pub fn export_text(cfg: &ShellConfig, opts: ExportOptions) -> Result<(String, Ve
     Ok((format!("{header}\n{body}"), if opts.redact { Vec::new() } else { sensitive }))
 }
 
+/// Sections that carry the version of the defaults they were written for
+/// (see [`crate::upgrade`]), with that key.
+const VERSIONED: &[(&str, &str)] = &[("plugins", "defaults_version"), ("integrations", "version")];
+
 /// Parses an exported (or hand-written) config. Missing values take their
-/// defaults, so a changes-only export imports as "defaults + changes".
+/// defaults, so a changes-only export imports as "defaults + changes"; an
+/// export from an older version is upgraded like a config file.
 pub fn import_text(text: &str) -> Result<ShellConfig> {
     let table: Table = toml::from_str(text).context("not a TOML file")?;
     if contains_redacted(&table) {
         bail!("this export was redacted (personal values replaced); import an unredacted export instead");
     }
-    Value::Table(table).try_into().context("the file is not a Mandara config")
+    let mut cfg: ShellConfig = Value::Table(table).try_into().context("the file is not a Mandara config")?;
+    crate::upgrade::upgrade(&mut cfg);
+    Ok(cfg)
 }
 
 /// Parses a damaged `config.toml`, keeping every value that still fits:

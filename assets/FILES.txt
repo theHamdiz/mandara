@@ -45,6 +45,9 @@ assets/plugins/color-picker/icon.svg
 assets/plugins/containers/cover.png
 assets/plugins/containers/icon.png
 assets/plugins/containers/icon.svg
+assets/plugins/cursors/cover.png
+assets/plugins/cursors/icon.png
+assets/plugins/cursors/icon.svg
 assets/plugins/dock/cover.png
 assets/plugins/dock/icon.png
 assets/plugins/dock/icon.svg
@@ -129,6 +132,9 @@ assets/plugins/tray/icon.svg
 assets/plugins/updates/cover.png
 assets/plugins/updates/icon.png
 assets/plugins/updates/icon.svg
+assets/plugins/wallhaven/cover.png
+assets/plugins/wallhaven/icon.png
+assets/plugins/wallhaven/icon.svg
 assets/plugins/wallpaper-generator/cover.png
 assets/plugins/wallpaper-generator/icon.png
 assets/plugins/wallpaper-generator/icon.svg

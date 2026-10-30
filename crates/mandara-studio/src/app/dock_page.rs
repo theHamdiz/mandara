@@ -577,15 +577,18 @@ impl StudioView {
                         }))
                         .child(heading(t("Add apps to the Dock"), t("Search your installed apps; checked apps stay in the dock."), p))
                         .child(div().child(search))
-                        .child(
-                            div()
+                        .child({
+                            let (scroll, bar) = mandara_ui::scrollbar::keyed("dock-picker-scroll");
+                            let list = div()
                                 .id("dock-picker-scroll")
                                 .flex_1()
                                 .min_h(px(0.0))
                                 .overflow_y_scroll()
+                                .track_scroll(&scroll)
                                 .child(grid)
-                                .when(empty, |el| el.child(div().p(px(SPACE_10_PX)).text_color(p.on_surface_variant.hsla()).child(tf("No apps match “{query}”", &[("query", &query)])))),
-                        )
+                                .when(empty, |el| el.child(div().p(px(SPACE_10_PX)).text_color(p.on_surface_variant.hsla()).child(tf("No apps match “{query}”", &[("query", &query)]))));
+                            mandara_ui::scrollbar::with_scrollbar(list, &scroll, &bar, p).flex_1().min_h(px(0.0)).flex().flex_col()
+                        })
                         .child(
                             div()
                                 .row()

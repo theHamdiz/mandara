@@ -1162,7 +1162,7 @@ fn status_output() -> Output {
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, tk("Network speed"), tk("Live upload and download rates, public IP and a speed test"), Some(Zone::Right)), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, tk("Network speed"), tk("Live upload and download rates, public IP and a speed test"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let bar = fn_view(None, bar_view, window, cx);
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(panel_height(1)))));
         // Learn how many interfaces the panel lists (off the UI thread) so

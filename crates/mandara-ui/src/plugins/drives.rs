@@ -1194,7 +1194,7 @@ fn request(_cx: &mut App, command: DrivesCommand) -> Result<Output, String> {
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, tk("Drives"), tk("Mounted filesystems and removable drives: mount, unlock and safely remove"), Some(Zone::Right)), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, tk("Drives"), tk("Mounted filesystems and removable drives: mount, unlock and safely remove"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let m = shared(cx);
         let bar = {
             let m = m.clone();

@@ -581,11 +581,9 @@ Brightness over DDC/CI through /dev/i2c-* (needs the i2c group and DDC/CI on in 
 Bring back a removed Mandara plugin where it was
 Broken
 Brown noise
-Browse Wallhaven
 Browse settings
 Browse the marketplace
 Browser
-Browses Wallhaven when you ask it to
 Build
 Build the component
 Build time p50
@@ -974,6 +972,7 @@ Cursor
 Cursor size
 Cursor theme
 Cursor theme, size and hiding are in Themes → Cursor
+Cursor themes
 Cursors in the cool Nord palette, based on Vimix
 Curtain height
 Curtains
@@ -1085,6 +1084,7 @@ Desktop
 Desktop cards & visualizers
 Desktop ids listed first, in this order (Ctrl+P in the launcher pins too)
 Desktop ids never listed
+Desktop toolkits
 Desktop widgets
 Details
 Detect automatically
@@ -1174,6 +1174,7 @@ Downloading {file}: {error}
 Downloading {model} ({file}): {error}
 Downloading…
 Downloads
+Downloads the cursor themes you pick from their GitHub releases
 Downloads {size} from speed.cloudflare.com
 Dracula
 Drag around the QR code · Enter scans the whole screen · Esc cancels
@@ -1240,6 +1241,7 @@ Edit user
 Edit window and screen captures
 Editor font
 Editor text size
+Editors
 Edits you make in Studio appear here, newest first, with an Undo.
 Education
 Effect
@@ -1837,6 +1839,7 @@ Install location
 Install one from the marketplace with a click, or drop a plugin folder into your plugin folders. It shows up here within a second.
 Install pacman-contrib to check for updates without touching the system database
 Install {count} apps
+Install, preview and apply cursor themes, live, with size and hiding options
 Installed
 Installed apps with where each came from (package manager, Flatpak, Snap, AppImage, Mandara, local); --by-mandara lists what Mandara's installer installed, with every file it wrote
 Installed by Mandara
@@ -1862,6 +1865,7 @@ Installing {percent}%
 Installing {percent}% · Cancel
 Installing…
 Installs system-wide with {manager}
+Installs them to ~/.local/share/icons
 Installs to {dir}
 Installs with Flatpak, for everyone
 Installs with Flatpak, for you only
@@ -2241,6 +2245,7 @@ Mandara shows what it is and what will happen before anything is installed.
 Mandara starts the enabled entries at your next login.
 Mandara starts these at login
 Mandara updates
+Mandara writes nothing to other apps until you switch them on. Switching one off takes back exactly what Mandara changed, and any file it replaced comes back from its backup.
 Mandara {version} is already the latest version
 Mandara {version} is available
 Mandara {version} is the latest version
@@ -2378,7 +2383,7 @@ Move to Trash
 Moving clouds, rain and stars (off with reduced motion)
 Muharram
 Music or video playing over MPRIS holds every idle stage back
-Music, screenshots, wallpapers and color
+Music, screenshots, color and ambient sound
 Mute
 Mute all
 Mute all sound
@@ -2769,7 +2774,6 @@ One note's full Markdown text
 One of choices: plain strings or { value, label } tables
 One of your settings as JSON: the user's value, or the declared default.
 One tiny pill at the top
-Online wallpapers in the picker — used automatically when your folder has no images (Tab switches)
 Only HOTP accounts have a counter
 Only Mandara's own plugins are removed this way; uninstall third-party plugins from their page in Studio → Plugins
 Only each app's most recent window
@@ -2851,6 +2855,7 @@ Order of results without a search
 Organic warp
 Other
 Other Wi-Fi networks listed in the panel
+Other apps
 Other settings
 Other xkb options
 Out-of-focus lights at different depths
@@ -3470,6 +3475,7 @@ Saved {when}
 Saved — reconnect to apply
 Saves captures to ~/Pictures/Screenshots
 Saves the history in Mandara's data folder
+Saves the wallpapers you pick in Mandara's data folder
 Saves your notes in Mandara's data folder
 Saves your tasks in Mandara's data folder
 Saving…
@@ -3486,7 +3492,7 @@ Scanning processes…
 SceneFX blur
 Schedule
 Schedule & colour
-Schedule, tuning, style, icons and the themes Mandara writes for your other apps
+Schedule, tuning, style and icons
 Scheduled
 Scheduled: switch to dark at this time
 Scheduled: switch to light at this time
@@ -3532,6 +3538,7 @@ Seamless AV1 loop at {size}
 Search
 Search Wallhaven
 Search accounts…
+Search and download wallpapers from wallhaven.cc right in the wallpaper picker
 Search apps
 Search apps by name or id
 Search below to add a city or time zone
@@ -3551,6 +3558,7 @@ Search units…
 Search what you copied; Enter copies it again
 Search widgets
 Search your installed apps; checked apps stay in the dock.
+Searches wallhaven.cc and downloads the wallpapers you pick
 Searching GitHub…
 Searching Wallhaven…
 Searching for devices…
@@ -3612,6 +3620,7 @@ Set the screen brightness in percent
 Set the shared location by coordinates
 Set the wallpaper from an image or video path
 Set up
+Sets the cursor in Mandara's compositor drop-in and live
 Setting types
 Settings
 Settings and data this app may have left in your home folder. Only what you tick moves to the Trash; nothing is deleted, and the app's removal doesn't depend on it.
@@ -3692,6 +3701,7 @@ Show or hide every desktop widget at once (none is switched off)
 Show or regenerate the depth mask of the current wallpaper
 Show over fullscreen apps
 Show over fullscreen windows
+Show previews
 Show running apps
 Show seconds
 Show stopped containers
@@ -4000,6 +4010,7 @@ Temperatures and wind speed in weather and system panels
 Temperatures shown
 Terminal
 Terminal colors follow the theme
+Terminals
 Terrain scale
 Test
 Test load
@@ -4586,6 +4597,7 @@ Wallpaper scheme
 Wallpapers
 Wallpapers in plain searches
 Wallpapers prefix
+Wallpapers, generated art, online galleries and cursor themes
 Warm
 Warm from
 Warm now
@@ -5149,6 +5161,7 @@ your default
 {count} lines · {errors} on stderr
 {count} min
 {count} notifications
+{count} on
 {count} open
 {count} packages from {sources} sources
 {count} pages
@@ -5285,6 +5298,7 @@ your default
 {plugin} settings
 {plugin} was removed. Restore it in Studio → Plugins or with `mandara msg plugins restore {id}`
 {plugin} {version} is available
+{plugin}: turn on in Plugins
 {prayer} in {span}
 {program} exited with status {code}
 {program} timed out

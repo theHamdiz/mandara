@@ -1357,7 +1357,7 @@ impl View {
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, tk("Process hunter"), tk("Find running processes by name or PID and end them"), None), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, tk("Process hunter"), tk("Find running processes by name or PID and end them"), None).opt_in(), |window, cx, panel_cx| {
         let hunter: Shared = Rc::new(RefCell::new(Hunter::default()));
         // Typing re-renders only this panel, not every window.
         let views = hunter.borrow().views.clone();

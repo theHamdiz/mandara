@@ -5,6 +5,7 @@
 pub mod frame;
 pub mod input_mask;
 pub mod layer;
+pub mod liquid;
 pub mod material;
 pub mod motion;
 pub mod outputs;

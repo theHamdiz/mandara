@@ -48,9 +48,12 @@ fn sync_with(backend: &dyn mandara_compositor::CompositorBackend, cfg: &mandara_
     let (path, emitted) = backend.sync_managed_config(&cfg.effective_compositor(), borders).map_err(|e| format!("{e:#}"))?;
     let target = backend.target();
     let included = include_installed(target);
+    // The cursor is the opt-in cursor themes plugin's: switched off,
+    // Mandara touches no cursor setting at all.
+    let cursors = cfg.cursors_enabled();
     // X11 and older toolkit apps read `~/.icons/default` (only a file
     // Mandara wrote is updated, and it goes when the theme is unset).
-    if let Err(err) = mandara_config::input::sync_default_cursor(cfg.compositor.input.cursor.theme.as_deref()) {
+    if cursors && let Err(err) = mandara_config::input::sync_default_cursor(cfg.compositor.input.cursor.theme.as_deref()) {
         tracing::warn!("default cursor: {err}");
     }
     if included {
@@ -58,7 +61,7 @@ fn sync_with(backend: &dyn mandara_compositor::CompositorBackend, cfg: &mandara_
         // Hyprland's `env = XCURSOR_*` lines only reach apps started later;
         // the cursor on screen changes through `setcursor`.
         let cursor = &cfg.compositor.input.cursor;
-        if let Err(err) = backend.apply_cursor(cursor.theme.as_deref(), cursor.size) {
+        if cursors && let Err(err) = backend.apply_cursor(cursor.theme.as_deref(), cursor.size) {
             tracing::warn!("live cursor: {err:#}");
         }
     }

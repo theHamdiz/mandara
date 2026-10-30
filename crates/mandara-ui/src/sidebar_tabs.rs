@@ -193,6 +193,8 @@ pub struct SidebarTabs {
     /// Live card instances by plugin id, with their factory generation.
     pool: HashMap<String, (u64, AnyView)>,
     scroll: HashMap<String, ScrollHandle>,
+    /// The cards' overlay scroll bar (one per sidebar, whichever tab shows).
+    bar: std::rc::Rc<crate::scrollbar::ScrollbarState>,
     anim: SpringValue<f32>,
     /// -1 / +1: the side new cards slide in from.
     dir: f32,
@@ -231,6 +233,7 @@ impl SidebarTabs {
             cards: Vec::new(),
             pool: HashMap::new(),
             scroll: HashMap::new(),
+            bar: crate::scrollbar::ScrollbarState::new(),
             anim,
             dir: 1.0,
             menu: None,
@@ -425,6 +428,11 @@ impl SidebarTabs {
             Sel::Notifications => NOTIFICATIONS_TAB,
         };
         self.scroll.entry(key.to_string()).or_default().clone()
+    }
+
+    /// The cards' overlay scroll bar state.
+    pub fn scrollbar(&self) -> std::rc::Rc<crate::scrollbar::ScrollbarState> {
+        self.bar.clone()
     }
 
     /// `(x offset, opacity)` of the switching-in cards.

@@ -10,6 +10,8 @@ use crate::color::Color;
 use crate::palette::MandaraPalette;
 
 mod apps;
+mod ledger;
+pub use ledger::{BACKUP_SUFFIX, Ledger, MARKER, backup_path, fnv1a};
 pub use apps::{alacritty, firefox_userchrome, foot, helix, kde, kitty, neovim, pywal_json, vesktop, wezterm};
 
 /// Which apps to theme (mirrors `[integrations]` in the config).
@@ -577,84 +579,95 @@ const GTK_VERSIONS: [&str; 2] = ["gtk-4.0", "gtk-3.0"];
 const FUZZEL_MARKER: &str = "# Mandara theme colors — keep this block last";
 
 /// Writes every enabled target; returns the files written or linked.
-pub fn sync(p: &MandaraPalette, targets: Targets, cache_dir: &Path, config_dir: &Path) -> Vec<PathBuf> {
+/// Files outside `cache_dir` go through `ledger`, and a target that is off
+/// takes back what the ledger says Mandara applied for it (see
+/// [`Ledger`]); with every target off and an empty ledger nothing is
+/// written anywhere.
+pub fn sync(p: &MandaraPalette, targets: Targets, cache_dir: &Path, config_dir: &Path, ledger: &mut Ledger) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut put = |path: PathBuf, body: String| match write(&path, &body) {
         Ok(()) => out.push(path),
         Err(err) => tracing::warn!("theme sync {}: {err}", path.display()),
     };
-    if targets.ghostty {
-        put(config_dir.join("ghostty/themes/mandara"), ghostty(p));
-    }
     if targets.gtk {
         put(cache_dir.join("gtk.css"), gtk(p));
     }
-    let import = gtk_import(cache_dir);
-    for v in GTK_VERSIONS {
-        let css = config_dir.join(v).join("gtk.css");
-        // Off: the import line Mandara added goes again (the user's own
-        // rules stay), so GTK apps stop following the theme.
-        let done = if targets.gtk { ensure_line(&css, &import, Placement::AfterImports) } else { remove_block(&css, &[import.as_str()]) };
-        if let Err(err) = done {
-            tracing::warn!("theme sync {v}: {err}");
-        }
-    }
-    if targets.qt6 {
-        put(config_dir.join("qt6ct/colors/mandara.conf"), qt(p));
-        put(config_dir.join("qt5ct/colors/mandara.conf"), qt(p));
-    }
-    if targets.zed {
-        put(config_dir.join("zed/themes/mandara.json"), zed(p));
-    }
-    {
-        let file = cache_dir.join("fuzzel.ini");
-        // `include` is a [main]-section key; re-open [main] in a trailing
-        // block so it comes after (and overrides) the user's own colors.
-        let include = format!("include={}", file.display());
-        let block = [FUZZEL_MARKER, "[main]", include.as_str()];
-        let ini = config_dir.join("fuzzel/fuzzel.ini");
-        if targets.fuzzel {
-            put(file, fuzzel(p));
-        }
-        let done = if targets.fuzzel { ensure_block(&ini, &block, Placement::End) } else { remove_block(&ini, &block) };
-        if let Err(err) = done {
-            tracing::warn!("theme sync fuzzel: {err}");
-        }
-    }
-    if targets.btop {
-        put(config_dir.join("btop/themes/mandara.theme"), btop(p));
+    if targets.fuzzel {
+        put(cache_dir.join("fuzzel.ini"), fuzzel(p));
     }
     if targets.kvantum {
         let dir = kvantum_dir(cache_dir);
         put(dir.join(format!("{KVANTUM_THEME}.kvconfig")), kvantum_config(p));
         put(dir.join(format!("{KVANTUM_THEME}.svg")), kvantum_svg(p));
-        if targets.kvantum_apply
-            && let Err(err) = kvantum_apply(&dir, config_dir)
-        {
+    }
+    let mut owned = |ledger: &mut Ledger, on: bool, app: &str, files: Vec<(PathBuf, String)>| {
+        if !on {
+            ledger.take_back(app);
+            return;
+        }
+        for (path, body) in files {
+            match ledger.put_file(app, &path, &body) {
+                Ok(()) => out.push(path),
+                Err(err) => tracing::warn!("theme sync {}: {err}", path.display()),
+            }
+        }
+    };
+    owned(ledger, targets.ghostty, "ghostty", if targets.ghostty { vec![(config_dir.join("ghostty/themes/mandara"), ghostty(p))] } else { Vec::new() });
+    owned(ledger, targets.qt6, "qt", if targets.qt6 { vec![(config_dir.join("qt6ct/colors/mandara.conf"), qt(p)), (config_dir.join("qt5ct/colors/mandara.conf"), qt(p))] } else { Vec::new() });
+    owned(ledger, targets.zed, "zed", if targets.zed { vec![(config_dir.join("zed/themes/mandara.json"), zed(p))] } else { Vec::new() });
+    owned(ledger, targets.btop, "btop", if targets.btop { vec![(config_dir.join("btop/themes/mandara.theme"), btop(p))] } else { Vec::new() });
+    // GTK: one import line in each version's gtk.css.
+    if targets.gtk {
+        let import = gtk_import(cache_dir);
+        for v in GTK_VERSIONS {
+            if let Err(err) = ledger.put_block("gtk", &config_dir.join(v).join("gtk.css"), &[import.as_str()], Placement::AfterImports) {
+                tracing::warn!("theme sync {v}: {err}");
+            }
+        }
+    } else {
+        ledger.take_back("gtk");
+    }
+    // Fuzzel: `include` is a [main]-section key; re-open [main] in a
+    // trailing block so it comes after (and overrides) the user's colors.
+    if targets.fuzzel {
+        let include = format!("include={}", cache_dir.join("fuzzel.ini").display());
+        let block = [FUZZEL_MARKER, "[main]", include.as_str()];
+        if let Err(err) = ledger.put_block("fuzzel", &config_dir.join("fuzzel/fuzzel.ini"), &block, Placement::End) {
+            tracing::warn!("theme sync fuzzel: {err}");
+        }
+    } else {
+        ledger.take_back("fuzzel");
+    }
+    if targets.kvantum && targets.kvantum_apply {
+        if let Err(err) = kvantum_apply(&kvantum_dir(cache_dir), config_dir, ledger) {
             tracing::warn!("theme sync kvantum: {err}");
         }
+    } else {
+        kvantum_take_back(config_dir, ledger);
     }
     out
 }
 
-/// Writes the additional app themes. Only files Mandara owns are written:
-/// each app's own themes folder (`~/.config/kitty/themes/mandara.conf`,
-/// `helix/themes/mandara.toml`, `nvim/colors/mandara.lua`,
-/// `wezterm/colors/mandara.toml`, `vesktop/themes/mandara.theme.css`,
-/// `<data>/color-schemes/Mandara.colors`) and `<cache>/…` copies for apps
-/// that `include` / `import` a file (foot, Alacritty, Firefox). The apps'
-/// main configs are never edited: selecting the theme stays the user's
-/// one-line choice (see the README).
-pub fn sync_apps(p: &MandaraPalette, targets: AppTargets, cache_dir: &Path, config_dir: &Path, data_dir: &Path) -> Vec<PathBuf> {
+/// An app theme file Mandara owns: on?, app, path and its renderer.
+type OwnedTheme<'a> = (bool, &'a str, PathBuf, fn(&MandaraPalette) -> String);
+
+/// Writes the additional app themes. Outside `cache_dir` only files Mandara
+/// owns are written, through `ledger`: each app's own themes folder
+/// (`~/.config/kitty/themes/mandara.conf`, `helix/themes/mandara.toml`,
+/// `nvim/colors/mandara.lua`, `wezterm/colors/mandara.toml`,
+/// `vesktop/themes/mandara.theme.css`, `<data>/color-schemes/Mandara.colors`)
+/// and `<cache>/…` copies for apps that `include` / `import` a file (foot,
+/// Alacritty, Firefox). The apps' main configs are never edited: selecting
+/// the theme stays the user's one-line choice (see the README). An app
+/// switched off takes its owned files back.
+pub fn sync_apps(p: &MandaraPalette, targets: AppTargets, cache_dir: &Path, config_dir: &Path, data_dir: &Path, ledger: &mut Ledger) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut put = |path: PathBuf, body: String| match write(&path, &body) {
         Ok(()) => out.push(path),
         Err(err) => tracing::warn!("theme sync {}: {err}", path.display()),
     };
     if targets.kitty {
-        let body = kitty(p);
-        put(cache_dir.join("kitty.conf"), body.clone());
-        put(config_dir.join("kitty/themes/mandara.conf"), body);
+        put(cache_dir.join("kitty.conf"), kitty(p));
     }
     if targets.foot {
         put(cache_dir.join("foot.ini"), foot(p));
@@ -662,24 +675,27 @@ pub fn sync_apps(p: &MandaraPalette, targets: AppTargets, cache_dir: &Path, conf
     if targets.alacritty {
         put(cache_dir.join("alacritty.toml"), alacritty(p));
     }
-    if targets.wezterm {
-        put(config_dir.join("wezterm/colors/mandara.toml"), wezterm(p));
-    }
-    if targets.helix {
-        put(config_dir.join("helix/themes/mandara.toml"), helix(p));
-    }
-    if targets.neovim {
-        put(config_dir.join("nvim/colors/mandara.lua"), neovim(p));
-    }
     if targets.firefox {
         put(cache_dir.join("firefox/colors.json"), pywal_json(p, ""));
         put(cache_dir.join("firefox/userChrome.css"), firefox_userchrome(p));
     }
-    if targets.vesktop {
-        put(config_dir.join("vesktop/themes/mandara.theme.css"), vesktop(p));
-    }
-    if targets.kde {
-        put(data_dir.join("color-schemes/Mandara.colors"), kde(p));
+    let owned: [OwnedTheme; 6] = [
+        (targets.kitty, "kitty", config_dir.join("kitty/themes/mandara.conf"), kitty),
+        (targets.wezterm, "wezterm", config_dir.join("wezterm/colors/mandara.toml"), wezterm),
+        (targets.helix, "helix", config_dir.join("helix/themes/mandara.toml"), helix),
+        (targets.neovim, "neovim", config_dir.join("nvim/colors/mandara.lua"), neovim),
+        (targets.vesktop, "vesktop", config_dir.join("vesktop/themes/mandara.theme.css"), vesktop),
+        (targets.kde, "kde", data_dir.join("color-schemes/Mandara.colors"), kde),
+    ];
+    for (on, app, path, render) in owned {
+        if !on {
+            ledger.take_back(app);
+            continue;
+        }
+        match ledger.put_file(app, &path, &render(p)) {
+            Ok(()) => out.push(path),
+            Err(err) => tracing::warn!("theme sync {}: {err}", path.display()),
+        }
     }
     out
 }
@@ -689,36 +705,65 @@ pub fn kvantum_dir(cache_dir: &Path) -> PathBuf {
     cache_dir.join("kvantum").join(KVANTUM_THEME)
 }
 
+/// Kvantum's own config, which `kvantummanager --set` edits.
+fn kvantum_config_file(config_dir: &Path) -> PathBuf {
+    config_dir.join("Kvantum").join("kvantum.kvconfig")
+}
+
 /// Opt-in Kvantum activation: links `~/.config/Kvantum/Mandara` to the
 /// generated theme (only if that path is free or already our link) and,
-/// when Kvantum isn't on Mandara yet, runs `kvantummanager --set Mandara`.
-/// Returns whether the theme had to be selected.
-pub fn kvantum_apply(theme_dir: &Path, config_dir: &Path) -> std::io::Result<bool> {
+/// when Kvantum isn't on Mandara yet, runs `kvantummanager --set Mandara`
+/// after backing up `kvantum.kvconfig` (recorded in `ledger`). Returns
+/// whether the theme had to be selected.
+pub fn kvantum_apply(theme_dir: &Path, config_dir: &Path, ledger: &mut Ledger) -> std::io::Result<bool> {
+    kvantum_apply_with(theme_dir, config_dir, ledger, || {
+        let status = std::process::Command::new("kvantummanager").args(["--set", KVANTUM_THEME]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status()?;
+        if !status.success() {
+            return Err(std::io::Error::other(format!("kvantummanager --set {KVANTUM_THEME} failed ({status})")));
+        }
+        Ok(())
+    })
+}
+
+/// [`kvantum_apply`] with the selection step supplied (tests stand in for
+/// `kvantummanager`).
+fn kvantum_apply_with(theme_dir: &Path, config_dir: &Path, ledger: &mut Ledger, select: impl FnOnce() -> std::io::Result<()>) -> std::io::Result<bool> {
     let kv = config_dir.join("Kvantum");
     let link = kv.join(KVANTUM_THEME);
+    let kvconfig = kvantum_config_file(config_dir);
     match std::fs::symlink_metadata(&link) {
         Ok(meta) if meta.file_type().is_symlink() => {
-            if std::fs::read_link(&link)? != theme_dir {
+            let target = std::fs::read_link(&link)?;
+            if target != theme_dir {
+                // Only a link into a Mandara theme cache is ours to repoint.
+                if !target.to_string_lossy().contains("/mandara/") {
+                    return Err(std::io::Error::other(format!("{} links elsewhere and is not Mandara's", link.display())));
+                }
                 std::fs::remove_file(&link)?;
                 std::os::unix::fs::symlink(theme_dir, &link)?;
             }
+            ledger.record_kvantum(&link, theme_dir, &kvconfig)?;
         }
         // A real folder of the same name is the user's: leave it alone.
         Ok(_) => return Err(std::io::Error::other(format!("{} exists and is not Mandara's link", link.display()))),
         Err(_) => {
+            ledger.record_kvantum(&link, theme_dir, &kvconfig)?;
             std::fs::create_dir_all(&kv)?;
             std::os::unix::fs::symlink(theme_dir, &link)?;
         }
     }
-    let selected = std::fs::read_to_string(kv.join("kvantum.kvconfig")).is_ok_and(|t| t.lines().any(|l| l.trim().replace(' ', "") == format!("theme={KVANTUM_THEME}")));
+    let selected = std::fs::read_to_string(&kvconfig).is_ok_and(|t| t.lines().any(|l| l.trim().replace(' ', "") == format!("theme={KVANTUM_THEME}")));
     if selected {
         return Ok(false);
     }
-    let status = std::process::Command::new("kvantummanager").args(["--set", KVANTUM_THEME]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status()?;
-    if !status.success() {
-        return Err(std::io::Error::other(format!("kvantummanager --set {KVANTUM_THEME} failed ({status})")));
-    }
+    select()?;
     Ok(true)
+}
+
+/// Takes back [`kvantum_apply`]: Mandara's link and, while Kvantum still
+/// selects Mandara, the user's `kvantum.kvconfig`.
+fn kvantum_take_back(config_dir: &Path, ledger: &mut Ledger) -> Vec<PathBuf> {
+    ledger.take_back_kvantum(&kvantum_config_file(config_dir), KVANTUM_THEME)
 }
 
 #[cfg(test)]
@@ -782,18 +827,19 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("mandara-kv-{}", std::process::id()));
         let (cache, config) = (dir.join("cache"), dir.join("config"));
         let targets = Targets { ghostty: false, gtk: false, qt6: false, zed: false, fuzzel: false, btop: false, kvantum: true, kvantum_apply: false };
-        let files = sync(&palette(), targets, &cache, &config);
+        let mut ledger = Ledger::default();
+        let files = sync(&palette(), targets, &cache, &config, &mut ledger);
         assert_eq!(files.len(), 2);
         assert!(kvantum_dir(&cache).join("Mandara.kvconfig").is_file() && kvantum_dir(&cache).join("Mandara.svg").is_file());
         assert!(!config.join("Kvantum").exists(), "nothing outside the cache without opt-in");
         // A user's own folder named Mandara is never replaced.
         std::fs::create_dir_all(config.join("Kvantum/Mandara")).unwrap();
-        assert!(kvantum_apply(&kvantum_dir(&cache), &config).is_err());
+        assert!(kvantum_apply(&kvantum_dir(&cache), &config, &mut ledger).is_err());
         assert!(config.join("Kvantum/Mandara").is_dir());
         // With the theme already selected, apply only (re)links.
         std::fs::remove_dir(config.join("Kvantum/Mandara")).unwrap();
         std::fs::write(config.join("Kvantum/kvantum.kvconfig"), "[General]\ntheme=Mandara\n").unwrap();
-        assert!(!kvantum_apply(&kvantum_dir(&cache), &config).unwrap());
+        assert!(!kvantum_apply(&kvantum_dir(&cache), &config, &mut ledger).unwrap());
         assert_eq!(std::fs::read_link(config.join("Kvantum/Mandara")).unwrap(), kvantum_dir(&cache));
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -806,12 +852,14 @@ mod tests {
         std::fs::create_dir_all(config.join("kitty")).unwrap();
         std::fs::write(config.join("kitty/kitty.conf"), "font_size 11\n").unwrap();
         let all = AppTargets { kitty: true, foot: true, alacritty: true, wezterm: true, helix: true, neovim: true, firefox: true, vesktop: true, kde: true };
-        let files = sync_apps(&palette(), all, &cache, &config, &data);
+        let mut ledger = Ledger::default();
+        let files = sync_apps(&palette(), all, &cache, &config, &data, &mut ledger);
         assert_eq!(files.len(), 11);
         assert!(files.iter().all(|f| f.starts_with(&dir) && f.is_file()));
         assert_eq!(std::fs::read_to_string(config.join("kitty/kitty.conf")).unwrap(), "font_size 11\n");
         assert!(data.join("color-schemes/Mandara.colors").is_file());
-        assert!(sync_apps(&palette(), AppTargets::default(), &cache, &config, &data).is_empty());
+        assert!(sync_apps(&palette(), AppTargets::default(), &cache, &config, &data, &mut ledger).is_empty());
+        assert!(!config.join("kitty/themes").exists() && !data.join("color-schemes").exists(), "switched off, the owned files and their folders go again");
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -914,8 +962,9 @@ mod tests {
             std::fs::write(&f, body).unwrap();
         }
         for p in [crate::engine::default_palette(true), crate::engine::default_palette(false)] {
-            let mut files = sync(&p, ALL_TARGETS, &cache, &config);
-            files.extend(sync_apps(&p, ALL_APPS, &cache, &config, &data));
+            let mut ledger = Ledger::default();
+            let mut files = sync(&p, ALL_TARGETS, &cache, &config, &mut ledger);
+            files.extend(sync_apps(&p, ALL_APPS, &cache, &config, &data, &mut ledger));
             for (rel, body) in USER_FILES {
                 assert_eq!(std::fs::read_to_string(config.join(rel)).unwrap(), *body, "{rel} was edited");
                 assert!(!files.contains(&config.join(rel)), "{rel} was written");
@@ -930,30 +979,136 @@ mod tests {
     }
 
     #[test]
-    fn a_symlinked_theme_file_is_replaced_not_followed() {
+    fn a_users_file_at_an_owned_path_is_backed_up_and_restored() {
         let (dir, cache, config, _) = sandbox("symlink");
         let own = dir.join("dotfiles/my-ghostty-theme");
         std::fs::create_dir_all(own.parent().unwrap()).unwrap();
         std::fs::write(&own, "background = 000000\n").unwrap();
-        std::fs::create_dir_all(config.join("ghostty/themes")).unwrap();
-        std::os::unix::fs::symlink(&own, config.join("ghostty/themes/mandara")).unwrap();
-        sync(&palette(), Targets { ghostty: true, ..NO_TARGETS }, &cache, &config);
+        let path = config.join("ghostty/themes/mandara");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&own, &path).unwrap();
+        let mut ledger = Ledger::default();
+        sync(&palette(), Targets { ghostty: true, ..NO_TARGETS }, &cache, &config, &mut ledger);
         assert_eq!(std::fs::read_to_string(&own).unwrap(), "background = 000000\n", "the link's target is the user's");
-        assert!(std::fs::read_to_string(config.join("ghostty/themes/mandara")).unwrap().contains(&palette().primary.to_hex_rgb_bare()));
+        assert!(std::fs::read_to_string(&path).unwrap().contains(&palette().primary.to_hex_rgb_bare()));
+        let backup = config.join("ghostty/themes/mandara.mandara-backup");
+        assert_eq!(std::fs::read_link(&backup).unwrap(), own, "the user's link is kept as the backup");
+        // A second sync rewrites Mandara's own file without another backup.
+        sync(&palette(), Targets { ghostty: true, ..NO_TARGETS }, &cache, &config, &mut ledger);
+        assert_eq!(std::fs::read_dir(path.parent().unwrap()).unwrap().count(), 2);
+        // Off: the user's link is back where it was.
+        sync(&palette(), NO_TARGETS, &cache, &config, &mut ledger);
+        assert_eq!(std::fs::read_link(&path).unwrap(), own);
+        assert!(!backup.exists());
+        // A plain user file is restored byte for byte too.
+        std::fs::remove_file(&path).unwrap();
+        std::fs::write(&path, "palette = 0=#000000\n").unwrap();
+        sync(&palette(), Targets { ghostty: true, ..NO_TARGETS }, &cache, &config, &mut ledger);
+        sync(&palette(), NO_TARGETS, &cache, &config, &mut ledger);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "palette = 0=#000000\n");
+        assert!(ledger.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn mandaras_file_edited_by_the_user_is_kept_on_take_back() {
+        let (dir, cache, config, _) = sandbox("edited");
+        let mut ledger = Ledger::default();
+        let on = Targets { btop: true, ..NO_TARGETS };
+        sync(&palette(), on, &cache, &config, &mut ledger);
+        let path = config.join("btop/themes/mandara.theme");
+        std::fs::write(&path, "# my tweaks\n").unwrap();
+        sync(&palette(), NO_TARGETS, &cache, &config, &mut ledger);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "# my tweaks\n", "a user's edit is never deleted");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn leftovers_without_a_ledger_are_never_touched() {
+        // What 0.1 wrote (no ledger back then) stays as it is while off.
+        let (dir, cache, config, data) = sandbox("legacy");
+        let import = gtk_import(&cache);
+        let css = config.join("gtk-4.0/gtk.css");
+        let theme = config.join("ghostty/themes/mandara");
+        let kitty_theme = config.join("kitty/themes/mandara.conf");
+        let link = config.join("Kvantum/Mandara");
+        for (f, body) in [(&css, format!("{import}\nbutton {{ color: red; }}\n")), (&theme, ghostty(&palette())), (&kitty_theme, kitty(&palette()))] {
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(f, body).unwrap();
+        }
+        std::fs::create_dir_all(link.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(kvantum_dir(&cache), &link).unwrap();
+        let before: Vec<String> = [&css, &theme, &kitty_theme].iter().map(|f| std::fs::read_to_string(f).unwrap()).collect();
+        let mut ledger = Ledger::default();
+        assert!(sync(&palette(), NO_TARGETS, &cache, &config, &mut ledger).is_empty());
+        assert!(sync_apps(&palette(), AppTargets::default(), &cache, &config, &data, &mut ledger).is_empty());
+        let after: Vec<String> = [&css, &theme, &kitty_theme].iter().map(|f| std::fs::read_to_string(f).unwrap()).collect();
+        assert_eq!(before, after);
+        assert!(std::fs::read_link(&link).is_ok());
+        // Mandara's own old output is recognised: switching on rewrites it
+        // without backing it up as the user's.
+        sync(&palette(), Targets { ghostty: true, ..NO_TARGETS }, &cache, &config, &mut ledger);
+        assert!(!config.join("ghostty/themes/mandara.mandara-backup").exists());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn kvantum_activation_is_taken_back() {
+        let (dir, cache, config, _) = sandbox("kv-back");
+        let kvconfig = config.join("Kvantum/kvantum.kvconfig");
+        std::fs::create_dir_all(kvconfig.parent().unwrap()).unwrap();
+        std::fs::write(&kvconfig, "[General]\ntheme=KvArc\n").unwrap();
+        let mut ledger = Ledger::default();
+        // kvantummanager stands in: it selects Mandara in kvantum.kvconfig.
+        let selected = kvantum_apply_with(&kvantum_dir(&cache), &config, &mut ledger, || std::fs::write(&kvconfig, "[General]\ntheme=Mandara\n")).unwrap();
+        assert!(selected);
+        assert_eq!(std::fs::read_link(config.join("Kvantum/Mandara")).unwrap(), kvantum_dir(&cache));
+        assert!(ledger.kvantum.is_some());
+        // Off (through sync): the link goes and the user's theme returns.
+        sync(&palette(), NO_TARGETS, &cache, &config, &mut ledger);
+        assert!(std::fs::symlink_metadata(config.join("Kvantum/Mandara")).is_err());
+        assert_eq!(std::fs::read_to_string(&kvconfig).unwrap(), "[General]\ntheme=KvArc\n");
+        assert!(ledger.is_empty());
+        // A user who picked another theme meanwhile keeps it.
+        kvantum_apply_with(&kvantum_dir(&cache), &config, &mut ledger, || std::fs::write(&kvconfig, "[General]\ntheme=Mandara\n")).unwrap();
+        std::fs::write(&kvconfig, "[General]\ntheme=Other\n").unwrap();
+        kvantum_take_back(&config, &mut ledger);
+        assert_eq!(std::fs::read_to_string(&kvconfig).unwrap(), "[General]\ntheme=Other\n");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_ledger_persists_and_is_written_only_when_it_changes() {
+        let (dir, cache, config, _) = sandbox("ledger");
+        let path = config.join("mandara/generated/app-themes.toml");
+        let mut ledger = Ledger::load(&path);
+        sync(&palette(), NO_TARGETS, &cache, &config, &mut ledger);
+        ledger.store(&path).unwrap();
+        assert!(!path.exists(), "nothing applied, nothing written");
+        sync(&palette(), Targets { gtk: true, zed: true, ..NO_TARGETS }, &cache, &config, &mut ledger);
+        ledger.store(&path).unwrap();
+        let mut back = Ledger::load(&path);
+        assert!(back.has("gtk") && back.has("zed") && !back.has("btop"));
+        sync(&palette(), NO_TARGETS, &cache, &config, &mut back);
+        back.store(&path).unwrap();
+        assert!(!path.exists(), "an empty ledger is removed");
+        assert!(!config.join("zed").exists() && !config.join("gtk-4.0").exists(), "everything Mandara made is gone");
         std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
     fn disabled_apps_are_not_touched() {
         let (dir, cache, config, data) = sandbox("disabled");
-        assert!(sync(&palette(), NO_TARGETS, &cache, &config).is_empty());
-        assert!(sync_apps(&palette(), AppTargets::default(), &cache, &config, &data).is_empty());
+        let mut ledger = Ledger::default();
+        assert!(sync(&palette(), NO_TARGETS, &cache, &config, &mut ledger).is_empty());
+        assert!(sync_apps(&palette(), AppTargets::default(), &cache, &config, &data, &mut ledger).is_empty());
+        assert!(ledger.is_empty());
         assert!(!config.exists() && !cache.exists() && !data.exists(), "nothing is created for disabled apps");
         // A user's gtk.css without Mandara's line is left byte-identical, without a backup.
         let css = config.join("gtk-4.0/gtk.css");
         std::fs::create_dir_all(css.parent().unwrap()).unwrap();
         std::fs::write(&css, "window { padding: 0; }").unwrap();
-        sync(&palette(), NO_TARGETS, &cache, &config);
+        sync(&palette(), NO_TARGETS, &cache, &config, &mut ledger);
         assert_eq!(std::fs::read_to_string(&css).unwrap(), "window { padding: 0; }");
         assert!(!config.join("gtk-4.0/gtk.css.mandara-backup").exists());
         std::fs::remove_dir_all(dir).unwrap();
@@ -971,17 +1126,19 @@ mod tests {
             std::fs::write(f, body).unwrap();
         }
         let on = Targets { gtk: true, fuzzel: true, ..NO_TARGETS };
-        sync(&palette(), on, &cache, &config);
+        let mut ledger = Ledger::default();
+        sync(&palette(), on, &cache, &config, &mut ledger);
         let import = gtk_import(&cache);
         assert!(std::fs::read_to_string(&css).unwrap().contains(&import));
         assert!(std::fs::read_to_string(config.join("gtk-3.0/gtk.css")).unwrap().contains(&import), "GTK 3 gets the line too");
         assert!(std::fs::read_to_string(&ini).unwrap().ends_with(&format!("include={}\n", cache.join("fuzzel.ini").display())));
         assert!(cache.join("gtk.css").is_file() && cache.join("fuzzel.ini").is_file());
         // Off: the files are the user's again, byte for byte.
-        sync(&palette(), NO_TARGETS, &cache, &config);
+        sync(&palette(), NO_TARGETS, &cache, &config, &mut ledger);
+        assert!(ledger.is_empty(), "everything taken back");
         assert_eq!(std::fs::read_to_string(&css).unwrap(), user_css);
         assert_eq!(std::fs::read_to_string(&ini).unwrap(), user_ini);
-        assert!(!std::fs::read_to_string(config.join("gtk-3.0/gtk.css")).unwrap().contains(&import));
+        assert!(!config.join("gtk-3.0/gtk.css").exists(), "a gtk.css Mandara created goes again");
         // The backups made when the line went in are the originals.
         assert_eq!(std::fs::read_to_string(config.join("gtk-4.0/gtk.css.mandara-backup")).unwrap(), user_css);
         // Off again is a no-op.

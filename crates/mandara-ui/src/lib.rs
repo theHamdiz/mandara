@@ -37,6 +37,7 @@ pub mod polkit;
 pub mod powerctl;
 pub mod plugin_art;
 pub mod plugins;
+pub mod scrollbar;
 pub mod shell;
 pub mod snip;
 pub mod state;

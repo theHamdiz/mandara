@@ -1255,7 +1255,7 @@ fn check_now(cx: &mut App) -> Output {
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, tk("Updates"), tk("Pending package updates from pacman, the AUR, APT, DNF, Zypper and Flatpak"), None), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, tk("Updates"), tk("Pending package updates from pacman, the AUR, APT, DNF, Zypper and Flatpak"), None).opt_in(), |window, cx, panel_cx| {
         let m = shared(cx);
         // Typing re-renders this plugin's views only.
         let views = m.borrow().views.clone();

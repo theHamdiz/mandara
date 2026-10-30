@@ -8,7 +8,8 @@
 //! * `apps defaults|default set|autostart …|preferred` — `mimeapps.list`
 //!   and XDG autostart, edited non-destructively (`mandara_config::apps`).
 //! * `input cursor-themes|layouts` — what Studio → Input offers.
-//! * `cursor list|install|apply|remove` — Studio → Themes → Cursor.
+//! * `cursor list|install|apply|remove` — Studio → Themes → Cursor (the
+//!   opt-in `cursors` plugin's commands).
 //! * `profile list|save|apply|delete`, `config export|import|reset`.
 
 use gpui::{App, AsyncApp};
@@ -26,6 +27,9 @@ use crate::state::{config, update_config};
 const NETWORK: &str = super::network::ID;
 const BLUETOOTH: &str = "bluetooth";
 const CORE: &str = "core";
+/// The cursor commands belong to the opt-in cursor themes plugin (refused
+/// while it is off).
+const CURSORS: &str = super::cursors::ID;
 /// Matches in `input layouts <query>`.
 const LAYOUT_MATCHES_MAX: usize = 40;
 
@@ -600,7 +604,7 @@ fn apply_cursor(cx: &mut App, theme: Option<String>, size: Option<u32>) -> Value
 fn register_cursor(r: &mut PluginRegistry) {
     use mandara_services::cursors::{catalog, install};
     r.command(
-        CORE,
+        CURSORS,
         CommandSpec::new("cursor list", tk("The cursor theme catalog (variants, licence, installed, active) and other installed themes"), |_, cx| {
             let installed = mandara_config::input::cursor_themes();
             let ours: Vec<String> = install::installed(&install::Env::current()).into_iter().map(|i| i.theme).collect();
@@ -621,7 +625,7 @@ fn register_cursor(r: &mut PluginRegistry) {
         }),
     );
     r.command(
-        CORE,
+        CURSORS,
         CommandSpec::new_output("cursor install", tk("Download a catalog cursor theme from its GitHub release, verify its SHA-256 and install it to ~/.local/share/icons"), |a, _| {
             let spec = a.get(0).ok_or("expected a theme id, e.g. bibata/ice (see `cursor list`)")?.to_string();
             let (theme, variant) = catalog::resolve(&spec).ok_or_else(|| format!("unknown cursor theme {spec:?} (see `cursor list`)"))?;
@@ -636,7 +640,7 @@ fn register_cursor(r: &mut PluginRegistry) {
         .example("cursor install bibata/ice"),
     );
     r.command(
-        CORE,
+        CURSORS,
         CommandSpec::new("cursor apply", tk("Make an installed cursor theme (and optionally a size) the cursor, live; `none` returns to your compositor's own"), |a, cx| {
             let spec = a.get(0).ok_or("expected a theme (see `cursor list`)")?;
             let size = match a.get(1) {
@@ -661,7 +665,7 @@ fn register_cursor(r: &mut PluginRegistry) {
         .example("cursor apply bibata/ice 32"),
     );
     r.command(
-        CORE,
+        CURSORS,
         CommandSpec::new("cursor remove", tk("Remove a cursor theme Mandara installed (never one from a package or your own folders)"), |a, cx| {
             let spec = a.get(0).ok_or("expected a theme id (see `cursor list`)")?;
             let env = install::Env::current();

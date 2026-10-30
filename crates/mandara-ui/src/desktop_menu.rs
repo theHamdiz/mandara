@@ -405,13 +405,15 @@ fn hint_el(h: Hint, palette: &MandaraPalette) -> gpui::AnyElement {
 
 // ── Running an action ────────────────────────────────────────────────────
 
-/// Runs a desktop-menu action for a right-click at `at` on `output`.
-pub fn run(action: &Action, output: &str, at: (f32, f32), cx: &mut App) {
+/// Runs a desktop-menu action for a right-click at `at` on `output` (of
+/// logical size `size`).
+pub fn run(action: &Action, output: &str, at: (f32, f32), size: (f32, f32), cx: &mut App) {
     match action {
         Action::EditDesktop => crate::desktop_edit::enter_on(Some(output), cx),
         Action::Add(kind) => crate::desktop_edit::add_at(*kind, output, Some(at), cx),
         Action::ChangeWallpaper => {
             if config(cx).read(cx).get().wallpaper.picker {
+                crate::overlays::picker_on(output, Some(size), cx);
                 crate::state::shell(cx).update(cx, |s, cx| s.set_wallpaper_picker(true, cx));
             } else {
                 crate::state::open_studio_at(Some("wallpaper".into()), cx);
@@ -464,6 +466,8 @@ fn open_terminal(cx: &mut App) {
 pub struct DesktopMenu {
     output: String,
     at: (f32, f32),
+    /// The output's logical size (the surface's).
+    size: (f32, f32),
     entries: Vec<Entry>,
     hover: Option<usize>,
     /// The "Add widget" flyout is open (and the row hovered in it).
@@ -507,8 +511,8 @@ impl DesktopMenu {
         } else {
             self.sheet.close();
         }
-        let (output, at) = (self.output.clone(), self.at);
-        cx.defer(move |cx| run(&action, &output, at, cx));
+        let (output, at, size) = (self.output.clone(), self.at, self.size);
+        cx.defer(move |cx| run(&action, &output, at, size, cx));
         cx.notify();
     }
 
@@ -666,13 +670,21 @@ pub fn close(cx: &mut App) {
 
 /// Opens the desktop menu at `at` (logical px) on `output`.
 pub fn open(output: &str, at: (f32, f32), cx: &mut App) {
+    open_sized(output, at, None, cx);
+}
+
+/// [`open`] with the output's logical size when the caller knows it (the
+/// wallpaper canvas does). The startup output list misses a display
+/// connected later, and a menu surface sized for another output is
+/// centred on this one: the card then opened away from the pointer.
+pub fn open_sized(output: &str, at: (f32, f32), known: Option<(f32, f32)>, cx: &mut App) {
     close(cx);
     if crate::desktop_edit::active(cx) || crate::lock::is_locked() {
         return;
     }
     let cfg = config(cx).read(cx).snapshot();
     let entries = desktop_entries(&cfg, output);
-    let size = crate::plugins::dock::output_size(output, cx);
+    let size = menu_surface_size(known, || crate::plugins::dock::output_size(output, cx));
     let display = crate::plugins::dock::display_for(output, cx);
     // Over the whole output (zones ignored, so the click point maps 1:1),
     // keyboard for the arrows and Esc.
@@ -682,7 +694,7 @@ pub fn open(output: &str, at: (f32, f32), cx: &mut App) {
         cx.new(|cx| {
             let focus = cx.focus_handle();
             focus.focus(window, cx);
-            DesktopMenu { output, at, entries, hover: None, sub: false, sub_hover: None, sub_open: SpringValue::new(0.0, SUB_SPRING), sub_clock: FrameClock::new(), focus, sheet: Sheet::new(OPEN_SPRING) }
+            DesktopMenu { output, at, size, entries, hover: None, sub: false, sub_hover: None, sub_open: SpringValue::new(0.0, SUB_SPRING), sub_clock: FrameClock::new(), focus, sheet: Sheet::new(OPEN_SPRING) }
         })
     });
     match handle {
@@ -694,6 +706,23 @@ pub fn open(output: &str, at: (f32, f32), cx: &mut App) {
 /// Layer-shell exclusive zone `-1`: the whole output, whatever the bar
 /// reserves.
 pub const IGNORE_ZONES: f32 = -1.0;
+
+/// Smallest side, logical px, accepted as an output size for the menu
+/// surface: a layer surface asked for a 0 side is a protocol error.
+const MIN_SURFACE_SIDE: f32 = 1.0;
+
+/// The menu surface's size: the size the canvas reported for the clicked
+/// output when it is usable, else `fallback` (the startup output list).
+fn menu_surface_size(known: Option<(f32, f32)>, fallback: impl FnOnce() -> (f32, f32)) -> (f32, f32) {
+    let usable = |(w, h): (f32, f32)| w.is_finite() && h.is_finite() && w >= MIN_SURFACE_SIDE && h >= MIN_SURFACE_SIDE;
+    match known.filter(|s| usable(*s)) {
+        Some(size) => size,
+        None => {
+            let (w, h) = fallback();
+            (w.max(MIN_SURFACE_SIDE), h.max(MIN_SURFACE_SIDE))
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -729,6 +758,18 @@ mod tests {
         let e = desktop_entries(&cfg, "");
         let shot = e.iter().find(|e| e.action == Action::Screenshot).unwrap();
         assert!(matches!(&shot.hint, Some(Hint::Keys(k)) if k.last().map(|s| s.as_ref()) == Some("S")), "{:?}", shot.hint);
+    }
+
+    #[test]
+    fn the_menu_surface_takes_the_clicked_outputs_size() {
+        let startup_first = || (1707.0, 960.0);
+        // A display connected after startup: the canvas's size wins.
+        assert_eq!(menu_surface_size(Some((1920.0, 1080.0)), startup_first), (1920.0, 1080.0));
+        // Unknown or unusable sizes fall back, never to a 0 side.
+        assert_eq!(menu_surface_size(None, startup_first), (1707.0, 960.0));
+        assert_eq!(menu_surface_size(Some((0.0, 1080.0)), startup_first), (1707.0, 960.0));
+        assert_eq!(menu_surface_size(Some((f32::NAN, 1080.0)), startup_first), (1707.0, 960.0));
+        assert_eq!(menu_surface_size(None, || (0.0, 0.0)), (MIN_SURFACE_SIDE, MIN_SURFACE_SIDE));
     }
 
     #[test]

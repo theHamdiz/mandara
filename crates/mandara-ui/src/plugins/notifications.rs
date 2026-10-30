@@ -887,6 +887,8 @@ pub fn register(r: &mut PluginRegistry) {
         let marked = Rc::new(Cell::new(false));
         // Cards shown in the panel; panel-only state, reset on close.
         let page = Rc::new(Cell::new(PAGE_SIZE));
+        // The history's overlay scroll bar (per panel instance).
+        let (scroll, scroll_bar) = (gpui::ScrollHandle::new(), crate::scrollbar::ScrollbarState::new());
         let panel = fn_view(
             None,
             move |palette, window, cx| {
@@ -914,15 +916,16 @@ pub fn register(r: &mut PluginRegistry) {
                 let (body, h, more) = center(&hub.read(cx).notifications, palette, Some(&p), r, page.get());
                 let h = if more { h + MORE_H } else { h } + if composer.is_some() { REPLY_H + tokens::MD } else { 0.0 };
                 sc.set(size(px(PANEL_W), px((PAD * 2.0 + h).min(MAX_PANEL_H))));
-                div()
+                let list = div()
                     .id("notif-scroll")
                     .size_full()
                     .overflow_y_scroll()
+                    .track_scroll(&scroll)
                     .p(px(PAD))
                     .when_some(composer, |el, c| el.child(div().pb(px(tokens::MD)).child(c)))
                     .child(body)
-                    .when(more, |el| el.child(show_more(page.clone(), palette)))
-                    .into_any_element()
+                    .when(more, |el| el.child(show_more(page.clone(), palette)));
+                crate::scrollbar::with_scrollbar(list, &scroll, &scroll_bar, palette).size_full().into_any_element()
             },
             window,
             cx,

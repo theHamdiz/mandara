@@ -23,6 +23,15 @@ pub fn generated_dir() -> PathBuf {
     config_dir().join("generated")
 }
 
+/// What app theming changed outside Mandara's folders, so switching an app
+/// off takes exactly that back (`mandara_theme::templates::Ledger`):
+/// `~/.config/mandara/generated/app-themes.toml`. Machine-written like the
+/// compositor drop-ins beside it, and kept out of the cache so clearing
+/// caches never forgets what to restore.
+pub fn app_themes_ledger() -> PathBuf {
+    generated_dir().join("app-themes.toml")
+}
+
 /// `$XDG_CACHE_HOME/mandara` (usually `~/.cache/mandara`).
 pub fn cache_dir() -> PathBuf {
     dirs::cache_dir().unwrap_or_else(|| home().join(".cache")).join(APP_DIR)

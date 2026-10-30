@@ -139,8 +139,57 @@ mod tests {
         r
     }
 
-    /// The built-ins that ship switched off.
-    const OPT_IN: &[&str] = &["dock", "mini-stats", "prayer-times", "screen-time", "wallpaper-generator"];
+    /// The built-ins that ship switched off (README: "ship switched off").
+    const OPT_IN: &[&str] = &[
+        "app-installer",
+        "authenticator",
+        "color-picker",
+        "containers",
+        "cursors",
+        "dock",
+        "drives",
+        "mini-stats",
+        "net-speed",
+        "notes",
+        "pomodoro",
+        "prayer-times",
+        "privacy",
+        "processes",
+        "screen-time",
+        "services",
+        "soundscapes",
+        "todo",
+        "updates",
+        "wallhaven",
+        "wallpaper-generator",
+        "world-clock",
+    ];
+
+    /// What a fresh install shows: the bar essentials, quick settings,
+    /// media, weather, wallpaper, screenshot and clipboard.
+    const ON_BY_DEFAULT: &[&str] = &[
+        "active-window",
+        "audio",
+        "bluetooth",
+        "clipboard",
+        "clock",
+        "keyboard-layout",
+        "language",
+        "launcher",
+        "main-menu",
+        "media",
+        "network",
+        "notifications",
+        "power",
+        "quick-settings",
+        "resources",
+        "screenshot",
+        "session",
+        "tray",
+        "wallpaper",
+        "weather",
+        "workspaces",
+    ];
 
     #[test]
     fn opt_in_builtins_are_off_by_default_and_prayer_times_among_them() {
@@ -152,6 +201,42 @@ mod tests {
         for id in OPT_IN {
             assert!(!r.is_enabled(id, &c.plugins), "{id} must be off in a fresh config");
             assert!(c.plugin_places(id).is_empty(), "{id} must not be in the default layout");
+        }
+    }
+
+    #[test]
+    fn a_fresh_install_turns_on_exactly_the_calm_default_set() {
+        let r = registry();
+        let c = ShellConfig::default();
+        let mut on: Vec<&str> = r.manifests().filter(|m| m.origin == PluginOrigin::Builtin && m.id != super::super::compositor::ID && r.is_enabled(&m.id, &c.plugins)).map(|m| m.id.as_str()).collect();
+        on.sort_unstable();
+        assert_eq!(on, ON_BY_DEFAULT);
+        // Every plugin the default bar and sidebar show is on.
+        for lane in mandara_config::LayoutLane::ALL {
+            for id in c.layout_lane(lane) {
+                assert!(r.is_enabled(id, &c.plugins), "{id} is in the default layout but off");
+            }
+        }
+    }
+
+    #[test]
+    fn plugins_switched_off_by_default_since_0_2_stay_on_in_older_configs() {
+        let r = registry();
+        // The upgrade's list names real built-ins that now ship switched off.
+        for (id, why) in mandara_config::upgrade::OPT_IN_SINCE_V1 {
+            assert!(OPT_IN.contains(id), "{id} is in the upgrade list but ships on");
+            assert!(!why.is_empty());
+        }
+        // A 0.1 config: its plugins table has no defaults version.
+        let mut old: ShellConfig = toml::from_str("[plugins]\nenabled = [\"dock\"]\n").unwrap();
+        mandara_config::upgrade::upgrade(&mut old);
+        for (id, _) in mandara_config::upgrade::OPT_IN_SINCE_V1 {
+            assert!(r.is_enabled(id, &old.plugins), "{id} was on under the old defaults and must stay on");
+        }
+        assert!(r.is_enabled("wallhaven", &old.plugins), "Wallhaven browsing was on by default");
+        assert!(!r.is_enabled("cursors", &old.plugins), "no cursor was set");
+        for id in ON_BY_DEFAULT {
+            assert!(r.is_enabled(id, &old.plugins), "{id}");
         }
     }
 

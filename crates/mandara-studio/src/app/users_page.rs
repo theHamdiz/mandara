@@ -1090,7 +1090,11 @@ impl UsersPage {
                                             })),
                                     ),
                             )
-                            .child(div().id(SharedString::from(format!("{id}-body"))).flex_1().min_h(px(0.0)).overflow_y_scroll().px(px(SPACE_22_PX)).pb(px(SPACE_8_PX)).child(body))
+                            .child({
+                                let (scroll, bar) = mandara_ui::scrollbar::keyed(format!("{id}-body"));
+                                let body = div().id(SharedString::from(format!("{id}-body"))).flex_1().min_h(px(0.0)).overflow_y_scroll().track_scroll(&scroll).px(px(SPACE_22_PX)).pb(px(SPACE_8_PX)).child(body);
+                                mandara_ui::scrollbar::with_scrollbar(body, &scroll, &bar, p).flex_1().min_h(px(0.0)).flex().flex_col()
+                            })
                             .child(div().row().flex_wrap().items_center().gap(px(SPACE_10_PX)).px(px(SPACE_22_PX)).py(px(SPACE_16_PX)).child(footer)),
                     ),
             ),

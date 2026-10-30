@@ -23,7 +23,39 @@ it that way (see [Guard](#guard)).
 | Plugin settings | `[plugins.settings.<plugin-id>]` | that plugin; shown in its settings modal (Studio → Plugins → the plugin → Settings) |
 
 Numbers outside a setting's range are clamped to it, so a hand-edited value
-never breaks the layout. `mandara msg config get <pointer>` and
+never breaks the layout.
+
+### Defaults and upgrades
+
+A changed default only affects new installs. Two tables record which
+defaults they were written for, and an older config is brought forward on
+load (in memory; the next write saves it), never losing what it had on:
+
+| Key | Since | What an older config gets |
+|---|---|---|
+| `[plugins] defaults_version = 1` | 0.2 | Fifteen built-ins became opt-in (containers, services, drives, updates, process hunter, authenticator, soundscapes, world clock, network speed, color picker, Pomodoro, notes, to-do, privacy, app installer) and Wallhaven and cursor themes became the opt-in `wallhaven` and `cursors` plugins. A config without the key keeps each of these on (written into `enabled`) unless it had switched it off or removed it; `wallhaven` is on when the old `wallpaper.wallhaven` was, `cursors` when any `compositor.input.cursor.*` was set. |
+| `[integrations] version = 1` | 0.2 | Every app theme (and compositor borders) is off by default. A table still exactly at the 0.1 defaults is recorded as off and the files 0.1 wrote stay as they were; a table you had changed keeps every value. Compositor borders keep their value (they live in Mandara's own drop-in). |
+
+`[plugins] enabled` lists opt-in plugins you switched on, `disabled` the
+ones you switched off; a plugin in neither follows its default. Exports
+(`config export --changes-only`) keep these version keys, and imports of
+older exports are upgraded the same way.
+
+### App theming (`[integrations]`)
+
+`ghostty`, `gtk4` (GTK 3 / 4 and libadwaita), `qt6` (qt5ct / qt6ct),
+`kvantum`, `kvantum_apply`, `zed`, `fuzzel`, `btop`, `kitty`, `foot`,
+`alacritty`, `wezterm`, `helix`, `neovim`, `firefox`, `vesktop`, `kde` and
+`compositor_borders`, all `false` by default. While an app is off Mandara
+writes nothing for it outside `~/.config/mandara` and `~/.cache/mandara`.
+Switched on, Mandara writes its own theme file (backing up to
+`<file>.mandara-backup` anything already at that path that isn't Mandara's)
+or adds one include line to the app's config (backing the file up once
+first), and records what it did in
+`~/.config/mandara/generated/app-themes.toml`. Switched off, it takes back
+exactly that: the line or block goes, files it created go if you didn't edit
+them, replaced files come back from their backup, and Kvantum's link and
+selection are undone. `mandara msg config get <pointer>` and
 `mandara msg config set <pointer> <value>` reach the same keys as JSON
 pointers (for example `/plugins/settings/resources/refresh_ms`).
 
@@ -35,7 +67,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 
 | Page | Settings |
 |---|---|
-| Themes | **looks** — six one-click looks and *Restore my look* (`looks.*`, see [Looks](#looks)); light / dark / automatic and its schedule (`theme.*`), palette tuning (`theme.adjustments`), theme crossfade (`theme.transition_ms`), icons (`appearance.*`), corner roundness, shadows, borders, backdrop dim (`style.*`); the theme and app theming switches (`integrations.*`); **cursor** — theme, size, hide while typing / when idle, Hyprland's software cursor and hide on touch (`compositor.input.cursor.theme`, `.size`, `.hide_when_typing`, `.hide_after_secs`, `.no_hardware_cursors`, `.hide_on_touch`; themes Mandara downloaded are listed in `~/.local/share/mandara/cursor-themes.json`) |
+| Themes | **looks** — six one-click looks and *Restore my look* (`looks.*`, see [Looks](#looks)); light / dark / automatic and its schedule (`theme.*`), palette tuning (`theme.adjustments`), theme crossfade (`theme.transition_ms`), icons (`appearance.*`), corner roundness, shadows, borders, backdrop dim (`style.*`); the theme; **other apps** — the app theming switches, all off by default (`integrations.*`, see [App theming](#app-theming-integrations)); **cursor** (the opt-in `cursors` plugin) — theme, size, hide while typing / when idle, Hyprland's software cursor and hide on touch (`compositor.input.cursor.theme`, `.size`, `.hide_when_typing`, `.hide_after_secs`, `.no_hardware_cursors`, `.hide_on_touch`; themes Mandara downloaded are listed in `~/.local/share/mandara/cursor-themes.json`) |
 | Wallpaper | folder, picker style / size / focus / names, fill and colour, transitions, crossfade (`wallpaper.crossfade_ms`), light / dark and per-display variants, slideshow interval and order, depth effect and subject mask (`wallpaper.*`); video wallpapers: pause behind windows / on battery, frame-rate limit, first frame only (`wallpaper.video.*`, see [Video wallpapers](#video-wallpapers)) |
 | Desktop widgets | clocks (incl. the depth clock), system monitor, decorations, plane visualizer, show / hide them all (`desktop.widgets.*`, see [Desktop widgets](#desktop-widgets)); desktop cards and visualizers (`cards.*`, `visualizers.*`) |
 | Typography | interface / display / Arabic / monospace fonts, text scale, weight (`typography.*`) |
@@ -98,6 +130,8 @@ fixed:
 | Bluetooth (`bluetooth`) | `battery_warn_percent` (coral follows Power → peripheral alerts) | 30 % |
 | Authenticator (`authenticator`) | `visible_rows` | 6 |
 | Wallpaper generator (`wallpaper-generator`) | recipe, size, format, folder, schedule and video loops: see [Wallpaper generator](#wallpaper-generator) | |
+| Wallhaven (`wallhaven`, opt-in) | `wallpaper.wallhaven_query` (default search; empty: the toplist), `wallpaper.wallhaven_sorting` (`toplist`, `date_added`, `views`, `favorites`, `random`) — shown on Studio → Wallpaper while the plugin is on; off, no Wallhaven request is made | empty, toplist |
+| Cursor themes (`cursors`, opt-in) | `compositor.input.cursor.*` — written to the compositor drop-in, `~/.icons/default` and applied live only while the plugin is on | unset |
 
 Older plugin settings (weather, prayer times, pomodoro, screenshot and
 recording, updates, world clock, power history, media lyrics, visualizer,

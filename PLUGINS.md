@@ -464,8 +464,19 @@ of these it supports.
 | `~/.local/share/mandara/plugins/` | installed (marketplace or by hand) | opt-in (a marketplace install switches it on) |
 | `$XDG_DATA_DIRS/mandara/plugins/` (e.g. `/usr/share/mandara/plugins/`) | distribution packages | opt-in |
 
-Mandara's built-in plugins are on by default except a few opt-in ones: the
-dock, mini stats, screen time, prayer times and the wallpaper generator.
+Mandara's built-in plugins are composable: a calm default set is on (the bar
+essentials, quick settings, media, weather, wallpaper, screenshot and
+clipboard) and the rest ship opt-in (`PluginManifest::opt_in`): the dock,
+mini stats, screen time, prayer times, the wallpaper generator, Wallhaven,
+cursor themes, containers, services, drives, updates, the process hunter,
+the authenticator, soundscapes, world clock, network speed, the color
+picker, Pomodoro, notes, to-do, privacy and the app installer. A config
+written before a default changed keeps what it had on: `[plugins]
+defaults_version` records the defaults a config was written for, and
+`mandara_config::upgrade` writes the plugins an older config had on into
+`enabled`. An opt-in plugin's state can be read without the registry with
+`PluginsConfig::opted_in(id)` (the compositor emitters use it for
+`cursors`).
 First-party plugins without a bar item work the same way, for example the
 **App installer** (`app-installer`): it installs apps dropped on the dock or
 Studio (AppImage, Flatpak, portable archives, native packages through the

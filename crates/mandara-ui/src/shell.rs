@@ -1552,6 +1552,7 @@ impl Render for ShellView {
             let (slide, fade) = self.tabs.transition();
             let cards = div().relative().left(px(slide)).opacity(fade).flex().flex_col().gap(px(card_gap)).children(cards);
             let scroll_handle = self.tabs.scroll(&sel);
+            let scroll_bar = self.tabs.scrollbar();
             let unread = if notifications { crate::hub::hub(cx).read(cx).notifications.unread() } else { 0 };
             // The header row: the strip, then the pin and close buttons.
             let strip_w = sidebar_w - 2.0 * SIDEBAR_PAD_PX - 2.0 * (icon_btn + tokens::XS);
@@ -1613,15 +1614,16 @@ impl Render for ShellView {
                                 shell.update(cx, |s, cx| s.set_sidebar(false, cx));
                             }));
                         let scroll = div().id("sidebar-scroll").overflow_y_scroll().track_scroll(&scroll_handle).p(px(SIDEBAR_PAD_PX)).flex().flex_col().gap(px(card_gap));
+                        let with_bar = |scroll| crate::scrollbar::with_scrollbar(scroll, &scroll_handle, &scroll_bar, &palette);
                         match side_look.tab_position {
                             // The header scrolls with the cards (the shipped layout).
-                            TabPosition::Top => scroll.size_full().child(header).child(cards).into_any_element(),
+                            TabPosition::Top => with_bar(scroll.size_full().child(header).child(cards)).size_full().into_any_element(),
                             // Pinned under the scrolling cards.
                             TabPosition::Bottom => div()
                                 .size_full()
                                 .flex()
                                 .flex_col()
-                                .child(scroll.flex_1().min_h(px(0.0)).child(cards))
+                                .child(with_bar(scroll.flex_1().min_h(px(0.0)).child(cards)).flex_1().min_h(px(0.0)).flex().flex_col())
                                 .child(div().px(px(SIDEBAR_PAD_PX)).pb(px(SIDEBAR_PAD_PX)).child(header))
                                 .into_any_element(),
                         }

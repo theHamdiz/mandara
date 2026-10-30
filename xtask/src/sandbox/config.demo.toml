@@ -41,6 +41,8 @@ y = -0.18
 pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
 
 [plugins]
+# Written for the current built-in defaults (no 0.1 upgrade).
+defaults_version = 1
 enabled = ["dock"]
 
 [wallpaper]

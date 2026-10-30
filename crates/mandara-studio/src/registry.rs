@@ -416,6 +416,18 @@ pub fn in_section(section: Section) -> impl Iterator<Item = &'static Setting> {
     settings().iter().filter(move |s| s.section == section)
 }
 
+/// The opt-in plugin a setting belongs to: its rows show only while that
+/// plugin is on (Wallhaven's search options, the cursor settings).
+pub fn required_plugin(path: &str) -> Option<&'static str> {
+    if path.starts_with("/wallpaper/wallhaven") {
+        Some(mandara_config::upgrade::WALLHAVEN_ID)
+    } else if path.starts_with("/compositor/input/cursor/") {
+        Some(mandara_config::upgrade::CURSORS_ID)
+    } else {
+        None
+    }
+}
+
 /// Why `setting` can't be changed under `cfg` right now (`tk` text shown in
 /// place of its control), e.g. the launcher's hover edge while the dock
 /// owns the bottom edge (`ShellConfig::launcher_hover_enabled`).
@@ -544,7 +556,6 @@ fn build() -> Vec<Setting> {
         s(Wallpaper, tk("Picker"), "/wallpaper/picker_focus", tk("Focused tile size"), tk("Carousel: how much bigger the middle wallpaper is"), slider(1.5, 4.0, 0.1, "×")),
         s(Wallpaper, tk("Picker"), "/wallpaper/picker_names", tk("Show names"), tk("The focused wallpaper's name under the picker"), Toggle),
         s(Wallpaper, tk("Picker"), "/wallpaper/directory", tk("Folder"), tk("Images here (and one level of sub-folders) appear in the picker"), Text { placeholder: "~/Pictures/Wallpapers" }),
-        s(Wallpaper, tk("Wallhaven"), "/wallpaper/wallhaven", tk("Browse Wallhaven"), tk("Online wallpapers in the picker — used automatically when your folder has no images (Tab switches)"), Toggle),
         s(Wallpaper, tk("Wallhaven"), "/wallpaper/wallhaven_query", tk("Default search"), tk("Leave empty for the toplist, e.g. \"nature 4k\""), Text { placeholder: "toplist" }),
         s(Wallpaper, tk("Wallhaven"), "/wallpaper/wallhaven_sorting", tk("Sort by"), tk("Order of results without a search"), Choice(const { &[("toplist", tk("Top")), ("date_added", tk("Newest")), ("views", tk("Most viewed")), ("favorites", tk("Favorites")), ("random", tk("Random"))] })),
         s(Wallpaper, tk("Picker"), "/wallpaper/match_colors", tk("Match colors to wallpaper"), tk("Re-derive the theme (Material You) from each wallpaper you pick"), Toggle),

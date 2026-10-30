@@ -1057,7 +1057,11 @@ impl GreeterPage {
             .flex_col()
             .gap(px(SPACE_12_PX))
             .child(tabs)
-            .child(div().id("greeter-controls").flex_1().min_h(px(0.0)).overflow_y_scroll().child(div().row().flex_col().gap(px(SPACE_16_PX)).pb(px(SPACE_24_PX)).children(body)))
+            .child({
+                let (scroll, bar) = mandara_ui::scrollbar::keyed("greeter-controls");
+                let controls = div().id("greeter-controls").flex_1().min_h(px(0.0)).overflow_y_scroll().track_scroll(&scroll).child(div().row().flex_col().gap(px(SPACE_16_PX)).pb(px(SPACE_24_PX)).children(body));
+                mandara_ui::scrollbar::with_scrollbar(controls, &scroll, &bar, &p).flex_1().min_h(px(0.0)).flex().flex_col()
+            })
             .into_any_element()
     }
 }

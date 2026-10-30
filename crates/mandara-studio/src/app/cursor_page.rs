@@ -386,6 +386,11 @@ impl StudioView {
 
     /// The whole Cursor section of the Themes page.
     pub(super) fn cursor_section(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        // Cursor themes are an opt-in plugin: off, a one-line card offers it
+        // and nothing here reads or writes the cursor.
+        if !cfg.cursors_enabled() {
+            return self.plugin_offer(mandara_ui::plugins::cursors::ID, p, cx);
+        }
         self.cursor_scroll(cx);
         let display = mandara_ui::fonts::fonts(cx).display.clone();
         let current = cfg.compositor.input.cursor.theme.clone();

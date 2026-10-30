@@ -1979,6 +1979,19 @@ struct Overlays {
 
 impl gpui::Global for Overlays {}
 
+/// The output (connector name, and its logical size when known) the next
+/// wallpaper picker opens on.
+#[derive(Default)]
+struct PickerOutput(Option<(String, Option<(f32, f32)>)>);
+
+impl gpui::Global for PickerOutput {}
+
+/// Opens the next wallpaper picker on `output` (the desktop menu's
+/// display, of logical `size`) instead of the focused window's.
+pub fn picker_on(output: &str, size: Option<(f32, f32)>, cx: &mut App) {
+    cx.set_global(PickerOutput((!output.is_empty()).then(|| (output.to_string(), size))));
+}
+
 fn is_open<V: 'static>(handle: &Option<WindowHandle<V>>, cx: &App) -> bool {
     handle.as_ref().is_some_and(|h| cx.windows().iter().any(|w: &AnyWindowHandle| w.window_id() == h.window_id()))
 }
@@ -2007,9 +2020,28 @@ pub fn init_overlays(cx: &mut App) {
                 .map_err(|e| tracing::error!("session: {e:#}"))
                 .ok();
         }
+        let picker_target = std::mem::take(&mut cx.default_global::<PickerOutput>().0);
         if picker && !is_open(&overlays.picker, cx) {
+            // Sized for, and placed on, one output: the one asked for (the
+            // desktop menu's), else the focused window's. Sized for the
+            // first output while the compositor put it on another, the
+            // picker covered only part of a larger display.
+            let (target, known) = match picker_target {
+                Some((m, size)) => (Some(m), size),
+                None => (cx.try_global::<crate::hub::GlobalHub>().and_then(|h| h.0.read(cx).focused.as_ref().map(|c| c.monitor.clone())), None),
+            };
+            let display = target.as_deref().and_then(|m| crate::plugins::dock::display_for(m, cx));
+            let (w, h) = match (&target, display, known) {
+                // The size its caller measured (an output connected after
+                // startup isn't in the output list).
+                (_, _, Some(size)) => size,
+                (Some(m), Some(_), None) => crate::plugins::dock::output_size(m, cx),
+                _ => (w, h),
+            };
+            let mut options = overlay_spec(SurfaceRole::Launcher, w, h);
+            options.display_id = display;
             overlays.picker = cx
-                .open_window(overlay_spec(SurfaceRole::Launcher, w, h), move |window, cx| cx.new(|cx| crate::wallpaper::PickerView::new((w, h), window, cx)))
+                .open_window(options, move |window, cx| cx.new(|cx| crate::wallpaper::PickerView::new((w, h), window, cx)))
                 .map_err(|e| tracing::error!("wallpaper picker: {e:#}"))
                 .ok();
         }

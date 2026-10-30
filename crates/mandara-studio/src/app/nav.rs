@@ -344,7 +344,9 @@ impl StudioView {
                 }
             }
         }
-        nav.into_any_element()
+        // The sidebar's overlay scroll bar (the wrapper takes its place).
+        let bar = mandara_ui::scrollbar::keyed_state("studio-nav");
+        mandara_ui::scrollbar::with_scrollbar(nav, &self.nav_scroll, &bar, p).h_full().flex_none().into_any_element()
     }
 
     // ── Home ────────────────────────────────────────────────────────────
