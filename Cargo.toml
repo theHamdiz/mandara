@@ -141,7 +141,8 @@ khronos-egl = { git = "https://github.com/zed-industries/khronos-egl", rev = "42
 [patch."https://github.com/zed-industries/zed"]
 gpui_wgpu = { path = "vendor/gpui_wgpu" }
 # GPUI core with rounded content masks, so `.rounded_*().overflow_hidden()`
-# clips children to the rounded shape: vendor/gpui/MANDARA-PATCHES.md.
+# clips children to the rounded shape, and `.hover()` that repaints on pointer
+# motion without an `.id()`: vendor/gpui/MANDARA-PATCHES.md.
 gpui = { path = "vendor/gpui" }
 
 [profile.dev]

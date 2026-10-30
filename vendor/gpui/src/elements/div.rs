@@ -2913,6 +2913,15 @@ impl Interactivity {
                     .cloned()
             });
             let current_view = window.current_view();
+            // Mandara patch (hover without an id): an element with a hover
+            // style but no `.id()` has no element state, so there is no
+            // `hover_state` to compare against and upstream never notified
+            // its view: the hover style only appeared when something else
+            // re-rendered it (a scroll, a timer). Compare against the hover
+            // state this frame was painted with instead (the hit test is
+            // taken before paint), and notify only when it flips.
+            let painted_hovered = (self.hover_style.is_some() && hover_state.is_none())
+                .then(|| hitbox.is_hovered(window));
 
             window.on_mouse_event(move |_: &MouseMoveEvent, phase, window, cx| {
                 let hovered = hitbox.is_hovered(window);
@@ -2924,6 +2933,11 @@ impl Interactivity {
                         hover_state.borrow_mut().element = hovered;
                         cx.notify(current_view);
                     }
+                }
+                if phase == DispatchPhase::Capture
+                    && painted_hovered.is_some_and(|painted| painted != hovered)
+                {
+                    cx.notify(current_view);
                 }
             });
         }
@@ -4603,6 +4617,87 @@ mod tests {
         assert_eq!(render_count.get(), initial_render_count + 2);
         assert_eq!(anonymous_paint_count.get(), 1);
         assert_eq!(stateful_width.get(), px(10.));
+    }
+
+    /// Mandara patch (hover without an id): a cached child view whose only
+    /// hoverable element has no `.id()`, as Mandara Studio's setting rows.
+    struct IdlessHoverRow {
+        render_count: Rc<Cell<usize>>,
+    }
+
+    impl Render for IdlessHoverRow {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            self.render_count.set(self.render_count.get() + 1);
+            div().size_full().child(
+                div()
+                    .ml(px(20.))
+                    .mt(px(20.))
+                    .size(px(10.))
+                    .bg(crate::blue())
+                    .hover(|style| style.bg(crate::red())),
+            )
+        }
+    }
+
+    struct IdlessHoverRoot {
+        row: Entity<IdlessHoverRow>,
+    }
+
+    impl Render for IdlessHoverRoot {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            div()
+                .size_full()
+                .child(self.row.clone().cached(StyleRefinement::default().size(px(100.))))
+        }
+    }
+
+    /// The cached row view re-renders exactly when its hover state flips, and
+    /// the frame shows its hover background then. (`group_hover` without an id
+    /// was already covered upstream by `paint_hover_group_handler`.)
+    #[gpui::test]
+    fn hover_without_an_id_updates_its_cached_view(cx: &mut TestAppContext) {
+        let row_renders = Rc::new(Cell::new(0));
+        let window = cx.add_window({
+            let row_renders = row_renders.clone();
+            move |_, cx| IdlessHoverRoot {
+                row: cx.new(|_| IdlessHoverRow { render_count: row_renders }),
+            }
+        });
+        let window = AnyWindowHandle::from(window);
+        cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+        let move_mouse = |cx: &mut TestAppContext, position| {
+            cx.update_window(window, |_, window, cx| window.simulate_mouse_move(position, cx))
+                .unwrap();
+        };
+        let painted = |cx: &mut TestAppContext, color: crate::Hsla| {
+            cx.update_window(window, |_, window, _| {
+                window.painted_quads().iter().any(|quad| quad.background == color.into())
+            })
+            .unwrap()
+        };
+        // The row sits at 20..30 inside the cached view.
+        let (outside, inside, inside_again) =
+            (point(px(5.), px(5.)), point(px(25.), px(25.)), point(px(26.), px(26.)));
+        move_mouse(cx, outside);
+        let rows = row_renders.get();
+        assert!(painted(cx, crate::blue()) && !painted(cx, crate::red()));
+
+        // Entering re-renders the cached row view (upstream left it cached,
+        // so the hover background never showed).
+        move_mouse(cx, inside);
+        assert_eq!(row_renders.get(), rows + 1);
+        assert!(painted(cx, crate::red()) && !painted(cx, crate::blue()));
+
+        // Moving within it does not re-render.
+        move_mouse(cx, inside_again);
+        assert_eq!(row_renders.get(), rows + 1);
+        assert!(painted(cx, crate::red()));
+
+        // Leaving re-renders it once more and drops the hover background.
+        move_mouse(cx, outside);
+        assert_eq!(row_renders.get(), rows + 2);
+        assert!(painted(cx, crate::blue()) && !painted(cx, crate::red()));
     }
 
     struct HoverListenerLayoutTestView {

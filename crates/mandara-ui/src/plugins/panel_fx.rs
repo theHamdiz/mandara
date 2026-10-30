@@ -786,7 +786,8 @@ pub fn empty_state(icon_name: &'static str, title: impl Into<SharedString>, hint
 
 /// Big slider geometry: track height, the nominal track width used to tell
 /// when the fill reaches past the icon, the icon inset / size, and the end
-/// handle (inset from top and bottom, width, offset, alpha, hide-below).
+/// handle (inset from top and bottom, width, offset from the fill's end,
+/// alpha, hide-below).
 const SLIDER_H_PX: f32 = 40.0;
 const SLIDER_NOMINAL_W_PX: f32 = 260.0;
 const SLIDER_ICON_INSET_PX: f32 = 12.0;
@@ -798,36 +799,37 @@ const SLIDER_HANDLE_W_PX: f32 = 4.0;
 const SLIDER_HANDLE_OFFSET_PX: f32 = -10.0;
 const SLIDER_HANDLE_ALPHA: f32 = 0.7;
 const SLIDER_HANDLE_HIDE_BELOW: f32 = 0.06;
+/// From the fill's end back to the handle's centre.
+const SLIDER_HANDLE_CENTER_INSET_PX: f32 = -SLIDER_HANDLE_OFFSET_PX - SLIDER_HANDLE_W_PX / 2.0;
+/// Where values sit on the big slider: the fill is never shorter than its
+/// round cap (one track height, holding the icon) and grows by the value
+/// over the rest of the track, so the handle's centre runs from the cap's
+/// end at 0 to the track's end at 1 and a press or drag puts it under the
+/// pointer.
+const BIG_SLIDER_TRACK: crate::slider_model::Track =
+    crate::slider_model::Track { start_inset: SLIDER_H_PX - SLIDER_HANDLE_CENTER_INSET_PX, end_inset: SLIDER_HANDLE_CENTER_INSET_PX };
 /// Muted fill alphas `(start, end)`.
 const SLIDER_MUTED_FILL: (f32, f32) = (0.45, 0.3);
 
 /// A thick Caelestia-style slider: a rounded pill whose gradient fill grows
-/// with `value` (`0..=1`), the icon riding inside at the start. Click or
-/// drag. Mirrored (fills from the right) in right-to-left languages.
-pub fn big_slider(
+/// with `value` (`0..=1`), the icon riding inside at the start. A press
+/// jumps to the value under the pointer and drags until release, even
+/// outside the pill; while held it draws your value, not the owner's echoes
+/// ([`crate::slider_model`]). `on_change` writes a value and returns the
+/// write's completion (`None` for a local value set at once, or nothing).
+/// Mirrored (fills from the right) in right-to-left languages.
+pub fn big_slider<R: crate::slider_model::IntoWrite>(
     id: impl Into<gpui::ElementId>,
     value: f32,
     icon_name: &'static str,
     muted: bool,
     palette: &MandaraPalette,
-    on_change: impl Fn(f32, &mut Window, &mut App) + 'static,
+    on_change: impl Fn(f32, &mut Window, &mut App) -> R + 'static,
 ) -> gpui::Stateful<Div> {
-    use gpui::{InteractiveElement as _, MouseButton, MouseDownEvent, MouseMoveEvent};
-    use std::cell::Cell;
-    let v = value.clamp(0.0, 1.0);
+    use gpui::InteractiveElement as _;
+    let id = id.into();
+    let v = crate::slider_model::shown(&id, value).clamp(0.0, 1.0);
     let rtl = crate::bidi::rtl();
-    let bounds: Rc<Cell<gpui::Bounds<gpui::Pixels>>> = Rc::default();
-    let pick = {
-        let bounds = bounds.clone();
-        move |x: gpui::Pixels| -> f32 {
-            let b = bounds.get();
-            let frac = ((f32::from(x) - f32::from(b.origin.x)) / f32::from(b.size.width).max(1.0)).clamp(0.0, 1.0);
-            if rtl { 1.0 - frac } else { frac }
-        }
-    };
-    let on_change = Rc::new(on_change);
-    let (pick_down, pick_move) = (pick.clone(), pick);
-    let (change_down, change_move) = (on_change.clone(), on_change);
     let (from, to) = if muted {
         (palette.on_surface_variant.with_alpha(SLIDER_MUTED_FILL.0), palette.on_surface_variant.with_alpha(SLIDER_MUTED_FILL.1))
     } else {
@@ -835,37 +837,46 @@ pub fn big_slider(
     };
     let on_fill = if muted { palette.on_surface } else { palette.on_primary };
     let icon_color = if v * SLIDER_NOMINAL_W_PX > SLIDER_ICON_COVER_PX { on_fill } else { palette.on_surface_variant };
-    div()
-        .id(id)
+    // The value's share of the track: everything but one cap at the end;
+    // the fill hangs one cap past it, the handle sits just inside the fill.
+    let travel = div().absolute().top_0().bottom_0().inset_start(px(0.0)).inset_end(px(SLIDER_H_PX)).child(
+        div()
+            .relative()
+            .h_full()
+            .w(gpui::relative(v))
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .bottom_0()
+                    .inset_start(px(0.0))
+                    .inset_end(px(-SLIDER_H_PX))
+                    .rounded_full()
+                    .bg(oklab_gradient(if rtl { ANGLE_RIGHT_DEG + HALF_TURN_DEG } else { ANGLE_RIGHT_DEG }, from, to)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .top(px(SLIDER_HANDLE_INSET_PX))
+                    .inset_end(px(-(SLIDER_H_PX + SLIDER_HANDLE_OFFSET_PX + SLIDER_HANDLE_W_PX)))
+                    .w(px(SLIDER_HANDLE_W_PX))
+                    .h(px(SLIDER_H_PX - SLIDER_HANDLE_INSET_PX * 2.0))
+                    .rounded_full()
+                    .bg(on_fill.with_alpha(SLIDER_HANDLE_ALPHA).hsla())
+                    .when(v < SLIDER_HANDLE_HIDE_BELOW, |el| el.opacity(0.0)),
+            ),
+    );
+    let el = div()
+        .id(id.clone())
         .relative()
         .h(px(SLIDER_H_PX))
         .w_full()
         .rounded_full()
         .cursor_pointer()
         .bg(wash(WASH_TRACK, palette).hsla())
-        .child(div().absolute().top_0().inset_start(px(0.0)).h_full().w(gpui::relative(v)).min_w(px(SLIDER_H_PX)).rounded_full().bg(oklab_gradient(if rtl { ANGLE_RIGHT_DEG + HALF_TURN_DEG } else { ANGLE_RIGHT_DEG }, from, to)))
-        // A slim handle at the end of the fill.
-        .child(
-            div()
-                .absolute()
-                .top(px(SLIDER_HANDLE_INSET_PX))
-                .inset_start(gpui::relative(v))
-                .when(rtl, |el| el.mr(px(SLIDER_HANDLE_OFFSET_PX)))
-                .when(!rtl, |el| el.ml(px(SLIDER_HANDLE_OFFSET_PX)))
-                .w(px(SLIDER_HANDLE_W_PX))
-                .h(px(SLIDER_H_PX - SLIDER_HANDLE_INSET_PX * 2.0))
-                .rounded_full()
-                .bg(on_fill.with_alpha(SLIDER_HANDLE_ALPHA).hsla())
-                .when(v < SLIDER_HANDLE_HIDE_BELOW, |el| el.opacity(0.0)),
-        )
-        .child(div().absolute().top_0().inset_start(px(SLIDER_ICON_INSET_PX)).h_full().flex().items_center().child(icon(icon_name, SLIDER_ICON_PX, icon_color)))
-        .child(gpui::canvas(move |b, _, _| bounds.set(b), |_, _, _, _| {}).absolute().top_0().left_0().size_full())
-        .on_mouse_down(MouseButton::Left, move |e: &MouseDownEvent, window, cx| change_down(pick_down(e.position.x), window, cx))
-        .on_mouse_move(move |e: &MouseMoveEvent, window, cx| {
-            if e.pressed_button == Some(MouseButton::Left) {
-                change_move(pick_move(e.position.x), window, cx);
-            }
-        })
+        .child(travel)
+        .child(div().absolute().top_0().inset_start(px(SLIDER_ICON_INSET_PX)).h_full().flex().items_center().child(icon(icon_name, SLIDER_ICON_PX, icon_color)));
+    crate::slider_model::bind(el, id, BIG_SLIDER_TRACK, on_change)
 }
 
 // ── Live audio spectrum ──────────────────────────────────────────────────

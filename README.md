@@ -1528,7 +1528,8 @@ The workspace contains these crates:
 patches, applied through `[patch]` in the workspace manifest; its
 `MANDARA-PATCHES.md` lists each change and its measurements. `vendor/gpui`
 is GPUI itself with rounded content masks, so a rounded card that hides its
-overflow clips covers and art to its corners
+overflow clips covers and art to its corners, and hover styles that follow
+the pointer on every element, with or without an id
 ([`MANDARA-PATCHES.md`](vendor/gpui/MANDARA-PATCHES.md)).
 
 ## Supporting Mandara

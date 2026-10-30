@@ -54,6 +54,7 @@ pub mod markdown;
 pub mod notes_store;
 pub mod productivity;
 pub mod sidebar_tabs;
+pub mod slider_model;
 pub mod todo_lists;
 pub mod recorder;
 pub mod widgets;

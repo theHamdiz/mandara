@@ -3,13 +3,10 @@
 //! and 8 % state layers (hover) rather than borders.
 
 use crate::bidi::Bidi as _;
-use std::cell::Cell;
-use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, Bounds, Div, ElementId, FontWeight, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
-    MouseMoveEvent, ParentElement, Pixels, StatefulInteractiveElement, Styled, Window, canvas, div,
-    prelude::FluentBuilder as _, px,
+    AnyElement, App, Div, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement,
+    Styled, Window, div, prelude::FluentBuilder as _, px,
 };
 use mandara_core::ToGpui;
 use mandara_plugins::PanelCx;
@@ -171,33 +168,25 @@ pub fn icon_button(
         .on_click(move |_, window, cx| on_click(window, cx))
 }
 
-/// A horizontal slider (click or drag). `on_change` receives `0..=1`. In
-/// right-to-left languages it fills from the right.
-pub fn slider(
+/// A horizontal slider. A press jumps to the value under the pointer and
+/// drags until release, even outside the track; while held it draws your
+/// value, not the owner's echoes ([`crate::slider_model`]). `on_change`
+/// writes a value (`0..=1`) and returns the write's completion (`None` for a
+/// local value set at once, or nothing). In right-to-left languages it fills
+/// from the right.
+pub fn slider<R: crate::slider_model::IntoWrite>(
     id: impl Into<ElementId>,
     value: f32,
     palette: &MandaraPalette,
-    on_change: impl Fn(f32, &mut Window, &mut App) + 'static,
+    on_change: impl Fn(f32, &mut Window, &mut App) -> R + 'static,
 ) -> impl IntoElement {
-    let value = value.clamp(0.0, 1.0);
+    let id = id.into();
+    let value = crate::slider_model::shown(&id, value).clamp(0.0, 1.0);
     let rtl = crate::bidi::rtl();
-    let bounds: Rc<Cell<Bounds<Pixels>>> = Rc::default();
-    let on_change = Rc::new(on_change);
-    let pick = {
-        let bounds = bounds.clone();
-        move |x: Pixels| -> f32 {
-            let b = bounds.get();
-            let w = f32::from(b.size.width).max(1.0);
-            let frac = ((f32::from(x) - f32::from(b.origin.x)) / w).clamp(0.0, 1.0);
-            if rtl { 1.0 - frac } else { frac }
-        }
-    };
-    let (pick_down, pick_move) = (pick.clone(), pick);
-    let (change_down, change_move) = (on_change.clone(), on_change);
     let fill = palette.primary;
     let track = palette.surface_container_high;
-    div()
-        .id(id)
+    let el = div()
+        .id(id.clone())
         .relative()
         .h(px(metrics::SLIDER_H))
         .flex()
@@ -213,7 +202,7 @@ pub fn slider(
                 .child(div().h_full().rounded_full().w(gpui::relative(value)).bg(fill.hsla())),
         )
         .child(
-            // Knob
+            // Knob, centred on the value (so the whole width maps to 0..=1).
             div()
                 .absolute()
                 .inset_start(gpui::relative(value))
@@ -229,22 +218,8 @@ pub fn slider(
                     spread_radius: px(0.0),
                     inset: false,
                 }]),
-        )
-        .child(
-            canvas(move |b, _, _| bounds.set(b), |_, _, _, _| {})
-                .absolute()
-                .top_0()
-                .left_0()
-                .size_full(),
-        )
-        .on_mouse_down(MouseButton::Left, move |e: &MouseDownEvent, window, cx| {
-            change_down(pick_down(e.position.x), window, cx);
-        })
-        .on_mouse_move(move |e: &MouseMoveEvent, window, cx| {
-            if e.pressed_button == Some(MouseButton::Left) {
-                change_move(pick_move(e.position.x), window, cx);
-            }
-        })
+        );
+    crate::slider_model::bind(el, id, crate::slider_model::Track::EDGE_TO_EDGE, on_change)
 }
 
 /// A list row with leading icon, title/subtitle and trailing content.

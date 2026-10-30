@@ -4,7 +4,7 @@ Vendored from [zed-industries/zed](https://github.com/zed-industries/zed) at
 `ec86047d67acd6fddd81392f44ed6ebcc6e7f531` (`crates/gpui`, Apache-2.0, see
 `LICENSE-APACHE`) and wired in through the workspace's
 `[patch."https://github.com/zed-industries/zed"]`, next to the vendored
-renderer (`vendor/gpui_wgpu`, whose patch 9 is the GPU half of this one). Every
+renderer (`vendor/gpui_wgpu`, whose patch 9 is the GPU half of patch 1 here). Every
 source change is marked `Mandara patch` in a comment. Only `crates/gpui` is
 vendored; every other Zed crate (`gpui_platform`, `gpui_linux`, `gpui_macros`,
 `refineable`, `collections`, …) still comes from the same git revision and is
@@ -55,7 +55,39 @@ grows by 16 bytes (`Quad` 160 → 176, `Shadow` / `MonochromeSprite` /
 96 → 112). The vendored `gpui_wgpu` mirrors that layout; upstream's Metal
 renderer (`gpui_apple`, macOS only, never built for Mandara) does not.
 
+## 2. Hover styles without an id (`elements/div.rs`)
+
+At this revision `Interactivity::paint` only notifies the view when an
+element's `.hover()` state flips if the element has element state, that is an
+`.id()`: the listener compares the hit test against `hover_state`, which lives
+in the element state, and without it does nothing. The hover style itself is
+still resolved at paint from the hitbox, so an id-less hoverable element (every
+setting row in Mandara Studio, many shell list rows) showed its hover only when
+something else re-rendered its view: a scroll, a timer, the pointer entering
+the window. Moving the pointer from one row to the next left the highlight on
+the first one (theHamdiz/mandara#2). `group_hover` without an id was already
+covered (`paint_hover_group_handler`), and `.on_hover` listeners have their own
+path.
+
+* For an element with a hover style and no `hover_state`, the paint step records
+  whether the hitbox is hovered in the frame being painted (the hit test is
+  taken before paint, the same value the style was resolved from), and the
+  mouse-move listener notifies the current view when that flips, exactly like
+  upstream's text-element hover listener and group-hover handler. Elements with
+  an id keep the `hover_state` path; cursor-only elements (no hover style)
+  still never notify.
+* Cost: one comparison per hoverable element per mouse move, as before, and a
+  re-render of the containing view only on an enter or leave, never while the
+  pointer moves within an element. A cached view (`.cached(..)`) re-renders on
+  its own, without its parent's cache key changing.
+
 ## Tests
+
+`elements::div::tests::hover_without_an_id_updates_its_cached_view` (patch 2,
+`TestAppContext`): a cached child view with one id-less `.hover(bg)` element
+re-renders once on enter and once on leave, not on motion within it, and the
+painted frame carries the hover background exactly while hovered. It fails
+without the patch.
 
 `window::mandara_rounded_mask_tests` (unit and `TestAppContext`):
 
@@ -72,7 +104,7 @@ renderer (`gpui_apple`, macOS only, never built for Mandara) does not.
   card's own background quad, and without overflow (or with one hidden axis)
   nothing is rounded.
 
-All 410 library tests pass. Like `gpui_wgpu`, some tests `include_bytes!` Zed's
+All 411 library tests pass. Like `gpui_wgpu`, some tests `include_bytes!` Zed's
 `assets/`, so run them from a copy laid out like Zed's tree (the vendored
 renderer's `[patch]` points at `../gpui`, so copy both):
 

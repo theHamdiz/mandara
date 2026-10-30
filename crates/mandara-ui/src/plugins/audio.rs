@@ -101,6 +101,13 @@ const SPECTRUM_FRAME: Duration = Duration::from_millis(16);
 /// While the panel is open but silent, check this often for sound.
 const SILENCE_POLL: Duration = Duration::from_millis(400);
 
+/// Element ids (and drag-state keys) of the device sliders: the panel's
+/// output and microphone, and the sidebar card's.
+const OUT_SLIDER: &str = "audio-out";
+const IN_SLIDER: &str = "audio-in";
+const SIDE_OUT_SLIDER: &str = "side-out";
+const SIDE_IN_SLIDER: &str = "side-in";
+
 /// Volumes at or below this read as silent (mute glyph).
 const SILENT_VOLUME: f32 = 0.001;
 /// Volumes below this use the low-volume glyph.
@@ -183,6 +190,19 @@ fn send(cx: &mut App, command: AudioCommand) {
     }
 }
 
+/// A slider's write: the command as a request, so the slider sends the
+/// next value only once the server has applied this one
+/// ([`crate::slider_model`]).
+fn write(cx: &mut App, command: AudioCommand) -> crate::slider_model::Write {
+    hub(cx).read(cx).audio_service.clone().map(|s| s.request(command))
+}
+
+/// A device channel's volume as drawn: the value you are dragging on the
+/// slider `key` (a fraction of `lim`), else the server's.
+fn shown_volume(key: &'static str, ch: &Channel, lim: f32) -> f32 {
+    crate::slider_model::held(&key.into()).map_or(ch.volume, |frac| frac * lim)
+}
+
 /// Label row of a channel card: kind, device name, big percentage, mute.
 #[allow(clippy::too_many_arguments)]
 fn channel_head(
@@ -193,7 +213,7 @@ fn channel_head(
     (on_icon, off_icon): (&'static str, &'static str),
     mute: AudioCommand,
     palette: &MandaraPalette,
-    display: gpui::SharedString,
+    (display, volume): (gpui::SharedString, f32),
 ) -> impl IntoElement {
     let accent = readable(palette.primary, palette);
     div()
@@ -217,7 +237,7 @@ fn channel_head(
                 .text_size(px(VOLUME_TEXT_PX))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(if ch.muted { palette.on_surface_variant.hsla() } else { palette.on_surface.hsla() })
-                .child(volume_text(ch.volume)),
+                .child(volume_text(volume)),
         )
         .child(pill_button(
             id,
@@ -231,29 +251,31 @@ fn channel_head(
 
 fn output_card(s: &AudioState, bands: Option<&[f32]>, palette: &MandaraPalette, radius: f32, display: gpui::SharedString, (name, lim): (SharedString, f32)) -> impl IntoElement {
     let o = &s.output;
+    let volume = shown_volume(OUT_SLIDER, o, lim);
     let from = readable(palette.primary, palette);
     glass_card(palette)
         .rounded(px(radius))
         .p(px(CARD_PAD))
         .flex()
         .flex_col()
-        .child(channel_head("audio-out-mute", t("OUTPUT"), o, name, ("volume-high", "volume-mute"), AudioCommand::ToggleMute, palette, display))
+        .child(channel_head("audio-out-mute", t("OUTPUT"), o, name, ("volume-high", "volume-mute"), AudioCommand::ToggleMute, palette, (display, volume)))
         .child(div().h(px(ROW_GAP)))
-        .child(big_slider("audio-out", o.volume / lim, volume_icon(o.volume, o.muted), o.muted, palette, move |v, _, cx| send(cx, AudioCommand::SetVolume(v * lim))))
+        .child(big_slider(OUT_SLIDER, o.volume / lim, volume_icon(volume, o.muted), o.muted, palette, move |v, _, cx| write(cx, AudioCommand::SetVolume(v * lim))))
         .child(div().h(px(ROW_GAP)))
         .child(spectrum_bars(bands.unwrap_or(&[]), from, readable(partner(palette.primary), palette), palette, VIZ_H, VIZ_BAR_GAP_PX))
 }
 
 fn input_card(s: &AudioState, palette: &MandaraPalette, radius: f32, display: gpui::SharedString, (name, lim): (SharedString, f32)) -> impl IntoElement {
     let i = &s.input;
+    let volume = shown_volume(IN_SLIDER, i, lim);
     glass_card(palette)
         .rounded(px(radius))
         .p(px(CARD_PAD))
         .flex()
         .flex_col()
-        .child(channel_head("audio-in-mute", t("MICROPHONE"), i, name, ("mic", "mic-off"), AudioCommand::ToggleMicMute, palette, display))
+        .child(channel_head("audio-in-mute", t("MICROPHONE"), i, name, ("mic", "mic-off"), AudioCommand::ToggleMicMute, palette, (display, volume)))
         .child(div().h(px(ROW_GAP)))
-        .child(big_slider("audio-in", i.volume / lim, if i.muted { "mic-off" } else { "mic" }, i.muted, palette, move |v, _, cx| send(cx, AudioCommand::SetMicVolume(v * lim))))
+        .child(big_slider(IN_SLIDER, i.volume / lim, if i.muted { "mic-off" } else { "mic" }, i.muted, palette, move |v, _, cx| write(cx, AudioCommand::SetMicVolume(v * lim))))
 }
 
 /// The header's global mute switch: "Mute all" / coral "Unmute all".
@@ -393,10 +415,7 @@ fn sidebar_apps(rows: &[(apps::AppGroup, f32)], rc: &RowCx<'_>) -> AnyElement {
     let palette = rc.palette;
     let items = rows.iter().enumerate().map(|(i, (g, a))| {
         let gap = if i == 0 { 0.0 } else { tokens::MD };
-        let (volume, muted) = {
-            let tap = rc.tap.borrow();
-            (tap.volume(g), tap.muted(g))
-        };
+        let (volume, muted) = (apps::shown_volume(g, rc), rc.tap.borrow().muted(g));
         let line = div()
             .h(px(SIDEBAR_LINE_H))
             .row()
@@ -470,7 +489,13 @@ pub fn register(r: &mut PluginRegistry) {
                     (device_name(&s.output, t("Output"), cx), device_name(&s.input, t("Microphone"), cx))
                 };
                 let s = &hub(cx).read(cx).audio;
-                let row = |id: &'static str, icon_name: &'static str, ch: &Channel, name: SharedString, set: fn(f32) -> AudioCommand| {
+                let row = |id: &'static str, ch: &Channel, name: SharedString, set: fn(f32) -> AudioCommand, mic: bool| {
+                    let volume = shown_volume(id, ch, lim);
+                    let icon_name = match (mic, ch.muted) {
+                        (true, true) => "mic-off",
+                        (true, false) => "mic",
+                        (false, muted) => volume_icon(volume, muted),
+                    };
                     div()
                         .flex()
                         .flex_col()
@@ -481,9 +506,9 @@ pub fn register(r: &mut PluginRegistry) {
                                 .items_center()
                                 .gap(px(tokens::SM))
                                 .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(text::BODY_S)).child(name))
-                                .child(div().font_features(tabular_nums()).text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(volume_text(ch.volume))),
+                                .child(div().font_features(tabular_nums()).text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(volume_text(volume))),
                         )
-                        .child(big_slider(id, ch.volume / lim, icon_name, ch.muted, palette, move |v, _, cx| send(cx, set(v * lim))))
+                        .child(big_slider(id, ch.volume / lim, icon_name, ch.muted, palette, move |v, _, cx| write(cx, set(v * lim))))
                 };
                 let rc = RowCx { tap: &apps_tap, limit: lim, all_muted: s.all_muted, outputs: &[], default_sink: None, palette, id_prefix: "side-app" };
                 let app_list = (!app_rows.is_empty()).then(|| sidebar_apps(&app_rows, &rc));
@@ -491,8 +516,8 @@ pub fn register(r: &mut PluginRegistry) {
                     .flex()
                     .flex_col()
                     .gap(px(tokens::MD))
-                    .child(row("side-out", volume_icon(s.output.volume, s.output.muted), &s.output, names.0.clone(), AudioCommand::SetVolume))
-                    .child(row("side-in", if s.input.muted { "mic-off" } else { "mic" }, &s.input, names.1.clone(), AudioCommand::SetMicVolume))
+                    .child(row(SIDE_OUT_SLIDER, &s.output, names.0.clone(), AudioCommand::SetVolume, false))
+                    .child(row(SIDE_IN_SLIDER, &s.input, names.1.clone(), AudioCommand::SetMicVolume, true))
                     .when_some(app_list, |el, list| el.child(list))
                     .when(!s.available, |el| el.opacity(UNAVAILABLE_OPACITY))
                     .into_any_element()

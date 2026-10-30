@@ -6,9 +6,10 @@
 //!
 //! The list follows the sound server's stream events only while a view that
 //! shows it is on screen ([`AppsTap`]); rows spring in and out
-//! ([`Presence`]); a dragged slider or clicked mute shows your value until
-//! the server has caught up ([`AppsTap::volume`]), so the echo of an older
-//! command never makes the slider jump back mid-drag.
+//! ([`Presence`]); a dragged slider shows your value until the server has
+//! caught up ([`crate::slider_model`]), and a clicked mute likewise
+//! ([`AppsTap::muted`]), so the echo of an older command never makes a
+//! control jump back.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -32,9 +33,9 @@ use crate::kit::text;
 
 /// Volume sliders snap to hundredths (one displayed percent).
 const VOLUME_STEPS: f32 = 100.0;
-/// A slider value you set wins over the server's for this long after your
-/// last change: long enough for the server to echo it, short enough that a
-/// change made elsewhere shows soon after.
+/// A mute you clicked wins over the server's for this long: long enough for
+/// the server to echo it, short enough that a change made elsewhere shows
+/// soon after.
 const ECHO_HOLD: Duration = Duration::from_millis(700);
 /// How often the watchdog checks whether a view still shows the list.
 const WATCHDOG: Duration = Duration::from_millis(700);
@@ -172,8 +173,8 @@ pub(super) fn slider_frac(volume: f32, limit: f32) -> f32 {
     if limit > 0.0 { (volume / limit).clamp(0.0, 1.0) } else { 0.0 }
 }
 
-/// The value to show: yours while you changed it within [`ECHO_HOLD`],
-/// else the server's.
+/// The mute to show: yours while you changed it within [`ECHO_HOLD`], else
+/// the server's.
 pub(super) fn shown<T: Copy>(server: T, held: Option<&(T, Instant)>, now: Instant) -> T {
     match held {
         Some((value, at)) if now.saturating_duration_since(*at) < ECHO_HOLD => *value,
@@ -203,7 +204,6 @@ pub(super) struct AppsTap {
     alive: Option<Arc<AtomicBool>>,
     last_render: Option<Instant>,
     views: ViewSet,
-    held_volume: HashMap<String, (f32, Instant)>,
     held_mute: HashMap<String, (bool, Instant)>,
 }
 
@@ -254,7 +254,6 @@ impl AppsTap {
                         break;
                     }
                     let now = Instant::now();
-                    s.held_volume.retain(|_, (_, at)| now.saturating_duration_since(*at) < ECHO_HOLD);
                     s.held_mute.retain(|_, (_, at)| now.saturating_duration_since(*at) < ECHO_HOLD);
                     if *s.snapshot.groups != snap.groups || *s.snapshot.outputs != snap.outputs {
                         s.snapshot = Rc::new(snap);
@@ -284,23 +283,9 @@ impl AppsTap {
         .detach();
     }
 
-    /// The volume to draw for `g`.
-    pub fn volume(&self, g: &AppGroup) -> f32 {
-        shown(g.volume, self.held_volume.get(&g.key), Instant::now())
-    }
-
     /// The mute to draw for `g`.
     pub fn muted(&self, g: &AppGroup) -> bool {
         shown(g.muted, self.held_mute.get(&g.key), Instant::now())
-    }
-
-    /// Holds a dragged volume; whether it differs from what was last sent
-    /// (unchanged slider positions send nothing).
-    fn hold_volume(&mut self, key: &str, volume: f32) -> bool {
-        let now = Instant::now();
-        let fresh = self.held_volume.get(key).is_some_and(|(v, at)| *v == volume && now.saturating_duration_since(*at) < ECHO_HOLD);
-        self.held_volume.insert(key.to_string(), (volume, now));
-        !fresh
     }
 }
 
@@ -396,30 +381,26 @@ fn name_line(g: &AppGroup, palette: &MandaraPalette) -> impl IntoElement {
         })
 }
 
-/// The slider for `g`: sets every stream of the app; holds your value.
+/// The element id (and drag-state key) of `g`'s slider.
+fn slider_id(g: &AppGroup, rc: &RowCx<'_>) -> gpui::ElementId {
+    SharedString::from(format!("{}-vol-{}", rc.id_prefix, g.key)).into()
+}
+
+/// The volume to draw for `g`: the one you are dragging on its slider, else
+/// the server's.
+pub(super) fn shown_volume(g: &AppGroup, rc: &RowCx<'_>) -> f32 {
+    crate::slider_model::held(&slider_id(g, rc)).map_or(g.volume, |frac| slider_volume(frac, rc.limit))
+}
+
+/// The slider for `g`: sets every stream of the app, one write at a time,
+/// and shows your value while you drag ([`crate::slider_model`]).
 pub(super) fn app_slider(g: &AppGroup, rc: &RowCx<'_>) -> gpui::Stateful<gpui::Div> {
-    let tap = rc.tap.borrow();
-    let (volume, muted) = (tap.volume(g), tap.muted(g));
-    drop(tap);
-    let (tap, key, indices, limit) = (rc.tap.clone(), g.key.clone(), g.indices.clone(), rc.limit);
-    big_slider(
-        SharedString::from(format!("{}-vol-{}", rc.id_prefix, g.key)),
-        slider_frac(volume, limit),
-        volume_icon(volume, muted || rc.all_muted),
-        muted || rc.all_muted,
-        rc.palette,
-        move |frac, _, cx| {
-            let v = slider_volume(frac, limit);
-            let (changed, views) = {
-                let mut s = tap.borrow_mut();
-                (s.hold_volume(&key, v), s.views.clone())
-            };
-            if changed {
-                send(cx, AudioCommand::SetStreamVolume(indices.clone(), v));
-                views.notify(cx);
-            }
-        },
-    )
+    let volume = shown_volume(g, rc);
+    let muted = rc.tap.borrow().muted(g) || rc.all_muted;
+    let (indices, limit) = (g.indices.clone(), rc.limit);
+    big_slider(slider_id(g, rc), slider_frac(g.volume, limit), volume_icon(volume, muted), muted, rc.palette, move |frac, _, cx| {
+        hub(cx).read(cx).audio_service.clone().map(|s| s.request(AudioCommand::SetStreamVolume(indices.clone(), slider_volume(frac, limit))))
+    })
 }
 
 thread_local! {
@@ -528,10 +509,7 @@ fn subtitle(g: &AppGroup, rc: &RowCx<'_>, cx: &App) -> SharedString {
 /// A full app row for the sound panel.
 pub(super) fn panel_row(g: &AppGroup, rc: &RowCx<'_>, cx: &App) -> AnyElement {
     let p = rc.palette;
-    let (volume, muted) = {
-        let tap = rc.tap.borrow();
-        (tap.volume(g), tap.muted(g))
-    };
+    let (volume, muted) = (shown_volume(g, rc), rc.tap.borrow().muted(g));
     let subtitle = subtitle(g, rc, cx);
     let output = output_button(g, rc);
     div()
@@ -639,17 +617,11 @@ mod tests {
     }
 
     #[test]
-    fn your_value_wins_until_the_hold_expires() {
+    fn your_mute_wins_until_the_hold_expires() {
         let now = Instant::now();
-        assert_eq!(shown(0.2, None, now), 0.2);
-        assert_eq!(shown(0.2, Some(&(0.8, now)), now + ECHO_HOLD / 2), 0.8, "a stale echo doesn't move the slider");
-        assert_eq!(shown(0.2, Some(&(0.8, now)), now + ECHO_HOLD), 0.2);
-        let mut tap = AppsTap::default();
-        assert!(tap.hold_volume("ff", 0.5));
-        assert!(!tap.hold_volume("ff", 0.5), "same position: nothing to send");
-        assert!(tap.hold_volume("ff", 0.51));
-        let g = AppGroup { key: "ff".into(), volume: 0.1, ..Default::default() };
-        assert_eq!(tap.volume(&g), 0.51);
+        assert!(!shown(false, None, now));
+        assert!(shown(false, Some(&(true, now)), now + ECHO_HOLD / 2), "a stale echo doesn't flip the pill");
+        assert!(!shown(false, Some(&(true, now)), now + ECHO_HOLD));
     }
 
     #[test]

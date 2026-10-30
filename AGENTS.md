@@ -65,7 +65,7 @@ Zed's GPU-accelerated UI framework.
 | `crates/mandara-install` | `mandara install` / `uninstall`: per-distribution package tables and the package-manager abstraction. |
 | `crates/mandara-version` | Build identity: component versions, content hashes, git revision, source fingerprint. |
 | `vendor/gpui_wgpu` | GPUI's wgpu renderer, vendored with Mandara's patches (GPU memory, fonts, colour emoji, Vulkan first, rounded clipping). Every change is listed in [`MANDARA-PATCHES.md`](vendor/gpui_wgpu/MANDARA-PATCHES.md) and marked `Mandara patch` in the source. |
-| `vendor/gpui` | GPUI core, vendored for rounded content masks: a rounded element whose overflow is hidden or clipped clips its children to its rounded shape ([`MANDARA-PATCHES.md`](vendor/gpui/MANDARA-PATCHES.md)). |
+| `vendor/gpui` | GPUI core, vendored for rounded content masks (a rounded element whose overflow is hidden or clipped clips its children to its rounded shape) and for `.hover()` on elements without an `.id()`, which upstream only repaints when something else re-renders the view ([`MANDARA-PATCHES.md`](vendor/gpui/MANDARA-PATCHES.md)). |
 | `xtask` | `cargo xtask`: versioning, fingerprinted builds, packaging, artwork, delta updates, the resource budget and the demo sandbox. |
 | `tools/mandara-delta` | The delta-update format and CLI, outside the workspace so plugin authors can `cargo install` it alone. |
 | `plugins/examples` | Example third-party plugins (`moon-phase`), built on their own for `wasm32-wasip2`. |
@@ -320,6 +320,15 @@ Things that cost real debugging time:
   send keyboard leave and enter *before* the press, so never dismiss a
   panel synchronously on deactivation. Elements over a click-outside
   catcher must `.occlude()`.
+- **Sliders.** Build every slider on `kit::slider` or `panel_fx::big_slider`
+  (both use `crate::slider_model`). Their `on_change` returns the write's
+  completion: a service request's reply receiver, or `None` for a local value.
+  That lets the model keep one write in flight per slider, draw the dragged
+  value instead of the server's late echoes, and keep following the pointer
+  outside the track. Read readouts next to a slider through
+  `slider_model::held` so they move with the fill. Never fire a service
+  command for every pointer event: a slow sound server falls behind, and the
+  bounded queue drops the newest values.
 - **Blur halos.** MangoWM blurs layer surfaces wherever alpha is above 0,
   so wide translucent shadows become halos; keep shadows tight.
 - **Killing processes.** Never `pkill -f "mandara studio"` (or any pattern
