@@ -1,7 +1,7 @@
 [package]
 name = "mandara-install"
 description = "Mandara Shell's installer (`mandara install` / `uninstall`): distribution package tables and the package-manager abstraction shared with Mandara Login"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

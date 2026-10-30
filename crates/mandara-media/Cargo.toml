@@ -1,7 +1,7 @@
 [package]
 name = "mandara-media"
 description = "Pure-Rust video pipeline: WebM / Matroska and IVF demuxing, AV1 decoding (rav1d), YUV conversion and threaded players"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

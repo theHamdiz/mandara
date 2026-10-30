@@ -1,7 +1,7 @@
 [package]
 name = "xtask"
 description = "Mandara dev and release tooling: versioning, fingerprinted builds, packaging, checksums, resource budget, headless demo sandbox"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 license.workspace = true
 publish = false
