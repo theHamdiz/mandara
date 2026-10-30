@@ -122,6 +122,9 @@ pub struct NotificationsState {
     pub dnd_until: Option<i64>,
     /// Automatic do not disturb in effect, and why.
     pub auto_dnd: Vec<AutoDnd>,
+    /// The notification list (panel or sidebar tab) is on screen: popups
+    /// hand over to it and new notifications go straight into it.
+    pub list_open: bool,
     /// Newest first.
     pub items: Vec<Notification>,
     /// The latest notification that wants a sound.
@@ -152,6 +155,8 @@ pub enum NotificationCommand {
     /// Automatic do not disturb for `reason` on / off.
     Auto(AutoDnd, bool),
     MarkAllRead,
+    /// The notification list opened or closed (see `list_open`).
+    ListOpen(bool),
     /// Hides a popup without removing it from history.
     Expire(u32),
     /// Posts a notification from the shell itself (e.g. Pomodoro).
@@ -260,7 +265,11 @@ impl Shared {
         n.display_ms = d.display_ms;
         n.popup = d.popup;
         n.transient = !d.history;
-        if n.transient && !n.popup {
+        let listed = self.state.lock().list_open;
+        if listed {
+            arrive_in_list(&mut n);
+        }
+        if n.transient && !n.popup && !listed {
             // Nothing to show and nothing to keep.
             return if replaces != 0 { replaces } else { self.fresh_id() };
         }
@@ -339,6 +348,30 @@ fn set_reason(list: &mut Vec<AutoDnd>, reason: AutoDnd, on: bool) {
     } else if !on && has {
         list.retain(|r| *r != reason);
     }
+}
+
+/// The notification list opened: every popup leaves the screen, and every
+/// notification stays listed (ones history doesn't keep stay until the list
+/// closes, so they're seen).
+fn hand_over_to_list(items: &mut [Notification]) {
+    for n in items {
+        n.popup = false;
+    }
+}
+
+/// A notification arriving while the list is open shows up in it instead of
+/// as a popup, already read.
+fn arrive_in_list(n: &mut Notification) {
+    n.popup = false;
+    n.read = true;
+}
+
+/// The list closed: notifications history doesn't keep were seen there and
+/// go now. Returns their ids.
+fn drop_seen_transient(items: &mut Vec<Notification>) -> Vec<u32> {
+    let gone: Vec<u32> = items.iter().filter(|n| n.transient && !n.popup).map(|n| n.id).collect();
+    items.retain(|n| n.popup || !n.transient);
+    gone
 }
 
 /// Do not disturb took effect: popups that wouldn't be allowed now close
@@ -787,6 +820,15 @@ pub fn spawn_notification_service() -> NotificationService {
                             }
                             Ok("read".into())
                         }
+                        NotificationCommand::ListOpen(open) => {
+                            st.list_open = open;
+                            if open {
+                                hand_over_to_list(&mut st.items);
+                            } else {
+                                closed.extend(drop_seen_transient(&mut st.items).into_iter().map(|id| (id, EXPIRED)));
+                            }
+                            Ok(format!("list {}", if open { "open" } else { "closed" }))
+                        }
                         NotificationCommand::Expire(id) => {
                             let transient = st.items.iter().any(|n| n.id == id && n.transient);
                             if transient {
@@ -846,6 +888,27 @@ mod tests {
         let mut items = vec![note(5, false, true), note(4, false, false), note(3, false, false), note(2, false, true), note(1, false, false)];
         truncate_history(&mut items, 1);
         assert_eq!(items.iter().map(|n| n.id).collect::<Vec<_>>(), vec![5, 4, 2]);
+    }
+
+    #[test]
+    fn the_open_list_takes_over_from_popups() {
+        let mut crit = note(1, false, true);
+        crit.urgency = Urgency::Critical;
+        let mut transient = note(2, false, true);
+        transient.transient = true;
+        let mut items = vec![crit, transient, note(3, false, true), note(4, false, false)];
+        // Opening the list: every popup leaves, critical ones included, and
+        // nothing leaves the list (the transient one is still there to see).
+        hand_over_to_list(&mut items);
+        assert!(items.iter().all(|n| !n.popup));
+        assert_eq!(items.iter().map(|n| n.id).collect::<Vec<_>>(), vec![1, 2, 3, 4]);
+        // Arriving while it's open: listed, read, no popup.
+        let mut fresh = note(5, false, true);
+        arrive_in_list(&mut fresh);
+        assert!(!fresh.popup && fresh.read);
+        // Closing it: the seen transient one goes, the rest stay.
+        assert_eq!(drop_seen_transient(&mut items), vec![2]);
+        assert_eq!(items.iter().map(|n| n.id).collect::<Vec<_>>(), vec![1, 3, 4]);
     }
 
     #[test]

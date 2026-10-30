@@ -451,6 +451,9 @@ anything that must stay fixed is a named, documented constant.
   surface, close the gap smoothly when one leaves, pause while you hover them
   and draw a thin countdown line. Only the cards take clicks; the rest of the
   surface passes them through to your windows.
+- Opening the notification center (its panel or the sidebar tab) moves the
+  cards on screen into it, and new notifications go straight into the list
+  until you close it, so cards never cover the center.
 - Cards carry the app icon, rich text (bold, italic, links), images,
   progress bars, **action buttons** and **inline replies**, and group by app.
 - The **notification center** keeps a history you size. **Per-app rules**

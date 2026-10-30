@@ -164,6 +164,23 @@ fn sync(cx: &mut App) {
     }
 }
 
+/// Whether a notification list is on screen: the bar's notifications panel,
+/// or the sidebar (opened or hover-revealed) on its Notifications tab.
+fn list_on_screen(cx: &App) -> bool {
+    let s = crate::state::shell(cx).read(cx);
+    let sidebar_tab = (s.sidebar_open || s.sidebar_hover) && config(cx).read(cx).get().sidebar.notifications_tab && crate::sidebar_tabs::notifications_selected(cx);
+    s.panel.as_deref() == Some(crate::plugins::notifications::ID) || sidebar_tab
+}
+
+/// Tells the notification service whether its list is on screen, so the
+/// popups hand over to it (and new ones go straight into it) while it is.
+pub fn sync_list(cx: &mut App) {
+    let open = list_on_screen(cx);
+    if crate::hub::hub(cx).read(cx).notifications.list_open != open {
+        crate::plugins::notifications::send(cx, NotificationCommand::ListOpen(open));
+    }
+}
+
 /// Installs the popup surface; it follows the hub and the config.
 pub fn init(cx: &mut App) {
     let host = cx.new(|_| Toasts { window: None, key: None });
@@ -175,6 +192,15 @@ pub fn init(cx: &mut App) {
         if popups != last {
             last = popups;
             sync(cx);
+        }
+    })
+    .detach();
+    let mut list_was_open = false;
+    cx.observe(&crate::state::shell(cx), move |_, cx| {
+        let open = list_on_screen(cx);
+        if open != list_was_open {
+            list_was_open = open;
+            sync_list(cx);
         }
     })
     .detach();

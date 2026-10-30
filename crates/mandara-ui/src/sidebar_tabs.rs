@@ -138,12 +138,18 @@ fn last_tab(cx: &mut App) -> String {
     cx.global::<LastTab>().0.clone()
 }
 
+/// Whether the sidebar's selected tab is the Notifications tab.
+pub fn notifications_selected(cx: &App) -> bool {
+    cx.try_global::<LastTab>().is_some_and(|l| l.0 == NOTIFICATIONS_TAB)
+}
+
 /// Remembers `id` as the last tab (written off the UI thread).
 fn remember(id: &str, cx: &mut App) {
     if cx.try_global::<LastTab>().is_some_and(|l| l.0 == id) {
         return;
     }
     cx.set_global(LastTab(id.to_string()));
+    crate::toasts::sync_list(cx);
     let state = SidebarState { last_tab: id.to_string() };
     cx.background_executor()
         .spawn(async move {
