@@ -247,7 +247,7 @@ fn bump(args: &[String]) -> Result<()> {
             None if init => "chore(release): record component versions".to_string(),
             None => "chore(release): component updates".to_string(),
         };
-        run(Command::new("git").args(["add", "-A", "versions.toml", "Cargo.toml", "Cargo.lock", "crates", "xtask", "plugins"]))?;
+        run(Command::new("git").args(["add", "-A", "versions.toml", "Cargo.toml", "Cargo.lock", "crates", "xtask", "plugins", "tools"]))?;
         run(Command::new("git").args(["commit", "--quiet", "-m", &title, "-m", &summary.join("\n")]))?;
         if flag(args, "--tag") {
             for (name, version, tag) in &bumped {
