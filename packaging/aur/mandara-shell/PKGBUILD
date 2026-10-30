@@ -1,7 +1,7 @@
 # Maintainer: Ahmad Hamdi <ahmad dot hamdi dot emara at gmail dot com>
 
 pkgname=mandara-shell
-pkgver=0.1.1
+pkgver=0.1.2
 pkgrel=1
 pkgdesc="GPU-accelerated, design-first Wayland desktop shell for MangoWM, Niri and Hyprland, written in Rust"
 arch=('x86_64' 'aarch64')
@@ -27,7 +27,7 @@ backup=('etc/pam.d/mandara-lock')
 # Cargo does its own (fat) LTO; makepkg's -flto would also reach the C parts.
 options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('442301b7e6c271ee0a46513dcf612f0ff2f2c5b8181cab77687c1a096008c09f')
+sha256sums=('a169845101c39a5811529bc93b1efa4c1f8982d75a24c8e1dba87315d338da8e')
 
 prepare() {
   cd "mandara-$pkgver"
