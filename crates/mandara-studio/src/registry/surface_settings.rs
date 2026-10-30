@@ -12,6 +12,8 @@ use super::{Control, Section, Setting, s, span};
 /// Group names.
 pub const APPEARANCE: &str = tk("Appearance");
 pub const PANELS: &str = tk("Drop-down panels");
+/// How drop-down panels open (animation and spring).
+pub const PANEL_MOTION: &str = tk("Panel animation");
 const LAYOUT: &str = tk("Layout");
 const MOTION: &str = tk("Motion");
 
@@ -47,15 +49,15 @@ pub fn entries() -> Vec<Setting> {
     vec![
         // Bar → Layout
         s(Bar, LAYOUT, "/bar/compact_height", tk("Compact height"), tk("Thickness of the hairline and the micro pill"), span(ranges::BAR_COMPACT_HEIGHT, " px")),
-        s(Bar, LAYOUT, "/bar/accent_line", tk("Accent line"), tk("A 1 px accent line along the hairline's inner edge"), Toggle),
+        s(Bar, APPEARANCE, "/bar/accent_line", tk("Accent line"), tk("A 1 px accent line along the hairline's inner edge"), Toggle),
         s(Bar, LAYOUT, "/bar/vertical_width", tk("Side bar width"), tk("Width of a left or right bar"), span(ranges::BAR_VERTICAL_WIDTH, " px")),
-        s(Bar, LAYOUT, "/bar/screen_frame", tk("Screen frame"), tk("A thin border round the whole display, joined to the side bar; it reserves no space of its own"), Toggle),
-        s(Bar, LAYOUT, "/bar/frame_thickness", tk("Frame thickness"), tk("Width of the screen frame's border"), span(ranges::SCREEN_FRAME, " px")),
-        s(Bar, LAYOUT, "/bar/floating_frame", tk("Float the edge frame"), tk("Inset the edge frame by the edge gap and side inset, with rounded ends; panels still pour out of it"), Toggle),
+        s(Bar, tk("Screen frame"), "/bar/screen_frame", tk("Screen frame"), tk("A thin border round the whole display, joined to the side bar; it reserves no space of its own"), Toggle),
+        s(Bar, tk("Screen frame"), "/bar/frame_thickness", tk("Frame thickness"), tk("Width of the screen frame's border"), span(ranges::SCREEN_FRAME, " px")),
+        s(Bar, tk("Screen frame"), "/bar/floating_frame", tk("Float the edge frame"), tk("Inset the edge frame by the edge gap and side inset, with rounded ends; panels still pour out of it"), Toggle),
         s(Bar, LAYOUT, "/bar/center_align", tk("Center group"), tk("Where the middle group sits"), Choice(CENTER_ALIGN)),
-        s(Bar, LAYOUT, "/bar/chip_padding", tk("Item padding"), tk("Space inside each bar item, around its content"), span(ranges::BAR_CHIP_PADDING, " px")),
-        s(Bar, LAYOUT, "/bar/chip_spacing", tk("Item spacing"), tk("Gap between neighbouring bar items"), span(ranges::BAR_CHIP_SPACING, " px")),
-        s(Bar, LAYOUT, "/bar/separator", tk("Separators"), tk("A mark between neighbouring bar items"), Choice(SEPARATORS)),
+        s(Bar, tk("Spacing"), "/bar/chip_padding", tk("Item padding"), tk("Space inside each bar item, around its content"), span(ranges::BAR_CHIP_PADDING, " px")),
+        s(Bar, tk("Spacing"), "/bar/chip_spacing", tk("Item spacing"), tk("Gap between neighbouring bar items"), span(ranges::BAR_CHIP_SPACING, " px")),
+        s(Bar, tk("Spacing"), "/bar/separator", tk("Separators"), tk("A mark between neighbouring bar items"), Choice(SEPARATORS)),
         // Bar → Appearance
         s(Bar, APPEARANCE, "/bar/tint", tk("Accent tint"), tk("Mixes the theme accent into the bar's background"), span(ranges::BAR_TINT, "")),
         s(Bar, APPEARANCE, "/bar/rim_width", tk("Rim width"), tk("Thickness of the glass edge highlight"), span(ranges::BAR_RIM_WIDTH, " px")),
@@ -79,10 +81,10 @@ pub fn entries() -> Vec<Setting> {
         s(Bar, PANELS, "/panels/anchor", tk("Horizontal position"), tk("Center panels under their button, on the screen, or push them to the screen edge on their side"), Choice(ANCHORS)),
         s(Bar, PANELS, "/panels/opacity", tk("Background opacity"), tk("Lower it to let the desktop show through panels"), span(ranges::OPACITY, "")),
         s(Bar, PANELS, "/panels/shadow_strength", tk("Shadow strength"), tk("Shadow under floating panels and floating side panels"), span(ranges::INTENSITY, "×")),
-        s(Bar, PANELS, "/panels/animation", tk("Open animation"), tk("How panels appear"), Choice(ANIMATIONS)),
-        s(Bar, PANELS, "/panels/spring/custom", tk("Custom spring"), tk("Use your own stiffness and damping instead of the global motion settings"), Toggle),
-        s(Bar, PANELS, "/panels/spring/stiffness", tk("Stiffness"), tk("Higher is snappier"), span(ranges::SPRING_STIFFNESS, "")),
-        s(Bar, PANELS, "/panels/spring/damping", tk("Damping"), tk("Higher settles with less bounce"), span(ranges::SPRING_DAMPING, "")),
+        s(Bar, PANEL_MOTION, "/panels/animation", tk("Open animation"), tk("How panels appear"), Choice(ANIMATIONS)),
+        s(Bar, PANEL_MOTION, "/panels/spring/custom", tk("Custom spring"), tk("Use your own stiffness and damping instead of the global motion settings"), Toggle),
+        s(Bar, PANEL_MOTION, "/panels/spring/stiffness", tk("Stiffness"), tk("Higher is snappier"), span(ranges::SPRING_STIFFNESS, "")),
+        s(Bar, PANEL_MOTION, "/panels/spring/damping", tk("Damping"), tk("Higher settles with less bounce"), span(ranges::SPRING_DAMPING, "")),
         // Sidebars → Layout
         s(Sidebar, LAYOUT, "/sidebar/look/attach", tk("Attachment"), tk("Flush with the screen edge, or floating clear of the edges and the bar (sidebar and power dock)"), Choice(ATTACH)),
         s(Sidebar, LAYOUT, "/sidebar/look/margin", tk("Margin"), tk("Gap between a floating side panel and the screen edges and bar"), span(ranges::SIDE_PANEL_MARGIN, " px")),

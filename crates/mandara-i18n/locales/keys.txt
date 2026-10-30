@@ -792,6 +792,7 @@ Code
 Code and numbers
 Code copied
 Code copied · clears in {n} s
+Collapse all
 Collecting 10-second averages…
 Color
 Color picker
@@ -1331,6 +1332,7 @@ Example plugin on GitHub
 Exceptions
 Exists
 Exited
+Expand all
 Expected a color like #1e88e5
 Expected a local time as HH:MM
 Expected a number
@@ -1633,6 +1635,7 @@ Hairline and micro pill only
 Hairline style only
 Hairlines between apps, recent apps and the right side
 Hanafi
+Hand-made palettes, Mandara's own and community favourites
 Hard disk
 Header position
 Header size
@@ -2915,6 +2918,7 @@ Pairing dialog
 Pairing…
 Pairs and connects devices through BlueZ
 Palette
+Panel animation
 Panel edges
 Panel radius
 Panels wider or narrower than their natural width
@@ -3045,6 +3049,7 @@ Polkit agent status; demo previews the authentication dialog; close cancels it
 Pomodoro
 Pop up for
 Popup
+Popup content
 Popup time
 Popup width
 Popups
@@ -3368,6 +3373,7 @@ Resting icon size
 Restore
 Restore my look
 Restored as it was
+Results
 Results for “{query}”
 Resume
 Resume a paused container
@@ -3823,6 +3829,7 @@ Space between a floating bar and its panels
 Space between a panel's edge and its content (unset: none for the edge frame, a little for floating styles)
 Space inside cards
 Space inside each bar item, around its content
+Spacing
 Speakers
 Specular rim
 Speed
@@ -4691,6 +4698,7 @@ Whether Mandara's pairing agent is registered with BlueZ
 Whether the hotspot runs, and its network name
 Which app has focus, per day; needs the Screen time plugin. Stays on this computer
 Which container engine the panel talks to
+Which displays show the bar, dock, OSDs, notifications and wallpaper
 Which edge it lives on; the power dock takes the other. Auto follows the locale (right for Arabic)
 Which units the panel shows when it opens
 Which windows
@@ -5177,6 +5185,7 @@ your default
 {app} · minimized
 {app}: daily limit reached
 {call} ms per call, {init} ms for init
+{changed} of {count} changed
 {city} is already on the clock
 {city} is not on the clock
 {cores} cores · {running} running
@@ -5259,6 +5268,7 @@ your default
 {layout}: choose a variant
 {limit} · resumes below {start}%
 {limit} · set by firmware or root (read-only)
+{list} and {count} more
 {manager} also removes:
 {manager} installs: {packages}
 {manager} says: {message}
@@ -5321,7 +5331,6 @@ your default
 {percent}% left — plug in soon
 {percent}% left — this is a test
 {percent}% — you can unplug the charger
-{place} is in {zone} ({offset}), but your clock uses {system} ({system_offset})
 {plugin} is off. Turn it on in Studio → Plugins or with `mandara msg plugins enable {id}`
 {plugin} is part of Mandara's core and can't be turned off or removed: {reason}
 {plugin} is up to date

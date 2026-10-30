@@ -29,6 +29,9 @@ use super::compositor_page::{badge, card, group_title, heading};
 use crate::registry::{self, Section};
 use crate::tokens::*;
 
+/// What Audio → Listen does.
+const LISTEN_HELP: &str = mandara_i18n::tk("Plays each sound from your theme at the volume above (even while shell sounds are off). Your own files: `[sounds.files]` in config.toml.");
+
 #[derive(Default)]
 struct AudioStudio {
     mixer: Option<Result<Mixer, String>>,
@@ -177,7 +180,7 @@ impl StudioView {
         let players = self.rows(registry::in_section(Section::Audio).filter(|s| s.group == PLAYERS), cfg, p, cx);
         let ignore = self.ignore_list("players", mandara_i18n::tk("Never follow these players"), &cfg.media.ignore_players, |c| &mut c.media.ignore_players, p, cx);
         let sounds = self.rows(registry::in_section(Section::Audio).filter(|s| s.group == SOUNDS || s.group == SOUND_EVENTS), cfg, p, cx);
-        let previews = self.sound_previews(p, cx);
+        let previews = self.fold("Listen", super::fold::FoldHead { title: t("Listen").into(), preview: t(LISTEN_HELP).to_string(), badge: None, trailing: None, closed: true }, p, cx, |this, cx| this.sound_previews(p, cx));
         div()
             .row()
             .flex_col()
@@ -449,7 +452,7 @@ impl StudioView {
                 }
             }));
         }
-        card(p).child(heading(t("Listen"), t("Plays each sound from your theme at the volume above (even while shell sounds are off). Your own files: `[sounds.files]` in config.toml."), p)).child(row).into_any_element()
+        div().row().flex_col().gap(px(SPACE_12_PX)).p(px(SPACE_12_PX)).child(div().text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t(LISTEN_HELP)))).child(row).into_any_element()
     }
 
     fn streams(&mut self, list: &[Stream], p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {

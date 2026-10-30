@@ -4,7 +4,7 @@
 //! `config.toml`, so it isn't synced to the shell, exported with profiles
 //! or shown as a setting.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,9 @@ pub struct UiState {
     /// the compact list.
     pub looks_previews: bool,
     pub themes_previews: bool,
+    /// Page sections you opened (`true`) or closed (`false`), by
+    /// `Section/group`; others use their default (the first open).
+    pub sections: BTreeMap<String, bool>,
 }
 
 impl UiState {

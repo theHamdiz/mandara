@@ -512,7 +512,8 @@ impl StudioView {
         let rules = self.window_rules(cfg, tab, p, cx);
         let specific = match tab {
             Target::Mango => {
-                let tags = self.tag_studio(cfg, p, cx);
+                let head = super::fold::FoldHead { title: t("Tag & layout studio").into(), preview: t("Pick a tag, then its layout, master share and scroller width. Tags without a rule keep MangoWM's default.").to_string(), badge: None, trailing: None, closed: true };
+                let tags = self.fold("Tag & layout studio", head, p, cx, |this, cx| this.tag_studio(cfg, p, cx));
                 let fx = self.rows(group("MangoWM"), cfg, p, cx);
                 div().row().flex_col().gap(px(SPACE_26_PX)).child(tags).child(fx).into_any_element()
             }
@@ -947,9 +948,12 @@ impl StudioView {
             .row()
             .flex_col()
             .gap(px(SPACE_10_PX))
-            .child(group_title(t("Tag & layout studio"), p))
             .child(
-                card(p)
+                div()
+                    .p(px(SPACE_12_PX))
+                    .row()
+                    .flex_col()
+                    .gap(px(SPACE_12_PX))
                     .child(heading(t("Per-tag layouts"), t("Pick a tag, then its layout, master share and scroller width. Tags without a rule keep MangoWM's default."), p))
                     .child(
                         div()

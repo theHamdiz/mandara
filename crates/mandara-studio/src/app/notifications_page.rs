@@ -211,10 +211,11 @@ impl StudioView {
     }
 
     pub(super) fn notifications_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        use registry::alert_settings::{POPUPS, TIMEOUTS};
-        let first = self.rows(registry::in_section(Section::Notifications).filter(|s| s.group == POPUPS || s.group == TIMEOUTS), cfg, p, cx);
+        use registry::alert_settings::{POPUP_CONTENT, POPUPS, TIMEOUTS};
+        let popup = |s: &&registry::Setting| s.group == POPUPS || s.group == POPUP_CONTENT || s.group == TIMEOUTS;
+        let first = self.rows(registry::in_section(Section::Notifications).filter(popup), cfg, p, cx);
         let rules = self.notification_rules(cfg, p, cx);
-        let rest = self.rows(registry::in_section(Section::Notifications).filter(|s| s.group != POPUPS && s.group != TIMEOUTS), cfg, p, cx);
+        let rest = self.rows(registry::in_section(Section::Notifications).filter(|s| !popup(s)), cfg, p, cx);
         div()
             .row()
             .flex_col()

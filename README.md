@@ -245,8 +245,11 @@ browser tab, without trading away speed. It took deliberate work at every layer:
   (morph, fade and slide, or none) and their own spring; the sidebar and
   power dock sit flush or float, with their own radius, card styling,
   header layout and tab position.
-- **Studio explains itself:** controls that don't apply to your current
-  layout say why, and every settings group has a one-click Reset.
+- **Studio explains itself:** every page reads like a short table of
+  contents. Related settings sit together in collapsible sections, each
+  with a one-line preview of what's inside and how many you've changed.
+  Controls that don't apply to your current layout say why, and every
+  section has a one-click Reset.
 
 ### Looks and desktop widgets
 

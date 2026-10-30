@@ -24,6 +24,19 @@ reduced motion). Under 900 px of window width it becomes an icon
 rail. In Arabic the whole frame mirrors: the sidebar moves to the right and
 chevrons point the other way.
 
+## Sections
+
+Every page is a short list of collapsible sections: related settings sit
+together (the bar's spacing, its screen frame, how panels animate; a
+popup's look and what it shows). A closed section shows a one-line preview
+of what's inside and how many settings it holds, or how many you've
+changed, and its **Reset** works without opening it. The first settings
+section on a page starts open; the long extras (designed themes, the tag
+studio, each display's shell surfaces, sound previews) start closed.
+**Expand all** / **Collapse all** sit next to the title of pages with
+several sections, search results open everything, and Studio remembers
+what you opened per page (in the same `studio-ui.toml`).
+
 **Search** (top of the sidebar) looks through every setting of every page,
 in English and in your language, and also finds pages by topic ("vpn",
 "cursor", "autostart"). While you search, every group opens, each page shows

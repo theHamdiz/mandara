@@ -337,7 +337,7 @@ impl StudioView {
             .child(mandara_ui::bidi::paragraph(t("Updates install as small binary patches against the version you have, checked byte for byte. If a patch can't be used, Mandara falls back to the full download automatically. Mandara's own plugins are built in and update with the shell.")));
 
         let plugin_banner = self.plugin_updates_banner(p, cx);
-        let settings = self.rows(registry::in_section(Section::About), cfg, p, cx);
+        let settings = self.rows_plain(registry::in_section(Section::About), cfg, p, cx);
 
         div()
             .id("about-updates")

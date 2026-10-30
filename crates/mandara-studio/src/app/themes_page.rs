@@ -410,7 +410,17 @@ impl StudioView {
             }))
             .into_any_element();
         let folder = apps_page::tilde(&catalog::user_theme_dir());
-        let head = section_head(t("Designed themes"), tf("{count} themes · add your own in {folder}", &[("count", &count), ("folder", &folder)]), vec![toggle], fonts.display.clone(), p);
+        // The title is the fold's (looks_page.rs); here the count and the
+        // previews switch.
+        let head = div()
+            .px(px(SPACE_6_PX))
+            .row()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap(px(SPACE_10_PX))
+            .child(div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(tf("{count} themes · add your own in {folder}", &[("count", &count), ("folder", &folder)])))
+            .child(toggle);
         if !previews {
             let rows: Vec<AnyElement> = gallery
                 .themes

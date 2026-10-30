@@ -32,6 +32,7 @@ mod designer;
 mod sidebar_tabs_page;
 mod greeter_page;
 mod keyrings_card;
+mod fold;
 mod time_card;
 mod users_page;
 pub use time_card::set_demo as set_time_demo;
@@ -132,6 +133,9 @@ pub struct StudioView {
     nav_focus: gpui::FocusHandle,
     nav_scroll: gpui::ScrollHandle,
     ui: crate::ui_state::UiState,
+    /// The folds on the page being built, in order, with whether each
+    /// starts open ([`fold`]).
+    fold_keys: Vec<(String, bool)>,
 }
 
 impl StudioView {
@@ -191,7 +195,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { section: Section::Home, search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load() }
+        Self { section: Section::Home, search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -523,20 +527,48 @@ impl StudioView {
         }
     }
 
-    fn rows<'a>(&mut self, settings: impl IntoIterator<Item = &'a Setting>, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        // Rows of an opt-in plugin that is off stay out of the page (the
-        // plugin's store card offers it instead).
+    /// The visible settings of `settings`, by group (rows of an opt-in
+    /// plugin that is off stay out: its store card offers it instead).
+    fn visible_groups<'a>(&self, settings: impl IntoIterator<Item = &'a Setting>, cfg: &ShellConfig, cx: &mut Context<Self>) -> Vec<(&'static str, Vec<&'a Setting>)> {
         let registry = cx.try_global::<mandara_plugins::PluginRegistry>();
         let shown = |s: &&Setting| registry::required_plugin(s.path).is_none_or(|id| registry.is_some_and(|r| r.is_enabled(id, &cfg.plugins)));
-        let settings: Vec<&Setting> = settings.into_iter().filter(shown).collect();
-        let groups = group_rows(settings);
-        let mut col = div().row().flex_col().gap(px(SPACE_26_PX));
-        for (title, list) in groups {
-            let mut card = div().row().flex_col().gap(px(2.0)).p(px(SPACE_6_PX)).rounded(px(RADIUS_20_PX)).bg(p.surface_container.hsla());
-            // "Reset" restores the group's defaults; shown only once a
-            // setting in it differs from them.
-            let resettable: Vec<Setting> = list.iter().filter(|s| !matches!(s.control, Control::Command { .. })).map(|s| (*s).clone()).collect();
-            let changed = resettable.iter().any(|s| registry::get(cfg, s) != registry::default_value(s));
+        let mut groups = group_rows(settings.into_iter().filter(shown).collect::<Vec<_>>());
+        // Related groups next to each other, the everyday ones first.
+        if let Some(order) = groups.first().and_then(|(_, list)| list.first()).and_then(|s| group_order(s.section)) {
+            groups.sort_by_key(|(title, _)| order.iter().position(|g| g == title).unwrap_or(order.len()));
+        }
+        groups
+    }
+
+    /// A group's "Reset", shown once a setting in it differs from the
+    /// defaults.
+    fn group_reset(&mut self, title: &'static str, list: &[&Setting], cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let resettable: Vec<Setting> = list.iter().filter(|s| !matches!(s.control, Control::Command { .. })).map(|s| (*s).clone()).collect();
+        let changed = resettable.iter().any(|s| registry::get(cfg, s) != registry::default_value(s));
+        changed.then(|| {
+            div()
+                .id(SharedString::from(format!("reset-{}-{title}", resettable.first().map_or("", |s| s.path))))
+                .px(px(SPACE_10_PX))
+                .py(px(SPACE_3_PX))
+                .rounded_full()
+                .cursor_pointer()
+                .text_size(px(TEXT_12_PX))
+                .text_color(p.on_surface_variant.hsla())
+                .hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_8).hsla()))
+                .child(t("Reset"))
+                // Inside a fold header: don't also open / close it.
+                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    cx.stop_propagation();
+                    this.reset_group(&resettable, cx)
+                }))
+                .into_any_element()
+        })
+    }
+
+    /// One group's rows (inside a fold or a plain card).
+    fn group_card(&mut self, list: &[&Setting], cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> gpui::Div {
+        let mut card = div().row().flex_col().gap(px(2.0));
             for s in list.iter() {
                 // A control that does nothing in the current setup shows why
                 // instead (toggles render their own locked state).
@@ -581,19 +613,38 @@ impl StudioView {
                     card = card.child(div().px(px(SPACE_18_PX)).pb(px(SPACE_14_PX)).child(picker));
                 }
             }
-            let reset = changed.then(|| {
-                div()
-                    .id(SharedString::from(format!("reset-{}-{title}", resettable.first().map_or("", |s| s.path))))
-                    .px(px(SPACE_10_PX))
-                    .py(px(SPACE_3_PX))
-                    .rounded_full()
-                    .cursor_pointer()
-                    .text_size(px(TEXT_12_PX))
-                    .text_color(p.on_surface_variant.hsla())
-                    .hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_8).hsla()))
-                    .child(t("Reset"))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.reset_group(&resettable, cx)))
-            });
+        card
+    }
+
+    /// A page's settings: each group in its own collapsible fold.
+    fn rows<'a>(&mut self, settings: impl IntoIterator<Item = &'a Setting>, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let groups = self.visible_groups(settings, cfg, cx);
+        let mut col = div().row().flex_col().gap(px(SPACE_12_PX));
+        for (title, list) in groups {
+            let changed = list.iter().filter(|s| !matches!(s.control, Control::Command { .. }) && registry::get(cfg, s) != registry::default_value(s)).count();
+            let preview = fold::preview_of(list.iter().map(|s| s.label));
+            let badge = Some(if changed > 0 { tf("{changed} of {count} changed", &[("changed", &changed), ("count", &list.len())]) } else { list.len().to_string() });
+            // The Reset button lives in the header, so it works while closed.
+            let reset = self.group_reset(title, &list, cfg, p, cx);
+            let head = fold::FoldHead { title: tr(title).into(), preview, badge, trailing: reset, closed: false };
+            let list: Vec<Setting> = list.into_iter().cloned().collect();
+            col = col.child(self.fold(title, head, p, cx, move |this, cx| {
+                let refs: Vec<&Setting> = list.iter().collect();
+                let cfg = config(cx).read(cx).snapshot();
+                this.group_card(&refs, &cfg, p, cx).into_any_element()
+            }));
+        }
+        col.into_any_element()
+    }
+
+    /// Settings as plain titled cards, always open (inside a dialog or
+    /// another card, where a fold would nest).
+    fn rows_plain<'a>(&mut self, settings: impl IntoIterator<Item = &'a Setting>, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let groups = self.visible_groups(settings, cfg, cx);
+        let mut col = div().row().flex_col().gap(px(SPACE_26_PX));
+        for (title, list) in groups {
+            let reset = self.group_reset(title, &list, cfg, p, cx);
+            let card = self.group_card(&list, cfg, p, cx);
             col = col.child(
                 div()
                     .row()
@@ -606,7 +657,7 @@ impl StudioView {
                             .child(div().flex_1().px(px(SPACE_10_PX)).text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(mandara_ui::bidi::paragraph(tr(title))))
                             .children(reset),
                     )
-                    .child(card),
+                    .child(card.p(px(SPACE_6_PX)).rounded(px(RADIUS_20_PX)).bg(p.surface_container.hsla())),
             );
         }
         col.into_any_element()
@@ -1488,6 +1539,8 @@ impl Render for StudioView {
 
         let nav = self.nav(rail, window, &p, cx);
 
+        // The folds of this frame's page, counted as the body builds them.
+        self.fold_keys.clear();
         let (title, body) = if !self.query.is_empty() {
             let q = self.query.clone();
             let matches: Vec<&Setting> = registry::settings().iter().filter(|s| s.matches(&q)).collect();
@@ -1632,6 +1685,7 @@ impl Render for StudioView {
                 window.request_animation_frame();
             }
         }
+        let folds_toolbar = self.fold_toolbar(&p, cx);
         let content_bar = mandara_ui::scrollbar::keyed_state("studio-content");
         let content = div()
             .id("studio-content")
@@ -1652,7 +1706,16 @@ impl Render for StudioView {
                     .gap(px(SPACE_22_PX))
                     // With the icon rail, search moves into the page header.
                     .when(rail, |el| el.child(self.search.clone()))
-                    .child(div().font_family(fonts.display.clone()).text_size(px(if gutter < GUTTER_MEDIUM_PX { PAGE_TITLE_SMALL_PX } else { PAGE_TITLE_PX })).font_weight(FontWeight::MEDIUM).child(title))
+                    .child(
+                        div()
+                            .row()
+                            .flex_wrap()
+                            .items_end()
+                            .justify_between()
+                            .gap(px(SPACE_12_PX))
+                            .child(div().font_family(fonts.display.clone()).text_size(px(if gutter < GUTTER_MEDIUM_PX { PAGE_TITLE_SMALL_PX } else { PAGE_TITLE_PX })).font_weight(FontWeight::MEDIUM).child(title))
+                            .children(folds_toolbar),
+                    )
                     .when_some(self.error.clone(), |el, e| {
                         el.child(div().px(px(SPACE_14_PX)).py(px(SPACE_10_PX)).rounded(px(RADIUS_12_PX)).bg(p.urgent_coral.with_alpha(ALPHA_15).hsla()).text_color(p.urgent_coral.hsla()).child(e))
                     })
@@ -1734,6 +1797,20 @@ const LAUNCHER_POSITION_PATH: &str = "/launcher/look/position";
 /// appearance. A page's groups merge even when the registry lists them apart
 /// (Themes' app themes come from two registry files); the same title in
 /// another section (search results) stays its own card.
+/// The order of a page's groups, where the registry's own order (first
+/// appearance) doesn't put related ones together. Unlisted groups follow,
+/// in registry order.
+fn group_order(section: Section) -> Option<&'static [&'static str]> {
+    use registry::surface_settings::{APPEARANCE, PANEL_MOTION, PANELS};
+    Some(match section {
+        Section::Bar => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", PANELS, PANEL_MOTION],
+        Section::Launcher => &["Launcher", "Results", "Size & placement", "Search providers", "Ranking", "Starting apps", "Pinned & hidden apps", "Button"],
+        Section::Themes => &["Mode", "Style", "Tuning", "Accessibility", "Wallpaper colors", "Icons", "Cursor", "App themes"],
+        Section::Wallpaper => &["Desktop", "Light & dark", "Slideshow", "Video", "Picker", "Depth clock", "Wallhaven"],
+        _ => return None,
+    })
+}
+
 pub(crate) fn group_rows<'a>(settings: impl IntoIterator<Item = &'a Setting>) -> Vec<(&'static str, Vec<&'a Setting>)> {
     let mut groups: Vec<(&'static str, Vec<&'a Setting>)> = Vec::new();
     for s in settings {
@@ -1781,4 +1858,27 @@ fn about_chip(text: String, tone: mandara_theme::Color, family: SharedString, p:
         .font_family(family)
         .child(text)
         .into_any_element()
+}
+
+#[cfg(test)]
+mod group_order_tests {
+    use super::*;
+
+    /// A misspelt name in a page's order table would silently sink that
+    /// group to the end; every listed group must exist on its page, and
+    /// every page section keeps all its groups.
+    #[test]
+    fn ordered_groups_exist_and_none_are_lost() {
+        for section in [Section::Bar, Section::Launcher, Section::Themes, Section::Wallpaper] {
+            let order = group_order(section).unwrap();
+            let groups: Vec<&str> = group_rows(registry::in_section(section)).into_iter().map(|(g, _)| g).collect();
+            for g in order {
+                assert!(groups.contains(g), "{section:?}: no group {g:?} (has {groups:?})");
+            }
+        }
+        // Bar: spacing and the frame split out of a 15-setting Layout.
+        let bar = group_rows(registry::in_section(Section::Bar));
+        let size = |name: &str| bar.iter().find(|(g, _)| *g == name).map_or(0, |(_, l)| l.len());
+        assert!(size("Layout") <= 7 && size("Spacing") >= 4 && size("Screen frame") == 3, "{:?}", bar.iter().map(|(g, l)| (*g, l.len())).collect::<Vec<_>>());
+    }
 }

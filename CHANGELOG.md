@@ -6,7 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
-Your clock and your location finally agree with each other.
+A calmer, tidier Studio, and your clock and your location finally agree
+with each other.
 
 ### New
 
@@ -24,6 +25,21 @@ Your clock and your location finally agree with each other.
 
 ### Improved
 
+- **Studio is much easier to find your way around.** Every page is now a
+  short list of collapsible sections, so instead of one long scroll you
+  see what a page holds at a glance. A closed section shows a preview of
+  its settings and how many you've changed, and its Reset works without
+  opening it. The first section opens for you, Studio remembers the ones
+  you open, and pages with several sections have Expand all and Collapse
+  all next to the title. Search still opens everything.
+- **Related settings live together.** The bar's layout, spacing and screen
+  frame are now separate sections, and so are its drop-down panels and how
+  they animate. Pop-ups are split into where they appear and what they
+  show, the launcher's results have their own section, and the Themes,
+  Wallpaper and Launcher sections are ordered from everyday to occasional.
+- **Long extras tuck away.** Designed themes, MangoWM's tag & layout
+  studio, which displays show each part of the shell, and the sound
+  previews start folded, so the settings you use most come first.
 - **One location really is one location.** Weather and prayer times now
   follow the location in Studio → Date, time & location by default, so
   typing your coordinates there is enough. A plugin only uses a place of

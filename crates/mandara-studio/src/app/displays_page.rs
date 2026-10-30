@@ -400,7 +400,8 @@ impl StudioView {
         }
         let arrangement = self.arrangement(cfg, p, cx);
         let night = self.night_light_section(cfg, p, cx);
-        let screens = self.surface_screens(cfg, p, cx);
+        let head = super::fold::FoldHead { title: t("Shell on each display").into(), preview: t("Which displays show the bar, dock, OSDs, notifications and wallpaper").to_string(), badge: None, trailing: None, closed: true };
+        let screens = self.fold("Shell on each display", head, p, cx, |this, cx| this.surface_screens(cfg, p, cx));
         let brightness = self.external_brightness(cfg, p, cx);
         let rest = self.rows(registry::in_section(Section::Displays).filter(|s| !s.path.starts_with("/night_light/")), cfg, p, cx);
         let mut groups = vec![("arrangement", arrangement), ("screens", screens), ("brightness", brightness), ("night", night), ("rest", rest)];
@@ -885,7 +886,7 @@ impl StudioView {
             }
             body = body.child(div().row().flex_wrap().items_center().gap(px(SPACE_12_PX)).child(div().w(px(DIM_150_PX)).text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(tr(surface_label(kind))))).child(chips));
         }
-        div().row().flex_col().gap(px(SPACE_10_PX)).child(group_title(t("Shell on each display"), p)).child(body).into_any_element()
+        div().p(px(SPACE_12_PX)).child(body).into_any_element()
     }
 
     // ── External brightness (DDC/CI) ────────────────────────────────────────

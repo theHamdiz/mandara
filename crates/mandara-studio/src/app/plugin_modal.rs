@@ -1134,7 +1134,7 @@ impl StudioView {
                 .child(div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("This plugin works without settings.")))
                 .into_any_element()
         } else {
-            self.rows(&list, cfg, p, cx)
+            self.rows_plain(&list, cfg, p, cx)
         };
         div()
             .p(px(BODY_PAD))

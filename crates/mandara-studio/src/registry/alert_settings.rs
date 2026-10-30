@@ -21,6 +21,8 @@ pub const OSD_POSITIONS: &[(&str, &str)] = &[("bottom", tk("Bottom")), ("top", t
 /// Group names (the bespoke pages pick rows by them).
 pub const POPUPS: &str = tk("Popups");
 pub const TIMEOUTS: &str = tk("How long popups stay");
+/// What a popup shows (app name, actions, text).
+pub const POPUP_CONTENT: &str = tk("Popup content");
 pub const DND: &str = tk("Do not disturb");
 pub const HISTORY: &str = tk("History");
 pub const SERVER: &str = tk("Notification server");
@@ -45,12 +47,12 @@ pub fn entries() -> Vec<Setting> {
         s(Notifications, POPUPS, "/notifications/scale", tk("Size"), tk("Scales popup text, icons and spacing"), slider(0.75, 1.5, 0.05, "×")),
         s(Notifications, POPUPS, "/notifications/opacity", tk("Background opacity"), tk("Lower lets windows show through popups"), slider(0.3, 1.0, 0.05, "")),
         s(Notifications, POPUPS, "/notifications/over_fullscreen", tk("Show over fullscreen apps"), tk("Popups appear above games and videos in fullscreen"), Toggle),
-        s(Notifications, POPUPS, "/notifications/show_app_name", tk("App name"), tk("The sending app's name above the title"), Toggle),
-        s(Notifications, POPUPS, "/notifications/show_actions", tk("Action buttons"), tk("Buttons apps attach, like Reply or Open"), Toggle),
-        s(Notifications, POPUPS, "/notifications/click_action", tk("Click opens the app"), tk("Clicking a popup runs its default action"), Toggle),
-        s(Notifications, POPUPS, "/notifications/compact", tk("Compact"), tk("One line of body text in popups"), Toggle),
-        s(Notifications, POPUPS, "/notifications/markup", tk("Rich text"), tk("Bold, italic and links in notification text"), Toggle),
-        s(Notifications, POPUPS, "/notifications/privacy", tk("Hide message text in popups"), tk("Popups show the app and title only; open the notification center to read"), Toggle),
+        s(Notifications, POPUP_CONTENT, "/notifications/show_app_name", tk("App name"), tk("The sending app's name above the title"), Toggle),
+        s(Notifications, POPUP_CONTENT, "/notifications/show_actions", tk("Action buttons"), tk("Buttons apps attach, like Reply or Open"), Toggle),
+        s(Notifications, POPUP_CONTENT, "/notifications/click_action", tk("Click opens the app"), tk("Clicking a popup runs its default action"), Toggle),
+        s(Notifications, POPUP_CONTENT, "/notifications/compact", tk("Compact"), tk("One line of body text in popups"), Toggle),
+        s(Notifications, POPUP_CONTENT, "/notifications/markup", tk("Rich text"), tk("Bold, italic and links in notification text"), Toggle),
+        s(Notifications, POPUP_CONTENT, "/notifications/privacy", tk("Hide message text in popups"), tk("Popups show the app and title only; open the notification center to read"), Toggle),
         s(Notifications, POPUPS, "/notifications/progress_bar", tk("Countdown line"), tk("A thin line along a popup's edge shows the time left"), Toggle),
         s(Notifications, POPUPS, "/notifications/pause_on_hover", tk("Pause on hover"), tk("A popup under the pointer doesn't time out"), Toggle),
         s(Notifications, TIMEOUTS, "/notifications/timeout_low", tk("Low urgency"), tk("Seconds on screen; 0 keeps it until you close it"), slider(0.0, 30.0, 0.5, " s")),

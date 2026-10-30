@@ -282,7 +282,8 @@ impl StudioView {
         let display = mandara_ui::fonts::fonts(cx).display.clone();
         let preview = self.theme_preview(cfg, p, cx);
         let looks = self.looks_gallery(cfg, p, display.clone(), cx);
-        let themes = self.designed_themes(cfg, p, cx);
+        let head = super::fold::FoldHead { title: t("Designed themes").into(), preview: t("Hand-made palettes, Mandara's own and community favourites").to_string(), badge: None, trailing: None, closed: true };
+        let themes = self.fold("Designed themes", head, p, cx, |this, cx| this.designed_themes(cfg, p, cx));
         let wallpaper = self.wallpaper_schemes(cfg, p, cx);
         let apps = self.app_themes_section(cfg, p, cx);
         let cursor = self.cursor_section(cfg, p, cx);
