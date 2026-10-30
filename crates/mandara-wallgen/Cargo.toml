@@ -1,7 +1,7 @@
 [package]
 name = "mandara-wallgen"
 description = "Procedural wallpaper engine for Mandara Shell: twelve resolution-independent styles, OKLab palettes, compact lossless output and seamless AV1 video loops"
-version = "0.1.1"
+version = "0.1.2"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
