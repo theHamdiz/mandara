@@ -147,6 +147,20 @@ impl Pomodoro {
         1.0 - self.left().as_secs_f32() / self.length.as_secs_f32()
     }
 
+    /// A phase that hasn't started yet takes its length from `rules`, so a
+    /// new focus or break length shows at once; a running or paused one
+    /// keeps its time. Returns whether anything changed.
+    pub fn follow(&mut self, rules: &PomodoroRules) -> bool {
+        let fresh = !self.running() && self.paused_left == self.length;
+        let length = rules.length(self.phase);
+        if !fresh || length == self.length {
+            return false;
+        }
+        self.length = length;
+        self.paused_left = length;
+        true
+    }
+
     /// `mm:ss` of the time left.
     pub fn clock(&self) -> String {
         let s = self.left().as_secs_f32().ceil() as u64;
@@ -394,8 +408,10 @@ impl Productivity {
     }
 
     /// Drops notes left empty (e.g. a new note closed without typing).
-    pub fn prune_empty(&mut self, cx: &mut Context<Self>) {
-        let empty: Vec<u64> = self.notes.notes.iter().filter(|n| n.text.trim().is_empty() && n.path.is_none()).map(|n| n.id).collect();
+    /// Deletes abandoned empty drafts, sparing `keep` (the note just
+    /// opened: a new one is empty until you type).
+    pub fn prune_empty(&mut self, keep: Option<u64>, cx: &mut Context<Self>) {
+        let empty = self.notes.empty_drafts(keep);
         for id in &empty {
             let _ = self.notes.delete(*id);
         }
@@ -617,6 +633,10 @@ pub fn init(cx: &mut App) -> Entity<Productivity> {
         cx.observe(&config(cx), |p: &mut Productivity, store, cx| {
             let root = notes_root(&store.read(cx).snapshot());
             p.ensure_notes_root(root, cx);
+            // New Pomodoro lengths apply to a timer that hasn't started.
+            if p.pomodoro.follow(&PomodoroRules::from_config(cx)) {
+                cx.notify();
+            }
         })
         .detach();
         p
@@ -651,6 +671,25 @@ mod tests {
         assert_eq!(r.next(Phase::Focus, 4), Phase::LongBreak);
         assert_eq!(r.next(Phase::ShortBreak, 4), Phase::Focus);
         assert_eq!(r.next(Phase::LongBreak, 8), Phase::Focus);
+    }
+
+    #[test]
+    fn an_idle_timer_follows_new_lengths_but_a_started_one_keeps_its_time() {
+        let mins = |m: u64| Duration::from_secs(m * 60);
+        let rules = |focus: u64, short: u64| PomodoroRules { focus: mins(focus), short_break: mins(short), long_break: mins(15), long_every: 4, auto_continue: true };
+        // Issue #7: a 50-minute focus shows at once on a fresh timer.
+        let mut p = Pomodoro { phase: Phase::Focus, ends_at: None, paused_left: mins(25), length: mins(25), completed: 0 };
+        assert!(p.follow(&rules(50, 5)));
+        assert_eq!((p.length, p.clock().as_str()), (mins(50), "50:00"));
+        assert!(!p.follow(&rules(50, 5)), "nothing new");
+        // Paused halfway: the session keeps its own time.
+        p.paused_left = mins(20);
+        assert!(!p.follow(&rules(30, 5)));
+        assert_eq!(p.paused_left, mins(20));
+        // A fresh break follows the break length.
+        let mut b = Pomodoro { phase: Phase::ShortBreak, ends_at: None, paused_left: mins(5), length: mins(5), completed: 1 };
+        assert!(b.follow(&rules(25, 10)));
+        assert_eq!(b.length, mins(10));
     }
 
     #[test]

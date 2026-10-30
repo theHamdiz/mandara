@@ -285,7 +285,8 @@ fn open(ui: &Ui, f: &Fields, id: u64, edit: bool, window: &mut Window, cx: &mut 
         u.editing = edit;
         u.menu = None;
     });
-    productivity(cx).update(cx, |p, cx| p.prune_empty(cx));
+    // Other abandoned drafts go; this one stays, even empty (a new note).
+    productivity(cx).update(cx, |p, cx| p.prune_empty(Some(id), cx));
 }
 
 fn close(ui: &Ui, cx: &mut App) {
@@ -293,7 +294,7 @@ fn close(ui: &Ui, cx: &mut App) {
     if let Some(id) = id {
         productivity(cx).update(cx, |p, cx| {
             p.settle_note(id, cx);
-            p.prune_empty(cx);
+            p.prune_empty(None, cx);
         });
     }
     refresh(cx);

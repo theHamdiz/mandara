@@ -46,6 +46,11 @@ const BAR_GAP_PX: f32 = 5.0;
 const ID_RESET: usize = 0;
 const ID_TOGGLE: usize = 1;
 const ID_SKIP: usize = 2;
+const ID_SETTINGS: usize = 3;
+/// The settings button in the header.
+const SETTINGS_BUTTON_PX: f32 = 26.0;
+/// Studio's page for this plugin's settings.
+const STUDIO_SETTINGS: &str = "plugins/pomodoro/settings";
 
 fn phase_color(phase: Phase, palette: &MandaraPalette) -> Color {
     match phase {
@@ -120,7 +125,9 @@ fn body(p: &Productivity, rules: PomodoroRules, palette: &MandaraPalette, ring_d
             0 => mandara_i18n::t("No sessions yet").to_string(),
             1 => mandara_i18n::t("1 session").to_string(),
             n => mandara_i18n::tf("{count} sessions", &[("count", &n)]),
-        }));
+        }))
+        // Focus and break lengths, in Studio.
+        .child(icon_button((prefix, ID_SETTINGS), "sliders", SETTINGS_BUTTON_PX, palette.on_surface_variant, None, |_, cx| crate::state::open_studio_at(Some(STUDIO_SETTINGS.into()), cx)));
     let blocks: [AnyElement; 4] = [
         head.into_any_element(),
         div().flex().justify_center().child(dial).into_any_element(),

@@ -281,6 +281,12 @@ impl NoteStore {
     }
 
     /// A new note (written once it has text). Returns its id.
+    /// Notes never written to a file and still empty (abandoned drafts),
+    /// except `keep`: the one just opened to type into.
+    pub fn empty_drafts(&self, keep: Option<u64>) -> Vec<u64> {
+        self.notes.iter().filter(|n| n.text.trim().is_empty() && n.path.is_none() && Some(n.id) != keep).map(|n| n.id).collect()
+    }
+
     pub fn create(&mut self, topic: u64, text: &str) -> Result<u64> {
         let topic = if self.topic(topic).is_some() { topic } else { DEFAULT_TOPIC };
         let id = self.fresh_id();
@@ -552,6 +558,25 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let s = NoteStore::open(&dir.path().join("notes"));
         (dir, s)
+    }
+
+    /// Issue #6: "+" creates an empty note and opens it; pruning abandoned
+    /// drafts must not delete it before you've typed a word.
+    #[test]
+    fn a_new_empty_note_survives_while_open_and_goes_once_abandoned() {
+        let (_dir, mut s) = store();
+        let old = s.create(DEFAULT_TOPIC, "").unwrap();
+        let kept = s.create(DEFAULT_TOPIC, "Groceries").unwrap();
+        let new = s.create(DEFAULT_TOPIC, "").unwrap();
+        // Opening the new one prunes the old draft only.
+        assert_eq!(s.empty_drafts(Some(new)), vec![old]);
+        // Closing it with nothing typed prunes it too; written notes stay.
+        let mut all = s.empty_drafts(None);
+        all.sort_unstable();
+        let mut want = vec![old, new];
+        want.sort_unstable();
+        assert_eq!(all, want);
+        assert!(!all.contains(&kept));
     }
 
     #[test]

@@ -6,6 +6,26 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Two fixes for the productivity widgets, thanks to reports on GitHub.
+
+### Fixed
+
+- **The new-note button works again.** Pressing + in the Notes panel or
+  card created a note and threw it away in the same moment, because
+  Mandara tidies up empty notes you leave behind and the brand-new note
+  was still empty. Now the note you just opened stays put until you've
+  typed something, and an empty one is only cleaned up once you leave it.
+
+### Improved
+
+- **Pomodoro settings are one click away.** The Pomodoro panel and card
+  have a settings button that opens their Studio page, where you choose
+  how long focus sessions, short breaks and long breaks last, and how many
+  sessions come before a long break.
+- **New lengths show right away.** Change the focus or break length while
+  the timer hasn't started and it updates on the spot. A session that's
+  running or paused keeps its time.
+
 ## 0.3.0 — 2026-10-30
 
 A calmer, tidier Studio, and your clock and your location finally agree
