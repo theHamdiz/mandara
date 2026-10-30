@@ -19,7 +19,7 @@
 //! a kind and an [`OsdPayload`]).
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use gpui::layer_shell::{Anchor, KeyboardInteractivity, Layer};
@@ -637,10 +637,18 @@ pub fn init(hub: &Entity<Hub>, cx: &mut App) {
     })
     .detach();
 
+    if let Some(b) = backlight::primary() {
+        remember_backlight(b.level());
+    }
     if let Some(rx) = backlight::watch_backlight() {
         cx.spawn(async move |cx| {
             while let Ok(b) = rx.recv().await {
-                let _ = cx.update(|cx| show(OsdEvent::brightness(b.level()), cx));
+                remember_backlight(b.level());
+                let _ = cx.update(|cx| {
+                    show(OsdEvent::brightness(b.level()), cx);
+                    // The quick settings slider follows the brightness keys.
+                    cx.refresh_windows();
+                });
             }
         })
         .detach();
@@ -1032,6 +1040,36 @@ fn event_for(kind: OsdKind, cx: &App) -> Result<OsdEvent, String> {
     })
 }
 
+/// The primary backlight's level (`0..=1`, as `f32` bits) as last read or
+/// set; `u32::MAX` while unknown or on a machine without one.
+static BACKLIGHT_LEVEL: AtomicU32 = AtomicU32::new(u32::MAX);
+
+fn remember_backlight(level: f32) {
+    BACKLIGHT_LEVEL.store(level.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+}
+
+/// The screen brightness (`0..=1`) for sliders: the laptop backlight, else
+/// the external monitors' DDC/CI level. `None` when neither can be changed.
+pub fn brightness_level(cx: &App) -> Option<f32> {
+    match BACKLIGHT_LEVEL.load(Ordering::Relaxed) {
+        u32::MAX => crate::plugins::displays::ddc_level(cx),
+        bits => Some(f32::from_bits(bits)),
+    }
+}
+
+/// Sets the brightness from a slider (`0..=1`); the slider sends its next
+/// value once logind has applied this one ([`crate::slider_model`]).
+pub fn set_brightness(level: f32, cx: &mut App) -> crate::slider_model::Write {
+    match set_level(level, cx) {
+        Ok(Output::Pending(rx)) => Some(rx),
+        Ok(Output::Value(_)) => None,
+        Err(e) => {
+            tracing::warn!("brightness: {e}");
+            None
+        }
+    }
+}
+
 /// Sets the primary backlight to `level` (`0..=1`) via logind and shows the
 /// OSD right away.
 fn set_level(level: f32, cx: &mut App) -> Result<Output, String> {
@@ -1045,6 +1083,7 @@ fn set_level(level: f32, cx: &mut App) -> Result<Output, String> {
         return external.ok_or_else(|| t("This machine has no backlight").to_string());
     };
     let raw = b.raw_for(level);
+    remember_backlight(raw as f32 / b.max.max(1) as f32);
     show(OsdEvent::brightness(raw as f32 / b.max.max(1) as f32), cx);
     Ok(Output::Pending(backlight::set_brightness(&b.name, raw)))
 }

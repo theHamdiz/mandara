@@ -1,18 +1,27 @@
 //! Quick settings: toggle tiles for the sidebar (Wi-Fi, Bluetooth,
 //! light/dark appearance, keep-awake, night light, mute all sound, and
-//! KeePassXC when it's installed) plus the keep-awake command.
+//! KeePassXC when it's installed), a screen brightness slider (laptop
+//! backlight or DDC/CI monitors), plus the keep-awake command.
 
 use gpui::{App, Global, IntoElement, ParentElement, Styled, div, px};
+use mandara_core::ToGpui as _;
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginInstance, PluginManifest, PluginRegistry};
 use mandara_services::{BluetoothCommand, NetworkCommand};
 use serde_json::json;
 
 use super::fn_view;
 use crate::hub::hub;
-use crate::kit::{toggle_tile, tokens};
+use crate::fonts::tabular_nums;
+use crate::kit::{text, toggle_tile, tokens};
 use crate::state::{config, update_config};
 
 pub const ID: &str = "quick-settings";
+
+/// The brightness slider's id (its drag state in [`crate::slider_model`]).
+const BRIGHTNESS_SLIDER: &str = "qs-brightness";
+/// Gap between the brightness label line and its slider.
+const BRIGHTNESS_ROW_GAP_PX: f32 = 6.0;
+const PERCENT: f32 = 100.0;
 
 /// Holds the logind idle/sleep inhibitor while keep-awake is on.
 #[derive(Default)]
@@ -157,7 +166,25 @@ pub fn register(r: &mut PluginRegistry) {
                         },
                     ))
                 });
-                div().flex().flex_col().gap(px(tokens::SM)).child(row1).child(row2).child(row3).children(keepass).into_any_element()
+                // Screen brightness, when this machine can change it.
+                let brightness = crate::osd::brightness_level(cx).map(|level| {
+                    let shown = crate::slider_model::held(&BRIGHTNESS_SLIDER.into()).unwrap_or(level);
+                    div()
+                        .pt(px(tokens::XS))
+                        .flex()
+                        .flex_col()
+                        .gap(px(BRIGHTNESS_ROW_GAP_PX))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(tokens::SM))
+                                .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(text::BODY_S)).child(mandara_i18n::t("Brightness")))
+                                .child(div().font_features(tabular_nums()).text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(format!("{}%", (shown * PERCENT).round()))),
+                        )
+                        .child(super::panel_fx::big_slider(BRIGHTNESS_SLIDER, level, "sun", false, palette, |v, _, cx| crate::osd::set_brightness(v, cx)))
+                });
+                div().flex().flex_col().gap(px(tokens::SM)).child(row1).child(row2).child(row3).children(keepass).children(brightness).into_any_element()
             },
             window,
             cx,

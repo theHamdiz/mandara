@@ -470,6 +470,13 @@ fn start_shell(sb: &Sandbox, state: &State) -> Result<()> {
     Ok(())
 }
 
+/// `--ro-bind /dev/null /dev/i2c-N` for every I2C bus node under `dev`.
+fn i2c_masks(dev: &Path) -> Vec<String> {
+    let mut nodes: Vec<String> = std::fs::read_dir(dev).into_iter().flatten().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.starts_with("i2c-")).collect();
+    nodes.sort();
+    nodes.into_iter().flat_map(|n| ["--ro-bind".to_string(), "/dev/null".to_string(), dev.join(n).to_string_lossy().into_owned()]).collect()
+}
+
 /// bwrap arguments for running `bin` as the demo user on the demo machine.
 fn bwrap_args(sb: &Sandbox, bin: &Path) -> Vec<String> {
     let s = |p: PathBuf| p.to_string_lossy().into_owned();
@@ -487,6 +494,11 @@ fn bwrap_args(sb: &Sandbox, bin: &Path) -> Vec<String> {
         }
     }
     a.extend(["--bind".into(), s(sb.home()), DEMO_HOME.into()]);
+    // The real monitors stay out of reach: DDC/CI talks to them over
+    // /dev/i2c-*, so each node is masked with /dev/null (opening works,
+    // the I2C ioctls fail, and the shell sees no DDC monitors). Backlight
+    // writes go through logind, which the dead system bus already blocks.
+    a.extend(i2c_masks(Path::new("/dev")));
     let vars = [
         ("USER", DEMO_USER.to_string()),
         ("LOGNAME", DEMO_USER.to_string()),
@@ -731,6 +743,17 @@ mod tests {
         assert!(a.contains("--setenv USER demo"));
         let under_home = bwrap_args(&sb, Path::new("/home/u/.local/bin/mandara")).join(" ");
         assert!(under_home.contains("--bind /home/u/.local/bin/mandara /home/u/.local/bin/mandara"));
+    }
+
+    #[test]
+    fn real_monitors_are_masked_from_ddc() {
+        let dev = tempfile::tempdir().unwrap();
+        for n in ["i2c-7", "i2c-0", "null", "dri"] {
+            std::fs::write(dev.path().join(n), "").unwrap();
+        }
+        let a = i2c_masks(dev.path()).join(" ");
+        let d = dev.path().display();
+        assert_eq!(a, format!("--ro-bind /dev/null {d}/i2c-0 --ro-bind /dev/null {d}/i2c-7"));
     }
 
     #[test]

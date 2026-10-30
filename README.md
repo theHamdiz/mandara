@@ -891,8 +891,10 @@ scriptable too: `mandara msg apps owner <id>` and
   existing one); app icons sit in the bar and their menus open as styled
   panels with submenus, check and radio items. Left-click activates,
   middle-click is the secondary action, the wheel scrolls.
-- **Brightness keys** can call `mandara msg brightness up|down` (logind, no
-  root needed); external monitors follow over DDC/CI.
+- **Brightness**: a slider in the sidebar's quick settings, and the laptop
+  brightness keys work out of the box (`mandara msg brightness up|down`
+  through logind, no root needed; a key your compositor config already
+  binds is left alone). External monitors follow over DDC/CI.
 - **Displays & night light**: arrange monitors, change modes with a
   keep-or-revert countdown, save profiles that switch on hotplug, choose
   which displays show the bar, dock, OSDs, notifications and wallpaper, and

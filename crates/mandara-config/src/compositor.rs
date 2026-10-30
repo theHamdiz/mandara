@@ -591,6 +591,10 @@ pub fn default_keybinds() -> Vec<Keybind> {
         // 100 % / 150 % ceiling; skipped when your config binds them.
         Keybind::new(&[], "XF86AudioRaiseVolume", M("audio volume up".into())),
         Keybind::new(&[], "XF86AudioLowerVolume", M("audio volume down".into())),
+        // Laptop brightness keys (logind, no root; DDC/CI monitors follow
+        // when set to); skipped when your config binds them.
+        Keybind::new(&[], "XF86MonBrightnessUp", M("brightness up".into())),
+        Keybind::new(&[], "XF86MonBrightnessDown", M("brightness down".into())),
     ]
 }
 
@@ -1992,6 +1996,9 @@ mod tests {
         assert!(!out.text.contains("bind=SUPER,space,"));
         assert_eq!(out.skipped.len(), 2);
         assert!(out.text.contains("bind=NONE,XF86AudioMute,spawn_shell,mandara msg audio mute-all toggle"), "new installs: the mute key mutes all sound");
+        assert!(out.text.contains("bind=NONE,XF86MonBrightnessUp,spawn_shell,mandara msg brightness up"), "laptop brightness keys work out of the box");
+        assert!(out.text.contains("bind=NONE,XF86MonBrightnessDown,spawn_shell,mandara msg brightness down"));
+        assert!(!emit_mango(&managed(&cfg, &["xf86monbrightnessup"])).text.contains("XF86MonBrightnessUp,spawn"), "your own brightness key wins");
         assert!(!emit_mango(&managed(&cfg, &["xf86audiomute"])).text.contains("XF86AudioMute,spawn"), "your own mute key wins");
     }
 

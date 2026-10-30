@@ -2,9 +2,15 @@
 //!
 //! libpam is a system library (like libc): it is loaded at runtime with
 //! `dlopen("libpam.so.0")` and driven through a tiny hand-written binding of
-//! the five calls a screen locker needs (`pam_start`, `pam_authenticate`,
-//! `pam_acct_mgmt`, `pam_setcred`, `pam_end`) — no build-time headers, no
-//! extra crate, and the shell still starts on a machine without PAM.
+//! the calls a screen locker needs (`pam_start`, `pam_authenticate`,
+//! `pam_setcred`, `pam_end`) — no build-time headers, no extra crate, and
+//! the shell still starts on a machine without PAM.
+//!
+//! The account stack (`pam_acct_mgmt`) is deliberately not consulted: you
+//! are already logged in, and the password proves who you are, which is all
+//! a lock screen needs (swaylock and hyprlock do the same). A service file
+//! without `account` lines falls back to PAM's `other` service, `pam_deny`
+//! on most distributions, so checking it refused every correct password.
 //!
 //! The service is `/etc/pam.d/mandara-lock` when installed (see
 //! `packaging/pam/mandara-lock`), else `login`, which every distribution
@@ -196,13 +202,15 @@ unsafe fn free_responses(replies: *mut PamResponse, filled: usize) {
 // ─────────────────────────── libpam loading ───────────────────────────
 
 type StartFn = unsafe extern "C" fn(*const c_char, *const c_char, *const PamConv, *mut *mut c_void) -> c_int;
+type StartConfdirFn = unsafe extern "C" fn(*const c_char, *const c_char, *const PamConv, *const c_char, *mut *mut c_void) -> c_int;
 type HandleFn = unsafe extern "C" fn(*mut c_void, c_int) -> c_int;
 type StrErrorFn = unsafe extern "C" fn(*mut c_void, c_int) -> *const c_char;
 
 struct LibPam {
     start: StartFn,
+    /// Linux-PAM 1.4+.
+    start_confdir: Option<StartConfdirFn>,
     authenticate: HandleFn,
-    acct_mgmt: HandleFn,
     setcred: HandleFn,
     end: HandleFn,
     strerror: StrErrorFn,
@@ -228,8 +236,8 @@ fn libpam() -> Result<&'static LibPam, String> {
             };
             Ok(LibPam {
                 start: std::mem::transmute::<*mut c_void, StartFn>(sym(c"pam_start")?),
+                start_confdir: sym(c"pam_start_confdir").ok().map(|p| std::mem::transmute::<*mut c_void, StartConfdirFn>(p)),
                 authenticate: std::mem::transmute::<*mut c_void, HandleFn>(sym(c"pam_authenticate")?),
-                acct_mgmt: std::mem::transmute::<*mut c_void, HandleFn>(sym(c"pam_acct_mgmt")?),
                 setcred: std::mem::transmute::<*mut c_void, HandleFn>(sym(c"pam_setcred")?),
                 end: std::mem::transmute::<*mut c_void, HandleFn>(sym(c"pam_end")?),
                 strerror: std::mem::transmute::<*mut c_void, StrErrorFn>(sym(c"pam_strerror")?),
@@ -264,11 +272,14 @@ pub trait Authenticator: Send {
 /// Real authentication through libpam.
 pub struct PamAuthenticator {
     pub service: String,
+    /// Read the service from this directory instead of `/etc/pam.d`
+    /// (`pam_start_confdir`; tests only).
+    pub confdir: Option<std::path::PathBuf>,
 }
 
 impl PamAuthenticator {
     pub fn system() -> Self {
-        Self { service: pam_service(|p| p.exists()).to_string() }
+        Self { service: pam_service(|p| p.exists()).to_string(), confdir: None }
     }
 }
 
@@ -296,23 +307,25 @@ impl Authenticator for PamAuthenticator {
         let mut dyn_conv: &mut dyn Conversation = &mut conv;
         let pam_conv = PamConv { conv: Some(conversation_trampoline), appdata_ptr: &mut dyn_conv as *mut &mut dyn Conversation as *mut c_void };
         let mut handle: *mut c_void = std::ptr::null_mut();
+        let confdir = match self.confdir.as_ref().map(|d| CString::new(d.as_os_str().as_encoded_bytes())) {
+            Some(Ok(dir)) => Some(dir),
+            Some(Err(_)) => return AuthResult { ok: false, error: Some("invalid PAM configuration directory".into()), messages: Vec::new() },
+            None => None,
+        };
         // SAFETY: valid C strings; `pam_conv` and `dyn_conv` outlive the handle
         // (pam_end is called below before they drop).
-        let mut rc = unsafe { (lib.start)(service.as_ptr(), user_c.as_ptr(), &pam_conv, &mut handle) };
+        let mut rc = match (&confdir, lib.start_confdir) {
+            (Some(dir), Some(start_confdir)) => unsafe { start_confdir(service.as_ptr(), user_c.as_ptr(), &pam_conv, dir.as_ptr(), &mut handle) },
+            (Some(_), None) => return AuthResult { ok: false, error: Some("libpam lacks pam_start_confdir".into()), messages: Vec::new() },
+            (None, _) => unsafe { (lib.start)(service.as_ptr(), user_c.as_ptr(), &pam_conv, &mut handle) },
+        };
         if rc != PAM_SUCCESS || handle.is_null() {
             return AuthResult { ok: false, error: Some(tf("Could not start PAM ({code})", &[("code", &rc)])), messages: Vec::new() };
         }
         rc = unsafe { (lib.authenticate)(handle, 0) };
         if rc == PAM_SUCCESS {
-            let acct = unsafe { (lib.acct_mgmt)(handle, 0) };
-            // An expired password still proves who you are; the lock only
-            // needs that.
-            if acct != PAM_SUCCESS && acct != PAM_NEW_AUTHTOK_REQD {
-                rc = acct;
-            } else {
-                // Refresh Kerberos tickets & co; failures are harmless.
-                unsafe { (lib.setcred)(handle, PAM_REFRESH_CRED) };
-            }
+            // Refresh Kerberos tickets & co; failures are harmless.
+            unsafe { (lib.setcred)(handle, PAM_REFRESH_CRED) };
         }
         let detail = if rc == PAM_SUCCESS {
             None
@@ -504,5 +517,37 @@ mod tests {
         let worker = AuthWorker::spawn(Box::new(DemoAuthenticator { delay: Duration::ZERO })).unwrap();
         worker.submit("anyone", "x".into());
         assert!(wait(&worker).ok);
+    }
+
+    /// Runs the real libpam against service files in a scratch directory
+    /// (`pam_start_confdir`), never `/etc/pam.d`. `None` when this libpam
+    /// predates 1.4 or lacks the stock modules.
+    fn real_pam(service: &str, files: &[(&str, &str)]) -> Option<AuthResult> {
+        if libpam().ok()?.start_confdir.is_none() || !["/usr/lib/security", "/usr/lib64/security", "/lib/x86_64-linux-gnu/security", "/usr/lib/x86_64-linux-gnu/security", "/usr/lib/aarch64-linux-gnu/security"].iter().any(|d| Path::new(d).join("pam_permit.so").exists()) {
+            eprintln!("skipped: no libpam with pam_start_confdir and pam_permit.so");
+            return None;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        for (name, text) in files {
+            std::fs::write(dir.path().join(name), text).unwrap();
+        }
+        Some(PamAuthenticator { service: service.into(), confdir: Some(dir.path().to_path_buf()) }.authenticate("nobody", "any password"))
+    }
+
+    /// Issue #5: a service file with only `auth` lines (like the one 0.1.x
+    /// packages shipped) must not fall through to `other`'s `pam_deny` and
+    /// call a correct password wrong.
+    #[test]
+    fn an_auth_only_service_unlocks() {
+        let files = [("mandara-lock", "auth required pam_permit.so\n"), ("other", "auth required pam_deny.so\naccount required pam_deny.so\n")];
+        let Some(result) = real_pam("mandara-lock", &files) else { return };
+        assert!(result.ok, "{result:?}");
+    }
+
+    #[test]
+    fn a_refusing_stack_reports_a_wrong_password() {
+        let Some(result) = real_pam("mandara-lock", &[("mandara-lock", "auth required pam_deny.so\n")]) else { return };
+        assert!(!result.ok);
+        assert_eq!(result.error.as_deref(), Some("Wrong password"));
     }
 }

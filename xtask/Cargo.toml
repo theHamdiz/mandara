@@ -36,3 +36,6 @@ wayland-protocols-wlr.workspace = true
 # `cargo xtask sandbox audio` / `notify`: the demo MPRIS player and demo
 # notifications on the sandbox's private session bus.
 zbus.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

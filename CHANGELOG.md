@@ -6,11 +6,17 @@ About → What's new shows it too.
 
 ## Unreleased
 
-Every release now tells you what changed, in plain words, wherever you
-look.
+A lock screen that accepts your password, brightness controls for laptops,
+and release notes you can read right inside Mandara.
 
 ### New
 
+- **Brightness slider.** The sidebar's quick settings now have a
+  brightness slider, right under the toggles. It shows up on laptops, and
+  on desktops whose monitors support DDC/CI.
+- **Brightness keys just work.** The laptop brightness keys now change the
+  screen brightness out of the box, with the on-screen display. If your
+  compositor config already binds them, Mandara leaves yours alone.
 - **What's new in Studio.** Studio → About has a new What's new card with
   every release's notes. The version you're running starts open, and you
   can open any other release to read what it brought.
@@ -22,10 +28,22 @@ look.
   everything an update brought, and `--all` for the whole history.
   `--markdown` and `--json` are there for scripts.
 
+### Fixed
+
+- The lock screen could say your password was wrong when it wasn't. This
+  happened when Mandara's own PAM file was installed, for example by the
+  Arch packages: it only described how to check passwords, so the extra
+  account check fell back to a rule that refuses everyone. The lock screen
+  now only checks your password, like other screen lockers do, and the PAM
+  file is complete too. You don't need to change anything; updating fixes
+  it. Thanks for reporting it on GitHub!
+
 ### Under the hood
 
 - Each GitHub release now uses its changelog entry as its release notes,
   and the release pipeline dates the entry when it ships.
+- The demo sandbox used for screenshots and tests can no longer reach real
+  monitors over DDC/CI.
 
 ## 0.1.2 — 2026-10-30
 
