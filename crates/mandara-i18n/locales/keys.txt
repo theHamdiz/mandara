@@ -682,6 +682,7 @@ Change wallpaper
 Change wallpaper…
 Changed display settings come back unless you press Keep within this time
 Changed plugins get a fresh instance; removed ones are unloaded
+Changes
 Changes apply the next time this network connects.
 Changes are authorized by polkit: you may be asked for an administrator's password.
 Changes are picked up live: add, rebuild or delete a plugin and the shell and this page update within a second.
@@ -1428,6 +1429,7 @@ First match wins: when the same id is in several folders, the one higher in this
 Fit
 Fits in
 Fix the errors in the plan first.
+Fixed
 Fixed schedule: end of the night
 Fixed schedule: start of the night
 Fixed times
@@ -1803,6 +1805,7 @@ Import a profile
 Imported {name} — switch it on above
 Imported — the previous settings are in {folder}
 Importing…
+Improved
 In front
 In logical pixels; apps and the compositor scale it on HiDPI screens
 In the store
@@ -2663,6 +2666,7 @@ Not installed
 Not mounted · {size}
 Not one of this app's leftovers: {path}
 Not placed
+Not released yet
 Not running
 Not set
 Not supported by this compositor
@@ -4384,6 +4388,7 @@ Ultrawide (3440 × 1440)
 Umm al-Qura
 Under each running app
 Under its button
+Under the hood
 Undo
 Undo the display change being tested right away
 Undone
@@ -4627,6 +4632,7 @@ Week starts on
 Week {week}
 Weight
 Weight of body text across the shell
+What changed in each release, in plain words. Run mandara changelog to see it in a terminal.
 What clicking an entry does
 What happens
 What happens (needs your password)
@@ -4638,6 +4644,7 @@ What the bar shows for this layout, e.g. EN or ع
 What the idle stage, the critical battery action and the session menu's Sleep do
 What the launcher has learnt
 What the launcher shows for a query (apps, settings, commands, slash commands, skills)
+What's in {version}
 What's new
 When
 When Bluetooth turns on, at login and after sleep

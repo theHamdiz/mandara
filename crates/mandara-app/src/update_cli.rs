@@ -116,6 +116,9 @@ pub fn main(args: UpdateArgs) -> Result<()> {
                 return Ok(());
             }
             println!("Mandara {} is available (you have {}) — {}", info.latest, info.current, info.notes_url);
+            if let Some(notes) = crate::changelog_cli::update_notes(&info.latest, &info.notes) {
+                println!("\n{notes}");
+            }
             match (info.patch.as_ref(), info.full_size()) {
                 (Some(p), Some(full)) => println!("smart update: {} instead of {}", su::human_size(p.download.size), su::human_size(full)),
                 (None, Some(full)) => println!("full update: {} (no patch from {})", su::human_size(full), info.current),
@@ -139,6 +142,9 @@ pub fn main(args: UpdateArgs) -> Result<()> {
             println!("{}", describe(&report));
             if !dry_run {
                 println!("installed {} (previous version kept as {})", exe.display(), install::backup_path(&exe).display());
+                if let Some(notes) = crate::changelog_cli::update_notes(&info.latest, &info.notes) {
+                    println!("\nWhat's new\n\n{notes}");
+                }
                 if !no_restart {
                     restart_shell(&exe);
                 }

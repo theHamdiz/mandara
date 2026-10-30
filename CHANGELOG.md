@@ -1,0 +1,132 @@
+# Changelog
+
+What changed in each Mandara release, written for the people who use it.
+Newest first. `mandara changelog` prints it in a terminal, and Studio →
+About → What's new shows it too.
+
+## Unreleased
+
+Every release now tells you what changed, in plain words, wherever you
+look.
+
+### New
+
+- **What's new in Studio.** Studio → About has a new What's new card with
+  every release's notes. The version you're running starts open, and you
+  can open any other release to read what it brought.
+- **See what's coming before you update.** When a new version is out, the
+  update card in Studio and `mandara update` list what's in it before you
+  install it, and `mandara update apply` shows what's new once it's done.
+- **`mandara changelog` in your terminal.** It shows this version's notes,
+  or `mandara changelog 0.1.1` for one release, `--since 0.1.0` for
+  everything an update brought, and `--all` for the whole history.
+  `--markdown` and `--json` are there for scripts.
+
+### Under the hood
+
+- Each GitHub release now uses its changelog entry as its release notes,
+  and the release pipeline dates the entry when it ships.
+
+## 0.1.2 — 2026-10-30
+
+A small release that makes notifications and the notification center get
+along.
+
+### Fixed
+
+- Opening the notification center now clears the pop-up cards off the
+  screen. The cards that were showing move into the list, and anything
+  that arrives while the center is open lands straight in it, already
+  marked as read, instead of popping up on top of it. Close the center
+  and new notifications pop up as usual again. This works the same for
+  the notification panel and the sidebar's Notifications tab. Thanks for
+  the report on GitHub!
+
+## 0.1.1 — 2026-10-30
+
+The first round of fixes from your feedback on 0.1.0. Thank you to
+everyone who tried it, reported bugs and opened issues.
+
+### Improved
+
+- **Calmer out of the box.** Fewer plugins start switched on (21 of 43),
+  so a fresh install feels lighter. Wallhaven browsing and cursor themes
+  are now optional plugins. They're off by default, and off really means
+  off: no network calls and no cursor changes. If you're upgrading, you
+  keep exactly the plugins you had.
+- **Theming your other apps is now your choice.** GTK, Qt/Kvantum,
+  terminals, editors and compositor borders all start switched off.
+  Mandara remembers what it changes, and switching an app off puts its
+  original files back. Coming from 0.1.0? Your existing files stay as
+  they are. To hand an app back to Mandara, or to clean it up, switch it
+  on (or on and off again) in Studio → Themes → Other apps.
+- **Tidier Studio.** Scroll bars are slim and hide when you're not using
+  them. Looks and Designed themes show as compact swatch lists, with big
+  previews one click away, and Other apps is a neat grid of tiles.
+- **Liquid MangoWM tags.** Every active tag gets its own pill, and
+  neighbouring active tags melt into each other with a smooth liquid
+  bridge. Before, viewing tags 1 and 3 together only highlighted tag 1.
+
+### Fixed
+
+- Volume sliders follow your pointer again, even on slower machines.
+  They draw where your pointer is while you drag, keep dragging when the
+  pointer slips off the thin track, and only send the newest value to the
+  audio server, so nothing lags behind. Every slider in the shell gets
+  this.
+- Rows in Studio light up as soon as your pointer moves onto them, not
+  only after you scroll. This was a small GPUI quirk, fixed for every
+  hover effect in Studio and the shell's panels.
+- The wallpaper picker no longer leaks memory. It used to grow by about
+  40 MB every time you opened it. It also can't get stuck invisible while
+  holding on to your keyboard, it opens at the right size on every
+  display, and an unreadable image now shows a cross instead of loading
+  forever.
+- The desktop's right-click menu opens at your pointer on displays you
+  plug in after Mandara starts, and it can no longer crash the shell by
+  asking for a zero-size window.
+
+### Under the hood
+
+- Installing from the Arch recipes in `packaging/aur` works now. Every
+  release fills in their real version and checksums.
+- The release pipeline's version bump got two fixes, so releases build
+  cleanly from start to finish.
+
+## 0.1.0 — 2026-10-29
+
+The first public release of Mandara Shell: a design-first Wayland desktop
+shell for MangoWM, Niri and Hyprland, written entirely in Rust on GPUI.
+
+### New
+
+- **One fast native binary.** The bar, dynamic island, dock, launcher,
+  sidebar, notification center, wallpaper engine, lock screen, login
+  manager and settings studio all run in a single process, rendered on
+  the GPU with real spring physics. The whole shell stays under 100 MiB
+  of RAM, with about 0.1% CPU when idle.
+- **First-class MangoWM, Niri and Hyprland.** Tags or workspaces, live
+  window rules, keybinds and layouts. Mandara never overwrites your
+  config: it writes its own drop-in file and adds a single include line.
+- **Mandara Studio.** Every setting, applied the moment you change it:
+  colours, bar styles, spring physics, panels, the compositor, audio,
+  displays, login screen and plugins.
+- **Colour that follows your wallpaper.** Material 3 palettes extracted
+  from your wallpaper, smooth OKLCH colour transitions, and Alexandrian
+  signature themes (Mandara Corniche, Montaza Twilight, Mandara Obsidian)
+  next to community favourites.
+- **Wallpapers with depth.** A desktop clock that tucks behind the
+  subject of your photo, AV1 video wallpapers, and a built-in wallpaper
+  generator with twelve styles, up to 8K and seamless video loops.
+- **Plugins.** 43 built-in plugins, plus sandboxed WebAssembly plugins
+  from a community marketplace. Community plugins are checked before they
+  install, and ones that fail the check are flagged.
+- **Updates by binary patch.** `mandara update` downloads a few
+  megabytes instead of the whole release, with the full download as a
+  fallback.
+- **One-command install.** `mandara install` sets up the binary, the
+  packages it needs, your compositor and the login screen, and
+  `--dry-run` shows you everything first.
+- **Ready for scripts and agents.** Almost everything the UI does is a
+  documented `mandara msg` command with JSON replies.
+- **Ten languages**, including right-to-left Arabic.

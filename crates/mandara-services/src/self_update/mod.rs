@@ -119,6 +119,10 @@ pub struct UpdateInfo {
     pub available: bool,
     /// The release page.
     pub notes_url: String,
+    /// The release's notes (its CHANGELOG.md entry, Markdown; read with
+    /// `mandara_version::changelog::parse_notes`).
+    #[serde(default)]
+    pub notes: String,
     /// The full tarball for this target.
     pub full: Option<Download>,
     /// The patch from `current` (delta update), when published.
@@ -153,6 +157,9 @@ pub(crate) struct ReleaseJson {
     pub(crate) tag_name: String,
     #[serde(default)]
     pub(crate) html_url: String,
+    /// GitHub sends `null` for a release without notes.
+    #[serde(default)]
+    pub(crate) body: Option<String>,
     #[serde(default)]
     pub(crate) assets: Vec<AssetJson>,
 }
@@ -187,6 +194,7 @@ pub fn check_with(api: &str, current: &str, target: &str) -> Result<UpdateInfo, 
         latest: latest.clone(),
         target: target.to_string(),
         notes_url: release.html_url.clone(),
+        notes: release.body.clone().unwrap_or_default(),
         sums_url: asset_url(&release.assets, SUMS_FILE).map(|(u, _)| u),
         checked_at: now_secs(),
         ..Default::default()

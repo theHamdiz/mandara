@@ -450,6 +450,10 @@ settings, permissions, translations, releases and updates) is in
 
 Every user-facing change updates its docs in the same change:
 
+- [CHANGELOG.md](CHANGELOG.md): a line under `## Unreleased` in plain,
+  friendly words, saying what people will notice (format in
+  [docs/releasing.md](docs/releasing.md#changelog)). It becomes the release
+  notes on GitHub, in Studio and in `mandara changelog`.
 - [README.md](README.md): features, plugin table and counts, screenshots
   (from the sandbox).
 - The guides in [`docs/`](docs): Studio pages, commands, configuration.

@@ -13,6 +13,7 @@
 //! `cargo xtask bump` turns changed components into real releases (semver
 //! from Conventional Commits) and records their new hashes.
 
+pub mod changelog;
 pub mod manifest;
 
 /// One component's identity in this build.

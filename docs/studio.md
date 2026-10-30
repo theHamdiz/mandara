@@ -428,6 +428,8 @@ to the release notes, and how much the update downloads: **"Smart update:
   running shell restarts on the new version (reopen Studio to use it there
   too). The previous binary is kept for `mandara update rollback`.
 - **Download full update** skips the patch.
+- **What's in it:** when a release is available, the card lists its notes
+  (new, improved, fixed) before you install it.
 - **Check now** asks GitHub right away. Automatic checks (**Check for
   updates automatically**, every **6 h** by default) reuse the last answer
   in between and announce each new version once with a notification (quiet
@@ -442,6 +444,15 @@ Marketplace plugins with a newer release are listed on the card, on
 their store cards turn **Get / On** into **Update**, and the product page offers **Update to v1.2 · 48 KB patch**. They use the same method:
 a patch for `plugin.wasm` when the plugin's release publishes one, the full
 archive otherwise; the plugin hot-reloads and stays enabled.
+
+### What's new (About)
+
+Right under the update card, **What's new** lists every release with its
+date and a one-line summary. The version you're running starts open; click
+any release to read its notes, grouped as **New**, **Improved**, **Fixed**
+and **Under the hood**. The notes come from the `CHANGELOG.md` built into
+your binary, so they work offline; `mandara changelog` prints the same in a
+terminal.
 
 ## Opening a page directly
 

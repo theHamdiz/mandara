@@ -27,6 +27,7 @@ mod store_page;
 pub(crate) use store_page::{HIDDEN_PLUGINS, PLUGIN_CATEGORIES, plugin_art_cache_clear, plugin_icon, plugin_tile};
 mod plugin_updates;
 mod updates_card;
+mod whats_new;
 mod designer;
 mod sidebar_tabs_page;
 mod greeter_page;
@@ -1463,7 +1464,8 @@ impl StudioView {
                     ),
             );
 
-        div().row().flex_col().gap(px(SPACE_16_PX)).child(hero).child(updates).child(stats).child(details).child(links).child(support).into_any_element()
+        let whats_new = self.whats_new_card(p, cx);
+        div().row().flex_col().gap(px(SPACE_16_PX)).child(hero).child(updates).child(whats_new).child(stats).child(details).child(links).child(support).into_any_element()
     }
 }
 

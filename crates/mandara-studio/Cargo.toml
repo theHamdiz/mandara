@@ -25,6 +25,7 @@ tracing.workspace = true
 rustix.workspace = true
 mandara-compositor.workspace = true
 mandara-services.workspace = true
+mandara-version.workspace = true
 toml.workspace = true
 ureq.workspace = true
 chrono.workspace = true

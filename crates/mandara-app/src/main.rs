@@ -18,6 +18,7 @@
 //!   compositor integration and login screen; remove it again.
 
 mod alloc;
+mod changelog_cli;
 mod ipc;
 mod residency;
 mod update_cli;
@@ -125,6 +126,10 @@ enum Cmd {
         #[arg(long, value_name = "SECONDS")]
         timeout: Option<u64>,
     },
+    /// What changed in each release, in plain words: this version by
+    /// default, `mandara changelog 0.1.1`, `--all`, or `--since 0.1.0` for
+    /// everything an update brought.
+    Changelog(changelog_cli::ChangelogArgs),
     /// Update Mandara (binary patch first, full download as the fallback),
     /// roll back, or update marketplace plugins: `mandara update apply`.
     Update(update_cli::UpdateArgs),
@@ -240,6 +245,7 @@ fn main() -> Result<()> {
         Some(Cmd::Greeter(args)) => mandara_greeter::cli::main(args),
         Some(Cmd::Lock { demo, timeout }) => mandara_ui::lock::run(mandara_ui::lock::LockOptions { demo, timeout: timeout.map(Duration::from_secs) }),
         Some(Cmd::Update(args)) => update_cli::main(args),
+        Some(Cmd::Changelog(args)) => changelog_cli::main(args),
         Some(Cmd::Install(args)) => mandara_install::install(args, &mandara_greeter::install_probe::InstallerProbe).map_err(anyhow::Error::msg),
         Some(Cmd::Uninstall(args)) => mandara_install::uninstall(args, &mandara_greeter::install_probe::InstallerProbe).map_err(anyhow::Error::msg),
         Some(Cmd::Run) => run_shell(),

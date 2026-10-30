@@ -50,6 +50,8 @@ pub struct Updates {
     pub(super) plugins: Vec<plugins::PluginUpdate>,
     pub(super) plugin_jobs: std::collections::HashMap<String, JobHandle>,
     pub(super) plugin_message: Option<(bool, String)>,
+    /// About → What's new: the release shown open (the running one first).
+    pub(super) whats_new: Option<String>,
 }
 
 pub(super) fn lock(job: &JobHandle) -> std::sync::MutexGuard<'_, Job> {
@@ -137,6 +139,7 @@ impl StudioView {
             return;
         }
         self.updates.primed = true;
+        self.updates.whats_new = super::whats_new::current_version();
         self.updates.info = su::cached();
         self.updates.plugins = plugins::cached();
         let cfg = mandara_ui::state::config(cx).read(cx).snapshot().updates.clone();
@@ -290,6 +293,19 @@ impl StudioView {
             }));
         }
 
+        // What the available release brings (its CHANGELOG.md entry).
+        let incoming = available.as_ref().filter(|_| !installed).map(|info| mandara_version::changelog::parse_notes(&info.latest, &info.notes)).filter(|r| !r.sections.is_empty()).map(|r| {
+            div()
+                .row()
+                .flex_col()
+                .gap(px(SPACE_10_PX))
+                .px(px(SPACE_16_PX))
+                .py(px(SPACE_14_PX))
+                .rounded(px(RADIUS_16_PX))
+                .bg(p.surface_container_high.with_alpha(ALPHA_60).hsla())
+                .child(div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::SEMIBOLD).child(tf("What's in {version}", &[("version", &r.version)])))
+                .child(super::whats_new::release_notes(&r, p))
+        });
         let progress = u.job.as_ref().map(|j| {
             let j = lock(j);
             let bytes = (j.total > 0).then(|| div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(format!("{} / {}", su::human_size(j.done), su::human_size(j.total))));
@@ -338,6 +354,7 @@ impl StudioView {
                     .flex_col()
                     .gap(px(SPACE_14_PX))
                     .child(header)
+                    .children(incoming)
                     .children(progress)
                     .children(outcome)
                     .children(error)

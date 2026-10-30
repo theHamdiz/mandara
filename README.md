@@ -656,6 +656,11 @@ scriptable too: `mandara msg apps owner <id>` and
 - **Polite.** Each new version is announced once, background checks respect
   offline mode, and installs owned by a package manager (pacman, apt, dnf)
   are left to it.
+- **Know what changed.** Every release comes with notes in plain words: the
+  update card shows what's in a new version before you install it, Studio →
+  About → What's new keeps every release's notes, and `mandara changelog`
+  prints them in a terminal (`--since 0.1.0` for everything an update
+  brought). The full history is in [CHANGELOG.md](CHANGELOG.md).
 
 ### Lock screen and Mandara Login
 

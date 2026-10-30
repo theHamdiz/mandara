@@ -8,7 +8,11 @@
 //!   `versions.toml`, refreshes `Cargo.lock`, and optionally commits and tags
 //!   (`v<shell version>` for the shell, `<component>-v<version>` for each).
 //!   With `$GITHUB_OUTPUT` set it reports `released`, `version` and `tag`.
+//!   A shell release also releases `CHANGELOG.md`'s Unreleased notes as the
+//!   new version (commit subjects fill in when nobody wrote any).
 //! - `verify`: fails if any component changed without a bump.
+//! - `changelog [VERSION]`: a release's notes from `CHANGELOG.md` as
+//!   Markdown (the GitHub release body); the shell's version by default.
 //! - `dist --target <triple> [--bin <path>] [--out dist]`: the release
 //!   tarball (binary — its own installer —, desktop entry, icon, docs) and
 //!   its SHA-256.
@@ -237,6 +241,10 @@ fn bump(args: &[String]) -> Result<()> {
         manifest::write_record(&root(), &record, &s.kinds()).map_err(|e| e.to_string())?;
     }
     let app = bumped.iter().find(|(n, _, _)| n == "mandara-app").cloned();
+    if let Some((_, version, _)) = &app {
+        let previous = s.components.iter().find(|c| c.name == "mandara-app").map(|c| c.version.clone()).unwrap_or_default();
+        release_changelog(&previous, version)?;
+    }
     if bumped.is_empty() {
         println!("{}", if init { "versions.toml initialized" } else { "nothing changed since the last release" });
     }
@@ -247,7 +255,7 @@ fn bump(args: &[String]) -> Result<()> {
             None if init => "chore(release): record component versions".to_string(),
             None => "chore(release): component updates".to_string(),
         };
-        run(Command::new("git").args(["add", "-A", "versions.toml", "Cargo.toml", "Cargo.lock", "crates", "xtask", "plugins", "tools"]))?;
+        run(Command::new("git").args(["add", "-A", "versions.toml", "Cargo.toml", "Cargo.lock", "CHANGELOG.md", "crates", "xtask", "plugins", "tools"]))?;
         run(Command::new("git").args(["commit", "--quiet", "-m", &title, "-m", &summary.join("\n")]))?;
         if flag(args, "--tag") {
             for (name, version, tag) in &bumped {
@@ -263,6 +271,68 @@ fn bump(args: &[String]) -> Result<()> {
         };
         writeln!(f, "released={released}\nversion={version}\ntag={tag}\nbumped={}", bumped.len()).map_err(|e| e.to_string())?;
     }
+    Ok(())
+}
+
+/// Commit types that never reach the changelog on their own.
+const QUIET_COMMIT_TYPES: &[&str] = &["chore", "ci", "test", "style", "docs", "build"];
+
+/// The commit subjects since `v<previous>` as changelog lines (the
+/// fallback when nobody wrote notes).
+fn commit_lines(previous: &str) -> Vec<String> {
+    let tag = format!("v{previous}");
+    let range = if git(&["rev-parse", "--verify", "--quiet", &format!("refs/tags/{tag}")]).is_some() { format!("{tag}..HEAD") } else { "HEAD".to_string() };
+    let log = git(&["log", "--format=%s", "--no-merges", &range]).unwrap_or_default();
+    log.lines()
+        .filter(|s| {
+            let kind = s.split([':', '(', '!']).next().unwrap_or_default();
+            !QUIET_COMMIT_TYPES.contains(&kind)
+        })
+        .filter_map(mandara_version::changelog::commit_line)
+        .collect()
+}
+
+/// Today (UTC) as `YYYY-MM-DD`; `SOURCE_DATE_EPOCH` wins for reproducibility.
+fn today() -> String {
+    const SECS_PER_DAY: i64 = 86_400;
+    let unix = std::env::var("SOURCE_DATE_EPOCH").ok().and_then(|s| s.parse::<i64>().ok()).unwrap_or_else(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0));
+    let (y, m, d) = mandara_version::civil_from_days(unix.div_euclid(SECS_PER_DAY));
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// Releases `CHANGELOG.md`'s Unreleased notes as `version`.
+fn release_changelog(previous: &str, version: &str) -> Result<()> {
+    use mandara_version::changelog;
+    let path = root().join("CHANGELOG.md");
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    if changelog::release(&changelog::parse(&text), version).is_some() {
+        return Ok(());
+    }
+    let written = changelog::release(&changelog::parse(&text), changelog::UNRELEASED).is_some_and(|r| !r.is_empty());
+    if !written {
+        // A GitHub Actions annotation; plain output elsewhere.
+        println!("::warning::CHANGELOG.md has no Unreleased notes; {version} lists its commit subjects instead");
+    }
+    std::fs::write(&path, changelog::stamp(&text, version, &today(), &commit_lines(previous))).map_err(|e| format!("{}: {e}", path.display()))?;
+    println!("CHANGELOG.md                Unreleased → {version}");
+    Ok(())
+}
+
+/// `changelog [VERSION]`: one release's notes as Markdown.
+fn changelog(args: &[String]) -> Result<()> {
+    use mandara_version::changelog;
+    let version = match args.iter().find(|a| !a.starts_with("--")) {
+        Some(v) => v.clone(),
+        None => state().components.iter().find(|c| c.name == "mandara-app").map(|c| c.version.clone()).ok_or("no mandara-app component")?,
+    };
+    let path = root().join("CHANGELOG.md");
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let releases = changelog::parse(&text);
+    let release = changelog::release(&releases, &version).ok_or_else(|| format!("CHANGELOG.md has no notes for {version}"))?;
+    if release.is_empty() {
+        return Err(format!("CHANGELOG.md's notes for {version} are empty"));
+    }
+    println!("{}", release.to_markdown());
     Ok(())
 }
 
@@ -423,6 +493,7 @@ fn main() {
         Some("status") => status(rest),
         Some("bump") => bump(rest),
         Some("verify") => verify(),
+        Some("changelog") => changelog(rest),
         Some("dist") => dist(rest),
         Some("plugins") => plugins(rest),
         Some("checksums") => checksums(rest),
@@ -436,7 +507,7 @@ fn main() {
         Some("sandbox") => sandbox::sandbox(rest),
         Some("prune") => prune::prune(rest),
         _ => {
-            eprintln!("usage: cargo xtask <status [--json] | bump [--dry-run] [--commit] [--tag] [--init] | verify | dist --target <triple> [--bin PATH] [--variant NAME] [--out DIR] | plugins [--out DIR] | checksums [--out DIR] | build [--target <triple>] [--variant NAME] [--profile P] [--features F] [--no-default-features] [--out DIR] [--no-readme] | art [--check | --compose [--only ID] [--out DIR]] | delta --old BIN --new BIN --out PATCH | apply-delta --old BIN --patch PATCH --out BIN [--sha256 HEX] | update-part --target <triple> [--variant NAME] [--out DIR] [--previous OLD.tar.gz] | plugin-delta --new ARCHIVE [--old ARCHIVE] --out DIR | resource-check BIN [config.toml] | sandbox <up | down | shot | matte | msg | pointer | studio | shell | audio | notify | env> … | prune [--max-gib N] [--watch MINUTES] [--dir PATH]… [--cargo-cache] [--dry-run]>");
+            eprintln!("usage: cargo xtask <status [--json] | bump [--dry-run] [--commit] [--tag] [--init] | verify | changelog [VERSION] | dist --target <triple> [--bin PATH] [--variant NAME] [--out DIR] | plugins [--out DIR] | checksums [--out DIR] | build [--target <triple>] [--variant NAME] [--profile P] [--features F] [--no-default-features] [--out DIR] [--no-readme] | art [--check | --compose [--only ID] [--out DIR]] | delta --old BIN --new BIN --out PATCH | apply-delta --old BIN --patch PATCH --out BIN [--sha256 HEX] | update-part --target <triple> [--variant NAME] [--out DIR] [--previous OLD.tar.gz] | plugin-delta --new ARCHIVE [--old ARCHIVE] --out DIR | resource-check BIN [config.toml] | sandbox <up | down | shot | matte | msg | pointer | studio | shell | audio | notify | env> … | prune [--max-gib N] [--watch MINUTES] [--dir PATH]… [--cargo-cache] [--dry-run]>");
             std::process::exit(EXIT_USAGE);
         }
     };

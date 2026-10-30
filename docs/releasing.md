@@ -146,7 +146,11 @@ Every push and pull request runs:
 On every push to `main` (not on its own `chore(release)` commits):
 
 1. **Version:** `cargo xtask bump --commit --tag` and `cargo xtask verify`,
-   then the release commit and tags are pushed.
+   then the release commit and tags are pushed. When the shell's version
+   changes, the bump also turns `CHANGELOG.md`'s **Unreleased** notes into
+   the new version's entry (dated today) and starts a fresh Unreleased
+   section. If nobody wrote notes, the release's commit subjects fill a
+   **Changes** list and the job shows a warning.
 2. **Build** (only when the shell's version changed), on Ubuntu 22.04 runners
    so the binaries need glibc ≥ 2.35. Builds are fingerprinted
    (`cargo xtask build --no-readme`) optimized release builds: fat LTO, one
@@ -166,7 +170,9 @@ On every push to `main` (not on its own `chore(release)` commits):
    | `update.json` | update manifest: per target the tarball, `bin/mandara` and patches, with SHA-256s and sizes |
    | `SHA256SUMS` | checksums of everything |
 
-3. **Publish:** a GitHub release `v<version>` with generated notes, all
+3. **Publish:** a GitHub release `v<version>` whose notes are the
+   version's `CHANGELOG.md` entry (`cargo xtask changelog <version>`),
+   followed by the install command, GitHub's generated notes, all
    artifacts, and a signed **build provenance attestation** (verify with
    `gh attestation verify <file> --repo <owner>/<repo>`).
 
@@ -175,6 +181,34 @@ runs on. macOS and Windows have no Wayland compositors to host it.
 
 To re-publish artifacts for the current version without a code change, run
 the Release workflow manually with **rebuild** enabled.
+
+## Changelog
+
+`CHANGELOG.md` is the release notes, written for the people who use
+Mandara: what they'll notice, in plain, friendly sentences, not commit
+messages. It is compiled into the binary (`mandara_version::changelog`), so
+`mandara changelog`, Studio → About → What's new and the update card all
+read it, and its entry for each version becomes that GitHub release's
+notes.
+
+Every user-facing change adds a line under `## Unreleased` in the same
+commit:
+
+```markdown
+## Unreleased
+
+One short paragraph saying what the release is about.
+
+### New          ← also: Improved, Fixed, Under the hood
+- **Short lead.** What changed and why it matters, wrapped over indented
+  lines as needed.
+```
+
+Keep the format strict (it is parsed): `##` version headings, a summary
+paragraph, `###` sections and `-` items. A unit test checks the shipped
+file. Text after a `---` rule in a release body (the install command) isn't
+shown in Studio. Don't edit released entries except to fix mistakes, and
+never add the version heading yourself: the release bump does it.
 
 ## Delta updates
 

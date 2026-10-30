@@ -17,7 +17,7 @@ command's siblings and arguments.
 ## Updating Mandara
 
 ```bash
-mandara update                   # check: "Mandara 0.2.0 is available … smart update: 7.2 MB instead of 42 MB"
+mandara update                   # check: "Mandara 0.2.0 is available … smart update: 7.2 MB instead of 42 MB", then what's in it
 mandara update apply             # binary patch first, full download as the fallback; restarts the shell
 mandara update apply --full      # skip the patch
 mandara update apply --dry-run   # what would be downloaded
@@ -26,6 +26,20 @@ mandara update check --json      # machine-readable
 mandara update plugins           # marketplace plugins with a newer release
 mandara update plugins apply [ID] [--full] [--dry-run] [--force]   # --force: a release that fails the compliance check
 mandara update plugins rollback ID
+```
+
+## What changed
+
+Every release comes with notes in plain words (`CHANGELOG.md`, compiled into
+the binary). Studio → About → What's new shows the same.
+
+```bash
+mandara changelog                   # this version's notes
+mandara changelog 0.1.1             # one release
+mandara changelog --since 0.1.0     # everything newer than 0.1.0, up to this version
+mandara changelog --all             # every release, newest first
+mandara changelog --markdown        # as written in CHANGELOG.md
+mandara changelog --json            # machine-readable
 ```
 
 Only installs Mandara made itself are replaced (`mandara install`'s

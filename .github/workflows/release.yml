@@ -3,9 +3,11 @@
 #      shell binary) a new semantic version — Conventional Commits pick
 #      patch / minor / major — records the content hashes, commits
 #      "chore(release): …" and tags v<version> (+ <component>-v<version>).
+#      A shell release turns CHANGELOG.md's Unreleased notes into the new
+#      version's entry.
 #   2. If the shell's version changed, it builds release artifacts for every
 #      supported platform, packages them and publishes a GitHub release with
-#      checksums and build provenance.
+#      its CHANGELOG.md notes, checksums and build provenance.
 #
 # Mandara is a Wayland shell: it runs on Linux (glibc ≥ 2.35) on x86_64 and
 # aarch64. Artifacts:
@@ -379,6 +381,36 @@ jobs:
         with:
           subject-path: dist/*
 
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: xtask
+
+      # The release notes: this version's CHANGELOG.md entry in plain words
+      # (Studio and `mandara update` show them before updating), then how
+      # to install. Text after the `---` rule isn't shown in Studio.
+      - name: Release notes
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          notes="$RUNNER_TEMP/notes.md"
+          if ! cargo xtask changelog "$v" > "$notes"; then
+            echo "::warning::CHANGELOG.md has no notes for $v"
+            echo "Mandara $v." > "$notes"
+          fi
+          cat >> "$notes" <<'EOF'
+
+          ---
+
+          **Install** with one command:
+
+          ```sh
+          sh -c 'cd "$(mktemp -d)" && curl -fsSL "https://github.com/${{ github.repository }}/releases/latest/download/mandara-$(uname -m)-linux-gnu.tar.gz" | tar xz && exec ./mandara-*/bin/mandara install'
+          ```
+
+          Or download the tarball for your CPU, `tar xf` it and run `./mandara-*/bin/mandara install`. Already on Mandara? Run `mandara update`, or open Studio → About.
+          EOF
+          cat "$notes"
+
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -387,8 +419,7 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" dist/* --clobber
           else
-            gh release create "$tag" dist/* --verify-tag --title "Mandara ${{ needs.version.outputs.version }}" --generate-notes \
-              --notes "Install with one command: \`sh -c 'cd \"\$(mktemp -d)\" && curl -fsSL \"https://github.com/${{ github.repository }}/releases/latest/download/mandara-\$(uname -m)-linux-gnu.tar.gz\" | tar xz && exec ./mandara-*/bin/mandara install'\`. Or download the tarball for your CPU, \`tar xf\` it and run \`./mandara-*/bin/mandara install\`. Upgrade: \`mandara update\`."
+            gh release create "$tag" dist/* --verify-tag --title "Mandara ${{ needs.version.outputs.version }}" --generate-notes --notes-file "$RUNNER_TEMP/notes.md"
           fi
 
       # The AUR recipes in packaging/aur carry the real version and

@@ -3953,6 +3953,7 @@ dependencies = [
  "mandara-services",
  "mandara-theme",
  "mandara-ui",
+ "mandara-version",
  "mandara-wallgen",
  "notify",
  "qrcodegen",
