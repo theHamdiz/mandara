@@ -89,5 +89,5 @@ hash = "16fd579053fb53ae33a448c9c8c42663"
 
 [xtask]
 kind = "tool"
-version = "0.1.1"
-hash = "169d0261b67a27abb1b556d6104a92df"
+version = "0.1.2"
+hash = "9d757b0da4b78b70333dc12c915f7b8c"
