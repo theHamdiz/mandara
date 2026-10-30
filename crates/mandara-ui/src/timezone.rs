@@ -36,6 +36,22 @@ fn pending(job: impl std::future::Future<Output = Result<Value, String>> + Send 
     Output::Pending(rx)
 }
 
+/// Redraws every clock as soon as the wall clock is set or its time zone
+/// changes (from Studio, `timedatectl` or an NTP correction), instead of at
+/// its next minute.
+pub fn init(cx: &mut App) {
+    let changes = timedate::watch_clock();
+    cx.spawn(async move |cx| {
+        while changes.recv().await.is_ok() {
+            cx.update(|cx| {
+                cx.refresh_windows();
+                crate::backdrop::wake(cx);
+            });
+        }
+    })
+    .detach();
+}
+
 pub fn register(r: &mut PluginRegistry) {
     r.command(
         OWNER,

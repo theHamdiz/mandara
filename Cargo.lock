@@ -3758,6 +3758,7 @@ dependencies = [
  "smallvec",
  "tiny-skia",
  "tracing",
+ "uuid",
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-wlr",

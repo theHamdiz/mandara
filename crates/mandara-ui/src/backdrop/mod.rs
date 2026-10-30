@@ -322,6 +322,15 @@ fn until_next_minute() -> Duration {
     Duration::from_millis(MS_PER_MINUTE.unsigned_abs() - into) + MINUTE_WAKE_SLACK
 }
 
+/// Wakes the renderer so time-dependent widgets (the desktop clock) redraw
+/// now: the clock was set, or its time zone changed.
+pub(crate) fn wake(cx: &mut App) {
+    if let Some(driver) = cx.try_global::<GlobalBackdrop>().map(|g| g.0.clone()) {
+        driver.borrow().waker.wake();
+    }
+    refresh(cx);
+}
+
 /// Rebuilds the scene and posts it if it changed.
 pub(crate) fn refresh(cx: &mut App) {
     let Some(driver) = cx.try_global::<GlobalBackdrop>().map(|g| g.0.clone()) else { return };

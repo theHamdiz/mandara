@@ -51,6 +51,16 @@ pub fn shows_seconds(pattern: &str) -> bool {
     ["%S", "%T", "%X", "%r", "%s", "%f", "%3f", "%6f", "%9f", "%.f"].iter().any(|t| pattern.contains(t))
 }
 
+/// The local wall-clock second (or minute) as a number: caches of clock
+/// text key on it. Unlike the UTC timestamp it changes with the time zone,
+/// so a new zone redraws the clock at once instead of keeping the old
+/// local time until the next minute.
+pub fn local_stamp<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>, seconds: bool) -> i64 {
+    const SECS_PER_MIN: i64 = 60;
+    let local = now.naive_local().and_utc().timestamp();
+    if seconds { local } else { local.div_euclid(SECS_PER_MIN) }
+}
+
 /// Formats `t` with a user pattern in the date locale, falling back to
 /// `fallback` when the pattern is invalid.
 pub fn format_with<Tz: chrono::TimeZone>(t: &chrono::DateTime<Tz>, pattern: &str, fallback: &str) -> String
@@ -93,6 +103,19 @@ pub fn arabic_numerals(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Riyadh's clock and Cairo's show different times for the same
+    /// instant: a time-zone change must change the cache key.
+    #[test]
+    fn clock_caches_key_on_local_time() {
+        use chrono::{FixedOffset, TimeZone as _};
+        let instant = chrono::Utc.with_ymd_and_hms(2026, 10, 30, 14, 29, 30).unwrap();
+        let riyadh = instant.with_timezone(&FixedOffset::east_opt(3 * 3600).unwrap());
+        let cairo = instant.with_timezone(&FixedOffset::east_opt(2 * 3600).unwrap());
+        assert_ne!(local_stamp(&riyadh, false), local_stamp(&cairo, false));
+        assert_eq!(local_stamp(&riyadh, false) - local_stamp(&cairo, false), 60, "an hour apart, in minutes");
+        assert_eq!(local_stamp(&riyadh, true) % 60, 30, "seconds keep their second");
+    }
     use chrono::NaiveDate;
 
     #[test]

@@ -1,6 +1,6 @@
 //! XDG locations used by Mandara Shell.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const APP_DIR: &str = "mandara";
 
@@ -76,9 +76,69 @@ pub fn expand_tilde(path: &str) -> PathBuf {
     }
 }
 
+/// The wallpaper folder Mandara used to default to, written into configs
+/// before it followed your Pictures folder.
+pub const LEGACY_WALLPAPER_DIR: &str = "~/Pictures/Wallpapers";
+
+/// `Wallpapers` in your Pictures folder: `XDG_PICTURES_DIR` from
+/// `user-dirs.dirs` (`~/Imagens` in Portuguese), else `~/Pictures`.
+pub fn default_wallpaper_dir() -> PathBuf {
+    wallpaper_dir_in(dirs::picture_dir(), &home())
+}
+
+fn wallpaper_dir_in(pictures: Option<PathBuf>, home: &Path) -> PathBuf {
+    pictures.unwrap_or_else(|| home.join("Pictures")).join("Wallpapers")
+}
+
+/// [`default_wallpaper_dir`] written with `~` (the config's default).
+pub fn default_wallpaper_dir_display() -> String {
+    tilde(&default_wallpaper_dir(), &home())
+}
+
+/// `path` with the home folder written as `~`.
+fn tilde(path: &Path, home: &Path) -> String {
+    match path.strip_prefix(home) {
+        Ok(rest) if !rest.as_os_str().is_empty() => format!("~/{}", rest.display()),
+        _ => path.display().to_string(),
+    }
+}
+
+/// The folder `wallpaper.directory` names. Empty, or the old English
+/// default when that folder doesn't exist, means your Pictures folder's
+/// `Wallpapers`; anything else is used as written.
+pub fn wallpaper_dir(configured: &str) -> PathBuf {
+    resolve_wallpaper_dir(configured, default_wallpaper_dir(), |p| p.is_dir())
+}
+
+fn resolve_wallpaper_dir(configured: &str, default: PathBuf, exists: impl Fn(&Path) -> bool) -> PathBuf {
+    let configured = configured.trim();
+    if configured.is_empty() {
+        return default;
+    }
+    let path = expand_tilde(configured);
+    if configured == LEGACY_WALLPAPER_DIR && !exists(&path) { default } else { path }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Issue #9: the default follows XDG_PICTURES_DIR (e.g. pt_BR ~/Imagens).
+    #[test]
+    fn the_wallpaper_folder_follows_your_pictures_folder() {
+        let home = Path::new("/home/u");
+        assert_eq!(wallpaper_dir_in(Some("/home/u/Imagens".into()), home), Path::new("/home/u/Imagens/Wallpapers"));
+        assert_eq!(wallpaper_dir_in(None, home), Path::new("/home/u/Pictures/Wallpapers"));
+        assert_eq!(tilde(Path::new("/home/u/Imagens/Wallpapers"), home), "~/Imagens/Wallpapers");
+        assert_eq!(tilde(Path::new("/srv/walls"), home), "/srv/walls");
+        let default = PathBuf::from("/home/u/Imagens/Wallpapers");
+        // A config from before keeps the old English default: it follows
+        // Pictures unless that folder really exists (then it's yours).
+        assert_eq!(resolve_wallpaper_dir(LEGACY_WALLPAPER_DIR, default.clone(), |_| false), default);
+        assert!(resolve_wallpaper_dir(LEGACY_WALLPAPER_DIR, default.clone(), |_| true).ends_with("Pictures/Wallpapers"));
+        assert_eq!(resolve_wallpaper_dir("", default.clone(), |_| true), default);
+        assert_eq!(resolve_wallpaper_dir("/srv/walls", default, |_| false), Path::new("/srv/walls"));
+    }
 
     #[test]
     fn tilde_expansion() {

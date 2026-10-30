@@ -486,7 +486,7 @@ pub fn step_static(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>
     }
     ws.states.resize_with(scene.items.len().min(ranges::MAX_WIDGETS), State::default);
     let output = o.output_rect();
-    let minute = now.timestamp().div_euclid(MS_PER_MINUTE / MS_PER_SECOND);
+    let minute = crate::widgets::clock::local_stamp(&now, false);
     let avail = shared.sampler.as_ref().map(|s| availability(&s.reading, s.samples));
     for (i, w) in shown {
         let (p_static, p_live) = planes(i);

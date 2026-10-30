@@ -168,10 +168,11 @@ fn show_next(cx: &mut App) {
         return;
     }
     let Some((request, prompter)) = cx.global_mut::<KeyringUi>().queue.pop_front() else { return };
-    let (w, h) = output_size(cx);
+    // The focused monitor: its display and size together (issue #8).
+    let (display, (w, h)) = crate::outputs::overlay_target(cx);
     // The lock role: its namespace already carries every compositor's
     // no-animation / no-shadow layer rules (the polkit dialog uses it too).
-    let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Lock, gpui::size(px(w), px(h)), None).with_keyboard(KeyboardInteractivity::Exclusive);
+    let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Lock, gpui::size(px(w), px(h)), display).with_keyboard(KeyboardInteractivity::Exclusive);
     spec.layer = Layer::Overlay;
     spec.anchor = Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT;
     let handle = cx
@@ -181,12 +182,6 @@ fn show_next(cx: &mut App) {
     cx.global_mut::<KeyringUi>().window = handle;
 }
 
-fn output_size(cx: &App) -> (f32, f32) {
-    cx.try_global::<crate::overlays::Outputs>()
-        .and_then(|o| o.0.first().map(|g| (g.width as f32, g.height as f32)))
-        .or_else(|| mandara_core::query_outputs().ok().and_then(|o| o.first().map(|g| (g.width as f32, g.height as f32))))
-        .unwrap_or((1920.0, 1080.0))
-}
 
 // ─────────────────────────────── the dialog ───────────────────────────────
 

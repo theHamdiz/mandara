@@ -466,9 +466,9 @@ fn is_open(cx: &App) -> bool {
 }
 
 fn surface(mode: Mode, cx: &App) -> gpui::WindowOptions {
-    let (w, h) = crate::overlays::primary_output_size(cx);
+    let (display, (w, h)) = crate::outputs::overlay_target(cx);
     let keyboard = if mode == Mode::Demo { KeyboardInteractivity::None } else { KeyboardInteractivity::Exclusive };
-    let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Switcher, gpui::size(px(w), px(h)), None).with_keyboard(keyboard);
+    let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Switcher, gpui::size(px(w), px(h)), display).with_keyboard(keyboard);
     spec.layer = Layer::Overlay;
     spec.anchor = Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT;
     spec.window_options()

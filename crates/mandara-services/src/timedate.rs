@@ -73,6 +73,61 @@ pub async fn zones() -> Result<Vec<String>, String> {
     Ok(list)
 }
 
+/// Wakes whenever the wall clock or its time zone changes, so clocks redraw
+/// at once instead of at their next minute: a kernel timer cancelled by
+/// any clock step (NTP corrections, `date -s`), and timedated's
+/// `PropertiesChanged` (time zone, network time). Neither ticks.
+pub fn watch_clock() -> async_channel::Receiver<()> {
+    let (tx, rx) = async_channel::bounded(1);
+    let steps = tx.clone();
+    if let Err(e) = std::thread::Builder::new().name("mandara-clock-steps".into()).spawn(move || watch_steps(&steps)) {
+        tracing::warn!("clock step watch: {e}");
+    }
+    crate::runtime::spawn("timedate-watch", async move {
+        use futures::StreamExt as _;
+        let watch = async {
+            let conn = crate::runtime::system().await?;
+            let props = crate::actor::proxy(&conn, TIMEDATE, TIMEDATE_PATH, "org.freedesktop.DBus.Properties").await?;
+            let mut changes = props.receive_signal("PropertiesChanged").await?;
+            while changes.next().await.is_some() {
+                // Full: a wake-up is already pending.
+                let _ = tx.try_send(());
+            }
+            zbus::Result::Ok(())
+        };
+        if let Err(e) = watch.await {
+            tracing::info!("time zone watch: {e}");
+        }
+    });
+    rx
+}
+
+/// Blocks on a `CLOCK_REALTIME` timerfd armed far in the future with
+/// `CANCEL_ON_SET`: every clock step cancels it (`ECANCELED`), then it's
+/// armed again.
+fn watch_steps(tx: &async_channel::Sender<()>) {
+    use rustix::time::{Itimerspec, TimerfdClockId, TimerfdFlags, TimerfdTimerFlags, Timespec, timerfd_create, timerfd_settime};
+    /// About 2100: never reached, only cancelled.
+    const FAR_FUTURE_SECS: i64 = 4_102_444_800;
+    let Ok(fd) = timerfd_create(TimerfdClockId::Realtime, TimerfdFlags::CLOEXEC) else { return };
+    let far = Itimerspec { it_interval: Timespec { tv_sec: 0, tv_nsec: 0 }, it_value: Timespec { tv_sec: FAR_FUTURE_SECS, tv_nsec: 0 } };
+    loop {
+        if timerfd_settime(&fd, TimerfdTimerFlags::ABSTIME | TimerfdTimerFlags::CANCEL_ON_SET, &far).is_err() {
+            return;
+        }
+        let mut buf = [0u8; 8];
+        match rustix::io::read(&fd, &mut buf) {
+            Err(rustix::io::Errno::CANCELED) => {
+                if tx.try_send(()).is_err() && tx.is_closed() {
+                    return;
+                }
+            }
+            Err(rustix::io::Errno::INTR) => {}
+            _ => return,
+        }
+    }
+}
+
 /// Whether `zone` is an IANA time zone name.
 pub fn is_zone(zone: &str) -> bool {
     zone.parse::<chrono_tz::Tz>().is_ok()

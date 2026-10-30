@@ -102,7 +102,7 @@ const CONFIG_DEMO: &str = include_str!("config.demo.toml");
 const CONFIG_HERO: &str = include_str!("config.hero.toml");
 
 const USAGE: &str = "usage: cargo xtask sandbox <command>
-  up [--bin PATH] [--size WxH] [--scale S] [--config demo|hero|FILE] [--studio-size WxH]
+  up [--bin PATH] [--size WxH] [--scale S] [--second WxH] [--config demo|hero|FILE] [--studio-size WxH]
   down
   shot OUT.png
   matte OUT.png [--region X0 Y0 X1 Y1] [--margin PX]
@@ -121,6 +121,9 @@ struct State {
     width: u32,
     height: u32,
     scale: f64,
+    /// `up --second WxH`: a second output to the right of the first.
+    #[serde(default)]
+    second: Option<(u32, u32)>,
 }
 
 impl State {
@@ -403,8 +406,9 @@ fn fresh_runtime(sb: &Sandbox) -> Result<()> {
 }
 
 fn mango_config(state: &State, studio: (u32, u32)) -> String {
+    let second = state.second.map(|(w, h)| format!("\n{}", headless::second_monitor_rule(w, h, REFRESH, state.layout().0))).unwrap_or_default();
     format!(
-        "{}\nanimations=0\nborder_px=0\nshadows=0\nborder_radius={STUDIO_RADIUS}\n{}\n",
+        "{}{second}\nanimations=0\nborder_px=0\nshadows=0\nborder_radius={STUDIO_RADIUS}\n{}\n",
         headless::monitor_rule(state.width, state.height, REFRESH, state.scale),
         studio_rule(studio)
     )
@@ -420,7 +424,8 @@ fn up(sb: &Sandbox, args: &[String]) -> Result<()> {
     let (width, height) = opt(args, "--size").map(|s| parse_size(&s)).transpose()?.unwrap_or(DEFAULT_SIZE);
     let scale = opt(args, "--scale").map(|s| s.parse::<f64>().map_err(|e| format!("--scale: {e}"))).transpose()?.unwrap_or(DEFAULT_SCALE);
     let studio = opt(args, "--studio-size").map(|s| parse_size(&s)).transpose()?.unwrap_or(STUDIO_SIZE);
-    let state = State { bin, width, height, scale };
+    let second = opt(args, "--second").map(|s| parse_size(&s)).transpose()?;
+    let state = State { bin, width, height, scale, second };
 
     fresh_runtime(sb)?;
     demo::ensure(sb)?;
@@ -447,7 +452,7 @@ fn up(sb: &Sandbox, args: &[String]) -> Result<()> {
     }
 
     let mut mango = sb.command("mango");
-    mango.env("WLR_BACKENDS", "headless").env("WLR_LIBINPUT_NO_DEVICES", "1").env("WLR_HEADLESS_OUTPUTS", "1").arg("-c").arg(sb.mango_conf());
+    mango.env("WLR_BACKENDS", "headless").env("WLR_LIBINPUT_NO_DEVICES", "1").env("WLR_HEADLESS_OUTPUTS", if state.second.is_some() { "2" } else { "1" }).arg("-c").arg(sb.mango_conf());
     sb.start("mango", &mut mango)?;
     let ready = || headless::wayland_socket(&sb.runtime).is_some() && headless::mango_socket(&sb.runtime).is_some();
     if !proc::wait_until(headless::COMPOSITOR_TIMEOUT, ready) {
@@ -729,7 +734,7 @@ mod tests {
 
     #[test]
     fn layout_is_logical() {
-        let s = State { bin: PathBuf::new(), width: 2560, height: 1440, scale: 1.5 };
+        let s = State { bin: PathBuf::new(), width: 2560, height: 1440, scale: 1.5, second: None };
         assert_eq!(s.layout(), (1707, 960));
     }
 

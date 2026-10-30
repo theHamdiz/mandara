@@ -396,7 +396,7 @@ impl StudioView {
                 st(cx).display = res.ok().and_then(|o| o.first().map(|g| (g.width.max(1) as u32, g.height.max(1) as u32)));
             });
         }
-        let dir = s.output_dir(&mandara_config::paths::expand_tilde(&cfg.wallpaper.directory));
+        let dir = s.output_dir(&mandara_config::paths::wallpaper_dir(&cfg.wallpaper.directory));
         let g = st(cx);
         if g.recent_dir.as_ref() != Some(&dir) {
             g.recent_dir = Some(dir);
@@ -938,7 +938,7 @@ impl StudioView {
         let result = st(cx).result.clone().map(|res| self.wallgen_result(res, p, cx));
 
         // Where files go, and whether they become the wallpaper.
-        let dir = s.output_dir(&mandara_config::paths::expand_tilde(&cfg.wallpaper.directory));
+        let dir = s.output_dir(&mandara_config::paths::wallpaper_dir(&cfg.wallpaper.directory));
         let folder = self.wallgen_folder_field(s, cx);
         let apply = s.apply;
         let output = div()
@@ -1403,7 +1403,7 @@ impl StudioView {
 
     fn wallgen_recent(&mut self, s: &WallgenSettings, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let fonts = mandara_ui::fonts::fonts(cx);
-        let dir = s.output_dir(&mandara_config::paths::expand_tilde(&cfg.wallpaper.directory));
+        let dir = s.output_dir(&mandara_config::paths::wallpaper_dir(&cfg.wallpaper.directory));
         let shown = st(cx).recent.as_ref().map_or(0, Vec::len);
         let fit = grid::fit(self.page.column_w, RECENT_GRID).balanced(shown);
         let thumb_w = fit.card_w;

@@ -448,6 +448,7 @@ fn run_shell() -> Result<()> {
         mandara_ui::style::init(cx);
         mandara_ui::calendar::init(cx);
         mandara_ui::location::init(cx);
+        mandara_ui::timezone::init(cx);
         mandara_ui::slideshow::init(cx);
         mandara_ui::plugins::wallpaper_generator::init(cx);
         mandara_ui::polkit::init(cx);
@@ -688,30 +689,40 @@ fn open_gpui_wallpaper(display: Option<gpui::DisplayId>, (w, h): (f32, f32), mon
 
 /// GPUI desktop backgrounds on every output (the software renderer's fallback).
 fn open_gpui_wallpapers(outputs: &[mandara_core::OutputGeometry], cx: &mut App) {
-    let displays = cx.displays();
-    for i in 0..displays.len().max(1) {
-        let display = displays.get(i).map(|d| d.id());
-        let geo = outputs.get(i);
-        let (w, h) = geo
-            .map(|g| (g.width as f32, g.height as f32))
-            .or_else(|| displays.get(i).map(|d| (f32::from(d.bounds().size.width), f32::from(d.bounds().size.height))))
-            .unwrap_or(FALLBACK_OUTPUT);
-        open_gpui_wallpaper(display, (w, h), geo.map(|g| g.name.clone()).unwrap_or_default(), cx);
+    for (display, geo, (w, h)) in surfaces_per_output(outputs, cx) {
+        open_gpui_wallpaper(display, (w, h), geo.map(|g| g.name).unwrap_or_default(), cx);
     }
+}
+
+/// Every display with its output's geometry and logical size, paired by
+/// output name: GPUI and the xdg-output query list outputs in their own
+/// orders, and pairing by position gave each display the other monitor's
+/// size after a compositor reload (issue #8). One entry with no display
+/// when GPUI reports none.
+fn surfaces_per_output(outputs: &[mandara_core::OutputGeometry], cx: &App) -> Vec<(Option<gpui::DisplayId>, Option<mandara_core::OutputGeometry>, (f32, f32))> {
+    let displays = cx.displays();
+    let keys: Vec<mandara_core::DisplayKey> = displays.iter().map(|d| mandara_core::DisplayKey::of(d.as_ref())).collect();
+    let mut paired: Vec<(Option<gpui::DisplayId>, Option<mandara_core::OutputGeometry>)> = mandara_core::pair_displays(&keys, outputs).into_iter().map(|(id, g)| (Some(id), g)).collect();
+    if paired.is_empty() {
+        paired.push((None, outputs.first().cloned()));
+    }
+    paired
+        .into_iter()
+        .map(|(display, geo)| {
+            let size = geo
+                .as_ref()
+                .map(|g| (g.width as f32, g.height as f32))
+                .or_else(|| displays.iter().find(|d| Some(d.id()) == display).map(|d| (f32::from(d.bounds().size.width), f32::from(d.bounds().size.height))))
+                .unwrap_or(FALLBACK_OUTPUT);
+            (display, geo, size)
+        })
+        .collect()
 }
 
 /// Opens the shell surface + exclusion strip on every output.
 fn open_surfaces(outputs: &[mandara_core::OutputGeometry], cx: &mut App) {
-    let displays = cx.displays();
-    let count = displays.len().max(1);
-    for i in 0..count {
-        let display = displays.get(i).map(|d| d.id());
-        let geo = outputs.get(i);
-        let (w, h) = geo
-            .map(|g| (g.width as f32, g.height as f32))
-            .or_else(|| displays.get(i).map(|d| (f32::from(d.bounds().size.width), f32::from(d.bounds().size.height))))
-            .unwrap_or(FALLBACK_OUTPUT);
-        let monitor = geo.map(|g| g.name.clone()).unwrap_or_default();
+    for (display, geo, (w, h)) in surfaces_per_output(outputs, cx) {
+        let monitor = geo.map(|g| g.name).unwrap_or_default();
 
         // Invisible strips reserving the bar's / sidebar's space, created
         // on demand (only the edges that currently reserve).

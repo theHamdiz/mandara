@@ -57,6 +57,12 @@ pub fn monitor_rule(width: u32, height: u32, refresh: u32, scale: f64) -> String
     format!("monitor_rule=name:^HEADLESS-1$,width:{width},height:{height},refresh:{refresh},x:0,y:0,scale:{scale},primary:1")
 }
 
+/// A second headless output (`HEADLESS-2`) at scale 1, `x` px right of the
+/// first: multi-monitor checks.
+pub fn second_monitor_rule(width: u32, height: u32, refresh: u32, x: u32) -> String {
+    format!("monitor_rule=name:^HEADLESS-2$,width:{width},height:{height},refresh:{refresh},x:{x},y:0,scale:1")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

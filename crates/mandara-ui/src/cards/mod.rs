@@ -348,12 +348,12 @@ fn reconcile(cx: &mut App) {
         }
     }
     host.open = keep;
-    for (key, i) in want {
+    for (key, _) in want {
         if host.open.iter().any(|(k, _)| *k == key) {
             continue;
         }
         let rect = Bounds { origin: point(px(key.rect.0 as f32), px(key.rect.1 as f32)), size: size(px(key.rect.2 as f32), px(key.rect.3 as f32)) };
-        let display = cx.displays().get(i).map(|d| d.id());
+        let display = crate::outputs::display_for(&key.output, cx);
         let opts = options(rect, display);
         let widget = key.widget.clone();
         let opened = match key.card.as_str() {

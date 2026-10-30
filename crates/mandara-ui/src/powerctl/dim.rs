@@ -141,16 +141,18 @@ impl Render for DimView {
 pub fn start(duration: Duration, stage: DimStage, cx: &mut App) {
     stop_now(cx);
     let displays = cx.displays();
-    let outputs = cx.try_global::<crate::overlays::Outputs>().map(|o| o.0.clone()).unwrap_or_default();
-    let count = displays.len().max(1);
-    let mut windows = Vec::with_capacity(count);
-    for i in 0..count {
-        let (w, h) = outputs
-            .get(i)
+    // Each display with its own output's size (paired by name).
+    let mut paired: Vec<(Option<gpui::DisplayId>, Option<mandara_core::OutputGeometry>)> = crate::outputs::paired(cx).into_iter().map(|(id, g)| (Some(id), g)).collect();
+    if paired.is_empty() {
+        paired.push((None, None));
+    }
+    let mut windows = Vec::with_capacity(paired.len());
+    for (display, geo) in paired {
+        let (w, h) = geo
             .map(|g| (g.width as f32, g.height as f32))
-            .or_else(|| displays.get(i).map(|d| (f32::from(d.bounds().size.width), f32::from(d.bounds().size.height))))
+            .or_else(|| displays.iter().find(|d| Some(d.id()) == display).map(|d| (f32::from(d.bounds().size.width), f32::from(d.bounds().size.height))))
             .unwrap_or(FALLBACK_OUTPUT);
-        let spec = LayerSurfaceSpec::overlay(SurfaceRole::Osd, size(px(w), px(h)), displays.get(i).map(|d| d.id()));
+        let spec = LayerSurfaceSpec::overlay(SurfaceRole::Osd, size(px(w), px(h)), display);
         let started = Instant::now();
         match cx.open_window(spec.window_options(), move |_, cx| cx.new(|_| DimView { started, duration, stage, leaving: None, left_at_alpha: 0.0, input_cleared: false })) {
             Ok(handle) => windows.push(handle),

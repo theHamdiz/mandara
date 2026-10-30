@@ -183,7 +183,7 @@ impl PanelText {
     fn update_events(&mut self, now: &DateTime<Local>, cfg: &mandara_config::ShellConfig, cx: &gpui::App) {
         let Some(store) = crate::calendar::store(cx) else { return };
         let store = store.read(cx);
-        let minute = now.timestamp().div_euclid(MS_PER_MIN as i64 / MS_PER_S as i64);
+        let minute = crate::widgets::clock::local_stamp(&now, false);
         let key = (store.generation, minute, cfg.calendar.agenda_days, cfg.calendar.enabled && cfg.calendar.hide_past);
         if self.events_key == Some(key) {
             return;
@@ -235,7 +235,7 @@ impl PanelText {
         // The date language (an override of the interface's) is part of
         // every key, so changing it re-renders without a restart.
         let locale = fmt::locale();
-        let minute = (now.timestamp().div_euclid(MS_PER_MIN as i64 / MS_PER_S as i64), lang, locale, big_clock);
+        let minute = (crate::widgets::clock::local_stamp(&now, false), lang, locale, big_clock);
         if self.minute != Some(minute) {
             self.minute = Some(minute);
             self.hh_mm = fmt::format_with(now, big_clock, "%H:%M").into();
@@ -290,7 +290,7 @@ pub fn register(r: &mut PluginRegistry) {
                 let (vertical, clock_24h) = (cfg.bar.position.is_vertical(), cfg.general.clock_24h);
                 redraw_in(until_next_tick(&now, seconds), window, cx);
                 let mut cache = bar_text.borrow_mut();
-                let stamp = if seconds { now.timestamp() } else { now.timestamp().div_euclid(MS_PER_MIN as i64 / MS_PER_S as i64) };
+                let stamp = crate::widgets::clock::local_stamp(&now, seconds);
                 let key = (stamp, mandara_i18n::language(), fmt::locale(), time_pattern, date_pattern, show_date);
                 if cache.key.as_ref() != Some(&key) {
                     cache.time = fmt::format_with(&now, &key.3, &fallback).into();

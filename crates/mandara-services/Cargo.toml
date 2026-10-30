@@ -42,7 +42,7 @@ rustfft.workspace = true
 flate2.workspace = true
 tar.workspace = true
 toml.workspace = true
-rustix = { workspace = true, features = ["event"] }
+rustix = { workspace = true, features = ["event", "time"] }
 serde.workspace = true
 serde_json.workspace = true
 # world clock, net speed, authenticator, color picker plugins

@@ -540,7 +540,7 @@ impl LockApp for LockScreen {
             self.finish_attempt(result);
             self.dirty = true;
         }
-        let minute = chrono::Local::now().timestamp() / 60;
+        let minute = crate::widgets::clock::local_stamp(&chrono::Local::now(), false);
         if minute != self.minute {
             self.minute = minute;
             self.dirty = true;

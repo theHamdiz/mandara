@@ -30,6 +30,7 @@ pub mod launcher_ext;
 pub mod launcher_place;
 pub mod location;
 pub mod timezone;
+pub mod outputs;
 pub mod lock;
 pub mod night_light;
 pub mod osd;

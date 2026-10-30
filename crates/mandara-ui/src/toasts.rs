@@ -78,7 +78,7 @@ pub fn target_display(kind: SurfaceKind, cx: &App) -> Option<gpui::DisplayId> {
     }
     let focused = crate::hub::hub(cx).read(cx).focused.as_ref().map(|c| c.monitor.clone());
     let pick = focused.and_then(|m| allowed.iter().copied().find(|&i| outputs[i].name == m)).or_else(|| allowed.first().copied())?;
-    cx.displays().get(pick).map(|d| d.id())
+    crate::outputs::display_for(&outputs[pick].name, cx)
 }
 
 /// What the surface was opened with; a change reopens it.

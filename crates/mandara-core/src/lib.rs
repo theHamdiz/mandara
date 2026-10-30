@@ -19,7 +19,7 @@ pub use input_mask::InputMaskRegistry;
 pub use layer::{EXCLUSION_STRIP_THICKNESS_PX, LayerSurfaceSpec, SHELL_APP_ID, STUDIO_APP_ID, SurfaceRole};
 pub use material::{ToGpui, glass_fill, glass_rim, glass_rim_width, grain_overlay, oklab_gradient};
 pub use motion::FrameClock;
-pub use outputs::{OutputGeometry, query_outputs};
+pub use outputs::{DisplayKey, OutputGeometry, output_uuid, pair_displays, query_outputs};
 pub use spring::{SpringConfig, SpringValue, Springable};
 pub use theme::{GlobalTheme, frame_palette, init_theme, theme_entity};
 

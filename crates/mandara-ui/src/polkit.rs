@@ -218,8 +218,9 @@ fn show_next(cx: &mut App) {
         return;
     }
     let Some((request, agent)) = cx.global::<PolkitUi>().queue.front().cloned() else { return };
-    let (w, h) = output_size(cx);
-    let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Lock, gpui::size(px(w), px(h)), None).with_keyboard(KeyboardInteractivity::Exclusive);
+    // The focused monitor: its display and size together (issue #8).
+    let (display, (w, h)) = crate::outputs::overlay_target(cx);
+    let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Lock, gpui::size(px(w), px(h)), display).with_keyboard(KeyboardInteractivity::Exclusive);
     spec.layer = Layer::Overlay;
     spec.anchor = Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT;
     let handle = cx
@@ -229,12 +230,6 @@ fn show_next(cx: &mut App) {
     cx.global_mut::<PolkitUi>().window = handle;
 }
 
-fn output_size(cx: &App) -> (f32, f32) {
-    cx.try_global::<crate::overlays::Outputs>()
-        .and_then(|o| o.0.first().map(|g| (g.width as f32, g.height as f32)))
-        .or_else(|| mandara_core::query_outputs().ok().and_then(|o| o.first().map(|g| (g.width as f32, g.height as f32))))
-        .unwrap_or((1920.0, 1080.0))
-}
 
 // ─────────────────────────────── the dialog ───────────────────────────────
 

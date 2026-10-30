@@ -79,7 +79,7 @@ pub fn list(dir: &Path) -> Vec<PathBuf> {
 }
 
 pub fn directory(cx: &App) -> PathBuf {
-    mandara_config::paths::expand_tilde(&config(cx).read(cx).get().wallpaper.directory)
+    mandara_config::paths::wallpaper_dir(&config(cx).read(cx).get().wallpaper.directory)
 }
 
 /// A cache key that changes when the file does.
@@ -637,7 +637,7 @@ impl WallpaperView {
         let tone = self.tone.as_ref().map(|t| desktop::region_tone(t, (l.center.0 / w, l.center.1 / h), (l.size * 1.3 / w, l.block_h * 0.6 / h)));
         let palette = mandara_core::frame_palette(window, cx);
         let ink = desktop::ink_for(tone, palette.primary);
-        let minute = now.timestamp() / 60;
+        let minute = crate::widgets::clock::local_stamp(&now, false);
         let date = if wc.show_date {
             if self.date.as_ref().is_none_or(|(m, _)| *m != minute) {
                 self.date = Some((minute, desktop::date_line(cfg, wc.show_weather, cx)));

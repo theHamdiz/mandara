@@ -1370,7 +1370,8 @@ impl Default for WallpaperConfig {
         Self {
             enabled: true,
             picker: true,
-            directory: "~/Pictures/Wallpapers".into(),
+            // Your Pictures folder's Wallpapers (`~/Imagens/…` in Portuguese).
+            directory: crate::paths::default_wallpaper_dir_display(),
             match_colors: false,
             picker_style: PickerStyle::Slices,
             picker_size: 1.0,

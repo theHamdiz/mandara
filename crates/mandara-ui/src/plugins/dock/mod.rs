@@ -1612,8 +1612,7 @@ pub(crate) fn output_size(monitor: &str, cx: &App) -> (f32, f32) {
 }
 
 pub(crate) fn display_for(monitor: &str, cx: &App) -> Option<gpui::DisplayId> {
-    let i = outputs(cx).iter().position(|o| o.name == monitor)?;
-    cx.displays().get(i).map(|d| d.id())
+    crate::outputs::display_for(monitor, cx)
 }
 
 /// What a dock surface was opened with (a change reopens it).
@@ -1670,14 +1669,14 @@ fn reconcile(cx: &mut App) {
         !close
     });
     for name in to_open {
-        let Some((i, o)) = all.iter().enumerate().find(|(_, o)| o.name == name) else { continue };
+        let Some(o) = all.iter().find(|o| o.name == name) else { continue };
         let (anchor, sz) = match d.position {
             DockPosition::Bottom => (Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT, (o.width as f32, thickness)),
             DockPosition::Left => (Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM, (thickness, o.height as f32)),
             DockPosition::Right => (Anchor::RIGHT | Anchor::TOP | Anchor::BOTTOM, (thickness, o.height as f32)),
         };
         let layer = if d.overlay { Layer::Overlay } else { Layer::Top };
-        let display = cx.displays().get(i).map(|d| d.id());
+        let display = crate::outputs::display_for(&o.name, cx);
         // A zone of 0 keeps clear of other surfaces' zones (a bottom bar).
         let options = layer_options(SurfaceRole::Dock, layer, anchor, sz, Some(exclusive.map(|z| z as f32).unwrap_or(0.0)), KeyboardInteractivity::None, display);
         let n = o.name.clone();

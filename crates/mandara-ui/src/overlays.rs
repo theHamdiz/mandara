@@ -97,21 +97,19 @@ const AUTO_PASTE_DELAY: std::time::Duration = std::time::Duration::from_millis(1
 pub struct Outputs(pub Vec<mandara_core::OutputGeometry>);
 impl gpui::Global for Outputs {}
 
-/// Logical size of the primary output (for other full-output overlays).
+/// Logical size of the output full-screen overlays open on (the focused
+/// monitor's, see [`crate::outputs::overlay_target`]).
 pub fn primary_output_size(cx: &App) -> (f32, f32) {
     output_size(cx)
 }
 
-/// Logical size of the primary output (overlays cover it entirely).
+/// Logical size of the focused monitor (overlays cover it entirely).
 fn output_size(cx: &App) -> (f32, f32) {
-    cx.try_global::<Outputs>()
-        .and_then(|o| o.0.first().map(|g| (g.width as f32, g.height as f32)))
-        .or_else(|| mandara_core::query_outputs().ok().and_then(|o| o.first().map(|g| (g.width as f32, g.height as f32))))
-        .unwrap_or((1920.0, 1080.0))
+    crate::outputs::overlay_target(cx).1
 }
 
-fn overlay_spec(role: SurfaceRole, w: f32, h: f32) -> gpui::WindowOptions {
-    let mut spec = LayerSurfaceSpec::overlay(role, gpui::size(px(w), px(h)), None).with_keyboard(KeyboardInteractivity::Exclusive);
+fn overlay_spec(role: SurfaceRole, w: f32, h: f32, display: Option<gpui::DisplayId>) -> gpui::WindowOptions {
+    let mut spec = LayerSurfaceSpec::overlay(role, gpui::size(px(w), px(h)), display).with_keyboard(KeyboardInteractivity::Exclusive);
     spec.layer = Layer::Overlay;
     spec.anchor = Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT;
     spec.window_options()
@@ -1132,8 +1130,7 @@ fn viewport_settled(window: &Window, expected: (f32, f32)) -> bool {
 /// first one.
 fn focused_output(cx: &App) -> Option<mandara_core::OutputGeometry> {
     let outputs = &cx.try_global::<Outputs>()?.0;
-    let focused = cx.try_global::<crate::hub::GlobalHub>().and_then(|h| h.0.read(cx).focused.as_ref().map(|c| c.monitor.clone()));
-    focused.and_then(|m| outputs.iter().find(|o| o.name == m)).or_else(|| outputs.first()).cloned()
+    crate::outputs::focused_monitor(cx).and_then(|m| outputs.iter().find(|o| o.name == m)).or_else(|| outputs.first()).cloned()
 }
 
 impl LauncherView {
@@ -2003,20 +2000,23 @@ pub fn init_overlays(cx: &mut App) {
     cx.observe(&shell, |shell, cx| {
         let (launcher, session, picker) = (shell.read(cx).launcher_open, shell.read(cx).session_open, shell.read(cx).wallpaper_open);
         let mut overlays = std::mem::take(cx.global_mut::<Overlays>());
-        let (w, h) = if (launcher && !is_open(&overlays.launcher, cx)) || (session && !is_open(&overlays.session, cx)) || (picker && !is_open(&overlays.picker, cx)) {
-            output_size(cx)
+        // Sized for, and placed on, the focused monitor: sized for the first
+        // output while the compositor put it on another, an overlay covered
+        // only part of a larger display (issue #8).
+        let (display, (w, h)) = if (launcher && !is_open(&overlays.launcher, cx)) || (session && !is_open(&overlays.session, cx)) || (picker && !is_open(&overlays.picker, cx)) {
+            crate::outputs::overlay_target(cx)
         } else {
-            (1920.0, 1080.0)
+            (None, (1920.0, 1080.0))
         };
         if launcher && !is_open(&overlays.launcher, cx) {
             overlays.launcher = cx
-                .open_window(overlay_spec(SurfaceRole::Launcher, w, h), |window, cx| cx.new(|cx| LauncherView::new(window, cx)))
+                .open_window(overlay_spec(SurfaceRole::Launcher, w, h, display), |window, cx| cx.new(|cx| LauncherView::new(window, cx)))
                 .map_err(|e| tracing::error!("launcher: {e:#}"))
                 .ok();
         }
         if session && !is_open(&overlays.session, cx) {
             overlays.session = cx
-                .open_window(overlay_spec(SurfaceRole::Lock, w, h), |window, cx| cx.new(|cx| SessionView::new(window, cx)))
+                .open_window(overlay_spec(SurfaceRole::Lock, w, h, display), |window, cx| cx.new(|cx| SessionView::new(window, cx)))
                 .map_err(|e| tracing::error!("session: {e:#}"))
                 .ok();
         }
@@ -2028,18 +2028,18 @@ pub fn init_overlays(cx: &mut App) {
             // picker covered only part of a larger display.
             let (target, known) = match picker_target {
                 Some((m, size)) => (Some(m), size),
-                None => (cx.try_global::<crate::hub::GlobalHub>().and_then(|h| h.0.read(cx).focused.as_ref().map(|c| c.monitor.clone())), None),
+                None => (None, None),
             };
-            let display = target.as_deref().and_then(|m| crate::plugins::dock::display_for(m, cx));
-            let (w, h) = match (&target, display, known) {
+            let asked = target.as_deref().and_then(|m| crate::outputs::display_for(m, cx));
+            let (display, (w, h)) = match (&target, asked, known) {
                 // The size its caller measured (an output connected after
                 // startup isn't in the output list).
-                (_, _, Some(size)) => size,
-                (Some(m), Some(_), None) => crate::plugins::dock::output_size(m, cx),
-                _ => (w, h),
+                (_, d, Some(size)) => (d, size),
+                (Some(m), Some(d), None) => (Some(d), crate::plugins::dock::output_size(m, cx)),
+                // Else the focused monitor, as for the other overlays.
+                _ => (display, (w, h)),
             };
-            let mut options = overlay_spec(SurfaceRole::Launcher, w, h);
-            options.display_id = display;
+            let options = overlay_spec(SurfaceRole::Launcher, w, h, display);
             overlays.picker = cx
                 .open_window(options, move |window, cx| cx.new(|cx| crate::wallpaper::PickerView::new((w, h), window, cx)))
                 .map_err(|e| tracing::error!("wallpaper picker: {e:#}"))

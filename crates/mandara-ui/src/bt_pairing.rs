@@ -71,8 +71,6 @@ const GRADIENT_DEG: f32 = 135.0;
 const GONE: f32 = 0.01;
 /// Viewport sizes within this many px count as the requested size.
 const SETTLE_EPSILON_PX: f32 = 2.0;
-/// Fallback output size before the outputs are known.
-const FALLBACK_OUTPUT: (f32, f32) = (1920.0, 1080.0);
 /// Longest PIN BlueZ takes.
 const PIN_MAX_CHARS: usize = 16;
 const PASSKEY_DIGITS: usize = 6;
@@ -136,20 +134,14 @@ fn is_open(handle: &Option<WindowHandle<PairingDialog>>, cx: &App) -> bool {
     handle.as_ref().is_some_and(|h| cx.windows().iter().any(|w| w.window_id() == h.window_id()))
 }
 
-fn output_size(cx: &App) -> (f32, f32) {
-    cx.try_global::<crate::overlays::Outputs>()
-        .and_then(|o| o.0.first().map(|g| (g.width as f32, g.height as f32)))
-        .or_else(|| mandara_core::query_outputs().ok().and_then(|o| o.first().map(|g| (g.width as f32, g.height as f32))))
-        .unwrap_or(FALLBACK_OUTPUT)
-}
-
 fn show_next(cx: &mut App) {
     if is_open(&cx.global::<PairingUi>().window, cx) {
         return;
     }
     let Some((request, agent)) = cx.global_mut::<PairingUi>().queue.pop_front() else { return };
-    let (w, h) = output_size(cx);
-    let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Lock, gpui::size(px(w), px(h)), None).with_keyboard(KeyboardInteractivity::Exclusive);
+    // The focused monitor: its display and size together (issue #8).
+    let (display, (w, h)) = crate::outputs::overlay_target(cx);
+    let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Lock, gpui::size(px(w), px(h)), display).with_keyboard(KeyboardInteractivity::Exclusive);
     spec.layer = Layer::Overlay;
     spec.anchor = Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT;
     let handle = cx

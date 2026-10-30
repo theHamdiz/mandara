@@ -7,6 +7,8 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+# The display ↔ output pairing (GPUI's display uuid is v5 of the output name).
+uuid = { version = "1", features = ["v5"] }
 gpui.workspace = true
 palette.workspace = true
 smallvec.workspace = true

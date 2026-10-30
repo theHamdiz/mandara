@@ -6,10 +6,28 @@ About → What's new shows it too.
 
 ## Unreleased
 
-Two fixes for the productivity widgets, thanks to reports on GitHub.
+Multi-monitor setups get the right sizes everywhere, the clock keeps up
+with time changes, and a handful of fixes from your reports on GitHub.
 
 ### Fixed
 
+- **The bar and dock fit each monitor again.** With two monitors, starting
+  Mandara right after a compositor reload could give each monitor's bar
+  and dock the other one's size, leaving the laptop without a bar and a
+  small bar floating in the middle of the big screen. Mandara now matches
+  every surface to its monitor by name, so the order the monitors are
+  listed in no longer matters.
+- **Full-screen overlays cover the screen you're on.** The session menu,
+  wallpaper picker, window switcher and password dialogs opened on a
+  bigger second monitor used to be laptop-sized and centred. They now open
+  on the monitor you're using, at its size.
+- **The clock follows time changes right away.** Changing the time zone,
+  switching on automatic time, or the clock being corrected from the
+  internet now updates the bar, the desktop clock and the lock screen at
+  once, instead of after you change the clock format or wait for the next
+  minute.
+- **Even buttons in Themes → Looks.** "Restore my look" was taller than
+  the buttons next to it. They're all the same size now.
 - **The new-note button works again.** Pressing + in the Notes panel or
   card created a note and threw it away in the same moment, because
   Mandara tidies up empty notes you leave behind and the brand-new note
@@ -22,6 +40,11 @@ Two fixes for the productivity widgets, thanks to reports on GitHub.
   have a settings button that opens their Studio page, where you choose
   how long focus sessions, short breaks and long breaks last, and how many
   sessions come before a long break.
+- **Your wallpaper folder follows your language.** New installs keep
+  wallpapers in the Wallpapers folder inside your own Pictures folder, for
+  example ~/Imagens/Wallpapers on a Portuguese system, instead of always
+  ~/Pictures/Wallpapers. If you already have wallpapers in
+  ~/Pictures/Wallpapers, Mandara keeps using it.
 - **New lengths show right away.** Change the focus or break length while
   the timer hasn't started and it updates on the spot. A session that's
   running or paused keeps its time.

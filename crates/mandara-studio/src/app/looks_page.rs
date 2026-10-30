@@ -35,7 +35,7 @@ use mandara_ui::icons::icon;
 use mandara_ui::state::update_config;
 
 use super::{StudioView, swatch_list};
-use super::compositor_page::{badge, button, card, chip, group_title, heading};
+use super::compositor_page::{badge, card, chip, group_title, heading};
 use super::themes_page::section_head;
 use crate::registry::system_settings::CURSOR;
 use crate::registry::{self, Section};
@@ -384,7 +384,8 @@ impl StudioView {
             .on_click(move |_, _, cx| update_config(cx, move |c| c.looks.wallpaper_colors = !wallpaper_colors))
             .into_any_element()];
         if has_before {
-            options.push(button("looks-restore", "undo", t("Restore my look"), false, p).on_click(|_, _, cx| restore_look(cx)).into_any_element());
+            // A chip like its neighbours: one height for the whole row.
+            options.push(chip("looks-restore", t("Restore my look"), false, p).child(icon("undo", ICON_12_PX, p.primary)).on_click(|_, _, cx| restore_look(cx)).into_any_element());
         }
         options.push(toggle);
         let head = section_head(t("Looks"), t("One click sets the bar, desktop widgets, colors, fonts and roundness together. Your own setup is saved first, so you can always go back. Looks never change your wallpaper."), options, display, p);
