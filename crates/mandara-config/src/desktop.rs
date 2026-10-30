@@ -204,11 +204,15 @@ pub struct LocationConfig {
     pub longitude: f64,
     /// Place name shown in widgets.
     pub name: String,
+    /// The place's IANA time zone (`Africa/Cairo`), from the last place
+    /// search or IP lookup; empty when unknown (then the weather
+    /// forecast's is used). Studio warns when the system clock disagrees.
+    pub timezone: String,
 }
 
 impl Default for LocationConfig {
     fn default() -> Self {
-        Self { shared: false, mode: LocationMode::Manual, latitude: defaults::LATITUDE, longitude: defaults::LONGITUDE, name: defaults::PLACE.into() }
+        Self { shared: false, mode: LocationMode::Manual, latitude: defaults::LATITUDE, longitude: defaults::LONGITUDE, name: defaults::PLACE.into(), timezone: String::new() }
     }
 }
 

@@ -38,6 +38,8 @@ fn store(place: &Place, cx: &mut App) {
         if !place.name.is_empty() {
             c.location.name = place.name.clone();
         }
+        // Unknown (GeoClue) clears it: the forecast's time zone takes over.
+        c.location.timezone = place.timezone.clone();
         c.location.shared = true;
     });
 }
@@ -141,7 +143,7 @@ pub fn register(r: &mut PluginRegistry) {
                 return Err(mandara_i18n::t("Latitude must be within ±90° and longitude within ±180°").into());
             }
             let name = a.rest(2);
-            store(&Place { latitude: lat, longitude: lon, name, detail: String::new() }, cx);
+            store(&Place { latitude: lat, longitude: lon, name, detail: String::new(), timezone: String::new() }, cx);
             Ok(json!({ "latitude": location::coarse(lat), "longitude": location::coarse(lon) }))
         })
         .arg(ArgSpec::required("latitude", ArgKind::Number, tk("Degrees north")))

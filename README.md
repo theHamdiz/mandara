@@ -784,7 +784,13 @@ scriptable too: `mandara msg apps owner <id>` and
   screen, leading zeros, ISO week numbers, a separate date-name locale.
 - **One location** for weather and prayer times: typed, looked up by city
   name, or found on request via GeoClue or one IP lookup (never on its own).
-  Weather refresh interval, wind unit and bar extras are configurable.
+  They follow it unless you give one of them its own place. Weather refresh
+  interval, wind unit and bar extras are configurable.
+- **Time zone and internet time**: Studio → Date, time & location sets the
+  system time zone and switches network time on or off (it asks for your
+  password). If your clock's time zone doesn't match your location's, it
+  tells you and fixes it in one click, since a wrong zone puts the bar, the
+  lock screen and prayer times off by an hour.
 - **Synced lyrics** in the media panel from lrclib.net: karaoke glow in the
   album-art colors, Arabic lines right-to-left, cached offline. The panel
   keeps one size while lyrics load, are missing or fail, so its controls

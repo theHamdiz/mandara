@@ -32,7 +32,9 @@ mod designer;
 mod sidebar_tabs_page;
 mod greeter_page;
 mod keyrings_card;
+mod time_card;
 mod users_page;
+pub use time_card::set_demo as set_time_demo;
 pub use users_page::set_demo as set_users_demo;
 mod compositor_page;
 mod keybind_conflicts;
@@ -1552,6 +1554,13 @@ impl Render for StudioView {
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(placement).child(rows).child(extras).child(editor).into_any_element()
                 }
                 Section::Dock => self.dock_page(&cfg, &p, cx),
+                Section::DateTime => {
+                    // The system clock first: time zone, network time and
+                    // the mismatch warning (time_card.rs).
+                    let clock = time_card::element(cx);
+                    let rows = self.rows(registry::in_section(Section::DateTime), &cfg, &p, cx);
+                    div().row().flex_col().gap(px(SPACE_26_PX)).child(clock).child(rows).into_any_element()
+                }
                 Section::DesktopWidgets => {
                     let widgets = self.desktop_widgets_page(&cfg, &p, cx);
                     // The interactive cards and GPU visualizers (looks_page.rs).

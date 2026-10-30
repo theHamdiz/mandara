@@ -185,15 +185,12 @@ struct Settings {
 fn settings(cx: &App) -> Settings {
     let cfg = config(cx).read(cx).snapshot();
     let s = &cfg.plugins;
-    let loc = if cfg.location.shared {
-        Location { latitude: cfg.location.latitude, longitude: cfg.location.longitude }
-    } else {
-        Location {
-            latitude: s.setting(ID, "latitude", Location::EL_MANDARA.latitude),
-            longitude: s.setting(ID, "longitude", Location::EL_MANDARA.longitude),
-        }
-    };
-    let default_place = if cfg.location.shared && !cfg.location.name.is_empty() {
+    // Its own place when it has one (and sharing isn't forced), else the
+    // shared location.
+    let own = super::weather::own_location(&cfg, ID);
+    let (latitude, longitude) = own.unwrap_or((cfg.location.latitude, cfg.location.longitude));
+    let loc = Location { latitude, longitude };
+    let default_place = if own.is_none() && !cfg.location.name.is_empty() {
         cfg.location.name.clone()
     } else if loc == Location::EL_MANDARA {
         t("El-Mandara, Alexandria").to_string()
@@ -215,7 +212,7 @@ fn settings(cx: &App) -> Settings {
         method: s.setting(ID, "method", Method::Egyptian),
         school: s.setting(ID, "asr", AsrSchool::Shafii),
         // An empty name (a cleared Studio field) falls back like a missing one.
-        place: if cfg.location.shared { default_place } else { Some(s.setting(ID, "location_name", String::new())).filter(|n| !n.trim().is_empty()).unwrap_or(default_place) },
+        place: if own.is_none() { default_place } else { Some(s.setting(ID, "location_name", String::new())).filter(|n| !n.trim().is_empty()).unwrap_or(default_place) },
         hijri_offset: s.setting(ID, "hijri_offset", 0_i64),
         h24: cfg.general.clock_24h,
         utc_offset: utc_offset_hours(),

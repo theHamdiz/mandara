@@ -24,6 +24,10 @@ pub struct Place {
     pub name: String,
     /// Region / country detail for search results.
     pub detail: String,
+    /// IANA time zone (`Africa/Cairo`) when the lookup knows it; empty
+    /// otherwise (GeoClue, typed coordinates).
+    #[serde(default)]
+    pub timezone: String,
 }
 
 /// Request timeout for the web lookups.
@@ -60,6 +64,8 @@ struct IpReply {
     region: String,
     #[serde(default)]
     country_name: String,
+    #[serde(default)]
+    timezone: String,
 }
 
 /// Parses an IP-lookup reply.
@@ -67,7 +73,7 @@ fn parse_ip(body: &str) -> Result<Place, String> {
     let r: IpReply = serde_json::from_str(body).map_err(|e| e.to_string())?;
     let (Some(latitude), Some(longitude)) = (r.latitude, r.longitude) else { return Err("the lookup service returned no coordinates".into()) };
     let detail = [r.region, r.country_name].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(", ");
-    Ok(Place { latitude, longitude, name: r.city, detail })
+    Ok(Place { latitude, longitude, name: r.city, detail, timezone: r.timezone })
 }
 
 /// One IP-based lookup (blocking; run off the UI thread).
@@ -92,6 +98,8 @@ struct GeoResult {
     admin1: Option<String>,
     #[serde(default)]
     country: Option<String>,
+    #[serde(default)]
+    timezone: String,
 }
 
 fn parse_search(body: &str) -> Result<Vec<Place>, String> {
@@ -103,6 +111,7 @@ fn parse_search(body: &str) -> Result<Vec<Place>, String> {
             longitude: g.longitude,
             detail: [g.admin1, g.country].into_iter().flatten().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(", "),
             name: g.name,
+            timezone: g.timezone,
         })
         .collect())
 }
@@ -153,12 +162,14 @@ pub async fn locate_geoclue() -> Result<Place, String> {
     };
     let location = futures::future::select(Box::pin(wait), Box::pin(timeout)).await.factor_first().0;
     let _ = client.call::<_, _, ()>("Stop", &()).await;
-    let path = location.ok_or_else(|| "GeoClue gave no location (is the service enabled and Mandara allowed?)".to_string())?;
+    // Most often GeoClue has no lookup service to ask: Mozilla's closed in
+    // 2024 and many distributions (Arch among them) ship none set up.
+    let path = location.ok_or_else(|| mandara_i18n::t("Your system's location service (GeoClue) couldn't find you. Many Linux systems ship it without a lookup service. Choose IP lookup, or type your city and press Find.").to_string())?;
     let loc = crate::actor::proxy(&conn, GEOCLUE, path.as_str(), GEOCLUE_LOCATION).await.map_err(fail)?;
     let latitude: f64 = loc.get_property("Latitude").await.map_err(fail)?;
     let longitude: f64 = loc.get_property("Longitude").await.map_err(fail)?;
     let name: String = loc.get_property("Description").await.unwrap_or_default();
-    Ok(Place { latitude, longitude, name, detail: String::new() })
+    Ok(Place { latitude, longitude, name, detail: String::new(), timezone: String::new() })
 }
 
 /// Rounds coordinates to ~1 km so the stored location stays coarse.
@@ -173,8 +184,8 @@ mod tests {
 
     #[test]
     fn parses_ip_lookup_replies() {
-        let p = parse_ip(r#"{"ip":"x","city":"Alexandria","region":"Alexandria","country_name":"Egypt","latitude":31.2,"longitude":29.9}"#).unwrap();
-        assert_eq!((p.name.as_str(), p.detail.as_str()), ("Alexandria", "Alexandria, Egypt"));
+        let p = parse_ip(r#"{"ip":"x","city":"Alexandria","region":"Alexandria","country_name":"Egypt","latitude":31.2,"longitude":29.9,"timezone":"Africa/Cairo"}"#).unwrap();
+        assert_eq!((p.name.as_str(), p.detail.as_str(), p.timezone.as_str()), ("Alexandria", "Alexandria, Egypt", "Africa/Cairo"));
         assert!((p.latitude - 31.2).abs() < 1e-9);
         assert!(parse_ip(r#"{"error":true,"reason":"RateLimited"}"#).is_err());
         assert!(parse_ip("not json").is_err());
@@ -182,10 +193,11 @@ mod tests {
 
     #[test]
     fn parses_geocoding_results() {
-        let body = r#"{"results":[{"name":"Alexandria","latitude":31.2,"longitude":29.92,"admin1":"Alexandria","country":"Egypt"},{"name":"Alexandria","latitude":38.8,"longitude":-77.05,"country":"United States"}]}"#;
+        let body = r#"{"results":[{"name":"Alexandria","latitude":31.2,"longitude":29.92,"admin1":"Alexandria","country":"Egypt","timezone":"Africa/Cairo"},{"name":"Alexandria","latitude":38.8,"longitude":-77.05,"country":"United States"}]}"#;
         let r = parse_search(body).unwrap();
         assert_eq!(r.len(), 2);
         assert_eq!(r[1].detail, "United States");
+        assert_eq!((r[0].timezone.as_str(), r[1].timezone.as_str()), ("Africa/Cairo", ""), "the time zone comes along when the service knows it");
         assert!(parse_search("{}").unwrap().is_empty(), "no matches → empty");
         assert_eq!(coarse(31.28456), 31.28);
     }

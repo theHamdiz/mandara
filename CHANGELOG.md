@@ -6,6 +6,34 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Your clock and your location finally agree with each other.
+
+### New
+
+- **Time zone and internet time in Studio.** Studio → Date, time &
+  location now shows your system clock: its time zone, with a search to
+  change it, and a switch to set the time automatically from internet time
+  servers. Mandara asks for your password before changing either.
+- **A heads-up when your clock is in the wrong time zone.** If your
+  clock's time zone doesn't match the place you've set, Studio tells you,
+  for example "Alexandria is in Africa/Cairo, but your clock uses
+  Asia/Riyadh", and fixes it in one click. A wrong time zone puts the bar,
+  the lock screen and prayer times off by an hour, and it often only shows
+  when daylight saving time starts or ends. Scripts can use `mandara msg
+  time` too.
+
+### Improved
+
+- **One location really is one location.** Weather and prayer times now
+  follow the location in Studio → Date, time & location by default, so
+  typing your coordinates there is enough. A plugin only uses a place of
+  its own if you give it one, and "Use one location everywhere" still
+  overrides even that.
+- **Clearer "Locate me" errors.** When your system's location service
+  (GeoClue) can't find you, which happens a lot because many Linux systems
+  ship it without a lookup service, Mandara now says so and suggests IP
+  lookup or typing your city.
+
 ## 0.2.0 — 2026-10-30
 
 A lock screen that accepts your password, brightness controls for laptops,

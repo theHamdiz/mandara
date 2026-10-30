@@ -32,6 +32,7 @@ pub mod location;
 pub mod lyrics;
 pub mod offline;
 pub mod sleep;
+pub mod timedate;
 pub mod logind;
 pub mod models;
 pub mod polkit;

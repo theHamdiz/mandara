@@ -932,6 +932,7 @@ Couldn't preview what gets installed: {error}
 Couldn't reach GitHub: {error}
 Couldn't reach lrclib.net
 Couldn't read the app inside this AppImage: {error}
+Couldn't read the clock: {error}
 Couldn't read the keyring
 Couldn't start KeePassXC: {error}
 Couldn't uninstall {app}: {error}
@@ -1764,6 +1765,7 @@ Hyprland
 Hyprland and Niri switch it per fullscreen window; MangoWM treats it as on
 Hyprland layout & groups
 Hyprland only
+IANA name, e.g. Africa/Cairo
 INTERFACES
 IP & DNS
 IP address lookup
@@ -2078,6 +2080,7 @@ List name
 List plugins with origin and enablement
 List the one-click looks
 List themes (built-in and ~/.config/mandara/themes)
+List time zones, optionally only those containing a word
 Listen
 Lists and joins networks through NetworkManager
 Lists in order, with open / done counts
@@ -2572,6 +2575,7 @@ No menu entry {id}
 No network access
 No network devices
 No network interfaces with traffic
+No network time service is installed (for example systemd-timesyncd)
 No networks found
 No news
 No note matches “{query}”
@@ -2745,6 +2749,7 @@ Off: low-urgency notifications vanish when their popup closes
 Off: only windows on the focused display
 Off: plain searches list apps (and the providers above) only
 Off: stay with the current player until it closes
+Off: the clock keeps its own time
 Off: the compositor's own config decides at the next start
 Office
 Offline mode
@@ -2762,6 +2767,8 @@ On the desktop, under your windows
 On this tab
 On your lap — performance is limited
 On · nothing connected
+On, and in sync with internet time servers
+On, waiting to reach a time server
 On-screen displays
 Once per login, when KeePassXC is running with a locked database, Mandara's dialog asks for its password
 Once per session
@@ -3562,6 +3569,7 @@ Search units…
 Search what you copied; Enter copies it again
 Search widgets
 Search your installed apps; checked apps stay in the dock.
+Search, e.g. Cairo or Europe
 Searches wallhaven.cc and downloads the wallpapers you pick
 Searching GitHub…
 Searching Wallhaven…
@@ -3618,11 +3626,14 @@ Set one app stream's volume in percent (0-150)
 Set output volume in percent (0-150)
 Set shortcut
 Set the bar layout
+Set the clock from internet time servers (asks for your password)
 Set the interface language (auto or an ISO code: en, ar, es, fr, de, tr, ru, hi, zh, ja)
 Set the night colour temperature in kelvin (1000–10000)
 Set the screen brightness in percent
 Set the shared location by coordinates
+Set the system time zone (asks for your password)
 Set the wallpaper from an image or video path
+Set time automatically
 Set up
 Sets the cursor in Mandara's compositor drop-in and live
 Setting types
@@ -3965,6 +3976,7 @@ System
 System access
 System accounts
 System accounts are managed by your distribution
+System clock
 System default
 System folders come from $XDG_DATA_DIRS: distribution packages create them, and they're opt-in and read-only.
 System monitor
@@ -4066,10 +4078,14 @@ The bar is on the other edge: the launcher opens from the bare screen edge inste
 The bar item, or none for no bar item.
 The bar item, panel and sidebar card re-render: no restart
 The bar's battery chip breathes coral while the charge is critical
+The bar, the lock screen and prayer times all follow the clock, so they show the wrong time there.
 The battery is nearly empty. Plug in the charger to cancel.
 The battery reading turns coral at or below this charge
 The carousel opened from the bar, the main menu or `mandara msg wallpaper picker toggle`
 The clipboard thread failed
+The clock keeps its own time now
+The clock now sets itself from internet time servers
+The clock's time zone, network time, and the shared location's time zone
 The command is empty
 The compiled WebAssembly component (manifest `entry`)
 The compositor did not answer
@@ -4258,6 +4274,8 @@ Time span of the battery charge sparkline
 Time spent in each app shows up here
 Time to focus for {minutes} minutes.
 Time to plug in after the warning appears
+Time zone
+Time zone set to {zone}
 Time, date and calendar
 Time-synced lyrics from lrclib.net in the media panel (fetched only while it is open)
 Timeouts
@@ -4516,6 +4534,7 @@ Use the events' own alarms
 Use the time an app asks for instead of the values above
 Use this variation
 Use your own stiffness and damping instead of the global motion settings
+Use {zone}
 Used by your config
 Used by {tool}
 Used for most text
@@ -4618,7 +4637,7 @@ Waves
 Waviness
 Weak
 Weather
-Weather and prayer times follow this location instead of their own
+Weather and prayer times always follow this location, even when they have their own
 Weather request failed: {error}
 Weather unavailable
 Weather, prayer times, world clocks and more at a glance
@@ -4767,6 +4786,7 @@ Your hooks
 Your idle commands
 Your keyring may ask you to unlock it
 Your keys
+Your location
 Your marketplace plugins are current
 Your name for this device (empty: its own name)
 Your names & icons
@@ -4777,6 +4797,7 @@ Your package manager couldn't fit this package with what is already installed.
 Your plugin provides these
 Your session starts these (systemd's xdg-autostart).
 Your session's units
+Your system's location service (GeoClue) couldn't find you. Many Linux systems ship it without a lookup service. Choose IP lookup, or type your city and press Find.
 Your text (“ / ” starts a new line or column)
 Your wallpaper, an image of your choice or a solid color
 Yours
@@ -5003,6 +5024,7 @@ otpauth://totp/…
 p95 interval {ms}
 p95 {p95} · p99 {p99}
 palette source
+part of a name, e.g. cairo
 part of a unit name or description
 path to the profile file
 paused
@@ -5299,6 +5321,7 @@ your default
 {percent}% left — plug in soon
 {percent}% left — this is a test
 {percent}% — you can unplug the charger
+{place} is in {zone} ({offset}), but your clock uses {system} ({system_offset})
 {plugin} is off. Turn it on in Studio → Plugins or with `mandara msg plugins enable {id}`
 {plugin} is part of Mandara's core and can't be turned off or removed: {reason}
 {plugin} is up to date
@@ -5357,6 +5380,7 @@ your default
 “{prefix}” emoji
 “{prefix}” windows
 “{theme}” isn't a valid theme name
+“{zone}” isn't a time zone
 …
 …and {count} more
 …in its own systemd scope (app-mandara-firefox-<pid>.scope).

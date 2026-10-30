@@ -544,8 +544,10 @@ pub fn register(r: &mut PluginRegistry) {
     r.command(
         core,
         CommandSpec::new("studio", mandara_i18n::tk("Open Mandara Studio, optionally on a section"), |a, cx| {
+            // Words after the section (`--demo`) go to `mandara studio` too.
+            let words = a.rest(0);
             let section = a.get(0).map(str::to_string);
-            crate::state::open_studio_at(section.clone(), cx);
+            crate::state::open_studio_at((!words.trim().is_empty()).then_some(words), cx);
             Ok(json!({ "opened": section.unwrap_or_else(|| "home".into()) }))
         })
         .arg(ArgSpec::optional("section", ArgKind::String, STUDIO_SECTION_ARG))

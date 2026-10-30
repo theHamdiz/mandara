@@ -254,20 +254,25 @@ const HASH_RESOLUTION: u32 = 10_000;
 
 // ── Settings ─────────────────────────────────────────────────────────────
 
-pub fn query(cfg: &ShellConfig) -> WeatherQuery {
-    let refresh_minutes = cfg.weather.refresh_minutes;
+/// A plugin's own coordinates: only when it has them and "Use one location
+/// everywhere" is off. Everything else follows the shared location (Studio
+/// → Date, time & location).
+pub fn own_location(cfg: &ShellConfig, plugin: &str) -> Option<(f64, f64)> {
     if cfg.location.shared {
-        return WeatherQuery { latitude: cfg.location.latitude, longitude: cfg.location.longitude, refresh_minutes };
+        return None;
     }
-    let s = &cfg.plugins;
-    let el_mandara = mandara_services::prayer::Location::EL_MANDARA;
-    let lat = s.setting(super::prayer::ID, "latitude", el_mandara.latitude);
-    let lon = s.setting(super::prayer::ID, "longitude", el_mandara.longitude);
-    WeatherQuery { latitude: s.setting(ID, "latitude", lat), longitude: s.setting(ID, "longitude", lon), refresh_minutes }
+    let own = cfg.plugins.settings.get(plugin)?;
+    (own.contains_key("latitude") && own.contains_key("longitude")).then(|| (cfg.plugins.setting(plugin, "latitude", cfg.location.latitude), cfg.plugins.setting(plugin, "longitude", cfg.location.longitude)))
+}
+
+pub fn query(cfg: &ShellConfig) -> WeatherQuery {
+    // The weather's own place, else the prayer times', else the shared one.
+    let (latitude, longitude) = own_location(cfg, ID).or_else(|| own_location(cfg, super::prayer::ID)).unwrap_or((cfg.location.latitude, cfg.location.longitude));
+    WeatherQuery { latitude, longitude, refresh_minutes: cfg.weather.refresh_minutes }
 }
 
 pub fn location_name(cfg: &ShellConfig) -> String {
-    if cfg.location.shared {
+    if own_location(cfg, ID).is_none() {
         return cfg.location.name.clone();
     }
     // An empty name (a cleared Studio field) falls back like a missing one.
@@ -1000,6 +1005,34 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_shared_location_is_the_default_and_a_plugins_own_place_overrides_it() {
+        let mut cfg = ShellConfig::default();
+        cfg.location.latitude = 52.52;
+        cfg.location.longitude = 13.40;
+        cfg.location.name = "Berlin".into();
+        // No place of its own: the weather follows the shared location,
+        // even with "Use one location everywhere" off.
+        assert!(!cfg.location.shared);
+        assert_eq!((query(&cfg).latitude, query(&cfg).longitude), (52.52, 13.40));
+        assert_eq!(location_name(&cfg), "Berlin");
+        // Its own place wins…
+        let own = toml::toml! { latitude = 31.2
+        longitude = 29.92
+        location_name = "Alexandria" };
+        cfg.plugins.settings.insert(ID.into(), own);
+        assert_eq!((query(&cfg).latitude, query(&cfg).longitude), (31.2, 29.92));
+        assert_eq!(location_name(&cfg), "Alexandria");
+        // …unless one location is forced everywhere.
+        cfg.location.shared = true;
+        assert_eq!((query(&cfg).latitude, query(&cfg).longitude), (52.52, 13.40));
+        assert_eq!(location_name(&cfg), "Berlin");
+        // Half a place (only a latitude) isn't a place.
+        cfg.location.shared = false;
+        cfg.plugins.settings.insert(ID.into(), toml::toml! { latitude = 1.0 });
+        assert_eq!(own_location(&cfg, ID), None);
+    }
 
     #[test]
     fn particle_noise_is_deterministic_and_in_range() {

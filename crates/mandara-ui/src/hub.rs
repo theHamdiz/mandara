@@ -58,6 +58,11 @@ pub fn hub(cx: &App) -> Entity<Hub> {
     cx.global::<GlobalHub>().0.clone()
 }
 
+/// The hub, when this process runs the shell (Studio on its own has none).
+pub fn try_hub(cx: &App) -> Option<Entity<Hub>> {
+    cx.try_global::<GlobalHub>().map(|h| h.0.clone())
+}
+
 #[derive(Clone)]
 struct GlobalResources(Entity<SystemSampler>);
 impl Global for GlobalResources {}

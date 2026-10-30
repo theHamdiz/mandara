@@ -96,6 +96,8 @@ pub struct Weather {
     pub days: Vec<Day>,
     /// Unix seconds of the fetch.
     pub fetched_at: i64,
+    /// The forecast location's IANA time zone (`Africa/Cairo`), when known.
+    pub timezone: String,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
@@ -146,6 +148,9 @@ struct Response {
     current: Current,
     hourly: Hourly,
     daily: Daily,
+    /// With `timezone=auto`: the coordinates' own time zone.
+    #[serde(default)]
+    timezone: String,
 }
 
 #[derive(Deserialize)]
@@ -238,6 +243,7 @@ fn parse(body: &str) -> Result<Weather, String> {
         hours,
         days,
         fetched_at: chrono::Local::now().timestamp(),
+        timezone: r.timezone,
     })
 }
 
@@ -260,6 +266,19 @@ fn fetch(q: WeatherQuery) -> Result<Weather, String> {
     let mut response = agent().get(&url(q)).header("User-Agent", concat!("mandara-shell/", env!("CARGO_PKG_VERSION"))).call().map_err(|e| tf("Weather request failed: {error}", &[("error", &e)]))?;
     let body = response.body_mut().read_to_string().map_err(|e| tf("Weather request failed: {error}", &[("error", &e)]))?;
     parse(&body)
+}
+
+/// The IANA time zone at a place (one small Open-Meteo request; blocking).
+pub fn timezone_at(latitude: f64, longitude: f64) -> Result<String, String> {
+    #[derive(Deserialize)]
+    struct Reply {
+        timezone: String,
+    }
+    crate::offline::check()?;
+    let url = format!("https://api.open-meteo.com/v1/forecast?latitude={latitude:.4}&longitude={longitude:.4}&timezone=auto&forecast_days=1");
+    let mut response = agent().get(&url).header("User-Agent", concat!("mandara-shell/", env!("CARGO_PKG_VERSION"))).call().map_err(|e| e.to_string())?;
+    let body = response.body_mut().read_to_string().map_err(|e| e.to_string())?;
+    serde_json::from_str::<Reply>(&body).map(|r| r.timezone).map_err(|e| e.to_string())
 }
 
 pub fn spawn_weather_service(initial: WeatherQuery) -> WeatherService {

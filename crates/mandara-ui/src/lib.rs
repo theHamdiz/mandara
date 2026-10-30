@@ -29,6 +29,7 @@ pub mod kit;
 pub mod launcher_ext;
 pub mod launcher_place;
 pub mod location;
+pub mod timezone;
 pub mod lock;
 pub mod night_light;
 pub mod osd;

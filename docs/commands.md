@@ -293,6 +293,9 @@ mandara msg cursor apply bibata/ice 32  # theme (catalog id[/variant] or XCursor
 mandara msg cursor remove bibata     # every variant Mandara installed (or one: bibata/ice); never a package's or your own
 mandara msg calendar add webcal://example.com/holidays.ics Holidays  # calendar [days], sources, remove <n>, refresh
 mandara msg location locate          # geoclue|ip; location search <city>, geocode, set <lat> <lon> [name]
+mandara msg time                     # time zone, network time, and your location's time zone (suggested_timezone when they differ)
+mandara msg time zone Africa/Cairo   # set the system time zone (asks for your password); time zones [word] lists them
+mandara msg time auto on             # set the clock from internet time servers (on / off / toggle; asks for your password)
 mandara msg world-clock add Mecca    # list, remove, search <query>, at <HH:MM>
 mandara msg authenticator code github  # list, copy, add <otpauth://…>, remove <id>, scan, demo on|off
 ```

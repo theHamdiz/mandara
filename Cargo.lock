@@ -3940,6 +3940,7 @@ dependencies = [
  "anyhow",
  "async-channel",
  "chrono",
+ "chrono-tz",
  "dirs 7.0.0",
  "gpui",
  "image",

@@ -175,6 +175,7 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     clock::register(registry);
     crate::calendar::register(registry);
     crate::location::register(registry);
+    crate::timezone::register(registry);
     keyboard::register(registry);
     language::register(registry);
     media::register(registry);

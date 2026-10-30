@@ -87,7 +87,7 @@ pub(super) fn entries() -> Vec<Setting> {
         s(DateTime, tk("Reminders"), "/calendar/reminder_minutes", tk("Remind me"), tk("Minutes before events without their own alarm"), slider(0.0, 120.0, 5.0, " min")),
         s(DateTime, tk("Reminders"), "/calendar/honour_event_alarms", tk("Use the events' own alarms"), tk("When an event defines alarms, remind at those times instead"), Toggle),
         // Location
-        s(DateTime, tk("Location"), "/location/shared", tk("Use one location everywhere"), tk("Weather and prayer times follow this location instead of their own"), Toggle),
+        s(DateTime, tk("Location"), "/location/shared", tk("Use one location everywhere"), tk("Weather and prayer times always follow this location, even when they have their own"), Toggle),
         s(DateTime, tk("Location"), "/location/mode", tk("Find my location with"), tk("Nothing is looked up until you press Locate me (the location service also refreshes at startup)"), Choice(LOCATION_MODE)),
         s(DateTime, tk("Location"), "/location/mode", tk("Locate me"), tk("One lookup with the method above; IP lookups send your address to ipapi.co"), Command { button: tk("Locate me"), args: &["location", "locate"] }),
         s(DateTime, tk("Location"), "/location/name", tk("Place"), tk("Shown in widgets; Find looks its coordinates up (Open-Meteo)"), Text { placeholder: "El-Mandara" }),

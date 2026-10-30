@@ -85,7 +85,8 @@ enum Cmd {
         #[arg(long, value_name = "SECTION", requires = "tab")]
         scroll: Option<String>,
         /// Demo data instead of the real system (`mandara studio users
-        /// --demo`: fictional accounts, nothing on the system changes).
+        /// --demo`: fictional accounts; `mandara studio date --demo`: a
+        /// fictional clock). Nothing on the system changes.
         #[arg(long)]
         demo: bool,
     },
@@ -231,6 +232,7 @@ fn main() -> Result<()> {
         Some(Cmd::Studio { section, plugin, settings, tab, scroll, demo }) => {
             if demo {
                 mandara_studio::app::set_users_demo();
+                mandara_studio::app::set_time_demo();
             }
             run_studio(match (plugin, tab) {
                 // Studio's target syntax: `plugins/<id>[/settings]` and
@@ -528,7 +530,14 @@ fn spawn_studio(section: Option<String>) {
     use std::os::unix::process::CommandExt as _;
     let exe = paths::self_exe();
     let mut cmd = std::process::Command::new(exe);
-    cmd.arg("studio").args(section).stdin(std::process::Stdio::null()).process_group(0);
+    // `section` may carry flags after the page (`date --demo`); the page
+    // itself can have spaces ("Login screen").
+    let (flags, words): (Vec<&str>, Vec<&str>) = section.as_deref().unwrap_or_default().split_whitespace().partition(|w| w.starts_with("--"));
+    cmd.arg("studio");
+    if !words.is_empty() {
+        cmd.arg(words.join(" "));
+    }
+    cmd.args(flags).stdin(std::process::Stdio::null()).process_group(0);
     match cmd.spawn() {
         // Reap it in the background so it never lingers as a zombie.
         Ok(mut child) => drop(std::thread::spawn(move || child.wait())),

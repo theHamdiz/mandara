@@ -103,7 +103,7 @@ narrow ones; everything mirrors for right-to-left languages.
 | **Power & idle** | Status, idle timeouts (mains / battery), lock behaviour, idle commands, battery alerts and profiles, the power menu editor, event hooks. |
 | **Input** | Keyboard layouts and labels, repeat, Num Lock; mouse and touchpad; focus follows mouse. The cursor lives on Themes → Cursor (a card here links there). |
 | **Keyboard shortcuts** | Mandara's compositor binds with chord capture and conflict detection. |
-| **Date, time & location** | Clock and date formats, week numbers, calendar subscriptions and reminders, the shared location, weather. |
+| **Date, time & location** | The system clock (time zone with search, set time automatically, and a one-click fix when it doesn't match your location's time zone), clock and date formats, week numbers, calendar subscriptions and reminders, the shared location (weather and prayer times follow it unless they have their own), weather. |
 | **Applications** | Installed apps (search, hide, rename, install from files by picker or drag and drop, uninstall with optional leftover cleanup), default apps, apps at login, how apps are launched. |
 
 ### Security & accounts
