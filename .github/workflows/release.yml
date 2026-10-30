@@ -407,7 +407,9 @@ jobs:
           sh -c 'cd "$(mktemp -d)" && curl -fsSL "https://github.com/${{ github.repository }}/releases/latest/download/mandara-$(uname -m)-linux-gnu.tar.gz" | tar xz && exec ./mandara-*/bin/mandara install'
           ```
 
-          Or download the tarball for your CPU, `tar xf` it and run `./mandara-*/bin/mandara install`. Already on Mandara? Run `mandara update`, or open Studio → About.
+          Or download the tarball for your CPU, `tar xf` it and run `./mandara-*/bin/mandara install`.
+
+          **Already on Mandara?** Open Mandara Studio (click the grid button at the start of the bar, or press Super+Space, and search for "Studio"), go to **About** and press **Update now**. It downloads a small patch and restarts the shell for you. Mandara also tells you with a notification when a new version is out.
           EOF
           cat "$notes"
 
