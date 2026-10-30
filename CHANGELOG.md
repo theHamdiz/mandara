@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.3.1 — 2026-10-30
+
 Multi-monitor setups get the right sizes everywhere, the clock keeps up
 with time changes, and a handful of fixes from your reports on GitHub.
 
