@@ -170,6 +170,18 @@ fn refresh_lock(manifest: Option<&std::path::Path>) -> Result<()> {
     update(true).or_else(|_| update(false)).map_err(|e| format!("refreshing {}: {e}", manifest.map_or_else(|| "Cargo.lock".to_string(), |m| m.display().to_string())).into())
 }
 
+/// The Cargo manifests among `manifests` (relative to `root`) whose crate
+/// keeps its own lock file outside the root workspace. A plugin's manifests
+/// also include its `plugin.toml`, which cargo can't update.
+fn own_lock_manifests(root: &Path, manifests: &[PathBuf]) -> Vec<PathBuf> {
+    manifests
+        .iter()
+        .map(|m| root.join(m))
+        .filter(|m| m.file_name().is_some_and(|n| n == "Cargo.toml"))
+        .filter(|m| m.parent().is_some_and(|d| d != root && d.join("Cargo.lock").exists()))
+        .collect()
+}
+
 fn bump(args: &[String]) -> Result<()> {
     let dry = flag(args, "--dry-run");
     let init = flag(args, "--init") || !root().join(manifest::RECORD).exists();
@@ -210,11 +222,8 @@ fn bump(args: &[String]) -> Result<()> {
         // Crates outside the workspace (example plugins) keep their own
         // lock file; a stale one makes their `--locked` builds fail.
         for c in s.components.iter().filter(|c| bumped.iter().any(|(n, _, _)| *n == c.name)) {
-            for m in &c.manifests {
-                let manifest = root().join(m);
-                if manifest.parent().is_some_and(|d| d != root() && d.join("Cargo.lock").exists()) {
-                    refresh_lock(Some(&manifest))?;
-                }
+            for manifest in own_lock_manifests(&root(), &c.manifests) {
+                refresh_lock(Some(&manifest))?;
             }
         }
         // Version lines are excluded from hashes, so recorded hashes still
@@ -434,5 +443,27 @@ fn main() {
     if let Err(e) = result {
         eprintln!("error: {e}");
         std::process::exit(EXIT_FAILURE);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_cargo_manifests_with_their_own_lock_are_refreshed() {
+        let root = std::env::temp_dir().join(format!("mandara-xtask-locks-{}", std::process::id()));
+        let plugin = root.join("plugins/examples/moon-phase");
+        std::fs::create_dir_all(&plugin).unwrap();
+        for f in ["Cargo.toml", "plugin.toml", "Cargo.lock"] {
+            std::fs::write(plugin.join(f), "").unwrap();
+        }
+        std::fs::create_dir_all(root.join("crates/app")).unwrap();
+        std::fs::write(root.join("crates/app/Cargo.toml"), "").unwrap();
+        let manifests: Vec<PathBuf> = ["plugins/examples/moon-phase/plugin.toml", "plugins/examples/moon-phase/Cargo.toml", "crates/app/Cargo.toml"].iter().map(PathBuf::from).collect();
+        // The plugin's plugin.toml is skipped (cargo rejects it) and so is a
+        // workspace crate without a lock file of its own.
+        assert_eq!(own_lock_manifests(&root, &manifests), vec![plugin.join("Cargo.toml")]);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

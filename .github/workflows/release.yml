@@ -390,3 +390,35 @@ jobs:
             gh release create "$tag" dist/* --verify-tag --title "Mandara ${{ needs.version.outputs.version }}" --generate-notes \
               --notes "Install with one command: \`sh -c 'cd \"\$(mktemp -d)\" && curl -fsSL \"https://github.com/${{ github.repository }}/releases/latest/download/mandara-\$(uname -m)-linux-gnu.tar.gz\" | tar xz && exec ./mandara-*/bin/mandara install'\`. Or download the tarball for your CPU, \`tar xf\` it and run \`./mandara-*/bin/mandara install\`. Upgrade: \`mandara update\`."
           fi
+
+      # The AUR recipes in packaging/aur carry the real version and
+      # checksums of the newest release, so building them straight from a
+      # clone (the README's Arch instructions) works. Committed as
+      # "chore(release)", which doesn't start another release.
+      - name: AUR recipes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --quiet origin main
+          git checkout --quiet -B main origin/main
+          sha() { sha256sum "$1" | cut -d' ' -f1; }
+          x86="$(sha "dist/mandara-$v-x86_64-linux-gnu.tar.gz")"
+          arm="$(sha "dist/mandara-$v-aarch64-linux-gnu.tar.gz")"
+          curl -fsSL --retry 5 -o source.tar.gz "https://github.com/${{ github.repository }}/archive/refs/tags/v$v.tar.gz"
+          src="$(sha source.tar.gz)"
+          rm -f source.tar.gz
+          sed -i -E -e "s/^pkgver=.*/pkgver=$v/" -e "s/^pkgrel=.*/pkgrel=1/" \
+              -e "s/^sha256sums_x86_64=.*/sha256sums_x86_64=('$x86')/" \
+              -e "s/^sha256sums_aarch64=.*/sha256sums_aarch64=('$arm')/" \
+              packaging/aur/mandara-shell-bin/PKGBUILD
+          sed -i -E -e "s/^pkgver=.*/pkgver=$v/" -e "s/^pkgrel=.*/pkgrel=1/" \
+              -e "s/^sha256sums=.*/sha256sums=('$src')/" \
+              packaging/aur/mandara-shell/PKGBUILD
+          git diff --stat
+          if ! git diff --quiet; then
+            git commit -am "chore(release): AUR recipes for v$v"
+            git push origin HEAD:main
+          fi

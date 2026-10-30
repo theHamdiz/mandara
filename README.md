@@ -1283,9 +1283,11 @@ git clone https://github.com/theHamdiz/mandara.git
 cd mandara/packaging/aur/mandara-shell-bin && makepkg -si
 ```
 
-Every [release](https://github.com/theHamdiz/mandara/releases) also
-attaches a ready `PKGBUILD` for `mandara-shell-bin` with its checksums
-filled in: download it into an empty folder and run `makepkg -si`.
+Each release fills these recipes in with its version and checksums, so a
+fresh clone always builds the newest release. Every
+[release](https://github.com/theHamdiz/mandara/releases) also attaches a
+ready `PKGBUILD` for `mandara-shell-bin`: download it into an empty folder
+and run `makepkg -si`.
 
 The package installs the `mandara` binary, the Studio desktop entry and
 icon, and the lock screen's PAM file (`/etc/pam.d/mandara-lock`). Then hook
