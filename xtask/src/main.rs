@@ -46,6 +46,7 @@ mod headless;
 mod loc;
 mod proc;
 mod prune;
+mod release_key;
 mod resource_check;
 mod sandbox;
 
@@ -506,8 +507,9 @@ fn main() {
         Some("resource-check") => resource_check::resource_check(rest),
         Some("sandbox") => sandbox::sandbox(rest),
         Some("prune") => prune::prune(rest),
+        Some("release-key") => release_key::release_key(rest),
         _ => {
-            eprintln!("usage: cargo xtask <status [--json] | bump [--dry-run] [--commit] [--tag] [--init] | verify | changelog [VERSION] | dist --target <triple> [--bin PATH] [--variant NAME] [--out DIR] | plugins [--out DIR] | checksums [--out DIR] | build [--target <triple>] [--variant NAME] [--profile P] [--features F] [--no-default-features] [--out DIR] [--no-readme] | art [--check | --compose [--only ID] [--out DIR]] | delta --old BIN --new BIN --out PATCH | apply-delta --old BIN --patch PATCH --out BIN [--sha256 HEX] | update-part --target <triple> [--variant NAME] [--out DIR] [--previous OLD.tar.gz] | plugin-delta --new ARCHIVE [--old ARCHIVE] --out DIR | resource-check BIN [config.toml] | sandbox <up | down | shot | matte | msg | pointer | studio | shell | audio | notify | env> … | prune [--max-gib N] [--watch MINUTES] [--dir PATH]… [--cargo-cache] [--dry-run]>");
+            eprintln!("usage: cargo xtask <status [--json] | bump [--dry-run] [--commit] [--tag] [--init] | verify | changelog [VERSION] | dist --target <triple> [--bin PATH] [--variant NAME] [--out DIR] | plugins [--out DIR] | checksums [--out DIR] | build [--target <triple>] [--variant NAME] [--profile P] [--features F] [--no-default-features] [--out DIR] [--no-readme] | art [--check | --compose [--only ID] [--out DIR]] | delta --old BIN --new BIN --out PATCH | apply-delta --old BIN --patch PATCH --out BIN [--sha256 HEX] | update-part --target <triple> [--variant NAME] [--out DIR] [--previous OLD.tar.gz] | plugin-delta --new ARCHIVE [--old ARCHIVE] --out DIR | resource-check BIN [config.toml] | sandbox <up | down | shot | matte | msg | pointer | studio | shell | audio | notify | env> … | prune [--max-gib N] [--watch MINUTES] [--dir PATH]… [--cargo-cache] [--dry-run] | release-key <new [--repo OWNER/NAME] [--secret NAME] [--backup PATH] [--force] | sign FILE [--env NAME]>>");
             std::process::exit(EXIT_USAGE);
         }
     };

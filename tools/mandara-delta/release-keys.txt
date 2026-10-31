@@ -1,0 +1,6 @@
+# Mandara's release signing keys (Ed25519, hex), one per line.
+# Every release after 0.3.3 signs its SHA256SUMS with one of these;
+# the shell, `mandara update` and `mandara install` trust only these.
+# Created with `cargo xtask release-key new`. To change keys, add the new
+# one here and release with the old one first, then retire the old line.
+2fde15bd0518f2352436174a3bcc1e41d62e3ac99647a9dfa773d6462970b43d  # added 2026-10-31

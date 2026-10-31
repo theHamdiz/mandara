@@ -4,10 +4,13 @@
 //! target the full tarball, the `bin/mandara` inside it, and a bsdiff-style
 //! patch from the previous release. Updating:
 //!
-//! 1. **Check** — `releases/latest` of [`REPO`] (or `MANDARA_UPDATE_API`),
-//!    then its `update.json` (releases without one fall back to the tarball
-//!    naming and `SHA256SUMS`); semver against the running build. Automatic
-//!    checks reuse the last answer for the configured interval.
+//! 1. **Check** — `releases/latest` of [`REPO`] (or `MANDARA_UPDATE_API`);
+//!    semver against the running build. A newer release must be **signed**:
+//!    its `SHA256SUMS` is checked against `SHA256SUMS.sig` and the release
+//!    keys built into Mandara ([`mandara_delta::signing`]), and every hash
+//!    used afterwards comes from that listing (`update.json` must match its
+//!    line; releases without one fall back to the tarball's line).
+//!    Automatic checks reuse the last answer for the configured interval.
 //! 2. **Delta** — only when the installed binary's SHA-256 equals the
 //!    published hash of the version it claims to be: download the patch,
 //!    verify its hash, rebuild the new binary in memory and verify *its*
@@ -27,8 +30,10 @@ pub mod install;
 pub mod plugins;
 
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use mandara_delta::signing::{self, PublicKey, SIG_FILE};
 use mandara_delta::{MANIFEST_FILE, Manifest, SHELL_BINARY};
 use mandara_i18n::{t, tf};
 use serde::{Deserialize, Serialize};
@@ -130,8 +135,10 @@ pub struct UpdateInfo {
     /// The new binary's hash and size (from update.json).
     pub binary_sha256: Option<String>,
     pub binary_size: Option<u64>,
-    /// `SHA256SUMS` of the release.
-    pub sums_url: Option<String>,
+    /// The release's `SHA256SUMS`, its signature checked (`None` when no
+    /// update is available, or for an answer cached by an older build).
+    #[serde(default)]
+    pub signed_sums: Option<String>,
     /// When the check ran (seconds since the epoch).
     pub checked_at: u64,
 }
@@ -180,6 +187,33 @@ pub(crate) fn unexpected(e: impl std::fmt::Display) -> String {
     tf("Unexpected answer from GitHub: {error}", &[("error", &e)])
 }
 
+/// Keys trusted instead of the shipped ones (the end-to-end test only).
+static TEST_KEYS: OnceLock<Vec<PublicKey>> = OnceLock::new();
+
+/// Trusts `keys` instead of Mandara's release keys, for this process: the
+/// end-to-end test signs its mock releases with a key of its own.
+#[doc(hidden)]
+pub fn trust_keys_for_tests(keys: Vec<PublicKey>) {
+    let _ = TEST_KEYS.set(keys);
+}
+
+fn release_keys() -> Vec<PublicKey> {
+    TEST_KEYS.get().cloned().unwrap_or_else(signing::trusted_keys)
+}
+
+/// `SHA256SUMS` of `version`'s release, accepted only with a valid
+/// signature. Always required here: any release newer than this build
+/// comes after signing began.
+fn signed_sums(assets: &[AssetJson], version: &str) -> Result<String, String> {
+    let unsigned = |reason: String| tf("Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed", &[("version", &version), ("reason", &reason)]);
+    let get = |name: &str| asset_url(assets, name).map(|(url, _)| fetch::get(&url, MAX_JSON_BYTES, &|_| {}).map_err(String::from)).transpose();
+    let missing = |name: &str| unsigned(tf("{file} is missing", &[("file", &name)]));
+    let sums = get(SUMS_FILE)?.ok_or_else(|| missing(SUMS_FILE))?;
+    let sig = get(SIG_FILE)?.ok_or_else(|| missing(SIG_FILE))?;
+    signing::verify_with(&release_keys(), &sums, &sig).map_err(unsigned)?;
+    Ok(String::from_utf8_lossy(&sums).into_owned())
+}
+
 /// Checks `api` for a release newer than `current` for `target` (no cache).
 pub fn check_with(api: &str, current: &str, target: &str) -> Result<UpdateInfo, String> {
     let body = fetch::get(&format!("{api}/repos/{REPO}/releases/latest"), MAX_JSON_BYTES, &|_| {}).map_err(|f| match f {
@@ -195,12 +229,15 @@ pub fn check_with(api: &str, current: &str, target: &str) -> Result<UpdateInfo, 
         target: target.to_string(),
         notes_url: release.html_url.clone(),
         notes: release.body.clone().unwrap_or_default(),
-        sums_url: asset_url(&release.assets, SUMS_FILE).map(|(u, _)| u),
         checked_at: now_secs(),
         ..Default::default()
     };
+    if !info.available {
+        return Ok(info);
+    }
+    let sums = signed_sums(&release.assets, &latest)?;
     let manifest = match asset_url(&release.assets, MANIFEST_FILE) {
-        Some((url, _)) => match fetch::get(&url, MAX_JSON_BYTES, &|_| {}).map_err(String::from).and_then(|b| Manifest::parse(&b)) {
+        Some((url, _)) => match fetch::get(&url, MAX_JSON_BYTES, &|_| {}).map_err(String::from).and_then(|b| listed(&sums, MANIFEST_FILE, &b).and_then(|()| Manifest::parse(&b))) {
             Ok(m) if m.version.trim_start_matches('v') == latest => Some(m),
             Ok(m) => {
                 tracing::warn!("update.json describes {} but the release is {latest}; ignoring it", m.version);
@@ -224,10 +261,21 @@ pub fn check_with(api: &str, current: &str, target: &str) -> Result<UpdateInfo, 
         }
         None => {
             let file = format!("mandara-{latest}-{target}.tar.gz");
-            info.full = asset_url(&release.assets, &file).map(|(url, size)| Download { file, url, size, sha256: None });
+            let sha256 = mandara_delta::sha256sums_lookup(&sums, &file);
+            info.full = asset_url(&release.assets, &file).map(|(url, size)| Download { file, url, size, sha256 });
         }
     }
+    info.signed_sums = Some(sums);
     Ok(info)
+}
+
+/// Whether `bytes` (the asset `file`) match their line in the signed
+/// listing.
+fn listed(sums: &str, file: &str, bytes: &[u8]) -> Result<(), String> {
+    match mandara_delta::sha256sums_lookup(sums, file) {
+        Some(want) if want.eq_ignore_ascii_case(&mandara_delta::sha256_hex(bytes)) => Ok(()),
+        _ => Err(tf("{file} doesn't match the signed checksums", &[("file", &file)])),
+    }
 }
 
 fn cache_path() -> PathBuf {
@@ -237,7 +285,7 @@ fn cache_path() -> PathBuf {
 /// The last check's answer, if it was made by this build (no network).
 pub fn cached() -> Option<UpdateInfo> {
     let info: UpdateInfo = serde_json::from_slice(&std::fs::read(cache_path()).ok()?).ok()?;
-    (info.current == running_version() && info.target == running_target()).then_some(info)
+    (info.current == running_version() && info.target == running_target() && (!info.available || info.signed_sums.is_some())).then_some(info)
 }
 
 /// Checks for an update. Without `force`, an answer younger than
@@ -394,7 +442,10 @@ pub fn apply(info: &UpdateInfo, exe: &Path, opts: ApplyOptions, progress: &dyn F
     if !info.available {
         return Err(tf("Mandara {version} is already the latest version", &[("version", &info.current)]));
     }
-    let plan = Plan { patch: info.patch.as_ref(), full: info.full.as_ref(), binary_sha256: info.binary_sha256.as_deref(), binary_size: info.binary_size, sums_url: info.sums_url.as_deref() };
+    if info.signed_sums.is_none() {
+        return Err(t("This update wasn't checked against Mandara's signature; check for updates again").to_string());
+    }
+    let plan = Plan { patch: info.patch.as_ref(), full: info.full.as_ref(), binary_sha256: info.binary_sha256.as_deref(), binary_size: info.binary_size, sums_url: None };
     let full_size = info.full_size().unwrap_or_default();
     let use_patch = !opts.full_only && plan.patch.is_some();
     if opts.dry_run {

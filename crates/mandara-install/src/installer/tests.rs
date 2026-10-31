@@ -8,6 +8,21 @@ use std::path::{Path, PathBuf};
 use super::*;
 use crate::host::{Fetch, Output};
 use crate::release::tests::tarball;
+use mandara_delta::signing::sign;
+
+/// The tests' release key (private, hex).
+fn test_key() -> &'static str {
+    static KEY: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    KEY.get_or_init(|| sign::generate().unwrap().0)
+}
+
+/// Publishes `SHA256SUMS` for `files` at `base`, signed with the test key.
+fn signed_sums(host: &mut FakeHost, base: &str, files: &[(&str, &[u8])]) -> String {
+    let sums: String = files.iter().map(|(name, data)| format!("{}  {name}\n", mandara_delta::sha256_hex(data))).collect();
+    host.fetches.insert(format!("{base}/SHA256SUMS"), sums.clone().into_bytes());
+    host.fetches.insert(format!("{base}/SHA256SUMS.sig"), sign::sign(test_key(), sums.as_bytes()).unwrap().into_bytes());
+    sums
+}
 
 #[derive(Default)]
 struct FakeHost {
@@ -130,6 +145,7 @@ impl Fixture {
             mirror: None,
             xdg_data: None,
             xdg_config: None,
+            release_keys: vec![sign::public_key(test_key()).unwrap()],
         }
     }
 
@@ -351,22 +367,37 @@ fn self_check_uses_update_json() {
     let version = mandara_version::version();
     let target = platform::compiled_target();
     let manifest = |sha: &str| format!(r#"{{"schema":1,"name":"mandara","version":"{version}","targets":{{"{target}":{{"archive":{{"file":"a.tar.gz","sha256":"{sha}","size":1}},"binary":{{"path":"bin/mandara","sha256":"{sha}","size":1}}}}}}}}"#);
-    let url = format!("https://github.com/theHamdiz/mandara/releases/download/v{version}/update.json");
+    let base = format!("https://github.com/theHamdiz/mandara/releases/download/v{version}");
+    let url = format!("{base}/update.json");
     let args = InstallArgs { no_deps: true, no_greeter: true, ..Default::default() };
+    let release = |host: &mut FakeHost, sha: &str| {
+        let json = manifest(sha).into_bytes();
+        signed_sums(host, &base, &[("update.json", &json)]);
+        host.fetches.insert(url.clone(), json);
+    };
     // Matches.
     let mut host = FakeHost::default();
-    host.fetches.insert(url.clone(), manifest(&mandara_delta::sha256_hex(b"\x7fELF mandara")).into_bytes());
+    release(&mut host, &mandara_delta::sha256_hex(b"\x7fELF mandara"));
     run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(args.clone())).unwrap();
     assert!(host.text().contains("SHA-256 verified against"), "{}", host.text());
     // Differs: refused, unless --no-verify.
     let mut host = FakeHost::default();
-    host.fetches.insert(url.clone(), manifest(&"0".repeat(64)).into_bytes());
+    release(&mut host, &"0".repeat(64));
     let err = run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(args.clone())).unwrap_err();
     assert!(err.contains("doesn't match its release"), "{err}");
     let mut host = FakeHost::default();
-    host.fetches.insert(url, manifest(&"0".repeat(64)).into_bytes());
-    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(InstallArgs { no_verify: true, ..args })).unwrap();
+    release(&mut host, &"0".repeat(64));
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(InstallArgs { no_verify: true, ..args.clone() })).unwrap();
     assert!(host.text().contains("installing anyway (--no-verify)"));
+    // A signed release's update.json counts only when the signed
+    // SHA256SUMS lists it: a swapped one is a mismatch.
+    if mandara_delta::signing::must_be_signed(version) {
+        let mut host = FakeHost::default();
+        release(&mut host, &"0".repeat(64));
+        host.fetches.insert(url.clone(), manifest(&mandara_delta::sha256_hex(b"\x7fELF mandara")).into_bytes());
+        let err = run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(args)).unwrap_err();
+        assert!(err.contains("checksum mismatch for update.json"), "{err}");
+    }
 }
 
 #[test]
@@ -381,7 +412,9 @@ fn self_check_falls_back_to_a_local_tarball_and_sha256sums() {
     let name = format!("mandara-{version}-{target}.tar.gz");
     let archive = tarball(&[(&format!("mandara-{version}-{target}/bin/mandara"), b"\x7fELF release")]);
     std::fs::write(f.dir.path().join("dl").join(&name), &archive).unwrap();
-    std::fs::write(f.dir.path().join("dl/SHA256SUMS"), format!("{}  {name}\n", mandara_delta::sha256_hex(&archive))).unwrap();
+    let sums = format!("{}  {name}\n", mandara_delta::sha256_hex(&archive));
+    std::fs::write(f.dir.path().join("dl/SHA256SUMS"), &sums).unwrap();
+    std::fs::write(f.dir.path().join("dl/SHA256SUMS.sig"), sign::sign(test_key(), sums.as_bytes()).unwrap()).unwrap();
     let mut facts = f.facts(Family::Arch);
     facts.exe = exe;
     let mut host = FakeHost::default();
@@ -406,16 +439,66 @@ fn local_builds_are_not_checked() {
     assert!(host.text().contains("local build, e.g. `cargo install`"));
 }
 
-/// A release on a fake GitHub: latest tag, the tuned tarball and SHA256SUMS.
+/// A release on a fake GitHub: latest tag, the tuned tarball, SHA256SUMS
+/// and its signature (by the test key).
 fn fake_release(host: &mut FakeHost, archive_bin: &[u8], good_sum: bool) -> String {
-    let base = "https://github.com/theHamdiz/mandara/releases/download/v9.9.9";
-    let name = "mandara-9.9.9-x86_64-linux-gnu-x86-64-v3.tar.gz";
-    let archive = tarball(&[("mandara-9.9.9-x86_64-linux-gnu-x86-64-v3/bin/mandara", archive_bin), ("mandara-9.9.9-x86_64-linux-gnu-x86-64-v3/share/applications/org.mandara.studio.desktop", b"[Desktop Entry]\nExec=mandara studio --from-release\n")]);
-    let sum = if good_sum { mandara_delta::sha256_hex(&archive) } else { "f".repeat(64) };
-    host.fetches.insert(release::latest_url(release::DEFAULT_REPO), br#"{"tag_name":"v9.9.9"}"#.to_vec());
+    fake_release_of(host, "9.9.9", archive_bin, good_sum)
+}
+
+fn fake_release_of(host: &mut FakeHost, version: &str, archive_bin: &[u8], good_sum: bool) -> String {
+    let base = format!("https://github.com/theHamdiz/mandara/releases/download/v{version}");
+    let top = format!("mandara-{version}-x86_64-linux-gnu-x86-64-v3");
+    let name = format!("{top}.tar.gz");
+    let archive = tarball(&[(&format!("{top}/bin/mandara"), archive_bin), (&format!("{top}/share/applications/org.mandara.studio.desktop"), b"[Desktop Entry]\nExec=mandara studio --from-release\n")]);
+    host.fetches.insert(release::latest_url(release::DEFAULT_REPO), format!(r#"{{"tag_name":"v{version}"}}"#).into_bytes());
+    signed_sums(host, &base, &[(&name, if good_sum { &archive } else { b"something else" })]);
     host.fetches.insert(format!("{base}/{name}"), archive);
-    host.fetches.insert(format!("{base}/SHA256SUMS"), format!("{sum}  {name}\n").into_bytes());
-    name.to_string()
+    name
+}
+
+#[test]
+fn releases_after_0_3_3_must_be_signed_by_a_trusted_key() {
+    let base = "https://github.com/theHamdiz/mandara/releases/download/v9.9.9";
+    let install = |host: &mut FakeHost| {
+        let f = Fixture::new();
+        let mut facts = f.facts(Family::Arch);
+        facts.x86_64_v3 = true;
+        let result = run(host, &FakeProbe::default(), facts, InstallArgs { version: Some("9.9.9".into()), yes: true, no_deps: true, no_greeter: true, ..Default::default() });
+        (result, f.home_files())
+    };
+    // No signature.
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    fake_release(&mut host, b"\x7fELF 9.9.9", true);
+    host.fetches.remove(&format!("{base}/SHA256SUMS.sig"));
+    let (result, files) = install(&mut host);
+    assert!(result.unwrap_err().contains("isn't signed"));
+    assert!(files.is_empty());
+    // Signed by a key Mandara doesn't trust.
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    fake_release(&mut host, b"\x7fELF 9.9.9", true);
+    let sums = host.fetches[&format!("{base}/SHA256SUMS")].clone();
+    let (stranger, _) = sign::generate().unwrap();
+    host.fetches.insert(format!("{base}/SHA256SUMS.sig"), sign::sign(&stranger, &sums).unwrap().into_bytes());
+    let (result, files) = install(&mut host);
+    assert!(result.unwrap_err().contains("doesn't match Mandara's release key"));
+    assert!(files.is_empty());
+    // A listing changed after signing.
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    fake_release(&mut host, b"\x7fELF 9.9.9", true);
+    host.fetches.get_mut(&format!("{base}/SHA256SUMS")).unwrap().extend_from_slice(b"0000  extra\n");
+    assert!(install(&mut host).0.is_err());
+}
+
+#[test]
+fn releases_from_before_signing_install_with_a_note() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    fake_release_of(&mut host, "0.3.3", b"\x7fELF 0.3.3", true);
+    host.fetches.remove("https://github.com/theHamdiz/mandara/releases/download/v0.3.3/SHA256SUMS.sig");
+    let mut facts = f.facts(Family::Arch);
+    facts.x86_64_v3 = true;
+    run(&mut host, &FakeProbe::default(), facts, InstallArgs { version: Some("0.3.3".into()), yes: true, no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
+    assert!(host.text().contains("came out before releases were signed"), "{}", host.text());
 }
 
 #[test]
@@ -427,7 +510,7 @@ fn latest_release_is_downloaded_verified_and_installed() {
     facts.x86_64_v3 = true;
     run(&mut host, &FakeProbe::default(), facts, InstallArgs { latest: true, yes: true, no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
     let text = host.text();
-    assert!(text.contains(&format!("v9.9.9 · {name}")) && text.contains("SHA-256 verified"), "{text}");
+    assert!(text.contains(&format!("v9.9.9 · {name}")) && text.contains("SHA-256 verified, signed by Mandara's release key"), "{text}");
     let bin = f.home().join(".local/bin/mandara");
     assert_eq!(std::fs::read(&bin).unwrap(), b"\x7fELF 9.9.9");
     // The release's own desktop entry, pointed at the installed binary.

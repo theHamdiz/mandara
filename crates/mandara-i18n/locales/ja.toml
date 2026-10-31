@@ -5587,3 +5587,6 @@
 "The admin helper couldn't be installed, so nothing was changed." = "管理ヘルパーをインストールできなかったため、何も変更していません。"
 "by {author} · {stars} stars" = "作者 {author} · スター {stars}"
 "{count} stars" = "スター {count}"
+"{file} doesn't match the signed checksums" = "{file} は署名済みチェックサムと一致しません"
+"This update wasn't checked against Mandara's signature; check for updates again" = "この更新は Mandara の署名で確認されていません。もう一度更新を確認してください"
+"Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed" = "Mandara {version} は Mandara のリリース鍵で署名されていないため ({reason})、インストールしません"

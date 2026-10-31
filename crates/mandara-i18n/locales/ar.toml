@@ -5590,3 +5590,6 @@
 "The admin helper couldn't be installed, so nothing was changed." = "تعذّر تثبيت أداة الإدارة، لذا لم يتغيّر شيء."
 "by {author} · {stars} stars" = "بواسطة {author} · {stars} نجمة"
 "{count} stars" = "{count} نجمة"
+"{file} doesn't match the signed checksums" = "{file} لا يطابق المجاميع الاختبارية الموقَّعة"
+"This update wasn't checked against Mandara's signature; check for updates again" = "لم يُتحقَّق من هذا التحديث بتوقيع Mandara؛ ابحث عن التحديثات مرة أخرى"
+"Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed" = "Mandara {version} غير موقَّع بمفتاح إصدارات Mandara ({reason})، لذا لن يُثبَّت"

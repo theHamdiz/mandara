@@ -2,6 +2,7 @@
 //! `MANDARA_UPDATE_API` / `MANDARA_MARKETPLACE_API`): Mandara's self-update
 //! and marketplace plugin updates — check, delta install, fallback to the
 //! full download (corrupt patch, locally modified binary, release without
+//! update.json), signed releases (missing or wrong signature, tampered
 //! update.json), rollback, the check cache and offline mode. Everything is
 //! installed into a temporary folder; nothing real is touched.
 //!
@@ -151,9 +152,14 @@ fn self_update_and_plugin_updates_end_to_end() {
     assert!(patch_bytes.len() * 20 < tarball.len(), "patch {} vs tarball {}", patch_bytes.len(), tarball.len());
     let mut manifest = Manifest { schema: SCHEMA, name: "mandara".into(), version: NEW.into(), ..Default::default() };
     manifest.targets.insert(target.clone(), entry);
-    let sums = format!("{}  {tarball_name}\n", mandara_delta::sha256_hex(&tarball));
+    // The release key: the mock release is signed like a real one.
+    let (private, _) = mandara_delta::signing::sign::generate().unwrap();
+    su::trust_keys_for_tests(vec![mandara_delta::signing::sign::public_key(&private).unwrap()]);
+    let manifest_json = manifest.to_json();
+    let sums = format!("{}  {tarball_name}\n{}  {MANIFEST_FILE}\n", mandara_delta::sha256_hex(&tarball), mandara_delta::sha256_hex(manifest_json.as_bytes()));
+    let sig = mandara_delta::signing::sign::sign(&private, sums.as_bytes()).unwrap();
     let release = |with_manifest: bool| {
-        let mut assets = vec![asset(&base, &tarball_name, tarball.len()), asset(&base, &patch_name, patch_bytes.len()), asset(&base, "SHA256SUMS", sums.len())];
+        let mut assets = vec![asset(&base, &tarball_name, tarball.len()), asset(&base, &patch_name, patch_bytes.len()), asset(&base, "SHA256SUMS", sums.len()), asset(&base, "SHA256SUMS.sig", sig.len())];
         if with_manifest {
             assets.push(asset(&base, MANIFEST_FILE, 1));
         }
@@ -162,10 +168,11 @@ fn self_update_and_plugin_updates_end_to_end() {
     {
         let mut r = routes.lock().unwrap();
         r.insert(format!("/repos/{}/releases/latest", su::REPO), release(true));
-        r.insert(format!("/download/{MANIFEST_FILE}"), manifest.to_json().into_bytes());
+        r.insert(format!("/download/{MANIFEST_FILE}"), manifest_json.clone().into_bytes());
         r.insert(format!("/download/{tarball_name}"), tarball.clone());
         r.insert(format!("/download/{patch_name}"), patch_bytes.clone());
         r.insert("/download/SHA256SUMS".into(), sums.clone().into_bytes());
+        r.insert("/download/SHA256SUMS.sig".into(), sig.clone().into_bytes());
     }
 
     // A temporary install, as `mandara install` lays it out.
@@ -181,7 +188,48 @@ fn self_update_and_plugin_updates_end_to_end() {
     assert_eq!(info.patch.as_ref().map(|p| p.download.size), Some(patch_bytes.len() as u64));
     assert_eq!(info.download_size(false), Some(patch_bytes.len() as u64));
     assert_eq!(info.download_size(true), Some(tarball.len() as u64));
+    assert!(info.signed_sums.as_deref() == Some(sums.as_str()));
     assert!(!su::check_with(&base, NEW, &target).unwrap().available);
+
+    // Signed releases: no signature, a signature by another key, or a
+    // listing changed after signing → nothing is offered.
+    let swap = |path: &str, body: Option<Vec<u8>>| {
+        let mut r = routes.lock().unwrap();
+        match body {
+            Some(b) => r.insert(path.to_string(), b),
+            None => r.remove(path),
+        }
+    };
+    let latest_path = format!("/repos/{}/releases/latest", su::REPO);
+    let mut no_sig: serde_json::Value = serde_json::from_slice(&release(true)).unwrap();
+    no_sig["assets"].as_array_mut().unwrap().retain(|a| a["name"] != "SHA256SUMS.sig");
+    let signed_release = swap(&latest_path, Some(no_sig.to_string().into_bytes()));
+    assert!(su::check_with(&base, OLD, &target).unwrap_err().contains("isn't signed"));
+    swap(&latest_path, signed_release);
+    let unsigned = swap("/download/SHA256SUMS.sig", None);
+    assert!(su::check_with(&base, OLD, &target).is_err(), "a signature that can't be downloaded");
+    let (stranger, _) = mandara_delta::signing::sign::generate().unwrap();
+    swap("/download/SHA256SUMS.sig", Some(mandara_delta::signing::sign::sign(&stranger, sums.as_bytes()).unwrap().into_bytes()));
+    assert!(su::check_with(&base, OLD, &target).unwrap_err().contains("isn't signed"));
+    swap("/download/SHA256SUMS.sig", unsigned);
+    let listing = swap("/download/SHA256SUMS", Some(format!("{}  {tarball_name}\n", "0".repeat(64)).into_bytes()));
+    assert!(su::check_with(&base, OLD, &target).is_err(), "a listing changed after signing");
+    swap("/download/SHA256SUMS", listing);
+    // A replaced update.json (its own hash no longer listed) is ignored:
+    // the tarball's signed line is used, and no patch is trusted.
+    let mut forged = manifest.clone();
+    forged.version = NEW.into();
+    forged.targets.values_mut().for_each(|t| t.binary.size += 1);
+    let genuine = swap(&format!("/download/{MANIFEST_FILE}"), Some(forged.to_json().into_bytes()));
+    let forged_info = su::check_with(&base, OLD, &target).unwrap();
+    assert!(forged_info.patch.is_none() && forged_info.binary_size.is_none());
+    assert_eq!(forged_info.full.as_ref().and_then(|f| f.sha256.clone()), Some(mandara_delta::sha256_hex(&tarball)));
+    swap(&format!("/download/{MANIFEST_FILE}"), genuine);
+    // An answer without a checked signature (cached by an older build) is
+    // never installed.
+    let stale = su::UpdateInfo { signed_sums: None, ..info.clone() };
+    assert!(su::apply(&stale, &exe, ApplyOptions::default(), &|_| {}).is_err());
+    assert_eq!(std::fs::read(&exe).unwrap(), old_bin);
 
     // Dry run: plans the patch, touches nothing.
     let plan = su::apply(&info, &exe, ApplyOptions { dry_run: true, ..Default::default() }, &|_| {}).unwrap();
@@ -241,7 +289,7 @@ fn self_update_and_plugin_updates_end_to_end() {
     // A release without update.json: tarball naming + SHA256SUMS.
     routes.lock().unwrap().insert(format!("/repos/{}/releases/latest", su::REPO), release(false));
     let bare = su::check_with(&base, OLD, &target).unwrap();
-    assert!(bare.available && bare.patch.is_none() && bare.full.as_ref().is_some_and(|f| f.sha256.is_none()));
+    assert!(bare.available && bare.patch.is_none() && bare.full.as_ref().is_some_and(|f| f.sha256.as_deref() == Some(mandara_delta::sha256_hex(&tarball).as_str())));
     let report = su::apply(&bare, &exe, ApplyOptions::default(), &|_| {}).unwrap();
     assert_eq!(report.method, Method::Full);
     assert_eq!(std::fs::read(&exe).unwrap(), new_bin);

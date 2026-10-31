@@ -5587,3 +5587,6 @@
 "The admin helper couldn't be installed, so nothing was changed." = "L'assistant d'administration n'a pas pu être installé, rien n'a donc été modifié."
 "by {author} · {stars} stars" = "par {author} · {stars} étoiles"
 "{count} stars" = "{count} étoiles"
+"{file} doesn't match the signed checksums" = "{file} ne correspond pas aux sommes de contrôle signées"
+"This update wasn't checked against Mandara's signature; check for updates again" = "Cette mise à jour n'a pas été vérifiée avec la signature de Mandara ; recherchez à nouveau les mises à jour"
+"Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed" = "Mandara {version} n'est pas signé par la clé de publication de Mandara ({reason}), il ne sera donc pas installé"

@@ -6,6 +6,19 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Signed releases: Mandara now checks that an update really comes from its
+maker before installing it.
+
+### Improved
+
+- **Signed updates.** Every release is now signed with Mandara's own release
+  key, and Studio's Update now, `mandara update` and `mandara install` check
+  that signature before installing anything. If someone replaced the files
+  of a release on GitHub without the key, Mandara refuses the update and
+  tells you why, instead of installing it. To update, open Mandara Studio
+  (click the grid button at the start of the bar, or press Super+Space and
+  search for "Studio"), go to About and press Update now.
+
 ## 0.3.3 — 2026-10-31
 
 The last open finding from the security review, and icons that say what

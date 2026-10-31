@@ -5581,3 +5581,6 @@
 "The admin helper couldn't be installed, so nothing was changed." = "无法安装管理助手，因此没有做任何更改。"
 "by {author} · {stars} stars" = "作者 {author} · {stars} 个星标"
 "{count} stars" = "{count} 个星标"
+"{file} doesn't match the signed checksums" = "{file} 与已签名的校验和不符"
+"This update wasn't checked against Mandara's signature; check for updates again" = "此更新尚未用 Mandara 的签名检查;请重新检查更新"
+"Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed" = "Mandara {version} 未经 Mandara 发布密钥签名({reason}),因此不会安装"

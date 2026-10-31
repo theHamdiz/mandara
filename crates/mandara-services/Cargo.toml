@@ -90,5 +90,6 @@ bzip2 = "0.6"
 
 [dev-dependencies]
 tempfile.workspace = true
-# Tests create real patches (bidiff + zstd), as the release does.
-mandara-delta = { workspace = true, features = ["create"] }
+# Tests create real patches (bidiff + zstd) and sign their mock releases,
+# as the release does.
+mandara-delta = { workspace = true, features = ["create", "sign"] }

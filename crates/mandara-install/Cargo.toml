@@ -19,3 +19,5 @@ libc.workspace = true
 tempfile.workspace = true
 flate2.workspace = true
 tar.workspace = true
+# Tests sign their fake releases with a key of their own.
+mandara-delta = { workspace = true, features = ["sign"] }

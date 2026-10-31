@@ -49,7 +49,7 @@ mandara-wallgen = { path = "crates/mandara-wallgen" }
 mandara-install = { path = "crates/mandara-install" }
 # Delta-update format (own root so plugin authors can `cargo install` it);
 # the shell uses the apply side only, release tooling adds `create`.
-mandara-delta = { path = "tools/mandara-delta", default-features = false, features = ["archive"] }
+mandara-delta = { path = "tools/mandara-delta", default-features = false, features = ["archive", "verify"] }
 semver = "1"
 
 # UI — upstream Zed GPUI pinned to a revision with native zwlr_layer_shell_v1

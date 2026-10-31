@@ -8,12 +8,13 @@
 
 use std::path::{Path, PathBuf};
 
+use mandara_delta::signing::{self, PublicKey, SIG_FILE};
 use mandara_delta::{MANIFEST_FILE, SHELL_BINARY};
 
 use crate::args::InstallArgs;
 use crate::family::{Family, OsRelease};
 use crate::files::{self, Paths};
-use crate::host::{Cmd, Host, Io, Level, TempDir};
+use crate::host::{Cmd, Fetch, Host, Io, Level, TempDir};
 use crate::packages;
 use crate::pkg::{PackageManager, Privilege};
 use crate::platform::{self, MIN_RUST, RELEASED_ARCHES};
@@ -97,6 +98,9 @@ pub struct Facts {
     /// `$XDG_DATA_HOME` / `$XDG_CONFIG_HOME`.
     pub xdg_data: Option<String>,
     pub xdg_config: Option<String>,
+    /// The release keys signatures are checked against (the shipped ones;
+    /// a test key in tests).
+    pub release_keys: Vec<PublicKey>,
 }
 
 impl Facts {
@@ -131,6 +135,7 @@ impl Facts {
             mirror: env(release::RELEASE_BASE_ENV),
             xdg_data: env("XDG_DATA_HOME"),
             xdg_config: env("XDG_CONFIG_HOME"),
+            release_keys: signing::trusted_keys(),
         }
     }
 
@@ -449,31 +454,73 @@ impl<'a> Installer<'a> {
         Ok(Stage::embedded(exe))
     }
 
+    /// A release's `SHA256SUMS`, its signature checked (releases after
+    /// 0.3.3 must be signed). `Unavailable` when it can't be downloaded,
+    /// `Mismatch` when the signature is missing or wrong.
+    fn release_sums(&mut self, base: &str, version: &str) -> Result<String, SelfCheck> {
+        let sums = self.host.fetch(&format!("{base}/{SUMS_FILE}"), MAX_JSON_BYTES).map_err(|e| SelfCheck::Unavailable(format!("{SUMS_FILE}: {e}")))?;
+        let sig = match self.host.fetch(&format!("{base}/{SIG_FILE}"), MAX_JSON_BYTES) {
+            Ok(sig) => Some(sig),
+            Err(Fetch::NotFound) => None,
+            Err(e) => return Err(SelfCheck::Unavailable(format!("{SIG_FILE}: {e}"))),
+        };
+        signing::checked_sums(&self.facts.release_keys, version, &sums, sig.as_deref()).map_err(SelfCheck::Mismatch)
+    }
+
     /// `update.json`'s binary hash first; else a release tarball next to
-    /// the extracted binary, checked against `SHA256SUMS`.
+    /// the extracted binary, checked against `SHA256SUMS`. For a signed
+    /// release, both only count once the signed `SHA256SUMS` vouches for
+    /// them.
     fn self_check(&mut self, bytes: &[u8], version: &str, target: &str) -> SelfCheck {
         let base = release::release_base(&self.facts.repo, version, self.facts.mirror.as_deref());
         let actual = mandara_delta::sha256_hex(bytes);
+        let signed = signing::must_be_signed(version);
         let mut why = Vec::new();
+        let remote_sums = match self.release_sums(&base, version) {
+            Ok(sums) => Some(sums),
+            Err(SelfCheck::Unavailable(e)) => {
+                why.push(e);
+                None
+            }
+            Err(other) => return other,
+        };
         match self.host.fetch(&format!("{base}/{MANIFEST_FILE}"), MAX_JSON_BYTES) {
-            Ok(json) => match release::manifest_binary_sha(&json, version, target) {
-                Ok(Some(expected)) if expected == actual => return SelfCheck::Verified(format!("v{version}'s {MANIFEST_FILE}")),
-                Ok(Some(expected)) => return SelfCheck::Mismatch(format!("v{version}'s {MANIFEST_FILE} publishes {expected} for {target}, this binary is {actual}")),
-                Ok(None) => why.push(format!("{MANIFEST_FILE} lists no {target} build")),
-                Err(e) => why.push(e),
-            },
+            Ok(json) => {
+                let vouched = match (&remote_sums, signed) {
+                    (Some(sums), true) => match release::verify_sums(&json, sums, MANIFEST_FILE) {
+                        Ok(_) => true,
+                        Err(e) => return SelfCheck::Mismatch(e),
+                    },
+                    (None, true) => {
+                        why.push(format!("{MANIFEST_FILE} can't be checked without the signed {SUMS_FILE}"));
+                        false
+                    }
+                    (_, false) => true,
+                };
+                if vouched {
+                    match release::manifest_binary_sha(&json, version, target) {
+                        Ok(Some(expected)) if expected == actual => return SelfCheck::Verified(format!("v{version}'s {}", if signed { "signed release" } else { MANIFEST_FILE })),
+                        Ok(Some(expected)) => return SelfCheck::Mismatch(format!("v{version}'s {MANIFEST_FILE} publishes {expected} for {target}, this binary is {actual}")),
+                        Ok(None) => why.push(format!("{MANIFEST_FILE} lists no {target} build")),
+                        Err(e) => why.push(e),
+                    }
+                }
+            }
             Err(e) => why.push(format!("{MANIFEST_FILE}: {e}")),
         }
-        let mut remote_sums: Option<Option<String>> = None;
         for archive in release::local_archives(&self.facts.exe, &self.facts.cwd, version, target) {
             let name = archive.file_name().unwrap_or_default().to_string_lossy().into_owned();
-            let local = std::fs::read_to_string(archive.with_file_name(SUMS_FILE)).ok();
+            let local = std::fs::read(archive.with_file_name(SUMS_FILE)).ok().map(|sums| (sums, std::fs::read(archive.with_file_name(SIG_FILE)).ok()));
             let sums = match local {
-                Some(s) => Some(s),
-                None => remote_sums.get_or_insert_with(|| self.host.fetch(&format!("{base}/{SUMS_FILE}"), MAX_JSON_BYTES).ok().map(|b| String::from_utf8_lossy(&b).into_owned())).clone(),
+                Some((sums, Some(sig))) => match signing::checked_sums(&self.facts.release_keys, version, &sums, Some(&sig)) {
+                    Ok(sums) => Some(sums),
+                    Err(e) => return SelfCheck::Mismatch(e),
+                },
+                Some((sums, None)) if !signed => Some(String::from_utf8_lossy(&sums).into_owned()),
+                _ => remote_sums.clone(),
             };
             let Some(sums) = sums else {
-                why.push(format!("no {SUMS_FILE} for {name}"));
+                why.push(format!("no {} {SUMS_FILE} for {name}", if signed { "signed" } else { "published" }));
                 continue;
             };
             match std::fs::read(&archive) {
@@ -521,8 +568,17 @@ impl<'a> Installer<'a> {
         };
         self.say(Level::Ok, format!("v{version} · {file}"));
         let sums = self.host.fetch(&format!("{base}/{SUMS_FILE}"), MAX_JSON_BYTES).map_err(|_| format!("couldn't download {SUMS_FILE} for v{version}"))?;
-        release::verify_sums(&archive, &String::from_utf8_lossy(&sums), &file)?;
-        self.say(Level::Ok, "SHA-256 verified");
+        let sig = match self.host.fetch(&format!("{base}/{SIG_FILE}"), MAX_JSON_BYTES) {
+            Ok(sig) => Some(sig),
+            Err(Fetch::NotFound) => None,
+            Err(e) => return Err(format!("couldn't download {SIG_FILE} for v{version}: {e}")),
+        };
+        let sums = signing::checked_sums(&self.facts.release_keys, &version, &sums, sig.as_deref()).map_err(|e| format!("{e}; not installing it"))?;
+        release::verify_sums(&archive, &sums, &file)?;
+        match sig {
+            Some(_) => self.say(Level::Ok, "SHA-256 verified, signed by Mandara's release key"),
+            None => self.say(Level::Ok, format!("SHA-256 verified (v{version} came out before releases were signed)")),
+        }
         let bin = release::extract(&archive, SHELL_BINARY)?.ok_or_else(|| format!("{file} has no {SHELL_BINARY}"))?;
         let exe = self.tmp()?.join(files::BINARY);
         write_executable(&exe, &bin)?;

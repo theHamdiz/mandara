@@ -5586,3 +5586,6 @@
 "The admin helper couldn't be installed, so nothing was changed." = "Не удалось установить помощника администратора, поэтому ничего не изменилось."
 "by {author} · {stars} stars" = "автор {author} · звёзд: {stars}"
 "{count} stars" = "звёзд: {count}"
+"{file} doesn't match the signed checksums" = "{file} не совпадает с подписанными контрольными суммами"
+"This update wasn't checked against Mandara's signature; check for updates again" = "Это обновление не проверено подписью Mandara; проверьте обновления ещё раз"
+"Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed" = "Mandara {version} не подписана ключом выпусков Mandara ({reason}), поэтому не будет установлена"

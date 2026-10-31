@@ -23,6 +23,8 @@ use sha2::{Digest, Sha256};
 pub mod archive;
 #[cfg(feature = "create")]
 pub mod create;
+#[cfg(feature = "verify")]
+pub mod signing;
 
 /// File name of the release manifest.
 pub const MANIFEST_FILE: &str = "update.json";

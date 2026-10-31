@@ -5586,3 +5586,6 @@
 "The admin helper couldn't be installed, so nothing was changed." = "Yönetici yardımcısı kurulamadı, bu yüzden hiçbir şey değişmedi."
 "by {author} · {stars} stars" = "{author} · {stars} yıldız"
 "{count} stars" = "{count} yıldız"
+"{file} doesn't match the signed checksums" = "{file} imzalı sağlama toplamlarıyla eşleşmiyor"
+"This update wasn't checked against Mandara's signature; check for updates again" = "Bu güncelleme Mandara'nın imzasıyla doğrulanmadı; güncellemeleri yeniden denetleyin"
+"Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed" = "Mandara {version}, Mandara'nın sürüm anahtarıyla imzalanmamış ({reason}), bu yüzden kurulmayacak"

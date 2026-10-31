@@ -169,6 +169,7 @@ On every push to `main` (not on its own `chore(release)` commits):
    | `mandara-<old>-to-<v>-<target>[-<variant>].patch.zst` | delta update from the previous release (see below) |
    | `update.json` | update manifest: per target the tarball, `bin/mandara` and patches, with SHA-256s and sizes |
    | `SHA256SUMS` | checksums of everything |
+   | `SHA256SUMS.sig` | Ed25519 signature of `SHA256SUMS` by the release key (see [Signed releases](#signed-releases)) |
 
 3. **Publish:** a GitHub release `v<version>` whose notes are the
    version's `CHANGELOG.md` entry (`cargo xtask changelog <version>`),
@@ -210,6 +211,40 @@ file. Text after a `---` rule in a release body (the install command) isn't
 shown in Studio. Don't edit released entries except to fix mistakes, and
 never add the version heading yourself: the release bump does it.
 
+## Signed releases
+
+Every release after 0.3.3 signs its `SHA256SUMS` with Mandara's release key
+(Ed25519). The listing covers every asset, `update.json` and the patches
+included, so one signature vouches for the whole release. Someone who can
+replace release files but doesn't hold the key can't get them installed:
+
+- **Updates** (`mandara update`, Studio → About → Update now) always require
+  a valid `SHA256SUMS.sig`. `update.json` is used only when its hash matches
+  its line in the signed listing (otherwise the tarball's signed line is
+  used and no patch is trusted), and every later hash comes from there.
+- **`mandara install`** requires the signature for releases after 0.3.3
+  (`--version 0.3.3` or older installs with a note that it came out before
+  signing). Its self-check trusts `update.json` or a local tarball only
+  through the signed listing.
+
+The trusted public keys are compiled in from
+`tools/mandara-delta/release-keys.txt` (`mandara_delta::signing`). The
+private key exists only in the `MANDARA_RELEASE_KEY` repository secret and
+the owner's backup (`~/.local/share/mandara-release/release-key`, mode
+0600). The publish job's **Sign checksums** step runs
+`cargo xtask release-key sign dist/SHA256SUMS`, which also checks the
+signature against the shipped keys, and the release fails without the
+secret.
+
+`cargo xtask release-key new` created the key: it hands the private half to
+`gh secret set` on stdin (never printed), writes the backup, and adds the
+public half to `release-keys.txt`. It refuses to replace an existing key,
+secret or backup. **To change keys**, run it with `--force` (after moving
+the old backup away), release once while the old key still signs (put the
+old private key back in the secret for that release), then remove the old
+line from `release-keys.txt`: clients only trust a new key after they've
+installed a release that lists it.
+
 ## Delta updates
 
 Binary patches are Mandara's main update method (`mandara update`, Studio →
@@ -230,7 +265,7 @@ it with pure-Rust code only (bipatch + ruzstd) and checks every step:
 3. the rebuilt binary's SHA-256 and size equal `binary` in `update.json`.
 
 Any failure falls back to the tarball, verified against `update.json` (or
-`SHA256SUMS` for releases without one). The new binary replaces the old one
+`SHA256SUMS` for releases without one); both come from the signed listing. The new binary replaces the old one
 atomically (`mandara.new` → fsync → rename) and the old one stays as
 `mandara.old` (`mandara update rollback`). Package-managed installs (`/usr`,
 `pacman -Qo` / `dpkg -S` / `rpm -qf`) and cargo builds are never replaced.
@@ -504,7 +539,8 @@ shell script. Users download a release tarball, extract it and run
 1. It checks its own SHA-256 against the release's `update.json` (the
    binary hash of its target), else against a tarball sitting next to the
    extracted folder and `SHA256SUMS`, refusing a mismatch (`--no-verify`
-   overrides). Cargo builds from a checkout skip the check; debug builds are
+   overrides). For signed releases both count only through the signed
+   `SHA256SUMS`. Cargo builds from a checkout skip the check; debug builds are
    refused.
 2. It installs the runtime packages of the distribution family (tables in
    `crates/mandara-install/src/packages.rs`, unit-tested: every family has
@@ -518,8 +554,8 @@ shell script. Users download a release tarball, extract it and run
 `--latest` / `--version X.Y.Z` download a release instead: it asks the GitHub
 API for the latest tag, picks `x86_64`, `x86_64-v3` (when the CPU has
 AVX2/BMI2/FMA/MOVBE/F16C) or `aarch64` (glibc or musl, as the running binary),
-downloads the tarball and checks it against `SHA256SUMS`, refusing to install
-on a mismatch. It falls back to building from source when there is no
+downloads the tarball and checks it against `SHA256SUMS` and its signature,
+refusing to install on a mismatch or a missing or wrong signature. It falls back to building from source when there is no
 matching binary (other architectures). `--from-source` builds with
 `cargo xtask build` (installing rustup's own `rustup-init` binary, checksum
 verified, when Rust is missing). `MANDARA_RELEASE_BASE=<url>` (with

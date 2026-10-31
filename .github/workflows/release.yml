@@ -32,6 +32,12 @@
 #                                                  the tarball, bin/mandara and
 #                                                  patches, with SHA-256s/sizes
 #   SHA256SUMS                                     checksums of everything
+#   SHA256SUMS.sig                                 Ed25519 signature of
+#                                                  SHA256SUMS by the release
+#                                                  key (secret
+#                                                  MANDARA_RELEASE_KEY); the
+#                                                  updater and installer
+#                                                  refuse releases without it
 name: Release
 
 on:
@@ -385,6 +391,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: xtask
+
+      # SHA256SUMS lists every asset (update.json included), so signing it
+      # vouches for the whole release. Fails without the key: Mandara
+      # doesn't install unsigned releases.
+      - name: Sign checksums
+        env:
+          MANDARA_RELEASE_KEY: ${{ secrets.MANDARA_RELEASE_KEY }}
+        run: cargo xtask release-key sign dist/SHA256SUMS
 
       # The release notes: this version's CHANGELOG.md entry in plain words
       # (Studio and `mandara update` show them before updating), then how

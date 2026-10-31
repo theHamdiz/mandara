@@ -27,6 +27,11 @@ archive = ["dep:tar", "dep:flate2"]
 # Patch creation (release tooling only): bidiff's suffix-array diff and the
 # reference zstd encoder at a high level. Never linked into the shell.
 create = ["archive", "dep:bidiff", "dep:zstd", "dep:toml"]
+# Checking release signatures (`SHA256SUMS.sig`, Ed25519 through ring,
+# which the shell already links for TLS).
+verify = ["dep:ring"]
+# Creating the release key and signing (release tooling only).
+sign = ["verify"]
 
 [dependencies]
 # Apply side (linked into the shell): bipatch is bidiff's tiny pure-Rust
@@ -41,3 +46,4 @@ flate2 = { version = "1.1", optional = true }
 bidiff = { version = "1", optional = true }
 zstd = { version = "0.13", optional = true }
 toml = { version = "1.1", optional = true }
+ring = { version = "0.17", optional = true }

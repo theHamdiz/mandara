@@ -1246,7 +1246,9 @@ Pick the tarball that fits (or grab it from the
 browser): `mandara-x86_64-linux-gnu-x86-64-v3` (AVX2-era CPUs, fastest),
 `mandara-x86_64-linux-gnu`, `mandara-aarch64-linux-gnu`, or the `-musl`
 builds for Alpine, Void musl and Chimera. `SHA256SUMS` sits next to them
-(`sha256sum -c SHA256SUMS --ignore-missing` checks a download by hand).
+(`sha256sum -c SHA256SUMS --ignore-missing` checks a download by hand),
+signed by Mandara's release key in `SHA256SUMS.sig`: `mandara install` and
+every update check that signature and refuse a release without it.
 
 `mandara install` copies itself to `~/.local/bin`, after **checking its own
 SHA-256** against the release's published checksums. Then it installs the

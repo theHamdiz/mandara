@@ -3772,6 +3772,7 @@ dependencies = [
  "bidiff",
  "bipatch",
  "flate2",
+ "ring",
  "ruzstd",
  "serde",
  "serde_json",

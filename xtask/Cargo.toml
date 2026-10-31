@@ -24,7 +24,7 @@ serde_json.workspace = true
 toml.workspace = true
 # `cargo xtask delta` / `update-part` / `plugin-delta`: binary patches and
 # update.json (bidiff + zstd encoder; the shell links only the apply side).
-mandara-delta = { workspace = true, features = ["create"] }
+mandara-delta = { workspace = true, features = ["create", "sign"] }
 # `cargo xtask resource-check` / `sandbox`: process control and /proc
 # (kill, setsid, rlimits, parent-death signal, clock ticks).
 rustix.workspace = true

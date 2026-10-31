@@ -28,6 +28,10 @@ mandara update plugins apply [ID] [--full] [--dry-run] [--force]   # --force: a 
 mandara update plugins rollback ID
 ```
 
+Studio → About → Update now does the same with one button. Either way, only
+releases signed by Mandara's release key are installed: a release whose
+`SHA256SUMS.sig` is missing or wrong is refused.
+
 ## What changed
 
 Every release comes with notes in plain words (`CHANGELOG.md`, compiled into
