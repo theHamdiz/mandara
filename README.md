@@ -1251,7 +1251,10 @@ builds for Alpine, Void musl and Chimera. `SHA256SUMS` sits next to them
 `mandara install` copies itself to `~/.local/bin`, after **checking its own
 SHA-256** against the release's published checksums. Then it installs the
 runtime packages your distribution needs (asking for sudo, doas, run0 or
-pkexec only for that), hooks into your compositor non-destructively and, if
+pkexec only for that), installs a root-owned **admin helper** (a copy of
+Mandara only root can change, the one Studio's administrator actions run,
+so your user-writable copy never runs as root), hooks into your compositor
+non-destructively and, if
 you agree, starts Mandara with it, switches your login screen to Mandara
 Login (greetd + cage, backed up and reversible) and unlocks GNOME Keyring /
 KWallet with your login password. Updates come later by binary patch

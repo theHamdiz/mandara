@@ -850,7 +850,7 @@ fn generated_badge(palette: &mandara_theme::MandaraPalette, label: bool) -> gpui
         .text_size(px(text::LABEL))
         .font_weight(FontWeight::MEDIUM)
         .text_color(palette.on_surface.hsla())
-        .child(icon("sparkles", BADGE_ICON, palette.primary))
+        .child(icon("brush", BADGE_ICON, palette.primary))
         .when(label, |el| el.child(t("Generated")))
 }
 
@@ -1683,7 +1683,7 @@ impl Render for PickerView {
                     None => t("Generate").into(),
                 };
                 el.child(
-                    pill_btn("wall-generate", if generating.is_some() { "close" } else { "sparkles" }, Some(label), generating.is_some())
+                    pill_btn("wall-generate", if generating.is_some() { "close" } else { "brush" }, Some(label), generating.is_some())
                         .font_features(crate::fonts::tabular_nums())
                         .on_click(cx.listener(|this, _, _, cx| this.generate(cx))),
                 )

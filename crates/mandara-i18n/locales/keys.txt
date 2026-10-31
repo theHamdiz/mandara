@@ -40,6 +40,7 @@
 1 plugin update
 1 px glass edge highlight
 1 session
+1 star
 1 thing to look at
 1 update
 100% Rust
@@ -3643,6 +3644,7 @@ Set time automatically
 Set up
 Sets the cursor in Mandara's compositor drop-in and live
 Setting types
+Setting up Mandara's admin helper first (one more approval, only this once)…
 Settings
 Settings and data this app may have left in your home folder. Only what you tick moves to the Trash; nothing is deleted, and the app's removal doesn't depend on it.
 Settings in Studio
@@ -4072,6 +4074,7 @@ The QR code isn't a 2FA (otpauth://) code
 The Trash: count its items, or empty it (asks for --yes)
 The XCursor theme name, e.g. Bibata-Modern-Ice; pick one from the gallery above
 The active keyboard layout; click to switch
+The admin helper couldn't be installed, so nothing was changed.
 The app each kind of file or link opens in, for every app that asks the system (mimeapps.list).
 The archive contains unsafe paths
 The archive has no {path}
@@ -4847,7 +4850,7 @@ boot entry id (see `session boot-entries`) or firmware
 boot entry id, e.g. windows.conf
 by {author}
 by {author} · v{version}
-by {author} · ★ {stars}
+by {author} · {stars} stars
 by {developer}
 cargo build
 catalog id[/variant] or XCursor theme name
@@ -5210,6 +5213,7 @@ your default
 {count} ready to install
 {count} s
 {count} sessions
+{count} stars
 {count} stopped containers — show All to start one
 {count} themes · add your own in {folder}
 {count} updates

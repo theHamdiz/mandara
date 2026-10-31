@@ -362,7 +362,7 @@ impl StudioView {
                     .row()
                     .gap(px(SPACE_8_PX))
                     .child(pill("wallgen-details", "grid", t("In the store"), false, p).on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.open_plugin(wg::ID, super::plugin_modal::ModalView::Detail, window, cx))))
-                    .child(pill("wallgen-enable", "sparkles", t("Turn on"), true, p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.plugin_lifecycle(wg::ID, Action::Enable, cx)))),
+                    .child(pill("wallgen-enable", "brush", t("Turn on"), true, p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.plugin_lifecycle(wg::ID, Action::Enable, cx)))),
             )
             .into_any_element()
     }
@@ -668,7 +668,7 @@ impl StudioView {
             .bg(p.surface_base.with_alpha(ALPHA_80).hsla())
             .text_size(px(TEXT_12_PX))
             .font_weight(FontWeight::MEDIUM)
-            .child(icon("sparkles", ICON_12_PX, p.primary))
+            .child(icon("brush", ICON_12_PX, p.primary))
             .child(format!("{} · {}", tr(r.style.label()), tr(r.palette.label())));
         let size_chip = div()
             .absolute()
@@ -710,7 +710,7 @@ impl StudioView {
             }))
             .child(icon_button("wallgen-lock", if locked { "lock" } else { "lock-open" }, tk("Lock the layout: shuffles and variations keep this seed"), locked, p).on_click(|_: &ClickEvent, _, cx| wg::update_settings(cx, |s| s.seed_locked = !s.seed_locked)))
             .child(div().flex_1())
-            .child(pill("wallgen-surprise", "sparkles", t("Surprise me"), false, p).on_click(move |_: &ClickEvent, _, cx| {
+            .child(pill("wallgen-surprise", "dice", t("Surprise me"), false, p).on_click(move |_: &ClickEvent, _, cx| {
                 edit(dark, cx, |s, r| {
                     let keep = s.seed_locked.then_some(r.seed);
                     *r = model::random_recipe(None, model::fresh_seed(), r.light, keep);
@@ -890,7 +890,7 @@ impl StudioView {
             .when(!running, |el| el.shadow(vec![gpui::BoxShadow { color: p.primary.with_alpha(ALPHA_30).hsla(), offset: gpui::point(px(0.0), px(SPACE_4_PX)), blur_radius: px(SPACE_14_PX), spread_radius: px(0.0), inset: false }]))
             .hover(|st| st.opacity(ALPHA_90))
             .active(|st| st.opacity(ALPHA_75))
-            .child(icon("sparkles", ICON_17_PX, if running { p.on_surface_variant } else { p.on_primary }))
+            .child(icon("brush", ICON_17_PX, if running { p.on_surface_variant } else { p.on_primary }))
             .child(t("Generate wallpaper"))
             .when(!running, |el| el.on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
                 let p = mandara_core::frame_palette(window, cx);
@@ -1523,7 +1523,7 @@ impl StudioView {
                 .flex_col()
                 .items_center()
                 .gap(px(SPACE_6_PX))
-                .child(icon("sparkles", ICON_22_PX, p.on_surface_variant.with_alpha(ALPHA_60)))
+                .child(icon("image", ICON_22_PX, p.on_surface_variant.with_alpha(ALPHA_60)))
                 .child(div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(if st(cx).recent_loading { t("Looking for generated wallpapers…") } else { t("Nothing generated yet. Your wallpapers appear here.") }))
                 .into_any_element()
         } else {

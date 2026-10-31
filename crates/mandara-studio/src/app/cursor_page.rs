@@ -169,8 +169,10 @@ fn backdrop(p: &MandaraPalette, tint: Option<Color>) -> gpui::Background {
     mandara_core::oklab_gradient(DIAGONAL_DEG, bg, bg.mix(tint, STRIP_TINT))
 }
 
+/// A GitHub star count in words ("4.2k stars"), no star glyph.
 fn stars(n: u32) -> String {
-    if n as f32 >= THOUSAND { format!("★ {:.1}k", n as f32 / THOUSAND) } else { format!("★ {n}") }
+    let count = if n as f32 >= THOUSAND { format!("{:.1}k", n as f32 / THOUSAND) } else { n.to_string() };
+    if n == 1 { t("1 star").to_string() } else { tf("{count} stars", &[("count", &count)]) }
 }
 
 /// Makes `theme` the cursor (`None`: your compositor's own), and points X11
@@ -790,8 +792,9 @@ mod tests {
     fn swatches_and_stars_render() {
         let v = &CATALOG[0].variants[0];
         assert_eq!(swatch(v).to_rgba8()[3], u8::MAX);
-        assert_eq!(stars(4233), "★ 4.2k");
-        assert_eq!(stars(186), "★ 186");
+        assert_eq!(stars(4233), "4.2k stars");
+        assert_eq!(stars(186), "186 stars");
+        assert_eq!(stars(1), "1 star");
         assert_eq!(catalog_name("Bibata-Modern-Ice").as_deref(), Some("Bibata Modern · Ice"));
         assert_eq!(catalog_name("Adwaita"), None);
     }

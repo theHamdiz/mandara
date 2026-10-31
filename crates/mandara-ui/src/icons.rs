@@ -151,6 +151,12 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "eye" => r#"<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>"#.into(),
         "eye-off" => r#"<path d="M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.6 3.4M6.6 6.6C4 8.3 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 5.4-1.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3.5 3.5l17 17"/>"#.into(),
         "pencil" => r#"<path d="M15.5 4.5l4 4L8.5 19.5l-5 1 1-5z"/><path d="M13.5 6.5l4 4"/>"#.into(),
+        // A paint brush: making art (the wallpaper generator).
+        "brush" => r#"<path d="M20 4l-8.2 8.2"/><path d="M15.6 7.1l1.3 1.3"/><path d="M11.8 12.2c-2.1-1.3-4.9-.1-5.3 2.6-.3 1.9-1.2 3-2.7 3.6 2.8 1.6 6.5 1.1 8.1-1.2 1-1.4 1-3.4-.1-5z"/>"#.into(),
+        // A die: something chosen at random.
+        "dice" => r#"<rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="8.8" cy="8.8" r="1.25" fill="black" stroke="none"/><circle cx="15.2" cy="8.8" r="1.25" fill="black" stroke="none"/><circle cx="12" cy="12" r="1.25" fill="black" stroke="none"/><circle cx="8.8" cy="15.2" r="1.25" fill="black" stroke="none"/><circle cx="15.2" cy="15.2" r="1.25" fill="black" stroke="none"/>"#.into(),
+        // A page with lines and a version tag: release notes.
+        "release-notes" => r#"<path d="M14.5 3H7a2.5 2.5 0 0 0-2.5 2.5v13A2.5 2.5 0 0 0 7 21h10a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14.5 3v5h5"/><path d="M8.5 12.5h7M8.5 16h4"/><path d="M8.5 7.5h2.5"/>"#.into(),
         "sparkles" => r#"<path d="M10.5 3.5l1.6 4.4a3 3 0 0 0 1.8 1.8l4.4 1.6-4.4 1.6a3 3 0 0 0-1.8 1.8l-1.6 4.4-1.6-4.4a3 3 0 0 0-1.8-1.8L2.7 11.3l4.4-1.6a3 3 0 0 0 1.8-1.8z"/><path d="M18.5 2.5v4M16.5 4.5h4M19 16.5v3M17.5 18h3"/>"#.into(),
         _ => return None,
     })
@@ -188,7 +194,7 @@ pub const ICON_NAMES: &[&str] = &[
     "eject", "usb", "box", "package", "gauge", "leaf", "download", "server", "terminal", "battery", "plug", "external", "folder",
     "stop", "heart", "alert", "zap",
     "eyedropper", "waves", "arrow-down", "arrow-up", "shield", "copy", "clock", "flame",
-    "user", "user-plus", "key", "tiles", "eye", "eye-off", "pencil", "sparkles",
+    "user", "user-plus", "key", "tiles", "eye", "eye-off", "pencil", "sparkles", "brush", "dice", "release-notes",
 ];
 
 /// An icon element tinted with `color`.

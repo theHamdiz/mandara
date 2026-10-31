@@ -248,7 +248,7 @@ setting with a **live preview** — the real greeter view, rendering your draft.
 The first tab, **Login manager**, shows the active login screen (name, icon,
 kind) and every choice, with Mandara Login marked **Recommended · default**.
 **Use** runs `mandara greeter use <name> --dry-run` and shows that plan in a
-confirm card; **Switch** then runs `pkexec mandara greeter use <name> --apply`
+confirm card; **Switch** then runs `pkexec <admin> greeter use <name> --apply`
 (no shell involved) and reports the result — the change shows the next time
 you log in or restart. Choices that aren't installed are disabled with what's
 missing and the package to install (e.g. "greetd isn't installed — install it
@@ -264,9 +264,19 @@ a dry run.
 * Preview buttons play the entrance, typing, a wrong password, the success
   transition, or the idle clock.
 * **Preview full screen** runs `mandara greeter --demo` with the draft.
-* **Apply to login screen** runs `pkexec mandara greeter apply-config`
+* **Apply to login screen** runs `pkexec <admin> greeter apply-config`
   (validates the draft and installs it as `/etc/mandara/greeter.toml`; the
   previous file is kept as `.bak`).
+
+`<admin>` is always a copy of Mandara that only root can change, never the
+one in your home (which your account, or malware in it, could replace before
+an administrator approves the prompt): a package's `mandara`, the admin
+helper `/usr/local/lib/mandara/mandara-admin` that `mandara install` puts in
+place, or the login screen's own `/usr/local/lib/mandara/mandara-greeter`.
+Studio checks that root owns the file and every folder above it. Without
+one yet, the first such action installs the helper from your binary (`pkexec
+install -D -o root -g root -m 0755 …`, one more approval), and after that your
+own copy never runs as root.
 
 ## Configuration reference
 

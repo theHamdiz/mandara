@@ -23,6 +23,9 @@ use crate::release::{self, ARCHIVE_SUFFIX, MAX_ARCHIVE_BYTES, MAX_JSON_BYTES, SU
 const LOGIN_PROGRAMS: &[&str] = &["greetd", "cage"];
 /// The lock screen's own PAM service (else `login` is used).
 const LOCK_PAM: &str = "/etc/pam.d/mandara-lock";
+/// Studio's admin helper: the root-owned copy of Mandara its administrator
+/// actions run as root (`mandara_config::admin::ADMIN_EXE`).
+pub const ADMIN_EXE: &str = "/usr/local/lib/mandara/mandara-admin";
 /// Loads i2c-dev at boot (DDC/CI monitor brightness).
 const I2C_MODULES_LOAD: &str = "/etc/modules-load.d/i2c-dev.conf";
 const I2C_MODULE: &str = "i2c-dev";
@@ -339,6 +342,7 @@ impl<'a> Installer<'a> {
         self.install_files(&stage)?;
         self.compositor();
         let bin = self.paths.binary();
+        self.admin_helper(&bin);
         self.greeter(&bin);
         self.lock_hint();
         self.i2c();
@@ -667,6 +671,7 @@ impl<'a> Installer<'a> {
         }
         self.say(Level::Info, format!("then run: mandara setup{setup}"));
         self.say(Level::Info, "then run: mandara setup --check (and offer --fix-conflicts)");
+        self.admin_helper(exe);
         self.greeter(exe);
         self.i2c();
         Ok(())
@@ -837,6 +842,36 @@ impl<'a> Installer<'a> {
             self.say(Level::Ok, "keyrings unlock when you log in with your password (undo: sudo mandara greeter keyring-unlock --remove)");
         } else {
             self.say(Level::Warn, format!("keyrings were not set up; run: {hint}"));
+        }
+    }
+
+    /// Studio's administrator actions (login screen, keyring unlock) run as
+    /// root only through a root-owned copy of Mandara, never the copy in
+    /// your home, which your account (or malware in it) can change. This
+    /// installs that copy from the binary just checked against its release.
+    fn admin_helper(&mut self, exe: &Path) {
+        // NixOS installs nothing as root from here; a `mandara` from the Nix
+        // store is root-owned already, and Studio uses that.
+        if self.facts.family == Family::NixOS {
+            self.say(Level::Detail, "admin helper: on NixOS, install mandara through your configuration; Studio runs that root-owned copy for administrator actions");
+            return;
+        }
+        let exe_s = exe.to_string_lossy().into_owned();
+        let argv = ["install", "-D", "-o", "root", "-g", "root", "-m", "0755", exe_s.as_str(), ADMIN_EXE];
+        if self.dry() {
+            self.as_root(Cmd::new(&argv));
+            return;
+        }
+        self.say(Level::Step, "Admin helper");
+        if !self.ask("Install Mandara's admin helper (a copy only root can change, used when Studio needs administrator rights)?", true) {
+            self.say(Level::Info, "skipped; Studio installs it the first time it needs administrator rights");
+            return;
+        }
+        if self.as_root(Cmd::new(&argv).io(Io::Quiet)) {
+            self.say(Level::Ok, format!("admin helper: {ADMIN_EXE}"));
+        } else {
+            let hint = self.root_hint(&argv);
+            self.say(Level::Warn, format!("admin helper not installed; run: {hint}"));
         }
     }
 

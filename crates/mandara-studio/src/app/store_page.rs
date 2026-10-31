@@ -406,7 +406,7 @@ pub(crate) fn plugin_icon(id: &str) -> &'static str {
         "media" => "music",
         "screenshot" => "camera",
         "wallpaper" => "image",
-        "wallpaper-generator" => "sparkles",
+        "wallpaper-generator" => "brush",
         "wallhaven" => "cloud",
         "cursors" => "arrow",
         "mini-stats" => "cpu",

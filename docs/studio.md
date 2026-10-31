@@ -415,7 +415,8 @@ narrow ones; everything mirrors for right-to-left languages.
   replaced (its D-Bus API takes no password), so the **Unlock at login** card
   below shows whether GNOME Keyring and KWallet open with your login
   password through Mandara Login's PAM stack, with *Set up* / *Remove*
-  (the `greeter keyring-unlock` plan first, then `pkexec … --apply`;
+  (the `greeter keyring-unlock` plan first, then `pkexec … --apply` through
+  the root-owned admin helper, never your own copy;
   `MANDARA_GREETER_DRY_RUN=1` keeps it plan-only), and KeePassXC's state with
   *Unlock now*.
 - **Profiles & backup**: recent changes with undo, named profiles (look

@@ -5,7 +5,7 @@ fn main() {
         Ok(found) => {
             println!("{} of {} plugin(s) for {:?}", found.items.len(), found.total, q);
             for l in found.items.iter().take(5) {
-                println!("  {} ★{} — {}", l.full_name, l.stargazers_count, l.description.clone().unwrap_or_default());
+                println!("  {} ({} stars) — {}", l.full_name, l.stargazers_count, l.description.clone().unwrap_or_default());
             }
         }
         Err(e) => eprintln!("error: {e}"),

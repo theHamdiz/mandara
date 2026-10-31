@@ -366,7 +366,7 @@ fn build_index_with(registry: &mandara_plugins::PluginRegistry, cfg: &mandara_co
     let mut out = actions();
     // Actions of opt-in plugins, while they are on.
     if registry.is_enabled(crate::plugins::wallpaper_generator::ID, &cfg.plugins) {
-        out.push(entry(t("Generate wallpaper"), t("A new procedural wallpaper from the generator"), "sparkles", tk("Action"), "wallpaper generate generator procedural new art background random", line("wallgen generate random")));
+        out.push(entry(t("Generate wallpaper"), t("A new procedural wallpaper from the generator"), "brush", tk("Action"), "wallpaper generate generator procedural new art background random", line("wallgen generate random")));
     }
     for m in registry.manifests() {
         if m.id == crate::plugins::session::LAUNCHER_ID || !registry.is_enabled(&m.id, &cfg.plugins) {

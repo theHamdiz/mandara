@@ -291,20 +291,11 @@ impl GreeterPage {
         }
         self.save();
         self.applying = true;
-        self.message = Some((true, tl("Waiting for authorization…")));
-        let exe = std::env::current_exe().unwrap_or_else(|_| "mandara".into());
+        self.message = Some((true, super::admin_run::waiting_message()));
         let draft = mandara_greeter::config::user_draft_path();
-        let task = cx.background_executor().spawn(async move {
-            let out = std::process::Command::new("pkexec").arg(&exe).args(["greeter", "apply-config", "--from"]).arg(&draft).output();
-            match out {
-                Ok(o) if o.status.success() => Ok(String::from_utf8_lossy(&o.stdout).trim().to_string()),
-                Ok(o) => {
-                    let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
-                    Err(if err.is_empty() { format!("pkexec exited with {}", o.status) } else { err })
-                }
-                Err(e) => Err(format!("pkexec: {e} — run `sudo {} greeter apply-config --from {}`", exe.display(), draft.display())),
-            }
-        });
+        // As root through a root-owned Mandara, never this (user-writable)
+        // binary.
+        let task = cx.background_executor().spawn(async move { super::admin_run::as_root(["greeter", "apply-config", "--from"].map(std::ffi::OsString::from).into_iter().chain([draft.into_os_string()]).collect()) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {

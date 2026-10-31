@@ -213,6 +213,17 @@ fn from_source_adds_build_tools_and_gentoo_uses_atoms() {
     assert!(text.contains("login screen unchanged (--no-greeter)"));
 }
 
+/// Issue #10: the installer puts a root-owned copy in place for Studio's
+/// administrator actions, from the binary it just checked.
+#[test]
+fn installs_the_admin_helper_from_the_checked_binary() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(InstallArgs { no_greeter: true, ..Default::default() })).unwrap();
+    let text = host.text();
+    assert!(text.lines().any(|l| l.starts_with("would run: sudo install -D -o root -g root -m 0755 ") && l.ends_with(&format!(" {}", super::ADMIN_EXE))), "{text}");
+}
+
 #[test]
 fn nixos_and_unknown_systems_get_hints() {
     let f = Fixture::new();

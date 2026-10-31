@@ -1,6 +1,7 @@
 //! Mandara configuration: the TOML schema, the reactive [`ConfigStore`] with
 //! its file watcher, and XDG [`paths`].
 
+pub mod admin;
 pub mod alerts;
 pub mod apps;
 pub mod compositor;

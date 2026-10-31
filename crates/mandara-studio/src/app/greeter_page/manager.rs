@@ -161,11 +161,13 @@ impl GreeterPage {
         }
         let dry = manager::forced_dry_run();
         self.manager.busy = Some(confirm.id);
-        self.message = Some((true, if dry { t("Preparing the plan…") } else { t("Waiting for authorization…") }.to_string()));
+        self.message = Some((true, if dry { t("Preparing the plan…").to_string() } else { super::super::admin_run::waiting_message() }));
         let exe = std::env::current_exe().unwrap_or_else(|_| "mandara".into());
         let (prog, args) = use_command(&exe, confirm.id, dry, confirm.install);
         let name = manager::find(confirm.id).map_or(confirm.id, |m| m.name);
-        let task = cx.background_executor().spawn(async move { run(prog, args) });
+        // The real switch runs as root through a root-owned Mandara, never
+        // this (user-writable) binary: `[exe, args…]` → `args…`.
+        let task = cx.background_executor().spawn(async move { if dry { run(prog, args) } else { super::super::admin_run::as_root(args.into_iter().skip(1).collect()) } });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {

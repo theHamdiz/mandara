@@ -361,7 +361,7 @@ impl StudioView {
                     .flex_col()
                     .gap(px(SPACE_4_PX))
                     .child(div().text_size(px(TEXT_14_5_PX)).font_weight(FontWeight::SEMIBOLD).truncate().child(l.name.clone()))
-                    .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).font_features(mandara_ui::fonts::tabular_nums()).truncate().child(tf("by {author} · ★ {stars}", &[("author", &l.owner.login), ("stars", &l.stargazers_count)])))
+                    .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).font_features(mandara_ui::fonts::tabular_nums()).truncate().child(tf("by {author} · {stars} stars", &[("author", &l.owner.login), ("stars", &l.stargazers_count)])))
                     // A flagged release's warning takes the pitch's place (same height).
                     .child(
                         div()

@@ -31,7 +31,7 @@ pub(super) fn current_version() -> Option<String> {
 /// A section's icon, tone and translated title.
 fn section_style(title: &str, p: &MandaraPalette) -> (&'static str, Color, SharedString) {
     match title {
-        "New" => ("sparkles", p.primary, t("New").into()),
+        "New" => ("plus", p.primary, t("New").into()),
         "Improved" => ("arrow-up", p.secondary, t("Improved").into()),
         "Fixed" => ("check", p.success_emerald, t("Fixed").into()),
         "Under the hood" => ("sliders", p.on_surface_variant, t("Under the hood").into()),
@@ -106,7 +106,7 @@ impl StudioView {
                     .items_center()
                     .gap(px(SPACE_16_PX))
                     .pb(px(SPACE_6_PX))
-                    .child(div().flex_none().size(px(DIM_48_PX)).rounded_full().bg(p.tertiary.with_alpha(ALPHA_15).hsla()).row().items_center().justify_center().child(icon("sparkles", ICON_22_PX, p.tertiary)))
+                    .child(div().flex_none().size(px(DIM_48_PX)).rounded_full().bg(p.tertiary.with_alpha(ALPHA_15).hsla()).row().items_center().justify_center().child(icon("release-notes", ICON_22_PX, p.tertiary)))
                     .child(
                         div()
                             .flex_1()

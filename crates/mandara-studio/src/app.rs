@@ -32,6 +32,7 @@ mod designer;
 mod sidebar_tabs_page;
 mod greeter_page;
 mod keyrings_card;
+mod admin_run;
 mod fold;
 mod time_card;
 mod users_page;

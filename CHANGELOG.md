@@ -6,6 +6,27 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The last open finding from the security review, and icons that say what
+they do.
+
+### Fixed
+
+- **Your own copy of Mandara never runs as root anymore.** Studio's
+  administrator actions (switching the login screen, applying its look,
+  unlocking keyrings at login) used to run the `mandara` in your home folder
+  as root, which your account, or malware in it, could replace before you
+  approved the prompt. They now only run a copy that root owns and nobody
+  else can change: a package's `mandara`, or Mandara's new admin helper.
+  `mandara install` sets the helper up for you; on an existing install,
+  Studio sets it up the first time it needs it, with one extra approval.
+
+### Improved
+
+- **Icons that say what they do.** The wallpaper generator now uses a
+  brush, "Surprise me" a die, and What's new a release-notes page, instead
+  of generic sparkles. Star counts for plugins and cursor themes are
+  written out ("1.2k stars") instead of a star symbol.
+
 ## 0.3.2 — 2026-10-31
 
 A security release. Thank you to the person who reviewed Mandara and
