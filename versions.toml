@@ -4,18 +4,18 @@
 
 [mandara-app]
 kind = "binary"
-version = "0.3.1"
-hash = "bd5e05bb65bb01eec7553c8be87f4e7e"
+version = "0.3.2"
+hash = "1996285326f463b3614e5c54a109ed95"
 
 [mandara-compositor]
 kind = "library"
-version = "0.1.4"
-hash = "01508a91b91b7f94e7ea1c3c5bfcbee9"
+version = "0.1.5"
+hash = "8f68c47686c383eb128efa00127d1416"
 
 [mandara-config]
 kind = "library"
-version = "0.2.1"
-hash = "b250701a30f2504a1efe69f93b8e289d"
+version = "0.2.2"
+hash = "1f3babe50f2b2d8749a74742f0568907"
 
 [mandara-core]
 kind = "library"
@@ -29,13 +29,13 @@ hash = "05031989b633b087c0f7c25100eaaf2b"
 
 [mandara-greeter]
 kind = "library"
-version = "0.1.5"
-hash = "38c032ef94d2c52ea9b9cbdf386c1db3"
+version = "0.1.6"
+hash = "8941863c3ac64e660bcb68b9ac149936"
 
 [mandara-i18n]
 kind = "library"
-version = "0.3.1"
-hash = "2aae8825975117f2c80c152aa5ce29e5"
+version = "0.3.2"
+hash = "bb910ae763b93cc2876181bc08189c78"
 
 [mandara-install]
 kind = "library"
@@ -49,18 +49,18 @@ hash = "0e845933f21bd5af29781120dd71bd98"
 
 [mandara-plugins]
 kind = "library"
-version = "0.1.5"
-hash = "16e429ad597d5185bddec96dc527f7fc"
+version = "0.1.6"
+hash = "259718eb1c0404fc49f24089c0a8cfe9"
 
 [mandara-services]
 kind = "library"
-version = "0.3.1"
-hash = "6a43b397fcb52978dd376078d7104ab1"
+version = "0.3.2"
+hash = "847e2ac6c0edd852085d0c862ae55155"
 
 [mandara-studio]
 kind = "library"
-version = "0.3.1"
-hash = "7ac8fbf55f821e73c25ffc4741e123e6"
+version = "0.3.2"
+hash = "d5ac7aaec1e8c9bf4d80f03102940d64"
 
 [mandara-theme]
 kind = "library"
@@ -69,8 +69,8 @@ hash = "1107f135de9fa737dd8eb48091f1fb9d"
 
 [mandara-ui]
 kind = "library"
-version = "0.2.1"
-hash = "61c842820042efed1b19366be32c41f9"
+version = "0.2.2"
+hash = "1e5c2d6a722a091b7ff1f6f11de38cbf"
 
 [mandara-version]
 kind = "library"
@@ -79,8 +79,8 @@ hash = "9aa93d29fcc7d981a788d3d86459d621"
 
 [mandara-wallgen]
 kind = "library"
-version = "0.1.5"
-hash = "f421ac86f54d75df811c1984d99558b0"
+version = "0.1.6"
+hash = "edf9cacb4085a5af223c48b0f128c1f5"
 
 [plugin-moon-phase]
 kind = "plugin"

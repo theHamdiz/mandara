@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.3.2 — 2026-10-31
+
 A security release. Thank you to the person who reviewed Mandara and
 reported what they found on GitHub.
 
