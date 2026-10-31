@@ -1,6 +1,6 @@
 [package]
 name = "moon-phase"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 description = "Example Mandara plugin: the current moon phase"
 license = "GPL-3.0-or-later"

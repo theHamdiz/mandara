@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.3.4 — 2026-10-31
+
 Signed releases: Mandara now checks that an update really comes from its
 maker before installing it.
 
