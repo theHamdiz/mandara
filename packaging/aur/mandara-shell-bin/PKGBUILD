@@ -1,7 +1,7 @@
 # Maintainer: Ahmad Hamdi <ahmad dot hamdi dot emara at gmail dot com>
 
 pkgname=mandara-shell-bin
-pkgver=0.3.1
+pkgver=0.3.2
 pkgrel=1
 pkgdesc="GPU-accelerated, design-first Wayland desktop shell for MangoWM, Niri and Hyprland, written in Rust"
 arch=('x86_64' 'aarch64')
@@ -26,8 +26,8 @@ backup=('etc/pam.d/mandara-lock')
 options=('!strip' '!debug')
 source_x86_64=("$url/releases/download/v$pkgver/mandara-$pkgver-x86_64-linux-gnu.tar.gz")
 source_aarch64=("$url/releases/download/v$pkgver/mandara-$pkgver-aarch64-linux-gnu.tar.gz")
-sha256sums_x86_64=('814a706dc557a6f4b40dcd3f95fe25b75291ed9bcb520f5cebd167057dbe94e8')
-sha256sums_aarch64=('6f0d61a9958fec85ce3cb78731b8fb8fabfd32db558afddcc6046938cffcdd2e')
+sha256sums_x86_64=('afe9b8f8ad8e42088dcb6d36e4cea6fbd5f871dea61d72c53f3065cbab8b3413')
+sha256sums_aarch64=('139f4441e7dcb86f7ee17d68b4909fbb7a7a9f8b1872e2e0caed599b952dd41c')
 
 package() {
   cd "mandara-$pkgver-$CARCH-linux-gnu"
