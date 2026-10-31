@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.3.3 — 2026-10-31
+
 The last open finding from the security review, and icons that say what
 they do.
 
