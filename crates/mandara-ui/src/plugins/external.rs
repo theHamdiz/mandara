@@ -30,6 +30,9 @@ type Shared = Rc<RefCell<Option<WasmPlugin>>>;
 const MIN_REFRESH_MS: u64 = 250;
 /// Deepest node nesting rendered (guards against cyclic / hostile trees).
 const MAX_DEPTH: u32 = 32;
+/// Most nodes one plugin view renders. Children are node indices, so a
+/// few nodes listing each other repeatedly could expand exponentially.
+const MAX_RENDERED_NODES: usize = 2048;
 /// Font sizes a plugin may request.
 const MIN_TEXT_PX: f32 = 6.0;
 const MAX_TEXT_PX: f32 = 96.0;
@@ -178,7 +181,7 @@ pub fn tone_color(t: Tone, p: &MandaraPalette) -> Color {
 fn render(view: &View, palette: &MandaraPalette, plugin: &Shared, id: &str, views: &ViewSet, emoji: Option<&gpui::SharedString>) -> AnyElement {
     #[allow(clippy::too_many_arguments)]
     fn node(view: &View, i: u32, depth: u32, p: &MandaraPalette, plugin: &Shared, id: &str, views: &ViewSet, emoji: Option<&gpui::SharedString>, key: &mut usize) -> AnyElement {
-        let Some(n) = view.nodes.get(i as usize).filter(|_| depth < MAX_DEPTH) else { return div().into_any_element() };
+        let Some(n) = view.nodes.get(i as usize).filter(|_| depth < MAX_DEPTH && *key < MAX_RENDERED_NODES) else { return div().into_any_element() };
         *key += 1;
         let children: Vec<AnyElement> = n.children.iter().map(|c| node(view, *c, depth + 1, p, plugin, id, views, emoji, key)).collect();
         let color = tone_color(n.tone, p);
@@ -244,11 +247,24 @@ fn render(view: &View, palette: &MandaraPalette, plugin: &Shared, id: &str, view
     node(view, view.root, 0, palette, plugin, id, views, emoji, &mut key)
 }
 
-/// Runs commands a plugin queued (through the documented registry).
+/// Runs commands a plugin queued (through the documented registry), only
+/// those on the plugin allowlist ([`mandara_plugins::wasm::PLUGIN_COMMANDS`]):
+/// anything else would act outside the WebAssembly sandbox.
 fn run_commands(lines: Vec<String>, cx: &mut App) {
     for line in lines {
         let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
         let registry = cx.global::<PluginRegistry>().commands.clone();
+        match registry.resolve(&words) {
+            Ok(r) if mandara_plugins::wasm::plugin_may_run(r.spec.path) => {}
+            Ok(r) => {
+                tracing::warn!(target: "mandara::plugin", "plugin command `{}` refused: plugins may only run interface commands", r.spec.path);
+                continue;
+            }
+            Err(err) => {
+                tracing::warn!(target: "mandara::plugin", "plugin command `{line}` failed: {err}");
+                continue;
+            }
+        }
         if let Err(err) = registry.execute(&words, cx) {
             tracing::warn!(target: "mandara::plugin", "plugin command `{line}` failed: {err}");
         }
@@ -504,4 +520,29 @@ pub fn watch(cx: &mut App) {
         }
     })
     .detach();
+}
+
+#[cfg(test)]
+mod tests {
+    use mandara_plugins::wasm::{PLUGIN_COMMANDS, plugin_may_run};
+
+    /// Issue #10: plugins may only queue interface commands. Every allowed
+    /// path is a real built-in command (a typo would silently block it),
+    /// and nothing that starts programs or changes settings, startup apps,
+    /// compositor config, plugins or the system is among them.
+    #[test]
+    fn plugins_may_only_run_interface_commands() {
+        let mut registry = mandara_plugins::PluginRegistry::default();
+        super::super::register_builtin(&mut registry);
+        let paths: Vec<&str> = registry.commands.all().iter().map(|c| c.path).collect();
+        for allowed in PLUGIN_COMMANDS {
+            assert!(paths.contains(allowed), "`{allowed}` isn't a command");
+        }
+        for risky in ["launcher run", "apps launch", "config set", "hooks add", "plugins install", "updates apply", "session logout", "power off", "screenshot", "record", "compositor dispatch", "keep-awake", "profile apply"] {
+            if paths.contains(&risky) {
+                assert!(!plugin_may_run(risky), "plugins must not run `{risky}`");
+            }
+        }
+        assert!(plugin_may_run("media play-pause") && !plugin_may_run("config set"));
+    }
 }

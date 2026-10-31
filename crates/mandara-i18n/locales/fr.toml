@@ -1234,7 +1234,6 @@
 "Caches & plugins" = "Caches et extensions"
 "Café murmur" = "Murmure de café"
 "Can change system settings and manage users." = "Peut modifier les paramètres du système et gérer les utilisateurs."
-"Can run Mandara commands: open panels, change settings, control media" = "Peut exécuter des commandes Mandara : ouvrir des panneaux, modifier des paramètres, contrôler les médias"
 "Can't reach systemd" = "Impossible de joindre systemd"
 "Cancel" = "Annuler"
 "Cancelled" = "Annulé"
@@ -5582,3 +5581,5 @@
 "Which displays show the bar, dock, OSDs, notifications and wallpaper" = "Les écrans qui affichent la barre, le dock, les OSD, les notifications et le fond d'écran"
 "{changed} of {count} changed" = "{changed} sur {count} modifiés"
 "{list} and {count} more" = "{list} et {count} de plus"
+"Can use Mandara's interface: open panels, control media and volume, post notifications, add notes and to-dos. It can't run programs or change your settings" = "Peut utiliser l'interface de Mandara : ouvrir des panneaux, contrôler les médias et le volume, publier des notifications, ajouter des notes et des tâches. Il ne peut pas lancer de programmes ni modifier vos réglages"
+"{name} now points to another repository ({page}). Mandara doesn't follow moved plugins; install it again from its new home if you trust it." = "{name} pointe désormais vers un autre dépôt ({page}). Mandara ne suit pas les extensions déplacées ; réinstallez-la depuis son nouveau dépôt si vous lui faites confiance."

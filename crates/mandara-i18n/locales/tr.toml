@@ -1235,7 +1235,6 @@
 "Caches & plugins" = "Önbellekler ve eklentiler"
 "Café murmur" = "Kafe uğultusu"
 "Can change system settings and manage users." = "Sistem ayarlarını değiştirebilir ve kullanıcıları yönetebilir."
-"Can run Mandara commands: open panels, change settings, control media" = "Mandara komutlarını çalıştırabilir: panelleri açma, ayarları değiştirme, medyayı kontrol etme"
 "Can't reach systemd" = "systemd'ye ulaşılamıyor"
 "Cancel" = "İptal"
 "Cancelled" = "İptal edildi"
@@ -5581,3 +5580,5 @@
 "Which displays show the bar, dock, OSDs, notifications and wallpaper" = "Çubuğu, dock'u, OSD'leri, bildirimleri ve duvar kâğıdını hangi ekranların gösterdiği"
 "{changed} of {count} changed" = "{count} ayardan {changed} tanesi değişti"
 "{list} and {count} more" = "{list} ve {count} tane daha"
+"Can use Mandara's interface: open panels, control media and volume, post notifications, add notes and to-dos. It can't run programs or change your settings" = "Mandara'nın arayüzünü kullanabilir: paneller açar, medyayı ve sesi yönetir, bildirim gönderir, not ve yapılacak ekler. Program çalıştıramaz ve ayarlarını değiştiremez"
+"{name} now points to another repository ({page}). Mandara doesn't follow moved plugins; install it again from its new home if you trust it." = "{name} artık başka bir depoyu ({page}) gösteriyor. Mandara taşınan eklentilerin peşinden gitmez; güveniyorsan yeni yerinden yeniden kur."

@@ -526,7 +526,46 @@ fn plugin_asset<'a>(assets: &'a [Asset], full_name: &str) -> Option<&'a Asset> {
 
 /// The newest release carrying a plugin archive: `releases/latest` first,
 /// then the release list (pre-releases count; drafts don't).
+/// Whether `release` really belongs to `full_name`. GitHub silently
+/// redirects a renamed or transferred repository, which would hand the
+/// plugin to another publisher; Mandara only follows the exact repository
+/// it was installed from. Only a github.com page link can show a move (an
+/// answer without one, or a test server's, has nothing to compare).
+fn same_repo(release: &Release, full_name: &str) -> bool {
+    const GITHUB: &str = "https://github.com/";
+    let page = release.html_url.to_ascii_lowercase();
+    !page.starts_with(GITHUB) || page.starts_with(&format!("{GITHUB}{}/", full_name.to_ascii_lowercase()))
+}
+
+/// The `SHA256SUMS` line for `file`: its hex digest.
+fn sum_for<'a>(sums: &'a str, file: &str) -> Option<&'a str> {
+    sums.lines().find_map(|l| {
+        let (hash, name) = l.split_once(char::is_whitespace)?;
+        (name.trim().trim_start_matches('*') == file).then_some(hash.trim())
+    })
+}
+
+/// Checks the archive against the release's `SHA256SUMS`, when it has one.
+fn verify_archive(release: &Release, asset: &Asset, bytes: &[u8]) -> Result<(), InstallError> {
+    let Some(sums) = release.assets.iter().find(|a| a.name == SUMS_FILE) else { return Ok(()) };
+    let text = get(&sums.browser_download_url, MAX_JSON_BYTES).map_err(String::from)?;
+    let Some(want) = sum_for(&String::from_utf8_lossy(&text), &asset.name).map(str::to_string) else { return Ok(()) };
+    let got = mandara_delta::sha256_hex(bytes);
+    if got.eq_ignore_ascii_case(&want) { Ok(()) } else { Err(InstallError::Failed(tf("{file} failed verification (sha256 {got})", &[("file", &asset.name), ("got", &got)]))) }
+}
+
+/// A release's checksum list (`SHA256SUMS`).
+const SUMS_FILE: &str = "SHA256SUMS";
+
 pub(crate) fn find_release(full_name: &str) -> Result<(Release, Asset), InstallError> {
+    let (release, asset) = find_any_release(full_name)?;
+    if !same_repo(&release, full_name) {
+        return Err(InstallError::Failed(tf("{name} now points to another repository ({page}). Mandara doesn't follow moved plugins; install it again from its new home if you trust it.", &[("name", &full_name), ("page", &release.html_url)])));
+    }
+    Ok((release, asset))
+}
+
+fn find_any_release(full_name: &str) -> Result<(Release, Asset), InstallError> {
     let base = api_base();
     match get(&format!("{base}/repos/{full_name}/releases/latest"), MAX_JSON_BYTES) {
         Ok(body) => {
@@ -565,6 +604,7 @@ pub fn install(full_name: &str, vetting: &Vetting, progress: &dyn Fn(&str)) -> R
     }
     progress(t("Downloading…"));
     let bytes = get(&asset.browser_download_url, MAX_BYTES).map_err(String::from)?;
+    verify_archive(&release, &asset, &bytes)?;
     progress(t("Installing…"));
     let scratch = mandara_config::paths::cache_dir().join("marketplace").join(full_name.replace('/', "__"));
     let (root, id) = unpack(&bytes, &scratch)?;
@@ -614,6 +654,22 @@ pub fn uninstall(full_name: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Issue #10: a renamed or transferred repository (GitHub redirects
+    /// silently) isn't followed, and the archive matches SHA256SUMS.
+    #[test]
+    fn plugins_stay_with_their_repository_and_checksums() {
+        let release = |page: &str| Release { tag_name: "v1".into(), draft: false, html_url: page.into(), assets: Vec::new() };
+        assert!(same_repo(&release("https://github.com/Alice/Weather-Plus/releases/tag/v1"), "alice/weather-plus"));
+        assert!(!same_repo(&release("https://github.com/mallory/weather-plus/releases/tag/v1"), "alice/weather-plus"));
+        assert!(!same_repo(&release("https://github.com/alice/weather-plus-evil/releases/tag/v1"), "alice/weather-plus"));
+        assert!(same_repo(&release(""), "alice/weather-plus"), "no page link, nothing to compare");
+        assert!(same_repo(&release("https://example.invalid/demo/v1"), "alice/weather-plus"), "not GitHub: nothing to compare");
+        let sums = "0a1b  weather.mandara.tar.gz\nffee *other.tar.gz\n";
+        assert_eq!(sum_for(sums, "weather.mandara.tar.gz"), Some("0a1b"));
+        assert_eq!(sum_for(sums, "other.tar.gz"), Some("ffee"));
+        assert_eq!(sum_for(sums, "missing.tar.gz"), None);
+    }
 
     fn archive(files: &[(&str, &[u8])]) -> Vec<u8> {
         let mut builder = tar::Builder::new(flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast()));

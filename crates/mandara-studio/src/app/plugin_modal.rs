@@ -279,7 +279,7 @@ const BUILTIN_ACCESS: &[(&str, &[(Access, &str)])] = &[
 /// Third-party permission → what it allows (`tk`).
 fn permission_text(name: &str) -> (Access, &'static str) {
     match name {
-        "commands" => (Access::Commands, tk("Can run Mandara commands: open panels, change settings, control media")),
+        "commands" => (Access::Commands, tk("Can use Mandara's interface: open panels, control media and volume, post notifications, add notes and to-dos. It can't run programs or change your settings")),
         _ => (Access::Commands, tk("A permission this version of Mandara doesn't know; it has no effect")),
     }
 }

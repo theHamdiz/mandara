@@ -627,7 +627,7 @@ Camera released
 Camera: {apps}
 Cameras, USB devices, game controllers…
 Can change system settings and manage users.
-Can run Mandara commands: open panels, change settings, control media
+Can use Mandara's interface: open panels, control media and volume, post notifications, add notes and to-dos. It can't run programs or change your settings
 Can't install
 Can't install this file
 Can't move {path} to the Trash: {error}
@@ -5285,6 +5285,7 @@ your default
 {name} doesn't answer DDC/CI (enable it in the monitor's menu)
 {name} is idle — start something to see it here
 {name} isn't installed — Install & use adds it (package {package})
+{name} now points to another repository ({page}). Mandara doesn't follow moved plugins; install it again from its new home if you trust it.
 {name} won't be able to sign in any more. This can't be undone.
 {name} · on the desktop
 {n} accounts · {backend}

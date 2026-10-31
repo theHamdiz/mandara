@@ -819,10 +819,10 @@ pub fn emit_mango(cfg: &ManagedConfig) -> Emitted {
             props.push(format!("focused_opacity:{:.2}", o.clamp(0.1, 1.0)));
         }
         if let Some(a) = &r.app_id {
-            props.push(format!("app_id:{a}"));
+            props.push(format!("app_id:{}", rule_value(a)));
         }
         if let Some(t) = &r.title {
-            props.push(format!("title:{t}"));
+            props.push(format!("title:{}", rule_value(t)));
         }
         if props.iter().any(|p| p.starts_with("app_id:") || p.starts_with("title:")) {
             let _ = writeln!(s, "window_rule={}", props.join(","));
@@ -873,7 +873,28 @@ fn proportion(w: f32) -> String {
 const NIRI_DEFAULT_GAPS: u32 = 16;
 
 fn kdl_str(s: &str) -> String {
-    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+    let mut out = String::from("\"");
+    for ch in s.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => {}
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// A window class or title for a `key:value,…` (MangoWM) or `a, b`
+/// (Hyprland) rule line. Comes from other apps (a picked window's title), so
+/// it can't add config lines (control characters dropped) or split the rule
+/// (a comma becomes `.`, the regex wildcard, so it still matches).
+fn rule_value(s: &str) -> String {
+    s.chars().filter(|c| !c.is_control()).map(|c| if c == ',' { '.' } else { c }).collect()
 }
 
 /// `~/.config/mandara/generated/niri.kdl`, in the KDL v1 dialect Niri's
@@ -1142,10 +1163,10 @@ pub fn emit_hyprland_conf(cfg: &ManagedConfig) -> Emitted {
     for r in &c.window_rules {
         let mut matchers = Vec::new();
         if let Some(a) = &r.app_id {
-            matchers.push(format!("match:class {a}"));
+            matchers.push(format!("match:class {}", rule_value(a)));
         }
         if let Some(t) = &r.title {
-            matchers.push(format!("match:title {t}"));
+            matchers.push(format!("match:title {}", rule_value(t)));
         }
         if matchers.is_empty() {
             continue;
@@ -1193,6 +1214,9 @@ fn lua_str(s: &str) -> String {
             '\\' => out.push_str("\\\\"),
             '"' => out.push_str("\\\""),
             '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => {}
             c => out.push(c),
         }
     }
@@ -1979,6 +2003,21 @@ mod tests {
         assert_eq!(parse_chords(Target::Hyprland, hypr), vec!["super+q", "xf86audiomute"]);
         let niri = "binds {\n    Mod+T { spawn \"alacritty\"; }\n    Mod+Shift+E { quit; }\n}\nlayout { gaps 8; }\n";
         assert_eq!(parse_chords(Target::Niri, niri), vec!["super+t", "shift+super+e"]);
+    }
+
+    #[test]
+    fn a_window_title_cannot_add_config_lines() {
+        // Issue #10: a picked window's title is chosen by another app.
+        let mut cfg = CompositorConfig::default();
+        cfg.window_rules = vec![WindowRule { app_id: Some("^evil$".into()), title: Some("x\nexec = rm -rf ~\r\n, float on".into()), floating: Some(true), ..Default::default() }];
+        for (name, text) in [("mango", emit_mango(&managed(&cfg, &[])).text), ("hyprland", emit_hyprland(&managed(&cfg, &[])).text), ("niri", emit_niri(&managed(&cfg, &[])).text)] {
+            assert!(!text.lines().any(|l| l.trim_start().starts_with("exec")), "{name}: a title started a config line:\n{text}");
+        }
+        let mango = emit_mango(&managed(&cfg, &[])).text;
+        let rule = mango.lines().find(|l| l.contains("app_id:^evil$")).unwrap();
+        assert!(rule.contains("title:xexec = rm -rf ~. float on"), "commas can't split the rule: {rule}");
+        assert_eq!(rule_value("a,b\u{7}c"), "a.bc");
+        assert_eq!(kdl_str("a\nb\""), "\"a\\nb\\\"\"");
     }
 
     #[test]

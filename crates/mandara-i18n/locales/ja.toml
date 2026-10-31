@@ -1263,7 +1263,6 @@
 "Caches & plugins" = "キャッシュとプラグイン"
 "Café murmur" = "カフェのざわめき"
 "Can change system settings and manage users." = "システム設定の変更とユーザーの管理ができます。"
-"Can run Mandara commands: open panels, change settings, control media" = "Mandara コマンドを実行できます：パネルを開く、設定を変更、メディアを操作"
 "Can't reach systemd" = "systemd に接続できません"
 "Cancel" = "キャンセル"
 "Cancelled" = "キャンセルしました"
@@ -5582,3 +5581,5 @@
 "Which displays show the bar, dock, OSDs, notifications and wallpaper" = "バー、Dock、OSD、通知、壁紙を表示するディスプレイ"
 "{changed} of {count} changed" = "{count} 件中 {changed} 件を変更"
 "{list} and {count} more" = "{list} ほか {count} 件"
+"Can use Mandara's interface: open panels, control media and volume, post notifications, add notes and to-dos. It can't run programs or change your settings" = "Mandara のインターフェースを使えます：パネルを開く、メディアと音量の操作、通知の投稿、メモとタスクの追加。プログラムの実行や設定の変更はできません"
+"{name} now points to another repository ({page}). Mandara doesn't follow moved plugins; install it again from its new home if you trust it." = "{name} は別のリポジトリ（{page}）を指すようになりました。Mandara は移動したプラグインを追いません。信頼できる場合は新しい場所から入れ直してください。"

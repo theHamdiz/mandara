@@ -1263,7 +1263,6 @@
 "Caches & plugins" = "缓存与插件"
 "Café murmur" = "咖啡馆低语"
 "Can change system settings and manage users." = "可以更改系统设置并管理用户。"
-"Can run Mandara commands: open panels, change settings, control media" = "可运行 Mandara 命令：打开面板、更改设置、控制媒体"
 "Can't reach systemd" = "无法连接 systemd"
 "Cancel" = "取消"
 "Cancelled" = "已取消"
@@ -5576,3 +5575,5 @@
 "Which displays show the bar, dock, OSDs, notifications and wallpaper" = "哪些显示器显示状态栏、程序坞、OSD、通知和壁纸"
 "{changed} of {count} changed" = "已更改 {changed}/{count} 项"
 "{list} and {count} more" = "{list} 等 {count} 项"
+"Can use Mandara's interface: open panels, control media and volume, post notifications, add notes and to-dos. It can't run programs or change your settings" = "可以使用 Mandara 的界面：打开面板、控制媒体和音量、发送通知、添加笔记和待办。它不能运行程序，也不能更改你的设置"
+"{name} now points to another repository ({page}). Mandara doesn't follow moved plugins; install it again from its new home if you trust it." = "{name} 现在指向另一个仓库（{page}）。Mandara 不会跟随已迁移的插件；如果你信任它，请从新地址重新安装。"

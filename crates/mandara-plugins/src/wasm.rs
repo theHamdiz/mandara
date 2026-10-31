@@ -45,6 +45,56 @@ pub const MAX_QUEUED_COMMANDS: usize = 16;
 /// The only permission a manifest can ask for.
 pub const PERMISSION_COMMANDS: &str = "commands";
 
+/// The Mandara commands a plugin with [`PERMISSION_COMMANDS`] may queue:
+/// interface actions only (open a panel, control media and volume, post a
+/// notification, add a note or to-do). Nothing that starts programs, edits
+/// settings, startup apps, compositor config or plugins, changes power or
+/// the network, or records the screen: those run outside the WebAssembly
+/// sandbox, so a plugin could escape it through them. A command's output
+/// never goes back to the plugin.
+pub const PLUGIN_COMMANDS: &[&str] = &[
+    "panel",
+    "sidebar",
+    "sidebar tab open",
+    "launcher",
+    "launcher search",
+    "switcher",
+    "menu",
+    "osd",
+    "osd show",
+    "media next",
+    "media previous",
+    "media play-pause",
+    "media seek",
+    "audio volume up",
+    "audio volume down",
+    "audio volume set",
+    "audio mute",
+    "audio mic mute",
+    "notifications send",
+    "notifications dnd",
+    "pomodoro",
+    "weather refresh",
+    "calendar refresh",
+    "theme mode",
+    "workspace view",
+    "workspace toggle",
+    "workspace cycle-layout",
+    "todo add",
+    "todo done",
+    "notes add",
+    "notes append",
+    "clock now",
+    "info",
+    "ping",
+];
+
+/// Whether a plugin may run the command at `path` (the matched command,
+/// not the words typed after it).
+pub fn plugin_may_run(path: &str) -> bool {
+    PLUGIN_COMMANDS.contains(&path)
+}
+
 /// Plugin calls currently running (the ticker only runs while > 0).
 static ACTIVE_CALLS: AtomicUsize = AtomicUsize::new(0);
 /// The epoch ticker thread (unparked when a call starts).
@@ -105,8 +155,15 @@ pub(crate) fn engine() -> Result<&'static Engine> {
     Ok(engine)
 }
 
+/// Most linear memory one plugin may use: plenty for a widget, and a
+/// runaway plugin can't take the shell's memory with it.
+pub const MAX_PLUGIN_MEMORY: usize = 64 * 1024 * 1024;
+/// WASI's poll interface, as wasmtime-wasi links it.
+const WASI_POLL: &str = "wasi:io/poll@0.2.12";
+
 pub struct HostState {
     wasi: WasiCtx,
+    limits: wasmtime::StoreLimits,
     table: ResourceTable,
     id: String,
     settings: serde_json::Map<String, serde_json::Value>,
@@ -197,6 +254,36 @@ impl mandara::plugin::host::Host for HostState {
     }
 }
 
+/// Instances, tables and table entries one plugin may create (a component
+/// is a handful of core instances; generous, but bounded).
+const MAX_INSTANCES: usize = 64;
+const MAX_TABLES: usize = 64;
+const MAX_TABLE_ELEMENTS: usize = 100_000;
+
+/// Plugins can't block: WASI's waits return at once. The time limit (epoch
+/// interruption) only stops WebAssembly code, so a sleep or a poll inside
+/// the host would park the shell for as long as the plugin liked. A plugin
+/// has nothing to wait for (no files, sockets or children), so every
+/// pollable counts as ready.
+fn non_blocking_waits(linker: &mut Linker<HostState>) -> wasmtime::Result<()> {
+    use wasmtime::component::Val;
+    linker.allow_shadowing(true);
+    let mut poll = linker.instance(WASI_POLL)?;
+    poll.func_new("[method]pollable.block", |_, _, _, _| Ok(()))?;
+    poll.func_new("poll", |_, _, params, results| {
+        let ready = match params.first() {
+            Some(Val::List(list)) => list.len(),
+            _ => 0,
+        };
+        if let Some(out) = results.first_mut() {
+            *out = Val::List((0..ready).map(|i| Val::U32(i as u32)).collect());
+        }
+        Ok(())
+    })?;
+    linker.allow_shadowing(false);
+    Ok(())
+}
+
 /// Compiles (or loads the cached native code for) a component.
 pub(crate) fn load_component(path: &Path) -> Result<Component> {
     let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
@@ -240,10 +327,12 @@ impl WasmPlugin {
     pub(crate) fn instantiate(id: &str, plugin_dir: &Path, component: &Component, settings: serde_json::Map<String, serde_json::Value>, allow_commands: bool) -> Result<Self> {
         let mut linker: Linker<HostState> = Linker::new(engine()?);
         w(wasmtime_wasi::p2::add_to_linker_sync(&mut linker), "linking WASI")?;
+        w(non_blocking_waits(&mut linker), "linking WASI")?;
         w(Plugin::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |s| s), "linking host")?;
         let state = HostState {
             // No preopens, env, args or network: an empty sandbox.
             wasi: WasiCtxBuilder::new().build(),
+            limits: wasmtime::StoreLimitsBuilder::new().memory_size(MAX_PLUGIN_MEMORY).instances(MAX_INSTANCES).tables(MAX_TABLES).table_elements(MAX_TABLE_ELEMENTS).trap_on_grow_failure(true).build(),
             table: ResourceTable::new(),
             id: id.to_string(),
             settings,
@@ -252,6 +341,9 @@ impl WasmPlugin {
             i18n: PluginCatalogs::new(plugin_dir),
         };
         let mut store = Store::new(engine()?, state);
+        // Memory and table growth past the limits traps (the plugin is
+        // disabled) instead of taking the shell's memory.
+        store.limiter(|s| &mut s.limits);
         store.set_epoch_deadline(CALL_BUDGET_TICKS * INIT_BUDGET_FACTOR);
         let bindings = {
             let _active = ActiveCall::start();
@@ -625,6 +717,38 @@ mod tests {
         .join()
         .unwrap();
         assert_eq!(result, Ok((true, None)));
+    }
+
+    /// Issue #10: a hostile plugin can't stall the shell with a sleep (the
+    /// time limit only stops WebAssembly code, so host waits return at
+    /// once) or take its memory (growth past MAX_PLUGIN_MEMORY traps and
+    /// disables only that plugin). Run with MANDARA_HOSTILE_PLUGINS set to a
+    /// folder holding `sleep/` and `mem/` builds of the example whose `bar`
+    /// sleeps 10 s / allocates 200 MiB.
+    #[test]
+    fn a_hostile_plugin_cannot_stall_or_exhaust_the_shell() {
+        let Some(root) = std::env::var_os("MANDARA_HOSTILE_PLUGINS").map(std::path::PathBuf::from) else {
+            eprintln!("skipped: MANDARA_HOSTILE_PLUGINS not set");
+            return;
+        };
+        let palette = Palette { dark: true, primary: "#80cbc4".into(), on_primary: "#00201d".into(), surface: "#101418".into(), on_surface: "#e0e3e8".into(), on_surface_variant: "#c0c7cd".into(), container: "#1c2024".into(), error: "#ffb4ab".into(), success: "#7dd3a0".into(), warning: "#f5c26b".into() };
+        let run = |variant: &str| {
+            let dir = root.join(variant);
+            let entry = dir.join("target/wasm32-wasip2/release/moon_phase.wasm");
+            let palette = palette.clone();
+            std::thread::spawn(move || {
+                let mut p = WasmPlugin::load("moon-phase", &dir, &entry, serde_json::Map::new(), false).map_err(|e| format!("{e:#}"))?;
+                let started = std::time::Instant::now();
+                let bar = p.bar(&palette).is_some();
+                Ok::<_, String>((bar, p.disabled.clone(), started.elapsed()))
+            })
+            .join()
+            .unwrap()
+        };
+        let (_, _, took) = run("sleep").unwrap();
+        assert!(took < Duration::from_secs(2), "a 10 s sleep held the shell for {took:?}");
+        let (bar, disabled, _) = run("mem").unwrap();
+        assert!(!bar && disabled.is_some(), "a 200 MiB allocation must disable the plugin: {disabled:?}");
     }
 
     #[test]

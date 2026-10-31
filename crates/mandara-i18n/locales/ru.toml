@@ -1235,7 +1235,6 @@
 "Caches & plugins" = "Кэши и плагины"
 "Café murmur" = "Гул кафе"
 "Can change system settings and manage users." = "Может менять системные настройки и управлять пользователями."
-"Can run Mandara commands: open panels, change settings, control media" = "Может выполнять команды Mandara: открывать панели, менять настройки, управлять медиа"
 "Can't reach systemd" = "Нет связи с systemd"
 "Cancel" = "Отмена"
 "Cancelled" = "Отменено"
@@ -5581,3 +5580,5 @@
 "Which displays show the bar, dock, OSDs, notifications and wallpaper" = "На каких экранах показывать панель, док, OSD, уведомления и обои"
 "{changed} of {count} changed" = "Изменено {changed} из {count}"
 "{list} and {count} more" = "{list} и ещё {count}"
+"Can use Mandara's interface: open panels, control media and volume, post notifications, add notes and to-dos. It can't run programs or change your settings" = "Может пользоваться интерфейсом Mandara: открывать панели, управлять медиа и громкостью, отправлять уведомления, добавлять заметки и задачи. Не может запускать программы и менять ваши настройки"
+"{name} now points to another repository ({page}). Mandara doesn't follow moved plugins; install it again from its new home if you trust it." = "{name} теперь указывает на другой репозиторий ({page}). Mandara не следует за перемещёнными плагинами; установите его заново из нового места, если доверяете ему."

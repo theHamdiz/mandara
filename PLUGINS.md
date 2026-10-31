@@ -122,7 +122,7 @@ author = "Your Name"
 version = "0.1.0"            # default "0.0.0"
 zone = "right"               # default bar zone: left | center | right
 entry = "plugin.wasm"        # the component, relative to this folder (default)
-permissions = []             # ["commands"] to run Mandara commands
+permissions = []             # ["commands"] to run Mandara's interface commands
 homepage = "https://github.com/you/mandara-moon-phase"   # "Homepage" button in Studio
 
 # Name and description per language (ISO 639-1 codes).
@@ -407,10 +407,20 @@ returns `60_000`: the moon changes slowly.
   Read them with `host::setting("hemisphere")`, which returns the JSON text
   `"south"` (the declared default when the user hasn't chosen yet). A change
   in Studio reaches your plugin before its next render.
-- **Commands:** with `permissions = ["commands"]`, `host::command("theme next")`
-  runs any [documented command](docs/commands.md), the same ones as
-  `mandara msg …` (`mandara commands` lists them all). Commands run after
-  your call returns; a failure is logged.
+- **Commands:** with `permissions = ["commands"]`, `host::command("media play-pause")`
+  runs one of Mandara's interface commands, the same as `mandara msg …`.
+  Only interface actions are allowed, because commands run outside the
+  WebAssembly sandbox: `panel`, `sidebar`, `sidebar tab open`, `launcher`,
+  `launcher search`, `switcher`, `menu`, `osd`, `osd show`, `media next` /
+  `previous` / `play-pause` / `seek`, `audio volume up` / `down` / `set`,
+  `audio mute`, `audio mic mute`, `notifications send`, `notifications dnd`,
+  `pomodoro`, `weather refresh`, `calendar refresh`, `theme mode`,
+  `workspace view` / `toggle` / `cycle-layout`, `todo add`, `todo done`,
+  `notes add`, `notes append`, `clock now`, `info` and `ping`. Anything that
+  starts programs or changes settings, startup apps, compositor config,
+  plugins, power or the network is refused (and logged). Commands run
+  after your call returns, their output doesn't come back to your plugin,
+  and a failure is logged.
   At most 16 commands can be queued per call, and without the permission
   `host::command` returns an error.
   Users see the permission, with what it allows, on your plugin's product

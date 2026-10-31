@@ -864,8 +864,10 @@ impl StudioView {
     }
 
     fn apply_pick(&mut self, rule: Option<usize>, app_id: &str, title: Option<&str>, cx: &mut Context<Self>) {
-        let app = exact_regex(app_id);
-        let title = title.filter(|t| !t.is_empty()).map(exact_regex);
+        // Another app chose these: no control characters into the config.
+        let clean = |s: &str| s.chars().filter(|c| !c.is_control()).collect::<String>();
+        let app = exact_regex(&clean(app_id));
+        let title = title.map(clean).filter(|t| !t.is_empty()).map(|t| exact_regex(&t));
         self.list_fields.retain(|k, _| !k.starts_with("wr-"));
         update_config(cx, move |c| match rule.and_then(|i| c.compositor.window_rules.get_mut(i)) {
             Some(r) => {

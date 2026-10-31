@@ -1263,7 +1263,6 @@
 "Caches & plugins" = "कैश और प्लगइन"
 "Café murmur" = "कैफ़े की गुनगुनाहट"
 "Can change system settings and manage users." = "सिस्टम सेटिंग्स बदल सकता है और उपयोगकर्ताओं को प्रबंधित कर सकता है।"
-"Can run Mandara commands: open panels, change settings, control media" = "Mandara कमांड चला सकता है: पैनल खोलना, सेटिंग्स बदलना, मीडिया नियंत्रित करना"
 "Can't reach systemd" = "systemd तक नहीं पहुंच सके"
 "Cancel" = "रद्द करें"
 "Cancelled" = "रद्द किया गया"
@@ -5582,3 +5581,5 @@
 "Which displays show the bar, dock, OSDs, notifications and wallpaper" = "कौन-से डिस्प्ले बार, डॉक, OSD, सूचनाएँ और वॉलपेपर दिखाते हैं"
 "{changed} of {count} changed" = "{count} में से {changed} बदले गए"
 "{list} and {count} more" = "{list} और {count} और"
+"Can use Mandara's interface: open panels, control media and volume, post notifications, add notes and to-dos. It can't run programs or change your settings" = "Mandara के इंटरफ़ेस का उपयोग कर सकता है: पैनल खोलना, मीडिया और वॉल्यूम नियंत्रित करना, सूचनाएँ भेजना, नोट्स और कार्य जोड़ना। यह प्रोग्राम नहीं चला सकता और आपकी सेटिंग्स नहीं बदल सकता"
+"{name} now points to another repository ({page}). Mandara doesn't follow moved plugins; install it again from its new home if you trust it." = "{name} अब किसी दूसरे रिपॉज़िटरी ({page}) की ओर इशारा करता है। Mandara स्थानांतरित प्लगइन का पीछा नहीं करता; भरोसा हो तो इसे इसके नए ठिकाने से फिर से इंस्टॉल करें।"

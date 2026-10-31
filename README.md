@@ -1135,15 +1135,19 @@ was, and cursor themes stay on if you had picked a cursor.
   WebAssembly component (`wasm32-wasip2`) against a small WIT contract and
   run inside `wasmtime`.
 - **Sandboxed.** No files, no network, no environment and no subprocesses.
-  Each call has a time budget (100 ms, 1 s for `init`). A plugin that traps
-  or runs over its budget is switched off; the shell keeps running.
+  Each call has a time budget (100 ms, 1 s for `init`), a plugin can't
+  block or sleep, its memory is capped at 64 MiB and its views are capped
+  in size. A plugin that traps or crosses a limit is switched off; the
+  shell keeps running.
 - **Native look for free.** A plugin returns a declarative view tree (rows,
   columns, cards, text, icons, buttons, meters) and Mandara draws it
   with the current theme in every palette, light or dark, right to left in
   Arabic.
 - **Settings and permissions.** A plugin declares its settings in
   `plugin.toml`, and Studio builds its settings modal from them. The only
-  permission, `commands`, lets it run Mandara commands; Studio shows it in
+  permission, `commands`, lets it use Mandara's interface (open panels,
+  control media and volume, post notifications, add notes and to-dos),
+  never commands that run programs or change settings; Studio shows it in
   the plugin's detail modal.
 - **Live.** Drop a folder in, rebuild, edit a translation or delete it, and
   Mandara reloads it within about half a second.
@@ -1168,8 +1172,11 @@ That's all. Your plugin is listed in **Studio → Plugins → Community**
 One click installs it, switches it on and loads it live; updating and
 removing are one click too. Forks and pre-release-only repositories count,
 and the archive may hold the plugin folder or just its files. Archives are
-checked before anything is unpacked: no paths outside the plugin folder, no
-links or device files, at most 64 MB, and the id comes from `plugin.toml`.
+checked before anything is unpacked: they must match the release's
+`SHA256SUMS` when it publishes one, with no paths outside the plugin
+folder, no links or device files, at most 64 MB, and the id comes from
+`plugin.toml`. A plugin stays with the repository it came from: if that
+repository is renamed or handed to another owner, Mandara won't follow it.
 Every release then passes a compliance check in the sandbox (well under a
 second): a broken, malicious or placeholder one doesn't install, and Studio
 marks that version with the reason while still letting you install it

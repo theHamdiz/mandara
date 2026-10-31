@@ -51,7 +51,7 @@ author = "Your Name"
 version = "0.1.0"                # default "0.0.0"
 zone = "right"                   # default bar zone: left | center | right
 entry = "plugin.wasm"            # the component, relative to this folder (default)
-permissions = []                 # ["commands"] to run Mandara commands
+permissions = []                 # ["commands"] to run Mandara's interface commands
 homepage = "https://github.com/you/mandara-moon-phase"
 
 # Name and description per language (ISO 639-1 codes).

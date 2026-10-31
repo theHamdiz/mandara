@@ -6,6 +6,34 @@ About → What's new shows it too.
 
 ## Unreleased
 
+A security release. Thank you to the person who reviewed Mandara and
+reported what they found on GitHub.
+
+### Fixed
+
+- **Plugins stay in their sandbox.** A plugin with the `commands`
+  permission could ask Mandara to run any command, including ones that
+  start programs or add themselves to your startup apps. Now plugins may
+  only use the interface: open panels, control media and volume, post
+  notifications, add notes and to-dos. Everything else is refused, and
+  Studio describes the permission honestly.
+- **A window's title can't change your compositor config.** Picking a
+  running window in Studio's window rules copied its title into your
+  MangoWM or Hyprland drop-in as-is, so an app could choose a title that
+  added its own line. Titles are now cleaned before they're written, for
+  every compositor.
+- **Plugins can't freeze the shell or eat its memory.** Each plugin gets at
+  most 64 MiB, a plugin can no longer sleep past its time limit, and the
+  size of what it draws is capped. A plugin that crosses a limit is simply
+  switched off.
+
+### Improved
+
+- **Marketplace plugins stay with their publisher.** If a plugin's
+  repository is renamed or handed to someone else, Mandara stops updating
+  it instead of quietly following, and the first install is now checked
+  against the release's checksums too, not just updates.
+
 ## 0.3.1 — 2026-10-30
 
 Multi-monitor setups get the right sizes everywhere, the clock keeps up
