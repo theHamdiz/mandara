@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.5.2 — 2026-11-01
+
+The launcher and Alt+Tab open on the right display. Choose the displays
+for the launcher and pop-ups.
+
 ### Fixed
 
 - **The launcher and Alt+Tab open on the right display.** With more than
