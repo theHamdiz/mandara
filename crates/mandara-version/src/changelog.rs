@@ -254,8 +254,18 @@ fn wrap(text: &str, width: usize, first: &str, indent: &str) -> String {
 /// section so a release is never without any.
 pub fn stamp(text: &str, version: &str, date: &str, fallback: &[String]) -> String {
     let releases = parse(text);
-    let notes_written = releases.iter().find(|r| r.is_unreleased()).is_some_and(|r| !r.is_empty());
+    let unreleased = releases.iter().find(|r| r.is_unreleased());
+    let notes_written = unreleased.is_some_and(|r| !r.is_empty());
     let mut fresh = format!("## {UNRELEASED}\n\n## {version} — {date}\n");
+    // Every release has a summary: the notes' own, else one made from the
+    // bold headlines of their first entries.
+    if let Some(notes) = unreleased.filter(|r| r.summary.is_empty() && !r.sections.is_empty()) {
+        let summary = summary_from(notes);
+        if !summary.is_empty() {
+            fresh.push('\n');
+            fresh.push_str(&wrap(&summary, SUMMARY_WIDTH, "", ""));
+        }
+    }
     if !notes_written && !fallback.is_empty() {
         fresh.push_str("\nThe changes in this release, taken from its commit history.\n\n### Changes\n\n");
         for item in fallback {
@@ -284,6 +294,23 @@ pub fn stamp(text: &str, version: &str, date: &str, fallback: &[String]) -> Stri
         out.push_str(&fresh);
     }
     out
+}
+
+/// Entries whose headlines make a generated summary, and its line width.
+const SUMMARY_ITEMS: usize = 4;
+const SUMMARY_WIDTH: usize = 74;
+
+/// A summary from a release's entries: the bold headline of each of its
+/// first [`SUMMARY_ITEMS`] entries, as sentences.
+fn summary_from(r: &Release) -> String {
+    r.sections
+        .iter()
+        .flat_map(|s| s.items.iter())
+        .filter_map(|item| item.split("**").nth(1).map(str::trim).filter(|h| !h.is_empty()))
+        .take(SUMMARY_ITEMS)
+        .map(|h| if h.ends_with(['.', '!', '?']) { h.to_string() } else { format!("{h}.") })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// A commit subject as a changelog line: the Conventional Commits prefix
@@ -389,6 +416,20 @@ mod tests {
         assert_eq!(commit_line("feat: dock magnification!").as_deref(), Some("Dock magnification!"));
         assert_eq!(commit_line("Plain subject").as_deref(), Some("Plain subject."));
         assert_eq!(commit_line("chore(release): mandara v0.1.2"), None);
+    }
+
+    /// A release whose notes have no summary paragraph gets one from its
+    /// entries' headlines, so every shipped release reads well.
+    #[test]
+    fn stamping_writes_a_summary_when_the_notes_have_none() {
+        let text = "# Changelog\n\n## Unreleased\n\n### Fixed\n\n- **A missing wallpaper no longer spins the shell.** It waits.\n\n### Improved\n\n- **Big wallpapers switch with less memory** — details.\n\n## 0.1.0 — 2026-10-01\n\nFirst.\n\n### New\n\n- **Hello.** World.\n";
+        let all = parse(&stamp(text, "0.2.0", "2026-11-02", &[]));
+        let r = release(&all, "0.2.0").unwrap();
+        assert_eq!(r.summary, "A missing wallpaper no longer spins the shell. Big wallpapers switch with less memory.");
+        assert_eq!(r.sections.len(), 2);
+        // A written summary is kept as it is.
+        let written = text.replace("## Unreleased\n\n", "## Unreleased\n\nOur own words.\n\n");
+        assert_eq!(release(&parse(&stamp(&written, "0.2.0", "2026-11-02", &[])), "0.2.0").unwrap().summary, "Our own words.");
     }
 
     #[test]

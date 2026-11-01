@@ -1,7 +1,10 @@
 //! CAM16/HCT Material 3 bridge: wallpaper / album-art quantization and
 //! dynamic tonal schemes mapped onto Mandara tokens.
 
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
+use std::time::SystemTime;
 
 use material_colors::color::Rgb;
 use material_colors::dynamic_color::dynamic_scheme::DynamicScheme;
@@ -156,6 +159,64 @@ pub fn open_image(path: &Path) -> image::ImageResult<image::DynamicImage> {
     image::ImageReader::open(path)?.with_guessed_format()?.decode()
 }
 
+/// One decode of a file, shared by everyone who asks for it while it's in
+/// use ([`open_shared`]).
+enum Shared {
+    /// Someone is decoding it; wait for them.
+    Decoding,
+    /// Decoded; alive while any caller still holds it.
+    Ready(Weak<image::DynamicImage>),
+}
+
+/// A file as decoded: its path, size and modification time (a changed file
+/// is a new image).
+type SharedKey = (PathBuf, u64, Option<SystemTime>);
+
+fn shared() -> &'static (Mutex<HashMap<SharedKey, Shared>>, Condvar) {
+    static SHARED: OnceLock<(Mutex<HashMap<SharedKey, Shared>>, Condvar)> = OnceLock::new();
+    SHARED.get_or_init(|| (Mutex::new(HashMap::new()), Condvar::new()))
+}
+
+/// Decodes `path` like [`open_image`], once for all the callers that want
+/// it at the same time: a wallpaper switch has the renderer, the frosted
+/// copy, the depth effect and the theme's colours all reading the same
+/// picture, and a separate full-size decode each would hold several copies
+/// of an 8K image at once. A second caller waits for the decode in flight
+/// and gets the same pixels; nothing is kept once the last caller is done.
+pub fn open_shared(path: &Path) -> image::ImageResult<Arc<image::DynamicImage>> {
+    let meta = std::fs::metadata(path).map_err(image::ImageError::IoError)?;
+    let key: SharedKey = (path.to_path_buf(), meta.len(), meta.modified().ok());
+    let (lock, ready) = shared();
+    let mut map = lock.lock().unwrap_or_else(|e| e.into_inner());
+    loop {
+        match map.get(&key) {
+            Some(Shared::Ready(weak)) => match weak.upgrade() {
+                Some(image) => return Ok(image),
+                None => break,
+            },
+            Some(Shared::Decoding) => map = ready.wait(map).unwrap_or_else(|e| e.into_inner()),
+            None => break,
+        }
+    }
+    map.insert(key.clone(), Shared::Decoding);
+    drop(map);
+    let result = open_image(path).map(Arc::new);
+    let mut map = lock.lock().unwrap_or_else(|e| e.into_inner());
+    map.retain(|_, slot| !matches!(slot, Shared::Ready(weak) if weak.strong_count() == 0));
+    match &result {
+        Ok(image) => {
+            map.insert(key, Shared::Ready(Arc::downgrade(image)));
+        }
+        // Waiting callers try again themselves.
+        Err(_) => {
+            map.remove(&key);
+        }
+    }
+    drop(map);
+    ready.notify_all();
+    result
+}
+
 /// Decodes `path` and extracts its seed colors. The full-size pixels are
 /// freed as soon as the thumbnail exists, before quantization. Video
 /// wallpapers (`.webm`, `.mkv`, `.ivf`) use a representative frame.
@@ -164,7 +225,7 @@ pub fn extract_seeds(path: &Path, count: usize) -> Result<Vec<SeedColor>, Extrac
         let frame = mandara_media::representative_frame(path).map_err(|reason| ExtractError::Video { path: path.display().to_string(), reason })?;
         image::DynamicImage::ImageRgba8(frame).thumbnail(SAMPLE_EDGE, SAMPLE_EDGE).to_rgba8()
     } else {
-        let img = open_image(path).map_err(|source| ExtractError::Decode { path: path.display().to_string(), source })?;
+        let img = open_shared(path).map_err(|source| ExtractError::Decode { path: path.display().to_string(), source })?;
         img.thumbnail(SAMPLE_EDGE, SAMPLE_EDGE).to_rgba8()
     };
     seeds_from_thumbnail(&thumb, count)
@@ -309,6 +370,32 @@ mod tests {
     use super::*;
 
     /// Issue #16: album art cached without an extension still decodes.
+    /// A wallpaper switch reads one picture from several threads at once:
+    /// they share one decode, and a changed file is decoded again.
+    #[test]
+    fn concurrent_readers_share_one_decode() {
+        let path = std::env::temp_dir().join(format!("mandara-shared-{}.png", std::process::id()));
+        image::RgbaImage::from_pixel(64, 32, image::Rgba([10, 120, 200, 255])).save(&path).unwrap();
+        let barrier = std::sync::Barrier::new(4);
+        let images: Vec<Arc<image::DynamicImage>> = std::thread::scope(|s| {
+            let handles: Vec<_> = (0..4)
+                .map(|_| {
+                    s.spawn(|| {
+                        barrier.wait();
+                        open_shared(&path).unwrap()
+                    })
+                })
+                .collect();
+            handles.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        assert!(images.windows(2).all(|w| Arc::ptr_eq(&w[0], &w[1])), "every reader got the same pixels");
+        drop(images);
+        image::RgbaImage::from_pixel(16, 16, image::Rgba([250, 10, 10, 255])).save(&path).unwrap();
+        let changed = open_shared(&path).unwrap();
+        assert_eq!((changed.width(), changed.height()), (16, 16), "a changed file is decoded again");
+        std::fs::remove_file(&path).unwrap();
+    }
+
     #[test]
     fn images_open_by_content_not_name() {
         let path = std::env::temp_dir().join(format!("mandara-art-{}", std::process::id()));

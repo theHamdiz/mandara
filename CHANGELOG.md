@@ -6,7 +6,29 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **A missing wallpaper file no longer spins the shell.** If your
+  wallpaper was deleted or moved, Mandara kept trying to load it in a tight
+  loop, filling the log and, over time, crashing. It now tries again every
+  30 seconds and stays idle in between.
+
+### Improved
+
+- **Big wallpapers switch with far less memory.** Switching to an 8K
+  picture used to need about 770 MB for a moment; it now needs about
+  300 MB, and a 4K switch needs no extra memory at all. The picture is
+  decoded once for everything that uses it (the desktop, the frosted
+  menu, the depth effect and the theme colours), and large shrinks no
+  longer go through a huge temporary buffer.
+
 ## 0.5.0 — 2026-11-01
+
+Umbriel joins MangoWM, Niri and Hyprland; a config doctor that asks your
+compositor what's wrong and helps you fix it; desktop widgets as plugins,
+with dozens of new widgets and shapes; a depth effect that can use a small
+model; a richer clipboard, calendar, bar and wallpaper page; Alt+V for the
+clipboard and Print for screenshots.
 
 ### New
 

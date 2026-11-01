@@ -78,6 +78,9 @@ pub fn software_enabled() -> bool {
 
 /// Linux input codes of the left and right mouse buttons (`BTN_LEFT`,
 /// `BTN_RIGHT`).
+/// How long a wallpaper that failed to load (a missing or unreadable file)
+/// rests before it's tried again.
+const LOAD_RETRY: Duration = Duration::from_secs(30);
 const BTN_LEFT: u32 = 0x110;
 const BTN_RIGHT: u32 = 0x111;
 
@@ -951,6 +954,9 @@ struct Out {
     cur: usize,
     serial: u64,
     loading: Option<(u64, Want)>,
+    /// The last wallpaper that failed to load and when: not retried before
+    /// [`LOAD_RETRY`], so a missing file isn't re-read on every pass.
+    failed: Option<(Want, Instant)>,
     trans: Option<Trans>,
     painted: Painted,
     ring: f32,
@@ -971,6 +977,7 @@ impl Out {
             cur: 0,
             serial: 0,
             loading: None,
+            failed: None,
             trans: None,
             painted: Painted::default(),
             ring: 0.0,
@@ -1255,7 +1262,8 @@ impl Renderer {
         // Load what should be shown.
         let shown = out.current().map(|s| &s.want) == Some(&want);
         let pending = out.loading.as_ref().is_some_and(|(_, w)| *w == want);
-        if !shown && !pending {
+        let resting = out.failed.as_ref().is_some_and(|(w, at)| *w == want && at.elapsed() < LOAD_RETRY);
+        if !shown && !pending && !resting {
             out.serial += 1;
             out.loading = Some((out.serial, want.clone()));
             let mask = mask_for(scene, &want);
@@ -1337,7 +1345,8 @@ impl Renderer {
                 let (bg, cut) = match result {
                     Ok(v) => v,
                     Err(err) => {
-                        tracing::warn!("wallpaper: {err}");
+                        tracing::warn!("wallpaper: {err} (trying again in {} s)", LOAD_RETRY.as_secs());
+                        o.failed = Some((want, Instant::now()));
                         return;
                     }
                 };

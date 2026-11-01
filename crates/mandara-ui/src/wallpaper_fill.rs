@@ -37,7 +37,7 @@ pub fn prepare_in(path: &Path, fill: WallpaperFill, w: u32, h: u32, cache: &Path
             }
             let out = derived(&format!("{w}x{h}"));
             if !out.exists() {
-                let img = image::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+                let img = crate::wallpaper::open_still(path)?;
                 crate::wallpaper::save_jpeg(&crate::wallpaper::cover(&img, w, h), &out, JPEG_QUALITY)?;
             }
             Ok((out, (w, h)))
@@ -50,8 +50,8 @@ pub fn prepare_in(path: &Path, fill: WallpaperFill, w: u32, h: u32, cache: &Path
             let (fw, fh) = (((iw as f32 * scale).round() as u32).max(1), ((ih as f32 * scale).round() as u32).max(1));
             let out = derived(&format!("fit{fw}x{fh}"));
             if !out.exists() {
-                let img = image::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
-                crate::wallpaper::save_jpeg(&img.resize_exact(fw, fh, image::imageops::FilterType::Triangle), &out, JPEG_QUALITY)?;
+                let img = crate::wallpaper::open_still(path)?;
+                crate::wallpaper::save_jpeg(&crate::wallpaper::shrink(&img, fw, fh), &out, JPEG_QUALITY)?;
             }
             Ok((out, (fw, fh)))
         }
@@ -62,7 +62,7 @@ pub fn prepare_in(path: &Path, fill: WallpaperFill, w: u32, h: u32, cache: &Path
             let (cw, ch) = (iw.min(w), ih.min(h));
             let out = derived(&format!("center{cw}x{ch}"));
             if !out.exists() {
-                let img = image::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+                let img = crate::wallpaper::open_still(path)?;
                 crate::wallpaper::save_jpeg(&img.crop_imm((iw - cw) / 2, (ih - ch) / 2, cw, ch), &out, JPEG_QUALITY)?;
             }
             Ok((out, (cw, ch)))

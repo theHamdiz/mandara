@@ -181,7 +181,7 @@ pub fn segment(img: &DynamicImage) -> Segmentation {
     if img.width() < 64 || img.height() < 64 {
         return decline("image too small", 0.0);
     }
-    let small = img.resize(ANALYSIS_MAX, ANALYSIS_MAX, image::imageops::FilterType::Triangle).to_rgb8();
+    let small = crate::wallpaper::fit_within(img, ANALYSIS_MAX, ANALYSIS_MAX).to_rgb8();
     let (w, h) = (small.width() as usize, small.height() as usize);
     let raw = Grid { w, h, data: small.pixels().map(|p| oklab(p.0)).collect() };
     let lab = box_blur_lab(&raw);
@@ -380,7 +380,7 @@ pub fn segment(img: &DynamicImage) -> Segmentation {
     }
     let scale = (MASK_MAX as f32 / img.width().max(img.height()) as f32).min(1.0);
     let (ow, oh) = (((img.width() as f32 * scale).round() as u32).max(1), ((img.height() as f32 * scale).round() as u32).max(1));
-    let full: RgbImage = if (ow, oh) == (img.width(), img.height()) { img.to_rgb8() } else { img.resize_exact(ow, oh, image::imageops::FilterType::Triangle).to_rgb8() };
+    let full: RgbImage = if (ow, oh) == (img.width(), img.height()) { img.to_rgb8() } else { crate::wallpaper::shrink(img, ow, oh).to_rgb8() };
     let sample = |fx: f32, fy: f32| -> f32 {
         let (fx, fy) = (fx.clamp(0.0, (w - 1) as f32), fy.clamp(0.0, (h - 1) as f32));
         let (x0, y0) = (fx.floor() as usize, fy.floor() as usize);

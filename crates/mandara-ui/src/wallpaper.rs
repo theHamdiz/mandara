@@ -108,7 +108,41 @@ pub(crate) fn cover(img: &image::DynamicImage, w: u32, h: u32) -> image::Dynamic
     let (iw, ih) = (img.width().max(1), img.height().max(1));
     let target = w as f32 / h as f32;
     let (cw, ch) = if iw as f32 / ih as f32 > target { ((ih as f32 * target) as u32, ih) } else { (iw, (iw as f32 / target) as u32) };
-    img.crop_imm((iw - cw) / 2, (ih - ch) / 2, cw.max(1), ch.max(1)).resize_exact(w, h, image::imageops::FilterType::Triangle)
+    shrink_region(img, ((iw - cw) / 2, (ih - ch) / 2, cw.max(1), ch.max(1)), w, h)
+}
+
+/// From this much smaller on, a picture is box-averaged straight to its
+/// size instead of resampled: the same anti-aliased result for a large
+/// shrink, without the float buffer of `w × source height × 16` bytes a
+/// two-pass resize allocates (265 MB to bring an 8K picture to 4K).
+const BOX_SHRINK: f32 = 1.25;
+
+/// `img` resized to exactly `w × h` (see [`shrink_region`]).
+pub(crate) fn shrink(img: &image::DynamicImage, w: u32, h: u32) -> image::DynamicImage {
+    shrink_region(img, (0, 0, img.width(), img.height()), w, h)
+}
+
+/// The `(x, y, width, height)` region of `img`, resized to exactly
+/// `w × h`. A large shrink reads the region in place (no cropped copy) and
+/// box-averages it; anything else is cropped and resampled.
+pub(crate) fn shrink_region(img: &image::DynamicImage, (x, y, cw, ch): (u32, u32, u32, u32), w: u32, h: u32) -> image::DynamicImage {
+    use image::{DynamicImage, GenericImageView as _, imageops};
+    let (w, h) = (w.max(1), h.max(1));
+    if (cw as f32) < w as f32 * BOX_SHRINK || (ch as f32) < h as f32 * BOX_SHRINK {
+        return img.crop_imm(x, y, cw, ch).resize_exact(w, h, imageops::FilterType::Triangle);
+    }
+    match img {
+        DynamicImage::ImageRgb8(b) => DynamicImage::ImageRgb8(imageops::thumbnail(&*b.view(x, y, cw, ch), w, h)),
+        DynamicImage::ImageRgba8(b) => DynamicImage::ImageRgba8(imageops::thumbnail(&*b.view(x, y, cw, ch), w, h)),
+        other => DynamicImage::ImageRgba8(imageops::thumbnail(&*other.view(x, y, cw, ch), w, h)),
+    }
+}
+
+/// `img` scaled to fit within `max_w × max_h`, keeping its shape (like
+/// [`image::DynamicImage::resize`], through [`shrink`]).
+pub(crate) fn fit_within(img: &image::DynamicImage, max_w: u32, max_h: u32) -> image::DynamicImage {
+    let scale = (max_w as f32 / img.width().max(1) as f32).min(max_h as f32 / img.height().max(1) as f32);
+    shrink(img, (img.width() as f32 * scale).round() as u32, (img.height() as f32 * scale).round() as u32)
 }
 
 pub(crate) fn save_jpeg(img: &image::DynamicImage, out: &Path, quality: u8) -> Result<(), String> {
@@ -167,19 +201,20 @@ pub fn preview(path: &Path) -> Result<Preview, String> {
     let file = mandara_config::paths::cache_dir().join("thumbnails").join(cache_key(path, &format!("preview{PREVIEW_EDGE}")));
     if !file.exists() {
         let img = open_still(path)?;
-        let img = if img.width().max(img.height()) > PREVIEW_EDGE { img.resize(PREVIEW_EDGE, PREVIEW_EDGE, image::imageops::FilterType::Triangle) } else { img };
+        let img = if img.width().max(img.height()) > PREVIEW_EDGE { std::sync::Arc::new(fit_within(&img, PREVIEW_EDGE, PREVIEW_EDGE)) } else { img };
         save_jpeg(&img, &file, PREVIEW_QUALITY)?;
     }
     Ok(Preview { file, size, video, bytes })
 }
 
 /// Decodes a wallpaper as a picture: the image itself, or a video's first
-/// frame.
-pub fn open_still(path: &Path) -> Result<image::DynamicImage, String> {
+/// frame. A picture is decoded once for everyone reading it at the same
+/// time ([`mandara_theme::material::open_shared`]).
+pub fn open_still(path: &Path) -> Result<std::sync::Arc<image::DynamicImage>, String> {
     if mandara_media::is_video(path) {
-        return mandara_media::first_frame(path).map(image::DynamicImage::ImageRgba8);
+        return mandara_media::first_frame(path).map(|frame| std::sync::Arc::new(image::DynamicImage::ImageRgba8(frame)));
     }
-    image::open(path).map_err(|e| format!("{}: {e}", path.display()))
+    mandara_theme::material::open_shared(path).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 /// Width of the frosted copy (the GPU stretches it; the blur hides it).
@@ -289,7 +324,7 @@ fn share_with_login(path: &Path, dir: &Path) -> Result<(), String> {
     let user = std::env::var("USER").ok().filter(|u| !u.is_empty() && !u.contains('/')).ok_or("no user name")?;
     let uid = rustix::process::getuid().as_raw();
     let img = open_still(path)?;
-    let img = if img.width() > LOGIN_SHARE_MAX.0 || img.height() > LOGIN_SHARE_MAX.1 { img.resize(LOGIN_SHARE_MAX.0, LOGIN_SHARE_MAX.1, image::imageops::FilterType::Triangle) } else { img };
+    let img = if img.width() > LOGIN_SHARE_MAX.0 || img.height() > LOGIN_SHARE_MAX.1 { std::sync::Arc::new(fit_within(&img, LOGIN_SHARE_MAX.0, LOGIN_SHARE_MAX.1)) } else { img };
     let target = mandara_config::paths::login_wallpaper_target(dir, &user, uid);
     let tmp = dir.join(format!(".{user}.{uid}.tmp"));
     let _ = std::fs::remove_file(&tmp);
@@ -314,7 +349,7 @@ pub fn still_in(path: &Path, cache: &Path) -> Result<PathBuf, String> {
     }
     let out = cache.join("posters").join(cache_key(path, "poster"));
     if !out.exists() {
-        save_jpeg(&open_still(path)?, &out, POSTER_QUALITY)?;
+        save_jpeg(&*open_still(path)?, &out, POSTER_QUALITY)?;
     }
     Ok(out)
 }
@@ -332,7 +367,7 @@ pub fn slant(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
     if out.exists() {
         return Ok(out);
     }
-    let src = if w <= THUMB_W && h <= THUMB_H { image::open(thumbnail(path)?).map_err(|e| format!("{}: {e}", path.display()))? } else { open_still(path)? };
+    let src = if w <= THUMB_W && h <= THUMB_H { std::sync::Arc::new(image::open(thumbnail(path)?).map_err(|e| format!("{}: {e}", path.display()))?) } else { open_still(path)? };
     let cov = cover(&src, w, h).to_rgba8();
     let off = (h as f32 * SHEAR).round() as u32;
     let size = IntSize::from_wh(w, h).ok_or("bad size")?;
@@ -405,7 +440,7 @@ pub fn display_copy(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
     if iw <= w + w / 4 && ih <= h + h / 4 {
         return Ok(source);
     }
-    let img = image::open(&source).map_err(|e| format!("{}: {e}", path.display()))?;
+    let img = open_still(&source)?;
     save_jpeg(&cover(&img, w, h), &out, DISPLAY_QUALITY)?;
     Ok(out)
 }
@@ -1896,6 +1931,27 @@ impl Render for PickerView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Large shrinks box-average without a cropped copy; small ones still
+    /// resample. Both land exactly on the asked size and keep the colours.
+    #[test]
+    fn shrinking_is_exact_and_keeps_the_picture() {
+        // Left half red, right half blue.
+        let src = image::RgbImage::from_fn(800, 400, |x, _| if x < 400 { image::Rgb([220, 30, 30]) } else { image::Rgb([30, 30, 220]) });
+        let img = image::DynamicImage::ImageRgb8(src);
+        let big = shrink(&img, 200, 100);
+        assert_eq!((big.width(), big.height()), (200, 100));
+        let px = big.to_rgb8();
+        assert!(px.get_pixel(20, 50)[0] > 200 && px.get_pixel(180, 50)[2] > 200, "colours stay where they were");
+        let small = shrink(&img, 700, 350);
+        assert_eq!((small.width(), small.height()), (700, 350), "a small shrink resamples to the exact size");
+        // A square cover of the wide picture is its middle: half red, half blue.
+        let square = cover(&img, 100, 100).to_rgb8();
+        assert_eq!(square.dimensions(), (100, 100));
+        assert!(square.get_pixel(10, 50)[0] > 200 && square.get_pixel(90, 50)[2] > 200);
+        let fitted = fit_within(&img, 300, 300);
+        assert_eq!((fitted.width(), fitted.height()), (300, 150), "fit keeps the shape");
+    }
 
     #[test]
     fn match_colors_switches_and_restores_theme() {

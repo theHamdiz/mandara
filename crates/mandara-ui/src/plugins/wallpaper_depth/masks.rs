@@ -218,7 +218,7 @@ fn source_name(mode: DepthMode) -> &'static str {
 type Made = Result<(GrayImage, String), String>;
 
 fn hand_tuned(wallpaper: &Path) -> Result<Made, String> {
-    let img = image::open(wallpaper).map_err(|e| format!("{}: {e}", wallpaper.display()))?;
+    let img = mandara_theme::material::open_shared(wallpaper).map_err(|e| format!("{}: {e}", wallpaper.display()))?;
     let seg = super::hand_tuned::segment(&img);
     Ok(seg.alpha.map(|a| (a, seg.reason.clone())).ok_or(seg.reason))
 }
@@ -239,7 +239,7 @@ fn model(wallpaper: &Path, request: Request) -> Result<Made, String> {
         *LAST_RUN.lock().unwrap_or_else(|e| e.into_inner()) = Some((wallpaper.to_path_buf(), report));
     }
     let depth = DepthMap::load(&depth_file)?;
-    let img = image::open(wallpaper).map_err(|e| format!("{}: {e}", wallpaper.display()))?;
+    let img = mandara_theme::material::open_shared(wallpaper).map_err(|e| format!("{}: {e}", wallpaper.display()))?;
     let photo = mask_sized(&img).to_rgb8();
     drop(img);
     Ok(depth_model::subject_alpha(&depth, &photo, request.split_fraction()).map(|(alpha, split)| (alpha, format!("{detail}{}", split.describe()))))
@@ -260,7 +260,7 @@ pub(crate) fn mask_sized(img: &DynamicImage) -> DynamicImage {
         return img.clone();
     }
     let (w, h) = (((img.width() as f32 * scale).round() as u32).max(1), ((img.height() as f32 * scale).round() as u32).max(1));
-    img.resize_exact(w, h, image::imageops::FilterType::Triangle)
+    crate::wallpaper::shrink(img, w, h)
 }
 
 /// The mask aligned to a displayed image of `size`: the display copy is
