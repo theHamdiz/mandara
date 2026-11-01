@@ -119,9 +119,85 @@ fn resolve_wallpaper_dir(configured: &str, default: PathBuf, exists: impl Fn(&Pa
     if configured == LEGACY_WALLPAPER_DIR && !exists(&path) { default } else { path }
 }
 
+/// Where each person's wallpaper is shared with Mandara Login: a sticky
+/// folder anyone can add to (like `/tmp`) and nobody can change another's
+/// files in. Root creates it when Mandara Login is installed or its config
+/// is applied ([`ensure_login_wallpaper_dir`]); the shell copies your
+/// wallpaper in as `<user>.jpg`.
+pub const LOGIN_WALLPAPER_DIR: &str = "/var/lib/mandara-login/wallpapers";
+/// Sticky and writable by everyone.
+pub const LOGIN_WALLPAPER_DIR_MODE: u32 = 0o1777;
+
+/// Creates [`LOGIN_WALLPAPER_DIR`] under `root` (root only).
+pub fn ensure_login_wallpaper_dir(root: &Path) -> std::io::Result<PathBuf> {
+    use std::os::unix::fs::PermissionsExt as _;
+    let dir = root.join(LOGIN_WALLPAPER_DIR.trim_start_matches('/'));
+    std::fs::create_dir_all(&dir)?;
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(LOGIN_WALLPAPER_DIR_MODE))?;
+    Ok(dir)
+}
+
+/// The file the shell shares `user`'s wallpaper as, in `dir`: `<user>.jpg`,
+/// or `<user>.<uid>.jpg` when someone else already took that name.
+pub fn login_wallpaper_target(dir: &Path, user: &str, uid: u32) -> PathBuf {
+    let plain = dir.join(format!("{user}.jpg"));
+    match std::fs::symlink_metadata(&plain) {
+        Ok(m) if std::os::unix::fs::MetadataExt::uid(&m) != uid => dir.join(format!("{user}.{uid}.jpg")),
+        _ => plain,
+    }
+}
+
+/// `user`'s shared wallpaper in `dir`, as Mandara Login reads it: a regular
+/// file (never a link) named `<user>.jpg` or `<user>.<…>.jpg` and owned by
+/// `uid`, so nobody can put a picture under someone else's name.
+pub fn shared_login_wallpaper(dir: &Path, user: &str, uid: u32) -> Option<PathBuf> {
+    use std::os::unix::fs::MetadataExt as _;
+    let named = |n: &str| n == format!("{user}.jpg") || (n.starts_with(&format!("{user}.")) && n.ends_with(".jpg") && !n.starts_with('.'));
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .filter(|e| named(&e.file_name().to_string_lossy()))
+        .filter_map(|e| {
+            let m = std::fs::symlink_metadata(e.path()).ok()?;
+            (m.file_type().is_file() && m.uid() == uid && m.len() > 0).then(|| (m.mtime(), e.path()))
+        })
+        .max()
+        .map(|(_, p)| p)
+}
+
+/// The running `mandara` executable. Once a rebuild or upgrade replaces the
+/// file, Linux reports `/path/mandara (deleted)`; spawning that fails, so the
+/// suffix is stripped (the new binary sits at the same path). Falls back to
+/// `mandara` on `PATH`.
+pub fn self_exe() -> PathBuf {
+    let exe = std::env::current_exe().ok().and_then(|p| p.to_str().map(str::to_string)).unwrap_or_default();
+    let exe = PathBuf::from(exe.strip_suffix(" (deleted)").unwrap_or(&exe));
+    if exe.is_file() { exe } else { PathBuf::from("mandara") }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Only the person's own regular file counts as their login wallpaper.
+    #[test]
+    fn shared_login_wallpapers_belong_to_their_owner() {
+        use std::os::unix::fs::MetadataExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        let me = std::fs::metadata(dir.path()).unwrap().uid();
+        assert_eq!(login_wallpaper_target(dir.path(), "amal", me), dir.path().join("amal.jpg"));
+        std::fs::write(dir.path().join("amal.jpg"), b"jpeg").unwrap();
+        assert_eq!(shared_login_wallpaper(dir.path(), "amal", me), Some(dir.path().join("amal.jpg")));
+        assert_eq!(shared_login_wallpaper(dir.path(), "amal", me + 1), None, "a file owned by someone else");
+        assert_eq!(shared_login_wallpaper(dir.path(), "am", me), None, "another user's name prefix");
+        std::os::unix::fs::symlink(dir.path().join("amal.jpg"), dir.path().join("omar.jpg")).unwrap();
+        assert_eq!(shared_login_wallpaper(dir.path(), "omar", me), None, "links never count");
+        std::fs::write(dir.path().join("sara.jpg"), b"").unwrap();
+        assert_eq!(shared_login_wallpaper(dir.path(), "sara", me), None, "empty files don't count");
+        assert_eq!(login_wallpaper_target(dir.path(), "amal", me + 1), dir.path().join(format!("amal.{}.jpg", me + 1)), "a squatted name");
+        assert_eq!(shared_login_wallpaper(dir.path(), "nobody", me), None);
+        assert_eq!(shared_login_wallpaper(&dir.path().join("missing"), "amal", me), None);
+    }
 
     /// Issue #9: the default follows XDG_PICTURES_DIR (e.g. pt_BR ~/Imagens).
     #[test]
@@ -153,14 +229,4 @@ mod tests {
         assert!(generated_dir().ends_with("mandara/generated"));
         assert!(depth_masks_dir().ends_with("mandara/depth_masks"));
     }
-}
-
-/// The running `mandara` executable. Once a rebuild or upgrade replaces the
-/// file, Linux reports `/path/mandara (deleted)`; spawning that fails, so the
-/// suffix is stripped (the new binary sits at the same path). Falls back to
-/// `mandara` on `PATH`.
-pub fn self_exe() -> PathBuf {
-    let exe = std::env::current_exe().ok().and_then(|p| p.to_str().map(str::to_string)).unwrap_or_default();
-    let exe = PathBuf::from(exe.strip_suffix(" (deleted)").unwrap_or(&exe));
-    if exe.is_file() { exe } else { PathBuf::from("mandara") }
 }

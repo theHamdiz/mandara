@@ -26,3 +26,6 @@ path = "examples/make_test_clip.rs"
 [[example]]
 name = "decode_bench"
 path = "examples/decode_bench.rs"
+
+[lints]
+workspace = true

@@ -513,6 +513,11 @@ pub struct CompositorConfig {
     pub window_rules: Vec<WindowRule>,
     pub tag_rules: Vec<TagRule>,
     pub keybinds: Vec<Keybind>,
+    /// The hardware-key defaults `keybinds` was written for (see
+    /// [`crate::upgrade`]): missing in older files, so the media and
+    /// brightness keys added since reach existing configs too.
+    #[serde(default)]
+    pub keybinds_version: u32,
     /// Window border width; `None` leaves the compositor's own setting.
     pub border_width: Option<u32>,
     /// Window look (gaps, rounding, blur, shadows…). Every field is
@@ -553,6 +558,7 @@ impl Default for CompositorConfig {
             ],
             tag_rules: Vec::new(),
             keybinds: default_keybinds(),
+            keybinds_version: crate::upgrade::KEYBIND_DEFAULTS_VERSION,
             border_width: None,
             look: CompositorLook::default(),
             mango_blur: true,
@@ -595,7 +601,20 @@ pub fn default_keybinds() -> Vec<Keybind> {
         // when set to); skipped when your config binds them.
         Keybind::new(&[], "XF86MonBrightnessUp", M("brightness up".into())),
         Keybind::new(&[], "XF86MonBrightnessDown", M("brightness down".into())),
+        // Media keys (laptop F-keys such as F4–F6 send these) drive the
+        // current player; skipped when your config binds them.
+        Keybind::new(&[], "XF86AudioPlay", M("media play-pause".into())),
+        Keybind::new(&[], "XF86AudioPause", M("media play-pause".into())),
+        Keybind::new(&[], "XF86AudioNext", M("media next".into())),
+        Keybind::new(&[], "XF86AudioPrev", M("media previous".into())),
+        Keybind::new(&[], "XF86AudioMicMute", M("audio mic mute".into())),
     ]
+}
+
+/// The hardware keys among [`default_keybinds`] (volume, brightness,
+/// media): the ones an older config is given when it lacks them.
+pub fn hardware_keybinds() -> Vec<Keybind> {
+    default_keybinds().into_iter().filter(|b| b.mods.is_empty() && b.key.starts_with("XF86")).collect()
 }
 
 /// Window appearance written to the compositor drop-in. `None` = keep the
@@ -1615,14 +1634,13 @@ pub fn install_include(target: Target) -> Result<bool> {
     let path = target.user_config();
     let before = std::fs::read_to_string(&path).ok();
     let added = install_include_at(target, &path)?;
-    if added {
-        if let crate::conflicts::Validation::Invalid { tool, report } = crate::conflicts::validate(target) {
+    if added
+        && let crate::conflicts::Validation::Invalid { tool, report } = crate::conflicts::validate(target) {
             if let Some(original) = before {
                 crate::store::write_atomic(&path, original.as_bytes())?;
             }
             anyhow::bail!("{tool} rejects {} with Mandara's include line, so it was not added:\n{report}", path.display());
         }
-    }
     Ok(added)
 }
 
@@ -1630,7 +1648,7 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
     if include_installed_at(target, path) {
         return Ok(false);
     }
-    let original = std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let original = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     let backup = path.with_extension(format!("{}.mandara-backup", path.extension().and_then(|e| e.to_str()).unwrap_or("conf")));
     std::fs::write(&backup, &original).with_context(|| format!("writing backup {}", backup.display()))?;
     let comment = match target {
@@ -2008,8 +2026,10 @@ mod tests {
     #[test]
     fn a_window_title_cannot_add_config_lines() {
         // Issue #10: a picked window's title is chosen by another app.
-        let mut cfg = CompositorConfig::default();
-        cfg.window_rules = vec![WindowRule { app_id: Some("^evil$".into()), title: Some("x\nexec = rm -rf ~\r\n, float on".into()), floating: Some(true), ..Default::default() }];
+        let cfg = CompositorConfig {
+            window_rules: vec![WindowRule { app_id: Some("^evil$".into()), title: Some("x\nexec = rm -rf ~\r\n, float on".into()), floating: Some(true), ..Default::default() }],
+            ..Default::default()
+        };
         for (name, text) in [("mango", emit_mango(&managed(&cfg, &[])).text), ("hyprland", emit_hyprland(&managed(&cfg, &[])).text), ("niri", emit_niri(&managed(&cfg, &[])).text)] {
             assert!(!text.lines().any(|l| l.trim_start().starts_with("exec")), "{name}: a title started a config line:\n{text}");
         }
@@ -2027,8 +2047,7 @@ mod tests {
         assert!(out.text.contains("layer_rule=no_animation:1,no_shadow:1,no_blur:1,layer_name:mandara-bar"));
         assert!(out.text.contains("focus_color=0x5eead4ff"));
         assert!(!out.text.contains("border_px"), "width is left alone unless configured");
-        let mut sized = CompositorConfig::default();
-        sized.border_width = Some(3);
+        let sized = CompositorConfig { border_width: Some(3), ..Default::default() };
         assert!(emit_mango(&managed(&sized, &[])).text.contains("border_px=3"), "Mango's key is border_px");
         assert!(out.text.contains("window_rule=is_floating:1,app_id:^org\\.mandara\\.studio$"));
         assert!(out.text.contains("bind=SUPER+ALT,space,spawn_shell,mandara msg launcher toggle"));

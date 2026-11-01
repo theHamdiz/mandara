@@ -28,7 +28,7 @@ const TILE_BITS: u32 = 3;
 /// Side of the film-grain tile.
 const GRAIN_TILE: usize = 256;
 /// Seed of the (fixed) grain tile: it is part of the format, not the recipe.
-const GRAIN_SEED: u64 = 0x6772_6169_6E;
+const GRAIN_SEED: u64 = 0x0067_7261_696E;
 
 /// The Bayer rank of `(x, y)` in the 8 × 8 matrix (0–63): the bits of
 /// `x ⊕ y` and `y`, interleaved with the lowest coordinate bits on top.

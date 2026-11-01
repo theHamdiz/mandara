@@ -110,7 +110,7 @@ fn main() {
                 hijri_latin: "5 Jumada al-Ula 1448".into(),
                 weather: Some(("cloud-sun", "23°".into(), "Partly cloudy".into())),
             }),
-            fonts: mandara_ui::Fonts { ui: "Inter".into(), display: "Alexandria".into(), arabic: "Cairo".into(), mono: "JetBrains Mono".into(), emoji: None },
+            fonts: mandara_ui::Fonts { ui: "Inter".into(), display: "Alexandria".into(), arabic: "Cairo".into(), mono: "JetBrains Mono".into(), bar: "Inter".into(), panels: "Inter".into(), studio: "Inter".into(), widgets: "Inter".into(), emoji: None },
             primary: mandara_theme::Color::oklch(0.7, 0.12, 200.0),
             widgets: mandara_ui::backdrop::widgets::WidgetScene {
                 items: cfg.desktop.widgets.painted().cloned().collect(),

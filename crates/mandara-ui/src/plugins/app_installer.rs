@@ -408,7 +408,7 @@ fn inspect(id: u64, path: PathBuf, cx: &mut App) {
     });
     cx.spawn(async move |cx| {
         let result = task.await;
-        let _ = cx.update(|cx| on_planned(id, result, cx));
+        cx.update(|cx| on_planned(id, result, cx));
     })
     .detach();
 }
@@ -435,7 +435,7 @@ fn on_planned(id: u64, result: Result<Plan, String>, cx: &mut App) {
             j.name = plan.inspection.name.clone();
             j.app_id = Some(plan.inspection.id.clone());
             j.desktop_id = plan.desktop_id.clone();
-            j.icon = plan.inspection.icon_file.clone().or_else(|| plan.desktop_id.as_deref().and_then(|d| crate::apps::find_icon(d)));
+            j.icon = plan.inspection.icon_file.clone().or_else(|| plan.desktop_id.as_deref().and_then(crate::apps::find_icon));
             j.badge = plan.badge();
             j.choices = Choices { path_shim: plan.default_choices.path_shim && !j.options.no_path_shim && plan.shim.as_ref().is_some_and(|s| s.conflict.is_none()), dry_run: j.options.dry_run, ..plan.default_choices.clone() };
             j.plan = Some(plan.clone());
@@ -591,6 +591,7 @@ pub fn send_to_background(id: u64, cx: &mut App) {
     });
 }
 
+#[expect(clippy::large_enum_variant, reason = "one message per install step; nothing to gain from boxing")]
 enum Msg {
     Progress(Progress),
     Finished(Result<Outcome, String>),
@@ -634,7 +635,7 @@ fn run(id: u64, cx: &mut App) {
     cx.spawn(async move |cx| {
         while let Ok(msg) = rx.recv().await {
             let done = matches!(msg, Msg::Finished(_));
-            let _ = cx.update(|cx| match msg {
+            cx.update(|cx| match msg {
                 Msg::Progress(p) => queue(cx).update(cx, |q, cx| {
                     if let Some(j) = q.job_mut(id) {
                         j.phase = p.phase;
@@ -694,7 +695,7 @@ fn finish(id: u64, result: Result<Outcome, String>, cx: &mut App) {
     let linger = if phase == Phase::Failed { FAILED_LINGER } else { JOB_LINGER };
     cx.spawn(async move |cx| {
         cx.background_executor().timer(linger).await;
-        let _ = cx.update(|cx| dismiss(id, cx));
+        cx.update(|cx| dismiss(id, cx));
     })
     .detach();
     crate::installer_overlay::ensure_open(cx);

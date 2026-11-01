@@ -115,12 +115,16 @@ impl State {
         self.record.get(&c.name).is_none_or(|r| r.hash != self.hashes[&c.name] || r.version != c.version)
     }
 
-    /// The bump Conventional Commits since the component's last tag ask for.
+    /// The bump Conventional Commits since the component's last tag ask
+    /// for: commits touching it or any component it's built from (the
+    /// folders its content hash covers).
     fn bump_level(&self, c: &Component) -> Bump {
         let tag = tag_for(c, &c.version);
         let range = if git(&["rev-parse", "--verify", "--quiet", &format!("refs/tags/{tag}")]).is_some() { format!("{tag}..HEAD") } else { "HEAD".to_string() };
-        let dir = c.dir.to_string_lossy().to_string();
-        let log = git(&["log", "--format=%B%x1e", &range, "--", &dir]).unwrap_or_default();
+        let dirs: Vec<String> = manifest::closure_dirs(&c.name, &self.components).iter().map(|d| d.to_string_lossy().into_owned()).collect();
+        let mut args = vec!["log", "--format=%B%x1e", &range, "--"];
+        args.extend(dirs.iter().map(String::as_str));
+        let log = git(&args).unwrap_or_default();
         let messages: Vec<String> = log.split('\u{1e}').map(|m| m.trim().to_string()).filter(|m| !m.is_empty()).collect();
         manifest::bump_from_commits(&messages)
     }
@@ -172,7 +176,7 @@ fn refresh_lock(manifest: Option<&std::path::Path>) -> Result<()> {
         }
         run(&mut cmd)
     };
-    update(true).or_else(|_| update(false)).map_err(|e| format!("refreshing {}: {e}", manifest.map_or_else(|| "Cargo.lock".to_string(), |m| m.display().to_string())).into())
+    update(true).or_else(|_| update(false)).map_err(|e| format!("refreshing {}: {e}", manifest.map_or_else(|| "Cargo.lock".to_string(), |m| m.display().to_string())))
 }
 
 /// The Cargo manifests among `manifests` (relative to `root`) whose crate

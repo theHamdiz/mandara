@@ -252,7 +252,7 @@ fn push_samples(ring: &mut [f32], bytes: &[u8]) {
     let keep = n - skip;
     let len = ring.len();
     ring.copy_within(keep.., 0);
-    for (dst, c) in ring[len - keep..].iter_mut().zip(bytes.chunks_exact(SAMPLE_BYTES).skip(skip)) {
+    for (dst, c) in ring[len - keep..].iter_mut().zip(bytes.as_chunks::<SAMPLE_BYTES>().0.iter().skip(skip)) {
         *dst = f32::from_le_bytes([c[0], c[1], c[2], c[3]]);
     }
 }

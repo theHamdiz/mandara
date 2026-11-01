@@ -29,6 +29,22 @@ license = "GPL-3.0-or-later"
 authors = ["Mandara Shell contributors"]
 repository = "https://github.com/theHamdiz/mandara"
 
+# Warnings are errors, everywhere: rustc's and clippy's default set. Every
+# crate opts in with `[lints] workspace = true`; fix the cause rather than
+# allowing a lint, and when an allow is truly right, put it on the item with
+# its reason (`#[expect(lint, reason = "…")]`).
+[workspace.lints.rust]
+warnings = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+# GPUI views are built by small free functions that take the palette, the
+# panel context and a handful of values, and hand callbacks around as
+# `Rc<dyn Fn(…)>`: these two style lints would only push that into structs
+# made for one call.
+too_many_arguments = "allow"
+type_complexity = "allow"
+
 [workspace.dependencies]
 # Internal crates
 mandara-core = { path = "crates/mandara-core" }

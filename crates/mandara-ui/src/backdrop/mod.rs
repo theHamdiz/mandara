@@ -302,7 +302,7 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
     let locks = crate::lock::subscribe();
     cx.spawn(async move |cx| {
         while locks.recv().await.is_ok() {
-            cx.update(|cx| refresh(cx));
+            cx.update(refresh);
         }
     })
     .detach();
@@ -310,7 +310,7 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
     cx.spawn(async move |cx| {
         loop {
             cx.background_executor().timer(until_next_minute()).await;
-            cx.update(|cx| refresh(cx));
+            cx.update(refresh);
         }
     })
     .detach();
@@ -805,7 +805,7 @@ impl Renderer {
                 continue;
             }
             // Mid-transition the plane holds its poster (or last frame).
-            let allowed = out.trans.is_none() && scene.video_play.iter().any(|n| *n == out.name);
+            let allowed = out.trans.is_none() && scene.video_play.contains(&out.name);
             let c = video::Consumer { id: out.id, plane: WALLPAPER[out.cur], physical: geom.physical, scale120: geom.scale120, fill: slot.want.fill, allowed };
             match shown.iter_mut().find(|(p, _)| *p == slot.want.path) {
                 Some((_, list)) => list.push(c),
@@ -1021,7 +1021,7 @@ impl Renderer {
         let wants: Vec<bool> = self
             .outs
             .iter()
-            .map(|o| scene.wallpaper.audio_ring && o.painted.geo.is_some() && scene.ring.iter().any(|n| *n == o.name))
+            .map(|o| scene.wallpaper.audio_ring && o.painted.geo.is_some() && scene.ring.contains(&o.name))
             .collect();
         if wants.iter().any(|w| *w) {
             if self.tap.is_none() && self.tap_tried.is_none_or(|t| t.elapsed() > SPECTRUM_RETRY) {
@@ -1072,7 +1072,7 @@ impl Renderer {
     }
 
     fn next_wake(&self, host: &Host, now: Instant) -> Option<Duration> {
-        let Some(scene) = self.scene.as_ref() else { return None };
+        let scene = self.scene.as_ref()?;
         let mut wake: Option<Duration> = None;
         let mut at = |d: Duration| wake = Some(wake.map_or(d, |w| w.min(d)));
         if let Some(d) = self.videos.next_wake(now) {
@@ -1086,7 +1086,7 @@ impl Renderer {
             }
             if out.ring > 0.0 {
                 at(out.ring_painted.map_or(Duration::ZERO, |t| RING_FRAME.saturating_sub(now.saturating_duration_since(t))));
-            } else if scene.ring.iter().any(|n| *n == out.name) && scene.wallpaper.audio_ring {
+            } else if scene.ring.contains(&out.name) && scene.wallpaper.audio_ring {
                 at(RING_POLL);
             }
             if out.painted.digits.is_some() {
@@ -1356,16 +1356,16 @@ fn decor(host: &mut Host, out: &mut Out, scene: &Scene, text: &mut TextPainter, 
     let clock = legacy.as_ref().map(|(geo, _)| geo);
     let plan = subject_plan(clock, cfg, out.slots[live].as_ref().and_then(|s| s.cut.as_deref()), layers.reach, geom);
     let release = RELEASE_CUT_PIXELS && !scene.editing;
-    for s in 0..2 {
+    for (s, &plane) in CUT.iter().enumerate() {
         let shown = if s == live { out.slots[s].as_ref().and_then(|slot| slot.cut.clone()) } else { None };
         let Some(cut) = shown else {
-            host.hide(id, CUT[s]);
+            host.hide(id, plane);
             out.painted.cut[s] = None;
             continue;
         };
         let (rect, limit) = (plan.rect, plan.limit);
         if rect.is_empty() || limit <= 0.0 {
-            host.hide(id, CUT[s]);
+            host.hide(id, plane);
             out.painted.cut[s] = None;
             // Nothing on this layer sits under the subject: don't keep its
             // pixels (a 4K subject is ~14 MiB); a later overlap cuts it again.
@@ -1390,7 +1390,7 @@ fn decor(host: &mut Host, out: &mut Out, scene: &Scene, text: &mut TextPainter, 
             }
             continue;
         }
-        if host.paint(id, CUT[s], Place::Rect(rect), None, false, true, |pm| paint::paint_cut(pm, &cut, rect, limit))? {
+        if host.paint(id, plane, Place::Rect(rect), None, false, true, |pm| paint::paint_cut(pm, &cut, rect, limit))? {
             out.painted.cut[s] = k;
             if release && let Some(slot) = out.slots[s].as_mut() {
                 slot.cut = Some(Arc::new(cut.released()));
@@ -1639,7 +1639,7 @@ fn hide_decor(host: &mut Host, out: &mut Out) {
 /// under the incoming one, [`stack_order`]).
 fn apply_alphas(host: &mut Host, out: &mut Out, alpha: bool, now: Instant) {
     let id = out.id;
-    for s in 0..2 {
+    for (s, &plane) in CUT.iter().enumerate() {
         let Some(slot) = out.slots[s].as_mut() else { continue };
         let fade = match slot.cut_fade {
             CutFade::Shown => 1.0,
@@ -1655,7 +1655,7 @@ fn apply_alphas(host: &mut Host, out: &mut Out, alpha: bool, now: Instant) {
                 if f >= 1.0 {
                     slot.cut = None;
                     slot.cut_fade = CutFade::Shown;
-                    host.hide(id, CUT[s]);
+                    host.hide(id, plane);
                     out.painted.cut[s] = None;
                     continue;
                 }
@@ -1663,7 +1663,7 @@ fn apply_alphas(host: &mut Host, out: &mut Out, alpha: bool, now: Instant) {
             }
         };
         if alpha {
-            host.set_alpha(id, CUT[s], fade);
+            host.set_alpha(id, plane, fade);
         }
     }
 }
@@ -1850,7 +1850,7 @@ mod tests {
     /// An opaque wallpaper whose channels follow `f(x, y)`.
     fn wallpaper(f: impl Fn(u32, u32) -> [u8; 3]) -> tiny_skia::Pixmap {
         let mut pm = tiny_skia::Pixmap::new(W, H).unwrap();
-        for (i, px) in pm.data_mut().chunks_exact_mut(4).enumerate() {
+        for (i, px) in pm.data_mut().as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let [r, g, b] = f(i as u32 % W, i as u32 / W);
             px.copy_from_slice(&[r, g, b, u8::MAX]);
         }
@@ -1860,7 +1860,7 @@ mod tests {
     /// A premultiplied plane of `r`'s size, colour `rgb` at coverage `a(x, y)`.
     fn plane(r: Rect, rgb: [u8; 3], a: impl Fn(u32, u32) -> f32) -> tiny_skia::Pixmap {
         let mut pm = tiny_skia::Pixmap::new(r.w, r.h).unwrap();
-        for (i, px) in pm.data_mut().chunks_exact_mut(4).enumerate() {
+        for (i, px) in pm.data_mut().as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let cov = a(i as u32 % r.w, i as u32 / r.w).clamp(0.0, 1.0);
             let k = |c: u8| (c as f32 * cov).round() as u8;
             px.copy_from_slice(&[k(rgb[0]), k(rgb[1]), k(rgb[2]), (cov * 255.0).round() as u8]);

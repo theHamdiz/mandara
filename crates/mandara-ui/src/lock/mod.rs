@@ -76,10 +76,9 @@ pub struct LockOptions {
 
 /// The longest password accepted (keeps a stuck key from growing forever).
 const MAX_PASSWORD: usize = 512;
-/// Pill geometry (logical px).
-const PILL_W: f32 = 340.0;
-const PILL_H: f32 = 54.0;
-const AVATAR_R: f32 = 46.0;
+// Layout: Mandara Login's proportions (`mandara_config::login_layout`),
+// so locking and logging in look like one screen.
+use mandara_config::login_layout as L;
 const SHAKE: SpringConfig = SpringConfig::new(620.0, 13.0, 1.0);
 const REVEAL: SpringConfig = SpringConfig::new(170.0, 22.0, 1.0);
 const EXIT: SpringConfig = SpringConfig::new(240.0, 31.0, 1.0);
@@ -116,7 +115,11 @@ pub fn run(options: LockOptions) -> anyhow::Result<()> {
     let mut screen = LockScreen::new(
         options.demo,
         palette,
-        Fonts { display: cfg.typography.display_font.clone(), ui: cfg.typography.ui_font.clone() },
+        // Typography → Lock screen fonts (else the display / UI fonts).
+        Fonts {
+            display: mandara_config::TypographyConfig::or(&cfg.typography.lock_clock_font, &cfg.typography.display_font).to_string(),
+            ui: mandara_config::TypographyConfig::or(&cfg.typography.lock_font, &cfg.typography.ui_font).to_string(),
+        },
         cfg.general.clock_24h,
         user,
         auth,
@@ -607,11 +610,16 @@ impl LockApp for LockScreen {
             pm.fill(tiny_skia::Color::BLACK);
             return;
         }
-        let clock_size = (logical_h * 0.15).clamp(72.0, 176.0) * s * if self.look.compact() { COMPACT_CLOCK } else { 1.0 };
+        // One unit = a logical px on a 1080 px tall screen, in physical px.
+        let unit = L::scale(logical_h) * s;
+        let clock_size = L::CLOCK_SIZE * unit * if self.look.compact() { COMPACT_CLOCK } else { 1.0 };
         let (time, ampm) = self.time_strings();
         let stacked = self.look.stacked() && !self.look.custom_time;
-        let clock_font = Font { family: &self.fonts.display, size: clock_size, weight: if stacked { STACK_WEIGHT } else { 250 }, tabular: true, tracking: -0.02 };
-        let clock_y = fh * 0.17 + lift;
+        // The date sits over the clock, as on the login screen.
+        self.draw_date(pm, cx, L::DATE_TOP * unit + lift, alpha, unit);
+        let display = self.fonts.display.clone();
+        let clock_font = Font { family: &display, size: clock_size, weight: if stacked { STACK_WEIGHT } else { L::CLOCK_WEIGHT }, tabular: true, tracking: -0.01 };
+        let clock_y = L::CLOCK_TOP * unit + lift;
         if stacked {
             // Hours over minutes, centred; the date follows the block.
             let (hours, minutes) = time.split_once(':').map(|(a, b)| (a.to_string(), b.to_string())).unwrap_or((time.clone(), String::new()));
@@ -620,14 +628,14 @@ impl LockApp for LockScreen {
             self.text.draw_centered(pm, &hours, &clock_font, cx, clock_y, p.on_surface, alpha);
             self.text.draw_centered(pm, &minutes, &clock_font, cx, clock_y + line_h * STACK_LINE, p.primary, alpha);
             let th = line_h * (1.0 + STACK_LINE);
-            self.draw_date_and_info(pm, cx, clock_y + th * 0.98, alpha, s);
+            self.draw_info(pm, cx, clock_y + th * 0.98, alpha, s);
             if !info.focused {
                 if self.demo {
                     paint::fade(pm, presence);
                 }
                 return;
             }
-            self.draw_lower(info, pm, now, (fw, fh, cx, lift, alpha, presence, s));
+            self.draw_lower(info, pm, now, (fw, fh, cx, lift, alpha, presence, s, unit));
             return;
         }
         let (tw, th) = self.text.measure(&time, &clock_font);
@@ -640,7 +648,7 @@ impl LockApp for LockScreen {
         if let Some(a) = &ampm {
             self.text.draw(pm, a, &ampm_font, clock_x + tw + 10.0 * s, clock_y + th * 0.62, p.on_surface_variant, alpha);
         }
-        self.draw_date_and_info(pm, cx, clock_y + th * 0.98, alpha, s);
+        self.draw_info(pm, cx, clock_y + th * 0.98, alpha, s);
 
         if !info.focused {
             if self.demo {
@@ -648,26 +656,31 @@ impl LockApp for LockScreen {
             }
             return;
         }
-        self.draw_lower(info, pm, now, (fw, fh, cx, lift, alpha, presence, s));
+        self.draw_lower(info, pm, now, (fw, fh, cx, lift, alpha, presence, s, unit));
     }
 
 }
 
 impl LockScreen {
-    /// The date line and the info line (weather · now playing ·
-    /// notifications) under the clock.
-    fn draw_date_and_info(&mut self, pm: &mut PixmapMut<'_>, cx: f32, y: f32, alpha: f32, s: f32) {
-        let p = self.palette.clone();
-        let mut y = y;
-        if self.look.cfg.show_date {
-            let now = chrono::Local::now();
-            let date = match &self.look.date_pattern {
-                Some(pattern) => crate::widgets::clock::format_with(&now, pattern, t("%A, %-d %B")),
-                None => crate::widgets::clock::localized(&now, t("%A, %-d %B")),
-            };
-            let date_font = Font { family: &self.fonts.ui, size: 19.0 * s, weight: 450, tabular: true, tracking: 0.01 };
-            y += self.text.draw_centered(pm, &date, &date_font, cx, y, p.on_surface_variant, alpha * 0.95).1 + 8.0 * s;
+    /// The date line over the clock.
+    fn draw_date(&mut self, pm: &mut PixmapMut<'_>, cx: f32, y: f32, alpha: f32, unit: f32) {
+        if !self.look.cfg.show_date {
+            return;
         }
+        let p = self.palette.clone();
+        let now = chrono::Local::now();
+        let date = match &self.look.date_pattern {
+            Some(pattern) => crate::widgets::clock::format_with(&now, pattern, t("%A, %-d %B")),
+            None => crate::widgets::clock::localized(&now, t("%A, %-d %B")),
+        };
+        let date_font = Font { family: &self.fonts.ui, size: L::DATE_SIZE * unit, weight: L::DATE_WEIGHT, tabular: true, tracking: 0.0 };
+        self.text.draw_centered(pm, &date, &date_font, cx, y, p.on_surface, alpha * 0.9);
+    }
+
+    /// The info line (weather · now playing · notifications) under the
+    /// clock.
+    fn draw_info(&mut self, pm: &mut PixmapMut<'_>, cx: f32, y: f32, alpha: f32, s: f32) {
+        let p = self.palette.clone();
         if let Some(line) = self.look.info_line() {
             let info_font = Font { family: &self.fonts.ui, size: 14.0 * s, weight: 450, tabular: true, tracking: 0.01 };
             self.text.draw_centered(pm, &line, &info_font, cx, y, p.on_surface_variant, alpha * 0.8);
@@ -676,14 +689,15 @@ impl LockScreen {
 
     /// Avatar, name, password pill, status and footer (focused output).
     #[allow(clippy::type_complexity)]
-    fn draw_lower(&mut self, info: &SurfaceInfo, pm: &mut PixmapMut<'_>, now: Instant, (fw, fh, cx, lift, alpha, presence, s): (f32, f32, f32, f32, f32, f32, f32)) {
+    fn draw_lower(&mut self, info: &SurfaceInfo, pm: &mut PixmapMut<'_>, now: Instant, (fw, fh, cx, lift, alpha, presence, s, unit): (f32, f32, f32, f32, f32, f32, f32, f32)) {
         let p = self.palette.clone();
         let _ = info;
 
         // Avatar with accent rim and glow.
-        let ay = fh * 0.56 + lift * 0.6;
-        let r = AVATAR_R * s;
         let show_avatar = self.look.cfg.show_avatar;
+        let card_top = fh / 2.0 + (L::CARD_CENTER - L::card_height(show_avatar) / 2.0) * unit + lift * 0.6;
+        let r = L::AVATAR / 2.0 * unit;
+        let ay = card_top + r;
         if show_avatar {
         paint::glow(pm, cx, ay, r * 2.4, paint::skia(p.primary_glow, 0.28 * alpha));
         paint::soft_shadow(pm, cx - r, ay - r, r * 2.0, r * 2.0, r, 14.0 * s, 0.30 * alpha);
@@ -702,15 +716,15 @@ impl LockScreen {
         paint::stroke(pm, &paint::circle(cx, ay, r + 3.0 * s), &rim, 2.5 * s);
         }
 
-        let name_font = Font { family: &self.fonts.ui, size: 18.0 * s, weight: 600, tabular: false, tracking: 0.0 };
-        // Without the avatar the name and field move up into its place.
-        let name_y = if show_avatar { ay + r + 14.0 * s } else { ay };
-        let (_, nh) = self.text.draw_centered(pm, &self.user.display, &name_font, cx, name_y, p.on_surface, alpha);
+        let name_font = Font { family: &self.fonts.ui, size: L::NAME_SIZE * unit, weight: 600, tabular: false, tracking: 0.0 };
+        // Without the avatar the card is just the name.
+        let name_y = if show_avatar { ay + r + L::NAME_GAP * unit } else { card_top };
+        self.text.draw_centered(pm, &self.user.display, &name_font, cx, name_y, p.on_surface, alpha);
 
-        // The glass password pill.
-        let (pw, ph) = (PILL_W * s, PILL_H * s);
+        // The glass password field.
+        let (pw, ph) = (L::FIELD_W * unit, L::FIELD_H * unit);
         let px = cx - pw / 2.0 + self.shake.value() * s;
-        let py = name_y + nh + 18.0 * s;
+        let py = fh / 2.0 + (L::FIELD_CENTER - L::FIELD_H / 2.0) * unit + lift * 0.6;
         let radius = ph / 2.0;
         let pill = paint::rounded_rect(px, py, pw, ph, radius);
         paint::soft_shadow(pm, px, py, pw, ph, radius, 18.0 * s, 0.32 * alpha);
@@ -1189,7 +1203,7 @@ mod tests {
         type_text(&mut s, "ab");
         s.draw(&info, &mut pm.as_mut(), Instant::now());
         // The backdrop is opaque on a real lock.
-        assert!(pm.data().chunks_exact(4).all(|p| p[3] == 255));
+        assert!(pm.data().as_chunks::<4>().0.iter().all(|p| p[3] == 255));
     }
 
     /// Renders typing / error / Caps Lock states to PNGs for a visual check:

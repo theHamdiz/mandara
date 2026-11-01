@@ -61,8 +61,7 @@ pub fn stroke(pm: &mut PixmapMut<'_>, path: &Option<Path>, paint: &Paint<'_>, wi
 
 /// A two-stop linear gradient paint between two points.
 pub fn linear(from: (f32, f32), to: (f32, f32), a: tiny_skia::Color, b: tiny_skia::Color) -> Paint<'static> {
-    let mut p = Paint::default();
-    p.anti_alias = true;
+    let mut p = Paint { anti_alias: true, ..Paint::default() };
     if let Some(shader) = LinearGradient::new(
         Point::from_xy(from.0, from.1),
         Point::from_xy(to.0, to.1),
@@ -90,9 +89,7 @@ pub fn glow(pm: &mut PixmapMut<'_>, cx: f32, cy: f32, r: f32, color: tiny_skia::
     ) else {
         return;
     };
-    let mut p = Paint::default();
-    p.shader = shader;
-    p.anti_alias = true;
+    let p = Paint { shader, anti_alias: true, ..Paint::default() };
     if let Some(rect) = tiny_skia::Rect::from_xywh(cx - r, cy - r, r * 2.0, r * 2.0) {
         pm.fill_rect(rect, &p, Transform::identity(), None);
     }
@@ -121,9 +118,7 @@ pub fn image_circle(pm: &mut PixmapMut<'_>, image: &tiny_skia::Pixmap, cx: f32, 
     let scale = (2.0 * r) / image.width().min(image.height()) as f32;
     let tx = cx - image.width() as f32 * scale / 2.0;
     let ty = cy - image.height() as f32 * scale / 2.0;
-    let mut p = Paint::default();
-    p.anti_alias = true;
-    p.shader = Pattern::new(image.as_ref(), SpreadMode::Pad, FilterQuality::Bicubic, opacity.clamp(0.0, 1.0), Transform::from_row(scale, 0.0, 0.0, scale, tx, ty));
+    let p = Paint { anti_alias: true, shader: Pattern::new(image.as_ref(), SpreadMode::Pad, FilterQuality::Bicubic, opacity.clamp(0.0, 1.0), Transform::from_row(scale, 0.0, 0.0, scale, tx, ty)), ..Paint::default() };
     fill(pm, &circle(cx, cy, r), &p);
 }
 
@@ -133,8 +128,7 @@ pub fn image_cover(pm: &mut PixmapMut<'_>, image: &tiny_skia::Pixmap) {
     let scale = (w / image.width() as f32).max(h / image.height() as f32);
     let tx = (w - image.width() as f32 * scale) / 2.0;
     let ty = (h - image.height() as f32 * scale) / 2.0;
-    let mut p = Paint::default();
-    p.shader = Pattern::new(image.as_ref(), SpreadMode::Pad, FilterQuality::Bilinear, 1.0, Transform::from_row(scale, 0.0, 0.0, scale, tx, ty));
+    let p = Paint { shader: Pattern::new(image.as_ref(), SpreadMode::Pad, FilterQuality::Bilinear, 1.0, Transform::from_row(scale, 0.0, 0.0, scale, tx, ty)), ..Paint::default() };
     if let Some(rect) = tiny_skia::Rect::from_xywh(0.0, 0.0, w, h) {
         pm.fill_rect(rect, &p, Transform::identity(), None);
     }
@@ -143,7 +137,7 @@ pub fn image_cover(pm: &mut PixmapMut<'_>, image: &tiny_skia::Pixmap) {
 /// Converts straight RGBA bytes into a premultiplied pixmap.
 pub fn pixmap_from_rgba(width: u32, height: u32, rgba: &[u8]) -> Option<tiny_skia::Pixmap> {
     let mut pm = tiny_skia::Pixmap::new(width, height)?;
-    for (d, s) in pm.data_mut().chunks_exact_mut(4).zip(rgba.chunks_exact(4)) {
+    for (d, s) in pm.data_mut().as_chunks_mut::<4>().0.iter_mut().zip(rgba.as_chunks::<4>().0) {
         let a = s[3] as u32;
         d[0] = ((s[0] as u32 * a + 127) / 255) as u8;
         d[1] = ((s[1] as u32 * a + 127) / 255) as u8;
@@ -157,7 +151,7 @@ pub fn pixmap_from_rgba(width: u32, height: u32, rgba: &[u8]) -> Option<tiny_ski
 pub fn grain(pm: &mut PixmapMut<'_>, amount: f32) {
     let width = pm.width() as usize;
     let amp = (amount * 255.0).max(0.0);
-    for (i, px) in pm.data_mut().chunks_exact_mut(4).enumerate() {
+    for (i, px) in pm.data_mut().as_chunks_mut::<4>().0.iter_mut().enumerate() {
         // Integer hash of the pixel position (stable between frames).
         let (x, y) = ((i % width) as u32, (i / width) as u32);
         let mut h = x.wrapping_mul(374_761_393) ^ y.wrapping_mul(668_265_263);
@@ -488,7 +482,7 @@ mod tests {
         let mut pm = tiny_skia::Pixmap::new(16, 16).unwrap();
         pm.fill(tiny_skia::Color::from_rgba8(40, 40, 40, 200));
         grain(&mut pm.as_mut(), 0.015);
-        for px in pm.data().chunks_exact(4) {
+        for px in pm.data().as_chunks::<4>().0 {
             assert!(px[0] <= px[3] && px[1] <= px[3] && px[2] <= px[3]);
         }
     }

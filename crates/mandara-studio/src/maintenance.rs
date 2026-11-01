@@ -363,7 +363,7 @@ pub fn backup_in(roots: &Roots, reason: &str) -> Result<PathBuf, String> {
     }
     let src = &roots.config;
     if src.exists() {
-        copy_dir(&src, &dest).map_err(|e| tf("backup to {folder}: {error}", &[("folder", &dest.display()), ("error", &e)]))?;
+        copy_dir(src, &dest).map_err(|e| tf("backup to {folder}: {error}", &[("folder", &dest.display()), ("error", &e)]))?;
     } else {
         std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
     }

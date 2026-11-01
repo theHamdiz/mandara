@@ -149,6 +149,13 @@ fn seeds_from_thumbnail(thumb: &image::RgbaImage, count: usize) -> Result<Vec<Se
 /// CAM16 chroma from which a seed counts as colourful enough to lead.
 const VIVID_CHROMA: f32 = 18.0;
 
+/// Decodes an image file by its contents, not its name: album art, cached
+/// downloads and notification images often have no (or a wrong) extension,
+/// which [`image::open`] would refuse.
+pub fn open_image(path: &Path) -> image::ImageResult<image::DynamicImage> {
+    image::ImageReader::open(path)?.with_guessed_format()?.decode()
+}
+
 /// Decodes `path` and extracts its seed colors. The full-size pixels are
 /// freed as soon as the thumbnail exists, before quantization. Video
 /// wallpapers (`.webm`, `.mkv`, `.ivf`) use a representative frame.
@@ -157,7 +164,7 @@ pub fn extract_seeds(path: &Path, count: usize) -> Result<Vec<SeedColor>, Extrac
         let frame = mandara_media::representative_frame(path).map_err(|reason| ExtractError::Video { path: path.display().to_string(), reason })?;
         image::DynamicImage::ImageRgba8(frame).thumbnail(SAMPLE_EDGE, SAMPLE_EDGE).to_rgba8()
     } else {
-        let img = image::open(path).map_err(|source| ExtractError::Decode { path: path.display().to_string(), source })?;
+        let img = open_image(path).map_err(|source| ExtractError::Decode { path: path.display().to_string(), source })?;
         img.thumbnail(SAMPLE_EDGE, SAMPLE_EDGE).to_rgba8()
     };
     seeds_from_thumbnail(&thumb, count)
@@ -300,6 +307,17 @@ impl MiniPalette {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Issue #16: album art cached without an extension still decodes.
+    #[test]
+    fn images_open_by_content_not_name() {
+        let path = std::env::temp_dir().join(format!("mandara-art-{}", std::process::id()));
+        image::RgbaImage::from_pixel(4, 4, image::Rgba([200, 40, 40, 255])).save_with_format(&path, image::ImageFormat::Png).unwrap();
+        assert!(image::open(&path).is_err(), "image::open goes by the extension");
+        let img = open_image(&path).unwrap();
+        assert_eq!((img.width(), img.height()), (4, 4));
+        std::fs::remove_file(&path).unwrap();
+    }
     use image::{DynamicImage, Rgba, RgbaImage};
 
     fn split_image(left: [u8; 3], right: [u8; 3], left_share: f32) -> DynamicImage {

@@ -272,7 +272,7 @@ fn trailing_number(s: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
-fn labelled<'a>(chip: &'a Chip, pred: impl Fn(&str) -> bool) -> Option<&'a Temp> {
+fn labelled(chip: &Chip, pred: impl Fn(&str) -> bool) -> Option<&Temp> {
     chip.temps.iter().find(|t| t.label.as_deref().is_some_and(&pred))
 }
 
@@ -630,11 +630,10 @@ fn first_hwmon(device: &Path) -> Option<PathBuf> {
 fn amd_freq_mhz(device: &Path, hwmon: Option<&Path>) -> Option<f32> {
     if let Some(h) = hwmon {
         for i in 1..=4 {
-            if read_trim(h.join(format!("freq{i}_label"))).as_deref() == Some("sclk") {
-                if let Some(hz) = read_num::<f64>(h.join(format!("freq{i}_input"))) {
+            if read_trim(h.join(format!("freq{i}_label"))).as_deref() == Some("sclk")
+                && let Some(hz) = read_num::<f64>(h.join(format!("freq{i}_input"))) {
                     return Some((hz / 1e6) as f32);
                 }
-            }
         }
     }
     let table = fs::read_to_string(device.join("pp_dpm_sclk")).ok()?;
@@ -680,7 +679,7 @@ fn read_gpu(root: &Path, card: &Path) -> Option<Gpu> {
         GpuVendor::Intel => {
             gpu.freq_mhz = [card.join("gt/gt0/rps_act_freq_mhz"), card.join("gt_act_freq_mhz"), device.join("tile0/gt0/freq0/act_freq")]
                 .iter()
-                .find_map(|p| read_num::<f32>(p))
+                .find_map(read_num::<f32>)
                 .filter(|f| *f > 0.0);
             gpu.vram_total = read_num::<u64>(device.join("lmem_total_bytes")).filter(|t| *t > 0);
             gpu.integrated = gpu.vram_total.is_none() && !gpu.name.as_deref().is_some_and(|n| n.contains("Arc"));
@@ -694,11 +693,10 @@ fn read_gpu(root: &Path, card: &Path) -> Option<Gpu> {
 pub fn read_gpus(root: &Path) -> Vec<Gpu> {
     let mut out: Vec<Gpu> = Vec::new();
     for card in numbered(&root.join("sys/class/drm"), "card") {
-        if let Some(g) = read_gpu(root, &card) {
-            if !out.iter().any(|o| o.slot == g.slot) {
+        if let Some(g) = read_gpu(root, &card)
+            && !out.iter().any(|o| o.slot == g.slot) {
                 out.push(g);
             }
-        }
     }
     out.sort_by_key(|g| g.integrated);
     out
@@ -778,11 +776,10 @@ pub fn nvidia_smi() -> Vec<Gpu> {
     const EVERY: Duration = Duration::from_secs(2);
     static LAST: Mutex<Option<(Instant, Vec<Gpu>)>> = Mutex::new(None);
     let Some(bin) = nvidia_smi_path() else { return Vec::new() };
-    if let Ok(last) = LAST.lock() {
-        if let Some((_, gpus)) = last.as_ref().filter(|(at, _)| at.elapsed() < EVERY) {
+    if let Ok(last) = LAST.lock()
+        && let Some((_, gpus)) = last.as_ref().filter(|(at, _)| at.elapsed() < EVERY) {
             return gpus.clone();
         }
-    }
     let gpus = std::process::Command::new(bin)
         .args(["--query-gpu=pci.bus_id,name,utilization.gpu,memory.used,memory.total,temperature.gpu,clocks.gr", "--format=csv,noheader,nounits"])
         .stdin(std::process::Stdio::null())

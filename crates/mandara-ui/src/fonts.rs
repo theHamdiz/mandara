@@ -12,6 +12,11 @@ pub struct Fonts {
     pub display: SharedString,
     pub arabic: SharedString,
     pub mono: SharedString,
+    /// Per-surface families (`typography.*_font`, else the UI font).
+    pub bar: SharedString,
+    pub panels: SharedString,
+    pub studio: SharedString,
+    pub widgets: SharedString,
     /// An installed colour emoji family, for text made only of emoji (the
     /// fallback chain would pick a text font's flat symbol first).
     pub emoji: Option<SharedString>,
@@ -119,8 +124,15 @@ impl Fonts {
     pub fn resolve(cfg: &TypographyConfig, cx: &App) -> Self {
         let installed = cx.text_system().all_font_names();
         gpui_wgpu::set_default_font_fallbacks(fallback_chain(&cfg.arabic_font, &installed));
+        const UI_FALLBACKS: [&str; 5] = ["Inter", "Inter Display", "Cantarell", "Noto Sans", "DejaVu Sans"];
+        let ui = pick(&installed, &cfg.ui_font, &UI_FALLBACKS);
+        let surface = |family: &str| if family.trim().is_empty() { ui.clone() } else { pick(&installed, family.trim(), &UI_FALLBACKS) };
         Self {
-            ui: pick(&installed, &cfg.ui_font, &["Inter", "Inter Display", "Cantarell", "Noto Sans", "DejaVu Sans"]),
+            bar: surface(&cfg.bar_font),
+            panels: surface(&cfg.panels_font),
+            studio: surface(&cfg.studio_font),
+            widgets: surface(&cfg.widgets_font),
+            ui: ui.clone(),
             display: pick(
                 &installed,
                 &cfg.display_font,

@@ -74,17 +74,13 @@ pub const MAX_FEEL_MASS: f32 = 10.0;
 ///   Springs that are critically damped or slower (exits) never gain a
 ///   bounce, so a closing surface can't flash back into view.
 #[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Default)]
 pub struct MotionProfile {
     pub feel: SpringConfig,
     /// Every spring jumps straight to its target.
     pub reduce: bool,
 }
 
-impl Default for MotionProfile {
-    fn default() -> Self {
-        Self { feel: SpringConfig::default(), reduce: false }
-    }
-}
 
 impl MotionProfile {
     /// A profile from raw config values (non-finite values fall back to the

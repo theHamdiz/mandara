@@ -34,7 +34,9 @@ cargo xtask verify          # fail if anything changed without a bump
 ### How much to bump
 
 The bump level comes from [Conventional Commits](https://www.conventionalcommits.org)
-since the component's last tag, counting only commits that touch its folder:
+since the component's last tag, counting commits that touch its folder or
+the folder of any component it's built from (the same set its content hash
+covers), so a `feat:` in the updater makes a minor shell release:
 
 | Commits | Bump | Pre-1.0 |
 |---|---|---|
@@ -42,7 +44,8 @@ since the component's last tag, counting only commits that touch its folder:
 | `feat:` | minor | minor |
 | `feat!:`, `fix!:`, `BREAKING CHANGE:` in the body | major | minor |
 
-A component that changed only because a dependency changed gets a patch bump.
+A component whose own folder and dependencies only saw `fix:`-type commits
+gets a patch bump.
 
 ### Tags
 

@@ -277,7 +277,7 @@ fn new_buffer(shm: &wl_shm::WlShm, qh: &QueueHandle<State>, width: u32, height: 
 
 /// Premultiplied RGBA → `ARGB8888` (BGRA in memory on little-endian).
 fn swizzle_into(src: &[u8], dst: &mut [u8]) {
-    for (d, s) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+    for (d, s) in dst.as_chunks_mut::<4>().0.iter_mut().zip(src.as_chunks::<4>().0) {
         d[0] = s[2];
         d[1] = s[1];
         d[2] = s[0];
@@ -637,6 +637,7 @@ impl Host {
     /// next paint (planes redrawn often); otherwise they are dropped as soon
     /// as the compositor releases them. Returns `false` when every buffer
     /// is still held by the compositor (try again after the next frame).
+    #[allow(clippy::too_many_arguments)]
     pub fn paint(&mut self, id: u32, index: usize, place: Place, damage: Option<Rect>, keep: bool, clear: bool, paint: impl FnOnce(&mut tiny_skia::PixmapMut<'_>)) -> Result<bool> {
         self.paint_with(id, index, place, damage, keep, |map, bw, bh, abgr| {
             if abgr {
@@ -862,7 +863,7 @@ impl Host {
             let (w, h) = if has_vp { (1, 1) } else { c.physical() };
             let mut buf = new_buffer(&shm, &qh, w, h, abgr)?;
             let px = if abgr { rgba } else { [rgba[2], rgba[1], rgba[0], rgba[3]] };
-            for d in buf.map.chunks_exact_mut(4) {
+            for d in buf.map.as_chunks_mut::<4>().0 {
                 d.copy_from_slice(&px);
             }
             c.surface.attach(Some(&buf.buffer), 0, 0);

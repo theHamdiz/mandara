@@ -12,12 +12,14 @@ pub const MAX_SIDE: u32 = 16384;
 /// option, or anything custom.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum Resolution {
     /// 1920 × 1080.
     Fhd1080,
     /// 2560 × 1440 ("2K").
     Qhd1440,
     /// 3840 × 2160.
+    #[default]
     Uhd4k,
     /// 5120 × 2880.
     Uhd5k,
@@ -30,11 +32,6 @@ pub enum Resolution {
     Custom { width: u32, height: u32 },
 }
 
-impl Default for Resolution {
-    fn default() -> Self {
-        Resolution::Uhd4k
-    }
-}
 
 impl Resolution {
     /// The named sizes, smallest first.

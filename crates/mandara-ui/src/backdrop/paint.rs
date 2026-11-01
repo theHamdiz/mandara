@@ -132,7 +132,7 @@ fn over(dst: &mut Pixmap, src: &RgbaImage, x: i32, y: i32) {
         let sy = dy - y;
         let s_row = &raw[((sy * sw + (x0 - x)) * 4) as usize..((sy * sw + (x1 - x)) * 4) as usize];
         let d_row = &mut data[((dy * dw + x0) * 4) as usize..((dy * dw + x1) * 4) as usize];
-        for (d, s) in d_row.chunks_exact_mut(4).zip(s_row.chunks_exact(4)) {
+        for (d, s) in d_row.as_chunks_mut::<4>().0.iter_mut().zip(s_row.as_chunks::<4>().0) {
             match s[3] {
                 u8::MAX => d.copy_from_slice(&[s[0], s[1], s[2], u8::MAX]),
                 0 => {}
@@ -564,7 +564,7 @@ pub fn icon_pixmap(name: &str, size: u32, color: Color) -> Option<Pixmap> {
     let k = size as f32 / ICON_VIEWBOX;
     resvg::render(&tree, Transform::from_scale(k, k), &mut pm.as_mut());
     let [r, g, b, a] = color.to_rgba8();
-    for px in pm.data_mut().chunks_exact_mut(4) {
+    for px in pm.data_mut().as_chunks_mut::<4>().0 {
         let cov = px[3] as u32 * a as u32 / 255;
         px[0] = (r as u32 * cov / 255) as u8;
         px[1] = (g as u32 * cov / 255) as u8;
@@ -670,7 +670,7 @@ mod tests {
         let img = DynamicImage::ImageRgba8(RgbaImage::from_pixel(40, 20, image::Rgba([200, 10, 10, 255])));
         let black = Color::hex("#000000");
         let cover = background(&img, WallpaperFill::Cover, (30, 30), black).unwrap();
-        assert!(cover.pixmap.data().chunks_exact(4).all(|p| p[0] > 190 && p[3] == 255));
+        assert!(cover.pixmap.data().as_chunks::<4>().0.iter().all(|p| p[0] > 190 && p[3] == 255));
         let contain = background(&img, WallpaperFill::Contain, (40, 40), black).unwrap();
         let at = |pm: &Pixmap, x: u32, y: u32| pm.pixel(x, y).unwrap().red();
         assert_eq!(at(&contain.pixmap, 20, 2), 0, "band above");
@@ -725,10 +725,10 @@ mod tests {
         // The digits plane paints something.
         let mut pm = Pixmap::new(geo.digits.w, geo.digits.h).unwrap();
         paint_digits(&mut pm.as_mut(), &mut text, &geo, &input);
-        assert!(pm.data().chunks_exact(4).any(|p| p[3] > 200));
+        assert!(pm.data().as_chunks::<4>().0.iter().any(|p| p[3] > 200));
         let mut pill = Pixmap::new(p.w, p.h).unwrap();
         paint_pill(&mut pill.as_mut(), &mut text, &geo, &input);
-        assert!(pill.data().chunks_exact(4).any(|p| p[3] > 0));
+        assert!(pill.data().as_chunks::<4>().0.iter().any(|p| p[3] > 0));
     }
 
     #[test]

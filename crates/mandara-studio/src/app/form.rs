@@ -184,27 +184,6 @@ impl WhenDark for gpui::Div {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn search_finds_pages_by_topic() {
-        use crate::registry::Section;
-        let pages = |q: &str| super::matching_pages(q).into_iter().map(|(_, s)| s).collect::<Vec<_>>();
-        assert!(pages("vpn").contains(&Section::Network));
-        assert!(pages("cursor").contains(&Section::Input));
-        assert!(pages("autostart").contains(&Section::Applications));
-        assert!(pages("undo").contains(&Section::Profiles));
-        assert!(pages("zzzz-nothing").is_empty());
-    }
-
-    #[test]
-    fn wifi_payload_encodes() {
-        let payload = mandara_config::connectivity::wifi_qr_payload("Mandara hotspot", Some("k3yp4ss-word"), false);
-        let code = qrcodegen::QrCode::encode_text(&payload, qrcodegen::QrCodeEcc::Medium).unwrap();
-        assert!(code.size() >= 21);
-    }
-}
-
 /// `(icon, section)` of every page whose title or topics match `q`
 /// (lowercase).
 pub(super) fn matching_pages(q: &str) -> Vec<(&'static str, crate::registry::Section)> {
@@ -258,4 +237,25 @@ pub(super) fn page_matches(query: &str, p: &MandaraPalette, cx: &mut Context<Stu
             .child(div().row().flex_wrap().gap(px(SPACE_8_PX)).children(chips))
             .into_any_element(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn search_finds_pages_by_topic() {
+        use crate::registry::Section;
+        let pages = |q: &str| super::matching_pages(q).into_iter().map(|(_, s)| s).collect::<Vec<_>>();
+        assert!(pages("vpn").contains(&Section::Network));
+        assert!(pages("cursor").contains(&Section::Input));
+        assert!(pages("autostart").contains(&Section::Applications));
+        assert!(pages("undo").contains(&Section::Profiles));
+        assert!(pages("zzzz-nothing").is_empty());
+    }
+
+    #[test]
+    fn wifi_payload_encodes() {
+        let payload = mandara_config::connectivity::wifi_qr_payload("Mandara hotspot", Some("k3yp4ss-word"), false);
+        let code = qrcodegen::QrCode::encode_text(&payload, qrcodegen::QrCodeEcc::Medium).unwrap();
+        assert!(code.size() >= 21);
+    }
 }

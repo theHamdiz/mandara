@@ -6,6 +6,133 @@ About → What's new shows it too.
 
 ## Unreleased
 
+A new main menu, a Notch bar that hangs from the top edge, your wallpaper
+on the login and lock screens (which now share one design), a far more
+customisable login screen with ready-made looks, plus fixes for night
+light, media keys, album art, the process list and logging out.
+
+### New
+
+- **A new main menu.** Right-clicking empty bar space opens a control
+  centre: your profile, what's playing, the time and weather, quick
+  toggles and a volume slider on its home page, then pages for apps and
+  tools, themes and your session (Lock, Log out, Sleep, Restart, Shut
+  down). A rail down its side jumps to the sound, network, Bluetooth,
+  system monitor, weather, calendar and notification panels, and to
+  Studio. It's frosted glass over your wallpaper with solid cards on top;
+  Studio → Bar → Main menu sets how see-through it is, or makes it solid.
+- **Choose what right-clicking the bar opens.** Studio → Bar → "Right-click
+  on empty bar space" picks the bar's main menu or the desktop's menu.
+- **A Notch bar.** A new bar style that hangs from the top edge, narrower
+  than the screen, with curved shoulders where it meets the edge and
+  rounded corners below; panels pour out of it. Pick "Notch" in Studio →
+  Bar → Presets for the full look, or set the style yourself and tune its
+  width (Studio → Bar → Notch width).
+- **Group capsules.** Each group of bar items can sit on a soft capsule of
+  its own (Studio → Bar → Group capsules), on the edge frame, the hairline
+  and the notch.
+- **Design the login screen your way.** Mandara Login can now put the
+  sign-in on a card (size, padding, corners, fill, border, a back button and
+  the session picker inside it), show your picture without a frame, put the
+  sign-in button beside the field, give the focused field an accent border,
+  hide what you type as varied shapes instead of dots, use a full-width
+  session field and outlined power buttons, show a logo, and offer a colour
+  scheme switcher people can use right on the login screen.
+- **Ready-made login looks.** Studio → Login screen → Looks applies a whole
+  design in one click: Mandara's own, or "Midnight card", a quiet clock over
+  one outlined card in midnight navy and citrine. Change anything after.
+- **Pick fonts from a list.** Every font setting is now a searchable list of
+  the fonts on your system, each shown in its own face. You can also type a
+  name you haven't installed yet. Typography has new per-surface fonts too:
+  the bar, panels and plugins, desktop widgets, the lock screen and its
+  clock, and Studio itself, each following the interface font until you
+  pick one. The login screen has its own text font as well.
+- **A new theme, Night Citrine.** Deep midnight navy with pale citrine, soft
+  lavender and mint, for the shell and the login screen.
+- **Your wallpaper on the login screen.** Mandara Login now shows the
+  wallpaper of whoever is picked, and switches as you pick someone else.
+  Your session shares a copy for it (Studio → Wallpaper → "Show on the
+  login screen", on by default; Studio → Login screen → "Each person's own
+  wallpaper" turns it off for everyone). People without one see the usual
+  backdrop. Apply your login screen settings once in Studio after
+  updating, so the shared folder is created.
+- **A settings button on the weather card.** The weather card in the bar
+  panel and the sidebar has a button in its corner that opens Studio on
+  every weather setting.
+
+### Improved
+
+- **A calmer Login screen page in Studio.** The preview sits beside what
+  you do with it (apply, full screen, and "Try it" buttons that play the
+  entrance, typing, a wrong password or a sign-in), so the settings get
+  most of the page. One slim row of tabs follows the way you work: looks,
+  layout, background, clock, sign-in, session, theme, motion, and the login
+  manager last. Settings that depend on another one appear only when it's
+  on (the card's size and colours once the card is on, the video options
+  only for a video backdrop), and the logo and the colour scheme switcher
+  have their own on/off switch. The preview also shows your real
+  wallpaper, the same one the login screen gets.
+- **The sound spectrum moves to the app that's playing.** In the sound
+  panel the live bars now sit under the app actually playing, such as
+  Spotify, instead of under the output, which with EasyEffects showed them
+  under EasyEffects. With nothing playing they stay under the output.
+- **The weather panel fits what it shows,** without the empty space at its
+  bottom.
+
+- **The login and lock screens look like one screen.** Both now have the
+  date over a bold clock, your picture and name a little below the middle,
+  and a wider password field, in the same proportions on every screen size.
+  The lock screen also blurs and darkens your wallpaper much less, so you
+  can actually see it. If you changed those settings yourself, they stay.
+
+### Fixed
+
+- **Night light works on Intel laptops.** Some graphics chips, Intel ones
+  among them, use colour tables larger than Mandara expected, and Mandara
+  sent a shortened table the compositor refused, so the screen never
+  warmed. It now sends the full table.
+- **Media keys work.** Play/pause, next and previous (often F4–F6 on
+  laptops) and the microphone mute key now control your music, and the
+  laptop brightness keys work on installs from before they were added.
+  Keys your own compositor config binds are left alone.
+- **Album art shows up.** Covers from players such as Spotify were saved
+  without a file extension, so they never loaded. They're now saved and
+  read properly, and images are recognised by their contents everywhere.
+- **"All processes" opens the process list.** The link in the system
+  monitor did nothing, because the process list is switched off on new
+  installs. It now switches it on and opens it.
+
+- **Log out works on MangoWM.** The power menu's Log out button (the dock
+  that slides in from the right when you press the power button) did
+  nothing on MangoWM: Mandara asked MangoWM to quit but hung up before
+  MangoWM answered, and MangoWM drops a request whose sender has gone. It
+  now waits for the answer, so Log out ends your session. If MangoWM can't
+  be reached, it asks logind to end the session instead.
+- **The power menu tells you when something fails.** Lock, Log out, Sleep,
+  Restart and Shut down used to fail silently, for example when the system
+  refused or a service wasn't running. Now a notification says what went
+  wrong. Lock also uses Mandara's own lock screen directly when logind
+  can't be reached, and Lock and Log out now always target your own
+  session.
+
+- **Night light says why when it can't warm your screen.** Turning night
+  light on used to show "Warm" even when nothing changed, for example when
+  another night-light app such as wlsunset or gammastep already controls
+  the screen colours, or when the compositor or display driver refuses the
+  change. Mandara now shows a notification that names the app when it finds
+  one, and `mandara msg nightlight status` lists it too. If night light ever
+  loses its connection to the compositor, turning it off and on again
+  reconnects it.
+
+### Under the hood
+
+- **Warnings are errors.** Every compiler and linter warning now fails the
+  build, across the whole project, and the ones already there are fixed.
+- **Version numbers follow what changed.** A new feature anywhere in the
+  shell now makes a minor release (like 0.4.0), not only one in its startup
+  code. Signed updates came out as 0.3.4 because of this; the next release
+  with a new feature gets the minor number.
+
 ## 0.3.4 — 2026-10-31
 
 Signed releases: Mandara now checks that an update really comes from its

@@ -267,11 +267,10 @@ pub fn camera_users() -> Vec<AppUse> {
         // Other users' fd tables aren't readable: skipped cheaply.
         let Ok(fds) = std::fs::read_dir(entry.path().join("fd")) else { continue };
         let holds = fds.flatten().any(|fd| std::fs::read_link(fd.path()).is_ok_and(|t| t.parent() == Some(Path::new(DEV)) && t.file_name().and_then(OsStr::to_str).is_some_and(|n| n.starts_with(VIDEO_PREFIX))));
-        if holds && let Some(name) = comm(pid) {
-            if !apps.iter().any(|a| a.name == name) {
+        if holds && let Some(name) = comm(pid)
+            && !apps.iter().any(|a| a.name == name) {
                 apps.push(AppUse { name, pid: Some(pid), icon: None });
             }
-        }
     }
     apps
 }

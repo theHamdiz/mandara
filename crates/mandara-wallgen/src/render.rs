@@ -308,7 +308,7 @@ pub(crate) fn render_rgb8(recipe: &Recipe, width: u32, height: u32, t: f32, prev
             for (i, row) in band.chunks_mut(w * 3).enumerate() {
                 let y = (first + i) as u32;
                 shade_row(y, &mut cur);
-                for (x, px) in row.chunks_exact_mut(3).enumerate() {
+                for (x, px) in row.as_chunks_mut::<3>().0.iter_mut().enumerate() {
                     let c = cur[x];
                     let l = cur[x.saturating_sub(1)];
                     let r = cur[(x + 1).min(w - 1)];
@@ -346,7 +346,7 @@ pub(crate) fn render_rgb16(recipe: &Recipe, width: u32, height: u32, t: f32) -> 
     let mut buf = vec![0u16; width as usize * height as usize * 3];
     with_frame(recipe, width, height, t, false, |frame| {
         par_rows(&mut buf, width as usize * 3, |y, row| {
-            for (x, px) in row.chunks_exact_mut(3).enumerate() {
+            for (x, px) in row.as_chunks_mut::<3>().0.iter_mut().enumerate() {
                 let rgb = frame.pixel(x as u32, y as u32).to_srgb();
                 for i in 0..3 {
                     px[i] = (rgb[i] * 65535.0 + 0.5) as u16;

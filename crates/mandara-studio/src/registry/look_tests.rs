@@ -53,7 +53,7 @@ fn another_value(setting: &Setting, current: &Value) -> Option<Value> {
         Control::Time => Value::from(if current.as_str() == Some("06:45") { "07:30" } else { "06:45" }),
         Control::Text { .. } | Control::OptionalText { .. } if setting.path.ends_with("color") => Value::from("#123456"),
         Control::Text { .. } | Control::OptionalText { .. } if setting.path.contains("/variants/") => Value::from("~/Pictures/Wallpapers/test.jpg"),
-        Control::Text { .. } | Control::OptionalText { .. } => Value::from("Mandara Test"),
+        Control::Text { .. } | Control::OptionalText { .. } | Control::Font { .. } => Value::from("Mandara Test"),
         Control::Command { .. } => return None,
         _ => return None,
     })
@@ -220,11 +220,7 @@ fn app_theme_toggles_select_their_templates() {
     // And the selection writes (or skips) the files.
     let dir = tempfile::tempdir().unwrap();
     let (cache, config, data) = (dir.path().join("cache"), dir.path().join("config"), dir.path().join("data"));
-    let only_kitty = {
-        let mut c = ShellConfig::default();
-        c.integrations = mandara_config::IntegrationsConfig { kitty: true, ..mandara_config::IntegrationsConfig::all(false) };
-        c
-    };
+    let only_kitty = ShellConfig { integrations: mandara_config::IntegrationsConfig { kitty: true, ..mandara_config::IntegrationsConfig::all(false) }, ..Default::default() };
     let (targets, apps) = mandara_ui::state::app_theme_targets(&only_kitty.integrations);
     let p = palette_of(&only_kitty);
     let mut ledger = mandara_theme::templates::Ledger::default();

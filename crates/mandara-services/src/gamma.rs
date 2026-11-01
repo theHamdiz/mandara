@@ -29,7 +29,16 @@ const FADE_FRAME: Duration = Duration::from_millis(33);
 /// `wl_output` version bound (v4 adds the connector name event).
 const WL_OUTPUT_VERSION: u32 = 4;
 /// Upper bound on a gamma table, entries per channel (guards a bogus size).
-const MAX_RAMP_SIZE: u32 = 1 << 16;
+/// Intel i915 reports 262145 entries, so the bound stays well above real
+/// hardware; a table is never shortened to fit it (the compositor rejects
+/// a ramp of the wrong size).
+const MAX_RAMP_SIZE: u32 = 1 << 20;
+
+/// The table size to send for a size the compositor reported, or `None`
+/// when it's implausible (that output is left alone).
+fn ramp_size(size: u32) -> Option<u32> {
+    (size > 0 && size <= MAX_RAMP_SIZE).then_some(size)
+}
 
 /// Whether the compositor can do night light.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize)]
@@ -55,6 +64,29 @@ pub struct GammaStatus {
     pub busy: Vec<String>,
     /// The ramp shown now (mid-fade values included).
     pub current: Option<GammaTarget>,
+    /// Why the thread stopped, when it did (the controller starts a new
+    /// one on the next change).
+    pub error: Option<String>,
+}
+
+/// Programs that hold the screens' gamma for their own night light; only
+/// one client can, so any of these running blocks Mandara's.
+pub const GAMMA_TOOLS: &[&str] = &["wlsunset", "gammastep", "hyprsunset", "redshift", "sunsetr", "wl-gammarelay", "wl-gammarelay-rs", "gammactl", "wluma"];
+
+/// The [`GAMMA_TOOLS`] among process names (`/proc/<pid>/comm`), sorted
+/// and once each.
+pub fn gamma_tools_in(names: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut found: Vec<String> = names.into_iter().map(|n| n.trim().to_string()).filter(|n| GAMMA_TOOLS.contains(&n.as_str())).collect();
+    found.sort();
+    found.dedup();
+    found
+}
+
+/// The [`GAMMA_TOOLS`] running now (your own processes are all that's
+/// readable, which is where they run).
+pub fn running_gamma_tools() -> Vec<String> {
+    let names = std::fs::read_dir("/proc").into_iter().flatten().flatten().filter(|e| e.file_name().to_string_lossy().bytes().all(|b| b.is_ascii_digit())).filter_map(|e| std::fs::read_to_string(e.path().join("comm")).ok());
+    gamma_tools_in(names)
 }
 
 enum Cmd {
@@ -80,6 +112,8 @@ impl Gamma {
             if let Err(err) = run(rx, w, s.clone()) {
                 tracing::warn!("night light: {err:#}");
                 let mut st = s.lock();
+                st.error = Some(format!("{err:#}"));
+                st.outputs.clear();
                 if st.support == GammaSupport::Unknown {
                     st.support = GammaSupport::NoDisplay;
                 }
@@ -174,10 +208,16 @@ impl Dispatch<control::ZwlrGammaControlV1, u32> for State {
     fn event(state: &mut Self, proxy: &control::ZwlrGammaControlV1, event: control::Event, global: &u32, _: &Connection, _: &QueueHandle<Self>) {
         let Some(o) = state.outputs.iter_mut().find(|o| o.global == *global) else { return };
         match event {
-            control::Event::GammaSize { size } => {
-                o.size = Some(size.min(MAX_RAMP_SIZE));
-                state.dirty = true;
-            }
+            control::Event::GammaSize { size } => match ramp_size(size) {
+                Some(size) => {
+                    o.size = Some(size);
+                    state.dirty = true;
+                }
+                None => {
+                    tracing::warn!("night light: {}: implausible gamma size {size}, leaving it alone", o.name);
+                    o.size = None;
+                }
+            },
             control::Event::Failed => {
                 tracing::warn!("night light: gamma of {} is held by another app (or the output is gone)", o.name);
                 proxy.destroy();
@@ -341,4 +381,27 @@ pub fn probe() -> GammaSupport {
     let Ok((globals, _)) = registry_queue_init::<Probe>(&conn) else { return GammaSupport::NoDisplay };
     let found = globals.contents().with_list(|l| l.iter().any(|g| g.interface == manager::ZwlrGammaControlManagerV1::interface().name));
     if found { GammaSupport::Supported } else { GammaSupport::Unsupported }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Issue #11: Intel i915 reports 262145 entries per channel; shortening
+    /// the table made MangoWM reject every ramp.
+    #[test]
+    fn real_gamma_sizes_are_sent_whole() {
+        assert_eq!(ramp_size(256), Some(256));
+        assert_eq!(ramp_size(4096), Some(4096));
+        assert_eq!(ramp_size(262_145), Some(262_145));
+        assert_eq!(ramp_size(MAX_RAMP_SIZE + 1), None);
+        assert_eq!(ramp_size(0), None);
+    }
+
+    #[test]
+    fn finds_the_night_light_tools_that_block_gamma() {
+        let names = ["kitty\n", "wlsunset\n", "mango\n", "gammastep\n", "wlsunset\n", "wlsunset-helper\n"].map(String::from);
+        assert_eq!(gamma_tools_in(names), ["gammastep", "wlsunset"]);
+        assert!(gamma_tools_in(Vec::new()).is_empty());
+    }
 }

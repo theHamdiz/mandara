@@ -53,3 +53,6 @@ rav1e.workspace = true
 usvg = { version = "0.46", default-features = false }
 # examples/polkit_dialog.rs
 gpui_platform.workspace = true
+
+[lints]
+workspace = true

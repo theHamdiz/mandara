@@ -205,7 +205,7 @@ pub fn register(r: &mut PluginRegistry) {
         core,
         CommandSpec::new_output("theme seeds", mandara_i18n::tk("Material You seed colors extracted from an image (default: the wallpaper)"), |a, cx| {
             let path = match a.get(0) {
-                Some(p) => mandara_config::paths::expand_tilde(&a.rest(0).replace(p, p)),
+                Some(_) => mandara_config::paths::expand_tilde(&a.rest(0)),
                 None => config(cx).read(cx).get().wallpaper.path.clone().ok_or("no wallpaper set; pass an image path")?,
             };
             let (tx, rx) = async_channel::bounded(1);
@@ -305,12 +305,13 @@ pub fn register(r: &mut PluginRegistry) {
                 "island" => BarLayout::ContiguousIsland,
                 "hairline" => BarLayout::Hairline,
                 "micro" => BarLayout::Micro,
+                "notch" => BarLayout::Notch,
                 _ => current.next(),
             };
             update_config(cx, |c| c.bar.layout = layout);
             Ok(json!({ "layout": layout, "name": layout.display_name() }))
         })
-        .arg(ArgSpec::required("layout", ArgKind::Enum, mandara_i18n::tk("layout")).choices(&["edge-frame", "glass-pills", "island", "hairline", "micro", "next"]))
+        .arg(ArgSpec::required("layout", ArgKind::Enum, mandara_i18n::tk("layout")).choices(&["edge-frame", "glass-pills", "island", "hairline", "micro", "notch", "next"]))
         .example("bar layout hairline"),
     );
 

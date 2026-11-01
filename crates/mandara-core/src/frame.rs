@@ -87,6 +87,7 @@ pub enum Edge {
 /// corners and concave flares where it meets the edge. `x, y, w, h` is the
 /// drawer rect in surface coordinates; flares extend outside it along the
 /// attached edge.
+#[allow(clippy::too_many_arguments)]
 pub fn edge_drawer(edge: Edge, x: f32, y: f32, w: f32, h: f32, radius: f32, flare: f32, color: Hsla) -> AnyElement {
     edge_drawer_snapped(edge, x, y, w, h, radius, flare, color, 0.0)
 }

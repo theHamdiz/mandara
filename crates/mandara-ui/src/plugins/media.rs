@@ -419,7 +419,7 @@ struct ArtImages {
 /// Decodes `path` once (off the UI thread) into a `cover_px`² cover
 /// (centre-cropped like `ObjectFit::Cover`) and, when `blur`, the backdrop.
 fn decode_art(path: &Path, cover_px: u32, blur: bool) -> ArtImages {
-    let Ok(decoded) = image::open(path) else { return ArtImages::default() };
+    let Ok(decoded) = mandara_theme::material::open_image(path) else { return ArtImages::default() };
     let cover = (cover_px > 0).then(|| to_render_image(decoded.resize_to_fill(cover_px, cover_px, FilterType::Triangle).to_rgba8()));
     let backdrop = blur.then(|| {
         let small = decoded.thumbnail(BACKDROP_PX, BACKDROP_PX).to_rgba8();
@@ -1354,8 +1354,8 @@ mod tests {
 
     #[test]
     fn panel_heights_fit_content() {
-        assert!(PLAYING_H > EMPTY_H);
-        assert!(PLAYING_H < 420.0);
+        const { assert!(PLAYING_H > EMPTY_H) };
+        const { assert!(PLAYING_H < 420.0) };
         // The rows a playing panel stacks, all fixed: it can't be taller
         // than this sum, nor shorter.
         assert_eq!(panel_height(PanelState::Track, None), PLAYING_H);

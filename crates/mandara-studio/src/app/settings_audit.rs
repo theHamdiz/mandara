@@ -337,7 +337,7 @@ pub(super) fn changed_value(s: &Setting, current: &Value) -> Option<Value> {
             Some(Value::from(v))
         }
         Control::Choice(choices) => choices.iter().map(|(raw, _)| registry::choice_value(raw)).find(|v| v != current && !v.is_null()),
-        Control::Text { .. } | Control::OptionalText { .. } => Some(Value::from(format!("{}-audit", current.as_str().unwrap_or("x")))),
+        Control::Text { .. } | Control::OptionalText { .. } | Control::Font { .. } => Some(Value::from(format!("{}-audit", current.as_str().unwrap_or("x")))),
         Control::List { .. } => Some(Value::from(vec!["audit.example"])),
         Control::Time => Some(Value::from(if current.as_str() == Some("06:15") { "06:45" } else { "06:15" })),
         Control::Icon | Control::Command { .. } => None,
@@ -526,7 +526,7 @@ fn every_compositor_setting_reaches_its_drop_ins() {
         for target in group_targets(s.group) {
             // Niri only has an "off" switch for animations: "on" keeps the
             // user's own block (documented in the emitter).
-            if *target == mandara_config::compositor::Target::Niri && s.path == "/compositor/look/animations" && value == Value::from(true) {
+            if *target == mandara_config::compositor::Target::Niri && s.path == "/compositor/look/animations" && value == true {
                 continue;
             }
             // Niri can't blur before 26.04: the version-gated note counts.

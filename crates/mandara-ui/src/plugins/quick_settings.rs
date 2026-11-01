@@ -7,6 +7,7 @@ use gpui::{App, Global, IntoElement, ParentElement, Styled, div, px};
 use mandara_core::ToGpui as _;
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginInstance, PluginManifest, PluginRegistry};
 use mandara_services::{BluetoothCommand, NetworkCommand};
+use mandara_theme::MandaraPalette;
 use serde_json::json;
 
 use super::fn_view;
@@ -47,11 +48,10 @@ pub fn set_keep_awake(on: bool, cx: &mut App) -> Result<bool, String> {
     Ok(on)
 }
 
-pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Quick settings"), mandara_i18n::tk("Toggles for the sidebar"),None), |window, cx, _| {
-        let sidebar = fn_view(
-            None,
-            |palette, _, cx| {
+/// The toggle tiles (Wi-Fi, Bluetooth, appearance, keep awake, night
+/// light, mute all, KeePassXC) and the brightness slider: the sidebar card,
+/// and the main menu's home page.
+pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
                 let hub = hub(cx).read(cx);
                 let (net, bt) = (&hub.network, &hub.bluetooth);
                 let (wifi_on, bt_on) = (net.wifi_enabled, bt.powered);
@@ -185,10 +185,11 @@ pub fn register(r: &mut PluginRegistry) {
                         .child(super::panel_fx::big_slider(BRIGHTNESS_SLIDER, level, "sun", false, palette, |v, _, cx| crate::osd::set_brightness(v, cx)))
                 });
                 div().flex().flex_col().gap(px(tokens::SM)).child(row1).child(row2).child(row3).children(keepass).children(brightness).into_any_element()
-            },
-            window,
-            cx,
-        );
+}
+
+pub fn register(r: &mut PluginRegistry) {
+    r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Quick settings"), mandara_i18n::tk("Toggles for the sidebar"),None), |window, cx, _| {
+        let sidebar = fn_view(None, |palette, _, cx| tiles(palette, cx), window, cx);
         PluginInstance { sidebar: Some(sidebar), ..PluginInstance::empty() }
     });
     r.command(

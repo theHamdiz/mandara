@@ -330,7 +330,7 @@ impl Pink {
         let b = &mut self.b;
         b[0] = flush(0.99886 * b[0] + w * 0.0555179);
         b[1] = flush(0.99332 * b[1] + w * 0.0750759);
-        b[2] = flush(0.96900 * b[2] + w * 0.1538520);
+        b[2] = flush(0.96900 * b[2] + w * 0.153_852);
         b[3] = flush(0.86650 * b[3] + w * 0.3104856);
         b[4] = flush(0.55000 * b[4] + w * 0.5329522);
         b[5] = flush(-0.7616 * b[5] - w * 0.0168980);
@@ -468,7 +468,7 @@ impl Sea {
     fn run(&mut self) -> (f32, f32) {
         let under = self.undertow.run(self.rng.white()) * 0.25;
         let mut out = [0.0f32; 2];
-        for ch in 0..2 {
+        for (ch, o) in out.iter_mut().enumerate() {
             self.phase[ch] += self.step[ch];
             if self.phase[ch] >= 1.0 {
                 self.phase[ch] -= 1.0;
@@ -478,7 +478,7 @@ impl Sea {
             let cutoff = 260.0 + env * 2600.0;
             let body = self.tone[ch].run(self.rng.white(), one_pole(cutoff));
             let foam = self.hiss[ch].run(self.rng.white(), one_pole(1800.0)) * env * env * 0.12;
-            out[ch] = (body * (0.18 + 0.95 * env) + foam) * 1.6 + under;
+            *o = (body * (0.18 + 0.95 * env) + foam) * 1.6 + under;
         }
         (out[0], out[1])
     }
@@ -737,7 +737,7 @@ impl Engine {
     /// fade in between).
     pub fn render(&mut self, out: &mut [f32], levels: &[f32; LAYERS], master: f32, play: f32) {
         let mut sum_sq = 0.0f32;
-        for frame in out.chunks_exact_mut(CHANNELS) {
+        for frame in out.as_chunks_mut::<CHANNELS>().0 {
             self.play = flush(self.play + (play - self.play) * self.play_glide);
             self.master = flush(self.master + (master - self.master) * self.glide);
             let (mut l, mut r) = (0.0f32, 0.0f32);
@@ -1019,7 +1019,7 @@ fn playback(params: &Params) -> Result<(), String> {
                 let play = if params.playing.load(Ordering::Relaxed) { sleep_fade } else { 0.0 };
                 engine.render(block, &params.levels(), params.master(), play);
             }
-            for (dst, s) in bytes[..chunk].chunks_exact_mut(std::mem::size_of::<f32>()).zip(&samples[..frames * CHANNELS]) {
+            for (dst, s) in bytes[..chunk].as_chunks_mut::<{ std::mem::size_of::<f32>() }>().0.iter_mut().zip(&samples[..frames * CHANNELS]) {
                 dst.copy_from_slice(&s.to_le_bytes());
             }
             protocol::write_memblock(sock.get_mut(), info.channel, &bytes[..chunk], 0).map_err(perr)?;
@@ -1082,7 +1082,7 @@ mod tests {
     #[test]
     fn layers_sound_different() {
         // Zero-crossing rate separates bright (white, rain) from dark (brown, sea).
-        let zcr = |s: &[f32]| s.chunks_exact(2).map(|f| f[0]).collect::<Vec<_>>().windows(2).filter(|w| (w[0] < 0.0) != (w[1] < 0.0)).count();
+        let zcr = |s: &[f32]| s.as_chunks::<2>().0.iter().map(|f| f[0]).collect::<Vec<_>>().windows(2).filter(|w| (w[0] < 0.0) != (w[1] < 0.0)).count();
         let white = zcr(&render_layer(Layer::White, 1.0));
         let brown = zcr(&render_layer(Layer::Brown, 1.0));
         let sea = zcr(&render_layer(Layer::Sea, 1.0));
@@ -1099,11 +1099,11 @@ mod tests {
         engine.render(&mut warm, &levels, 1.0, 1.0);
         // Slam the master from 1 to 0 and the layer off: the output must
         // glide, never jump by more than noise does on its own.
-        let natural = warm.chunks_exact(2).map(|f| f[0]).collect::<Vec<_>>().windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0f32, f32::max);
+        let natural = warm.as_chunks::<2>().0.iter().map(|f| f[0]).collect::<Vec<_>>().windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0f32, f32::max);
         let mut out = vec![0f32; RATE as usize * 3 / 2 * CHANNELS];
         engine.render(&mut out, &[0.0; LAYERS], 0.0, 0.0);
         let mut prev = warm[warm.len() - 2];
-        for f in out.chunks_exact(2) {
+        for f in out.as_chunks::<2>().0 {
             assert!((f[0] - prev).abs() <= natural * 1.05 + 1e-6, "jump {} > {natural}", (f[0] - prev).abs());
             prev = f[0];
         }

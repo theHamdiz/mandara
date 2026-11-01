@@ -377,7 +377,7 @@ fn tokenize(argb: &[u32], width: usize, cache_bits: u32) -> Vec<Token> {
     let mut pending: Option<(usize, usize)> = None;
     while pos < n {
         let (len, dist) = pending.take().unwrap_or_else(|| m.best(pos));
-        if len >= MIN_MATCH && len < MAX_MATCH && pos + 1 < n {
+        if (MIN_MATCH..MAX_MATCH).contains(&len) && pos + 1 < n {
             let next = m.best(pos + 1);
             if next.0 > len + LAZY_MARGIN {
                 pending = Some(next);
@@ -607,7 +607,7 @@ pub fn encode_rgb(rgb: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String
     }
     // ARGB with the green channel subtracted from red and blue.
     let px: Vec<u32> = rgb
-        .chunks_exact(3)
+        .as_chunks::<3>().0.iter()
         .map(|p| {
             let (r, g, b) = (p[0].wrapping_sub(p[1]), p[1], p[2].wrapping_sub(p[1]));
             0xFF00_0000 | ((r as u32) << 16) | ((g as u32) << 8) | b as u32

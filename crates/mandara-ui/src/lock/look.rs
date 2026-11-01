@@ -177,7 +177,9 @@ mod tests {
         assert_eq!(look.background_image(wp.clone()), wp, "no image chosen → wallpaper");
         look.cfg.image = Some("/lock.png".into());
         assert_eq!(look.background_image(wp), Some("/lock.png".into()));
-        assert!((LockLook::default().blur_sigma() - 7.0).abs() < 1e-4, "default matches the original blur");
+        // A light blur by default, so the wallpaper still shows.
+        let sigma = LockLook::default().blur_sigma();
+        assert!((sigma - mandara_config::desktop::defaults::LOCK_BLUR_PX * BLUR_SIGMA_PER_PX).abs() < 1e-4 && sigma < 7.0, "default blur {sigma}");
     }
 
     #[test]

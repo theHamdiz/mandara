@@ -49,6 +49,8 @@ pub mod ranges {
     pub const BAR_TEXT_SCALE: Span = Span::new(0.75, 1.5, 0.05);
     /// Hairline / micro pill height.
     pub const BAR_COMPACT_HEIGHT: Span = Span::new(18.0, 30.0, 1.0);
+    /// Share of the screen edge the notch spans.
+    pub const BAR_NOTCH_WIDTH: Span = Span::new(0.3, 1.0, 0.01);
     /// Width of a left / right bar.
     pub const BAR_VERTICAL_WIDTH: Span = Span::new(32.0, 64.0, 1.0);
     /// Thickness of the screen frame around a side bar's display.
@@ -91,6 +93,8 @@ pub mod defaults {
     pub const BAR_CHIP_SPACING_PX: f32 = 2.0;
     pub const BAR_RIM_WIDTH_PX: f32 = 1.0;
     pub const BAR_COMPACT_HEIGHT_PX: f32 = 24.0;
+    /// The notch spans this share of its screen edge.
+    pub const BAR_NOTCH_WIDTH: f32 = 0.82;
     pub const BAR_VERTICAL_WIDTH_PX: f32 = 40.0;
     pub const SCREEN_FRAME_PX: f32 = 6.0;
     pub const BAR_SHADOW_STRENGTH: f32 = 0.5;
@@ -255,12 +259,13 @@ impl SidebarLook {
     }
 
     /// Floats when set to, and also while `bar` has no edge frame to join:
-    /// glass pills, the island, the micro pill or a floating frame. A flush
+    /// glass pills, the island, the micro pill, the notch or a floating
+    /// frame. A flush
     /// panel there looked bolted onto the screen edge under a bar that
     /// floats. Beside a side bar it stays as set.
     pub fn floats_with(&self, bar: &crate::BarConfig) -> bool {
         let side_bar = matches!(bar.position, crate::BarPosition::Left | crate::BarPosition::Right);
-        self.floating() || (!side_bar && (!bar.layout.is_attached() || bar.floating_frame))
+        self.floating() || (!side_bar && (!bar.layout.is_full_width() || bar.floating_frame))
     }
 
     /// [`Self::inset`] for the panel as drawn beside `bar` ([`Self::floats_with`]).
@@ -324,6 +329,23 @@ pub struct PanelsConfig {
     pub leave_delay_ms: u32,
     /// How long (ms) a panel's action message stays up.
     pub toast_ms: u32,
+    /// The main menu is see-through glass with solid cards on it.
+    pub menu_translucent: bool,
+    /// Its glass opacity (0–1) while translucent.
+    pub menu_opacity: f32,
+}
+
+/// What a right-click on empty bar space (between and around its items)
+/// opens.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BarRightClick {
+    /// The bar's main menu, at the click.
+    #[default]
+    MainMenu,
+    /// The desktop's right-click menu (edit desktop, add widget,
+    /// wallpaper…), at the click.
+    DesktopMenu,
 }
 
 impl Default for PanelsConfig {
@@ -340,6 +362,8 @@ impl Default for PanelsConfig {
             spring: SpringOverride::default(),
             leave_delay_ms: defaults::LEAVE_DELAY_MS,
             toast_ms: defaults::TOAST_MS,
+            menu_translucent: true,
+            menu_opacity: 0.62,
         }
     }
 }

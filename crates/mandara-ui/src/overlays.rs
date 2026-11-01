@@ -117,6 +117,7 @@ fn overlay_spec(role: SurfaceRole, w: f32, h: f32, display: Option<gpui::Display
 
 /// One launcher result.
 #[derive(Clone)]
+#[expect(clippy::large_enum_variant, reason = "launcher rows are rebuilt per keystroke; boxing adds an allocation per row (speed over memory)")]
 enum Item {
     App(DesktopApp),
     Calc { expr: String, value: f64 },
@@ -1410,7 +1411,7 @@ fn fuzzy(items: Vec<Item>, needle: &str, text: impl Fn(&Item) -> String) -> Vec<
         .into_iter()
         .map(|(t, score)| (t.0, score))
         .collect();
-    scored.sort_by(|a, b| b.1.cmp(&a.1));
+    scored.sort_by_key(|a| std::cmp::Reverse(a.1));
     scored.into_iter().map(|(i, _)| items[i].clone()).collect()
 }
 
@@ -1789,7 +1790,7 @@ impl Render for LauncherView {
             .child(icon("search", 18.0, palette.on_surface_variant))
             .child({
                 // Blinking caret, solid for half a second after each edit.
-                let caret_on = (self.blink_from.elapsed().as_millis() / 530) % 2 == 0;
+                let caret_on = (self.blink_from.elapsed().as_millis() / 530).is_multiple_of(2);
                 let caret = div().w(px(2.0)).h(px(19.0)).rounded(px(crate::style::radius(1.0))).flex_none().bg(palette.primary.hsla()).when(!caret_on, |el| el.opacity(0.0));
                 let bounds = self.text_bounds.clone();
                 let field = div()
@@ -2086,11 +2087,10 @@ mod tests {
     fn assert_line(registry: &PluginRegistry, words: &[String], complete: bool, label: &str) {
         let commands = &registry.commands;
         assert!(commands.all().iter().any(|c| starts_with_line(words, c.path)), "`{label}` runs `{}`, which is not a command", words.join(" "));
-        if complete {
-            if let Err(err) = commands.resolve(words) {
+        if complete
+            && let Err(err) = commands.resolve(words) {
                 panic!("`{label}` runs `{}`: {err}", words.join(" "));
             }
-        }
         let ids: Vec<&str> = registry.manifests().map(|m| m.id.as_str()).collect();
         match words.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
             ["studio", target] => {

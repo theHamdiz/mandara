@@ -80,15 +80,22 @@ impl SessionAction {
         if self == SessionAction::Logout
             && let Some(sock) = std::env::var_os("MANGO_INSTANCE_SIGNATURE")
         {
-            use std::io::Write;
-            let mut stream = std::os::unix::net::UnixStream::connect(sock).map_err(|e| e.to_string())?;
-            return writeln!(stream, "dispatch quit").map_err(|e| e.to_string());
+            match mango_quit(std::path::Path::new(&sock)) {
+                Ok(()) => return Ok(()),
+                // A stale socket (MangoWM restarted, or a shell started
+                // outside it): end the session through logind instead.
+                Err(MangoQuit::Unreachable(e)) => tracing::warn!("log out: MangoWM's socket: {e}; asking logind"),
+                Err(MangoQuit::Refused(e)) => return Err(tf("{action} failed ({call}): {error}", &[("action", &self.label()), ("call", &"MangoWM dispatch quit"), ("error", &e)])),
+            }
         }
         let conn = crate::runtime::system().await.map_err(err)?;
         const DEST: &str = "org.freedesktop.login1";
         match self {
             SessionAction::Lock | SessionAction::Logout => {
-                let session = proxy(&conn, DEST, "/org/freedesktop/login1/session/auto", "org.freedesktop.login1.Session").await.map_err(err)?;
+                // This shell's own session (the one the lock screen answers
+                // for), not logind's "auto" guess.
+                let path = crate::logind::session_path(&conn).await.map_err(err)?;
+                let session = proxy(&conn, DEST, path.as_str(), "org.freedesktop.login1.Session").await.map_err(err)?;
                 let method = if self == SessionAction::Lock { "Lock" } else { "Terminate" };
                 session.call::<_, _, ()>(method, &()).await.map_err(err)
             }
@@ -105,6 +112,39 @@ impl SessionAction {
             }
         }
     }
+}
+
+/// How long MangoWM gets to acknowledge `dispatch quit`.
+const MANGO_REPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Why MangoWM didn't quit.
+#[derive(Debug, PartialEq)]
+enum MangoQuit {
+    /// Its socket couldn't be reached.
+    Unreachable(String),
+    /// It answered with an error.
+    Refused(String),
+}
+
+/// Asks MangoWM to quit (ending the session it runs) and waits for its
+/// answer: MangoWM only carries out a command once it has written the reply,
+/// so a client that hangs up straight after sending it never logs out.
+fn mango_quit(sock: &std::path::Path) -> Result<(), MangoQuit> {
+    use std::io::{BufRead as _, Write as _};
+    let mut stream = std::os::unix::net::UnixStream::connect(sock).map_err(|e| MangoQuit::Unreachable(e.to_string()))?;
+    let _ = stream.set_read_timeout(Some(MANGO_REPLY_TIMEOUT));
+    writeln!(stream, "dispatch quit").map_err(|e| MangoQuit::Unreachable(e.to_string()))?;
+    let mut reply = String::new();
+    // No reply (it quit before answering, or timed out) still counts: the
+    // command was delivered.
+    let _ = std::io::BufReader::new(&stream).read_line(&mut reply);
+    mango_reply_error(&reply).map_or(Ok(()), |e| Err(MangoQuit::Refused(e)))
+}
+
+/// The error in a MangoWM reply line (`{"error":"…"}`), if any.
+fn mango_reply_error(reply: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(reply.trim()).ok()?;
+    v.get("error").and_then(|e| e.as_str()).map(str::to_string)
 }
 
 /// Holds a logind idle/sleep inhibitor; dropping it releases the lock.
@@ -128,36 +168,6 @@ pub fn inhibit_idle(why: &str) -> Result<Inhibitor, String> {
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ids_round_trip_and_destructiveness() {
-        for a in SessionAction::ALL {
-            assert_eq!(SessionAction::from_id(a.id()), Some(a));
-            assert!(a.describe().contains("login1") || a == SessionAction::Logout);
-        }
-        assert!(SessionAction::Shutdown.is_destructive());
-        assert!(!SessionAction::Lock.is_destructive());
-    }
-
-    #[test]
-    fn preferred_openers() {
-        assert_eq!(preferred_argv("https://x.org", Some("firefox --new-tab"), None), Some(vec!["firefox".into(), "--new-tab".into(), "https://x.org".into()]));
-        assert_eq!(preferred_argv("https://x.org", None, Some("thunar")), None);
-        let dir = std::env::temp_dir();
-        assert_eq!(preferred_argv(&format!("file://{}", dir.display()), None, Some("thunar")), Some(vec!["thunar".into(), dir.display().to_string()]));
-        assert_eq!(preferred_argv("trash:///", Some("b"), Some("f")), None);
-        // A folder with a space arrives percent-encoded (drives).
-        let spaced = tempfile::tempdir().unwrap();
-        let folder = spaced.path().join("My Disk");
-        std::fs::create_dir(&folder).unwrap();
-        let uri = format!("file://{}", folder.display().to_string().replace(' ', "%20"));
-        assert_eq!(preferred_argv(&uri, None, Some("nautilus -w")), Some(vec!["nautilus".into(), "-w".into(), folder.display().to_string()]));
-    }
-}
-
 /// Apps chosen in Studio → Applications for links / folders Mandara opens
 /// (`None` = the system default through the portal).
 static PREFERRED: std::sync::RwLock<(Option<String>, Option<String>)> = std::sync::RwLock::new((None, None));
@@ -174,7 +184,8 @@ pub fn set_preferred_openers(browser: &str, file_manager: &str) {
 pub fn preferred_argv(uri: &str, browser: Option<&str>, file_manager: Option<&str>) -> Option<Vec<String>> {
     let (program, target) = if uri.starts_with("http://") || uri.starts_with("https://") {
         (browser?, uri.to_string())
-    } else if let Some(path) = uri.strip_prefix("file://") {
+    } else {
+        let path = uri.strip_prefix("file://")?;
         // Drives send encoded URIs (`/run/media/u/My%20Disk`).
         let decoded = crate::mpris::percent_decode(path);
         let path = std::path::Path::new(&decoded);
@@ -182,8 +193,6 @@ pub fn preferred_argv(uri: &str, browser: Option<&str>, file_manager: Option<&st
             return None;
         }
         (file_manager?, path.display().to_string())
-    } else {
-        return None;
     };
     let mut argv: Vec<String> = program.split_whitespace().map(String::from).collect();
     argv.push(target);
@@ -214,4 +223,63 @@ pub fn open_uri(uri: &str) -> Result<(), String> {
                 .map_err(|e| tf("Could not open {uri}: {error}", &[("uri", &uri), ("error", &e)]))
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ids_round_trip_and_destructiveness() {
+        for a in SessionAction::ALL {
+            assert_eq!(SessionAction::from_id(a.id()), Some(a));
+            assert!(a.describe().contains("login1") || a == SessionAction::Logout);
+        }
+        assert!(SessionAction::Shutdown.is_destructive());
+        assert!(!SessionAction::Lock.is_destructive());
+    }
+
+    /// The session dock's Log out did nothing on MangoWM: it hung up right
+    /// after sending `dispatch quit`, and MangoWM only acts on a command
+    /// once it has answered. A fake MangoWM that answers late checks that
+    /// the answer is awaited.
+    #[test]
+    fn logout_waits_for_mango_to_answer() {
+        use std::io::{BufRead as _, Write as _};
+        let dir = tempfile::tempdir().unwrap();
+        let sock = dir.path().join("mango.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut line = String::new();
+            std::io::BufReader::new(&stream).read_line(&mut line).unwrap();
+            std::thread::sleep(ANSWER_AFTER);
+            (&stream).write_all(b"{\"success\":true}\n").unwrap();
+            line
+        });
+        const ANSWER_AFTER: std::time::Duration = std::time::Duration::from_millis(100);
+        let start = std::time::Instant::now();
+        assert_eq!(mango_quit(&sock), Ok(()));
+        assert!(start.elapsed() >= ANSWER_AFTER, "returned before MangoWM answered");
+        assert_eq!(server.join().unwrap(), "dispatch quit\n");
+        assert!(matches!(mango_quit(&dir.path().join("missing.sock")), Err(MangoQuit::Unreachable(_))));
+        assert_eq!(mango_reply_error(r#"{"error":"unknown dispatcher"}"#).as_deref(), Some("unknown dispatcher"));
+        assert_eq!(mango_reply_error(r#"{"success":true}"#), None);
+        assert_eq!(mango_reply_error(""), None);
+    }
+
+    #[test]
+    fn preferred_openers() {
+        assert_eq!(preferred_argv("https://x.org", Some("firefox --new-tab"), None), Some(vec!["firefox".into(), "--new-tab".into(), "https://x.org".into()]));
+        assert_eq!(preferred_argv("https://x.org", None, Some("thunar")), None);
+        let dir = std::env::temp_dir();
+        assert_eq!(preferred_argv(&format!("file://{}", dir.display()), None, Some("thunar")), Some(vec!["thunar".into(), dir.display().to_string()]));
+        assert_eq!(preferred_argv("trash:///", Some("b"), Some("f")), None);
+        // A folder with a space arrives percent-encoded (drives).
+        let spaced = tempfile::tempdir().unwrap();
+        let folder = spaced.path().join("My Disk");
+        std::fs::create_dir(&folder).unwrap();
+        let uri = format!("file://{}", folder.display().to_string().replace(' ', "%20"));
+        assert_eq!(preferred_argv(&uri, None, Some("nautilus -w")), Some(vec!["nautilus".into(), "-w".into(), folder.display().to_string()]));
+    }
 }

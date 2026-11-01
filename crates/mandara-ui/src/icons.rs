@@ -153,6 +153,10 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "pencil" => r#"<path d="M15.5 4.5l4 4L8.5 19.5l-5 1 1-5z"/><path d="M13.5 6.5l4 4"/>"#.into(),
         // A paint brush: making art (the wallpaper generator).
         "brush" => r#"<path d="M20 4l-8.2 8.2"/><path d="M15.6 7.1l1.3 1.3"/><path d="M11.8 12.2c-2.1-1.3-4.9-.1-5.3 2.6-.3 1.9-1.2 3-2.7 3.6 2.8 1.6 6.5 1.1 8.1-1.2 1-1.4 1-3.4-.1-5z"/>"#.into(),
+        // A house: the main menu's home page.
+        "home" => r#"<path d="M3.5 11L12 4l8.5 7"/><path d="M5.5 9.5V20h4.5v-5.5h4V20h4.5V9.5"/>"#.into(),
+        // An artist's palette: colours and themes.
+        "palette" => r#"<path d="M12 21a9 9 0 1 1 9-9c0 2.5-2 3.5-4 3.5h-1.8a1.7 1.7 0 0 0-1.2 2.9 1.6 1.6 0 0 1-1.1 2.6z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="14.5" cy="7" r="1"/><circle cx="17" cy="11" r="1"/>"#.into(),
         // A die: something chosen at random.
         "dice" => r#"<rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="8.8" cy="8.8" r="1.25" fill="black" stroke="none"/><circle cx="15.2" cy="8.8" r="1.25" fill="black" stroke="none"/><circle cx="12" cy="12" r="1.25" fill="black" stroke="none"/><circle cx="8.8" cy="15.2" r="1.25" fill="black" stroke="none"/><circle cx="15.2" cy="15.2" r="1.25" fill="black" stroke="none"/>"#.into(),
         // A page with lines and a version tag: release notes.
@@ -194,7 +198,7 @@ pub const ICON_NAMES: &[&str] = &[
     "eject", "usb", "box", "package", "gauge", "leaf", "download", "server", "terminal", "battery", "plug", "external", "folder",
     "stop", "heart", "alert", "zap",
     "eyedropper", "waves", "arrow-down", "arrow-up", "shield", "copy", "clock", "flame",
-    "user", "user-plus", "key", "tiles", "eye", "eye-off", "pencil", "sparkles", "brush", "dice", "release-notes",
+    "user", "user-plus", "key", "tiles", "eye", "eye-off", "pencil", "sparkles", "brush", "dice", "release-notes", "home", "palette",
 ];
 
 /// An icon element tinted with `color`.
@@ -274,27 +278,6 @@ pub fn dot(color: Color, diameter: f32) -> impl IntoElement {
     div().size(px(diameter)).rounded_full().bg(color.hsla()).flex_none()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_icon_is_valid_svg() {
-        for name in ICON_NAMES {
-            let bytes = MandaraAssets.load(&format!("icons/{name}.svg")).unwrap().unwrap_or_else(|| panic!("{name} missing"));
-            let text = std::str::from_utf8(&bytes).unwrap();
-            assert!(text.starts_with("<svg") && text.ends_with("</svg>"), "{name}");
-            // Parse with the same usvg version GPUI renders with.
-            let tree = usvg::Tree::from_data(&bytes, &usvg::Options::default())
-                .unwrap_or_else(|e| panic!("{name}: {e}"));
-            assert!(tree.root().has_children(), "{name} renders nothing");
-        }
-        assert!(MandaraAssets.load("icons/nope.svg").unwrap().is_none());
-        assert!(MandaraAssets.load("other/x.png").unwrap().is_none());
-        assert_eq!(MandaraAssets.list("icons").unwrap().len(), ICON_NAMES.len());
-    }
-}
-
 /// Renders a user-chosen icon spec: a bundled Mandara icon name, `distro`
 /// (the os-release logo), an icon-theme name, or an image path. Symbolic
 /// SVGs tint with `tint`; colour images render as they are.
@@ -327,5 +310,26 @@ pub fn any_icon_at(spec: &str, size: f32, decode_size: f32, tint: Color) -> gpui
         }
         Some(r) => div().size(px(size)).flex_none().child(img(r.path).size_full().object_fit(ObjectFit::Contain)).into_any_element(),
         None => icon("grid", size, tint).into_any_element(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_icon_is_valid_svg() {
+        for name in ICON_NAMES {
+            let bytes = MandaraAssets.load(&format!("icons/{name}.svg")).unwrap().unwrap_or_else(|| panic!("{name} missing"));
+            let text = std::str::from_utf8(&bytes).unwrap();
+            assert!(text.starts_with("<svg") && text.ends_with("</svg>"), "{name}");
+            // Parse with the same usvg version GPUI renders with.
+            let tree = usvg::Tree::from_data(&bytes, &usvg::Options::default())
+                .unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert!(tree.root().has_children(), "{name} renders nothing");
+        }
+        assert!(MandaraAssets.load("icons/nope.svg").unwrap().is_none());
+        assert!(MandaraAssets.load("other/x.png").unwrap().is_none());
+        assert_eq!(MandaraAssets.list("icons").unwrap().len(), ICON_NAMES.len());
     }
 }

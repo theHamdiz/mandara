@@ -587,7 +587,7 @@ async fn follow_daemon_setting(conn: &zbus::Connection, shared: &Arc<Shared>, wa
     let owned = shared.state.lock().active;
     if want && !owned {
         let flags = fdo::RequestNameFlags::ReplaceExisting | fdo::RequestNameFlags::AllowReplacement;
-        match conn.request_name_with_flags(BUS_NAME, flags.into()).await {
+        match conn.request_name_with_flags(BUS_NAME, flags).await {
             Ok(fdo::RequestNameReply::PrimaryOwner | fdo::RequestNameReply::AlreadyOwner) => shared.state.lock().active = true,
             Ok(_) => {
                 // Queued behind a daemon that refuses replacement (e.g.

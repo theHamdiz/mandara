@@ -39,7 +39,7 @@ use super::panel_fx::{ANGLE_DIAGONAL_DEG, ANGLE_DOWN_DEG, ANGLE_RIGHT_DEG, CARD_
 use crate::fonts::{fonts, tabular_nums};
 use crate::hub::hub;
 use crate::icons::icon;
-use crate::kit::{card, reveal, text, tokens};
+use crate::kit::{card, icon_button, reveal, text, tokens};
 use crate::state::config;
 
 pub const ID: &str = "weather";
@@ -51,7 +51,10 @@ const SCENE_FRAME: Duration = Duration::from_millis(33);
 // ── Layout ───────────────────────────────────────────────────────────────
 
 const PANEL_W_PX: f32 = 420.0;
-const PANEL_H_PX: f32 = 628.0;
+/// Before the first measurement.
+const PANEL_H_PX: f32 = 600.0;
+/// Size changes smaller than this don't resize the panel.
+const SIZE_EPSILON_PX: f32 = 0.5;
 /// Panel hero height and its temperature size; the sidebar card's.
 const PANEL_HERO_H_PX: f32 = 188.0;
 const PANEL_HERO_TEMP_PX: f32 = 58.0;
@@ -743,7 +746,17 @@ fn build_labels(key: (i64, *const ShellConfig, Lang), w: &Weather, cfg: &Arc<She
 }
 
 /// The hero: animated sky with temperature, condition and place.
-fn hero(w: &Weather, l: &Labels, palette: &MandaraPalette, height: f32, big: f32, display: SharedString) -> AnyElement {
+/// The settings button in the hero's corner (issue #14).
+const SETTINGS_BUTTON_PX: f32 = 28.0;
+/// Its backdrop over the weather art.
+const SETTINGS_BUTTON_BG: f32 = 0.22;
+
+/// Opens Studio on every weather setting (place, units, refresh, bar).
+fn open_weather_settings(cx: &mut App) {
+    crate::state::open_studio_at(Some(format!("search/{}", mandara_i18n::t("Weather"))), cx);
+}
+
+fn hero(id: &'static str, w: &Weather, l: &Labels, palette: &MandaraPalette, height: f32, big: f32, display: SharedString) -> AnyElement {
     div()
         .relative()
         .w_full()
@@ -780,6 +793,13 @@ fn hero(w: &Weather, l: &Labels, palette: &MandaraPalette, height: f32, big: f32
                             el.child(div().text_size(px(text::BODY_S)).opacity(HERO_RANGE_OPACITY).font_features(tabular_nums()).child(range))
                         }),
                 ),
+        )
+        .child(
+            div()
+                .absolute()
+                .top(px(HERO_INSET_Y_PX))
+                .right(px(HERO_INSET_Y_PX))
+                .child(icon_button(id, "sliders", SETTINGS_BUTTON_PX, Color::from_rgba8(255, 255, 255, 255), Some(Color::from_rgba8(0, 0, 0, 255).with_alpha(SETTINGS_BUTTON_BG)), |_, cx| open_weather_settings(cx))),
         )
         .into_any_element()
 }
@@ -921,12 +941,29 @@ pub fn register(r: &mut PluginRegistry) {
             );
             let pcx: PanelCx = panel_cx.clone();
             let panel_cache = cache.clone();
+            // The panel is as tall as what it shows (measured each frame).
+            let panel_size = Rc::new(Cell::new(size(px(PANEL_W_PX), px(PANEL_H_PX))));
+            let measured = panel_size.clone();
             let panel = fn_view(
                 None,
                 move |palette, _, cx| {
                     let cx: &App = cx;
                     let state = &hub(cx).read(cx).weather;
-                    let mut col = div().size_full().p(px(tokens::LG)).flex().flex_col().gap(px(tokens::MD));
+                    let fit = measured.clone();
+                    let probe = canvas(
+                        move |b, _, _| {
+                            let h = f32::from(b.size.height) + tokens::LG * 2.0;
+                            if (f32::from(fit.get().height) - h).abs() > SIZE_EPSILON_PX {
+                                fit.set(size(px(PANEL_W_PX), px(h)));
+                            }
+                        },
+                        |_, _, _, _| {},
+                    )
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full();
+                    let mut col = div().relative().flex().flex_col().gap(px(tokens::MD)).child(probe);
                     match &state.weather {
                         Some(w) => {
                             let cfg = config(cx).read(cx).snapshot();
@@ -934,14 +971,14 @@ pub fn register(r: &mut PluginRegistry) {
                             let l = labels(&mut cache, w, &cfg);
                             let display = fonts(cx).display.clone();
                             col = col
-                                .child(reveal(&pcx, REVEAL_HERO, hero(w, l, palette, PANEL_HERO_H_PX, PANEL_HERO_TEMP_PX, display)))
+                                .child(reveal(&pcx, REVEAL_HERO, hero("weather-panel-settings", w, l, palette, PANEL_HERO_H_PX, PANEL_HERO_TEMP_PX, display)))
                                 .child(reveal(&pcx, REVEAL_STATS, stats(w, l, palette)))
                                 .child(reveal(&pcx, REVEAL_HOURLY, card(palette).py(px(HOURLY_PAD_Y_PX)).child(hourly(&w.hours, &l.hours, PANEL_HOURS, palette))))
                                 .child(reveal(&pcx, REVEAL_DAILY, card(palette).py(px(DAILY_PAD_Y_PX)).child(daily(&w.days, &l.days, palette))));
                         }
                         None => col = col.child(placeholder(state, palette, PANEL_HERO_H_PX)),
                     }
-                    col.into_any_element()
+                    div().size_full().p(px(tokens::LG)).child(col).into_any_element()
                 },
                 window,
                 cx,
@@ -962,7 +999,7 @@ pub fn register(r: &mut PluginRegistry) {
                                 .flex()
                                 .flex_col()
                                 .gap(px(tokens::SM))
-                                .child(hero(w, l, palette, SIDEBAR_HERO_H_PX, SIDEBAR_HERO_TEMP_PX, display))
+                                .child(hero("weather-sidebar-settings", w, l, palette, SIDEBAR_HERO_H_PX, SIDEBAR_HERO_TEMP_PX, display))
                                 .child(card(palette).py(px(SIDEBAR_HOURLY_PAD_Y_PX)).child(hourly(&w.hours, &l.hours, SIDEBAR_HOURS, palette)))
                                 .into_any_element()
                         }
@@ -974,7 +1011,7 @@ pub fn register(r: &mut PluginRegistry) {
             );
             PluginInstance {
                 bar: Some(bar),
-                panel: Some(PanelSpec { view: panel, size: Rc::new(Cell::new(size(px(PANEL_W_PX), px(PANEL_H_PX)))) }),
+                panel: Some(PanelSpec { view: panel, size: panel_size }),
                 sidebar: Some(sidebar),
                 ..PluginInstance::empty()
             }

@@ -214,7 +214,7 @@ pub struct SnipView {
 /// Converts RGBA to the BGRA layout GPUI's renderer expects.
 fn frozen_image(capture: &Capture) -> Option<Arc<RenderImage>> {
     let mut bgra = capture.rgba.clone();
-    for px in bgra.chunks_exact_mut(4) {
+    for px in bgra.as_chunks_mut::<4>().0 {
         px.swap(0, 2);
     }
     let buffer = image::RgbaImage::from_raw(capture.width, capture.height, bgra)?;
@@ -905,7 +905,7 @@ impl Render for SnipView {
             (false, _) => t("Enter save"),
         };
         let hint: gpui::SharedString = match (&error, self.mode) {
-            (Some(e), _) => format!("{e}").into(),
+            (Some(e), _) => e.to_string().into(),
             (_, SnipMode::Region) if self.record => t("Drag to choose the area to record · Enter to start · Esc to cancel").into(),
             (_, SnipMode::Region) if self.tool != Tool::Select && candidate.is_some() => tf("Drag inside the selection to annotate · Ctrl+Z undo · {enter}", &[("enter", &enter)]).into(),
             (_, SnipMode::Region) => tf("Drag to select · A arrow · B box · C circle · Ctrl+C copy · Ctrl+S save · Ctrl+T text · {enter}", &[("enter", &enter)]).into(),

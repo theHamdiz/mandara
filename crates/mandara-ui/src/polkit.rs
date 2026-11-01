@@ -452,7 +452,7 @@ impl Render for PolkitDialog {
         if self.closing && self.appear.value() <= 0.01 {
             window.remove_window();
             // Let the next queued request open.
-            cx.defer(|cx| show_next(cx));
+            cx.defer(show_next);
         } else if moving || self.busy {
             window.request_animation_frame();
         } else {
@@ -548,7 +548,7 @@ impl Render for PolkitDialog {
         // Password pill.
         let echo = self.prompt.as_ref().is_some_and(|(_, e)| *e);
         let placeholder = self.prompt.as_ref().map(|(text, _)| text.trim().trim_end_matches(':').to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| t("Password").into());
-        let caret_on = ((self.blink_from.elapsed().as_millis() / 530) % 2 == 0) && !self.busy;
+        let caret_on = (self.blink_from.elapsed().as_millis() / 530).is_multiple_of(2) && !self.busy;
         let content = if self.input.is_empty() {
             div().text_color(p.on_surface_variant.with_alpha(0.7).hsla()).child(placeholder).into_any_element()
         } else if echo {

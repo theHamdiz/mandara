@@ -90,11 +90,10 @@ pub fn register(r: &mut PluginRegistry) {
         PluginInstance {
             bar: Some(bar),
             on_click: Some(std::rc::Rc::new(|_, cx| {
-                if let Some(b) = hub(cx).read(cx).compositor.clone() {
-                    if let Err(err) = b.switch_keyboard_layout() {
+                if let Some(b) = hub(cx).read(cx).compositor.clone()
+                    && let Err(err) = b.switch_keyboard_layout() {
                         tracing::warn!("switch keyboard layout: {err:#}");
                     }
-                }
             })),
             ..PluginInstance::empty()
         }

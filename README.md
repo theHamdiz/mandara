@@ -235,11 +235,12 @@ browser tab, without trading away speed. It took deliberate work at every layer:
   shell (bar, panels, sidebar, cards, chips, launcher, OSD, dock), keeps
   nested corners concentric, and updates live, open panels included.
 - **Bar, your way:** edge frame (flush or floating), glass pills, island, a
-  24 px **hairline** dense with live stats, a single **micro pill**, or a slim
+  24 px **hairline** dense with live stats, a single **micro pill**, a
+  **notch** that hangs from the top edge on curved shoulders, or a slim
   **side bar** on the left or right edge with an optional screen frame
   (panels open sideways from it). Each style has its own radius, item padding
-  and spacing, separators, center-group alignment, accent tint, glass rim,
-  shadow, and text and icon size.
+  and spacing, separators, group capsules, center-group alignment, accent
+  tint, glass rim, shadow, and text and icon size.
 - **Panels you can shape:** drop-down panels get width, maximum height,
   padding, gap to the bar, anchoring, opacity, shadow, an open animation
   (morph, fade and slide, or none) and their own spring; the sidebar and

@@ -63,7 +63,7 @@ mandara msg theme set mandara-corniche      # theme list, current, next, mode to
 mandara msg theme mode toggle
 mandara msg look apply corniche-dusk        # look list; look restore brings back your own setup
 mandara msg bar position left               # top|bottom|left|right (left/right = the side bar)
-mandara msg bar layout hairline             # edge-frame|glass-pills|island|hairline|micro|next
+mandara msg bar layout hairline             # edge-frame|glass-pills|island|hairline|micro|notch|next
 mandara msg desktop edit                    # move, resize, add and remove desktop widgets on the desktop (off|toggle)
 mandara msg desktop widgets hide            # show|hide|toggle every desktop widget at once
 mandara msg desktop menu DP-1 800 500       # the desktop's right-click menu at a point (logical px)
@@ -171,6 +171,10 @@ mandara msg display brightness all 60  # DDC/CI external monitors; display brigh
 mandara msg brightness up 10           # down, set, status (laptop backlight through logind)
 mandara msg nightlight toggle          # on|off|auto, status, temperature <K>, schedule sun|fixed|always, preview <K> [s]
 ```
+
+`nightlight status` lists the screens it warms (`outputs`), the ones that
+refused (`held_by_another_app`), the night-light apps it found running
+(`held_by`) and, if its connection dropped, `error`.
 
 ## Power, idle and session
 

@@ -79,6 +79,7 @@ pub enum Prompt<'a> {
 /// Answers PAM's questions. `Ok(None)` acknowledges a message, `Err(())`
 /// aborts the conversation (PAM then fails with `PAM_CONV_ERR`).
 pub trait Conversation {
+    #[allow(clippy::result_unit_err, reason = "PAM's conversation has one failure, PAM_CONV_ERR; there is nothing to carry")]
     fn answer(&mut self, prompt: Prompt<'_>) -> Result<Option<String>, ()>;
 }
 

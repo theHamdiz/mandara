@@ -224,7 +224,9 @@ impl CommandSpec {
 /// removed), or `None` to let it run. Installed by the shell as a global;
 /// without one every command runs.
 #[derive(Clone)]
-pub struct CommandGate(pub Rc<dyn Fn(&str, &App) -> Option<String>>);
+pub struct CommandGate(pub GateFn);
+/// Why a command may not run now (`None`: it may).
+pub type GateFn = Rc<dyn Fn(&str, &App) -> Option<String>>;
 
 impl gpui::Global for CommandGate {}
 

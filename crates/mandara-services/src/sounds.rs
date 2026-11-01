@@ -288,7 +288,7 @@ impl Clip {
 
     /// Mono stays mono; anything wider folds down to stereo (even
     /// channels left, odd channels right).
-    fn to_stereo_at_most(mut self) -> Self {
+    fn into_stereo_at_most(mut self) -> Self {
         let ch = usize::from(self.channels);
         if ch <= 2 {
             return self;
@@ -321,7 +321,7 @@ pub fn decode(path: &Path) -> Result<Clip, String> {
     if clip.samples.is_empty() || clip.channels == 0 || clip.rate == 0 {
         return Err(format!("{}: no audio", path.display()));
     }
-    Ok(clip.to_stereo_at_most())
+    Ok(clip.into_stereo_at_most())
 }
 
 fn decode_vorbis(path: &Path) -> Result<Clip, String> {

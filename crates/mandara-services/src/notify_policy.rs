@@ -310,13 +310,15 @@ mod tests {
 
     #[test]
     fn rules_match_first_enabled_and_apply_effects() {
-        let mut cfg = NotificationsConfig::default();
-        cfg.rules = vec![
-            NotificationRule { enabled: false, block: true, ..NotificationRule::for_app("spotify") },
-            NotificationRule { popup: false, sound: false, ..NotificationRule::for_app("^spot") },
-            NotificationRule { set_urgency: Some(UrgencyLevel::Critical), timeout: Some(2.0), summary: "backup (done|failed)".into(), ..NotificationRule::default() },
-            NotificationRule { block: true, ..NotificationRule::for_app("spam[") },
-        ];
+        let cfg = NotificationsConfig {
+            rules: vec![
+                NotificationRule { enabled: false, block: true, ..NotificationRule::for_app("spotify") },
+                NotificationRule { popup: false, sound: false, ..NotificationRule::for_app("^spot") },
+                NotificationRule { set_urgency: Some(UrgencyLevel::Critical), timeout: Some(2.0), summary: "backup (done|failed)".into(), ..NotificationRule::default() },
+                NotificationRule { block: true, ..NotificationRule::for_app("spam[") },
+            ],
+            ..Default::default()
+        };
         let p = Policy::new(cfg);
         let d = p.decide(&incoming("Spotify", "Song", Urgency::Normal), false);
         assert_eq!((d.popup, d.history, d.sound, d.rule), (false, true, false, Some(1)));

@@ -706,7 +706,7 @@ impl StudioView {
         };
         cx.spawn(async move |cx| {
             let result = task.await;
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 st(cx).note = match result {
                     Ok(_) => Some((t("Confirm the install on screen").to_string(), false)),
                     Err(e) => Some((e, true)),
@@ -722,7 +722,7 @@ impl StudioView {
                     break;
                 }
             }
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 let s = st(cx);
                 s.installed_at = None;
                 s.entries = None;

@@ -390,6 +390,7 @@ Apply {n} changes
 Applying the patch…
 Applying…
 Apps
+Apps & tools
 Apps and packages
 Apps appear here with their own volume while they play.
 Apps can ask for their own sound
@@ -1028,6 +1029,7 @@ Decoration
 Deep focus
 Deep green: a giant stacked clock behind the subject and a dock media chip.
 Default
+Default ({font})
 Default apps per category (from mimeapps.list)
 Default column width
 Default list
@@ -1205,6 +1207,7 @@ Drop plugins here
 Drop shadows under windows
 Drop to install
 Drop-down panels
+Drop-down panels and plugin cards
 Dry run
 Dry run (MANDARA_UNINSTALL_DRY_RUN): nothing will be removed or moved.
 Dry run: nothing changed. {app} would be removed and {count} items moved to the Trash.
@@ -1225,6 +1228,7 @@ Each new one replaces the current wallpaper
 Each note is a Markdown file, each topic a folder in here — point it at a synced folder or an Obsidian vault (empty: Mandara's data folder)
 Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence.
 Each repair is safe: your compositor config only ever gets one include line, with a backup.
+Each surface
 Eastern Arabic numerals
 Edge
 Edge dock
@@ -1599,6 +1603,7 @@ Give an app your own icon (theme icon name or image path; empty restores it)
 Give one display its own wallpaper (clear = follow the main one)
 Give the profile a name
 Glass
+Glass menu
 Glass opacity
 Glass pills
 Glass pills and island: their corners. Edge frame: the hover chips, and the frame's ends when it floats
@@ -1758,6 +1763,7 @@ How often to look for updates while the chip is in the bar
 How often to re-render, in milliseconds (0 = only after events).
 How often transfer rates are measured
 How panels appear
+How see-through the main menu's glass is
 How the critical warning appears
 How the media panel draws the live audio spectrum
 How the warning appears
@@ -1913,6 +1919,7 @@ It crashes or runs past its time budget: {error}
 It fails to start: {error}
 It holds Mandara Studio, the settings and the session actions
 It is the on-screen way to lock, log out, restart and shut down
+It lost its connection to the compositor ({error}). Turn night light off and on again to retry.
 It opens apps and runs Mandara's commands, including the one that turns plugins back on
 It poses as Mandara's built-in {plugin} plugin
 It runs commands without being asked ({command})
@@ -2125,6 +2132,7 @@ Lock keys
 Lock once when the session starts (useful with autologin); shell restarts don't lock
 Lock requests from the session menu, idle daemons and loginctl lock-session open Mandara's lock screen
 Lock screen
+Lock screen clock
 Lock screen date
 Lock screen time
 Lock the layout: shuffles and variations keep this seed
@@ -2221,11 +2229,13 @@ Manage
 Manage compositor drop-in
 Mandara
 Mandara Corniche
+Mandara Login shows your wallpaper when your account is picked (a copy goes to /var/lib/mandara-login)
 Mandara Obsidian
 Mandara Shell
 Mandara Shell isn't running
 Mandara Studio
 Mandara Studio (this window)
+Mandara Studio itself
 Mandara Studio…
 Mandara answers pairing codes and connection requests (restart the shell to apply)
 Mandara asks for your administrator password, backs up greetd's PAM file and changes only its own marked lines.
@@ -2259,6 +2269,7 @@ Mandara writes nothing to other apps until you switch them on. Switching one off
 Mandara {version} is already the latest version
 Mandara {version} is available
 Mandara {version} is the latest version
+Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed
 Mandara's KeePassXC dialog is off (Studio → General → Keyrings & passwords)
 MangoWM
 MangoWM and Niri only
@@ -2491,6 +2502,7 @@ Next wallpaper: due now (shortly after the shell starts)
 Night bay
 Night dimming
 Night light
+Night light can't warm your screen
 Night light schedule: sunset to sunrise, fixed times, or always
 Night light state, schedule and next change (JSON)
 Night light uses wlr-gamma-control, which MangoWM, Hyprland and Sway offer. Niri doesn't implement it yet; there, use its own settings or a tool built for it.
@@ -2552,6 +2564,7 @@ No failed units
 No files match “{query}”
 No filesystem access
 No folder to write into
+No fonts match
 No frames yet — the shell only draws while something changes. Open a panel to see it work.
 No hotspot has been set up yet
 No icons named like “{query}” in your theme
@@ -2614,6 +2627,7 @@ No results
 No rules yet: every app follows the settings above.
 No saved connection "{name}"
 No saved networks
+No screen took the warmer colours. Run `mandara msg nightlight status` to see what Mandara found.
 No sessions yet
 No settings match “{query}”
 No shadow
@@ -2922,6 +2936,7 @@ Palette
 Panel animation
 Panel edges
 Panel radius
+Panels & plugins
 Panels wider or narrower than their natural width
 Panic inside a command (debug builds; tests fault isolation)
 Part of Mandara's core, so it is always on. {reason}
@@ -3400,6 +3415,7 @@ Right / bottom
 Right click
 Right tile
 Right-click empty bar space
+Right-click on empty bar space
 Rim brightness
 Rim intensity
 Rim width
@@ -3565,6 +3581,7 @@ Search cities (English or Arabic) and IANA time zones
 Search every icon in your theme…
 Search every note
 Search field
+Search fonts, or type any name
 Search installed apps
 Search looks at names, ids and descriptions.
 Search places by name (Open-Meteo geocoding)
@@ -3716,6 +3733,7 @@ Show more
 Show names
 Show names on hover
 Show on
+Show on the login screen
 Show on-screen displays
 Show one list (or all) in the card and panel
 Show one topic (or all) in the card and panel
@@ -4088,9 +4106,12 @@ The bar is on the other edge: the launcher opens from the bare screen edge inste
 The bar item, or none for no bar item.
 The bar item, panel and sidebar card re-render: no restart
 The bar's battery chip breathes coral while the charge is critical
+The bar's items
+The bar's main menu
 The bar, the lock screen and prayer times all follow the clock, so they show the wrong time there.
 The battery is nearly empty. Plug in the charger to cancel.
 The battery reading turns coral at or below this charge
+The big clock on the lock screen
 The carousel opened from the bar, the main menu or `mandara msg wallpaper picker toggle`
 The clipboard thread failed
 The clock keeps its own time now
@@ -4108,6 +4129,7 @@ The cursor theme catalog (variants, licence, installed, active) and other instal
 The date next to the time
 The date under the clock
 The day
+The desktop's menu
 The displays changed meanwhile; try again
 The dock hides until you touch the screen edge.
 The dock hides while a window covers it. Touch the screen edge to bring it back.
@@ -4145,6 +4167,8 @@ The last log lines of a container
 The link has no account name
 The link has no secret
 The list is full — remove a widget to add another
+The lock screen's text
+The main menu is see-through glass with solid cards on it
 The name is empty
 The network name is empty
 The new release is plugin {new}, not {old}; reinstall it from the marketplace
@@ -4262,6 +4286,7 @@ This session
 This sign-in method needs more than a password
 This style uses Compact height
 This tab is empty
+This update wasn't checked against Mandara's signature; check for updates again
 This username is already in use
 This version ({version}) isn't recommended: {class}: {reason}
 This volume is encrypted. Enter its passphrase to open it.
@@ -4504,6 +4529,7 @@ Until the schedule next changes
 Untitled note
 Up to 150 %; can distort
 Up to date
+Up {time}
 Upcoming
 Upcoming calendar events as JSON
 Upcoming days listed under the month
@@ -4545,6 +4571,7 @@ Use the time an app asks for instead of the values above
 Use this variation
 Use your own stiffness and damping instead of the global motion settings
 Use {zone}
+Use “{font}”
 Used by your config
 Used by {tool}
 Used for most text
@@ -4668,6 +4695,7 @@ What happens (needs your password)
 What happens to the file you installed from
 What is open: panel, sidebar, launcher, power menu, wallpaper picker; whether the launcher opens on hover
 What it does
+What opens when you right-click the bar between and around its items
 What scripts can show
 What the bar shows for this layout, e.g. EN or ع
 What the idle stage, the critical battery action and the session menu's Sleep do
@@ -4715,6 +4743,7 @@ Whole output
 Wi-Fi
 Wi-Fi and wired connectivity
 Wi-Fi is off
+Widgets on the desktop (a widget's own font wins)
 Widgets on “{tab}”
 Width
 Width in the center
@@ -5168,14 +5197,17 @@ which kind of file or link
 which prompt
 which recognizer(s)
 which sound
+widgets
 window id
 words to look for
 your compositor
 your default
 {account} is already added
+{action} didn't work
 {action} failed ({call}): {error}
 {action} in {seconds} s
 {action} — press and hold
+{apps} already controls the colours of {outputs}. Quit it, and take it out of your startup, to use Mandara's night light.
 {app} holds {profile}
 {app} holds {profile} · {reason}
 {app} is installed
@@ -5247,6 +5279,7 @@ your default
 {file} already exists
 {file} doesn't compile: {error}
 {file} doesn't include {drop_in}
+{file} doesn't match the signed checksums
 {file} failed verification (sha256 {got})
 {file} has no published checksum; not installing it
 {file} is a program, not an app package: move it to ~/.local/bin to use it.
@@ -5321,6 +5354,7 @@ your default
 {n}h
 {n}m
 {on} of {total} plugins on
+{outputs} refused the warmer colours: another night-light app may hold them (wlsunset, gammastep, hyprsunset…), or the compositor or display driver doesn't allow it.
 {package} is part of your system and can't be removed here
 {page} is back to its defaults — Undo is under Recent changes
 {path} already exists, so no command is added

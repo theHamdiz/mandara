@@ -248,7 +248,7 @@ pub fn log_path() -> PathBuf {
     if let Some(p) = LOG_OVERRIDE.lock().clone() {
         return p;
     }
-    dirs::state_dir().unwrap_or_else(|| mandara_config::paths::cache_dir()).join("mandara").join("hooks.log")
+    dirs::state_dir().unwrap_or_else(mandara_config::paths::cache_dir).join("mandara").join("hooks.log")
 }
 
 fn log_file() -> Option<std::fs::File> {

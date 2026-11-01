@@ -265,22 +265,11 @@ pub fn hashes(root: &Path, components: &[Component]) -> BTreeMap<String, String>
         }
         own.insert(c.name.clone(), h.finalize().to_vec());
     }
-    // Fold in dependencies, transitively (sorted, cycle-safe).
-    fn closure(name: &str, comps: &[Component], seen: &mut BTreeSet<String>) {
-        if !seen.insert(name.to_string()) {
-            return;
-        }
-        if let Some(c) = comps.iter().find(|c| c.name == name) {
-            for d in &c.deps {
-                closure(d, comps, seen);
-            }
-        }
-    }
+    // Fold in dependencies, transitively.
     components
         .iter()
         .map(|c| {
-            let mut seen = BTreeSet::new();
-            closure(&c.name, components, &mut seen);
+            let seen = dep_closure(&c.name, components);
             let mut h = Sha256::new();
             for name in &seen {
                 if let Some(o) = own.get(name) {
@@ -292,6 +281,32 @@ pub fn hashes(root: &Path, components: &[Component]) -> BTreeMap<String, String>
             (c.name.clone(), hex(&digest[..HASH_BYTES]))
         })
         .collect()
+}
+
+/// `name` and every workspace component it depends on, transitively
+/// (sorted, cycle-safe): what its content hash covers.
+pub fn dep_closure(name: &str, components: &[Component]) -> BTreeSet<String> {
+    fn walk(name: &str, comps: &[Component], seen: &mut BTreeSet<String>) {
+        if !seen.insert(name.to_string()) {
+            return;
+        }
+        if let Some(c) = comps.iter().find(|c| c.name == name) {
+            for d in &c.deps {
+                walk(d, comps, seen);
+            }
+        }
+    }
+    let mut seen = BTreeSet::new();
+    walk(name, components, &mut seen);
+    seen
+}
+
+/// The folders of [`dep_closure`]: whose commits decide `name`'s bump, so a
+/// `feat` in any crate the shell is built from bumps the shell's minor
+/// version, not only one in its own folder.
+pub fn closure_dirs(name: &str, components: &[Component]) -> Vec<PathBuf> {
+    let names = dep_closure(name, components);
+    components.iter().filter(|c| names.contains(&c.name)).map(|c| c.dir.clone()).collect()
 }
 
 /// Reads `versions.toml`: `[name] version = "…" hash = "…"`.
@@ -394,6 +409,16 @@ mod tests {
         assert_eq!(bump("1.4.2", Bump::Major), "2.0.0");
         assert_eq!(bump("0.3.9", Bump::Major), "0.4.0");
         assert_eq!(bump("0.1.0-dev+abc", Bump::Patch), "0.1.1");
+    }
+
+    #[test]
+    fn a_component_bumps_from_commits_anywhere_in_its_dependencies() {
+        let comp = |name: &str, dir: &str, deps: &[&str]| Component { name: name.into(), kind: Kind::Library, dir: dir.into(), manifests: Vec::new(), version: "0.1.0".into(), deps: deps.iter().map(|d| d.to_string()).collect() };
+        let comps = [comp("mandara-app", "crates/mandara-app", &["mandara-services", "mandara-app"]), comp("mandara-services", "crates/mandara-services", &["mandara-delta"]), comp("mandara-delta", "tools/mandara-delta", &[]), comp("mandara-studio", "crates/mandara-studio", &[])];
+        let dirs = closure_dirs("mandara-app", &comps);
+        assert_eq!(dirs, [PathBuf::from("crates/mandara-app"), PathBuf::from("crates/mandara-services"), PathBuf::from("tools/mandara-delta")]);
+        assert_eq!(closure_dirs("mandara-studio", &comps), [PathBuf::from("crates/mandara-studio")]);
+        assert!(closure_dirs("missing", &comps).is_empty());
     }
 
     #[test]

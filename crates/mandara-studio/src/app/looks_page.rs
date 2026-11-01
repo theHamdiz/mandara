@@ -199,6 +199,7 @@ fn thumbnail(look: &LookDef, lp: &MandaraPalette, cfg: &ShellConfig) -> AnyEleme
         (_, BarLayout::FloatingPills) => pills(div().absolute().top(px(THUMB_FRAME_PX * 2.0)).left(px(THUMB_INSET_PX)).right(px(THUMB_INSET_PX)).ltr_row().justify_between()),
         (_, BarLayout::ContiguousIsland) => div().absolute().top(px(THUMB_FRAME_PX * 2.0)).left_0().right_0().row().justify_center().child(div().w(px(THUMB_PILL_W_PX[2] * 2.5)).h(px(THUMB_BAR_PX)).rounded_full().bg(bar_fill)),
         (_, BarLayout::MinimalEdge) => div().absolute().top_0().left_0().right_0().h(px(THUMB_BAR_PX)).bg(bar_fill),
+        (_, BarLayout::Notch) => div().absolute().top_0().left(px(THUMB_INSET_PX * 2.0)).right(px(THUMB_INSET_PX * 2.0)).h(px(THUMB_BAR_PX)).rounded_b(px(THUMB_BAR_PX / 2.0)).bg(bar_fill),
     });
     if look.screen_frame && side {
         root = root.child(div().absolute().inset_0().border_t(px(THUMB_FRAME_PX)).border_r(px(THUMB_FRAME_PX)).border_b(px(THUMB_FRAME_PX)).border_color(bar_fill).rounded(px(RADIUS_14_PX)));

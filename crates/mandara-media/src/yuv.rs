@@ -393,7 +393,7 @@ fn row_pairs<S: Sample, const RGBA: bool>(y: &[S], u: &[S], v: &[S], out: &mut [
         put::<RGBA>(px, clamp8(yv + buv), clamp8(yv - guv), clamp8(yv + ruv));
     };
     let pairs = y.len() / 2;
-    for (((o, yy), uu), vv) in out[..pairs * 8].chunks_exact_mut(8).zip(y.chunks_exact(2)).zip(u.iter()).zip(v.iter()) {
+    for (((o, yy), uu), vv) in out[..pairs * 8].as_chunks_mut::<8>().0.iter_mut().zip(y.as_chunks::<2>().0).zip(u.iter()).zip(v.iter()) {
         let (cu, cv) = ((uu.get() >> shift) - 128, (vv.get() >> shift) - 128);
         let (ruv, guv, buv) = (c.rv * cv, c.gu * cu + c.gv * cv, c.bu * cu);
         let (a, b) = o.split_at_mut(4);
@@ -424,7 +424,7 @@ mod tests {
             let c = vec![128u8; 4];
             let (out, w, h) = to_bgra(&frame(&y, &c, &c, 4, 4, false, Matrix::Bt709), false);
             assert_eq!((w, h), (4, 4));
-            for px in out.chunks_exact(4) {
+            for px in out.as_chunks::<4>().0 {
                 for ch in &px[..3] {
                     assert!((*ch as i32 - want as i32).abs() <= 1, "Y={luma}: got {px:?}, want {want}");
                 }
@@ -551,7 +551,7 @@ mod tests {
         let full = Crop { x: 0, y: 0, w: 8, h: 8 };
         let bgra = region(&f, full, 8, 8, PixelOrder::Bgra, 1);
         let rgba = region(&f, full, 8, 8, PixelOrder::Rgba, 1);
-        for (a, b) in bgra.chunks_exact(4).zip(rgba.chunks_exact(4)) {
+        for (a, b) in bgra.as_chunks::<4>().0.iter().zip(rgba.as_chunks::<4>().0) {
             assert_eq!([a[2], a[1], a[0], a[3]], [b[0], b[1], b[2], b[3]]);
         }
     }

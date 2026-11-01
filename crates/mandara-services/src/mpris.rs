@@ -313,11 +313,10 @@ async fn run(updates: async_channel::Sender<Option<MediaState>>, commands: async
                 if command == MediaCommand::Refresh {
                     continue;
                 }
-                if let (Some(bus), Some(state)) = (followed.clone(), last.clone()) {
-                    if let Err(err) = execute(&conn, &bus, &state, command).await {
+                if let (Some(bus), Some(state)) = (followed.clone(), last.clone())
+                    && let Err(err) = execute(&conn, &bus, &state, command).await {
                         tracing::warn!("MPRIS command failed: {err:#}");
                     }
-                }
             }
         }
     }
@@ -554,6 +553,20 @@ fn resolve_art(url: &str, cache: &ArtCache, ready: &async_channel::Sender<()>) -
     (None, Vec::new())
 }
 
+/// Extensions cached album art is saved under.
+const ART_EXTENSIONS: [&str; 5] = ["jpg", "png", "webp", "gif", "img"];
+
+/// The cache extension for a decoded header's format (`img` when unknown).
+fn art_extension(format: Option<image::ImageFormat>) -> &'static str {
+    match format {
+        Some(image::ImageFormat::Jpeg) => "jpg",
+        Some(image::ImageFormat::Png) => "png",
+        Some(image::ImageFormat::WebP) => "webp",
+        Some(image::ImageFormat::Gif) => "gif",
+        _ => "img",
+    }
+}
+
 fn fetch_art(url: &str) -> Option<PathBuf> {
     if let Some(path) = url.strip_prefix("file://") {
         let path = PathBuf::from(percent_decode(path));
@@ -565,22 +578,27 @@ fn fetch_art(url: &str) -> Option<PathBuf> {
     let mut hasher = DefaultHasher::new();
     url.hash(&mut hasher);
     let dir = art_cache_dir();
-    let path = dir.join(format!("{:016x}", hasher.finish()));
-    if path.exists() {
-        return Some(path);
+    let stem = format!("{:016x}", hasher.finish());
+    // Cached as `<hash>.<ext>` (the format's usual extension), so anything
+    // that goes by the name can read it too.
+    if let Some(cached) = ART_EXTENSIONS.iter().map(|ext| dir.join(format!("{stem}.{ext}"))).find(|p| p.exists()) {
+        return Some(cached);
     }
-    let result = (|| -> Result<()> {
+    let result = (|| -> Result<PathBuf> {
         std::fs::create_dir_all(&dir)?;
         let bytes = ureq::get(url).call()?.body_mut().with_config().limit(ART_MAX_BYTES).read_to_vec()?;
         // Validate the header (format + size) without decoding the pixels.
-        image::ImageReader::new(std::io::Cursor::new(&bytes)).with_guessed_format()?.into_dimensions()?;
+        let reader = image::ImageReader::new(std::io::Cursor::new(&bytes)).with_guessed_format()?;
+        let ext = art_extension(reader.format());
+        reader.into_dimensions()?;
+        let path = dir.join(format!("{stem}.{ext}"));
         let tmp = path.with_extension("tmp");
         std::fs::write(&tmp, &bytes)?;
         std::fs::rename(&tmp, &path)?;
-        Ok(())
+        Ok(path)
     })();
     match result {
-        Ok(()) => Some(path),
+        Ok(path) => Some(path),
         Err(err) => {
             tracing::debug!("album art download failed for {url}: {err:#}");
             None
@@ -592,6 +610,14 @@ fn fetch_art(url: &str) -> Option<PathBuf> {
 mod tests {
     use super::*;
     use zbus::zvariant::Value;
+
+    #[test]
+    fn cached_art_gets_its_formats_extension() {
+        assert_eq!(art_extension(Some(image::ImageFormat::Jpeg)), "jpg");
+        assert_eq!(art_extension(Some(image::ImageFormat::WebP)), "webp");
+        assert_eq!(art_extension(None), "img");
+        assert!(ART_EXTENSIONS.contains(&art_extension(Some(image::ImageFormat::Png))));
+    }
 
     fn ov(v: Value<'_>) -> OwnedValue {
         v.try_to_owned().unwrap()

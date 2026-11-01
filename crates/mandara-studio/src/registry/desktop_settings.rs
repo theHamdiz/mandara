@@ -7,6 +7,8 @@ use mandara_i18n::tk;
 
 use super::{Control, Section, Setting, s};
 
+/// `bar.right_click`.
+const BAR_RIGHT_CLICK: &[(&str, &str)] = &[("main-menu", tk("The bar's main menu")), ("desktop-menu", tk("The desktop's menu"))];
 const AUTO_HIDE: &[(&str, &str)] = &[("never", tk("Never")), ("always", tk("Always")), ("overlap", tk("When a window covers it")), ("fullscreen", tk("Fullscreen only"))];
 const FILL: &[(&str, &str)] = &[("cover", tk("Fill")), ("contain", tk("Fit")), ("stretch", tk("Stretch")), ("center", tk("Center")), ("tile", tk("Tile"))];
 const TRANSITION: &[(&str, &str)] = &[("fade", tk("Fade")), ("wipe", tk("Wipe")), ("grow", tk("Grow")), ("none", tk("None"))];
@@ -40,11 +42,15 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Bar, tk("Behaviour"), "/bar/auto_hide/delay_ms", tk("Hide delay"), tk("How long the bar stays after the pointer leaves"), slider(0.0, 3000.0, 50.0, " ms")),
         s(Bar, tk("Behaviour"), "/bar/auto_hide/reveal_on_workspace_switch", tk("Peek on workspace switch"), tk("Show the hidden bar briefly when you change workspace or tag"), Toggle),
         s(Bar, tk("Behaviour"), "/bar/click_through", tk("Click through empty space"), tk("Clicks between bar items reach the window below (no main menu on right-click there)"), Toggle),
+        s(Bar, tk("Behaviour"), "/bar/right_click", tk("Right-click on empty bar space"), tk("What opens when you right-click the bar between and around its items"), Choice(BAR_RIGHT_CLICK)),
+        s(Bar, tk("Main menu"), "/panels/menu_translucent", tk("Glass menu"), tk("The main menu is see-through glass with solid cards on it"), Toggle),
+        s(Bar, tk("Main menu"), "/panels/menu_opacity", tk("Glass opacity"), tk("How see-through the main menu's glass is"), Control::Slider { min: 0.2, max: 1.0, step: 0.01, unit: "" }),
         s(Bar, tk("Behaviour"), "/bar/over_fullscreen", tk("Show over fullscreen windows"), tk("Keeps the bar and its panels above fullscreen apps; applies after a shell restart"), Toggle),
         // Wallpaper
         s(Wallpaper, tk("Desktop"), "/wallpaper/fill", tk("Fill mode"), tk("How images that don't match the screen are placed"), Choice(FILL)),
         s(Wallpaper, tk("Desktop"), "/wallpaper/fill_color", tk("Fill color"), tk("Behind Fit and Center (hex)"), Text { placeholder: "#000000" }),
         s(Wallpaper, tk("Desktop"), "/wallpaper/transition", tk("Transition"), tk("How a new wallpaper replaces the old one"), Choice(TRANSITION)),
+        s(Wallpaper, tk("Desktop"), "/wallpaper/share_with_login", tk("Show on the login screen"), tk("Mandara Login shows your wallpaper when your account is picked (a copy goes to /var/lib/mandara-login)"), Toggle),
         s(Wallpaper, tk("Light & dark"), "/wallpaper/variants/light", tk("Light wallpaper"), tk("Shown while the theme is light; empty uses the main wallpaper"), OptionalText { placeholder: "~/Pictures/Wallpapers/day.jpg" }),
         s(Wallpaper, tk("Light & dark"), "/wallpaper/variants/dark", tk("Dark wallpaper"), tk("Shown while the theme is dark; per-display wallpapers: mandara msg wallpaper output"), OptionalText { placeholder: "~/Pictures/Wallpapers/night.jpg" }),
         s(Wallpaper, tk("Slideshow"), "/wallpaper/slideshow/enabled", tk("Slideshow"), tk("Change the wallpaper on a timer"), Toggle),

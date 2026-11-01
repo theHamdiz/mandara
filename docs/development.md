@@ -4,6 +4,18 @@ Everything here is Rust, run through `cargo xtask` (the `xtask/` crate). The
 system programs it starts are MangoWM, `dbus-daemon`, `bwrap`, PipeWire
 (`pipewire`, `pipewire-pulse`, `wireplumber`, `pactl`, `paplay`) and `grim`.
 
+## Warnings are errors
+
+`[workspace.lints]` in `Cargo.toml` denies every compiler warning and
+clippy's default lints in every crate, and CI runs
+`cargo clippy --workspace --all-targets`, so any warning fails the build.
+Run it before you call a change done. Fix the cause; when an exception is
+truly right, put it on that one item with its reason:
+
+```rust
+#[expect(clippy::large_enum_variant, reason = "one per frame; boxing would allocate per frame")]
+```
+
 ## The demo sandbox: `cargo xtask sandbox`
 
 A private, headless Mandara desktop for screenshots, demos and end-to-end

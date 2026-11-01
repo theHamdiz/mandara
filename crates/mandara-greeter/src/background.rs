@@ -204,6 +204,34 @@ impl Background {
         bg
     }
 
+    /// Switches to other sources (another person's wallpaper, or back to
+    /// the configured clips and stills), fading over what is on screen.
+    pub fn set_sources(&mut self, clips: Vec<PathBuf>, stills: Vec<PathBuf>, video_enabled: bool) {
+        if self.opts.clips == clips && self.opts.stills == stills && self.opts.video_enabled == video_enabled {
+            return;
+        }
+        self.failed_clips = vec![false; clips.len()];
+        self.opts.clips = clips;
+        self.opts.stills = stills;
+        self.opts.video_enabled = video_enabled;
+        self.video_given_up = false;
+        self.next_clip = 0;
+        self.next_still = 0;
+        self.failed_stills = 0;
+        self.loading_still = None;
+        if self.video_active() {
+            self.start_clip(0, self.opts.lite);
+        } else {
+            // A still on top would otherwise wait out its life first.
+            self.request_still();
+        }
+    }
+
+    /// The configured clips / stills this backdrop shows now.
+    pub fn sources(&self) -> (&[PathBuf], &[PathBuf], bool) {
+        (&self.opts.clips, &self.opts.stills, self.opts.video_enabled)
+    }
+
     fn video_active(&self) -> bool {
         self.opts.video_enabled && !self.video_given_up && self.failed_clips.iter().any(|f| !f)
     }
@@ -708,7 +736,10 @@ pub fn grain(vw: f32, vh: f32) -> AnyElement {
 /// Decodes and downsizes a still to at most ~1.25× the output (Ken Burns
 /// zooms in up to 16 %), as BGRA.
 fn load_still(path: &std::path::Path, target: (u32, u32), blur: f32) -> Option<(Arc<RenderImage>, (u32, u32))> {
-    let img = image::open(path).map_err(|e| tracing::warn!("background {}: {e}", path.display())).ok()?;
+    let img = image::ImageReader::open(path)
+        .and_then(|r| r.with_guessed_format())
+        .map_err(image::ImageError::IoError)
+        .and_then(|r| r.decode()).map_err(|e| tracing::warn!("background {}: {e}", path.display())).ok()?;
     let (tw, th) = ((target.0.max(640) as f32 * 1.25) as u32, (target.1.max(360) as f32 * 1.25) as u32);
     let scale = (tw as f32 / img.width() as f32).max(th as f32 / img.height() as f32);
     let img = if scale < 1.0 {
@@ -724,7 +755,7 @@ fn load_still(path: &std::path::Path, target: (u32, u32), blur: f32) -> Option<(
         img
     };
     let mut rgba = img.to_rgba8();
-    for px in rgba.chunks_exact_mut(4) {
+    for px in rgba.as_chunks_mut::<4>().0 {
         px.swap(0, 2);
     }
     let size = (rgba.width(), rgba.height());

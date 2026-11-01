@@ -96,7 +96,13 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
     // `power/<part>` scrolls the Power & idle page to that part.
     let power_part = section.and_then(|t| t.strip_prefix("power/")).map(str::to_string);
     let cursor = section.is_some_and(cursor_target);
-    let section = if tab.is_some() { Some(registry::Section::Plugins) } else { section.and_then(resolve_section) };
+    // `search/<text>` opens the results for that text.
+    let search = section.and_then(|t| t.strip_prefix("search/")).filter(|q| !q.trim().is_empty()).map(str::to_string);
+    let section = match (&search, &tab) {
+        (Some(_), _) => None,
+        (None, Some(_)) => Some(registry::Section::Plugins),
+        (None, None) => section.and_then(resolve_section),
+    };
     let show = move |view: &mut StudioView, window: &mut gpui::Window, cx: &mut gpui::Context<StudioView>| {
         if let Some(s) = section {
             view.show(s, cx);
@@ -115,6 +121,9 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
         }
         if cursor {
             view.show_cursor_section(cx);
+        }
+        if let Some(q) = &search {
+            view.show_search(q, cx);
         }
     };
     if let Some(handle) = cx.try_global::<StudioWindow>().and_then(|w| w.0)
@@ -195,11 +204,10 @@ pub fn run(section: Option<&str>, cx: &mut App) {
             // A display test's revert timer lives in this process: closing
             // Studio mid-countdown must not make an untested mode stick
             // (the monitor might not show it), so revert now.
-            if mandara_services::outputs::revert_remaining().is_some() {
-                if let Err(err) = mandara_services::outputs::revert_now() {
+            if mandara_services::outputs::revert_remaining().is_some()
+                && let Err(err) = mandara_services::outputs::revert_now() {
                     tracing::warn!("reverting the display test on close: {err}");
                 }
-            }
             cx.quit();
         }
     })

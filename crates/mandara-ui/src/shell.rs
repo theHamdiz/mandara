@@ -180,6 +180,10 @@ const SEPARATOR_DOT_PX: f32 = 3.0;
 const SEPARATOR_LINE_W_PX: f32 = 1.0;
 const SEPARATOR_LINE_FRAC: f32 = 0.5;
 const SEPARATOR_ALPHA: f32 = 0.22;
+/// `bar.capsules`: each zone's soft capsule (its overhang past the chips
+/// and its fill).
+const CAPSULE_PAD_PX: f32 = 4.0;
+const CAPSULE_ALPHA: f32 = 0.07;
 /// Alpha of the hairline bar's accent line.
 const ACCENT_LINE_ALPHA: f32 = 0.7;
 /// Compact sidebar header: button / tab height.
@@ -232,7 +236,7 @@ pub struct ChipHost {
 }
 
 impl Render for ChipHost {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let measured = self.measured.clone();
         let measured_cross = self.measured_cross.clone();
         let shell = self.shell;
@@ -245,6 +249,8 @@ impl Render for ChipHost {
                 .when(!vertical, |el| el.h_full().flex().items_center())
                 .when(vertical, |el| el.flex().flex_col().items_center())
                 .whitespace_nowrap()
+                // Typography → Bar font.
+                .font_family(crate::fonts::fonts(cx).bar)
                 .child(self.view.clone())
                 .child(
                     canvas(
@@ -672,6 +678,28 @@ impl ShellView {
         Some((layout::orient(pos, collapsed, surface), layout::orient(pos, expanded, surface)))
     }
 
+    /// A right-click on empty bar space at `at` (surface px): the main menu
+    /// there, or the desktop's right-click menu (`bar.right_click`).
+    fn bar_right_click(&mut self, at: gpui::Point<Pixels>, cx: &mut Context<Self>) {
+        let (x, y) = (f32::from(at.x), f32::from(at.y));
+        match crate::state::config(cx).read(cx).get().bar.right_click {
+            mandara_config::surfaces::BarRightClick::DesktopMenu => {
+                // The bar's surface starts at the output's top, or ends at its
+                // bottom (a bottom bar).
+                let (_, out_h) = crate::plugins::dock::output_size(&self.monitor, cx);
+                let dy = if self.metrics.position == BarPosition::Bottom { out_h - self.surface.1 } else { 0.0 };
+                crate::desktop_menu::open(&self.monitor, (x, y + dy), cx);
+            }
+            mandara_config::surfaces::BarRightClick::MainMenu => {
+                let along = if self.metrics.vertical { y } else { x };
+                self.shell.update(cx, |s, cx| {
+                    s.panel_anchor = Some(along);
+                    s.toggle_panel(crate::plugins::main_menu::ID, cx);
+                })
+            }
+        }
+    }
+
     fn update_panel(&mut self, cfg: &ShellConfig, cx: &App) {
         let state = self.shell.read(cx);
         let wanted = match state.panel.as_deref() {
@@ -949,7 +977,9 @@ impl Render for ShellView {
         let bar_fill = if cfg.bar.tint > 0.0 { fill.mix(palette.primary, ranges::BAR_TINT.clamp(cfg.bar.tint, 0.0)) } else { fill };
         let bar_fill_h = bar_fill.with_alpha(fill.alpha() * ranges::OPACITY.clamp(cfg.bar.opacity, 1.0)).hsla();
         // Drop-down panels / side panels carry their own opacity.
-        let panel_alpha = ranges::OPACITY.clamp(cfg.panels.opacity, 1.0);
+        // The main menu is glass with solid cards on it (panels.menu_*).
+        let menu_glass = self.panel_slot == Some(MENU_SLOT) && cfg.panels.menu_translucent;
+        let panel_alpha = ranges::OPACITY.clamp(if menu_glass { cfg.panels.menu_opacity.min(cfg.panels.opacity) } else { cfg.panels.opacity }, 1.0);
         let side_alpha = ranges::OPACITY.clamp(cfg.sidebar.look.opacity, 1.0);
         let panel_radius = crate::style::panel_radius(&cfg.bar);
         let side_look = &cfg.sidebar.look;
@@ -998,7 +1028,7 @@ impl Render for ShellView {
         );
         // Attached to the edge frame (flares, shared fill) unless it floats
         // or the frame itself floats (or the bar is a side bar).
-        let side_attached = attached && !side_look.floats_with(&cfg.bar) && !m.floating_frame && !vertical;
+        let side_attached = attached && !side_look.floats_with(&cfg.bar) && !m.floating_frame && !vertical && !m.notch();
 
         let mut root = div()
             .id("mandara-shell")
@@ -1087,11 +1117,7 @@ impl Render for ShellView {
                     .shadow(bar_depth(&bar_rim))
                     .on_mouse_down(gpui::MouseButton::Right, cx.listener(move |this, e: &gpui::MouseDownEvent, _, cx| {
                         // The main menu opens at the press, along the bar.
-                        let x = f32::from(if vertical { e.position.y } else { e.position.x });
-                        this.shell.update(cx, |s, cx| {
-                            s.panel_anchor = Some(x);
-                            s.toggle_panel(crate::plugins::main_menu::ID, cx);
-                        });
+                        this.bar_right_click(e.position, cx);
                     }))
                     .when(!click_through, |el| el.child(self.mask.region())),
             );
@@ -1121,11 +1147,27 @@ impl Render for ShellView {
                 place(self.backdrop.value())
                     .id("bar-backdrop")
                     .on_mouse_down(gpui::MouseButton::Right, cx.listener(|this, e: &gpui::MouseDownEvent, _, cx| {
-                        let y = f32::from(e.position.y);
-                        this.shell.update(cx, |s, cx| {
-                            s.panel_anchor = Some(y);
-                            s.toggle_panel(crate::plugins::main_menu::ID, cx);
-                        });
+                        this.bar_right_click(e.position, cx);
+                    }))
+                    .when(!click_through, |el| el.child(self.mask.region())),
+            );
+        } else if attached && m.notch() {
+            // The notch hangs from the edge: concave shoulders where it
+            // meets the screen edge, rounded far corners, a soft shadow.
+            let frame = layout::orient(m.position, m.frame(self.surface.0), self.surface);
+            let (fx, fw) = (f32::from(frame.origin.x), f32::from(frame.size.width));
+            let fy = f32::from(frame.origin.y) + shift;
+            let radius = m.frame_radius();
+            let edge = if bottom { Edge::Bottom } else { Edge::Top };
+            if !bar_shadow.is_empty() {
+                let shade = div().absolute().left(px(fx)).top(px(fy)).w(px(fw)).h(px(bar_h)).shadow(bar_shadow.clone());
+                root = root.child(if bottom { shade.rounded_t(px(radius)) } else { shade.rounded_b(px(radius)) });
+            }
+            root = root.child(edge_drawer_snapped(edge, fx, fy, fw, bar_h, radius, m.flare, bar_fill_h, scale)).child(
+                place(shifted(self.backdrop.value()))
+                    .id("bar-backdrop")
+                    .on_mouse_down(gpui::MouseButton::Right, cx.listener(|this, e: &gpui::MouseDownEvent, _, cx| {
+                        this.bar_right_click(e.position, cx);
                     }))
                     .when(!click_through, |el| el.child(self.mask.region())),
             );
@@ -1148,11 +1190,7 @@ impl Render for ShellView {
                     place(shifted(self.backdrop.value()))
                         .id("bar-backdrop")
                         .on_mouse_down(gpui::MouseButton::Right, cx.listener(|this, e: &gpui::MouseDownEvent, _, cx| {
-                            let x = f32::from(e.position.x);
-                            this.shell.update(cx, |s, cx| {
-                                s.panel_anchor = Some(x);
-                                s.toggle_panel(crate::plugins::main_menu::ID, cx);
-                            });
+                            this.bar_right_click(e.position, cx);
                         }))
                         .when(!click_through, |el| el.child(self.mask.region())),
                 );
@@ -1169,6 +1207,8 @@ impl Render for ShellView {
                     .rounded(pill_radius)
                     .bg(bar_fill_h)
                     .shadow(bar_depth(&bar_rim))
+                    // Empty island space: bar.right_click decides.
+                    .when(!click_through, |el| el.on_mouse_down(gpui::MouseButton::Right, cx.listener(|this, e: &gpui::MouseDownEvent, _, cx| this.bar_right_click(e.position, cx))))
                     .when(!click_through, |el| el.child(self.mask.region())),
             );
         }
@@ -1235,6 +1275,22 @@ impl Render for ShellView {
                     .shadow(crate::plugins::panel_fx::elevation_scaled(&palette, progress, cfg.panels.shadow_strength))
                     .into_any_element()
             };
+            // The main menu's glass shows your wallpaper, blurred, not
+            // whatever sits on the desktop behind it.
+            if menu_glass {
+                let wall = mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, Some(&self.monitor), cfg.theme.mode.is_dark()).and_then(|p| crate::wallpaper::frosted(&p));
+                if let Some(frost) = wall {
+                    let (out_w, out_h) = crate::plugins::dock::output_size(&self.monitor, cx);
+                    let dy = if bottom { out_h - self.surface.1 } else { 0.0 };
+                    root = root.child(
+                        place(b)
+                            .rounded(px(panel_radius))
+                            .overflow_hidden()
+                            .opacity(panel_fade)
+                            .child(gpui::StyledImage::object_fit(gpui::img(frost), gpui::ObjectFit::Cover).absolute().left(px(-x)).top(px(-(y + dy))).w(px(out_w)).h(px(out_h))),
+                    );
+                }
+            }
             root = root.child(if panel_fade < 1.0 { div().absolute().size_full().opacity(panel_fade).child(drawer).into_any_element() } else { drawer });
         }
 
@@ -1251,6 +1307,13 @@ impl Render for ShellView {
                         .rounded(pill_radius)
                         .bg(bar_fill_h)
                         .shadow(bar_depth(&bar_rim))
+                        // Empty space on a pill or the island: the main
+                        // menu or desktop edit mode (bar.right_click).
+                        .when(!click_through, |el| {
+                            el.on_mouse_down(gpui::MouseButton::Right, cx.listener(move |this, e: &gpui::MouseDownEvent, _, cx| {
+                                this.bar_right_click(e.position, cx);
+                            }))
+                        })
                         .when(!click_through, |el| el.child(self.mask.region())),
                 );
             }
@@ -1272,6 +1335,26 @@ impl Render for ShellView {
                     if attached { m.radius.min(half) } else { crate::style::concentric(f32::from(pill_radius), PILL_INSET).min(half) }
                 })
                 .unwrap_or(FALLBACK_CHIP_RADIUS_PX);
+            // `bar.capsules`: the zone's chips sit on one soft capsule.
+            if cfg.bar.capsules && attached {
+                let visible: Vec<Bounds<Pixels>> = rects.iter().flatten().copied().collect();
+                if !visible.is_empty() {
+                    let u = layout::union(&visible);
+                    let (pad_x, pad_y) = if vertical { (0.0, CAPSULE_PAD_PX) } else { (CAPSULE_PAD_PX, 0.0) };
+                    let (x, y) = (f32::from(u.origin.x) - pad_x, f32::from(u.origin.y) - pad_y);
+                    let (w, h) = (f32::from(u.size.width) + pad_x * 2.0, f32::from(u.size.height) + pad_y * 2.0);
+                    root = root.child(
+                        div()
+                            .absolute()
+                            .left(px(px_snap(x)))
+                            .top(px(px_snap(y)))
+                            .w(px(px_snap(w)))
+                            .h(px(px_snap(h)))
+                            .rounded(px(chip_radius + CAPSULE_PAD_PX * 0.5))
+                            .bg(palette.on_surface.with_alpha(CAPSULE_ALPHA).hsla()),
+                    );
+                }
+            }
             // Separator marks centred in the gaps between visible chips.
             if cfg.bar.separator != BarSeparator::None {
                 let mut prev: Option<Bounds<Pixels>> = None;
@@ -1405,8 +1488,8 @@ impl Render for ShellView {
             let settled = progress > PANEL_SETTLED_PROGRESS;
             // Floating layouts leave a gap between the pill and its panel:
             // bridge it so crossing it never counts as leaving.
-            if !attached && slot.0 < self.zones.len() {
-                if let Some(Some(chip)) = self.slot_rects(slot.0).get(slot.1).copied() {
+            if !attached && slot.0 < self.zones.len()
+                && let Some(Some(chip)) = self.slot_rects(slot.0).get(slot.1).copied() {
                     let (cy0, cy1) = (f32::from(chip.origin.y), f32::from(chip.origin.y + chip.size.height));
                     let (py0, py1) = (f32::from(b.origin.y), f32::from(b.origin.y + b.size.height));
                     let (y0, y1) = if py0 >= cy1 { (cy1, py0) } else { (py1, cy0) };
@@ -1429,7 +1512,6 @@ impl Render for ShellView {
                         );
                     }
                 }
-            }
             // Content: the plugin's natural size, widened by the width
             // scale, held inside the (height-capped) panel and its padding.
             let pad = m.panel_pad;
@@ -1495,6 +1577,8 @@ impl Render for ShellView {
                             .w(content_w)
                             .h(content_h)
                             .opacity(smoothstep(CONTENT_FADE_FROM, CONTENT_FADE_TO, progress))
+                            // Typography → Panels & plugins font.
+                            .font_family(f.panels.clone())
                             // Once the morph has settled the content is a
                             // cached view: it rebuilds only when the plugin
                             // notifies, not when a bar chip or hover spring

@@ -66,7 +66,7 @@ fn other_values(setting: &Setting, current: &Value) -> Vec<Value> {
             [*max, *min, mid].into_iter().map(Value::from).collect()
         }
         Control::Choice(choices) => choices.iter().map(|(v, _)| registry::choice_value(v)).collect(),
-        Control::Text { .. } | Control::OptionalText { .. } => vec![Value::from("audit-value")],
+        Control::Text { .. } | Control::OptionalText { .. } | Control::Font { .. } => vec![Value::from("audit-value")],
         Control::List { .. } => vec![serde_json::json!(["audit-a", "audit-b"])],
         Control::Number { min, max } => vec![Value::from(*min), Value::from(*max)],
         Control::Icon => vec![Value::from("search"), Value::from("grid")],

@@ -262,7 +262,7 @@ impl Model {
 type Shared = Rc<RefCell<Model>>;
 
 thread_local! {
-    static SHARED: RefCell<Weak<RefCell<Model>>> = RefCell::new(Weak::new());
+    static SHARED: RefCell<Weak<RefCell<Model>>> = const { RefCell::new(Weak::new()) };
 }
 
 /// The shared model, starting the power actor on first use. It stops once

@@ -30,3 +30,6 @@ rustix = { workspace = true, features = ["fs", "event"] }
 approx.workspace = true
 # `examples/vram_probe.rs` opens real layer surfaces.
 gpui_platform.workspace = true
+
+[lints]
+workspace = true

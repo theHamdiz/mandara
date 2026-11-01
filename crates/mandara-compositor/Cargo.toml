@@ -15,3 +15,6 @@ tracing.workspace = true
 mandara-config.workspace = true
 # poll(2): one thread multiplexes every Mango watch stream.
 rustix = { workspace = true, features = ["event"] }
+
+[lints]
+workspace = true

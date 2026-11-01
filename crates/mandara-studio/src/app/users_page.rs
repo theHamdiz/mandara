@@ -1782,7 +1782,7 @@ mod tests {
 
     #[test]
     fn mask_ring_covers_the_corners() {
-        assert!(MASK_RATIO >= (std::f32::consts::SQRT_2 - 1.0) / 2.0);
+        const { assert!(MASK_RATIO >= (std::f32::consts::SQRT_2 - 1.0) / 2.0) };
     }
 
     #[test]

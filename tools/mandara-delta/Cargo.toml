@@ -47,3 +47,12 @@ bidiff = { version = "1", optional = true }
 zstd = { version = "0.13", optional = true }
 toml = { version = "1.1", optional = true }
 ring = { version = "0.17", optional = true }
+
+# The same rule as the main workspace (this crate is its own root).
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+too_many_arguments = "allow"
+type_complexity = "allow"

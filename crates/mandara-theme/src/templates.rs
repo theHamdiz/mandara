@@ -778,8 +778,8 @@ mod tests {
     fn ansi_is_distinct_and_readable() {
         let p = palette();
         let a = ansi(&p);
-        for i in 1..7 {
-            assert!(a[i].contrast_ratio(p.surface_base) >= 3.0, "ansi {i} readable on background");
+        for (i, c) in a.iter().enumerate().take(7).skip(1) {
+            assert!(c.contrast_ratio(p.surface_base) >= 3.0, "ansi {i} readable on background");
         }
         assert_ne!(a[1], a[2]);
     }

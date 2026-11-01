@@ -60,10 +60,8 @@ fn keys_in(source: &str) -> Vec<String> {
             let at = from + pos;
             let prev = source[..at].chars().next_back();
             let ident_before = prev.is_some_and(|c| c.is_alphanumeric() || c == '_');
-            if !ident_before {
-                if let Some(k) = literal(&source[at + marker.len()..]) {
-                    keys.push(k);
-                }
+            if !ident_before && let Some(k) = literal(&source[at + marker.len()..]) {
+                keys.push(k);
             }
             from = at + marker.len();
         }

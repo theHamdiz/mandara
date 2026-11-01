@@ -617,11 +617,10 @@ pub fn install(full_name: &str, vetting: &Vetting, progress: &dyn Fn(&str)) -> R
         return Err(e);
     }
     let dest = install_dir().join(&id);
-    if let Some((existing, _)) = installed(full_name) {
-        if existing != dest {
+    if let Some((existing, _)) = installed(full_name)
+        && existing != dest {
             let _ = std::fs::remove_dir_all(&existing);
         }
-    }
     let staging = install_dir().join(format!(".{id}.new"));
     let _ = std::fs::remove_dir_all(&staging);
     std::fs::create_dir_all(install_dir()).map_err(|e| e.to_string())?;

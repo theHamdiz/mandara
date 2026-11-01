@@ -56,6 +56,7 @@ pub enum Lead {
 
 /// What activating a provider result does.
 #[derive(Clone, Debug, PartialEq)]
+#[expect(clippy::large_enum_variant, reason = "launcher results are rebuilt per keystroke; boxing adds an allocation per hit (speed over memory)")]
 pub enum HitAction {
     /// Copy text (and paste it when auto-paste is on).
     Copy(String),
@@ -429,8 +430,8 @@ pub fn file_hits(query: &str, recent: &[PathBuf], limit: usize) -> Vec<Hit> {
         q.is_empty() || q.split_whitespace().all(|w| hay.contains(w))
     };
     let mut out: Vec<Hit> = recent.iter().filter(|p| matches(p)).take(limit).map(|p| file_hit(p)).collect();
-    if !q.is_empty() && out.len() < limit {
-        if let Ok(i) = file_index().lock()
+    if !q.is_empty() && out.len() < limit
+        && let Ok(i) = file_index().lock()
             && let Some(index) = i.as_ref()
         {
             for p in index.files.iter().filter(|p| matches(p)) {
@@ -442,7 +443,6 @@ pub fn file_hits(query: &str, recent: &[PathBuf], limit: usize) -> Vec<Hit> {
                 }
             }
         }
-    }
     out
 }
 
@@ -499,7 +499,7 @@ pub fn browse_order(apps: &[App], pinned: &[String], usage: &UsageSnapshot, rece
             (f > 0).then_some((f, a))
         })
         .collect();
-    recent.sort_by(|a, b| b.0.cmp(&a.0));
+    recent.sort_by_key(|a| std::cmp::Reverse(a.0));
     out.extend(recent.into_iter().take(recent_count).map(|(_, a)| a.clone()));
     let n_recent = out.len() - n_pinned;
     let rest: Vec<App> = apps.iter().filter(|a| !out.iter().any(|o| o.id == a.id)).cloned().collect();
@@ -824,8 +824,7 @@ mod tests {
 
     #[test]
     fn customization_hides_and_renames() {
-        let mut cfg = LauncherConfig::default();
-        cfg.hidden = vec!["B".into()];
+        let mut cfg = LauncherConfig { hidden: vec!["B".into()], ..Default::default() };
         cfg.overrides.insert("a".into(), mandara_config::workflow::AppOverride { name: "Alpha".into(), icon: String::new() });
         let apps = vec![App { id: "a".into(), name: "a".into(), ..Default::default() }, App { id: "b".into(), ..Default::default() }];
         let out = customize(apps, &cfg);

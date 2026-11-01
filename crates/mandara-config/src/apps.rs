@@ -692,9 +692,9 @@ mod tests {
         // Adding an app and a command.
         let id = add_autostart_in(&user, std::slice::from_ref(&apps), &AutostartNew::App("ghostty.desktop".into())).unwrap();
         assert_eq!(id, "ghostty.desktop");
-        let cmd = add_autostart_in(&user, &[apps.clone()], &AutostartNew::Command { name: "Sync notes".into(), command: "rclone sync a b".into() }).unwrap();
+        let cmd = add_autostart_in(&user, std::slice::from_ref(&apps), &AutostartNew::Command { name: "Sync notes".into(), command: "rclone sync a b".into() }).unwrap();
         assert_eq!(cmd, "sync-notes.desktop");
-        let again = add_autostart_in(&user, &[apps.clone()], &AutostartNew::Command { name: "Sync notes".into(), command: "x".into() }).unwrap();
+        let again = add_autostart_in(&user, std::slice::from_ref(&apps), &AutostartNew::Command { name: "Sync notes".into(), command: "x".into() }).unwrap();
         assert_eq!(again, "sync-notes-2.desktop", "never overwrites");
         let list = autostart_entries_in(&user, &systems);
         assert_eq!(list.iter().filter(|e| e.mandara).count(), 3);

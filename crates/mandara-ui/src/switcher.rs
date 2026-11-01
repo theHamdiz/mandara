@@ -423,7 +423,7 @@ fn release_commits(cx: &App) -> bool {
 
 /// Decodes RGBA into a GPUI image (BGRA).
 fn render_image(mut rgba: image::RgbaImage) -> Arc<RenderImage> {
-    for px in rgba.chunks_exact_mut(4) {
+    for px in rgba.as_chunks_mut::<4>().0 {
         px.swap(0, 2);
     }
     Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(rgba)]))

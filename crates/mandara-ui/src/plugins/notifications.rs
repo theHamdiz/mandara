@@ -242,10 +242,11 @@ impl gpui::Asset for Thumbnail {
     type Source = Arc<Path>;
     type Output = Result<Arc<gpui::RenderImage>, gpui::ImageCacheError>;
 
+    #[allow(clippy::manual_async_fn, reason = "an `async fn` would borrow the `&mut App` argument; GPUI needs a 'static future")]
     fn load(source: Self::Source, _: &mut App) -> impl std::future::Future<Output = Self::Output> + Send + 'static {
         async move {
             let fail = |e: String| gpui::ImageCacheError::Asset(SharedString::from(e));
-            let decoded = image::open(&source).map_err(|e| fail(format!("{}: {e}", source.display())))?;
+            let decoded = mandara_theme::material::open_image(&source).map_err(|e| fail(format!("{}: {e}", source.display())))?;
             let mut thumb = decoded.thumbnail(THUMB_PX, THUMB_PX).into_rgba8();
             // GPUI's renderer expects BGRA.
             for px in thumb.pixels_mut() {

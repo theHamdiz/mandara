@@ -274,7 +274,7 @@ fn run(program: &str, args: &[&str], timeout: Duration) -> Result<Ran, String> {
 
 /// The last meaningful stderr line, for error messages.
 fn last_line(stderr: &str) -> String {
-    stderr.lines().map(str::trim).filter(|l| !l.is_empty()).last().unwrap_or_default().to_string()
+    stderr.lines().map(str::trim).rfind(|l| !l.is_empty()).unwrap_or_default().to_string()
 }
 
 fn failed(program: &str, code: Option<i32>, stderr: &str) -> String {
@@ -518,7 +518,7 @@ pub fn resolve_terminal(configured: &str) -> Option<String> {
 pub fn open_terminal(configured: &str, command: &str) -> Result<String, String> {
     use std::os::unix::process::CommandExt as _;
     let terminal = resolve_terminal(configured).ok_or_else(|| t("No terminal found — set one in Studio → Plugins → Updates").to_string())?;
-    let argv = terminal_argv(&terminal, &terminal_script(command, &t("Press Enter to close")));
+    let argv = terminal_argv(&terminal, &terminal_script(command, t("Press Enter to close")));
     let child = Command::new(&argv[0])
         .args(&argv[1..])
         .process_group(0)

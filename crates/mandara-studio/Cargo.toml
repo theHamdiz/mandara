@@ -39,3 +39,6 @@ anyhow.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 kdl.workspace = true
+
+[lints]
+workspace = true

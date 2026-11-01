@@ -73,7 +73,7 @@ pub fn slug(name: &str) -> String {
 }
 
 fn to_table(cfg: &ShellConfig) -> Result<Table> {
-    Ok(Table::try_from(cfg).context("serializing the config")?)
+    Table::try_from(cfg).context("serializing the config")
 }
 
 fn get_path<'a>(t: &'a Table, path: &str) -> Option<&'a Value> {
@@ -352,7 +352,7 @@ pub fn export_text(cfg: &ShellConfig, opts: ExportOptions) -> Result<(String, Ve
 
 /// Sections that carry the version of the defaults they were written for
 /// (see [`crate::upgrade`]), with that key.
-const VERSIONED: &[(&str, &str)] = &[("plugins", "defaults_version"), ("integrations", "version")];
+const VERSIONED: &[(&str, &str)] = &[("plugins", "defaults_version"), ("integrations", "version"), ("compositor", "keybinds_version"), ("lock", "look_version")];
 
 /// Parses an exported (or hand-written) config. Missing values take their
 /// defaults, so a changes-only export imports as "defaults + changes"; an

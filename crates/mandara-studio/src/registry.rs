@@ -315,6 +315,10 @@ pub enum Control {
     Command { button: &'static str, args: &'static [&'static str] },
     /// A list of strings, edited as comma-separated text.
     List { placeholder: &'static str },
+    /// A font family from the searchable picker of installed fonts (any
+    /// typed name is allowed too). `follows`: the setting an empty value
+    /// falls back to (offered as "Default"); `None` = always set.
+    Font { follows: Option<&'static str> },
 }
 
 #[derive(Clone, Debug)]
@@ -349,7 +353,7 @@ fn sd(section: Section, group: &'static str, path: &'static str, label: &'static
 }
 
 /// Choice labels are `tk()`-marked English; display them with `tr()`.
-const LAYOUTS: &[(&str, &str)] = &[("minimal-edge", tk("Edge frame")), ("floating-pills", tk("Glass pills")), ("contiguous-island", tk("Island")), ("hairline", tk("Hairline")), ("micro", tk("Micro pill"))];
+const LAYOUTS: &[(&str, &str)] = &[("minimal-edge", tk("Edge frame")), ("floating-pills", tk("Glass pills")), ("contiguous-island", tk("Island")), ("hairline", tk("Hairline")), ("micro", tk("Micro pill")), ("notch", tk("Notch"))];
 /// Tri-state for optional booleans: unset keeps the compositor's value.
 const TRI: &[(&str, &str)] = &[("null", tk("Your config")), ("true", tk("On")), ("false", tk("Off"))];
 
@@ -515,13 +519,13 @@ fn build() -> Vec<Setting> {
         // picking one switches to the wallpaper's colors.
         s(Themes, tk("Wallpaper colors"), "/theme/source/variant", tk("Wallpaper scheme"), tk("Material You variant used for wallpaper themes"), Choice(BOOL_SCHEMES)),
         // Bar
-        s(Bar, tk("Layout"), "/bar/layout", tk("Style"), tk("Edge frame, floating glass pills, one island, a thin hairline or a tiny micro pill"), Choice(LAYOUTS)),
+        s(Bar, tk("Layout"), "/bar/layout", tk("Style"), tk("Edge frame, floating glass pills, one island, a thin hairline, a tiny micro pill or a notch hanging from the edge"), Choice(LAYOUTS)),
         s(Bar, tk("Layout"), "/bar/position", tk("Position"), tk("Any screen edge; panels open toward the middle (sideways from a side bar)"), Choice(const { &[("top", tk("Top")), ("bottom", tk("Bottom")), ("left", tk("Left")), ("right", tk("Right"))] })),
         s(Bar, tk("Layout"), "/bar/height", tk("Height"), tk("Bar thickness"), span(ranges::BAR_HEIGHT, " px")),
         s(Bar, tk("Spacing"), "/bar/edge_gap", tk("Edge gap"), tk("Distance from the screen edge (floating styles and the floating frame)"), span(ranges::BAR_EDGE_GAP, " px")),
         s(Bar, tk("Spacing"), "/bar/side_gap", tk("Side inset"), tk("Horizontal inset of the outer groups"), span(ranges::BAR_SIDE_GAP, " px")),
         s(Bar, tk("Shape"), "/bar/corner_radius", tk("Bar radius"), tk("Glass pills and island: their corners. Edge frame: the hover chips, and the frame's ends when it floats"), span(ranges::BAR_PILL_RADIUS, " px")),
-        s(Bar, tk("Shape"), "/bar/flare_radius", tk("Flare radius"), tk("Concave curve where the edge frame meets the screen sides, panels and the sidebar"), span(ranges::BAR_FLARE_RADIUS, " px")),
+        s(Bar, tk("Shape"), "/bar/flare_radius", tk("Flare radius"), tk("Concave curve where the edge frame or the notch meets the screen, panels and the sidebar"), span(ranges::BAR_FLARE_RADIUS, " px")),
         s(Bar, surface_settings::APPEARANCE, "/bar/opacity", tk("Background opacity"), tk("Lower it to let your wallpaper and windows show through the bar"), span(ranges::OPACITY, "")),
         s(Bar, surface_settings::PANELS, "/bar/panel_radius", tk("Panel radius"), tk("Corner radius of dropdown panels"), span(ranges::PANEL_RADIUS, " px")),
         s(Bar, tk("Clock"), "/bar/show_seconds", tk("Show seconds"), tk("Seconds in the bar clock"), Toggle),
@@ -628,11 +632,17 @@ fn build() -> Vec<Setting> {
         s(Power, tk("Session menu"), "/session_menu/show_shortcuts", tk("Number-key hints"), tk("Badges 1–9; pressing a number runs that entry"), Toggle),
         s(Power, tk("Hooks"), "/hooks/enabled", tk("Run event hooks"), tk("Commands attached to shell events (below) run; off pauses them all"), Toggle),
         s(Power, tk("Hooks"), "/hooks/timeout_s", tk("Hook time limit"), tk("A hook still running after this is stopped (rules can set their own)"), slider(1.0, 300.0, 1.0, " s")),
-        // Typography (font family placeholders are names, not text)
-        s(Typography, tk("Families"), "/typography/ui_font", tk("Interface font"), tk("Used for most text"), Text { placeholder: "Inter" }),
-        s(Typography, tk("Families"), "/typography/display_font", tk("Display font"), tk("Large clocks and headings"), Text { placeholder: "Alexandria" }),
-        s(Typography, tk("Families"), "/typography/arabic_font", tk("Arabic font"), tk("Arabic script"), Text { placeholder: "Cairo" }),
-        s(Typography, tk("Families"), "/typography/mono_font", tk("Monospace font"), tk("Code and numbers"), Text { placeholder: "JetBrains Mono" }),
+        // Typography: every family comes from the font picker.
+        s(Typography, tk("Families"), "/typography/ui_font", tk("Interface font"), tk("Used for most text"), Font { follows: None }),
+        s(Typography, tk("Families"), "/typography/display_font", tk("Display font"), tk("Large clocks and headings"), Font { follows: None }),
+        s(Typography, tk("Families"), "/typography/arabic_font", tk("Arabic font"), tk("Arabic script"), Font { follows: None }),
+        s(Typography, tk("Families"), "/typography/mono_font", tk("Monospace font"), tk("Code and numbers"), Font { follows: None }),
+        s(Typography, tk("Each surface"), "/typography/bar_font", tk("Bar"), tk("The bar's items"), Font { follows: Some("/typography/ui_font") }),
+        s(Typography, tk("Each surface"), "/typography/panels_font", tk("Panels & plugins"), tk("Drop-down panels and plugin cards"), Font { follows: Some("/typography/ui_font") }),
+        s(Typography, tk("Each surface"), "/typography/widgets_font", tk("Desktop widgets"), tk("Widgets on the desktop (a widget's own font wins)"), Font { follows: Some("/typography/ui_font") }),
+        s(Typography, tk("Each surface"), "/typography/lock_font", tk("Lock screen"), tk("The lock screen's text"), Font { follows: Some("/typography/ui_font") }),
+        s(Typography, tk("Each surface"), "/typography/lock_clock_font", tk("Lock screen clock"), tk("The big clock on the lock screen"), Font { follows: Some("/typography/display_font") }),
+        s(Typography, tk("Each surface"), "/typography/studio_font", tk("Studio"), tk("Mandara Studio itself"), Font { follows: Some("/typography/ui_font") }),
         s(Typography, tk("Size"), "/typography/scale", tk("Text scale"), tk("Scales text in the bar, the launcher and the wallpaper picker"), slider(0.75, 1.5, 0.05, "×")),
         // Plugins (per-plugin settings tables)
         // Groups are the plugins' English names (matched against manifests).

@@ -12,6 +12,7 @@
 
 use std::path::{Path, PathBuf};
 
+use mandara_config::login_layout as L;
 use serde::{Deserialize, Serialize};
 
 pub const SYSTEM_CONFIG: &str = "/etc/mandara/greeter.toml";
@@ -109,6 +110,10 @@ pub struct BackgroundConfig {
     /// Drifting light orbs over any backdrop.
     pub orbs: bool,
     pub orb_intensity: f32,
+    /// Show the picked person's own desktop wallpaper (shared by their
+    /// Mandara session into `/var/lib/mandara-login/wallpapers`) instead
+    /// of the clips and stills above, when they have one.
+    pub user_wallpaper: bool,
     /// Pointer parallax depth in px (0 = off).
     pub parallax: f32,
 }
@@ -137,6 +142,7 @@ impl Default for BackgroundConfig {
             solid: String::new(),
             orbs: true,
             orb_intensity: 0.5,
+            user_wallpaper: true,
             parallax: 14.0,
         }
     }
@@ -161,7 +167,7 @@ pub struct ClockConfig {
 
 impl Default for ClockConfig {
     fn default() -> Self {
-        Self { format_24h: true, seconds: false, font: String::new(), size: 150.0, weight: 700, opacity: 0.95, roll_digits: true }
+        Self { format_24h: true, seconds: false, font: String::new(), size: L::CLOCK_SIZE, weight: L::CLOCK_WEIGHT, opacity: 0.95, roll_digits: true }
     }
 }
 
@@ -178,7 +184,7 @@ pub struct DateConfig {
 
 impl Default for DateConfig {
     fn default() -> Self {
-        Self { format: String::new(), font: String::new(), size: 24.0, weight: 600, opacity: 0.9 }
+        Self { format: String::new(), font: String::new(), size: L::DATE_SIZE, weight: L::DATE_WEIGHT, opacity: 0.9 }
     }
 }
 
@@ -203,6 +209,9 @@ pub enum AvatarShape {
     Circle,
     Squircle,
     Rounded,
+    /// No plate or frame: a picture stays round, a monogram or icon is
+    /// drawn on its own.
+    Bare,
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -236,10 +245,10 @@ impl Default for UserConfig {
             list: UserList::All,
             avatar_shape: AvatarShape::Circle,
             avatar_source: AvatarSource::Auto,
-            avatar_size: 108.0,
+            avatar_size: L::AVATAR,
             glow_ring: true,
             show_name: true,
-            name_size: 20.0,
+            name_size: L::NAME_SIZE,
             hidden: Vec::new(),
         }
     }
@@ -257,15 +266,47 @@ pub enum FieldStyle {
     Outline,
     /// A single underline.
     Underline,
+    /// A dark recessed field with a hairline border.
+    Inset,
+}
+
+/// Where the sign-in button sits.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SubmitButton {
+    /// A round button inside the field, shown once you type.
+    #[default]
+    Inside,
+    /// A square accent button beside the field, always shown.
+    Beside,
+    /// None: Enter signs in.
+    Hidden,
+}
+
+/// How typed characters are masked.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PasswordMask {
+    #[default]
+    Dots,
+    /// A different small shape per character (circle, square, diamond,
+    /// triangle…), so the length is less obvious at a glance.
+    Shapes,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PasswordConfig {
     pub style: FieldStyle,
+    pub submit: SubmitButton,
+    pub mask: PasswordMask,
+    /// The focused field gets an accent-coloured border.
+    pub accent_border: bool,
+    /// Text size inside the field.
+    pub text_size: f32,
     pub width: f32,
     pub height: f32,
-    /// Placeholder (empty = "Enter Password" in the current language).
+    /// Placeholder (empty = "Enter password" in the current language).
     pub placeholder: String,
     pub caps_hint: bool,
     /// An eye button to reveal what was typed.
@@ -278,7 +319,20 @@ pub struct PasswordConfig {
 
 impl Default for PasswordConfig {
     fn default() -> Self {
-        Self { style: FieldStyle::Glass, width: 290.0, height: 44.0, placeholder: String::new(), caps_hint: true, reveal_toggle: true, keystroke_ripple: true, glow: true }
+        Self {
+            style: FieldStyle::Glass,
+            submit: SubmitButton::Inside,
+            mask: PasswordMask::Dots,
+            accent_border: false,
+            text_size: 15.0,
+            width: L::FIELD_W,
+            height: L::FIELD_H,
+            placeholder: String::new(),
+            caps_hint: true,
+            reveal_toggle: true,
+            keystroke_ripple: true,
+            glow: true,
+        }
     }
 }
 
@@ -292,11 +346,24 @@ pub struct SessionConfig {
     pub default: String,
     /// List X11 sessions too.
     pub x11: bool,
+    pub style: SessionStyle,
+}
+
+/// How the session picker looks.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SessionStyle {
+    /// A compact pill.
+    #[default]
+    Pill,
+    /// A full-width field (a drop-down as wide as the password field, or
+    /// the card).
+    Field,
 }
 
 impl Default for SessionConfig {
     fn default() -> Self {
-        Self { default: String::new(), x11: true }
+        Self { default: String::new(), x11: true, style: SessionStyle::Pill }
     }
 }
 
@@ -307,11 +374,70 @@ pub struct PowerConfig {
     pub reboot: bool,
     pub poweroff: bool,
     pub labels: bool,
+    pub style: PowerStyle,
+    /// Button size.
+    pub size: f32,
+}
+
+/// How the power buttons look.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PowerStyle {
+    /// Soft frosted circles.
+    #[default]
+    Soft,
+    /// Dark circles with a hairline outline.
+    Outlined,
 }
 
 impl Default for PowerConfig {
     fn default() -> Self {
-        Self { suspend: true, reboot: true, poweroff: true, labels: true }
+        Self { suspend: true, reboot: true, poweroff: true, labels: true, style: PowerStyle::Soft, size: 44.0 }
+    }
+}
+
+/// A card behind the user, the password field and (optionally) the
+/// session picker, drawn where the user card is placed. Off: the pieces
+/// float on the backdrop at their own places.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CardConfig {
+    pub enabled: bool,
+    pub width: f32,
+    pub padding: f32,
+    pub radius: f32,
+    /// Fill colour (`#rrggbb`, empty = the theme's raised surface).
+    pub fill: String,
+    pub opacity: f32,
+    /// Border width (0 = none) and colour (empty = the theme's outline).
+    pub border: f32,
+    pub border_color: String,
+    /// A back arrow in its corner returns to the user switcher.
+    pub back_button: bool,
+    /// The session picker sits inside the card, under the password.
+    pub session_inside: bool,
+}
+
+impl Default for CardConfig {
+    fn default() -> Self {
+        Self { enabled: false, width: 460.0, padding: 22.0, radius: 22.0, fill: String::new(), opacity: 1.0, border: 1.0, border_color: String::new(), back_button: true, session_inside: true }
+    }
+}
+
+/// An image on the login screen (a logo, an emblem), placed like the other
+/// elements.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LogoConfig {
+    /// PNG / JPEG / WebP / SVG file (empty = Mandara's emblem).
+    pub path: String,
+    pub size: f32,
+    pub opacity: f32,
+}
+
+impl Default for LogoConfig {
+    fn default() -> Self {
+        Self { path: String::new(), size: 56.0, opacity: 0.9 }
     }
 }
 
@@ -351,11 +477,14 @@ pub struct ThemeConfig {
     pub rim: f32,
     /// Control corner roundness (0 = square, 1 = pill).
     pub roundness: f32,
+    /// Themes the colour scheme switcher offers (catalog ids; empty = a
+    /// handful of Mandara's own). The pick is remembered.
+    pub switcher: Vec<String>,
 }
 
 impl Default for ThemeConfig {
     fn default() -> Self {
-        Self { preset: "montaza-twilight".into(), accent: String::new(), glass: 0.18, rim: 0.6, roundness: 1.0 }
+        Self { preset: "montaza-twilight".into(), accent: String::new(), glass: 0.18, rim: 0.6, roundness: 1.0, switcher: Vec::new() }
     }
 }
 
@@ -449,10 +578,14 @@ pub enum Element {
     Power,
     Keyboard,
     Banner,
+    /// An image (`[logo]`).
+    Logo,
+    /// A colour scheme switcher (`[theme] switcher`).
+    Themes,
 }
 
 impl Element {
-    pub const ALL: [Element; 9] = [Self::Clock, Self::Date, Self::User, Self::Password, Self::Users, Self::Session, Self::Power, Self::Keyboard, Self::Banner];
+    pub const ALL: [Element; 11] = [Self::Clock, Self::Date, Self::User, Self::Password, Self::Users, Self::Session, Self::Power, Self::Keyboard, Self::Banner, Self::Logo, Self::Themes];
 
     /// English name (translate for display).
     pub fn name(self) -> &'static str {
@@ -466,6 +599,8 @@ impl Element {
             Self::Power => "Power buttons",
             Self::Keyboard => "Keyboard layout",
             Self::Banner => "Message",
+            Self::Logo => "Logo",
+            Self::Themes => "Colour schemes",
         }
     }
 
@@ -535,19 +670,141 @@ fn place(element: Element, anchor: Anchor, x: f32, y: f32, visible: bool, z: i32
     Placement { element, anchor, x, y, scale: 1.0, visible, z }
 }
 
+/// The card positions (user, password, user list) and field size before
+/// the login screen and the lock screen shared their proportions.
+const OLD_CARD_CENTERS: [(Element, f32); 3] = [(Element::User, 118.0), (Element::Password, 254.0), (Element::Users, 350.0)];
+const OLD_FIELD: (f32, f32) = (290.0, 44.0);
+
+impl GreeterConfig {
+    /// A config still at the old card defaults (written in full by the
+    /// installer, never edited) gets the new ones: the card closer to the
+    /// clock and the wider field. Anything moved or resized stays.
+    fn upgrade_untouched_layout(&mut self) {
+        let untouched = OLD_CARD_CENTERS.iter().all(|(e, y)| self.layout.iter().any(|p| p.element == *e && p.anchor == Anchor::Center && p.x == 0.0 && p.y == *y && p.scale == 1.0));
+        if untouched {
+            let defaults = default_layout();
+            for p in &mut self.layout {
+                if let Some(d) = OLD_CARD_CENTERS.iter().find(|(e, _)| *e == p.element).and_then(|(e, _)| defaults.iter().find(|d| d.element == *e)) {
+                    p.y = d.y;
+                }
+            }
+        }
+        if (self.password.width, self.password.height) == OLD_FIELD {
+            (self.password.width, self.password.height) = (L::FIELD_W, L::FIELD_H);
+        }
+    }
+}
+
+/// Ready-made looks for the whole screen: `(id, English name, summary)`.
+/// Applying one ([`GreeterConfig::apply_look`]) changes how the screen
+/// looks and where things sit; who is listed, sessions, folders, language
+/// and accessibility stay as they are.
+pub const LOOKS: [(&str, &str, &str); 2] = [
+    ("mandara", "Mandara", "A big clock, your picture over a glass field, everything floating on the backdrop"),
+    ("midnight-card", "Midnight card", "A quiet clock over one outlined card with the user, password and session, in midnight navy and citrine"),
+];
+
+impl GreeterConfig {
+    /// Applies look `id` from [`LOOKS`]; `false` for an unknown id.
+    pub fn apply_look(&mut self, id: &str) -> bool {
+        let base = GreeterConfig::default();
+        // What a look owns, starting from Mandara's defaults.
+        let keep_dirs = (self.background.video_dirs.clone(), self.background.image_dirs.clone(), self.background.playlist.clone());
+        self.background = BackgroundConfig { video_dirs: keep_dirs.0, image_dirs: keep_dirs.1, playlist: keep_dirs.2, ..base.background.clone() };
+        self.clock = ClockConfig { format_24h: self.clock.format_24h, seconds: self.clock.seconds, ..base.clock.clone() };
+        self.date = DateConfig { format: self.date.format.clone(), ..base.date.clone() };
+        self.user = UserConfig { list: self.user.list, hidden: self.user.hidden.clone(), ..base.user.clone() };
+        self.password = PasswordConfig { placeholder: self.password.placeholder.clone(), caps_hint: self.password.caps_hint, ..base.password.clone() };
+        self.session.style = base.session.style;
+        self.power = PowerConfig { suspend: self.power.suspend, reboot: self.power.reboot, poweroff: self.power.poweroff, ..base.power.clone() };
+        self.theme = ThemeConfig { switcher: self.theme.switcher.clone(), ..base.theme.clone() };
+        self.card = base.card.clone();
+        self.logo = LogoConfig { path: self.logo.path.clone(), ..base.logo.clone() };
+        self.layout = default_layout();
+        match id {
+            "mandara" => {}
+            "midnight-card" => {
+                self.theme.preset = "night-citrine".into();
+                self.theme.roundness = 0.32;
+                self.theme.glass = 0.0;
+                self.theme.rim = 0.0;
+                self.background.mode = BackgroundMode::Solid;
+                self.background.solid = "#070722".into();
+                self.background.dim = 0.32;
+                self.background.vignette = 0.0;
+                self.background.orbs = false;
+                self.background.grain = 0.0;
+                self.clock.size = 96.0;
+                self.clock.weight = 400;
+                self.clock.opacity = 1.0;
+                self.clock.roll_digits = false;
+                self.date.size = 15.0;
+                self.date.weight = 400;
+                self.date.opacity = 0.6;
+                self.user.avatar_source = AvatarSource::Icon;
+                self.user.avatar_shape = AvatarShape::Bare;
+                self.user.avatar_size = 64.0;
+                self.user.glow_ring = false;
+                self.user.name_size = 16.0;
+                self.password.style = FieldStyle::Inset;
+                self.password.submit = SubmitButton::Beside;
+                self.password.mask = PasswordMask::Shapes;
+                self.password.accent_border = true;
+                self.password.height = 40.0;
+                self.password.text_size = 14.0;
+                self.password.glow = false;
+                self.password.keystroke_ripple = false;
+                self.password.reveal_toggle = false;
+                self.session.style = SessionStyle::Field;
+                self.power.style = PowerStyle::Outlined;
+                self.power.labels = false;
+                self.power.size = 36.0;
+                self.card = CardConfig { enabled: true, width: 440.0, padding: 20.0, radius: 18.0, border: 1.0, ..CardConfig::default() };
+                for pl in &mut self.layout {
+                    match pl.element {
+                        Element::Clock => (pl.anchor, pl.y) = (Anchor::Top, 112.0),
+                        Element::Date => (pl.anchor, pl.y) = (Anchor::Top, 226.0),
+                        Element::User => pl.y = 30.0,
+                        Element::Users | Element::Keyboard => pl.visible = false,
+                        Element::Logo => (pl.visible, pl.y) = (true, -36.0),
+                        Element::Themes => pl.visible = true,
+                        Element::Power => (pl.x, pl.y) = (-28.0, -28.0),
+                        _ => {}
+                    }
+                }
+            }
+            _ => return false,
+        }
+        self.normalize();
+        true
+    }
+
+    /// The look this config matches exactly, if any.
+    pub fn current_look(&self) -> Option<&'static str> {
+        LOOKS.iter().map(|(id, _, _)| *id).find(|id| {
+            let mut probe = self.clone();
+            probe.apply_look(id);
+            probe == *self
+        })
+    }
+}
+
 /// The flagship arrangement: date over a big clock at the top, the user
 /// card below center, session bottom-left, power bottom-right.
 pub fn default_layout() -> Vec<Placement> {
     vec![
-        place(Element::Date, Anchor::Top, 0.0, 78.0, true, 1),
-        place(Element::Clock, Anchor::Top, 0.0, 108.0, true, 1),
-        place(Element::User, Anchor::Center, 0.0, 118.0, true, 2),
-        place(Element::Password, Anchor::Center, 0.0, 254.0, true, 3),
-        place(Element::Users, Anchor::Center, 0.0, 350.0, true, 2),
+        place(Element::Date, Anchor::Top, 0.0, L::DATE_TOP, true, 1),
+        place(Element::Clock, Anchor::Top, 0.0, L::CLOCK_TOP, true, 1),
+        place(Element::User, Anchor::Center, 0.0, L::CARD_CENTER, true, 2),
+        place(Element::Password, Anchor::Center, 0.0, L::FIELD_CENTER, true, 3),
+        place(Element::Users, Anchor::Center, 0.0, L::USERS_CENTER, true, 2),
         place(Element::Session, Anchor::BottomLeft, 34.0, -34.0, true, 2),
         place(Element::Power, Anchor::BottomRight, -34.0, -34.0, true, 2),
         place(Element::Keyboard, Anchor::Bottom, 0.0, -38.0, true, 2),
         place(Element::Banner, Anchor::Top, 0.0, 34.0, false, 2),
+        // Above the keyboard pill, so turning it on doesn't cover it.
+        place(Element::Logo, Anchor::Bottom, 0.0, -96.0, false, 2),
+        place(Element::Themes, Anchor::TopRight, -28.0, 28.0, false, 2),
     ]
 }
 
@@ -558,6 +815,9 @@ pub fn default_layout() -> Vec<Placement> {
 pub struct GreeterConfig {
     /// `auto` (from the environment) or a language code.
     pub language: String,
+    /// The family for the login screen's text (empty = the interface font;
+    /// the clock and date have their own).
+    pub font: String,
     pub background: BackgroundConfig,
     pub clock: ClockConfig,
     pub date: DateConfig,
@@ -567,6 +827,8 @@ pub struct GreeterConfig {
     pub power: PowerConfig,
     pub keyboard: KeyboardConfig,
     pub banner: BannerConfig,
+    pub card: CardConfig,
+    pub logo: LogoConfig,
     pub theme: ThemeConfig,
     pub motion: MotionConfig,
     pub accessibility: AccessibilityConfig,
@@ -577,6 +839,7 @@ impl Default for GreeterConfig {
     fn default() -> Self {
         Self {
             language: "auto".into(),
+            font: String::new(),
             background: BackgroundConfig::default(),
             clock: ClockConfig::default(),
             date: DateConfig::default(),
@@ -586,6 +849,8 @@ impl Default for GreeterConfig {
             power: PowerConfig::default(),
             keyboard: KeyboardConfig::default(),
             banner: BannerConfig::default(),
+            card: CardConfig::default(),
+            logo: LogoConfig::default(),
             theme: ThemeConfig::default(),
             motion: MotionConfig::default(),
             accessibility: AccessibilityConfig::default(),
@@ -624,6 +889,7 @@ impl GreeterConfig {
         self.user.avatar_size = self.user.avatar_size.clamp(32.0, 320.0);
         self.password.width = self.password.width.clamp(160.0, 720.0);
         self.password.height = self.password.height.clamp(28.0, 96.0);
+        self.upgrade_untouched_layout();
         let t = &mut self.theme;
         t.glass = t.glass.clamp(0.0, 1.0);
         t.rim = t.rim.clamp(0.0, 1.0);
@@ -772,6 +1038,11 @@ pub fn apply_config(from: &Path) -> Result<String, String> {
     use std::os::unix::fs::PermissionsExt as _;
     let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o644));
     std::fs::rename(&tmp, dst).map_err(|e| e.to_string())?;
+    // Where sessions share their wallpaper (installs from before it existed
+    // get it the next time the config is applied).
+    if let Err(e) = mandara_config::paths::ensure_login_wallpaper_dir(Path::new("/")) {
+        tracing::warn!("{}: {e}", mandara_config::paths::LOGIN_WALLPAPER_DIR);
+    }
     let home_media: Vec<String> = cfg
         .background
         .video_dirs
@@ -793,6 +1064,42 @@ pub fn apply_config(from: &Path) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn looks_apply_and_are_recognised() {
+        let mut cfg = GreeterConfig::default();
+        cfg.user.hidden = vec!["guest".into()];
+        cfg.language = "ar".into();
+        assert_eq!(cfg.current_look(), Some("mandara"));
+        assert!(cfg.apply_look("midnight-card"));
+        assert!(cfg.card.enabled && cfg.password.submit == SubmitButton::Beside && cfg.theme.preset == "night-citrine");
+        assert_eq!(cfg.current_look(), Some("midnight-card"));
+        assert_eq!((cfg.user.hidden.clone(), cfg.language.clone()), (vec!["guest".to_string()], "ar".to_string()), "who and what language stay");
+        assert!(mandara_theme::catalog::find(&cfg.theme.preset).is_some());
+        cfg.clock.size = 120.0;
+        assert_eq!(cfg.current_look(), None, "edited after applying");
+        assert!(cfg.apply_look("mandara") && cfg.current_look() == Some("mandara") && !cfg.card.enabled);
+        assert!(!cfg.apply_look("nope"));
+    }
+
+    /// An installed config at the old card defaults moves to the shared
+    /// proportions; a customised one stays.
+    #[test]
+    fn untouched_old_layouts_get_the_new_card_positions() {
+        let mut old = GreeterConfig::default();
+        for (e, y) in OLD_CARD_CENTERS {
+            old.layout.iter_mut().find(|p| p.element == e).unwrap().y = y;
+        }
+        (old.password.width, old.password.height) = OLD_FIELD;
+        let mut cfg = old.clone();
+        cfg.normalize();
+        assert_eq!(cfg.layout.iter().find(|p| p.element == Element::User).unwrap().y, L::CARD_CENTER);
+        assert_eq!((cfg.password.width, cfg.password.height), (L::FIELD_W, L::FIELD_H));
+        let mut moved = old;
+        moved.layout.iter_mut().find(|p| p.element == Element::User).unwrap().y = 140.0;
+        moved.normalize();
+        assert_eq!(moved.layout.iter().find(|p| p.element == Element::Password).unwrap().y, 254.0, "a moved card keeps its layout");
+    }
 
     #[test]
     fn partial_config_keeps_defaults() {

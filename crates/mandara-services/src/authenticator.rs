@@ -156,7 +156,7 @@ pub fn group_code(code: &str) -> String {
     let chars: Vec<char> = code.chars().collect();
     let mut out = String::new();
     for (i, c) in chars.iter().enumerate() {
-        if i > 0 && (n - i) % 3 == 0 {
+        if i > 0 && (n - i).is_multiple_of(3) {
             out.push(' ');
         }
         out.push(*c);
@@ -419,11 +419,10 @@ pub fn copy_secret(text: &str, clear_after: Option<Duration>) -> Result<(), Stri
         let _ = std::thread::Builder::new().name("mandara-otp-clear".into()).spawn(move || {
             std::thread::sleep(after);
             // Still ours (nothing newer copied, still being served)?
-            if copy_generation().load(Ordering::SeqCst) == generation && serving.load(Ordering::SeqCst) {
-                if let Err(e) = wl_clipboard_rs::copy::clear(ClipboardType::Regular, Seat::All) {
+            if copy_generation().load(Ordering::SeqCst) == generation && serving.load(Ordering::SeqCst)
+                && let Err(e) = wl_clipboard_rs::copy::clear(ClipboardType::Regular, Seat::All) {
                     tracing::warn!("could not clear the clipboard: {e}");
                 }
-            }
         });
     }
     Ok(())

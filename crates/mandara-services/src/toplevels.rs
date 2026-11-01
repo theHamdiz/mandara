@@ -87,7 +87,7 @@ pub fn touch(order: &mut Vec<u64>, id: u64) {
 
 /// Decodes a `state` array (native-endian `u32` values).
 pub fn decode_states(raw: &[u8]) -> Vec<u32> {
-    raw.chunks_exact(4).map(|c| u32::from_ne_bytes([c[0], c[1], c[2], c[3]])).collect()
+    raw.as_chunks::<4>().0.iter().map(|c| u32::from_ne_bytes([c[0], c[1], c[2], c[3]])).collect()
 }
 
 /// Per-handle data accumulated until `done`.

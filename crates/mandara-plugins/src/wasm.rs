@@ -558,6 +558,7 @@ pub fn plugin_dirs() -> Vec<(PathBuf, Source)> {
 
 /// What discovery made of one sub-folder of a plugin directory.
 #[derive(Clone, Debug)]
+#[expect(clippy::large_enum_variant, reason = "made once per plugin folder when inspecting; boxing buys nothing")]
 pub enum Inspection {
     /// A plugin (the first with its id). `entry_missing`: its component
     /// isn't built / copied yet, so loading it will fail.

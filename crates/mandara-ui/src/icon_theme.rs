@@ -233,31 +233,6 @@ pub fn resolve(name: &str, theme: Option<&str>, prefer_symbolic: bool) -> Option
     found
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hicolor_is_always_in_the_chain() {
-        let chain = search_chain("definitely-not-a-theme");
-        assert!(chain.iter().all(|d| d.is_dir()));
-    }
-
-    #[test]
-    fn a_theme_spans_every_icon_root() {
-        let dirs = theme_dirs("hicolor");
-        assert_eq!(dirs.len(), icon_roots().iter().filter(|r| r.join("hicolor").is_dir()).count());
-        let chain = search_chain("hicolor");
-        assert!(dirs.iter().all(|d| chain.contains(d)), "every hicolor directory is searched, not just the first");
-    }
-
-    #[test]
-    fn absolute_paths_and_empty_names() {
-        assert!(resolve("", None, true).is_none());
-        assert!(resolve("/nonexistent/icon.svg", None, false).is_none());
-    }
-}
-
 /// The distribution's logo icon name (`LOGO=` in os-release).
 /// Read once: os-release does not change while the shell runs, and bar
 /// icons ask for it on every render.
@@ -305,4 +280,29 @@ pub fn all_names() -> Vec<String> {
         c.insert(theme, names.clone());
     }
     names
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hicolor_is_always_in_the_chain() {
+        let chain = search_chain("definitely-not-a-theme");
+        assert!(chain.iter().all(|d| d.is_dir()));
+    }
+
+    #[test]
+    fn a_theme_spans_every_icon_root() {
+        let dirs = theme_dirs("hicolor");
+        assert_eq!(dirs.len(), icon_roots().iter().filter(|r| r.join("hicolor").is_dir()).count());
+        let chain = search_chain("hicolor");
+        assert!(dirs.iter().all(|d| chain.contains(d)), "every hicolor directory is searched, not just the first");
+    }
+
+    #[test]
+    fn absolute_paths_and_empty_names() {
+        assert!(resolve("", None, true).is_none());
+        assert!(resolve("/nonexistent/icon.svg", None, false).is_none());
+    }
 }

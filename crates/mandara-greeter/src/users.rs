@@ -130,7 +130,7 @@ pub fn load_avatar(user: &User, size: u32) -> Option<Arc<RenderImage>> {
         let side = img.width().min(img.height());
         let cropped = img.crop_imm((img.width() - side) / 2, (img.height() - side) / 2, side, side);
         let mut rgba = cropped.resize_exact(size, size, image::imageops::FilterType::Lanczos3).to_rgba8();
-        for px in rgba.chunks_exact_mut(4) {
+        for px in rgba.as_chunks_mut::<4>().0 {
             px.swap(0, 2);
         }
         Some(Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(rgba)])))

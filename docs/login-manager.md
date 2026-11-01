@@ -245,7 +245,18 @@ instead (see [commands.md](commands.md#keyrings-and-passwords)).
 `mandara studio "login screen"` (or Studio → **Login screen**) edits every
 setting with a **live preview** — the real greeter view, rendering your draft.
 
-The first tab, **Login manager**, shows the active login screen (name, icon,
+The first tab, **Looks**, applies a whole design in one click: **Mandara**
+(the default) or **Midnight card** (a regular-weight clock with the date under
+it, and one outlined card holding a frameless user icon, an inset field with
+an accent border and a sign-in button beside it, and a full-width session
+field; outlined power buttons, a logo and a colour scheme switcher; the
+Night Citrine theme). Who is listed, sessions, folders, language and
+accessibility stay as they are, and every part stays editable in the other
+tabs: Layout, Background, Clock & date, Sign-in (card, user, password
+field), Session, power & extras (logo, scheme switcher, language), Theme &
+glass, and Motion & accessibility.
+
+The last tab, **Login manager**, shows the active login screen (name, icon,
 kind) and every choice, with Mandara Login marked **Recommended · default**.
 **Use** runs `mandara greeter use <name> --dry-run` and shows that plan in a
 confirm card; **Switch** then runs `pkexec <admin> greeter use <name> --apply`
@@ -288,6 +299,7 @@ own copy never runs as root.
 language = "auto"                # or en, ar, es, fr, de, tr, ru, hi, zh, ja
 
 [background]
+user_wallpaper = true            # the picked person's own wallpaper, when shared
 mode = "auto"                    # auto | video | stills | aurora | solid
 video = "auto"                   # auto | lite | off (decoding)
 video_dirs = ["/usr/share/mandara/login/videos"]
@@ -329,7 +341,7 @@ opacity = 0.9
 
 [user]
 list = "all"                     # all | last-user | manual
-avatar_shape = "circle"          # circle | squircle | rounded
+avatar_shape = "circle"          # circle | squircle | rounded | bare (no frame)
 avatar_source = "auto"           # auto (AccountsService / ~/.face) | monogram | icon
 avatar_size = 108.0
 glow_ring = true                 # breathing accent ring
@@ -338,9 +350,13 @@ name_size = 20.0
 hidden = []                      # login names never listed
 
 [password]
-style = "glass"                  # glass | solid | outline | underline
-width = 290.0
-height = 44.0
+style = "glass"                  # glass | solid | inset | outline | underline
+submit = "inside"                # inside | beside | hidden (Enter signs in)
+mask = "dots"                    # dots | shapes (a varied shape per character)
+accent_border = false            # accent border while focused
+text_size = 15.0
+width = 340.0
+height = 48.0
 placeholder = ""
 caps_hint = true
 reveal_toggle = true
@@ -350,12 +366,32 @@ glow = true
 [session]
 default = ""                     # e.g. "niri"; a user's last choice wins
 x11 = true
+style = "pill"                   # pill | field (full width)
 
 [power]
 suspend = true
 reboot = true
 poweroff = true
 labels = true
+style = "soft"                   # soft | outlined
+size = 44.0
+
+[card]                           # user, password and session on one card
+enabled = false
+width = 460.0
+padding = 22.0
+radius = 22.0
+fill = ""                        # #rrggbb, empty = the theme's surface
+opacity = 1.0
+border = 1.0
+border_color = ""                # #rrggbb, empty = the theme's outline
+back_button = true               # back to the user switcher
+session_inside = true
+
+[logo]                           # shown with the "logo" layout element
+path = ""                        # PNG / SVG, empty = Mandara's emblem
+size = 56.0
+opacity = 0.9
 
 [keyboard]
 layout = ""                      # empty = detected
@@ -370,6 +406,7 @@ accent = ""                      # "#rrggbb" override
 glass = 0.18
 rim = 0.6
 roundness = 1.0
+switcher = []                    # schemes the "themes" element offers (ids)
 
 [motion]
 entrance = true
@@ -391,7 +428,9 @@ large_text = false
 high_contrast = false
 
 # Layout: one entry per element (clock, date, user, password, users,
-# session, power, keyboard, banner).
+# session, power, keyboard, banner, logo, themes — the colour scheme
+# switcher).
+# With the card on, the user element places the whole card.
 [[layout]]
 element = "clock"
 anchor = "top"                   # top-left … bottom-right, center
@@ -466,6 +505,20 @@ cargo run -p mandara-media --example make_test_clip -- test.webm 1920x1080 120 2
 >
 > or build with `--config profile.dev.package.rav1d.debug-assertions=false
 > --config profile.dev.package.rav1d.overflow-checks=false`.
+
+## Each person's own wallpaper
+
+When someone is picked, the login screen shows their desktop wallpaper.
+Their Mandara session shares a copy (at most 2560×1600, JPEG) in
+`/var/lib/mandara-login/wallpapers/<user>.jpg` whenever the wallpaper
+changes (Studio → Wallpaper → "Show on the login screen"). The folder is
+sticky like `/tmp`: anyone can add their own file and nobody can change
+someone else's, and the login screen only shows a regular file owned by the
+picked account, so nobody can put a picture under another person's name.
+`greeter install` creates the folder, and so does applying the login screen
+settings in Studio (for installs from before it existed). People without a
+shared wallpaper, and `user_wallpaper = false`, get the backdrop below. The
+demo and Studio's preview show your own current wallpaper.
 
 ## Stills and the aurora
 

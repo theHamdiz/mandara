@@ -84,15 +84,12 @@ pub(super) fn place(id: &str, from: Lane, to: Lane, index: Option<usize>, cx: &m
     update_config(cx, |c| {
         // Index in the target before removal (same-lane reorders shift).
         let mut index = index;
-        if from == to {
-            if let (Some(list), Some(i)) = (to.list(c), index.as_mut()) {
-                if let Some(old) = list.iter().position(|x| x == id) {
-                    if old < *i {
+        if from == to
+            && let (Some(list), Some(i)) = (to.list(c), index.as_mut())
+                && let Some(old) = list.iter().position(|x| x == id)
+                    && old < *i {
                         *i -= 1;
                     }
-                }
-            }
-        }
         if from == Lane::Sidebar && to == Lane::Tray {
             for tab in &mut c.sidebar.tabs {
                 tab.cards.retain(|x| x != id);
@@ -151,6 +148,16 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces", "active-window"],
         center: &["clock", "media"],
         right: &["weather", "resources", "clipboard", "screenshot", "network", "bluetooth", "audio", "notifications", "session"],
+    },
+    Preset {
+        name: tk("Notch"),
+        blurb: tk("Hangs from the top edge with curved shoulders"),
+        layout: BarLayout::Notch,
+        position: BarPosition::Top,
+        height: 30.0,
+        left: &["launcher", "workspaces", "active-window"],
+        center: &["clock", "media"],
+        right: &["weather", "tray", "network", "bluetooth", "audio", "notifications", "session"],
     },
     Preset {
         name: tk("Glass pills"),
@@ -245,6 +252,11 @@ fn apply_preset(p: &'static Preset, cx: &mut App) {
         c.bar.left = left;
         c.bar.center = center;
         c.bar.right = right;
+        // The notch look: grouped capsules and a soft shadow under it.
+        if p.layout == BarLayout::Notch {
+            c.bar.capsules = true;
+            c.bar.shadow = true;
+        }
     });
 }
 
@@ -368,6 +380,7 @@ impl StudioView {
                     BarLayout::Hairline => div().h(px(DIM_6_PX)).rounded(px(RADIUS_1_5_PX)).bg(p.surface_container_high.hsla()).border_b_1().border_color(p.primary.hsla()),
                     BarLayout::Micro => div().h(px(DIM_10_PX)).row().justify_center().child(div().w(px(DIM_40_PX)).h(px(DIM_10_PX)).rounded_full().bg(p.surface_container_high.hsla())),
                     BarLayout::MinimalEdge => div().h(px(DIM_12_PX)).rounded(px(RADIUS_4_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(MOCK_PILL_A_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_C_PX)),
+                    BarLayout::Notch => div().h(px(DIM_12_PX)).mt(px(-SPACE_6_PX)).mx(px(SPACE_10_PX)).rounded_b(px(RADIUS_6_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(MOCK_PILL_A_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_C_PX)),
                     BarLayout::FloatingPills => div().h(px(DIM_12_PX)).ltr_row().items_center().justify_between().child(pill(MOCK_PILL_A_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_C_PX)),
                     BarLayout::ContiguousIsland => div().h(px(DIM_12_PX)).row().justify_center().child(div().h(px(DIM_12_PX)).px(px(SPACE_4_PX)).rounded_full().bg(p.surface_container_high.hsla()).row().items_center().gap(px(SPACE_4_PX)).child(pill(MOCK_PILL_SMALL_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_SMALL_PX))),
                 });

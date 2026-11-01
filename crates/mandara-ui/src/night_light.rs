@@ -13,9 +13,9 @@ use chrono::Local;
 use gpui::{App, Global};
 use mandara_config::ShellConfig;
 use mandara_config::outputs::{NightSchedule, defaults};
-use mandara_i18n::{t, tk};
+use mandara_i18n::{t, tf, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginRegistry};
-use mandara_services::gamma::{Gamma, GammaSupport, probe};
+use mandara_services::gamma::{Gamma, GammaStatus, GammaSupport, probe, running_gamma_tools};
 use mandara_services::night_light::{GammaTarget, NightWindow, next_change, phase};
 use serde_json::json;
 
@@ -34,6 +34,9 @@ const PREVIEW_SECONDS: f64 = 3.0;
 const MAX_PREVIEW_SECONDS: f64 = 10.0;
 /// The schedule counts as "night" from this factor on (override bookkeeping).
 const NIGHT_SIDE: f32 = 0.5;
+/// How long after warming up the screens are checked (the compositor
+/// answers within a frame or two; a fade is well underway by then).
+const TINT_CHECK: Duration = Duration::from_secs(2);
 
 /// A manual override that lasts until the schedule next crosses day/night.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -54,6 +57,9 @@ struct NightLight {
     paused: Option<&'static str>,
     /// Cached support probe (before the thread runs).
     support: Option<GammaSupport>,
+    /// Told the user the screens couldn't be warmed (once until it's off
+    /// again).
+    warned: bool,
 }
 impl Global for NightLight {}
 
@@ -122,16 +128,69 @@ fn evaluate(fade: Duration, cx: &mut App) {
     let (target, paused) = desired(&cfg, &mut forced, preview, focused.as_ref().map(|(a, f)| (a.as_str(), *f)));
     st.forced = forced;
     st.paused = paused;
+    // A gamma thread that stopped (its connection failed) can't tint
+    // anything: start a fresh one for the next warm target.
+    if st.gamma.as_ref().is_some_and(|g| g.status().error.is_some()) && st.sent != Some(target) {
+        st.gamma = None;
+        st.sent = None;
+    }
     if st.sent == Some(target) || (st.sent.is_none() && target.is_neutral()) {
         return;
     }
     if st.gamma.is_none() && !target.is_neutral() {
         st.gamma = Some(Gamma::spawn());
     }
-    if let Some(g) = &st.gamma {
-        g.set(target, if preview.is_some() { PREVIEW_FADE } else { fade });
-        st.sent = Some(target);
+    let Some(g) = &st.gamma else { return };
+    g.set(target, if preview.is_some() { PREVIEW_FADE } else { fade });
+    st.sent = Some(target);
+    let check = if target.is_neutral() {
+        st.warned = false;
+        false
+    } else {
+        !st.warned && preview.is_none()
+    };
+    if check {
+        cx.spawn(async move |cx| {
+            cx.background_executor().timer(TINT_CHECK).await;
+            cx.update(check_tint);
+        })
+        .detach();
     }
+}
+
+/// After warming up: tells the user, once, when a screen refused the
+/// warmer colours (another night-light app holds them, or the compositor or
+/// driver can't apply them: the protocol reports both the same way) or the
+/// connection failed,
+/// instead of the toggle saying "Warm" while nothing changes.
+fn check_tint(cx: &mut App) {
+    let st = state(cx);
+    if st.warned || !st.sent.is_some_and(|t| !t.is_neutral()) {
+        return;
+    }
+    let Some(status) = st.gamma.as_ref().map(Gamma::status) else { return };
+    let Some(body) = blocked_message(&status, running_gamma_tools) else { return };
+    st.warned = true;
+    crate::plugins::notifications::send(cx, mandara_services::NotificationCommand::Post { app: t("Night light").into(), icon: "moon".into(), summary: t("Night light can't warm your screen").into(), body });
+}
+
+/// Why `status` shows no warmed screen, for the user; `None` when every
+/// screen took it. `tools` lists running night-light apps (only asked when
+/// a screen is held).
+fn blocked_message(status: &GammaStatus, tools: impl FnOnce() -> Vec<String>) -> Option<String> {
+    if let Some(err) = &status.error {
+        return Some(tf("It lost its connection to the compositor ({error}). Turn night light off and on again to retry.", &[("error", err)]));
+    }
+    if !status.busy.is_empty() {
+        let outputs = status.busy.join(", ");
+        let tools = tools();
+        return Some(if tools.is_empty() {
+            tf("{outputs} refused the warmer colours: another night-light app may hold them (wlsunset, gammastep, hyprsunset…), or the compositor or display driver doesn't allow it.", &[("outputs", &outputs)])
+        } else {
+            tf("{apps} already controls the colours of {outputs}. Quit it, and take it out of your startup, to use Mandara's night light.", &[("apps", &tools.join(", ")), ("outputs", &outputs)])
+        });
+    }
+    status.outputs.is_empty().then(|| t("No screen took the warmer colours. Run `mandara msg nightlight status` to see what Mandara found.").to_string())
 }
 
 /// Starts the controller (the gamma thread itself waits until needed).
@@ -142,7 +201,7 @@ pub fn init(cx: &mut App) {
     let hub = crate::hub::hub(cx);
     cx.observe(&hub, |_, cx| evaluate(TOGGLE_FADE, cx)).detach();
     cx.spawn(async move |cx| loop {
-        let _ = cx.update(|cx| evaluate(STEP_FADE, cx));
+        cx.update(|cx| evaluate(STEP_FADE, cx));
         cx.background_executor().timer(TICK).await;
     })
     .detach();
@@ -193,7 +252,8 @@ fn status(cx: &mut App) -> serde_json::Value {
     json!({
         "support": support,
         "enabled": n.enabled,
-        "active": st.sent.is_some_and(|t| !t.is_neutral()),
+        // Warm only while the gamma thread runs and some screen took it.
+        "active": st.sent.is_some_and(|t| !t.is_neutral()) && gamma.error.is_none() && (st.gamma.is_none() || !gamma.outputs.is_empty()),
         "temperature": st.sent.map(|t| t.temperature).unwrap_or(defaults::NEUTRAL_TEMPERATURE_K),
         "schedule": n.schedule,
         "night_factor": sched.factor,
@@ -205,6 +265,8 @@ fn status(cx: &mut App) -> serde_json::Value {
         "override": st.forced.map(|f| if f.on { "on" } else { "off" }),
         "paused": st.paused,
         "next_change": next.map(|(at, to_night)| json!({ "at": at.format("%H:%M").to_string(), "to_night": to_night })),
+        "held_by": if gamma.busy.is_empty() { Vec::new() } else { running_gamma_tools() },
+        "error": gamma.error,
         "outputs": gamma.outputs,
         "held_by_another_app": gamma.busy,
         "location": { "latitude": lat, "longitude": lon },
@@ -301,7 +363,7 @@ pub fn register(r: &mut PluginRegistry) {
             let wait = Duration::from_secs_f64(secs);
             cx.spawn(async move |cx| {
                 cx.background_executor().timer(wait).await;
-                let _ = cx.update(|cx| evaluate(TOGGLE_FADE, cx));
+                cx.update(|cx| evaluate(TOGGLE_FADE, cx));
             })
             .detach();
             Ok(json!({ "preview": k, "seconds": secs }))
@@ -351,6 +413,21 @@ mod tests {
         // Previews win over everything.
         let p = GammaTarget { temperature: 3000, ..GammaTarget::NEUTRAL };
         assert_eq!(desired(&cfg(false), &mut None, Some(p), None).0, p);
+    }
+
+    /// Issue #11: a screen held by another night-light app, or a dropped
+    /// connection, is reported instead of silently showing nothing.
+    #[test]
+    fn explains_why_the_screen_stays_cold() {
+        let ok = GammaStatus { outputs: vec!["eDP-1".into()], ..Default::default() };
+        assert_eq!(blocked_message(&ok, || unreachable!("no screen is held")), None);
+        let held = GammaStatus { busy: vec!["eDP-1".into()], ..Default::default() };
+        let msg = blocked_message(&held, || vec!["wlsunset".into()]).unwrap();
+        assert!(msg.contains("wlsunset") && msg.contains("eDP-1"), "{msg}");
+        assert!(blocked_message(&held, Vec::new).unwrap().contains("display driver"));
+        let lost = GammaStatus { error: Some("Broken pipe".into()), ..Default::default() };
+        assert!(blocked_message(&lost, Vec::new).unwrap().contains("Broken pipe"));
+        assert!(blocked_message(&GammaStatus::default(), Vec::new).unwrap().contains("nightlight status"));
     }
 
     #[test]

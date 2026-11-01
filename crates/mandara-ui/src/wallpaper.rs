@@ -136,6 +136,105 @@ pub fn open_still(path: &Path) -> Result<image::DynamicImage, String> {
     image::open(path).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// Width of the frosted copy (the GPU stretches it; the blur hides it).
+const FROSTED_W: u32 = 640;
+const FROSTED_SIGMA: f32 = 9.0;
+
+/// A small, heavily blurred copy of `path` for frosted glass (the main
+/// menu): its cached file when it exists, else `None` while it is made in
+/// the background (the next frame picks it up).
+pub fn frosted(path: &Path) -> Option<PathBuf> {
+    use std::sync::Mutex;
+    static MAKING: Mutex<Option<PathBuf>> = Mutex::new(None);
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut h);
+    std::fs::metadata(path).and_then(|m| m.modified()).ok().hash(&mut h);
+    let out = mandara_config::paths::cache_dir().join("frosted").join(format!("{:016x}.png", h.finish()));
+    if out.is_file() {
+        return Some(out);
+    }
+    let mut making = MAKING.lock().ok()?;
+    if making.as_ref() == Some(&out) {
+        return None;
+    }
+    *making = Some(out.clone());
+    let src = path.to_path_buf();
+    std::thread::spawn(move || {
+        let made = (|| -> Result<(), String> {
+            let img = open_still(&src)?.thumbnail(FROSTED_W, FROSTED_W).to_rgb8();
+            let blurred = image::imageops::blur(&img, FROSTED_SIGMA);
+            if let Some(dir) = out.parent() {
+                std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+            }
+            let tmp = out.with_extension("tmp");
+            blurred.save_with_format(&tmp, image::ImageFormat::Png).map_err(|e| e.to_string())?;
+            std::fs::rename(&tmp, &out).map_err(|e| e.to_string())
+        })();
+        if let Err(e) = made {
+            tracing::debug!("frosted wallpaper: {e}");
+        }
+        if let Ok(mut m) = MAKING.lock() {
+            *m = None;
+        }
+    });
+    None
+}
+
+/// Largest copy shared with the login screen (it fills the screen with
+/// a gentle zoom; 1440p covers it without a multi-megabyte file).
+const LOGIN_SHARE_MAX: (u32, u32) = (2560, 1600);
+const LOGIN_SHARE_QUALITY: u8 = 88;
+
+/// Keeps a copy of your wallpaper where Mandara Login can show it when
+/// your account is picked (shell process). Off with
+/// `wallpaper.share_with_login = false`; nothing happens until Mandara
+/// Login's shared folder exists.
+pub fn init_login_share(cx: &mut App) {
+    let last: std::rc::Rc<std::cell::RefCell<Option<PathBuf>>> = Default::default();
+    let share = move |cx: &mut App| {
+        let c = config(cx).read(cx).snapshot();
+        if !c.wallpaper.share_with_login {
+            return;
+        }
+        let Some(shown) = mandara_config::desktop::effective_wallpaper(c.wallpaper.path.as_ref(), &c.wallpaper.variants, None, c.theme.mode.is_dark()) else { return };
+        if last.borrow().as_ref() == Some(&shown) {
+            return;
+        }
+        *last.borrow_mut() = Some(shown.clone());
+        cx.background_executor()
+            .spawn(async move {
+                if let Err(e) = share_with_login(&shown, Path::new(mandara_config::paths::LOGIN_WALLPAPER_DIR)) {
+                    tracing::debug!("login screen wallpaper: {e}");
+                }
+            })
+            .detach();
+    };
+    share(cx);
+    cx.observe(&config(cx), move |_, cx| share(cx)).detach();
+}
+
+/// Writes `path` (a picture or a video's first frame) into `dir` as this
+/// user's login wallpaper: a JPEG at most [`LOGIN_SHARE_MAX`], replaced
+/// atomically.
+fn share_with_login(path: &Path, dir: &Path) -> Result<(), String> {
+    use std::os::unix::fs::OpenOptionsExt as _;
+    if !dir.is_dir() || rustix::fs::access(dir, rustix::fs::Access::WRITE_OK).is_err() {
+        return Ok(());
+    }
+    let user = std::env::var("USER").ok().filter(|u| !u.is_empty() && !u.contains('/')).ok_or("no user name")?;
+    let uid = rustix::process::getuid().as_raw();
+    let img = open_still(path)?;
+    let img = if img.width() > LOGIN_SHARE_MAX.0 || img.height() > LOGIN_SHARE_MAX.1 { img.resize(LOGIN_SHARE_MAX.0, LOGIN_SHARE_MAX.1, image::imageops::FilterType::Triangle) } else { img };
+    let target = mandara_config::paths::login_wallpaper_target(dir, &user, uid);
+    let tmp = dir.join(format!(".{user}.{uid}.tmp"));
+    let _ = std::fs::remove_file(&tmp);
+    let file = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o644).open(&tmp).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    let mut out = std::io::BufWriter::new(file);
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, LOGIN_SHARE_QUALITY).encode_image(&img.to_rgb8()).map_err(|e| e.to_string())?;
+    drop(out);
+    std::fs::rename(&tmp, &target).map_err(|e| format!("{}: {e}", target.display()))
+}
+
 /// The file to read when a wallpaper is needed as a picture (fill copies,
 /// the lock screen, previews): the image itself, or for a video its
 /// poster, the first frame cached under `~/.cache/mandara/posters/`.
@@ -182,14 +281,12 @@ pub fn slant(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
     pb.line_to(0.0, h as f32);
     pb.close();
     let shape = pb.finish().ok_or("bad path")?;
-    let mut paint = Paint::default();
-    paint.anti_alias = true;
     // x' = x + off − SHEAR·y: the photo leans with its frame.
-    paint.shader = Pattern::new(source.as_ref(), SpreadMode::Pad, FilterQuality::Bilinear, 1.0, Transform::from_row(1.0, 0.0, -SHEAR, 1.0, off as f32, 0.0));
+    let paint = Paint { anti_alias: true, shader: Pattern::new(source.as_ref(), SpreadMode::Pad, FilterQuality::Bilinear, 1.0, Transform::from_row(1.0, 0.0, -SHEAR, 1.0, off as f32, 0.0)), ..Paint::default() };
     canvas.fill_path(&shape, &paint, FillRule::Winding, Transform::identity(), None);
     // Back to straight alpha for PNG.
     let mut rgba = canvas.take();
-    for px in rgba.chunks_exact_mut(4) {
+    for px in rgba.as_chunks_mut::<4>().0 {
         let a = px[3] as u32;
         if a > 0 && a < 255 {
             for c in &mut px[..3] {
@@ -737,11 +834,10 @@ impl Render for WallpaperView {
         if self.cutout.as_ref().is_some_and(fading) || self.retired.as_ref().is_some_and(fading) {
             window.request_animation_frame();
         }
-        if self.retired.as_ref().is_some_and(|r| !fading(r)) {
-            if let Some(r) = self.retired.take() {
+        if self.retired.as_ref().is_some_and(|r| !fading(r))
+            && let Some(r) = self.retired.take() {
                 self.stale_images.push(r.image);
             }
-        }
         let crossfading = self.previous.is_some();
         // A subject may overlap the clock but never swallow it; the date
         // pill rises above a subject that would hide it.
@@ -1100,11 +1196,10 @@ impl PickerView {
             let w = wall.clone();
             let full = cx.background_executor().spawn(async move { wallhaven::download(&w) }).await;
             let _ = this.update(cx, |this, cx| {
-                if let Ok(path) = full {
-                    if let Some(pos) = this.online.walls.iter().position(|x| x.id == wall.id) {
+                if let Ok(path) = full
+                    && let Some(pos) = this.online.walls.iter().position(|x| x.id == wall.id) {
                         this.all[pos] = path;
                     }
-                }
                 cx.notify();
             });
         }));
@@ -1463,11 +1558,10 @@ impl Render for PickerView {
                                         if let Some(path) = shape(gpui::PathBuilder::fill()) {
                                             window.paint_path(path, placeholder.hsla());
                                         }
-                                    } else if e < 1.0 {
-                                        if let Some(path) = shape(gpui::PathBuilder::fill()) {
+                                    } else if e < 1.0
+                                        && let Some(path) = shape(gpui::PathBuilder::fill()) {
                                             window.paint_path(path, gpui::black().opacity(0.16 * (1.0 - e)));
                                         }
-                                    }
                                     if let Some(path) = shape(gpui::PathBuilder::stroke(px(1.0 + e))) {
                                         window.paint_path(path, gpui::Rgba { r: 1.0, g: 0.97, b: 0.93, a: 0.28 + 0.72 * e });
                                     }

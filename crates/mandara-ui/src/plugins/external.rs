@@ -500,11 +500,10 @@ pub fn watch(cx: &mut App) {
         if source != Source::System {
             let _ = std::fs::create_dir_all(&dir);
         }
-        if dir.is_dir() {
-            if let Err(err) = watcher.watch(&dir, notify::RecursiveMode::Recursive) {
+        if dir.is_dir()
+            && let Err(err) = watcher.watch(&dir, notify::RecursiveMode::Recursive) {
                 tracing::warn!("watching {}: {err}", dir.display());
             }
-        }
     }
     cx.spawn(async move |cx| {
         // Keep the watcher alive for the life of the shell.

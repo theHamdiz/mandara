@@ -136,12 +136,11 @@ fn unfold(text: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for raw in text.split('\n') {
         let line = raw.strip_suffix('\r').unwrap_or(raw);
-        if let Some(rest) = line.strip_prefix(' ').or_else(|| line.strip_prefix('\t')) {
-            if let Some(last) = out.last_mut() {
+        if let Some(rest) = line.strip_prefix(' ').or_else(|| line.strip_prefix('\t'))
+            && let Some(last) = out.last_mut() {
                 last.push_str(rest);
                 continue;
             }
-        }
         if !line.is_empty() {
             out.push(line.to_string());
         }
@@ -440,8 +439,7 @@ fn instances(event: &Event, to: DateTime<Local>) -> Vec<When> {
             let start_date = event.start.local().date_naive();
             let first = start_date.with_day(1).unwrap_or(start_date);
             let mut month = 0u32;
-            'months: loop {
-                let Some(base) = first.checked_add_months(Months::new(month * rule.interval)) else { break };
+            'months: while let Some(base) = first.checked_add_months(Months::new(month * rule.interval)) {
                 let mut days = rule.by_month_day.clone();
                 days.sort_unstable();
                 for d in days {

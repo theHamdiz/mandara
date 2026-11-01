@@ -295,20 +295,18 @@ fn niri_binds(text: &str) -> Vec<(usize, usize, String)> {
         }
         if depth == 0 && line.starts_with("binds") {
             in_binds = true;
-        } else if in_binds && depth == 1 && open.is_none() {
-            if let Some(first) = line.split_whitespace().next().filter(|w| !w.starts_with('}')) {
+        } else if in_binds && depth == 1 && open.is_none()
+            && let Some(first) = line.split_whitespace().next().filter(|w| !w.starts_with('}')) {
                 let mut pieces: Vec<&str> = first.split('+').collect();
                 let key = pieces.pop().unwrap_or_default();
                 open = Some((i, chord(pieces.into_iter(), key), depth));
             }
-        }
         depth += line.matches('{').count() as i32 - line.matches('}').count() as i32;
-        if let Some((start, ch, at)) = open.clone() {
-            if depth <= at {
+        if let Some((start, ch, at)) = open.clone()
+            && depth <= at {
                 out.push((start, i, ch));
                 open = None;
             }
-        }
         if depth <= 0 {
             in_binds = false;
             depth = 0;

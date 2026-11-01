@@ -17,11 +17,23 @@ fn extra(name: &str) -> Option<&'static str> {
         "caps" => r#"<path d="M12 4l7.5 8H15v4.5H9V12H4.5z"/><path d="M9 20.5h6"/>"#,
         "eye" => r#"<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>"#,
         "eye-off" => r#"<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" stroke-opacity="0.5"/><path d="M4 4l16 16"/>"#,
+        "palette" => r#"<path d="M12 21a9 9 0 1 1 9-9c0 2.5-2 3.5-4 3.5h-1.8a1.7 1.7 0 0 0-1.2 2.9 1.6 1.6 0 0 1-1.1 2.6z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="14.5" cy="7" r="1"/><circle cx="17" cy="11" r="1"/>"#,
         _ => return None,
     })
 }
 
-pub const EXTRA_ICONS: [&str; 8] = ["arrow-right", "arrow-left", "chevron-down", "chevron-up", "user", "caps", "eye", "eye-off"];
+/// Mandara's single-colour emblem (the login screen's default logo).
+const EMBLEM: &str = include_str!("../../../assets/brand/mandara-symbolic.svg");
+
+/// A complete SVG for an extra icon.
+fn svg_text(name: &str) -> Option<String> {
+    if name == "emblem" {
+        return Some(EMBLEM.to_string());
+    }
+    extra(name).map(|body| format!("{HEAD}{body}</svg>"))
+}
+
+pub const EXTRA_ICONS: [&str; 10] = ["arrow-right", "arrow-left", "chevron-down", "chevron-up", "user", "caps", "eye", "eye-off", "palette", "emblem"];
 
 /// The greeter's extra icons as files (for `svg().external_path`), so the
 /// view also renders where only the shell's asset source is installed
@@ -30,7 +42,7 @@ pub const EXTRA_ICONS: [&str; 8] = ["arrow-right", "arrow-left", "chevron-down",
 pub fn extra_icon_file(name: &str) -> Option<String> {
     use std::sync::OnceLock;
     static DIR: OnceLock<Option<std::path::PathBuf>> = OnceLock::new();
-    let body = extra(name)?;
+    let body = svg_text(name)?;
     let dir = DIR.get_or_init(|| {
         // The per-user runtime dir (private), else a uid-named temp folder.
         // SAFETY: getuid has no preconditions.
@@ -41,8 +53,8 @@ pub fn extra_icon_file(name: &str) -> Option<String> {
         };
         std::fs::create_dir_all(&dir).ok()?;
         for n in EXTRA_ICONS {
-            if let Some(b) = extra(n) {
-                std::fs::write(dir.join(format!("{n}.svg")), format!("{HEAD}{b}</svg>")).ok()?;
+            if let Some(svg) = svg_text(n) {
+                std::fs::write(dir.join(format!("{n}.svg")), svg).ok()?;
             }
         }
         let _ = body;
@@ -55,8 +67,8 @@ pub struct GreeterAssets;
 
 impl AssetSource for GreeterAssets {
     fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
-        if let Some(body) = path.strip_prefix("icons/").and_then(|p| p.strip_suffix(".svg")).and_then(extra) {
-            return Ok(Some(Cow::Owned(format!("{HEAD}{body}</svg>").into_bytes())));
+        if let Some(svg) = path.strip_prefix("icons/").and_then(|p| p.strip_suffix(".svg")).and_then(svg_text) {
+            return Ok(Some(Cow::Owned(svg.into_bytes())));
         }
         MandaraAssets.load(path)
     }

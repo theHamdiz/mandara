@@ -242,10 +242,10 @@ fn init_notifications(cx: &mut App) {
         };
         for a in announcements {
             match a {
-                Announce::Bluetooth { name, connected: true } if cfg_bt => post(cx, &t("Bluetooth"), "bluetooth", tf("{device} connected", &[("device", &name)])),
-                Announce::Bluetooth { name, connected: false } if cfg_bt => post(cx, &t("Bluetooth"), "bluetooth-off", tf("{device} disconnected", &[("device", &name)])),
-                Announce::Vpn { name, connected: true } if cfg_net => post(cx, &t("VPN"), "shield", tf("VPN {name} connected", &[("name", &name)])),
-                Announce::Vpn { name, connected: false } if cfg_net => post(cx, &t("VPN"), "shield", tf("VPN {name} disconnected", &[("name", &name)])),
+                Announce::Bluetooth { name, connected: true } if cfg_bt => post(cx, t("Bluetooth"), "bluetooth", tf("{device} connected", &[("device", &name)])),
+                Announce::Bluetooth { name, connected: false } if cfg_bt => post(cx, t("Bluetooth"), "bluetooth-off", tf("{device} disconnected", &[("device", &name)])),
+                Announce::Vpn { name, connected: true } if cfg_net => post(cx, t("VPN"), "shield", tf("VPN {name} connected", &[("name", &name)])),
+                Announce::Vpn { name, connected: false } if cfg_net => post(cx, t("VPN"), "shield", tf("VPN {name} disconnected", &[("name", &name)])),
                 _ => {}
             }
         }
@@ -762,44 +762,6 @@ fn register_uninstall(r: &mut PluginRegistry) {
     );
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn connection_notices_need_a_baseline_per_service() {
-        let dev = |a: &str, n: &str| (a.to_string(), n.to_string());
-        let mut w = ConnectionWatch::default();
-        // Startup: Bluetooth reports first, NetworkManager later. Neither
-        // announces what was already connected.
-        assert!(w.update(Some(vec![dev("AA", "Buds")]), None).is_empty());
-        assert!(w.update(Some(vec![dev("AA", "Buds")]), Some(vec!["Work".into()])).is_empty(), "an active VPN at startup is not news");
-        // A rename keeps the address: no disconnect / connect pair.
-        assert!(w.update(Some(vec![dev("AA", "My buds")]), Some(vec!["Work".into()])).is_empty());
-        let got = w.update(Some(vec![dev("BB", "Mouse")]), Some(vec![]));
-        assert_eq!(
-            got,
-            [
-                Announce::Bluetooth { name: "Mouse".into(), connected: true },
-                Announce::Bluetooth { name: "My buds".into(), connected: false },
-                Announce::Vpn { name: "Work".into(), connected: false },
-            ]
-        );
-        // Bluetooth goes away (adapter switch / off) and back: silent rebaseline.
-        assert!(w.update(None, Some(vec![])).is_empty());
-        assert!(w.update(Some(vec![dev("CC", "Keyboard")]), Some(vec![])).is_empty());
-        assert_eq!(w.update(Some(vec![]), Some(vec!["Home".into()])), [Announce::Bluetooth { name: "Keyboard".into(), connected: false }, Announce::Vpn { name: "Home".into(), connected: true }]);
-    }
-
-    #[test]
-    fn name_diffs() {
-        let (up, down) = diff_names(&["Buds".into(), "Mouse".into()], &["Mouse".into(), "Keyboard".into()]);
-        assert_eq!((up, down), (vec!["Keyboard".to_string()], vec!["Buds".to_string()]));
-        assert_eq!(desktop_id("firefox"), "firefox.desktop");
-        assert_eq!(desktop_id("a.desktop"), "a.desktop");
-    }
-}
-
 fn desktop_id(s: &str) -> String {
     let s = s.trim();
     if s.ends_with(".desktop") { s.to_string() } else { format!("{s}.desktop") }
@@ -888,4 +850,42 @@ fn register_profiles(r: &mut PluginRegistry) {
         .arg(ArgSpec::required("section", ArgKind::String, tk("top-level section, e.g. bar, launcher, compositor")))
         .example("config reset bar"),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connection_notices_need_a_baseline_per_service() {
+        let dev = |a: &str, n: &str| (a.to_string(), n.to_string());
+        let mut w = ConnectionWatch::default();
+        // Startup: Bluetooth reports first, NetworkManager later. Neither
+        // announces what was already connected.
+        assert!(w.update(Some(vec![dev("AA", "Buds")]), None).is_empty());
+        assert!(w.update(Some(vec![dev("AA", "Buds")]), Some(vec!["Work".into()])).is_empty(), "an active VPN at startup is not news");
+        // A rename keeps the address: no disconnect / connect pair.
+        assert!(w.update(Some(vec![dev("AA", "My buds")]), Some(vec!["Work".into()])).is_empty());
+        let got = w.update(Some(vec![dev("BB", "Mouse")]), Some(vec![]));
+        assert_eq!(
+            got,
+            [
+                Announce::Bluetooth { name: "Mouse".into(), connected: true },
+                Announce::Bluetooth { name: "My buds".into(), connected: false },
+                Announce::Vpn { name: "Work".into(), connected: false },
+            ]
+        );
+        // Bluetooth goes away (adapter switch / off) and back: silent rebaseline.
+        assert!(w.update(None, Some(vec![])).is_empty());
+        assert!(w.update(Some(vec![dev("CC", "Keyboard")]), Some(vec![])).is_empty());
+        assert_eq!(w.update(Some(vec![]), Some(vec!["Home".into()])), [Announce::Bluetooth { name: "Keyboard".into(), connected: false }, Announce::Vpn { name: "Home".into(), connected: true }]);
+    }
+
+    #[test]
+    fn name_diffs() {
+        let (up, down) = diff_names(&["Buds".into(), "Mouse".into()], &["Mouse".into(), "Keyboard".into()]);
+        assert_eq!((up, down), (vec!["Keyboard".to_string()], vec!["Buds".to_string()]));
+        assert_eq!(desktop_id("firefox"), "firefox.desktop");
+        assert_eq!(desktop_id("a.desktop"), "a.desktop");
+    }
 }

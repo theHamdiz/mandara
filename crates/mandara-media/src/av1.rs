@@ -31,7 +31,7 @@ const MAX_THREADS: usize = 16;
 const MAX_FRAME_DELAY: u32 = 256;
 
 /// Decoder tuning.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct DecoderSettings {
     /// Worker threads (0 = one per core).
     pub threads: usize,
@@ -41,12 +41,6 @@ pub struct DecoderSettings {
     /// Frames decoded in parallel (0 = automatic, from the thread count).
     /// Every frame in flight holds a picture, so a low value saves memory.
     pub frame_delay: u32,
-}
-
-impl Default for DecoderSettings {
-    fn default() -> Self {
-        Self { threads: 0, lite: false, frame_delay: 0 }
-    }
 }
 
 pub struct Av1Decoder {

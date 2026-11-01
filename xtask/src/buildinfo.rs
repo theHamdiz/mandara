@@ -114,7 +114,7 @@ fn thousands(n: u64) -> String {
     let digits = n.to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / GROUP);
     for (i, ch) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i) % GROUP == 0 {
+        if i > 0 && (digits.len() - i).is_multiple_of(GROUP) {
             out.push(',');
         }
         out.push(ch);
@@ -226,12 +226,12 @@ const SOURCE_LABEL: &str = "source fingerprint";
 /// `## Build fingerprint` section before `## License` (or at the end);
 /// nothing else changes.
 pub fn splice_readme(readme: &str, block: &str) -> String {
-    if let (Some(start), Some(end)) = (readme.find(README_START), readme.find(README_END)) {
-        if start < end {
-            let head = &readme[..start + README_START.len()];
-            let tail = &readme[end..];
-            return format!("{head}\n{block}{tail}");
-        }
+    if let (Some(start), Some(end)) = (readme.find(README_START), readme.find(README_END))
+        && start < end
+    {
+        let head = &readme[..start + README_START.len()];
+        let tail = &readme[end..];
+        return format!("{head}\n{block}{tail}");
     }
     let section = format!(
         "{README_SECTION}\n\nThe last `cargo xtask build`: source fingerprint, toolchain, binary hashes and\nlines of code ([`docs/releasing.md`](docs/releasing.md#build-fingerprint)).\n\n{README_START}\n{block}{README_END}\n\n"

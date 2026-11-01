@@ -185,7 +185,7 @@ pub fn classify(types: &[&str]) -> Option<&'static str> {
     if is_secret(types) {
         return None;
     }
-    if types.iter().any(|t| *t == "image/png") {
+    if types.contains(&"image/png") {
         Some("image/png")
     } else if types.iter().any(|t| t.starts_with("image/")) {
         Some("image")
@@ -742,11 +742,10 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
                     Ok(watch::Event::Cleared) => {
                         // The app owning the selection quit: offer its last
                         // copy ourselves so it can still be pasted.
-                        if policy.keep_from_closed_apps && let Some(last) = entries.first().cloned() {
-                            if let Err(err) = crate::runtime::unblock(move || restore(&last, false)).await {
+                        if policy.keep_from_closed_apps && let Some(last) = entries.first().cloned()
+                            && let Err(err) = crate::runtime::unblock(move || restore(&last, false)).await {
                                 tracing::debug!("clipboard: keeping the last copy failed: {err}");
                             }
-                        }
                     }
                     // The watcher ended: keep serving commands (a closed
                     // channel would resolve immediately, so park a fresh one).
@@ -832,10 +831,7 @@ mod tests {
 
     #[test]
     fn policy_from_config() {
-        let mut c = ClipboardConfig::default();
-        c.exclude_apps = vec!["KeePassXC".into(), " ".into()];
-        c.max_text_kb = 1;
-        c.auto_clear_hours = 2;
+        let c = ClipboardConfig { exclude_apps: vec!["KeePassXC".into(), " ".into()], max_text_kb: 1, auto_clear_hours: 2, ..Default::default() };
         let p = ClipboardPolicy::from(&c);
         assert!(p.excludes("org.keepassxc.KeePassXC") && !p.excludes("firefox") && !p.excludes(""));
         assert_eq!(p.max_text, 1024);

@@ -55,7 +55,7 @@ pub fn exp2(x: f32) -> f32 {
     let p = p * f + 9.618_129e-3;
     let p = p * f + 5.550_411e-2;
     let p = p * f + 0.240_226_5;
-    let p = p * f + 0.693_147_2;
+    let p = p * f + LN_2;
     let p = p * f + 1.0;
     p * f32::from_bits(((k as i32 + 127) as u32) << 23)
 }

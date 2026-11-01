@@ -202,8 +202,9 @@ impl InstallPlan {
         let _ = writeln!(s, "  1. Copy {} → {INSTALLED_EXE}", self.exe.display());
         let _ = writeln!(s, "  2. Create {} and {} (drop .webm/.mkv/.ivf clips and images there)", crate::config::SYSTEM_VIDEOS, crate::config::SYSTEM_IMAGES);
         let _ = writeln!(s, "  3. Create {STATE_DIR} owned by `{}` (remembers the last user / session)", self.greeter_user);
-        let _ = writeln!(s, "  4. Write {} if missing (theme, language, video settings)", crate::config::SYSTEM_CONFIG);
-        let mut n = 5;
+        let _ = writeln!(s, "  4. Create {} (sticky, like /tmp): sessions share each person's wallpaper there", mandara_config::paths::LOGIN_WALLPAPER_DIR);
+        let _ = writeln!(s, "  5. Write {} if missing (theme, language, video settings)", crate::config::SYSTEM_CONFIG);
+        let mut n = 6;
         if let Some((path, _)) = self.kiosk.config_file() {
             let _ = writeln!(s, "  {n}. Write {path} ({} as the greeter's compositor)", self.kiosk.program());
             n += 1;
@@ -327,7 +328,10 @@ pub fn install_runtime(root: &Path, exe: &Path, greeter_user: &str) -> Result<Ve
         std::os::unix::fs::chown(&state, Some(uid), Some(gid)).map_err(|e| err(&state, e))?;
     }
     std::fs::set_permissions(&state, std::fs::Permissions::from_mode(STATE_DIR_MODE)).map_err(|e| err(&state, e))?;
-    // 4. Greeter config (only when missing).
+    // 4. The shared folder sessions copy each person's wallpaper into.
+    let shared = mandara_config::paths::ensure_login_wallpaper_dir(root).map_err(|e| err(&under(root, mandara_config::paths::LOGIN_WALLPAPER_DIR), e))?;
+    done.push(format!("shared wallpaper folder {}", shared.display()));
+    // 5. Greeter config (only when missing).
     let sys = under(root, crate::config::SYSTEM_CONFIG);
     if !sys.exists() {
         let parent = sys.parent().unwrap_or(root).to_path_buf();

@@ -1028,10 +1028,14 @@ pub enum BarLayout {
     Hairline,
     /// A single tiny floating pill at the middle of the edge.
     Micro,
+    /// A frame hanging from the screen edge, narrower than the screen
+    /// (`bar.notch_width`): its ends curve into the edge with concave
+    /// shoulders, its far corners are rounded, and panels pour out of it.
+    Notch,
 }
 
 impl BarLayout {
-    pub const ALL: [BarLayout; 5] = [BarLayout::MinimalEdge, BarLayout::FloatingPills, BarLayout::ContiguousIsland, BarLayout::Hairline, BarLayout::Micro];
+    pub const ALL: [BarLayout; 6] = [BarLayout::MinimalEdge, BarLayout::FloatingPills, BarLayout::ContiguousIsland, BarLayout::Hairline, BarLayout::Micro, BarLayout::Notch];
 
     pub fn display_name(self) -> &'static str {
         match self {
@@ -1040,11 +1044,18 @@ impl BarLayout {
             BarLayout::ContiguousIsland => "Island",
             BarLayout::Hairline => "Hairline",
             BarLayout::Micro => "Micro Pill",
+            BarLayout::Notch => "Notch",
         }
     }
 
     /// Whether panels hang from the bar (vs. morphing out of a floating pill).
     pub fn is_attached(self) -> bool {
+        matches!(self, BarLayout::MinimalEdge | BarLayout::Hairline | BarLayout::Notch)
+    }
+
+    /// Spans the whole edge (the edge frame, the hairline): the styles that
+    /// can float clear of it (`bar.floating_frame`).
+    pub fn is_full_width(self) -> bool {
         matches!(self, BarLayout::MinimalEdge | BarLayout::Hairline)
     }
 
@@ -1118,6 +1129,9 @@ pub struct BarConfig {
     /// Clicks on empty bar space reach the windows below (no main menu on
     /// right-click there).
     pub click_through: bool,
+    /// What right-clicking empty bar space opens (the main menu, or the
+    /// desktop's menu).
+    pub right_click: crate::surfaces::BarRightClick,
     /// Keep the bar above fullscreen windows (overlay layer; applies after
     /// a restart).
     pub over_fullscreen: bool,
@@ -1153,6 +1167,10 @@ pub struct BarConfig {
     pub floating_frame: bool,
     /// Height of the compact styles (hairline, micro pill).
     pub compact_height: f32,
+    /// Notch only: the share of the screen edge it spans.
+    pub notch_width: f32,
+    /// Each zone of an attached bar sits on a soft capsule of its own.
+    pub capsules: bool,
     /// Hairline: a 1 px accent line along the bar's inner edge.
     pub accent_line: bool,
     /// Width of a left / right bar.
@@ -1173,7 +1191,12 @@ impl BarConfig {
 
     /// Whether the edge frame floats clear of the screen edges.
     pub fn frame_floats(&self) -> bool {
-        self.layout.is_attached() && self.floating_frame
+        self.layout.is_full_width() && self.floating_frame
+    }
+
+    /// Notch: the share of the edge it spans.
+    pub fn notch_width(&self) -> f32 {
+        surfaces::ranges::BAR_NOTCH_WIDTH.clamp(self.notch_width, surfaces::defaults::BAR_NOTCH_WIDTH)
     }
 
     pub fn chip_padding(&self) -> f32 {
@@ -1234,6 +1257,7 @@ impl Default for BarConfig {
             right: ids(&["weather", "resources", "clipboard", "screenshot", "tray", "network", "bluetooth", "audio", "notifications", "session"]),
             auto_hide: crate::desktop::BarAutoHide::default(),
             click_through: false,
+            right_click: crate::surfaces::BarRightClick::MainMenu,
             over_fullscreen: false,
             monitors: String::new(),
             chip_padding: surfaces::defaults::BAR_CHIP_PADDING_PX,
@@ -1249,6 +1273,8 @@ impl Default for BarConfig {
             separator: crate::surfaces::BarSeparator::None,
             floating_frame: false,
             compact_height: surfaces::defaults::BAR_COMPACT_HEIGHT_PX,
+            notch_width: surfaces::defaults::BAR_NOTCH_WIDTH,
+            capsules: false,
             accent_line: true,
             vertical_width: surfaces::defaults::BAR_VERTICAL_WIDTH_PX,
             screen_frame: false,
@@ -1288,10 +1314,30 @@ pub struct TypographyConfig {
     pub display_font: String,
     pub arabic_font: String,
     pub mono_font: String,
+    /// Per-surface families (empty = the interface font; the clocks follow
+    /// the display font). Any name works: one that isn't installed falls
+    /// back like the families above.
+    pub bar_font: String,
+    /// Drop-down panels and plugin cards.
+    pub panels_font: String,
+    /// Mandara Studio itself.
+    pub studio_font: String,
+    /// The lock screen's text, and its clock.
+    pub lock_font: String,
+    pub lock_clock_font: String,
+    /// Desktop widgets (a widget's own font wins).
+    pub widgets_font: String,
     /// Global UI text scale.
     pub scale: f32,
     /// Weight of body text (CSS scale, 100–900; 400 = regular).
     pub weight: u16,
+}
+
+impl TypographyConfig {
+    /// `family`, or `fallback` when it is empty.
+    pub fn or<'a>(family: &'a str, fallback: &'a str) -> &'a str {
+        if family.trim().is_empty() { fallback } else { family.trim() }
+    }
 }
 
 impl Default for TypographyConfig {
@@ -1301,6 +1347,12 @@ impl Default for TypographyConfig {
             display_font: "Alexandria".into(),
             arabic_font: "Cairo".into(),
             mono_font: "JetBrains Mono".into(),
+            bar_font: String::new(),
+            panels_font: String::new(),
+            studio_font: String::new(),
+            lock_font: String::new(),
+            lock_clock_font: String::new(),
+            widgets_font: String::new(),
             scale: 1.0,
             weight: defaults::FONT_WEIGHT_REGULAR,
         }
@@ -1327,6 +1379,10 @@ pub struct WallpaperConfig {
     /// Show the focused wallpaper's name.
     pub picker_names: bool,
     pub path: Option<PathBuf>,
+    /// Share a copy with Mandara Login, so the login screen shows your
+    /// wallpaper when your account is picked
+    /// ([`crate::paths::LOGIN_WALLPAPER_DIR`]).
+    pub share_with_login: bool,
     pub depth_effect: bool,
     /// Desktop clock anchor as a fraction of the output size.
     pub clock_x: f32,
@@ -1373,6 +1429,7 @@ impl Default for WallpaperConfig {
             // Your Pictures folder's Wallpapers (`~/Imagens/…` in Portuguese).
             directory: crate::paths::default_wallpaper_dir_display(),
             match_colors: false,
+            share_with_login: true,
             picker_style: PickerStyle::Slices,
             picker_size: 1.0,
             picker_focus: defaults::WALLPAPER_PICKER_FOCUS,

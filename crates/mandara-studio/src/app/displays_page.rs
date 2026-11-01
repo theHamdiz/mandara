@@ -545,7 +545,7 @@ impl StudioView {
                                 Ok(heads) if !heads.is_empty() => heads.iter().map(outputs::Head::to_config).collect(),
                                 _ => fallback,
                             };
-                            let _ = cx.update(|cx| update_config(cx, move |c| c.compositor.outputs = kept));
+                            cx.update(|cx| update_config(cx, move |c| c.compositor.outputs = kept));
                         })
                         .detach();
                     }
@@ -1007,7 +1007,7 @@ impl StudioView {
             )
             .when(!busy.is_empty(), |el| {
                 el.child(div().row().items_center().gap(px(SPACE_8_PX)).child(icon("alert", ICON_14_PX, p.warning_amber)).child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(tf(
-                    "Another app controls the colours of {outputs} (wlsunset, gammastep, hyprsunset…); quit it to use Mandara's night light",
+                    "{outputs} refused the warmer colours: another night-light app may hold them (wlsunset, gammastep, hyprsunset…), or the compositor or display driver doesn't allow it.",
                     &[("outputs", &busy.join(", "))],
                 ))))
             });

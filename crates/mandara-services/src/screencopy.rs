@@ -156,7 +156,7 @@ pub fn to_rgba(format: wl_shm::Format, width: u32, height: u32, stride: u32, dat
         let src_row = if y_invert { h - 1 - row } else { row };
         let src = &data[src_row * stride..src_row * stride + w * 4];
         let dst = &mut out[row * w * 4..(row + 1) * w * 4];
-        for (px, d) in src.chunks_exact(4).zip(dst.chunks_exact_mut(4)) {
+        for (px, d) in src.as_chunks::<4>().0.iter().zip(dst.as_chunks_mut::<4>().0) {
             d[0] = px[order[0]];
             d[1] = px[order[1]];
             d[2] = px[order[2]];
@@ -255,9 +255,13 @@ pub struct FrameSource {
     output: wl_output::WlOutput,
     region: Option<(i32, i32, i32, i32)>,
     cursor: bool,
-    buffer: Option<(wl_shm_pool::WlShmPool, wl_buffer::WlBuffer, std::fs::File, (wl_shm::Format, u32, u32, u32))>,
+    buffer: Option<ShmBuffer>,
     data: Vec<u8>,
 }
+
+/// A shared-memory buffer: its pool, the buffer, the backing file and its
+/// layout (format, width, height, stride).
+type ShmBuffer = (wl_shm_pool::WlShmPool, wl_buffer::WlBuffer, std::fs::File, (wl_shm::Format, u32, u32, u32));
 
 impl FrameSource {
     /// `output`: xdg-output name (empty = first output). `region`: logical

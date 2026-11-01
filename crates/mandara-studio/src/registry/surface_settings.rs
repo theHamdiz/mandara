@@ -36,6 +36,8 @@ const CUSTOM_SPRING_OFF: &str = tk("Turn on Custom spring first");
 const SIDE_BAR_FRAME: &str = tk("A side bar is always an edge frame");
 const COMPACT_ONLY: &str = tk("Hairline and micro pill only");
 const HAIRLINE_ONLY: &str = tk("Hairline style only");
+const NOTCH_ONLY: &str = tk("Notch style only");
+const ATTACHED_ONLY: &str = tk("Edge frame, hairline and notch only");
 const SIDE_BAR_WIDTH_INSTEAD: &str = tk("A side bar uses Side bar width");
 const COMPACT_HEIGHT_INSTEAD: &str = tk("This style uses Compact height");
 const SIDE_BAR_ONLY: &str = tk("Left or right bar only");
@@ -49,6 +51,8 @@ pub fn entries() -> Vec<Setting> {
     vec![
         // Bar → Layout
         s(Bar, LAYOUT, "/bar/compact_height", tk("Compact height"), tk("Thickness of the hairline and the micro pill"), span(ranges::BAR_COMPACT_HEIGHT, " px")),
+        s(Bar, LAYOUT, "/bar/notch_width", tk("Notch width"), tk("How much of the screen edge the notch spans"), span(ranges::BAR_NOTCH_WIDTH, "")),
+        s(Bar, APPEARANCE, "/bar/capsules", tk("Group capsules"), tk("Each group of bar items sits on a soft capsule of its own"), Toggle),
         s(Bar, APPEARANCE, "/bar/accent_line", tk("Accent line"), tk("A 1 px accent line along the hairline's inner edge"), Toggle),
         s(Bar, LAYOUT, "/bar/vertical_width", tk("Side bar width"), tk("Width of a left or right bar"), span(ranges::BAR_VERTICAL_WIDTH, " px")),
         s(Bar, tk("Screen frame"), "/bar/screen_frame", tk("Screen frame"), tk("A thin border round the whole display, joined to the side bar; it reserves no space of its own"), Toggle),
@@ -109,10 +113,11 @@ pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
     let attached = cfg.bar.effective_layout().is_attached();
     let vertical = cfg.bar.position.is_vertical();
     let compact = !vertical && cfg.bar.layout.is_compact();
+    let notch = !vertical && cfg.bar.layout == BarLayout::Notch;
     let flush_frame = attached && !cfg.bar.floating_frame;
     let side_floating = cfg.sidebar.look.floats_with(&cfg.bar);
     // Beside a floating bar the side panels always float (no frame to join).
-    let bar_floats = !vertical && (!attached || cfg.bar.floating_frame);
+    let bar_floats = !vertical && (!cfg.bar.layout.is_full_width() || cfg.bar.floating_frame);
     match path {
         "/bar/layout" if vertical => Some(SIDE_BAR_FRAME),
         "/bar/compact_height" if !compact => Some(COMPACT_ONLY),
@@ -123,7 +128,13 @@ pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
         "/bar/frame_thickness" if !vertical || !cfg.bar.screen_frame => Some(FRAME_FIRST),
         "/bar/auto_hide/mode" if vertical => Some(SIDE_BAR_STAYS),
         "/bar/floating_frame" if cfg.bar.screen_frame && vertical => Some(FRAME_FIRST_OFF),
+        "/bar/notch_width" if !notch => Some(NOTCH_ONLY),
+        "/bar/capsules" if !attached => Some(ATTACHED_ONLY),
+        "/bar/floating_frame" if notch => Some(EDGE_FRAME_ONLY),
         "/bar/flare_radius" | "/bar/floating_frame" if !attached => Some(EDGE_FRAME_ONLY),
+        // The notch has a shadow (it isn't flush along the whole edge).
+        "/bar/shadow_strength" if notch && !cfg.bar.shadow => Some(tk("Turn on Shadow first")),
+        "/bar/shadow" | "/bar/shadow_strength" if notch => None,
         "/bar/edge_gap" | "/bar/rim_width" | "/bar/rim_intensity" | "/bar/shadow" | "/bar/shadow_strength" if flush_frame => Some(FLOATING_ONLY),
         "/bar/shadow_strength" if !cfg.bar.shadow => Some(tk("Turn on Shadow first")),
         "/bar/center_align" if cfg.bar.layout == BarLayout::ContiguousIsland => Some(ISLAND_TOGETHER),
@@ -154,6 +165,16 @@ mod tests {
         assert_eq!(locked("/panels/gap", &cfg), None);
         cfg.bar.layout = BarLayout::ContiguousIsland;
         assert_eq!(locked("/bar/center_align", &cfg), Some(ISLAND_TOGETHER));
+        assert_eq!(locked("/bar/notch_width", &cfg), Some(NOTCH_ONLY));
+        assert_eq!(locked("/bar/capsules", &cfg), Some(ATTACHED_ONLY));
+        cfg.bar.layout = BarLayout::Notch;
+        cfg.bar.floating_frame = false;
+        assert_eq!(locked("/bar/notch_width", &cfg), None);
+        assert_eq!(locked("/bar/capsules", &cfg), None);
+        assert_eq!(locked("/bar/flare_radius", &cfg), None, "the notch's shoulders are flares");
+        assert_eq!(locked("/bar/floating_frame", &cfg), Some(EDGE_FRAME_ONLY));
+        assert_eq!(locked("/bar/shadow", &cfg), None, "the notch casts a shadow");
+        assert_eq!(locked("/panels/gap", &cfg), Some(HANGS_FROM_BAR));
         assert_eq!(locked("/panels/spring/damping", &cfg), Some(CUSTOM_SPRING_OFF));
         cfg.panels.spring.custom = true;
         assert_eq!(locked("/panels/spring/damping", &cfg), None);

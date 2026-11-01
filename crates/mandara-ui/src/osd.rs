@@ -644,7 +644,7 @@ pub fn init(hub: &Entity<Hub>, cx: &mut App) {
         cx.spawn(async move |cx| {
             while let Ok(b) = rx.recv().await {
                 remember_backlight(b.level());
-                let _ = cx.update(|cx| {
+                cx.update(|cx| {
                     show(OsdEvent::brightness(b.level()), cx);
                     // The quick settings slider follows the brightness keys.
                     cx.refresh_windows();
@@ -1258,7 +1258,7 @@ mod tests {
         let mut cfg = ShellConfig::default();
         let g = Geometry::of(&cfg);
         assert!(g.surface.0 > PILL_W && g.surface.1 > PILL_H);
-        assert!(EDGE_GAP >= MARGIN_Y);
+        const { assert!(EDGE_GAP >= MARGIN_Y) };
         cfg.general.osd_position = OsdPosition::Right;
         cfg.osd.scale = 1.5;
         let v = Geometry::of(&cfg);

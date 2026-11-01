@@ -128,7 +128,7 @@ pub struct PickView {
 /// thread; `capture.rgba` is left empty.
 fn frozen_image(capture: &mut Capture) -> Option<Arc<RenderImage>> {
     let mut bgra = std::mem::take(&mut capture.rgba);
-    for px in bgra.chunks_exact_mut(BYTES_PER_PIXEL) {
+    for px in bgra.as_chunks_mut::<BYTES_PER_PIXEL>().0 {
         px.swap(0, 2);
     }
     let buffer = image::RgbaImage::from_raw(capture.width, capture.height, bgra)?;

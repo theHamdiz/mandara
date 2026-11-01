@@ -201,6 +201,8 @@ pub struct GreeterState {
     pub last_user: Option<String>,
     /// Last session id per user.
     pub sessions: BTreeMap<String, String>,
+    /// The colour scheme picked with the switcher.
+    pub theme: Option<String>,
 }
 
 impl GreeterState {
@@ -309,8 +311,7 @@ DesktopNames=niri
     fn state_round_trip_and_session_choice() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("sub/state.toml");
-        let mut st = GreeterState::default();
-        st.last_user = Some("layla".into());
+        let mut st = GreeterState { last_user: Some("layla".into()), ..Default::default() };
         st.sessions.insert("layla".into(), "niri".into());
         st.save(&path).unwrap();
         let back = GreeterState::load(&path);

@@ -162,6 +162,9 @@ pub fn run(entry: &SessionEntry, cfg: &ShellConfig, cx: &mut App) -> Result<(), 
         return Err(t("Choose a boot entry for this item in Studio → Power & idle").into());
     }
     let suspend_mode = cfg.idle.suspend_mode;
+    let own_lock_screen = cfg.general.lock_screen;
+    let (label, icon) = (entry_label(&entry), kind_icon(entry.kind));
+    let (done, outcome) = async_channel::bounded::<String>(1);
     std::thread::Builder::new()
         .name("mandara-session".into())
         .spawn(move || {
@@ -173,7 +176,9 @@ pub fn run(entry: &SessionEntry, cfg: &ShellConfig, cx: &mut App) -> Result<(), 
                 return;
             }
             let result = match entry.kind {
-                SessionEntryKind::Lock => SessionAction::Lock.run(),
+                // logind tells every locker, Mandara's included; when it
+                // can't be reached, Mandara's own lock screen locks anyway.
+                SessionEntryKind::Lock => SessionAction::Lock.run().or_else(|e| if own_lock_screen { crate::lock::lock_now().map(|_| ()) } else { Err(e) }),
                 SessionEntryKind::Logout => SessionAction::Logout.run(),
                 SessionEntryKind::Suspend => sleep::sleep(suspend_mode),
                 SessionEntryKind::Hibernate => sleep::sleep(SuspendMode::Hibernate),
@@ -186,10 +191,25 @@ pub fn run(entry: &SessionEntry, cfg: &ShellConfig, cx: &mut App) -> Result<(), 
             };
             if let Err(e) = result {
                 tracing::error!("session {}: {e}", entry.kind.id());
+                let _ = done.send_blocking(e);
             }
         })
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    // The menu has closed by now: a failure (polkit said no, logind or the
+    // compositor refused) shows as a notification instead of nothing.
+    cx.spawn(async move |cx| {
+        if let Ok(error) = outcome.recv().await {
+            cx.update(|cx| failed(&label, icon, error, cx));
+        }
+    })
+    .detach();
+    Ok(())
+}
+
+/// Tells the user that a session action didn't happen, and why.
+fn failed(label: &str, icon: &str, error: String, cx: &mut App) {
+    let summary = tf("{action} didn't work", &[("action", &label)]);
+    crate::plugins::notifications::send(cx, mandara_services::NotificationCommand::Post { app: t("Session").into(), icon: icon.into(), summary, body: error });
 }
 
 /// Visible entries and the index selected on opening.
@@ -702,8 +722,7 @@ mod tests {
 
     #[test]
     fn visible_entries_and_default_selection() {
-        let mut menu = SessionMenuConfig::default();
-        menu.default_action = "reboot".into();
+        let mut menu = SessionMenuConfig { default_action: "reboot".into(), ..Default::default() };
         let (entries, selected) = visible(&menu);
         assert_eq!(entries[selected].kind, SessionEntryKind::Reboot);
         // Nothing enabled still leaves Lock.

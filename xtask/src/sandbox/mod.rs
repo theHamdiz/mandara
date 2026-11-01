@@ -72,7 +72,7 @@ const STUDIO_RADIUS: u32 = 12;
 /// The headless output's name.
 pub const OUTPUT: &str = "HEADLESS-1";
 /// Processes stopped by `down`, in order.
-const STOP_ORDER: [&str; 7] = ["shell", "player", "wireplumber", "pipewire-pulse", "pipewire", "mango", "dbus"];
+const STOP_ORDER: [&str; 8] = ["run", "shell", "player", "wireplumber", "pipewire-pulse", "pipewire", "mango", "dbus"];
 /// Audio processes stopped by `audio stop`, in order.
 const AUDIO_ORDER: [&str; 4] = ["player", "wireplumber", "pipewire-pulse", "pipewire"];
 /// How long the sound server's sockets may take to appear.
@@ -110,6 +110,7 @@ const USAGE: &str = "usage: cargo xtask sandbox <command>
   pointer move X Y | click X Y [left|right|middle] | drag X1 Y1 X2 Y2 | flyby X Y MS | scroll X Y STEPS
   studio [--size WxH] SECTION [ARGS…] | studio stop
   shell restart | stop
+  run ARGS… | run stop      (the sandbox's mandara with ARGS as the demo user, e.g. run greeter --demo --layer-shell)
   audio play | stop
   notify
   env [--fish]";
@@ -350,6 +351,7 @@ pub fn sandbox(args: &[String]) -> Result<()> {
         }
         Some("pointer") => pointer(&sb, rest),
         Some("studio") => studio(&sb, rest),
+        Some("run") => run_bin(&sb, rest),
         Some("shell") => match rest.first().map(String::as_str) {
             Some("restart") => restart_shell(&sb),
             Some("stop") => {
@@ -472,6 +474,25 @@ fn start_shell(sb: &Sandbox, state: &State) -> Result<()> {
     cmd.args(bwrap_args(sb, &state.bin)).arg(&state.bin).arg("run").env("RUST_LOG", std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()));
     let pid = sb.start("shell", &mut cmd)?;
     println!("shell {pid}");
+    Ok(())
+}
+
+/// `run ARGS…`: the sandbox's binary with `ARGS` as the demo user (bwrap),
+/// recorded as `run` (one at a time; `run stop` ends it).
+fn run_bin(sb: &Sandbox, args: &[String]) -> Result<()> {
+    sb.verify()?;
+    sb.stop("run");
+    if args.first().is_some_and(|a| a == "stop") {
+        return Ok(());
+    }
+    if args.is_empty() {
+        return Err(USAGE.into());
+    }
+    let state = sb.state()?;
+    let mut cmd = sb.command("bwrap");
+    cmd.args(bwrap_args(sb, &state.bin)).arg(&state.bin).args(args).env("RUST_LOG", std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()));
+    let pid = sb.start("run", &mut cmd)?;
+    println!("run {pid}");
     Ok(())
 }
 

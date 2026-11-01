@@ -378,11 +378,11 @@ mod tests {
 
     #[test]
     fn presets_are_opaque_gradients() {
-        for i in 0..PRESETS.len() {
+        for (i, preset) in PRESETS.iter().enumerate() {
             let img = render_preset(i, "", 64);
             assert_eq!(img.dimensions(), (64, 64));
             assert!(img.pixels().all(|p| p.0[3] == u8::MAX));
-            assert_ne!(img.get_pixel(0, 0), img.get_pixel(63, 63), "{} is a gradient", PRESETS[i].name);
+            assert_ne!(img.get_pixel(0, 0), img.get_pixel(63, 63), "{} is a gradient", preset.name);
         }
     }
 

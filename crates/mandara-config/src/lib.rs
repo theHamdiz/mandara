@@ -12,6 +12,7 @@ pub mod desktop_widgets;
 pub mod desktop_cards;
 pub mod dock;
 pub mod input;
+pub mod login_layout;
 pub mod looks;
 pub mod outputs;
 pub mod paths;

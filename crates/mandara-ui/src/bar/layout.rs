@@ -82,6 +82,8 @@ pub struct Metrics {
     pub screen_frame: f32,
     /// Hairline: a 1 px accent line along the bar's inner edge.
     pub accent_line: bool,
+    /// Notch: the share of the edge it spans.
+    pub notch_width: f32,
 }
 
 impl Metrics {
@@ -113,7 +115,7 @@ impl Metrics {
             chip_padding: bar.chip_padding(),
             chip_gap: if bar.separator == BarSeparator::None { spacing } else { spacing.max(SEPARATOR_MIN_GAP) },
             center: bar.center_align,
-            floating_frame: layout.is_attached() && bar.floating_frame && screen_frame <= 0.0,
+            floating_frame: layout.is_full_width() && bar.floating_frame && screen_frame <= 0.0,
             panel_gap: cfg.panels.gap(),
             panel_pad: cfg.panels.padding_for(layout.is_attached()),
             panel_width_scale: cfg.panels.width_scale(),
@@ -122,6 +124,7 @@ impl Metrics {
             vertical,
             screen_frame,
             accent_line: layout == BarLayout::Hairline && bar.accent_line,
+            notch_width: bar.notch_width(),
         }
     }
 
@@ -142,19 +145,28 @@ impl Metrics {
         self.layout.is_attached()
     }
 
-    /// The edge frame's rect (top-oriented): the full edge, or inset by the
-    /// edge and side gaps while it floats.
+    /// The edge frame's rect (top-oriented): the full edge, inset by the
+    /// edge and side gaps while it floats, or the notch's middle share.
     pub fn frame(&self, surface_width: f32) -> Bounds<Pixels> {
-        if self.floating_frame {
+        if self.notch() {
+            let w = (surface_width * self.notch_width).round();
+            rect(((surface_width - w) / 2.0).round(), 0.0, w, self.height)
+        } else if self.floating_frame {
             rect(self.side_gap, self.edge_gap, (surface_width - self.side_gap * 2.0).max(0.0), self.height)
         } else {
             rect(0.0, 0.0, surface_width, self.height)
         }
     }
 
-    /// Corner radius of the floating frame (capped at half its height).
+    /// Corner radius of the floating frame or the notch's far corners
+    /// (capped at half its height).
     pub fn frame_radius(&self) -> f32 {
-        if self.floating_frame { self.radius.min(self.height / 2.0) } else { 0.0 }
+        if self.floating_frame || self.notch() { self.radius.min(self.height / 2.0) } else { 0.0 }
+    }
+
+    /// The notch: an attached frame narrower than the edge.
+    pub fn notch(&self) -> bool {
+        self.layout == BarLayout::Notch && !self.vertical
     }
 
     /// Distance from the bar's screen edge to its far side (top-oriented y
@@ -208,8 +220,10 @@ fn h_of(b: &Bounds<Pixels>) -> f32 {
 }
 
 /// X of the center zone (width `cw`) between the start zone ending at
-/// `start_end` and the end zone beginning at `end_start`.
-fn center_x(align: BarCenterAlign, surface_width: f32, start_end: f32, end_start: f32, cw: f32) -> f32 {
+/// `start_end` and the end zone beginning at `end_start`. `keep_clear`
+/// keeps even a screen-centred zone off its neighbours while there's room
+/// (the notch is too narrow to rely on the screen's middle being free).
+fn center_x(align: BarCenterAlign, surface_width: f32, start_end: f32, end_start: f32, cw: f32, keep_clear: bool) -> f32 {
     let x = match align {
         BarCenterAlign::Screen => (surface_width - cw) / 2.0,
         BarCenterAlign::Between => start_end + (end_start - start_end - cw) / 2.0,
@@ -219,7 +233,7 @@ fn center_x(align: BarCenterAlign, surface_width: f32, start_end: f32, end_start
     // Never under a neighbour while there is room beside them; the true
     // screen center stays exact when it fits (the shipped look).
     let (lo, hi) = (start_end + ZONE_GAP, end_start - ZONE_GAP - cw);
-    if lo <= hi && align != BarCenterAlign::Screen { x.clamp(lo, hi) } else { x }
+    if lo <= hi && (align != BarCenterAlign::Screen || keep_clear) { x.clamp(lo, hi) } else { x }
 }
 
 /// Computes resting geometry. `content` holds each zone's width (see
@@ -228,17 +242,17 @@ pub fn compute(m: &Metrics, surface_width: f32, content: [f32; 3]) -> BarGeometr
     let h = m.height;
     let inset_y = m.chip_inset();
     match m.layout {
-        BarLayout::MinimalEdge | BarLayout::Hairline => {
+        BarLayout::MinimalEdge | BarLayout::Hairline | BarLayout::Notch => {
             let frame = m.frame(surface_width);
             let chip_h = h - inset_y * 2.0;
             let chip_w = |i: usize| content[i];
             // Outer chips sit inside the screen flares (or the floating
-            // frame's rounded ends).
-            let inset = if m.floating_frame { x_of(&frame) + m.frame_radius() * 0.5 + inset_y } else { m.side_gap + m.flare * 0.5 };
+            // frame's / the notch's rounded ends).
+            let inset = if m.floating_frame || m.notch() { x_of(&frame) + m.frame_radius() * 0.5 + inset_y } else { m.side_gap + m.flare * 0.5 };
             let y = y_of(&frame) + inset_y;
             let left = rect(inset, y, chip_w(0), chip_h);
             let right = rect(surface_width - inset - chip_w(2), y, chip_w(2), chip_h);
-            let cx = center_x(m.center, surface_width, inset + chip_w(0), x_of(&right), chip_w(1));
+            let cx = center_x(m.center, surface_width, inset + chip_w(0), x_of(&right), chip_w(1), m.notch());
             let center = rect(cx, y, chip_w(1), chip_h);
             BarGeometry { pills: [left, center, right], backdrop: frame, separate_pills: false, pill_radius: px(m.radius.min(chip_h / 2.0)) }
         }
@@ -247,7 +261,7 @@ pub fn compute(m: &Metrics, surface_width: f32, content: [f32; 3]) -> BarGeometr
             let y = m.edge_gap;
             let left = rect(m.side_gap, y, pill_w(0), h);
             let right = rect(surface_width - m.side_gap - pill_w(2), y, pill_w(2), h);
-            let cx = center_x(m.center, surface_width, m.side_gap + pill_w(0), x_of(&right), pill_w(1));
+            let cx = center_x(m.center, surface_width, m.side_gap + pill_w(0), x_of(&right), pill_w(1), false);
             let center = rect(cx, y, pill_w(1), h);
             BarGeometry { pills: [left, center, right], backdrop: union(&[left, center, right]), separate_pills: true, pill_radius: px(m.radius.min(h / 2.0)) }
         }
@@ -299,7 +313,14 @@ pub fn start_rect(m: &Metrics, animation: mandara_config::surfaces::PanelAnimati
 pub fn dashboard_rect(m: &Metrics, origin_pill: Bounds<Pixels>, dashboard: Size<Pixels>, surface_width: f32, free_h: f32) -> Bounds<Pixels> {
     let attached = m.attached();
     let margin = if attached {
-        let frame_inset = if m.floating_frame { m.side_gap + m.frame_radius() } else { 0.0 };
+        // A notch's panels stay on its straight edge, clear of its corners.
+        let frame_inset = if m.notch() {
+            x_of(&m.frame(surface_width)) + m.frame_radius() - m.flare
+        } else if m.floating_frame {
+            m.side_gap + m.frame_radius()
+        } else {
+            0.0
+        };
         frame_inset + m.flare * 2.0 + FLARE_CLEARANCE
     } else {
         m.side_gap
@@ -451,6 +472,22 @@ pub fn morph_progress(current: Bounds<Pixels>, collapsed: Bounds<Pixels>, expand
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn notch_hangs_in_the_middle_and_keeps_its_groups_apart() {
+        let mut m = Metrics::default_for(BarLayout::Notch, BarPosition::Top);
+        m.notch_width = 0.5;
+        let frame = m.frame(1920.0);
+        assert_eq!((x_of(&frame), w_of(&frame), y_of(&frame)), (480.0, 960.0, 0.0));
+        assert!(m.attached() && !m.floating_frame);
+        let g = compute(&m, 1920.0, [200.0, 300.0, 300.0]);
+        assert!(x_of(&g.pills[0]) >= x_of(&frame), "the left group sits inside the notch");
+        assert!(x_of(&g.pills[2]) + w_of(&g.pills[2]) <= x_of(&frame) + w_of(&frame), "so does the right one");
+        assert!(x_of(&g.pills[1]) + w_of(&g.pills[1]) <= x_of(&g.pills[2]), "the middle group keeps clear of the right one");
+        // Panels stay on the notch's straight edge.
+        let panel = dashboard_rect(&m, g.pills[0], size(px(300.0), px(200.0)), 1920.0, 1000.0);
+        assert!(x_of(&panel) >= x_of(&frame) + m.frame_radius());
+    }
 
     fn m(layout: BarLayout) -> Metrics {
         Metrics::default_for(layout, BarPosition::Top)

@@ -183,7 +183,7 @@ impl PanelText {
     fn update_events(&mut self, now: &DateTime<Local>, cfg: &mandara_config::ShellConfig, cx: &gpui::App) {
         let Some(store) = crate::calendar::store(cx) else { return };
         let store = store.read(cx);
-        let minute = crate::widgets::clock::local_stamp(&now, false);
+        let minute = crate::widgets::clock::local_stamp(now, false);
         let key = (store.generation, minute, cfg.calendar.agenda_days, cfg.calendar.enabled && cfg.calendar.hide_past);
         if self.events_key == Some(key) {
             return;
@@ -235,7 +235,7 @@ impl PanelText {
         // The date language (an override of the interface's) is part of
         // every key, so changing it re-renders without a restart.
         let locale = fmt::locale();
-        let minute = (crate::widgets::clock::local_stamp(&now, false), lang, locale, big_clock);
+        let minute = (crate::widgets::clock::local_stamp(now, false), lang, locale, big_clock);
         if self.minute != Some(minute) {
             self.minute = Some(minute);
             self.hh_mm = fmt::format_with(now, big_clock, "%H:%M").into();

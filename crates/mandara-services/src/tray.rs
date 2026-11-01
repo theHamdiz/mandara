@@ -81,7 +81,7 @@ impl Pixmap {
         if argb.len() != (width as usize) * (height as usize) * 4 {
             return None;
         }
-        let rgba = argb.chunks_exact(4).flat_map(|p| [p[1], p[2], p[3], p[0]]).collect();
+        let rgba = argb.as_chunks::<4>().0.iter().flat_map(|p| [p[1], p[2], p[3], p[0]]).collect();
         Self::from_rgba(width, height, rgba)
     }
 
@@ -189,7 +189,7 @@ impl TrayItem {
 /// `Docker Desktop_status_icon_1` → `Docker Desktop`.
 fn prettify_id(s: &str) -> String {
     let s = s.split("_status_icon").next().unwrap_or(s);
-    s.trim_end_matches(|c: char| c == '_' || c == '-').to_string()
+    s.trim_end_matches(['_', '-']).to_string()
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize)]

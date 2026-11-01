@@ -62,7 +62,7 @@ fn decoded_colours_match_the_source() {
     // red in the top-left corner and nothing is pure black or white.
     let px = &bgra[..4];
     assert!(px[0] > px[2], "top-left should be bluish, got BGRA {px:?}");
-    let mean: f64 = bgra.chunks_exact(4).map(|p| (p[0] as f64 + p[1] as f64 + p[2] as f64) / 3.0).sum::<f64>() / (w * h) as f64;
+    let mean: f64 = bgra.as_chunks::<4>().0.iter().map(|p| (p[0] as f64 + p[1] as f64 + p[2] as f64) / 3.0).sum::<f64>() / (w * h) as f64;
     assert!((20.0..200.0).contains(&mean), "mean {mean}");
 }
 

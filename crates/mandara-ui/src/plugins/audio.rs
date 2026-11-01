@@ -50,6 +50,12 @@ const ROW_GAP: f32 = 10.0;
 /// Gap between spectrum bars.
 const VIZ_BAR_GAP_PX: f32 = 2.0;
 const OUT_CARD_H: f32 = CARD_PAD * 2.0 + LABEL_H + ROW_GAP + SLIDER_H + ROW_GAP + VIZ_H;
+/// The spectrum's share of the output card, moved to the playing app's
+/// row when there is one.
+const OUT_VIZ_H: f32 = ROW_GAP + VIZ_H;
+/// Apps that process everyone's sound (their own stream always "plays"),
+/// never the one the spectrum belongs to.
+const EFFECT_APPS: [&str; 6] = ["easyeffects", "pulseeffects", "noisetorch", "jamesdsp", "carla", "pipewire"];
 const IN_CARD_H: f32 = CARD_PAD * 2.0 + LABEL_H + ROW_GAP + SLIDER_H;
 const PANEL_H: f32 = PAD * 2.0 + HEADER_H + HEADER_GAP + OUT_CARD_H + GAP + IN_CARD_H;
 
@@ -117,6 +123,8 @@ const PERCENT: f32 = 100.0;
 /// Scroll on the bar item: pixels per notch, dead zone, step per notch.
 const SCROLL_PX_PER_LINE: f32 = 20.0;
 const SCROLL_DEAD_ZONE: f32 = 0.01;
+/// The main menu's volume level column.
+const VOLUME_LABEL_W: f32 = 44.0;
 
 /// The bar / header glyph: global mute has its own struck-through speaker.
 fn audio_icon(s: &AudioState) -> &'static str {
@@ -249,7 +257,9 @@ fn channel_head(
         ))
 }
 
-fn output_card(s: &AudioState, bands: Option<&[f32]>, palette: &MandaraPalette, radius: f32, display: gpui::SharedString, (name, lim): (SharedString, f32)) -> impl IntoElement {
+/// The output card; `bands` draws the spectrum in it (`None`: an app row
+/// shows it instead).
+fn output_card(s: &AudioState, bands: Option<Option<&[f32]>>, palette: &MandaraPalette, radius: f32, display: gpui::SharedString, (name, lim): (SharedString, f32)) -> impl IntoElement {
     let o = &s.output;
     let volume = shown_volume(OUT_SLIDER, o, lim);
     let from = readable(palette.primary, palette);
@@ -261,8 +271,7 @@ fn output_card(s: &AudioState, bands: Option<&[f32]>, palette: &MandaraPalette, 
         .child(channel_head("audio-out-mute", t("OUTPUT"), o, name, ("volume-high", "volume-mute"), AudioCommand::ToggleMute, palette, (display, volume)))
         .child(div().h(px(ROW_GAP)))
         .child(big_slider(OUT_SLIDER, o.volume / lim, volume_icon(volume, o.muted), o.muted, palette, move |v, _, cx| write(cx, AudioCommand::SetVolume(v * lim))))
-        .child(div().h(px(ROW_GAP)))
-        .child(spectrum_bars(bands.unwrap_or(&[]), from, readable(partner(palette.primary), palette), palette, VIZ_H, VIZ_BAR_GAP_PX))
+        .when_some(bands, |el, bands| el.child(div().h(px(ROW_GAP))).child(spectrum_bars(bands.unwrap_or(&[]), from, readable(partner(palette.primary), palette), palette, VIZ_H, VIZ_BAR_GAP_PX)))
 }
 
 fn input_card(s: &AudioState, palette: &MandaraPalette, radius: f32, display: gpui::SharedString, (name, lim): (SharedString, f32)) -> impl IntoElement {
@@ -276,6 +285,21 @@ fn input_card(s: &AudioState, palette: &MandaraPalette, radius: f32, display: gp
         .child(channel_head("audio-in-mute", t("MICROPHONE"), i, name, ("mic", "mic-off"), AudioCommand::ToggleMicMute, palette, (display, volume)))
         .child(div().h(px(ROW_GAP)))
         .child(big_slider(IN_SLIDER, i.volume / lim, if i.muted { "mic-off" } else { "mic" }, i.muted, palette, move |v, _, cx| write(cx, AudioCommand::SetMicVolume(v * lim))))
+}
+
+/// The main menu's volume row: the output slider and its level.
+pub fn volume_row(palette: &MandaraPalette, cx: &App) -> AnyElement {
+    const KEY: &str = "menu-volume";
+    let o = hub(cx).read(cx).audio.output.clone();
+    let lim = limit(cx);
+    let volume = shown_volume(KEY, &o, lim);
+    div()
+        .flex()
+        .items_center()
+        .gap(px(tokens::SM))
+        .child(div().flex_1().min_w(px(0.0)).child(big_slider(KEY, o.volume / lim, volume_icon(volume, o.muted), o.muted, palette, move |v, _, cx| write(cx, AudioCommand::SetVolume(v * lim)))))
+        .child(div().w(px(VOLUME_LABEL_W)).flex().justify_end().font_features(tabular_nums()).text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(volume_text(volume)))
+        .into_any_element()
 }
 
 /// The header's global mute switch: "Mute all" / coral "Unmute all".
@@ -323,24 +347,45 @@ fn visible_outputs<'a>(list: &'a [mandara_services::audio::Device], cx: &App) ->
     list.iter().filter(|d| !cfg.audio.is_hidden(&d.name)).collect()
 }
 
-/// Height of the app rows at their current presence (rows fold in / out).
-fn apps_content_h(rows: &[(apps::AppGroup, f32)], row_h: f32, gap: f32) -> f32 {
-    rows.iter().enumerate().map(|(i, (_, a))| a * (row_h + if i == 0 { 0.0 } else { gap })).sum()
+/// Height of the app rows at their current presence (rows fold in / out);
+/// the `host` row also carries the spectrum.
+fn apps_content_h(rows: &[(apps::AppGroup, f32)], row_h: f32, gap: f32, host: Option<&str>) -> f32 {
+    rows.iter().enumerate().map(|(i, (g, a))| a * (row_h + if i == 0 { 0.0 } else { gap } + if host == Some(g.key.as_str()) { OUT_VIZ_H } else { 0.0 })).sum()
+}
+
+/// The app the spectrum shows under: the one playing what the media
+/// player shows (by name), else the first app playing at all. Effects
+/// processors such as EasyEffects carry everyone's sound, so they never
+/// count.
+fn spectrum_host<'a>(groups: &'a [apps::AppGroup], player: Option<&str>) -> Option<&'a apps::AppGroup> {
+    let effect = |g: &apps::AppGroup| {
+        let (key, name) = (g.key.to_lowercase(), g.name.to_lowercase().replace(' ', ""));
+        EFFECT_APPS.iter().any(|e| key.contains(e) || name.contains(e))
+    };
+    let playing: Vec<&apps::AppGroup> = groups.iter().filter(|g| !g.corked && !effect(g)).collect();
+    let player = player.map(|p| p.to_lowercase()).filter(|p| !p.is_empty());
+    player
+        .and_then(|p| playing.iter().copied().find(|g| g.key.contains(&p) || g.name.to_lowercase().contains(&p) || p.contains(&g.name.to_lowercase())))
+        .or_else(|| playing.first().copied())
 }
 
 /// The Apps card: one row per app playing sound, or a muted empty line;
 /// scrolls once it would push the panel past [`MAX_PANEL_H`]. Returns the
 /// card and its height.
-fn apps_card(rows: &[(apps::AppGroup, f32)], rc: &RowCx<'_>, radius: f32, max_list_h: f32, cx: &App) -> (AnyElement, f32) {
+fn apps_card(rows: &[(apps::AppGroup, f32)], rc: &RowCx<'_>, radius: f32, max_list_h: f32, (host, bands): (Option<&str>, Option<&[f32]>), cx: &App) -> (AnyElement, f32) {
     let palette = rc.palette;
-    let content_h = if rows.is_empty() { APPS_EMPTY_H } else { apps_content_h(rows, apps::ROW_H, APP_ROW_GAP) };
+    let content_h = if rows.is_empty() { APPS_EMPTY_H } else { apps_content_h(rows, apps::ROW_H, APP_ROW_GAP, host) };
     let list_h = content_h.min(max_list_h.max(0.0));
     let list = if rows.is_empty() {
         div().h(px(APPS_EMPTY_H)).flex().items_center().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(t("No apps are playing sound")).into_any_element()
     } else {
+        let from = readable(palette.primary, palette);
         let items = rows.iter().enumerate().map(|(i, (g, a))| {
             let gap = if i == 0 { 0.0 } else { APP_ROW_GAP };
-            div().flex_none().h(px(a * (apps::ROW_H + gap))).overflow_hidden().opacity(*a).child(div().pt(px(gap)).child(apps::panel_row(g, rc, cx)))
+            let hosts = host == Some(g.key.as_str());
+            let viz = hosts.then(|| div().pt(px(ROW_GAP)).child(spectrum_bars(bands.unwrap_or(&[]), from, readable(partner(palette.primary), palette), palette, VIZ_H, VIZ_BAR_GAP_PX)));
+            let h = apps::ROW_H + gap + if hosts { OUT_VIZ_H } else { 0.0 };
+            div().flex_none().h(px(a * h)).overflow_hidden().opacity(*a).child(div().pt(px(gap)).child(apps::panel_row(g, rc, cx)).children(viz))
         });
         let list = div().id("audio-apps-list").h(px(list_h)).flex().flex_col().children(items);
         if content_h > list_h { gpui::StatefulInteractiveElement::overflow_y_scroll(list).into_any_element() } else { list.overflow_hidden().into_any_element() }
@@ -383,12 +428,15 @@ fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, apps_ta
         let snapshot = if visible { AppsTap::snapshot(&apps_tap, window, cx) } else { Rc::default() };
         let rows = presence.borrow_mut().frame(&snapshot.groups, window);
         let outputs = visible_outputs(&snapshot.outputs, cx);
+        let player = hub.read(cx).media.as_ref().filter(|m| m.status == mandara_services::PlaybackStatus::Playing).map(|m| m.identity.clone());
+        let host = spectrum_host(&snapshot.groups, player.as_deref()).map(|g| g.key.clone());
         let s = &hub.read(cx).audio;
         let all = s.all_muted;
-        let base_h = if all { PANEL_H_MUTED } else { PANEL_H };
+        let base_h = if all { PANEL_H_MUTED } else { PANEL_H } - if host.is_some() { OUT_VIZ_H } else { 0.0 };
         let default_sink = snapshot.outputs.iter().find(|d| d.is_default).map(|d| d.index);
         let rc = RowCx { tap: &apps_tap, limit: lim, all_muted: all, outputs: &outputs, default_sink, palette, id_prefix: "audio-app" };
-        let (apps, apps_h) = apps_card(&rows, &rc, r, MAX_PANEL_H - base_h - GAP - APPS_CARD_CHROME_H, cx);
+        let band_slice = bands.as_ref().map(|b| &b[..]);
+        let (apps, apps_h) = apps_card(&rows, &rc, r, MAX_PANEL_H - base_h - GAP - APPS_CARD_CHROME_H, (host.as_deref(), band_slice), cx);
         size_cell.set(size(px(PANEL_W), px(base_h + GAP + apps_h)));
         let subtitle = if !s.available { t("Audio server unavailable").into() } else { out_name.clone() };
         let chip_tint = if all { readable(palette.urgent_coral, palette) } else { accent };
@@ -401,7 +449,7 @@ fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, apps_ta
             .child(reveal(&p, 0, header(audio_icon(s), chip_tint, t("Sound"), subtitle, palette, trailing)))
             .child(div().h(px(HEADER_GAP)))
             .when(all, |el| el.child(reveal(&p, 1, muted_banner(palette, r))).child(div().h(px(GAP))))
-            .child(reveal(&p, 2, output_card(s, bands.as_ref().map(|b| &b[..]), palette, r, display.clone(), (out_name, lim))))
+            .child(reveal(&p, 2, output_card(s, host.is_none().then_some(band_slice), palette, r, display.clone(), (out_name, lim))))
             .child(div().h(px(GAP)))
             .child(reveal(&p, 3, input_card(s, palette, r, display, (in_name, lim))))
             .child(div().h(px(GAP)))
@@ -656,6 +704,18 @@ pub fn register(r: &mut PluginRegistry) {
 mod tests {
     use super::*;
 
+    /// The spectrum belongs to the app playing the music, never to
+    /// EasyEffects (whose stream carries everyone's sound).
+    #[test]
+    fn the_spectrum_sits_under_the_app_playing() {
+        let g = |key: &str, name: &str, corked: bool| apps::AppGroup { key: key.into(), name: name.to_string().into(), corked, ..Default::default() };
+        let groups = [g("com.github.wwmm.easyeffects", "Easy Effects", false), g("firefox", "Firefox", true), g("spotify", "Spotify", false), g("mpv", "mpv", false)];
+        assert_eq!(spectrum_host(&groups, Some("Spotify")).map(|g| g.key.as_str()), Some("spotify"));
+        assert_eq!(spectrum_host(&groups, Some("mpv")).map(|g| g.key.as_str()), Some("mpv"));
+        assert_eq!(spectrum_host(&groups, None).map(|g| g.key.as_str()), Some("spotify"), "the first one playing");
+        assert_eq!(spectrum_host(&groups[..2], None), None, "EasyEffects alone, or a paused app, hosts nothing");
+    }
+
     #[test]
     fn next_device_skips_hidden_and_wraps() {
         use mandara_services::audio::Device;
@@ -680,7 +740,7 @@ mod tests {
         let all = AudioState { all_muted: true, ..Default::default() };
         assert_eq!(audio_icon(&all), "volume-off", "global mute has its own glyph");
         assert!(crate::icons::ICON_NAMES.contains(&audio_icon(&all)));
-        assert!(PANEL_H_MUTED > PANEL_H);
+        const { assert!(PANEL_H_MUTED > PANEL_H) };
     }
 
     #[test]

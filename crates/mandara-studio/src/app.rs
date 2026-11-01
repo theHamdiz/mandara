@@ -34,6 +34,7 @@ mod greeter_page;
 mod keyrings_card;
 mod admin_run;
 mod fold;
+mod font_picker;
 mod time_card;
 mod users_page;
 pub use time_card::set_demo as set_time_demo;
@@ -93,6 +94,8 @@ pub struct StudioView {
     icon_search: Entity<TextField>,
     icon_query: String,
     icon_path: Entity<TextField>,
+    /// One font picker per font setting.
+    font_selects: HashMap<&'static str, Entity<font_picker::FontSelect>>,
     /// Seeds extracted from the current wallpaper (path, hex colors).
     wallpaper_seeds: Option<(std::path::PathBuf, Rc<[mandara_theme::Color]>)>,
     /// The current wallpaper's picker thumbnail (wallpaper, thumbnail file),
@@ -196,7 +199,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { section: Section::Home, search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new() }
+        Self { section: Section::Home, search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -222,6 +225,15 @@ impl StudioView {
         self.section = section;
         self.query.clear();
         self.search.update(cx, |f, _| f.value.clear());
+        cx.notify();
+    }
+
+    /// Opens the search results for `query` (`mandara studio search/<text>`,
+    /// e.g. a widget's settings button showing every weather setting).
+    pub fn show_search(&mut self, query: &str, cx: &mut Context<Self>) {
+        self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+        self.query = query.to_string();
+        self.search.update(cx, |f, _| f.set(query));
         cx.notify();
     }
 
@@ -513,6 +525,20 @@ impl StudioView {
                     }
                 })
                 .into_any_element(),
+            Control::Font { follows } => {
+                let fallback = follows.map(|path| registry::by_path(path).map(|s| registry::get(cfg, s)).and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default());
+                let current = value.as_str().unwrap_or_default().to_string();
+                let picker = self.font_selects.entry(setting.path).or_insert_with(|| {
+                    let s = setting.clone();
+                    let studio = cx.entity().downgrade();
+                    cx.new(|_| font_picker::FontSelect::new(format!("font-{}", s.path), Rc::new(move |family, _, cx| {
+                        let s = s.clone();
+                        let _ = studio.update(cx, |this, cx| this.apply(&s, Value::from(family), cx));
+                    })))
+                }).clone();
+                picker.update(cx, |f, _| f.sync(&current, fallback.as_deref()));
+                picker.into_any_element()
+            }
             Control::Icon => {
                 let current = value.as_str().unwrap_or("grid").to_string();
                 div()
@@ -1743,7 +1769,8 @@ impl Render for StudioView {
             }))
             .bg(p.surface_base.hsla())
             .text_color(p.on_surface.hsla())
-            .font_family(fonts.ui.clone())
+            // Typography → Studio font.
+            .font_family(fonts.studio.clone())
             .text_size(px(TEXT_13_PX))
             .child(nav)
             .child(div().flex_1().min_w(px(0.0)).h_full().row().flex_col().child(titlebar).child(content))

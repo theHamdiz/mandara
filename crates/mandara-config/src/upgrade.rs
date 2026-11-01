@@ -21,6 +21,13 @@
 //!   theme back). A table the user changed keeps every value. Compositor
 //!   borders live in Mandara's own drop-in, so they keep their value.
 //!
+//! * **`[compositor] keybinds_version`** — the volume keys shipped first;
+//!   the brightness keys and (version 1) the media keys came later, but a
+//!   saved key list never grew, so existing installs never got them. An
+//!   older list gets every hardware key it lacks (by key and modifiers);
+//!   chords the user's own compositor config binds are still skipped when
+//!   the drop-in is written.
+//!
 //! The upgrade is idempotent and runs in memory; the next write persists it.
 
 use crate::ShellConfig;
@@ -29,6 +36,10 @@ use crate::ShellConfig;
 pub const PLUGIN_DEFAULTS_VERSION: u32 = 1;
 /// The `[integrations]` defaults this build ships.
 pub const INTEGRATIONS_VERSION: u32 = 1;
+/// The hardware-key defaults this build ships.
+pub const KEYBIND_DEFAULTS_VERSION: u32 = 1;
+/// The lock screen look defaults this build ships.
+pub const LOCK_LOOK_VERSION: u32 = 1;
 
 /// Built-ins that were on by default before version 1 and ship switched off
 /// since, each with the reason.
@@ -66,7 +77,42 @@ fn push_unique(list: &mut Vec<String>, id: &str) {
 pub fn upgrade(cfg: &mut ShellConfig) -> bool {
     let mut changed = upgrade_plugins(cfg);
     changed |= upgrade_integrations(cfg);
+    changed |= upgrade_keybinds(cfg);
+    changed |= upgrade_lock_look(cfg);
     changed
+}
+
+/// The lock screen blurred and darkened the wallpaper beyond recognition
+/// by default; a `[lock]` still at those old defaults gets the lighter
+/// ones. Values the user chose stay.
+fn upgrade_lock_look(cfg: &mut ShellConfig) -> bool {
+    use crate::desktop::defaults::{LOCK_BLUR_PX, LOCK_BLUR_PX_V0, LOCK_DIM, LOCK_DIM_V0};
+    let lock = &mut cfg.lock;
+    if lock.look_version >= LOCK_LOOK_VERSION {
+        return false;
+    }
+    if (lock.blur - LOCK_BLUR_PX_V0).abs() < 0.01 && (lock.dim - LOCK_DIM_V0).abs() < 0.001 {
+        lock.blur = LOCK_BLUR_PX;
+        lock.dim = LOCK_DIM;
+    }
+    lock.look_version = LOCK_LOOK_VERSION;
+    true
+}
+
+/// Adds the hardware keys (media, brightness, volume) an older key list
+/// lacks.
+fn upgrade_keybinds(cfg: &mut ShellConfig) -> bool {
+    let c = &mut cfg.compositor;
+    if c.keybinds_version >= KEYBIND_DEFAULTS_VERSION {
+        return false;
+    }
+    for bind in crate::compositor::hardware_keybinds() {
+        if !c.keybinds.iter().any(|b| b.chord() == bind.chord()) {
+            c.keybinds.push(bind);
+        }
+    }
+    c.keybinds_version = KEYBIND_DEFAULTS_VERSION;
+    true
 }
 
 /// Keeps on what an older config had on under the old plugin defaults.
@@ -171,6 +217,42 @@ disabled = ["notes"]
         let i = ShellConfig::default().integrations;
         assert!(!i.any_app() && !i.compositor_borders, "{i:?}");
         assert_eq!(i, crate::IntegrationsConfig::all(false));
+    }
+
+    #[test]
+    fn the_old_lock_defaults_become_the_lighter_ones() {
+        use crate::desktop::defaults::{LOCK_BLUR_PX, LOCK_DIM};
+        let old: ShellConfig = toml::from_str("[lock]\nblur = 28.0\ndim = 0.35\n").unwrap();
+        let mut cfg = old.clone();
+        assert!(upgrade(&mut cfg));
+        assert_eq!((cfg.lock.blur, cfg.lock.dim), (LOCK_BLUR_PX, LOCK_DIM));
+        let mut chosen: ShellConfig = toml::from_str("[lock]\nblur = 40.0\ndim = 0.35\n").unwrap();
+        upgrade(&mut chosen);
+        assert_eq!((chosen.lock.blur, chosen.lock.dim), (40.0, 0.35), "your own values stay");
+        assert!(!upgrade(&mut cfg), "runs once");
+    }
+
+    /// Issue #13: an install from before the media and brightness keys gets
+    /// them added once; keys it already binds keep their action.
+    #[test]
+    fn older_key_lists_get_the_hardware_keys() {
+        use crate::compositor::{BindAction, Keybind};
+        let mut cfg = ShellConfig::default();
+        let own_play = Keybind::new(&[], "XF86AudioPlay", BindAction::Mandara("media next".into()));
+        cfg.compositor.keybinds = vec![Keybind::new(&["super"], "space", BindAction::Mandara("launcher toggle".into())), own_play.clone()];
+        cfg.compositor.keybinds_version = 0;
+        assert!(upgrade(&mut cfg));
+        let keys: Vec<&str> = cfg.compositor.keybinds.iter().map(|b| b.key.as_str()).collect();
+        for key in ["XF86AudioNext", "XF86AudioPrev", "XF86MonBrightnessUp", "XF86MonBrightnessDown", "XF86AudioMute", "XF86AudioRaiseVolume"] {
+            assert!(keys.contains(&key), "{key} missing from {keys:?}");
+        }
+        assert_eq!(cfg.compositor.keybinds.iter().filter(|b| b.key == "XF86AudioPlay").collect::<Vec<_>>(), [&own_play], "your own binding stays");
+        assert_eq!(cfg.compositor.keybinds_version, KEYBIND_DEFAULTS_VERSION);
+        let after = cfg.compositor.keybinds.len();
+        assert!(!upgrade(&mut cfg) && cfg.compositor.keybinds.len() == after, "runs once");
+        // A file without the field reads as version 0.
+        let old: ShellConfig = toml::from_str("[compositor]\nmanage = true\n").unwrap();
+        assert_eq!(old.compositor.keybinds_version, 0);
     }
 
     #[test]

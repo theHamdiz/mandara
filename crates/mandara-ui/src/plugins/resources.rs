@@ -1374,10 +1374,28 @@ fn open_hunter_link(palette: &MandaraPalette) -> AnyElement {
         .gap(px(LINK_GAP_PX))
         .child(t("All processes"))
         .child(icon("chevron-right", SMALL_ICON_PX, fg))
-        .on_click(|_, _, cx| {
-            crate::state::shell(cx).update(cx, |s, cx| s.set_panel(Some(super::processes::ID.into()), cx));
-        })
+        .on_click(|_, _, cx| open_process_hunter(cx))
         .into_any_element()
+}
+
+/// Opens the process list (issue #12). It's an opt-in plugin, off on a new
+/// install, and an off plugin's panel never opens, so the link did nothing:
+/// asking for it here switches it on first.
+fn open_process_hunter(cx: &mut App) {
+    use super::lifecycle::{Action, apply, is_on};
+    let id = super::processes::ID;
+    if crate::state::config(cx).read(cx).get().plugins.is_removed(id)
+        && let Err(e) = apply(id, Action::Restore, cx)
+    {
+        tracing::warn!("all processes: {e}");
+    }
+    if !is_on(id, cx)
+        && let Err(e) = apply(id, Action::Enable, cx)
+    {
+        tracing::warn!("all processes: {e}");
+        return;
+    }
+    crate::state::shell(cx).update(cx, |s, cx| s.set_panel(Some(id.into()), cx));
 }
 
 /// A labelled panel section.

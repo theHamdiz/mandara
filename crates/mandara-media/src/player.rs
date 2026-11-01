@@ -164,6 +164,7 @@ pub fn use_half(w: u32, h: u32, target: (u32, u32), lite: bool) -> bool {
 }
 
 /// Decode thread → its consumer.
+#[expect(clippy::large_enum_variant, reason = "one per frame; boxing would add an allocation per frame (speed over memory)")]
 enum Decoded {
     Picture { pic: Picture, pts: Duration, busy: Duration },
     End,

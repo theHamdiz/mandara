@@ -7,8 +7,8 @@
 //!   state; elements can be selected and dragged (snapping to the 9-point
 //!   anchors), and edits are emitted as [`PreviewEvent`]s.
 //!
-//! Every element is placed by the config's layout (anchor + offset + scale
-//! + z-order) and animated with springs: a staggered entrance (the avatar
+//! Every element is placed by the config's layout (anchor, offset, scale
+//! and z-order) and animated with springs: a staggered entrance (the avatar
 //! pops with overshoot, the password pill unfolds), an idle state with a big
 //! clock that wakes on any key or pointer move, rolling clock digits, a
 //! breathing ring around the avatar, keystroke dots that pop in with a
@@ -35,8 +35,8 @@ use mandara_ui::fonts::{Fonts, tabular_nums};
 use crate::auth::{AuthCommand, AuthEvent, AuthWorker};
 use crate::background::{Background, BackgroundOptions};
 use crate::config::{
-    Anchor, AvatarShape, AvatarSource, BackgroundMode, Element, FieldStyle, GreeterConfig, UserList, VideoMode, apply_playlist,
-    list_images,
+    Anchor, AvatarShape, AvatarSource, BackgroundMode, Element, FieldStyle, GreeterConfig, PasswordMask, PowerStyle, SessionStyle, SubmitButton, UserList,
+    VideoMode, apply_playlist, list_images,
 };
 use crate::greetd::{Notes, Step, wipe};
 use crate::i18n::{tl, tlf};
@@ -97,6 +97,13 @@ const CLOCK_SHADOW_ALPHA: f32 = 0.22;
 /// Avatar initials and fallback icon size, fractions of the avatar.
 const INITIALS_SCALE: f32 = 0.38;
 const USER_ICON_SCALE: f32 = 0.42;
+/// The person glyph without a plate fills more of its box.
+const BARE_ICON_SCALE: f32 = 0.78;
+/// The square sign-in button beside the field is this much of its height
+/// in corner radius (times the theme's roundness).
+const BESIDE_RADIUS: f32 = 0.22;
+/// Gap between the field and the button beside it.
+const BESIDE_GAP: f32 = 8.0;
 
 /// Studio preview: how long background edits that rescan folders or reload
 /// pictures (folders typed, the softening slider dragged) wait for the
@@ -168,6 +175,7 @@ enum Mode {
 
 /// Edits coming out of the Studio preview.
 #[derive(Clone, Debug)]
+#[expect(clippy::large_enum_variant, reason = "a handful per drag; the edited config is a fresh copy either way")]
 pub enum PreviewEvent {
     /// The layout changed by dragging; the new config.
     Edited(GreeterConfig),
@@ -211,6 +219,9 @@ pub struct GreeterView {
     sessions: Vec<Session>,
     session_ix: usize,
     session_menu: bool,
+    /// Picks the mask shapes (fresh per start, so they say nothing about
+    /// the characters).
+    mask_seed: u64,
     state: GreeterState,
     password: String,
     reveal: bool,
@@ -221,6 +232,9 @@ pub struct GreeterView {
     field: Field,
     auth: Option<AuthWorker>,
     background: Background,
+    /// The configured clips, stills and video switch, restored when the
+    /// picked person has no wallpaper of their own.
+    bg_base: (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>, bool),
     /// What the backdrop was built from (a change rebuilds it).
     bg_key: BackgroundSources,
     /// Preview: a debounced backdrop rebuild is due at this instant.
@@ -433,6 +447,12 @@ impl GreeterView {
         let all: Vec<User> = if demo { crate::users::current_user().into_iter().collect() } else { list_users() };
         let mut users: Vec<User> = all.into_iter().filter(|u| !config.user.hidden.contains(&u.name)).collect();
         let state = GreeterState::load(&state_path(demo));
+        // The colour scheme picked with the switcher last time.
+        if config.placement(Element::Themes).visible
+            && let Some(theme) = state.theme.clone().filter(|t| theme_choices(&config).contains(t))
+        {
+            config.theme.preset = theme;
+        }
         if config.user.list == UserList::LastUser
             && let Some(last) = state.last_user.clone()
         {
@@ -473,6 +493,7 @@ impl GreeterView {
             sessions,
             session_ix,
             session_menu: false,
+            mask_seed: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) | 1,
             state,
             password: String::new(),
             reveal: false,
@@ -481,6 +502,7 @@ impl GreeterView {
             status: Status::None,
             focus: cx.focus_handle(),
             auth: None,
+            bg_base: owned_sources(&background),
             background,
             bg_key: BackgroundSources::of(&config),
             bg_rebuild_at: None,
@@ -525,6 +547,7 @@ impl GreeterView {
             config,
         };
         this.started = Instant::now();
+        this.follow_user_wallpaper();
         this
     }
 
@@ -564,8 +587,37 @@ impl GreeterView {
     fn rebuild_background(&mut self) {
         let demo = !matches!(self.mode, Mode::Live { demo: false });
         self.background = Self::make_background(&self.config, demo, self.is_preview(), self.background.target());
+        self.bg_base = owned_sources(&self.background);
         self.bg_key = BackgroundSources::of(&self.config);
         self.bg_rebuild_at = None;
+        self.follow_user_wallpaper();
+    }
+
+    /// The picked person's own wallpaper, when the login screen shows it:
+    /// the copy their session shared (see
+    /// [`mandara_config::paths::shared_login_wallpaper`]), or in the demo
+    /// and Studio's preview your current wallpaper.
+    fn user_wallpaper(&self) -> Option<std::path::PathBuf> {
+        if !self.config.background.user_wallpaper || self.manual.is_some() {
+            return None;
+        }
+        if !matches!(self.mode, Mode::Live { demo: false }) {
+            return own_wallpaper();
+        }
+        let entry = self.users.get(self.user_ix)?;
+        mandara_config::paths::shared_login_wallpaper(std::path::Path::new(mandara_config::paths::LOGIN_WALLPAPER_DIR), &entry.user.name, entry.user.uid)
+    }
+
+    /// Shows the picked person's wallpaper, or the configured backdrop when
+    /// they have none (crossfading either way).
+    fn follow_user_wallpaper(&mut self) {
+        match self.user_wallpaper() {
+            Some(path) => self.background.set_sources(Vec::new(), vec![path], false),
+            None => {
+                let (clips, stills, video) = self.bg_base.clone();
+                self.background.set_sources(clips, stills, video);
+            }
+        }
     }
 
     // ── Studio API ───────────────────────────────────────────────────────
@@ -797,6 +849,7 @@ impl GreeterView {
             self.session_ix = self.state.sessions.get(&self.users[ix].user.name).and_then(|id| self.sessions.iter().position(|s| &s.id == id)).unwrap_or(def);
             self.field = Field::Password;
         }
+        self.follow_user_wallpaper();
         self.pop.snap_to(0.8);
         self.pop.set_target(1.0);
         cx.notify();
@@ -1052,65 +1105,32 @@ pub fn snap_placement(rect: (f32, f32, f32, f32), view: (f32, f32), u: f32) -> (
     (anchor, if snap_x { 0.0 } else { (ox / u).round() }, if snap_y { 0.0 } else { (oy / u).round() }, snap_x, snap_y)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn background_edits_rebuild_only_for_new_sources() {
-        let base = GreeterConfig::default();
-        let key = |f: &dyn Fn(&mut GreeterConfig)| {
-            let mut c = base.clone();
-            f(&mut c);
-            background_change(&BackgroundSources::of(&base), &BackgroundSources::of(&c))
-        };
-        // Timings and per-frame looks keep the backdrop.
-        assert_eq!(key(&|c| c.background.crossfade_ms += 100), BackgroundChange::Same);
-        assert_eq!(key(&|c| c.background.ken_burns += 0.05), BackgroundChange::Same);
-        assert_eq!(key(&|c| c.background.playback_rate = 0.5), BackgroundChange::Same);
-        assert_eq!(key(&|c| c.background.dim += 0.1), BackgroundChange::Same);
-        assert_eq!(key(&|c| c.background.parallax += 1.0), BackgroundChange::Same);
-        // Switches rebuild at once.
-        assert_eq!(key(&|c| c.background.mode = BackgroundMode::Solid), BackgroundChange::Rebuild);
-        assert_eq!(key(&|c| c.background.video = VideoMode::Off), BackgroundChange::Rebuild);
-        assert_eq!(key(&|c| c.accessibility.reduced_motion = !c.accessibility.reduced_motion), BackgroundChange::Rebuild);
-        // Typing folders / dragging the softening waits for the edits to settle.
-        assert_eq!(key(&|c| c.background.blur += 0.1), BackgroundChange::RebuildSettled);
-        assert_eq!(key(&|c| c.background.video_dirs.push("/tmp/x".into())), BackgroundChange::RebuildSettled);
+/// Schemes the switcher offers: the configured ones that exist, else a
+/// handful of Mandara's own.
+fn theme_choices(cfg: &GreeterConfig) -> Vec<String> {
+    const DEFAULTS: [&str; 5] = ["night-citrine", "montaza-twilight", "mandara-corniche", "mandara-obsidian", "catppuccin"];
+    let listed: Vec<String> = cfg.theme.switcher.iter().filter(|t| mandara_theme::catalog::find(t).is_some()).cloned().collect();
+    if !listed.is_empty() {
+        return listed;
     }
+    DEFAULTS.iter().filter(|t| mandara_theme::catalog::find(t).is_some()).map(|t| t.to_string()).collect()
+}
 
-    #[test]
-    fn solid_floor_follows_the_theme_when_unset() {
-        let mut a = GreeterConfig::default();
-        a.background.mode = BackgroundMode::Solid;
-        a.background.solid.clear();
-        let mut b = a.clone();
-        b.background.solid = "#123456".into();
-        assert_eq!(background_change(&BackgroundSources::of(&a), &BackgroundSources::of(&b)), BackgroundChange::Rebuild);
-    }
+/// A backdrop's sources, owned.
+fn owned_sources(b: &Background) -> (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>, bool) {
+    let (clips, stills, video) = b.sources();
+    (clips.to_vec(), stills.to_vec(), video)
+}
 
-    #[test]
-    fn dragging_snaps_to_the_nearest_anchor() {
-        // 960×540 preview (u = 0.5). An element near the bottom-left corner.
-        let (a, x, y, sx, sy) = snap_placement((20.0, 480.0, 100.0, 40.0), (960.0, 540.0), 0.5);
-        assert_eq!(a, Anchor::BottomLeft);
-        assert_eq!((x, y), (40.0, -40.0));
-        assert!(!sx && !sy);
-        // Centered horizontally within the snap distance → offset 0.
-        let (a, x, _, sx, _) = snap_placement((430.0 + 3.0, 10.0, 100.0, 30.0), (960.0, 540.0), 0.5);
-        assert_eq!(a, Anchor::Top);
-        assert_eq!(x, 0.0);
-        assert!(sx);
-        // The middle of the screen.
-        let (a, ..) = snap_placement((400.0, 250.0, 160.0, 40.0), (960.0, 540.0), 0.5);
-        assert_eq!(a, Anchor::Center);
-    }
-
-    #[test]
-    fn blend_composites_over() {
-        let out = gpui::Rgba::from(blend(gpui::black().opacity(1.0), gpui::white().opacity(0.5)));
-        assert!((out.r - 0.5).abs() < 0.01 && (out.a - 1.0).abs() < 1e-4);
-    }
+/// Your current desktop wallpaper (demo and preview run as you): a still
+/// image from `~/.config/mandara/config.toml`, not a video.
+fn own_wallpaper() -> Option<std::path::PathBuf> {
+    let text = std::fs::read_to_string(mandara_config::paths::config_file()).ok()?;
+    let cfg: mandara_config::ShellConfig = toml::from_str(&text).ok()?;
+    // The one the shell shows (and shares with the login screen): the
+    // light / dark variant when there is one.
+    let path = mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, None, cfg.theme.mode.is_dark()).filter(|p| p.is_file())?;
+    (!mandara_media::is_video(&path)).then_some(path)
 }
 
 // ── Rendering helpers ──────────────────────────────────────────────────
@@ -1122,6 +1142,24 @@ fn icon(name: &str, size: f32, color: Hsla) -> impl IntoElement {
     match crate::assets::extra_icon_file(name) {
         Some(path) => el.external_path(SharedString::from(path)),
         None => el.path(SharedString::from(format!("icons/{name}.svg"))),
+    }
+}
+
+/// One masked character for [`PasswordMask::Shapes`]: circle, square,
+/// diamond, ring, bar or plus, chosen from the position and a per-start
+/// seed (never the character).
+fn mask_shape(seed: u64, ix: usize, d: f32, ink: Hsla) -> gpui::Div {
+    let mut x = seed ^ (ix as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    x ^= x >> 31;
+    x = x.wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x ^= x >> 29;
+    match x % 6 {
+        0 => div().size(px(d)).rounded_full().bg(ink),
+        1 => div().size(px(d * 0.86)).rounded(px(d * 0.18)).bg(ink),
+        2 => div().size(px(d * 0.72)).rounded(px(d * 0.12)).bg(ink).mt(px(d * 0.1)),
+        3 => div().size(px(d)).rounded_full().border_2().border_color(ink),
+        4 => div().w(px(d)).h(px(d * 0.42)).rounded_full().bg(ink),
+        _ => div().relative().size(px(d)).child(div().absolute().left(px(d * 0.36)).top_0().w(px(d * 0.28)).h(px(d)).rounded(px(d * 0.1)).bg(ink)).child(div().absolute().top(px(d * 0.36)).left_0().h(px(d * 0.28)).w(px(d)).rounded(px(d * 0.1)).bg(ink)),
     }
 }
 
@@ -1187,6 +1225,7 @@ impl Frame {
         }
         match cfg.password.style {
             FieldStyle::Solid => p.surface_container.with_alpha(if focused { 0.96 } else { 0.9 }).hsla(),
+            FieldStyle::Inset => p.surface_dim.with_alpha(if focused { 0.98 } else { 0.92 }).hsla(),
             _ => self.white.opacity((cfg.theme.glass + if focused { 0.08 } else { 0.0 }).clamp(0.0, 1.0)),
         }
     }
@@ -1283,7 +1322,7 @@ impl GreeterView {
         if let Some(entrance_at) = self.entrance_at {
             let since = now.saturating_duration_since(entrance_at).as_secs_f32();
             let stagger = m.stagger_ms as f32 / MS_PER_S;
-            let order = [Element::Date, Element::Clock, Element::User, Element::Password, Element::Users, Element::Session, Element::Power, Element::Keyboard, Element::Banner];
+            let order = [Element::Date, Element::Clock, Element::User, Element::Password, Element::Users, Element::Session, Element::Power, Element::Keyboard, Element::Banner, Element::Logo, Element::Themes];
             // The avatar pops with the third element (the user card).
             let pop_slot = order.iter().position(|e| *e == Element::User).unwrap_or(0) as f32;
             for (i, e) in order.iter().enumerate() {
@@ -1482,11 +1521,19 @@ impl GreeterView {
         div().font_family(font).text_size(px(d.size * k)).font_weight(weight(d.weight)).text_color(f.white.opacity(d.opacity)).child(shadowed(text, 1.5 * k, 0.3)).into_any_element()
     }
 
+    /// Width of the password field (and a full-width session picker): the
+    /// card's inner width when it holds them, else the configured width.
+    fn field_width(&self, k: f32) -> f32 {
+        let c = &self.config.card;
+        if c.enabled { (c.width - c.padding * 2.0).max(120.0) * k } else { self.config.password.width * k }
+    }
+
     fn avatar_radius(&self, d: f32) -> f32 {
         match self.config.user.avatar_shape {
             AvatarShape::Circle => d / 2.0,
             AvatarShape::Squircle => d * 0.32,
             AvatarShape::Rounded => d * 0.18,
+            AvatarShape::Bare => d / 2.0,
         }
     }
 
@@ -1494,6 +1541,7 @@ impl GreeterView {
         let p = &self.palette;
         let r = self.avatar_radius(d);
         let rimmed = rim(self.config.theme.rim.max(0.5));
+        let bare = self.config.user.avatar_shape == AvatarShape::Bare;
         match entry {
             Some(UserEntry { avatar: Some(image), .. }) if self.config.user.avatar_source == AvatarSource::Auto => {
                 img(ImageSource::Render(image.clone())).size(px(d)).rounded(px(r)).object_fit(ObjectFit::Cover).into_any_element()
@@ -1501,8 +1549,7 @@ impl GreeterView {
             Some(UserEntry { user, .. }) if self.config.user.avatar_source != AvatarSource::Icon => div()
                 .size(px(d))
                 .rounded(px(r))
-                .bg(oklab_gradient(145.0, p.accent_gradient_start.with_lightness(0.66), p.accent_gradient_end.with_lightness(0.42)))
-                .shadow(rimmed)
+                .when(!bare, |el| el.bg(oklab_gradient(145.0, p.accent_gradient_start.with_lightness(0.66), p.accent_gradient_end.with_lightness(0.42))).shadow(rimmed.clone()))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -1515,12 +1562,11 @@ impl GreeterView {
             _ => div()
                 .size(px(d))
                 .rounded(px(r))
-                .bg(gpui::white().opacity(0.18))
-                .shadow(rimmed)
+                .when(!bare, |el| el.bg(gpui::white().opacity(0.18)).shadow(rimmed))
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(icon("user", snap_size(d * USER_ICON_SCALE), gpui::white().opacity(0.92)))
+                .child(icon("user", snap_size(d * if bare { BARE_ICON_SCALE } else { USER_ICON_SCALE }), gpui::white().opacity(0.92)))
                 .into_any_element(),
         }
     }
@@ -1536,7 +1582,7 @@ impl GreeterView {
         let accent = self.palette.primary;
         let ring_r = self.avatar_radius(d) + ring_w * 2.0;
         let mut ring = div().p(px(ring_w * 1.6)).rounded(px(ring_r));
-        if u.glow_ring {
+        if u.glow_ring && u.avatar_shape != AvatarShape::Bare {
             ring = ring.border_color(accent.with_lightness(0.8).with_alpha(0.35 + 0.35 * b).hsla()).shadow(vec![
                 glow(accent.with_alpha(0.22 + 0.25 * b).hsla(), 26.0 * k, (2.0 + 5.0 * b) * k),
                 soft_shadow(30.0 * k, 0.3, 10.0 * k),
@@ -1547,7 +1593,7 @@ impl GreeterView {
             widths.right = Some(w);
             widths.bottom = Some(w);
             widths.left = Some(w);
-        } else {
+        } else if u.avatar_shape != AvatarShape::Bare {
             ring = ring.shadow(vec![soft_shadow(30.0 * k, 0.35, 10.0 * k)]);
         }
         let name = match (&self.manual, entry) {
@@ -1594,13 +1640,14 @@ impl GreeterView {
         let p = &self.palette;
         let white = f.white;
         let h = pc.height * k;
-        let full_w = pc.width * k;
+        let is_pw = id == "password";
+        let beside = is_pw && pc.submit == SubmitButton::Beside;
+        let full_w = self.field_width(k) - if beside { h + BESIDE_GAP * k } else { 0.0 };
         let w = h + (full_w - h) * unfold.clamp(0.0, 1.0);
         let radius = (h / 2.0) * cfg.theme.roundness;
-        let is_pw = id == "password";
         let busy = self.phase == Phase::Busy && is_pw;
         let empty = text.is_empty();
-        let caret_on = focused && !busy && !self.is_preview() && ((self.started.elapsed().as_millis() / 530) % 2 == 0 || self.last_key.elapsed() < CARET_HOLD);
+        let caret_on = focused && !busy && !self.is_preview() && ((self.started.elapsed().as_millis() / 530).is_multiple_of(2) || self.last_key.elapsed() < CARET_HOLD);
         let field = if is_pw { Field::Password } else { Field::Username };
         // Keystroke dots pop in with a spring.
         let pop = SpringConfig::new(520.0, 14.0, 1.0);
@@ -1611,7 +1658,12 @@ impl GreeterView {
                 let born = self.dots.get(self.dots.len().saturating_sub(n) + i).copied();
                 let s = if pc.keystroke_ripple && !f.reduced { born.map(|b| pop_at(pop, f.now.saturating_duration_since(b).as_secs_f32())).unwrap_or(1.0) } else { 1.0 };
                 let d = 8.0 * k * s.max(0.0);
-                row = row.child(div().w(px(8.0 * k)).h(px(8.0 * k)).flex().items_center().justify_center().child(div().size(px(d)).rounded_full().bg(white.opacity(0.95))));
+                let ink = white.opacity(0.95);
+                let glyph = match pc.mask {
+                    PasswordMask::Dots => div().size(px(d)).rounded_full().bg(ink),
+                    PasswordMask::Shapes => mask_shape(self.mask_seed, self.dots.len().saturating_sub(n) + i, d, ink),
+                };
+                row = row.child(div().w(px(8.0 * k)).h(px(8.0 * k)).flex().items_center().justify_center().child(glyph));
             }
             row.into_any_element()
         } else if empty {
@@ -1625,7 +1677,7 @@ impl GreeterView {
                 el.child(if before { c.mr(px(4.0 * k)) } else { c.ml(px(4.0 * k)) })
             })
         };
-        let mut inner = div().flex_1().flex().items_center().overflow_hidden().font_family(f.ui_font.clone()).text_size(px(15.0 * k)).when(f.rtl, |el| el.flex_row_reverse());
+        let mut inner = div().flex_1().flex().items_center().overflow_hidden().font_family(f.ui_font.clone()).text_size(px(pc.text_size * k)).when(f.rtl, |el| el.flex_row_reverse());
         if empty {
             inner = caret(inner, true).child(content);
         } else {
@@ -1634,6 +1686,7 @@ impl GreeterView {
         let trailing: Option<AnyElement> = if busy {
             Some(spinner(h * 0.62, k, self.started.elapsed().as_secs_f32()))
         } else if is_pw && !empty {
+            let inside = pc.submit == SubmitButton::Inside;
             let reveal = pc.reveal_toggle.then(|| {
                 div()
                     .id("reveal")
@@ -1656,7 +1709,7 @@ impl GreeterView {
                     .items_center()
                     .gap(px(2.0 * k))
                     .children(reveal)
-                    .child(
+                    .when(inside, |el| el.child(
                         div()
                             .id("submit")
                             .size(px(h * 0.72))
@@ -1669,7 +1722,7 @@ impl GreeterView {
                             .justify_center()
                             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)))
                             .child(icon(if f.rtl { "arrow-left" } else { "arrow-right" }, h * 0.4, p.on_primary.hsla())),
-                    )
+                    ))
                     .into_any_element(),
             )
         } else {
@@ -1714,13 +1767,16 @@ impl GreeterView {
                 this.activity();
                 cx.notify();
             }));
+        let accent = pc.accent_border && focused;
+        let edge = |rest: Hsla| if accent { p.primary.hsla() } else { rest };
         pill = match pc.style {
             FieldStyle::Underline => {
                 pill.style().border_widths.bottom = Some(px(1.5).into());
-                pill.border_color(white.opacity(if focused { 0.9 } else { 0.55 }))
+                pill.border_color(edge(white.opacity(if focused { 0.9 } else { 0.55 })))
             }
-            FieldStyle::Outline => pill.rounded(px(radius)).border_1().border_color(white.opacity(if focused { 0.85 } else { 0.5 })),
-            _ => pill.rounded(px(radius)).bg(fill).border_1().border_color(if focused { white.opacity(0.3) } else { gpui::transparent_black() }),
+            FieldStyle::Outline => pill.rounded(px(radius)).border_1().border_color(edge(white.opacity(if focused { 0.85 } else { 0.5 }))),
+            FieldStyle::Inset => pill.rounded(px(radius)).bg(fill).border_1().border_color(edge(p.outline.with_alpha(0.9).hsla())),
+            _ => pill.rounded(px(radius)).bg(fill).border_1().border_color(edge(if focused { white.opacity(0.3) } else { gpui::transparent_black() })),
         };
         pill.when(unfold > 0.6, |el| el.child(inner).children(trailing)).into_any_element()
     }
@@ -1736,10 +1792,30 @@ impl GreeterView {
         let placeholder = match &self.prompt {
             Some((_, msg)) if !msg.is_empty() => msg.trim_end_matches(':').to_string(),
             _ if !cfg.password.placeholder.trim().is_empty() => cfg.password.placeholder.clone(),
-            _ => tl("Enter Password"),
+            _ => tl("Enter password"),
         };
         let secret = self.prompt.as_ref().is_none_or(|(s, _)| *s);
-        col = col.child(self.pill(f, k, "password", self.password.clone(), secret, placeholder, self.field == Field::Password, unfold, cx));
+        let field = self.pill(f, k, "password", self.password.clone(), secret, placeholder, self.field == Field::Password, unfold, cx);
+        col = if cfg.password.submit == SubmitButton::Beside && unfold > 0.6 {
+            let h = cfg.password.height * k;
+            let p = &self.palette;
+            let button = div()
+                .id("submit-beside")
+                .size(px(h))
+                .flex_none()
+                .rounded(px(h * BESIDE_RADIUS * cfg.theme.roundness.max(0.4) * 2.0))
+                .bg(p.primary.hsla())
+                .hover(|s| s.opacity(0.9))
+                .cursor_pointer()
+                .flex()
+                .items_center()
+                .justify_center()
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)))
+                .child(icon(if f.rtl { "arrow-left" } else { "arrow-right" }, h * 0.42, p.on_primary.hsla()));
+            col.child(div().flex().items_center().gap(px(BESIDE_GAP * k)).when(f.rtl, |el| el.flex_row_reverse()).child(field).child(button))
+        } else {
+            col.child(field)
+        };
         let white = f.white;
         let status: Option<(Option<&'static str>, String, Hsla)> = match &self.status {
             Status::Error(e) => Some((None, e.clone(), self.palette.urgent_coral.with_lightness(0.85).hsla())),
@@ -1819,7 +1895,8 @@ impl GreeterView {
         let cfg = &self.config;
         let name = self.sessions.get(self.session_ix).map(|s| if s.kind == SessionKind::X11 { format!("{} (X11)", s.name) } else { s.name.clone() }).unwrap_or_else(|| tl("Login shell"));
         let focused = self.field == Field::Session;
-        let h = 36.0 * k;
+        let wide = cfg.session.style == SessionStyle::Field;
+        let h = if wide { cfg.password.height * k * 0.9 } else { 36.0 * k };
         let pill = div()
             .id("session")
             .h(px(h))
@@ -1828,10 +1905,9 @@ impl GreeterView {
             .items_center()
             .gap(px(8.0 * k))
             .rounded(px(h / 2.0 * cfg.theme.roundness))
-            .bg(f.fill(cfg, p, focused))
-            .shadow(rim(cfg.theme.rim))
+            .when(wide, |el| el.w(px(self.field_width(k))).bg(p.surface_dim.with_alpha(0.92).hsla()).border_color(if focused { p.primary.hsla() } else { p.outline.with_alpha(0.9).hsla() }))
+            .when(!wide, |el| el.bg(f.fill(cfg, p, focused)).shadow(rim(cfg.theme.rim)).border_color(if focused { f.white.opacity(0.6) } else { gpui::transparent_black() }))
             .border_1()
-            .border_color(if focused { f.white.opacity(0.6) } else { gpui::transparent_black() })
             .cursor_pointer()
             .hover(|s| s.bg(gpui::white().opacity(0.24)))
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
@@ -1843,12 +1919,13 @@ impl GreeterView {
                 this.activity();
                 cx.notify();
             }))
-            .child(icon("monitor", 16.0 * k, f.white.opacity(0.92)))
+            .child(icon("monitor", 16.0 * k, f.white.opacity(if wide { 0.7 } else { 0.92 })))
             .child(div().font_family(f.ui_font.clone()).text_size(px(13.5 * k)).font_weight(FontWeight::MEDIUM).text_color(f.white.opacity(0.95)).child(name))
+            .when(wide, |el| el.child(div().flex_1()))
             .when(self.sessions.len() > 1, |el| el.child(icon(if self.session_menu { "chevron-up" } else { "chevron-down" }, 14.0 * k, f.white.opacity(0.8))));
         let mut root = div().relative().child(pill);
         if self.session_menu && !self.sessions.is_empty() {
-            let below = cfg.placement(Element::Session).anchor.fraction().1 < 0.5;
+            let below = (cfg.card.enabled && cfg.card.session_inside) || cfg.placement(Element::Session).anchor.fraction().1 < 0.5;
             let mut list = div()
                 .absolute()
                 .when(below, |el| el.top(px(h + 10.0 * k)))
@@ -1913,18 +1990,23 @@ impl GreeterView {
                     .gap(px(6.0 * k))
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.power(action, cx)))
-                    .child(
-                        div()
-                            .size(px(44.0 * k))
-                            .rounded(px(22.0 * k * self.config.theme.roundness.max(0.3)))
-                            .bg(f.fill(&self.config, &self.palette, false))
-                            .shadow(rim(self.config.theme.rim))
-                            .hover(|s| s.bg(gpui::white().opacity(0.28)))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(icon(action.icon(), 19.0 * k, f.white.opacity(0.95))),
-                    )
+                    .child({
+                        let d = pc.size * k;
+                        let button = div().size(px(d)).flex().items_center().justify_center().child(icon(action.icon(), d * 0.43, f.white.opacity(0.95)));
+                        match pc.style {
+                            PowerStyle::Soft => button
+                                .rounded(px(d / 2.0 * self.config.theme.roundness.max(0.3)))
+                                .bg(f.fill(&self.config, &self.palette, false))
+                                .shadow(rim(self.config.theme.rim))
+                                .hover(|s| s.bg(gpui::white().opacity(0.28))),
+                            PowerStyle::Outlined => button
+                                .rounded_full()
+                                .bg(self.palette.surface_dim.with_alpha(0.78).hsla())
+                                .border_1()
+                                .border_color(self.palette.outline.with_alpha(0.9).hsla())
+                                .hover(|s| s.bg(gpui::white().opacity(0.14))),
+                        }
+                    })
                     .when(pc.labels, |el| el.child(div().font_family(f.ui_font.clone()).text_size(px(11.5 * k)).text_color(f.white.opacity(0.85)).child(action.label()))),
             );
         }
@@ -1944,6 +2026,114 @@ impl GreeterView {
             .child(icon("keyboard", 15.0 * k, f.white.opacity(0.9)))
             .child(div().font_family(f.ui_font.clone()).text_size(px(12.0 * k)).font_weight(FontWeight::SEMIBOLD).text_color(f.white.opacity(0.95)).child(layout))
             .into_any_element()
+    }
+
+    /// The card: user, password and (optionally) session on one panel.
+    fn card_el(&self, f: &Frame, k: f32, caps: bool, cx: &mut Context<Self>) -> AnyElement {
+        let c = &self.config.card;
+        let p = &self.palette;
+        let fill = Color::from_hex(c.fill.trim()).unwrap_or(p.surface_container).with_alpha(c.opacity.clamp(0.0, 1.0));
+        let edge = Color::from_hex(c.border_color.trim()).unwrap_or(p.outline);
+        let mut card = div()
+            .relative()
+            .w(px(c.width * k))
+            .p(px(c.padding * k))
+            .rounded(px(c.radius * k))
+            .bg(fill.hsla())
+            .shadow(vec![soft_shadow(40.0 * k, 0.32, 14.0 * k)])
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap(px(14.0 * k));
+        if c.border > 0.0 {
+            let w: gpui::AbsoluteLength = px(c.border).into();
+            let widths = &mut card.style().border_widths;
+            (widths.top, widths.right, widths.bottom, widths.left) = (Some(w), Some(w), Some(w), Some(w));
+            card = card.border_color(edge.hsla());
+        }
+        let switcher = self.users.len() > 1 || self.manual.is_some();
+        if c.back_button && switcher && !self.is_preview() {
+            let d = 30.0 * k;
+            card = card.child(
+                div()
+                    .id("card-back")
+                    .absolute()
+                    .top(px(c.padding * k * 0.6))
+                    .when(!f.rtl, |el| el.left(px(c.padding * k * 0.6)))
+                    .when(f.rtl, |el| el.right(px(c.padding * k * 0.6)))
+                    .size(px(d))
+                    .rounded(px(d * 0.24 * self.config.theme.roundness.max(0.4) * 2.0))
+                    .border_1()
+                    .border_color(edge.hsla())
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .hover(|s| s.bg(gpui::white().opacity(0.08)))
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.field = Field::User;
+                        this.activity();
+                        cx.notify();
+                    }))
+                    .child(icon(if f.rtl { "arrow-right" } else { "arrow-left" }, d * 0.5, f.white.opacity(0.9))),
+            );
+        }
+        card = card.child(self.user_el(f, k, cx)).child(self.password_el(f, k, caps, cx));
+        if c.session_inside && !self.sessions.is_empty() && self.config.placement(Element::Session).visible {
+            card = card.child(self.session_el(f, k, cx));
+        }
+        card.into_any_element()
+    }
+
+    /// The logo: an image file, or Mandara's emblem.
+    fn logo_el(&self, f: &Frame, k: f32) -> AnyElement {
+        let l = &self.config.logo;
+        let d = l.size * k;
+        let path = l.path.trim();
+        if path.is_empty() {
+            return div().child(icon("emblem", d, f.white.opacity(l.opacity))).into_any_element();
+        }
+        img(std::path::PathBuf::from(path)).size(px(d)).object_fit(ObjectFit::Contain).opacity(l.opacity).into_any_element()
+    }
+
+    /// The colour scheme switcher: each press moves to the next scheme.
+    fn themes_el(&self, f: &Frame, k: f32, cx: &mut Context<Self>) -> AnyElement {
+        let p = &self.palette;
+        let h = 30.0 * k;
+        div()
+            .id("themes")
+            .h(px(h))
+            .px(px(10.0 * k))
+            .flex()
+            .items_center()
+            .gap(px(6.0 * k))
+            .rounded(px(h * 0.3 * self.config.theme.roundness.max(0.4) * 2.0))
+            .bg(p.surface_container.with_alpha(0.92).hsla())
+            .border_1()
+            .border_color(p.outline.with_alpha(0.9).hsla())
+            .cursor_pointer()
+            .hover(|s| s.bg(gpui::white().opacity(0.12)))
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.next_theme(cx)))
+            .child(icon("palette", 15.0 * k, p.on_surface_variant.hsla()))
+            .child(icon("chevron-down", 13.0 * k, f.white.opacity(0.6)))
+            .into_any_element()
+    }
+
+    fn next_theme(&mut self, cx: &mut Context<Self>) {
+        if self.is_preview() {
+            return;
+        }
+        let list = theme_choices(&self.config);
+        let next = list.iter().position(|t| *t == self.config.theme.preset).map_or(0, |i| (i + 1) % list.len().max(1));
+        let Some(theme) = list.get(next).cloned() else { return };
+        self.config.theme.preset = theme.clone();
+        self.palette = palette_for(&self.config);
+        self.state.theme = Some(theme);
+        if let Err(e) = self.state.save(&state_path(self.demo())) {
+            tracing::warn!("greeter state: {e}");
+        }
+        self.activity();
+        cx.notify();
     }
 
     fn banner_el(&self, f: &Frame, k: f32) -> AnyElement {
@@ -2088,7 +2278,11 @@ impl Render for GreeterView {
             vh,
             now,
             white: gpui::white(),
-            ui_font: if rtl { fonts.arabic.clone() } else { fonts.ui.clone() },
+            ui_font: match self.config.font.trim() {
+                "" if rtl => fonts.arabic.clone(),
+                "" => fonts.ui.clone(),
+                family => SharedString::from(family.to_string()),
+            },
             display_font: fonts.display.clone(),
             rtl,
             success,
@@ -2147,12 +2341,12 @@ impl Render for GreeterView {
                     cx.notify();
                 }),
             )
-            .child(self.background.element(vw, vh, zoom, shift, &p, now));
+            .child(self.background.element(vw, vh, zoom, shift, p, now));
         let origin = self.origin.clone();
         root = root.child(canvas(move |b, _, _| origin.set(b.origin), |_, _, _, _| {}).absolute().top_0().left_0().size_full());
         if bgc.orbs && bgc.orb_intensity > 0.0 {
             let t = if f.reduced { 0.0 } else { f.t };
-            root = root.child(orbs(vw, vh, &p, t, bgc.orb_intensity, shift));
+            root = root.child(orbs(vw, vh, p, t, bgc.orb_intensity, shift));
         }
         // Scrims: tint, dim (+ a little while typing), vignette, grain.
         if let Ok(tint) = Color::from_hex(bgc.tint.trim())
@@ -2171,7 +2365,7 @@ impl Render for GreeterView {
         }
         // A soft shade behind the user card keeps text legible on footage.
         let card = cfg.placement(Element::User);
-        if card.visible {
+        if card.visible && !cfg.card.enabled {
             let (fx, fy) = card.anchor.fraction();
             let (cxp, cyp) = (fx * vw + card.x * u, fy * vh + card.y * u + 60.0 * u);
             let r = 480.0 * u;
@@ -2191,13 +2385,19 @@ impl Render for GreeterView {
             let content = match pl.element {
                 Element::Clock => self.clock_el(&f, k),
                 Element::Date => self.date_el(&f, k),
+                Element::User if cfg.card.enabled => self.card_el(&f, k, caps, cx),
                 Element::User => self.user_el(&f, k, cx),
+                // Inside the card when there is one.
+                Element::Password if cfg.card.enabled => div().into_any_element(),
+                Element::Session if cfg.card.enabled && cfg.card.session_inside => div().into_any_element(),
                 Element::Password => self.password_el(&f, k, caps, cx),
                 Element::Users => self.users_el(&f, k, cx),
                 Element::Session => self.session_el(&f, k, cx),
                 Element::Power => self.power_el(&f, k, cx),
                 Element::Keyboard => self.keyboard_el(&f, k, layout.clone()),
                 Element::Banner => self.banner_el(&f, k),
+                Element::Logo => self.logo_el(&f, k),
+                Element::Themes => self.themes_el(&f, k, cx),
             };
             root = root.child(self.place(&f, pl.element, content, cx));
         }
@@ -2289,5 +2489,66 @@ impl Render for GreeterView {
             self.pacing_visible.record(now, build);
         }
         root
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn background_edits_rebuild_only_for_new_sources() {
+        let base = GreeterConfig::default();
+        let key = |f: &dyn Fn(&mut GreeterConfig)| {
+            let mut c = base.clone();
+            f(&mut c);
+            background_change(&BackgroundSources::of(&base), &BackgroundSources::of(&c))
+        };
+        // Timings and per-frame looks keep the backdrop.
+        assert_eq!(key(&|c| c.background.crossfade_ms += 100), BackgroundChange::Same);
+        assert_eq!(key(&|c| c.background.ken_burns += 0.05), BackgroundChange::Same);
+        assert_eq!(key(&|c| c.background.playback_rate = 0.5), BackgroundChange::Same);
+        assert_eq!(key(&|c| c.background.dim += 0.1), BackgroundChange::Same);
+        assert_eq!(key(&|c| c.background.parallax += 1.0), BackgroundChange::Same);
+        // Switches rebuild at once.
+        assert_eq!(key(&|c| c.background.mode = BackgroundMode::Solid), BackgroundChange::Rebuild);
+        assert_eq!(key(&|c| c.background.video = VideoMode::Off), BackgroundChange::Rebuild);
+        assert_eq!(key(&|c| c.accessibility.reduced_motion = !c.accessibility.reduced_motion), BackgroundChange::Rebuild);
+        // Typing folders / dragging the softening waits for the edits to settle.
+        assert_eq!(key(&|c| c.background.blur += 0.1), BackgroundChange::RebuildSettled);
+        assert_eq!(key(&|c| c.background.video_dirs.push("/tmp/x".into())), BackgroundChange::RebuildSettled);
+    }
+
+    #[test]
+    fn solid_floor_follows_the_theme_when_unset() {
+        let mut a = GreeterConfig::default();
+        a.background.mode = BackgroundMode::Solid;
+        a.background.solid.clear();
+        let mut b = a.clone();
+        b.background.solid = "#123456".into();
+        assert_eq!(background_change(&BackgroundSources::of(&a), &BackgroundSources::of(&b)), BackgroundChange::Rebuild);
+    }
+
+    #[test]
+    fn dragging_snaps_to_the_nearest_anchor() {
+        // 960×540 preview (u = 0.5). An element near the bottom-left corner.
+        let (a, x, y, sx, sy) = snap_placement((20.0, 480.0, 100.0, 40.0), (960.0, 540.0), 0.5);
+        assert_eq!(a, Anchor::BottomLeft);
+        assert_eq!((x, y), (40.0, -40.0));
+        assert!(!sx && !sy);
+        // Centered horizontally within the snap distance → offset 0.
+        let (a, x, _, sx, _) = snap_placement((430.0 + 3.0, 10.0, 100.0, 30.0), (960.0, 540.0), 0.5);
+        assert_eq!(a, Anchor::Top);
+        assert_eq!(x, 0.0);
+        assert!(sx);
+        // The middle of the screen.
+        let (a, ..) = snap_placement((400.0, 250.0, 160.0, 40.0), (960.0, 540.0), 0.5);
+        assert_eq!(a, Anchor::Center);
+    }
+
+    #[test]
+    fn blend_composites_over() {
+        let out = gpui::Rgba::from(blend(gpui::black().opacity(1.0), gpui::white().opacity(0.5)));
+        assert!((out.r - 0.5).abs() < 0.01 && (out.a - 1.0).abs() < 1e-4);
     }
 }

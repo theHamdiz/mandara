@@ -451,7 +451,7 @@ impl VideoSink {
     /// Pushes a packed RGB frame (`width × height × 3` bytes, sRGB).
     pub fn push_rgb(&mut self, rgb: &[u8], at: Duration) -> Result<(), String> {
         let (w, h) = (self.width, self.height);
-        let rgbx: Vec<u8> = rgb.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 0]).collect();
+        let rgbx: Vec<u8> = rgb.as_chunks::<3>().0.iter().flat_map(|p| [p[0], p[1], p[2], 0]).collect();
         let (y, u, v) = to_yuv420(&rgbx, w, h, w * 4, false, false, w, h);
         self.push_yuv420(&y, &u, &v, at)
     }

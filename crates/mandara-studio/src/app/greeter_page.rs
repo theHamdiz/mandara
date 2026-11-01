@@ -33,7 +33,8 @@ use gpui::{
 };
 use mandara_core::ToGpui;
 use mandara_greeter::config::{
-    Anchor, AvatarShape, AvatarSource, BackgroundMode, Element, FieldStyle, GreeterConfig, UserList, VideoMode,
+    Anchor, AvatarShape, AvatarSource, BackgroundMode, Element, FieldStyle, GreeterConfig, LOOKS, PasswordMask, PowerStyle, SessionStyle, SubmitButton, UserList,
+    VideoMode,
 };
 use mandara_greeter::i18n::{tl, tlf};
 use mandara_greeter::view::{GreeterView, PreviewEvent, Simulate};
@@ -48,6 +49,7 @@ mod manager;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Group {
+    Looks,
     Manager,
     Layout,
     Background,
@@ -56,28 +58,30 @@ enum Group {
     Session,
     Theme,
     Motion,
-    Accessibility,
 }
 
 impl Group {
-    const ALL: [Group; 9] = [Group::Manager, Group::Layout, Group::Background, Group::Clock, Group::User, Group::Session, Group::Theme, Group::Motion, Group::Accessibility];
+    /// In the order people work: pick a look, arrange it, fine-tune the
+    /// parts, and finally the system-wide login manager.
+    const ALL: [Group; 9] = [Group::Looks, Group::Layout, Group::Background, Group::Clock, Group::User, Group::Session, Group::Theme, Group::Motion, Group::Manager];
 
     fn label(self) -> String {
         match self {
+            Group::Looks => tl("Looks"),
             Group::Manager => tl("Login manager"),
             Group::Layout => tl("Layout"),
             Group::Background => tl("Background"),
-            Group::Clock => tl("Clock & date"),
-            Group::User => tl("User & password"),
-            Group::Session => tl("Session & power"),
-            Group::Theme => tl("Theme & glass"),
+            Group::Clock => tl("Clock"),
+            Group::User => tl("Sign-in"),
+            Group::Session => tl("Session"),
+            Group::Theme => tl("Theme"),
             Group::Motion => tl("Motion"),
-            Group::Accessibility => tl("Accessibility"),
         }
     }
 
     fn icon(self) -> &'static str {
         match self {
+            Group::Looks => "brush",
             Group::Manager => "monitor",
             Group::Layout => "grid",
             Group::Background => "image",
@@ -86,7 +90,6 @@ impl Group {
             Group::Session => "power",
             Group::Theme => "sun",
             Group::Motion => "refresh",
-            Group::Accessibility => "pointer",
         }
     }
 }
@@ -103,6 +106,8 @@ fn element_label(e: Element) -> String {
         Element::Power => tl("Power buttons"),
         Element::Keyboard => tl("Keyboard layout"),
         Element::Banner => tl("Message"),
+        Element::Logo => tl("Logo"),
+        Element::Themes => tl("Colour schemes"),
     }
 }
 
@@ -128,6 +133,8 @@ pub struct GreeterPage {
     applying: bool,
     idle: bool,
     fields: HashMap<&'static str, Entity<TextField>>,
+    /// Font pickers by row id.
+    fonts: HashMap<&'static str, Entity<super::font_picker::FontSelect>>,
     tracks: Rc<RefCell<HashMap<&'static str, Bounds<Pixels>>>>,
     slider: Option<SliderDrag>,
     width: Rc<std::cell::Cell<f32>>,
@@ -183,7 +190,13 @@ pub(super) fn element(cx: &mut Context<StudioView>) -> AnyElement {
 const PREVIEW_ASPECT_W: f32 = 16.0;
 const PREVIEW_ASPECT_H: f32 = 9.0;
 /// …at most this share of the window's height…
-const PREVIEW_MAX_SHARE: f32 = 0.46;
+const PREVIEW_MAX_SHARE: f32 = 0.4;
+/// The column beside the preview (apply, full screen, try-it chips) on
+/// pages at least this wide; narrower pages stack it under the preview.
+const SIDE_W_PX: f32 = 236.0;
+const SIDE_BY_SIDE_MIN_W_PX: f32 = 720.0;
+/// The selected tab's underline.
+const TAB_UNDERLINE_PX: f32 = 2.0;
 /// …and never narrower than this.
 const PREVIEW_MIN_W_PX: f32 = 320.0;
 /// Preview width before the first layout measured the page.
@@ -248,12 +261,13 @@ impl GreeterPage {
             controls,
             // `MANDARA_STUDIO_LOGIN_GROUP=theme` opens another tab first
             // (screenshots, layout testing).
-            group: std::env::var("MANDARA_STUDIO_LOGIN_GROUP").ok().and_then(|v| Group::ALL.into_iter().find(|g| format!("{g:?}").eq_ignore_ascii_case(&v))).unwrap_or(Group::Layout),
+            group: std::env::var("MANDARA_STUDIO_LOGIN_GROUP").ok().and_then(|v| Group::ALL.into_iter().find(|g| format!("{g:?}").eq_ignore_ascii_case(&v))).unwrap_or(Group::Looks),
             selected: None,
             message: None,
             applying: false,
             idle: false,
             fields: HashMap::new(),
+            fonts: HashMap::new(),
             tracks: Rc::new(RefCell::new(HashMap::new())),
             slider: None,
             width: Rc::new(std::cell::Cell::new(PAGE_INITIAL_W_PX)),
@@ -430,6 +444,24 @@ impl GreeterPage {
             );
         }
         Self::row(p, label, seg.into_any_element())
+    }
+
+    /// A font from the searchable picker; empty = `fallback` (shown as
+    /// "Default").
+    fn font(&mut self, p: &MandaraPalette, id: &'static str, label: String, value: String, fallback: String, set: fn(&mut GreeterConfig, String), cx: &mut Context<Self>) -> AnyElement {
+        let picker = match self.fonts.get(id) {
+            Some(f) => f.clone(),
+            None => {
+                let this = cx.entity().downgrade();
+                let f = cx.new(|_| super::font_picker::FontSelect::new(format!("greeter-font-{id}"), Rc::new(move |v, _, cx| {
+                    let _ = this.update(cx, |this, cx| this.edit(cx, |c| set(c, v)));
+                })));
+                self.fonts.insert(id, f.clone());
+                f
+            }
+        };
+        picker.update(cx, |f, _| f.sync(&value, Some(&fallback)));
+        Self::row(p, label, picker.into_any_element())
     }
 
     fn text(&mut self, p: &MandaraPalette, id: &'static str, label: String, value: String, placeholder: String, set: fn(&mut GreeterConfig, String), cx: &mut Context<Self>) -> AnyElement {
@@ -628,52 +660,78 @@ impl GreeterPage {
             (tl("Aurora"), BackgroundMode::Aurora),
             (tl("Solid"), BackgroundMode::Solid),
         ];
-        let source = vec![
+        // Only what the chosen backdrop uses (Auto plays videos, else
+        // stills, so it shows both).
+        let videos = matches!(b.mode, BackgroundMode::Auto | BackgroundMode::Video);
+        let stills = matches!(b.mode, BackgroundMode::Auto | BackgroundMode::Stills);
+        let mut source = vec![
+            self.toggle(p, "bg-user-wallpaper", tl("Each person's own wallpaper"), b.user_wallpaper, |c, v| c.background.user_wallpaper = v, cx),
             self.choice(p, "bg-mode", tl("Backdrop"), b.mode, modes, |c, v| c.background.mode = v, cx),
-            self.choice(p, "bg-video", tl("Video decoding"), b.video, vec![(tl("Auto"), VideoMode::Auto), (tl("Lite"), VideoMode::Lite), (tl("Off"), VideoMode::Off)], |c, v| c.background.video = v, cx),
-            self.text(p, "bg-video-dirs", tl("Video folders"), join(&b.video_dirs), tl("Separate folders with ;"), |c, v| c.background.video_dirs = split_paths(&v), cx),
-            self.text(p, "bg-image-dirs", tl("Image folders"), join(&b.image_dirs), tl("Separate folders with ;"), |c, v| c.background.image_dirs = split_paths(&v), cx),
-            self.text(p, "bg-playlist", tl("Playlist order"), b.playlist.join("; "), tl("File names in order (optional)"), |c, v| c.background.playlist = v.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(), cx),
-            self.toggle(p, "bg-shuffle", tl("Shuffle"), b.shuffle, |c, v| c.background.shuffle = v, cx),
-            self.text(p, "bg-solid", tl("Solid color"), b.solid.clone(), tl("#rrggbb (theme surface when empty)"), |c, v| c.background.solid = v, cx),
         ];
-        let timing = vec![
-            self.slider(p, "bg-clip", tl("Seconds per clip"), b.clip_seconds as f32, 5.0, 300.0, 1.0, " s", |c, v| c.background.clip_seconds = v as u32, cx),
-            self.slider(p, "bg-xfade", tl("Clip crossfade"), b.crossfade_ms as f32, 0.0, 5000.0, 50.0, " ms", |c, v| c.background.crossfade_ms = v as u32, cx),
-            self.slider(p, "bg-rate", tl("Playback speed"), b.playback_rate, 0.25, 2.0, 0.05, "×", |c, v| c.background.playback_rate = v, cx),
-            self.slider(p, "bg-still", tl("Seconds per image"), b.still_seconds as f32, 4.0, 120.0, 1.0, " s", |c, v| c.background.still_seconds = v as u32, cx),
-            self.slider(p, "bg-still-fade", tl("Image crossfade"), b.still_fade_ms as f32, 0.0, 6000.0, 50.0, " ms", |c, v| c.background.still_fade_ms = v as u32, cx),
-            self.slider(p, "bg-kb", tl("Ken Burns zoom"), b.ken_burns, 0.0, 0.4, 0.01, "", |c, v| c.background.ken_burns = v, cx),
-        ];
-        let look = vec![
+        if videos {
+            source.push(self.choice(p, "bg-video", tl("Video decoding"), b.video, vec![(tl("Auto"), VideoMode::Auto), (tl("Lite"), VideoMode::Lite), (tl("Off"), VideoMode::Off)], |c, v| c.background.video = v, cx));
+            source.push(self.text(p, "bg-video-dirs", tl("Video folders"), join(&b.video_dirs), tl("Separate folders with ;"), |c, v| c.background.video_dirs = split_paths(&v), cx));
+        }
+        if stills {
+            source.push(self.text(p, "bg-image-dirs", tl("Image folders"), join(&b.image_dirs), tl("Separate folders with ;"), |c, v| c.background.image_dirs = split_paths(&v), cx));
+        }
+        if videos || stills {
+            source.push(self.text(p, "bg-playlist", tl("Playlist order"), b.playlist.join("; "), tl("File names in order (optional)"), |c, v| c.background.playlist = v.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(), cx));
+            source.push(self.toggle(p, "bg-shuffle", tl("Shuffle"), b.shuffle, |c, v| c.background.shuffle = v, cx));
+        }
+        if b.mode == BackgroundMode::Solid {
+            source.push(self.text(p, "bg-solid", tl("Solid color"), b.solid.clone(), tl("#rrggbb (theme surface when empty)"), |c, v| c.background.solid = v, cx));
+        }
+        let mut timing = Vec::new();
+        if videos {
+            timing.push(self.slider(p, "bg-clip", tl("Seconds per clip"), b.clip_seconds as f32, 5.0, 300.0, 1.0, " s", |c, v| c.background.clip_seconds = v as u32, cx));
+            timing.push(self.slider(p, "bg-xfade", tl("Clip crossfade"), b.crossfade_ms as f32, 0.0, 5000.0, 50.0, " ms", |c, v| c.background.crossfade_ms = v as u32, cx));
+            timing.push(self.slider(p, "bg-rate", tl("Playback speed"), b.playback_rate, 0.25, 2.0, 0.05, "×", |c, v| c.background.playback_rate = v, cx));
+        }
+        if stills {
+            timing.push(self.slider(p, "bg-still", tl("Seconds per image"), b.still_seconds as f32, 4.0, 120.0, 1.0, " s", |c, v| c.background.still_seconds = v as u32, cx));
+            timing.push(self.slider(p, "bg-still-fade", tl("Image crossfade"), b.still_fade_ms as f32, 0.0, 6000.0, 50.0, " ms", |c, v| c.background.still_fade_ms = v as u32, cx));
+            timing.push(self.slider(p, "bg-kb", tl("Ken Burns zoom"), b.ken_burns, 0.0, 0.4, 0.01, "", |c, v| c.background.ken_burns = v, cx));
+        }
+        let mut look = vec![
             self.slider(p, "bg-dim", tl("Dim"), b.dim, 0.0, 0.9, 0.01, "", |c, v| c.background.dim = v, cx),
             self.slider(p, "bg-vignette", tl("Vignette"), b.vignette, 0.0, 1.0, 0.01, "", |c, v| c.background.vignette = v, cx),
             self.slider(p, "bg-blur", tl("Blur"), b.blur, 0.0, 1.0, 0.01, "", |c, v| c.background.blur = v, cx),
             self.slider(p, "bg-grain", tl("Grain"), b.grain, 0.0, 1.0, 0.01, "", |c, v| c.background.grain = v, cx),
             self.text(p, "bg-tint", tl("Tint color"), b.tint.clone(), "#rrggbb".into(), |c, v| c.background.tint = v, cx),
-            self.slider(p, "bg-tint-k", tl("Tint strength"), b.tint_strength, 0.0, 1.0, 0.01, "", |c, v| c.background.tint_strength = v, cx),
-            self.toggle(p, "bg-orbs", tl("Drifting light orbs"), b.orbs, |c, v| c.background.orbs = v, cx),
-            self.slider(p, "bg-orb-k", tl("Orb intensity"), b.orb_intensity, 0.0, 1.0, 0.01, "", |c, v| c.background.orb_intensity = v, cx),
-            self.slider(p, "bg-parallax", tl("Pointer parallax"), b.parallax, 0.0, 60.0, 1.0, " px", |c, v| c.background.parallax = v, cx),
         ];
-        vec![Self::card(p, tl("Source"), source), Self::card(p, tl("Timing"), timing), Self::card(p, tl("Look"), look)]
+        if !b.tint.trim().is_empty() {
+            look.push(self.slider(p, "bg-tint-k", tl("Tint strength"), b.tint_strength, 0.0, 1.0, 0.01, "", |c, v| c.background.tint_strength = v, cx));
+        }
+        look.push(self.toggle(p, "bg-orbs", tl("Drifting light orbs"), b.orbs, |c, v| c.background.orbs = v, cx));
+        if b.orbs {
+            look.push(self.slider(p, "bg-orb-k", tl("Orb intensity"), b.orb_intensity, 0.0, 1.0, 0.01, "", |c, v| c.background.orb_intensity = v, cx));
+        }
+        look.push(self.slider(p, "bg-parallax", tl("Pointer parallax"), b.parallax, 0.0, 60.0, 1.0, " px", |c, v| c.background.parallax = v, cx));
+        let mut cards = vec![Self::card(p, tl("Source"), source)];
+        if !timing.is_empty() {
+            cards.push(Self::card(p, tl("Timing"), timing));
+        }
+        cards.push(Self::card(p, tl("Look"), look));
+        cards
     }
 
     fn clock_group(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let c = self.draft.clock.clone();
         let d = self.draft.date.clone();
+        let shell_fonts = mandara_ui::fonts::fonts(cx);
         let clock = vec![
             self.toggle(p, "clk-24", tl("24-hour clock"), c.format_24h, |c, v| c.clock.format_24h = v, cx),
             self.toggle(p, "clk-sec", tl("Show seconds"), c.seconds, |c, v| c.clock.seconds = v, cx),
             self.toggle(p, "clk-roll", tl("Rolling digits"), c.roll_digits, |c, v| c.clock.roll_digits = v, cx),
-            self.text(p, "clk-font", tl("Font"), c.font.clone(), tl("Display font (Alexandria)"), |c, v| c.clock.font = v, cx),
+            self.font(p, "clk-font", tl("Font"), c.font.clone(), shell_fonts.display.to_string(), |c, v| c.clock.font = v, cx),
             self.slider(p, "clk-size", tl("Size"), c.size, 40.0, 320.0, 1.0, " px", |c, v| c.clock.size = v, cx),
             self.slider(p, "clk-weight", tl("Weight"), c.weight as f32, 100.0, 900.0, 100.0, "", |c, v| c.clock.weight = v as u16, cx),
             self.slider(p, "clk-opacity", tl("Opacity"), c.opacity, 0.2, 1.0, 0.01, "", |c, v| c.clock.opacity = v, cx),
         ];
         let date = vec![
             self.text(p, "date-fmt", tl("Format"), d.format.clone(), tl("strftime, e.g. %A %-d %B (empty = language default)"), |c, v| c.date.format = v, cx),
-            self.text(p, "date-font", tl("Font"), d.font.clone(), tl("Interface font"), |c, v| c.date.font = v, cx),
+            self.font(p, "date-font", tl("Font"), d.font.clone(), shell_fonts.ui.to_string(), |c, v| c.date.font = v, cx),
             self.slider(p, "date-size", tl("Size"), d.size, 10.0, 60.0, 1.0, " px", |c, v| c.date.size = v, cx),
             self.slider(p, "date-weight", tl("Weight"), d.weight as f32, 100.0, 900.0, 100.0, "", |c, v| c.date.weight = v as u16, cx),
             self.slider(p, "date-opacity", tl("Opacity"), d.opacity, 0.2, 1.0, 0.01, "", |c, v| c.date.opacity = v, cx),
@@ -684,27 +742,50 @@ impl GreeterPage {
     fn user_group(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let u = self.draft.user.clone();
         let pw = self.draft.password.clone();
-        let user = vec![
+        let mut user = vec![
             self.choice(p, "usr-list", tl("Users"), u.list, vec![(tl("Everyone"), UserList::All), (tl("Last user"), UserList::LastUser), (tl("Type a name"), UserList::Manual)], |c, v| c.user.list = v, cx),
-            self.choice(p, "usr-shape", tl("Avatar shape"), u.avatar_shape, vec![(tl("Circle"), AvatarShape::Circle), (tl("Squircle"), AvatarShape::Squircle), (tl("Rounded"), AvatarShape::Rounded)], |c, v| c.user.avatar_shape = v, cx),
+            self.choice(p, "usr-shape", tl("Avatar shape"), u.avatar_shape, vec![(tl("Circle"), AvatarShape::Circle), (tl("Squircle"), AvatarShape::Squircle), (tl("Rounded"), AvatarShape::Rounded), (tl("No frame"), AvatarShape::Bare)], |c, v| c.user.avatar_shape = v, cx),
             self.choice(p, "usr-src", tl("Avatar"), u.avatar_source, vec![(tl("Picture"), AvatarSource::Auto), (tl("Initials"), AvatarSource::Monogram), (tl("Icon"), AvatarSource::Icon)], |c, v| c.user.avatar_source = v, cx),
             self.slider(p, "usr-size", tl("Avatar size"), u.avatar_size, 48.0, 240.0, 1.0, " px", |c, v| c.user.avatar_size = v, cx),
             self.toggle(p, "usr-ring", tl("Breathing glow ring"), u.glow_ring, |c, v| c.user.glow_ring = v, cx),
             self.toggle(p, "usr-name", tl("Show name"), u.show_name, |c, v| c.user.show_name = v, cx),
-            self.slider(p, "usr-name-size", tl("Name size"), u.name_size, 10.0, 48.0, 1.0, " px", |c, v| c.user.name_size = v, cx),
-            self.text(p, "usr-hidden", tl("Hidden users"), u.hidden.join(", "), tl("Login names, comma-separated"), |c, v| c.user.hidden = v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(), cx),
         ];
+        if u.show_name {
+            user.push(self.slider(p, "usr-name-size", tl("Name size"), u.name_size, 10.0, 48.0, 1.0, " px", |c, v| c.user.name_size = v, cx));
+        }
+        user.extend([
+            self.text(p, "usr-hidden", tl("Hidden users"), u.hidden.join(", "), tl("Login names, comma-separated"), |c, v| c.user.hidden = v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(), cx),
+        ]);
+        let card = self.draft.card.clone();
+        let mut card_rows = vec![self.toggle(p, "card-on", tl("Put the sign-in on a card"), card.enabled, |c, v| c.card.enabled = v, cx)];
+        if card.enabled {
+            card_rows.extend([
+                self.slider(p, "card-w", tl("Card width"), card.width, 280.0, 720.0, 2.0, " px", |c, v| c.card.width = v, cx),
+                self.slider(p, "card-pad", tl("Padding"), card.padding, 8.0, 48.0, 1.0, " px", |c, v| c.card.padding = v, cx),
+                self.slider(p, "card-r", tl("Corner radius"), card.radius, 0.0, 48.0, 1.0, " px", |c, v| c.card.radius = v, cx),
+                self.text(p, "card-fill", tl("Fill color"), card.fill.clone(), tl("#rrggbb (theme surface when empty)"), |c, v| c.card.fill = v, cx),
+                self.slider(p, "card-op", tl("Fill opacity"), card.opacity, 0.0, 1.0, 0.01, "", |c, v| c.card.opacity = v, cx),
+                self.slider(p, "card-bd", tl("Border"), card.border, 0.0, 4.0, 0.5, " px", |c, v| c.card.border = v, cx),
+                self.text(p, "card-bdc", tl("Border color"), card.border_color.clone(), tl("#rrggbb (theme outline when empty)"), |c, v| c.card.border_color = v, cx),
+                self.toggle(p, "card-back", tl("Back button to the user switcher"), card.back_button, |c, v| c.card.back_button = v, cx),
+                self.toggle(p, "card-sess", tl("Session picker inside the card"), card.session_inside, |c, v| c.card.session_inside = v, cx),
+            ]);
+        }
         let password = vec![
-            self.choice(p, "pw-style", tl("Style"), pw.style, vec![(tl("Glass"), FieldStyle::Glass), (tl("Solid"), FieldStyle::Solid), (tl("Outline"), FieldStyle::Outline), (tl("Underline"), FieldStyle::Underline)], |c, v| c.password.style = v, cx),
+            self.choice(p, "pw-style", tl("Style"), pw.style, vec![(tl("Glass"), FieldStyle::Glass), (tl("Solid"), FieldStyle::Solid), (tl("Inset"), FieldStyle::Inset), (tl("Outline"), FieldStyle::Outline), (tl("Underline"), FieldStyle::Underline)], |c, v| c.password.style = v, cx),
+            self.choice(p, "pw-submit", tl("Sign-in button"), pw.submit, vec![(tl("In the field"), SubmitButton::Inside), (tl("Beside it"), SubmitButton::Beside), (tl("None (Enter)"), SubmitButton::Hidden)], |c, v| c.password.submit = v, cx),
+            self.choice(p, "pw-mask", tl("Hide typing as"), pw.mask, vec![(tl("Dots"), PasswordMask::Dots), (tl("Shapes"), PasswordMask::Shapes)], |c, v| c.password.mask = v, cx),
+            self.toggle(p, "pw-accent", tl("Accent border while focused"), pw.accent_border, |c, v| c.password.accent_border = v, cx),
             self.slider(p, "pw-w", tl("Width"), pw.width, 180.0, 560.0, 1.0, " px", |c, v| c.password.width = v, cx),
             self.slider(p, "pw-h", tl("Height"), pw.height, 30.0, 72.0, 1.0, " px", |c, v| c.password.height = v, cx),
-            self.text(p, "pw-ph", tl("Placeholder"), pw.placeholder.clone(), tl("Enter Password"), |c, v| c.password.placeholder = v, cx),
+            self.slider(p, "pw-text", tl("Text size"), pw.text_size, 10.0, 24.0, 0.5, " px", |c, v| c.password.text_size = v, cx),
+            self.text(p, "pw-ph", tl("Placeholder"), pw.placeholder.clone(), tl("Enter password"), |c, v| c.password.placeholder = v, cx),
             self.toggle(p, "pw-caps", tl("Caps Lock hint"), pw.caps_hint, |c, v| c.password.caps_hint = v, cx),
             self.toggle(p, "pw-reveal", tl("Show / hide button"), pw.reveal_toggle, |c, v| c.password.reveal_toggle = v, cx),
             self.toggle(p, "pw-ripple", tl("Keystroke ripples"), pw.keystroke_ripple, |c, v| c.password.keystroke_ripple = v, cx),
             self.toggle(p, "pw-glow", tl("Glow while typing"), pw.glow, |c, v| c.password.glow = v, cx),
         ];
-        vec![Self::card(p, tl("User"), user), Self::card(p, tl("Password field"), password)]
+        vec![Self::card(p, tl("Card"), card_rows), Self::card(p, tl("User"), user), Self::card(p, tl("Password field"), password)]
     }
 
     fn session_group(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -737,13 +818,32 @@ impl GreeterPage {
         let session = vec![
             Self::row(p, tl("Default session"), seg.into_any_element()),
             self.toggle(p, "sess-x11", tl("List X11 sessions"), s.x11, |c, v| c.session.x11 = v, cx),
+            self.choice(p, "sess-style", tl("Picker style"), s.style, vec![(tl("Pill"), SessionStyle::Pill), (tl("Full-width field"), SessionStyle::Field)], |c, v| c.session.style = v, cx),
         ];
         let power = vec![
             self.toggle(p, "pow-sleep", tl("Sleep"), pw.suspend, |c, v| c.power.suspend = v, cx),
             self.toggle(p, "pow-reboot", tl("Restart"), pw.reboot, |c, v| c.power.reboot = v, cx),
             self.toggle(p, "pow-off", tl("Shut Down"), pw.poweroff, |c, v| c.power.poweroff = v, cx),
             self.toggle(p, "pow-labels", tl("Labels under buttons"), pw.labels, |c, v| c.power.labels = v, cx),
+            self.choice(p, "pow-style", tl("Button style"), pw.style, vec![(tl("Soft"), PowerStyle::Soft), (tl("Outlined"), PowerStyle::Outlined)], |c, v| c.power.style = v, cx),
+            self.slider(p, "pow-size", tl("Button size"), pw.size, 28.0, 72.0, 1.0, " px", |c, v| c.power.size = v, cx),
         ];
+        let logo = self.draft.logo.clone();
+        let logo_on = self.draft.placement(Element::Logo).visible;
+        let mut logo_rows = vec![self.toggle(p, "logo-on", tl("Show a logo"), logo_on, |c, v| c.placement_mut(Element::Logo).visible = v, cx)];
+        if logo_on {
+            logo_rows.extend([
+                self.text(p, "logo-path", tl("Image"), logo.path.clone(), tl("Path to a PNG / SVG (Mandara's emblem when empty)"), |c, v| c.logo.path = v, cx),
+                self.slider(p, "logo-size", tl("Size"), logo.size, 16.0, 200.0, 1.0, " px", |c, v| c.logo.size = v, cx),
+                self.slider(p, "logo-op", tl("Opacity"), logo.opacity, 0.1, 1.0, 0.01, "", |c, v| c.logo.opacity = v, cx),
+            ]);
+        }
+        let switcher = self.draft.theme.switcher.join(", ");
+        let schemes_on = self.draft.placement(Element::Themes).visible;
+        let mut schemes = vec![self.toggle(p, "th-switch-on", tl("Let people switch colour schemes"), schemes_on, |c, v| c.placement_mut(Element::Themes).visible = v, cx)];
+        if schemes_on {
+            schemes.push(self.text(p, "th-switcher", tl("Schemes offered"), switcher, tl("Theme ids, comma-separated (a few of Mandara's when empty)"), |c, v| c.theme.switcher = v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(), cx));
+        }
         let mut langs = vec![(tl("Auto"), "auto")];
         langs.extend(mandara_i18n::Lang::ALL.iter().map(|l| (l.native_name().to_string(), l.code())));
         let lang = self.draft.language.clone();
@@ -768,8 +868,73 @@ impl GreeterPage {
         vec![
             Self::card(p, tl("Session"), session),
             Self::card(p, tl("Power buttons"), power),
+            Self::card(p, tl("Logo"), logo_rows),
+            Self::card(p, tl("Colour scheme switcher"), schemes),
             Self::card(p, tl("Language"), vec![Self::row(p, tl("Login screen language"), lseg.into_any_element())]),
         ]
+    }
+
+    /// Ready-made looks: each applies a whole design in one click (who is
+    /// listed, sessions, language and folders stay).
+    fn looks_group(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let current = self.draft.current_look();
+        let mut cards: Vec<AnyElement> = Vec::new();
+        for (i, (id, name, summary)) in LOOKS.into_iter().enumerate() {
+            let mut probe = self.draft.clone();
+            probe.apply_look(id);
+            let pal = mandara_greeter::view::palette_for(&probe);
+            let on = current == Some(id);
+            let carded = probe.card.enabled;
+            let thumb = div()
+                .h(px(DIM_96_PX))
+                .rounded(px(RADIUS_10_PX))
+                .bg(mandara_core::oklab_gradient(SWATCH_GRADIENT_DEG, pal.surface_dim, pal.primary.with_lightness(SWATCH_ACCENT_LIGHTNESS)))
+                .row()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap(px(SPACE_4_PX))
+                .child(div().w(px(DIM_30_PX)).h(px(SPACE_6_PX)).rounded_full().bg(pal.on_surface.with_alpha(ALPHA_70).hsla()))
+                .child(
+                    div()
+                        .w(px(DIM_64_PX))
+                        .h(px(DIM_36_PX))
+                        .rounded(px(RADIUS_6_PX))
+                        .when(carded, |el| el.bg(pal.surface_container.hsla()).border_1().border_color(pal.outline.hsla()))
+                        .row()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .gap(px(SPACE_3_PX))
+                        .child(div().size(px(DIM_10_PX)).rounded_full().bg(pal.primary.hsla()))
+                        .child(div().w(px(DIM_40_PX)).h(px(SPACE_5_PX)).rounded_full().bg(pal.on_surface.with_alpha(ALPHA_50).hsla())),
+                );
+            cards.push(
+                div()
+                    .id(("look", i))
+                    .flex_1()
+                    .min_w(px(DIM_220_PX))
+                    .p(px(SPACE_8_PX))
+                    .rounded(px(RADIUS_14_PX))
+                    .cursor_pointer()
+                    .border_2()
+                    .border_color(if on { p.primary.hsla() } else { gpui::transparent_black() })
+                    .bg(p.surface_container_high.hsla())
+                    .hover(|s| s.bg(p.surface_container.hsla()))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.selected = None;
+                        this.edit(cx, move |c| {
+                            c.apply_look(id);
+                        })
+                    }))
+                    .child(thumb)
+                    .child(div().pt(px(SPACE_8_PX)).row().items_center().gap(px(SPACE_6_PX)).child(div().text_size(px(TEXT_13_PX)).font_weight(gpui::FontWeight::SEMIBOLD).child(tl(name))).when(on, |el| el.child(div().text_size(px(TEXT_11_PX)).text_color(p.primary.hsla()).child(tl("In use")))))
+                    .child(div().pt(px(SPACE_3_PX)).text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(tl(summary)))
+                    .into_any_element(),
+            );
+        }
+        let gallery = div().row().flex_wrap().gap(px(SPACE_10_PX)).p(px(SPACE_10_PX)).children(cards);
+        vec![Self::card(p, tl("Start from a look, then change anything in the other tabs"), vec![gallery.into_any_element()])]
     }
 
     fn theme_group(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -815,7 +980,10 @@ impl GreeterPage {
             );
         }
         let gallery = div().p(px(SPACE_10_PX)).child(fit.render(swatches));
+        let ui_font = self.draft.font.clone();
+        let shell_ui = mandara_ui::fonts::fonts(cx).ui.to_string();
         let glass = vec![
+            self.font(p, "th-font", tl("Text font"), ui_font, shell_ui, |c, v| c.font = v, cx),
             self.text(p, "th-accent", tl("Accent color"), t.accent.clone(), tl("#rrggbb (theme primary when empty)"), |c, v| c.theme.accent = v, cx),
             self.slider(p, "th-glass", tl("Glass opacity"), t.glass, 0.0, 0.8, 0.01, "", |c, v| c.theme.glass = v, cx),
             self.slider(p, "th-rim", tl("Specular rim"), t.rim, 0.0, 1.0, 0.01, "", |c, v| c.theme.rim = v, cx),
@@ -826,29 +994,35 @@ impl GreeterPage {
 
     fn motion_group(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let m = self.draft.motion.clone();
-        let entrance = vec![
-            self.toggle(p, "mo-enter", tl("Staggered entrance"), m.entrance, |c, v| c.motion.entrance = v, cx),
-            self.slider(p, "mo-stagger", tl("Stagger"), m.stagger_ms as f32, 0.0, 300.0, 5.0, " ms", |c, v| c.motion.stagger_ms = v as u32, cx),
-            self.slider(p, "mo-enter-k", tl("Entrance stiffness"), m.entrance_spring.stiffness, 20.0, 600.0, 5.0, "", |c, v| c.motion.entrance_spring.stiffness = v, cx),
-            self.slider(p, "mo-enter-d", tl("Entrance damping"), m.entrance_spring.damping, 4.0, 60.0, 0.5, "", |c, v| c.motion.entrance_spring.damping = v, cx),
-            self.slider(p, "mo-pop-k", tl("Avatar pop stiffness"), m.pop_spring.stiffness, 40.0, 900.0, 5.0, "", |c, v| c.motion.pop_spring.stiffness = v, cx),
-            self.slider(p, "mo-pop-d", tl("Avatar pop damping"), m.pop_spring.damping, 4.0, 60.0, 0.5, "", |c, v| c.motion.pop_spring.damping = v, cx),
-        ];
+        let mut entrance = vec![self.toggle(p, "mo-enter", tl("Staggered entrance"), m.entrance, |c, v| c.motion.entrance = v, cx)];
+        if m.entrance {
+            entrance.extend([
+                self.slider(p, "mo-stagger", tl("Stagger"), m.stagger_ms as f32, 0.0, 300.0, 5.0, " ms", |c, v| c.motion.stagger_ms = v as u32, cx),
+                self.slider(p, "mo-enter-k", tl("Entrance stiffness"), m.entrance_spring.stiffness, 20.0, 600.0, 5.0, "", |c, v| c.motion.entrance_spring.stiffness = v, cx),
+                self.slider(p, "mo-enter-d", tl("Entrance damping"), m.entrance_spring.damping, 4.0, 60.0, 0.5, "", |c, v| c.motion.entrance_spring.damping = v, cx),
+                self.slider(p, "mo-pop-k", tl("Avatar pop stiffness"), m.pop_spring.stiffness, 40.0, 900.0, 5.0, "", |c, v| c.motion.pop_spring.stiffness = v, cx),
+                self.slider(p, "mo-pop-d", tl("Avatar pop damping"), m.pop_spring.damping, 4.0, 60.0, 0.5, "", |c, v| c.motion.pop_spring.damping = v, cx),
+            ]);
+        }
         let idle = vec![
             self.toggle(p, "mo-start-idle", tl("Start on the idle clock"), m.start_idle, |c, v| c.motion.start_idle = v, cx),
             self.slider(p, "mo-idle", tl("Back to idle after"), m.idle_seconds as f32, 0.0, 300.0, 5.0, " s", |c, v| c.motion.idle_seconds = v as u32, cx),
             self.slider(p, "mo-idle-k", tl("Wake stiffness"), m.idle_spring.stiffness, 20.0, 600.0, 5.0, "", |c, v| c.motion.idle_spring.stiffness = v, cx),
             self.slider(p, "mo-idle-d", tl("Wake damping"), m.idle_spring.damping, 4.0, 60.0, 0.5, "", |c, v| c.motion.idle_spring.damping = v, cx),
         ];
-        let feedback = vec![
-            self.toggle(p, "mo-shake", tl("Shake on a wrong password"), m.shake, |c, v| c.motion.shake = v, cx),
-            self.slider(p, "mo-shake-k", tl("Shake strength"), m.shake_strength, 0.2, 2.5, 0.05, "×", |c, v| c.motion.shake_strength = v, cx),
-            self.slider(p, "mo-shake-s", tl("Shake stiffness"), m.shake_spring.stiffness, 200.0, 2500.0, 10.0, "", |c, v| c.motion.shake_spring.stiffness = v, cx),
-            self.slider(p, "mo-shake-d", tl("Shake damping"), m.shake_spring.damping, 4.0, 60.0, 0.5, "", |c, v| c.motion.shake_spring.damping = v, cx),
+        let mut feedback = vec![self.toggle(p, "mo-shake", tl("Shake on a wrong password"), m.shake, |c, v| c.motion.shake = v, cx)];
+        if m.shake {
+            feedback.extend([
+                self.slider(p, "mo-shake-k", tl("Shake strength"), m.shake_strength, 0.2, 2.5, 0.05, "×", |c, v| c.motion.shake_strength = v, cx),
+                self.slider(p, "mo-shake-s", tl("Shake stiffness"), m.shake_spring.stiffness, 200.0, 2500.0, 10.0, "", |c, v| c.motion.shake_spring.stiffness = v, cx),
+                self.slider(p, "mo-shake-d", tl("Shake damping"), m.shake_spring.damping, 4.0, 60.0, 0.5, "", |c, v| c.motion.shake_spring.damping = v, cx),
+            ]);
+        }
+        feedback.extend([
             self.slider(p, "mo-succ-k", tl("Success stiffness"), m.success_spring.stiffness, 10.0, 300.0, 1.0, "", |c, v| c.motion.success_spring.stiffness = v, cx),
             self.slider(p, "mo-succ-d", tl("Success damping"), m.success_spring.damping, 4.0, 60.0, 0.5, "", |c, v| c.motion.success_spring.damping = v, cx),
             self.slider(p, "mo-zoom", tl("Success zoom"), m.success_zoom, 0.0, 0.4, 0.01, "", |c, v| c.motion.success_zoom = v, cx),
-        ];
+        ]);
         vec![Self::card(p, tl("Entrance"), entrance), Self::card(p, tl("Idle & wake"), idle), Self::card(p, tl("Feedback"), feedback)]
     }
 
@@ -905,9 +1079,11 @@ impl Render for GreeterPage {
         // The page column's width, known from the window this frame (the
         // canvas below confirms it after layout).
         self.width.set(super::grid::PageMetrics::of(window).column_w);
-        // Preview size: the page's width, 16:9, at most ~46 % of the window.
+        // Preview size: the page's width (less the column beside it), 16:9,
+        // at most 40 % of the window's height.
         let vh = f32::from(window.viewport_size().height);
-        let avail = self.width.get().max(PREVIEW_MIN_W_PX);
+        let side_by_side = self.width.get() >= SIDE_BY_SIDE_MIN_W_PX;
+        let avail = (self.width.get() - if side_by_side { SIDE_W_PX + SPACE_16_PX } else { 0.0 }).max(PREVIEW_MIN_W_PX);
         let pw = avail.min((vh * PREVIEW_MAX_SHARE) * PREVIEW_ASPECT_W / PREVIEW_ASPECT_H).floor();
         let ph = (pw * PREVIEW_ASPECT_H / PREVIEW_ASPECT_W).floor();
         self.preview.update(cx, |v, _| v.set_preview_size(pw, ph));
@@ -915,37 +1091,107 @@ impl Render for GreeterPage {
             SELECTED.with(|s| s.set(Some(e)));
         }
 
+        // Try it: the preview plays a moment of the login.
+        let chip = |id: &'static str, label: String, ic: &'static str, on: bool| {
+            div()
+                .id(id)
+                .h(px(DIM_28_PX))
+                .px(px(SPACE_10_PX))
+                .row()
+                .items_center()
+                .gap(px(SPACE_6_PX))
+                .rounded_full()
+                .cursor_pointer()
+                .text_size(px(TEXT_12_PX))
+                .when(on, |el| el.bg(p.primary.with_alpha(ALPHA_16).hsla()).text_color(p.primary.hsla()))
+                .when(!on, |el| el.bg(p.surface_container.hsla()).hover(|s| s.bg(p.surface_container_high.hsla())))
+                .child(icon(ic, ICON_13_PX, if on { p.primary } else { p.on_surface_variant }))
+                .child(label)
+        };
         let sim = |id: &'static str, label: String, ic: &'static str, what: Simulate, cx: &mut Context<Self>| {
-            Self::button(&p, id, label, ic, false).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.preview.update(cx, |v, cx| v.simulate(what, cx))))
+            chip(id, label, ic, false).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.preview.update(cx, |v, cx| v.simulate(what, cx))))
         };
         let idle = self.idle;
-        let actions = div()
+        let try_it = div()
             .row()
             .flex_wrap()
             .gap(px(SPACE_6_PX))
-            .child(sim("sim-enter", tl("Replay entrance"), "refresh", Simulate::Entrance, cx))
+            .child(sim("sim-enter", tl("Entrance"), "refresh", Simulate::Entrance, cx))
             .child(sim("sim-type", tl("Typing"), "keyboard", Simulate::Typing, cx))
             .child(sim("sim-error", tl("Wrong password"), "close", Simulate::Error, cx))
             .child(sim("sim-ok", tl("Success"), "check", Simulate::Success, cx))
-            .child(Self::button(&p, "sim-idle", if idle { tl("Show login") } else { tl("Show idle clock") }, "timer", false).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+            .child(chip("sim-idle", if idle { tl("Show login") } else { tl("Show idle clock") }, "timer", idle).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                 this.idle = !this.idle;
                 let idle = this.idle;
                 this.preview.update(cx, |v, cx| v.set_preview_idle(idle, cx));
                 cx.notify();
             })));
-        let main = div()
+        let apply = Self::button(&p, "apply", if self.applying { tl("Applying…") } else { tl("Apply to login screen") }, "lock", true).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.apply_system(cx)));
+        let full = Self::button(&p, "full", tl("Preview full screen"), "maximize", false).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+            this.preview_full_screen();
+            cx.notify();
+        }));
+        let reset = div()
+            .id("reset")
             .row()
-            .flex_wrap()
+            .items_center()
             .gap(px(SPACE_6_PX))
-            .child(Self::button(&p, "full", tl("Preview full screen"), "maximize", false).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.preview_full_screen();
-                cx.notify();
-            })))
-            .child(Self::button(&p, "apply", if self.applying { tl("Applying…") } else { tl("Apply to login screen") }, "lock", true).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.apply_system(cx))))
-            .child(Self::button(&p, "reset", tl("Reset to defaults"), "undo", false).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+            .cursor_pointer()
+            .text_size(px(TEXT_12_PX))
+            .text_color(p.on_surface_variant.hsla())
+            .hover(|s| s.text_color(p.on_surface.hsla()))
+            .child(icon("undo", ICON_13_PX, p.on_surface_variant))
+            .child(tl("Reset to defaults"))
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                 this.selected = None;
                 this.edit(cx, |c| *c = GreeterConfig::default());
-            })));
+            }));
+        let message = self.message.clone().map(|(ok, msg)| {
+            div()
+                .px(px(SPACE_10_PX))
+                .py(px(SPACE_8_PX))
+                .rounded(px(RADIUS_12_PX))
+                .text_size(px(TEXT_12_PX))
+                .bg(if ok { p.success_emerald.with_alpha(ALPHA_16).hsla() } else { p.urgent_coral.with_alpha(ALPHA_16).hsla() })
+                .child(SharedString::from(msg))
+        });
+        let caption = |text: String| div().text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface_variant.hsla()).child(text);
+        let preview = div()
+            .flex_none()
+            .rounded(px(RADIUS_16_PX))
+            .overflow_hidden()
+            .border_1()
+            .border_color(p.outline.with_alpha(ALPHA_35).hsla())
+            .shadow_lg()
+            .child(self.preview.clone().cached(StyleRefinement::default().w(px(pw)).h(px(ph))));
+        let top = if side_by_side {
+            // Preview, and beside it what you do with it.
+            let side = div()
+                .w(px(SIDE_W_PX))
+                .h(px(ph))
+                .flex_none()
+                .row()
+                .flex_col()
+                .gap(px(SPACE_8_PX))
+                .child(apply.w_full().justify_center())
+                .child(full.w_full().justify_center())
+                .children(message)
+                .child(div().pt(px(SPACE_8_PX)).child(caption(tl("Try it"))))
+                .child(try_it)
+                .child(div().flex_1())
+                .child(reset);
+            div().row().gap(px(SPACE_16_PX)).child(preview).child(side).into_any_element()
+        } else {
+            div()
+                .row()
+                .flex_col()
+                .gap(px(SPACE_10_PX))
+                .child(div().row().justify_center().child(preview))
+                .child(div().row().flex_wrap().items_center().gap(px(SPACE_6_PX)).child(apply).child(full).child(div().flex_1()).child(reset))
+                .children(message)
+                .child(try_it)
+                .into_any_element()
+        };
         let width = self.width.clone();
         let height = (vh - PAGE_CHROME_H_PX).max(PAGE_MIN_H_PX);
         div()
@@ -973,29 +1219,7 @@ impl Render for GreeterPage {
                 }
             }))
             .child(canvas(move |b, _, _| width.set(f32::from(b.size.width)), |_, _, _, _| {}).absolute().top_0().left_0().w_full().h(px(1.0)))
-            .child(
-                div().row().justify_center().child(
-                    div()
-                        .rounded(px(RADIUS_16_PX))
-                        .overflow_hidden()
-                        .border_1()
-                        .border_color(p.outline.with_alpha(ALPHA_35).hsla())
-                        .shadow_lg()
-                        .child(self.preview.clone().cached(StyleRefinement::default().w(px(pw)).h(px(ph)))),
-                ),
-            )
-            .child(div().row().flex_wrap().justify_between().gap(px(SPACE_8_PX)).child(actions).child(main))
-            .when_some(self.message.clone(), |el, (ok, msg)| {
-                el.child(
-                    div()
-                        .px(px(SPACE_12_PX))
-                        .py(px(SPACE_8_PX))
-                        .rounded(px(RADIUS_12_PX))
-                        .text_size(px(TEXT_12_5_PX))
-                        .bg(if ok { p.success_emerald.with_alpha(ALPHA_16).hsla() } else { p.urgent_coral.with_alpha(ALPHA_16).hsla() })
-                        .child(SharedString::from(msg)),
-                )
-            })
+            .child(top)
             .child(self.controls.clone().cached(StyleRefinement::default().w_full().flex_1().min_h(px(0.0))))
     }
 }
@@ -1006,31 +1230,35 @@ impl GreeterPage {
     fn controls(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let p = mandara_core::frame_palette(window, cx);
         let groups = Group::ALL;
-        let mut tabs = div().row().flex_wrap().gap(px(SPACE_4_PX));
+        // One slim row of tabs, underlined (it scrolls sideways when narrow).
+        let mut tabs = div().id("greeter-tabs").row().overflow_x_scroll().border_b_1().border_color(p.outline.with_alpha(ALPHA_35).hsla());
         for g in groups {
             let on = g == self.group;
             tabs = tabs.child(
                 div()
                     .id(("group", g as usize))
-                    .h(px(DIM_30_PX))
-                    .px(px(SPACE_11_PX))
+                    .relative()
+                    .flex_none()
+                    .h(px(DIM_36_PX))
+                    .px(px(SPACE_10_PX))
                     .row()
                     .items_center()
                     .gap(px(SPACE_6_PX))
-                    .rounded(px(RADIUS_10_PX))
                     .cursor_pointer()
-                    .text_size(px(TEXT_12_5_PX))
-                    .when(on, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()))
-                    .when(!on, |el| el.bg(p.surface_container.hsla()).hover(|s| s.bg(p.surface_container_high.hsla())))
+                    .text_size(px(TEXT_13_PX))
+                    .when(on, |el| el.text_color(p.on_surface.hsla()).font_weight(FontWeight::SEMIBOLD))
+                    .when(!on, |el| el.text_color(p.on_surface_variant.hsla()).hover(|s| s.text_color(p.on_surface.hsla())))
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.group = g;
                         cx.notify();
                     }))
-                    .child(icon(g.icon(), ICON_14_PX, if on { p.on_primary } else { p.on_surface_variant }))
-                    .child(g.label()),
+                    .child(icon(g.icon(), ICON_14_PX, if on { p.primary } else { p.on_surface_variant }))
+                    .child(g.label())
+                    .when(on, |el| el.child(div().absolute().bottom_0().left(px(SPACE_8_PX)).right(px(SPACE_8_PX)).h(px(TAB_UNDERLINE_PX)).rounded_full().bg(p.primary.hsla()))),
             );
         }
         let body = match self.group {
+            Group::Looks => self.looks_group(&p, cx),
             Group::Manager => self.manager_group(&p, cx),
             Group::Layout => self.layout_group(&p, cx),
             Group::Background => self.background_group(&p, cx),
@@ -1038,8 +1266,11 @@ impl GreeterPage {
             Group::User => self.user_group(&p, cx),
             Group::Session => self.session_group(&p, cx),
             Group::Theme => self.theme_group(&p, cx),
-            Group::Motion => self.motion_group(&p, cx),
-            Group::Accessibility => self.a11y_group(&p, cx),
+            Group::Motion => {
+                let mut cards = self.motion_group(&p, cx);
+                cards.extend(self.a11y_group(&p, cx));
+                cards
+            }
         };
 
         div()

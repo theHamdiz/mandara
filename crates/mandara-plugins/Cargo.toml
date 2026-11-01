@@ -26,3 +26,6 @@ wasmtime-wasi.workspace = true
 # tests/marketplace.rs: search → install → load against a mock GitHub.
 flate2.workspace = true
 tar.workspace = true
+
+[lints]
+workspace = true

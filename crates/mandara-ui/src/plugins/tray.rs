@@ -277,7 +277,7 @@ fn primary(item: &TrayItem, x: f32, y: f32, cx: &mut App) {
         if let Ok(Err(err)) = rx.recv().await {
             tracing::debug!("tray: activate failed ({err}); showing the menu instead");
             if has_menu {
-                let _ = cx.update(|cx| open_menu(&key, cx));
+                cx.update(|cx| open_menu(&key, cx));
             }
         }
     })
@@ -312,7 +312,7 @@ thread_local! {
 /// Whether an icon is effectively monochrome (a symbolic-style glyph).
 fn is_monochrome(p: &Pixmap) -> bool {
     let (mut n, mut chroma) = (0u64, 0u64);
-    for px in p.rgba.chunks_exact(BYTES_PER_PIXEL).filter(|px| px[ALPHA] > MONO_ALPHA_MIN) {
+    for px in p.rgba.as_chunks::<BYTES_PER_PIXEL>().0.iter().filter(|px| px[ALPHA] > MONO_ALPHA_MIN) {
         let (mx, mn) = (px[0].max(px[1]).max(px[2]), px[0].min(px[1]).min(px[2]));
         chroma += u64::from(mx - mn);
         n += 1;
@@ -339,14 +339,14 @@ fn render_image(p: &Pixmap, tint: Option<Color>, cache: IconCache) -> Arc<Render
     // logo out, so inner detail survives the recolour.
     let light = {
         let (mut sum, mut weight) = (0.0f32, 0.0f32);
-        for px in bgra.chunks_exact(BYTES_PER_PIXEL) {
+        for px in bgra.as_chunks::<BYTES_PER_PIXEL>().0 {
             let a = f32::from(px[ALPHA]) / CHANNEL_MAX;
             sum += a * lum(px);
             weight += a;
         }
         weight == 0.0 || sum / weight >= LIGHT_GLYPH_LUM
     };
-    for px in bgra.chunks_exact_mut(BYTES_PER_PIXEL) {
+    for px in bgra.as_chunks_mut::<BYTES_PER_PIXEL>().0 {
         match rgb {
             Some([r, g, b, _]) => {
                 let l = lum(px);
@@ -525,7 +525,7 @@ fn bar_view(palette: &MandaraPalette, window: &mut gpui::Window, cx: &mut App) -
         // showing it while closing).
         cx.spawn(async move |cx| {
             cx.background_executor().timer(MENU_RELEASE_DELAY).await;
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 let m = model(cx);
                 if m.read(cx).stale && !panel_open(cx) {
                     // The service drops the menu tree and publishes the

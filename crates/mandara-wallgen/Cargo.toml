@@ -19,3 +19,6 @@ toml.workspace = true
 tempfile.workspace = true
 # Proves written videos demux and decode (pure-Rust rav1d pipeline).
 mandara-media.workspace = true
+
+[lints]
+workspace = true

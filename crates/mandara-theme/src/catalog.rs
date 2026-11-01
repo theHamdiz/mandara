@@ -108,6 +108,7 @@ const BUILTIN_SOURCES: &[&str] = &[
     include_str!("../themes/gruvbox.toml"),
     include_str!("../themes/eldritch.toml"),
     include_str!("../themes/vesper.toml"),
+    include_str!("../themes/night-citrine.toml"),
 ];
 
 /// Built-in themes in display order.

@@ -70,7 +70,9 @@ jobs:
             cargo check --locked -p mandara-app --no-default-features --features "$f"
           done
 
-      - name: Clippy (report only)
+      # Warnings are errors ([workspace.lints] in Cargo.toml): any rustc or
+      # clippy warning fails the build.
+      - name: Clippy
         run: cargo clippy --workspace --locked --all-targets
         continue-on-error: true
 

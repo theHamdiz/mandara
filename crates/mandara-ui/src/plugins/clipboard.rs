@@ -243,7 +243,7 @@ fn decode_thumb(path: PathBuf, w: u32, h: u32) -> Option<Arc<RenderImage>> {
     let picture = image::open(&path).ok()?;
     let mut rgba = picture.resize_to_fill(w, h, image::imageops::FilterType::Triangle).into_rgba8();
     drop(picture);
-    for px in rgba.chunks_exact_mut(RGBA_CHANNELS) {
+    for px in rgba.as_chunks_mut::<RGBA_CHANNELS>().0 {
         px.swap(0, 2);
     }
     Some(Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(rgba)])))

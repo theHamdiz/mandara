@@ -41,8 +41,7 @@ pub async fn session_id(conn: &zbus::Connection) -> zbus::Result<String> {
     }
     let path = session_path(conn).await?;
     let session = proxy(conn, DEST, path.as_str(), "org.freedesktop.login1.Session").await?;
-    session.get_property::<String>("Id").await.map_err(Into::into)
-}
+    session.get_property::<String>("Id").await}
 
 /// Calls `on_lock` (on the blocking pool: it may spawn the locker)
 /// whenever logind asks this session to lock. Runs until the process exits.

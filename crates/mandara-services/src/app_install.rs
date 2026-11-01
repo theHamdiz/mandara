@@ -1389,7 +1389,7 @@ Categories=Utility;
         assert_eq!(previews.len(), 1, "the icon preview");
         assert!(previews[0].is_file());
         // Nothing outside the preview folder is ever touched.
-        remove_previews(&[file.clone()], &env);
+        remove_previews(std::slice::from_ref(&file), &env);
         assert!(file.is_file());
         remove_previews(&previews, &env);
         assert!(!previews[0].exists());

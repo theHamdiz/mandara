@@ -294,11 +294,7 @@ impl Dispatch<head::ZwlrOutputHeadV1, ()> for State {
             head::Event::Enabled { enabled } => i.enabled = enabled != 0,
             head::Event::CurrentMode { mode } => i.current_mode = h.modes.iter().position(|m| m == &mode),
             head::Event::Position { x, y } => (i.x, i.y) = (x, y),
-            head::Event::Transform { transform } => {
-                if let WEnum::Value(t) = transform {
-                    i.transform = Transform::from_wl(t as u32);
-                }
-            }
+            head::Event::Transform { transform: WEnum::Value(t) } => i.transform = Transform::from_wl(t as u32),
             head::Event::Scale { scale } => i.scale = scale,
             head::Event::Make { make } => i.make = make,
             head::Event::Model { model } => i.model = model,

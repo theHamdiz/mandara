@@ -135,5 +135,5 @@ pub fn register(r: &mut PluginRegistry) {
         );
         PluginInstance { bar: Some(bar), panel: Some(PanelSpec { view: panel, size: size_cell }), sidebar: None, on_click: None, on_secondary_click: None }
     });
-    r.command(ID, CommandSpec::new("privacy status", tk("Apps using the microphone, camera or screen right now"), |_, cx| Ok(json(&crate::alerts::privacy_state(cx)))));
+    r.command(ID, CommandSpec::new("privacy status", tk("Apps using the microphone, camera or screen right now"), |_, cx| Ok(json(crate::alerts::privacy_state(cx)))));
 }

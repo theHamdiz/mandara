@@ -21,9 +21,13 @@ pub mod defaults {
     pub const LATITUDE: f64 = 31.284;
     pub const LONGITUDE: f64 = 30.017;
     pub const PLACE: &str = "El-Mandara";
-    /// Lock screen background blur radius and dim, logical px / 0–1.
-    pub const LOCK_BLUR_PX: f32 = 28.0;
-    pub const LOCK_DIM: f32 = 0.35;
+    /// Lock screen background blur radius and dim, logical px / 0–1: light
+    /// enough that your wallpaper stays recognisable.
+    pub const LOCK_BLUR_PX: f32 = 10.0;
+    pub const LOCK_DIM: f32 = 0.18;
+    /// The defaults before version 1 of `[lock] look_version`.
+    pub const LOCK_BLUR_PX_V0: f32 = 28.0;
+    pub const LOCK_DIM_V0: f32 = 0.35;
     /// Lock screen battery reading turns coral at or below this, percent.
     pub const LOCK_LOW_BATTERY_PERCENT: u8 = 15;
     /// Bounds of `lock.low_battery_percent`.
@@ -294,6 +298,10 @@ pub enum LockBackground {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LockConfig {
+    /// The look defaults this table was written for (see
+    /// [`crate::upgrade`]); missing in older files.
+    #[serde(default)]
+    pub look_version: u32,
     pub clock_style: LockClockStyle,
     pub background: LockBackground,
     pub image: Option<PathBuf>,
@@ -327,6 +335,7 @@ impl LockConfig {
 impl Default for LockConfig {
     fn default() -> Self {
         Self {
+            look_version: crate::upgrade::LOCK_LOOK_VERSION,
             clock_style: LockClockStyle::Classic,
             background: LockBackground::Wallpaper,
             image: None,
