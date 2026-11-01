@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.5.0 — 2026-11-01
+
 ### New
 
 - **Config doctor: your compositor checks your config.** Mandara asks
