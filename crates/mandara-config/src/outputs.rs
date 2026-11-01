@@ -341,10 +341,13 @@ pub enum SurfaceKind {
     Wallpaper,
     /// The app dock (the built-in `dock` plugin).
     Dock,
+    /// Surfaces opened on demand over the desktop: the launcher, the window
+    /// switcher, the clipboard and the password and pairing prompts.
+    Overlays,
 }
 
 impl SurfaceKind {
-    pub const ALL: [SurfaceKind; 5] = [SurfaceKind::Bar, SurfaceKind::Dock, SurfaceKind::Osd, SurfaceKind::Notifications, SurfaceKind::Wallpaper];
+    pub const ALL: [SurfaceKind; 6] = [SurfaceKind::Bar, SurfaceKind::Dock, SurfaceKind::Osd, SurfaceKind::Overlays, SurfaceKind::Notifications, SurfaceKind::Wallpaper];
 
     pub fn parse(s: &str) -> Option<Self> {
         match s {
@@ -353,6 +356,7 @@ impl SurfaceKind {
             "notifications" => Some(Self::Notifications),
             "wallpaper" => Some(Self::Wallpaper),
             "dock" => Some(Self::Dock),
+            "overlays" => Some(Self::Overlays),
             _ => None,
         }
     }
@@ -364,6 +368,7 @@ impl SurfaceKind {
             Self::Notifications => "notifications",
             Self::Wallpaper => "wallpaper",
             Self::Dock => "dock",
+            Self::Overlays => "overlays",
         }
     }
 }
@@ -397,6 +402,9 @@ pub struct SurfaceAssignment {
     pub notifications: ScreenSet,
     pub wallpaper: ScreenSet,
     pub dock: ScreenSet,
+    /// The launcher, window switcher and prompts; follows `osd` until set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overlays: Option<ScreenSet>,
 }
 
 impl SurfaceAssignment {
@@ -407,9 +415,12 @@ impl SurfaceAssignment {
             SurfaceKind::Notifications => &self.notifications,
             SurfaceKind::Wallpaper => &self.wallpaper,
             SurfaceKind::Dock => &self.dock,
+            SurfaceKind::Overlays => self.overlays.as_ref().unwrap_or(&self.osd),
         }
     }
 
+    /// The set to edit; overlays take their own copy of the on-screen
+    /// displays' choice the first time they are changed.
     pub fn get_mut(&mut self, kind: SurfaceKind) -> &mut ScreenSet {
         match kind {
             SurfaceKind::Bar => &mut self.bar,
@@ -417,6 +428,7 @@ impl SurfaceAssignment {
             SurfaceKind::Notifications => &mut self.notifications,
             SurfaceKind::Wallpaper => &mut self.wallpaper,
             SurfaceKind::Dock => &mut self.dock,
+            SurfaceKind::Overlays => self.overlays.get_or_insert_with(|| self.osd.clone()),
         }
     }
 }
@@ -831,6 +843,18 @@ mod tests {
         for kind in SurfaceKind::ALL {
             assert_eq!(SurfaceKind::parse(kind.id()), Some(kind));
         }
+    }
+
+    #[test]
+    fn overlays_follow_the_osd_until_set() {
+        let mut cfg = DisplaysConfig { primary: Some("DP-2".into()), ..Default::default() };
+        cfg.surfaces.osd.show_on = ScreenChoice::Primary;
+        assert!(assignment(&cfg, SurfaceKind::Overlays, "DP-2") && !assignment(&cfg, SurfaceKind::Overlays, "DP-1"));
+        assert!(!toml::to_string(&cfg).unwrap().contains("overlays"), "an unset choice isn't written out");
+        cfg.surfaces.get_mut(SurfaceKind::Overlays).show_on = ScreenChoice::All;
+        assert!(assignment(&cfg, SurfaceKind::Overlays, "DP-1") && !assignment(&cfg, SurfaceKind::Osd, "DP-1"));
+        let back: DisplaysConfig = toml::from_str(&toml::to_string(&cfg).unwrap()).unwrap();
+        assert_eq!(back.surfaces.get(SurfaceKind::Overlays).show_on, ScreenChoice::All);
     }
 
     #[test]

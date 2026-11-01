@@ -1702,6 +1702,7 @@
 "On mains power · {profile}" = "मेन पावर पर · {profile}"
 "On your lap — performance is limited" = "आपकी गोद में — परफ़ॉर्मेंस सीमित है"
 "On-screen displays" = "ऑन-स्क्रीन डिस्प्ले"
+"Launcher & pop-ups" = "लॉन्चर और पॉप-अप"
 "One of choices: plain strings or { value, label } tables" = "choices में से एक: सादे स्ट्रिंग या { value, label } टेबल"
 "One of your settings as JSON: the user's value, or the declared default." = "आपकी कोई एक सेटिंग JSON के रूप में: उपयोगकर्ता का मान, या घोषित डिफ़ॉल्ट।"
 "Only HOTP accounts have a counter" = "केवल HOTP खातों में काउंटर होता है"

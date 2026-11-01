@@ -68,6 +68,27 @@ impl NiriWindow {
     }
 }
 
+/// Monitors from an `Outputs` reply; only `focused` (the `FocusedOutput`
+/// reply's name) is active, so overlays open on the monitor you're on.
+pub fn monitors(outputs: &Value, focused: Option<&str>) -> Vec<MonitorInfo> {
+    let map = outputs.as_object().cloned().unwrap_or_default();
+    map.into_iter()
+        .map(|(name, o)| {
+            let logical = o.get("logical").cloned().unwrap_or(Value::Null);
+            let n = |k: &str| logical.get(k).and_then(Value::as_i64).unwrap_or(0) as i32;
+            MonitorInfo {
+                active: focused == Some(name.as_str()),
+                x: n("x"),
+                y: n("y"),
+                width: n("width"),
+                height: n("height"),
+                scale: logical.get("scale").and_then(Value::as_f64).unwrap_or(1.0) as f32,
+                name,
+            }
+        })
+        .collect()
+}
+
 /// Groups workspaces into per-output navigation models.
 pub fn navigation(workspaces: &[NiriWorkspace], windows: &[NiriWindow]) -> Vec<(String, NavigationModel)> {
     let mut by_output: HashMap<String, Vec<WorkspaceStatus>> = HashMap::new();
@@ -301,23 +322,8 @@ impl CompositorBackend for NiriDriver {
 
     fn get_monitors(&self) -> Result<Vec<MonitorInfo>> {
         let outputs = unwrap_reply(&self.request(json!("Outputs"))?, "Outputs")?;
-        let map = outputs.as_object().cloned().unwrap_or_default();
-        Ok(map
-            .into_iter()
-            .map(|(name, o)| {
-                let logical = o.get("logical").cloned().unwrap_or(Value::Null);
-                let n = |k: &str| logical.get(k).and_then(Value::as_i64).unwrap_or(0) as i32;
-                MonitorInfo {
-                    name,
-                    x: n("x"),
-                    y: n("y"),
-                    width: n("width"),
-                    height: n("height"),
-                    scale: logical.get("scale").and_then(Value::as_f64).unwrap_or(1.0) as f32,
-                    active: true,
-                }
-            })
-            .collect())
+        let focused = unwrap_reply(&self.request(json!("FocusedOutput"))?, "FocusedOutput").unwrap_or(Value::Null);
+        Ok(monitors(&outputs, focused.get("name").and_then(Value::as_str)))
     }
 
     fn select_primary(&self, monitor: &str, id: u32) -> Result<()> {
@@ -368,6 +374,20 @@ impl CompositorBackend for NiriDriver {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_the_focused_output_is_active() {
+        // Issue #18: every output read as active, so overlays opened on
+        // whichever output niri listed first. Shapes as niri 26.04 replies.
+        let output = |x: i64| json!({"name":"","make":"Samsung Electric Company","model":"LC27G7xT","serial":null,"physical_size":[600,340],"modes":[],"current_mode":0,"is_custom_mode":false,"vrr_supported":true,"vrr_enabled":true,"logical":{"x":x,"y":0,"width":2560,"height":1440,"scale":1.0,"transform":"Normal"}});
+        let outputs = json!({"DP-1": output(2560), "DP-2": output(0)});
+        let focused = unwrap_reply(&json!({"Ok":{"FocusedOutput":{"name":"DP-2","logical":null}}}), "FocusedOutput").unwrap();
+        let list = monitors(&outputs, focused.get("name").and_then(Value::as_str));
+        assert_eq!(list.iter().filter(|m| m.active).map(|m| m.name.as_str()).collect::<Vec<_>>(), ["DP-2"]);
+        assert_eq!(list.iter().find(|m| m.name == "DP-1").map(|m| (m.x, m.width, m.height)), Some((2560, 2560, 1440)));
+        let none = unwrap_reply(&json!({"Ok":{"FocusedOutput":null}}), "FocusedOutput").unwrap();
+        assert!(monitors(&outputs, none.get("name").and_then(Value::as_str)).iter().all(|m| !m.active), "no outputs focused: none active");
+    }
 
     #[test]
     fn switch_layout_is_the_next_layout_action() {

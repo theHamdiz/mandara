@@ -1702,6 +1702,7 @@
 "On mains power · {profile}" = "AC 電源 · {profile}"
 "On your lap — performance is limited" = "膝の上で使用中 — パフォーマンスが制限されています"
 "On-screen displays" = "オンスクリーン表示"
+"Launcher & pop-ups" = "ランチャーとポップアップ"
 "One of choices: plain strings or { value, label } tables" = "choices のいずれか：文字列または { value, label } テーブル"
 "One of your settings as JSON: the user's value, or the declared default." = "設定の 1 つを JSON で返します：ユーザーの値、または宣言されたデフォルト。"
 "Only HOTP accounts have a counter" = "カウンターがあるのは HOTP アカウントのみです"

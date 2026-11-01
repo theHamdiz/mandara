@@ -1702,6 +1702,7 @@
 "On mains power · {profile}" = "使用外接电源 · {profile}"
 "On your lap — performance is limited" = "检测到置于腿上——性能受限"
 "On-screen displays" = "屏幕提示"
+"Launcher & pop-ups" = "启动器和弹出窗口"
 "One of choices: plain strings or { value, label } tables" = "choices 之一：纯字符串或 { value, label } 表"
 "One of your settings as JSON: the user's value, or the declared default." = "以 JSON 返回你的某项设置：用户设定的值，或声明的默认值。"
 "Only HOTP accounts have a counter" = "只有 HOTP 账户有计数器"

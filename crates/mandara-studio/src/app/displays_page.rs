@@ -197,6 +197,7 @@ fn surface_label(k: SurfaceKind) -> &'static str {
         SurfaceKind::Notifications => tk("Notifications"),
         SurfaceKind::Wallpaper => tk("Wallpaper"),
         SurfaceKind::Dock => tk("Dock"),
+        SurfaceKind::Overlays => tk("Launcher & pop-ups"),
     }
 }
 

@@ -20,7 +20,7 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 use mandara_config::alerts::{NotificationsConfig, ToastPosition};
-use mandara_config::outputs::{SurfaceKind, assignment};
+use mandara_config::outputs::SurfaceKind;
 use mandara_core::{FrameClock, InputMaskRegistry, LayerSurfaceSpec, SpringConfig, SpringValue, SurfaceRole, ToGpui, oklab_gradient};
 use mandara_services::{Notification, NotificationCommand};
 
@@ -66,19 +66,10 @@ const WAKE_SLACK: Duration = Duration::from_millis(30);
 const PRESENCE_SPRING: SpringConfig = SpringConfig::new(320.0, 26.0, 1.0);
 const SLOT_SPRING: SpringConfig = SpringConfig::new(300.0, 28.0, 1.0);
 
-/// Which output a transient surface (toasts, OSD) opens on: `None` lets the
-/// compositor pick (the focused output) when every output may show it or
-/// the focused one is allowed; otherwise the first allowed output.
-pub fn target_display(kind: SurfaceKind, cx: &App) -> Option<gpui::DisplayId> {
-    let outputs = cx.try_global::<crate::overlays::Outputs>()?.0.clone();
-    let cfg = config(cx).read(cx).snapshot();
-    let allowed: Vec<usize> = outputs.iter().enumerate().filter(|(_, o)| assignment(&cfg.displays, kind, &o.name)).map(|(i, _)| i).collect();
-    if allowed.len() == outputs.len() || allowed.is_empty() {
-        return None;
-    }
-    let focused = crate::hub::hub(cx).read(cx).focused.as_ref().map(|c| c.monitor.clone());
-    let pick = focused.and_then(|m| allowed.iter().copied().find(|&i| outputs[i].name == m)).or_else(|| allowed.first().copied())?;
-    crate::outputs::display_for(&outputs[pick].name, cx)
+/// The focused window's monitor: cheap enough for every hub update (the
+/// surface key is rebuilt on each one while toasts are up).
+fn focused_window_monitor(cx: &App) -> Option<String> {
+    crate::hub::hub(cx).read(cx).focused.as_ref().map(|c| c.monitor.clone())
 }
 
 /// What the surface was opened with; a change reopens it.
@@ -96,7 +87,7 @@ impl SurfaceKey {
         let w = cfg.width * scale + (EDGE_GAP_PX + SHADOW_ROOM_PX) * 2.0;
         let output_h = cx.try_global::<crate::overlays::Outputs>().and_then(|o| o.0.first().map(|g| g.height as f32)).unwrap_or(FALLBACK_OUTPUT_H);
         let h = (cfg.max_visible.max(1) as f32 * (TOAST_MAX_H_PX * scale + STACK_GAP_PX) + EDGE_GAP_PX * 2.0).min(output_h * MAX_SURFACE_SHARE);
-        Self { position: cfg.position, overlay: cfg.over_fullscreen, size: (w.round(), h.round()), display: target_display(SurfaceKind::Notifications, cx) }
+        Self { position: cfg.position, overlay: cfg.over_fullscreen, size: (w.round(), h.round()), display: crate::outputs::transient_display(SurfaceKind::Notifications, focused_window_monitor, cx) }
     }
 
     fn spec(&self) -> LayerSurfaceSpec {

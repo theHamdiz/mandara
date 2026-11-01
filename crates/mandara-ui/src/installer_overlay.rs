@@ -210,7 +210,7 @@ pub fn ensure_open(cx: &mut App) {
     if q.read(cx).jobs().iter().all(|j| j.background) {
         return;
     }
-    let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Installer, gpui::size(px(SURFACE_W_PX), px(SURFACE_H_PX)), None).with_keyboard(KeyboardInteractivity::OnDemand);
+    let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Installer, gpui::size(px(SURFACE_W_PX), px(SURFACE_H_PX)), crate::outputs::transient_display(mandara_config::outputs::SurfaceKind::Overlays, crate::outputs::focused_monitor, cx)).with_keyboard(KeyboardInteractivity::OnDemand);
     spec.layer = Layer::Overlay;
     spec.anchor = Anchor::TOP;
     spec.exclusive_zone = None;

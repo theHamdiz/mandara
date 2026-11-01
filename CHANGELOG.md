@@ -6,6 +6,24 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **The launcher and Alt+Tab open on the right display.** With more than
+  one monitor on Niri, the launcher, the window switcher and the password
+  and pairing prompts always opened on the same monitor, whichever one
+  Niri listed first, instead of the one you were on. They now follow your
+  focus on Niri, as they already did on MangoWM, Hyprland and Umbriel.
+  ([#18](https://github.com/theHamdiz/mandara/issues/18))
+
+### New
+
+- **Choose the displays for the launcher and pop-ups.** Displays → Shell
+  on each display has a new **Launcher & pop-ups** row for the launcher,
+  Alt+Tab, the app installer and the password and pairing prompts. Until you
+  set it, it follows **On-screen displays**, so if those show only on your
+  main display, the launcher and Alt+Tab now open there too. Choose **All**
+  to have them open on whichever display you're on.
+
 ## 0.5.1 — 2026-11-01
 
 A missing wallpaper file no longer spins the shell. Big wallpapers switch

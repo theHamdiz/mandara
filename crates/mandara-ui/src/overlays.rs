@@ -1127,11 +1127,9 @@ fn viewport_settled(window: &Window, expected: (f32, f32)) -> bool {
     same_size(window.viewport_size(), expected)
 }
 
-/// The focused output (the compositor opens overlays there), else the
-/// first one.
+/// The output the launcher opens on ([`crate::outputs::overlay_output`]).
 fn focused_output(cx: &App) -> Option<mandara_core::OutputGeometry> {
-    let outputs = &cx.try_global::<Outputs>()?.0;
-    crate::outputs::focused_monitor(cx).and_then(|m| outputs.iter().find(|o| o.name == m)).or_else(|| outputs.first()).cloned()
+    crate::outputs::overlay_output(&cx.try_global::<Outputs>()?.0, cx).cloned()
 }
 
 impl LauncherView {

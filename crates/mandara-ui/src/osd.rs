@@ -577,7 +577,7 @@ fn surface_spec(cfg: &ShellConfig, g: Geometry, cx: &App) -> LayerSurfaceSpec {
         // Respect exclusive zones: the pill always clears the bar's band.
         exclusive_zone: Some(px(0.0)),
         keyboard: KeyboardInteractivity::None,
-        display: crate::toasts::target_display(mandara_config::outputs::SurfaceKind::Osd, cx),
+        display: crate::outputs::transient_display(mandara_config::outputs::SurfaceKind::Osd, crate::outputs::focused_monitor, cx),
     }
 }
 

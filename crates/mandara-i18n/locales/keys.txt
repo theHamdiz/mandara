@@ -2340,6 +2340,7 @@ Latitude must be within ±90° and longitude within ±180°
 Latte Light
 Launch prefix
 Launcher
+Launcher & pop-ups
 Launcher button
 Launcher button at the end
 Launcher colors

@@ -173,7 +173,7 @@ narrow ones; everything mirrors for right-to-left languages.
 
 | Page | What it covers |
 |---|---|
-| **Displays** | Arrangement canvas, mode, refresh, scale, rotation, VRR, on / off with a keep-or-revert countdown; profiles; keep after restart; **Shell on each display** (bar, dock, OSDs, notifications, wallpaper); DDC/CI brightness; night light. |
+| **Displays** | Arrangement canvas, mode, refresh, scale, rotation, VRR, on / off with a keep-or-revert countdown; profiles; keep after restart; **Shell on each display** (bar, dock, OSDs, launcher & pop-ups, notifications, wallpaper); DDC/CI brightness; night light. |
 | **Audio & media** | Per-app mixer and outputs, default devices (rename, hide), volume step and ceiling, ignored players, shell sounds, visualizer and lyrics. |
 | **Network & Bluetooth** | Connection details, VPNs (WireGuard / OpenVPN import), hotspot with QR, saved networks, static IP / DNS; Bluetooth devices, pairing dialog, auto-connect, adapter. |
 | **Power & idle** | Status, idle timeouts (mains / battery), lock behaviour, idle commands, battery alerts and profiles, the power menu editor, event hooks. |
@@ -306,7 +306,10 @@ narrow ones; everything mirrors for right-to-left languages.
   make / model / serial), and *Keep after restart* writes monitor lines to
   the compositor drop-in. **Shell on each display** chooses where the bar,
   dock, OSDs, notifications and wallpaper appear (all, the main display, or
-  a list); the Bar and Dock pages link there. External monitor brightness
+  a list); the Bar and Dock pages link there. **Launcher & pop-ups** (the
+  launcher, Alt+Tab, the app installer and password prompts) open on the
+  display you're on when it is allowed, else on the main display; until
+  set, the row follows **On-screen displays**. External monitor brightness
   works over DDC/CI (pure Rust, `/dev/i2c-*`, needs the `i2c` group).
 - **Night light**: warm screens from sunset to sunrise (your location),
   fixed times or always, with eased transitions, gamma and night dimming,
