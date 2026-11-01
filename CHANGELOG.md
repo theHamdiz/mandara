@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.4.0 — 2026-11-01
+
 A new main menu, a Notch bar that hangs from the top edge, your wallpaper
 on the login and lock screens (which now share one design), a far more
 customisable login screen with ready-made looks, plus fixes for night
