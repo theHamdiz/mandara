@@ -119,11 +119,12 @@ It runs these steps:
 5. **Manifest:** `dist/mandara-<version>-<target>[-<variant>].build.toml`
    holds all of the above, plus `mandara --version` and the build time (UTC,
    from `SOURCE_DATE_EPOCH` when it's set).
-6. **README:** the block between `<!-- build-info:start -->` and
-   `<!-- build-info:end -->` in `README.md` is rewritten as a table, with full
-   hashes and the per-crate counts in a collapsed section. The command creates
-   a `## Build fingerprint` section before `## License` if the markers are
-   missing, and changes nothing else. `--no-readme` skips this step.
+6. **Fingerprint table:** the block between `<!-- build-info:start -->` and
+   `<!-- build-info:end -->` in [`docs/building.md`](building.md#build-fingerprint)
+   is rewritten as a table, with full hashes and the per-crate counts in a
+   collapsed section. The command adds a `## Build fingerprint` section at
+   the end if the markers are missing, and changes nothing else.
+   `--no-readme` (the name is historical) skips this step.
 
 To check a downloaded release, compare `mandara --version` and
 `sha256sum mandara` with the release's `.build.toml`. Rebuild the tagged

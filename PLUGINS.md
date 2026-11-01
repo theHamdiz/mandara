@@ -47,7 +47,7 @@ Contributing to Mandara itself (built-in plugins, Studio, the shell)? See
 ## Quick start
 
 You need a running Mandara (download a release and run `bin/mandara
-install`; see the [README](README.md#install)) and a Rust toolchain.
+install`; see [Install](docs/install.md)) and a Rust toolchain.
 
 ```bash
 rustup target add wasm32-wasip2

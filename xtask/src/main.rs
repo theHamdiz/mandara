@@ -22,7 +22,7 @@
 //! - `build [--target <triple>] [--variant NAME] [--profile P] [--features F]
 //!   [--no-default-features] [--out dist] [--no-readme]`: a fingerprinted
 //!   release build — source fingerprint, binary SHA-256s and lines of code
-//!   in `<out>/mandara-<v>-<target>.build.toml` and the README's build-info
+//!   in `<out>/mandara-<v>-<target>.build.toml` and the build-info
 //!   block (see [`buildinfo`]).
 //! - `art [--check | --compose [--only ID] [--out DIR]]`: plugin artwork —
 //!   builds the icons and covers embedded in the binaries, re-composes the

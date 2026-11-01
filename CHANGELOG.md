@@ -6,6 +6,14 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **A shorter README and a real documentation folder.** The front page on
+  GitHub is now a quick tour with a few screenshots and the install
+  command. Everything else moved, word for word, into the `docs` folder:
+  one page per topic (install, usage, your desktop, dock and launcher,
+  wallpapers, plugins, Studio and more), with an index to start from.
+
 ## 0.4.0 — 2026-11-01
 
 A new main menu, a Notch bar that hangs from the top edge, your wallpaper

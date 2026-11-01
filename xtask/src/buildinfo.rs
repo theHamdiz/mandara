@@ -8,7 +8,8 @@
 //!    fingerprint, and counts the lines of code ([`loc`](crate::loc)).
 //! 4. Writes `<out>/mandara-<version>-<target>[-<variant>].build.toml` and,
 //!    unless `--no-readme`, refreshes the block between the build-info
-//!    markers in `README.md`.
+//!    markers in [`FINGERPRINT_DOC`] (`docs/building.md`; the flag keeps
+//!    its old name for the installer and scripts).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -30,14 +31,16 @@ const DEFAULT_PROFILE: &str = "release";
 const MANIFEST_SCHEMA: u32 = 1;
 /// Suffix of the build manifest after the release name.
 const MANIFEST_SUFFIX: &str = ".build.toml";
-/// README markers around the generated block.
+/// The page that shows the last build's fingerprint table.
+pub const FINGERPRINT_DOC: &str = "docs/building.md";
+/// Markers around the generated block.
 pub const README_START: &str = "<!-- build-info:start -->";
 pub const README_END: &str = "<!-- build-info:end -->";
 /// Heading of the section created when the markers are missing.
 const README_SECTION: &str = "## Build fingerprint";
 /// The section the build-info section is inserted before.
 const README_ANCHOR: &str = "## License";
-/// Hex digits of a binary hash shown in the README table.
+/// Hex digits of a binary hash shown in the fingerprint table.
 const BINARY_HASH_SHOWN: usize = 16;
 /// Separator byte cargo uses in `CARGO_ENCODED_RUSTFLAGS`.
 const ENCODED_RUSTFLAGS_SEPARATOR: char = '\u{1f}';
@@ -234,7 +237,7 @@ pub fn splice_readme(readme: &str, block: &str) -> String {
         return format!("{head}\n{block}{tail}");
     }
     let section = format!(
-        "{README_SECTION}\n\nThe last `cargo xtask build`: source fingerprint, toolchain, binary hashes and\nlines of code ([`docs/releasing.md`](docs/releasing.md#build-fingerprint)).\n\n{README_START}\n{block}{README_END}\n\n"
+        "{README_SECTION}\n\nThe last `cargo xtask build`: source fingerprint, toolchain, binary hashes and\nlines of code ([`releasing.md`](releasing.md#build-fingerprint)).\n\n{README_START}\n{block}{README_END}\n\n"
     );
     let anchor = readme.match_indices(README_ANCHOR).find(|(i, _)| *i == 0 || readme.as_bytes()[i - 1] == b'\n').map(|(i, _)| i);
     match anchor {
@@ -357,7 +360,7 @@ pub fn build(args: &[String]) -> Result<()> {
     println!("{}", manifest_path.display());
 
     if !flag(args, "--no-readme") {
-        let readme = root.join("README.md");
+        let readme = root.join(FINGERPRINT_DOC);
         let text = std::fs::read_to_string(&readme).map_err(|e| format!("{}: {e}", readme.display()))?;
         let updated = splice_readme(&text, &readme_block(&m));
         if updated != text {

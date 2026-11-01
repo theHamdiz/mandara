@@ -75,7 +75,7 @@ mandara msg wallpaper render-preview /tmp/desktop.png 3840x2160@1.5   # the desk
 mandara msg language set ar                 # language list
 mandara msg plugins reload                  # plugins list|enable|disable|remove|restore <id>
 mandara msg plugins remove prayer-times     # built-ins: off + out of bar/sidebar until `plugins restore` (core plugins refuse)
-mandara msg plugins enable wallhaven        # opt-in built-ins: wallhaven, cursors, dock, notes, todo, pomodoro, … (README: "ship switched off")
+mandara msg plugins enable wallhaven        # opt-in built-ins: wallhaven, cursors, dock, notes, todo, pomodoro, … ([plugins](plugins.md): "ship switched off")
 mandara msg config set /integrations/gtk4 true   # theme an app (all off by default); false takes Mandara's changes back
 mandara msg plugins vet ./my-plugin          # the marketplace's compliance check: {"ok":true} or {"ok":false,"class":"broken|malicious|placeholder","reason":…}
 mandara msg config get /bar/height         # config set /bar/height 30, show, reload, export, import, reset

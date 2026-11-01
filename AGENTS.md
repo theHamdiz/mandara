@@ -103,7 +103,7 @@ conversation rely on `catch_unwind`, so never switch them to `abort`.
 | `cargo xtask status` | Every component's version and whether its content changed since. |
 | `cargo xtask bump --dry-run` | What a release would bump (CI does the real bump). |
 | `cargo xtask verify` | Fails if a component changed without a bump. |
-| `cargo xtask build` | A fingerprinted release build, its manifest and the README's build-fingerprint block. |
+| `cargo xtask build` | A fingerprinted release build, its manifest and the build-fingerprint table in `docs/building.md`. |
 | `cargo xtask plugins` | Builds the example plugins and packages them in marketplace format. |
 | `cargo xtask art [--check]` | Regenerates (or validates) the plugin artwork embedded in the binary. |
 | `cargo xtask resource-check target/release/mandara` | Runs a release binary in a throw-away headless session and checks its idle memory, threads and CPU against the budget. |
@@ -356,7 +356,9 @@ Things that cost real debugging time:
    and a row in `assets/README.md`, then run `cargo xtask art` and
    `cargo test -p xtask`.
 5. Give its options settings (below), its actions commands (below), its
-   strings translations, and add it to the README's plugin table and count.
+   strings translations, and add it to the plugin table and count in
+   [docs/plugins.md](docs/plugins.md) (and the plugin count in the README's
+   badges and highlights).
 
 ### A Studio setting
 
@@ -454,9 +456,11 @@ Every user-facing change updates its docs in the same change:
   friendly words, saying what people will notice (format in
   [docs/releasing.md](docs/releasing.md#changelog)). It becomes the release
   notes on GitHub, in Studio and in `mandara changelog`.
-- [README.md](README.md): features, plugin table and counts, screenshots
-  (from the sandbox).
-- The guides in [`docs/`](docs): Studio pages, commands, configuration.
+- [README.md](README.md): the short front page: the pitch, highlights,
+  a few screenshots and links. Keep it short; details belong in `docs/`.
+- The guides in [`docs/`](docs) ([index](docs/README.md)): features by
+  area, install, usage, plugins (table and counts), Studio pages,
+  commands, configuration; screenshots come from the sandbox.
 - [PLUGINS.md](PLUGINS.md) when the plugin interface or tooling changes
   (its tests check the budgets and exports).
 - The installer's per-distribution package tables

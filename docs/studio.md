@@ -6,7 +6,70 @@ memory never count against the shell, and every change is mirrored to the
 running shell over IPC: drag a slider and the bar follows at 144 Hz.
 Settings never live in bar dropdowns.
 
-<img src="screenshots/studio-home.png" alt="Studio Home: a greeting over the wallpaper, live shell status, the theme, quick settings, recent changes and a card per group"/>
+<p align="center">
+  <img src="screenshots/studio-home.png" alt="Studio Home: a greeting over the wallpaper, live shell status, the theme with one-click switching, quick settings, recent changes and a card per group" width="100%"/>
+  <br/><sub><b>Home</b>: a widget dashboard with live shell status, the current theme and its one-click switches, quick settings and recent changes</sub>
+</p>
+
+<p align="center">
+  <img src="screenshots/studio-themes.png" alt="Studio Themes: a live preview of the shell in the current theme with its palette and text contrast, light / dark, and the six Looks" width="100%"/>
+  <br/><sub><b>Themes</b>: a live preview of the shell in the current theme, its palette and contrast, light / dark, then the Looks, designed themes, wallpaper colors and cursors</sub>
+</p>
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="screenshots/studio-nav.png" alt="Grouped, collapsible navigation" width="100%"/><br/><sub><b>Navigation</b>: grouped, collapsible, searchable</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-desktop-widgets.png" alt="Desktop widgets: Edit on desktop, a live preview and the widget gallery" width="100%"/><br/><sub><b>Desktop widgets</b>: live preview and gallery</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="screenshots/studio-bar.png" alt="Layout designer and bar presets" width="100%"/><br/><sub><b>Bar</b>: presets and the layout designer</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-plugins.png" alt="Plugins → Installed: the library with on / off counts, filter chips and switches" width="100%"/><br/><sub><b>Plugins → Installed</b></sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="screenshots/studio-power-menu.png" alt="Power & idle: session menu editor" width="100%"/><br/><sub><b>Power &amp; idle</b>: the session menu editor</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-about.png" alt="About: the version, license badges and updates" width="100%"/><br/><sub><b>About</b>: version and binary-patch updates</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="screenshots/studio-home-ar.png" alt="العربية: right to left, «ستوديو المندرة»" width="100%"/><br/><sub><b>العربية</b>: every page mirrored right to left, «ستوديو المندرة»</sub></td>
+</tr>
+</table>
+
+Every setting is live: drag a slider and the bar changes at 144 Hz. Studio
+opens on **Home**, a widget dashboard (a greeting over your wallpaper, live
+shell CPU / memory / VRAM, the theme with one-click switching, quick toggles,
+recent changes with Undo, and a card per group), and
+its sidebar groups 31 pages into **Look & feel**, **Desktop**, **System**,
+**Security & accounts**, **Extend** and **Mandara**: collapsible, searchable
+across every setting, keyboard-driven (Ctrl+F, Alt+↑/↓) and mirrored for
+Arabic. Every page is responsive, from an icon rail and one column to
+ultra-wide.
+
+- **Look & feel**: appearance and palette tuning, themes with live mock-ups,
+  cursor themes (download, preview, apply),
+  wallpaper (per display, light / dark, slideshow, depth clock),
+  typography, motion (spring tuning, reduce motion).
+- **Desktop**: a drag-and-drop **layout designer** with one-click presets,
+  bar behaviour, sidebar and hot corners, dock, launcher, Alt-Tab switcher,
+  notifications (rules, quiet hours) and on-screen displays.
+- **System**: displays and night light, audio (per-app mixer and outputs,
+  device names, shell sounds), network (VPN, hotspot, saved networks,
+  static IP) and Bluetooth pairing, power and idle (timeouts, battery
+  alerts, power-menu editor, event hooks), input devices, keyboard
+  shortcuts with conflict detection, date / time / location and calendars,
+  default and startup apps.
+- **Security & accounts**: users (AccountsService, photos, passwords),
+  Mandara Login with a live preview, the lock screen's look, privacy
+  indicators and offline mode.
+- **Extend**: a plugin store (featured hero, curated shelves, search,
+  one-click Get / On, product pages, installed library, updates, the GitHub
+  marketplace, a local authoring handbook and validator, per-plugin settings) and compositor control for
+  MangoWM, Niri and Hyprland written to `~/.config/mandara/generated/*`;
+  **your own config only gets one include line** (with a backup).
+- **Mandara**: language, profiles with undo / export / import, performance,
+  maintenance (health checks, repair, factory reset) and about.
+
+Open any page directly: `mandara studio displays`,
+`mandara studio plugins --plugin weather --settings`.
 
 ## Navigation
 
