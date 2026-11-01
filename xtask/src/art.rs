@@ -679,7 +679,7 @@ fn encode_png(img: &RgbaImage) -> Result<Vec<u8>> {
 
 /// Pixel-exact lossless WebP: icons and covers with transparency.
 fn encode_webp(img: &RgbaImage) -> Result<Vec<u8>> {
-    mandara_wallgen::encode_webp_lossless_rgba(img.as_raw(), img.width(), img.height())
+    mandara_webp::encode_rgba(img.as_raw(), img.width(), img.height(), &[]).map_err(|e| e.to_string())
 }
 
 fn encode_jpeg(img: &RgbaImage) -> Result<Vec<u8>> {

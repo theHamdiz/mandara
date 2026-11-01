@@ -19,6 +19,7 @@ members = [
     "crates/mandara-wallgen",
     "crates/mandara-install",
     "crates/mandara-version",
+    "crates/mandara-webp",
     "xtask",
 ]
 
@@ -62,6 +63,8 @@ mandara-greeter = { path = "crates/mandara-greeter" }
 mandara-media = { path = "crates/mandara-media" }
 # Procedural wallpaper engine (styles, palettes, lossless output, AV1 loops).
 mandara-wallgen = { path = "crates/mandara-wallgen" }
+# Lossless WebP encoder (wallpapers, embedded plugin icons); no dependencies.
+mandara-webp = { path = "crates/mandara-webp" }
 mandara-install = { path = "crates/mandara-install" }
 # Delta-update format (own root so plugin authors can `cargo install` it);
 # the shell uses the apply side only, release tooling adds `create`.

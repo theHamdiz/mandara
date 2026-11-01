@@ -134,6 +134,10 @@ pub(crate) struct Sidecar {
 }
 
 /// Encodes an image.
+/// Where a generated wallpaper repeats: the dither tile and its half and
+/// double, searched for WebP back references.
+const WEBP_REPEATS: [usize; 3] = [crate::dither::TILE / 2, crate::dither::TILE, crate::dither::TILE * 2];
+
 pub fn encode(img: &RgbImage, format: Format) -> Result<Vec<u8>, String> {
     encode_resolved(img, format).map(|(bytes, _)| bytes)
 }
@@ -166,7 +170,7 @@ fn encode_one(img: &RgbImage, format: Format) -> Result<Vec<u8>, String> {
     match format {
         Format::Lossless => return encode_resolved(img, format).map(|(bytes, _)| bytes),
         Format::WebpLossless => {
-            out = crate::webp::encode_rgb(img.as_raw(), img.width(), img.height())?;
+            out = mandara_webp::encode_rgb(img.as_raw(), img.width(), img.height(), &WEBP_REPEATS).map_err(|_| mandara_i18n::t("WebP images must be 1 to 16384 pixels on each side").to_string())?;
         }
         Format::Png => {
             use image::ImageEncoder;

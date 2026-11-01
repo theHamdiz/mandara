@@ -22,9 +22,8 @@ ab_glyph = "0.2"
 # 1.x: the version image / gif link; 2.0 would be a second copy.
 color_quant = "1.1"
 png = "0.18"
-# Embedded icons: pixel-exact lossless WebP from the wallpaper engine's
-# pure-Rust VP8L encoder.
-mandara-wallgen.workspace = true
+# Embedded icons: pixel-exact lossless WebP (pure Rust, no dependencies).
+mandara-webp.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 # `cargo xtask build`: reads feature lists, writes the build manifest.

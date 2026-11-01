@@ -458,7 +458,12 @@ fn apply_guardrails() {
     if let Err(e) = setpriority_process(None, NICE) {
         tracing::debug!("depth helper: nice: {e}");
     }
-    let param = libc::sched_param { sched_priority: 0 };
+    // musl's `sched_param` has more fields than glibc's (the sporadic
+    // server's), so it's built zeroed rather than field by field.
+    // SAFETY: `sched_param` is a plain C struct of integers; all zeroes is
+    // a valid value of it.
+    let mut param: libc::sched_param = unsafe { std::mem::zeroed() };
+    param.sched_priority = 0;
     // SAFETY: plain syscall on this process with a valid, initialized
     // parameter struct; failure only leaves the normal policy in place.
     if unsafe { libc::sched_setscheduler(0, libc::SCHED_IDLE, &param) } != 0 {

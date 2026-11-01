@@ -1,4 +1,6 @@
-//! A lossless WebP (VP8L) encoder tuned for generated wallpapers.
+//! A pure-Rust lossless WebP (VP8L) encoder, tuned for generated
+//! wallpapers and used for Mandara's embedded plugin icons. No
+//! dependencies.
 //!
 //! `image`'s encoder writes a fixed top predictor and plain Huffman codes,
 //! with no LZ77 and no color cache, which is fine for photos but wastes
@@ -8,9 +10,9 @@
 //! * subtract-green, then the predictor transform with the best of the 14
 //!   modes chosen per 16 × 16 block;
 //! * LZ77 back references searched at the distances where generated
-//!   images repeat: the previous pixel and row, and multiples of the
-//!   dither tile's period, so the anti-banding pattern costs almost
-//!   nothing;
+//!   images repeat: the previous pixel and row, and the caller's repeat
+//!   periods (a wallpaper's dither tile), so an anti-banding pattern costs
+//!   almost nothing;
 //! * a color cache, and canonical Huffman codes limited to 15 bits.
 //!
 //! Output decodes with any WebP decoder (`image` round-trips it exactly in
@@ -38,9 +40,6 @@ const PLANE_CODES: usize = 120;
 const CODE_LENGTH_ORDER: [usize; 19] = [17, 18, 0, 1, 2, 3, 4, 5, 16, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 /// Multiplier of the color-cache hash (from the format).
 const CACHE_HASH: u32 = 0x1E35_A7BD;
-/// Horizontal and vertical repeat distances searched besides 1 and 2:
-/// the dither matrix period and its multiples.
-const PERIODS: [usize; 3] = [crate::dither::TILE / 2, crate::dither::TILE, crate::dither::TILE * 2];
 /// Hash-chain matcher: table size, candidates tried per position, and the
 /// farthest distance VP8L can code (2^20 − 120).
 const HASH_BITS: u32 = 18;
@@ -293,9 +292,9 @@ struct Matcher<'a> {
 }
 
 impl<'a> Matcher<'a> {
-    fn new(argb: &'a [u32], width: usize) -> Self {
+    fn new(argb: &'a [u32], width: usize, periods: &[usize]) -> Self {
         let mut dists: Vec<usize> = vec![1, 2, width, width * 2];
-        for p in PERIODS {
+        for &p in periods {
             dists.extend([p, p * width, p * width + p]);
         }
         dists.retain(|&d| d > 0);
@@ -367,11 +366,11 @@ impl<'a> Matcher<'a> {
 /// LZ77 + color cache parse of `argb` (`width` wide), with one step of
 /// lazy matching: a match is deferred by a literal when the next position
 /// has a clearly longer one.
-fn tokenize(argb: &[u32], width: usize, cache_bits: u32) -> Vec<Token> {
+fn tokenize(argb: &[u32], width: usize, cache_bits: u32, periods: &[usize]) -> Vec<Token> {
     let n = argb.len();
     let mut cache = vec![0u32; if cache_bits > 0 { 1 << cache_bits } else { 0 }];
     let hash = |c: u32| (c.wrapping_mul(CACHE_HASH) >> (32 - cache_bits)) as usize;
-    let mut m = Matcher::new(argb, width);
+    let mut m = Matcher::new(argb, width, periods);
     let mut tokens = Vec::with_capacity(n / 4);
     let mut pos = 0;
     let mut pending: Option<(usize, usize)> = None;
@@ -418,8 +417,8 @@ fn push_literal(tokens: &mut Vec<Token>, cache: &mut [u32], cache_bits: u32, has
 }
 
 /// Writes an entropy-coded image (one Huffman group).
-fn write_image(w: &mut BitWriter, argb: &[u32], width: usize, cache_bits: u32, is_main: bool) {
-    let tokens = tokenize(argb, width, cache_bits);
+fn write_image(w: &mut BitWriter, argb: &[u32], width: usize, cache_bits: u32, is_main: bool, periods: &[usize]) {
+    let tokens = tokenize(argb, width, cache_bits, periods);
     if cache_bits > 0 {
         w.bits(1, 1);
         w.bits(cache_bits, 4);
@@ -602,24 +601,39 @@ fn predictor_transform(px: &[u32], w: usize, h: usize) -> (Vec<u32>, Vec<u32>, u
 /// Largest side a VP8L image may have.
 const MAX_SIDE: usize = 16384;
 
-/// Encodes packed RGB as a lossless WebP file.
-pub fn encode_rgb(rgb: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
+/// The image is empty, larger than VP8L allows on a side, or its buffer
+/// doesn't match its size.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SizeError;
+
+impl std::fmt::Display for SizeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "WebP images must be 1 to {MAX_SIDE} pixels on each side")
+    }
+}
+
+impl std::error::Error for SizeError {}
+
+/// Encodes packed RGB as a lossless WebP file. `periods`: distances (in
+/// pixels) at which the image repeats, searched for back references
+/// (a dither tile); empty for none.
+pub fn encode_rgb(rgb: &[u8], width: u32, height: u32, periods: &[usize]) -> Result<Vec<u8>, SizeError> {
     let (w, h) = check_size(width, height, rgb.len(), 3)?;
     let px = rgb.as_chunks::<3>().0.iter().map(|p| argb(0xFF, p[0], p[1], p[2])).collect();
-    encode_argb(px, w, h, false)
+    Ok(encode_argb(px, w, h, false, periods))
 }
 
 /// Encodes packed RGBA as a lossless WebP file (pixel-exact, alpha kept).
-pub fn encode_rgba(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
+pub fn encode_rgba(rgba: &[u8], width: u32, height: u32, periods: &[usize]) -> Result<Vec<u8>, SizeError> {
     let (w, h) = check_size(width, height, rgba.len(), 4)?;
     let px = rgba.as_chunks::<4>().0.iter().map(|p| argb(p[3], p[0], p[1], p[2])).collect();
-    encode_argb(px, w, h, true)
+    Ok(encode_argb(px, w, h, true, periods))
 }
 
-fn check_size(width: u32, height: u32, len: usize, channels: usize) -> Result<(usize, usize), String> {
+fn check_size(width: u32, height: u32, len: usize, channels: usize) -> Result<(usize, usize), SizeError> {
     let (w, h) = (width as usize, height as usize);
     if w == 0 || h == 0 || w > MAX_SIDE || h > MAX_SIDE || len != w * h * channels {
-        return Err(mandara_i18n::t("WebP images must be 1 to 16384 pixels on each side").into());
+        return Err(SizeError);
     }
     Ok((w, h))
 }
@@ -629,7 +643,7 @@ fn argb(a: u8, r: u8, g: u8, b: u8) -> u32 {
     ((a as u32) << 24) | ((r.wrapping_sub(g) as u32) << 16) | ((g as u32) << 8) | b.wrapping_sub(g) as u32
 }
 
-fn encode_argb(px: Vec<u32>, w: usize, h: usize, alpha: bool) -> Result<Vec<u8>, String> {
+fn encode_argb(px: Vec<u32>, w: usize, h: usize, alpha: bool, periods: &[usize]) -> Vec<u8> {
     let (width, height) = (w as u32, h as u32);
     let (res, modes, mode_w) = predictor_transform(&px, w, h);
     drop(px);
@@ -646,9 +660,9 @@ fn encode_argb(px: Vec<u32>, w: usize, h: usize, alpha: bool) -> Result<Vec<u8>,
     bw.bits(1, 1);
     bw.bits(0, 2);
     bw.bits(PREDICTOR_BITS - 2, 3);
-    write_image(&mut bw, &modes, mode_w, 0, false);
+    write_image(&mut bw, &modes, mode_w, 0, false, &[]);
     bw.bits(0, 1);
-    write_image(&mut bw, &res, w, CACHE_BITS, true);
+    write_image(&mut bw, &res, w, CACHE_BITS, true, periods);
     let body = bw.finish();
     let pad = body.len() & 1;
     let mut out = Vec::with_capacity(body.len() + 21);
@@ -660,7 +674,7 @@ fn encode_argb(px: Vec<u32>, w: usize, h: usize, alpha: bool) -> Result<Vec<u8>,
     if pad == 1 {
         out.push(0);
     }
-    Ok(out)
+    out
 }
 
 #[cfg(test)]
@@ -678,9 +692,17 @@ mod tests {
                 rgba.extend_from_slice(&[(x * 7) as u8, (y * 11) as u8, ((x ^ y) * 5) as u8, a]);
             }
         }
-        let bytes = encode_rgba(&rgba, w, h).unwrap();
+        let bytes = encode_rgba(&rgba, w, h, &[]).unwrap();
         let back = image::load_from_memory_with_format(&bytes, image::ImageFormat::WebP).unwrap().to_rgba8();
         assert_eq!(back.as_raw(), &rgba);
+    }
+
+    /// A wallpaper-style 8 × 8 ordered dither and its repeat periods.
+    const DITHER_TILE: u32 = 8;
+    const DITHER_PERIODS: [usize; 3] = [DITHER_TILE as usize / 2, DITHER_TILE as usize, DITHER_TILE as usize * 2];
+
+    fn ordered_dither(x: u32, y: u32) -> f32 {
+        ((x % DITHER_TILE) * 5 + (y % DITHER_TILE) * 3) as f32 % DITHER_TILE as f32 / DITHER_TILE as f32 - 0.5
     }
 
     fn round_trip(w: u32, h: u32, mut f: impl FnMut(u32, u32) -> [u8; 3]) {
@@ -690,7 +712,7 @@ mod tests {
                 rgb.extend_from_slice(&f(x, y));
             }
         }
-        let bytes = encode_rgb(&rgb, w, h).unwrap();
+        let bytes = encode_rgb(&rgb, w, h, &DITHER_PERIODS).unwrap();
         let back = image::load_from_memory_with_format(&bytes, image::ImageFormat::WebP).unwrap().to_rgb8();
         assert_eq!(back.dimensions(), (w, h));
         assert!(back.as_raw() == &rgb, "{w}×{h} differs");
@@ -710,7 +732,7 @@ mod tests {
         });
         // Dithered gradient, the content this encoder is built for.
         round_trip(300, 70, |x, y| {
-            let v = 40.0 + x as f32 * 0.07 + y as f32 * 0.2 + crate::dither::threshold(x, y);
+            let v = 40.0 + x as f32 * 0.07 + y as f32 * 0.2 + ordered_dither(x, y);
             [v as u8, (v * 1.3) as u8, (v * 0.6) as u8]
         });
     }

@@ -8,6 +8,7 @@ authors.workspace = true
 
 [dependencies]
 mandara-i18n.workspace = true
+mandara-webp.workspace = true
 # The shared AV1 + WebM frame sink (recording.rs) for video loops.
 mandara-services.workspace = true
 image.workspace = true

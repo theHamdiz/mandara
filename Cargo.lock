@@ -3972,10 +3972,18 @@ dependencies = [
  "mandara-i18n",
  "mandara-media",
  "mandara-services",
+ "mandara-webp",
  "palette",
  "serde",
  "tempfile",
  "toml 1.1.8+spec-1.1.0",
+]
+
+[[package]]
+name = "mandara-webp"
+version = "0.1.0"
+dependencies = [
+ "image",
 ]
 
 [[package]]
@@ -8651,7 +8659,7 @@ dependencies = [
  "image",
  "mandara-delta",
  "mandara-version",
- "mandara-wallgen",
+ "mandara-webp",
  "png 0.18.1",
  "resvg",
  "roxmltree 0.21.2",
