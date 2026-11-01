@@ -68,8 +68,8 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 | Page | Settings |
 |---|---|
 | Themes | **looks** — six one-click looks and *Restore my look* (`looks.*`, see [Looks](#looks)); light / dark / automatic and its schedule (`theme.*`), palette tuning (`theme.adjustments`), theme crossfade (`theme.transition_ms`), icons (`appearance.*`), corner roundness, shadows, borders, backdrop dim (`style.*`); the theme; **other apps** — the app theming switches, all off by default (`integrations.*`, see [App theming](#app-theming-integrations)); **cursor** (the opt-in `cursors` plugin) — theme, size, hide while typing / when idle, Hyprland's software cursor and hide on touch (`compositor.input.cursor.theme`, `.size`, `.hide_when_typing`, `.hide_after_secs`, `.no_hardware_cursors`, `.hide_on_touch`; themes Mandara downloaded are listed in `~/.local/share/mandara/cursor-themes.json`) |
-| Wallpaper | folder, picker style / size / focus / names, fill and colour, transitions, crossfade (`wallpaper.crossfade_ms`), light / dark and per-display variants, slideshow interval and order, depth effect and subject mask (`wallpaper.*`); video wallpapers: pause behind windows / on battery, frame-rate limit, first frame only (`wallpaper.video.*`, see [Video wallpapers](#video-wallpapers)) |
-| Desktop widgets | clocks (incl. the depth clock), system monitor, decorations, plane visualizer, show / hide them all (`desktop.widgets.*`, see [Desktop widgets](#desktop-widgets)); desktop cards and visualizers (`cards.*`, `visualizers.*`) |
+| Wallpaper | folder, picker style / size / focus / names, fill and colour, transitions, crossfade (`wallpaper.crossfade_ms`), light / dark and per-display variants, depth effect (`wallpaper.depth_effect`) and how its subject is found: `wallpaper.depth.mode` (`hand-tuned` or `model`), `auto_split`, `split` (0.05–0.95, model mode) (`wallpaper.*`); video wallpapers: pause behind windows / on battery, frame-rate limit, first frame only (`wallpaper.video.*`, see [Video wallpapers](#video-wallpapers)); the slideshow (`wallpaper.slideshow.*`, see [Wallpaper slideshow](#wallpaper-slideshow)) |
+| Desktop widgets | clocks (incl. the depth clock, an analog dial and nine more faces), system monitor, gauges, meters and thermals, weather, world clock, countdown, progress, to-do, sticky note, focus timer, quote, notebook tabs, calendars, sun / moon / globe, profile, shortcuts, toggles, sliders, palette, desk cat, bubbles, photo frame, sticker, six media layouts, machine card, screen time, prayer times, search, at a glance, GitHub, exchange rates, AI usage, games, decorations, plane visualizer, per-widget plate shape, outline, shadow, header, frame, rotation and mirror, alignment, font, numerals, calendar and language, show / hide them all (`desktop.widgets.*`, see [Desktop widgets](#desktop-widgets)); desktop cards and visualizers (`cards.*`, `visualizers.*`) |
 | Typography | interface / display / Arabic / monospace fonts, text scale, weight (`typography.*`) |
 | Motion | stiffness, damping, mass, animation speed, reduce motion (`motion.*`) |
 
@@ -77,7 +77,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 
 | Page | Settings |
 |---|---|
-| Bar | style, position, height, gaps, radii, opacity, accent tint, rim width / intensity, shadow, text / icon scale, item padding / spacing, separators, center alignment, floating frame, **hairline / micro pill** (`bar.layout` = `hairline` / `micro`, `bar.compact_height`, `bar.accent_line`), **notch** (`bar.layout` = `notch`, `bar.notch_width` 0.3–1, the share of the edge it spans), group capsules (`bar.capsules`), what right-clicking empty bar space opens (`bar.right_click` = `main-menu` / `desktop-menu`), **side bar** (`bar.position` = `left` / `right`, `bar.vertical_width`, `bar.screen_frame`, `bar.frame_thickness`, see [Side bar](#side-bar)), auto-hide mode and delay, click-through, over fullscreen (`bar.*`); drop-down panels: width, maximum height, padding, gap, anchor, opacity, shadow, animation, custom spring, **close delay** (`panels.leave_delay_ms`), **action message time** (`panels.toast_ms`), the main menu's frosted glass (`panels.menu_translucent`, `panels.menu_opacity`) |
+| Bar | style, position, height, gaps, radii, opacity, accent tint, rim width / intensity, shadow, text / icon scale, item padding / spacing, separators, center alignment, floating frame, **hairline / micro pill** (`bar.layout` = `hairline` / `micro`, `bar.compact_height`, `bar.accent_line`), **notch** (`bar.layout` = `notch`, `bar.notch_width` 0.3–1, the share of the edge it spans), group capsules (`bar.capsules`), **item capsules** (`bar.item_capsules`: every item on its own capsule, any style) with their colour (`bar.capsule_fill` = `soft` / `container` / `accent`), strength (`bar.capsule_strength`, 0–2 ×) and hairline outline (`bar.capsule_outline`), **hover highlight** (`bar.hover_highlight`), **bar text weight** (`bar.font_weight`, 0 follows Typography's weight, else 100–900), **gap to windows** (`bar.window_gap`, 0–32 px added to the space the bar reserves), what right-clicking empty bar space opens (`bar.right_click` = `main-menu` / `desktop-menu`), what a **middle click** there does (`bar.middle_click.action`, any hot-corner action, and `bar.middle_click.command`), what **scrolling** there does (`bar.scroll` = `none` / `workspaces` / `volume`), **side bar** (`bar.position` = `left` / `right`, `bar.vertical_width`, `bar.screen_frame`, `bar.frame_thickness`, see [Side bar](#side-bar)), auto-hide mode and delay, click-through, over fullscreen (`bar.*`); drop-down panels: width, maximum height, padding, gap, anchor, opacity, shadow, animation, custom spring, **close delay** (`panels.leave_delay_ms`), **action message time** (`panels.toast_ms`), the main menu's frosted glass (`panels.menu_translucent`, `panels.menu_opacity`) |
 | Sidebars & hover | sidebar side, mode, width, tabs (`sidebar.tabs`, `always_first_tab`, `add_tab_button`, `notifications_tab`) and look (`sidebar.*`, `sidebar.look.*`), edge triggers and dwell (`edges.*`), hot corners with delay and size (`hot_corners.*`), screen corners (`screen_corners.*`) |
 | Dock | layout (position, size, magnification), behaviour (auto-hide, delays, slide speed, bounces, minimize into icon), apps (`pinned` order, running, recent apps, indicators, badges), stacks (`[[dock.stacks]]` path / view / sort / display, `stack_items`, `fan_items`, `stack_names`), the Applications folder (`[dock.applications]` enabled / view / order / icon_size; replaces 0.1's `applications_slot`), Trash, the now-playing chip (`dock.media_chip`), appearance (opacity, tint, radius, padding, spacing, shadow, rim) — every number clamped to `mandara_config::dock::ranges` (`dock.*`) |
 | Launcher | placement (`launcher.look.position`, see [Launcher placement](#launcher-placement)), align to the launcher button, width / height when attached and in the center, layout, columns, dim, results (`launcher.max_results`), providers and prefixes, ranking half-life and recent count, launching (`launcher.*`) |
@@ -93,8 +93,9 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 | Audio & media | volume step, over-amplification, devices, routes (`audio.*`), players (`media.*`), sounds (`sounds.*`); visualizer and lyrics (Media plugin) |
 | Network & Bluetooth | `network.*`, `bluetooth.*` |
 | Power & idle | idle stages per power source, lock grace, battery alert levels (`power.low_percent`, `power.critical_percent`, `power.peripheral_low_percent` — also the coral mark of the battery OSD and the Bluetooth device rings), power profiles, session menu, hooks (`idle.*`, `power.*`, `session_menu.*`, `hooks.*`) |
-| Date, time & location | formats, calendars (refresh, reminders, agenda days), location, weather refresh (`datetime.*`, `calendar.*`, `location.*`, `weather.*`) |
+| Date, time & location | formats, the clock panel's calendar (week numbers, `weekend` days, `hijri_dates`, `eastern_numerals`), calendars (refresh, reminders, agenda days), location, weather refresh (`datetime.*`, `calendar.*`, `location.*`, `weather.*`) |
 | Applications | default and preferred apps, autostart (`apps.*`) |
+| Compositor | the generated drop-in (`compositor.manage`), window look, effects, rules, tags and layouts (`compositor.*`), border colours (`integrations.compositor_borders`); the Config doctor's start-up notification about new problems in your compositor config (`compositor.doctor_notify`, on by default) |
 
 ### Security & accounts
 
@@ -117,9 +118,13 @@ fixed:
 | Process hunter (`processes`) | `refresh_ms`, `hot_cpu_percent` | 1500 ms, 50 % |
 | Containers (`containers`) | `hot_cpu_percent`, `refresh_s` (list refresh while the panel is closed, 5–600 s) (plus engine, stopped containers, log lines) | 80 %, 30 s |
 | Updates (`updates`) | `first_check_delay_s` (0–600 s after login), `news_count` (Arch news headlines, 1–5) | 20 s, 1 |
-| Media (`media`) | `lyrics_rows` (odd, 3–9) | 5 |
+| Media (`media`) | `lyrics_rows` (odd, 3–9), `bar_title` (the track beside the icon in the bar), `hide_when_paused` (the bar item only while something plays) | 5, on, off |
+| Workspaces (`workspaces`) | `labels` (`auto`: the number or a name of up to two characters, `number`, `dots`), `app_icons` (the apps' icons on each pill), `hide_empty` (only tags / workspaces with windows, plus the active and urgent ones) | auto, on, off |
+| Active window (`active-window`) | `show` (`app-and-title`, `app`, `title`), `max_width` (120–720 px) | app and title, 420 px |
+| Audio (`audio`) | `bar_level` (the volume beside the speaker icon) | on |
+| Power (`power`) | `bar_percent` (the charge beside the battery icon) | on |
 | Screenshot (`screenshot`) | `toolbar_position` (`top`, `bottom`; the toolbar's arrow button or M flips it live), `toolbar_scale` (0.75–1.5 ×, also its hint strip), `countdown` ("Capture in N s" and `--delay` without a number, 1–10 s) | top, 1 ×, 3 s |
-| Clipboard (`[clipboard]`) | `pinned_shown` (pinned rows above the history, 0–12) | 4 |
+| Clipboard (`[clipboard]`) | `pinned_shown` (pinned rows above the history, 0–12), `preview_lines` (lines of code, CSS and Markdown per row, 0–8), `kind_chips` (filter chips by kind), `max_collected` (entries kept in collections) | 4, 3, on, 500 |
 | Services (`services`) | `list_refresh_s`, `failed_check_s` (plus default view, alert, journal lines) | 4 s, 60 s |
 | Drives (`drives`) | `usage_every_s`, `full_warn_percent` | 10 s, 90 % |
 | Network speed (`net-speed`) | `interval_s` | 1 s |
@@ -197,27 +202,138 @@ desktop edit mode shows them anyway.
 | `place.scale` | 1 = designed size on a 1080 px tall display (0.25 … 4) |
 | `place.opacity` | 0 … 1 |
 | `place.depth` | `behind` (between the wallpaper and its subject; needs a depth mask and Fill = Cover) or `front` |
+| `place.rotation`, `place.flip_x`, `place.flip_y` | turn the painted widget (−180 … 180 degrees) and mirror it; interactive cards stay upright |
 | `look.tone`, `look.accent` | `auto` (light or dark against the wallpaper under it), `on-surface`, `accent`, `custom` with `look.custom_color` / `custom_accent` (`#rrggbb` or `oklch(L C H)`) |
-| `look.font` | `display`, `ui`, `arabic`, `mono` (families from Typography) |
-| `look.effect` | `none`, `shadow`, `glow` |
+| `look.font` | `widgets` (Typography → Desktop widgets, `typography.widgets_font`; the display face when that is empty), `display`, `ui`, `arabic`, `mono`, or `custom` with `look.font_family` |
+| `look.effect`, `look.effect_strength` | `none`, `shadow`, `glow`; strength 0.1 … 2 (1 = as designed) |
+| `look.align` | `auto` (with the anchor; decorations centre), `start`, `center`, `end` |
+| `look.plate` | `none`, `glass` (theme surface at `look.plate_opacity`, 0.05 … 1, with a specular rim) or `solid`; `look.plate_radius` (0 … 64) and `look.plate_padding` (0 … 96), reference px. On a plate, `auto` colours read against the plate. |
+| `look.plate_shape` | `rect` (corners from `plate_radius`), `circle`, `squircle`, `cookie` and `flower` (`plate_lobes` 3 … 24, `plate_depth` 0.02 … 0.3), `pentagon`, `chamfer` (`plate_chamfer` 0 … 64), `skew` (`plate_skew` −30 … 30 degrees), `deckle` (torn paper). The same shapes serve check boxes, cells, covers and markers where a kind has a shape option. |
+| `look.outline_width`, `outline_tone`, `outline_color` | an outline round the plate (0 … 12 reference px), `auto` / `on-surface` / `accent` / `custom` |
+| `look.shadow` | `none`, `soft` or `hard` (a solid offset copy, the sticker look); `shadow_x`, `shadow_y` (−40 … 40), `shadow_blur` (0 … 60), `shadow_opacity` (0 … 1), `shadow_tone` / `shadow_color` |
+| `look.header`, `header_size`, `header_rule` | a title line over the widget, its size and a rule under it |
+| `look.chrome` | `none`, `window` (a classic title bar with the header in it), `tape` (washi tape across the top, `tape_angle` 0 … 60) or `polaroid` (a white border with a deeper bottom); `chrome_tone` / `chrome_color` |
+| `locale.numerals` | `auto` (Eastern Arabic in Arabic, else Western), `western`, `eastern-arabic` |
+| `locale.calendar` | `gregorian`, `hijri`, `both` or `none` (clocks and the countdown; the Hijri day begins at Maghrib and follows Prayer times' correction) |
+| `locale.language` | a language code for names and words (`ar`, `de`, …; empty = the interface's); it also sets the reading direction |
+| `locale.hijri_in_arabic` | write the Hijri date in Arabic with its own digits (default `true`) |
+
+`[desktop.widgets] version` records the defaults a list was written for:
+a list from before version 1 (no numerals, calendar or widgets font yet)
+is upgraded once to show exactly what it showed (Western digits unless
+`eastern_numerals` was set, the depth pill's two calendars, the display
+face through `widgets`). Every kind comes from a first-party plugin
+(`desktop-clocks`, `desktop-monitor`, `desktop-decorations`,
+`desktop-visualizers`, `desktop-now-playing`, `desktop-calendar`,
+`desktop-weather`, `desktop-world-clock`, `desktop-countdown`,
+`desktop-productivity`, `desktop-sky`, `desktop-identity`, `desktop-fun`,
+`desktop-info`); a widget whose plugin is off isn't drawn.
 
 Kinds:
 
 - **`clock`** — `face`: `superscript`, `headline`, `day-block`, `ring`,
-  `greeting`, `day-numeral`, `minimal`, or the depth clock's own
-  `stacked` / `classic` / `arabic` (with its glow, Gregorian + Hijri date
-  pill and audio ring; the first enabled one is drawn). `seconds`
-  (superscript: only that small plane redraws each second, and only while
-  the desktop is visible), `eastern_numerals`, `date`, `weather` (needs the
-  weather plugin and a location), `audio_ring` (depth faces),
-  `ring_progress` = `hour` / `day`. Other clocks redraw once a minute.
-- **`monitor`** — `rows` in order (`cpu`, `cpu-graph`, `gpu`, `memory`,
-  `gpu-power`, `cpu-temp`, `gpu-temp`, `fan`, `battery`, `disk`,
-  `download`, `upload`, `net-graph`; rows the machine can't read are
-  hidden), `interval_s` (1 … 60, default 2), `width` (reference px),
-  `title`. Sampling runs only while a monitor shows on a visible display
-  (not covered by a fullscreen / tiled window, not locked, screens on) and
-  only reads the shown rows; only the values plane redraws.
+  `greeting`, `day-numeral`, `minimal`, `analog`, or the depth clock's own
+  `stacked` / `classic` / `arabic` (with its glow, date pill and audio
+  ring; the first enabled one is drawn). `seconds` (superscript and
+  analog: only that small plane redraws each second, and only while the
+  desktop is visible), `date`, `weather` (needs the weather plugin and a
+  location), `audio_ring` (depth faces), `ring_progress` = `hour` / `day`,
+  `dial_numbers` (analog). Other clocks redraw once a minute.
+  More faces: `stack` (a stacked card), `shape` (the time in
+  `face_options.shape`, which can `spin` a little each minute),
+  `dot-matrix` and `pixel` (`square_dots`, `unlit` dots), `boxes` (a digit
+  in each `box_shape`, `week_strip`), `hud` (`slant`, `moon`, the part of
+  the day), `numerals` (hands over giant numerals), `orbit`, and
+  `template`: `lines` you write, each `{ text, size, weight, opacity,
+  accent, caps }`, with `{HH}`, `{H}`, `{hh}`, `{h}`, `{mm}`, `{ss}`,
+  `{ampm}`, `{time}`, `{weekday}`, `{wd}`, `{day}`, `{dd}`, `{month}`,
+  `{mon}`, `{MM}`, `{year}`, `{greeting}`, `{daypart}` and `{hijri}`. The
+  analog dial takes `analog = { dial, dial_fill, marks (none / dots /
+  ticks / numbers), hour_hand (classic / fill / hollow), hand_width,
+  seconds_style (hand / dot), date_style (under / bubble / box),
+  dial_turn }`; the greeting clock takes your own `phrases` and a
+  `subtitle`.
+- **`progress`** — `period` (`hour`, `day`, `week`, `month`, `year`),
+  `style` (`ring`, `wavy-ring`, `bar`, `dots`), `label` (what's left),
+  `thickness`.
+- **`todo`**, **`note`**, **`pomodoro`**, **`quote`**, **`notebook`**
+  (`desktop-productivity`; read from the To-do, Notes and Pomodoro
+  plugins) — to-do: `list` (a list's name, empty = all), `rows`,
+  `show_done`, `checkbox` (a shape), `ruled`, `title`, `add_row`, `width`,
+  `text_size`; a click on a task ticks it. Note: `note` (a title, empty =
+  the latest), `sheet` (`theme`, `pastel`, `paper`, `custom` with
+  `sheet_color`), `ruling` (`plain`, `ruled`, `grid`, `dots`), `lines`,
+  `word_count`. Pomodoro: `style` (`ring`, `dots`), `controls`, `size`;
+  a click starts or pauses it. Quote: `quotes` (`text — author`; empty =
+  built-in sayings), `every` (`day`, `hour`, `click`), `mark`. Notebook:
+  `tabs`, `tab_shape`.
+- **`date`** — `layout` (`month`, `week`, `agenda`, `tile`), `marker`
+  (today's shape), `week_numbers`, `event_dots`, `rows` (agenda). Events
+  come from `[calendar]`.
+- **`sky`** (`desktop-sky`) — `layout` (`sun-arc`, `moon`, `globe`),
+  `size`, `dashed`, `ticks`, `arc_height`, `labels`, `shaded`, `moon`.
+  Computed from the weather location and the clock; the globe shows the
+  real day / night line (no map).
+- **`weather`** also takes `layout` = `sentence` (`sentences`: your own
+  lines per condition), `disc` (`disc` size, `dotted_ring`) and `hourly`
+  (`hours`, `fill`).
+- **`profile`**, **`shortcuts`**, **`toggles`**, **`sliders`**,
+  **`palette`** (`desktop-identity`) — profile: `avatar` (a shape),
+  `login`, `uptime`, `show_status`. Shortcuts: `items` (app ids, folders
+  or links), `folders`, `layout` (`grid`, `list`), `columns`, `tile`,
+  `colorful`, `labels`. Toggles: `toggles` (`wifi`, `bluetooth`, `dnd`,
+  `night-light`, …), `shape_off`, `shape_on` (the tile morphs), `columns`,
+  `labels`. Sliders: `levels` (`volume`, `brightness`), `vertical`,
+  `length`, `thickness`; click or scroll to set. Palette: `swatch`,
+  `labels`, `columns`; a click copies the colour.
+- **`pet`**, **`bubbles`**, **`photo`**, **`sticker`** (`desktop-fun`) —
+  the desk cat (`size`, `name`; 12 fps while seen, 2 fps asleep at night,
+  a click pokes it), bubbles (`count`, `min_size`, `max_size`, `speed`,
+  `width`, `height`; 24 fps while seen), a photo frame (`folder`,
+  `minutes`, `crop`, `width`, `height`; a click shows the next) and a
+  sticker (`image`, `size`, `border`: a die-cut outline).
+- **`media`** — `layout` (`vinyl`, `device`, `shaped`, `side-pill`,
+  `halftone`, `lyrics`), `size`, `spin` and `grooves` (vinyl), `shapes`
+  (the shaped cover's shapes), `dot_pitch` and `dither` (halftone),
+  `lines` (lyrics), `controls`. Only while a player is loaded; the record
+  turns only while music plays and the desktop shows.
+- **`fetch`**, **`screen-time`**, **`prayer`**, **`search`**, **`glance`**,
+  **`github`**, **`currency`**, **`ai-usage`**, **`games`**
+  (`desktop-info`) — the machine card (`layout` = `terminal`, `rows`,
+  `grid`; `logo`, `colors`), screen time (`days`, `apps`; needs the Screen
+  time plugin), prayer times (`layout` = `ring`, `list`; `arabic_names`;
+  needs the Prayer times plugin), a search field (`width`, `shape`,
+  `placeholder`; opens the launcher), at a glance (`weather`). GitHub:
+  `user`, `online` (default `false`: nothing is fetched until it's on),
+  `weeks`, `cell` (a shape), `summary`. Exchange rates: `base`, `pairs`,
+  `decimals`, `online` (default `false`; from open.er-api.com). AI usage:
+  `read_logs` (default `false`; Claude Code's logs in `~/.claude/projects`,
+  never sent anywhere), `days`, `budget_millions` (a weekly meter, 0 =
+  none). Games: `count`, `cover` (a shape), `names`; installed Steam
+  games, a click starts one. Network answers are cached in
+  `~/.cache/mandara/desktop-feeds/` (GitHub for six hours, rates for
+  twelve) and nothing is fetched while the desktop is covered or locked.
+- **`monitor`** also takes `style` = `meters`, `bars` or `thermals`, with
+  `ring_width`, `wavy`, `dotted`, `start_angle` and `segments`; the
+  **`visualizer`** takes `shape` = `led` (segmented LED meter) and the
+  **`decoration`** `shape` = `tape`.
+- **`monitor`** — `style` = `column` or `gauges` (ring gauges for the
+  readings that are a share, the rest listed under them); `rows` in order
+  (`cpu`, `cpu-graph`, `gpu`, `memory`, `gpu-power`, `cpu-temp`,
+  `gpu-temp`, `fan`, `battery`, `disk`, `download`, `upload`, `net-graph`;
+  rows the machine can't read are hidden), `interval_s` (1 … 60, default
+  2), `width` (reference px), `title`. Sampling runs only while a monitor
+  shows on a visible display (not covered by a fullscreen / tiled window,
+  not locked, screens on) and only reads the shown rows; only the values
+  plane redraws.
+- **`weather`** — `layout` = `hero` or `compact`, `location`, `details`
+  (feels like, humidity, wind), `days` (0 … 7 days ahead). From the
+  Weather plugin's forecast; redrawn when it changes.
+- **`world-clock`** — `cities` (names or IANA zones; empty = the World
+  clock plugin's), `offsets` (hours ahead or behind, tomorrow / yesterday),
+  `horizontal`. Redrawn once a minute.
+- **`countdown`** — `title`, `date` (`YYYY-MM-DD`; empty = the next New
+  Year's Day), `show_date`, `count_up` (days since, after the date).
 - **`decoration`** — `shape`: `text` (`text`, `vertical` top-to-bottom
   columns right to left, `size`, `weight`, `tracking`), `disc`, `circle`,
   `stripes`, `waves`, `rule`, `frame` (`width`, `height`, `stroke`,
@@ -248,6 +364,42 @@ anchor = "top-right"
 x = -0.06
 y = 0.1
 ```
+
+## Wallpaper slideshow
+
+`[wallpaper.slideshow]`, edited in *Studio → Wallpaper → Slideshow* or with
+`mandara msg wallpaper slideshow …`. Keys added after 0.4.0 default to the
+behaviour before them, so an older table keeps its folder, order, interval
+and pause.
+
+```toml
+[wallpaper.slideshow]
+enabled = true
+interval_minutes = 30          # 1 to 10080 (a week)
+order = "shuffle"              # shuffle (each once per round) | random | alphabetical | newest
+source = "folder"              # folder | playlist
+directory = ""                 # empty: the wallpaper folder
+subfolders = false             # every sub-folder (else one level, like the picker)
+playlist = []                  # wallpapers picked for source = "playlist"
+light_directory = ""           # used instead while the theme is light (empty: the folder above)
+dark_directory = ""            # …and while it is dark
+on_start = false               # a new wallpaper each time the shell starts
+pause_on_fullscreen = true
+pause_on_battery = false
+pause_when_locked = true       # also while the screens are off
+hours = false                  # only change between `from` and `until` (may cross midnight)
+from = "08:00"
+until = "22:00"
+transition = "desktop"         # desktop (wallpaper.transition and crossfade_ms) | fade | wipe | grow | none
+transition_ms = 1200           # 100 to 5000, when transition isn't "desktop"
+per_display = false            # each display its own wallpaper (written to wallpaper.variants.monitors)
+```
+
+No timer runs while the slideshow is off. While it is on, one timer sleeps
+until the next change; a change that is due but paused is looked at again a
+minute later (or when the `from` time comes). Turning `per_display` off
+hands the displays showing slideshow wallpapers back to the main one; your
+own per-display choices stay.
 
 ## Video wallpapers
 
@@ -356,6 +508,7 @@ reserved edge, and right-to-left languages mirror the anchor.
 | `wave` | a smoothed, mirrored spectrum filling a strip along the anchor's top or bottom edge, accent gradient with a soft glow | `height` (40–320), `glow`, `opacity` |
 | `framed-bars` | a bordered glass box of segmented bars with falling peak caps | `width`, `height`, `bars` (8–96), `opacity` |
 | `mirrored-bars` | a full-width strip of bars mirrored round its middle | `height` (24–200), `bars`, `opacity` |
+| `plugin:<id>/<widget>` | a third-party plugin's desktop widget, drawn by its `desktop-widget` export on a glass card ([PLUGINS.md](../PLUGINS.md#desktop-widgets)) | `width` (120–720), `height` (60–640), `numerals`, `calendar`, `language` (told to the plugin) |
 
 `[visualizers]` paces the three visualizers: `fps` (15–60, default 30 — a
 timer asks for the next frame, the display's refresh never drives them)
@@ -402,6 +555,36 @@ edge (it moves to the bottom there); the sidebar slides out beside the
 bar when they share an edge (its hover trigger is then off — open it from
 the bar or `mandara msg sidebar toggle`); the power dock's hover trigger
 is off on the bar's edge. `mandara msg bar position left|right|top|bottom`.
+
+### How a flush sidebar joins the bar
+
+A flush sidebar (`sidebar.look.attach = "flush"`) is one piece with an
+attached bar: the bar's own fill, and concave fillets of the bar's flare
+radius wherever its inner edge meets the bar or a screen edge.
+
+- **Edge frame:** it hangs from the frame, a fillet tucked under the
+  frame and another into the far screen edge; the frame's screen corner on
+  that side moves to the sidebar's edge as it slides out.
+- **Hairline:** square joints (the hairline has no flares) and the accent
+  line turns down the sidebar's inner edge.
+- **Notch:** the sidebar rises to the notch's edge; once it reaches the
+  notch the two merge, the notch ending square at the sidebar with a
+  fillet under it. A sidebar narrower than the gap beside the notch hangs
+  from the edge on its own shoulder.
+- **Side bar:** beside a bar on its edge it continues the strip, carrying
+  the bar's top and bottom fillets (or the screen frame's corners) to its
+  own edge; on the other edge it flares into the top and bottom edges.
+
+Glass pills, the island, the micro pill and a floating frame leave nothing
+to join, so the sidebar floats there, `sidebar.look.margin` clear of the
+screen edges and the bar.
+
+### Bar commands
+
+`mandara msg bar hide` puts the bar away and frees its space until
+`mandara msg bar show` (or `bar toggle`); touching its edge still peeks it
+out, as with auto-hide. It isn't saved: a restart brings the bar back. A
+side bar always stays.
 
 ## Looks
 

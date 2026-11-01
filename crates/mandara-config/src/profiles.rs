@@ -333,9 +333,14 @@ pub fn export_text(cfg: &ShellConfig, opts: ExportOptions) -> Result<(String, Ve
         // A table that made it into the export says which defaults it was
         // written for, or importing it would upgrade it as a 0.1 table.
         for (section, key) in VERSIONED {
-            if let (Some(Value::Table(out)), Some(Value::Table(all))) = (table.get_mut(*section), full.get(*section))
-                && let Some(v) = all.get(*key)
-            {
+            // Sections nest with dots (`desktop.widgets`).
+            let mut out = Some(&mut table);
+            let mut all = Some(&full);
+            for part in section.split('.') {
+                out = out.and_then(|t| t.get_mut(part)).and_then(Value::as_table_mut);
+                all = all.and_then(|t| t.get(part)).and_then(Value::as_table);
+            }
+            if let (Some(out), Some(v)) = (out, all.and_then(|t| t.get(*key))) {
                 out.insert(key.to_string(), v.clone());
             }
         }
@@ -352,7 +357,7 @@ pub fn export_text(cfg: &ShellConfig, opts: ExportOptions) -> Result<(String, Ve
 
 /// Sections that carry the version of the defaults they were written for
 /// (see [`crate::upgrade`]), with that key.
-const VERSIONED: &[(&str, &str)] = &[("plugins", "defaults_version"), ("integrations", "version"), ("compositor", "keybinds_version"), ("lock", "look_version")];
+const VERSIONED: &[(&str, &str)] = &[("plugins", "defaults_version"), ("integrations", "version"), ("compositor", "keybinds_version"), ("lock", "look_version"), ("desktop.widgets", "version")];
 
 /// Parses an exported (or hand-written) config. Missing values take their
 /// defaults, so a changes-only export imports as "defaults + changes"; an

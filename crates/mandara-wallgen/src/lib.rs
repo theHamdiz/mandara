@@ -43,6 +43,9 @@ pub use resolution::Resolution;
 pub use schedule::{is_due, next_due};
 pub use style::Style;
 pub use video::{VideoOptions, render_video};
+/// Pixel-exact lossless WebP (VP8L) for RGBA images, used beyond wallpapers
+/// (the embedded plugin icons).
+pub use webp::encode_rgba as encode_webp_lossless_rgba;
 
 /// Renders `recipe` at `width × height` (each at least 1).
 pub fn render(recipe: &Recipe, width: u32, height: u32) -> RgbImage {

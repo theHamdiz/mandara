@@ -13,6 +13,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{AnyElement, App, FontWeight, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px, size};
+use mandara_config::desktop_cards as dc;
 use mandara_core::ToGpui;
 use mandara_plugins::wasm::{self, Discovered, Kind, Palette, Source, Tone, View, WasmPlugin};
 use mandara_plugins::{PanelSpec, PluginInstance, PluginManifest, PluginOrigin, PluginRegistry};
@@ -395,6 +396,10 @@ fn register_one(r: &mut PluginRegistry, d: Discovered) {
         let print = fingerprint(&d);
         PRINTS.with(|p| p.borrow_mut().insert(d.id.clone(), print));
     }
+    DISCOVERED.with(|m| m.borrow_mut().insert(d.id.clone(), d.clone()));
+    let widgets = d.widgets.clone();
+    let mut catalog = wasm::PluginCatalogs::new(&d.dir);
+    let plugin_id = d.id.clone();
     r.register(manifest, move |window, cx, _panel_cx| {
         // One plugin instance backs all three surfaces: a click in any of
         // them re-renders the others.
@@ -409,7 +414,88 @@ fn register_one(r: &mut PluginRegistry, d: Discovered) {
             ..PluginInstance::empty()
         }
     });
+    // Its desktop widgets: cards the card host draws with the plugin's
+    // `desktop-widget` view.
+    for w in widgets {
+        let card = dc::plugin_card(&plugin_id, &w.id);
+        let opts = dc::PluginCardOptions { width: w.width, height: w.height, ..dc::PluginCardOptions::default() };
+        let name = catalog.translate(&w.name);
+        let description = catalog.translate(&w.description);
+        let make = move || {
+            let mut widget = dc::new_card(&card, mandara_config::desktop_widgets::Anchor::Center);
+            if let mandara_config::desktop_widgets::WidgetKind::Card(c) = &mut widget.kind {
+                dc::set_options(c, &opts);
+            }
+            vec![widget]
+        };
+        r.desktop_widget(mandara_plugins::DesktopWidgetType::new(&plugin_id, &w.id, &name, &description, &w.icon, make).in_menu());
+    }
 }
+
+thread_local! {
+    /// Every registered third-party plugin, by id (the card host finds a
+    /// plugin's desktop widget here).
+    static DISCOVERED: RefCell<HashMap<String, Discovered>> = RefCell::new(HashMap::new());
+}
+
+/// Inner padding of a plugin's desktop widget card.
+const DESKTOP_CARD_PAD_PX: f32 = tokens::LG;
+
+/// The view of plugin card `card` (`plugin:<id>/<widget>`) placed as
+/// widget `instance`: the plugin's `desktop-widget` view in a glass card of
+/// `size` (logical px), re-asked after clicks, setting changes and every
+/// `refresh-ms`.
+pub fn desktop_card_view(card: &str, placed: String, size: (f32, f32), window: &mut gpui::Window, cx: &mut App) -> Option<gpui::AnyView> {
+    let (plugin_id, widget) = dc::parse_plugin_card(card)?;
+    let d = DISCOVERED.with(|m| m.borrow().get(plugin_id).cloned())?;
+    let widget = widget.to_string();
+    let views = ViewSet::default();
+    let refresh = instance(&d, cx).borrow_mut().as_mut().map(|p| p.refresh_ms()).unwrap_or(0);
+    let tick = (refresh > 0).then(|| Duration::from_millis(u64::from(refresh).max(MIN_REFRESH_MS)));
+    Some(fn_view(
+        None,
+        move |palette, window, cx| {
+            views.track(window);
+            if let Some(every) = tick {
+                redraw_in(every, window, cx);
+            }
+            let plugin = instance(&d, cx);
+            let opts: dc::PluginCardOptions = config(cx).read(cx).get().desktop.widgets.get(&placed).and_then(dc::as_card).map(dc::options).unwrap_or_default();
+            let context = wasm::WidgetContext {
+                widget: widget.clone(),
+                instance: placed.clone(),
+                width: size.0,
+                height: size.1,
+                numerals: serde_plain(&opts.numerals),
+                calendar: serde_plain(&opts.calendar),
+                language: opts.language.clone(),
+            };
+            let theme = palette_for(palette);
+            let view = plugin.borrow_mut().as_mut().and_then(|p| p.desktop_widget(&theme, &context));
+            let commands = plugin.borrow_mut().as_mut().map(|p| p.take_commands()).unwrap_or_default();
+            if !commands.is_empty() {
+                cx.defer(move |cx| run_commands(commands, cx));
+            }
+            let emoji = cx.try_global::<crate::fonts::Fonts>().and_then(|f| f.emoji.clone());
+            let body = view.map(|v| render(&v, palette, &plugin, &d.id, &views, emoji.as_ref()));
+            let _ = window;
+            div()
+                .size_full()
+                .p(px(crate::cards::SHADOW_PAD_PX))
+                .text_color(palette.on_surface.hsla())
+                .child(crate::cards::now_playing::glass(palette, crate::style::card_radius(), 1.0).size_full().p(px(DESKTOP_CARD_PAD_PX)).flex().flex_col().children(body))
+                .into_any_element()
+        },
+        window,
+        cx,
+    ))
+}
+
+/// A choice's name as in the config (`eastern-arabic`).
+fn serde_plain(v: &impl serde::Serialize) -> String {
+    serde_json::to_value(v).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
+}
+
 
 fn is_builtin(r: &PluginRegistry, id: &str) -> bool {
     r.get(id).is_some_and(|f| f.manifest.origin == PluginOrigin::Builtin)

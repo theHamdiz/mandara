@@ -56,9 +56,19 @@ pub fn is_wallpaper(path: &Path) -> bool {
     path.extension().and_then(|x| x.to_str()).is_some_and(|x| EXTENSIONS.contains(&x.to_ascii_lowercase().as_str())) || mandara_media::is_video(path)
 }
 
+/// Whether `path` is a video wallpaper (by extension).
+pub fn is_video(path: &Path) -> bool {
+    mandara_media::is_video(path)
+}
+
 /// Wallpapers (images and video clips) directly inside `dir` (and one
 /// level of sub-folders), sorted by name.
 pub fn list(dir: &Path) -> Vec<PathBuf> {
+    list_depth(dir, 1)
+}
+
+/// [`list`] looking `depth` levels of (non-hidden) sub-folders deep.
+pub fn list_depth(dir: &Path, depth: u8) -> Vec<PathBuf> {
     fn scan(dir: &Path, depth: u8, out: &mut Vec<PathBuf>) {
         let Ok(entries) = std::fs::read_dir(dir) else { return };
         for e in entries.flatten() {
@@ -73,7 +83,7 @@ pub fn list(dir: &Path) -> Vec<PathBuf> {
         }
     }
     let mut out = Vec::new();
-    scan(dir, 1, &mut out);
+    scan(dir, depth, &mut out);
     out.sort_by_key(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
     out
 }
@@ -127,6 +137,42 @@ pub fn thumbnail_in(path: &Path, cache: &Path) -> Result<PathBuf, String> {
     Ok(out)
 }
 
+/// Longest edge of a [`preview`] (a large card at 1.5× fits in it).
+const PREVIEW_EDGE: u32 = 1600;
+/// Re-encode quality of previews.
+const PREVIEW_QUALITY: u8 = 88;
+
+/// A wallpaper shown large (Studio's current-wallpaper card): a cached,
+/// uncropped copy at most [`PREVIEW_EDGE`] on its longest side, and what
+/// the file is.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Preview {
+    pub file: PathBuf,
+    /// The wallpaper's own size in pixels.
+    pub size: (u32, u32),
+    pub video: bool,
+    pub bytes: u64,
+}
+
+/// Makes (or finds) the [`Preview`] of `path`. Blocking: call it off the
+/// UI thread.
+pub fn preview(path: &Path) -> Result<Preview, String> {
+    let video = mandara_media::is_video(path);
+    let bytes = std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?.len();
+    let size = if video {
+        mandara_media::Demuxer::open(path).map(|d| d.info()).map(|i| (i.width, i.height)).map_err(|e| format!("{}: {e}", path.display()))?
+    } else {
+        image::image_dimensions(path).map_err(|e| format!("{}: {e}", path.display()))?
+    };
+    let file = mandara_config::paths::cache_dir().join("thumbnails").join(cache_key(path, &format!("preview{PREVIEW_EDGE}")));
+    if !file.exists() {
+        let img = open_still(path)?;
+        let img = if img.width().max(img.height()) > PREVIEW_EDGE { img.resize(PREVIEW_EDGE, PREVIEW_EDGE, image::imageops::FilterType::Triangle) } else { img };
+        save_jpeg(&img, &file, PREVIEW_QUALITY)?;
+    }
+    Ok(Preview { file, size, video, bytes })
+}
+
 /// Decodes a wallpaper as a picture: the image itself, or a video's first
 /// frame.
 pub fn open_still(path: &Path) -> Result<image::DynamicImage, String> {
@@ -140,22 +186,38 @@ pub fn open_still(path: &Path) -> Result<image::DynamicImage, String> {
 const FROSTED_W: u32 = 640;
 const FROSTED_SIGMA: f32 = 9.0;
 
+/// Where the frosted copy of a wallpaper stands ([`frosted`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Frost {
+    /// The blurred copy, ready to draw.
+    Ready(PathBuf),
+    /// Being made in the background; ask again shortly.
+    Making,
+    /// This wallpaper can't be read (it isn't retried until it changes).
+    Unavailable,
+}
+
 /// A small, heavily blurred copy of `path` for frosted glass (the main
-/// menu): its cached file when it exists, else `None` while it is made in
-/// the background (the next frame picks it up).
-pub fn frosted(path: &Path) -> Option<PathBuf> {
+/// menu): its cached file when it exists, else made once in the background
+/// (callers redraw shortly and ask again).
+pub fn frosted(path: &Path) -> Frost {
+    use std::collections::HashSet;
     use std::sync::Mutex;
     static MAKING: Mutex<Option<PathBuf>> = Mutex::new(None);
+    static FAILED: Mutex<Option<HashSet<PathBuf>>> = Mutex::new(None);
     let mut h = std::collections::hash_map::DefaultHasher::new();
     path.hash(&mut h);
     std::fs::metadata(path).and_then(|m| m.modified()).ok().hash(&mut h);
     let out = mandara_config::paths::cache_dir().join("frosted").join(format!("{:016x}.png", h.finish()));
     if out.is_file() {
-        return Some(out);
+        return Frost::Ready(out);
     }
-    let mut making = MAKING.lock().ok()?;
+    if FAILED.lock().ok().is_some_and(|f| f.as_ref().is_some_and(|f| f.contains(&out))) {
+        return Frost::Unavailable;
+    }
+    let Ok(mut making) = MAKING.lock() else { return Frost::Unavailable };
     if making.as_ref() == Some(&out) {
-        return None;
+        return Frost::Making;
     }
     *making = Some(out.clone());
     let src = path.to_path_buf();
@@ -172,12 +234,15 @@ pub fn frosted(path: &Path) -> Option<PathBuf> {
         })();
         if let Err(e) = made {
             tracing::debug!("frosted wallpaper: {e}");
+            if let Ok(mut f) = FAILED.lock() {
+                f.get_or_insert_with(HashSet::new).insert(out.clone());
+            }
         }
         if let Ok(mut m) = MAKING.lock() {
             *m = None;
         }
     });
-    None
+    Frost::Making
 }
 
 /// Largest copy shared with the login screen (it fills the screen with
@@ -669,16 +734,16 @@ impl WallpaperView {
     }
 
     /// Keeps layer 3 in step with the shown wallpaper and its mask.
-    fn sync_cutout(&mut self, mode: mandara_config::DepthMask, cx: &mut Context<Self>) {
+    fn sync_cutout(&mut self, request: Option<crate::depth::Request>, cx: &mut Context<Self>) {
         let (Some(source), Some(shown)) = (self.target.clone(), self.current.clone()) else { return };
-        if mode == mandara_config::DepthMask::Off {
+        if request.is_none() {
             if self.cutout.is_some() {
                 self.retire(CUTOUT_EXIT_FADE);
                 self.cutout_key = None;
             }
             return;
         }
-        let status = self.masks.update(cx, |m, cx| m.status(&source, mode, cx));
+        let status = self.masks.update(cx, |m, cx| m.status(&source, request, cx));
         let crate::depth::MaskStatus::Ready(resolved) = status else {
             if matches!(status, crate::depth::MaskStatus::Unavailable(_)) && self.cutout.is_some() {
                 self.retire(CUTOUT_EXIT_FADE);
@@ -824,8 +889,8 @@ impl Render for WallpaperView {
         let clock = cfg.wallpaper.desktop_clock && self.current.is_some();
         // The subject cut-out is aligned to a cover-cropped image only.
         let covers = self.fill == mandara_config::desktop::WallpaperFill::Cover;
-        let mode = if clock && covers && cfg.wallpaper.depth_effect { cfg.wallpaper.depth_mask } else { mandara_config::DepthMask::Off };
-        self.sync_cutout(mode, cx);
+        let request = if clock && covers { crate::depth::Request::of(&cfg.wallpaper) } else { None };
+        self.sync_cutout(request, cx);
         let (clock_el, pill_el) = match clock.then(|| self.clock_layer(&cfg, window, cx)) {
             Some((c, p)) => (Some(c), p),
             None => (None, None),

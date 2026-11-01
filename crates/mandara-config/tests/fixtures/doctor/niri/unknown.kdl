@@ -1,0 +1,4 @@
+layout {
+    gaps 16
+    blur_optimized true
+}

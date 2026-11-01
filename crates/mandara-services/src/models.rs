@@ -1,7 +1,11 @@
-//! Downloadable model files the shell uses (OCR today), with install status
-//! and a resumable-safe downloader. Files land in
-//! `$XDG_DATA_HOME/mandara/models/<id>/` and are written to `*.part` first,
-//! so an interrupted download never leaves a truncated model in place.
+//! Downloadable model files the shell uses (OCR, the wallpaper depth
+//! model), with install status and a resumable-safe downloader. Files land
+//! in `$XDG_DATA_HOME/mandara/models/<id>/` and are written to `*.part`
+//! first, then checked against their size and, where known, their SHA-256,
+//! so an interrupted or tampered download never leaves a bad model in place.
+//!
+//! Every model keeps its own licence (all Apache-2.0 today; see
+//! COPYRIGHT.md). None ships inside the binary.
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -21,6 +25,9 @@ pub struct ModelFile {
     pub url: &'static str,
     /// Expected size in bytes (0 = unknown; then any non-empty file counts).
     pub size: u64,
+    /// Expected SHA-256 (lowercase hex) checked after download; empty for
+    /// files without a pinned upstream revision.
+    pub sha256: &'static str,
 }
 
 pub struct Model {
@@ -28,6 +35,13 @@ pub struct Model {
     pub title: &'static str,
     pub purpose: &'static str,
     pub license: &'static str,
+    /// Where it comes from, for display (the project page).
+    pub source: &'static str,
+    /// Icon name in Mandara's icon set.
+    pub icon: &'static str,
+    /// Downloaded only when its feature asks for it (the depth model):
+    /// left out of "download all" and of Maintenance's missing-model count.
+    pub on_demand: bool,
     pub files: &'static [ModelFile],
 }
 
@@ -46,9 +60,12 @@ pub const MODELS: &[Model] = &[
         title: tk("Text detection"),
         purpose: tk("Finds lines of text in screenshots (PP-OCRv5 mobile)"),
         license: "Apache-2.0",
+        source: HF,
+        icon: "text-scan",
+        on_demand: false,
         files: &[
-            ModelFile { name: "inference.onnx", url: hf!("PP-OCRv5_mobile_det_onnx", "inference.onnx"), size: 4_826_518 },
-            ModelFile { name: "inference.yml", url: hf!("PP-OCRv5_mobile_det_onnx", "inference.yml"), size: 0 },
+            ModelFile { name: "inference.onnx", url: hf!("PP-OCRv5_mobile_det_onnx", "inference.onnx"), size: 4_826_518, sha256: "" },
+            ModelFile { name: "inference.yml", url: hf!("PP-OCRv5_mobile_det_onnx", "inference.yml"), size: 0, sha256: "" },
         ],
     },
     Model {
@@ -56,9 +73,12 @@ pub const MODELS: &[Model] = &[
         title: tk("Latin text recognition"),
         purpose: tk("Reads English, Spanish, French and other Latin-script text"),
         license: "Apache-2.0",
+        source: HF,
+        icon: "text-scan",
+        on_demand: false,
         files: &[
-            ModelFile { name: "inference.onnx", url: hf!("latin_PP-OCRv5_mobile_rec_onnx", "inference.onnx"), size: 8_042_023 },
-            ModelFile { name: "inference.yml", url: hf!("latin_PP-OCRv5_mobile_rec_onnx", "inference.yml"), size: 0 },
+            ModelFile { name: "inference.onnx", url: hf!("latin_PP-OCRv5_mobile_rec_onnx", "inference.onnx"), size: 8_042_023, sha256: "" },
+            ModelFile { name: "inference.yml", url: hf!("latin_PP-OCRv5_mobile_rec_onnx", "inference.yml"), size: 0, sha256: "" },
         ],
     },
     Model {
@@ -66,14 +86,27 @@ pub const MODELS: &[Model] = &[
         title: tk("Arabic text recognition"),
         purpose: tk("Reads Arabic (and Persian / Urdu) text"),
         license: "Apache-2.0",
+        source: HF,
+        icon: "text-scan",
+        on_demand: false,
         files: &[
-            ModelFile { name: "inference.onnx", url: hf!("arabic_PP-OCRv5_mobile_rec_onnx", "inference.onnx"), size: 7_998_947 },
-            ModelFile { name: "inference.yml", url: hf!("arabic_PP-OCRv5_mobile_rec_onnx", "inference.yml"), size: 0 },
+            ModelFile { name: "inference.onnx", url: hf!("arabic_PP-OCRv5_mobile_rec_onnx", "inference.onnx"), size: 7_998_947, sha256: "" },
+            ModelFile { name: "inference.yml", url: hf!("arabic_PP-OCRv5_mobile_rec_onnx", "inference.yml"), size: 0, sha256: "" },
         ],
+    },
+    Model {
+        id: crate::depth_model::MODEL_ID,
+        title: tk("Wallpaper depth"),
+        purpose: tk("Finds what is near and far in a wallpaper for the depth clock (Depth Anything V2 Small)"),
+        license: "Apache-2.0",
+        source: crate::depth_model::SOURCE,
+        icon: "image",
+        on_demand: true,
+        files: &[ModelFile { name: crate::depth_model::MODEL_FILE, url: crate::depth_model::URL, size: crate::depth_model::SIZE, sha256: crate::depth_model::SHA256 }],
     },
 ];
 
-/// Source of every model, for display.
+/// Source of the OCR models, for display.
 pub const SOURCE: &str = HF;
 
 pub fn find(id: &str) -> Option<&'static Model> {
@@ -87,6 +120,11 @@ pub fn dir(id: &str) -> PathBuf {
 impl Model {
     pub fn dir(&self) -> PathBuf {
         dir(self.id)
+    }
+
+    /// Where file `name` of this model lives.
+    pub fn file(&self, name: &str) -> PathBuf {
+        self.dir().join(name)
     }
 
     pub fn download_size(&self) -> u64 {
@@ -134,12 +172,14 @@ impl Model {
             let mut out = std::fs::File::create(&part).map_err(|e| format!("{}: {e}", part.display()))?;
             let mut buf = vec![0u8; 64 * 1024];
             let mut got = 0u64;
+            let mut hasher = <sha2::Sha256 as sha2::Digest>::new();
             loop {
                 let n = reader.read(&mut buf).map_err(|e| tf("Downloading {file}: {error}", &[("file", &f.name), ("error", &e)]))?;
                 if n == 0 {
                     break;
                 }
                 out.write_all(&buf[..n]).map_err(|e| format!("{}: {e}", part.display()))?;
+                sha2::Digest::update(&mut hasher, &buf[..n]);
                 got += n as u64;
                 progress(done + got.min(f.size.max(got)), total);
             }
@@ -151,12 +191,25 @@ impl Model {
                     &[("model", &tr(self.title)), ("file", &f.name), ("got", &got), ("expected", &f.size)],
                 ));
             }
+            let digest = hex(&sha2::Digest::finalize(hasher));
+            if !f.sha256.is_empty() && !digest.eq_ignore_ascii_case(f.sha256) {
+                let _ = std::fs::remove_file(&part);
+                return Err(tf(
+                    "{model} ({file}) failed its checksum: got {got}, expected {expected}",
+                    &[("model", &tr(self.title)), ("file", &f.name), ("got", &digest), ("expected", &f.sha256)],
+                ));
+            }
             std::fs::rename(&part, &path).map_err(|e| format!("{}: {e}", path.display()))?;
             done += f.size;
         }
         progress(total, total);
         Ok(())
     }
+}
+
+/// Lowercase hex of `bytes`.
+pub fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -167,12 +220,14 @@ pub struct ModelStatus {
     pub installed: bool,
     pub size: u64,
     pub path: PathBuf,
+    pub license: &'static str,
+    pub on_demand: bool,
 }
 
 pub fn status() -> Vec<ModelStatus> {
     MODELS
         .iter()
-        .map(|m| ModelStatus { id: m.id, title: m.title, purpose: m.purpose, installed: m.installed(), size: m.download_size(), path: m.dir() })
+        .map(|m| ModelStatus { id: m.id, title: m.title, purpose: m.purpose, installed: m.installed(), size: m.download_size(), path: m.dir(), license: m.license, on_demand: m.on_demand })
         .collect()
 }
 
@@ -187,5 +242,14 @@ mod tests {
         ids.dedup();
         assert_eq!(ids.len(), MODELS.len());
         assert!(MODELS.iter().flat_map(|m| m.files).all(|f| f.url.starts_with("https://")));
+        // On-demand models are pinned: a size and a checksum per file.
+        for m in MODELS.iter().filter(|m| m.on_demand) {
+            assert!(m.files.iter().all(|f| f.sha256.len() == 64 && f.size > 0), "{}", m.id);
+        }
+    }
+
+    #[test]
+    fn hex_is_lowercase_and_padded() {
+        assert_eq!(hex(&[0x00, 0x0f, 0xab]), "000fab");
     }
 }

@@ -95,8 +95,32 @@ pub fn edge_drawer(edge: Edge, x: f32, y: f32, w: f32, h: f32, radius: f32, flar
 /// [`edge_drawer`] with geometry snapped to the device pixel grid at `scale`.
 #[allow(clippy::too_many_arguments)]
 pub fn edge_drawer_snapped(edge: Edge, x: f32, y: f32, w: f32, h: f32, radius: f32, flare: f32, color: Hsla, scale: f32) -> AnyElement {
+    edge_drawer_ends(edge, x, y, w, h, DrawerEnd::flared(radius, flare), DrawerEnd::flared(radius, flare), color, scale)
+}
+
+/// One end of an [`edge_drawer_ends`] drawer along its edge (left / top
+/// first): the radius of its free corner and the flare where it meets the
+/// edge. An end that butts against another piece (a sidebar joined to the
+/// notch) is square with no flare.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct DrawerEnd {
+    pub radius: f32,
+    pub flare: f32,
+}
+
+impl DrawerEnd {
+    pub const fn flared(radius: f32, flare: f32) -> Self {
+        Self { radius, flare }
+    }
+
+    /// Butts against a neighbour: square, no flare.
+    pub const BUTT: DrawerEnd = DrawerEnd { radius: 0.0, flare: 0.0 };
+}
+
+/// [`edge_drawer_snapped`] with each end shaped on its own.
+#[allow(clippy::too_many_arguments)]
+pub fn edge_drawer_ends(edge: Edge, x: f32, y: f32, w: f32, h: f32, start: DrawerEnd, end: DrawerEnd, color: Hsla, scale: f32) -> AnyElement {
     let (x, y, w, h) = snap_rect(x, y, w, h, scale);
-    let flare = snap(flare, scale);
     if w < MIN_VISIBLE_PX || h < MIN_VISIBLE_PX {
         return div().into_any_element();
     }
@@ -108,31 +132,16 @@ pub fn edge_drawer_snapped(edge: Edge, x: f32, y: f32, w: f32, h: f32, radius: f
         Edge::Top | Edge::Bottom => w,
         Edge::Left | Edge::Right => h,
     };
-    let radius = radius.min(along / 2.0).min(across / 2.0).max(0.0);
+    let radius = |e: DrawerEnd| px(e.radius.min(along / 2.0).min(across / 2.0).max(0.0));
     // Flares shrink as the drawer emerges so they never outgrow it.
-    let f = flare.min(along).max(0.0);
+    let flare = |e: DrawerEnd| snap(e.flare, scale).min(along).max(0.0);
+    let (rs, re, fs, fe) = (radius(start), radius(end), flare(start), flare(end));
     let body = div().absolute().left(px(x)).top(px(y)).w(px(w)).h(px(h)).bg(color);
     let (body, a, b) = match edge {
-        Edge::Top => (
-            body.rounded_b(px(radius)),
-            concave_flare(x - f, y, f, FlareCenter::BottomLeft, color),
-            concave_flare(x + w, y, f, FlareCenter::BottomRight, color),
-        ),
-        Edge::Bottom => (
-            body.rounded_t(px(radius)),
-            concave_flare(x - f, y + h - f, f, FlareCenter::TopLeft, color),
-            concave_flare(x + w, y + h - f, f, FlareCenter::TopRight, color),
-        ),
-        Edge::Left => (
-            body.rounded_r(px(radius)),
-            concave_flare(x, y - f, f, FlareCenter::TopRight, color),
-            concave_flare(x, y + h, f, FlareCenter::BottomRight, color),
-        ),
-        Edge::Right => (
-            body.rounded_l(px(radius)),
-            concave_flare(x + w - f, y - f, f, FlareCenter::TopLeft, color),
-            concave_flare(x + w - f, y + h, f, FlareCenter::BottomLeft, color),
-        ),
+        Edge::Top => (body.rounded_bl(rs).rounded_br(re), concave_flare(x - fs, y, fs, FlareCenter::BottomLeft, color), concave_flare(x + w, y, fe, FlareCenter::BottomRight, color)),
+        Edge::Bottom => (body.rounded_tl(rs).rounded_tr(re), concave_flare(x - fs, y + h - fs, fs, FlareCenter::TopLeft, color), concave_flare(x + w, y + h - fe, fe, FlareCenter::TopRight, color)),
+        Edge::Left => (body.rounded_tr(rs).rounded_br(re), concave_flare(x, y - fs, fs, FlareCenter::TopRight, color), concave_flare(x, y + h, fe, FlareCenter::BottomRight, color)),
+        Edge::Right => (body.rounded_tl(rs).rounded_bl(re), concave_flare(x + w - fs, y - fs, fs, FlareCenter::TopLeft, color), concave_flare(x + w - fe, y + h, fe, FlareCenter::BottomLeft, color)),
     };
     div().absolute().top_0().left_0().size_full().child(body).child(a).child(b).into_any_element()
 }

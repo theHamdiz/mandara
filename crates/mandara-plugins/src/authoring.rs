@@ -33,7 +33,7 @@ pub const WASM_TARGET: &str = "wasm32-wasip2";
 pub const EXAMPLE_DIR: &str = "plugins/examples/moon-phase";
 
 /// The `wit-bindgen` version the example uses.
-pub const WIT_BINDGEN_VERSION: &str = "0.57";
+pub const WIT_BINDGEN_VERSION: &str = "0.63";
 
 /// Recommended icon and cover sizes (px).
 pub const ICON_SIDE_PX: u32 = 256;
@@ -142,7 +142,8 @@ pub struct WitCase {
 pub struct Contract {
     /// `package …;`
     pub package: String,
-    /// What a plugin provides (`world plugin` exports).
+    /// What a plugin provides (`world plugin` exports, then the
+    /// `desktop-plugin` world's desktop widgets).
     pub exports: Vec<WitFunc>,
     /// What Mandara provides (`interface host`).
     pub imports: Vec<WitFunc>,
@@ -199,7 +200,7 @@ pub fn parse_contract(wit: &str) -> Contract {
             if depth <= 2 {
                 block = match line.trim_end_matches('{').trim() {
                     "interface host" => Block::Host,
-                    "world plugin" => Block::World,
+                    "world plugin" | "world desktop-plugin" => Block::World,
                     "enum kind" => Block::Kind,
                     "record node" => Block::Node,
                     _ if depth == 1 => Block::None,
@@ -220,7 +221,14 @@ pub fn parse_contract(wit: &str) -> Contract {
                 let decl = if block == Block::World { line.strip_prefix("export ") } else { Some(line) };
                 if let Some((name, sig)) = decl.and_then(|d| d.split_once(':')).filter(|(_, s)| s.trim_start().starts_with("func")) {
                     let f = WitFunc { name: name.trim().into(), signature: sig.trim().trim_end_matches(';').into(), doc: take_doc(&mut doc) };
-                    if block == Block::World { c.exports.push(f) } else { c.imports.push(f) }
+                    // `desktop-plugin` repeats the `plugin` world's exports.
+                    if block == Block::World {
+                        if !c.exports.iter().any(|e| e.name == f.name) {
+                            c.exports.push(f);
+                        }
+                    } else {
+                        c.imports.push(f);
+                    }
                 }
             }
             Block::Kind => {
@@ -315,7 +323,7 @@ mod tests {
         let c = contract();
         assert!(c.package.starts_with("mandara:plugin@"));
         let names = |v: &[WitFunc]| v.iter().map(|f| f.name.clone()).collect::<Vec<_>>();
-        assert_eq!(names(&c.exports), ["init", "bar", "panel", "sidebar", "on-event", "refresh-ms"]);
+        assert_eq!(names(&c.exports), ["init", "bar", "panel", "sidebar", "on-event", "refresh-ms", "desktop-widget"]);
         assert_eq!(names(&c.imports), ["log", "now-unix-ms", "setting", "command", "locale", "translate"]);
         let cases = |v: &[WitCase]| v.iter().map(|k| k.name.clone()).collect::<Vec<_>>();
         assert_eq!(cases(&c.kinds), ["row", "column", "card", "text", "icon", "button", "meter", "spacer"]);

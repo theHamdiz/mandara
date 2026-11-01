@@ -7,7 +7,7 @@ Everything about Mandara Shell, one topic per page. New here? Start with
 
 | Page | What's in it |
 |---|---|
-| [Install](install.md) | The one-line install, Arch packages, MangoWM / Niri / Hyprland, coming from another setup, versioning |
+| [Install](install.md) | The one-line install, Arch packages, MangoWM / Niri / Hyprland / Umbriel, coming from another setup, versioning |
 | [Usage](usage.md) | Starting Mandara, everyday commands, default shortcuts, where settings live |
 | [Mandara Studio](studio.md) | The settings app: a tour, every page, keyboard shortcuts and deep links |
 
@@ -15,7 +15,7 @@ Everything about Mandara Shell, one topic per page. New here? Start with
 
 | Page | What's in it |
 |---|---|
-| [Your desktop](desktop.md) | Bar styles, Looks, desktop widgets, sound, keyboard shortcut cards |
+| [Your desktop](desktop.md) | Bar styles, the main menu, Looks, desktop widgets and their shapes, sound, keyboard shortcut cards |
 | [Dock and launcher](dock-and-launcher.md) | The macOS-style dock, stacks, and the fuzzy launcher |
 | [Sidebar, notes and notifications](sidebar-and-notifications.md) | Sidebar tabs, to-do lists, Markdown notes, the notification center |
 | [Wallpapers](wallpapers.md) | The wallpaper picker and engine, and the wallpaper generator |

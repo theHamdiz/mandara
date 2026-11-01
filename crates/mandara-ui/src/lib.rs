@@ -11,10 +11,17 @@ pub mod bt_pairing;
 pub mod calendar;
 pub mod cards;
 pub mod corners;
-pub mod depth;
+/// Depth layer 3, now the `wallpaper-depth` plugin (kept under its old
+/// path for the renderers).
+pub use plugins::wallpaper_depth as depth;
 pub mod desktop;
+pub mod desktop_actions;
+pub mod desktop_media;
 pub mod desktop_edit;
+pub mod desktop_feeds;
+pub mod desktop_info;
 pub mod desktop_menu;
+pub mod desktop_plugins;
 pub mod dismiss;
 pub mod fonts;
 pub mod hub;

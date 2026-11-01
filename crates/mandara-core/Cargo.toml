@@ -8,7 +8,7 @@ authors.workspace = true
 
 [dependencies]
 # The display ↔ output pairing (GPUI's display uuid is v5 of the output name).
-uuid = { version = "1", features = ["v5"] }
+uuid = { version = "1", default-features = false, features = ["v5"] }
 gpui.workspace = true
 palette.workspace = true
 smallvec.workspace = true
@@ -21,7 +21,7 @@ serde.workspace = true
 tracing.workspace = true
 # ext-session-lock-v1 lock surfaces (session_lock.rs).
 wayland-protocols-wlr.workspace = true
-xkbcommon = { version = "0.8", default-features = false, features = ["wayland"] }
+xkbcommon = { workspace = true, features = ["wayland"] }
 tiny-skia.workspace = true
 memmap2 = "0.9"
 rustix = { workspace = true, features = ["fs", "event"] }

@@ -210,39 +210,39 @@ impl InputConfig {
 }
 
 /// Input options and the compositors whose drop-in honours them
-/// (`[MangoWM, Niri, Hyprland]`), for Studio's support dots.
-pub const INPUT_OPTIONS: &[(&str, [bool; 3])] = &[
-    ("keyboard.layouts", [true, true, true]),
-    ("keyboard.repeat", [true, true, true]),
-    ("keyboard.numlock", [true, true, true]),
-    ("keyboard.per_window_layout", [false, true, false]),
-    ("mouse.accel_profile", [true, true, true]),
-    ("mouse.speed", [true, true, true]),
-    ("mouse.natural_scroll", [true, true, true]),
-    ("mouse.left_handed", [true, true, true]),
-    ("mouse.scroll_method", [true, true, true]),
-    ("mouse.scroll_factor", [true, true, true]),
-    ("mouse.middle_emulation", [true, true, false]),
-    ("touchpad.accel_profile", [true, true, false]),
-    ("touchpad.speed", [true, true, false]),
-    ("touchpad.natural_scroll", [true, true, true]),
-    ("touchpad.left_handed", [true, true, false]),
-    ("touchpad.scroll_method", [true, true, false]),
-    ("touchpad.scroll_factor", [true, true, true]),
-    ("touchpad.middle_emulation", [true, true, true]),
-    ("touchpad.tap_to_click", [true, true, true]),
-    ("touchpad.tap_and_drag", [true, true, true]),
-    ("touchpad.drag_lock", [true, true, true]),
-    ("touchpad.disable_while_typing", [true, true, true]),
-    ("touchpad.click_method", [true, true, true]),
-    ("touchpad.disable_with_mouse", [true, true, false]),
-    ("cursor.theme", [true, true, true]),
-    ("cursor.size", [true, true, true]),
-    ("cursor.hide_when_typing", [true, true, true]),
-    ("cursor.hide_after_secs", [true, true, true]),
-    ("cursor.no_hardware_cursors", [false, false, true]),
-    ("cursor.hide_on_touch", [false, false, true]),
-    ("focus_follows_mouse", [true, true, true]),
+/// (`[MangoWM, Niri, Hyprland, Umbriel]`), for Studio's support dots.
+pub const INPUT_OPTIONS: &[(&str, [bool; crate::compositor::Target::ALL.len()])] = &[
+    ("keyboard.layouts", [true, true, true, true]),
+    ("keyboard.repeat", [true, true, true, true]),
+    ("keyboard.numlock", [true, true, true, true]),
+    ("keyboard.per_window_layout", [false, true, false, true]),
+    ("mouse.accel_profile", [true, true, true, true]),
+    ("mouse.speed", [true, true, true, true]),
+    ("mouse.natural_scroll", [true, true, true, true]),
+    ("mouse.left_handed", [true, true, true, true]),
+    ("mouse.scroll_method", [true, true, true, false]),
+    ("mouse.scroll_factor", [true, true, true, false]),
+    ("mouse.middle_emulation", [true, true, false, false]),
+    ("touchpad.accel_profile", [true, true, false, true]),
+    ("touchpad.speed", [true, true, false, true]),
+    ("touchpad.natural_scroll", [true, true, true, true]),
+    ("touchpad.left_handed", [true, true, false, true]),
+    ("touchpad.scroll_method", [true, true, false, true]),
+    ("touchpad.scroll_factor", [true, true, true, true]),
+    ("touchpad.middle_emulation", [true, true, true, false]),
+    ("touchpad.tap_to_click", [true, true, true, true]),
+    ("touchpad.tap_and_drag", [true, true, true, true]),
+    ("touchpad.drag_lock", [true, true, true, true]),
+    ("touchpad.disable_while_typing", [true, true, true, true]),
+    ("touchpad.click_method", [true, true, true, true]),
+    ("touchpad.disable_with_mouse", [true, true, false, true]),
+    ("cursor.theme", [true, true, true, true]),
+    ("cursor.size", [true, true, true, true]),
+    ("cursor.hide_when_typing", [true, true, true, true]),
+    ("cursor.hide_after_secs", [true, true, true, true]),
+    ("cursor.no_hardware_cursors", [false, false, true, true]),
+    ("cursor.hide_on_touch", [false, false, true, false]),
+    ("focus_follows_mouse", [true, true, true, true]),
 ];
 
 fn clamp_u(v: u32, (lo, hi): (u32, u32)) -> u32 {
@@ -759,6 +759,130 @@ pub fn icon_dirs() -> Vec<PathBuf> {
     dirs
 }
 
+fn umbriel_scroll(m: ScrollMethod) -> Option<&'static str> {
+    match m {
+        ScrollMethod::TwoFinger => Some("two_finger"),
+        ScrollMethod::Edge => Some("edge"),
+        ScrollMethod::NoScroll => Some("none"),
+        // Umbriel's touchpad scroll methods are two-finger, edge and none.
+        ScrollMethod::OnButtonDown => None,
+    }
+}
+
+fn umbriel_click(m: ClickMethod) -> &'static str {
+    match m {
+        ClickMethod::ButtonAreas => "button_areas",
+        ClickMethod::Clickfinger => "clickfinger",
+    }
+}
+
+/// One Umbriel `[input.*]` table, when it has keys.
+fn umbriel_table(s: &mut String, name: &str, body: &str) {
+    if !body.is_empty() {
+        let _ = write!(s, "\n[input.{name}]\n{body}");
+    }
+}
+
+/// Umbriel `[input.keyboard]`, `[input.mouse]`, `[input.touchpad]`,
+/// `[input.cursor]` and `[input.focus]` tables (empty when nothing is
+/// set). Tables merge by key across Umbriel's includes, so each option is
+/// its own `key = value`.
+pub fn emit_umbriel(input: &InputConfig) -> String {
+    use crate::compositor::toml_str;
+    if input.is_empty() {
+        return String::new();
+    }
+    let mut s = String::new();
+    let k = &input.keyboard;
+    let mut kb = String::new();
+    if let Some((layouts, variants)) = k.xkb_layouts() {
+        let _ = writeln!(kb, "layout = {}\nvariant = {}", toml_str(&layouts), toml_str(&variants));
+    }
+    if let Some(o) = k.xkb_options() {
+        let _ = writeln!(kb, "options = {}", toml_str(&o));
+    }
+    if let Some(m) = k.model.as_deref().filter(|m| !m.trim().is_empty()) {
+        let _ = writeln!(kb, "model = {}", toml_str(m.trim()));
+    }
+    if let Some(v) = k.repeat_rate {
+        let _ = writeln!(kb, "repeat_rate = {}", clamp_u(v, limits::REPEAT_RATE));
+    }
+    if let Some(v) = k.repeat_delay {
+        let _ = writeln!(kb, "repeat_delay = {}", clamp_u(v, limits::REPEAT_DELAY_MS));
+    }
+    if let Some(v) = k.numlock {
+        let _ = writeln!(kb, "numlock_toggle = {v}");
+    }
+    if let Some(v) = k.per_window_layout {
+        let _ = writeln!(kb, "track_layout = {}", toml_str(if v { "window" } else { "global" }));
+    }
+    umbriel_table(&mut s, "keyboard", &kb);
+    // Shared pointer keys: `[input.mouse]` takes the profile, speed,
+    // natural scrolling and handedness; scrolling method and factor are
+    // touchpad keys there.
+    let pointer = |p: &PointerInput| {
+        let mut b = String::new();
+        if let Some(v) = p.accel_profile {
+            let _ = writeln!(b, "accel_profile = {}", toml_str(kebab_profile(v)));
+        }
+        if let Some(v) = p.speed {
+            let _ = writeln!(b, "sensitivity = {:.2}", clamp_f(v, limits::SPEED));
+        }
+        if let Some(v) = p.natural_scroll {
+            let _ = writeln!(b, "natural_scroll = {v}");
+        }
+        if let Some(v) = p.left_handed {
+            let _ = writeln!(b, "left_handed = {v}");
+        }
+        b
+    };
+    umbriel_table(&mut s, "mouse", &pointer(&input.mouse));
+    let t = &input.touchpad;
+    let mut tp = pointer(&t.pointer);
+    if let Some(v) = t.pointer.scroll_method.and_then(umbriel_scroll) {
+        let _ = writeln!(tp, "scroll_method = {}", toml_str(v));
+    }
+    if let Some(v) = t.pointer.scroll_factor {
+        let _ = writeln!(tp, "scroll_factor = {:.2}", clamp_f(v, limits::SCROLL_FACTOR));
+    }
+    for (key, v) in [("tap", t.tap_to_click), ("tap_and_drag", t.tap_and_drag), ("disable_while_typing", t.disable_while_typing), ("disable_on_external_mouse", t.disable_with_mouse)] {
+        if let Some(v) = v {
+            let _ = writeln!(tp, "{key} = {v}");
+        }
+    }
+    // A mode in Umbriel: on is libinput's timed drag lock (as MangoWM's
+    // `drag_lock=1` and Hyprland's `drag_lock = 1`).
+    if let Some(v) = t.drag_lock {
+        let _ = writeln!(tp, "drag_lock = {}", toml_str(if v { "timeout" } else { "off" }));
+    }
+    if let Some(v) = t.click_method {
+        let _ = writeln!(tp, "click_method = {}", toml_str(umbriel_click(v)));
+    }
+    umbriel_table(&mut s, "touchpad", &tp);
+    let c = &input.cursor;
+    let mut cursor = String::new();
+    if let Some(theme) = c.theme.as_deref().filter(|t| !t.trim().is_empty()) {
+        let _ = writeln!(cursor, "theme = {}", toml_str(theme.trim()));
+    }
+    if let Some(v) = c.size {
+        let _ = writeln!(cursor, "size = {}", clamp_u(v, limits::CURSOR_SIZE));
+    }
+    if let Some(v) = c.no_hardware_cursors {
+        let _ = writeln!(cursor, "hardware_cursor = {}", !v);
+    }
+    if let Some(v) = c.hide_when_typing {
+        let _ = writeln!(cursor, "hide_when_typing = {v}");
+    }
+    if let Some(v) = c.hide_after_secs {
+        let _ = writeln!(cursor, "hide_timeout_ms = {}", clamp_u(v, limits::CURSOR_HIDE_SECS) * MS_PER_SECOND);
+    }
+    umbriel_table(&mut s, "cursor", &cursor);
+    if let Some(v) = input.focus_follows_mouse {
+        umbriel_table(&mut s, "focus", &format!("follows_mouse = {v}\n"));
+    }
+    if s.is_empty() { s } else { format!("\n# Input (Studio → Input)\n{}", s.trim_start_matches('\n')) }
+}
+
 /// Installed cursor themes (folders with a `cursors/` directory), sorted
 /// and deduplicated. `default` is skipped: it only points at another theme.
 pub fn cursor_themes_in(dirs: &[PathBuf]) -> Vec<String> {
@@ -1262,6 +1386,10 @@ mod dropin_tests {
                 assert!(depth >= 0, "{key}: unbalanced\n{hypr}");
             }
             assert_eq!(depth, 0, "{key}: unbalanced\n{hypr}");
+            let umbriel_input = super::emit_umbriel(&input);
+            assert_eq!(has_settings(&umbriel_input), support[3], "Umbriel support of {key}:\n{umbriel_input}");
+            let umbriel = crate::compositor::emit_umbriel(&managed(&c)).text;
+            umbriel.parse::<toml::Table>().unwrap_or_else(|e| panic!("{key}: invalid TOML: {e}\n{umbriel}"));
         }
         // MangoWM's own parser, over every case at once (later lines win).
         if std::process::Command::new("mango").arg("-v").output().is_ok() {

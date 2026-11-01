@@ -276,6 +276,12 @@ impl Background {
         !pending || self.layers.iter().any(|l| l.shown_at.is_some())
     }
 
+    /// Whether a picture is still fading in (it needs frames until it's
+    /// fully shown).
+    pub fn fading(&self, now: Instant) -> bool {
+        self.layers.iter().any(|l| l.shown_at.is_some() && l.opacity(now) < 1.0)
+    }
+
     /// Whether a clip is playing (it needs every frame).
     pub fn has_video(&self) -> bool {
         self.layers.iter().any(|l| matches!(l.content, Content::Video(_)))

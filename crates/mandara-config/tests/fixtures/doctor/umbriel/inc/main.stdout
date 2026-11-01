@@ -1,0 +1,1 @@
+{"diagnostics":[{"column":9,"file":"@FIXTURES@/umbriel/inc/child.toml","line":2,"message":"unknown key general.bogus","severity":"warning"}],"path":"@FIXTURES@/umbriel/inc/main.toml","valid":false}

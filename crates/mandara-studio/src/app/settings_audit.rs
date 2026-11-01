@@ -501,15 +501,16 @@ fn group_targets(group: &str) -> &'static [mandara_config::compositor::Target] {
 }
 
 /// Every Compositor-page setting changes the drop-in of each compositor it
-/// claims to drive (the only exception is the master switch, which gates
-/// the writing itself).
+/// claims to drive (the exceptions are the master switch, which gates the
+/// writing itself, and the Config doctor's notification switch, which is
+/// the shell's own).
 #[test]
 fn every_compositor_setting_reaches_its_drop_ins() {
     let base = ShellConfig::default();
     let before = emitted(&base);
     let mut checked = 0;
     for s in registry::settings().iter().filter(|s| s.section == Section::Compositor) {
-        if s.path == "/compositor/manage" {
+        if s.path == "/compositor/manage" || s.path == "/compositor/doctor_notify" {
             continue;
         }
         let Some(value) = changed_value(s, &registry::get(&base, s)) else { continue };

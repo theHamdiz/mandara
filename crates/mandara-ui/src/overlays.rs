@@ -438,7 +438,7 @@ struct SearchCtx {
     pinned: Vec<String>,
     recent_count: usize,
     windows: Vec<mandara_services::toplevels::Toplevel>,
-    clipboard: Vec<mandara_services::ClipEntry>,
+    clipboard: mandara_services::ClipboardState,
     wallpapers: Vec<std::path::PathBuf>,
     recent_files: Vec<std::path::PathBuf>,
     /// Desktop actions of the apps (empty when they aren't listed).
@@ -459,7 +459,7 @@ impl SearchCtx {
             pinned: l.pinned.clone(),
             recent_count: l.usage.recent_count as usize,
             windows: if wants("windows") { crate::windows::windows(cx).map(|w| w.read(cx).list().to_vec()).unwrap_or_default() } else { Vec::new() },
-            clipboard: if wants("clipboard") { crate::hub::hub(cx).read(cx).clipboard.entries.clone() } else { Vec::new() },
+            clipboard: if wants("clipboard") { crate::hub::hub(cx).read(cx).clipboard.clone() } else { Default::default() },
             wallpapers: if wants("wallpapers") { crate::wallpaper::list(&crate::wallpaper::directory(cx)) } else { Vec::new() },
             recent_files: if wants("files") { launcher_ext::recent_files() } else { Vec::new() },
             app_actions: if l.look.app_actions { launcher_ext::action_hits(apps) } else { Vec::new() },
@@ -472,7 +472,7 @@ impl SearchCtx {
         match id {
             "emoji" => launcher_ext::emoji_hits(q, limit),
             "windows" => launcher_ext::window_hits(q, &self.windows, limit),
-            "clipboard" => launcher_ext::clipboard_hits(q, &self.clipboard, limit),
+            "clipboard" => launcher_ext::clipboard_hits(q, &self.clipboard.entries, &self.clipboard.collections, limit),
             "wallpapers" => launcher_ext::wallpaper_hits(q, &self.wallpapers, limit),
             "files" => launcher_ext::file_hits(q, &self.recent_files, limit),
             _ => Vec::new(),

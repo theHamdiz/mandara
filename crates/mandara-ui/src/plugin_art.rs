@@ -4,7 +4,8 @@
 //! into `assets/plugin-art/` (committed: they are build inputs) together
 //! with the table below.
 //!
-//! The bytes are embedded compressed (PNG / JPEG); each image is wrapped in
+//! The bytes are embedded compressed (icons as lossless WebP, covers as
+//! JPEG, or lossless WebP when transparent); each image is wrapped in
 //! one shared `Arc<Image>` on first use, so GPUI decodes it once and its
 //! image cache keeps serving the same texture.
 
@@ -43,8 +44,8 @@ fn cached(id: &str, variant: Variant) -> Option<Arc<Image>> {
         return Some(hit);
     }
     let (bytes, format) = match variant {
-        Variant::Icon => (e.1, ImageFormat::Png),
-        Variant::Icon2x => (e.2, ImageFormat::Png),
+        Variant::Icon => (e.1, ImageFormat::Webp),
+        Variant::Icon2x => (e.2, ImageFormat::Webp),
         Variant::Cover => (e.3, e.4),
     };
     let image = Arc::new(Image::from_bytes(format, bytes.to_vec()));
@@ -132,7 +133,7 @@ mod tests {
     use super::*;
 
     /// Same ceiling `cargo xtask art` enforces.
-    const BUDGET_BYTES: usize = 9 * 1024 * 1024 / 2;
+    const BUDGET_BYTES: usize = 6 * 1024 * 1024;
 
     fn dimensions(bytes: &[u8]) -> (u32, u32) {
         image::load_from_memory(bytes).map(|i| (i.width(), i.height())).unwrap()

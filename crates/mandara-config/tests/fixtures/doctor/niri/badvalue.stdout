@@ -1,0 +1,14 @@
+error parsing
+    Diagnostic severity: error
+    Caused by: error parsing KDL
+
+Error: Unsupported value, only numbers are recognized
+    Diagnostic severity: error
+
+Begin snippet for badvalue.kdl starting at line 1, column 1
+
+snippet line 1: layout {
+snippet line 2:     gaps "wide"
+    label at line 2, columns 10 to 15: unsupported value
+snippet line 3: }
+

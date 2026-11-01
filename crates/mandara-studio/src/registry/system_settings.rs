@@ -15,10 +15,10 @@ const CLICK: &[(&str, &str)] = &[("null", tk("Your config")), ("button-areas", t
 const HYPR_LAYOUTS: &[(&str, &str)] = &[("null", tk("Your config")), ("dwindle", tk("Dwindle")), ("master", tk("Master"))];
 const HYPR_SPLIT: &[(&str, &str)] = &[("null", tk("Your config")), ("0", tk("Follow the pointer")), ("1", tk("Left / top")), ("2", tk("Right / bottom"))];
 const HYPR_ORIENTATION: &[(&str, &str)] = &[("null", tk("Your config")), ("left", tk("Left")), ("right", tk("Right")), ("top", tk("Top")), ("bottom", tk("Bottom")), ("center", tk("Center"))];
-/// Niri only — the tri-state without "Off" reads oddly, so it keeps all three.
-const NIRI_ONLY: &str = tk("Niri only");
 /// Help (and locked note) of the options only Hyprland's drop-in carries.
 pub const HYPRLAND_ONLY: &str = tk("Hyprland only");
+/// Locked note of options only Hyprland's and Umbriel's drop-ins carry.
+pub const HYPRLAND_UMBRIEL_ONLY: &str = tk("Hyprland and Umbriel only");
 /// Locked note of options MangoWM and Niri carry but Hyprland doesn't.
 const MANGO_NIRI_ONLY: &str = tk("MangoWM and Niri only");
 
@@ -43,20 +43,15 @@ pub const CURSOR_SIZE_MIN: f64 = 16.0;
 pub const CURSOR_SIZE_MAX: f64 = 128.0;
 
 /// Why a cursor option does nothing under the running compositor
-/// (`running`: MangoWM, Niri, Hyprland), from `INPUT_OPTIONS`.
+/// (`running`: MangoWM, Niri, Hyprland, Umbriel), from `INPUT_OPTIONS`.
 pub fn cursor_locked(path: &str, running: Option<mandara_config::compositor::Target>) -> Option<&'static str> {
-    use mandara_config::compositor::Target;
     let key = path.strip_prefix("/compositor/input/cursor/").map(|k| format!("cursor.{k}"))?;
     let support = mandara_config::input::INPUT_OPTIONS.iter().find(|(k, _)| *k == key)?.1;
-    let index = match running? {
-        Target::Mango => 0,
-        Target::Niri => 1,
-        Target::Hyprland => 2,
-    };
     match support {
-        _ if support[index] => None,
-        [false, false, true] => Some(HYPRLAND_ONLY),
-        [true, true, false] => Some(MANGO_NIRI_ONLY),
+        _ if support[running?.index()] => None,
+        [false, false, true, false] => Some(HYPRLAND_ONLY),
+        [false, false, true, true] => Some(HYPRLAND_UMBRIEL_ONLY),
+        [true, true, false, false] => Some(MANGO_NIRI_ONLY),
         _ => Some(tk("Not supported by this compositor")),
     }
 }
@@ -76,7 +71,7 @@ pub fn entries() -> Vec<Setting> {
         s(Input, KEYBOARD, "/compositor/input/keyboard/repeat_delay", tk("Repeat delay"), tk("How long a key is held before it repeats"), optional(100.0, 1500.0, 10.0, " ms", 600.0)),
         s(Input, KEYBOARD, "/compositor/input/keyboard/repeat_rate", tk("Repeat rate"), tk("Characters per second while a key is held"), optional(5.0, 80.0, 1.0, " /s", 25.0)),
         s(Input, KEYBOARD, "/compositor/input/keyboard/numlock", tk("Num Lock on at login"), "", Choice(TRI)),
-        s(Input, KEYBOARD, "/compositor/input/keyboard/per_window_layout", tk("Remember the layout per window"), NIRI_ONLY, Choice(TRI)),
+        s(Input, KEYBOARD, "/compositor/input/keyboard/per_window_layout", tk("Remember the layout per window"), tk("Niri, Umbriel"), Choice(TRI)),
         s(Input, KEYBOARD, "/compositor/input/keyboard/options", tk("Other xkb options"), tk("Comma-separated, e.g. ctrl:nocaps,compose:ralt"), OptionalText { placeholder: tk("Your config") }),
         s(Input, KEYBOARD, "/compositor/input/keyboard/model", tk("Keyboard model"), tk("Rarely needed, e.g. pc105"), OptionalText { placeholder: tk("Your config") }),
         // Input: mouse
@@ -84,8 +79,8 @@ pub fn entries() -> Vec<Setting> {
         s(Input, MOUSE, "/compositor/input/mouse/accel_profile", tk("Acceleration"), tk("Flat moves the pointer exactly as far as the mouse"), Choice(ACCEL)),
         s(Input, MOUSE, "/compositor/input/mouse/natural_scroll", tk("Natural scrolling"), tk("Content follows the wheel, like a touchscreen"), Choice(TRI)),
         s(Input, MOUSE, "/compositor/input/mouse/left_handed", tk("Left-handed"), tk("Swap the left and right buttons"), Choice(TRI)),
-        s(Input, MOUSE, "/compositor/input/mouse/scroll_factor", tk("Scroll speed"), "", optional(0.1, 5.0, 0.1, "×", 1.0)),
-        s(Input, MOUSE, "/compositor/input/mouse/scroll_method", tk("Scroll method"), "", Choice(SCROLL)),
+        s(Input, MOUSE, "/compositor/input/mouse/scroll_factor", tk("Scroll speed"), tk("MangoWM, Niri, Hyprland"), optional(0.1, 5.0, 0.1, "×", 1.0)),
+        s(Input, MOUSE, "/compositor/input/mouse/scroll_method", tk("Scroll method"), tk("MangoWM, Niri, Hyprland"), Choice(SCROLL)),
         s(Input, MOUSE, "/compositor/input/mouse/middle_emulation", tk("Middle-click emulation"), tk("Both buttons together click the middle one (MangoWM, Niri)"), Choice(TRI)),
         // Input: touchpad
         s(Input, TOUCHPAD, "/compositor/input/touchpad/tap_to_click", tk("Tap to click"), "", Choice(TRI)),
@@ -93,21 +88,21 @@ pub fn entries() -> Vec<Setting> {
         s(Input, TOUCHPAD, "/compositor/input/touchpad/disable_while_typing", tk("Disable while typing"), "", Choice(TRI)),
         s(Input, TOUCHPAD, "/compositor/input/touchpad/tap_and_drag", tk("Tap and drag"), tk("Tap, then slide to drag"), Choice(TRI)),
         s(Input, TOUCHPAD, "/compositor/input/touchpad/drag_lock", tk("Drag lock"), tk("A drag continues briefly after lifting the finger"), Choice(TRI)),
-        s(Input, TOUCHPAD, "/compositor/input/touchpad/speed", tk("Pointer speed"), tk("MangoWM, Niri"), optional(-1.0, 1.0, 0.05, "", 0.0)),
-        s(Input, TOUCHPAD, "/compositor/input/touchpad/accel_profile", tk("Acceleration"), tk("MangoWM, Niri"), Choice(ACCEL)),
-        s(Input, TOUCHPAD, "/compositor/input/touchpad/scroll_method", tk("Scroll method"), tk("MangoWM, Niri"), Choice(SCROLL)),
+        s(Input, TOUCHPAD, "/compositor/input/touchpad/speed", tk("Pointer speed"), tk("MangoWM, Niri, Umbriel"), optional(-1.0, 1.0, 0.05, "", 0.0)),
+        s(Input, TOUCHPAD, "/compositor/input/touchpad/accel_profile", tk("Acceleration"), tk("MangoWM, Niri, Umbriel"), Choice(ACCEL)),
+        s(Input, TOUCHPAD, "/compositor/input/touchpad/scroll_method", tk("Scroll method"), tk("MangoWM, Niri, Umbriel"), Choice(SCROLL)),
         s(Input, TOUCHPAD, "/compositor/input/touchpad/click_method", tk("Right click"), tk("Bottom-right corner, or two fingers"), Choice(CLICK)),
         s(Input, TOUCHPAD, "/compositor/input/touchpad/scroll_factor", tk("Scroll speed"), "", optional(0.1, 5.0, 0.1, "×", 1.0)),
-        s(Input, TOUCHPAD, "/compositor/input/touchpad/middle_emulation", tk("Middle-click emulation"), "", Choice(TRI)),
-        s(Input, TOUCHPAD, "/compositor/input/touchpad/left_handed", tk("Left-handed"), tk("MangoWM, Niri"), Choice(TRI)),
-        s(Input, TOUCHPAD, "/compositor/input/touchpad/disable_with_mouse", tk("Off while a mouse is plugged in"), tk("MangoWM, Niri"), Choice(TRI)),
+        s(Input, TOUCHPAD, "/compositor/input/touchpad/middle_emulation", tk("Middle-click emulation"), tk("MangoWM, Niri, Hyprland"), Choice(TRI)),
+        s(Input, TOUCHPAD, "/compositor/input/touchpad/left_handed", tk("Left-handed"), tk("MangoWM, Niri, Umbriel"), Choice(TRI)),
+        s(Input, TOUCHPAD, "/compositor/input/touchpad/disable_with_mouse", tk("Off while a mouse is plugged in"), tk("MangoWM, Niri, Umbriel"), Choice(TRI)),
         // Themes → Cursor (the theme gallery is `app/cursor_page.rs`; the
         // theme row is for search and the command line)
         s(Themes, CURSOR, CURSOR_THEME_PATH, tk("Cursor theme"), tk("The XCursor theme name, e.g. Bibata-Modern-Ice; pick one from the gallery above"), OptionalText { placeholder: tk("Your config") }),
         s(Themes, CURSOR, CURSOR_SIZE_PATH, tk("Cursor size"), tk("In logical pixels; apps and the compositor scale it on HiDPI screens"), optional(CURSOR_SIZE_MIN, CURSOR_SIZE_MAX, 2.0, " px", 24.0)),
         s(Themes, CURSOR, "/compositor/input/cursor/hide_when_typing", tk("Hide while typing"), tk("The cursor disappears on a key press and returns when the pointer moves"), Choice(TRI)),
         s(Themes, CURSOR, "/compositor/input/cursor/hide_after_secs", tk("Hide when idle"), tk("Seconds without motion before the cursor hides"), optional(1.0, 60.0, 1.0, " s", 5.0)),
-        s(Themes, CURSOR, "/compositor/input/cursor/no_hardware_cursors", tk("Software cursor"), tk("Draws the cursor in software: fixes an invisible or flickering cursor on some GPUs (Hyprland)"), Choice(TRI)),
+        s(Themes, CURSOR, "/compositor/input/cursor/no_hardware_cursors", tk("Software cursor"), tk("Draws the cursor in software: fixes an invisible or flickering cursor on some GPUs (Hyprland, Umbriel)"), Choice(TRI)),
         s(Themes, CURSOR, "/compositor/input/cursor/hide_on_touch", tk("Hide on touch"), tk("Hides the cursor while you use a touchscreen (Hyprland)"), Choice(TRI)),
         // Input: focus
         s(Input, FOCUS, "/compositor/input/focus_follows_mouse", tk("Focus follows the pointer"), tk("Windows get focus when the pointer enters them"), Choice(TRI)),
@@ -198,24 +193,28 @@ mod tests {
     /// writes nothing.
     #[test]
     fn every_input_control_reaches_the_right_drop_ins() {
-        use mandara_config::input::{INPUT_OPTIONS, emit_hyprland_conf, emit_mango, emit_niri};
+        use mandara_config::compositor::Target;
+        use mandara_config::input::{INPUT_OPTIONS, emit_hyprland_conf, emit_mango, emit_niri, emit_umbriel};
         let base = ShellConfig::default();
-        let has_settings = |text: &str| text.lines().map(str::trim).any(|l| !l.is_empty() && !l.starts_with('#') && !l.starts_with("//") && l != "}" && !l.ends_with('{'));
+        // A setting line: not blank, a comment, section punctuation or a
+        // TOML table header.
+        let has_settings = |text: &str| text.lines().map(str::trim).any(|l| !l.is_empty() && !l.starts_with('#') && !l.starts_with("//") && l != "}" && !l.ends_with('{') && !l.starts_with('['));
         for s in entries().into_iter().filter(|s| s.path.starts_with("/compositor/input/")) {
             let key = option_key(s.path);
             let support = INPUT_OPTIONS.iter().find(|(k, _)| *k == key).unwrap_or_else(|| panic!("{} → {key} not in INPUT_OPTIONS", s.path)).1;
             let cfg = set(&base, &s, engaged(&s)).unwrap_or_else(|e| panic!("{}: {e}", s.path));
             let input = &cfg.compositor.input;
-            let got = [has_settings(&emit_mango(input)), has_settings(&emit_niri(input)), has_settings(&emit_hyprland_conf(input))];
-            assert_eq!(got, support, "{} ({key}): [MangoWM, Niri, Hyprland]", s.path);
-            // The help text tells the truth about partial support.
-            let help = mandara_i18n::tr(s.help);
-            match support {
-                [true, true, true] => {}
-                [true, true, false] => assert!(s.help.contains("MangoWM, Niri"), "{}: help should say MangoWM, Niri: {help}", s.path),
-                [false, true, false] => assert_eq!(s.help, NIRI_ONLY, "{}", s.path),
-                [false, false, true] => assert!(s.help.contains("(Hyprland)"), "{}: help should say (Hyprland): {help}", s.path),
-                other => panic!("{}: no help wording for support {other:?}", s.path),
+            let got = [has_settings(&emit_mango(input)), has_settings(&emit_niri(input)), has_settings(&emit_hyprland_conf(input)), has_settings(&emit_umbriel(input))];
+            assert_eq!(got, support, "{} ({key}): [MangoWM, Niri, Hyprland, Umbriel]", s.path);
+            // The help text tells the truth about partial support: it names
+            // exactly the compositors that carry the option.
+            if support.contains(&false) {
+                let help = mandara_i18n::tr(s.help);
+                let names: Vec<&str> = Target::ALL.iter().filter(|t| support[t.index()]).map(|t| t.name()).collect();
+                assert!(s.help.contains(&names.join(", ")), "{}: help should say {}: {help}", s.path, names.join(", "));
+                for missing in Target::ALL.iter().filter(|t| !support[t.index()]) {
+                    assert!(!s.help.contains(missing.name()), "{}: help names {} but it lacks the option: {help}", s.path, missing.name());
+                }
             }
             // Back to "Your config": nothing is written again.
             let cleared = set(&cfg, &s, Value::Null).unwrap();
@@ -227,12 +226,14 @@ mod tests {
     fn cursor_options_lock_where_they_do_nothing() {
         use mandara_config::compositor::Target;
         let hw = "/compositor/input/cursor/no_hardware_cursors";
-        assert_eq!(cursor_locked(hw, Some(Target::Mango)), Some(HYPRLAND_ONLY));
-        assert_eq!(cursor_locked(hw, Some(Target::Niri)), Some(HYPRLAND_ONLY));
+        assert_eq!(cursor_locked(hw, Some(Target::Mango)), Some(HYPRLAND_UMBRIEL_ONLY));
+        assert_eq!(cursor_locked(hw, Some(Target::Niri)), Some(HYPRLAND_UMBRIEL_ONLY));
         assert_eq!(cursor_locked(hw, Some(Target::Hyprland)), None);
+        assert_eq!(cursor_locked(hw, Some(Target::Umbriel)), None);
+        assert_eq!(cursor_locked("/compositor/input/cursor/hide_on_touch", Some(Target::Umbriel)), Some(HYPRLAND_ONLY));
         assert_eq!(cursor_locked(hw, None), None, "no compositor: saved for later, not locked");
         for p in [CURSOR_THEME_PATH, CURSOR_SIZE_PATH, "/compositor/input/cursor/hide_when_typing", "/compositor/input/cursor/hide_after_secs"] {
-            for t in [Target::Mango, Target::Niri, Target::Hyprland] {
+            for t in Target::ALL {
                 assert_eq!(cursor_locked(p, Some(t)), None, "{p} works everywhere");
             }
         }

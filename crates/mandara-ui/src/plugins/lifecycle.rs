@@ -166,13 +166,29 @@ mod tests {
     ];
 
     /// What a fresh install shows: the bar essentials, quick settings,
-    /// media, weather, wallpaper, screenshot and clipboard.
+    /// media, weather, wallpaper, screenshot and clipboard; and the desktop
+    /// widget plugins (they draw nothing until a widget is placed, and the
+    /// widgets people already have must keep showing).
     const ON_BY_DEFAULT: &[&str] = &[
         "active-window",
         "audio",
         "bluetooth",
         "clipboard",
         "clock",
+        "desktop-calendar",
+        "desktop-clocks",
+        "desktop-countdown",
+        "desktop-decorations",
+        "desktop-fun",
+        "desktop-identity",
+        "desktop-info",
+        "desktop-monitor",
+        "desktop-now-playing",
+        "desktop-productivity",
+        "desktop-sky",
+        "desktop-visualizers",
+        "desktop-weather",
+        "desktop-world-clock",
         "keyboard-layout",
         "language",
         "launcher",
@@ -187,6 +203,7 @@ mod tests {
         "session",
         "tray",
         "wallpaper",
+        "wallpaper-depth",
         "weather",
         "workspaces",
     ];

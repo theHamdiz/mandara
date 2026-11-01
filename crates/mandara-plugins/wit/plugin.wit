@@ -85,6 +85,30 @@ interface host {
     translate: func(text: string) -> string;
 }
 
+/// Desktop widgets: a plugin built for the `desktop-plugin` world draws
+/// widgets people place on the desktop (each on its own small surface, in
+/// the theme like the plugin's other views). The kinds it offers are
+/// listed in plugin.toml (`[[widgets]]`: id, name, description, icon,
+/// width, height), so Mandara can offer them without loading the plugin.
+interface desktop {
+    /// One placed widget, as it is drawn now.
+    record widget-context {
+        /// The kind (a `[[widgets]]` id from plugin.toml).
+        widget: string,
+        /// This placed widget (a kind can be placed more than once).
+        instance: string,
+        /// Its size now, logical px.
+        width: f32,
+        height: f32,
+        /// The person's choices for its text: "auto", "western" or
+        /// "eastern-arabic" digits; "gregorian", "hijri", "both" or "none"
+        /// for dates; a language code ("" = the interface language).
+        numerals: string,
+        calendar: string,
+        language: string,
+    }
+}
+
 world plugin {
     use types.{palette, view};
     import host;
@@ -99,4 +123,25 @@ world plugin {
     export on-event: func(action: string);
     /// How often to re-render, in ms (0 = only after events).
     export refresh-ms: func() -> u32;
+}
+
+/// A plugin that also draws desktop widgets: everything in `plugin`
+/// (repeated here), plus `desktop-widget`. A plugin built for `plugin`
+/// alone keeps working.
+world desktop-plugin {
+    use types.{palette, view};
+    use desktop.{widget-context};
+    import host;
+
+    export init: func() -> result<_, string>;
+    export bar: func(theme: palette) -> option<view>;
+    export panel: func(theme: palette) -> option<view>;
+    export sidebar: func(theme: palette) -> option<view>;
+    export on-event: func(action: string);
+    export refresh-ms: func() -> u32;
+
+    /// One placed widget's view (none = nothing to show right now). It is
+    /// asked again after a click in it, when a setting changes and every
+    /// `refresh-ms`.
+    export desktop-widget: func(theme: palette, context: widget-context) -> option<view>;
 }

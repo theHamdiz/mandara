@@ -56,11 +56,7 @@ fn st(cx: &mut gpui::App) -> &mut InputStudio {
 }
 
 fn running() -> Option<Target> {
-    mandara_compositor::detect().map(|k| match k {
-        mandara_compositor::CompositorKind::MangoWM => Target::Mango,
-        mandara_compositor::CompositorKind::Niri => Target::Niri,
-        mandara_compositor::CompositorKind::Hyprland => Target::Hyprland,
-    })
+    mandara_compositor::detect().map(mandara_compositor::CompositorKind::target)
 }
 
 impl StudioView {
@@ -78,7 +74,7 @@ impl StudioView {
         let live = running();
         let status = match live {
             Some(t) => tf("Written to Mandara's {compositor} drop-in; “Your config” keeps your own setting.", &[("compositor", &target_name(t))]),
-            None => t("Saved now; applied the next time Mandara runs under MangoWM, Niri or Hyprland.").into(),
+            None => t("Saved now; applied the next time Mandara runs under MangoWM, Niri, Hyprland or Umbriel.").into(),
         };
         let layouts = self.input_layouts(cfg, p, cx);
         let keyboard = self.rows(group(KEYBOARD), cfg, p, cx);

@@ -32,3 +32,13 @@ description = "قمر الليلة: طوره ونسبة إضاءته والأي�
 [i18n.es]
 name = "Fase lunar"
 description = "La luna de esta noche: fase, iluminación y días hasta la luna llena"
+
+# A desktop widget (the plugin is built for the `desktop-plugin` world and
+# draws it in its `desktop-widget` export).
+[[widgets]]
+id = "moon"
+name = "Moon tonight"
+description = "Tonight's phase, large, on the desktop"
+icon = "moon"
+width = 240
+height = 190

@@ -6,13 +6,290 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Config doctor: your compositor checks your config.** Mandara asks
+  MangoWM, Niri, Hyprland or Umbriel itself whether your config is fine,
+  using its own checker on every file your config includes, and explains
+  each problem in plain words: where it is, whether it's in your files or
+  Mandara's, and what's wrong (an option a compositor update removed or
+  renamed, a typo, a broken line, a duplicate keybind, a missing file).
+  Studio → Compositor → Config doctor opens the line in your editor,
+  comments it out or removes it — always with a backup, checked again and
+  undone by itself if it made things worse — and regenerates Mandara's own
+  file, leaving out anything your compositor version doesn't support. It
+  runs with `mandara setup`, whenever Mandara rewrites its file, and once
+  at start-up after your config or compositor changed, with one
+  notification for new problems (and *Remind me later*). In a terminal:
+  `mandara setup --check` and `mandara setup --fix <id>=comment`.
+- **Desktop widgets take any shape.** Every desktop widget can now sit
+  on a circle, a squircle, a scalloped cookie, a flower, a pentagon, a
+  slanted card, chamfered corners or torn paper, with an outline, a soft
+  or hard shadow in any direction, a header line and a frame: a classic
+  window, washi tape or a polaroid. Turn and mirror any widget too.
+  Studio → Desktop widgets → Shape and frame has them all; widgets you
+  already have look exactly as before.
+- **Nine new clock faces.** A stacked card clock, the time in a shape
+  (that can turn a little every minute), dot-matrix and pixel digits (with
+  Eastern Arabic digits drawn dot by dot), a digit in each box with a week
+  strip, a slanted HUD clock with the part of the day and the moon, hands
+  over giant numerals, an orbit clock, and text lines you write yourself
+  from placeholders like `{weekday}` and `{HH}:{mm}`. The analog clock
+  gains scalloped and flower dials, dots or numbers, blade hands, a
+  seconds dot and the date in a bubble. The greeting clock takes your own
+  greetings and a second line.
+- **Day, week, month and year progress** as a ring, a wavy ring, a bar or
+  a year of dots, with how much time is left.
+- **Productivity on the desktop.** A to-do list you tick right on the
+  desktop, a sticky note from Notes (pastel, white or your colour, ruled,
+  squared or dotted), the focus timer you start and pause with a click, a
+  quote card with sayings that change every day (or your own), and your
+  notes as tabs along a screen edge. `mandara msg desktop widgets press`
+  does what any click on a widget does.
+- **Calendars painted on the desktop.** A month with today marked by
+  the shape you like, this week on one row, what's coming up with date
+  chips, and a big date tile, with your calendar's events.
+- **The sky on your desktop.** The sun on its arc from sunrise to sunset
+  (the moon walks it at night), tonight's moon and how much of it is lit,
+  and a globe lit where the sun is right now with your place and the moon
+  over it. Worked out from your location, nothing fetched.
+- **More weather layouts:** a friendly sentence about the sky (or your
+  own words for each kind of weather), a round disc with a dotted ring,
+  and the next hours as a temperature curve.
+- **You and your shortcuts on the desktop.** A profile card with your
+  picture in any shape, launch tiles for apps, folders and links, quick
+  toggles (Wi-Fi, Bluetooth, do not disturb, night light, keep awake, dark
+  mode, mute) that change shape when on, volume and brightness sliders you
+  click or scroll, and your theme's palette (click a swatch to copy it).
+- **A little fun.** A desk cat that breathes, blinks, sleeps at night,
+  bobs along to music and purrs when you click it; soap bubbles; a photo
+  frame that shows pictures from a folder (a polaroid if you like); any
+  picture as a cut-out sticker; and washi tape to stick on things.
+- **What plays, painted six ways.** The cover on a turning record, a
+  pocket player with an LCD and buttons, the cover cut to a new shape for
+  every track, a tall side pill, a halftone (or one-bit) cover, and synced
+  lyrics with the current line lit. They show only while a player is
+  loaded, and move only while music plays and you can see the desktop.
+- **An LED meter visualizer**, and the system monitor as segmented
+  meters, tall bars, thermal arcs for temperatures and the fan, or ring
+  gauges that are wavy or dotted and start wherever you like. Meters,
+  bars and arcs turn amber, then coral, only when a reading needs you: a
+  busy processor or a hot GPU when high, the battery when it runs low.
+- **Information on the desktop:** a machine card (like a terminal fetch,
+  in rows or as tiles), screen time with the last days and your top apps,
+  the next prayer in a ring of the day or a list, a search field that
+  opens the launcher, and an "at a glance" line with the date, the
+  weather and the one thing worth knowing now.
+- **Your GitHub year, exchange rates, AI usage and games.** A GitHub
+  contribution calendar with your streak, exchange rates for the
+  currencies you pick, Claude Code's tokens today and this week (from its
+  logs on your computer, with an optional weekly budget) and your Steam
+  games as covers you click to play. The GitHub and rates widgets only go
+  online once you switch that on in Studio, ask rarely, keep their answer
+  for the next start, and never ask while the desktop is covered.
+- `mandara msg diagnostics frames` now also reports what the desktop
+  widgets' live frames cost (`desktop_live_ms`).
+- **Mandara now runs on Umbriel.** Umbriel joins MangoWM, Niri and
+  Hyprland as a first-class compositor. The bar shows each screen's
+  workspaces, the active workspace's own layout (click it to cycle
+  scrolling, dwindle, master and stacking) and your keybind submap.
+  `mandara setup` adds one optional include to
+  `~/.config/umbriel/config.toml` and writes your binds, window rules,
+  border colours, gaps, input and display settings to Mandara's own file;
+  Studio's Compositor page gets an Umbriel tab, and old launcher binds or
+  a second bar in your Umbriel config are found and retired like on the
+  other compositors. Values you set in your own `config.toml` still win.
+- **More ways to shape the bar.** Give every bar item a capsule of its
+  own (in any bar style) in a soft wash, a card tone or an accent tint,
+  with an optional outline and a strength slider. Pick the bar's text
+  weight, switch off the hover highlight, and keep extra space between the
+  bar and your windows. Studio → Bar has them all.
+- **Empty bar space does more.** Besides right-click, a middle click can
+  run any hot-corner action (launcher, overview, sidebar, a command…) and
+  scrolling can switch workspaces or change the volume.
+- **Bar items show what you want.** Workspace pills can show numbers,
+  short names or dots, with or without app icons, and hide empty
+  workspaces. The active window can show its app, its title or both, up to
+  a width you choose. Volume, battery and the media track can show just
+  their icons, and the media item can hide while paused.
+- **`mandara msg bar hide`, `bar show` and `bar toggle`** put the bar away
+  and give its space to your windows until you bring it back (touch the
+  edge to peek at it).
+- **Your clipboard sorts itself.** Everything you copy is recognised as
+  you copy it: plain text, links, Markdown, code (with its language),
+  CSS, colours (hex, `rgb()`, `hsl()`, `oklch()` and friends),
+  screenshots and other images, or files from your file manager. The
+  panel shows each one the way it looks best: a swatch next to a colour,
+  tinted code in a monospace font, rendered Markdown, a thumbnail for
+  images, a file's icon, name and folder, and a link's site.
+- **Filter chips and collections in the clipboard.** Chips above the list
+  narrow it to one kind, your pins or a collection, and the search box
+  looks through text, kinds, languages, sites and collection names. Make
+  collections for anything you want to keep together (a palette, your
+  snippets, links for later): the folder button on an entry adds it, a
+  right-click on a collection's chip renames it, and collected entries
+  survive clears just like pinned ones. Studio → Plugins → Clipboard
+  turns the chips off, sets how many lines of code and Markdown a row
+  previews and how many collected entries are kept, and every panel action
+  has a `mandara msg clipboard …` command too.
+- **More desktop widgets.** An analog clock (with an optional sweeping
+  seconds hand), the weather with the days ahead, a world clock for the
+  cities you care about, a countdown to a date that matters, and system
+  gauges: ring meters for CPU, GPU, memory, disk and battery.
+- **Every widget can sit on a plate.** Give any widget a frosted glass or
+  solid plate behind it, with its own opacity, corners and padding, so it
+  reads over any wallpaper. Widgets also gained an alignment setting and
+  a strength slider for their shadow or glow.
+- **Your numerals, your calendar, your language.** Every widget that shows
+  numbers or dates now lets you pick Western or Eastern Arabic digits (or
+  follow the language), the Gregorian or Hijri calendar, both, or no date,
+  and the language it writes day and month names in. The depth clock's
+  date pill follows these too. Widgets you already have look exactly as
+  before.
+- **Desktop widgets are plugins now.** Clocks, the system monitor,
+  decorations, visualizers, the now-playing and calendar cards, weather,
+  world clock and countdown each come from their own plugin in Studio →
+  Plugins (Desktop widgets). Turn one off and its widgets step aside until
+  you turn it back on. Plugin authors can add their own desktop widgets
+  too (see PLUGINS.md); the moon phase example now has one.
+- **A font for all your widgets.** Typography → Desktop widgets now sets
+  the font every widget uses, and any widget can pick its own family from
+  the same searchable font list.
+- **Your wallpaper greets you in Studio.** Studio → Wallpaper now opens on
+  the wallpaper on your desktop, shown large at its own shape with its
+  name, size, folder and colours, plus quick buttons to change or open the
+  folder, pick one at random and share it with the login screen. Below it
+  are all the other wallpapers in your folder: click one (or move with the
+  arrow keys and press Enter) to switch, filter them by name, and add any
+  of them to a slideshow playlist. Even folders with thousands of
+  pictures stay quick.
+- **A much richer slideshow.** The new Slideshow tab has a big on / off
+  switch, the time of the next change, Previous and Next buttons, one-click
+  intervals from 5 minutes to a day (or type your own, like `90m` or
+  `2h`), and four orders: shuffle (every wallpaper once before any
+  repeats), random, by name and newest first. It can use your wallpaper
+  folder, another folder with all its sub-folders, separate folders for
+  the light and dark theme, or a playlist you pick. It can change at
+  login, only between certain hours, pause during fullscreen apps, on
+  battery or while locked, use its own transition, and give each display
+  its own wallpaper. Every option is also a `mandara msg wallpaper
+  slideshow …` command.
+- **A sharper depth clock, if you want it.** The part of your wallpaper
+  drawn over the desktop clock now comes from its own built-in plugin,
+  *Wallpaper depth*, with two modes in Studio → Wallpaper: *Hand-tuned*
+  (what you had, no download) or *Model*, a small depth model (27 MB,
+  downloaded once when you pick it) that sees what is near and far in the
+  picture. It cuts out antlers, skylines and ridges cleanly, and lets you
+  slide the clock deeper into the scene or nearer. It runs once per
+  wallpaper at the lowest priority in a separate helper that exits right
+  after, so the shell itself uses no extra memory.
+- **Place the clock for you.** *Place the clock* (or `mandara msg depth
+  place-clock`) moves the desktop clock to where the wallpaper's subject
+  rises into it.
+
+### Fixed
+
+- **No more "Key binding conflict" warning on MangoWM.** MangoWM treats
+  Play and Pause (and any two names for one key) as the same key, so a
+  Mandara shortcut could clash with one you already had. Mandara now
+  checks your keys the way MangoWM does, including your keyboard layouts
+  and key modes, and leaves yours alone. Niri and Hyprland get the same
+  care for keys with two names, like Page Up and Prior.
+- **Arabic on desktop widgets stays joined.** Widgets that space out their
+  letters (headers, captions, the countdown) no longer pull Arabic words
+  apart; spacing now applies only to scripts whose letters stand alone.
+- **The volume slider changes what you hear, even with Easy Effects.**
+  Easy Effects puts its own output in front of your speakers, and that
+  output ignores volume, so the slider in the main menu, the Sound panel,
+  your volume keys and the on-screen display moved nothing. They now follow
+  the device your sound really plays on.
+- **The main menu's side rail sits exactly in the middle**, with the same
+  space above it as below.
+- **A calm login screen preview in Studio.** The preview no longer drifts
+  or judders: it shows your wallpaper standing still and only moves when
+  you try something out or change a setting.
+
 ### Improved
 
+- **Alt+V opens the clipboard, and Print takes screenshots.** Alt+V joins
+  Super+Shift+V for the clipboard; Print captures the screen, Alt+Print the
+  focused window and Ctrl+Print opens the snipping tool. Keys you already
+  use for something else stay yours. Change any of them in Studio →
+  Keyboard shortcuts (the Clipboard and Screenshot chips add new ones).
+
+- **New artwork for the new plugins.** The depth effect and every desktop
+  widget plugin have their own logo and a painted store cover in the
+  Corniche, Twilight and Obsidian palettes.
+
+- **The date stays readable over a depth wallpaper.** The clock's digits can
+  still tuck behind the wallpaper's subject, but the date line now comes to
+  the front as soon as anything covers it, and *Place the clock* aims for a
+  lighter overlap so no digit disappears.
+
+- **Sidebars fit the bar like puzzle pieces.** A flush sidebar now uses
+  the bar's own material and meets it with the same curved joins in every
+  style: it merges into the notch, hangs from the edge frame, carries the
+  hairline's accent line down its edge and continues a side bar's strip,
+  with clean curves into the screen edges.
+- **The main menu's glass always shows your wallpaper.** Until its frosted
+  copy is ready (or when there is no wallpaper to frost) the menu stays
+  solid instead of letting desktop widgets show through.
+- **A calendar worth opening.** The clock's drop-down is redesigned: the
+  time sits on a glass hero beside a page-a-day tile, and the month below
+  slides from page to page with the arrows, **Today**, the scroll wheel or
+  the keyboard (arrows, Page Up / Down, Home). Click any day to see its
+  events; today lists what's coming up and marks the one happening now.
+  Weekends and the neighbouring months' days are set apart, each calendar
+  keeps its own dot colour, and the panel no longer cuts off its agenda.
+  New in Studio → Date, time & location: Hijri dates, Eastern Arabic
+  numerals and your weekend days (all off or automatic, so your calendar
+  looks as before until you turn them on). Scripts get `calendar goto` and
+  `calendar day`.
+
+- **Arranging widgets is smooth now.** Dragging a widget in Studio's
+  preview or on the desktop follows your pointer at your display's full
+  frame rate: the widget slides as it is and is painted once where you
+  drop it, sliders apply at most once per frame, and a widget behind the
+  wallpaper's subject no longer makes the subject redraw on every move.
+  Studio also stopped quietly reloading the wallpaper preview over and
+  over when its path started with `~`, and the preview now uses the same
+  fonts as your desktop.
+
+- **A tidier Wallpaper page.** Its settings are now in tabs: Wallpaper,
+  Slideshow, Fit & effects (fill, transitions, light and dark wallpapers,
+  video and depth), and Generator and Online when those plugins are on.
+  The wallpaper generator no longer sits at the top of the page.
+  `mandara studio wallpaper --tab slideshow` opens a tab directly.
+- **The slideshow costs nothing while it's off.** It used to check a timer
+  every 30 seconds even when switched off; now it only wakes when a change
+  is due.
+
+- **"My masks only" is gone.** Your own masks still win over anything
+  Mandara finds; if you had the subject mask switched off, the depth
+  effect stays off.
+- **Fresh screenshots everywhere.** The README has a new Desktop widgets
+  section, and the guides show today's Studio pages, the new plugin
+  covers, the main menu, the clipboard with its kinds and collections, the
+  notch bar with a sidebar fitted to it and the depth clock.
 - **A shorter README and a real documentation folder.** The front page on
   GitHub is now a quick tour with a few screenshots and the install
   command. Everything else moved, word for word, into the `docs` folder:
   one page per topic (install, usage, your desktop, dock and launcher,
   wallpapers, plugins, Studio and more), with an index to start from.
+- **Back-to-back releases no longer trip over each other.** A release that
+  waited behind another one used to fail when it tried to save its version
+  bump. It now starts from the latest code, so both go through.
+
+### Under the hood
+
+- **Plugin art takes less space.** Built-in plugin icons are now embedded as
+  lossless WebP: the same pixels, about a fifth fewer bytes, so 58 plugins
+  with their new artwork still fit the old size budget.
+
+- **Fresher, leaner building blocks.** Mandara's libraries are updated to
+  their latest versions (including the engine that runs plugins), and
+  parts of them it never used are switched off, so the shell links fewer
+  duplicate libraries.
 
 ## 0.4.0 — 2026-11-01
 

@@ -72,6 +72,13 @@ const SEAT_VERSION: u32 = 7;
 /// Most button presses queued between two [`Host::take_presses`] calls
 /// (a stuck app must not grow the queue without bound).
 const MAX_PRESSES: usize = 16;
+/// Pseudo button codes of [`Press`] for a scroll step up / down (beyond
+/// every Linux input code).
+pub const SCROLL_UP: u32 = 0x1_0000;
+pub const SCROLL_DOWN: u32 = 0x1_0001;
+/// Scroll distance (surface px, as `wl_pointer.axis` reports it) that
+/// makes one step: one wheel notch on common compositors.
+const SCROLL_STEP: f64 = 10.0;
 
 /// Which layer the canvases live on.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -403,6 +410,8 @@ struct State {
     /// The canvas under the pointer (its output global) and the position.
     pointer: Option<(u32, f64, f64)>,
     presses: Vec<Press>,
+    /// Vertical scroll not yet turned into steps.
+    scroll: f64,
     /// Pointer events dispatched since [`Host::wait`] started (a wake-up
     /// with nothing else is input only).
     input_events: usize,
@@ -462,6 +471,7 @@ impl Host {
             seats: Vec::new(),
             cursor_shape,
             pointer: None,
+            scroll: 0.0,
             presses: Vec::new(),
             input_events: 0,
         };
@@ -754,6 +764,25 @@ impl Host {
         p.dirty = true;
     }
 
+    /// Moves a mapped plane placed at a [`Place::Rect`] to `to`, a
+    /// [`snap`]ped rectangle of the same size, keeping its pixels: only the
+    /// subsurface position changes (no repaint, no buffer upload). Returns
+    /// `false` when the plane isn't mapped there at that size (paint it
+    /// instead).
+    pub fn move_plane(&mut self, id: u32, index: usize, to: Rect) -> bool {
+        let Some(p) = self.plane(id, index) else { return false };
+        match p.place {
+            Some(Place::Rect(r)) if p.mapped && r.w == to.w && r.h == to.h => {
+                if r != to {
+                    p.place = Some(Place::Rect(to));
+                    self.apply_geometry(id, index);
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Alpha multiplier of a plane (no-op without `wp_alpha_modifier_v1`).
     pub fn set_alpha(&mut self, id: u32, index: usize, alpha: f32) {
         let Some(p) = self.plane(id, index) else { return };
@@ -996,9 +1025,15 @@ pub trait Planes {
     fn has_plane(&self, id: u32, index: usize) -> bool;
     /// See [`Host::frame_ready`].
     fn frame_ready(&self, id: u32) -> bool;
+    /// See [`Host::move_plane`].
+    fn move_plane(&mut self, id: u32, index: usize, to: Rect) -> bool;
 }
 
 impl Planes for Host {
+    fn move_plane(&mut self, id: u32, index: usize, to: Rect) -> bool {
+        Host::move_plane(self, id, index, to)
+    }
+
     fn paint(&mut self, id: u32, index: usize, place: Place, damage: Option<Rect>, keep: bool, clear: bool, paint: impl FnOnce(&mut tiny_skia::PixmapMut<'_>)) -> Result<bool> {
         Host::paint(self, id, index, place, damage, keep, clear, paint)
     }
@@ -1191,7 +1226,6 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                     d.set_shape(serial, wp_cursor_shape_device_v1::Shape::Default);
                 }
             }
-            wl_pointer::Event::Leave { .. } => state.pointer = None,
             wl_pointer::Event::Motion { surface_x, surface_y, .. } => {
                 if let Some(p) = state.pointer.as_mut() {
                     (p.1, p.2) = (surface_x, surface_y);
@@ -1203,6 +1237,22 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 {
                     state.presses.push(Press { output, x, y, button });
                 }
+            }
+            wl_pointer::Event::Axis { axis: WEnum::Value(wl_pointer::Axis::VerticalScroll), value, .. } => {
+                state.scroll += value;
+                while state.scroll.abs() >= SCROLL_STEP {
+                    let up = state.scroll < 0.0;
+                    state.scroll -= SCROLL_STEP.copysign(state.scroll);
+                    if let Some((output, x, y)) = state.pointer
+                        && state.presses.len() < MAX_PRESSES
+                    {
+                        state.presses.push(Press { output, x, y, button: if up { SCROLL_UP } else { SCROLL_DOWN } });
+                    }
+                }
+            }
+            wl_pointer::Event::Leave { .. } => {
+                state.pointer = None;
+                state.scroll = 0.0;
             }
             _ => {}
         }

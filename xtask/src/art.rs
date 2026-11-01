@@ -2,9 +2,10 @@
 //!
 //! - `art` builds the artwork embedded in the binaries. For every built-in
 //!   plugin in `assets/plugins/<id>/` it writes
-//!   `crates/mandara-ui/assets/plugin-art/<id>/` with `icon.png` (128 px),
-//!   `icon@2x.png` (256 px) and `cover.jpg` (960×540; `cover.png` when the
-//!   source has transparency), plus `index.rs`, the table
+//!   `crates/mandara-ui/assets/plugin-art/<id>/` with `icon.webp` (128 px)
+//!   and `icon@2x.webp` (256 px), both pixel-exact lossless WebP, and
+//!   `cover.jpg` (960×540; lossless `cover.webp` when the source has
+//!   transparency), plus `index.rs`, the table
 //!   `mandara_ui::plugin_art` embeds. Example plugins under
 //!   `plugins/examples/<id>` ship their own art in their package and are
 //!   skipped. The generated files are committed: they are build inputs.
@@ -42,8 +43,11 @@ const COVER_JPEG_QUALITY: u8 = 82;
 const ICON_1X: u32 = 128;
 const ICON_2X: u32 = 256;
 /// About 100 KiB per built-in plugin's icon pair and cover, with room for a
-/// few more plugins before the next artwork budget review.
-const EMBED_BUDGET_BYTES: u64 = 9 * 1024 * 1024 / 2;
+/// few more plugins before the next artwork budget review (raised from
+/// 4.5 MiB when the desktop widgets became nine plugins of their own; kept
+/// there at 58 plugins by embedding the icons as lossless WebP, about a
+/// third smaller than PNG with the same pixels).
+const EMBED_BUDGET_BYTES: u64 = 6 * 1024 * 1024;
 /// Where the embedded art goes, relative to the repository root.
 const EMBED_DIR: &str = "crates/mandara-ui/assets/plugin-art";
 /// The table `plugin_art.rs` includes.
@@ -51,6 +55,8 @@ const INDEX_FILE: &str = "index.rs";
 
 // ── Cover composition ────────────────────────────────────────────────────
 
+/// Per-plugin painted cover backgrounds, under `assets/artwork/`.
+const SCENES_DIR: &str = "scenes";
 /// Largest accepted marketplace cover PNG.
 const COVER_PNG_BUDGET_BYTES: u64 = 600_000;
 const PALETTE_COLORS: usize = 256;
@@ -143,6 +149,11 @@ pub struct Record {
     pub crop: Option<[u32; 4]>,
     #[serde(default)]
     pub radius: Option<f32>,
+    /// A painted background of its own (`assets/artwork/scenes/<file>`,
+    /// 1600×900), used instead of the palette's shared artwork and motif;
+    /// the icon and title are still composed on top.
+    #[serde(default)]
+    pub scene: Option<String>,
 }
 
 fn assets() -> PathBuf {
@@ -585,12 +596,20 @@ pub fn save_cover_png(img: &RgbaImage, path: &Path) -> Result<()> {
 
 /// Composes one marketplace cover.
 pub fn compose(record: &Record, font: &FontRef) -> Result<RgbaImage> {
-    let mut canvas = load_rgba(&assets().join("artwork").join(format!("{}.png", record.palette)))?;
+    let background = match &record.scene {
+        Some(scene) => assets().join("artwork").join(SCENES_DIR).join(scene),
+        None => assets().join("artwork").join(format!("{}.png", record.palette)),
+    };
+    let mut canvas = load_rgba(&background)?;
     if canvas.dimensions() != COVER_SIZE {
-        return Err(format!("artwork {} is not {}×{}", record.palette, COVER_SIZE.0, COVER_SIZE.1));
+        return Err(format!("artwork {} is not {}×{}", background.display(), COVER_SIZE.0, COVER_SIZE.1));
     }
-    let motif = render_svg(motif_svg(&record.motif, &record.palette)?.as_bytes(), COVER_SIZE.0, COVER_SIZE.1)?;
-    over(&mut canvas, &motif, 0, 0);
+    // A painted scene carries its own detail; the motif linework is for the
+    // shared palette artwork.
+    if record.scene.is_none() {
+        let motif = render_svg(motif_svg(&record.motif, &record.palette)?.as_bytes(), COVER_SIZE.0, COVER_SIZE.1)?;
+        over(&mut canvas, &motif, 0, 0);
+    }
     let has_panel = record.panel.is_some();
     let icon_size = if has_panel { ICON_WITH_PANEL } else { ICON_ALONE };
     let svg_path = assets().join("plugins").join(&record.id).join("icon.svg");
@@ -649,12 +668,18 @@ fn export_icon(source: &Path, target: &Path) -> Result<()> {
 
 // ── Embedding ────────────────────────────────────────────────────────────
 
+/// The 256 px source icon export next to each SVG (`assets/plugins/<id>/`).
 fn encode_png(img: &RgbaImage) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     image::codecs::png::PngEncoder::new_with_quality(&mut out, image::codecs::png::CompressionType::Best, image::codecs::png::FilterType::Adaptive)
         .write_image(img.as_raw(), img.width(), img.height(), image::ExtendedColorType::Rgba8)
         .map_err(|e| e.to_string())?;
     Ok(out)
+}
+
+/// Pixel-exact lossless WebP: icons and covers with transparency.
+fn encode_webp(img: &RgbaImage) -> Result<Vec<u8>> {
+    mandara_wallgen::encode_webp_lossless_rgba(img.as_raw(), img.width(), img.height())
 }
 
 fn encode_jpeg(img: &RgbaImage) -> Result<Vec<u8>> {
@@ -671,33 +696,40 @@ fn write(path: &Path, bytes: &[u8]) -> Result<u64> {
     Ok(bytes.len() as u64)
 }
 
+/// Embedded file names: icons are lossless WebP; covers are JPEG, or
+/// lossless WebP when they have transparency.
+const EMBED_ICON: &str = "icon.webp";
+const EMBED_ICON_2X: &str = "icon@2x.webp";
+const EMBED_COVER_JPEG: &str = "cover.jpg";
+const EMBED_COVER_WEBP: &str = "cover.webp";
+/// Names earlier builds embedded; removed when the art is rebuilt.
+const EMBED_STALE: &[&str] = &["icon.png", "icon@2x.png", "cover.png"];
+
 /// One plugin's embedded files; returns (bytes written, cover file name).
 fn embed_one(id: &str, out: &Path) -> Result<(u64, &'static str)> {
     let src = assets().join("plugins").join(id);
     std::fs::create_dir_all(out).map_err(|e| e.to_string())?;
+    for stale in EMBED_STALE {
+        let _ = std::fs::remove_file(out.join(stale));
+    }
     let mut total = 0;
-    let icon_png = src.join("icon.png");
-    let icon = load_rgba(&icon_png)?;
-    // 2×: the 256 px export as shipped (already optimized), else resized.
-    total += if icon.dimensions() == (ICON_2X, ICON_2X) {
-        let bytes = std::fs::read(&icon_png).map_err(|e| e.to_string())?;
-        write(&out.join("icon@2x.png"), &bytes)?
-    } else {
-        write(&out.join("icon@2x.png"), &encode_png(&resize(&icon, ICON_2X, ICON_2X))?)?
-    };
+    let icon = load_rgba(&src.join("icon.png"))?;
+    // 2×: the 256 px export, else resized.
+    let large = if icon.dimensions() == (ICON_2X, ICON_2X) { icon.clone() } else { resize(&icon, ICON_2X, ICON_2X) };
+    total += write(&out.join(EMBED_ICON_2X), &encode_webp(&large)?)?;
     // 1×: rendered from the vector source when there is one (crisper than a
     // downscale), else resized.
     let small = match std::fs::read(src.join("icon.svg")) {
         Ok(svg) => render_svg(&svg, ICON_1X, ICON_1X)?,
         Err(_) => resize(&icon, ICON_1X, ICON_1X),
     };
-    total += write(&out.join("icon.png"), &encode_png(&small)?)?;
+    total += write(&out.join(EMBED_ICON), &encode_webp(&small)?)?;
     let cover = load_rgba(&src.join("cover.png"))?;
     let cover = resize(&cover, EMBED_COVER_SIZE.0, EMBED_COVER_SIZE.1);
     let opaque = cover.pixels().all(|p| p[3] == u8::MAX);
-    let (name, stale) = if opaque { ("cover.jpg", "cover.png") } else { ("cover.png", "cover.jpg") };
+    let (name, stale) = if opaque { (EMBED_COVER_JPEG, EMBED_COVER_WEBP) } else { (EMBED_COVER_WEBP, EMBED_COVER_JPEG) };
     let _ = std::fs::remove_file(out.join(stale));
-    total += write(&out.join(name), &if opaque { encode_jpeg(&cover)? } else { encode_png(&cover)? })?;
+    total += write(&out.join(name), &if opaque { encode_jpeg(&cover)? } else { encode_webp(&cover)? })?;
     Ok((total, name))
 }
 
@@ -720,9 +752,9 @@ fn embed_all() -> Result<()> {
     for id in &ids {
         let (bytes, cover) = embed_one(id, &out_root.join(id))?;
         total += bytes;
-        let format = if cover.ends_with(".jpg") { "Jpeg" } else { "Png" };
+        let format = if cover.ends_with(".jpg") { "Jpeg" } else { "Webp" };
         let path = |file: &str| format!("include_bytes!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/assets/plugin-art/{id}/{file}\"))");
-        let _ = writeln!(index, "    (\"{id}\", {}, {}, {}, gpui::ImageFormat::{format}),", path("icon.png"), path("icon@2x.png"), path(cover));
+        let _ = writeln!(index, "    (\"{id}\", {}, {}, {}, gpui::ImageFormat::{format}),", path(EMBED_ICON), path(EMBED_ICON_2X), path(cover));
         println!("{id:>16}: {:>4} KB", bytes / 1024);
     }
     index.push_str("]\n");
@@ -887,6 +919,14 @@ pub fn check_catalog(r: &mut Report, records: &[Record]) {
     r.ensure(ids.len() == records.len(), || "catalog.json: duplicate ids".into());
     let dirs: BTreeSet<String> = std::fs::read_dir(assets().join("plugins")).map(|d| d.flatten().filter(|e| e.path().is_dir()).map(|e| e.file_name().to_string_lossy().to_string()).collect()).unwrap_or_default();
     r.ensure(dirs.iter().map(String::as_str).collect::<BTreeSet<_>>() == ids, || "catalog.json: ids don't match assets/plugins/".into());
+    for rec in records {
+        if let Some(scene) = &rec.scene {
+            let path = assets().join("artwork").join(SCENES_DIR).join(scene);
+            if let Some(img) = r.try_or(load_rgba(&path)) {
+                r.ensure(img.dimensions() == COVER_SIZE, || format!("{}: must be {}×{}", path.display(), COVER_SIZE.0, COVER_SIZE.1));
+            }
+        }
+    }
     let panels: BTreeSet<&str> = records.iter().filter(|x| x.panel.is_some()).map(|x| x.id.as_str()).collect();
     r.ensure(panels == SCREENSHOT_IDS.iter().copied().collect(), || "catalog.json: the panel captures changed".into());
     for rec in records.iter().filter(|x| x.panel.is_some()) {
@@ -990,12 +1030,19 @@ pub fn check_embedded(r: &mut Report) {
     let mut total = 0;
     for id in &ids {
         r.ensure(index.contains(&format!("(\"{id}\"")), || format!("{EMBED_DIR}/{INDEX_FILE} lacks {id} — run `cargo xtask art`"));
-        for (file, side) in [("icon.png", ICON_1X), ("icon@2x.png", ICON_2X)] {
+        for (file, side) in [(EMBED_ICON, ICON_1X), (EMBED_ICON_2X, ICON_2X)] {
             let path = dir.join(id).join(file);
             total += file_size(&path).min(EMBED_BUDGET_BYTES);
             r.ensure(image::image_dimensions(&path).ok() == Some((side, side)), || format!("{}: must be {side}×{side} — run `cargo xtask art`", path.display()));
         }
-        let cover = ["cover.jpg", "cover.png"].iter().map(|f| dir.join(id).join(f)).find(|p| p.is_file());
+        // Lossless: the 2× icon is exactly the shipped 256 px export.
+        let source = assets().join("plugins").join(id).join("icon.png");
+        if let (Ok(embedded), Ok(original)) = (load_rgba(&dir.join(id).join(EMBED_ICON_2X)), load_rgba(&source))
+            && original.dimensions() == (ICON_2X, ICON_2X)
+        {
+            r.ensure(embedded == original, || format!("{EMBED_DIR}/{id}/{EMBED_ICON_2X}: pixels differ from {} — run `cargo xtask art`", source.display()));
+        }
+        let cover = [EMBED_COVER_JPEG, EMBED_COVER_WEBP].iter().map(|f| dir.join(id).join(f)).find(|p| p.is_file());
         match cover {
             Some(path) => {
                 total += file_size(&path);

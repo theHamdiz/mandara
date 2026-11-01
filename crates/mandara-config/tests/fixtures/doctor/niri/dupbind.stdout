@@ -1,0 +1,23 @@
+error parsing
+    Diagnostic severity: error
+    Caused by: error parsing KDL
+
+Error: keybind first defined here
+    Diagnostic severity: error
+
+Begin snippet for dupbind.kdl starting at line 1, column 1
+
+snippet line 1: binds {
+snippet line 2:     Mod+Q { close-window; }
+    label at line 2, columns 5 to 9: node starts here
+snippet line 3:     Mod+T { spawn "foot"; }
+Error: duplicate keybind later defined here
+    Diagnostic severity: error
+
+Begin snippet for dupbind.kdl starting at line 3, column 1
+
+snippet line 3:     Mod+T { spawn "foot"; }
+snippet line 4:     Mod+Q { spawn "kitty"; }
+    label at line 4, columns 5 to 9: unexpected keybind
+snippet line 5: }
+

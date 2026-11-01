@@ -112,14 +112,15 @@ mandara setup
 The recipes live in [`packaging/aur/`](../packaging/aur) and follow the
 [AUR submission guidelines](https://wiki.archlinux.org/title/AUR_submission_guidelines).
 
-## MangoWM, Niri and Hyprland
+## MangoWM, Niri, Hyprland and Umbriel
 
 `mandara setup` (run by the installer) hooks Mandara into your compositor
 with **one include line** in your own config, writes everything else to
 `~/.config/mandara/generated/`, starts Mandara at login with an absolute
 path, and checks the result with the compositor's own validator
-(`mango -p`, `niri validate`, `Hyprland --verify-config`), rolling back if
-it objects.
+(`mango -p`, `niri validate`, `Hyprland --verify-config`,
+`umbriel config validate`), rolling back if it objects (see
+[Config doctor](#config-doctor)).
 
 | | Include line in your config | Autostart |
 |---|---|---|
@@ -127,12 +128,23 @@ it objects.
 | **Niri** 25.11+ | `include optional=true "…/mandara/generated/niri.kdl"` (plain `include` before 26.04) | `spawn-at-startup` |
 | **Hyprland 0.57+** (Lua only) | `pcall(dofile, "…/mandara/generated/hyprland.lua")` in `hyprland.lua` | `hl.on("hyprland.start", …)` |
 | **Hyprland ≤ 0.56** | `source = ~/.config/mandara/generated/hyprland.conf` | `exec-once =` |
+| **Umbriel** | `"…/mandara/generated/umbriel.toml"` in `[include.optional] files` of `~/.config/umbriel/config.toml` (added to your list if you have one) | `general.autostart` |
 
 Mandara detects the installed version and speaks its dialect, including
 Hyprland 0.57's Lua dispatches. On Niri the drop-in makes workspace
 backgrounds transparent so the wallpaper shows outside the Overview; night
 light needs a real Niri session on a tty (a nested Niri has no gamma
 control).
+
+On **Umbriel**, your own `config.toml` is applied after its includes, so a
+value you set there wins over Mandara's drop-in (window and layer rules
+from both files are kept, and binds merge by key). Two things follow from
+that: live border colours only show when your config doesn't set
+`[colors.border]`, and Mandara's autostart entry only counts when your
+config has no `general.autostart` list of its own (add Mandara to that list
+instead). Mandara reaches Umbriel over `$UMBRIEL_SOCKET`; the bar shows each
+output's workspaces, the active workspace's layout (click to cycle
+scrolling → dwindle → master → stacking) and the active keybind submap.
 
 ## Coming from another setup
 
@@ -145,7 +157,8 @@ line. Leftovers from a previous setup can still fight it:
 - another wallpaper daemon (swww, hyprpaper, swaybg).
 
 The installer finds them in your config **and every file it sources or
-includes**, for MangoWM, Niri and Hyprland (`.conf` and `.lua`).
+includes**, for MangoWM, Niri, Hyprland (`.conf` and `.lua`) and Umbriel
+(`[include]` lists, `[keybinds]` and `general.autostart`).
 
 ```bash
 mandara setup --check            # list conflicts, change nothing
@@ -156,15 +169,69 @@ mandara setup --restore latest   # undo
 What `--fix-conflicts` does:
 
 - Each conflicting line is commented out with a `mandara-retired:` marker,
-  after a timestamped backup of every file it touches.
+  after a timestamped backup of every file it touches. On Umbriel only the
+  program's entry leaves the `general.autostart` list; the rest of the list
+  stays.
 - Keys an old tool used (an extra launcher shortcut, say) are re-bound to the
   Mandara equivalent.
 - The compositor then validates the result (`mango -p`, `niri validate`,
-  `Hyprland --verify-config`). If it objects, everything is rolled back.
+  `Hyprland --verify-config`, `umbriel config validate`). If it reports
+  more problems than before, everything is rolled back.
 
 Binds that are yours, like quitting the compositor or launching your VPN,
 are never touched; Mandara skips its own shortcut on those keys. Studio →
 Maintenance shows the same check with a one-click fix.
+
+## Config doctor
+
+Compositors change their config languages between releases: an option is
+renamed, a value tightens, a section moves. The **Config doctor** asks the
+compositor itself: it runs its own checker (`mango -p`, `niri validate`,
+`Hyprland --verify-config`, `umbriel config validate --json`) on your real
+config and every file it includes, read-only (a private runtime folder, no
+display, a time limit), and explains each problem it reports:
+
+- **where**: the file and line, with the line itself;
+- **whose**: your own files, or Mandara's generated drop-in;
+- **what**: an unknown option (and whether it was *removed in the update*
+  you just installed), a deprecated one, a syntax error, an invalid value,
+  a duplicate keybind, a missing included file, or something Mandara wrote
+  that this compositor version doesn't support.
+
+Each problem offers fixes, and none of them is final:
+
+- **Open in editor** at that line (`$VISUAL`, else `$EDITOR` in your
+  terminal, else your default app for the file).
+- **Comment out** (with the file's own comment syntax and a
+  `mandara-doctor:` marker; a whole Niri node or TOML table when the problem
+  spans several lines) or **Remove line**. The file is backed up first
+  (`~/.local/share/mandara/doctor-backups/`), written atomically and checked
+  again; if the compositor then reports more problems, the backup is put
+  back by itself.
+- **Regenerate** for problems in Mandara's drop-in. An option the installed
+  compositor version rejects is left out of the drop-in for that version
+  from then on (an update gets to try it again).
+- **Remind me later**: no reminders about these problems until your config or
+  the compositor changes.
+
+It runs when `mandara setup` runs (before and after it writes anything: a
+drop-in or include line the compositor rejects is rolled back), every time
+the shell rewrites the drop-in, and once at start-up when your config files
+or the compositor's version changed since the last check (off the UI
+thread). New problems are announced with one notification whose button opens
+Studio → Compositor → Config doctor; turn that off with *Tell me about config
+problems* on the same page.
+
+```bash
+mandara setup --check                  # report only (exit 10 conflicts, 11 config errors)
+mandara setup --fix 1a2b3c4d=comment   # fix by id from the report: comment, remove or regenerate
+mandara msg --json compositor check    # the same report from the running shell, for agents
+```
+
+MangoWM, Niri and Umbriel output is read as those checkers print it (tested
+against MangoWM 0.18.4, Niri 26.04 and Umbriel 0.1.0). Hyprland's is read
+from its documented format and hasn't been tested against a real Hyprland
+yet; an output the doctor doesn't recognise is still shown as it is.
 
 ## Packages
 

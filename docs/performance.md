@@ -52,3 +52,24 @@ browser tab, without trading away speed. It took deliberate work at every layer:
   sampling run only while you can see them.
 - **Optimized releases.** Fat LTO, one codegen unit, stripped symbols, and
   `cargo native` for your exact CPU.
+
+## Wallpaper depth model
+
+The depth clock's *Model* mode ([details](plugins.md#wallpaper-depth)) runs
+Depth Anything V2 Small once per wallpaper, in a helper process the shell
+starts and forgets, so none of its memory is ever the shell's. Measured on a
+Ryzen 9 9950X while the machine was busy compiling (load around 50), with
+the optimized development build in the demo sandbox; the release build's
+in-process model run took about 2.2 s per 4K wallpaper:
+
+| | 4K JPEG | 8K PNG |
+|---|---|---|
+| Helper CPU time (one core, decode + model + write) | under 6 s | under 7 s |
+| Helper wall time at idle priority | 4–17 s | 35 s |
+| Helper peak memory | under 220 MiB | under 360 MiB |
+| Shell after the run | no new threads, no helper left, resident memory back under its level before the run | same |
+
+The wall time is mostly waiting: at `SCHED_IDLE` the helper only gets CPU
+time nothing else wants. The download is 27 MB, once. A cached mask makes
+every later start and wallpaper switch free; changing the clock depth
+re-cuts the cached depth map without running the model.

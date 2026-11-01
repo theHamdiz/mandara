@@ -1,0 +1,5 @@
+binds {
+    Mod+Q { close-window; }
+    Mod+T { spawn "foot"; }
+    Mod+Q { spawn "kitty"; }
+}

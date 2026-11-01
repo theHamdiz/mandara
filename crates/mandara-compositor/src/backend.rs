@@ -37,7 +37,8 @@ pub trait CompositorBackend: Send + Sync {
     fn reload_config(&self) -> Result<()>;
 
     /// Switches to the next keyboard layout. MangoWM's dispatcher by
-    /// default; Niri and Hyprland override it with their own requests.
+    /// default; Niri, Hyprland and Umbriel override it with their own
+    /// requests.
     fn switch_keyboard_layout(&self) -> Result<()> {
         self.dispatch_raw("switch_keyboard_layout", &[])
     }
@@ -52,23 +53,24 @@ pub trait CompositorBackend: Send + Sync {
 
     /// Config dialect this compositor reads.
     fn target(&self) -> Target {
-        match self.kind() {
-            CompositorKind::MangoWM => Target::Mango,
-            CompositorKind::Niri => Target::Niri,
-            CompositorKind::Hyprland => Target::Hyprland,
-        }
+        self.kind().target()
     }
 
     /// Emits and writes the generated drop-in, skipping binds the user
     /// already owns. Returns the file and the emitter report.
     fn sync_managed_config(&self, config: &CompositorConfig, borders: Option<BorderColors>) -> Result<(PathBuf, Emitted)> {
-        let target = self.target();
-        let mandara_bin = mandara_binary();
-        let managed = ManagedConfig { config, borders, existing_chords: existing_chords(target), mandara_bin, version: self.version(), user_autostarts: mandara_config::compositor::user_autostarts(target) };
-        let emitted = emit(target, &managed);
-        let path = write_generated(target, &emitted)?;
-        Ok((path, emitted))
+        write_dropin(self.target(), config, borders, self.version())
     }
+}
+
+/// Emits and writes `target`'s drop-in, skipping binds the user already
+/// owns (and options the config doctor found `version` rejects). Used by the
+/// live sync, `mandara setup` and Studio's Config doctor.
+pub fn write_dropin(target: Target, config: &CompositorConfig, borders: Option<BorderColors>, version: Option<(u32, u32)>) -> Result<(PathBuf, Emitted)> {
+    let managed = ManagedConfig { config, borders, existing_chords: existing_chords(target), mandara_bin: mandara_binary(), version, user_autostarts: mandara_config::compositor::user_autostarts(target) };
+    let emitted = emit(target, &managed);
+    let path = write_generated(target, &emitted)?;
+    Ok((path, emitted))
 }
 
 /// The command keybinds use to reach Mandara. An installed `mandara` on

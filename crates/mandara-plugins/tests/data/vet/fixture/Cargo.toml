@@ -10,7 +10,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-wit-bindgen = "0.57"
+wit-bindgen = { version = "0.63", default-features = false, features = ["macros", "realloc", "std"] }
 
 [profile.release]
 opt-level = "z"

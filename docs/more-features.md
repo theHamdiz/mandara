@@ -11,7 +11,7 @@ The rest of what's built in.
 
 <table>
 <tr>
-<td width="33%" valign="top"><img src="screenshots/clock-agenda.png" alt="Clock panel with week numbers and the calendar agenda" width="100%"/><br/><sub><b>Clock and calendar</b> with ICS feeds and an agenda</sub></td>
+<td width="33%" valign="top"><img src="screenshots/clock-agenda.png" alt="Clock panel: the time, a month calendar with week numbers, Hijri dates and event dots, and today's agenda" width="100%"/><br/><sub><b>Clock and calendar</b> with ICS feeds, Hijri dates and an agenda</sub></td>
 <td width="33%" valign="top"><img src="screenshots/world-clock.png" alt="World clock with a meeting planner" width="100%"/><br/><sub><b>World clock</b> and meeting planner</sub></td>
 <td width="33%" valign="top"><img src="screenshots/color-picker.png" alt="Color picker with formats, tonal ramp and contrast" width="100%"/><br/><sub><b>Color picker</b> with OKLCH ramps and WCAG contrast</sub></td>
 </tr>
@@ -26,7 +26,9 @@ The rest of what's built in.
   that stretches as it travels. Neighbouring tags viewed together on MangoWM
   (right-click, `toggleview`) melt into one shape with a soft waist (a
   smooth minimum of their distance fields), and one Oklab gradient runs
-  across them all.
+  across them all. Next to them, MangoWM shows the tag's layout and Umbriel the
+  active workspace's own layout (click to cycle), plus a badge for a
+  non-default keymode or keybind submap.
 - **Sidebar** with Overview and Notifications tabs, quick settings, weather
   (animated sky), media, Pomodoro, to-do, notes, sound and more. It opens on
   hover or Super+B and sits left or right (the power dock takes the opposite
@@ -36,6 +38,40 @@ The rest of what's built in.
 - **Clipboard history** with pins that survive clears, size and image
   limits, per-app exclusions (password managers), clear on lock / after N
   hours, and keep-copies-from-closed-apps.
+  - **Sorted by kind as you copy.** Each copy is recognised once, off the
+    UI thread, and the kind is saved with it: plain text, links (shown by
+    their site), Markdown (rendered), code with a best-guess language
+    (Rust, Python, JavaScript, TypeScript, Go, C, C++, Java, Kotlin, C#,
+    PHP, Ruby, Lua, Nix, shell, PowerShell, Dockerfile, SQL, JSON, YAML,
+    TOML, HTML, XML, diffs), CSS rules and declarations, colour values
+    (`#hex`, `rgb()`, `hsl()`, `hwb()`, `lab()`, `lch()`, `oklab()`,
+    `oklch()` and Hyprland's `rgba(rrggbbaa)`, drawn as a swatch), images
+    (screenshots told apart by their size, the tool that made them or the
+    app you copied from) and files copied in a file manager (icon, name
+    and folder; pasting them back works in file managers too). Short
+    all-digit hex like `#123` stays text, since it's usually an issue
+    number.
+  - **Chips, search and collections.** Chips filter by kind, pins or a
+    collection; the search box matches text, kinds, languages, sites, apps
+    and collection names. Collections are your own groups: the folder
+    button on an entry adds it to one (or makes a new one), a right-click
+    on a collection's chip renames it, and the pencil and trash next to its
+    title rename or delete it (its entries stay in the history). Collected
+    entries survive clears like pinned ones; collections are saved in
+    `~/.cache/mandara/clipboard/collections.json`, even when the history
+    itself is kept in memory only.
+  - **Settings** (Studio → Plugins → Clipboard): *Filter by kind* (the
+    chips), *Preview lines* (lines of code, CSS and Markdown a row shows,
+    0 = one line) and *Entries in collections* (how many are kept).
+  - **Alt+V** opens it (as does Super+Shift+V).
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="screenshots/clipboard.png" alt="The clipboard panel: filter chips, a pinned note, a link shown by its site, a CSS rule in monospace, an image thumbnail, a PDF from Downloads, an OKLCH colour swatch and rendered Markdown" width="100%"/><br/><sub><b>Clipboard</b>: every kind shown the way it looks best</sub></td>
+<td width="50%" valign="top"><img src="screenshots/clipboard-collection.png" alt="The clipboard filtered to the Palette collection: two colours with their swatches, hex and OKLCH" width="100%"/><br/><sub><b>Collections</b>: a palette kept together, with rename and delete</sub></td>
+</tr>
+</table>
+
 - **On-screen displays** for volume, microphone, output device, brightness,
   keyboard backlight, layout, Caps / Num / Scroll Lock, power mode, do not
   disturb, night light, now playing, privacy and your own scripts
@@ -54,10 +90,22 @@ The rest of what's built in.
   with the pointer still there doesn't reopen it. While they're on, the
   compositor's own hot corner (MangoWM's hot area, Niri's overview corner)
   is switched off in the drop-in so the two never fight.
+- **Calendar**: the clock panel pairs the time and a page-a-day tile with a
+  month you can page through: the arrows, **Today**, the scroll wheel, a
+  click on any day, or the keyboard (arrows by day and week, Page Up / Down
+  by month, Shift for a year, Home for today). Months slide in on a spring;
+  today is filled, the selected day ringed, weekends and the neighbouring
+  months' days set apart. Pick a day to see its events; today shows what's
+  coming up, with the event in progress marked. Optional ISO week numbers,
+  Hijri dates (with Prayer times' adjustment), Eastern Arabic numerals and
+  your weekend days (Studio → Date, time & location); the whole panel
+  mirrors in Arabic. `calendar goto` and `calendar day` do the same from a
+  script.
 - **Calendar events**: subscribe to ICS feeds (`https://` / `webcal://`) or
-  local `.ics` files and folders; events show as dots and an agenda in the
-  clock panel, with **reminders** as notifications (the events' own alarms
-  or a lead time). Pure-Rust RFC 5545 parser with recurring events.
+  local `.ics` files and folders; events show as dots in each calendar's
+  colour and in the clock panel's agenda, with **reminders** as
+  notifications (the events' own alarms or a lead time). Pure-Rust RFC 5545
+  parser with recurring events.
 - **Date & time formats**: custom strftime patterns for the bar and lock
   screen, leading zeros, ISO week numbers, a separate date-name locale.
 - **One location** for weather and prayer times: typed, looked up by city
@@ -110,7 +158,7 @@ The rest of what's built in.
 - **Idle & sleep** (Studio → Power & idle, opt-in): fade → lock → screens off
   → sleep with separate mains and battery timeouts, read from the
   compositor (`ext-idle-notify-v1`, so a fullscreen video's inhibitor
-  counts) and switched with `wlr-output-power-management` (Niri / Hyprland
+  counts) and switched with `wlr-output-power-management` (Niri / Hyprland / Umbriel
   IPC as fallback). Playing media and *Keep awake* (also for N minutes) hold
   it back; screens go dark sooner on the lock screen; your own commands run
   after N idle seconds with a resume command. Lock before sleeping (a logind

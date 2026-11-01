@@ -565,6 +565,16 @@ impl GreeterView {
         let mut stills = if matches!(mode, BackgroundMode::Video | BackgroundMode::Aurora | BackgroundMode::Solid) { Vec::new() } else { list_images(&config.image_dirs(demo)) };
         apply_playlist(&mut clips, &b.playlist);
         apply_playlist(&mut stills, &b.playlist);
+        // Studio's preview holds still: one picture, no clip, no drift (a
+        // scaled-down moving backdrop inside Studio judders). A video
+        // backdrop shows your wallpaper instead.
+        if preview {
+            if mode == BackgroundMode::Video && stills.is_empty() {
+                stills.extend(own_wallpaper());
+            }
+            stills.truncate(1);
+            clips.clear();
+        }
         tracing::info!("greeter background: {:?}, {} clips, {} stills", mode, clips.len(), stills.len());
         let solid = (mode == BackgroundMode::Solid).then(|| Color::from_hex(b.solid.trim()).unwrap_or_else(|_| palette_for(config).surface_dim));
         Background::new(
@@ -573,10 +583,10 @@ impl GreeterView {
                 stills,
                 target,
                 lite: b.video == VideoMode::Lite || preview,
-                video_enabled: b.video != VideoMode::Off,
+                video_enabled: b.video != VideoMode::Off && !preview,
                 blur: b.blur,
                 solid,
-                still_motion: config.accessibility.reduced_motion,
+                still_motion: config.accessibility.reduced_motion || preview,
                 ..background_timing(config)
             },
             b.shuffle && b.playlist.is_empty(),
@@ -652,8 +662,13 @@ impl GreeterView {
         cx.notify();
     }
 
-    pub fn set_preview_size(&mut self, w: f32, h: f32) {
-        self.preview_size = (w.max(64.0), h.max(36.0));
+    pub fn set_preview_size(&mut self, w: f32, h: f32, cx: &mut Context<Self>) {
+        let size = (w.max(64.0), h.max(36.0));
+        if size != self.preview_size {
+            // The preview holds still, so a new size needs a redraw.
+            self.preview_size = size;
+            cx.notify();
+        }
     }
 
     pub fn set_preview_idle(&mut self, idle: bool, cx: &mut Context<Self>) {
@@ -1213,6 +1228,9 @@ struct Frame {
     rtl: bool,
     success: f32,
     reduced: bool,
+    /// No ambient motion (drifting orbs, parallax, breathing glow): reduced
+    /// motion, or Studio's preview, which holds still between changes.
+    still: bool,
     high_contrast: bool,
     t: f32,
 }
@@ -1306,13 +1324,34 @@ impl GreeterView {
     /// where the page around it is cached so a frame costs only the
     /// preview; nothing while the preview is scrolled out of view (moving
     /// it back re-renders it, which resumes).
+    ///
+    /// The preview holds still between changes: it asks for frames only
+    /// while something it shows is moving (a Try-it moment, an edit's
+    /// springs, a picture fading in), and the next edit or click wakes it.
     fn schedule_frame(&mut self, window: &mut Window) {
-        if self.is_preview() && self.offscreen(window) {
+        if self.is_preview() && (self.offscreen(window) || !self.preview_moving(Instant::now())) {
             // Restart the clock cleanly after the pause (no catch-up jump).
             self.clock.idle();
             return;
         }
         window.request_animation_frame();
+    }
+
+    /// Preview only: whether anything on it is still moving.
+    fn preview_moving(&self, now: Instant) -> bool {
+        let springs = self.enter.iter().chain([&self.pop, &self.wake, &self.shake, &self.success, &self.glow, &self.pointer.0, &self.pointer.1]).any(|s| s.is_animating());
+        let m = &self.config.motion;
+        let entrance_s = ENTRANCE_LEAD_S + Element::ALL.len() as f32 * m.stagger_ms as f32 / MS_PER_S;
+        let entering = self.entrance_at.is_some_and(|at| now.saturating_duration_since(at).as_secs_f32() < entrance_s);
+        springs
+            || entering
+            || self.sim_reset.is_some()
+            || self.phase != Phase::Idle
+            || self.toast.is_some()
+            || self.drag.is_some()
+            || self.bg_rebuild_at.is_some()
+            || !self.background.ready()
+            || self.background.fading(now)
     }
 
     fn tick(&mut self, now: Instant, dt: f32) {
@@ -1426,7 +1465,7 @@ impl GreeterView {
         }
         alpha *= 1.0 - f.success;
         // Pointer parallax (foreground moves with the pointer).
-        if !f.reduced {
+        if !f.still {
             let k = self.config.background.parallax * 0.35 * f.u;
             dx += self.pointer.0.value() * k;
             dy += self.pointer.1.value() * k;
@@ -1577,7 +1616,7 @@ impl GreeterView {
         let grow = 1.0 + 0.5 * f.success;
         let d = u.avatar_size * k * self.pop.value().max(0.0) * grow;
         let ring_w = 2.5 * k;
-        let breathing = u.glow_ring && self.password.is_empty() && !f.reduced;
+        let breathing = u.glow_ring && self.password.is_empty() && !f.still;
         let b = if breathing { (f.t * 1.25).sin() * 0.5 + 0.5 } else { 0.4 };
         let accent = self.palette.primary;
         let ring_r = self.avatar_radius(d) + ring_w * 2.0;
@@ -2287,6 +2326,7 @@ impl Render for GreeterView {
             rtl,
             success,
             reduced: a11y.reduced_motion,
+            still: a11y.reduced_motion || preview,
             high_contrast: a11y.high_contrast,
             t: now.saturating_duration_since(self.started).as_secs_f32(),
         };
@@ -2294,7 +2334,7 @@ impl Render for GreeterView {
 
         // Backdrop with pointer parallax (moves against the pointer).
         let bgc = &cfg.background;
-        let par = if f.reduced { 0.0 } else { bgc.parallax * u };
+        let par = if f.still { 0.0 } else { bgc.parallax * u };
         let shift = (-self.pointer.0.value() * par, -self.pointer.1.value() * par);
         let zoom = 1.0 + cfg.motion.success_zoom * success;
         let mut root = div()
@@ -2345,7 +2385,7 @@ impl Render for GreeterView {
         let origin = self.origin.clone();
         root = root.child(canvas(move |b, _, _| origin.set(b.origin), |_, _, _, _| {}).absolute().top_0().left_0().size_full());
         if bgc.orbs && bgc.orb_intensity > 0.0 {
-            let t = if f.reduced { 0.0 } else { f.t };
+            let t = if f.still { 0.0 } else { f.t };
             root = root.child(orbs(vw, vh, p, t, bgc.orb_intensity, shift));
         }
         // Scrims: tint, dim (+ a little while typing), vignette, grain.

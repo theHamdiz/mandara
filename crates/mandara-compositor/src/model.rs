@@ -1,7 +1,8 @@
 //! Compositor-neutral navigation model.
 //!
-//! MangoWM's bitmask tags and Niri/Hyprland's linear workspaces are modelled
-//! natively rather than squeezed into a lowest-common-denominator struct.
+//! MangoWM's bitmask tags and Niri/Hyprland/Umbriel's linear workspaces are
+//! modelled natively rather than squeezed into a lowest-common-denominator
+//! struct.
 
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +11,20 @@ pub enum CompositorKind {
     MangoWM,
     Niri,
     Hyprland,
+    Umbriel,
+}
+
+impl CompositorKind {
+    /// The config dialect this compositor reads.
+    pub const fn target(self) -> mandara_config::compositor::Target {
+        use mandara_config::compositor::Target;
+        match self {
+            CompositorKind::MangoWM => Target::Mango,
+            CompositorKind::Niri => Target::Niri,
+            CompositorKind::Hyprland => Target::Hyprland,
+            CompositorKind::Umbriel => Target::Umbriel,
+        }
+    }
 }
 
 /// One MangoWM tag.
@@ -25,7 +40,7 @@ pub struct TagStatus {
     pub layout: String,
 }
 
-/// One linear / scrollable workspace (Niri, Hyprland).
+/// One linear / scrollable workspace (Niri, Hyprland, Umbriel).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkspaceStatus {
     pub id: u32,
@@ -33,6 +48,11 @@ pub struct WorkspaceStatus {
     pub active: bool,
     pub occupied: bool,
     pub urgent: bool,
+    /// The workspace's own layout where the compositor has one per
+    /// workspace (Umbriel: `scrolling`, `dwindle`, `master`, `stacking`);
+    /// empty elsewhere.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub layout: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

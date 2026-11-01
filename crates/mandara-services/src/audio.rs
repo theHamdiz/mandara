@@ -16,6 +16,7 @@ use crate::actor::{Envelope, ServiceHandle, reply};
 /// Read timeout of the PulseAudio-protocol socket (IPC safety bound).
 const PULSE_READ_TIMEOUT: Duration = Duration::from_secs(5);
 
+pub mod heard;
 pub mod mute;
 
 /// Upper bound for boosted volume.
@@ -150,6 +151,25 @@ impl Pulse {
         Ok((info.default_sink_name, info.default_source_name))
     }
 
+    /// Like [`Self::defaults`], with the sink you actually hear: past a
+    /// pass-through effects sink to the device behind it ([`heard`]).
+    fn heard_defaults(&mut self) -> Result<(Option<CString>, Option<CString>), String> {
+        let (sink, source) = self.defaults()?;
+        let Some(default) = sink else { return Ok((None, source)) };
+        let sinks: protocol::SinkInfoList = self.request(Command::GetSinkInfoList)?;
+        let facts: Vec<heard::SinkFacts> = sinks.iter().map(heard::SinkFacts::of).collect();
+        let name = default.to_string_lossy().into_owned();
+        // Only an effects sink needs the streams and Easy Effects' settings.
+        if !facts.iter().any(|s| s.name == name && s.volume_ignored) {
+            return Ok((Some(default), source));
+        }
+        let inputs: protocol::SinkInputInfoList = self.request(Command::GetSinkInputInfoList)?;
+        let streams: Vec<heard::StreamFacts> = inputs.iter().map(|i| heard::StreamFacts { sink: i.sink_index, link_group: heard::raw_prop(&i.props, "node.link-group") }).collect();
+        let output = heard::easy_effects_output();
+        let chosen = heard::heard(&name, &facts, &streams, output.as_deref());
+        Ok((CString::new(chosen).ok().or(Some(default)), source))
+    }
+
     fn sink(&mut self, name: CString) -> Result<protocol::SinkInfo, String> {
         self.request(Command::GetSinkInfo(protocol::GetSinkInfo { index: None, name: Some(name) }))
     }
@@ -183,7 +203,7 @@ fn text(c: &Option<CString>) -> String {
 }
 
 fn read_state(p: &mut Pulse) -> Result<AudioState, String> {
-    let (sink, source) = p.defaults()?;
+    let (sink, source) = p.heard_defaults()?;
     let mut state = AudioState { available: true, ..Default::default() };
     if let Some(name) = sink {
         let s = p.sink(name)?;
@@ -208,7 +228,7 @@ fn set_mute_all(p: &mut Pulse, global: &mute::GlobalMute, on: bool) -> Result<St
 }
 
 fn execute(p: &mut Pulse, state: &AudioState, command: AudioCommand, global: &mute::GlobalMute) -> Result<String, String> {
-    let (sink, source) = p.defaults()?;
+    let (sink, source) = p.heard_defaults()?;
     let set_sink = |p: &mut Pulse, v: f32| -> Result<String, String> {
         let v = v.clamp(0.0, volume_limit());
         let name = sink.clone().ok_or("no default output")?;

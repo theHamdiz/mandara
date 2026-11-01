@@ -22,7 +22,45 @@ use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 wasmtime::component::bindgen!({ world: "plugin", path: "wit" });
 
+/// The `desktop-plugin` world: `plugin` plus desktop widgets. Its shared
+/// interfaces are the ones generated above, so one host serves both.
+mod desktop_world {
+    wasmtime::component::bindgen!({
+        world: "desktop-plugin",
+        path: "wit",
+        with: { "mandara:plugin/types": super::mandara::plugin::types, "mandara:plugin/host": super::mandara::plugin::host },
+    });
+}
+
+pub use desktop_world::DesktopPlugin;
+pub use desktop_world::mandara::plugin::desktop::WidgetContext;
 pub use mandara::plugin::types::{Kind, Node, Tone};
+
+/// The export a component built for the `desktop-plugin` world has.
+const DESKTOP_EXPORT: &str = "desktop-widget";
+/// Most desktop widget kinds one plugin may offer.
+pub const MAX_DESKTOP_WIDGETS: usize = 16;
+
+/// Desktop widget ids: 1–64 lowercase ASCII letters, digits and `-`.
+pub fn valid_widget_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= MAX_ID_LEN && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// A component's bindings: the plain `plugin` world, or `desktop-plugin`.
+enum Bindings {
+    Plain(Plugin),
+    Desktop(DesktopPlugin),
+}
+
+/// Calls an export both worlds have, whichever the component was built for.
+macro_rules! either {
+    ($b:expr, $s:expr, $call:ident $(, $arg:expr)*) => {
+        match $b {
+            Bindings::Plain(p) => p.$call($s $(, $arg)*),
+            Bindings::Desktop(p) => p.$call($s $(, $arg)*),
+        }
+    };
+}
 
 /// Converts a wasmtime error into an anyhow one with context.
 fn w<T>(r: wasmtime::Result<T>, what: &str) -> Result<T> {
@@ -220,6 +258,7 @@ impl WasiView for HostState {
 }
 
 impl mandara::plugin::types::Host for HostState {}
+impl desktop_world::mandara::plugin::desktop::Host for HostState {}
 
 impl mandara::plugin::host::Host for HostState {
     fn log(&mut self, message: String) {
@@ -311,7 +350,7 @@ pub(crate) fn load_component(path: &Path) -> Result<Component> {
 pub struct WasmPlugin {
     pub id: String,
     store: Store<HostState>,
-    bindings: Plugin,
+    bindings: Bindings,
     /// Set (with the reason) once the plugin trapped or errored; a disabled
     /// plugin is never called again.
     pub disabled: Option<String>,
@@ -328,7 +367,13 @@ impl WasmPlugin {
         let mut linker: Linker<HostState> = Linker::new(engine()?);
         w(wasmtime_wasi::p2::add_to_linker_sync(&mut linker), "linking WASI")?;
         w(non_blocking_waits(&mut linker), "linking WASI")?;
-        w(Plugin::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |s| s), "linking host")?;
+        // A component built for `desktop-plugin` exports its desktop widgets.
+        let desktop = component.component_type().exports(engine()?).any(|(name, _)| name == DESKTOP_EXPORT);
+        if desktop {
+            w(DesktopPlugin::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |s| s), "linking host")?;
+        } else {
+            w(Plugin::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |s| s), "linking host")?;
+        }
         let state = HostState {
             // No preopens, env, args or network: an empty sandbox.
             wasi: WasiCtxBuilder::new().build(),
@@ -347,20 +392,24 @@ impl WasmPlugin {
         store.set_epoch_deadline(CALL_BUDGET_TICKS * INIT_BUDGET_FACTOR);
         let bindings = {
             let _active = ActiveCall::start();
-            w(Plugin::instantiate(&mut store, component, &linker), "instantiating plugin")?
+            if desktop {
+                Bindings::Desktop(w(DesktopPlugin::instantiate(&mut store, component, &linker), "instantiating plugin")?)
+            } else {
+                Bindings::Plain(w(Plugin::instantiate(&mut store, component, &linker), "instantiating plugin")?)
+            }
         };
         let mut plugin = Self { id: id.to_string(), store, bindings, disabled: None };
-        plugin.call_within("init", CALL_BUDGET_TICKS * INIT_BUDGET_FACTOR, |b, s| b.call_init(s)).map(|r| r.map_err(|e| anyhow::anyhow!("init failed: {e}"))).unwrap_or(Ok(()))?;
+        plugin.call_within("init", CALL_BUDGET_TICKS * INIT_BUDGET_FACTOR, |b, s| either!(b, s, call_init)).map(|r| r.map_err(|e| anyhow::anyhow!("init failed: {e}"))).unwrap_or(Ok(()))?;
         Ok(plugin)
     }
 
     /// Runs one export under the time budget; a trap disables the plugin.
-    fn call<T>(&mut self, what: &str, f: impl FnOnce(&Plugin, &mut Store<HostState>) -> wasmtime::Result<T>) -> Option<T> {
+    fn call<T>(&mut self, what: &str, f: impl FnOnce(&Bindings, &mut Store<HostState>) -> wasmtime::Result<T>) -> Option<T> {
         self.call_within(what, CALL_BUDGET_TICKS, f)
     }
 
     /// [`Self::call`] with an explicit budget in epoch ticks.
-    fn call_within<T>(&mut self, what: &str, ticks: u64, f: impl FnOnce(&Plugin, &mut Store<HostState>) -> wasmtime::Result<T>) -> Option<T> {
+    fn call_within<T>(&mut self, what: &str, ticks: u64, f: impl FnOnce(&Bindings, &mut Store<HostState>) -> wasmtime::Result<T>) -> Option<T> {
         if self.disabled.is_some() {
             return None;
         }
@@ -387,22 +436,22 @@ impl WasmPlugin {
     }
 
     pub fn bar(&mut self, theme: &Palette) -> Option<View> {
-        let v = self.call("bar", |b, s| b.call_bar(s, theme)).flatten();
+        let v = self.call("bar", |b, s| either!(b, s, call_bar, theme)).flatten();
         self.localized(v)
     }
 
     pub fn panel(&mut self, theme: &Palette) -> Option<View> {
-        let v = self.call("panel", |b, s| b.call_panel(s, theme)).flatten();
+        let v = self.call("panel", |b, s| either!(b, s, call_panel, theme)).flatten();
         self.localized(v)
     }
 
     pub fn sidebar(&mut self, theme: &Palette) -> Option<View> {
-        let v = self.call("sidebar", |b, s| b.call_sidebar(s, theme)).flatten();
+        let v = self.call("sidebar", |b, s| either!(b, s, call_sidebar, theme)).flatten();
         self.localized(v)
     }
 
     pub fn on_event(&mut self, action: &str) {
-        self.call("on-event", |b, s| b.call_on_event(s, action));
+        self.call("on-event", |b, s| either!(b, s, call_on_event, action));
     }
 
     /// The settings `host::setting` answers from.
@@ -415,8 +464,24 @@ impl WasmPlugin {
         self.store.data_mut().settings = settings;
     }
 
+    /// Whether the plugin offers desktop widgets (built for `desktop-plugin`).
+    pub fn has_desktop(&self) -> bool {
+        matches!(self.bindings, Bindings::Desktop(_))
+    }
+
+    /// A placed desktop widget's view.
+    pub fn desktop_widget(&mut self, theme: &Palette, context: &WidgetContext) -> Option<View> {
+        let v = self
+            .call("desktop-widget", |b, s| match b {
+                Bindings::Desktop(p) => p.call_desktop_widget(s, theme, context),
+                Bindings::Plain(_) => Ok(None),
+            })
+            .flatten();
+        self.localized(v)
+    }
+
     pub fn refresh_ms(&mut self) -> u32 {
-        self.call("refresh-ms", |b, s| b.call_refresh_ms(s)).unwrap_or(0)
+        self.call("refresh-ms", |b, s| either!(b, s, call_refresh_ms)).unwrap_or(0)
     }
 
     /// Commands queued by the plugin since the last call.
@@ -458,6 +523,8 @@ pub struct Discovered {
     pub translations: std::collections::BTreeMap<String, crate::ManifestText>,
     /// `[[settings]]` declarations (validated).
     pub settings: Vec<crate::ManifestSetting>,
+    /// `[[widgets]]`: the desktop widgets it draws (validated).
+    pub widgets: Vec<crate::ManifestWidget>,
 }
 
 /// The contents of a `plugin.toml` (the format documented in PLUGINS.md
@@ -487,6 +554,9 @@ pub struct ManifestFile {
     /// As declared (unvalidated).
     #[serde(default)]
     pub settings: Vec<crate::ManifestSetting>,
+    /// Desktop widgets it draws, as declared (unvalidated).
+    #[serde(default)]
+    pub widgets: Vec<crate::ManifestWidget>,
 }
 
 fn default_version() -> String {
@@ -524,12 +594,14 @@ impl ManifestFile {
         }
         out.extend(self.permissions.iter().filter(|p| p.as_str() != PERMISSION_COMMANDS).map(|p| format!("unknown permission `{p}` (only `{PERMISSION_COMMANDS}` exists)")));
         out.extend(crate::split_settings(self.settings.clone()).1);
+        out.extend(crate::split_widgets(self.widgets.clone()).1);
         out
     }
 
     fn into_discovered(self, dir: PathBuf, source: Source) -> Discovered {
         Discovered {
             settings: crate::split_settings(self.settings).0,
+            widgets: crate::split_widgets(self.widgets).0,
             entry: dir.join(&self.entry),
             dir,
             source,
@@ -750,6 +822,19 @@ mod tests {
         assert!(took < Duration::from_secs(2), "a 10 s sleep held the shell for {took:?}");
         let (bar, disabled, _) = run("mem").unwrap();
         assert!(!bar && disabled.is_some(), "a 200 MiB allocation must disable the plugin: {disabled:?}");
+    }
+
+    /// `non_blocking_waits` only replaces WASI's own `poll` and
+    /// `pollable.block` while `WASI_POLL` names the interface version
+    /// wasmtime-wasi links; after a wasmtime upgrade that moves it, the
+    /// shadows would land in an unused instance and plugins could block
+    /// again. Defining `poll` there without shadowing must collide.
+    #[test]
+    fn the_shadowed_poll_is_the_one_wasi_links() {
+        let mut linker: Linker<HostState> = Linker::new(engine().unwrap());
+        wasmtime_wasi::p2::add_to_linker_sync(&mut linker).unwrap();
+        let mut poll = linker.instance(WASI_POLL).unwrap();
+        assert!(poll.func_new("poll", |_, _, _, _| Ok(())).is_err(), "wasmtime-wasi doesn't link {WASI_POLL}");
     }
 
     #[test]

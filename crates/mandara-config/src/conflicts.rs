@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::compositor::{BindAction, CompositorConfig, Keybind, Target, chord, chords_by_line, include_path, is_generated, resolve_include};
+use crate::compositor::{BindAction, CompositorConfig, Keybind, Target, chord, chords_by_line, includes_in, is_generated, resolve_include, target_chord, toml_code, toml_header, toml_line_key};
 
 /// What a conflicting autostart program does.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -157,7 +157,7 @@ pub fn config_files_from(target: Target, root: &Path) -> Vec<PathBuf> {
             continue;
         }
         let text = std::fs::read_to_string(&file).unwrap_or_default();
-        let mut children: Vec<PathBuf> = text.lines().filter(|l| !is_comment(target, l)).filter_map(|l| include_path(target, l)).map(|p| resolve_include(&file, &p)).collect();
+        let mut children: Vec<PathBuf> = includes_in(target, &text).into_iter().map(|p| resolve_include(&file, &p)).collect();
         children.reverse();
         out.push(file);
         stack.extend(children);
@@ -202,7 +202,112 @@ fn autostart_command(target: Target, line: &str) -> Option<String> {
             t.split_once("hl.exec_cmd(").and_then(|(_, rest)| lua_string(rest))
         }
         Target::Niri => ["spawn-at-startup ", "spawn-sh-at-startup "].iter().find_map(|p| t.strip_prefix(p)).map(str::to_string),
+        // A TOML array that can span lines: read whole-file by
+        // [`umbriel_autostarts`].
+        Target::Umbriel => None,
     }
+}
+
+/// The TOML string literals on one line (comments skipped), as written
+/// (quotes included) and as values.
+fn toml_literals(line: &str) -> Vec<(String, String)> {
+    let code = toml_code(line);
+    let mut out = Vec::new();
+    let mut chars = code.char_indices().peekable();
+    while let Some((start, c)) = chars.next() {
+        if c != '"' && c != '\'' {
+            continue;
+        }
+        let mut value = String::new();
+        let mut end = None;
+        while let Some((i, ch)) = chars.next() {
+            match ch {
+                '\\' if c == '"' => {
+                    if let Some((_, esc)) = chars.next() {
+                        value.push(match esc {
+                            'n' => '\n',
+                            't' => '\t',
+                            other => other,
+                        });
+                    }
+                }
+                q if q == c => {
+                    end = Some(i);
+                    break;
+                }
+                ch => value.push(ch),
+            }
+        }
+        if let Some(end) = end {
+            out.push((code[start..=end].to_string(), value));
+        }
+    }
+    out
+}
+
+/// Umbriel `general.autostart` entries with their 0-based line: `[general]`
+/// `autostart = [ … ]` (or a top-level `general.autostart`), one array that
+/// may span several lines.
+pub(crate) fn umbriel_autostarts(text: &str) -> Vec<(usize, String)> {
+    let mut out = Vec::new();
+    let mut section = String::new();
+    let mut in_array = false;
+    for (i, line) in text.lines().enumerate() {
+        if !in_array && let Some(h) = toml_header(line) {
+            section = h.to_string();
+            continue;
+        }
+        let code = toml_code(line);
+        if !in_array {
+            let key = toml_line_key(line).unwrap_or_default();
+            let starts = (section == "general" && key == "autostart") || (section.is_empty() && key == "general.autostart");
+            if !starts {
+                continue;
+            }
+            in_array = true;
+        }
+        let value_part = if code.contains('=') && toml_line_key(line).is_some() { code.split_once('=').map(|(_, v)| v).unwrap_or(code) } else { code };
+        out.extend(toml_literals(value_part).into_iter().map(|(_, v)| (i, v)));
+        // The array ends at a `]` outside strings.
+        let unquoted: String = toml_literals(value_part).iter().fold(value_part.to_string(), |acc, (lit, _)| acc.replacen(lit.as_str(), "", 1));
+        if unquoted.contains(']') {
+            in_array = false;
+        }
+    }
+    out
+}
+
+/// Retires one Umbriel autostart entry: its string is taken out of the
+/// array line (the rest of the list stays as written) and noted in a
+/// trailing `mandara-retired:` comment.
+fn umbriel_retire_autostart(line: &str, program: &str) -> String {
+    let mut kept = toml_code(line).to_string();
+    let mut retired = Vec::new();
+    for (lit, value) in toml_literals(line) {
+        if programs_in(&value).iter().any(|p| p == program)
+            && let Some(at) = kept.find(&lit)
+        {
+            // Take a following comma with it, else a preceding one.
+            let after = kept[at + lit.len()..].trim_start();
+            let (from, to) = if after.starts_with(',') {
+                let comma = kept[at + lit.len()..].find(',').map(|c| at + lit.len() + c + 1).unwrap_or(at + lit.len());
+                let spaces = kept[comma..].len() - kept[comma..].trim_start().len();
+                (at, comma + spaces)
+            } else {
+                let before = kept[..at].trim_end();
+                let from = if before.ends_with(',') { before.len() - 1 } else { at };
+                (from, at + lit.len())
+            };
+            kept.replace_range(from..to, "");
+            retired.push(lit);
+        }
+    }
+    // The line's own comment stays, after the marker.
+    let own = line[toml_code(line).len()..].trim_start_matches('#').trim();
+    let own = if own.is_empty() { String::new() } else { format!(" · {own}") };
+    let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+    let (kept, sep) = if kept.trim().is_empty() { (indent.as_str(), "") } else { (kept.trim_end(), " ") };
+    format!("{kept}{sep}# mandara-retired: {}{own}", retired.join(", "))
 }
 
 /// The first Lua string literal in `s` (`"waybar") end)` → `waybar`).
@@ -278,8 +383,8 @@ pub fn takeover_keybinds(conflicts: &[Conflict]) -> Vec<Keybind> {
 }
 
 /// Chord → Mandara action, for the binds Mandara manages.
-fn mandara_chords(cfg: &CompositorConfig) -> Vec<(String, String)> {
-    cfg.keybinds.iter().map(|k| (k.chord(), k.action.shell_command_with("mandara").trim_start_matches("mandara msg ").to_string())).collect()
+fn mandara_chords(target: Target, cfg: &CompositorConfig) -> Vec<(String, String)> {
+    cfg.keybinds.iter().map(|k| (target_chord(target, k), k.action.shell_command_with("mandara").trim_start_matches("mandara msg ").to_string())).collect()
 }
 
 /// Line ranges of Niri binds: (first line, last line, chord).
@@ -336,7 +441,7 @@ pub fn scan(target: Target, cfg: &CompositorConfig) -> Vec<Conflict> {
 }
 
 pub fn scan_files(target: Target, cfg: &CompositorConfig, files: &[PathBuf]) -> Vec<Conflict> {
-    let ours = mandara_chords(cfg);
+    let ours = mandara_chords(target, cfg);
     let mut out = Vec::new();
     for file in files {
         let Ok(text) = std::fs::read_to_string(file) else { continue };
@@ -365,11 +470,13 @@ pub fn scan_files(target: Target, cfg: &CompositorConfig, files: &[PathBuf]) -> 
             }
         }
         // Autostarted programs.
-        for (i, l) in lines.iter().enumerate() {
-            if is_comment(target, l) {
-                continue;
-            }
-            let Some(cmd) = autostart_command(target, l) else { continue };
+        let autostarts: Vec<(usize, String)> = if target == Target::Umbriel {
+            umbriel_autostarts(&text)
+        } else {
+            lines.iter().enumerate().filter(|(_, l)| !is_comment(target, l)).filter_map(|(i, l)| autostart_command(target, l).map(|cmd| (i, cmd))).collect()
+        };
+        for (i, cmd) in autostarts {
+            let l = lines[i];
             if cmd.contains("mandara") {
                 continue;
             }
@@ -469,8 +576,25 @@ pub fn retire_into(target: Target, conflicts: &[Conflict], root: &Path) -> Resul
         let prefix = comment_prefix(target, file);
         let script = is_script(file);
         let mut out: Vec<String> = Vec::new();
+        // Umbriel autostarts are entries of one array: only the entry goes.
+        let umbriel_programs: Vec<(usize, &str)> = if target == Target::Umbriel {
+            conflicts
+                .iter()
+                .filter(|c| &c.file == *file)
+                .filter_map(|c| match &c.kind {
+                    Kind::Autostart { program, .. } => Some(c.lines.iter().map(move |l| (*l, program.as_str()))),
+                    _ => None,
+                })
+                .flatten()
+                .collect()
+        } else {
+            Vec::new()
+        };
         for (i, line) in text.lines().enumerate() {
-            if retire_lines.contains(&i) {
+            let programs: Vec<&str> = umbriel_programs.iter().filter(|(l, _)| *l == i).map(|(_, p)| *p).collect();
+            if !programs.is_empty() && !script {
+                out.push(programs.iter().fold(line.to_string(), |l, p| umbriel_retire_autostart(&l, p)));
+            } else if retire_lines.contains(&i) {
                 let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
                 if script {
                     out.push(format!("{indent}{SCRIPT_RETIRED} {}", line.trim_start()));
@@ -527,13 +651,21 @@ pub enum Validation {
 }
 
 /// Runs the compositor's own config checker on the user's config:
-/// `mango -p -c`, `niri validate -c`, `Hyprland --verify-config -c`.
+/// `mango -p -c`, `niri validate -c`, `Hyprland --verify-config -c`,
+/// `umbriel config validate -c`.
 pub fn validate(target: Target) -> Validation {
-    let config = target.user_config();
+    validate_file(target, &target.user_config())
+}
+
+/// [`validate`] for any config file of `target`'s dialect.
+pub fn validate_file(target: Target, config: &Path) -> Validation {
     let (tool, args): (&'static str, Vec<String>) = match target {
         Target::Mango => ("mango", vec!["-p".into(), "-c".into(), config.display().to_string()]),
         Target::Niri => ("niri", vec!["validate".into(), "-c".into(), config.display().to_string()]),
         Target::Hyprland => ("Hyprland", vec!["--verify-config".into(), "-c".into(), config.display().to_string()]),
+        // Exits non-zero when it finds a problem (and works without a
+        // running compositor).
+        Target::Umbriel => ("umbriel", vec!["config".into(), "validate".into(), "-c".into(), config.display().to_string()]),
     };
     let Ok(out) = std::process::Command::new(tool).args(&args).output() else { return Validation::Unchecked };
     let report = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
@@ -578,6 +710,7 @@ mod tests {
     }
 
     use super::*;
+    use crate::compositor::include_path;
 
     fn cfg() -> CompositorConfig {
         CompositorConfig::default()
@@ -623,6 +756,44 @@ mod tests {
         restore(&backup_dir).unwrap();
         assert_eq!(std::fs::read_to_string(d.join("bind.conf")).unwrap(), original);
         std::fs::remove_dir_all(&backup_dir).ok();
+        std::fs::remove_dir_all(d).ok();
+    }
+
+    /// Umbriel: binds in `[keybinds]`, autostarts as entries of one
+    /// `general.autostart` array (single- or multi-line), includes in
+    /// `[include] files`. Retiring takes only the entry out of the array.
+    #[test]
+    fn umbriel_binds_autostarts_and_includes() {
+        let d = tmp("umbriel");
+        std::fs::write(
+            d.join("config.toml"),
+            "[general]\nautostart = [\"waybar\", \"kitty\"] # start\n\n[include]\nfiles = [\"binds.toml\"]\n\n[include.optional]\nfiles = [\"/home/u/.config/mandara/generated/umbriel.toml\"]\n",
+        )
+        .unwrap();
+        std::fs::write(d.join("binds.toml"), "[keybinds]\n\"Mod+Space\" = \"spawn fuzzel\"\n\"Mod+Return\" = \"spawn kitty\"\n\"Alt+Space\" = \"spawn rofi -show drun\"\n").unwrap();
+        let files = config_files_from(Target::Umbriel, &d.join("config.toml"));
+        assert_eq!(files, vec![d.join("config.toml"), d.join("binds.toml")], "includes followed, Mandara's drop-in skipped");
+        let found = scan_files(Target::Umbriel, &cfg(), &files);
+        assert!(found.iter().any(|c| matches!(&c.kind, Kind::Keybind { chord, replaces: Some(tool), .. } if chord == "super+space" && tool == "fuzzel")), "{found:?}");
+        assert!(found.iter().any(|c| matches!(&c.kind, Kind::Takeover { chord, tool, .. } if chord == "alt+space" && tool == "rofi")), "{found:?}");
+        let bar = found.iter().find(|c| matches!(&c.kind, Kind::Autostart { program, .. } if program == "waybar")).expect("waybar autostart");
+        assert_eq!(bar.lines, vec![1]);
+        // Multi-line arrays: one conflict per entry line.
+        let multi = "[general]\nautostart = [\n  \"swww-daemon\",\n  \"kitty\",\n  \"mako\",\n]\n";
+        assert_eq!(umbriel_autostarts(multi), vec![(2, "swww-daemon".into()), (3, "kitty".into()), (4, "mako".into())]);
+        assert_eq!(umbriel_autostarts("general.autostart = [\"a\"]\n[x]\nautostart = [\"b\"]\n"), vec![(0, "a".into())]);
+        // Retire: only waybar leaves the list; kitty and the comment stay.
+        let backups = d.join("backup");
+        let only: Vec<Conflict> = found.iter().filter(|c| matches!(c.kind, Kind::Autostart { .. })).cloned().collect();
+        let b = retire_into(Target::Umbriel, &only, &backups).unwrap();
+        let text = std::fs::read_to_string(d.join("config.toml")).unwrap();
+        assert!(text.contains("autostart = [\"kitty\"] # mandara-retired: \"waybar\" · start"), "{text}");
+        text.parse::<toml::Table>().expect("still TOML");
+        assert!(scan_files(Target::Umbriel, &cfg(), &files).iter().all(|c| !matches!(c.kind, Kind::Autostart { .. })), "retired entries are not found again");
+        assert_eq!(umbriel_retire_autostart("  \"mako\",", "mako"), "  # mandara-retired: \"mako\"");
+        assert_eq!(umbriel_retire_autostart("autostart = [\"kitty\", \"waybar\"]", "waybar"), "autostart = [\"kitty\"] # mandara-retired: \"waybar\"");
+        restore(&b).unwrap();
+        assert!(std::fs::read_to_string(d.join("config.toml")).unwrap().contains("[\"waybar\", \"kitty\"]"));
         std::fs::remove_dir_all(d).ok();
     }
 

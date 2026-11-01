@@ -15,10 +15,27 @@
 //! locked): the system monitor samples only then, the visualizer listens
 //! only while music plays and stops after its silence timeout.
 
+pub mod actions;
+pub mod datecal;
 pub mod draw;
+pub mod faces;
+pub mod feeds;
+pub mod frame;
+pub mod fun;
+pub mod identity;
+pub mod info;
 pub mod layout;
+pub mod lingo;
+pub mod media_view;
+pub mod monitor_more;
+pub mod productive;
+pub mod progress;
+pub mod sky;
+pub mod skyview;
 pub mod sysmon;
+pub mod texts;
 pub mod visualizer;
+pub mod weather_more;
 
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
@@ -26,17 +43,18 @@ use std::time::{Duration, Instant};
 use chrono::{DateTime, Datelike as _, Local, Timelike as _};
 use image::RgbImage;
 use mandara_config::Units;
-use mandara_config::desktop_widgets::{ClockFace, ClockWidget, Depth, DesktopWidget, Insets, MonitorRow, MonitorWidget, WidgetKind, ranges};
+use mandara_config::desktop_widgets::{ClockFace, ClockWidget, Depth, DesktopWidget, Insets, MonitorRow, MonitorStyle, MonitorWidget, WidgetKind, ranges};
 use mandara_core::shm_canvas::{Place, Planes, Rect, snap};
-use mandara_i18n::t;
+use mandara_i18n::tk;
 use mandara_theme::Color;
 use tiny_skia::Pixmap;
 
 use self::draw::{Inks, Measurer, Style};
 use self::layout::{ClockStrings, Composition, MonitorLine};
+use self::lingo::{HijriDate, Lingo};
 use crate::backdrop::paint::FontNames;
 use crate::lock::paint::TextPainter;
-use crate::widgets::clock::{arabic_numerals, localized};
+use crate::widgets::clock::arabic_numerals;
 use crate::widgets::system::format_bytes;
 
 /// Plane index of widget `i`'s static plane (its live plane is the next).
@@ -93,15 +111,322 @@ pub struct WidgetScene {
     pub units: Units,
     pub h24: bool,
     pub rtl: bool,
+    /// The widget being dragged in edit mode: its planes move with the
+    /// pointer as they are (a subsurface move, no repaint) and are painted
+    /// once more where it lands.
+    pub moving: Option<String>,
+    /// The theme's surface (widget plates).
+    pub surface: Color,
+    /// Today's Hijri date (the day begins at Maghrib), while a widget may
+    /// show it.
+    pub hijri: Option<HijriDate>,
+    /// The weather in full, while a weather widget shows.
+    pub forecast: Option<Forecast>,
+    /// The World clock plugin's cities (a world clock widget without its
+    /// own list shows them).
+    pub world_cities: Vec<String>,
+    /// The week's first day, days after Monday.
+    pub week_start: u32,
+    /// What the newer widgets show, filled only while one needs it.
+    pub data: WidgetData,
+}
+
+/// Data of the widget collection's kinds, from the shell's services.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct WidgetData {
+    /// Every to-do, open first, and the lists.
+    pub todos: Vec<TodoItem>,
+    pub lists: Vec<(u64, String)>,
+    /// Notes, most recently edited first.
+    pub notes: Vec<NoteItem>,
+    pub pomodoro: Option<PomodoroState>,
+    /// Each widget's turns of its "next" (photos, quotes, the pet).
+    pub turns: std::collections::BTreeMap<String, u32>,
+    /// Calendar events from today on, soonest first.
+    pub events: Vec<EventItem>,
+    /// The location (latitude, longitude) the sky widgets use.
+    pub place: Option<(f64, f64)>,
+    /// You (the profile card).
+    pub me: Option<MeInfo>,
+    /// Each shortcut widget's tiles.
+    pub tiles: std::collections::BTreeMap<String, Vec<TileItem>>,
+    /// Quick toggles and whether each is on, volume and brightness.
+    pub toggles: Vec<(String, bool)>,
+    pub levels: Vec<(String, f32)>,
+    /// The theme's colours: role name (a catalog key) and `0xRRGGBB`.
+    pub palette: Vec<(String, u32)>,
+    /// Each photo frame's and sticker's picture.
+    pub pictures: std::collections::BTreeMap<String, layout::Picture>,
+    /// When each widget was last clicked for its "next" (Unix ms): the
+    /// desk pet reacts for a moment.
+    pub poked: std::collections::BTreeMap<String, i64>,
+    /// What plays (while a player is loaded and a media widget shows).
+    pub media: Option<MediaInfo>,
+    pub fetch: Option<FetchInfo>,
+    pub screen: Option<ScreenInfo>,
+    pub prayer: Option<PrayerInfo>,
+    pub glance: Option<GlanceInfo>,
+    /// Each GitHub, exchange rate and AI usage widget's feed, by widget id.
+    pub github: std::collections::BTreeMap<String, Feed<Vec<mandara_services::desktop_feeds::ContributionDay>>>,
+    pub rates: std::collections::BTreeMap<String, Feed<mandara_services::desktop_feeds::Rates>>,
+    pub ai_usage: std::collections::BTreeMap<String, Feed<std::collections::BTreeMap<chrono::NaiveDate, mandara_services::desktop_feeds::DayTokens>>>,
+    pub games: Feed<Vec<GameItem>>,
+}
+
+/// Something fetched for a widget: what came, why it didn't, or that it's
+/// on its way.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Feed<T> {
+    pub value: Option<T>,
+    pub error: Option<String>,
+    pub loading: bool,
+}
+
+impl<T> Default for Feed<T> {
+    fn default() -> Self {
+        Self { value: None, error: None, loading: false }
+    }
+}
+
+/// An installed game for the games shelf.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GameItem {
+    pub appid: u32,
+    pub name: String,
+    pub cover: Option<layout::Picture>,
+}
+
+/// The machine, for the fetch card.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FetchInfo {
+    pub user: String,
+    pub host: String,
+    pub os: String,
+    pub kernel: String,
+    pub desktop: String,
+    pub cpu: String,
+    pub gpu: String,
+    /// Memory used and total, bytes.
+    pub memory: (u64, u64),
+    pub uptime_s: u64,
+    pub shell: String,
+    pub screen: String,
+    pub logo: Option<layout::Picture>,
+}
+
+/// Screen time: day names with their totals (today last, flagged) and
+/// today's top apps.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ScreenInfo {
+    pub days: Vec<(String, u64, bool)>,
+    pub top: Vec<(String, u64)>,
+}
+
+/// Today's prayer times: name (catalog key), Arabic name, time; tomorrow's
+/// Fajr and today's Hijri date.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PrayerInfo {
+    pub times: Vec<(&'static str, &'static str, chrono::NaiveTime)>,
+    pub tomorrow_fajr: chrono::NaiveTime,
+    /// Today's Hijri date (the day turns at Maghrib); the widget writes it
+    /// in its own language, digits and calendar.
+    pub hijri: Option<lingo::HijriDate>,
+}
+
+/// The one thing worth knowing now: an icon, a sentence and what a click
+/// does.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GlanceInfo {
+    pub icon: &'static str,
+    pub text: String,
+    pub action: Option<actions::Action>,
+}
+
+/// The track a media widget shows.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MediaInfo {
+    pub title: String,
+    pub artist: String,
+    pub playing: bool,
+    /// Position at `at_ms` (Unix ms), the playback rate and the length.
+    pub position_ms: i64,
+    pub at_ms: i64,
+    pub rate: f64,
+    pub length_ms: i64,
+    pub art: Option<layout::Picture>,
+    /// Synced lyric lines (ms, text), when a lyrics widget asked.
+    pub lyrics: Vec<(i64, String)>,
+    pub lyrics_loading: bool,
+}
+
+/// You, for the profile card.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MeInfo {
+    pub name: String,
+    pub login: String,
+    pub host: String,
+    pub uptime_s: u64,
+    pub avatar: Option<layout::Picture>,
+    pub dnd: bool,
+}
+
+/// One launch tile.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TileItem {
+    pub label: String,
+    pub action: actions::Action,
+    /// The app's own icon, else a bundled glyph.
+    pub icon: Option<layout::Picture>,
+    pub glyph: &'static str,
+}
+
+/// A calendar event.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EventItem {
+    /// Its first and last day (local).
+    pub day: chrono::NaiveDate,
+    pub last_day: chrono::NaiveDate,
+    /// Unix ms.
+    pub start_ms: i64,
+    pub end_ms: i64,
+    pub all_day: bool,
+    pub title: String,
+    /// Its calendar's colour (`0xRRGGBB`).
+    pub color: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TodoItem {
+    pub id: u64,
+    pub text: String,
+    pub done: bool,
+    pub list: u64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct NoteItem {
+    pub title: String,
+    /// The text after the title (cut short).
+    pub body: String,
+}
+
+/// The focus timer, as wall-clock times so the canvas counts down on its
+/// own.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PomodoroState {
+    /// The phase (an English catalog key).
+    pub phase: &'static str,
+    /// When it ends (Unix ms) while running.
+    pub ends_ms: Option<i64>,
+    /// Time left while paused, ms.
+    pub paused_ms: i64,
+    pub length_ms: i64,
+    pub running: bool,
+    pub completed: u32,
+    /// Focus sessions in a set (a long break follows).
+    pub long_every: u32,
+}
+
+/// What the weather widget shows, from the weather plugin.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Forecast {
+    pub icon: &'static str,
+    /// °C.
+    pub temp: f32,
+    pub feels_like: f32,
+    pub humidity: u8,
+    /// km/h.
+    pub wind: f32,
+    /// The condition (an English catalog key).
+    pub condition: String,
+    pub place: String,
+    /// Coming days: date, icon, min and max °C.
+    pub days: Vec<(chrono::NaiveDate, &'static str, f32, f32)>,
+    /// The coming hours: hour of the day, icon, °C.
+    pub hours: Vec<(u32, &'static str, f32)>,
+    /// The condition as an index (clear, partly cloudy, cloudy, fog,
+    /// drizzle, rain, snow, thunder) and whether the sun is up.
+    pub kind: usize,
+    pub is_day: bool,
+    /// Today's low and high, °C.
+    pub today: Option<(f32, f32)>,
 }
 
 impl Default for WidgetScene {
     fn default() -> Self {
-        Self { items: Vec::new(), on_surface: Color::oklch(0.95, 0.0, 0.0), weather: None, visible: Vec::new(), music: false, units: Units::default(), h24: true, rtl: false }
+        Self {
+            items: Vec::new(),
+            on_surface: Color::oklch(0.95, 0.0, 0.0),
+            weather: None,
+            visible: Vec::new(),
+            music: false,
+            units: Units::default(),
+            h24: true,
+            rtl: false,
+            moving: None,
+            surface: Color::oklch(0.22, 0.02, 250.0),
+            hijri: None,
+            forecast: None,
+            world_cities: Vec::new(),
+            week_start: 0,
+            data: WidgetData::default(),
+        }
     }
 }
 
+/// What changes a widget's pixels: its settings and size, not where it
+/// sits (moving it moves its planes). The anchor stays in (it sets the
+/// text alignment), and so does the way vertical text turns (it follows
+/// the side of the screen).
+pub fn content_key(w: &DesktopWidget) -> u64 {
+    let mut c = w.clone();
+    c.place.x = 0.0;
+    c.place.y = 0.0;
+    c.place.displays.clear();
+    c.place.depth = Depth::Behind;
+    let turns = matches!(&w.kind, WidgetKind::Decoration(d) if d.vertical && d.sideways.clockwise(&w.place));
+    key((format!("{c:?}"), turns))
+}
+
+/// Physical px a placed box may drift from where it was painted before it
+/// counts as moved.
+const MOVE_EPSILON_PX: f32 = 0.01;
+
+/// `r` moved by `(dx, dy)` rounded to the canvas grid (subsurfaces sit on
+/// whole logical pixels).
+fn shifted(r: Rect, (dx, dy): (f32, f32), scale120: u32) -> Rect {
+    let g = mandara_core::shm_canvas::grid_step(scale120).max(1) as f32;
+    let step = |d: f32| ((d / g).round() * g) as i32;
+    Rect { x: r.x + step(dx), y: r.y + step(dy), ..r }
+}
+
+impl PomodoroState {
+    /// A timer that hasn't started: 25 minutes of focus.
+    pub fn idle() -> Self {
+        Self { phase: tk("Focus"), ends_ms: None, paused_ms: IDLE_FOCUS_MS, length_ms: IDLE_FOCUS_MS, running: false, completed: 0, long_every: IDLE_LONG_EVERY }
+    }
+}
+
+/// The focus timer's defaults (previews, before the store is read).
+const IDLE_FOCUS_MS: i64 = 25 * 60 * 1000;
+const IDLE_LONG_EVERY: u32 = 4;
+
 impl WidgetScene {
+    /// A scene for previews and Studio's gallery: `items` with example
+    /// weather, today's Hijri date and the default world cities.
+    pub fn preview(items: Vec<DesktopWidget>) -> Self {
+        let today = Local::now().date_naive();
+        Self {
+            items,
+            weather: Some(("sun", "23°".into())),
+            hijri: Some(lingo::hijri_of(today)),
+            forecast: Some(texts::sample_forecast(today)),
+            world_cities: mandara_services::world_clock::DEFAULT_CITIES.iter().map(|c| c.to_string()).collect(),
+            rtl: mandara_i18n::language().is_rtl(),
+            ..Self::default()
+        }
+    }
+
     /// Any widget below the depth subject (the depth mask is needed).
     pub fn any_behind(&self) -> bool {
         self.items.iter().any(|w| w.place.depth == Depth::Behind)
@@ -119,21 +444,78 @@ impl WidgetScene {
 
 fn is_live(k: &WidgetKind) -> bool {
     match k {
-        WidgetKind::Clock(c) => c.seconds && c.face == ClockFace::Superscript,
-        WidgetKind::Monitor(_) | WidgetKind::Visualizer(_) => true,
+        WidgetKind::Clock(c) => ticks_seconds(c),
+        WidgetKind::Monitor(_) | WidgetKind::Visualizer(_) | WidgetKind::Pomodoro(_) | WidgetKind::Pet(_) | WidgetKind::Bubbles(_) | WidgetKind::Media(_) => true,
         _ => false,
     }
+}
+
+/// Frames per second of an animated widget (the pet, bubbles) at `now`.
+fn animation_fps(w: &DesktopWidget, scene: &WidgetScene, now: &DateTime<Local>) -> Option<u32> {
+    match &w.kind {
+        WidgetKind::Pet(_) => Some(if fun::asleep(now) && !scene.data.poked.contains_key(&w.id) { fun::PET_SLEEP_FPS } else { fun::PET_FPS }),
+        WidgetKind::Bubbles(_) => Some(fun::BUBBLES_FPS),
+        WidgetKind::Media(mw) if mw.layout == mandara_config::desktop_widgets::MediaLayout::Vinyl && mw.spin && scene.data.media.as_ref().is_some_and(|m| m.playing) => Some(media_view::VINYL_FPS),
+        _ => None,
+    }
+}
+
+/// The toggles a widget shows (its own list, else four common ones).
+pub fn toggle_ids(w: &mandara_config::desktop_widgets::TogglesWidget) -> Vec<String> {
+    if w.toggles.is_empty() { ["wifi", "bluetooth", "dnd", "night-light"].map(String::from).to_vec() } else { w.toggles.clone() }
+}
+
+/// What else `w` shows from the scene (the forecast, the cities), hashed.
+fn data_key(w: &DesktopWidget, scene: &WidgetScene) -> u64 {
+    match &w.kind {
+        WidgetKind::Weather(_) => key(format!("{:?}", scene.forecast)),
+        WidgetKind::WorldClock(_) => key(&scene.world_cities),
+        WidgetKind::Todo(_) => key(format!("{:?}{:?}", scene.data.todos, scene.data.lists)),
+        WidgetKind::Note(_) | WidgetKind::Notebook(_) => key(format!("{:?}", scene.data.notes)),
+        WidgetKind::Pomodoro(_) => key(format!("{:?}", scene.data.pomodoro)),
+        WidgetKind::Quote(_) => key(scene.data.turns.get(&w.id)),
+        WidgetKind::Date(_) => key(format!("{:?}", scene.data.events)),
+        WidgetKind::Sky(_) => key(format!("{:?}", scene.data.place)),
+        WidgetKind::Profile(_) => key(format!("{:?}", scene.data.me)),
+        WidgetKind::Shortcuts(_) => key(format!("{:?}", scene.data.tiles.get(&w.id))),
+        WidgetKind::Toggles(_) => key(format!("{:?}", scene.data.toggles)),
+        WidgetKind::Sliders(_) => key(format!("{:?}", scene.data.levels)),
+        WidgetKind::Palette(_) => key(format!("{:?}", scene.data.palette)),
+        WidgetKind::Photo(_) | WidgetKind::Sticker(_) => key(format!("{:?}", scene.data.pictures.get(&w.id))),
+        WidgetKind::Fetch(_) => key(format!("{:?}{:?}", scene.data.fetch, scene.data.palette)),
+        WidgetKind::ScreenTime(_) => key(format!("{:?}", scene.data.screen)),
+        WidgetKind::Prayer(_) => key(format!("{:?}", scene.data.prayer)),
+        WidgetKind::Glance(_) => key(format!("{:?}{:?}", scene.data.glance, scene.weather)),
+        WidgetKind::Github(_) => key(format!("{:?}", scene.data.github.get(&w.id))),
+        WidgetKind::Currency(_) => key(format!("{:?}", scene.data.rates.get(&w.id))),
+        WidgetKind::AiUsage(_) => key(format!("{:?}", scene.data.ai_usage.get(&w.id))),
+        WidgetKind::Games(_) => key(format!("{:?}", scene.data.games)),
+        // The track, the art and the lyrics; not the moving position.
+        WidgetKind::Media(_) => key(format!("{:?}", scene.data.media.as_ref().map(|m| (&m.title, &m.artist, m.playing, &m.art, &m.lyrics, m.lyrics_loading, m.length_ms)))),
+        _ => 0,
+    }
+}
+
+/// A clock face that shows seconds (its live plane redraws each second).
+fn ticks_seconds(c: &ClockWidget) -> bool {
+    c.seconds && matches!(c.face, ClockFace::Superscript | ClockFace::Analog)
 }
 
 /// One widget's planes on one output.
 #[derive(Default)]
 struct State {
     id: String,
+    /// [`content_key`]: everything that changes the pixels (not where the
+    /// widget sits).
     cfg: u64,
     static_key: Option<u64>,
     live_key: Option<u64>,
     rect: Rect,
     live_rect: Rect,
+    /// Where the planes were painted: the placed box's top-left (physical
+    /// px) and the two rectangles, before any [`Planes::move_plane`].
+    painted_at: (f32, f32),
+    painted_rects: (Rect, Rect),
     /// Where the plane content may reach (grows; the depth cut covers it).
     envelope: Rect,
     behind: bool,
@@ -143,6 +525,30 @@ struct State {
     vis: Option<(visualizer::Geometry, visualizer::Painter)>,
     frame_at: Option<Instant>,
     inks: Option<Inks>,
+    /// Where a click does something, as last painted.
+    hits: Option<HitMap>,
+}
+
+/// A painted widget's clickable areas and how it was placed and turned.
+#[derive(Clone, Debug)]
+struct HitMap {
+    hits: Vec<layout::Hit>,
+    origin: (f32, f32),
+    size: (f32, f32),
+    rotation: f32,
+    flip: (bool, bool),
+}
+
+impl HitMap {
+    fn of(l: &Laid) -> Option<Self> {
+        (!l.comp.hits.is_empty()).then(|| HitMap { hits: l.comp.hits.clone(), origin: l.origin, size: l.comp.size, rotation: l.rotation, flip: l.flip })
+    }
+
+    fn hit(&self, p: (f32, f32)) -> Option<&actions::Action> {
+        let laid = Laid { comp: Composition { hits: self.hits.clone(), size: self.size, ..Composition::default() }, origin: self.origin, k: 1.0, rotation: self.rotation, flip: self.flip, outer: (0.0, 0.0, 0.0, 0.0), margin: 0.0 };
+        let found = laid.hit(p)?.clone();
+        self.hits.iter().map(|h| &h.action).find(|a| **a == found)
+    }
 }
 
 /// The widgets of one output.
@@ -165,6 +571,12 @@ impl OutWidgets {
             .map(|st| (st.id.clone(), st.rect.union(&st.live_rect), st.outer))
             .filter(|(_, r, _)| !r.is_empty())
             .collect()
+    }
+
+    /// The widget and action under `p` (physical px), the topmost widget
+    /// first.
+    pub fn hit(&self, p: (f32, f32)) -> Option<(String, actions::Action)> {
+        self.states.iter().rev().filter(|st| !st.id.is_empty()).find_map(|st| st.hits.as_ref()?.hit(p).map(|a| (st.id.clone(), a.clone())))
     }
 
     /// Removes every widget plane of output `id` (buffers and surfaces)
@@ -278,47 +690,115 @@ fn shows(w: &DesktopWidget, o: &OutputCx<'_>) -> bool {
 
 // ── Strings ──────────────────────────────────────────────────────────────
 
-/// The greeting for `hour` (localized).
+/// The greeting for `hour` (an English catalog key).
 pub fn greeting(hour: u32) -> &'static str {
     match hour {
-        h if (MORNING_FROM..AFTERNOON_FROM).contains(&h) => t("Good morning"),
-        h if (AFTERNOON_FROM..EVENING_FROM).contains(&h) => t("Good afternoon"),
-        h if (EVENING_FROM..NIGHT_FROM).contains(&h) => t("Good evening"),
-        _ => t("Good night"),
+        h if (MORNING_FROM..AFTERNOON_FROM).contains(&h) => tk("Good morning"),
+        h if (AFTERNOON_FROM..EVENING_FROM).contains(&h) => tk("Good afternoon"),
+        h if (EVENING_FROM..NIGHT_FROM).contains(&h) => tk("Good evening"),
+        _ => tk("Good night"),
     }
 }
 
-/// Every string of a clock at `now`.
-pub fn clock_strings(now: &DateTime<Local>, c: &ClockWidget, h24: bool, weather: Option<&(&'static str, String)>) -> ClockStrings {
+/// Every string of a clock at `now`, in the clock's language, digits and
+/// calendar (`hijri`: today's Hijri date).
+#[allow(clippy::too_many_arguments)]
+pub fn clock_strings(now: &DateTime<Local>, c: &ClockWidget, h24: bool, weather: Option<&(&'static str, String)>, hijri: Option<HijriDate>, ui_rtl: bool, week_start: u32) -> ClockStrings {
+    let probe = Lingo::of(&c.locale, ui_rtl, None);
+    let l = Lingo { eastern: c.eastern(probe.arabic()), ..probe };
     let (h, m, s) = (now.hour(), now.minute(), now.second());
     let h12 = match h % HALF_DAY {
         0 => HALF_DAY,
         v => v,
     };
     // Stacked hours balance better as two digits.
-    let hours = if h24 { format!("{h:02}") } else if c.face == ClockFace::Superscript { format!("{h12:02}") } else { h12.to_string() };
+    let padded = matches!(c.face, ClockFace::Superscript | ClockFace::Stack | ClockFace::DotMatrix | ClockFace::Pixel | ClockFace::Boxes | ClockFace::Numerals);
+    let hours = if h24 { format!("{h:02}") } else if padded { format!("{h12:02}") } else { h12.to_string() };
     let minutes = format!("{m:02}");
-    let num = |v: String| if c.eastern_numerals { arabic_numerals(&v) } else { v };
     let date = now.date_naive();
     let secs = now.num_seconds_from_midnight() as f32;
+    // The Hijri calendar alone names its own day and month.
+    let hijri_only = c.locale.calendar == mandara_config::desktop_widgets::Calendar::Hijri;
+    let (day, month) = match hijri.filter(|_| hijri_only) {
+        Some(hd) => (l.hijri_digits(hd.2), l.hijri_month(hd.1)),
+        None => (l.digits(date.day().to_string()), l.date(&date, "%B")),
+    };
     ClockStrings {
-        time: num(format!("{hours}:{minutes}")),
-        hours: num(hours),
-        minutes: num(minutes),
-        seconds: num(format!("{s:02}")),
-        meridiem: (!h24).then(|| if h < HALF_DAY { t("AM") } else { t("PM") }.to_string()),
-        weekday: localized(&date, "%A"),
-        weekday_short: localized(&date, "%a"),
-        day: num(date.day().to_string()),
-        month: localized(&date, "%B"),
-        numeric_date: num(localized(&date, t("%d/%m"))),
-        day_month: num(localized(&date, t("%-d %B"))),
-        greeting: greeting(h).to_string(),
-        weather: if c.weather { weather.map(|(i, temp)| (*i, num(temp.clone()))) } else { None },
+        time: l.digits(format!("{hours}:{minutes}")),
+        hours: l.digits(hours),
+        minutes: l.digits(minutes),
+        seconds: l.digits(format!("{s:02}")),
+        meridiem: (!h24).then(|| l.word(if h < HALF_DAY { tk("AM") } else { tk("PM") })),
+        weekday: l.date(&date, "%A"),
+        weekday_short: l.date(&date, "%a"),
+        day,
+        month,
+        numeric_date: match hijri.filter(|_| c.locale.calendar.hijri()) {
+            Some((_, hm, hd)) if hijri_only => {
+                let s = format!("{hd:02}/{hm:02}");
+                if l.hijri_in_arabic { arabic_numerals(&s) } else { l.digits(s) }
+            }
+            _ => lingo::dated(&l, &date, tk("%d/%m"), hijri, face_separator()),
+        },
+        day_month: lingo::dated(&l, &date, tk("%-d %B"), hijri, face_separator()),
+        greeting: c.phrases.get(greeting_slot(h)).map(|p| p.trim()).filter(|p| !p.is_empty()).map_or_else(|| l.word(greeting(h)), str::to_string),
+        weather: if c.weather { weather.map(|(i, temp)| (*i, l.digits(temp.clone()))) } else { None },
         hour_fraction: (m as f32 * 60.0 + s as f32) / SECONDS_PER_HOUR,
         day_fraction: secs / SECONDS_PER_DAY,
+        rtl: l.rtl,
+        hour: h,
+        minute: m,
+        second: s,
+        hour_numbers: ANALOG_NUMBERS.map(|n| l.digits(n)),
+        all_hours: std::array::from_fn(|i| l.digits(if i == 0 { HALF_DAY } else { i as u32 }.to_string())),
+        meridiem_pair: [l.word(tk("AM")), l.word(tk("PM"))],
+        year: l.digits(date.year().to_string()),
+        month_short: l.date(&date, "%b"),
+        month_number: l.digits(format!("{:02}", date.month())),
+        day_part: l.word(day_part(h)),
+        hijri: hijri.map(|hd| l.hijri_full(hd)).unwrap_or_default(),
+        moon_phase: sky::moon_phase(now.timestamp()),
+        week: week_of(&l, date, week_start),
     }
 }
+
+/// The greeting slot of `hour`: morning, afternoon, evening, night.
+fn greeting_slot(hour: u32) -> usize {
+    match hour {
+        h if (MORNING_FROM..AFTERNOON_FROM).contains(&h) => 0,
+        h if (AFTERNOON_FROM..EVENING_FROM).contains(&h) => 1,
+        h if (EVENING_FROM..NIGHT_FROM).contains(&h) => 2,
+        _ => 3,
+    }
+}
+
+/// The part of the day of `hour` (an English catalog key).
+pub fn day_part(hour: u32) -> &'static str {
+    [tk("Morning"), tk("Afternoon"), tk("Evening"), tk("Night")][greeting_slot(hour)]
+}
+
+/// This week's short day names from its first day (`week_start` days
+/// after Monday), and whether each is `today`.
+fn week_of(l: &Lingo, today: chrono::NaiveDate, week_start: u32) -> Vec<(String, bool)> {
+    let from_start = (today.weekday().num_days_from_monday() + 7 - week_start % 7) % 7;
+    let first = today - chrono::Duration::days(i64::from(from_start));
+    (0..7).map(|i| first + chrono::Duration::days(i)).map(|d| (l.date(&d, "%a"), d == today)).collect()
+}
+
+/// Where a decoration's lines line up by default: centred.
+const DECORATION_ALIGN: f32 = 0.5;
+
+/// The hours an analog dial numbers: the quarters.
+const ANALOG_NUMBERS: [&str; 4] = ["12", "3", "6", "9"];
+
+/// What joins two dates on one line.
+fn face_separator() -> &'static str {
+    layout::SEPARATOR
+}
+
+/// Full scale of the thermal arcs: degrees Celsius and fan RPM.
+const TEMP_SCALE_C: f32 = 100.0;
+const FAN_SCALE_RPM: f32 = 3000.0;
 
 /// `6.1 / 31.2 GB`: both in the total's unit.
 fn pair_bytes(used: u64, total: u64) -> String {
@@ -338,35 +818,62 @@ fn percent(v: f32) -> String {
 
 /// The monitor's rows for the current reading (rows without a reading are
 /// left out once the sampler has had a full sample).
-pub fn monitor_lines(w: &MonitorWidget, s: Option<&sysmon::Sampler>, units: Units) -> Vec<MonitorLine> {
+pub fn monitor_lines(w: &MonitorWidget, s: Option<&sysmon::Sampler>, units: Units, ui_rtl: bool) -> Vec<MonitorLine> {
+    let l = Lingo::of(&w.locale, ui_rtl, None);
     let r = s.map(|s| &s.reading);
     let settled = s.is_some_and(|s| s.samples >= 2);
     let dash = || "—".to_string();
+    // Gauges, meters and bars show memory as a share of the total.
+    let gauges = w.style != MonitorStyle::Column;
+    let share = |u: u64, tot: u64| u as f32 / tot.max(1) as f32;
     let mut out = Vec::new();
     for row in &w.rows {
         let row = *row;
-        let line = |label: &str, value: Option<String>| -> Option<MonitorLine> {
+        let line = |label: &str, value: Option<String>, share: Option<f32>| -> Option<MonitorLine> {
             if value.is_none() && settled {
                 return None;
             }
-            Some(MonitorLine { row: Some(row), label: label.to_string(), value: value.unwrap_or_else(dash), ..Default::default() })
+            Some(MonitorLine { row: Some(row), label: l.word(label), value: l.digits(value.unwrap_or_else(dash)), share: share.filter(|_| gauges), ..Default::default() })
         };
-        let rate = |v: Option<f64>| v.map(|b| format!("{}{}", format_bytes(b as u64), t("/s")));
+        let rate = |v: Option<f64>| v.map(|b| format!("{}{}", format_bytes(b as u64), l.word(tk("/s"))));
         let made = match row {
-            MonitorRow::Cpu => line(t("CPU"), r.and_then(|r| r.cpu).map(percent)),
-            MonitorRow::Gpu => line(t("GPU"), r.and_then(|r| r.gpu).map(percent)),
-            MonitorRow::Memory => line(t("Memory"), r.and_then(|r| r.memory).map(|(u, tot)| pair_bytes(u, tot))),
-            MonitorRow::GpuPower => line(t("GPU power"), r.and_then(|r| r.gpu_power_w).map(|w| format!("{w:.0} W"))),
-            MonitorRow::CpuTemp => line(t("CPU temp"), r.and_then(|r| r.cpu_temp).map(|c| units.format_degrees(c))),
-            MonitorRow::GpuTemp => line(t("GPU temp"), r.and_then(|r| r.gpu_temp).map(|c| units.format_degrees(c))),
-            MonitorRow::Fan => line(t("Fan"), r.and_then(|r| r.fan_rpm).map(|v| format!("{v} {}", t("RPM")))),
-            MonitorRow::Battery => line(t("Battery"), r.and_then(|r| r.battery).map(percent)),
-            MonitorRow::Disk => line(t("Disk"), r.and_then(|r| r.disk).map(|(u, tot)| pair_bytes(u, tot))).map(|mut l| {
-                l.bar = Some(r.and_then(|r| r.disk).map(|(u, tot)| u as f32 / tot.max(1) as f32).unwrap_or(0.0));
-                l
+            MonitorRow::Cpu => line(tk("CPU"), r.and_then(|r| r.cpu).map(percent), Some(r.and_then(|r| r.cpu).unwrap_or(0.0))),
+            MonitorRow::Gpu => line(tk("GPU"), r.and_then(|r| r.gpu).map(percent), Some(r.and_then(|r| r.gpu).unwrap_or(0.0))),
+            MonitorRow::Memory => {
+                let mem = r.and_then(|r| r.memory);
+                line(tk("Memory"), mem.map(|(u, tot)| if gauges { percent(share(u, tot)) } else { pair_bytes(u, tot) }), Some(mem.map(|(u, tot)| share(u, tot)).unwrap_or(0.0))).map(|mut ln| {
+                    ln.short = Some(l.word(tk("RAM")));
+                    ln
+                })
+            }
+            MonitorRow::GpuPower => line(tk("GPU power"), r.and_then(|r| r.gpu_power_w).map(|w| format!("{w:.0} W")), None),
+            MonitorRow::CpuTemp => line(tk("CPU temp"), r.and_then(|r| r.cpu_temp).map(|c| units.format_degrees(c)), None).map(|mut ln| {
+                ln.level = r.and_then(|r| r.cpu_temp).map(|c| c / TEMP_SCALE_C);
+                ln.short = Some(l.word(tk("CPU")));
+                ln
             }),
-            MonitorRow::Download => line(t("Download"), rate(r.and_then(|r| r.down))),
-            MonitorRow::Upload => line(t("Upload"), rate(r.and_then(|r| r.up))),
+            MonitorRow::GpuTemp => line(tk("GPU temp"), r.and_then(|r| r.gpu_temp).map(|c| units.format_degrees(c)), None).map(|mut ln| {
+                ln.level = r.and_then(|r| r.gpu_temp).map(|c| c / TEMP_SCALE_C);
+                ln.short = Some(l.word(tk("GPU")));
+                ln
+            }),
+            MonitorRow::Fan => line(tk("Fan"), r.and_then(|r| r.fan_rpm).map(|v| format!("{v} {}", l.word(tk("RPM")))), None).map(|mut ln| {
+                ln.level = r.and_then(|r| r.fan_rpm).map(|v| v as f32 / FAN_SCALE_RPM);
+                ln
+            }),
+            MonitorRow::Battery => line(tk("Battery"), r.and_then(|r| r.battery).map(percent), Some(r.and_then(|r| r.battery).unwrap_or(0.0))).map(|mut ln| {
+                ln.short = Some(l.word(tk("Batt.")));
+                ln
+            }),
+            MonitorRow::Disk => {
+                let disk = r.and_then(|r| r.disk);
+                line(tk("Disk"), disk.map(|(u, tot)| if gauges { percent(share(u, tot)) } else { pair_bytes(u, tot) }), Some(disk.map(|(u, tot)| share(u, tot)).unwrap_or(0.0))).map(|mut ln| {
+                    ln.bar = (!gauges).then(|| disk.map(|(u, tot)| share(u, tot)).unwrap_or(0.0));
+                    ln
+                })
+            }
+            MonitorRow::Download => line(tk("Download"), rate(r.and_then(|r| r.down)), None),
+            MonitorRow::Upload => line(tk("Upload"), rate(r.and_then(|r| r.up)), None),
             MonitorRow::CpuGraph => Some(MonitorLine { row: Some(row), graph: Some((s.map(|s| s.cpu_history.normalized(1.0)).unwrap_or_default(), None)), ..Default::default() }),
             MonitorRow::NetGraph => {
                 let scale = s.map(|s| s.down_history.max().max(s.up_history.max())).unwrap_or(1.0).max(1.0);
@@ -381,53 +888,164 @@ pub fn monitor_lines(w: &MonitorWidget, s: Option<&sysmon::Sampler>, units: Unit
 // ── Layout of one widget ─────────────────────────────────────────────────
 
 /// A widget laid out on an output: its composition, where its box goes
-/// (physical, absolute) and its rotation.
+/// (physical, absolute) and how it is turned.
 pub struct Laid {
     pub comp: Composition,
     pub origin: (f32, f32),
     pub k: f32,
+    /// Degrees clockwise (the decoration's own turn plus the placement's).
     pub rotation: f32,
+    /// Mirrored left to right / top to bottom.
+    pub flip: (bool, bool),
     /// The placed (possibly rotated) outer box, `x, y, w, h`.
     pub outer: (f32, f32, f32, f32),
+    /// Margin the look's effect and shadow need, physical px.
+    pub margin: f32,
 }
 
 /// Lays out `w` at `now` (`None` for visualizers, which have no marks).
 pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler: Option<&sysmon::Sampler>, now: &DateTime<Local>, text: &mut TextPainter) -> Option<Laid> {
     let k = o.k(w.place.scale());
-    let align = w.place.anchor.fraction().0;
-    let mut m = Measurer { text, fonts: o.fonts };
-    let (comp, rotation) = match &w.kind {
-        WidgetKind::Clock(c) => (layout::clock(c, &clock_strings(now, c, scene.h24, scene.weather.as_ref()), k, align, scene.rtl, &mut m), 0.0),
-        WidgetKind::Monitor(mw) => (layout::monitor(mw, &monitor_lines(mw, sampler, scene.units), k, scene.rtl, &mut m), 0.0),
-        WidgetKind::Decoration(d) => (layout::decoration(d, k, d.sideways.clockwise(&w.place), &mut m), d.rotation.clamp(ranges::ANGLE_DEG.0, ranges::ANGLE_DEG.1)),
+    let look = w.kind.look();
+    let fonts = o.fonts.for_look(look);
+    let rtl_of = |opts: Option<&mandara_config::desktop_widgets::TextOptions>| opts.map_or(scene.rtl, |opts| Lingo::of(opts, scene.rtl, None).rtl);
+    let rtl = rtl_of(w.kind.locale());
+    let align = look.map_or(mandara_config::desktop_widgets::Align::Auto, |l| l.align).fraction(w.place.anchor.fraction().0, rtl);
+    let mut m = Measurer { text, fonts: &fonts };
+    let (comp, own_turn) = match &w.kind {
+        WidgetKind::Clock(c) => {
+            let s = clock_strings(now, c, scene.h24, scene.weather.as_ref(), scene.hijri, scene.rtl, scene.week_start);
+            (layout::clock(c, &s, k, align, s.rtl, &mut m), 0.0)
+        }
+        WidgetKind::Monitor(mw) => {
+            let lines = monitor_lines(mw, sampler, scene.units, scene.rtl);
+            match mw.style {
+                MonitorStyle::Column => (layout::monitor(mw, &lines, k, rtl, &mut m), 0.0),
+                MonitorStyle::Gauges => (layout::monitor_gauges(mw, &lines, k, rtl, &mut m), 0.0),
+                MonitorStyle::Meters => (monitor_more::meters(mw, &lines, k, rtl, &mut m), 0.0),
+                MonitorStyle::Bars => (monitor_more::bars(mw, &lines, k, rtl, &mut m), 0.0),
+                MonitorStyle::Thermals => (monitor_more::thermals(mw, &lines, k, rtl, &mut m), 0.0),
+            }
+        }
+        WidgetKind::Decoration(d) => {
+            // Lines of text are centred unless told otherwise.
+            let align = if d.look.align == mandara_config::desktop_widgets::Align::Auto { DECORATION_ALIGN } else { align };
+            (layout::decoration(d, k, d.sideways.clockwise(&w.place), align, &mut m), d.rotation.clamp(ranges::ANGLE_DEG.0, ranges::ANGLE_DEG.1))
+        }
+        WidgetKind::Weather(ww) => {
+            use mandara_config::desktop_widgets::WeatherLayout;
+            let s = texts::weather(ww, scene, now);
+            let l = Lingo::of(&ww.locale, scene.rtl, None);
+            let comp = match ww.layout {
+                WeatherLayout::Sentence => {
+                    let text = scene.forecast.as_ref().map(|f| weather_more::sentence(ww, f, &l)).unwrap_or_default();
+                    Composition::of(weather_more::sentence_layout(ww, &s, &text, k, align, &mut m))
+                }
+                WeatherLayout::Disc => Composition::of(weather_more::disc_layout(ww, &s, scene.forecast.as_ref(), &l, scene.units, k, &mut m)),
+                WeatherLayout::Hourly => Composition::of(weather_more::hourly_layout(ww, scene.forecast.as_ref(), &l, scene.units, scene.h24, k, &mut m)),
+                _ => layout::weather_widget(ww, &s, k, align, &mut m),
+            };
+            (comp, 0.0)
+        }
+        WidgetKind::WorldClock(wc) => (layout::world_clock(wc, &texts::cities(wc, scene, now), k, rtl, &mut m), 0.0),
+        WidgetKind::Countdown(c) => {
+            let s = texts::countdown(c, scene, now);
+            (layout::countdown(c, &s, k, align, &mut m), 0.0)
+        }
+        WidgetKind::Progress(p) => (progress::progress(p, now, &Lingo::of(&p.locale, scene.rtl, None), scene.week_start, k, align, &mut m), 0.0),
+        WidgetKind::Todo(t) => (productive::todo(t, &scene.data.todos, &scene.data.lists, &Lingo::of(&t.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Note(n) => (productive::note(n, &scene.data.notes, &Lingo::of(&n.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Pomodoro(p) => {
+            let state = scene.data.pomodoro.clone().unwrap_or_else(PomodoroState::idle);
+            (productive::pomodoro(p, &state, now, &Lingo::of(&p.locale, scene.rtl, None), k, &mut m), 0.0)
+        }
+        WidgetKind::Quote(q) => (productive::quote(q, now, scene.data.turns.get(&w.id).copied().unwrap_or(0), &Lingo::of(&q.locale, scene.rtl, None), k, align, &mut m), 0.0),
+        WidgetKind::Date(d) => (datecal::date_widget(d, &scene.data.events, now, &Lingo::of(&d.locale, scene.rtl, None), scene.hijri, scene.week_start, scene.h24, k, align, &mut m), 0.0),
+        WidgetKind::Sky(sk) => (skyview::sky_widget(sk, scene.data.place, now, &Lingo::of(&sk.locale, scene.rtl, None), scene.h24, k, align, &mut m), 0.0),
+        WidgetKind::Profile(p) => {
+            let me = scene.data.me.clone().unwrap_or_else(|| MeInfo { name: String::new(), login: String::new(), host: String::new(), uptime_s: 0, avatar: None, dnd: false });
+            (identity::profile(p, &me, &Lingo::of(&p.locale, scene.rtl, None), k, &mut m), 0.0)
+        }
+        WidgetKind::Shortcuts(sw) => (identity::shortcuts(sw, scene.data.tiles.get(&w.id).map(Vec::as_slice).unwrap_or_default(), &Lingo::of(&sw.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Toggles(tw) => {
+            let states: Vec<(String, bool)> = toggle_ids(tw).into_iter().filter_map(|id| scene.data.toggles.iter().find(|(t, _)| *t == id).cloned()).collect();
+            (identity::toggles(tw, &states, &Lingo::of(&tw.locale, scene.rtl, None), k, &mut m), 0.0)
+        }
+        WidgetKind::Sliders(sw) => {
+            let wanted = if sw.levels.is_empty() { vec!["volume".to_string(), "brightness".to_string()] } else { sw.levels.clone() };
+            let levels: Vec<(String, f32)> = wanted.into_iter().filter_map(|id| scene.data.levels.iter().find(|(t, _)| *t == id).cloned()).collect();
+            (identity::sliders(sw, &levels, &Lingo::of(&sw.locale, scene.rtl, None), k, &mut m), 0.0)
+        }
+        WidgetKind::Palette(pw) => (identity::palette(pw, &scene.data.palette, &Lingo::of(&pw.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Pet(pw) => {
+            let poked = scene.data.poked.get(&w.id).map(|at| now.timestamp_millis() - at).filter(|d| (0..fun::POKE_MS).contains(d));
+            (fun::pet(pw, now, poked, scene.music, k, &mut m), 0.0)
+        }
+        WidgetKind::Bubbles(b) => (fun::bubbles(b, now, k), 0.0),
+        WidgetKind::Photo(p) => (fun::photo(p, scene.data.pictures.get(&w.id), if p.folder.trim().is_empty() { "~/Pictures" } else { p.folder.trim() }, &Lingo::of(&Default::default(), scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Sticker(st) => (fun::sticker(st, scene.data.pictures.get(&w.id), &Lingo::of(&Default::default(), scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Media(mw) => (media_view::media(mw, scene.data.media.as_ref(), now, &Lingo::of(&mw.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Fetch(f) => (info::fetch(f, &scene.data.fetch.clone().unwrap_or_default(), &scene.data.palette, &Lingo::of(&f.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::ScreenTime(st) => (info::screen_time(st, &scene.data.screen.clone().unwrap_or_default(), &Lingo::of(&st.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Prayer(p) => (info::prayer(p, scene.data.prayer.as_ref()?, now, &Lingo::of(&p.locale, scene.rtl, None), scene.h24, k, &mut m), 0.0),
+        WidgetKind::Search(sw) => (info::search(sw, &Lingo::of(&sw.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Glance(g) => {
+            let gi = scene.data.glance.clone().unwrap_or(GlanceInfo { icon: "sparkles", text: String::new(), action: None });
+            (info::glance(g, &gi, scene.weather.as_ref(), now, &Lingo::of(&g.locale, scene.rtl, None), k, align, &mut m), 0.0)
+        }
+        WidgetKind::Github(gw) => (feeds::github(gw, &scene.data.github.get(&w.id).cloned().unwrap_or_default(), &Lingo::of(&gw.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Currency(cw) => (feeds::currency(cw, &scene.data.rates.get(&w.id).cloned().unwrap_or_default(), &Lingo::of(&cw.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::AiUsage(aw) => (feeds::ai_usage(aw, &scene.data.ai_usage.get(&w.id).cloned().unwrap_or_default(), &Lingo::of(&aw.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Games(gw) => (feeds::games(gw, &scene.data.games, &Lingo::of(&gw.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Notebook(n) => (productive::notebook(n, &scene.data.notes, &Lingo::of(&n.locale, scene.rtl, None), mandara_config::desktop_widgets::Sideways::Auto.clockwise(&w.place), k, &mut m), 0.0),
         WidgetKind::Visualizer(_) | WidgetKind::Card(_) => return None,
     };
-    let margin = draw::effect_margin(look_of(&w.kind).map(|l| l.effect).unwrap_or_default(), k);
+    let comp = match look {
+        Some(l) => layout::with_plate(comp, l, k, align, &mut m),
+        None => comp,
+    };
+    let rotation = own_turn + w.place.rotation();
+    let flip = (w.place.flip_x, w.place.flip_y);
+    let margin = draw::look_margin(look, k);
     let boxed = (comp.size.0 + 2.0 * margin, comp.size.1 + 2.0 * margin);
     let outer = if rotation != 0.0 { draw::rotated_size(boxed, rotation) } else { boxed };
     let (x, y) = w.place.origin_in((o.physical.0 as f32, o.physical.1 as f32), outer, o.safe);
     // The composition's origin inside the (possibly rotated) outer box.
     let origin = (x + (outer.0 - comp.size.0) / 2.0, y + (outer.1 - comp.size.1) / 2.0);
-    Some(Laid { comp, origin, k, rotation, outer: (x, y, outer.0, outer.1) })
+    Some(Laid { comp, origin, k, rotation, flip, outer: (x, y, outer.0, outer.1), margin })
 }
 
 fn look_of(k: &WidgetKind) -> Option<&mandara_config::desktop_widgets::Look> {
-    match k {
-        WidgetKind::Clock(c) => Some(&c.look),
-        WidgetKind::Monitor(m) => Some(&m.look),
-        WidgetKind::Decoration(d) => Some(&d.look),
-        WidgetKind::Visualizer(v) => Some(&v.look),
-        WidgetKind::Card(_) => None,
+    k.look()
+}
+
+/// How `w`'s planes are painted: its fonts, colours, effect and shadow.
+fn style_for(w: &DesktopWidget, fonts: &FontNames, inks: Inks, opacity: f32, k: f32) -> Style {
+    let look = look_of(&w.kind);
+    Style {
+        fonts: fonts.for_look(look),
+        inks,
+        opacity,
+        effect: look.map(|l| l.effect).unwrap_or_default(),
+        strength: look.map_or(ranges::EFFECT_STRENGTH_DEFAULT, |l| l.effect_strength()),
+        k,
+        drop: look.and_then(|l| draw::Drop::of(l, k)),
     }
 }
 
 impl Laid {
+    /// Turned or mirrored: the whole widget is drawn through a transform,
+    /// into one plane (the live one when anything in it changes between
+    /// minutes).
+    pub fn transformed(&self) -> bool {
+        self.rotation != 0.0 || self.flip.0 || self.flip.1
+    }
+
     /// The plane rectangle holding the marks with `live == live`.
-    pub fn rect(&self, live: bool, effect: mandara_config::desktop_widgets::Effect, scale120: u32, output: Rect) -> Rect {
-        let margin = draw::effect_margin(effect, self.k);
-        if self.rotation != 0.0 {
-            // A rotated decoration is one static plane over its outer box.
-            if live {
+    pub fn rect(&self, live: bool, scale120: u32, output: Rect) -> Rect {
+        let margin = self.margin;
+        if self.transformed() {
+            if live != self.comp.bounds(true).is_some() {
                 return Rect::default();
             }
             let (w, h) = draw::rotated_size((self.comp.size.0 + 2.0 * margin, self.comp.size.1 + 2.0 * margin), self.rotation);
@@ -441,17 +1059,31 @@ impl Laid {
     }
 
     /// Paints into a plane at `rect`.
-    pub fn paint(&self, pm: &mut tiny_skia::PixmapMut<'_>, text: &mut TextPainter, live: bool, rect: Rect, st: &Style<'_>) {
-        if self.rotation == 0.0 {
-            draw::paint(pm, text, &self.comp, live, (rect.x as f32 - self.origin.0, rect.y as f32 - self.origin.1), st);
+    pub fn paint(&self, pm: &mut tiny_skia::PixmapMut<'_>, text: &mut TextPainter, live: bool, rect: Rect, st: &Style) {
+        if !self.transformed() {
+            draw::paint(pm, text, &self.comp, Some(live), (rect.x as f32 - self.origin.0, rect.y as f32 - self.origin.1), st);
             return;
         }
-        let margin = draw::effect_margin(st.effect, self.k);
+        let margin = self.margin;
         let (w, h) = ((self.comp.size.0 + 2.0 * margin).ceil() as u32, (self.comp.size.1 + 2.0 * margin).ceil() as u32);
         let Some(mut tmp) = Pixmap::new(w.max(1), h.max(1)) else { return };
-        draw::paint(&mut tmp.as_mut(), text, &self.comp, false, (-margin, -margin), st);
+        draw::paint(&mut tmp.as_mut(), text, &self.comp, None, (-margin, -margin), st);
         let c = (self.origin.0 + self.comp.size.0 / 2.0 - rect.x as f32, self.origin.1 + self.comp.size.1 / 2.0 - rect.y as f32);
-        draw::draw_rotated(pm, &tmp, self.rotation, c, 1.0);
+        draw::draw_turned(pm, &tmp, self.rotation, self.flip, c, 1.0);
+    }
+
+    /// The action at `p` (physical px on the output), if the widget has
+    /// one there.
+    pub fn hit(&self, p: (f32, f32)) -> Option<&actions::Action> {
+        let c = (self.origin.0 + self.comp.size.0 / 2.0, self.origin.1 + self.comp.size.1 / 2.0);
+        let mut q = mandara_core::shape::rotate(p, c, -self.rotation);
+        if self.flip.0 {
+            q.0 = 2.0 * c.0 - q.0;
+        }
+        if self.flip.1 {
+            q.1 = 2.0 * c.1 - q.1;
+        }
+        self.comp.hit((q.0 - self.origin.0, q.1 - self.origin.1))
     }
 }
 
@@ -462,9 +1094,17 @@ fn inks_for(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, rect: Rect
         let c = ((rect.x as f32 + rect.w as f32 / 2.0) / pw, (rect.y as f32 + rect.h as f32 / 2.0) / ph);
         crate::desktop::region_tone(t, c, (rect.w as f32 / pw * TONE_HALF, rect.h as f32 / ph * TONE_HALF))
     });
-    let auto = crate::desktop::ink_for(tone, o.primary);
     let default = mandara_config::desktop_widgets::Look::default();
-    draw::inks(look_of(&w.kind).unwrap_or(&default), &auto, scene.on_surface)
+    let look = look_of(&w.kind).unwrap_or(&default);
+    // On a plate the automatic ink reads against the plate, not the
+    // wallpaper (on a polaroid, against its paper).
+    let tone = match (look.chrome, look.framed()) {
+        (mandara_config::desktop_widgets::Chrome::Polaroid, _) => Some(draw::paper()),
+        (_, true) => Some(scene.surface),
+        _ => tone,
+    };
+    let auto = crate::desktop::ink_for(tone, o.primary);
+    draw::inks(look, &auto, scene.on_surface, scene.surface)
 }
 
 // ── Static pass (from the clock layer, every wake) ───────────────────────
@@ -491,10 +1131,11 @@ pub fn step_static(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>
     for (i, w) in shown {
         let (p_static, p_live) = planes(i);
         let st = &mut ws.states[i];
-        let cfg = key(format!("{w:?}"));
+        let cfg = content_key(w);
         if st.id != w.id || st.cfg != cfg {
             *st = State { id: w.id.clone(), cfg, ..State::default() };
         }
+        let moving = scene.moving.as_deref() == Some(w.id.as_str());
         let opacity = w.place.opacity();
         if let WidgetKind::Visualizer(v) = &w.kind {
             let k = o.k(w.place.scale());
@@ -502,30 +1143,60 @@ pub fn step_static(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>
             let (x, y) = w.place.origin_in((o.physical.0 as f32, o.physical.1 as f32), g.size, o.safe);
             let rect = snap(Rect::from_edges(x, y, x + g.size.0, y + g.size.1), o.scale120).intersect(&output);
             st.outer = (x, y, g.size.0, g.size.1);
-            if st.live_rect != rect || st.vis.is_none() {
-                st.live_rect = rect;
+            // Same size elsewhere: the last frame moves along (a silent
+            // visualizer keeps showing it where it now is).
+            let moved = st.vis.is_some() && st.live_rect.w == rect.w && st.live_rect.h == rect.h && (st.live_rect == rect || host.move_plane(o.id, p_live, rect));
+            if !moved {
                 st.vis = Some((g, visualizer::Painter::default()));
                 st.live_key = None;
                 st.inks = Some(inks_for(w, o, scene, rect));
             }
+            st.live_rect = rect;
             st.envelope = st.envelope.union(&rect);
             st.behind = behind_subject(w, o, &st.envelope);
             push_layers(&mut layers, st, None, Some(p_live));
             continue;
         }
         let tick = match &w.kind {
-            WidgetKind::Clock(_) => minute,
+            WidgetKind::Clock(_) | WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_) | WidgetKind::Quote(_) | WidgetKind::Date(_) | WidgetKind::Sky(_) | WidgetKind::Prayer(_) | WidgetKind::Glance(_) => minute,
             _ => 0,
         };
-        let skey = key(((cfg, tick, o.physical, o.scale120, wallpaper_key), (scene.on_surface.to_rgba8(), o.primary.to_rgba8(), o.fonts, &scene.weather), (scene.h24, scene.rtl, mandara_i18n::language(), if matches!(w.kind, WidgetKind::Monitor(_)) { avail } else { None })));
+        let skey = key((
+            (cfg, tick, o.physical, o.scale120, wallpaper_key),
+            (scene.on_surface.to_rgba8(), scene.surface.to_rgba8(), o.primary.to_rgba8(), o.fonts, &scene.weather, &scene.hijri),
+            (scene.h24, scene.rtl, mandara_i18n::language(), if matches!(w.kind, WidgetKind::Monitor(_)) { avail } else { None }),
+            data_key(w, scene),
+        ));
+        if st.static_key == Some(skey) {
+            // Same pixels: has the widget moved?
+            let size = (st.outer.2, st.outer.3);
+            let at = w.place.origin_in((o.physical.0 as f32, o.physical.1 as f32), size, o.safe);
+            let delta = (at.0 - st.painted_at.0, at.1 - st.painted_at.1);
+            if delta.0.abs() > MOVE_EPSILON_PX || delta.1.abs() > MOVE_EPSILON_PX {
+                let (r0, l0) = st.painted_rects;
+                let (r1, l1) = (shifted(r0, delta, o.scale120), shifted(l0, delta, o.scale120));
+                // While dragged, the planes slide as they are; once it lands
+                // (or when moved from Studio) it is painted where it is.
+                let slid = moving && (r1.is_empty() || host.move_plane(o.id, p_static, r1)) && (l1.is_empty() || host.move_plane(o.id, p_live, l1));
+                if slid {
+                    (st.rect, st.live_rect) = (r1, l1);
+                    st.outer = (at.0, at.1, size.0, size.1);
+                    st.envelope = st.envelope.union(&r1).union(&l1);
+                } else {
+                    st.static_key = None;
+                }
+            }
+        }
         if st.static_key != Some(skey) {
             let Some(laid) = lay_out(w, o, scene, shared.sampler.as_ref(), &now, text) else { continue };
-            let effect = look_of(&w.kind).map(|l| l.effect).unwrap_or_default();
-            let rect = laid.rect(false, effect, o.scale120, output);
-            let live_rect = laid.rect(true, effect, o.scale120, output);
+            let rect = laid.rect(false, o.scale120, output);
+            let live_rect = laid.rect(true, o.scale120, output);
             st.outer = laid.outer;
+            st.hits = HitMap::of(&laid);
+            st.painted_at = (laid.outer.0, laid.outer.1);
+            st.painted_rects = (rect, live_rect);
             let inks = inks_for(w, o, scene, rect.union(&live_rect));
-            let style = Style { fonts: o.fonts, inks, opacity, effect, k: laid.k };
+            let style = style_for(w, o.fonts, inks, opacity, laid.k);
             if rect.is_empty() {
                 host.hide(o.id, p_static);
                 st.static_key = Some(skey);
@@ -533,9 +1204,9 @@ pub fn step_static(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>
                 st.static_key = Some(skey);
             }
             st.rect = rect;
-            if st.live_rect != live_rect || st.inks != Some(inks) {
-                st.live_key = None;
-            }
+            // What changed the static part (the language, the data, the
+            // look) may change the live part too.
+            st.live_key = None;
             st.live_rect = live_rect;
             st.inks = Some(inks);
             if live_rect.is_empty() {
@@ -543,7 +1214,7 @@ pub fn step_static(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>
             } else if st.live_key.is_none() {
                 // Paint the live part now (the live pass keeps it current).
                 if host.paint(o.id, p_live, Place::Rect(live_rect), None, true, true, |pm| laid.paint(pm, text, true, live_rect, &style))? {
-                    st.live_key = Some(live_tick_key(w, shared, &now));
+                    st.live_key = Some(live_tick_key(w, scene, shared, &now));
                 }
             }
             st.envelope = st.envelope.union(&rect).union(&live_rect);
@@ -590,9 +1261,17 @@ fn availability(r: &sysmon::Reading, samples: u64) -> u64 {
 }
 
 /// The live content's tick: the second (seconds clocks) or the sample.
-fn live_tick_key(w: &DesktopWidget, shared: &Shared, now: &DateTime<Local>) -> u64 {
+fn live_tick_key(w: &DesktopWidget, scene: &WidgetScene, shared: &Shared, now: &DateTime<Local>) -> u64 {
     match &w.kind {
         WidgetKind::Monitor(_) => key(("sample", shared.sampler.as_ref().map(|s| s.generation))),
+        // A paused timer doesn't change between scenes.
+        WidgetKind::Pomodoro(_) if !scene.data.pomodoro.as_ref().is_some_and(|p| p.running) => key(("paused", format!("{:?}", scene.data.pomodoro))),
+        WidgetKind::Pet(_) | WidgetKind::Bubbles(_) | WidgetKind::Media(_) if animation_fps(w, scene, now).is_some() => {
+            let fps = i64::from(animation_fps(w, scene, now).unwrap_or(1).max(1));
+            key(("frame", now.timestamp_millis() * fps / MS_PER_SECOND))
+        }
+        // Paused: the position stays.
+        WidgetKind::Media(_) if !scene.data.media.as_ref().is_some_and(|m| m.playing) => key(("paused", format!("{:?}", scene.data.media.as_ref().map(|m| m.position_ms)))),
         _ => key(("second", now.timestamp())),
     }
 }
@@ -703,15 +1382,18 @@ pub fn step_live(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>, 
                     painted = true;
                 }
             }
-            WidgetKind::Clock(_) | WidgetKind::Monitor(_) => {
-                let k = live_tick_key(w, shared, &now);
+            WidgetKind::Clock(_) | WidgetKind::Monitor(_) | WidgetKind::Pomodoro(_) | WidgetKind::Pet(_) | WidgetKind::Bubbles(_) | WidgetKind::Media(_) => {
+                let k = live_tick_key(w, scene, shared, &now);
                 if st.live_key == Some(k) {
                     continue;
                 }
+                // Animations wait for the compositor to take the last frame.
+                if animation_fps(w, scene, &now).is_some() && !host.frame_ready(o.id) {
+                    continue;
+                }
                 let Some(laid) = lay_out(w, o, scene, shared.sampler.as_ref(), &now, text) else { continue };
-                let effect = look_of(&w.kind).map(|l| l.effect).unwrap_or_default();
                 let Some(inks) = st.inks else { continue };
-                let style = Style { fonts: o.fonts, inks, opacity, effect, k: laid.k };
+                let style = style_for(w, o.fonts, inks, opacity, laid.k);
                 if host.paint(o.id, p_live, Place::Rect(rect), None, true, true, |pm| laid.paint(pm, text, true, rect, &style))? {
                     st.live_key = Some(k);
                     painted = true;
@@ -737,10 +1419,18 @@ pub fn next_wake(ws: &OutWidgets, o_names: &[&str], scene: &WidgetScene, shared:
         match &w.kind {
             WidgetKind::Clock(c) => {
                 soon(until(MS_PER_MINUTE));
-                if visible && c.seconds && c.face == ClockFace::Superscript {
+                if visible && ticks_seconds(c) {
                     soon(until(MS_PER_SECOND));
                 }
             }
+            // Their times and the day count change with the minute.
+            WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_) | WidgetKind::Quote(_) | WidgetKind::Date(_) | WidgetKind::Sky(_) | WidgetKind::Prayer(_) | WidgetKind::Glance(_) => soon(until(MS_PER_MINUTE)),
+            WidgetKind::Pomodoro(_) if visible && scene.data.pomodoro.as_ref().is_some_and(|p| p.running) => soon(until(MS_PER_SECOND)),
+            WidgetKind::Pet(_) | WidgetKind::Bubbles(_) | WidgetKind::Media(_) if visible && animation_fps(w, scene, &now).is_some() => {
+                let fps = i64::from(animation_fps(w, scene, &now).unwrap_or(1).max(1));
+                soon(until(MS_PER_SECOND / fps));
+            }
+            WidgetKind::Media(_) if visible && scene.data.media.as_ref().is_some_and(|m| m.playing) => soon(until(MS_PER_SECOND)),
             WidgetKind::Monitor(m) if visible => {
                 let every = Duration::from_secs(u64::from(m.interval_s()));
                 soon(shared.sampler.as_ref().and_then(|s| s.sampled_at).map_or(Duration::ZERO, |t| every.saturating_sub(at.saturating_duration_since(t))));
@@ -780,10 +1470,9 @@ pub fn compose(canvas: &mut tiny_skia::PixmapMut<'_>, w: &DesktopWidget, o: &Out
         return;
     }
     let Some(laid) = lay_out(w, o, scene, sampler, now, text) else { return };
-    let effect = look_of(&w.kind).map(|l| l.effect).unwrap_or_default();
-    let (rect, live) = (laid.rect(false, effect, o.scale120, output), laid.rect(true, effect, o.scale120, output));
+    let (rect, live) = (laid.rect(false, o.scale120, output), laid.rect(true, o.scale120, output));
     let inks = inks_for(w, o, scene, rect.union(&live));
-    let style = Style { fonts: o.fonts, inks, opacity, effect, k: laid.k };
+    let style = style_for(w, o.fonts, inks, opacity, laid.k);
     for (r, is_live) in [(rect, false), (live, true)] {
         if r.is_empty() {
             continue;
@@ -828,12 +1517,73 @@ pub fn widget_rect(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, tex
         return Some(Rect::from_edges(x, y, x + g.size.0, y + g.size.1).intersect(&output));
     }
     let laid = lay_out(w, o, scene, None, now, text)?;
-    let effect = look_of(&w.kind).map(|l| l.effect).unwrap_or_default();
-    Some(laid.rect(false, effect, o.scale120, output).union(&laid.rect(true, effect, o.scale120, output)))
+    Some(laid.rect(false, o.scale120, output).union(&laid.rect(true, o.scale120, output)))
 }
 
 /// A widget's id and box as fractions of a preview frame `[x, y, w, h]`.
 pub type WidgetBox = (String, [f32; 4]);
+
+/// One widget of a preview drawn on its own: its pixels (straight RGBA,
+/// `rect`'s size) and, in frame pixels, the rectangle they cover and the
+/// box its placement positions. Moving the widget moves the picture
+/// (`rect` keeps its offset from the box), so a drag never repaints it.
+pub struct PreviewLayer {
+    pub rect: Rect,
+    /// `x, y, w, h` of the placed box.
+    pub outer: (f32, f32, f32, f32),
+}
+
+impl PreviewLayer {
+    /// Where the picture goes when the widget is placed at `place` on a
+    /// `frame` (frame px, top-left).
+    pub fn at(&self, place: &mandara_config::desktop_widgets::Placement, frame: (f32, f32)) -> (f32, f32) {
+        let (x, y) = place.origin(frame, (self.outer.2, self.outer.3));
+        (x + self.rect.x as f32 - self.outer.0, y + self.rect.y as f32 - self.outer.1)
+    }
+}
+
+/// `w` alone on a transparent `size` frame, cropped to what it draws (see
+/// [`PreviewLayer`]).
+pub fn preview_layer(w: &DesktopWidget, size: (u32, u32), fonts: &FontNames, primary: Color, text: &mut TextPainter) -> Option<(image::RgbaImage, PreviewLayer)> {
+    let names: [&str; 0] = [];
+    let o = OutputCx { id: 0, names: &names, logical: (size.0 as f32, size.1 as f32), physical: size, scale120: mandara_core::shm_canvas::SCALE_DENOMINATOR, tone: None, primary, fonts, depth: false, subject: None, safe: Insets::default() };
+    let scene = WidgetScene::preview(vec![w.clone()]);
+    let now = Local::now();
+    let output = o.output_rect();
+    let opacity = w.place.opacity();
+    let (union, outer, parts): (Rect, (f32, f32, f32, f32), Vec<(Rect, Pixmap)>) = if let WidgetKind::Visualizer(v) = &w.kind {
+        let g = visualizer::Geometry::new(v, o.k(w.place.scale()));
+        let (x, y) = w.place.origin_in((size.0 as f32, size.1 as f32), g.size, o.safe);
+        let rect = snap(Rect::from_edges(x, y, x + g.size.0, y + g.size.1), o.scale120).intersect(&output);
+        let mut pm = Pixmap::new(rect.w.max(1), rect.h.max(1))?;
+        let inks = inks_for(w, &o, &scene, rect);
+        visualizer::Painter::default().frame(&mut pm.as_mut(), &g, &preview_bands(), inks.accent, opacity);
+        (rect, (x, y, g.size.0, g.size.1), vec![(rect, pm)])
+    } else {
+        let laid = lay_out(w, &o, &scene, None, &now, text)?;
+        let (rect, live) = (laid.rect(false, o.scale120, output), laid.rect(true, o.scale120, output));
+        let inks = inks_for(w, &o, &scene, rect.union(&live));
+        let style = style_for(w, o.fonts, inks, opacity, laid.k);
+        let mut parts = Vec::new();
+        for (r, is_live) in [(rect, false), (live, true)] {
+            if r.is_empty() {
+                continue;
+            }
+            let mut pm = Pixmap::new(r.w, r.h)?;
+            laid.paint(&mut pm.as_mut(), text, is_live, r, &style);
+            parts.push((r, pm));
+        }
+        (rect.union(&live), laid.outer, parts)
+    };
+    if union.is_empty() {
+        return None;
+    }
+    let mut canvas = Pixmap::new(union.w, union.h)?;
+    for (r, pm) in &parts {
+        crate::backdrop::paint::compose(&mut canvas.as_mut(), pm, Rect::new(r.x - union.x, r.y - union.y, r.w, r.h), 1.0);
+    }
+    Some((straight(canvas)?, PreviewLayer { rect: union, outer }))
+}
 
 /// A widget preview (all of `items` on a transparent `size` frame, as
 /// straight RGBA) and each widget's box as fractions of the frame.
@@ -841,7 +1591,7 @@ pub fn preview(items: &[DesktopWidget], size: (u32, u32), fonts: &FontNames, pri
     let mut canvas = Pixmap::new(size.0.max(1), size.1.max(1))?;
     let names: [&str; 0] = [];
     let o = OutputCx { id: 0, names: &names, logical: (size.0 as f32, size.1 as f32), physical: size, scale120: mandara_core::shm_canvas::SCALE_DENOMINATOR, tone: None, primary, fonts, depth: false, subject: None, safe: Insets::default() };
-    let scene = WidgetScene { items: items.to_vec(), weather: Some(("sun", "23°".into())), ..WidgetScene::default() };
+    let scene = WidgetScene::preview(items.to_vec());
     let now = Local::now();
     let bands = preview_bands();
     let mut boxes = Vec::new();
@@ -899,7 +1649,7 @@ pub fn thumbnail(w: &DesktopWidget, size: (u32, u32), fonts: &FontNames, primary
     }
     let names: [&str; 0] = [];
     let o = OutputCx { id: 0, names: &names, logical: (size.0 as f32, size.1 as f32), physical: size, scale120: mandara_core::shm_canvas::SCALE_DENOMINATOR, tone: None, primary, fonts, depth: false, subject: None, safe: Insets::default() };
-    let scene = WidgetScene { weather: Some(("sun", "23°".into())), ..WidgetScene::default() };
+    let scene = WidgetScene::preview(Vec::new());
     compose(&mut canvas.as_mut(), w, &o, &scene, Some(&sample), text, &Local::now(), &preview_bands());
     straight(canvas)
 }
@@ -978,10 +1728,10 @@ mod tests {
         use chrono::TimeZone as _;
         let now = Local.with_ymd_and_hms(2026, 8, 22, 0, 9, 5).unwrap();
         let c = ClockWidget { face: ClockFace::Superscript, ..Default::default() };
-        let s = clock_strings(&now, &c, false, None);
+        let s = clock_strings(&now, &c, false, None, None, false, 0);
         assert_eq!((s.hours.as_str(), s.minutes.as_str(), s.time.as_str()), ("12", "09", "12:09"));
         assert_eq!(s.meridiem.as_deref(), Some("AM"));
-        let h24 = clock_strings(&now, &ClockWidget { eastern_numerals: true, ..c.clone() }, true, Some(&("sun", "23°".into())));
+        let h24 = clock_strings(&now, &ClockWidget { locale: mandara_config::desktop_widgets::TextOptions { numerals: mandara_config::desktop_widgets::Numerals::EasternArabic, ..Default::default() }, ..c.clone() }, true, Some(&("sun", "23°".into())), None, false, 0);
         assert_eq!(h24.time, "٠٠:٠٩");
         assert!(h24.meridiem.is_none());
         assert_eq!(h24.weather.as_ref().map(|w| w.1.as_str()), Some("٢٣°"));
@@ -991,7 +1741,7 @@ mod tests {
     #[test]
     fn byte_pairs_share_a_unit() {
         assert_eq!(pair_bytes(6_100_000_000, 31_200_000_000), "6.1 / 31.2 GB");
-        let lines = monitor_lines(&MonitorWidget::default(), None, Units::Metric);
+        let lines = monitor_lines(&MonitorWidget::default(), None, Units::Metric, false);
         assert!(lines.iter().any(|l| l.label == "CPU" && l.value == "—"), "unknown until sampled");
     }
 
@@ -1002,6 +1752,9 @@ mod tests {
         exists: std::collections::BTreeSet<usize>,
         bytes: std::collections::BTreeMap<usize, u64>,
         rects: std::collections::BTreeMap<usize, Rect>,
+        /// Paints and plane moves so far.
+        paints: usize,
+        moves: usize,
     }
 
     impl Planes for Recorder {
@@ -1012,6 +1765,7 @@ mod tests {
             self.exists.insert(index);
             self.bytes.insert(index, u64::from(r.w.max(1)) * u64::from(r.h.max(1)) * 4);
             self.rects.insert(index, r);
+            self.paints += 1;
             Ok(true)
         }
 
@@ -1032,6 +1786,17 @@ mod tests {
         fn frame_ready(&self, _id: u32) -> bool {
             true
         }
+
+        fn move_plane(&mut self, _id: u32, index: usize, to: Rect) -> bool {
+            match self.rects.get_mut(&index) {
+                Some(r) if r.w == to.w && r.h == to.h => {
+                    *r = to;
+                    self.moves += 1;
+                    true
+                }
+                _ => false,
+            }
+        }
     }
 
     impl Recorder {
@@ -1043,6 +1808,40 @@ mod tests {
     fn shape(id: &str, shape: mandara_config::desktop_widgets::DecorShape, anchor: mandara_config::desktop_widgets::Anchor) -> DesktopWidget {
         use mandara_config::desktop_widgets::Decoration;
         DesktopWidget { id: id.into(), place: Placement { anchor, ..Default::default() }, kind: WidgetKind::Decoration(Decoration { shape, ..Default::default() }), ..Default::default() }
+    }
+
+    /// Dragging a widget in edit mode slides its planes (no repaint per
+    /// pointer event); where it lands it is painted once more, exactly.
+    #[test]
+    fn a_dragged_widget_slides_and_is_painted_once_where_it_lands() {
+        use mandara_config::desktop_widgets::{Anchor, DecorShape};
+        let fonts = FontNames::default();
+        let names = ["DP-1"];
+        let o = OutputCx { id: 1, names: &names, logical: (1920.0, 1080.0), physical: (1920, 1080), scale120: mandara_core::shm_canvas::SCALE_DENOMINATOR, tone: None, primary: Color::oklch(0.6, 0.15, 200.0), fonts: &fonts, depth: false, subject: None, safe: Insets::default() };
+        let mut text = TextPainter::new();
+        let mut host = Recorder::default();
+        let mut ws = OutWidgets::default();
+        let shared = Shared::default();
+        let now = Local::now();
+        let mut disc = shape("decoration-1", DecorShape::Disc, Anchor::TopLeft);
+        let (d0, _) = planes(0);
+        step_static(&mut host, &mut ws, &o, &scene(vec![disc.clone()]), &shared, &mut text, now, 0).expect("step");
+        let (painted, first) = (host.paints, host.rects[&d0]);
+        let mut dragging = scene(vec![]);
+        dragging.moving = Some(disc.id.clone());
+        for step in 1..=10 {
+            disc.place.x = step as f32 * 0.01;
+            dragging.items = vec![disc.clone()];
+            step_static(&mut host, &mut ws, &o, &dragging, &shared, &mut text, now, 0).expect("step");
+        }
+        assert_eq!(host.paints, painted, "no repaint while dragged");
+        assert_eq!(host.rects[&d0].x - first.x, (0.1_f32 * 1920.0).round() as i32, "the plane followed");
+        assert_eq!(host.moves, 10);
+        // Released: painted once at the exact place.
+        step_static(&mut host, &mut ws, &o, &scene(vec![disc.clone()]), &shared, &mut text, now, 0).expect("step");
+        assert_eq!(host.paints, painted + 1);
+        step_static(&mut host, &mut ws, &o, &scene(vec![disc.clone()]), &shared, &mut text, now, 0).expect("step");
+        assert_eq!(host.paints, painted + 1, "and left alone after that");
     }
 
     #[test]

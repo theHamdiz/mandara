@@ -4,6 +4,7 @@
 //! `mandara_config::surfaces::ranges`, the same spans the shell clamps to.
 
 use mandara_config::surfaces::{defaults, ranges};
+use mandara_config::desktop::{AutoHideMode, CornerAction};
 use mandara_config::{BarLayout, ShellConfig};
 use mandara_i18n::tk;
 
@@ -16,6 +17,12 @@ pub const PANELS: &str = tk("Drop-down panels");
 pub const PANEL_MOTION: &str = tk("Panel animation");
 const LAYOUT: &str = tk("Layout");
 const MOTION: &str = tk("Motion");
+/// Group of the bar's capsule options.
+pub const CAPSULES: &str = tk("Capsules");
+
+const CAPSULE_FILLS: &[(&str, &str)] = &[("soft", tk("Soft wash")), ("container", tk("Raised card")), ("accent", tk("Accent tint"))];
+/// `bar.font_weight`: 0 follows Typography's weight.
+const BAR_WEIGHTS: &[(&str, &str)] = &[("0", tk("Interface weight")), ("300", tk("Light")), ("400", tk("Regular")), ("500", tk("Medium")), ("600", tk("Semibold")), ("700", tk("Bold"))];
 
 const CENTER_ALIGN: &[(&str, &str)] = &[("screen", tk("Screen center")), ("between", tk("Between the sides")), ("start", tk("After the start group")), ("end", tk("Before the end group"))];
 const SEPARATORS: &[(&str, &str)] = &[("none", tk("None")), ("dot", tk("Dot")), ("line", tk("Line"))];
@@ -44,6 +51,10 @@ const SIDE_BAR_ONLY: &str = tk("Left or right bar only");
 const FRAME_FIRST: &str = tk("Turn on Screen frame (side bar) first");
 const SIDE_BAR_STAYS: &str = tk("A side bar always stays on screen");
 const FRAME_FIRST_OFF: &str = tk("The screen frame already joins the bar to the edges");
+const CLICKS_PASS_THROUGH: &str = tk("Empty bar space clicks through to windows");
+const COMMAND_FIRST: &str = tk("Pick Command as the action first");
+const CAPSULES_FIRST: &str = tk("Turn on group or item capsules first");
+const FLOATS_OVER_WINDOWS: &str = tk("The bar floats over windows while it auto-hides");
 
 pub fn entries() -> Vec<Setting> {
     use Control::*;
@@ -52,7 +63,11 @@ pub fn entries() -> Vec<Setting> {
         // Bar → Layout
         s(Bar, LAYOUT, "/bar/compact_height", tk("Compact height"), tk("Thickness of the hairline and the micro pill"), span(ranges::BAR_COMPACT_HEIGHT, " px")),
         s(Bar, LAYOUT, "/bar/notch_width", tk("Notch width"), tk("How much of the screen edge the notch spans"), span(ranges::BAR_NOTCH_WIDTH, "")),
-        s(Bar, APPEARANCE, "/bar/capsules", tk("Group capsules"), tk("Each group of bar items sits on a soft capsule of its own"), Toggle),
+        s(Bar, CAPSULES, "/bar/capsules", tk("Group capsules"), tk("Each group of bar items sits on a soft capsule of its own"), Toggle),
+        s(Bar, CAPSULES, "/bar/item_capsules", tk("Item capsules"), tk("Every bar item sits on a capsule of its own, in any bar style"), Toggle),
+        s(Bar, CAPSULES, "/bar/capsule_fill", tk("Capsule colour"), tk("A faint wash, the raised tone of cards, or a tint of the accent"), Choice(CAPSULE_FILLS)),
+        s(Bar, CAPSULES, "/bar/capsule_strength", tk("Capsule strength"), tk("How strongly the capsules stand out from the bar"), span(ranges::INTENSITY, "×")),
+        s(Bar, CAPSULES, "/bar/capsule_outline", tk("Capsule outline"), tk("A hairline edge around each capsule"), Toggle),
         s(Bar, APPEARANCE, "/bar/accent_line", tk("Accent line"), tk("A 1 px accent line along the hairline's inner edge"), Toggle),
         s(Bar, LAYOUT, "/bar/vertical_width", tk("Side bar width"), tk("Width of a left or right bar"), span(ranges::BAR_VERTICAL_WIDTH, " px")),
         s(Bar, tk("Screen frame"), "/bar/screen_frame", tk("Screen frame"), tk("A thin border round the whole display, joined to the side bar; it reserves no space of its own"), Toggle),
@@ -62,6 +77,7 @@ pub fn entries() -> Vec<Setting> {
         s(Bar, tk("Spacing"), "/bar/chip_padding", tk("Item padding"), tk("Space inside each bar item, around its content"), span(ranges::BAR_CHIP_PADDING, " px")),
         s(Bar, tk("Spacing"), "/bar/chip_spacing", tk("Item spacing"), tk("Gap between neighbouring bar items"), span(ranges::BAR_CHIP_SPACING, " px")),
         s(Bar, tk("Spacing"), "/bar/separator", tk("Separators"), tk("A mark between neighbouring bar items"), Choice(SEPARATORS)),
+        s(Bar, tk("Spacing"), "/bar/window_gap", tk("Gap to windows"), tk("Extra space between the bar and your windows (the bar keeps it free)"), span(ranges::BAR_WINDOW_GAP, " px")),
         // Bar → Appearance
         s(Bar, APPEARANCE, "/bar/tint", tk("Accent tint"), tk("Mixes the theme accent into the bar's background"), span(ranges::BAR_TINT, "")),
         s(Bar, APPEARANCE, "/bar/rim_width", tk("Rim width"), tk("Thickness of the glass edge highlight"), span(ranges::BAR_RIM_WIDTH, " px")),
@@ -70,6 +86,8 @@ pub fn entries() -> Vec<Setting> {
         s(Bar, APPEARANCE, "/bar/shadow_strength", tk("Shadow strength"), tk("How dark the bar's shadow is"), span(ranges::INTENSITY, "×")),
         s(Bar, APPEARANCE, "/bar/text_scale", tk("Text size"), tk("Bar text relative to the interface text size"), span(ranges::BAR_TEXT_SCALE, "×")),
         s(Bar, APPEARANCE, "/bar/icon_scale", tk("Icon size"), tk("Bar icons relative to their designed size"), span(ranges::BAR_ICON_SCALE, "×")),
+        s(Bar, APPEARANCE, "/bar/font_weight", tk("Text weight"), tk("Weight of bar text; items keep their own emphasis"), Choice(BAR_WEIGHTS)),
+        s(Bar, APPEARANCE, "/bar/hover_highlight", tk("Hover highlight"), tk("Bar items light up softly under the pointer"), Toggle),
         // Bar → Drop-down panels
         s(Bar, PANELS, "/panels/width_scale", tk("Width"), tk("Panels wider or narrower than their natural width"), span(ranges::PANEL_WIDTH_SCALE, "×")),
         s(Bar, PANELS, "/panels/max_height", tk("Maximum height"), tk("Tallest panel, as a share of the screen height the bar leaves free"), span(ranges::PANEL_MAX_HEIGHT, "×")),
@@ -117,8 +135,15 @@ pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
     let flush_frame = attached && !cfg.bar.floating_frame;
     let side_floating = cfg.sidebar.look.floats_with(&cfg.bar);
     // Beside a floating bar the side panels always float (no frame to join).
-    let bar_floats = !vertical && (!cfg.bar.layout.is_full_width() || cfg.bar.floating_frame);
+    let bar_floats = !vertical && (!cfg.bar.layout.is_attached() || (cfg.bar.layout.is_full_width() && cfg.bar.floating_frame));
+    // Group capsules only draw on attached styles; item capsules on all.
+    let capsules = cfg.bar.item_capsules || (cfg.bar.capsules && attached);
+    let floats_over = !vertical && matches!(cfg.bar.auto_hide.mode, AutoHideMode::Always | AutoHideMode::Overlap);
     match path {
+        "/bar/capsule_fill" | "/bar/capsule_strength" | "/bar/capsule_outline" if !capsules => Some(CAPSULES_FIRST),
+        "/bar/window_gap" if floats_over => Some(FLOATS_OVER_WINDOWS),
+        "/bar/right_click" | "/bar/middle_click/action" | "/bar/middle_click/command" | "/bar/scroll" if cfg.bar.click_through => Some(CLICKS_PASS_THROUGH),
+        "/bar/middle_click/command" if cfg.bar.middle_click.action != CornerAction::Command => Some(COMMAND_FIRST),
         "/bar/layout" if vertical => Some(SIDE_BAR_FRAME),
         "/bar/compact_height" if !compact => Some(COMPACT_ONLY),
         "/bar/accent_line" if vertical || cfg.bar.layout != BarLayout::Hairline => Some(HAIRLINE_ONLY),
@@ -178,6 +203,31 @@ mod tests {
         assert_eq!(locked("/panels/spring/damping", &cfg), Some(CUSTOM_SPRING_OFF));
         cfg.panels.spring.custom = true;
         assert_eq!(locked("/panels/spring/damping", &cfg), None);
+    }
+
+    #[test]
+    fn capsule_and_gap_controls_explain_themselves() {
+        let mut cfg = ShellConfig::default();
+        assert_eq!(locked("/bar/capsule_fill", &cfg), Some(CAPSULES_FIRST));
+        cfg.bar.item_capsules = true;
+        assert_eq!(locked("/bar/capsule_fill", &cfg), None, "item capsules draw on every style");
+        cfg.bar.item_capsules = false;
+        cfg.bar.capsules = true;
+        assert_eq!(locked("/bar/capsule_outline", &cfg), None, "group capsules on the default edge frame");
+        cfg.bar.layout = BarLayout::FloatingPills;
+        assert_eq!(locked("/bar/capsule_strength", &cfg), Some(CAPSULES_FIRST), "group capsules need an attached style");
+        assert_eq!(locked("/bar/window_gap", &cfg), None);
+        cfg.bar.auto_hide.mode = AutoHideMode::Overlap;
+        assert_eq!(locked("/bar/window_gap", &cfg), Some(FLOATS_OVER_WINDOWS));
+        cfg.bar.auto_hide.mode = AutoHideMode::Fullscreen;
+        assert_eq!(locked("/bar/window_gap", &cfg), None, "a bar hiding only for fullscreen keeps its space");
+        assert_eq!(locked("/bar/middle_click/command", &cfg), Some(COMMAND_FIRST));
+        cfg.bar.middle_click.action = CornerAction::Command;
+        assert_eq!(locked("/bar/middle_click/command", &cfg), None);
+        cfg.bar.click_through = true;
+        for path in ["/bar/right_click", "/bar/middle_click/action", "/bar/scroll"] {
+            assert_eq!(locked(path, &cfg), Some(CLICKS_PASS_THROUGH), "{path}");
+        }
     }
 
     #[test]

@@ -161,7 +161,7 @@ impl StudioView {
             }
             self.maint_fix(id, cx);
         }
-        for model in models::MODELS.iter().filter(|m| !m.installed()) {
+        for model in models::MODELS.iter().filter(|m| !m.on_demand && !m.installed()) {
             self.maint_model(model.id, true, cx);
         }
     }
@@ -234,7 +234,7 @@ impl StudioView {
         };
 
         // ── Overview ──────────────────────────────────────────────────────
-        let issues = self.maint.results.values().filter(|h| !h.is_ok()).count() + models::MODELS.iter().filter(|m| !m.installed()).count();
+        let issues = self.maint.results.values().filter(|h| !h.is_ok()).count() + models::MODELS.iter().filter(|m| !m.on_demand && !m.installed()).count();
         let all_good = !self.maint.results.is_empty() && issues == 0;
         let hero = card()
             .flex_row()
@@ -313,7 +313,7 @@ impl StudioView {
         }
 
         // ── Downloads ─────────────────────────────────────────────────────
-        let mut downloads = card().child(title(t("Downloads"), t("Models for features like copying text from screenshots. From PaddlePaddle on Hugging Face (Apache-2.0).")));
+        let mut downloads = card().child(title(t("Downloads"), t("Models for copying text from screenshots and for the wallpaper depth effect's model mode. From Hugging Face, all Apache-2.0; the depth model downloads only when you pick that mode.")));
         for model in models::MODELS {
             let installed = model.installed();
             let key = format!("model:{}", model.id);
@@ -324,7 +324,7 @@ impl StudioView {
                     .items_center()
                     .gap(px(SPACE_12_PX))
                     .py(px(SPACE_6_PX))
-                    .child(div().size(px(DIM_34_PX)).rounded(px(RADIUS_11_PX)).row().items_center().justify_center().flex_none().bg(p.surface_container_high.hsla()).child(icon("text-scan", ICON_16_PX, p.on_surface_variant)))
+                    .child(div().size(px(DIM_34_PX)).rounded(px(RADIUS_11_PX)).row().items_center().justify_center().flex_none().bg(p.surface_container_high.hsla()).child(icon(model.icon, ICON_16_PX, p.on_surface_variant)))
                     .child(
                         div()
                             .flex_1()

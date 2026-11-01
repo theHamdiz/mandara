@@ -48,6 +48,9 @@ const MODE_EXECUTABLE: u32 = 0o755;
 /// What `mandara_version::source_fingerprint` reports for builds not made
 /// by `cargo xtask build`.
 const DEV_FINGERPRINT: &str = "dev";
+/// `mandara setup --check` exit code for errors the compositor reports in
+/// its config (10 means conflicts).
+pub const SETUP_CONFIG_ERRORS: i32 = 11;
 /// The quiet log level for the setup commands the installer runs.
 const SETUP_LOG: (&str, &str) = ("RUST_LOG", "warn");
 
@@ -787,8 +790,14 @@ impl<'a> Installer<'a> {
         // Retiring comments those lines out (marked, every file backed up),
         // validates with the compositor and rolls back if it objects.
         let check = with_compositor(vec![bin.clone(), "setup".into(), "--check".into()], &compositor);
-        let clean = self.run(Cmd::from_argv(check).env(SETUP_LOG.0, SETUP_LOG.1).io(Io::Quiet)).is_none_or(|o| o.success);
-        if clean {
+        let checked = self.run(Cmd::from_argv(check).env(SETUP_LOG.0, SETUP_LOG.1).io(Io::Quiet));
+        if checked.as_ref().is_none_or(|o| o.success) {
+            return;
+        }
+        // No conflicts, but the compositor itself reports errors in the
+        // config: the Config doctor explains them and offers fixes.
+        if checked.as_ref().and_then(|o| o.code) == Some(SETUP_CONFIG_ERRORS) {
+            self.say(Level::Warn, "your compositor reports errors in its config: run `mandara setup --check` to see them, or open Studio → Compositor → Config doctor");
             return;
         }
         if self.ask("Retire the conflicts listed above (backed up, reversible with `mandara setup --restore latest`)?", true) {

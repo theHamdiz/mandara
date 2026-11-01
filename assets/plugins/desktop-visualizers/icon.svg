@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>Visualizers</title>
+  <defs>
+    <linearGradient id="visualizers-tile" x1="64" y1="40" x2="448" y2="496" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2B2160"/><stop offset="1" stop-color="#15113A"/>
+    </linearGradient>
+    <radialGradient id="visualizers-light" cx="0" cy="0" r="1" gradientTransform="translate(98 48) rotate(45) scale(440 354)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="visualizers-rim" x1="76" y1="28" x2="446" y2="482" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".72"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".08"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".24"/>
+    </linearGradient>
+    <clipPath id="visualizers-tile-clip"><rect x="16" y="16" width="480" height="480" rx="108"/></clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#visualizers-tile)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#visualizers-light)"/>
+  <g clip-path="url(#visualizers-tile-clip)">
+    <path d="M-28 324C126 476 349 518 544 274v238H-28z" fill="#FFFFFF" opacity=".045"/>
+  </g>
+  <rect x="19" y="19" width="474" height="474" rx="105" stroke="url(#visualizers-rim)" stroke-width="2"/>
+  <g id="visualizers-spectrum" stroke="#FF8A6B" stroke-width="28" stroke-linecap="round">
+    <path d="M100 256H412" stroke="#F6B65A" stroke-width="12"/>
+    <line x1="112" y1="216" x2="112" y2="296"/>
+    <line x1="184" y1="156" x2="184" y2="356"/>
+    <line x1="256" y1="114" x2="256" y2="398" stroke="#F6B65A"/>
+    <line x1="328" y1="172" x2="328" y2="340" stroke="#F6B65A"/>
+    <line x1="400" y1="216" x2="400" y2="296"/>
+  </g>
+</svg>

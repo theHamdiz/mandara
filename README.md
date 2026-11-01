@@ -16,8 +16,8 @@
   <a href="docs/building.md#build-fingerprint"><img src="https://img.shields.io/badge/100%25-Rust-B7410E?logo=rust&logoColor=white" alt="100% Rust"/></a>
   <a href="docs/desktop.md"><img src="https://img.shields.io/badge/Wayland-native-FFBC00?logo=wayland&logoColor=black" alt="Wayland native"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-5B4FE9" alt="GPU rendered"/></a>
-  <a href="docs/install.md#mangowm-niri-and-hyprland"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland-first--class-0A7EA4" alt="MangoWM, Niri, Hyprland"/></a>
-  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-43%20built--in%20%2B%20WebAssembly-8250DF" alt="43 plugins plus WebAssembly"/></a>
+  <a href="docs/install.md#mangowm-niri-hyprland-and-umbriel"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel-first--class-0A7EA4" alt="MangoWM, Niri, Hyprland, Umbriel"/></a>
+  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-58%20built--in%20%2B%20WebAssembly-8250DF" alt="58 plugins plus WebAssembly"/></a>
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-10%20%C2%B7%20RTL%20Arabic-0E7C86" alt="10 languages"/></a>
   <br/>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/RAM-under%20100%20MiB-2EA44F" alt="RAM under 100 MiB"/></a>
@@ -45,7 +45,7 @@
 Mandara is everything around your windows: the bar, a dynamic island, a
 dock, a launcher, a sidebar, notifications, wallpapers, the lock screen and
 the login screen, plus a settings app that changes all of it live. It runs
-on **MangoWM, Niri and Hyprland**, and it's one small, fast program you
+on **MangoWM, Niri, Hyprland and Umbriel**, and it's one small, fast program you
 install with one command.
 
 It's made to feel good to use. Panels pour out of the bar on real spring
@@ -65,8 +65,9 @@ desktop stays light enough to run all day without you noticing it.
   [Mandara Studio](docs/studio.md)
 - **It does a lot out of the box.** A media island with lyrics, a sound
   mixer per app, screenshots and screen recording, copying text from the
-  screen, a clipboard, a drag-and-drop app installer, night light, and 43
-  built-in plugins. [Everything else](docs/more-features.md)
+  screen, a clipboard that sorts what you copy, a drag-and-drop app
+  installer, night light, and 58 built-in plugins.
+  [Everything else](docs/more-features.md)
 - **It welcomes you in.** A matching lock screen and login screen with
   your own wallpaper, and ready-made looks for both.
   [Lock screen and login](docs/lock-and-login.md)
@@ -107,6 +108,29 @@ desktop stays light enough to run all day without you noticing it.
   <br/>
   <sub><b>Mandara Studio</b>: every setting, live, with previews like this login screen designer.</sub>
 </p>
+
+## Desktop widgets
+
+Dress up your desktop with dozens of widgets: clocks of every
+kind, calendars with your events, the sky, the weather, what's playing, a
+to-do list you tick right there, quick toggles, a desk cat and more. Each
+one can sit on a glass or solid plate, take a shape (a circle, a scalloped
+cookie, a flower, torn paper…) and wear a frame like washi tape or a
+polaroid. Pick Western or Eastern Arabic digits, the Gregorian or Hijri
+calendar and the language of the day names. Widgets come from plugins, so
+you turn on only the ones you want, and plugins can add their own.
+[Desktop widgets](docs/desktop.md#desktop-widgets)
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/screenshots/widgets-desk.webp" alt="Desktop widgets: a cookie analog clock, a quote, a month calendar, a taped to-do list on torn paper, a sticky note, the focus timer and upcoming events" width="100%"/><br/><sub><b>Your day</b>: tick tasks, start the timer, see what's next.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/widgets-music.webp" alt="Music widgets: a turning record, a pocket player, a cover cut to a flower, a side pill, an LED meter, a dot-matrix clock and the desk cat" width="100%"/><br/><sub><b>What's playing</b>, painted six ways, with the desk cat bobbing along.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/screenshots/widgets-sky.webp" alt="Sky and weather widgets: a slanted HUD clock, an at-a-glance line, the sun's arc, a globe, the moon, a weather disc, an hourly curve and the next prayer" width="100%"/><br/><sub><b>The sky</b>: the sun's arc, the moon, the weather and the next prayer.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/widgets-arabic.webp" alt="Widgets in Arabic: a dot-matrix clock in Eastern Arabic digits, an orbit clock, a Hijri month, prayer times, a countdown and a date tile on a scalloped plate" width="100%"/><br/><sub><b>Your language</b>: Eastern Arabic digits and the Hijri calendar.</sub></td>
+</tr>
+</table>
 
 ## Install
 
@@ -151,4 +175,5 @@ Mandara Shell is free software under the **GNU General Public License,
 version 3 or later** ([LICENSE.md](LICENSE.md), notice in
 [COPYRIGHT.md](COPYRIGHT.md)). Vendored code keeps the license in its
 folder, and fonts and models downloaded on demand keep their own: OFL for
-Google Fonts, Apache-2.0 for the PaddleOCR models.
+Google Fonts, Apache-2.0 for the PaddleOCR models and the Depth Anything V2
+Small depth model.

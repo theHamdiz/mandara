@@ -20,6 +20,7 @@ futures.workspace = true
 async-channel.workspace = true
 ureq.workspace = true
 pure-onnx-ocr.workspace = true
+tract-onnx.workspace = true
 image.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
@@ -35,20 +36,24 @@ wl-clipboard-rs.workspace = true
 tiny-skia.workspace = true
 sha-crypt.workspace = true
 ab_glyph = "0.2"
+# 0.23: the fontdb cosmic-text 0.19 (GPUI's text stack) uses.
 fontdb = "0.23"
 rav1e.workspace = true
 pulseaudio.workspace = true
 rustfft.workspace = true
 flate2.workspace = true
 tar.workspace = true
-toml.workspace = true
+toml = { workspace = true, features = ["display"] }
 rustix = { workspace = true, features = ["event", "time"] }
 serde.workspace = true
 serde_json.workspace = true
 # world clock, net speed, authenticator, color picker plugins
 chrono-tz = "0.10"
-hmac = "0.12"
-sha1 = "0.10"
+# hmac / sha1 (TOTP) and hkdf / aes / cbc below stay on the RustCrypto
+# generation GPUI's oo7 links (digest 0.10, cipher 0.4): their new majors
+# would add a second digest / cipher stack (see sha2 in the workspace).
+hmac = { version = "0.12", default-features = false }
+sha1 = { version = "0.10", default-features = false }
 sha2.workspace = true
 rqrr = { version = "0.11", default-features = false }
 palette.workspace = true
@@ -70,20 +75,21 @@ num-bigint-dig = { version = "0.9", features = ["zeroize"] }
 hkdf = "0.12"
 aes = "0.8"
 cbc = { version = "0.1", features = ["zeroize"] }
-base64 = "0.22"
+base64 = { version = "0.23", default-features = false, features = ["alloc"] }
 zeroize = "1"
-getrandom = "0.3"
+getrandom = "0.4"
 # App installer (app_install/): AppImage type-2 payloads are squashfs
 # images, read in-process (never executed) with backhand. Its default
 # xz/zstd codecs link C libraries, so only its pure-Rust gzip and lz4
 # codecs are enabled and xz / zstd blocks are decoded by lzma-rs and
 # ruzstd (both pure Rust; ruzstd is already in the tree via
 # mandara-delta). lzma-rs and ruzstd also unpack .tar.xz / .tar.zst
-# portable apps; zip (deflate only, pure-Rust flate2 backend) reads .zip.
+# portable apps; zip (deflate only, through flate2's pure-Rust backend; no
+# zopfli encoder, since Mandara only reads zips) reads .zip.
 backhand = { version = "0.25", default-features = false, features = ["gzip", "lz4"] }
 lzma-rs = "0.3"
 ruzstd = "0.9"
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 # Cursor themes (cursors/): Phinger ships its release as .tar.bz2; bzip2
 # 0.6 decodes with the pure-Rust libbz2-rs-sys by default.
 bzip2 = "0.6"

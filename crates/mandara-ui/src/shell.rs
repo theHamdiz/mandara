@@ -23,7 +23,7 @@ use gpui::{
 use mandara_config::surfaces::{BarSeparator, SidebarHeader, TabPosition, ranges};
 use mandara_config::{BarLayout, BarPosition, ConfigStore, ShellConfig};
 use mandara_core::{
-    Edge, FlareCenter, FrameClock, InputMaskRegistry, SpringConfig, SpringValue, ToGpui, concave_flare, edge_drawer_snapped,
+    DrawerEnd, Edge, FlareCenter, FrameClock, InputMaskRegistry, SpringConfig, SpringValue, ToGpui, concave_flare, edge_drawer_ends, edge_drawer_snapped,
 };
 use mandara_plugins::{ClickHandler, PanelCx, PanelSpec, PluginRegistry};
 use mandara_theme::{Color, MandaraPalette};
@@ -132,6 +132,10 @@ pub struct ShellView {
     /// Bar auto-hide / per-output visibility, and this frame's bar shift.
     autohide: crate::bar::autohide::AutoHide,
     bar_shift: f32,
+    /// Wheel travel over empty bar space not yet turned into a step.
+    empty_scroll: f32,
+    /// A redraw waiting for the main menu's frosted wallpaper.
+    frost_wait: Option<Task<()>>,
     /// Hot corners (and rounded screen corners).
     corners: crate::corners::HotCorners,
 }
@@ -180,12 +184,17 @@ const SEPARATOR_DOT_PX: f32 = 3.0;
 const SEPARATOR_LINE_W_PX: f32 = 1.0;
 const SEPARATOR_LINE_FRAC: f32 = 0.5;
 const SEPARATOR_ALPHA: f32 = 0.22;
-/// `bar.capsules`: each zone's soft capsule (its overhang past the chips
-/// and its fill).
+/// `bar.capsules`: each zone's soft capsule (its overhang past the chips),
+/// and the shipped alpha of each capsule colour (`bar.capsule_fill`, scaled
+/// by `bar.capsule_strength`) and of their outline.
 const CAPSULE_PAD_PX: f32 = 4.0;
 const CAPSULE_ALPHA: f32 = 0.07;
-/// Alpha of the hairline bar's accent line.
+const CAPSULE_CONTAINER_ALPHA: f32 = 0.85;
+const CAPSULE_ACCENT_ALPHA: f32 = 0.16;
+const CAPSULE_OUTLINE_ALPHA: f32 = 0.35;
+/// Alpha and thickness of the hairline bar's accent line.
 const ACCENT_LINE_ALPHA: f32 = 0.7;
+const ACCENT_LINE_PX: f32 = 1.0;
 /// Compact sidebar header: button / tab height.
 const SIDEBAR_COMPACT_BUTTON_PX: f32 = 24.0;
 /// State-layer alphas of bar chips (active panel / hover).
@@ -216,6 +225,9 @@ const SIDEBAR_TRIGGER_INSET: f32 = 0.1;
 /// fractions of the surface.
 const EDGE_TRIGGER_START: f32 = 0.3;
 const EDGE_TRIGGER_SPAN: f32 = 0.4;
+/// How soon the main menu looks again for a frosted wallpaper copy that
+/// is still being made.
+const FROST_RETRY: Duration = Duration::from_millis(150);
 /// Exclusive-zone changes smaller than this are ignored, in px.
 const ZONE_EPSILON_PX: f32 = 0.5;
 
@@ -414,6 +426,8 @@ impl ShellView {
             sidebar_cx: PanelCx::new(),
             autohide: crate::bar::autohide::AutoHide::new(monitor_for_autohide, |v: &mut ShellView| &mut v.autohide, cx),
             bar_shift: 0.0,
+            empty_scroll: 0.0,
+            frost_wait: None,
             corners: crate::corners::HotCorners::new(monitor_for_corners, |v: &mut ShellView| &mut v.corners, cx),
         }
     }
@@ -700,6 +714,66 @@ impl ShellView {
         }
     }
 
+    /// The main menu's frosted wallpaper, decoded and ready to draw: `None`
+    /// without a wallpaper Mandara can read, or while the copy is still
+    /// being made (a redraw is scheduled) or decoded (GPUI redraws this view
+    /// when it is).
+    fn menu_frost(&mut self, cfg: &ShellConfig, window: &mut Window, cx: &mut Context<Self>) -> Option<std::sync::Arc<gpui::RenderImage>> {
+        let wall = mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, Some(&self.monitor), cfg.theme.mode.is_dark())?;
+        match crate::wallpaper::frosted(&wall) {
+            crate::wallpaper::Frost::Ready(path) => window.use_asset::<gpui::ImgResourceLoader>(&gpui::Resource::Path(path.into()), cx)?.ok(),
+            crate::wallpaper::Frost::Making => {
+                if self.frost_wait.is_none() {
+                    self.frost_wait = Some(cx.spawn(async move |this, cx| {
+                        cx.background_executor().timer(FROST_RETRY).await;
+                        let _ = this.update(cx, |this, cx| {
+                            this.frost_wait = None;
+                            cx.notify();
+                        });
+                    }));
+                }
+                None
+            }
+            crate::wallpaper::Frost::Unavailable => None,
+        }
+    }
+
+    /// A middle click on empty bar space: `bar.middle_click`.
+    fn bar_middle_click(&mut self, cx: &mut Context<Self>) {
+        let corner = crate::state::config(cx).read(cx).get().bar.middle_click.clone();
+        crate::corners::run(corner.action, &corner.command, cx);
+    }
+
+    /// Scrolling over empty bar space: `bar.scroll` (one workspace or
+    /// volume step per wheel notch; touchpads add up to a notch first).
+    fn bar_scroll(&mut self, e: &gpui::ScrollEvent, cx: &mut Context<Self>) {
+        use mandara_config::surfaces::BarScrollAction;
+        let action = crate::state::config(cx).read(cx).get().bar.scroll;
+        if action == BarScrollAction::None {
+            return;
+        }
+        let notches = match e.delta {
+            gpui::ScrollDelta::Lines(l) => l.y,
+            gpui::ScrollDelta::Pixels(p) => f32::from(p.y) / crate::plugins::audio::SCROLL_PX_PER_LINE,
+        };
+        self.empty_scroll += notches;
+        if self.empty_scroll.abs() < 1.0 {
+            return;
+        }
+        // Up: the previous workspace / louder.
+        let up = self.empty_scroll > 0.0;
+        self.empty_scroll = 0.0;
+        match action {
+            BarScrollAction::Workspaces => {
+                if let Err(err) = crate::plugins::workspaces::step(&self.monitor, !up, cx) {
+                    tracing::warn!("bar scroll: {err}");
+                }
+            }
+            BarScrollAction::Volume => crate::plugins::audio::nudge_volume(up, cx),
+            BarScrollAction::None => {}
+        }
+    }
+
     fn update_panel(&mut self, cfg: &ShellConfig, cx: &App) {
         let state = self.shell.read(cx);
         let wanted = match state.panel.as_deref() {
@@ -897,6 +971,31 @@ fn px_snap_shift(shift: f32, scale: f32) -> f32 {
 }
 
 /// A bounds as a [`crate::dismiss::Rect`] (logical pixels).
+/// Empty bar space (between and around its items): right click
+/// (`bar.right_click`), middle click (`bar.middle_click`) and the scroll
+/// wheel (`bar.scroll`). Items occlude it, so their own handlers win.
+trait EmptyBarSpace: InteractiveElement + Sized {
+    fn empty_bar_space(self, cx: &mut Context<ShellView>) -> Self {
+        self.on_mouse_down(gpui::MouseButton::Right, cx.listener(|this, e: &gpui::MouseDownEvent, _, cx| this.bar_right_click(e.position, cx)))
+            .on_mouse_down(gpui::MouseButton::Middle, cx.listener(|this, _: &gpui::MouseDownEvent, _, cx| this.bar_middle_click(cx)))
+            .on_scroll(cx.listener(|this, e: &gpui::ScrollEvent, _, cx| this.bar_scroll(e, cx)))
+    }
+}
+
+impl<E: InteractiveElement> EmptyBarSpace for E {}
+
+/// Fill and outline colour of the bar's group / item capsules.
+fn capsule_colors(bar: &mandara_config::BarConfig, palette: &MandaraPalette) -> (Color, Color) {
+    use mandara_config::surfaces::BarCapsuleFill;
+    let k = bar.capsule_strength();
+    let fill = match bar.capsule_fill {
+        BarCapsuleFill::Soft => palette.on_surface.with_alpha(CAPSULE_ALPHA * k),
+        BarCapsuleFill::Container => palette.surface_container_high.with_alpha((CAPSULE_CONTAINER_ALPHA * k).min(1.0)),
+        BarCapsuleFill::Accent => palette.primary.with_alpha(CAPSULE_ACCENT_ALPHA * k),
+    };
+    (fill, palette.outline.with_alpha((CAPSULE_OUTLINE_ALPHA * k).min(1.0)))
+}
+
 fn rect_of(b: Bounds<Pixels>) -> crate::dismiss::Rect {
     crate::dismiss::Rect::new(f32::from(b.origin.x), f32::from(b.origin.y), f32::from(b.size.width), f32::from(b.size.height))
 }
@@ -943,6 +1042,11 @@ impl Render for ShellView {
             let chip = self.find_slot(crate::plugins::session::LAUNCHER_ID).and_then(|(z, i)| self.slot_rects(z).get(i).copied().flatten()).filter(|_| !m.vertical);
             crate::launcher_place::publish_button(&self.monitor, chip.map(|b| (f32::from(b.origin.x), f32::from(b.size.width))), cx);
         }
+        // The main menu is glass with solid cards on it (panels.menu_*),
+        // over your frosted wallpaper; until that is decoded (or without a
+        // wallpaper Mandara can read) it stays solid, never see-through to
+        // the desktop's widgets.
+        let menu_frost = if self.panel_slot == Some(MENU_SLOT) && cfg.panels.menu_translucent { self.menu_frost(&cfg, window, cx) } else { None };
         let shell_state = self.shell.read(cx);
         let panel_open = shell_state.panel.is_some();
         let sidebar_target = if cfg.sidebar.enabled && (cfg.sidebar.pinned() || shell_state.sidebar_visible()) { 1.0 } else { 0.0 };
@@ -977,8 +1081,7 @@ impl Render for ShellView {
         let bar_fill = if cfg.bar.tint > 0.0 { fill.mix(palette.primary, ranges::BAR_TINT.clamp(cfg.bar.tint, 0.0)) } else { fill };
         let bar_fill_h = bar_fill.with_alpha(fill.alpha() * ranges::OPACITY.clamp(cfg.bar.opacity, 1.0)).hsla();
         // Drop-down panels / side panels carry their own opacity.
-        // The main menu is glass with solid cards on it (panels.menu_*).
-        let menu_glass = self.panel_slot == Some(MENU_SLOT) && cfg.panels.menu_translucent;
+        let menu_glass = menu_frost.is_some();
         let panel_alpha = ranges::OPACITY.clamp(if menu_glass { cfg.panels.menu_opacity.min(cfg.panels.opacity) } else { cfg.panels.opacity }, 1.0);
         let side_alpha = ranges::OPACITY.clamp(cfg.sidebar.look.opacity, 1.0);
         let panel_radius = crate::style::panel_radius(&cfg.bar);
@@ -994,9 +1097,6 @@ impl Render for ShellView {
         );
         let bar_shadow = if cfg.bar.shadow { crate::plugins::panel_fx::elevation_scaled(&palette, 1.0, cfg.bar.shadow_strength) } else { Vec::new() };
         let bar_depth = |rim: &[gpui::BoxShadow]| -> Vec<gpui::BoxShadow> { bar_shadow.iter().chain(rim).cloned().collect() };
-        // Frame pieces overlap the bar by a pixel to hide seams; translucent
-        // fills would double up there, so they butt edge to edge instead.
-        let seam = if cfg.bar.opacity >= OPAQUE_ALPHA && !m.floating_frame { 1.0 } else { 0.0 };
         // Every frame edge sits on the device pixel grid (no AA seams).
         let scale = window.scale_factor();
         let px_snap = |v: f32| mandara_core::snap(v, scale);
@@ -1026,9 +1126,31 @@ impl Render for ShellView {
             if sidebar_right { self.surface.0 - beside_bar - travel * sidebar_p.min(1.0) } else { beside_bar + side_inset - travel * (1.0 - sidebar_p.min(1.0)) },
             window.scale_factor(),
         );
-        // Attached to the edge frame (flares, shared fill) unless it floats
-        // or the frame itself floats (or the bar is a side bar).
-        let side_attached = attached && !side_look.floats_with(&cfg.bar) && !m.floating_frame && !vertical && !m.notch();
+        // Flush, the sidebar is a piece of the bar's frame: the edge frame,
+        // the hairline, the notch or a side bar (shared fill, fillets where
+        // it meets the bar and the screen edges). It floats otherwise.
+        let side_attached = attached && !side_look.floats_with(&cfg.bar) && !m.floating_frame;
+        // The sidebar's box: the free height beside the bar, inset all
+        // round while floating.
+        let (side_top, side_h) = (top + side_inset, (free_h - side_inset * 2.0).max(0.0));
+        // Frame pieces overlap by a device pixel to hide seams; translucent
+        // fills would double up there, so they butt edge to edge instead.
+        let seam = if cfg.bar.opacity >= OPAQUE_ALPHA && !m.floating_frame { 1.0 } else { 0.0 };
+        let side_col = (side_attached && sidebar_p > HIDDEN_EPSILON).then(|| {
+            // Beside a side bar on its edge: only what slid out past the bar
+            // (plus the seam under it).
+            let (x0, x1) = if sidebar_right {
+                (sidebar_x, (sidebar_x + sidebar_w).min(self.surface.0 - beside_bar + if bar_on_sidebar_edge { seam } else { 0.0 }))
+            } else {
+                (sidebar_x.max(beside_bar - if bar_on_sidebar_edge { seam } else { 0.0 }), sidebar_x + sidebar_w)
+            };
+            // Its inner edge is the slid edge, whatever the clip.
+            let inner_from = if sidebar_right { x0 } else { sidebar_x };
+            let mut col = layout::side_column(&m, self.surface, inner_from, if sidebar_right { x1 - x0 } else { x1 - sidebar_x }, sidebar_right, (side_top, side_h), px_snap(m.flare));
+            let (_, y, _, h) = col.column;
+            col.column = (x0, y, (x1 - x0).max(0.0), h);
+            col
+        });
 
         let mut root = div()
             .id("mandara-shell")
@@ -1115,10 +1237,7 @@ impl Render for ShellView {
                     .rounded(px(m.frame_radius()))
                     .bg(bar_fill_h)
                     .shadow(bar_depth(&bar_rim))
-                    .on_mouse_down(gpui::MouseButton::Right, cx.listener(move |this, e: &gpui::MouseDownEvent, _, cx| {
-                        // The main menu opens at the press, along the bar.
-                        this.bar_right_click(e.position, cx);
-                    }))
+                    .empty_bar_space(cx)
                     .when(!click_through, |el| el.child(self.mask.region())),
             );
         } else if attached && vertical {
@@ -1134,41 +1253,48 @@ impl Render for ShellView {
                 }
                 let (ix, iy) = (px_snap(f32::from(inner.origin.x)), px_snap(f32::from(inner.origin.y)));
                 let (ix1, iy1) = (px_snap(f32::from(inner.origin.x + inner.size.width)), px_snap(f32::from(inner.origin.y + inner.size.height)));
+                // The opening's corners on the sidebar's side move to the
+                // sidebar's inner edge (its column draws them).
+                let (left_free, right_free) = (side_col.is_none() || sidebar_right, side_col.is_none() || !sidebar_right);
                 root = root
-                    .child(concave_flare(ix, iy, r, FlareCenter::BottomRight, bar_fill_h))
-                    .child(concave_flare(ix1 - r, iy, r, FlareCenter::BottomLeft, bar_fill_h))
-                    .child(concave_flare(ix, iy1 - r, r, FlareCenter::TopRight, bar_fill_h))
-                    .child(concave_flare(ix1 - r, iy1 - r, r, FlareCenter::TopLeft, bar_fill_h));
-            } else {
+                    .when(left_free, |el| el.child(concave_flare(ix, iy, r, FlareCenter::BottomRight, bar_fill_h)).child(concave_flare(ix, iy1 - r, r, FlareCenter::TopRight, bar_fill_h)))
+                    .when(right_free, |el| el.child(concave_flare(ix1 - r, iy, r, FlareCenter::BottomLeft, bar_fill_h)).child(concave_flare(ix1 - r, iy1 - r, r, FlareCenter::TopLeft, bar_fill_h)));
+            } else if side_col.is_none() || !bar_on_sidebar_edge {
+                // (A sidebar out beside the bar carries these to its edge.)
                 let (fx, top_c, bottom_c) = if right_bar { (sx - r, FlareCenter::BottomLeft, FlareCenter::TopLeft) } else { (sx + sw_, FlareCenter::BottomRight, FlareCenter::TopRight) };
                 root = root.child(concave_flare(fx, 0.0, r, top_c, bar_fill_h)).child(concave_flare(fx, self.surface.1 - r, r, bottom_c, bar_fill_h));
             }
             root = root.child(
                 place(self.backdrop.value())
                     .id("bar-backdrop")
-                    .on_mouse_down(gpui::MouseButton::Right, cx.listener(|this, e: &gpui::MouseDownEvent, _, cx| {
-                        this.bar_right_click(e.position, cx);
-                    }))
+                    .empty_bar_space(cx)
                     .when(!click_through, |el| el.child(self.mask.region())),
             );
         } else if attached && m.notch() {
             // The notch hangs from the edge: concave shoulders where it
             // meets the screen edge, rounded far corners, a soft shadow.
             let frame = layout::orient(m.position, m.frame(self.surface.0), self.surface);
-            let (fx, fw) = (f32::from(frame.origin.x), f32::from(frame.size.width));
-            let fy = f32::from(frame.origin.y) + shift;
             let radius = m.frame_radius();
+            // A flush sidebar that reached the notch merges into it: the
+            // notch ends square at the sidebar (overlapping it by the seam).
+            let (fx, fw, start, end) = match side_col.as_ref().and_then(|c| c.notch) {
+                Some((x, w, butt_start, butt_end)) => {
+                    let (x, w) = if butt_start { (x - seam, w + seam) } else { (x, w + if butt_end { seam } else { 0.0 }) };
+                    let shaped = |butt: bool| if butt { DrawerEnd::BUTT } else { DrawerEnd::flared(radius, m.flare) };
+                    (x, w, shaped(butt_start), shaped(butt_end))
+                }
+                None => (f32::from(frame.origin.x), f32::from(frame.size.width), DrawerEnd::flared(radius, m.flare), DrawerEnd::flared(radius, m.flare)),
+            };
+            let fy = f32::from(frame.origin.y) + shift;
             let edge = if bottom { Edge::Bottom } else { Edge::Top };
             if !bar_shadow.is_empty() {
                 let shade = div().absolute().left(px(fx)).top(px(fy)).w(px(fw)).h(px(bar_h)).shadow(bar_shadow.clone());
                 root = root.child(if bottom { shade.rounded_t(px(radius)) } else { shade.rounded_b(px(radius)) });
             }
-            root = root.child(edge_drawer_snapped(edge, fx, fy, fw, bar_h, radius, m.flare, bar_fill_h, scale)).child(
+            root = root.child(edge_drawer_ends(edge, fx, fy, fw, bar_h, start, end, bar_fill_h, scale)).child(
                 place(shifted(self.backdrop.value()))
                     .id("bar-backdrop")
-                    .on_mouse_down(gpui::MouseButton::Right, cx.listener(|this, e: &gpui::MouseDownEvent, _, cx| {
-                        this.bar_right_click(e.position, cx);
-                    }))
+                    .empty_bar_space(cx)
                     .when(!click_through, |el| el.child(self.mask.region())),
             );
         } else if attached {
@@ -1182,24 +1308,19 @@ impl Render for ShellView {
             } else {
                 (bar_h + shift, FlareCenter::BottomRight, FlareCenter::BottomLeft)
             };
+            // A sidebar out on one side carries that screen flare to its
+            // inner edge.
+            let (left_free, right_free) = (side_col.is_none() || sidebar_right, side_col.is_none() || !sidebar_right);
             root = root
                 .child(div().absolute().top(px(strip_y)).left_0().w(px(w)).h(px(bar_h)).bg(bar_fill_h))
-                .child(concave_flare(0.0, flare_y, r, left_c, bar_fill_h))
-                .child(concave_flare(w - r, flare_y, r, right_c, bar_fill_h))
+                .when(left_free, |el| el.child(concave_flare(0.0, flare_y, r, left_c, bar_fill_h)))
+                .when(right_free, |el| el.child(concave_flare(w - r, flare_y, r, right_c, bar_fill_h)))
                 .child(
                     place(shifted(self.backdrop.value()))
                         .id("bar-backdrop")
-                        .on_mouse_down(gpui::MouseButton::Right, cx.listener(|this, e: &gpui::MouseDownEvent, _, cx| {
-                            this.bar_right_click(e.position, cx);
-                        }))
+                        .empty_bar_space(cx)
                         .when(!click_through, |el| el.child(self.mask.region())),
                 );
-            // Hairline: a 1 px accent line along the bar's inner edge (over
-            // the strip).
-            if m.accent_line {
-                let line_y = if bottom { strip_y } else { strip_y + bar_h - 1.0 };
-                root = root.child(div().absolute().top(px(line_y)).left_0().w(px(w)).h(px(1.0)).bg(palette.primary.with_alpha(ACCENT_LINE_ALPHA).hsla()));
-            }
         } else if pill_alpha < OPAQUE_ALPHA {
             root = root.child(
                 place(shifted(self.backdrop.value()))
@@ -1208,43 +1329,59 @@ impl Render for ShellView {
                     .bg(bar_fill_h)
                     .shadow(bar_depth(&bar_rim))
                     // Empty island space: bar.right_click decides.
-                    .when(!click_through, |el| el.on_mouse_down(gpui::MouseButton::Right, cx.listener(|this, e: &gpui::MouseDownEvent, _, cx| this.bar_right_click(e.position, cx))))
+                    .when(!click_through, |el| el.empty_bar_space(cx))
                     .when(!click_through, |el| el.child(self.mask.region())),
             );
         }
-        // The sidebar's box: the free height beside the bar, inset all
-        // round while floating.
-        let (side_top, side_h) = (top + side_inset, (free_h - side_inset * 2.0).max(0.0));
-        if sidebar_p > HIDDEN_EPSILON {
-            let h = side_h;
-            let side_fill = if side_attached { bar_fill_h } else { fill.with_alpha(fill.alpha() * side_alpha).hsla() };
-            let seam = if side_attached { seam } else { 0.0 };
+        if let Some(col) = &side_col {
+            // One piece with the bar: its fill, fillets into the bar and the
+            // screen edges, overlapping a horizontal bar by the seam.
+            let (x, y, w, h) = col.column;
+            let (y, h) = if m.notch() || vertical { (y, h) } else if bottom { (y, h + seam) } else { (y - seam, h + seam) };
+            let (x0, x1) = (px_snap(x), px_snap(x + w));
+            root = root.child(div().absolute().left(px(x0)).top(px(px_snap(y))).w(px(x1 - x0)).h(px(px_snap(y + h) - px_snap(y))).bg(bar_fill_h));
+            for &(fx, fy, r, c) in &col.flares {
+                root = root.child(concave_flare(px_snap(fx), px_snap(fy), r, c, bar_fill_h));
+            }
+            // Beside the notch it fills the bar's band too: that part takes
+            // clicks like the rest of the sidebar.
+            if m.notch() {
+                let band = if bottom { (band_y, band_h) } else { (0.0, band_h) };
+                root = root.child(div().absolute().left(px(x0)).top(px(band.0)).w(px(x1 - x0)).h(px(band.1)).child(self.mask.region()));
+            }
+        } else if sidebar_p > HIDDEN_EPSILON {
+            let side_fill = fill.with_alpha(fill.alpha() * side_alpha).hsla();
             let floating_side = side_look.floats_with(&cfg.bar);
-            root = root
-                .child(
-                    div()
-                        .absolute()
-                        .left(px(sidebar_x))
-                        // Overlap the bar by a pixel on the side it touches.
-                        .top(px(if bottom { side_top } else { side_top - seam }))
-                        .w(px(sidebar_w))
-                        .h(px(h + seam))
-                        .bg(side_fill)
-                        .when(floating_side, |el| el.rounded(px(side_radius)).shadow(crate::plugins::panel_fx::elevation_scaled(&palette, sidebar_p.min(1.0), cfg.panels.shadow_strength)))
-                        .when(!side_attached && !floating_side && !sidebar_right, |el| el.rounded_r(px(side_radius)))
-                        .when(!side_attached && !floating_side && sidebar_right, |el| el.rounded_l(px(side_radius))),
-                )
-                .when(side_attached, |el| {
-                    let r = px_snap(m.flare * sidebar_p.min(1.0));
-                    // Where the sidebar meets the bar: under a top bar, or
-                    // just above a bottom one.
-                    let fy = if bottom { px_snap(top + h) - r } else { px_snap(top) };
-                    el.child(if sidebar_right {
-                        concave_flare(px_snap(sidebar_x) - r, fy, r, if bottom { FlareCenter::TopLeft } else { FlareCenter::BottomLeft }, bar_fill_h)
-                    } else {
-                        concave_flare(px_snap(sidebar_x + sidebar_w), fy, r, if bottom { FlareCenter::TopRight } else { FlareCenter::BottomRight }, bar_fill_h)
-                    })
-                });
+            root = root.child(
+                div()
+                    .absolute()
+                    .left(px(sidebar_x))
+                    .top(px(side_top))
+                    .w(px(sidebar_w))
+                    .h(px(side_h))
+                    .bg(side_fill)
+                    .when(floating_side, |el| el.rounded(px(side_radius)).shadow(crate::plugins::panel_fx::elevation_scaled(&palette, sidebar_p.min(1.0), cfg.panels.shadow_strength)))
+                    .when(!floating_side && !sidebar_right, |el| el.rounded_r(px(side_radius)))
+                    .when(!floating_side && sidebar_right, |el| el.rounded_l(px(side_radius))),
+            );
+        }
+        // Hairline: a 1 px accent line along the bar's inner edge (over the
+        // strip), turning down the inner edge of a sidebar joined to it.
+        if m.accent_line && attached && !vertical && !m.floating_frame {
+            let accent = palette.primary.with_alpha(ACCENT_LINE_ALPHA).hsla();
+            let strip_y = if bottom { px_snap(band_y + band_h - bar_h) } else { 0.0 } + shift;
+            let line_y = if bottom { strip_y } else { strip_y + bar_h - ACCENT_LINE_PX };
+            let w = self.surface.0;
+            match side_col.as_ref().map(|c| if sidebar_right { px_snap(c.column.0) } else { px_snap(c.column.0 + c.column.2) - ACCENT_LINE_PX }) {
+                Some(inner) => {
+                    let (hx, hw) = if sidebar_right { (0.0, inner + ACCENT_LINE_PX) } else { (inner, w - inner) };
+                    let (vy, vh) = if bottom { (0.0, line_y + ACCENT_LINE_PX) } else { (line_y, self.surface.1 - line_y) };
+                    root = root
+                        .child(div().absolute().top(px(line_y)).left(px(hx)).w(px(hw.max(0.0))).h(px(ACCENT_LINE_PX)).bg(accent))
+                        .child(div().absolute().top(px(vy)).left(px(inner)).w(px(ACCENT_LINE_PX)).h(px(vh.max(0.0))).bg(accent));
+                }
+                None => root = root.child(div().absolute().top(px(line_y)).left_0().w(px(w)).h(px(ACCENT_LINE_PX)).bg(accent)),
+            }
         }
         // Fade & slide panels fade in with their travel.
         let panel_fade = if cfg.panels.animation == mandara_config::surfaces::PanelAnimation::Slide { progress } else { 1.0 };
@@ -1276,20 +1413,22 @@ impl Render for ShellView {
                     .into_any_element()
             };
             // The main menu's glass shows your wallpaper, blurred, not
-            // whatever sits on the desktop behind it.
-            if menu_glass {
-                let wall = mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, Some(&self.monitor), cfg.theme.mode.is_dark()).and_then(|p| crate::wallpaper::frosted(&p));
-                if let Some(frost) = wall {
-                    let (out_w, out_h) = crate::plugins::dock::output_size(&self.monitor, cx);
-                    let dy = if bottom { out_h - self.surface.1 } else { 0.0 };
-                    root = root.child(
-                        place(b)
-                            .rounded(px(panel_radius))
-                            .overflow_hidden()
-                            .opacity(panel_fade)
-                            .child(gpui::StyledImage::object_fit(gpui::img(frost), gpui::ObjectFit::Cover).absolute().left(px(-x)).top(px(-(y + dy))).w(px(out_w)).h(px(out_h))),
-                    );
-                }
+            // whatever sits on the desktop behind it (clipped like the
+            // panel's content: square where it joins an attached bar).
+            if let Some(frost) = menu_frost {
+                let (out_w, out_h) = crate::plugins::dock::output_size(&self.monitor, cx);
+                let dy = if bottom { out_h - self.surface.1 } else { 0.0 };
+                root = root.child(
+                    place(b)
+                        .overflow_hidden()
+                        .opacity(panel_fade)
+                        .when(attached && vertical && !right_bar, |el| el.rounded_r(px(panel_radius)))
+                        .when(attached && vertical && right_bar, |el| el.rounded_l(px(panel_radius)))
+                        .when(attached && !vertical && !bottom, |el| el.rounded_b(px(panel_radius)))
+                        .when(attached && !vertical && bottom, |el| el.rounded_t(px(panel_radius)))
+                        .when(!attached, |el| el.rounded(px(panel_radius)))
+                        .child(gpui::StyledImage::object_fit(gpui::img(gpui::ImageSource::Render(frost)), gpui::ObjectFit::Cover).absolute().left(px(-x)).top(px(-(y + dy))).w(px(out_w)).h(px(out_h))),
+                );
             }
             root = root.child(if panel_fade < 1.0 { div().absolute().size_full().opacity(panel_fade).child(drawer).into_any_element() } else { drawer });
         }
@@ -1309,11 +1448,7 @@ impl Render for ShellView {
                         .shadow(bar_depth(&bar_rim))
                         // Empty space on a pill or the island: the main
                         // menu or desktop edit mode (bar.right_click).
-                        .when(!click_through, |el| {
-                            el.on_mouse_down(gpui::MouseButton::Right, cx.listener(move |this, e: &gpui::MouseDownEvent, _, cx| {
-                                this.bar_right_click(e.position, cx);
-                            }))
-                        })
+                        .when(!click_through, |el| el.empty_bar_space(cx))
                         .when(!click_through, |el| el.child(self.mask.region())),
                 );
             }
@@ -1322,6 +1457,9 @@ impl Render for ShellView {
         // ── Slot chips + content ──────────────────────────────────────────
         let active_slot = if panel_open { self.panel_slot } else { None };
         let bar_text_px = BASE_TEXT_PX * cfg.typography.scale * cfg.bar.text_scale();
+        let bar_weight = gpui::FontWeight(f32::from(cfg.bar.font_weight(cfg.typography.weight)));
+        let (capsule_fill, capsule_edge) = capsule_colors(&cfg.bar, &palette);
+        let hover_k = if cfg.bar.hover_highlight { HOVER_CHIP_TINT_ALPHA } else { 0.0 };
         for z in 0..self.zones.len() {
             let rects = self.slot_rects(z);
             // Edge-frame chips take the bar radius; chips inside a pill or
@@ -1336,7 +1474,7 @@ impl Render for ShellView {
                 })
                 .unwrap_or(FALLBACK_CHIP_RADIUS_PX);
             // `bar.capsules`: the zone's chips sit on one soft capsule.
-            if cfg.bar.capsules && attached {
+            if cfg.bar.capsules && attached && !cfg.bar.item_capsules {
                 let visible: Vec<Bounds<Pixels>> = rects.iter().flatten().copied().collect();
                 if !visible.is_empty() {
                     let u = layout::union(&visible);
@@ -1351,7 +1489,16 @@ impl Render for ShellView {
                             .w(px(px_snap(w)))
                             .h(px(px_snap(h)))
                             .rounded(px(chip_radius + CAPSULE_PAD_PX * 0.5))
-                            .bg(palette.on_surface.with_alpha(CAPSULE_ALPHA).hsla()),
+                            .bg(capsule_fill.hsla())
+                            .when(cfg.bar.capsule_outline, |el| el.border_1().border_color(capsule_edge.hsla())),
+                    );
+                }
+            }
+            // `bar.item_capsules`: every item on a capsule of its own.
+            if cfg.bar.item_capsules {
+                for r in rects.iter().flatten() {
+                    root = root.child(
+                        place(*r).rounded(px(chip_radius)).bg(capsule_fill.hsla()).when(cfg.bar.capsule_outline, |el| el.border_1().border_color(capsule_edge.hsla())),
                     );
                 }
             }
@@ -1396,7 +1543,7 @@ impl Render for ShellView {
                 let lift = slot.hover.value().clamp(0.0, 1.0);
                 let active = active_slot == Some((z, i));
                 if let Some(r) = rects[i] {
-                    let tint = if active { palette.primary.with_alpha(ACTIVE_CHIP_TINT_ALPHA) } else { palette.on_surface.with_alpha(HOVER_CHIP_TINT_ALPHA * lift) };
+                    let tint = if active { palette.primary.with_alpha(ACTIVE_CHIP_TINT_ALPHA) } else { palette.on_surface.with_alpha(hover_k * lift) };
                     let has_action = slot.panel.is_some() || slot.on_click.is_some();
                     let id = slot.id.clone();
                     let id2 = id.clone();
@@ -1470,6 +1617,7 @@ impl Render for ShellView {
                         .w(px(self.surface.0))
                         .h(px(h))
                         .text_size(px(bar_text_px))
+                        .font_weight(bar_weight)
                         .when(active, |el| el.text_color(palette.primary.lighten(ACTIVE_TEXT_LIGHTEN).hsla()))
                         .child(AnyView::from(host).cached(StyleRefinement::default().size_full())),
                 );
@@ -1982,6 +2130,8 @@ impl ExclusionView {
     pub fn new(position: BarPosition, cx: &mut Context<Self>) -> Self {
         let config = config(cx);
         cx.observe(&config, |_, _, cx| cx.notify()).detach();
+        // `bar hide` / `bar show` notify the shell state.
+        cx.observe(&crate::state::shell(cx), |_, _, cx| cx.notify()).detach();
         Self { config, applied: -1.0, position, monitor: String::new() }
     }
 
@@ -1991,9 +2141,14 @@ impl ExclusionView {
     }
 
     /// The zone this strip should reserve for `cfg` on `monitor`: none when
-    /// the bar is hidden there or floats over windows (auto-hide).
+    /// the bar is hidden there or floats over windows (auto-hide); the bar
+    /// plus its gap to windows (`bar.window_gap`) otherwise.
     pub fn zone_for(position: BarPosition, cfg: &ShellConfig, monitor: &str) -> f32 {
-        if cfg.bar.position == position && crate::bar::autohide::reserves_space(cfg, monitor) { layout::exclusive_zone(&Metrics::of(cfg, crate::style::radius_scale())) } else { 0.0 }
+        if cfg.bar.position == position && crate::bar::autohide::reserves_space(cfg, monitor) {
+            layout::exclusive_zone(&Metrics::of(cfg, crate::style::radius_scale())) + cfg.bar.window_gap()
+        } else {
+            0.0
+        }
     }
 }
 

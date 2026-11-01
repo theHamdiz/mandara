@@ -384,6 +384,9 @@ impl TextPainter {
                 Some(i) => attrs.clone().family(Family::Name(&self.fallbacks[i])).weight(Weight(weights[i])),
                 None => attrs.clone(),
             };
+            // Joined scripts are never letter-spaced: spacing pulls their
+            // connected letters apart.
+            let span = if joins(&text[range.clone()]) { span.letter_spacing(0.0) } else { span };
             (&text[range], span)
         });
         buffer.set_rich_text(spans, &attrs, Shaping::Advanced, None);
@@ -456,8 +459,23 @@ impl TextPainter {
     }
 }
 
+/// Unicode blocks of scripts whose letters join (Arabic and its
+/// supplements and presentation forms, Syriac, N'Ko, Mongolian).
+const JOINING_SCRIPTS: &[(u32, u32)] = &[(0x0600, 0x06FF), (0x0700, 0x074F), (0x0750, 0x077F), (0x07C0, 0x07FF), (0x0870, 0x08FF), (0x1800, 0x18AF), (0xFB50, 0xFDFF), (0xFE70, 0xFEFF)];
+
+/// Whether `text` has letters of a joining script.
+fn joins(text: &str) -> bool {
+    text.chars().any(|c| JOINING_SCRIPTS.iter().any(|&(lo, hi)| (lo..=hi).contains(&(c as u32))))
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn joining_scripts_are_never_letter_spaced() {
+        assert!(super::joins("أيام حتى") && super::joins("ܫܠܡܐ") && super::joins("ᠮᠣᠩᠭᠣᠯ"));
+        assert!(!super::joins("DAYS UNTIL 2026"));
+    }
+
     use super::*;
 
     #[test]
@@ -554,3 +572,4 @@ mod tests {
         }
     }
 }
+

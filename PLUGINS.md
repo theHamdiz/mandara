@@ -37,12 +37,13 @@ Contributing to Mandara itself (built-in plugins, Studio, the shell)? See
 2. [Anatomy of a plugin](#anatomy-of-a-plugin)
 3. [The API (WIT)](#the-api-wit)
 4. [Views](#views)
-5. [Walkthrough: the moon-phase example](#walkthrough-the-moon-phase-example)
-6. [Settings, commands and permissions](#settings-commands-and-permissions)
-7. [Localization](#localization)
-8. [Where plugins live](#where-plugins-live)
-9. [Publishing to the marketplace](#publishing-to-the-marketplace)
-10. [Guidelines](#guidelines)
+5. [Desktop widgets](#desktop-widgets)
+6. [Walkthrough: the moon-phase example](#walkthrough-the-moon-phase-example)
+7. [Settings, commands and permissions](#settings-commands-and-permissions)
+8. [Localization](#localization)
+9. [Where plugins live](#where-plugins-live)
+10. [Publishing to the marketplace](#publishing-to-the-marketplace)
+11. [Guidelines](#guidelines)
 
 ## Quick start
 
@@ -147,7 +148,7 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-wit-bindgen = "0.57"
+wit-bindgen = "0.63"
 
 [profile.release]
 opt-level = "s"
@@ -250,6 +251,65 @@ Trees deeper than 32 levels are cut off. A third-party panel opens at
 360 × 380 px with 16 px of padding. One plugin instance backs the bar item,
 the panel and the sidebar card, so state you keep in the plugin (statics,
 atomics) is shared between them.
+
+## Desktop widgets
+
+A plugin can also put widgets on the desktop, next to Mandara's own clocks,
+weather and gauges (which are first-party plugins themselves). People find
+your widgets in Studio → Desktop widgets and in the desktop's right-click
+**Add widget** menu, place them anywhere, resize them and choose their
+numerals, calendar and language.
+
+1. **List them in `plugin.toml`**, so Mandara can offer them without loading
+   your plugin:
+
+   ```toml
+   [[widgets]]
+   id = "moon"                     # lowercase letters, digits and - (unique)
+   name = "Moon tonight"           # translated through locales/
+   description = "Tonight's phase, large"
+   icon = "moon"                   # a bundled icon (default "sparkles")
+   width = 280                     # logical px at scale 1 (default 320 × 180)
+   height = 200
+   ```
+
+   At most 16 widgets per plugin.
+
+2. **Build for the `desktop-plugin` world.** It is the `plugin` world plus
+   one export, so everything above still applies:
+
+   ```rust
+   wit_bindgen::generate!({ world: "desktop-plugin", path: "wit" });
+   // `WidgetContext` comes from the world, like `Palette` and `View`.
+
+   impl Guest for MyPlugin {
+       // … init, bar, panel, sidebar, on_event, refresh_ms as before …
+       fn desktop_widget(theme: Palette, context: WidgetContext) -> Option<View> {
+           (context.widget == "moon").then(|| moon_view(&context))
+       }
+   }
+   ```
+
+| Export | Purpose |
+|---|---|
+| `desktop-widget(theme, context)` | One placed widget's view, or `None` to show nothing for now. Asked again after a click in it, when a setting changes and every `refresh-ms`. |
+
+`context` says which widget and how it is shown: `widget` (your
+`[[widgets]]` id), `instance` (one kind can be placed several times),
+`width` and `height` (its size now, logical px), and the person's choices
+for its text: `numerals` (`auto`, `western` or `eastern-arabic`),
+`calendar` (`gregorian`, `hijri`, `both` or `none`) and `language` (a code,
+empty for the interface language). Honour them: write Eastern Arabic digits
+when asked (or when `auto` and the language is Arabic), and leave dates out
+for `none`.
+
+The view is drawn on a glass card of that size in the theme, like your
+panel, and clicks reach `on-event` as usual. A plugin built for the plain
+`plugin` world keeps working; one that lists `[[widgets]]` but isn't built
+for `desktop-plugin` fails the [compliance check](#before-you-publish-compliance-check).
+Switching your plugin off in Studio hides its widgets (people keep them in
+their list), and nothing of it runs until one of its widgets is placed and
+shown.
 
 ## Walkthrough: the moon-phase example
 

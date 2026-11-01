@@ -1,6 +1,6 @@
 //! Workspaces / tags plugin.
 //!
-//! Each tag (MangoWM) or workspace (Niri, Hyprland) is a pill showing its
+//! Each tag (MangoWM) or workspace (Niri, Hyprland, Umbriel) is a pill showing its
 //! number and the icons of the apps on it; empty ones show only the number.
 //! Apps without a themed icon get a generated monogram tile. Every active tag
 //! carries a liquid capsule whose leading edge springs fast and trailing edge
@@ -60,7 +60,7 @@ const OVERFLOW_ALPHA: f32 = 0.8;
 /// Highest tag / workspace number accepted from the CLI.
 const MAX_TAG: i64 = 32;
 
-// MangoWM layout pill and keymode badge.
+// MangoWM / Umbriel layout pill and keymode (submap) badge.
 const LAYOUT_PAD_X_PX: f32 = 9.0;
 const LAYOUT_GAP_PX: f32 = 5.0;
 const LAYOUT_TEXT_PX: f32 = 10.5;
@@ -388,6 +388,28 @@ fn dispatch(cx: &mut gpui::App, f: impl FnOnce(&dyn mandara_compositor::Composit
     f(backend.as_ref()).map_err(|e| format!("{e:#}"))
 }
 
+/// The tag / workspace after (`forward`) or before the active one on
+/// `monitor`, in bar order; `None` at either end (it doesn't wrap).
+pub fn neighbour(model: &NavigationModel, forward: bool) -> Option<u32> {
+    let ids: Vec<(u32, bool)> = match model {
+        NavigationModel::BitmaskTags { tags, .. } => tags.iter().map(|t| (t.id, t.active)).collect(),
+        NavigationModel::Workspaces { workspaces } => workspaces.iter().map(|w| (w.id, w.active)).collect(),
+    };
+    let at = ids.iter().position(|(_, active)| *active)?;
+    let next = if forward { at.checked_add(1)? } else { at.checked_sub(1)? };
+    ids.get(next).map(|(id, _)| *id)
+}
+
+/// Views the next (`forward`) or previous tag / workspace of `monitor`
+/// (scrolling over empty bar space).
+pub fn step(monitor: &str, forward: bool, cx: &mut gpui::App) -> Result<(), String> {
+    let next = hub(cx).read(cx).navigation.get(monitor).and_then(|m| neighbour(m, forward));
+    match next {
+        Some(id) => dispatch(cx, |b| b.select_primary(monitor, id)),
+        None => Ok(()),
+    }
+}
+
 /// Tag-number labels, formatted once per thread.
 fn number_label(id: u32) -> SharedString {
     thread_local! {
@@ -419,12 +441,54 @@ impl Pill<'_> {
     }
 }
 
+/// How the bar draws its pills (`[plugins.settings.workspaces]`).
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Look {
+    pub labels: Labels,
+    /// Hide tags / workspaces without windows (the active and urgent ones
+    /// stay).
+    pub hide_empty: bool,
+    /// The icons of the apps on each pill.
+    pub app_icons: bool,
+}
+
+impl Default for Look {
+    fn default() -> Self {
+        Self { labels: Labels::Auto, hide_empty: false, app_icons: true }
+    }
+}
+
+/// What a pill says.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Labels {
+    /// Its number, or a workspace name short enough to fit.
+    Auto,
+    /// Always its number.
+    Number,
+    /// A dot.
+    Dots,
+}
+
+/// The dot a pill shows with [`Labels::Dots`].
+const DOT_LABEL: &str = "•";
+
+impl Look {
+    fn of(cfg: &mandara_config::ShellConfig) -> Self {
+        let labels = match cfg.plugins.setting(ID, "labels", String::from("auto")).as_str() {
+            "number" => Labels::Number,
+            "dots" => Labels::Dots,
+            _ => Labels::Auto,
+        };
+        Self { labels, hide_empty: cfg.plugins.setting(ID, "hide_empty", false), app_icons: cfg.plugins.setting(ID, "app_icons", true) }
+    }
+}
+
 /// Distinct apps per tag counted without a heap allocation.
 const APPS_INLINE: usize = 8;
 /// Workspace names this short are shown instead of their number.
 const SHORT_NAME_CHARS: usize = 2;
 
-fn pills<'a>(model: &'a NavigationModel, clients: &'a [ClientInfo], monitor: &str) -> Vec<Pill<'a>> {
+fn pills<'a>(model: &'a NavigationModel, clients: &'a [ClientInfo], monitor: &str, look: Look) -> Vec<Pill<'a>> {
     let apps_on = |id: u32| -> (SmallVec<[&'a str; MAX_ICONS]>, usize) {
         let mut seen: SmallVec<[&'a str; APPS_INLINE]> = SmallVec::new();
         for c in clients.iter().filter(|c| (monitor.is_empty() || c.monitor.is_empty() || c.monitor == monitor) && c.tags.contains(&id)) {
@@ -435,16 +499,25 @@ fn pills<'a>(model: &'a NavigationModel, clients: &'a [ClientInfo], monitor: &st
         let extra = seen.len().saturating_sub(MAX_ICONS);
         (seen.into_iter().take(MAX_ICONS).collect(), extra)
     };
-    let mk = |id: u32, label: SharedString, active: bool, urgent: bool| {
+    let label = |id: u32, name: Option<&str>| -> SharedString {
+        match (look.labels, name) {
+            (Labels::Dots, _) => DOT_LABEL.into(),
+            (Labels::Auto, Some(n)) if !n.is_empty() && n.chars().count() <= SHORT_NAME_CHARS => n.to_string().into(),
+            _ => number_label(id),
+        }
+    };
+    let mk = |id: u32, label: SharedString, active: bool, urgent: bool, occupied: bool| {
         let (apps, extra) = apps_on(id);
-        Pill { id, label, active, urgent, apps, extra }
+        // Hidden when empty: no windows, not shown, not asking for you.
+        if look.hide_empty && !active && !urgent && !occupied && apps.is_empty() {
+            return None;
+        }
+        let (apps, extra) = if look.app_icons { (apps, extra) } else { (SmallVec::new(), 0) };
+        Some(Pill { id, label, active, urgent, apps, extra })
     };
     match model {
-        NavigationModel::BitmaskTags { tags, .. } => tags.iter().map(|t| mk(t.id, number_label(t.id), t.active, t.urgent)).collect(),
-        NavigationModel::Workspaces { workspaces } => workspaces
-            .iter()
-            .map(|w| mk(w.id, if w.name.chars().count() <= SHORT_NAME_CHARS { w.name.clone().into() } else { number_label(w.id) }, w.active, w.urgent))
-            .collect(),
+        NavigationModel::BitmaskTags { tags, .. } => tags.iter().filter_map(|t| mk(t.id, label(t.id, None), t.active, t.urgent, t.occupied)).collect(),
+        NavigationModel::Workspaces { workspaces } => workspaces.iter().filter_map(|w| mk(w.id, label(w.id, Some(&w.name)), w.active, w.urgent, w.occupied)).collect(),
     }
 }
 
@@ -610,6 +683,11 @@ fn layout_label(code: &str) -> (&'static str, &'static str) {
         ("VG", "grid", mandara_i18n::tk("Vertical grid")),
         ("VK", "window", mandara_i18n::tk("Vertical deck")),
         ("TG", "grid", mandara_i18n::tk("Tgmix")),
+        // Umbriel's per-workspace layouts.
+        ("scrolling", "skip", mandara_i18n::tk("Scrolling")),
+        ("dwindle", "sidebar", mandara_i18n::tk("Dwindle")),
+        ("master", "sidebar", mandara_i18n::tk("Master")),
+        ("stacking", "window", mandara_i18n::tk("Stacking")),
     ];
     let code = code.trim();
     LAYOUTS
@@ -631,8 +709,9 @@ pub fn register(r: &mut PluginRegistry) {
                 let cx_ref: &gpui::App = cx;
                 let h = hub(cx_ref).read(cx_ref);
                 let Some(model) = h.navigation.get(monitor.as_ref()).or_else(|| h.navigation.values().next()) else { return div().into_any_element() };
-                let list = pills(model, &h.clients, &monitor);
-                let monochrome = crate::state::config(cx_ref).read(cx_ref).get().appearance.bar_icons == mandara_config::IconStyle::Monochrome;
+                let cfg = crate::state::config(cx_ref).read(cx_ref).snapshot();
+                let list = pills(model, &h.clients, &monitor, Look::of(&cfg));
+                let monochrome = cfg.appearance.bar_icons == mandara_config::IconStyle::Monochrome;
                 // A side bar stacks number-only pills in a column.
                 let vertical = crate::bar::vertical(cx_ref);
                 let along = |p: &Pill| if vertical { PILL_H } else { p.width() };
@@ -720,9 +799,16 @@ pub fn register(r: &mut PluginRegistry) {
                 if vertical {
                     return strip.into_any_element();
                 }
-                // MangoWM: the active tag's layout (click cycles) and a
-                // badge for non-default keymodes.
-                let NavigationModel::BitmaskTags { active_layout, .. } = model else { return strip.into_any_element() };
+                // MangoWM: the active tag's layout; Umbriel: the active
+                // workspace's own layout (click cycles either), and a badge
+                // for non-default keymodes / submaps.
+                let active_layout = match model {
+                    NavigationModel::BitmaskTags { active_layout, .. } => active_layout,
+                    NavigationModel::Workspaces { workspaces } => match workspaces.iter().find(|w| w.active).map(|w| &w.layout).filter(|l| !l.is_empty()) {
+                        Some(layout) => layout,
+                        None => return strip.into_any_element(),
+                    },
+                };
                 let keymode = h.keymode.as_str();
                 let (glyph, name) = layout_label(active_layout);
                 let pop = {
@@ -818,6 +904,18 @@ mod tests {
     use super::*;
     use mandara_compositor::TagStatus;
 
+    /// Umbriel's workspace layouts get their own names on the layout pill;
+    /// an unknown code falls back to the generic "Layout".
+    #[test]
+    fn umbriel_layouts_are_named() {
+        assert_eq!(layout_label("scrolling").1, "Scrolling");
+        assert_eq!(layout_label("dwindle").1, "Dwindle");
+        assert_eq!(layout_label("master").1, "Master");
+        assert_eq!(layout_label("stacking").1, "Stacking");
+        assert_eq!(layout_label("S").1, "Scroller", "MangoWM's codes still win");
+        assert_eq!(layout_label("spiral").1, "Layout");
+    }
+
     fn tag(id: u32, active: bool) -> TagStatus {
         TagStatus { id, active, occupied: false, urgent: false, client_count: 0, layout: "T".into() }
     }
@@ -827,10 +925,42 @@ mod tests {
     }
 
     #[test]
+    fn scrolling_steps_to_the_neighbour_without_wrapping() {
+        let tags = NavigationModel::BitmaskTags { tags: vec![tag(1, false), tag(2, true), tag(3, false)], active_layout: "T".into(), keymode: String::new() };
+        assert_eq!((neighbour(&tags, true), neighbour(&tags, false)), (Some(3), Some(1)));
+        let first = NavigationModel::BitmaskTags { tags: vec![tag(1, true), tag(2, false)], active_layout: "T".into(), keymode: String::new() };
+        assert_eq!(neighbour(&first, false), None, "no wrap past the first tag");
+        let ws = |id: u32, active: bool| mandara_compositor::WorkspaceStatus { id, name: String::new(), active, occupied: false, urgent: false, layout: String::new() };
+        let spaces = NavigationModel::Workspaces { workspaces: vec![ws(4, false), ws(7, true)] };
+        assert_eq!((neighbour(&spaces, false), neighbour(&spaces, true)), (Some(4), None));
+    }
+
+    #[test]
+    fn pill_looks_hide_empty_tags_drop_icons_and_relabel() {
+        let mut t3 = tag(3, false);
+        t3.urgent = true;
+        let model = NavigationModel::BitmaskTags { tags: vec![tag(1, false), tag(2, true), t3, tag(4, false)], active_layout: "T".into(), keymode: String::new() };
+        let clients = vec![client("zed", 1)];
+        let hide = Look { hide_empty: true, ..Look::default() };
+        let ids: Vec<u32> = pills(&model, &clients, "M", hide).iter().map(|p| p.id).collect();
+        assert_eq!(ids, [1, 2, 3], "empty tag 4 hides; the active and the urgent one stay");
+        let bare = pills(&model, &clients, "M", Look { app_icons: false, ..Look::default() });
+        assert!(bare[0].apps.is_empty() && bare[0].width() == NUMBER_W);
+        let dots = pills(&model, &clients, "M", Look { labels: Labels::Dots, ..Look::default() });
+        assert!(dots.iter().all(|p| p.label.as_ref() == DOT_LABEL));
+        let ws = |id: u32, name: &str| mandara_compositor::WorkspaceStatus { id, name: name.into(), active: id == 1, occupied: false, urgent: false, layout: String::new() };
+        let named = NavigationModel::Workspaces { workspaces: vec![ws(1, "ω"), ws(2, "browser")] };
+        let auto: Vec<String> = pills(&named, &[], "M", Look::default()).iter().map(|p| p.label.to_string()).collect();
+        assert_eq!(auto, ["ω", "2"], "short names show, long ones fall back to the number");
+        let numbers: Vec<String> = pills(&named, &[], "M", Look { labels: Labels::Number, ..Look::default() }).iter().map(|p| p.label.to_string()).collect();
+        assert_eq!(numbers, ["1", "2"]);
+    }
+
+    #[test]
     fn pills_carry_unique_apps_capped_at_three() {
         let model = NavigationModel::BitmaskTags { tags: vec![tag(1, true), tag(2, false)], active_layout: "T".into(), keymode: String::new() };
         let clients = vec![client("zed", 1), client("zed", 1), client("firefox", 1), client("a", 1), client("b", 1), client("c", 1)];
-        let p = pills(&model, &clients, "M");
+        let p = pills(&model, &clients, "M", Look::default());
         assert_eq!(p[0].apps.as_slice(), ["zed", "firefox", "a"]);
         assert_eq!(p[0].extra, 2);
         assert!(p[1].apps.is_empty());

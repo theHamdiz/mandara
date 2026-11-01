@@ -26,6 +26,8 @@ use crate::apps::{App, DesktopAction};
 pub const PROVIDER_LIMIT: usize = 40;
 /// Provider hits mixed into a plain search, per provider.
 const GLOBAL_LIMIT: usize = 4;
+/// Characters of a clipboard entry shown as a launcher result.
+const CLIPBOARD_LABEL_CHARS: usize = 90;
 /// Seconds per day (usage decay is configured in days).
 const SECS_PER_DAY: f64 = 86_400.0;
 /// Usage scores below this are forgotten when saving.
@@ -250,26 +252,27 @@ pub fn window_hits(query: &str, windows: &[mandara_services::toplevels::Toplevel
         .collect()
 }
 
-pub fn clipboard_hits(query: &str, entries: &[mandara_services::ClipEntry], limit: usize) -> Vec<Hit> {
+/// Clipboard entries matching every typed word (text, kind, language, host,
+/// app or collection name; "image", "code", "color" … find a kind).
+pub fn clipboard_hits(query: &str, entries: &[mandara_services::ClipEntry], collections: &[mandara_services::clipboard::ClipCollection], limit: usize) -> Vec<Hit> {
     use mandara_services::clipboard::ClipContent;
-    let q = query.trim().to_lowercase();
     entries
         .iter()
-        .filter(|e| match &e.content {
-            ClipContent::Text { text } => q.is_empty() || text.to_lowercase().contains(&q),
-            ClipContent::Image { .. } => q.is_empty() || "image picture".contains(q.as_str()),
-        })
+        .filter(|e| e.matches(query, collections))
         .take(limit)
         .map(|e| {
+            let kind = e.class.kind();
             let (lead, label) = match &e.content {
                 ClipContent::Image { path, mime } => (Lead::Image(path.clone()), mandara_i18n::tf("Image ({mime})", &[("mime", mime)])),
-                ClipContent::Text { .. } => (Lead::Icon(if e.pinned { "pin" } else { "clipboard" }), e.preview(90)),
+                _ => (Lead::Icon(if e.pinned { "pin" } else { crate::plugins::clipboard::clip_kind_icon(kind) }), e.preview(CLIPBOARD_LABEL_CHARS)),
             };
+            let app = if e.app_id.is_empty() { String::new() } else { crate::plugins::window::app_name(&e.app_id) };
+            let kind_name = mandara_i18n::tr(crate::plugins::clipboard::clip_kind_label(kind));
             Hit {
                 provider: "clipboard",
                 key: e.id.to_string(),
                 label,
-                detail: if e.app_id.is_empty() { String::new() } else { crate::plugins::window::app_name(&e.app_id) },
+                detail: if app.is_empty() { kind_name.to_string() } else { format!("{kind_name} · {app}") },
                 lead,
                 badge: tk("Clipboard"),
                 keywords: String::new(),

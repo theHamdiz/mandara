@@ -411,6 +411,8 @@ fn screens_via_compositor(on: bool, cx: &App) {
     let result = match backend.kind() {
         CompositorKind::Niri => backend.dispatch_raw(if on { "PowerOnMonitors" } else { "PowerOffMonitors" }, &[]),
         CompositorKind::Hyprland => backend.dispatch_raw("dpms", &[if on { "on" } else { "off" }]),
+        // Bare `dpms-on` / `dpms-off` act on every output.
+        CompositorKind::Umbriel => backend.dispatch_raw(if on { "dpms-on" } else { "dpms-off" }, &[]),
         CompositorKind::MangoWM => {
             tracing::warn!("idle: MangoWM without wlr-output-power-management; screens stay on");
             Ok(())

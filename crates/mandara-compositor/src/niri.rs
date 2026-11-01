@@ -79,6 +79,7 @@ pub fn navigation(workspaces: &[NiriWorkspace], windows: &[NiriWindow]) -> Vec<(
             active: w.is_active,
             occupied,
             urgent: w.is_urgent,
+            layout: String::new(),
         });
     }
     let mut out: Vec<(String, NavigationModel)> = by_output

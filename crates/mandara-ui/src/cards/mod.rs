@@ -132,6 +132,10 @@ pub fn card_size(card: &str, widget: &DesktopWidget, output: (f32, f32)) -> (f32
             let (w, h) = card_opts::<dc::FramedBarsOptions>(widget).size();
             (w * k, h * k)
         }
+        c if dc::parse_plugin_card(c).is_some() => {
+            let (w, h) = card_opts::<dc::PluginCardOptions>(widget).size();
+            (w * k, h * k)
+        }
         _ => (0.0, 0.0),
     }
 }
@@ -328,6 +332,11 @@ fn reconcile(cx: &mut App) {
     if cfg.desktop.widgets.hidden && !crate::desktop_edit::active(cx) {
         std::sync::Arc::make_mut(&mut cfg).desktop.widgets.items.retain(|w| dc::as_card(w).is_none());
     }
+    // Cards whose plugin is switched off aren't shown.
+    if cfg.desktop.widgets.items.iter().any(|w| dc::as_card(w).is_some() && !crate::desktop_plugins::shows(w, &cfg, cx)) {
+        let snapshot = cfg.clone();
+        std::sync::Arc::make_mut(&mut cfg).desktop.widgets.items.retain(|w| dc::as_card(w).is_none() || crate::desktop_plugins::shows(w, &snapshot, cx));
+    }
     let now = Instant::now();
     let presence = MediaPresence::of(cx);
     let mut host = cx.remove_global::<Host>();
@@ -372,6 +381,14 @@ fn reconcile(cx: &mut App) {
                 cx.new(|_| Root(view.into()))
             })
             .map(Handle::Other),
+            card if dc::parse_plugin_card(card).is_some() => {
+                let (card, size) = (card.to_string(), (key.rect.2 as f32 - 2.0 * SHADOW_PAD_PX, key.rect.3 as f32 - 2.0 * SHADOW_PAD_PX));
+                cx.open_window(opts, move |window, cx| {
+                    let view = crate::plugins::external::desktop_card_view(&card, widget, size, window, cx).unwrap_or_else(|| cx.new(|_| gpui::Empty).into());
+                    cx.new(|_| Root(view))
+                })
+                .map(Handle::Other)
+            }
             card => {
                 let kind = visualizer::Kind::of(card);
                 cx.open_window(opts, move |window, cx| {
@@ -403,9 +420,12 @@ fn reconcile(cx: &mut App) {
 /// Added to grace deadlines so the re-check lands after them.
 const GRACE_SLACK: Duration = Duration::from_millis(30);
 
-/// What of the config a card host re-plans on (cheap to compare).
-fn config_key(cfg: &ShellConfig) -> (mandara_config::desktop_widgets::DesktopWidgetsConfig, mandara_config::desktop_cards::VisualizersConfig, mandara_config::BarConfig, mandara_config::outputs::DisplaysConfig, mandara_config::Locale) {
-    (cfg.desktop.widgets.clone(), cfg.visualizers.clone(), cfg.bar.clone(), cfg.displays.clone(), cfg.general.locale)
+/// What of the config a card host re-plans on (cheap to compare); plugins
+/// switched on or off show or hide their cards.
+type ConfigKey = (mandara_config::desktop_widgets::DesktopWidgetsConfig, mandara_config::desktop_cards::VisualizersConfig, mandara_config::BarConfig, mandara_config::outputs::DisplaysConfig, mandara_config::Locale, (Vec<String>, Vec<String>));
+
+fn config_key(cfg: &ShellConfig) -> ConfigKey {
+    (cfg.desktop.widgets.clone(), cfg.visualizers.clone(), cfg.bar.clone(), cfg.displays.clone(), cfg.general.locale, (cfg.plugins.enabled.clone(), cfg.plugins.disabled.clone()))
 }
 
 /// Starts the host: it stays idle (no surfaces, no timers) until a card is

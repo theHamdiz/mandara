@@ -216,3 +216,39 @@ fn hyprland_lua_uses_057_option_names() {
     assert!(!lua.contains("[\"") && lua.contains("tap_to_click = true") && lua.contains("drag_lock = 1"), "{lua}");
     assert!(lua.contains("pcall(hl.on, \"hyprland.start\", function() hl.exec_cmd(\"/home/u/.local/bin/mandara\") end)"));
 }
+
+/// A user's Umbriel config with its own binds and an output, and Mandara's
+/// include added the way `mandara setup` adds it.
+fn umbriel_main(dir: &Path, dropin: &Path) -> std::path::PathBuf {
+    let main = dir.join("config.toml");
+    let text = "[general]\nmod_key = \"Super\"\n\n[output.eDP-1]\nscale = 1.25\n\n[keybinds]\n\"Mod+T\" = \"spawn alacritty\"\n\"Mod+Q\" = \"window-close\"\n";
+    let with_include = umbriel_add_include(text, &dropin.display().to_string()).unwrap().expect("include added");
+    std::fs::write(&main, with_include).unwrap();
+    main
+}
+
+/// Every Umbriel drop-in is TOML whose rule lists and binds have the shape
+/// Umbriel documents; Umbriel's own checker accepts the drop-in through the
+/// include when it is installed.
+#[test]
+fn umbriel_validates_every_dropin() {
+    let checker = installed("umbriel", "--version");
+    let dir = tempfile::tempdir().unwrap();
+    for (name, cfg, colors) in configs() {
+        let text = emit_umbriel(&managed(&cfg, colors, None)).text;
+        let doc: toml::Table = text.parse().unwrap_or_else(|e| panic!("{name}: invalid TOML: {e}\n{text}"));
+        let rules = doc.get("layer_rule").and_then(toml::Value::as_array).expect("layer rules");
+        assert!(rules.iter().all(|r| r.get("match").and_then(|m| m.get("namespace")).is_some()), "{name}: every layer rule matches a namespace\n{text}");
+        if let Some(binds) = doc.get("keybinds").and_then(toml::Value::as_table) {
+            assert!(binds.values().all(|v| v.as_str().is_some_and(|a| a.starts_with("spawn "))), "{name}: binds run `spawn …`\n{text}");
+        }
+        if !checker {
+            continue; // Umbriel isn't installed here.
+        }
+        let dropin = dir.path().join("umbriel.toml");
+        std::fs::write(&dropin, &text).unwrap();
+        let main = umbriel_main(dir.path(), &dropin);
+        let (ok, log) = run(Command::new("umbriel").arg("config").arg("validate").arg("-c").arg(&main));
+        assert!(ok, "umbriel rejected the {name} drop-in:\n{log}\n--- drop-in ---\n{text}");
+    }
+}

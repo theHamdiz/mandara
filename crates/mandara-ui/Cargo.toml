@@ -19,7 +19,7 @@ mandara-services.workspace = true
 mandara-plugins.workspace = true
 mandara-compositor.workspace = true
 serde.workspace = true
-toml.workspace = true
+toml = { workspace = true, features = ["display"] }
 smallvec.workspace = true
 chrono.workspace = true
 tracing.workspace = true
@@ -39,6 +39,7 @@ async-channel.workspace = true
 # Keyring dialog: password buffers are wiped on drop.
 zeroize = "1"
 ab_glyph = "0.2"
+# 0.23: the fontdb cosmic-text 0.19 uses.
 fontdb = "0.23"
 # Lock screen: libpam is dlopen'ed at runtime; text painted with cosmic-text.
 libc.workspace = true

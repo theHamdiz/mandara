@@ -2,7 +2,8 @@
 //! text painter), with the widget's colours, opacity and optional soft
 //! shadow / glow.
 
-use mandara_config::desktop_widgets::{Effect, FontRole, Look, Tone};
+use mandara_config::desktop_widgets::{Effect, FontRole, Look, ShadowKind, Tone};
+use mandara_core::shape::Shape;
 use mandara_theme::Color;
 use tiny_skia::{FillRule, LineCap, LineJoin, Paint, PathBuilder, Pixmap, PixmapMut, PixmapPaint, Stroke, Transform};
 
@@ -29,10 +30,23 @@ const MIN_ARC_STEPS: usize = 8;
 const WAVE_STEPS_PER_PERIOD: f32 = 24.0;
 /// Opacity of the area under a sparkline (of its line's).
 const GRAPH_FILL_ALPHA: f32 = 0.16;
+/// The glass plate's rim: its bright and dark ends.
+const RIM_LIGHT_ALPHA: f32 = 0.38;
+const RIM_SHADOW_ALPHA: f32 = 0.22;
 /// Accents lighter than this get dark text on them.
 const ON_ACCENT_SWITCH: f32 = 0.62;
 const ON_ACCENT_DARK: f32 = 0.16;
 const ON_ACCENT_LIGHT: f32 = 0.98;
+/// Print paper (a polaroid's border) and the ink written on it.
+const PAPER_L: f32 = 0.97;
+const PAPER_C: f32 = 0.008;
+const ON_PAPER_L: f32 = 0.26;
+const ON_PAPER_C: f32 = 0.02;
+/// Lightness and chroma of the accent's pastels (sticky notes, tabs).
+const PASTEL_L: f32 = 0.9;
+const PASTEL_C: f32 = 0.07;
+/// Hue of the paper's faint warmth, degrees.
+const PAPER_HUE: f32 = 85.0;
 
 /// The resolved colours of one widget.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -42,6 +56,14 @@ pub struct Inks {
     pub on_accent: Color,
     /// Shadow colour (the opposite of the ink's lightness).
     pub shadow: Color,
+    /// The plate behind the widget (the theme's surface).
+    pub plate: Color,
+    /// The outline, the chrome (tape) and a directional shadow.
+    pub outline: Color,
+    pub chrome: Color,
+    pub drop: Color,
+    /// The theme's text colour (on shapes filled like the plate).
+    pub on_plate: Color,
 }
 
 impl Inks {
@@ -50,8 +72,26 @@ impl Inks {
             InkRole::Fg => self.fg,
             InkRole::Accent => self.accent,
             InkRole::OnAccent => self.on_accent,
+            InkRole::Plate => self.plate,
+            InkRole::Outline => self.outline,
+            InkRole::Chrome => self.chrome,
+            InkRole::Paper => paper(),
+            InkRole::OnPaper => Color::oklch(ON_PAPER_L, ON_PAPER_C, PAPER_HUE),
+            InkRole::OnPlate => self.on_plate,
+            InkRole::Pastel(turn) => Color::oklch(PASTEL_L, PASTEL_C, self.accent.hue() + f32::from(turn)),
+            InkRole::Rgb(v) => Color::from_rgba8((v >> 16) as u8, (v >> 8) as u8, v as u8, u8::MAX),
         }
     }
+
+    /// Every role in one colour (the flat shadow / glow passes).
+    fn flat(color: Color, accent: Color) -> Self {
+        Inks { fg: color, accent, on_accent: color, shadow: color, plate: color, outline: color, chrome: color, drop: color, on_plate: color }
+    }
+}
+
+/// Print paper (a polaroid's border).
+pub fn paper() -> Color {
+    Color::oklch(PAPER_L, PAPER_C, PAPER_HUE)
 }
 
 /// `#rrggbb` or `oklch(L C H)` (L as 0–1 or a percentage).
@@ -73,8 +113,9 @@ pub fn parse_color(s: &str) -> Option<Color> {
 }
 
 /// Colours for `look` over a backdrop that gave `auto` (light ink over
-/// dark wallpaper and vice versa).
-pub fn inks(look: &Look, auto: &Ink, on_surface: Color) -> Inks {
+/// dark wallpaper and vice versa, or over the plate when it has one);
+/// `surface` is the theme's surface (the plate's colour).
+pub fn inks(look: &Look, auto: &Ink, on_surface: Color, surface: Color) -> Inks {
     let pick = |tone: Tone, custom: &str, fallback: Color| match tone {
         Tone::Auto => fallback,
         Tone::OnSurface => on_surface,
@@ -85,16 +126,25 @@ pub fn inks(look: &Look, auto: &Ink, on_surface: Color) -> Inks {
     let acc = pick(look.accent, &look.custom_accent, auto.accent);
     let on_accent = if acc.lightness() > ON_ACCENT_SWITCH { Color::oklch(ON_ACCENT_DARK, acc.chroma() * 0.3, acc.hue()) } else { Color::oklch(ON_ACCENT_LIGHT, acc.chroma() * 0.2, acc.hue()) };
     let shadow = if fg.lightness() > 0.5 { Color::oklch(0.08, 0.0, 0.0) } else { Color::oklch(0.98, 0.0, 0.0) };
-    Inks { fg, accent: acc, on_accent, shadow }
+    let outline = pick(look.outline_tone, &look.outline_color, fg);
+    let chrome = pick(look.chrome_tone, &look.chrome_color, acc);
+    // A hard shadow defaults to the ink (neo-brutalist), a soft one to the
+    // dark of the shadow effect.
+    let drop_auto = if look.shadow == ShadowKind::Hard { fg } else { Color::oklch(0.08, 0.0, 0.0) };
+    let drop = pick(look.shadow_tone, &look.shadow_color, drop_auto);
+    Inks { fg, accent: acc, on_accent, shadow, plate: surface, outline, chrome, drop, on_plate: on_surface }
 }
 
-/// The font family of a role.
+/// The font family of a role (`fonts.custom` holds the widget's own).
 pub fn family(fonts: &FontNames, role: FontRole) -> &str {
     match role {
+        FontRole::Widgets => &fonts.widgets,
         FontRole::Display => &fonts.display,
         FontRole::Ui => &fonts.ui,
         FontRole::Arabic => &fonts.arabic,
         FontRole::Mono => &fonts.mono,
+        FontRole::Custom if fonts.custom.is_empty() => &fonts.widgets,
+        FontRole::Custom => &fonts.custom,
     }
 }
 
@@ -111,14 +161,40 @@ impl Measure for Measurer<'_> {
     }
 }
 
+/// A shadow of the whole widget, physical px.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Drop {
+    pub offset: (f32, f32),
+    /// 0 = hard.
+    pub blur: f32,
+    pub opacity: f32,
+}
+
+impl Drop {
+    /// `look`'s shadow at `k` physical px per reference px.
+    pub fn of(look: &Look, k: f32) -> Option<Self> {
+        let (x, y) = look.shadow_offset();
+        match look.shadow {
+            ShadowKind::None => None,
+            ShadowKind::Hard => Some(Drop { offset: (x * k, y * k), blur: 0.0, opacity: look.shadow_opacity() }),
+            ShadowKind::Soft => Some(Drop { offset: (x * k, y * k), blur: look.shadow_blur() * k, opacity: look.shadow_opacity() }),
+        }
+    }
+}
+
 /// How a plane is painted.
-pub struct Style<'a> {
-    pub fonts: &'a FontNames,
+pub struct Style {
+    /// The widget's families ([`FontNames::for_look`]).
+    pub fonts: FontNames,
     pub inks: Inks,
     pub opacity: f32,
     pub effect: Effect,
+    /// Shadow / glow strength (1 = as designed).
+    pub strength: f32,
     /// Physical px per reference px.
     pub k: f32,
+    /// The widget's directional shadow.
+    pub drop: Option<Drop>,
 }
 
 /// Extra margin the effect needs around the marks, physical px.
@@ -129,29 +205,70 @@ pub fn effect_margin(effect: Effect, k: f32) -> f32 {
     }
 }
 
-/// Paints the marks with `live == live` into `pm`, whose top-left is at
-/// `origin` in the composition's coordinates.
-pub fn paint(pm: &mut PixmapMut<'_>, text: &mut TextPainter, comp: &Composition, live: bool, origin: (f32, f32), st: &Style<'_>) {
-    let marks: Vec<&Mark> = comp.marks.iter().filter(|m| m.live == live && m.opacity > 0.0).collect();
+/// Extra margin `look`'s effect and shadow need around the marks,
+/// physical px.
+pub fn look_margin(look: Option<&Look>, k: f32) -> f32 {
+    let effect = effect_margin(look.map(|l| l.effect).unwrap_or_default(), k);
+    let drop = look.and_then(|l| Drop::of(l, k)).map_or(0.0, |d| d.offset.0.abs().max(d.offset.1.abs()) + d.blur + AA_MARGIN_PX * k);
+    effect.max(drop)
+}
+
+/// Paints the marks with `live == live` (every mark for `None`) into
+/// `pm`, whose top-left is at `origin` in the composition's coordinates.
+pub fn paint(pm: &mut PixmapMut<'_>, text: &mut TextPainter, comp: &Composition, live: Option<bool>, origin: (f32, f32), st: &Style) {
+    let marks: Vec<&Mark> = comp.marks.iter().filter(|m| live.is_none_or(|l| m.live == l) && m.opacity > 0.0).collect();
     if marks.is_empty() {
         return;
     }
     let shift = (-origin.0, -origin.1);
+    // Shapes on paper or a plate don't cast their own shadow: only what
+    // stands on the desktop does.
+    let casts = |m: &Mark| !matches!(m.ink, InkRole::OnAccent | InkRole::OnPaper | InkRole::OnPlate);
+    let drops = |m: &&&Mark| casts(m) && m.casts;
+    if let Some(d) = st.drop {
+        let flat = Inks::flat(st.inks.drop, st.inks.drop);
+        let alpha = d.opacity * st.opacity;
+        if d.blur <= 0.0 {
+            for m in marks.iter().filter(drops) {
+                draw(pm, text, m, (shift.0 + d.offset.0, shift.1 + d.offset.1), &flat, &st.fonts, alpha);
+            }
+        } else if let Some(mut tmp) = Pixmap::new(pm.width(), pm.height()) {
+            for m in marks.iter().filter(drops) {
+                draw(&mut tmp.as_mut(), text, m, (shift.0 + d.offset.0, shift.1 + d.offset.1), &flat, &st.fonts, alpha);
+            }
+            box_blur(&mut tmp.as_mut(), (d.blur / BLUR_PASSES as f32).round().max(1.0) as usize);
+            pm.draw_pixmap(0, 0, tmp.as_ref(), &PixmapPaint::default(), Transform::identity(), None);
+        }
+    }
     if st.effect != Effect::None {
         let (color, alpha, drop) = match st.effect {
             Effect::Shadow => (st.inks.shadow, SHADOW_ALPHA, SHADOW_DROP_PX * st.k),
             _ => (st.inks.fg, GLOW_ALPHA, 0.0),
         };
-        let flat = Inks { fg: color, accent: if st.effect == Effect::Glow { st.inks.accent } else { color }, on_accent: color, shadow: color };
-        for m in &marks {
-            if m.ink != InkRole::OnAccent {
-                draw(pm, text, m, (shift.0, shift.1 + drop), &flat, st.fonts, alpha * st.opacity);
+        let flat = Inks::flat(color, if st.effect == Effect::Glow { st.inks.accent } else { color });
+        let alpha = (alpha * st.strength).clamp(0.0, 1.0);
+        // Blurred on its own (a drop shadow under it stays as it is).
+        let scratch = if st.drop.is_some() { Pixmap::new(pm.width(), pm.height()) } else { None };
+        let mut glow_marks = |target: &mut PixmapMut<'_>| {
+            for m in &marks {
+                // A plate casts a shadow but never glows.
+                let glowing_plate = st.effect == Effect::Glow && matches!(m.ink, InkRole::Plate | InkRole::Paper);
+                if casts(m) && !glowing_plate {
+                    draw(target, text, m, (shift.0, shift.1 + drop), &flat, &st.fonts, alpha * st.opacity);
+                }
             }
+            box_blur(target, (EFFECT_BLUR_PX * st.k).round().max(1.0) as usize);
+        };
+        match scratch {
+            Some(mut tmp) => {
+                glow_marks(&mut tmp.as_mut());
+                pm.draw_pixmap(0, 0, tmp.as_ref(), &PixmapPaint::default(), Transform::identity(), None);
+            }
+            None => glow_marks(pm),
         }
-        box_blur(pm, (EFFECT_BLUR_PX * st.k).round().max(1.0) as usize);
     }
     for m in &marks {
-        draw(pm, text, m, shift, &st.inks, st.fonts, st.opacity);
+        draw(pm, text, m, shift, &st.inks, &st.fonts, st.opacity);
     }
 }
 
@@ -182,6 +299,16 @@ fn draw(pm: &mut PixmapMut<'_>, text: &mut TextPainter, m: &Mark, (dx, dy): (f32
         MarkKind::Text { text: s, style, x, y, .. } => {
             let font = Font { family: family(fonts, style.role), size: style.size, weight: style.weight, tabular: true, tracking: style.tracking };
             text.draw(pm, s, &font, x + dx, y + dy, color, alpha);
+        }
+        MarkKind::SlantText { text: s, style, x, y, w, h, slant } => {
+            // Shaped upright into a scratch line, then sheared into place.
+            let font = Font { family: family(fonts, style.role), size: style.size, weight: style.weight, tabular: true, tracking: style.tracking };
+            let Some(mut line) = Pixmap::new(w.ceil().max(1.0) as u32, h.ceil().max(1.0) as u32) else { return };
+            text.draw(&mut line.as_mut(), s, &font, 0.0, 0.0, color, 1.0);
+            // Leaning right means the top moves right: x' = x − slant·(y − h).
+            let t = Transform::from_row(1.0, 0.0, -slant, 1.0, x + dx + slant * h, y + dy);
+            let paint = PixmapPaint { quality: tiny_skia::FilterQuality::Bilinear, opacity: alpha, ..PixmapPaint::default() };
+            pm.draw_pixmap(0, 0, line.as_ref(), &paint, t, None);
         }
         MarkKind::SideText { text: s, style, x, y, w, h, clockwise } => {
             // Shaped upright into a scratch line, then turned into place.
@@ -215,6 +342,45 @@ fn draw(pm: &mut PixmapMut<'_>, text: &mut TextPainter, m: &Mark, (dx, dy): (f32
             }
         }
         MarkKind::Disc { c, r } => lp::fill(pm, &lp::circle(c.0 + dx, c.1 + dy, *r), &solid(color, alpha)),
+        MarkKind::Plate { x, y, w, h, radius, rim, shape } => {
+            // A rounded rectangle keeps its exact arcs (as plates always
+            // were); any other shape is the shared outline.
+            let path = |x: f32, y: f32, w: f32, h: f32, r: f32| if shape.is_rect() { lp::rounded_rect(x, y, w, h, r) } else { shape.skia_path(x, y, w, h) };
+            lp::fill(pm, &path(x + dx, y + dy, *w, *h, *radius), &solid(color, alpha));
+            // (Not in the flat shadow / glow pass, where every ink is one.)
+            if *rim > 0.0 && inks.fg != inks.plate {
+                // The chromatic-glass rim: bright top-left fading into a
+                // soft bottom-right shadow.
+                let inset = rim / 2.0;
+                let edge = path(x + dx + inset, y + dy + inset, w - rim, h - rim, (radius - inset).max(0.0));
+                let paint = lp::linear((x + dx, y + dy), (x + dx + w, y + dy + h), lp::skia(Color::oklch(1.0, 0.0, 0.0), RIM_LIGHT_ALPHA * alpha), lp::skia(Color::oklch(0.0, 0.0, 0.0), RIM_SHADOW_ALPHA * alpha));
+                lp::stroke(pm, &edge, &paint, *rim);
+            }
+        }
+        MarkKind::Shaped { x, y, w, h, shape, width } => {
+            let path = shape.skia_path(x + dx, y + dy, *w, *h);
+            if *width > 0.0 { lp::stroke(pm, &path, &solid(color, alpha), *width) } else { lp::fill(pm, &path, &solid(color, alpha)) }
+        }
+        MarkKind::Polyline { pts, width } => {
+            if let Some(p) = polyline(pts.iter().map(|p| (p.0 + dx, p.1 + dy)), false) {
+                pm.stroke_path(&p, &solid(color, alpha), &stroke(*width), t, None);
+            }
+        }
+        MarkKind::Image { x, y, w, h, pic, shape, turn } => draw_image(pm, &pic.pixmap, (x + dx, y + dy, *w, *h), *shape, *turn, alpha),
+        MarkKind::Mask { x, y, w, h, mask } => {
+            let src = &mask.pixmap;
+            let Some(mut tinted) = Pixmap::new(src.width(), src.height()) else { return };
+            let [r, g, b, _] = color.to_rgba8();
+            for (out, m) in tinted.pixels_mut().iter_mut().zip(src.pixels()) {
+                let a = m.alpha();
+                if let Some(p) = tiny_skia::PremultipliedColorU8::from_rgba(mul(r, a), mul(g, a), mul(b, a), a) {
+                    *out = p;
+                }
+            }
+            let t = Transform::from_scale(w / src.width() as f32, h / src.height() as f32).post_translate(x + dx, y + dy);
+            let paint = PixmapPaint { quality: tiny_skia::FilterQuality::Bilinear, opacity: alpha, ..PixmapPaint::default() };
+            pm.draw_pixmap(0, 0, tinted.as_ref(), &paint, t, None);
+        }
         MarkKind::Rect { x, y, w, h, radius, width } => {
             let path = lp::rounded_rect(x + dx, y + dy, *w, *h, *radius);
             if *width > 0.0 { lp::stroke(pm, &path, &solid(color, alpha), *width) } else { lp::fill(pm, &path, &solid(color, alpha)) }
@@ -253,8 +419,31 @@ fn draw(pm: &mut PixmapMut<'_>, text: &mut TextPainter, m: &Mark, (dx, dy): (f32
     }
 }
 
+/// `c × a / 255`, rounded.
+fn mul(c: u8, a: u8) -> u8 {
+    ((u16::from(c) * u16::from(a) + 127) / 255) as u8
+}
+
+/// Draws `image` covering `(x, y, w, h)` (cropped to its aspect), clipped
+/// to `shape`.
+fn draw_image(pm: &mut PixmapMut<'_>, image: &Pixmap, (x, y, w, h): (f32, f32, f32, f32), shape: Shape, turn: f32, alpha: f32) {
+    let (iw, ih) = (image.width() as f32, image.height() as f32);
+    if iw < 1.0 || ih < 1.0 || w < 1.0 || h < 1.0 {
+        return;
+    }
+    let scale = (w / iw).max(h / ih);
+    let (ox, oy) = (x + (w - iw * scale) / 2.0, y + (h - ih * scale) / 2.0);
+    let t = Transform::from_scale(scale, scale).post_translate(ox, oy).post_rotate_at(turn, x + w / 2.0, y + h / 2.0);
+    let pattern = tiny_skia::Pattern::new(image.as_ref(), tiny_skia::SpreadMode::Pad, tiny_skia::FilterQuality::Bilinear, alpha.clamp(0.0, 1.0), t);
+    let paint = Paint { shader: pattern, anti_alias: true, ..Paint::default() };
+    let path = if shape.is_rect() { match shape { Shape::Rect { radius } => lp::rounded_rect(x, y, w, h, radius), _ => None } } else { shape.skia_path(x, y, w, h) };
+    if let Some(p) = path {
+        pm.fill_path(&p, &paint, FillRule::Winding, Transform::identity(), None);
+    }
+}
+
 /// In-place separable box blur of a premultiplied plane, `passes` times.
-fn box_blur(pm: &mut PixmapMut<'_>, radius: usize) {
+pub fn box_blur(pm: &mut PixmapMut<'_>, radius: usize) {
     let (w, h) = (pm.width() as usize, pm.height() as usize);
     if w == 0 || h == 0 || radius == 0 {
         return;
@@ -303,6 +492,16 @@ fn box_blur(pm: &mut PixmapMut<'_>, radius: usize) {
 pub fn draw_rotated(pm: &mut PixmapMut<'_>, src: &Pixmap, degrees: f32, (cx, cy): (f32, f32), opacity: f32) {
     let (w, h) = (src.width() as f32, src.height() as f32);
     let t = Transform::from_translate(-w / 2.0, -h / 2.0).post_rotate(degrees).post_translate(cx, cy);
+    let paint = PixmapPaint { quality: tiny_skia::FilterQuality::Bilinear, opacity: opacity.clamp(0.0, 1.0), ..PixmapPaint::default() };
+    pm.draw_pixmap(0, 0, src.as_ref(), &paint, t, None);
+}
+
+/// Draws `src` mirrored (`flip`: left to right, top to bottom) and turned
+/// by `degrees` about its centre into `pm`, centred at `(cx, cy)`.
+pub fn draw_turned(pm: &mut PixmapMut<'_>, src: &Pixmap, degrees: f32, flip: (bool, bool), (cx, cy): (f32, f32), opacity: f32) {
+    let (w, h) = (src.width() as f32, src.height() as f32);
+    let (sx, sy) = (if flip.0 { -1.0 } else { 1.0 }, if flip.1 { -1.0 } else { 1.0 });
+    let t = Transform::from_translate(-w / 2.0, -h / 2.0).post_scale(sx, sy).post_rotate(degrees).post_translate(cx, cy);
     let paint = PixmapPaint { quality: tiny_skia::FilterQuality::Bilinear, opacity: opacity.clamp(0.0, 1.0), ..PixmapPaint::default() };
     pm.draw_pixmap(0, 0, src.as_ref(), &paint, t, None);
 }

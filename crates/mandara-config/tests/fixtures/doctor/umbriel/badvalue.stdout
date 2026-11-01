@@ -1,0 +1,1 @@
+{"diagnostics":[{"column":7,"file":"@FIXTURES@/umbriel/badvalue.toml","line":2,"message":"ignoring layout.gap (expected integer)","severity":"warning"}],"path":"@FIXTURES@/umbriel/badvalue.toml","valid":false}

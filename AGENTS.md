@@ -22,7 +22,7 @@ write a third-party plugin, [PLUGINS.md](PLUGINS.md) is all you need.
 
 ## What Mandara is
 
-Mandara is a Wayland desktop shell for **MangoWM, Niri and Hyprland**: the
+Mandara is a Wayland desktop shell for **MangoWM, Niri, Hyprland and Umbriel**: the
 bar, panels, sidebar, dock, launcher, notifications, on-screen displays,
 wallpaper engine, lock screen, login manager and more, shipped as **one
 native Rust binary** (`mandara`) built on [GPUI](https://github.com/zed-industries/zed),
@@ -42,7 +42,7 @@ Zed's GPU-accelerated UI framework.
   plugins: first-party ones compiled into the shell, and third-party ones
   written in Rust, compiled to WebAssembly and run sandboxed.
 - **Every compositor is first-class.** MangoWM's bitmask tags and per-tag
-  layouts and Niri's and Hyprland's workspaces are modelled natively, not
+  layouts and Niri's, Hyprland's and Umbriel's workspaces are modelled natively, not
   squeezed into a lowest common denominator.
 
 ## Repository map
@@ -51,9 +51,9 @@ Zed's GPU-accelerated UI framework.
 |---|---|
 | `crates/mandara-app` | The `mandara` binary: CLI (`msg`, `commands`, `studio`, `setup`, `update`, `install`, …), the restart supervisor, IPC and app bootstrap. |
 | `crates/mandara-core` | GPUI layer-shell surface specs, the analytical spring solver, OKLCH tweening, frame-synced input-region masking, the chromatic-glass material, output geometry and the software (`wl_shm`) canvas. |
-| `crates/mandara-config` | The TOML schema and defaults, the reactive `ConfigStore` with its file watcher, XDG paths, and the non-destructive MangoWM / Niri / Hyprland emitters and conflict scanner. |
+| `crates/mandara-config` | The TOML schema and defaults, the reactive `ConfigStore` with its file watcher, XDG paths, and the non-destructive MangoWM / Niri / Hyprland / Umbriel emitters and conflict scanner. |
 | `crates/mandara-theme` | The color engine: `Color` (OKLCH, gamut mapping, WCAG contrast), `MandaraPalette` tokens, HCT wallpaper quantization, the theme catalog (`themes/*.toml`) and app theme templates. |
-| `crates/mandara-compositor` | The `CompositorBackend` trait, the navigation model, and the MangoWM, Niri and Hyprland IPC drivers. |
+| `crates/mandara-compositor` | The `CompositorBackend` trait, the navigation model, and the MangoWM, Niri, Hyprland and Umbriel IPC drivers. |
 | `crates/mandara-services` | D-Bus and system service actors (MPRIS, notifications, tray, UPower, NetworkManager, polkit, audio, keyrings, …), the marketplace client and the self-updater. |
 | `crates/mandara-plugins` | The plugin runtime: manifests, the registry, `CommandSpec` and the command catalog, plugin lifecycle, the wasmtime host and the WIT contract (`wit/plugin.wit`). |
 | `crates/mandara-ui` | The shell's views: bar, panels, sidebar, launcher, OSDs, lock screen, desktop and backdrop, the UI kit and every first-party plugin (`src/plugins/`). |
@@ -209,9 +209,28 @@ by tests.
    drop-ins in `~/.config/mandara/generated/`, and the user's main file
    gains one include line. Any edit to a user file takes a timestamped
    backup first, is validated with the compositor's own checker
-   (`mango -p`, `niri validate`, `Hyprland --verify-config`) and rolls
+   (`mango -p`, `niri validate`, `Hyprland --verify-config`,
+   `umbriel config validate`) and rolls
    back on failure. Binds that collide with the user's are skipped and
-   reported, never overridden.
+   reported, never overridden, and "collide" means what the compositor
+   means: MangoWM's plain `bind` compares keycodes (Play and Pause are one
+   key), every compositor compares keysyms, not their spellings
+   (`crates/mandara-config/src/mango_keys.rs`).
+   Every option or syntax an emitter writes comes from the compositor's
+   documentation and must pass its own checker in a test before it ships
+   (`mango_itself_accepts_the_drop_in` runs `mango -p` on the drop-in
+   where MangoWM is installed); never guess one.
+   Every write to a compositor config (the drop-in, the include line, a
+   retire, a fix) goes through the **Config doctor**
+   (`crates/mandara-config/src/doctor/`): it runs the compositor's own
+   checker read-only (private runtime dir, no display, a timeout), compares
+   the result with the check before the write and rolls back when it is
+   worse (`doctor::fix::guarded_write`, `fix::apply`, `fix::is_worse`).
+   Options a compositor version rejects in Mandara's drop-in go on the
+   per-version unsupported list instead of being emitted again. A change to
+   a checker's output format needs its parser updated with captured output
+   in `crates/mandara-config/tests/fixtures/doctor/` (the golden tests and
+   `real_checkers_match_the_golden_files`, which runs installed checkers).
 5. **Never change a user's config unless they asked.** Defaults apply to
    new installs; existing settings, files and enabled plugins stay as the
    user left them.
@@ -380,15 +399,17 @@ add a Studio control.
 
 ### A compositor feature
 
-Implement it for **all three** backends (`crates/mandara-compositor/src/`
-`mango.rs`, `niri.rs`, `hyprland.rs`, behind `CompositorBackend` in
-`backend.rs`), or lock it in Studio with a reason where a compositor can't
-do it. Generated config goes through the emitters in
-`crates/mandara-config/src/compositor.rs` (`emit_mango`, `emit_niri`,
-`emit_hyprland`), with unit tests and, where the compositor is installed,
-its own checker (`validator_tests.rs`). Window-rule options one compositor
-lacks are gated with `rule_option_supported`, and include lines follow the
-installed version (`installed_version`).
+Implement it for **all four** backends (`crates/mandara-compositor/src/`
+`mango.rs`, `niri.rs`, `hyprland.rs`, `umbriel.rs`, behind
+`CompositorBackend` in `backend.rs`), or lock it in Studio with a reason
+where a compositor can't do it. Generated config goes through the emitters
+in `crates/mandara-config/src/compositor.rs` (`emit_mango`, `emit_niri`,
+`emit_hyprland`, `emit_umbriel`), with unit tests and, where the compositor
+is installed, its own checker (`validator_tests.rs`). Window-rule options
+one compositor lacks are gated with `rule_option_supported`, and include
+lines follow the installed version (`installed_version`). Umbriel applies
+the user's `config.toml` after Mandara's drop-in, so its own values win
+there.
 
 ### A command
 

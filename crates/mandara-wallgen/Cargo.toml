@@ -13,7 +13,7 @@ mandara-services.workspace = true
 image.workspace = true
 palette.workspace = true
 serde.workspace = true
-toml.workspace = true
+toml = { workspace = true, features = ["display"] }
 
 [dev-dependencies]
 tempfile.workspace = true

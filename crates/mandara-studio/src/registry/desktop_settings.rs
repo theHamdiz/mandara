@@ -2,17 +2,37 @@
 //! slideshow, interface style, date / time / calendar / location /
 //! weather, the lock screen's look, and hot / screen corners.
 
-use mandara_config::desktop::defaults::VIDEO_FPS_RANGE;
+use mandara_config::desktop::defaults::{SLIDESHOW_INTERVAL_RANGE, SLIDESHOW_TRANSITION_RANGE, VIDEO_FPS_RANGE};
 use mandara_i18n::tk;
 
 use super::{Control, Section, Setting, s};
 
 /// `bar.right_click`.
 const BAR_RIGHT_CLICK: &[(&str, &str)] = &[("main-menu", tk("The bar's main menu")), ("desktop-menu", tk("The desktop's menu"))];
+/// `bar.scroll`.
+const BAR_SCROLL: &[(&str, &str)] = &[("none", tk("Nothing")), ("workspaces", tk("Switch workspace")), ("volume", tk("Change volume"))];
 const AUTO_HIDE: &[(&str, &str)] = &[("never", tk("Never")), ("always", tk("Always")), ("overlap", tk("When a window covers it")), ("fullscreen", tk("Fullscreen only"))];
 const FILL: &[(&str, &str)] = &[("cover", tk("Fill")), ("contain", tk("Fit")), ("stretch", tk("Stretch")), ("center", tk("Center")), ("tile", tk("Tile"))];
 const TRANSITION: &[(&str, &str)] = &[("fade", tk("Fade")), ("wipe", tk("Wipe")), ("grow", tk("Grow")), ("none", tk("None"))];
-const ORDER: &[(&str, &str)] = &[("random", tk("Random")), ("alphabetical", tk("Alphabetical"))];
+const ORDER: &[(&str, &str)] = &[("shuffle", tk("Shuffle")), ("random", tk("Random")), ("alphabetical", tk("By name")), ("newest", tk("Newest first"))];
+const SLIDESHOW_SOURCE: &[(&str, &str)] = &[("folder", tk("A folder")), ("playlist", tk("Playlist"))];
+const SLIDESHOW_TRANSITION: &[(&str, &str)] = &[("desktop", tk("Same as the desktop")), ("fade", tk("Fade")), ("wipe", tk("Wipe")), ("grow", tk("Grow")), ("none", tk("None"))];
+/// Step of the slideshow transition's length slider, ms.
+const SLIDESHOW_TRANSITION_STEP_MS: f64 = 50.0;
+
+/// Why a slideshow setting doesn't apply under `cfg` right now.
+pub(super) fn slideshow_locked(path: &str, cfg: &mandara_config::ShellConfig) -> Option<&'static str> {
+    use mandara_config::desktop::{SlideshowSource, SlideshowTransition};
+    let s = &cfg.wallpaper.slideshow;
+    match path {
+        "/wallpaper/slideshow/from" | "/wallpaper/slideshow/until" if !s.hours => Some(tk("Turn on Only at certain times first")),
+        "/wallpaper/slideshow/transition_ms" if s.transition == SlideshowTransition::Desktop => Some(tk("Follows the desktop's transition (Fit & effects)")),
+        "/wallpaper/slideshow/directory" | "/wallpaper/slideshow/subfolders" | "/wallpaper/slideshow/light_directory" | "/wallpaper/slideshow/dark_directory" if s.source == SlideshowSource::Playlist => {
+            Some(tk("The playlist is used instead of a folder"))
+        }
+        _ => None,
+    }
+}
 const VIDEO_PAUSE: &[(&str, &str)] = &[("covered", tk("When windows cover it")), ("fullscreen", tk("Fullscreen only")), ("never", tk("Never"))];
 const LOCATION_MODE: &[(&str, &str)] = &[("manual", tk("Manual")), ("geoclue", tk("Location service (GeoClue)")), ("ip", tk("IP address lookup"))];
 const WIND: &[(&str, &str)] = &[("auto", tk("Follow units")), ("meters-per-second", "m/s"), ("knots", tk("Knots"))];
@@ -30,6 +50,14 @@ const CORNER: &[(&str, &str)] = &[
     ("command", tk("Command")),
 ];
 const WEIGHTS: &[(&str, &str)] = &[("300", tk("Light")), ("400", tk("Regular")), ("500", tk("Medium")), ("600", tk("Semibold"))];
+/// `datetime.weekend`.
+const WEEKEND: &[(&str, &str)] = &[
+    ("auto", tk("Automatic")),
+    ("saturday-sunday", tk("Saturday and Sunday")),
+    ("friday-saturday", tk("Friday and Saturday")),
+    ("friday", tk("Friday")),
+    ("sunday", tk("Sunday")),
+];
 
 /// Every W5 setting, appended to the registry.
 pub(super) fn entries() -> Vec<Setting> {
@@ -43,6 +71,9 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Bar, tk("Behaviour"), "/bar/auto_hide/reveal_on_workspace_switch", tk("Peek on workspace switch"), tk("Show the hidden bar briefly when you change workspace or tag"), Toggle),
         s(Bar, tk("Behaviour"), "/bar/click_through", tk("Click through empty space"), tk("Clicks between bar items reach the window below (no main menu on right-click there)"), Toggle),
         s(Bar, tk("Behaviour"), "/bar/right_click", tk("Right-click on empty bar space"), tk("What opens when you right-click the bar between and around its items"), Choice(BAR_RIGHT_CLICK)),
+        s(Bar, tk("Behaviour"), "/bar/middle_click/action", tk("Middle-click on empty bar space"), tk("What a middle click between and around the bar's items does"), Choice(CORNER)),
+        s(Bar, tk("Behaviour"), "/bar/middle_click/command", tk("Middle-click command"), tk("Run with sh -c when the action is Command"), Text { placeholder: "ghostty" }),
+        s(Bar, tk("Behaviour"), "/bar/scroll", tk("Scroll on empty bar space"), tk("Scrolling between and around the bar's items switches workspace or changes the volume"), Choice(BAR_SCROLL)),
         s(Bar, tk("Main menu"), "/panels/menu_translucent", tk("Glass menu"), tk("The main menu is see-through glass with solid cards on it"), Toggle),
         s(Bar, tk("Main menu"), "/panels/menu_opacity", tk("Glass opacity"), tk("How see-through the main menu's glass is"), Control::Slider { min: 0.2, max: 1.0, step: 0.01, unit: "" }),
         s(Bar, tk("Behaviour"), "/bar/over_fullscreen", tk("Show over fullscreen windows"), tk("Keeps the bar and its panels above fullscreen apps; applies after a shell restart"), Toggle),
@@ -53,12 +84,27 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Wallpaper, tk("Desktop"), "/wallpaper/share_with_login", tk("Show on the login screen"), tk("Mandara Login shows your wallpaper when your account is picked (a copy goes to /var/lib/mandara-login)"), Toggle),
         s(Wallpaper, tk("Light & dark"), "/wallpaper/variants/light", tk("Light wallpaper"), tk("Shown while the theme is light; empty uses the main wallpaper"), OptionalText { placeholder: "~/Pictures/Wallpapers/day.jpg" }),
         s(Wallpaper, tk("Light & dark"), "/wallpaper/variants/dark", tk("Dark wallpaper"), tk("Shown while the theme is dark; per-display wallpapers: mandara msg wallpaper output"), OptionalText { placeholder: "~/Pictures/Wallpapers/night.jpg" }),
+        // Slideshow (Studio → Wallpaper → Slideshow: the first group is its
+        // header card, the others its folds).
         s(Wallpaper, tk("Slideshow"), "/wallpaper/slideshow/enabled", tk("Slideshow"), tk("Change the wallpaper on a timer"), Toggle),
-        s(Wallpaper, tk("Slideshow"), "/wallpaper/slideshow/interval_minutes", tk("Every"), tk("Time between wallpapers"), slider(1.0, 240.0, 1.0, " min")),
-        s(Wallpaper, tk("Slideshow"), "/wallpaper/slideshow/order", tk("Order"), tk("Random never repeats the current image"), Choice(ORDER)),
-        s(Wallpaper, tk("Slideshow"), "/wallpaper/slideshow/directory", tk("Folder"), tk("Empty uses the picker folder"), Text { placeholder: "~/Pictures/Wallpapers" }),
-        s(Wallpaper, tk("Slideshow"), "/wallpaper/slideshow/pause_on_fullscreen", tk("Pause during fullscreen"), tk("Keep the wallpaper while a fullscreen app is open"), Toggle),
+        s(Wallpaper, tk("Slideshow"), "/wallpaper/slideshow/interval_minutes", tk("Every"), tk("Time between wallpapers, in minutes"), Number { min: f64::from(SLIDESHOW_INTERVAL_RANGE.0), max: f64::from(SLIDESHOW_INTERVAL_RANGE.1) }),
+        s(Wallpaper, tk("Slideshow"), "/wallpaper/slideshow/order", tk("Order"), tk("Shuffle shows every wallpaper once before any repeats"), Choice(ORDER)),
         s(Wallpaper, tk("Slideshow"), "/wallpaper/slideshow/enabled", tk("Next wallpaper"), tk("Skip to the next image now"), Command { button: tk("Next"), args: &["wallpaper", "next"] }),
+        s(Wallpaper, tk("Source"), "/wallpaper/slideshow/source", tk("Wallpapers from"), tk("A folder, or the wallpapers you picked into the playlist"), Choice(SLIDESHOW_SOURCE)),
+        s(Wallpaper, tk("Source"), "/wallpaper/slideshow/directory", tk("Folder"), tk("Empty uses your wallpaper folder"), Text { placeholder: "~/Pictures/Wallpapers" }),
+        s(Wallpaper, tk("Source"), "/wallpaper/slideshow/subfolders", tk("Include all sub-folders"), tk("Look into every folder inside it (otherwise one level, like the picker)"), Toggle),
+        s(Wallpaper, tk("Source"), "/wallpaper/slideshow/light_directory", tk("Light theme folder"), tk("Used instead while the theme is light; empty uses the folder above"), Text { placeholder: "~/Pictures/Wallpapers/Day" }),
+        s(Wallpaper, tk("Source"), "/wallpaper/slideshow/dark_directory", tk("Dark theme folder"), tk("Used instead while the theme is dark; empty uses the folder above"), Text { placeholder: "~/Pictures/Wallpapers/Night" }),
+        s(Wallpaper, tk("When to change"), "/wallpaper/slideshow/on_start", tk("New wallpaper at login"), tk("Show the next wallpaper each time Mandara starts"), Toggle),
+        s(Wallpaper, tk("When to change"), "/wallpaper/slideshow/pause_on_fullscreen", tk("Pause during fullscreen"), tk("Keep the wallpaper while a fullscreen app is open"), Toggle),
+        s(Wallpaper, tk("When to change"), "/wallpaper/slideshow/pause_on_battery", tk("Pause on battery"), tk("Keep the wallpaper while running on battery"), Toggle),
+        s(Wallpaper, tk("When to change"), "/wallpaper/slideshow/pause_when_locked", tk("Pause while locked"), tk("No changes while the screen is locked or off"), Toggle),
+        s(Wallpaper, tk("When to change"), "/wallpaper/slideshow/hours", tk("Only at certain times"), tk("Change wallpapers only between the two times below"), Toggle),
+        s(Wallpaper, tk("When to change"), "/wallpaper/slideshow/from", tk("From"), tk("Changes start at this time"), Time),
+        s(Wallpaper, tk("When to change"), "/wallpaper/slideshow/until", tk("Until"), tk("…and stop at this time (it may be after midnight)"), Time),
+        s(Wallpaper, tk("Slideshow transition"), "/wallpaper/slideshow/transition", tk("Transition"), tk("How a slideshow change replaces the wallpaper"), Choice(SLIDESHOW_TRANSITION)),
+        s(Wallpaper, tk("Slideshow transition"), "/wallpaper/slideshow/transition_ms", tk("Length"), tk("How long a slideshow change takes"), slider(SLIDESHOW_TRANSITION_RANGE.0 as f64, SLIDESHOW_TRANSITION_RANGE.1 as f64, SLIDESHOW_TRANSITION_STEP_MS, " ms")),
+        s(Wallpaper, tk("Displays"), "/wallpaper/slideshow/per_display", tk("Different wallpaper on each display"), tk("Every display gets its own wallpaper from the slideshow; off, they all change together"), Toggle),
         // Video wallpapers (AV1 .webm / .mkv / .ivf)
         s(Wallpaper, tk("Video"), "/wallpaper/video/pause_when", tk("Pause behind windows"), tk("A video wallpaper keeps its current frame while windows hide the desktop"), Choice(VIDEO_PAUSE)),
         s(Wallpaper, tk("Video"), "/wallpaper/video/pause_on_battery", tk("Pause on battery"), tk("Keep the current frame while running on battery"), Toggle),
@@ -84,6 +130,9 @@ pub(super) fn entries() -> Vec<Setting> {
         s(DateTime, tk("Formats"), "/datetime/time_locale", tk("Date language"), tk("Month and weekday names: auto follows the interface, or a locale such as en_GB, ar_EG, de_DE"), Text { placeholder: "auto" }),
         s(DateTime, tk("Calendar"), "/general/week_start", tk("Week starts on"), tk("First day in calendars"), Choice(super::WEEK)),
         s(DateTime, tk("Calendar"), "/datetime/week_numbers", tk("Week numbers"), tk("ISO week numbers beside each calendar row"), Toggle),
+        s(DateTime, tk("Calendar"), "/datetime/weekend", tk("Weekend"), tk("Days the calendar sets apart; automatic picks Friday and Saturday for a Saturday-first week or an Arabic interface"), Choice(WEEKEND)),
+        s(DateTime, tk("Calendar"), "/datetime/hijri_dates", tk("Hijri dates"), tk("Islamic day numbers under each day and the Hijri month in the clock panel's calendar (Prayer times' adjustment applies)"), Toggle),
+        s(DateTime, tk("Calendar"), "/datetime/eastern_numerals", tk("Eastern Arabic numerals"), tk("٠١٢٣ instead of 0123 in the clock panel and its calendar"), Toggle),
         s(DateTime, tk("Calendar"), "/calendar/enabled", tk("Show events"), tk("Events from your calendars in the clock panel. Add one with mandara msg calendar add <url or .ics> [name]"), Toggle),
         s(DateTime, tk("Calendar"), "/calendar/agenda_days", tk("Agenda length"), tk("Upcoming days listed under the month"), slider(1.0, 31.0, 1.0, " d")),
         s(DateTime, tk("Calendar"), "/calendar/hide_past", tk("Hide finished events"), tk("Today's events disappear once they end"), Toggle),

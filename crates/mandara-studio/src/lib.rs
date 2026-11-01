@@ -57,6 +57,15 @@ fn apps_tab_target(target: &str) -> Option<app::apps_page::AppsTab> {
     app::apps_page::AppsTab::parse(tab.split('/').next()?)
 }
 
+/// A Wallpaper tab to show: `wallpaper/<wallpaper|slideshow|effects|generator|online>`,
+/// as passed by `mandara studio wallpaper --tab slideshow`. Without one the
+/// page opens on the Wallpaper tab.
+fn wallpaper_tab_target(target: &str) -> Option<app::wallpaper_page::WallpaperTab> {
+    let (section, tab) = target.split_once('/')?;
+    (resolve_section(section) == Some(registry::Section::Wallpaper)).then_some(())?;
+    app::wallpaper_page::WallpaperTab::parse(tab.split('/').next()?)
+}
+
 /// Names of pages merged into another one, still accepted on the command
 /// line (`mandara studio appearance` opens Themes).
 const FORMER_SECTIONS: &[(&str, registry::Section)] = &[("appearance", registry::Section::Themes), ("looks", registry::Section::Themes), ("cursor", registry::Section::Themes), ("cursors", registry::Section::Themes)];
@@ -93,6 +102,7 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
     let plugin = section.and_then(plugin_target);
     let tab = section.and_then(tab_target);
     let apps_tab = section.and_then(apps_tab_target);
+    let wallpaper_tab = section.and_then(wallpaper_tab_target);
     // `power/<part>` scrolls the Power & idle page to that part.
     let power_part = section.and_then(|t| t.strip_prefix("power/")).map(str::to_string);
     let cursor = section.is_some_and(cursor_target);
@@ -112,6 +122,9 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
         }
         if let Some(tab) = apps_tab {
             view.show_apps_tab(tab, cx);
+        }
+        if let Some(tab) = wallpaper_tab {
+            view.show_wallpaper_tab(tab, cx);
         }
         if let Some((id, which)) = &plugin {
             view.open_plugin(id, *which, window, cx);

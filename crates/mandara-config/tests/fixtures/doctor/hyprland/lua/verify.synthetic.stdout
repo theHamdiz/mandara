@@ -1,0 +1,14 @@
+[LOG] Welcome to Hyprland!
+[LOG] Config: loading @FIXTURES@/hyprland/lua/hyprland.lua
+
+
+======== Config parsing result:
+
+@FIXTURES@/hyprland/lua/hyprland.lua:5: unknown config key 'general.blur_optimized'
+@FIXTURES@/hyprland/lua/hyprland.lua:8: hl.window_rule: unknown field 'frobnicate'
+@FIXTURES@/hyprland/lua/binds.lua:2: hl.bind: failed to parse key string: empty key
+...ixtures/doctor/hyprland/lua/mandara/generated/hyprland.lua:2: unknown config key 'decoration.shadow_optimized'
+config reload: @FIXTURES@/hyprland/lua/hyprland.lua:8: attempt to call a nil value (field 'nonexistent')
+stack traceback:
+	[C]: in function 'hl.nonexistent'
+	@FIXTURES@/hyprland/lua/hyprland.lua:8: in main chunk

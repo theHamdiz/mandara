@@ -23,7 +23,7 @@ use mandara_theme::Color;
 
 use crate::fonts::{Fonts, tabular_nums};
 use crate::icons::icon;
-use crate::widgets::clock::{arabic_numerals, localized};
+use crate::widgets::clock::arabic_numerals;
 
 // ── Layout ───────────────────────────────────────────────────────────────
 
@@ -186,9 +186,13 @@ pub fn ink_for(tone: Option<Color>, primary: Color) -> Ink {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DateLine {
+    /// The Gregorian date (empty when the clock's calendar leaves it out).
     pub gregorian: String,
-    /// Arabic `(day, month, year)` with Eastern Arabic digits.
-    pub hijri_ar: (String, &'static str, String),
+    /// The Hijri `(day, month, year)` (empty when left out): in Arabic
+    /// with Eastern Arabic digits when `hijri_arabic`, else in the clock's
+    /// language and digits.
+    pub hijri_ar: (String, String, String),
+    pub hijri_arabic: bool,
     /// e.g. `5 Jumada al-Ula 1448` (for the preview renderer).
     pub hijri_latin: String,
     /// `(icon, temperature, condition)`.
@@ -197,20 +201,34 @@ pub struct DateLine {
 
 /// Today's date line. The Islamic day begins at Maghrib (prayer times from
 /// the Prayer plugin's settings, including its Hijri correction).
-pub fn date_line(cfg: &ShellConfig, show_weather: bool, cx: &App) -> DateLine {
+/// Today's Hijri date `(year, month, day)`: the Islamic day begins at
+/// Maghrib (prayer times and the Hijri correction from the Prayer
+/// plugin's settings).
+pub fn hijri_today(cfg: &ShellConfig, cx: &App) -> (i64, usize, i64) {
     let now = Local::now().naive_local();
     let maghrib = crate::plugins::prayer::today(cx).get(mandara_services::prayer::Prayer::Maghrib);
     let offset: i64 = cfg.plugins.setting(crate::plugins::prayer::ID, "hijri_offset", 0_i64);
-    let date = now.date() + TimeDelta::days(offset + (now.time() >= maghrib) as i64);
-    let (y, m, d) = crate::plugins::prayer::hijri(date);
-    let (latin, arabic) = crate::plugins::prayer::HIJRI_MONTHS[m.clamp(1, 12) - 1];
+    crate::plugins::prayer::hijri(now.date() + TimeDelta::days(offset + (now.time() >= maghrib) as i64))
+}
+
+pub fn date_line(cfg: &ShellConfig, show_weather: bool, cx: &App) -> DateLine {
+    let now = Local::now().naive_local();
+    let hijri = hijri_today(cfg, cx);
+    let (y, m, d) = hijri;
+    let (latin, _) = crate::plugins::prayer::HIJRI_MONTHS[m.clamp(1, crate::plugins::prayer::HIJRI_MONTHS.len()) - 1];
+    // The depth clock's own digits, calendar and language.
+    let clock = cfg.desktop.widgets.depth_clock().map(|(_, c)| c.clone()).unwrap_or_else(|| mandara_config::desktop_widgets::ClockWidget::with_face(mandara_config::desktop_widgets::ClockFace::from_depth_style(cfg.wallpaper.clock_style)));
+    let probe = crate::backdrop::widgets::lingo::Lingo::of(&clock.locale, cfg.general.locale.is_arabic(), None);
+    let l = crate::backdrop::widgets::lingo::Lingo { eastern: clock.eastern(probe.arabic()), ..probe };
     let weather = show_weather
         .then(|| crate::hub::hub(cx).read(cx).weather.weather.clone())
         .flatten()
-        .map(|w| (crate::plugins::weather::condition_icon(w.condition, w.is_day), cfg.units().format_degrees(w.temp), w.condition.label().to_string()));
+        .map(|w| (crate::plugins::weather::condition_icon(w.condition, w.is_day), l.digits(cfg.units().format_degrees(w.temp)), l.word(&mandara_i18n::untranslate(w.condition.label()))));
+    let calendar = clock.locale.calendar;
     DateLine {
-        gregorian: localized(&now, mandara_i18n::t("%A, %-d %B")),
-        hijri_ar: (arabic_numerals(&d.to_string()), arabic, arabic_numerals(&y.to_string())),
+        gregorian: if calendar.gregorian() { l.date(&now.date(), mandara_i18n::tk("%A, %-d %B")) } else { String::new() },
+        hijri_ar: if calendar.hijri() { (l.hijri_digits(d), l.hijri_month(m), l.hijri_digits(y)) } else { Default::default() },
+        hijri_arabic: l.hijri_in_arabic || l.arabic(),
         hijri_latin: format!("{d} {} {y}", mandara_i18n::tr(latin)),
         weather,
     }
@@ -268,20 +286,14 @@ fn date_pill(d: &DateLine, ink: &Ink, fonts: &Fonts, k: f32) -> AnyElement {
         .font_weight(FontWeight::MEDIUM)
         .font_features(tabular_nums())
         .whitespace_nowrap()
-        .child(d.gregorian.clone())
-        .child(pill_dot(ink))
-        // Right-to-left by hand (day · month · year): no bidi surprises.
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(5.0 * k))
-                .font_family(fonts.arabic.clone())
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(d.hijri_ar.2.clone())
-                .child(d.hijri_ar.1)
-                .child(d.hijri_ar.0.clone()),
-        )
+        .when(!d.gregorian.is_empty(), |el| el.child(d.gregorian.clone()))
+        .when(!d.gregorian.is_empty() && !d.hijri_ar.1.is_empty(), |el| el.child(pill_dot(ink)))
+        // Arabic right-to-left by hand (day · month · year): no bidi surprises.
+        .when(!d.hijri_ar.1.is_empty(), |el| {
+            let (day, month, year) = d.hijri_ar.clone();
+            let parts = if d.hijri_arabic { [year, month, day] } else { [day, month, year] };
+            el.child(div().flex().items_center().gap(px(5.0 * k)).when(d.hijri_arabic, |el| el.font_family(fonts.arabic.clone())).font_weight(FontWeight::SEMIBOLD).children(parts))
+        })
         .when_some(d.weather.clone(), |el, (icon_name, temp, label)| {
             el.child(pill_dot(ink)).child(div().flex().items_center().gap(px(6.0 * k)).child(icon(icon_name, 15.0 * k, ink.fg)).child(temp).child(div().opacity(0.75).child(label)))
         })
@@ -410,7 +422,9 @@ pub struct PreviewInput {
 }
 
 /// Subject coverage of the date pill above which it is lifted over layer 3.
-pub const PILL_LIFT: f32 = 0.2;
+/// Any real overlap: the digits may tuck behind the subject, but the date
+/// is text to read, and even a thin antler or spire hides whole words.
+pub const PILL_LIFT: f32 = 0.02;
 
 /// Composes the three depth layers offscreen into a PNG at `input.out`
 /// with the live software renderer's painters ([`crate::backdrop`]), so

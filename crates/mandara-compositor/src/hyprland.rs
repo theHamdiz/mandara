@@ -126,6 +126,7 @@ pub fn navigation(workspaces: &[HyprWorkspace], monitors: &[HyprMonitor]) -> Vec
                     active: Some(id) == active,
                     occupied: w.windows > 0,
                     urgent: false,
+                    layout: String::new(),
                 })
                 .collect();
             list.sort_by_key(|w| w.id);

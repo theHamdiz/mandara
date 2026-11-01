@@ -367,6 +367,11 @@ fn optional(min: f64, max: f64, step: f64, unit: &'static str, default: f64) -> 
 }
 
 const ICON_STYLES: &[(&str, &str)] = &[("monochrome", tk("Monochrome")), ("color", tk("Color"))];
+/// `[plugins.settings.workspaces] labels` and `[plugins.settings.active-window] show`.
+const WORKSPACE_LABELS: &[(&str, &str)] = &[("auto", tk("Number, or a short name")), ("number", tk("Number")), ("dots", tk("Dots"))];
+const ACTIVE_WINDOW_SHOW: &[(&str, &str)] = &[("app-and-title", tk("App and title")), ("app", tk("App")), ("title", tk("Title"))];
+/// Slider step of the active window's maximum width, px.
+const ACTIVE_WINDOW_WIDTH_STEP: f64 = 20.0;
 /// Language names stay in their own script (`tr` leaves them as they are).
 const LOCALES: &[(&str, &str)] = &[
     ("auto", tk("System")),
@@ -400,6 +405,11 @@ const MENU_DEFAULTS: &[(&str, &str)] = &[("lock", tk("Lock")), ("suspend", tk("S
 const SCHOOLS: &[(&str, &str)] = &[("shafii", tk("Shafi'i")), ("hanafi", tk("Hanafi"))];
 const BOOL_SCHEMES: &[(&str, &str)] = &[("tonal-spot", tk("Tonal spot")), ("vibrant", tk("Vibrant")), ("expressive", tk("Expressive")), ("fidelity", tk("Fidelity")), ("fruit-salad", tk("Fruit salad")), ("monochrome", tk("Monochrome"))];
 
+/// The depth plugin's group on the Wallpaper page.
+pub const DEPTH_GROUP: &str = tk("Depth clock");
+/// Step of the model mode's clock-depth slider.
+const DEPTH_SPLIT_STEP: f64 = 0.05;
+
 /// Every registered setting, built once (the table is static data).
 pub fn settings() -> &'static [Setting] {
     static ALL: OnceLock<Vec<Setting>> = OnceLock::new();
@@ -425,6 +435,10 @@ pub fn in_section(section: Section) -> impl Iterator<Item = &'static Setting> {
 pub fn required_plugin(path: &str) -> Option<&'static str> {
     if path.starts_with("/wallpaper/wallhaven") {
         Some(mandara_config::upgrade::WALLHAVEN_ID)
+    } else if path.starts_with("/wallpaper/depth") {
+        // The depth plugin is core (always on): this only files its rows
+        // under its own product page instead of the wallpaper plugin's.
+        Some(mandara_ui::plugins::wallpaper_depth::ID)
     } else if path.starts_with("/compositor/input/cursor/") {
         Some(mandara_config::upgrade::CURSORS_ID)
     } else {
@@ -439,6 +453,11 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     match setting.path {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         path if path.starts_with("/compositor/input/cursor/") => system_settings::cursor_locked(path, running_compositor()),
+        path if path.starts_with("/wallpaper/slideshow/") => desktop_settings::slideshow_locked(path, cfg),
+        "/wallpaper/depth/auto_split" | "/wallpaper/depth/download" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
+        "/wallpaper/depth/split" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
+        "/wallpaper/depth/split" if cfg.wallpaper.depth.auto_split => Some(tk("Set per wallpaper while the automatic split is on")),
+        "/wallpaper/depth/regenerate" | "/wallpaper/depth/place_clock" if !cfg.wallpaper.depth_effect => Some(tk("Turn on the depth effect first")),
         path => surface_settings::locked(path, cfg),
     }
 }
@@ -449,13 +468,7 @@ pub fn running_compositor() -> Option<mandara_config::compositor::Target> {
     use mandara_compositor::CompositorKind;
     use mandara_config::compositor::Target;
     static RUNNING: OnceLock<Option<Target>> = OnceLock::new();
-    *RUNNING.get_or_init(|| {
-        mandara_compositor::detect().map(|k| match k {
-            CompositorKind::MangoWM => Target::Mango,
-            CompositorKind::Niri => Target::Niri,
-            CompositorKind::Hyprland => Target::Hyprland,
-        })
-    })
+    *RUNNING.get_or_init(|| mandara_compositor::detect().map(CompositorKind::target))
 }
 
 thread_local! {
@@ -552,8 +565,14 @@ fn build() -> Vec<Setting> {
         // The depth clock itself (style, place, date pill, audio ring) is a
         // desktop widget: Wallpaper → Desktop widgets.
         s(Wallpaper, tk("Depth clock"), "/wallpaper/depth_effect", tk("Depth effect"), tk("Draw the wallpaper's foreground subject over the clock (with the Fill mode)"), Toggle),
-        s(Wallpaper, tk("Depth clock"), "/wallpaper/depth_mask", tk("Subject mask"), tk("Automatic finds the subject itself; your own masks go in ~/.local/share/mandara/depth_masks/<wallpaper name>.png"), Choice(const { &[("auto", tk("Automatic")), ("custom", tk("My masks only")), ("off", tk("Off"))] })),
-        s(Wallpaper, tk("Depth clock"), "/wallpaper/path", tk("Regenerate depth mask"), tk("Find the current wallpaper's subject again (skipped when it isn't confident)"), Command { button: tk("Regenerate"), args: &["wallpaper", "depth-mask", "regenerate"] }),
+        // The wallpaper-depth plugin's own rows (one group, so the page
+        // can place them as a unit).
+        s(Wallpaper, DEPTH_GROUP, "/wallpaper/depth/mode", tk("Find the subject with"), tk("Hand-tuned needs no download and skips wallpapers it isn't sure about. Model downloads a 27 MB depth model once (Depth Anything V2 Small, Apache-2.0) and runs it once per wallpaper at the lowest priority. Your own masks in ~/.local/share/mandara/depth_masks/<wallpaper name>.png win over both"), Choice(const { &[("hand-tuned", tk("Hand-tuned")), ("model", tk("Model"))] })),
+        s(Wallpaper, DEPTH_GROUP, "/wallpaper/depth/auto_split", tk("Automatic depth split"), tk("Decide per wallpaper what stands in front of the clock"), Toggle),
+        s(Wallpaper, DEPTH_GROUP, "/wallpaper/depth/split", tk("Clock depth"), tk("How far back the clock sits in the picture: low lets everything but the far background pass in front, high only the nearest things"), slider(f64::from(mandara_config::defaults::DEPTH_SPLIT_RANGE.0), f64::from(mandara_config::defaults::DEPTH_SPLIT_RANGE.1), DEPTH_SPLIT_STEP, "")),
+        s(Wallpaper, DEPTH_GROUP, "/wallpaper/depth/download", tk("Depth model"), tk("Download it now (27 MB, checksum-verified); picking Model also downloads it. Studio → Maintenance lists and removes it"), Command { button: tk("Download"), args: &["depth", "download"] }),
+        s(Wallpaper, DEPTH_GROUP, "/wallpaper/depth/regenerate", tk("Regenerate depth mask"), tk("Find the current wallpaper's subject again (skipped when it isn't confident)"), Command { button: tk("Regenerate"), args: &["depth", "regenerate"] }),
+        s(Wallpaper, DEPTH_GROUP, "/wallpaper/depth/place_clock", tk("Place the clock"), tk("Move the desktop clock to where the wallpaper's subject rises into it"), Command { button: tk("Place clock"), args: &["depth", "place-clock"] }),
         s(Wallpaper, tk("Picker"), "/wallpaper/picker", tk("Enable wallpaper picker"), tk("The carousel opened from the bar, the main menu or `mandara msg wallpaper picker toggle`"), Toggle),
         s(Wallpaper, tk("Picker"), "/wallpaper/picker_style", tk("Layout"), tk("Slices: slanted strips around a big preview (Omarchy-style). Carousel: floating cards"), Choice(const { &[("slices", tk("Slices")), ("carousel", tk("Carousel"))] })),
         s(Wallpaper, tk("Picker"), "/wallpaper/picker_size", tk("Tile size"), tk("Scales every tile"), slider(0.6, 1.6, 0.05, "×")),
@@ -639,7 +658,7 @@ fn build() -> Vec<Setting> {
         s(Typography, tk("Families"), "/typography/mono_font", tk("Monospace font"), tk("Code and numbers"), Font { follows: None }),
         s(Typography, tk("Each surface"), "/typography/bar_font", tk("Bar"), tk("The bar's items"), Font { follows: Some("/typography/ui_font") }),
         s(Typography, tk("Each surface"), "/typography/panels_font", tk("Panels & plugins"), tk("Drop-down panels and plugin cards"), Font { follows: Some("/typography/ui_font") }),
-        s(Typography, tk("Each surface"), "/typography/widgets_font", tk("Desktop widgets"), tk("Widgets on the desktop (a widget's own font wins)"), Font { follows: Some("/typography/ui_font") }),
+        s(Typography, tk("Each surface"), "/typography/widgets_font", tk("Desktop widgets"), tk("Widgets on the desktop (a widget's own font wins)"), Font { follows: Some("/typography/display_font") }),
         s(Typography, tk("Each surface"), "/typography/lock_font", tk("Lock screen"), tk("The lock screen's text"), Font { follows: Some("/typography/ui_font") }),
         s(Typography, tk("Each surface"), "/typography/lock_clock_font", tk("Lock screen clock"), tk("The big clock on the lock screen"), Font { follows: Some("/typography/display_font") }),
         s(Typography, tk("Each surface"), "/typography/studio_font", tk("Studio"), tk("Mandara Studio itself"), Font { follows: Some("/typography/ui_font") }),
@@ -671,6 +690,24 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("App installer"), "/plugins/settings/app-installer/notify", tk("Notify when done"), tk("A notification when an install finishes in the background or from the command line"), Toggle, Value::from(true)),
         sd(Plugins, tk("Media"), "/plugins/settings/media/lyrics", tk("Synced lyrics"), tk("Time-synced lyrics from lrclib.net in the media panel (fetched only while it is open)"), Toggle, Value::from(true)),
         sd(Plugins, tk("Media"), "/plugins/settings/media/lyrics_rows", tk("Lyrics rows"), tk("Lines of lyrics shown around the one being sung"), slider(3.0, 9.0, 2.0, ""), Value::from(5)),
+        sd(Plugins, tk("Media"), "/plugins/settings/media/bar_title", tk("Track in the bar"), tk("The track's title beside the music icon; off shows the icon alone"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Media"), "/plugins/settings/media/hide_when_paused", tk("Hide when paused"), tk("The bar item goes away while nothing is playing"), Toggle, Value::from(false)),
+        // Bar items: what each shows.
+        sd(Plugins, tk("Workspaces"), "/plugins/settings/workspaces/labels", tk("Pill labels"), tk("What each tag or workspace pill says"), Choice(WORKSPACE_LABELS), Value::from("auto")),
+        sd(Plugins, tk("Workspaces"), "/plugins/settings/workspaces/app_icons", tk("App icons"), tk("The icons of the apps on each tag or workspace"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Workspaces"), "/plugins/settings/workspaces/hide_empty", tk("Hide empty ones"), tk("Only tags and workspaces with windows (plus the one you are on)"), Toggle, Value::from(false)),
+        sd(Plugins, tk("Active window"), "/plugins/settings/active-window/show", tk("Show"), tk("The app's name, the window's title, or both"), Choice(ACTIVE_WINDOW_SHOW), Value::from("app-and-title")),
+        sd(
+            Plugins,
+            tk("Active window"),
+            "/plugins/settings/active-window/max_width",
+            tk("Maximum width"),
+            tk("Longer titles are cut short with an ellipsis"),
+            slider(mandara_ui::plugins::window::MAX_W_RANGE.0, mandara_ui::plugins::window::MAX_W_RANGE.1, ACTIVE_WINDOW_WIDTH_STEP, " px"),
+            Value::from(mandara_ui::plugins::window::MAX_W_PX.round() as i64),
+        ),
+        sd(Plugins, tk("Audio"), "/plugins/settings/audio/bar_level", tk("Volume in the bar"), tk("The volume beside the speaker icon"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Power"), "/plugins/settings/power/bar_percent", tk("Charge in the bar"), tk("The battery's percentage beside its icon"), Toggle, Value::from(true)),
         sd(Plugins, tk("Pomodoro"), "/plugins/settings/pomodoro/focus_minutes", tk("Focus"), tk("Length of a focus session"), slider(5.0, 120.0, 5.0, " min"), Value::from(25)),
         sd(Plugins, tk("Pomodoro"), "/plugins/settings/pomodoro/short_break_minutes", tk("Short break"), tk("Between focus sessions"), slider(1.0, 30.0, 1.0, " min"), Value::from(5)),
         sd(Plugins, tk("Pomodoro"), "/plugins/settings/pomodoro/long_break_minutes", tk("Long break"), tk("After several sessions"), slider(5.0, 60.0, 5.0, " min"), Value::from(15)),
@@ -712,6 +749,7 @@ fn build() -> Vec<Setting> {
         // Compositor
         s(Compositor, tk("Integration"), "/compositor/manage", tk("Manage compositor drop-in"), tk("Write rules, binds and colors to ~/.config/mandara/generated"), Toggle),
         s(Compositor, tk("Integration"), "/integrations/compositor_borders", tk("Sync border colors"), tk("Window borders follow the theme"), Toggle),
+        s(Compositor, tk("Integration"), "/compositor/doctor_notify", tk("Tell me about config problems"), tk("When your compositor config or the compositor changed, the Config doctor checks it once at start-up and sends one notification about new problems"), Toggle),
         s(Compositor, tk("Window look"), "/compositor/look/gaps_inner", tk("Gaps between windows"), tk("Unset keeps your compositor's value"), optional(0.0, 48.0, 1.0, " px", 10.0)),
         s(Compositor, tk("Window look"), "/compositor/look/gaps_outer", tk("Gaps to screen edges"), tk("Unset keeps your compositor's value"), optional(0.0, 64.0, 1.0, " px", 10.0)),
         s(Compositor, tk("Window look"), "/compositor/border_width", tk("Border width"), tk("Window border / focus ring thickness"), optional(0.0, 10.0, 1.0, " px", 2.0)),

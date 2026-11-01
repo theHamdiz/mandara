@@ -5,7 +5,9 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-wit_bindgen::generate!({ world: "plugin", path: "../../../crates/mandara-plugins/wit" });
+// The `desktop-plugin` world: everything of `plugin`, plus a desktop widget
+// (`WidgetContext` comes from the world itself, like `Palette` and `View`).
+wit_bindgen::generate!({ world: "desktop-plugin", path: "../../../crates/mandara-plugins/wit" });
 
 use mandara::plugin::host;
 use mandara::plugin::types::{Kind, Node, Tone};
@@ -295,6 +297,44 @@ impl Guest for Plugin {
     fn refresh_ms() -> u32 {
         60_000
     }
+
+    /// The desktop widget listed in plugin.toml (`[[widgets]]`, id "moon"):
+    /// tonight's moon large, its phase and how lit it is, with the digits
+    /// the person chose for it.
+    fn desktop_widget(_theme: Palette, context: WidgetContext) -> Option<View> {
+        if context.widget != "moon" {
+            return None;
+        }
+        let m = Moon::now();
+        let eastern = context.numerals == "eastern-arabic" || (context.numerals == "auto" && widget_language(&context) == "ar");
+        let lit = host::translate("{percent}% illuminated").replace("{percent}", &digits(&format!("{:.0}", m.illumination() * 100.0), eastern));
+        let mut t = Tree::default();
+        let col = t.add(Kind::Column, "");
+        t.node(col).gap = STACK_GAP;
+        let moon = t.add(Kind::Text, glyph(m.phase_index(), hemisphere()));
+        t.node(moon).size = HERO_MOON_PX;
+        let name = t.add(Kind::Text, &host::translate(m.name()));
+        t.node(name).size = TITLE_PX;
+        t.node(name).bold = true;
+        let detail = t.add(Kind::Text, &lit);
+        t.node(detail).tone = Tone::Muted;
+        t.children(col, &[moon, name, detail]);
+        t.view(col)
+    }
+}
+
+/// The widget's language: its own, else the interface's.
+fn widget_language(context: &WidgetContext) -> String {
+    if context.language.is_empty() { host::locale() } else { context.language.clone() }
+}
+
+/// `s` with Eastern Arabic digits when `eastern`.
+fn digits(s: &str, eastern: bool) -> String {
+    const EASTERN: [char; 10] = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+    if !eastern {
+        return s.to_string();
+    }
+    s.chars().map(|c| c.to_digit(10).map_or(c, |d| EASTERN[d as usize])).collect()
 }
 
 export!(Plugin);

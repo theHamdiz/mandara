@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>Decorations</title>
+  <defs>
+    <linearGradient id="decorations-tile" x1="64" y1="40" x2="448" y2="496" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2B2160"/><stop offset="1" stop-color="#15113A"/>
+    </linearGradient>
+    <radialGradient id="decorations-light" cx="0" cy="0" r="1" gradientTransform="translate(98 48) rotate(45) scale(440 354)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="decorations-rim" x1="76" y1="28" x2="446" y2="482" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".72"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".08"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".24"/>
+    </linearGradient>
+    <clipPath id="decorations-tile-clip"><rect x="16" y="16" width="480" height="480" rx="108"/></clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#decorations-tile)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#decorations-light)"/>
+  <g clip-path="url(#decorations-tile-clip)">
+    <path d="M-28 324C126 476 349 518 544 274v238H-28z" fill="#FFFFFF" opacity=".045"/>
+  </g>
+  <rect x="19" y="19" width="474" height="474" rx="105" stroke="url(#decorations-rim)" stroke-width="2"/>
+  <path d="M194 136C215 185 249 218 296 240C249 262 215 295 194 344C173 295 139 262 92 240C139 218 173 185 194 136Z" fill="#F6B65A"/>
+  <path d="M335 114C347 112 361 116 373 126C352 207 347 289 351 357C352 375 338 390 319 397C307 401 293 402 282 397C310 331 316 241 317 163C317 141 323 123 335 114Z" fill="#FF8A6B"/>
+</svg>

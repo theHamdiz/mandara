@@ -1,12 +1,14 @@
 //! First-class compositor integration behind one [`CompositorBackend`]
 //! trait: MangoWM (bitmask tags, native socket), Niri (scrollable
-//! workspaces, JSON socket) and Hyprland (workspaces, socket/socket2).
+//! workspaces, JSON socket), Hyprland (workspaces, socket/socket2) and
+//! Umbriel (per-output workspaces, JSON-lines socket).
 
 pub mod backend;
 pub mod hyprland;
 pub mod mango;
 pub mod model;
 pub mod niri;
+pub mod umbriel;
 
 use std::sync::Arc;
 
@@ -15,17 +17,24 @@ pub use hyprland::HyprlandDriver;
 pub use mango::MangoDriver;
 pub use model::*;
 pub use niri::NiriDriver;
+pub use umbriel::UmbrielDriver;
 
-/// Detects the running compositor from the environment.
+/// Detects the running compositor from the environment. Umbriel exports
+/// `UMBRIEL_SOCKET` and always sets `XDG_CURRENT_DESKTOP=umbriel` for its
+/// clients, so that desktop name wins even over variables inherited from an
+/// outer compositor when Umbriel runs nested.
 pub fn detect() -> Option<CompositorKind> {
-    if std::env::var_os("MANGO_INSTANCE_SIGNATURE").is_some()
-        || std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|d| d.eq_ignore_ascii_case("mango"))
-    {
+    let desktop = |name: &str| std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|d| d.eq_ignore_ascii_case(name));
+    if desktop("umbriel") {
+        Some(CompositorKind::Umbriel)
+    } else if std::env::var_os("MANGO_INSTANCE_SIGNATURE").is_some() || desktop("mango") {
         Some(CompositorKind::MangoWM)
     } else if std::env::var_os("NIRI_SOCKET").is_some() {
         Some(CompositorKind::Niri)
     } else if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some() {
         Some(CompositorKind::Hyprland)
+    } else if std::env::var_os("UMBRIEL_SOCKET").is_some() {
+        Some(CompositorKind::Umbriel)
     } else {
         None
     }
@@ -48,6 +57,7 @@ pub fn connect() -> Option<Arc<dyn CompositorBackend>> {
         CompositorKind::MangoWM => MangoDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
         CompositorKind::Niri => NiriDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
         CompositorKind::Hyprland => HyprlandDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
+        CompositorKind::Umbriel => UmbrielDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
     }
 }
 

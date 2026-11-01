@@ -60,7 +60,7 @@ use image::RgbImage;
 use mandara_config::desktop::{WallpaperFill, WallpaperTransition, effective_wallpaper};
 use mandara_config::outputs::{DisplaysConfig, SurfaceKind, assignment_any};
 use mandara_config::desktop_widgets::Insets;
-use mandara_config::{DepthMask, WallpaperConfig};
+use mandara_config::WallpaperConfig;
 use mandara_core::shm_canvas::{CanvasLayer, FRAME_TIMEOUT, Host, OutputInfo, Place, Rect, View, Waker, snap};
 use mandara_theme::Color;
 
@@ -76,7 +76,9 @@ pub fn software_enabled() -> bool {
     std::env::var(RENDERER_ENV).map(|v| !v.trim().eq_ignore_ascii_case("gpui")).unwrap_or(true)
 }
 
-/// Linux input code of the right mouse button (`BTN_RIGHT`).
+/// Linux input codes of the left and right mouse buttons (`BTN_LEFT`,
+/// `BTN_RIGHT`).
+const BTN_LEFT: u32 = 0x110;
 const BTN_RIGHT: u32 = 0x111;
 
 // Plane indices on each canvas.
@@ -153,6 +155,18 @@ pub struct Scene {
     /// Outputs (connector names) whose video wallpaper may play now
     /// ([`video::may_play`]); empty when no output shows a video.
     pub video_play: Vec<String>,
+    /// The depth clock's own digits and font.
+    pub depth: DepthLook,
+}
+
+/// How the depth clock writes its time.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DepthLook {
+    /// Eastern Arabic digits.
+    pub eastern: bool,
+    /// The family of the stacked and classic digits (`None`: the display
+    /// face).
+    pub family: Option<String>,
 }
 
 /// Where a widget is painted on an output, logical px `[x, y, w, h]`:
@@ -201,6 +215,8 @@ enum Event {
     Menu(String, f32, f32, Option<(f32, f32)>),
     /// Painted widget geometry (edit mode).
     Boxes(Vec<OutputBoxes>),
+    /// A click (or a scroll step) on a widget's clickable area.
+    Widget(String, widgets::actions::Action),
     /// The renderer could not start; the shell falls back to GPUI.
     Failed(String),
 }
@@ -221,6 +237,11 @@ struct Driver {
 #[derive(Clone)]
 struct GlobalBackdrop(Rc<RefCell<Driver>>);
 impl Global for GlobalBackdrop {}
+
+/// The outputs (connector names) the desktop is drawn on.
+pub(crate) fn outputs(cx: &App) -> Vec<String> {
+    cx.try_global::<GlobalBackdrop>().map(|g| g.0.borrow().outputs.clone()).unwrap_or_default()
+}
 
 /// Whether the software renderer is running in this process.
 pub fn running(cx: &App) -> bool {
@@ -275,6 +296,7 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
                 }
                 Event::Menu(output, x, y, size) => crate::desktop_menu::open_sized(&output, (x, y), size, cx),
                 Event::Boxes(boxes) => crate::desktop_edit::on_boxes(boxes, cx),
+                Event::Widget(id, action) => crate::desktop_actions::run(&id, action, cx),
                 Event::Failed(why) => {
                     tracing::warn!("wallpaper: software renderer unavailable ({why}); using GPUI windows");
                     cx.remove_global::<GlobalBackdrop>();
@@ -297,6 +319,14 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
         cx.observe(&hub, |_, cx| refresh(cx)).detach();
     }
     cx.observe_global::<crate::fonts::Fonts>(refresh).detach();
+    // Calendar events (the calendar widgets).
+    if let Some(store) = crate::calendar::store(cx) {
+        cx.observe(&store, |_, cx| refresh(cx)).detach();
+    }
+    // To-dos, notes and the focus timer (their desktop widgets).
+    if let Some(p) = cx.try_global::<crate::productivity::GlobalProductivity>().map(|g| g.0.clone()) {
+        cx.observe(&p, |_, cx| refresh(cx)).detach();
+    }
     // Video wallpapers stop while the session is locked (a channel wait:
     // no cost until a lock happens).
     let locks = crate::lock::subscribe();
@@ -401,12 +431,14 @@ fn build_scene(outputs: &[String], cx: &mut App) -> Scene {
     let editing = crate::desktop_edit::active(cx);
     // A widget being dragged in edit mode is drawn where the pointer has
     // it, ahead of the config (written on release).
+    let mut moving = None;
     if let Some((id, place)) = crate::desktop_edit::live_place(cx) {
         let c = std::sync::Arc::make_mut(&mut cfg);
         if let Some(w) = c.desktop.widgets.get_mut(&id) {
             w.place = place;
             mandara_config::desktop_widgets::sync_depth_clock(c);
         }
+        moving = Some(id);
     }
     // Hidden widgets (the depth clock too) are shown again while editing.
     if cfg.desktop.widgets.hidden && !editing {
@@ -414,14 +446,19 @@ fn build_scene(outputs: &[String], cx: &mut App) -> Scene {
         c.desktop.widgets.items.clear();
         c.wallpaper.desktop_clock = false;
     }
+    // The clocks plugin switched off takes the depth clock with it.
+    if cfg.wallpaper.desktop_clock && !crate::desktop_plugins::enabled(mandara_config::desktop_widgets::plugin_ids::CLOCKS, &cfg, cx) {
+        std::sync::Arc::make_mut(&mut cfg).wallpaper.desktop_clock = false;
+    }
     let w = &cfg.wallpaper;
     let dark = cfg.theme.mode.is_dark();
-    let widgets = widget_scene(&cfg, outputs, cx);
+    let mut widgets = widget_scene(&cfg, outputs, cx);
+    widgets.moving = moving.filter(|_| !widgets.items.is_empty());
     let depth = (w.desktop_clock || widgets.any_behind()) && w.depth_effect && w.fill == WallpaperFill::Cover;
-    let mode = if depth { w.depth_mask } else { DepthMask::Off };
+    let request = if depth { crate::depth::Request::of(w) } else { None };
     let entity = crate::depth::masks(cx);
     let mut masks = HashMap::new();
-    if w.enabled && mode != DepthMask::Off {
+    if w.enabled && request.is_some() {
         let mut paths: Vec<PathBuf> = outputs.iter().filter_map(|o| effective_wallpaper(w.path.as_ref(), &w.variants, Some(o), dark)).collect();
         if paths.is_empty() {
             paths.extend(effective_wallpaper(w.path.as_ref(), &w.variants, None, dark));
@@ -431,7 +468,7 @@ fn build_scene(outputs: &[String], cx: &mut App) -> Scene {
         // Videos have no depth subject (it moves).
         paths.retain(|p| !video::is_video(p));
         for p in paths {
-            if let crate::depth::MaskStatus::Ready(r) = entity.update(cx, |m, cx| m.status(&p, mode, cx)) {
+            if let crate::depth::MaskStatus::Ready(r) = entity.update(cx, |m, cx| m.status(&p, request, cx)) {
                 masks.insert(p, r.path);
             }
         }
@@ -443,15 +480,30 @@ fn build_scene(outputs: &[String], cx: &mut App) -> Scene {
     } else {
         Vec::new()
     };
+    let fonts = FontNames::from(&crate::fonts::fonts(cx));
+    let ui_rtl = cfg.general.locale.is_arabic();
+    let depth = cfg
+        .desktop
+        .widgets
+        .depth_clock()
+        .map(|(_, c)| DepthLook {
+            eastern: c.eastern(widgets::lingo::Lingo::of(&c.locale, ui_rtl, None).arabic()),
+            family: (c.look.font != mandara_config::desktop_widgets::FontRole::Display).then(|| widgets::draw::family(&fonts.for_look(Some(&c.look)), c.look.font).to_string()),
+        })
+        .unwrap_or_default();
+    // Slideshow changes may have their own transition.
+    let mut wallpaper = w.clone();
+    crate::slideshow::scene_transition(&mut wallpaper, cx);
     Scene {
+        depth,
         enabled: w.enabled,
-        wallpaper: w.clone(),
+        wallpaper,
         dark,
         h24: cfg.general.clock_24h,
         rtl: cfg.general.locale.is_arabic(),
         displays: cfg.displays.clone(),
         primary: mandara_core::theme_entity(cx).read(cx).target().primary,
-        fonts: FontNames::from(&crate::fonts::fonts(cx)),
+        fonts,
         date,
         masks,
         mask_generation: entity.read(cx).generation,
@@ -469,26 +521,353 @@ fn build_scene(outputs: &[String], cx: &mut App) -> Scene {
 /// The widgets part of the scene. Visibility and playback are looked up
 /// only while a widget needs them.
 fn widget_scene(cfg: &mandara_config::ShellConfig, outputs: &[String], cx: &mut App) -> widgets::WidgetScene {
-    let items: Vec<_> = cfg.desktop.widgets.painted().cloned().collect();
+    use mandara_config::desktop_widgets::WidgetKind;
+    // A widget whose plugin is switched off isn't drawn.
+    let items: Vec<_> = cfg.desktop.widgets.painted().filter(|w| crate::desktop_plugins::shows(w, cfg, cx)).cloned().collect();
     if items.is_empty() {
         return widgets::WidgetScene::default();
     }
-    let mut ws = widgets::WidgetScene { items, units: cfg.units(), h24: cfg.general.clock_24h, rtl: cfg.general.locale.is_arabic(), ..widgets::WidgetScene::default() };
-    ws.on_surface = mandara_core::theme_entity(cx).read(cx).target().on_surface;
-    let weather_wanted = ws.items.iter().any(|w| matches!(&w.kind, mandara_config::desktop_widgets::WidgetKind::Clock(c) if c.weather));
+    let mut ws = widgets::WidgetScene { items, units: cfg.units(), h24: cfg.general.clock_24h, rtl: cfg.general.locale.is_arabic(), week_start: crate::plugins::clock::week_start_days(cx), ..widgets::WidgetScene::default() };
+    let palette = mandara_core::theme_entity(cx).read(cx).target().clone();
+    ws.on_surface = palette.on_surface;
+    ws.surface = palette.surface_container;
+    let weather_wanted = ws.items.iter().any(|w| matches!(&w.kind, WidgetKind::Clock(c) if c.weather));
     if weather_wanted {
         ws.weather = crate::hub::hub(cx).read(cx).weather.weather.clone().map(|w| (crate::plugins::weather::condition_icon(w.condition, w.is_day), cfg.units().format_degrees(w.temp)));
     }
+    if ws.items.iter().any(|w| matches!(w.kind, WidgetKind::Weather(_))) {
+        ws.forecast = crate::hub::hub(cx).read(cx).weather.weather.as_ref().map(|w| widgets::Forecast {
+            icon: crate::plugins::weather::condition_icon(w.condition, w.is_day),
+            temp: w.temp,
+            feels_like: w.feels_like,
+            humidity: w.humidity,
+            wind: w.wind,
+            condition: mandara_i18n::untranslate(w.condition.label()),
+            place: crate::plugins::weather::location_name(cfg),
+            days: w.days.iter().filter_map(|d| Some((chrono::NaiveDate::parse_from_str(&d.date, "%Y-%m-%d").ok()?, crate::plugins::weather::condition_icon(d.condition, true), d.min, d.max))).collect(),
+            hours: w.hours.iter().map(|h| (h.hour, crate::plugins::weather::condition_icon(h.condition, h.is_day), h.temp)).collect(),
+            kind: w.condition as usize,
+            is_day: w.is_day,
+            today: w.days.first().map(|d| (d.min, d.max)),
+        });
+    }
+    // The Hijri date, while a widget may show it (the day turns at Maghrib).
+    let hijri = ws.items.iter().any(|w| {
+        w.kind.locale().is_some_and(|l| l.calendar.hijri()) || matches!(&w.kind, WidgetKind::Countdown(_)) || matches!(&w.kind, WidgetKind::Clock(c) if c.face == mandara_config::desktop_widgets::ClockFace::Template && c.lines.iter().any(|l| l.text.contains("{hijri}")))
+    });
+    if hijri {
+        ws.hijri = Some(desktop::hijri_today(cfg, cx));
+    }
+    if ws.items.iter().any(|w| matches!(&w.kind, WidgetKind::WorldClock(c) if c.cities.is_empty())) {
+        ws.world_cities = crate::plugins::world_clock::city_entries(cfg);
+    }
+    ws.data = widget_data(&ws.items, cfg, outputs, cx);
     if ws.any_live() {
         let screens_off = crate::powerctl::idle::manager(cx).is_some_and(|m| m.read(cx).screens_off());
         if !screens_off && !crate::lock::is_locked() {
             ws.visible = outputs.iter().filter(|o| crate::wallpaper::desktop_visible(o, cx)).cloned().collect();
         }
     }
-    if ws.any_visualizer() {
+    if ws.any_visualizer() || ws.items.iter().any(|w| matches!(w.kind, WidgetKind::Pet(_))) {
         ws.music = crate::wallpaper::music_playing(cx);
     }
     ws
+}
+
+/// Most notes the scene carries, and the characters of each one's text.
+const SCENE_NOTES: usize = 24;
+const NOTE_BODY_CHARS: usize = 1200;
+
+/// What the widget collection's kinds show, read only for the kinds
+/// placed.
+fn widget_data(items: &[mandara_config::desktop_widgets::DesktopWidget], cfg: &mandara_config::ShellConfig, outputs: &[String], cx: &mut App) -> widgets::WidgetData {
+    use mandara_config::desktop_widgets::WidgetKind as K;
+    let has = |f: fn(&K) -> bool| items.iter().any(|w| f(&w.kind));
+    let mut d = widgets::WidgetData::default();
+    if has(|k| matches!(k, K::Sky(_))) {
+        let q = crate::plugins::weather::query(cfg);
+        d.place = Some((q.latitude, q.longitude));
+    }
+    if has(|k| matches!(k, K::Date(_))) {
+        d.events = calendar_events(cfg, cx);
+    }
+    let Some(p) = cx.try_global::<crate::productivity::GlobalProductivity>().map(|g| g.0.clone()) else { return d };
+    let p = p.read(cx);
+    if has(|k| matches!(k, K::Todo(_))) {
+        let mut todos: Vec<widgets::TodoItem> = p.book.todos.iter().map(|t| widgets::TodoItem { id: t.id, text: t.text.clone(), done: t.done, list: t.list }).collect();
+        // Open tasks first, newest first within each.
+        todos.sort_by_key(|t| t.done);
+        d.todos = todos;
+        d.lists = p.book.lists.iter().map(|l| (l.id, l.name.clone())).collect();
+    }
+    if has(|k| matches!(k, K::Note(_) | K::Notebook(_))) {
+        d.notes = p.notes.notes.iter().filter(|n| !n.text.trim().is_empty()).take(SCENE_NOTES).map(|n| widgets::NoteItem { title: n.title(), body: n.preview().chars().take(NOTE_BODY_CHARS).collect() }).collect();
+    }
+    if has(|k| matches!(k, K::Pomodoro(_))) {
+        let t = &p.pomodoro;
+        let now_ms = chrono::Local::now().timestamp_millis();
+        let phase = match t.phase {
+            crate::productivity::Phase::Focus => mandara_i18n::tk("Focus"),
+            crate::productivity::Phase::ShortBreak => mandara_i18n::tk("Short break"),
+            crate::productivity::Phase::LongBreak => mandara_i18n::tk("Long break"),
+        };
+        let ms = |d: Duration| i64::try_from(d.as_millis()).unwrap_or(i64::MAX);
+        // Rounded to whole seconds so a scene rebuilt mid-second compares equal.
+        let ends = t.running().then(|| (now_ms + ms(t.left())).div_euclid(SECOND_MS) * SECOND_MS);
+        d.pomodoro = Some(widgets::PomodoroState { phase, ends_ms: ends, paused_ms: ms(t.paused_left), length_ms: ms(t.length), running: t.running(), completed: t.completed, long_every: crate::productivity::PomodoroRules::from_config(cx).long_every });
+    }
+    if let Some(turns) = cx.try_global::<crate::desktop_actions::Turns>() {
+        let ours = turns.0.iter().filter(|(id, _)| items.iter().any(|w| &w.id == *id));
+        d.turns = ours.clone().map(|(k, v)| (k.clone(), v.0)).collect();
+        d.poked = ours.map(|(k, v)| (k.clone(), v.1)).collect();
+    }
+    identity_data(&mut d, items, cfg, cx);
+    media_data(&mut d, items, cx);
+    if has(|k| matches!(k, K::Fetch(_))) {
+        d.fetch = crate::desktop_info::fetch(cx);
+        if d.palette.is_empty() {
+            d.palette = theme_palette(cx);
+        }
+    }
+    if let Some(days) = items.iter().find_map(|w| if let K::ScreenTime(s) = &w.kind { Some(s.days) } else { None }) {
+        d.screen = crate::desktop_info::screen(days.clamp(mandara_config::widget_kinds::ranges::SCREEN_DAYS.0, mandara_config::widget_kinds::ranges::SCREEN_DAYS.1), cx);
+    }
+    let prayer_on = crate::desktop_plugins::enabled(crate::plugins::prayer::ID, cfg, cx);
+    if has(|k| matches!(k, K::Prayer(_))) && prayer_on {
+        d.prayer = Some(crate::desktop_info::prayer(cfg, cx));
+    }
+    if has(|k| matches!(k, K::Glance(_))) {
+        d.glance = Some(crate::desktop_info::glance(cfg, prayer_on, cx));
+    }
+    feeds_data(&mut d, items, outputs, cx);
+    crate::desktop_media::retain_asked(cx);
+    d
+}
+
+/// The fetched feeds (GitHub, rates, AI usage, games): each widget's last
+/// answer, and a new fetch only while the desktop can be seen and the
+/// widget may ask (its online or log switch on).
+fn feeds_data(d: &mut widgets::WidgetData, items: &[mandara_config::desktop_widgets::DesktopWidget], outputs: &[String], cx: &mut App) {
+    use mandara_config::desktop_widgets::WidgetKind as K;
+    use mandara_config::widget_kinds::{count, ranges};
+    let feeds = items.iter().filter(|w| matches!(w.kind, K::Github(_) | K::Currency(_) | K::AiUsage(_) | K::Games(_)));
+    let mut feeds = feeds.peekable();
+    if feeds.peek().is_none() {
+        return;
+    }
+    let seen = !crate::lock::is_locked() && outputs.iter().any(|o| crate::wallpaper::desktop_visible(o, cx));
+    for w in feeds {
+        match &w.kind {
+            K::Github(g) if !g.user.trim().is_empty() => {
+                let f = crate::desktop_feeds::github(&g.user, seen && g.online, cx);
+                d.github.insert(w.id.clone(), f);
+            }
+            K::Currency(c) => {
+                let f = crate::desktop_feeds::rates(&c.base, seen && c.online, cx);
+                d.rates.insert(w.id.clone(), f);
+            }
+            K::AiUsage(a) if a.read_logs => {
+                let f = crate::desktop_feeds::ai_usage(count(a.days, ranges::AI_DAYS).max(widgets::feeds::WEEK_DAYS), seen, cx);
+                d.ai_usage.insert(w.id.clone(), f);
+            }
+            K::Games(g) => {
+                let f = crate::desktop_feeds::games(seen, cx);
+                let edge = (widgets::feeds::COVER_W * w.place.scale() * PICTURE_DENSITY).round().max(1.0) as u32;
+                let list = f.value.as_ref().map(|list| {
+                    list.iter()
+                        .take(count(g.count, ranges::GAMES) as usize)
+                        .map(|s| widgets::GameItem { appid: s.appid, name: s.name.clone(), cover: s.cover.as_deref().and_then(|p| crate::desktop_media::picture(p, edge, cx)) })
+                        .collect()
+                });
+                d.games = widgets::Feed { value: list, error: f.error, loading: f.loading };
+            }
+            _ => {}
+        }
+    }
+}
+
+/// What plays, for the media widgets: the track, its art at the largest
+/// widget's size and, when a lyrics widget shows, its synced lines.
+fn media_data(d: &mut widgets::WidgetData, items: &[mandara_config::desktop_widgets::DesktopWidget], cx: &mut App) {
+    use mandara_config::desktop_widgets::{MediaLayout, WidgetKind as K};
+    let media: Vec<&mandara_config::desktop_widgets::MediaWidget> = items.iter().filter_map(|w| if let K::Media(m) = &w.kind { Some(m) } else { None }).collect();
+    if media.is_empty() {
+        return;
+    }
+    let Some(state) = crate::hub::try_hub(cx).and_then(|h| h.read(cx).media.clone()) else { return };
+    if state.status == mandara_services::PlaybackStatus::Stopped && state.title.is_empty() {
+        return;
+    }
+    let size = items.iter().filter_map(|w| if let K::Media(m) = &w.kind { Some(m.size * w.place.scale()) } else { None }).fold(0.0, f32::max);
+    let art = state.art_path.as_deref().and_then(|p| crate::desktop_media::picture(p, (size * PICTURE_DENSITY).round().max(1.0) as u32, cx));
+    let now_ms = chrono::Local::now().timestamp_millis();
+    let ms = |d: Duration| i64::try_from(d.as_millis()).unwrap_or(i64::MAX);
+    let wants_lyrics = media.iter().any(|m| m.layout == MediaLayout::Lyrics);
+    let (lyrics, loading) = if wants_lyrics { crate::desktop_media::lyrics(&state, cx) } else { (Vec::new(), false) };
+    d.media = Some(widgets::MediaInfo {
+        title: state.title.clone(),
+        artist: state.artist.clone(),
+        playing: state.status == mandara_services::PlaybackStatus::Playing,
+        position_ms: ms(state.position),
+        at_ms: now_ms - ms(state.position_at.elapsed()),
+        rate: state.rate,
+        length_ms: state.length.map(ms).unwrap_or(0),
+        art,
+        lyrics,
+        lyrics_loading: loading,
+    });
+}
+
+/// Physical px a picture is decoded for: its reference size at the
+/// tallest display's density (a 4K screen is twice the reference).
+const PICTURE_DENSITY: f32 = 2.0;
+
+/// The profile, tiles, toggles, levels, palette and pictures the placed
+/// widgets show.
+fn identity_data(d: &mut widgets::WidgetData, items: &[mandara_config::desktop_widgets::DesktopWidget], cfg: &mandara_config::ShellConfig, cx: &mut App) {
+    use mandara_config::desktop_widgets::WidgetKind as K;
+    use widgets::actions::Action;
+    let edge = |size: f32, scale: f32| (size * scale * PICTURE_DENSITY).round().max(1.0) as u32;
+    for w in items {
+        match &w.kind {
+            K::Profile(_) if d.me.is_none() => {
+                let me = crate::plugins::main_menu::me();
+                let avatar = me.picture.as_deref().and_then(|p| crate::desktop_media::picture(p, edge(PROFILE_AVATAR_PX, w.place.scale()), cx));
+                let dnd = crate::hub::try_hub(cx).is_some_and(|h| h.read(cx).notifications.dnd);
+                d.me = Some(widgets::MeInfo { name: me.name, login: me.login, host: me.host, uptime_s: crate::plugins::main_menu::uptime_secs().unwrap_or(0), avatar, dnd });
+            }
+            K::Shortcuts(sw) => {
+                let mut tiles = Vec::new();
+                if sw.folders {
+                    // The home folders that exist (named by the user-dirs
+                    // config, else the usual English names).
+                    let defaults = || {
+                        let home = dirs::home_dir().unwrap_or_default();
+                        let named = [(dirs::document_dir(), "Documents"), (dirs::download_dir(), "Downloads"), (dirs::picture_dir(), "Pictures"), (dirs::audio_dir(), "Music"), (dirs::video_dir(), "Videos")];
+                        std::iter::once(home.clone()).chain(named.into_iter().map(|(d, name)| d.unwrap_or_else(|| home.join(name)))).filter(|p| p.is_dir()).map(|p| p.to_string_lossy().to_string()).collect::<Vec<_>>()
+                    };
+                    let list = if sw.items.is_empty() { defaults() } else { sw.items.clone() };
+                    for item in list {
+                        let path = mandara_config::paths::expand_tilde(item.trim());
+                        let label = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| item.clone());
+                        tiles.push(widgets::TileItem { label, action: Action::Open(path.to_string_lossy().to_string()), icon: None, glyph: "folder" });
+                    }
+                } else {
+                    let list = if sw.items.is_empty() { cfg.dock.pinned.clone() } else { sw.items.clone() };
+                    let apps = crate::desktop_media::apps(cx);
+                    for item in list {
+                        let item = item.trim().to_string();
+                        if item.contains("://") {
+                            let label = item.split("://").nth(1).unwrap_or(&item).trim_end_matches('/').to_string();
+                            tiles.push(widgets::TileItem { label, action: Action::Open(item), icon: None, glyph: "globe" });
+                            continue;
+                        }
+                        let id = item.trim_end_matches(".desktop").to_string();
+                        let Some((name, icon)) = apps.as_ref().and_then(|a| a.get(&id).cloned()) else { continue };
+                        let icon = icon.and_then(|p| crate::desktop_media::picture(&p, edge(TILE_ICON_PX, w.place.scale()), cx));
+                        tiles.push(widgets::TileItem { label: name, action: Action::Launch(id), icon, glyph: "grid" });
+                    }
+                }
+                d.tiles.insert(w.id.clone(), tiles);
+            }
+            K::Toggles(_) if d.toggles.is_empty() => {
+                d.toggles = crate::desktop_actions::TOGGLES.iter().filter_map(|t| crate::desktop_actions::toggle_state(t, cx).map(|on| (t.to_string(), on))).collect();
+            }
+            K::Sliders(_) if d.levels.is_empty() => {
+                d.levels = ["volume", "brightness"].into_iter().filter_map(|t| crate::desktop_actions::level(t, cx).map(|v| (t.to_string(), v))).collect();
+            }
+            K::Palette(_) if d.palette.is_empty() => d.palette = theme_palette(cx),
+            K::Photo(p) => {
+                let folder = if p.folder.trim().is_empty() { dirs::picture_dir().unwrap_or_default() } else { mandara_config::paths::expand_tilde(p.folder.trim()) };
+                let list = crate::desktop_media::folder_pictures(&folder, cx);
+                if !list.is_empty() {
+                    let minutes = u64::from(p.minutes.clamp(mandara_config::widget_kinds::ranges::PHOTO_MINUTES.0, mandara_config::widget_kinds::ranges::PHOTO_MINUTES.1));
+                    let slot = chrono::Local::now().timestamp().max(0) as u64 / (minutes * SECS_PER_MINUTE);
+                    let turn = u64::from(d.turns.get(&w.id).copied().unwrap_or(0));
+                    let path = list[((slot + turn) % list.len() as u64) as usize].clone();
+                    let size = p.width.max(p.height) * w.place.scale();
+                    if let Some(pic) = crate::desktop_media::picture(&path, edge(size, 1.0), cx) {
+                        d.pictures.insert(w.id.clone(), pic);
+                    }
+                }
+            }
+            K::Sticker(st) if !st.image.trim().is_empty() => {
+                let path = mandara_config::paths::expand_tilde(st.image.trim());
+                if let Some(pic) = crate::desktop_media::picture(&path, edge(st.size, w.place.scale()), cx) {
+                    d.pictures.insert(w.id.clone(), pic);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The theme's colours with their names (catalog keys), as `0xRRGGBB`.
+fn theme_palette(cx: &App) -> Vec<(String, u32)> {
+    let p = mandara_core::theme_entity(cx).read(cx).target().clone();
+    let rgb = |c: mandara_theme::Color| {
+        let [r, g, b, _] = c.to_rgba8();
+        (u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b)
+    };
+    [
+        (mandara_i18n::tk("Primary"), p.primary),
+        (mandara_i18n::tk("Secondary"), p.secondary),
+        (mandara_i18n::tk("Tertiary"), p.tertiary),
+        (mandara_i18n::tk("Surface"), p.surface_container),
+        (mandara_i18n::tk("Text"), p.on_surface),
+        (mandara_i18n::tk("Urgent"), p.urgent_coral),
+        (mandara_i18n::tk("Success"), p.success_emerald),
+        (mandara_i18n::tk("Warning"), p.warning_amber),
+    ]
+    .into_iter()
+    .map(|(n, c)| (n.to_string(), rgb(c)))
+    .collect()
+}
+
+/// Reference sizes of the avatar and app icons the identity widgets draw.
+const PROFILE_AVATAR_PX: f32 = 96.0;
+const TILE_ICON_PX: f32 = 48.0;
+const SECS_PER_MINUTE: u64 = 60;
+
+/// Milliseconds in a second.
+const SECOND_MS: i64 = 1000;
+/// Days of events the calendar widgets look ahead (the month grid's
+/// remaining weeks).
+const EVENT_DAYS: i64 = 42;
+/// Most events the scene carries.
+const SCENE_EVENTS: usize = 64;
+
+/// Calendar events from the start of this month on, soonest first.
+fn calendar_events(cfg: &mandara_config::ShellConfig, cx: &App) -> Vec<widgets::EventItem> {
+    use chrono::Datelike as _;
+    if !cfg.calendar.enabled {
+        return Vec::new();
+    }
+    let Some(store) = crate::calendar::store(cx) else { return Vec::new() };
+    let now = chrono::Local::now();
+    let from = now.with_day(1).and_then(|d| d.date_naive().and_hms_opt(0, 0, 0)).and_then(|d| d.and_local_timezone(chrono::Local).earliest()).unwrap_or(now);
+    let colors: Vec<Option<u32>> = cfg.calendar.sources.iter().filter(|s| s.enabled).map(|s| mandara_theme::Color::from_hex(s.color.trim()).ok().map(|c| {
+        let [r, g, b, _] = c.to_rgba8();
+        (u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b)
+    })).collect();
+    let mut out: Vec<widgets::EventItem> = store
+        .read(cx)
+        .between(from, now + chrono::Duration::days(EVENT_DAYS))
+        .into_iter()
+        .map(|o| widgets::EventItem {
+            day: o.start.date_naive(),
+            // An all-day event ends at the next midnight.
+            last_day: (o.end - chrono::Duration::seconds(1)).date_naive().max(o.start.date_naive()),
+            start_ms: o.start.timestamp_millis(),
+            end_ms: o.end.timestamp_millis(),
+            all_day: o.all_day,
+            title: o.summary.clone(),
+            color: colors.get(o.source).copied().flatten(),
+        })
+        .collect();
+    out.sort_by_key(|e| e.start_ms);
+    out.truncate(SCENE_EVENTS);
+    out
 }
 
 // ── Renderer thread ──────────────────────────────────────────────────────
@@ -686,9 +1065,13 @@ fn run(layer: CanvasLayer, rx: mpsc::Receiver<Msg>, waker: Arc<Waker>, events: a
         video_states: HashMap::new(),
     };
     loop {
+        let mut new_scene = false;
         loop {
             match rx.try_recv() {
-                Ok(Msg::Scene(s)) => r.scene = Some(*s),
+                Ok(Msg::Scene(s)) => {
+                    r.scene = Some(*s);
+                    new_scene = true;
+                }
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
             }
@@ -701,6 +1084,11 @@ fn run(layer: CanvasLayer, rx: mpsc::Receiver<Msg>, waker: Arc<Waker>, events: a
         }
         let now = Instant::now();
         r.step(&mut host, now);
+        if new_scene {
+            // What a change of the desktop (a widget dragged, a setting
+            // moved) costs here: `diagnostics frames` → `desktop_ms`.
+            crate::plugins::diagnostics::record_desktop(now.elapsed());
+        }
         r.report_boxes(&events);
         r.report_presses(&mut host, &events);
         host.release_idle();
@@ -712,14 +1100,31 @@ fn run(layer: CanvasLayer, rx: mpsc::Receiver<Msg>, waker: Arc<Waker>, events: a
 }
 
 impl Renderer {
-    /// Right-clicks on the desktop go to the shell (other buttons do
-    /// nothing).
+    /// Right-clicks on the desktop go to the shell; left clicks and scroll
+    /// steps on a widget's clickable area run its action (scrolling over a
+    /// level nudges it); other buttons do nothing.
     fn report_presses(&self, host: &mut Host, events: &async_channel::Sender<Event>) {
+        use mandara_core::shm_canvas::{SCALE_DENOMINATOR, SCROLL_DOWN, SCROLL_UP};
+        use widgets::actions::Action;
         for p in host.take_presses() {
             let Some(out) = self.outs.iter().find(|o| o.id == p.output && !o.name.is_empty()) else { continue };
-            if p.button == BTN_RIGHT {
-                let size = out.geom.map(|g| (g.logical.0 as f32, g.logical.1 as f32));
-                let _ = events.send_blocking(Event::Menu(out.name.clone(), p.x as f32, p.y as f32, size));
+            match p.button {
+                BTN_RIGHT => {
+                    let size = out.geom.map(|g| (g.logical.0 as f32, g.logical.1 as f32));
+                    let _ = events.send_blocking(Event::Menu(out.name.clone(), p.x as f32, p.y as f32, size));
+                }
+                BTN_LEFT | SCROLL_UP | SCROLL_DOWN => {
+                    let Some(geom) = out.geom else { continue };
+                    let k = geom.scale120 as f32 / SCALE_DENOMINATOR as f32;
+                    let Some((id, action)) = out.widgets.hit((p.x as f32 * k, p.y as f32 * k)) else { continue };
+                    let action = match (p.button, action) {
+                        (BTN_LEFT, a) => a,
+                        (b, Action::Level(what, _) | Action::Step(what, _)) => Action::Step(what, if b == SCROLL_UP { 1 } else { -1 }),
+                        _ => continue,
+                    };
+                    let _ = events.send_blocking(Event::Widget(id, action));
+                }
+                _ => {}
             }
         }
     }
@@ -1007,8 +1412,12 @@ impl Renderer {
                 subject: slot.cut.as_deref().map(|c| &c.map),
                 safe: scene.safe_for(&out.aliases).scaled(geom.scale120 as f32 / mandara_core::shm_canvas::SCALE_DENOMINATOR as f32),
             };
+            let started = Instant::now();
             match widgets::step_live(host, &mut out.widgets, &o, &scene.widgets, &self.wshared, text, clock, now) {
                 Ok(true) => {
+                    // What one live frame (seconds, readings, an animation)
+                    // costs: `diagnostics frames` → `desktop_live_ms`.
+                    crate::plugins::diagnostics::record_desktop_live(started.elapsed());
                     let _ = host.commit(out.id, true);
                 }
                 Ok(false) => {}
@@ -1354,7 +1763,16 @@ fn decor(host: &mut Host, out: &mut Out, scene: &Scene, text: &mut TextPainter, 
     // behind it. The other slot has no plane: during a transition it is
     // the incoming one, baked into its wallpaper plane.
     let clock = legacy.as_ref().map(|(geo, _)| geo);
-    let plan = subject_plan(clock, cfg, out.slots[live].as_ref().and_then(|s| s.cut.as_deref()), layers.reach, geom);
+    let cut_now = out.slots[live].as_ref().and_then(|s| s.cut.as_deref());
+    // While editing, the subject covers all it can at once: a widget
+    // dragged behind it then never makes it cut a larger area again (that
+    // repaint cost most of each drag step at 4K). Drawing the subject over
+    // the wallpaper it comes from changes no pixel.
+    let reach = match cut_now {
+        Some(c) if scene.editing && !layers.behind.is_empty() => layers.reach.union(&c.rect),
+        _ => layers.reach,
+    };
+    let plan = subject_plan(clock, cfg, cut_now, reach, geom);
     let release = RELEASE_CUT_PIXELS && !scene.editing;
     for (s, &plane) in CUT.iter().enumerate() {
         let shown = if s == live { out.slots[s].as_ref().and_then(|slot| slot.cut.clone()) } else { None };
@@ -1499,6 +1917,8 @@ struct ClockFrame {
     ink: desktop::Ink,
     lines: Vec<String>,
     safe: Insets,
+    /// The families, the digits set in the clock's own font.
+    fonts: FontNames,
 }
 
 impl ClockFrame {
@@ -1511,15 +1931,17 @@ impl ClockFrame {
         let l = desktop::layout_in(lw, lh, cfg, safe);
         let tone = desktop::region_tone(tone, (l.center.0 / lw, l.center.1 / lh), (l.size * TONE_HALF_W_EM / lw, l.block_h * TONE_HALF_H_BLOCK / lh));
         let ink = desktop::ink_for(Some(tone), scene.primary);
-        let lines = desktop::clock_lines(&chrono::Local::now().naive_local(), cfg.clock_style, scene.h24);
-        let input = DecorInput { logical: (lw, lh), scale120: geom.scale120, cfg, lines: &lines, date: scene.date.as_ref(), ink, fonts: &scene.fonts, safe };
+        let digits = |s: &String| if scene.depth.eastern { crate::widgets::clock::arabic_numerals(s) } else { crate::widgets::clock::western_numerals(s) };
+        let lines: Vec<String> = desktop::clock_lines(&chrono::Local::now().naive_local(), cfg.clock_style, scene.h24).iter().map(digits).collect();
+        let fonts = FontNames { display: scene.depth.family.clone().unwrap_or_else(|| scene.fonts.display.clone()), ..scene.fonts.clone() };
+        let input = DecorInput { logical: (lw, lh), scale120: geom.scale120, cfg, lines: &lines, date: scene.date.as_ref(), ink, fonts: &fonts, safe };
         let geo = DecorGeometry::new(&input, text);
-        Self { geo, ink, lines, safe }
+        Self { geo, ink, lines, safe, fonts }
     }
 
     fn input<'a>(&'a self, scene: &'a Scene, geom: Geom) -> DecorInput<'a> {
         let logical = (geom.logical.0 as f32, geom.logical.1 as f32);
-        DecorInput { logical, scale120: geom.scale120, cfg: &scene.wallpaper, lines: &self.lines, date: scene.date.as_ref(), ink: self.ink, fonts: &scene.fonts, safe: self.safe }
+        DecorInput { logical, scale120: geom.scale120, cfg: &scene.wallpaper, lines: &self.lines, date: scene.date.as_ref(), ink: self.ink, fonts: &self.fonts, safe: self.safe }
     }
 }
 
@@ -1540,7 +1962,7 @@ fn depth_clock(host: &mut Host, out: &mut Out, scene: &Scene, text: &mut TextPai
             out.painted.halo = Some(k);
         }
     }
-    let k = key((geo.digits, &frame.lines, ink.fg.to_rgba8(), cfg.clock_style, &scene.fonts, l.size, l.line_h));
+    let k = key((geo.digits, &frame.lines, ink.fg.to_rgba8(), cfg.clock_style, &frame.fonts, l.size, l.line_h));
     if out.painted.digits != Some(k) && !geo.digits.is_empty() && host.paint(id, DIGITS, Place::Rect(geo.digits), None, false, true, |pm| paint::paint_digits(pm, text, geo, &input))? {
         out.painted.digits = Some(k);
     }
@@ -1689,7 +2111,7 @@ pub fn render_preview(input: &desktop::PreviewInput) -> Result<serde_json::Value
     text.set_arabic_font(&fonts.arabic);
     let depth = cfg.depth_effect && cfg.fill == WallpaperFill::Cover;
     let mask = if cfg.desktop_clock || behind_widgets {
-        crate::depth::resolve(&input.wallpaper, if depth { cfg.depth_mask } else { DepthMask::Off }, false)
+        crate::depth::resolve(&input.wallpaper, if depth { crate::depth::Request::of(cfg) } else { None }, false)
     } else {
         Err("no clock or widget behind the subject".to_string())
     };

@@ -306,6 +306,14 @@ pub fn fire(corner: ScreenCorner, action: CornerAction, command: &str, monitor: 
     }
     let at_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     log.recent.push_back(FireRecord { corner, action, monitor: monitor.to_string(), at_ms, dry_run: dry });
+    if !dry {
+        run(action, command, cx);
+    }
+}
+
+/// Runs one of the hot-corner actions (also a middle click on empty bar
+/// space, `bar.middle_click`).
+pub fn run(action: CornerAction, command: &str, cx: &mut App) {
     let shell = crate::state::shell(cx);
     match action {
         CornerAction::None => {}
@@ -317,10 +325,9 @@ pub fn fire(corner: ScreenCorner, action: CornerAction, command: &str, monitor: 
             shell.update(cx, |s, cx| s.set_sidebar(open, cx));
         }
         CornerAction::Notifications => shell.update(cx, |s, cx| s.toggle_panel(crate::plugins::notifications::ID, cx)),
-        CornerAction::Lock if dry => {}
         CornerAction::Lock => {
             if let Err(err) = crate::lock::lock_now() {
-                tracing::warn!("hot corner lock: {err}");
+                tracing::warn!("lock: {err}");
             }
         }
         CornerAction::Overview => {
@@ -330,9 +337,10 @@ pub fn fire(corner: ScreenCorner, action: CornerAction, command: &str, monitor: 
                 mandara_compositor::CompositorKind::MangoWM => ("toggleoverview", &[]),
                 // Hyprland ships no overview; hyprexpo is the common plugin.
                 mandara_compositor::CompositorKind::Hyprland => ("hyprexpo:expo", &["toggle"]),
+                mandara_compositor::CompositorKind::Umbriel => ("overview-toggle", &[]),
             };
             if let Err(err) = backend.dispatch_raw(cmd, args) {
-                tracing::warn!("hot corner overview: {err:#}");
+                tracing::warn!("overview: {err:#}");
             }
         }
         CornerAction::Command => {
@@ -343,7 +351,7 @@ pub fn fire(corner: ScreenCorner, action: CornerAction, command: &str, monitor: 
             match std::process::Command::new("sh").arg("-c").arg(command).stdin(std::process::Stdio::null()).spawn() {
                 // Reap in the background so no zombie is left behind.
                 Ok(child) => mandara_services::reaper::adopt(child),
-                Err(err) => tracing::warn!("hot corner command: {err}"),
+                Err(err) => tracing::warn!("corner / bar command: {err}"),
             }
         }
     }

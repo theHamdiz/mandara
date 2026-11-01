@@ -1,0 +1,1 @@
+{"diagnostics":[{"column":10,"file":"@FIXTURES@/umbriel/missing.toml","line":2,"message":"include not found: @FIXTURES@/umbriel/nothere.toml (from @FIXTURES@/umbriel/missing.toml)","severity":"warning"}],"path":"@FIXTURES@/umbriel/missing.toml","valid":false}

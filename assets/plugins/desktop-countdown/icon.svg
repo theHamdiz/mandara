@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>Countdown</title>
+  <defs>
+    <linearGradient id="countdown-tile" x1="64" y1="40" x2="448" y2="496" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2B2160"/><stop offset="1" stop-color="#15113A"/>
+    </linearGradient>
+    <radialGradient id="countdown-light" cx="0" cy="0" r="1" gradientTransform="translate(98 48) rotate(45) scale(440 354)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="countdown-rim" x1="76" y1="28" x2="446" y2="482" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".72"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".08"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".24"/>
+    </linearGradient>
+    <linearGradient id="countdown-sand" x1="234" y1="200" x2="280" y2="334" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE0A0"/><stop offset="1" stop-color="#F6B65A"/>
+    </linearGradient>
+    <clipPath id="countdown-tile-clip"><rect x="16" y="16" width="480" height="480" rx="108"/></clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#countdown-tile)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#countdown-light)"/>
+  <g clip-path="url(#countdown-tile-clip)">
+    <path d="M-28 324C126 476 349 518 544 274v238H-28z" fill="#FFFFFF" opacity=".045"/>
+  </g>
+  <rect x="19" y="19" width="474" height="474" rx="105" stroke="url(#countdown-rim)" stroke-width="2"/>
+  <g stroke="#FF8A6B" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="256" cy="256" r="158" stroke-width="28" opacity=".18"/>
+    <path d="M256 98a158 158 0 1 1-158 158" stroke-width="28"/>
+    <path d="M204 164c0 52 18 66 40 84q8 8 0 16c-22 18-40 32-40 84m104-184c0 52-18 66-40 84q-8 8 0 16c22 18 40 32 40 84" stroke-width="22"/>
+    <path d="M186 160h140m-140 192h140" stroke-width="26"/>
+  </g>
+  <g fill="url(#countdown-sand)">
+    <path d="M224 202h64c-5 15-16 26-32 38-16-12-27-23-32-38z"/>
+    <path d="M222 332c8-16 21-27 34-38 13 11 26 22 34 38z"/>
+  </g>
+  <path d="M256 260v20" stroke="#F6B65A" stroke-width="10" stroke-linecap="round"/>
+</svg>

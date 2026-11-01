@@ -2,8 +2,8 @@
 //!
 //! Mandara never rewrites the user's own compositor config. Rules, keybinds
 //! and live border colors go to `~/.config/mandara/generated/{mango.conf,
-//! niri.kdl, hyprland.conf}`, and the user's main file only ever gains one
-//! include line (installed on request, verified at startup):
+//! niri.kdl, hyprland.conf, umbriel.toml}`, and the user's main file only
+//! ever gains one include line (installed on request, verified at startup):
 //!
 //! * MangoWM — `source_optional=~/.config/mandara/generated/mango.conf`
 //! * Niri — `include optional=true "<abs path>/niri.kdl"` (26.04+; plain
@@ -11,6 +11,9 @@
 //! * Hyprland — `source = ~/.config/mandara/generated/hyprland.conf`, or on
 //!   Lua Hyprland (0.57+ only reads `hyprland.lua`)
 //!   `pcall(dofile, "<abs path>/hyprland.lua")`
+//! * Umbriel — `"<abs path>/umbriel.toml"` in `[include.optional] files`
+//!   (added to the list when the user already has one; see
+//!   [`umbriel_add_include`])
 //!
 //! Keybinds that collide with binds already in the user's config are
 //! skipped and reported instead of silently overriding them.
@@ -22,7 +25,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context as _, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::paths;
+use crate::{mango_keys, paths};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -30,10 +33,32 @@ pub enum Target {
     Mango,
     Niri,
     Hyprland,
+    Umbriel,
 }
 
 impl Target {
-    pub const ALL: [Target; 3] = [Target::Mango, Target::Niri, Target::Hyprland];
+    pub const ALL: [Target; 4] = [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel];
+
+    /// This compositor's column in the `[MangoWM, Niri, Hyprland, Umbriel]`
+    /// support tables ([`RULE_OPTIONS`], `input::INPUT_OPTIONS`).
+    pub const fn index(self) -> usize {
+        match self {
+            Target::Mango => 0,
+            Target::Niri => 1,
+            Target::Hyprland => 2,
+            Target::Umbriel => 3,
+        }
+    }
+
+    /// The compositor's name as people know it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Target::Mango => "MangoWM",
+            Target::Niri => "Niri",
+            Target::Hyprland => "Hyprland",
+            Target::Umbriel => "Umbriel",
+        }
+    }
 
     /// Whether Hyprland reads the Lua config: always from 0.57 (hyprlang
     /// support was removed), and on 0.55–0.56 when `hyprland.lua` exists
@@ -48,6 +73,7 @@ impl Target {
             Target::Niri => "niri.kdl",
             Target::Hyprland if Self::hyprland_lua() => "hyprland.lua",
             Target::Hyprland => "hyprland.conf",
+            Target::Umbriel => "umbriel.toml",
         })
     }
 
@@ -59,6 +85,8 @@ impl Target {
             Target::Niri => config.join("niri/config.kdl"),
             Target::Hyprland if Self::hyprland_lua() => config.join("hypr/hyprland.lua"),
             Target::Hyprland => config.join("hypr/hyprland.conf"),
+            // Umbriel reads `$XDG_CONFIG_HOME/umbriel/config.toml` first.
+            Target::Umbriel => config.join("umbriel/config.toml"),
         }
     }
 
@@ -70,6 +98,9 @@ impl Target {
             Target::Niri => niri_include_line(&self.generated_file().display().to_string(), installed_version(Target::Niri)),
             Target::Hyprland if Self::hyprland_lua() => hyprland_lua_include(&self.generated_file().display().to_string()),
             Target::Hyprland => "source = ~/.config/mandara/generated/hyprland.conf".into(),
+            // A table rather than a line: shown as the two lines to add when
+            // the config has no `[include.optional]` yet.
+            Target::Umbriel => format!("[include.optional]\nfiles = [{}]", toml_str(&self.generated_file().display().to_string())),
         }
     }
 }
@@ -114,15 +145,18 @@ pub fn parse_version(text: &str) -> Option<(u32, u32)> {
 }
 
 /// Version of the compositor installed on `PATH` (`niri --version`,
-/// `Hyprland --version`), probed once per process. Lets `mandara setup`
-/// pick the right dialect even when it runs outside that compositor.
+/// `Hyprland --version`, `umbriel --version`), probed once per process.
+/// Lets `mandara setup` pick the right dialect even when it runs outside
+/// that compositor.
 pub fn installed_version(target: Target) -> Option<(u32, u32)> {
-    static CACHE: [std::sync::OnceLock<Option<(u32, u32)>>; 3] = [const { std::sync::OnceLock::new() }; 3];
-    let (slot, program) = match target {
+    static CACHE: [std::sync::OnceLock<Option<(u32, u32)>>; Target::ALL.len()] = [const { std::sync::OnceLock::new() }; Target::ALL.len()];
+    let program = match target {
         Target::Mango => return None,
-        Target::Niri => (&CACHE[1], "niri"),
-        Target::Hyprland => (&CACHE[2], "Hyprland"),
+        Target::Niri => "niri",
+        Target::Hyprland => "Hyprland",
+        Target::Umbriel => "umbriel",
     };
+    let slot = &CACHE[target.index()];
     *slot.get_or_init(|| {
         let out = std::process::Command::new(program).arg("--version").stdin(std::process::Stdio::null()).output().ok()?;
         parse_version(&String::from_utf8_lossy(&out.stdout))
@@ -169,27 +203,24 @@ pub struct TagRule {
 }
 
 /// Window-rule options and the compositors whose drop-in honours them
-/// (`[MangoWM, Niri, Hyprland]`). Studio greys out the rest.
-pub const RULE_OPTIONS: &[(&str, [bool; 3])] = &[
-    ("floating", [true, true, true]),
-    ("global", [true, false, true]),
-    ("overlay", [true, false, false]),
-    ("focused_opacity", [true, true, true]),
-    ("unfocused_opacity", [true, true, true]),
-    ("no_blur", [true, false, true]),
-    ("no_shadow", [true, true, true]),
-    ("confine_pointer", [true, false, false]),
-    ("force_tiled_state", [true, false, false]),
+/// (`[MangoWM, Niri, Hyprland, Umbriel]`). Studio greys out the rest.
+/// Umbriel's `global` is its `default_pinned` (above other windows on every
+/// workspace of the output, like Hyprland's `pin`).
+pub const RULE_OPTIONS: &[(&str, [bool; Target::ALL.len()])] = &[
+    ("floating", [true, true, true, true]),
+    ("global", [true, false, true, true]),
+    ("overlay", [true, false, false, false]),
+    ("focused_opacity", [true, true, true, true]),
+    ("unfocused_opacity", [true, true, true, true]),
+    ("no_blur", [true, false, true, true]),
+    ("no_shadow", [true, true, true, true]),
+    ("confine_pointer", [true, false, false, true]),
+    ("force_tiled_state", [true, false, false, false]),
 ];
 
 /// Whether `target`'s emitter writes window-rule option `option`.
 pub fn rule_option_supported(target: Target, option: &str) -> bool {
-    let i = match target {
-        Target::Mango => 0,
-        Target::Niri => 1,
-        Target::Hyprland => 2,
-    };
-    RULE_OPTIONS.iter().any(|(name, s)| *name == option && s[i])
+    RULE_OPTIONS.iter().any(|(name, s)| *name == option && s[target.index()])
 }
 
 /// MangoWM SceneFX fine-tuning (`None` keeps the compositor's value).
@@ -401,11 +432,12 @@ impl Keybind {
         MOD_NAMES
             .iter()
             .filter(|(n, ..)| set.contains(n))
-            .map(|&(_, mango, niri, hypr)| {
+            .map(|&(_, mango, niri, hypr, umbriel)| {
                 let name = match target {
                     Target::Mango => mango,
                     Target::Niri => niri,
                     Target::Hyprland => hypr,
+                    Target::Umbriel => umbriel,
                 };
                 (!name.is_empty()).then_some(name)
             })
@@ -433,8 +465,17 @@ fn normalize_mod(m: &str) -> Option<&'static str> {
 }
 
 /// The modifiers a Studio-captured chord may carry, as each compositor
-/// spells them: `(normalized, MangoWM, Niri, Hyprland)`.
-const MOD_NAMES: &[(&str, &str, &str, &str)] = &[("super", "SUPER", "Mod", "SUPER"), ("ctrl", "CTRL", "Ctrl", "CTRL"), ("alt", "ALT", "Alt", "ALT"), ("shift", "SHIFT", "Shift", "SHIFT"), ("hyper", "HYPER", "Mod3", "MOD3"), ("mod5", "", "ISO_Level3_Shift", "MOD5")];
+/// spells them: `(normalized, MangoWM, Niri, Hyprland, Umbriel)`. Umbriel
+/// documents Super, Ctrl, Alt and Shift only (its `Mod` follows
+/// `general.mod_key`, so Mandara spells Super out).
+const MOD_NAMES: &[(&str, &str, &str, &str, &str)] = &[
+    ("super", "SUPER", "Mod", "SUPER", "Super"),
+    ("ctrl", "CTRL", "Ctrl", "CTRL", "Ctrl"),
+    ("alt", "ALT", "Alt", "ALT", "Alt"),
+    ("shift", "SHIFT", "Shift", "SHIFT", "Shift"),
+    ("hyper", "HYPER", "Mod3", "MOD3", ""),
+    ("mod5", "", "ISO_Level3_Shift", "MOD5", ""),
+];
 
 /// A key typed as a character (`,`) or a GPUI key name (`pageup`) → its
 /// xkb keysym name (`comma`, `Prior`), the spelling every compositor's
@@ -500,7 +541,7 @@ pub fn chord<'a>(mods: impl Iterator<Item = &'a str>, key: &str) -> String {
     if !s.is_empty() {
         s.push('+');
     }
-    s.push_str(&key.trim().to_ascii_lowercase());
+    s.push_str(&mango_keys::canonical_keysym(key));
     s
 }
 
@@ -547,6 +588,10 @@ pub struct CompositorConfig {
     /// [`crate::ShellConfig::effective_compositor`]).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub disable_builtin_hot_corners: bool,
+    /// Config doctor: check the compositor's config at start-up (only when
+    /// it or the compositor changed) and send one notification about new
+    /// problems.
+    pub doctor_notify: bool,
 }
 
 impl Default for CompositorConfig {
@@ -571,6 +616,7 @@ impl Default for CompositorConfig {
             outputs: Vec::new(),
             input: crate::input::InputConfig::default(),
             disable_builtin_hot_corners: false,
+            doctor_notify: true,
         }
     }
 }
@@ -585,6 +631,10 @@ pub fn default_keybinds() -> Vec<Keybind> {
         Keybind::new(&["ctrl", "alt"], "Delete", M("session menu toggle".into())),
         Keybind::new(&["super", "shift"], "s", M("screenshot region".into())),
         Keybind::new(&["super", "shift"], "v", M("panel toggle clipboard".into())),
+        Keybind::new(&["alt"], "v", M("panel toggle clipboard".into())),
+        Keybind::new(&[], "Print", M("screenshot screen".into())),
+        Keybind::new(&["ctrl"], "Print", M("screenshot region".into())),
+        Keybind::new(&["alt"], "Print", M("screenshot window".into())),
         Keybind::new(&["super", "shift"], "t", M("theme mode toggle".into())),
         Keybind::new(&["ctrl", "shift"], "w", M("wallpaper picker toggle".into())),
         // Alt-Tab window switcher (releasing Alt switches).
@@ -615,6 +665,19 @@ pub fn default_keybinds() -> Vec<Keybind> {
 /// media): the ones an older config is given when it lacks them.
 pub fn hardware_keybinds() -> Vec<Keybind> {
     default_keybinds().into_iter().filter(|b| b.mods.is_empty() && b.key.starts_with("XF86")).collect()
+}
+
+/// Defaults added after release, with the key-defaults version that
+/// brought each: an older config is given the ones newer than its own
+/// version whose chord it doesn't already use.
+pub fn added_keybinds() -> Vec<(u32, Keybind)> {
+    use BindAction::Mandara as M;
+    vec![
+        (2, Keybind::new(&["alt"], "v", M("panel toggle clipboard".into()))),
+        (2, Keybind::new(&[], "Print", M("screenshot screen".into()))),
+        (2, Keybind::new(&["ctrl"], "Print", M("screenshot region".into()))),
+        (2, Keybind::new(&["alt"], "Print", M("screenshot window".into()))),
+    ]
 }
 
 /// Window appearance written to the compositor drop-in. `None` = keep the
@@ -682,8 +745,13 @@ impl ManagedConfig<'_> {
 pub fn user_autostarts(target: Target) -> bool {
     // The main file and every file it sources / includes (never Mandara's
     // own drop-in).
-    let text: String = crate::conflicts::config_files(target).iter().filter_map(|f| std::fs::read_to_string(f).ok()).collect::<Vec<_>>().join("\n");
-    starts_mandara(&text)
+    let texts: Vec<String> = crate::conflicts::config_files(target).iter().filter_map(|f| std::fs::read_to_string(f).ok()).collect();
+    if target == Target::Umbriel {
+        // `general.autostart` entries (an array, possibly over several
+        // lines) rather than keyword lines.
+        return texts.iter().any(|t| crate::conflicts::umbriel_autostarts(t).iter().any(|(_, cmd)| cmd.split_whitespace().any(|w| w == "mandara" || w.ends_with("/mandara"))));
+    }
+    starts_mandara(&texts.join("\n"))
 }
 
 /// Whether config text has an autostart line launching `mandara` (a bind
@@ -723,7 +791,9 @@ fn split_binds<'a>(cfg: &'a ManagedConfig, target: Target) -> (Vec<ReadyBind<'a>
     let mut keep = Vec::new();
     let mut skipped = Vec::new();
     for bind in &cfg.config.keybinds {
-        let chord = bind.chord();
+        // As the compositor sees it: on MangoWM, two key names on one key
+        // (Play and Pause) are one bind.
+        let chord = target_chord(target, bind);
         let mods = bind.target_mods(target);
         if let Some(problem) = bind.problem() {
             skipped.push(format!("{} → `{}` skipped: {problem}", bind.display(), bind.action.shell_command()));
@@ -1380,11 +1450,186 @@ pub fn emit_hyprland_lua(cfg: &ManagedConfig) -> Emitted {
     Emitted { text: s, skipped }
 }
 
+/// A TOML basic string (`"…"`), escaped per the TOML spec. Values come from
+/// other apps too (a picked window's title), so control characters are
+/// escaped rather than written raw.
+pub fn toml_str(s: &str) -> String {
+    let mut out = String::from("\"");
+    for ch in s.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => {
+                let _ = write!(out, "\\u{:04X}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// Umbriel's default `layout.gap` (logical px): the edge gap Studio's outer
+/// gap is measured against when the inner gap is left alone.
+const UMBRIEL_DEFAULT_GAP: u32 = 8;
+
+/// Umbriel's hot-corner tables (`[hot_corners.<corner>]`).
+const UMBRIEL_HOT_CORNERS: [&str; 4] = ["top_left", "top_right", "bottom_left", "bottom_right"];
+
+/// A colour as Umbriel writes it (`#RRGGBBAA`).
+fn umbriel_color(hex: &str) -> String {
+    format!("#{}", hex_bare(hex).to_ascii_uppercase())
+}
+
+/// One `[[window_rule]]` (Umbriel), from `match.*` selectors and settings.
+fn umbriel_window_rule(s: &mut String, matchers: &[(&str, String)], settings: &[(&str, String)]) {
+    if settings.is_empty() {
+        return;
+    }
+    let _ = writeln!(s, "\n[[window_rule]]");
+    for (k, v) in matchers {
+        let _ = writeln!(s, "match.{k} = {v}");
+    }
+    for (k, v) in settings {
+        let _ = writeln!(s, "{k} = {v}");
+    }
+}
+
+/// `~/.config/mandara/generated/umbriel.toml`, Umbriel's TOML dialect
+/// (documented keys only; checked with `umbriel config validate` where
+/// Umbriel is installed). Umbriel applies the including file *after* its
+/// includes, so anything the user's own `config.toml` sets wins over this
+/// drop-in; rule lists (`[[window_rule]]`, `[[layer_rule]]`) are collected
+/// from both, and `[keybinds]` merge by chord.
+pub fn emit_umbriel(cfg: &ManagedConfig) -> Emitted {
+    let c = cfg.config;
+    let l = &c.look;
+    let mut s = String::new();
+    let _ = writeln!(s, "# {HEADER}");
+    let _ = writeln!(s, "# Umbriel applies your config.toml after this file: a value you set there wins over Mandara's.");
+    if cfg.autostart() {
+        // A plain array: replaced, not merged, when your config.toml sets
+        // its own `general.autostart`.
+        let _ = writeln!(s, "\n[general]\nautostart = [{}]", toml_str(&cfg.mandara_bin));
+    }
+    let mut layout = String::new();
+    if let Some(g) = l.gaps_inner {
+        let _ = writeln!(layout, "gap = {g}");
+    }
+    if !layout.is_empty() {
+        let _ = write!(s, "\n# Window look (Studio → Compositor)\n[layout]\n{layout}");
+    }
+    // One gap value (between windows and to the edges); struts add (or,
+    // negative, remove) the difference at the screen edges.
+    if let Some(outer) = l.gaps_outer {
+        let d = outer as i64 - l.gaps_inner.unwrap_or(UMBRIEL_DEFAULT_GAP) as i64;
+        let _ = writeln!(s, "\n[layout.struts]\nleft = {d}\nright = {d}\ntop = {d}\nbottom = {d}");
+    }
+    let mut appearance = String::new();
+    if let Some(w) = c.border_width {
+        let _ = writeln!(appearance, "border_width = {w}");
+    }
+    if let Some(r) = l.rounding {
+        let _ = writeln!(appearance, "corner_radius = {r}");
+    }
+    if !appearance.is_empty() {
+        let _ = write!(s, "\n[appearance]\n{appearance}");
+    }
+    if let Some(v) = l.blur {
+        let _ = writeln!(s, "\n[appearance.blur]\nenabled = {v}");
+    }
+    if let Some(v) = l.shadows {
+        let _ = writeln!(s, "\n[appearance.shadow]\nenabled = {v}");
+    }
+    if let Some(v) = l.animations {
+        let _ = writeln!(s, "\n[animation]\nenabled = {v}");
+    }
+    if let Some(bc) = &cfg.borders {
+        // Umbriel borders take one colour each (no gradient, no urgent colour).
+        let _ = writeln!(s, "\n# Live border colors from the active Mandara palette\n[colors.border]\nfocused = {}\nunfocused = {}", toml_str(&umbriel_color(&bc.active)), toml_str(&umbriel_color(&bc.inactive)));
+    }
+    if c.disable_builtin_hot_corners {
+        let _ = writeln!(s, "\n# Mandara's hot corners replace Umbriel's");
+        for corner in UMBRIEL_HOT_CORNERS {
+            let _ = writeln!(s, "[hot_corners.{corner}]\nenabled = false");
+        }
+    }
+    s.push_str(&crate::input::emit_umbriel(&c.input));
+    s.push_str(&crate::outputs::emit_outputs(Target::Umbriel, &c.outputs, false));
+    let (binds, skipped) = split_binds(cfg, Target::Umbriel);
+    if !binds.is_empty() {
+        let _ = writeln!(s, "\n# Mandara keybinds\n[keybinds]");
+    }
+    for k in binds {
+        let chord = k.mods.iter().copied().chain(std::iter::once(k.key.as_str())).collect::<Vec<_>>().join("+");
+        let _ = writeln!(s, "{} = {}", toml_str(&chord), toml_str(&format!("spawn {}", k.bind.action.shell_command_with(&cfg.mandara_bin))));
+    }
+    // Shell surfaces: Mandara draws its own glass (layer blur is off by
+    // default; this states it). The lock surface keeps the compositor's blur.
+    let namespaces: Vec<String> = SHELL_SURFACES.iter().map(|ns| toml_str(&format!("^{ns}$"))).collect();
+    let _ = writeln!(s, "\n# Shell surfaces (Mandara draws its own glass)\n[[layer_rule]]\nmatch.namespace = [{}]\nblur = false", namespaces.join(", "));
+    let _ = writeln!(s, "\n[[layer_rule]]\nmatch.namespace = {}\nblur = true", toml_str("^mandara-lock$"));
+    if l.blur == Some(true) {
+        // `appearance.blur.enabled` is only the master switch: windows opt in.
+        umbriel_window_rule(&mut s, &[], &[("blur", "true".into())]);
+    }
+    for (focused, o) in [(true, l.active_opacity), (false, l.inactive_opacity)] {
+        if let Some(o) = o {
+            umbriel_window_rule(&mut s, &[("is_focused", focused.to_string())], &[("opacity", format!("{:.2}", o.clamp(0.1, 1.0)))]);
+        }
+    }
+    for r in &c.window_rules {
+        let mut matchers = Vec::new();
+        if let Some(a) = &r.app_id {
+            matchers.push(("app_id", toml_str(a)));
+        }
+        if let Some(t) = &r.title {
+            matchers.push(("title", toml_str(t)));
+        }
+        if matchers.is_empty() {
+            continue;
+        }
+        let mut settings = Vec::new();
+        if let Some(v) = r.floating {
+            settings.push(("default_floating", v.to_string()));
+        }
+        if let Some(v) = r.global {
+            settings.push(("default_pinned", v.to_string()));
+        }
+        if r.no_blur == Some(true) {
+            settings.push(("blur", "false".to_string()));
+        }
+        if r.no_shadow == Some(true) {
+            settings.push(("shadow", "false".to_string()));
+        }
+        if let Some(v) = r.confine_pointer {
+            settings.push(("confine_pointer", v.to_string()));
+        }
+        umbriel_window_rule(&mut s, &matchers, &settings);
+        // One opacity per rule: focused / unfocused match on `is_focused`.
+        for (focused, o) in [(true, r.focused_opacity), (false, r.unfocused_opacity)] {
+            if let Some(o) = o {
+                let mut m = matchers.clone();
+                m.push(("is_focused", focused.to_string()));
+                umbriel_window_rule(&mut s, &m, &[("opacity", format!("{:.2}", o.clamp(0.1, 1.0)))]);
+            }
+        }
+    }
+    for note in &skipped {
+        let _ = writeln!(s, "# {note}");
+    }
+    Emitted { text: s, skipped }
+}
+
 pub fn emit(target: Target, cfg: &ManagedConfig) -> Emitted {
     match target {
         Target::Mango => emit_mango(cfg),
         Target::Niri => emit_niri(cfg),
         Target::Hyprland => emit_hyprland(cfg),
+        Target::Umbriel => emit_umbriel(cfg),
     }
 }
 
@@ -1405,7 +1650,9 @@ pub(crate) fn include_path(target: Target, line: &str) -> Option<String> {
         Target::Mango | Target::Hyprland if !line.contains("hl.") && !line.contains("require") && !line.contains("dofile") => {
             line.strip_prefix("source_optional").or_else(|| line.strip_prefix("source")).and_then(|r| r.trim_start().strip_prefix('=')).map(|p| p.trim().to_string())
         }
-        Target::Mango => None,
+        // Umbriel's includes are TOML arrays, read whole-file by
+        // [`includes_in`].
+        Target::Mango | Target::Umbriel => None,
         Target::Hyprland => {
             let (call, at) = ["require", "dofile"].iter().find_map(|f| line.find(f).map(|i| (*f, i + f.len())))?;
             let rest = &line[at..];
@@ -1425,6 +1672,55 @@ pub(crate) fn include_path(target: Target, line: &str) -> Option<String> {
     }
 }
 
+/// The files one config file's `text` includes, as written: one per include
+/// line (MangoWM, Niri, Hyprland; commented lines skipped), or Umbriel's
+/// `[include] files` and `[include.optional] files` (with `$VAR` /
+/// `${VAR}` expanded, as Umbriel does).
+pub(crate) fn includes_in(target: Target, text: &str) -> Vec<String> {
+    if target == Target::Umbriel {
+        return umbriel_includes(text);
+    }
+    text.lines().filter(|l| !l.trim_start().starts_with(['#', '/']) && !l.trim_start().starts_with("--")).filter_map(|l| include_path(target, l)).collect()
+}
+
+/// Umbriel `[include] files` then `[include.optional] files`.
+pub fn umbriel_includes(text: &str) -> Vec<String> {
+    let Ok(doc) = text.parse::<toml::Table>() else { return Vec::new() };
+    let Some(include) = doc.get("include").and_then(toml::Value::as_table) else { return Vec::new() };
+    let files = |t: Option<&toml::Table>| -> Vec<String> { t.and_then(|t| t.get("files")).and_then(toml::Value::as_array).map(|a| a.iter().filter_map(|v| v.as_str()).map(expand_env).collect()).unwrap_or_default() };
+    let mut out = files(Some(include));
+    out.extend(files(include.get("optional").and_then(toml::Value::as_table)));
+    out
+}
+
+/// `$VAR` and `${VAR}` replaced from the environment (unset: empty), the
+/// expansion Umbriel applies to include paths.
+fn expand_env(path: &str) -> String {
+    let mut out = String::new();
+    let mut rest = path;
+    while let Some(at) = rest.find('$') {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + 1..];
+        let (name, tail) = if let Some(braced) = after.strip_prefix('{') {
+            match braced.find('}') {
+                Some(end) => (&braced[..end], &braced[end + 1..]),
+                None => ("", after),
+            }
+        } else {
+            let end = after.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).unwrap_or(after.len());
+            (&after[..end], &after[end..])
+        };
+        if name.is_empty() {
+            out.push('$');
+        } else {
+            out.push_str(&std::env::var(name).unwrap_or_default());
+        }
+        rest = tail;
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Expands `source=`/`include` paths relative to `base`.
 pub(crate) fn resolve_include(base: &Path, raw: &str) -> PathBuf {
     let raw = raw.trim().trim_matches('"');
@@ -1435,6 +1731,9 @@ pub(crate) fn resolve_include(base: &Path, raw: &str) -> PathBuf {
 /// Chords bound in the user's own config, following `source=` / `include`
 /// (but never Mandara's generated file).
 pub fn existing_chords(target: Target) -> BTreeSet<String> {
+    if target == Target::Mango {
+        return mango_keys::with_user_keys(|keys| mango_existing_chords(&target.user_config(), keys));
+    }
     let mut out = BTreeSet::new();
     let mut stack = vec![target.user_config()];
     let mut visited = BTreeSet::new();
@@ -1447,13 +1746,63 @@ pub fn existing_chords(target: Target) -> BTreeSet<String> {
         }
         let Ok(text) = std::fs::read_to_string(&file) else { continue };
         out.extend(parse_chords(target, &text));
-        for line in text.lines().filter(|l| !l.trim_start().starts_with(['#', '/']) && !l.trim_start().starts_with("--")) {
-            if let Some(path) = include_path(target, line) {
-                stack.push(resolve_include(&file, &path));
-            }
+        for path in includes_in(target, &text) {
+            stack.push(resolve_include(&file, &path));
         }
     }
     out
+}
+
+/// MangoWM reads `source=` files in place and keeps one key mode across
+/// them, so the user's binds are walked in order. Mandara's binds live in
+/// the key mode in force where its drop-in is sourced (`default` when it
+/// isn't sourced yet); only user binds that can meet that mode count.
+fn mango_existing_chords(root: &Path, keys: &mango_keys::MangoKeys) -> BTreeSet<String> {
+    struct Walk<'k> {
+        keys: &'k mango_keys::MangoKeys,
+        visited: BTreeSet<PathBuf>,
+        binds: Vec<(String, String)>,
+        ours: Option<String>,
+    }
+    fn walk(w: &mut Walk, file: &Path, mode: String) -> String {
+        if !w.visited.insert(file.to_path_buf()) {
+            return mode;
+        }
+        let Ok(text) = std::fs::read_to_string(file) else { return mode };
+        let mut mode = mode;
+        // Split the file at its `source=` lines so each part starts in the
+        // mode the previous part (or sourced file) left.
+        let mut chunk = String::new();
+        for line in text.lines() {
+            let sourced = (!line.trim_start().starts_with('#')).then(|| include_path(Target::Mango, line)).flatten();
+            match sourced {
+                Some(path) => {
+                    mode = flush(w, &mut chunk, mode);
+                    let path = resolve_include(file, &path);
+                    if path == Target::Mango.generated_file() || is_generated(&path) {
+                        w.ours.get_or_insert_with(|| mode.clone());
+                    } else {
+                        mode = walk(w, &path, mode);
+                    }
+                }
+                None => {
+                    chunk.push_str(line);
+                    chunk.push('\n');
+                }
+            }
+        }
+        flush(w, &mut chunk, mode)
+    }
+    fn flush(w: &mut Walk, chunk: &mut String, mode: String) -> String {
+        let (binds, mode) = mango_binds(chunk, &mode, w.keys);
+        w.binds.extend(binds.into_iter().map(|b| (b.chord, b.mode)));
+        chunk.clear();
+        mode
+    }
+    let mut w = Walk { keys, visited: BTreeSet::new(), binds: Vec::new(), ours: None };
+    walk(&mut w, root, mango_keys::DEFAULT_MODE.to_string());
+    let ours = w.ours.unwrap_or_else(|| mango_keys::DEFAULT_MODE.to_string());
+    w.binds.into_iter().filter(|(_, mode)| mango_keys::modes_meet(mode, &ours)).map(|(chord, _)| chord).collect()
 }
 
 /// A file Mandara generates (`…/mandara/generated/…`).
@@ -1485,20 +1834,125 @@ pub fn chords_by_line(target: Target, text: &str) -> Vec<(usize, String)> {
         Target::Mango => mango_chords(text),
         Target::Niri => niri_chords(text),
         Target::Hyprland => hyprland_chords(text),
+        Target::Umbriel => umbriel_chords(text),
     }
 }
 
+/// The table a TOML header line opens (`[keybinds]` → `keybinds`,
+/// `[[window_rule]]` → `window_rule`), quotes and spaces kept as written.
+pub(crate) fn toml_header(line: &str) -> Option<&str> {
+    let t = toml_code(line).trim();
+    let inner = t.strip_prefix("[[").and_then(|r| r.strip_suffix("]]")).or_else(|| t.strip_prefix('[').and_then(|r| r.strip_suffix(']')))?;
+    Some(inner.trim())
+}
+
+/// A TOML line without its trailing comment (`#` outside strings).
+pub(crate) fn toml_code(line: &str) -> &str {
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    for (i, c) in line.char_indices() {
+        match (quote, c) {
+            (Some('"'), '\\') if !escaped => {
+                escaped = true;
+                continue;
+            }
+            (Some(q), c) if c == q && !escaped => quote = None,
+            (None, '"' | '\'') => quote = Some(c),
+            (None, '#') => return &line[..i],
+            _ => {}
+        }
+        escaped = false;
+    }
+    line
+}
+
+/// The key of a TOML `key = value` line, unquoted (`"Mod+T" = …` → `Mod+T`).
+pub(crate) fn toml_line_key(line: &str) -> Option<String> {
+    let t = toml_code(line).trim_start();
+    if let Some(q) = t.chars().next().filter(|c| *c == '"' || *c == '\'') {
+        let end = t[1..].find(q)? + 1;
+        t[end + 1..].trim_start().starts_with('=').then(|| t[1..end].replace("\\\"", "\""))
+    } else {
+        let (key, _) = t.split_once('=')?;
+        let key = key.trim();
+        (!key.is_empty() && !key.starts_with('[')).then(|| key.to_string())
+    }
+}
+
+/// Umbriel `[keybinds]` chords with their 0-based line (`"Mod+T" = …`;
+/// `Mod` is Super, Umbriel's default `mod_key`). Submap binds
+/// (`submap[name],Key`) only act inside their submap and are left out.
+fn umbriel_chords(text: &str) -> Vec<(usize, String)> {
+    let mut out = Vec::new();
+    let mut in_binds = false;
+    for (i, line) in text.lines().enumerate() {
+        if let Some(header) = toml_header(line) {
+            in_binds = header == "keybinds";
+            continue;
+        }
+        let Some(key) = toml_line_key(line).filter(|_| in_binds) else { continue };
+        if key.starts_with("submap[") {
+            continue;
+        }
+        let mut parts: Vec<&str> = key.split('+').map(str::trim).filter(|p| !p.is_empty()).collect();
+        let Some(k) = parts.pop() else { continue };
+        out.push((i, chord(parts.into_iter(), &keysym_for(k))));
+    }
+    out
+}
+
 fn mango_chords(text: &str) -> Vec<(usize, String)> {
+    crate::mango_keys::with_user_keys(|keys| mango_binds(text, mango_keys::DEFAULT_MODE, keys).0.into_iter().filter(|b| mango_keys::modes_meet(&b.mode, mango_keys::DEFAULT_MODE)).map(|b| (b.line, b.chord)).collect())
+}
+
+/// One MangoWM key bind: its 0-based line, its chord with the key as
+/// MangoWM resolves it (see [`mango_keys`]) and its key mode.
+pub(crate) struct MangoBind {
+    pub line: usize,
+    pub chord: String,
+    pub mode: String,
+}
+
+/// MangoWM's key binds in `text`, starting in key mode `mode`; also returns
+/// the key mode in force at the end of the file (a sourced file carries
+/// it on).
+pub(crate) fn mango_binds(text: &str, mode: &str, keys: &mango_keys::MangoKeys) -> (Vec<MangoBind>, String) {
+    let mut mode = mode.to_string();
     let mut out = Vec::new();
     for (i, line) in text.lines().enumerate() {
         let line = line.trim();
-        let Some(rest) = ["bind=", "bindl=", "bindr=", "bindlr="].iter().find_map(|p| line.strip_prefix(p)) else { continue };
-        let mut parts = rest.splitn(3, ',');
-        if let (Some(mods), Some(key)) = (parts.next(), parts.next()) {
-            out.push((i, chord(mods.split('+'), &keysym_for(key.trim()))));
+        if line.starts_with('#') {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else { continue };
+        let key = key.trim();
+        if key == mango_keys::KEY_MODE_KEY {
+            mode = value.trim().to_string();
+            continue;
+        }
+        let Some(flags) = mango_keys::bind_flags(key) else { continue };
+        let mut parts = value.splitn(3, ',');
+        if let (Some(mods), Some(name)) = (parts.next(), parts.next()) {
+            out.push(MangoBind { line: i, chord: mango_chord(mods.split('+'), keys.canonical(name, mango_keys::keysym_only(flags))), mode: mode.clone() });
         }
     }
-    out
+    (out, mode)
+}
+
+/// A MangoWM chord: modifiers as MangoWM reads them (`super_l` is Super,
+/// `none` is nothing) and an already-resolved key.
+fn mango_chord<'a>(mods: impl Iterator<Item = &'a str>, key: String) -> String {
+    let mods: Vec<String> = mods.map(|m| m.trim().to_ascii_lowercase()).map(|m| mango_keys::modifier_code(&m).map_or_else(|| m.trim_end_matches("_l").trim_end_matches("_r").to_string(), str::to_string)).collect();
+    chord(mods.iter().map(String::as_str), &key)
+}
+
+/// The chord a Mandara bind takes in `target`'s config: MangoWM writes a
+/// plain `bind`, so its key resolves like the user's own binds do.
+pub fn target_chord(target: Target, bind: &Keybind) -> String {
+    match target {
+        Target::Mango => crate::mango_keys::with_user_keys(|keys| mango_chord(bind.mods.iter().map(String::as_str), keys.canonical(&bind.keysym(), false))),
+        _ => bind.chord(),
+    }
 }
 
 fn niri_chords(text: &str) -> Vec<(usize, String)> {
@@ -1606,7 +2060,10 @@ fn lua_concat(expr: &str, vars: &[(String, String)]) -> Option<String> {
 /// Writes the generated drop-in atomically; returns its path.
 pub fn write_generated(target: Target, emitted: &Emitted) -> Result<PathBuf> {
     let path = target.generated_file();
-    crate::store::write_atomic(&path, emitted.text.as_bytes())?;
+    // Options the config doctor found this compositor version rejects stay
+    // out (commented, with the reason).
+    let text = crate::doctor::state::apply_unsupported(target, &path, &emitted.text);
+    crate::store::write_atomic(&path, text.as_bytes())?;
     Ok(path)
 }
 
@@ -1649,17 +2106,75 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
         return Ok(false);
     }
     let original = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    // Umbriel's include is a TOML array: worked out (and the file checked
+    // to be TOML) before anything is written.
+    let umbriel = match target {
+        Target::Umbriel => Some(umbriel_add_include(&original, &target.generated_file().display().to_string()).with_context(|| format!("adding Mandara's include to {}", path.display()))?),
+        _ => None,
+    };
     let backup = path.with_extension(format!("{}.mandara-backup", path.extension().and_then(|e| e.to_str()).unwrap_or("conf")));
     std::fs::write(&backup, &original).with_context(|| format!("writing backup {}", backup.display()))?;
     let comment = match target {
         Target::Niri => "// Mandara Shell (generated rules, binds and colors)",
         Target::Hyprland if Target::hyprland_lua() => "-- Mandara Shell (generated rules, binds and colors)",
-        _ => "# Mandara Shell (generated rules, binds and colors)",
+        _ => INCLUDE_COMMENT,
     };
-    let sep = if original.ends_with('\n') { "" } else { "\n" };
-    let updated = format!("{original}{sep}\n{comment}\n{}\n", target.include_line());
+    let updated = match umbriel {
+        Some(Some(text)) => text,
+        // Already listed (a commented-out copy aside): nothing to change.
+        Some(None) => return Ok(false),
+        None => {
+            let sep = if original.ends_with('\n') { "" } else { "\n" };
+            format!("{original}{sep}\n{comment}\n{}\n", target.include_line())
+        }
+    };
     crate::store::write_atomic(path, updated.as_bytes())?;
     Ok(true)
+}
+
+/// The comment above Mandara's include line (`#` dialects).
+const INCLUDE_COMMENT: &str = "# Mandara Shell (generated rules, binds and colors)";
+
+/// Umbriel config `text` with `path` added to `[include.optional] files`,
+/// keeping everything else as written (comments, order, formatting): the
+/// path is appended to an existing list, or a new `[include.optional]`
+/// table is added (inside an inline `include = { … }` when the user wrote
+/// one). `None` when `path` is already included (required or optional).
+/// Fails when the file isn't valid TOML or `include` isn't a table.
+pub fn umbriel_add_include(text: &str, path: &str) -> Result<Option<String>> {
+    use toml_edit::{Array, DocumentMut, InlineTable, Item, Table, Value};
+    let mut doc: DocumentMut = text.parse().context("not valid TOML")?;
+    let listed = |files: Option<&Item>| files.and_then(Item::as_array).is_some_and(|a| a.iter().any(|v| v.as_str() == Some(path)));
+    if let Some(include) = doc.get("include").and_then(Item::as_table_like)
+        && (listed(include.get("files")) || include.get("optional").and_then(Item::as_table_like).is_some_and(|o| listed(o.get("files"))))
+    {
+        return Ok(None);
+    }
+    let include = doc.entry("include").or_insert_with(|| {
+        let mut t = Table::new();
+        t.set_implicit(true);
+        Item::Table(t)
+    });
+    let inline = include.as_inline_table().is_some();
+    let include = include.as_table_like_mut().context("`include` is not a table")?;
+    if inline {
+        let optional = include.entry("optional").or_insert(Item::Value(Value::InlineTable(InlineTable::new())));
+        let optional = optional.as_table_like_mut().context("`include.optional` is not a table")?;
+        let files = optional.entry("files").or_insert(Item::Value(Value::Array(Array::new())));
+        files.as_array_mut().context("`include.optional.files` is not a list")?.push(path);
+    } else if let Some(optional) = include.get_mut("optional") {
+        let optional = optional.as_table_like_mut().context("`include.optional` is not a table")?;
+        let files = optional.entry("files").or_insert(Item::Value(Value::Array(Array::new())));
+        files.as_array_mut().context("`include.optional.files` is not a list")?.push(path);
+    } else {
+        let mut optional = Table::new();
+        optional.decor_mut().set_prefix(format!("\n{INCLUDE_COMMENT}\n"));
+        let mut files = Array::new();
+        files.push(path);
+        optional.insert("files", Item::Value(Value::Array(files)));
+        include.insert("optional", Item::Table(optional));
+    }
+    Ok(Some(doc.to_string()))
 }
 
 #[cfg(test)]
@@ -2052,12 +2567,150 @@ mod tests {
         assert!(out.text.contains("window_rule=is_floating:1,app_id:^org\\.mandara\\.studio$"));
         assert!(out.text.contains("bind=SUPER+ALT,space,spawn_shell,mandara msg launcher toggle"));
         assert!(!out.text.contains("bind=SUPER,space,"));
-        assert_eq!(out.skipped.len(), 2);
+        assert_eq!(out.skipped.len(), 3, "{:?}", out.skipped);
+        assert!(out.text.contains("XF86AudioPlay,spawn") != out.text.contains("XF86AudioPause,spawn"), "Play and Pause are one key to MangoWM: only one is written");
         assert!(out.text.contains("bind=NONE,XF86AudioMute,spawn_shell,mandara msg audio mute-all toggle"), "new installs: the mute key mutes all sound");
         assert!(out.text.contains("bind=NONE,XF86MonBrightnessUp,spawn_shell,mandara msg brightness up"), "laptop brightness keys work out of the box");
         assert!(out.text.contains("bind=NONE,XF86MonBrightnessDown,spawn_shell,mandara msg brightness down"));
         assert!(!emit_mango(&managed(&cfg, &["xf86monbrightnessup"])).text.contains("XF86MonBrightnessUp,spawn"), "your own brightness key wins");
         assert!(!emit_mango(&managed(&cfg, &["xf86audiomute"])).text.contains("XF86AudioMute,spawn"), "your own mute key wins");
+    }
+
+    /// Runs MangoWM's own config check (`mango -p`) on `user` (which
+    /// sources Mandara's drop-in, written next to it) in a private home and
+    /// returns every warning and error it prints, or `None` when MangoWM
+    /// isn't installed (CI).
+    fn mango_check(user: &str, generated: &str) -> Option<Vec<String>> {
+        std::process::Command::new("mango").arg("-v").output().ok()?;
+        let dir = tempfile::tempdir().unwrap();
+        let gen_path = dir.path().join("generated.conf");
+        std::fs::write(&gen_path, generated).unwrap();
+        let root = dir.path().join("config.conf");
+        std::fs::write(&root, format!("{user}\nsource_optional={}\n", gen_path.display())).unwrap();
+        let out = std::process::Command::new("mango").arg("-p").arg("-c").arg(&root).env_clear().env("HOME", dir.path()).env("XDG_RUNTIME_DIR", dir.path()).env("PATH", std::env::var_os("PATH").unwrap_or_default()).output().unwrap();
+        let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+        let plain: String = text.split('\u{1b}').enumerate().map(|(i, part)| if i == 0 { part } else { part.split_once('m').map_or(part, |(_, rest)| rest) }).collect();
+        Some(plain.lines().filter(|l| l.contains("WARN") || l.contains("ERROR")).map(|l| l.to_string()).chain(plain.lines().filter(|l| l.trim_start().starts_with("File")).map(|l| l.to_string())).collect())
+    }
+
+    /// The Niri release the drop-in was last checked against with Niri's own
+    /// parser (26.04).
+    const NIRI_CHECKED: (u32, u32) = (26, 4);
+
+    /// Everything the emitters can write, filled in.
+    fn mango_kitchen_sink() -> CompositorConfig {
+        let mut cfg = CompositorConfig { border_width: Some(2), autostart: true, ..Default::default() };
+        cfg.window_rules.push(WindowRule {
+            app_id: Some("^pavucontrol$".into()),
+            title: Some("Volume".into()),
+            floating: Some(true),
+            global: Some(true),
+            overlay: Some(false),
+            unfocused_opacity: Some(0.9),
+            focused_opacity: Some(1.0),
+            no_blur: Some(true),
+            no_shadow: Some(true),
+            confine_pointer: Some(false),
+            force_tiled_state: Some(true),
+        });
+        cfg.tag_rules.push(TagRule { id: 2, monitor: Some("DP-1".into()), layout: Some("scroller".into()), scroller_default_proportion: Some(0.6), master_factor: Some(0.55), master_count: Some(1) });
+        cfg.outputs.push(crate::outputs::OutputConfig { name: "DP-1".into(), enabled: true, width: Some(2560), height: Some(1440), refresh_mhz: Some(144_000), scale: Some(1.25), x: Some(0), y: Some(0), ..Default::default() });
+        cfg
+    }
+
+    /// The real compositor accepts Mandara's drop-in without a single
+    /// warning, beside a config that binds the media keys itself (the case
+    /// that once produced "Key binding conflict": Play and Pause share a
+    /// key).
+    #[test]
+    fn mango_itself_accepts_the_drop_in() {
+        let user = "bindl=NONE,XF86AudioPlay,spawn_shell,playerctl play-pause\nbindl=NONE,XF86AudioMute,spawn_shell,wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle\nbind=SUPER,space,spawn,fuzzel\nkey_mode=resize\nbind=NONE,Escape,setkeymode,default\nkey_mode=default";
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("config.conf");
+        std::fs::write(&root, user).unwrap();
+        let existing = mango_existing_chords(&root, &mango_keys::MangoKeys::us());
+        for cfg in [CompositorConfig::default(), mango_kitchen_sink()] {
+            let managed = ManagedConfig { existing_chords: existing.clone(), ..managed(&cfg, &[]) };
+            let out = emit_mango(&managed);
+            let Some(problems) = mango_check(user, &out.text) else {
+                eprintln!("mango isn't installed; skipped");
+                return;
+            };
+            assert!(problems.is_empty(), "mango -p complained:\n{}\n--- drop-in ---\n{}", problems.join("\n"), out.text);
+        }
+    }
+
+    /// Niri's own check (`niri validate`), like [`mango_check`]: `Some(errors)`
+    /// (empty when valid), or `None` when Niri isn't installed.
+    fn niri_check(user: &str, generated: &str) -> Option<String> {
+        std::process::Command::new("niri").arg("--version").output().ok()?;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("mandara.kdl"), generated).unwrap();
+        let root = dir.path().join("config.kdl");
+        std::fs::write(&root, format!("{user}\ninclude \"mandara.kdl\"\n")).unwrap();
+        let out = std::process::Command::new("niri").arg("validate").arg("-c").arg(&root).env("HOME", dir.path()).output().unwrap();
+        Some(if out.status.success() { String::new() } else { String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr) })
+    }
+
+    /// Umbriel's own check (`umbriel config validate`), like
+    /// [`mango_check`]: `Some(diagnostics)` (empty when valid), or `None`
+    /// when Umbriel isn't installed.
+    fn umbriel_check(user: &str, generated: &str) -> Option<String> {
+        std::process::Command::new("umbriel").arg("--version").output().ok()?;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("mandara.toml"), generated).unwrap();
+        let root = dir.path().join("config.toml");
+        std::fs::write(&root, format!("[include.optional]\nfiles = [\"mandara.toml\"]\n\n{user}\n")).unwrap();
+        let out = std::process::Command::new("umbriel").args(["config", "validate", "-c"]).arg(&root).env_clear().env("HOME", dir.path()).env("XDG_RUNTIME_DIR", dir.path()).env("PATH", std::env::var_os("PATH").unwrap_or_default()).output().unwrap();
+        Some(if out.status.success() { String::new() } else { String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr) })
+    }
+
+    #[test]
+    fn umbriel_itself_accepts_the_drop_in() {
+        let user = "[keybinds]\n\"XF86AudioPlay\" = \"spawn playerctl play-pause\"\n\"Mod+Space\" = \"spawn fuzzel\"";
+        let existing = parse_chords(Target::Umbriel, user);
+        let existing: Vec<&str> = existing.iter().map(String::as_str).collect();
+        for cfg in [CompositorConfig::default(), mango_kitchen_sink()] {
+            let out = emit_umbriel(&managed(&cfg, &existing));
+            let Some(errors) = umbriel_check(user, &out.text) else {
+                eprintln!("umbriel isn't installed; skipped");
+                return;
+            };
+            assert!(errors.is_empty(), "umbriel config validate failed:\n{errors}\n--- drop-in ---\n{}", out.text);
+        }
+    }
+
+    #[test]
+    fn niri_itself_accepts_the_drop_in() {
+        let user = "binds {\n    XF86AudioPlay allow-when-locked=true { spawn \"playerctl\" \"play-pause\"; }\n    Mod+Space { spawn \"fuzzel\"; }\n}";
+        let existing = parse_chords(Target::Niri, user);
+        let existing: Vec<&str> = existing.iter().map(String::as_str).collect();
+        for cfg in [CompositorConfig::default(), mango_kitchen_sink()] {
+            let out = emit_niri(&ManagedConfig { version: Some(NIRI_CHECKED), ..managed(&cfg, &existing) });
+            let Some(errors) = niri_check(user, &out.text) else {
+                eprintln!("niri isn't installed; skipped");
+                return;
+            };
+            assert!(errors.is_empty(), "niri validate failed:\n{errors}\n--- drop-in ---\n{}", out.text);
+        }
+    }
+
+    #[test]
+    fn mango_conflicts_follow_keycodes_and_key_modes() {
+        let dir = tempfile::tempdir().unwrap();
+        let generated = Target::Mango.generated_file();
+        std::fs::write(dir.path().join("bind.conf"), "bindl=NONE,XF86AudioPlay,spawn_shell,playerctl play-pause\nkey_mode=resize\nbind=SUPER,r,resizewin,+10,0\n").unwrap();
+        let root = dir.path().join("config.conf");
+        std::fs::write(&root, format!("bind=code:64,code:24,killclient\nsource=./bind.conf\nkey_mode=default\nsource_optional={}\n", generated.display())).unwrap();
+        let keys = mango_keys::MangoKeys::us();
+        let chords = mango_existing_chords(&root, &keys);
+        let pause = Keybind::new(&[], "XF86AudioPause", BindAction::Mandara("media play-pause".into()));
+        let alt_q = Keybind::new(&["alt"], "q", BindAction::Mandara("x".into()));
+        let super_r = Keybind::new(&["super"], "r", BindAction::Mandara("x".into()));
+        let ours = |b: &Keybind| mango_chord(b.mods.iter().map(String::as_str), keys.canonical(&b.keysym(), false));
+        assert!(chords.contains(&ours(&pause)), "Pause lands on the Play key: {chords:?}");
+        assert!(chords.contains(&ours(&alt_q)), "code:64 is Alt and code:24 is q");
+        assert!(!chords.contains(&ours(&super_r)), "a resize-mode bind can't clash with a default-mode one");
     }
 
     #[test]
@@ -2142,6 +2795,125 @@ mod tests {
         assert!(out.text.contains("col.active_border = rgba(5eead4ff) rgba(93c5fdff) 45deg"));
         assert!(out.text.contains("bind = SUPER, space, exec, mandara msg launcher toggle"));
         assert!(out.text.contains("windowrule = match:class ^org\\.mandara\\.studio$, float on"));
+    }
+
+    #[test]
+    fn umbriel_output() {
+        let cfg = CompositorConfig::default();
+        let out = emit_umbriel(&managed(&cfg, &["super+b"]));
+        let doc: toml::Table = out.text.parse().unwrap_or_else(|e| panic!("{e}\n{}", out.text));
+        assert!(out.text.contains("\"Super+space\" = \"spawn mandara msg launcher toggle\""), "{}", out.text);
+        assert!(out.text.contains("\"XF86AudioMute\" = \"spawn mandara msg audio mute-all toggle\""));
+        assert!(out.skipped.iter().any(|n| n.contains("already bound")), "Super+B is the user's: {:?}", out.skipped);
+        assert_eq!(doc["colors"]["border"]["focused"].as_str(), Some("#5EEAD4FF"));
+        assert_eq!(doc["colors"]["border"]["unfocused"].as_str(), Some("#1F2937FF"));
+        let layers = doc["layer_rule"].as_array().unwrap();
+        let shell = layers[0]["match"]["namespace"].as_array().unwrap();
+        assert_eq!(shell.len(), SHELL_SURFACES.len());
+        assert!(shell.iter().any(|n| n.as_str() == Some("^mandara-bar$")) && layers[0]["blur"].as_bool() == Some(false));
+        assert_eq!(layers[1]["match"]["namespace"].as_str(), Some("^mandara-lock$"));
+        let rules = doc["window_rule"].as_array().unwrap();
+        assert_eq!(rules[0]["match"]["app_id"].as_str(), Some("^org\\.mandara\\.studio$"));
+        assert_eq!(rules[0]["default_floating"].as_bool(), Some(true));
+        // Nothing the user didn't set in Studio.
+        for key in ["general", "layout", "appearance", "animation", "hot_corners", "input", "output"] {
+            assert!(!doc.contains_key(key), "{key} written without a Studio setting\n{}", out.text);
+        }
+    }
+
+    #[test]
+    fn umbriel_look_rules_and_corners() {
+        let mut cfg = CompositorConfig {
+            autostart: true,
+            border_width: Some(3),
+            disable_builtin_hot_corners: true,
+            look: CompositorLook { gaps_inner: Some(12), gaps_outer: Some(10), rounding: Some(14), blur: Some(true), shadows: Some(false), animations: Some(false), active_opacity: Some(1.0), inactive_opacity: Some(0.85), gaps_follow_bar: false },
+            keybinds: vec![Keybind::new(&["hyper"], "x", BindAction::Spawn("foot".into()))],
+            ..Default::default()
+        };
+        cfg.window_rules = vec![WindowRule { app_id: Some("^mpv$".into()), title: Some("a \"quoted\"\ttitle".into()), floating: Some(false), global: Some(true), no_blur: Some(true), no_shadow: Some(true), confine_pointer: Some(true), focused_opacity: Some(0.9), ..Default::default() }];
+        let out = emit_umbriel(&managed(&cfg, &[]));
+        let doc: toml::Table = out.text.parse().unwrap_or_else(|e| panic!("{e}\n{}", out.text));
+        assert_eq!(doc["general"]["autostart"].as_array().unwrap()[0].as_str(), Some("mandara"));
+        assert_eq!(doc["layout"]["gap"].as_integer(), Some(12));
+        assert_eq!(doc["layout"]["struts"]["top"].as_integer(), Some(-2), "outer 10 = gap 12 - 2");
+        assert_eq!((doc["appearance"]["border_width"].as_integer(), doc["appearance"]["corner_radius"].as_integer()), (Some(3), Some(14)));
+        assert_eq!(doc["appearance"]["blur"]["enabled"].as_bool(), Some(true));
+        assert_eq!(doc["appearance"]["shadow"]["enabled"].as_bool(), Some(false));
+        assert_eq!(doc["animation"]["enabled"].as_bool(), Some(false));
+        for corner in UMBRIEL_HOT_CORNERS {
+            assert_eq!(doc["hot_corners"][corner]["enabled"].as_bool(), Some(false));
+        }
+        let rules = doc["window_rule"].as_array().unwrap();
+        // Blur is opt-in per window: the look's blur adds a rule for all.
+        assert!(rules.iter().any(|r| r.get("match").is_none() && r["blur"].as_bool() == Some(true)));
+        assert!(rules.iter().any(|r| r.get("match").and_then(|m| m.get("is_focused")).and_then(toml::Value::as_bool) == Some(false) && r["opacity"].as_float() == Some(0.85)));
+        let mpv = rules.iter().find(|r| r.get("match").and_then(|m| m.get("app_id")).is_some_and(|a| a.as_str() == Some("^mpv$")) && r.get("default_pinned").is_some()).unwrap();
+        assert_eq!(mpv["match"]["title"].as_str(), Some("a \"quoted\"\ttitle"));
+        assert_eq!((mpv["default_floating"].as_bool(), mpv["blur"].as_bool(), mpv["shadow"].as_bool(), mpv["confine_pointer"].as_bool()), (Some(false), Some(false), Some(false), Some(true)));
+        assert!(rules.iter().any(|r| r.get("match").and_then(|m| m.get("is_focused")).and_then(toml::Value::as_bool) == Some(true) && r["match"].get("app_id").is_some() && r["opacity"].as_float() == Some(0.9)));
+        // Umbriel binds Super, Ctrl, Alt and Shift only.
+        assert!(out.skipped.iter().any(|n| n.contains("modifier this compositor can't bind")), "{:?}", out.skipped);
+    }
+
+    #[test]
+    fn umbriel_include_is_added_to_the_toml() {
+        let path = "/home/u/.config/mandara/generated/umbriel.toml";
+        let files = |text: &str| -> Vec<String> { umbriel_includes(text) };
+        // No include yet: a new commented `[include.optional]` table, the
+        // user's text kept verbatim before it.
+        let user = "# my config\n[general]\nautostart = [\"kitty\"] # terminal\n\n[[window_rule]]\nmatch.app_id = \"^mpv$\"\nopacity = 0.9\n";
+        let out = umbriel_add_include(user, path).unwrap().unwrap();
+        assert!(out.starts_with(user), "user content first, untouched:\n{out}");
+        assert!(out.contains("# Mandara Shell (generated rules, binds and colors)\n[include.optional]"), "{out}");
+        assert_eq!(files(&out), vec![path]);
+        assert_eq!(umbriel_add_include(&out, path).unwrap(), None, "already included");
+        // Existing optional list: appended to it, nothing else added.
+        let listed = "[include.optional]\nfiles = [\n  \"~/.config/umbriel/extra.toml\",\n]\n\n[keybinds]\n\"Mod+T\" = \"spawn foot\"\n";
+        let out = umbriel_add_include(listed, path).unwrap().unwrap();
+        assert_eq!(files(&out), vec!["~/.config/umbriel/extra.toml".to_string(), path.to_string()]);
+        assert_eq!(out.matches("[include.optional]").count(), 1, "{out}");
+        assert!(out.contains("[keybinds]\n\"Mod+T\" = \"spawn foot\""));
+        // Required includes only: an optional table beside them.
+        let required = "[include]\nfiles = [\"appearance.toml\"]\n";
+        let out = umbriel_add_include(required, path).unwrap().unwrap();
+        out.parse::<toml::Table>().unwrap();
+        assert_eq!(files(&out), vec!["appearance.toml".to_string(), path.to_string()]);
+        // An inline table stays inline.
+        let inline = "include = { files = [\"a.toml\"] }\n[general]\nmod_key = \"Super\"\n";
+        let out = umbriel_add_include(inline, path).unwrap().unwrap();
+        assert_eq!(files(&out), vec!["a.toml".to_string(), path.to_string()], "{out}");
+        // Listed as a required include already: nothing to add.
+        assert_eq!(umbriel_add_include(&format!("[include]\nfiles = [\"{path}\"]\n"), path).unwrap(), None);
+        // Not TOML, or `include` not a table: refused, nothing written.
+        assert!(umbriel_add_include("[general\n", path).is_err());
+        assert!(umbriel_add_include("include = 3\n", path).is_err());
+        // `$VAR` / `${VAR}` expand as Umbriel expands them.
+        let home = std::env::var("HOME").unwrap_or_default();
+        assert_eq!(files("[include]\nfiles = [\"${HOME}/a.toml\", \"$HOME/b.toml\"]\n"), vec![format!("{home}/a.toml"), format!("{home}/b.toml")]);
+    }
+
+    #[test]
+    fn umbriel_include_install_keeps_a_backup_and_is_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("config.toml");
+        let user = "[general]\nmod_key = \"Super\"\n";
+        std::fs::write(&file, user).unwrap();
+        assert!(install_include_at(Target::Umbriel, &file).unwrap());
+        let after = std::fs::read_to_string(&file).unwrap();
+        assert!(after.starts_with(user) && include_installed_at(Target::Umbriel, &file), "{after}");
+        assert!(!install_include_at(Target::Umbriel, &file).unwrap(), "second install is a no-op");
+        assert_eq!(std::fs::read_to_string(dir.path().join("config.toml.mandara-backup")).unwrap(), user);
+        // A broken file is refused before anything is written.
+        std::fs::write(&file, "[general\n").unwrap();
+        assert!(install_include_at(Target::Umbriel, &file).is_err());
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "[general\n");
+    }
+
+    #[test]
+    fn umbriel_binds_are_read_from_keybinds() {
+        let text = "[general]\nmod_key = \"Super\"\n\"Mod+Q\" = \"not a bind\"\n\n[keybinds]\n\"Mod+Space\" = \"spawn fuzzel\" # launcher\n\"Mod+Shift+Return\" = { action = \"spawn kitty\", repeat = false }\n'Ctrl+Alt+Delete' = \"session-quit\"\n# \"Mod+W\" = \"spawn waypaper\"\n\"submap[resize],Escape\" = \"submap reset\"\n\"XF86AudioMute\" = \"spawn wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle\"\n\n[[window_rule]]\nmatch.app_id = \"^x$\"\n";
+        assert_eq!(chords_by_line(Target::Umbriel, text), vec![(5, "super+space".to_string()), (6, "shift+super+return".to_string()), (7, "alt+ctrl+delete".to_string()), (10, "xf86audiomute".to_string())]);
     }
 
     #[test]

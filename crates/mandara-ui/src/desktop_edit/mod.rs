@@ -40,8 +40,8 @@ use gpui::{
     MouseUpEvent, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Subscription, Window, WindowHandle, div, prelude::FluentBuilder as _, px,
 };
 use mandara_config::ShellConfig;
-use mandara_config::desktop_cards::{self as dc, CALENDAR, FRAMED_BARS, MIRRORED_BARS, NOW_PLAYING, WAVE};
-use mandara_config::desktop_widgets::{self as dw, Anchor, ClockWidget, DesktopWidget, DesktopWidgetsConfig, Insets, MonitorWidget, Placement, PlaneVisualizer, Preset, WidgetKind};
+use mandara_config::desktop_cards::{self as dc, MIRRORED_BARS, WAVE};
+use mandara_config::desktop_widgets::{self as dw, Anchor, DesktopWidget, DesktopWidgetsConfig, Insets, Placement, WidgetKind};
 use mandara_core::{FrameClock, SpringConfig, SpringValue, SurfaceRole, ToGpui};
 use mandara_i18n::{t, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginRegistry};
@@ -188,6 +188,10 @@ struct Model {
     /// a config update re-renders every view that reads the config, and
     /// doing that per pointer event held dragging to a few frames a second.
     live: Option<(String, Placement)>,
+    /// A card's latest place during a drag, written on the next frame.
+    card_live: Option<(String, Placement)>,
+    /// That next-frame update is already scheduled.
+    apply_queued: bool,
 }
 
 struct Edit {
@@ -225,26 +229,9 @@ fn safe_of(output: &str, m: &Model, cfg: &ShellConfig) -> Insets {
     m.boxes.iter().find(|b| b.output == output).map(|b| b.safe).unwrap_or_else(|| crate::backdrop::widgets::safe_insets(cfg, cfg.bar_on_output(output)))
 }
 
-fn card_label(card: &str) -> &'static str {
-    match card {
-        NOW_PLAYING => t("Now playing"),
-        CALENDAR => t("Calendar"),
-        WAVE => t("Wave"),
-        FRAMED_BARS => t("Framed bars"),
-        MIRRORED_BARS => t("Mirrored bars"),
-        _ => t("Card"),
-    }
-}
-
 fn label_of(w: &DesktopWidget) -> (SharedString, &'static str) {
-    match &w.kind {
-        WidgetKind::Clock(c) if c.face.depth_style().is_some() => (t("Depth clock").into(), "clock"),
-        WidgetKind::Clock(_) => (NewWidget::Clock.label().into(), "clock"),
-        WidgetKind::Monitor(_) => (NewWidget::Monitor.label().into(), "gauge"),
-        WidgetKind::Decoration(_) => (NewWidget::Decoration.label().into(), "leaf"),
-        WidgetKind::Visualizer(_) => (NewWidget::Visualizer.label().into(), "waves"),
-        WidgetKind::Card(c) => (card_label(&c.card).into(), if c.card == CALENDAR { "calendar" } else if c.card == NOW_PLAYING { "music" } else { "waves" }),
-    }
+    let (label, icon) = crate::desktop_plugins::label(w);
+    (mandara_i18n::tr(label).into(), icon)
 }
 
 /// The widgets shown on `output`, in paint order (cards last: they sit
@@ -359,27 +346,17 @@ fn undo(cx: &mut App) {
     });
 }
 
-fn new_widget(kind: NewWidget) -> DesktopWidget {
-    let plane = |k: WidgetKind| DesktopWidget { kind: k, ..DesktopWidget::default() };
-    match kind {
-        NewWidget::Clock => plane(WidgetKind::Clock(ClockWidget::default())),
-        NewWidget::Monitor => plane(WidgetKind::Monitor(MonitorWidget::default())),
-        // The Alexandria line (an empty decoration would be invisible).
-        NewWidget::Decoration => Preset::AlexandriaLine.widgets().into_iter().next().unwrap_or_else(|| plane(WidgetKind::Decoration(Default::default()))),
-        NewWidget::Visualizer => plane(WidgetKind::Visualizer(PlaneVisualizer::default())),
-        NewWidget::NowPlaying => dc::new_card(NOW_PLAYING, Anchor::Center),
-        NewWidget::Calendar => dc::new_card(CALENDAR, Anchor::Center),
-    }
-}
-
 /// Adds a `kind` widget on `output` with its anchor point at `at`
 /// (logical px; `None` = the centre), entering edit mode with it selected.
+/// A kind that adds a set (a decoration preset) adds its first piece here.
 pub fn add_at(kind: NewWidget, output: &str, at: Option<(f32, f32)>, cx: &mut App) {
+    let Some(mut w) = kind.make(cx).into_iter().next() else { return };
     enter_on(Some(output), cx);
     let Some(m) = model(cx) else { return };
     let cfg = config(cx).read(cx).snapshot();
     let size = output_size(output, m.read(cx), cx);
-    let mut w = new_widget(kind);
+    // Placed where asked (a gallery kind's own corner is for Studio).
+    w.place = Placement { anchor: Anchor::Center, x: 0.0, y: 0.0, ..w.place };
     let card = matches!(w.kind, WidgetKind::Card(_));
     let (anchor, x, y) = match at {
         Some(p) if card => {
@@ -485,9 +462,9 @@ fn run_popup(action: Action, popup: &Popup, cx: &mut App) {
     }
 }
 
-fn popup_entries(kind: &PopupKind, cfg: &ShellConfig) -> Vec<Entry> {
+fn popup_entries(kind: &PopupKind, cfg: &ShellConfig, cx: &App) -> Vec<Entry> {
     match kind {
-        PopupKind::Add(_) => menu::add_entries(),
+        PopupKind::Add(_) => menu::add_entries(cx),
         PopupKind::Widget(id) => vec![
             menu::entry(0, "copy", t("Duplicate"), Action::Duplicate(id.clone())).enabled(can_duplicate(id, cfg)),
             menu::entry(0, "eye-off", t("Hide"), Action::Hide(id.clone())),
@@ -531,7 +508,7 @@ fn card_offsets(place: &Placement, area: &Area, outer: Box4, rtl: bool) -> Place
     geom::card_stored_place(&sp, rtl)
 }
 
-fn on_move(output: &str, at: (f32, f32), free: bool, cx: &mut App) {
+fn on_move(output: &str, at: (f32, f32), free: bool, window: &mut Window, cx: &mut App) {
     let Some(m) = model(cx) else { return };
     let Some(mut d) = m.read(cx).drag.clone().filter(|d| d.output == output) else { return };
     let (dx, dy) = (at.0 - d.from.0, at.1 - d.from.1);
@@ -592,24 +569,43 @@ fn on_move(output: &str, at: (f32, f32), free: bool, cx: &mut App) {
     let id = it.id.clone();
     let place = Placement { displays: d.place.displays.clone(), depth: d.place.depth, opacity: d.place.opacity, ..place };
     // Wallpaper widgets move in the renderer only until release; cards are
-    // their own surfaces, placed from the config.
+    // their own surfaces, placed from the config. Either way the move is
+    // applied once per frame, however many pointer events a frame brings
+    // (a 1000 Hz mouse sends sixteen at 60 Hz).
     let live = matches!(it.kind, Kind::Plane | Kind::DepthClock);
-    if !live {
-        let card = place.clone();
-        write(&id, move |w| w.place = card, cx);
-    }
     let output = output.to_string();
     m.update(cx, |m, cx| {
         m.guides = guides.into_iter().map(|g| (output.clone(), g)).collect();
         m.drag = Some(d);
         if live {
             m.live = Some((id, place));
+        } else {
+            m.card_live = Some((id, place));
         }
         cx.notify();
     });
-    if live {
-        crate::backdrop::refresh(cx);
+    apply_next_frame(window, cx);
+}
+
+/// Applies the drag's latest position on the next frame: the renderer
+/// gets the wallpaper widget's place, a card its config (once per frame).
+fn apply_next_frame(window: &mut Window, cx: &mut App) {
+    let Some(m) = model(cx) else { return };
+    if m.read(cx).apply_queued {
+        return;
     }
+    m.update(cx, |m, _| m.apply_queued = true);
+    window.on_next_frame(|_, cx| {
+        let Some(m) = model(cx) else { return };
+        let card = m.update(cx, |m, _| {
+            m.apply_queued = false;
+            m.card_live.take()
+        });
+        if let Some((id, place)) = card {
+            write(&id, move |w| w.place = place, cx);
+        }
+        crate::backdrop::refresh(cx);
+    });
 }
 
 fn on_up(cx: &mut App) {
@@ -623,6 +619,10 @@ fn on_up(cx: &mut App) {
     };
     if !d.moved {
         return;
+    }
+    // A card's last position not applied yet goes in before it re-anchors.
+    if let Some((id, place)) = m.update(cx, |m, _| m.card_live.take()) {
+        write(&id, move |w| w.place = place, cx);
     }
     let rtl = crate::bidi::rtl();
     let it = &d.item;
@@ -1010,6 +1010,7 @@ fn menu_hint_alpha() -> f32 {
 
 impl Render for EditView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
         let palette = mandara_core::frame_palette(window, cx);
         let f = crate::fonts::fonts(cx);
         let reduce = mandara_core::spring::motion_profile().reduce;
@@ -1036,7 +1037,7 @@ impl Render for EditView {
             Guide::Horizontal(y) => div().absolute().left_0().top(px(y - GUIDE_W / 2.0)).h(px(GUIDE_W)).w(px(size.0)).bg(accent.with_alpha(GUIDE_ALPHA).hsla()),
         });
         let popup_el = popup.map(|pp| {
-            let entries = popup_entries(&pp.kind, &cfg);
+            let entries = popup_entries(&pp.kind, &cfg, cx);
             let h = menu::height(&entries);
             let w = menu::MENU_W;
             let at = if pp.up { (pp.at.0 - w / 2.0, pp.at.1) } else { pp.at };
@@ -1044,7 +1045,7 @@ impl Render for EditView {
             let pick: OnRow<Self> = Rc::new(move |this, i, _, cx| {
                 let Some(pp) = this.model.read(cx).popup.clone() else { return };
                 let cfg = config(cx).read(cx).snapshot();
-                if let Some(e) = popup_entries(&pp.kind, &cfg).get(i).filter(|e| e.enabled) {
+                if let Some(e) = popup_entries(&pp.kind, &cfg, cx).get(i).filter(|e| e.enabled) {
                     let action = e.action.clone();
                     cx.defer(move |cx| run_popup(action, &pp, cx));
                 }
@@ -1083,9 +1084,9 @@ impl Render for EditView {
                 let at = pos(e.position);
                 this.open_popup(PopupKind::Add(Some(at)), at, false, cx);
             }))
-            .on_mouse_move(cx.listener(move |_, e: &MouseMoveEvent, _, cx| {
+            .on_mouse_move(cx.listener(move |_, e: &MouseMoveEvent, window, cx| {
                 if e.pressed_button == Some(MouseButton::Left) {
-                    on_move(&output, pos(e.position), e.modifiers.shift, cx);
+                    on_move(&output, pos(e.position), e.modifiers.shift, window, cx);
                 }
             }))
             .on_mouse_up(MouseButton::Left, cx.listener(|_, _: &MouseUpEvent, _, cx| on_up(cx)))
@@ -1129,6 +1130,22 @@ pub fn register(r: &mut PluginRegistry) {
         })
         .arg(ArgSpec::required("action", ArgKind::Enum, tk("what to do")).choices(&["show", "hide", "toggle"]))
         .example("desktop widgets hide"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("desktop widgets press", tk("Do what a click on a desktop widget does: tick a to-do, flip a toggle, start the timer, open a shortcut…"), |a, cx| {
+            let id = a.str(0)?.to_string();
+            let action: crate::backdrop::widgets::actions::Action = a.rest(1).parse()?;
+            if config(cx).read(cx).get().desktop.widgets.get(&id).is_none() {
+                return Err(mandara_i18n::tf("No desktop widget {id}", &[("id", &id)]).to_string());
+            }
+            crate::desktop_actions::perform(&id, &action, cx)?;
+            Ok(json!({ "widget": id, "action": action.to_string() }))
+        })
+        .arg(ArgSpec::required("widget", ArgKind::String, tk("widget id (config get /desktop/widgets/items)")))
+        .arg(ArgSpec::required("action", ArgKind::String, tk("todo:<id>, toggle:<wifi|bluetooth|dnd|night-light|keep-awake|dark|mute>, media:<play-pause|next|previous>, launch:<app>, open:<path>, level:<volume|brightness>:<0-1>, pomodoro, next, search…")))
+        .example("desktop widgets press toggles-1 toggle:dnd")
+        .example("desktop widgets press todo-1 todo:3"),
     );
     r.command(
         core,

@@ -189,6 +189,68 @@ impl ManifestSetting {
     }
 }
 
+/// A desktop widget a third-party plugin offers, declared in plugin.toml
+/// and drawn by its `desktop-widget` export (the `desktop-plugin` world):
+///
+/// ```toml
+/// [[widgets]]
+/// id = "moon"
+/// name = "Moon tonight"
+/// description = "Tonight's phase, large"
+/// icon = "moon"
+/// width = 280
+/// height = 200
+/// ```
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ManifestWidget {
+    /// Unique within the plugin: lowercase letters, digits and `-`.
+    pub id: String,
+    /// Translated through the plugin's `locales/` catalog.
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    /// A bundled Mandara icon.
+    #[serde(default = "default_widget_icon")]
+    pub icon: String,
+    /// Logical px at scale 1 (the person can resize it).
+    #[serde(default = "default_widget_width")]
+    pub width: f32,
+    #[serde(default = "default_widget_height")]
+    pub height: f32,
+}
+
+fn default_widget_icon() -> String {
+    "sparkles".into()
+}
+
+fn default_widget_width() -> f32 {
+    mandara_config::desktop_cards::defaults::PLUGIN_CARD_WIDTH_PX
+}
+
+fn default_widget_height() -> f32 {
+    mandara_config::desktop_cards::defaults::PLUGIN_CARD_HEIGHT_PX
+}
+
+/// Splits widget declarations into the valid ones (at most
+/// [`crate::wasm::MAX_DESKTOP_WIDGETS`]) and why the others are skipped.
+pub fn split_widgets(widgets: Vec<ManifestWidget>) -> (Vec<ManifestWidget>, Vec<String>) {
+    let (mut valid, mut problems): (Vec<ManifestWidget>, Vec<String>) = (Vec::new(), Vec::new());
+    for w in widgets {
+        if !crate::wasm::valid_widget_id(&w.id) {
+            problems.push(format!("widget id `{}` must be lowercase letters, digits or -", w.id));
+        } else if valid.iter().any(|v| v.id == w.id) {
+            problems.push(format!("duplicate widget `{}` ignored", w.id));
+        } else if valid.len() >= crate::wasm::MAX_DESKTOP_WIDGETS {
+            problems.push(format!("widget `{}` ignored: at most {} widgets", w.id, crate::wasm::MAX_DESKTOP_WIDGETS));
+        } else if w.name.trim().is_empty() {
+            problems.push(format!("widget `{}` has no name", w.id));
+        } else {
+            valid.push(w);
+        }
+    }
+    (valid, problems)
+}
+
 /// Splits declarations into the valid ones and why the others are skipped
 /// (invalid, or a duplicate key).
 pub fn split_settings(settings: Vec<ManifestSetting>) -> (Vec<ManifestSetting>, Vec<String>) {
@@ -367,6 +429,52 @@ impl PluginInstance {
     }
 }
 
+/// Makes the widgets a [`DesktopWidgetType`] adds.
+pub type MakeWidgets = Rc<dyn Fn() -> Vec<mandara_config::desktop_widgets::DesktopWidget>>;
+
+/// A kind of desktop widget a plugin offers: an entry of Studio's gallery
+/// and (with `menu`) of the desktop's Add widget menu.
+#[derive(Clone)]
+pub struct DesktopWidgetType {
+    /// The plugin that provides it.
+    pub plugin: String,
+    /// Unique within the plugin (`analog`, `gauges`).
+    pub id: String,
+    /// English, translated with the catalogs for built-ins (a third-party
+    /// plugin's own words otherwise).
+    pub name: String,
+    pub description: String,
+    /// A bundled Mandara icon.
+    pub icon: String,
+    /// Listed in the desktop's Add widget menu (the gallery lists them all).
+    pub menu: bool,
+    /// The widgets it adds (usually one), each placed by the caller.
+    pub make: MakeWidgets,
+}
+
+impl DesktopWidgetType {
+    pub fn new(plugin: &str, id: &str, name: &str, description: &str, icon: &str, make: impl Fn() -> Vec<mandara_config::desktop_widgets::DesktopWidget> + 'static) -> Self {
+        Self { plugin: plugin.into(), id: id.into(), name: name.into(), description: description.into(), icon: icon.into(), menu: false, make: Rc::new(make) }
+    }
+
+    /// Also in the desktop's Add widget menu.
+    pub fn in_menu(mut self) -> Self {
+        self.menu = true;
+        self
+    }
+
+    /// `plugin/id`, unique in the registry.
+    pub fn key(&self) -> String {
+        format!("{}/{}", self.plugin, self.id)
+    }
+}
+
+impl std::fmt::Debug for DesktopWidgetType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DesktopWidgetType").field("plugin", &self.plugin).field("id", &self.id).field("name", &self.name).finish_non_exhaustive()
+    }
+}
+
 /// Registry of every known plugin and the command catalog they contribute.
 #[derive(Default)]
 pub struct PluginRegistry {
@@ -374,6 +482,8 @@ pub struct PluginRegistry {
     pub commands: CommandRegistry,
     /// Bumped on every (re)registration or removal.
     pub generation: u64,
+    /// Desktop widget kinds the plugins offer, in registration order.
+    widgets: Vec<DesktopWidgetType>,
 }
 
 impl Global for PluginRegistry {}
@@ -386,19 +496,45 @@ impl PluginRegistry {
         build: impl Fn(&mut Window, &mut App, PanelCx) -> PluginInstance + 'static,
     ) {
         self.factories.retain(|f| f.manifest.id != manifest.id);
+        // A plugin registered again offers its desktop widgets anew.
+        self.widgets.retain(|w| w.plugin != manifest.id);
         self.generation += 1;
         self.factories.push(PluginFactory { manifest, build: Rc::new(build), generation: self.generation });
     }
 
-    /// Removes a plugin (hot unload). Returns whether it existed.
+    /// Removes a plugin (hot unload) and the desktop widgets it offered.
+    /// Returns whether it existed.
     pub fn unregister(&mut self, id: &str) -> bool {
         let before = self.factories.len();
         self.factories.retain(|f| f.manifest.id != id);
+        self.widgets.retain(|w| w.plugin != id);
         let removed = self.factories.len() != before;
         if removed {
             self.generation += 1;
         }
         removed
+    }
+
+    /// Adds a desktop widget kind (replacing one with the same key).
+    pub fn desktop_widget(&mut self, kind: DesktopWidgetType) {
+        let key = kind.key();
+        self.widgets.retain(|w| w.key() != key);
+        self.widgets.push(kind);
+    }
+
+    /// Every desktop widget kind, enabled plugins or not.
+    pub fn desktop_widgets(&self) -> &[DesktopWidgetType] {
+        &self.widgets
+    }
+
+    /// The desktop widget kinds of the plugins enabled under `config`.
+    pub fn enabled_desktop_widgets<'a>(&'a self, config: &'a mandara_config::PluginsConfig) -> impl Iterator<Item = &'a DesktopWidgetType> {
+        self.widgets.iter().filter(move |w| self.is_enabled(&w.plugin, config))
+    }
+
+    /// The desktop widget kind with `key` (`plugin/id`).
+    pub fn desktop_widget_type(&self, key: &str) -> Option<&DesktopWidgetType> {
+        self.widgets.iter().find(|w| w.key() == key)
     }
 
     /// Registers a command contributed by `owner`.

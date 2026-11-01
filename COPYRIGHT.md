@@ -16,8 +16,10 @@ FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
 SPDX-License-Identifier: `GPL-3.0-or-later`
 
 Third-party material keeps its own license: vendored code under `vendor/`
-keeps the license stated in its directory, and fonts and OCR models that
+keeps the license stated in its directory, and fonts and models that
 Mandara downloads on demand keep theirs (SIL Open Font License for Google
-Fonts, Apache-2.0 for the PaddleOCR models).
+Fonts; Apache-2.0 for the PaddleOCR models and for Depth Anything V2 Small,
+the wallpaper depth model, in its `onnx-community/depth-anything-v2-small`
+ONNX export).
 
 The full license text is in [LICENSE.md](LICENSE.md).

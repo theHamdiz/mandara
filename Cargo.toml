@@ -79,6 +79,9 @@ wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 wayland-protocols-misc = { version = "0.3", features = ["client"] }
 wl-clipboard-rs = "0.9"
+# 0.8: the version GPUI's Linux platform (gpui_linux) links; 0.9 would be a
+# second copy of the bindings.
+xkbcommon = { version = "0.8", default-features = false }
 smallvec = { version = "1.16.4", features = ["union", "const_new"] }
 
 # Color science & imaging
@@ -89,12 +92,21 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 # Config & serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "1.1"
+# Read + serde everywhere; crates that also write TOML add `display`.
+toml = { version = "1.1", default-features = false, features = ["std", "parse", "serde"] }
+# Format-preserving edits of a user's TOML config (Umbriel's include line).
+toml_edit = "0.25"
+# The RustCrypto 0.10 generation (digest 0.10) that GPUI's oo7 keyring client
+# and cranelift / wasmtime-environ link: sha2 0.11 would add a second
+# digest / block-buffer / sha2 stack.
 sha2 = "0.10"
 # SHA-512 crypt ($6$) password hashes for AccountsService.SetPassword.
+# 0.5: 0.6 is on sha2 0.11 (see sha2 above).
 sha-crypt = { version = "0.5", default-features = false }
-kdl = { version = "6", features = ["v1"] }
-notify = "8"
+# Test-only: the emitters' tests parse the generated niri drop-ins.
+kdl = { version = "6", default-features = false, features = ["v1"] }
+# No `macos_fsevent`: inotify is the Linux backend and is always built.
+notify = { version = "8", default-features = false }
 dirs = "7.0.0"
 
 # Wi-Fi share QR codes (hotspot, saved networks): pure Rust, no deps.
@@ -107,24 +119,33 @@ pulldown-cmark = { version = "0.13", default-features = false }
 pulseaudio = "0.3"
 rustfft = "6.4"
 flate2 = "1.1"
-tar = "0.4"
+# No `xattr`: Mandara never restores extended attributes when unpacking.
+tar = { version = "0.4", default-features = false }
 
 # System
 rustix = { version = "1", features = ["fs", "param", "process"] }
 libc = "0.2"
+# 0.11 (with resvg / usvg 0.46): the versions vendored GPUI draws SVGs with.
+# resvg 0.49 (tiny-skia 0.12) needs fontdb 0.24 and harfrust 0.12 for SVG
+# text, but cosmic-text 0.19 (the latest; GPUI's text stack) is on fontdb 0.23
+# and harfrust 0.5, so moving would link two copies of both.
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
 rav1e = { version = "0.8", default-features = false, features = ["threading"] }
 # Pure-Rust AV1 decoder (dav1d port); `asm` off so no nasm / C toolchain.
 rav1d = { version = "1.1", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
 # Lean: no `parallel-compilation` (a rayon pool for a one-time compile —
 # compiled plugins are cached on disk), no cache/pooling/profiling/WASI-p1.
-wasmtime = { version = "48", default-features = false, features = ["runtime", "cranelift", "component-model", "std"] }
-wasmtime-wasi = { version = "48", default-features = false }
+wasmtime = { version = "50", default-features = false, features = ["runtime", "cranelift", "component-model", "std"] }
+wasmtime-wasi = { version = "50", default-features = false }
 
 # Async & errors
+# 5: the major GPUI's accesskit, ashpd and oo7 use, so one zbus is linked.
 zbus = { version = "5", default-features = false, features = ["async-io"] }
 async-io = "2"
 pure-onnx-ocr = "0.3.2"
+# The ONNX engine pure-onnx-ocr runs on (same version, nothing new to
+# build): the wallpaper depth model (mandara-services depth_model.rs).
+tract-onnx = "0.23.9"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 async-channel = "2.5"
 futures = "0.3"
@@ -138,7 +159,8 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 
 # CLI & logging
 clap = { version = "4.6.7", features = ["derive"] }
-tracing = "0.1"
+# No `attributes`: Mandara has no `#[instrument]` spans.
+tracing = { version = "0.1", default-features = false, features = ["std"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 # Test-only

@@ -159,7 +159,7 @@ const OWNED_SETTINGS: &[(&str, &[&str])] = &[
     // the switch sits next to them.
     ("prayer-times", &["/location/shared"]),
     ("privacy", &["/privacy/"]),
-    ("clock", &["/general/clock_24h", "/general/week_start", "/bar/show_seconds"]),
+    ("clock", &["/general/clock_24h", "/general/week_start", "/bar/show_seconds", "/datetime/week_numbers", "/datetime/weekend", "/datetime/hijri_dates", "/datetime/eastern_numerals"]),
     ("wallpaper", &["/wallpaper/"]),
     ("launcher", &["/launcher/", "/appearance/launcher_icon", "/appearance/launcher_icons", "/edges/launcher_bottom"]),
     ("clipboard", &["/clipboard/"]),
@@ -264,6 +264,14 @@ const BUILTIN_ACCESS: &[(&str, &[(Access, &str)])] = &[
         ],
     ),
     ("wallpaper", &[(Access::Files, tk("Reads images from your wallpaper folder"))]),
+    (
+        "wallpaper-depth",
+        &[
+            (Access::Files, tk("Reads your wallpaper and caches its subject mask in Mandara's cache folder")),
+            (Access::Network, tk("Model mode only: downloads the depth model once from Hugging Face")),
+            (Access::Processes, tk("Model mode only: runs the model once per wallpaper in a low-priority helper")),
+        ],
+    ),
     ("wallhaven", &[(Access::Network, tk("Searches wallhaven.cc and downloads the wallpapers you pick")), (Access::Files, tk("Saves the wallpapers you pick in Mandara's data folder"))]),
     ("cursors", &[(Access::Network, tk("Downloads the cursor themes you pick from their GitHub releases")), (Access::Files, tk("Installs them to ~/.local/share/icons")), (Access::Compositor, tk("Sets the cursor in Mandara's compositor drop-in and live"))]),
     ("workspaces", &[(Access::Compositor, tk("Reads and switches tags or workspaces"))]),
@@ -529,9 +537,9 @@ impl StudioView {
             tracing::warn!("Studio: no plugin `{id}`");
             return;
         };
-        // The wallpaper generator's settings are its studio on the Wallpaper page.
+        // The wallpaper generator's settings are its tab on the Wallpaper page.
         if view == ModalView::Settings && id == mandara_ui::plugins::wallpaper_generator::ID {
-            self.show(Section::Wallpaper, cx);
+            self.show_wallpaper_tab(super::wallpaper_page::WallpaperTab::Generator, cx);
             return;
         }
         // A settings deep link to a plugin without settings shows its details.

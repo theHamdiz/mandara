@@ -44,8 +44,10 @@ mandara msg studio displays
 | Super+Space | Launcher |
 | Ctrl+Shift+W | Wallpaper picker |
 | Super+B | Sidebar |
-| Super+Shift+S | Screenshot (region) |
-| Super+Shift+V | Clipboard history |
+| Super+Shift+S · Ctrl+Print | Screenshot (pick a region) |
+| Print | Screenshot of the screen |
+| Alt+Print | Screenshot of the focused window |
+| Super+Shift+V or Alt+V | Clipboard history |
 | Super+Shift+T | Light / dark |
 | Super+Shift+E · Ctrl+Alt+Delete | Power menu |
 | Alt+Tab · Alt+Shift+Tab | Window switcher (new installs; Studio → Window switcher → Bind Alt+Tab) |

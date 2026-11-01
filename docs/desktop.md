@@ -18,8 +18,24 @@ How Mandara looks and feels, and how much of it you can shape.
   **notch** that hangs from the top edge on curved shoulders, or a slim
   **side bar** on the left or right edge with an optional screen frame
   (panels open sideways from it). Each style has its own radius, item padding
-  and spacing, separators, group capsules, center-group alignment, accent
-  tint, glass rim, shadow, and text and icon size.
+  and spacing, separators, group or item capsules (soft, card-toned or
+  accent, with an optional outline), center-group alignment, accent tint,
+  glass rim, shadow, text and icon size, text weight and a hover highlight
+  you can switch off. Keep extra space between the bar and your windows,
+  and choose what right-clicking, middle-clicking and scrolling on empty
+  bar space do (main menu or desktop menu; any hot-corner action;
+  workspaces or volume). `mandara msg bar hide` / `show` / `toggle` puts
+  the bar away until you want it back.
+- **Bar items show what you want:** workspace pills with numbers, short
+  names or dots, with or without app icons, and empty ones hidden; the
+  active window as its app, its title or both, up to a width you pick; the
+  volume and battery with or without their numbers; the track title or
+  just the music icon, hidden while paused if you like.
+- **Sidebars fit like puzzle pieces:** a flush sidebar takes the bar's
+  material and meets it with the same concave curves: it hangs from the
+  edge frame, turns the hairline's accent line down its edge, merges into
+  the notch, and continues a side bar's strip. Beside floating styles it
+  floats too.
 - **Panels you can shape:** drop-down panels get width, maximum height,
   padding, gap to the bar, anchoring, opacity, shadow, an open animation
   (morph, fade and slide, or none) and their own spring; the sidebar and
@@ -31,7 +47,20 @@ How Mandara looks and feels, and how much of it you can shape.
   Controls that don't apply to your current layout say why, and every
   section has a one-click Reset.
 
-## Looks and desktop widgets
+<table>
+<tr>
+<td width="50%" valign="top"><img src="screenshots/bar-notch-sidebar.webp" alt="The notch bar with a flush sidebar that merges into it on curved joins" width="100%"/><br/><sub><b>Notch</b>: the flush sidebar merges into it</sub></td>
+<td width="50%" valign="top"><img src="screenshots/bar-edge-sidebar.webp" alt="The edge frame bar with a flush sidebar hanging from it" width="100%"/><br/><sub><b>Edge frame</b>: the sidebar hangs from the frame</sub></td>
+</tr>
+</table>
+
+<p align="center">
+  <img src="screenshots/main-menu.png" alt="The main menu: a side rail, the demo user, the track playing, the time and weather, quick toggles and the volume" width="60%"/>
+  <br/>
+  <sub>Right-click empty bar space for the <b>main menu</b>.</sub>
+</p>
+
+## Looks
 
 <p align="center">
   <img src="screenshots/looks.png" alt="The six Looks: Corniche Dusk, Pharos Ink, Montaza Crimson, Qaitbay Forest, Anfushi Wave and Night Frame" width="100%"/>
@@ -53,13 +82,14 @@ How Mandara looks and feels, and how much of it you can shape.
   leaves your cursor configuration alone entirely and Studio → Themes shows
   a one-line card to turn it on. Switched on, Studio → Themes → Cursor shows your cursor drawn from
   its own files at its size, every cursor setting (size with 24 / 32 / 48 /
-  64 px chips, hide while typing, hide when idle, Hyprland's software cursor
-  and hide on touch) and a gallery of the ten most popular ricing cursor
+  64 px chips, hide while typing, hide when idle, the software cursor of
+  Hyprland and Umbriel and Hyprland's hide on touch) and a gallery of the
+  ten most popular ricing cursor
   themes — Bibata Modern, macOS, Qogir, Phinger, Catppuccin, BreezeX, Vimix,
   Banana, Nordzy and Rosé Pine — with author, licence and variants. One
   click downloads the pinned GitHub release, verifies its SHA-256 and
   installs it to `~/.local/share/icons`; Apply changes the cursor live on
-  MangoWM, Niri and Hyprland (and X11 apps through `~/.icons/default`);
+  MangoWM, Niri, Hyprland and Umbriel (and X11 apps through `~/.icons/default`);
   Remove only ever deletes what Mandara installed. Nothing is bundled in the
   binary. `mandara msg cursor list|install|apply|remove` scripts it.
 
@@ -84,16 +114,94 @@ How Mandara looks and feels, and how much of it you can shape.
 </tr>
 </table>
 
+## Desktop widgets
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="screenshots/widgets-desk.webp" alt="A cookie analog clock, a quote, a month calendar, a taped to-do list on torn paper, a sticky note, the focus timer and upcoming events" width="100%"/><br/><sub><b>Productivity</b>: a to-do list you tick, a sticky note, the focus timer, calendars</sub></td>
+<td width="50%" valign="top"><img src="screenshots/widgets-music.webp" alt="A turning record, a pocket player, a cover cut to a flower, a side pill, an LED meter, a dot-matrix clock and the desk cat" width="100%"/><br/><sub><b>Now playing</b>, an LED meter and the desk cat</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="screenshots/widgets-sky.webp" alt="A slanted HUD clock, an at-a-glance line, the sun's arc, a globe, the moon, a weather disc, an hourly curve and the next prayer" width="100%"/><br/><sub><b>Sky and weather</b>: the sun's arc, the moon, a globe, a disc and an hourly curve</sub></td>
+<td width="50%" valign="top"><img src="screenshots/widgets-you.webp" alt="Digit boxes with a week strip, the year in dots, a profile card on a squircle with a hard shadow, wavy gauges, app shortcuts, quick toggles, a volume slider and the palette" width="100%"/><br/><sub><b>You and your shortcuts</b>: a profile card, toggles, sliders and the palette</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="screenshots/widgets-arabic.webp" alt="A dot-matrix clock in Eastern Arabic digits, an orbit clock, a Hijri month, prayer times, a countdown and a date tile on a scalloped plate, all in Arabic" width="100%"/><br/><sub><b>Numerals, calendars and language</b>: Eastern Arabic digits, the Hijri month and Arabic day names</sub></td>
+</tr>
+</table>
+
 - **Desktop widgets:** hero clocks (superscript, headline, day block, ring,
-  greeting, giant day numeral, minimal), a system-monitor column with live
-  graphs, text and shape decorations (discs, stripes, waves, frames, and
+  greeting, giant day numeral, minimal, and an analog dial with an optional
+  seconds hand), a system monitor as a column with live graphs or as ring
+  gauges, the weather with the days ahead, a world clock, a countdown to a
+  date, text and shape decorations (discs, stripes, waves, frames, and
   vertical text: kana and CJK stand upright, Arabic and Latin keep their
   joined line turned toward the screen's middle) and an audio visualizer
   that can sit *behind* the wallpaper's subject. Every widget stays fully on
   screen and clear of the bar at any resolution. They're drawn in software
   into small shared-memory layers: no video memory, redrawn only when they
   change, nothing runs until you add one, and a removed widget's layer is
-  freed at once.
+  freed at once. Moving one only moves its layer: it is painted again once,
+  where you drop it.
+- **Many more widgets:** nine more clock faces (a stacked card, the time
+  in a shape, dot-matrix and pixel digits, a digit in each box, a slanted
+  HUD, hands over giant numerals, an orbit, and text lines you write from
+  placeholders), day / week / month / year progress, a to-do list you tick
+  on the desktop, a sticky note, the focus timer, a quote card, notebook
+  tabs, painted month / week / agenda / date-tile calendars, the sun on its
+  arc, the moon's phase, a day-and-night globe, the weather as a sentence,
+  a disc or an hourly chart, a profile card, app and folder shortcuts,
+  quick toggles whose tiles change shape when switched, volume and
+  brightness sliders, the theme's palette, a desk cat, bubbles, a photo
+  frame, stickers, what plays on a turning record, a pocket player, a
+  shaped or halftone cover, a side pill or as lyrics, an LED meter,
+  system meters, bars and thermals, a machine card, screen time, prayer
+  times, a search field, an "at a glance" line, your GitHub contribution
+  year, exchange rates, Claude Code's token use and your Steam games.
+  Clicks work on the desktop itself (tick, toggle, start, open, copy,
+  play), and `mandara msg desktop widgets press <id> <action>` does the
+  same from a script. Clocks and calendars redraw once a minute; only the
+  cat, the bubbles, a playing record and a seconds hand animate, and only
+  while the desktop is in sight. GitHub and exchange rates go online only
+  once you switch that on, and the AI usage widget reads its logs only
+  once you allow it.
+- **Any shape, any frame:** every painted widget can sit on a circle, a
+  squircle, a scalloped cookie, a flower, a pentagon, chamfered corners, a
+  slanted card or torn paper, with an outline, a soft or hard directional
+  shadow, a header line, and a frame (a classic window title bar, washi
+  tape or a polaroid). Any widget can be turned and mirrored. The same
+  shapes are offered wherever a widget draws a check box, a cell, a cover
+  or a marker, so a widget can look like the original you have in mind or
+  like nothing seen before. Studio → Desktop widgets → Shape and frame.
+
+<p align="center">
+  <img src="screenshots/studio-widget-shape.png" alt="Studio → Desktop widgets: a widget's look with plate, shape (rectangle, circle, squircle, cookie, flower, pentagon, chamfer, slanted, torn paper), outline, hard or soft shadow, chrome and header" width="100%"/>
+  <br/>
+  <sub>Studio → Desktop widgets: the plate, <b>Shape and frame</b>, outline, shadow, chrome and header of one widget.</sub>
+</p>
+- **Each widget, your way:** size, opacity, colour and accent (automatic
+  over the wallpaper, the theme's, or your own `#rrggbb` / `oklch(…)`),
+  alignment, a shadow or glow and its strength, and a frosted glass or
+  solid plate behind it with its own opacity, corners and padding. Fonts
+  follow Typography → Desktop widgets (the display face until you choose
+  one), and any widget can take another role or its own family from the
+  searchable font list.
+- **Numbers, dates and language:** every widget that writes numbers or
+  dates has its own numerals (from the language, Western `123` or Eastern
+  Arabic `١٢٣`), calendar (Gregorian, Hijri, both or none; the Hijri day
+  begins at sunset and follows the Prayer times correction), the Hijri
+  date in Arabic or in the widget's language, and a language for day and
+  month names (it also sets the reading direction). Widgets made before
+  these options keep what they showed.
+- **Widgets are plugins:** each kind comes from a first-party plugin in
+  Studio → Plugins → Desktop widgets (*Desktop clocks*, *System monitor*,
+  *Desktop decorations*, *Desktop visualizers*, *Now playing card*,
+  *Calendar card*, *Desktop weather*, *Desktop world clock*, *Countdown*,
+  *Desktop productivity*, *Desktop sky*, *Desktop shortcuts and you*, *Desktop fun*,
+  *Desktop info*).
+  Switching one off hides its widgets without removing them and takes it
+  out of the Add widget menus. Third-party WebAssembly plugins can offer
+  desktop widgets too ([PLUGINS.md](../PLUGINS.md#desktop-widgets)).
 - **Desktop cards:** a now-playing card (art, wavy progress, synced lyrics)
   and a calendar card, each on its own tiny surface that exists only while
   shown.
@@ -103,14 +211,19 @@ How Mandara looks and feels, and how much of it you can shape.
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/desktop-menu.png" alt="The desktop's right-click menu with the Add widget flyout open" width="100%"/><br/><sub><b>Right-click the desktop</b></sub></td>
-<td width="50%" valign="top"><img src="screenshots/desktop-edit.png" alt="Desktop edit mode: widget outlines with name chips, a centre snap guide and the floating toolbar" width="100%"/><br/><sub><b>Edit the desktop in place</b></sub></td>
+<td width="34%" valign="top"><img src="screenshots/desktop-menu.png" alt="The desktop's right-click menu with the Add widget flyout listing widgets from the desktop widget plugins" width="100%"/><br/><sub><b>Right-click the desktop</b></sub></td>
+<td width="66%" valign="top"><img src="screenshots/desktop-edit.png" alt="Desktop edit mode: widget outlines with name chips and a remove button, a resize handle and the floating toolbar" width="100%"/><br/><sub><b>Edit the desktop in place</b></sub></td>
 </tr>
 </table>
 
 - **Right-click the desktop** for a glass menu: Edit desktop, Add widget ▸
-  (clock, system monitor, decoration, visualizer, now-playing or calendar
-  card), show / hide widgets, change or skip the wallpaper, Themes & looks,
+  (a few widgets from every desktop widget plugin that's on: clocks, day
+  progress, the system monitor or gauges, a decoration, a visualizer, the
+  record player, a machine card, a search field, an "at a glance" line, the
+  sun's arc, a profile card, shortcuts, quick toggles, the desk cat, a
+  photo frame, weather, a world clock, a to-do list, a sticky note, the
+  focus timer, a quote, a countdown, the now-playing and calendar cards and
+  any third-party plugin's widgets; Studio has the rest), show / hide widgets, change or skip the wallpaper, Themes & looks,
   display settings, a terminal, a screenshot and Studio.
 - **Edit the desktop in place:** every widget gets an outline and its name.
   Drag to move it, pull the corner to resize, and it snaps to the screen's
@@ -150,9 +263,9 @@ anything that must stay fixed is a named, documented constant.
 ## Keyboard shortcut cards
 
 <p align="center">
-  <img src="screenshots/studio-shortcuts.png" alt="Keyboard shortcut cards with conflict badges" width="100%"/>
+  <img src="screenshots/studio-shortcuts.png" alt="Keyboard shortcut cards: Alt+V and Super+Shift+V open the clipboard, Print, Alt+Print and Ctrl+Print take screenshots, with conflict badges" width="100%"/>
   <br/>
-  <sub>Studio → Keyboard shortcuts: <b>Used by your config</b>, <b>Duplicate</b> and <b>Needs Super, Ctrl or Alt</b> badges.</sub>
+  <sub>Studio → Keyboard shortcuts: Alt+V for the clipboard, Print for screenshots, and the <b>Used by your config</b>, <b>Duplicate</b> and <b>Needs Super, Ctrl or Alt</b> badges.</sub>
 </p>
 
 Studio → Keyboard shortcuts shows every binding as a card. Click the keycap
@@ -161,4 +274,4 @@ you type: **Duplicate** when two Mandara binds share a chord, **Needs
 Super, Ctrl or Alt** when a bind would swallow plain typing, and **Used by
 your config** with the exact file and line when your own compositor config
 already has that chord. Mandara never overrides a key you already use; its
-binds go into its own drop-in file for MangoWM, Niri or Hyprland.
+binds go into its own drop-in file for MangoWM, Niri, Hyprland or Umbriel.

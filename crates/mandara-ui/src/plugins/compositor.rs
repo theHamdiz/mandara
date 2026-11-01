@@ -4,9 +4,11 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use gpui::App;
+use gpui::{App, AsyncApp};
 use mandara_config::compositor::{BorderColors, Target, include_installed, install_include};
-use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginRegistry};
+use mandara_config::doctor::{self, CheckEnv, Report, fix as dfix, state as dstate};
+use mandara_i18n::{t, tf};
+use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, Output, PluginRegistry};
 use serde_json::{Value, json};
 
 use super::json;
@@ -26,13 +28,6 @@ pub fn border_colors(cx: &App) -> BorderColors {
     }
 }
 
-/// Writes the generated file for the running compositor and reloads it when
-/// the user's config includes it.
-pub fn sync(cx: &App) -> Result<Value, String> {
-    let (backend, cfg, borders) = sync_inputs(cx)?;
-    sync_with(backend.as_ref(), &cfg, borders)
-}
-
 type SyncInputs = (std::sync::Arc<dyn mandara_compositor::CompositorBackend>, std::sync::Arc<mandara_config::ShellConfig>, Option<BorderColors>);
 
 fn sync_inputs(cx: &App) -> Result<SyncInputs, String> {
@@ -42,11 +37,31 @@ fn sync_inputs(cx: &App) -> Result<SyncInputs, String> {
     Ok((backend, cfg, borders))
 }
 
-/// [`sync`] without the app: file writes and the compositor reload are
-/// blocking, so live re-syncs run this off the UI thread.
+/// Writes the generated file for the running compositor (checked by the
+/// Config doctor, rolled back if the compositor rejects it) and reloads it
+/// when the user's config includes it. Blocking: always run off the UI
+/// thread.
 fn sync_with(backend: &dyn mandara_compositor::CompositorBackend, cfg: &mandara_config::ShellConfig, borders: Option<BorderColors>) -> Result<Value, String> {
-    let (path, emitted) = backend.sync_managed_config(&cfg.effective_compositor(), borders).map_err(|e| format!("{e:#}"))?;
     let target = backend.target();
+    let compositor = cfg.effective_compositor();
+    // The config as the compositor reads it now (the stored report unless
+    // a file or the compositor changed), so the write below can be judged.
+    let (before, _) = dstate::check_cached(target);
+    let written = RefCell::new(None);
+    let write = || -> anyhow::Result<()> {
+        *written.borrow_mut() = Some(backend.sync_managed_config(&compositor, borders.clone())?);
+        Ok(())
+    };
+    let env = CheckEnv { version: doctor::installed_version(target), ..CheckEnv::default() };
+    let guarded = dfix::guarded_write(&before, &env, &write).map_err(|e| format!("{e:#}"))?;
+    for option in &guarded.left_out {
+        tracing::info!("config doctor: {} {} rejects `{option}`; left out of the drop-in", target.name(), guarded.after.version.as_deref().unwrap_or("?"));
+    }
+    if guarded.rolled_back {
+        tracing::warn!("config doctor: {} rejected the new drop-in, so the previous one was kept", target.name());
+    }
+    dstate::record(guarded.after);
+    let (path, emitted) = written.into_inner().ok_or("the drop-in was not written")?;
     let included = include_installed(target);
     // The cursor is the opt-in cursor themes plugin's: switched off,
     // Mandara touches no cursor setting at all.
@@ -83,14 +98,28 @@ static SYNC_APPLIED: std::sync::Mutex<u64> = std::sync::Mutex::new(0);
 pub fn init(cx: &mut App) {
     // The watcher below is installed even when management is off, so
     // turning "Manage the compositor" on later syncs without a restart.
-    if config(cx).read(cx).get().compositor.manage {
-        initial_sync(cx);
-    }
+    let manage = config(cx).read(cx).get().compositor.manage;
+    let inputs = sync_inputs(cx);
+    // Off the UI thread: the sync checks the config with the compositor's
+    // own checker, then the Config doctor announces new problems once.
+    cx.spawn(async move |cx| {
+        let task = cx.background_executor().spawn(async move {
+            let (backend, cfg, borders) = inputs.ok()?;
+            if manage {
+                initial_sync(backend.as_ref(), &cfg, borders);
+            }
+            Some(dstate::check_cached(backend.target()).0)
+        });
+        if let Some(report) = task.await {
+            announce(report, cx).await;
+        }
+    })
+    .detach();
     watch(cx);
 }
 
-fn initial_sync(cx: &App) {
-    match sync(cx) {
+fn initial_sync(backend: &dyn mandara_compositor::CompositorBackend, cfg: &mandara_config::ShellConfig, borders: Option<BorderColors>) {
+    match sync_with(backend, cfg, borders) {
         Ok(report) => {
             if let Some(hint) = report.get("hint").and_then(Value::as_str) {
                 tracing::warn!("compositor drop-in written but not included yet: {hint}");
@@ -103,12 +132,58 @@ fn initial_sync(cx: &App) {
     }
 }
 
+/// One gentle notification about problems not announced before (and not
+/// snoozed): the first problem in plain words, and a button that opens the
+/// Config doctor in Studio.
+async fn announce(report: Report, cx: &mut AsyncApp) {
+    if !cx.update(|cx| config(cx).read(cx).get().compositor.doctor_notify) {
+        return;
+    }
+    let fresh = cx.background_executor().spawn(async move {
+        let fresh = dstate::take_unannounced(&report);
+        (report, fresh)
+    });
+    let (report, fresh) = fresh.await;
+    let Some(first) = fresh.first() else { return };
+    let compositor = report.target.name();
+    let summary = if fresh.len() == 1 { tf("{compositor} reports a problem in your config", &[("compositor", &compositor)]) } else { tf("{compositor} reports {count} problems in your config", &[("compositor", &compositor), ("count", &fresh.len())]) };
+    let place = first.place().map(|p| format!("{p}: ")).unwrap_or_default();
+    let body = format!("{place}{}", doctor::explain(first, report.target, report.version.as_deref()));
+    let clicked = mandara_services::desktop_notify::post_with_action(t("Mandara Shell"), "monitor", &summary, &body, t("Open Config doctor"));
+    if clicked.recv().await == Ok(true) {
+        cx.update(|cx| crate::state::open_studio_at(Some("compositor".into()), cx));
+    }
+}
+
+/// The compositor a command names (`mango`, `niri`…), else the running one.
+fn target_arg(name: Option<&str>, cx: &App) -> Result<Target, String> {
+    match name {
+        Some("mango") | Some("mangowm") => Ok(Target::Mango),
+        Some("niri") => Ok(Target::Niri),
+        Some("hyprland") => Ok(Target::Hyprland),
+        Some("umbriel") => Ok(Target::Umbriel),
+        Some(other) => Err(format!("unknown compositor {other:?} (mango, niri, hyprland or umbriel)")),
+        None => Ok(backend(cx)?.target()),
+    }
+}
+
+/// Runs `work` on a thread of its own and answers with its JSON.
+fn pending(work: impl FnOnce() -> Result<Value, String> + Send + 'static) -> Output {
+    let (tx, rx) = async_channel::bounded(1);
+    std::thread::spawn(move || {
+        let _ = tx.send_blocking(work().map(|v| v.to_string()));
+    });
+    Output::Pending(rx)
+}
+
 /// What the drop-in is made of, compared to skip needless re-syncs.
 /// Keyboard-layout labels are bar-only, so editing one never rewrites the
 /// drop-in or reloads the compositor.
 fn sync_key(cfg: &mandara_config::ShellConfig) -> String {
     let mut compositor = cfg.effective_compositor().into_owned();
     compositor.input.keyboard.labels.clear();
+    // The Config doctor's notification switch isn't part of the drop-in.
+    compositor.doctor_notify = true;
     serde_json::to_string(&compositor).unwrap_or_default()
 }
 
@@ -186,21 +261,74 @@ pub fn register(r: &mut PluginRegistry) {
             "include_line": target.include_line(),
         }))
     }));
-    r.command(ID, CommandSpec::new("compositor sync", mandara_i18n::tk("Regenerate the drop-in (rules, binds, border colors) and reload"), |_, cx| sync(cx)));
+    r.command(ID, CommandSpec::new_output("compositor sync", mandara_i18n::tk("Regenerate the drop-in (rules, binds, border colors) and reload"), |_, cx| {
+        let (backend, cfg, borders) = sync_inputs(cx)?;
+        Ok(pending(move || sync_with(backend.as_ref(), &cfg, borders)))
+    }));
     r.command(
         ID,
-        CommandSpec::new("compositor install-include", mandara_i18n::tk("Append the single include line to your compositor config (backup kept)"), |a, cx| {
+        CommandSpec::new_output("compositor check", mandara_i18n::tk("Config doctor: check the compositor's config with its own checker; problems with file, line, explanation and fixes"), |a, cx| {
+            let target = target_arg(a.get(0), cx)?;
+            Ok(pending(move || Ok(dstate::record(doctor::check(target)).to_json())))
+        })
+        .arg(ArgSpec::optional("compositor", ArgKind::Enum, mandara_i18n::tk("defaults to the running one")).choices(&["mango", "niri", "hyprland", "umbriel"]))
+        .example("compositor check"),
+    );
+    r.command(
+        ID,
+        CommandSpec::new_output("compositor fix", mandara_i18n::tk("Config doctor: fix a problem from the last check (backed up, re-checked, rolled back if worse)"), |a, cx| {
+            let id = a.str(0)?.to_string();
+            let fix = dfix::Fix::parse(a.str(1)?).ok_or("the fix is comment, remove or regenerate")?;
+            let (backend, cfg, borders) = sync_inputs(cx)?;
+            let target = target_arg(a.get(2), cx)?;
+            Ok(pending(move || {
+                let report = dstate::last_report(target).filter(|r| r.find(&id).is_some()).ok_or_else(|| format!("no problem {id} in the last check; run `mandara msg compositor check` first"))?;
+                let regenerate = || backend.sync_managed_config(&cfg.effective_compositor(), borders.clone()).map(|_| ());
+                let env = CheckEnv { version: report.version.clone(), ..CheckEnv::default() };
+                let outcome = dfix::apply(&report, &id, fix, &env, &regenerate).map_err(|e| format!("{e:#}"))?;
+                let after = dstate::record(outcome.after.clone());
+                if fix == dfix::Fix::Regenerate && include_installed(target) {
+                    backend.reload_config().map_err(|e| format!("reload: {e:#}"))?;
+                }
+                Ok(json!({ "fix": fix, "id": id, "resolved": outcome.resolved, "rolled_back": outcome.rolled_back, "backup": outcome.backup, "report": after.to_json() }))
+            }))
+        })
+        .arg(ArgSpec::required("id", ArgKind::String, mandara_i18n::tk("the problem's id from `compositor check`")))
+        .arg(ArgSpec::required("fix", ArgKind::Enum, mandara_i18n::tk("comment or remove (your files), regenerate (Mandara's drop-in)")).choices(&["comment", "remove", "regenerate"]))
+        .arg(ArgSpec::optional("compositor", ArgKind::Enum, mandara_i18n::tk("defaults to the running one")).choices(&["mango", "niri", "hyprland", "umbriel"]))
+        .example("compositor fix 1a2b3c4d comment"),
+    );
+    r.command(
+        ID,
+        CommandSpec::new("compositor snooze", mandara_i18n::tk("Config doctor: no reminders about the current problems until the config or the compositor changes"), |a, cx| {
+            let target = target_arg(a.get(0), cx)?;
+            let report = dstate::last_report(target).ok_or("nothing checked yet; run `mandara msg compositor check` first")?;
+            dstate::snooze(&report);
+            Ok(json!({ "snoozed": report.diagnostics.len() }))
+        })
+        .arg(ArgSpec::optional("compositor", ArgKind::Enum, mandara_i18n::tk("defaults to the running one")).choices(&["mango", "niri", "hyprland", "umbriel"])),
+    );
+    r.command(
+        ID,
+        CommandSpec::new_output("compositor install-include", mandara_i18n::tk("Append the single include line to your compositor config (backup kept)"), |a, cx| {
             let target = match a.get(0) {
                 Some("mango") => Target::Mango,
                 Some("niri") => Target::Niri,
                 Some("hyprland") => Target::Hyprland,
+                Some("umbriel") => Target::Umbriel,
                 _ => backend(cx)?.target(),
             };
-            let added = install_include(target).map_err(|e| format!("{e:#}"))?;
-            let report = if added { sync(cx).unwrap_or(Value::Null) } else { Value::Null };
-            Ok(json!({ "file": target.user_config(), "added": added, "line": target.include_line(), "sync": report }))
+            let inputs = sync_inputs(cx);
+            Ok(pending(move || {
+                let added = install_include(target).map_err(|e| format!("{e:#}"))?;
+                let report = match (added, inputs) {
+                    (true, Ok((backend, cfg, borders))) => sync_with(backend.as_ref(), &cfg, borders).unwrap_or(Value::Null),
+                    _ => Value::Null,
+                };
+                Ok(json!({ "file": target.user_config(), "added": added, "line": target.include_line(), "sync": report }))
+            }))
         })
-        .arg(ArgSpec::optional("compositor", ArgKind::Enum, mandara_i18n::tk("defaults to the running one")).choices(&["mango", "niri", "hyprland"]))
+        .arg(ArgSpec::optional("compositor", ArgKind::Enum, mandara_i18n::tk("defaults to the running one")).choices(&["mango", "niri", "hyprland", "umbriel"]))
         .example("compositor install-include"),
     );
     r.command(ID, CommandSpec::new("compositor reload", mandara_i18n::tk("Ask the compositor to reload its config"), |_, cx| {
@@ -215,7 +343,7 @@ pub fn register(r: &mut PluginRegistry) {
     }));
     r.command(
         ID,
-        CommandSpec::new("compositor dispatch", mandara_i18n::tk("Raw compositor dispatch (MangoWM function, Hyprland dispatcher, Niri action)"), |a, cx| {
+        CommandSpec::new("compositor dispatch", mandara_i18n::tk("Raw compositor dispatch (MangoWM function, Hyprland dispatcher, Niri or Umbriel action)"), |a, cx| {
             let cmd = a.str(0)?.to_string();
             let rest: Vec<String> = a.0.iter().skip(1).cloned().collect();
             let args: Vec<&str> = rest.iter().map(String::as_str).collect();

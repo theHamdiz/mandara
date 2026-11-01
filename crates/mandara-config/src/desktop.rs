@@ -43,6 +43,18 @@ pub mod defaults {
     pub const BAR_REVEAL_STRIP_PX: f32 = 3.0;
     /// Wallpaper slideshow interval, minutes.
     pub const SLIDESHOW_MIN: u32 = 30;
+    /// Bounds of `wallpaper.slideshow.interval_minutes`: a minute to a week.
+    pub const SLIDESHOW_INTERVAL_RANGE: (u32, u32) = (1, 7 * 24 * 60);
+    /// The one-click intervals Studio offers, minutes.
+    pub const SLIDESHOW_PRESETS: [u32; 8] = [5, 15, 30, 60, 3 * 60, 6 * 60, 12 * 60, 24 * 60];
+    /// Default "only between" window of the slideshow.
+    pub const SLIDESHOW_FROM: &str = "08:00";
+    pub const SLIDESHOW_UNTIL: &str = "22:00";
+    /// The slideshow's own transition length, and its bounds, ms.
+    pub const SLIDESHOW_TRANSITION_MS: u64 = 1200;
+    pub const SLIDESHOW_TRANSITION_RANGE: (u64, u64) = (100, 5000);
+    /// How deep "include sub-folders" looks below the slideshow folder.
+    pub const SLIDESHOW_FOLDER_DEPTH: u8 = 8;
     /// Video wallpapers: highest frame rate drawn, and its bounds. 30 fps
     /// keeps motion smooth at a fraction of a 60 fps clip's decode cost.
     pub const VIDEO_MAX_FPS: u32 = 30;
@@ -70,6 +82,13 @@ pub struct DateTimeConfig {
     pub leading_zero_12h: bool,
     /// ISO week numbers in front of every calendar row.
     pub week_numbers: bool,
+    /// Hijri (Islamic) day numbers under each calendar day, the Hijri month
+    /// in the calendar's title and today's Hijri date in the clock panel.
+    pub hijri_dates: bool,
+    /// Eastern Arabic numerals (٠١٢٣…) in the clock panel and its calendar.
+    pub eastern_numerals: bool,
+    /// Which days the calendar marks as the weekend.
+    pub weekend: Weekend,
     /// Month / weekday names: `auto` follows the interface language, or a
     /// POSIX locale such as `en_GB`, `ar_EG`, `de_DE`.
     pub time_locale: String,
@@ -85,6 +104,9 @@ impl Default for DateTimeConfig {
             lock_date_format: String::new(),
             leading_zero_12h: false,
             week_numbers: false,
+            hijri_dates: false,
+            eastern_numerals: false,
+            weekend: Weekend::Auto,
             time_locale: "auto".into(),
         }
     }
@@ -127,6 +149,43 @@ impl DateTimeConfig {
         let secs = if seconds { ":%S" } else { "" };
         let ampm = if clock_24h { "" } else { " %p" };
         format!("{hour}:%M{secs}{ampm}")
+    }
+}
+
+/// The calendar's weekend days (`datetime.weekend`).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Weekend {
+    /// Friday and Saturday when the week starts on Saturday or the
+    /// interface is in Arabic, else Saturday and Sunday.
+    #[default]
+    Auto,
+    SaturdaySunday,
+    FridaySaturday,
+    Friday,
+    Sunday,
+}
+
+impl Weekend {
+    /// Weekend flags indexed by days from Monday (`0` = Monday, `6` =
+    /// Sunday). `saturday_first`: the week starts on Saturday; `arabic`:
+    /// the interface language is Arabic (both only matter for `Auto`).
+    pub fn days_from_monday(self, saturday_first: bool, arabic: bool) -> [bool; 7] {
+        const FRIDAY: usize = 4;
+        const SATURDAY: usize = 5;
+        const SUNDAY: usize = 6;
+        let mut days = [false; 7];
+        let on: &[usize] = match self {
+            Self::Auto if saturday_first || arabic => &[FRIDAY, SATURDAY],
+            Self::Auto | Self::SaturdaySunday => &[SATURDAY, SUNDAY],
+            Self::FridaySaturday => &[FRIDAY, SATURDAY],
+            Self::Friday => &[FRIDAY],
+            Self::Sunday => &[SUNDAY],
+        };
+        for d in on {
+            days[*d] = true;
+        }
+        days
     }
 }
 
@@ -595,28 +654,203 @@ pub enum WallpaperTransition {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SlideshowOrder {
-    #[default]
+    /// Any other wallpaper each time (repeats can come soon).
     Random,
+    /// Every wallpaper once in a shuffled order, then a new shuffle.
+    #[default]
+    Shuffle,
+    /// By file name.
     Alphabetical,
+    /// The most recently added or changed files first.
+    Newest,
 }
 
-/// Wallpaper slideshow (`[wallpaper.slideshow]`).
+/// Which wallpapers the slideshow cycles through.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SlideshowSource {
+    /// A folder: [`WallpaperSlideshow::directory`], or the wallpaper folder
+    /// when that is empty.
+    #[default]
+    Folder,
+    /// The wallpapers picked into [`WallpaperSlideshow::playlist`].
+    Playlist,
+}
+
+/// How a slideshow change replaces the wallpaper.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SlideshowTransition {
+    /// The desktop's own transition and length (`wallpaper.transition`).
+    #[default]
+    Desktop,
+    Fade,
+    Wipe,
+    Grow,
+    None,
+}
+
+impl SlideshowTransition {
+    /// The transition to draw, or `None` to follow the desktop's.
+    pub fn own(self) -> Option<WallpaperTransition> {
+        match self {
+            Self::Desktop => None,
+            Self::Fade => Some(WallpaperTransition::Fade),
+            Self::Wipe => Some(WallpaperTransition::Wipe),
+            Self::Grow => Some(WallpaperTransition::Grow),
+            Self::None => Some(WallpaperTransition::None),
+        }
+    }
+}
+
+/// Wallpaper slideshow (`[wallpaper.slideshow]`). Every field added after
+/// 0.4 defaults to the behaviour before it, so older configs keep working.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WallpaperSlideshow {
     pub enabled: bool,
+    /// Time between wallpapers ([`defaults::SLIDESHOW_INTERVAL_RANGE`]).
     pub interval_minutes: u32,
     pub order: SlideshowOrder,
-    /// Folder to cycle through; empty uses the picker folder.
+    pub source: SlideshowSource,
+    /// Folder to cycle through; empty uses the wallpaper folder.
     pub directory: String,
+    /// Look into every sub-folder (else the folder and one level below,
+    /// like the picker).
+    pub subfolders: bool,
+    /// Wallpapers picked for [`SlideshowSource::Playlist`], in order.
+    pub playlist: Vec<PathBuf>,
+    /// Folders used instead while the theme is light / dark (empty: the
+    /// source above).
+    pub light_directory: String,
+    pub dark_directory: String,
+    /// Show the next wallpaper each time the shell starts (login).
+    pub on_start: bool,
     /// Don't change wallpapers while a fullscreen window is open.
     pub pause_on_fullscreen: bool,
+    /// …while running on battery.
+    pub pause_on_battery: bool,
+    /// …while the session is locked or the screens are off.
+    pub pause_when_locked: bool,
+    /// Change only between [`Self::from`] and [`Self::until`] (`HH:MM`,
+    /// local time; the window may cross midnight).
+    pub hours: bool,
+    pub from: String,
+    pub until: String,
+    pub transition: SlideshowTransition,
+    /// Length of [`Self::transition`] when it isn't the desktop's, ms.
+    pub transition_ms: u64,
+    /// Every display gets its own wallpaper from the slideshow (else they
+    /// all change to the same one).
+    pub per_display: bool,
 }
 
 impl Default for WallpaperSlideshow {
     fn default() -> Self {
-        Self { enabled: false, interval_minutes: defaults::SLIDESHOW_MIN, order: SlideshowOrder::Random, directory: String::new(), pause_on_fullscreen: true }
+        Self {
+            enabled: false,
+            interval_minutes: defaults::SLIDESHOW_MIN,
+            order: SlideshowOrder::default(),
+            source: SlideshowSource::default(),
+            directory: String::new(),
+            subfolders: false,
+            playlist: Vec::new(),
+            light_directory: String::new(),
+            dark_directory: String::new(),
+            on_start: false,
+            pause_on_fullscreen: true,
+            pause_on_battery: false,
+            pause_when_locked: true,
+            hours: false,
+            from: defaults::SLIDESHOW_FROM.into(),
+            until: defaults::SLIDESHOW_UNTIL.into(),
+            transition: SlideshowTransition::default(),
+            transition_ms: defaults::SLIDESHOW_TRANSITION_MS,
+            per_display: false,
+        }
     }
+}
+
+impl WallpaperSlideshow {
+    /// [`Self::interval_minutes`] within its range.
+    pub fn interval(&self) -> u32 {
+        self.interval_minutes.clamp(defaults::SLIDESHOW_INTERVAL_RANGE.0, defaults::SLIDESHOW_INTERVAL_RANGE.1)
+    }
+
+    /// [`Self::transition_ms`] within its range.
+    pub fn transition_len(&self) -> u64 {
+        self.transition_ms.clamp(defaults::SLIDESHOW_TRANSITION_RANGE.0, defaults::SLIDESHOW_TRANSITION_RANGE.1)
+    }
+
+    /// The folder typed for the current appearance (light / dark folder,
+    /// else the main one; empty = the wallpaper folder).
+    pub fn folder_for(&self, dark: bool) -> &str {
+        let themed = if dark { &self.dark_directory } else { &self.light_directory };
+        if themed.trim().is_empty() { self.directory.trim() } else { themed.trim() }
+    }
+
+    /// Whether the slideshow may change at `minute` of the day (minutes
+    /// since local midnight): always without [`Self::hours`], else inside
+    /// the window (which may cross midnight; equal ends mean all day).
+    pub fn in_hours(&self, minute: u32) -> bool {
+        match (self.hours, parse_hhmm(&self.from), parse_hhmm(&self.until)) {
+            (true, Some(from), Some(until)) => within(from, until, minute % MINUTES_PER_DAY),
+            _ => true,
+        }
+    }
+
+    /// Minutes from `minute` until the window opens (0 when inside it).
+    pub fn minutes_until_open(&self, minute: u32) -> u32 {
+        if self.in_hours(minute) {
+            return 0;
+        }
+        let from = parse_hhmm(&self.from).unwrap_or(0);
+        (from + MINUTES_PER_DAY - minute % MINUTES_PER_DAY) % MINUTES_PER_DAY
+    }
+}
+
+/// Minutes in a day.
+const MINUTES_PER_DAY: u32 = 24 * 60;
+
+/// `HH:MM` → minutes since midnight.
+pub fn parse_hhmm(text: &str) -> Option<u32> {
+    let (h, m) = text.trim().split_once(':')?;
+    let (h, m) = (h.trim().parse::<u32>().ok()?, m.trim().parse::<u32>().ok()?);
+    (h < 24 && m < 60).then_some(h * 60 + m)
+}
+
+/// Whether `minute` is in `[from, until)`, wrapping past midnight.
+fn within(from: u32, until: u32, minute: u32) -> bool {
+    match from.cmp(&until) {
+        std::cmp::Ordering::Equal => true,
+        std::cmp::Ordering::Less => (from..until).contains(&minute),
+        std::cmp::Ordering::Greater => minute >= from || minute < until,
+    }
+}
+
+/// A slideshow interval typed by a person: `45` (minutes), `45m`, `2h`,
+/// `1h30m`, `1d`. `None` for anything else or zero.
+pub fn parse_interval(text: &str) -> Option<u32> {
+    let t = text.trim().to_ascii_lowercase();
+    if let Ok(m) = t.parse::<u32>() {
+        return (m > 0).then_some(m);
+    }
+    let (mut total, mut digits) = (0u32, String::new());
+    for c in t.chars().filter(|c| !c.is_whitespace()) {
+        if c.is_ascii_digit() {
+            digits.push(c);
+            continue;
+        }
+        let n: u32 = digits.parse().ok()?;
+        digits.clear();
+        total = total.checked_add(match c {
+            'm' => n,
+            'h' => n.checked_mul(60)?,
+            'd' => n.checked_mul(MINUTES_PER_DAY)?,
+            _ => return None,
+        })?;
+    }
+    (digits.is_empty() && total > 0).then_some(total)
 }
 
 /// When a video wallpaper stops for windows in front of it.
@@ -690,8 +924,10 @@ pub fn next_slide(images: &[PathBuf], current: Option<&PathBuf>, order: Slidesho
     }
     let at = current.and_then(|c| images.iter().position(|p| p == c));
     let next = match order {
-        SlideshowOrder::Alphabetical => at.map_or(0, |i| (i + 1) % images.len()),
-        SlideshowOrder::Random => {
+        // `images` comes newest first for [`SlideshowOrder::Newest`].
+        SlideshowOrder::Alphabetical | SlideshowOrder::Newest => at.map_or(0, |i| (i + 1) % images.len()),
+        // A shuffle without its [`ShuffleDeck`] picks like Random.
+        SlideshowOrder::Random | SlideshowOrder::Shuffle => {
             if images.len() == 1 {
                 0
             } else {
@@ -705,6 +941,61 @@ pub fn next_slide(images: &[PathBuf], current: Option<&PathBuf>, order: Slidesho
         }
     };
     images.get(next).cloned()
+}
+
+/// [`SlideshowOrder::Shuffle`]: every wallpaper once in a shuffled order,
+/// then a fresh shuffle (never starting with the one on screen). A change
+/// to the set of wallpapers starts a new round.
+#[derive(Clone, Debug, Default)]
+pub struct ShuffleDeck {
+    /// Still to show this round; drawn from the end.
+    left: Vec<PathBuf>,
+    /// Fingerprint of the wallpapers the round was dealt from.
+    of: u64,
+}
+
+impl ShuffleDeck {
+    /// Wallpapers left in this round.
+    pub fn remaining(&self) -> usize {
+        self.left.len()
+    }
+
+    /// The next wallpaper of the round (`seed` shuffles a new one).
+    pub fn draw(&mut self, images: &[PathBuf], current: Option<&PathBuf>, seed: u64) -> Option<PathBuf> {
+        use std::hash::{Hash, Hasher};
+        if images.is_empty() {
+            self.left.clear();
+            return None;
+        }
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        images.hash(&mut h);
+        let of = h.finish();
+        if of != self.of || self.left.is_empty() {
+            self.of = of;
+            self.left = images.to_vec();
+            // Fisher–Yates with a xorshift stream from `seed`.
+            let mut state = seed | 1;
+            for i in (1..self.left.len()).rev() {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                let j = usize::try_from(state % (i as u64 + 1)).unwrap_or(0);
+                self.left.swap(i, j);
+            }
+            // A new round never opens with the wallpaper already shown.
+            if self.left.len() > 1 && self.left.last() == current {
+                let last = self.left.len() - 1;
+                self.left.swap(0, last);
+            }
+        }
+        self.left.pop()
+    }
+}
+
+/// Wallpapers newest first (by modification time, then name), for
+/// [`SlideshowOrder::Newest`].
+pub fn newest_first(images: &mut [PathBuf]) {
+    images.sort_by_cached_key(|p| (std::cmp::Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok()), p.file_name().map(|n| n.to_string_lossy().to_lowercase())));
 }
 
 #[cfg(test)]
@@ -722,6 +1013,22 @@ mod tests {
         let custom = DateTimeConfig { bar_time_format: "%H.%M".into(), ..Default::default() };
         assert_eq!(custom.bar_time_pattern(false, true), "%H.%M");
         assert_eq!(d.lock_time_pattern(false), "%-I:%M");
+    }
+
+    #[test]
+    fn weekend_days_follow_the_choice_and_the_region() {
+        let on = |w: Weekend, sat: bool, ar: bool| w.days_from_monday(sat, ar).iter().enumerate().filter(|(_, d)| **d).map(|(i, _)| i).collect::<Vec<_>>();
+        assert_eq!(on(Weekend::Auto, false, false), [5, 6], "Saturday and Sunday by default");
+        assert_eq!(on(Weekend::Auto, true, false), [4, 5], "a Saturday-first week rests on Friday and Saturday");
+        assert_eq!(on(Weekend::Auto, false, true), [4, 5], "so does an Arabic interface");
+        assert_eq!(on(Weekend::SaturdaySunday, true, true), [5, 6], "an explicit choice wins");
+        assert_eq!(on(Weekend::Friday, false, false), [4]);
+        assert_eq!(on(Weekend::Sunday, false, false), [6]);
+        let d = DateTimeConfig::default();
+        assert!(!d.hijri_dates && !d.eastern_numerals && d.weekend == Weekend::Auto, "existing setups look as before");
+        let parsed: DateTimeConfig = toml::from_str("weekend = \"friday-saturday\"\nhijri_dates = true").unwrap();
+        assert_eq!(parsed.weekend, Weekend::FridaySaturday);
+        assert!(parsed.hijri_dates);
     }
 
     #[test]
@@ -759,6 +1066,81 @@ mod tests {
         }
         assert_eq!(next_slide(&imgs[..1], Some(&imgs[0]), SlideshowOrder::Random, 7), Some(imgs[0].clone()));
         assert_eq!(next_slide(&[], None, SlideshowOrder::Random, 7), None);
+    }
+
+    #[test]
+    fn shuffle_shows_every_wallpaper_once_per_round() {
+        let imgs: Vec<PathBuf> = ["a", "b", "c", "d", "e"].iter().map(PathBuf::from).collect();
+        for seed in 0..20 {
+            let mut deck = ShuffleDeck::default();
+            let mut current = Some(imgs[2].clone());
+            let mut seen = Vec::new();
+            for _ in 0..imgs.len() {
+                let next = deck.draw(&imgs, current.as_ref(), seed).unwrap();
+                assert!(!seen.contains(&next), "seed {seed}: {next:?} twice in one round");
+                seen.push(next.clone());
+                current = Some(next);
+            }
+            assert_ne!(seen[0], imgs[2], "a round never opens with the wallpaper on screen");
+            assert_eq!(deck.remaining(), 0);
+            // The next round deals again and doesn't repeat the last one.
+            assert_ne!(deck.draw(&imgs, current.as_ref(), seed + 1), current);
+        }
+        // A changed folder starts a new round from it.
+        let mut deck = ShuffleDeck::default();
+        deck.draw(&imgs, None, 3);
+        let fewer = &imgs[..2];
+        assert!(fewer.contains(&deck.draw(fewer, None, 3).unwrap()));
+        assert_eq!(deck.draw(&[], None, 3), None);
+    }
+
+    #[test]
+    fn slideshow_hours_and_intervals() {
+        let mut s = WallpaperSlideshow::default();
+        assert!(s.in_hours(3 * 60), "no window: always");
+        s.hours = true;
+        assert!(s.in_hours(8 * 60) && s.in_hours(21 * 60 + 59) && !s.in_hours(22 * 60) && !s.in_hours(7 * 60));
+        assert_eq!(s.minutes_until_open(7 * 60 + 30), 30);
+        assert_eq!(s.minutes_until_open(23 * 60), 9 * 60);
+        assert_eq!(s.minutes_until_open(9 * 60), 0);
+        // A window across midnight.
+        s.from = "22:00".into();
+        s.until = "06:30".into();
+        assert!(s.in_hours(23 * 60) && s.in_hours(60) && !s.in_hours(12 * 60));
+        // Unreadable times never stop the slideshow.
+        s.from = "late".into();
+        assert!(s.in_hours(12 * 60));
+        assert_eq!(parse_interval("45"), Some(45));
+        assert_eq!(parse_interval("2h"), Some(120));
+        assert_eq!(parse_interval("1h 30m"), Some(90));
+        assert_eq!(parse_interval("1d"), Some(1440));
+        assert_eq!(parse_interval("0"), None);
+        assert_eq!(parse_interval("soon"), None);
+        assert_eq!(parse_interval("5"), Some(5));
+        assert_eq!(parse_interval("3x"), None);
+        assert_eq!(WallpaperSlideshow { interval_minutes: 0, ..Default::default() }.interval(), defaults::SLIDESHOW_INTERVAL_RANGE.0);
+    }
+
+    #[test]
+    fn slideshow_folders_follow_the_appearance() {
+        let s = WallpaperSlideshow { directory: "~/W".into(), dark_directory: "~/Night".into(), ..Default::default() };
+        assert_eq!(s.folder_for(true), "~/Night");
+        assert_eq!(s.folder_for(false), "~/W", "no light folder: the main one");
+        assert_eq!(WallpaperSlideshow::default().folder_for(true), "", "empty: the wallpaper folder");
+    }
+
+    /// A `[wallpaper.slideshow]` table as 0.4 wrote it keeps its meaning:
+    /// the same folder, order, interval and pause, and nothing new turned on.
+    #[test]
+    fn slideshow_tables_from_before_keep_working() {
+        let old = "enabled = true\ninterval_minutes = 45\norder = \"random\"\ndirectory = \"~/Pictures/Walls\"\npause_on_fullscreen = false\n";
+        let s: WallpaperSlideshow = toml::from_str(old).unwrap();
+        assert!(s.enabled && !s.pause_on_fullscreen);
+        assert_eq!((s.interval(), s.order, s.source, s.folder_for(true)), (45, SlideshowOrder::Random, SlideshowSource::Folder, "~/Pictures/Walls"));
+        assert!(!s.on_start && !s.per_display && !s.hours && !s.subfolders && !s.pause_on_battery);
+        assert_eq!(s.transition.own(), None, "changes keep the desktop's transition");
+        let alpha: WallpaperSlideshow = toml::from_str("order = \"alphabetical\"").unwrap();
+        assert_eq!(alpha.order, SlideshowOrder::Alphabetical);
     }
 
     #[test]

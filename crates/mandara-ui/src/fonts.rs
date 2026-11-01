@@ -12,7 +12,8 @@ pub struct Fonts {
     pub display: SharedString,
     pub arabic: SharedString,
     pub mono: SharedString,
-    /// Per-surface families (`typography.*_font`, else the UI font).
+    /// Per-surface families (`typography.*_font`, else the UI font; the
+    /// widgets font falls back to the display face).
     pub bar: SharedString,
     pub panels: SharedString,
     pub studio: SharedString,
@@ -127,17 +128,16 @@ impl Fonts {
         const UI_FALLBACKS: [&str; 5] = ["Inter", "Inter Display", "Cantarell", "Noto Sans", "DejaVu Sans"];
         let ui = pick(&installed, &cfg.ui_font, &UI_FALLBACKS);
         let surface = |family: &str| if family.trim().is_empty() { ui.clone() } else { pick(&installed, family.trim(), &UI_FALLBACKS) };
+        let display = pick(&installed, &cfg.display_font, &["Alexandria", "Inter Display", "Inter", "Cairo", "Noto Sans"]);
         Self {
             bar: surface(&cfg.bar_font),
             panels: surface(&cfg.panels_font),
             studio: surface(&cfg.studio_font),
-            widgets: surface(&cfg.widgets_font),
+            // Desktop widgets were designed in the display face: it is
+            // theirs until a widgets font is chosen.
+            widgets: if cfg.widgets_font.trim().is_empty() { display.clone() } else { pick(&installed, cfg.widgets_font.trim(), &UI_FALLBACKS) },
             ui: ui.clone(),
-            display: pick(
-                &installed,
-                &cfg.display_font,
-                &["Alexandria", "Inter Display", "Inter", "Cairo", "Noto Sans"],
-            ),
+            display,
             arabic: pick(&installed, &cfg.arabic_font, &["Cairo", "Alexandria", "Noto Sans Arabic", "Noto Naskh Arabic"]),
             mono: pick_mono(&installed, &cfg.mono_font, system_fixed_pitch_family),
             emoji: EMOJI_FAMILIES.iter().find(|name| installed.iter().any(|f| f.eq_ignore_ascii_case(name))).map(|f| SharedString::from(*f)),

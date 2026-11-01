@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>Now playing</title>
+  <defs>
+    <linearGradient id="now-playing-tile" x1="64" y1="40" x2="448" y2="496" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2B2160"/><stop offset="1" stop-color="#15113A"/>
+    </linearGradient>
+    <radialGradient id="now-playing-light" cx="0" cy="0" r="1" gradientTransform="translate(98 48) rotate(45) scale(440 354)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="now-playing-rim" x1="76" y1="28" x2="446" y2="482" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".72"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".08"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".24"/>
+    </linearGradient>
+    <clipPath id="now-playing-tile-clip"><rect x="16" y="16" width="480" height="480" rx="108"/></clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#now-playing-tile)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#now-playing-light)"/>
+  <g clip-path="url(#now-playing-tile-clip)">
+    <path d="M-28 324C126 476 349 518 544 274v238H-28z" fill="#FFFFFF" opacity=".045"/>
+  </g>
+  <rect x="19" y="19" width="474" height="474" rx="105" stroke="url(#now-playing-rim)" stroke-width="2"/>
+  <g id="now-playing-glyph" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+    <rect id="now-playing-album" x="132" y="104" width="248" height="248" rx="34" stroke="#FF8A6B"/>
+    <path id="now-playing-note" d="M252 253v-83a14 14 0 0 1 20-12l52 27a14 14 0 0 1-13 25l-31-16v90c0 18-18 32-40 32s-40-14-40-32 18-32 40-32c4 0 8 0 12 1z" fill="#F6B65A"/>
+    <path id="now-playing-progress" d="M142 406c19-28 38-28 57 0s38 28 57 0 38-28 57 0 38 28 57 0" stroke="#F6B65A"/>
+  </g>
+</svg>

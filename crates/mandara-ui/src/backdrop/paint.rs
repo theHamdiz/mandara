@@ -234,11 +234,29 @@ pub struct FontNames {
     pub arabic: String,
     /// Monospace (desktop widgets).
     pub mono: String,
+    /// Typography → Desktop widgets (the display face when unset).
+    pub widgets: String,
+    /// One widget's own family (`font = "custom"`); set per widget.
+    pub custom: String,
 }
 
 impl From<&crate::fonts::Fonts> for FontNames {
     fn from(f: &crate::fonts::Fonts) -> Self {
-        Self { ui: f.ui.to_string(), display: f.display.to_string(), arabic: f.arabic.to_string(), mono: f.mono.to_string() }
+        Self { ui: f.ui.to_string(), display: f.display.to_string(), arabic: f.arabic.to_string(), mono: f.mono.to_string(), widgets: f.widgets.to_string(), custom: String::new() }
+    }
+}
+
+impl FontNames {
+    /// The four Typography families, with the widgets font following the
+    /// display face (tests, previews without the resolved fonts).
+    pub fn new(ui: &str, display: &str, arabic: &str, mono: &str) -> Self {
+        Self { ui: ui.into(), display: display.into(), arabic: arabic.into(), mono: mono.into(), widgets: display.into(), custom: String::new() }
+    }
+
+    /// These names for a widget with `look`: its own family filled in.
+    pub fn for_look(&self, look: Option<&mandara_config::desktop_widgets::Look>) -> Self {
+        let custom = look.map(|l| l.font_family.trim()).filter(|f| !f.is_empty()).unwrap_or(&self.widgets);
+        Self { custom: custom.to_string(), ..self.clone() }
     }
 }
 
@@ -406,20 +424,32 @@ impl DecorGeometry {
                 text.measure(t, &font).0
             };
             let txt = |t: &str, arabic: bool, opacity: f32, m: &mut dyn FnMut(&str, bool) -> f32| PillItem::Text { text: t.to_string(), arabic, opacity, w: m(t, arabic) };
-            pill_items.push(txt(&d.gregorian, false, 1.0, &mut measure));
-            pill_items.push(PillItem::Gap(px(PILL_GAP * k)));
-            pill_items.push(PillItem::Dot);
-            pill_items.push(PillItem::Gap(px(PILL_GAP * k)));
-            // Right-to-left by hand (day · month · year read from the right).
-            pill_items.push(txt(&d.hijri_ar.2, true, 1.0, &mut measure));
-            pill_items.push(PillItem::Gap(px(PILL_HIJRI_GAP * k)));
-            pill_items.push(txt(d.hijri_ar.1, true, 1.0, &mut measure));
-            pill_items.push(PillItem::Gap(px(PILL_HIJRI_GAP * k)));
-            pill_items.push(txt(&d.hijri_ar.0, true, 1.0, &mut measure));
+            // Each part after the first is set off by a dot.
+            let dot = |items: &mut Vec<PillItem>| {
+                if !items.is_empty() {
+                    items.push(PillItem::Gap(px(PILL_GAP * k)));
+                    items.push(PillItem::Dot);
+                    items.push(PillItem::Gap(px(PILL_GAP * k)));
+                }
+            };
+            if !d.gregorian.is_empty() {
+                pill_items.push(txt(&d.gregorian, false, 1.0, &mut measure));
+            }
+            if !d.hijri_ar.1.is_empty() {
+                dot(&mut pill_items);
+                // Arabic right to left by hand (day · month · year read
+                // from the right); another language reads day month year.
+                let (day, month, year) = &d.hijri_ar;
+                let parts = if d.hijri_arabic { [year, month, day] } else { [day, month, year] };
+                for (i, part) in parts.into_iter().enumerate() {
+                    if i > 0 {
+                        pill_items.push(PillItem::Gap(px(PILL_HIJRI_GAP * k)));
+                    }
+                    pill_items.push(txt(part, d.hijri_arabic, 1.0, &mut measure));
+                }
+            }
             if let Some((icon, temp, label)) = &d.weather {
-                pill_items.push(PillItem::Gap(px(PILL_GAP * k)));
-                pill_items.push(PillItem::Dot);
-                pill_items.push(PillItem::Gap(px(PILL_GAP * k)));
+                dot(&mut pill_items);
                 pill_items.push(PillItem::Icon(icon));
                 pill_items.push(PillItem::Gap(px(PILL_WEATHER_GAP * k)));
                 pill_items.push(txt(temp, false, 1.0, &mut measure));
@@ -705,8 +735,8 @@ mod tests {
     #[test]
     fn decor_planes_are_snapped_and_inside_the_output() {
         let cfg = WallpaperConfig::default();
-        let fonts = FontNames { ui: "Inter".into(), display: "Inter".into(), arabic: "Cairo".into(), mono: "JetBrains Mono".into() };
-        let date = DateLine { gregorian: "Tuesday, 27 October".into(), hijri_ar: ("٥".into(), "جمادى الأولى", "١٤٤٨".into()), hijri_latin: String::new(), weather: Some(("sun", "23°".into(), "Clear".into())) };
+        let fonts = FontNames::new("Inter", "Inter", "Cairo", "JetBrains Mono");
+        let date = DateLine { gregorian: "Tuesday, 27 October".into(), hijri_ar: ("٥".into(), "جمادى الأولى".into(), "١٤٤٨".into()), hijri_arabic: true, hijri_latin: String::new(), weather: Some(("sun", "23°".into(), "Clear".into())) };
         let lines = vec!["21".to_string(), "05".to_string()];
         let ink = desktop::ink_for(None, Color::oklch(0.6, 0.1, 200.0));
         let input = DecorInput { logical: (2560.0, 1440.0), scale120: 180, cfg: &cfg, lines: &lines, date: Some(&date), ink, fonts: &fonts, safe: Default::default() };

@@ -58,6 +58,8 @@ pub mod ranges {
     pub const BAR_ICON_SCALE: Span = Span::new(0.75, 1.6, 0.05);
     /// Background opacity (0–1).
     pub const OPACITY: Span = Span::new(0.0, 1.0, 0.05);
+    /// Extra space a bar keeps between itself and windows.
+    pub const BAR_WINDOW_GAP: Span = Span::new(0.0, 32.0, 1.0);
 
     pub const SIDEBAR_WIDTH: Span = Span::new(280.0, 520.0, 4.0);
     pub const SIDE_PANEL_RADIUS: Span = Span::new(0.0, 40.0, 1.0);
@@ -98,6 +100,9 @@ pub mod defaults {
     pub const BAR_VERTICAL_WIDTH_PX: f32 = 40.0;
     pub const SCREEN_FRAME_PX: f32 = 6.0;
     pub const BAR_SHADOW_STRENGTH: f32 = 0.5;
+    /// The CSS font-weight scale a bar weight is clamped to.
+    pub const FONT_WEIGHT_MIN: u16 = 100;
+    pub const FONT_WEIGHT_MAX: u16 = 900;
     /// Side panel corner radius (floating side panels, or every bar style
     /// but the edge frame) and the card radius / padding / spacing.
     pub const SIDE_PANEL_RADIUS_PX: f32 = 26.0;
@@ -144,6 +149,31 @@ pub enum BarSeparator {
     None,
     Dot,
     Line,
+}
+
+/// Colour of the bar's group and item capsules.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BarCapsuleFill {
+    /// A faint wash of the text colour (the shipped look).
+    #[default]
+    Soft,
+    /// The raised container tone of cards.
+    Container,
+    /// A tint of the theme accent.
+    Accent,
+}
+
+/// What scrolling over empty bar space does.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BarScrollAction {
+    #[default]
+    None,
+    /// The next / previous workspace (tag on MangoWM) of that display.
+    Workspaces,
+    /// Output volume up / down.
+    Volume,
 }
 
 /// A spring that follows `[motion]` or uses its own stiffness / damping.
@@ -258,14 +288,15 @@ impl SidebarLook {
         if self.floating() { self.margin_px() } else { 0.0 }
     }
 
-    /// Floats when set to, and also while `bar` has no edge frame to join:
-    /// glass pills, the island, the micro pill, the notch or a floating
-    /// frame. A flush
-    /// panel there looked bolted onto the screen edge under a bar that
-    /// floats. Beside a side bar it stays as set.
+    /// Floats when set to, and also while `bar` has nothing attached to
+    /// join: glass pills, the island, the micro pill or a floating frame. A
+    /// flush panel there looked bolted onto the screen edge under a bar that
+    /// floats. Flush, it joins the edge frame, the hairline and the notch
+    /// (it rises to the notch's edge and merges into it). Beside a side bar
+    /// it stays as set.
     pub fn floats_with(&self, bar: &crate::BarConfig) -> bool {
         let side_bar = matches!(bar.position, crate::BarPosition::Left | crate::BarPosition::Right);
-        self.floating() || (!side_bar && (!bar.layout.is_full_width() || bar.floating_frame))
+        self.floating() || (!side_bar && (!bar.layout.is_attached() || (bar.layout.is_full_width() && bar.floating_frame)))
     }
 
     /// [`Self::inset`] for the panel as drawn beside `bar` ([`Self::floats_with`]).
@@ -475,12 +506,30 @@ mod tests {
     }
 
     #[test]
+    fn a_flush_sidebar_joins_every_attached_bar_and_floats_beside_the_rest() {
+        let look = SidebarLook::default();
+        let bar = |layout: crate::BarLayout, floating_frame: bool| crate::BarConfig { layout, floating_frame, ..Default::default() };
+        for layout in [crate::BarLayout::MinimalEdge, crate::BarLayout::Hairline, crate::BarLayout::Notch] {
+            assert!(!look.floats_with(&bar(layout, false)), "{layout:?} has an edge to join");
+        }
+        for layout in [crate::BarLayout::FloatingPills, crate::BarLayout::ContiguousIsland, crate::BarLayout::Micro] {
+            assert!(look.floats_with(&bar(layout, false)), "{layout:?} floats");
+        }
+        assert!(look.floats_with(&bar(crate::BarLayout::MinimalEdge, true)), "a floating frame has nothing to join");
+        assert!(!look.floats_with(&bar(crate::BarLayout::Notch, true)), "the notch never floats");
+    }
+
+    #[test]
     fn older_bar_tables_keep_the_shipped_look() {
         let bar: crate::BarConfig = toml::from_str("height = 28.0\ncorner_radius = 10.0").unwrap();
         assert_eq!(bar.height, 28.0);
         assert_eq!((bar.chip_padding(), bar.chip_spacing()), (defaults::BAR_CHIP_PADDING_PX, defaults::BAR_CHIP_SPACING_PX));
         assert_eq!((bar.text_scale(), bar.icon_scale(), bar.tint, bar.shadow, bar.floating_frame), (1.0, 1.0, 0.0, false, false));
         assert_eq!((bar.center_align, bar.separator), (BarCenterAlign::Screen, BarSeparator::None));
+        // The item options of a later release keep the old look too.
+        assert!(bar.hover_highlight && !bar.item_capsules && !bar.capsule_outline);
+        assert_eq!((bar.capsule_fill, bar.scroll, bar.window_gap(), bar.font_weight), (BarCapsuleFill::Soft, BarScrollAction::None, 0.0, 0));
+        assert_eq!(bar.middle_click.action, crate::desktop::CornerAction::None);
         // A whole config from before these tables loads, and round-trips.
         let cfg: crate::ShellConfig = toml::from_str("[bar]\nheight = 30.0\n[sidebar]\nwidth = 380.0\npinned = true").unwrap();
         assert_eq!(cfg.panels, PanelsConfig::default());
@@ -500,5 +549,10 @@ mod tests {
         assert_eq!(bar.text_scale(), ranges::BAR_TEXT_SCALE.min);
         assert_eq!(bar.icon_scale(), ranges::BAR_ICON_SCALE.max);
         assert_eq!(bar.shape_radius(), 0.0);
+        let bar = crate::BarConfig { window_gap: 900.0, capsule_strength: f32::NAN, font_weight: 2000, ..Default::default() };
+        assert_eq!(bar.window_gap(), ranges::BAR_WINDOW_GAP.max);
+        assert_eq!(bar.capsule_strength(), 1.0);
+        assert_eq!(bar.font_weight(400), defaults::FONT_WEIGHT_MAX);
+        assert_eq!(crate::BarConfig::default().font_weight(450), 450, "0 follows the interface weight");
     }
 }

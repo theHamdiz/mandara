@@ -42,6 +42,9 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::widget_style::ranges as style;
+pub use crate::widget_kinds::*;
+pub use crate::widget_style::{Chrome, PlateShape, ShadowKind};
 use crate::{ClockStyle, ShellConfig};
 
 /// Bounds and defaults of the widget settings, in one place.
@@ -98,7 +101,59 @@ pub mod ranges {
     /// Font weight (CSS scale).
     pub const WEIGHT: (u16, u16) = (100, 900);
     pub const WEIGHT_DEFAULT: u16 = 400;
+    /// Shadow / glow strength (1 = as designed).
+    pub const EFFECT_STRENGTH: (f32, f32) = (0.1, 2.0);
+    pub const EFFECT_STRENGTH_DEFAULT: f32 = 1.0;
+    /// The plate behind a widget: opacity, corner radius and padding
+    /// (reference px).
+    pub const PLATE_OPACITY: (f32, f32) = (0.05, 1.0);
+    pub const PLATE_OPACITY_DEFAULT: f32 = 0.55;
+    pub const PLATE_RADIUS_PX: (f32, f32) = (0.0, 64.0);
+    pub const PLATE_RADIUS_DEFAULT_PX: f32 = 24.0;
+    pub const PLATE_PADDING_PX: (f32, f32) = (0.0, 96.0);
+    pub const PLATE_PADDING_DEFAULT_PX: f32 = 24.0;
+    /// World clock: most cities on one widget.
+    pub const WORLD_CLOCK_CITIES: usize = 8;
+    /// Weather: forecast days shown.
+    pub const WEATHER_DAYS: (u32, u32) = (0, 7);
+    pub const WEATHER_DAYS_DEFAULT: u32 = 4;
+    /// Analog hands' width, reference px.
+    pub const HAND_WIDTH_PX: (f32, f32) = (2.0, 24.0);
+    pub const HAND_WIDTH_DEFAULT_PX: f32 = 5.0;
+    /// Dot-matrix: brightness of the unlit dots.
+    pub const UNLIT: (f32, f32) = (0.0, 0.5);
+    pub const UNLIT_DEFAULT: f32 = 0.12;
+    /// Stack face: gap between hours and minutes (fraction of a line).
+    pub const LINE_GAP: (f32, f32) = (-0.4, 0.6);
+    pub const LINE_GAP_DEFAULT: f32 = -0.18;
+    /// HUD face: slant, degrees.
+    pub const SLANT_DEG: (f32, f32) = (-30.0, 30.0);
+    pub const SLANT_DEFAULT_DEG: f32 = 12.0;
+    /// Numerals face: the giant numerals' strength.
+    pub const NUMERALS: (f32, f32) = (0.05, 1.0);
+    pub const NUMERALS_DEFAULT: f32 = 0.22;
+    /// Template face: a new line's size, and most lines.
+    pub const TEMPLATE_SIZE_DEFAULT_PX: f32 = 32.0;
+    pub const TEMPLATE_LINES: usize = 6;
+    /// Progress: ring / bar thickness, reference px.
+    pub const PROGRESS_THICKNESS_PX: (f32, f32) = (2.0, 40.0);
+    pub const PROGRESS_THICKNESS_DEFAULT_PX: f32 = 12.0;
+    /// Monitor gauges: ring width (reference px), where the ring starts
+    /// (degrees from the top; the gauges leave a gap at the bottom), and
+    /// meter segments.
+    pub const RING_WIDTH_PX: (f32, f32) = (1.0, 24.0);
+    pub const RING_WIDTH_DEFAULT_PX: f32 = 6.5;
+    pub const START_ANGLE_DEFAULT_DEG: f32 = -135.0;
+    pub const SEGMENTS: (u32, u32) = (3, 40);
+    pub const SEGMENTS_DEFAULT: u32 = 10;
 }
+
+/// The `[desktop.widgets]` defaults this build ships (see
+/// [`crate::upgrade`]): since version 1 a widget's numerals, calendar and
+/// font are its own settings (numerals and font follow the language and the
+/// widgets font by default); an older list is upgraded to show exactly
+/// what it showed before.
+pub const WIDGETS_VERSION: u32 = 1;
 
 // ── Shared model ─────────────────────────────────────────────────────────
 
@@ -110,9 +165,13 @@ pub struct DesktopConfig {
 }
 
 /// `[desktop.widgets]`.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DesktopWidgetsConfig {
+    /// The defaults this list was written for ([`WIDGETS_VERSION`]);
+    /// missing in older files.
+    #[serde(default)]
+    pub version: u32,
     /// The `[wallpaper]` depth clock has been moved into [`Self::items`].
     pub migrated: bool,
     /// Every widget (the depth clock and the cards too) is hidden for now,
@@ -121,6 +180,12 @@ pub struct DesktopWidgetsConfig {
     pub hidden: bool,
     /// Widgets in paint order (later ones on top).
     pub items: Vec<DesktopWidget>,
+}
+
+impl Default for DesktopWidgetsConfig {
+    fn default() -> Self {
+        Self { version: WIDGETS_VERSION, migrated: false, hidden: false, items: Vec::new() }
+    }
 }
 
 /// One widget placed on the desktop.
@@ -158,11 +223,16 @@ pub struct Placement {
     pub opacity: f32,
     /// Under the wallpaper's subject (depth effect) or over it.
     pub depth: Depth,
+    /// Turned about its centre, degrees clockwise.
+    pub rotation: f32,
+    /// Mirrored left to right / top to bottom.
+    pub flip_x: bool,
+    pub flip_y: bool,
 }
 
 impl Default for Placement {
     fn default() -> Self {
-        Self { displays: Vec::new(), anchor: Anchor::Center, x: 0.0, y: 0.0, scale: 1.0, opacity: 1.0, depth: Depth::Behind }
+        Self { displays: Vec::new(), anchor: Anchor::Center, x: 0.0, y: 0.0, scale: 1.0, opacity: 1.0, depth: Depth::Behind, rotation: 0.0, flip_x: false, flip_y: false }
     }
 }
 
@@ -178,6 +248,15 @@ impl Placement {
 
     pub fn opacity(&self) -> f32 {
         self.opacity.clamp(ranges::OPACITY.0, ranges::OPACITY.1)
+    }
+
+    pub fn rotation(&self) -> f32 {
+        crate::widget_style::ranges::ROTATION_DEG.clamp(self.rotation, 0.0)
+    }
+
+    /// Turned or mirrored (drawn through a transform).
+    pub fn transformed(&self) -> bool {
+        self.rotation() != 0.0 || self.flip_x || self.flip_y
     }
 
     /// Top-left of a `w × h` box on a `out_w × out_h` display (same units),
@@ -289,9 +368,39 @@ pub enum WidgetKind {
     Monitor(MonitorWidget),
     Decoration(Decoration),
     Visualizer(PlaneVisualizer),
-    /// An interactive card (media, calendar, …) on its own small layer
-    /// surface, drawn by the shell's card host: `card` names it, `options`
-    /// holds its settings.
+    Weather(WeatherWidget),
+    WorldClock(WorldClockWidget),
+    Countdown(CountdownWidget),
+    Progress(ProgressWidget),
+    Todo(TodoWidget),
+    Note(NoteWidget),
+    Pomodoro(PomodoroWidget),
+    Quote(QuoteWidget),
+    Notebook(NotebookWidget),
+    Date(DateWidget),
+    Sky(SkyWidget),
+    Profile(ProfileWidget),
+    Shortcuts(ShortcutsWidget),
+    Toggles(TogglesWidget),
+    Sliders(SlidersWidget),
+    Palette(PaletteWidget),
+    Pet(PetWidget),
+    Bubbles(BubblesWidget),
+    Photo(PhotoWidget),
+    Sticker(StickerWidget),
+    Media(MediaWidget),
+    Fetch(FetchWidget),
+    ScreenTime(ScreenTimeWidget),
+    Prayer(PrayerWidget),
+    Search(SearchWidget),
+    Glance(GlanceWidget),
+    Github(GithubWidget),
+    Currency(CurrencyWidget),
+    AiUsage(AiUsageWidget),
+    Games(GamesWidget),
+    /// An interactive card (media, calendar, a plugin's widget, …) on its
+    /// own small layer surface, drawn by the shell's card host: `card`
+    /// names it, `options` holds its settings.
     Card(CardWidget),
 }
 
@@ -303,13 +412,349 @@ impl WidgetKind {
             WidgetKind::Monitor(_) => "monitor",
             WidgetKind::Decoration(_) => "decoration",
             WidgetKind::Visualizer(_) => "visualizer",
-            WidgetKind::Card(_) => "card",
+            WidgetKind::Weather(_) => "weather",
+            WidgetKind::WorldClock(_) => "world-clock",
+            WidgetKind::Countdown(_) => "countdown",
+            WidgetKind::Progress(_) => "progress",
+            WidgetKind::Todo(_) => "todo",
+                        WidgetKind::Note(_) => "note",
+                        WidgetKind::Pomodoro(_) => "pomodoro",
+                        WidgetKind::Quote(_) => "quote",
+                        WidgetKind::Notebook(_) => "notebook",
+            WidgetKind::Date(_) => "date",
+            WidgetKind::Sky(_) => "sky",
+            WidgetKind::Profile(_) => "profile",
+            WidgetKind::Shortcuts(_) => "shortcuts",
+            WidgetKind::Toggles(_) => "toggles",
+            WidgetKind::Sliders(_) => "sliders",
+            WidgetKind::Palette(_) => "palette",
+            WidgetKind::Pet(_) => "pet",
+            WidgetKind::Bubbles(_) => "bubbles",
+            WidgetKind::Photo(_) => "photo",
+            WidgetKind::Sticker(_) => "sticker",
+            WidgetKind::Media(_) => "media",
+            WidgetKind::Fetch(_) => "fetch",
+            WidgetKind::ScreenTime(_) => "screen-time",
+            WidgetKind::Prayer(_) => "prayer",
+            WidgetKind::Search(_) => "search",
+            WidgetKind::Glance(_) => "glance",
+            WidgetKind::Github(_) => "github",
+            WidgetKind::Currency(_) => "currency",
+            WidgetKind::AiUsage(_) => "ai-usage",
+            WidgetKind::Games(_) => "games",
+                        WidgetKind::Card(_) => "card",
         }
     }
 
     /// Painted by the software wallpaper renderer (cards are not).
     pub fn on_wallpaper_plane(&self) -> bool {
         !matches!(self, WidgetKind::Card(_))
+    }
+
+    /// The painted look, for every kind that has one.
+    pub fn look(&self) -> Option<&Look> {
+        match self {
+            WidgetKind::Clock(c) => Some(&c.look),
+            WidgetKind::Monitor(m) => Some(&m.look),
+            WidgetKind::Decoration(d) => Some(&d.look),
+            WidgetKind::Visualizer(v) => Some(&v.look),
+            WidgetKind::Weather(w) => Some(&w.look),
+            WidgetKind::WorldClock(w) => Some(&w.look),
+            WidgetKind::Countdown(c) => Some(&c.look),
+            WidgetKind::Progress(p) => Some(&p.look),
+            WidgetKind::Todo(x) => Some(&x.look),
+            WidgetKind::Note(x) => Some(&x.look),
+            WidgetKind::Pomodoro(x) => Some(&x.look),
+            WidgetKind::Quote(x) => Some(&x.look),
+            WidgetKind::Notebook(x) => Some(&x.look),
+            WidgetKind::Date(x) => Some(&x.look),
+            WidgetKind::Sky(x) => Some(&x.look),
+            WidgetKind::Profile(x) => Some(&x.look),
+            WidgetKind::Shortcuts(x) => Some(&x.look),
+            WidgetKind::Toggles(x) => Some(&x.look),
+            WidgetKind::Sliders(x) => Some(&x.look),
+            WidgetKind::Palette(x) => Some(&x.look),
+            WidgetKind::Pet(x) => Some(&x.look),
+            WidgetKind::Bubbles(x) => Some(&x.look),
+            WidgetKind::Photo(x) => Some(&x.look),
+            WidgetKind::Sticker(x) => Some(&x.look),
+            WidgetKind::Media(x) => Some(&x.look),
+            WidgetKind::Fetch(x) => Some(&x.look),
+            WidgetKind::ScreenTime(x) => Some(&x.look),
+            WidgetKind::Prayer(x) => Some(&x.look),
+            WidgetKind::Search(x) => Some(&x.look),
+            WidgetKind::Glance(x) => Some(&x.look),
+            WidgetKind::Github(x) => Some(&x.look),
+            WidgetKind::Currency(x) => Some(&x.look),
+            WidgetKind::AiUsage(x) => Some(&x.look),
+            WidgetKind::Games(x) => Some(&x.look),
+            WidgetKind::Card(_) => None,
+        }
+    }
+
+    pub fn look_mut(&mut self) -> Option<&mut Look> {
+        match self {
+            WidgetKind::Clock(c) => Some(&mut c.look),
+            WidgetKind::Monitor(m) => Some(&mut m.look),
+            WidgetKind::Decoration(d) => Some(&mut d.look),
+            WidgetKind::Visualizer(v) => Some(&mut v.look),
+            WidgetKind::Weather(w) => Some(&mut w.look),
+            WidgetKind::WorldClock(w) => Some(&mut w.look),
+            WidgetKind::Countdown(c) => Some(&mut c.look),
+            WidgetKind::Progress(p) => Some(&mut p.look),
+            WidgetKind::Todo(x) => Some(&mut x.look),
+            WidgetKind::Note(x) => Some(&mut x.look),
+            WidgetKind::Pomodoro(x) => Some(&mut x.look),
+            WidgetKind::Quote(x) => Some(&mut x.look),
+            WidgetKind::Notebook(x) => Some(&mut x.look),
+            WidgetKind::Date(x) => Some(&mut x.look),
+            WidgetKind::Sky(x) => Some(&mut x.look),
+            WidgetKind::Profile(x) => Some(&mut x.look),
+            WidgetKind::Shortcuts(x) => Some(&mut x.look),
+            WidgetKind::Toggles(x) => Some(&mut x.look),
+            WidgetKind::Sliders(x) => Some(&mut x.look),
+            WidgetKind::Palette(x) => Some(&mut x.look),
+            WidgetKind::Pet(x) => Some(&mut x.look),
+            WidgetKind::Bubbles(x) => Some(&mut x.look),
+            WidgetKind::Photo(x) => Some(&mut x.look),
+            WidgetKind::Sticker(x) => Some(&mut x.look),
+            WidgetKind::Media(x) => Some(&mut x.look),
+            WidgetKind::Fetch(x) => Some(&mut x.look),
+            WidgetKind::ScreenTime(x) => Some(&mut x.look),
+            WidgetKind::Prayer(x) => Some(&mut x.look),
+            WidgetKind::Search(x) => Some(&mut x.look),
+            WidgetKind::Glance(x) => Some(&mut x.look),
+            WidgetKind::Github(x) => Some(&mut x.look),
+            WidgetKind::Currency(x) => Some(&mut x.look),
+            WidgetKind::AiUsage(x) => Some(&mut x.look),
+            WidgetKind::Games(x) => Some(&mut x.look),
+            WidgetKind::Card(_) => None,
+        }
+    }
+
+    /// Digits, calendar and language, for every kind that writes them.
+    pub fn locale(&self) -> Option<&TextOptions> {
+        match self {
+            WidgetKind::Clock(c) => Some(&c.locale),
+            WidgetKind::Monitor(m) => Some(&m.locale),
+            WidgetKind::Weather(w) => Some(&w.locale),
+            WidgetKind::WorldClock(w) => Some(&w.locale),
+            WidgetKind::Countdown(c) => Some(&c.locale),
+            WidgetKind::Progress(p) => Some(&p.locale),
+            WidgetKind::Todo(x) => Some(&x.locale),
+            WidgetKind::Note(x) => Some(&x.locale),
+            WidgetKind::Pomodoro(x) => Some(&x.locale),
+            WidgetKind::Quote(x) => Some(&x.locale),
+            WidgetKind::Notebook(x) => Some(&x.locale),
+            WidgetKind::Date(x) => Some(&x.locale),
+            WidgetKind::Sky(x) => Some(&x.locale),
+            WidgetKind::Profile(x) => Some(&x.locale),
+            WidgetKind::Shortcuts(x) => Some(&x.locale),
+            WidgetKind::Toggles(x) => Some(&x.locale),
+            WidgetKind::Sliders(x) => Some(&x.locale),
+            WidgetKind::Palette(x) => Some(&x.locale),
+            WidgetKind::Pet(x) => Some(&x.locale),
+            WidgetKind::Media(x) => Some(&x.locale),
+            WidgetKind::Fetch(x) => Some(&x.locale),
+            WidgetKind::ScreenTime(x) => Some(&x.locale),
+            WidgetKind::Prayer(x) => Some(&x.locale),
+            WidgetKind::Search(x) => Some(&x.locale),
+            WidgetKind::Glance(x) => Some(&x.locale),
+            WidgetKind::Github(x) => Some(&x.locale),
+            WidgetKind::Currency(x) => Some(&x.locale),
+            WidgetKind::AiUsage(x) => Some(&x.locale),
+            WidgetKind::Games(x) => Some(&x.locale),
+            WidgetKind::Decoration(_) | WidgetKind::Visualizer(_) | WidgetKind::Bubbles(_) | WidgetKind::Photo(_) | WidgetKind::Sticker(_) | WidgetKind::Card(_) => None,
+        }
+    }
+
+    pub fn locale_mut(&mut self) -> Option<&mut TextOptions> {
+        match self {
+            WidgetKind::Clock(c) => Some(&mut c.locale),
+            WidgetKind::Monitor(m) => Some(&mut m.locale),
+            WidgetKind::Weather(w) => Some(&mut w.locale),
+            WidgetKind::WorldClock(w) => Some(&mut w.locale),
+            WidgetKind::Countdown(c) => Some(&mut c.locale),
+            WidgetKind::Progress(p) => Some(&mut p.locale),
+            WidgetKind::Todo(x) => Some(&mut x.locale),
+            WidgetKind::Note(x) => Some(&mut x.locale),
+            WidgetKind::Pomodoro(x) => Some(&mut x.locale),
+            WidgetKind::Quote(x) => Some(&mut x.locale),
+            WidgetKind::Notebook(x) => Some(&mut x.locale),
+            WidgetKind::Date(x) => Some(&mut x.locale),
+            WidgetKind::Sky(x) => Some(&mut x.locale),
+            WidgetKind::Profile(x) => Some(&mut x.locale),
+            WidgetKind::Shortcuts(x) => Some(&mut x.locale),
+            WidgetKind::Toggles(x) => Some(&mut x.locale),
+            WidgetKind::Sliders(x) => Some(&mut x.locale),
+            WidgetKind::Palette(x) => Some(&mut x.locale),
+            WidgetKind::Pet(x) => Some(&mut x.locale),
+            WidgetKind::Media(x) => Some(&mut x.locale),
+            WidgetKind::Fetch(x) => Some(&mut x.locale),
+            WidgetKind::ScreenTime(x) => Some(&mut x.locale),
+            WidgetKind::Prayer(x) => Some(&mut x.locale),
+            WidgetKind::Search(x) => Some(&mut x.locale),
+            WidgetKind::Glance(x) => Some(&mut x.locale),
+            WidgetKind::Github(x) => Some(&mut x.locale),
+            WidgetKind::Currency(x) => Some(&mut x.locale),
+            WidgetKind::AiUsage(x) => Some(&mut x.locale),
+            WidgetKind::Games(x) => Some(&mut x.locale),
+            WidgetKind::Decoration(_) | WidgetKind::Visualizer(_) | WidgetKind::Bubbles(_) | WidgetKind::Photo(_) | WidgetKind::Sticker(_) | WidgetKind::Card(_) => None,
+        }
+    }
+
+    /// The first-party plugin that provides this kind (see
+    /// [`crate::desktop_cards::card_plugin`] for cards).
+    pub fn plugin(&self) -> &str {
+        match self {
+            WidgetKind::Clock(_) | WidgetKind::Progress(_) => plugin_ids::CLOCKS,
+            WidgetKind::Monitor(_) => plugin_ids::MONITOR,
+            WidgetKind::Decoration(_) => plugin_ids::DECORATIONS,
+            WidgetKind::Visualizer(_) => plugin_ids::VISUALIZERS,
+            WidgetKind::Weather(_) => plugin_ids::WEATHER,
+            WidgetKind::WorldClock(_) => plugin_ids::WORLD_CLOCK,
+            WidgetKind::Countdown(_) => plugin_ids::COUNTDOWN,
+            WidgetKind::Todo(_) | WidgetKind::Note(_) | WidgetKind::Pomodoro(_) | WidgetKind::Quote(_) | WidgetKind::Notebook(_) => plugin_ids::PRODUCTIVITY,
+            WidgetKind::Date(_) => plugin_ids::CALENDAR,
+            WidgetKind::Sky(_) => plugin_ids::SKY,
+            WidgetKind::Profile(_) | WidgetKind::Shortcuts(_) | WidgetKind::Toggles(_) | WidgetKind::Sliders(_) | WidgetKind::Palette(_) => plugin_ids::IDENTITY,
+            WidgetKind::Pet(_) | WidgetKind::Bubbles(_) | WidgetKind::Photo(_) | WidgetKind::Sticker(_) => plugin_ids::FUN,
+            WidgetKind::Media(_) => plugin_ids::NOW_PLAYING,
+            WidgetKind::Fetch(_) | WidgetKind::ScreenTime(_) | WidgetKind::Prayer(_) | WidgetKind::Search(_) | WidgetKind::Glance(_) | WidgetKind::Github(_) | WidgetKind::Currency(_) | WidgetKind::AiUsage(_) | WidgetKind::Games(_) => plugin_ids::INFO,
+            WidgetKind::Card(c) => crate::desktop_cards::card_plugin(&c.card),
+        }
+    }
+}
+
+/// Ids of the first-party plugins that provide the desktop widgets. A
+/// widget whose plugin is switched off isn't drawn (it stays in the list).
+pub mod plugin_ids {
+    pub const CLOCKS: &str = "desktop-clocks";
+    pub const MONITOR: &str = "desktop-monitor";
+    pub const DECORATIONS: &str = "desktop-decorations";
+    pub const VISUALIZERS: &str = "desktop-visualizers";
+    pub const NOW_PLAYING: &str = "desktop-now-playing";
+    pub const CALENDAR: &str = "desktop-calendar";
+    pub const WEATHER: &str = "desktop-weather";
+    pub const WORLD_CLOCK: &str = "desktop-world-clock";
+    pub const COUNTDOWN: &str = "desktop-countdown";
+    pub const PRODUCTIVITY: &str = "desktop-productivity";
+    pub const SKY: &str = "desktop-sky";
+    pub const IDENTITY: &str = "desktop-identity";
+    pub const FUN: &str = "desktop-fun";
+    pub const INFO: &str = "desktop-info";
+    /// Every one of them.
+    pub const ALL: [&str; 14] = [CLOCKS, MONITOR, DECORATIONS, VISUALIZERS, NOW_PLAYING, CALENDAR, WEATHER, WORLD_CLOCK, COUNTDOWN, PRODUCTIVITY, SKY, IDENTITY, FUN, INFO];
+}
+
+/// The current weather, painted (needs the weather plugin and a location).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WeatherWidget {
+    pub layout: WeatherLayout,
+    /// The place name.
+    pub location: bool,
+    /// Feels like, humidity and wind.
+    pub details: bool,
+    /// Days of forecast under it (0 = none).
+    pub days: u32,
+    /// Sentence layout: your own sentence per condition (clear, partly
+    /// cloudy, cloudy, fog, drizzle, rain, snow, thunder; empty = the
+    /// built-in one).
+    pub sentences: Vec<String>,
+    /// Disc layout: its diameter and a dotted ring round it.
+    pub disc: f32,
+    pub dotted_ring: bool,
+    /// Hourly layout: hours shown and the area under the curve.
+    pub hours: u32,
+    pub fill: bool,
+    pub look: Look,
+    pub locale: TextOptions,
+}
+
+/// Weather widget layouts.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WeatherLayout {
+    /// A big temperature beside the condition's icon, the condition and
+    /// place under it.
+    #[default]
+    Hero,
+    /// One line: icon, temperature, condition.
+    Compact,
+    /// The condition and a friendly sentence about it.
+    Sentence,
+    /// A round disc: the icon, a big temperature and the day's range.
+    Disc,
+    /// The next hours as a temperature curve with icons.
+    Hourly,
+}
+
+impl Default for WeatherWidget {
+    fn default() -> Self {
+        Self {
+            layout: WeatherLayout::Hero,
+            location: true,
+            details: true,
+            days: ranges::WEATHER_DAYS_DEFAULT,
+            sentences: Vec::new(),
+            disc: crate::widget_kinds::ranges::DISC_DEFAULT_PX,
+            dotted_ring: true,
+            hours: crate::widget_kinds::ranges::HOURS_DEFAULT,
+            fill: true,
+            look: Look::default(),
+            locale: TextOptions::default(),
+        }
+    }
+}
+
+impl WeatherWidget {
+    pub fn days(&self) -> u32 {
+        self.days.clamp(ranges::WEATHER_DAYS.0, ranges::WEATHER_DAYS.1)
+    }
+}
+
+/// Times in other cities.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WorldClockWidget {
+    /// Cities or IANA time zones (`Tokyo`, `America/New_York`); empty =
+    /// the World clock plugin's cities.
+    pub cities: Vec<String>,
+    /// Hours ahead or behind here, and "tomorrow" / "yesterday".
+    pub offsets: bool,
+    /// Side by side instead of one under another.
+    pub horizontal: bool,
+    pub look: Look,
+    pub locale: TextOptions,
+}
+
+impl Default for WorldClockWidget {
+    fn default() -> Self {
+        Self { cities: Vec::new(), offsets: true, horizontal: false, look: Look::default(), locale: TextOptions::default() }
+    }
+}
+
+/// Days until (or since) a date.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CountdownWidget {
+    /// What is coming (empty = "New Year" when counting to it).
+    pub title: String,
+    /// `YYYY-MM-DD` (empty = the next New Year's Day).
+    pub date: String,
+    /// The target date under the count.
+    pub show_date: bool,
+    /// After the date: days since it (otherwise the widget shows "today"
+    /// on the day and nothing after).
+    pub count_up: bool,
+    pub look: Look,
+    pub locale: TextOptions,
+}
+
+impl Default for CountdownWidget {
+    fn default() -> Self {
+        Self { title: String::new(), date: String::new(), show_date: true, count_up: true, look: Look::default(), locale: TextOptions::default() }
     }
 }
 
@@ -342,8 +787,10 @@ pub enum Tone {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FontRole {
-    /// Display face (Alexandria by default).
+    /// Typography → Desktop widgets (the display face until one is set).
     #[default]
+    Widgets,
+    /// Display face (Alexandria by default).
     Display,
     /// Interface face (Inter).
     Ui,
@@ -351,6 +798,101 @@ pub enum FontRole {
     Arabic,
     /// Monospace face (JetBrains Mono).
     Mono,
+    /// The widget's own family ([`Look::font_family`]).
+    Custom,
+}
+
+/// Which digits numbers are written with.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Numerals {
+    /// The widget's language decides: Eastern Arabic in Arabic, else
+    /// Western.
+    #[default]
+    Auto,
+    /// 0123456789
+    Western,
+    /// ٠١٢٣٤٥٦٧٨٩
+    EasternArabic,
+}
+
+impl Numerals {
+    pub const ALL: [Numerals; 3] = [Numerals::Auto, Numerals::Western, Numerals::EasternArabic];
+
+    /// Whether Eastern Arabic digits are used for text in `lang`.
+    pub fn eastern(self, arabic_language: bool) -> bool {
+        match self {
+            Numerals::Auto => arabic_language,
+            Numerals::Western => false,
+            Numerals::EasternArabic => true,
+        }
+    }
+}
+
+/// Which calendar a widget's date is in.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Calendar {
+    #[default]
+    Gregorian,
+    /// The Islamic (Hijri) date; the day begins at sunset (Maghrib).
+    Hijri,
+    /// Gregorian · Hijri.
+    Both,
+    /// No date (where the widget can go without one).
+    None,
+}
+
+impl Calendar {
+    pub const ALL: [Calendar; 4] = [Calendar::Gregorian, Calendar::Hijri, Calendar::Both, Calendar::None];
+
+    pub fn gregorian(self) -> bool {
+        matches!(self, Calendar::Gregorian | Calendar::Both)
+    }
+
+    pub fn hijri(self) -> bool {
+        matches!(self, Calendar::Hijri | Calendar::Both)
+    }
+}
+
+/// How lines of a widget line up.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Align {
+    /// With the side of the screen the widget is anchored to.
+    #[default]
+    Auto,
+    /// Where reading starts (left, or right in right-to-left text).
+    Start,
+    Center,
+    End,
+}
+
+impl Align {
+    pub const ALL: [Align; 4] = [Align::Auto, Align::Start, Align::Center, Align::End];
+
+    /// 0 (left) … 1 (right) for a widget anchored at `anchor_x` (0, ½, 1)
+    /// whose text runs right to left when `rtl`.
+    pub fn fraction(self, anchor_x: f32, rtl: bool) -> f32 {
+        match (self, rtl) {
+            (Align::Auto, _) => anchor_x,
+            (Align::Center, _) => HALF,
+            (Align::Start, false) | (Align::End, true) => 0.0,
+            (Align::Start, true) | (Align::End, false) => 1.0,
+        }
+    }
+}
+
+/// A plate behind the widget, so it reads over any wallpaper.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Plate {
+    #[default]
+    None,
+    /// Translucent theme surface with a 1 px specular rim.
+    Glass,
+    /// The theme surface, opaque.
+    Solid,
 }
 
 /// Soft shadow or glow behind text and shapes.
@@ -375,12 +917,173 @@ pub struct Look {
     pub custom_color: String,
     pub custom_accent: String,
     pub font: FontRole,
+    /// The family when `font = "custom"` (any name; one that isn't
+    /// installed falls back like the Typography families).
+    pub font_family: String,
     pub effect: Effect,
+    /// Shadow / glow strength, 1 = as designed.
+    pub effect_strength: f32,
+    /// How the lines line up.
+    pub align: Align,
+    pub plate: Plate,
+    pub plate_opacity: f32,
+    /// Corner radius and padding of the plate, reference px.
+    pub plate_radius: f32,
+    pub plate_padding: f32,
+    /// The plate's outline shape, and its parameters: lobes (cookie,
+    /// flower), lobe or tear depth, lean (skew) and corner cut (chamfer).
+    pub plate_shape: PlateShape,
+    pub plate_lobes: u32,
+    pub plate_depth: f32,
+    pub plate_skew: f32,
+    pub plate_chamfer: f32,
+    /// A line around the plate's shape (drawn even without a plate),
+    /// reference px (0 = none), and its colour.
+    pub outline_width: f32,
+    pub outline_tone: Tone,
+    pub outline_color: String,
+    /// A shadow of the whole widget: soft or hard, its offset, blur,
+    /// opacity and colour.
+    pub shadow: ShadowKind,
+    pub shadow_x: f32,
+    pub shadow_y: f32,
+    pub shadow_blur: f32,
+    pub shadow_opacity: f32,
+    pub shadow_tone: Tone,
+    pub shadow_color: String,
+    /// A header line above the content (empty = none), its size, and a
+    /// rule under it.
+    pub header: String,
+    pub header_size: f32,
+    pub header_rule: bool,
+    /// A frame around the widget, its colour (tape) and the tape's angle.
+    pub chrome: Chrome,
+    pub chrome_tone: Tone,
+    pub chrome_color: String,
+    pub tape_angle: f32,
 }
 
 impl Default for Look {
     fn default() -> Self {
-        Self { tone: Tone::Auto, accent: Tone::Accent, custom_color: String::new(), custom_accent: String::new(), font: FontRole::Display, effect: Effect::None }
+        Self {
+            tone: Tone::Auto,
+            accent: Tone::Accent,
+            custom_color: String::new(),
+            custom_accent: String::new(),
+            font: FontRole::Widgets,
+            font_family: String::new(),
+            effect: Effect::None,
+            effect_strength: ranges::EFFECT_STRENGTH_DEFAULT,
+            align: Align::Auto,
+            plate: Plate::None,
+            plate_opacity: ranges::PLATE_OPACITY_DEFAULT,
+            plate_radius: ranges::PLATE_RADIUS_DEFAULT_PX,
+            plate_padding: ranges::PLATE_PADDING_DEFAULT_PX,
+            plate_shape: PlateShape::Rect,
+            plate_lobes: style::LOBES_DEFAULT,
+            plate_depth: style::DEPTH_DEFAULT,
+            plate_skew: style::SKEW_DEFAULT_DEG,
+            plate_chamfer: style::CHAMFER_DEFAULT_PX,
+            outline_width: 0.0,
+            outline_tone: Tone::Auto,
+            outline_color: String::new(),
+            shadow: ShadowKind::None,
+            shadow_x: style::SHADOW_X_DEFAULT_PX,
+            shadow_y: style::SHADOW_Y_DEFAULT_PX,
+            shadow_blur: style::SHADOW_BLUR_DEFAULT_PX,
+            shadow_opacity: style::SHADOW_OPACITY_DEFAULT,
+            shadow_tone: Tone::Auto,
+            shadow_color: String::new(),
+            header: String::new(),
+            header_size: style::HEADER_SIZE_DEFAULT_PX,
+            header_rule: true,
+            chrome: Chrome::None,
+            chrome_tone: Tone::Accent,
+            chrome_color: String::new(),
+            tape_angle: style::TAPE_ANGLE_DEFAULT_DEG,
+        }
+    }
+}
+
+impl Look {
+    pub fn effect_strength(&self) -> f32 {
+        self.effect_strength.clamp(ranges::EFFECT_STRENGTH.0, ranges::EFFECT_STRENGTH.1)
+    }
+
+    pub fn plate_opacity(&self) -> f32 {
+        self.plate_opacity.clamp(ranges::PLATE_OPACITY.0, ranges::PLATE_OPACITY.1)
+    }
+
+    pub fn plate_radius(&self) -> f32 {
+        self.plate_radius.clamp(ranges::PLATE_RADIUS_PX.0, ranges::PLATE_RADIUS_PX.1)
+    }
+
+    pub fn plate_padding(&self) -> f32 {
+        self.plate_padding.clamp(ranges::PLATE_PADDING_PX.0, ranges::PLATE_PADDING_PX.1)
+    }
+
+    pub fn outline_width(&self) -> f32 {
+        style::OUTLINE_PX.clamp(self.outline_width, 0.0)
+    }
+
+    pub fn shadow_offset(&self) -> (f32, f32) {
+        (style::SHADOW_OFFSET_PX.clamp(self.shadow_x, style::SHADOW_X_DEFAULT_PX), style::SHADOW_OFFSET_PX.clamp(self.shadow_y, style::SHADOW_Y_DEFAULT_PX))
+    }
+
+    pub fn shadow_blur(&self) -> f32 {
+        style::SHADOW_BLUR_PX.clamp(self.shadow_blur, style::SHADOW_BLUR_DEFAULT_PX)
+    }
+
+    pub fn shadow_opacity(&self) -> f32 {
+        style::SHADOW_OPACITY.clamp(self.shadow_opacity, style::SHADOW_OPACITY_DEFAULT)
+    }
+
+    pub fn header_size(&self) -> f32 {
+        style::HEADER_SIZE_PX.clamp(self.header_size, style::HEADER_SIZE_DEFAULT_PX)
+    }
+
+    pub fn plate_depth(&self) -> f32 {
+        style::DEPTH.clamp(self.plate_depth, style::DEPTH_DEFAULT)
+    }
+
+    pub fn plate_skew(&self) -> f32 {
+        style::SKEW_DEG.clamp(self.plate_skew, style::SKEW_DEFAULT_DEG)
+    }
+
+    pub fn plate_chamfer(&self) -> f32 {
+        style::CHAMFER_PX.clamp(self.plate_chamfer, style::CHAMFER_DEFAULT_PX)
+    }
+
+    pub fn tape_angle(&self) -> f32 {
+        style::TAPE_ANGLE_DEG.clamp(self.tape_angle, style::TAPE_ANGLE_DEFAULT_DEG)
+    }
+
+    /// Something is drawn around or behind the content: a plate, an
+    /// outline or a chrome (the automatic ink then reads against the
+    /// plate).
+    pub fn framed(&self) -> bool {
+        self.plate != Plate::None || self.chrome != Chrome::None
+    }
+}
+
+/// Language-dependent text of a widget: digits, calendar and the language
+/// names and words are written in.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TextOptions {
+    pub numerals: Numerals,
+    pub calendar: Calendar,
+    /// A language code (`en`, `ar`, …) for day and month names and words;
+    /// empty = the interface language (or Studio's date language).
+    pub language: String,
+    /// The Hijri date in Arabic (its month names and digits), whatever the
+    /// widget's language.
+    pub hijri_in_arabic: bool,
+}
+
+impl Default for TextOptions {
+    fn default() -> Self {
+        Self { numerals: Numerals::Auto, calendar: Calendar::Gregorian, language: String::new(), hijri_in_arabic: true }
     }
 }
 
@@ -415,10 +1118,34 @@ pub enum ClockFace {
     DayNumeral,
     /// `23:23` over `Sunday · August 23`, the weekday in the accent.
     Minimal,
+    /// A dial with hands: hour ticks, optional numbers and a seconds hand,
+    /// the date under it.
+    Analog,
+    /// Hours over minutes in huge numerals, the date under them (a card
+    /// clock on a plate).
+    Stack,
+    /// The time centred in one big expressive shape.
+    Shape,
+    /// The time in lit dots of a dot-matrix display.
+    DotMatrix,
+    /// The time in square pixels, with a small date line.
+    Pixel,
+    /// Each digit in its own box, AM / PM chips and a week strip.
+    Boxes,
+    /// Heavy slanted time over a hard shadow, the part of the day, the
+    /// weekday and the moon beside it.
+    Hud,
+    /// Lines you write yourself from the time and date (`{HH}:{mm}`,
+    /// `{weekday}`, …), each with its own size.
+    Template,
+    /// Analog hands over the hour and minute as giant numerals.
+    Numerals,
+    /// Hour and minute as bodies orbiting on two rings.
+    Orbit,
 }
 
 impl ClockFace {
-    pub const ALL: [ClockFace; 10] = [
+    pub const ALL: [ClockFace; 20] = [
         Self::Stacked,
         Self::Classic,
         Self::Arabic,
@@ -429,6 +1156,16 @@ impl ClockFace {
         Self::Greeting,
         Self::DayNumeral,
         Self::Minimal,
+        Self::Analog,
+        Self::Stack,
+        Self::Shape,
+        Self::DotMatrix,
+        Self::Pixel,
+        Self::Boxes,
+        Self::Hud,
+        Self::Template,
+        Self::Numerals,
+        Self::Orbit,
     ];
 
     /// The depth clock's own faces (drawn by its dedicated planes).
@@ -462,6 +1199,16 @@ impl ClockFace {
             ClockFace::Greeting => "greeting",
             ClockFace::DayNumeral => "day-numeral",
             ClockFace::Minimal => "minimal",
+            ClockFace::Analog => "analog",
+            ClockFace::Stack => "stack",
+            ClockFace::Shape => "shape",
+            ClockFace::DotMatrix => "dot-matrix",
+            ClockFace::Pixel => "pixel",
+            ClockFace::Boxes => "boxes",
+            ClockFace::Hud => "hud",
+            ClockFace::Template => "template",
+            ClockFace::Numerals => "numerals",
+            ClockFace::Orbit => "orbit",
         }
     }
 }
@@ -486,9 +1233,11 @@ pub struct ClockWidget {
     /// Seconds (faces that show them; only that small plane redraws each
     /// second, and only while the desktop is visible).
     pub seconds: bool,
-    /// Eastern Arabic numerals (٠١٢٣…).
-    pub eastern_numerals: bool,
-    /// The date line (and, for the depth faces, the Gregorian + Hijri pill).
+    /// Before [`WIDGETS_VERSION`] 1: Eastern Arabic numerals (read once by
+    /// the upgrade into [`TextOptions::numerals`], never written).
+    #[serde(rename = "eastern_numerals", skip_serializing)]
+    pub legacy_eastern: bool,
+    /// The date line (and, for the depth faces, the date pill).
     pub date: bool,
     /// Current weather where the face has room for it (needs the weather
     /// plugin and a location).
@@ -496,11 +1245,312 @@ pub struct ClockWidget {
     /// Depth faces: the audio ring around the clock.
     pub audio_ring: bool,
     pub ring_progress: RingProgress,
+    /// Analog face: the hour numbers around the dial.
+    pub dial_numbers: bool,
+    /// Digits, calendar and language.
+    pub locale: TextOptions,
+    /// Analog and numerals faces: the dial and the hands.
+    pub analog: AnalogOptions,
+    /// The faces' own shapes and sizes (shape, dots, boxes, slant, …).
+    pub face_options: FaceOptions,
+    /// Template face: its lines.
+    pub lines: Vec<TemplateLine>,
+    /// Greeting face: your own greeting for the morning, afternoon,
+    /// evening and night (empty = the built-in one) and a line under it.
+    pub phrases: Vec<String>,
+    pub subtitle: String,
 }
 
 impl Default for ClockWidget {
     fn default() -> Self {
-        Self { face: ClockFace::Minimal, look: Look::default(), seconds: false, eastern_numerals: false, date: true, weather: true, audio_ring: false, ring_progress: RingProgress::Hour }
+        Self {
+            face: ClockFace::Minimal,
+            look: Look::default(),
+            seconds: false,
+            legacy_eastern: false,
+            date: true,
+            weather: true,
+            audio_ring: false,
+            ring_progress: RingProgress::Hour,
+            dial_numbers: true,
+            locale: TextOptions::default(),
+            analog: AnalogOptions::default(),
+            face_options: FaceOptions::default(),
+            lines: TemplateLine::defaults(),
+            phrases: Vec::new(),
+            subtitle: String::new(),
+        }
+    }
+}
+
+impl ClockWidget {
+    /// A new clock with `face`: the depth faces keep their Gregorian ·
+    /// Hijri date pill.
+    pub fn with_face(face: ClockFace) -> Self {
+        let mut c = Self { face, ..Self::default() };
+        if face.depth_style().is_some() {
+            c.locale.calendar = Calendar::Both;
+        }
+        c
+    }
+
+    /// Whether the clock writes Eastern Arabic digits when the widget's
+    /// language is Arabic or not (`arabic_language`). The Arabic depth face
+    /// always did unless told otherwise.
+    pub fn eastern(&self, arabic_language: bool) -> bool {
+        match (self.locale.numerals, self.face) {
+            (Numerals::Auto, ClockFace::Arabic) => true,
+            (n, _) => n.eastern(arabic_language),
+        }
+    }
+}
+
+/// Analog dial marks.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DialMarks {
+    None,
+    /// A dot at every hour.
+    Dots,
+    /// Hour ticks (numbers at the quarters with "hour numbers" on).
+    #[default]
+    Ticks,
+    /// The twelve hour numbers.
+    Numbers,
+}
+
+/// Analog hand shapes.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HandStyle {
+    /// A rounded line.
+    #[default]
+    Classic,
+    /// A wide filled blade.
+    Fill,
+    /// A blade drawn as an outline.
+    Hollow,
+}
+
+/// How the analog clock shows the seconds.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SecondsStyle {
+    #[default]
+    Hand,
+    /// A dot running round the rim.
+    Dot,
+}
+
+/// How the analog clock writes the date.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DateStyle {
+    /// A line under the dial.
+    #[default]
+    Under,
+    /// The day in a round bubble on the dial.
+    Bubble,
+    /// The day in a small box on the dial.
+    Box,
+}
+
+/// The analog and numerals faces' dial and hands.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AnalogOptions {
+    /// The dial's outline (a scalloped cookie, a flower, …).
+    pub dial: PlateShape,
+    /// The dial filled with the plate's colour (else only its rim).
+    pub dial_fill: bool,
+    pub marks: DialMarks,
+    pub hour_hand: HandStyle,
+    /// Width of the minute hand (and the hour hand with it), reference px.
+    pub hand_width: f32,
+    pub seconds_style: SecondsStyle,
+    pub date_style: DateStyle,
+    /// Turns the dial's shape, degrees.
+    pub dial_turn: f32,
+}
+
+impl Default for AnalogOptions {
+    fn default() -> Self {
+        Self {
+            dial: PlateShape::Circle,
+            dial_fill: false,
+            marks: DialMarks::Ticks,
+            hour_hand: HandStyle::Classic,
+            hand_width: ranges::HAND_WIDTH_DEFAULT_PX,
+            seconds_style: SecondsStyle::Hand,
+            date_style: DateStyle::Under,
+            dial_turn: 0.0,
+        }
+    }
+}
+
+impl AnalogOptions {
+    pub fn hand_width(&self) -> f32 {
+        self.hand_width.clamp(ranges::HAND_WIDTH_PX.0, ranges::HAND_WIDTH_PX.1)
+    }
+}
+
+/// The other faces' own shapes and sizes.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FaceOptions {
+    /// Shape face: the shape the time sits in, and whether it turns a
+    /// little every minute.
+    pub shape: PlateShape,
+    pub spin: bool,
+    /// Dot-matrix face: square dots, and how bright the unlit ones are.
+    pub square_dots: bool,
+    pub unlit: f32,
+    /// Stack face: the gap between hours and minutes, fraction of the
+    /// digits' height.
+    pub line_gap: f32,
+    /// Boxes face: each box's shape, and the week strip under them.
+    pub box_shape: PlateShape,
+    pub week_strip: bool,
+    /// HUD face: the slant (degrees), and the moon beside the time.
+    pub slant: f32,
+    pub moon: bool,
+    /// Numerals face: how strong the giant numerals are.
+    pub numerals: f32,
+    /// Orbit face: the hour numbers around the rings.
+    pub labels: bool,
+    /// Template face: the first line beside the others, a rule between.
+    pub divider: bool,
+}
+
+impl Default for FaceOptions {
+    fn default() -> Self {
+        Self {
+            shape: PlateShape::Cookie,
+            spin: false,
+            square_dots: false,
+            unlit: ranges::UNLIT_DEFAULT,
+            line_gap: ranges::LINE_GAP_DEFAULT,
+            box_shape: PlateShape::Rect,
+            week_strip: true,
+            slant: ranges::SLANT_DEFAULT_DEG,
+            moon: true,
+            numerals: ranges::NUMERALS_DEFAULT,
+            labels: true,
+            divider: false,
+        }
+    }
+}
+
+impl FaceOptions {
+    pub fn unlit(&self) -> f32 {
+        self.unlit.clamp(ranges::UNLIT.0, ranges::UNLIT.1)
+    }
+    pub fn line_gap(&self) -> f32 {
+        self.line_gap.clamp(ranges::LINE_GAP.0, ranges::LINE_GAP.1)
+    }
+    pub fn slant(&self) -> f32 {
+        self.slant.clamp(ranges::SLANT_DEG.0, ranges::SLANT_DEG.1)
+    }
+    pub fn numerals(&self) -> f32 {
+        self.numerals.clamp(ranges::NUMERALS.0, ranges::NUMERALS.1)
+    }
+}
+
+/// One line of the template face.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TemplateLine {
+    /// Text with placeholders: `{HH}` `{H}` `{hh}` `{h}` `{mm}` `{ss}`
+    /// `{ampm}` `{time}` `{weekday}` `{wd}` `{day}` `{dd}` `{month}` `{mon}`
+    /// `{MM}` `{year}` `{greeting}` `{daypart}` `{hijri}`.
+    pub text: String,
+    /// Size, reference px.
+    pub size: f32,
+    pub weight: u16,
+    pub opacity: f32,
+    /// In the accent colour.
+    pub accent: bool,
+    /// Upper case.
+    pub caps: bool,
+}
+
+impl Default for TemplateLine {
+    fn default() -> Self {
+        Self { text: String::new(), size: ranges::TEMPLATE_SIZE_DEFAULT_PX, weight: ranges::WEIGHT_DEFAULT, opacity: 1.0, accent: false, caps: false }
+    }
+}
+
+impl TemplateLine {
+    /// The lines a new template clock starts with.
+    pub fn defaults() -> Vec<TemplateLine> {
+        vec![
+            TemplateLine { text: "{weekday}".into(), size: 30.0, weight: 300, opacity: 0.8, caps: true, ..Default::default() },
+            TemplateLine { text: "{day} {month}".into(), size: 22.0, weight: 500, accent: true, ..Default::default() },
+            TemplateLine { text: "{time}".into(), size: 120.0, weight: 200, ..Default::default() },
+        ]
+    }
+
+    pub fn size(&self) -> f32 {
+        self.size.clamp(ranges::TEXT_SIZE_PX.0, ranges::TEXT_SIZE_PX.1)
+    }
+    pub fn weight(&self) -> u16 {
+        self.weight.clamp(ranges::WEIGHT.0, ranges::WEIGHT.1)
+    }
+    pub fn opacity(&self) -> f32 {
+        self.opacity.clamp(ranges::OPACITY.0, ranges::OPACITY.1)
+    }
+}
+
+// ── Progress ─────────────────────────────────────────────────────────────
+
+/// The period a progress widget measures.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Period {
+    Hour,
+    #[default]
+    Day,
+    Week,
+    Month,
+    Year,
+}
+
+/// How a progress widget draws.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProgressStyle {
+    #[default]
+    Ring,
+    /// A ring with a gentle wave.
+    WavyRing,
+    Bar,
+    /// One dot per day (hour, for the day) in a grid, the past filled.
+    Dots,
+}
+
+/// How much of today (this week, month or year) has passed.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProgressWidget {
+    pub period: Period,
+    pub style: ProgressStyle,
+    /// `62 % of today · 9 h 2 min left` under it.
+    pub label: bool,
+    /// Line width (rings, bars), reference px.
+    pub thickness: f32,
+    pub look: Look,
+    pub locale: TextOptions,
+}
+
+impl Default for ProgressWidget {
+    fn default() -> Self {
+        Self { period: Period::Day, style: ProgressStyle::Ring, label: true, thickness: ranges::PROGRESS_THICKNESS_DEFAULT_PX, look: Look::default(), locale: TextOptions::default() }
+    }
+}
+
+impl ProgressWidget {
+    pub fn thickness(&self) -> f32 {
+        self.thickness.clamp(ranges::PROGRESS_THICKNESS_PX.0, ranges::PROGRESS_THICKNESS_PX.1)
     }
 }
 
@@ -558,7 +1608,36 @@ pub struct MonitorWidget {
     pub width: f32,
     /// Section title above the rows (empty = none).
     pub title: String,
+    pub style: MonitorStyle,
+    /// Gauges: ring width (reference px), a wavy ring, a ring of dots, and
+    /// where the ring starts (degrees from the top).
+    pub ring_width: f32,
+    pub wavy: bool,
+    pub dotted: bool,
+    pub start_angle: f32,
+    /// Meters: segments per meter.
+    pub segments: u32,
     pub look: Look,
+    /// Digits (and the language of the labels).
+    pub locale: TextOptions,
+}
+
+/// How the system monitor shows its readings.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MonitorStyle {
+    /// A column of labelled values, bars and graphs.
+    #[default]
+    Column,
+    /// Ring gauges for the readings that are a share (CPU, GPU, memory,
+    /// disk, battery), the others listed under them.
+    Gauges,
+    /// Segmented meters (like a battery's cells) for the shares.
+    Meters,
+    /// Tall bars side by side for the shares.
+    Bars,
+    /// Arc gauges with ticks for the temperatures and the fan.
+    Thermals,
 }
 
 impl Default for MonitorWidget {
@@ -568,12 +1647,26 @@ impl Default for MonitorWidget {
             interval_s: ranges::MONITOR_INTERVAL_DEFAULT_S,
             width: ranges::MONITOR_WIDTH_DEFAULT_PX,
             title: String::new(),
-            look: Look { font: FontRole::Mono, ..Look::default() },
+            style: MonitorStyle::Column,
+            ring_width: ranges::RING_WIDTH_DEFAULT_PX,
+            wavy: false,
+            dotted: false,
+            start_angle: ranges::START_ANGLE_DEFAULT_DEG,
+            segments: ranges::SEGMENTS_DEFAULT,
+            look: Look::default(),
+            locale: TextOptions::default(),
         }
     }
 }
 
 impl MonitorWidget {
+    pub fn ring_width(&self) -> f32 {
+        self.ring_width.clamp(ranges::RING_WIDTH_PX.0, ranges::RING_WIDTH_PX.1)
+    }
+    pub fn segments(&self) -> u32 {
+        self.segments.clamp(ranges::SEGMENTS.0, ranges::SEGMENTS.1)
+    }
+
     pub fn interval_s(&self) -> u32 {
         self.interval_s.clamp(ranges::MONITOR_INTERVAL_S.0, ranges::MONITOR_INTERVAL_S.1)
     }
@@ -600,6 +1693,8 @@ pub enum DecorShape {
     Rule,
     /// A rectangular frame.
     Frame,
+    /// A strip of washi tape (`count` stripes, torn ends).
+    Tape,
 }
 
 /// A static decoration (drawn once).
@@ -699,6 +1794,9 @@ pub enum VisualizerShape {
     Wave,
     /// Spikes around a circle.
     Radial,
+    /// Bars of stacked square segments, like an LED meter: the accent,
+    /// then amber, then coral near the top.
+    Led,
 }
 
 /// An audio visualizer painted on the wallpaper layer (it can sit behind
@@ -935,16 +2033,56 @@ pub fn migrate_depth_clock(cfg: &mut ShellConfig) -> bool {
             ..Placement::default()
         },
         kind: WidgetKind::Clock(ClockWidget {
-            face: ClockFace::from_depth_style(wp.clock_style),
             date: wp.show_date,
             weather: wp.show_weather,
             audio_ring: wp.audio_ring,
-            ..ClockWidget::default()
+            // As the old clock showed it: its own digits.
+            locale: TextOptions { numerals: legacy_numerals(ClockFace::from_depth_style(wp.clock_style), false), ..ClockWidget::with_face(ClockFace::from_depth_style(wp.clock_style)).locale },
+            ..ClockWidget::with_face(ClockFace::from_depth_style(wp.clock_style))
         }),
     };
     if !w.items.iter().any(|i| i.id == DEPTH_CLOCK_ID) {
         w.items.insert(0, clock);
     }
+    true
+}
+
+/// The digits a clock showed before [`WIDGETS_VERSION`] 1: Eastern Arabic
+/// on the Arabic depth face or when asked for, else Western, whatever the
+/// language.
+pub fn legacy_numerals(face: ClockFace, eastern: bool) -> Numerals {
+    if eastern || face == ClockFace::Arabic { Numerals::EasternArabic } else { Numerals::Western }
+}
+
+/// Brings a list written before [`WIDGETS_VERSION`] 1 forward so it shows
+/// exactly what it showed: digits the old way (the language never chose
+/// them), the depth clock's Gregorian · Hijri pill, and the display face
+/// as the widgets font (Typography → Desktop widgets falls back to it, so
+/// nothing changes until a widgets font is chosen). Returns whether
+/// anything changed.
+pub fn upgrade(w: &mut DesktopWidgetsConfig) -> bool {
+    if w.version >= WIDGETS_VERSION {
+        return false;
+    }
+    for item in &mut w.items {
+        match &mut item.kind {
+            WidgetKind::Clock(c) => {
+                c.locale.numerals = legacy_numerals(c.face, c.legacy_eastern);
+                c.legacy_eastern = false;
+                if c.face.depth_style().is_some() {
+                    c.locale.calendar = Calendar::Both;
+                }
+            }
+            WidgetKind::Monitor(m) => m.locale.numerals = Numerals::Western,
+            _ => {}
+        }
+        if let Some(look) = item.kind.look_mut()
+            && look.font == FontRole::Display
+        {
+            look.font = FontRole::Widgets;
+        }
+    }
+    w.version = WIDGETS_VERSION;
     true
 }
 

@@ -83,11 +83,7 @@ impl CheckId {
 }
 
 fn target() -> Option<Target> {
-    match mandara_compositor::detect()? {
-        mandara_compositor::CompositorKind::MangoWM => Some(Target::Mango),
-        mandara_compositor::CompositorKind::Niri => Some(Target::Niri),
-        mandara_compositor::CompositorKind::Hyprland => Some(Target::Hyprland),
-    }
+    mandara_compositor::detect().map(mandara_compositor::CompositorKind::target)
 }
 
 /// A font Mandara's design uses, downloadable from Google Fonts (OFL).
@@ -173,7 +169,7 @@ pub fn check_in(roots: &Roots, id: CheckId, installed_fonts: &[String]) -> Healt
             }
         }
         CheckId::CompositorInclude => match target() {
-            None => Health::Warn(t("No supported compositor detected (MangoWM, Niri, Hyprland)").into()),
+            None => Health::Warn(t("No supported compositor detected (MangoWM, Niri, Hyprland, Umbriel)").into()),
             Some(c) if include_installed(c) => Health::Ok(tf("{file} sources Mandara's drop-in", &[("file", &c.user_config().display())])),
             Some(c) => Health::Broken(tf("{file} doesn't include {drop_in}", &[("file", &c.user_config().display()), ("drop_in", &c.generated_file().display())])),
         },

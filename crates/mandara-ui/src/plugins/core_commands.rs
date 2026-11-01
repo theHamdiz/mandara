@@ -332,6 +332,25 @@ pub fn register(r: &mut PluginRegistry) {
         .example("bar position left"),
     );
 
+    // `bar hide|show|toggle`: until the shell restarts (not saved);
+    // touching the bar's edge still peeks it out, as with auto-hide.
+    for (path, summary, want) in [
+        ("bar hide", mandara_i18n::tk("Put the bar away and free its space until bar show (touching its edge peeks it out)"), Some(true)),
+        ("bar show", mandara_i18n::tk("Bring back a bar put away with bar hide"), Some(false)),
+        ("bar toggle", mandara_i18n::tk("Put the bar away or bring it back"), None),
+    ] {
+        r.command(
+            core,
+            CommandSpec::new(path, summary, move |_, cx| {
+                let hidden = want.unwrap_or_else(|| !crate::bar::autohide::hidden_by_command());
+                crate::bar::autohide::set_hidden_by_command(hidden);
+                shell(cx).update(cx, |_, cx| cx.notify());
+                let side = config(cx).read(cx).get().bar.position.is_vertical();
+                Ok(json!({ "hidden": hidden && !side, "side_bar_stays": side }))
+            }),
+        );
+    }
+
     r.command(
         core,
         CommandSpec::new("look list", mandara_i18n::tk("List the one-click looks"), |_, cx| {
@@ -421,13 +440,15 @@ pub fn register(r: &mut PluginRegistry) {
         })
         .arg(ArgSpec::required("json", ArgKind::String, mandara_i18n::tk("the whole config as JSON"))),
     );
-    r.command(core, CommandSpec::new("models list", mandara_i18n::tk("Downloadable models (OCR) and whether they're installed"), |_, _| Ok(json!(mandara_services::models::status()))));
+    r.command(core, CommandSpec::new("models list", mandara_i18n::tk("Downloadable models (OCR, wallpaper depth) and whether they're installed"), |_, _| Ok(json!(mandara_services::models::status()))));
     r.command(
         core,
         CommandSpec::new_output("models download", mandara_i18n::tk("Download a model by id, or all of them"), |a, _| {
             let which = a.get(0).unwrap_or("all").to_string();
             let models: Vec<&'static mandara_services::models::Model> = match which.as_str() {
-                "all" => mandara_services::models::MODELS.iter().collect(),
+                // "all" is every model a feature needs up front; on-demand
+                // ones (the depth model) come with their feature.
+                "all" => mandara_services::models::MODELS.iter().filter(|m| !m.on_demand).collect(),
                 id => vec![mandara_services::models::find(id).ok_or_else(|| format!("unknown model {id:?}"))?],
             };
             let (tx, rx) = async_channel::bounded(1);

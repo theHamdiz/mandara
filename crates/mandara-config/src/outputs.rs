@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::compositor::{Target, include_path, is_generated, resolve_include};
+use crate::compositor::{Target, includes_in, is_generated, resolve_include};
 
 /// Default values, in one place.
 pub mod defaults {
@@ -652,6 +652,47 @@ pub fn hyprland_lua_lines(outputs: &[OutputConfig]) -> String {
     s
 }
 
+/// Umbriel's `vrr` policy names.
+fn umbriel_vrr(v: VrrMode) -> &'static str {
+    match v {
+        VrrMode::Off => "disabled",
+        VrrMode::On => "always",
+        VrrMode::Fullscreen => "fullscreen",
+    }
+}
+
+/// Umbriel `[output."NAME"]` tables (by connector, as the other drop-ins).
+pub fn umbriel_tables(outputs: &[OutputConfig]) -> String {
+    let mut s = String::new();
+    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
+        let mut body = String::new();
+        if !o.enabled {
+            let _ = writeln!(body, "enabled = false");
+        } else {
+            if let Some(mode) = o.mode_string() {
+                let _ = writeln!(body, "mode = {}", crate::compositor::toml_str(&mode));
+            }
+            if let (Some(x), Some(y)) = (o.x, o.y) {
+                let _ = writeln!(body, "position = [{x}, {y}]");
+            }
+            if let Some(scale) = o.scale_clamped() {
+                let _ = writeln!(body, "scale = {:.2}", scale.clamp(MIN_SCALE, UMBRIEL_MAX_SCALE));
+            }
+            if let Some(t) = o.transform {
+                let _ = writeln!(body, "transform = {}", crate::compositor::toml_str(t.name()));
+            }
+            if let Some(v) = o.vrr {
+                let _ = writeln!(body, "vrr = {}", crate::compositor::toml_str(umbriel_vrr(v)));
+            }
+        }
+        let _ = write!(s, "\n[output.{}]\n{body}", crate::compositor::toml_str(o.name.trim()));
+    }
+    s
+}
+
+/// Umbriel's largest output scale (its documented range is 0.25 to 4.0).
+const UMBRIEL_MAX_SCALE: f32 = 4.0;
+
 /// The monitor lines for `target`'s drop-in, with a heading comment;
 /// empty when nothing is persisted.
 pub fn emit_outputs(target: Target, outputs: &[OutputConfig], hyprland_lua: bool) -> String {
@@ -660,6 +701,7 @@ pub fn emit_outputs(target: Target, outputs: &[OutputConfig], hyprland_lua: bool
         Target::Niri => ("//", niri_blocks(outputs)),
         Target::Hyprland if hyprland_lua => ("--", hyprland_lua_lines(outputs)),
         Target::Hyprland => ("#", hyprland_conf_lines(outputs)),
+        Target::Umbriel => ("#", umbriel_tables(outputs)),
     };
     if body.trim().is_empty() {
         return String::new();
@@ -680,10 +722,8 @@ pub fn user_output_rules(target: Target) -> BTreeSet<String> {
         }
         let Ok(text) = std::fs::read_to_string(&file) else { continue };
         out.extend(parse_output_rules(target, &text));
-        for line in text.lines().filter(|l| !l.trim_start().starts_with(['#', '/']) && !l.trim_start().starts_with("--")) {
-            if let Some(path) = include_path(target, line) {
-                stack.push(resolve_include(&file, &path));
-            }
+        for path in includes_in(target, &text) {
+            stack.push(resolve_include(&file, &path));
         }
     }
     out
@@ -691,6 +731,12 @@ pub fn user_output_rules(target: Target) -> BTreeSet<String> {
 
 /// Output names configured in one config file's text.
 pub fn parse_output_rules(target: Target, text: &str) -> Vec<String> {
+    if target == Target::Umbriel {
+        // `[output.NAME]` / `[output."NAME"]` tables (sub-tables such as
+        // `[output.DP-1.layout.scrolling]` name the same output).
+        let Ok(doc) = text.parse::<toml::Table>() else { return Vec::new() };
+        return doc.get("output").and_then(toml::Value::as_table).map(|t| t.keys().cloned().collect()).unwrap_or_default();
+    }
     let mut out = Vec::new();
     for line in text.lines().map(str::trim).filter(|l| !l.starts_with('#') && !l.starts_with("//")) {
         let name = match target {
@@ -701,6 +747,8 @@ pub fn parse_output_rules(target: Target, text: &str) -> Vec<String> {
                 .map(|n| n.trim_start_matches('^').trim_end_matches('$').replace('\\', "")),
             Target::Hyprland => line.strip_prefix("monitor").and_then(|r| r.trim_start().strip_prefix('=')).and_then(|r| r.split(',').next()).map(|n| n.trim().to_string()),
             Target::Niri => line.strip_prefix("output ").and_then(|r| r.trim().strip_prefix('"')).and_then(|r| r.split('"').next()).map(str::to_string),
+            // Read whole-file above.
+            Target::Umbriel => None,
         };
         if let Some(n) = name.filter(|n| !n.is_empty()) {
             out.push(n);

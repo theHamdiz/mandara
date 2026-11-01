@@ -31,7 +31,7 @@ fn main() {
         // copy into a shared-memory-sized buffer), for the CPU estimate.
         use mandara_ui::backdrop::paint::{DecorGeometry, DecorInput, FontNames, paint_ring};
         const FRAMES: u32 = 300;
-        let fonts = FontNames { ui: "Inter".into(), display: "Alexandria".into(), arabic: "Cairo".into(), mono: "JetBrains Mono".into() };
+        let fonts = FontNames::new("Inter", "Alexandria", "Cairo", "JetBrains Mono");
         let lines = vec!["07".to_string(), "20".to_string()];
         let ink = mandara_ui::desktop::ink_for(None, mandara_theme::Color::oklch(0.7, 0.12, 200.0));
         let input = DecorInput { logical: (2560.0, 1440.0), scale120: 180, cfg: &cfg.wallpaper, lines: &lines, date: None, ink, fonts: &fonts, safe: Default::default() };
@@ -106,7 +106,8 @@ fn main() {
             lines: mandara_ui::desktop::clock_lines(&now, cfg.wallpaper.clock_style, cfg.general.clock_24h),
             date: Some(mandara_ui::desktop::DateLine {
                 gregorian: "Tuesday, 27 October".into(),
-                hijri_ar: ("٥".into(), "جمادى الأولى", "١٤٤٨".into()),
+                hijri_ar: ("٥".into(), "جمادى الأولى".into(), "١٤٤٨".into()),
+                hijri_arabic: true,
                 hijri_latin: "5 Jumada al-Ula 1448".into(),
                 weather: Some(("cloud-sun", "23°".into(), "Partly cloudy".into())),
             }),

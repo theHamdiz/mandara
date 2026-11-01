@@ -94,6 +94,11 @@ pub fn weekday_ar<T: Datelike>(d: &T) -> &'static str {
 }
 
 /// Converts ASCII digits to Eastern Arabic numerals.
+/// `s` with Eastern Arabic digits turned into Western ones.
+pub fn western_numerals(s: &str) -> String {
+    s.chars().map(|c| ARABIC_DIGITS.iter().position(|d| *d == c).and_then(|i| char::from_digit(i as u32, 10)).unwrap_or(c)).collect()
+}
+
 pub fn arabic_numerals(s: &str) -> String {
     s.chars()
         .map(|c| c.to_digit(10).map(|d| ARABIC_DIGITS[d as usize]).unwrap_or(c))

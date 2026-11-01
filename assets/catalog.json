@@ -483,6 +483,15 @@
     "panel": null
   },
   {
+    "id": "wallpaper-depth",
+    "name": "Wallpaper depth",
+    "palette": "corniche",
+    "motif": "landscape",
+    "angle": -4,
+    "panel": null,
+    "scene": "wallpaper-depth.jpg"
+  },
+  {
     "id": "wallhaven",
     "name": "Wallhaven",
     "palette": "twilight",
@@ -497,5 +506,131 @@
     "motif": "focus",
     "angle": -5,
     "panel": null
+  },
+  {
+    "id": "desktop-clocks",
+    "name": "Desktop clocks",
+    "palette": "twilight",
+    "motif": "timer",
+    "angle": 6,
+    "panel": null,
+    "scene": "desktop-clocks.jpg"
+  },
+  {
+    "id": "desktop-monitor",
+    "name": "System monitor",
+    "palette": "obsidian",
+    "motif": "bars",
+    "angle": -6,
+    "panel": null,
+    "scene": "desktop-monitor.jpg"
+  },
+  {
+    "id": "desktop-decorations",
+    "name": "Desktop decorations",
+    "palette": "twilight",
+    "motif": "waves",
+    "angle": 4,
+    "panel": null,
+    "scene": "desktop-decorations.jpg"
+  },
+  {
+    "id": "desktop-visualizers",
+    "name": "Desktop visualizers",
+    "palette": "twilight",
+    "motif": "sound",
+    "angle": -4,
+    "panel": null,
+    "scene": "desktop-visualizers.jpg"
+  },
+  {
+    "id": "desktop-now-playing",
+    "name": "Now playing card",
+    "palette": "twilight",
+    "motif": "waves",
+    "angle": 5,
+    "panel": null,
+    "scene": "desktop-now-playing.jpg"
+  },
+  {
+    "id": "desktop-calendar",
+    "name": "Calendar card",
+    "palette": "corniche",
+    "motif": "tiles",
+    "angle": -5,
+    "panel": null,
+    "scene": "desktop-calendar.jpg"
+  },
+  {
+    "id": "desktop-weather",
+    "name": "Desktop weather",
+    "palette": "corniche",
+    "motif": "sun",
+    "angle": 6,
+    "panel": null,
+    "scene": "desktop-weather.jpg"
+  },
+  {
+    "id": "desktop-world-clock",
+    "name": "Desktop world clock",
+    "palette": "obsidian",
+    "motif": "globe",
+    "angle": -6,
+    "panel": null,
+    "scene": "desktop-world-clock.jpg"
+  },
+  {
+    "id": "desktop-countdown",
+    "name": "Countdown",
+    "palette": "twilight",
+    "motif": "hourglass",
+    "angle": 5,
+    "panel": null,
+    "scene": "desktop-countdown.jpg"
+  },
+  {
+    "id": "desktop-productivity",
+    "name": "Desktop productivity",
+    "palette": "corniche",
+    "motif": "tiles",
+    "angle": 4,
+    "panel": null,
+    "scene": "desktop-productivity.jpg"
+  },
+  {
+    "id": "desktop-sky",
+    "name": "Desktop sky",
+    "palette": "twilight",
+    "motif": "sun",
+    "angle": 4,
+    "panel": null,
+    "scene": "desktop-sky.jpg"
+  },
+  {
+    "id": "desktop-identity",
+    "name": "Desktop shortcuts and you",
+    "palette": "obsidian",
+    "motif": "tiles",
+    "angle": 4,
+    "panel": null,
+    "scene": "desktop-identity.jpg"
+  },
+  {
+    "id": "desktop-fun",
+    "name": "Desktop fun",
+    "palette": "corniche",
+    "motif": "aurora",
+    "angle": 4,
+    "panel": null,
+    "scene": "desktop-fun.jpg"
+  },
+  {
+    "id": "desktop-info",
+    "name": "Desktop info",
+    "palette": "twilight",
+    "motif": "frame",
+    "angle": 4,
+    "panel": null,
+    "scene": "desktop-info.jpg"
   }
 ]

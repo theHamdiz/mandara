@@ -11,11 +11,11 @@
 //!   `pkexec mandara greeter apply-config` (the real greeter reads
 //!   `/etc/mandara/greeter.toml`).
 //!
-//! * Frames: the preview animates on the display's frame clock, and every
-//!   preview frame re-renders the views around it, so the page keeps its
-//!   tabs and controls in a cached child view ([`GreeterControls`]) and the
-//!   preview itself is cached too (a slider drag or scroll doesn't rebuild
-//!   it unless it is animating anyway).
+//! * Frames: the preview holds still (one picture of the backdrop, no
+//!   drift or parallax) and draws frames only while something on it moves:
+//!   a Try-it moment or an edit settling. Those frames re-render the views
+//!   around it, so the page keeps its tabs and controls in a cached child
+//!   view ([`GreeterControls`]) and the preview itself is cached too.
 //!
 //! Strings go through the greeter's catalog (`tl`), which falls back to the
 //! shell's shared catalogs — the same language as the rest of Studio.
@@ -1086,7 +1086,7 @@ impl Render for GreeterPage {
         let avail = (self.width.get() - if side_by_side { SIDE_W_PX + SPACE_16_PX } else { 0.0 }).max(PREVIEW_MIN_W_PX);
         let pw = avail.min((vh * PREVIEW_MAX_SHARE) * PREVIEW_ASPECT_W / PREVIEW_ASPECT_H).floor();
         let ph = (pw * PREVIEW_ASPECT_H / PREVIEW_ASPECT_W).floor();
-        self.preview.update(cx, |v, _| v.set_preview_size(pw, ph));
+        self.preview.update(cx, |v, cx| v.set_preview_size(pw, ph, cx));
         if let Some(e) = self.selected {
             SELECTED.with(|s| s.set(Some(e)));
         }

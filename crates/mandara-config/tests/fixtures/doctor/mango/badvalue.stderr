@@ -1,0 +1,11 @@
+[1m[31m[ERROR]:[0m Invalid focuscolor format: [1m[31m0xzzzzzzff[0m
+[1;31m╰─[1;33m[Index][0m [1;36m@FIXTURES@/mango/badvalue.conf[0m:[1;35m1[0m
+   [1;36m╰─[0;33mfocus_color=0xzzzzzzff
+[0m
+
+[1m[31m[ERROR]:[0m Invalid number in array: [1m[31ma[0m
+[1m[31m[ERROR]:[0m Failed to parse animation_curve_open: [1m[31ma,b[0m
+[1;31m╰─[1;33m[Index][0m [1;36m@FIXTURES@/mango/badvalue.conf[0m:[1;35m2[0m
+   [1;36m╰─[0;33manimation_curve_open=a,b
+[0m
+

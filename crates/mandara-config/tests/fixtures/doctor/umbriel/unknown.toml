@@ -1,0 +1,5 @@
+[general]
+blur_optimized = true
+
+[frobnicate]
+x = 1

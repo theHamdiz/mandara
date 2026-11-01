@@ -83,6 +83,40 @@ fn record(key: u64, start: Instant, build: Duration) {
     });
 }
 
+/// Passes of the software desktop renderer (wallpaper and desktop widgets,
+/// its own thread) that followed a change of what it shows: the time each
+/// took, kept like the frames.
+#[derive(Default)]
+struct DesktopPasses {
+    recent: VecDeque<Duration>,
+    total: u64,
+}
+
+static DESKTOP: Mutex<Option<DesktopPasses>> = Mutex::new(None);
+/// Live passes of the desktop renderer: seconds, readings and animation
+/// frames of the desktop widgets.
+static DESKTOP_LIVE: Mutex<Option<DesktopPasses>> = Mutex::new(None);
+
+/// Records one desktop renderer pass that took `took`.
+pub fn record_desktop(took: Duration) {
+    record_into(&DESKTOP, took);
+}
+
+/// Records one live desktop-widget pass that took `took`.
+pub fn record_desktop_live(took: Duration) {
+    record_into(&DESKTOP_LIVE, took);
+}
+
+fn record_into(passes: &Mutex<Option<DesktopPasses>>, took: Duration) {
+    let mut guard = passes.lock().unwrap_or_else(|e| e.into_inner());
+    let d = guard.get_or_insert_with(DesktopPasses::default);
+    d.recent.push_back(took);
+    d.total += 1;
+    while d.recent.len() > CAPACITY {
+        d.recent.pop_front();
+    }
+}
+
 /// Render samples kept per plugin view for its percentiles.
 const VIEW_SAMPLES: usize = 64;
 /// Milliseconds per second, for duration → ms conversions.
@@ -196,7 +230,17 @@ pub fn frames_report() -> Value {
     let fps = percentiles(&intervals).map(|(p50, ..)| MS_PER_S / p50.max(MIN_INTERVAL_MS));
     // Over budget: an animation frame later than 1.5× the median interval.
     let janky = percentiles(&intervals).map(|(p50, ..)| intervals.iter().filter(|i| **i > p50 * JANK_FACTOR).count()).unwrap_or(0);
+    let read = |passes: &Mutex<Option<DesktopPasses>>| {
+        let guard = passes.lock().unwrap_or_else(|e| e.into_inner());
+        guard.as_ref().map(|d| (d.recent.iter().map(|t| t.as_secs_f32() * MS_PER_S).collect::<Vec<f32>>(), d.total)).unwrap_or_default()
+    };
+    let (desktop, desktop_total) = read(&DESKTOP);
+    let (live, live_total) = read(&DESKTOP_LIVE);
     json!({
+        "desktop_ms": stats(&desktop),
+        "desktop_passes": desktop_total,
+        "desktop_live_ms": stats(&live),
+        "desktop_live_passes": live_total,
         "frames": frames,
         "total_frames": total,
         "animating": frames.last().is_some_and(|f| f.age_ms < ANIMATING_WITHIN_MS),

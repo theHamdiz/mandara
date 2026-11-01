@@ -19,11 +19,11 @@ Settings never live in bar dropdowns.
 <table>
 <tr>
 <td width="50%" valign="top"><img src="screenshots/studio-nav.png" alt="Grouped, collapsible navigation" width="100%"/><br/><sub><b>Navigation</b>: grouped, collapsible, searchable</sub></td>
-<td width="50%" valign="top"><img src="screenshots/studio-desktop-widgets.png" alt="Desktop widgets: Edit on desktop, a live preview and the widget gallery" width="100%"/><br/><sub><b>Desktop widgets</b>: live preview and gallery</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-desktop-widgets.png" alt="Desktop widgets: the widget gallery grouped by plugin (Desktop clocks, Calendar card, Desktop sky…) with a painted preview on every tile" width="100%"/><br/><sub><b>Desktop widgets</b>: the gallery, grouped by plugin</sub></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/studio-bar.png" alt="Layout designer and bar presets" width="100%"/><br/><sub><b>Bar</b>: presets and the layout designer</sub></td>
-<td width="50%" valign="top"><img src="screenshots/studio-plugins.png" alt="Plugins → Installed: the library with on / off counts, filter chips and switches" width="100%"/><br/><sub><b>Plugins → Installed</b></sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-bar.png" alt="Bar: Shape, Appearance and Capsules sections with item capsules switched on, their colour, strength and outline" width="100%"/><br/><sub><b>Bar</b>: shape, appearance and item capsules</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-plugins.png" alt="Plugins → Installed: all 58 Mandara plugins with on / off counts, filter chips and switches" width="100%"/><br/><sub><b>Plugins → Installed</b></sub></td>
 </tr>
 <tr>
 <td width="50%" valign="top"><img src="screenshots/studio-power-menu.png" alt="Power & idle: session menu editor" width="100%"/><br/><sub><b>Power &amp; idle</b>: the session menu editor</sub></td>
@@ -63,7 +63,7 @@ ultra-wide.
 - **Extend**: a plugin store (featured hero, curated shelves, search,
   one-click Get / On, product pages, installed library, updates, the GitHub
   marketplace, a local authoring handbook and validator, per-plugin settings) and compositor control for
-  MangoWM, Niri and Hyprland written to `~/.config/mandara/generated/*`;
+  MangoWM, Niri, Hyprland and Umbriel written to `~/.config/mandara/generated/*`;
   **your own config only gets one include line** (with a backup).
 - **Mandara**: language, profiles with undo / export / import, performance,
   maintenance (health checks, repair, factory reset) and about.
@@ -152,7 +152,7 @@ narrow ones; everything mirrors for right-to-left languages.
 | Page | What it covers |
 |---|---|
 | **Themes** | Every color and shape choice on one page, laid out like a theme store. At the top a **live preview**: a large mock of the shell (bar, desktop clock, a panel, a media card and the dock) in the current palette over your wallpaper, beside the theme's name and description, its palette strip, the text contrast ratio and the light / dark switch. Then **Looks**: six original one-click looks (Corniche Dusk, Pharos Ink, Montaza Crimson, Qaitbay Forest, Anfushi Wave, Night Frame) as a compact list — a swatch of the look's palette, its name in its own display face and one line, the current one checked, a live mock of it on hover — or, with **Show previews**, as big cards with that mock (Studio remembers the choice in `studio-ui.toml`); a click sets bar style, desktop widgets and cards, colors, fonts and roundness together after saving your setup, *Use my wallpaper's colors* keeps the look but takes the palette from your wallpaper, *Restore my look* brings your setup back (looks never touch the wallpaper). Then **Designed themes**: every built-in and user theme as a compact row (a swatch of its surface and accents, its name and description, the active one checked, a mock of the shell in it on hover), or with **Show previews** as cards with a mock in the current mode, the other mode inset in its corner, a palette strip and its description. Then **Colors from your wallpaper**: on / off, the wallpaper, its lead colors and every Material You scheme style drawn as the palette it would make. Then **Other apps**: the apps Mandara can theme as a grid of small tiles grouped into desktop toolkits (GTK, Qt, Kvantum, KDE), terminals (Ghostty, kitty, foot, Alacritty, WezTerm), editors (Zed, Helix, Neovim) and apps (Fuzzel, btop, Firefox, Vesktop), each with a switch and a chevron that opens a card with where its theme goes and how to select it (Kvantum's also holds *Use the Kvantum theme*). Every app is off until you switch it on: Mandara writes nothing to other apps before that, and switching one off takes back exactly what it changed and restores any file it replaced. Then **Cursor** (the opt-in *Cursor themes* plugin; off, a one-line card offers it; see *Cursor themes* below): your cursor drawn from its own files at its size, every cursor setting, and a gallery of the ten most popular ricing cursor themes to download, apply and remove. Below them, under **Fine-tune**: automatic light / dark and its schedule, palette tuning (accent vividness, hue, lightness, specular rim), theme crossfade, style (corner roundness, shadows, panel edges, backdrop dim), icons and high contrast. `mandara studio appearance` and `mandara studio looks` still open it. |
-| **Wallpaper** | With the **wallpaper generator** plugin on, its studio comes first: a large live preview of the recipe (re-rendered off the UI thread as you drag, the last picture kept until the next is ready), the seed (shuffle, lock, *Surprise me*), five clickable **variations**, light / dark, the size (1080p to 8K, ultrawide, portrait or *Match display*) and format (WebP, PNG, JPEG, each with its expected file size), **Generate wallpaper** and **Generate loop** (seconds, fps) with progress and cancel, then the result with *Set as wallpaper*, *Show in folder* and *Remix*. Below: a **style gallery** previewing your palette and seed, the **palette** tiles (curated, *Match theme*, *Custom* with 2–8 hex stops), **Fine-tune** sliders built from the engine's parameters (the style's own, then tone, light, texture and layout, each group with a reset), **Recent** generated files (Remix, Set, Delete twice to confirm) and the opt-in **schedule** (interval, what to make, still or loop, keep N, apply, next run). With the plugin off, a small card offers it. Then: folder, picker style, fill mode and colour, transitions, light / dark and per-display wallpapers, slideshow, video wallpapers (pause behind windows / on battery, frame-rate limit, first frame only), depth effect and subject mask. With the opt-in **Wallhaven** plugin on, its default search and sort order follow; off, a one-line card offers it (and the picker has no Wallhaven source). |
+| **Wallpaper** | Opens on the **Wallpaper** tab, always: the wallpaper on your desktop shown large at its own shape, with its file name, resolution and aspect, size, folder (click to open it), its colours as the theme engine reads them (*Use for my theme* turns on Match colors) and quick actions (*Change folder*, *Open folder*, *Surprise me*, *Show on the login screen*). Below it, **In this folder**: every image and video in your wallpaper folder as a grid of cached thumbnails, decoded at the size they're drawn and loaded one page at a time (it opens on the page with your wallpaper, which is marked *Current*). Click a wallpaper or move with the arrow keys, Home / End and Page Up / Down and press Enter to switch (with the desktop's transition); filter by name; hover a tile and press **+** to add it to the slideshow playlist. The picker's settings follow, and while the generator or Wallhaven plugins are off, one-line cards offer them. **Slideshow**: an on / off switch with the next change's time (or why it's paused), *Previous* and *Next wallpaper*, interval presets from 5 minutes to a day plus *Custom* (`45`, `90m`, `2h`, `1d`, up to a week) and the order (shuffle without repeats, random, by name, newest first); then folds for the **source** (your wallpaper folder, another folder, all sub-folders, separate light- and dark-theme folders, or the **playlist**, shown as thumbnails with remove buttons), **when to change** (at login, pause during fullscreen / on battery / while locked, only between two times), the **slideshow transition** (the desktop's, or fade / wipe / grow / none with its own length) and **displays** (the same wallpaper everywhere or a different one on each display). A fixed light or dark wallpaper, which would hide the slideshow in that mode, is pointed out with a button to clear it. **Fit & effects**: drawing the wallpaper, crossfade, fill mode and colour, transition, sharing with the login screen, light / dark wallpapers, video wallpapers (pause behind windows / on battery, frame-rate limit, first frame only) and the depth clock: the depth effect, how the subject is found (Hand-tuned or Model), the model's automatic split or Clock depth slider, Download, Regenerate and Place the clock; any new wallpaper setting lands here unless another tab claims it. **Generator** (with the wallpaper generator plugin on): a large live preview of the recipe (re-rendered off the UI thread as you drag, the last picture kept until the next is ready), the seed (shuffle, lock, *Surprise me*), five clickable **variations**, light / dark, the size (1080p to 8K, ultrawide, portrait or *Match display*) and format (WebP, PNG, JPEG, each with its expected file size), **Generate wallpaper** and **Generate loop** (seconds, fps) with progress and cancel, then the result with *Set as wallpaper*, *Show in folder* and *Remix*. Below: a **style gallery** previewing your palette and seed, the **palette** tiles (curated, *Match theme*, *Custom* with 2–8 hex stops), **Fine-tune** sliders built from the engine's parameters (the style's own, then tone, light, texture and layout, each group with a reset), **Recent** generated files (Remix, Set, Delete twice to confirm) and the opt-in **schedule** (interval, what to make, still or loop, keep N, apply, next run). **Online** (with the opt-in **Wallhaven** plugin on): *Browse in the picker*, the default search and sort order; off, the picker has no Wallhaven source. `mandara studio wallpaper --tab slideshow` opens a tab directly. |
 | **Desktop widgets** | **Edit on desktop**, then **Widgets** (clocks incl. the depth clock, system monitor, decorations, plane visualizer: add from the gallery — a new widget starts in front of the wallpaper's subject on a free spot, and a tile already on the desktop is ticked and selects it instead of adding a copy — drag on the live preview, style each one; repeats are numbered, *Remove duplicates* takes exact copies away) and **Desktop cards & visualizers** — now playing, calendar, glowing wave, framed bars, mirrored bars: on / off and where each sits (nine anchors; top or bottom edge for the strips); each lives on its own small surface only while it shows. `mandara studio desktop-widgets` opens it. |
 | **Typography** | Interface, display, Arabic and monospace fonts, size and weight; a font per surface (bar, panels & plugins, desktop widgets, lock screen and its clock, Studio). Every font comes from a searchable list of installed fonts, and any typed name works too. |
 | **Motion** | Spring stiffness, damping and mass, animation speed, reduce motion. |
@@ -179,7 +179,7 @@ narrow ones; everything mirrors for right-to-left languages.
 | **Power & idle** | Status, idle timeouts (mains / battery), lock behaviour, idle commands, battery alerts and profiles, the power menu editor, event hooks. |
 | **Input** | Keyboard layouts and labels, repeat, Num Lock; mouse and touchpad; focus follows mouse. The cursor lives on Themes → Cursor (a card here links there). |
 | **Keyboard shortcuts** | Mandara's compositor binds with chord capture and conflict detection. |
-| **Date, time & location** | The system clock (time zone with search, set time automatically, and a one-click fix when it doesn't match your location's time zone), clock and date formats, week numbers, calendar subscriptions and reminders, the shared location (weather and prayer times follow it unless they have their own), weather. |
+| **Date, time & location** | The system clock (time zone with search, set time automatically, and a one-click fix when it doesn't match your location's time zone), clock and date formats, the calendar's week numbers, weekend days, Hijri dates and Eastern Arabic numerals, calendar subscriptions and reminders, the shared location (weather and prayer times follow it unless they have their own), weather. |
 | **Applications** | Installed apps (search, hide, rename, install from files by picker or drag and drop, uninstall with optional leftover cleanup), default apps, apps at login, how apps are launched. |
 
 ### Security & accounts
@@ -196,7 +196,7 @@ narrow ones; everything mirrors for right-to-left languages.
 | Page | What it covers |
 |---|---|
 | **Plugins** | A plugin store: Discover (featured hero, curated shelves, search with filter chips), Installed, Updates, Community (the GitHub marketplace) and Develop (the authoring handbook and validator); per-plugin product pages and settings modals, which hold each plugin's own options (clipboard history, screenshot, weather, prayer times…) — including refresh intervals, how many rows a list shows and alert thresholds (Resources, Process hunter, Containers, Services, Drives, Network speed, Network, Clock, To-do, Bluetooth, Authenticator). To-do adds its default list, show completed, sort order and what the bar counts; Notes its default topic, the notes folder (point it at a synced folder or an Obsidian vault), preview by default and the editor font and size. [Configuration](configuration.md) lists every setting by page. Every Mandara plugin can be switched off (it then stops everything it runs: bar item, sidebar card, launcher entries, background polling) or **removed** from the detail modal: off, out of the bar and sidebar, and parked under *Removed Mandara plugins* (their store cards offer *Add back*) until **Restore** puts it back where it was. Core plugins (launcher, session menu, main menu) show *Always on*. The dock, mini stats, screen time and prayer times ship off. |
-| **Compositor** | MangoWM / Niri / Hyprland gaps, borders, rounding, blur, rules, tags, layouts; all written to `~/.config/mandara/generated/`. |
+| **Compositor** | The **Config doctor** (your compositor's own checker on your config: problems by file and line, explained, with reversible fixes), then MangoWM / Niri / Hyprland / Umbriel gaps, borders, rounding, blur, rules, tags, layouts; all written to `~/.config/mandara/generated/`. |
 
 ### Mandara
 
@@ -246,7 +246,7 @@ narrow ones; everything mirrors for right-to-left languages.
   appears once something in the group differs from them.
 - **Everything is live**: the bar, open panels, the sidebar, the launcher,
   OSDs and the dock redraw in place on every edit, without reopening.
-- **Compositor control** for MangoWM, Niri and Hyprland: gaps, borders,
+- **Compositor control** for MangoWM, Niri, Hyprland and Umbriel: gaps, borders,
   rounding, blur, shadows, opacity, window rules and keybinds, one-click
   window-look presets and common window rules, gaps that follow the bar,
   and Hyprland's layout (dwindle / master), border resizing and group tabs.
@@ -260,16 +260,37 @@ narrow ones; everything mirrors for right-to-left languages.
   | Niri | `include optional=true "/home/you/.config/mandara/generated/niri.kdl"` (plain `include` before 26.04) | `spawn-at-startup "/abs/path/mandara"` |
   | Hyprland ≤ 0.56 | `source = ~/.config/mandara/generated/hyprland.conf` | `exec-once = /abs/path/mandara` |
   | Hyprland 0.57+ (Lua only) | `pcall(dofile, "/home/you/.config/mandara/generated/hyprland.lua")` in `hyprland.lua` | `hl.on("hyprland.start", …)` |
+  | Umbriel | `"/home/you/.config/mandara/generated/umbriel.toml"` in `[include.optional] files` (added to your list if you have one) | `general.autostart = ["/abs/path/mandara"]` |
 
   The dialect follows the installed version (`niri --version`,
   `Hyprland --version`); each compositor's own checker (`mango -p`,
-  `niri validate`, `Hyprland --verify-config`) must accept the result or
-  the include is rolled back. On Niri the drop-in also makes workspace
+  `niri validate`, `Hyprland --verify-config`, `umbriel config validate`)
+  must accept the result or the include is rolled back. Umbriel is the
+  exception to "Mandara's values win": it applies your `config.toml`
+  after its includes, so what you set there wins (rules from both files
+  are kept), and the Umbriel tab says so. On Niri the drop-in also makes workspace
   backgrounds transparent: Mandara's wallpaper lives in Niri's Overview
   backdrop and would otherwise only show there. On Hyprland 0.57 Mandara's
   workspace clicks and other dispatches are sent as Lua
   (`hl.dsp.focus({ workspace = 3 })`); `mandara msg compositor dispatch`
   translates the common hyprlang dispatchers and passes `hl.…` text through.
+- **Config doctor** (top of the Compositor page): the compositor's own
+  checker (`mango -p`, `niri validate`, `Hyprland --verify-config`,
+  `umbriel config validate`) run read-only on your config and every file it
+  includes, with its verdict in one line ("All good — checked 2 min ago
+  with MangoWM 0.18.4"). Problems are grouped by file, your files apart
+  from Mandara's drop-in, each with its kind (unknown, removed in this
+  update, deprecated, syntax error, invalid value, duplicate keybind,
+  missing file, not supported by this version), the line itself, a
+  plain-language explanation and the compositor's own message. Fixes:
+  **Open in editor** at that line, **Comment out** or **Remove line** (backup
+  first, checked again, undone automatically if it made things worse) and
+  **Regenerate** for the drop-in (an option this version rejects is left out
+  for it from then on). **Check again** re-runs it; **Remind me later**
+  quiets the start-up notification until the config or the compositor
+  changes. The same is `mandara msg compositor check` / `fix`, and
+  `mandara setup --check` / `--fix` without a running shell (see
+  [install](install.md#config-doctor)).
 - **Notifications, On-screen displays, Privacy**: popup placement and
   timeouts per urgency, a rules editor with one-click rules for recent
   apps, quiet modes, history limits; every OSD kind; indicator ignore lists.
@@ -357,9 +378,9 @@ narrow ones; everything mirrors for right-to-left languages.
     pointer, link, text, busy, precision, the three resizes and move — at
     the chosen size, with 24 / 32 / 48 / 64 px chips beside the size
     slider. The rows next to it: *Hide while typing*, *Hide when idle*
-    (MangoWM, Niri, Hyprland), *Software cursor* and *Hide on touch*
-    (Hyprland only: on MangoWM and Niri they say so in place of the
-    control).
+    (MangoWM, Niri, Hyprland, Umbriel), *Software cursor* (Hyprland and
+    Umbriel) and *Hide on touch* (Hyprland only); where a compositor lacks
+    one, the row says so in place of the control.
   - **The gallery**: Bibata Modern, macOS, Qogir, Phinger, Catppuccin,
     BreezeX, Vimix, Banana, Nordzy and Rosé Pine — the ten most-starred
     themes that publish ready-built cursors on GitHub. Each card shows a
@@ -381,7 +402,7 @@ narrow ones; everything mirrors for right-to-left languages.
   - **Applying** writes the drop-in (`cursor_theme` / `cursor_size` +
     `env=XCURSOR_*` for MangoWM, `cursor { xcursor-theme … }` for Niri,
     `env = XCURSOR_* / HYPRCURSOR_*` + `cursor {}` and a live `setcursor`
-    for Hyprland) and reloads the compositor, so the cursor changes at
+    for Hyprland, `[input.cursor]` for Umbriel) and reloads the compositor, so the cursor changes at
     once. X11 and older toolkit apps follow through
     `~/.icons/default/index.theme`, created only when you have none and
     removed again when you go back to "Your config".
@@ -392,7 +413,7 @@ narrow ones; everything mirrors for right-to-left languages.
   lock, disable while typing, scroll and click method, left-handed),
   focus follows the pointer.
   Written to the compositor drop-in (`mango.conf`, `niri.kdl` `input {}`,
-  Hyprland `input {}` / `hl.config({ input = … })`); "Your config" keeps
+  Hyprland `input {}` / `hl.config({ input = … })`, Umbriel `[input.*]`); "Your config" keeps
   your own value. On Niri a touchpad or mouse setting replaces your whole
   `touchpad {}` / `mouse {}` block (Niri merges those blocks as a unit),
   and "focus follows the pointer: off" can't be set from an include —
@@ -560,6 +581,7 @@ mandara studio plugins --plugin weather          # a plugin's detail modal (plug
 mandara studio plugins --plugin weather --settings   # its settings (plugins/weather/settings)
 mandara studio plugins --tab develop --scroll validate # plugins/develop/validate; tabs: discover, installed, updates, community, develop (also marketplace, local)
 mandara studio applications --tab startup        # applications/startup; tabs: installed, defaults, startup, launching
+mandara studio wallpaper --tab slideshow         # wallpaper/slideshow; tabs: wallpaper (where it always opens), slideshow, effects, generator, online
 mandara studio users --demo                      # fictional accounts, nothing is changed
 mandara msg studio displays                      # the same from the running shell (IPC)
 ```

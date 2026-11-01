@@ -22,6 +22,9 @@
 //! the device goes away, which a real mouse never does.
 //! `VPOINTER_DRAG_HOLD_MS=N` keeps the button down at the end of a drag (to
 //! screenshot a drag in progress).
+//! `VPOINTER_DRAG_STEPS=N` and `VPOINTER_DRAG_STEP_MS=M` send a drag's motion
+//! as N events M ms apart (default: 20, one per 60 Hz frame); 400 and 1 play
+//! a 1000 Hz gaming mouse, to measure how an editor keeps up.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -35,6 +38,9 @@ use wayland_protocols_wlr::virtual_pointer::v1::client::{zwlr_virtual_pointer_ma
 pub const HOLD_ENV: &str = "VPOINTER_HOLD_MS";
 /// Milliseconds a `drag` holds the button at its end before releasing.
 pub const DRAG_HOLD_ENV: &str = "VPOINTER_DRAG_HOLD_MS";
+/// Motion events of a drag, and the milliseconds between two of them.
+pub const DRAG_STEPS_ENV: &str = "VPOINTER_DRAG_STEPS";
+pub const DRAG_STEP_MS_ENV: &str = "VPOINTER_DRAG_STEP_MS";
 /// `WxH` logical size of the output layout.
 pub const LAYOUT_ENV: &str = "MANDARA_LAYOUT";
 /// Layout size when `MANDARA_LAYOUT` is unset.
@@ -136,14 +142,19 @@ pub struct Options {
     pub hold: Option<Duration>,
     /// Keep the button down this long at the end of a drag.
     pub drag_hold: Option<Duration>,
+    /// Motion events of a drag and the pause after each.
+    pub drag_steps: u32,
+    pub drag_step: Duration,
 }
 
 impl Options {
-    /// `MANDARA_LAYOUT`, `VPOINTER_HOLD_MS` and `VPOINTER_DRAG_HOLD_MS`.
+    /// `MANDARA_LAYOUT`, `VPOINTER_HOLD_MS`, `VPOINTER_DRAG_HOLD_MS`,
+    /// `VPOINTER_DRAG_STEPS` and `VPOINTER_DRAG_STEP_MS`.
     pub fn from_env() -> Self {
         let ms = |name: &str| std::env::var(name).ok().and_then(|v| v.parse::<u64>().ok()).map(Duration::from_millis);
         let layout = std::env::var(LAYOUT_ENV).ok().and_then(|s| parse_size(&s)).unwrap_or(DEFAULT_LAYOUT);
-        Self { layout, hold: ms(HOLD_ENV), drag_hold: ms(DRAG_HOLD_ENV) }
+        let steps = std::env::var(DRAG_STEPS_ENV).ok().and_then(|v| v.parse::<u32>().ok()).filter(|n| *n > 0).unwrap_or(DRAG_STEPS);
+        Self { layout, hold: ms(HOLD_ENV), drag_hold: ms(DRAG_HOLD_ENV), drag_steps: steps, drag_step: ms(DRAG_STEP_MS_ENV).unwrap_or(FRAME) }
     }
 }
 
@@ -210,12 +221,12 @@ pub fn perform(conn: &Connection, gesture: &Gesture, opts: &Options) -> Result<(
             pointer.button(now_ms(), BTN_LEFT, wl_pointer::ButtonState::Pressed);
             flush(&pointer)?;
             std::thread::sleep(DRAG_START_PAUSE);
-            for step in 1..=DRAG_STEPS {
-                let t = step as f32 / DRAG_STEPS as f32;
+            for step in 1..=opts.drag_steps {
+                let t = step as f32 / opts.drag_steps as f32;
                 let (cx, cy) = (x as f32 + (x2 as f32 - x as f32) * t, y as f32 + (y2 as f32 - y as f32) * t);
                 pointer.motion_absolute(now_ms(), cx as u32, cy as u32, w, h);
                 flush(&pointer)?;
-                std::thread::sleep(FRAME);
+                std::thread::sleep(opts.drag_step);
             }
             if let Some(hold) = opts.drag_hold {
                 std::thread::sleep(hold);

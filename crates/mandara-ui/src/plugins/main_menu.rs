@@ -215,14 +215,14 @@ fn apply_theme(id: String, cx: &mut App) {
 // ── You ─────────────────────────────────────────────────────────────────
 
 /// Your name, login, host, picture, uptime.
-struct Me {
-    name: String,
-    login: String,
-    host: String,
-    picture: Option<PathBuf>,
+pub(crate) struct Me {
+    pub(crate) name: String,
+    pub(crate) login: String,
+    pub(crate) host: String,
+    pub(crate) picture: Option<PathBuf>,
 }
 
-fn me() -> Me {
+pub(crate) fn me() -> Me {
     let uid = rustix::process::getuid().as_raw();
     let user = std::fs::read_to_string("/etc/passwd").ok().and_then(|t| crate::lock::parse_passwd(&t, uid));
     let login = user.as_ref().map(|u| u.name.clone()).or_else(|| std::env::var("USER").ok()).unwrap_or_default();
@@ -234,6 +234,10 @@ fn me() -> Me {
 }
 
 /// "3 h 17 min" since boot.
+pub(crate) fn uptime_secs() -> Option<u64> {
+    Some(std::fs::read_to_string("/proc/uptime").ok()?.split_whitespace().next()?.parse::<f64>().ok()? as u64)
+}
+
 fn uptime() -> Option<String> {
     let secs = std::fs::read_to_string("/proc/uptime").ok()?.split_whitespace().next()?.parse::<f64>().ok()? as u64;
     let (d, h, m) = (secs / 86_400, secs % 86_400 / 3600, secs % 3600 / 60);
@@ -357,10 +361,11 @@ fn fill(p: &PanelCx, index: usize, el: impl IntoElement) -> gpui::AnyElement {
     div().relative().top(px(r.offset)).opacity(r.opacity).flex_1().min_h(px(0.0)).flex().flex_col().child(el).into_any_element()
 }
 
-/// A reveal that keeps its row's full height (the rail).
+/// A reveal that keeps its row's full height and centres its content in
+/// it (the rail: exactly as much space above it as below).
 fn fill_row(p: &PanelCx, index: usize, el: impl IntoElement) -> gpui::AnyElement {
     let r = p.reveal(index);
-    div().relative().top(px(r.offset)).opacity(r.opacity).flex().flex_col().child(el).into_any_element()
+    div().relative().top(px(r.offset)).opacity(r.opacity).flex().flex_col().justify_center().child(el).into_any_element()
 }
 
 fn home(palette: &MandaraPalette, p: &PanelCx, cx: &mut App) -> gpui::AnyElement {
@@ -501,7 +506,7 @@ fn render(page: &Rc<Cell<Page>>, fit: &Rc<Cell<gpui::Size<gpui::Pixels>>>, palet
             .child(icon(glyph, RAIL_ICON, if on { palette.primary } else { palette.on_surface_variant }))
     };
     let rule = || div().w(px(RAIL_RULE_W)).h(px(1.0)).my(px(RAIL_GAP)).bg(palette.outline.with_alpha(RAIL_RULE_ALPHA).hsla());
-    // As tall as the menu, its buttons in the middle.
+    // As tall as its buttons, centred in the menu's height.
     let mut rail = div().w(px(RAIL_W)).flex_none().flex().flex_col().items_center().justify_center().gap(px(RAIL_GAP)).py(px(tokens::SM)).rounded(px(crate::style::card_radius())).bg(palette.surface_container.hsla());
     // The menu's own pages.
     for (i, pg) in Page::ALL.into_iter().enumerate() {

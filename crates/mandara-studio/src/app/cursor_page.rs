@@ -489,7 +489,7 @@ impl StudioView {
             }));
         let status = match registry::running_compositor() {
             Some(target) => tf("Applies live on {compositor}; apps started from now on use it too.", &[("compositor", &target_name(target))]),
-            None => t("Saved now; applied the next time Mandara runs under MangoWM, Niri or Hyprland.").to_string(),
+            None => t("Saved now; applied the next time Mandara runs under MangoWM, Niri, Hyprland or Umbriel.").to_string(),
         };
         let note = st(cx).note.clone();
         let panel = div()

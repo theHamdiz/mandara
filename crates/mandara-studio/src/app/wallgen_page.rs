@@ -1,6 +1,6 @@
 //! Studio → Wallpaper → Generator: the wallpaper generator plugin's
-//! studio, shown at the top of the Wallpaper page while the plugin is on
-//! (a compact card offers to turn it on otherwise).
+//! studio, its own tab of the Wallpaper page while the plugin is on (a
+//! compact card on the Wallpaper tab offers to turn it on otherwise).
 //!
 //! * **Hero** — a large live preview of the current recipe (rendered off
 //!   the UI thread at [`MAIN_W`] × [`MAIN_H`], debounced while sliders move,
@@ -235,7 +235,7 @@ fn in_label(secs: u64) -> String {
 }
 
 /// Opens a folder with the file manager, off the UI thread.
-fn reveal(path: &Path) {
+pub(super) fn reveal(path: &Path) {
     let dir = if path.is_dir() { path.to_path_buf() } else { path.parent().map(Path::to_path_buf).unwrap_or_default() };
     let uri = format!("file://{}", mandara_services::app_uninstall::percent_encode(&dir));
     std::thread::spawn(move || {

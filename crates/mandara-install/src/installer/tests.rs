@@ -30,6 +30,8 @@ struct FakeHost {
     fetches: HashMap<String, Vec<u8>>,
     /// Commands (argv joined by spaces) that fail.
     failing: HashSet<String>,
+    /// Commands that fail with this exit code.
+    codes: HashMap<String, i32>,
     answers: Option<bool>,
     ran: Vec<Cmd>,
     out: Vec<(Level, String)>,
@@ -52,7 +54,8 @@ impl FakeHost {
 impl Host for FakeHost {
     fn run(&mut self, cmd: &Cmd) -> std::io::Result<Output> {
         self.ran.push(cmd.clone());
-        Ok(Output { success: !self.failing.contains(&cmd.display()), ..Default::default() })
+        let code = self.codes.get(&cmd.display()).copied();
+        Ok(Output { success: !self.failing.contains(&cmd.display()) && code.is_none(), code, ..Default::default() })
     }
 
     fn has_program(&self, name: &str) -> bool {
@@ -615,4 +618,16 @@ fn uninstall_removes_files_and_empties_dropins() {
     assert_eq!(std::fs::read_to_string(home.join(".config/mandara/config.toml")).unwrap(), "kept");
     assert_eq!(host.ran(), [format!("{} msg quit", bin.display())]);
     assert!(host.text().contains("Mandara Login stays your login screen"));
+}
+
+#[test]
+fn config_errors_are_reported_without_retiring() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    let b = f.home().join(".local/bin/mandara").display().to_string();
+    host.codes.insert(format!("{b} setup --check"), crate::installer::SETUP_CONFIG_ERRORS);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    assert!(!ran.contains(&format!("{b} setup --fix-conflicts")), "{ran:#?}");
+    assert!(host.text().contains("Config doctor"));
 }

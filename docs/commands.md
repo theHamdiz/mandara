@@ -64,14 +64,29 @@ mandara msg theme mode toggle
 mandara msg look apply corniche-dusk        # look list; look restore brings back your own setup
 mandara msg bar position left               # top|bottom|left|right (left/right = the side bar)
 mandara msg bar layout hairline             # edge-frame|glass-pills|island|hairline|micro|notch|next
+mandara msg bar hide                        # put the bar away and free its space until bar show (bar toggle flips it; not saved)
 mandara msg desktop edit                    # move, resize, add and remove desktop widgets on the desktop (off|toggle)
 mandara msg desktop widgets hide            # show|hide|toggle every desktop widget at once
+mandara msg desktop widgets press todo-1 todo:3   # what a click on a widget does: todo:<id>, toggle:<wifi|dnd|…>, pomodoro, media:<play-pause|next|previous>, level:volume:0.4, step:brightness:1, copy:<text>, open:<path|url>, launch:<app>, next, refresh, panel:<id>, search
+mandara msg diagnostics frames              # frame build times, plus what the desktop widgets cost (desktop_ms, desktop_live_ms)
 mandara msg desktop menu DP-1 800 500       # the desktop's right-click menu at a point (logical px)
 mandara msg wallpaper picker toggle         # wallpaper set|next|random|list|current
-mandara msg wallpaper slideshow on          # off|toggle|<minutes>
+mandara msg wallpaper slideshow on          # off|toggle|<interval: 45, 30m, 2h, 1d>
+mandara msg wallpaper slideshow status      # settings, wallpapers in rotation, next_in_seconds, paused (fullscreen|battery|locked|hours)
+mandara msg wallpaper slideshow next        # previous; interval 2h; order shuffle|random|alphabetical|newest
+mandara msg wallpaper slideshow source folder ~/Pictures/Favourites   # source wallpapers|folder <dir>|playlist
+mandara msg wallpaper slideshow playlist add ~/Pictures/Wallpapers/dunes.jpg   # playlist list|add|remove|clear
+mandara msg wallpaper slideshow folder dark ~/Pictures/Night   # a folder for the light or dark theme (clear to remove)
+mandara msg wallpaper slideshow hours 08:00-22:00   # only change between two times (off: always)
+mandara msg wallpaper slideshow transition grow 1500   # desktop|fade|wipe|grow|none [ms]
+mandara msg wallpaper slideshow option per-display on   # on-start|pause-fullscreen|pause-battery|pause-locked|subfolders|per-display on|off|toggle
 mandara msg wallpaper output DP-1 ~/Pictures/side.jpg   # per-display wallpaper (clear to remove)
 mandara msg wallpaper set ~/Pictures/Wallpapers/tide.webm  # AV1 video wallpapers (.webm, .mkv, .ivf) loop on the desktop
 mandara msg wallpaper render-preview /tmp/desktop.png 3840x2160@1.5   # the desktop canvas offscreen (same painters as the live one)
+mandara msg depth status                   # depth effect: mode (hand-tuned | model), current mask, model install, last model run
+mandara msg depth download                 # the depth model (27 MB, checksum-verified) for the model mode
+mandara msg depth regenerate               # find the current wallpaper's subject again with the chosen mode
+mandara msg depth place-clock              # move the clock to where the subject rises into it
 mandara msg language set ar                 # language list
 mandara msg plugins reload                  # plugins list|enable|disable|remove|restore <id>
 mandara msg plugins remove prayer-times     # built-ins: off + out of bar/sidebar until `plugins restore` (core plugins refuse)
@@ -147,6 +162,12 @@ mandara msg switcher next            # prev|open|commit|cancel|demo|status|bind 
 mandara msg window list              # window focus|close|minimize|maximize|fullscreen <id>, window active
 mandara msg screentime today         # week, app <id>, reset today|all, track on|off
 mandara msg clipboard pin <id>       # unpin, list, copy, delete, clear [all], record on|off, edit <id>
+mandara msg clipboard kinds          # entries per kind; clipboard kind <text|link|markdown|code|css|color|image|files> [words]
+mandara msg clipboard search rust    # entries matching every word (text, kind, language, site, app, collection)
+mandara msg clipboard collections    # your collections with counts; collection show <name|id> [words]
+mandara msg clipboard collection create Palette   # collection rename <name|id> <new name>, delete <name|id>
+mandara msg clipboard collection add Palette <id> # collection remove <name|id> <id>
+mandara msg clipboard view color     # the panel's filter: all, pinned, a kind or a collection, plus optional search words
 ```
 
 ## Notifications, OSD, sound and media
@@ -250,6 +271,27 @@ mandara msg services failed          # list|status|logs|start|stop|restart|enabl
 mandara msg updates check            # list, sources, news, run [source]
 ```
 
+## Compositor and Config doctor
+
+```bash
+mandara msg compositor status        # detected compositor, drop-in, include line
+mandara msg compositor sync          # regenerate the drop-in (checked, rolled back if the compositor rejects it) and reload
+mandara msg compositor install-include [mango|niri|hyprland|umbriel]
+mandara msg --json compositor check  # Config doctor: the compositor's own checker on your config; each problem with id, file, line, kind, owner, explanation and fixes
+mandara msg compositor fix 1a2b3c4d comment   # comment | remove (your files) | regenerate (Mandara's drop-in); backed up, re-checked, rolled back if worse
+mandara msg compositor snooze        # no reminders about the current problems until the config or the compositor changes
+mandara msg compositor reload        # clients, monitors, dispatch <command> [args]
+```
+
+Without a running shell (a session that won't start, a TTY), the same check
+and fixes work from the terminal:
+
+```bash
+mandara setup --check                       # the Config doctor's report and conflicts, nothing changed; exit 10 = conflicts, 11 = errors
+mandara setup --fix 1a2b3c4d=comment        # ID=comment|remove|regenerate, repeatable
+mandara setup --restore ~/.local/share/mandara/doctor-backups/<backup>   # undo a fix
+```
+
 ## Capture
 
 ```bash
@@ -300,6 +342,8 @@ mandara msg cursor install bibata/ice   # download the pinned GitHub release, ve
 mandara msg cursor apply bibata/ice 32  # theme (catalog id[/variant] or XCursor name) and optional size, live; `none` = your compositor's
 mandara msg cursor remove bibata     # every variant Mandara installed (or one: bibata/ice); never a package's or your own
 mandara msg calendar add webcal://example.com/holidays.ics Holidays  # calendar [days], sources, remove <n>, refresh
+mandara msg calendar goto 2026-12     # open the clock panel's calendar there: today, next, prev, +N / -N days, YYYY-MM, YYYY-MM-DD
+mandara msg calendar day 2026-12-25   # one day as JSON: its events, ISO week, day of the year and Hijri date
 mandara msg location locate          # geoclue|ip; location search <city>, geocode, set <lat> <lon> [name]
 mandara msg time                     # time zone, network time, and your location's time zone (suggested_timezone when they differ)
 mandara msg time zone Africa/Cairo   # set the system time zone (asks for your password); time zones [word] lists them

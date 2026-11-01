@@ -1,6 +1,6 @@
 //! Studio → Compositor: the adaptive compositor control center.
 //!
-//! * The running compositor (MangoWM, Niri or Hyprland) is detected and its
+//! * The running compositor (MangoWM, Niri, Hyprland or Umbriel) is detected and its
 //!   tab opens first; the others stay editable (their drop-ins are written
 //!   whenever that compositor runs).
 //! * **Window rules**: a visual builder over `compositor.window_rules` with
@@ -8,7 +8,8 @@
 //!   window" (the shell's `compositor clients`, with app icons).
 //! * **Tag & Layout Studio** (MangoWM): a 3×3 tag grid with layout glyphs
 //!   editing `compositor.tag_rules`, plus SceneFX tuning.
-//! * **Columns & outputs** (Niri) and **Decoration** (Hyprland).
+//! * **Columns & outputs** (Niri) and **Decoration** (Hyprland); Umbriel
+//!   shares the common rows and rules.
 //!
 //! Everything writes the config; the shell's compositor sync regenerates
 //! `~/.config/mandara/generated/<compositor>` and reloads — the user's own
@@ -233,28 +234,15 @@ const INCLUDE_REFRESH: Duration = Duration::from_secs(3);
 const SAME_WIDTH_EPSILON: f32 = 0.01;
 
 fn running() -> Option<Target> {
-    match mandara_compositor::detect() {
-        Some(mandara_compositor::CompositorKind::MangoWM) => Some(Target::Mango),
-        Some(mandara_compositor::CompositorKind::Niri) => Some(Target::Niri),
-        Some(mandara_compositor::CompositorKind::Hyprland) => Some(Target::Hyprland),
-        None => None,
-    }
+    mandara_compositor::detect().map(mandara_compositor::CompositorKind::target)
 }
 
 pub(super) fn target_name(t: Target) -> &'static str {
-    match t {
-        Target::Mango => "MangoWM",
-        Target::Niri => "Niri",
-        Target::Hyprland => "Hyprland",
-    }
+    t.name()
 }
 
 fn target_index(t: Target) -> usize {
-    match t {
-        Target::Mango => 0,
-        Target::Niri => 1,
-        Target::Hyprland => 2,
-    }
+    t.index()
 }
 
 /// `^…$` around `s` with regex metacharacters escaped.
@@ -395,6 +383,7 @@ impl StudioView {
                 "mango" => Some(Target::Mango),
                 "niri" => Some(Target::Niri),
                 "hyprland" => Some(Target::Hyprland),
+                "umbriel" => Some(Target::Umbriel),
                 _ => None,
             });
             cx.set_global(CompositorStudio { tag: 1, tab, auto_picker, ..Default::default() });
@@ -527,10 +516,20 @@ impl StudioView {
                 list.extend(group(crate::registry::system_settings::HYPR_LAYOUT));
                 self.rows(list, cfg, p, cx)
             }
+            // No Umbriel-only settings: how its drop-in combines with the
+            // user's config, in one sentence.
+            Target::Umbriel => div()
+                .text_size(px(TEXT_12_PX))
+                .line_height(px(LEADING_17_PX))
+                .text_color(p.on_surface_variant.hsla())
+                .child(t("Umbriel reads your config.toml after Mandara's file, so a value you set there wins. Each workspace keeps its own layout; the bar's layout pill switches it."))
+                .into_any_element(),
         };
         let preview = self.dropin_preview(cfg, tab, p, cx);
         let presets = self.comp_presets(cfg, p, cx);
-        div().row().flex_col().gap(px(SPACE_26_PX)).child(header).child(presets).child(specific).child(rules).child(common).child(preview).into_any_element()
+        // The compositor's own verdict on the config comes first.
+        let doctor = self.config_doctor(cfg, tab, p, cx);
+        div().row().flex_col().gap(px(SPACE_26_PX)).child(header).child(doctor).child(presets).child(specific).child(rules).child(common).child(preview).into_any_element()
     }
 
     fn dropin_preview(&mut self, cfg: &ShellConfig, tab: Target, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {

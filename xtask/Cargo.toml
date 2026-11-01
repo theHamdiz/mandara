@@ -13,15 +13,22 @@ tar.workspace = true
 flate2.workspace = true
 # `cargo xtask art`: plugin artwork pipeline (embedding, cover composition, checks).
 image.workspace = true
-resvg = "0.46"
-roxmltree = "0.21"
+# The same resvg as GPUI. The brand marks and plugin icons have no text or
+# embedded images (`cargo xtask art --check` enforces it), so no text or
+# raster-image support.
+resvg = { version = "0.46", default-features = false }
+roxmltree = { version = "0.21", default-features = false, features = ["std"] }
 ab_glyph = "0.2"
+# 1.x: the version image / gif link; 2.0 would be a second copy.
 color_quant = "1.1"
 png = "0.18"
+# Embedded icons: pixel-exact lossless WebP from the wallpaper engine's
+# pure-Rust VP8L encoder.
+mandara-wallgen.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 # `cargo xtask build`: reads feature lists, writes the build manifest.
-toml.workspace = true
+toml = { workspace = true, features = ["display"] }
 # `cargo xtask delta` / `update-part` / `plugin-delta`: binary patches and
 # update.json (bidiff + zstd encoder; the shell links only the apply side).
 mandara-delta = { workspace = true, features = ["create", "sign"] }

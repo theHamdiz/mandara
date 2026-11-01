@@ -64,7 +64,8 @@ pub(crate) const PLUGIN_CATEGORIES: &[(&str, &[&str])] = &[
     (tk("System"), &["network", "bluetooth", "audio", "tray", "resources", "mini-stats", "processes", "notifications", "clipboard", "drives", "power", "privacy"]),
     (tk("Maintenance"), &["updates", "services", "containers", "app-installer"]),
     (tk("Media & capture"), &["media", "screenshot", "color-picker", "soundscapes"]),
-    (tk("Look & feel"), &["wallpaper", "wallpaper-generator", "wallhaven", "cursors"]),
+    (tk("Look & feel"), &["wallpaper", "wallpaper-depth", "wallpaper-generator", "wallhaven", "cursors"]),
+    (tk("Desktop widgets"), &["desktop-clocks", "desktop-monitor", "desktop-decorations", "desktop-visualizers", "desktop-now-playing", "desktop-calendar", "desktop-weather", "desktop-world-clock", "desktop-countdown", "desktop-productivity", "desktop-sky", "desktop-identity", "desktop-fun", "desktop-info"]),
     (tk("Productivity"), &["todo", "notes", "pomodoro", "authenticator", "screen-time"]),
     (tk("Everyday info"), &["weather", "prayer-times", "world-clock", "net-speed"]),
     (tk("Third-party"), &[]),
@@ -86,6 +87,7 @@ const SHELVES: &[Shelf] = &[
     Shelf { key: "productivity", title: tk("Productivity"), line: tk("Tasks, notes, focus timers and sign-in codes"), categories: &[tk("Productivity")] },
     Shelf { key: "media", title: tk("Media & capture"), line: tk("Music, screenshots, color and ambient sound"), categories: &[tk("Media & capture")] },
     Shelf { key: "look", title: tk("Look & feel"), line: tk("Wallpapers, generated art, online galleries and cursor themes"), categories: &[tk("Look & feel")] },
+    Shelf { key: "desktop", title: tk("Desktop widgets"), line: tk("Clocks, weather, gauges and more, right on your wallpaper"), categories: &[tk("Desktop widgets")] },
     Shelf { key: "system", title: tk("System tools"), line: tk("Network, sound, power and upkeep, one click away"), categories: &[tk("System"), tk("Maintenance")] },
 ];
 
@@ -407,6 +409,7 @@ pub(crate) fn plugin_icon(id: &str) -> &'static str {
         "screenshot" => "camera",
         "wallpaper" => "image",
         "wallpaper-generator" => "brush",
+        "wallpaper-depth" => "sparkles",
         "wallhaven" => "cloud",
         "cursors" => "arrow",
         "mini-stats" => "cpu",

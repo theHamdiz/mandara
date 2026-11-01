@@ -24,6 +24,15 @@ const GRADIENT_STOPS: usize = 4;
 const MIN_LEVEL: f32 = 0.025;
 /// Wave strip points per bar.
 const WAVE_POINTS_PER_BAR: usize = 2;
+/// LED meter: segments per bar and the gap between them (of a segment),
+/// and where amber and coral take over (of the height).
+const LED_SEGMENTS: usize = 14;
+const LED_GAP: f32 = 0.28;
+const LED_AMBER_FROM: f32 = 0.62;
+const LED_CORAL_FROM: f32 = 0.84;
+/// The LED meter's amber and coral, OKLCH.
+const LED_AMBER: (f32, f32, f32) = (0.8, 0.15, 75.0);
+const LED_CORAL: (f32, f32, f32) = (0.68, 0.19, 25.0);
 /// Anti-aliasing margin around the shape, reference px.
 const AA_MARGIN_PX: f32 = 2.0;
 
@@ -83,6 +92,22 @@ impl Geometry {
     pub fn quads(&self, levels: &[f32], mut out: impl FnMut([(f32, f32); 4])) {
         let n = levels.len().max(1);
         match self.shape {
+            VisualizerShape::Led => {
+                let slot = self.length / n as f32;
+                let bw = slot * (1.0 - self.gap);
+                let seg = self.height / LED_SEGMENTS as f32;
+                let sh = seg * (1.0 - LED_GAP);
+                for (i, lv) in levels.iter().enumerate() {
+                    // At least the bottom segment, like a resting meter.
+                    let lit = ((lv.clamp(0.0, 1.0) * LED_SEGMENTS as f32).ceil() as usize).clamp(1, LED_SEGMENTS);
+                    let x0 = -self.length / 2.0 + i as f32 * slot + (slot - bw) / 2.0;
+                    for j in 0..lit {
+                        let bottom = self.height / 2.0 - j as f32 * seg;
+                        let top = bottom - sh;
+                        out([self.place((x0, top)), self.place((x0 + bw, top)), self.place((x0 + bw, bottom)), self.place((x0, bottom))]);
+                    }
+                }
+            }
             VisualizerShape::Bars | VisualizerShape::Mirrored => {
                 let slot = self.length / n as f32;
                 let bw = slot * (1.0 - self.gap);
@@ -220,8 +245,32 @@ impl Painter {
     }
 }
 
+/// The LED meter's colours by level: the accent at the bottom, amber, then
+/// coral at the top, in hard steps (each segment one colour).
+fn led_gradient(g: &Geometry, accent: Color, opacity: f32) -> Paint<'static> {
+    let amber = Color::oklch(LED_AMBER.0, LED_AMBER.1, LED_AMBER.2);
+    let coral = Color::oklch(LED_CORAL.0, LED_CORAL.1, LED_CORAL.2);
+    let stops = vec![
+        GradientStop::new(0.0, lp::skia(accent, opacity)),
+        GradientStop::new(LED_AMBER_FROM, lp::skia(accent, opacity)),
+        GradientStop::new(LED_AMBER_FROM, lp::skia(amber, opacity)),
+        GradientStop::new(LED_CORAL_FROM, lp::skia(amber, opacity)),
+        GradientStop::new(LED_CORAL_FROM, lp::skia(coral, opacity)),
+        GradientStop::new(1.0, lp::skia(coral, opacity)),
+    ];
+    let (a, b) = (g.place((0.0, g.height / 2.0)), g.place((0.0, -g.height / 2.0)));
+    let mut paint = Paint { anti_alias: true, ..Paint::default() };
+    if let Some(shader) = LinearGradient::new(Point::from_xy(a.0, a.1), Point::from_xy(b.0, b.1), stops, SpreadMode::Pad, Transform::identity()) {
+        paint.shader = shader;
+    }
+    paint
+}
+
 /// The accent → hue-turned accent gradient along the shape.
 fn gradient(g: &Geometry, accent: Color, opacity: f32) -> Paint<'static> {
+    if g.shape == VisualizerShape::Led {
+        return led_gradient(g, accent, opacity);
+    }
     let end = Color::oklch(accent.lightness(), accent.chroma() * GRADIENT_CHROMA_GAIN, accent.hue() + GRADIENT_HUE_TURN);
     let stops: Vec<GradientStop> = (0..GRADIENT_STOPS)
         .map(|i| {

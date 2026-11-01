@@ -1016,7 +1016,7 @@ fn critical_pulse(window: &mut Window, cx: &mut App) -> Option<f32> {
     Some(PULSE_MIN_ALPHA + (1.0 - PULSE_MIN_ALPHA) * wave)
 }
 
-fn chip_view(m: &Shared, palette: &MandaraPalette, window: &Window, pulse: Option<f32>, low_percent: f64) -> AnyElement {
+fn chip_view(m: &Shared, palette: &MandaraPalette, window: &Window, pulse: Option<f32>, low_percent: f64, show_percent: bool) -> AnyElement {
     let mb = m.borrow();
     mb.views.track(window);
     if let Some(b) = mb.state.batteries().next() {
@@ -1034,7 +1034,7 @@ fn chip_view(m: &Shared, palette: &MandaraPalette, window: &Window, pulse: Optio
             .gap(px(CHIP_GAP_PX))
             .child(crate::icons::battery(frac, b.state.is_charging(), fill, palette.on_surface.with_alpha(CHIP_OUTLINE_ALPHA)))
             .when(b.state.is_charging(), |el| el.child(icon("zap", CHIP_BOLT_PX, from)))
-            .child(div().font_features(tabular_nums()).text_size(px(text::BODY_S)).font_weight(FontWeight::MEDIUM).child(percent_text(frac)))
+            .when(show_percent, |el| el.child(div().font_features(tabular_nums()).text_size(px(text::BODY_S)).font_weight(FontWeight::MEDIUM).child(percent_text(frac))))
             .into_any_element();
     }
     match mb.state.profiles.as_ref() {
@@ -1243,7 +1243,9 @@ pub fn register(r: &mut PluginRegistry) {
             None,
             move |palette, window, cx| {
                 let pulse = critical_pulse(window, cx);
-                chip_view(&bar_m, palette, window, pulse, low_percent(cx))
+                // `[plugins.settings.power] bar_percent`: the charge beside the battery.
+                let show_percent = crate::state::config(cx).read(cx).get().plugins.setting(ID, "bar_percent", true);
+                chip_view(&bar_m, palette, window, pulse, low_percent(cx), show_percent)
             },
             window,
             cx,

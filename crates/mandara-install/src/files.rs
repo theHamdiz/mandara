@@ -18,7 +18,7 @@ pub const BINARY: &str = "mandara";
 pub const PLUGIN_DIRS: &[&str] = &["mandara/plugins", "mandara/plugins-dev"];
 /// The compositor drop-ins Mandara generates (`~/.config/mandara/generated/`).
 pub const GENERATED_DIR: &str = "mandara/generated";
-pub const GENERATED_DROPINS: &[&str] = &["mango.conf", "hyprland.conf", "niri.kdl", "hyprland.lua"];
+pub const GENERATED_DROPINS: &[&str] = &["mango.conf", "hyprland.conf", "niri.kdl", "hyprland.lua", "umbriel.toml"];
 /// Mode of the installed binary.
 const MODE_EXECUTABLE: u32 = 0o755;
 /// The `Exec=` value the packaged desktop entry starts with.
@@ -181,6 +181,8 @@ mod tests {
         assert!(emptied_dropin("hyprland.lua").starts_with("-- "));
         assert!(emptied_dropin("mango.conf").starts_with("# "));
         assert!(emptied_dropin("hyprland.conf").contains("mandara setup"));
+        // A TOML comment: Umbriel still reads it as an empty file.
+        assert!(emptied_dropin("umbriel.toml").starts_with("# "));
     }
 
     #[test]

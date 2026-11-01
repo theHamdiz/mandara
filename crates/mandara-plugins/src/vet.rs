@@ -111,8 +111,20 @@ pub fn vet(dir: &Path, reserved_ids: &[&str], repo: Option<&str>) -> Result<(), 
         behaved(&mut plugin)?;
         shows_something |= view.as_ref().is_some_and(has_content);
     }
+    // A plugin may offer only desktop widgets.
+    let widgets = crate::split_widgets(m.widgets.clone()).0;
+    if !widgets.is_empty() && !plugin.has_desktop() {
+        return Err(broken(t("plugin.toml lists desktop widgets, but the plugin isn't built for the desktop-plugin world").to_string()));
+    }
+    for info in &widgets {
+        let context = wasm::WidgetContext { widget: info.id.clone(), instance: format!("{}-1", info.id), width: info.width, height: info.height, numerals: "auto".into(), calendar: "gregorian".into(), language: String::new() };
+        let view = plugin.desktop_widget(&theme, &context);
+        behaved(&mut plugin)?;
+        shows_something |= view.as_ref().is_some_and(has_content);
+    }
     if !shows_something {
-        return Err(Finding::new(Class::Placeholder, t("It shows nothing: its bar item, panel and sidebar card are all empty")));
+        let why = if plugin.has_desktop() { t("It shows nothing: its bar item, panel, sidebar card and desktop widgets are all empty") } else { t("It shows nothing: its bar item, panel and sidebar card are all empty") };
+        return Err(Finding::new(Class::Placeholder, why));
     }
     Ok(())
 }

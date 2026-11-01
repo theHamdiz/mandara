@@ -12,6 +12,7 @@
 use std::f32::consts::{FRAC_PI_2, TAU};
 
 use mandara_config::desktop_widgets::{ClockFace, ClockWidget, DecorShape, Decoration, FontRole, MonitorRow, MonitorWidget, RingProgress};
+use mandara_core::shape::Shape;
 
 /// What a text mark is set in.
 #[derive(Clone, Debug, PartialEq)]
@@ -36,6 +37,23 @@ pub enum InkRole {
     Accent,
     /// Text on an accent-filled shape.
     OnAccent,
+    /// The plate behind the widget.
+    Plate,
+    /// The outline around the plate's shape.
+    Outline,
+    /// The chrome (tape, a window's title bar details).
+    Chrome,
+    /// Print paper (a polaroid's border, a note's sheet).
+    Paper,
+    /// Ink on paper.
+    OnPaper,
+    /// The theme's text colour, on shapes filled with the plate's colour.
+    OnPlate,
+    /// A colour of its own (`0xRRGGBB`): palette swatches, tiles.
+    Rgb(u32),
+    /// A light pastel of the accent, its hue turned by this many degrees
+    /// (sticky notes, tabs, tiles); ink on it is [`InkRole::OnPaper`].
+    Pastel(u16),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -60,6 +78,22 @@ pub enum MarkKind {
     Icon { name: &'static str, x: f32, y: f32, size: f32 },
     /// A sparkline of `values` (0..=1, oldest first) filling the box.
     Graph { x: f32, y: f32, w: f32, h: f32, values: Vec<f32>, width: f32 },
+    /// The plate behind a widget in `shape` (a rounded rectangle keeps its
+    /// exact arcs), with a specular rim `rim` px wide (0 = none).
+    Plate { x: f32, y: f32, w: f32, h: f32, radius: f32, rim: f32, shape: Shape },
+    /// Any shared shape, filled when `width` is 0, else outlined.
+    Shaped { x: f32, y: f32, w: f32, h: f32, shape: Shape, width: f32 },
+    /// An open stroked line through `pts`.
+    Polyline { pts: Vec<(f32, f32)>, width: f32 },
+    /// A picture drawn into `w × h` (covering it), clipped to `shape` and
+    /// turned `turn` degrees inside it (a spinning record's label).
+    Image { x: f32, y: f32, w: f32, h: f32, pic: Picture, shape: Shape, turn: f32 },
+    /// `mask`'s alpha filled with the ink, stretched over `w × h` (globes,
+    /// procedural shading).
+    Mask { x: f32, y: f32, w: f32, h: f32, mask: Picture },
+    /// Text leaning by `slant` (run per rise, positive leans right): the
+    /// measured box at `(x, y)`; the lean reaches `h × slant` beyond it.
+    SlantText { text: String, style: TextStyle, x: f32, y: f32, w: f32, h: f32, slant: f32 },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -69,19 +103,28 @@ pub struct Mark {
     pub opacity: f32,
     /// Drawn in the widget's live plane.
     pub live: bool,
+    /// Casts the widget's directional shadow (small print doesn't: a hard
+    /// shadow under it reads as doubled text).
+    pub casts: bool,
 }
 
 impl Mark {
-    fn new(kind: MarkKind, ink: InkRole) -> Self {
-        Self { kind, ink, opacity: 1.0, live: false }
+    pub fn new(kind: MarkKind, ink: InkRole) -> Self {
+        Self { kind, ink, opacity: 1.0, live: false, casts: true }
     }
 
-    fn dim(mut self, opacity: f32) -> Self {
+    /// Casts no directional shadow.
+    pub fn flat(mut self) -> Self {
+        self.casts = false;
+        self
+    }
+
+    pub fn dim(mut self, opacity: f32) -> Self {
         self.opacity = opacity;
         self
     }
 
-    fn live(mut self) -> Self {
+    pub fn live(mut self) -> Self {
         self.live = true;
         self
     }
@@ -90,6 +133,7 @@ impl Mark {
     pub fn bounds(&self) -> (f32, f32, f32, f32) {
         match &self.kind {
             MarkKind::Text { x, y, w, h, .. } | MarkKind::SideText { x, y, w, h, .. } => (*x, *y, x + w, y + h),
+            MarkKind::SlantText { x, y, w, h, slant, .. } => (x + (h * slant).min(0.0), *y, x + w + (h * slant).max(0.0), y + h),
             MarkKind::Poly { pts } => pts.iter().fold((f32::MAX, f32::MAX, f32::MIN, f32::MIN), |b, p| (b.0.min(p.0), b.1.min(p.1), b.2.max(p.0), b.3.max(p.1))),
             MarkKind::Line { a, b, width } => {
                 let h = width / 2.0;
@@ -104,20 +148,36 @@ impl Mark {
             MarkKind::Wave { x, y, w, amp, width, .. } => (*x, y - amp - width, x + w, y + amp + width),
             MarkKind::Icon { x, y, size, .. } => (*x, *y, x + size, y + size),
             MarkKind::Graph { x, y, w, h, width, .. } => (*x, y - width, x + w, y + h + width),
+            MarkKind::Plate { x, y, w, h, .. } | MarkKind::Image { x, y, w, h, .. } | MarkKind::Mask { x, y, w, h, .. } => (*x, *y, x + w, y + h),
+            MarkKind::Shaped { x, y, w, h, width, .. } => (x - width / 2.0, y - width / 2.0, x + w + width / 2.0, y + h + width / 2.0),
+            MarkKind::Polyline { pts, width } => {
+                let b = pts.iter().fold((f32::MAX, f32::MAX, f32::MIN, f32::MIN), |b, p| (b.0.min(p.0), b.1.min(p.1), b.2.max(p.0), b.3.max(p.1)));
+                (b.0 - width / 2.0, b.1 - width / 2.0, b.2 + width / 2.0, b.3 + width / 2.0)
+            }
         }
     }
 
-    fn shift(&mut self, dx: f32, dy: f32) {
+    pub fn shift(&mut self, dx: f32, dy: f32) {
         let mv = |p: &mut (f32, f32)| {
             p.0 += dx;
             p.1 += dy;
         };
         match &mut self.kind {
-            MarkKind::Text { x, y, .. } | MarkKind::SideText { x, y, .. } | MarkKind::Rect { x, y, .. } | MarkKind::Wave { x, y, .. } | MarkKind::Icon { x, y, .. } | MarkKind::Graph { x, y, .. } => {
+            MarkKind::Text { x, y, .. }
+            | MarkKind::SideText { x, y, .. }
+            | MarkKind::Rect { x, y, .. }
+            | MarkKind::Wave { x, y, .. }
+            | MarkKind::Icon { x, y, .. }
+            | MarkKind::Graph { x, y, .. }
+            | MarkKind::Plate { x, y, .. }
+            | MarkKind::Shaped { x, y, .. }
+            | MarkKind::SlantText { x, y, .. }
+            | MarkKind::Mask { x, y, .. }
+            | MarkKind::Image { x, y, .. } => {
                 *x += dx;
                 *y += dy;
             }
-            MarkKind::Poly { pts } => pts.iter_mut().for_each(mv),
+            MarkKind::Poly { pts } | MarkKind::Polyline { pts, .. } => pts.iter_mut().for_each(mv),
             MarkKind::Line { a, b, .. } => {
                 mv(a);
                 mv(b);
@@ -127,11 +187,40 @@ impl Mark {
     }
 }
 
-/// A laid-out widget: its marks and its box size (physical px).
+/// A laid-out widget: its marks, its box size (physical px) and the
+/// places a click does something.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Composition {
     pub marks: Vec<Mark>,
     pub size: (f32, f32),
+    pub hits: Vec<Hit>,
+}
+
+/// A clickable area of a widget (composition px) and what it does.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Hit {
+    pub rect: (f32, f32, f32, f32),
+    pub action: super::actions::Action,
+}
+
+/// A decoded picture for [`MarkKind::Image`]; compared by `key` (the
+/// source and the size it was decoded at), never by its pixels.
+#[derive(Clone)]
+pub struct Picture {
+    pub key: u64,
+    pub pixmap: std::sync::Arc<tiny_skia::Pixmap>,
+}
+
+impl PartialEq for Picture {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key
+    }
+}
+
+impl std::fmt::Debug for Picture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Picture({:x})", self.key)
+    }
 }
 
 impl Composition {
@@ -140,9 +229,23 @@ impl Composition {
         self.marks.iter().filter(|m| m.live == live).map(Mark::bounds).reduce(|a, b| (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3)))
     }
 
+    /// A composition of `marks`, moved to start at the origin.
+    pub fn of(marks: Vec<Mark>) -> Self {
+        let mut c = Self { marks, ..Self::default() };
+        c.normalize();
+        c
+    }
+
+    /// [`Self::of`] with clickable areas (in the marks' coordinates).
+    pub fn with_hits(marks: Vec<Mark>, hits: Vec<Hit>) -> Self {
+        let mut c = Self { marks, hits, ..Self::default() };
+        c.normalize();
+        c
+    }
+
     /// Moves everything so the marks start at the origin and recomputes
     /// the size.
-    fn normalize(&mut self) {
+    pub fn normalize(&mut self) {
         let all = self.marks.iter().map(Mark::bounds).reduce(|a, b| (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3)));
         let Some((x0, y0, x1, y1)) = all else {
             self.size = (0.0, 0.0);
@@ -151,7 +254,28 @@ impl Composition {
         for m in &mut self.marks {
             m.shift(-x0, -y0);
         }
+        for h in &mut self.hits {
+            h.rect.0 -= x0;
+            h.rect.1 -= y0;
+        }
         self.size = ((x1 - x0).max(0.0), (y1 - y0).max(0.0));
+    }
+
+    /// Moves every mark and hit by `(dx, dy)`.
+    pub fn shift(&mut self, dx: f32, dy: f32) {
+        for m in &mut self.marks {
+            m.shift(dx, dy);
+        }
+        for h in &mut self.hits {
+            h.rect.0 += dx;
+            h.rect.1 += dy;
+        }
+    }
+
+    /// The action under `(x, y)` (composition px), the last one drawn
+    /// winning.
+    pub fn hit(&self, (x, y): (f32, f32)) -> Option<&super::actions::Action> {
+        self.hits.iter().rev().find(|h| x >= h.rect.0 && y >= h.rect.1 && x < h.rect.0 + h.rect.2 && y < h.rect.1 + h.rect.3).map(|h| &h.action)
     }
 }
 
@@ -183,10 +307,70 @@ pub struct ClockStrings {
     /// Fraction of the hour / of the day gone.
     pub hour_fraction: f32,
     pub day_fraction: f32,
+    /// The clock's text reads right to left.
+    pub rtl: bool,
+    /// The time as numbers (the analog hands).
+    pub hour: u32,
+    pub minute: u32,
+    pub second: u32,
+    /// `12`, `3`, `6`, `9` in the clock's digits (the analog dial).
+    pub hour_numbers: [String; 4],
+    /// `12`, `1` … `11` in the clock's digits.
+    pub all_hours: [String; 12],
+    /// `AM` and `PM` in the clock's language.
+    pub meridiem_pair: [String; 2],
+    pub year: String,
+    pub month_short: String,
+    /// `08`.
+    pub month_number: String,
+    /// `Evening`.
+    pub day_part: String,
+    /// The day in the Hijri calendar (`5 Jumada al-Awwal 1448`), when known.
+    pub hijri: String,
+    /// The moon's age, 0 (new) … ½ (full) … 1.
+    pub moon_phase: f32,
+    /// This week's days (short names) from the week's first day, and
+    /// whether each is today.
+    pub week: Vec<(String, bool)>,
 }
 
+impl ClockStrings {
+    /// The value of a template token (`HH`, `weekday`, …).
+    pub fn token(&self, token: &str) -> Option<String> {
+        let h12 = self.all_hours[(self.hour % 12) as usize].clone();
+        Some(match token {
+            "HH" => self.hours.clone(),
+            "H" => match self.hours.trim_start_matches(['0', '٠']) {
+                "" => self.hours.chars().last().map(String::from).unwrap_or_default(),
+                t => t.to_string(),
+            },
+            "hh" => format!("{h12:0>2}"),
+            "h" => h12,
+            "mm" => self.minutes.clone(),
+            "ss" => self.seconds.clone(),
+            "ampm" => self.meridiem_pair[usize::from(self.hour >= 12)].clone(),
+            "time" => self.time.clone(),
+            "weekday" => self.weekday.clone(),
+            "wd" => self.weekday_short.clone(),
+            "day" => self.day.clone(),
+            "dd" => format!("{:0>2}", self.day),
+            "month" => self.month.clone(),
+            "mon" => self.month_short.clone(),
+            "MM" => self.month_number.clone(),
+            "year" => self.year.clone(),
+            "greeting" => self.greeting.clone(),
+            "daypart" => self.day_part.clone(),
+            "hijri" => self.hijri.clone(),
+            _ => return None,
+        })
+    }
+}
+
+/// What joins two parts of a line (`Sunday · 1 November`).
+pub use self::face::SEPARATOR;
+
 /// Reference sizes of the faces (px at a 1080 px tall display).
-mod face {
+pub(super) mod face {
     pub const SUPER_DIGITS: f32 = 230.0;
     pub const SUPER_LINE: f32 = 0.8;
     pub const SUPER_SMALL: f32 = 46.0;
@@ -243,24 +427,24 @@ mod face {
 }
 
 /// One horizontal run of a line.
-struct Run {
-    text: String,
-    style: TextStyle,
-    ink: InkRole,
-    opacity: f32,
-    live: bool,
+pub(super) struct Run {
+    pub text: String,
+    pub style: TextStyle,
+    pub ink: InkRole,
+    pub opacity: f32,
+    pub live: bool,
     /// Gap after the run, physical px.
-    gap: f32,
+    pub gap: f32,
 }
 
-fn run(text: impl Into<String>, style: TextStyle, ink: InkRole) -> Run {
+pub(super) fn run(text: impl Into<String>, style: TextStyle, ink: InkRole) -> Run {
     Run { text: text.into(), style, ink, opacity: 1.0, live: false, gap: 0.0 }
 }
 
 /// Lays out runs left to right (right to left when `rtl`) with their
 /// baselines roughly aligned (bottoms of the line boxes), top at `y`.
 /// Returns the marks and the line's `(width, height)`.
-fn line(runs: Vec<Run>, x: f32, y: f32, rtl: bool, m: &mut dyn Measure) -> (Vec<Mark>, (f32, f32)) {
+pub(super) fn line(runs: Vec<Run>, x: f32, y: f32, rtl: bool, m: &mut dyn Measure) -> (Vec<Mark>, (f32, f32)) {
     let sized: Vec<(Run, (f32, f32))> = runs.into_iter().filter(|r| !r.text.is_empty()).map(|r| {
         let s = m.measure(&r.text, &r.style);
         (r, s)
@@ -282,7 +466,7 @@ fn line(runs: Vec<Run>, x: f32, y: f32, rtl: bool, m: &mut dyn Measure) -> (Vec<
 }
 
 /// Stacks lines, each aligned by `align` (0 left, ½ centre, 1 right).
-fn stack(lines: Vec<(Vec<Mark>, (f32, f32))>, gap: f32, align: f32) -> Vec<Mark> {
+pub(super) fn stack(lines: Vec<(Vec<Mark>, (f32, f32))>, gap: f32, align: f32) -> Vec<Mark> {
     let width = lines.iter().map(|(_, s)| s.0).fold(0.0, f32::max);
     let mut y = 0.0;
     let mut out = Vec::new();
@@ -297,17 +481,76 @@ fn stack(lines: Vec<(Vec<Mark>, (f32, f32))>, gap: f32, align: f32) -> Vec<Mark>
     out
 }
 
-fn style(role: FontRole, size: f32, weight: u16) -> TextStyle {
+pub(super) fn style(role: FontRole, size: f32, weight: u16) -> TextStyle {
     TextStyle { role, size, weight, tracking: 0.0 }
 }
 
-fn tracked(mut s: TextStyle, tracking: f32) -> TextStyle {
+pub(super) fn tracked(mut s: TextStyle, tracking: f32) -> TextStyle {
     s.tracking = tracking;
     s
 }
 
+/// `text` broken into lines no wider than `width` (at spaces; a word
+/// longer than a line is cut), at most `max` lines, the last one ending in
+/// `…` when text was left over.
+pub fn wrap(text: &str, st: &TextStyle, width: f32, max: usize, m: &mut dyn Measure) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for para in text.lines() {
+        let mut cur = String::new();
+        for word in para.split_whitespace() {
+            let next = if cur.is_empty() { word.to_string() } else { format!("{cur} {word}") };
+            if m.measure(&next, st).0 <= width || cur.is_empty() && m.measure(word, st).0 <= width {
+                cur = next;
+                continue;
+            }
+            if !cur.is_empty() {
+                lines.push(std::mem::take(&mut cur));
+            }
+            cur = fit(word, st, width, m);
+        }
+        lines.push(cur);
+        if lines.len() > max {
+            break;
+        }
+    }
+    while lines.last().is_some_and(String::is_empty) {
+        lines.pop();
+    }
+    if lines.len() > max {
+        lines.truncate(max);
+        if let Some(last) = lines.last_mut() {
+            *last = fit(&format!("{last} …"), st, width, m);
+            if !last.ends_with('…') {
+                last.push('…');
+            }
+        }
+    }
+    lines
+}
+
+/// Whether `text` reads right to left: its first letter is Arabic,
+/// Hebrew, Syriac or Thaana (user content in any interface language).
+pub fn reads_rtl(text: &str) -> Option<bool> {
+    text.chars().find(|c| c.is_alphabetic()).map(|c| matches!(u32::from(c), 0x0590..=0x08FF | 0xFB1D..=0xFDFF | 0xFE70..=0xFEFF))
+}
+
+/// `text` cut (with `…`) to fit `width`.
+pub fn fit(text: &str, st: &TextStyle, width: f32, m: &mut dyn Measure) -> String {
+    if m.measure(text, st).0 <= width {
+        return text.to_string();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let (mut lo, mut hi) = (0, chars.len());
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        let cand: String = chars[..mid].iter().collect::<String>() + "…";
+        if m.measure(&cand, st).0 <= width { lo = mid } else { hi = mid - 1 }
+    }
+    chars[..lo].iter().collect::<String>().trim_end().to_string() + "…"
+}
+
 /// Upper-cases Latin text (scripts without case are unchanged).
-fn caps(s: &str) -> String {
+pub(super) fn caps(s: &str) -> String {
     s.to_uppercase()
 }
 
@@ -351,8 +594,10 @@ pub fn clock(c: &ClockWidget, s: &ClockStrings, k: f32, align: f32, rtl: bool, m
             if let Some(mer) = &s.meridiem {
                 runs.push(Run { gap: 0.0, ..run(mer, small, InkRole::Accent) });
             }
-            runs.push(Run { opacity: DIM, ..run(DASH, light.clone(), InkRole::Fg) });
-            runs.push(run(&s.numeric_date, light, InkRole::Fg));
+            if !s.numeric_date.is_empty() {
+                runs.push(Run { opacity: DIM, ..run(DASH, light.clone(), InkRole::Fg) });
+                runs.push(run(&s.numeric_date, light, InkRole::Fg));
+            }
             marks.extend(line(runs, 0.0, 0.0, rtl, m).0);
         }
         ClockFace::DayBlock => {
@@ -384,11 +629,14 @@ pub fn clock(c: &ClockWidget, s: &ClockStrings, k: f32, align: f32, rtl: bool, m
             let (box_pts, _) = skewed_box(box_x, top, bw, bh, DAY_SLANT);
             let mut row2 = vec![Mark::new(MarkKind::Poly { pts: box_pts }, InkRole::Accent)];
             row2.push(Mark::new(MarkKind::Text { text: s.time.clone(), style: ts, x: box_x + (bw - tw) / 2.0, y: top + (bh - th) / 2.0, w: tw, h: th }, InkRole::OnAccent));
-            let ds = tracked(style(role, px(DAY_DATE), MEDIUM), GREET_TRACKING / 2.0);
-            let date = caps(&format!("{} {}", s.day, s.month));
-            let (dw, dh) = m.measure(&date, &ds);
-            let dy = top + bh + px(DAY_ROW_GAP);
-            row2.push(Mark::new(MarkKind::Text { text: date, style: ds, x: (row1_w.max(bw) - dw) * align, y: dy, w: dw, h: dh }, InkRole::Fg).dim(DIM));
+            if !s.day_month.is_empty() {
+                let ds = tracked(style(role, px(DAY_DATE), MEDIUM), GREET_TRACKING / 2.0);
+                // Day and month as designed; both calendars when asked.
+                let date = caps(&if s.day_month.contains(SEPARATOR) { s.day_month.clone() } else { format!("{} {}", s.day, s.month) });
+                let (dw, dh) = m.measure(&date, &ds);
+                let dy = top + bh + px(DAY_ROW_GAP);
+                row2.push(Mark::new(MarkKind::Text { text: date, style: ds, x: (row1_w.max(bw) - dw) * align, y: dy, w: dw, h: dh }, InkRole::Fg).dim(DIM));
+            }
             if rtl {
                 // Mirror the first row so the weekday leads from the right.
                 let w = row1_w;
@@ -406,12 +654,16 @@ pub fn clock(c: &ClockWidget, s: &ClockStrings, k: f32, align: f32, rtl: bool, m
         }
         ClockFace::Greeting => {
             let small = tracked(style(role, px(GREET_SMALL), SEMIBOLD), GREET_TRACKING);
-            let lines = vec![
+            let lines: Vec<_> = [
                 line(vec![run(caps(&s.greeting), small.clone(), InkRole::Accent)], 0.0, 0.0, rtl, m),
+                line(vec![Run { opacity: DIM, ..run(c.subtitle.trim(), style(role, px(GREET_SMALL), MEDIUM), InkRole::Fg) }], 0.0, 0.0, rtl, m),
                 line(vec![run(caps(&s.weekday_short), style(role, px(GREET_DAY), HEAVY), InkRole::Fg)], 0.0, 0.0, rtl, m),
                 line(vec![run(caps(&s.day_month), small, InkRole::Fg)], 0.0, 0.0, rtl, m),
                 line(vec![run(&s.time, style(role, px(GREET_TIME), LIGHT), InkRole::Fg)], 0.0, 0.0, rtl, m),
-            ];
+            ]
+            .into_iter()
+            .filter(|(marks, _)| !marks.is_empty())
+            .collect();
             let col_w = lines.iter().map(|(_, s)| s.0).fold(0.0, f32::max);
             let col_h: f32 = lines.iter().map(|(_, s)| s.1).sum::<f32>() + px(GREET_GAP) * (lines.len() as f32 - 1.0);
             let mut col = stack(lines, px(GREET_GAP), 0.5);
@@ -441,20 +693,25 @@ pub fn clock(c: &ClockWidget, s: &ClockStrings, k: f32, align: f32, rtl: bool, m
         ClockFace::Minimal => {
             let time = line(vec![run(&s.time, style(role, px(MIN_TIME), LIGHT), InkRole::Fg)], 0.0, 0.0, rtl, m);
             let ds = style(role, px(MIN_DATE), REGULAR);
-            let date = line(
-                vec![
-                    Run { ..run(&s.weekday, TextStyle { weight: SEMIBOLD, ..ds.clone() }, InkRole::Accent) },
-                    Run { opacity: DIM, ..run(format!("{SEPARATOR}{}", s.day_month), ds, InkRole::Fg) },
-                ],
-                0.0,
-                0.0,
-                rtl,
-                m,
-            );
+            let mut runs = vec![run(&s.weekday, TextStyle { weight: SEMIBOLD, ..ds.clone() }, InkRole::Accent)];
+            if !s.day_month.is_empty() {
+                runs.push(Run { opacity: DIM, ..run(format!("{SEPARATOR}{}", s.day_month), ds, InkRole::Fg) });
+            }
+            let date = line(runs, 0.0, 0.0, rtl, m);
             marks.extend(stack(vec![time, date], px(MIN_GAP), align));
         }
+        ClockFace::Analog => marks.extend(super::faces::analog_face(c, s, k, role, align, m)),
+        ClockFace::Stack => marks.extend(super::faces::stack_face(c, s, k, align, rtl, m)),
+        ClockFace::Shape => marks.extend(super::faces::shape_face(c, s, k, m)),
+        ClockFace::DotMatrix => marks.extend(super::faces::matrix_face(c, s, k, align, true, m)),
+        ClockFace::Pixel => marks.extend(super::faces::matrix_face(c, s, k, align, false, m)),
+        ClockFace::Boxes => marks.extend(super::faces::boxes_face(c, s, k, m)),
+        ClockFace::Hud => marks.extend(super::faces::hud_face(c, s, k, rtl, m)),
+        ClockFace::Template => marks.extend(super::faces::template_face(c, s, k, align, rtl, m)),
+        ClockFace::Numerals => marks.extend(super::faces::numerals_face(c, s, k, m)),
+        ClockFace::Orbit => marks.extend(super::faces::orbit_face(c, s, k, m)),
     }
-    let mut comp = Composition { marks, size: (0.0, 0.0) };
+    let mut comp = Composition { marks, ..Composition::default() };
     comp.normalize();
     comp
 }
@@ -477,7 +734,7 @@ pub fn ring_face(s: &ClockStrings, k: f32, role: FontRole, c: (f32, f32), r: f32
     let (tw, th) = m.measure(&s.time, &ts);
     marks.push(Mark::new(MarkKind::Text { text: s.time.clone(), style: ts, x: c.0 - tw / 2.0, y: c.1 - th / 2.0, w: tw, h: th }, InkRole::Fg));
     let ds = style(role, px(RING_DATE), MEDIUM);
-    let date = format!("{}{SEPARATOR}{}", s.weekday, s.day_month);
+    let date = if s.day_month.is_empty() { s.weekday.clone() } else { format!("{}{SEPARATOR}{}", s.weekday, s.day_month) };
     let (dw, dh) = m.measure(&date, &ds);
     marks.push(Mark::new(MarkKind::Text { text: date, style: ds, x: c.0 - dw / 2.0, y: c.1 + r + w + px(RING_DATE_GAP), w: dw, h: dh }, InkRole::Fg).dim(DIM));
     marks
@@ -500,8 +757,15 @@ pub struct MonitorLine {
     pub value: String,
     /// A thin bar under the row (0..=1).
     pub bar: Option<f32>,
+    /// The reading as a share (0..=1) when it is one (a gauge shows it).
+    pub share: Option<f32>,
     /// A sparkline (and an optional second series) instead of a value.
     pub graph: Option<(Vec<f32>, Option<Vec<f32>>)>,
+    /// A temperature or the fan as a part of its usual range (0..=1), for
+    /// the thermal arcs.
+    pub level: Option<f32>,
+    /// A shorter label for tight spots (`RAM` for Memory).
+    pub short: Option<String>,
 }
 
 mod monitor {
@@ -569,7 +833,7 @@ pub fn monitor(w: &MonitorWidget, lines: &[MonitorLine], k: f32, rtl: bool, m: &
     }
     // A fixed box: the full width, whatever the values measure.
     marks.push(Mark::new(MarkKind::Rect { x: 0.0, y: 0.0, w: width, h: (y - px(ROW_GAP)).max(0.0), radius: 0.0, width: 0.0 }, InkRole::Fg).dim(0.0));
-    let mut comp = Composition { marks, size: (0.0, 0.0) };
+    let mut comp = Composition { marks, ..Composition::default() };
     comp.normalize();
     comp
 }
@@ -586,10 +850,15 @@ const WAVE_AMP: f32 = 0.28;
 const WAVE_PERIODS_PER_100PX: f32 = 0.9;
 /// Gap between stripes, fraction of a stripe slot.
 const STRIPE_GAP: f32 = 0.45;
+/// Washi tape: its opacity, the depth of the torn teeth (of its height)
+/// and the stripes' lean.
+const TAPE_ALPHA: f32 = 0.62;
+const TAPE_TOOTH: f32 = 0.12;
+const TAPE_LEAN: f32 = 0.35;
 
 /// A decoration (unrotated: the painter rotates the plane's content).
 /// `clockwise`: which way vertical text turns its sideways runs.
-pub fn decoration(d: &Decoration, k: f32, clockwise: bool, m: &mut dyn Measure) -> Composition {
+pub fn decoration(d: &Decoration, k: f32, clockwise: bool, align: f32, m: &mut dyn Measure) -> Composition {
     let px = |v: f32| v * k;
     let r = mandara_config::desktop_widgets::ranges::SHAPE_SIZE_PX;
     let (w, h) = (px(d.width.clamp(r.0, r.1)), px(d.height.clamp(r.0, r.1)));
@@ -608,7 +877,7 @@ pub fn decoration(d: &Decoration, k: f32, clockwise: bool, m: &mut dyn Measure) 
                 marks.extend(vertical_text(&d.text, &ts, Vertical { clockwise, upright_latin: d.upright_latin }, m));
             } else {
                 let lines: Vec<_> = d.text.lines().map(|l| line(vec![run(l, ts.clone(), InkRole::Fg)], 0.0, 0.0, false, m)).collect();
-                marks.extend(stack(lines, 0.0, 0.5));
+                marks.extend(stack(lines, 0.0, align));
             }
         }
         DecorShape::Disc => marks.push(Mark::new(MarkKind::Disc { c: (w / 2.0, w / 2.0), r: w / 2.0 }, InkRole::Fg)),
@@ -630,8 +899,27 @@ pub fn decoration(d: &Decoration, k: f32, clockwise: bool, m: &mut dyn Measure) 
         }
         DecorShape::Rule => marks.push(Mark::new(MarkKind::Line { a: (0.0, stroke / 2.0), b: (w, stroke / 2.0), width: stroke }, InkRole::Fg)),
         DecorShape::Frame => marks.push(Mark::new(MarkKind::Rect { x: stroke / 2.0, y: stroke / 2.0, w: w - stroke, h: h - stroke, radius: 0.0, width: stroke }, InkRole::Fg)),
+        DecorShape::Tape => {
+            // A translucent strip with torn ends and diagonal stripes.
+            let tooth = (h * TAPE_TOOTH).max(stroke);
+            let mut pts = vec![(0.0, 0.0), (w, 0.0)];
+            let teeth = (h / tooth).round().max(2.0) as usize;
+            for i in 1..=teeth {
+                pts.push((if i % 2 == 1 { w - tooth } else { w }, h * i as f32 / teeth as f32));
+            }
+            pts.push((0.0, h));
+            for i in (1..teeth).rev() {
+                pts.push((if i % 2 == 1 { tooth } else { 0.0 }, h * i as f32 / teeth as f32));
+            }
+            marks.push(Mark::new(MarkKind::Poly { pts }, InkRole::Accent).dim(TAPE_ALPHA));
+            let n = d.count.max(1);
+            for i in 1..=n {
+                let x = w * i as f32 / (n + 1) as f32;
+                marks.push(Mark::new(MarkKind::Line { a: (x - h * TAPE_LEAN, h), b: (x + h * TAPE_LEAN, 0.0), width: stroke }, InkRole::Paper).dim(TAPE_ALPHA / 2.0));
+            }
+        }
     }
-    let mut comp = Composition { marks, size: (0.0, 0.0) };
+    let mut comp = Composition { marks, ..Composition::default() };
     comp.normalize();
     comp
 }
@@ -745,6 +1033,346 @@ pub fn vertical_text(text: &str, ts: &TextStyle, v: Vertical, m: &mut dyn Measur
     out
 }
 
+// ── Plate ────────────────────────────────────────────────────────────────
+
+/// Puts `look`'s plate, outline, header and chrome around `comp` (see
+/// [`super::frame`]).
+pub fn with_plate(comp: Composition, look: &mandara_config::desktop_widgets::Look, k: f32, align: f32, m: &mut dyn Measure) -> Composition {
+    super::frame::frame(comp, look, k, align, m)
+}
+
+// ── Gauges ───────────────────────────────────────────────────────────────
+
+mod gauge {
+    pub const R: f32 = 38.0;
+    pub const W: f32 = 6.5;
+    pub const GAP: f32 = 22.0;
+    pub const VALUE: f32 = 19.0;
+    pub const LABEL: f32 = 13.0;
+    pub const LABEL_GAP: f32 = 8.0;
+    pub const ROW_GAP: f32 = 18.0;
+    pub const TRACK_ALPHA: f32 = 0.18;
+    pub const LABEL_ALPHA: f32 = 0.7;
+    pub const TRACKING: f32 = 0.12;
+    /// Where the arc starts (a gap at the bottom): fraction of a turn.
+    pub const SWEEP_TURN: f32 = 0.75;
+    /// A quarter turn, degrees (angles from the top to angles from 3
+    /// o'clock).
+    pub const QUARTER_DEG: f32 = 90.0;
+}
+
+/// The monitor as ring gauges (the readings that are a share), the other
+/// rows as a column under them.
+pub fn monitor_gauges(w: &MonitorWidget, lines: &[MonitorLine], k: f32, rtl: bool, m: &mut dyn Measure) -> Composition {
+    use gauge::*;
+    let px = |v: f32| v * k;
+    let role = w.look.font;
+    let (shares, rest): (Vec<&MonitorLine>, Vec<&MonitorLine>) = lines.iter().partition(|l| l.share.is_some());
+    let width = px(w.width.clamp(mandara_config::desktop_widgets::ranges::MONITOR_WIDTH_PX.0, mandara_config::desktop_widgets::ranges::MONITOR_WIDTH_PX.1));
+    let cell = 2.0 * px(R) + px(GAP);
+    let per_row = ((width + px(GAP)) / cell).floor().max(1.0) as usize;
+    let mut marks = Vec::new();
+    let vs = style(role, px(VALUE), face::SEMIBOLD);
+    let ls = tracked(style(role, px(LABEL), face::MEDIUM), TRACKING);
+    let mut y = 0.0;
+    for row in shares.chunks(per_row) {
+        let mut row_h: f32 = 0.0;
+        for (i, l) in row.iter().enumerate() {
+            let slot = if rtl { row.len() - 1 - i } else { i };
+            let c = (px(R) + slot as f32 * cell, y + px(R));
+            // Degrees from the top, clockwise; the default leaves the gap
+            // at the bottom where it always was.
+            let start = (w.start_angle - QUARTER_DEG).to_radians();
+            let sweep = SWEEP_TURN * TAU;
+            let rw = px(w.ring_width());
+            let ring_style = super::monitor_more::RingStyle { wavy: w.wavy, dotted: w.dotted };
+            marks.extend(super::monitor_more::ring(c, px(R), rw, start, sweep, ring_style, InkRole::Fg).into_iter().map(|m| m.dim(TRACK_ALPHA)));
+            let f = l.share.unwrap_or(0.0).clamp(0.0, 1.0);
+            if f > 0.0 {
+                marks.extend(super::monitor_more::ring(c, px(R), rw, start, sweep * f, ring_style, InkRole::Accent).into_iter().map(Mark::live));
+            }
+            // The live plane always covers the whole ring.
+            marks.push(Mark::new(MarkKind::Arc { c, r: px(R), width: rw + px(W), start: 0.0, sweep: TAU }, InkRole::Fg).dim(0.0).live());
+            let (vw, vh) = m.measure(&l.value, &vs);
+            marks.push(Mark::new(MarkKind::Text { text: l.value.clone(), style: vs.clone(), x: c.0 - vw / 2.0, y: c.1 - vh / 2.0, w: vw, h: vh }, InkRole::Fg).live());
+            let small = tracked(style(role, px(super::monitor_more::LABEL_SMALL), face::MEDIUM), TRACKING);
+            let (label, st) = super::monitor_more::slot_label(&l.label, l.short.as_deref(), cell - px(super::monitor_more::LABEL_SPACE), &ls, &small, m);
+            let (lw, lh) = m.measure(&label, &st);
+            let ly = y + 2.0 * px(R) + px(LABEL_GAP);
+            marks.push(Mark::new(MarkKind::Text { text: label, style: st, x: c.0 - lw / 2.0, y: ly, w: lw, h: lh }, InkRole::Fg).dim(LABEL_ALPHA));
+            row_h = row_h.max(ly + lh - y);
+        }
+        y += row_h + px(ROW_GAP);
+    }
+    if !rest.is_empty() {
+        let column = MonitorWidget { title: String::new(), ..w.clone() };
+        let rest: Vec<MonitorLine> = rest.into_iter().cloned().collect();
+        let col = monitor(&column, &rest, k, rtl, m);
+        for mut mk in col.marks {
+            mk.shift(0.0, y);
+            marks.push(mk);
+        }
+    }
+    let mut comp = Composition { marks, ..Composition::default() };
+    comp.normalize();
+    comp
+}
+
+// ── Weather ──────────────────────────────────────────────────────────────
+
+/// Everything the weather widget writes, formatted for its language.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct WeatherStrings {
+    pub icon: &'static str,
+    pub temp: String,
+    pub condition: String,
+    /// `Alexandria`, empty when hidden.
+    pub place: String,
+    /// `Feels like 25° · Humidity 60% · 12 km/h`, empty when hidden.
+    pub details: String,
+    /// Forecast days: weekday, icon, `27° / 18°`.
+    pub days: Vec<(String, &'static str, String)>,
+    pub rtl: bool,
+}
+
+mod weather {
+    pub const ICON: f32 = 76.0;
+    pub const TEMP: f32 = 84.0;
+    pub const CONDITION: f32 = 26.0;
+    pub const SMALL: f32 = 17.0;
+    pub const GAP: f32 = 18.0;
+    pub const LINE_GAP: f32 = 4.0;
+    pub const DAYS_GAP: f32 = 22.0;
+    pub const DAY_ICON: f32 = 30.0;
+    pub const DAY_GAP: f32 = 26.0;
+    pub const DAY_ROW_GAP: f32 = 6.0;
+    pub const RULE_W: f32 = 1.0;
+    pub const RULE_ALPHA: f32 = 0.25;
+    pub const COMPACT_ICON: f32 = 40.0;
+    pub const COMPACT_TEMP: f32 = 40.0;
+    pub const COMPACT_TEXT: f32 = 22.0;
+}
+
+/// The weather widget.
+pub fn weather_widget(w: &mandara_config::desktop_widgets::WeatherWidget, s: &WeatherStrings, k: f32, align: f32, m: &mut dyn Measure) -> Composition {
+    use mandara_config::desktop_widgets::WeatherLayout;
+    use weather::*;
+    let px = |v: f32| v * k;
+    let role = w.look.font;
+    let mut marks = Vec::new();
+    match w.layout {
+        WeatherLayout::Compact => {
+            let icon = px(COMPACT_ICON);
+            let ts = style(role, px(COMPACT_TEMP), face::SEMIBOLD);
+            let (tw, th) = m.measure(&s.temp, &ts);
+            let cs = style(role, px(COMPACT_TEXT), face::MEDIUM);
+            let (cw, ch) = m.measure(&s.condition, &cs);
+            let h = icon.max(th).max(ch);
+            let gap = px(GAP) / 2.0;
+            let items = [(icon, 0), (tw, 1), (cw, 2)];
+            let total: f32 = items.iter().map(|(w, _)| w).sum::<f32>() + 2.0 * gap;
+            let mut x = if s.rtl { total } else { 0.0 };
+            for (iw, kind) in items {
+                let left = if s.rtl { x - iw } else { x };
+                match kind {
+                    0 => marks.push(Mark::new(MarkKind::Icon { name: s.icon, x: left, y: (h - icon) / 2.0, size: icon }, InkRole::Accent)),
+                    1 => marks.push(Mark::new(MarkKind::Text { text: s.temp.clone(), style: ts.clone(), x: left, y: (h - th) / 2.0, w: tw, h: th }, InkRole::Fg)),
+                    _ => marks.push(Mark::new(MarkKind::Text { text: s.condition.clone(), style: cs.clone(), x: left, y: (h - ch) / 2.0, w: cw, h: ch }, InkRole::Fg).dim(face::DIM)),
+                }
+                x = if s.rtl { left - gap } else { x + iw + gap };
+            }
+        }
+        // Drawn from the whole forecast by `super::weather_more`.
+        WeatherLayout::Sentence | WeatherLayout::Disc | WeatherLayout::Hourly => {}
+        WeatherLayout::Hero => {
+            let icon = px(ICON);
+            let ts = style(role, px(TEMP), face::LIGHT);
+            let head = line(vec![run(&s.temp, ts, InkRole::Fg)], 0.0, 0.0, s.rtl, m);
+            let mut text_lines = vec![head, line(vec![run(&s.condition, style(role, px(CONDITION), face::MEDIUM), InkRole::Fg)], 0.0, 0.0, s.rtl, m)];
+            let small = style(role, px(SMALL), face::REGULAR);
+            for t in [&s.place, &s.details] {
+                if !t.is_empty() {
+                    text_lines.push(line(vec![Run { opacity: face::DIM, ..run(t.as_str(), small.clone(), InkRole::Fg) }], 0.0, 0.0, s.rtl, m));
+                }
+            }
+            let block_w = text_lines.iter().map(|(_, s)| s.0).fold(0.0, f32::max);
+            let block_h: f32 = text_lines.iter().map(|(_, s)| s.1).sum::<f32>() + px(LINE_GAP) * (text_lines.len() as f32 - 1.0);
+            let text_align = if s.rtl { 1.0 } else { 0.0 };
+            let mut block = stack(text_lines, px(LINE_GAP), text_align);
+            let (icon_x, text_x) = if s.rtl { (block_w + px(GAP), 0.0) } else { (0.0, icon + px(GAP)) };
+            for mk in &mut block {
+                mk.shift(text_x, 0.0);
+            }
+            marks.push(Mark::new(MarkKind::Icon { name: s.icon, x: icon_x, y: (block_h - icon).max(0.0) / 2.0, size: icon }, InkRole::Accent));
+            marks.extend(block);
+            let top_w = icon + px(GAP) + block_w;
+            if !s.days.is_empty() {
+                let y0 = block_h.max(icon) + px(DAYS_GAP);
+                marks.push(Mark::new(MarkKind::Line { a: (0.0, y0 - px(DAYS_GAP) / 2.0), b: (top_w, y0 - px(DAYS_GAP) / 2.0), width: px(RULE_W) }, InkRole::Fg).dim(RULE_ALPHA));
+                let mut cols = Vec::new();
+                for (day, ic, range) in &s.days {
+                    let ds = tracked(style(role, px(SMALL), face::SEMIBOLD), gauge::TRACKING);
+                    let d = caps(day);
+                    let (dw, dh) = m.measure(&d, &ds);
+                    let (rw, rh) = m.measure(range, &small);
+                    let cw = dw.max(rw).max(px(DAY_ICON));
+                    let mut col = vec![Mark::new(MarkKind::Text { text: d, style: ds, x: (cw - dw) / 2.0, y: 0.0, w: dw, h: dh }, InkRole::Fg).dim(face::DIM)];
+                    let iy = dh + px(DAY_ROW_GAP);
+                    col.push(Mark::new(MarkKind::Icon { name: ic, x: (cw - px(DAY_ICON)) / 2.0, y: iy, size: px(DAY_ICON) }, InkRole::Accent));
+                    col.push(Mark::new(MarkKind::Text { text: range.clone(), style: small.clone(), x: (cw - rw) / 2.0, y: iy + px(DAY_ICON) + px(DAY_ROW_GAP), w: rw, h: rh }, InkRole::Fg));
+                    cols.push((col, cw));
+                }
+                let total: f32 = cols.iter().map(|(_, w)| w).sum::<f32>() + px(DAY_GAP) * (cols.len() as f32 - 1.0);
+                let mut x = (top_w - total).max(0.0) * align;
+                if s.rtl {
+                    cols.reverse();
+                }
+                for (col, cw) in cols {
+                    for mut mk in col {
+                        mk.shift(x, y0);
+                        marks.push(mk);
+                    }
+                    x += cw + px(DAY_GAP);
+                }
+            }
+        }
+    }
+    let mut comp = Composition { marks, ..Composition::default() };
+    comp.normalize();
+    comp
+}
+
+// ── World clock ──────────────────────────────────────────────────────────
+
+/// One city of the world clock.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CityLine {
+    pub name: String,
+    pub time: String,
+    /// `+2 h · Tomorrow`, empty when hidden or the same.
+    pub note: String,
+    /// Night there.
+    pub night: bool,
+}
+
+mod world {
+    pub const NAME: f32 = 20.0;
+    pub const TIME: f32 = 30.0;
+    pub const NOTE: f32 = 14.0;
+    pub const ROW_GAP: f32 = 14.0;
+    pub const COL_GAP: f32 = 34.0;
+    pub const NAME_GAP: f32 = 28.0;
+    pub const NOTE_GAP: f32 = 2.0;
+    pub const DOT: f32 = 4.0;
+    pub const DOT_GAP: f32 = 10.0;
+    pub const NIGHT_ALPHA: f32 = 0.45;
+    pub const TRACKING: f32 = 0.08;
+}
+
+/// The world clock: a column (or a row) of cities.
+pub fn world_clock(w: &mandara_config::desktop_widgets::WorldClockWidget, cities: &[CityLine], k: f32, rtl: bool, m: &mut dyn Measure) -> Composition {
+    use world::*;
+    let px = |v: f32| v * k;
+    let role = w.look.font;
+    let ns = style(role, px(NAME), face::MEDIUM);
+    let ts = style(role, px(TIME), face::SEMIBOLD);
+    let es = tracked(style(role, px(NOTE), face::MEDIUM), TRACKING);
+    let mut marks = Vec::new();
+    if w.horizontal {
+        let mut x = 0.0;
+        let cols: Vec<&CityLine> = if rtl { cities.iter().rev().collect() } else { cities.iter().collect() };
+        for c in cols {
+            let name = caps(&c.name);
+            let (nw, nh) = m.measure(&name, &es);
+            let (tw, th) = m.measure(&c.time, &ts);
+            let (ew, eh) = m.measure(&c.note, &es);
+            let cw = nw.max(tw).max(ew);
+            marks.push(Mark::new(MarkKind::Text { text: name, style: es.clone(), x: x + (cw - nw) / 2.0, y: 0.0, w: nw, h: nh }, InkRole::Accent));
+            marks.push(Mark::new(MarkKind::Text { text: c.time.clone(), style: ts.clone(), x: x + (cw - tw) / 2.0, y: nh + px(NOTE_GAP), w: tw, h: th }, InkRole::Fg).dim(if c.night { face::DIM } else { 1.0 }));
+            if !c.note.is_empty() {
+                marks.push(Mark::new(MarkKind::Text { text: c.note.clone(), style: es.clone(), x: x + (cw - ew) / 2.0, y: nh + th + 2.0 * px(NOTE_GAP), w: ew, h: eh }, InkRole::Fg).dim(face::DIM));
+            }
+            x += cw + px(COL_GAP);
+        }
+    } else {
+        let rows: Vec<(f32, f32, f32)> = cities.iter().map(|c| (m.measure(&c.name, &ns).0, m.measure(&c.time, &ts).0, m.measure(&c.note, &es).0)).collect();
+        let name_w = rows.iter().map(|r| r.0.max(r.2)).fold(0.0, f32::max) + px(DOT) * 2.0 + px(DOT_GAP);
+        let time_w = rows.iter().map(|r| r.1).fold(0.0, f32::max);
+        let width = name_w + px(NAME_GAP) + time_w;
+        let mut y = 0.0;
+        for (c, (nw, tw, ew)) in cities.iter().zip(rows) {
+            let (_, th) = m.measure(&c.time, &ts);
+            let (_, nh) = m.measure(&c.name, &ns);
+            let (_, eh) = m.measure(&c.note, &es);
+            let dot_x = if rtl { width - px(DOT) } else { px(DOT) };
+            let text_x = |w: f32| if rtl { width - 2.0 * px(DOT) - px(DOT_GAP) - w } else { 2.0 * px(DOT) + px(DOT_GAP) };
+            let time_x = if rtl { 0.0 } else { width - tw };
+            let name_y = if c.note.is_empty() { y + (th - nh) / 2.0 } else { y };
+            marks.push(Mark::new(MarkKind::Disc { c: (dot_x, name_y + nh / 2.0), r: px(DOT) }, InkRole::Accent).dim(if c.night { NIGHT_ALPHA } else { 1.0 }));
+            marks.push(Mark::new(MarkKind::Text { text: c.name.clone(), style: ns.clone(), x: text_x(nw), y: name_y, w: nw, h: nh }, InkRole::Fg));
+            if !c.note.is_empty() {
+                marks.push(Mark::new(MarkKind::Text { text: c.note.clone(), style: es.clone(), x: text_x(ew), y: name_y + nh + px(NOTE_GAP), w: ew, h: eh }, InkRole::Fg).dim(face::DIM));
+            }
+            marks.push(Mark::new(MarkKind::Text { text: c.time.clone(), style: ts.clone(), x: time_x, y, w: tw, h: th }, InkRole::Fg).dim(if c.night { face::DIM } else { 1.0 }));
+            y += th.max(nh + if c.note.is_empty() { 0.0 } else { eh + px(NOTE_GAP) }) + px(ROW_GAP);
+        }
+    }
+    let mut comp = Composition { marks, ..Composition::default() };
+    comp.normalize();
+    comp
+}
+
+// ── Countdown ────────────────────────────────────────────────────────────
+
+/// The countdown's texts.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CountdownStrings {
+    /// `DAYS UNTIL`, `DAYS SINCE` or `TODAY`.
+    pub label: String,
+    /// The count (empty on the day itself).
+    pub count: String,
+    pub title: String,
+    /// The target date, empty when hidden.
+    pub date: String,
+    pub rtl: bool,
+}
+
+mod countdown {
+    pub const LABEL: f32 = 18.0;
+    pub const COUNT: f32 = 150.0;
+    pub const TITLE: f32 = 30.0;
+    pub const DATE: f32 = 18.0;
+    pub const GAP: f32 = 6.0;
+    pub const TRACKING: f32 = 0.3;
+    pub const COUNT_LINE: f32 = 0.86;
+}
+
+/// The countdown: a label, the count large, the title and the date.
+pub fn countdown(c: &mandara_config::desktop_widgets::CountdownWidget, s: &CountdownStrings, k: f32, align: f32, m: &mut dyn Measure) -> Composition {
+    use countdown::*;
+    let px = |v: f32| v * k;
+    let role = c.look.font;
+    let mut lines = vec![line(vec![run(caps(&s.label), tracked(style(role, px(LABEL), face::BOLD), TRACKING), InkRole::Accent)], 0.0, 0.0, s.rtl, m)];
+    if !s.count.is_empty() {
+        let (mut marks, (w, h)) = line(vec![run(&s.count, style(role, px(COUNT), face::BLACK), InkRole::Fg)], 0.0, 0.0, s.rtl, m);
+        // Big digits carry a tall line box: tighten it under them.
+        let h = h * COUNT_LINE;
+        for mk in &mut marks {
+            mk.shift(0.0, -(h / COUNT_LINE - h) / 2.0);
+        }
+        lines.push((marks, (w, h)));
+    }
+    if !s.title.is_empty() {
+        lines.push(line(vec![run(&s.title, style(role, px(TITLE), face::SEMIBOLD), InkRole::Fg)], 0.0, 0.0, s.rtl, m));
+    }
+    if !s.date.is_empty() {
+        lines.push(line(vec![Run { opacity: face::DIM, ..run(&s.date, style(role, px(DATE), face::MEDIUM), InkRole::Fg) }], 0.0, 0.0, s.rtl, m));
+    }
+    let mut comp = Composition { marks: stack(lines, px(GAP), align), ..Composition::default() };
+    comp.normalize();
+    comp
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -775,6 +1403,20 @@ pub(crate) mod tests {
             weather: Some(("sun", "23°".into())),
             hour_fraction: 0.25,
             day_fraction: 0.5,
+            rtl: false,
+            hour: 0,
+            minute: 35,
+            second: 7,
+            hour_numbers: ["12".into(), "3".into(), "6".into(), "9".into()],
+            all_hours: ["12", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"].map(String::from),
+            meridiem_pair: ["AM".into(), "PM".into()],
+            year: "2026".into(),
+            month_short: "Aug".into(),
+            month_number: "08".into(),
+            day_part: "Night".into(),
+            hijri: String::new(),
+            moon_phase: 0.3,
+            week: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].iter().map(|d| (d.to_string(), *d == "Sat")).collect(),
         }
     }
 
@@ -939,14 +1581,14 @@ pub(crate) mod tests {
 
     #[test]
     fn decorations_fill_their_extent() {
-        let stripes = decoration(&Decoration { shape: DecorShape::Stripes, width: 200.0, height: 100.0, count: 4, ..Default::default() }, 1.0, true, &mut Fixed);
+        let stripes = decoration(&Decoration { shape: DecorShape::Stripes, width: 200.0, height: 100.0, count: 4, ..Default::default() }, 1.0, true, 0.5, &mut Fixed);
         assert_eq!(stripes.marks.len(), 4);
         assert!((stripes.size.0 - 200.0).abs() < 1e-3 && stripes.size.1 < 100.0 && stripes.size.1 > 80.0);
-        let disc = decoration(&Decoration { shape: DecorShape::Disc, width: 120.0, ..Default::default() }, 2.0, true, &mut Fixed);
+        let disc = decoration(&Decoration { shape: DecorShape::Disc, width: 120.0, ..Default::default() }, 2.0, true, 0.5, &mut Fixed);
         assert_eq!(disc.size, (240.0, 240.0));
-        let waves = decoration(&Decoration { shape: DecorShape::Waves, count: 3, ..Default::default() }, 1.0, true, &mut Fixed);
+        let waves = decoration(&Decoration { shape: DecorShape::Waves, count: 3, ..Default::default() }, 1.0, true, 0.5, &mut Fixed);
         assert_eq!(waves.marks.len(), 3);
-        let text = decoration(&Decoration { text: "المندرة".into(), ..Default::default() }, 1.0, true, &mut Fixed);
+        let text = decoration(&Decoration { text: "المندرة".into(), ..Default::default() }, 1.0, true, 0.5, &mut Fixed);
         assert_eq!(text.marks.len(), 1);
     }
 }

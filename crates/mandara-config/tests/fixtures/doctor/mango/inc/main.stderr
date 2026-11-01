@@ -1,0 +1,5 @@
+[1m[31m[ERROR]:[0m Unknown keyword: [1m[31mbogus_key[0m
+[1;31m╰─[1;33m[Index][0m [1;36m@FIXTURES@/mango/inc/child.conf[0m:[1;35m2[0m
+   [1;36m╰─[0;33mbogus_key=1
+[0m
+

@@ -20,6 +20,7 @@ pub const ESSENTIAL: &[(&str, &str)] = &[
     ("launcher", tk("It opens apps and runs Mandara's commands, including the one that turns plugins back on")),
     ("main-menu", tk("It holds Mandara Studio, the settings and the session actions")),
     ("session", tk("It is the on-screen way to lock, log out, restart and shut down")),
+    ("wallpaper-depth", tk("It draws the wallpaper's subject over the desktop clock; switch the depth effect off in Studio → Wallpaper instead")),
 ];
 
 /// Why `id` can't be switched off, when it is [`ESSENTIAL`] (English key;

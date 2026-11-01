@@ -1170,13 +1170,22 @@ pub fn register(r: &mut PluginRegistry) {
             |palette, _, cx| {
                 let Some(snap) = playing_snapshot(cx) else { return div().into_any_element() };
                 let playing = snap.playing();
+                // `[plugins.settings.media]`: the track beside the icon, and
+                // whether a paused player keeps its bar item.
+                let (title, keep_paused) = {
+                    let settings = &crate::state::config(cx).read(cx).get().plugins;
+                    (settings.setting(ID, "bar_title", true), !settings.setting(ID, "hide_when_paused", false))
+                };
+                if !playing && !keep_paused {
+                    return div().into_any_element();
+                }
                 let m = ArtTheme::of(&snap.state, palette);
                 div()
                     .flex()
                     .items_center()
                     .gap(px(CHIP_GAP_PX))
                     .child(icon(if playing { "music" } else { "pause" }, crate::style::bar_icon(CHIP_ICON_PX), if playing { m.a } else { palette.on_surface_variant }))
-                    .child(div().max_w(px(CHIP_TITLE_MAX_W_PX)).truncate().text_color(palette.on_surface_variant.hsla()).child(snap.chip_title.clone()))
+                    .when(title, |el| el.child(div().max_w(px(CHIP_TITLE_MAX_W_PX)).truncate().text_color(palette.on_surface_variant.hsla()).child(snap.chip_title.clone())))
                     .into_any_element()
             },
             window,

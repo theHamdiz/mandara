@@ -21,6 +21,7 @@ mod alloc;
 mod changelog_cli;
 mod ipc;
 mod residency;
+mod setup_cli;
 mod update_cli;
 
 use std::time::Duration;
@@ -75,9 +76,10 @@ enum Cmd {
         settings: bool,
         /// Open a tab: Plugins (discover, installed, updates, community,
         /// develop — `mandara studio plugins --tab develop`; the older
-        /// `marketplace` / `local` still work) or Applications (installed,
+        /// `marketplace` / `local` still work), Applications (installed,
         /// defaults, startup, launching — `mandara studio applications --tab
-        /// startup`).
+        /// startup`) or Wallpaper (wallpaper, slideshow, effects, generator,
+        /// online — `mandara studio wallpaper --tab slideshow`).
         #[arg(long, value_name = "TAB", conflicts_with = "plugin")]
         tab: Option<String>,
         /// With `--tab develop`: scroll to a section (folders, format,
@@ -97,14 +99,22 @@ enum Cmd {
         /// Also start Mandara with the compositor (from the drop-in).
         #[arg(long)]
         autostart: bool,
-        /// mango, niri or hyprland (default: the running one, else every
+        /// mango, niri, hyprland or umbriel (default: the running one, else every
         /// compositor that has a config file).
         #[arg(long)]
         compositor: Option<String>,
-        /// Only report conflicts (old launcher binds, other bars, notification
-        /// or wallpaper daemons); change nothing. Exits 10 when there are any.
+        /// Only report: the Config doctor's check of your compositor config
+        /// (with the compositor's own checker) and conflicts (old launcher
+        /// binds, other bars, notification or wallpaper daemons); change
+        /// nothing. Exits 10 when there are conflicts, else 11 when the
+        /// compositor reports errors.
         #[arg(long)]
         check: bool,
+        /// Fix a Config doctor problem by its id: `ID=comment`, `ID=remove`
+        /// (your files: backed up, re-checked, rolled back if worse) or
+        /// `ID=regenerate` (Mandara's drop-in). Repeatable.
+        #[arg(long, value_name = "ID=comment|remove|regenerate")]
+        fix: Vec<String>,
         /// Retire conflicting lines in your config (commented out with a
         /// `mandara-retired:` marker, every touched file backed up first),
         /// validate with the compositor, and roll back if it objects.
@@ -142,6 +152,15 @@ enum Cmd {
     /// Remove the binary and desktop entry and empty the compositor
     /// drop-ins (your settings are kept).
     Uninstall(mandara_install::UninstallArgs),
+    /// Internal: the wallpaper depth plugin's helper. Runs the depth model
+    /// once on one image at idle priority with memory and time caps, writes
+    /// the depth map and exits (started by the shell, not by hand).
+    #[command(hide = true)]
+    DepthWorker {
+        model: std::path::PathBuf,
+        image: std::path::PathBuf,
+        out: std::path::PathBuf,
+    },
 }
 
 fn main() -> Result<()> {
@@ -165,7 +184,7 @@ fn main() -> Result<()> {
     let matches = <Cli as clap::CommandFactory>::command().version(mandara_version::version()).long_version(long).get_matches();
     let cli = <Cli as clap::FromArgMatches>::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     match cli.command {
-        Some(Cmd::Setup { autostart, compositor, check, fix_conflicts, restore }) => setup(autostart, compositor.as_deref(), check, fix_conflicts, restore.as_deref()),
+        Some(Cmd::Setup { autostart, compositor, check, fix_conflicts, restore, fix }) => setup_cli::setup(setup_cli::Options { autostart, compositor, check, fix_conflicts, restore, fix }),
         Some(Cmd::Msg { json, args }) => {
             use std::io::Write as _;
             let args = absolute_install_paths(args);
@@ -251,6 +270,7 @@ fn main() -> Result<()> {
         Some(Cmd::Install(args)) => mandara_install::install(args, &mandara_greeter::install_probe::InstallerProbe).map_err(anyhow::Error::msg),
         Some(Cmd::Uninstall(args)) => mandara_install::uninstall(args, &mandara_greeter::install_probe::InstallerProbe).map_err(anyhow::Error::msg),
         Some(Cmd::Run) => run_shell(),
+        Some(Cmd::DepthWorker { model, image, out }) => std::process::exit(mandara_services::depth_model::worker_main(&model, &image, &out)),
         None => supervise(),
     }
 }
@@ -385,9 +405,6 @@ fn application() -> gpui::Application {
 
 /// Exit code a shell uses to ask its supervisor for an immediate restart.
 pub const RESTART_CODE: i32 = 75;
-/// `mandara setup --check` exit code when conflicts were found (scripts and
-/// `mandara install` test for it).
-const EXIT_CONFLICTS: i32 = 10;
 /// Crashes are counted over this window…
 const CRASH_WINDOW: Duration = Duration::from_secs(60);
 /// …and supervision gives up after more than this many in it.
@@ -748,133 +765,6 @@ fn open_surfaces(outputs: &[mandara_core::OutputGeometry], cx: &mut App) {
     }
 }
 
-/// `mandara setup`: compositor integration from the command line — the
-/// drop-in, the single include line, conflict detection / retirement, all
-/// validated by the compositor with automatic rollback.
-fn setup(autostart: bool, compositor: Option<&str>, check: bool, fix_conflicts: bool, restore: Option<&str>) -> Result<()> {
-    use mandara_config::compositor::{ManagedConfig, Target, emit, existing_chords, install_include, user_autostarts, write_generated};
-    use mandara_config::conflicts::{self, Validation};
-    if let Some(which) = restore {
-        let backup = if which == "latest" { conflicts::backups().into_iter().next().ok_or_else(|| anyhow::anyhow!("no retire backups in {}", conflicts::backups_root().display()))? } else { std::path::PathBuf::from(which) };
-        for f in conflicts::restore(&backup)? {
-            println!("restored {}", f.display());
-        }
-    }
-    let parse = |name: &str| match name {
-        "mango" | "mangowm" => Some(Target::Mango),
-        "niri" => Some(Target::Niri),
-        "hyprland" | "hypr" => Some(Target::Hyprland),
-        _ => None,
-    };
-    let targets: Vec<Target> = match compositor {
-        Some(name) => vec![parse(name).ok_or_else(|| anyhow::anyhow!("unknown compositor {name:?} (mango, niri or hyprland)"))?],
-        None => match mandara_compositor::detect() {
-            Some(mandara_compositor::CompositorKind::MangoWM) => vec![Target::Mango],
-            Some(mandara_compositor::CompositorKind::Niri) => vec![Target::Niri],
-            Some(mandara_compositor::CompositorKind::Hyprland) => vec![Target::Hyprland],
-            None => [Target::Mango, Target::Niri, Target::Hyprland].into_iter().filter(|t| t.user_config().exists()).collect(),
-        },
-    };
-    if targets.is_empty() {
-        println!("No MangoWM, Niri or Hyprland config found — start your compositor once, then run `mandara setup` again.");
-        return Ok(());
-    }
-    let mut store = mandara_config::ConfigStore::open_default()?;
-    if autostart && !check && !store.get().compositor.autostart {
-        store.update(|c| c.compositor.autostart = true);
-        store.flush()?;
-    }
-    let mut cfg = store.snapshot();
-    let write_dropin = |target: Target, compositor: &mandara_config::compositor::CompositorConfig| -> Result<(std::path::PathBuf, mandara_config::compositor::Emitted, bool)> {
-        let starts = user_autostarts(target);
-        let managed = ManagedConfig { config: compositor, borders: None, existing_chords: existing_chords(target), mandara_bin: mandara_compositor::backend::mandara_binary(), version: mandara_config::compositor::installed_version(target), user_autostarts: starts };
-        let emitted = emit(target, &managed);
-        Ok((write_generated(target, &emitted)?, emitted, starts))
-    };
-    let mut total_conflicts = 0;
-    for target in targets {
-        let has_config = target.user_config().exists();
-        if !check {
-            let (path, emitted, starts) = write_dropin(target, &cfg.effective_compositor())?;
-            if !has_config {
-                println!("{target:?}: drop-in {} · {} doesn't exist yet — add this line to your config: {}", path.display(), target.user_config().display(), target.include_line());
-                continue;
-            }
-            let before = std::fs::read_to_string(target.user_config())?;
-            let added = install_include(target)?;
-            if let Validation::Invalid { tool, report } = conflicts::validate(target) {
-                if added {
-                    // Our include made it invalid: undo exactly that.
-                    mandara_config::write_atomic(&target.user_config(), before.as_bytes())?;
-                }
-                println!("{target:?}: `{tool}` rejects the config{} — fix it, then run `mandara setup` again:\n{report}", if added { " with Mandara's include (include removed)" } else { "" });
-                continue;
-            }
-            println!("{target:?}: drop-in {} · include {} {}", path.display(), if added { "added to" } else { "already in" }, target.user_config().display());
-            if cfg.compositor.autostart {
-                println!("  autostart: {}", if starts { "your config already starts Mandara" } else { "on (from the drop-in)" });
-            }
-            for note in emitted.skipped {
-                println!("  note: {note}");
-            }
-        }
-        if !has_config {
-            continue;
-        }
-        let found = conflicts::scan(target, &cfg.compositor);
-        let fixable: Vec<conflicts::Conflict> = found.iter().filter(|c| c.is_conflict()).cloned().collect();
-        total_conflicts += fixable.len();
-        for c in &found {
-            println!("  {} {}:{} — {}", if c.is_conflict() { "conflict:" } else { "note:" }, c.file.display(), c.lines[0] + 1, c.summary());
-            println!("      {}", c.text);
-        }
-        if fix_conflicts && !check && !fixable.is_empty() {
-            let backup = conflicts::retire(target, &fixable)?;
-            match conflicts::validate(target) {
-                Validation::Invalid { tool, report } => {
-                    conflicts::restore(&backup)?;
-                    println!("  `{tool}` rejected the result, so nothing was changed:\n{report}");
-                }
-                v => {
-                    // Keys an old tool used now open its Mandara equivalent.
-                    let takeovers = conflicts::takeover_keybinds(&fixable);
-                    if !takeovers.is_empty() {
-                        store.update(|c| {
-                            for k in takeovers {
-                                if !c.compositor.keybinds.iter().any(|x| x.chord() == k.chord()) {
-                                    c.compositor.keybinds.push(k);
-                                }
-                            }
-                        });
-                        store.flush()?;
-                        cfg = store.snapshot();
-                    }
-                    // Freed chords: regenerate so Mandara's binds take them.
-                    write_dropin(target, &cfg.effective_compositor())?;
-                    total_conflicts -= fixable.len();
-                    println!(
-                        "  retired {} line(s){} · backup {} · undo: mandara setup --restore {}",
-                        fixable.len(),
-                        match v { Validation::Valid { tool } => format!(", validated by {tool}"), _ => String::new() },
-                        backup.display(),
-                        backup.display()
-                    );
-                }
-            }
-        } else if !fixable.is_empty() && !check {
-            println!("  run `mandara setup --fix-conflicts` to retire them (backed up, validated, reversible)");
-        }
-        if !check && std::env::var_os("MANDARA_NO_IPC").is_none() {
-            // Ask a running shell to reload the compositor with the new files.
-            let _ = ipc::send(&paths::ipc_socket(), &["compositor".to_string(), "reload".to_string()]);
-        }
-    }
-    if check && total_conflicts > 0 {
-        std::process::exit(EXIT_CONFLICTS);
-    }
-    Ok(())
-}
-
 /// This binary's identity for the UI (About, `info`).
 fn build_info() -> mandara_core::BuildInfo {
     mandara_core::BuildInfo {
@@ -908,6 +798,7 @@ mod tests {
     fn admin_binaries_agree_across_crates() {
         assert_eq!(mandara_install::installer::ADMIN_EXE, mandara_config::admin::ADMIN_EXE);
         assert_eq!(mandara_greeter::install::INSTALLED_EXE, mandara_config::admin::GREETER_EXE);
+        assert_eq!(mandara_install::installer::SETUP_CONFIG_ERRORS, crate::setup_cli::EXIT_CONFIG_ERRORS, "the installer reads `setup --check`'s exit code");
     }
 
     use super::{Cli, Cmd};

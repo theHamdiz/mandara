@@ -28,6 +28,20 @@
 //!   chords the user's own compositor config binds are still skipped when
 //!   the drop-in is written.
 //!
+//! * **`[desktop.widgets] version`** — before version 1 a clock's digits
+//!   were Western unless `eastern_numerals` was set, the depth clock's pill
+//!   always showed Gregorian · Hijri, and widgets were set in the display
+//!   face. Since then each widget has its own numerals (following its
+//!   language by default), calendar and font (the widgets font by
+//!   default). An older list gets explicit values that show exactly what
+//!   it showed ([`crate::desktop_widgets::upgrade`]).
+//! * **`[wallpaper] depth_mask`** — before 0.5 the subject mask was
+//!   `auto`, `custom` (your masks only) or `off`. The depth effect is now
+//!   the `wallpaper-depth` plugin with two exclusive modes (hand-tuned or
+//!   model) and your own masks always win. `off` becomes
+//!   `depth_effect = false` (the effect stays off); `auto` and `custom`
+//!   keep the effect on in hand-tuned mode. The old key is then dropped.
+//!
 //! The upgrade is idempotent and runs in memory; the next write persists it.
 
 use crate::ShellConfig;
@@ -36,8 +50,9 @@ use crate::ShellConfig;
 pub const PLUGIN_DEFAULTS_VERSION: u32 = 1;
 /// The `[integrations]` defaults this build ships.
 pub const INTEGRATIONS_VERSION: u32 = 1;
-/// The hardware-key defaults this build ships.
-pub const KEYBIND_DEFAULTS_VERSION: u32 = 1;
+/// The key defaults this build ships: 1 added the hardware keys, 2 Alt+V
+/// for the clipboard and the Print keys for screenshots.
+pub const KEYBIND_DEFAULTS_VERSION: u32 = 2;
 /// The lock screen look defaults this build ships.
 pub const LOCK_LOOK_VERSION: u32 = 1;
 
@@ -79,7 +94,18 @@ pub fn upgrade(cfg: &mut ShellConfig) -> bool {
     changed |= upgrade_integrations(cfg);
     changed |= upgrade_keybinds(cfg);
     changed |= upgrade_lock_look(cfg);
+    changed |= crate::desktop_widgets::upgrade(&mut cfg.desktop.widgets);
+    changed |= upgrade_depth_mask(cfg);
     changed
+}
+
+/// The pre-0.5 subject-mask choice: `off` keeps the depth effect off.
+fn upgrade_depth_mask(cfg: &mut ShellConfig) -> bool {
+    let Some(old) = cfg.wallpaper.depth_mask.take() else { return false };
+    if old == crate::DepthMask::Off {
+        cfg.wallpaper.depth_effect = false;
+    }
+    true
 }
 
 /// The lock screen blurred and darkened the wallpaper beyond recognition
@@ -106,7 +132,9 @@ fn upgrade_keybinds(cfg: &mut ShellConfig) -> bool {
     if c.keybinds_version >= KEYBIND_DEFAULTS_VERSION {
         return false;
     }
-    for bind in crate::compositor::hardware_keybinds() {
+    let mut new = if c.keybinds_version < 1 { crate::compositor::hardware_keybinds() } else { Vec::new() };
+    new.extend(crate::compositor::added_keybinds().into_iter().filter(|(since, _)| *since > c.keybinds_version).map(|(_, bind)| bind));
+    for bind in new {
         if !c.keybinds.iter().any(|b| b.chord() == bind.chord()) {
             c.keybinds.push(bind);
         }
@@ -201,6 +229,24 @@ disabled = ["notes"]
     }
 
     #[test]
+    fn old_depth_mask_choice_carries_over() {
+        let mut off: ShellConfig = toml::from_str("[wallpaper]\ndepth_mask = \"off\"\n").unwrap();
+        assert!(off.wallpaper.depth_effect);
+        assert!(upgrade(&mut off));
+        assert!(!off.wallpaper.depth_effect, "an effect switched off stays off");
+        assert_eq!(off.wallpaper.depth_mask, None, "the old key is consumed");
+        assert!(!toml::to_string(&off).unwrap().contains("depth_mask"));
+        for old in ["auto", "custom"] {
+            let mut c: ShellConfig = toml::from_str(&format!("[wallpaper]\ndepth_mask = \"{old}\"\n")).unwrap();
+            upgrade(&mut c);
+            assert!(c.wallpaper.depth_effect);
+            assert_eq!(c.wallpaper.depth.mode, crate::DepthMode::HandTuned);
+        }
+        let mut fresh = ShellConfig::default();
+        assert!(!upgrade_depth_mask(&mut fresh), "nothing to do without the old key");
+    }
+
+    #[test]
     fn fresh_configs_are_current_and_upgrade_to_themselves() {
         let mut cfg = ShellConfig::default();
         assert_eq!(cfg.plugins.defaults_version, PLUGIN_DEFAULTS_VERSION);
@@ -210,6 +256,33 @@ disabled = ["notes"]
         // And a written-then-read fresh config stays current.
         let back = load(&toml::to_string(&ShellConfig::default()).unwrap());
         assert_eq!(back, ShellConfig::default());
+    }
+
+    /// Widgets written before their numerals, calendar and font were
+    /// options show what they showed: Western digits even in Arabic, the
+    /// Eastern ones where asked for, the depth pill's two calendars.
+    #[test]
+    fn old_widget_lists_keep_their_digits_calendars_and_faces() {
+        use crate::desktop_widgets::{Calendar, FontRole, Numerals, WIDGETS_VERSION, WidgetKind};
+        let old = "[desktop.widgets]\nmigrated = true\n\n[[desktop.widgets.items]]\nid = \"depth-clock\"\nkind = \"clock\"\nface = \"stacked\"\n[desktop.widgets.items.look]\nfont = \"display\"\n\n[[desktop.widgets.items]]\nid = \"clock-1\"\nkind = \"clock\"\nface = \"minimal\"\neastern_numerals = true\n\n[[desktop.widgets.items]]\nid = \"monitor-1\"\nkind = \"monitor\"\n[desktop.widgets.items.look]\nfont = \"mono\"\n";
+        let cfg = load(old);
+        let w = &cfg.desktop.widgets;
+        assert_eq!(w.version, WIDGETS_VERSION);
+        let WidgetKind::Clock(depth) = &w.items[0].kind else { panic!() };
+        assert_eq!((depth.locale.numerals, depth.locale.calendar, depth.look.font), (Numerals::Western, Calendar::Both, FontRole::Widgets));
+        let WidgetKind::Clock(c) = &w.items[1].kind else { panic!() };
+        assert_eq!((c.locale.numerals, c.locale.calendar), (Numerals::EasternArabic, Calendar::Gregorian));
+        let WidgetKind::Monitor(m) = &w.items[2].kind else { panic!() };
+        assert_eq!((m.locale.numerals, m.look.font), (Numerals::Western, FontRole::Mono), "a chosen face stays");
+        // Only the widgets: the calendar's own `eastern_numerals` is a
+        // different, current setting.
+        let text = toml::to_string(&cfg.desktop.widgets).unwrap();
+        assert!(!text.contains("eastern_numerals"), "the old key isn't written back");
+        let mut again = cfg.clone();
+        assert!(!upgrade(&mut again), "runs once");
+        // New widgets follow the language and the widgets font.
+        let fresh = crate::desktop_widgets::ClockWidget::default();
+        assert_eq!((fresh.locale.numerals, fresh.look.font), (Numerals::Auto, FontRole::Widgets));
     }
 
     #[test]
@@ -253,6 +326,28 @@ disabled = ["notes"]
         // A file without the field reads as version 0.
         let old: ShellConfig = toml::from_str("[compositor]\nmanage = true\n").unwrap();
         assert_eq!(old.compositor.keybinds_version, 0);
+    }
+
+    /// Alt+V opens the clipboard on configs from before it was a default,
+    /// unless Alt+V already does something else there.
+    #[test]
+    fn older_key_lists_get_alt_v_for_the_clipboard() {
+        use crate::compositor::{BindAction, Keybind};
+        let clipboard = |b: &Keybind| b.chord() == "alt+v" && b.action == BindAction::Mandara("panel toggle clipboard".into());
+        let mut cfg = ShellConfig::default();
+        cfg.compositor.keybinds.retain(|b| !clipboard(b));
+        cfg.compositor.keybinds_version = 1;
+        assert!(upgrade(&mut cfg));
+        assert_eq!(cfg.compositor.keybinds.iter().filter(|b| clipboard(b)).count(), 1);
+        assert!(!cfg.compositor.keybinds.iter().any(|b| b.key == "XF86AudioPlay" && b.chord() != "xf86audioplay"), "version 1 isn't given the hardware keys twice");
+        let mut taken = ShellConfig::default();
+        let own = Keybind::new(&["alt"], "v", BindAction::Spawn("my-clipboard".into()));
+        taken.compositor.keybinds = vec![own.clone()];
+        taken.compositor.keybinds_version = 1;
+        upgrade(&mut taken);
+        let alt_v: Vec<&Keybind> = taken.compositor.keybinds.iter().filter(|b| b.chord() == "alt+v").collect();
+        assert_eq!(alt_v, [&own], "your own Alt+V stays, and no second one is added");
+        assert!(taken.compositor.keybinds.iter().any(|b| b.key == "Print" && b.mods.is_empty()), "the Print keys still arrive");
     }
 
     #[test]

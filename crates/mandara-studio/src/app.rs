@@ -40,6 +40,7 @@ mod users_page;
 pub use time_card::set_demo as set_time_demo;
 pub use users_page::set_demo as set_users_demo;
 mod compositor_page;
+mod config_doctor;
 mod keybind_conflicts;
 mod audio_page;
 mod notifications_page;
@@ -65,6 +66,7 @@ mod plugin_offer;
 mod swatch_list;
 mod wallgen_logic;
 mod wallgen_page;
+pub mod wallpaper_page;
 pub(crate) mod grid;
 pub mod plugin_modal;
 pub mod plugins_local;
@@ -220,6 +222,7 @@ impl StudioView {
             }
             if self.section == Section::Wallpaper {
                 wallgen_page::release(cx);
+                wallpaper_page::release(cx);
             }
         }
         self.section = section;
@@ -694,12 +697,7 @@ impl StudioView {
     /// conflict detection, actions and quick-add suggestions.
     fn shortcuts(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         use mandara_config::compositor::{BindAction, Keybind, Target, existing_chords};
-        let target = match mandara_compositor::detect() {
-            Some(mandara_compositor::CompositorKind::MangoWM) => Some(Target::Mango),
-            Some(mandara_compositor::CompositorKind::Niri) => Some(Target::Niri),
-            Some(mandara_compositor::CompositorKind::Hyprland) => Some(Target::Hyprland),
-            None => None,
-        };
+        let target: Option<Target> = mandara_compositor::detect().map(mandara_compositor::CompositorKind::target);
         let _ = existing_chords;
         let taken = keybind_conflicts::user_binds(target, &cfg.compositor, cx);
         let binds = &cfg.compositor.keybinds;
@@ -879,12 +877,7 @@ impl StudioView {
                     cx.notify();
                 }))
         }));
-        let target_name = match target {
-            Some(Target::Mango) => "MangoWM",
-            Some(Target::Niri) => "Niri",
-            Some(Target::Hyprland) => "Hyprland",
-            None => t("your compositor"),
-        };
+        let target_name = target.map_or_else(|| t("your compositor"), Target::name);
         div()
             .id("shortcuts")
             .track_focus(&self.focus)
@@ -1648,15 +1641,9 @@ impl Render for StudioView {
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(widgets).child(cards).into_any_element()
                 }
                 Section::WindowSwitcher => self.switcher_page(&cfg, &p, cx),
-                Section::Wallpaper => {
-                    // The wallpaper generator first (or the card offering it).
-                    let generator = self.wallgen_panel(&cfg, &p, cx);
-                    let rows = self.rows(registry::in_section(Section::Wallpaper), &cfg, &p, cx);
-                    // Wallhaven's rows show with its plugin on; off, a
-                    // one-line card offers it.
-                    let wallhaven = (!cfg.wallhaven_enabled()).then(|| self.plugin_offer(mandara_ui::plugins::wallhaven::ID, &p, cx));
-                    div().row().flex_col().gap(px(SPACE_26_PX)).child(generator).child(rows).children(wallhaven).into_any_element()
-                }
+                // The wallpaper on the desktop first, then tabs
+                // (wallpaper_page.rs).
+                Section::Wallpaper => self.wallpaper_page(&cfg, &p, window, cx),
                 section => {
                     self.rows(registry::in_section(section), &cfg, &p, cx)
                 }
@@ -1834,7 +1821,7 @@ fn group_order(section: Section) -> Option<&'static [&'static str]> {
         Section::Bar => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", PANELS, PANEL_MOTION],
         Section::Launcher => &["Launcher", "Results", "Size & placement", "Search providers", "Ranking", "Starting apps", "Pinned & hidden apps", "Button"],
         Section::Themes => &["Mode", "Style", "Tuning", "Accessibility", "Wallpaper colors", "Icons", "Cursor", "App themes"],
-        Section::Wallpaper => &["Desktop", "Light & dark", "Slideshow", "Video", "Picker", "Depth clock", "Wallhaven"],
+        Section::Wallpaper => &["Desktop", "Light & dark", "Video", "Depth clock", "Picker", "Slideshow", "Source", "When to change", "Slideshow transition", "Displays", "Wallhaven"],
         _ => return None,
     })
 }

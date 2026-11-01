@@ -173,7 +173,7 @@ impl Tracker {
 struct GlobalTracker(Entity<Tracker>);
 impl gpui::Global for GlobalTracker {}
 
-fn tracker(cx: &App) -> Option<Entity<Tracker>> {
+pub(crate) fn tracker(cx: &App) -> Option<Entity<Tracker>> {
     cx.try_global::<GlobalTracker>().map(|g| g.0.clone())
 }
 

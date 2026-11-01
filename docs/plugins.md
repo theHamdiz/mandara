@@ -16,12 +16,12 @@ handbook) sit beside it.
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/studio-marketplace.png" alt="Plugins → Discover: featured hero, filter chips and curated shelves" width="100%"/><br/><sub><b>Discover</b>: featured hero and curated shelves</sub></td>
-<td width="50%" valign="top"><img src="screenshots/studio-plugin-detail.png" alt="A plugin's product page: blurred-cover hero, info strip, art band, permissions and settings" width="100%"/><br/><sub><b>Product page</b>: art, permissions and settings</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-marketplace.png" alt="Plugins → Discover filtered to Desktop widgets: Calendar card, Countdown, Desktop clocks, Desktop decorations, Desktop fun, Desktop info, Desktop productivity and Desktop shortcuts and you, each with its painted cover" width="100%"/><br/><sub><b>Discover</b>: the desktop widget plugins and their painted covers</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-plugin-detail.png" alt="The Desktop clocks product page: its icon, info strip, painted cover, more like this and what it does" width="100%"/><br/><sub><b>Product page</b>: art, more like this, permissions and settings</sub></td>
 </tr>
 </table>
 
-The 43 first-party plugins (22 of them ship switched off, marked *opt-in*):
+The 58 first-party plugins (22 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -47,7 +47,7 @@ The 43 first-party plugins (22 of them ship switched off, marked *opt-in*):
 | **Audio** | Volume and microphone |
 | **Quick settings** | Toggles for the sidebar |
 | **Screenshot** | Region, window and screen capture |
-| **Clipboard** | Clipboard history with images |
+| **Clipboard** | Clipboard history sorted by kind, with collections |
 | **Main menu** | Right-click empty bar space |
 | **Notifications** | Notification center with history and do-not-disturb |
 | **Privacy** | Shows when apps use your microphone, camera or screen | *(opt-in)*
@@ -56,6 +56,7 @@ The 43 first-party plugins (22 of them ship switched off, marked *opt-in*):
 | **Pomodoro** | Focus timer with breaks and session tracking | *(opt-in)*
 | **Weather** | Animated current conditions, hourly and 5-day forecast |
 | **Wallpaper** | Wallpaper picker and desktop background |
+| **Wallpaper depth** | Draws the wallpaper's subject over the desktop clock and widgets: hand-tuned, or with a small depth model downloaded on demand *(core)* |
 | **Wallhaven** | Search and download wallpapers from wallhaven.cc right in the wallpaper picker *(opt-in)* |
 | **Wallpaper generator** | Procedural wallpapers and seamless AV1 video loops at any size up to 8K: twelve styles, every variable adjustable, on a schedule if you want *(opt-in)* |
 | **System tray** | Status icons and menus of background apps |
@@ -68,13 +69,34 @@ The 43 first-party plugins (22 of them ship switched off, marked *opt-in*):
 | **App installer** | Install apps by dropping AppImages, Flatpaks, archives or packages on the dock or Studio | *(opt-in)*
 | **Screen time** | How long you spend in each app, per day, with limits *(opt-in)* |
 | **Cursor themes** | Install, preview and apply cursor themes, live, with size and hiding options *(opt-in)* |
+| **Desktop clocks** | Hero clocks on the desktop: analog and cookie dials, stacked cards, dot matrix, digit boxes, a slanted HUD, your own text lines, orbits, day and year progress, and the depth clock |
+| **System monitor** | Live readings on the desktop as a column with graphs, ring or wavy gauges, segmented meters, tall bars or thermal arcs |
+| **Desktop decorations** | Text and shapes on the desktop: lines of type, vertical poems, discs, stripes, waves and frames |
+| **Desktop visualizers** | Audio visualizers on the desktop (bars, a mirrored strip, a wave, a ring or an LED meter), even behind the wallpaper's subject |
+| **Now playing card** | Album art, progress and synced lyrics on the desktop while music plays, plus a turning record, a pocket player, a shaped or halftone cover, a side pill and lyrics |
+| **Calendar card** | This month on the desktop, with your events, plus a painted month, a week strip, what's coming up and a date tile |
+| **Desktop weather** | The weather and the days ahead on the desktop, a sentence about the sky, a disc and an hourly curve |
+| **Desktop world clock** | The time in other cities on the desktop |
+| **Countdown** | Days until (or since) a date, on the desktop |
+| **Desktop productivity** | Your to-dos, a sticky note, the focus timer, a quote and notebook tabs on the desktop; tick tasks and run the timer right there |
+| **Desktop sky** | The sun's arc from sunrise to sunset, tonight's moon and a globe lit where the sun is now |
+| **Desktop shortcuts and you** | A profile card, launch tiles for apps, folders and links, quick toggles, volume and brightness sliders and your theme's palette |
+| **Desktop fun** | A little cat, soap bubbles, a photo frame and stickers on the desktop |
+| **Desktop info** | A machine card, screen time, the next prayer, a search field, an "at a glance" line, your GitHub year, exchange rates, AI usage and your Steam games (the online ones fetch only once you switch that on) |
+
+The desktop widget plugins draw nothing until you place one of their
+widgets (Studio → Desktop widgets, or right-click the desktop → Add
+widget); switching one off hides its widgets until you switch it back on.
+Each has its own logo and a painted store cover; screenshots of the
+widgets themselves are in [Your desktop](desktop.md#desktop-widgets).
 
 Every Mandara plugin can be **switched off**, which stops everything it
 runs (bar item, sidebar card, launcher entries and any background polling),
 or **removed**: taken out of the bar and sidebar and parked under
 *Studio → Plugins → Removed Mandara plugins* until you restore it to where it
 was (`mandara msg plugins disable|enable|remove|restore <id>`). The
-launcher, session menu and main menu are core and stay on.
+launcher, session menu, main menu and wallpaper depth are core and stay on
+(the depth effect itself has its own switch in Studio → Wallpaper).
 
 Mandara is **composable, not minimal**: a fresh install turns on a calm,
 complete desktop (workspaces, active window, clock, keyboard layout and
@@ -90,6 +112,41 @@ installer. Turn any of them on in Studio → Plugins or with
 had:** a config written before these defaults keeps every plugin it had on
 (the upgrade writes them into `[plugins] enabled`), Wallhaven stays on if it
 was, and cursor themes stay on if you had picked a cursor.
+
+## Wallpaper depth
+
+The depth clock's subject (the part of your wallpaper drawn *over* the
+clock and the widgets behind it) comes from the core **Wallpaper depth**
+plugin, in one of two modes (Studio → Wallpaper → Depth clock, or
+`[wallpaper.depth] mode`):
+
+- **Hand-tuned** (the default): Mandara's own sky / subject finder, pure
+  Rust, no download. It is conservative and skips wallpapers it isn't sure
+  about.
+- **Model**: [Depth Anything V2 Small](https://huggingface.co/onnx-community/depth-anything-v2-small)
+  (Apache-2.0), a 27 MB quantized ONNX file run by the pure-Rust `tract`
+  engine. It is downloaded once, checksum-verified, into
+  `~/.local/share/mandara/models/` when you pick this mode (or press
+  Download, or run `mandara msg depth download`); the binary never ships
+  it. It orders the whole picture from far to near, so it also lets you
+  choose how deep the clock sits: automatically per wallpaper (where the
+  far backdrop ends), or with the **Clock depth** slider.
+
+Picking one turns the other off. A mask you make yourself
+(`~/.local/share/mandara/depth_masks/<wallpaper name>.png`) wins over both.
+**Place the clock** (`mandara msg depth place-clock`) moves the clock to
+where the subject rises into its digits.
+
+The model never runs inside the shell. For each new wallpaper the shell
+starts a short-lived helper (`mandara depth-worker`) at idle priority
+(`SCHED_IDLE`, nice 19), single-threaded, with a 1 GiB data cap, a 45 s
+CPU budget for the model run, a 60 s CPU cap and a 5-minute wall-clock
+limit (at idle priority a busy machine only stretches the run); it runs once on a
+518 × 518 downscale, writes a small depth map to
+`~/.cache/mandara/depth_masks/` and exits, so its memory goes back to the
+system at once. Masks and depth maps are reused until the wallpaper file
+changes; nothing runs at idle and nothing polls. Measurements are in
+[performance](performance.md#wallpaper-depth-model).
 
 ## The plugin system
 

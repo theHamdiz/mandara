@@ -9,12 +9,24 @@
 //! size limits, pinned entries that survive clears, apps whose copies are
 //! never recorded, age-based clearing, and re-offering the last copy when
 //! the app it came from quits.
+//!
+//! Every entry is classified when it is copied ([`kind`]: text, link,
+//! Markdown, code, CSS, colour, image or screenshot, files) and the class is
+//! saved with it. Entries can be grouped into named [`ClipCollection`]s
+//! (saved next to the history in `collections.json`); collected entries
+//! survive clears like pinned ones.
+
+mod color;
+pub mod kind;
+mod lang;
+
+pub use kind::{ClipClass, Kind};
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::io::{Read, Write};
 use std::os::fd::AsFd;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -57,6 +69,8 @@ const EVENT_QUEUE: usize = 16;
 pub enum ClipContent {
     Text { text: String },
     Image { path: PathBuf, mime: String },
+    /// Files copied in a file manager (`text/uri-list`): `file://` URIs.
+    Files { uris: Vec<String> },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -71,7 +85,26 @@ pub struct ClipEntry {
     /// App focused when it was copied (best effort; empty if unknown).
     #[serde(default)]
     pub app_id: String,
+    /// What it holds, decided when it was copied.
+    #[serde(default)]
+    pub class: ClipClass,
+    /// Ids of the [`ClipCollection`]s it belongs to.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub collections: Vec<u32>,
 }
+
+/// A named group of entries (Work, Palette, Snippets…).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ClipCollection {
+    pub id: u32,
+    pub name: String,
+    /// Unix seconds.
+    #[serde(default)]
+    pub created: i64,
+}
+
+/// Longest collection name kept (characters).
+pub const COLLECTION_NAME_MAX: usize = 40;
 
 /// What the history keeps (from `[clipboard]`).
 #[derive(Clone, Debug, PartialEq)]
@@ -79,6 +112,8 @@ pub struct ClipboardPolicy {
     pub enabled: bool,
     pub max_entries: usize,
     pub max_pinned: usize,
+    /// Unpinned entries kept because they are in a collection.
+    pub max_collected: usize,
     pub max_text: usize,
     pub images: bool,
     pub max_image: usize,
@@ -103,6 +138,7 @@ impl From<&ClipboardConfig> for ClipboardPolicy {
             enabled: c.enabled,
             max_entries: c.max_entries.max(1),
             max_pinned: c.max_pinned,
+            max_collected: c.max_collected,
             max_text: c.max_text_kb as usize * KIB,
             images: c.images,
             max_image: c.max_image_mb as usize * MIB,
@@ -132,14 +168,69 @@ struct Shared {
 
 impl ClipEntry {
     pub fn preview(&self, max: usize) -> String {
+        let clip = |flat: String| if flat.chars().count() > max { format!("{}…", flat.chars().take(max).collect::<String>()) } else { flat };
         match &self.content {
             ClipContent::Text { text } => {
-                let flat: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
-                if flat.chars().count() > max { format!("{}…", flat.chars().take(max).collect::<String>()) } else { flat }
+                // Fold whitespace over a bounded head only: a huge copy's
+                // title never needs more than `max` characters.
+                let head: String = text.chars().take(max.saturating_mul(PREVIEW_HEAD_FACTOR).max(max + 1)).collect();
+                clip(head.split_whitespace().collect::<Vec<_>>().join(" "))
             }
             ClipContent::Image { mime, .. } => tf("Image ({mime})", &[("mime", mime)]),
+            ClipContent::Files { .. } => clip(self.file_paths().iter().filter_map(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).collect::<Vec<_>>().join(", ")),
         }
     }
+
+    /// Local paths of a files entry (empty for anything else).
+    pub fn file_paths(&self) -> Vec<PathBuf> {
+        match &self.content {
+            ClipContent::Files { uris } => uris.iter().map(|u| kind::uri_path(u)).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Kept through clears and limits: pinned or in a collection.
+    pub fn kept(&self) -> bool {
+        self.pinned || !self.collections.is_empty()
+    }
+
+    /// Whether every word of `query` is found (case-insensitively) in the
+    /// entry: its text, file paths, kind and language / host / notation,
+    /// the app it came from or the names of its collections.
+    pub fn matches(&self, query: &str, collections: &[ClipCollection]) -> bool {
+        let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+        if words.is_empty() {
+            return true;
+        }
+        let keywords = self.class.keywords();
+        let names: Vec<&str> = collections.iter().filter(|c| self.collections.contains(&c.id)).map(|c| c.name.as_str()).collect();
+        let paths: Vec<String> = self.file_paths().iter().map(|p| p.to_string_lossy().into_owned()).collect();
+        words.iter().all(|w| {
+            let content = match &self.content {
+                ClipContent::Text { text } => contains_ci(text, w),
+                ClipContent::Image { mime, .. } => contains_ci(mime, w),
+                ClipContent::Files { .. } => paths.iter().any(|p| contains_ci(p, w)),
+            };
+            content || contains_ci(&keywords, w) || contains_ci(&self.app_id, w) || names.iter().any(|n| contains_ci(n, w))
+        })
+    }
+}
+
+/// How many characters of a text's head the one-line preview folds, per
+/// character shown (whitespace runs collapse, so a little more is read).
+const PREVIEW_HEAD_FACTOR: usize = 4;
+
+/// Case-insensitive substring test; `needle` is already lower-case. ASCII
+/// needles compare in place, without lower-casing the haystack.
+fn contains_ci(hay: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    if needle.is_ascii() {
+        let (h, n) = (hay.as_bytes(), needle.as_bytes());
+        return h.len() >= n.len() && h.windows(n.len()).any(|w| w.eq_ignore_ascii_case(n));
+    }
+    hay.to_lowercase().contains(needle)
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
@@ -147,6 +238,8 @@ pub struct ClipboardState {
     pub available: bool,
     /// Newest first.
     pub entries: Vec<ClipEntry>,
+    /// In the order they were created.
+    pub collections: Vec<ClipCollection>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -157,6 +250,13 @@ pub enum ClipboardCommand {
     /// Forget the history; pinned entries stay unless `pinned`.
     Clear { pinned: bool },
     Pin { id: u64, pinned: bool },
+    /// A new, empty collection (replies `{"id", "name"}`).
+    CreateCollection(String),
+    RenameCollection { id: u32, name: String },
+    /// Removes the collection; its entries stay in the history.
+    DeleteCollection(u32),
+    /// Adds an entry to a collection (or takes it out).
+    Collect { id: u64, collection: u32, add: bool },
     /// New settings (applied to the history at once).
     Configure(ClipboardConfig),
     /// The focused window's app id (for per-app exclusion).
@@ -180,7 +280,13 @@ pub fn is_secret(types: &[&str]) -> bool {
     types.iter().any(|t| t.contains("passwordManagerHint") || *t == "x-kde-passwordManagerHint")
 }
 
-/// Decides what (if anything) to record from the offered MIME types.
+/// File-manager copies: a URI list, or GNOME's `copy\n<uris>` form.
+const URI_LIST: &str = "text/uri-list";
+const GNOME_FILES: &str = "x-special/gnome-copied-files";
+
+/// Decides what (if anything) to record from the offered MIME types:
+/// `image/png`, another `image`, `files` (a URI list, read and checked
+/// before falling back to its text) or `text`.
 pub fn classify(types: &[&str]) -> Option<&'static str> {
     if is_secret(types) {
         return None;
@@ -189,6 +295,8 @@ pub fn classify(types: &[&str]) -> Option<&'static str> {
         Some("image/png")
     } else if types.iter().any(|t| t.starts_with("image/")) {
         Some("image")
+    } else if types.iter().any(|t| *t == URI_LIST || *t == GNOME_FILES) {
+        Some("files")
     } else if types.iter().any(|t| t.starts_with("text/") || *t == "UTF8_STRING" || *t == "STRING") {
         Some("text")
     } else {
@@ -196,22 +304,56 @@ pub fn classify(types: &[&str]) -> Option<&'static str> {
     }
 }
 
-fn load() -> Vec<ClipEntry> {
-    std::fs::read_to_string(store_dir().join("history.json"))
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default()
+const HISTORY_FILE: &str = "history.json";
+const COLLECTIONS_FILE: &str = "collections.json";
+
+/// The saved history in `dir`, every entry (re)classified: entries from
+/// before classification get their kind, and text follows the current rules.
+fn load(dir: &Path) -> Vec<ClipEntry> {
+    let mut entries: Vec<ClipEntry> = std::fs::read_to_string(dir.join(HISTORY_FILE)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    for e in &mut entries {
+        e.class = match &e.content {
+            ClipContent::Text { text } => kind::classify_text(text),
+            ClipContent::Files { uris } => ClipClass::Files { count: uris.len() },
+            ClipContent::Image { .. } if matches!(e.class, ClipClass::Image { .. }) => continue,
+            ClipContent::Image { path, .. } => kind::classify_image_file(path, &e.app_id),
+        };
+    }
+    entries
 }
 
-fn save(entries: &[ClipEntry]) {
-    let dir = store_dir();
-    if std::fs::create_dir_all(&dir).is_ok()
-        && let Ok(json) = serde_json::to_vec(entries)
-    {
-        let tmp = dir.join("history.json.tmp");
-        if std::fs::write(&tmp, json).is_ok() {
-            let _ = std::fs::rename(tmp, dir.join("history.json"));
+/// Writes `bytes` to `dir/name` atomically (temp file + rename).
+fn write_atomic(dir: &Path, name: &str, bytes: &[u8]) {
+    if std::fs::create_dir_all(dir).is_ok() {
+        let tmp = dir.join(format!("{name}.tmp"));
+        if std::fs::write(&tmp, bytes).is_ok() {
+            let _ = std::fs::rename(tmp, dir.join(name));
         }
+    }
+}
+
+fn save(dir: &Path, entries: &[ClipEntry]) {
+    if let Ok(json) = serde_json::to_vec(entries) {
+        write_atomic(dir, HISTORY_FILE, &json);
+    }
+}
+
+/// Collections are small and the user's own organization: saved even when
+/// the history itself is kept in memory only.
+fn load_collections(dir: &Path) -> Vec<ClipCollection> {
+    std::fs::read_to_string(dir.join(COLLECTIONS_FILE)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+}
+
+fn save_collections(dir: &Path, collections: &[ClipCollection]) {
+    if let Ok(json) = serde_json::to_vec_pretty(collections) {
+        write_atomic(dir, COLLECTIONS_FILE, &json);
+    }
+}
+
+/// Forgets memberships of collections that no longer exist.
+fn reconcile(entries: &mut [ClipEntry], collections: &[ClipCollection]) {
+    for e in entries {
+        e.collections.retain(|id| collections.iter().any(|c| c.id == *id));
     }
 }
 
@@ -221,85 +363,186 @@ fn pick_mime<'a>(kind: &str, types: &[&'a str]) -> Option<&'a str> {
         "text" => ["text/plain;charset=utf-8", "UTF8_STRING", "text/plain", "STRING", "TEXT"]
             .iter()
             .find_map(|want| types.iter().find(|t| *t == want).copied())
-            .or_else(|| types.iter().find(|t| t.starts_with("text/")).copied()),
+            .or_else(|| types.iter().find(|t| t.starts_with("text/") && **t != URI_LIST).copied()),
+        "files" => types.iter().find(|t| **t == URI_LIST).or_else(|| types.iter().find(|t| **t == GNOME_FILES)).copied(),
         "image/png" => types.iter().find(|t| **t == "image/png").copied(),
         _ => types.iter().find(|t| t.starts_with("image/")).copied(),
     }
 }
 
+/// The `file://` URIs of a URI list or GNOME copy (`copy\n…` / `cut\n…`).
+fn read_uris(bytes: &[u8]) -> Option<Vec<String>> {
+    let text = std::str::from_utf8(bytes).ok()?;
+    let text = text.strip_prefix("copy\n").or_else(|| text.strip_prefix("cut\n")).unwrap_or(text);
+    kind::file_uris(text)
+}
+
 /// Builds an entry from the offered types under `policy`, reading the
-/// chosen type with `read` (which returns the raw bytes).
-fn capture(types: &[&str], policy: &ClipboardPolicy, app_id: &str, read: impl FnOnce(&str) -> Option<Vec<u8>>) -> Option<ClipEntry> {
+/// chosen type with `read` (which returns the raw bytes) and classifying
+/// what it got.
+fn capture(types: &[&str], policy: &ClipboardPolicy, app_id: &str, mut read: impl FnMut(&str) -> Option<Vec<u8>>) -> Option<ClipEntry> {
     if !policy.enabled || policy.excludes(app_id) {
         return None;
     }
-    let kind = if policy.exclude_password_managers {
-        classify(types)?
+    let open: Vec<&str> = if policy.exclude_password_managers {
+        types.to_vec()
     } else {
         // Without the password-manager filter, classify as if the hint were absent.
-        let open: Vec<&str> = types.iter().copied().filter(|t| !is_secret(&[t])).collect();
-        classify(&open)?
+        types.iter().copied().filter(|t| !is_secret(&[t])).collect()
     };
-    if kind != "text" && !policy.images {
+    let mut kind = classify(&open)?;
+    if kind.starts_with("image") && !policy.images {
         return None;
     }
-    let mime = pick_mime(kind, types)?;
-    let bytes = read(mime)?;
-    let content = if kind == "text" {
-        if bytes.is_empty() || bytes.len() > policy.max_text {
-            return None;
+    let mut content = None;
+    if kind == "files" {
+        // A URI list of web links (browsers offer one) is just text.
+        content = pick_mime(kind, types).and_then(&mut read).and_then(|b| read_uris(&b)).map(|uris| ClipContent::Files { uris });
+        if content.is_none() {
+            kind = "text";
         }
-        let text = String::from_utf8(bytes).ok()?;
-        if text.trim().is_empty() {
-            return None;
+    }
+    let content = match content {
+        Some(c) => c,
+        None => {
+            let mime = pick_mime(kind, types)?;
+            let bytes = read(mime)?;
+            if kind == "text" {
+                if bytes.is_empty() || bytes.len() > policy.max_text {
+                    return None;
+                }
+                let text = String::from_utf8(bytes).ok()?;
+                if text.trim().is_empty() {
+                    return None;
+                }
+                ClipContent::Text { text }
+            } else {
+                if bytes.is_empty() || bytes.len() > policy.max_image {
+                    return None;
+                }
+                let ext = mime.trim_start_matches("image/").split(';').next().unwrap_or("img");
+                let dir = store_dir().join("images");
+                std::fs::create_dir_all(&dir).ok()?;
+                let path = dir.join(format!("{:016x}.{ext}", hash(&bytes)));
+                if !path.exists() {
+                    std::fs::write(&path, &bytes).ok()?;
+                }
+                let class = kind::classify_image(&bytes, app_id);
+                return Some(entry(ClipContent::Image { path, mime: mime.to_string() }, class, app_id));
+            }
         }
-        ClipContent::Text { text }
-    } else {
-        if bytes.is_empty() || bytes.len() > policy.max_image {
-            return None;
-        }
-        let ext = mime.trim_start_matches("image/").split(';').next().unwrap_or("img");
-        let dir = store_dir().join("images");
-        std::fs::create_dir_all(&dir).ok()?;
-        let path = dir.join(format!("{:016x}.{ext}", hash(&bytes)));
-        if !path.exists() {
-            std::fs::write(&path, &bytes).ok()?;
-        }
-        ClipContent::Image { path, mime: mime.to_string() }
     };
-    let key = match &content {
-        ClipContent::Text { text } => hash(text.as_bytes()),
-        ClipContent::Image { path, .. } => hash(path.to_string_lossy().as_bytes()),
+    let class = match &content {
+        ClipContent::Text { text } => kind::classify_text(text),
+        ClipContent::Files { uris } => ClipClass::Files { count: uris.len() },
+        ClipContent::Image { path, .. } => kind::classify_image_file(path, app_id),
     };
-    Some(ClipEntry { id: key, content, copied_at: chrono::Local::now().timestamp(), pinned: false, app_id: app_id.to_string() })
+    Some(entry(content, class, app_id))
 }
 
-/// Inserts newest-first, de-duplicating by id (a re-copied pinned entry
-/// stays pinned) and enforcing the policy's limits.
+/// A new entry, keyed by its content.
+fn entry(content: ClipContent, class: ClipClass, app_id: &str) -> ClipEntry {
+    let id = match &content {
+        ClipContent::Text { text } => hash(text.as_bytes()),
+        ClipContent::Image { path, .. } => hash(path.to_string_lossy().as_bytes()),
+        ClipContent::Files { uris } => hash(uris.join("\n").as_bytes()),
+    };
+    ClipEntry { id, content, copied_at: chrono::Local::now().timestamp(), pinned: false, app_id: app_id.to_string(), class, collections: Vec::new() }
+}
+
+/// Inserts newest-first, de-duplicating by id (a re-copied entry keeps its
+/// pin and collections) and enforcing the policy's limits.
 pub fn push(entries: &mut Vec<ClipEntry>, mut entry: ClipEntry, policy: &ClipboardPolicy) {
     if let Some(old) = entries.iter().find(|e| e.id == entry.id) {
         entry.pinned |= old.pinned;
+        for c in &old.collections {
+            if !entry.collections.contains(c) {
+                entry.collections.push(*c);
+            }
+        }
     }
     entries.retain(|e| e.id != entry.id);
     entries.insert(0, entry);
     enforce_limits(entries, policy);
 }
 
-/// Caps unpinned entries at `max_entries` and pinned ones at `max_pinned`
-/// (the oldest go first) and drops unpinned entries past the max age.
+/// Caps pinned entries at `max_pinned`, other collected ones at
+/// `max_collected` and the rest at `max_entries` (the oldest go first),
+/// and drops entries that are neither pinned nor collected past the max age.
 pub fn enforce_limits(entries: &mut Vec<ClipEntry>, policy: &ClipboardPolicy) {
     let now = chrono::Local::now().timestamp();
     let max_age = policy.max_age.map(|d| d.as_secs() as i64);
-    let (mut pinned, mut loose) = (0usize, 0usize);
+    let (mut pinned, mut collected, mut loose) = (0usize, 0usize, 0usize);
     entries.retain(|e| {
         if e.pinned {
             pinned += 1;
             pinned <= policy.max_pinned
+        } else if !e.collections.is_empty() {
+            collected += 1;
+            collected <= policy.max_collected
         } else {
             loose += 1;
             loose <= policy.max_entries && max_age.is_none_or(|age| now - e.copied_at <= age)
         }
     });
+}
+
+/// Trims a collection name to its limit; `None` when nothing is left.
+fn collection_name(name: &str) -> Option<String> {
+    let name: String = name.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(COLLECTION_NAME_MAX).collect();
+    (!name.is_empty()).then_some(name)
+}
+
+/// Applies a collection command to the collections and entries; returns the
+/// reply (JSON for a created or renamed collection).
+fn edit_collections(command: &ClipboardCommand, collections: &mut Vec<ClipCollection>, entries: &mut [ClipEntry]) -> Result<String, String> {
+    let missing = |id: u32| tf("No clipboard collection {id}", &[("id", &id)]);
+    let taken = |name: &str, except: Option<u32>| collections.iter().any(|c| Some(c.id) != except && c.name.eq_ignore_ascii_case(name));
+    match command {
+        ClipboardCommand::CreateCollection(name) => {
+            let name = collection_name(name).ok_or_else(|| t("A collection needs a name").to_string())?;
+            if taken(&name, None) {
+                return Err(tf("There is already a collection called {name}", &[("name", &name)]));
+            }
+            let id = collections.iter().map(|c| c.id).max().unwrap_or(0) + 1;
+            collections.push(ClipCollection { id, name: name.clone(), created: chrono::Local::now().timestamp() });
+            Ok(serde_json::json!({ "id": id, "name": name }).to_string())
+        }
+        ClipboardCommand::RenameCollection { id, name } => {
+            let name = collection_name(name).ok_or_else(|| t("A collection needs a name").to_string())?;
+            if taken(&name, Some(*id)) {
+                return Err(tf("There is already a collection called {name}", &[("name", &name)]));
+            }
+            let c = collections.iter_mut().find(|c| c.id == *id).ok_or_else(|| missing(*id))?;
+            c.name = name.clone();
+            Ok(serde_json::json!({ "id": id, "name": name }).to_string())
+        }
+        ClipboardCommand::DeleteCollection(id) => {
+            let before = collections.len();
+            collections.retain(|c| c.id != *id);
+            if before == collections.len() {
+                return Err(missing(*id));
+            }
+            for e in entries.iter_mut() {
+                e.collections.retain(|c| c != id);
+            }
+            Ok("deleted".into())
+        }
+        ClipboardCommand::Collect { id, collection, add } => {
+            if !collections.iter().any(|c| c.id == *collection) {
+                return Err(missing(*collection));
+            }
+            let e = entries.iter_mut().find(|e| e.id == *id).ok_or_else(|| tf("No clipboard entry {id}", &[("id", id)]))?;
+            let had = e.collections.contains(collection);
+            if *add && !had {
+                e.collections.push(*collection);
+            } else if !*add {
+                e.collections.retain(|c| c != collection);
+            }
+            Ok(if *add { "added".into() } else { "removed".into() })
+        }
+        _ => Err("not a collection command".into()),
+    }
 }
 
 /// Removes image files no entry refers to any more.
@@ -309,7 +552,7 @@ fn sweep_images(entries: &[ClipEntry]) {
         .iter()
         .filter_map(|e| match &e.content {
             ClipContent::Image { path, .. } => Some(path.clone()),
-            ClipContent::Text { .. } => None,
+            ClipContent::Text { .. } | ClipContent::Files { .. } => None,
         })
         .collect();
     for f in dir.flatten() {
@@ -322,20 +565,32 @@ fn sweep_images(entries: &[ClipEntry]) {
 /// Takes ownership of the clipboard with `bytes`, serving it from a
 /// background thread until another client replaces the selection.
 pub fn serve(bytes: Vec<u8>, mime: Option<String>) -> Result<(), String> {
-    use wl_clipboard_rs::copy::{MimeType, Options, Source};
+    serve_all(vec![(bytes, mime)])
+}
+
+/// Like [`serve`], offering the same data in several MIME types at once
+/// (copied files: a URI list, GNOME's form and plain paths).
+pub fn serve_all(sources: Vec<(Vec<u8>, Option<String>)>) -> Result<(), String> {
+    use wl_clipboard_rs::copy::{MimeSource, MimeType, Options, Source};
     let (tx, rx) = mpsc::channel();
     std::thread::Builder::new()
         .name("mandara-clipboard-serve".into())
         .spawn(move || {
             let mut opts = Options::new();
             opts.foreground(true);
-            let mime = match mime {
-                Some(m) => MimeType::Specific(m),
-                None => MimeType::Text,
-            };
+            let sources: Vec<MimeSource> = sources
+                .into_iter()
+                .map(|(bytes, mime)| MimeSource {
+                    source: Source::Bytes(bytes.into_boxed_slice()),
+                    mime_type: match mime {
+                        Some(m) => MimeType::Specific(m),
+                        None => MimeType::Text,
+                    },
+                })
+                .collect();
             // Preparing takes the selection; serving blocks until another
             // app replaces it. Report success / failure right after taking it.
-            match opts.prepare_copy(Source::Bytes(bytes.into_boxed_slice()), mime) {
+            match opts.prepare_copy_multi(sources) {
                 Ok(prepared) => {
                     let _ = tx.send(Ok(()));
                     if let Err(err) = prepared.serve() {
@@ -355,6 +610,14 @@ fn restore(entry: &ClipEntry, paste: bool) -> Result<String, String> {
     match &entry.content {
         ClipContent::Text { text } => serve(text.clone().into_bytes(), None)?,
         ClipContent::Image { path, mime } => serve(std::fs::read(path).map_err(|e| e.to_string())?, Some(mime.clone()))?,
+        ClipContent::Files { uris } => {
+            let paths = entry.file_paths().iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>().join("\n");
+            serve_all(vec![
+                (uris.join("\r\n").into_bytes(), Some(URI_LIST.into())),
+                (format!("copy\n{}", uris.join("\n")).into_bytes(), Some(GNOME_FILES.into())),
+                (paths.into_bytes(), Some("text/plain;charset=utf-8".into())),
+            ])?
+        }
     }
     if paste {
         // Give the launcher/panel time to release keyboard focus.
@@ -663,20 +926,21 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
         let mut policy = start_policy;
         let mut available = false;
         let persist = policy.persist;
-        let mut entries = crate::runtime::unblock(move || if persist { load() } else { Vec::new() }).await;
+        let (mut entries, mut collections) = crate::runtime::unblock(move || (if persist { load(&store_dir()) } else { Vec::new() }, load_collections(&store_dir()))).await;
+        reconcile(&mut entries, &collections);
         if clear_on_start {
-            entries.retain(|e| e.pinned);
+            entries.retain(ClipEntry::kept);
         }
         enforce_limits(&mut entries, &policy);
         {
             let (snapshot, persist) = (entries.clone(), policy.persist);
             crate::runtime::unblock(move || {
-                if persist { save(&snapshot) } else { forget_disk() }
+                if persist { save(&store_dir(), &snapshot) } else { forget_disk() }
                 sweep_images(&snapshot);
             })
             .await;
         }
-        let _ = tx.send(ClipboardState { available, entries: entries.clone() }).await;
+        let _ = tx.send(ClipboardState { available, entries: entries.clone(), collections: collections.clone() }).await;
         let mut events = events;
         // Keeps a never-firing replacement channel open once the watcher ends.
         let mut _parked: Option<async_channel::Sender<watch::Event>> = None;
@@ -698,9 +962,21 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
                             if changed { Ok("deleted".into()) } else { Err(tf("No clipboard entry {id}", &[("id", &id)])) }
                         }
                         ClipboardCommand::Clear { pinned } => {
-                            entries.retain(|e| e.pinned && !pinned);
+                            entries.retain(|e| e.kept() && !pinned);
                             changed = true;
                             Ok("cleared".into())
+                        }
+                        command @ (ClipboardCommand::CreateCollection(_) | ClipboardCommand::RenameCollection { .. } | ClipboardCommand::DeleteCollection(_) | ClipboardCommand::Collect { .. }) => {
+                            match edit_collections(&command, &mut collections, &mut entries) {
+                                Ok(reply) => {
+                                    enforce_limits(&mut entries, &policy);
+                                    let snapshot = collections.clone();
+                                    crate::runtime::unblock(move || save_collections(&store_dir(), &snapshot)).await;
+                                    changed = true;
+                                    Ok(reply)
+                                }
+                                Err(err) => Err(err),
+                            }
                         }
                         ClipboardCommand::Pin { id, pinned } => match entries.iter_mut().find(|e| e.id == id) {
                             Some(e) => {
@@ -765,11 +1041,11 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
             if changed {
                 let (snapshot, persist) = (entries.clone(), policy.persist);
                 crate::runtime::unblock(move || {
-                    if persist { save(&snapshot) } else { forget_disk() }
+                    if persist { save(&store_dir(), &snapshot) } else { forget_disk() }
                     sweep_images(&snapshot);
                 })
                 .await;
-                if tx.send(ClipboardState { available, entries: entries.clone() }).await.is_err() {
+                if tx.send(ClipboardState { available, entries: entries.clone(), collections: collections.clone() }).await.is_err() {
                     return;
                 }
             }
@@ -780,7 +1056,7 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
 
 /// Deletes the saved history file (history kept in memory only).
 fn forget_disk() {
-    let _ = std::fs::remove_file(store_dir().join("history.json"));
+    let _ = std::fs::remove_file(store_dir().join(HISTORY_FILE));
 }
 
 #[cfg(test)]
@@ -788,7 +1064,7 @@ mod tests {
     use super::*;
 
     fn text(t: &str) -> ClipEntry {
-        ClipEntry { id: hash(t.as_bytes()), content: ClipContent::Text { text: t.into() }, copied_at: chrono::Local::now().timestamp(), pinned: false, app_id: String::new() }
+        entry(ClipContent::Text { text: t.into() }, kind::classify_text(t), "")
     }
 
     #[test]
@@ -797,6 +1073,134 @@ mod tests {
         assert_eq!(classify(&["image/png", "text/html"]), Some("image/png"));
         assert_eq!(classify(&["text/plain", "x-kde-passwordManagerHint"]), None);
         assert_eq!(classify(&["application/x-thing"]), None);
+        assert_eq!(classify(&["text/uri-list", "x-special/gnome-copied-files", "text/plain"]), Some("files"));
+    }
+
+    #[test]
+    fn captures_classify_what_was_copied() {
+        let p = ClipboardPolicy::default();
+        let e = capture(&["text/plain"], &p, "", |_| Some(b"#cba6f7".to_vec())).unwrap();
+        assert!(matches!(e.class, ClipClass::Color { .. }), "{:?}", e.class);
+        let e = capture(&["text/plain"], &p, "", |_| Some(b"fn main() {\n    println!(\"hi\");\n}".to_vec())).unwrap();
+        assert_eq!(e.class, ClipClass::Code { lang: "rust".into() });
+        // A file manager's copy: files, offered back as a URI list.
+        let list = b"file:///home/demo/Pictures/harbour.png\r\nfile:///home/demo/notes.md\r\n".to_vec();
+        let e = capture(&["text/uri-list", "text/plain"], &p, "", |mime| (mime == "text/uri-list").then(|| list.clone())).unwrap();
+        assert_eq!(e.class, ClipClass::Files { count: 2 });
+        assert_eq!(e.preview(40), "harbour.png, notes.md");
+        assert_eq!(e.file_paths()[1], PathBuf::from("/home/demo/notes.md"));
+        // GNOME's form.
+        let e = capture(&["x-special/gnome-copied-files"], &p, "", |_| Some(b"copy\nfile:///tmp/a.txt".to_vec())).unwrap();
+        assert_eq!(e.content, ClipContent::Files { uris: vec!["file:///tmp/a.txt".into()] });
+        // A browser's URI list of web links falls back to its text: a link.
+        let e = capture(&["text/uri-list", "text/plain"], &p, "", |_| Some(b"https://mandara.dev/".to_vec())).unwrap();
+        assert_eq!(e.class, ClipClass::Link { host: "mandara.dev".into() });
+    }
+
+    #[test]
+    fn search_matches_text_kind_and_collections() {
+        let work = ClipCollection { id: 1, name: "Work notes".into(), created: 0 };
+        let mut e = text("SELECT id FROM users;");
+        e.collections.push(1);
+        e.app_id = "dev.zed.Zed".into();
+        let all = [work];
+        for q in ["", "select", "USERS", "code", "sql", "work", "zed", "id users"] {
+            assert!(e.matches(q, &all), "{q:?}");
+        }
+        for q in ["python", "image", "id nope", "personal"] {
+            assert!(!e.matches(q, &all), "{q:?}");
+        }
+        assert!(text("oklch(70% 0.15 250)").matches("color", &[]));
+        assert!(text("Ünïcode Straße").matches("straße", &[]));
+    }
+
+    #[test]
+    fn collections_create_rename_collect_and_delete() {
+        let (mut cols, mut entries) = (Vec::new(), vec![text("a"), text("b")]);
+        let (a, b) = (entries[0].id, entries[1].id);
+        let reply = edit_collections(&ClipboardCommand::CreateCollection("  Work  ".into()), &mut cols, &mut entries).unwrap();
+        assert_eq!(reply, r#"{"id":1,"name":"Work"}"#);
+        edit_collections(&ClipboardCommand::CreateCollection("Palette".into()), &mut cols, &mut entries).unwrap();
+        assert!(edit_collections(&ClipboardCommand::CreateCollection("work".into()), &mut cols, &mut entries).is_err(), "names are unique");
+        assert!(edit_collections(&ClipboardCommand::CreateCollection("   ".into()), &mut cols, &mut entries).is_err(), "names aren't empty");
+        assert!(edit_collections(&ClipboardCommand::RenameCollection { id: 2, name: "Work".into() }, &mut cols, &mut entries).is_err());
+        edit_collections(&ClipboardCommand::RenameCollection { id: 2, name: "Colours".into() }, &mut cols, &mut entries).unwrap();
+        assert_eq!(cols.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), ["Work", "Colours"]);
+        let long = "x".repeat(COLLECTION_NAME_MAX * 2);
+        edit_collections(&ClipboardCommand::RenameCollection { id: 2, name: long }, &mut cols, &mut entries).unwrap();
+        assert_eq!(cols[1].name.chars().count(), COLLECTION_NAME_MAX);
+        for (id, c) in [(a, 1), (b, 1), (b, 2)] {
+            edit_collections(&ClipboardCommand::Collect { id, collection: c, add: true }, &mut cols, &mut entries).unwrap();
+        }
+        // Adding twice is harmless; unknown collections and entries fail.
+        edit_collections(&ClipboardCommand::Collect { id: a, collection: 1, add: true }, &mut cols, &mut entries).unwrap();
+        assert_eq!(entries[0].collections, [1]);
+        assert!(edit_collections(&ClipboardCommand::Collect { id: a, collection: 9, add: true }, &mut cols, &mut entries).is_err());
+        assert!(edit_collections(&ClipboardCommand::Collect { id: 7, collection: 1, add: true }, &mut cols, &mut entries).is_err());
+        edit_collections(&ClipboardCommand::Collect { id: b, collection: 1, add: false }, &mut cols, &mut entries).unwrap();
+        assert_eq!(entries[1].collections, [2]);
+        // Deleting a collection keeps its entries, minus the membership.
+        edit_collections(&ClipboardCommand::DeleteCollection(2), &mut cols, &mut entries).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert!(entries[1].collections.is_empty());
+        assert!(edit_collections(&ClipboardCommand::DeleteCollection(2), &mut cols, &mut entries).is_err());
+        // New ids never reuse a live one.
+        let reply = edit_collections(&ClipboardCommand::CreateCollection("Snippets".into()), &mut cols, &mut entries).unwrap();
+        assert_eq!(reply, r#"{"id":2,"name":"Snippets"}"#);
+    }
+
+    #[test]
+    fn collected_entries_survive_limits_and_clears() {
+        let policy = ClipboardPolicy { max_entries: 1, max_collected: 2, max_age: Some(Duration::from_secs(3600)), ..ClipboardPolicy::default() };
+        let mut list = Vec::new();
+        for t in ["a", "b", "c"] {
+            push(&mut list, text(t), &policy);
+            list[0].collections.push(1);
+        }
+        let mut old = text("old");
+        old.copied_at -= 2 * 3600;
+        old.collections.push(1);
+        list.push(old);
+        push(&mut list, text("loose"), &policy);
+        // Two collected kept (the oldest collected beyond the cap goes), plus one loose.
+        assert_eq!(list.iter().map(|e| e.preview(9)).collect::<Vec<_>>(), ["loose", "c", "b"]);
+        // A re-copy keeps the membership.
+        push(&mut list, text("c"), &policy);
+        assert_eq!(list[0].collections, [1]);
+        list.retain(ClipEntry::kept);
+        assert_eq!(list.len(), 2);
+    }
+
+    #[test]
+    fn collections_and_memberships_persist() {
+        let dir = std::env::temp_dir().join(format!("mandara-clip-test-{}-{}", std::process::id(), chrono::Local::now().timestamp_nanos_opt().unwrap_or_default()));
+        let (mut cols, mut entries) = (Vec::new(), vec![text("#cba6f7"), text("https://mandara.dev"), text("plain")]);
+        for name in ["Palette", "Links", "Scratch"] {
+            edit_collections(&ClipboardCommand::CreateCollection(name.into()), &mut cols, &mut entries).unwrap();
+        }
+        let (colour, link) = (entries[0].id, entries[1].id);
+        edit_collections(&ClipboardCommand::Collect { id: colour, collection: 1, add: true }, &mut cols, &mut entries).unwrap();
+        edit_collections(&ClipboardCommand::Collect { id: link, collection: 2, add: true }, &mut cols, &mut entries).unwrap();
+        edit_collections(&ClipboardCommand::Collect { id: link, collection: 3, add: true }, &mut cols, &mut entries).unwrap();
+        save(&dir, &entries);
+        save_collections(&dir, &cols);
+        // A restart: the same collections and memberships, classes intact.
+        let (mut loaded, loaded_cols) = (load(&dir), load_collections(&dir));
+        assert_eq!(loaded_cols, cols);
+        assert_eq!(loaded, entries);
+        assert!(matches!(loaded[0].class, ClipClass::Color { .. }));
+        // A collection deleted while the history wasn't saved: memberships
+        // to it are dropped on load.
+        let fewer: Vec<ClipCollection> = cols.iter().filter(|c| c.id != 3).cloned().collect();
+        save_collections(&dir, &fewer);
+        reconcile(&mut loaded, &load_collections(&dir));
+        assert_eq!(loaded[1].collections, [2]);
+        // An old history without classes or collections loads and is classified.
+        let legacy = r#"[{"id":7,"content":{"kind":"text","text":"margin: 0 auto;"},"copied_at":0,"pinned":true}]"#;
+        std::fs::write(dir.join(HISTORY_FILE), legacy).unwrap();
+        let old = load(&dir);
+        assert_eq!((old[0].class.clone(), old[0].pinned, old[0].collections.is_empty()), (ClipClass::Css, true, true));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

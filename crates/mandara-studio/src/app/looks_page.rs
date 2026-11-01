@@ -135,7 +135,7 @@ fn decoration_image(look: &LookDef, lp: &MandaraPalette, cfg: &ShellConfig) -> O
     // Same edge as on the desktop, so the sideways turn matches.
     w.place = Placement { anchor: w.place.anchor, scale, opacity: w.place.opacity, ..Placement::default() };
     let t = &cfg.typography;
-    let fonts = FontNames { ui: look.ui_font.into(), display: look.display_font.into(), arabic: t.arabic_font.clone(), mono: t.mono_font.clone() };
+    let fonts = FontNames::new(look.ui_font, look.display_font, &t.arabic_font, &t.mono_font);
     let mut h = std::collections::hash_map::DefaultHasher::new();
     (look.id, &fonts, lp.primary.to_rgba8(), format!("{w:?}")).hash(&mut h);
     let key = h.finish();

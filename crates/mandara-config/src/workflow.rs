@@ -59,6 +59,12 @@ pub mod defaults {
     pub const CLIPBOARD_MAX_PINNED: usize = 25;
     /// Pinned entries listed at the top of the clipboard panel.
     pub const CLIPBOARD_PINNED_SHOWN: usize = 4;
+    /// Entries kept in collections (they survive clears like pinned ones).
+    pub const CLIPBOARD_MAX_COLLECTED: usize = 500;
+    /// Lines of a code, CSS or Markdown entry shown in its panel row (0 =
+    /// one-line rows), and the bounds of that setting.
+    pub const CLIPBOARD_PREVIEW_LINES: usize = 3;
+    pub const CLIPBOARD_PREVIEW_LINES_RANGE: (usize, usize) = (0, 8);
     /// Largest text entry kept, KiB.
     pub const CLIPBOARD_MAX_TEXT_KB: u32 = 256;
     /// Largest image entry kept, MiB.
@@ -529,6 +535,21 @@ pub struct ClipboardConfig {
     /// Command for the edit button on images; `{path}` is the image file
     /// (e.g. `swappy -f {path}` or `satty --filename {path}`).
     pub image_command: String,
+    /// Entries kept in collections (oldest dropped beyond it).
+    pub max_collected: usize,
+    /// Filter chips by kind (text, links, code, colours, …) in the panel.
+    pub kind_chips: bool,
+    /// Lines of code, CSS and Markdown previewed in a panel row (0 = one
+    /// line, like plain text).
+    pub preview_lines: usize,
+}
+
+impl ClipboardConfig {
+    /// [`Self::preview_lines`] clamped to its range.
+    pub fn preview_lines(&self) -> usize {
+        let (lo, hi) = defaults::CLIPBOARD_PREVIEW_LINES_RANGE;
+        self.preview_lines.clamp(lo, hi)
+    }
 }
 
 impl Default for ClipboardConfig {
@@ -551,6 +572,9 @@ impl Default for ClipboardConfig {
             confirm_clear: true,
             click_action: ClipClick::Copy,
             image_command: String::new(),
+            max_collected: defaults::CLIPBOARD_MAX_COLLECTED,
+            kind_chips: true,
+            preview_lines: defaults::CLIPBOARD_PREVIEW_LINES,
         }
     }
 }
@@ -736,6 +760,10 @@ mod tests {
         assert_eq!(old.clipboard.max_entries, defaults::CLIPBOARD_MAX_ENTRIES);
         assert!(old.switcher.release_commits);
         assert_eq!(old.clipboard.pinned_shown, defaults::CLIPBOARD_PINNED_SHOWN);
+        assert!(old.clipboard.kind_chips);
+        assert_eq!(old.clipboard.max_collected, defaults::CLIPBOARD_MAX_COLLECTED);
+        let wide: ShellConfig = toml::from_str("[clipboard]\npreview_lines = 99\n").unwrap();
+        assert_eq!(wide.clipboard.preview_lines(), defaults::CLIPBOARD_PREVIEW_LINES_RANGE.1);
     }
 
     #[test]

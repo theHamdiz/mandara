@@ -64,6 +64,9 @@ pub mod ranges {
     pub const SILENCE_S: Span = Span::new(1.0, 60.0, 1.0);
     /// Opacity of a visualizer's fill (0–1).
     pub const OPACITY: Span = Span::new(0.1, 1.0, 0.05);
+    /// A plugin's desktop widget.
+    pub const PLUGIN_CARD_WIDTH: Span = Span::new(120.0, 720.0, 4.0);
+    pub const PLUGIN_CARD_HEIGHT: Span = Span::new(60.0, 640.0, 4.0);
 }
 
 /// Shipped defaults.
@@ -84,6 +87,9 @@ pub mod defaults {
     /// Offset of a new card from its anchored corner (fraction of the
     /// display's width / height).
     pub const CARD_OFFSET: (f32, f32) = (0.03, 0.05);
+    /// A plugin's desktop widget until the plugin or the user sizes it.
+    pub const PLUGIN_CARD_WIDTH_PX: f32 = 320.0;
+    pub const PLUGIN_CARD_HEIGHT_PX: f32 = 180.0;
 }
 
 fn count(v: u32, span: Span, fallback: u32) -> u32 {
@@ -318,9 +324,60 @@ pub fn card_origin(place: &Placement, output: (f32, f32), size: (f32, f32), rtl:
     (x.clamp(0.0, (output.0 - size.0).max(0.0)), y.clamp(0.0, (output.1 - size.1).max(0.0)))
 }
 
-/// Enabled card widgets of the shell's card host, in list order.
+/// Enabled card widgets of the shell's card host, in list order: the
+/// built-in cards and plugins' widgets ([`plugin_card`]).
 pub fn enabled_cards(widgets: &crate::desktop_widgets::DesktopWidgetsConfig) -> impl Iterator<Item = (&DesktopWidget, &CardWidget)> {
-    widgets.items.iter().filter(|w| w.enabled).filter_map(|w| as_card(w).filter(|c| ALL.contains(&c.card.as_str())).map(|c| (w, c)))
+    widgets.items.iter().filter(|w| w.enabled).filter_map(|w| as_card(w).filter(|c| ALL.contains(&c.card.as_str()) || parse_plugin_card(&c.card).is_some()).map(|c| (w, c)))
+}
+
+/// Cards a third-party plugin provides are named `plugin:<plugin id>/<widget id>`.
+pub const PLUGIN_CARD_PREFIX: &str = "plugin:";
+
+/// The card name of plugin `plugin`'s desktop widget `widget`.
+pub fn plugin_card(plugin: &str, widget: &str) -> String {
+    format!("{PLUGIN_CARD_PREFIX}{plugin}/{widget}")
+}
+
+/// `(plugin id, widget id)` of a plugin's card.
+pub fn parse_plugin_card(card: &str) -> Option<(&str, &str)> {
+    card.strip_prefix(PLUGIN_CARD_PREFIX)?.split_once('/').filter(|(p, w)| !p.is_empty() && !w.is_empty())
+}
+
+/// The plugin that provides `card`: a first-party one for the built-in
+/// cards, the third-party plugin named in a plugin card.
+pub fn card_plugin(card: &str) -> &str {
+    use crate::desktop_widgets::plugin_ids;
+    match card {
+        NOW_PLAYING => plugin_ids::NOW_PLAYING,
+        CALENDAR => plugin_ids::CALENDAR,
+        WAVE | FRAMED_BARS | MIRRORED_BARS => plugin_ids::VISUALIZERS,
+        other => parse_plugin_card(other).map_or("", |(p, _)| p),
+    }
+}
+
+/// A plugin card's options: its size (logical px at scale 1) and the text
+/// choices the plugin is told about.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PluginCardOptions {
+    pub width: f32,
+    pub height: f32,
+    pub numerals: crate::desktop_widgets::Numerals,
+    pub calendar: crate::desktop_widgets::Calendar,
+    /// A language code; empty = the interface language.
+    pub language: String,
+}
+
+impl Default for PluginCardOptions {
+    fn default() -> Self {
+        Self { width: defaults::PLUGIN_CARD_WIDTH_PX, height: defaults::PLUGIN_CARD_HEIGHT_PX, numerals: Default::default(), calendar: Default::default(), language: String::new() }
+    }
+}
+
+impl PluginCardOptions {
+    pub fn size(&self) -> (f32, f32) {
+        (ranges::PLUGIN_CARD_WIDTH.clamp(self.width, defaults::PLUGIN_CARD_WIDTH_PX), ranges::PLUGIN_CARD_HEIGHT.clamp(self.height, defaults::PLUGIN_CARD_HEIGHT_PX))
+    }
 }
 
 /// Turns the first `card` widget on (adding one at `anchor` if there is

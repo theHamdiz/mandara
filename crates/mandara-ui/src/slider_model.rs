@@ -244,6 +244,19 @@ impl LiveValue {
 /// (a service request's reply).
 pub type Write = Option<async_channel::Receiver<Result<String, String>>>;
 
+/// A write that completes when `window` draws its next frame: for a value
+/// applied at once that is costly to apply (a whole config written and
+/// mirrored to the shell). The slider then applies at most one value per
+/// frame, the latest, however many pointer events the frame brings.
+pub fn next_frame(window: &mut Window) -> Write {
+    let (tx, rx) = async_channel::bounded(1);
+    window.on_next_frame(move |_, _| {
+        let _ = tx.try_send(Ok(String::new()));
+    });
+    window.refresh();
+    Some(rx)
+}
+
 /// Writes a slider value (`0..=1`) to its owner.
 pub type Writer = Rc<dyn Fn(f32, &mut Window, &mut App) -> Write>;
 

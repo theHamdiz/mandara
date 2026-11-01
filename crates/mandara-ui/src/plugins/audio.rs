@@ -121,7 +121,7 @@ const LOW_VOLUME: f32 = 0.5;
 /// Volumes are exposed in percent.
 const PERCENT: f32 = 100.0;
 /// Scroll on the bar item: pixels per notch, dead zone, step per notch.
-const SCROLL_PX_PER_LINE: f32 = 20.0;
+pub(crate) const SCROLL_PX_PER_LINE: f32 = 20.0;
 const SCROLL_DEAD_ZONE: f32 = 0.01;
 /// The main menu's volume level column.
 const VOLUME_LABEL_W: f32 = 44.0;
@@ -190,6 +190,12 @@ fn stream_index(n: f64) -> Result<u32, String> {
 fn request(cx: &mut App, command: AudioCommand) -> Result<Output, String> {
     let service = hub(cx).read(cx).audio_service.clone().ok_or("audio service unavailable")?;
     Ok(Output::Pending(service.request(command)))
+}
+
+/// One volume step up or down (scrolling over empty bar space).
+pub(crate) fn nudge_volume(up: bool, cx: &mut App) {
+    let step = step(cx);
+    send(cx, AudioCommand::AdjustVolume(if up { step } else { -step }));
 }
 
 fn send(cx: &mut App, command: AudioCommand) {
@@ -491,6 +497,9 @@ pub fn register(r: &mut PluginRegistry) {
                 if !s.available {
                     return div().into_any_element();
                 }
+                // `[plugins.settings.audio] bar_level`: the volume beside the icon.
+                let level = crate::state::config(cx).read(cx).get().plugins.setting(ID, "bar_level", true);
+                let s = &hub(cx).read(cx).audio;
                 div()
                     .id("audio-bar")
                     .flex()
@@ -500,7 +509,7 @@ pub fn register(r: &mut PluginRegistry) {
                     .gap(px(BAR_GAP_PX))
                     .font_features(tabular_nums())
                     .child(icon(audio_icon(s), crate::style::bar_icon(BAR_ICON_PX), if s.all_muted { readable(palette.urgent_coral, palette) } else { palette.on_surface }))
-                    .child(div().text_color(palette.on_surface_variant.hsla()).when(s.all_muted, |el| el.opacity(UNAVAILABLE_OPACITY)).child(volume_text(s.output.volume)))
+                    .when(level, |el| el.child(div().text_color(palette.on_surface_variant.hsla()).when(s.all_muted, |el| el.opacity(UNAVAILABLE_OPACITY)).child(volume_text(s.output.volume))))
                     .on_mouse_down(MouseButton::Middle, |_: &MouseDownEvent, _, cx| {
                         cx.stop_propagation();
                         send(cx, AudioCommand::ToggleMuteAll);

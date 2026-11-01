@@ -88,41 +88,28 @@ const SCREENSHOT_SETTLE: Duration = Duration::from_millis(160);
 
 // ── Model ────────────────────────────────────────────────────────────────
 
-/// A widget the menus can add.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum NewWidget {
-    Clock,
-    Monitor,
-    Decoration,
-    Visualizer,
-    NowPlaying,
-    Calendar,
-}
+/// A widget the menus can add: a desktop widget kind of the plugin
+/// registry, by key (`plugin/id`, [`mandara_plugins::DesktopWidgetType::key`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NewWidget(pub String);
 
 impl NewWidget {
-    pub const ALL: [NewWidget; 6] = [Self::Clock, Self::Monitor, Self::Decoration, Self::Visualizer, Self::NowPlaying, Self::Calendar];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Clock => t("Clock"),
-            Self::Monitor => t("System monitor"),
-            Self::Decoration => t("Decoration"),
-            Self::Visualizer => t("Visualizer"),
-            Self::NowPlaying => t("Now playing"),
-            Self::Calendar => t("Calendar"),
-        }
+    /// The widgets this kind adds (none when its plugin went away).
+    pub fn make(&self, cx: &App) -> Vec<mandara_config::desktop_widgets::DesktopWidget> {
+        cx.try_global::<mandara_plugins::PluginRegistry>().and_then(|r| r.desktop_widget_type(&self.0)).map(|t| (t.make)()).unwrap_or_default()
     }
+}
 
-    pub fn icon(self) -> &'static str {
-        match self {
-            Self::Clock => "clock",
-            Self::Monitor => "gauge",
-            Self::Decoration => "leaf",
-            Self::Visualizer => "waves",
-            Self::NowPlaying => "music",
-            Self::Calendar => "calendar",
-        }
-    }
+/// A bundled icon by name (a plugin's choice), `sparkles` when unknown.
+pub fn icon_named(name: &str) -> &'static str {
+    crate::icons::ICON_NAMES.iter().find(|n| **n == name).copied().unwrap_or("sparkles")
+}
+
+/// A widget kind's name in the interface language (built-ins through the
+/// catalogs; a third-party plugin's own words as they are).
+pub fn widget_type_name(t: &mandara_plugins::DesktopWidgetType, cx: &App) -> String {
+    let builtin = cx.try_global::<mandara_plugins::PluginRegistry>().and_then(|r| r.get(&t.plugin)).is_none_or(|f| f.manifest.origin == mandara_plugins::PluginOrigin::Builtin);
+    if builtin { mandara_i18n::tr(&t.name) } else { t.name.clone() }
 }
 
 /// What a menu row does.
@@ -249,8 +236,19 @@ pub fn desktop_entries(cfg: &ShellConfig, output: &str) -> Vec<Entry> {
 
 /// The "Add widget" rows: what paints on the wallpaper, then the cards
 /// (a hairline between the two says it without a word on every row).
-pub fn add_entries() -> Vec<Entry> {
-    NewWidget::ALL.into_iter().map(|k| entry(if matches!(k, NewWidget::NowPlaying | NewWidget::Calendar) { 1 } else { 0 }, k.icon(), k.label(), Action::Add(k))).collect()
+pub fn add_entries(cx: &App) -> Vec<Entry> {
+    let Some(r) = cx.try_global::<mandara_plugins::PluginRegistry>() else { return Vec::new() };
+    let cfg = crate::state::config(cx).read(cx).snapshot();
+    let mut rows: Vec<Entry> = r
+        .enabled_desktop_widgets(&cfg.plugins)
+        .filter(|t| t.menu)
+        .map(|t| {
+            let card = (t.make)().iter().any(|w| !w.kind.on_wallpaper_plane());
+            entry(u8::from(card), icon_named(&t.icon), widget_type_name(t, cx), Action::Add(NewWidget(t.key())))
+        })
+        .collect();
+    rows.sort_by_key(|e| e.group);
+    rows
 }
 
 /// Card height of `entries`.
@@ -410,7 +408,7 @@ fn hint_el(h: Hint, palette: &MandaraPalette) -> gpui::AnyElement {
 pub fn run(action: &Action, output: &str, at: (f32, f32), size: (f32, f32), cx: &mut App) {
     match action {
         Action::EditDesktop => crate::desktop_edit::enter_on(Some(output), cx),
-        Action::Add(kind) => crate::desktop_edit::add_at(*kind, output, Some(at), cx),
+        Action::Add(kind) => crate::desktop_edit::add_at(kind.clone(), output, Some(at), cx),
         Action::ChangeWallpaper => {
             if config(cx).read(cx).get().wallpaper.picker {
                 crate::overlays::picker_on(output, Some(size), cx);
@@ -419,11 +417,7 @@ pub fn run(action: &Action, output: &str, at: (f32, f32), size: (f32, f32), cx: 
                 crate::state::open_studio_at(Some("wallpaper".into()), cx);
             }
         }
-        Action::NextWallpaper => {
-            if let Err(err) = crate::slideshow::advance(None, cx) {
-                tracing::warn!("desktop menu: {err}");
-            }
-        }
+        Action::NextWallpaper => crate::slideshow::advance_logged(cx),
         Action::ToggleWidgets => update_config(cx, |c| c.desktop.widgets.hidden = !c.desktop.widgets.hidden),
         Action::Themes => crate::state::open_studio_at(Some("themes".into()), cx),
         Action::Displays => crate::state::open_studio_at(Some("displays".into()), cx),
@@ -497,7 +491,7 @@ impl DesktopMenu {
     }
 
     fn pick_sub(&mut self, i: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(e) = add_entries().get(i) {
+        if let Some(e) = add_entries(cx).get(i) {
             let action = e.action.clone();
             self.finish(action, window, cx);
         }
@@ -546,7 +540,7 @@ impl DesktopMenu {
                 self.sub_hover = None;
             }
             "escape" => self.sheet.close(),
-            "up" | "down" if self.sub && self.sub_hover.is_some() => self.sub_hover = step(self.sub_hover, add_entries().len(), key == "up"),
+            "up" | "down" if self.sub && self.sub_hover.is_some() => self.sub_hover = step(self.sub_hover, add_entries(cx).len(), key == "up"),
             "up" | "down" => {
                 self.hover = step(self.hover, self.entries.len(), key == "up");
                 self.sub = false;
@@ -600,7 +594,7 @@ impl Render for DesktopMenu {
         }
         let q = self.sub_open.value().clamp(0.0, 1.0);
         let sub = (q > 0.0).then(|| {
-            let rows = add_entries();
+            let rows = add_entries(cx);
             let sh = height(&rows);
             let row_y = y + self.add_row().map_or(0.0, |i| row_top(&self.entries, i));
             let (sx, sy) = place_sub(x, row_y, (SUB_W, sh), screen, rtl);

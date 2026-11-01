@@ -5,6 +5,7 @@
 use gpui::{Bounds, Pixels, Size, point, px, size};
 use mandara_config::surfaces::{BarCenterAlign, BarSeparator, PanelAnchor, ranges};
 use mandara_config::{BarLayout, BarPosition, ShellConfig};
+use mandara_core::FlareCenter;
 
 /// The three widget groups of the bar.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -439,6 +440,72 @@ pub fn reserved_band(m: &Metrics, surface_h: f32) -> (f32, f32) {
     }
 }
 
+/// A flush side panel (the sidebar) joined to the bar and the screen like
+/// a puzzle piece: one column of the bar's material, concave fillets where
+/// its inner edge meets the bar or a screen edge, and, beside a notch, the
+/// span the notch keeps once the column butts against it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SideColumn {
+    /// The column, `(x, y, w, h)` in surface px.
+    pub column: (f32, f32, f32, f32),
+    /// Fillets: the `r × r` square at `(x, y)` and its arc's centre.
+    pub flares: Vec<(f32, f32, f32, FlareCenter)>,
+    /// Beside a notch the column reaches its edge; once it reaches the
+    /// notch the two join: the notch's span `(x, w)` along the edge and
+    /// whether its start / end butts against the column (square, no
+    /// shoulder).
+    pub notch: Option<(f32, f32, bool, bool)>,
+}
+
+/// How the flush side panel at `x` (its slid position, width `w`, on the
+/// right edge when `right`) joins the bar of `m` on a `surface`: its box
+/// `span` (`(y, h)`: the height beside the bar, or the whole height beside a
+/// side bar) and fillets of radius `flare` at both ends of its inner edge.
+/// A column only reaches a screen edge the bar doesn't cover; next to the
+/// notch it rises to the notch's edge and merges into the notch.
+pub fn side_column(m: &Metrics, surface: (f32, f32), x: f32, w: f32, right: bool, span: (f32, f32), flare: f32) -> SideColumn {
+    let (sw, sh) = surface;
+    let r = flare.max(0.0);
+    // The inner edge, and where its fillets' squares start.
+    let inner = if right { x } else { x + w };
+    let fx = if right { inner - r } else { inner };
+    // Arc centres of a fillet below a horizontal surface (top) and above one
+    // (bottom): the filled part hugs the column and that surface.
+    let (top_c, bottom_c) = if right { (FlareCenter::BottomLeft, FlareCenter::TopLeft) } else { (FlareCenter::BottomRight, FlareCenter::TopRight) };
+    let (mut y0, mut y1) = (span.0, span.0 + span.1);
+    let mut flares = Vec::with_capacity(2);
+    let mut notch = None;
+    if m.notch() {
+        let frame = m.frame(sw);
+        let (nx, nw, nh) = (x_of(&frame), w_of(&frame), m.height);
+        let bottom = m.position == BarPosition::Bottom;
+        // The column reaches the notch's edge.
+        if bottom { y1 = sh } else { y0 = 0.0 }
+        // Joined once the column's shoulder would touch the notch's.
+        let joined = if right { inner <= nx + nw + r } else { inner >= nx - r };
+        if joined {
+            notch = Some(if right {
+                let end = inner.clamp(nx, nx + nw);
+                (nx, end - nx, false, true)
+            } else {
+                let start = inner.clamp(nx, nx + nw);
+                // A column short of the notch stretches the notch to it.
+                let start = if inner < nx { inner } else { start };
+                (start, nx + nw - start, true, false)
+            });
+            flares.push(if bottom { (fx, sh - nh - r, r, bottom_c) } else { (fx, nh, r, top_c) });
+        } else {
+            flares.push(if bottom { (fx, sh - r, r, bottom_c) } else { (fx, 0.0, r, top_c) });
+        }
+        flares.push(if bottom { (fx, 0.0, r, top_c) } else { (fx, sh - r, r, bottom_c) });
+    } else {
+        flares.push((fx, y0, r, top_c));
+        flares.push((fx, y1 - r, r, bottom_c));
+    }
+    flares.retain(|f| f.2 > 0.0);
+    SideColumn { column: (x, y0, w, (y1 - y0).max(0.0)), flares, notch }
+}
+
 /// Smallest rect containing all `rects`.
 pub fn union(rects: &[Bounds<Pixels>]) -> Bounds<Pixels> {
     let mut it = rects.iter();
@@ -835,6 +902,54 @@ mod tests {
         let mut cfg = ShellConfig::default();
         cfg.bar.screen_frame = true;
         assert!(screen_frame(&Metrics::of(&cfg, 1.0), SCREEN).is_none());
+    }
+
+    fn notch(position: BarPosition) -> Metrics {
+        Metrics::default_for(BarLayout::Notch, position)
+    }
+
+    #[test]
+    fn a_column_beside_a_full_edge_bar_flares_into_the_bar_and_the_far_edge() {
+        let m = edge();
+        let c = side_column(&m, (1600.0, 900.0), 0.0, 380.0, false, (30.0, 870.0), 12.0);
+        assert_eq!(c.column, (0.0, 30.0, 380.0, 870.0));
+        assert_eq!(c.flares, [(380.0, 30.0, 12.0, FlareCenter::BottomRight), (380.0, 888.0, 12.0, FlareCenter::TopRight)]);
+        assert_eq!(c.notch, None);
+        // On the right edge the fillets sit left of its inner edge.
+        let c = side_column(&m, (1600.0, 900.0), 1220.0, 380.0, true, (30.0, 870.0), 12.0);
+        assert_eq!(c.flares, [(1208.0, 30.0, 12.0, FlareCenter::BottomLeft), (1208.0, 888.0, 12.0, FlareCenter::TopLeft)]);
+        // A hairline (no flares) meets the column square.
+        assert!(side_column(&m, (1600.0, 900.0), 0.0, 380.0, false, (24.0, 876.0), 0.0).flares.is_empty());
+    }
+
+    #[test]
+    fn a_column_joins_the_notch_like_a_puzzle_piece() {
+        let (surface, m) = ((1600.0, 900.0), notch(BarPosition::Top));
+        let frame = m.frame(surface.0);
+        let (nx, nw) = (x_of(&frame), w_of(&frame));
+        // Wider than the gap left of the notch: it rises to the top edge and
+        // the notch starts where the column ends, square, with a fillet
+        // tucked under the notch.
+        let c = side_column(&m, surface, 0.0, nx + 100.0, false, (m.height, surface.1 - m.height), 12.0);
+        assert_eq!(c.column, (0.0, 0.0, nx + 100.0, surface.1));
+        assert_eq!(c.notch, Some((nx + 100.0, nw - 100.0, true, false)));
+        assert_eq!(c.flares[0], (nx + 100.0, m.height, 12.0, FlareCenter::BottomRight));
+        assert_eq!(c.flares[1], (nx + 100.0, surface.1 - 12.0, 12.0, FlareCenter::TopRight));
+        // Still sliding in, short of the notch: two separate pieces hanging
+        // from the edge, each with its own shoulder.
+        let c = side_column(&m, surface, -300.0, 380.0, false, (m.height, surface.1 - m.height), 12.0);
+        assert!(80.0 < nx - 12.0, "the test column must stop short of the notch");
+        assert_eq!(c.notch, None);
+        assert_eq!(c.flares[0], (80.0, 0.0, 12.0, FlareCenter::BottomRight));
+        // A right sidebar ends the notch at its inner edge.
+        let c = side_column(&m, surface, nx + nw - 50.0, 450.0, true, (m.height, surface.1 - m.height), 12.0);
+        assert_eq!(c.notch, Some((nx, nw - 50.0, false, true)));
+        // Under a bottom notch the column rises from the bottom edge.
+        let m = notch(BarPosition::Bottom);
+        let c = side_column(&m, surface, 0.0, nx + 100.0, false, (0.0, surface.1 - m.height), 12.0);
+        assert_eq!(c.column, (0.0, 0.0, nx + 100.0, surface.1));
+        assert_eq!(c.flares[0], (nx + 100.0, surface.1 - m.height - 12.0, 12.0, FlareCenter::TopRight));
+        assert_eq!(c.flares[1], (nx + 100.0, 0.0, 12.0, FlareCenter::BottomRight));
     }
 
     #[test]

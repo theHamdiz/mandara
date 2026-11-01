@@ -260,6 +260,12 @@ fn schedule(date: NaiveDate, s: &Settings) -> Schedule {
     })
 }
 
+/// Tomorrow's times from the user's settings.
+pub fn tomorrow(cx: &App) -> PrayerTimes {
+    let s = settings(cx);
+    schedule(Local::now().date_naive(), &s)[2].clone()
+}
+
 /// Today's times from the user's settings.
 pub fn today(cx: &App) -> PrayerTimes {
     let s = settings(cx);

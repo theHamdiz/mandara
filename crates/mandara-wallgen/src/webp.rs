@@ -599,28 +599,46 @@ fn predictor_transform(px: &[u32], w: usize, h: usize) -> (Vec<u32>, Vec<u32>, u
     (res, mode_img, bw)
 }
 
+/// Largest side a VP8L image may have.
+const MAX_SIDE: usize = 16384;
+
 /// Encodes packed RGB as a lossless WebP file.
 pub fn encode_rgb(rgb: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
+    let (w, h) = check_size(width, height, rgb.len(), 3)?;
+    let px = rgb.as_chunks::<3>().0.iter().map(|p| argb(0xFF, p[0], p[1], p[2])).collect();
+    encode_argb(px, w, h, false)
+}
+
+/// Encodes packed RGBA as a lossless WebP file (pixel-exact, alpha kept).
+pub fn encode_rgba(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
+    let (w, h) = check_size(width, height, rgba.len(), 4)?;
+    let px = rgba.as_chunks::<4>().0.iter().map(|p| argb(p[3], p[0], p[1], p[2])).collect();
+    encode_argb(px, w, h, true)
+}
+
+fn check_size(width: u32, height: u32, len: usize, channels: usize) -> Result<(usize, usize), String> {
     let (w, h) = (width as usize, height as usize);
-    if w == 0 || h == 0 || w > 16384 || h > 16384 || rgb.len() != w * h * 3 {
+    if w == 0 || h == 0 || w > MAX_SIDE || h > MAX_SIDE || len != w * h * channels {
         return Err(mandara_i18n::t("WebP images must be 1 to 16384 pixels on each side").into());
     }
-    // ARGB with the green channel subtracted from red and blue.
-    let px: Vec<u32> = rgb
-        .as_chunks::<3>().0.iter()
-        .map(|p| {
-            let (r, g, b) = (p[0].wrapping_sub(p[1]), p[1], p[2].wrapping_sub(p[1]));
-            0xFF00_0000 | ((r as u32) << 16) | ((g as u32) << 8) | b as u32
-        })
-        .collect();
+    Ok((w, h))
+}
+
+/// One ARGB pixel with the green channel subtracted from red and blue.
+fn argb(a: u8, r: u8, g: u8, b: u8) -> u32 {
+    ((a as u32) << 24) | ((r.wrapping_sub(g) as u32) << 16) | ((g as u32) << 8) | b.wrapping_sub(g) as u32
+}
+
+fn encode_argb(px: Vec<u32>, w: usize, h: usize, alpha: bool) -> Result<Vec<u8>, String> {
+    let (width, height) = (w as u32, h as u32);
     let (res, modes, mode_w) = predictor_transform(&px, w, h);
     drop(px);
     let mut bw = BitWriter::new();
     bw.bits(0x2F, 8);
     bw.bits(width - 1, 14);
     bw.bits(height - 1, 14);
-    // No alpha; version 0.
-    bw.bits(0, 1);
+    // Whether alpha is used; version 0.
+    bw.bits(u32::from(alpha), 1);
     bw.bits(0, 3);
     // Transforms in decoding-reverse order: subtract green, then predictor.
     bw.bits(1, 1);
@@ -648,6 +666,22 @@ pub fn encode_rgb(rgb: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rgba_round_trips_exactly() {
+        let (w, h) = (37u32, 23u32);
+        let mut rgba = Vec::new();
+        for y in 0..h {
+            for x in 0..w {
+                // Transparent corners, soft edges and full opacity, like an icon.
+                let a = if (x + y) % 7 == 0 { 0 } else { ((x * 13 + y * 7) % 256) as u8 };
+                rgba.extend_from_slice(&[(x * 7) as u8, (y * 11) as u8, ((x ^ y) * 5) as u8, a]);
+            }
+        }
+        let bytes = encode_rgba(&rgba, w, h).unwrap();
+        let back = image::load_from_memory_with_format(&bytes, image::ImageFormat::WebP).unwrap().to_rgba8();
+        assert_eq!(back.as_raw(), &rgba);
+    }
 
     fn round_trip(w: u32, h: u32, mut f: impl FnMut(u32, u32) -> [u8; 3]) {
         let mut rgb = Vec::new();

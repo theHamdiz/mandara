@@ -1,0 +1,272 @@
+//! `mandara setup`: compositor integration from the command line — the
+//! drop-in, the single include line, conflict detection / retirement and the
+//! Config doctor, every change checked with the compositor's own checker and
+//! rolled back when it makes the config worse.
+
+use std::cell::RefCell;
+use std::path::PathBuf;
+
+use anyhow::Result;
+use mandara_config::compositor::{Emitted, Target, install_include, user_autostarts};
+use mandara_config::conflicts;
+use mandara_config::doctor::{self, CheckEnv, CheckerStatus, Report, fix as dfix, state};
+use mandara_config::paths;
+
+use crate::ipc;
+
+/// `mandara setup --check` exit code when conflicts were found (scripts and
+/// `mandara install` test for it).
+pub const EXIT_CONFLICTS: i32 = 10;
+/// `mandara setup --check` exit code when the compositor reports errors in
+/// the config (and there are no conflicts).
+pub const EXIT_CONFIG_ERRORS: i32 = 11;
+
+pub struct Options {
+    pub autostart: bool,
+    pub compositor: Option<String>,
+    pub check: bool,
+    pub fix_conflicts: bool,
+    pub restore: Option<String>,
+    pub fix: Vec<String>,
+}
+
+fn parse_target(name: &str) -> Option<Target> {
+    match name {
+        "mango" | "mangowm" => Some(Target::Mango),
+        "niri" => Some(Target::Niri),
+        "hyprland" | "hypr" => Some(Target::Hyprland),
+        "umbriel" => Some(Target::Umbriel),
+        _ => None,
+    }
+}
+
+pub fn setup(o: Options) -> Result<()> {
+    if let Some(which) = &o.restore {
+        let backup = if which == "latest" { conflicts::backups().into_iter().next().ok_or_else(|| anyhow::anyhow!("no retire backups in {}", conflicts::backups_root().display()))? } else { PathBuf::from(which) };
+        // Doctor backups and retire backups share the manifest format; a
+        // doctor backup may also record a file that didn't exist.
+        let restored = if backup.starts_with(dfix::backups_root()) { dfix::restore(&backup)? } else { conflicts::restore(&backup)? };
+        for f in restored {
+            println!("restored {}", f.display());
+        }
+    }
+    let targets: Vec<Target> = match o.compositor.as_deref() {
+        Some(name) => vec![parse_target(name).ok_or_else(|| anyhow::anyhow!("unknown compositor {name:?} (mango, niri, hyprland or umbriel)"))?],
+        None => match mandara_compositor::detect() {
+            Some(kind) => vec![kind.target()],
+            None => Target::ALL.into_iter().filter(|t| t.user_config().exists()).collect(),
+        },
+    };
+    if targets.is_empty() {
+        println!("No MangoWM, Niri, Hyprland or Umbriel config found — start your compositor once, then run `mandara setup` again.");
+        return Ok(());
+    }
+    let mut store = mandara_config::ConfigStore::open_default()?;
+    if o.autostart && !o.check && !store.get().compositor.autostart {
+        store.update(|c| c.compositor.autostart = true);
+        store.flush()?;
+    }
+    let mut cfg = store.snapshot();
+    let mut total_conflicts = 0;
+    let mut config_errors = 0;
+    // `--fix` ids that matched a problem of some compositor.
+    let mut fixed_ids: Vec<String> = Vec::new();
+    for target in targets {
+        let has_config = target.user_config().exists();
+        let env = CheckEnv::default();
+        // The config as the compositor reads it before Mandara touches it.
+        let before = doctor::check(target);
+        // The last drop-in written (its skipped binds are reported).
+        let last: RefCell<Option<(PathBuf, Emitted)>> = RefCell::new(None);
+        let effective = cfg.effective_compositor().into_owned();
+        let write = || -> Result<()> {
+            let written = mandara_compositor::backend::write_dropin(target, &effective, None, mandara_config::compositor::installed_version(target))?;
+            *last.borrow_mut() = Some(written);
+            Ok(())
+        };
+        let mut report = before.clone();
+        if !o.check && o.fix.is_empty() {
+            if !has_config {
+                write()?;
+                let path = last.borrow().as_ref().map(|(p, _)| p.clone()).unwrap_or_else(|| target.generated_file());
+                println!("{target:?}: drop-in {} · {} doesn't exist yet — add this line to your config: {}", path.display(), target.user_config().display(), target.include_line());
+                continue;
+            }
+            let guarded = dfix::guarded_write(&before, &env, &write)?;
+            for option in &guarded.left_out {
+                println!("  note: {} {} rejects `{option}`, so Mandara leaves it out for this version", target.name(), guarded.after.version.as_deref().unwrap_or("?"));
+            }
+            if guarded.rolled_back {
+                println!("{target:?}: the new drop-in made {} reject your config, so the previous one was kept:", target.name());
+                print_report(&guarded.after);
+                config_errors += guarded.after.errors();
+                state::record(guarded.after);
+                continue;
+            }
+            report = guarded.after;
+            let user_before = std::fs::read_to_string(target.user_config())?;
+            let added = install_include(target)?;
+            if added {
+                let after = doctor::check(target);
+                if dfix::is_worse(&report, &after) {
+                    // Our include made it worse: undo exactly that.
+                    mandara_config::write_atomic(&target.user_config(), user_before.as_bytes())?;
+                    println!("{target:?}: {} rejects the config with Mandara's include, so it was removed again:", target.name());
+                    print_report(&after);
+                    config_errors += after.errors();
+                    continue;
+                }
+                report = after;
+            }
+            let path = last.borrow().as_ref().map(|(p, _)| p.clone()).unwrap_or_else(|| target.generated_file());
+            println!("{target:?}: drop-in {} · include {} {}", path.display(), if added { "added to" } else { "already in" }, target.user_config().display());
+            if cfg.compositor.autostart {
+                println!("  autostart: {}", if user_autostarts(target) { "your config already starts Mandara" } else { "on (from the drop-in)" });
+            }
+            for note in last.borrow().as_ref().map(|(_, e)| e.skipped.clone()).unwrap_or_default() {
+                println!("  note: {note}");
+            }
+        }
+        if !has_config {
+            continue;
+        }
+        // Fixes asked for by id, bottom of each file first: a removed line
+        // never shifts the lines of the fixes still to come.
+        let mut wanted: Vec<(doctor::Diagnostic, dfix::Fix)> = Vec::new();
+        for spec in &o.fix {
+            let Some((id, action)) = spec.split_once('=') else {
+                anyhow::bail!("--fix takes ID=comment, ID=remove or ID=regenerate, not {spec:?}");
+            };
+            let Some(action) = dfix::Fix::parse(action) else { anyhow::bail!("unknown fix {action:?} (comment, remove or regenerate)") };
+            if let Some(d) = report.find(id) {
+                fixed_ids.push(id.to_string());
+                wanted.push((d.clone(), action));
+            }
+        }
+        wanted.sort_by(|(a, _), (b, _)| (&b.file, b.line).cmp(&(&a.file, a.line)));
+        for (d, action) in wanted {
+            // The same problem in the latest check (its id is stable while
+            // the lines above it are).
+            let Some(id) = report.diagnostics.iter().find(|x| x.file == d.file && x.line == d.line && x.message == d.message).map(|x| x.id.clone()) else {
+                println!("  {}: already gone", d.id);
+                continue;
+            };
+            let outcome = dfix::apply(&report, &id, action, &env, &write)?;
+            let backup = outcome.backup.as_ref().map(|b| b.display().to_string()).unwrap_or_default();
+            if outcome.rolled_back {
+                println!("  {id}: {} made the config worse, so it was undone (backup {backup})", action.id());
+            } else {
+                println!("  {id}: {}{} · backup {backup} · undo: mandara setup --restore {backup}", action.id(), if outcome.resolved { " — fixed" } else { " — the problem is still reported" });
+            }
+            report = outcome.after;
+        }
+        let report = state::record(report);
+        print_report(&report);
+        config_errors += report.errors();
+        let found = conflicts::scan(target, &cfg.compositor);
+        let fixable: Vec<conflicts::Conflict> = found.iter().filter(|c| c.is_conflict()).cloned().collect();
+        total_conflicts += fixable.len();
+        for c in &found {
+            println!("  {} {}:{} — {}", if c.is_conflict() { "conflict:" } else { "note:" }, c.file.display(), c.lines[0] + 1, c.summary());
+            println!("      {}", c.text);
+        }
+        if o.fix_conflicts && !o.check && !fixable.is_empty() {
+            let backup = conflicts::retire(target, &fixable)?;
+            let after = doctor::check(target);
+            if dfix::is_worse(&report, &after) {
+                conflicts::restore(&backup)?;
+                println!("  {} rejected the result, so nothing was changed:", target.name());
+                print_report(&after);
+            } else {
+                // Keys an old tool used now open its Mandara equivalent.
+                let takeovers = conflicts::takeover_keybinds(&fixable);
+                if !takeovers.is_empty() {
+                    store.update(|c| {
+                        for k in takeovers {
+                            if !c.compositor.keybinds.iter().any(|x| x.chord() == k.chord()) {
+                                c.compositor.keybinds.push(k);
+                            }
+                        }
+                    });
+                    store.flush()?;
+                    cfg = store.snapshot();
+                }
+                // Freed chords: regenerate so Mandara's binds take them.
+                mandara_compositor::backend::write_dropin(target, &cfg.effective_compositor(), None, mandara_config::compositor::installed_version(target))?;
+                total_conflicts -= fixable.len();
+                let checked = match &after.status {
+                    CheckerStatus::Ran => format!(", checked with {}", target.name()),
+                    _ => String::new(),
+                };
+                println!("  retired {} line(s){checked} · backup {} · undo: mandara setup --restore {}", fixable.len(), backup.display(), backup.display());
+            }
+        } else if !fixable.is_empty() && !o.check {
+            println!("  run `mandara setup --fix-conflicts` to retire them (backed up, validated, reversible)");
+        }
+        if !o.check && std::env::var_os("MANDARA_NO_IPC").is_none() {
+            // Ask a running shell to reload the compositor with the new files.
+            let _ = ipc::send(&paths::ipc_socket(), &["compositor".to_string(), "reload".to_string()]);
+        }
+    }
+    for spec in &o.fix {
+        let id = spec.split_once('=').map_or(spec.as_str(), |(id, _)| id);
+        if !fixed_ids.iter().any(|f| f == id) {
+            println!("no problem {id} in the current check — run `mandara setup --check` for the current ids");
+        }
+    }
+    if o.check && total_conflicts > 0 {
+        std::process::exit(EXIT_CONFLICTS);
+    }
+    if o.check && config_errors > 0 {
+        std::process::exit(EXIT_CONFIG_ERRORS);
+    }
+    Ok(())
+}
+
+/// The Config doctor's findings for a terminal: grouped by file, each with
+/// its line, explanation and the commands that fix it.
+fn print_report(report: &Report) {
+    let name = report.target.name();
+    let version = report.version.as_deref().map(|v| format!(" {v}")).unwrap_or_default();
+    match &report.status {
+        CheckerStatus::NoConfig => return,
+        CheckerStatus::NotInstalled => {
+            println!("  config doctor: {name}'s checker isn't installed here, so the config wasn't checked");
+            return;
+        }
+        CheckerStatus::TimedOut => {
+            println!("  config doctor: `{}` didn't finish in time; the config wasn't checked", report.checker);
+            return;
+        }
+        CheckerStatus::Failed(e) => {
+            println!("  config doctor: `{}` couldn't run: {e}", report.checker);
+            return;
+        }
+        CheckerStatus::Ran => {}
+    }
+    if report.diagnostics.is_empty() {
+        println!("  config doctor: all good — {name}{version} accepts the config");
+        return;
+    }
+    let unverified = if report.verified_parser { "" } else { " (reading of its output not verified against a real binary)" };
+    println!("  config doctor: {name}{version} reports {} error(s), {} warning(s){unverified}", report.errors(), report.warnings());
+    for (file, list) in report.by_file() {
+        match &file {
+            Some(f) if mandara_config::compositor::is_generated(f) => println!("    {} (Mandara's drop-in)", f.display()),
+            Some(f) => println!("    {}", f.display()),
+            None => println!("    (no file named)"),
+        }
+        for d in list {
+            let line = d.line.map(|l| format!("line {l}")).unwrap_or_default();
+            println!("      [{}] {} {line} — {}", d.id, d.kind.label(), d.message);
+            if let Some(text) = &d.text {
+                println!("          {text}");
+            }
+            println!("          {}", doctor::explain(d, report.target, report.version.as_deref()));
+            let fixes: Vec<String> = doctor::fixes_for(d).iter().map(|f| format!("mandara setup --fix {}={}", d.id, f.id())).collect();
+            if !fixes.is_empty() {
+                println!("          fix: {}", fixes.join("  or  "));
+            }
+        }
+    }
+}

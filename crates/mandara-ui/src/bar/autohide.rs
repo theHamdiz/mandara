@@ -7,6 +7,7 @@
 //! slides the bar back; leaving the bar for `delay_ms` hides it again.
 //! An open panel or sidebar always keeps the bar out.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use gpui::{AnyElement, Context, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled, Task, div, px};
@@ -28,6 +29,22 @@ const HIDE_OVERSHOOT_PX: f32 = 2.0;
 const STRIP_ID: &str = "bar-reveal-strip";
 const BAND_ID: &str = "bar-hover-band";
 
+/// `bar hide` / `bar show`: the bar was put away by command until shown
+/// again (not saved; a restart brings it back). It hides like auto-hide
+/// "Always": touching its edge still peeks it out.
+static HIDDEN_BY_COMMAND: AtomicBool = AtomicBool::new(false);
+
+/// Whether `bar hide` put the bar away.
+pub fn hidden_by_command() -> bool {
+    HIDDEN_BY_COMMAND.load(Ordering::Relaxed)
+}
+
+/// Puts the bar away (`true`) or brings it back; the caller notifies the
+/// shell state so every bar and exclusion strip re-evaluates.
+pub fn set_hidden_by_command(hidden: bool) {
+    HIDDEN_BY_COMMAND.store(hidden, Ordering::Relaxed);
+}
+
 /// Whether the bar is shown on output `monitor` at all.
 pub fn bar_on_monitor(cfg: &ShellConfig, monitor: &str) -> bool {
     cfg.bar_on_output(monitor)
@@ -43,7 +60,19 @@ pub fn reserves_space(cfg: &ShellConfig, monitor: &str) -> bool {
 /// The auto-hide mode in effect: a side bar always stays (its reveal strip
 /// would sit on the edge windows scroll and drag against).
 pub fn mode(cfg: &ShellConfig) -> AutoHideMode {
-    if cfg.bar.position.is_vertical() { AutoHideMode::Never } else { cfg.bar.auto_hide.mode }
+    mode_with(cfg, hidden_by_command())
+}
+
+/// [`mode`] with the `bar hide` state given: a bar put away by command
+/// hides like "Always" (and frees its space) until shown again.
+pub fn mode_with(cfg: &ShellConfig, hidden: bool) -> AutoHideMode {
+    if cfg.bar.position.is_vertical() {
+        AutoHideMode::Never
+    } else if hidden {
+        AutoHideMode::Always
+    } else {
+        cfg.bar.auto_hide.mode
+    }
 }
 
 /// `(any window covers the workspace, a fullscreen window is shown)` on
@@ -243,6 +272,17 @@ mod tests {
         assert!(wants_hidden(AutoHideMode::Always, false, false));
         assert!(wants_hidden(AutoHideMode::Overlap, true, false) && !wants_hidden(AutoHideMode::Overlap, false, false));
         assert!(wants_hidden(AutoHideMode::Fullscreen, true, true) && !wants_hidden(AutoHideMode::Fullscreen, true, false));
+    }
+
+    #[test]
+    fn hiding_by_command_frees_the_space_except_beside_a_side_bar() {
+        let mut cfg = ShellConfig::default();
+        assert_eq!(mode_with(&cfg, true), AutoHideMode::Always);
+        assert_eq!(mode_with(&cfg, false), AutoHideMode::Never);
+        cfg.bar.auto_hide.mode = AutoHideMode::Fullscreen;
+        assert_eq!(mode_with(&cfg, true), AutoHideMode::Always, "the command wins over the configured mode");
+        cfg.bar.position = BarPosition::Left;
+        assert_eq!(mode_with(&cfg, true), AutoHideMode::Never, "a side bar always stays");
     }
 
     #[test]

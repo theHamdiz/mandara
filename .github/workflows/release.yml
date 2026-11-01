@@ -74,8 +74,12 @@ jobs:
       version: ${{ steps.result.outputs.version }}
       tag: ${{ steps.result.outputs.tag }}
     steps:
+      # The branch tip, not the pushed commit: a release queued behind
+      # another one starts after that one pushed its AUR recipes, and a
+      # bump made on the older commit could never be pushed.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@stable

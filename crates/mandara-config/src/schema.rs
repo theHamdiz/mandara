@@ -48,6 +48,11 @@ pub mod defaults {
     pub const DESKTOP_CLOCK_Y: f32 = 0.32;
     /// Wallpaper cross-fade, ms.
     pub const WALLPAPER_CROSSFADE_MS: u64 = 700;
+    /// Model depth mode, manual split: where the clock sits in the scene's
+    /// depth (0 = far background, 1 = nearest), and its bounds (the ends
+    /// would put everything or nothing in front).
+    pub const DEPTH_SPLIT: f32 = 0.5;
+    pub const DEPTH_SPLIT_RANGE: (f32, f32) = (0.05, 0.95);
     /// Launcher results shown.
     pub const LAUNCHER_MAX_RESULTS: usize = 7;
     /// Regular body text weight (CSS scale).
@@ -1179,6 +1184,26 @@ pub struct BarConfig {
     /// (reserves nothing beyond the bar itself).
     pub screen_frame: bool,
     pub frame_thickness: f32,
+    /// Bar items light up softly under the pointer.
+    pub hover_highlight: bool,
+    /// Weight of bar text (CSS scale, 100–900); 0 follows the interface
+    /// weight (`typography.weight`).
+    pub font_weight: u16,
+    /// Each bar item sits on a capsule of its own (any style).
+    pub item_capsules: bool,
+    /// Colour of the group and item capsules.
+    pub capsule_fill: crate::surfaces::BarCapsuleFill,
+    /// Strength of the capsule fill (multiplier of its shipped alpha).
+    pub capsule_strength: f32,
+    /// A hairline outline around each capsule.
+    pub capsule_outline: bool,
+    /// Extra space the bar keeps between itself and windows (added to its
+    /// reserved zone).
+    pub window_gap: f32,
+    /// What scrolling over empty bar space does.
+    pub scroll: crate::surfaces::BarScrollAction,
+    /// What a middle click on empty bar space does (the hot-corner actions).
+    pub middle_click: crate::desktop::Corner,
 }
 
 impl BarConfig {
@@ -1213,6 +1238,22 @@ impl BarConfig {
 
     pub fn icon_scale(&self) -> f32 {
         surfaces::ranges::BAR_ICON_SCALE.clamp(self.icon_scale, 1.0)
+    }
+
+    /// The capsule fill's strength, clamped.
+    pub fn capsule_strength(&self) -> f32 {
+        surfaces::ranges::INTENSITY.clamp(self.capsule_strength, 1.0)
+    }
+
+    /// Extra reserved space toward windows, clamped.
+    pub fn window_gap(&self) -> f32 {
+        surfaces::ranges::BAR_WINDOW_GAP.clamp(self.window_gap, 0.0)
+    }
+
+    /// Bar text weight: its own when set (clamped to the CSS scale), else
+    /// `interface` (the typography weight).
+    pub fn font_weight(&self, interface: u16) -> u16 {
+        if self.font_weight == 0 { interface } else { self.font_weight.clamp(surfaces::defaults::FONT_WEIGHT_MIN, surfaces::defaults::FONT_WEIGHT_MAX) }
     }
 
     /// The style actually drawn: a side bar is always the edge frame.
@@ -1279,6 +1320,15 @@ impl Default for BarConfig {
             vertical_width: surfaces::defaults::BAR_VERTICAL_WIDTH_PX,
             screen_frame: false,
             frame_thickness: surfaces::defaults::SCREEN_FRAME_PX,
+            hover_highlight: true,
+            font_weight: 0,
+            item_capsules: false,
+            capsule_fill: crate::surfaces::BarCapsuleFill::default(),
+            capsule_strength: 1.0,
+            capsule_outline: false,
+            window_gap: 0.0,
+            scroll: crate::surfaces::BarScrollAction::default(),
+            middle_click: crate::desktop::Corner::default(),
         }
     }
 }
@@ -1325,7 +1375,7 @@ pub struct TypographyConfig {
     /// The lock screen's text, and its clock.
     pub lock_font: String,
     pub lock_clock_font: String,
-    /// Desktop widgets (a widget's own font wins).
+    /// Desktop widgets (empty: the display face; a widget's own font wins).
     pub widgets_font: String,
     /// Global UI text scale.
     pub scale: f32,
@@ -1397,8 +1447,14 @@ pub struct WallpaperConfig {
     pub show_weather: bool,
     /// Subtle ring around the clock reacting to the music playing.
     pub audio_ring: bool,
-    /// Foreground subject mask drawn over the clock (depth layer 3).
-    pub depth_mask: DepthMask,
+    /// How the foreground subject drawn over the clock (depth layer 3) is
+    /// found: the `wallpaper-depth` plugin's settings.
+    pub depth: WallpaperDepth,
+    /// Before 0.5: where the subject mask came from (`auto`, `custom`,
+    /// `off`). [`crate::upgrade`] turns `off` into `depth_effect = false`,
+    /// then drops the key; your own masks always win now.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depth_mask: Option<DepthMask>,
     pub crossfade_ms: u64,
     /// Before 0.2: browse Wallhaven in the picker. Wallhaven is now the
     /// opt-in `wallhaven` plugin; [`crate::upgrade`] turns a `true` here
@@ -1444,7 +1500,8 @@ impl Default for WallpaperConfig {
             show_date: true,
             show_weather: true,
             audio_ring: true,
-            depth_mask: DepthMask::default(),
+            depth: WallpaperDepth::default(),
+            depth_mask: None,
             crossfade_ms: defaults::WALLPAPER_CROSSFADE_MS,
             wallhaven: None,
             wallhaven_query: String::new(),
@@ -1472,7 +1529,8 @@ pub enum ClockStyle {
     Arabic,
 }
 
-/// Where the foreground subject mask comes from.
+/// Where the foreground subject mask came from before 0.5 (read only to
+/// upgrade old configs, see [`WallpaperConfig::depth_mask`]).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum DepthMask {
@@ -1482,6 +1540,48 @@ pub enum DepthMask {
     /// Only masks you provide (`~/.local/share/mandara/depth_masks/<stem>.png`).
     Custom,
     Off,
+}
+
+/// How the wallpaper's subject is found. The two modes exclude each other;
+/// a mask you provide (`~/.local/share/mandara/depth_masks/<stem>.png`)
+/// wins over both.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DepthMode {
+    /// Mandara's hand-tuned sky / subject segmentation: no download, skips
+    /// wallpapers it isn't sure about.
+    #[default]
+    HandTuned,
+    /// A small depth-estimation model (Depth Anything V2 Small), downloaded
+    /// once on demand and run once per wallpaper in a low-priority helper.
+    Model,
+}
+
+/// The `wallpaper-depth` plugin's settings (`[wallpaper.depth]`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WallpaperDepth {
+    pub mode: DepthMode,
+    /// Model mode: split what is in front of the clock from the background
+    /// automatically (per wallpaper).
+    pub auto_split: bool,
+    /// Model mode with `auto_split` off: how far back the clock sits, from
+    /// 0 (only the far background is behind it) to 1 (only the nearest
+    /// things pass in front). Bounded by [`defaults::DEPTH_SPLIT_RANGE`].
+    pub split: f32,
+}
+
+impl Default for WallpaperDepth {
+    fn default() -> Self {
+        Self { mode: DepthMode::default(), auto_split: true, split: defaults::DEPTH_SPLIT }
+    }
+}
+
+impl WallpaperDepth {
+    /// The manual split clamped to its range, or `None` when automatic.
+    pub fn manual_split(&self) -> Option<f32> {
+        (!self.auto_split).then(|| self.split.clamp(defaults::DEPTH_SPLIT_RANGE.0, defaults::DEPTH_SPLIT_RANGE.1))
+    }
 }
 
 /// Wallpaper picker layout.

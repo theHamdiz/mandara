@@ -97,21 +97,20 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new_output("wallpaper depth-mask", mandara_i18n::tk("Show or regenerate the depth mask of the current wallpaper"), |a, cx| {
+        CommandSpec::new_output("wallpaper depth-mask", mandara_i18n::tk("Show or regenerate the depth mask of the current wallpaper (the depth plugin's `depth status` / `depth regenerate`)"), |a, cx| {
             let w = config(cx).read(cx).get().wallpaper.clone();
             let path = w.path.clone().ok_or("no wallpaper is set")?;
+            let request = crate::depth::Request::of(&w);
             let masks = crate::depth::masks(cx);
             match a.str(0)? {
                 "regenerate" => {
-                    if w.depth_mask == mandara_config::DepthMask::Off {
-                        return Err("the depth mask is off (Mandara Studio → Wallpaper)".into());
-                    }
+                    let request = request.ok_or("the depth effect is off (Mandara Studio → Wallpaper)")?;
                     let (tx, rx) = async_channel::bounded(1);
-                    masks.update(cx, |m, cx| m.regenerate(&path, w.depth_mask, Some(tx), cx));
+                    masks.update(cx, |m, cx| m.regenerate(&path, request, Some(tx), cx));
                     Ok(Output::Pending(rx))
                 }
                 _ => {
-                    let status = masks.read(cx).known(&path, w.depth_mask);
+                    let status = masks.read(cx).known(&path, request);
                     Ok(Output::Value(match status {
                         Some(crate::depth::MaskStatus::Ready(r)) => json!({ "wallpaper": path, "mask": r.path, "source": r.source, "detail": r.detail }),
                         Some(crate::depth::MaskStatus::Unavailable(why)) => json!({ "wallpaper": path, "mask": null, "reason": why }),

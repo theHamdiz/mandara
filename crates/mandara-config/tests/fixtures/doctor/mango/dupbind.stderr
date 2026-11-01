@@ -1,0 +1,3 @@
+[1m[33m[WARN]:[0m Key binding conflict in keymode default:
+  File "@FIXTURES@/mango/dupbind.conf", line 1
+  File "@FIXTURES@/mango/dupbind.conf", line 3
