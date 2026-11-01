@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.5.1 — 2026-11-01
+
+A missing wallpaper file no longer spins the shell. Big wallpapers switch
+with far less memory.
+
 ### Fixed
 
 - **A missing wallpaper file no longer spins the shell.** If your
