@@ -29,7 +29,7 @@ impl PathGroup {
         match self {
             PathGroup::Worship => tk("Worship"),
             PathGroup::Character => tk("Character"),
-            PathGroup::Family => tk("Family"),
+            PathGroup::Family => tk("Family and kin"),
             PathGroup::Others => tk("People around you"),
             PathGroup::Heart => tk("The heart"),
             PathGroup::Avoid => tk("Things to avoid"),

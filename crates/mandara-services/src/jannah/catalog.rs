@@ -260,7 +260,7 @@ pub fn group_label(g: &PathGroup) -> (&'static str, &'static str) {
     match g {
         PathGroup::Worship => ("worship", tk("Worship")),
         PathGroup::Character => ("character", tk("Character")),
-        PathGroup::Family => ("family", tk("Family")),
+        PathGroup::Family => ("family", tk("Family and kin")),
         PathGroup::Others => ("others", tk("People around you")),
         PathGroup::Heart => ("heart", tk("The heart")),
         PathGroup::Avoid => ("avoid", tk("Keep away from")),

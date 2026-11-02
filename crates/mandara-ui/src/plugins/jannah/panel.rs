@@ -248,7 +248,7 @@ impl View {
             };
             segmented(
                 "jannah-tabs",
-                vec![seg(tk("Today"), "sun", Tab::Today), seg(tk("Paths"), "leaf", Tab::Paths), seg(tk("Qur'an"), "book", Tab::Quran), seg(tk("Hadith"), "note", Tab::Hadith), seg(tk("Saved"), "heart", Tab::Saved)],
+                vec![seg(tk("Today"), "sun", Tab::Today), seg(tk("Paths"), "leaf", Tab::Paths), seg(tk("Qur'an"), "book", Tab::Quran), seg(tk("Hadith"), "note", Tab::Hadith), seg(tk("Favorites"), "heart", Tab::Saved)],
                 palette,
             )
         };
@@ -995,7 +995,7 @@ fn filter_chips(c: &Ctx, quran: bool) -> AnyElement {
         }
         chips.push(div().w(px(1.0)).h(px(CHIPS_H * 0.6)).flex_none().bg(wash(WASH_SOFT, palette).hsla()).into_any_element());
     }
-    chips.push(chip("jannah-theme-all".into(), t("All themes").into(), theme.is_none(), Rc::new(|u: &mut Ui| u.theme = None)));
+    chips.push(chip("jannah-theme-all".into(), t("All topics").into(), theme.is_none(), Rc::new(|u: &mut Ui| u.theme = None)));
     for (id, label) in THEMES {
         chips.push(chip(format!("jannah-theme-{id}").into(), t(label).into(), theme == Some(id), Rc::new(move |u: &mut Ui| u.theme = if u.theme == Some(id) { None } else { Some(id) })));
     }
@@ -1012,7 +1012,7 @@ const THEMES: [(&str, &str); 10] = [
     ("levels", tk("Levels")),
     ("vision", tk("Seeing Allah")),
     ("eternity", tk("Forever")),
-    ("family", tk("Family")),
+    ("family", tk("Family and kin")),
     ("adam", tk("Adam")),
 ];
 

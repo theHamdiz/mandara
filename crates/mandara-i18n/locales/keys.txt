@@ -68,6 +68,7 @@
 24-hour clock
 256×256 rounded-square tile for Studio
 270°
+2:25, quran-2:25 or bukhari-3245
 2K
 2K (1440p)
 4K
@@ -101,6 +102,7 @@ A column of live readings
 A connection named "{name}" already exists
 A connection's IPv4 method, addresses, gateway and DNS
 A container using this much CPU (percent of one core) is highlighted
+A daily reminder of the final home
 A day's events, ISO week and Hijri date as JSON
 A design-first Wayland desktop shell, written entirely in Rust.
 A device battery this low turns amber; Power → peripheral alerts sets when it turns coral
@@ -111,6 +113,7 @@ A drag continues briefly after lifting the finger
 A faceted, lit triangle mesh
 A faint wash, the raised tone of cards, or a tint of the accent
 A fan shows this many of the newest files; its top row opens the folder in your file manager
+A few extra rak'ahs each day quietly build you a home.
 A filesystem this full turns amber
 A filesystem this full turns coral
 A fixed light or dark wallpaper is set under Fit & effects; it shows instead of the slideshow while the theme is in that mode.
@@ -121,6 +124,7 @@ A folder of pictures (empty: ~/Pictures)
 A folder, or the wallpapers you picked into the playlist
 A folding Completed group under each list
 A full-width strip of bars mirrored round its middle
+A gentle daily reminder of Paradise: a verse or hadith, its meaning and one good step for today (opt-in)
 A gentle notification once an app has had this much of your day.
 A hairline around floating panels
 A hairline edge around each capsule
@@ -160,6 +164,7 @@ A password is set.
 A permission this version of Mandara doesn't know; it has no effect
 A picture file (PNG with a transparent background looks best)
 A picture in a white print border, a little crooked
+A pilgrimage done well and sincerely has a reward beyond measure.
 A pill with a label that sends its action
 A plugin is a folder with a manifest and a WebAssembly component. This example contains every field and every setting type.
 A popup under the pointer doesn't time out
@@ -204,6 +209,7 @@ A “Mandara” color scheme in ~/.local/share/color-schemes
 A “Mandara” editor theme
 A “mandara” btop theme
 A “mandara” color scheme for qt6ct / qt5ct
+AI rendering of the meaning
 AI usage
 AM
 APP
@@ -212,6 +218,7 @@ AUR packages
 AV1 video of the whole screen
 Aborted
 About
+About Jannah
 Above fullscreen windows
 Above or below the results
 Acceleration
@@ -229,6 +236,7 @@ Account type
 Accounts aren't available
 Accounts in the keyring (issuer, label, type — never secrets); may prompt to unlock
 AccountsService isn't running (accounts-daemon)
+Act sincerely and steadily
 Action
 Action buttons
 Action level
@@ -241,6 +249,7 @@ Activate a tray item (its primary action)
 Active
 Active now
 Active window
+Adam
 Adapter state and devices
 Adaptive
 Adaptive sync
@@ -290,6 +299,7 @@ Add skill
 Add slash command
 Add the WebAssembly target
 Add the command {name} to {dir}
+Add the sunnah prayers
 Add the “{name}” plugin to the bar (Studio → Bar) to see the indicator there; on-screen displays work either way.
 Add to PATH as {name}
 Add to PATH by default
@@ -480,13 +490,16 @@ Arabic
 Arabic font
 Arabic proverb
 Arabic script
+Arabic size
 Arabic text recognition
 Arc gauges for the temperatures and the fan
 Arc height
 Arch Linux news
 Arch Linux news · {date}
+Arch and today's step
 Arch news
 Arch news request failed: {error}
+Arch only
 Architecture
 Archive: a portable app unpacked into your home folder. No password needed.
 Archived
@@ -612,6 +625,10 @@ Battery health, cycles, rate and time estimates (JSON)
 Battery level
 Battery low
 Battery warning at
+Be easy in your dealings
+Be just with those in your care
+Be merciful to every creature
+Be patient in hardship
 Be the first: publish yours by tagging the repository mandara-plugin (see PLUGINS.md).
 Before the end group
 Behaviour
@@ -656,6 +673,7 @@ Border width
 Both
 Both Shift keys
 Both buttons together click the middle one (MangoWM, Niri)
+Both take turns: a verse, then a hadith
 Bottom
 Bottom center
 Bottom edge
@@ -696,6 +714,7 @@ Built for {arch}, but this computer is {host}: it probably won't start.
 Built in
 Built-in
 Built-in ids can't be overridden: a plugin whose id matches a built-in plugin is skipped.
+Bukhari
 Bundled, your distro's logo, any icon from your theme, or your own image
 Bus error
 Busiest apps
@@ -729,6 +748,7 @@ Calculator
 Calculators float
 Calendar
 Calendar card
+Call, visit and forgive your relatives; never let the bond break.
 Calls (headset)
 Camera
 Camera check interval
@@ -772,6 +792,7 @@ Card padding
 Card radius
 Card spacing
 Cards keep clear of the bar's edge automatically.
+Care for an orphan
 Carousel
 Carousel: how much bigger the middle wallpaper is
 Categories
@@ -812,6 +833,7 @@ Changes are authorized by polkit: you may be asked for an administrator's passwo
 Changes are picked up live: add, rebuild or delete a plugin and the shell and this page update within a second.
 Changes start at this time
 Changes volumes and devices (PipeWire / PulseAudio)
+Character
 Characters per second while a key is held
 Charge at which the action above runs
 Charge history
@@ -852,9 +874,11 @@ Checking your installation…
 Checking your {compositor} config…
 Checking…
 Checks
+Cherish your children
 Children side by side, gap apart
 Children stacked, gap apart
 Chips for text, links, Markdown, code, CSS, colors, images and files above the list
+Choose Qur'an, hadith or both in Studio
 Choose a .conf or .ovpn file first
 Choose a boot entry for this item in Studio → Power & idle
 Choose a file to import
@@ -870,6 +894,7 @@ Choose what the power menu offers and in which order. Built-in entries can be hi
 Choose…
 Chrome
 Circle
+Citation copied
 Cities
 Cities around the world with daylight and a meeting planner
 Cities in the bar
@@ -1050,6 +1075,7 @@ Copied
 Copied images and screenshots
 Copied text and images appear here
 Copied the report of PID {pid}
+Copied with its reference
 Copied {address}
 Copied {path}
 Copied {text}
@@ -1241,6 +1267,7 @@ Decide per wallpaper what stands in front of the clock
 Decimals
 Deck
 Decoration
+Deeds
 Deep focus
 Deep green: a giant stacked clock behind the subject and a dock media chip.
 Default
@@ -1387,12 +1414,15 @@ Distance from the screen edge (floating styles and the floating frame)
 Distant coast
 Distro logo
 Divided text clock
+Do not betray those in your care
+Do not carry tales
 Do not disturb
 Do not disturb every day between the times below
 Do not disturb is on
 Do not disturb on / off / toggle, optionally for a while (30m, 2h, 1h30m)
 Do not disturb state, server status and counts
 Do not disturb until {time}
+Do not take anything that is not yours with an oath, not even a twig.
 Do what a click on a desktop widget does: tick a to-do, flip a toggle, start the timer, open a shortcut…
 Dock
 Dock items: pinned, running and recent apps with their windows, stacks
@@ -1402,6 +1432,7 @@ Documented commands
 Doesn't match
 Doesn't parse: {error}
 Done
+Done today
 Done, but {compositor} still reports the problem.
 Done. Keyrings are no longer unlocked at login.
 Done. Your keyrings unlock the next time you log in with your password.
@@ -1432,6 +1463,7 @@ Downloading the smart update ({size})…
 Downloading {file}: {error}
 Downloading {model} ({file}): {error}
 Downloading…
+Downloading… {done} of {total} MB
 Downloads
 Downloads the cursor themes you pick from their GitHub releases
 Downloads {size} from speed.cloudflare.com
@@ -1477,6 +1509,7 @@ Dwindle
 Dynamic island
 E
 E-mail
+EVIDENCE
 Each app runs in app-mandara-<app>.scope: tracked resources, survives shell restarts
 Each bar is one shell frame: the solid part is the time spent building it, the full height the time until the next frame. Coral bars came late.
 Each group of bar items sits on a soft capsule of its own
@@ -1485,6 +1518,8 @@ Each note is a Markdown file, each topic a folder in here — point it at a sync
 Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence.
 Each repair is safe: your compositor config only ever gets one include line, with a backup.
 Each surface
+Each walk to the mosque, morning or evening, is a welcome being prepared.
+Ease someone's hardship
 Eastern Arabic (١٢٣)
 Eastern Arabic numerals
 Edge
@@ -1554,6 +1589,7 @@ End the process listening on a port (SIGTERM)
 Ending…
 Engine
 Engine unreachable
+English
 Enjoying Mandara?
 Enter
 Enter / Capture copies the image
@@ -1576,6 +1612,7 @@ Esc
 Essentials
 Estimating…
 Ethernet
+Even a drink of water for a thirsty animal is seen and rewarded.
 Even when closing the lid doesn't suspend (docked, external monitor)
 Evening
 Evening greeting
@@ -1591,12 +1628,15 @@ Every check with its state, latency, uptime and last result (JSON)
 Every city on the world clock with its time, offsets and daylight
 Every city's time when it is HH:MM here today (meeting planner)
 Every day
+Every day is a new beginning
 Every display
 Every display gets its own wallpaper from the slideshow; off, they all change together
 Every display is off
+Every fast you keep is remembered at a gate of its own.
 Every folder Mandara found, with what it made of it: start here when a plugin doesn't show up.
 Every hour
 Every keyboard shortcut, Mandara's and your compositor's, in one searchable sheet
+Every kindness to your children counts, down to a shared date.
 Every monitor
 Every on-screen display kind and whether it is on
 Every opening shows the first tab instead of the one you used last
@@ -1606,6 +1646,7 @@ Every page of Studio, by group
 Every prayer time today, the next one lit
 Every setting, live
 Every shortcut: chord, keys, action, description, group and source file (JSON)
+Every step you take toward learning is a step on an easy road.
 Every task with its progress, elapsed time, ETA and status (JSON)
 Every variable of the style, then tone, light, texture and layout. The preview follows as you drag.
 Every {every}
@@ -1674,9 +1715,11 @@ Fajr
 Families
 Family
 Fan
+Fast for His sake
 Faster blur on static backgrounds
 Favorites
 Featured
+Feed and visit
 Feels
 Feels like {temp}
 Fetch
@@ -1708,6 +1751,7 @@ Files prefix
 Fill
 Fill color
 Fill mode
+Fill quiet moments with His remembrance; it is a treasure kept for you.
 Fill under the curve
 Filled dial
 Film grain
@@ -1835,6 +1879,7 @@ Force kill ×{count}
 Force tiled state
 Force-killed {count} × {name}
 Forest
+Forever
 Forget
 Forget a saved network
 Forget after
@@ -1948,9 +1993,12 @@ GitHub sent something unexpected: {error}
 GitHub's limit for anonymous requests was reached. Try again in {seconds} s.
 GitHub's rate limit was reached; checking again in {minutes} min
 Give an app your own icon (theme icon name or image path; empty restores it)
+Give generously
 Give one display its own wallpaper (clear = follow the main one)
 Give the file's full path
 Give the profile a name
+Give time to those who owe you, and let go when you can.
+Give, and give again, in every good cause you can reach.
 Glass
 Glass menu
 Glass opacity
@@ -1976,6 +2024,7 @@ Gradient group tabs
 Graphics
 Graphics acceleration
 Green
+Greet everyone with peace; love grows from it, and faith with love.
 Greeting
 Gregorian
 Grey skies today. Keep something warm close.
@@ -1989,9 +2038,12 @@ Group tab bar
 Group tab height
 Grow
 Gruvbox
+Guard what you say and keep your desires within what is lawful.
 H {high}  L {low}
 HISTORY
 HTTP {code}
+Hadith
+Hadith: Sahih al-Bukhari and Sahih Muslim from the public-domain hadith-api collection, with its translations.
 Hairline
 Hairline and micro pill only
 Hairline style only
@@ -2061,6 +2113,7 @@ Hijri date adjustment
 Hijri date in Arabic
 Hijri dates
 Hillshade
+His mercy is wider than any sin; never lose hope, and keep trying.
 History
 History is empty
 History paused
@@ -2069,14 +2122,17 @@ Hold a button
 Hold reminders while a fullscreen window (a game, a video) has focus
 Hold time
 Hold to confirm
+Hold to sincere faith in the One God; it is the root of every good.
 Hold {ms} ms to log out, restart or shut down
 Hollow
 Home
 Homepage
+Honour your parents
 Hook ran — see recent runs
 Hook time limit
 Hooks
 Hooks aren't set up yet
+Hope in His mercy
 Horizon height
 Horizontal
 Horizontal inset of the outer groups
@@ -2117,6 +2173,7 @@ How dark the bar's shadow is
 How far back the clock sits in the picture: low lets everything but the far background pass in front, high only the nearest things
 How fast the dock slides in and out
 How images that don't match the screen are placed
+How large the verses and hadith are set
 How long a key is held before it repeats
 How long a panel's result message (stopped, copied, failed…) stays up
 How long a slideshow change takes
@@ -2154,6 +2211,7 @@ How often the process table is sampled while the panel is open
 How often the unit list is reloaded while the panel is open
 How often to look for updates while the chip is in the bar
 How often to re-render, in milliseconds (0 = only after events).
+How often today's verse or hadith changes, the same everywhere
 How often transfer rates are measured
 How panels appear
 How see-through the main menu's glass is
@@ -2163,6 +2221,7 @@ How the critical warning appears
 How the media panel draws the live audio spectrum
 How the warning appears
 How to publish a plugin
+However hard it is, do not be the one who breaks the bond.
 Hue shift
 Humidity
 Humidity {n}%
@@ -2173,6 +2232,7 @@ Hyprland and Umbriel only
 Hyprland layout & groups
 Hyprland only
 Hyprland, Niri and Umbriel switch it per fullscreen window; MangoWM treats it as on
+I did this today
 IANA name, e.g. Africa/Cairo
 INTERFACES
 IP & DNS
@@ -2197,9 +2257,12 @@ Idle handling is off
 Idle stages are back on
 Idle state: idle time, inhibitors, power source and the stages to come (JSON)
 Idle · hidden from the bar
+If people are placed in your hands, serve them sincerely and fairly.
+If you lose a little one, your patient grief is not forgotten.
 Ignore
 Ignored players
 Illegal instruction
+Illness, loss and long nights are not wasted when met with patience.
 Image
 Image ({mime})
 Image editor
@@ -2219,10 +2282,12 @@ Importing…
 Improved
 In front
 In logical pixels; apps and the compositor scale it on HiDPI screens
+In the bar
 In the slideshow playlist: click to remove
 In the store
 In the zone holding the bar's launcher button, it grows out of the button.
 In this folder
+In your language, the hadith meanings are AI renderings of the meaning, not published translations.
 In {minutes} min
 In {n} days
 Inbox
@@ -2343,10 +2408,14 @@ Item capsules
 Item padding
 Item spacing
 Its name (optional)
+Its people
 JPEG
 JPEG quality
 JSON pointer, e.g. /bar/height
 JSON value
+Jannah
+Jannah quote
+Jannah verse
 Join
 Join a hidden network
 Join a saved network automatically, or not
@@ -2357,6 +2426,7 @@ Journal lines
 Jumada al-Akhirah
 Jumada al-Ula
 Junction
+Just the arch, or the arch with today's step
 Just the essentials, nothing else
 KB
 KDE / Plasma
@@ -2374,6 +2444,7 @@ Keep after restart
 Keep an app in the dock (desktop id or name)
 Keep awake
 Keep awake for an hour
+Keep away from
 Keep both
 Keep copies from closed apps
 Keep history
@@ -2397,7 +2468,9 @@ Keep the wallpaper while a fullscreen app is open
 Keep the wallpaper while running on battery
 Keep these display settings? Reverting in {seconds} s
 Keep ticked tasks
+Keep ties of kinship
 Keep windows clear of the dock
+Keep your tongue
 Keeps Mandara running if anything ever takes it down. Turn off to let it stay stopped after a crash or kill
 Keeps a history of what you copy
 Keeps daily totals in Mandara's state folder
@@ -2476,6 +2549,7 @@ Layered glassy waves
 Layout
 Lead color
 Leading zero
+Lean on Him rather than charms and omens, and walk on without fear.
 Leave empty for the toplist, e.g. "nature 4k"
 Leave empty to follow GTK's icon theme
 Leave it
@@ -2489,12 +2563,18 @@ Left-handed
 Length
 Length of a focus session
 Let apps choose
+Let go of pride
+Let the thought of meeting your Lord keep you steady and kind.
 Let them choose at first login
 Let your eyes relax: blink slowly and soften your gaze
+Let your love for the Qur'an grow; that love is itself a way.
+Let your neighbours feel safe from your words and your hands.
+Let your word be true, even when it costs you something.
 Letter spacing
 Letters, digits, - and _; used for the home folder
 Letting go of Alt switches; off, Enter or a click does
 Letting go of a region drag captures (no annotating)
+Levels
 Libraries & fonts (shared files)
 Light
 Light & dark
@@ -2507,6 +2587,7 @@ Light or dark surfaces for every theme
 Light theme folder
 Light theme wallpaper
 Light wallpaper
+Lighten a burden, cover a fault, help a brother or sister through.
 Lightness
 Limestone
 Line
@@ -2571,6 +2652,7 @@ Loading Arch news…
 Loading logs…
 Loading menu…
 Loading preview…
+Loading the meaning…
 Loading units…
 Loading…
 Loads an exported file; your current settings are backed up first (Maintenance → Backups).
@@ -2648,6 +2730,7 @@ Looks text up in your locales/ catalog; labels in views are translated automatic
 Lossless
 Lossless, smallest
 Lossy, smallest
+Love what you recite
 Loved by Mandara users: third-party plugins that run sandboxed
 Low
 Low battery
@@ -2694,6 +2777,7 @@ Make a device the default output
 Make a list (--color tone|hue:<deg>, --icon name)
 Make a topic (a folder; --color tone|hue:<deg>, --icon name)
 Make a window fullscreen or restore it
+Make an accepted Hajj
 Make an app the default for a category (edits only those keys of mimeapps.list)
 Make an installed cursor theme (and optionally a size) the cursor, live; `none` returns to your compositor's own
 Make it yours
@@ -2767,6 +2851,7 @@ Mark a task finished (posts a notification)
 Mark a task open again
 Mark all as seen
 Mark every crash as seen (clears the bar badge)
+Mark today's step done
 Markdown
 Markdown notes in topics, saved as .md files
 Marker shape
@@ -2795,6 +2880,8 @@ Maximize
 Maximize or restore a window
 Maximum height
 Maximum width
+May Allah accept it from you
+Meanings of the Qur'an: {translator}, from Tanzil through api.alquran.cloud, downloaded once and kept on this computer.
 Measuring…
 Media
 Media & capture
@@ -2802,11 +2889,13 @@ Media & system
 Media players
 Media remote control
 Medium
+Meet each prayer at its hour, dawn and afternoon most of all.
 Meeting planner
 Memory
 Memory profile
 Menu
 Menu entries
+Mercy
 Merge
 Mesh gradient
 Messages
@@ -2887,6 +2976,7 @@ More wallpapers
 More windows wrap onto further rows
 Morning
 Morning greeting
+Morning reminder
 Morph from the bar
 Most apps
 Most entries kept in collections; they survive clears like pinned ones
@@ -2916,12 +3006,15 @@ Move left
 Move notes to Notes
 Move right
 Move tasks to Inbox
+Move the branch, the stone, the broken glass: small kindness, great reward.
 Move the desktop clock to where the wallpaper's subject rises into it
 Move the desktop clock to where the wallpaper's subject tucks into it
 Move the toolbar to the bottom · M
 Move the toolbar to the top · M
 Move to
 Move to Trash
+Move today's reminder back one item
+Move today's reminder forward one item (every surface follows)
 Move window to {place} {n}
 Move window {direction}
 Moves with the music
@@ -2929,11 +3022,13 @@ Moving clouds, rain and stars (off with reduced motion)
 Muharram
 Music or video playing over MPRIS holds every idle stage back
 Music, screenshots, color and ambient sound
+Muslim
 Mute
 Mute all
 Mute all sound
 Mute all sound: every output and app at once; off restores your own mutes
 Mute or unmute one app stream
+Mute the microphone
 Muted
 My command
 My recipe, new layout
@@ -2974,6 +3069,7 @@ Needs Super, Ctrl or Alt
 Needs attention
 Needs no system access beyond drawing its own view
 Needs pacman-contrib
+Needs the Jannah plugin; today's reminder, its rotation and the meaning follow its settings.
 Needs the Prayer times plugin; times follow its settings.
 Needs the Screen time plugin.
 Needs the Weather plugin's location
@@ -2997,13 +3093,17 @@ Networks shown
 Networks you join appear here.
 Never
 Never blur behind this window
+Never cut family ties
 Never dim a screen below this
 Never follow these players
+Never harm your neighbour
 Never list an app in the launcher
+Never pass words between people to set them against each other.
 Never record
 Never record from
 Never report
 Never signed in
+Never swear falsely
 New
 New & updated
 New Window
@@ -3016,6 +3116,7 @@ New layout (shuffle the seed)
 New moon
 New name
 New password
+New reminder
 New skill
 New sound from a matching app goes to the chosen device, e.g. calls to a headset and music to the speakers.
 New tab
@@ -3036,6 +3137,7 @@ Next wallpaper
 Next wallpaper at {time} · {count} in the rotation
 Next wallpaper {when}
 Next wallpaper: due now (shortly after the shell starts)
+Next window (Alt+Tab)
 Night
 Night bay
 Night dimming
@@ -3165,6 +3267,7 @@ No package manager found
 No package manager on this computer can install it.
 No package manager on this system says it installed this app
 No package matches “{query}”
+No path {key}
 No permission to talk to your monitors
 No pictures in {folder}
 No place found for “{name}”
@@ -3236,6 +3339,7 @@ No tray menu is open
 No unit matches “{query}”
 No units here
 No upcoming events
+No verse or hadith {reference} in Jannah
 No visible volumes
 No volume matching "{query}"
 No wallpaper yet
@@ -3317,6 +3421,7 @@ Nothing on your list. Type a task and press Enter.
 Nothing playing
 Nothing running
 Nothing running · {checked}
+Nothing saved yet
 Nothing scheduled
 Nothing starts at login
 Nothing to do
@@ -3387,6 +3492,7 @@ Off: your wallpaper stays until you change it
 Office
 Offline mode
 Offline mode is on (Studio → Privacy)
+Offline mode is on: the Arabic only
 Oldest first
 Ollama
 Ollama address
@@ -3422,6 +3528,7 @@ One centered island that morphs
 One click sets the bar, desktop widgets, colors, fonts and roundness together. Your own setup is saved first, so you can always go back. Looks never change your wallpaper.
 One dot
 One entry per app
+One good deed for today, with its check and your week
 One light line, stacked hours over minutes, or a small clock
 One line
 One line of body text in popups
@@ -3430,6 +3537,8 @@ One lookup with the method above; IP lookups send your address to ipapi.co
 One note's full Markdown text
 One of choices: plain strings or { value, label } tables
 One of your settings as JSON: the user's value, or the declared default.
+One path with its evidence
+One quiet notification each morning with today's reminder
 One switch for talks and screen sharing: quiet, awake and tidy
 One tiny pill at the top
 One-bit dither
@@ -3458,6 +3567,7 @@ Open Mandara Studio, optionally on a section
 Open PLUGINS.md
 Open a copied image in your image editor (`[clipboard] image_command`)
 Open a terminal running the update command (all sources with updates, or one)
+Open a verse or hadith in the Jannah panel and return it
 Open a volume in the file manager (mounting it first if needed)
 Open animation
 Open as a floating window
@@ -3606,7 +3716,9 @@ Passwords match
 Paste (right-click copies)
 Paste after copying
 Pastel
+Paths
 Patience is the key to relief.
+Patience when a child dies
 Pause
 Pause 1 h
 Pause behind windows
@@ -3633,12 +3745,14 @@ Pen
 Pending package updates from pacman, the AUR, APT, DNF, Zypper and Flatpak
 Pending updates by source (the last check; runs one if there is none)
 Pentagon
+People around you
 People who use this computer
 People, sign-in, lock and privacy
 Per-app notification rules, in order
 Per-app output
 Per-app rules
 Per-tag layouts
+Perfect your wudu
 Performance
 Performance limited: {reason}
 Period
@@ -3714,6 +3828,7 @@ Plate corners
 Plate opacity
 Plate padding
 Play
+Play / pause
 Play a shell sound even while sounds are off
 Play a shell sound if sounds and that event are on (or any theme sound name)
 Play a sound for
@@ -3788,6 +3903,7 @@ Power profiles, battery health and charge history
 Power saver
 Power saver / balanced / performance
 Power saver at low battery
+Pray on time
 Prayer times
 Prayer times list
 Precision
@@ -3815,6 +3931,8 @@ Preview — any password unlocks · Esc closes
 Previews per row
 Previous
 Previous track
+Previous window
+Pride, even a grain of it, stands in the way; choose humility.
 Primary
 Print the live configuration
 Printing
@@ -3891,7 +4009,10 @@ Quit Mandara Shell
 Quit the compositor
 Quotation mark
 Quote
+Quote card
 Quotes
+Qur'an
+Qur'an and hadith
 RAM
 RECENT
 RPM
@@ -3922,6 +4043,7 @@ Re-export
 Re-read config.toml from disk
 Read Claude Code's logs
 Read a setting by JSON pointer (whole config when omitted)
+Read more
 Read the folder again
 Read the text in an image file (PP-OCRv5; auto, latin or arabic)
 Read-only
@@ -4023,14 +4145,17 @@ Reliability
 Relief
 Reload config
 Reload the config
+Remember Allah often
 Remember the last search
 Remember the layout per window
 Remember the region
 Remember what you open
+Remember you will stand before Him
 Remind me
 Remind me later
 Reminder
 Reminders
+Reminders from
 Reminders paused
 Remix
 Remix: load its recipe
@@ -4043,6 +4168,7 @@ Remove a city from the world clock
 Remove a cursor theme Mandara installed (never one from a package or your own folders)
 Remove a paired device
 Remove a rule by its position (from 1)
+Remove a saved verse or hadith
 Remove a task from the bar and the panel
 Remove an account (by id from `authenticator list`) from the keyring
 Remove an app from the dock
@@ -4054,6 +4180,7 @@ Remove from Mandara
 Remove from bar ({zone})
 Remove from sidebar
 Remove from the playlist
+Remove harm from the road
 Remove line
 Remove one entry
 Remove photo
@@ -4228,6 +4355,8 @@ SW
 Safar
 Safely remove
 Safely remove a drive: unmount and lock its volumes, then eject or power it off
+Sahih Muslim
+Sahih al-Bukhari
 Same as the desktop
 Same time
 Sample levels — play something to see it live
@@ -4241,6 +4370,7 @@ Saturation
 Saturday
 Saturday and Sunday
 Save
+Save a verse or hadith
 Save as profile
 Save how things look now — say “Work” and “Night” — and switch with one click or `mandara msg profile apply Night`.
 Save photo
@@ -4319,6 +4449,9 @@ Screens via compositor
 Screens, sound, network, power and input
 Screenshot
 Screenshot failed
+Screenshot of a region
+Screenshot of a window
+Screenshot of the screen
 Screenshot taken
 Screenshots
 Scripts and plugins
@@ -4339,6 +4472,7 @@ Scrolling between and around the bar's items switches workspace or changes the v
 Sea glass
 Seamless AV1 loop at {size}
 Search
+Search Arabic or meaning…
 Search Wallhaven
 Search accounts…
 Search and download wallpapers from wallhaven.cc right in the wallpaper picker
@@ -4362,6 +4496,7 @@ Search settings
 Search shortcuts…
 Search text, kinds, collections…
 Search the community for “{query}”
+Search the verses and hadith (Arabic without diacritics, or the meaning)
 Search units…
 Search wallhaven.cc in the wallpaper picker: type a search and pick a result, it downloads at full size into your folder.
 Search what you copied; Enter copies it again
@@ -4373,6 +4508,7 @@ Searching GitHub…
 Searching Wallhaven…
 Searching for devices…
 Searching — new devices appear below; Pair shows a code to compare.
+Searching…
 Second line
 Second shape
 Secondary
@@ -4394,6 +4530,9 @@ Security & accounts
 See all
 See all {count}
 Seed
+Seeing Allah
+Seek forgiveness daily
+Seek knowledge
 Seek to a position in seconds
 Segmentation fault
 Segmented meters, like a battery's cells
@@ -4489,6 +4628,7 @@ Share the newest screenshot
 Share this computer's connection over Wi-Fi
 Share to phone
 Share what the clipboard holds: text, an image or a copied file (JSON with the link)
+Share your food with the needy and sit a while with the sick.
 Shared from Mandara
 Shared memory
 Sharing as {name}
@@ -4569,6 +4709,7 @@ Show the confirmation card for AppImages, Flatpaks and portable apps too (native
 Show the date
 Show the dock
 Show the hidden bar briefly when you change workspace or tag
+Show the meaning
 Show the minutes left next to the playing indicator
 Show the next slideshow wallpaper now
 Show the next wallpaper each time Mandara starts
@@ -4657,6 +4798,8 @@ Slideshow
 Slideshow transition
 Slow
 Slowest build
+Small
+Small good deeds, done sincerely and kept up, are the most beloved.
 Smallest
 Smallest exact file
 Smart update unavailable ({reason}); using the full download
@@ -4702,6 +4845,7 @@ Space inside cards
 Space inside each bar item, around its content
 Spacing
 Spanish proverb
+Speak the truth
 Speakers
 Specular rim
 Speed
@@ -4710,6 +4854,7 @@ Speed test cancelled
 Speed test failed
 Speed test size
 Split toward the pointer
+Spread salam
 Springs
 Square dots
 Squircle
@@ -4771,6 +4916,7 @@ Status
 Status icons and menus of background apps
 Status text
 Stay awake while media plays
+Stay humble
 Stays for
 Step must be a number
 Sticker
@@ -4906,6 +5052,7 @@ System, kernel, processor, graphics, memory, uptime, like a terminal fetch
 TB
 TCP
 TEMPERATURES
+TODAY'S STEP
 TONAL RAMP · OKLCH
 TOP APPS
 TOP APPS TODAY
@@ -4933,6 +5080,7 @@ Take a plugin's card off a tab
 Take a screenshot
 Take a short break — {minutes} minutes.
 Take an entry out of a collection
+Take an orphan under your wing and you will be close to the Prophet ﷺ.
 Take screenshot
 Takes effect the next time you log in or restart. Your current session isn't touched.
 Tall bars side by side
@@ -4940,6 +5088,7 @@ Tallest it grows; fewer rows show when this is low
 Tallest panel, as a share of the screen height the bar leaves free
 Tallest the floating card grows
 Tap and drag
+Tap the heart on a verse or hadith to keep it here
 Tap to click
 Tap, then slide to drag
 Tape angle
@@ -5008,6 +5157,8 @@ The Inbox can be renamed but not deleted
 The Mediterranean horizon with waves and sun glitter
 The Pomodoro timer; click to start or pause
 The QR code isn't a 2FA (otpauth://) code
+The Qur'an service sent no verses
+The Qur'an's text is the Tanzil Project's Uthmani text, copied exactly.
 The Trash: count its items, or empty it (asks for --yes)
 The XCursor theme name, e.g. Bibata-Modern-Ice; pick one from the gallery above
 The active keyboard layout; click to switch
@@ -5087,6 +5238,7 @@ The focused window
 The full coredumpctl report of a crash (with a stack trace when the core is stored)
 The generator's curated palettes
 The generator's styles with their parameters
+The heart
 The hint strip under the toolbar
 The hotspot's name, password and Wi-Fi QR payload
 The hour
@@ -5109,6 +5261,8 @@ The link stops working once your phone has downloaded the item
 The list is full — remove a widget to add another
 The lock screen's text
 The main menu is see-through glass with solid cards on it
+The meaning couldn't be loaded
+The meaning in your language under the Arabic; the Qur'an's is downloaded once from Tanzil (api.alquran.cloud). Off: Arabic only
 The name is empty
 The network name is empty
 The new release is plugin {new}, not {old}; reinstall it from the marketplace
@@ -5121,6 +5275,7 @@ The panel that drops from the bar item, or none.
 The password is empty
 The password needs 8–63 characters
 The passwords don't match
+The paths to Jannah, by group
 The percentage next to level bars
 The pieces every Mandara bar is built from
 The place name next to the temperature
@@ -5184,6 +5339,7 @@ The world clock holds up to {n} cities
 The {corner} corner has no action
 The × on a popup only hides it; it stays in the history
 Their files stay in {home}
+Their old age is an open door; serve them with love while you can.
 Theme
 Theme crossfade
 Theme follows these colors
@@ -5205,6 +5361,7 @@ Thickness
 Thickness of the glass edge highlight
 Thickness of the hairline and the micro pill
 Thin
+Things to avoid
 Third shape
 Third-party
 Third-party plugins
@@ -5310,8 +5467,15 @@ Today · stays on this computer
 Today's events disappear once they end
 Today's prayer times
 Today's range next to the temperature
+Today's reminder
 Today's screen time per app
+Today's step
+Today's step and this week's done days
+Today's step · done
 Today's total, the last days and your top apps (needs the Screen time plugin)
+Today's verse or hadith and today's step
+Today's verse or hadith in calligraphy under an arch, with its meaning
+Today's verse or hadith in the quote card's style
 Toggle floating
 Toggle fullscreen
 Toggle light / dark
@@ -5362,6 +5526,7 @@ Trash
 Tray items (role, status, icons, menus)
 Trigger size
 Trust a device (it may connect by itself and is auto-connected)
+Trust in your Lord
 Trusted
 Trusted devices connect without asking and reconnect automatically
 Try All types or another filter
@@ -5375,6 +5540,7 @@ Try another word or another filter.
 Try another word or filter
 Try another word, or look in the community marketplace.
 Try it
+Try other words or another theme
 Try part of a unit name or its description
 Tue
 Tuning
@@ -5383,6 +5549,7 @@ Turn Mandara's idle stages (fade, lock, screens off, sleep) on or off
 Turn a plugin off; it stops everything it runs
 Turn a plugin on (a removed Mandara plugin is restored)
 Turn a slideshow option on or off
+Turn back to Him
 Turn every minute
 Turn it on below, or toggle it from quick settings
 Turn it on to connect your devices
@@ -5413,6 +5580,7 @@ Turn the opt-in schedule on or off, or show it; flags: --every 6h, --mode random
 Turn the screens off
 Turn the screens off after this much idle time on the lock screen, even while a video keeps the session awake (0 = never)
 Turn the wallpaper slideshow on or off, or set its interval (minutes, or 30m, 2h, 1d)
+Turn to Him morning and evening with a sincere plea for forgiveness.
 Turning on and off
 Turning on and off, including automatically
 Turns while playing
@@ -5460,6 +5628,7 @@ Unexpected Wallhaven response: {error}
 Unexpected answer from GitHub: {error}
 Unexpected answer from Ollama: {error}
 Unexpected answer from tailscale: {error}
+Unexpected answer from the Qur'an service: {error}
 Unexpected argument {value}
 Unexpected reply from the engine: {error}
 Unexpected weather data: {error}
@@ -5641,6 +5810,8 @@ Validate
 Valley mist
 Values are saved in [plugins.settings.<id>] in config.toml
 Variations
+Verse under an arch
+Verses and hadith are shown exactly as in their sources. When in doubt, check a reference with a scholar or a printed edition.
 Version
 Version {version}
 Version {version} available
@@ -5695,6 +5866,8 @@ Waiting for its hours: next change at {time}
 Waiting for you
 Waiting to discharge
 Walk around, drink some water and rest your eyes
+Walk gently and think little of yourself; the humble are honoured there.
+Walk to the mosque
 Wallhaven
 Wallhaven returned something that isn't an image
 Wallhaven search failed: {error}
@@ -5703,6 +5876,7 @@ Wallpaper
 Wallpaper colors
 Wallpaper depth
 Wallpaper generator
+Wallpaper picker
 Wallpaper picker and desktop background
 Wallpaper scheme
 Wallpapers
@@ -5722,6 +5896,7 @@ Warn once when the charge drops to this while discharging
 Warn when a mouse, keyboard or headset runs low
 Warning
 Warning before the action
+Wash with care, then pray two rak'ahs with your whole heart.
 Washi tape
 Watches your sites and services and tells you when one goes down
 Wave
@@ -5772,6 +5947,8 @@ What is coming (empty: New Year)
 What is open: panel, sidebar, launcher, power menu, wallpaper picker; whether the launcher opens on hover
 What is shared: link, kind, name, time left and downloads (JSON)
 What it does
+What it is like
+What keeps from it
 What one unit of your currency buys (fetched twice a day once you switch it on)
 What opens when you right-click the bar between and around its items
 What scripts can show
@@ -5781,6 +5958,7 @@ What the launcher has learnt
 What the launcher shows for a query (apps, settings, commands, slash commands, skills)
 What's in {version}
 What's new
+Whatever has happened, sincere repentance opens the way again.
 When
 When Bluetooth turns on, at login and after sleep
 When a window covers it
@@ -5824,6 +6002,7 @@ White
 White noise
 Who installed an app, the exact removal command and its leftovers (changes nothing)
 Whoever strives, succeeds.
+Whoever you are responsible for, never deceive or neglect them.
 Whole output
 Wi-Fi
 Wi-Fi and wired connectivity
@@ -5868,6 +6047,7 @@ WireGuard works out of the box; .ovpn files need networkmanager-openvpn.
 WireGuard works out of the box; OpenVPN uses NetworkManager's plugin.
 Wired and Wi-Fi adapters appear here.
 Wired connection
+With its chain of narrators
 With the anchor
 With your password through Mandara Login (not autologin). Each keyring's password must be your login password.
 Won't join automatically
@@ -5879,6 +6059,8 @@ Works in the background
 Workspaces
 World clock
 World clock row
+Worship
+Worship Him alone
 Write a reply…
 Write in Markdown…
 Write rules, binds and colors to ~/.config/mandara/generated
@@ -5946,6 +6128,7 @@ Your picture, name, user@host, uptime and a status
 Your plugin provides these
 Your quotes: text — author | next one (empty: built-in sayings)
 Your recent notes as tabs on the screen's edge
+Your saved verses and hadith, newest first
 Your session starts these (systemd's xdg-autostart).
 Your session's units
 Your status (empty: Online / Do not disturb)
@@ -5972,6 +6155,7 @@ a folder (with folder)
 a folder, or clear
 a fullscreen window is focused
 a generated wallpaper
+a path key from `jannah paths`
 a section (home, themes, wallpaper, desktop-widgets, typography, motion, bar, sidebar, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
 a style id from `wallgen styles`
 a wallpaper (with add / remove)
@@ -6403,6 +6587,7 @@ widget id (config get /desktop/widgets/items)
 widgets
 wifi, bluetooth, dnd, night-light, keep-awake, dark, mute
 window id
+words in Arabic or in your language
 words to look for
 workspace
 your compositor
@@ -6547,6 +6732,7 @@ your default
 {h}h {m}m
 {id} · not installed
 {images} images · {volumes} volumes
+{kind} · 1 line
 {kind} · charging
 {kind} · {chars} chars
 {kind} · {lines} lines
@@ -6590,6 +6776,8 @@ your default
 {n} days ago
 {n} finished
 {n} found
+{n} good steps this week
+{n} hadith
 {n} items
 {n} items · right-click copies
 {n} items · right-click pastes
@@ -6598,7 +6786,9 @@ your default
 {n} need attention
 {n} notifications
 {n} of {max}
+{n} of {total}
 {n} open
+{n} paths
 {n} plugin folders checked
 {n} plugins
 {n} processes
@@ -6613,6 +6803,7 @@ your default
 {n} theme files in {folder}
 {n} things to look at
 {n} unread
+{n} verses
 {n} windows
 {n}h
 {n}m
@@ -6655,6 +6846,7 @@ your default
 {running} running · {finished} finished
 {seconds}s timer
 {setting} must be a number
+{size} MB
 {size} volume
 {size}/s
 {source} is not available here
