@@ -54,8 +54,9 @@ use mandara_services::hadith::{GradeClass, refs};
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::{Value, json};
 
-use super::fn_view;
 use super::jannah::{ArabicSize, arabic_ui, gold};
+use super::{fn_view, plugin_lang};
+use crate::bidi::Bidi as _;
 use super::panel_fx::{ViewSet, readable};
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
@@ -98,6 +99,9 @@ pub(crate) struct Settings {
     pub daily: Vec<Collection>,
     /// Today's reference next to the glyph.
     pub bar_reference: bool,
+    /// The language Hadith speaks (and downloads meanings in): its own,
+    /// else Mandara's.
+    pub lang: Lang,
 }
 
 fn ids(list: &[Collection]) -> Vec<String> {
@@ -121,17 +125,23 @@ pub(crate) fn settings(cx: &App) -> Settings {
         rotate: Rotate::parse(&s.setting(ID, "rotate", String::from("daily"))),
         daily: if daily.is_empty() { collections::defaults() } else { daily },
         bar_reference: s.setting(ID, "bar_label", String::from("glyph")) == "reference",
+        lang: plugin_lang::resolved(own_lang(cx)),
     }
 }
 
-/// The interface language's code (`en`, `ar`).
-pub(crate) fn ui_code() -> &'static str {
-    mandara_i18n::language().code()
+/// Hadith's own language (`None`: Mandara's), from its `language` setting.
+pub(crate) fn own_lang(cx: &App) -> Option<Lang> {
+    plugin_lang::own_language(&config(cx).read(cx).snapshot().plugins.setting(ID, "language", String::from(plugin_lang::FOLLOW)))
 }
 
-/// Whether meanings show under the Arabic.
+/// The code of the language Hadith speaks (`en`, `ar`).
+pub(crate) fn ui_code(cx: &App) -> &'static str {
+    plugin_lang::resolved(own_lang(cx)).code()
+}
+
+/// Whether meanings show under the Arabic (never in Arabic).
 pub(crate) fn wants_meaning(s: &Settings) -> bool {
-    s.translation && !arabic_ui()
+    s.translation && s.lang != Lang::Ar
 }
 
 /// A collection's name in the interface language (Arabic in Arabic).
@@ -209,6 +219,9 @@ pub(crate) struct Model {
     auto_for: Option<Vec<Collection>>,
     /// A hadith a command asked the panel to open.
     pub open_request: Option<(Collection, String)>,
+    /// A look at another slot's hadith: `(slot, pool)` and its card
+    /// (`None` while it is picked). Never saved, never marked read.
+    peeked: Option<((i64, String), Option<Card>)>,
 }
 
 pub(crate) type Shared = Rc<RefCell<Model>>;
@@ -240,6 +253,7 @@ pub(crate) fn model(cx: &mut App) -> Shared {
         today_tried: None,
         auto_for: None,
         open_request: None,
+        peeked: None,
     }));
     cx.set_global(GlobalHadith(shared.clone()));
     refresh_statuses(&shared, cx);
@@ -296,7 +310,7 @@ pub(crate) fn refresh_statuses(shared: &Shared, cx: &mut App) {
         }
         m.statuses_busy = true;
     }
-    let lang = mandara_i18n::language();
+    let lang = plugin_lang::resolved(own_lang(cx));
     let task = cx.background_spawn(async move { store::statuses(lang.code()) });
     let shared = shared.clone();
     cx.spawn(async move |cx| {
@@ -323,9 +337,10 @@ pub(crate) fn refresh_statuses(shared: &Shared, cx: &mut App) {
 
 /// Refreshes the statuses when the interface language changed since.
 pub(crate) fn check_language(shared: &Shared, cx: &mut App) {
+    let lang = plugin_lang::resolved(own_lang(cx));
     let stale = {
         let m = shared.borrow();
-        m.statuses_lang.is_some() && m.statuses_lang != Some(mandara_i18n::language())
+        m.statuses_lang.is_some() && m.statuses_lang != Some(lang)
     };
     if stale {
         refresh_statuses(shared, cx);
@@ -404,13 +419,13 @@ fn run_queue(shared: &Shared, cx: &mut App) {
     let shared = shared.clone();
     cx.spawn(async move |cx| {
         loop {
-            let next = cx.update(|_| {
+            let next = cx.update(|cx| {
+                let lang = ui_code(cx);
                 let mut m = shared.borrow_mut();
                 if m.queue.is_empty() {
                     return None;
                 }
                 let c = m.queue.remove(0);
-                let lang = ui_code();
                 let total = collections::download_size(c, collections::translation(c, lang).map(|(l, _)| l));
                 m.current = Some(Progress { collection: c, step: collections::edition(c, "ara"), done: 0, total });
                 Some((c, lang))
@@ -479,7 +494,7 @@ pub(crate) fn remove(shared: &Shared, list: Vec<Collection>, cx: &mut App, done:
 /// `c`, loaded for the interface language; starts loading it off the UI
 /// thread when it isn't (the views are told when it is ready).
 pub(crate) fn library(shared: &Shared, c: Collection, cx: &mut App) -> Option<Arc<Loaded>> {
-    let lang = ui_code();
+    let lang = ui_code(cx);
     if let Some(hit) = store::cached(c, lang) {
         return Some(hit);
     }
@@ -518,6 +533,18 @@ fn compute_today(daily: &[Collection], lang: &str, slot: i64) -> Option<Card> {
         .iter()
         .filter_map(|c| store::cached(*c, lang).map(|l| l.library.clone()).or_else(|| store::read(*c, lang).ok().map(Arc::new)).map(|l| (*c, l)))
         .collect();
+    card_at(&libs, slot)
+}
+
+/// The card of `slot` for a peek: the collections are loaded and kept, so
+/// stepping on is quick (blocking).
+fn compute_peek(daily: &[Collection], lang: &str, slot: i64) -> Option<Card> {
+    let libs: Vec<(Collection, Arc<Library>)> = daily.iter().filter_map(|c| store::load(*c, lang).ok().map(|l| (*c, l.library.clone()))).collect();
+    card_at(&libs, slot)
+}
+
+/// The card `slot` picks from `libs`.
+fn card_at(libs: &[(Collection, Arc<Library>)], slot: i64) -> Option<Card> {
     let borrowed: Vec<(Collection, &Library)> = libs.iter().map(|(c, l)| (*c, l.as_ref())).collect();
     let pool = rotation::pool(&borrowed);
     let (c, index) = pool[rotation::pick(pool.len(), slot)?];
@@ -527,7 +554,7 @@ fn compute_today(daily: &[Collection], lang: &str, slot: i64) -> Option<Card> {
 
 /// The current slot and what today's pool is.
 fn today_key(s: &Settings) -> (i64, String) {
-    (rotation::period(Local::now().naive_local(), s.rotate), rotation::pool_key(&s.daily, collections::dataset_lang(ui_code())))
+    (rotation::period(Local::now().naive_local(), s.rotate), rotation::pool_key(&s.daily, collections::dataset_lang(s.lang.code())))
 }
 
 /// Picks today's hadith off the UI thread when the cached one is for
@@ -552,7 +579,7 @@ pub(crate) fn ensure_today(shared: &Shared, cx: &mut App) {
         m.today_tried = Some((slot, pool.clone()));
         daily
     };
-    let lang = ui_code();
+    let lang = s.lang.code();
     let task = cx.background_spawn(async move { compute_today(&daily, lang, slot) });
     let shared = shared.clone();
     cx.spawn(async move |cx| {
@@ -577,6 +604,50 @@ pub(crate) fn ensure_today(shared: &Shared, cx: &mut App) {
 pub(crate) fn today(shared: &Shared, cx: &mut App) -> Option<Card> {
     ensure_today(shared, cx);
     shared.borrow().state.today.as_ref().map(|t| t.card.clone())
+}
+
+/// The downloaded daily collections, to pick from.
+fn daily_on_disk(shared: &Shared, s: &Settings) -> Vec<Collection> {
+    let m = shared.borrow();
+    s.daily.iter().copied().filter(|c| downloaded(&m, *c)).collect()
+}
+
+/// The hadith `by` slots after today's (before it when negative): a look
+/// only, never saved and never marked read. Picked off the UI thread;
+/// `None` until it is there (the views are told).
+pub(crate) fn peek(shared: &Shared, by: i64, cx: &mut App) -> Option<Card> {
+    let s = settings(cx);
+    let (slot, pool) = today_key(&s);
+    let key = (slot + by, pool);
+    if let Some((k, card)) = &shared.borrow().peeked
+        && *k == key
+    {
+        return card.clone();
+    }
+    let daily = daily_on_disk(shared, &s);
+    if daily.is_empty() {
+        return None;
+    }
+    shared.borrow_mut().peeked = Some((key.clone(), None));
+    let lang = s.lang.code();
+    let at = key.0;
+    let task = cx.background_spawn(async move { compute_peek(&daily, lang, at) });
+    let shared = shared.clone();
+    cx.spawn(async move |cx| {
+        let card = task.await;
+        cx.update(|cx| {
+            {
+                let mut m = shared.borrow_mut();
+                // Still the look asked for (it may have moved on).
+                if m.peeked.as_ref().is_some_and(|(k, _)| *k == key) {
+                    m.peeked = Some((key, card));
+                }
+            }
+            notify(&shared, cx);
+        });
+    })
+    .detach();
+    None
 }
 
 /// Keeps one wake-up scheduled for the next rotation (nothing while the
@@ -662,6 +733,8 @@ pub(crate) fn copy_text(c: Collection, reference: &str, url: &str, words: &str, 
 /// What the desktop widgets show.
 pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::HadithInfo> {
     use crate::backdrop::widgets::{HadithCard, HadithInfo, HadithProgress};
+    let own = own_lang(cx);
+    let _lang = mandara_i18n::scoped(own);
     let shared = model(cx);
     ensure_timer(&shared, cx);
     let card = today(&shared, cx);
@@ -693,7 +766,7 @@ pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::HadithInfo>
             last: m.state.places.get(c.id()).and_then(|p| refs::parse(&p.key)).map(|(c, r)| refs::citation(t(info(c).short), &r)),
         })
         .collect();
-    Some(HadithInfo { today, progress })
+    Some(HadithInfo { today, progress, lang: own })
 }
 
 // ── Bar chip ─────────────────────────────────────────────────────────────
@@ -799,7 +872,7 @@ fn sidebar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> 
                 move |_, _, cx| open_key(&shared, &key, cx)
             })
     });
-    card(palette).flex().flex_col().gap(px(tokens::SM)).child(head).when_some(body, |el, b| el.child(b)).when_some(hint, |el, h| el.child(h)).when_some(resume, |el, r| el.child(r)).into_any_element()
+    card(palette).text_start().flex().flex_col().gap(px(tokens::SM)).child(head).when_some(body, |el, b| el.child(b)).when_some(hint, |el, h| el.child(h)).when_some(resume, |el, r| el.child(r)).into_any_element()
 }
 
 // ── Commands ─────────────────────────────────────────────────────────────
@@ -887,7 +960,7 @@ fn collection_json(c: Collection, st: Option<&Status>, s: &Settings, state: &Sta
         "downloaded": st.is_some_and(|x| x.arabic),
         "translation": st.and_then(|x| x.translation.as_ref()).map(|(lang, have)| json!({ "language": lang, "downloaded": have })),
         "bytes_on_disk": st.map_or(0, |x| x.bytes),
-        "download_bytes": collections::download_size(c, collections::translation(c, ui_code()).map(|(l, _)| l)),
+        "download_bytes": collections::download_size(c, collections::translation(c, s.lang.code()).map(|(l, _)| l)),
         "read": state.read_count(c),
         "removed_by_you": state.declined(c),
     })
@@ -931,10 +1004,38 @@ fn find(c: Collection, reference: &str, lang: &str) -> Result<(Arc<Loaded>, u32)
 }
 
 fn register_commands(r: &mut PluginRegistry) {
-    r.command(
-        ID,
+    // Every command answers in Hadith's own language.
+    let mut add = |spec: CommandSpec| r.command(ID, plugin_lang::speaking(spec, own_lang));
+    add(plugin_lang::language_command(ID, "hadith language", "hadith language en"));
+    add(
+        CommandSpec::new_output("hadith peek", tk("Look at the hadith a few days (or hours) after today's, or before it when negative, without marking anything read"), |a, cx| {
+            let by = if a.get(0).is_some() { a.int(0)? } else { 1 };
+            let shared = model(cx);
+            let s = settings(cx);
+            let daily = daily_on_disk(&shared, &s);
+            if daily.is_empty() {
+                return Err(t("Nothing to pick from yet: download Sahih al-Bukhari or Sahih Muslim (`hadith download`)").into());
+            }
+            let (slot, _) = today_key(&s);
+            let lang = s.lang.code();
+            Ok(job(
+                cx,
+                move || compute_peek(&daily, lang, slot + by).ok_or_else(|| t("The hadith of the day couldn't be picked").to_string()),
+                move |c, _| {
+                    let mut v = card_json(&c);
+                    v["peek"] = json!(by);
+                    v["marked_read"] = json!(false);
+                    v
+                },
+            ))
+        })
+        .arg(ArgSpec::optional("n", ArgKind::Integer, tk("how many ahead (1 when left out; negative looks back)")))
+        .example("hadith peek")
+        .example("hadith peek -1"),
+    );
+    add(
         CommandSpec::new_output("hadith collections", tk("Every collection: download state, size, progress and whether it is chosen"), |_, cx| {
-            let lang = ui_code();
+            let lang = ui_code(cx);
             Ok(job(cx, move || Ok(store::statuses(lang)), |statuses, cx| {
                 let shared = model(cx);
                 let s = settings(cx);
@@ -943,8 +1044,7 @@ fn register_commands(r: &mut PluginRegistry) {
             }))
         }),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new("hadith download", tk("Download a collection (Arabic and the meaning in your language), all of them, or (with none) your chosen ones; returns at once, see `hadith status`"), |a, cx| {
             let list = which(a.get(0), cx)?;
             mandara_services::offline::check().map_err(|e| store::explain(&e))?;
@@ -958,8 +1058,7 @@ fn register_commands(r: &mut PluginRegistry) {
         .example("hadith download abudawud")
         .example("hadith download all"),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new_output("hadith remove", tk("Delete a collection's files (or all of them); it isn't downloaded again on its own"), |a, cx| {
             let list = which(Some(a.str(0)?), cx)?;
             let shared = model(cx);
@@ -974,10 +1073,9 @@ fn register_commands(r: &mut PluginRegistry) {
         .example("hadith remove abudawud")
         .example("hadith remove all"),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new_output("hadith status", tk("What is downloaded, what is downloading and how far, and any errors"), |_, cx| {
-            let lang = ui_code();
+            let lang = ui_code(cx);
             Ok(job(cx, move || Ok(json!(store::statuses(lang))), |v: Value, cx| {
                 let shared = model(cx);
                 refresh_statuses(&shared, cx);
@@ -992,8 +1090,7 @@ fn register_commands(r: &mut PluginRegistry) {
             }))
         }),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new_output("hadith today", tk("The hadith of the day (or the hour), the same as every surface shows"), |_, cx| {
             let shared = model(cx);
             ensure_today(&shared, cx);
@@ -1006,15 +1103,14 @@ fn register_commands(r: &mut PluginRegistry) {
             if daily.is_empty() {
                 return Err(t("Nothing to pick from yet: download Sahih al-Bukhari or Sahih Muslim (`hadith download`)").into());
             }
-            let lang = ui_code();
+            let lang = ui_code(cx);
             Ok(job(cx, move || compute_today(&daily, lang, slot).map(|c| card_json(&c)).ok_or_else(|| t("The hadith of the day couldn't be picked").to_string()), |v, _| v))
         }),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new_output("hadith show", tk("Open a hadith in the panel's reader and return it"), |a, cx| {
             let (c, reference) = wanted_ref(&a.rest(0), cx)?;
-            let lang = ui_code();
+            let lang = ui_code(cx);
             Ok(job(
                 cx,
                 move || {
@@ -1036,8 +1132,7 @@ fn register_commands(r: &mut PluginRegistry) {
         .example("hadith show muslim 2699a")
         .example("hadith show abudawud 4031"),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new_output("hadith search", tk("Search the downloaded collections: Arabic without diacritics, the meaning or a reference; filter by collection and grade"), |a, cx| {
             let q = Query::parse(&a.0)?;
             if q.text.trim().is_empty() {
@@ -1048,7 +1143,7 @@ fn register_commands(r: &mut PluginRegistry) {
             if list.is_empty() {
                 return Err(t("None of those collections is downloaded").into());
             }
-            let lang = ui_code();
+            let lang = ui_code(cx);
             Ok(job(
                 cx,
                 move || {
@@ -1081,8 +1176,7 @@ fn register_commands(r: &mut PluginRegistry) {
         .example("hadith search mercy --collection bukhari")
         .example("hadith search الصلاة --grade sahih"),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new_output("hadith bookmark", tk("Bookmark a hadith, or remove its bookmark"), |a, cx| {
             let add = a.str(0)? == "add";
             let input = a.rest(1);
@@ -1096,7 +1190,7 @@ fn register_commands(r: &mut PluginRegistry) {
                 return Ok(Output::Value(json!({ "key": key, "bookmarked": false, "changed": removed })));
             }
             let (c, reference) = wanted_ref(&input, cx)?;
-            let lang = ui_code();
+            let lang = ui_code(cx);
             Ok(job(
                 cx,
                 move || {
@@ -1119,15 +1213,14 @@ fn register_commands(r: &mut PluginRegistry) {
         .example("hadith bookmark add bukhari 1")
         .example("hadith bookmark remove muslim 2699a"),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new_output("hadith bookmarks", tk("Your bookmarked hadith, newest first"), |_, cx| {
             let shared = model(cx);
             let (marks, have) = {
                 let m = shared.borrow();
                 (m.state.bookmarks.clone(), on_disk(&m))
             };
-            let lang = ui_code();
+            let lang = ui_code(cx);
             Ok(job(
                 cx,
                 move || {
@@ -1163,8 +1256,8 @@ pub fn register(r: &mut PluginRegistry) {
         |window, cx, panel_cx| {
             let shared = model(cx);
             ensure_timer(&shared, cx);
-            let bar = fn_view(None, bar_view, window, cx);
-            let sidebar = fn_view(None, sidebar_view, window, cx);
+            let bar = fn_view(None, plugin_lang::in_language(own_lang, bar_view), window, cx);
+            let sidebar = fn_view(None, plugin_lang::in_language(own_lang, sidebar_view), window, cx);
             let panel = panel::build(panel_cx, window, cx);
             PluginInstance { bar: Some(bar), panel: Some(panel), sidebar: Some(sidebar), on_click: None, on_secondary_click: None }
         },

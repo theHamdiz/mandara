@@ -334,6 +334,7 @@ mod tests {
             step_done: false,
             week: [true, false, true, false, false, false, false],
             today: 2,
+            lang: None,
         }
     }
 

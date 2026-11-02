@@ -406,6 +406,22 @@ const PROFILES: &[(&str, &str)] = &[("null", tk("Leave it")), ("power-saver", tk
 const MENU_STYLES: &[(&str, &str)] = &[("dock", tk("Edge dock")), ("grid", tk("Grid"))];
 const MENU_DEFAULTS: &[(&str, &str)] = &[("lock", tk("Lock")), ("suspend", tk("Sleep")), ("logout", tk("Log out")), ("reboot", tk("Restart")), ("shutdown", tk("Shut down"))];
 const SCHOOLS: &[(&str, &str)] = &[("shafii", tk("Shafi'i")), ("hanafi", tk("Hanafi"))];
+/// A faith plugin's own language: Mandara's, or one of its languages (each
+/// named in itself).
+const PLUGIN_LANGUAGES: &[(&str, &str)] = &[
+    ("follow", tk("Follow Mandara")),
+    ("en", "English"),
+    ("ar", "العربية"),
+    ("es", "Español"),
+    ("fr", "Français"),
+    ("de", "Deutsch"),
+    ("tr", "Türkçe"),
+    ("ru", "Русский"),
+    ("hi", "हिन्दी"),
+    ("id", "Bahasa Indonesia"),
+    ("zh", "简体中文"),
+    ("ja", "日本語"),
+];
 const BOOL_SCHEMES: &[(&str, &str)] = &[("tonal-spot", tk("Tonal spot")), ("vibrant", tk("Vibrant")), ("expressive", tk("Expressive")), ("fidelity", tk("Fidelity")), ("fruit-salad", tk("Fruit salad")), ("monochrome", tk("Monochrome"))];
 
 /// The depth plugin's group on the Wallpaper page.
@@ -674,6 +690,18 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Prayer times"), "/plugins/settings/prayer-times/method", tk("Method"), tk("Twilight angles"), Choice(METHODS), Value::from("egyptian")),
         sd(Plugins, tk("Prayer times"), "/plugins/settings/prayer-times/asr", tk("Asr school"), tk("Shadow length rule"), Choice(SCHOOLS), Value::from("shafii")),
         sd(Plugins, tk("Prayer times"), "/plugins/settings/prayer-times/hijri_offset", tk("Hijri date adjustment"), tk("Days to add when your local moon sighting differs from the calculation"), slider(-2.0, 2.0, 1.0, " d"), Value::from(0)),
+        sd(Plugins, tk("Prayer times"), "/plugins/settings/prayer-times/language", tk("Language"), tk("Follow Mandara, or a language of its own: its panel, bar item, sidebar card, widgets and the meanings it shows; the rest of Mandara keeps its language"), Choice(PLUGIN_LANGUAGES), Value::from("follow")),
+        sd(
+            Plugins,
+            tk("Prayer times"),
+            "/plugins/settings/prayer-times/adhan",
+            tk("Adhan at prayer times"),
+            tk("Plays the call to prayer at each of the five prayers, with a notification to stop it; silent during do not disturb and presentations. The recording (about 1.8 MB, public domain, from Wikimedia Commons) is downloaded once when you turn this on"),
+            Toggle,
+            Value::from(false),
+        ),
+        // An action row (on a live path, as the other command rows are).
+        sd(Plugins, tk("Prayer times"), "/plugins/settings/prayer-times/adhan", tk("Downloaded adhan"), tk("Delete the downloaded recording and turn the adhan off"), Command { button: tk("Remove"), args: &["prayer", "adhan", "remove"] }, Value::from(false)),
         sd(Plugins, tk("System tray"), "/plugins/settings/tray/show_passive", tk("Show idle items"), tk("Keep passive (idle) tray icons in the bar; they're always listed in the tray panel"), Toggle, Value::from(false)),
         sd(Plugins, tk("Screenshot"), "/plugins/settings/screenshot/copy", tk("Copy to clipboard"), tk("Enter / Capture copies the image"), Toggle, Value::from(true)),
         sd(Plugins, tk("Screenshot"), "/plugins/settings/screenshot/save", tk("Save to disk"), tk("~/Pictures/Screenshots · off = clipboard only"), Toggle, Value::from(true)),
@@ -776,6 +804,7 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Jannah"), "/plugins/settings/jannah/arabic_size", tk("Arabic size"), tk("How large the verses and hadith are set"), Choice(const { &[("small", tk("Small")), ("medium", tk("Medium")), ("large", tk("Large"))] }), Value::from("medium")),
         sd(Plugins, tk("Jannah"), "/plugins/settings/jannah/bar_label", tk("In the bar"), tk("Just the arch, or the arch with today's step"), Choice(const { &[("glyph", tk("Arch only")), ("step", tk("Arch and today's step"))] }), Value::from("glyph")),
         sd(Plugins, tk("Jannah"), "/plugins/settings/jannah/morning_reminder", tk("Morning reminder"), tk("One quiet notification each morning with today's reminder"), Toggle, Value::from(false)),
+        sd(Plugins, tk("Jannah"), "/plugins/settings/jannah/language", tk("Language"), tk("Follow Mandara, or a language of its own: its panel, bar item, sidebar card, widgets and the meanings it shows; the rest of Mandara keeps its language"), Choice(PLUGIN_LANGUAGES), Value::from("follow")),
         sd(Plugins, tk("Hadith"), "/plugins/settings/hadith/collections", tk("Collections"), tk("Downloaded on their own when the plugin is on: bukhari, muslim, abudawud, tirmidhi, nasai, ibnmajah, malik, nawawi, qudsi, dehlawi"), List { placeholder: "bukhari, muslim" }, Value::from(vec!["bukhari", "muslim"])),
         sd(Plugins, tk("Hadith"), "/plugins/settings/hadith/show_translation", tk("Show the meaning"), tk("The meaning in your language under the Arabic (English where the collection has none in yours). Off: Arabic only"), Toggle, Value::from(true)),
         sd(Plugins, tk("Hadith"), "/plugins/settings/hadith/arabic_size", tk("Arabic size"), tk("How large the hadith are set"), Choice(const { &[("small", tk("Small")), ("medium", tk("Medium")), ("large", tk("Large"))] }), Value::from("medium")),
@@ -783,6 +812,7 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Hadith"), "/plugins/settings/hadith/rotate", tk("New hadith"), tk("How often the hadith of the day changes, the same everywhere"), Choice(const { &[("daily", tk("Every day")), ("hourly", tk("Every hour"))] }), Value::from("daily")),
         sd(Plugins, tk("Hadith"), "/plugins/settings/hadith/daily_collections", tk("Hadith of the day from"), tk("Collections the daily hadith is picked from (Bukhari and Muslim keep it sahih)"), List { placeholder: "bukhari, muslim" }, Value::from(vec!["bukhari", "muslim"])),
         sd(Plugins, tk("Hadith"), "/plugins/settings/hadith/bar_label", tk("In the bar"), tk("Just the glyph, or the glyph with today's reference"), Choice(const { &[("glyph", tk("Glyph only")), ("reference", tk("Glyph and today's reference"))] }), Value::from("glyph")),
+        sd(Plugins, tk("Hadith"), "/plugins/settings/hadith/language", tk("Language"), tk("Follow Mandara, or a language of its own: its panel, bar item, sidebar card, widgets and the meanings it shows; the rest of Mandara keeps its language"), Choice(PLUGIN_LANGUAGES), Value::from("follow")),
         // An action row (on a live path, as the other command rows are).
         sd(Plugins, tk("Hadith"), "/plugins/settings/hadith/collections", tk("Downloaded collections"), tk("Delete every downloaded collection from this computer; nothing is downloaded again on its own"), Command { button: tk("Remove all"), args: &["hadith", "remove", "all"] }, Value::from(vec!["bukhari", "muslim"])),
         sd(
@@ -816,6 +846,7 @@ fn build() -> Vec<Setting> {
             Value::from(""),
         ),
         sd(Plugins, tk("Qur'an"), "/plugins/settings/quran/arabic_size", tk("Arabic size"), tk("How large the reader sets the Arabic"), Choice(const { &[("small", tk("Small")), ("medium", tk("Medium")), ("large", tk("Large"))] }), Value::from("medium")),
+        sd(Plugins, tk("Qur'an"), "/plugins/settings/quran/language", tk("Language"), tk("Follow Mandara, or a language of its own: its panel, bar item, sidebar card, widgets and the meanings it shows; the rest of Mandara keeps its language"), Choice(PLUGIN_LANGUAGES), Value::from("follow")),
         // An action row (no value of its own; the default keeps the settings
         // table valid TOML).
         sd(Plugins, tk("Qur'an"), "/plugins/settings/quran/remove", tk("Downloaded Qur'an"), tk("Remove the text, the meanings and the cached recitations; the panel offers to download them again"), Command { button: tk("Remove"), args: &["quran", "remove"] }, Value::from(false)),

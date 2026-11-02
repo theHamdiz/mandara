@@ -151,6 +151,7 @@ A list's name (empty: every list)
 A little cat, soap bubbles, a photo frame and stickers on the desktop
 A little player with an LCD and buttons
 A locked account can't sign in until it's unlocked.
+A look ahead: only today's step can be marked done
 A macOS-style dock: pinned, running and recent apps, stacks and the Trash, with magnification and auto-hide
 A man does not attain everything that he desires; the winds convey whither the ships do not list.
 A man who dares to waste one hour of time has not discovered the value of life.
@@ -235,6 +236,7 @@ APP
 APPS
 AUR packages
 AV1 video of the whole screen
+AYAH FOR {date}
 AYAH OF THE DAY
 Aborted
 About
@@ -345,6 +347,7 @@ Address
 Address, e.g. 192.168.1.20/24
 Adds a window rule (edit or remove it below)
 Adds one import line to gtk.css (backed up first)
+Adhan at prayer times
 Adjusts mid-tones at night (1 = unchanged)
 Administrator
 Administrator rights needed, but no authentication agent answered
@@ -651,6 +654,8 @@ BREAKS TODAY
 Back
 Back to before this
 Back to daylight at {time}
+Back to today
+Back to your place
 Back to {name}
 Back up now
 Backed up to {folder}
@@ -791,6 +796,7 @@ Broken
 Brown noise
 Browse in the picker
 Browse settings
+Browse the coming days' times
 Browse the marketplace
 Browser
 Bubble
@@ -822,6 +828,7 @@ CCD {n}
 CI status
 CITIES
 COLLECTIONS
+COMING NEXT
 CONTAINER
 CONTINUE READING
 CONTRAST · WCAG 2
@@ -1432,6 +1439,8 @@ Delete notes too
 Delete tab
 Delete task
 Delete tasks too
+Delete the downloaded adhan (it downloads again only when the adhan is on)
+Delete the downloaded recording and turn the adhan off
 Delete the list “{name}”?
 Delete the tab “{name}”? Its widgets stay available in Studio.
 Delete the topic “{name}”? It has {count} notes.
@@ -1595,11 +1604,13 @@ Download it now (27 MB, checksum-verified); picking Model also downloads it. Stu
 Download speed
 Download speed test
 Download the Qur'an and the meaning in your language now (or load them); waits until done
+Download the adhan now (it downloads on its own when you turn it on)
 Download the depth model (27 MB, checksum-verified) for the model mode
 Download the library in the Hadith panel to read a hadith a day
 Download · {size}
 Downloadable models (OCR, wallpaper depth) and whether they're installed
 Downloaded Qur'an
+Downloaded adhan
 Downloaded collections
 Downloaded from speed.cloudflare.com only when you press Run test
 Downloaded on demand
@@ -1610,6 +1621,8 @@ Downloaded: sharing stopped
 Downloading in the Hadith panel
 Downloading models {percent}%
 Downloading the Qur'an
+Downloading the adhan: {error}
+Downloading the adhan… {percent}%
 Downloading the full update ({size})…
 Downloading the meaning · {pct}%
 Downloading the recitation of ayah {n}: {error}
@@ -1666,6 +1679,7 @@ Dwindle
 Dynamic island
 E
 E-mail
+EARLIER
 EVIDENCE
 Each app runs in app-mandara-<app>.scope: tracked resources, survives shell restarts
 Each bar is one shell frame: the solid part is the time spent building it, the full height the time until the next frame. Coral bars came late.
@@ -2033,6 +2047,8 @@ Folders
 Folders on the right side of the dock. Click one for its newest files; drag it along the dock to reorder or away to remove it.
 Folders to search
 Folders, comma separated (empty: your home folders)
+Follow Mandara
+Follow Mandara, or a language of its own: its panel, bar item, sidebar card, widgets and the meanings it shows; the rest of Mandara keeps its language
 Follow Quick start above: your plugin shows up here, and in Installed, as soon as you copy it in.
 Follow system
 Follow the desktop's light/dark preference, or switch at set times every day
@@ -2669,6 +2685,7 @@ It shows nothing: its bar item, panel and sidebar card are all empty
 It shows nothing: its bar item, panel, sidebar card and desktop widgets are all empty
 It's Mandara's {example} example, republished unchanged
 It's the unchanged plugin template (still named {name})
+It's time for {prayer}
 Item capsules
 Item padding
 Item spacing
@@ -3016,6 +3033,10 @@ Look
 Look & feel
 Look at something 6 metres away
 Look at something 6 metres away for {n} seconds
+Look at the ayah of another day (days after today, or before it when negative) without moving your place
+Look at the hadith a few days (or hours) after today's, or before it when negative, without marking anything read
+Look at the reminder a few items after today's (before it when negative) without moving today's
+Look at the step of a day after today (before it when negative) without marking anything
 Look far away
 Look for this app as a Flatpak (Flathub) or an AppImage instead.
 Look into every folder inside it (otherwise one level, like the picker)
@@ -3032,6 +3053,7 @@ Looking for lyrics…
 Looking for monitors…
 Looking for repositories…
 Looking inside {count} files…
+Looking…
 Looks
 Looks for new Mandara releases in the background and tells you once per version. Updates install as small binary patches, with the full download as the fallback
 Looks text up in your locales/ catalog; labels in views are translated automatically.
@@ -4158,6 +4180,11 @@ Paused: offline mode is on
 Paused: {reason}
 Pausing…
 Peak size of the icon under the pointer
+Peek at the coming days' ayahs
+Peek at the coming days' hadith
+Peek at the coming days' steps
+Peek at the next ayahs
+Peek at what comes next
 Peek on workspace switch
 Pen
 Pending package updates from pacman, the AUR, APT, DNF, Zypper and Flatpak
@@ -4255,12 +4282,14 @@ Play a sound for
 Play from here
 Play music or video in any MPRIS player
 Play or pause
+Play the adhan now (to hear it; it must be downloaded)
 Playback state, levels, preset and sleep timer
 Playful, bright cursors in bold colors
 Playing
 Playlist
 Plays each sound from your theme at the volume above (even while shell sounds are off). Your own files: `[sounds.files]` in config.toml.
 Plays every animation faster or slower with the same feel
+Plays the call to prayer at each of the five prayers, with a notification to stop it; silent during do not disturb and presentations. The recording (about 1.8 MB, public domain, from Wikimedia Commons) is downloaded once when you turn this on
 Plays until you pause it
 Please confirm
 Plug in a USB drive or SD card to see it here
@@ -4808,6 +4837,7 @@ SD card
 SE
 SKIPPED TODAY
 SLEEP TIMER
+STEP FOR {date}
 STORAGE
 SURAH {n}
 SW
@@ -5432,6 +5462,7 @@ Stop searching
 Stop sharing after
 Stop sharing now
 Stop sharing?
+Stop the adhan
 Stop the hotspot
 Stop the recitation
 Stop the wallpaper being generated
@@ -5707,6 +5738,11 @@ The Tanzil text and its meaning, for the Qur'an plugin (api.alquran.cloud)
 The Trash: count its items, or empty it (asks for --yes)
 The XCursor theme name, e.g. Bibata-Modern-Ice; pick one from the gallery above
 The active keyboard layout; click to switch
+The adhan for {prayer} is playing
+The adhan is playing
+The adhan isn't downloaded
+The adhan isn't downloaded: turn it on in Studio, or run `prayer adhan download`
+The adhan: whether it is on, downloaded or playing, and where it comes from
 The admin helper couldn't be installed, so nothing was changed.
 The app each kind of file or link opens in, for every app that asks the system (mimeapps.list).
 The app's name, the window's title, or both
@@ -5851,6 +5887,8 @@ The playlist is used instead of a folder
 The plugin archive contains unsafe paths
 The plugin archive has no plugin.toml
 The plugin archive is too large
+The plugin's own language (a code such as ar or en), or follow to use Mandara's
+The prayer times of another day (days after today, or before it when negative)
 The public IP endpoint must be an http(s) URL
 The reader shows the Prophet's words first; the chain opens with a tap
 The ready-made launcher looks (Classic, Grid, Beacon) and which one is applied
@@ -6264,6 +6302,7 @@ Unknown filter {filter}
 Unknown format {format}: use lossless, webp, png or jpeg
 Unknown grade {grade}: use sahih, hasan or daif
 Unknown kind {kind}
+Unknown language {code}: use follow or one of {codes}
 Unknown layer {name}
 Unknown level {name}
 Unknown mode {mode}: use random, variation or reseed
@@ -6940,6 +6979,7 @@ failed
 folder name or path of the repository
 folder path, name or index
 folder to write into (made if missing)
+follow, or a language code: en, ar, es, fr, de, tr, ru, hi, id, zh, ja
 fps
 front
 function / dispatcher / action name, then its arguments
@@ -6959,6 +6999,9 @@ how long
 how long, e.g. 45m or 2h
 how long, in minutes
 how many (default 50)
+how many ahead (1 when left out; negative looks back)
+how many days ahead (1 when left out; negative looks back)
+how many items ahead (1 when left out; negative looks back)
 how many lines (default from Studio)
 how many recent lines
 how to go through the wallpapers

@@ -390,7 +390,7 @@ mod tests {
     fn the_prayer_date_follows_the_widgets_language_and_calendar() {
         use mandara_config::desktop_widgets::{Calendar, TextOptions};
         let now = Local.with_ymd_and_hms(2026, 11, 1, 13, 0, 0).unwrap();
-        let p = PrayerInfo { times: Vec::new(), tomorrow_fajr: NaiveTime::MIN, hijri: Some((1448, 5, 21)) };
+        let p = PrayerInfo { times: Vec::new(), tomorrow_fajr: NaiveTime::MIN, hijri: Some((1448, 5, 21)), lang: None };
         let arabic = TextOptions { language: "ar".into(), calendar: Calendar::Hijri, hijri_in_arabic: true, ..Default::default() };
         let text = prayer_date(&p, &now, &Lingo::of(&arabic, true, None));
         assert!(!text.contains("Jumada") && text.contains('٢') && text.chars().any(|c| ('\u{0621}'..='\u{064A}').contains(&c)), "{text}");
@@ -411,7 +411,7 @@ mod tests {
         let s = ScreenInfo { days: vec![("Mon".into(), 3600, false), ("Tue".into(), 7200, true)], top: vec![("Browser".into(), 3000)] };
         assert!(screen_time(&ScreenTimeWidget::default(), &s, &l(), 1.0, &mut Fixed).hits.len() == 1);
         let t = |h, m| NaiveTime::from_hms_opt(h, m, 0).unwrap();
-        let p = PrayerInfo { times: vec![(tk("Fajr"), "الفجر", t(4, 50)), (tk("Sunrise"), "الشروق", t(6, 10)), (tk("Dhuhr"), "الظهر", t(11, 50)), (tk("Asr"), "العصر", t(15, 10)), (tk("Maghrib"), "المغرب", t(17, 40)), (tk("Isha"), "العشاء", t(19, 0))], tomorrow_fajr: t(4, 49), hijri: None };
+        let p = PrayerInfo { times: vec![(tk("Fajr"), "الفجر", t(4, 50)), (tk("Sunrise"), "الشروق", t(6, 10)), (tk("Dhuhr"), "الظهر", t(11, 50)), (tk("Asr"), "العصر", t(15, 10)), (tk("Maghrib"), "المغرب", t(17, 40)), (tk("Isha"), "العشاء", t(19, 0))], tomorrow_fajr: t(4, 49), hijri: None, lang: None };
         for layout in [PrayerLayout::Ring, PrayerLayout::List] {
             let c = prayer(&PrayerWidget { layout, ..Default::default() }, &p, &now, &l(), true, 1.0, &mut Fixed);
             assert!(c.marks.iter().any(|m| matches!(&m.kind, MarkKind::Text { text, .. } if text.contains("Asr"))), "{layout:?}: Asr is next");

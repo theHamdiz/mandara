@@ -45,8 +45,9 @@ use mandara_services::quran::{Quran, Ref, Selection, Translation, daily};
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::{Value, json};
 
-use super::fn_view;
 use super::panel_fx::{ViewSet, arabic_digits, partner, redraw_in};
+use super::{fn_view, plugin_lang};
+use crate::bidi::Bidi as _;
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
 use crate::kit::{card, text, tokens};
@@ -121,6 +122,9 @@ pub(crate) struct Settings {
     /// The chosen translation edition (empty: the language's default).
     pub translation: String,
     pub arabic_size: ArabicSize,
+    /// The language the Qur'an plugin speaks (and shows the meaning in):
+    /// its own, else Mandara's.
+    pub lang: Lang,
 }
 
 pub(crate) fn settings(cx: &App) -> Settings {
@@ -134,7 +138,14 @@ pub(crate) fn settings(cx: &App) -> Settings {
             "large" => ArabicSize::Large,
             _ => ArabicSize::Medium,
         },
+        lang: plugin_lang::resolved(own_lang(cx)),
     }
+}
+
+/// The Qur'an plugin's own language (`None`: Mandara's), from its
+/// `language` setting.
+pub(crate) fn own_lang(cx: &App) -> Option<Lang> {
+    plugin_lang::own_language(&config(cx).read(cx).snapshot().plugins.setting(ID, "language", String::from(plugin_lang::FOLLOW)))
 }
 
 /// Whether the interface is Arabic (the text only, no translation).
@@ -150,7 +161,8 @@ pub(crate) fn digits(s: impl Into<String>) -> String {
 
 /// The meaning edition the settings and language ask for.
 pub(crate) fn wanted_edition(cx: &App) -> Option<String> {
-    mandara_services::quran::meaning_edition(mandara_i18n::language().code(), &settings(cx).translation)
+    let s = settings(cx);
+    mandara_services::quran::meaning_edition(s.lang.code(), &s.translation)
 }
 
 /// The gold accent (the same as Jannah's).
@@ -201,7 +213,12 @@ impl Book {
 
     /// Today's ayah (global number).
     pub fn today(&self) -> Option<u16> {
-        daily::pick(&self.daily, Local::now().date_naive())
+        self.ayah_of_day(0)
+    }
+
+    /// The ayah of the day `days` after today (before it when negative).
+    pub fn ayah_of_day(&self, days: i64) -> Option<u16> {
+        daily::pick(&self.daily, Local::now().date_naive() + chrono::Duration::days(days))
     }
 
     /// `Al-Baqara 2:255`, or `البقرة ٢:٢٥٥` in Arabic.
@@ -369,6 +386,8 @@ fn save_soon(shared: &Shared, cx: &mut App) {
 
 /// Reading (or listening) reached global ayah `g`.
 pub(crate) fn read_at(shared: &Shared, g: u16, cx: &mut App) {
+    // The khatm's notification speaks the plugin's language.
+    let _lang = mandara_i18n::scoped(own_lang(cx));
     let completed = {
         let mut m = shared.borrow_mut();
         if m.state.last == Some(g) {
@@ -662,6 +681,8 @@ pub(crate) fn copy_text(book: &Book, g: u16, with_meaning: bool) -> String {
 
 /// What the desktop widgets show (`None` until the content is loaded).
 pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::QuranInfo> {
+    let own = own_lang(cx);
+    let _lang = mandara_i18n::scoped(own);
     let shared = model(cx);
     ensure(&shared, cx);
     let book = book(&shared)?;
@@ -692,6 +713,7 @@ pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::QuranInfo> 
         ayahs: surah.ayahs,
         juz: book.q.ayah(last).map(|a| a.juz).unwrap_or(1),
         reciting: playing.and_then(|g| book.q.at(g)).map(|r| r.to_string()),
+        lang: own,
     })
 }
 
@@ -848,7 +870,7 @@ fn sidebar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> 
             .child(div().text_size(px(text::LABEL)).text_color(muted.hsla()).font_features(tabular_nums()).child(book.reference(g)))
             .on_click(move |_, _, cx| open_at(&shared, g, cx))
     });
-    card(palette).flex().flex_col().gap(px(tokens::SM)).child(head(Some(ring))).child(resume).when_some(today, |el, x| el.child(x)).into_any_element()
+    card(palette).text_start().flex().flex_col().gap(px(tokens::SM)).child(head(Some(ring))).child(resume).when_some(today, |el, x| el.child(x)).into_any_element()
 }
 
 // ── Commands ─────────────────────────────────────────────────────────────
@@ -973,15 +995,31 @@ fn status_command(cx: &mut App) -> Output {
 }
 
 fn register_commands(r: &mut PluginRegistry) {
-    r.command(
-        ID,
+    // Every command answers in the plugin's own language.
+    let mut cmd = |spec: CommandSpec| r.command(ID, plugin_lang::speaking(spec, own_lang));
+    cmd(plugin_lang::language_command(ID, "quran language", "quran language fr"));
+    cmd(
+        CommandSpec::new("quran peek", tk("Look at the ayah of another day (days after today, or before it when negative) without moving your place"), |a, cx| {
+            let days = if a.get(0).is_some() { a.int(0)? } else { 1 };
+            let (shared, book) = need_book(cx)?;
+            let g = book.ayah_of_day(days).ok_or_else(|| t("Nothing to show").to_string())?;
+            let mut v = ayah_json(&shared, &book, g);
+            v["days"] = json!(days);
+            v["date"] = json!((Local::now().date_naive() + chrono::Duration::days(days)).format("%Y-%m-%d").to_string());
+            v["place_moved"] = json!(false);
+            Ok(v)
+        })
+        .arg(ArgSpec::optional("days", ArgKind::Integer, tk("how many days ahead (1 when left out; negative looks back)")))
+        .example("quran peek")
+        .example("quran peek 7"),
+    );
+    cmd(
         CommandSpec::new("quran surahs", tk("The 114 surahs: names, meaning, Makki or Madani and ayah counts"), |_, cx| {
             let (_, book) = need_book(cx)?;
             Ok(json!((1..=mandara_services::quran::text::SURAHS).map(|n| surah_json(&book, n)).collect::<Vec<_>>()))
         }),
     );
-    r.command(
-        ID,
+    cmd(
         CommandSpec::new("quran read", tk("Open the reader at a surah or ayah and return its text and meaning"), |a, cx| {
             let (shared, book) = need_book(cx)?;
             let sel = select(&book, &a.rest(0))?;
@@ -997,16 +1035,14 @@ fn register_commands(r: &mut PluginRegistry) {
         .example("quran read al-kahf")
         .example("quran read 36"),
     );
-    r.command(
-        ID,
+    cmd(
         CommandSpec::new("quran today", tk("The ayah of the day with its meaning"), |_, cx| {
             let (shared, book) = need_book(cx)?;
             let g = book.today().ok_or_else(|| t("Nothing to show").to_string())?;
             Ok(ayah_json(&shared, &book, g))
         }),
     );
-    r.command(
-        ID,
+    cmd(
         CommandSpec::new_output("quran search", tk("Search the Arabic (without diacritics) and the meaning; every word must match"), |a, cx| {
             let (shared, book) = need_book(cx)?;
             let query = a.rest(0);
@@ -1027,8 +1063,7 @@ fn register_commands(r: &mut PluginRegistry) {
         .example("quran search الحي القيوم")
         .example("quran search patience"),
     );
-    r.command(
-        ID,
+    cmd(
         CommandSpec::new("quran bookmarks", tk("Your bookmarked ayahs, newest first"), |_, cx| {
             let (shared, book) = need_book(cx)?;
             let marks = shared.borrow().state.bookmarks.clone();
@@ -1044,8 +1079,7 @@ fn register_commands(r: &mut PluginRegistry) {
         }),
     );
     for (path, add) in [("quran bookmark add", true), ("quran bookmark remove", false)] {
-        r.command(
-            ID,
+        cmd(
             CommandSpec::new(path, if add { tk("Bookmark an ayah") } else { tk("Remove a bookmark") }, move |a, cx| {
                 let (shared, book) = need_book(cx)?;
                 let g = global_of(&book, &a.rest(0))?;
@@ -1064,8 +1098,7 @@ fn register_commands(r: &mut PluginRegistry) {
             .example(if add { "quran bookmark add 2:255" } else { "quran bookmark remove 2:255" }),
         );
     }
-    r.command(
-        ID,
+    cmd(
         CommandSpec::new("quran play", tk("Recite an ayah, a range or a whole surah (the reader follows along)"), |a, cx| {
             let (shared, book) = need_book(cx)?;
             let sel = select(&book, &a.rest(0))?;
@@ -1078,8 +1111,7 @@ fn register_commands(r: &mut PluginRegistry) {
         .example("quran play 2:255")
         .example("quran play 2:285-286"),
     );
-    r.command(
-        ID,
+    cmd(
         CommandSpec::new("quran pause", tk("Pause the recitation"), |_, cx| {
             let shared = model(cx);
             let paused = shared.borrow().player.pause();
@@ -1089,8 +1121,7 @@ fn register_commands(r: &mut PluginRegistry) {
             Ok(v)
         }),
     );
-    r.command(
-        ID,
+    cmd(
         CommandSpec::new("quran resume", tk("Resume a paused recitation where it stopped"), |_, cx| {
             let shared = model(cx);
             let resumed = shared.borrow().player.resume();
@@ -1100,8 +1131,7 @@ fn register_commands(r: &mut PluginRegistry) {
             Ok(v)
         }),
     );
-    r.command(
-        ID,
+    cmd(
         CommandSpec::new("quran stop", tk("Stop the recitation"), |_, cx| {
             let shared = model(cx);
             shared.borrow().player.stop();
@@ -1109,11 +1139,10 @@ fn register_commands(r: &mut PluginRegistry) {
             Ok(playback_json(&shared, book(&shared).as_deref()))
         }),
     );
-    r.command(ID, CommandSpec::new_output("quran download", tk("Download the Qur'an and the meaning in your language now (or load them); waits until done"), |_, cx| Ok(download_command(cx))));
-    r.command(ID, CommandSpec::new_output("quran status", tk("What is downloaded and loaded, its size, the khatm and the recitation"), |_, cx| Ok(status_command(cx))));
-    r.command(ID, CommandSpec::new_output("quran remove", tk("Remove the downloaded text, meanings and cached recitations"), |_, cx| Ok(remove_command(cx))));
-    r.command(
-        ID,
+    cmd(CommandSpec::new_output("quran download", tk("Download the Qur'an and the meaning in your language now (or load them); waits until done"), |_, cx| Ok(download_command(cx))));
+    cmd(CommandSpec::new_output("quran status", tk("What is downloaded and loaded, its size, the khatm and the recitation"), |_, cx| Ok(status_command(cx))));
+    cmd(CommandSpec::new_output("quran remove", tk("Remove the downloaded text, meanings and cached recitations"), |_, cx| Ok(remove_command(cx))));
+    cmd(
         CommandSpec::new_output("quran editions", tk("The translations available in your language (for Studio's translation setting)"), |_, cx| {
             let lang = mandara_i18n::language().code();
             let current = wanted_edition(cx);
@@ -1148,8 +1177,8 @@ pub fn register(r: &mut PluginRegistry) {
             let shared = model(cx);
             // The content downloads when the plugin is first switched on.
             ensure(&shared, cx);
-            let bar = fn_view(None, bar_view, window, cx);
-            let sidebar = fn_view(None, sidebar_view, window, cx);
+            let bar = fn_view(None, plugin_lang::in_language(own_lang, bar_view), window, cx);
+            let sidebar = fn_view(None, plugin_lang::in_language(own_lang, sidebar_view), window, cx);
             let panel = panel::build(panel_cx, window, cx);
             PluginInstance {
                 bar: Some(bar),

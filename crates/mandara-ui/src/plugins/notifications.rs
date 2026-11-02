@@ -167,6 +167,14 @@ pub fn send(cx: &mut App, command: NotificationCommand) {
     }
 }
 
+/// Runs an action of the shell's own notifications (posted with
+/// `PostActions`): the shell is their app, so it answers them itself.
+fn shell_action(key: &str, cx: &mut App) {
+    if key == super::adhan::STOP_ACTION {
+        super::adhan::stop(cx);
+    }
+}
+
 /// A notification id from a command argument (ids are `u32` on D-Bus).
 fn notification_id(n: i64) -> Result<u32, String> {
     u32::try_from(n).map_err(|_| format!("invalid notification id {n}"))
@@ -442,6 +450,7 @@ pub fn notification_card_styled(n: &Notification, palette: &MandaraPalette, styl
                 .child(label.clone())
                 .on_click(move |_, _, cx| {
                     cx.stop_propagation();
+                    shell_action(&key, cx);
                     send(cx, NotificationCommand::Invoke { id, action: key.clone() })
                 }),
         );
@@ -975,7 +984,9 @@ pub fn register(r: &mut PluginRegistry) {
     r.command(
         ID,
         CommandSpec::new_output("notifications invoke", tk("Invoke a notification action"), |a, cx| {
-            request(cx, NotificationCommand::Invoke { id: notification_id(a.int(0)?)?, action: a.get(1).unwrap_or("default").to_string() })
+            let action = a.get(1).unwrap_or("default").to_string();
+            shell_action(&action, cx);
+            request(cx, NotificationCommand::Invoke { id: notification_id(a.int(0)?)?, action })
         })
         .arg(ArgSpec::required("id", ArgKind::Integer, tk("notification id")))
         .arg(ArgSpec::optional("action", ArgKind::String, tk("action key (default: \"default\")"))),

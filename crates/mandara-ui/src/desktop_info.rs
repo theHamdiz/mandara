@@ -192,6 +192,7 @@ pub fn prayer(cfg: &mandara_config::ShellConfig, cx: &App) -> PrayerInfo {
         times: today.times.iter().map(|(p, t)| (p.name(), p.name_ar(), *t)).collect(),
         tomorrow_fajr: tomorrow.get(mandara_services::prayer::Prayer::Fajr),
         hijri: Some(crate::desktop::hijri_today(cfg, cx)),
+        lang: crate::plugins::prayer::own_lang(cx),
     }
 }
 

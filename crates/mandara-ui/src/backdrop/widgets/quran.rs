@@ -156,6 +156,7 @@ mod tests {
             ayahs: 286,
             juz: 3,
             reciting: Some("2:255".into()),
+            lang: None,
         }
     }
 

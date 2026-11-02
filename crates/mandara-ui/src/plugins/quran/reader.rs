@@ -252,7 +252,9 @@ impl Reader {
         });
         let body = list(list_state, {
             let rc = rc.clone();
-            move |ix, window, cx| row(&rc, ix, window, cx)
+            // Rows are built at layout, outside the render's language scope.
+            let lang = mandara_i18n::language();
+            move |ix, window, cx| mandara_i18n::with_language(Some(lang), || row(&rc, ix, window, cx))
         })
         .w_full()
         .flex_1();
@@ -657,20 +659,22 @@ fn sheet(c: &Ctx, g: u16) -> AnyElement {
         changed(&s1, cx);
     });
     let (s2, ui2) = (c.shared.clone(), c.ui.clone());
+    // Translated now, in the plugin's language (the clicks come later).
+    let (marked, unmarked, copied, copied_meaning) = (t("Bookmarked"), t("Bookmark removed"), t("Copied with its reference"), t("Copied with its meaning"));
     let pin = pill_button("quran-sheet-pin", Some("pin"), if bookmarked { t("Bookmarked") } else { t("Bookmark") }, if bookmarked { gc } else { palette.on_surface_variant }, palette, move |_, cx| {
         let on = toggle_bookmark(&s2, r, cx);
-        flash(&ui2, true, if on { t("Bookmarked").into() } else { t("Bookmark removed").into() });
+        flash(&ui2, true, if on { marked.into() } else { unmarked.into() });
     });
     let (book1, ui3) = (c.book.clone(), c.ui.clone());
     let copy = pill_button("quran-sheet-copy", Some("copy"), t("Copy"), palette.on_surface_variant, palette, move |_, cx| {
         cx.write_to_clipboard(gpui::ClipboardItem::new_string(copy_text(&book1, g, false)));
-        flash(&ui3, true, t("Copied with its reference").into());
+        flash(&ui3, true, copied.into());
     });
     let with_meaning = has_meaning.then(|| {
         let (book2, ui4) = (c.book.clone(), c.ui.clone());
         pill_button("quran-sheet-copy-meaning", Some("copy"), t("Copy with meaning"), palette.on_surface_variant, palette, move |_, cx| {
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(copy_text(&book2, g, true)));
-            flash(&ui4, true, t("Copied with its meaning").into());
+            flash(&ui4, true, copied_meaning.into());
         })
     });
     let web = pill_button("quran-sheet-web", Some("external"), "quran.com", palette.on_surface_variant, palette, move |_, _| open_link(link(r)));

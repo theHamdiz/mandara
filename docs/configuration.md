@@ -146,9 +146,15 @@ fixed:
 | Git repositories (`git-repos`, opt-in) | `roots` (folders to look in, comma-separated), `depth` (1–6) | `~/projects, ~/Projects, ~/code, ~/src, ~/dev, ~/git`, 3 |
 | CI status (`ci`, opt-in) | `repos` (`owner/name`, comma-separated), `use_gh_token` (the `gh` CLI's login for private repos and higher limits; else `GITHUB_TOKEN`), `notify` | empty, on, on |
 | Crash reports (`crashes`, opt-in) | `notify` (a notification for a new crash) | on |
-| Jannah (`jannah`, opt-in) | `rotate` (`daily`, `hourly`), `sources` (`both`, `quran`, `hadith`), `show_translation`, `arabic_size` (`small`, `medium`, `large`), `bar_label` (`glyph`, `step`), `morning_reminder` | daily, both, on, medium, glyph, off |
-| Qur'an (`quran`, opt-in) | `reciter` (`ar.alafasy`, `ar.husary`, …), `translation` (an edition id; empty: your language's default), `arabic_size` | Alafasy, default, medium |
-| Hadith (`hadith`, opt-in) | `collections` (downloaded ones), `show_translation`, `arabic_size`, `hide_chain` (fold the chain of narrators), `rotate` (`daily`, `hourly`), `daily_collections`, `bar_label` (`glyph`, `reference`) | bukhari, muslim; on; medium; on; daily; bukhari, muslim; glyph |
+| Jannah (`jannah`, opt-in) | `rotate` (`daily`, `hourly`), `sources` (`both`, `quran`, `hadith`), `show_translation`, `arabic_size` (`small`, `medium`, `large`), `bar_label` (`glyph`, `step`), `morning_reminder`, `language` | daily, both, on, medium, glyph, off, follow |
+| Qur'an (`quran`, opt-in) | `reciter` (`ar.alafasy`, `ar.husary`, …), `translation` (an edition id; empty: the plugin language's default), `arabic_size`, `language` | Alafasy, default, medium, follow |
+| Hadith (`hadith`, opt-in) | `collections` (downloaded ones), `show_translation`, `arabic_size`, `hide_chain` (fold the chain of narrators), `rotate` (`daily`, `hourly`), `daily_collections`, `bar_label` (`glyph`, `reference`), `language` | bukhari, muslim; on; medium; on; daily; bukhari, muslim; glyph; follow |
+| Prayer times (`prayer-times`, opt-in) | `language`, `adhan` (the call to prayer at each prayer; the recording downloads once when you turn it on) | follow, off |
+
+`language` (Jannah, Qur'an, Hadith, Prayer times) is `follow` (Mandara's
+language) or a language code (`en`, `ar`, `es`, `fr`, `de`, `tr`, `ru`,
+`hi`, `id`, `zh`, `ja`): that plugin's surfaces and the meanings it shows
+switch to it, the rest of the shell keeps its own.
 
 Older plugin settings (weather, prayer times, pomodoro, screenshot and
 recording, updates, world clock, power history, media lyrics, visualizer,

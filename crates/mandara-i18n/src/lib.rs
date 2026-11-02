@@ -154,12 +154,73 @@ impl Lang {
 
 static CURRENT: AtomicU8 = AtomicU8::new(Lang::En as u8);
 
+thread_local! {
+    /// A language this thread speaks for now instead of the shell's (a
+    /// plugin with a language of its own, while its views are built).
+    static OVERRIDE: std::cell::Cell<Option<Lang>> = const { std::cell::Cell::new(None) };
+}
+
 pub fn set_language(lang: Lang) {
     CURRENT.store(lang as u8, Ordering::Relaxed);
 }
 
+/// The language strings are translated into: a [`scoped`] override on this
+/// thread, else the shell's.
 pub fn language() -> Lang {
+    OVERRIDE.with(std::cell::Cell::get).unwrap_or_else(shell_language)
+}
+
+/// The shell's language, whatever a [`scoped`] override says.
+pub fn shell_language() -> Lang {
     Lang::from_u8(CURRENT.load(Ordering::Relaxed))
+}
+
+/// While it lives, [`language`] (and so [`t`], [`tf`], [`tr`] and every
+/// reading-direction check built on it) answers `lang` on this thread;
+/// `None` changes nothing. Dropping it restores what was there before, so
+/// scopes nest. For a plugin whose own language differs from the shell's.
+#[must_use = "the override ends when the guard is dropped"]
+pub struct LangScope {
+    previous: Option<Lang>,
+    active: bool,
+}
+
+/// Overrides the language on this thread until the guard drops.
+pub fn scoped(lang: Option<Lang>) -> LangScope {
+    match lang {
+        Some(l) => LangScope { previous: OVERRIDE.with(|o| o.replace(Some(l))), active: true },
+        None => LangScope { previous: None, active: false },
+    }
+}
+
+impl Drop for LangScope {
+    fn drop(&mut self) {
+        if self.active {
+            OVERRIDE.with(|o| o.set(self.previous));
+        }
+    }
+}
+
+/// Runs `f` with the language overridden by `lang` (see [`scoped`]).
+pub fn with_language<R>(lang: Option<Lang>, f: impl FnOnce() -> R) -> R {
+    let _scope = scoped(lang);
+    f()
+}
+
+/// [`t`] in an explicit language.
+pub fn t_in(lang: Lang, key: &'static str) -> &'static str {
+    match lang {
+        Lang::En => key,
+        lang => catalog(lang).get(key).unwrap_or(key),
+    }
+}
+
+/// [`tr`] in an explicit language.
+pub fn tr_in(lang: Lang, key: &str) -> String {
+    match lang {
+        Lang::En => key.to_string(),
+        lang => catalog(lang).get(key).unwrap_or(key).to_string(),
+    }
 }
 
 /// An English-keyed string table.
@@ -239,18 +300,12 @@ pub fn catalog(lang: Lang) -> &'static Catalog {
 
 /// Translates `key` (English) into the current language.
 pub fn t(key: &'static str) -> &'static str {
-    match language() {
-        Lang::En => key,
-        lang => catalog(lang).get(key).unwrap_or(key),
-    }
+    t_in(language(), key)
 }
 
 /// [`t`] for keys that aren't `'static` (e.g. names from data).
 pub fn tr(key: &str) -> String {
-    match language() {
-        Lang::En => key.to_string(),
-        lang => catalog(lang).get(key).unwrap_or(key).to_string(),
-    }
+    tr_in(language(), key)
 }
 
 /// Translates `key` and fills `{name}` placeholders.

@@ -137,6 +137,9 @@ pub(super) struct Ui {
     show_chain: Option<bool>,
     /// A collection whose Remove was pressed once.
     armed: Option<(Collection, Instant)>,
+    /// Peeking: the hero shows the hadith this many slots from today's (a
+    /// look only, never saved, never marked read).
+    peek: i64,
     chips: crate::hstrip::HStrip,
 }
 
@@ -176,10 +179,11 @@ pub(super) fn build(p: PanelCx, window: &mut Window, cx: &mut App) -> PanelSpec 
         flash: Flash::default(),
         show_chain: None,
         armed: None,
+        peek: 0,
         chips: Default::default(),
     }));
     let view = View { p, field, ui, size: size_cell.clone() };
-    PanelSpec { view: fn_view(None, move |palette, window, cx| view.render(palette, window, cx), window, cx), size: size_cell }
+    PanelSpec { view: fn_view(None, super::plugin_lang::in_language(super::own_lang, move |palette, window, cx| view.render(palette, window, cx)), window, cx), size: size_cell }
 }
 
 /// Re-renders every Hadith view (the panel among them).
@@ -285,6 +289,7 @@ impl View {
         div()
             .relative()
             .size_full()
+            .text_start()
             .p(px(PAD))
             .flex()
             .flex_col()
@@ -391,7 +396,7 @@ impl View {
         };
         let list: Vec<Collection> = have.iter().copied().filter(|x| key.1.is_none_or(|f| f == *x)).collect();
         let q = Query { text: key.0.clone(), collections: None, grade: key.2 };
-        let lang = super::ui_code();
+        let lang = super::ui_code(cx);
         let task = cx.background_spawn(async move {
             let mut hits = Vec::new();
             let mut total = 0;
@@ -431,11 +436,19 @@ fn home(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
     if let Some(card) = download_card(c) {
         col = col.child(card);
     }
+    let peek = c.ui.borrow().peek;
     let today = super::today(c.shared, cx);
-    match today {
+    let has_today = today.is_some();
+    let shown = if peek == 0 { today } else { super::peek(c.shared, peek, cx) };
+    match shown {
         Some(card) => {
             let book = if card.book_name.is_empty() { tf("Book {n}", &[("n", &card.book)]) } else { card.book_name.clone() };
-            let label = format!("{} · {}", t("HADITH OF THE DAY"), book.to_uppercase());
+            let kicker = match peek {
+                0 => t("HADITH OF THE DAY"),
+                p if p > 0 => t("COMING NEXT"),
+                _ => t("EARLIER"),
+            };
+            let label = format!("{kicker} · {}", book.to_uppercase());
             // The lead grade's own words and grader (none for the two Sahih).
             let grades: Vec<Grade> = card.grade.iter().filter(|g| !g.grade.is_empty()).map(|g| Grade::new(&g.grader, &g.grade)).collect();
             let shown = Shown {
@@ -456,10 +469,20 @@ fn home(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
             };
             col = col.child(reader::card(c, &shown, Mode::Hero, window));
         }
+        // A peek still being picked.
+        None if peek != 0 => col = col.child(div().h(px(BODY_MIN)).flex().items_center().justify_center().child(caption(t("Looking…"), c.palette))),
         None if !on_disk(&c.shared.borrow()).is_empty() || c.shared.borrow().current.is_some() => {
             col = col.child(empty_state("hadith", t("The hadith of the day is on its way"), t("It comes from your daily collections once one is downloaded"), BODY_MIN, c.palette));
         }
         None => {}
+    }
+    if has_today {
+        let (ui, shared) = (c.ui.clone(), c.shared.clone());
+        let step: super::plugin_lang::Step = Rc::new(move |by, cx| {
+            ui.borrow_mut().peek += by;
+            refresh(&shared, cx);
+        });
+        col = col.child(super::plugin_lang::peek_bar("hadith-peek", peek, t("Peek at the coming days' hadith").into(), None, tk("Back to today"), gold(c.palette), c.palette, step));
     }
     if let Some(cont) = continue_card(c) {
         col = col.child(cont);
@@ -524,7 +547,7 @@ fn download_card(c: &Ctx) -> Option<AnyElement> {
     }
     if m.statuses_lang.is_some() && on_disk(&m).is_empty() {
         let want = if c.settings.collections.is_empty() { collections::defaults() } else { c.settings.collections.clone() };
-        let bytes: u64 = want.iter().map(|x| collections::download_size(*x, collections::translation(*x, super::ui_code()).map(|(l, _)| l))).sum();
+        let bytes: u64 = want.iter().map(|x| collections::download_size(*x, collections::translation(*x, c.settings.lang.code()).map(|(l, _)| l))).sum();
         let ring = div().size(px(RING_D)).flex_none().rounded_full().bg(g.with_alpha(alpha(WASH_SOFT, palette) * 2.0).hsla()).flex().items_center().justify_center().child(icon("download", text::TITLE + 4.0, g)).into_any_element();
         let names = want.iter().map(|x| title(*x)).collect::<Vec<_>>().join(" · ");
         let action: AnyElement = if offline {
@@ -599,7 +622,7 @@ fn collection_card(c: &Ctx, col: Collection) -> AnyElement {
     let failed = m.errors.contains_key(&col);
     let read = m.state.read_count(col);
     drop(m);
-    let lang = super::ui_code();
+    let lang = c.settings.lang.code();
     let translation = collections::translation(col, lang).map(|(l, _)| l);
     let ink = palette.on_surface_variant;
     let foot: AnyElement = if let Some(p) = current {
@@ -644,8 +667,9 @@ fn collection_card(c: &Ctx, col: Collection) -> AnyElement {
                 cx.stop_propagation();
                 ui.borrow_mut().armed = None;
                 let flash = ui.borrow().flash.clone();
+                let removed = t("Removed · {size} freed");
                 super::remove(&shared, vec![col], cx, move |r, _| match r {
-                    Ok(freed) => flash.show(true, tf("Removed · {size} freed", &[("size", &mb(freed))])),
+                    Ok(freed) => flash.show(true, mandara_i18n::fill(removed, &[("size", &mb(freed))])),
                     Err(e) => flash.show(false, e),
                 });
             })
@@ -785,7 +809,10 @@ fn collection_page(c: &Ctx, col: Collection, cx: &mut App) -> AnyElement {
         .when_some(resume, |el, r| el.child(div().pt(px(tokens::XS)).child(r)));
     let rows: Rc<[u32]> = (0..lib.books.len() as u32).collect();
     let (palette_c, shared, ui) = (palette.clone(), c.shared.clone(), c.ui.clone());
+    // Rows are built at layout, outside the render's language scope.
+    let lang = mandara_i18n::language();
     let list = uniform_list("hadith-books", rows.len(), move |range, _, _| {
+        let _lang = mandara_i18n::scoped(Some(lang));
         range
             .filter_map(|i| rows.get(i).copied())
             .map(|b| book_row(&lib, col, b, &palette_c, &shared, &ui))
@@ -863,7 +890,9 @@ fn hadith_list(c: &Ctx, id: &'static str, items: Rc<[(Collection, u32)]>, height
     }
     let (palette, shared, ui, font) = (c.palette.clone(), c.shared.clone(), c.ui.clone(), c.hadith_font.clone());
     let show_meaning = c.show_meaning;
+    let lang = mandara_i18n::language();
     uniform_list(id, items.len(), move |range, _, _| {
+        let _lang = mandara_i18n::scoped(Some(lang));
         let m = shared.borrow();
         range
             .filter_map(|i| items.get(i).copied().map(|x| (i, x)))

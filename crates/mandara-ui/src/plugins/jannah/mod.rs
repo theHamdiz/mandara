@@ -46,8 +46,9 @@ use mandara_services::jannah::state::{self, State};
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::{Value, json};
 
-use super::fn_view;
 use super::panel_fx::{ViewSet, readable};
+use super::{fn_view, plugin_lang};
+use crate::bidi::Bidi as _;
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
 use crate::kit::{card, text, tokens};
@@ -114,6 +115,8 @@ pub(crate) struct Settings {
     pub arabic_size: ArabicSize,
     pub bar_step: bool,
     pub morning: bool,
+    /// The language Jannah speaks: its own, else Mandara's.
+    pub lang: Lang,
 }
 
 pub(crate) fn settings(cx: &App) -> Settings {
@@ -130,7 +133,13 @@ pub(crate) fn settings(cx: &App) -> Settings {
         },
         bar_step: s.setting(ID, "bar_label", String::from("glyph")) == "step",
         morning: s.setting(ID, "morning_reminder", false),
+        lang: plugin_lang::resolved(own_lang(cx)),
     }
+}
+
+/// Jannah's own language (`None`: Mandara's), from its `language` setting.
+pub(crate) fn own_lang(cx: &App) -> Option<Lang> {
+    plugin_lang::own_language(&config(cx).read(cx).snapshot().plugins.setting(ID, "language", String::from(plugin_lang::FOLLOW)))
 }
 
 /// Whether the interface is Arabic (scripture only, no translation).
@@ -138,9 +147,9 @@ pub(crate) fn arabic_ui() -> bool {
     mandara_i18n::language() == Lang::Ar
 }
 
-/// Whether meanings show under the Arabic.
+/// Whether meanings show under the Arabic (never in Arabic).
 pub(crate) fn wants_meaning(s: &Settings) -> bool {
-    s.translation && !arabic_ui()
+    s.translation && s.lang != Lang::Ar
 }
 
 // ── The shared model ─────────────────────────────────────────────────────
@@ -258,13 +267,24 @@ pub(crate) fn slot(m: &Model, s: &Settings, now: NaiveDateTime) -> i64 {
 
 /// Today's item on a surface showing at most `limit` characters.
 pub(crate) fn today(shared: &Shared, s: &Settings, limit: Option<usize>) -> Option<ItemId> {
+    peek(shared, s, limit, 0)
+}
+
+/// The item `by` places after today's (before it when negative): a look
+/// only, "today" stays where it is.
+pub(crate) fn peek(shared: &Shared, s: &Settings, limit: Option<usize>, by: i64) -> Option<ItemId> {
     let now = Local::now().naive_local();
-    pick(slot(&shared.borrow(), s, now), s.sources, limit)
+    pick(slot(&shared.borrow(), s, now) + by, s.sources, limit)
 }
 
 /// Today's step.
 pub(crate) fn today_step() -> Option<&'static Path> {
-    rotation::step(Local::now().date_naive())
+    step_in(0)
+}
+
+/// The step of the day `days` after today (before it when negative).
+pub(crate) fn step_in(days: i64) -> Option<&'static Path> {
+    rotation::step(Local::now().date_naive() + chrono::Duration::days(days))
 }
 
 /// Moves "today" by `by` items on every surface.
@@ -300,10 +320,11 @@ pub(crate) fn toggle_saved(shared: &Shared, key: &str, cx: &mut App) -> bool {
 /// are wanted and not there yet (the cache, else the network unless
 /// offline), off the UI thread.
 pub(crate) fn ensure_meanings(shared: &Shared, cx: &mut App) {
-    if !wants_meaning(&settings(cx)) {
+    let s = settings(cx);
+    if !wants_meaning(&s) {
         return;
     }
-    let Some(e) = meanings::edition(mandara_i18n::language().code()) else { return };
+    let Some(e) = meanings::edition(s.lang.code()) else { return };
     {
         let mut m = shared.borrow_mut();
         if m.edition != Some(e.id) {
@@ -489,6 +510,7 @@ pub(crate) fn ensure_timer(shared: &Shared, cx: &mut App) {
 /// Sends the morning reminder once a morning, when it is on.
 fn remind(shared: &Shared, cx: &mut App) {
     let s = settings(cx);
+    let _lang = mandara_i18n::scoped(Some(s.lang));
     let now = Local::now().naive_local();
     if !s.morning || !(MORNING_HOUR..NOON).contains(&now.hour()) || shared.borrow().state.reminded_on(now.date()) {
         return;
@@ -514,6 +536,8 @@ pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::JannahInfo>
     let shared = model(cx);
     ensure_timer(&shared, cx);
     let s = settings(cx);
+    let own = own_lang(cx);
+    let _lang = mandara_i18n::scoped(own);
     if wants_meaning(&s) {
         ensure_meanings(&shared, cx);
     }
@@ -535,6 +559,7 @@ pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::JannahInfo>
         step_done: m.state.done_on(date),
         week: week.map(|(_, done)| done),
         today: week.iter().position(|(d, _)| *d == date).unwrap_or_default(),
+        lang: own,
     })
 }
 
@@ -695,7 +720,7 @@ fn sidebar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> 
                 mark_step_done(cx);
             })
     });
-    card(palette).flex().flex_col().gap(px(tokens::SM)).child(head).when_some(body, |el, b| el.child(b)).when_some(step, |el, s| el.child(s)).into_any_element()
+    card(palette).text_start().flex().flex_col().gap(px(tokens::SM)).child(head).when_some(body, |el, b| el.child(b)).when_some(step, |el, s| el.child(s)).into_any_element()
 }
 
 // ── Commands ─────────────────────────────────────────────────────────────
@@ -759,25 +784,48 @@ fn step_json(cx: &mut App) -> Value {
 }
 
 fn register_commands(r: &mut PluginRegistry) {
-    r.command(ID, CommandSpec::new("jannah today", tk("Today's verse or hadith and today's step"), |_, cx| today_json(cx)));
-    r.command(
-        ID,
+    // Every command answers in Jannah's own language.
+    let mut add = |spec: CommandSpec| r.command(ID, plugin_lang::speaking(spec, own_lang));
+    add(plugin_lang::language_command(ID, "jannah language", "jannah language ar"));
+    add(
+        CommandSpec::new("jannah peek", tk("Look at the reminder a few items after today's (before it when negative) without moving today's"), |a, cx| {
+            let by = if a.get(0).is_some() { a.int(0)? } else { 1 };
+            let shared = model(cx);
+            ensure_meanings(&shared, cx);
+            let s = settings(cx);
+            let item = peek(&shared, &s, None, by).and_then(|id| catalog().get(id)).ok_or_else(|| t("Nothing to show").to_string())?;
+            Ok(json!({ "peek": by, "item": item_json(&shared, item), "today_moved": false }))
+        })
+        .arg(ArgSpec::optional("n", ArgKind::Integer, tk("how many items ahead (1 when left out; negative looks back)")))
+        .example("jannah peek")
+        .example("jannah peek -1"),
+    );
+    add(
+        CommandSpec::new("jannah step peek", tk("Look at the step of a day after today (before it when negative) without marking anything"), |a, _| {
+            let days = if a.get(0).is_some() { a.int(0)? } else { 1 };
+            let date = Local::now().date_naive() + chrono::Duration::days(days);
+            Ok(json!({ "days": days, "date": date.format("%Y-%m-%d").to_string(), "step": step_in(days).map(path_json), "marked": false }))
+        })
+        .arg(ArgSpec::optional("days", ArgKind::Integer, tk("how many days ahead (1 when left out; negative looks back)")))
+        .example("jannah step peek")
+        .example("jannah step peek 2"),
+    );
+    add(CommandSpec::new("jannah today", tk("Today's verse or hadith and today's step"), |_, cx| today_json(cx)));
+    add(
         CommandSpec::new("jannah next", tk("Move today's reminder forward one item (every surface follows)"), |_, cx| {
             let shared = model(cx);
             nudge(&shared, 1, cx);
             today_json(cx)
         }),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new("jannah prev", tk("Move today's reminder back one item"), |_, cx| {
             let shared = model(cx);
             nudge(&shared, -1, cx);
             today_json(cx)
         }),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new("jannah show", tk("Open a verse or hadith in the Jannah panel and return it"), |a, cx| {
             let item = find(&a.rest(0))?;
             let shared = model(cx);
@@ -791,8 +839,7 @@ fn register_commands(r: &mut PluginRegistry) {
         .example("jannah show 2:25")
         .example("jannah show bukhari-3245"),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new("jannah search", tk("Search the verses and hadith (Arabic without diacritics, or the meaning)"), |a, cx| {
             let shared = model(cx);
             let meanings = match &shared.borrow().fetch {
@@ -807,8 +854,7 @@ fn register_commands(r: &mut PluginRegistry) {
         .example("jannah search الجنة")
         .example("jannah search rivers"),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new("jannah paths", tk("The paths to Jannah, by group"), |_, _| {
             Ok(json!(catalog::GROUPS
                 .iter()
@@ -820,8 +866,7 @@ fn register_commands(r: &mut PluginRegistry) {
                 .collect::<Vec<_>>()))
         }),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new("jannah path", tk("One path with its evidence"), |a, cx| {
             let key = a.str(0)?;
             let p = catalog::path(key).ok_or_else(|| mandara_i18n::tf("No path {key}", &[("key", &key)]))?;
@@ -833,9 +878,8 @@ fn register_commands(r: &mut PluginRegistry) {
         .arg(ArgSpec::required("key", ArgKind::String, tk("a path key from `jannah paths`")))
         .example("jannah path truthfulness"),
     );
-    r.command(ID, CommandSpec::new("jannah step", tk("Today's step and this week's done days"), |_, cx| Ok(step_json(cx))));
-    r.command(
-        ID,
+    add(CommandSpec::new("jannah step", tk("Today's step and this week's done days"), |_, cx| Ok(step_json(cx))));
+    add(
         CommandSpec::new("jannah step done", tk("Mark today's step done"), |_, cx| {
             let newly = mark_step_done(cx);
             let mut v = step_json(cx);
@@ -843,8 +887,7 @@ fn register_commands(r: &mut PluginRegistry) {
             Ok(v)
         }),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new("jannah saved", tk("Your saved verses and hadith, newest first"), |_, cx| {
             let shared = model(cx);
             let saved = shared.borrow().state.saved.clone();
@@ -859,8 +902,7 @@ fn register_commands(r: &mut PluginRegistry) {
                 .collect::<Vec<_>>()))
         }),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new("jannah save", tk("Save a verse or hadith"), |a, cx| {
             let item = find(&a.rest(0))?;
             let shared = model(cx);
@@ -874,8 +916,7 @@ fn register_commands(r: &mut PluginRegistry) {
         .arg(ArgSpec::required("ref", ArgKind::String, tk("2:25, quran-2:25 or bukhari-3245")))
         .example("jannah save 2:25"),
     );
-    r.command(
-        ID,
+    add(
         CommandSpec::new("jannah unsave", tk("Remove a saved verse or hadith"), |a, cx| {
             let item = find(&a.rest(0))?;
             let shared = model(cx);
@@ -899,8 +940,8 @@ pub fn register(r: &mut PluginRegistry) {
         |window, cx, panel_cx| {
             let shared = model(cx);
             ensure_timer(&shared, cx);
-            let bar = fn_view(None, bar_view(Rc::default()), window, cx);
-            let sidebar = fn_view(None, sidebar_view, window, cx);
+            let bar = fn_view(None, plugin_lang::in_language(own_lang, bar_view(Rc::default())), window, cx);
+            let sidebar = fn_view(None, plugin_lang::in_language(own_lang, sidebar_view), window, cx);
             let panel = panel::build(panel_cx, window, cx);
             PluginInstance {
                 bar: Some(bar),
@@ -964,7 +1005,7 @@ mod tests {
     use super::*;
 
     fn s() -> Settings {
-        Settings { rotate: Rotate::Daily, sources: Sources::Both, translation: true, arabic_size: ArabicSize::Medium, bar_step: false, morning: true }
+        Settings { rotate: Rotate::Daily, sources: Sources::Both, translation: true, arabic_size: ArabicSize::Medium, bar_step: false, morning: true, lang: Lang::En }
     }
 
     fn m() -> Model {

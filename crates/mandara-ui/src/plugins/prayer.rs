@@ -20,13 +20,14 @@ use std::time::Duration;
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, NaiveTime, Offset as _, TimeDelta, Timelike};
 use gpui::{AnyElement, App, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::FluentBuilder as _, px, size};
 use mandara_core::{ToGpui, oklab_gradient};
-use mandara_i18n::{t, tf, tk};
-use mandara_plugins::{CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
+use mandara_i18n::{Lang, t, tf, tk};
+use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
 use mandara_services::prayer::{self, AsrSchool, Location, Method, Prayer, PrayerTimes};
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
 
-use super::fn_view;
+use super::{adhan, fn_view, plugin_lang};
+use crate::bidi::Bidi as _;
 use super::panel_fx::{
     Cached, HEADER_CHIP_PX, HEADER_H, PanelShape, SMALL_ICON_PX, arabic_digits, dot_ring, glass_card, glow, icon_chip, partner,
     percent_text, readable, redraw_in, rim,
@@ -53,8 +54,15 @@ const HEADER_EXTRA_GAP: f32 = 2.0;
 /// Rows on the timeline (five prayers and sunrise).
 const TIMELINE_ROWS: usize = 6;
 
-/// Panel height: header, hero, six timeline rows and the stats strip.
-const PANEL_H: f32 = PAD * 2.0 + HEADER_H + GAP + HEADER_EXTRA_GAP + HERO_H + GAP + ROW_H * TIMELINE_ROWS as f32 + GAP + STATS_H;
+/// The day browser's row (previous / next day) under the hero.
+const BROWSE_H: f32 = super::panel_fx::PILL_H_PX;
+
+/// Panel height: header, hero, the day browser, six timeline rows and the
+/// stats strip.
+const PANEL_H: f32 = PAD * 2.0 + HEADER_H + GAP + HEADER_EXTRA_GAP + HERO_H + GAP + BROWSE_H + GAP + ROW_H * TIMELINE_ROWS as f32 + GAP + STATS_H;
+/// The adhan's row (downloading, failed, or Stop while it plays), added
+/// under the stats while it has something to say.
+const ADHAN_ROW_H: f32 = super::panel_fx::PILL_H_PX;
 
 /// Header: Arabic date size and gap.
 const HIJRI_AR_PX: f32 = 14.0;
@@ -219,6 +227,12 @@ fn settings(cx: &App) -> Settings {
     }
 }
 
+/// The plugin's own language (`None`: Mandara's), from its `language`
+/// setting.
+pub(crate) fn own_lang(cx: &App) -> Option<Lang> {
+    plugin_lang::own_language(&config(cx).read(cx).snapshot().plugins.setting(ID, "language", String::from(plugin_lang::FOLLOW)))
+}
+
 fn utc_offset_hours() -> f64 {
     f64::from(Local::now().offset().fix().local_minus_utc()) / SECS_PER_HOUR as f64
 }
@@ -246,18 +260,21 @@ thread_local! {
 
 /// The three days around `date`, computed once per date and settings.
 fn schedule(date: NaiveDate, s: &Settings) -> Schedule {
+    SCHEDULE.with(|c| cached_schedule(&mut c.borrow_mut(), date, s))
+}
+
+/// [`schedule`] kept in `slot` (the panel keeps a browsed day's apart, so
+/// today's stays cached for the bar).
+fn cached_schedule(slot: &mut Option<(ScheduleKey, Schedule)>, date: NaiveDate, s: &Settings) -> Schedule {
     let key = ScheduleKey { date, loc: s.loc, offset: s.utc_offset.to_bits(), method: s.method, school: s.school };
-    SCHEDULE.with(|c| {
-        let mut c = c.borrow_mut();
-        if let Some((k, days)) = c.as_ref()
-            && *k == key
-        {
-            return days.clone();
-        }
-        let days: Schedule = Rc::new([times_for(date.pred_opt().unwrap_or(date), s), times_for(date, s), times_for(date.succ_opt().unwrap_or(date), s)]);
-        *c = Some((key, days.clone()));
-        days
-    })
+    if let Some((k, days)) = slot.as_ref()
+        && *k == key
+    {
+        return days.clone();
+    }
+    let days: Schedule = Rc::new([times_for(date.pred_opt().unwrap_or(date), s), times_for(date, s), times_for(date.succ_opt().unwrap_or(date), s)]);
+    *slot = Some((key, days.clone()));
+    days
 }
 
 /// Tomorrow's times from the user's settings.
@@ -390,8 +407,12 @@ struct Day {
 
 impl Day {
     fn at(now: NaiveDateTime, s: &Settings) -> Day {
+        Day::with_days(now, schedule(now.date(), s))
+    }
+
+    /// The day as seen from `now`, with its three days' schedules.
+    fn with_days(now: NaiveDateTime, days: Schedule) -> Day {
         let date = now.date();
-        let days = schedule(date, s);
         let [yesterday, today, tomorrow] = &*days;
         let mut events: Vec<(Prayer, NaiveDateTime)> = Vec::with_capacity(TIMELINE_ROWS + 2);
         if let Some(d) = date.pred_opt() {
@@ -469,6 +490,7 @@ struct TextKey {
     place: String,
     method: Method,
     loc: Location,
+    lang: Lang,
 }
 
 struct Texts {
@@ -493,7 +515,7 @@ thread_local! {
 fn texts(day: &Day, s: &Settings) -> Rc<Texts> {
     let hijri_date = day.hijri(s.hijri_offset);
     let minute = day.now.with_second(0).and_then(|m| m.with_nanosecond(0)).unwrap_or(day.now);
-    let key = TextKey { minute, next: day.next, prev: day.prev, h24: s.h24, hijri: hijri_date, place: s.place.clone(), method: s.method, loc: s.loc };
+    let key = TextKey { minute, next: day.next, prev: day.prev, h24: s.h24, hijri: hijri_date, place: s.place.clone(), method: s.method, loc: s.loc, lang: mandara_i18n::language() };
     TEXTS.with(|c| {
         let mut c = c.borrow_mut();
         if let Some(texts) = c.as_ref()
@@ -652,7 +674,7 @@ fn rail_half(fill: f32, visible: bool, on: Color, off: Color) -> impl IntoElemen
     })
 }
 
-fn timeline(day: &Day, txt: &Texts, h24: bool, palette: &MandaraPalette, arabic: SharedString, row_h: f32, show_arabic: bool) -> impl IntoElement {
+fn timeline(day: &Day, times_txt: &[SharedString], in_span: SharedString, live: bool, h24: bool, palette: &MandaraPalette, arabic: SharedString, row_h: f32, show_arabic: bool) -> impl IntoElement {
     let pick = |(dark, light): (f32, f32)| super::panel_fx::alpha((dark, light), palette);
     let accent = readable(palette.primary, palette);
     let accent2 = readable(partner(palette.primary), palette);
@@ -663,17 +685,17 @@ fn timeline(day: &Day, txt: &Texts, h24: bool, palette: &MandaraPalette, arabic:
     // How far `now` has travelled between row i and row i + 1.
     let seg = |i: usize| -> f32 {
         match (at.get(i), at.get(i + 1)) {
-            (Some(a), Some(b)) => ((day.now - *a).num_seconds() as f32 / (*b - *a).num_seconds().max(1) as f32).clamp(0.0, 1.0),
+            (Some(a), Some(b)) if live => ((day.now - *a).num_seconds() as f32 / (*b - *a).num_seconds().max(1) as f32).clamp(0.0, 1.0),
             _ => 0.0,
         }
     };
-    let next_today = (day.next.1.date() == date).then_some(day.next.0);
+    let next_today = (live && day.next.1.date() == date).then_some(day.next.0);
     let n = times.len();
     let frame = crate::shell::frame_color(palette);
     let time_w = if h24 { TIME_W_24H_PX } else { TIME_W_12H_PX };
     div().flex().flex_col().children(times.iter().enumerate().map(move |(i, (p, _))| {
         let p = *p;
-        let past = at[i] <= day.now;
+        let past = live && at[i] <= day.now;
         let is_next = next_today == Some(p);
         let marker = !p.is_prayer();
         let line_color = accent.mix(accent2, i as f32 / n as f32);
@@ -760,7 +782,7 @@ fn timeline(day: &Day, txt: &Texts, h24: bool, palette: &MandaraPalette, arabic:
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .font_features(tabular_nums())
                                 .text_color(accent.hsla())
-                                .child(txt.in_span.clone()),
+                                .child(in_span.clone()),
                         )
                     })
                     .child(div().flex_1())
@@ -782,7 +804,7 @@ fn timeline(day: &Day, txt: &Texts, h24: bool, palette: &MandaraPalette, arabic:
                             .text_size(px(text::BODY))
                             .font_weight(if is_next { FontWeight::SEMIBOLD } else { FontWeight::NORMAL })
                             .text_color(if past && !is_next { palette.on_surface_variant.with_alpha(ROW_TIME_PAST_ALPHA).hsla() } else { palette.on_surface.hsla() })
-                            .child(txt.times.get(i).cloned().unwrap_or_default()),
+                            .child(times_txt.get(i).cloned().unwrap_or_default()),
                     ),
             )
     }))
@@ -820,12 +842,53 @@ fn stats(txt: &Texts, palette: &MandaraPalette, r: f32) -> impl IntoElement {
         .child(stat("arrow", t("Qibla"), qibla, readable(palette.primary, palette), palette, r))
 }
 
-fn panel_view(p: PanelCx) -> impl Fn(&MandaraPalette, &mut Window, &mut App) -> AnyElement {
+/// A browsed day: its schedule and its formatted times (kept while the
+/// panel shows it).
+type Browsed = Option<((ScheduleKey, bool), Schedule, Rc<[SharedString]>)>;
+
+fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>) -> impl Fn(&MandaraPalette, &mut Window, &mut App) -> AnyElement {
     let clock: RefCell<Cached<i64>> = RefCell::default();
+    // Browsing days: how many from today (a look only, forgotten on close
+    // of the shell), and that day's schedule.
+    let peek = Rc::new(Cell::new(0_i64));
+    let browsed: RefCell<Browsed> = RefCell::default();
     move |palette, window, cx| {
+        adhan::ensure(Some(window), cx);
         let s = settings(cx);
         let day = Day::now(&s);
         let txt = texts(&day, &s);
+        let offset = peek.get();
+        let date = day.now.date() + TimeDelta::days(offset);
+        let shown: Option<(Day, Rc<[SharedString]>)> = (offset != 0).then(|| {
+            let mut b = browsed.borrow_mut();
+            let key = (ScheduleKey { date, loc: s.loc, offset: s.utc_offset.to_bits(), method: s.method, school: s.school }, s.h24);
+            let (days, times) = match b.as_ref() {
+                Some((k, days, times)) if *k == key => (days.clone(), times.clone()),
+                _ => {
+                    let days = cached_schedule(&mut None, date, &s);
+                    let times: Rc<[SharedString]> = days[1].times.iter().map(|(_, t)| SharedString::from(fmt_time(*t, s.h24))).collect();
+                    *b = Some((key, days.clone(), times.clone()));
+                    (days, times)
+                }
+            };
+            (Day::with_days(date.and_time(NaiveTime::MIN), days), times)
+        });
+        let browse = {
+            let peek = peek.clone();
+            let views = window.current_view();
+            let step: plugin_lang::Step = Rc::new(move |by, cx| {
+                peek.set(peek.get() + by);
+                cx.notify(views);
+            });
+            // The browsed day's date.
+            let away = (offset != 0).then(|| SharedString::from(plugin_lang::date(date, tk("%a %-d %b"))));
+            plugin_lang::peek_bar("prayer-day", offset, t("Browse the coming days' times").into(), away, tk("Back to today"), readable(palette.primary, palette), palette, step)
+        };
+        let adhan_row = adhan::row(palette, cx);
+        let height = PANEL_H + if adhan_row.is_some() { ADHAN_ROW_H + GAP } else { 0.0 };
+        if (f32::from(size_cell.get().height) - height).abs() > f32::EPSILON {
+            size_cell.set(size(px(PANEL_W), px(height)));
+        }
         let remaining = day.remaining();
         let clock = clock.borrow_mut().get(remaining.num_seconds(), |_| fmt_clock(remaining));
         let f = fonts(cx);
@@ -837,6 +900,7 @@ fn panel_view(p: PanelCx) -> impl Fn(&MandaraPalette, &mut Window, &mut App) -> 
         }
         div()
             .size_full()
+            .text_start()
             .p(px(PAD))
             .flex()
             .flex_col()
@@ -844,9 +908,19 @@ fn panel_view(p: PanelCx) -> impl Fn(&MandaraPalette, &mut Window, &mut App) -> 
             .child(div().h(px(GAP + HEADER_EXTRA_GAP)))
             .child(reveal(&p, 1, hero(&day, &txt, clock, palette, f.arabic.clone(), f.display.clone(), r)))
             .child(div().h(px(GAP)))
-            .child(reveal(&p, 2, timeline(&day, &txt, s.h24, palette, f.arabic.clone(), ROW_H, true)))
+            .child(reveal(&p, 2, browse))
+            .child(div().h(px(GAP)))
+            .child(reveal(
+                &p,
+                2,
+                match &shown {
+                    Some((other, times)) => timeline(other, times, SharedString::default(), false, s.h24, palette, f.arabic.clone(), ROW_H, true),
+                    None => timeline(&day, &txt.times, txt.in_span.clone(), true, s.h24, palette, f.arabic.clone(), ROW_H, true),
+                },
+            ))
             .child(div().h(px(GAP)))
             .child(reveal(&p, 3, stats(&txt, palette, r)))
+            .when_some(adhan_row, |el, row| el.child(div().h(px(GAP))).child(div().h(px(ADHAN_ROW_H)).flex().items_center().child(row)))
             .into_any_element()
     }
 }
@@ -855,7 +929,8 @@ pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Prayer times"), tk("Islamic daily prayer times and countdown (opt-in)"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let bar = fn_view(
             None,
-            |palette, window, cx| {
+            plugin_lang::in_language(own_lang, |palette, window, cx| {
+                adhan::ensure(Some(window), cx);
                 let s = settings(cx);
                 let day = Day::now(&s);
                 // The chip shows minutes: redraw when they (or the prayer) change.
@@ -870,20 +945,23 @@ pub fn register(r: &mut PluginRegistry) {
                     .child(icon("crescent", crate::style::bar_icon(BAR_ICON_PX), accent))
                     .child(div().text_color(if txt.bar_soon { accent.hsla() } else { palette.on_surface_variant.hsla() }).child(txt.bar.clone()))
                     .into_any_element()
-            },
+            }),
             window,
             cx,
         );
-        let panel = fn_view(None, panel_view(panel_cx.clone()), window, cx);
+        let panel_size = Rc::new(Cell::new(size(px(PANEL_W), px(PANEL_H))));
+        let panel = fn_view(None, plugin_lang::in_language(own_lang, panel_view(panel_cx.clone(), panel_size.clone())), window, cx);
         let sidebar = fn_view(
             None,
-            |palette, window, cx| {
+            plugin_lang::in_language(own_lang, |palette, window, cx| {
+                adhan::ensure(Some(window), cx);
                 let s = settings(cx);
                 let day = Day::now(&s);
                 redraw_in(day.next_change(), window, cx);
                 let txt = texts(&day, &s);
                 let accent = readable(palette.primary, palette);
                 card(palette)
+                    .text_start()
                     .flex()
                     .flex_col()
                     .gap(px(tokens::SM))
@@ -896,15 +974,15 @@ pub fn register(r: &mut PluginRegistry) {
                             .child(div().flex_1().text_size(px(text::BODY_S)).font_weight(FontWeight::MEDIUM).text_color(palette.on_surface_variant.hsla()).child(t("Prayer times")))
                             .child(div().text_size(px(text::LABEL)).font_weight(FontWeight::SEMIBOLD).font_features(tabular_nums()).text_color(accent.hsla()).child(txt.sidebar.clone())),
                     )
-                    .child(timeline(&day, &txt, s.h24, palette, fonts(cx).arabic, SIDEBAR_ROW_H, true))
+                    .child(timeline(&day, &txt.times, txt.in_span.clone(), true, s.h24, palette, fonts(cx).arabic, SIDEBAR_ROW_H, true))
                     .into_any_element()
-            },
+            }),
             window,
             cx,
         );
         PluginInstance {
             bar: Some(bar),
-            panel: Some(PanelSpec { view: panel, size: Rc::new(Cell::new(size(px(PANEL_W), px(PANEL_H)))) }),
+            panel: Some(PanelSpec { view: panel, size: panel_size }),
             sidebar: Some(sidebar),
             on_click: None,
             on_secondary_click: Some(Rc::new(|_, cx| {
@@ -914,11 +992,32 @@ pub fn register(r: &mut PluginRegistry) {
             })),
         }
     });
-    r.command(ID, CommandSpec::new("prayer today", tk("Today's prayer times"), |_, cx| {
+    adhan::register_commands(r, own_lang);
+    // Every command answers in the plugin's own language.
+    let mut add = |spec: CommandSpec| r.command(ID, plugin_lang::speaking(spec, own_lang));
+    add(plugin_lang::language_command(ID, "prayer language", "prayer language ar"));
+    add(CommandSpec::new("prayer today", tk("Today's prayer times"), |_, cx| {
         let times = today(cx);
         Ok(json!(Prayer::ALL.iter().map(|p| json!({ "prayer": p.name(), "arabic": p.name_ar(), "time": times.get(*p).format("%H:%M").to_string() })).collect::<Vec<_>>()))
     }));
-    r.command(ID, CommandSpec::new("prayer next", tk("The next prayer and time remaining"), |_, cx| {
+    add(
+        CommandSpec::new("prayer peek", tk("The prayer times of another day (days after today, or before it when negative)"), |a, cx| {
+            let days = if a.get(0).is_some() { a.int(0)? } else { 1 };
+            let s = settings(cx);
+            let date = Local::now().date_naive() + TimeDelta::days(days);
+            let times = times_for(date, &s);
+            let (y, m, d) = hijri(date + TimeDelta::days(s.hijri_offset));
+            Ok(json!({
+                "date": date.format("%Y-%m-%d").to_string(),
+                "hijri": format!("{d} {} {y}", t(hijri_month(m).0)),
+                "times": Prayer::ALL.iter().map(|p| json!({ "prayer": p.name(), "name": t(p.name()), "arabic": p.name_ar(), "time": times.get(*p).format("%H:%M").to_string() })).collect::<Vec<_>>(),
+            }))
+        })
+        .arg(ArgSpec::optional("days", ArgKind::Integer, tk("how many days ahead (1 when left out; negative looks back)")))
+        .example("prayer peek")
+        .example("prayer peek 7"),
+    );
+    add(CommandSpec::new("prayer next", tk("The next prayer and time remaining"), |_, cx| {
         let s = settings(cx);
         let day = Day::now(&s);
         let (y, m, d) = day.hijri(s.hijri_offset);
@@ -1017,6 +1116,6 @@ mod tests {
 
     #[test]
     fn panel_height_is_unchanged() {
-        assert_eq!(PANEL_H, 14.0 * 2.0 + 38.0 + 12.0 + 2.0 + 134.0 + 12.0 + 38.0 * 6.0 + 12.0 + 54.0);
+        assert_eq!(PANEL_H, 14.0 * 2.0 + 38.0 + 12.0 + 2.0 + 134.0 + 12.0 + 28.0 + 12.0 + 38.0 * 6.0 + 12.0 + 54.0);
     }
 }

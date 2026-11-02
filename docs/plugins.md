@@ -131,6 +131,43 @@ had:** a config written before these defaults keeps every plugin it had on
 (the upgrade writes them into `[plugins] enabled`), Wallhaven stays on if it
 was, and cursor themes stay on if you had picked a cursor.
 
+## Jannah, Qur'an, Hadith and Prayer times
+
+These four opt-in plugins share two things:
+
+- **Their own language.** Each has a *Language* setting in Studio →
+  Plugins (`language`: *Follow Mandara*, or one of Mandara's eleven
+  languages; `mandara msg <jannah|quran|hadith|prayer> language ar`). Its
+  panel, bar item, sidebar card and desktop widgets, the meanings and
+  prayer names it shows, and its reading direction (Arabic reads right to
+  left) follow it, while the rest of the shell keeps its own. A meaning
+  missing in that language downloads the way it always does (the Qur'an's
+  translation, a hadith collection's meaning); what was downloaded for
+  another language stays.
+- **A peek.** *Previous* / *Next* under today's item shows another one
+  without marking anything: Jannah's reminder and the coming days' steps
+  (only today's step can be marked done), the Qur'an's ayah of the day and
+  the ayahs after your place (your place and khatm don't move), Hadith's
+  coming hadith (nothing is marked read), and Prayer times' other days.
+  *Back to today* returns; a peek is forgotten when the shell restarts.
+  From the command line: `jannah peek`, `jannah step peek`, `quran peek`,
+  `hadith peek`, `prayer peek`.
+
+**The adhan.** Prayer times can play the call to prayer at each of the
+five prayers (Studio → Plugins → Prayer times → *Adhan at prayer times*,
+off by default). Nothing ships with Mandara: turning it on downloads the
+recording once into `~/.local/share/mandara/prayer/adhan/` (about 1.8 MB,
+with progress and *Try again*); turning it off keeps it, and *Remove*
+(`mandara msg prayer adhan remove`) deletes it. It plays on its own stream
+at the system volume, once per prayer and only on time (a prayer missed
+while the computer slept is never played late), stays silent during do
+not disturb and presentation mode, and stops from its notification, the
+panel or `mandara msg prayer adhan stop`. The recording is
+["Beautiful adhan"](https://commons.wikimedia.org/wiki/File:Beautiful_adhan.ogg)
+by Adam-synagda, released into the public domain (CC0 1.0) on Wikimedia
+Commons, fetched as Commons' MP3 rendering; the same recording plays at
+Fajr.
+
 ## Wallpaper depth
 
 The depth clock's subject (the part of your wallpaper drawn *over* the
