@@ -1577,7 +1577,7 @@ fn load_background(want: &Want) -> Result<paint::Background, String> {
     let (w, h) = want.size;
     let (prepared, _) = crate::wallpaper_fill::prepare(&want.path, want.fill, w, h)?;
     let img = image::open(&prepared).map_err(|e| format!("{}: {e}", prepared.display()))?;
-    paint::background(&img, want.fill, want.size, crate::wallpaper_fill::fill_color(&want.fill_color))
+    paint::background(img, want.fill, want.size, crate::wallpaper_fill::fill_color(&want.fill_color))
 }
 
 /// What [`bake`] needs besides the output and the scene.

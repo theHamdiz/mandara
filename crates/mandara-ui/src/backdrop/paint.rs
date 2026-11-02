@@ -80,60 +80,89 @@ pub struct Background {
 }
 
 /// Places `img` on a `w × h` canvas for `fill` (bands in `fill_color`).
-pub fn background(img: &DynamicImage, fill: WallpaperFill, (w, h): (u32, u32), fill_color: Color) -> Result<Background, String> {
+///
+/// Memory: the picture is resampled first and the canvas allocated after,
+/// with the source already dropped when it was resampled, so the
+/// resampler's float buffer, the source and the canvas are never alive
+/// together; and the picture is copied onto the canvas straight from its
+/// own pixels (no RGBA copy of it). At 4K that is one to two full-frame
+/// buffers (33 MB each) less at the moment a wallpaper loads.
+pub fn background(img: DynamicImage, fill: WallpaperFill, (w, h): (u32, u32), fill_color: Color) -> Result<Background, String> {
     use image::imageops::FilterType::Triangle;
-    let mut pm = Pixmap::new(w, h).ok_or("bad canvas size")?;
-    let [r, g, b, _] = fill_color.to_rgba8();
-    pm.fill(tiny_skia::Color::from_rgba8(r, g, b, u8::MAX));
     let (iw, ih) = (img.width().max(1), img.height().max(1));
     let centered = |cw: u32, ch: u32| ((w as i32 - cw as i32) / 2, (h as i32 - ch as i32) / 2);
-    match fill {
+    // What goes on the canvas and where: one placement, or a grid of tiles.
+    let (placed, at, grid) = match fill {
         // The cached display copy usually has the output's size already.
-        WallpaperFill::Cover | WallpaperFill::Stretch if (iw, ih) == (w, h) => over(&mut pm, &img.to_rgba8(), 0, 0),
-        WallpaperFill::Cover => over(&mut pm, &crate::wallpaper::cover(img, w, h).to_rgba8(), 0, 0),
-        WallpaperFill::Stretch => over(&mut pm, &img.resize_exact(w, h, Triangle).to_rgba8(), 0, 0),
+        WallpaperFill::Cover | WallpaperFill::Stretch if (iw, ih) == (w, h) => (img, (0, 0), None),
+        WallpaperFill::Cover => (resampled(img, |img| crate::wallpaper::cover(img, w, h)), (0, 0), None),
+        WallpaperFill::Stretch => (resampled(img, |img| img.resize_exact(w, h, Triangle)), (0, 0), None),
         WallpaperFill::Contain => {
             let s = (w as f32 / iw as f32).min(h as f32 / ih as f32);
             let (fw, fh) = (((iw as f32 * s).round() as u32).max(1), ((ih as f32 * s).round() as u32).max(1));
-            let fit = if (fw, fh) == (iw, ih) { img.to_rgba8() } else { img.resize_exact(fw, fh, Triangle).to_rgba8() };
-            let (x, y) = centered(fw, fh);
-            over(&mut pm, &fit, x, y);
+            let fit = if (fw, fh) == (iw, ih) { img } else { resampled(img, |img| img.resize_exact(fw, fh, Triangle)) };
+            (fit, centered(fw, fh), None)
         }
-        WallpaperFill::Center => {
-            let (x, y) = centered(iw, ih);
-            over(&mut pm, &img.to_rgba8(), x, y);
-        }
+        WallpaperFill::Center => (img, centered(iw, ih), None),
         WallpaperFill::Tile => {
             let (cols, rows, k) = crate::wallpaper_fill::tile_grid(w as f32, h as f32, iw as f32, ih as f32);
             let (tw, th) = (((iw as f32 * k).round() as u32).max(1), ((ih as f32 * k).round() as u32).max(1));
-            let tile = if (tw, th) == (iw, ih) { img.to_rgba8() } else { img.resize_exact(tw, th, Triangle).to_rgba8() };
+            let tile = if (tw, th) == (iw, ih) { img } else { resampled(img, |img| img.resize_exact(tw, th, Triangle)) };
+            (tile, (0, 0), Some((cols, rows, tw, th)))
+        }
+    };
+    let mut pm = Pixmap::new(w, h).ok_or("bad canvas size")?;
+    let [r, g, b, _] = fill_color.to_rgba8();
+    pm.fill(tiny_skia::Color::from_rgba8(r, g, b, u8::MAX));
+    match grid {
+        Some((cols, rows, tw, th)) => {
             for row in 0..rows {
                 for col in 0..cols {
-                    over(&mut pm, &tile, (col * tw) as i32, (row * th) as i32);
+                    over(&mut pm, &placed, (col * tw) as i32, (row * th) as i32);
                 }
             }
         }
+        None => over(&mut pm, &placed, at.0, at.1),
     }
+    drop(placed);
     let tone = tone_map(&pm);
     Ok(Background { pixmap: pm, tone })
 }
 
-/// Straight RGBA `src` over the opaque `dst` at `(x, y)`, clipped.
-fn over(dst: &mut Pixmap, src: &RgbaImage, x: i32, y: i32) {
+/// `img` resampled by `f`, the source dropped before the canvas exists.
+fn resampled(img: DynamicImage, f: impl FnOnce(&DynamicImage) -> DynamicImage) -> DynamicImage {
+    f(&img)
+}
+
+/// `src` (straight alpha) over the opaque `dst` at `(x, y)`, clipped. RGB
+/// and RGBA pictures are read in place; other layouts are converted to
+/// RGBA first.
+fn over(dst: &mut Pixmap, src: &DynamicImage, x: i32, y: i32) {
+    match src {
+        DynamicImage::ImageRgba8(rgba) => over_pixels::<4>(dst, rgba.as_raw(), (rgba.width() as i32, rgba.height() as i32), x, y),
+        DynamicImage::ImageRgb8(rgb) => over_pixels::<3>(dst, rgb.as_raw(), (rgb.width() as i32, rgb.height() as i32), x, y),
+        other => {
+            let rgba: RgbaImage = other.to_rgba8();
+            over_pixels::<4>(dst, rgba.as_raw(), (rgba.width() as i32, rgba.height() as i32), x, y);
+        }
+    }
+}
+
+/// [`over`] for `N`-channel pixels (3: opaque RGB, 4: straight RGBA).
+fn over_pixels<const N: usize>(dst: &mut Pixmap, raw: &[u8], (sw, sh): (i32, i32), x: i32, y: i32) {
     let (dw, dh) = (dst.width() as i32, dst.height() as i32);
-    let (sw, sh) = (src.width() as i32, src.height() as i32);
     let (x0, y0, x1, y1) = (x.max(0), y.max(0), (x + sw).min(dw), (y + sh).min(dh));
     if x1 <= x0 || y1 <= y0 {
         return;
     }
     let data = dst.data_mut();
-    let raw = src.as_raw();
+    let n = N as i32;
     for dy in y0..y1 {
         let sy = dy - y;
-        let s_row = &raw[((sy * sw + (x0 - x)) * 4) as usize..((sy * sw + (x1 - x)) * 4) as usize];
+        let s_row = &raw[((sy * sw + (x0 - x)) * n) as usize..((sy * sw + (x1 - x)) * n) as usize];
         let d_row = &mut data[((dy * dw + x0) * 4) as usize..((dy * dw + x1) * 4) as usize];
-        for (d, s) in d_row.as_chunks_mut::<4>().0.iter_mut().zip(s_row.as_chunks::<4>().0) {
-            match s[3] {
+        for (d, s) in d_row.as_chunks_mut::<4>().0.iter_mut().zip(s_row.as_chunks::<N>().0) {
+            match if N == 4 { s[3] } else { u8::MAX } {
                 u8::MAX => d.copy_from_slice(&[s[0], s[1], s[2], u8::MAX]),
                 0 => {}
                 a => {
@@ -703,24 +732,37 @@ mod tests {
     fn fills_place_the_image() {
         let img = DynamicImage::ImageRgba8(RgbaImage::from_pixel(40, 20, image::Rgba([200, 10, 10, 255])));
         let black = Color::hex("#000000");
-        let cover = background(&img, WallpaperFill::Cover, (30, 30), black).unwrap();
+        let cover = background(img.clone(), WallpaperFill::Cover, (30, 30), black).unwrap();
         assert!(cover.pixmap.data().as_chunks::<4>().0.iter().all(|p| p[0] > 190 && p[3] == 255));
-        let contain = background(&img, WallpaperFill::Contain, (40, 40), black).unwrap();
+        let contain = background(img.clone(), WallpaperFill::Contain, (40, 40), black).unwrap();
         let at = |pm: &Pixmap, x: u32, y: u32| pm.pixel(x, y).unwrap().red();
         assert_eq!(at(&contain.pixmap, 20, 2), 0, "band above");
         assert!(at(&contain.pixmap, 20, 20) > 190, "image in the middle");
-        let center = background(&img, WallpaperFill::Center, (60, 60), black).unwrap();
+        let center = background(img.clone(), WallpaperFill::Center, (60, 60), black).unwrap();
         assert_eq!(at(&center.pixmap, 5, 30), 0);
         assert!(at(&center.pixmap, 30, 30) > 190);
-        let tile = background(&img, WallpaperFill::Tile, (100, 50), black).unwrap();
+        let tile = background(img, WallpaperFill::Tile, (100, 50), black).unwrap();
         assert!(at(&tile.pixmap, 95, 45) > 190, "tiles reach the far corner");
         assert!(cover.tone.width() <= TONE_MAP_PX && cover.tone.get_pixel(0, 0).0[0] > 190);
     }
 
     #[test]
+    fn rgb_pictures_are_placed_like_their_rgba_copies() {
+        let rgb = image::RgbImage::from_fn(37, 23, |x, y| image::Rgb([(x * 7) as u8, (y * 11) as u8, ((x + y) * 5) as u8]));
+        let fill = Color::hex("#203040");
+        for mode in [WallpaperFill::Cover, WallpaperFill::Contain, WallpaperFill::Center, WallpaperFill::Stretch, WallpaperFill::Tile] {
+            for size in [(37, 23), (50, 50), (90, 40), (20, 12)] {
+                let from_rgb = background(DynamicImage::ImageRgb8(rgb.clone()), mode, size, fill).unwrap();
+                let from_rgba = background(DynamicImage::ImageRgba8(DynamicImage::ImageRgb8(rgb.clone()).to_rgba8()), mode, size, fill).unwrap();
+                assert_eq!(from_rgb.pixmap.data(), from_rgba.pixmap.data(), "{mode:?} at {size:?}");
+            }
+        }
+    }
+
+    #[test]
     fn translucent_images_blend_over_the_fill() {
         let img = DynamicImage::ImageRgba8(RgbaImage::from_pixel(10, 10, image::Rgba([255, 255, 255, 128])));
-        let bg = background(&img, WallpaperFill::Stretch, (10, 10), Color::hex("#000000")).unwrap();
+        let bg = background(img, WallpaperFill::Stretch, (10, 10), Color::hex("#000000")).unwrap();
         let p = bg.pixmap.pixel(5, 5).unwrap();
         assert_eq!(p.alpha(), 255);
         assert!((120..=135).contains(&p.red()));
