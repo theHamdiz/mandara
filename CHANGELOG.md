@@ -41,6 +41,10 @@ developer tools.
 - **Crash reports.** Apps that crashed this week, with the report to copy
   and a debugger one click away.
 
+- **Jannah.** A gentle daily reminder of Jannah: a verse or hadith, its
+  meaning and one good step for today, in the bar, the sidebar or on the
+  desktop. Switched off by default; turn it on in Studio → Plugins.
+
 - **Mandara speaks Bahasa Indonesia.** The whole interface, Studio and the
   login screen are translated, and dates follow Indonesian conventions.
   Pick it in Studio → General → Language, or let Mandara follow your

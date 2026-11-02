@@ -299,6 +299,7 @@ mandara msg keybinds toggle          # show, hide, list (every shortcut as JSON)
 mandara msg breaks status            # now [short|long], skip, snooze [minutes], pause [minutes], resume
 mandara msg presentation toggle      # on, off, status
 mandara msg share clipboard          # text <text>, file <path>, screenshot, stop, status
+mandara msg jannah today             # next, prev, show <ref>, search <query>, paths, step [done], saved
 ```
 
 ## Compositor and Config doctor

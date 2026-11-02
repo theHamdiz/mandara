@@ -21,7 +21,7 @@ handbook) sit beside it.
 </tr>
 </table>
 
-The 70 first-party plugins (34 of them ship switched off, marked *opt-in*):
+The 71 first-party plugins (35 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -34,6 +34,7 @@ The 70 first-party plugins (34 of them ship switched off, marked *opt-in*):
 | **Language** | Switch the interface language instantly |
 | **Media** | MPRIS now playing and controls |
 | **Prayer times** | Islamic daily prayer times and countdown *(opt-in)* |
+| **Jannah** | A gentle daily reminder of Jannah: verses of the Qur'an and hadith from Sahih al-Bukhari and Sahih Muslim, their meaning in your language, and one good step for today, in the bar, the sidebar or on the desktop *(opt-in)* |
 | **Resources** | CPU, memory and disk usage |
 | **Mini stats** | CPU, memory, network, temperature and battery as compact numbers in the bar *(opt-in)* |
 | **Process hunter** | Find running processes by name or PID and end them | *(opt-in)*
@@ -121,8 +122,8 @@ the process hunter, the authenticator, soundscapes, world clock, network
 speed, the color picker, Pomodoro, notes, to-do, privacy, the app
 installer, the shortcuts cheatsheet, task progress, eye breaks,
 presentation mode, share to phone, Tailscale, the uptime monitor, local
-AI, listening ports, Git repositories, CI status and crash reports. Turn
-any of them on in Studio → Plugins or with
+AI, listening ports, Git repositories, CI status, crash reports and Jannah.
+Turn any of them on in Studio → Plugins or with
 `mandara msg plugins enable <id>`. **Upgrading from 0.1 changes nothing you
 had:** a config written before these defaults keeps every plugin it had on
 (the upgrade writes them into `[plugins] enabled`), Wallhaven stays on if it

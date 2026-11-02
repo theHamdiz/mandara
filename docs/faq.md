@@ -74,7 +74,7 @@ the bar. [Scripting, automation and agents](agent-ready.md)
 
 ## What plugins come with Mandara?
 
-Mandara ships 70 first-party plugins: workspaces, media with lyrics,
+Mandara ships 71 first-party plugins: workspaces, media with lyrics,
 audio, network, Bluetooth, weather, prayer times, a clipboard manager,
 screenshots, containers, services, a process hunter, a shortcuts
 cheatsheet, Tailscale, local AI models, sharing to your phone and more.

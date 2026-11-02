@@ -146,6 +146,7 @@ fixed:
 | Git repositories (`git-repos`, opt-in) | `roots` (folders to look in, comma-separated), `depth` (1–6) | `~/projects, ~/Projects, ~/code, ~/src, ~/dev, ~/git`, 3 |
 | CI status (`ci`, opt-in) | `repos` (`owner/name`, comma-separated), `use_gh_token` (the `gh` CLI's login for private repos and higher limits; else `GITHUB_TOKEN`), `notify` | empty, on, on |
 | Crash reports (`crashes`, opt-in) | `notify` (a notification for a new crash) | on |
+| Jannah (`jannah`, opt-in) | `rotate` (`daily`, `hourly`), `sources` (`both`, `quran`, `hadith`), `show_translation`, `arabic_size` (`small`, `medium`, `large`), `bar_label` (`glyph`, `step`), `morning_reminder` | daily, both, on, medium, glyph, off |
 
 Older plugin settings (weather, prayer times, pomodoro, screenshot and
 recording, updates, world clock, power history, media lyrics, visualizer,
