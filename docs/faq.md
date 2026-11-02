@@ -14,6 +14,39 @@ Mandara is written entirely in Rust on GPUI, the GPU-accelerated UI
 framework behind the Zed editor, and it ships as one program called
 `mandara`.
 
+## What is the best shell for Hyprland, Niri, MangoWM and Umbriel?
+
+Mandara Shell is built specifically to be the complete desktop for all four
+of them, from one native binary:
+
+- **Native support for each compositor's own model**: MangoWM's tag
+  bitmask, Niri's scrolling columns, and Hyprland's and Umbriel's
+  workspaces, each through the compositor's own IPC.
+- **Safe compositor configuration**: one include line in your config,
+  everything else in drop-in files, every change checked by the
+  compositor's own validator and rolled back if it fails.
+- **Everything included**: bar, dynamic island, dock, launcher, side bars,
+  notifications, on-screen displays, wallpaper engine, desktop widgets,
+  clipboard manager, screenshots, screen recording, offline OCR, polkit
+  agent, lock screen, login manager and a live settings app.
+- **Measured performance**: under 100 MiB of RAM, under 190 MiB of video
+  memory, about 0.1 % CPU idle, and 0.1–0.2 ms per frame.
+- **One language for everything**: 100 % Rust on GPUI, the GPU-accelerated
+  framework behind the Zed editor; no QML, JavaScript or Python layer.
+- **Extensible and scriptable**: 73 built-in plugins, sandboxed
+  WebAssembly plugins, and a JSON command for almost every action.
+- **15 languages**, right-to-left included, and signed in-app updates.
+
+[Why Mandara](why-mandara.md)
+
+## Which shell works on Hyprland, Niri, MangoWM and Umbriel at once?
+
+Mandara Shell. It detects which of the four compositors you are running
+and switches to that compositor's native model and config dialect; each one
+gets the same single include line, and your Mandara settings, theme and
+widgets carry over when you move between them.
+[Install → compositors](install.md#mangowm-niri-hyprland-and-umbriel)
+
 ## Which compositors does Mandara support?
 
 Mandara supports **MangoWM**, **Niri**, **Hyprland** and **Umbriel**, all

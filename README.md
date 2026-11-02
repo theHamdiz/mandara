@@ -82,6 +82,57 @@ widget can be moved, resized and restyled right on the desktop.
 | **Languages** | 15, including right-to-left Arabic, Persian and Urdu |
 | **License** | GPL-3.0-or-later |
 
+## What sets Mandara apart
+
+Mandara is built for one job: being the complete desktop for **MangoWM,
+Niri, Hyprland and Umbriel**. These are the strengths it was designed
+around, each one measured or shipped today:
+
+1. **Four compositors, each first-class.** It speaks every compositor's
+   own IPC natively: MangoWM's tag bitmask (view, toggle-view, tag moves),
+   Niri's scrolling columns, Hyprland's and Umbriel's workspaces. It reads
+   each compositor's version and writes its exact config dialect, down to
+   Hyprland 0.57's Lua config.
+2. **It never breaks your compositor config.** It adds one include line;
+   everything else goes into its own drop-in files. Every change is
+   checked by the compositor's own validator (`mango -p`, `niri validate`,
+   `Hyprland --verify-config`, `umbriel config validate`) and rolled back
+   if it objects.
+3. **A whole desktop in one native binary.** Bar, dynamic island, dock,
+   launcher, side bars and sidebar, notification center, on-screen
+   displays, wallpaper engine, desktop widgets, clipboard manager,
+   screenshots, screen recording, offline OCR, polkit agent, lock screen,
+   login manager and a settings app: one Rust program, no QML, JavaScript,
+   Python or shell glue.
+4. **Fast by measurement, not by claim.** Under 100 MiB of RAM, under
+   190 MiB of video memory, about 0.1 % CPU idle, and frames built in
+   0.1–0.2 ms, a sliver of the 6.94 ms a 144 Hz display allows.
+   [How it's measured](docs/performance.md)
+5. **Real motion.** Analytical spring physics that can be interrupted
+   mid-flight, and OKLCH colour blending, so every morph, slide and theme
+   change stays smooth.
+6. **Every setting live, in a real app.** Mandara Studio has 31 pages; drag
+   a slider and the bar follows as you drag. Nothing needs a config file
+   unless you want one.
+7. **A colour engine, not a colour picker.** Material You (HCT) palettes
+   from your wallpaper, hand-tuned themes, and opt-in theming of Ghostty,
+   GTK 3/4, Qt 5/6, Kvantum, Zed, kitty, foot, Alacritty, btop and more.
+8. **Your desktop, your look.** Six bar styles on any edge, side bars that
+   join the top bar into one frame, one-click Looks, dozens of desktop
+   widgets placed per monitor, and three launcher looks.
+9. **Safe, rich extensions.** 73 plugins built in. Third-party plugins are
+   Rust compiled to sandboxed WebAssembly: a crashing plugin is switched
+   off and the shell keeps running.
+10. **Scriptable end to end.** Almost everything the interface does is a
+    `mandara msg` command with JSON replies, so scripts and AI agents can
+    drive and inspect the whole desktop. [How](docs/agent-ready.md)
+11. **Installs and updates itself, safely.** One command sets it up on Arch,
+    Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus,
+    takes over an existing setup without losing it, and updates arrive as
+    small, signed binary patches from Studio → About → Update now.
+12. **Made for everyone.** 15 interface languages, right-to-left Arabic,
+    Persian and Urdu included, and fonts chosen for every script it shows.
+
 ## Why you'll like it
 
 - **It's light.** The whole desktop needs less memory than a browser tab

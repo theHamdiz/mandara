@@ -54,7 +54,7 @@ WebAssembly.
 | Bar layouts | **Edge frame, glass pills, dynamic island, hairline, micro pill, notch; any screen edge** | Several | Several | Island |
 | Screen recording | **Built in (native screencopy → AV1/WebM, pure Rust)** | External tools | External tools | External tools |
 | OCR (copy text from screen) | **Built in, offline: English, العربية, Español, Français…** | — | — | — |
-| Interface languages | **10, with RTL Arabic** | Several | Several | English |
+| Interface languages | **15, with RTL Arabic, Persian and Urdu** | Several | Several | English |
 | Settings app | **Mandara Studio: 31 pages in six groups, live preview, drag-and-drop layout designer, maintenance and repair** | Settings panel | Settings app | Config files |
 
 Desktop and system features:
