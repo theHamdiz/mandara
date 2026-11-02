@@ -100,6 +100,7 @@ A box of segmented bars, like a hardware spectrum display
 A brief pill when volume, brightness, keyboard layout and more change
 A bundled Mandara icon by name, such as sun or timer
 A card for the sidebar, or none.
+A centred glass search bar in the style of macOS Spotlight; grouped results open under it as you type
 A charger's saddle is an exalted throne, the best companions are books alone.
 A clear night. Look up, the stars are out.
 A clear sky. A good day to be outside.
@@ -204,6 +205,7 @@ A slim bar on the left edge; panels open sideways
 A smoothed spectrum along the screen edge, with a soft glow; only while music plays
 A soft shadow under the bar
 A soft tick as the volume moves
+A strip of key hints under the results
 A tab needs a name
 A talent is formed in stillness, a character in the world's torrent.
 A tall pill with the track down its side
@@ -212,6 +214,7 @@ A thin line along a popup's edge shows the time left
 A thin strip dense with live stats
 A title is needed
 A to Z
+A top hit, then results under headings by kind: Applications, Actions & settings, Files…
 A topographic map with tinted terrain
 A trap or a timeout stops only that plugin, until it is reloaded
 A variation of my recipe
@@ -260,6 +263,7 @@ Action
 Action buttons
 Action level
 Action messages
+Actions
 Actions & settings
 Actions in plain searches
 Actions prefix
@@ -399,6 +403,7 @@ All types
 All windows
 All your files and the system's
 All {count}
+All, Pinned and app categories above the grid (Tab switches)
 Allow
 Allow above 100 %
 Allow native packages
@@ -492,7 +497,7 @@ App name or pattern, then Enter
 App reminders
 App theme files
 App themes
-App tiles per row
+App tiles per row; fewer fit a narrower launcher
 App, binary or role (music, phone, game…)
 App, e.g. Spotify or ^discord$
 AppImage: a portable app that runs from your home folder. No password needed.
@@ -508,6 +513,7 @@ Applies live on {compositor}; apps started from now on use it too.
 Applies now; reverts after {seconds} s unless you keep it
 Apply
 Apply a look (your setup is saved first so it can be restored)
+Apply a ready-made launcher look: its layout and style settings change together (no argument: the current one)
 Apply a saved display profile
 Apply changes instantly without springs
 Apply profiles automatically
@@ -696,6 +702,9 @@ Be just with those in your care
 Be merciful to every creature
 Be patient in hardship
 Be the first: publish yours by tagging the repository mandara-plugin (see PLUGINS.md).
+Beacon
+Beacon (centred search bar)
+Beacon search bar
 Before the end group
 Begin
 Begin at the beginning, and go on till you come to the end: then stop.
@@ -883,6 +892,7 @@ Carousel
 Carousel: how much bigger the middle wallpaper is
 Categories
 Category
+Category chips
 Catppuccin Mocha
 Caustics
 Cell shape
@@ -997,6 +1007,7 @@ Cities, comma separated (empty: your World clock cities)
 City or place name
 Clarice Lispector
 Classic
+Classic: one surface with the search field and results. Beacon: a centred search bar with results under it once you type
 Claude Code today
 Claude Code's tokens today and this week, read from its local logs once you switch it on
 Clean
@@ -1319,6 +1330,7 @@ Custom shadow
 Custom spring
 Custom tape
 Custom: {time}
+Customized: your own mix of the settings below. Pick a look to start over from it.
 Custom…
 Cycle through the wallpaper folder, another folder or the playlist
 Cycle to the next preset
@@ -1662,6 +1674,7 @@ Each new one replaces the current wallpaper
 Each note is a Markdown file, each topic a folder in here — point it at a synced folder or an Obsidian vault (empty: Mandara's data folder)
 Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence.
 Each repair is safe: your compositor config only ever gets one include line, with a backup.
+Each sets the launcher's style, layout and placement together; change any setting below afterwards.
 Each surface
 Each walk to the mosque, morning or evening, is a welcome being prepared.
 Ease someone's hardship
@@ -1775,6 +1788,7 @@ Event reminders
 Events come from Studio → Calendar.
 Events from your calendars in the clock panel. Add one with mandara msg calendar add <url or .ics> [name]
 Every
+Every app as a large icon in a card in the middle of the screen, with category chips
 Every app with a launcher entry, and where it came from. Uninstalling uses that app's own package manager and always shows what will happen first. Drop an AppImage, Flatpak, archive or package here to install it.
 Every bar item sits on a capsule of its own, in any bar style
 Every check with its state, latency, uptime and last result (JSON)
@@ -2214,10 +2228,12 @@ Gregorian
 Grey skies today. Keep something warm close.
 Grid
 Grid columns
-Grid shows app tiles while nothing is typed
+Grid icon size
+Grid shows app icons while browsing and while you type plain words; prefixed searches stay a list
 Grooves
 Group
 Group capsules
+Group results
 Group tab bar
 Group tab height
 Grow
@@ -2277,6 +2293,7 @@ Heavier springs move more slowly
 Heavy
 Height
 Height in the center
+Height on the screen
 Height when attached
 Helen Keller
 Helper
@@ -2804,6 +2821,7 @@ Launcher & pop-ups
 Launcher button
 Launcher button at the end
 Launcher colors
+Launcher looks
 Launcher width at a screen edge
 Launches count more when recent; the weight halves every few days (Ranking above).
 Launching
@@ -3277,6 +3295,7 @@ Model mode only: downloads the depth model once from Hugging Face
 Model mode only: runs the model once per wallpaper in a low-priority helper
 Models for copying text from screenshots and for the wallpaper depth effect's model mode. From Hugging Face, all Apache-2.0; the depth model downloads only when you pick that mode.
 Models loaded in memory with their VRAM share and unload time (JSON)
+Modes
 Mon
 Monday
 Monitor
@@ -3305,6 +3324,7 @@ Morning reminder
 Morph from the bar
 Most apps
 Most entries kept in collections; they survive clears like pinned ones
+Most grid columns
 Most launched results with their frecency scores
 Most often: {app} ×{count}
 Most pinned entries kept
@@ -4504,6 +4524,7 @@ Reads your wallpaper and caches its subject mask in Mandara's cache folder
 Ready
 Ready to present
 Ready, with a warning
+Ready-made looks
 Real kindness seeks no return; what return can the world make to rain clouds?
 Receives notifications as the desktop notification server
 Recent
@@ -4917,10 +4938,13 @@ Search Arabic or meaning…
 Search Arabic, meaning or reference…
 Search Wallhaven
 Search accounts…
+Search actions and settings
 Search and download wallpapers from wallhaven.cc right in the wallpaper picker
 Search apps
 Search apps by name or id
+Search apps, files and actions
 Search apps, files and more
+Search bar width
 Search below to add a city or time zone
 Search by service or account name
 Search cities (English or Arabic) and IANA time zones
@@ -4928,6 +4952,7 @@ Search depth
 Search every icon in your theme…
 Search every note
 Search field
+Search files
 Search fonts, or type any name
 Search for something: words in Arabic or in your language
 Search installed apps
@@ -4946,6 +4971,7 @@ Search the verses and hadith (Arabic without diacritics, or the meaning)
 Search the whole Qur'an
 Search units…
 Search wallhaven.cc in the wallpaper picker: type a search and pick a result, it downloads at full size into your folder.
+Search what you copied
 Search what you copied; Enter copies it again
 Search widgets
 Search your installed apps; checked apps stay in the dock.
@@ -5792,6 +5818,7 @@ The link has no secret
 The link stops working after this long
 The link stops working once your phone has downloaded the item
 The list is full — remove a widget to add another
+The list launcher: a drawer rising from the bottom edge, search next to the edge
 The lock screen's text
 The main menu is see-through glass with solid cards on it
 The main menu opens from the bar only
@@ -5824,6 +5851,7 @@ The plugin archive has no plugin.toml
 The plugin archive is too large
 The public IP endpoint must be an http(s) URL
 The reader shows the Prophet's words first; the chain opens with a tap
+The ready-made launcher looks (Classic, Grid, Beacon) and which one is applied
 The recording already finished
 The recording did not start in time
 The recording thread crashed
@@ -6072,6 +6100,7 @@ Toolbar size
 Top
 Top center
 Top edge
+Top hit
 Top left
 Top left command
 Top middle
@@ -6508,6 +6537,7 @@ Weather request failed: {error}
 Weather sentence
 Weather unavailable
 Weather, prayer times, world clocks and more at a glance
+Web & shortcuts
 Web addresses as colourful tiles
 WebAssembly component
 WebP
@@ -6583,6 +6613,7 @@ Where popups stack; they always stay clear of the bar
 Where screen recordings go (empty: Videos/Recordings)
 Where screenshots are saved (empty: Pictures/Screenshots)
 Where settings come from
+Where the Beacon bar sits, as a share of the screen height from the top
 Where the Ollama server listens
 Where the launcher opens
 Where the launcher opens: in the middle of the screen or attached to the top / bottom edge at the left, middle or right (no argument: the current one)
@@ -6620,6 +6651,7 @@ Width
 Width in the center
 Width of a left or right bar
 Width of each preview
+Width of the Beacon search bar (its mode buttons sit beside it)
 Width of the administrator-password and keyring-unlock dialogs
 Width of the screen frame's border
 Width when attached
@@ -6828,6 +6860,7 @@ changes or full (default)
 checked {span} ago
 city name or zone id
 city name, Arabic name or zone id
+classic, grid or beacon
 click to copy
 closes a group it never opened
 collection id or name
