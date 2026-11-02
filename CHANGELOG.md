@@ -6,6 +6,40 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **Sliders keep up with your pointer.** Dragging a slider in Studio, such
+  as Bar → Height or Notch width, used to trail behind the pointer: every
+  tiny move rewrote the whole configuration, and the bar's height made the
+  compositor re-tile all your windows, Studio's own included, on every
+  step. The handle and its value now follow the pointer on the very next
+  frame, the setting is applied at most once a frame, and windows move
+  once, when the slider rests. Compositor gaps and borders are rewritten
+  once the slider rests too. ([#20](https://github.com/theHamdiz/mandara/issues/20))
+- **Bar groups never overlap.** A long window title could run underneath
+  the clock in the middle of the bar. Each group now gets the room up to
+  its neighbour, a long title ends in an ellipsis there, and on a very
+  narrow bar the items nearest the middle make way first. This works in
+  every bar style and on every edge. ([#21](https://github.com/theHamdiz/mandara/issues/21))
+- **Workspace numbers stay centred.** When an app's icon couldn't be drawn,
+  its workspace pill kept an empty space for it and the number sat off to
+  one side. A broken icon now falls back to the app's coloured letter, so
+  the pill always shows what it made room for. ([#20](https://github.com/theHamdiz/mandara/issues/20))
+
+### Changed
+
+- **Sliders have a new look.** Every slider, in Studio and in the shell's
+  panels and sidebar, now has a rounded fill, a slim upright handle with a
+  small gap on each side, a softer track with a dot at its end, and a
+  little spring when you press it. Studio's sliders show their value in a
+  bubble above the handle while you drag. ([#20](https://github.com/theHamdiz/mandara/issues/20))
+
+### New
+
+- **Hide the slider handle.** Prefer a plain fill? Set Themes → Style →
+  **Slider handle** to *None* and sliders show just their rounded fill, with
+  no handle line. ([#20](https://github.com/theHamdiz/mandara/issues/20))
+
 ## 0.6.0 — 2026-11-02
 
 Rounded screen corners are on by default.

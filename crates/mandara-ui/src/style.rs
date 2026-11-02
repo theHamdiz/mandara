@@ -27,6 +27,8 @@ static CARD_RADIUS: AtomicU32 = AtomicU32::new(surfaces::defaults::CARD_RADIUS_P
 static CARD_PADDING: AtomicU32 = AtomicU32::new(surfaces::defaults::CARD_PADDING_PX.to_bits());
 static SHADOWS: AtomicBool = AtomicBool::new(true);
 static BORDERS: AtomicBool = AtomicBool::new(true);
+/// `style.slider_handle` is `line`.
+static SLIDER_HANDLE: AtomicBool = AtomicBool::new(true);
 /// Body text weight, CSS scale.
 static WEIGHT: AtomicU32 = AtomicU32::new(mandara_config::defaults::FONT_WEIGHT_REGULAR as u32);
 
@@ -113,6 +115,11 @@ pub fn borders() -> bool {
     BORDERS.load(Ordering::Relaxed)
 }
 
+/// The thick sliders draw their handle line (`style.slider_handle`).
+pub fn slider_handle() -> bool {
+    SLIDER_HANDLE.load(Ordering::Relaxed)
+}
+
 /// Body text weight.
 pub fn body_weight() -> FontWeight {
     FontWeight(WEIGHT.load(Ordering::Relaxed) as f32)
@@ -128,6 +135,7 @@ pub fn apply(cfg: &ShellConfig) {
     CARD_PADDING.store(surfaces::ranges::CARD_PADDING.clamp(look.card_padding, surfaces::defaults::CARD_PADDING_PX).to_bits(), Ordering::Relaxed);
     SHADOWS.store(cfg.style.shadows, Ordering::Relaxed);
     BORDERS.store(cfg.style.borders, Ordering::Relaxed);
+    SLIDER_HANDLE.store(cfg.style.slider_handle == mandara_config::desktop::SliderHandle::Line, Ordering::Relaxed);
     WEIGHT.store(u32::from(cfg.typography.weight.clamp(MIN_WEIGHT, MAX_WEIGHT)), Ordering::Relaxed);
     mandara_core::spring::set_time_scale(cfg.motion.speed);
     mandara_core::spring::set_motion_profile(motion_profile(cfg));

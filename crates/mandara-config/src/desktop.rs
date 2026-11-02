@@ -574,12 +574,26 @@ pub struct StyleConfig {
     pub borders: bool,
     /// Dims the desktop behind open panels / the launcher, 0–1.
     pub backdrop_dim: f32,
+    /// The upright handle between every slider's fill and its track.
+    pub slider_handle: SliderHandle,
 }
 
 impl Default for StyleConfig {
     fn default() -> Self {
-        Self { radius_scale: 1.0, shadows: true, borders: true, backdrop_dim: 0.0 }
+        Self { radius_scale: 1.0, shadows: true, borders: true, backdrop_dim: 0.0, slider_handle: SliderHandle::Line }
     }
+}
+
+/// What marks the end of a thick slider's fill (`style.slider_handle`).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SliderHandle {
+    /// An upright line past the fill, a small gap on each side, and a stop
+    /// dot at the end of the track.
+    #[default]
+    Line,
+    /// Nothing: the fill's rounded end alone.
+    None,
 }
 
 // ── Bar extras ───────────────────────────────────────────────────────────

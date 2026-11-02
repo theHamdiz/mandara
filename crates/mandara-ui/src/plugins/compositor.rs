@@ -187,7 +187,36 @@ fn sync_key(cfg: &mandara_config::ShellConfig) -> String {
     serde_json::to_string(&compositor).unwrap_or_default()
 }
 
+/// A compositor edit is written to the drop-in once edits have rested
+/// this long.
+const SYNC_SETTLE: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Writes the drop-in for the current config in the background.
+fn start_sync(cx: &mut App) {
+    match sync_inputs(cx) {
+        Ok((backend, cfg, borders)) => {
+            let generation = SYNC_STARTED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            cx.background_executor()
+                .spawn(async move {
+                    // Background syncs may finish out of order: an older one
+                    // never overwrites a newer drop-in.
+                    let mut applied = SYNC_APPLIED.lock().unwrap_or_else(|e| e.into_inner());
+                    if generation < *applied {
+                        return;
+                    }
+                    *applied = generation;
+                    if let Err(err) = sync_with(backend.as_ref(), &cfg, borders) {
+                        tracing::warn!("compositor sync: {err}");
+                    }
+                })
+                .detach();
+        }
+        Err(err) => tracing::warn!("compositor sync: {err}"),
+    }
+}
+
 fn watch(cx: &mut App) {
+    let pending: Rc<RefCell<Option<gpui::Task<()>>>> = Rc::default();
     let last: Rc<RefCell<(Option<BorderColors>, String)>> = Rc::default();
     let snapshot = |cx: &App| {
         let cfg = config(cx).read(cx).snapshot();
@@ -216,26 +245,13 @@ fn watch(cx: &mut App) {
         let now = snapshot(cx);
         if *last.borrow() != now {
             *last.borrow_mut() = now;
-            match sync_inputs(cx) {
-                Ok((backend, cfg, borders)) => {
-                    let generation = SYNC_STARTED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                    cx.background_executor()
-                        .spawn(async move {
-                            // Background syncs may finish out of order: an
-                            // older one never overwrites a newer drop-in.
-                            let mut applied = SYNC_APPLIED.lock().unwrap_or_else(|e| e.into_inner());
-                            if generation < *applied {
-                                return;
-                            }
-                            *applied = generation;
-                            if let Err(err) = sync_with(backend.as_ref(), &cfg, borders) {
-                                tracing::warn!("compositor sync: {err}");
-                            }
-                        })
-                        .detach();
-                }
-                Err(err) => tracing::warn!("compositor sync: {err}"),
-            }
+            // Committed once the edits rest: a dragged Studio slider (gaps,
+            // borders) rewrites and reloads the drop-in once, not per step.
+            // A newer edit drops the waiting one.
+            *pending.borrow_mut() = Some(cx.spawn(async move |cx| {
+                cx.background_executor().timer(SYNC_SETTLE).await;
+                cx.update(start_sync);
+            }));
         }
     };
     let on_change = Rc::new(on_change);

@@ -376,28 +376,25 @@ impl StudioView {
                 let frac = ((v - min) / (max - min)).clamp(0.0, 1.0) as f32;
                 let setting2 = setting.clone();
                 let this = cx.entity().downgrade();
+                let id = SharedString::from(format!("s{}", setting.path));
+                let v = slider_readout(&id, v, (min, max, step));
                 div()
                     .row()
                     .items_center()
                     .gap(px(SPACE_12_PX))
-                    .child(div().w(px(DIM_220_PX)).child(mandara_ui::kit::slider(
-                        SharedString::from(format!("s{}", setting.path)),
-                        frac,
-                        p,
-                        move |f, _, cx| {
-                            let raw = min + (max - min) * f as f64;
-                            let snapped = (raw / step).round() * step;
-                            let setting = setting2.clone();
-                            let _ = this.update(cx, |studio, cx| studio.apply(&setting, Value::from(snapped), cx));
-                        },
-                    )))
+                    .child(div().w(px(DIM_220_PX)).child(mandara_ui::kit::slider_with_label(id, frac, p, move |f| slider_text(snap_slider(f, (min, max, step)), step, unit).into(), move |f, window, cx| {
+                        let setting = setting2.clone();
+                        let _ = this.update(cx, |studio, cx| studio.apply(&setting, Value::from(snap_slider(f, (min, max, step))), cx));
+                        // At most one value a frame reaches the config.
+                        mandara_ui::slider_model::next_frame(window)
+                    })))
                     .child(
                         div()
                             .w(px(DIM_76_PX))
                             .text_end()
                             .text_size(px(TEXT_12_PX))
                             .text_color(p.on_surface_variant.hsla())
-                            .child(if step >= 1.0 { format!("{v:.0}{unit}") } else if step >= TWO_DECIMAL_STEP { format!("{v:.2}{unit}") } else { format!("{v:.3}{unit}") }),
+                            .child(slider_text(v, step, unit)),
                     )
                     .into_any_element()
             }
@@ -473,15 +470,16 @@ impl StudioView {
                         let frac = ((v - min) / (max - min)).clamp(0.0, 1.0) as f32;
                         let this = cx.entity().downgrade();
                         let slide = setting.clone();
+                        let id = SharedString::from(format!("s{}", setting.path));
+                        let v = slider_readout(&id, v, (min, max, step));
                         div()
                             .row()
                             .items_center()
                             .gap(px(SPACE_12_PX))
-                            .child(div().w(px(DIM_200_PX)).child(mandara_ui::kit::slider(SharedString::from(format!("s{}", setting.path)), frac, p, move |f, _, cx| {
-                                let raw = min + (max - min) * f as f64;
-                                let snapped = (raw / step).round() * step;
+                            .child(div().w(px(DIM_200_PX)).child(mandara_ui::kit::slider_with_label(id, frac, p, move |f| slider_text(snap_slider(f, (min, max, step)), step, unit).into(), move |f, window, cx| {
                                 let setting = slide.clone();
-                                let _ = this.update(cx, |studio, cx| studio.apply(&setting, Value::from(snapped), cx));
+                                let _ = this.update(cx, |studio, cx| studio.apply(&setting, Value::from(snap_slider(f, (min, max, step))), cx));
+                                mandara_ui::slider_model::next_frame(window)
                             })))
                             .child(div().w(px(DIM_56_PX)).text_end().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(if step >= 1.0 { format!("{v:.0}{unit}") } else { format!("{v:.2}{unit}") }))
                             .child(
@@ -1792,6 +1790,31 @@ const MINUTES_PER_DAY: i32 = 24 * MINUTES_PER_HOUR;
 const TIME_STEP_MINUTES: i32 = 15;
 /// Slider steps at least this coarse show two decimals (finer: three).
 const TWO_DECIMAL_STEP: f64 = 0.05;
+
+/// A setting slider's value at fraction `f` of its track, snapped to its
+/// step.
+fn snap_slider(f: f32, (min, max, step): (f64, f64, f64)) -> f64 {
+    ((min + (max - min) * f64::from(f)) / step).round() * step
+}
+
+/// A setting slider's value as its readout and value bubble show it.
+fn slider_text(v: f64, step: f64, unit: &str) -> String {
+    if step >= 1.0 {
+        format!("{v:.0}{unit}")
+    } else if step >= TWO_DECIMAL_STEP {
+        format!("{v:.2}{unit}")
+    } else {
+        format!("{v:.3}{unit}")
+    }
+}
+
+/// What a setting slider's readout shows: the value under the knob while
+/// the slider is held, so the number follows the pointer at once (the
+/// config catches up at most a frame later), else the setting's `value`.
+fn slider_readout(id: &SharedString, value: f64, range: (f64, f64, f64)) -> f64 {
+    mandara_ui::slider_model::held(&gpui::ElementId::Name(id.clone())).map_or(value, |f| snap_slider(f, range))
+}
+
 /// A switch that can't be changed right now (see `registry::locked`).
 const LOCKED_OPACITY: f32 = 0.45;
 /// Widest a "doesn't apply here" note grows in place of a control.

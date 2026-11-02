@@ -189,6 +189,117 @@ pub fn zone_width(slot_widths: &[f32], m: &Metrics) -> f32 {
     if visible == 0 { 0.0 } else { total + m.chip_gap * (visible - 1) as f32 }
 }
 
+/// Narrowest a slot is squeezed to before it is left out of a full zone
+/// (room for a word and an ellipsis). A slot that fits whole always stays.
+pub const MIN_SQUEEZED_SLOT: f32 = 48.0;
+
+/// Splits `room` between two neighbours that want `a` and `b`: each may take
+/// whatever the other leaves, and when both want more than half, each gets
+/// half. Returns the most each may take; together they never exceed `room`.
+fn fair_split(room: f32, a: f32, b: f32) -> (f32, f32) {
+    let room = room.max(0.0);
+    let half = room / 2.0;
+    (room - b.min(half), room - a.min(half))
+}
+
+/// Where the edge styles' outer chips start, from either end of the bar:
+/// inside the screen flares, or the floating frame's / the notch's rounded
+/// ends.
+fn edge_inset(m: &Metrics, surface_width: f32) -> f32 {
+    if m.floating_frame || m.notch() { x_of(&m.frame(surface_width)) + m.frame_radius() * 0.5 + m.chip_inset() } else { m.side_gap + m.flare * 0.5 }
+}
+
+/// The island's (and micro pill's) gap between groups and inset of chips.
+fn island_spacing(m: &Metrics) -> (f32, f32) {
+    if m.layout == BarLayout::Micro { (MICRO_GAP, COMPACT_CHIP_INSET) } else { (ISLAND_GAP, PILL_INSET) }
+}
+
+/// [`zone_limits`] for groups placed apart between `start` and `end`
+/// (outer widths, so a floating pill's insets included).
+fn spread_limits(align: BarCenterAlign, keep_clear: bool, surface_width: f32, (start, end): (f32, f32), [l, c, r]: [f32; 3]) -> [f32; 3] {
+    let room = (end - start).max(0.0);
+    let c = c.min(room);
+    if c <= 0.0 {
+        let (a, b) = fair_split(room - ZONE_GAP, l, r);
+        return [a, room, b];
+    }
+    if align == BarCenterAlign::Screen && !keep_clear {
+        // The middle group stays on the screen's middle: each side gets
+        // the room up to it.
+        let x = (surface_width - c) / 2.0;
+        return [(x - ZONE_GAP - start).max(0.0), room, (end - x - c - ZONE_GAP).max(0.0)];
+    }
+    let (a, b) = fair_split(room - c - ZONE_GAP * 2.0, l, r);
+    [a, room, b]
+}
+
+/// The most each zone (start, centre, end) may take along the bar, in the
+/// units of [`zone_width`], so zones never run into each other however long
+/// their content (a window title) grows. `content` is what each zone wants.
+///
+/// The centre zone keeps its place and may take the whole bar. Beside a
+/// screen-centred group each side gets the room up to it, less
+/// [`ZONE_GAP`]; with the other alignments (and in the narrow notch, which
+/// moves its middle group aside) a side may take whatever the other leaves,
+/// half each when both are full. The island packs its groups, so only the
+/// whole island is bounded (by the bar less its side gaps).
+pub fn zone_limits(m: &Metrics, surface_width: f32, content: [f32; 3]) -> [f32; 3] {
+    match m.layout {
+        BarLayout::MinimalEdge | BarLayout::Hairline | BarLayout::Notch => {
+            let inset = edge_inset(m, surface_width);
+            spread_limits(m.center, m.notch(), surface_width, (inset, surface_width - inset), content)
+        }
+        BarLayout::FloatingPills => {
+            let pad = PILL_INSET * 2.0;
+            let pills = content.map(|c| if c > 0.0 { c + pad } else { 0.0 });
+            spread_limits(m.center, false, surface_width, (m.side_gap, surface_width - m.side_gap), pills).map(|l| (l - pad).max(0.0))
+        }
+        BarLayout::ContiguousIsland | BarLayout::Micro => {
+            let (gap, inset) = island_spacing(m);
+            let g = |i: usize| if m.layout == BarLayout::Micro && content[i] <= 0.0 { 0.0 } else { gap };
+            let room = (surface_width - m.side_gap * 2.0 - (g(0) / 2.0 + g(1) + g(2) / 2.0 + inset * 2.0)).max(0.0);
+            let centre = content[1].min(room);
+            let (l, r) = fair_split(room - centre, content[0], content[2]);
+            [l, room, r]
+        }
+    }
+}
+
+/// Fits a zone's slots (content widths in bar order, as for
+/// [`zone_width`]) into the zone's `limit`, from its outer edge inward (the
+/// end zone's outer edge is its end: `from_end`). Returns the most content
+/// width each slot may take, whole px, or `None` for a slot left out
+/// because the zone is full (and for hidden slots, which take no space).
+///
+/// A slot's limit depends only on the slots outside it, so a slot squeezed
+/// to its limit (a long window title, ellipsized) never feeds back into its
+/// own room. The innermost slots give way first: they are squeezed down to
+/// [`MIN_SQUEEZED_SLOT`], and the ones with less room than that are left
+/// out. The kept slots always fit: their [`zone_width`] is at most `limit`.
+pub fn fit_slots(slot_widths: &[f32], m: &Metrics, limit: f32, from_end: bool) -> smallvec::SmallVec<[Option<f32>; 16]> {
+    let mut out: smallvec::SmallVec<[Option<f32>; 16]> = smallvec::smallvec![None; slot_widths.len()];
+    let mut used = 0.0;
+    let mut first = true;
+    let n = slot_widths.len();
+    for k in 0..n {
+        let i = if from_end { n - 1 - k } else { k };
+        let w = slot_widths[i];
+        if w < 1.0 {
+            continue;
+        }
+        let gap = if first { 0.0 } else { m.chip_gap };
+        let room = (limit - used - gap - m.chip_padding * 2.0).floor();
+        if w > room && room < MIN_SQUEEZED_SLOT {
+            // Full: this slot and every one inside it stay out.
+            break;
+        }
+        out[i] = Some(room);
+        used += gap + w.min(room) + m.chip_padding * 2.0;
+        first = false;
+    }
+    out
+}
+
 /// Resting geometry for one frame.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BarGeometry {
@@ -247,9 +358,7 @@ pub fn compute(m: &Metrics, surface_width: f32, content: [f32; 3]) -> BarGeometr
             let frame = m.frame(surface_width);
             let chip_h = h - inset_y * 2.0;
             let chip_w = |i: usize| content[i];
-            // Outer chips sit inside the screen flares (or the floating
-            // frame's / the notch's rounded ends).
-            let inset = if m.floating_frame || m.notch() { x_of(&frame) + m.frame_radius() * 0.5 + inset_y } else { m.side_gap + m.flare * 0.5 };
+            let inset = edge_inset(m, surface_width);
             let y = y_of(&frame) + inset_y;
             let left = rect(inset, y, chip_w(0), chip_h);
             let right = rect(surface_width - inset - chip_w(2), y, chip_w(2), chip_h);
@@ -269,7 +378,7 @@ pub fn compute(m: &Metrics, surface_width: f32, content: [f32; 3]) -> BarGeometr
         BarLayout::ContiguousIsland | BarLayout::Micro => {
             let y = m.edge_gap;
             // The micro pill: tighter group gaps; empty groups take none.
-            let (gap, inset) = if m.layout == BarLayout::Micro { (MICRO_GAP, COMPACT_CHIP_INSET) } else { (ISLAND_GAP, PILL_INSET) };
+            let (gap, inset) = island_spacing(m);
             let g = |i: usize| if m.layout == BarLayout::Micro && content[i] <= 0.0 { 0.0 } else { gap };
             let total = content.iter().sum::<f32>() + g(0) / 2.0 + g(1) + g(2) / 2.0 + inset * 2.0;
             let total = total.min(surface_width - m.side_gap * 2.0);
@@ -771,6 +880,110 @@ mod tests {
         let c3 = at(&cfg)[1];
         let (gap_l, gap_r) = (x_of(&c3) - (x_of(&l) + w_of(&l)), x_of(&r) - (x_of(&c3) + w_of(&c3)));
         assert!((gap_l - gap_r).abs() < 0.01, "centered in the free space");
+    }
+
+    /// One frame of the shell's zone layout: limits from what each zone
+    /// shows (`measured`), every zone fitted into its limit, then the
+    /// geometry. Returns it and what each slot measures next frame (a
+    /// squeezed slot measures its limit; a left-out one is drawn off
+    /// screen at its own width).
+    fn fit_frame(m: &Metrics, along: f32, intrinsic: &[Vec<f32>; 3], measured: &[Vec<f32>; 3]) -> (BarGeometry, [Vec<f32>; 3]) {
+        let wanted: [f32; 3] = std::array::from_fn(|z| zone_width(&measured[z], m));
+        let limits = zone_limits(m, along, wanted);
+        let mut next = intrinsic.clone();
+        let content: [f32; 3] = std::array::from_fn(|z| {
+            let fit = fit_slots(&measured[z], m, limits[z], z == Group::Right.index());
+            let kept: Vec<f32> = measured[z].iter().zip(&fit).map(|(w, f)| f.map_or(0.0, |l| w.min(l))).collect();
+            for (i, f) in fit.iter().enumerate() {
+                next[z][i] = f.map_or(intrinsic[z][i], |l| intrinsic[z][i].min(l));
+            }
+            let total = zone_width(&kept, m);
+            assert!(total <= limits[z] + 0.01, "zone {z} fits its limit: {total} > {}", limits[z]);
+            total
+        });
+        (compute(m, along, content), next)
+    }
+
+    fn end_of(b: &Bounds<Pixels>) -> f32 {
+        x_of(b) + w_of(b)
+    }
+
+    #[test]
+    fn zones_never_overlap_in_any_style_position_alignment_or_width() {
+        // A long window title on the start side, a clock in the middle, a
+        // few icons at the end (issue #21).
+        let intrinsic = [vec![24.0, 70.0, 900.0], vec![110.0], vec![60.0, 40.0, 30.0]];
+        let layouts = [BarLayout::MinimalEdge, BarLayout::FloatingPills, BarLayout::ContiguousIsland, BarLayout::Hairline, BarLayout::Notch, BarLayout::Micro];
+        let aligns = [BarCenterAlign::Screen, BarCenterAlign::Between, BarCenterAlign::Start, BarCenterAlign::End];
+        for layout in layouts {
+            for position in BarPosition::ALL {
+                for align in aligns {
+                    for along in [360.0, 480.0, 800.0, 1280.0, 1920.0, 2560.0] {
+                        let mut m = Metrics::default_for(layout, position);
+                        m.center = align;
+                        let mut measured = intrinsic.clone();
+                        let mut last = None;
+                        // Every frame is clean, and a few frames settle it.
+                        for _ in 0..4 {
+                            let (g, next) = fit_frame(&m, along, &intrinsic, &measured);
+                            let [l, c, r] = &g.pills;
+                            let what = format!("{layout:?} {position:?} {align:?} at {along}");
+                            for p in &g.pills {
+                                assert!(x_of(p) >= -0.01 && end_of(p) <= along + 0.01, "{what}: {p:?} stays on the bar");
+                            }
+                            if w_of(c) > 0.0 {
+                                assert!(end_of(l) <= x_of(c) + 0.01, "{what}: the start zone ends before the centre one ({l:?} / {c:?})");
+                                assert!(end_of(c) <= x_of(r) + 0.01, "{what}: the centre zone ends before the end one ({c:?} / {r:?})");
+                            }
+                            assert!(end_of(l) <= x_of(r) + 0.01, "{what}: the start zone ends before the end one");
+                            measured = next;
+                            last = Some(g);
+                        }
+                        let (settled, _) = fit_frame(&m, along, &intrinsic, &measured);
+                        assert_eq!(Some(settled), last, "{layout:?} {position:?} {align:?} at {along}: settles");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_long_title_is_squeezed_beside_a_screen_centred_clock() {
+        let m = Metrics::default_for(BarLayout::MinimalEdge, BarPosition::Top);
+        let zones = [vec![24.0, 900.0], vec![110.0], vec![60.0]];
+        // Without fitting, the title runs under the clock (the bug).
+        let raw = compute(&m, 1280.0, std::array::from_fn(|z| zone_width(&zones[z], &m)));
+        assert!(end_of(&raw.pills[0]) > x_of(&raw.pills[1]));
+        let (g, next) = fit_frame(&m, 1280.0, &zones, &zones);
+        let [l, c, _] = &g.pills;
+        assert!((x_of(c) + w_of(c) / 2.0 - 640.0).abs() < 0.01, "the clock stays on the screen's middle");
+        assert!((x_of(c) - end_of(l) - ZONE_GAP).abs() < 1.0, "the title takes the room up to it, less the gap");
+        assert!(next[0][1] < 900.0 && next[0][1] >= MIN_SQUEEZED_SLOT, "the title is ellipsized, not left out");
+        assert_eq!(next[0][0], 24.0, "the outer chip keeps its width");
+        // A bar that fits is laid out exactly as before.
+        let small = [vec![24.0, 200.0], vec![110.0], vec![60.0]];
+        let (fits, _) = fit_frame(&m, 1920.0, &small, &small);
+        assert_eq!(fits, compute(&m, 1920.0, std::array::from_fn(|z| zone_width(&small[z], &m))));
+    }
+
+    #[test]
+    fn slots_give_way_from_the_inside_and_the_last_one_drops_out() {
+        let m = Metrics::default_for(BarLayout::MinimalEdge, BarPosition::Top);
+        let pad = m.chip_padding * 2.0;
+        // Room for the first slot whole and a squeezed second one.
+        let limit = 40.0 + pad + m.chip_gap + 100.0 + pad;
+        let fit = fit_slots(&[40.0, 300.0, 50.0], &m, limit, false);
+        assert_eq!(fit[0], Some((limit - pad).floor()));
+        assert_eq!(fit[1], Some(100.0), "squeezed into what is left");
+        assert_eq!(fit[2], None, "no room left: left out");
+        // The end zone gives way from its start (the side facing the centre).
+        let fit = fit_slots(&[50.0, 300.0, 40.0], &m, limit, true);
+        assert_eq!((fit[0], fit[1]), (None, Some(100.0)));
+        // Hidden slots take no room; a slot that fits whole is never left out.
+        let fit = fit_slots(&[0.0, 30.0], &m, 30.0 + pad, false);
+        assert_eq!(fit, smallvec::SmallVec::<[Option<f32>; 16]>::from_slice(&[None, Some(30.0)]));
+        assert_eq!(fit_slots(&[20.0], &m, 20.0 + pad, false)[0], Some(20.0), "fits exactly, below the squeeze minimum");
+        assert_eq!(fit_slots(&[200.0], &m, 30.0 + pad, false)[0], None, "too little room to squeeze into");
     }
 
     #[test]

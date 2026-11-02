@@ -1576,13 +1576,17 @@ fn slider(id: &str, what: &str, value: f32, (min, max): (f32, f32), step: f32, u
     let wid = id.to_string();
     let slider_id = SharedString::from(format!("dw-s-{what}-{id}"));
     // The readout follows the fill while the slider is held.
-    let shown_value = mandara_ui::slider_model::held(&gpui::ElementId::Name(slider_id.clone())).map_or(value, |f| ((min + (max - min) * f) / step).round() * step);
-    let shown = if step >= 1.0 { format!("{shown_value:.0}{unit}") } else if step >= 0.05 { format!("{shown_value:.2}{unit}") } else { format!("{shown_value:.3}{unit}") };
+    let snap = move |f: f32| ((min + (max - min) * f) / step).round() * step;
+    let text = {
+        let unit = unit.to_string();
+        move |v: f32| if step >= 1.0 { format!("{v:.0}{unit}") } else if step >= 0.05 { format!("{v:.2}{unit}") } else { format!("{v:.3}{unit}") }
+    };
+    let shown = text(mandara_ui::slider_model::held(&gpui::ElementId::Name(slider_id.clone())).map_or(value, snap));
     div()
         .row()
         .items_center()
         .gap(px(SPACE_12_PX))
-        .child(div().w(px(TRACK_W_PX)).child(mandara_ui::kit::slider(slider_id, frac, p, move |f, window, cx| {
+        .child(div().w(px(TRACK_W_PX)).child(mandara_ui::kit::slider_with_label(slider_id, frac, p, move |f| text(snap(f)).into(), move |f, window, cx| {
             let v = ((min + (max - min) * f) / step).round() * step;
             let set = set.clone();
             edit(cx, &wid, move |w| set(w, v));

@@ -627,7 +627,11 @@ fn resolve_icon(app_id: &str, monochrome: bool) -> AppIcon {
         if map.len() >= ICON_CACHE_CAP {
             map.clear();
         }
-        let icon = match crate::apps::icon_for_app_id(app_id, monochrome) {
+        // A symbolic icon that draws nothing (unreadable, or no shapes)
+        // would leave a blank where the icon goes: use the colour one.
+        let found = crate::apps::icon_for_app_id(app_id, monochrome).filter(|i| !i.symbolic || crate::icon_raster::svg_draws(&i.path));
+        let found = if found.is_none() && monochrome { crate::apps::icon_for_app_id(app_id, false).filter(|i| !i.symbolic) } else { found };
+        let icon = match found {
             Some(i) if i.symbolic => AppIcon::Symbolic(i.path.to_string_lossy().into_owned().into()),
             Some(i) => AppIcon::Raster(i.path.into()),
             None => AppIcon::Missing,
@@ -648,13 +652,22 @@ pub fn app_icon(app_id: &str, size: f32, tint: Color, monochrome: bool, palette:
 /// (at least `size`). An icon whose size animates (the dock's
 /// magnification) passes the largest size it reaches, so it keeps one
 /// bitmap the whole way instead of blanking while each new size decodes.
+/// An icon file that fails to decode shows the app's monogram instead of
+/// a blank (a workspace pill kept room for an icon that never drew, its
+/// number pushed aside: issue #20).
 pub fn app_icon_at(app_id: &str, size: f32, decode_size: f32, tint: Color, monochrome: bool, palette: &MandaraPalette) -> AnyElement {
+    let fallback = || {
+        let (app_id, palette) = (app_id.to_string(), palette.clone());
+        move || monogram(&app_id, size, &palette)
+    };
     match resolve_icon(app_id, monochrome) {
         AppIcon::Symbolic(path) => gpui::svg().external_path(path).size(px(size)).flex_none().text_color(tint.hsla()).into_any_element(),
-        AppIcon::Raster(path) if crate::icon_raster::handles(&path) => {
-            div().size(px(size)).flex_none().child(img(crate::icon_raster::source(&path, decode_size.max(size))).size_full().object_fit(ObjectFit::Contain)).into_any_element()
-        }
-        AppIcon::Raster(path) => div().size(px(size)).flex_none().child(img(path).size_full().object_fit(ObjectFit::Contain)).into_any_element(),
+        AppIcon::Raster(path) if crate::icon_raster::handles(&path) => div()
+            .size(px(size))
+            .flex_none()
+            .child(img(crate::icon_raster::source(&path, decode_size.max(size))).size_full().object_fit(ObjectFit::Contain).with_fallback(fallback()))
+            .into_any_element(),
+        AppIcon::Raster(path) => div().size(px(size)).flex_none().child(img(path).size_full().object_fit(ObjectFit::Contain).with_fallback(fallback())).into_any_element(),
         AppIcon::Missing => monogram(app_id, size, palette),
     }
 }
