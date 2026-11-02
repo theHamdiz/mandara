@@ -1418,7 +1418,6 @@ impl StudioView {
                             .gap(px(SPACE_6_PX))
                             .child(div().text_size(px(TEXT_26_PX)).font_weight(FontWeight::BOLD).child(t("Mandara Shell")))
                             .child(div().text_size(px(TEXT_14_PX)).text_color(p.on_surface.with_alpha(ALPHA_85).hsla()).child(mandara_ui::bidi::paragraph(t("A design-first Wayland desktop shell, written entirely in Rust."))))
-                            .child(div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("Named after El-Mandara (المندرة), the coastal district of Alexandria."))))
                             .child(
                                 div()
                                     .pt(px(SPACE_6_PX))

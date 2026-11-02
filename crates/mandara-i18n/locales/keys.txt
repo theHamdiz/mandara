@@ -3439,7 +3439,6 @@ Name the app the rule is for
 Name the profile first
 Name, command or PID…
 Name, image or project…
-Named after El-Mandara (المندرة), the coastal district of Alexandria.
 Named routines: each step is a Mandara command, run in order. Find them by name in the launcher or as /name.
 Names
 Names and codes

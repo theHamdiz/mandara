@@ -4,7 +4,7 @@
 
 Key facts:
 
-- Repository: https://github.com/theHamdiz/mandara (author: Ahmad Hamdi, `theHamdiz`). Named after El-Mandara (المندرة), a coastal district of Alexandria, Egypt.
+- Repository: https://github.com/theHamdiz/mandara (author: Ahmad Hamdi, `theHamdiz`).
 - Compositors: MangoWM (tags), Niri (scrollable tiling), Hyprland and Umbriel, all first-class. Mandara never edits the user's own compositor config. It writes drop-in files to `~/.config/mandara/generated/` and adds one include line.
 - Install: one command that downloads the signed release and runs `mandara install` (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo, Solus). Update from Studio → About → Update now.
 - Configuration: `~/.config/mandara/config.toml`, watched live. Mandara Studio (`mandara studio`) edits the same file, with 31 pages of settings.

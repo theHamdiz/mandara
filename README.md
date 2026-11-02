@@ -8,8 +8,6 @@
   <b>A beautiful, fast Linux desktop that fits in under 100 MiB of RAM.</b>
   <br/>
   Design-first, spring-animated and written entirely in Rust.
-  <br/>
-  Named after <b>المندرة, El-Mandara</b>, the coastal district of Alexandria.
 </p>
 
 <p align="center">
