@@ -95,8 +95,9 @@ widget can be moved, resized and restyled right on the desktop.
   [Mandara Studio](docs/studio.md)
 - **It does a lot out of the box.** A media island with lyrics, a sound
   mixer per app, screenshots and screen recording, copying text from the
-  screen, a clipboard that sorts what you copy, a drag-and-drop app
-  installer, night light, and 73 built-in plugins.
+  screen, a launcher with three looks (a list, an icon grid or a centred
+  Spotlight-style search bar), a clipboard that sorts what you copy, a
+  drag-and-drop app installer, night light, and 73 built-in plugins.
   [Everything else](docs/more-features.md)
 - **It welcomes you in.** A matching lock screen and login screen with
   your own wallpaper, and ready-made looks for both.
