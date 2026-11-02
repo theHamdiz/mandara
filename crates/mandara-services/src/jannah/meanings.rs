@@ -312,6 +312,18 @@ mod tests {
     }
 
     #[test]
+    fn every_ai_rendering_covers_every_hadith() {
+        for lang in AI_LANGS {
+            let r = ai_renderings(lang).expect("an AI language");
+            assert!(!r.note.is_empty(), "{lang}: the note says what it is");
+            for h in super::super::data::all_hadith() {
+                assert!(r.text.get(&h.id).is_some_and(|t| !t.trim().is_empty()), "{lang}: no rendering of {}", h.id);
+            }
+            assert_eq!(r.text.len(), super::super::data::all_hadith().len(), "{lang}: renderings of hadith that aren't in the data");
+        }
+    }
+
+    #[test]
     fn excerpts_start_at_the_words() {
         let t = "Narrated `Abdullah:The Prophet (ﷺ) said, \"Truthfulness leads to righteousness, and righteousness leads to Paradise. And a man keeps on telling the truth";
         assert_eq!(excerpt(t), "Truthfulness leads to righteousness, and righteousness leads to Paradise.");
