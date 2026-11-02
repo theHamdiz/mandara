@@ -54,6 +54,7 @@ pub mod screen_pick;
 pub mod color_picker;
 pub mod authenticator;
 pub mod soundscapes;
+pub mod jannah;
 pub mod system_admin;
 
 use std::time::Duration;
@@ -219,6 +220,7 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     color_picker::register(registry);
     authenticator::register(registry);
     soundscapes::register(registry);
+    jannah::register(registry);
     crate::osd::register(registry);
     crate::corners::register(registry);
     crate::night_light::register(registry);

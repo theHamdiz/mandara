@@ -18,6 +18,9 @@ pub struct Fonts {
     pub panels: SharedString,
     pub studio: SharedString,
     pub widgets: SharedString,
+    /// Qur'anic Naskh for scripture (Jannah): Amiri Quran when installed,
+    /// else Amiri, Noto Naskh Arabic, else the Arabic face.
+    pub scripture: SharedString,
     /// An installed colour emoji family, for text made only of emoji (the
     /// fallback chain would pick a text font's flat symbol first).
     pub emoji: Option<SharedString>,
@@ -80,6 +83,16 @@ pub fn fallback_chain(arabic: &str, installed: &[String]) -> Vec<String> {
     chain
 }
 
+/// Scripture faces, best first: Studio downloads the two Amiri families
+/// on demand (Maintenance → Fonts); until then a Naskh, then the Arabic
+/// face, sets the verses.
+pub const SCRIPTURE_FAMILIES: &[&str] = &["Amiri Quran", "Amiri", "Noto Naskh Arabic"];
+
+/// The first installed [`SCRIPTURE_FAMILIES`] face, else `arabic`.
+pub fn pick_scripture(installed: &[String], arabic: &SharedString) -> SharedString {
+    SCRIPTURE_FAMILIES.iter().find_map(|name| installed.iter().find(|f| f.eq_ignore_ascii_case(name))).map(|f| SharedString::from(f.clone())).unwrap_or_else(|| arabic.clone())
+}
+
 /// Monospace families tried after the configured one, best first. GPUI
 /// resolves fonts by family *name*, so a generic `monospace` never matches:
 /// without one of these the code would fall back to the UI's sans font.
@@ -129,6 +142,7 @@ impl Fonts {
         let ui = pick(&installed, &cfg.ui_font, &UI_FALLBACKS);
         let surface = |family: &str| if family.trim().is_empty() { ui.clone() } else { pick(&installed, family.trim(), &UI_FALLBACKS) };
         let display = pick(&installed, &cfg.display_font, &["Alexandria", "Inter Display", "Inter", "Cairo", "Noto Sans"]);
+        let arabic = pick(&installed, &cfg.arabic_font, &["Cairo", "Alexandria", "Noto Sans Arabic", "Noto Naskh Arabic"]);
         Self {
             bar: surface(&cfg.bar_font),
             panels: surface(&cfg.panels_font),
@@ -138,7 +152,8 @@ impl Fonts {
             widgets: if cfg.widgets_font.trim().is_empty() { display.clone() } else { pick(&installed, cfg.widgets_font.trim(), &UI_FALLBACKS) },
             ui: ui.clone(),
             display,
-            arabic: pick(&installed, &cfg.arabic_font, &["Cairo", "Alexandria", "Noto Sans Arabic", "Noto Naskh Arabic"]),
+            scripture: pick_scripture(&installed, &arabic),
+            arabic,
             mono: pick_mono(&installed, &cfg.mono_font, system_fixed_pitch_family),
             emoji: EMOJI_FAMILIES.iter().find(|name| installed.iter().any(|f| f.eq_ignore_ascii_case(name))).map(|f| SharedString::from(*f)),
         }

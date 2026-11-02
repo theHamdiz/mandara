@@ -148,6 +148,7 @@ mod tests {
         "cursors",
         "dock",
         "drives",
+        "jannah",
         "mini-stats",
         "net-speed",
         "notes",

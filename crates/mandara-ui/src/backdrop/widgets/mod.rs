@@ -24,6 +24,7 @@ pub mod frame;
 pub mod fun;
 pub mod identity;
 pub mod info;
+pub mod jannah;
 pub mod layout;
 pub mod lingo;
 pub mod media_view;
@@ -165,6 +166,8 @@ pub struct WidgetData {
     pub fetch: Option<FetchInfo>,
     pub screen: Option<ScreenInfo>,
     pub prayer: Option<PrayerInfo>,
+    /// Today's Jannah reminder and step (while a Jannah widget shows).
+    pub jannah: Option<JannahInfo>,
     pub glance: Option<GlanceInfo>,
     /// Each GitHub, exchange rate and AI usage widget's feed, by widget id.
     pub github: std::collections::BTreeMap<String, Feed<Vec<mandara_services::desktop_feeds::ContributionDay>>>,
@@ -231,6 +234,30 @@ pub struct PrayerInfo {
     /// Today's Hijri date (the day turns at Maghrib); the widget writes it
     /// in its own language, digits and calendar.
     pub hijri: Option<lingo::HijriDate>,
+}
+
+/// Today's Jannah reminder (as the plugin picked it for the desktop) and
+/// today's step.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct JannahInfo {
+    /// The Arabic (a hadith's words without its chain), verbatim.
+    pub arabic: String,
+    /// A verse's ornate number (`﴿٢٥﴾`); none for a hadith.
+    pub ayah_mark: Option<String>,
+    /// The meaning in the interface language, when shown and known.
+    pub meaning: Option<String>,
+    /// The meaning is an AI rendering (labelled as such).
+    pub ai: bool,
+    /// The reference (`Al-Baqara 2:25`) and in Arabic (`البقرة ٢:٢٥`).
+    pub reference: String,
+    pub reference_ar: String,
+    /// Today's step: its title and line (catalog keys) and its check.
+    pub step_title: String,
+    pub step_line: String,
+    pub step_done: bool,
+    /// This week's days, done or not, and which is today.
+    pub week: [bool; 7],
+    pub today: usize,
 }
 
 /// The one thing worth knowing now: an icon, a sentence and what a click
@@ -485,6 +512,7 @@ fn data_key(w: &DesktopWidget, scene: &WidgetScene) -> u64 {
         WidgetKind::Fetch(_) => key(format!("{:?}{:?}", scene.data.fetch, scene.data.palette)),
         WidgetKind::ScreenTime(_) => key(format!("{:?}", scene.data.screen)),
         WidgetKind::Prayer(_) => key(format!("{:?}", scene.data.prayer)),
+        WidgetKind::Jannah(_) => key(format!("{:?}", scene.data.jannah)),
         WidgetKind::Glance(_) => key(format!("{:?}{:?}", scene.data.glance, scene.weather)),
         WidgetKind::Github(_) => key(format!("{:?}", scene.data.github.get(&w.id))),
         WidgetKind::Currency(_) => key(format!("{:?}", scene.data.rates.get(&w.id))),
@@ -988,6 +1016,7 @@ pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler
         WidgetKind::Fetch(f) => (info::fetch(f, &scene.data.fetch.clone().unwrap_or_default(), &scene.data.palette, &Lingo::of(&f.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::ScreenTime(st) => (info::screen_time(st, &scene.data.screen.clone().unwrap_or_default(), &Lingo::of(&st.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Prayer(p) => (info::prayer(p, scene.data.prayer.as_ref()?, now, &Lingo::of(&p.locale, scene.rtl, None), scene.h24, k, &mut m), 0.0),
+        WidgetKind::Jannah(jw) => (jannah::jannah(jw, scene.data.jannah.as_ref()?, &Lingo::of(&jw.locale, scene.rtl, None), k, align, &mut m), 0.0),
         WidgetKind::Search(sw) => (info::search(sw, &Lingo::of(&sw.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Glance(g) => {
             let gi = scene.data.glance.clone().unwrap_or(GlanceInfo { icon: "sparkles", text: String::new(), action: None });

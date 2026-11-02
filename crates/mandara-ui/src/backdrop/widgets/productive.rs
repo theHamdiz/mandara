@@ -40,12 +40,14 @@ const TIMER_DOT_GAP: f32 = 0.05;
 const BUTTON: f32 = 0.16;
 const BUTTON_GAP: f32 = 0.06;
 const TRACK_ALPHA: f32 = 0.18;
-const QUOTE_MARK: f32 = 2.6;
-const QUOTE_AUTHOR: f32 = 0.62;
-const QUOTE_GAP: f32 = 14.0;
-const QUOTE_LINES: usize = 12;
+pub(super) const QUOTE_MARK: f32 = 2.6;
+pub(super) const QUOTE_AUTHOR: f32 = 0.62;
+pub(super) const QUOTE_GAP: f32 = 14.0;
+pub(super) const QUOTE_LINES: usize = 12;
 const LABEL_TRACKING: f32 = 0.12;
-const AUTHOR_TRACKING: f32 = 0.06;
+pub(super) const AUTHOR_TRACKING: f32 = 0.06;
+/// The words start this share of the quotation mark's height below its top.
+pub(super) const QUOTE_MARK_DROP: f32 = 0.62;
 const TAB_W: f32 = 46.0;
 const TAB_TEXT: f32 = 16.0;
 const TAB_PAD: f32 = 18.0;
@@ -338,7 +340,7 @@ pub fn quote(w: &QuoteWidget, now: &DateTime<Local>, turns: u32, l: &Lingo, k: f
         let glyph = if l.rtl { "”" } else { "“" };
         let (gw, gh) = m.measure(glyph, &ms);
         marks.push(Mark::new(MarkKind::Text { text: glyph.into(), style: ms, x: (width - gw) * align, y: 0.0, w: gw, h: gh }, InkRole::Accent));
-        y += gh * 0.62;
+        y += gh * QUOTE_MARK_DROP;
     }
     for line in wrap(&text, &qs, width, QUOTE_LINES, m) {
         let (lw, lh) = m.measure(&line, &qs);

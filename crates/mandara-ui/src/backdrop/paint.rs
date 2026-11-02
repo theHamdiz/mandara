@@ -238,11 +238,13 @@ pub struct FontNames {
     pub widgets: String,
     /// One widget's own family (`font = "custom"`); set per widget.
     pub custom: String,
+    /// Scripture (Qur'anic Naskh); empty = the Arabic face.
+    pub scripture: String,
 }
 
 impl From<&crate::fonts::Fonts> for FontNames {
     fn from(f: &crate::fonts::Fonts) -> Self {
-        Self { ui: f.ui.to_string(), display: f.display.to_string(), arabic: f.arabic.to_string(), mono: f.mono.to_string(), widgets: f.widgets.to_string(), custom: String::new() }
+        Self { ui: f.ui.to_string(), display: f.display.to_string(), arabic: f.arabic.to_string(), mono: f.mono.to_string(), widgets: f.widgets.to_string(), custom: String::new(), scripture: f.scripture.to_string() }
     }
 }
 
@@ -250,7 +252,7 @@ impl FontNames {
     /// The four Typography families, with the widgets font following the
     /// display face (tests, previews without the resolved fonts).
     pub fn new(ui: &str, display: &str, arabic: &str, mono: &str) -> Self {
-        Self { ui: ui.into(), display: display.into(), arabic: arabic.into(), mono: mono.into(), widgets: display.into(), custom: String::new() }
+        Self { ui: ui.into(), display: display.into(), arabic: arabic.into(), mono: mono.into(), widgets: display.into(), custom: String::new(), scripture: String::new() }
     }
 
     /// These names for a widget with `look`: its own family filled in.

@@ -739,6 +739,43 @@ impl Default for PrayerWidget {
     }
 }
 
+/// How the Jannah widget lays out.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum JannahLayout {
+    /// Today's verse or hadith in calligraphy under a pointed arch, with
+    /// its meaning and reference.
+    #[default]
+    Verse,
+    /// Today's step as a tile with its check and the week's dots.
+    Step,
+    /// Today's verse or hadith in the quote card's design: the ornate
+    /// marks, the words, the meaning and the reference as attribution.
+    Quote,
+}
+
+/// Today's reminder from the Jannah plugin (it changes with the plugin's
+/// rotation, nothing in between).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct JannahWidget {
+    pub layout: JannahLayout,
+    /// The card's width and the meaning's text size (the quote and verse
+    /// layouts; the Arabic is set larger), reference px.
+    pub width: f32,
+    pub text_size: f32,
+    /// The large ornate opening mark (the quote layout).
+    pub mark: bool,
+    pub look: Look,
+    pub locale: TextOptions,
+}
+
+impl Default for JannahWidget {
+    fn default() -> Self {
+        Self { layout: JannahLayout::Verse, width: ranges::QUOTE_WIDTH_DEFAULT_PX, text_size: ranges::QUOTE_TEXT_DEFAULT_PX, mark: true, look: Look::default(), locale: TextOptions::default() }
+    }
+}
+
 /// A search field on the desktop: a click opens the launcher.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]

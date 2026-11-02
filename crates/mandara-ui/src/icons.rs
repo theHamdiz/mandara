@@ -162,6 +162,12 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         // A page with lines and a version tag: release notes.
         "release-notes" => r#"<path d="M14.5 3H7a2.5 2.5 0 0 0-2.5 2.5v13A2.5 2.5 0 0 0 7 21h10a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14.5 3v5h5"/><path d="M8.5 12.5h7M8.5 16h4"/><path d="M8.5 7.5h2.5"/>"#.into(),
         "sparkles" => r#"<path d="M10.5 3.5l1.6 4.4a3 3 0 0 0 1.8 1.8l4.4 1.6-4.4 1.6a3 3 0 0 0-1.8 1.8l-1.6 4.4-1.6-4.4a3 3 0 0 0-1.8-1.8L2.7 11.3l4.4-1.6a3 3 0 0 0 1.8-1.8z"/><path d="M18.5 2.5v4M16.5 4.5h4M19 16.5v3M17.5 18h3"/>"#.into(),
+        // A pointed (mihrab) arch with an inner doorway: Jannah.
+        "arch" => r#"<path d="M5 21V11.6c0-3.9 3-6.8 7-8.6 4 1.8 7 4.7 7 8.6V21"/><path d="M3.5 21h17"/><path d="M9.5 21v-4.6c0-1.3 1-2.4 2.5-3.3 1.5.9 2.5 2 2.5 3.3V21"/>"#.into(),
+        // An open book: reading (the Qur'an tab).
+        "book" => r#"<path d="M12 6.5C10.2 5.1 7.4 4.5 4 4.5V18c3.4 0 6.2.6 8 2 1.8-1.4 4.6-2 8-2V4.5c-3.4 0-6.2.6-8 2z"/><path d="M12 6.5V20"/>"#.into(),
+        // An "i" in a circle: more about something.
+        "info" => r#"<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.6h.01"/>"#.into(),
         _ => return None,
     })
 }
@@ -171,6 +177,10 @@ pub struct MandaraAssets;
 
 impl AssetSource for MandaraAssets {
     fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
+        // Plugin artwork (monochrome masks, tinted like icons).
+        if let Some(name) = path.strip_prefix("art/").and_then(|p| p.strip_suffix(".svg")) {
+            return Ok(crate::plugins::jannah::art::asset(name).map(|svg| Cow::Owned(svg.into_bytes())));
+        }
         let Some(name) = path.strip_prefix("icons/").and_then(|p| p.strip_suffix(".svg")) else {
             return Ok(None);
         };
@@ -199,6 +209,7 @@ pub const ICON_NAMES: &[&str] = &[
     "stop", "heart", "alert", "zap",
     "eyedropper", "waves", "arrow-down", "arrow-up", "shield", "copy", "clock", "flame",
     "user", "user-plus", "key", "tiles", "eye", "eye-off", "pencil", "sparkles", "brush", "dice", "release-notes", "home", "palette",
+    "arch", "book", "info",
 ];
 
 /// An icon element tinted with `color`.
