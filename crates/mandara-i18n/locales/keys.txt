@@ -17,9 +17,11 @@
 +{n} more (mandara msg progress list)
 +{n} virtual
 --by-mandara
+--collection needs a collection
 --delay [seconds]: count down first (default: the Countdown setting)
 --demo shows the lock screen as a harmless preview
 --every 6h, --mode, --keep N, --video, --apply
+--grade needs sahih, hasan or daif
 --index needs a number
 --level takes a number from 0 to 100
 --purge-data (leftovers to the Trash), --dry-run, --confirm-default (allow removing a default app)
@@ -69,6 +71,7 @@
 256×256 rounded-square tile for Studio
 270°
 2:25, quran-2:25 or bukhari-3245
+2:255, 2:255-257, 2:255- (to the surah's end), 36 or yaseen
 2K
 2K (1440p)
 4K
@@ -139,6 +142,7 @@ A hook still running after this is stopped (rules can set their own)
 A label above the icon under the pointer
 A label: size, bold and tone style it
 A launch counts half as much after this many days
+A library of the hadith collections, downloaded on demand, with a hadith of the day, a reader, search and bookmarks (opt-in)
 A light drizzle. A hood will do.
 A line under the greeting (optional)
 A list needs a name
@@ -151,6 +155,7 @@ A man does not attain everything that he desires; the winds convey whither the s
 A man who dares to waste one hour of time has not discovered the value of life.
 A manual configuration needs an address
 A mark between neighbouring bar items
+A moment while the collection is read
 A new procedural wallpaper from the generator
 A newer release is ready. Your settings and on / off state are kept.
 A node with an action was clicked; receives that action.
@@ -227,11 +232,14 @@ APP
 APPS
 AUR packages
 AV1 video of the whole screen
+AYAH OF THE DAY
 Aborted
 About
 About Jannah
+About the library
 Above fullscreen windows
 Above or below the results
+Abu Dawud
 Acceleration
 Accent
 Accent colour
@@ -351,6 +359,11 @@ Agenda events
 Agenda length
 Ah, make the most of what we yet may spend, before we too into the Dust descend.
 Airy
+Al-Ajamy
+Al-Hudhaify
+Al-Husary
+Al-Husary (Mujawwad)
+Al-Minshawi
 Al-Mutanabbi
 Albert Einstein
 Album art, a wavy progress line and synced lyrics on the desktop while music plays
@@ -364,6 +377,7 @@ Align to the launcher button
 Alignment
 All
 All clear
+All collections
 All day
 All defaults
 All devices
@@ -428,6 +442,7 @@ An app starts or stops using the microphone, camera or screen
 An app wants access to the keyring “Login”, but it is locked (preview: nothing is unlocked)
 An app wants to create a new keyring called “Mandara”. Choose the password you want to use for it (preview: nothing is created)
 An interactive card — its own settings are with the cards.
+An-Nawawi's Forty
 Analects 1.1
 Analects 13.17
 Analects 15.23
@@ -449,11 +464,13 @@ Anne Frank
 Announce new drives
 Anonymous: public repositories, 60 requests an hour
 Another notification daemon (e.g. mako) is running. Mandara takes over app notifications as soon as it exits.
+Another translation in your language, by its identifier (`mandara msg quran editions` lists them); empty uses the default. Arabic shows no translation
 Answer a notification that offers an inline reply
 Answered in {ms} ms
 Anti-banding dither
 Antoine de Saint-Exupéry
 Anton Chekhov
+Any grade
 Any picture, cut out with a white border
 Any screen edge; panels open toward the middle (sideways from a side bar)
 Anyone can hold the helm when the sea is calm.
@@ -525,7 +542,10 @@ Arabic font
 Arabic proverb
 Arabic script
 Arabic size
+Arabic text
 Arabic text recognition
+Arabic with or without diacritics, words of the meaning, or a reference like bukhari 1
+Arabic without diacritics, words of the meaning, or 2:255
 Arc gauges for the temperatures and the fan
 Arc height
 Arch Linux news
@@ -547,6 +567,7 @@ Arrangement
 Arrow of God
 As
 As a solid rock is not shaken by the wind, wise people falter not amidst blame and praise.
+Ash-Shatri
 Ask a window to close
 Ask for KeePassXC at login
 Ask for a new one at next login
@@ -610,13 +631,21 @@ Available
 Available login screens
 Awake while media plays
 Away · the clock waits
+Ayah of the day
+Ayah under an arch
+Ayah {ayah} of {ayahs} · Juz {juz}
+Ayah {surah}:{ayah} is damaged
 A–Z
 A–Z, most used first, or grouped by category
 B
+BEGIN YOUR KHATM
+BOOKMARKS
+BOOKS
 BREAKS TODAY
 Back
 Back to before this
 Back to daylight at {time}
+Back to {name}
 Back up now
 Backed up to {folder}
 Background
@@ -668,6 +697,7 @@ Be merciful to every creature
 Be patient in hardship
 Be the first: publish yours by tagging the repository mandara-plugin (see PLUGINS.md).
 Before the end group
+Begin
 Begin at the beginning, and go on till you come to the end: then stop.
 Behaviour
 Behind Fit and Center (hex)
@@ -709,6 +739,14 @@ Bokeh
 Bold
 Bold palace red: a framed spectrum box, an Arabic clock and calligraphy.
 Bold, italic and links in notification text
+Book {book}, hadith {n}
+Book {n}
+Bookmark
+Bookmark a hadith, or remove its bookmark
+Bookmark an ayah
+Bookmark removed
+Bookmarked
+Bookmarks
 Border
 Border grab area
 Border width
@@ -774,7 +812,9 @@ Bytes · MB/s
 CCD {n}
 CI status
 CITIES
+COLLECTIONS
 CONTAINER
+CONTINUE READING
 CONTRAST · WCAG 2
 CPU
 CPU graph
@@ -808,6 +848,7 @@ Can't open {file}
 Can't open {path}: {error}
 Can't reach systemd
 Can't read {path}: {error}
+Can't read {reference}: try `bukhari 1` or `muslim 2699a`
 Cancel
 Cancel an install job (rootless installs roll back)
 Cancelled
@@ -916,7 +957,9 @@ Checked {n} min ago
 Checked {span} ago
 Checking
 Checking Tailscale…
+Checking every surah and saving
 Checking for updates…
+Checking the files
 Checking the plugin…
 Checking who installed it…
 Checking your installation…
@@ -1022,7 +1065,11 @@ Code copied
 Code copied · clears in {n} s
 Collapse all
 Collecting 10-second averages…
+Collection
 Collection name
+Collections
+Collections the Hadith plugin downloads from hadith-api (public domain)
+Collections the daily hadith is picked from (Bukhari and Muslim keep it sahih)
 Color
 Color picker
 Color picker preview
@@ -1118,6 +1165,9 @@ Content
 Content follows the wheel, like a touchscreen
 Content follows your fingers
 Continue
+Continue at {reference}
+Continue reading
+Continue where you left off
 Contour lines
 Contours
 Contrast
@@ -1132,6 +1182,7 @@ Copied
 Copied images and screenshots
 Copied text and images appear here
 Copied the report of PID {pid}
+Copied with its meaning
 Copied with its reference
 Copied {address}
 Copied {path}
@@ -1152,6 +1203,7 @@ Copy text
 Copy text (Ctrl+T) reads this script; Auto reads both
 Copy the first matching account's code (cleared from the clipboard after the timeout)
 Copy to clipboard
+Copy with meaning
 Copy {file} ({size}) to {dir}
 Copying…
 Corner cut
@@ -1181,6 +1233,7 @@ Could not start the lock screen
 Could not start {terminal}: {error}
 Could not write {path}: {error}
 Couldn't create {path}: {error}
+Couldn't download {collection}
 Couldn't install
 Couldn't install {app}
 Couldn't install {app}: {error}
@@ -1273,6 +1326,7 @@ Cycles
 DIMM {n}
 DNS
 DNS servers, e.g. 1.1.1.1, 9.9.9.9 (empty = automatic)
+Da'if
 Daily limits per app
 Daily reminder
 Daily screen time reached
@@ -1343,11 +1397,13 @@ Defaults restored — your old setup is in {folder}
 Defocus
 Degrees east
 Degrees north
+Dehlawi
 Del
 Delay
 Delete
 Delete a VPN profile
 Delete a collection (its entries stay in the history)
+Delete a collection's files (or all of them); it isn't downloaded again on its own
 Delete a downloaded model
 Delete a list; its tasks move to the Inbox unless `delete` is given
 Delete a note (and its file)
@@ -1358,6 +1414,7 @@ Delete a task
 Delete a topic; its notes move to the default topic unless `delete` is given
 Delete collection
 Delete completed tasks (every list, or one)
+Delete every downloaded collection from this computer; nothing is downloaded again on its own
 Delete files
 Delete notes too
 Delete tab
@@ -1516,6 +1573,8 @@ Dotted ring
 Down
 Download
 Download a catalog cursor theme from its GitHub release, verify its SHA-256 and install it to ~/.local/share/icons
+Download a collection (Arabic and the meaning in your language), all of them, or (with none) your chosen ones; returns at once, see `hadith status`
+Download a collection on Home first
 Download a model by id, or all of them
 Download every subscription again now
 Download failed: {error}
@@ -1523,17 +1582,30 @@ Download full update
 Download it now (27 MB, checksum-verified); picking Model also downloads it. Studio → Maintenance lists and removes it
 Download speed
 Download speed test
+Download the Qur'an and the meaning in your language now (or load them); waits until done
 Download the depth model (27 MB, checksum-verified) for the model mode
+Download the library in the Hadith panel to read a hadith a day
+Download · {size}
 Downloadable models (OCR, wallpaper depth) and whether they're installed
+Downloaded Qur'an
+Downloaded collections
 Downloaded from speed.cloudflare.com only when you press Run test
+Downloaded on demand
+Downloaded on their own when the plugin is on: bukhari, muslim, abudawud, tirmidhi, nasai, ibnmajah, malik, nawawi, qudsi, dehlawi
 Downloaded once
 Downloaded {count} times
 Downloaded: sharing stopped
+Downloading in the Hadith panel
 Downloading models {percent}%
+Downloading the Qur'an
 Downloading the full update ({size})…
+Downloading the meaning · {pct}%
+Downloading the recitation of ayah {n}: {error}
 Downloading the smart update ({size})…
+Downloading {collection}
 Downloading {file}: {error}
 Downloading {model} ({file}): {error}
+Downloading {url}: {error}
 Downloading…
 Downloading… {done} of {total} MB
 Downloads
@@ -1708,6 +1780,7 @@ Every bar item sits on a capsule of its own, in any bar style
 Every check with its state, latency, uptime and last result (JSON)
 Every city on the world clock with its time, offsets and daylight
 Every city's time when it is HH:MM here today (meeting planner)
+Every collection: download state, size, progress and whether it is chosen
 Every day
 Every day is a journey, and the journey itself is home.
 Every day is a new beginning
@@ -1761,6 +1834,7 @@ Expected minutes or off
 Expected off or a range such as 08:00-22:00
 Expected on, off or toggle
 Expected on, off, toggle or a number of minutes
+Expected {want} surahs, got {got}
 Explicit sync
 Export
 Export, import & support
@@ -1847,6 +1921,7 @@ Filter by kind
 Filter by name
 Filter packages…
 Find
+Find a surah by name or number…
 Find a window by title or app; Enter focuses it
 Find coordinates
 Find devices
@@ -1883,6 +1958,7 @@ First match wins: when the same id is in several folders, the one higher in this
 First quarter
 First say to yourself what you would be; and then do what you have to do.
 First shape
+First {shown} of {n} matches
 Fit
 Fit & effects
 Fits in
@@ -1935,6 +2011,7 @@ Focused window title
 Fog
 Fog out there. Take it slow.
 Fold repeats
+Fold the chain of narrators
 Folder
 Folder (empty: Generated in your wallpaper folder)
 Folder for AppImages and portable apps; empty uses ~/.local/share/mandara/apps
@@ -1987,6 +2064,7 @@ Format
 Format copied when a color is picked
 Formats
 Formats, tonal ramp and WCAG contrast of a color
+Forty Hadith Qudsi
 Found
 Frame
 Frame rate
@@ -2011,9 +2089,11 @@ Friday
 Friday and Saturday
 Friendship is always a sweet responsibility, never an opportunity.
 From
+From api.alquran.cloud: the Tanzil Project's text, copied exactly
 From nothing to a plugin in your bar. Run these in a terminal; the last step copies it straight into your development folder.
 From the installer's own records.
 From the language
+From the public-domain hadith-api collection, via jsDelivr
 From your playlist ({count})
 From your system
 From your wallpaper
@@ -2081,6 +2161,7 @@ George Eliot
 Get
 Get · {size}
 Getting it ready…
+Getting the Qur'an ready…
 Git isn't installed
 Git repositories
 GitHub
@@ -2109,6 +2190,8 @@ Gloss
 Glossy liquid blobs melting together
 Glow
 Glowing wave
+Glyph and today's reference
+Glyph only
 Go back to the wallpaper shown before
 Go to {place} {n}
 Good
@@ -2118,6 +2201,7 @@ Good morning
 Good night
 Google Authenticator export codes aren't supported yet; export accounts one by one
 Grace period after the pointer leaves
+Graded
 Gradient angle
 Gradient group tabs
 Graphics
@@ -2142,9 +2226,14 @@ Guard what you say and keep your desires within what is lawful.
 Gulistan II
 Gulistan III
 H {high}  L {low}
+HADITH OF THE DAY
 HISTORY
 HTTP {code}
 Hadith
+Hadith library
+Hadith library removed · {size} freed
+Hadith of the day
+Hadith of the day from
 Hadith: Sahih al-Bukhari and Sahih Muslim from the public-domain hadith-api collection, with its translations.
 Hafez
 Hairline
@@ -2166,6 +2255,7 @@ Hands over numerals
 Hangs from the top edge with curved shoulders
 Hard
 Hard disk
+Hasan
 Hatred does not cease by hatred at any time: hatred ceases by love, this is an old rule.
 He who has begun has half done. Dare to be wise; begin!
 He who is too busy doing good finds no time to be good.
@@ -2211,6 +2301,7 @@ Hide message text in popups
 Hide on touch
 Hide other desktops' entries
 Hide system accounts ({n})
+Hide the chain of narrators
 Hide when idle
 Hide when paused
 Hide while typing
@@ -2287,8 +2378,11 @@ How app icons are drawn
 How big the hot spot in each corner is
 How dark the bar's shadow is
 How far back the clock sits in the picture: low lets everything but the far background pass in front, high only the nearest things
+How far you have read through a hadith collection
 How fast the dock slides in and out
 How images that don't match the screen are placed
+How large the hadith are set
+How large the reader sets the Arabic
 How large the verses and hadith are set
 How long a key is held before it repeats
 How long a panel's result message (stopped, copied, failed…) stays up
@@ -2323,6 +2417,7 @@ How often failed units are counted for the chip's badge
 How often filesystem usage is read again while the panel is open
 How often subscriptions are downloaded again
 How often the container list updates while the panel is closed (the open panel refreshes every 2 s)
+How often the hadith of the day changes, the same everywhere
 How often the process table is sampled while the panel is open
 How often the unit list is reloaded while the panel is open
 How often to look for updates while the chip is in the bar
@@ -2366,6 +2461,7 @@ ISNA
 ISO week numbers beside each calendar row
 Ibn Hazm
 Ibn Khaldun
+Ibn Majah
 Ibn Sina
 Ice
 Icon name or image path
@@ -2536,6 +2632,7 @@ It can read and change any file
 It can read and change your files
 It can talk to other apps and services directly
 It can use your SSH or GPG keys
+It comes from your daily collections once one is downloaded
 It crashes or runs past its time budget: {error}
 It draws the wallpaper's subject over the desktop clock; switch the depth effect off in Studio → Wallpaper instead
 It fails to start: {error}
@@ -2564,6 +2661,8 @@ JPEG
 JPEG quality
 JSON pointer, e.g. /bar/height
 JSON value
+JUZ
+Jami' at-Tirmidhi
 Jane Austen
 Jane Eyre
 Jannah
@@ -2585,6 +2684,8 @@ Jumada al-Ula
 Junction
 Just the arch, or the arch with today's step
 Just the essentials, nothing else
+Just the glyph, or the glyph with today's reference
+Juz {n}
 KB
 KDE / Plasma
 KDE Breeze cursors, refined and extended with more shapes
@@ -2657,6 +2758,8 @@ Keypad {key}
 Keyring
 Keyring prompter status; demo previews the unlock dialog; close cancels it
 Keyrings & passwords
+Khatm complete
+Khatm progress
 Khufu's Wisdom
 Killed {name} ({pid})
 Kind
@@ -2754,6 +2857,7 @@ Letting go of a region drag captures (no annotating)
 Levels
 Lewis Carroll
 Libraries & fonts (shared files)
+Library
 Life is like riding a bicycle. To keep your balance you must keep moving.
 Life is not in bits and pieces. It is a magnificent, rhythmic, pulsating symphony.
 Life is not what one lived, but what one remembers and how one remembers it in order to recount it.
@@ -2947,12 +3051,14 @@ MWL
 Macchiato Dark
 Machine card
 Machine tiles
+Madani
 Made by Mandara
 Made by Mandara and built into the shell, so they update with it. Turn on what you want; turn off or remove what you don't (core plugins stay on).
 Maghrib
 Magnification
 Magnification spread
 Magnified size
+Maher Al-Muaiqly
 Main
 Main display
 Main menu
@@ -2973,7 +3079,9 @@ Make main display
 Make tabs, name them, give them an icon and put any widget on any of them. The open sidebar follows at once.
 Make the current recipe a random one (of one style when given)
 Make your own wallpapers and video loops on this machine: twelve styles, any palette, every detail adjustable, up to 8K. A plugin in the store; turn it on to design here.
+Makki
 Malicious
+Malik
 Manage
 Manage compositor drop-in
 Mandara
@@ -3078,7 +3186,10 @@ Maxims and Reflections
 Maximum height
 Maximum width
 May Allah accept it from you
+May Allah accept it from you. That makes {n}.
 Maya Angelou
+Meaning in English
+Meanings
 Meanings of the Qur'an: {translator}, from Tanzil through api.alquran.cloud, downloaded once and kept on this computer.
 Measure for Measure I.4
 Measuring…
@@ -3143,6 +3254,7 @@ Minutes, or with m, h or d (up to a week)
 Mirror left to right
 Mirror top to bottom
 Mirrored bars
+Mishary Alafasy
 Missing
 Missing argument #{position}
 Missing file
@@ -3232,6 +3344,7 @@ Move window to {place} {n}
 Move window {direction}
 Moves with the music
 Moving clouds, rain and stars (off with reduced motion)
+Muhammad Ayyub
 Muharram
 Muqaddimah
 Murasaki Shikibu
@@ -3245,6 +3358,7 @@ Mute all sound: every output and app at once; off restores your own mutes
 Mute or unmute one app stream
 Mute the microphone
 Muted
+Muwatta Malik
 My command
 My recipe, new layout
 N
@@ -3274,9 +3388,12 @@ Names
 Names and codes
 Names beside fan items and under grid icons
 Names in Arabic
+Narrated by {narrator}
+Nasa'i
 Native
 Native views
 Natural scrolling
+Nawawi
 Nearby
 Nearby Wi-Fi networks
 Nearly full at
@@ -3285,8 +3402,10 @@ Needs Super, Ctrl or Alt
 Needs attention
 Needs no system access beyond drawing its own view
 Needs pacman-contrib
+Needs the Hadith plugin; today's hadith, its rotation and the meaning follow its settings.
 Needs the Jannah plugin; today's reminder, its rotation and the meaning follow its settings.
 Needs the Prayer times plugin; times follow its settings.
+Needs the Qur'an plugin; the ayah of the day and your khatm follow it, the meaning its translation setting.
 Needs the Screen time plugin.
 Needs the Weather plugin's location
 Needs the commands permission
@@ -3328,6 +3447,7 @@ New Year
 New collection
 New columns' share of the screen width
 New command
+New hadith
 New keyring
 New layout (shuffle the seed)
 New moon
@@ -3355,6 +3475,7 @@ Next wallpaper at {time} · {count} in the rotation
 Next wallpaper {when}
 Next wallpaper: due now (shortly after the shell starts)
 Next window (Alt+Tab)
+Next: {name}
 Nicomachean Ethics, Book II
 Night
 Night bay
@@ -3399,6 +3520,7 @@ No apps match “{query}”
 No audio server
 No battery
 No blur
+No bookmarks yet
 No boot entry chosen
 No calendar “{name}”
 No calendars yet: add one in Studio → Date, time & location
@@ -3410,6 +3532,8 @@ No city or zone matches “{query}”
 No clipboard collection {id}
 No clipboard collection {name}
 No clipboard entry {id}
+No collection {name}
+No collection {name}; see `hadith collections`
 No colors yet
 No community plugins yet. Be the first to publish one.
 No config file yet — defaults are in use
@@ -3441,6 +3565,7 @@ No filesystem access
 No folder to write into
 No fonts match
 No frames yet — the shell only draws while something changes. Open a panel to see it work.
+No hadith {reference} in {collection}
 No hotspot has been set up yet
 No icons named like “{query}” in your theme
 No idle detection
@@ -3485,6 +3610,8 @@ No one is useless in this world who lightens the burden of it for any one else.
 No other device to switch to
 No other devices yet
 No output devices
+No output named {output}
+No output to float the panel on
 No package manager found
 No package manager on this computer can install it.
 No package manager on this system says it installed this app
@@ -3494,6 +3621,7 @@ No permission to talk to your monitors
 No pictures in {folder}
 No place found for “{name}”
 No plugin file yet
+No plugin named {plugin}
 No plugin with a sidebar card is called {id}
 No plugin.toml in this folder
 No plugins found
@@ -3549,6 +3677,9 @@ No such topic (use its name or id; see `notes topics`)
 No such unit
 No supported compositor detected
 No supported compositor detected (MangoWM, Niri, Hyprland, Umbriel)
+No surah matches
+No surah or ayah {reference}
+No surah or ayah {reference} (try 2, 2:255, 2:255-260 or al-baqara)
 No task {id}
 No tasks yet
 No terminal found — choose one in Studio → Applications
@@ -3576,6 +3707,7 @@ No workflow runs yet
 No {what} to change here
 Node fields
 None
+None of those collections is downloaded
 Nord
 Normal
 Normal and critical
@@ -3591,9 +3723,11 @@ Not authorized — the authentication was cancelled or refused
 Not authorized: the request was cancelled or the password was wrong
 Not checked yet
 Not connected
+Not downloaded yet: open the Hadith panel
 Not enough arguments; usage: {usage}
 Not enough space in {dir}.
 Not exported yet — Ghostty, GTK, Qt, Zed and btop follow Mandara once exported
+Not found
 Not found: check the name, and that your token can see it
 Not found: check the name; private repositories need the gh CLI signed in or GITHUB_TOKEN
 Not installed
@@ -3650,12 +3784,18 @@ Nothing running · {checked}
 Nothing saved yet
 Nothing scheduled
 Nothing starts at login
+Nothing to bookmark
 Nothing to do
+Nothing to pick from yet: download Sahih al-Bukhari or Sahih Muslim (`hadith download`)
+Nothing to read
+Nothing to recite
 Nothing to retire
 Nothing to run
+Nothing to search yet
 Nothing to set up
 Nothing to show
 Nothing to watch yet
+Nothing was changed; your files are as they were
 Nothing yet today
 Notification
 Notification + OSD
@@ -3719,7 +3859,13 @@ Off: your wallpaper stays until you change it
 Office
 Offline mode
 Offline mode is on (Studio → Privacy)
+Offline mode is on (Studio → Privacy): the Qur'an downloads once it's off
+Offline mode is on and the Qur'an isn't downloaded yet
+Offline mode is on and this recitation isn't downloaded yet
+Offline mode is on: nothing is downloaded
+Offline mode is on: nothing is downloaded until you turn it off (Studio → Privacy)
 Offline mode is on: the Arabic only
+Offline mode is on: the Qur'an downloads once you're online
 Okakura Kakuzō
 Oldest first
 Ollama
@@ -3803,6 +3949,7 @@ Open KeePassXC
 Open Mandara Studio, optionally on a section
 Open PLUGINS.md
 Open a copied image in your image editor (`[clipboard] image_command`)
+Open a hadith in the panel's reader and return it
 Open a terminal running the update command (all sources with updates, or one)
 Open a verse or hadith in the Jannah panel and return it
 Open a volume in the file manager (mounting it first if needed)
@@ -3832,6 +3979,8 @@ Open the development folder
 Open the drives panel to mount or safely remove it
 Open the eyedropper; replies with the picked color's formats (or an error if cancelled)
 Open the panel after picking
+Open the panel to download the Qur'an
+Open the reader at a surah or ayah and return its text and meaning
 Open the shortcuts cheatsheet
 Open the sidebar on a tab
 Open the tray panel (an item's menu, or the overview)
@@ -3842,7 +3991,7 @@ Open windows
 Open windows, most recently used first
 Open {folder}
 Open {folder} · {n} more
-Open, close or toggle a plugin's panel
+Open, close or toggle a plugin's panel. A floating panel is brought to the front by open and closed by toggle or close <plugin>; close without a plugin closes the bar's panel, pinned or not
 Open, close or toggle the launcher
 Open, close or toggle the left sidebar
 Open, close or toggle the session dock
@@ -3850,7 +3999,9 @@ Open, close or toggle the wallpaper picker
 Open-source cursors in the style of macOS, with the spinning wait wheel
 Opened {path}
 Opened {terminal}: {command}
+Opening the Qur'an…
 Opening your keyring…
+Opening {collection}…
 Opening {url}
 Opening…
 Opens drives and folders from Mandara; empty uses your default
@@ -3940,6 +4091,7 @@ Panel edges
 Panel radius
 Panels & plugins
 Panels wider or narrower than their natural width
+Panels you popped out of the bar come back where they were after a restart
 Panic inside a command (debug builds; tests fault isolation)
 Paper
 Part of Mandara's core, so it is always on. {reason}
@@ -3972,8 +4124,10 @@ Pause on battery
 Pause on hover
 Pause or resume recording screen time
 Pause or resume recording what you copy
+Pause the recitation
 Pause while locked
 Paused
+Paused at {reference} · {reciter}
 Paused while a fullscreen app is open
 Paused while on battery
 Paused while the screen is locked
@@ -4042,6 +4196,7 @@ Picture shape
 Picture-in-picture floats on every workspace
 Pictures from a folder, a new one every so often
 Pill labels
+Pin a plugin's panel open in the bar: outside clicks, focus changes and the launcher leave it open (its chip, Esc or panel close still close it). A floating panel docks back pinned
 Pin an app to the top of the launcher
 Pin an entry (survives clears)
 Pin, unpin or toggle-pin the sidebar (pinned pushes windows aside)
@@ -4076,6 +4231,7 @@ Play / pause
 Play a shell sound even while sounds are off
 Play a shell sound if sounds and that event are on (or any theme sound name)
 Play a sound for
+Play from here
 Play music or video in any MPRIS player
 Play or pause
 Playback state, levels, preset and sleep timer
@@ -4112,6 +4268,7 @@ Polaroid
 Polkit agent status; demo previews the authentication dialog; close cancels it
 Pomodoro
 Poor Richard's Almanack
+Pop a plugin's panel out of the bar into a floating card you can drag anywhere on the output its panel is open on (else the focused one): at x y when given (logical px from the output's top-left), else where it last floated there. A floating card moves to x y
 Pop up for
 Popup
 Popup content
@@ -4211,6 +4368,7 @@ Progress
 Progress bars
 Progress reported by an app's notifications, on its icon
 Projects
+Prostration
 Proverbs are the palm-oil with which words are eaten.
 Provincial Letters XVI
 PrtSc
@@ -4238,6 +4396,7 @@ Pywal-style colors.json and userChrome.css in ~/.cache/mandara/themes/firefox (s
 Qaitbay Citadel
 Qibla
 Qt 5 / 6 (qt6ct, qt5ct)
+Qudsi
 Queried once when the panel opens; must answer with the address as plain text
 Queued
 Queues a Mandara command, the same ones as mandara msg.
@@ -4295,12 +4454,15 @@ Ray detail
 Re-derive the theme (Material You) from each wallpaper you pick
 Re-export
 Re-read config.toml from disk
+Read
 Read Claude Code's logs
 Read a setting by JSON pointer (whole config when omitted)
 Read more
 Read the folder again
 Read the text in an image file (PP-OCRv5; auto, latin or arabic)
+Read the whole Qur'an with its meaning, listen to it recited, keep your place and your khatm (opt-in)
 Read-only
+Reading
 Reading Bluetooth…
 Reading IP settings…
 Reading VPNs…
@@ -4310,9 +4472,11 @@ Reading desktop entries and where each one came from.
 Reading displays…
 Reading drives…
 Reading history…
+Reading it from this computer
 Reading maketh a full man; conference a ready man; and writing an exact man.
 Reading network devices…
 Reading power state…
+Reading progress
 Reading saved networks…
 Reading sockets…
 Reading tailscale status
@@ -4355,6 +4519,10 @@ Recent log lines shown for a selected unit
 Recent runs
 Recent shell frame timings with p50 / p95 / p99 (build time and frame interval)
 Recently used apps listed under the pinned ones before you type
+Recite an ayah, a range or a whole surah (the reader follows along)
+Reciter
+Reciting
+Reciting {reference} · {reciter}
 Recolour a list
 Recolour a topic
 Recommended · default
@@ -4379,6 +4547,7 @@ Rectangle
 Red
 Redact personal values
 Reduce motion
+References and links follow sunnah.com. Muwatta Malik is numbered as in the dataset and links to its book.
 Refraction
 Refresh
 Refresh calendars
@@ -4402,6 +4571,7 @@ Relief
 Reload config
 Reload the config
 Remember Allah often
+Remember floating panels
 Remember the last search
 Remember the layout per window
 Remember the region
@@ -4419,6 +4589,7 @@ Removable
 Remove
 Remove (only what Mandara installed)
 Remove a Mandara plugin: off, out of the bar and sidebar, listed under Removed
+Remove a bookmark
 Remove a calendar by index or name
 Remove a city from the world clock
 Remove a cursor theme Mandara installed (never one from a package or your own folders)
@@ -4426,6 +4597,7 @@ Remove a paired device
 Remove a rule by its position (from 1)
 Remove a saved verse or hadith
 Remove a task from the bar and the panel
+Remove all
 Remove an account (by id from `authenticator list`) from the keyring
 Remove an app from the dock
 Remove an autostart entry Mandara added
@@ -4440,7 +4612,9 @@ Remove harm from the road
 Remove line
 Remove one entry
 Remove photo
+Remove the downloaded text, meanings and cached recitations
 Remove the last line
+Remove the text, the meanings and the cached recitations; the panel offers to download them again
 Remove this color
 Remove this entry
 Remove?
@@ -4450,6 +4624,7 @@ Removed from login
 Removed in this version
 Removed line {line} of {file}. Backup: {backup}
 Removed {plugin}
+Removed · {size} freed
 Removes {home} and everything in it
 Removing
 Removing turns it off and takes it out of the bar and sidebar. It waits under Removed Mandara plugins until you restore it.
@@ -4521,6 +4696,7 @@ Results
 Results for “{query}”
 Resume
 Resume a paused container
+Resume a paused recitation where it stopped
 Resume reminders after a pause
 Resumed {count} containers
 Resumed {name}
@@ -4611,11 +4787,13 @@ SE
 SKIPPED TODAY
 SLEEP TIMER
 STORAGE
+SURAH {n}
 SW
 Saadi
 Safar
 Safely remove
 Safely remove a drive: unmount and lock its volumes, then eject or power it off
+Sahih
 Sahih Muslim
 Sahih al-Bukhari
 Same as the desktop
@@ -4736,6 +4914,7 @@ Sea glass
 Seamless AV1 loop at {size}
 Search
 Search Arabic or meaning…
+Search Arabic, meaning or reference…
 Search Wallhaven
 Search accounts…
 Search and download wallpapers from wallhaven.cc right in the wallpaper picker
@@ -4750,6 +4929,7 @@ Search every icon in your theme…
 Search every note
 Search field
 Search fonts, or type any name
+Search for something: words in Arabic or in your language
 Search installed apps
 Search looks at names, ids and descriptions.
 Search places by name (Open-Meteo geocoding)
@@ -4758,8 +4938,12 @@ Search providers
 Search settings
 Search shortcuts…
 Search text, kinds, collections…
+Search the Arabic (without diacritics) and the meaning; every word must match
 Search the community for “{query}”
+Search the downloaded collections: Arabic without diacritics, the meaning or a reference; filter by collection and grade
+Search the library
 Search the verses and hadith (Arabic without diacritics, or the meaning)
+Search the whole Qur'an
 Search units…
 Search wallhaven.cc in the wallpaper picker: type a search and pick a result, it downloads at full size into your folder.
 Search what you copied; Enter copies it again
@@ -4809,6 +4993,7 @@ Selected on open
 Selection outline
 Semibold
 Send
+Send a floating panel back into the bar (it opens there)
 Send a notification when a check goes down or comes back up
 Send a sample notification
 Send apps to their own output
@@ -4881,6 +5066,7 @@ Shadow under floating panels and floating side panels
 Shadowed
 Shadows
 Shafi'i
+Shah Waliullah's Forty
 Shahnameh
 Shape
 Shape and frame
@@ -4973,6 +5159,7 @@ Show stopped containers
 Show suggested and recent apps in Dock
 Show system accounts ({n})
 Show system partitions
+Show the chain of narrators
 Show the confirmation card for AppImages, Flatpaks and portable apps too (native packages always ask)
 Show the date
 Show the dock
@@ -5064,6 +5251,7 @@ Sleep timer in the bar
 Slices
 Slices: slanted strips around a big preview (Omarchy-style). Carousel: floating cards
 Slide the bar away; touch its edge to bring it back
+Slider handle
 Slider with min and max, otherwise a number field
 Slideshow
 Slideshow transition
@@ -5217,6 +5405,7 @@ Stop sharing after
 Stop sharing now
 Stop sharing?
 Stop the hotspot
+Stop the recitation
 Stop the wallpaper being generated
 Stop unlocking keyrings at login?
 Stop writing display settings to the compositor drop-in (your own config decides again)
@@ -5250,6 +5439,7 @@ Studio isn't connected to the shell
 Studio isn't running inside a Wayland session.
 Studio runs as its own process, so its usage is measured separately and never counted in the shell figures above.
 Studio shows them in your plugin's settings modal
+Study
 Style
 Styles
 Subscribe to an ICS calendar (https / webcal URL, .ics file or folder)
@@ -5261,6 +5451,9 @@ Sun glitter
 Sun height
 Sun position
 Sun size
+Sunan Abu Dawud
+Sunan Ibn Majah
+Sunan an-Nasa'i
 Sunday
 Sunrise
 Sunrise in {time}
@@ -5274,6 +5467,10 @@ Superscript
 Supported by:
 Supported interface languages
 Supports pacman, AUR helpers, APT, DNF, Zypper and Flatpak
+Surah {n} has {got} ayahs, expected {want}
+Surah {n} is out of order
+Surah {n} · {count} ayahs
+Surahs
 Surface
 Surprise me
 Suspend
@@ -5369,11 +5566,16 @@ Tall bars side by side
 Tallest it grows; fewer rows show when this is low
 Tallest panel, as a share of the screen height the bar leaves free
 Tallest the floating card grows
+Tanzil Uthmani text
+Tanzil Uthmani text · the meaning couldn't be downloaded
+Tanzil Uthmani text · {translator}
 Tao Te Ching 33
 Tao Te Ching 36
 Tao Te Ching 64
+Tap an ayah in the reader and bookmark it to keep it here
 Tap and drag
 Tap the heart on a verse or hadith to keep it here
+Tap the ribbon on a hadith to keep it here
 Tap to click
 Tap, then slide to drag
 Tape angle
@@ -5430,16 +5632,19 @@ That didn't work — try again
 That doesn't look like an e-mail address
 That entry is not an image
 That file includes personal values ({keys}); turn on “Redact personal values” before sharing it.
+That hadith isn't in the collection
 That local time does not exist today
 That made {compositor} report more problems, so it was undone.
 That user no longer exists
 That widget is already on this tab
 That widget is not on this tab
 That's Mandara itself — use Studio → Performance → Quit
+The 114 surahs: names, meaning, Makki or Madani and ayah counts
 The Analytical Engine weaves algebraical patterns just as the Jacquard-loom weaves flowers and leaves.
 The App Installer plugin is off: turn it on in Studio → Plugins
 The Applications folder is off (Studio → Dock → Applications folder)
 The Applications folder: open or close its grid of apps
+The Arabic and the meanings are shown exactly as the dataset gives them, with its grades and graders. Where your language has no translation of a collection, the English one is shown and labelled.
 The Art of War III
 The Book of Five Rings
 The Book of Tea
@@ -5452,11 +5657,25 @@ The Mediterranean horizon with waves and sun glitter
 The Narrow Road to the Interior
 The Pomodoro timer; click to start or pause
 The Prophet
+The Prophet's sayings ﷺ, collection by collection
 The QR code isn't a 2FA (otpauth://) code
+The Qur'an is downloaded
+The Qur'an is still downloading; try again in a moment (`quran status`)
+The Qur'an isn't downloaded
+The Qur'an isn't downloaded yet
+The Qur'an isn't loaded
+The Qur'an plugin stopped
 The Qur'an service sent no verses
+The Qur'an service's index is incomplete
+The Qur'an service's index is out of order
+The Qur'an text is damaged
+The Qur'an text is incomplete: {surahs} surahs and {ayahs} ayahs
+The Qur'an was removed; run `quran download`
+The Qur'an's downloads are removed ({size})
 The Qur'an's text is the Tanzil Project's Uthmani text, copied exactly.
 The Sum of Our Days
 The Tale of Genji
+The Tanzil text and its meaning, for the Qur'an plugin (api.alquran.cloud)
 The Trash: count its items, or empty it (asks for --yes)
 The XCursor theme name, e.g. Bibata-Modern-Ice; pick one from the gallery above
 The active keyboard layout; click to switch
@@ -5470,6 +5689,7 @@ The archive is too large to install
 The audio server is unavailable
 The audio server isn't reachable
 The authentication helper is not available
+The ayah of the day with its meaning
 The bar chip isn't placed
 The bar floats over windows while it auto-hides
 The bar is on the other edge: the launcher opens from the bare screen edge instead of growing out of the bar.
@@ -5494,6 +5714,7 @@ The clipboard thread failed
 The clock keeps its own time now
 The clock now sets itself from internet time servers
 The clock's time zone, network time, and the shared location's time zone
+The collections come from the hadith-api dataset, released into the public domain (the Unlicense). Each one is downloaded when you ask for it, checked, and kept on this computer in ~/.local/share/mandara/hadith.
 The command is empty
 The compiled WebAssembly component (manifest `entry`)
 The compositor did not answer
@@ -5518,13 +5739,17 @@ The dock hides until you touch the screen edge.
 The dock hides while a window covers it. Touch the screen edge to bring it back.
 The dock is on: the launcher floats above it and opens on click only.
 The dock isn't showing
+The download didn't finish
+The download didn't finish; open the panel to try again
 The download didn't get through. Check your connection.
 The download doesn't match its pinned checksum, so it wasn't installed
+The download failed: {error} (`quran download` tries again)
 The download has no cursor theme at {folder}
 The download is larger than expected
 The drive is busy — close files and apps that use it
 The edge drawer with quick settings and cards
 The edge opposite the sidebar · MangoWM and Hyprland
+The end of the Qur'an. May Allah accept your reading.
 The endpoint did not answer with an IP address: {reply}
 The engine refused ({status}): {error}
 The entries of a collection, optionally matching a search
@@ -5533,6 +5758,7 @@ The file chooser failed: {error}
 The file is larger than this location allows.
 The first matching rule decides. Patterns are case-insensitive regular expressions; plain words match anywhere. Also from the command line: `mandara msg notifications rules add silent Spotify`.
 The first principle is that you must not fool yourself, and you are the easiest person to fool.
+The floating panels with their output, position and size, and every remembered position
 The focused wallpaper's name under the picker
 The focused window
 The full coredumpctl report of a crash (with a stack trace when the core is stored)
@@ -5540,6 +5766,9 @@ The generator's curated palettes
 The generator's styles with their parameters
 The great man is the one who does not lose his child's heart.
 The greatest thing in the world is to know how to belong to oneself.
+The hadith of the day (or the hour), the same as every surface shows
+The hadith of the day couldn't be picked
+The hadith of the day is on its way
 The heart
 The hint strip under the toolbar
 The hotspot's name, password and Wi-Fi QR payload
@@ -5565,8 +5794,12 @@ The link stops working once your phone has downloaded the item
 The list is full — remove a widget to add another
 The lock screen's text
 The main menu is see-through glass with solid cards on it
+The main menu opens from the bar only
 The meaning couldn't be loaded
+The meaning in your language
+The meaning in your language under the Arabic (English where the collection has none in yours). Off: Arabic only
 The meaning in your language under the Arabic; the Qur'an's is downloaded once from Tanzil (api.alquran.cloud). Off: Arabic only
+The meaning {edition} is incomplete
 The name is empty
 The network name is empty
 The new release is plugin {new}, not {old}; reinstall it from the marketplace
@@ -5590,6 +5823,7 @@ The plugin archive contains unsafe paths
 The plugin archive has no plugin.toml
 The plugin archive is too large
 The public IP endpoint must be an http(s) URL
+The reader shows the Prophet's words first; the chain opens with a tap
 The recording already finished
 The recording did not start in time
 The recording thread crashed
@@ -5629,14 +5863,19 @@ The sun doesn't rise today
 The sun doesn't set today
 The sun on its path, sunrise, sunset and what comes next
 The sun's arc from sunrise to sunset, tonight's moon and a globe lit where the sun is now, worked out for your location
+The surah index
 The system bus is not available
 The terminal, file manager and browser Mandara launches
+The text and the meaning in your language, about {size} MB, kept on this computer
+The text: Tanzil's Uthmani script
 The time in other cities on the desktop, with how far ahead or behind they are
 The track that is playing
 The track's title beside the music icon; off shows the icon alone
+The translations available in your language (for Studio's translation setting)
 The tray service is not running
 The unit is masked
 The unlock password was incorrect
+The upright line between a slider's fill and its track; None shows the fill alone
 The uptime monitor stopped
 The volume beside the speaker icon
 The wallpaper Mandara is drawing
@@ -5659,6 +5898,7 @@ Theme: {name}
 Themes
 Themes & looks…
 Themes, session actions, plugins, Studio pages, commands and skills
+Then {collection}
 There is already a collection called {name}
 There is no default keyring; create one in your keyring app
 There is no rule {n}
@@ -5774,6 +6014,7 @@ Time, date and calendar
 Time-synced lyrics from lrclib.net in the media panel (fetched only while it is open)
 Timeouts
 Timer
+Tirmidhi
 Tirukkural 100
 Tirukkural 211
 Title
@@ -5790,7 +6031,9 @@ To-do
 To-do list
 Today
 Today · stays on this computer
+Today's ayah in calligraphy under an arch, with its meaning
 Today's events disappear once they end
+Today's hadith in Amiri with its meaning and reference
 Today's prayer times
 Today's range next to the temperature
 Today's reminder
@@ -5847,6 +6090,7 @@ Trace trap
 Track in the bar
 Tracking is paused
 Transition
+Translation
 Translations of your labels
 Translucency
 Trash
@@ -5859,6 +6103,7 @@ Trusted devices connect without asking and reconnect automatically
 Try All types or another filter
 Try a name, image, compose project or ID
 Try a name, part of a command line or a PID
+Try a number, a name or its meaning
 Try a port number or a process name
 Try again
 Try another name or repository
@@ -5866,8 +6111,10 @@ Try another source, or show hidden and helper entries.
 Try another word or another filter.
 Try another word or filter
 Try another word, or look in the community marketplace.
+Try fewer or other words
 Try it
 Try other words or another theme
+Try other words, another collection or any grade
 Try part of a unit name or its description
 Tue
 Tuning
@@ -5917,6 +6164,7 @@ Two fingers
 Two-factor codes (TOTP / HOTP) stored in your keyring
 Type /trigger and your words in the launcher. Actions: url:<address with {query}> opens the browser, mandara:<command> runs a Mandara command (see `mandara commands`), exec:<shell command> runs a program; {query} is replaced by what you typed.
 Type a database password in Mandara's dialog
+Type a word in Arabic or in your language
 Type the PIN for {device} (often 0000 or 1234, or shown on its screen).
 Type the six-digit code shown on {device}.
 Type this code on the device
@@ -5957,6 +6205,7 @@ Unexpected answer from Ollama: {error}
 Unexpected answer from tailscale: {error}
 Unexpected answer from the Qur'an service: {error}
 Unexpected argument {value}
+Unexpected hadith file: {error}
 Unexpected reply from the engine: {error}
 Unexpected weather data: {error}
 Unfocused opacity
@@ -5982,6 +6231,7 @@ Unknown effect "{effect}"
 Unknown event
 Unknown filter {filter}
 Unknown format {format}: use lossless, webp, png or jpeg
+Unknown grade {grade}: use sahih, hasan or daif
 Unknown kind {kind}
 Unknown layer {name}
 Unknown level {name}
@@ -6031,6 +6281,7 @@ Unmounted {device}
 Unmute
 Unmute all
 Unpack {file} ({size}) into {dir}
+Unpin a plugin's panel: it stays open until the next outside click
 Unpin an app
 Unpin an entry
 Unpinned entries are forgotten when Mandara starts
@@ -6200,6 +6451,7 @@ Waiting for authorization…
 Waiting for its hours: next change at {time}
 Waiting for you
 Waiting to discharge
+Waiting…
 Walden
 Walk around, drink some water and rest your eyes
 Walk gently and think little of yourself; the humble are honoured there.
@@ -6286,6 +6538,8 @@ What happens
 What happens (needs your password)
 What happens to the file you installed from
 What is coming (empty: New Year)
+What is downloaded and loaded, its size, the khatm and the recitation
+What is downloaded, what is downloading and how far, and any errors
 What is open: panel, sidebar, launcher, power menu, wallpaper picker; whether the launcher opens on hover
 What is shared: link, kind, name, time left and downloads (JSON)
 What it does
@@ -6309,6 +6563,7 @@ When a window covers it
 When a window overlaps
 When an event defines alarms, remind at those times instead
 When idle
+When in doubt, check a hadith with a scholar or a printed edition.
 When in doubt, tell the truth.
 When it overflows
 When nearly empty
@@ -6352,6 +6607,7 @@ Who installed an app, the exact removal command and its leftovers (changes nothi
 Whoever strives, succeeds.
 Whoever you are responsible for, never deceive or neglect them.
 Whole output
+Whose recitation plays; each ayah is downloaded once from cdn.islamic.network and kept
 Wi-Fi
 Wi-Fi and wired connectivity
 Wi-Fi is off
@@ -6447,6 +6703,7 @@ You have {version}
 You'll be asked once, by the system, before anything changes
 You're all caught up
 You're logged out
+You're offline
 You're presenting
 Your GitHub user name
 Your Steam games as covers; a click starts one
@@ -6456,6 +6713,8 @@ Your account has expired
 Your apps in a Launchpad-style grid, on the right of the dock; drop an app on it to install it
 Your avatar above the password field
 Your bind wins; Mandara leaves this chord out of its drop-in
+Your bookmarked ayahs, newest first
+Your bookmarked hadith, newest first
 Your clipboard collections and how many entries each holds
 Your command
 Your compositor's cursor
@@ -6466,6 +6725,7 @@ Your contribution calendar (fetched from github.com once you switch it on)
 Your cursor
 Your devices
 Your dock's apps, or any apps and links, as tiles
+Your hadith library
 Your home folder
 Your home folders; a click opens one
 Your hooks
@@ -6473,6 +6733,7 @@ Your idle commands
 Your installed Steam games, the most recently played first.
 Your keyring may ask you to unlock it
 Your keys
+Your khatm as a ring, with the surah you're reading and a click to continue
 Your local repositories at a glance: branch, uncommitted changes, unpushed commits
 Your location
 Your machine at a glance, screen time, the next prayer, a search field, your GitHub year, exchange rates, AI usage and your games
@@ -6513,13 +6774,18 @@ Zoom
 `{key}` still works, but {compositor} has deprecated it and a future version may drop it.
 `{key}` worked with your previous version, but {compositor} {version} no longer accepts it: it was probably renamed or removed in this update.
 a Mandara or icon-theme icon name
+a collection id (bukhari, muslim, abudawud, tirmidhi, nasai, ibnmajah, malik, nawawi, qudsi, dehlawi) or all
+a collection id or all
 a folder (with folder)
 a folder, or clear
 a fullscreen window is focused
 a generated wallpaper
 a path key from `jannah paths`
+a reference: bukhari 1, muslim 2699a
+a reference: bukhari 1, muslim 2699a, abudawud 4031
 a section (home, themes, wallpaper, desktop-widgets, typography, motion, bar, sidebar, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
 a style id from `wallgen styles`
+a surah (2, al-baqara) or an ayah (2:255), or a range (2:255-257)
 a wallpaper (with add / remove)
 about {time} left
 absolute file paths, then --yes (skip the confirmation), --no-path-shim, --dry-run
@@ -6528,10 +6794,13 @@ account id
 action key (default: "default")
 activating
 active
+add or remove
 after
+all sahih
 all, pinned, a kind (code, color, …) or a collection id or name
 already recording
 also paste with Ctrl+V
+an ayah: 2:255 or al-baqara:255
 an excluded app is focused
 an exported settings file
 another architecture
@@ -6640,6 +6909,7 @@ fps
 front
 function / dispatcher / action name, then its arguments
 geoclue or ip (default: the configured mode)
+graded
 greetd greeter
 h
 haiku, 1686
@@ -6679,9 +6949,12 @@ job id from apps jobs
 journalctl failed
 just now
 key=value pairs, or a TOML recipe
+khatm
+khatm {n}
 last {hours} h
 layout
 left
+left edge, logical px from the output's left
 length in milliseconds
 light or dark
 line to append
@@ -6897,6 +7170,7 @@ today, +N / -N days or YYYY-MM-DD
 today, next, prev, +N / -N days, YYYY-MM or YYYY-MM-DD
 todo:<id>, toggle:<wifi|bluetooth|dnd|night-light|keep-awake|dark|mute>, media:<play-pause|next|previous>, launch:<app>, open:<path>, level:<volume|brightness>:<0-1>, pomodoro, next, search…
 toggle
+top edge, logical px from the output's top
 top-level section, e.g. bar, launcher, compositor
 topic name (one word) or id
 topic name (rest of the line)
@@ -6955,7 +7229,9 @@ widgets
 wifi, bluetooth, dnd, night-light, keep-awake, dark, mute
 window id
 words in Arabic or in your language
+words in Arabic or in your language, or a reference
 words to look for
+words, then optionally --collection <id> and --grade sahih|hasan|daif
 workspace
 your compositor
 your default
@@ -6982,6 +7258,9 @@ your default
 {changed} of {count} changed
 {city} is already on the clock
 {city} is not on the clock
+{collection} couldn't be opened
+{collection} isn't downloaded
+{collection} isn't downloaded: run `hadith download {id}`
 {compositor} can't read this line: something in its syntax is broken (a missing bracket, quote or `=`), so it may skip everything after it.
 {compositor} doesn't know `{key}`. It may be misspelled, or it was renamed or removed in a newer version.
 {compositor} has no config file here yet.
@@ -7058,6 +7337,7 @@ your default
 {device} wants to pair with this computer.
 {device} wants to use: {service}.
 {done} of {total}
+{done} of {total} MB
 {downloaded} instead of {full}
 {download} file · {installed} installed
 {drives} drives · {mounted} mounted
@@ -7065,6 +7345,10 @@ your default
 {drive} can't be ejected or powered off
 {drive} connected
 {d} d {h} h
+{edition} doesn't line up with the Arabic
+{edition} has Arabic for {got} hadith, expected {expected}
+{edition} has {got} entries, expected {expected}
+{edition} is out of order
 {engine} · {running} running of {total}
 {event} in {minutes} min
 {event} now
@@ -7138,6 +7422,10 @@ your default
 {name} · on the desktop
 {n} accounts · {backend}
 {n} apps
+{n} ayahs
+{n} ayahs · showing the first {shown}
+{n} books
+{n} collections from hadith-api (public domain)
 {n} conflicts, e.g. {first}
 {n} connected
 {n} days
@@ -7149,10 +7437,14 @@ your default
 {n} items
 {n} items · right-click copies
 {n} items · right-click pastes
+{n} khatms completed
 {n} lines
+{n} matches
 {n} min
+{n} more in collections that aren't downloaded
 {n} need attention
 {n} notifications
+{n} of 30 this khatm
 {n} of {max}
 {n} of {total}
 {n} open
@@ -7161,6 +7453,7 @@ your default
 {n} plugins
 {n} processes
 {n} processes · {apps} apps
+{n} read
 {n} running
 {n} sec
 {n} settings · changes apply live
@@ -7168,11 +7461,13 @@ your default
 {n} shortcuts
 {n} shortcuts · Mandara and {compositor}
 {n} streams
+{n} surahs
 {n} theme files in {folder}
 {n} things to look at
 {n} unread
 {n} verses
 {n} windows
+{n} · {name} · {count} ayahs
 {n}h
 {n}m
 {on} of {total} plugins on
@@ -7196,8 +7491,12 @@ your default
 {percent}% left — this is a test
 {percent}% of today left
 {percent}% — you can unplug the charger
+{plugin} failed to start
+{plugin} has no panel
+{plugin} is not floating
 {plugin} is off. Turn it on in Studio → Plugins or with `mandara msg plugins enable {id}`
 {plugin} is part of Mandara's core and can't be turned off or removed: {reason}
+{plugin} is switched off (Studio → Plugins)
 {plugin} is up to date
 {plugin} settings
 {plugin} was removed. Restore it in Studio → Plugins or with `mandara msg plugins restore {id}`
@@ -7209,6 +7508,7 @@ your default
 {program} exited with status {code}
 {program} timed out
 {program} was interrupted
+{read} of {total} read
 {region} memory
 {running} of {count} running
 {running} running · {finished} finished
