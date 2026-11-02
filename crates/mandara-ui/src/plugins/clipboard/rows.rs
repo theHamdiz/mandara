@@ -53,6 +53,19 @@ const SWATCH_RING_ALPHA: f32 = 0.18;
 /// Row buttons (collection, pin, edit, delete).
 pub const ROW_BUTTON_PX: f32 = 28.0;
 const BUTTON_ALPHA: f32 = 0.8;
+/// The floating action pill shown on hover: inner padding, gap between its
+/// buttons and its soft shadow.
+const ACTIONS_PAD_PX: f32 = 3.0;
+const ACTIONS_GAP_PX: f32 = 1.0;
+const ACTIONS_SHADOW_ALPHA: f32 = 0.5;
+const ACTIONS_SHADOW_BLUR_PX: f32 = 10.0;
+/// The quiet marks a pinned / collected row keeps at its end: pin glyph,
+/// collection dots (at most this many), and the room kept for them.
+const MARK_ICON_PX: f32 = 12.0;
+const MARK_DOT_PX: f32 = 6.0;
+const MARK_GAP_PX: f32 = 4.0;
+const MAX_MARK_DOTS: usize = 3;
+const MARK_ROOM_PX: f32 = 44.0;
 /// Code / CSS preview lines: text size and line height, box padding.
 const CODE_TEXT_PX: f32 = text::LABEL + 0.5;
 const CODE_LINE_PX: f32 = 16.0;
@@ -217,6 +230,20 @@ fn line_count(text: &str) -> usize {
     text.lines().count().max(1)
 }
 
+/// "Rust · 12 lines", or "· 1 line" for one.
+fn lines_meta(kind: &str, text: &str) -> SharedString {
+    match line_count(text) {
+        1 => tf("{kind} · 1 line", &[("kind", &kind)]).into(),
+        n => tf("{kind} · {lines} lines", &[("kind", &kind), ("lines", &n)]).into(),
+    }
+}
+
+/// How many lines a code preview of `text` shows (at most `n`): the box
+/// is as tall as what it holds.
+fn shown_lines(text: &str, n: usize) -> usize {
+    text.lines().skip_while(|l| l.trim().is_empty()).take(n).count().clamp(1, n.max(1))
+}
+
 impl RowText {
     pub fn of(e: &ClipEntry, preview_lines: usize) -> Self {
         let mut row = Self { title: SharedString::default(), meta: SharedString::default(), lines: Vec::new(), doc: None, file_icon: "note", preview_lines };
@@ -262,12 +289,12 @@ impl RowText {
                     }
                     ClipClass::Code { lang } => {
                         row.title = e.preview(PREVIEW_CHARS).into();
-                        row.meta = tf("{kind} · {lines} lines", &[("kind", &lang_name(lang)), ("lines", &line_count(text))]).into();
+                        row.meta = lines_meta(&lang_name(lang), text);
                         row.lines = tinted(text, lang, preview_lines);
                     }
                     ClipClass::Css => {
                         row.title = e.preview(PREVIEW_CHARS).into();
-                        row.meta = tf("{kind} · {lines} lines", &[("kind", &"CSS"), ("lines", &line_count(text))]).into();
+                        row.meta = lines_meta("CSS", text);
                         row.lines = tinted(text, "css", preview_lines);
                     }
                     ClipClass::Markdown => {
@@ -391,7 +418,11 @@ pub fn row_h(e: &ClipEntry, preview_lines: usize) -> f32 {
     if !previews(e, preview_lines) {
         return TEXT_H;
     }
-    let body = if e.class.kind() == Kind::Markdown { md_box_h(preview_lines) } else { CODE_LINE_PX * preview_lines as f32 };
+    let shown = match &e.content {
+        ClipContent::Text { text } => shown_lines(text, preview_lines),
+        _ => preview_lines,
+    };
+    let body = if e.class.kind() == Kind::Markdown { md_box_h(preview_lines) } else { CODE_LINE_PX * shown as f32 };
     ROW_PAD_Y_PX * 2.0 + PREVIEW_PAD_Y_PX * 2.0 + body + ROW_TEXT_GAP_PX + META_H_PX
 }
 
@@ -439,7 +470,8 @@ fn tok_color(tok: Tok, palette: &MandaraPalette) -> Color {
 }
 
 fn preview_box(e: &ClipEntry, r: &RowText, rcx: &RowCx, palette: &MandaraPalette) -> AnyElement {
-    let n = rcx.preview_lines as f32;
+    // As many lines as the entry has, up to the setting (see `row_h`).
+    let n = r.lines.len().clamp(1, rcx.preview_lines.max(1)) as f32;
     let shell = div()
         .w_full()
         .px(px(PREVIEW_PAD_X_PX))
@@ -535,20 +567,29 @@ pub fn entry_row(e: &ClipEntry, rcx: &RowCx, palette: &MandaraPalette, actions: 
     let in_collection = !e.collections.is_empty();
     let RowActions { restore, pin, delete, edit, pick } = actions;
     let restore_right = restore.clone();
-    div()
-        .id(("clip", i))
-        .h(px(row_h(e, rcx.preview_lines)))
-        .px(px(ROW_PAD_X_PX))
-        .when(preview, |el| el.py(px(ROW_PAD_Y_PX)))
-        .rounded(px(crate::style::radius(ROW_RADIUS_PX)))
+    // The actions float over the row's end while it is hovered (or its
+    // collection picker is open), so the content gets the full width; a
+    // pinned or collected entry keeps a quiet mark at the end instead.
+    let group = SharedString::from(format!("clip-row-{i}"));
+    let marks = div()
+        .absolute()
+        .right(px(ROW_PAD_X_PX + ACTIONS_PAD_PX))
+        .when(preview, |el| el.top(px(ROW_PAD_Y_PX + ACTIONS_PAD_PX)))
+        .when(!preview, |el| el.top_0().bottom_0())
         .flex()
-        .when(preview, |el| el.items_start())
-        .when(!preview, |el| el.items_center())
-        .gap(px(ROW_GAP_PX))
-        .cursor_pointer()
-        .hover(move |s| s.bg(hover.hsla()))
-        .child(lead(e, rcx, palette))
-        .child(body)
+        .items_center()
+        .gap(px(MARK_GAP_PX))
+        .when(e.pinned, |el| el.child(icon("pin", MARK_ICON_PX, readable(palette.primary, palette))))
+        .children(e.collections.iter().take(MAX_MARK_DOTS).map(|c| div().size(px(MARK_DOT_PX)).rounded_full().bg(collection_tint(*c, palette).hsla())));
+    let actions_pill = div()
+        .flex()
+        .items_center()
+        .gap(px(ACTIONS_GAP_PX))
+        .p(px(ACTIONS_PAD_PX))
+        .rounded_full()
+        .bg(palette.surface_container_high.hsla())
+        .shadow(vec![crate::plugins::panel_fx::glow(palette.surface_dim.with_alpha(ACTIONS_SHADOW_ALPHA), ACTIONS_SHADOW_BLUR_PX, 0.0, 2.0)]);
+    let actions_pill = actions_pill
         .when(is_image && rcx.can_edit, |el| {
             el.child(icon_button(("clip-edit", i), "crop", ROW_BUTTON_PX, quiet, None, move |_, cx| {
                 cx.stop_propagation();
@@ -574,7 +615,34 @@ pub fn entry_row(e: &ClipEntry, rcx: &RowCx, palette: &MandaraPalette, actions: 
             // Don't let the row's click (copy) fire too.
             cx.stop_propagation();
             delete(cx);
-        }))
+        }));
+    let overlay = div()
+        .absolute()
+        .right(px(ROW_PAD_X_PX))
+        .when(preview, |el| el.top(px(ROW_PAD_Y_PX)))
+        .when(!preview, |el| el.top_0().bottom_0())
+        .flex()
+        .items_center()
+        .when(!rcx.picking, |el| el.invisible().group_hover(group.clone(), |s| s.visible()))
+        .child(actions_pill);
+    div()
+        .id(("clip", i))
+        .group(group.clone())
+        .relative()
+        .h(px(row_h(e, rcx.preview_lines)))
+        .px(px(ROW_PAD_X_PX))
+        .when(preview, |el| el.py(px(ROW_PAD_Y_PX)))
+        .rounded(px(crate::style::radius(ROW_RADIUS_PX)))
+        .flex()
+        .when(preview, |el| el.items_start())
+        .when(!preview, |el| el.items_center())
+        .gap(px(ROW_GAP_PX))
+        .cursor_pointer()
+        .hover(move |s| s.bg(hover.hsla()))
+        .child(lead(e, rcx, palette))
+        .child(body.when(e.pinned || in_collection, |el| el.pr(px(MARK_ROOM_PX))))
+        .when(!rcx.picking, |el| el.child(marks.group_hover(group.clone(), |s| s.invisible())))
+        .child(overlay)
         .on_click(move |_, _, cx| restore(false, cx))
         .on_mouse_down(MouseButton::Right, move |_, _, cx| restore_right(true, cx))
         .into_any_element()

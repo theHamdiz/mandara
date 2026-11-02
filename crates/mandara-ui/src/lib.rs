@@ -24,6 +24,7 @@ pub mod desktop_menu;
 pub mod desktop_plugins;
 pub mod dismiss;
 pub mod fonts;
+pub mod hstrip;
 pub mod hub;
 pub mod icon_theme;
 pub mod icons;

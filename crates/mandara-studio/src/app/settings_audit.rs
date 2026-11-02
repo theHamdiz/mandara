@@ -285,7 +285,7 @@ fn field(path: &str) -> &str {
 /// Whether consumer code reads a shell (non-plugin-table) setting: its
 /// field is accessed somewhere outside its definition.
 fn shell_setting_is_read(s: &Setting) -> bool {
-    if matches!(s.control, Control::Command { .. }) {
+    if matches!(s.control, Control::Command { .. } | Control::DepthModel) {
         return true;
     }
     let name = field(s.path);
@@ -340,7 +340,7 @@ pub(super) fn changed_value(s: &Setting, current: &Value) -> Option<Value> {
         Control::Text { .. } | Control::OptionalText { .. } | Control::Font { .. } => Some(Value::from(format!("{}-audit", current.as_str().unwrap_or("x")))),
         Control::List { .. } => Some(Value::from(vec!["audit.example"])),
         Control::Time => Some(Value::from(if current.as_str() == Some("06:15") { "06:45" } else { "06:15" })),
-        Control::Icon | Control::Command { .. } => None,
+        Control::Icon | Control::Command { .. } | Control::DepthModel => None,
     }
 }
 

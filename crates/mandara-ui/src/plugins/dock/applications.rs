@@ -183,6 +183,8 @@ pub struct AppsGrid {
     new_ids: Vec<String>,
     query: String,
     group: Option<&'static str>,
+    /// The category chips (wheel and drag scroll them sideways).
+    chips: crate::hstrip::HStrip,
     order: Vec<usize>,
     rows: Vec<GridRow>,
     cols: usize,
@@ -223,6 +225,7 @@ impl AppsGrid {
             apps,
             query: String::new(),
             group: None,
+            chips: Default::default(),
             order: Vec::new(),
             rows: Vec::new(),
             cols: MIN_COLUMNS,
@@ -566,13 +569,20 @@ impl Render for AppsGrid {
                 .when(!on, |el| el.bg(wash(WASH_SOFT, &palette).hsla()).hover(|st| st.bg(palette.on_surface.with_alpha(HOVER_ALPHA).hsla())))
                 .child(label)
         };
-        let mut chips = div().id("apps-chips").h(px(CHIPS_H)).flex().flex_row().gap(px(CHIP_GAP)).overflow_x_scroll();
+        let strip = self.chips.clone();
+        let mut chips = strip.row("apps-chips").h(px(CHIPS_H)).flex().flex_row().gap(px(CHIP_GAP));
         chips = chips.child(chip("apps-chip-all".into(), t("All").into(), self.group.is_none()).on_click(cx.listener(|this, _, _, cx| {
+            if this.chips.dragged() {
+                return;
+            }
             this.group = None;
             this.rebuild(cx);
         })));
         for g in present {
             chips = chips.child(chip(SharedString::from(format!("apps-chip-{g}")), t(g).into(), self.group == Some(g)).on_click(cx.listener(move |this, _, _, cx| {
+                if this.chips.dragged() {
+                    return;
+                }
                 this.group = if this.group == Some(g) { None } else { Some(g) };
                 this.selected = None;
                 this.rebuild(cx);
@@ -614,7 +624,7 @@ impl Render for AppsGrid {
             .flex_col()
             .gap(px(GAP))
             .child(header)
-            .child(chips)
+            .child(strip.with_chevrons("apps-chips-more", chips, CHIPS_H, &palette))
             .child(grid)
             .when(empty, |el| el.child(div().absolute().left(px(PAD)).top(px(chrome - PAD)).text_color(palette.on_surface_variant.hsla()).child(tf("No apps match “{query}”", &[("query", &self.query)]))));
         let mut shadow = sheet::panel_shadow(&palette, p);

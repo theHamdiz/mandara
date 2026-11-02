@@ -46,6 +46,25 @@ developer tools.
   Pick it in Studio → General → Language, or let Mandara follow your
   system language.
 
+### Fixed
+
+- **The depth model's download shows its progress.** Studio → Wallpaper
+  (and the Wallpaper depth plugin's settings) now shows a live progress bar
+  while the depth model downloads, an error with **Retry** if it fails, and
+  **Installed** once it's there, with a button to start using it. Before,
+  the Download button gave no sign of anything happening.
+- **Filter chips scroll with any mouse.** The clipboard's categories, the
+  to-do lists, the note topics and the dock's app categories now scroll
+  sideways with a normal mouse wheel, can be grabbed and dragged, and show
+  arrows when there are more chips off to the side.
+
+### Changed
+
+- **A roomier clipboard.** Each entry's buttons appear when you point at
+  it, so code, links and text use the whole width of the row. Pinned and
+  collected entries keep a small mark. Code previews are only as tall as
+  the code, and short snippets read "1 line".
+
 ## 0.6.0 — 2026-11-02
 
 Rounded screen corners are on by default.

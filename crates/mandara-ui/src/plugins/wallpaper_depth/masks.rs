@@ -18,7 +18,8 @@ use gpui::{App, AppContext as _, Context, Entity, Global};
 use image::{DynamicImage, GrayImage, RgbaImage};
 use mandara_config::{DepthMode, WallpaperConfig};
 use mandara_services::depth_model::{self, DepthMap, WorkerReport};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use serde_json::json;
 
 use super::MASK_MAX;
@@ -388,6 +389,9 @@ pub struct DepthMasks {
     /// Bumped on regeneration so views rebuild their cut-outs.
     pub generation: u64,
     pub download: Download,
+    /// Bytes of the model received so far while [`Download::Running`]
+    /// (written by the download thread, read by `depth status`).
+    pub downloaded: Arc<AtomicU64>,
     download_waiters: Vec<Reply>,
 }
 
@@ -476,10 +480,12 @@ impl DepthMasks {
             return;
         }
         self.download = Download::Running;
+        self.downloaded.store(0, Ordering::Relaxed);
+        let downloaded = self.downloaded.clone();
         cx.notify();
         let task = cx.background_executor().spawn(async move {
             let model = mandara_services::models::find(depth_model::MODEL_ID).ok_or("unknown model")?;
-            model.download(&|_, _| {})?;
+            model.download(&|done, _| downloaded.store(done, Ordering::Relaxed))?;
             Ok::<_, String>(model.dir())
         });
         cx.spawn(async move |this, cx| {

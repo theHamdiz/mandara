@@ -148,6 +148,7 @@ fn status(cx: &mut gpui::App) -> serde_json::Value {
         Download::Running => json!("running"),
         Download::Failed(why) => json!({ "failed": why }),
     };
+    let downloaded = (state.download == Download::Running).then(|| state.downloaded.load(std::sync::atomic::Ordering::Relaxed));
     let model = mandara_services::models::find(depth_model::MODEL_ID);
     json!({
         "effect": w.depth_effect,
@@ -165,6 +166,8 @@ fn status(cx: &mut gpui::App) -> serde_json::Value {
             "sha256": depth_model::SHA256,
             "path": depth_model::model_path(),
             "download": download,
+            // Bytes received so far, while downloading.
+            "downloaded": downloaded,
         },
         "last_run": last_run().map(|(wallpaper, r)| json!({ "wallpaper": wallpaper, "ms": r.ms, "cpu_ms": r.cpu_ms, "peak_rss_kib": r.peak_rss_kib })),
     })

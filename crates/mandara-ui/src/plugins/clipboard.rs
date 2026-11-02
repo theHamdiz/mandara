@@ -280,7 +280,7 @@ struct Ui {
     /// "Delete collection" was clicked once.
     confirm_delete: Option<(u32, Instant)>,
     /// The chip strip's scroll, and the filter it last scrolled into view.
-    chips_scroll: gpui::ScrollHandle,
+    chips: crate::hstrip::HStrip,
     chips_shown: Option<Filter>,
 }
 
@@ -528,9 +528,15 @@ fn start_naming(ui: &Shared, field: &Entity<TextField>, naming: Naming, name: &s
 fn chips_strip(ui: &Shared, name_field: &Entity<TextField>, entries: &[ClipEntry], collections: &[ClipCollection], kind_chips: bool, palette: &MandaraPalette) -> AnyElement {
     let current = ui.borrow().filter;
     let accent = readable(palette.primary, palette);
+    let dragging = ui.borrow().chips.clone();
     let pick = |filter: Filter| {
-        let ui = ui.clone();
-        move |cx: &mut App| update(&ui, cx, |u| u.show(filter))
+        let (ui, dragging) = (ui.clone(), dragging.clone());
+        // A press that dragged the strip is not a click on the chip.
+        move |cx: &mut App| {
+            if !dragging.dragged() {
+                update(&ui, cx, |u| u.show(filter));
+            }
+        }
     };
     let glyph = |name: &'static str, tint| icon(name, CHIP_ICON_PX, tint).into_any_element();
     let mut chips: Vec<AnyElement> = vec![chip("clip-chip-all", glyph("clipboard", accent), t("All").into(), entries.len(), current == Filter::All, accent, palette, pick(Filter::All)).into_any_element()];
@@ -590,17 +596,18 @@ fn chips_strip(ui: &Shared, name_field: &Entity<TextField>, entries: &[ClipEntry
     );
     // Keep the active chip in view when the filter changes (a command or a
     // click on a chip half off the edge).
-    let scroll = {
+    let strip = {
         let mut u = ui.borrow_mut();
         if u.chips_shown != Some(current) {
             u.chips_shown = Some(current);
             if let Some(ix) = active_ix {
-                u.chips_scroll.scroll_to_item(ix);
+                u.chips.scroll.scroll_to_item(ix);
             }
         }
-        u.chips_scroll.clone()
+        u.chips.clone()
     };
-    div().id("clip-chips").h(px(CHIPS_H)).overflow_x_scroll().track_scroll(&scroll).flex().items_center().gap(px(CHIP_GAP_PX)).children(chips).into_any_element()
+    let row = strip.row("clip-chips").flex().items_center().gap(px(CHIP_GAP_PX)).children(chips);
+    strip.with_chevrons("clip-chips-more", row, CHIPS_H, palette)
 }
 
 /// A rounded field row: leading icon, the text field, trailing buttons.

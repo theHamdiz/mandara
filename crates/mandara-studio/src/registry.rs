@@ -313,6 +313,9 @@ pub enum Control {
     OptionalSlider { min: f64, max: f64, step: f64, unit: &'static str, default: f64 },
     /// A button running a shell command over IPC (`button` is `tk()` text).
     Command { button: &'static str, args: &'static [&'static str] },
+    /// The wallpaper depth model: installed or not, Download with live
+    /// progress, errors with Retry (no value of its own).
+    DepthModel,
     /// A list of strings, edited as comma-separated text.
     List { placeholder: &'static str },
     /// A font family from the searchable picker of installed fonts (any
@@ -570,7 +573,7 @@ fn build() -> Vec<Setting> {
         s(Wallpaper, DEPTH_GROUP, "/wallpaper/depth/mode", tk("Find the subject with"), tk("Hand-tuned needs no download and skips wallpapers it isn't sure about. Model downloads a 27 MB depth model once (Depth Anything V2 Small, Apache-2.0) and runs it once per wallpaper at the lowest priority. Your own masks in ~/.local/share/mandara/depth_masks/<wallpaper name>.png win over both"), Choice(const { &[("hand-tuned", tk("Hand-tuned")), ("model", tk("Model"))] })),
         s(Wallpaper, DEPTH_GROUP, "/wallpaper/depth/auto_split", tk("Automatic depth split"), tk("Decide per wallpaper what stands in front of the clock"), Toggle),
         s(Wallpaper, DEPTH_GROUP, "/wallpaper/depth/split", tk("Clock depth"), tk("How far back the clock sits in the picture: low lets everything but the far background pass in front, high only the nearest things"), slider(f64::from(mandara_config::defaults::DEPTH_SPLIT_RANGE.0), f64::from(mandara_config::defaults::DEPTH_SPLIT_RANGE.1), DEPTH_SPLIT_STEP, "")),
-        s(Wallpaper, DEPTH_GROUP, "/wallpaper/depth/download", tk("Depth model"), tk("Download it now (27 MB, checksum-verified); picking Model also downloads it. Studio → Maintenance lists and removes it"), Command { button: tk("Download"), args: &["depth", "download"] }),
+        s(Wallpaper, DEPTH_GROUP, "/wallpaper/depth/download", tk("Depth model"), tk("Download it now (27 MB, checksum-verified); picking Model also downloads it. Studio → Maintenance lists and removes it"), DepthModel),
         s(Wallpaper, DEPTH_GROUP, "/wallpaper/depth/regenerate", tk("Regenerate depth mask"), tk("Find the current wallpaper's subject again (skipped when it isn't confident)"), Command { button: tk("Regenerate"), args: &["depth", "regenerate"] }),
         s(Wallpaper, DEPTH_GROUP, "/wallpaper/depth/place_clock", tk("Place the clock"), tk("Move the desktop clock to where the wallpaper's subject rises into it"), Command { button: tk("Place clock"), args: &["depth", "place-clock"] }),
         s(Wallpaper, tk("Picker"), "/wallpaper/picker", tk("Enable wallpaper picker"), tk("The carousel opened from the bar, the main menu or `mandara msg wallpaper picker toggle`"), Toggle),

@@ -21,6 +21,7 @@ use mandara_ui::state::{config, update_config};
 use serde_json::Value;
 
 mod maint_page;
+mod depth_model_row;
 mod nav;
 mod market_page;
 mod store_page;
@@ -122,6 +123,7 @@ pub struct StudioView {
     capturing: Option<usize>,
     focus: gpui::FocusHandle,
     maint: maint_page::Maint,
+    depth_model: depth_model_row::DepthModelRow,
     /// About → Mandara updates, and marketplace plugin updates.
     updates: updates_card::Updates,
     /// Plugins page: the plugin detail / settings modal.
@@ -201,7 +203,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { section: Section::Home, search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new() }
+        Self { section: Section::Home, search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -503,6 +505,7 @@ impl StudioView {
                     }
                 }
             }
+            Control::DepthModel => self.depth_model_control(cfg, p, cx),
             Control::Command { button, args } => div()
                 .id(SharedString::from(format!("cmd{}", setting.path)))
                 .h(px(DIM_32_PX))
@@ -573,7 +576,7 @@ impl StudioView {
     /// A group's "Reset", shown once a setting in it differs from the
     /// defaults.
     fn group_reset(&mut self, title: &'static str, list: &[&Setting], cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let resettable: Vec<Setting> = list.iter().filter(|s| !matches!(s.control, Control::Command { .. })).map(|s| (*s).clone()).collect();
+        let resettable: Vec<Setting> = list.iter().filter(|s| !matches!(s.control, Control::Command { .. } | Control::DepthModel)).map(|s| (*s).clone()).collect();
         let changed = resettable.iter().any(|s| registry::get(cfg, s) != registry::default_value(s));
         changed.then(|| {
             div()
@@ -651,7 +654,7 @@ impl StudioView {
         let groups = self.visible_groups(settings, cfg, cx);
         let mut col = div().row().flex_col().gap(px(SPACE_12_PX));
         for (title, list) in groups {
-            let changed = list.iter().filter(|s| !matches!(s.control, Control::Command { .. }) && registry::get(cfg, s) != registry::default_value(s)).count();
+            let changed = list.iter().filter(|s| !matches!(s.control, Control::Command { .. } | Control::DepthModel) && registry::get(cfg, s) != registry::default_value(s)).count();
             let preview = fold::preview_of(list.iter().map(|s| s.label));
             let badge = Some(if changed > 0 { tf("{changed} of {count} changed", &[("changed", &changed), ("count", &list.len())]) } else { list.len().to_string() });
             // The Reset button lives in the header, so it works while closed.

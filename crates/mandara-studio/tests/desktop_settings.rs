@@ -71,7 +71,7 @@ fn other_values(setting: &Setting, current: &Value) -> Vec<Value> {
         Control::Number { min, max } => vec![Value::from(*min), Value::from(*max)],
         Control::Icon => vec![Value::from("search"), Value::from("grid")],
         Control::Time => vec![Value::from("07:30"), Value::from("22:15")],
-        Control::Command { .. } => Vec::new(),
+        Control::Command { .. } | Control::DepthModel => Vec::new(),
     }
     .into_iter()
     .filter(|v| registry::integral(v.clone()) != registry::integral(current.clone()))
@@ -84,7 +84,7 @@ fn every_desktop_setting_reaches_the_shell_and_survives_a_restart() {
     assert!(settings.len() > 150, "the Desktop group lost its settings? {}", settings.len());
     let mut checked = 0;
     for setting in settings {
-        if matches!(setting.control, Control::Command { .. }) {
+        if matches!(setting.control, Control::Command { .. } | Control::DepthModel) {
             continue;
         }
         let mut session = Session::new();

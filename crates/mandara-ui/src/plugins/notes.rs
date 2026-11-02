@@ -111,6 +111,8 @@ const LIST_GAP_PX: f32 = 6.0;
 const BLOCK_GAP_PX: f32 = tokens::SM + 2.0;
 /// Topic chips (as the to-do list switcher).
 const CHIP_H_PX: f32 = 26.0;
+/// Room above and below the chips in their strip (the chevrons sit centred).
+const CHIP_STRIP_PAD_PX: f32 = 4.0;
 const CHIP_PAD_X_PX: f32 = 10.0;
 const CHIP_GAP_PX: f32 = 6.0;
 const CHIP_DOT_PX: f32 = 8.0;
@@ -184,6 +186,8 @@ struct NotesUi {
     naming: Option<Naming>,
     /// Parsed notes keyed by their text (parsed once per edit).
     docs: HashMap<u64, (String, Rc<Doc>)>,
+    /// The topic switcher (wheel and drag scroll it sideways).
+    chips: crate::hstrip::HStrip,
 }
 
 type Ui = Rc<RefCell<NotesUi>>;
@@ -349,7 +353,14 @@ fn chip(topic: Option<&Topic>, count: usize, active: bool, palette: &MandaraPale
         .child(marker)
         .child(label)
         .when(count > 0, |el| el.child(div().font_features(crate::fonts::tabular_nums()).text_color(palette.on_surface_variant.with_alpha(CHIP_COUNT_ALPHA).hsla()).child(count.to_string())))
-        .on_click(move |_, _, cx| productivity(cx).update(cx, |p, cx| p.set_notes_topic(sel, cx)))
+        .on_click({
+            let ui = ui.clone();
+            move |_, _, cx| {
+                if !ui.borrow().chips.dragged() {
+                    productivity(cx).update(cx, |p, cx| p.set_notes_topic(sel, cx));
+                }
+            }
+        })
         .when_some(sel, |el, id| {
             el.on_mouse_down(MouseButton::Right, move |_, _, cx| {
                 cx.stop_propagation();
@@ -599,7 +610,8 @@ fn body(p: &Productivity, ui: &Ui, f: &Fields, palette: &MandaraPalette, limit: 
                 .into_any_element(),
         );
     }
-    blocks.push(div().id(ids.chips).overflow_x_scroll().row().items_center().gap(px(CHIP_GAP_PX)).children(chips).into_any_element());
+    let strip = ui.borrow().chips.clone();
+    blocks.push(strip.with_chevrons(ids.chips, strip.row(ids.chips).row().items_center().gap(px(CHIP_GAP_PX)).children(chips), CHIP_H_PX + CHIP_STRIP_PAD_PX, palette));
     if state.naming.is_some() {
         blocks.push(div().child(f.name.clone()).into_any_element());
     }

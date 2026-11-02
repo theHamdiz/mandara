@@ -106,6 +106,8 @@ const MORE_PAD_TOP_PX: f32 = 4.0;
 const BLOCK_GAP_PX: f32 = tokens::SM + 2.0;
 // List switcher chips.
 const CHIP_H_PX: f32 = 26.0;
+/// Room above and below the chips in their strip (the chevrons sit centred).
+const CHIP_STRIP_PAD_PX: f32 = 4.0;
 const CHIP_PAD_X_PX: f32 = 10.0;
 const CHIP_GAP_PX: f32 = 6.0;
 const CHIP_DOT_PX: f32 = 8.0;
@@ -205,6 +207,8 @@ fn bar_filter(cx: &App) -> Filter {
 struct TodoUi {
     menu: Option<Menu>,
     naming: Option<Naming>,
+    /// The list switcher (wheel and drag scroll it sideways).
+    chips: crate::hstrip::HStrip,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -358,7 +362,14 @@ fn chip(list: Option<&TodoList>, count: usize, active: bool, palette: &MandaraPa
         .when(count > 0, |el| {
             el.child(div().font_features(crate::fonts::tabular_nums()).text_color(palette.on_surface_variant.with_alpha(CHIP_COUNT_ALPHA).hsla()).child(count.to_string()))
         })
-        .on_click(move |_, _, cx| productivity(cx).update(cx, |p, cx| p.set_filter(filter, cx)))
+        .on_click({
+            let ui = ui.clone();
+            move |_, _, cx| {
+                if !ui.borrow().chips.dragged() {
+                    productivity(cx).update(cx, |p, cx| p.set_filter(filter, cx));
+                }
+            }
+        })
         .when_some(list.map(|l| l.id), |el, id| {
             el.on_mouse_down(MouseButton::Right, move |_, _, cx| {
                 cx.stop_propagation();
@@ -663,7 +674,8 @@ fn list(p: &Productivity, ui: &Ui, field: &Entity<TextField>, name_field: &Entit
                 .into_any_element(),
         );
     }
-    let switcher = div().id(ids.chips).overflow_x_scroll().row().items_center().gap(px(CHIP_GAP_PX)).children(chips);
+    let strip = ui.borrow().chips.clone();
+    let switcher = strip.with_chevrons(ids.chips, strip.row(ids.chips).row().items_center().gap(px(CHIP_GAP_PX)).children(chips), CHIP_H_PX + CHIP_STRIP_PAD_PX, palette);
     let name_row = naming.map(|_| div().child(name_field.clone()));
     let menu_el = state.menu.and_then(|m| menu(m, book, palette, ids, ui, window, name_field));
     drop(state);
