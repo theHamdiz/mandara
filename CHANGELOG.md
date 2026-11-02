@@ -41,6 +41,12 @@ developer tools.
 - **Crash reports.** Apps that crashed this week, with the report to copy
   and a debugger one click away.
 
+- **Pin a panel, or pop it out.** Point at any open panel and a small tab
+  appears with two buttons. **Pin** keeps the panel open while you click
+  around and work in other windows. **Pop out** lifts it off the bar into a
+  floating card you can drag anywhere and keep beside your work, as many as
+  you like. Floating cards come back where you left them after a restart
+  (Studio → Bar → Drop-down panels). Also `mandara msg panel pin|float|dock`.
 - **Jannah.** A gentle daily reminder of Jannah: a verse or hadith, its
   meaning and one good step for today, in the bar, the sidebar or on the
   desktop. Switched off by default; turn it on in Studio → Plugins.
