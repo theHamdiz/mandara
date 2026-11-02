@@ -122,6 +122,12 @@ pub fn group_of(categories: &str) -> &'static str {
     GROUPS.iter().find(|(_, keys)| cats.iter().any(|c| keys.iter().any(|k| k.eq_ignore_ascii_case(c)))).map(|(name, _)| *name).unwrap_or(OTHER)
 }
 
+/// Where a display group (from [`group_of`]) sorts: the groups' order,
+/// Other last.
+pub fn group_rank(group: &str) -> usize {
+    GROUPS.iter().position(|(g, _)| *g == group).unwrap_or(GROUPS.len())
+}
+
 /// The apps to show, in order: matching `query` (ranked best first while
 /// searching), in `group` (`None` = all), sorted by `order` otherwise.
 /// `usage` maps desktop ids to frecency.

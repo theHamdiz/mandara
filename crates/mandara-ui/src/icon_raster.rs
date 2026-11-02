@@ -83,6 +83,20 @@ pub fn forget(path: &Path, size: f32, window: &mut Window, cx: &mut App) {
     cx.remove_asset::<SizedIcon>(&key);
 }
 
+/// [`forget`] for the bitmap decoded at device-pixel `edge` ([`edge_for`]).
+pub fn forget_edge(path: &Path, edge: u32, window: &mut Window, cx: &mut App) {
+    let key = IconKey { path: Arc::from(path), edge };
+    if let Some(Ok(image)) = window.get_asset::<SizedIcon>(&key, cx) {
+        cx.drop_image(image, Some(window));
+    }
+    cx.remove_asset::<SizedIcon>(&key);
+}
+
+/// [`forget_edge`] without a window (its atlas went with it).
+pub fn forget_cached_edge(path: &Path, edge: u32, cx: &mut App) {
+    cx.remove_asset::<SizedIcon>(&IconKey { path: Arc::from(path), edge });
+}
+
 /// [`forget`] without a window (the window and its atlas are gone): drops
 /// the decoded bitmap drawn at `size` on a `scale` output.
 pub fn forget_cached(path: &Path, size: f32, scale: f32, cx: &mut App) {

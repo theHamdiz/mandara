@@ -1620,12 +1620,14 @@ impl Render for StudioView {
                 }
                 Section::Shortcuts => self.shortcuts(&cfg, &p, cx),
                 Section::Launcher => {
-                    // The placement diagram stands in for its choice row.
+                    // The ready-made looks first; the placement diagram
+                    // stands in for its choice row.
+                    let looks = self.launcher_looks(&cfg, &p, cx);
                     let placement = self.launcher_placement(&cfg, &p, cx);
                     let rows = self.rows(registry::in_section(Section::Launcher).filter(|s| s.path != LAUNCHER_POSITION_PATH), &cfg, &p, cx);
                     let editor = self.launcher_editor(&cfg, &p, cx);
                     let extras = self.launcher_extras(&cfg, &p, cx);
-                    div().row().flex_col().gap(px(SPACE_26_PX)).child(placement).child(rows).child(extras).child(editor).into_any_element()
+                    div().row().flex_col().gap(px(SPACE_26_PX)).child(looks).child(placement).child(rows).child(extras).child(editor).into_any_element()
                 }
                 Section::Dock => self.dock_page(&cfg, &p, cx),
                 Section::DateTime => {

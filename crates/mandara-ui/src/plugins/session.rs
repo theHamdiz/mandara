@@ -1,9 +1,10 @@
 //! Session plugin: power button in the bar opening the session dock; the
-//! launcher button; and `session …` / `launcher …` commands.
+//! launcher button; and `session …` / `launcher …` commands (including
+//! `launcher looks` / `launcher look <id>`, the ready-made launcher looks).
 
 use gpui::{IntoElement, ParentElement, Styled, div};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
-use mandara_config::workflow::LauncherPosition;
+use mandara_config::workflow::{LAUNCHER_LOOKS, LauncherLookPreset, LauncherPosition};
 use mandara_services::SessionAction;
 use serde_json::json;
 
@@ -144,4 +145,94 @@ pub fn register(r: &mut PluginRegistry) {
         .example("launcher placement top-left")
         .example("launcher placement center"),
     );
+    r.command(
+        LAUNCHER_ID,
+        CommandSpec::new("launcher looks", mandara_i18n::tk("The ready-made launcher looks (Classic, Grid, Beacon) and which one is applied"), |_, cx| {
+            let look = crate::state::config(cx).read(cx).get().launcher.look.clone();
+            Ok(looks_json(&look))
+        })
+        .example("launcher looks"),
+    );
+    r.command(
+        LAUNCHER_ID,
+        CommandSpec::new("launcher look", mandara_i18n::tk("Apply a ready-made launcher look: its layout and style settings change together (no argument: the current one)"), |a, cx| {
+            if let Some(id) = a.get(0) {
+                let preset = LauncherLookPreset::find(id).ok_or_else(|| format!("unknown launcher look {id:?} (see launcher looks)"))?;
+                crate::state::update_config(cx, move |c| preset.apply(&mut c.launcher.look));
+            }
+            let look = crate::state::config(cx).read(cx).get().launcher.look.clone();
+            let active = LauncherLookPreset::active(&look);
+            Ok(json!({
+                "look": active.map_or("custom", |l| l.id),
+                "style": look.style.id(),
+                "layout": if look.layout == mandara_config::workflow::LauncherLayout::Grid { "grid" } else { "list" },
+                "placement": look.position.id(),
+                "group_results": look.group_results,
+                "hints": look.hints,
+                "grid_icon_size": look.grid_icon_size,
+                "grid_categories": look.grid_categories,
+                "beacon_width": look.beacon_width,
+                "beacon_top": look.beacon_top,
+            }))
+        })
+        .arg(ArgSpec::optional("look", ArgKind::Enum, mandara_i18n::tk("classic, grid or beacon")).choices(&LOOK_IDS))
+        .example("launcher look grid")
+        .example("launcher look classic"),
+    );
+}
+
+/// Ids of the launcher looks, in order.
+const LOOK_IDS: [&str; LAUNCHER_LOOKS.len()] = {
+    let mut ids = [""; LAUNCHER_LOOKS.len()];
+    let mut i = 0;
+    while i < ids.len() {
+        ids[i] = LAUNCHER_LOOKS[i].id;
+        i += 1;
+    }
+    ids
+};
+
+/// `launcher looks`: every look with what it sets, the applied one marked
+/// (`active` is `custom` when settings were changed after applying).
+fn looks_json(look: &mandara_config::workflow::LauncherLook) -> serde_json::Value {
+    let active = LauncherLookPreset::active(look).map_or("custom", |l| l.id);
+    let looks: Vec<serde_json::Value> = LAUNCHER_LOOKS
+        .iter()
+        .map(|l| {
+            json!({
+                "id": l.id,
+                "name": mandara_i18n::tr(l.name),
+                "description": mandara_i18n::tr(l.blurb),
+                "active": l.id == active,
+                "style": l.style.id(),
+                "layout": if l.layout == mandara_config::workflow::LauncherLayout::Grid { "grid" } else { "list" },
+                "placement": l.position.id(),
+                "group_results": l.group_results,
+                "hints": l.hints,
+                "grid_icon_size": l.grid_icon_size,
+            })
+        })
+        .collect();
+    json!({ "active": active, "looks": looks })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn launcher_looks_list_marks_the_applied_one() {
+        let mut look = mandara_config::workflow::LauncherLook::default();
+        let v = looks_json(&look);
+        assert_eq!(v["active"], "classic");
+        assert_eq!(v["looks"].as_array().unwrap().len(), LAUNCHER_LOOKS.len());
+        assert_eq!(LOOK_IDS, ["classic", "grid", "beacon"]);
+        LAUNCHER_LOOKS[2].apply(&mut look);
+        let v = looks_json(&look);
+        assert_eq!(v["active"], "beacon");
+        assert_eq!(v["looks"][2]["active"], true);
+        assert_eq!(v["looks"][2]["style"], "beacon");
+        look.hints = false;
+        assert_eq!(looks_json(&look)["active"], "custom");
+    }
 }

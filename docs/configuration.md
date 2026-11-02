@@ -80,7 +80,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 | Bar | style, position, height, gaps, radii, opacity, accent tint, rim width / intensity, shadow, text / icon scale, item padding / spacing, separators, center alignment, floating frame, **hairline / micro pill** (`bar.layout` = `hairline` / `micro`, `bar.compact_height`, `bar.accent_line`), **notch** (`bar.layout` = `notch`, `bar.notch_width` 0.3–1, the share of the edge it spans), group capsules (`bar.capsules`), **item capsules** (`bar.item_capsules`: every item on its own capsule, any style) with their colour (`bar.capsule_fill` = `soft` / `container` / `accent`), strength (`bar.capsule_strength`, 0–2 ×) and hairline outline (`bar.capsule_outline`), **hover highlight** (`bar.hover_highlight`), **bar text weight** (`bar.font_weight`, 0 follows Typography's weight, else 100–900), **gap to windows** (`bar.window_gap`, 0–32 px added to the space the bar reserves), what right-clicking empty bar space opens (`bar.right_click` = `main-menu` / `desktop-menu`), what a **middle click** there does (`bar.middle_click.action`, any hot-corner action, and `bar.middle_click.command`), what **scrolling** there does (`bar.scroll` = `none` / `workspaces` / `volume`), **side bar** (`bar.position` = `left` / `right`, `bar.vertical_width`, `bar.screen_frame`, `bar.frame_thickness`, see [Side bar](#side-bar)), auto-hide mode and delay, click-through, over fullscreen (`bar.*`); drop-down panels: width, maximum height, padding, gap, anchor, opacity, shadow, animation, custom spring, **close delay** (`panels.leave_delay_ms`), **action message time** (`panels.toast_ms`), the main menu's frosted glass (`panels.menu_translucent`, `panels.menu_opacity`) |
 | Sidebars & hover | sidebar side, mode, width, tabs (`sidebar.tabs`, `always_first_tab`, `add_tab_button`, `notifications_tab`) and look (`sidebar.*`, `sidebar.look.*`), edge triggers and dwell (`edges.*`), hot corners with delay and size (`hot_corners.*`), rounded screen corners, on by default (`screen_corners.*`) |
 | Dock | layout (position, size, magnification), behaviour (auto-hide, delays, slide speed, bounces, minimize into icon), apps (`pinned` order, running, recent apps, indicators, badges), stacks (`[[dock.stacks]]` path / view / sort / display, `stack_items`, `fan_items`, `stack_names`), the Applications folder (`[dock.applications]` enabled / view / order / icon_size; replaces 0.1's `applications_slot`), Trash, the now-playing chip (`dock.media_chip`), appearance (opacity, tint, radius, padding, spacing, shadow, rim) — every number clamped to `mandara_config::dock::ranges` (`dock.*`) |
-| Launcher | placement (`launcher.look.position`, see [Launcher placement](#launcher-placement)), align to the launcher button, width / height when attached and in the center, layout, columns, dim, results (`launcher.max_results`), providers and prefixes, ranking half-life and recent count, launching (`launcher.*`) |
+| Launcher | ready-made looks ([Launcher looks](#launcher-looks)), style (classic / beacon), placement (`launcher.look.position`, see [Launcher placement](#launcher-placement)), align to the launcher button, width / height when attached and in the center, layout, grid columns and icon size, category chips, grouped results, keyboard hints, Beacon bar width and height, dim, results (`launcher.max_results`), providers and prefixes, ranking half-life and recent count, launching (`launcher.*`) |
 | Window switcher | style, previews, scope, thumbnail width, columns (`switcher.*`); screen time retention, idle and limits (`screen_time.*`) |
 | Notifications | position, width, scale, opacity, timeouts per urgency, maximum visible, history size and age, do not disturb, quiet hours, rules (`notifications.*`) |
 | On-screen displays | kinds, hold time, scale, opacity, offsets (`osd.*`) |
@@ -660,6 +660,53 @@ dim = 0.0                    # 0–0.7; a bar the launcher hangs from stays brig
   attached width.
 - `mandara msg launcher placement <mode>` sets it (live, even while the
   launcher is open); without an argument it reports the current one.
+
+## Launcher looks
+
+Three ready-made looks set the launcher's style, layout and placement in
+one click (Studio → Launcher → Launcher looks, or `mandara msg launcher
+look <id>`). Every value stays editable afterwards; the look then shows as
+customized. `mandara msg launcher looks` lists them as JSON with the
+applied one marked (`"active": "custom"` after your own changes).
+
+| id | Look |
+|---|---|
+| `classic` (default) | the list launcher: a drawer rising from the bottom edge, search next to the edge |
+| `grid` | every app as a large icon in a card in the middle, category chips above, the screen dimmed a little |
+| `beacon` | a centred glass search bar in the upper part of the screen in the style of macOS Spotlight, mode buttons beside it, grouped results under it as you type |
+
+```toml
+[launcher.look]
+style = "classic"            # classic | beacon (a centred search bar; the placement doesn't apply)
+layout = "list"              # list | grid
+grid_columns = 6             # most tiles per row (3–10); fewer fit a narrower launcher
+grid_icon_size = 48.0        # px (32–96)
+grid_categories = true       # All / Pinned / category chips above the grid (Tab switches)
+group_results = false        # a Top hit, then headings: Applications, Actions & settings, Files…
+hints = false                # keyboard hints under the results
+beacon_width = 680.0         # the Beacon bar, px (480–960); its mode buttons sit beside it
+beacon_top = 0.24            # the Beacon bar's top, a share of the screen height (0.08–0.45)
+```
+
+- **Grid** shows while nothing is typed and while you type plain words;
+  prefixed searches (`:` `@` `#` `*` `~` `>`), `/` and `=` switch to the
+  list. Columns follow the launcher's width and the icon size, capped by
+  `grid_columns`. Arrows move in two dimensions (left / right swap in
+  right-to-left languages), Enter launches, Tab / Shift+Tab switch the
+  category, and tiles reflow with a spring as you type. Rows are
+  virtualized: only visible tiles lay out and decode their icons.
+- **Beacon** floats a 56 px glass capsule centred across the screen with
+  its top at `beacon_top` (never under the bar or over the dock), round
+  mode buttons at its reading end — Apps, Files, Actions, Clipboard, also
+  Ctrl+1–4 (a mode's button hides while its provider is off) — and the
+  results in their own glass card under it once you type or pick a mode.
+  Apps shows the grid. Backspace on an empty field or Esc leaves a mode.
+  It uses the panels' fill, opacity, rim and shadow, so it follows your
+  theme in light and dark.
+- **Memory:** colour app icons are decoded at the size they are drawn,
+  capped at 8 MiB while the launcher is open (the least recently drawn go
+  first, never the visible ones), and every icon and thumbnail it decoded
+  is freed when it closes. Nothing runs while it is closed.
 
 ## Sidebar tabs
 

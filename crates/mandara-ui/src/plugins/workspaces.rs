@@ -672,6 +672,15 @@ pub fn app_icon_at(app_id: &str, size: f32, decode_size: f32, tint: Color, monoc
     }
 }
 
+/// The colour icon file [`app_icon`] draws for `app_id`, when it is one
+/// [`crate::icon_raster`] decodes (the launcher tracks what it decodes).
+pub fn raster_icon_path(app_id: &str) -> Option<Arc<Path>> {
+    match resolve_icon(app_id, false) {
+        AppIcon::Raster(path) if crate::icon_raster::handles(&path) => Some(path),
+        _ => None,
+    }
+}
+
 /// The app's symbolic (monochrome) icon tinted `tint`, when its icon theme
 /// has one (Studio → Launcher → App icons: Monochrome).
 pub fn symbolic_icon(app_id: &str, size: f32, tint: Color) -> Option<AnyElement> {

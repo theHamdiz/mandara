@@ -1,4 +1,5 @@
-//! Studio → Launcher, the bespoke parts: your own names and icons for apps
+//! Studio → Launcher, the bespoke parts: the ready-made launcher looks
+//! (Classic, Grid, Beacon; a card each with a miniature), your own names and icons for apps
 //! (`[launcher.overrides]`) and a glance at what the ranking has learnt
 //! (frecency from `launcher-usage.toml`). The providers, ranking, look and
 //! launching options are plain registry rows above, under the placement
@@ -10,7 +11,7 @@ use std::rc::Rc;
 use gpui::{AnyElement, AppContext as _, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px};
 use mandara_config::ShellConfig;
 use mandara_core::ToGpui;
-use mandara_config::workflow::{LauncherEdge, LauncherPosition};
+use mandara_config::workflow::{LAUNCHER_LOOKS, LauncherEdge, LauncherLookPreset, LauncherPosition};
 use mandara_i18n::{t, tf, tr};
 use mandara_theme::MandaraPalette;
 use mandara_ui::icons::icon;
@@ -43,6 +44,111 @@ const CENTER_TILE_H_PX: f32 = 58.0;
 const TILE_RADIUS_PX: f32 = 9.0;
 /// The launcher glyph inside each tile.
 const TILE_ICON_PX: f32 = 14.0;
+
+/// Launcher looks: card grid and the miniature drawn on each card (a
+/// little screen with the launcher in it).
+const LOOK_GRID: CardGrid = CardGrid { min_w: 190.0, max_w: 300.0, gap: SPACE_10_PX };
+const MINI_H_PX: f32 = 104.0;
+const MINI_RADIUS_PX: f32 = 10.0;
+/// Classic: a drawer at the bottom (width share, rows, row and search height).
+const MINI_DRAWER_W: f32 = 0.56;
+const MINI_ROWS: usize = 3;
+const MINI_ROW_H_PX: f32 = 9.0;
+const MINI_SEARCH_H_PX: f32 = 10.0;
+/// Grid: the card's width share, columns × rows of icons and their size.
+const MINI_CARD_W: f32 = 0.66;
+const MINI_GRID: (usize, usize) = (5, 2);
+const MINI_ICON_PX: f32 = 11.0;
+const MINI_CHIP_W_PX: f32 = 16.0;
+const MINI_CHIP_H_PX: f32 = 5.0;
+/// Beacon: the bar's width share and height, its round mode buttons, the
+/// results card's rows, and how far down the bar sits.
+const MINI_BAR_W: f32 = 0.5;
+const MINI_BAR_H_PX: f32 = 13.0;
+const MINI_MODES: usize = 4;
+const MINI_BEACON_TOP: f32 = 0.16;
+const MINI_LINE_H_PX: f32 = 3.0;
+
+/// A miniature of a launcher look in this theme's colours.
+fn look_mini(preset: &LauncherLookPreset, w: f32, p: &MandaraPalette) -> gpui::Div {
+    use mandara_config::workflow::{LauncherLayout, LauncherStyle};
+    let surface = p.surface_container_high;
+    let line = |w: f32, c: mandara_theme::Color| div().h(px(MINI_LINE_H_PX)).w(px(w)).rounded_full().bg(c.hsla());
+    let screen = div().relative().w(px(w)).h(px(MINI_H_PX)).flex_none().rounded(px(MINI_RADIUS_PX)).overflow_hidden().bg(p.surface_dim.hsla());
+    match (preset.style, preset.layout) {
+        (LauncherStyle::Beacon, _) => {
+            let bar_w = w * MINI_BAR_W;
+            let step = MINI_BAR_H_PX + SPACE_3_PX;
+            let total = bar_w + MINI_MODES as f32 * step;
+            let x0 = (w - total) / 2.0;
+            let y0 = MINI_H_PX * MINI_BEACON_TOP;
+            // The mode buttons sit at the bar's reading end (its left in
+            // right-to-left languages).
+            let rtl = mandara_ui::bidi::rtl();
+            let bar_x = if rtl { x0 + total - bar_w } else { x0 };
+            let mut s = screen.child(
+                div().absolute().left(px(bar_x)).top(px(y0)).w(px(bar_w)).h(px(MINI_BAR_H_PX)).rounded_full().bg(surface.hsla()).row().items_center().px(px(SPACE_4_PX)).gap(px(SPACE_3_PX)).child(icon("search", MINI_LINE_H_PX * 2.0, p.on_surface_variant)).child(line(bar_w * 0.4, p.on_surface_variant.with_alpha(ALPHA_40))),
+            );
+            for i in 0..MINI_MODES {
+                let x = if rtl { bar_x - (i as f32 + 1.0) * step } else { x0 + bar_w + SPACE_3_PX + i as f32 * step };
+                s = s.child(div().absolute().left(px(x)).top(px(y0)).size(px(MINI_BAR_H_PX)).rounded_full().bg(surface.hsla()));
+            }
+            // The results card: a heading, the highlighted top hit, rows.
+            let mut card = div().absolute().left(px(x0)).top(px(y0 + MINI_BAR_H_PX + SPACE_3_PX)).w(px(total)).p(px(SPACE_4_PX)).rounded(px(RADIUS_6_PX)).bg(surface.hsla()).row().flex_col().gap(px(SPACE_3_PX));
+            card = card.child(line(total * 0.18, p.on_surface_variant.with_alpha(ALPHA_60)));
+            card = card.child(div().h(px(MINI_ROW_H_PX)).w_full().rounded(px(RADIUS_3_PX)).bg(p.primary.hsla()).row().items_center().px(px(SPACE_3_PX)).child(line(total * 0.3, p.on_primary)));
+            card = card.child(line(total * 0.18, p.on_surface_variant.with_alpha(ALPHA_60)));
+            for k in 0..2 {
+                card = card.child(div().h(px(MINI_ROW_H_PX)).row().items_center().px(px(SPACE_3_PX)).child(line(total * (0.42 - 0.1 * k as f32), p.on_surface.with_alpha(ALPHA_40))));
+            }
+            s.child(card)
+        }
+        (_, LauncherLayout::Grid) => {
+            let cw = w * MINI_CARD_W;
+            let (cols, rows) = MINI_GRID;
+            let mut grid = div().row().flex_col().gap(px(SPACE_4_PX));
+            for _ in 0..rows {
+                grid = grid.child(div().row().justify_between().children((0..cols).map(|c| div().size(px(MINI_ICON_PX)).rounded(px(RADIUS_3_PX)).bg(if c == 0 { p.primary.hsla() } else { p.primary.with_alpha(ALPHA_30).hsla() }))));
+            }
+            let chips = div().row().gap(px(SPACE_3_PX)).children((0..4).map(|c| div().w(px(MINI_CHIP_W_PX)).h(px(MINI_CHIP_H_PX)).rounded_full().bg(if c == 0 { p.primary.hsla() } else { p.on_surface.with_alpha(ALPHA_15).hsla() })));
+            let card = div()
+                .absolute()
+                .left(px((w - cw) / 2.0))
+                .top(px(SPACE_8_PX))
+                .w(px(cw))
+                .p(px(SPACE_6_PX))
+                .rounded(px(RADIUS_8_PX))
+                .bg(surface.hsla())
+                .row()
+                .flex_col()
+                .gap(px(SPACE_5_PX))
+                .child(div().h(px(MINI_SEARCH_H_PX)).w_full().rounded_full().bg(p.surface_dim.hsla()))
+                .child(chips)
+                .child(grid);
+            screen.child(card)
+        }
+        _ => {
+            let dw = w * MINI_DRAWER_W;
+            let mut drawer = div().absolute().bottom_0().left(px((w - dw) / 2.0)).w(px(dw)).p(px(SPACE_5_PX)).rounded_t(px(RADIUS_8_PX)).bg(surface.hsla()).row().flex_col().gap(px(SPACE_3_PX));
+            for r in 0..MINI_ROWS {
+                drawer = drawer.child(
+                    div()
+                        .h(px(MINI_ROW_H_PX))
+                        .row()
+                        .items_center()
+                        .gap(px(SPACE_3_PX))
+                        .px(px(SPACE_3_PX))
+                        .rounded(px(RADIUS_3_PX))
+                        .when(r == MINI_ROWS - 1, |el| el.bg(p.on_surface.with_alpha(ALPHA_8).hsla()))
+                        .child(div().size(px(MINI_ROW_H_PX - SPACE_3_PX)).rounded(px(RADIUS_1_5_PX)).bg(p.primary.with_alpha(ALPHA_60).hsla()))
+                        .child(line(dw * (0.5 - 0.08 * r as f32), p.on_surface.with_alpha(ALPHA_40))),
+                );
+            }
+            drawer = drawer.child(div().h(px(MINI_SEARCH_H_PX)).w_full().rounded_full().border_1().border_color(p.primary.with_alpha(ALPHA_60).hsla()).bg(p.surface_dim.hsla()));
+            screen.child(drawer)
+        }
+    }
+}
 
 /// Asks the running shell to do something (Studio is its own process).
 fn shell_ipc(cx: &gpui::App, args: &[&str]) {
@@ -101,6 +207,58 @@ fn usage_label(key: &str) -> String {
 }
 
 impl StudioView {
+    /// Studio → Launcher → Launcher looks: a card per ready-made look with
+    /// a miniature of it; a click applies it (live, while the launcher is
+    /// open too). Each setting it changes stays editable below.
+    pub(super) fn launcher_looks(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let active = LauncherLookPreset::active(&cfg.launcher.look).map(|l| l.id);
+        let fit = super::grid::fit(self.page.column_w - 2.0 * SPACE_18_PX, LOOK_GRID);
+        let mini_w = (fit.card_w - 2.0 * SPACE_10_PX).max(0.0);
+        let cards: Vec<AnyElement> = LAUNCHER_LOOKS
+            .iter()
+            .map(|preset| {
+                let on = active == Some(preset.id);
+                let preset = *preset;
+                div()
+                    .id(SharedString::from(format!("launcher-look-{}", preset.id)))
+                    .p(px(SPACE_10_PX))
+                    .rounded(px(RADIUS_14_PX))
+                    .row()
+                    .flex_col()
+                    .gap(px(SPACE_8_PX))
+                    .cursor_pointer()
+                    .bg(if on { p.primary_container.hsla() } else { p.surface_container_high.hsla() })
+                    .hover(|s| s.opacity(ALPHA_88))
+                    .child(look_mini(&preset, mini_w, p))
+                    .child(
+                        div()
+                            .row()
+                            .items_center()
+                            .gap(px(SPACE_6_PX))
+                            .child(div().text_size(px(TEXT_14_PX)).font_weight(if on { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM }).child(tr(preset.name)))
+                            .when(on, |el| el.child(icon("check", ICON_11_PX, p.primary))),
+                    )
+                    .child(div().text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(preset.blurb))))
+                    .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| update_config(cx, move |c| preset.apply(&mut c.launcher.look))))
+                    .into_any_element()
+            })
+            .collect();
+        let custom = active.is_none().then(|| div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("Customized: your own mix of the settings below. Pick a look to start over from it.")));
+        div()
+            .row()
+            .flex_col()
+            .gap(px(SPACE_10_PX))
+            .child(group_title(t("Launcher looks"), p))
+            .child(
+                card(p)
+                    .child(heading(t("Ready-made looks"), t("Each sets the launcher's style, layout and placement together; change any setting below afterwards."), p))
+                    .child(fit.balanced(LAUNCHER_LOOKS.len()).render(cards))
+                    .children(custom)
+                    .child(div().row().child(button("launcher-look-preview", "eye", t("Preview"), false, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| shell_ipc(cx, &["launcher", "open"]))))),
+            )
+            .into_any_element()
+    }
+
     /// Studio → Launcher → Placement: the screen diagram, what the chosen
     /// spot looks like with this bar, and a live preview.
     pub(super) fn launcher_placement(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {

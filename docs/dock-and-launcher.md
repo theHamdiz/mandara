@@ -55,6 +55,20 @@
   card under pills or the island), optionally out of the launcher button
   itself. Pick the spot on a screen diagram in Studio → Launcher, or run
   `mandara msg launcher placement top-left`.
+  **Three looks, one click each** (Studio → Launcher → Launcher looks, or
+  `mandara msg launcher look classic|grid|beacon`; `launcher looks` lists
+  them): **Classic** is the list drawer above (the default). **Grid** shows
+  every app as a large icon with its name, in as many columns as fit, with
+  All / Pinned / category chips on top; arrows move in two dimensions,
+  Tab switches the category, and the tiles reflow with a spring as you
+  type. **Beacon** is a centred glass search bar in the upper part of the
+  screen, in the style of macOS Spotlight: round mode buttons beside it
+  (Apps, Files, Actions, Clipboard, or Ctrl+1–4) and the results under it,
+  grouped under a Top hit and headings by kind, once you type. Any look's
+  settings (grid icon size, grouping, keyboard hints, the bar's width and
+  height on the screen) can be changed afterwards. The launcher keeps only
+  the icons it shows decoded (8 MiB at most) and frees them all when it
+  closes.
 - **They share the edge.** With the dock on, the bottom edge belongs to the
   dock: the launcher stops opening on hover, opens by click or keybind only,
   and floats above the dock instead of covering it.

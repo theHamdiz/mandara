@@ -299,6 +299,71 @@ pub fn for_config(cfg: &mandara_config::ShellConfig, screen: (f32, f32), content
     })
 }
 
+// ── The Beacon style ────────────────────────────────────────────────────
+
+/// Height of the Beacon search bar (and diameter of its mode buttons), px.
+pub const BEACON_BAR_H: f32 = 56.0;
+/// Gap between the bar and its mode buttons, and between the bar and the
+/// results card under it, px.
+pub const BEACON_GAP: f32 = 10.0;
+/// Narrowest the Beacon bar gets on a small screen, px.
+const BEACON_MIN_BAR_W: f32 = 240.0;
+
+/// Where the Beacon style's parts rest.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct BeaconPlacement {
+    /// The search bar.
+    pub bar: Rect,
+    /// The first mode button (the one next to the bar); the others follow
+    /// it [`BEACON_GAP`] apart toward the reading end.
+    pub first_mode: Rect,
+    /// Step from one mode button to the next (negative: right to left).
+    pub mode_step: f32,
+    /// The results card at its tallest: under the bar, as wide as the bar
+    /// and its mode buttons together.
+    pub card: Rect,
+}
+
+/// Solves the Beacon placement: the bar (and `modes` round buttons at its
+/// reading end) centred across the screen with its top at `top` (a share
+/// of the screen height), clear of the bar's band; the results card under
+/// it up to `max_card_h` (and the screen's free room). `rtl` puts the mode
+/// buttons on the bar's left.
+pub fn beacon(cfg: &mandara_config::ShellConfig, screen: (f32, f32), bar_here: bool, modes: usize, rtl: bool) -> BeaconPlacement {
+    let look = &cfg.launcher.look;
+    let (width, top) = look.beacon();
+    let m = Metrics::of(cfg, crate::style::radius_scale());
+    beacon_with(&m, bar_here, cfg.dock_bottom_clearance(), screen, width, top, look.size_for_center().1, modes, rtl)
+}
+
+/// [`beacon`] from its parts (unit-tested).
+pub fn beacon_with(m: &Metrics, bar_here: bool, dock: Option<f32>, (sw, sh): (f32, f32), width: f32, top: f32, max_card_h: f32, modes: usize, rtl: bool) -> BeaconPlacement {
+    let i = Inputs { position: LauncherPosition::Center, screen: (sw, sh), size: (width, 0.0), max_h: 0.0, bar: *m, bar_here, dock_clearance: dock, button: None, animation: PanelAnimation::Morph };
+    let (side_l, side_r) = side_clearance(&i);
+    let band = if bar_here { exclusive_zone(m) } else { 0.0 };
+    let top_free = if bar_here && m.position == BarPosition::Top { band } else { 0.0 } + SCREEN_MARGIN;
+    let bottom_free = if bar_here && m.position == BarPosition::Bottom { band } else { 0.0 } + dock.unwrap_or(0.0) + SCREEN_MARGIN;
+    let modes_w = modes as f32 * (BEACON_BAR_H + BEACON_GAP);
+    let room = (sw - side_l - side_r - SCREEN_MARGIN * 2.0).max(0.0);
+    let bar_w = width.min(room - modes_w).max(BEACON_MIN_BAR_W.min(room));
+    let total = bar_w + modes_w;
+    let x0 = side_l + (sw - side_l - side_r - total) / 2.0;
+    let y = (sh * top).max(top_free).min((sh - bottom_free - BEACON_BAR_H).max(top_free));
+    let (bar_x, first_x, step) = if rtl {
+        (x0 + modes_w, x0 + modes_w - BEACON_GAP - BEACON_BAR_H, -(BEACON_BAR_H + BEACON_GAP))
+    } else {
+        (x0, x0 + bar_w + BEACON_GAP, BEACON_BAR_H + BEACON_GAP)
+    };
+    let card_y = y + BEACON_BAR_H + BEACON_GAP;
+    let card_h = max_card_h.min((sh - bottom_free - card_y).max(0.0));
+    BeaconPlacement {
+        bar: Rect::new(bar_x, y, bar_w, BEACON_BAR_H),
+        first_mode: Rect::new(first_x, y, BEACON_BAR_H, BEACON_BAR_H),
+        mode_step: step,
+        card: Rect::new(x0, card_y, total, card_h),
+    }
+}
+
 /// Top-oriented y of the bar's chips (for a chip rect from its x / width).
 pub fn chip_y(m: &Metrics) -> (f32, f32) {
     if m.attached() { (f32::from(m.frame(0.0).origin.y) + CHIP_INSET, m.height - CHIP_INSET * 2.0) } else { (m.edge_gap + PILL_INSET, m.height - PILL_INSET * 2.0) }
@@ -548,6 +613,32 @@ mod tests {
         assert_eq!(a.lerp(b, 0.5), Rect::new(5.0, 10.0, 20.0, 20.0));
         assert_eq!(a.lerp(b, -0.5).h, 0.0);
         assert_eq!(Rect::from_bounds(b.to_bounds()), b);
+    }
+
+    #[test]
+    fn beacon_centres_the_bar_in_the_upper_part_and_mirrors_its_buttons() {
+        let m = Metrics::default_for(BarLayout::FloatingPills, BarPosition::Top);
+        let p = beacon_with(&m, true, None, SCREEN, 680.0, 0.24, 640.0, 4, false);
+        let total = 680.0 + 4.0 * (BEACON_BAR_H + BEACON_GAP);
+        assert!(near(p.bar.x, (SCREEN.0 - total) / 2.0) && near(p.bar.w, 680.0) && near(p.bar.h, BEACON_BAR_H));
+        assert!(near(p.bar.y, SCREEN.1 * 0.24), "a quarter of the way down: {p:?}");
+        assert!(near(p.first_mode.x, p.bar.right() + BEACON_GAP) && p.mode_step > 0.0);
+        assert!(near(p.first_mode.x + 3.0 * p.mode_step + BEACON_BAR_H, p.bar.x + total), "the buttons end where the card does");
+        assert!(near(p.card.x, p.bar.x) && near(p.card.w, total) && near(p.card.y, p.bar.bottom() + BEACON_GAP) && near(p.card.h, 640.0));
+        // Right to left: buttons first (on the left), the bar after them.
+        let r = beacon_with(&m, true, None, SCREEN, 680.0, 0.24, 640.0, 4, true);
+        assert!(near(r.bar.right(), p.card.x + total) && near(r.first_mode.right() + BEACON_GAP, r.bar.x) && r.mode_step < 0.0);
+        assert!(near(r.first_mode.x + 3.0 * r.mode_step, r.card.x), "the last button starts the row");
+        assert_eq!(r.card, p.card);
+        // Never under the bar's band, never past the bottom.
+        let high = beacon_with(&m, true, None, SCREEN, 680.0, 0.0, 640.0, 4, false);
+        assert!(high.bar.y >= exclusive_zone(&m) + SCREEN_MARGIN - 0.01);
+        let short = beacon_with(&m, true, Some(80.0), (1280.0, 600.0), 680.0, 0.45, 640.0, 4, false);
+        assert!(short.card.bottom() <= 600.0 - 80.0 - SCREEN_MARGIN + 0.01, "{short:?}");
+        // A narrow screen shrinks the bar, not the buttons.
+        let narrow = beacon_with(&m, true, None, (700.0, 900.0), 680.0, 0.24, 640.0, 4, false);
+        assert!(narrow.card.x >= SCREEN_MARGIN - 0.01 && narrow.card.right() <= 700.0 - SCREEN_MARGIN + 0.01, "{narrow:?}");
+        assert!(narrow.bar.w < 680.0 && near(narrow.first_mode.w, BEACON_BAR_H));
     }
 
     #[test]

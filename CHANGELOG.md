@@ -73,6 +73,17 @@ developer tools.
   **Slider handle** to *None* and sliders show just their rounded fill, with
   no handle line. ([#20](https://github.com/theHamdiz/mandara/issues/20))
 
+- **Launcher looks.** Studio → Launcher has a new **Launcher looks** picker
+  with three ready-made looks, one click each: **Classic** (the list
+  launcher you know, still the default), **Grid** (every app as a large
+  icon with category chips; arrows move in all four directions and the
+  tiles glide into place as you type) and **Beacon** (a centred glass
+  search bar in the style of macOS Spotlight, with Apps, Files, Actions
+  and Clipboard buttons beside it and your results grouped under it). You
+  can still change any setting afterwards. Scripts can switch too:
+  `mandara msg launcher look grid`. The launcher now also frees every icon
+  it loaded when it closes.
+
 ### Fixed
 
 - **Sliders keep up with your pointer.** Dragging a slider in Studio, such
