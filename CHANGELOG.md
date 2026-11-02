@@ -39,9 +39,23 @@ About → What's new shows it too.
   widget's new **Style** row, with a small preview of each; the widget
   stays where it is and keeps your colours and font. Widgets you already
   placed keep their exact look. ([#23](https://github.com/theHamdiz/mandara/issues/23))
+- **Less memory from the start.** Every surface the shell opens (the bar,
+  the dock, the invisible strips that reserve the bar's space, popovers,
+  the launcher) used to compile its own copy of the drawing shaders. They
+  are built once now and shared. Measured right after start: about
+  1.4 MiB less of the shell's own memory with the default setup on a 4K
+  test session, and 4 MiB less (36.4 → 32.4 MiB) in the demo desktop with
+  the dock. Windows that open later skip that work too.
 
 ### Fixed
 
+- **Floating panels drag smoothly.** A panel popped out onto the desktop
+  now follows your pointer exactly, frame by frame, wherever you drag it.
+  Before, it only moved once the pointer had slipped off its grab strip,
+  so it stuck and jumped, and letting go over the card often didn't save
+  where you put it. You can grab it by its whole top strip or its edges
+  (never the panel's own buttons), a plain click never nudges it, and its
+  place is saved once, when you let go.
 - **Wi-Fi switched off no longer says "Connecting…".** With Wi-Fi off and a
   container or virtual-machine network up, the Network card claimed it was
   connecting. It now reads "Wi-Fi is off".

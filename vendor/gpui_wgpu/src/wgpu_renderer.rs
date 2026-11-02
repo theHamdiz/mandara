@@ -157,6 +157,7 @@ pub struct WgpuSurfaceConfig {
     pub preferred_present_mode: Option<wgpu::PresentMode>,
 }
 
+#[derive(Clone)]
 struct WgpuPipelines {
     quads: wgpu::RenderPipeline,
     shadows: wgpu::RenderPipeline,
@@ -190,11 +191,34 @@ struct InstanceBindings {
     polychrome_sprites: InstanceBinding,
 }
 
+#[derive(Clone)]
 struct WgpuBindGroupLayouts {
     globals: wgpu::BindGroupLayout,
     instances: wgpu::BindGroupLayout,
     texture: wgpu::BindGroupLayout,
     surfaces: wgpu::BindGroupLayout,
+}
+
+/// What a renderer's pipelines depend on (Mandara patch 10).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct PipelineKey {
+    target_format: wgpu::TextureFormat,
+    alpha_mode: wgpu::CompositeAlphaMode,
+    path_sample_count: u32,
+    dual_source_blending: bool,
+    uses_webgl_instance_data: bool,
+}
+
+/// One set of pipelines and the bind group layouts they were built against,
+/// shared by every renderer on a device that draws to the same kind of
+/// target (Mandara patch 10). Each window used to parse the shaders and
+/// build every pipeline again: memory per open window and time on every
+/// first open of a surface.
+#[derive(Clone)]
+pub(crate) struct SharedPipelines {
+    pub(crate) key: PipelineKey,
+    layouts: WgpuBindGroupLayouts,
+    pipelines: WgpuPipelines,
 }
 
 /// Shared GPU context reference, used to coordinate device recovery across multiple windows.
@@ -1291,16 +1315,35 @@ impl WgpuRendererCore {
         let uses_webgl_instance_data = context.uses_webgl_instance_data();
         let dual_source_blending =
             context.supports_dual_source_blending() && !uses_webgl_instance_data;
-        let bind_group_layouts = Self::create_bind_group_layouts(&device, uses_webgl_instance_data);
-        let pipelines = Self::create_pipelines(
-            &device,
-            &bind_group_layouts,
+        // Mandara patch 10: built once per device and target, then shared.
+        let key = PipelineKey {
             target_format,
             alpha_mode,
-            rendering_params.path_sample_count,
+            path_sample_count: rendering_params.path_sample_count,
             dual_source_blending,
             uses_webgl_instance_data,
-        );
+        };
+        let SharedPipelines {
+            layouts: bind_group_layouts,
+            pipelines,
+            ..
+        } = context.shared_pipelines(key, || {
+            let layouts = Self::create_bind_group_layouts(&device, uses_webgl_instance_data);
+            let pipelines = Self::create_pipelines(
+                &device,
+                &layouts,
+                target_format,
+                alpha_mode,
+                rendering_params.path_sample_count,
+                dual_source_blending,
+                uses_webgl_instance_data,
+            );
+            SharedPipelines {
+                key,
+                layouts,
+                pipelines,
+            }
+        });
         let atlas_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("atlas_sampler"),
             mag_filter: wgpu::FilterMode::Linear,

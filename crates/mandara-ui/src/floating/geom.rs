@@ -99,6 +99,15 @@ pub fn card_size((w, h): (f32, f32), c: Chrome) -> (f32, f32) {
     (w + 2.0 * c.pad, c.strip + h + c.pad)
 }
 
+/// Whether `p` lies on the chrome of a card drawn at `card` with
+/// `content` inside it: the grab strip and the padding around the
+/// plugin's content, where a press drags the card. Presses on the content
+/// itself belong to the plugin.
+pub fn on_chrome(card: Rect, (w, h): (f32, f32), c: Chrome, (x, y): (f32, f32)) -> bool {
+    let inside = |r: Rect| x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+    inside(card) && !inside(Rect::new(card.x + c.pad, card.y + c.strip, w, h))
+}
+
 /// The floating surface's input region: every card, or the whole surface
 /// (`everything`) while a drag or typing must see presses anywhere.
 /// Empty rects never enter it.
@@ -199,6 +208,20 @@ mod tests {
         let (_, card_h) = card_size((400.0, h), chrome);
         assert_eq!(card_h, 1040.0 - 16.0, "a tall panel fits between the margins");
         assert_eq!(card_size((400.0, 300.0), chrome), (424.0, 334.0));
+    }
+
+    #[test]
+    fn the_chrome_drags_and_the_content_does_not() {
+        let chrome = Chrome { pad: 6.0, strip: 28.0, margin: 8.0 };
+        let card = Rect::new(100.0, 200.0, 412.0, 334.0);
+        let content = (400.0, 300.0);
+        assert!(on_chrome(card, content, chrome, (300.0, 210.0)), "the grab strip, across its whole width");
+        assert!(on_chrome(card, content, chrome, (102.0, 400.0)), "the left edge");
+        assert!(on_chrome(card, content, chrome, (510.0, 400.0)), "the right edge");
+        assert!(on_chrome(card, content, chrome, (300.0, 531.0)), "the bottom edge");
+        assert!(!on_chrome(card, content, chrome, (300.0, 400.0)), "the plugin's content");
+        assert!(!on_chrome(card, content, chrome, (106.0, 228.0)), "the content's top-left corner");
+        assert!(!on_chrome(card, content, chrome, (90.0, 400.0)), "outside the card");
     }
 
     #[test]
