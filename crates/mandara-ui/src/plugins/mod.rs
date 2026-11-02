@@ -55,6 +55,10 @@ pub mod color_picker;
 pub mod authenticator;
 pub mod soundscapes;
 pub mod system_admin;
+pub mod ports;
+pub mod git_repos;
+pub mod ci;
+pub mod crashes;
 
 use std::time::Duration;
 
@@ -230,6 +234,10 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     dock::register(registry);
     app_installer::register(registry);
     screen_time::register(registry);
+    ports::register(registry);
+    git_repos::register(registry);
+    ci::register(registry);
+    crashes::register(registry);
     // Third-party / development plugins from the plugin directories.
     external::register(registry);
 }
