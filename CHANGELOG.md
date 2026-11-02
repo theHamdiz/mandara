@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.8.0 — 2026-11-02
+
+Side bars. Mandara speaks Persian, Korean, Urdu and Bengali. Swipe a
+notification away. App icons share one shape.
+
 ### New
 
 - **Side bars.** A slim bar of icons and pills on the left and right
