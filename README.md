@@ -8,6 +8,8 @@
   <b>A beautiful, fast Linux desktop that fits in under 100 MiB of RAM.</b>
   <br/>
   Design-first, spring-animated and written entirely in Rust.
+  <br/>
+  <i>Frames built in under a millisecond, motion tuned for 144 Hz: a shell that feels like an instrument, not a toolkit.</i>
 </p>
 
 <p align="center">
