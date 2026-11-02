@@ -57,6 +57,10 @@ pub enum SurfaceRole {
     /// Desktop edit mode: widget outlines and handles (Top layer, one per
     /// output, only while editing).
     DesktopEdit,
+    /// Plugin panels popped out of the bar (Top layer, one per output,
+    /// only while a card floats there), and the one-pixel keyboard bridge
+    /// that exists only while you type into one of them.
+    Floating,
 }
 
 impl SurfaceRole {
@@ -75,10 +79,11 @@ impl SurfaceRole {
             SurfaceRole::Desktop => "mandara-desktop",
             SurfaceRole::DesktopMenu => "mandara-desktop-menu",
             SurfaceRole::DesktopEdit => "mandara-desktop-edit",
+            SurfaceRole::Floating => "mandara-floating",
         }
     }
 
-    pub const ALL: [SurfaceRole; 13] = [
+    pub const ALL: [SurfaceRole; 14] = [
         SurfaceRole::Exclusion,
         SurfaceRole::Bar,
         SurfaceRole::Wallpaper,
@@ -92,6 +97,7 @@ impl SurfaceRole {
         SurfaceRole::Desktop,
         SurfaceRole::DesktopMenu,
         SurfaceRole::DesktopEdit,
+        SurfaceRole::Floating,
     ];
 }
 

@@ -6,6 +6,8 @@ use gpui::{App, AppContext as _, Context, Entity, Global, Task};
 use mandara_config::{ConfigStore, ReloadOutcome, ShellConfig};
 use mandara_theme::{ThemeEngine, ThemeSource};
 
+use crate::floating::dock::{Effect, PanelDock};
+
 /// Live UI state shared by every surface (and driven by IPC commands).
 #[derive(Default)]
 pub struct ShellState {
@@ -14,6 +16,12 @@ pub struct ShellState {
     /// Horizontal anchor (surface x) for panels opened at the pointer, like
     /// the main menu.
     pub panel_anchor: Option<f32>,
+    /// The open panel is pinned: dismissals leave it open (see
+    /// [`crate::floating::dock`]).
+    pub panel_pinned: bool,
+    /// `(plugin, output)`: a floating card just docked into the bar there,
+    /// so that output's panel opens already expanded where the card landed.
+    pub snap_open: Option<(String, String)>,
     /// Sidebar explicitly opened (command / click).
     pub sidebar_open: bool,
     /// Sidebar revealed by pointer hover at the left edge.
@@ -25,16 +33,68 @@ pub struct ShellState {
 }
 
 impl ShellState {
-    pub fn toggle_panel(&mut self, id: &str, cx: &mut Context<Self>) {
-        self.panel = if self.panel.as_deref() == Some(id) { None } else { Some(id.to_string()) };
-        cx.notify();
-    }
-
-    pub fn set_panel(&mut self, id: Option<String>, cx: &mut Context<Self>) {
-        if self.panel != id {
-            self.panel = id;
+    /// Runs `f` on the bar's panel slot, then carries out its effect
+    /// (floating a displaced pinned panel, raising or closing a card).
+    fn dock<R>(&mut self, cx: &mut Context<Self>, f: impl FnOnce(&mut PanelDock) -> (R, Effect)) -> R {
+        let mut d = PanelDock { open: self.panel.take(), pinned: self.panel_pinned };
+        let before = d.clone();
+        let (out, effect) = f(&mut d);
+        if d != before {
+            self.snap_open = None;
             cx.notify();
         }
+        self.panel = d.open;
+        self.panel_pinned = d.pinned;
+        if effect != Effect::None {
+            cx.defer(move |cx| crate::floating::apply(effect, cx));
+        }
+        out
+    }
+
+    /// The chip / `panel toggle`: closes the open panel (pinned or not) or
+    /// the plugin's floating card; opens anything else.
+    pub fn toggle_panel(&mut self, id: &str, cx: &mut Context<Self>) {
+        let floating = crate::floating::is_floating(id, cx);
+        self.dock(cx, |d| ((), d.toggle(id, floating)));
+    }
+
+    /// Opens (or, with `None`, closes) the bar's panel on purpose: a
+    /// command, a click, the plugin itself. Closing ignores the pin; a
+    /// pinned panel displaced by another one floats.
+    pub fn set_panel(&mut self, id: Option<String>, cx: &mut Context<Self>) {
+        match id {
+            None => self.dock(cx, |d| {
+                d.close();
+                ((), Effect::None)
+            }),
+            Some(id) => {
+                let floating = crate::floating::is_floating(&id, cx);
+                self.dock(cx, |d| ((), d.open(&id, floating)))
+            }
+        }
+    }
+
+    /// Closes the open panel unless it is pinned (outside clicks, focus
+    /// changes, the pointer leaving, an overlay opening). Returns whether
+    /// it closed.
+    pub fn dismiss_panel(&mut self, cx: &mut Context<Self>) -> bool {
+        self.dock(cx, |d| (d.dismiss(), Effect::None))
+    }
+
+    /// Pins `id` in the bar's slot (opening it there if needed).
+    pub fn pin_panel(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.dock(cx, |d| ((), d.pin(id)));
+    }
+
+    /// Unpins `id`; it stays open until the next dismissal. Returns whether
+    /// it was pinned.
+    pub fn unpin_panel(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
+        self.dock(cx, |d| (d.unpin(id), Effect::None))
+    }
+
+    /// Whether `id` is the pinned panel.
+    pub fn is_pinned(&self, id: &str) -> bool {
+        self.panel_pinned && self.panel.as_deref() == Some(id)
     }
 
     /// Open by command, hover, or pin (pin lives in config).
@@ -66,7 +126,10 @@ impl ShellState {
             if open {
                 self.session_open = false;
                 self.wallpaper_open = false;
-                self.panel = None;
+                // A pinned panel stays open over the overlay.
+                if !self.panel_pinned {
+                    self.panel = None;
+                }
             }
             cx.notify();
         }
@@ -78,7 +141,10 @@ impl ShellState {
             if open {
                 self.launcher_open = false;
                 self.wallpaper_open = false;
-                self.panel = None;
+                // A pinned panel stays open over the overlay.
+                if !self.panel_pinned {
+                    self.panel = None;
+                }
             }
             cx.notify();
         }
@@ -93,7 +159,10 @@ impl ShellState {
             if open {
                 self.launcher_open = false;
                 self.session_open = false;
-                self.panel = None;
+                // A pinned panel stays open over the overlay.
+                if !self.panel_pinned {
+                    self.panel = None;
+                }
             }
             cx.notify();
         }
