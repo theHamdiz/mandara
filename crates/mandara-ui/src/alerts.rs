@@ -143,7 +143,10 @@ fn apply(cfg: &ShellConfig, prev: Option<&ShellConfig>, cx: &mut App) {
             media.send(mandara_services::MediaCommand::Refresh);
         }
     }
-    if prev.is_none_or(|p| p.privacy != cfg.privacy || p.plugins.disabled != cfg.plugins.disabled || p.plugins.enabled != cfg.plugins.enabled || p.plugins.removed != cfg.plugins.removed) {
+    let presentation = |c: &ShellConfig| c.plugins.settings.get(crate::plugins::presentation::ID).cloned();
+    if prev.is_none_or(|p| {
+        p.privacy != cfg.privacy || p.plugins.disabled != cfg.plugins.disabled || p.plugins.enabled != cfg.plugins.enabled || p.plugins.removed != cfg.plugins.removed || presentation(p) != presentation(cfg)
+    }) {
         configure_privacy(cfg, cx);
     }
     // Automatic do not disturb follows its switches too.
@@ -160,14 +163,23 @@ fn configure_privacy(cfg: &ShellConfig, cx: &mut App) {
     let Some(entity) = privacy_entity(cx) else { return };
     // The monitor belongs to the privacy plugin: off plugin, no watching.
     let plugin_on = cx.try_global::<mandara_plugins::PluginRegistry>().is_none_or(|r| r.is_enabled(crate::plugins::privacy::ID, &cfg.plugins));
-    let want = plugin_on && cfg.privacy.indicators && (cfg.privacy.microphone || cfg.privacy.camera || cfg.privacy.screen_share);
+    let indicators = plugin_on && cfg.privacy.indicators && (cfg.privacy.microphone || cfg.privacy.camera || cfg.privacy.screen_share);
+    // Presentation mode can follow screen sharing on its own: then the
+    // screen is watched even with the privacy indicators off.
+    let presenting = crate::plugins::presentation::watches_screen_share(cfg, cx);
+    let want = indicators || presenting;
+    let watch = match (indicators, presenting) {
+        (true, true) => mandara_config::alerts::PrivacyConfig { screen_share: true, ..cfg.privacy.clone() },
+        (true, false) => cfg.privacy.clone(),
+        (false, _) => mandara_config::alerts::PrivacyConfig { indicators: true, microphone: false, camera: false, screen_share: true, ..cfg.privacy.clone() },
+    };
     let start = entity.update(cx, |p, _| match (&mut p.monitor, want) {
         (Some(m), true) => {
-            m.configure(&cfg.privacy);
+            m.configure(&watch);
             None
         }
         (None, true) => {
-            let m = PrivacyMonitor::new(&cfg.privacy);
+            let m = PrivacyMonitor::new(&watch);
             let rx = m.updates.clone();
             p.monitor = Some(m);
             Some(rx)

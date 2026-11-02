@@ -55,6 +55,10 @@ pub mod color_picker;
 pub mod authenticator;
 pub mod soundscapes;
 pub mod system_admin;
+pub mod keybinds;
+pub mod progress;
+pub mod breaks;
+pub mod presentation;
 
 use std::time::Duration;
 
@@ -230,6 +234,10 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     dock::register(registry);
     app_installer::register(registry);
     screen_time::register(registry);
+    keybinds::register(registry);
+    progress::register(registry);
+    breaks::register(registry);
+    presentation::register(registry);
     // Third-party / development plugins from the plugin directories.
     external::register(registry);
 }
