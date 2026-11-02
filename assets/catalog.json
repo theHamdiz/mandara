@@ -736,5 +736,21 @@
     "motif": "dawn",
     "angle": -5,
     "panel": null
+  },
+  {
+    "id": "quran",
+    "name": "Qur'an",
+    "palette": "twilight",
+    "motif": "paper",
+    "angle": -5,
+    "panel": null
+  },
+  {
+    "id": "hadith",
+    "name": "Hadith",
+    "palette": "corniche",
+    "motif": "tiles",
+    "angle": 5,
+    "panel": null
   }
 ]

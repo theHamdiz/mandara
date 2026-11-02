@@ -123,6 +123,9 @@ assets/plugins/drives/icon.svg
 assets/plugins/git-repos/cover.png
 assets/plugins/git-repos/icon.png
 assets/plugins/git-repos/icon.svg
+assets/plugins/hadith/cover.png
+assets/plugins/hadith/icon.png
+assets/plugins/hadith/icon.svg
 assets/plugins/jannah/cover.png
 assets/plugins/jannah/icon.png
 assets/plugins/jannah/icon.svg
@@ -192,6 +195,9 @@ assets/plugins/progress/icon.svg
 assets/plugins/quick-settings/cover.png
 assets/plugins/quick-settings/icon.png
 assets/plugins/quick-settings/icon.svg
+assets/plugins/quran/cover.png
+assets/plugins/quran/icon.png
+assets/plugins/quran/icon.svg
 assets/plugins/resources/cover.png
 assets/plugins/resources/icon.png
 assets/plugins/resources/icon.svg

@@ -13,7 +13,7 @@
 
 ## Plugins
 
-Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
+The 74 plugins below include 73 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
 
 | Preview | Files | Notes |
 | --- | --- | --- |
@@ -89,6 +89,8 @@ Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900
 | <img src="plugins/breaks/icon.png" width="40" alt="Eye breaks icon"> <img src="plugins/breaks/cover.png" width="128" alt="Eye breaks cover"> | **Eye breaks** · [SVG](plugins/breaks/icon.svg) · [256 PNG](plugins/breaks/icon.png) · [Cover](plugins/breaks/cover.png) | Twilight · illustration |
 | <img src="plugins/presentation/icon.png" width="40" alt="Presentation mode icon"> <img src="plugins/presentation/cover.png" width="128" alt="Presentation mode cover"> | **Presentation mode** · [SVG](plugins/presentation/icon.svg) · [256 PNG](plugins/presentation/icon.png) · [Cover](plugins/presentation/cover.png) | Twilight · illustration |
 | <img src="plugins/jannah/icon.png" width="40" alt="Jannah icon"> <img src="plugins/jannah/cover.png" width="128" alt="Jannah cover"> | **Jannah** · [SVG](plugins/jannah/icon.svg) · [256 PNG](plugins/jannah/icon.png) · [Cover](plugins/jannah/cover.png) | Twilight · pointed arch and gold eight-pointed star · illustration |
+| <img src="plugins/quran/icon.png" width="40" alt="Qur'an icon"> <img src="plugins/quran/cover.png" width="128" alt="Qur'an cover"> | **Qur'an** · [SVG](plugins/quran/icon.svg) · [256 PNG](plugins/quran/icon.png) · [Cover](plugins/quran/cover.png) | Twilight · open book on a gold rahle with an eight-pointed star · illustration |
+| <img src="plugins/hadith/icon.png" width="40" alt="Hadith icon"> <img src="plugins/hadith/cover.png" width="128" alt="Hadith cover"> | **Hadith** · [SVG](plugins/hadith/icon.svg) · [256 PNG](plugins/hadith/icon.png) · [Cover](plugins/hadith/cover.png) | Corniche · bound manuscript with a gold cover medallion and page edge · illustration |
 
 ## Palette and grid
 
@@ -109,6 +111,7 @@ SVGs store sRGB values for desktop renderer compatibility. Use the OKLCH anchors
 | Productivity | `#843D58` → `#C47268` | Clipboard, Notifications, To-do, Notes, Pomodoro, Authenticator, Screen time |
 | Time | `#765323` → `#B78D47` | Clock, World clock |
 | Sky | `#30265E` → `#7063B5` | Prayer times, Weather, Wallpaper, Moon phase, Soundscapes, Eye breaks, Presentation mode, Jannah |
+| Reading | Qur'an: `#30265E` → `#7063B5`; Hadith: `#103C63` → `#286B91` | Qur'an, Hadith |
 | Creation | `#185D54` → `#40C8BD` | Wallpaper generator |
 | Maintenance | `#14303A` → `#2F6C70` | Updates, Services, Containers, App installer, Listening ports, Git repositories, Crash reports |
 
@@ -119,6 +122,7 @@ SVGs store sRGB values for desktop renderer compatibility. Use the OKLCH anchors
 - The added cover motifs are `watch` (eye contours), `shelf` (dock rails), `package` (open carton), `hourglass` and `aurora` (flowing contours and a sparkle). System tray and Mini stats reuse `peers` and `bars` respectively. Mini stats is visible in Studio's uncategorized store group; the internal Compositor commands are hidden and have no marketplace art.
 - Listening ports, Git repositories, CI status, Crash reports, Tailscale, Uptime monitor, Local AI, Share to phone, Shortcuts cheatsheet, Task progress, Eye breaks and Presentation mode reuse the existing motifs and palette backgrounds. Their covers are illustrations with no panel capture. Their glyph and motif notes are in `artwork/prompts.json`.
 - Jannah uses the Twilight background and existing `dawn` motif. Its cream pointed doorway frames a gold eight-pointed star and a soft glow, suggesting a gate opening onto light. The cover is an illustration with no panel capture; the glyph note is in `artwork/prompts.json`.
+- Qur'an uses the Twilight background and existing `paper` motif: a cream open book rests on a gold X-shaped rahle beneath a small eight-pointed star. Hadith uses the Corniche background and existing `tiles` motif: a closed manuscript has a gold cover medallion and page edge. Both use broad contours that remain readable at 32 px, with no text, calligraphy or figures. Their covers are illustrations with no panel capture; glyph notes are in `artwork/prompts.json`.
 
 ## Sources and checks
 
@@ -141,7 +145,7 @@ The whole pipeline is Rust (`xtask/src/art.rs`): SVGs render with [resvg](https:
 
 `cargo xtask art` turns every built-in plugin's art into the compact set the shell and Studio embed, in [`crates/mandara-ui/assets/plugin-art/<id>/`](../crates/mandara-ui/assets/plugin-art): `icon.webp` (128 px, rendered from the SVG), `icon@2x.webp` (256 px) and `cover.jpg` (960×540, JPEG quality 82; lossless `cover.webp` when the cover has transparency), plus the generated `index.rs` table. The generated files are committed — they are build inputs. Example plugins in `plugins/examples/` ship their own `icon.png` / `cover.png` inside their package instead.
 
-The embedded-art ceiling is **7,400,000 bytes (7.06 MiB)**, rounded to 100,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 71-plugin set uses **7,095,587 bytes (6.77 MiB)**, leaving **304,413 bytes (297 KiB)** of headroom for artwork revisions and small additions.
+The embedded-art ceiling is **7,650,000 bytes (7.30 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 73-plugin set uses **7,287,230 bytes (6.95 MiB)**, leaving **362,770 bytes (354 KiB)** of headroom for artwork revisions and small additions.
 
 ```sh
 cargo xtask art --compose            # render source icons and compose covers (--only ID)
