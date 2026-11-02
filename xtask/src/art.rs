@@ -105,18 +105,26 @@ const AURORA_MOTIF: &str = r#"<path d="M420 730C730 820 690 160 1030 320S1300 76
 
 // ── Checks ───────────────────────────────────────────────────────────────
 
+/// Every brand mark exported as PNGs.
 const BRAND_NAMES: &[&str] = &["mandara", "mandara-studio", "mandara-login"];
+/// The marks drawn as SVG (the shell's own logo is a raster master,
+/// `mandara-1024.png`).
+const BRAND_SVG_NAMES: &[&str] = &["mandara-studio", "mandara-login"];
+const BRAND_MASTER: &str = "mandara-1024.png";
+const BRAND_MASTER_SIZE: u32 = 1024;
+/// The raster logo's gradients don't compress like the drawn marks.
+const BRAND_RASTER_BUDGET_BYTES: u64 = 300_000;
+const BRAND_MASTER_BUDGET_BYTES: u64 = 800_000;
 const BRAND_EXPORT_SIZES: &[u32] = &[512, 256, 128];
 const BRAND_VIEWBOX: &str = "0 0 1024 1024";
 const BRAND_TILE_RADIUS: &str = "216";
 const BRAND_EXPORT_BUDGET_BYTES: u64 = 150_000;
 /// An export with fewer colors has lost its gradients.
 const BRAND_MIN_COLORS: usize = 128;
-/// The main mark must still read at favicon size: enough light shoreline
-/// pixels survive a 16 px render (resvg anti-aliases slightly softer than
-/// librsvg, which the original check used with 12).
+/// The logo must still read at favicon size: enough solid pixels survive
+/// shrinking the 128 px export to 16 px.
 const BRAND_SMALL_RENDER: u32 = 16;
-const BRAND_SMALL_MIN_LIGHT_PIXELS: usize = 10;
+const BRAND_SMALL_MIN_SOLID_PIXELS: usize = 30;
 const SHORELINE: &str = "M232 648c0-124 24-224 114-224s86 196 166 196 76-196 166-196 114 100 114 224";
 const ICON_VIEWBOX: &str = "0 0 512 512";
 const ICON_SVG_BUDGET_BYTES: u64 = 12_000;
@@ -799,7 +807,7 @@ fn is_rgba8_png(path: &Path) -> bool {
 
 pub fn check_brand(r: &mut Report) {
     let brand = assets().join("brand");
-    for name in BRAND_NAMES {
+    for name in BRAND_SVG_NAMES {
         let path = brand.join(format!("{name}.svg"));
         if let Some(text) = r.try_or(parse_svg(&path)) {
             let doc = roxmltree::Document::parse(&text).expect("parsed above");
@@ -811,6 +819,9 @@ pub fn check_brand(r: &mut Report) {
             let tile = doc.descendants().find(|n| n.tag_name().name() == "rect" && n.attribute("id") == Some("tile-shape"));
             r.ensure(tile.and_then(|n| n.attribute("rx")) == Some(BRAND_TILE_RADIUS), || format!("{name}.svg: tile radius must be {BRAND_TILE_RADIUS}"));
         }
+    }
+    for name in BRAND_NAMES {
+        let budget = if BRAND_SVG_NAMES.contains(name) { BRAND_EXPORT_BUDGET_BYTES } else { BRAND_RASTER_BUDGET_BYTES };
         for &size in BRAND_EXPORT_SIZES {
             let path = brand.join(format!("{name}-{size}.png"));
             let Some(img) = r.try_or(load_rgba(&path)) else { continue };
@@ -820,7 +831,7 @@ pub fn check_brand(r: &mut Report) {
             r.ensure(img.get_pixel(size / 2, size / 2)[3] == u8::MAX, || format!("{}: center must be opaque", path.display()));
             let colors: BTreeSet<[u8; 4]> = img.pixels().map(|p| p.0).collect();
             r.ensure(colors.len() > BRAND_MIN_COLORS, || format!("{}: only {} colors", path.display(), colors.len()));
-            r.ensure(file_size(&path) < BRAND_EXPORT_BUDGET_BYTES, || format!("{}: over {BRAND_EXPORT_BUDGET_BYTES} bytes", path.display()));
+            r.ensure(file_size(&path) < budget, || format!("{}: over {budget} bytes", path.display()));
         }
     }
     let symbolic = brand.join("mandara-symbolic.svg");
@@ -835,10 +846,17 @@ pub fn check_brand(r: &mut Report) {
         }
         r.ensure(!doc.descendants().any(|n| matches!(n.tag_name().name(), "defs" | "text")), || "mandara-symbolic.svg: no defs or text".into());
     }
-    if let Some(small) = r.try_or(std::fs::read(brand.join("mandara.svg")).map_err(|e| e.to_string()).and_then(|svg| render_svg(&svg, BRAND_SMALL_RENDER, BRAND_SMALL_RENDER))) {
-        let light = small.pixels().filter(|p| p[0] > 110 && p[1] > 155 && p[3] > 180).count();
-        r.ensure(light >= BRAND_SMALL_MIN_LIGHT_PIXELS, || format!("mandara.svg: the mark fades at {BRAND_SMALL_RENDER} px ({light} light pixels)"));
-        r.ensure(small.get_pixel(0, 0)[3] == 0, || "mandara.svg: small render corners must be transparent".into());
+    let master = brand.join(BRAND_MASTER);
+    if let Some(img) = r.try_or(load_rgba(&master)) {
+        r.ensure(img.dimensions() == (BRAND_MASTER_SIZE, BRAND_MASTER_SIZE), || format!("{BRAND_MASTER}: must be {BRAND_MASTER_SIZE}×{BRAND_MASTER_SIZE}"));
+        r.ensure(img.get_pixel(0, 0)[3] == 0, || format!("{BRAND_MASTER}: corners must be transparent"));
+        r.ensure(file_size(&master) < BRAND_MASTER_BUDGET_BYTES, || format!("{BRAND_MASTER}: over {BRAND_MASTER_BUDGET_BYTES} bytes"));
+    }
+    if let Some(img) = r.try_or(load_rgba(&brand.join("mandara-128.png"))) {
+        let small = image::imageops::resize(&img, BRAND_SMALL_RENDER, BRAND_SMALL_RENDER, image::imageops::FilterType::Triangle);
+        let solid = small.pixels().filter(|p| p[3] > 180).count();
+        r.ensure(solid >= BRAND_SMALL_MIN_SOLID_PIXELS, || format!("mandara-128.png: the logo fades at {BRAND_SMALL_RENDER} px ({solid} solid pixels)"));
+        r.ensure(small.get_pixel(0, 0)[3] == 0, || "mandara-128.png: small render corners must be transparent".into());
     }
 }
 

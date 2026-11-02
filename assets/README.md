@@ -1,15 +1,15 @@
 # Mandara artwork
 
-**Pharos Current** joins a double sea swell with a warm beacon. The three app marks share that shoreline: Studio adds tuning rails; Login turns the beacon into a dawn keyhole.
+Mandara's logo is a **phoenix rising from a Mediterranean wave**, in violet, cyan and silver. Studio's and Login's app marks keep the **Pharos Current** shoreline: Studio adds tuning rails; Login turns the beacon into a dawn keyhole.
 
 ## App icons
 
 | Preview | Files | Notes |
 | --- | --- | --- |
-| <img src="brand/mandara-128.png" width="64" alt="Mandara Shell"> | [Mandara Shell SVG](brand/mandara.svg) · [512 PNG](brand/mandara-512.png) · [256 PNG](brand/mandara-256.png) · [128 PNG](brand/mandara-128.png) | Corniche shoreline and beacon |
+| <img src="brand/mandara-128.png" width="64" alt="Mandara Shell"> | [1024 PNG master](brand/mandara-1024.png) · [512 PNG](brand/mandara-512.png) · [256 PNG](brand/mandara-256.png) · [128 PNG](brand/mandara-128.png) | A phoenix rising from a Mediterranean wave, in violet, cyan and silver |
 | <img src="brand/mandara-studio-128.png" width="64" alt="Mandara Studio"> | [Mandara Studio SVG](brand/mandara-studio.svg) · [512 PNG](brand/mandara-studio-512.png) · [256 PNG](brand/mandara-studio-256.png) · [128 PNG](brand/mandara-studio-128.png) | Sea-glass shoreline with tuning rails |
 | <img src="brand/mandara-login-128.png" width="64" alt="Mandara Login"> | [Mandara Login SVG](brand/mandara-login.svg) · [512 PNG](brand/mandara-login-512.png) · [256 PNG](brand/mandara-login-256.png) · [128 PNG](brand/mandara-login-128.png) | Montaza Twilight with a dawn keyhole |
-| <img src="brand/mandara-symbolic.svg" width="48" alt="Symbolic shoreline"> | [Symbolic SVG](brand/mandara-symbolic.svg) | `currentColor`; transparent, without a tile |
+| <img src="brand/mandara-symbolic.svg" width="48" alt="Symbolic phoenix"> | [Symbolic SVG](brand/mandara-symbolic.svg) | The phoenix in one colour (`currentColor`), transparent: panels and the login screen |
 
 ## Plugins
 

@@ -606,7 +606,7 @@ pub struct AppearanceConfig {
 
 impl Default for AppearanceConfig {
     fn default() -> Self {
-        Self { icon_theme: None, bar_icons: IconStyle::Monochrome, launcher_icons: IconStyle::Color, launcher_icon: "grid".into() }
+        Self { icon_theme: None, bar_icons: IconStyle::Monochrome, launcher_icons: IconStyle::Color, launcher_icon: "mandara".into() }
     }
 }
 

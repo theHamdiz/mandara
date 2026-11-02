@@ -8,6 +8,10 @@ About → What's new shows it too.
 
 ### Changed
 
+- **A new logo.** Mandara's logo is now a phoenix rising from a
+  Mediterranean wave, in violet, cyan and silver, and the launcher button
+  in the bar shows it in colour. Prefer another icon? Pick one in Studio →
+  Launcher → Button icon. ([#23](https://github.com/theHamdiz/mandara/issues/23))
 - **A tidier widget gallery.** Look-alike widgets now share one tile in
   Studio → Desktop widgets: the clocks are Stacked, Headline, Day block,
   Analog, Digital, Progress, Greeting and Text (plus the depth clock), and
@@ -15,6 +19,18 @@ About → What's new shows it too.
   widget's new **Style** row, with a small preview of each; the widget
   stays where it is and keeps your colours and font. Widgets you already
   placed keep their exact look. ([#23](https://github.com/theHamdiz/mandara/issues/23))
+
+### Fixed
+
+- **The Screenshot panel gets out of the way at once.** Clicking Region,
+  Window, Screen or Record region in the bar's Screenshot panel used to
+  fold the panel away slowly, so it lingered on screen and could end up in
+  the shot. It now disappears instantly, and the capture waits until it's
+  gone.
+- **A region selection never gets stuck.** Letting go of the mouse over the
+  capture toolbar or past the edge of the screen left the selection stuck,
+  and the next click didn't capture. The drag now always ends where you
+  let go.
 
 ## 0.7.0 — 2026-11-02
 
@@ -136,15 +152,6 @@ developer tools.
   login screen was stretched across both. It now shows on one, and
   updating Mandara moves an existing login screen over too.
   ([#22](https://github.com/theHamdiz/mandara/issues/22))
-- **The Screenshot panel gets out of the way at once.** Clicking Region,
-  Window, Screen or Record region in the bar's Screenshot panel used to
-  fold the panel away slowly, so it lingered on screen and could end up in
-  the shot. It now disappears instantly, and the capture waits until it's
-  gone.
-- **A region selection never gets stuck.** Letting go of the mouse over the
-  capture toolbar or past the edge of the screen left the selection stuck,
-  and the next click didn't capture. The drag now always ends where you
-  let go.
 - **Filter chips scroll with any mouse.** The clipboard's categories, the
   to-do lists, the note topics and the dock's app categories now scroll
   sideways with a normal mouse wheel, can be grabbed and dragged, and show

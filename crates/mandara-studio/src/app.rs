@@ -1105,13 +1105,13 @@ impl StudioView {
     /// Visual icon chooser: bundled set, distro logo, themed suggestions,
     /// live search over the whole icon theme, and a custom path.
     fn icon_picker(&mut self, setting: &Setting, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        const BUNDLED: &[&str] = &["grid", "search", "circle", "sun", "moon", "crescent", "music", "monitor", "image", "note", "bolt", "cloud-sun", "coffee", "power"];
+        const BUNDLED: &[&str] = &[mandara_ui::icons::BRAND_SPEC, "grid", "search", "circle", "sun", "moon", "crescent", "music", "monitor", "image", "note", "bolt", "cloud-sun", "coffee", "power"];
         const SUGGESTED: &[&str] = &[
             "distro", "start-here", "start-here-symbolic", "distributor-logo", "view-app-grid-symbolic", "view-grid-symbolic", "applications-all-symbolic",
             "open-menu-symbolic", "archlinux-logo", "cachyos", "fedora-logo-icon", "ubuntu-logo-icon", "debian-logo", "nix-snowflake", "manjaro",
             "endeavouros", "linuxmint-logo", "pop-os", "opensuse-logo",
         ];
-        let current = registry::get(cfg, setting).as_str().unwrap_or("grid").to_string();
+        let current = registry::get(cfg, setting).as_str().unwrap_or(mandara_ui::icons::BRAND_SPEC).to_string();
         let query = self.icon_query.trim().to_lowercase();
         // Resolved once per query (the full theme listing is thousands of names).
         let theme_names = match &self.icon_matches {
