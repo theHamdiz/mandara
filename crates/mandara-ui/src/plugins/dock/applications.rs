@@ -422,7 +422,10 @@ impl AppsGrid {
                 let selected = self.selected == Some(i);
                 let is_new = self.new_ids.iter().any(|n| n.eq_ignore_ascii_case(&a.id));
                 let badge = is_new.then(|| div().h(px(BADGE_H)).px(px(BADGE_PAD)).rounded_full().flex().items_center().bg(accent.hsla()).text_color(on_accent.hsla()).text_size(px(BADGE_TEXT)).font_weight(FontWeight::BOLD).child(t("New")));
-                let app_icon = crate::plugins::workspaces::app_icon(&icon_id, icon_px, palette.on_surface, false, palette);
+                // App icons sit on the shared app-icon shape, like the launcher's.
+                let shape = crate::icon_shape::current(cx);
+                let shaped = |side: f32| crate::icon_shape::plate(shape, side, crate::icon_shape::plate_color(palette), crate::plugins::workspaces::app_icon(&icon_id, crate::icon_shape::inner(shape, side), palette.on_surface, false, palette));
+                let app_icon = shaped(icon_px);
                 let mut tile = div()
                     .id(SharedString::from(format!("apps-{}", a.id)))
                     .relative()
@@ -438,7 +441,7 @@ impl AppsGrid {
                         .flex()
                         .items_center()
                         .gap(px(GAP))
-                        .child(crate::plugins::workspaces::app_icon(&icon_id, LIST_ICON, palette.on_surface, false, palette))
+                        .child(shaped(LIST_ICON))
                         .child(
                             div()
                                 .flex_1()

@@ -1622,14 +1622,14 @@ fn format_number(v: f64) -> String {
     if (v - v.round()).abs() < 1e-9 && v.abs() < 1e15 { format!("{}", v.round() as i64) } else { format!("{v:.6}").trim_end_matches('0').trim_end_matches('.').to_string() }
 }
 
-fn monogram(name: &str, size: f32, palette: &MandaraPalette) -> impl IntoElement {
+fn monogram(name: &str, size: f32, corner: f32, palette: &MandaraPalette) -> impl IntoElement {
     let letter = name.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_default();
     let hue = name.bytes().fold(0u32, |h, b| h.wrapping_mul(31).wrapping_add(b as u32)) % 360;
     let bg = Color::oklch(if palette.is_dark { 0.42 } else { 0.86 }, 0.09, hue as f32);
     div()
         .size(px(size))
         .flex_none()
-        .rounded(px(crate::style::radius(size * LEAD_RADIUS_FRAC)))
+        .rounded(px(corner))
         .bg(bg.hsla())
         .flex()
         .items_center()
@@ -1769,27 +1769,37 @@ impl LauncherView {
 
     /// The leading tile of a result.
     fn lead(&mut self, item: &Item, size: f32, palette: &MandaraPalette, cx: &mut Context<Self>) -> gpui::AnyElement {
-        let tile = || div().size(px(size)).flex_none().rounded(px(crate::style::radius(size * LEAD_RADIUS_FRAC))).flex().items_center().justify_center();
+        // Every tile shares the app icons' shape (`[appearance] app_icon_shape`).
+        let shape = crate::icon_shape::current(cx);
+        let corner = crate::icon_shape::radius(shape, size).unwrap_or_else(|| crate::style::radius(size * LEAD_RADIUS_FRAC));
+        let tile = || div().size(px(size)).flex_none().rounded(px(corner)).flex().items_center().justify_center();
+        let (inner, fill) = (crate::icon_shape::inner(shape, size), crate::icon_shape::plate_color(palette));
         // Monochrome: the theme's symbolic icon, tinted like the bar's.
         if let Item::App(app) = item
             && crate::state::config(cx).read(cx).get().appearance.launcher_icons == mandara_config::IconStyle::Monochrome
-            && let Some(symbolic) = crate::plugins::workspaces::symbolic_icon(&app.id, size * APP_ICON_FRAC, palette.on_surface)
+            && let Some(symbolic) = crate::plugins::workspaces::symbolic_icon(&app.id, inner.min(size * APP_ICON_FRAC), palette.on_surface)
         {
-            return tile().child(symbolic).into_any_element();
+            return crate::icon_shape::plate(shape, size, fill, symbolic.into_any_element());
         }
         match item {
             Item::App(app) => match &app.icon {
-                Some(path) => self.colour_icon(path, size),
-                None => monogram(&app.name, size, palette).into_any_element(),
+                Some(path) => {
+                    let icon = self.colour_icon(path, inner);
+                    crate::icon_shape::plate(shape, size, fill, icon)
+                }
+                None => monogram(&app.name, size, corner, palette).into_any_element(),
             },
             Item::Entry(e) => tile().bg(palette.surface_container_high.hsla()).child(icon(e.icon, size * LEAD_ICON_FRAC, palette.primary)).into_any_element(),
             Item::Calc { .. } => tile().bg(palette.primary_container.hsla()).text_color(palette.primary.hsla()).child("=").into_any_element(),
             Item::Hit(h) => match &h.lead {
                 Lead::Glyph(g) => tile().bg(palette.surface_container_high.hsla()).text_size(px(EMOJI_LEAD_PX * size / ROW_LEAD_PX)).child(g.clone()).into_any_element(),
-                Lead::AppIcon(id) => match crate::plugins::workspaces::raster_icon_path(id) {
-                    Some(path) => tile().child(self.colour_icon(&path, size * APP_ICON_FRAC)).into_any_element(),
-                    None => tile().child(crate::plugins::workspaces::app_icon(id, size * APP_ICON_FRAC, palette.on_surface, false, palette)).into_any_element(),
-                },
+                Lead::AppIcon(id) => {
+                    let icon = match crate::plugins::workspaces::raster_icon_path(id) {
+                        Some(path) => self.colour_icon(&path, inner.min(size * APP_ICON_FRAC)),
+                        None => crate::plugins::workspaces::app_icon(id, inner.min(size * APP_ICON_FRAC), palette.on_surface, false, palette),
+                    };
+                    crate::icon_shape::plate(shape, size, fill, icon)
+                }
                 Lead::Icon(name) => tile().bg(palette.surface_container_high.hsla()).child(icon(name, size * LEAD_ICON_FRAC, palette.primary)).into_any_element(),
                 Lead::Image(path) => match self.thumb(path, cx) {
                     Some(thumb) => img(thumb).size(px(size)).flex_none().rounded(px(crate::style::radius(THUMB_RADIUS))).object_fit(ObjectFit::Cover).into_any_element(),

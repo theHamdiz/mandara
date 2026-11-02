@@ -414,6 +414,8 @@ const MENU_DEFAULTS: &[(&str, &str)] = &[("lock", tk("Lock")), ("suspend", tk("S
 const SCHOOLS: &[(&str, &str)] = &[("shafii", tk("Shafi'i")), ("hanafi", tk("Hanafi"))];
 /// A faith plugin's own language: Mandara's, or one of its languages (each
 /// named in itself).
+/// The plate under app icons in the launcher and the dock.
+const APP_ICON_SHAPES: &[(&str, &str)] = &[("squircle", tk("Squircle")), ("circle", tk("Circle")), ("original", tk("Theme's own"))];
 const PLUGIN_LANGUAGES: &[(&str, &str)] = &[
     ("follow", tk("Follow Mandara")),
     ("en", "English"),
@@ -589,6 +591,7 @@ fn build() -> Vec<Setting> {
         s(Launcher, tk("Launcher"), "/launcher/enabled", tk("Enable launcher"), tk("Apps, settings, commands, “/” slash commands and skills, “=” calculator; off disables the keybind, edge and menu entry"), Toggle),
         s(Launcher, tk("Launcher"), "/launcher/max_results", tk("Visible results"), tk("Rows shown before the list scrolls"), slider(3.0, 12.0, 1.0, "")),
         s(Launcher, tk("Launcher"), "/appearance/launcher_icons", tk("App icons"), tk("How app icons are drawn"), Choice(ICON_STYLES)),
+        s(Launcher, tk("Launcher"), "/appearance/app_icon_shape", tk("App icon shape"), tk("Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn"), Choice(APP_ICON_SHAPES)),
         // Wallpaper
         s(Wallpaper, tk("Desktop"), "/wallpaper/enabled", tk("Draw the wallpaper"), tk("Mandara paints the desktop background (replaces swww / awww / swaybg)"), Toggle),
         s(Wallpaper, tk("Desktop"), "/wallpaper/crossfade_ms", tk("Crossfade"), tk("Blend time when the wallpaper changes"), slider(0.0, 2000.0, 50.0, " ms")),

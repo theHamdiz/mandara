@@ -8012,3 +8012,8 @@
 "how many ahead (1 when left out; negative looks back)" = "combien en avant (1 si omis ; un nombre négatif regarde en arrière)"
 "how many days ahead (1 when left out; negative looks back)" = "combien de jours en avant (1 si omis ; un nombre négatif regarde en arrière)"
 "how many items ahead (1 when left out; negative looks back)" = "combien d'éléments en avant (1 si omis ; un nombre négatif regarde en arrière)"
+
+# ── App icon shape ──
+"App icon shape" = "Forme des icônes d'applications"
+"Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "Chaque icône d'application du lanceur et du dock repose sur la même forme, pour former un ensemble ; « Comme dans le thème » garde chaque icône telle qu'elle est dessinée"
+"Theme's own" = "Comme dans le thème"

@@ -57,7 +57,11 @@
   `mandara msg launcher placement top-left`. The launcher button in the bar
   shows Mandara's logo in colour; Studio → Launcher → Button icon swaps it
   for a bundled icon, your distribution's logo, any icon from your theme or
-  your own image (`[appearance] launcher_icon`).
+  your own image (`[appearance] launcher_icon`). Every app icon in the
+  launcher, the dock and its Applications drawer sits on one shape, a
+  squircle by default, so icons themes draw as squares, circles or free
+  shapes read as one set; pick Circle, or Theme's own to keep each icon as
+  drawn (Studio → Launcher → App icon shape, `[appearance] app_icon_shape`).
   **Three looks, one click each** (Studio → Launcher → Launcher looks, or
   `mandara msg launcher look classic|grid|beacon`; `launcher looks` lists
   them): **Classic** is the list drawer above (the default). **Grid** shows

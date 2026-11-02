@@ -28,6 +28,11 @@ About → What's new shows it too.
 
 ### Changed
 
+- **App icons share one shape.** Every app icon in the launcher (all three
+  looks), the dock and its Applications drawer now sits on the same
+  squircle, so icons drawn as squares, circles or free shapes read as one
+  set. Prefer circles, or each icon as its theme draws it? Studio →
+  Launcher → App icon shape.
 - **A new logo.** Mandara's logo is now a phoenix rising from a
   Mediterranean wave, in violet, cyan and silver, and the launcher button
   in the bar shows it in colour. Prefer another icon? Pick one in Studio →

@@ -595,6 +595,19 @@ pub enum IconStyle {
     Color,
 }
 
+/// The shape every app icon in the launcher and the dock sits on, so icons
+/// drawn as squares, circles and odd silhouettes read as one set.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AppIconShape {
+    /// A rounded square with soft, continuous corners.
+    #[default]
+    Squircle,
+    Circle,
+    /// Each icon as its theme draws it.
+    Original,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppearanceConfig {
@@ -605,11 +618,13 @@ pub struct AppearanceConfig {
     /// The launcher button's icon: a bundled Mandara icon name, `distro`
     /// (the distribution logo), an icon-theme name, or an image path.
     pub launcher_icon: String,
+    /// The plate every app icon sits on in the launcher and the dock.
+    pub app_icon_shape: AppIconShape,
 }
 
 impl Default for AppearanceConfig {
     fn default() -> Self {
-        Self { icon_theme: None, bar_icons: IconStyle::Monochrome, launcher_icons: IconStyle::Color, launcher_icon: "mandara".into() }
+        Self { icon_theme: None, bar_icons: IconStyle::Monochrome, launcher_icons: IconStyle::Color, launcher_icon: "mandara".into(), app_icon_shape: AppIconShape::Squircle }
     }
 }
 

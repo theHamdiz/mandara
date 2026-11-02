@@ -30,6 +30,7 @@ pub mod hub;
 pub mod icon_theme;
 pub mod icons;
 pub mod icon_raster;
+pub mod icon_shape;
 pub mod image_cache;
 pub mod installer_overlay;
 pub mod keepassxc_prompt;

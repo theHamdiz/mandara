@@ -7763,3 +7763,8 @@
 "on, off or toggle (default)" = "on, off 또는 toggle(기본값)"
 "which side bar" = "대상 가장자리 바"
 "{name} · changed" = "{name} · 변경됨"
+
+# ── App icon shape ──
+"App icon shape" = "앱 아이콘 모양"
+"Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "런처와 Dock의 모든 앱 아이콘을 같은 모양 위에 놓아 한 세트처럼 보이게 합니다. '테마 그대로'는 각 아이콘을 그려진 그대로 둡니다"
+"Theme's own" = "테마 그대로"

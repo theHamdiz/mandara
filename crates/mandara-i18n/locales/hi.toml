@@ -8012,3 +8012,8 @@
 "how many ahead (1 when left out; negative looks back)" = "कितने आगे (न देने पर 1; ऋणात्मक संख्या पीछे देखती है)"
 "how many days ahead (1 when left out; negative looks back)" = "कितने दिन आगे (न देने पर 1; ऋणात्मक संख्या पीछे देखती है)"
 "how many items ahead (1 when left out; negative looks back)" = "कितने आइटम आगे (न देने पर 1; ऋणात्मक संख्या पीछे देखती है)"
+
+# ── App icon shape ──
+"App icon shape" = "ऐप आइकन का आकार"
+"Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "लॉन्चर और डॉक का हर ऐप आइकन एक ही आकार पर रखा जाता है, ताकि सब एक सेट जैसे दिखें; “थीम के अनुसार” हर आइकन को वैसा ही रखता है जैसा वह बना है"
+"Theme's own" = "थीम के अनुसार"

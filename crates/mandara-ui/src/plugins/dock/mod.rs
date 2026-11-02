@@ -992,6 +992,8 @@ impl Render for DockView {
         let mut along = start + cfg.padding;
         let mut max_cross = thickness;
         let launcher_icon = config(cx).read(cx).get().appearance.launcher_icon.clone();
+        // App icons sit on one shape (`[appearance] app_icon_shape`), filled like the dock's own tiles.
+        let shape = crate::icon_shape::current(cx);
         let trash_full = cfg.trash && stacks::trash_count(cx) > 0;
         let media_cover = self.media_cover.clone();
         for (it, s) in list.iter().zip(&scales) {
@@ -1049,10 +1051,10 @@ impl Render for DockView {
                     Some(st) => stacks::stack_tile(st, size_px, &palette, cx),
                     None => glyph_tile("folder", size_px, &palette, accent),
                 },
-                Kind::Minimized(_) => minimized_tile(&it.icon_id, size_px, decode_px, &palette),
+                Kind::Minimized(_) => minimized_tile(&it.icon_id, shape, size_px, decode_px, &palette),
                 Kind::Installing(_) => install_tile(failed.as_ref(), size_px, &palette, accent),
                 Kind::Media => media_chip(&media_cover, rect.2.max(rect.3), rect.2.min(rect.3), &palette, window, cx),
-                _ => crate::plugins::workspaces::app_icon_at(&it.icon_id, size_px, decode_px, palette.on_surface, false, &palette),
+                _ => shaped_app_icon(&it.icon_id, shape, size_px, decode_px, &palette),
             };
             let key_down = it.key.clone();
             let key_up = it.key.clone();
@@ -1481,13 +1483,20 @@ fn trash_tile(full: bool, size_px: f32, palette: &MandaraPalette) -> gpui::AnyEl
     themed(names, "trash", size_px, palette, if full { palette.on_surface } else { palette.on_surface_variant })
 }
 
+/// An app's icon on the shared app-icon plate (`Original`: as the theme draws it).
+fn shaped_app_icon(app_id: &str, shape: mandara_config::AppIconShape, size_px: f32, decode_px: f32, palette: &MandaraPalette) -> gpui::AnyElement {
+    let (inner, inner_decode) = (crate::icon_shape::inner(shape, size_px), crate::icon_shape::inner(shape, decode_px));
+    let icon = crate::plugins::workspaces::app_icon_at(app_id, inner, inner_decode, palette.on_surface, false, palette);
+    crate::icon_shape::plate(shape, size_px, wash(WASH_SOFT, palette), icon)
+}
+
 /// A minimized window: its app's icon with a corner mark.
-fn minimized_tile(app_id: &str, size_px: f32, decode_px: f32, palette: &MandaraPalette) -> gpui::AnyElement {
+fn minimized_tile(app_id: &str, shape: mandara_config::AppIconShape, size_px: f32, decode_px: f32, palette: &MandaraPalette) -> gpui::AnyElement {
     let g = size_px * MINIMIZED_GLYPH_FRAC;
     div()
         .size(px(size_px))
         .relative()
-        .child(crate::plugins::workspaces::app_icon_at(app_id, size_px, decode_px, palette.on_surface, false, palette))
+        .child(shaped_app_icon(app_id, shape, size_px, decode_px, palette))
         .child(div().absolute().right(px(0.0)).bottom(px(0.0)).size(px(g)).rounded_full().bg(crate::shell::frame_color(palette).hsla()).flex().items_center().justify_center().child(icon("minus", g * GLYPH_FRAC * 1.4, palette.on_surface_variant)))
         .into_any_element()
 }

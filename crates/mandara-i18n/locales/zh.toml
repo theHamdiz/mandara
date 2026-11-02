@@ -8006,3 +8006,8 @@
 "how many ahead (1 when left out; negative looks back)" = "向前多少个（省略时为 1；负数表示向后）"
 "how many days ahead (1 when left out; negative looks back)" = "向前多少天（省略时为 1；负数表示向后）"
 "how many items ahead (1 when left out; negative looks back)" = "向前多少条（省略时为 1；负数表示向后）"
+
+# ── App icon shape ──
+"App icon shape" = "应用图标形状"
+"Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "启动器和停靠栏中的每个应用图标都放在同一形状上，看起来浑然一体；“保持主题原样”则让每个图标保持原本的样子"
+"Theme's own" = "保持主题原样"

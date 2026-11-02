@@ -8015,3 +8015,8 @@
 "how many ahead (1 when left out; negative looks back)" = "كم عنصرًا إلى الأمام (1 إن لم يُحدَّد؛ والقيمة السالبة تعود إلى الوراء)"
 "how many days ahead (1 when left out; negative looks back)" = "كم يومًا إلى الأمام (1 إن لم يُحدَّد؛ والقيمة السالبة تعود إلى الوراء)"
 "how many items ahead (1 when left out; negative looks back)" = "كم تذكيرًا إلى الأمام (1 إن لم يُحدَّد؛ والقيمة السالبة تعود إلى الوراء)"
+
+# ── App icon shape ──
+"App icon shape" = "شكل أيقونات التطبيقات"
+"Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "تجلس كل أيقونة تطبيق في المشغّل والمرسى على الشكل نفسه فتبدو مجموعة واحدة؛ «كما في السمة» يُبقي كل أيقونة كما رُسمت"
+"Theme's own" = "كما في السمة"

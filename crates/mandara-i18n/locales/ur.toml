@@ -7763,3 +7763,8 @@
 "on, off or toggle (default)" = "on، off یا toggle (ڈیفالٹ)"
 "which side bar" = "کون سا کنارے کا بار"
 "{name} · changed" = "{name} · تبدیل شدہ"
+
+# ── App icon shape ──
+"App icon shape" = "ایپ آئیکن کی شکل"
+"Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "لانچر اور ڈاک میں ہر ایپ آئیکن ایک ہی شکل پر رکھا جاتا ہے تاکہ سب ایک سیٹ لگیں؛ «تھیم کے مطابق» ہر آئیکن کو ویسا ہی رکھتا ہے جیسا وہ بنا ہے"
+"Theme's own" = "تھیم کے مطابق"

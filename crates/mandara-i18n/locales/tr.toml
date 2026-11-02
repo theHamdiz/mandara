@@ -8011,3 +8011,8 @@
 "how many ahead (1 when left out; negative looks back)" = "kaç tane ileri (verilmezse 1; negatif sayı geriye bakar)"
 "how many days ahead (1 when left out; negative looks back)" = "kaç gün ileri (verilmezse 1; negatif sayı geriye bakar)"
 "how many items ahead (1 when left out; negative looks back)" = "kaç öğe ileri (verilmezse 1; negatif sayı geriye bakar)"
+
+# ── App icon shape ──
+"App icon shape" = "Uygulama simgesi şekli"
+"Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "Başlatıcıdaki ve Dock'taki her uygulama simgesi aynı şeklin üzerinde durur, böylece bir set gibi görünürler; “Temadaki gibi” her simgeyi çizildiği gibi bırakır"
+"Theme's own" = "Temadaki gibi"

@@ -8012,3 +8012,8 @@
 "how many ahead (1 when left out; negative looks back)" = "いくつ先か（省略時は 1、負の数は前を見る）"
 "how many days ahead (1 when left out; negative looks back)" = "何日先か（省略時は 1、負の数は前を見る）"
 "how many items ahead (1 when left out; negative looks back)" = "いくつ先の項目か（省略時は 1、負の数は前を見る）"
+
+# ── App icon shape ──
+"App icon shape" = "アプリアイコンの形"
+"Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "ランチャーとドックのアプリアイコンをすべて同じ形の上に置き、統一感を出します。「テーマのまま」は各アイコンを描かれたままにします"
+"Theme's own" = "テーマのまま"

@@ -7764,3 +7764,8 @@
 "how many ahead (1 when left out; negative looks back)" = "berapa banyak ke depan (1 jika dikosongkan; angka negatif melihat ke belakang)"
 "how many days ahead (1 when left out; negative looks back)" = "berapa hari ke depan (1 jika dikosongkan; angka negatif melihat ke belakang)"
 "how many items ahead (1 when left out; negative looks back)" = "berapa item ke depan (1 jika dikosongkan; angka negatif melihat ke belakang)"
+
+# ── App icon shape ──
+"App icon shape" = "Bentuk ikon aplikasi"
+"Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "Setiap ikon aplikasi di peluncur dan dok diletakkan di atas bentuk yang sama agar terlihat serasi; “Sesuai tema” membiarkan setiap ikon seperti aslinya"
+"Theme's own" = "Sesuai tema"

@@ -8011,3 +8011,8 @@
 "how many ahead (1 when left out; negative looks back)" = "на сколько вперёд (1, если не указано; отрицательное число смотрит назад)"
 "how many days ahead (1 when left out; negative looks back)" = "на сколько дней вперёд (1, если не указано; отрицательное число смотрит назад)"
 "how many items ahead (1 when left out; negative looks back)" = "на сколько позиций вперёд (1, если не указано; отрицательное число смотрит назад)"
+
+# ── App icon shape ──
+"App icon shape" = "Форма значков приложений"
+"Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "Каждый значок приложения в лаунчере и доке лежит на одной форме, чтобы они смотрелись единым набором; «Как в теме» оставляет значки такими, как они нарисованы"
+"Theme's own" = "Как в теме"
