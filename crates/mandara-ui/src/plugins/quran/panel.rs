@@ -665,7 +665,7 @@ fn continue_hero(c: &Ctx) -> AnyElement {
     let juz = c.book.q.ayah(r).map(|a| a.juz).unwrap_or(1);
     let name = s.map(|s| s.short_name().to_string()).unwrap_or_default();
     let title: String = match s {
-        Some(s) if !arabic_ui() => format!("{} · {}", s.transliteration, s.meaning),
+        Some(s) if !arabic_ui() => s.title(),
         Some(s) => s.name.clone(),
         None => String::new(),
     };

@@ -434,7 +434,7 @@ fn banner(rc: &RowCx) -> AnyElement {
                         .gap(px(tokens::XS + 2.0))
                         .child(kicker(digits(tf("SURAH {n}", &[("n", &n)])), palette))
                         .child(div().font_family(rc.scripture.clone()).text_size(px(BANNER_NAME_PX)).line_height(gpui::relative(1.6)).text_color(g.hsla()).child(crate::bidi::paragraph(s.name.clone())))
-                        .when(!arabic_ui(), |el| el.child(div().text_size(px(text::TITLE)).font_weight(FontWeight::SEMIBOLD).child(format!("{} · {}", s.transliteration, s.meaning))))
+                        .when(!arabic_ui(), |el| el.child(div().text_size(px(text::TITLE)).font_weight(FontWeight::SEMIBOLD).child(s.title())))
                         .child(
                             div()
                                 .pt(px(tokens::XS))

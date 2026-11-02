@@ -91,6 +91,17 @@ pub struct Surah {
 }
 
 impl Surah {
+    /// "Al-Baqara · The Cow"; just the transliteration when the meaning only
+    /// repeats it ("Yaseen", "Taa-Haa").
+    pub fn title(&self) -> String {
+        let same = |a: &str, b: &str| a.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).eq(b.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase));
+        if self.meaning.trim().is_empty() || same(&self.transliteration, &self.meaning) {
+            self.transliteration.clone()
+        } else {
+            format!("{} · {}", self.transliteration, self.meaning)
+        }
+    }
+
     /// The Arabic name without the word "surah" (`البَقَرَةِ`).
     pub fn short_name(&self) -> &str {
         let name = self.name.trim();
@@ -610,6 +621,14 @@ pub fn parse_editions(json: &str) -> Result<Vec<EditionInfo>, String> {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    #[test]
+    fn a_surah_title_never_repeats_its_name() {
+        let s = |t: &str, m: &str| Surah { number: 1, name: String::new(), transliteration: t.into(), meaning: m.into(), revelation: Revelation::Makki, ayahs: 1, first: 1 };
+        assert_eq!(s("Al-Baqara", "The Cow").title(), "Al-Baqara · The Cow");
+        assert_eq!(s("Yaseen", "Yaseen").title(), "Yaseen");
+        assert_eq!(s("Taa-Haa", "Taa Haa").title(), "Taa-Haa");
+    }
 
     /// A tiny Qur'an in the API's shape: `counts[i]` ayahs in surah `i+1`
     /// (the real index is only checked by the full parser).
