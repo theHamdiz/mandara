@@ -34,8 +34,10 @@
 
 - **Notification cards** spring in from their corner on their own layer
   surface, close the gap smoothly when one leaves, pause while you hover them
-  and draw a thin countdown line. Only the cards take clicks; the rest of the
-  surface passes them through to your windows.
+  and draw a thin countdown line. Swipe a card sideways to send it away:
+  it leaves the screen but stays in the notification center (× dismisses it
+  for good). Only the cards take clicks; the rest of the surface passes them
+  through to your windows.
 - Opening the notification center (its panel or the sidebar tab) moves the
   cards on screen into it, and new notifications go straight into the list
   until you close it, so cards never cover the center.

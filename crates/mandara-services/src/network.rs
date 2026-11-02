@@ -27,6 +27,7 @@ const AP_FLAG_PRIVACY: u32 = 0x1;
 /// `NMState` bounds: CONNECTING (40) up to, not including, CONNECTED_LOCAL (50);
 /// CONNECTED_GLOBAL is 70.
 const NM_STATE_CONNECTING: u32 = 40;
+const NM_STATE_CONNECTED_LOCAL: u32 = 50;
 const NM_STATE_CONNECTED_GLOBAL: u32 = 70;
 /// Signals coalesced into one re-read (a scan fires dozens at once).
 const DEBOUNCE: Duration = Duration::from_millis(400);
@@ -181,6 +182,13 @@ async fn read_ap(conn: &Connection, path: &str) -> Result<AccessPoint> {
     })
 }
 
+/// What a machine with no primary connection shows: connecting only while a
+/// device really is connecting. "Connected locally / to the site" (a
+/// container or VM bridge, Wi-Fi switched off) is not connecting (#24).
+fn without_primary(nm_state: u32) -> Connectivity {
+    if (NM_STATE_CONNECTING..NM_STATE_CONNECTED_LOCAL).contains(&nm_state) { Connectivity::Connecting } else { Connectivity::Disconnected }
+}
+
 async fn read_state(conn: &Connection) -> Result<NetworkState> {
     let nm = proxy(conn, NM, NM_PATH, NM).await?;
     let nm_state: u32 = nm.get_property("State").await?;
@@ -201,8 +209,8 @@ async fn read_state(conn: &Connection) -> Result<NetworkState> {
             _ if nm_state >= NM_STATE_CONNECTED_GLOBAL => Connectivity::Ethernet,
             _ => Connectivity::Disconnected,
         };
-    } else if (NM_STATE_CONNECTING..NM_STATE_CONNECTED_GLOBAL).contains(&nm_state) {
-        state.connectivity = Connectivity::Connecting;
+    } else {
+        state.connectivity = without_primary(nm_state);
     }
 
     let active: Vec<OwnedObjectPath> = nm.get_property("ActiveConnections").await.unwrap_or_default();
@@ -319,5 +327,15 @@ mod tests {
         assert_eq!(strength_tier(5), 0);
         assert_eq!(strength_tier(65), 3);
         assert_eq!(strength_tier(100), 4);
+    }
+
+    #[test]
+    fn only_a_connecting_device_reads_as_connecting() {
+        assert_eq!(without_primary(NM_STATE_CONNECTING), Connectivity::Connecting);
+        // Wi-Fi off with a container bridge up: connected locally / to the site.
+        assert_eq!(without_primary(NM_STATE_CONNECTED_LOCAL), Connectivity::Disconnected);
+        assert_eq!(without_primary(60), Connectivity::Disconnected);
+        assert_eq!(without_primary(20), Connectivity::Disconnected, "disconnected");
+        assert_eq!(without_primary(30), Connectivity::Disconnected, "disconnecting");
     }
 }

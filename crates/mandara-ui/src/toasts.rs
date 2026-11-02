@@ -16,7 +16,8 @@ use std::time::{Duration, Instant};
 
 use gpui::layer_shell::{Anchor, KeyboardInteractivity, Layer};
 use gpui::{
-    App, AppContext as _, BoxShadow, Context, Entity, Global, InteractiveElement, IntoElement, ParentElement, Render, StatefulInteractiveElement as _, Styled, Task, Window, WindowHandle, canvas, div, point,
+    App, AppContext as _, BoxShadow, Context, DispatchPhase, Entity, Global, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Render,
+    StatefulInteractiveElement as _, Styled, Task, Window, WindowHandle, canvas, div, point,
     prelude::FluentBuilder as _, px,
 };
 use mandara_config::alerts::{NotificationsConfig, ToastPosition};
@@ -65,6 +66,14 @@ const SIZE_TOLERANCE_PX: f32 = 2.0;
 const WAKE_SLACK: Duration = Duration::from_millis(30);
 const PRESENCE_SPRING: SpringConfig = SpringConfig::new(320.0, 26.0, 1.0);
 const SLOT_SPRING: SpringConfig = SpringConfig::new(300.0, 28.0, 1.0);
+/// Swiping a toast away: the pointer travels this far before the toast
+/// follows it, and past this share of its width the toast flies off (hidden,
+/// still in the notification list); a shorter swipe springs back.
+const SWIPE_SLOP_PX: f32 = 6.0;
+const SWIPE_DISMISS_SHARE: f32 = 0.35;
+/// How much a toast fades over a swipe as long as its width.
+const SWIPE_FADE: f32 = 0.7;
+const SWIPE_SPRING: SpringConfig = SpringConfig::new(420.0, 34.0, 1.0);
 
 /// The focused window's monitor: cheap enough for every hub update (the
 /// surface key is rebuilt on each one while toasts are up).
@@ -217,11 +226,68 @@ struct Item {
     presence: SpringValue<f32>,
     /// Offset from the stack's anchored edge.
     slot: SpringValue<f32>,
+    /// Sideways offset while (or after) it is swiped.
+    swipe: SpringValue<f32>,
+    /// The left button is down on it (a click or the start of a swipe).
+    drag: Option<Drag>,
     leaving: bool,
     expired: bool,
 }
 
+/// A press on a toast that may become a swipe.
+#[derive(Clone, Copy)]
+struct Drag {
+    /// Pointer x at the press, surface px.
+    from: f32,
+    /// It moved past the slop: a swipe, not a click.
+    moved: bool,
+}
+
 impl Item {
+    fn new(n: Notification, now: Instant, reduce: bool) -> Self {
+        let mut presence = SpringValue::new(0.0, PRESENCE_SPRING);
+        presence.set_instant(reduce);
+        presence.set_target(1.0);
+        let mut slot = SpringValue::new(0.0, SLOT_SPRING);
+        slot.set_instant(reduce);
+        let mut swipe = SpringValue::new(0.0, SWIPE_SPRING);
+        swipe.set_instant(reduce);
+        Item { n, first_shown: now, paused: Duration::ZERO, hovered_since: None, presence, slot, swipe, drag: None, leaving: false, expired: false }
+    }
+
+    /// The pointer left: the countdown runs again.
+    fn resume(&mut self, now: Instant) {
+        if let Some(since) = self.hovered_since.take() {
+            self.paused += now.saturating_duration_since(since);
+        }
+    }
+
+    /// The pointer moved to `x` with the button down: past the slop the toast
+    /// follows it 1:1. Returns whether anything changed.
+    fn drag_to(&mut self, x: f32) -> bool {
+        let Some(drag) = self.drag.as_mut() else { return false };
+        let dx = x - drag.from;
+        if !drag.moved && dx.abs() < SWIPE_SLOP_PX {
+            return false;
+        }
+        drag.moved = true;
+        self.swipe.snap_to(dx);
+        true
+    }
+
+    /// The button came up. A swipe past `width × SWIPE_DISMISS_SHARE` flies
+    /// off (returns `Some(true)`: hide it), a shorter one springs back
+    /// (`Some(false)`); a plain click returns `None` and stays a click.
+    fn release(&mut self, width: f32) -> Option<bool> {
+        let drag = self.drag.take()?;
+        if !drag.moved {
+            return None;
+        }
+        let dx = self.swipe.value();
+        let away = dx.abs() > width * SWIPE_DISMISS_SHARE;
+        self.swipe.set_target(if away { dx.signum() * (width + SHADOW_ROOM_PX * 2.0) } else { 0.0 });
+        Some(away)
+    }
     /// Countdown progress `0..=1` at `now` (`None` for sticky toasts).
     fn elapsed_fraction(&self, now: Instant) -> Option<f32> {
         if self.n.display_ms == 0 {
@@ -280,12 +346,7 @@ impl ToastView {
         }
         for n in popups.iter().rev() {
             if !self.items.iter().any(|i| i.n.id == n.id) {
-                let mut presence = SpringValue::new(0.0, PRESENCE_SPRING);
-                presence.set_instant(reduce);
-                presence.set_target(1.0);
-                let mut slot = SpringValue::new(0.0, SLOT_SPRING);
-                slot.set_instant(reduce);
-                self.items.insert(0, Item { n: n.clone(), first_shown: now, paused: Duration::ZERO, hovered_since: None, presence, slot, leaving: false, expired: false });
+                self.items.insert(0, Item::new(n.clone(), now, reduce));
             }
         }
         // Newest first, leaving ones keep their place.
@@ -302,6 +363,14 @@ impl Render for ToastView {
         let now = Instant::now();
         let popups: Vec<Notification> = crate::hub::hub(cx).read(cx).notifications.items.iter().filter(|n| n.popup).take(ncfg.max_visible.max(1)).cloned().collect();
         self.reconcile(&popups, reduce, now);
+
+        // The pointer is gone without a hover-out (clicking a toast raises
+        // its app's window): the countdown runs again (#24).
+        if !window.is_window_hovered() {
+            for item in self.items.iter_mut().filter(|i| i.drag.is_none()) {
+                item.resume(now);
+            }
+        }
 
         // Expire due toasts (once each).
         for item in &mut self.items {
@@ -343,6 +412,7 @@ impl Render for ToastView {
         for item in &mut self.items {
             animating |= item.presence.step(dt);
             animating |= item.slot.step(dt);
+            animating |= item.swipe.step(dt);
         }
         self.items.retain(|i| !(i.leaving && i.presence.value() <= GONE && !i.presence.is_animating()));
         let any_timed = ncfg.progress_bar && self.items.iter().any(|i| !i.leaving && i.n.display_ms > 0);
@@ -392,14 +462,27 @@ impl Render for ToastView {
             let progress = ncfg.progress_bar.then(|| item.elapsed_fraction(now)).flatten();
             let card = notification_card_styled(&item.n, &palette, &style);
             let hover_view = this.clone();
+            let press_view = this.clone();
+            let swipe = item.swipe.value();
+            let swipe_fade = 1.0 - (swipe.abs() / w).min(1.0) * SWIPE_FADE;
             root = root.child(
                 div()
                     .id(("toast", id as usize))
                     .absolute()
-                    .left(px(x0 + dx))
+                    .left(px(x0 + dx + swipe))
                     .top(px(y + dy))
                     .w(px(w))
-                    .opacity(p)
+                    .opacity(p * swipe_fade)
+                    // A press may become a swipe (followed by the listeners below).
+                    .on_mouse_down(MouseButton::Left, move |e: &MouseDownEvent, _, cx| {
+                        let x = f32::from(e.position.x);
+                        let _ = press_view.update(cx, |v, cx| {
+                            if let Some(item) = v.items.iter_mut().find(|i| i.n.id == id && !i.leaving) {
+                                item.drag = Some(Drag { from: x - item.swipe.value(), moved: false });
+                                cx.notify();
+                            }
+                        });
+                    })
                     .occlude()
                     // The card's hover fill, image and progress bar stay inside the corners.
                     .clip_rounded()
@@ -413,7 +496,12 @@ impl Render for ToastView {
                         inset: false,
                     }])
                     .when(ncfg.pause_on_hover, |el| {
-                        el.on_hover(move |hovered: &bool, _, cx| {
+                        el.on_hover(move |hovered: &bool, window, cx| {
+                            // GPUI re-tests hover on repaint against the last
+                            // pointer position, stale once the pointer left.
+                            if *hovered && !window.is_window_hovered() {
+                                return;
+                            }
                             let hovered = *hovered;
                             let _ = hover_view.update(cx, |v, cx| {
                                 let now = Instant::now();
@@ -465,6 +553,55 @@ impl Render for ToastView {
                     .when(!item.leaving, |el| el.child(self.mask.region())),
             );
         }
+        // The button is down on a toast: follow the pointer wherever it goes
+        // (the surface keeps it until release) and settle the swipe then.
+        if let Some(id) = self.items.iter().find(|i| i.drag.is_some()).map(|i| i.n.id) {
+            let (follow, settle) = (this.clone(), this.clone());
+            root = root.child(
+                canvas(
+                    |_, _, _| {},
+                    move |_, _, window, _| {
+                        window.on_mouse_event(move |e: &MouseMoveEvent, phase, _, cx| {
+                            if phase != DispatchPhase::Bubble {
+                                return;
+                            }
+                            let x = f32::from(e.position.x);
+                            let _ = follow.update(cx, |v, cx| {
+                                if v.items.iter_mut().find(|i| i.n.id == id).is_some_and(|i| i.drag_to(x)) {
+                                    cx.notify();
+                                }
+                            });
+                        });
+                        window.on_mouse_event(move |e: &MouseUpEvent, phase, _, cx| {
+                            if phase != DispatchPhase::Capture || e.button != MouseButton::Left {
+                                return;
+                            }
+                            let swiped = settle
+                                .update(cx, |v, cx| {
+                                    let item = v.items.iter_mut().find(|i| i.n.id == id);
+                                    let outcome = item.and_then(|i| {
+                                        let away = i.release(w);
+                                        i.expired |= away == Some(true);
+                                        away
+                                    });
+                                    if outcome == Some(true) {
+                                        crate::plugins::notifications::send(cx, NotificationCommand::Expire(id));
+                                    }
+                                    cx.notify();
+                                    outcome.is_some()
+                                })
+                                .unwrap_or(false);
+                            // A swipe is not a click on the toast.
+                            if swiped {
+                                cx.stop_propagation();
+                            }
+                        });
+                    },
+                )
+                .absolute()
+                .size_full(),
+            );
+        }
         self.heights.borrow_mut().retain(|id, _| self.items.iter().any(|i| i.n.id == *id));
 
         // Wake once for the next expiry (re-armed only when it changes).
@@ -493,16 +630,41 @@ mod tests {
     use super::*;
 
     fn item(display_ms: u32, shown: Instant) -> Item {
-        Item {
-            n: Notification { id: 1, display_ms, ..Default::default() },
-            first_shown: shown,
-            paused: Duration::ZERO,
-            hovered_since: None,
-            presence: SpringValue::new(1.0, PRESENCE_SPRING),
-            slot: SpringValue::new(0.0, SLOT_SPRING),
-            leaving: false,
-            expired: false,
-        }
+        Item::new(Notification { id: 1, display_ms, ..Default::default() }, shown, true)
+    }
+
+    /// #24: clicking a toast raises its app, the pointer leaves without a
+    /// hover-out, and the countdown must run again.
+    #[test]
+    fn a_pause_ends_when_the_pointer_is_gone() {
+        let t0 = Instant::now();
+        let mut i = item(4000, t0);
+        i.hovered_since = Some(t0 + Duration::from_secs(1));
+        let t2 = t0 + Duration::from_secs(2);
+        i.resume(t2);
+        assert!(i.hovered_since.is_none());
+        assert_eq!(i.due(t2), Some(t2 + Duration::from_secs(3)), "the second hovered doesn't count");
+    }
+
+    #[test]
+    fn a_swipe_past_a_third_hides_and_a_short_one_springs_back() {
+        let width = 360.0;
+        let mut i = item(4000, Instant::now());
+        // A click stays a click.
+        i.drag = Some(Drag { from: 100.0, moved: false });
+        assert!(!i.drag_to(100.0 + SWIPE_SLOP_PX / 2.0));
+        assert_eq!(i.release(width), None);
+        // A short swipe springs back.
+        i.drag = Some(Drag { from: 100.0, moved: false });
+        assert!(i.drag_to(160.0));
+        assert_eq!(i.swipe.value(), 60.0, "follows the pointer 1:1");
+        assert_eq!(i.release(width), Some(false));
+        assert_eq!(i.swipe.target(), 0.0);
+        // Past the threshold, either way, it flies off that way.
+        i.drag = Some(Drag { from: 100.0, moved: false });
+        assert!(i.drag_to(100.0 - width * 0.5));
+        assert_eq!(i.release(width), Some(true));
+        assert!(i.swipe.target() < -width);
     }
 
     #[test]

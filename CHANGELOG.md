@@ -22,6 +22,9 @@ About → What's new shows it too.
   interface, Studio and the login screen, with Persian and Urdu laid out
   right to left. Pick yours in Studio → General → Language, or leave it on
   System to follow your desktop.
+- **Swipe a notification away.** Drag a notification card sideways and let
+  go: it leaves the screen but stays in the notification center. The × still
+  dismisses it for good. ([#24](https://github.com/theHamdiz/mandara/issues/24))
 
 ### Changed
 
@@ -39,6 +42,15 @@ About → What's new shows it too.
 
 ### Fixed
 
+- **Wi-Fi switched off no longer says "Connecting…".** With Wi-Fi off and a
+  container or virtual-machine network up, the Network card claimed it was
+  connecting. It now reads "Wi-Fi is off".
+  ([#24](https://github.com/theHamdiz/mandara/issues/24))
+- **Notifications don't get stuck after a click.** Clicking a notification
+  usually brings its app forward, and the card thought the pointer was still
+  on it, so its countdown froze until you pressed ×. It now carries on as
+  soon as the pointer is gone.
+  ([#24](https://github.com/theHamdiz/mandara/issues/24))
 - **The Screenshot panel gets out of the way at once.** Clicking Region,
   Window, Screen or Record region in the bar's Screenshot panel used to
   fold the panel away slowly, so it lingered on screen and could end up in
