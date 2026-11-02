@@ -68,7 +68,7 @@ pub(crate) const PLUGIN_CATEGORIES: &[(&str, &[&str])] = &[
     (tk("Look & feel"), &["wallpaper", "wallpaper-depth", "wallpaper-generator", "wallhaven", "cursors"]),
     (tk("Desktop widgets"), &["desktop-clocks", "desktop-monitor", "desktop-decorations", "desktop-visualizers", "desktop-now-playing", "desktop-calendar", "desktop-weather", "desktop-world-clock", "desktop-countdown", "desktop-productivity", "desktop-sky", "desktop-identity", "desktop-fun", "desktop-info"]),
     (tk("Productivity"), &["todo", "notes", "pomodoro", "authenticator", "screen-time", "keybinds", "breaks", "presentation"]),
-    (tk("Everyday info"), &["weather", "prayer-times", "world-clock", "net-speed"]),
+    (tk("Everyday info"), &["weather", "prayer-times", "jannah", "world-clock", "net-speed"]),
     (tk("Third-party"), &[]),
 ];
 
@@ -420,6 +420,7 @@ pub(crate) fn plugin_icon(id: &str) -> &'static str {
         "pomodoro" => "timer",
         "weather" => "cloud-sun",
         "prayer-times" => "crescent",
+        "jannah" => "arch",
         "world-clock" => "globe",
         "net-speed" => "gauge",
         "authenticator" => "shield",

@@ -104,6 +104,9 @@ pub const FONTS: &[Font] = &[
     Font { family: "Cairo", file: "Cairo[slnt,wght].ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/Cairo%5Bslnt,wght%5D.ttf", size: 599_548 },
     Font { family: "Alexandria", file: "Alexandria[wght].ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/alexandria/Alexandria%5Bwght%5D.ttf", size: 332_488 },
     Font { family: "JetBrains Mono", file: "JetBrainsMono[wght].ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf", size: 187_208 },
+    // The Qur'anic Naskh for Jannah's verses and hadith.
+    Font { family: "Amiri Quran", file: "AmiriQuran-Regular.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/amiriquran/AmiriQuran-Regular.ttf", size: 136_920 },
+    Font { family: "Amiri", file: "Amiri-Regular.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Regular.ttf", size: 431_116 },
 ];
 
 pub fn fonts_dir() -> PathBuf {

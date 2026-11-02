@@ -143,6 +143,8 @@ pub fn family(fonts: &FontNames, role: FontRole) -> &str {
         FontRole::Ui => &fonts.ui,
         FontRole::Arabic => &fonts.arabic,
         FontRole::Mono => &fonts.mono,
+        FontRole::Scripture if fonts.scripture.is_empty() => &fonts.arabic,
+        FontRole::Scripture => &fonts.scripture,
         FontRole::Custom if fonts.custom.is_empty() => &fonts.widgets,
         FontRole::Custom => &fonts.custom,
     }

@@ -45,6 +45,8 @@ pub enum Action {
     Panel(String),
     /// Fetch the widget's feed again now (rates, GitHub, AI usage, games).
     Refresh,
+    /// Mark today's Jannah step done.
+    JannahStep,
 }
 
 impl fmt::Display for Action {
@@ -68,6 +70,7 @@ impl fmt::Display for Action {
             Action::Next => f.write_str("next"),
             Action::Panel(p) => write!(f, "panel:{p}"),
             Action::Refresh => f.write_str("refresh"),
+            Action::JannahStep => f.write_str("jannah-step"),
         }
     }
 }
@@ -103,6 +106,7 @@ impl std::str::FromStr for Action {
             "next" => Action::Next,
             "panel" => Action::Panel(need(arg)?),
             "refresh" => Action::Refresh,
+            "jannah-step" => Action::JannahStep,
             other => return Err(format!("unknown action {other:?}")),
         })
     }
@@ -133,6 +137,7 @@ mod tests {
             Action::Next,
             Action::Panel("prayer".into()),
             Action::Refresh,
+            Action::JannahStep,
         ];
         for a in all {
             assert_eq!(a.to_string().parse::<Action>(), Ok(a.clone()), "{a}");

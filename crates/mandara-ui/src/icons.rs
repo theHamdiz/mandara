@@ -168,6 +168,12 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "workflow" => r#"<rect x="3" y="3.5" width="7.5" height="7.5" rx="2.2"/><rect x="13.5" y="13" width="7.5" height="7.5" rx="2.2"/><path d="M6.75 11v2.5a3.25 3.25 0 0 0 3.25 3.25h3.5"/>"#.into(),
         // A beetle: crashes and bugs.
         "bug" => r#"<rect x="7" y="8" width="10" height="12.5" rx="5"/><path d="M9.5 8a2.5 2.5 0 0 1 5 0"/><path d="M12 11.5v9"/><path d="M7 13H3.5M20.5 13H17M7.4 17l-2.9 2M16.6 17l2.9 2M7.6 9.8L5 7.5M16.4 9.8L19 7.5"/>"#.into(),
+        // A pointed (mihrab) arch with an inner doorway: Jannah.
+        "arch" => r#"<path d="M5 21V11.6c0-3.9 3-6.8 7-8.6 4 1.8 7 4.7 7 8.6V21"/><path d="M3.5 21h17"/><path d="M9.5 21v-4.6c0-1.3 1-2.4 2.5-3.3 1.5.9 2.5 2 2.5 3.3V21"/>"#.into(),
+        // An open book: reading (the Qur'an tab).
+        "book" => r#"<path d="M12 6.5C10.2 5.1 7.4 4.5 4 4.5V18c3.4 0 6.2.6 8 2 1.8-1.4 4.6-2 8-2V4.5c-3.4 0-6.2.6-8 2z"/><path d="M12 6.5V20"/>"#.into(),
+        // An "i" in a circle: more about something.
+        "info" => r#"<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.6h.01"/>"#.into(),
         _ => return None,
     })
 }
@@ -177,6 +183,10 @@ pub struct MandaraAssets;
 
 impl AssetSource for MandaraAssets {
     fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
+        // Plugin artwork (monochrome masks, tinted like icons).
+        if let Some(name) = path.strip_prefix("art/").and_then(|p| p.strip_suffix(".svg")) {
+            return Ok(crate::plugins::jannah::art::asset(name).map(|svg| Cow::Owned(svg.into_bytes())));
+        }
         let Some(name) = path.strip_prefix("icons/").and_then(|p| p.strip_suffix(".svg")) else {
             return Ok(None);
         };
@@ -206,6 +216,7 @@ pub const ICON_NAMES: &[&str] = &[
     "eyedropper", "waves", "arrow-down", "arrow-up", "shield", "copy", "clock", "flame",
     "user", "user-plus", "key", "tiles", "eye", "eye-off", "pencil", "sparkles", "brush", "dice", "release-notes", "home", "palette",
     "git-branch", "workflow", "bug",
+    "arch", "book", "info",
 ];
 
 /// An icon element tinted with `color`.

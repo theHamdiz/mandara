@@ -77,6 +77,9 @@ pub fn perform(widget: &str, action: &Action, cx: &mut App) -> Result<(), String
         }
         Action::Panel(id) => open_panel(id, cx),
         Action::Refresh => crate::desktop_feeds::refresh(cx),
+        Action::JannahStep => {
+            crate::plugins::jannah::mark_step_done(cx);
+        }
     }
     Ok(())
 }

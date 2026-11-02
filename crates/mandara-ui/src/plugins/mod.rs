@@ -54,6 +54,7 @@ pub mod screen_pick;
 pub mod color_picker;
 pub mod authenticator;
 pub mod soundscapes;
+pub mod jannah;
 pub mod system_admin;
 pub mod ports;
 pub mod git_repos;
@@ -235,6 +236,7 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     local_ai::register(registry);
     uptime::register(registry);
     share::register(registry);
+    jannah::register(registry);
     crate::osd::register(registry);
     crate::corners::register(registry);
     crate::night_light::register(registry);
