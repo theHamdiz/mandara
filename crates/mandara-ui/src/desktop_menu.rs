@@ -89,14 +89,19 @@ const SCREENSHOT_SETTLE: Duration = Duration::from_millis(160);
 // ── Model ────────────────────────────────────────────────────────────────
 
 /// A widget the menus can add: a desktop widget kind of the plugin
-/// registry, by key (`plugin/id`, [`mandara_plugins::DesktopWidgetType::key`]).
+/// registry, by key (`plugin/id`, [`mandara_plugins::DesktopWidgetType::key`],
+/// or `plugin/style` for one style of a family).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NewWidget(pub String);
 
 impl NewWidget {
     /// The widgets this kind adds (none when its plugin went away).
     pub fn make(&self, cx: &App) -> Vec<mandara_config::desktop_widgets::DesktopWidget> {
-        cx.try_global::<mandara_plugins::PluginRegistry>().and_then(|r| r.desktop_widget_type(&self.0)).map(|t| (t.make)()).unwrap_or_default()
+        let made = cx.try_global::<mandara_plugins::PluginRegistry>().and_then(|r| r.make_desktop_widgets(&self.0));
+        if made.is_none() {
+            tracing::warn!(kind = %self.0, "no desktop widget kind or style by this id; nothing added");
+        }
+        made.unwrap_or_default()
     }
 }
 

@@ -432,6 +432,23 @@ impl PluginInstance {
 /// Makes the widgets a [`DesktopWidgetType`] adds.
 pub type MakeWidgets = Rc<dyn Fn() -> Vec<mandara_config::desktop_widgets::DesktopWidget>>;
 
+/// One look of a widget family ([`DesktopWidgetType::styles`]).
+#[derive(Clone)]
+pub struct DesktopWidgetStyle {
+    /// Unique within the plugin, kinds' ids included (`cookie`).
+    pub id: String,
+    /// English, translated like the kind's name.
+    pub name: String,
+    /// The widgets it adds.
+    pub make: MakeWidgets,
+}
+
+impl DesktopWidgetStyle {
+    pub fn new(id: &str, name: &str, make: impl Fn() -> Vec<mandara_config::desktop_widgets::DesktopWidget> + 'static) -> Self {
+        Self { id: id.into(), name: name.into(), make: Rc::new(make) }
+    }
+}
+
 /// A kind of desktop widget a plugin offers: an entry of Studio's gallery
 /// and (with `menu`) of the desktop's Add widget menu.
 #[derive(Clone)]
@@ -450,11 +467,22 @@ pub struct DesktopWidgetType {
     pub menu: bool,
     /// The widgets it adds (usually one), each placed by the caller.
     pub make: MakeWidgets,
+    /// A family's looks, the first one what `make` adds (empty: one look).
+    /// Each is also reachable by its own id (`plugin/style`), so the ids of
+    /// kinds folded into a family keep working.
+    pub styles: Vec<DesktopWidgetStyle>,
 }
 
 impl DesktopWidgetType {
     pub fn new(plugin: &str, id: &str, name: &str, description: &str, icon: &str, make: impl Fn() -> Vec<mandara_config::desktop_widgets::DesktopWidget> + 'static) -> Self {
-        Self { plugin: plugin.into(), id: id.into(), name: name.into(), description: description.into(), icon: icon.into(), menu: false, make: Rc::new(make) }
+        Self { plugin: plugin.into(), id: id.into(), name: name.into(), description: description.into(), icon: icon.into(), menu: false, make: Rc::new(make), styles: Vec::new() }
+    }
+
+    /// A family of looks: one gallery entry that adds the first of
+    /// `styles`; a placed widget can switch to any of them.
+    pub fn family(plugin: &str, id: &str, name: &str, description: &str, icon: &str, styles: Vec<DesktopWidgetStyle>) -> Self {
+        let make = styles.first().map_or_else(|| -> MakeWidgets { Rc::new(Vec::new) }, |s| s.make.clone());
+        Self { plugin: plugin.into(), id: id.into(), name: name.into(), description: description.into(), icon: icon.into(), menu: false, make, styles }
     }
 
     /// Also in the desktop's Add widget menu.
@@ -535,6 +563,16 @@ impl PluginRegistry {
     /// The desktop widget kind with `key` (`plugin/id`).
     pub fn desktop_widget_type(&self, key: &str) -> Option<&DesktopWidgetType> {
         self.widgets.iter().find(|w| w.key() == key)
+    }
+
+    /// The widgets `key` adds: a kind (`plugin/id`), or one style of a
+    /// family (`plugin/style`, e.g. the id of a kind folded into it).
+    pub fn make_desktop_widgets(&self, key: &str) -> Option<Vec<mandara_config::desktop_widgets::DesktopWidget>> {
+        if let Some(t) = self.desktop_widget_type(key) {
+            return Some((t.make)());
+        }
+        let (plugin, id) = key.split_once('/')?;
+        self.widgets.iter().filter(|w| w.plugin == plugin).flat_map(|w| &w.styles).find(|s| s.id == id).map(|s| (s.make)())
     }
 
     /// Registers a command contributed by `owner`.

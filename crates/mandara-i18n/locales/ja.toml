@@ -7881,3 +7881,13 @@
 # ── Desktop widgets per display ──
 "Only on this display" = "このディスプレイのみ"
 "Show on every display" = "すべてのディスプレイに表示"
+
+# ── Desktop widget families and styles (#23) ──
+"Digital" = "デジタル"
+"Classic analog" = "クラシックなアナログ"
+"Framed HUD" = "枠付き HUD"
+"Day ring" = "一日のリング"
+"Wavy week" = "波打つ一週間"
+"Month bar" = "今月のバー"
+"Divided text" = "区切りテキスト"
+"{name} · changed" = "{name} · 変更あり"

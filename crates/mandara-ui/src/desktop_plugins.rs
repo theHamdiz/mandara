@@ -22,7 +22,7 @@ use mandara_config::desktop_widgets::{
     ProgressStyle, ProgressWidget, SecondsStyle, ShadowKind, TemplateLine, Tone, Look, Chrome, MediaLayout, MediaWidget, MonitorRow, FetchWidget, FetchLayout, ScreenTimeWidget, PrayerWidget, PrayerLayout, JannahLayout, HadithLayout, QuranLayout, SearchWidget, GlanceWidget, GithubWidget, CurrencyWidget, AiUsageWidget, GamesWidget, ProfileWidget, ShortcutsWidget, TileLayout, TogglesWidget, SlidersWidget, PaletteWidget, PetWidget, BubblesWidget, PhotoWidget, StickerWidget, DateLayout, DateWidget, SkyLayout, SkyWidget, TodoWidget, NoteWidget, NoteSheet, PomodoroWidget, QuoteWidget, NotebookWidget, VisualizerShape, WeatherLayout, WeatherWidget, WidgetKind, WorldClockWidget, plugin_ids as ids,
 };
 use mandara_i18n::tk;
-use mandara_plugins::{DesktopWidgetType, PluginInstance, PluginManifest, PluginRegistry};
+use mandara_plugins::{DesktopWidgetStyle, DesktopWidgetType, PluginInstance, PluginManifest, PluginRegistry};
 
 /// A new radial visualizer: inner diameter and spike length, reference px.
 const RADIAL_DIAMETER_PX: f32 = 260.0;
@@ -183,49 +183,67 @@ fn plugin(r: &mut PluginRegistry, id: &str, name: &'static str, description: &'s
 /// Registers the desktop widget plugins and the kinds they offer.
 pub fn register(r: &mut PluginRegistry) {
     plugin(r, ids::CLOCKS, tk("Desktop clocks"), tk("Hero clocks on the desktop: analog and cookie dials, stacked cards, dot matrix, digit boxes, a slanted HUD, your own text lines, orbits, day and year progress, and the depth clock behind the wallpaper's subject"));
-    for face in ClockFace::ALL.into_iter().filter(|f| f.depth_style().is_none() || *f == ClockFace::Stacked) {
-        let mut kind = DesktopWidgetType::new(ids::CLOCKS, face.id(), face_label(face), tk("A clock on the desktop"), "clock", move || one(WidgetKind::Clock(clock_preset(face))));
-        if matches!(face, ClockFace::Minimal | ClockFace::Analog) {
-            kind.name = if face == ClockFace::Analog { tk("Analog clock") } else { tk("Clock") }.into();
-            kind = kind.in_menu();
-        }
-        r.desktop_widget(kind);
-    }
-    for (id, name, description, make) in CLOCK_LOOKS {
-        r.desktop_widget(DesktopWidgetType::new(ids::CLOCKS, id, name, description, "clock", move || one(WidgetKind::Clock(make()))));
-    }
-    for (id, name, period, style) in [
-        ("day-ring", tk("Day progress"), Period::Day, ProgressStyle::Ring),
-        ("week-wave", tk("Week progress"), Period::Week, ProgressStyle::WavyRing),
-        ("month-bar", tk("Month progress"), Period::Month, ProgressStyle::Bar),
+    // One entry per family; a placed widget switches between the family's
+    // styles in Studio. Each family's id is its first style's (and each
+    // style's id the kind it used to be), so the old ids still add the same
+    // widgets ([`PluginRegistry::make_desktop_widgets`]).
+    let face = |face: ClockFace, name: &'static str| DesktopWidgetStyle::new(face.id(), name, move || one(WidgetKind::Clock(clock_preset(face))));
+    let look = |id: &str, name: &'static str, make: fn() -> ClockWidget| DesktopWidgetStyle::new(id, name, move || one(WidgetKind::Clock(make())));
+    let single = |f: ClockFace| DesktopWidgetType::new(ids::CLOCKS, f.id(), face_label(f), tk("A clock on the desktop"), "clock", move || one(WidgetKind::Clock(clock_preset(f))));
+    let family = |name: &'static str, styles: Vec<DesktopWidgetStyle>| {
+        let id = styles.first().map(|s| s.id.clone()).unwrap_or_default();
+        DesktopWidgetType::family(ids::CLOCKS, &id, name, tk("A clock on the desktop"), "clock", styles)
+    };
+    // The depth clock behind the wallpaper's subject (its other faces are
+    // its own styles in Studio).
+    r.desktop_widget(single(ClockFace::Stacked));
+    r.desktop_widget(family(tk("Stacked"), vec![face(ClockFace::Superscript, tk("Superscript")), face(ClockFace::Stack, tk("Stacked card")), look("framed-hud", tk("Framed HUD"), framed_hud_clock)]));
+    r.desktop_widget(single(ClockFace::Headline));
+    r.desktop_widget(single(ClockFace::DayBlock));
+    r.desktop_widget(
+        family(tk("Analog"), vec![face(ClockFace::Analog, tk("Classic analog")), look("cookie", tk("Cookie"), cookie_clock), face(ClockFace::Orbit, tk("Orbit")), face(ClockFace::Numerals, tk("Hands over numerals"))]).in_menu(),
+    );
+    r.desktop_widget(
+        family(
+            tk("Digital"),
+            vec![
+                face(ClockFace::Minimal, tk("Clock")),
+                face(ClockFace::Ring, tk("Ring")),
+                face(ClockFace::Shape, tk("Time in a shape")),
+                face(ClockFace::DotMatrix, tk("Dot matrix")),
+                face(ClockFace::Pixel, tk("Pixel")),
+                face(ClockFace::Boxes, tk("Digit boxes")),
+                face(ClockFace::Hud, tk("Slanted HUD")),
+            ],
+        )
+        .in_menu(),
+    );
+    let progress = [
+        ("day-ring", tk("Day ring"), Period::Day, ProgressStyle::Ring),
+        ("week-wave", tk("Wavy week"), Period::Week, ProgressStyle::WavyRing),
+        ("month-bar", tk("Month bar"), Period::Month, ProgressStyle::Bar),
         ("year-dots", tk("Year in dots"), Period::Year, ProgressStyle::Dots),
-    ] {
-        let kind = DesktopWidgetType::new(ids::CLOCKS, id, name, tk("How much of it has passed"), "gauge", move || one(WidgetKind::Progress(ProgressWidget { period, style, ..ProgressWidget::default() })));
-        r.desktop_widget(if period == Period::Day { kind.in_menu() } else { kind });
-    }
+    ]
+    .map(|(id, name, period, style)| DesktopWidgetStyle::new(id, name, move || one(WidgetKind::Progress(ProgressWidget { period, style, ..ProgressWidget::default() }))));
+    r.desktop_widget(DesktopWidgetType::family(ids::CLOCKS, "day-ring", tk("Progress"), tk("How much of it has passed"), "gauge", progress.into()).in_menu());
+    r.desktop_widget(single(ClockFace::Greeting));
+    r.desktop_widget(family(tk("Text"), vec![face(ClockFace::Template, tk("Text lines")), look("divided", tk("Divided text"), divided_clock), face(ClockFace::DayNumeral, tk("Day numeral"))]));
 
     plugin(r, ids::MONITOR, tk("System monitor"), tk("Live CPU, GPU, memory, temperatures, disk and network on the desktop, as a column or ring gauges"));
-    let monitor = |style: MonitorStyle| {
-        move || vec![DesktopWidget { kind: WidgetKind::Monitor(MonitorWidget { style, ..MonitorWidget::default() }), place: Placement { anchor: Anchor::TopRight, x: MONITOR_PLACE.0, y: MONITOR_PLACE.1, ..Placement::default() }, ..DesktopWidget::default() }]
+    let monitor = |id: &str, name: &'static str, m: MonitorWidget| {
+        DesktopWidgetStyle::new(id, name, move || vec![DesktopWidget { kind: WidgetKind::Monitor(m.clone()), place: Placement { anchor: Anchor::TopRight, x: MONITOR_PLACE.0, y: MONITOR_PLACE.1, ..Placement::default() }, ..DesktopWidget::default() }])
     };
-    r.desktop_widget(DesktopWidgetType::new(ids::MONITOR, "column", tk("System monitor"), tk("A column of live readings"), "gauge", monitor(MonitorStyle::Column)).in_menu());
-    r.desktop_widget(DesktopWidgetType::new(ids::MONITOR, "gauges", tk("System gauges"), tk("Ring gauges for CPU, GPU, memory, disk and battery"), "gauge", monitor(MonitorStyle::Gauges)).in_menu());
-    r.desktop_widget(DesktopWidgetType::new(ids::MONITOR, "meters", tk("System meters"), tk("Segmented meters, like a battery's cells"), "gauge", monitor(MonitorStyle::Meters)));
-    r.desktop_widget(DesktopWidgetType::new(ids::MONITOR, "bars", tk("System bars"), tk("Tall bars side by side"), "gauge", monitor(MonitorStyle::Bars)));
-    r.desktop_widget(DesktopWidgetType::new(ids::MONITOR, "thermals", tk("Thermals"), tk("Arc gauges for the temperatures and the fan"), "thermometer", move || {
-        vec![DesktopWidget {
-            kind: WidgetKind::Monitor(MonitorWidget { style: MonitorStyle::Thermals, rows: vec![MonitorRow::CpuTemp, MonitorRow::GpuTemp, MonitorRow::Fan], ..MonitorWidget::default() }),
-            place: Placement { anchor: Anchor::TopRight, x: MONITOR_PLACE.0, y: MONITOR_PLACE.1, ..Placement::default() },
-            ..DesktopWidget::default()
-        }]
-    }));
-    r.desktop_widget(DesktopWidgetType::new(ids::MONITOR, "wavy", tk("Wavy gauges"), tk("Ring gauges drawn as a wave"), "gauge", move || {
-        vec![DesktopWidget {
-            kind: WidgetKind::Monitor(MonitorWidget { style: MonitorStyle::Gauges, wavy: true, ring_width: WAVY_RING_PX, rows: vec![MonitorRow::Cpu, MonitorRow::Memory, MonitorRow::Disk], ..MonitorWidget::default() }),
-            place: Placement { anchor: Anchor::TopRight, x: MONITOR_PLACE.0, y: MONITOR_PLACE.1, ..Placement::default() },
-            ..DesktopWidget::default()
-        }]
-    }));
+    let style = |style: MonitorStyle| MonitorWidget { style, ..MonitorWidget::default() };
+    let monitors = vec![
+        monitor("column", tk("Column"), style(MonitorStyle::Column)),
+        monitor("gauges", tk("Gauges"), style(MonitorStyle::Gauges)),
+        monitor("meters", tk("Meters"), style(MonitorStyle::Meters)),
+        monitor("bars", tk("Bars"), style(MonitorStyle::Bars)),
+        monitor("wavy", tk("Wavy gauges"), MonitorWidget { style: MonitorStyle::Gauges, wavy: true, ring_width: WAVY_RING_PX, rows: vec![MonitorRow::Cpu, MonitorRow::Memory, MonitorRow::Disk], ..MonitorWidget::default() }),
+    ];
+    r.desktop_widget(DesktopWidgetType::family(ids::MONITOR, "column", tk("System monitor"), tk("Live CPU, GPU, memory, temperatures, disk and network on the desktop, as a column or ring gauges"), "gauge", monitors).in_menu());
+    let thermals = monitor("thermals", tk("Thermals"), MonitorWidget { style: MonitorStyle::Thermals, rows: vec![MonitorRow::CpuTemp, MonitorRow::GpuTemp, MonitorRow::Fan], ..MonitorWidget::default() });
+    r.desktop_widget(DesktopWidgetType::new(ids::MONITOR, "thermals", tk("Thermals"), tk("Arc gauges for the temperatures and the fan"), "thermometer", move || (thermals.make)()));
 
     plugin(r, ids::DECORATIONS, tk("Desktop decorations"), tk("Text and shapes on the desktop: lines of type, vertical poems, discs, stripes, waves and frames"));
     for p in Preset::ALL {
@@ -430,43 +448,129 @@ const FRAME_PADDING_PX: f32 = 18.0;
 const COOKIE_LOBES: u32 = 14;
 const COOKIE_DEPTH: f32 = 0.07;
 
-/// Clocks that are a face plus a look, as seen in other setups.
-type ClockLook = (&'static str, &'static str, &'static str, fn() -> ClockWidget);
-const CLOCK_LOOKS: [ClockLook; 3] = [
-    ("cookie", tk("Cookie clock"), tk("A scalloped dial, dots for hours, blade hands and the day in a bubble"), || {
-        let mut c = clock_preset(ClockFace::Analog);
-        c.analog = AnalogOptions { dial: PlateShape::Cookie, dial_fill: true, marks: DialMarks::Dots, hour_hand: HandStyle::Fill, seconds_style: SecondsStyle::Dot, date_style: DateStyle::Bubble, ..AnalogOptions::default() };
-        c.look.plate_lobes = COOKIE_LOBES;
-        c.look.plate_depth = COOKIE_DEPTH;
-        c
-    }),
-    ("framed-hud", tk("Framed HUD clock"), tk("Stacked digits in a thin frame with a header"), || {
-        let mut c = clock_preset(ClockFace::Stack);
-        c.look = mandara_config::desktop_widgets::Look {
-            font: FontRole::Mono,
-            plate: Plate::Glass,
-            plate_shape: PlateShape::Chamfer,
-            plate_chamfer: FRAME_CHAMFER_PX,
-            plate_padding: FRAME_PADDING_PX,
-            outline_width: FRAME_OUTLINE_PX,
-            outline_tone: Tone::Accent,
-            header: "SYS.CLOCK".into(),
-            ..mandara_config::desktop_widgets::Look::default()
-        };
-        c
-    }),
-    ("divided", tk("Divided text clock"), tk("The day large, a rule, the weekday and the time beside it"), || {
-        let mut c = clock_preset(ClockFace::Template);
-        c.face_options.divider = true;
-        c.lines = vec![
-            TemplateLine { text: "{day}".into(), size: 140.0, weight: 800, ..TemplateLine::default() },
-            TemplateLine { text: "{weekday}".into(), size: 40.0, weight: 600, ..TemplateLine::default() },
-            TemplateLine { text: "{month} {year}".into(), size: 22.0, weight: 400, opacity: 0.75, ..TemplateLine::default() },
-            TemplateLine { text: "{time}".into(), size: 30.0, weight: 300, accent: true, ..TemplateLine::default() },
-        ];
-        c
-    }),
-];
+/// The cookie analog clock: a scalloped dial, dots for hours, blade hands
+/// and the day in a bubble.
+fn cookie_clock() -> ClockWidget {
+    let mut c = clock_preset(ClockFace::Analog);
+    c.analog = AnalogOptions { dial: PlateShape::Cookie, dial_fill: true, marks: DialMarks::Dots, hour_hand: HandStyle::Fill, seconds_style: SecondsStyle::Dot, date_style: DateStyle::Bubble, ..AnalogOptions::default() };
+    c.look.plate_lobes = COOKIE_LOBES;
+    c.look.plate_depth = COOKIE_DEPTH;
+    c
+}
+
+/// The framed HUD clock: stacked digits in a thin frame with a header.
+fn framed_hud_clock() -> ClockWidget {
+    let mut c = clock_preset(ClockFace::Stack);
+    c.look = Look {
+        font: FontRole::Mono,
+        plate: Plate::Glass,
+        plate_shape: PlateShape::Chamfer,
+        plate_chamfer: FRAME_CHAMFER_PX,
+        plate_padding: FRAME_PADDING_PX,
+        outline_width: FRAME_OUTLINE_PX,
+        outline_tone: Tone::Accent,
+        header: "SYS.CLOCK".into(),
+        ..Look::default()
+    };
+    c
+}
+
+/// The divided text clock: the day large, a rule, the weekday and the
+/// time beside it.
+fn divided_clock() -> ClockWidget {
+    let mut c = clock_preset(ClockFace::Template);
+    c.face_options.divider = true;
+    c.lines = vec![
+        TemplateLine { text: "{day}".into(), size: 140.0, weight: 800, ..TemplateLine::default() },
+        TemplateLine { text: "{weekday}".into(), size: 40.0, weight: 600, ..TemplateLine::default() },
+        TemplateLine { text: "{month} {year}".into(), size: 22.0, weight: 400, opacity: 0.75, ..TemplateLine::default() },
+        TemplateLine { text: "{time}".into(), size: 30.0, weight: 300, accent: true, ..TemplateLine::default() },
+    ];
+    c
+}
+
+// ── Styles ───────────────────────────────────────────────────────────────
+
+/// What every style a widget could have come from shares with it: its
+/// kind, a clock's face, whether a monitor shows the thermals.
+fn shape(kind: &WidgetKind) -> String {
+    match kind {
+        WidgetKind::Clock(c) => format!("clock/{}", c.face.id()),
+        WidgetKind::Monitor(m) => format!("monitor/{}", m.style == MonitorStyle::Thermals),
+        k => serde_json::to_value(k).ok().and_then(|v| v.get("kind").and_then(|x| x.as_str()).map(String::from)).unwrap_or_default(),
+    }
+}
+
+/// How many of `preset`'s settings `kind` has the same.
+fn agreement(preset: &serde_json::Value, kind: &serde_json::Value) -> usize {
+    match (preset, kind) {
+        (serde_json::Value::Object(a), serde_json::Value::Object(b)) => a.iter().map(|(k, v)| b.get(k).map_or(0, |w| agreement(v, w))).sum(),
+        (a, b) => usize::from(a == b),
+    }
+}
+
+/// A placed widget's family and the style it has.
+pub struct StyleOf {
+    /// The family (a kind with styles).
+    pub family: DesktopWidgetType,
+    /// Each style's kind, as it adds it.
+    pub presets: Vec<WidgetKind>,
+    /// The style it matches, or the closest one when it was changed since.
+    pub current: usize,
+    /// Whether it is that style unchanged.
+    pub exact: bool,
+}
+
+/// The family `w` belongs to (one of `r`'s kinds with styles) and the
+/// style it has: the one it equals, else the closest of those with its
+/// face. Nothing for widgets of a kind without styles.
+pub fn style_of(w: &DesktopWidget, r: &PluginRegistry) -> Option<StyleOf> {
+    let shape_w = shape(&w.kind);
+    let json_w = serde_json::to_value(&w.kind).ok()?;
+    r.desktop_widgets().iter().filter(|t| t.plugin == w.kind.plugin() && t.styles.len() > 1).find_map(|t| {
+        let presets: Vec<WidgetKind> = t.styles.iter().map(|s| (s.make)().into_iter().next().map(|w| w.kind)).collect::<Option<_>>()?;
+        let (current, _) = presets
+            .iter()
+            .enumerate()
+            .filter(|(_, k)| shape(k) == shape_w)
+            .map(|(i, k)| (i, serde_json::to_value(k).map_or(0, |v| agreement(&v, &json_w))))
+            // The first of equally close styles.
+            .rev()
+            .max_by_key(|(_, score)| *score)?;
+        let exact = presets[current] == w.kind;
+        Some(StyleOf { family: t.clone(), presets, current, exact })
+    })
+}
+
+/// Merges, setting by setting: the user's value where the styles `from`
+/// and `to` agree and the user changed it, `to`'s otherwise.
+fn merge(user: &serde_json::Value, from: &serde_json::Value, to: &serde_json::Value) -> serde_json::Value {
+    match to {
+        serde_json::Value::Object(t) => serde_json::Value::Object(
+            t.iter()
+                .map(|(k, tv)| {
+                    let v = match (user.get(k), from.get(k)) {
+                        (Some(u), Some(f)) => merge(u, f, tv),
+                        _ => tv.clone(),
+                    };
+                    (k.clone(), v)
+                })
+                .collect(),
+        ),
+        _ if user != from && to == from => user.clone(),
+        _ => to.clone(),
+    }
+}
+
+/// `kind` (of style `from`) switched to style `to`: what `to` sets (its
+/// face, dial, frame, font…) with what the user changed that `to` leaves
+/// as `from` had it (colours, digits, rows…). The placement isn't part of
+/// a kind: a restyled widget stays where it is.
+pub fn restyle(kind: &WidgetKind, from: &WidgetKind, to: &WidgetKind) -> WidgetKind {
+    let json = |k: &WidgetKind| serde_json::to_value(k).ok();
+    let (Some(user), Some(f), Some(t)) = (json(kind), json(from), json(to)) else { return to.clone() };
+    serde_json::from_value(merge(&user, &f, &t)).unwrap_or_else(|_| to.clone())
+}
 
 fn preset_id(p: Preset) -> &'static str {
     match p {
@@ -510,6 +614,166 @@ mod tests {
         unique.dedup();
         assert_eq!(keys.len(), unique.len(), "unique keys");
         assert!(r.desktop_widgets().iter().filter(|w| w.menu).count() >= ids::ALL.len());
+    }
+
+    #[test]
+    fn twins_are_one_family_and_old_ids_still_add_them() {
+        let mut r = PluginRegistry::default();
+        register(&mut r);
+        let count = |plugin: &str| r.desktop_widgets().iter().filter(|t| t.plugin == plugin).count();
+        // Eight clock families and the depth clock; the monitor and thermals.
+        assert_eq!(count(ids::CLOCKS), 9);
+        assert_eq!(count(ids::MONITOR), 2);
+        // Every kind a family replaced still adds what it added.
+        let clock = |key: &str| match r.make_desktop_widgets(&format!("{}/{key}", ids::CLOCKS)).as_deref() {
+            Some([w]) => w.kind.clone(),
+            other => panic!("{key}: {other:?}"),
+        };
+        for f in ClockFace::ALL.into_iter().filter(|f| f.depth_style().is_none() || *f == ClockFace::Stacked) {
+            assert_eq!(clock(f.id()), WidgetKind::Clock(clock_preset(f)), "{}", f.id());
+        }
+        assert_eq!(clock("cookie"), WidgetKind::Clock(cookie_clock()));
+        assert_eq!(clock("framed-hud"), WidgetKind::Clock(framed_hud_clock()));
+        assert_eq!(clock("divided"), WidgetKind::Clock(divided_clock()));
+        assert!(matches!(clock("year-dots"), WidgetKind::Progress(p) if p.period == Period::Year && p.style == ProgressStyle::Dots));
+        for id in ["column", "gauges", "meters", "bars", "thermals", "wavy"] {
+            assert!(r.make_desktop_widgets(&format!("{}/{id}", ids::MONITOR)).is_some_and(|w| w.len() == 1), "{id}");
+        }
+        assert!(r.make_desktop_widgets("desktop-clocks/nope").is_none());
+        // Style ids are unique within a plugin, and a family adds its first.
+        for t in r.desktop_widgets().iter().filter(|t| !t.styles.is_empty()) {
+            assert_eq!(t.id, t.styles[0].id);
+            assert_eq!((t.make)(), (t.styles[0].make)());
+        }
+        let mut style_ids: Vec<String> = r.desktop_widgets().iter().flat_map(|t| t.styles.iter().map(move |s| format!("{}/{}", t.plugin, s.id))).collect();
+        let n = style_ids.len();
+        style_ids.sort();
+        style_ids.dedup();
+        assert_eq!(n, style_ids.len());
+    }
+
+    #[test]
+    fn a_style_switch_keeps_the_place_and_what_the_user_changed() {
+        let mut r = PluginRegistry::default();
+        register(&mut r);
+        let placed = |kind: WidgetKind| DesktopWidget { id: "w".into(), kind, place: Placement { x: 0.3, scale: 1.4, displays: vec!["DP-1".into()], ..Placement::default() }, ..DesktopWidget::default() };
+        // Unchanged: exactly its style.
+        let s = style_of(&placed(WidgetKind::Clock(cookie_clock())), &r).expect("a family");
+        assert_eq!((s.family.id.as_str(), s.family.styles[s.current].id.as_str(), s.exact), ("analog", "cookie", true));
+        // Changed: the closest style, not rewritten.
+        let mut c = cookie_clock();
+        c.look.tone = Tone::Accent;
+        c.look.font = FontRole::Display;
+        let mut w = placed(WidgetKind::Clock(c));
+        let s = style_of(&w, &r).expect("a family");
+        assert_eq!((s.family.styles[s.current].id.as_str(), s.exact), ("cookie", false));
+        // To the orbit: its face and dial, the user's colour and font kept.
+        let orbit = s.family.styles.iter().position(|x| x.id == "orbit").expect("orbit");
+        let place = w.place.clone();
+        w.kind = restyle(&w.kind, &s.presets[s.current], &s.presets[orbit]);
+        assert_eq!(w.place, place);
+        let WidgetKind::Clock(c) = &w.kind else { panic!("a clock") };
+        assert_eq!((c.face, c.analog.dial, c.look.tone, c.look.font), (ClockFace::Orbit, PlateShape::Circle, Tone::Accent, FontRole::Display));
+        // A font the style sets wins over the user's.
+        let digital = style_of(&placed(WidgetKind::Clock(ClockWidget { look: Look { font: FontRole::Display, ..Look::default() }, ..clock_preset(ClockFace::Minimal) })), &r).expect("a family");
+        let dots = digital.family.styles.iter().position(|x| x.id == "dot-matrix").expect("dot matrix");
+        let WidgetKind::Clock(c) = restyle(&placed(WidgetKind::Clock(clock_preset(ClockFace::Minimal))).kind, &digital.presets[digital.current], &digital.presets[dots]) else { panic!("a clock") };
+        assert_eq!((c.face, c.look.font), (ClockFace::DotMatrix, FontRole::Mono));
+        // Progress: the style's period, the user's line width.
+        let p = WidgetKind::Progress(ProgressWidget { period: Period::Hour, thickness: 12.0, ..ProgressWidget::default() });
+        let s = style_of(&placed(p.clone()), &r).expect("a family");
+        assert_eq!(s.family.styles[s.current].id, "day-ring");
+        let month = s.family.styles.iter().position(|x| x.id == "month-bar").expect("month bar");
+        let WidgetKind::Progress(p) = restyle(&p, &s.presets[s.current], &s.presets[month]) else { panic!("progress") };
+        assert_eq!((p.period, p.style, p.thickness), (Period::Month, ProgressStyle::Bar, 12.0));
+        // Monitors: wavy gauges are their own style; thermals have none.
+        let wavy = style_of(&placed(r.make_desktop_widgets("desktop-monitor/wavy").expect("wavy").remove(0).kind), &r).expect("a family");
+        assert_eq!((wavy.family.styles[wavy.current].id.as_str(), wavy.exact), ("wavy", true));
+        assert!(style_of(&placed(r.make_desktop_widgets("desktop-monitor/thermals").expect("thermals").remove(0).kind), &r).is_none());
+        // Kinds without styles have no Style row.
+        assert!(style_of(&placed(WidgetKind::Clock(clock_preset(ClockFace::Headline))), &r).is_none());
+        assert!(style_of(&placed(WidgetKind::Clock(clock_preset(ClockFace::Classic))), &r).is_none());
+    }
+
+    /// One widget of every gallery entry that became a style (#23), as
+    /// v0.7.0 wrote them: `(widget id, its TOML, family, style)`.
+    const OLD_ENTRIES: [(&str, &str, &str, &str); 27] = [
+        ("superscript", "kind = \"clock\"\nface = \"superscript\"\nseconds = true", "superscript", "superscript"),
+        ("stack", "kind = \"clock\"\nface = \"stack\"\n[desktop.widgets.items.look]\nplate = \"solid\"\nplate_radius = 44.0\nplate_padding = 30.0", "superscript", "stack"),
+        ("framed-hud", "kind = \"clock\"\nface = \"stack\"\n[desktop.widgets.items.look]\nfont = \"mono\"\nplate = \"glass\"\nplate_shape = \"chamfer\"\nplate_chamfer = 10.0\nplate_padding = 18.0\noutline_width = 1.0\noutline_tone = \"accent\"\nheader = \"SYS.CLOCK\"", "superscript", "framed-hud"),
+        ("analog", "kind = \"clock\"\nface = \"analog\"", "analog", "analog"),
+        ("cookie", "kind = \"clock\"\nface = \"analog\"\n[desktop.widgets.items.analog]\ndial = \"cookie\"\ndial_fill = true\nmarks = \"dots\"\nhour_hand = \"fill\"\nseconds_style = \"dot\"\ndate_style = \"bubble\"\n[desktop.widgets.items.look]\nplate_lobes = 14\nplate_depth = 0.07", "analog", "cookie"),
+        ("orbit", "kind = \"clock\"\nface = \"orbit\"", "analog", "orbit"),
+        ("numerals", "kind = \"clock\"\nface = \"numerals\"", "analog", "numerals"),
+        ("minimal", "kind = \"clock\"\nface = \"minimal\"", "minimal", "minimal"),
+        ("ring", "kind = \"clock\"\nface = \"ring\"\nring_progress = \"day\"", "minimal", "ring"),
+        ("shape", "kind = \"clock\"\nface = \"shape\"", "minimal", "shape"),
+        ("dot-matrix", "kind = \"clock\"\nface = \"dot-matrix\"\n[desktop.widgets.items.look]\nfont = \"mono\"", "minimal", "dot-matrix"),
+        ("pixel", "kind = \"clock\"\nface = \"pixel\"\n[desktop.widgets.items.look]\nfont = \"mono\"", "minimal", "pixel"),
+        ("boxes", "kind = \"clock\"\nface = \"boxes\"\n[desktop.widgets.items.look]\nfont = \"mono\"", "minimal", "boxes"),
+        ("hud", "kind = \"clock\"\nface = \"hud\"\n[desktop.widgets.items.look]\nshadow = \"hard\"\nshadow_tone = \"accent\"\nshadow_x = 6.0\nshadow_y = 6.0\nshadow_opacity = 1.0", "minimal", "hud"),
+        ("day-ring", "kind = \"progress\"\nperiod = \"day\"\nstyle = \"ring\"", "day-ring", "day-ring"),
+        ("week-wave", "kind = \"progress\"\nperiod = \"week\"\nstyle = \"wavy-ring\"", "day-ring", "week-wave"),
+        ("month-bar", "kind = \"progress\"\nperiod = \"month\"\nstyle = \"bar\"", "day-ring", "month-bar"),
+        ("year-dots", "kind = \"progress\"\nperiod = \"year\"\nstyle = \"dots\"", "day-ring", "year-dots"),
+        ("template", "kind = \"clock\"\nface = \"template\"", "template", "template"),
+        ("divided", "kind = \"clock\"\nface = \"template\"\n[desktop.widgets.items.face_options]\ndivider = true\n[[desktop.widgets.items.lines]]\ntext = \"{day}\"\nsize = 140.0\nweight = 800\n[[desktop.widgets.items.lines]]\ntext = \"{time}\"\nsize = 30.0\naccent = true", "template", "divided"),
+        ("day-numeral", "kind = \"clock\"\nface = \"day-numeral\"", "template", "day-numeral"),
+        ("column", "kind = \"monitor\"\nstyle = \"column\"", "column", "column"),
+        ("gauges", "kind = \"monitor\"\nstyle = \"gauges\"", "column", "gauges"),
+        ("meters", "kind = \"monitor\"\nstyle = \"meters\"\nsegments = 8", "column", "meters"),
+        ("bars", "kind = \"monitor\"\nstyle = \"bars\"", "column", "bars"),
+        ("wavy", "kind = \"monitor\"\nstyle = \"gauges\"\nwavy = true\nring_width = 9.0\nrows = [\"cpu\", \"memory\", \"disk\"]", "column", "wavy"),
+        ("thermals", "kind = \"monitor\"\nstyle = \"thermals\"\nrows = [\"cpu-temp\", \"gpu-temp\", \"fan\"]", "", ""),
+    ];
+
+    /// Widgets placed from the old gallery load, survive a save and find
+    /// their family and style: nobody's desktop breaks over the folding.
+    #[test]
+    fn widgets_of_every_old_gallery_entry_load_and_find_their_style() {
+        let mut r = PluginRegistry::default();
+        register(&mut r);
+        // Each widget's own keys, its place, then its sub-tables.
+        let text = OLD_ENTRIES.iter().fold(String::from("[desktop.widgets]\nmigrated = true\n"), |mut out, (id, body, _, _)| {
+            let (head, tables) = body.split_once("\n[").map_or((*body, String::new()), |(h, t)| (h, format!("\n[{t}")));
+            out.push_str(&format!("\n[[desktop.widgets.items]]\nid = \"{id}\"\n{head}\n[desktop.widgets.items.place]\nanchor = \"top-right\"\nx = -0.03\nscale = 1.2\ndisplays = [\"DP-1\"]{tables}\n"));
+            out
+        });
+        let mut cfg: ShellConfig = toml::from_str(&text).expect("an old widget list parses");
+        mandara_config::upgrade::upgrade(&mut cfg);
+        assert_eq!(cfg.desktop.widgets.items.len(), OLD_ENTRIES.len());
+        // Saved and read back, nothing changes.
+        let saved = toml::to_string(&cfg).expect("it saves");
+        let back: ShellConfig = toml::from_str(&saved).expect("and reads back");
+        assert_eq!(back.desktop.widgets, cfg.desktop.widgets);
+        for (w, (id, _, family, style)) in cfg.desktop.widgets.items.iter().zip(OLD_ENTRIES) {
+            assert_eq!(w.id, id);
+            assert_eq!((w.place.anchor, w.place.scale, w.place.displays.as_slice()), (Anchor::TopRight, 1.2, ["DP-1".to_string()].as_slice()), "{id}: its place");
+            match style_of(w, &r) {
+                Some(s) => {
+                    assert_eq!((s.family.id.as_str(), s.family.styles[s.current].id.as_str()), (family, style), "{id}");
+                    // Every switch from it works.
+                    for to in &s.presets {
+                        let _ = restyle(&w.kind, &s.presets[s.current], to);
+                    }
+                }
+                None => assert_eq!(family, "", "{id} has a family"),
+            }
+        }
+        // As the old gallery added them (all of each preset written), they
+        // are exactly their style.
+        for (id, _, family, style) in OLD_ENTRIES {
+            let key = if matches!(id, "column" | "gauges" | "meters" | "bars" | "wavy" | "thermals") { ids::MONITOR } else { ids::CLOCKS };
+            let made = r.make_desktop_widgets(&format!("{key}/{id}")).expect("the old id adds it").remove(0);
+            let mut cfg = ShellConfig::default();
+            cfg.desktop.widgets.items.push(DesktopWidget { id: id.into(), ..made });
+            let read: ShellConfig = toml::from_str(&toml::to_string(&cfg).expect("it saves")).expect("it reads back");
+            assert_eq!(read.desktop.widgets.items, cfg.desktop.widgets.items, "{id} round-trips");
+            match style_of(&read.desktop.widgets.items[0], &r) {
+                Some(s) => assert_eq!((s.family.id.as_str(), s.family.styles[s.current].id.as_str(), s.exact), (family, style, true), "{id}"),
+                None => assert_eq!(family, "", "{id}"),
+            }
+        }
     }
 
     #[test]

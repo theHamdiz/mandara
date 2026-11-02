@@ -7875,3 +7875,13 @@
 # ── Desktop widgets per display ──
 "Only on this display" = "Solo en esta pantalla"
 "Show on every display" = "Mostrar en todas las pantallas"
+
+# ── Desktop widget families and styles (#23) ──
+"Digital" = "Digital"
+"Classic analog" = "Analógico clásico"
+"Framed HUD" = "HUD enmarcado"
+"Day ring" = "Anillo del día"
+"Wavy week" = "Semana ondulada"
+"Month bar" = "Barra del mes"
+"Divided text" = "Texto dividido"
+"{name} · changed" = "{name} · modificado"
