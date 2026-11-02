@@ -162,6 +162,12 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         // A page with lines and a version tag: release notes.
         "release-notes" => r#"<path d="M14.5 3H7a2.5 2.5 0 0 0-2.5 2.5v13A2.5 2.5 0 0 0 7 21h10a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14.5 3v5h5"/><path d="M8.5 12.5h7M8.5 16h4"/><path d="M8.5 7.5h2.5"/>"#.into(),
         "sparkles" => r#"<path d="M10.5 3.5l1.6 4.4a3 3 0 0 0 1.8 1.8l4.4 1.6-4.4 1.6a3 3 0 0 0-1.8 1.8l-1.6 4.4-1.6-4.4a3 3 0 0 0-1.8-1.8L2.7 11.3l4.4-1.6a3 3 0 0 0 1.8-1.8z"/><path d="M18.5 2.5v4M16.5 4.5h4M19 16.5v3M17.5 18h3"/>"#.into(),
+        // A branch leaving a trunk: Git repositories.
+        "git-branch" => r#"<path d="M6 3.5v12"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M18 8.5c0 4.7-3.8 7-8.5 8.6"/>"#.into(),
+        // Two linked jobs: CI workflows.
+        "workflow" => r#"<rect x="3" y="3.5" width="7.5" height="7.5" rx="2.2"/><rect x="13.5" y="13" width="7.5" height="7.5" rx="2.2"/><path d="M6.75 11v2.5a3.25 3.25 0 0 0 3.25 3.25h3.5"/>"#.into(),
+        // A beetle: crashes and bugs.
+        "bug" => r#"<rect x="7" y="8" width="10" height="12.5" rx="5"/><path d="M9.5 8a2.5 2.5 0 0 1 5 0"/><path d="M12 11.5v9"/><path d="M7 13H3.5M20.5 13H17M7.4 17l-2.9 2M16.6 17l2.9 2M7.6 9.8L5 7.5M16.4 9.8L19 7.5"/>"#.into(),
         _ => return None,
     })
 }
@@ -199,6 +205,7 @@ pub const ICON_NAMES: &[&str] = &[
     "stop", "heart", "alert", "zap",
     "eyedropper", "waves", "arrow-down", "arrow-up", "shield", "copy", "clock", "flame",
     "user", "user-plus", "key", "tiles", "eye", "eye-off", "pencil", "sparkles", "brush", "dice", "release-notes", "home", "palette",
+    "git-branch", "workflow", "bug",
 ];
 
 /// An icon element tinted with `color`.
