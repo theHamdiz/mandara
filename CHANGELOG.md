@@ -6,6 +6,46 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+Twelve new plugins. They all ship switched off: turn on the ones you want
+in Studio → Plugins, where a new **For developers** shelf collects the
+developer tools.
+
+- **Shortcuts cheatsheet.** Every keyboard shortcut, Mandara's and your
+  compositor's, in one searchable sheet. Bind
+  `mandara msg keybinds toggle` to a key of your choice.
+- **Task progress.** Scripts, long builds and AI agents can put a progress
+  ring in the bar (`mandara msg progress set build 40%`), with a
+  notification when the task is done or fails.
+- **Eye breaks.** Gentle 20-20-20 reminders that count only the time you're
+  actually at the computer and wait while a game or video is fullscreen.
+- **Presentation mode.** One switch for talks and screen sharing: do not
+  disturb, keep the screen awake and hide the desktop widgets. Turning it
+  off puts everything back the way it was, even if the shell restarted in
+  between. It can also switch itself on while you share your screen.
+- **Share to phone.** Send clipboard text, a screenshot or a file to your
+  phone: scan the QR code and it downloads over your own network, once.
+- **Tailscale.** Your tailnet at a glance: peers, direct or relayed
+  connections, exit nodes, and connect or disconnect.
+- **Uptime monitor.** Watches your sites and services and lets you know
+  when one goes down or comes back.
+- **Local AI.** See which Ollama models are loaded and how much GPU memory
+  they use, and unload them before you start a game.
+- **Listening ports.** Which apps listen on which ports and who can reach
+  them; open one in the browser or end the app.
+- **Git repositories.** Uncommitted changes and unpushed commits across
+  your projects, with a terminal one click away.
+- **CI status.** GitHub Actions runs of your repositories in the bar, with
+  a notification when a run finishes.
+- **Crash reports.** Apps that crashed this week, with the report to copy
+  and a debugger one click away.
+
+- **Mandara speaks Bahasa Indonesia.** The whole interface, Studio and the
+  login screen are translated, and dates follow Indonesian conventions.
+  Pick it in Studio → General → Language, or let Mandara follow your
+  system language.
+
 ## 0.6.0 — 2026-11-02
 
 Rounded screen corners are on by default.

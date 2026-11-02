@@ -37,10 +37,11 @@ pub enum Lang {
     De,
     Ru,
     Hi,
+    Id,
 }
 
 impl Lang {
-    pub const ALL: [Lang; 10] = [Lang::En, Lang::Ar, Lang::Es, Lang::Fr, Lang::De, Lang::Tr, Lang::Ru, Lang::Hi, Lang::Zh, Lang::Ja];
+    pub const ALL: [Lang; 11] = [Lang::En, Lang::Ar, Lang::Es, Lang::Fr, Lang::De, Lang::Tr, Lang::Ru, Lang::Hi, Lang::Id, Lang::Zh, Lang::Ja];
 
     /// ISO 639-1 code.
     pub fn code(self) -> &'static str {
@@ -55,6 +56,7 @@ impl Lang {
             Lang::De => "de",
             Lang::Ru => "ru",
             Lang::Hi => "hi",
+            Lang::Id => "id",
         }
     }
 
@@ -71,6 +73,7 @@ impl Lang {
             Lang::De => "Deutsch",
             Lang::Ru => "Русский",
             Lang::Hi => "हिन्दी",
+            Lang::Id => "Bahasa Indonesia",
         }
     }
 
@@ -86,6 +89,7 @@ impl Lang {
             Lang::De => "German",
             Lang::Ru => "Russian",
             Lang::Hi => "Hindi",
+            Lang::Id => "Indonesian",
         }
     }
 
@@ -102,6 +106,7 @@ impl Lang {
             Lang::De => "Hallo",
             Lang::Ru => "Привет",
             Lang::Hi => "नमस्ते",
+            Lang::Id => "Halo",
         }
     }
 
@@ -122,6 +127,7 @@ impl Lang {
             Lang::De => "de_DE",
             Lang::Ru => "ru_RU",
             Lang::Hi => "hi_IN",
+            Lang::Id => "id_ID",
         }
     }
 
@@ -215,12 +221,13 @@ fn source(lang: Lang) -> &'static str {
         Lang::De => include_str!("../locales/de.toml"),
         Lang::Ru => include_str!("../locales/ru.toml"),
         Lang::Hi => include_str!("../locales/hi.toml"),
+        Lang::Id => include_str!("../locales/id.toml"),
     }
 }
 
 /// The built-in catalog for `lang` (parsed once, leaked for `'static`).
 pub fn catalog(lang: Lang) -> &'static Catalog {
-    static CATALOGS: [OnceLock<Catalog>; 10] = [const { OnceLock::new() }; 10];
+    static CATALOGS: [OnceLock<Catalog>; Lang::ALL.len()] = [const { OnceLock::new() }; Lang::ALL.len()];
     CATALOGS[lang as usize].get_or_init(|| match Catalog::parse(source(lang)) {
         Ok(c) => c,
         Err(e) => {

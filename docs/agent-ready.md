@@ -32,6 +32,9 @@ Mandara is a platform as much as a shell:
 - **React to your desktop.** Hooks run your commands on 27 events (locked,
   idle, plugged in, battery low, wallpaper or colors changed, before sleep…),
   with details in environment variables.
+- **Show progress.** A long build, a backup or an AI agent can put a live
+  progress ring in the bar (`mandara msg progress set build 40%`) and
+  finish with a notification (`progress done build`).
 - **Name routines.** Launcher *skills* chain commands into one named step,
   and slash commands (`/g`, `/yt`, `/todo`, your own) turn the launcher into
   a command line.

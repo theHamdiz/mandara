@@ -269,6 +269,36 @@ mandara msg drives list              # mount|unmount|eject|unlock|lock|open <dev
 mandara msg containers list          # start|stop|restart|pause|unpause|logs <name>, stats
 mandara msg services failed          # list|status|logs|start|stop|restart|enable|disable <unit> [--user]
 mandara msg updates check            # list, sources, news, run [source]
+mandara msg uptime status            # check: run every check now
+mandara msg tailscale status         # up, down, exit-node <peer|none>
+mandara msg crashes list             # info <pid>, seen
+```
+
+## Developer tools and progress
+
+Scripts, builds and AI agents can show their progress in the bar with the
+Task progress plugin:
+
+```bash
+mandara msg progress start build Building the release
+mandara msg progress set build 40%           # or 3/10; an optional new label after it
+mandara msg progress done build "All green"  # fail build "3 tests failed"; remove <id>; list; clear
+```
+
+```bash
+mandara msg ports list               # kill <port>
+mandara msg git list                 # fetch <repo>, refresh
+mandara msg ci status                # refresh
+mandara msg ai loaded                # models, load <model>, unload <model|all>
+```
+
+## Everyday helpers
+
+```bash
+mandara msg keybinds toggle          # show, hide, list (every shortcut as JSON)
+mandara msg breaks status            # now [short|long], skip, snooze [minutes], pause [minutes], resume
+mandara msg presentation toggle      # on, off, status
+mandara msg share clipboard          # text <text>, file <path>, screenshot, stop, status
 ```
 
 ## Compositor and Config doctor

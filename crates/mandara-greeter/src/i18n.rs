@@ -20,12 +20,13 @@ fn source(lang: Lang) -> &'static str {
         Lang::De => include_str!("../locales/de.toml"),
         Lang::Ru => include_str!("../locales/ru.toml"),
         Lang::Hi => include_str!("../locales/hi.toml"),
+        Lang::Id => include_str!("../locales/id.toml"),
     }
 }
 
 /// The greeter's own catalog for `lang`.
 pub fn catalog(lang: Lang) -> &'static Catalog {
-    static CATALOGS: [OnceLock<Catalog>; 10] = [const { OnceLock::new() }; 10];
+    static CATALOGS: [OnceLock<Catalog>; Lang::ALL.len()] = [const { OnceLock::new() }; Lang::ALL.len()];
     CATALOGS[lang as usize].get_or_init(|| match Catalog::parse(source(lang)) {
         Ok(c) => c,
         Err(e) => {

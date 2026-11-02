@@ -3,13 +3,16 @@
 //! turning it off restores exactly that, and when screen sharing turns it on
 //! and off by itself.
 //!
-//! Pure logic; the shell reads the live switches, applies the [`Plan`]s
-//! and keeps the [`Session`] while the mode is on.
+//! Pure logic, plus the small state file that keeps the [`Session`] across a
+//! shell restart; the shell reads the live switches, applies the [`Plan`]s
+//! and keeps the session while the mode is on.
 
-use serde::Serialize;
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
 
 /// The switches presentation mode controls.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Switches {
     /// Notifications' do not disturb.
     pub dnd: bool,
@@ -34,7 +37,7 @@ impl Plan {
 }
 
 /// The mode while it is on.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Session {
     /// When it turned on, milliseconds since the Unix epoch.
     pub since_ms: i64,
@@ -73,9 +76,67 @@ pub fn follow_sharing(auto_enabled: bool, sharing: bool, session: Option<&Sessio
     }
 }
 
+/// Re-applying the mode after the shell restarted mid-session: switches on
+/// whatever is off again (keep awake dies with the old process).
+pub fn resume(current: Switches) -> Plan {
+    let on = |now: bool| (!now).then_some(true);
+    Plan { dnd: on(current.dnd), keep_awake: on(current.keep_awake), widgets_hidden: on(current.widgets_hidden) }
+}
+
+// ── The session on disk ──────────────────────────────────────────────────
+//
+// Kept while the mode is on, so a shell that restarts mid-talk still knows
+// what to put back. Small files; blocking.
+
+const STATE_FILE: &str = "presentation.json";
+
+/// `~/.local/state/mandara/presentation.json`.
+pub fn state_path() -> PathBuf {
+    mandara_config::paths::state_dir().join(STATE_FILE)
+}
+
+/// The session a previous run left on, if any.
+pub fn load(path: &Path) -> Option<Session> {
+    std::fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok())
+}
+
+/// Saves the session (`None` removes the file).
+pub fn store(path: &Path, session: Option<&Session>) -> Result<(), String> {
+    let Some(session) = session else {
+        return match std::fs::remove_file(path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+            _ => Ok(()),
+        };
+    };
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    let body = serde_json::to_string(session).map_err(|e| e.to_string())?;
+    std::fs::write(&tmp, body).and_then(|()| std::fs::rename(&tmp, path)).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_session_survives_a_restart_and_resumes() {
+        let dir = std::env::temp_dir().join(format!("mandara-presentation-{}", std::process::id()));
+        let path = dir.join(STATE_FILE);
+        let before = Switches { dnd: true, keep_awake: false, widgets_hidden: false };
+        let (session, _) = turn_on(before, 42, false);
+        store(&path, Some(&session)).unwrap();
+        assert_eq!(load(&path), Some(session), "read back as written");
+        // After a restart keep awake is gone; the widgets are still hidden.
+        let after_restart = Switches { dnd: true, keep_awake: false, widgets_hidden: true };
+        assert_eq!(resume(after_restart), Plan { dnd: None, keep_awake: Some(true), widgets_hidden: None });
+        assert_eq!(turn_off(&session, Switches { dnd: true, keep_awake: true, widgets_hidden: true }), Plan { dnd: None, keep_awake: Some(false), widgets_hidden: Some(false) });
+        store(&path, None).unwrap();
+        assert_eq!(load(&path), None, "turning off removes the file");
+        store(&path, None).unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn turning_on_saves_and_switches_on_what_is_off() {

@@ -21,7 +21,7 @@ handbook) sit beside it.
 </tr>
 </table>
 
-The 58 first-party plugins (22 of them ship switched off, marked *opt-in*):
+The 70 first-party plugins (34 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -69,6 +69,18 @@ The 58 first-party plugins (22 of them ship switched off, marked *opt-in*):
 | **App installer** | Install apps by dropping AppImages, Flatpaks, archives or packages on the dock or Studio | *(opt-in)*
 | **Screen time** | How long you spend in each app, per day, with limits *(opt-in)* |
 | **Cursor themes** | Install, preview and apply cursor themes, live, with size and hiding options *(opt-in)* |
+| **Shortcuts cheatsheet** | Every keyboard shortcut, Mandara's and your compositor's, in one searchable sheet (`mandara msg keybinds toggle`) *(opt-in)* |
+| **Task progress** | A bar ring that scripts, long builds and AI agents report progress to (`mandara msg progress set build 40%`) *(opt-in)* |
+| **Eye breaks** | Gentle 20-20-20 reminders that count only active time and wait while a fullscreen app has focus *(opt-in)* |
+| **Presentation mode** | One switch for talks and screen sharing: do not disturb, keep awake and hidden desktop widgets, all put back afterwards *(opt-in)* |
+| **Share to phone** | Clipboard text, a screenshot or a file, served once on your network behind a QR code *(opt-in)* |
+| **Tailscale** | Your tailnet: this device, peers, direct or relayed paths, exit nodes, connect and disconnect *(opt-in)* |
+| **Uptime monitor** | Watches your sites and services (HTTP or TCP) and tells you when one goes down *(opt-in)* |
+| **Local AI** | Ollama models in memory and on disk: GPU memory, unload timers, load and unload *(opt-in)* |
+| **Listening ports** | Which apps listen on which ports, who can reach them, open in the browser or end them *(opt-in)* |
+| **Git repositories** | Your local repositories: branch, uncommitted changes and unpushed commits, with a terminal a click away *(opt-in)* |
+| **CI status** | GitHub Actions runs of your repositories, with a notification when a run finishes *(opt-in)* |
+| **Crash reports** | Apps that crashed this week (systemd-coredump), with the report and a debugger a click away *(opt-in)* |
 | **Desktop clocks** | Hero clocks on the desktop: analog and cookie dials, stacked cards, dot matrix, digit boxes, a slanted HUD, your own text lines, orbits, day and year progress, and the depth clock |
 | **System monitor** | Live readings on the desktop as a column with graphs, ring or wavy gauges, segmented meters, tall bars or thermal arcs |
 | **Desktop decorations** | Text and shapes on the desktop: lines of type, vertical poems, discs, stripes, waves and frames |
@@ -106,8 +118,11 @@ the core launcher, session and main menus) and everything else ships
 switched off: the dock, mini stats, screen time, prayer times, the wallpaper
 generator, Wallhaven, cursor themes, containers, services, drives, updates,
 the process hunter, the authenticator, soundscapes, world clock, network
-speed, the color picker, Pomodoro, notes, to-do, privacy and the app
-installer. Turn any of them on in Studio → Plugins or with
+speed, the color picker, Pomodoro, notes, to-do, privacy, the app
+installer, the shortcuts cheatsheet, task progress, eye breaks,
+presentation mode, share to phone, Tailscale, the uptime monitor, local
+AI, listening ports, Git repositories, CI status and crash reports. Turn
+any of them on in Studio → Plugins or with
 `mandara msg plugins enable <id>`. **Upgrading from 0.1 changes nothing you
 had:** a config written before these defaults keeps every plugin it had on
 (the upgrade writes them into `[plugins] enabled`), Wallhaven stays on if it

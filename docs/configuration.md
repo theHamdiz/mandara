@@ -137,6 +137,15 @@ fixed:
 | Wallpaper generator (`wallpaper-generator`) | recipe, size, format, folder, schedule and video loops: see [Wallpaper generator](#wallpaper-generator) | |
 | Wallhaven (`wallhaven`, opt-in) | `wallpaper.wallhaven_query` (default search; empty: the toplist), `wallpaper.wallhaven_sorting` (`toplist`, `date_added`, `views`, `favorites`, `random`) — shown on Studio → Wallpaper while the plugin is on; off, no Wallhaven request is made | empty, toplist |
 | Cursor themes (`cursors`, opt-in) | `compositor.input.cursor.*` — written to the compositor drop-in, `~/.icons/default` and applied live only while the plugin is on | unset |
+| Task progress (`progress`, opt-in) | `notify` (a notification when a task is done or fails) | on |
+| Eye breaks (`breaks`, opt-in) | `every_min` (active minutes between short breaks), `short_s`, `long_every_min` (0: no long breaks), `long_min`, `style` (`notification`, `overlay`), `skip_fullscreen` | 20 min, 20 s, 60 min, 5 min, notification, on |
+| Presentation mode (`presentation`, opt-in) | `auto_screen_share` (on while an app shares the screen) | off |
+| Share to phone (`share`, opt-in) | `minutes` (the link stops after this long, 1–120), `once` (stop after the first download) | 10 min, on |
+| Uptime monitor (`uptime`, opt-in) | `checks` (`https://…`, `http://…` or `host:port`, optionally `Name=target`, comma-separated), `interval_s` (10–3600), `notify` | empty, 60 s, on |
+| Local AI (`local-ai`, opt-in) | `url` (the Ollama server) | `http://127.0.0.1:11434` |
+| Git repositories (`git-repos`, opt-in) | `roots` (folders to look in, comma-separated), `depth` (1–6) | `~/projects, ~/Projects, ~/code, ~/src, ~/dev, ~/git`, 3 |
+| CI status (`ci`, opt-in) | `repos` (`owner/name`, comma-separated), `use_gh_token` (the `gh` CLI's login for private repos and higher limits; else `GITHUB_TOKEN`), `notify` | empty, on, on |
+| Crash reports (`crashes`, opt-in) | `notify` (a notification for a new crash) | on |
 
 Older plugin settings (weather, prayer times, pomodoro, screenshot and
 recording, updates, world clock, power history, media lyrics, visualizer,

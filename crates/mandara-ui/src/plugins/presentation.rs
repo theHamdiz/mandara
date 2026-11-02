@@ -5,9 +5,11 @@
 //! there before (do not disturb you had on stays on).
 //!
 //! The bookkeeping (what was saved, what to restore, when screen sharing
-//! decides) is [`mandara_services::presentation`]. The mode lives in memory
-//! only: nothing ticks while it is off; while it is on, the bar chip
-//! redraws once a minute for its elapsed time.
+//! decides) is [`mandara_services::presentation`]. While the mode is on its
+//! session is also kept in `~/.local/state/mandara/presentation.json`, so a
+//! shell that restarts mid-talk resumes it and still knows what to put
+//! back. Nothing ticks while it is off; while it is on, the bar chip redraws
+//! once a minute for its elapsed time.
 //!
 //! Settings (`[plugins.settings.presentation]`): `auto_screen_share` (turn
 //! on by itself while the privacy monitor reports screen sharing, and off
@@ -149,8 +151,29 @@ fn apply(plan: Plan, cx: &mut App) {
     }
 }
 
+/// Writes the session (or its absence) off the UI thread.
+fn persist(session: Option<Session>, cx: &mut App) {
+    cx.background_executor()
+        .spawn(async move {
+            if let Err(e) = pm::store(&pm::state_path(), session.as_ref()) {
+                tracing::warn!("presentation: saving the session: {e}");
+            }
+        })
+        .detach();
+}
+
 /// Turns the mode on or off (`auto`: screen sharing did it).
 pub fn set(on: bool, auto: bool, cx: &mut App) {
+    let m = model(cx);
+    let before = m.read(cx).session;
+    set_inner(on, auto, cx);
+    let after = m.read(cx).session;
+    if after != before {
+        persist(after, cx);
+    }
+}
+
+fn set_inner(on: bool, auto: bool, cx: &mut App) {
     let m = model(cx);
     let session = m.read(cx).session;
     match (on, session) {
@@ -214,7 +237,23 @@ fn sync(cx: &mut App) {
 
 /// Watches screen sharing and the plugin switch (call after the alerts).
 pub fn init(cx: &mut App) {
-    model(cx);
+    let m = model(cx);
+    // A previous run was presenting when it stopped: carry on, and keep
+    // what to restore.
+    let cfg = config(cx).read(cx).snapshot();
+    if let Some(session) = pm::load(&pm::state_path()) {
+        if enabled(&cfg, cx) {
+            apply(pm::resume(current(cx)), cx);
+            m.update(cx, |p, cx| {
+                p.session = Some(session);
+                cx.notify();
+            });
+        } else {
+            // Switched off since: just put things back.
+            apply(pm::turn_off(&session, current(cx)), cx);
+            persist(None, cx);
+        }
+    }
     if let Some(privacy) = crate::alerts::privacy_entity(cx) {
         cx.observe(&privacy, |_, cx| sync(cx)).detach();
     }

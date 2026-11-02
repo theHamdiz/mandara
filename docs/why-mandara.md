@@ -15,11 +15,11 @@ process, rendered on the GPU and animated with real spring physics.
 <table>
 <tr><td><b>Light</b></td><td>under 100 MiB of RAM and under 190 MiB of video memory for the whole shell (<a href="performance.md">measured</a>), ~0.1 % CPU idle</td></tr>
 <tr><td><b>Native</b></td><td>100 % Rust in one binary; the exact line count and hashes of this build are in the <a href="building.md#build-fingerprint">build fingerprint</a></td></tr>
-<tr><td><b>Extensible</b></td><td>58 first-party plugins built in; third-party plugins in sandboxed WebAssembly, from a GitHub marketplace or a folder</td></tr>
+<tr><td><b>Extensible</b></td><td>70 first-party plugins built in; third-party plugins in sandboxed WebAssembly, from a GitHub marketplace or a folder</td></tr>
 <tr><td><b>Compositors</b></td><td>MangoWM (tags), Niri, Hyprland and Umbriel, all first-class, configured non-destructively</td></tr>
 <tr><td><b>Complete</b></td><td>bar, dock, launcher, notifications, sound mixer, lock screen, login manager, wallpaper engine, drag-and-drop app installer and uninstaller, and more</td></tr>
 <tr><td><b>Generative</b></td><td>a built-in <a href="wallpapers.md#wallpaper-generator">wallpaper generator</a>: twelve styles, up to 8K, the smallest lossless files and seamless video loops, all in pure Rust</td></tr>
-<tr><td><b>Global</b></td><td>10 interface languages, including right-to-left Arabic</td></tr>
+<tr><td><b>Global</b></td><td>11 interface languages, including right-to-left Arabic</td></tr>
 <tr><td><b>Live</b></td><td>Mandara Studio: 31 pages of settings, every change applied instantly</td></tr>
 <tr><td><b>Agent-ready</b></td><td>almost everything the UI does is a documented CLI command with JSON replies, so scripts and AI agents can drive and inspect the desktop (<a href="agent-ready.md">how</a>)</td></tr>
 </table>

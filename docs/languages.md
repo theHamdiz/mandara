@@ -1,6 +1,6 @@
 # Languages
 
-English · العربية · Español · Français · Deutsch · Türkçe · Русский · हिन्दी · 简体中文 · 日本語
+English · العربية · Español · Français · Deutsch · Türkçe · Русский · हिन्दी · Bahasa Indonesia · 简体中文 · 日本語
 
 The whole interface is translated. Right-to-left paragraphs wrap correctly
 everywhere (dialogs, notifications, notes, Studio help and plugin

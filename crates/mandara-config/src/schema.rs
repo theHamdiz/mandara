@@ -627,6 +627,7 @@ pub enum Locale {
     German,
     Russian,
     Hindi,
+    Indonesian,
 }
 
 impl Locale {
@@ -645,6 +646,7 @@ impl Locale {
             Locale::German => Lang::De,
             Locale::Russian => Lang::Ru,
             Locale::Hindi => Lang::Hi,
+            Locale::Indonesian => Lang::Id,
         }
     }
 
@@ -661,6 +663,7 @@ impl Locale {
             Lang::De => Locale::German,
             Lang::Ru => Locale::Russian,
             Lang::Hi => Locale::Hindi,
+            Lang::Id => Locale::Indonesian,
         }
     }
 

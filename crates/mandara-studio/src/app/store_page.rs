@@ -61,12 +61,13 @@ pub(crate) const HIDDEN_PLUGINS: &[&str] = &["compositor"];
 /// plugins get their own group).
 pub(crate) const PLUGIN_CATEGORIES: &[(&str, &[&str])] = &[
     (tk("Bar essentials"), &["workspaces", "active-window", "clock", "language", "keyboard-layout", "main-menu", "session", "quick-settings", "dock"]),
-    (tk("System"), &["network", "bluetooth", "audio", "tray", "resources", "mini-stats", "processes", "notifications", "clipboard", "drives", "power", "privacy"]),
-    (tk("Maintenance"), &["updates", "services", "containers", "app-installer"]),
-    (tk("Media & capture"), &["media", "screenshot", "color-picker", "soundscapes"]),
+    (tk("System"), &["network", "bluetooth", "tailscale", "audio", "tray", "resources", "mini-stats", "processes", "notifications", "clipboard", "drives", "power", "privacy"]),
+    (tk("Maintenance"), &["updates", "services", "containers", "app-installer", "uptime", "crashes"]),
+    (tk("Developer tools"), &["progress", "ports", "git-repos", "ci", "local-ai"]),
+    (tk("Media & capture"), &["media", "screenshot", "color-picker", "soundscapes", "share"]),
     (tk("Look & feel"), &["wallpaper", "wallpaper-depth", "wallpaper-generator", "wallhaven", "cursors"]),
     (tk("Desktop widgets"), &["desktop-clocks", "desktop-monitor", "desktop-decorations", "desktop-visualizers", "desktop-now-playing", "desktop-calendar", "desktop-weather", "desktop-world-clock", "desktop-countdown", "desktop-productivity", "desktop-sky", "desktop-identity", "desktop-fun", "desktop-info"]),
-    (tk("Productivity"), &["todo", "notes", "pomodoro", "authenticator", "screen-time"]),
+    (tk("Productivity"), &["todo", "notes", "pomodoro", "authenticator", "screen-time", "keybinds", "breaks", "presentation"]),
     (tk("Everyday info"), &["weather", "prayer-times", "world-clock", "net-speed"]),
     (tk("Third-party"), &[]),
 ];
@@ -89,6 +90,7 @@ const SHELVES: &[Shelf] = &[
     Shelf { key: "look", title: tk("Look & feel"), line: tk("Wallpapers, generated art, online galleries and cursor themes"), categories: &[tk("Look & feel")] },
     Shelf { key: "desktop", title: tk("Desktop widgets"), line: tk("Clocks, weather, gauges and more, right on your wallpaper"), categories: &[tk("Desktop widgets")] },
     Shelf { key: "system", title: tk("System tools"), line: tk("Network, sound, power and upkeep, one click away"), categories: &[tk("System"), tk("Maintenance")] },
+    Shelf { key: "developer", title: tk("For developers"), line: tk("Ports, repositories, CI, local AI models and progress from your scripts"), categories: &[tk("Developer tools")] },
 ];
 
 /// Featured on the Discover hero, in order (built-ins with cover art).
@@ -427,6 +429,18 @@ pub(crate) fn plugin_icon(id: &str) -> &'static str {
         "app-installer" => "download",
         "privacy" => "eye-off",
         "screen-time" => "clock",
+        "ports" => "plug",
+        "git-repos" => "git-branch",
+        "ci" => "workflow",
+        "crashes" => "bug",
+        "tailscale" => "globe",
+        "uptime" => "heart",
+        "local-ai" => "sparkles",
+        "share" => "external",
+        "keybinds" => "keyboard",
+        "progress" => "gauge",
+        "breaks" => "eye",
+        "presentation" => "monitor",
         _ => "grid",
     }
 }
