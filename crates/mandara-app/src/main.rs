@@ -774,11 +774,12 @@ fn build_info() -> mandara_core::BuildInfo {
     }
 }
 
-/// `mandara msg apps install ./x.AppImage`, `mandara msg plugins vet ./my-plugin`:
+/// `mandara msg apps install ./x.AppImage`, `mandara msg plugins vet ./my-plugin`,
+/// `mandara msg share file ./x.pdf`:
 /// the shell resolves paths against its own folder, so relative ones are
 /// made absolute here.
 fn absolute_install_paths(mut args: Vec<String>) -> Vec<String> {
-    if args.len() > 2 && matches!((args[0].as_str(), args[1].as_str()), ("apps", "install") | ("plugins", "vet")) {
+    if args.len() > 2 && matches!((args[0].as_str(), args[1].as_str()), ("apps", "install") | ("plugins", "vet") | ("share", "file")) {
         for a in args.iter_mut().skip(2).filter(|a| !a.starts_with("--")) {
             if let Ok(abs) = std::path::absolute(&*a) {
                 *a = abs.to_string_lossy().into_owned();

@@ -75,6 +75,10 @@ pub mod net_speed;
 pub mod nm_admin;
 pub mod soundscapes;
 pub mod world_clock;
+pub mod tailscale;
+pub mod uptime;
+pub mod local_ai;
+pub mod share;
 
 pub use actor::ServiceHandle;
 pub use audio::{AudioCommand, AudioService, AudioState, spawn_audio_service};

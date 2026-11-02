@@ -78,6 +78,8 @@ cbc = { version = "0.1", features = ["zeroize"] }
 base64 = { version = "0.23", default-features = false, features = ["alloc"] }
 zeroize = "1"
 getrandom = "0.4"
+# Share to phone (share.rs): the QR code of the share link.
+qrcodegen.workspace = true
 # App installer (app_install/): AppImage type-2 payloads are squashfs
 # images, read in-process (never executed) with backhand. Its default
 # xz/zstd codecs link C libraries, so only its pure-Rust gzip and lz4
