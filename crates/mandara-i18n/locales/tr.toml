@@ -7880,3 +7880,13 @@
 # ── Desktop widgets per display ──
 "Only on this display" = "Yalnızca bu ekranda"
 "Show on every display" = "Tüm ekranlarda göster"
+
+# ── Desktop widget families and styles (#23) ──
+"Digital" = "Dijital"
+"Classic analog" = "Klasik analog"
+"Framed HUD" = "Çerçeveli HUD"
+"Day ring" = "Gün halkası"
+"Wavy week" = "Dalgalı hafta"
+"Month bar" = "Ay çubuğu"
+"Divided text" = "Bölmeli metin"
+"{name} · changed" = "{name} · değiştirildi"

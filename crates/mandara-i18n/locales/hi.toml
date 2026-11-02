@@ -7881,3 +7881,13 @@
 # ── Desktop widgets per display ──
 "Only on this display" = "सिर्फ़ इस डिस्प्ले पर"
 "Show on every display" = "हर डिस्प्ले पर दिखाएँ"
+
+# ── Desktop widget families and styles (#23) ──
+"Digital" = "डिजिटल"
+"Classic analog" = "क्लासिक एनालॉग"
+"Framed HUD" = "फ़्रेम वाला HUD"
+"Day ring" = "दिन का वलय"
+"Wavy week" = "लहरदार सप्ताह"
+"Month bar" = "महीने की पट्टी"
+"Divided text" = "विभाजित पाठ"
+"{name} · changed" = "{name} · बदला हुआ"

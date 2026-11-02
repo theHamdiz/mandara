@@ -62,6 +62,9 @@ const TILE_W_PX: f32 = 132.0;
 const TILE_H_PX: f32 = 74.0;
 const TILE_RENDER: (u32, u32) = (528, 296);
 const TILE_SCALE: f32 = 1.9;
+/// A style's picture in a widget's Style row (the same rendering, smaller).
+const STYLE_TILE_W_PX: f32 = 104.0;
+const STYLE_TILE_H_PX: f32 = 58.0;
 /// Opacity of the box outlines of unselected widgets on the preview.
 const BOX_ALPHA: f32 = 0.35;
 /// Opacity of a switched-off widget's chip.
@@ -433,8 +436,9 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// A gallery tile's picture (painted kinds), cached.
-    fn tile_image(&mut self, t: &DesktopWidgetType, widgets: &[DesktopWidget], cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
+    /// The picture of a gallery tile or of a style (painted kinds) by its
+    /// `tile` key, cached.
+    fn tile_image(&mut self, tile: &str, widgets: &[DesktopWidget], cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
         if widgets.is_empty() || widgets.iter().any(|w| !w.kind.on_wallpaper_plane()) {
             return None;
         }
@@ -443,8 +447,8 @@ impl StudioView {
         // Tiles that tell the time are painted again with the minute.
         let timed = widgets.iter().any(|w| matches!(w.kind, WidgetKind::Clock(_) | WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_)));
         let minute = timed.then(|| chrono::Local::now().timestamp().div_euclid(SECS_PER_MINUTE));
-        let k = key((t.key(), primary.to_rgba8(), &fonts, mandara_i18n::language(), minute));
-        if let Some((_, img)) = cx.global::<PageState>().tiles.get(&t.key()).filter(|(old, _)| *old == k) {
+        let k = key((tile, primary.to_rgba8(), &fonts, mandara_i18n::language(), minute));
+        if let Some((_, img)) = cx.global::<PageState>().tiles.get(tile).filter(|(old, _)| *old == k) {
             return Some(img.clone());
         }
         let s = cx.global_mut::<PageState>();
@@ -458,7 +462,7 @@ impl StudioView {
                 if widgets.len() == 1 {
                     w.place = Placement { scale: TILE_SCALE, ..Placement::default() };
                 }
-                w.id = format!("{}-{i}", t.key());
+                w.id = format!("{tile}-{i}");
                 w
             })
             .collect();
@@ -466,7 +470,7 @@ impl StudioView {
         text.release_glyphs();
         let image = render_image(rgba);
         // The tile it replaces leaves the GPU atlas.
-        if let Some((_, old)) = s.tiles.insert(t.key(), (k, image.clone())) {
+        if let Some((_, old)) = s.tiles.insert(tile.to_string(), (k, image.clone())) {
             cx.drop_image(old, None);
         }
         Some(image)
@@ -483,7 +487,7 @@ impl StudioView {
             if has_depth && widgets.iter().any(|w| matches!(&w.kind, WidgetKind::Clock(c) if c.face.depth_style().is_some())) {
                 continue;
             }
-            let tile = self.tile_image(&t, &widgets, cx);
+            let tile = self.tile_image(&t.key(), &widgets, cx);
             let label = mandara_ui::desktop_menu::widget_type_name(&t, cx);
             // Already on the desktop (one widget, same settings): the tile
             // selects it instead of stacking an identical copy on top.
@@ -709,6 +713,69 @@ impl StudioView {
             .into_any_element()
     }
 
+    /// The styles of the widget's family, each with its picture: a click
+    /// switches to it and keeps the widget's place and what the user
+    /// changed that the style leaves alone. A widget changed since its
+    /// style shows the closest one; opening the page never writes.
+    fn style_row(&mut self, w: &DesktopWidget, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let s = cx.try_global::<PluginRegistry>().and_then(|r| dp::style_of(w, r))?;
+        let from = s.presets.get(s.current)?.clone();
+        let mut tiles = Vec::new();
+        for (i, (style, to)) in s.family.styles.iter().zip(&s.presets).enumerate() {
+            let image = self.tile_image(&format!("{}#{}", s.family.key(), style.id), &(style.make)(), cx);
+            let active = i == s.current;
+            let name = tr(&style.name);
+            let label = if active && !s.exact { tf("{name} · changed", &[("name", &name)]) } else { name };
+            let (wid, from, to) = (w.id.clone(), from.clone(), to.clone());
+            let unchanged = active && s.exact;
+            tiles.push(
+                div()
+                    .id(SharedString::from(format!("dw-style-{i}-{}", w.id)))
+                    .w(px(STYLE_TILE_W_PX))
+                    .row()
+                    .flex_col()
+                    .gap(px(SPACE_4_PX))
+                    .cursor_pointer()
+                    .child(
+                        div()
+                            .w(px(STYLE_TILE_W_PX))
+                            .h(px(STYLE_TILE_H_PX))
+                            .rounded(px(RADIUS_10_PX))
+                            .overflow_hidden()
+                            .bg(p.surface_dim.hsla())
+                            .hover(|s| s.bg(p.surface_base.hsla()))
+                            .border_1()
+                            .border_color(if active { p.primary.hsla() } else { p.on_surface.with_alpha(ALPHA_8).hsla() })
+                            .row()
+                            .items_center()
+                            .justify_center()
+                            .when_some(image, |el, img_| {
+                                use gpui::StyledImage as _;
+                                el.child(img(img_).w(px(STYLE_TILE_W_PX)).h(px(STYLE_TILE_H_PX)).object_fit(gpui::ObjectFit::Contain))
+                            }),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(TEXT_11_5_PX))
+                            .truncate()
+                            .when(active, |el| el.text_color(p.primary.hsla()).font_weight(FontWeight::MEDIUM))
+                            .when(!active, |el| el.text_color(p.on_surface_variant.hsla()))
+                            .child(label),
+                    )
+                    .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                        // Already this style, unchanged: nothing to do.
+                        if unchanged {
+                            return;
+                        }
+                        let (from, to) = (from.clone(), to.clone());
+                        edit(cx, &wid, move |w| w.kind = dp::restyle(&w.kind, &from, &to));
+                    }))
+                    .into_any_element(),
+            );
+        }
+        Some(row(p, t("Style"), div().row().flex_wrap().gap(px(SPACE_8_PX)).children(tiles).into_any_element()))
+    }
+
     /// A clock face's own options.
     fn face_rows(&mut self, id: &str, c: &dw::ClockWidget, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let f = &c.face_options;
@@ -884,11 +951,14 @@ impl StudioView {
     /// What the widget shows: its kind's own settings.
     fn content_rows(&mut self, w: &DesktopWidget, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let id = w.id.clone();
-        let mut rows = Vec::new();
+        let mut rows: Vec<AnyElement> = self.style_row(w, p, cx).into_iter().collect();
         match &w.kind {
             WidgetKind::Clock(c) => {
-                let faces: Vec<(ClockFace, &'static str)> = ClockFace::ALL.iter().map(|f| (*f, face_label(*f))).collect();
-                rows.push(row(p, t("Style"), choice(&id, "face", c.face, &faces, clock_set(|c, v| c.face = v), p, cx)));
+                // The depth clock's faces are its styles.
+                if c.face.depth_style().is_some() {
+                    let faces: Vec<(ClockFace, &'static str)> = [ClockFace::Stacked, ClockFace::Classic, ClockFace::Arabic].iter().map(|f| (*f, face_label(*f))).collect();
+                    rows.push(row(p, t("Style"), choice(&id, "face", c.face, &faces, clock_set(|c, v| c.face = v), p, cx)));
+                }
                 if matches!(c.face, ClockFace::Superscript | ClockFace::Analog) {
                     rows.push(row(p, t("Seconds"), toggle(&id, "seconds", c.seconds, clock_set(|c, v| c.seconds = v), p, cx)));
                 }
@@ -911,7 +981,7 @@ impl StudioView {
             }
             WidgetKind::Progress(pw) => {
                 rows.push(row(p, t("Period"), choice(&id, "period", pw.period, &PERIODS, progress_set(|w, v| w.period = v), p, cx)));
-                rows.push(row(p, t("Style"), choice(&id, "pstyle", pw.style, &PROGRESS_STYLES, progress_set(|w, v| w.style = v), p, cx)));
+                rows.push(row(p, t("Shape"), choice(&id, "pstyle", pw.style, &PROGRESS_STYLES, progress_set(|w, v| w.style = v), p, cx)));
                 rows.push(row(p, t("Line width"), slider(&id, "pthick", pw.thickness, ranges::PROGRESS_THICKNESS_PX, 1.0, " px", progress_set(|w, v| w.thickness = v), p)));
                 rows.push(row(p, t("Text under it"), toggle(&id, "plabel", pw.label, progress_set(|w, v| w.label = v), p, cx)));
             }
@@ -1167,7 +1237,6 @@ impl StudioView {
             }
             WidgetKind::Monitor(m) => {
                 let set = |f: fn(&mut mandara_config::desktop_widgets::MonitorWidget, f32)| -> Set<f32> { Rc::new(move |w, v| if let WidgetKind::Monitor(m) = &mut w.kind { f(m, v) }) };
-                rows.push(row(p, t("Style"), choice(&id, "mstyle", m.style, &[(MonitorStyle::Column, tk("Column")), (MonitorStyle::Gauges, tk("Gauges")), (MonitorStyle::Meters, tk("Meters")), (MonitorStyle::Bars, tk("Bars")), (MonitorStyle::Thermals, tk("Thermals"))], Rc::new(|w, v| if let WidgetKind::Monitor(m) = &mut w.kind { m.style = v }), p, cx)));
                 if m.style == MonitorStyle::Gauges {
                     rows.push(row(p, t("Ring width"), slider(&id, "mring", m.ring_width, ranges::RING_WIDTH_PX, 0.5, " px", monitor_set(|m, v| m.ring_width = v), p)));
                     rows.push(row(p, t("Wavy ring"), toggle(&id, "mwavy", m.wavy, monitor_set(|m, v| m.wavy = v), p, cx)));

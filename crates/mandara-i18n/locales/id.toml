@@ -7633,3 +7633,13 @@
 # ── Desktop widgets per display ──
 "Only on this display" = "Hanya di layar ini"
 "Show on every display" = "Tampilkan di semua layar"
+
+# ── Desktop widget families and styles (#23) ──
+"Digital" = "Digital"
+"Classic analog" = "Analog klasik"
+"Framed HUD" = "HUD berbingkai"
+"Day ring" = "Cincin hari"
+"Wavy week" = "Minggu bergelombang"
+"Month bar" = "Bilah bulan"
+"Divided text" = "Teks terbagi"
+"{name} · changed" = "{name} · diubah"

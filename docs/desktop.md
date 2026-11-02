@@ -149,7 +149,9 @@ How Mandara looks and feels, and how much of it you can shape.
 - **Many more widgets:** nine more clock faces (a stacked card, the time
   in a shape, dot-matrix and pixel digits, a digit in each box, a slanted
   HUD, hands over giant numerals, an orbit, and text lines you write from
-  placeholders), day / week / month / year progress, a to-do list you tick
+  placeholders; in Studio's gallery the look-alike faces share one tile
+  per family, *Stacked*, *Analog*, *Digital*, *Text*, each with a
+  **Style** choice), day / week / month / year progress, a to-do list you tick
   on the desktop, a sticky note, the focus timer, a quote card, notebook
   tabs, painted month / week / agenda / date-tile calendars, the sun on its
   arc, the moon's phase, a day-and-night globe, the weather as a sentence,

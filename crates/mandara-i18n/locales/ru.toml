@@ -7880,3 +7880,13 @@
 # ── Desktop widgets per display ──
 "Only on this display" = "Только на этом экране"
 "Show on every display" = "Показывать на всех экранах"
+
+# ── Desktop widget families and styles (#23) ──
+"Digital" = "Цифровые"
+"Classic analog" = "Классические аналоговые"
+"Framed HUD" = "HUD в рамке"
+"Day ring" = "Кольцо дня"
+"Wavy week" = "Волнистая неделя"
+"Month bar" = "Полоса месяца"
+"Divided text" = "Текст с разделителем"
+"{name} · changed" = "{name} · изменено"

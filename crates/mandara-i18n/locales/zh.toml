@@ -7875,3 +7875,13 @@
 # ── Desktop widgets per display ──
 "Only on this display" = "仅在此显示器"
 "Show on every display" = "在所有显示器上显示"
+
+# ── Desktop widget families and styles (#23) ──
+"Digital" = "数字"
+"Classic analog" = "经典模拟"
+"Framed HUD" = "带框 HUD"
+"Day ring" = "今日圆环"
+"Wavy week" = "波浪周进度"
+"Month bar" = "本月进度条"
+"Divided text" = "分栏文字"
+"{name} · changed" = "{name} · 已修改"

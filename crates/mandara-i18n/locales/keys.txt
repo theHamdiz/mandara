@@ -107,7 +107,6 @@ A clear sky. A good day to be outside.
 A click opens the launcher
 A clock on the desktop
 A collection needs a name
-A column of live readings
 A connection named "{name}" already exists
 A connection's IPv4 method, addresses, gateway and DNS
 A container using this much CPU (percent of one core) is highlighted
@@ -191,7 +190,6 @@ A public repository with this topic (About → Topics).
 A random style
 A rounded surface around its children
 A saying that changes every day, or your own
-A scalloped dial, dots for hours, blade hands and the day in a bubble
 A second, stronger warning
 A sense of humour is a sense of proportion.
 A shutter when a capture is taken
@@ -1007,6 +1005,7 @@ Cities, comma separated (empty: your World clock cities)
 City or place name
 Clarice Lispector
 Classic
+Classic analog
 Classic: one surface with the search field and results. Beacon: a centred search bar with results under it once you type
 Claude Code today
 Claude Code's tokens today and this week, read from its local logs once you switch it on
@@ -1187,7 +1186,6 @@ Control the focus timer
 Controller
 Conversations with Maya Angelou
 Cookie
-Cookie clock
 Cooler, quieter, longer
 Copied
 Copied images and screenshots
@@ -1372,7 +1370,7 @@ Day and night globe
 Day and night where they are right now, your place and the moon
 Day block
 Day numeral
-Day progress
+Day ring
 Day temperature
 Day {n}
 Daylight
@@ -1503,6 +1501,7 @@ Diary, 1944
 Diary, 1953
 Different wallpaper on each display
 Digit boxes
+Digital
 Diligence is the mother of good fortune.
 Dim
 Dim behind panels
@@ -1548,7 +1547,7 @@ Distance from the screen edge (floating styles and the floating frame)
 Distant coast
 Distro logo
 Divan
-Divided text clock
+Divided text
 Diwan
 Do not be desirous to have things done quickly; do not look at small advantages.
 Do not betray those in your care
@@ -2085,7 +2084,7 @@ Frame rate
 Frame rate limit
 Frame thickness
 Frame timing
-Framed HUD clock
+Framed HUD
 Framed bars
 Frames per second of screen recordings
 Francis Bacon
@@ -3310,7 +3309,7 @@ Montaza Twilight
 Montaza twilight
 Month
 Month and weekday names: auto follows the interface, or a locale such as en_GB, ar_EG, de_DE
-Month progress
+Month bar
 Moon
 Moon phase
 More
@@ -4748,8 +4747,6 @@ Rim brightness
 Rim intensity
 Rim width
 Ring
-Ring gauges drawn as a wave
-Ring gauges for CPU, GPU, memory, disk and battery
 Ring shows
 Ring starts at
 Ring width
@@ -5010,7 +5007,6 @@ Seek knowledge
 Seek not the paths of the ancients; seek that which the ancients sought.
 Seek to a position in seconds
 Segmentation fault
-Segmented meters, like a battery's cells
 Segments
 Select a region to capture
 Select a screen region with a QR code and add the account it holds
@@ -5350,7 +5346,6 @@ Squircle
 Stack
 Stacked
 Stacked card
-Stacked digits in a thin frame with a header
 Stacking
 Stacks
 Stacks & Trash
@@ -5590,7 +5585,6 @@ Take an entry out of a collection
 Take an orphan under your wing and you will be close to the Prophet ﷺ.
 Take screenshot
 Takes effect the next time you log in or restart. Your current session isn't touched.
-Tall bars side by side
 Tallest it grows; fewer rows show when this is low
 Tallest panel, as a share of the screen height the bar leaves free
 Tallest the floating card grows
@@ -5759,7 +5753,6 @@ The date next to the time
 The date under the clock
 The date, the weather and the one thing worth knowing now
 The day
-The day large, a rule, the weekday and the time beside it
 The depth effect's mode, model, current mask and last model run
 The desktop's menu
 The displays changed meanwhile; try again
@@ -6525,6 +6518,7 @@ Waves
 Waviness
 Wavy gauges
 Wavy ring
+Wavy week
 Waxing crescent
 Waxing gibbous
 We come nearest to the great when we are great in humility.
@@ -6548,7 +6542,6 @@ WebP images must be 1 to 16384 pixels on each side
 Wed
 Week
 Week numbers
-Week progress
 Week starts on
 Week strip
 Week {week}
@@ -7454,6 +7447,7 @@ your default
 {name} isn't installed — Install & use adds it (package {package})
 {name} now points to another repository ({page}). Mandara doesn't follow moved plugins; install it again from its new home if you trust it.
 {name} won't be able to sign in any more. This can't be undone.
+{name} · changed
 {name} · on the desktop
 {n} accounts · {backend}
 {n} apps

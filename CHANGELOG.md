@@ -6,6 +6,16 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Changed
+
+- **A tidier widget gallery.** Look-alike widgets now share one tile in
+  Studio → Desktop widgets: the clocks are Stacked, Headline, Day block,
+  Analog, Digital, Progress, Greeting and Text (plus the depth clock), and
+  the monitors are System monitor and Thermals. Pick a look from the
+  widget's new **Style** row, with a small preview of each; the widget
+  stays where it is and keeps your colours and font. Widgets you already
+  placed keep their exact look. ([#23](https://github.com/theHamdiz/mandara/issues/23))
+
 ## 0.7.0 — 2026-11-02
 
 Shortcuts cheatsheet. Task progress. Eye breaks. Presentation mode.

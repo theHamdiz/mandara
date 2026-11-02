@@ -7884,3 +7884,13 @@
 # ── Desktop widgets per display ──
 "Only on this display" = "على هذه الشاشة فقط"
 "Show on every display" = "اعرض على كل الشاشات"
+
+# ── Desktop widget families and styles (#23) ──
+"Digital" = "رقمية"
+"Classic analog" = "تناظرية كلاسيكية"
+"Framed HUD" = "HUD مؤطّر"
+"Day ring" = "حلقة اليوم"
+"Wavy week" = "الأسبوع المتموّج"
+"Month bar" = "شريط الشهر"
+"Divided text" = "نص مقسّم"
+"{name} · changed" = "{name} · معدّل"
