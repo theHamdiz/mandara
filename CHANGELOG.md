@@ -105,10 +105,6 @@ developer tools.
   small gap on each side, a softer track with a dot at its end, and a
   little spring when you press it. Studio's sliders show their value in a
   bubble above the handle while you drag. ([#20](https://github.com/theHamdiz/mandara/issues/20))
-- **Less video memory after closing the sidebar or a panel.** The
-  drawing space a large panel needed is now given back about a second and a
-  half after you close it, instead of lingering for minutes while the
-  desktop sits idle (around 60 MB at 4K).
 - **A quicker start.** Loading the built-in plugins at startup now takes a
   fraction of the memory work it did (under half a megabyte instead of
   about 16 MB), so the shell is ready a little sooner.
