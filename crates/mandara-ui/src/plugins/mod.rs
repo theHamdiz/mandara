@@ -63,6 +63,10 @@ pub mod tailscale;
 pub mod local_ai;
 pub mod uptime;
 pub mod share;
+pub mod keybinds;
+pub mod progress;
+pub mod breaks;
+pub mod presentation;
 
 use std::time::Duration;
 
@@ -246,6 +250,10 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     git_repos::register(registry);
     ci::register(registry);
     crashes::register(registry);
+    keybinds::register(registry);
+    progress::register(registry);
+    breaks::register(registry);
+    presentation::register(registry);
     // Third-party / development plugins from the plugin directories.
     external::register(registry);
 }

@@ -1,5 +1,6 @@
 //! Quick settings: toggle tiles for the sidebar (Wi-Fi, Bluetooth,
-//! light/dark appearance, keep-awake, night light, mute all sound, and
+//! light/dark appearance, keep-awake, night light, mute all sound,
+//! presentation mode when its plugin is on, and
 //! KeePassXC when it's installed), a screen brightness slider (laptop
 //! backlight or DDC/CI monitors), plus the keep-awake command.
 
@@ -49,7 +50,7 @@ pub fn set_keep_awake(on: bool, cx: &mut App) -> Result<bool, String> {
 }
 
 /// The toggle tiles (Wi-Fi, Bluetooth, appearance, keep awake, night
-/// light, mute all, KeePassXC) and the brightness slider: the sidebar card,
+/// light, mute all, presentation, KeePassXC) and the brightness slider: the sidebar card,
 /// and the main menu's home page.
 pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
                 let hub = hub(cx).read(cx);
@@ -149,10 +150,27 @@ pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
                             }
                         },
                     ));
-                // KeePassXC: only when it's installed and Mandara's dialog is on.
+                // Presentation mode (when its plugin is on) and KeePassXC (when
+                // it's installed and Mandara's dialog is on) share a row.
+                let presentation = {
+                    let cfg = config(cx).read(cx).snapshot();
+                    cx.global::<mandara_plugins::PluginRegistry>().is_enabled(super::presentation::ID, &cfg.plugins)
+                }
+                .then(|| {
+                    let on = super::presentation::active(cx);
+                    toggle_tile(
+                        "qs-presentation",
+                        "monitor",
+                        mandara_i18n::t("Presenting"),
+                        Some(if on { mandara_i18n::t("On").into() } else { mandara_i18n::t("Off").into() }),
+                        on,
+                        palette,
+                        move |_, cx| super::presentation::set(!on, false, cx),
+                    )
+                });
                 let keepass = crate::keepassxc_prompt::available(cx).then(|| {
                     let open = crate::keepassxc_prompt::unlocked(cx);
-                    div().flex().gap(px(tokens::SM)).child(toggle_tile(
+                    toggle_tile(
                         "qs-keepassxc",
                         if open { "lock-open" } else { "key" },
                         mandara_i18n::t("KeePassXC"),
@@ -164,8 +182,9 @@ pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
                                 tracing::warn!("keepassxc: {e}");
                             }
                         },
-                    ))
+                    )
                 });
+                let row4 = (presentation.is_some() || keepass.is_some()).then(|| div().flex().gap(px(tokens::SM)).children(presentation).children(keepass));
                 // Screen brightness, when this machine can change it.
                 let brightness = crate::osd::brightness_level(cx).map(|level| {
                     let shown = crate::slider_model::held(&BRIGHTNESS_SLIDER.into()).unwrap_or(level);
@@ -184,7 +203,7 @@ pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
                         )
                         .child(super::panel_fx::big_slider(BRIGHTNESS_SLIDER, level, "sun", false, palette, |v, _, cx| crate::osd::set_brightness(v, cx)))
                 });
-                div().flex().flex_col().gap(px(tokens::SM)).child(row1).child(row2).child(row3).children(keepass).children(brightness).into_any_element()
+                div().flex().flex_col().gap(px(tokens::SM)).child(row1).child(row2).child(row3).children(row4).children(brightness).into_any_element()
 }
 
 pub fn register(r: &mut PluginRegistry) {

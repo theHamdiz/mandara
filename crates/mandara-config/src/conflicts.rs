@@ -435,6 +435,72 @@ pub fn file_binds(target: Target, text: &str) -> Vec<(usize, usize, String)> {
     }
 }
 
+/// One keybind from the user's own compositor config (Studio's shortcut
+/// conflicts and the shortcuts cheatsheet).
+#[derive(Clone, Debug, PartialEq)]
+pub struct UserBind {
+    /// Normalized chord (`shift+super+e`).
+    pub chord: String,
+    pub file: PathBuf,
+    /// 1-based line number of the bind's first line.
+    pub line: usize,
+    /// The bind's first line, trimmed.
+    pub text: String,
+    /// Every line of the bind (a Niri bind spans its `{ … }` block), with
+    /// Hyprland `$variables` substituted so `exec, $menu` names the program.
+    pub body: String,
+    /// A tool Mandara replaces (old launcher, wallpaper picker…).
+    pub replaces: Option<String>,
+}
+
+/// Hyprland `$name = value` definitions in `lines`, longest names first so
+/// `$mainModShift` is substituted before `$mainMod`.
+fn hypr_vars(target: Target, lines: &[&str]) -> Vec<(String, String)> {
+    if target != Target::Hyprland {
+        return Vec::new();
+    }
+    let mut v: Vec<(String, String)> = lines.iter().filter_map(|l| l.trim().strip_prefix('$')?.split_once('=').map(|(n, val)| (format!("${}", n.trim()), val.trim().to_string()))).collect();
+    v.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
+    v
+}
+
+/// Binds in `text` (one file) with their line numbers: the same whole-file
+/// parse as the conflict scanner ([`file_binds`]), so Hyprland's `$mainMod`
+/// variables and Lua `hl.bind` chords built from `local`s count.
+pub fn binds_in(target: Target, file: &Path, text: &str) -> Vec<UserBind> {
+    let lines: Vec<&str> = text.lines().collect();
+    let vars = hypr_vars(target, &lines);
+    file_binds(target, text)
+        .into_iter()
+        .map(|(start, end, chord)| {
+            let block = lines.get(start..=end.min(lines.len().saturating_sub(1))).map(|l| l.join("\n")).unwrap_or_default();
+            let body = vars.iter().fold(block, |b, (n, val)| b.replace(n.as_str(), val));
+            UserBind { chord, file: file.to_path_buf(), line: start + 1, text: lines.get(start).map_or_else(String::new, |l| l.trim().to_string()), body, replaces: None }
+        })
+        .collect()
+}
+
+/// Every bind in the user's config tree for `target` (never Mandara's
+/// drop-in), keyed by chord: later files win, like the compositor. Binds
+/// whose tool Mandara replaces carry it in [`UserBind::replaces`].
+pub fn user_binds(target: Target, cfg: &CompositorConfig) -> std::collections::BTreeMap<String, UserBind> {
+    let mut map = std::collections::BTreeMap::new();
+    for file in config_files(target) {
+        let Ok(text) = std::fs::read_to_string(&file) else { continue };
+        for b in binds_in(target, &file, &text) {
+            map.insert(b.chord.clone(), b);
+        }
+    }
+    for c in scan(target, cfg) {
+        if let Kind::Keybind { chord, replaces: Some(tool), .. } = c.kind
+            && let Some(b) = map.get_mut(&chord)
+        {
+            b.replaces = Some(tool);
+        }
+    }
+    map
+}
+
 /// Conflicts in the user's config tree for `target` against `cfg`.
 pub fn scan(target: Target, cfg: &CompositorConfig) -> Vec<Conflict> {
     scan_files(target, cfg, &config_files(target))
@@ -450,13 +516,7 @@ pub fn scan_files(target: Target, cfg: &CompositorConfig, files: &[PathBuf]) -> 
         let binds = file_binds(target, &text);
         // Hyprland `$var = value` lines, substituted into bind bodies so
         // `exec, $menu` names the program behind it.
-        let vars: Vec<(String, String)> = if target == Target::Hyprland {
-            let mut v: Vec<(String, String)> = lines.iter().filter_map(|l| l.trim().strip_prefix('$')?.split_once('=').map(|(n, val)| (format!("${}", n.trim()), val.trim().to_string()))).collect();
-            v.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
-            v
-        } else {
-            Vec::new()
-        };
+        let vars = hypr_vars(target, &lines);
         for (start, end, ch) in binds {
             let body = vars.iter().fold(lines[start..=end].join("\n"), |b, (n, val)| b.replace(n.as_str(), val));
             if body.contains("mandara") {
@@ -908,5 +968,31 @@ fcitx5 -d
         assert!(std::fs::read_to_string(d.join("hyprland.lua")).unwrap().contains("-- mandara-retired: hl.exec_cmd(\"waybar\")"));
         std::fs::remove_dir_all(&b).ok();
         std::fs::remove_dir_all(d).ok();
+    }
+
+    #[test]
+    fn user_binds_carry_lines_and_bodies_per_compositor() {
+        let f = Path::new("/x/config.conf");
+        let mango = binds_in(Target::Mango, f, "blur=1\nbind=SUPER,Return,spawn,ghostty\n# bind=SUPER,x,nope\nbind=CTRL+ALT,Delete,quit\n");
+        assert_eq!(mango.iter().map(|b| (b.chord.as_str(), b.line)).collect::<Vec<_>>(), vec![("super+return", 2), ("alt+ctrl+delete", 4)]);
+        let niri = binds_in(Target::Niri, f, "binds {\n    Mod+T { spawn \"alacritty\"; }\n    // Mod+X { quit; }\n    Mod+Shift+E {\n        quit;\n    }\n}\nlayout { gaps 8; }\n");
+        assert_eq!(niri.iter().map(|b| (b.chord.as_str(), b.line)).collect::<Vec<_>>(), vec![("super+t", 2), ("shift+super+e", 4)]);
+        assert_eq!(niri[1].body, "    Mod+Shift+E {\n        quit;\n    }", "a Niri bind spans its block");
+        let hypr = binds_in(Target::Hyprland, f, "$menu = fuzzel\nbind = SUPER, Q, exec, kitty\n#bind = SUPER, W, exec, x\nbind = SUPER, D, exec, $menu\n");
+        assert_eq!(hypr.len(), 2);
+        assert_eq!(hypr[0].text, "bind = SUPER, Q, exec, kitty");
+        assert_eq!(hypr[1].body, "bind = SUPER, D, exec, fuzzel", "variables are substituted");
+    }
+
+    #[test]
+    fn hyprland_variables_and_lua_locals_resolve_in_user_binds() {
+        let f = Path::new("/x/hyprland.conf");
+        let conf = "$mainMod = SUPER\n$alt = ALT\nbind = $mainMod, Q, exec, kitty\nbind = $mainMod SHIFT, E, exit\n# bind = $mainMod, W, exec, x\nbindl = $alt, F1, exec, y\n";
+        let got: Vec<(String, usize)> = binds_in(Target::Hyprland, f, conf).into_iter().map(|b| (b.chord, b.line)).collect();
+        assert_eq!(got, vec![("super+q".to_string(), 3), ("shift+super+e".to_string(), 4), ("alt+f1".to_string(), 6)]);
+        let lua = Path::new("/x/hyprland.lua");
+        let text = "local mod = \"SUPER\"\nlocal smod = mod .. \" + SHIFT\"\nhl.bind(mod .. \" + Return\", hl.exec(\"kitty\"))\n-- hl.bind(mod .. \" + X\", hl.exec(\"x\"))\nhl.bind(smod .. \" + Q\", hl.kill())\n";
+        let got: Vec<(String, usize)> = binds_in(Target::Hyprland, lua, text).into_iter().map(|b| (b.chord, b.line)).collect();
+        assert_eq!(got, vec![("super+return".to_string(), 3), ("shift+super+q".to_string(), 5)]);
     }
 }

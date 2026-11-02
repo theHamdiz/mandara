@@ -83,6 +83,10 @@ pub mod tailscale;
 pub mod uptime;
 pub mod local_ai;
 pub mod share;
+pub mod keybinds;
+pub mod progress;
+pub mod breaks;
+pub mod presentation;
 
 pub use actor::ServiceHandle;
 pub use audio::{AudioCommand, AudioService, AudioState, spawn_audio_service};
