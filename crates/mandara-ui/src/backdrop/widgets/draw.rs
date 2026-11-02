@@ -145,6 +145,8 @@ pub fn family(fonts: &FontNames, role: FontRole) -> &str {
         FontRole::Mono => &fonts.mono,
         FontRole::Scripture if fonts.scripture.is_empty() => &fonts.arabic,
         FontRole::Scripture => &fonts.scripture,
+        FontRole::Hadith if fonts.hadith.is_empty() => &fonts.arabic,
+        FontRole::Hadith => &fonts.hadith,
         FontRole::Custom if fonts.custom.is_empty() => &fonts.widgets,
         FontRole::Custom => &fonts.custom,
     }

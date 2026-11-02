@@ -25,7 +25,7 @@
 //! <key>|step|step done|saved|save <ref>|unsave <ref>`.
 
 pub mod art;
-mod panel;
+pub(crate) mod panel;
 
 use std::cell::RefCell;
 use std::rc::Rc;

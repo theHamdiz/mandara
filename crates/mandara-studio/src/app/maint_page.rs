@@ -346,6 +346,49 @@ impl StudioView {
             );
         }
 
+        // The Hadith plugin's library (downloaded by the shell, which hears
+        // about a removal through its status command).
+        let (collections, bytes) = mandara_services::hadith::store::summary();
+        let installed = collections > 0;
+        let key = "hadith-library".to_string();
+        downloads = downloads.child(
+            div()
+                .row()
+                .items_center()
+                .gap(px(SPACE_12_PX))
+                .py(px(SPACE_6_PX))
+                .child(div().size(px(DIM_34_PX)).rounded(px(RADIUS_11_PX)).row().items_center().justify_center().flex_none().bg(p.surface_container_high.hsla()).child(icon("hadith", ICON_16_PX, p.on_surface_variant)))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.0))
+                        .row()
+                        .flex_col()
+                        .child(div().font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(t("Hadith library"))))
+                        .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).truncate().child(if installed {
+                            format!("{} · {}", tf("{n} collections from hadith-api (public domain)", &[("n", &collections)]), human(bytes))
+                        } else {
+                            t("Collections the Hadith plugin downloads from hadith-api (public domain)").to_string()
+                        })),
+                )
+                .child({
+                    let color = if installed { p.success_emerald } else { p.on_surface_variant };
+                    div().px(px(SPACE_9_PX)).h(px(DIM_22_PX)).rounded_full().row().items_center().flex_none().bg(color.with_alpha(ALPHA_14).hsla()).text_color(color.hsla()).text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).child(if installed { t("Installed") } else { t("Not installed") })
+                })
+                .child(if installed {
+                    button("rm-hadith".into(), t("Remove").into(), Some(&key), ButtonKind::Tonal).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.maint_job("hadith-library".into(), cx, |_| {
+                            let freed = mandara_services::hadith::store::remove_all()?;
+                            Ok((tf("Hadith library removed · {size} freed", &[("size", &human(freed))]), vec![vec!["hadith".into(), "status".into()]]))
+                        });
+                    }))
+                } else {
+                    button("dl-hadith".into(), t("Download").into(), Some(&key), ButtonKind::Primary).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.maint_job("hadith-library".into(), cx, |_| Ok((t("Downloading in the Hadith panel").to_string(), vec![vec!["hadith".into(), "download".into()]])));
+                    }))
+                }),
+        );
+
         // ── Storage ───────────────────────────────────────────────────────
         let storage = card().child(
             div()

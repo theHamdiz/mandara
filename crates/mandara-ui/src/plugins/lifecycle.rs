@@ -152,6 +152,7 @@ mod tests {
         "dock",
         "drives",
         "git-repos",
+        "hadith",
         "jannah",
         "keybinds",
         "local-ai",

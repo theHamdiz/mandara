@@ -24,6 +24,7 @@ pub mod frame;
 pub mod fun;
 pub mod identity;
 pub mod info;
+pub mod hadith;
 pub mod jannah;
 pub mod layout;
 pub mod lingo;
@@ -169,6 +170,9 @@ pub struct WidgetData {
     pub prayer: Option<PrayerInfo>,
     /// Today's Jannah reminder and step (while a Jannah widget shows).
     pub jannah: Option<JannahInfo>,
+    /// Today's hadith and the reading progress (while a Hadith widget
+    /// shows).
+    pub hadith: Option<HadithInfo>,
     pub glance: Option<GlanceInfo>,
     /// Each GitHub, exchange rate and AI usage widget's feed, by widget id.
     pub github: std::collections::BTreeMap<String, Feed<Vec<mandara_services::desktop_feeds::ContributionDay>>>,
@@ -235,6 +239,46 @@ pub struct PrayerInfo {
     /// Today's Hijri date (the day turns at Maghrib); the widget writes it
     /// in its own language, digits and calendar.
     pub hijri: Option<lingo::HijriDate>,
+}
+
+/// The Hadith plugin's widgets: today's hadith and the reading progress
+/// through each collection.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct HadithInfo {
+    pub today: Option<HadithCard>,
+    pub progress: Vec<HadithProgress>,
+}
+
+/// The hadith of the day as the desktop shows it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct HadithCard {
+    /// The words without the chain, verbatim.
+    pub words: String,
+    /// The meaning (without "Narrated X:") when shown, and its narrator.
+    pub meaning: Option<String>,
+    /// English stands in for the interface language.
+    pub english: bool,
+    pub narrator: Option<String>,
+    /// `Sahih al-Bukhari 1` and `صحيح البخاري ١`.
+    pub reference: String,
+    pub reference_ar: String,
+    /// The lead grade: its family, its words (empty for the two Sahih
+    /// collections) and its colour (`0xRRGGBB`).
+    pub grade: Option<(mandara_services::hadith::GradeClass, String, u32)>,
+}
+
+/// Reading progress through one collection.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HadithProgress {
+    pub collection: mandara_config::widget_kinds::HadithCollection,
+    /// The English name (a catalog key) and the Arabic.
+    pub title: String,
+    pub arabic: String,
+    pub read: usize,
+    pub total: usize,
+    pub downloaded: bool,
+    /// Where you were (`Bukhari 52`).
+    pub last: Option<String>,
 }
 
 /// Today's Jannah reminder (as the plugin picked it for the desktop) and
@@ -514,6 +558,7 @@ fn data_key(w: &DesktopWidget, scene: &WidgetScene) -> u64 {
         WidgetKind::ScreenTime(_) => key(format!("{:?}", scene.data.screen)),
         WidgetKind::Prayer(_) => key(format!("{:?}", scene.data.prayer)),
         WidgetKind::Jannah(_) => key(format!("{:?}", scene.data.jannah)),
+        WidgetKind::Hadith(_) => key(format!("{:?}", scene.data.hadith)),
         WidgetKind::Glance(_) => key(format!("{:?}{:?}", scene.data.glance, scene.weather)),
         WidgetKind::Github(_) => key(format!("{:?}", scene.data.github.get(&w.id))),
         WidgetKind::Currency(_) => key(format!("{:?}", scene.data.rates.get(&w.id))),
@@ -1018,6 +1063,7 @@ pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler
         WidgetKind::ScreenTime(st) => (info::screen_time(st, &scene.data.screen.clone().unwrap_or_default(), &Lingo::of(&st.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Prayer(p) => (info::prayer(p, scene.data.prayer.as_ref()?, now, &Lingo::of(&p.locale, scene.rtl, None), scene.h24, k, &mut m), 0.0),
         WidgetKind::Jannah(jw) => (jannah::jannah(jw, scene.data.jannah.as_ref()?, &Lingo::of(&jw.locale, scene.rtl, None), k, align, &mut m), 0.0),
+        WidgetKind::Hadith(hw) => (hadith::hadith(hw, scene.data.hadith.as_ref()?, &Lingo::of(&hw.locale, scene.rtl, None), k, align, &mut m)?, 0.0),
         WidgetKind::Search(sw) => (info::search(sw, &Lingo::of(&sw.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Glance(g) => {
             let gi = scene.data.glance.clone().unwrap_or(GlanceInfo { icon: "sparkles", text: String::new(), action: None });

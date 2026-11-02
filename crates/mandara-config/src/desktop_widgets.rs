@@ -393,6 +393,7 @@ pub enum WidgetKind {
     ScreenTime(ScreenTimeWidget),
     Prayer(PrayerWidget),
     Jannah(JannahWidget),
+    Hadith(HadithWidget),
     Search(SearchWidget),
     Glance(GlanceWidget),
     Github(GithubWidget),
@@ -438,6 +439,7 @@ impl WidgetKind {
             WidgetKind::ScreenTime(_) => "screen-time",
             WidgetKind::Prayer(_) => "prayer",
             WidgetKind::Jannah(_) => "jannah",
+            WidgetKind::Hadith(_) => "hadith",
             WidgetKind::Search(_) => "search",
             WidgetKind::Glance(_) => "glance",
             WidgetKind::Github(_) => "github",
@@ -485,6 +487,7 @@ impl WidgetKind {
             WidgetKind::ScreenTime(x) => Some(&x.look),
             WidgetKind::Prayer(x) => Some(&x.look),
             WidgetKind::Jannah(x) => Some(&x.look),
+            WidgetKind::Hadith(x) => Some(&x.look),
             WidgetKind::Search(x) => Some(&x.look),
             WidgetKind::Glance(x) => Some(&x.look),
             WidgetKind::Github(x) => Some(&x.look),
@@ -526,6 +529,7 @@ impl WidgetKind {
             WidgetKind::ScreenTime(x) => Some(&mut x.look),
             WidgetKind::Prayer(x) => Some(&mut x.look),
             WidgetKind::Jannah(x) => Some(&mut x.look),
+            WidgetKind::Hadith(x) => Some(&mut x.look),
             WidgetKind::Search(x) => Some(&mut x.look),
             WidgetKind::Glance(x) => Some(&mut x.look),
             WidgetKind::Github(x) => Some(&mut x.look),
@@ -563,6 +567,7 @@ impl WidgetKind {
             WidgetKind::ScreenTime(x) => Some(&x.locale),
             WidgetKind::Prayer(x) => Some(&x.locale),
             WidgetKind::Jannah(x) => Some(&x.locale),
+            WidgetKind::Hadith(x) => Some(&x.locale),
             WidgetKind::Search(x) => Some(&x.locale),
             WidgetKind::Glance(x) => Some(&x.locale),
             WidgetKind::Github(x) => Some(&x.locale),
@@ -599,6 +604,7 @@ impl WidgetKind {
             WidgetKind::ScreenTime(x) => Some(&mut x.locale),
             WidgetKind::Prayer(x) => Some(&mut x.locale),
             WidgetKind::Jannah(x) => Some(&mut x.locale),
+            WidgetKind::Hadith(x) => Some(&mut x.locale),
             WidgetKind::Search(x) => Some(&mut x.locale),
             WidgetKind::Glance(x) => Some(&mut x.locale),
             WidgetKind::Github(x) => Some(&mut x.locale),
@@ -628,6 +634,7 @@ impl WidgetKind {
             WidgetKind::Media(_) => plugin_ids::NOW_PLAYING,
             WidgetKind::Fetch(_) | WidgetKind::ScreenTime(_) | WidgetKind::Prayer(_) | WidgetKind::Search(_) | WidgetKind::Glance(_) | WidgetKind::Github(_) | WidgetKind::Currency(_) | WidgetKind::AiUsage(_) | WidgetKind::Games(_) => plugin_ids::INFO,
             WidgetKind::Jannah(_) => plugin_ids::JANNAH,
+            WidgetKind::Hadith(_) => plugin_ids::HADITH,
             WidgetKind::Card(c) => crate::desktop_cards::card_plugin(&c.card),
         }
     }
@@ -653,6 +660,8 @@ pub mod plugin_ids {
     /// Not a desktop widget plugin: the Jannah plugin offers its own
     /// widgets (so they are not in [`ALL`]).
     pub const JANNAH: &str = "jannah";
+    /// Not a desktop widget plugin either: the Hadith plugin's widgets.
+    pub const HADITH: &str = "hadith";
     /// Every one of them.
     pub const ALL: [&str; 14] = [CLOCKS, MONITOR, DECORATIONS, VISUALIZERS, NOW_PLAYING, CALENDAR, WEATHER, WORLD_CLOCK, COUNTDOWN, PRODUCTIVITY, SKY, IDENTITY, FUN, INFO];
 }
@@ -811,6 +820,9 @@ pub enum FontRole {
     /// A Qur'anic Naskh for scripture (Amiri Quran, then Amiri, Noto Naskh
     /// Arabic or the Arabic face).
     Scripture,
+    /// A Naskh for hadith (Amiri, then Amiri Quran, Noto Naskh Arabic or
+    /// the Arabic face).
+    Hadith,
     /// The widget's own family ([`Look::font_family`]).
     Custom,
 }

@@ -642,6 +642,9 @@ fn widget_data(items: &[mandara_config::desktop_widgets::DesktopWidget], cfg: &m
     if has(|k| matches!(k, K::Jannah(_))) && crate::desktop_plugins::enabled(crate::plugins::jannah::ID, cfg, cx) {
         d.jannah = crate::plugins::jannah::widget_info(cx);
     }
+    if has(|k| matches!(k, K::Hadith(_))) && crate::desktop_plugins::enabled(crate::plugins::hadith::ID, cfg, cx) {
+        d.hadith = crate::plugins::hadith::widget_info(cx);
+    }
     if has(|k| matches!(k, K::Glance(_))) {
         d.glance = Some(crate::desktop_info::glance(cfg, prayer_on, cx));
     }
