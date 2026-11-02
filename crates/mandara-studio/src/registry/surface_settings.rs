@@ -129,7 +129,7 @@ pub fn entries() -> Vec<Setting> {
 /// Why the setting at `path` has no effect under `cfg` (shown in place of
 /// its control), so every visible control visibly does something.
 pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
-    let attached = cfg.bar.effective_layout().is_attached();
+    let attached = cfg.bar_layout().is_attached();
     let vertical = cfg.bar.position.is_vertical();
     let compact = !vertical && cfg.bar.layout.is_compact();
     let notch = !vertical && cfg.bar.layout == BarLayout::Notch;

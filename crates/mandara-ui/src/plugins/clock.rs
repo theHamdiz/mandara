@@ -137,7 +137,8 @@ pub fn register(r: &mut PluginRegistry) {
                 let seconds = fmt::shows_seconds(&time_pattern) || (!fmt::valid_pattern(&time_pattern) && fmt::shows_seconds(&fallback));
                 let show_date = dt.bar_show_date;
                 let date_pattern = dt.bar_date_format.trim().to_string();
-                let (vertical, clock_24h) = (cfg.bar.position.is_vertical(), cfg.general.clock_24h);
+                let clock_24h = cfg.general.clock_24h;
+                let vertical = crate::bar::vertical(cx);
                 redraw_in(until_next_tick(&now, seconds), window, cx);
                 let mut cache = bar_text.borrow_mut();
                 let stamp = crate::widgets::clock::local_stamp(&now, seconds);

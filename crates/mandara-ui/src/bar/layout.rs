@@ -93,7 +93,9 @@ impl Metrics {
         let bar = &cfg.bar;
         let d = mandara_config::defaults::BAR_HEIGHT_PX;
         let spacing = bar.chip_spacing();
-        let layout = bar.effective_layout();
+        // Joined side bars draw the bar as the edge frame (`ShellConfig::bar_layout`).
+        let layout = cfg.bar_layout();
+        let joined = cfg.side_bars_join();
         let vertical = bar.position.is_vertical();
         let screen_frame = bar.frame_thickness();
         let height = if vertical {
@@ -116,7 +118,7 @@ impl Metrics {
             chip_padding: bar.chip_padding(),
             chip_gap: if bar.separator == BarSeparator::None { spacing } else { spacing.max(SEPARATOR_MIN_GAP) },
             center: bar.center_align,
-            floating_frame: layout.is_full_width() && bar.floating_frame && screen_frame <= 0.0,
+            floating_frame: layout.is_full_width() && bar.floating_frame && screen_frame <= 0.0 && !joined,
             panel_gap: cfg.panels.gap(),
             panel_pad: cfg.panels.padding_for(layout.is_attached()),
             panel_width_scale: cfg.panels.width_scale(),

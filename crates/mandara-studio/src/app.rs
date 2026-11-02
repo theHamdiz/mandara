@@ -1844,9 +1844,10 @@ const LAUNCHER_POSITION_PATH: &str = "/launcher/look/position";
 /// appearance) doesn't put related ones together. Unlisted groups follow,
 /// in registry order.
 fn group_order(section: Section) -> Option<&'static [&'static str]> {
+    use registry::side_bar_settings::{SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL, SIDE_BAR_SHAPE, SIDE_BARS};
     use registry::surface_settings::{APPEARANCE, PANEL_MOTION, PANELS};
     Some(match section {
-        Section::Bar => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", PANELS, PANEL_MOTION],
+        Section::Bar => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", SIDE_BARS, SIDE_BAR_SHAPE, SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL, PANELS, PANEL_MOTION],
         Section::Launcher => &["Launcher", "Results", "Size & placement", "Search providers", "Ranking", "Starting apps", "Pinned & hidden apps", "Button"],
         Section::Themes => &["Mode", "Style", "Tuning", "Accessibility", "Wallpaper colors", "Icons", "Cursor", "App themes"],
         Section::Wallpaper => &["Desktop", "Light & dark", "Video", "Depth clock", "Picker", "Slideshow", "Source", "When to change", "Slideshow transition", "Displays", "Wallhaven"],
