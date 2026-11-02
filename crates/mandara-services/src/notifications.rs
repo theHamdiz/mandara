@@ -161,6 +161,9 @@ pub enum NotificationCommand {
     Expire(u32),
     /// Posts a notification from the shell itself (e.g. Pomodoro).
     Post { app: String, icon: String, summary: String, body: String },
+    /// Posts a notification from the shell with action buttons (`(key,
+    /// label)`); the shell runs its own keys when they are clicked.
+    PostActions { app: String, icon: String, summary: String, body: String, actions: Vec<(String, String)> },
     /// Posts a notification with an urgency (`notifications send --urgency`,
     /// Studio's preview buttons).
     PostUrgent { app: String, icon: String, summary: String, body: String, urgency: Urgency },
@@ -717,6 +720,22 @@ pub fn spawn_notification_service() -> NotificationService {
                     reply(&r, Ok(format!("posted {id}")));
                     continue;
                 }
+                NotificationCommand::PostActions { app, icon, summary, body, actions } => {
+                    let n = Notification {
+                        app_name: app,
+                        icon,
+                        summary,
+                        body,
+                        actions,
+                        timestamp: chrono::Local::now().timestamp(),
+                        expire_timeout: EXPIRE_DEFAULT,
+                        popup: true,
+                        ..Default::default()
+                    };
+                    let id = shared.insert(Draft { n, transient_hint: false, suppress_sound: false, sound: None }, 0);
+                    reply(&r, Ok(format!("posted {id}")));
+                    continue;
+                }
                 NotificationCommand::PostUrgent { app, icon, summary, body, urgency } => {
                     let n = Notification {
                         app_name: app,
@@ -839,7 +858,7 @@ pub fn spawn_notification_service() -> NotificationService {
                             closed.push((id, EXPIRED));
                             Ok("expired".into())
                         }
-                        NotificationCommand::Post { .. } | NotificationCommand::PostUrgent { .. } | NotificationCommand::Configure(_) => unreachable!("handled above"),
+                        NotificationCommand::Post { .. } | NotificationCommand::PostActions { .. } | NotificationCommand::PostUrgent { .. } | NotificationCommand::Configure(_) => unreachable!("handled above"),
                     }
                 }
             };

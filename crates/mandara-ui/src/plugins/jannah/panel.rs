@@ -164,6 +164,10 @@ struct Ui {
     slide: Option<(Instant, f32)>,
     /// The step's glow after a tick.
     glow: Option<Instant>,
+    /// Peeking: the hero's item and the step this many places / days from
+    /// today's (a look only, never saved).
+    peek: i64,
+    step_peek: i64,
     flash: Flash,
     /// The Qur'an and Hadith filter chips (wheel and drag scroll them).
     chips_q: crate::hstrip::HStrip,
@@ -193,9 +197,9 @@ pub(super) fn build(p: PanelCx, window: &mut Window, cx: &mut App) -> PanelSpec 
     let views = shared.borrow().views.clone();
     let field = cx.new(|cx| TextField::new(String::new(), t("Search Arabic or meaning…"), true, Rc::new(move |_, _, cx| views.notify(cx)), cx));
     let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(CHROME_H + BODY_GUESS))));
-    let ui = Rc::new(RefCell::new(Ui { tab: Tab::Today, stack: Vec::new(), theme: None, collection: None, searched: None, search_gen: 0, slide: None, glow: None, flash: Flash::default(), chips_q: Default::default(), chips_h: Default::default() }));
+    let ui = Rc::new(RefCell::new(Ui { tab: Tab::Today, stack: Vec::new(), theme: None, collection: None, searched: None, search_gen: 0, slide: None, glow: None, peek: 0, step_peek: 0, flash: Flash::default(), chips_q: Default::default(), chips_h: Default::default() }));
     let view = View { p, field, ui, size: size_cell.clone() };
-    PanelSpec { view: fn_view(None, move |palette, window, cx| view.render(palette, window, cx), window, cx), size: size_cell }
+    PanelSpec { view: fn_view(None, super::plugin_lang::in_language(super::own_lang, move |palette, window, cx| view.render(palette, window, cx)), window, cx), size: size_cell }
 }
 
 /// Re-renders every Jannah view (the panel among them).
@@ -291,6 +295,7 @@ impl View {
         div()
             .relative()
             .size_full()
+            .text_start()
             .p(px(PAD))
             .flex()
             .flex_col()
@@ -335,7 +340,10 @@ impl View {
             empty_state(if quran { "book" } else { "note" }, t("Nothing matches"), t("Try other words or another theme"), LIST_H - CHIPS_H - CONTROL_H - GAP * 2.0, palette).into_any_element()
         } else {
             let (palette, shared, ui, scripture) = (palette.clone(), c.shared.clone(), c.ui.clone(), c.scripture.clone());
+            // Rows are built at layout, outside the render's language scope.
+            let lang = mandara_i18n::language();
             uniform_list(if quran { "jannah-quran" } else { "jannah-hadith" }, count, move |range, _, _| {
+                let _lang = mandara_i18n::scoped(Some(lang));
                 let m = shared.borrow();
                 range
                     .filter_map(|i| rows.get(i).copied().map(|r| (i, r)))
@@ -409,7 +417,8 @@ impl View {
 
 fn today(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
     let s = settings(cx);
-    let item = super::today(c.shared, &s, None).and_then(|id| catalog().get(id));
+    let peek = c.ui.borrow().peek;
+    let item = super::peek(c.shared, &s, None, peek).and_then(|id| catalog().get(id));
     let mut col = div().flex().flex_col().gap(px(GAP));
     match item {
         Some(item) => {
@@ -427,10 +436,28 @@ fn today(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
                 (prev, next)
             };
             col = col.child(hero(c, item, false, Some((prev, next)), window));
+            col = col.child(peek_bar(c, "jannah-peek", peek, t("Peek at what comes next"), |u| &mut u.peek));
         }
         None => col = col.child(empty_state("arch", t("Nothing to show"), t("Choose Qur'an, hadith or both in Studio"), BODY_MIN, c.palette)),
     }
     col.child(step_card(c, window, cx)).into_any_element()
+}
+
+/// A peek bar over `field` of the panel's state: steps it (with the hero's
+/// slide) and redraws; nothing is marked or saved.
+fn peek_bar(c: &Ctx, id: &'static str, offset: i64, here: &'static str, field: fn(&mut Ui) -> &mut i64) -> AnyElement {
+    let (ui, shared) = (c.ui.clone(), c.shared.clone());
+    let step: super::plugin_lang::Step = Rc::new(move |by, cx| {
+        {
+            let mut u = ui.borrow_mut();
+            *field(&mut u) += by;
+            if id == "jannah-peek" {
+                u.slide = Some((Instant::now(), if by < 0 { -1.0 } else { 1.0 }));
+            }
+        }
+        refresh(&shared, cx);
+    });
+    super::plugin_lang::peek_bar(id, offset, here.into(), None, tk("Back to today"), gold(c.palette), c.palette, step)
 }
 
 /// The verse's or hadith's words with a verse's ornate number.
@@ -622,6 +649,7 @@ fn reference_row(c: &Ctx, item: &Item, meaning: Option<String>, saved: bool) -> 
     let link = catalog::link(item);
     let key = item.key.clone();
     let (ui1, ui2, shared) = (c.ui.clone(), c.ui.clone(), c.shared.clone());
+    let (cited, copied_msg) = (t("Citation copied"), t("Copied with its reference"));
     let chip = div()
         .id("jannah-ref")
         .h(px(CHIP_H))
@@ -639,7 +667,7 @@ fn reference_row(c: &Ctx, item: &Item, meaning: Option<String>, saved: bool) -> 
         .child(div().truncate().child(chip_text(item)))
         .on_click(move |_, _, cx| {
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(citation.clone()));
-            ui1.borrow_mut().flash.show(true, t("Citation copied"));
+            ui1.borrow_mut().flash.show(true, cited);
         });
     let ink = palette.on_surface_variant;
     div()
@@ -655,7 +683,7 @@ fn reference_row(c: &Ctx, item: &Item, meaning: Option<String>, saved: bool) -> 
         }))
         .child(icon_button("jannah-copy", "copy", ACTION_BTN, ink, None, move |_, cx| {
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(copied.clone()));
-            ui2.borrow_mut().flash.show(true, t("Copied with its reference"));
+            ui2.borrow_mut().flash.show(true, copied_msg);
         }))
         .into_any_element()
 }
@@ -698,8 +726,10 @@ fn evidence_excerpt(c: &Ctx, p: &Path) -> Option<(String, bool, String)> {
 fn step_card(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
     let palette = c.palette;
     let g = gold(palette);
-    let Some(p) = super::today_step() else { return div().into_any_element() };
+    let peek = c.ui.borrow().step_peek;
+    let Some(p) = super::step_in(peek) else { return div().into_any_element() };
     let date = Local::now().date_naive();
+    let peeked = date + chrono::Duration::days(peek);
     let (done, week) = {
         let m = c.shared.borrow();
         (m.state.done_on(date), m.state.week(date, crate::plugins::clock::week_start_days(cx)))
@@ -716,7 +746,10 @@ fn step_card(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
     } else {
         c.ui.borrow_mut().glow = None;
     }
-    let action: AnyElement = if done {
+    let action: AnyElement = if peek != 0 {
+        // Only today's step can be marked done.
+        caption(t("A look ahead: only today's step can be marked done"), palette).into_any_element()
+    } else if done {
         div()
             .row()
             .items_center()
@@ -756,7 +789,11 @@ fn step_card(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
                 .row()
                 .items_center()
                 .justify_between()
-                .child(div().text_size(px(text::LABEL)).font_weight(FontWeight::BOLD).text_color(g.hsla()).child(t("TODAY'S STEP")))
+                .child(div().text_size(px(text::LABEL)).font_weight(FontWeight::BOLD).text_color(g.hsla()).child(if peek == 0 {
+                    t("TODAY'S STEP").to_string()
+                } else {
+                    tf("STEP FOR {date}", &[("date", &super::plugin_lang::date(peeked, tk("%a %-d %b")).to_uppercase())])
+                }))
                 .child(caption(t(group), palette)),
         )
         .child(div().text_size(px(text::TITLE)).font_weight(FontWeight::SEMIBOLD).child(t(p.title)))
@@ -777,6 +814,7 @@ fn step_card(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
             )
         })
         .child(div().pt(px(tokens::XS)).child(action))
+        .child(peek_bar(c, "jannah-step-peek", peek, t("Peek at the coming days' steps"), |u| &mut u.step_peek))
         .child(div().pt(px(tokens::SM)).row().items_center().justify_between().child(dots).child(caption(week_line, palette).font_features(tabular_nums())));
     if let Some(k) = glow_shadow {
         let mut shadows = rim(palette);

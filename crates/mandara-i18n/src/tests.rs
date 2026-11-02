@@ -107,6 +107,24 @@ fn scanner_reads_literals() {
 }
 
 #[test]
+fn scoped_languages_nest_and_end() {
+    assert_eq!(t_in(Lang::Ar, "Settings"), "الإعدادات");
+    assert_eq!(t_in(Lang::En, "Settings"), "Settings");
+    {
+        let _ar = scoped(Some(Lang::Ar));
+        assert_eq!(language(), Lang::Ar);
+        assert_eq!(t("Settings"), "الإعدادات");
+        // `None` keeps the override around it.
+        with_language(None, || assert_eq!(language(), Lang::Ar));
+        with_language(Some(Lang::De), || assert_eq!(language(), Lang::De));
+        assert_eq!(language(), Lang::Ar);
+        // Other threads keep the shell's language.
+        assert_eq!(std::thread::spawn(|| language() == shell_language()).join().ok(), Some(true));
+    }
+    assert_eq!(language(), shell_language());
+}
+
+#[test]
 fn language_codes() {
     assert_eq!(Lang::from_code("ar_EG.UTF-8"), Some(Lang::Ar));
     assert_eq!(Lang::from_code("zh-CN"), Some(Lang::Zh));

@@ -70,6 +70,8 @@ pub mod keybinds;
 pub mod progress;
 pub mod breaks;
 pub mod presentation;
+pub mod plugin_lang;
+pub mod adhan;
 
 use std::time::Duration;
 

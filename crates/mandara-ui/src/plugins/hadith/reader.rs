@@ -286,6 +286,8 @@ fn actions(c: &Ctx, s: &Shown, mode: &Mode) -> AnyElement {
     let bookmarked = c.shared.borrow().state.is_bookmarked(s.key);
     let (url, key) = (s.url.to_string(), s.key.to_string());
     let (f1, f2, f3) = (c.ui.borrow().flash.clone(), c.ui.borrow().flash.clone(), c.ui.borrow().flash.clone());
+    // Translated now, in the plugin's language (the clicks come later).
+    let (cited, copied, copied_meaning) = (t("Citation copied"), t("Copied with its reference"), t("Copied with its meaning"));
     let chip = div()
         .id("hadith-ref")
         .h(px(CHIP_H))
@@ -303,7 +305,7 @@ fn actions(c: &Ctx, s: &Shown, mode: &Mode) -> AnyElement {
         .child(div().truncate().child(chip_text))
         .on_click(move |_, _, cx| {
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(cite.clone()));
-            f1.show(true, t("Citation copied"));
+            f1.show(true, cited);
         });
     let shared = c.shared.clone();
     let mut row = div()
@@ -319,12 +321,12 @@ fn actions(c: &Ctx, s: &Shown, mode: &Mode) -> AnyElement {
         }))
         .child(icon_button("hadith-copy", "copy", ACTION_BTN, ink, None, move |_, cx| {
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(plain.clone()));
-            f2.show(true, t("Copied with its reference"));
+            f2.show(true, copied);
         }))
         .when(has_meaning, |el| {
             el.child(icon_button("hadith-copy-meaning", "clipboard", ACTION_BTN, ink, None, move |_, cx| {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(full.clone()));
-                f3.show(true, t("Copied with its meaning"));
+                f3.show(true, copied_meaning);
             }))
         });
     if matches!(mode, Mode::Hero) {

@@ -242,6 +242,8 @@ pub struct PrayerInfo {
     /// Today's Hijri date (the day turns at Maghrib); the widget writes it
     /// in its own language, digits and calendar.
     pub hijri: Option<lingo::HijriDate>,
+    /// The plugin's own language (`None`: the interface's).
+    pub lang: Option<mandara_i18n::Lang>,
 }
 
 /// The Hadith plugin's widgets: today's hadith and the reading progress
@@ -250,6 +252,8 @@ pub struct PrayerInfo {
 pub struct HadithInfo {
     pub today: Option<HadithCard>,
     pub progress: Vec<HadithProgress>,
+    /// The plugin's own language (`None`: the interface's).
+    pub lang: Option<mandara_i18n::Lang>,
 }
 
 /// The hadith of the day as the desktop shows it.
@@ -306,6 +310,8 @@ pub struct JannahInfo {
     /// This week's days, done or not, and which is today.
     pub week: [bool; 7],
     pub today: usize,
+    /// The plugin's own language (`None`: the interface's).
+    pub lang: Option<mandara_i18n::Lang>,
 }
 
 /// The Qur'an plugin's ayah of the day and where you are in your khatm.
@@ -331,6 +337,8 @@ pub struct QuranInfo {
     pub juz: u8,
     /// The ayah being recited (`2:255`), while a recitation plays.
     pub reciting: Option<String>,
+    /// The plugin's own language (`None`: the interface's).
+    pub lang: Option<mandara_i18n::Lang>,
 }
 
 /// The one thing worth knowing now: an icon, a sentence and what a click
@@ -1018,7 +1026,15 @@ pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler
     let k = o.k(w.place.scale());
     let look = w.kind.look();
     let fonts = o.fonts.for_look(look);
-    let rtl_of = |opts: Option<&mandara_config::desktop_widgets::TextOptions>| opts.map_or(scene.rtl, |opts| Lingo::of(opts, scene.rtl, None).rtl);
+    // A faith plugin's widget speaks the plugin's own language unless it has one.
+    let plugin = match &w.kind {
+        WidgetKind::Prayer(_) => scene.data.prayer.as_ref().and_then(|p| p.lang),
+        WidgetKind::Jannah(_) => scene.data.jannah.as_ref().and_then(|j| j.lang),
+        WidgetKind::Hadith(_) => scene.data.hadith.as_ref().and_then(|h| h.lang),
+        WidgetKind::Quran(_) => scene.data.quran.as_ref().and_then(|q| q.lang),
+        _ => None,
+    };
+    let rtl_of = |opts: Option<&mandara_config::desktop_widgets::TextOptions>| opts.map_or(scene.rtl, |opts| Lingo::of_plugin(opts, scene.rtl, plugin).rtl);
     let rtl = rtl_of(w.kind.locale());
     let align = look.map_or(mandara_config::desktop_widgets::Align::Auto, |l| l.align).fraction(w.place.anchor.fraction().0, rtl);
     let mut m = Measurer { text, fonts: &fonts };
@@ -1097,10 +1113,10 @@ pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler
         WidgetKind::Media(mw) => (media_view::media(mw, scene.data.media.as_ref(), now, &Lingo::of(&mw.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Fetch(f) => (info::fetch(f, &scene.data.fetch.clone().unwrap_or_default(), &scene.data.palette, &Lingo::of(&f.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::ScreenTime(st) => (info::screen_time(st, &scene.data.screen.clone().unwrap_or_default(), &Lingo::of(&st.locale, scene.rtl, None), k, &mut m), 0.0),
-        WidgetKind::Prayer(p) => (info::prayer(p, scene.data.prayer.as_ref()?, now, &Lingo::of(&p.locale, scene.rtl, None), scene.h24, k, &mut m), 0.0),
-        WidgetKind::Jannah(jw) => (jannah::jannah(jw, scene.data.jannah.as_ref()?, &Lingo::of(&jw.locale, scene.rtl, None), k, align, &mut m), 0.0),
-        WidgetKind::Hadith(hw) => (hadith::hadith(hw, scene.data.hadith.as_ref()?, &Lingo::of(&hw.locale, scene.rtl, None), k, align, &mut m)?, 0.0),
-        WidgetKind::Quran(qw) => (quran::quran(qw, scene.data.quran.as_ref()?, &Lingo::of(&qw.locale, scene.rtl, None), k, align, &mut m), 0.0),
+        WidgetKind::Prayer(p) => (info::prayer(p, scene.data.prayer.as_ref()?, now, &Lingo::of_plugin(&p.locale, scene.rtl, plugin), scene.h24, k, &mut m), 0.0),
+        WidgetKind::Jannah(jw) => (jannah::jannah(jw, scene.data.jannah.as_ref()?, &Lingo::of_plugin(&jw.locale, scene.rtl, plugin), k, align, &mut m), 0.0),
+        WidgetKind::Hadith(hw) => (hadith::hadith(hw, scene.data.hadith.as_ref()?, &Lingo::of_plugin(&hw.locale, scene.rtl, plugin), k, align, &mut m)?, 0.0),
+        WidgetKind::Quran(qw) => (quran::quran(qw, scene.data.quran.as_ref()?, &Lingo::of_plugin(&qw.locale, scene.rtl, plugin), k, align, &mut m), 0.0),
         WidgetKind::Search(sw) => (info::search(sw, &Lingo::of(&sw.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Glance(g) => {
             let gi = scene.data.glance.clone().unwrap_or(GlanceInfo { icon: "sparkles", text: String::new(), action: None });

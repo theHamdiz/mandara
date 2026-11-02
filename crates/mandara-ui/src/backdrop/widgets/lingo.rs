@@ -39,6 +39,15 @@ impl Lingo {
         Self { lang, rtl, eastern: eastern.unwrap_or_else(|| opts.numerals.eastern(arabic)), calendar: opts.calendar, hijri_in_arabic: opts.hijri_in_arabic }
     }
 
+    /// [`Lingo::of`] for a plugin's widget: the widget's own language, else
+    /// the plugin's (`plugin`), else the interface's.
+    pub fn of_plugin(opts: &TextOptions, ui_rtl: bool, plugin: Option<Lang>) -> Self {
+        match plugin.filter(|_| opts.language.trim().is_empty()) {
+            Some(l) => Self::of(&TextOptions { language: l.code().into(), ..opts.clone() }, ui_rtl, None),
+            None => Self::of(opts, ui_rtl, None),
+        }
+    }
+
     /// Whether the widget's language is Arabic.
     pub fn arabic(&self) -> bool {
         self.lang.map_or(mandara_i18n::language() == Lang::Ar, |l| l == Lang::Ar)
@@ -122,6 +131,15 @@ mod tests {
         assert!(Lingo::of(&opts(Numerals::EasternArabic, Calendar::Gregorian, "de"), false, None).eastern);
         let ar = Lingo::of(&opts(Numerals::Auto, Calendar::Gregorian, "ar"), false, None);
         assert!(ar.rtl && ar.digits("12:05") == "١٢:٠٥");
+    }
+
+    #[test]
+    fn plugin_languages_stand_in_for_the_widgets() {
+        let own = Lingo::of_plugin(&opts(Numerals::Auto, Calendar::Gregorian, ""), false, Some(Lang::Ar));
+        assert!(own.rtl && own.arabic() && own.lang == Some(Lang::Ar));
+        // The widget's own language wins; no plugin language follows the interface.
+        assert_eq!(Lingo::of_plugin(&opts(Numerals::Auto, Calendar::Gregorian, "de"), true, Some(Lang::Ar)).lang, Some(Lang::De));
+        assert_eq!(Lingo::of_plugin(&opts(Numerals::Auto, Calendar::Gregorian, ""), true, None).lang, None);
     }
 
     #[test]

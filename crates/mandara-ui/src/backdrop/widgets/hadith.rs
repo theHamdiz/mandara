@@ -13,7 +13,7 @@
 
 use mandara_config::desktop_widgets::{FontRole, HadithLayout, HadithWidget};
 use mandara_config::widget_kinds::{ranges, within};
-use mandara_i18n::{tf, tk};
+use mandara_i18n::{fill, tk};
 
 use super::HadithInfo;
 use super::actions::Action;
@@ -91,7 +91,7 @@ fn today(w: &HadithWidget, info: &HadithInfo, l: &Lingo, k: f32, align: f32, m: 
         let ms = style(w.look.font, size * MEANING_SCALE, face::REGULAR);
         if let Some(n) = &card.narrator {
             let ns = style(w.look.font, size * MEANING_SCALE * 0.8, face::SEMIBOLD);
-            y = text_block(&tf("Narrated by {narrator}", &[("narrator", n)]), &ns, width, align, 1, InkRole::Accent, face::DIM, y, &mut marks, m);
+            y = text_block(&fill(&l.word(tk("Narrated by {narrator}")), &[("narrator", n)]), &ns, width, align, 1, InkRole::Accent, face::DIM, y, &mut marks, m);
         }
         y = text_block(meaning, &ms, width, align, MEANING_LINES, InkRole::Fg, face::DIM, y, &mut marks, m);
         if card.english {
@@ -146,7 +146,7 @@ fn progress(w: &HadithWidget, info: &HadithInfo, l: &Lingo, k: f32, m: &mut dyn 
     let line = if !p.downloaded {
         l.word(tk("Not downloaded yet: open the Hadith panel"))
     } else {
-        let read = tf("{read} of {total} read", &[("read", &l.digits(p.read.to_string())), ("total", &l.digits(p.total.to_string()))]);
+        let read = fill(&l.word(tk("{read} of {total} read")), &[("read", &l.digits(p.read.to_string())), ("total", &l.digits(p.total.to_string()))]);
         match &p.last {
             Some(at) => format!("{read} · {}", l.digits(at.clone())),
             None => read,
@@ -177,6 +177,7 @@ mod tests {
                 grade: Some((GradeClass::Sahih, String::new(), 0x2f_b5_7e)),
             }),
             progress: vec![HadithProgress { collection: HadithCollection::Muslim, title: "Sahih Muslim".into(), arabic: "صحيح مسلم".into(), read: 368, total: 7360, downloaded: true, last: Some("Muslim 8a".into()) }],
+            lang: None,
         }
     }
 
@@ -199,7 +200,7 @@ mod tests {
             }
         }
         // No hadith picked yet: nothing drawn.
-        let none = HadithInfo { today: None, progress: Vec::new() };
+        let none = HadithInfo { today: None, progress: Vec::new(), lang: None };
         assert!(hadith(&HadithWidget::default(), &none, &lingo(false), 1.0, 0.0, &mut Fixed).is_none());
     }
 

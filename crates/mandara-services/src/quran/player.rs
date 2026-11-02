@@ -309,7 +309,24 @@ struct Ctl {
     rate: u32,
 }
 
+/// Where a player's files come from and how its stream is named: the
+/// recitation's per-ayah files, or another queue (the adhan).
+#[derive(Copy, Clone)]
+pub struct Source {
+    /// The file of queue item `n` for `voice` (fetched when missing, or an
+    /// error); called off the UI thread.
+    pub fetch: fn(&str, u16) -> Result<PathBuf, String>,
+    /// The sound server client's name, the stream's and the app's id.
+    pub client: &'static str,
+    pub media: &'static std::ffi::CStr,
+    pub app_id: &'static std::ffi::CStr,
+}
+
+/// The Qur'an recitation: per-ayah files from the CDN.
+pub const RECITATION: Source = Source { fetch: fetch_audio, client: "Mandara Qur'an", media: c"Qur'an recitation", app_id: c"org.mandara.quran" };
+
 struct Inner {
+    source: Source,
     ctl: Mutex<Ctl>,
     /// Wakes the prefetcher (the queue moved on) and the audio thread (a
     /// file arrived).
@@ -331,8 +348,13 @@ fn lock(m: &Mutex<Ctl>) -> MutexGuard<'_, Ctl> {
 
 impl Player {
     pub fn new(on_event: impl Fn(Event) + Send + Sync + 'static) -> Self {
+        Self::with_source(RECITATION, on_event)
+    }
+
+    /// A player of `source`'s files.
+    pub fn with_source(source: Source, on_event: impl Fn(Event) + Send + Sync + 'static) -> Self {
         let ctl = Ctl { generation: 0, snap: Snapshot::default(), sent: 0, rate: 44_100 };
-        Self { inner: Arc::new(Inner { ctl: Mutex::new(ctl), wake: Condvar::new(), level: AtomicU32::new(0), on_event: Box::new(on_event) }) }
+        Self { inner: Arc::new(Inner { source, ctl: Mutex::new(ctl), wake: Condvar::new(), level: AtomicU32::new(0), on_event: Box::new(on_event) }) }
     }
 
     pub fn snapshot(&self) -> Snapshot {
@@ -485,7 +507,7 @@ fn prefetch(inner: &Inner, generation: u64, ready: &Mutex<Vec<Option<Result<Path
             }
             continue;
         }
-        let result = fetch_audio(&reciter, queue[have]);
+        let result = (inner.source.fetch)(&reciter, queue[have]);
         {
             let mut r = ready.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             r.resize(have, None);
@@ -512,11 +534,11 @@ fn wait_file(inner: &Inner, generation: u64, i: usize, ready: &Mutex<Vec<Option<
 
 /// Opens the stream on the sound server at the first clip's rate: the
 /// connection, the stream's channel and the bytes it asks for first.
-fn connect(rate: u32) -> Result<(crate::audio::Pulse, u32, usize), String> {
-    let mut p = crate::audio::Pulse::connect("Mandara Qur'an")?;
+fn connect(source: &Source, rate: u32) -> Result<(crate::audio::Pulse, u32, usize), String> {
+    let mut p = crate::audio::Pulse::connect(source.client)?;
     let mut props = protocol::Props::new();
-    props.set(protocol::Prop::MediaName, std::ffi::CString::from(c"Qur'an recitation"));
-    props.set(protocol::Prop::ApplicationId, std::ffi::CString::from(c"org.mandara.quran"));
+    props.set(protocol::Prop::MediaName, std::ffi::CString::from(source.media));
+    props.set(protocol::Prop::ApplicationId, std::ffi::CString::from(source.app_id));
     let target = (TARGET_LATENCY.as_secs_f32() * rate as f32) as u32 * BYTES_PER_FRAME as u32;
     let params = protocol::PlaybackStreamParams {
         sample_spec: protocol::SampleSpec { format: protocol::SampleFormat::Float32Le, channels: CHANNELS as u8, sample_rate: rate },
@@ -557,7 +579,7 @@ fn session(inner: &Inner, generation: u64, skip: u64, ready: &Mutex<Vec<Option<R
         c.rate = rate;
         c.sent = sent;
     }
-    let (mut p, channel, mut owed) = connect(rate)?;
+    let (mut p, channel, mut owed) = connect(&inner.source, rate)?;
     if !inner.current(generation) {
         return Ok(());
     }

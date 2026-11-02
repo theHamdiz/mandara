@@ -130,6 +130,11 @@ pub(super) struct Ui {
     searched: Option<(String, Option<Rc<Hits>>)>,
     search_gen: u64,
     pub flash: Flash,
+    /// Peeking (a look only, never saved, your place never moves): the
+    /// ayah of the day this many days from today's, and the ayah this many
+    /// after your place.
+    day_peek: i64,
+    next_peek: i64,
 }
 
 struct View {
@@ -161,9 +166,9 @@ pub(super) fn build(p: PanelCx, window: &mut Window, cx: &mut App) -> PanelSpec 
     let surah_field = field(tk("Find a surah by name or number…"), cx);
     let search_field = field(tk("Search Arabic or meaning…"), cx);
     let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(CHROME_H + BODY_GUESS))));
-    let ui = Rc::new(RefCell::new(Ui { tab: Tab::Home, reader: Reader::new(&shared), revelation: None, searched: None, search_gen: 0, flash: Flash::default() }));
+    let ui = Rc::new(RefCell::new(Ui { tab: Tab::Home, reader: Reader::new(&shared), revelation: None, searched: None, search_gen: 0, flash: Flash::default(), day_peek: 0, next_peek: 0 }));
     let view = View { p, surah_field, search_field, ui, size: size_cell.clone() };
-    PanelSpec { view: fn_view(None, move |palette, window, cx| view.render(palette, window, cx), window, cx), size: size_cell }
+    PanelSpec { view: fn_view(None, super::plugin_lang::in_language(super::own_lang, move |palette, window, cx| view.render(palette, window, cx)), window, cx), size: size_cell }
 }
 
 /// Re-renders every Qur'an view (the panel among them).
@@ -223,9 +228,13 @@ pub(super) fn ref_chip(id: impl Into<gpui::ElementId>, book: &Book, g: u16, ui: 
         .font_features(tabular_nums())
         .text_color(g_.hsla())
         .child(div().truncate().child(book.reference(g)))
-        .on_click(move |_, _, cx| {
-            cx.write_to_clipboard(gpui::ClipboardItem::new_string(citation.clone()));
-            ui.borrow_mut().flash.show(true, t("Citation copied"));
+        .on_click({
+            // Translated now, in the plugin's language (the click comes later).
+            let cited = t("Citation copied");
+            move |_, _, cx| {
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(citation.clone()));
+                ui.borrow_mut().flash.show(true, cited);
+            }
         })
         .into_any_element()
 }
@@ -255,7 +264,7 @@ impl View {
         let Some(book) = book else {
             let body = download_card(&shared, palette, PanelShape::of(cx).inner(PAD));
             self.size.set(size(px(PANEL_W), px(PAD * 2.0 + HEADER_H + GAP + DOWNLOAD_H)));
-            return div().relative().size_full().p(px(PAD)).flex().flex_col().child(reveal(&self.p, 0, head)).child(div().h(px(GAP))).child(reveal(&self.p, 1, body)).into_any_element();
+            return div().relative().size_full().text_start().p(px(PAD)).flex().flex_col().child(reveal(&self.p, 0, head)).child(div().h(px(GAP))).child(reveal(&self.p, 1, body)).into_any_element();
         };
         let f = fonts(cx);
         let c = Ctx { palette, shared: &shared, ui: &self.ui, book, scripture: f.scripture.clone(), radius: PanelShape::of(cx).inner(PAD), arabic_px: s.arabic_size.reader_px() };
@@ -330,6 +339,7 @@ impl View {
         div()
             .relative()
             .size_full()
+            .text_start()
             .p(px(PAD))
             .flex()
             .flex_col()
@@ -380,7 +390,12 @@ impl View {
         } else {
             let (palette, shared, ui, book, scripture) = (palette.clone(), c.shared.clone(), c.ui.clone(), c.book.clone(), c.scripture.clone());
             let here = c.book.q.at(continue_at(c.shared)).map(|r| r.surah);
-            uniform_list("quran-surahs", list.len(), move |range, _, _| range.filter_map(|i| list.get(i).map(|n| surah_row(*n, &book, here == Some(*n), &palette, &scripture, &shared, &ui))).collect::<Vec<_>>())
+            // Rows are built at layout, outside the render's language scope.
+            let lang = mandara_i18n::language();
+            uniform_list("quran-surahs", list.len(), move |range, _, _| {
+                let _lang = mandara_i18n::scoped(Some(lang));
+                range.filter_map(|i| list.get(i).map(|n| surah_row(*n, &book, here == Some(*n), &palette, &scripture, &shared, &ui))).collect::<Vec<_>>()
+            })
                 .h(px(list_h))
                 .w_full()
                 .into_any_element()
@@ -407,7 +422,9 @@ impl View {
             Some(h) if h.ayahs.is_empty() => empty_state("search", t("Nothing matches"), t("Try fewer or other words"), list_h, palette).into_any_element(),
             Some(h) => {
                 let (palette, shared, ui, book, scripture) = (palette.clone(), c.shared.clone(), c.ui.clone(), c.book.clone(), c.scripture.clone());
+                let lang = mandara_i18n::language();
                 uniform_list("quran-search", h.ayahs.len(), move |range, _, _| {
+                    let _lang = mandara_i18n::scoped(Some(lang));
                     range
                         .filter_map(|i| h.ayahs.get(i).map(|g| (i, *g)))
                         .map(|(i, g)| {
@@ -648,7 +665,53 @@ fn download_card(shared: &Shared, palette: &MandaraPalette, radius: f32) -> AnyE
 // ── Home ─────────────────────────────────────────────────────────────────
 
 fn home(c: &Ctx) -> AnyElement {
-    div().flex().flex_col().gap(px(GAP)).child(continue_hero(c)).when_some(today_card(c), |el, x| el.child(x)).child(juz_grid(c)).into_any_element()
+    let day_peek = c.ui.borrow().day_peek;
+    let today = today_card(c).map(|card| {
+        let bar = peek_bar(c, "quran-day-peek", day_peek, t("Peek at the coming days' ayahs"), tk("Back to today"), |u| &mut u.day_peek);
+        div().flex().flex_col().gap(px(tokens::SM)).child(card).child(bar)
+    });
+    div().flex().flex_col().gap(px(GAP)).child(continue_hero(c)).when_some(today, |el, x| el.child(x)).child(juz_grid(c)).into_any_element()
+}
+
+/// A peek bar over `field` of the panel's state (a look only).
+fn peek_bar(c: &Ctx, id: &'static str, offset: i64, here: &'static str, back: &'static str, field: fn(&mut Ui) -> &mut i64) -> AnyElement {
+    let (ui, shared) = (c.ui.clone(), c.shared.clone());
+    let step: super::plugin_lang::Step = Rc::new(move |by, cx| {
+        *field(&mut ui.borrow_mut()) += by;
+        refresh(&shared, cx);
+    });
+    super::plugin_lang::peek_bar(id, offset, here.into(), None, back, gold(c.palette), c.palette, step)
+}
+
+/// The ayah `ahead` after your place, shown in the "continue reading" card
+/// while you peek (your place stays where it is).
+fn next_ayah(c: &Ctx, at: u16, ahead: i64) -> Option<AnyElement> {
+    let palette = c.palette;
+    let g = u16::try_from(i64::from(at) + ahead).ok().filter(|g| (1..=AYAHS).contains(g))?;
+    let a = c.book.q.ayah_at(g)?;
+    let r = c.book.q.at(g)?;
+    let meaning = c.book.meaning_of(g).filter(|_| !arabic_ui()).map(str::to_string);
+    Some(
+        glass_card(palette)
+            .rounded(px(c.radius))
+            .p(px(tokens::MD))
+            .flex()
+            .flex_col()
+            .gap(px(tokens::XS))
+            .child(caption(c.book.reference(g), palette).font_features(tabular_nums()))
+            .child(
+                div()
+                    .w_full()
+                    .font_family(c.scripture.clone())
+                    .text_size(px(TODAY_ARABIC_PX))
+                    .line_height(gpui::relative(ARABIC_LINE_EM))
+                    .text_right()
+                    .text_color(palette.on_surface.hsla())
+                    .child(crate::bidi::paragraph(format!("{}\u{00A0}{}", a.text, ayah_mark(r.ayah)))),
+            )
+            .when_some(meaning, |el, m| el.child(div().text_size(px(text::BODY_S)).line_height(gpui::relative(MEANING_LINE_EM)).text_color(palette.on_surface_variant.hsla()).child(crate::bidi::paragraph(m))))
+            .into_any_element(),
+    )
 }
 
 /// "Continue reading": where you are, the khatm ring and the way back in.
@@ -656,6 +719,7 @@ fn continue_hero(c: &Ctx) -> AnyElement {
     let palette = c.palette;
     let g = gold(palette);
     let at = continue_at(c.shared);
+    let next_peek = c.ui.borrow().next_peek;
     let r = c.book.q.at(at).unwrap_or(Ref::new(1, 1));
     let s = c.book.q.surah(r.surah);
     let (progress, khatms, fresh) = {
@@ -739,7 +803,9 @@ fn continue_hero(c: &Ctx) -> AnyElement {
                         )
                         .child(ring),
                 )
-                .child(div().pt(px(tokens::XS)).row().items_center().gap(px(tokens::SM)).child(go).child(listen)),
+                .child(div().pt(px(tokens::XS)).row().items_center().gap(px(tokens::SM)).child(go).child(listen))
+                .when_some((next_peek != 0).then(|| next_ayah(c, at, next_peek)).flatten(), |el, x| el.child(x))
+                .child(peek_bar(c, "quran-next-peek", next_peek, t("Peek at the next ayahs"), tk("Back to your place"), |u| &mut u.next_peek)),
         )
         .into_any_element()
 }
@@ -748,7 +814,8 @@ fn continue_hero(c: &Ctx) -> AnyElement {
 fn today_card(c: &Ctx) -> Option<AnyElement> {
     let palette = c.palette;
     let g_ = gold(palette);
-    let g = c.book.today()?;
+    let day_peek = c.ui.borrow().day_peek;
+    let g = c.book.ayah_of_day(day_peek)?;
     let r = c.book.q.at(g)?;
     let a = c.book.q.ayah_at(g)?;
     let arch = g_.with_alpha(alpha(ARCH_ALPHA, palette));
@@ -783,9 +850,12 @@ fn today_card(c: &Ctx) -> Option<AnyElement> {
         .child(icon_button("quran-today-pin", "pin", ACTION_BTN, if bookmarked { g_ } else { ink }, bookmarked.then(|| g_.with_alpha(alpha(CHIP_FILL, palette))), move |_, cx| {
             toggle_bookmark(&s2, r, cx);
         }))
-        .child(icon_button("quran-today-copy", "copy", ACTION_BTN, ink, None, move |_, cx| {
-            cx.write_to_clipboard(gpui::ClipboardItem::new_string(copied.clone()));
-            ui2.borrow().flash.show(true, t("Copied with its reference"));
+        .child(icon_button("quran-today-copy", "copy", ACTION_BTN, ink, None, {
+            let copied_msg = t("Copied with its reference");
+            move |_, cx| {
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(copied.clone()));
+                ui2.borrow().flash.show(true, copied_msg);
+            }
         }))
         .child(icon_button("quran-today-read", "book", ACTION_BTN, ink, None, move |_, cx| open_reader(&s3, &ui3, g, cx)));
     let content = div()
@@ -797,7 +867,14 @@ fn today_card(c: &Ctx) -> Option<AnyElement> {
         .flex_col()
         .items_center()
         .gap(px(BLOCK_GAP))
-        .child(kicker(t("AYAH OF THE DAY"), palette))
+        .child(kicker(
+            if day_peek == 0 {
+                t("AYAH OF THE DAY").to_string()
+            } else {
+                tf("AYAH FOR {date}", &[("date", &super::plugin_lang::date(chrono::Local::now().date_naive() + chrono::Duration::days(day_peek), tk("%a %-d %b")).to_uppercase())])
+            },
+            palette,
+        ))
         .child(
             div()
                 .w_full()

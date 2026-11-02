@@ -5,6 +5,7 @@
 //! carry a reply channel so CLI callers receive structured results.
 
 pub mod accounts;
+pub mod adhan;
 pub mod app_install;
 pub mod app_uninstall;
 pub mod actor;

@@ -304,9 +304,10 @@ mandara msg keybinds toggle          # show, hide, list (every shortcut as JSON)
 mandara msg breaks status            # now [short|long], skip, snooze [minutes], pause [minutes], resume
 mandara msg presentation toggle      # on, off, status
 mandara msg share clipboard          # text <text>, file <path>, screenshot, stop, status
-mandara msg jannah today             # next, prev, show <ref>, search <query>, paths, step [done], saved
-mandara msg quran read 2:255           # surahs, today, search <q>, play <ref|surah>, pause, resume, stop, bookmark add|remove <ref>, download, status, remove
-mandara msg hadith show bukhari 1      # collections, download|remove <collection|all>, today, search <q> [--collection c] [--grade g], bookmarks
+mandara msg jannah today             # next, prev, peek [n], show <ref>, search <query>, paths, step [done|peek [days]], saved, language [code|follow]
+mandara msg quran read 2:255           # surahs, today, peek [days], search <q>, play <ref|surah>, pause, resume, stop, bookmark add|remove <ref>, download, status, remove, language [code|follow]
+mandara msg hadith show bukhari 1      # collections, download|remove <collection|all>, today, peek [n], search <q> [--collection c] [--grade g], bookmarks, language [code|follow]
+mandara msg prayer peek 1              # today, next, peek [days], language [code|follow], adhan [stop|play|download|remove]
 ```
 
 ## Compositor and Config doctor
