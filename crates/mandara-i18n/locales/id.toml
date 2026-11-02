@@ -6728,3 +6728,4 @@
 "…or a command, e.g. syncthing serve --no-browser" = "…atau perintah, mis. syncthing serve --no-browser"
 "…or an image path, e.g. ~/Pictures/logo.svg" = "…atau path gambar, mis. ~/Pictures/logo.svg"
 "≈ {size}" = "≈ {size}"
+"Unknown command {command}; did you mean:\n  {suggestions}" = "Perintah {command} tidak dikenal; maksud Anda:\n  {suggestions}"
