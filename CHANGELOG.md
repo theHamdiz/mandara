@@ -45,6 +45,15 @@ developer tools.
   login screen are translated, and dates follow Indonesian conventions.
   Pick it in Studio → General → Language, or let Mandara follow your
   system language.
+- **Many more quotes for the Quote widget, all real.** When you haven't
+  written your own, the desktop Quote widget now picks from 152 sayings
+  instead of six,
+  from Ibn Khaldun, al-Mutanabbi and Gibran to Confucius, Seneca, Bashō,
+  Tagore, Rumi, Marie Curie, Achebe and Frida Kahlo, plus a few proverbs.
+  Every one was checked against its source, so no made-up "famous quotes".
+  The card names the work under the author when it fits ("Seneca, On
+  Providence"), and each quote is translated into all of Mandara's
+  languages, in the author's own words where the original exists.
 
 ## 0.6.0 — 2026-11-02
 

@@ -274,7 +274,8 @@ Kinds:
   `sheet_color`), `ruling` (`plain`, `ruled`, `grid`, `dots`), `lines`,
   `word_count`. Pomodoro: `style` (`ring`, `dots`), `controls`, `size`;
   a click starts or pauses it. Quote: `quotes` (`text — author`; empty =
-  built-in sayings), `every` (`day`, `hour`, `click`), `mark`. Notebook:
+  152 built-in sayings, each checked against its source and shown with its
+  work when it fits), `every` (`day`, `hour`, `click`), `mark`. Notebook:
   `tabs`, `tab_shape`.
 - **`date`** — `layout` (`month`, `week`, `agenda`, `tile`), `marker`
   (today's shape), `week_numbers`, `event_dots`, `rows` (agenda). Events

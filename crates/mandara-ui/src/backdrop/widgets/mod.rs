@@ -30,6 +30,7 @@ pub mod media_view;
 pub mod monitor_more;
 pub mod productive;
 pub mod progress;
+pub mod sayings;
 pub mod sky;
 pub mod skyview;
 pub mod sysmon;

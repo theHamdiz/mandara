@@ -13,8 +13,9 @@ use mandara_i18n::tk;
 
 use super::actions::Action;
 use super::frame::shape_of;
-use super::layout::{Composition, Hit, InkRole, Mark, MarkKind, Measure, caps, face, fit, style, tracked, wrap};
+use super::layout::{Composition, Hit, InkRole, Mark, MarkKind, Measure, TextStyle, caps, face, fit, style, tracked, wrap};
 use super::lingo::Lingo;
+use super::sayings::SAYINGS;
 use super::{NoteItem, PomodoroState, TodoItem};
 
 /// Reference sizes.
@@ -292,35 +293,45 @@ pub fn pomodoro(w: &PomodoroWidget, p: &PomodoroState, now: &DateTime<Local>, l:
 
 // ── Quote ────────────────────────────────────────────────────────────────
 
-/// Built-in sayings (public domain): text and who said it, catalog keys.
-pub const SAYINGS: [(&str, &str); 6] = [
-    (tk("The journey of a thousand miles begins with one step."), tk("Lao Tzu")),
-    (tk("Knowing yourself is the beginning of all wisdom."), tk("Aristotle")),
-    (tk("Well begun is half done."), tk("Aristotle")),
-    (tk("Patience is the key to relief."), tk("Arabic proverb")),
-    (tk("Little by little, one goes far."), tk("Spanish proverb")),
-    (tk("Whoever strives, succeeds."), tk("Arabic proverb")),
-];
+/// How far the built-in sayings advance per day, hour or click: coprime to
+/// their count, so every saying comes round once per cycle, and large
+/// enough that neighbours in the list (same author, same tradition) are not
+/// shown one after the other.
+const SAYING_STRIDE: usize = 41;
 
-/// The quote shown at `now` after `turns` clicks: `(text, author)`.
-pub fn pick_quote(w: &QuoteWidget, now: &DateTime<Local>, turns: u32, l: &Lingo) -> (String, String) {
-    let own: Vec<(String, String)> = w
-        .quotes
-        .iter()
-        .map(|q| q.trim())
-        .filter(|q| !q.is_empty())
-        .map(|q| match q.rsplit_once(" — ").or_else(|| q.rsplit_once(" - ")) {
-            Some((t, a)) => (t.trim().to_string(), a.trim().to_string()),
-            None => (q.to_string(), String::new()),
-        })
-        .collect();
-    let all: Vec<(String, String)> = if own.is_empty() { SAYINGS.iter().map(|(t, a)| (l.word(t), l.word(a))).collect() } else { own };
+/// The quote shown at `now` after `turns` clicks: `(text, author, work)`,
+/// translated. Your own quotes (`text — author`) come in the order you
+/// wrote them and have no work; without any, the built-in [`SAYINGS`].
+pub fn pick_quote(w: &QuoteWidget, now: &DateTime<Local>, turns: u32, l: &Lingo) -> (String, String, String) {
     let step = match w.every {
         QuoteEvery::Day => now.num_days_from_ce() as u32,
         QuoteEvery::Hour => now.num_days_from_ce() as u32 * 24 + now.hour(),
         QuoteEvery::Click => 0,
     };
-    all[(step.wrapping_add(turns) as usize) % all.len()].clone()
+    let at = step.wrapping_add(turns) as usize;
+    let own: Vec<&str> = w.quotes.iter().map(|q| q.trim()).filter(|q| !q.is_empty()).collect();
+    if own.is_empty() {
+        let s = &SAYINGS[at % SAYINGS.len() * SAYING_STRIDE % SAYINGS.len()];
+        let work = if s.work.is_empty() { String::new() } else { l.word(s.work) };
+        return (l.word(s.text), l.word(s.author), work);
+    }
+    let q = own[at % own.len()];
+    match q.rsplit_once(" — ").or_else(|| q.rsplit_once(" - ")) {
+        Some((t, a)) => (t.trim().to_string(), a.trim().to_string(), String::new()),
+        None => (q.to_string(), String::new(), String::new()),
+    }
+}
+
+/// The attribution under a quote: "— Author, Work" when that fits on one
+/// line of the card (measured in the author's style), else "— Author".
+fn attribution(author: &str, work: &str, l: &Lingo, st: &TextStyle, width: f32, m: &mut dyn Measure) -> String {
+    if !work.is_empty() {
+        let full = format!("— {}", mandara_i18n::fill(&l.word(tk("{author}, {work}")), &[("author", &author), ("work", &work)]));
+        if m.measure(&full, st).0 <= width {
+            return full;
+        }
+    }
+    format!("— {author}")
 }
 
 /// A quote card: a large quotation mark, the words, the author.
@@ -328,7 +339,7 @@ pub fn quote(w: &QuoteWidget, now: &DateTime<Local>, turns: u32, l: &Lingo, k: f
     let px = |v: f32| v * k;
     let width = px(within(w.width, ranges::WIDTH_PX, ranges::QUOTE_WIDTH_DEFAULT_PX));
     let size = px(within(w.text_size, ranges::TEXT_PX, ranges::QUOTE_TEXT_DEFAULT_PX));
-    let (text, author) = pick_quote(w, now, turns, l);
+    let (text, author, work) = pick_quote(w, now, turns, l);
     let qs = style(w.look.font, size, face::LIGHT);
     let mut marks = Vec::new();
     let mut y = 0.0;
@@ -347,8 +358,8 @@ pub fn quote(w: &QuoteWidget, now: &DateTime<Local>, turns: u32, l: &Lingo, k: f
     }
     if !author.is_empty() {
         y += px(QUOTE_GAP);
-        let a = format!("— {author}");
         let st = tracked(style(w.look.font, size * QUOTE_AUTHOR, face::SEMIBOLD), AUTHOR_TRACKING);
+        let a = attribution(&author, &work, l, &st, width, m);
         let (aw, ah) = m.measure(&a, &st);
         marks.push(Mark::new(MarkKind::Text { text: a, style: st, x: (width - aw) * align, y, w: aw, h: ah }, InkRole::Accent).dim(face::DIM));
         y += ah;
@@ -388,12 +399,20 @@ pub fn notebook(w: &NotebookWidget, notes: &[NoteItem], l: &Lingo, clockwise: bo
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::super::layout::tests::Fixed;
     use super::*;
     use chrono::TimeZone as _;
+    use mandara_config::desktop_widgets::TextOptions;
 
     fn lingo() -> Lingo {
         Lingo::of(&Default::default(), false, None)
+    }
+
+    /// A widget language set explicitly, whatever the interface language.
+    fn lingo_in(language: &str) -> Lingo {
+        Lingo::of(&TextOptions { language: language.into(), ..Default::default() }, false, None)
     }
 
     fn items() -> Vec<TodoItem> {
@@ -434,10 +453,61 @@ mod tests {
             assert!(c.marks.iter().any(|m| matches!(&m.kind, MarkKind::Text { text, .. } if text == "01:01")));
         }
         let q = QuoteWidget { quotes: vec!["Stay hungry — Someone".into(), "Plain words".into()], every: QuoteEvery::Click, ..Default::default() };
-        assert_eq!(pick_quote(&q, &now, 0, &lingo()), ("Stay hungry".into(), "Someone".into()));
+        assert_eq!(pick_quote(&q, &now, 0, &lingo()), ("Stay hungry".into(), "Someone".into(), String::new()));
         assert_eq!(pick_quote(&q, &now, 1, &lingo()).0, "Plain words");
         assert!(quote(&QuoteWidget::default(), &now, 0, &lingo(), 1.0, 0.0, &mut Fixed).size.1 > 30.0);
         let c = notebook(&NotebookWidget::default(), &notes, &lingo(), true, 1.0, &mut Fixed);
         assert_eq!(c.hits[0].action, Action::Note("Ideas".into()));
+    }
+
+    #[test]
+    fn sayings_are_sourced_short_and_all_come_round() {
+        let mut texts = HashSet::new();
+        for s in SAYINGS {
+            assert!(!s.text.is_empty() && !s.author.is_empty(), "{s:?}");
+            assert!(s.text.chars().count() <= 125, "too long for a card: {}", s.text);
+            assert!(texts.insert(s.text), "twice: {}", s.text);
+            // Proverbs have no single source; every other saying names its work.
+            assert_eq!(s.work.is_empty(), s.author.ends_with("proverb"), "{s:?}");
+        }
+        assert!(SAYINGS.len() >= 150);
+        // One saying per click, each once per cycle, and never the same
+        // author twice in a row.
+        let q = QuoteWidget { every: QuoteEvery::Click, ..Default::default() };
+        let now = Local.with_ymd_and_hms(2026, 3, 4, 15, 0, 0).unwrap();
+        let en = lingo_in("en");
+        let shown: Vec<_> = (0..SAYINGS.len() as u32).map(|t| pick_quote(&q, &now, t, &en)).collect();
+        assert_eq!(shown.iter().map(|s| &s.0).collect::<HashSet<_>>().len(), SAYINGS.len());
+        assert!(shown.windows(2).all(|p| p[0].1 != p[1].1), "same author twice in a row");
+        assert!(shown.iter().all(|(t, a, _)| SAYINGS.iter().any(|s| s.text == t && s.author == a)));
+        // A day later, another saying.
+        let day = QuoteWidget::default();
+        assert_ne!(pick_quote(&day, &now, 0, &en).0, pick_quote(&day, &(now + chrono::Duration::days(1)), 0, &en).0);
+    }
+
+    #[test]
+    fn attribution_names_the_work_when_it_fits() {
+        let st = style(QuoteWidget::default().look.font, 20.0, face::SEMIBOLD);
+        let en = lingo_in("en");
+        assert_eq!(attribution("Seneca", "On Providence", &en, &st, 1000.0, &mut Fixed), "— Seneca, On Providence");
+        // Too wide for the card: the author alone.
+        assert_eq!(attribution("Seneca", "On Providence", &en, &st, 200.0, &mut Fixed), "— Seneca");
+        assert_eq!(attribution("Seneca", "", &en, &st, 1000.0, &mut Fixed), "— Seneca");
+        // Each language joins them its own way.
+        assert_eq!(attribution("سينيكا", "عن العناية الإلهية", &lingo_in("ar"), &st, 1000.0, &mut Fixed), "— سينيكا، عن العناية الإلهية");
+        // The card draws it, and the built-in sayings are translated.
+        let q = QuoteWidget { every: QuoteEvery::Click, ..Default::default() };
+        let now = Local.with_ymd_and_hms(2026, 3, 4, 15, 0, 0).unwrap();
+        let c = quote(&q, &now, 0, &en, 1.0, 0.0, &mut Fixed);
+        let (_, author, work) = pick_quote(&q, &now, 0, &en);
+        let line = |c: &Composition| c.marks.iter().rev().find_map(|m| match &m.kind {
+            MarkKind::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        });
+        assert!(line(&c).is_some_and(|l| l == format!("— {author}, {work}") || l == format!("— {author}")), "{:?}", line(&c));
+        let ar = lingo_in("ar");
+        for s in SAYINGS {
+            assert_ne!(ar.word(s.text), s.text, "untranslated: {}", s.text);
+        }
     }
 }

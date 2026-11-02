@@ -83,6 +83,10 @@
 A + at the end of the tab strip makes a tab in place
 A .tar.gz of your plugin folder, named after its id.
 A 1 px accent line along the hairline's inner edge
+A Breath of Life
+A Question of Power
+A Room of One's Own
+A Vindication of the Rights of Woman
 A badge on apps with two or more windows (when no notifications are unread)
 A bar chip (the Privacy plugin) and a pill while apps use your microphone, camera or screen
 A bar item and panel with today's time per app and the last seven days. Recorded only on this computer.
@@ -92,6 +96,7 @@ A box of segmented bars, like a hardware spectrum display
 A brief pill when volume, brightness, keyboard layout and more change
 A bundled Mandara icon by name, such as sun or timer
 A card for the sidebar, or none.
+A charger's saddle is an exalted throne, the best companions are books alone.
 A clear night. Look up, the stars are out.
 A clear sky. A good day to be outside.
 A click opens the launcher
@@ -122,6 +127,8 @@ A folder, or the wallpapers you picked into the playlist
 A folding Completed group under each list
 A full-width strip of bars mirrored round its middle
 A gentle notification once an app has had this much of your day.
+A good head and a good heart are always a formidable combination.
+A grain of poetry suffices to season a century.
 A hairline around floating panels
 A hairline edge around each capsule
 A hook still running after this is stopped (rules can set their own)
@@ -136,6 +143,8 @@ A little cat, soap bubbles, a photo frame and stickers on the desktop
 A little player with an LCD and buttons
 A locked account can't sign in until it's unlocked.
 A macOS-style dock: pinned, running and recent apps, stacks and the Trash, with magnification and auto-hide
+A man does not attain everything that he desires; the winds convey whither the ships do not list.
+A man who dares to waste one hour of time has not discovered the value of life.
 A manual configuration needs an address
 A mark between neighbouring bar items
 A new procedural wallpaper from the generator
@@ -173,6 +182,7 @@ A rounded surface around its children
 A saying that changes every day, or your own
 A scalloped dial, dots for hours, blade hands and the day in a bubble
 A second, stronger warning
+A sense of humour is a sense of proportion.
 A shutter when a capture is taken
 A side bar always stays on screen
 A side bar is always an edge frame
@@ -185,6 +195,7 @@ A smoothed spectrum along the screen edge, with a soft glow; only while music pl
 A soft shadow under the bar
 A soft tick as the volume moves
 A tab needs a name
+A talent is formed in stillness, a character in the world's torrent.
 A tall pill with the track down its side
 A thin border round the whole display, joined to the side bar; it reserves no space of its own
 A thin line along a popup's edge shows the time left
@@ -241,6 +252,7 @@ Activate a tray item (its primary action)
 Active
 Active now
 Active window
+Ada Lovelace
 Adapter state and devices
 Adaptive
 Adaptive sync
@@ -315,6 +327,8 @@ Adjusts mid-tones at night (1 = unchanged)
 Administrator
 Administrator rights needed, but no authentication agent answered
 Administrators can install software, change system settings and manage other users.
+Aeneid, Book V
+Aesop
 After an automatic lock, moving the mouse or pressing a key within this time unlocks without a password (0 = always ask)
 After app themes are written
 After installing
@@ -325,12 +339,17 @@ Afternoon
 Afternoon greeting
 Agenda events
 Agenda length
+Ah, make the most of what we yet may spend, before we too into the Dust descend.
 Airy
+Al-Mutanabbi
+Albert Einstein
 Album art, a wavy progress line and synced lyrics on the desktop while music plays
 Album art, title and play / pause at the dock's end while music plays
 Album art, title, a wavy progress line, controls and synced lyrics; shown while music plays
 Album ring
+Alexander Pope
 Alexandria line
+Alice's Adventures in Wonderland
 Align to the launcher button
 Alignment
 All
@@ -344,6 +363,7 @@ All good
 All good — checked {when} with {compositor}
 All interfaces
 All lists
+All men by nature desire to know.
 All plugins — drag onto the bar (turns it on), or drop here to remove
 All processes
 All sound
@@ -381,6 +401,7 @@ Alt+Space
 Alt+Tab runs `mandara msg switcher next`, Alt+Shift+Tab `switcher prev`
 Alt-Tab window switcher: next / prev open it or move the selection (releasing Alt switches); commit, cancel; open stays until Enter; demo previews without grabbing the keyboard
 AltGr
+Although the world is full of suffering, it is full also of the overcoming of it.
 Always
 Always above other windows
 Always clear of the bar; left and right draw a vertical pill
@@ -389,12 +410,20 @@ Always open on the first tab
 Amber
 Ambient sea, rain, wind, café, fire and noise — synthesized live
 Amplitude
+An Essay on Criticism
 An HOTP link needs a counter
 An app needs administrator rights
 An app starts or stops using the microphone, camera or screen
 An app wants access to the keyring “Login”, but it is locked (preview: nothing is unlocked)
 An app wants to create a new keyring called “Mandara”. Choose the password you want to use for it (preview: nothing is created)
 An interactive card — its own settings are with the cards.
+Analects 1.1
+Analects 13.17
+Analects 15.23
+Analects 2.11
+Analects 2.15
+Analects 7.21
+Analects 9.27
 Analog
 Analog clock
 Anchor
@@ -405,14 +434,18 @@ Animated sky
 Animating
 Animation speed
 Animations
+Anne Frank
 Announce new drives
 Anonymous: public repositories, 60 requests an hour
 Another notification daemon (e.g. mako) is running. Mandara takes over app notifications as soon as it exits.
 Answer a notification that offers an inline reply
 Answered in {ms} ms
 Anti-banding dither
+Antoine de Saint-Exupéry
+Anton Chekhov
 Any picture, cut out with a white border
 Any screen edge; panels open toward the middle (sideways from a side bar)
+Anyone can hold the helm when the sea is calm.
 App
 App (desktop id), e.g. steam
 App + title
@@ -497,7 +530,9 @@ Argument <{name}> must be one of: {choices}
 Aristotle
 Arithmetic error
 Arrangement
+Arrow of God
 As
+As a solid rock is not shaken by the wind, wise people falter not amidst blame and praise.
 Ask a window to close
 Ask for KeePassXC at login
 Ask for a new one at next login
@@ -527,6 +562,7 @@ Attach a release asset
 Attached at the bar's edge, in the zone holding the bar's launcher button: grow out of the button
 Attachment
 Attention
+Attention is the rarest and purest form of generosity.
 Audio
 Audio & media
 Audio ring
@@ -614,18 +650,23 @@ Battery low
 Battery warning at
 Be the first: publish yours by tagging the repository mandara-plugin (see PLUGINS.md).
 Before the end group
+Begin at the beginning, and go on till you come to the end: then stop.
 Behaviour
 Behind Fit and Center (hex)
 Behind the subject
 Below this, notifications go straight to the history
+Benjamin Franklin
+Bessie Head
 Between focus sessions
 Between the sides
+Bhagavad Gita
 Bigger images aren't recorded
 Bind Alt+Tab
 Bits · Mb/s
 Black
 Black rounded corners drawn over the desktop
 Blade
+Blaise Pascal
 Blank other displays
 Blend size
 Blend time when the wallpaper changes
@@ -672,6 +713,7 @@ Break every
 Break's over
 Breathes, blinks, sleeps at night, bobs to music, purrs when clicked
 BreezeX cursors recolored in the Rosé Pine palette
+Brevity is the sister of talent.
 Brightness
 Brightness down
 Brightness keys change every screen
@@ -749,6 +791,7 @@ Cancel
 Cancel an install job (rootless installs roll back)
 Cancelled
 Cancelling…
+Candide
 Capacity
 Capitals
 Capped at a full pill; follows Themes → Corner roundness
@@ -772,6 +815,7 @@ Card padding
 Card radius
 Card spacing
 Cards keep clear of the bar's edge automatically.
+Cargo Cult Science
 Carousel
 Carousel: how much bigger the middle wallpaper is
 Categories
@@ -812,6 +856,7 @@ Changes are authorized by polkit: you may be asked for an administrator's passwo
 Changes are picked up live: add, rebuild or delete a plugin and the shell and this page update within a second.
 Changes start at this time
 Changes volumes and devices (PipeWire / PulseAudio)
+Chapter II
 Characters per second while a key is held
 Charge at which the action above runs
 Charge history
@@ -825,6 +870,9 @@ Charger
 Charger and battery
 Charging
 Charging — critical action cancelled
+Charles Darwin
+Charles Dickens
+Charlotte Brontë
 Check again
 Check box
 Check every
@@ -854,6 +902,7 @@ Checking…
 Checks
 Children side by side, gap apart
 Children stacked, gap apart
+Chinua Achebe
 Chips for text, links, Markdown, code, CSS, colors, images and files above the list
 Choose a .conf or .ovpn file first
 Choose a boot entry for this item in Studio → Power & idle
@@ -869,12 +918,15 @@ Choose the key file
 Choose what the power menu offers and in which order. Built-in entries can be hidden or renamed; your own commands and boot entries can be removed.
 Choose…
 Chrome
+Cicero
 Circle
+Circles
 Cities
 Cities around the world with daylight and a meeting planner
 Cities in the bar
 Cities, comma separated (empty: your World clock cities)
 City or place name
+Clarice Lispector
 Classic
 Claude Code today
 Claude Code's tokens today and this week, read from its local logs once you switch it on
@@ -961,6 +1013,7 @@ Colourful tiles
 Column
 Columns
 Columns & outputs
+Come, seek, for search is the foundation of fortune: every success depends upon focusing the heart.
 Coming up
 Comma-separated GitHub repositories as owner/name
 Comma-separated city names (English or Arabic) or time zones like Europe/Lisbon
@@ -1001,6 +1054,7 @@ Config, compositor integration, app themes, fonts, plugin folders and downloadab
 Configuration file
 Configured calendars and their load errors
 Confine pointer
+Confine thyself to the present.
 Confirm
 Confirm before clearing
 Confirm before installing
@@ -1011,6 +1065,7 @@ Confirm the install on screen
 Confirm uninstall
 Confirm ×{count}
 Confirm: install anyway
+Confucius
 Connect
 Connect a VPN (the last one used when no name is given)
 Connect a device by name or address
@@ -1043,6 +1098,7 @@ Contrast
 Control external monitors
 Control the focus timer
 Controller
+Conversations with Maya Angelou
 Cookie
 Cookie clock
 Cooler, quieter, longer
@@ -1126,6 +1182,7 @@ Countdown line
 Counted on this computer only (~/.local/state/mandara)
 Counter-clockwise
 Counts the tokens in ~/.claude/projects on this computer. Nothing leaves it.
+Courage is resistance to fear, mastery of fear—not absence of fear.
 Cover shape
 Crash reports
 Crashes aren't being collected
@@ -1193,6 +1250,7 @@ Daily limits per app
 Daily reminder
 Daily screen time reached
 Damping
+Dante Alighieri
 Dark
 Dark appearance
 Dark from
@@ -1337,14 +1395,18 @@ Device removed
 Devices
 Devices you add to your tailnet appear here
 Devices · {online} of {total} online
+Dhammapada
 Dhu al-Hijjah
 Dhu al-Qadah
 Dhuhr
 Diagonal band
 Dial
 Diameter
+Diary, 1944
+Diary, 1953
 Different wallpaper on each display
 Digit boxes
+Diligence is the mother of good fortune.
 Dim
 Dim behind panels
 Dim strength
@@ -1367,6 +1429,8 @@ Disconnect from the tailnet
 Disconnected
 Disconnected {name}
 Disconnecting…
+Discourses I.15
+Discourses III.23
 Discover
 Discrete
 Disk
@@ -1386,7 +1450,10 @@ Distance from the edge
 Distance from the screen edge (floating styles and the floating frame)
 Distant coast
 Distro logo
+Divan
 Divided text clock
+Diwan
+Do not be desirous to have things done quickly; do not look at small advantages.
 Do not disturb
 Do not disturb every day between the times below
 Do not disturb is on
@@ -1398,9 +1465,13 @@ Dock
 Dock items: pinned, running and recent apps with their windows, stacks
 Dock settings…
 Docker and Podman containers: status, live usage, logs and controls
+Doctor Brodie's Report
 Documented commands
 Doesn't match
 Doesn't parse: {error}
+Dokkodo
+Don Quixote I.46
+Don Quixote II.10
 Done
 Done, but {compositor} still reports the problem.
 Done. Keyrings are no longer unlocked at login.
@@ -1462,6 +1533,7 @@ Drop shadows under windows
 Drop to install
 Drop-down panels
 Drop-down panels and plugin cards
+Drops of water hollow out a stone.
 Dry run
 Dry run (MANDARA_UNINSTALL_DRY_RUN): nothing will be removed or moved.
 Dry run: nothing changed. {app} would be removed and {count} items moved to the Trash.
@@ -1517,6 +1589,8 @@ Egyptian
 Eject
 El-Mandara, Alexandria
 Elevation tint
+Emily Dickinson
+Emma
 Emoji
 Emoji in plain searches
 Emoji prefix
@@ -1543,6 +1617,7 @@ Enabled automatically
 Enabled {unit}
 Enabled. It loads when its bar item, panel or sidebar card is first shown.
 Enabling…
+Enchiridion 5
 Encoding PNG failed: {error}
 Encoding the loop… {percent}%
 Encoding the screenshot failed: {error}
@@ -1572,10 +1647,15 @@ Entries kept
 Entries kept (pinned ones don't count)
 Entries matching every word: text, kind, language, host, app or collection
 Entries of one kind, optionally matching a search
+Epictetus
+Epistles I.2
 Esc
+Essays I.39
+Essays in Idleness 98
 Essentials
 Estimating…
 Ethernet
+Even monkeys fall from trees.
 Even when closing the lid doesn't suspend (docked, external monitor)
 Evening
 Evening greeting
@@ -1591,6 +1671,7 @@ Every check with its state, latency, uptime and last result (JSON)
 Every city on the world clock with its time, offsets and daylight
 Every city's time when it is HH:MM here today (meeting planner)
 Every day
+Every day is a journey, and the journey itself is home.
 Every display
 Every display gets its own wallpaper from the slideshow; off, they all change together
 Every display is off
@@ -1616,6 +1697,7 @@ Every {time}
 Everyday info
 Everyday use: their own files and settings.
 Everything
+Everything comes in time to him who knows how to wait.
 Everything is up to date
 Everything looks healthy
 Everything started cleanly
@@ -1671,14 +1753,18 @@ Failed units on the system and user managers
 Failed-unit alert
 Fair
 Fajr
+Fall down seven times, get up eight.
 Families
 Family
 Fan
 Faster blur on static backgrounds
 Favorites
+Fear is inevitable, I have to accept that, but I cannot allow it to paralyze me.
 Featured
 Feels
 Feels like {temp}
+Feet, what do I need them for if I have wings to fly.
+Ferdowsi
 Fetch
 Fetch every calendar again now
 Fetch forecasts from Open-Meteo (off: no weather requests at all)
@@ -1735,6 +1821,7 @@ Finds what is near and far in a wallpaper for the depth clock (Depth Anything V2
 Fine-tune
 Finger count
 Finish logging in in your browser
+Fire tries gold, misfortune tries brave men.
 Firefox / Zen
 Firefox would start as:
 Fireplace
@@ -1748,6 +1835,7 @@ First frame only
 First line beside the rest
 First match wins: when the same id is in several folders, the one higher in this list is used and the others are skipped.
 First quarter
+First say to yourself what you would be; and then do what you have to do.
 First shape
 Fit
 Fit & effects
@@ -1816,6 +1904,7 @@ Follow the pointer
 Follow the shell
 Follow theme
 Follow units
+Following the Equator
 Follows the desktop's transition (Fit & effects)
 Follows which window has focus
 Follows your desktop
@@ -1826,6 +1915,7 @@ For me (--user)
 For sessions that don't start them (MangoWM, Niri, Hyprland without uwsm). Skipped when systemd's xdg-autostart does; leave off if your compositor config starts the same apps
 For terminal apps; empty uses your preferred terminal (Applications), then $TERMINAL, then the first installed one
 For the Model mode
+For the things we have to learn before we can do, we learn by doing.
 For windows whose app id doesn't name their app (games, web apps): * matches anything, e.g. steam_app_* → steam.
 For you only needs no password; for everyone, Flatpak asks for it
 For your desk
@@ -1859,6 +1949,8 @@ Frame timing
 Framed HUD clock
 Framed bars
 Frames per second of screen recordings
+Francis Bacon
+Frankenstein
 Free and open: plugins are GitHub repositories tagged mandara-plugin. They run sandboxed — no files, network or system access unless they ask for commands.
 Free, on GitHub: no account, no review queue
 Freed {size}
@@ -1867,8 +1959,10 @@ Frequency
 Frequently and recently used results come first
 Fresh releases and the plugins you added yourself
 Fri
+Frida Kahlo
 Friday
 Friday and Saturday
+Friendship is always a sweet responsibility, never an opportunity.
 From
 From nothing to a plugin in your bar. Run these in a terminal; the last step copies it straight into your development folder.
 From the installer's own records.
@@ -1901,6 +1995,8 @@ GPU power
 GPU temp
 GRAPHICS
 GTK 3 / 4 & libadwaita
+Gabriel García Márquez
+Gabriela Mistral
 Games
 Games and videos keep their true colours
 Gamma
@@ -1934,6 +2030,7 @@ Generating… {percent}%
 Generator
 Gentle 20-20-20 reminders to rest your eyes
 Geometric set
+George Eliot
 Get
 Get · {size}
 Getting it ready…
@@ -1975,6 +2072,7 @@ Gradient angle
 Gradient group tabs
 Graphics
 Graphics acceleration
+Great works are performed not by strength, but perseverance.
 Green
 Greeting
 Gregorian
@@ -1989,15 +2087,20 @@ Group tab bar
 Group tab height
 Grow
 Gruvbox
+Gulistan II
+Gulistan III
 H {high}  L {low}
 HISTORY
 HTTP {code}
+Hafez
 Hairline
 Hairline and micro pill only
 Hairline style only
 Hairlines between apps, recent apps and the right side
 Halftone
 Halftone cover
+Hamlet I.3
+Hamlet II.2
 Hanafi
 Hand
 Hand width
@@ -2009,6 +2112,12 @@ Hands over numerals
 Hangs from the top edge with curved shoulders
 Hard
 Hard disk
+Hatred does not cease by hatred at any time: hatred ceases by love, this is an old rule.
+He who has begun has half done. Dare to be wise; begin!
+He who is too busy doing good finds no time to be good.
+He who knows other men is discerning; he who knows himself is intelligent.
+He who overcomes others is strong; he who overcomes himself is mighty.
+He who receives a benefit with gratitude, repays the first installment of it.
 Header
 Header position
 Header size
@@ -2016,6 +2125,7 @@ Headline
 Headphones
 Heads up
 Headset
+Healing of Souls
 Health
 Health checks
 Heap & buffers
@@ -2024,7 +2134,10 @@ Heavy
 Height
 Height in the center
 Height when attached
+Helen Keller
 Helper
+Henry David Thoreau
+Heraclitus
 Hero clocks on the desktop: analog and cookie dials, stacked cards, dot matrix, digit boxes, a slanted HUD, your own text lines, orbits, day and year progress, and the depth clock behind the wallpaper's subject
 Hibernate
 Hidden
@@ -2077,6 +2190,7 @@ Hook ran — see recent runs
 Hook time limit
 Hooks
 Hooks aren't set up yet
+Horace
 Horizon height
 Horizontal
 Horizontal inset of the outer groups
@@ -2163,9 +2277,11 @@ How the critical warning appears
 How the media panel draws the live audio spectrum
 How the warning appears
 How to publish a plugin
+How well said the aged farmer to his son, O light of my eyes, thou wilt not reap save that which thou hast sown.
 Hue shift
 Humidity
 Humidity {n}%
+Hurry, hurry has no blessings.
 Hybrid
 Hyper
 Hyprland
@@ -2173,12 +2289,22 @@ Hyprland and Umbriel only
 Hyprland layout & groups
 Hyprland only
 Hyprland, Niri and Umbriel switch it per fullscreen window; MangoWM treats it as on
+I am no bird; and no net ensnares me; I am a free human being with an independent will.
+I am not sick. I am broken. But I am happy to be alive as long as I can paint.
+I do not wish them to have power over men; but over themselves.
+I learned that courage was not the absence of fear, but the triumph over it.
+I must live little by little, it's no good living everything at once.
+I would have written a shorter letter, but I did not have the time.
+I'm not afraid of storms, for I'm learning how to sail my ship.
 IANA name, e.g. Africa/Cairo
 INTERFACES
 IP & DNS
 IP address lookup
 ISNA
 ISO week numbers beside each calendar row
+Ibn Hazm
+Ibn Khaldun
+Ibn Sina
 Ice
 Icon name or image path
 Icon size
@@ -2197,6 +2323,18 @@ Idle handling is off
 Idle stages are back on
 Idle state: idle time, inhibitors, power source and the stages to come (JSON)
 Idle · hidden from the bar
+If I have seen further it is by standing on the shoulders of Giants.
+If a man keeps cherishing his old knowledge, so as continually to be acquiring new, he may be a teacher of others.
+If it is not right, do not do it: if it is not true, do not say it.
+If thou covetest riches, ask not but for contentment, which is an immense treasure.
+If you are irritated by every rub, how will your mirror be polished?
+If you are wholly perplexed and in straits, have patience, for patience is the key to joy.
+If you have a garden and a library, you have everything you need.
+If you know the enemy and know yourself, you need not fear the result of a hundred battles.
+If you shed tears when you miss the sun, you also miss the stars.
+If you shut your door to all errors truth will be shut out.
+If you sing of beauty though alone in the heart of the desert you will have an audience.
+If you venture in pursuit of glory, don't be satisfied with less than the stars.
 Ignore
 Ignored players
 Illegal instruction
@@ -2208,6 +2346,7 @@ Images
 Images and videos in the wallpaper folder (optionally filtered)
 Images here (and one level of sub-folders) appear in the picker
 Images in your wallpaper folder; Enter sets one
+Imagination is more important than knowledge.
 Imperial (°F, mph)
 Import
 Import a WireGuard (.conf) or OpenVPN (.ovpn) file below — it becomes a NetworkManager connection.
@@ -2234,6 +2373,7 @@ Included with Mandara, no download needed
 Index (see calendar sources) or name
 Index lines
 Indicators
+Inferno XXVI
 Inner padding
 Input
 Input device
@@ -2300,6 +2440,7 @@ Interface
 Interface font
 Interface weight
 Internet
+Interview, 1929
 Invalid PID
 Invalid character {char} in the secret
 Invalid declarations are skipped with a warning; see Validate below.
@@ -2312,7 +2453,10 @@ Invalid value
 Invalid value {value} for {property}
 Invoke a notification action
 Irregularity
+Is it not pleasant to learn with a constant perseverance and application?
 Is the engine running? Mandara retries automatically
+Isaac Newton
+Isabel Allende
 Isha
 Islamic daily prayer times and countdown (opt-in)
 Islamic day numbers under each day and the Hijri month in the clock panel's calendar (Prayer times' adjustment applies)
@@ -2329,6 +2473,11 @@ It crashes or runs past its time budget: {error}
 It draws the wallpaper's subject over the desktop clock; switch the depth effect off in Studio → Wallpaper instead
 It fails to start: {error}
 It holds Mandara Studio, the settings and the session actions
+It is in general the unexplored that attracts us.
+It is in the character of growth that we should learn from both pleasant and unpleasant experiences.
+It is not enough to know, we must also apply; it is not enough to will, we must also do.
+It is not that we have a short space of time, but that we waste much of it.
+It is only with the heart that one can see rightly; what is essential is invisible to the eye.
 It is the on-screen way to lock, log out, restart and shut down
 It lost its connection to the compositor ({error}). Turn night light off and on again to retry.
 It moves only while the desktop shows, a few frames a second.
@@ -2347,12 +2496,18 @@ JPEG
 JPEG quality
 JSON pointer, e.g. /bar/height
 JSON value
+Jane Austen
+Jane Eyre
+Japanese proverb
+Johann Wolfgang von Goethe
 Join
 Join a hidden network
 Join a saved network automatically, or not
 Join the docker group (sudo usermod -aG docker $USER), then log out and back in
 Joining {name}…
 Joins automatically
+Jorge Luis Borges
+José Martí
 Journal lines
 Jumada al-Akhirah
 Jumada al-Ula
@@ -2361,6 +2516,7 @@ Just the essentials, nothing else
 KB
 KDE / Plasma
 KDE Breeze cursors, refined and extended with more shapes
+Kahlil Gibran
 Kanagawa
 Karachi
 KeePassXC
@@ -2426,10 +2582,11 @@ Keypad {key}
 Keyring
 Keyring prompter status; demo previews the unlock dialog; close cancels it
 Keyrings & passwords
+Khufu's Wisdom
 Killed {name} ({pid})
 Kind
 Knots
-Knowing yourself is the beginning of all wisdom.
+Knowledge is like water and air: it is every citizen's right to enjoy it for free.
 LAST 7 DAYS
 LAYERS
 LED meter
@@ -2476,10 +2633,12 @@ Layered glassy waves
 Layout
 Lead color
 Leading zero
+Learning without thought is labour lost; thought without learning is perilous.
 Leave empty for the toplist, e.g. "nature 4k"
 Leave empty to follow GTK's icon theme
 Leave it
 Leave snipping and keep the toolbar · Esc
+Leave undone whatever you hesitate to do.
 Left
 Left (vertical)
 Left / top
@@ -2488,14 +2647,34 @@ Left or right bar only
 Left-handed
 Length
 Length of a focus session
+Leo Tolstoy
 Let apps choose
+Let right deeds be thy motive, not the fruit which comes from them.
 Let them choose at first login
+Let us cultivate our garden.
+Let us dream of evanescence, and linger in the beautiful foolishness of things.
 Let your eyes relax: blink slowly and soften your gaze
+Let your life lightly dance on the edges of Time like dew on the tip of a leaf.
 Letter spacing
+Letter to Joë Bousquet, 1942
+Letter to Robert Hooke, 1676
+Letter to T. W. Higginson, 1872
+Letter to her brother, 1894
+Letter to his sister, 1836
+Letter to his son, 1930
+Letter, 1889
+Letters from the Black Sea
+Letters to Friends IX.4
+Letters to Lucilius, 1
+Letters to Lucilius, 13
 Letters, digits, - and _; used for the home folder
 Letting go of Alt switches; off, Enter or a click does
 Letting go of a region drag captures (no annotating)
+Lewis Carroll
 Libraries & fonts (shared files)
+Life is like riding a bicycle. To keep your balance you must keep moving.
+Life is not in bits and pieces. It is a magnificent, rhythmic, pulsating symphony.
+Life is not what one lived, but what one remembers and how one remembers it in order to recount it.
 Light
 Light & dark
 Light / dark
@@ -2547,7 +2726,9 @@ Lists and joins networks through NetworkManager
 Lists in order, with open / done counts
 Lists running processes and ends the ones you choose
 Lists, focuses and closes windows (foreign-toplevel)
-Little by little, one goes far.
+Little Feet
+Little Women
+Little feet of children, two tiny suffering jewels, how can people pass and not see you!
 Live
 Live CPU and memory of running containers (JSON)
 Live CPU, GPU, memory, temperatures, disk and network on the desktop, as a column or ring gauges
@@ -2556,6 +2737,7 @@ Live state from the running shell
 Live upload and download rates, public IP and a speed test
 Live window previews or app icons
 Live — what's playing now
+Living to Tell the Tale
 Load
 Load a generated wallpaper's recipe as the current one
 Load a model into memory to warm it up (kept for 10 minutes)
@@ -2617,6 +2799,7 @@ Logging in
 Login
 Login screen
 Logo
+Long Walk to Freedom
 Long break
 Long break every
 Long break length
@@ -2634,6 +2817,7 @@ Look only
 Look up the coordinates of the configured place name and use the best match
 Look up the place name above
 Look up the public IP address (one request to the configured endpoint)
+Look within. Within is the fountain of good, and it will ever bubble up, if thou wilt ever dig.
 Looking at /proc/net
 Looking for Ollama…
 Looking for generated wallpapers…
@@ -2648,6 +2832,8 @@ Looks text up in your locales/ catalog; labels in views are translated automatic
 Lossless
 Lossless, smallest
 Lossy, smallest
+Louisa May Alcott
+Love is so powerful, it's like unseen flowers under your feet as you walk.
 Loved by Mandara users: third-party plugins that run sandboxed
 Low
 Low battery
@@ -2759,8 +2945,11 @@ MangoWM, Niri, Hyprland
 MangoWM, Niri, Umbriel
 Manifest: id, name, zone, permissions, settings
 Manual
+Marcus Aurelius
 Margin
+Marie Curie
 Mark Flatpak, Snap, AppImage and your own apps
+Mark Twain
 Mark a task complete
 Mark a task failed (posts a notification)
 Mark a task finished (posts a notification)
@@ -2773,6 +2962,10 @@ Marker shape
 Marketplace
 Marketplace installs and plugins you copy in by hand: off until you turn them on.
 Marketplace plugins update with a small binary patch when there is one; their settings and on / off state are kept. Mandara's own plugins update with Mandara.
+Mary Shelley
+Mary Wollstonecraft
+Masnavi I
+Masnavi III
 Mass
 Master
 Master area
@@ -2791,29 +2984,43 @@ Matching icons
 Material You seed colors extracted from an image (default: the wallpaper)
 Material You variant used for wallpaper themes
 Material You: a full tonal palette generated from the wallpaper, re-derived whenever it changes
+Matsuo Bashō
 Maximize
 Maximize or restore a window
+Maxims and Reflections
 Maximum height
 Maximum width
+Maya Angelou
+Measure for Measure I.4
 Measuring…
 Media
 Media & capture
 Media & system
 Media players
 Media remote control
+Meditations VII.29
+Meditations VII.59
+Meditations VII.67
+Meditations X.16
+Meditations XII.17
 Medium
 Meeting planner
 Memory
 Memory profile
+Men are disturbed not by things, but by the views which they take of things.
+Mencius
+Mencius IV.2.12
 Menu
 Menu entries
 Merge
 Mesh gradient
 Messages
+Metaphysics, Book I
 Meters
 Method
 Metric (°C, km/h)
 Mic mute
+Michel de Montaigne
 Micro pill
 Microphone
 Microphone in use
@@ -2824,8 +3031,11 @@ Middle click
 Middle-click command
 Middle-click emulation
 Middle-click on empty bar space
+Middlemarch
 Midnight sun
 Midnight violet: a side bar framing the screen, a greeting, calendar and bars.
+Mighty is he who has knowledge.
+Miguel de Cervantes
 Mini stats
 Minimal
 Minimize
@@ -2853,6 +3063,7 @@ Mix matching wallpapers into every search
 Mix matching windows into every search
 Mixes the theme accent into the bar's background
 Mixes the theme accent into the glass
+Miyamoto Musashi
 Mocha Dark
 Mocha Lavender
 Mocha Light
@@ -2927,6 +3138,8 @@ Move window {direction}
 Moves with the music
 Moving clouds, rain and stars (off with reduced motion)
 Muharram
+Muqaddimah
+Murasaki Shikibu
 Music or video playing over MPRIS holds every idle stage back
 Music, screenshots, color and ambient sound
 Mute
@@ -2934,6 +3147,7 @@ Mute all
 Mute all sound
 Mute all sound: every output and app at once; off restores your own mutes
 Mute or unmute one app stream
+Mute the microphone
 Muted
 My command
 My recipe, new layout
@@ -2945,6 +3159,7 @@ NEXT LONG BREAK
 NEXT PRAYER
 NVMe {n}
 NW
+Naguib Mahfouz
 Name
 Name (optional)
 Name a VPN: no VPN was used yet
@@ -2981,6 +3196,7 @@ Needs the commands permission
 Needs your password
 Needs {count} packages
 Neither GNOME Keyring's nor KWallet's PAM module is installed.
+Nelson Mandela
 Network
 Network & Bluetooth
 Network & Bluetooth settings float
@@ -3036,6 +3252,8 @@ Next wallpaper
 Next wallpaper at {time} · {count} in the rotation
 Next wallpaper {when}
 Next wallpaper: due now (shortly after the shell starts)
+Next window (Alt+Tab)
+Nicomachean Ethics, Book II
 Night
 Night bay
 Night dimming
@@ -3051,6 +3269,7 @@ Niri
 Niri, Umbriel
 No Bluetooth adapter
 No Docker or Podman socket found
+No Longer at Ease
 No Mandara command given
 No Mandara plugin `{id}`; see `mandara msg plugins list`
 No Mandara release is published yet
@@ -3140,6 +3359,7 @@ No load data
 No local network: connect to Wi-Fi or Ethernet first
 No log output yet
 No login manager is enabled
+No longer talk at all about the kind of man that a good man ought to be, but be such.
 No longer trusted
 No lyrics for this song
 No lyrics found
@@ -3149,6 +3369,7 @@ No menu entry {id}
 No model in memory: Load one below to warm it up
 No model named {model}
 No models installed
+No need to hurry. No need to sparkle. No need to be anybody but oneself.
 No network access
 No network devices
 No network interfaces with traffic
@@ -3158,6 +3379,7 @@ No news
 No note matches “{query}”
 No notes yet
 No notes yet. Press + to jot something down.
+No one is useless in this world who lightens the burden of it for any one else.
 No other device to switch to
 No other devices yet
 No output devices
@@ -3229,6 +3451,7 @@ No tasks yet
 No terminal found — choose one in Studio → Applications
 No terminal found — set one in Studio → Plugins → Updates
 No text found in the selection
+No thing great is created suddenly, any more than a bunch of grapes or a fig.
 No third-party plugins yet
 No timer
 No tray item matching "{query}"
@@ -3291,12 +3514,14 @@ Notebook tabs
 Notes
 Notes (every topic, or one), most recently edited first
 Notes folder
+Notes on the Analytical Engine
 Nothing
 Nothing coming up
 Nothing copied yet
 Nothing else is removed.
 Nothing from the file runs while installing, and no password is needed
 Nothing generated yet. Your wallpapers appear here.
+Nothing great was ever achieved without enthusiasm.
 Nothing here matches “{query}”.
 Nothing here yet
 Nothing in this session starts these yet: turn on “Mandara starts these at login”, or start them from your compositor config.
@@ -3307,6 +3532,7 @@ Nothing is listening on port {port}
 Nothing is looked up until you press Locate me (the location service also refreshes at startup)
 Nothing is playing
 Nothing is running
+Nothing is so painful to the human mind as a great and sudden change.
 Nothing is using your microphone, camera or screen
 Nothing kept in the dock yet: add apps, or right-click a running app's icon → Options → Keep in Dock.
 Nothing learnt yet: open a few apps from the launcher
@@ -3367,6 +3593,7 @@ OSD
 OUTPUT
 Obsidian
 Ocean
+Of Studies
 Of shell sounds only
 Off
 Off and out of your bar and sidebar. Restore one to bring it back where it was.
@@ -3387,6 +3614,7 @@ Off: your wallpaper stays until you change it
 Office
 Offline mode
 Offline mode is on (Studio → Privacy)
+Okakura Kakuzō
 Oldest first
 Ollama
 Ollama address
@@ -3396,8 +3624,13 @@ Ollama isn't reachable at {url} ({error})
 Ollama models in memory and on disk: VRAM, unload timers, load and unload
 Ollama {version} · nothing loaded
 Ollama {version} · {count} loaded
+Omar Khayyam
 On
 On Arch-based systems it may also be in the AUR.
+On Benefits, Book II
+On Medicine
+On Oscar Wilde
+On Providence
 On a click
 On battery
 On battery — the battery timeouts apply
@@ -3406,6 +3639,8 @@ On for {time} · started by screen sharing
 On mains power
 On mains power · {profile}
 On mains power — the mains timeouts apply
+On the Shortness of Life
+On the Statue of Liberty
 On the desktop (later ones on top)
 On the desktop, under your windows
 On this tab
@@ -3422,11 +3657,13 @@ One centered island that morphs
 One click sets the bar, desktop widgets, colors, fonts and roundness together. Your own setup is saved first, so you can always go back. Looks never change your wallpaper.
 One dot
 One entry per app
+One half of the world cannot understand the pleasures of the other.
 One light line, stacked hours over minutes, or a small clock
 One line
 One line of body text in popups
 One line per result
 One lookup with the method above; IP lookups send your address to ipapi.co
+One never notices what has been done; one can only see what remains to be done.
 One note's full Markdown text
 One of choices: plain strings or { value, label } tables
 One of your settings as JSON: the user's value, or the declared default.
@@ -3515,6 +3752,8 @@ Opens the launcher
 Opt-in
 Opt-in: a fresh wallpaper every few hours. Missed runs never pile up; older files are cleaned up.
 Optical drive
+Optimism
+Optimism is the faith that leads to achievement; nothing can be done without hope.
 Optimized blur
 Optional
 Optional, e.g. SYS.CLOCK // الساعة
@@ -3531,6 +3770,8 @@ Other Wi-Fi networks listed in the panel
 Other apps
 Other settings
 Other xkb options
+Our Mutual Friend
+Our doubts are traitors, and make us lose the good we oft might win, by fearing to attempt.
 Out-of-focus lights at different depths
 Outer corners of the sidebar and the power dock
 Outline
@@ -3548,6 +3789,7 @@ Overlay
 Override
 Override the unit for wind
 Overview
+Ovid
 Own systemd scope per app
 Owned by another user
 PAIRED
@@ -3606,6 +3848,7 @@ Passwords match
 Paste (right-click copies)
 Paste after copying
 Pastel
+Patience is man's refuge in times of despair, and his armor against misfortunes.
 Patience is the key to relief.
 Pause
 Pause 1 h
@@ -3713,7 +3956,9 @@ Plate
 Plate corners
 Plate opacity
 Plate padding
+Plato
 Play
+Play / pause
 Play a shell sound even while sounds are off
 Play a shell sound if sounds and that event are on (or any theme sound name)
 Play a sound for
@@ -3752,6 +3997,7 @@ Polar night
 Polaroid
 Polkit agent status; demo previews the authentication dialog; close cancels it
 Pomodoro
+Poor Richard's Almanack
 Pop up for
 Popup
 Popup content
@@ -3788,6 +4034,7 @@ Power profiles, battery health and charge history
 Power saver
 Power saver / balanced / performance
 Power saver at low battery
+Practice is the best of all instructors.
 Prayer times
 Prayer times list
 Precision
@@ -3815,6 +4062,7 @@ Preview — any password unlocks · Esc closes
 Previews per row
 Previous
 Previous track
+Previous window
 Primary
 Print the live configuration
 Printing
@@ -3847,12 +4095,16 @@ Progress
 Progress bars
 Progress reported by an app's notifications, on its icon
 Projects
+Proverbs are the palm-oil with which words are eaten.
+Provincial Letters XVI
 PrtSc
 Public IP copied
 Public IP service
 Public IP unavailable
 Public IP…
+Publilius Syrus
 Publish to the marketplace
+Pudd'nhead Wilson
 Pull one with: ollama pull llama3.2
 Pulse the battery when critical
 Push
@@ -3898,6 +4150,7 @@ RPM
 RTL
 Rabi al-Awwal
 Rabi al-Thani
+Rabindranath Tagore
 Radial
 Radius
 Rain
@@ -3907,14 +4160,17 @@ Raise the screen brightness (percent step, default 5)
 Raise volume
 Raised card
 Rajab
+Ralph Waldo Emerson
 Ramadan
 Random
 Random wallpaper
 Rank by use
 Ranking
 Rarely needed, e.g. pc105
+Rasselas
 Rates by ExchangeRate-API · {date}
 Rates in bytes (MB/s) or bits (Mb/s)
+Rather than love, than money, than fame, give me truth.
 Raw compositor dispatch (MangoWM function, Hyprland dispatcher, Niri or Umbriel action)
 Ray detail
 Re-derive the theme (Material You) from each wallpaper you pick
@@ -3934,6 +4190,7 @@ Reading desktop entries and where each one came from.
 Reading displays…
 Reading drives…
 Reading history…
+Reading maketh a full man; conference a ready man; and writing an exact man.
 Reading network devices…
 Reading power state…
 Reading saved networks…
@@ -3963,6 +4220,7 @@ Reads your wallpaper and caches its subject mask in Mandara's cache folder
 Ready
 Ready to present
 Ready, with a warning
+Real kindness seeks no return; what return can the world make to rain clouds?
 Receives notifications as the desktop notification server
 Recent
 Recent apps
@@ -4095,6 +4353,7 @@ Reply to {app}: {summary}
 Report a problem
 Report written to {file} (personal values redacted) — attach it to your bug report
 Repositories
+Republic, Book II
 Request failed: {error}
 Required
 Rescan for networks
@@ -4153,6 +4412,7 @@ Reverted to the previous arrangement
 Review
 Review each
 Rich text
+Richard Feynman
 Ridge layers
 Right
 Right (vertical)
@@ -4184,12 +4444,14 @@ Roundness
 Route traffic through a peer, or stop with none
 Rows
 Rows shown before the list scrolls
+Rubaiyat
 Ruggedness
 Rule
 Rule under the header
 Ruled
 Ruled to-do list
 Rules
+Rumi
 Run a command when something happens. Event details arrive as environment variables (MANDARA_EVENT, MANDARA_WALLPAPER, MANDARA_BATTERY_PERCENT…), never inside the command line. Before-logout, restart, shutdown and sleep hooks finish before the action.
 Run a download speed test against speed.cloudflare.com
 Run a hot corner's action now, as if the pointer rested there
@@ -4225,12 +4487,15 @@ SKIPPED TODAY
 SLEEP TIMER
 STORAGE
 SW
+Saadi
 Safar
 Safely remove
 Safely remove a drive: unmount and lock its volumes, then eject or power it off
 Same as the desktop
 Same time
 Sample levels — play something to see it live
+Samuel Johnson
+Sand and Foam
 Sand dunes lit by a low sun
 Sandbox data
 Sandboxed
@@ -4319,6 +4584,9 @@ Screens via compositor
 Screens, sound, network, power and input
 Screenshot
 Screenshot failed
+Screenshot of a region
+Screenshot of a window
+Screenshot of the screen
 Screenshot taken
 Screenshots
 Scripts and plugins
@@ -4394,6 +4662,7 @@ Security & accounts
 See all
 See all {count}
 Seed
+Seek not the paths of the ancients; seek that which the ancients sought.
 Seek to a position in seconds
 Segmentation fault
 Segmented meters, like a battery's cells
@@ -4412,11 +4681,14 @@ Send apps to their own output
 Send one app stream to another output
 Send the clipboard, a screenshot or a file to your phone with a QR code
 Send to
+Seneca
 Sensor
 Sensor {n}
 Sensors listed before the list folds
 Sent to KeePassXC. It can't confirm the result without its Secret Service integration; if it's still locked, KeePassXC shows its own unlock screen.
 Sentence
+Sentences, 358
+Sentences, 439
 Separators
 Service accounts belong to your distribution and are shown read-only.
 Services
@@ -4475,6 +4747,7 @@ Shadow under floating panels and floating side panels
 Shadowed
 Shadows
 Shafi'i
+Shahnameh
 Shape
 Shape and frame
 Shape size
@@ -4620,6 +4893,8 @@ Silences every output (speakers, HDMI and virtual devices such as EasyEffects) a
 Silk flow
 Silk sheen
 Silk threads drifting along a flow field
+Simone Weil
+Simplify, simplify.
 Simulate
 Since the link came up
 Size
@@ -4631,6 +4906,7 @@ Size of the floating card in the middle of the screen
 Size of the tabs and buttons
 Skill
 Skills
+Skills are acquired only through the repetition of actions.
 Skip
 Skip and reset buttons
 Skip passwords
@@ -4656,6 +4932,7 @@ Slider with min and max, otherwise a number field
 Slideshow
 Slideshow transition
 Slow
+Slow and steady wins the race.
 Slowest build
 Smallest
 Smallest exact file
@@ -4685,6 +4962,7 @@ Some folders
 Something went wrong while installing. The details say what.
 Somewhere in your config
 Soothing pastel cursors in the Catppuccin flavors and accents
+Sor Juana Inés de la Cruz
 Sort by
 Sort tasks
 Sound
@@ -4701,9 +4979,9 @@ Space between a panel's edge and its content (unset: none for the edge frame, a 
 Space inside cards
 Space inside each bar item, around its content
 Spacing
-Spanish proverb
 Speakers
 Specular rim
+Speech, 1997
 Speed
 Speed and efficiency
 Speed test cancelled
@@ -4772,6 +5050,7 @@ Status icons and menus of background apps
 Status text
 Stay awake while media plays
 Stays for
+Step by step walk the thousand-mile road.
 Step must be a number
 Sticker
 Sticky note
@@ -4814,6 +5093,11 @@ Stops in {time}
 Storage
 Storage service unavailable
 Store passwords unencrypted?
+Stray Birds 130
+Stray Birds 134
+Stray Birds 184
+Stray Birds 57
+Stray Birds 6
 Strength
 Strength of glass edge highlights
 Strength of the glass edge highlight and shade
@@ -4830,6 +5114,7 @@ Styles
 Subscribe to an ICS calendar (https / webcal URL, .ics file or folder)
 Success
 Sun
+Sun Tzu
 Sun arc
 Sun glitter
 Sun height
@@ -4852,6 +5137,7 @@ Surface
 Surprise me
 Suspend
 Suspend, then hibernate
+Swahili proverb
 Swap the left and right buttons
 Swatch shape
 Swirl
@@ -4921,6 +5207,7 @@ Tag {id}
 Tags
 Tags / workspaces per monitor
 Tags / workspaces with their apps
+Taha Hussein
 Tailscale
 Tailscale is busy with another change
 Tailscale isn't installed
@@ -4939,6 +5226,9 @@ Tall bars side by side
 Tallest it grows; fewer rows show when this is low
 Tallest panel, as a share of the screen height the bar leaves free
 Tallest the floating card grows
+Tao Te Ching 33
+Tao Te Ching 36
+Tao Te Ching 64
 Tap and drag
 Tap to click
 Tap, then slide to drag
@@ -4956,6 +5246,7 @@ Tasks, focus timer and system load
 Tasks, notes, focus timers and sign-in codes
 Technical details
 Tell me about config problems
+Tell me what company thou keepest, and I'll tell thee what thou art.
 Tell me when charged
 Tell the app it is tiled, even when floating
 Temperature
@@ -5001,13 +5292,25 @@ That user no longer exists
 That widget is already on this tab
 That widget is not on this tab
 That's Mandara itself — use Studio → Performance → Quit
+The Analytical Engine weaves algebraical patterns just as the Jacquard-loom weaves flowers and leaves.
 The App Installer plugin is off: turn it on in Studio → Plugins
 The Applications folder is off (Studio → Dock → Applications folder)
 The Applications folder: open or close its grid of apps
+The Art of War III
+The Book of Five Rings
+The Book of Tea
+The Cardinals
+The Gardener 45
+The Hare and the Tortoise
 The Inbox can be renamed but not deleted
+The Little Prince
 The Mediterranean horizon with waves and sun glitter
+The Narrow Road to the Interior
 The Pomodoro timer; click to start or pause
+The Prophet
 The QR code isn't a 2FA (otpauth://) code
+The Sum of Our Days
+The Tale of Genji
 The Trash: count its items, or empty it (asks for --yes)
 The XCursor theme name, e.g. Bibata-Modern-Ice; pick one from the gallery above
 The active keyboard layout; click to switch
@@ -5034,6 +5337,7 @@ The bar, the lock screen and prayer times all follow the clock, so they show the
 The battery is nearly empty. Plug in the charger to cancel.
 The battery reading turns coral at or below this charge
 The battery's percentage beside its icon
+The beginning is the most important part of any work.
 The big clock on the lock screen
 The carousel opened from the bar, the main menu or `mandara msg wallpaper picker toggle`
 The checker rejected the config without saying why.
@@ -5082,11 +5386,14 @@ The entry Enter runs right after opening the menu
 The file chooser failed: {error}
 The file is larger than this location allows.
 The first matching rule decides. Patterns are case-insensitive regular expressions; plain words match anywhere. Also from the command line: `mandara msg notifications rules add silent Spotify`.
+The first principle is that you must not fool yourself, and you are the easiest person to fool.
 The focused wallpaper's name under the picker
 The focused window
 The full coredumpctl report of a crash (with a stack trace when the core is stored)
 The generator's curated palettes
 The generator's styles with their parameters
+The great man is the one who does not lose his child's heart.
+The greatest thing in the world is to know how to belong to oneself.
 The hint strip under the toolbar
 The hotspot's name, password and Wi-Fi QR payload
 The hour
@@ -5098,10 +5405,12 @@ The interface language as an ISO 639-1 code; right-to-left for ar.
 The interface's
 The island keeps its groups together
 The job ended without a result
-The journey of a thousand miles begins with one step.
+The journey of a thousand li commenced with a single step.
 The keyring is locked
+The knowledge of anything, since all things have causes, is not acquired or complete unless it is known by its causes.
 The laptop panel and external monitors move together
 The last log lines of a container
+The less reason someone has, the more he fancies himself the most rational and most discerning of all.
 The link has no account name
 The link has no secret
 The link stops working after this long
@@ -5116,11 +5425,13 @@ The new track when music changes
 The newest one saved
 The next prayer and the time to it (needs the Prayer times plugin)
 The next prayer and time remaining
+The old pond: a frog jumps in — the sound of the water.
 The oldest go first
 The panel that drops from the bar item, or none.
 The password is empty
 The password needs 8–63 characters
 The passwords don't match
+The past resembles the future more than water resembles water.
 The percentage next to level bars
 The pieces every Mandara bar is built from
 The place name next to the temperature
@@ -5135,7 +5446,10 @@ The recording thread crashed
 The release has no download for this system
 The release has no plugin archive
 The release has no {suffix} file
+The roots below the earth claim no rewards for making the branches fruitful.
+The roots of education are bitter, but the fruit is sweet.
 The running job (progress, time), the last result and the schedule
+The sages were not ashamed to find themselves convinced; for they knew, being wise, that their knowledge was not infinite.
 The same as a grid of tiles
 The same message from the same app replaces the earlier one with a ×2 badge
 The sandbox
@@ -5157,6 +5471,7 @@ The sidebar keeps at least one tab
 The sidebar's tabs and their widgets
 The slideshow playlist is empty
 The slideshow's settings, source size, next change and pause
+The soft overcomes the hard; and the weak the strong.
 The sound server closed the stream
 The speed test server sent no data
 The speed test stopped
@@ -5181,6 +5496,7 @@ The window list is not available
 The window switcher is not open
 The window switcher is turned off (Studio → Window switcher)
 The world clock holds up to {n} cities
+The world is like a Mask dancing. If you want to see it well, you do not stand in one place.
 The {corner} corner has no action
 The × on a popup only hides it; it stays in the history
 Their files stay in {home}
@@ -5196,20 +5512,27 @@ There is already a collection called {name}
 There is no default keyring; create one in your keyring app
 There is no rule {n}
 There is no text to share
+There is nothing either good or bad, but thinking makes it so.
 There isn't enough free space on this disk.
 Thermals
 These files move to the Trash:
+They can because they think they can.
 They'll be asked to choose a password the first time they sign in.
 They'll choose a new password at their next login.
 Thickness
 Thickness of the glass edge highlight
 Thickness of the hairline and the micro pill
 Thin
+Things Fall Apart
+Think lightly of yourself and deeply of the world.
+Think of all the beauty still left around you and be happy.
 Third shape
 Third-party
 Third-party plugins
+Thiruvalluvar
 This AppImage's runtime isn't a valid program
 This Flatpak file doesn't name an app
+This above all: to thine own self be true.
 This account has no password.
 This app doesn't share a menu with the shell
 This app has no command to run
@@ -5284,6 +5607,7 @@ Time for a longer break
 Time for an eye break
 Time format
 Time in a shape
+Time is like a sword; if you don't cut it, it'll cut you.
 Time span of the battery charge sparkline
 Time spent in each app shows up here
 Time to focus for {minutes} minutes.
@@ -5293,16 +5617,23 @@ Time to stand up, stretch and rest your eyes
 Time to the next break, the next long break, today's counts and the rhythm (JSON)
 Time zone
 Time zone set to {zone}
+Time, 1953
 Time, date and calendar
 Time-synced lyrics from lrclib.net in the media panel (fetched only while it is open)
 Timeouts
 Timer
+Tirukkural 100
+Tirukkural 211
 Title
 Title (optional)
 Title contains (optional)
 Title, e.g. Picture-in-Picture
 Titles
 Titles on group tabs
+To beautify life is to give it an object.
+To err is human, to forgive divine.
+To live is so startling, it leaves but little room for other occupations.
+To use bitter words, when kind words are at hand, is like picking unripe fruit when the ripe fruit is there.
 To-do
 To-do list
 Today
@@ -5349,6 +5680,7 @@ Top {n} by frecency
 Topic name
 Topics in order, with their folders and note counts
 Torn paper
+Torquato Tasso
 Total and streak
 Touchpad
 Toward the middle
@@ -5590,6 +5922,7 @@ Use 8 or more characters; a few words make a strong password
 Use Material You colors from the wallpaper (optionally choosing style and seed)
 Use `osd show {kind} …` for this one
 Use `wallgen generate --palette theme` for the live theme colors
+Use a sweet tongue, courtesy, and gentleness, and thou mayst manage to guide an elephant with a hair.
 Use an absolute path: {path}
 Use another adapter (auto = the first)
 Use another folder while the theme is light or dark (clear to remove)
@@ -5641,6 +5974,8 @@ Validate
 Valley mist
 Values are saved in [plugins.settings.<id>] in config.toml
 Variations
+Verse 5
+Verse 81
 Version
 Version {version}
 Version {version} available
@@ -5654,6 +5989,7 @@ Vertical offset
 Vertical poem
 Vertical scroller
 Vertical tile
+Very little indeed is necessary for living a happy life.
 Vesktop / Vencord
 Vibrant
 Video
@@ -5663,6 +5999,9 @@ Video memory
 View as
 Views
 Vignette
+Villancico a Catarina
+Virgil
+Virginia Woolf
 Virtual
 Visible accounts
 Visible on every tag / workspace (pinned)
@@ -5671,6 +6010,7 @@ Visual window rule builder
 Visualizer
 Visualizer preview
 Visualizer style
+Voltaire
 Volume
 Volume and brightness
 Volume and microphone
@@ -5694,6 +6034,7 @@ Waiting for authorization…
 Waiting for its hours: next change at {time}
 Waiting for you
 Waiting to discharge
+Walden
 Walk around, drink some water and rest your eyes
 Wallhaven
 Wallhaven returned something that isn't an image
@@ -5703,6 +6044,7 @@ Wallpaper
 Wallpaper colors
 Wallpaper depth
 Wallpaper generator
+Wallpaper picker
 Wallpaper picker and desktop background
 Wallpaper scheme
 Wallpapers
@@ -5712,6 +6054,7 @@ Wallpapers prefix
 Wallpapers, generated art, online galleries and cursor themes
 Waning crescent
 Waning gibbous
+War and Peace X.16
 Warm
 Warm from
 Warm now
@@ -5732,6 +6075,9 @@ Wavy gauges
 Wavy ring
 Waxing crescent
 Waxing gibbous
+We come nearest to the great when we are great in humility.
+We must have perseverance and above all confidence in ourselves.
+We suffer more often in imagination than in reality.
 Weak
 Weather
 Weather and prayer times always follow this location, even when they have their own
@@ -5759,11 +6105,13 @@ Weeks
 Weight
 Weight of bar text; items keep their own emphasis
 Weight of body text across the shell
-Well begun is half done.
+Well done is better than well said.
+Were the diver to think on the jaws of the shark, he would never lay hands on the precious pearl.
 Western (123)
 What a middle click between and around the bar's items does
 What changed in each release, in plain words. Run mandara changelog to see it in a terminal.
 What clicking an entry does
+What do we live for, if it is not to make life less difficult to each other?
 What each tag or workspace pill says
 What happens
 What happens (needs your password)
@@ -5779,19 +6127,24 @@ What the bar shows for this layout, e.g. EN or ع
 What the idle stage, the critical battery action and the session menu's Sleep do
 What the launcher has learnt
 What the launcher shows for a query (apps, settings, commands, slash commands, skills)
+What you do not want done to yourself, do not do to others.
 What's in {version}
 What's new
 When
 When Bluetooth turns on, at login and after sleep
+When I walk along with two others, they may serve me as my teachers.
 When a window covers it
 When a window overlaps
 When an event defines alarms, remind at those times instead
 When idle
+When in doubt, tell the truth.
 When it overflows
 When nearly empty
 When the app you copied from quits, its last copy can still be pasted
 When the gh CLI is signed in, use its token for private repositories and higher rate limits (else GITHUB_TOKEN)
 When the monitors of a saved profile are connected, switch to it
+When the year becomes cold, then we know how the pine and the cypress are the last to lose their leaves.
+When there is a big tree small ones climb on its back to reach the sun.
 When to change
 When windows cover it
 When your compositor config or the compositor changed, the Config doctor checks it once at start-up and sends one notification about new problems
@@ -5820,6 +6173,7 @@ Which windows
 While a fullscreen app is focused
 While one of them is focused, colours stay true (photo and video editing).
 While sharing the screen
+While we are postponing, life speeds by.
 White
 White noise
 Who installed an app, the exact removal command and its leftovers (changes nothing)
@@ -5840,6 +6194,7 @@ Width of each preview
 Width of the administrator-password and keyring-unlock dialogs
 Width of the screen frame's border
 Width when attached
+William Shakespeare
 Wind
 Wind ripples
 Wind speed
@@ -5872,35 +6227,46 @@ With the anchor
 With your password through Mandara Login (not autologin). Each keyring's password must be your login password.
 Won't join automatically
 Word count
+Words by a Brushwood Gate
+Work is love made visible.
 Working day ends
 Working day starts
 Working…
+Works and Days
 Works in the background
 Workspaces
 World clock
 World clock row
 Write a reply…
 Write in Markdown…
+Write it on your heart that every day is the best day in the year.
 Write rules, binds and colors to ~/.config/mandara/generated
 Write the current display arrangement to the compositor drop-in so it survives restarts
 Write the current palette to Ghostty, GTK, Qt, Zed, Fuzzel and btop theme files
 Write the settings to a file (changes = only values that differ from the defaults)
 Writes to Mandara's log, tagged with your plugin's id.
+Writing is nothing more than a guided dream.
 Writing {file} and reloading {compositor} on every change.
 Written to Mandara's {compositor} drop-in; “Your config” keeps your own setting.
 Wrong passphrase
 Wrong password
 YYYY-MM-DD (empty: next New Year)
+Ye were not made to live like unto brutes, but for pursuit of virtue and of knowledge.
 Year
 Year in dots
 Yellow
 Yes, remove it anyway
 Yesterday
+Yoshida Kenkō
 You
 You can't delete the account you're signed in with
 You can't lock the account you're signed in with.
+You can't use up creativity. The more you use, the more you have.
+You cannot speak of ocean to a well-frog.
 You copy a new plugin.wasm, plugin.toml or translation into the folder
+You could not step twice into the same river.
 You declare [[settings]] in plugin.toml
+You give but little when you give of your possessions. It is when you give of yourself that you truly give.
 You have {version}
 You'll be asked once, by the system, before anything changes
 You're all caught up
@@ -5958,6 +6324,8 @@ Your to-dos, a sticky note, the focus timer, a quote and notebook tabs on the de
 Your wallpaper, an image of your choice or a solid color
 Your words in the field (optional)
 Yours
+Zhuangzi
+Zhuangzi 17
 Zoom
 [recipe|random|variation|reseed|<style>] [--size ID|WxH] [--format lossless|webp|png|jpeg] [--palette ID|theme|#hex,…] [--seed N] [--light|--dark] [--apply|--no-apply] [--video [--seconds N] [--fps N]] [--detach]
 `all` also forgets pinned and collected entries
@@ -6096,6 +6464,7 @@ function / dispatcher / action name, then its arguments
 geoclue or ip (default: the configured mode)
 greetd greeter
 h
+haiku, 1686
 has an unclosed group
 hci0, hci1… or auto
 healthy
@@ -6115,6 +6484,8 @@ id must be a number (see `clipboard list`)
 id must be a number (see `window list`)
 image file
 image, or AV1 video (.webm, .mkv, .ivf)
+in Diogenes Laërtius
+in Plato's Cratylus
 in {span}
 in {time}
 inactive
@@ -6259,6 +6630,8 @@ primary, secondary, tertiary, success, warning, urgent or hue:<0-359>
 process ID
 profile name
 profile to switch to
+quoted by Eve Curie
+quoted in Bahgory (2008)
 recorder not initialised
 redact replaces locations, keys and accounts
 relay · {region}
@@ -6425,6 +6798,7 @@ your default
 {app} wasn't installed
 {app} · minimized
 {app}: daily limit reached
+{author}, {work}
 {call} ms per call, {init} ms for init
 {changed} of {count} changed
 {city} is already on the clock
