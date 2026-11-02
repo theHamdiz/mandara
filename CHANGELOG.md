@@ -6,6 +6,15 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Changed
+
+- **A lighter start.** Right after it starts, the shell now holds far less
+  memory: 15 seconds in, 37–39 MiB instead of 111–123 MiB on a 4K display.
+  Its start-up peak is 11 MiB lower, 30–37 MiB lower with a wallpaper,
+  because fonts for other scripts load one face each until you see text in
+  them, and a wallpaper is put on screen without full-size copies of
+  itself. Memory once settled, video memory and frame times are unchanged.
+
 ## 0.8.0 — 2026-11-02
 
 Side bars. Mandara speaks Persian, Korean, Urdu and Bengali. Swipe a
