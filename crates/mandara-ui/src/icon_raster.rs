@@ -134,6 +134,24 @@ fn to_bgra(mut rgba: image::RgbaImage) -> image::RgbaImage {
     rgba
 }
 
+thread_local! {
+    /// [`svg_draws`] per file, checked once: app icons are resolved again
+    /// after every config change.
+    static DRAWS: RefCell<HashMap<std::path::PathBuf, bool>> = RefCell::new(HashMap::new());
+}
+
+/// Whether the SVG at `path` draws anything: it reads and parses and has at
+/// least one shape. A symbolic app icon that doesn't is skipped for the
+/// colour one (an empty one left a blank in the bar). Checked once per file.
+pub fn svg_draws(path: &Path) -> bool {
+    if let Some(hit) = DRAWS.with_borrow(|d| d.get(path).copied()) {
+        return hit;
+    }
+    let draws = std::fs::read(path).ok().and_then(|bytes| resvg::usvg::Tree::from_data(&bytes, &resvg::usvg::Options::default()).ok()).is_some_and(|tree| tree.root().has_children());
+    DRAWS.with_borrow_mut(|d| d.insert(path.to_path_buf(), draws));
+    draws
+}
+
 /// Whether a path is drawn through [`source`] (everything `img` handles
 /// as a still image: SVG, PNG, JPEG, WebP).
 pub fn handles(path: &Path) -> bool {
@@ -143,6 +161,23 @@ pub fn handles(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn empty_or_broken_svgs_draw_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let write = |name: &str, body: &str| {
+            let p = dir.path().join(name);
+            std::fs::write(&p, body).unwrap();
+            p
+        };
+        let shape = write("a.svg", r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><path d="M1 1h14v14H1z"/></svg>"#);
+        let empty = write("b.svg", r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"></svg>"#);
+        let broken = write("c.svg", "not an svg");
+        assert!(svg_draws(&shape));
+        assert!(!svg_draws(&empty));
+        assert!(!svg_draws(&broken));
+        assert!(!svg_draws(&dir.path().join("missing.svg")));
+    }
 
     #[test]
     fn edges_round_up_and_stay_bounded() {

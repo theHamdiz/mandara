@@ -38,7 +38,7 @@ pub mod alpha {
     pub const SELECTED: f32 = 0.14;
     /// Secondary text on a filled tile.
     pub const SECONDARY_TEXT: f32 = 0.72;
-    /// Slider knob drop shadow.
+    /// Drop shadow under a floating knob (the snip toolbar's handles).
     pub const KNOB_SHADOW: f32 = 0.35;
 }
 
@@ -50,15 +50,6 @@ pub mod metrics {
     pub const TILE_ICON: f32 = 18.0;
     /// Icon glyph size as a fraction of its round button.
     pub const ICON_BUTTON_GLYPH: f32 = 0.48;
-    /// Slider hit area, track thickness and knob diameter.
-    pub const SLIDER_H: f32 = 22.0;
-    pub const SLIDER_TRACK_H: f32 = 8.0;
-    pub const SLIDER_KNOB: f32 = 16.0;
-    /// Slider knob shadow offset / blur.
-    pub const KNOB_SHADOW_Y: f32 = 1.0;
-    pub const KNOB_SHADOW_BLUR: f32 = 3.0;
-    /// Knob lightness lift over the fill colour.
-    pub const KNOB_LIGHTEN: f32 = 0.04;
     /// List row height.
     pub const ROW_H: f32 = 46.0;
     /// Extra radius / gap step on top of the spacing scale.
@@ -168,58 +159,32 @@ pub fn icon_button(
         .on_click(move |_, window, cx| on_click(window, cx))
 }
 
-/// A horizontal slider. A press jumps to the value under the pointer and
-/// drags until release, even outside the track; while held it draws your
-/// value, not the owner's echoes ([`crate::slider_model`]). `on_change`
-/// writes a value (`0..=1`) and returns the write's completion (`None` for a
-/// local value set at once, or nothing). In right-to-left languages it fills
-/// from the right.
+/// A horizontal slider ([`crate::slider`], the standard size). A press
+/// jumps to the value under the pointer and drags until release, even
+/// outside the track; while held it draws your value, not the owner's
+/// echoes ([`crate::slider_model`]). `on_change` writes a value (`0..=1`)
+/// and returns the write's completion (`None` for a local value set at
+/// once, or nothing). In right-to-left languages it fills from the right.
 pub fn slider<R: crate::slider_model::IntoWrite>(
     id: impl Into<ElementId>,
     value: f32,
     palette: &MandaraPalette,
     on_change: impl Fn(f32, &mut Window, &mut App) -> R + 'static,
 ) -> impl IntoElement {
-    let id = id.into();
-    let value = crate::slider_model::shown(&id, value).clamp(0.0, 1.0);
-    let rtl = crate::bidi::rtl();
-    let fill = palette.primary;
-    let track = palette.surface_container_high;
-    let el = div()
-        .id(id.clone())
-        .relative()
-        .h(px(metrics::SLIDER_H))
-        .flex()
-        .items_center()
-        .cursor_pointer()
-        .child(
-            div()
-                .w_full()
-                .h(px(metrics::SLIDER_TRACK_H))
-                .rounded_full()
-                .bg(track.hsla())
-                .row()
-                .child(div().h_full().rounded_full().w(gpui::relative(value)).bg(fill.hsla())),
-        )
-        .child(
-            // Knob, centred on the value (so the whole width maps to 0..=1).
-            div()
-                .absolute()
-                .inset_start(gpui::relative(value))
-                .when(rtl, |el| el.mr(px(-metrics::SLIDER_KNOB / 2.0)))
-                .when(!rtl, |el| el.ml(px(-metrics::SLIDER_KNOB / 2.0)))
-                .size(px(metrics::SLIDER_KNOB))
-                .rounded_full()
-                .bg(palette.primary.lighten(metrics::KNOB_LIGHTEN).hsla())
-                .shadow(vec![gpui::BoxShadow {
-                    color: palette.specular_rim_shadow.with_alpha(alpha::KNOB_SHADOW).hsla(),
-                    offset: gpui::point(px(0.0), px(metrics::KNOB_SHADOW_Y)),
-                    blur_radius: px(metrics::KNOB_SHADOW_BLUR),
-                    spread_radius: px(0.0),
-                    inset: false,
-                }]),
-        );
-    crate::slider_model::bind(el, id, crate::slider_model::Track::EDGE_TO_EDGE, on_change)
+    crate::slider::slider(id.into(), value, crate::slider::Size::Standard, crate::slider::Look::default(), palette, on_change)
+}
+
+/// [`slider`] with a value bubble above the handle while it is held,
+/// showing `label` of the value (`0..=1`).
+pub fn slider_with_label<R: crate::slider_model::IntoWrite>(
+    id: impl Into<ElementId>,
+    value: f32,
+    palette: &MandaraPalette,
+    label: impl Fn(f32) -> gpui::SharedString + 'static,
+    on_change: impl Fn(f32, &mut Window, &mut App) -> R + 'static,
+) -> impl IntoElement {
+    let look = crate::slider::Look { label: Some(std::rc::Rc::new(label)), ..Default::default() };
+    crate::slider::slider(id.into(), value, crate::slider::Size::Standard, look, palette, on_change)
 }
 
 /// A list row with leading icon, title/subtitle and trailing content.

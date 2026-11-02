@@ -100,6 +100,9 @@ pub fn register(r: &mut PluginRegistry) {
                     .items_center()
                     .gap(px(tokens::SM))
                     .max_w(px(max_w))
+                    // Shrinks into the room its bar zone leaves (the title
+                    // ellipsizes) rather than overlapping the next zone.
+                    .min_w(px(0.0))
                     .when_some(app, |el, app| el.child(div().flex_none().font_weight(gpui::FontWeight::MEDIUM).child(app)))
                     .when_some(title, |el, title| el.child(div().min_w(px(0.0)).truncate().text_color(palette.on_surface_variant.hsla()).child(title)))
                     .into_any_element()

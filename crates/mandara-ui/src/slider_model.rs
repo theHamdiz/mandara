@@ -1,5 +1,5 @@
-//! The model behind every slider in the shell ([`crate::kit::slider`],
-//! [`crate::plugins::panel_fx::big_slider`]): pointer capture, the value
+//! The model behind every slider in the shell (drawn by [`crate::slider`]:
+//! [`crate::kit::slider`], [`crate::plugins::panel_fx::big_slider`]): pointer capture, the value
 //! you are dragging, and the writes that carry it to whatever owns the real
 //! value (the sound server, a backlight, a local mixer).
 //!
@@ -301,7 +301,8 @@ pub fn shown(key: &ElementId, server: f32) -> f32 {
     held(key).unwrap_or(server)
 }
 
-fn dragging(key: &ElementId) -> bool {
+/// Whether the slider `key` is being dragged (pressed).
+pub fn dragging(key: &ElementId) -> bool {
     SLOTS.with(|s| s.borrow().get(key).is_some_and(|slot| slot.model.dragging()))
 }
 
@@ -558,6 +559,55 @@ mod tests {
         assert_eq!(m.write_done(t0), None, "back where the write in flight goes: nothing more");
         assert_eq!(m.pointer_moved(0.5, true, t0), None, "same position: nothing to write");
         assert_eq!(m.pointer_moved(0.55, true, t0), Some(0.55));
+    }
+
+    /// A Studio setting slider ([`next_frame`]): each write completes when
+    /// the window draws its next frame. A 1000 Hz mouse sends ~16 pointer
+    /// events a 60 Hz frame; each used to copy, compare, serialise and
+    /// mirror the whole config (and resize the bar) on its own. Now at most
+    /// one value a frame is applied, the knob is under the pointer the whole
+    /// time, and the exact final position is applied after the release.
+    #[test]
+    fn frame_writes_apply_at_most_one_value_a_frame_and_the_last_lands() {
+        const FRAME_US: u64 = 16_667; // 60 Hz
+        const POINTER_US: u64 = 1_000; // 1000 Hz mouse
+        const DRAG_US: u64 = 600_000;
+        let t0 = Instant::now();
+        let at = |us: u64| t0 + Duration::from_micros(us);
+        let pointer = |us: u64| (0.1 + 0.8 * us as f32 / DRAG_US as f32).min(0.9) + if us == DRAG_US { 0.0123 } else { 0.0 };
+        let mut m = LiveValue::default();
+        let mut applied: Vec<(u64, f32)> = Vec::new();
+        let mut in_flight = false;
+        let mut events = 0;
+        for us in 0..=DRAG_US + FRAME_US * 3 {
+            // A frame boundary completes the write in flight.
+            if us % FRAME_US == 0 && in_flight {
+                in_flight = false;
+                if let Some(v) = m.write_done(at(us)) {
+                    applied.push((us / FRAME_US, v));
+                    in_flight = true;
+                }
+            }
+            if us % POINTER_US == 0 && us <= DRAG_US {
+                events += 1;
+                let w = if us == 0 { m.press(pointer(us), at(us)) } else { m.pointer_moved(pointer(us), true, at(us)) };
+                if let Some(v) = w {
+                    assert!(!in_flight, "one write per frame");
+                    applied.push((us / FRAME_US, v));
+                    in_flight = true;
+                }
+                assert_eq!(m.shown(0.0, at(us)), pointer(us), "the knob follows the pointer at once");
+            }
+            if us == DRAG_US {
+                m.release(at(us));
+            }
+        }
+        let frames = DRAG_US / FRAME_US + 1;
+        assert!(applied.len() as u64 <= frames + 1, "{} values applied for {events} pointer events over {frames} frames", applied.len());
+        for pair in applied.windows(2) {
+            assert!(pair[1].0 > pair[0].0, "never two values in one frame: {pair:?}");
+        }
+        assert_eq!(applied.last().map(|a| a.1), Some(pointer(DRAG_US)), "the exact final value is applied");
     }
 
     #[test]

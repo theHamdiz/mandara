@@ -30,7 +30,10 @@ How Mandara looks and feels, and how much of it you can shape.
   names or dots, with or without app icons, and empty ones hidden; the
   active window as its app, its title or both, up to a width you pick; the
   volume and battery with or without their numbers; the track title or
-  just the music icon, hidden while paused if you like.
+  just the music icon, hidden while paused if you like. The bar's three
+  groups never overlap: a group gets the room up to its neighbour, a long
+  window title ends in an ellipsis there, and on a very narrow bar the
+  items nearest the middle make way first.
 - **Sidebars fit like puzzle pieces:** a flush sidebar takes the bar's
   material and meets it with the same concave curves: it hangs from the
   edge frame, turns the hairline's accent line down its edge, merges into

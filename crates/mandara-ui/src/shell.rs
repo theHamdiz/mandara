@@ -63,6 +63,10 @@ struct Slot {
     on_secondary_click: Option<ClickHandler>,
     measured: Rc<Cell<f32>>,
     measured_cross: Rc<Cell<f32>>,
+    /// The most content length this frame's zone fitting leaves the slot
+    /// along the bar ([`layout::fit_slots`]); `None` while it is left out of
+    /// a full zone.
+    limit: Cell<Option<f32>>,
     /// Built for a side bar (its chip host stacks content in a column).
     vertical: bool,
     hover: SpringValue<f32>,
@@ -213,6 +217,8 @@ const ACTIVE_TEXT_LIGHTEN: f32 = 0.06;
 const OFFSCREEN_X_PX: f32 = -10_000.0;
 /// Width changes smaller than this don't re-layout the bar, in px.
 const MEASURE_EPSILON_PX: f32 = 0.5;
+/// A chip measuring within this of its fitted limit is squeezed to it.
+const SQUEEZED_EPSILON_PX: f32 = 1.0;
 /// Morph progress after which a panel counts as settled ("entered").
 const PANEL_SETTLED_PROGRESS: f32 = 0.92;
 /// Horizontal overhang of the hover bridge between a pill and its panel.
@@ -265,8 +271,11 @@ impl Render for ChipHost {
                 .absolute()
                 .top_0()
                 .left_0()
-                .when(!vertical, |el| el.h_full().flex().items_center())
-                .when(vertical, |el| el.flex().flex_col().items_center())
+                // At most the host's length along the bar (the slot's fitted
+                // limit): content that can shrink (a window title) ellipsizes
+                // there instead of running into the next zone.
+                .when(!vertical, |el| el.h_full().max_w(gpui::relative(1.0)).flex().items_center())
+                .when(vertical, |el| el.max_h(gpui::relative(1.0)).flex().flex_col().items_center())
                 .whitespace_nowrap()
                 // Typography → Bar font.
                 .font_family(crate::fonts::fonts(cx).bar)
@@ -521,6 +530,7 @@ impl ShellView {
                     on_secondary_click: instance.on_secondary_click,
                     measured,
                     measured_cross,
+                    limit: Cell::new(Some(f32::INFINITY)),
                     vertical,
                     hover: SpringValue::new(0.0, SpringConfig::SNAPPY),
                     hovered: false,
@@ -553,10 +563,36 @@ impl ShellView {
         self.applied = None;
     }
 
+    /// Every zone's width as laid out: its slots fitted into their share
+    /// of the bar ([`Self::fit_zones`]).
     fn zone_widths(&self) -> [f32; 3] {
         let m = self.metrics;
-        let w = |zone: &[Slot]| layout::zone_width(&zone.iter().map(|s| self.slot_length(s)).collect::<smallvec::SmallVec<[f32; 16]>>(), &m);
+        let w = |zone: &[Slot]| layout::zone_width(&zone.iter().map(|s| self.slot_extent(s)).collect::<smallvec::SmallVec<[f32; 16]>>(), &m);
         [w(&self.zones[0]), w(&self.zones[1]), w(&self.zones[2])]
+    }
+
+    /// Fits each zone into its share of the bar ([`layout::zone_limits`]),
+    /// so the zones never run into each other: a long window title is
+    /// ellipsized short of the clock instead of sliding under it (issue
+    /// #21). Sets every slot's limit for this frame.
+    fn fit_zones(&self) {
+        let m = &self.metrics;
+        let (along, _) = layout::bar_axes(m, self.surface);
+        let lengths: [smallvec::SmallVec<[f32; 16]>; 3] = std::array::from_fn(|z| self.zones[z].iter().map(|s| self.slot_length(s)).collect());
+        let wanted: [f32; 3] = std::array::from_fn(|z| layout::zone_width(&lengths[z], m));
+        let limits = layout::zone_limits(m, along, wanted);
+        for (z, zone) in self.zones.iter().enumerate() {
+            let fit = layout::fit_slots(&lengths[z], m, limits[z], z == layout::Group::Right.index());
+            for (slot, limit) in zone.iter().zip(fit) {
+                slot.limit.set(limit);
+            }
+        }
+    }
+
+    /// A slot's length along the bar as laid out: its content, at most its
+    /// fitted limit; 0 while it is left out.
+    fn slot_extent(&self, slot: &Slot) -> f32 {
+        slot.limit.get().map_or(0.0, |limit| self.slot_length(slot).min(limit))
     }
 
     /// A slot's content length along the bar; 0 (hidden) for content wider
@@ -570,6 +606,7 @@ impl ShellView {
     }
 
     fn update_targets(&mut self, cfg: &ShellConfig) {
+        self.fit_zones();
         let widths = self.zone_widths();
         if widths.iter().all(|w| *w <= 0.0) || self.surface.0 < 1.0 {
             return;
@@ -618,7 +655,7 @@ impl ShellView {
             return self.zones[zone]
                 .iter()
                 .map(|slot| {
-                    let w = self.slot_length(slot);
+                    let w = self.slot_extent(slot);
                     if w < 1.0 {
                         return None;
                     }
@@ -644,7 +681,7 @@ impl ShellView {
         self.zones[zone]
             .iter()
             .map(|slot| {
-                let w = slot.measured.get();
+                let w = self.slot_extent(slot);
                 if w < 1.0 {
                     return None;
                 }
@@ -1703,24 +1740,32 @@ impl Render for ShellView {
                 // that width (see [`ChipHost`]). Its bounds only change when
                 // the chip moves, so an idle chip is replayed, not rebuilt.
                 let Some(host) = slot.host.clone() else { continue };
-                let (x, y, h) = match rects[i] {
+                // The host spans the slot's fitted limit along the bar (the
+                // content is at most that long; see [`ChipHost`]), and clips
+                // content that can't shrink to it.
+                let limit = slot.limit.get().unwrap_or(f32::INFINITY);
+                let clamped = rects[i].is_some() && self.slot_length(slot) >= limit - SQUEEZED_EPSILON_PX;
+                let (x, y, w, h) = match rects[i] {
                     // A side bar's chip: content centred across, padded along.
                     Some(r) if vertical => (
                         f32::from(r.origin.x) + (f32::from(r.size.width) - slot.measured_cross.get()) / 2.0,
                         f32::from(r.origin.y) + m.chip_padding,
-                        f32::from(r.size.height) - m.chip_padding * 2.0,
+                        self.surface.0,
+                        limit.min(self.surface.1),
                     ),
-                    Some(r) => (f32::from(r.origin.x) + m.chip_padding, f32::from(r.origin.y), f32::from(r.size.height)),
-                    // Hidden/unmeasured: render offscreen-left so it can be measured.
-                    None => (OFFSCREEN_X_PX, 0.0, bar_h),
+                    Some(r) => (f32::from(r.origin.x) + m.chip_padding, f32::from(r.origin.y), limit.min(self.surface.0), f32::from(r.size.height)),
+                    // Hidden/unmeasured (or left out of a full zone): render
+                    // offscreen-left at its own size so it can be measured.
+                    None => (OFFSCREEN_X_PX, 0.0, self.surface.0, bar_h),
                 };
                 root = root.child(
                     div()
                         .absolute()
                         .left(px(x))
                         .top(px(y))
-                        .w(px(self.surface.0))
+                        .w(px(w))
                         .h(px(h))
+                        .when(clamped, |el| el.overflow_hidden())
                         .text_size(px(bar_text_px))
                         .font_weight(bar_weight)
                         .when(active, |el| el.text_color(palette.primary.lighten(ACTIVE_TEXT_LIGHTEN).hsla()))
@@ -2302,12 +2347,69 @@ impl Render for SidebarExclusionView {
     }
 }
 
+/// A resize of the bar's exclusive zone waits this long for the value to
+/// stop changing (a Studio slider being dragged) before it is applied.
+pub const ZONE_SETTLE: Duration = Duration::from_millis(220);
+
+/// When the bar's reserved space follows a new value.
+///
+/// Every change of an exclusive zone makes the compositor re-tile every
+/// window on the output, and each client redraws at its new size. Dragging
+/// Studio's bar height applied one per pointer step: all windows (Studio's
+/// own among them, moving its slider under the pointer) resized many times
+/// a second, and the drag lagged behind the pointer (issue #20). The bar
+/// itself still follows each step at once; the space it reserves follows
+/// once the value has rested for [`ZONE_SETTLE`]. Reserving space for the
+/// first time, releasing it (hide, auto-hide, another edge) and the first
+/// value apply at once.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ZoneSettle {
+    applied: Option<f32>,
+    /// A resize waiting for the value to rest, and since when it has.
+    pending: Option<(f32, Instant)>,
+}
+
+impl ZoneSettle {
+    /// The zone to apply now for the wanted `zone`, if any.
+    pub fn offer(&mut self, zone: f32, now: Instant) -> Option<f32> {
+        let same = |a: f32, b: f32| (a - b).abs() <= ZONE_EPSILON_PX;
+        let Some(applied) = self.applied else { return self.apply(zone) };
+        if same(zone, applied) {
+            self.pending = None;
+            return None;
+        }
+        if applied <= 0.0 || zone <= 0.0 {
+            return self.apply(zone);
+        }
+        match self.pending {
+            Some((value, since)) if same(value, zone) => (now.saturating_duration_since(since) >= ZONE_SETTLE).then(|| self.apply(zone)).flatten(),
+            _ => {
+                self.pending = Some((zone, now));
+                None
+            }
+        }
+    }
+
+    /// How long until a waiting resize is due (`None`: nothing waits).
+    pub fn due_in(&self, now: Instant) -> Option<Duration> {
+        self.pending.map(|(_, since)| ZONE_SETTLE.saturating_sub(now.saturating_duration_since(since)))
+    }
+
+    fn apply(&mut self, zone: f32) -> Option<f32> {
+        self.applied = Some(zone);
+        self.pending = None;
+        Some(zone)
+    }
+}
+
 /// Invisible strip that only reserves the bar's exclusive zone. One strip
 /// lives on the top edge and one on the bottom; only the one on the bar's
 /// configured edge reserves, so the position can switch live.
 pub struct ExclusionView {
     config: Entity<ConfigStore>,
-    applied: f32,
+    settle: ZoneSettle,
+    /// Looks again once a waiting resize is due.
+    recheck: Option<Task<()>>,
     position: BarPosition,
     /// The output's connector name (per-output bars / auto-hide).
     monitor: String,
@@ -2319,7 +2421,7 @@ impl ExclusionView {
         cx.observe(&config, |_, _, cx| cx.notify()).detach();
         // `bar hide` / `bar show` notify the shell state.
         cx.observe(&crate::state::shell(cx), |_, _, cx| cx.notify()).detach();
-        Self { config, applied: -1.0, position, monitor: String::new() }
+        Self { config, settle: ZoneSettle::default(), recheck: None, position, monitor: String::new() }
     }
 
     pub fn on_monitor(mut self, monitor: String) -> Self {
@@ -2343,10 +2445,16 @@ impl Render for ExclusionView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let cfg = self.config.read(cx).snapshot();
         let zone = Self::zone_for(self.position, &cfg, &self.monitor);
-        if (zone - self.applied).abs() > ZONE_EPSILON_PX {
+        let now = Instant::now();
+        if let Some(zone) = self.settle.offer(zone, now) {
             window.set_exclusive_zone(px(zone));
             window.set_input_region(Some(&[]));
-            self.applied = zone;
+            self.recheck = None;
+        } else if let Some(wait) = self.settle.due_in(now) {
+            self.recheck = Some(cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(wait).await;
+                let _ = this.update(cx, |_, cx| cx.notify());
+            }));
         }
         div().size_full()
     }
@@ -2386,6 +2494,33 @@ mod tests {
             edit(&mut changed);
             assert_ne!(key(&changed, 1.0, widths), base, "edit {i} must re-layout the bar");
         }
+    }
+
+    #[test]
+    fn the_reserved_space_follows_a_drag_once_it_rests() {
+        let t0 = Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        let mut z = ZoneSettle::default();
+        assert_eq!(z.offer(34.0, t0), Some(34.0), "the first value applies at once");
+        assert_eq!(z.offer(34.2, at(1)), None, "sub-pixel: nothing to do");
+        assert_eq!(z.due_in(at(1)), None);
+        // A drag: a new height every 16 ms re-tiles nothing.
+        for step in 1..=30u64 {
+            assert_eq!(z.offer(34.0 + step as f32, at(step * 16)), None, "step {step} waits");
+        }
+        let last = at(30 * 16);
+        assert_eq!(z.due_in(last), Some(ZONE_SETTLE));
+        assert_eq!(z.offer(64.0, last + ZONE_SETTLE / 2), None, "still settling");
+        assert_eq!(z.offer(64.0, last + ZONE_SETTLE), Some(64.0), "applied once, at the final value");
+        assert_eq!(z.offer(64.0, last + ZONE_SETTLE * 2), None, "and only once");
+        // Going back to the applied value cancels a waiting resize.
+        assert_eq!(z.offer(70.0, at(2000)), None);
+        assert_eq!(z.offer(64.0, at(2010)), None);
+        assert_eq!(z.due_in(at(2010)), None);
+        // Releasing or reserving the space (hide, auto-hide, another edge)
+        // never waits.
+        assert_eq!(z.offer(0.0, at(3000)), Some(0.0));
+        assert_eq!(z.offer(40.0, at(3001)), Some(40.0));
     }
 
     #[test]
