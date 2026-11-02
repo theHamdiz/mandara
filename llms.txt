@@ -1,0 +1,43 @@
+# Mandara Shell
+
+> Mandara Shell (`mandara`) is a native Linux Wayland desktop shell written entirely in Rust on GPUI, the GPU-accelerated UI framework behind the Zed editor. It gives MangoWM, Niri, Hyprland and Umbriel a status bar, dynamic island, dock, launcher, sidebar, notification center, on-screen displays, wallpaper engine, desktop widgets, lock screen, login manager and a live settings app (Mandara Studio), all in one binary that uses under 100 MiB of RAM. It is free software under GPL-3.0-or-later.
+
+Key facts:
+
+- Repository: https://github.com/theHamdiz/mandara (author: Ahmad Hamdi, `theHamdiz`). Named after El-Mandara (المندرة), a coastal district of Alexandria, Egypt.
+- Compositors: MangoWM (tags), Niri (scrollable tiling), Hyprland and Umbriel, all first-class. Mandara never edits the user's own compositor config. It writes drop-in files to `~/.config/mandara/generated/` and adds one include line.
+- Install: one command that downloads the signed release and runs `mandara install` (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo, Solus). Update from Studio → About → Update now.
+- Configuration: `~/.config/mandara/config.toml`, watched live. Mandara Studio (`mandara studio`) edits the same file, with 31 pages of settings.
+- Command line: almost everything the interface does is a documented command with JSON replies (`mandara msg <command>`, catalog via `mandara commands --json`), so scripts and AI agents can drive and inspect the desktop.
+- Plugins: 70 first-party plugins are built in. Third-party plugins are written in Rust, compiled to a sandboxed WebAssembly component (`wasm32-wasip2`, WIT interface), hot-reloaded, and shared through a GitHub marketplace.
+- Performance: under 100 MiB RAM, under 190 MiB video memory and about 0.1 % CPU when idle. Nothing animates or samples while it is off screen.
+- Design: spring-physics animation, Material You (HCT) palettes from the wallpaper, OKLCH color blending, light and dark themes, 10 interface languages including right-to-left Arabic.
+
+## Docs
+
+- [README](https://github.com/theHamdiz/mandara/blob/main/README.md): what Mandara is, screenshots and the install command
+- [FAQ](https://github.com/theHamdiz/mandara/blob/main/docs/faq.md): short, self-contained answers to common questions
+- [Install](https://github.com/theHamdiz/mandara/blob/main/docs/install.md): the one-line install, Arch packages, compositor setup, coming from another shell
+- [Usage](https://github.com/theHamdiz/mandara/blob/main/docs/usage.md): starting Mandara, everyday commands, default shortcuts
+- [Mandara Studio](https://github.com/theHamdiz/mandara/blob/main/docs/studio.md): the settings app, every page
+- [Your desktop](https://github.com/theHamdiz/mandara/blob/main/docs/desktop.md): bar styles, Looks, desktop widgets
+- [Plugins](https://github.com/theHamdiz/mandara/blob/main/docs/plugins.md): every built-in plugin and the plugin system
+- [Commands](https://github.com/theHamdiz/mandara/blob/main/docs/commands.md): the `mandara msg` command tour
+- [Scripting, automation and agents](https://github.com/theHamdiz/mandara/blob/main/docs/agent-ready.md): driving Mandara from scripts and AI agents
+- [Configuration](https://github.com/theHamdiz/mandara/blob/main/docs/configuration.md): every setting in config.toml
+- [Performance](https://github.com/theHamdiz/mandara/blob/main/docs/performance.md): how memory, video memory and CPU stay low
+
+## Developers
+
+- [Writing plugins](https://github.com/theHamdiz/mandara/blob/main/PLUGINS.md): the WebAssembly plugin guide, WIT contract and marketplace
+- [AGENTS.md](https://github.com/theHamdiz/mandara/blob/main/AGENTS.md): repository map, build and check commands, hard rules, for people and coding agents
+- [Building from source](https://github.com/theHamdiz/mandara/blob/main/docs/building.md): crates, build options, the build fingerprint
+- [Development tools](https://github.com/theHamdiz/mandara/blob/main/docs/development.md): the headless demo sandbox and resource checks
+
+## Optional
+
+- [Why Mandara](https://github.com/theHamdiz/mandara/blob/main/docs/why-mandara.md): how Mandara compares with other Wayland shells
+- [Color science](https://github.com/theHamdiz/mandara/blob/main/docs/color-science.md): Material You palettes, OKLCH and app theming
+- [Wallpapers](https://github.com/theHamdiz/mandara/blob/main/docs/wallpapers.md): the wallpaper engine and generator
+- [Lock screen and login](https://github.com/theHamdiz/mandara/blob/main/docs/lock-and-login.md): the lock screen and Mandara Login
+- [Changelog](https://github.com/theHamdiz/mandara/blob/main/CHANGELOG.md): what changed in each release

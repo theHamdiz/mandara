@@ -1,64 +1,129 @@
-# `cargo xtask sandbox up --config hero`: the README hero shot — floating
-# glass pills, a Today sidebar tab on the left, the media panel in the
-# middle, notifications and the Day block clock down the right edge, light /
-# dark wallpaper variants. Everything else keeps the shell's defaults.
+# `cargo xtask sandbox up --config hero --size 2880x1620 --scale 1.5`: the
+# README hero shot — the edge-frame bar with rounded screen corners, a
+# headline clock, a taped to-do list on torn paper, two sticky notes, the
+# month and the agenda, over the harbour at dusk (the dunes at dawn in
+# light mode). Everything else keeps the shell's defaults.
 #
-# The shot: `sandbox audio play`, `sandbox notify`, `sandbox msg sidebar
-# open`, `sandbox msg panel open media`, then `sandbox shot` while all three
-# notifications are up (`sandbox msg theme mode light` for hero-light).
+# The shot needs some demo content first:
+#   sandbox msg todo add "Water the basil"   (then four more; `todo done 1`)
+#   sandbox msg notes add "Weekend plans⏎…"  and  notes add "Ideas⏎…"
+#   an .ics file with four upcoming events at ~/Documents/demo.ics
+#   sandbox audio play   (a song in the bar)
+# then `sandbox msg notifications clear` and `sandbox shot hero.png`
+# (`sandbox msg theme mode light` for hero-light).
 
 [appearance]
 icon_theme = "Papirus-Dark"
-
-[bar]
-layout = "floating-pills"
-height = 32.0
-edge_gap = 2.0
-side_gap = 10.0
 
 [desktop.widgets]
 migrated = true
 
 [[desktop.widgets.items]]
-id = "day-block"
+id = "hero-clock"
 kind = "clock"
-enabled = true
-face = "day-block"
+face = "headline"
 date = true
 weather = true
-audio_ring = false
-ring_progress = "hour"
 seconds = false
-eastern_numerals = false
 
 [desktop.widgets.items.look]
-accent = "accent"
-custom_accent = ""
-custom_color = ""
-effect = "none"
 font = "display"
-tone = "auto"
 
 [desktop.widgets.items.place]
-anchor = "bottom-right"
 depth = "front"
-displays = []
-opacity = 1.0
+anchor = "top-left"
+x = 0.045
+y = 0.075
 scale = 1.0
-x = -0.02
-y = -0.035
 
-[[sidebar.tabs]]
-id = "today"
-name = "Today"
-icon = "sun"
-cards = ["weather", "prayer-times", "resources", "audio"]
+[[desktop.widgets.items]]
+id = "hero-todo"
+kind = "todo"
+rows = 5
+show_done = true
+title = true
+add_row = true
+width = 360.0
 
-[[sidebar.tabs]]
-id = "overview"
-name = "Overview"
-icon = "grid"
-cards = ["quick-settings", "weather", "media", "pomodoro", "todo", "notes", "audio", "resources"]
+[desktop.widgets.items.look]
+plate = "solid"
+plate_shape = "deckle"
+plate_opacity = 0.96
+chrome = "tape"
+shadow = "soft"
+
+[desktop.widgets.items.place]
+depth = "front"
+anchor = "bottom-left"
+x = 0.06
+y = -0.13
+rotation = -2.0
+
+[[desktop.widgets.items]]
+id = "hero-note"
+kind = "note"
+note = "Weekend plans"
+lines = 4
+sheet = "pastel"
+ruling = "ruled"
+width = 320.0
+
+[desktop.widgets.items.look]
+shadow = "soft"
+
+[desktop.widgets.items.place]
+depth = "front"
+anchor = "bottom"
+x = -0.07
+y = -0.15
+rotation = 3.0
+
+[[desktop.widgets.items]]
+id = "hero-note-2"
+kind = "note"
+note = "Ideas"
+lines = 4
+sheet = "custom"
+sheet_color = "#ffd8a8"
+ruling = "plain"
+width = 280.0
+
+[desktop.widgets.items.look]
+shadow = "soft"
+chrome = "tape"
+
+[desktop.widgets.items.place]
+depth = "front"
+anchor = "bottom"
+x = 0.13
+y = -0.17
+rotation = -4.0
+
+[[desktop.widgets.items]]
+id = "hero-month"
+kind = "date"
+layout = "month"
+
+[desktop.widgets.items.look]
+plate = "glass"
+
+[desktop.widgets.items.place]
+depth = "front"
+anchor = "top-right"
+x = -0.045
+y = 0.075
+
+[[desktop.widgets.items]]
+id = "hero-agenda"
+kind = "date"
+layout = "agenda"
+rows = 4
+
+[desktop.widgets.items.place]
+depth = "front"
+anchor = "bottom-right"
+x = -0.045
+y = -0.13
 
 [dock]
 pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
@@ -67,16 +132,17 @@ pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.dem
 shared = true
 
 [plugins]
-# Written for the current built-in defaults (no 0.1 upgrade).
 defaults_version = 1
-enabled = ["dock", "prayer-times"]
-
-[plugins.settings.media]
-lyrics = false
+enabled = ["dock", "todo", "notes", "desktop-productivity", "desktop-calendar", "desktop-clocks"]
 
 [wallpaper]
-path = "/home/demo/Pictures/Wallpapers/tide-dark.png"
+path = "/home/demo/Pictures/Wallpapers/harbour-dusk.png"
+
+[[calendar.sources]]
+name = "Demo"
+location = "/home/demo/Documents/demo.ics"
+enabled = true
 
 [wallpaper.variants]
-light = "/home/demo/Pictures/Wallpapers/tide-light.png"
-dark = "/home/demo/Pictures/Wallpapers/tide-dark.png"
+light = "/home/demo/Pictures/Wallpapers/dune-dawn.png"
+dark = "/home/demo/Pictures/Wallpapers/harbour-dusk.png"

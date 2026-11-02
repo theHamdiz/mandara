@@ -3,7 +3,7 @@
 How Mandara looks and feels, and how much of it you can shape.
 
 <p align="center">
-  <img src="screenshots/hero-light.webp" alt="The same Mandara desktop in light mode" width="100%"/>
+  <img src="screenshots/hero-light.webp" alt="The same Mandara desktop in light mode, over dunes at dawn: the headline clock, the taped to-do list, two sticky notes, the month calendar and the agenda" width="100%"/>
   <br/>
   <sub>The demo desktop in light mode (<code>mandara msg theme mode light</code>).</sub>
 </p>

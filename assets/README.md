@@ -76,6 +76,18 @@ Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900
 | <img src="plugins/desktop-identity/icon.png" width="40" alt="Desktop shortcuts and you icon"> <img src="plugins/desktop-identity/cover.png" width="128" alt="Desktop shortcuts and you cover"> | **Desktop shortcuts and you** · [SVG](plugins/desktop-identity/icon.svg) · [256 PNG](plugins/desktop-identity/icon.png) · [Cover](plugins/desktop-identity/cover.png) | Obsidian · a profile and glass tiles · painted scene |
 | <img src="plugins/desktop-fun/icon.png" width="40" alt="Desktop fun icon"> <img src="plugins/desktop-fun/cover.png" width="128" alt="Desktop fun cover"> | **Desktop fun** · [SVG](plugins/desktop-fun/icon.svg) · [256 PNG](plugins/desktop-fun/icon.png) · [Cover](plugins/desktop-fun/cover.png) | Corniche · bubbles and a polaroid on the beach · painted scene |
 | <img src="plugins/desktop-info/icon.png" width="40" alt="Desktop info icon"> <img src="plugins/desktop-info/cover.png" width="128" alt="Desktop info cover"> | **Desktop info** · [SVG](plugins/desktop-info/icon.svg) · [256 PNG](plugins/desktop-info/icon.png) · [Cover](plugins/desktop-info/cover.png) | Twilight · glass info cards on the water · painted scene |
+| <img src="plugins/ports/icon.png" width="40" alt="Listening ports icon"> <img src="plugins/ports/cover.png" width="128" alt="Listening ports cover"> | **Listening ports** · [SVG](plugins/ports/icon.svg) · [256 PNG](plugins/ports/icon.png) · [Cover](plugins/ports/cover.png) | Obsidian · illustration |
+| <img src="plugins/git-repos/icon.png" width="40" alt="Git repositories icon"> <img src="plugins/git-repos/cover.png" width="128" alt="Git repositories cover"> | **Git repositories** · [SVG](plugins/git-repos/icon.svg) · [256 PNG](plugins/git-repos/icon.png) · [Cover](plugins/git-repos/cover.png) | Obsidian · illustration |
+| <img src="plugins/ci/icon.png" width="40" alt="CI status icon"> <img src="plugins/ci/cover.png" width="128" alt="CI status cover"> | **CI status** · [SVG](plugins/ci/icon.svg) · [256 PNG](plugins/ci/icon.png) · [Cover](plugins/ci/cover.png) | Corniche · illustration |
+| <img src="plugins/crashes/icon.png" width="40" alt="Crash reports icon"> <img src="plugins/crashes/cover.png" width="128" alt="Crash reports cover"> | **Crash reports** · [SVG](plugins/crashes/icon.svg) · [256 PNG](plugins/crashes/icon.png) · [Cover](plugins/crashes/cover.png) | Obsidian · illustration |
+| <img src="plugins/tailscale/icon.png" width="40" alt="Tailscale icon"> <img src="plugins/tailscale/cover.png" width="128" alt="Tailscale cover"> | **Tailscale** · [SVG](plugins/tailscale/icon.svg) · [256 PNG](plugins/tailscale/icon.png) · [Cover](plugins/tailscale/cover.png) | Corniche · illustration |
+| <img src="plugins/uptime/icon.png" width="40" alt="Uptime monitor icon"> <img src="plugins/uptime/cover.png" width="128" alt="Uptime monitor cover"> | **Uptime monitor** · [SVG](plugins/uptime/icon.svg) · [256 PNG](plugins/uptime/icon.png) · [Cover](plugins/uptime/cover.png) | Corniche · illustration |
+| <img src="plugins/local-ai/icon.png" width="40" alt="Local AI icon"> <img src="plugins/local-ai/cover.png" width="128" alt="Local AI cover"> | **Local AI** · [SVG](plugins/local-ai/icon.svg) · [256 PNG](plugins/local-ai/icon.png) · [Cover](plugins/local-ai/cover.png) | Twilight · illustration |
+| <img src="plugins/share/icon.png" width="40" alt="Share to phone icon"> <img src="plugins/share/cover.png" width="128" alt="Share to phone cover"> | **Share to phone** · [SVG](plugins/share/icon.svg) · [256 PNG](plugins/share/icon.png) · [Cover](plugins/share/cover.png) | Twilight · illustration |
+| <img src="plugins/keybinds/icon.png" width="40" alt="Shortcuts cheatsheet icon"> <img src="plugins/keybinds/cover.png" width="128" alt="Shortcuts cheatsheet cover"> | **Shortcuts cheatsheet** · [SVG](plugins/keybinds/icon.svg) · [256 PNG](plugins/keybinds/icon.png) · [Cover](plugins/keybinds/cover.png) | Corniche · illustration |
+| <img src="plugins/progress/icon.png" width="40" alt="Task progress icon"> <img src="plugins/progress/cover.png" width="128" alt="Task progress cover"> | **Task progress** · [SVG](plugins/progress/icon.svg) · [256 PNG](plugins/progress/icon.png) · [Cover](plugins/progress/cover.png) | Obsidian · illustration |
+| <img src="plugins/breaks/icon.png" width="40" alt="Eye breaks icon"> <img src="plugins/breaks/cover.png" width="128" alt="Eye breaks cover"> | **Eye breaks** · [SVG](plugins/breaks/icon.svg) · [256 PNG](plugins/breaks/icon.png) · [Cover](plugins/breaks/cover.png) | Twilight · illustration |
+| <img src="plugins/presentation/icon.png" width="40" alt="Presentation mode icon"> <img src="plugins/presentation/cover.png" width="128" alt="Presentation mode cover"> | **Presentation mode** · [SVG](plugins/presentation/icon.svg) · [256 PNG](plugins/presentation/icon.png) · [Cover](plugins/presentation/cover.png) | Twilight · illustration |
 
 ## Palette and grid
 
@@ -89,21 +101,22 @@ SVGs store sRGB values for desktop renderer compatibility. Use the OKLCH anchors
 
 | Plugin category | Tile gradient | Plugins |
 | --- | --- | --- |
-| Navigation | `#103C63` → `#286B91` | Session, Launcher, Workspaces, Active window, Keyboard layout, Language, Main menu, System tray, Dock |
-| System | `#124D4B` → `#268878` | Resources, Process hunter, Quick settings, Drives, Power, Privacy, Mini stats |
-| Connections | `#125477` → `#329DA7` | Network, Bluetooth, Network speed |
-| Media | `#40316F` → `#8666AA` | Media, Audio, Screenshot, Color picker |
+| Navigation | `#103C63` → `#286B91` | Session, Launcher, Workspaces, Active window, Keyboard layout, Language, Main menu, System tray, Dock, CI status, Shortcuts cheatsheet |
+| System | `#124D4B` → `#268878` | Resources, Process hunter, Quick settings, Drives, Power, Privacy, Mini stats, Task progress |
+| Connections | `#125477` → `#329DA7` | Network, Bluetooth, Network speed, Tailscale, Uptime monitor |
+| Media | `#40316F` → `#8666AA` | Media, Audio, Screenshot, Color picker, Local AI, Share to phone |
 | Productivity | `#843D58` → `#C47268` | Clipboard, Notifications, To-do, Notes, Pomodoro, Authenticator, Screen time |
 | Time | `#765323` → `#B78D47` | Clock, World clock |
-| Sky | `#30265E` → `#7063B5` | Prayer times, Weather, Wallpaper, Moon phase, Soundscapes |
+| Sky | `#30265E` → `#7063B5` | Prayer times, Weather, Wallpaper, Moon phase, Soundscapes, Eye breaks, Presentation mode |
 | Creation | `#185D54` → `#40C8BD` | Wallpaper generator |
-| Maintenance | `#14303A` → `#2F6C70` | Updates, Services, Containers, App installer |
+| Maintenance | `#14303A` → `#2F6C70` | Updates, Services, Containers, App installer, Listening ports, Git repositories, Crash reports |
 
 - App tiles: 1024-unit square; tile inset 32, radius 216, primary shoreline stroke 88, rim 8. The main mark was checked at 16 px. Symbolic artwork fills its own 704-unit viewBox.
 - Plugin tiles: 512-unit square; tile inset 16, radius 108, primary stroke 28. Use rounded caps and joins, a centered glyph around 112–400, cream `#FFF2D5`, and sand `#FFD58A`.
 - Glass: one quiet diagonal gradient, a top-left highlight, a thin inner rim, and a translucent lower shoreline. Keep the glyph dominant. Icons contain no lettering or borrowed project marks; Bluetooth uses two wireless peers.
 - Covers: name at the upper left in Inter; a large icon; restrained thematic linework; a floating real panel where supplied. Preserve panel proportions and use a soft shadow. UI appears only in the 21 real captures linked through the catalog; captures never show private data (demo accounts, blurred addresses, or a crop to non-identifying parts). The dock retains its full transparent capture and source corner shape, with no desktop background. The other new covers use illustrations because no suitable isolated capture is available. The desktop widget plugins and Wallpaper depth have painted scenes of their own (`assets/artwork/scenes/`, the catalog's `scene`) behind the name and icon; screenshots of the widgets themselves are in [docs/desktop.md](../docs/desktop.md#desktop-widgets).
 - The added cover motifs are `watch` (eye contours), `shelf` (dock rails), `package` (open carton), `hourglass` and `aurora` (flowing contours and a sparkle). System tray and Mini stats reuse `peers` and `bars` respectively. Mini stats is visible in Studio's uncategorized store group; the internal Compositor commands are hidden and have no marketplace art.
+- Listening ports, Git repositories, CI status, Crash reports, Tailscale, Uptime monitor, Local AI, Share to phone, Shortcuts cheatsheet, Task progress, Eye breaks and Presentation mode reuse the existing motifs and palette backgrounds. Their covers are illustrations with no panel capture. Their glyph and motif notes are in `artwork/prompts.json`.
 
 ## Sources and checks
 
@@ -124,9 +137,9 @@ The whole pipeline is Rust (`xtask/src/art.rs`): SVGs render with [resvg](https:
 
 ## Embedded in the binary
 
-`cargo xtask art` turns every built-in plugin's art into the compact set the shell and Studio embed, in [`crates/mandara-ui/assets/plugin-art/<id>/`](../crates/mandara-ui/assets/plugin-art): `icon.png` (128 px, rendered from the SVG), `icon@2x.png` (256 px) and `cover.jpg` (960×540, JPEG quality 82; a PNG when the cover has transparency), plus the generated `index.rs` table. The generated files are committed — they are build inputs. Example plugins in `plugins/examples/` ship their own `icon.png` / `cover.png` inside their package instead.
+`cargo xtask art` turns every built-in plugin's art into the compact set the shell and Studio embed, in [`crates/mandara-ui/assets/plugin-art/<id>/`](../crates/mandara-ui/assets/plugin-art): `icon.webp` (128 px, rendered from the SVG), `icon@2x.webp` (256 px) and `cover.jpg` (960×540, JPEG quality 82; lossless `cover.webp` when the cover has transparency), plus the generated `index.rs` table. The generated files are committed — they are build inputs. Example plugins in `plugins/examples/` ship their own `icon.png` / `cover.png` inside their package instead.
 
-The embedded-art ceiling is **6 MiB (6,291,456 bytes)**, allowing roughly 100 KiB per built-in plugin's icon pair and cover, with headroom for a few more plugins. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 58-plugin set uses **5,875,269 bytes (5.60 MiB)**, leaving **416,187 bytes** of headroom.
+The embedded-art ceiling is **7,400,000 bytes (7.06 MiB)**, rounded to 100,000 bytes to leave roughly 400 KiB for artwork revisions and small additions. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 70-plugin set uses **7,002,322 bytes (6.68 MiB)**, leaving **397,678 bytes (388 KiB)** of headroom.
 
 ```sh
 cargo xtask art --compose            # render source icons and compose covers (--only ID)

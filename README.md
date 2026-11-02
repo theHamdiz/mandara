@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/hero.webp" alt="Mandara Shell on a demo desktop: the glass-pill bar, a Today sidebar tab with weather, prayer times, resources and sound, the media panel with its visualizer, notification cards, the Day block desktop clock and the dock" width="100%"/>
+  <img src="docs/screenshots/hero.webp" alt="Mandara Shell desktop at dusk: the edge-frame bar with rounded screen corners and the song playing, a headline clock, a to-do list taped on torn paper, two sticky notes (Weekend plans and Ideas), a month calendar, the agenda of upcoming events and the dock" width="100%"/>
 </p>
 
 <p align="center">
@@ -42,15 +42,31 @@
 
 ---
 
-Mandara is everything around your windows: the bar, a dynamic island, a
-dock, a launcher, a sidebar, notifications, wallpapers, the lock screen and
-the login screen, plus a settings app that changes all of it live. It runs
-on **MangoWM, Niri, Hyprland and Umbriel**, and it's one small, fast program you
-install with one command.
+**Mandara Shell** is a native Linux Wayland desktop shell, written in Rust
+on [GPUI](https://github.com/zed-industries/zed). It's everything around
+your windows: the bar, a dynamic island, a dock, a launcher, a sidebar,
+notifications, wallpapers, desktop widgets, the lock screen and the login
+screen, plus a settings app that changes all of it live. It runs on
+**MangoWM, Niri, Hyprland and Umbriel**, and it's one small, fast program
+you install with one command.
 
 It's made to feel good to use. Panels pour out of the bar on real spring
 physics, colours follow your wallpaper and your music, and the whole
 desktop stays light enough to run all day without you noticing it.
+
+## At a glance
+
+| | |
+|---|---|
+| **What** | A complete Wayland desktop shell: bar, island, dock, launcher, sidebar, notifications, OSDs, wallpapers, desktop widgets, lock screen, login manager, settings app |
+| **Compositors** | MangoWM, Niri, Hyprland and Umbriel, all first-class; your own config gets one include line, nothing more |
+| **Built with** | 100 % Rust, one binary (`mandara`), GPU-rendered with GPUI and wgpu |
+| **Resources** | Under 100 MiB RAM, under 190 MiB video memory, about 0.1 % CPU idle |
+| **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`) |
+| **Automation** | `mandara msg <command>` with JSON replies; `mandara commands --json` lists them all |
+| **Plugins** | 70 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
+| **Languages** | 10, including right-to-left Arabic |
+| **License** | GPL-3.0-or-later |
 
 ## Why you'll like it
 
@@ -149,9 +165,29 @@ Gentoo and Solus. Updates arrive by small binary patch: Studio → About →
 → **[Install guide](docs/install.md)**: Arch packages, other options,
 coming from another setup.
 
+## Common questions
+
+**Does Mandara change my compositor config?** Only by one include line.
+Everything else goes to `~/.config/mandara/generated/`, and each change is
+checked by the compositor's own validator and rolled back if it objects.
+
+**How do I update?** Studio → About → **Update now**. Updates are small,
+signed binary patches.
+
+**Can I script it or let an AI agent drive it?** Yes. Nearly every action
+is a `mandara msg` command with a JSON reply, and scripts can push live
+progress to the bar.
+
+**Can I write my own plugins?** Yes, in Rust, compiled to a sandboxed
+WebAssembly component. They hot-reload while you work and can be shared
+through the GitHub marketplace. [Writing plugins](PLUGINS.md)
+
+More answers in the **[FAQ](docs/faq.md)**.
+
 ## Learn more
 
 - **[Documentation](docs/README.md)**: every feature, one topic per page
+- **[FAQ](docs/faq.md)**: short answers to common questions
 - **[Using Mandara](docs/usage.md)**: commands and default shortcuts
 - **[Plugins](docs/plugins.md)** and **[writing your own](PLUGINS.md)**
 - **[Why Mandara](docs/why-mandara.md)**: how it compares with other shells

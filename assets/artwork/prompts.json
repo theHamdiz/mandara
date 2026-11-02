@@ -47,6 +47,78 @@
       "panel": null,
       "store": "Artwork prepared ahead of plugin registration. Represents procedural still and looping wallpaper generation without depicting an unavailable panel."
     },
+    "ports": {
+      "glyph": "Cream network socket with three gold contacts and a short cable; maintenance teal tile with the shared light, rim and shoreline.",
+      "palette": "obsidian",
+      "motif": "signal",
+      "panel": null
+    },
+    "git-repos": {
+      "glyph": "Cream branch fork with two local nodes and a gold remote tip; maintenance teal tile. Generic branching linework without a project logo.",
+      "palette": "obsidian",
+      "motif": "circuit",
+      "panel": null
+    },
+    "ci": {
+      "glyph": "Cream play triangle inside an open run ring with a gold completion check; Corniche blue tile. No service logo.",
+      "palette": "corniche",
+      "motif": "orbits",
+      "panel": null
+    },
+    "crashes": {
+      "glyph": "Cream app window split by a gold zigzag crack; maintenance teal tile.",
+      "palette": "obsidian",
+      "motif": "frame",
+      "panel": null
+    },
+    "tailscale": {
+      "glyph": "Irregular mesh of four linked cream nodes with one gold peer; connection teal tile. No nine-dot grid or borrowed brand mark.",
+      "palette": "corniche",
+      "motif": "peers",
+      "panel": null
+    },
+    "uptime": {
+      "glyph": "Cream monitor frame with a gold heartbeat; connection teal tile.",
+      "palette": "corniche",
+      "motif": "waves",
+      "panel": null
+    },
+    "local-ai": {
+      "glyph": "Cream chip with a gold four-point sparkle; Twilight violet tile. A generic processor without a model or vendor mascot.",
+      "palette": "twilight",
+      "motif": "circuit",
+      "panel": null
+    },
+    "share": {
+      "glyph": "Cream QR-like corner squares beside a phone with a gold accent; Twilight violet tile. Decorative transfer symbol, not a scannable code.",
+      "palette": "twilight",
+      "motif": "capture",
+      "panel": null
+    },
+    "keybinds": {
+      "glyph": "Two cream keycaps above a wide space key, with a chevron and gold plus; navigation blue tile.",
+      "palette": "corniche",
+      "motif": "keys",
+      "panel": null
+    },
+    "progress": {
+      "glyph": "Cream partial progress ring with a gold current-point dot and short inner bar; system emerald tile.",
+      "palette": "obsidian",
+      "motif": "timer",
+      "panel": null
+    },
+    "breaks": {
+      "glyph": "Cream eye with a gold leaf for a pupil; Twilight indigo tile, distinct from Privacy's round pupil. The leaf sits clear of the eyelid.",
+      "palette": "twilight",
+      "motif": "watch",
+      "panel": null
+    },
+    "presentation": {
+      "glyph": "Cream presentation screen on a stand with a gold focus dot; Twilight indigo tile.",
+      "palette": "twilight",
+      "motif": "frame",
+      "panel": null
+    },
     "excluded": "Compositor is hidden infrastructure and registers commands only; no marketplace art."
   },
   "corniche": "Use case: stylized-concept. Asset type: reusable art background for Mandara Shell plugin marketplace covers, horizontal 16:9. Create one original premium abstract Mediterranean chromatic-glass artwork: wide ribbons of translucent turquoise sea glass flow in a slow S-curve through deep midnight Mediterranean blue, a sliver of warm limestone gold refracted light near the lower-right edge. Evoke water at Alexandria's Corniche without buildings. Perspective almost flat, sculptural frosted glass, soft specular edges, gentle luminous caustics, exquisitely restrained, broad simple shapes and generous dark negative space on the left half for future typesetting. Most visual movement in the right half and bottom edge. Palette deep navy #103C63, sea-glass #40C8BD, limestone #FFE4AB. No text, no logos, no icons, no UI, no devices, no objects other than abstract flowing glass. Avoid generic neon cyberpunk, tiny details, grain and noise. Output single landscape background.",

@@ -42,12 +42,9 @@ const COVER_JPEG_QUALITY: u8 = 82;
 /// Embedded icon sizes.
 const ICON_1X: u32 = 128;
 const ICON_2X: u32 = 256;
-/// About 100 KiB per built-in plugin's icon pair and cover, with room for a
-/// few more plugins before the next artwork budget review (raised from
-/// 4.5 MiB when the desktop widgets became nine plugins of their own; kept
-/// there at 58 plugins by embedding the icons as lossless WebP, about a
-/// third smaller than PNG with the same pixels).
-const EMBED_BUDGET_BYTES: u64 = 6 * 1024 * 1024;
+/// The 70-plugin set uses 7,002,322 bytes. Rounded to 100,000 bytes, this
+/// ceiling leaves about 400 KiB for artwork revisions and small additions.
+const EMBED_BUDGET_BYTES: u64 = 7_400_000;
 /// Where the embedded art goes, relative to the repository root.
 const EMBED_DIR: &str = "crates/mandara-ui/assets/plugin-art";
 /// The table `plugin_art.rs` includes.
@@ -462,6 +459,7 @@ fn title_lines(name: &str) -> Vec<&str> {
         "Quick settings" => vec!["Quick", "settings"],
         "App installer" => vec!["App", "installer"],
         "Wallpaper generator" => vec!["Wallpaper", "generator"],
+        "Shortcuts cheatsheet" => vec!["Shortcuts", "cheatsheet"],
         other => vec![other],
     }
 }
@@ -1108,6 +1106,9 @@ mod tests {
     /// New tiles use the same outer glass geometry as their siblings.
     const HOUSE_TILE_GEOMETRY: [(&str, &str); 5] = [("x", "16"), ("y", "16"), ("width", "480"), ("height", "480"), ("rx", "108")];
     const NEW_PLUGIN_IDS: &[&str] = &["privacy", "tray", "dock", "app-installer", "screen-time", "mini-stats", "wallpaper-generator", "wallhaven", "cursors"];
+    const UTILITY_PLUGIN_IDS: &[&str] = &[
+        "ports", "git-repos", "ci", "crashes", "tailscale", "uptime", "local-ai", "share", "keybinds", "progress", "breaks", "presentation",
+    ];
 
     fn assert_clean(check: impl FnOnce(&mut Report)) {
         let mut r = Report::default();
@@ -1169,7 +1170,7 @@ mod tests {
 
     #[test]
     fn new_icons_keep_house_geometry_and_read_at_store_size() {
-        for id in NEW_PLUGIN_IDS {
+        for id in NEW_PLUGIN_IDS.iter().chain(UTILITY_PLUGIN_IDS) {
             let source = std::fs::read_to_string(assets().join("plugins").join(id).join("icon.svg")).unwrap();
             let doc = roxmltree::Document::parse(&source).unwrap();
             let tile = doc.descendants().find(|n| n.tag_name().name() == "rect" && n.attribute("fill") == Some("url(#tile)")).unwrap();
@@ -1184,6 +1185,21 @@ mod tests {
                     && p.0[..3].iter().zip(STORE_GLYPH_MIN_RGB).all(|(channel, minimum)| *channel >= minimum)
             }).count();
             assert!(bright >= STORE_GLYPH_MIN_PIXELS, "{id}: glyph fades at {STORE_ICON_SIDE} px ({bright} bright pixels)");
+        }
+    }
+
+    #[test]
+    fn utility_art_notes_match_the_illustration_catalog() {
+        let prompts: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(assets().join("artwork/prompts.json")).unwrap()).unwrap();
+        let records = records();
+        for id in UTILITY_PLUGIN_IDS {
+            let record = records.iter().find(|record| record.id == *id).unwrap();
+            let note = &prompts["plugin_art"][id];
+            assert!(note["glyph"].as_str().is_some_and(|glyph| !glyph.trim().is_empty()), "{id}: missing glyph note");
+            assert_eq!(note["palette"].as_str(), Some(record.palette.as_str()), "{id}: palette");
+            assert_eq!(note["motif"].as_str(), Some(record.motif.as_str()), "{id}: motif");
+            assert!(note.get("panel").is_some_and(serde_json::Value::is_null), "{id}: panel note must be null");
+            assert!(record.panel.is_none() && record.scene.is_none(), "{id}: must use a shared background and linework");
         }
     }
 
@@ -1227,6 +1243,7 @@ mod tests {
         assert_eq!(title_lines("Wallpaper generator"), ["Wallpaper", "generator"]);
         assert_eq!(title_lines("App installer"), ["App", "installer"]);
         assert_eq!(title_lines("System tray"), ["System tray"]);
+        assert_eq!(title_lines("Shortcuts cheatsheet"), ["Shortcuts", "cheatsheet"]);
     }
 
     #[test]

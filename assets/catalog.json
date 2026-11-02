@@ -632,5 +632,101 @@
     "angle": 4,
     "panel": null,
     "scene": "desktop-info.jpg"
+  },
+  {
+    "id": "ports",
+    "name": "Listening ports",
+    "palette": "obsidian",
+    "motif": "signal",
+    "angle": -5,
+    "panel": null
+  },
+  {
+    "id": "git-repos",
+    "name": "Git repositories",
+    "palette": "obsidian",
+    "motif": "circuit",
+    "angle": 5,
+    "panel": null
+  },
+  {
+    "id": "ci",
+    "name": "CI status",
+    "palette": "corniche",
+    "motif": "orbits",
+    "angle": -6,
+    "panel": null
+  },
+  {
+    "id": "crashes",
+    "name": "Crash reports",
+    "palette": "obsidian",
+    "motif": "frame",
+    "angle": 6,
+    "panel": null
+  },
+  {
+    "id": "tailscale",
+    "name": "Tailscale",
+    "palette": "corniche",
+    "motif": "peers",
+    "angle": -5,
+    "panel": null
+  },
+  {
+    "id": "uptime",
+    "name": "Uptime monitor",
+    "palette": "corniche",
+    "motif": "waves",
+    "angle": 5,
+    "panel": null
+  },
+  {
+    "id": "local-ai",
+    "name": "Local AI",
+    "palette": "twilight",
+    "motif": "circuit",
+    "angle": -6,
+    "panel": null
+  },
+  {
+    "id": "share",
+    "name": "Share to phone",
+    "palette": "twilight",
+    "motif": "capture",
+    "angle": 6,
+    "panel": null
+  },
+  {
+    "id": "keybinds",
+    "name": "Shortcuts cheatsheet",
+    "palette": "corniche",
+    "motif": "keys",
+    "angle": -5,
+    "panel": null
+  },
+  {
+    "id": "progress",
+    "name": "Task progress",
+    "palette": "obsidian",
+    "motif": "timer",
+    "angle": 5,
+    "panel": null
+  },
+  {
+    "id": "breaks",
+    "name": "Eye breaks",
+    "palette": "twilight",
+    "motif": "watch",
+    "angle": -6,
+    "panel": null
+  },
+  {
+    "id": "presentation",
+    "name": "Presentation mode",
+    "palette": "twilight",
+    "motif": "frame",
+    "angle": 6,
+    "panel": null
   }
 ]
