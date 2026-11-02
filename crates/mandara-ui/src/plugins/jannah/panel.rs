@@ -67,12 +67,13 @@ const ARCH_ALPHA: (f32, f32) = (0.62, 0.7);
 const ARCH_INNER_SHARE: f32 = 0.5;
 /// The lattice's alpha `(dark, light)`.
 const LATTICE_ALPHA: (f32, f32) = (0.11, 0.13);
-/// Dawn light: its size, offset into the crown, fill and glow.
-const DAWN_W: f32 = 120.0;
-const DAWN_H: f32 = 46.0;
-const DAWN_TOP_SHARE: f32 = 0.42;
-const DAWN_FILL: (f32, f32) = (0.12, 0.16);
-const DAWN_GLOW: (f32, f32, f32) = (0.32, 60.0, 18.0);
+/// Dawn light: a fill-less source (size, offset into the crown) whose
+/// wide blurred shadow is the glow (alpha, blur, spread): soft at every
+/// edge, never a visible shape.
+const DAWN_W: f32 = 84.0;
+const DAWN_H: f32 = 18.0;
+const DAWN_TOP_SHARE: f32 = 0.5;
+const DAWN_GLOW: (f32, f32, f32) = (0.34, 64.0, 4.0);
 /// The words start this share of the crown down; side and bottom room.
 const CONTENT_TOP_SHARE: f32 = 0.6;
 const CONTENT_SIDE: f32 = 18.0;
@@ -111,6 +112,8 @@ const ARABIC_EXCERPT: usize = 140;
 
 // Lists.
 const LIST_ARABIC_PX: f32 = 16.5;
+/// One list line of Arabic: tall enough for its marks above and below.
+const LIST_ARABIC_LINE_PX: f32 = LIST_ARABIC_PX * 1.75;
 const HEAD_ARABIC_PX: f32 = 20.0;
 const ROW_PAD_X: f32 = 10.0;
 const ROW_RADIUS: f32 = 12.0;
@@ -162,6 +165,9 @@ struct Ui {
     /// The step's glow after a tick.
     glow: Option<Instant>,
     flash: Flash,
+    /// The Qur'an and Hadith filter chips (wheel and drag scroll them).
+    chips_q: crate::hstrip::HStrip,
+    chips_h: crate::hstrip::HStrip,
 }
 
 struct View {
@@ -187,7 +193,7 @@ pub(super) fn build(p: PanelCx, window: &mut Window, cx: &mut App) -> PanelSpec 
     let views = shared.borrow().views.clone();
     let field = cx.new(|cx| TextField::new(String::new(), t("Search Arabic or meaning…"), true, Rc::new(move |_, _, cx| views.notify(cx)), cx));
     let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(CHROME_H + BODY_GUESS))));
-    let ui = Rc::new(RefCell::new(Ui { tab: Tab::Today, stack: Vec::new(), theme: None, collection: None, searched: None, search_gen: 0, slide: None, glow: None, flash: Flash::default() }));
+    let ui = Rc::new(RefCell::new(Ui { tab: Tab::Today, stack: Vec::new(), theme: None, collection: None, searched: None, search_gen: 0, slide: None, glow: None, flash: Flash::default(), chips_q: Default::default(), chips_h: Default::default() }));
     let view = View { p, field, ui, size: size_cell.clone() };
     PanelSpec { view: fn_view(None, move |palette, window, cx| view.render(palette, window, cx), window, cx), size: size_cell }
 }
@@ -531,7 +537,6 @@ fn hero(c: &Ctx, item: &Item, full: bool, nav: Option<(Rc<dyn Fn(&mut App)>, Rc<
                 .w(px(DAWN_W))
                 .h(px(DAWN_H))
                 .rounded_full()
-                .bg(g.with_alpha(alpha(DAWN_FILL, palette)).hsla())
                 .shadow(vec![glow(g.with_alpha(DAWN_GLOW.0), DAWN_GLOW.1, DAWN_GLOW.2, 0.0)]),
         )
         .child(svg().path(art::CROWN_PATH).absolute().top(px(ARCH_INSET)).left(px(ARCH_INSET)).w(px(crown_w)).h(px(crown_h)).text_color(arch.hsla()))
@@ -942,9 +947,23 @@ fn item_row(
         .flex_col()
         .justify_center()
         .gap(px(LINE_GAP))
-        .child(div().w_full().font_family(scripture.clone()).text_size(px(LIST_ARABIC_PX)).text_right().truncate().child(item.arabic.to_string()))
+        // One right-aligned line of Arabic, laid out right to left (the bidi
+        // paragraph), the rest of it clipped.
         .child(
             div()
+                .w_full()
+                .h(px(LIST_ARABIC_LINE_PX))
+                .overflow_hidden()
+                .font_family(scripture.clone())
+                .text_size(px(LIST_ARABIC_PX))
+                .line_height(px(LIST_ARABIC_LINE_PX))
+                .text_right()
+                .child(crate::bidi::paragraph(item.arabic.to_string())),
+        )
+        .child(
+            div()
+                .w_full()
+                .min_w(px(0.0))
                 .row()
                 .items_center()
                 .gap(px(tokens::SM))
@@ -966,8 +985,9 @@ fn filter_chips(c: &Ctx, quran: bool) -> AnyElement {
         let ui = c.ui.borrow();
         (ui.theme, ui.collection)
     };
+    let strip = { let u = c.ui.borrow(); if quran { u.chips_q.clone() } else { u.chips_h.clone() } };
     let chip = |id: SharedString, label: SharedString, active: bool, set: Rc<dyn Fn(&mut Ui)>| {
-        let (ui, shared) = (c.ui.clone(), c.shared.clone());
+        let (ui, shared, strip) = (c.ui.clone(), c.shared.clone(), strip.clone());
         div()
             .id(id)
             .h(px(CHIPS_H))
@@ -983,6 +1003,10 @@ fn filter_chips(c: &Ctx, quran: bool) -> AnyElement {
             .when(!active, |el| el.bg(wash(WASH_SOFT, palette).hsla()).text_color(palette.on_surface_variant.hsla()))
             .child(label)
             .on_click(move |_, _, cx| {
+                // A press that dragged the strip is not a pick.
+                if strip.dragged() {
+                    return;
+                }
                 set(&mut ui.borrow_mut());
                 refresh(&shared, cx);
             })
@@ -999,7 +1023,8 @@ fn filter_chips(c: &Ctx, quran: bool) -> AnyElement {
     for (id, label) in THEMES {
         chips.push(chip(format!("jannah-theme-{id}").into(), t(label).into(), theme == Some(id), Rc::new(move |u: &mut Ui| u.theme = if u.theme == Some(id) { None } else { Some(id) })));
     }
-    div().id(if quran { "jannah-chips-q" } else { "jannah-chips-h" }).h(px(CHIPS_H)).overflow_x_scroll().row().items_center().gap(px(CHIP_GAP)).children(chips).into_any_element()
+    let id = if quran { "jannah-chips-q" } else { "jannah-chips-h" };
+    strip.with_chevrons(id, strip.row(id).row().items_center().gap(px(CHIP_GAP)).children(chips), CHIPS_H, palette)
 }
 
 /// The themes with their chip labels (catalog keys).

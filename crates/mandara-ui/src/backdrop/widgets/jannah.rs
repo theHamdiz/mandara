@@ -24,10 +24,17 @@ use super::JannahInfo;
 use super::actions::Action;
 use super::layout::{Composition, Hit, InkRole, Mark, MarkKind, Measure, TextStyle, caps, face, style, tracked, wrap};
 use super::lingo::Lingo;
-use super::productive::{AUTHOR_TRACKING, QUOTE_AUTHOR, QUOTE_GAP, QUOTE_MARK, QUOTE_MARK_DROP};
+use super::productive::{AUTHOR_TRACKING, QUOTE_AUTHOR, QUOTE_GAP, QUOTE_MARK};
 
 /// Arabic lines advance this many line heights (room for tashkeel).
 const ARABIC_LEADING: f32 = 1.32;
+/// How far below the top of the ornate opening mark the Arabic starts (of
+/// the mark's height).
+const ARABIC_MARK_DROP: f32 = 0.92;
+/// Alignments: centred, right edge; and how close counts as centred.
+const CENTRED: f32 = 0.5;
+const RIGHT: f32 = 1.0;
+const ALIGN_EPSILON: f32 = 0.01;
 /// The Arabic is set this much larger than the text size (Naskh reads
 /// small), the meaning this much smaller.
 const ARABIC_SCALE: f32 = 1.15;
@@ -123,10 +130,11 @@ fn text_block(text: &str, st: &TextStyle, width: f32, align: f32, max: usize, in
     y
 }
 
-/// The Arabic block's alignment: right-to-left start is the right edge, so
-/// a left (start) alignment of a left-to-right widget mirrors.
-fn arabic_align(align: f32, l: &Lingo) -> f32 {
-    if l.rtl { align } else { 1.0 - align }
+/// The Arabic block's alignment: it starts at the right edge, as right-to-
+/// left text does, whichever side the card is anchored to; only a centred
+/// card centres it.
+fn arabic_align(align: f32) -> f32 {
+    if (align - CENTRED).abs() < ALIGN_EPSILON { CENTRED } else { RIGHT }
 }
 
 /// The meaning (when there is one) with the AI caption; returns the
@@ -150,7 +158,7 @@ fn quote(w: &JannahWidget, info: &JannahInfo, l: &Lingo, k: f32, align: f32, m: 
     let px = |v: f32| v * k;
     let width = px(within(w.width, ranges::WIDTH_PX, ranges::QUOTE_WIDTH_DEFAULT_PX));
     let size = px(within(w.text_size, ranges::TEXT_PX, ranges::QUOTE_TEXT_DEFAULT_PX));
-    let ar_align = arabic_align(align, l);
+    let ar_align = arabic_align(align);
     let mut marks = vec![Mark::new(MarkKind::Rect { x: 0.0, y: 0.0, w: width, h: 1.0, radius: 0.0, width: 0.0 }, InkRole::Fg).dim(0.0)];
     let mut y = 0.0;
     if w.mark {
@@ -160,7 +168,9 @@ fn quote(w: &JannahWidget, info: &JannahInfo, l: &Lingo, k: f32, align: f32, m: 
         let glyph = if info.ayah_mark.is_some() { "\u{FD3F}" } else { "«" };
         let (gw, gh) = m.measure(glyph, &ms);
         marks.push(Mark::new(MarkKind::Text { text: glyph.into(), style: ms, x: (width - gw) * ar_align, y: 0.0, w: gw, h: gh }, InkRole::Accent));
-        y += gh * QUOTE_MARK_DROP;
+        // The ornate marks fill their line, unlike a Latin quotation mark
+        // riding high: the Arabic starts below it.
+        y += gh * ARABIC_MARK_DROP;
     }
     let ast = style(FontRole::Scripture, size * ARABIC_SCALE, face::REGULAR);
     y = arabic_block(&arabic_text(info), &ast, width, ar_align, y, &mut marks, m);
