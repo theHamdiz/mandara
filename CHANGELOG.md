@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.6.0 — 2026-11-02
+
+Rounded screen corners are on by default.
+
 ### Changed
 
 - **Rounded screen corners are on by default.** New setups round all four
