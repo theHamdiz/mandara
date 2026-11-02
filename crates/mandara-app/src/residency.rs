@@ -22,8 +22,15 @@
 
 use std::time::Duration;
 
-/// How long after start the first cold-page drop waits (startup, the first
-/// frames and lazy loads done).
+/// How long after start an early cold-page drop runs. The shell is up and
+/// has drawn its first frames within about a second; without it, the
+/// start-up code, the driver's initializers and the scanned fonts stayed
+/// resident until [`SETTLE`]. What the idle shell still runs maps back
+/// with a minor fault.
+pub const EARLY: Duration = Duration::from_secs(8);
+/// How long after start the first full cold-page drop waits (startup, the
+/// first frames and lazy loads done); it also rebuilds a large-folio page
+/// cache of the executable.
 pub const SETTLE: Duration = Duration::from_secs(45);
 /// How often the cold-page drop repeats afterwards (code paged in by a
 /// one-off action is shed again).
@@ -198,7 +205,10 @@ pub fn refresh_executable_page_cache() -> bool {
 /// Starts the periodic cold-page drop on the service runtime.
 pub fn start() {
     mandara_services::runtime::spawn("cold-pages", async {
-        mandara_services::runtime::sleep(SETTLE).await;
+        mandara_services::runtime::sleep(EARLY).await;
+        let kib = drop_clean_file_pages();
+        tracing::debug!("residency: unmapped {kib} KiB of clean file pages after start-up");
+        mandara_services::runtime::sleep(SETTLE.saturating_sub(EARLY)).await;
         let mut first = true;
         loop {
             let kib = drop_clean_file_pages();
