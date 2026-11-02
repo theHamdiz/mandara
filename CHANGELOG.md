@@ -6,6 +6,14 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Changed
+
+- **Rounded screen corners are on by default.** New setups round all four
+  corners of every display, and the edge-frame bar's outer corners round
+  with them. If you set Mandara up before this release, turn them on in
+  Studio → Sidebars & hover → **Screen corners**; the **Radius** slider is
+  next to the switch. ([#19](https://github.com/theHamdiz/mandara/issues/19))
+
 ## 0.5.2 — 2026-11-01
 
 The launcher and Alt+Tab open on the right display. Choose the displays

@@ -556,7 +556,7 @@ pub struct ScreenCornersConfig {
 
 impl Default for ScreenCornersConfig {
     fn default() -> Self {
-        Self { enabled: false, radius: defaults::SCREEN_CORNER_RADIUS_PX }
+        Self { enabled: true, radius: defaults::SCREEN_CORNER_RADIUS_PX }
     }
 }
 
@@ -1001,6 +1001,14 @@ pub fn newest_first(images: &mut [PathBuf]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn screen_corners_are_rounded_by_default_and_a_saved_choice_stays() {
+        let fresh: crate::ShellConfig = toml::from_str("").unwrap();
+        assert!(fresh.screen_corners.enabled, "a new config rounds the screen corners");
+        let saved: crate::ShellConfig = toml::from_str("[screen_corners]\nenabled = false").unwrap();
+        assert!(!saved.screen_corners.enabled, "turning them off is kept");
+    }
 
     #[test]
     fn automatic_time_patterns() {
