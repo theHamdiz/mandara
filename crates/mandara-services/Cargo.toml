@@ -40,6 +40,8 @@ ab_glyph = "0.2"
 fontdb = "0.23"
 rav1e.workspace = true
 pulseaudio.workspace = true
+# Qur'an recitation: the per-ayah MP3s, decoded in pure Rust.
+symphonia.workspace = true
 rustfft.workspace = true
 flate2.workspace = true
 tar.workspace = true

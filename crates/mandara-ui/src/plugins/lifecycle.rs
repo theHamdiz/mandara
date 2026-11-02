@@ -166,6 +166,7 @@ mod tests {
         "privacy",
         "processes",
         "progress",
+        "quran",
         "screen-time",
         "services",
         "share",

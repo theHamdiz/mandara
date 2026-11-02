@@ -785,6 +785,40 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Hadith"), "/plugins/settings/hadith/bar_label", tk("In the bar"), tk("Just the glyph, or the glyph with today's reference"), Choice(const { &[("glyph", tk("Glyph only")), ("reference", tk("Glyph and today's reference"))] }), Value::from("glyph")),
         // An action row (on a live path, as the other command rows are).
         sd(Plugins, tk("Hadith"), "/plugins/settings/hadith/collections", tk("Downloaded collections"), tk("Delete every downloaded collection from this computer; nothing is downloaded again on its own"), Command { button: tk("Remove all"), args: &["hadith", "remove", "all"] }, Value::from(vec!["bukhari", "muslim"])),
+        sd(
+            Plugins,
+            tk("Qur'an"),
+            "/plugins/settings/quran/reciter",
+            tk("Reciter"),
+            tk("Whose recitation plays; each ayah is downloaded once from cdn.islamic.network and kept"),
+            Choice(const {
+                &[
+                    ("ar.alafasy", tk("Mishary Alafasy")),
+                    ("ar.husary", tk("Al-Husary")),
+                    ("ar.husarymujawwad", tk("Al-Husary (Mujawwad)")),
+                    ("ar.minshawi", tk("Al-Minshawi")),
+                    ("ar.hudhaify", tk("Al-Hudhaify")),
+                    ("ar.mahermuaiqly", tk("Maher Al-Muaiqly")),
+                    ("ar.shaatree", tk("Ash-Shatri")),
+                    ("ar.ahmedajamy", tk("Al-Ajamy")),
+                    ("ar.muhammadayyoub", tk("Muhammad Ayyub")),
+                ]
+            }),
+            Value::from("ar.alafasy"),
+        ),
+        sd(
+            Plugins,
+            tk("Qur'an"),
+            "/plugins/settings/quran/translation",
+            tk("Translation"),
+            tk("Another translation in your language, by its identifier (`mandara msg quran editions` lists them); empty uses the default. Arabic shows no translation"),
+            Text { placeholder: "en.sahih" },
+            Value::from(""),
+        ),
+        sd(Plugins, tk("Qur'an"), "/plugins/settings/quran/arabic_size", tk("Arabic size"), tk("How large the reader sets the Arabic"), Choice(const { &[("small", tk("Small")), ("medium", tk("Medium")), ("large", tk("Large"))] }), Value::from("medium")),
+        // An action row (no value of its own; the default keeps the settings
+        // table valid TOML).
+        sd(Plugins, tk("Qur'an"), "/plugins/settings/quran/remove", tk("Downloaded Qur'an"), tk("Remove the text, the meanings and the cached recitations; the panel offers to download them again"), Command { button: tk("Remove"), args: &["quran", "remove"] }, Value::from(false)),
         sd(Plugins, tk("Soundscapes"), "/plugins/settings/soundscapes/bar_timer", tk("Sleep timer in the bar"), tk("Show the minutes left next to the playing indicator"), Toggle, Value::from(true)),
         sd(Plugins, tk("Uptime monitor"), "/plugins/settings/uptime/checks", tk("Checks"), tk("Comma-separated https:// or http:// addresses, or host:port for a TCP check; name one with Name=target"), Text { placeholder: "Home NAS=nas.local:22, Blog=https://example.com" }, Value::from("")),
         sd(Plugins, tk("Uptime monitor"), "/plugins/settings/uptime/interval_s", tk("Check every"), tk("How often every check runs in the background"), slider(10.0, 3600.0, 10.0, " s"), Value::from(60)),

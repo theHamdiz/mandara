@@ -56,6 +56,7 @@ pub mod authenticator;
 pub mod soundscapes;
 pub mod hadith;
 pub mod jannah;
+pub mod quran;
 pub mod system_admin;
 pub mod ports;
 pub mod git_repos;
@@ -239,6 +240,7 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     share::register(registry);
     jannah::register(registry);
     hadith::register(registry);
+    quran::register(registry);
     crate::osd::register(registry);
     crate::corners::register(registry);
     crate::night_light::register(registry);

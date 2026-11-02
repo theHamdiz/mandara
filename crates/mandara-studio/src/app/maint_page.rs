@@ -179,6 +179,24 @@ impl StudioView {
         });
     }
 
+    /// Downloads or removes the Qur'an plugin's text and meaning here, then
+    /// lets the shell load (or forget) them.
+    fn maint_quran(&mut self, download: bool, cx: &mut Context<Self>) {
+        use mandara_services::quran::store;
+        self.maint_job("quran".into(), cx, move |p| {
+            if download {
+                let cfg = mandara_config::ConfigStore::open_default().map(|s| s.snapshot()).unwrap_or_default();
+                let chosen: String = cfg.plugins.setting("quran", "translation", String::new());
+                let edition = mandara_services::quran::meaning_edition(mandara_i18n::language().code(), &chosen);
+                store::ensure(edition.as_deref(), &move |pr: store::Progress| p.store(u32::try_from(pr.done * PERMILLE / pr.total.max(1)).unwrap_or(u32::MAX - 1), Ordering::Relaxed))?;
+                Ok((t("The Qur'an is downloaded").into(), vec![vec!["quran".into(), "download".into()]]))
+            } else {
+                let freed = store::remove()?;
+                Ok((tf("The Qur'an's downloads are removed ({size})", &[("size", &human(freed))]), vec![vec!["quran".into(), "remove".into()]]))
+            }
+        });
+    }
+
     pub(super) fn maintenance(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         if self.maint.results.is_empty() && !self.maint.checking {
             self.maint_refresh(cx);
@@ -388,6 +406,39 @@ impl StudioView {
                     }))
                 }),
         );
+        // The Qur'an plugin's text and meaning (downloaded, never bundled).
+        {
+            use mandara_services::quran::store;
+            let installed = store::installed_bytes();
+            let key = "quran".to_string();
+            let size = installed.unwrap_or(store::META_BYTES + store::TEXT_BYTES + store::MEANING_BYTES);
+            downloads = downloads.child(
+                div()
+                    .row()
+                    .items_center()
+                    .gap(px(SPACE_12_PX))
+                    .py(px(SPACE_6_PX))
+                    .child(div().size(px(DIM_34_PX)).rounded(px(RADIUS_11_PX)).row().items_center().justify_center().flex_none().bg(p.surface_container_high.hsla()).child(icon("book", ICON_16_PX, p.on_surface_variant)))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.0))
+                            .row()
+                            .flex_col()
+                            .child(div().font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(t("Qur'an"))))
+                            .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).truncate().child(format!("{} · {}", t("The Tanzil text and its meaning, for the Qur'an plugin (api.alquran.cloud)"), human(size)))),
+                    )
+                    .child({
+                        let color = if installed.is_some() { p.success_emerald } else { p.on_surface_variant };
+                        div().px(px(SPACE_9_PX)).h(px(DIM_22_PX)).rounded_full().row().items_center().flex_none().bg(color.with_alpha(ALPHA_14).hsla()).text_color(color.hsla()).text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).child(if installed.is_some() { t("Installed") } else { t("Not installed") })
+                    })
+                    .child(if installed.is_some() {
+                        button("rm-quran".into(), t("Remove").into(), Some(&key), ButtonKind::Tonal).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.maint_quran(false, cx)))
+                    } else {
+                        button("dl-quran".into(), t("Download").into(), Some(&key), ButtonKind::Primary).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.maint_quran(true, cx)))
+                    }),
+            );
+        }
 
         // ── Storage ───────────────────────────────────────────────────────
         let storage = card().child(

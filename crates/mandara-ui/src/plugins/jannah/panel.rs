@@ -60,19 +60,19 @@ pub(crate) const HERO_DARK: [(f32, f32, f32); 2] = [(0.31, 0.75, 0.09), (0.23, 0
 pub(crate) const HERO_LIGHT: [(f32, f32, f32); 2] = [(0.94, 0.4, 0.05), (0.965, 0.32, 0.04)];
 pub(crate) const HERO_ANGLE_DEG: f32 = 165.0;
 /// How much of the primary tints the emerald.
-const HERO_PRIMARY_SHARE: f32 = 0.35;
+pub(crate) const HERO_PRIMARY_SHARE: f32 = 0.35;
 /// The arch: inset from the card's edge, its alpha, the inner arch's.
-const ARCH_INSET: f32 = 10.0;
-const ARCH_ALPHA: (f32, f32) = (0.62, 0.7);
-const ARCH_INNER_SHARE: f32 = 0.5;
+pub(crate) const ARCH_INSET: f32 = 10.0;
+pub(crate) const ARCH_ALPHA: (f32, f32) = (0.62, 0.7);
+pub(crate) const ARCH_INNER_SHARE: f32 = 0.5;
 /// The lattice's alpha `(dark, light)`.
 pub(crate) const LATTICE_ALPHA: (f32, f32) = (0.11, 0.13);
 /// Dawn light: a fill-less source (size, offset into the crown) whose
 /// wide blurred shadow is the glow (alpha, blur, spread): soft at every
 /// edge, never a visible shape.
-const DAWN_W: f32 = 84.0;
-const DAWN_H: f32 = 18.0;
-const DAWN_TOP_SHARE: f32 = 0.5;
+pub(crate) const DAWN_W: f32 = 84.0;
+pub(crate) const DAWN_H: f32 = 18.0;
+pub(crate) const DAWN_TOP_SHARE: f32 = 0.5;
 pub(crate) const DAWN_GLOW: (f32, f32, f32) = (0.34, 64.0, 4.0);
 /// The words start this share of the crown down; side and bottom room.
 const CONTENT_TOP_SHARE: f32 = 0.6;

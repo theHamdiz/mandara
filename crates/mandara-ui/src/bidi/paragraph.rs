@@ -97,6 +97,21 @@ impl ParagraphLayout {
 /// Called with the index of the clicked link range.
 pub type LinkHandler = Rc<dyn Fn(usize, &mut Window, &mut App)>;
 
+/// [`linked_paragraph`] laid out by this module whatever its direction,
+/// reporting its rows through `layout`, so a sibling painted under it can
+/// draw behind ranges of it (`ParagraphLayout::selection_rects`), e.g. the
+/// verse being recited.
+pub fn linked_paragraph_with_layout(
+    text: impl Into<SharedString>,
+    highlights: Vec<(Range<usize>, HighlightStyle)>,
+    links: Vec<Range<usize>>,
+    on_click: LinkHandler,
+    layout: &ParagraphLayout,
+) -> AnyElement {
+    let links = (!links.is_empty()).then_some((links, on_click));
+    Paragraph { text: text.into(), highlights, families: Vec::new(), links, layout: layout.rows.clone(), handle: Some(layout.clone()) }.into_any_element()
+}
+
 /// [`styled_paragraph`] with font families for byte ranges (`families`,
 /// e.g. inline code in the monospace font) and clickable `links` ranges:
 /// `on_click` gets the index of the range clicked (`id` keys GPUI's

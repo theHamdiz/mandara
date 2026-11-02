@@ -17,7 +17,7 @@
 use gpui::{DefiniteLength, Length, Styled};
 
 mod paragraph;
-pub use paragraph::{LinkHandler, Paragraph, ParagraphLayout, editable_paragraph, linked_paragraph, paragraph, styled_paragraph};
+pub use paragraph::{LinkHandler, Paragraph, ParagraphLayout, editable_paragraph, linked_paragraph, linked_paragraph_with_layout, paragraph, styled_paragraph};
 
 /// Whether the UI language reads right to left.
 pub fn rtl() -> bool {
