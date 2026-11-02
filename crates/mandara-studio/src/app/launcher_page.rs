@@ -66,7 +66,7 @@ const TILE_ICON_PX: f32 = 14.0;
 
 /// Launcher looks: the card grid. `max_w ≥ 1.5 × min_w + gap`, so a row of
 /// two or more cards always fills the column exactly.
-const LOOK_GRID: CardGrid = CardGrid { min_w: 200.0, max_w: 320.0, gap: SPACE_14_PX };
+const LOOK_GRID: CardGrid = CardGrid { min_w: 200.0, max_w: 620.0, gap: SPACE_14_PX };
 /// A look card's padding, inside its 2 px ring.
 const LOOK_PAD_PX: f32 = SPACE_8_PX;
 /// Lines of a look's description. It is clamped, and every slot of the card

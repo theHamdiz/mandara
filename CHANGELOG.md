@@ -28,6 +28,18 @@ About → What's new shows it too.
   switched-off display is easy to pick again), the selected display's
   settings in neat aligned rows, which displays show each part of the
   shell, and your profiles as equal cards with Apply and Delete.
+- **Desktop widgets page, redone.** The preview and your placed widgets
+  sit side by side at the top, the selected widget's settings come in
+  tidy cards (Style, Place, Look, Shape and frame, Content), and the
+  Add a widget gallery is an even grid of tiles that are all the same size.
+- **A proper font picker.** Font settings open a floating list next to the
+  button instead of stretching the whole row: search right away, move with
+  the arrow keys, Page Up / Page Down, Home and End, pick with Enter, and
+  close with Esc or a click anywhere else.
+- **Studio uses big screens.** On wide windows pages grow wider, card grids
+  gain columns, settings sit in two columns, and the plugin store's
+  category chips spread across the width; on narrow windows the chips
+  become a strip you can scroll or drag.
 - **A new logo.** Mandara's logo is now a phoenix rising from a
   Mediterranean wave, in violet, cyan and silver, and the launcher button
   in the bar shows it in colour. Prefer another icon? Pick one in Studio →
