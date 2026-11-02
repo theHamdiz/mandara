@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.7.0 — 2026-11-02
+
+Shortcuts cheatsheet. Task progress. Eye breaks. Presentation mode.
+
 ### New
 
 Twelve new plugins. They all ship switched off: turn on the ones you want
