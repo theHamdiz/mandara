@@ -32,7 +32,10 @@ use mandara_ui::state::update_config;
 use std::sync::Mutex;
 
 use super::StudioView;
-use super::compositor_page::{badge, button, card, chip, group_title, heading, tip};
+use super::compositor_page::{badge, button, card, chip, heading, tip};
+use super::launcher_page::page_section;
+use super::themes_page::section_head;
+use mandara_ui::style::ClipRounded as _;
 use crate::registry::{self, Section};
 use crate::tokens::*;
 
@@ -65,6 +68,28 @@ const MHZ_PER_HZ: f32 = 1000.0;
 const PERCENT: f32 = 100.0;
 /// Preview length of the night temperature, seconds.
 const PREVIEW_SECONDS: &str = "4";
+
+/// The Displays registry groups drawn in each page section (folds); the
+/// night light's rows go by path. A unit test checks that every row of the
+/// section is drawn somewhere.
+const ARRANGEMENT_GROUP: &str = tk("Arrangement");
+const BRIGHTNESS_GROUP: &str = tk("External brightness");
+const PROFILE_GROUPS: &[&str] = &[ARRANGEMENT_GROUP];
+const BRIGHTNESS_GROUPS: &[&str] = &[BRIGHTNESS_GROUP];
+
+/// Display picker under the canvas: equal cards, one per connected display.
+const MONITOR_GRID: CardGrid = CardGrid { min_w: 190.0, max_w: 300.0, gap: SPACE_10_PX };
+/// Every display card's height (one line of name, one of mode).
+const MONITOR_CARD_H_PX: f32 = DIM_60_PX;
+/// Profile cards: equal width and height whatever their names.
+const PROFILE_GRID: CardGrid = CardGrid { min_w: 220.0, max_w: 360.0, gap: SPACE_12_PX };
+const PROFILE_PAD_PX: f32 = SPACE_14_PX;
+const PROFILE_GAP_PX: f32 = SPACE_10_PX;
+/// A profile card: its padding and ring, the title row, one line of
+/// displays and the action row, each a fixed height.
+const PROFILE_CARD_H_PX: f32 = 2.0 * (PROFILE_PAD_PX + BORDER_2_PX) + DIM_36_PX + PROFILE_GAP_PX + LEADING_16_PX + PROFILE_GAP_PX + DIM_34_PX;
+/// The label column of the selected display's rows.
+const OUTPUT_LABEL_W_PX: f32 = DIM_140_PX;
 
 /// One DDC monitor's slider: latest wanted percent while a write runs.
 type DdcWants = Arc<Mutex<HashMap<String, u32>>>;
@@ -170,7 +195,7 @@ fn mode_label(c: &OutputConfig) -> String {
 }
 
 /// Which group comes first (`MANDARA_STUDIO_DISPLAYS_GROUP=arrangement|
-/// screens|brightness|night`): screenshots and layout checks of the lower
+/// screens|profiles|brightness|night`): screenshots and layout checks of the lower
 /// groups without scrolling.
 fn first_group() -> &'static str {
     static GROUP: std::sync::OnceLock<String> = std::sync::OnceLock::new();
@@ -187,6 +212,18 @@ fn transform_label(t: Transform) -> &'static str {
         Transform::Flipped90 => tk("Flipped 90°"),
         Transform::Flipped180 => tk("Flipped 180°"),
         Transform::Flipped270 => tk("Flipped 270°"),
+    }
+}
+
+/// The glyph of a part of the shell (Shell on each display).
+fn surface_icon(k: SurfaceKind) -> &'static str {
+    match k {
+        SurfaceKind::Bar => "window",
+        SurfaceKind::Osd => "volume-high",
+        SurfaceKind::Notifications => "bell",
+        SurfaceKind::Wallpaper => "image",
+        SurfaceKind::Dock => "box",
+        SurfaceKind::Overlays => "search",
     }
 }
 
@@ -400,28 +437,37 @@ impl StudioView {
         if st(cx).heads.is_none() && st(cx).heads_at.is_none() {
             Self::load_heads(cx);
         }
-        let arrangement = self.arrangement(cfg, p, cx);
-        let night = self.night_light_section(cfg, p, cx);
-        let head = super::fold::FoldHead { title: t("Shell on each display").into(), preview: t("Which displays show the bar, dock, OSDs, notifications and wallpaper").to_string(), badge: None, trailing: None, closed: true };
-        let screens = self.fold("Shell on each display", head, p, cx, |this, cx| this.surface_screens(cfg, p, cx));
-        let brightness = self.external_brightness(cfg, p, cx);
-        let rest = self.rows(registry::in_section(Section::Displays).filter(|s| !s.path.starts_with("/night_light/")), cfg, p, cx);
-        let mut groups = vec![("arrangement", arrangement), ("screens", screens), ("brightness", brightness), ("night", night), ("rest", rest)];
+        let display = mandara_ui::fonts::fonts(cx).display.clone();
+        // Arrangement and the selected display, which displays show which
+        // parts of the shell, profiles, brightness and the night light.
+        let arrangement = self.arrangement(cfg, p, &display, cx);
+        let screens = page_section(
+            section_head(t("Shell on each display"), t("Pick the displays each part of the shell appears on. Main display follows the one marked as main above."), vec![], display.clone(), p),
+            [self.surface_screens(cfg, p, cx)],
+        );
+        let profiles = self.profiles_section(cfg, p, &display, cx);
+        let brightness = self.external_brightness(cfg, p, &display, cx);
+        let night = self.night_light_section(cfg, p, &display, cx);
+        let mut groups = vec![("arrangement", arrangement), ("screens", screens), ("profiles", profiles), ("brightness", brightness), ("night", night)];
         if let Some(i) = groups.iter().position(|(name, _)| *name == first_group()) {
             let g = groups.remove(i);
             groups.insert(0, g);
         }
-        div().row().flex_col().gap(px(SPACE_26_PX)).children(groups.into_iter().map(|(_, g)| g)).into_any_element()
+        div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).children(groups.into_iter().map(|(_, g)| g)).into_any_element()
+    }
+
+    /// The Displays registry rows of `groups` (folds).
+    fn display_rows(&mut self, groups: &'static [&'static str], cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        self.rows(registry::in_section(Section::Displays).filter(|s| groups.contains(&s.group) && !s.path.starts_with("/night_light/")), cfg, p, cx)
     }
 
     // ── Arrangement ─────────────────────────────────────────────────────────
 
-    fn arrangement(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    fn arrangement(&mut self, cfg: &ShellConfig, p: &MandaraPalette, display: &SharedString, cx: &mut Context<Self>) -> AnyElement {
+        let head = || section_head(t("Arrangement"), t("Edges snap together. Changes apply only when you press Apply, and come back on their own unless you keep them."), vec![], display.clone(), p);
         let heads = match st(cx).heads.clone() {
-            None => return div().row().flex_col().gap(px(SPACE_10_PX)).child(group_title(t("Arrangement"), p)).child(card(p).child(div().text_color(p.on_surface_variant.hsla()).child(t("Reading displays…")))).into_any_element(),
-            Some(Err(e)) => {
-                return div().row().flex_col().gap(px(SPACE_10_PX)).child(group_title(t("Arrangement"), p)).child(card(p).child(heading(t("Display configuration isn't available"), e, p))).into_any_element();
-            }
+            None => return page_section(head(), [card(p).child(div().text_color(p.on_surface_variant.hsla()).child(t("Reading displays…"))).into_any_element()]),
+            Some(Err(e)) => return page_section(head(), [card(p).child(heading(t("Display configuration isn't available"), e, p)).into_any_element()]),
             Some(Ok(h)) => h,
         };
         let s = st(cx);
@@ -470,6 +516,9 @@ impl StudioView {
             );
         if shown.is_empty() {
             canvas = canvas.child(div().size_full().row().items_center().justify_center().text_color(p.on_surface_variant.hsla()).child(t("Every display is off")));
+        } else {
+            // What the canvas is for, in its corner (under the displays).
+            canvas = canvas.child(div().absolute().top(px(SPACE_10_PX)).inset_start(px(SPACE_14_PX)).row().items_center().gap(px(SPACE_6_PX)).text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.with_alpha(ALPHA_70).hsla()).child(icon("pointer", ICON_12_PX, p.on_surface_variant.with_alpha(ALPHA_70))).child(t("Drag displays to arrange them")));
         }
         for (i, (c, r)) in draft.iter().zip(&rects).enumerate().filter(|(_, (c, _))| c.enabled) {
             let (x, y, w, h) = ((r.0 - ox) * scale, (r.1 - oy) * scale, r.2 * scale, r.3 * scale);
@@ -616,17 +665,55 @@ impl StudioView {
                 .when_some(message, |el, (text, error)| el.child(badge(text, if error { p.urgent_coral } else { p.success_emerald })))
         };
 
+        // A card per display under the canvas: picks the one edited below
+        // (also displays that are off, which the canvas doesn't draw).
+        let picker = (draft.len() > 1).then(|| {
+            let fit = super::grid::fit(canvas_w, MONITOR_GRID).balanced(draft.len());
+            let cards: Vec<AnyElement> = draft
+                .iter()
+                .enumerate()
+                .map(|(i, c)| {
+                    let on = i == selected;
+                    let is_primary = primary.as_deref() == Some(c.name.as_str());
+                    let detail = if c.enabled { mode_label(c) } else { t("Off").to_string() };
+                    div()
+                        .id(("display-pick", i))
+                        .w_full()
+                        .h(px(MONITOR_CARD_H_PX))
+                        .px(px(SPACE_12_PX))
+                        .rounded(px(RADIUS_16_PX))
+                        .row()
+                        .items_center()
+                        .gap(px(SPACE_10_PX))
+                        .cursor_pointer()
+                        .bg(if on { p.primary.with_alpha(ALPHA_12).hsla() } else { p.surface_container_high.with_alpha(ALPHA_60).hsla() })
+                        .border_2()
+                        .border_color(if on { p.primary.hsla() } else { gpui::transparent_black() })
+                        .when(!on, |el| el.hover(|s| s.bg(p.primary.with_alpha(ALPHA_8).hsla())))
+                        .child(div().flex_none().size(px(DIM_32_PX)).rounded(px(RADIUS_10_PX)).bg(if on { p.primary.with_alpha(ALPHA_16).hsla() } else { p.surface_container.hsla() }).row().items_center().justify_center().child(icon("monitor", ICON_15_PX, if c.enabled { p.primary } else { p.on_surface_variant })))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w(px(0.0))
+                                .row()
+                                .flex_col()
+                                .gap(px(SPACE_3_PX))
+                                .child(div().truncate().text_size(px(TEXT_13_PX)).font_weight(FontWeight::SEMIBOLD).child(c.name.clone()))
+                                .child(div().truncate().text_size(px(TEXT_11_PX)).font_features(mandara_ui::fonts::tabular_nums()).text_color(p.on_surface_variant.hsla()).child(detail)),
+                        )
+                        .when(is_primary, |el| el.child(icon("pin", ICON_13_PX, p.primary)))
+                        .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                            st(cx).selected = i;
+                            cx.notify();
+                        }))
+                        .into_any_element()
+                })
+                .collect();
+            fit.render(cards)
+        });
+
         let selected_card = draft.get(selected).zip(heads.iter().find(|h| draft.get(selected).is_some_and(|c| c.name == h.name))).map(|(c, h)| self.output_card(selected, c, h, cfg, p, cx));
-        let profiles = self.profiles_card(&heads, cfg, p, cx);
-        div()
-            .row()
-            .flex_col()
-            .gap(px(SPACE_10_PX))
-            .child(group_title(t("Arrangement"), p))
-            .child(card(p).child(heading(t("Drag displays to arrange them"), t("Edges snap together. Changes apply only when you press Apply, and come back on their own unless you keep them."), p)).child(canvas).child(actions))
-            .when_some(selected_card, |el, c| el.child(c))
-            .child(profiles)
-            .into_any_element()
+        page_section(head(), [card(p).gap(px(SPACE_14_PX)).child(canvas).children(picker).child(actions).into_any_element()].into_iter().chain(selected_card))
     }
 
     /// Edits draft entry `i` with `f`.
@@ -641,9 +728,20 @@ impl StudioView {
         }
     }
 
+    /// The selected display: a header, then one aligned row per setting
+    /// (label column, then its chips), divided by hairlines.
     fn output_card(&mut self, i: usize, c: &OutputConfig, h: &outputs::Head, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let stack = self.stack_rows;
         let row = |label: &'static str, body: AnyElement| {
-            div().row().flex_wrap().items_center().gap(px(SPACE_12_PX)).child(div().w(px(DIM_110_PX)).text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(label)))).child(div().flex_1().min_w(px(0.0)).child(body))
+            div()
+                .row()
+                .when(stack, |el| el.flex_col().cross_start().gap(px(SPACE_8_PX)))
+                .when(!stack, |el| el.items_center().gap(px(SPACE_18_PX)))
+                .py(px(SPACE_12_PX))
+                .border_t_1()
+                .border_color(p.on_surface.with_alpha(ALPHA_6).hsla())
+                .child(div().flex_none().when(!stack, |el| el.w(px(OUTPUT_LABEL_W_PX))).text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(tr(label))))
+                .child(div().flex_1().min_w(px(0.0)).child(body))
         };
         let chips = || div().row().flex_wrap().gap(px(SPACE_6_PX));
         let enabled_count = st(cx).draft.iter().filter(|d| d.enabled).count();
@@ -709,13 +807,16 @@ impl StudioView {
         let title = if h.make.is_empty() && h.model.is_empty() { h.description.clone() } else { format!("{} {}", h.make, h.model).trim().to_string() };
         let mm = (h.physical_mm.0 > 0).then(|| tf("{width} × {height} mm", &[("width", &h.physical_mm.0), ("height", &h.physical_mm.1)]));
         card(p)
+            .gap_0()
             .child(
                 div()
                     .row()
+                    .flex_wrap()
                     .items_center()
-                    .gap(px(SPACE_10_PX))
-                    .child(icon("monitor", ICON_17_PX, p.primary))
-                    .child(div().flex_1().min_w(px(0.0)).child(heading(c.name.clone(), [Some(title), mm].into_iter().flatten().collect::<Vec<_>>().join(" · "), p)))
+                    .gap(px(SPACE_12_PX))
+                    .pb(px(SPACE_14_PX))
+                    .child(div().flex_none().size(px(DIM_44_PX)).rounded(px(RADIUS_14_PX)).bg(p.primary.with_alpha(ALPHA_14).hsla()).row().items_center().justify_center().child(icon("monitor", ICON_17_PX, p.primary)))
+                    .child(div().flex_1().min_w(px(DIM_180_PX)).child(heading(c.name.clone(), [Some(title), mm].into_iter().flatten().collect::<Vec<_>>().join(" · "), p)))
                     .child(primary),
             )
             .child(row(tk("Power"), power.into_any_element()))
@@ -729,37 +830,63 @@ impl StudioView {
             .into_any_element()
     }
 
-    fn profiles_card(&mut self, heads: &[outputs::Head], cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let connected = outputs::identities(heads);
-        let mut list = div().row().flex_wrap().gap(px(SPACE_8_PX));
+    /// Profiles: a card each (all the same size), saving the current
+    /// arrangement, keeping it after a restart, and the arrangement rows.
+    fn profiles_section(&mut self, cfg: &ShellConfig, p: &MandaraPalette, display: &SharedString, cx: &mut Context<Self>) -> AnyElement {
+        let rows = self.display_rows(PROFILE_GROUPS, cfg, p, cx);
+        let detail = t("Save the current arrangement; when the same monitors connect again the shell switches to it on its own.");
+        let Some(Ok(heads)) = st(cx).heads.clone() else {
+            return page_section(section_head(t("Profiles"), detail, vec![], display.clone(), p), [rows]);
+        };
+        let connected = outputs::identities(&heads);
+        let mut cards: Vec<AnyElement> = Vec::with_capacity(cfg.displays.profiles.len());
         for (n, prof) in cfg.displays.profiles.iter().enumerate() {
             let matches = prof.matches(&connected);
             let (apply_p, del_name) = (prof.clone(), prof.name.clone());
-            list = list.child(
+            let summary = prof
+                .outputs
+                .iter()
+                .filter(|o| o.enabled)
+                .map(|o| match (o.width, o.height) {
+                    (Some(w), Some(h)) => format!("{} {w}×{h}", o.name),
+                    _ => o.name.clone(),
+                })
+                .collect::<Vec<_>>()
+                .join(" · ");
+            cards.push(
                 div()
+                    .id(("profile", n))
+                    .w_full()
+                    .h(px(PROFILE_CARD_H_PX))
+                    .p(px(PROFILE_PAD_PX))
+                    .clip_rounded()
+                    .rounded(px(RADIUS_20_PX))
+                    .bg(p.surface_container.hsla())
+                    .border_2()
+                    .border_color(if matches { p.primary.with_alpha(ALPHA_55).hsla() } else { p.outline.with_alpha(ALPHA_12).hsla() })
                     .row()
-                    .items_center()
-                    .gap(px(SPACE_4_PX))
-                    .pad_start(px(SPACE_12_PX))
-                    .pad_end(px(SPACE_4_PX))
-                    .h(px(DIM_34_PX))
-                    .rounded_full()
-                    .bg(if matches { p.primary.with_alpha(ALPHA_14).hsla() } else { p.surface_container_high.hsla() })
-                    .child(div().text_size(px(TEXT_12_5_PX)).font_weight(FontWeight::MEDIUM).child(prof.name.clone()))
-                    .when(matches, |el| el.child(badge(t("Connected"), p.success_emerald)))
+                    .flex_col()
+                    .gap(px(PROFILE_GAP_PX))
                     .child(
                         div()
-                            .id(("profile-apply", n))
-                            .size(px(DIM_26_PX))
-                            .rounded_full()
+                            .flex_none()
+                            .h(px(DIM_36_PX))
                             .row()
                             .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(p.primary.with_alpha(ALPHA_16).hsla()))
-                            .tooltip(tip(t("Apply this profile"), p))
-                            .child(icon("check", ICON_12_PX, p.primary))
-                            .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                            .gap(px(SPACE_10_PX))
+                            .child(div().flex_none().size(px(DIM_36_PX)).rounded(px(RADIUS_12_PX)).bg(if matches { p.primary.with_alpha(ALPHA_16).hsla() } else { p.surface_container_high.hsla() }).row().items_center().justify_center().child(icon("monitor", ICON_16_PX, if matches { p.primary } else { p.on_surface_variant })))
+                            .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(TEXT_14_PX)).font_weight(FontWeight::SEMIBOLD).child(prof.name.clone()))
+                            .when(matches, |el| el.child(badge(t("Connected"), p.success_emerald))),
+                    )
+                    .child(div().flex_none().h(px(LEADING_16_PX)).truncate().text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).font_features(mandara_ui::fonts::tabular_nums()).text_color(p.on_surface_variant.hsla()).child(summary))
+                    .child(
+                        div()
+                            .flex_none()
+                            .h(px(DIM_34_PX))
+                            .row()
+                            .items_center()
+                            .gap(px(SPACE_8_PX))
+                            .child(button(SharedString::from(format!("profile-apply-{n}")), "check", t("Apply"), false, p).tooltip(tip(t("Apply this profile"), p)).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
                                 let profile = apply_p.clone();
                                 let secs = mandara_ui::state::config(cx).read(cx).get().displays.revert_secs();
                                 st(cx).busy = true;
@@ -777,30 +904,36 @@ impl StudioView {
                                     });
                                 })
                                 .detach();
-                            })),
+                            })))
+                            .child(div().flex_1())
+                            .child(
+                                div()
+                                    .id(("profile-del", n))
+                                    .flex_none()
+                                    .size(px(DIM_34_PX))
+                                    .rounded_full()
+                                    .row()
+                                    .items_center()
+                                    .justify_center()
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(p.urgent_coral.with_alpha(ALPHA_14).hsla()))
+                                    .tooltip(tip(t("Delete"), p))
+                                    .child(icon("trash", ICON_14_PX, p.on_surface_variant))
+                                    .on_click(move |_, _, cx| {
+                                        let name = del_name.clone();
+                                        update_config(cx, move |c| c.displays.profiles.retain(|p| p.name != name));
+                                    }),
+                            ),
                     )
-                    .child(
-                        div()
-                            .id(("profile-del", n))
-                            .size(px(DIM_26_PX))
-                            .rounded_full()
-                            .row()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(p.urgent_coral.with_alpha(ALPHA_14).hsla()))
-                            .tooltip(tip(t("Delete"), p))
-                            .child(icon("close", ICON_11_PX, p.on_surface_variant))
-                            .on_click(move |_, _, cx| {
-                                let name = del_name.clone();
-                                update_config(cx, move |c| c.displays.profiles.retain(|p| p.name != name));
-                            }),
-                    ),
+                    .into_any_element(),
             );
         }
-        if cfg.displays.profiles.is_empty() {
-            list = list.child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("No profiles yet")));
-        }
+        let list = if cards.is_empty() {
+            card(p).child(div().row().items_center().gap(px(SPACE_10_PX)).child(icon("bookmark", ICON_15_PX, p.on_surface_variant)).child(div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("No profiles yet")))).into_any_element()
+        } else {
+            let n = cards.len();
+            super::grid::fit(self.page.column_w, PROFILE_GRID).balanced(n).render(cards)
+        };
         let snapshot: Vec<OutputConfig> = heads.iter().map(outputs::Head::to_config).collect();
         let default_name = heads.iter().filter(|h| h.enabled).map(|h| if h.model.is_empty() { h.name.clone() } else { h.model.clone() }).collect::<Vec<_>>().join(" + ");
         let save = button("profile-save", "plus", t("Save as profile"), false, p).on_click(move |_, _, cx| {
@@ -825,43 +958,52 @@ impl StudioView {
                 update_config(cx, move |c| c.compositor.outputs = list);
             })
         };
-        card(p)
-            .child(heading(t("Profiles"), t("Save the current arrangement; when the same monitors connect again the shell switches to it on its own."), p))
-            .child(list)
-            .child(div().row().child(save))
-            .child(div().h(px(BORDER_1_PX)).bg(p.outline.with_alpha(ALPHA_12).hsla()))
-            .child(heading(
-                t("Keep after restart"),
-                if !cfg.compositor.manage {
-                    // Nothing is written while the drop-in is off.
-                    t("Turn on “Manage compositor drop-in” (Compositor page) first: Mandara writes no drop-in while it's off").into()
-                } else if persisted {
-                    tf("Saved as monitor lines in Mandara's {file} drop-in (your own config isn't touched)", &[("file", &file)])
-                } else {
-                    t("Off: the compositor's own config decides at the next start").into()
-                },
-                p,
-            ))
+        let keep_card = card(p)
+            .child(
+                div()
+                    .row()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(SPACE_14_PX))
+                    .child(div().flex_none().size(px(DIM_36_PX)).rounded(px(RADIUS_12_PX)).bg(if persisted { p.success_emerald.with_alpha(ALPHA_16).hsla() } else { p.surface_container_high.hsla() }).row().items_center().justify_center().child(icon("download", ICON_16_PX, if persisted { p.success_emerald } else { p.on_surface_variant })))
+                    .child(div().flex_1().min_w(px(DIM_240_PX)).child(heading(
+                        t("Keep after restart"),
+                        if !cfg.compositor.manage {
+                            // Nothing is written while the drop-in is off.
+                            t("Turn on “Manage compositor drop-in” (Compositor page) first: Mandara writes no drop-in while it's off").into()
+                        } else if persisted {
+                            tf("Saved as monitor lines in Mandara's {file} drop-in (your own config isn't touched)", &[("file", &file)])
+                        } else {
+                            t("Off: the compositor's own config decides at the next start").into()
+                        },
+                        p,
+                    )))
+                    .child(keep),
+            )
             .when(!overlap.is_empty(), |el| {
                 el.child(
                     div()
                         .row()
                         .items_center()
                         .gap(px(SPACE_8_PX))
+                        .px(px(SPACE_12_PX))
+                        .py(px(SPACE_8_PX))
+                        .rounded(px(RADIUS_12_PX))
+                        .bg(p.warning_amber.with_alpha(ALPHA_10).hsla())
                         .child(icon("alert", ICON_14_PX, p.warning_amber))
-                        .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tf("Your own config also sets {outputs}; your line may win over the drop-in", &[("outputs", &overlap.join(", "))])))),
+                        .child(div().flex_1().min_w(px(0.0)).text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tf("Your own config also sets {outputs}; your line may win over the drop-in", &[("outputs", &overlap.join(", "))])))),
                 )
-            })
-            .child(div().row().gap(px(SPACE_8_PX)).child(keep))
-            .into_any_element()
+            });
+        page_section(section_head(t("Profiles"), detail, vec![save.into_any_element()], display.clone(), p), [list, keep_card.into_any_element(), rows])
     }
 
     // ── Which displays show what ────────────────────────────────────────────
 
     fn surface_screens(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let names: Vec<String> = st(cx).heads.as_ref().and_then(|h| h.as_ref().ok()).map(|h| h.iter().filter(|h| h.enabled).map(|h| h.name.clone()).collect()).unwrap_or_default();
-        let mut body = card(p).child(heading(t("Show on"), t("Pick the displays each part of the shell appears on. Main display follows the one marked as main above."), p));
-        for kind in SurfaceKind::ALL {
+        let stack = self.stack_rows;
+        let mut body = card(p).gap_0().py(px(SPACE_6_PX));
+        for (k, kind) in SurfaceKind::ALL.into_iter().enumerate() {
             let set = cfg.displays.surfaces.get(kind).clone();
             let mut chips = div().row().flex_wrap().gap(px(SPACE_6_PX));
             chips = chips
@@ -886,14 +1028,41 @@ impl StudioView {
                     });
                 }));
             }
-            body = body.child(div().row().flex_wrap().items_center().gap(px(SPACE_12_PX)).child(div().w(px(DIM_150_PX)).text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(tr(surface_label(kind))))).child(chips));
+            body = body.child(
+                div()
+                    .row()
+                    .when(stack, |el| el.flex_col().cross_start().gap(px(SPACE_10_PX)))
+                    .when(!stack, |el| el.items_center().gap(px(SPACE_18_PX)))
+                    .py(px(SPACE_12_PX))
+                    .when(k > 0, |el| el.border_t_1().border_color(p.on_surface.with_alpha(ALPHA_6).hsla()))
+                    .child(
+                        div()
+                            .flex_none()
+                            .when(!stack, |el| el.w(px(DIM_220_PX)))
+                            .row()
+                            .items_center()
+                            .gap(px(SPACE_10_PX))
+                            .child(div().flex_none().size(px(DIM_32_PX)).rounded(px(RADIUS_10_PX)).bg(p.primary.with_alpha(ALPHA_12).hsla()).row().items_center().justify_center().child(icon(surface_icon(kind), ICON_14_PX, p.primary)))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w(px(0.0))
+                                    .row()
+                                    .flex_col()
+                                    .gap(px(SPACE_3_PX))
+                                    .child(div().truncate().text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).child(tr(surface_label(kind))))
+                                    .child(div().truncate().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(assignment_summary(cfg, kind))),
+                            ),
+                    )
+                    .child(div().flex_1().min_w(px(0.0)).child(chips)),
+            );
         }
-        div().p(px(SPACE_12_PX)).child(body).into_any_element()
+        body.into_any_element()
     }
 
     // ── External brightness (DDC/CI) ────────────────────────────────────────
 
-    fn external_brightness(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    fn external_brightness(&mut self, cfg: &ShellConfig, p: &MandaraPalette, display: &SharedString, cx: &mut Context<Self>) -> AnyElement {
         let s = st(cx);
         let wants = s.ddc_wants.clone();
         let shown = s.ddc_shown.clone();
@@ -949,12 +1118,13 @@ impl StudioView {
                 c
             }
         };
-        div().row().flex_col().gap(px(SPACE_10_PX)).child(group_title(t("Monitor brightness"), p)).child(body).into_any_element()
+        let rows = self.display_rows(BRIGHTNESS_GROUPS, cfg, p, cx);
+        page_section(section_head(t("Monitor brightness"), t("External monitors over DDC/CI, and how the brightness keys move them"), vec![], display.clone(), p), [body.into_any_element(), rows])
     }
 
     // ── Night light ─────────────────────────────────────────────────────────
 
-    fn night_light_section(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    fn night_light_section(&mut self, cfg: &ShellConfig, p: &MandaraPalette, display: &SharedString, cx: &mut Context<Self>) -> AnyElement {
         let s = st(cx);
         let support = s.support.unwrap_or_default();
         let night = s.night.clone();
@@ -1053,13 +1223,11 @@ impl StudioView {
             excl = excl.child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("Open the app you want to exclude, then come back here")));
         }
         let exclusions = card(p).child(heading(t("Pause for these apps"), t("While one of them is focused, colours stay true (photo and video editing)."), p)).child(excl);
-        div()
-            .row()
-            .flex_col()
-            .gap(px(SPACE_26_PX))
-            .child(div().row().flex_col().gap(px(SPACE_10_PX)).child(group_title(t("Night light"), p)).child(body))
-            .when(support != GammaSupport::Unsupported, |el| el.child(div().row().flex_col().gap(px(SPACE_10_PX)).child(rows).child(exclusions)))
-            .into_any_element()
+        let supported = support != GammaSupport::Unsupported;
+        page_section(
+            section_head(t("Night light"), t("Warmer colours in the evening, on a schedule"), vec![], display.clone(), p),
+            [body.into_any_element()].into_iter().chain(supported.then_some(rows)).chain(supported.then(|| exclusions.into_any_element())),
+        )
     }
 }
 
@@ -1099,6 +1267,17 @@ mod tests {
         let mut d = vec![out("a", 300, -100, 1920, 1080, 1.0), out("b", 2220, 50, 1920, 1080, 1.0)];
         normalize(&mut d);
         assert_eq!((d[0].x, d[0].y, d[1].x, d[1].y), (Some(0), Some(0), Some(1920), Some(150)));
+    }
+
+    /// Every Displays setting is drawn in one of the page's sections.
+    #[test]
+    fn every_displays_row_has_a_section() {
+        for s in registry::in_section(Section::Displays) {
+            let n = [PROFILE_GROUPS, BRIGHTNESS_GROUPS].iter().filter(|g| g.contains(&s.group)).count() + usize::from(s.path.starts_with("/night_light/"));
+            assert_eq!(n, 1, "{} ({}) is drawn {n} times", s.path, s.group);
+        }
+        const { assert!(MONITOR_GRID.max_w >= 1.5 * MONITOR_GRID.min_w + MONITOR_GRID.gap) };
+        const { assert!(PROFILE_GRID.max_w >= 1.5 * PROFILE_GRID.min_w + PROFILE_GRID.gap) };
     }
 
     #[test]

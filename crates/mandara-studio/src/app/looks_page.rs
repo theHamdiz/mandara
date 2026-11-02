@@ -35,7 +35,7 @@ use mandara_ui::icons::icon;
 use mandara_ui::state::update_config;
 
 use super::{StudioView, swatch_list};
-use super::compositor_page::{badge, card, chip, group_title, heading};
+use super::compositor_page::{badge, card, chip, heading};
 use super::themes_page::section_head;
 use crate::registry::system_settings::CURSOR;
 use crate::registry::{self, Section};
@@ -393,7 +393,7 @@ impl StudioView {
         div().row().flex_col().gap(px(SPACE_14_PX)).child(head).child(body).into_any_element()
     }
 
-    pub(super) fn desktop_cards_section(&self, cfg: &ShellConfig, p: &MandaraPalette) -> AnyElement {
+    pub(super) fn desktop_cards_section(&self, cfg: &ShellConfig, p: &MandaraPalette, display: SharedString) -> AnyElement {
         let mut list = div().row().flex_col().gap(px(SPACE_10_PX));
         for (card_id, title, detail) in CARDS {
             let placed = cfg.desktop.widgets.items.iter().find(|w| dc::as_card(w).is_some_and(|c| c.card == card_id));
@@ -432,18 +432,10 @@ impl StudioView {
         let side_note = (cfg.bar.position.is_vertical() || cfg.bar.position == BarPosition::Bottom).then(|| {
             div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("Cards keep clear of the bar's edge automatically."))
         });
-        div()
-            .row()
-            .flex_col()
-            .gap(px(SPACE_10_PX))
-            .child(group_title(t("Desktop cards & visualizers"), p))
-            .child(
-                card(p)
-                    .child(heading(t("On the desktop, under your windows"), t("Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence."), p))
-                    .child(list)
-                    .children(side_note),
-            )
-            .into_any_element()
+        super::launcher_page::page_section(
+            section_head(t("Desktop cards & visualizers"), t("Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence."), vec![], display, p),
+            [card(p).child(list).children(side_note).into_any_element()],
+        )
     }
 }
 

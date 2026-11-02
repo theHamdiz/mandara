@@ -13,6 +13,8 @@
 
 use mandara_ui::bidi::Bidi as _;
 use gpui::{AnyElement, Div, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder as _, px};
+use mandara_theme::MandaraPalette;
+use mandara_ui::hstrip::HStrip;
 
 use crate::tokens::*;
 
@@ -139,15 +141,62 @@ impl GridFit {
     }
 }
 
+thread_local! {
+    /// Each chip strip's scroll and drag state, by key (one Studio window).
+    static STRIPS: std::cell::RefCell<std::collections::HashMap<&'static str, HStrip>> = Default::default();
+}
+
+/// The strip state for `key`.
+pub fn strip(key: &'static str) -> HStrip {
+    STRIPS.with(|m| m.borrow_mut().entry(key).or_default().clone())
+}
+
+/// A row of chips (filters, categories) that fits its width: on a wide
+/// column, equal chips on balanced rows that use the whole width and line
+/// up with the card grids under them; on a narrow one, a horizontal strip
+/// that scrolls with the wheel, a drag or its chevrons, so no chip is ever
+/// out of reach. Give the chips `.justify_center()`; the strip keeps them
+/// at their own width. `height` is the chips' height.
+pub fn chips(avail: f32, key: &'static str, height: f32, items: Vec<AnyElement>, p: &MandaraPalette) -> AnyElement {
+    if avail >= CHIP_STRIP_BELOW_PX {
+        let n = items.len();
+        return fit(avail, CHIP_GRID).balanced(n).render(items);
+    }
+    let strip = strip(key);
+    let row = strip.row(key).row().items_center().gap(px(CHIP_GRID.gap)).h(px(height)).children(items.into_iter().map(|c| div().flex_none().child(c)));
+    strip.with_chevrons(key, row, height, p)
+}
+
 /// Two side-by-side sections that stack into one column below `min_each`
 /// per section (or when the page stacks its rows).
 pub fn pair(avail: f32, min_each: f32, gap: f32, first: impl IntoElement, second: impl IntoElement) -> AnyElement {
     fit(avail, CardGrid { min_w: min_each, max_w: f32::MAX, gap }).at_most(2).render([first.into_any_element(), second.into_any_element()])
 }
 
+/// Which of two columns each item goes to (0 or 1), in order, so the
+/// columns' total weights stay as even as possible.
+pub fn two_columns(weights: &[usize]) -> Vec<usize> {
+    let mut totals = [0usize; 2];
+    weights
+        .iter()
+        .map(|w| {
+            let side = usize::from(totals[1] < totals[0]);
+            totals[side] += w + 1;
+            side
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn two_columns_balance_by_weight() {
+        assert_eq!(two_columns(&[5, 2, 2, 1]), [0, 1, 1, 0]);
+        assert_eq!(two_columns(&[1, 1]), [0, 1]);
+        assert!(two_columns(&[]).is_empty());
+    }
 
     const SPEC: CardGrid = CardGrid { min_w: 200.0, max_w: 300.0, gap: 10.0 };
 
@@ -216,6 +265,7 @@ mod tests {
             ("LOCAL_CARD", LOCAL_CARD_GRID),
             ("PANEL", PANEL_GRID),
             ("ICON_TILE", ICON_TILE_GRID),
+            ("CHIP", CHIP_GRID),
         ] {
             assert!(g.max_w >= 1.5 * g.min_w + g.gap, "{name}_GRID: max_w must be ≥ 1.5 × min_w + gap");
             let mut w = g.min_w;

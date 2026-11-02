@@ -1894,6 +1894,7 @@ External brightness
 External monitor brightness is off
 External monitor brightness is off (Studio → Displays)
 External monitors answering DDC/CI and their brightness (JSON text)
+External monitors over DDC/CI, and how the brightness keys move them
 Extra distance from the left / right edge
 Extra distance from the top / bottom edge (centre: moves it down)
 Extra space between the bar and your windows (the bar keeps it free)
@@ -3974,7 +3975,6 @@ On mains power — the mains timeouts apply
 On the Shortness of Life
 On the Statue of Liberty
 On the desktop (later ones on top)
-On the desktop, under your windows
 On this tab
 On your desktop
 On your lap — performance is limited
@@ -4292,6 +4292,7 @@ Pin an app to the top of the launcher
 Pin an entry (survives clears)
 Pin the left side bar
 Pin the right side bar
+Pin, hide, rename or re-icon apps in the launcher
 Pin, unpin or toggle-pin the sidebar (pinned pushes windows aside)
 Pink noise
 Pinned
@@ -4600,7 +4601,6 @@ Reads your wallpaper and caches its subject mask in Mandara's cache folder
 Ready
 Ready to present
 Ready, with a warning
-Ready-made looks
 Real kindness seeks no return; what return can the world make to rain clouds?
 Receives notifications as the desktop notification server
 Recent
@@ -4731,7 +4731,6 @@ Rename a device
 Rename a list (the Inbox too)
 Rename a sidebar tab
 Rename a topic (and its folder)
-Rename apps or give them your own icon
 Rename in the launcher
 Renamed to {name}
 Render count and build cost per plugin view since the last reset
@@ -5013,6 +5012,7 @@ Scrolling between and around the bar's items switches workspace or changes the v
 Sea glass
 Seamless AV1 loop at {size}
 Search
+Search & results
 Search Arabic or meaning…
 Search Arabic, meaning or reference…
 Search Wallhaven
@@ -5247,7 +5247,6 @@ Show less
 Show more
 Show names
 Show names on hover
-Show on
 Show on every display
 Show on the login screen
 Show on-screen displays
@@ -5895,6 +5894,7 @@ The hint strip under the toolbar
 The hotspot's name, password and Wi-Fi QR payload
 The hour
 The i2c-dev kernel module isn't loaded
+The icon on the bar's launcher button
 The icons of the apps on each tag or workspace
 The idle manager is not running
 The interface between your plugin and Mandara, read from the plugin.wit this build was compiled with.
@@ -6291,6 +6291,7 @@ Turn the wallpaper slideshow on or off, or set its interval (minutes, or 30m, 2h
 Turn to Him morning and evening with a sincere plea for forgiveness.
 Turning on and off
 Turning on and off, including automatically
+Turning the launcher on, dimming the screen, the keyboard and how apps start
 Turns while playing
 Twelve looks, each with its own controls. Previews use your palette and seed.
 Twilight angles
@@ -6617,6 +6618,7 @@ Warm from
 Warm now
 Warm now · {kelvin} K
 Warm the screens in the evening (wlr-gamma-control: MangoWM, Hyprland, Sway; Niri can't)
+Warmer colours in the evening, on a schedule
 Warms at {time}
 Warn once when the charge drops to this while discharging
 Warn when a mouse, keyboard or headset runs low
@@ -6690,6 +6692,7 @@ What scripts can show
 What the bar shows for this layout, e.g. EN or ع
 What the idle stage, the critical battery action and the session menu's Sleep do
 What the launcher has learnt
+What the launcher searches, how results look and how they are ranked
 What the launcher shows for a query (apps, settings, commands, slash commands, skills)
 What you do not want done to yourself, do not do to others.
 What's in {version}
@@ -6724,7 +6727,6 @@ Where screenshots are saved (empty: Pictures/Screenshots)
 Where settings come from
 Where the Beacon bar sits, as a share of the screen height from the top
 Where the Ollama server listens
-Where the launcher opens
 Where the launcher opens: in the middle of the screen or attached to the top / bottom edge at the left, middle or right (no argument: the current one)
 Where the middle group sits
 Where the middle group sits along the edge
@@ -6733,7 +6735,6 @@ Whether presentation mode is on, for how long, and what it will restore (JSON)
 Whether the hotspot runs, and its network name
 Which app has focus, per day; needs the Screen time plugin. Stays on this computer
 Which container engine the panel talks to
-Which displays show the bar, dock, OSDs, notifications and wallpaper
 Which edge it lives on; the power dock takes the other. Auto follows the locale (right for Arabic)
 Which servers listen on which ports, who can reach them, and a quick way to end them
 Which units the panel shows when it opens

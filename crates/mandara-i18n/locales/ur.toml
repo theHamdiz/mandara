@@ -7768,3 +7768,12 @@
 "App icon shape" = "ایپ آئیکن کی شکل"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "لانچر اور ڈاک میں ہر ایپ آئیکن ایک ہی شکل پر رکھا جاتا ہے تاکہ سب ایک سیٹ لگیں؛ «تھیم کے مطابق» ہر آئیکن کو ویسا ہی رکھتا ہے جیسا وہ بنا ہے"
 "Theme's own" = "تھیم کے مطابق"
+
+# ── Studio redesign ──
+"External monitors over DDC/CI, and how the brightness keys move them" = "DDC/CI کے ذریعے بیرونی مانیٹر، اور چمک کی کلیدیں انہیں کیسے بدلتی ہیں"
+"Pin, hide, rename or re-icon apps in the launcher" = "لانچر میں ایپس کو پن کریں، چھپائیں، نام یا آئیکن بدلیں"
+"Search & results" = "تلاش اور نتائج"
+"The icon on the bar's launcher button" = "بار کے لانچر بٹن کا آئیکن"
+"Turning the launcher on, dimming the screen, the keyboard and how apps start" = "لانچر آن کرنا، اسکرین مدھم کرنا، کی بورڈ اور ایپس کے کھلنے کا طریقہ"
+"Warmer colours in the evening, on a schedule" = "شام کو گرم رنگ، طے شدہ وقت پر"
+"What the launcher searches, how results look and how they are ranked" = "لانچر کیا تلاش کرتا ہے، نتائج کیسے دکھتے ہیں اور ان کی ترتیب کیسے ہوتی ہے"

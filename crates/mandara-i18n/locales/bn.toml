@@ -7768,3 +7768,12 @@
 "App icon shape" = "অ্যাপ আইকনের আকৃতি"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "লঞ্চার ও ডকের প্রতিটি অ্যাপ আইকন একই আকৃতির ওপর বসে, যাতে সবগুলো একটি সেটের মতো দেখায়; “থিম অনুযায়ী” প্রতিটি আইকনকে যেমন আঁকা তেমনই রাখে"
 "Theme's own" = "থিম অনুযায়ী"
+
+# ── Studio redesign ──
+"External monitors over DDC/CI, and how the brightness keys move them" = "DDC/CI দিয়ে বাহ্যিক মনিটর, আর উজ্জ্বলতার কী কীভাবে সেগুলো বদলায়"
+"Pin, hide, rename or re-icon apps in the launcher" = "লঞ্চারে অ্যাপ পিন করুন, লুকান, নাম বা আইকন বদলান"
+"Search & results" = "অনুসন্ধান ও ফলাফল"
+"The icon on the bar's launcher button" = "বারের লঞ্চার বোতামের আইকন"
+"Turning the launcher on, dimming the screen, the keyboard and how apps start" = "লঞ্চার চালু করা, স্ক্রিন ম্লান করা, কিবোর্ড ও অ্যাপ কীভাবে খোলে"
+"Warmer colours in the evening, on a schedule" = "সন্ধ্যায় উষ্ণ রং, সময়সূচি অনুযায়ী"
+"What the launcher searches, how results look and how they are ranked" = "লঞ্চার কী খোঁজে, ফলাফল কেমন দেখায় ও কীভাবে সাজানো হয়"

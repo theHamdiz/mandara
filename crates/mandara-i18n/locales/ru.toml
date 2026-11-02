@@ -7880,6 +7880,14 @@
 "Only on this display" = "Только на этом экране"
 "Show on every display" = "Показывать на всех экранах"
 
+# ── Launcher & Displays pages ──
+"External monitors over DDC/CI, and how the brightness keys move them" = "Внешние мониторы по DDC/CI и как ими управляют клавиши яркости"
+"Pin, hide, rename or re-icon apps in the launcher" = "Закрепляйте, скрывайте, переименовывайте приложения в запуске или меняйте их значки"
+"Search & results" = "Поиск и результаты"
+"The icon on the bar's launcher button" = "Значок кнопки запуска на панели"
+"Turning the launcher on, dimming the screen, the keyboard and how apps start" = "Включение запуска, затемнение экрана, клавиатура и запуск приложений"
+"Warmer colours in the evening, on a schedule" = "Тёплые цвета вечером, по расписанию"
+"What the launcher searches, how results look and how they are ranked" = "Что ищет запуск, как выглядят результаты и как они упорядочены"
 # ── Desktop widget families and styles (#23) ──
 "Digital" = "Цифровые"
 "Classic analog" = "Классические аналоговые"

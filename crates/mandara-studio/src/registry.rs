@@ -370,7 +370,7 @@ fn optional(min: f64, max: f64, step: f64, unit: &'static str, default: f64) -> 
     Control::OptionalSlider { min, max, step, unit, default }
 }
 
-const ICON_STYLES: &[(&str, &str)] = &[("monochrome", tk("Monochrome")), ("color", tk("Color"))];
+pub(crate) const ICON_STYLES: &[(&str, &str)] = &[("monochrome", tk("Monochrome")), ("color", tk("Color"))];
 /// `[plugins.settings.workspaces] labels` and `[plugins.settings.active-window] show`.
 const WORKSPACE_LABELS: &[(&str, &str)] = &[("auto", tk("Number, or a short name")), ("number", tk("Number")), ("dots", tk("Dots"))];
 const ACTIVE_WINDOW_SHOW: &[(&str, &str)] = &[("app-and-title", tk("App and title")), ("app", tk("App")), ("title", tk("Title"))];
@@ -588,10 +588,7 @@ fn build() -> Vec<Setting> {
         s(Sidebar, tk("Layout"), "/sidebar/width", tk("Width"), tk("Sidebar width"), span(ranges::SIDEBAR_WIDTH, " px")),
         // Launcher
         s(Launcher, tk("Button"), "/appearance/launcher_icon", tk("Button icon"), tk("Bundled, your distro's logo, any icon from your theme, or your own image"), Icon),
-        s(Launcher, tk("Launcher"), "/launcher/enabled", tk("Enable launcher"), tk("Apps, settings, commands, “/” slash commands and skills, “=” calculator; off disables the keybind, edge and menu entry"), Toggle),
-        s(Launcher, tk("Launcher"), "/launcher/max_results", tk("Visible results"), tk("Rows shown before the list scrolls"), slider(3.0, 12.0, 1.0, "")),
-        s(Launcher, tk("Launcher"), "/appearance/launcher_icons", tk("App icons"), tk("How app icons are drawn"), Choice(ICON_STYLES)),
-        s(Launcher, tk("Launcher"), "/appearance/app_icon_shape", tk("App icon shape"), tk("Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn"), Choice(APP_ICON_SHAPES)),
+        s(Launcher, workflow_settings::GENERAL, "/launcher/enabled", tk("Enable launcher"), tk("Apps, settings, commands, “/” slash commands and skills, “=” calculator; off disables the keybind, edge and menu entry"), Toggle),
         // Wallpaper
         s(Wallpaper, tk("Desktop"), "/wallpaper/enabled", tk("Draw the wallpaper"), tk("Mandara paints the desktop background (replaces swww / awww / swaybg)"), Toggle),
         s(Wallpaper, tk("Desktop"), "/wallpaper/crossfade_ms", tk("Crossfade"), tk("Blend time when the wallpaper changes"), slider(0.0, 2000.0, 50.0, " ms")),

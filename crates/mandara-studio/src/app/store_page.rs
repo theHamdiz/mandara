@@ -971,15 +971,22 @@ impl StudioView {
                 .cursor_pointer()
                 .text_size(px(TEXT_12_5_PX))
                 .font_weight(FontWeight::MEDIUM)
+                .justify_center()
                 .bg(if active { p.primary.hsla() } else { p.surface_container.hsla() })
                 .text_color(fg.hsla())
                 .shadow(mandara_core::glass_rim(p.specular_rim_light, p.specular_rim_shadow))
                 .when(!active, |el| el.hover(|s| s.bg(p.surface_container_high.hsla())))
-                .child(label)
-                .when_some(count, |el, n| el.child(div().text_color(fg.with_alpha(ALPHA_70).hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(n.to_string())))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.store_set_filter(filter, cx)))
+                .child(div().min_w(px(0.0)).truncate().child(label))
+                .when_some(count, |el, n| el.child(div().flex_none().text_color(fg.with_alpha(ALPHA_70).hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(n.to_string())))
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    // The end of a drag along the strip isn't a click.
+                    if !grid::strip("store-chips").dragged() {
+                        this.store_set_filter(filter, cx)
+                    }
+                }))
+                .into_any_element()
         });
-        div().row().flex_wrap().gap(px(SPACE_8_PX)).children(row).into_any_element()
+        grid::chips(self.page.column_w, "store-chips", CHIP_H_PX, row.collect(), p)
     }
 
     // ── Get / On ─────────────────────────────────────────────────────────

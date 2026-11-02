@@ -36,6 +36,7 @@ mod keyrings_card;
 mod admin_run;
 mod fold;
 mod font_picker;
+mod popover;
 mod time_card;
 mod users_page;
 pub use time_card::set_demo as set_time_demo;
@@ -623,7 +624,9 @@ impl StudioView {
                         .row()
                         // Narrow: the control sits under its label.
                         .when(stack, |el| el.flex_col().cross_start().gap(px(SPACE_10_PX)))
-                        .when(!stack, |el| el.items_center().gap(px(SPACE_24_PX)))
+                        // The control sits at the end; the label keeps a
+                        // readable measure on wide windows.
+                        .when(!stack, |el| el.items_center().justify_between().gap(px(SPACE_24_PX)))
                         .hover(|el| el.bg(p.on_surface.with_alpha(ALPHA_3_5).hsla()))
                         .child(
                             div()
@@ -632,6 +635,7 @@ impl StudioView {
                                 // hot corner's actions) wraps instead of
                                 // squeezing its label to one letter per line.
                                 .min_w(px(ROW_LABEL_MIN_PX))
+                                .max_w(px(TEXT_MEASURE_PX))
                                 .row()
                                 .flex_col()
                                 .gap(px(SPACE_3_PX))
@@ -647,11 +651,16 @@ impl StudioView {
         card
     }
 
-    /// A page's settings: each group in its own collapsible fold.
+    /// A page's settings: each group in its own collapsible fold. On a wide
+    /// page the folds sit in two columns, balanced by how many settings
+    /// each holds (not by whether it's open, so a fold never jumps columns
+    /// when it opens).
     fn rows<'a>(&mut self, settings: impl IntoIterator<Item = &'a Setting>, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let groups = self.visible_groups(settings, cfg, cx);
-        let mut col = div().row().flex_col().gap(px(SPACE_12_PX));
-        for (title, list) in groups {
+        let two = self.page.column_w >= TWO_COLUMNS_FROM_PX && groups.len() > 1;
+        let sides = grid::two_columns(&groups.iter().map(|(_, l)| l.len()).collect::<Vec<_>>());
+        let mut cols = [div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_12_PX)), div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_12_PX))];
+        for (n, (title, list)) in groups.into_iter().enumerate() {
             let changed = list.iter().filter(|s| !matches!(s.control, Control::Command { .. } | Control::DepthModel) && registry::get(cfg, s) != registry::default_value(s)).count();
             let preview = fold::preview_of(list.iter().map(|s| s.label));
             let badge = Some(if changed > 0 { tf("{changed} of {count} changed", &[("changed", &changed), ("count", &list.len())]) } else { list.len().to_string() });
@@ -659,13 +668,17 @@ impl StudioView {
             let reset = self.group_reset(title, &list, cfg, p, cx);
             let head = fold::FoldHead { title: tr(title).into(), preview, badge, trailing: reset, closed: false };
             let list: Vec<Setting> = list.into_iter().cloned().collect();
-            col = col.child(self.fold(title, head, p, cx, move |this, cx| {
+            let fold = self.fold(title, head, p, cx, move |this, cx| {
                 let refs: Vec<&Setting> = list.iter().collect();
                 let cfg = config(cx).read(cx).snapshot();
                 this.group_card(&refs, &cfg, p, cx).into_any_element()
-            }));
+            });
+            let side = if two { sides[n] } else { 0 };
+            let [first, second] = cols;
+            cols = if side == 0 { [first.child(fold), second] } else { [first, second.child(fold)] };
         }
-        col.into_any_element()
+        let [first, second] = cols;
+        if two { div().row().cross_start().gap(px(SPACE_12_PX)).child(first).child(second).into_any_element() } else { first.w_full().into_any_element() }
     }
 
     /// Settings as plain titled cards, always open (inside a dialog or
@@ -1080,18 +1093,16 @@ impl StudioView {
                 c.launcher.skills.push(mandara_config::Skill { name: t("New skill").into(), description: String::new(), steps: vec!["theme mode toggle".into()], icon: "grid".into() })
             });
         }))));
+        // A page section each (launcher_page.rs): the heading with its
+        // help, then the list in a card.
+        let display = mandara_ui::fonts::fonts(cx).display.clone();
         let group = |title: &'static str, help: &'static str, body: gpui::Div, p: &MandaraPalette| {
-            div()
-                .row()
-                .flex_col()
-                .gap(px(SPACE_10_PX))
-                .child(div().px(px(SPACE_10_PX)).text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(title))
-                .child(div().p(px(SPACE_14_PX)).rounded(px(RADIUS_20_PX)).bg(p.surface_container.hsla()).row().flex_col().gap(px(SPACE_10_PX)).child(div().px(px(SPACE_4_PX)).text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(help)).child(body))
+            launcher_page::page_section(themes_page::section_head(title, help, vec![], display.clone(), p), [div().p(px(SPACE_14_PX)).rounded(px(RADIUS_20_PX)).bg(p.surface_container.hsla()).child(body).into_any_element()])
         };
         div()
             .row()
             .flex_col()
-            .gap(px(SPACE_26_PX))
+            .gap(px(PAGE_SECTION_GAP_PX))
             .child(group(
                 t("Slash commands"),
                 t("Type /trigger and your words in the launcher. Actions: url:<address with {query}> opens the browser, mandara:<command> runs a Mandara command (see `mandara commands`), exec:<shell command> runs a program; {query} is replaced by what you typed."),
@@ -1618,16 +1629,9 @@ impl Render for StudioView {
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(picker).child(rows).child(keyrings).into_any_element()
                 }
                 Section::Shortcuts => self.shortcuts(&cfg, &p, cx),
-                Section::Launcher => {
-                    // The ready-made looks first; the placement diagram
-                    // stands in for its choice row.
-                    let looks = self.launcher_looks(&cfg, &p, cx);
-                    let placement = self.launcher_placement(&cfg, &p, cx);
-                    let rows = self.rows(registry::in_section(Section::Launcher).filter(|s| s.path != LAUNCHER_POSITION_PATH), &cfg, &p, cx);
-                    let editor = self.launcher_editor(&cfg, &p, cx);
-                    let extras = self.launcher_extras(&cfg, &p, cx);
-                    div().row().flex_col().gap(px(SPACE_26_PX)).child(looks).child(placement).child(rows).child(extras).child(editor).into_any_element()
-                }
+                // The ready-made looks first, then the sections in setup
+                // order (launcher_page.rs).
+                Section::Launcher => self.launcher_page(&cfg, &p, cx),
                 Section::Dock => self.dock_page(&cfg, &p, cx),
                 Section::DateTime => {
                     // The system clock first: time zone, network time and
@@ -1639,8 +1643,8 @@ impl Render for StudioView {
                 Section::DesktopWidgets => {
                     let widgets = self.desktop_widgets_page(&cfg, &p, cx);
                     // The interactive cards and GPU visualizers (looks_page.rs).
-                    let cards = self.desktop_cards_section(&cfg, &p);
-                    div().row().flex_col().gap(px(SPACE_26_PX)).child(widgets).child(cards).into_any_element()
+                    let cards = self.desktop_cards_section(&cfg, &p, fonts.display.clone());
+                    div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(widgets).child(cards).into_any_element()
                 }
                 Section::WindowSwitcher => self.switcher_page(&cfg, &p, cx),
                 // The wallpaper on the desktop first, then tabs
@@ -1831,8 +1835,6 @@ const ICON_MATCHES_MAX: usize = 64;
 
 /// Config path of the language setting (Studio → General shows it as a picker).
 const LOCALE_PATH: &str = "/general/locale";
-/// The launcher's placement (drawn as a screen diagram on its page).
-const LAUNCHER_POSITION_PATH: &str = "/launcher/look/position";
 
 
 /// Settings grouped into cards by their group title, in order of first
@@ -1847,7 +1849,7 @@ fn group_order(section: Section) -> Option<&'static [&'static str]> {
     use registry::surface_settings::{APPEARANCE, PANEL_MOTION, PANELS};
     Some(match section {
         Section::Bar => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", SIDE_BARS, SIDE_BAR_SHAPE, SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL, PANELS, PANEL_MOTION],
-        Section::Launcher => &["Launcher", "Results", "Size & placement", "Search providers", "Ranking", "Starting apps", "Pinned & hidden apps", "Button"],
+        Section::Launcher => &["Size & placement", "Button", "Results", "Grid", "Beacon search bar", "Search providers", "Ranking", "General", "Starting apps", "Pinned & hidden apps"],
         Section::Themes => &["Mode", "Style", "Tuning", "Accessibility", "Wallpaper colors", "Icons", "Cursor", "App themes"],
         Section::Wallpaper => &["Desktop", "Light & dark", "Video", "Depth clock", "Picker", "Slideshow", "Source", "When to change", "Slideshow transition", "Displays", "Wallhaven"],
         _ => return None,

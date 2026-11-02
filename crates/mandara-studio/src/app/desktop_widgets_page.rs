@@ -46,7 +46,10 @@ use mandara_ui::lock::paint::TextPainter;
 use mandara_ui::state::update_config;
 
 use super::StudioView;
-use super::compositor_page::{button, card, group_title, heading};
+use super::compositor_page::{button, card, tip};
+use super::launcher_page::page_section;
+use super::themes_page::section_head;
+use mandara_ui::style::ClipRounded as _;
 use super::font_picker::FontSelect;
 use crate::tokens::*;
 
@@ -56,10 +59,14 @@ const PREVIEW_ASPECT: f32 = 9.0 / 16.0;
 /// …and rendered at this many physical pixels per preview pixel (crisp on
 /// HiDPI).
 const PREVIEW_DENSITY: f32 = 2.0;
-/// Gallery tiles: size, and the display they are rendered on (the widget
-/// is shown at a scale that fills the tile).
-const TILE_W_PX: f32 = 132.0;
-const TILE_H_PX: f32 = 74.0;
+/// Gallery tiles: an even grid of identical tiles (the picture's aspect,
+/// two clamped lines of name), and the display they are rendered on (the
+/// widget is shown at a scale that fills the tile).
+const TILE_GRID: CardGrid = CardGrid { min_w: 150.0, max_w: 240.0, gap: SPACE_10_PX };
+const TILE_ASPECT: f32 = 74.0 / 132.0;
+const TILE_PAD_PX: f32 = SPACE_6_PX;
+const TILE_LABEL_LINES: usize = 2;
+const TILE_LABEL_H_PX: f32 = LEADING_16_PX * TILE_LABEL_LINES as f32;
 const TILE_RENDER: (u32, u32) = (528, 296);
 const TILE_SCALE: f32 = 1.9;
 /// A style's picture in a widget's Style row (the same rendering, smaller).
@@ -69,6 +76,11 @@ const STYLE_TILE_H_PX: f32 = 58.0;
 const BOX_ALPHA: f32 = 0.35;
 /// Opacity of a switched-off widget's chip.
 const DISABLED_OPACITY: f32 = 0.55;
+/// The placed widgets' list beside the preview: its narrowest, and each row.
+const LIST_MIN_W_PX: f32 = DIM_240_PX;
+const LIST_ROW_H_PX: f32 = DIM_44_PX;
+/// The label column of the editor's rows.
+const ROW_LABEL_W_PX: f32 = DIM_150_PX;
 /// Track width of the sliders.
 const TRACK_W_PX: f32 = DIM_220_PX;
 /// Seconds per minute: clocks in the preview are repainted with the minute.
@@ -254,27 +266,21 @@ impl StudioView {
         dw::migrate_depth_clock(&mut cfg);
         let items = cfg.desktop.widgets.items.clone();
         let selected = cx.global::<PageState>().selected.clone().filter(|id| items.iter().any(|w| w.id == *id));
+        let display = mandara_ui::fonts::fonts(cx).display.clone();
         let preview = self.widgets_preview(&cfg, p, cx);
-        let gallery = self.widgets_gallery(&cfg, p, cx);
+        let gallery = self.widgets_gallery(&cfg, p, &display, cx);
         let list = self.widgets_list(&items, selected.as_deref(), p, cx);
-        let editor = selected.as_ref().and_then(|id| items.iter().find(|w| w.id == *id)).map(|w| self.widget_editor(w, &cfg, p, cx));
-        card(p)
-            .child(heading(t("Desktop widgets"), t("Clocks, weather, a system monitor, decorations and more on the wallpaper — behind its subject or in front. Each kind comes from a plugin; nothing runs until you add one."), p))
-            .child(
-                // Arrange them on the desktop itself (also: right-click the desktop → Edit desktop).
-                div()
-                    .row()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(SPACE_10_PX))
-                    .child(button("widgets-edit-on-desktop", "pencil", t("Edit on desktop"), true, p).on_click(|_, _, cx| mandara_ui::desktop_edit::enter(cx)))
-                    .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("Or right-click the desktop and choose Edit desktop")))),
-            )
-            .child(preview)
-            .child(gallery)
-            .child(list)
-            .children(editor)
-            .into_any_element()
+        let editor = selected.as_ref().and_then(|id| items.iter().find(|w| w.id == *id)).map(|w| self.widget_editor(w, &cfg, p, &display, cx));
+        // Arrange them on the desktop itself (also: right-click the desktop → Edit desktop).
+        let edit_here = button("widgets-edit-on-desktop", "pencil", t("Edit on desktop"), true, p).on_click(|_, _, cx| mandara_ui::desktop_edit::enter(cx)).tooltip(tip(t("Or right-click the desktop and choose Edit desktop"), p));
+        let hero = page_section(
+            section_head(t("Desktop widgets"), t("Clocks, weather, a system monitor, decorations and more on the wallpaper — behind its subject or in front. Each kind comes from a plugin; nothing runs until you add one."), vec![edit_here.into_any_element()], display.clone(), p),
+            [card(p)
+                .child(div().row().flex_wrap().cross_start().gap(px(SPACE_18_PX)).child(preview).child(div().flex_1().min_w(px(LIST_MIN_W_PX)).child(list)))
+                .child(div().row().items_center().gap(px(SPACE_8_PX)).child(mandara_ui::icons::icon("pointer", ICON_12_PX, p.on_surface_variant)).child(div().flex_1().min_w(px(0.0)).text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("Or right-click the desktop and choose Edit desktop")))))
+                .into_any_element()],
+        );
+        div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(hero).children(editor).child(gallery).into_any_element()
     }
 
     /// Starts loading the wallpaper's thumbnail (once per wallpaper; a
@@ -476,7 +482,13 @@ impl StudioView {
         Some(image)
     }
 
-    fn widgets_gallery(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    /// Add a widget: the kinds of the plugins that are on, grouped by
+    /// plugin, as identical tiles (the same picture size and two clamped
+    /// lines of name in every language) on an even grid.
+    fn widgets_gallery(&mut self, cfg: &ShellConfig, p: &MandaraPalette, display: &SharedString, cx: &mut Context<Self>) -> AnyElement {
+        let fit = super::grid::fit(self.page.column_w, TILE_GRID);
+        let pic_w = (fit.card_w - 2.0 * (TILE_PAD_PX + BORDER_2_PX)).max(0.0);
+        let pic_h = (pic_w * TILE_ASPECT).floor();
         let kinds: Vec<DesktopWidgetType> = cx.try_global::<PluginRegistry>().map(|r| r.enabled_desktop_widgets(&cfg.plugins).cloned().collect()).unwrap_or_default();
         let has_depth = cfg.desktop.widgets.items.iter().any(|w| matches!(&w.kind, WidgetKind::Clock(c) if c.face.depth_style().is_some()));
         // Grouped by the plugin that offers them, in registration order.
@@ -499,35 +511,43 @@ impl StudioView {
             let glyph = mandara_ui::desktop_menu::icon_named(&t.icon);
             let el = div()
                 .id(SharedString::from(format!("dw-add-{}", t.key())))
-                .w(px(TILE_W_PX))
+                .w_full()
+                .h(px(2.0 * (TILE_PAD_PX + BORDER_2_PX) + pic_h + SPACE_6_PX + TILE_LABEL_H_PX))
+                .p(px(TILE_PAD_PX))
+                .clip_rounded()
+                .rounded(px(RADIUS_16_PX))
+                .bg(p.surface_container.hsla())
+                .border_2()
+                .border_color(if on_desktop { p.primary.with_alpha(ALPHA_55).hsla() } else { p.outline.with_alpha(ALPHA_12).hsla() })
+                .hover(|s| s.border_color(p.primary.with_alpha(ALPHA_55).hsla()))
                 .row()
                 .flex_col()
-                .gap(px(SPACE_4_PX))
+                .gap(px(SPACE_6_PX))
                 .cursor_pointer()
                 .child(
                     div()
-                        .w(px(TILE_W_PX))
-                        .h(px(TILE_H_PX))
+                        .flex_none()
+                        .w(px(pic_w))
+                        .h(px(pic_h))
                         .relative()
-                        .rounded(px(RADIUS_10_PX))
+                        .rounded(px(RADIUS_11_PX))
                         .overflow_hidden()
                         .bg(p.surface_dim.hsla())
-                        .hover(|s| s.bg(p.surface_base.hsla()))
                         .row()
                         .items_center()
                         .justify_center()
                         .when_some(tile.clone(), |el, t| {
                             use gpui::StyledImage as _;
-                            el.child(img(t).absolute().top_0().left_0().w(px(TILE_W_PX)).h(px(TILE_H_PX)).object_fit(gpui::ObjectFit::Contain))
+                            el.child(img(t).absolute().top_0().left_0().w(px(pic_w)).h(px(pic_h)).object_fit(gpui::ObjectFit::Contain))
                         })
                         // Cards are live views: their tile shows their icon.
                         .when(tile.is_none(), |el| el.child(mandara_ui::icons::icon(glyph, ICON_26_PX, p.primary)))
                         .when(on_desktop, |el| {
-                            el.border_1().border_color(p.primary.with_alpha(ALPHA_55).hsla()).child(
+                            el.child(
                                 div()
                                     .absolute()
                                     .top(px(SPACE_4_PX))
-                                    .right(px(SPACE_4_PX))
+                                    .inset_end(px(SPACE_4_PX))
                                     .size(px(DIM_18_PX))
                                     .rounded_full()
                                     .row()
@@ -538,7 +558,18 @@ impl StudioView {
                             )
                         }),
                 )
-                .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).truncate().child(if on_desktop { tf("{name} · on the desktop", &[("name", &label)]) } else { label }))
+                .child(
+                    div()
+                        .flex_none()
+                        .h(px(TILE_LABEL_H_PX))
+                        .px(px(SPACE_4_PX))
+                        .overflow_hidden()
+                        .text_size(px(TEXT_12_PX))
+                        .line_height(px(LEADING_16_PX))
+                        .line_clamp(TILE_LABEL_LINES)
+                        .text_color(if on_desktop { p.primary.hsla() } else { p.on_surface.hsla() })
+                        .child(mandara_ui::bidi::paragraph(if on_desktop { tf("{name} · on the desktop", &[("name", &label)]) } else { label })),
+                )
                 .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
                     let id = match &existing {
                         Some(id) => Some(id.clone()),
@@ -555,26 +586,30 @@ impl StudioView {
             }
         }
         let full = cfg.desktop.widgets.items.len() >= ranges::MAX_WIDGETS;
-        div()
-            .row()
-            .flex_col()
-            .gap(px(SPACE_10_PX))
-            .child(group_title(if full { t("The list is full — remove a widget to add another") } else { t("Add a widget") }, p))
-            .children(groups.into_iter().map(|(name, tiles)| {
-                div()
-                    .row()
-                    .flex_col()
-                    .gap(px(SPACE_6_PX))
-                    .child(div().px(px(SPACE_10_PX)).text_size(px(TEXT_11_PX)).text_color(p.on_surface_variant.hsla()).child(name))
-                    .child(div().row().flex_wrap().gap(px(SPACE_10_PX)).children(tiles))
-            }))
-            .child(div().px(px(SPACE_10_PX)).text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("Widget kinds come from plugins: switch them on or off in Studio → Plugins (Desktop widgets)."))))
-            .into_any_element()
+        let groups = groups.into_iter().map(|(name, tiles)| {
+            div()
+                .row()
+                .flex_col()
+                .gap(px(SPACE_8_PX))
+                .child(div().px(px(SPACE_4_PX)).text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(name))
+                .child(fit.render(tiles))
+                .into_any_element()
+        });
+        page_section(
+            section_head(
+                if full { t("The list is full — remove a widget to add another") } else { t("Add a widget") },
+                t("Widget kinds come from plugins: switch them on or off in Studio → Plugins (Desktop widgets)."),
+                vec![],
+                display.clone(),
+                p,
+            ),
+            groups,
+        )
     }
 
     fn widgets_list(&mut self, items: &[DesktopWidget], selected: Option<&str>, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         if items.is_empty() {
-            return div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("No widgets yet.")).into_any_element();
+            return div().h_full().min_h(px(DIM_120_PX)).rounded(px(RADIUS_16_PX)).border_1().border_color(p.on_surface.with_alpha(ALPHA_10).hsla()).row().items_center().justify_center().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("No widgets yet.")).into_any_element();
         }
         // Same name more than once: "Clock 2", "Clock 3" tell them apart.
         let mut seen: HashMap<String, usize> = HashMap::new();
@@ -599,14 +634,18 @@ impl StudioView {
                 let plugin_off = !dp::shows(w, &cfg, cx);
                 div()
                     .id(SharedString::from(format!("dw-item-{}", w.id)))
-                    .h(px(DIM_34_PX))
+                    .flex_none()
+                    .h(px(LIST_ROW_H_PX))
                     .px(px(SPACE_10_PX))
-                    .rounded_full()
+                    .rounded(px(RADIUS_14_PX))
                     .row()
                     .items_center()
-                    .gap(px(SPACE_8_PX))
+                    .gap(px(SPACE_10_PX))
                     .cursor_pointer()
-                    .bg(if on { p.primary.with_alpha(ALPHA_14).hsla() } else { p.surface_container_high.hsla() })
+                    .bg(if on { p.primary.with_alpha(ALPHA_14).hsla() } else { p.surface_container_high.with_alpha(ALPHA_60).hsla() })
+                    .border_1()
+                    .border_color(if on { p.primary.with_alpha(ALPHA_55).hsla() } else { gpui::transparent_black() })
+                    .when(!on, |el| el.hover(|s| s.bg(p.surface_container_high.hsla())))
                     .when(!enabled || plugin_off, |el| el.opacity(DISABLED_OPACITY))
                     .child(
                         div()
@@ -617,13 +656,14 @@ impl StudioView {
                                 cx.stop_propagation();
                             })),
                     )
-                    .child(div().text_size(px(TEXT_12_5_PX)).child(name))
+                    .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(TEXT_13_PX)).when(on, |el| el.font_weight(FontWeight::MEDIUM)).child(name))
                     .when(w.place.depth == Depth::Front, |el| el.child(div().text_size(px(TEXT_10_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("front"))))
                     .when(plugin_off, |el| el.child(div().text_size(px(TEXT_10_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("plugin off"))))
                     .child(
                         div()
                             .id(SharedString::from(format!("dw-del-{}", w.id)))
-                            .size(px(DIM_22_PX))
+                            .flex_none()
+                            .size(px(DIM_28_PX))
                             .rounded_full()
                             .row()
                             .items_center()
@@ -660,15 +700,17 @@ impl StudioView {
         div()
             .row()
             .flex_col()
-            .gap(px(SPACE_8_PX))
-            .child(div().row().items_center().justify_between().gap(px(SPACE_10_PX)).child(group_title(t("On the desktop (later ones on top)"), p)).children(dedupe))
-            .child(div().row().flex_wrap().gap(px(SPACE_6_PX)).children(chips))
+            .gap(px(SPACE_10_PX))
+            .child(div().row().flex_wrap().items_center().gap(px(SPACE_10_PX)).child(div().flex_1().min_w(px(0.0)).text_size(px(TEXT_13_PX)).font_weight(FontWeight::SEMIBOLD).child(t("On the desktop (later ones on top)"))).children(dedupe))
+            .child(div().row().flex_col().gap(px(SPACE_6_PX)).children(chips))
             .into_any_element()
     }
 
     // ── Editor ───────────────────────────────────────────────────────────
 
-    fn widget_editor(&mut self, w: &DesktopWidget, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    /// The selected widget: Style, Place, Look, Shape and frame, Content,
+    /// then numbers, dates and language, each a card of aligned rows.
+    fn widget_editor(&mut self, w: &DesktopWidget, cfg: &ShellConfig, p: &MandaraPalette, display: &SharedString, cx: &mut Context<Self>) -> AnyElement {
         let id = w.id.clone();
         let place = vec![
             row(p, t("Depth"), choice(&id, "depth", w.place.depth, &[(Depth::Behind, tk("Behind the subject")), (Depth::Front, tk("In front"))], Rc::new(|w, v| w.place.depth = v), p, cx)),
@@ -687,6 +729,7 @@ impl StudioView {
         } else {
             place.push(hint(t("Interactive cards stay upright: they can't be turned or mirrored."), p));
         }
+        let styles = self.style_row(w, p, cx);
         let content = self.content_rows(w, p, cx);
         let text = w.kind.locale().map(|l| text_rows(&id, &w.kind, l, p, cx)).unwrap_or_default();
         let look = match &w.kind {
@@ -697,20 +740,36 @@ impl StudioView {
             WidgetKind::Clock(c) if c.face.depth_style().is_some() => Vec::new(),
             k => k.look().map(|l| self.shape_rows(&id, l, p, cx)).unwrap_or_default(),
         };
-        div()
+        let head = div()
             .row()
-            .flex_col()
-            .gap(px(SPACE_14_PX))
-            .p(px(SPACE_14_PX))
-            .rounded(px(RADIUS_16_PX))
-            .bg(p.surface_container_high.with_alpha(ALPHA_50).hsla())
-            .child(div().text_size(px(TEXT_14_PX)).font_weight(FontWeight::SEMIBOLD).child(widget_label(w, cx)))
-            .child(section(t("Place"), place, p))
-            .when(!content.is_empty(), |el| el.child(section(t("Content"), content, p)))
-            .when(!text.is_empty(), |el| el.child(section(t("Numbers, dates and language"), text, p)))
-            .when(!look.is_empty(), |el| el.child(section(t("Look"), look, p)))
-            .when(!shape.is_empty(), |el| el.child(section(t("Shape and frame"), shape, p)))
-            .into_any_element()
+            .items_center()
+            .gap(px(SPACE_12_PX))
+            .px(px(SPACE_4_PX))
+            .child(div().flex_none().size(px(DIM_40_PX)).rounded(px(RADIUS_14_PX)).bg(p.primary.with_alpha(ALPHA_14).hsla()).row().items_center().justify_center().child(mandara_ui::icons::icon("sliders", ICON_16_PX, p.primary)))
+            .child(div().flex_1().min_w(px(0.0)).truncate().font_family(display.clone()).text_size(px(TEXT_18_PX)).font_weight(FontWeight::MEDIUM).child(widget_label(w, cx)));
+        let style = styles.map(|s| section(t("Style"), vec![s], p));
+        let cards: Vec<(usize, AnyElement)> = [(t("Place"), place), (t("Look"), look), (t("Shape and frame"), shape), (t("Content"), content), (t("Numbers, dates and language"), text)]
+            .into_iter()
+            .filter(|(_, rows)| !rows.is_empty())
+            .map(|(title, rows)| (rows.len(), section(title, rows, p)))
+            .collect();
+        // Wide pages: the cards in two columns, balanced by their rows.
+        let body = if self.page.column_w >= TWO_COLUMNS_FROM_PX && cards.len() > 1 {
+            let sides = super::grid::two_columns(&cards.iter().map(|(n, _)| *n).collect::<Vec<_>>());
+            let column = || div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_14_PX));
+            let (mut a, mut b) = (column(), column());
+            for ((_, card), side) in cards.into_iter().zip(sides) {
+                if side == 0 {
+                    a = a.child(card);
+                } else {
+                    b = b.child(card);
+                }
+            }
+            vec![div().row().cross_start().gap(px(SPACE_14_PX)).child(a).child(b).into_any_element()]
+        } else {
+            cards.into_iter().map(|(_, c)| c).collect()
+        };
+        page_section(head.into_any_element(), style.into_iter().chain(body))
     }
 
     /// The styles of the widget's family, each with its picture: a click
@@ -773,7 +832,7 @@ impl StudioView {
                     .into_any_element(),
             );
         }
-        Some(row(p, t("Style"), div().row().flex_wrap().gap(px(SPACE_8_PX)).children(tiles).into_any_element()))
+        Some(div().row().flex_wrap().gap(px(SPACE_10_PX)).children(tiles).into_any_element())
     }
 
     /// A clock face's own options.
@@ -951,7 +1010,8 @@ impl StudioView {
     /// What the widget shows: its kind's own settings.
     fn content_rows(&mut self, w: &DesktopWidget, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let id = w.id.clone();
-        let mut rows: Vec<AnyElement> = self.style_row(w, p, cx).into_iter().collect();
+        // The family's styles have their own card (widget_editor).
+        let mut rows: Vec<AnyElement> = Vec::new();
         match &w.kind {
             WidgetKind::Clock(c) => {
                 // The depth clock's faces are its styles.
@@ -1451,8 +1511,13 @@ impl StudioView {
 }
 
 /// A titled group of rows in the editor.
+/// One of the editor's cards: its title, then its rows divided by hairlines.
 fn section(title: &str, rows: Vec<AnyElement>, p: &MandaraPalette) -> AnyElement {
-    div().row().flex_col().gap(px(SPACE_8_PX)).child(group_title(title.to_string(), p)).children(rows).into_any_element()
+    card(p)
+        .gap_0()
+        .child(div().pb(px(SPACE_8_PX)).text_size(px(TEXT_14_PX)).font_weight(FontWeight::SEMIBOLD).child(title.to_string()))
+        .children(rows.into_iter().map(|r| div().py(px(SPACE_10_PX)).border_t_1().border_color(p.on_surface.with_alpha(ALPHA_6).hsla()).child(r)))
+        .into_any_element()
 }
 
 fn hint(text: &str, p: &MandaraPalette) -> AnyElement {
@@ -1659,13 +1724,17 @@ fn edit_field(id: &str, f: impl Fn(&mut DesktopWidget, String) + 'static) -> imp
     }
 }
 
+/// A setting: its label in a fixed column, then the control.
 fn row(p: &MandaraPalette, label: &str, control: AnyElement) -> AnyElement {
     div()
         .row()
         .items_center()
-        .gap(px(SPACE_12_PX))
-        .child(div().w(px(DIM_150_PX)).flex_none().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(label.to_string()))
-        .child(div().flex_1().min_w(px(0.0)).child(control))
+        .gap(px(SPACE_18_PX))
+        .min_h(px(DIM_32_PX))
+        .child(div().w(px(ROW_LABEL_W_PX)).flex_none().text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).text_color(p.on_surface.hsla()).child(mandara_ui::bidi::paragraph(label.to_string())))
+        // A row, so segmented choices hug their options instead of
+        // stretching across the card.
+        .child(div().flex_1().min_w(px(0.0)).row().items_center().child(control))
         .into_any_element()
 }
 

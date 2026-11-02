@@ -7768,3 +7768,11 @@
 "App icon shape" = "앱 아이콘 모양"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "런처와 Dock의 모든 앱 아이콘을 같은 모양 위에 놓아 한 세트처럼 보이게 합니다. '테마 그대로'는 각 아이콘을 그려진 그대로 둡니다"
 "Theme's own" = "테마 그대로"
+# ── Launcher & Displays pages ──
+"External monitors over DDC/CI, and how the brightness keys move them" = "DDC/CI로 제어하는 외부 모니터와 밝기 키의 동작"
+"Pin, hide, rename or re-icon apps in the launcher" = "런처에서 앱을 고정하거나 숨기고, 이름이나 아이콘을 바꿉니다"
+"Search & results" = "검색 및 결과"
+"The icon on the bar's launcher button" = "바에 있는 런처 버튼의 아이콘"
+"Turning the launcher on, dimming the screen, the keyboard and how apps start" = "런처 켜기, 화면 어둡게 하기, 키보드, 앱 실행 방식"
+"Warmer colours in the evening, on a schedule" = "저녁에 일정에 맞춰 따뜻한 색으로"
+"What the launcher searches, how results look and how they are ranked" = "런처가 검색하는 대상, 결과의 모양과 순위"

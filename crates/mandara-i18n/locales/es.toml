@@ -7875,6 +7875,14 @@
 "Only on this display" = "Solo en esta pantalla"
 "Show on every display" = "Mostrar en todas las pantallas"
 
+# ── Launcher & Displays pages ──
+"External monitors over DDC/CI, and how the brightness keys move them" = "Monitores externos por DDC/CI y cómo los mueven las teclas de brillo"
+"Pin, hide, rename or re-icon apps in the launcher" = "Fija, oculta, renombra o cambia el icono de las apps en el lanzador"
+"Search & results" = "Búsqueda y resultados"
+"The icon on the bar's launcher button" = "El icono del botón del lanzador en la barra"
+"Turning the launcher on, dimming the screen, the keyboard and how apps start" = "Activar el lanzador, oscurecer la pantalla, el teclado y cómo se abren las apps"
+"Warmer colours in the evening, on a schedule" = "Colores más cálidos por la noche, según un horario"
+"What the launcher searches, how results look and how they are ranked" = "Qué busca el lanzador, cómo se ven los resultados y cómo se ordenan"
 # ── Desktop widget families and styles (#23) ──
 "Digital" = "Digital"
 "Classic analog" = "Analógico clásico"

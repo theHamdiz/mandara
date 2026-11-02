@@ -377,8 +377,20 @@ pub const GUTTER_MEDIUM_BELOW_PX: f32 = 760.0;
 pub const GUTTER_SMALL_PX: f32 = 16.0;
 pub const GUTTER_MEDIUM_PX: f32 = 24.0;
 pub const GUTTER_LARGE_PX: f32 = 40.0;
-/// The page column never grows wider than this (ultra-wide windows centre it).
-pub const PAGE_MAX_W_PX: f32 = 1000.0;
+/// The page column never grows wider than this (ultra-wide windows centre
+/// it). Wide enough that big windows gain grid columns and two-column
+/// settings ([`TWO_COLUMNS_FROM_PX`]); text keeps its own measure
+/// ([`TEXT_MEASURE_PX`]).
+pub const PAGE_MAX_W_PX: f32 = 1840.0;
+/// From this page width on, a page's settings groups sit in two columns.
+pub const TWO_COLUMNS_FROM_PX: f32 = 1180.0;
+/// The longest a settings row's label and help run before wrapping, so
+/// lines stay comfortable to read on wide windows.
+pub const TEXT_MEASURE_PX: f32 = 620.0;
+/// Chip rows (filters, categories): narrower than this they become a
+/// horizontal strip; wider, equal chips on balanced rows ([`CHIP_GRID`]).
+pub const CHIP_STRIP_BELOW_PX: f32 = 820.0;
+pub const CHIP_GRID: CardGrid = CardGrid { min_w: 168.0, max_w: 300.0, gap: SPACE_8_PX };
 /// A grouped-settings card's inner padding (`rows()`, compositor `card()`),
 /// subtracted from the column when a grid sits inside such a card.
 pub const SECTION_CARD_PAD_PX: f32 = 18.0;

@@ -7881,6 +7881,14 @@
 "Only on this display" = "このディスプレイのみ"
 "Show on every display" = "すべてのディスプレイに表示"
 
+# ── Launcher & Displays pages ──
+"External monitors over DDC/CI, and how the brightness keys move them" = "DDC/CI 経由の外部モニターと、明るさキーでの調整"
+"Pin, hide, rename or re-icon apps in the launcher" = "ランチャーのアプリをピン留め・非表示・名前やアイコンの変更"
+"Search & results" = "検索と結果"
+"The icon on the bar's launcher button" = "バーのランチャーボタンのアイコン"
+"Turning the launcher on, dimming the screen, the keyboard and how apps start" = "ランチャーのオン/オフ、画面の暗さ、キーボード、アプリの起動方法"
+"Warmer colours in the evening, on a schedule" = "夕方からスケジュールに合わせて暖かい色に"
+"What the launcher searches, how results look and how they are ranked" = "ランチャーが検索する対象、結果の見た目と並び順"
 # ── Desktop widget families and styles (#23) ──
 "Digital" = "デジタル"
 "Classic analog" = "クラシックなアナログ"
