@@ -116,6 +116,25 @@ fn language_codes() {
 }
 
 #[test]
+fn persian_korean_urdu_and_bengali() {
+    // The desktop's locale picks them; Persian and Urdu read right to left.
+    for (env, lang, rtl, posix) in [("fa_IR.UTF-8", Lang::Fa, true, "fa_IR"), ("ko_KR.UTF-8", Lang::Ko, false, "ko_KR"), ("ur_PK.UTF-8", Lang::Ur, true, "ur_PK"), ("bn_BD.UTF-8", Lang::Bn, false, "bn_BD"), ("bn_IN", Lang::Bn, false, "bn_BD"), ("ur-IN", Lang::Ur, true, "ur_PK")] {
+        assert_eq!(Lang::from_code(env), Some(lang), "{env}");
+        assert_eq!(lang.is_rtl(), rtl, "{env}");
+        assert_eq!(lang.posix(), posix);
+    }
+    assert_eq!([Lang::Fa, Lang::Ko, Lang::Ur, Lang::Bn].map(Lang::native_name), ["فارسی", "한국어", "اردو", "বাংলা"]);
+    // Every language has its own catalog slot, code and sample.
+    let mut codes: Vec<&str> = Lang::ALL.iter().map(|l| l.code()).collect();
+    codes.sort_unstable();
+    codes.dedup();
+    assert_eq!(codes.len(), Lang::ALL.len());
+    for lang in Lang::ALL {
+        assert!((lang as usize) < Lang::ALL.len() && !lang.sample().is_empty(), "{lang:?}");
+    }
+}
+
+#[test]
 fn catalogs_parse_and_keep_placeholders() {
     for lang in Lang::ALL.into_iter().filter(|l| *l != Lang::En) {
         let c = Catalog::parse(source(lang)).unwrap_or_else(|e| panic!("{}: {e}", lang.code()));

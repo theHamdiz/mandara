@@ -117,7 +117,7 @@ fn main() {
                 items: cfg.desktop.widgets.painted().cloned().collect(),
                 weather: Some(("cloud-sun", "23°".into())),
                 h24: cfg.general.clock_24h,
-                rtl: cfg.general.locale.is_arabic(),
+                rtl: cfg.general.locale.is_rtl(),
                 ..Default::default()
             },
         };

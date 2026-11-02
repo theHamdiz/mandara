@@ -86,6 +86,52 @@ pub fn fallback_chain(arabic: &str, installed: &[String]) -> Vec<String> {
     chain
 }
 
+/// Faces for the interface language's script, best first, tried after the
+/// Arabic chain. Without them cosmic-text's own fallback takes a face only
+/// at the exact weight asked for, so semibold Korean or Japanese escaped to
+/// whatever installed face has a 600 (Noto Serif CJK), and Han characters
+/// took the system locale's glyph forms (Simplified Chinese in a Japanese
+/// interface). In the chain each family is asked for its nearest weight.
+pub fn script_families(lang: mandara_i18n::Lang) -> &'static [&'static str] {
+    use mandara_i18n::Lang;
+    match lang {
+        Lang::Ko => &["Noto Sans CJK KR", "Noto Sans KR", "Source Han Sans KR", "Source Han Sans K", "NanumGothic", "UnDotum"],
+        Lang::Ja => &["Noto Sans CJK JP", "Noto Sans JP", "Source Han Sans JP", "Source Han Sans", "IPAexGothic", "IPAGothic"],
+        Lang::Zh => &["Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", "Source Han Sans CN", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei"],
+        Lang::Hi => &["Noto Sans Devanagari", "Noto Sans Devanagari UI", "Lohit Devanagari"],
+        Lang::Bn => &["Noto Sans Bengali", "Noto Sans Bengali UI", "Hind Siliguri", "Lohit Bengali"],
+        _ => &[],
+    }
+}
+
+/// The process-wide fallback chain for an interface in `lang`: the Arabic
+/// chain ([`fallback_chain`]), then the language's script faces
+/// ([`script_families`]). Installed families only, each once. The chain is
+/// consulted by coverage, so the Arabic faces never draw Hangul and the CJK
+/// faces never draw Arabic.
+///
+/// Persian and Urdu read in the Arabic font: Cairo, Alexandria and the Noto
+/// Arabic faces cover their letters (پ چ ژ گ ک ی, ٹ ڈ ڑ ں ے ھ ۃ) and the
+/// Extended Arabic-Indic digits. Noto Nastaliq Urdu can't join the chain:
+/// the text system loads only faces with a Latin `m` (it measures with it),
+/// and Nastaliq's 1.9 em ascent would push every mixed row's baseline down.
+pub fn language_chain(lang: mandara_i18n::Lang, arabic: &str, installed: &[String]) -> Vec<String> {
+    let find = |name: &str| installed.iter().find(|f| f.eq_ignore_ascii_case(name)).cloned();
+    let mut chain = fallback_chain(arabic, installed);
+    for family in script_families(lang).iter().filter_map(|n| find(n)) {
+        if !chain.contains(&family) {
+            chain.push(family);
+        }
+    }
+    chain
+}
+
+/// Installs the fallback chain for the current interface language. Called
+/// when fonts are resolved and again when the language changes.
+pub fn sync_fallbacks(arabic: &str, cx: &App) {
+    gpui_wgpu::set_default_font_fallbacks(language_chain(mandara_i18n::language(), arabic, &cx.text_system().all_font_names()));
+}
+
 /// Scripture faces, best first: Studio downloads the two Amiri families
 /// on demand (Maintenance → Fonts); until then a Naskh, then the Arabic
 /// face, sets the verses.
@@ -148,7 +194,7 @@ impl Fonts {
     /// at any weight renders in an Arabic face.
     pub fn resolve(cfg: &TypographyConfig, cx: &App) -> Self {
         let installed = cx.text_system().all_font_names();
-        gpui_wgpu::set_default_font_fallbacks(fallback_chain(&cfg.arabic_font, &installed));
+        gpui_wgpu::set_default_font_fallbacks(language_chain(mandara_i18n::language(), &cfg.arabic_font, &installed));
         const UI_FALLBACKS: [&str; 5] = ["Inter", "Inter Display", "Cantarell", "Noto Sans", "DejaVu Sans"];
         let ui = pick(&installed, &cfg.ui_font, &UI_FALLBACKS);
         let surface = |family: &str| if family.trim().is_empty() { ui.clone() } else { pick(&installed, family.trim(), &UI_FALLBACKS) };
@@ -200,7 +246,16 @@ mod tests {
     /// Arabic joining forms: without them letters render isolated.
     const JOINING: [&str; 3] = ["init", "medi", "fina"];
 
-    fn system_with_chain() -> Option<(CosmicTextSystem, Vec<String>)> {
+    /// The process-wide chain is shared by every test here: each one holds
+    /// this lock from setting it until its last layout.
+    static CHAIN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn lock_chain() -> std::sync::MutexGuard<'static, ()> {
+        CHAIN_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn system_with_chain() -> Option<(std::sync::MutexGuard<'static, ()>, CosmicTextSystem, Vec<String>)> {
+        let lock = lock_chain();
         let system = CosmicTextSystem::new("IBM Plex Sans");
         let installed = system.all_font_names();
         let chain = fallback_chain("Cairo", &installed);
@@ -209,7 +264,7 @@ mod tests {
             return None;
         }
         gpui_wgpu::set_default_font_fallbacks(chain.clone());
-        Some((system, chain))
+        Some((lock, system, chain))
     }
 
     /// Lays out the sample in `family` at `weight`; returns the faces
@@ -244,7 +299,7 @@ mod tests {
 
     #[test]
     fn arabic_in_a_latin_font_uses_the_arabic_chain_at_every_weight() {
-        let Some((system, chain)) = system_with_chain() else { return };
+        let Some((_chain_lock, system, chain)) = system_with_chain() else { return };
         for family in ["Inter", "JetBrains Mono"] {
             if !system.all_font_names().iter().any(|f| f == family) {
                 continue;
@@ -264,7 +319,7 @@ mod tests {
 
     #[test]
     fn variable_faces_draw_at_the_requested_weight() {
-        let Some((system, _)) = system_with_chain() else { return };
+        let Some((_chain_lock, system, _)) = system_with_chain() else { return };
         let Some(variable) = ["Alexandria", "Cairo"].into_iter().find(|f| system.all_font_names().iter().any(|n| n == f))
         else {
             return;
@@ -281,7 +336,7 @@ mod tests {
 
     #[test]
     fn punctuation_inside_arabic_keeps_its_place() {
-        let Some((system, _)) = system_with_chain() else { return };
+        let Some((_chain_lock, system, _)) = system_with_chain() else { return };
         // RTL: the colon sits left of "مجدول" (its logical predecessor) and
         // right of "التبديل", never past either end of the line.
         let text = "مجدول: التبديل";
@@ -298,7 +353,7 @@ mod tests {
 
     #[test]
     fn numbers_before_arabic_are_laid_out() {
-        let Some((system, _)) = system_with_chain() else { return };
+        let Some((_chain_lock, system, _)) = system_with_chain() else { return };
         // "5 min" in Arabic: the digit run differs from the line's direction.
         let text = "5 د";
         let id = system.font_id(&gpui::font("Inter")).expect("font");
@@ -319,7 +374,7 @@ mod tests {
 
     #[test]
     fn arabic_glued_to_latin_is_shaped_and_ordered() {
-        let Some((system, chain)) = system_with_chain() else { return };
+        let Some((_chain_lock, system, chain)) = system_with_chain() else { return };
         // (text, the word before و, the word after it, right-to-left paragraph)
         let cases = [
             ("الشبكة وBluetooth", "الشبكة", "Bluetooth", true),
@@ -352,7 +407,7 @@ mod tests {
 
     #[test]
     fn arabic_word_spaces_stay_open() {
-        let Some((system, _)) = system_with_chain() else { return };
+        let Some((_chain_lock, system, _)) = system_with_chain() else { return };
         // «البحث في الإعدادات»: Cairo's 0.22 em space made the first two words touch.
         let text = "البحث في الإعدادات";
         let glyphs = positions(&system, text);
@@ -363,6 +418,76 @@ mod tests {
         let tha = text[..space].char_indices().last().map(|(i, _)| i).expect("letter");
         let advance = x_of(tha) - x_of(space);
         assert!(advance >= SAMPLE_PX * MIN_ARABIC_SPACE_EM, "word space only {advance}px at {SAMPLE_PX}px");
+    }
+
+    /// Lays out `text` in Inter at `weight` under `lang`'s chain; returns
+    /// each run's face (family, drawn weight) and whether a glyph is missing.
+    fn script_runs(system: &CosmicTextSystem, text: &str, weight: FontWeight) -> Vec<(String, u16, bool)> {
+        let font = gpui::Font { weight, ..gpui::font("Inter") };
+        let id = system.font_id(&font).expect("font resolves");
+        let layout = system.layout_line(text, px(SAMPLE_PX), &[FontRun { len: text.len(), font_id: id }]);
+        layout
+            .runs
+            .iter()
+            .map(|r| {
+                let (family, drawn, _) = system.face_summary(r.font_id).expect("face");
+                (family, drawn, r.glyphs.iter().any(|g| g.id.0 == 0))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_chain_follows_the_interface_language() {
+        use mandara_i18n::Lang;
+        let installed: Vec<String> = ["Inter", "Cairo", "Noto Sans Arabic", "Noto Nastaliq Urdu", "Noto Sans CJK KR", "Noto Sans CJK JP", "Noto Sans Bengali"].map(String::from).to_vec();
+        // Persian and Urdu read in the Arabic font, like Arabic.
+        assert_eq!(language_chain(Lang::Ur, "Cairo", &installed), ["Cairo", "Noto Sans Arabic"]);
+        assert_eq!(language_chain(Lang::Fa, "Cairo", &installed), language_chain(Lang::Ar, "Cairo", &installed));
+        assert_eq!(language_chain(Lang::Fa, "Cairo", &installed), fallback_chain("Cairo", &installed));
+        // Korean and Bengali add their script after the Arabic chain.
+        assert_eq!(language_chain(Lang::Ko, "Cairo", &installed), ["Cairo", "Noto Sans Arabic", "Noto Sans CJK KR"]);
+        assert_eq!(language_chain(Lang::Ja, "Cairo", &installed).last().map(String::as_str), Some("Noto Sans CJK JP"));
+        assert_eq!(language_chain(Lang::Bn, "Cairo", &installed).last().map(String::as_str), Some("Noto Sans Bengali"));
+        // Nothing installed for a script: the Arabic chain alone.
+        let bare: Vec<String> = ["Inter", "Cairo"].map(String::from).to_vec();
+        assert_eq!(language_chain(Lang::Ko, "Cairo", &bare), ["Cairo"]);
+    }
+
+    /// Persian and Urdu letters beyond Arabic's (and Persian digits), Hangul
+    /// and Bengali render with real glyphs at every weight, in the Arabic
+    /// font or the language's own script face.
+    #[test]
+    fn persian_urdu_korean_and_bengali_render_in_their_faces() {
+        use mandara_i18n::Lang;
+        let _chain_lock = lock_chain();
+        let system = CosmicTextSystem::new("IBM Plex Sans");
+        let installed = system.all_font_names();
+        let cases = [
+            (Lang::Fa, "تنظیمات پچژگکی ۰۱۲۳۴۵۶۷۸۹"),
+            (Lang::Ur, "ترتیبات کھولیں ٹڈڑںےھۃ"),
+            (Lang::Ko, "설정 열기"),
+            (Lang::Bn, "সেটিংস খুলুন"),
+        ];
+        for (lang, text) in cases {
+            let chain = language_chain(lang, "Cairo", &installed);
+            let Some(script_face) = (match lang {
+                Lang::Fa | Lang::Ur => chain.first().cloned(),
+                _ => script_families(lang).iter().find_map(|n| chain.iter().find(|c| c.eq_ignore_ascii_case(n)).cloned()),
+            }) else {
+                eprintln!("{lang:?}: no face for its script installed; skipping");
+                continue;
+            };
+            gpui_wgpu::set_default_font_fallbacks(chain.clone());
+            for weight in WEIGHTS {
+                let runs = script_runs(&system, text, weight);
+                assert!(runs.iter().all(|(_, _, missing)| !missing), "{lang:?} {weight:?}: missing glyphs in {runs:?}");
+                let scripted: Vec<_> = runs.iter().filter(|(family, _, _)| family != "Inter").collect();
+                assert!(!scripted.is_empty(), "{lang:?} {weight:?}: drawn in Inter only");
+                for (family, _, _) in scripted {
+                    assert_eq!(family, &script_face, "{lang:?} {weight:?}: escaped to {family}: {runs:?}");
+                }
+            }
+        }
     }
 
     #[test]

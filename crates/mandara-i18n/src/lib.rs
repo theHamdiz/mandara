@@ -38,10 +38,14 @@ pub enum Lang {
     Ru,
     Hi,
     Id,
+    Fa,
+    Ko,
+    Ur,
+    Bn,
 }
 
 impl Lang {
-    pub const ALL: [Lang; 11] = [Lang::En, Lang::Ar, Lang::Es, Lang::Fr, Lang::De, Lang::Tr, Lang::Ru, Lang::Hi, Lang::Id, Lang::Zh, Lang::Ja];
+    pub const ALL: [Lang; 15] = [Lang::En, Lang::Ar, Lang::Fa, Lang::Ur, Lang::Es, Lang::Fr, Lang::De, Lang::Tr, Lang::Ru, Lang::Hi, Lang::Bn, Lang::Id, Lang::Zh, Lang::Ja, Lang::Ko];
 
     /// ISO 639-1 code.
     pub fn code(self) -> &'static str {
@@ -57,6 +61,10 @@ impl Lang {
             Lang::Ru => "ru",
             Lang::Hi => "hi",
             Lang::Id => "id",
+            Lang::Fa => "fa",
+            Lang::Ko => "ko",
+            Lang::Ur => "ur",
+            Lang::Bn => "bn",
         }
     }
 
@@ -74,6 +82,10 @@ impl Lang {
             Lang::Ru => "Русский",
             Lang::Hi => "हिन्दी",
             Lang::Id => "Bahasa Indonesia",
+            Lang::Fa => "فارسی",
+            Lang::Ko => "한국어",
+            Lang::Ur => "اردو",
+            Lang::Bn => "বাংলা",
         }
     }
 
@@ -90,6 +102,10 @@ impl Lang {
             Lang::Ru => "Russian",
             Lang::Hi => "Hindi",
             Lang::Id => "Indonesian",
+            Lang::Fa => "Persian",
+            Lang::Ko => "Korean",
+            Lang::Ur => "Urdu",
+            Lang::Bn => "Bengali",
         }
     }
 
@@ -107,11 +123,16 @@ impl Lang {
             Lang::Ru => "Привет",
             Lang::Hi => "नमस्ते",
             Lang::Id => "Halo",
+            Lang::Fa => "سلام",
+            Lang::Ko => "안녕하세요",
+            Lang::Ur => "السلام علیکم",
+            Lang::Bn => "হ্যালো",
         }
     }
 
+    /// Right-to-left languages: Arabic, Persian and Urdu.
     pub fn is_rtl(self) -> bool {
-        self == Lang::Ar
+        matches!(self, Lang::Ar | Lang::Fa | Lang::Ur)
     }
 
     /// The POSIX locale used for dates (`ar_EG`, `ja_JP`, …).
@@ -128,6 +149,10 @@ impl Lang {
             Lang::Ru => "ru_RU",
             Lang::Hi => "hi_IN",
             Lang::Id => "id_ID",
+            Lang::Fa => "fa_IR",
+            Lang::Ko => "ko_KR",
+            Lang::Ur => "ur_PK",
+            Lang::Bn => "bn_BD",
         }
     }
 
@@ -222,6 +247,10 @@ fn source(lang: Lang) -> &'static str {
         Lang::Ru => include_str!("../locales/ru.toml"),
         Lang::Hi => include_str!("../locales/hi.toml"),
         Lang::Id => include_str!("../locales/id.toml"),
+        Lang::Fa => include_str!("../locales/fa.toml"),
+        Lang::Ko => include_str!("../locales/ko.toml"),
+        Lang::Ur => include_str!("../locales/ur.toml"),
+        Lang::Bn => include_str!("../locales/bn.toml"),
     }
 }
 

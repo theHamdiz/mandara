@@ -227,7 +227,7 @@ impl TextPainter {
             fonts.db().faces().filter_map(|face| face.families.first().map(|(name, _)| name.clone())).collect();
         installed.sort_unstable();
         installed.dedup();
-        let fallbacks = crate::fonts::fallback_chain(&mandara_config::TypographyConfig::default().arabic_font, &installed);
+        let fallbacks = crate::fonts::language_chain(mandara_i18n::language(), &mandara_config::TypographyConfig::default().arabic_font, &installed);
         Self { fonts, glyphs: SwashCache::new(), shaped: HashMap::new(), fallbacks }
     }
 
@@ -238,13 +238,14 @@ impl TextPainter {
         self.glyphs = SwashCache::new();
     }
 
-    /// Puts `arabic` (the configured Arabic family) first in the fallback chain.
+    /// Puts `arabic` (the configured Arabic family) first in the Arabic part
+    /// of the fallback chain, for the current interface language.
     pub fn set_arabic_font(&mut self, arabic: &str) {
         let mut installed: Vec<String> =
             self.fonts.db().faces().filter_map(|face| face.families.first().map(|(name, _)| name.clone())).collect();
         installed.sort_unstable();
         installed.dedup();
-        let fallbacks = crate::fonts::fallback_chain(arabic, &installed);
+        let fallbacks = crate::fonts::language_chain(mandara_i18n::language(), arabic, &installed);
         if fallbacks != self.fallbacks {
             self.fallbacks = fallbacks;
             self.shaped.clear();

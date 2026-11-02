@@ -2,8 +2,10 @@
 //!
 //! * **run** — runtime libraries (always; a failure stops the install);
 //! * **build** — the toolchain for source builds (`--from-source` only);
-//! * **opt** — fonts, desktop portals, extra Vulkan drivers, colour emoji,
-//!   icons and `xdg-utils`;
+//! * **opt** — fonts (every interface language's script: Arabic, Persian
+//!   and Urdu, CJK, Devanagari and Bengali; distributions that split Noto
+//!   by script list each one), desktop portals, extra Vulkan drivers,
+//!   colour emoji, icons and `xdg-utils`;
 //! * **svc** — the system services Studio and the plugins talk to, the same
 //!   set on every family: AccountsService (Users), GeoClue (location), the
 //!   freedesktop sound theme (event sounds), UDisks2 (drives), UPower +
@@ -58,7 +60,7 @@ const DEBIAN: PackageSet = PackageSet {
 const FEDORA: PackageSet = PackageSet {
     run: &["libxkbcommon", "libwayland-client", "vulkan-loader", "mesa-vulkan-drivers", "fontconfig", "freetype"],
     build: &["gcc", "gcc-c++", "make", "git", "curl", "pkgconf-pkg-config", "cmake", "libxkbcommon-devel", "wayland-devel", "fontconfig-devel", "freetype-devel"],
-    opt: &["xdg-desktop-portal", "xdg-desktop-portal-gtk", "google-noto-sans-fonts", "google-noto-sans-arabic-fonts", "google-noto-sans-cjk-fonts", "rsms-inter-fonts", "jetbrains-mono-fonts", "pipewire-pulseaudio", "google-noto-color-emoji-fonts", "papirus-icon-theme", "xdg-utils"],
+    opt: &["xdg-desktop-portal", "xdg-desktop-portal-gtk", "google-noto-sans-fonts", "google-noto-sans-arabic-fonts", "google-noto-sans-bengali-fonts", "google-noto-sans-cjk-fonts", "rsms-inter-fonts", "jetbrains-mono-fonts", "pipewire-pulseaudio", "google-noto-color-emoji-fonts", "papirus-icon-theme", "xdg-utils"],
     svc: &["accountsservice", "geoclue2", "sound-theme-freedesktop", "udisks2", "upower", "power-profiles-daemon", "i2c-tools", "NetworkManager-openvpn", "pipewire", "wireplumber", "NetworkManager", "bluez", "polkit", "gnome-keyring", "gnome-keyring-pam"],
     greeter: GREETD_CAGE,
 };
@@ -66,7 +68,7 @@ const FEDORA: PackageSet = PackageSet {
 const SUSE: PackageSet = PackageSet {
     run: &["libxkbcommon0", "libwayland-client0", "libvulkan1", "Mesa-vulkan-device-select", "fontconfig", "libfreetype6"],
     build: &["gcc", "gcc-c++", "make", "git", "curl", "pkgconf", "cmake", "libxkbcommon-devel", "wayland-devel", "fontconfig-devel", "freetype2-devel"],
-    opt: &["xdg-desktop-portal", "xdg-desktop-portal-gtk", "google-noto-sans-fonts", "noto-sans-arabic-fonts", "noto-sans-cjk-fonts", "inter-fonts", "jetbrains-mono-fonts", "pipewire-pulseaudio", "libvulkan_radeon", "libvulkan_intel", "noto-coloremoji-fonts", "papirus-icon-theme", "xdg-utils"],
+    opt: &["xdg-desktop-portal", "xdg-desktop-portal-gtk", "google-noto-sans-fonts", "noto-sans-arabic-fonts", "noto-sans-bengali-fonts", "noto-sans-cjk-fonts", "inter-fonts", "jetbrains-mono-fonts", "pipewire-pulseaudio", "libvulkan_radeon", "libvulkan_intel", "noto-coloremoji-fonts", "papirus-icon-theme", "xdg-utils"],
     svc: &["accountsservice", "geoclue2", "sound-theme-freedesktop", "udisks2", "upower", "power-profiles-daemon", "i2c-tools", "NetworkManager-openvpn", "pipewire", "wireplumber", "NetworkManager", "bluez", "polkit", "gnome-keyring", "gnome-keyring-pam"],
     greeter: GREETD_CAGE,
 };
@@ -83,7 +85,7 @@ const VOID: PackageSet = PackageSet {
 const ALPINE: PackageSet = PackageSet {
     run: &["libxkbcommon", "wayland-libs-client", "vulkan-loader", "mesa-dri-gallium", "fontconfig", "freetype"],
     build: &["build-base", "git", "curl", "pkgconf", "cmake", "libxkbcommon-dev", "wayland-dev", "fontconfig-dev", "freetype-dev"],
-    opt: &["xdg-desktop-portal", "xdg-desktop-portal-gtk", "font-noto", "font-noto-arabic", "font-noto-cjk", "font-inter", "font-jetbrains-mono", "mesa-vulkan-ati", "mesa-vulkan-intel", "pipewire-pulse", "font-noto-emoji", "papirus-icon-theme", "xdg-utils"],
+    opt: &["xdg-desktop-portal", "xdg-desktop-portal-gtk", "font-noto", "font-noto-arabic", "font-noto-bengali", "font-noto-cjk", "font-inter", "font-jetbrains-mono", "mesa-vulkan-ati", "mesa-vulkan-intel", "pipewire-pulse", "font-noto-emoji", "papirus-icon-theme", "xdg-utils"],
     svc: &["accountsservice", "geoclue", "sound-theme-freedesktop", "udisks2", "upower", "power-profiles-daemon", "i2c-tools", "networkmanager-openvpn", "pipewire", "wireplumber", "networkmanager", "bluez", "polkit", "gnome-keyring"],
     greeter: GREETD_CAGE,
 };

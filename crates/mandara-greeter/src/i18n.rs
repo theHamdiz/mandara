@@ -21,6 +21,10 @@ fn source(lang: Lang) -> &'static str {
         Lang::Ru => include_str!("../locales/ru.toml"),
         Lang::Hi => include_str!("../locales/hi.toml"),
         Lang::Id => include_str!("../locales/id.toml"),
+        Lang::Fa => include_str!("../locales/fa.toml"),
+        Lang::Ko => include_str!("../locales/ko.toml"),
+        Lang::Ur => include_str!("../locales/ur.toml"),
+        Lang::Bn => include_str!("../locales/bn.toml"),
     }
 }
 

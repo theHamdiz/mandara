@@ -11,7 +11,7 @@ Key facts:
 - Command line: almost everything the interface does is a documented command with JSON replies (`mandara msg <command>`, catalog via `mandara commands --json`), so scripts and AI agents can drive and inspect the desktop.
 - Plugins: 73 first-party plugins are built in. Third-party plugins are written in Rust, compiled to a sandboxed WebAssembly component (`wasm32-wasip2`, WIT interface), hot-reloaded, and shared through a GitHub marketplace.
 - Performance: under 100 MiB RAM, under 190 MiB video memory and about 0.1 % CPU when idle. Nothing animates or samples while it is off screen.
-- Design: spring-physics animation, Material You (HCT) palettes from the wallpaper, OKLCH color blending, light and dark themes, 11 interface languages including right-to-left Arabic and Bahasa Indonesia.
+- Design: spring-physics animation, Material You (HCT) palettes from the wallpaper, OKLCH color blending, light and dark themes, 15 interface languages including right-to-left Arabic, Persian and Urdu.
 
 ## Docs
 

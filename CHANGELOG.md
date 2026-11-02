@@ -6,6 +6,19 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Mandara speaks Persian, Korean, Urdu and Bengali.** The whole
+  interface, Studio and the login screen, with Persian and Urdu laid out
+  right to left. Pick yours in Studio → General → Language, or leave it on
+  System to follow your desktop.
+
+### Fixed
+
+- Japanese and Chinese text in semibold (headings, the selected row) no
+  longer switches to a serif font. Japanese characters now use their
+  Japanese forms, even when your system language is something else.
+
 ## 0.7.0 — 2026-11-02
 
 Shortcuts cheatsheet. Task progress. Eye breaks. Presentation mode.

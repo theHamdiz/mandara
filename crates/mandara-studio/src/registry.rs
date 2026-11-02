@@ -380,14 +380,19 @@ const LOCALES: &[(&str, &str)] = &[
     ("auto", tk("System")),
     ("english", "English"),
     ("arabic", "العربية"),
+    ("persian", "فارسی"),
+    ("urdu", "اردو"),
     ("spanish", "Español"),
     ("french", "Français"),
     ("german", "Deutsch"),
     ("turkish", "Türkçe"),
     ("russian", "Русский"),
     ("hindi", "हिन्दी"),
+    ("bengali", "বাংলা"),
+    ("indonesian", "Bahasa Indonesia"),
     ("chinese", "简体中文"),
     ("japanese", "日本語"),
+    ("korean", "한국어"),
 ];
 const UNITS: &[(&str, &str)] = &[("metric", tk("Metric (°C, km/h)")), ("imperial", tk("Imperial (°F, mph)"))];
 const WEEK: &[(&str, &str)] = &[("monday", tk("Monday")), ("sunday", tk("Sunday")), ("saturday", tk("Saturday"))];
@@ -996,6 +1001,16 @@ mod tests {
         assert_eq!(with_gaps.compositor.look.gaps_inner, Some(12));
         let with_lat = set(&cfg, lat, Value::from(30.04)).unwrap();
         assert_eq!(with_lat.plugins.setting("prayer-times", "latitude", 0.0), 30.04);
+    }
+
+    #[test]
+    fn every_language_is_a_language_choice() {
+        for lang in mandara_i18n::Lang::ALL {
+            let value = serde_json::to_value(mandara_config::Locale::from_lang(lang)).unwrap();
+            let entry = LOCALES.iter().find(|(v, _)| Some(*v) == value.as_str()).unwrap_or_else(|| panic!("{lang:?} is missing from the language choices"));
+            assert_eq!(entry.1, lang.native_name(), "{lang:?} is named in its own script");
+        }
+        assert_eq!(LOCALES.len(), mandara_i18n::Lang::ALL.len() + 1, "every language plus System");
     }
 
     #[test]

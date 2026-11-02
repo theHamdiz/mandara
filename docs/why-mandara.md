@@ -19,7 +19,7 @@ process, rendered on the GPU and animated with real spring physics.
 <tr><td><b>Compositors</b></td><td>MangoWM (tags), Niri, Hyprland and Umbriel, all first-class, configured non-destructively</td></tr>
 <tr><td><b>Complete</b></td><td>bar, dock, launcher, notifications, sound mixer, lock screen, login manager, wallpaper engine, drag-and-drop app installer and uninstaller, and more</td></tr>
 <tr><td><b>Generative</b></td><td>a built-in <a href="wallpapers.md#wallpaper-generator">wallpaper generator</a>: twelve styles, up to 8K, the smallest lossless files and seamless video loops, all in pure Rust</td></tr>
-<tr><td><b>Global</b></td><td>11 interface languages, including right-to-left Arabic</td></tr>
+<tr><td><b>Global</b></td><td>15 interface languages, including right-to-left Arabic, Persian and Urdu</td></tr>
 <tr><td><b>Live</b></td><td>Mandara Studio: 31 pages of settings, every change applied instantly</td></tr>
 <tr><td><b>Agent-ready</b></td><td>almost everything the UI does is a documented CLI command with JSON replies, so scripts and AI agents can drive and inspect the desktop (<a href="agent-ready.md">how</a>)</td></tr>
 </table>
