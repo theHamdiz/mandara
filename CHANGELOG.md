@@ -73,6 +73,9 @@ developer tools.
 
 ### Changed
 
+- **A quicker start.** Loading the built-in plugins at startup now takes a
+  fraction of the memory work it did (under half a megabyte instead of
+  about 16 MB), so the shell is ready a little sooner.
 - **A roomier clipboard.** Each entry's buttons appear when you point at
   it, so code, links and text use the whole width of the row. Pinned and
   collected entries keep a small mark. Code previews are only as tall as

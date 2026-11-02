@@ -245,9 +245,12 @@ pub struct Resolved<'a> {
 impl CommandRegistry {
     pub fn register(&mut self, owner: &str, mut spec: CommandSpec) {
         spec.owner = owner.to_string();
-        self.commands.retain(|c| c.path != spec.path);
-        self.commands.push(spec);
-        self.commands.sort_by(|a, b| a.path.cmp(b.path));
+        // Kept sorted by path: insert in place (re-sorting on every
+        // registration allocated a merge buffer each time).
+        match self.commands.binary_search_by(|c| c.path.cmp(spec.path)) {
+            Ok(i) => self.commands[i] = spec,
+            Err(i) => self.commands.insert(i, spec),
+        }
     }
 
     pub fn all(&self) -> &[CommandSpec] {
