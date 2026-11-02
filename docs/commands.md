@@ -300,6 +300,8 @@ mandara msg breaks status            # now [short|long], skip, snooze [minutes],
 mandara msg presentation toggle      # on, off, status
 mandara msg share clipboard          # text <text>, file <path>, screenshot, stop, status
 mandara msg jannah today             # next, prev, show <ref>, search <query>, paths, step [done], saved
+mandara msg quran read 2:255           # surahs, today, search <q>, play <ref|surah>, pause, resume, stop, bookmark add|remove <ref>, download, status, remove
+mandara msg hadith show bukhari 1      # collections, download|remove <collection|all>, today, search <q> [--collection c] [--grade g], bookmarks
 ```
 
 ## Compositor and Config doctor

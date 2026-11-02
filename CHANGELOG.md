@@ -51,6 +51,10 @@ developer tools.
   meaning and one good step for today, in the bar, the sidebar or on the
   desktop. Switched off by default; turn it on in Studio → Plugins.
 
+- **Qur'an** and **Hadith**. Two companion plugins: a Qur'an reader with
+  recitation, and a library of the hadith collections. Both are switched off
+  by default and download their content only when you turn them on.
+
 - **Mandara speaks Bahasa Indonesia.** The whole interface, Studio and the
   login screen are translated, and dates follow Indonesian conventions.
   Pick it in Studio → General → Language, or let Mandara follow your

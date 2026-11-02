@@ -21,7 +21,7 @@ handbook) sit beside it.
 </tr>
 </table>
 
-The 71 first-party plugins (35 of them ship switched off, marked *opt-in*):
+The 73 first-party plugins (37 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -35,6 +35,8 @@ The 71 first-party plugins (35 of them ship switched off, marked *opt-in*):
 | **Media** | MPRIS now playing and controls |
 | **Prayer times** | Islamic daily prayer times and countdown *(opt-in)* |
 | **Jannah** | A gentle daily reminder of Jannah: verses of the Qur'an and hadith from Sahih al-Bukhari and Sahih Muslim, their meaning in your language, and one good step for today, in the bar, the sidebar or on the desktop *(opt-in)* |
+| **Qur'an** | Read the whole Qur'an with its meaning in your language and listen to it recited ayah by ayah, keep your place, your bookmarks and your khatm; the text downloads only once you turn it on *(opt-in)* |
+| **Hadith** | A library of the hadith collections (Bukhari and Muslim, and the Sunan when you want them) with grades, a hadith of the day, search and bookmarks; collections download only once you turn it on *(opt-in)* |
 | **Resources** | CPU, memory and disk usage |
 | **Mini stats** | CPU, memory, network, temperature and battery as compact numbers in the bar *(opt-in)* |
 | **Process hunter** | Find running processes by name or PID and end them | *(opt-in)*
@@ -122,7 +124,7 @@ the process hunter, the authenticator, soundscapes, world clock, network
 speed, the color picker, Pomodoro, notes, to-do, privacy, the app
 installer, the shortcuts cheatsheet, task progress, eye breaks,
 presentation mode, share to phone, Tailscale, the uptime monitor, local
-AI, listening ports, Git repositories, CI status, crash reports and Jannah.
+AI, listening ports, Git repositories, CI status, crash reports, Jannah, the Qur'an and Hadith.
 Turn any of them on in Studio → Plugins or with
 `mandara msg plugins enable <id>`. **Upgrading from 0.1 changes nothing you
 had:** a config written before these defaults keeps every plugin it had on
