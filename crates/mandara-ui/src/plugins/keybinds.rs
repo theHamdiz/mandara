@@ -112,7 +112,9 @@ fn mandara_entries(cfg: &ShellConfig, skip: &[String], cx: &App) -> Vec<Entry> {
             let (action, description) = match &b.action {
                 BindAction::Mandara(words) => {
                     let w: Vec<String> = words.split_whitespace().map(String::from).collect();
-                    let summary = registry.resolve(&w).map(|r| t(r.spec.summary).to_string()).unwrap_or_else(|_| words.clone());
+                    let summary = kb::mandara_label(words)
+                        .map(str::to_string)
+                        .unwrap_or_else(|| registry.resolve(&w).map(|r| t(r.spec.summary).to_string()).unwrap_or_else(|_| words.clone()));
                     (format!("mandara msg {words}"), summary)
                 }
                 BindAction::Spawn(cmd) => (cmd.clone(), tf("Run {program}", &[("program", &cmd)])),

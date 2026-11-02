@@ -371,6 +371,41 @@ pub fn describe(action: &str) -> Option<String> {
     })
 }
 
+/// A short name for a Mandara command a key runs (`panel toggle clipboard`
+/// → "Clipboard history"); `None` for commands without one, which then
+/// show their catalog summary.
+pub fn mandara_label(words: &str) -> Option<&'static str> {
+    let words = words.split_whitespace().collect::<Vec<_>>().join(" ");
+    Some(t(match words.as_str() {
+        "launcher toggle" => tk("Launcher"),
+        "sidebar toggle" => tk("Sidebar"),
+        "session menu toggle" => tk("Power menu"),
+        "screenshot region" => tk("Screenshot of a region"),
+        "screenshot screen" => tk("Screenshot of the screen"),
+        "screenshot window" => tk("Screenshot of a window"),
+        "record region" => tk("Record a region"),
+        "record stop" => tk("Stop recording"),
+        "panel toggle clipboard" => tk("Clipboard history"),
+        "theme mode toggle" => tk("Light / dark"),
+        "wallpaper picker toggle" => tk("Wallpaper picker"),
+        "switcher next" => tk("Next window (Alt+Tab)"),
+        "switcher prev" => tk("Previous window"),
+        "audio mute-all toggle" => tk("Mute all sound"),
+        "audio volume up" => tk("Volume up"),
+        "audio volume down" => tk("Volume down"),
+        "audio mic mute" => tk("Mute the microphone"),
+        "brightness up" => tk("Brightness up"),
+        "brightness down" => tk("Brightness down"),
+        "media play-pause" => tk("Play / pause"),
+        "media next" => tk("Next track"),
+        "media previous" => tk("Previous track"),
+        "pomodoro toggle" => tk("Pomodoro"),
+        "keybinds toggle" => tk("Shortcuts cheatsheet"),
+        "studio" => tk("Mandara Studio"),
+        _ => return None,
+    }))
+}
+
 /// One line of the cheatsheet.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Entry {
@@ -431,6 +466,17 @@ pub fn grouped(entries: &[Entry]) -> Vec<(Group, Vec<&Entry>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_default_bind_has_a_short_name() {
+        for b in mandara_config::compositor::default_keybinds() {
+            if let mandara_config::compositor::BindAction::Mandara(words) = &b.action {
+                assert!(mandara_label(words).is_some(), "no label for `{words}`");
+            }
+        }
+        assert_eq!(mandara_label("panel  toggle clipboard"), Some("Clipboard history"));
+        assert_eq!(mandara_label("weather refresh"), None);
+    }
 
     #[test]
     fn chords_split_into_ordered_keycaps() {
