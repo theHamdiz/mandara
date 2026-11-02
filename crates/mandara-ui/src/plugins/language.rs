@@ -88,6 +88,10 @@ fn badge(lang: Lang) -> &'static str {
         Lang::De => "DE",
         Lang::Tr => "TR",
         Lang::Id => "ID",
+        Lang::Fa => "FA",
+        Lang::Ko => "KO",
+        Lang::Ur => "UR",
+        Lang::Bn => "BN",
     }
 }
 

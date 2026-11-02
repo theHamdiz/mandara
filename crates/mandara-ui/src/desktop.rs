@@ -218,7 +218,7 @@ pub fn date_line(cfg: &ShellConfig, show_weather: bool, cx: &App) -> DateLine {
     let (latin, _) = crate::plugins::prayer::HIJRI_MONTHS[m.clamp(1, crate::plugins::prayer::HIJRI_MONTHS.len()) - 1];
     // The depth clock's own digits, calendar and language.
     let clock = cfg.desktop.widgets.depth_clock().map(|(_, c)| c.clone()).unwrap_or_else(|| mandara_config::desktop_widgets::ClockWidget::with_face(mandara_config::desktop_widgets::ClockFace::from_depth_style(cfg.wallpaper.clock_style)));
-    let probe = crate::backdrop::widgets::lingo::Lingo::of(&clock.locale, cfg.general.locale.is_arabic(), None);
+    let probe = crate::backdrop::widgets::lingo::Lingo::of(&clock.locale, cfg.general.locale.is_rtl(), None);
     let l = crate::backdrop::widgets::lingo::Lingo { eastern: clock.eastern(probe.arabic()), ..probe };
     let weather = show_weather
         .then(|| crate::hub::hub(cx).read(cx).weather.weather.clone())

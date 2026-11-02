@@ -18,7 +18,7 @@
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-5B4FE9" alt="GPU rendered"/></a>
   <a href="docs/install.md#mangowm-niri-hyprland-and-umbriel"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel-first--class-0A7EA4" alt="MangoWM, Niri, Hyprland, Umbriel"/></a>
   <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-73%20built--in%20%2B%20WebAssembly-8250DF" alt="73 plugins plus WebAssembly"/></a>
-  <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-11%20%C2%B7%20RTL%20Arabic-0E7C86" alt="11 languages"/></a>
+  <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-15%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-0E7C86" alt="15 languages"/></a>
   <br/>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/RAM-under%20100%20MiB-2EA44F" alt="RAM under 100 MiB"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/VRAM-under%20190%20MiB-2EA44F" alt="VRAM under 190 MiB"/></a>
@@ -79,7 +79,7 @@ widget can be moved, resized and restyled right on the desktop.
 | **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`) |
 | **Automation** | `mandara msg <command>` with JSON replies; `mandara commands --json` lists them all |
 | **Plugins** | 73 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
-| **Languages** | 11, including right-to-left Arabic and Bahasa Indonesia |
+| **Languages** | 15, including right-to-left Arabic, Persian and Urdu |
 | **License** | GPL-3.0-or-later |
 
 ## Why you'll like it
@@ -103,8 +103,8 @@ widget can be moved, resized and restyled right on the desktop.
 - **It welcomes you in.** A matching lock screen and login screen with
   your own wallpaper, and ready-made looks for both.
   [Lock screen and login](docs/lock-and-login.md)
-- **It speaks your language.** Eleven languages, with Arabic laid out right
-  to left. [Languages](docs/languages.md)
+- **It speaks your language.** Fifteen languages, with Arabic, Persian
+  and Urdu laid out right to left. [Languages](docs/languages.md)
 - **It plays well with scripts and AI agents.** Nearly everything the
   interface does is also a command with JSON replies.
   [Automation](docs/agent-ready.md)

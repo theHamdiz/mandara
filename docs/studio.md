@@ -46,7 +46,7 @@ recent changes with Undo, and a card per group), and
 its sidebar groups 31 pages into **Look & feel**, **Desktop**, **System**,
 **Security & accounts**, **Extend** and **Mandara**: collapsible, searchable
 across every setting, keyboard-driven (Ctrl+F, Alt+↑/↓) and mirrored for
-Arabic. Every page is responsive, from an icon rail and one column to
+Arabic, Persian and Urdu. Every page is responsive, from an icon rail and one column to
 ultra-wide.
 
 - **Look & feel**: appearance and palette tuning, themes with live mock-ups,
@@ -89,7 +89,7 @@ lists and dialogs) has a slim overlay scroll bar on its end edge: it shows
 while you scroll or point at the edge, widens under the pointer, can be
 dragged or clicked to jump, and fades out after a moment (at once with
 reduced motion). Under 900 px of window width it becomes an icon
-rail. In Arabic the whole frame mirrors: the sidebar moves to the right and
+rail. In Arabic, Persian and Urdu the whole frame mirrors: the sidebar moves to the right and
 chevrons point the other way.
 
 ## Sections

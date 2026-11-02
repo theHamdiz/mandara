@@ -157,7 +157,7 @@ pub fn register(r: &mut PluginRegistry) {
                     weather: crate::hub::hub(cx).read(cx).weather.weather.clone().map(|w| (crate::plugins::weather::condition_icon(w.condition, w.is_day), cfg.units().format_degrees(w.temp))),
                     units: cfg.units(),
                     h24: cfg.general.clock_24h,
-                    rtl: cfg.general.locale.is_arabic(),
+                    rtl: cfg.general.locale.is_rtl(),
                     ..Default::default()
                 },
             };

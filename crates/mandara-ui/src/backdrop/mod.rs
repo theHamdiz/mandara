@@ -484,7 +484,7 @@ fn build_scene(outputs: &[String], cx: &mut App) -> Scene {
         Vec::new()
     };
     let fonts = FontNames::from(&crate::fonts::fonts(cx));
-    let ui_rtl = cfg.general.locale.is_arabic();
+    let ui_rtl = cfg.general.locale.is_rtl();
     let depth = cfg
         .desktop
         .widgets
@@ -503,7 +503,7 @@ fn build_scene(outputs: &[String], cx: &mut App) -> Scene {
         wallpaper,
         dark,
         h24: cfg.general.clock_24h,
-        rtl: cfg.general.locale.is_arabic(),
+        rtl: cfg.general.locale.is_rtl(),
         displays: cfg.displays.clone(),
         primary: mandara_core::theme_entity(cx).read(cx).target().primary,
         fonts,
@@ -530,7 +530,7 @@ fn widget_scene(cfg: &mandara_config::ShellConfig, outputs: &[String], cx: &mut 
     if items.is_empty() {
         return widgets::WidgetScene::default();
     }
-    let mut ws = widgets::WidgetScene { items, units: cfg.units(), h24: cfg.general.clock_24h, rtl: cfg.general.locale.is_arabic(), week_start: crate::plugins::clock::week_start_days(cx), ..widgets::WidgetScene::default() };
+    let mut ws = widgets::WidgetScene { items, units: cfg.units(), h24: cfg.general.clock_24h, rtl: cfg.general.locale.is_rtl(), week_start: crate::plugins::clock::week_start_days(cx), ..widgets::WidgetScene::default() };
     let palette = mandara_core::theme_entity(cx).read(cx).target().clone();
     ws.on_surface = palette.on_surface;
     ws.surface = palette.surface_container;

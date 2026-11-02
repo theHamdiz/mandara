@@ -197,7 +197,7 @@ setting the shell reads has a control.
 3. A registry entry (`crates/mandara-studio/src/registry*.rs`) on the right
    page; plugin keys go in the plugin's group so they appear in its modal.
 4. Translate the label and help (`MANDARA_I18N_DUMP=1 cargo test -p
-   mandara-i18n`, then the nine catalogs in `crates/mandara-i18n/locales`).
+   mandara-i18n`, then the fourteen catalogs in `crates/mandara-i18n/locales`).
 
 ## Desktop widgets
 

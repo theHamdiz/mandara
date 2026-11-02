@@ -147,7 +147,7 @@ impl ShellConfig {
         match self.sidebar.side {
             SidebarSide::Left => false,
             SidebarSide::Right => true,
-            SidebarSide::Auto => self.general.locale.is_arabic(),
+            SidebarSide::Auto => self.general.locale.is_rtl(),
         }
     }
 
@@ -631,6 +631,10 @@ pub enum Locale {
     Russian,
     Hindi,
     Indonesian,
+    Persian,
+    Korean,
+    Urdu,
+    Bengali,
 }
 
 impl Locale {
@@ -650,6 +654,10 @@ impl Locale {
             Locale::Russian => Lang::Ru,
             Locale::Hindi => Lang::Hi,
             Locale::Indonesian => Lang::Id,
+            Locale::Persian => Lang::Fa,
+            Locale::Korean => Lang::Ko,
+            Locale::Urdu => Lang::Ur,
+            Locale::Bengali => Lang::Bn,
         }
     }
 
@@ -667,11 +675,22 @@ impl Locale {
             Lang::Ru => Locale::Russian,
             Lang::Hi => Locale::Hindi,
             Lang::Id => Locale::Indonesian,
+            Lang::Fa => Locale::Persian,
+            Lang::Ko => Locale::Korean,
+            Lang::Ur => Locale::Urdu,
+            Lang::Bn => Locale::Bengali,
         }
     }
 
-    /// Right-to-left interface (Arabic).
+    /// The interface is in Arabic (Arabic names, Eastern Arabic digits,
+    /// the Arab-world weekend). Persian and Urdu are right to left too but
+    /// not Arabic: see [`Self::is_rtl`].
     pub fn is_arabic(self) -> bool {
+        self.lang() == mandara_i18n::Lang::Ar
+    }
+
+    /// Right-to-left interface (Arabic, Persian, Urdu).
+    pub fn is_rtl(self) -> bool {
         self.lang().is_rtl()
     }
 }

@@ -957,7 +957,7 @@ impl Render for WallpaperView {
         let scale = window.scale_factor();
         let fill = self.fill;
         let layer = |p: &PathBuf, size: (u32, u32)| crate::wallpaper_fill::layer(p, size, fill, (vw, vh), scale);
-        let rtl = cfg.general.locale.is_arabic();
+        let rtl = cfg.general.locale.is_rtl();
         let transition = cfg.wallpaper.transition;
         let fill_bg = (fill != mandara_config::desktop::WallpaperFill::Cover && self.current.is_some()).then(|| crate::wallpaper_fill::fill_color(&cfg.wallpaper.fill_color).hsla());
         div()

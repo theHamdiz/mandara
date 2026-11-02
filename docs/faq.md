@@ -97,10 +97,10 @@ KDE Plasma bring their own shells, and Mandara does not run on X11.
 
 ## Does Mandara support Arabic and other languages?
 
-Yes. The interface comes in eleven languages: English, Arabic, German,
-Spanish, French, Hindi, Indonesian, Japanese, Russian, Turkish and
-Chinese. Arabic is
-laid out right to left, and widgets can show Eastern Arabic digits and the
+Yes. The interface comes in fifteen languages: English, Arabic, Bengali,
+German, Spanish, French, Hindi, Indonesian, Japanese, Korean, Persian,
+Russian, Turkish, Urdu and Chinese. Arabic, Persian and Urdu are laid out
+right to left, and widgets can show Eastern Arabic digits and the
 Hijri calendar. [Languages](languages.md)
 
 ## How do I make Mandara look different?

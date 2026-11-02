@@ -18,6 +18,10 @@ About → What's new shows it too.
   on in Studio → Bar → Side bars (or `mandara msg side-bars on`). While
   they're on they take over the widget sidebar's edge; your sidebar comes
   back just as you left it when you turn them off.
+- **Mandara speaks Persian, Korean, Urdu and Bengali.** The whole
+  interface, Studio and the login screen, with Persian and Urdu laid out
+  right to left. Pick yours in Studio → General → Language, or leave it on
+  System to follow your desktop.
 
 ### Changed
 
@@ -44,6 +48,10 @@ About → What's new shows it too.
   capture toolbar or past the edge of the screen left the selection stuck,
   and the next click didn't capture. The drag now always ends where you
   let go.
+- **Japanese and Chinese stay sans-serif.** Semibold Japanese and Chinese
+  text (headings, the selected row) no longer switches to a serif font, and
+  Japanese characters use their Japanese forms even when your system
+  language is something else.
 
 ## 0.7.0 — 2026-11-02
 

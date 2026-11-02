@@ -501,11 +501,15 @@ pub fn init_language(cx: &mut App) {
     let store = config(cx);
     let mut last = store.read(cx).get().general.locale;
     mandara_i18n::set_language(last.lang());
+    // The font fallback chain follows the language (Urdu's Nastaliq, the
+    // CJK / Bengali / Devanagari faces).
+    crate::fonts::sync_fallbacks(&store.read(cx).get().typography.arabic_font, cx);
     cx.observe(&store, move |store, cx| {
         let locale = store.read(cx).get().general.locale;
         if locale != last {
             last = locale;
             mandara_i18n::set_language(locale.lang());
+            crate::fonts::sync_fallbacks(&store.read(cx).get().typography.arabic_font, cx);
             cx.refresh_windows();
         }
     })
