@@ -1091,8 +1091,8 @@ fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, drag: R
         set_size(&size_cell, panel_height(PanelState::Track, lyrics_rows));
         let shape = PanelShape::of(cx);
         let (attached, bottom_bar) = {
-            let bar = &crate::state::config(cx).read(cx).get().bar;
-            (bar.effective_layout().is_attached() && !bar.position.is_vertical(), bar.position == mandara_config::BarPosition::Bottom)
+            let cfg = crate::state::config(cx).read(cx).get();
+            (cfg.bar_layout().is_attached() && !crate::bar::vertical(cx), cfg.bar.position == mandara_config::BarPosition::Bottom)
         };
         let surface = crate::shell::frame_color(palette);
 

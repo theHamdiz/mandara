@@ -315,6 +315,21 @@ impl SnipView {
         }
     }
 
+    /// The left button came up: keeps a drawn shape, or finishes a
+    /// selection drag (capturing at once with "capture on release").
+    fn end_drag(&mut self, cx: &mut Context<Self>) {
+        let dragged = self.drag_start.take().is_some();
+        if let Some(d) = self.draft.take() {
+            // Ignore accidental clicks.
+            if (d.to.0 - d.from.0).abs() + (d.to.1 - d.from.1).abs() > 6.0 {
+                self.shapes.push(d);
+            }
+        } else if dragged && self.mode == SnipMode::Region && self.shot.capture_on_release && self.candidate().is_some() {
+            self.confirm(cx);
+        }
+        cx.notify();
+    }
+
     fn confirm(&mut self, cx: &mut Context<Self>) {
         self.act(Action::Capture, cx);
     }
@@ -608,6 +623,13 @@ impl Render for SnipView {
             }))
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| {
                 this.pointer = pos(e.position);
+                // The button came up where the overlay never heard it (past
+                // the screen edge): finish the drag now, or the selection
+                // stays stuck to the pointer's last press.
+                if (this.drag_start.is_some() || this.draft.is_some()) && e.pressed_button != Some(MouseButton::Left) {
+                    this.end_drag(cx);
+                    return;
+                }
                 if let (Some(draft), Some(r)) = (this.draft.as_mut(), this.selection) {
                     draft.to = (this.pointer.0.clamp(r.x, r.x + r.w), this.pointer.1.clamp(r.y, r.y + r.h));
                 } else if let (SnipMode::Region, Some(start), true) = (this.mode, this.drag_start, e.pressed_button == Some(MouseButton::Left)) {
@@ -615,17 +637,13 @@ impl Render for SnipView {
                 }
                 cx.notify();
             }))
-            .on_mouse_up(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, cx| {
-                let dragged = this.drag_start.take().is_some();
-                if let Some(d) = this.draft.take() {
-                    // Ignore accidental clicks.
-                    if (d.to.0 - d.from.0).abs() + (d.to.1 - d.from.1).abs() > 6.0 {
-                        this.shapes.push(d);
-                    }
-                } else if dragged && this.mode == SnipMode::Region && this.shot.capture_on_release && this.candidate().is_some() {
-                    this.confirm(cx);
+            // Capture phase: a drag ending over the toolbar or the hints
+            // (dragging to the screen's edge) still ends, before their
+            // buttons see the release.
+            .capture_any_mouse_up(cx.listener(|this, e: &MouseUpEvent, _, cx| {
+                if e.button == MouseButton::Left {
+                    this.end_drag(cx);
                 }
-                cx.notify();
             }))
             .on_mouse_down(MouseButton::Right, cx.listener(|this, _, _, cx| this.pause(Input::Escape, cx)))
             .child(img(ImageSource::Render(self.frozen.clone())).absolute().top_0().left_0().size_full().object_fit(ObjectFit::Fill));

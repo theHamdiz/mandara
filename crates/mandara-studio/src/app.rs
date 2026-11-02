@@ -1103,13 +1103,13 @@ impl StudioView {
     /// Visual icon chooser: bundled set, distro logo, themed suggestions,
     /// live search over the whole icon theme, and a custom path.
     fn icon_picker(&mut self, setting: &Setting, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        const BUNDLED: &[&str] = &["grid", "search", "circle", "sun", "moon", "crescent", "music", "monitor", "image", "note", "bolt", "cloud-sun", "coffee", "power"];
+        const BUNDLED: &[&str] = &[mandara_ui::icons::BRAND_SPEC, "grid", "search", "circle", "sun", "moon", "crescent", "music", "monitor", "image", "note", "bolt", "cloud-sun", "coffee", "power"];
         const SUGGESTED: &[&str] = &[
             "distro", "start-here", "start-here-symbolic", "distributor-logo", "view-app-grid-symbolic", "view-grid-symbolic", "applications-all-symbolic",
             "open-menu-symbolic", "archlinux-logo", "cachyos", "fedora-logo-icon", "ubuntu-logo-icon", "debian-logo", "nix-snowflake", "manjaro",
             "endeavouros", "linuxmint-logo", "pop-os", "opensuse-logo",
         ];
-        let current = registry::get(cfg, setting).as_str().unwrap_or("grid").to_string();
+        let current = registry::get(cfg, setting).as_str().unwrap_or(mandara_ui::icons::BRAND_SPEC).to_string();
         let query = self.icon_query.trim().to_lowercase();
         // Resolved once per query (the full theme listing is thousands of names).
         let theme_names = match &self.icon_matches {
@@ -1416,7 +1416,6 @@ impl StudioView {
                             .gap(px(SPACE_6_PX))
                             .child(div().text_size(px(TEXT_26_PX)).font_weight(FontWeight::BOLD).child(t("Mandara Shell")))
                             .child(div().text_size(px(TEXT_14_PX)).text_color(p.on_surface.with_alpha(ALPHA_85).hsla()).child(mandara_ui::bidi::paragraph(t("A design-first Wayland desktop shell, written entirely in Rust."))))
-                            .child(div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("Named after El-Mandara (المندرة), the coastal district of Alexandria."))))
                             .child(
                                 div()
                                     .pt(px(SPACE_6_PX))
@@ -1833,9 +1832,10 @@ const LOCALE_PATH: &str = "/general/locale";
 /// appearance) doesn't put related ones together. Unlisted groups follow,
 /// in registry order.
 fn group_order(section: Section) -> Option<&'static [&'static str]> {
+    use registry::side_bar_settings::{SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL, SIDE_BAR_SHAPE, SIDE_BARS};
     use registry::surface_settings::{APPEARANCE, PANEL_MOTION, PANELS};
     Some(match section {
-        Section::Bar => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", PANELS, PANEL_MOTION],
+        Section::Bar => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", SIDE_BARS, SIDE_BAR_SHAPE, SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL, PANELS, PANEL_MOTION],
         Section::Launcher => &["Size & placement", "Button", "Results", "Grid", "Beacon search bar", "Search providers", "Ranking", "General", "Starting apps", "Pinned & hidden apps"],
         Section::Themes => &["Mode", "Style", "Tuning", "Accessibility", "Wallpaper colors", "Icons", "Cursor", "App themes"],
         Section::Wallpaper => &["Desktop", "Light & dark", "Video", "Depth clock", "Picker", "Slideshow", "Source", "When to change", "Slideshow transition", "Displays", "Wallhaven"],

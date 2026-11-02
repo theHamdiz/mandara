@@ -53,6 +53,89 @@ fn panel_state(cx: &gpui::App) -> serde_json::Value {
     json!({ "panel": s.panel, "pinned": s.panel_pinned, "floating": crate::floating::live_ids(cx) })
 }
 
+/// `on` / `off` / `toggle` applied to `current`.
+fn switch(arg: Option<&str>, current: bool) -> Result<bool, String> {
+    match arg.unwrap_or("toggle") {
+        "on" => Ok(true),
+        "off" => Ok(false),
+        "toggle" => Ok(!current),
+        other => Err(mandara_i18n::tf("Expected on, off or toggle, not {value}", &[("value", &other)])),
+    }
+}
+
+/// `left` (`false`) or `right` (`true`).
+fn side_arg(arg: &str) -> Result<bool, String> {
+    match arg {
+        "left" => Ok(false),
+        "right" => Ok(true),
+        other => Err(mandara_i18n::tf("Expected left or right, not {value}", &[("value", &other)])),
+    }
+}
+
+/// What `side-bars …` replies: the switches and each side's state.
+fn side_bars_state(cfg: &mandara_config::ShellConfig) -> serde_json::Value {
+    let side = |right: bool| {
+        let s = cfg.side_bars.side(right);
+        json!({ "enabled": s.enabled, "shown": cfg.side_bar_on(right), "pinned": s.pinned, "top": s.top, "middle": s.middle, "bottom": s.bottom })
+    };
+    json!({ "enabled": cfg.side_bars.enabled, "joined": cfg.side_bars.joined, "joins_bar": cfg.side_bars_join(), "left": side(false), "right": side(true) })
+}
+
+/// `side-bars …` / `side-bar …`: the side bars of plugin chips.
+fn side_bar_commands(r: &mut PluginRegistry) {
+    let core = "core";
+    let state_arg = || ArgSpec::optional("state", ArgKind::Enum, mandara_i18n::tk("on, off or toggle (default)")).choices(&["on", "off", "toggle"]);
+    let side = || ArgSpec::required("side", ArgKind::Enum, mandara_i18n::tk("which side bar")).choices(&["left", "right"]);
+    r.command(
+        core,
+        CommandSpec::new("side-bars", mandara_i18n::tk("Turn the left and right side bars of plugin chips on or off (they replace the widget sidebar on their edges)"), |a, cx| {
+            let next = switch(a.get(0), config(cx).read(cx).get().side_bars.enabled)?;
+            update_config(cx, |c| c.side_bars.enabled = next);
+            Ok(side_bars_state(&config(cx).read(cx).snapshot()))
+        })
+        .arg(state_arg())
+        .example("side-bars on"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("side-bars status", mandara_i18n::tk("The side bars' switches, pins and plugins"), |_, cx| Ok(side_bars_state(&config(cx).read(cx).snapshot()))).example("side-bars status"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("side-bars join", mandara_i18n::tk("Join the top bar and the side bars into one frame, or let them float apart"), |a, cx| {
+            let next = switch(a.get(0), config(cx).read(cx).get().side_bars.joined)?;
+            update_config(cx, |c| c.side_bars.joined = next);
+            Ok(side_bars_state(&config(cx).read(cx).snapshot()))
+        })
+        .arg(state_arg())
+        .example("side-bars join off"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("side-bar pin", mandara_i18n::tk("Pin a side bar (it stays and windows tile beside it) or let it slide away until the pointer touches its edge"), |a, cx| {
+            let right = side_arg(a.str(0)?)?;
+            let next = switch(a.get(1), config(cx).read(cx).get().side_bars.side(right).pinned)?;
+            update_config(cx, |c| c.side_bars.side_mut(right).pinned = next);
+            Ok(side_bars_state(&config(cx).read(cx).snapshot()))
+        })
+        .arg(side())
+        .arg(state_arg())
+        .example("side-bar pin right off"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("side-bar show", mandara_i18n::tk("Show or hide one side bar"), |a, cx| {
+            let right = side_arg(a.str(0)?)?;
+            let next = switch(a.get(1), config(cx).read(cx).get().side_bars.side(right).enabled)?;
+            update_config(cx, |c| c.side_bars.side_mut(right).enabled = next);
+            Ok(side_bars_state(&config(cx).read(cx).snapshot()))
+        })
+        .arg(side())
+        .arg(state_arg())
+        .example("side-bar show left off"),
+    );
+}
+
 pub fn register(r: &mut PluginRegistry) {
     let core = "core";
     // Debug builds only: proves a panicking plugin command is isolated.
@@ -421,6 +504,8 @@ pub fn register(r: &mut PluginRegistry) {
         .arg(ArgSpec::required("edge", ArgKind::Enum, mandara_i18n::tk("screen edge")).choices(&["top", "bottom", "left", "right"]))
         .example("bar position left"),
     );
+
+    side_bar_commands(r);
 
     // `bar hide|show|toggle`: until the shell restarts (not saved);
     // touching the bar's edge still peeks it out, as with auto-hide.

@@ -8,8 +8,6 @@
   <b>A beautiful, fast Linux desktop that fits in under 100 MiB of RAM.</b>
   <br/>
   Design-first, spring-animated and written entirely in Rust.
-  <br/>
-  Named after <b>المندرة, El-Mandara</b>, the coastal district of Alexandria.
 </p>
 
 <p align="center">
@@ -87,8 +85,9 @@ widget can be moved, resized and restyled right on the desktop.
 - **It's light.** The whole desktop needs less memory than a browser tab
   and sits at about 0.1 % CPU when idle. [How](docs/performance.md)
 - **It looks the way you want.** Six bar styles (now including a notch that
-  hangs from the top edge), one-click Looks, desktop widgets, a hundred
-  dials for corners, glass and motion, and themes made from your wallpaper.
+  hangs from the top edge), side bars of icons and pills that join the top
+  bar into one frame, one-click Looks, desktop widgets, a hundred dials for
+  corners, glass and motion, and themes made from your wallpaper.
   [Your desktop](docs/desktop.md)
 - **Everything is a click away in Studio.** 31 pages of settings, all
   live: drag a slider and the bar follows as you drag.

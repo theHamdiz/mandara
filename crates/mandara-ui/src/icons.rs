@@ -303,9 +303,14 @@ pub fn dot(color: Color, diameter: f32) -> impl IntoElement {
     div().size(px(diameter)).rounded_full().bg(color.hsla()).flex_none()
 }
 
+/// The spec that draws Mandara's full-colour logo (the launcher button's
+/// default).
+pub const BRAND_SPEC: &str = "mandara";
+
 /// Renders a user-chosen icon spec: a bundled Mandara icon name, `distro`
 /// (the os-release logo), an icon-theme name, or an image path. Symbolic
-/// SVGs tint with `tint`; colour images render as they are.
+/// SVGs tint with `tint`; colour images render as they are. `mandara` is
+/// Mandara's own logo, in colour.
 pub fn any_icon(spec: &str, size: f32, tint: Color) -> gpui::AnyElement {
     any_icon_at(spec, size, size, tint)
 }
@@ -316,6 +321,9 @@ pub fn any_icon(spec: &str, size: f32, tint: Color) -> gpui::AnyElement {
 pub fn any_icon_at(spec: &str, size: f32, decode_size: f32, tint: Color) -> gpui::AnyElement {
     use gpui::{IntoElement as _, ObjectFit, StyledImage as _, img};
     let spec = spec.trim();
+    if spec == BRAND_SPEC {
+        return div().size(px(size)).flex_none().child(img(gpui::ImageSource::from(crate::plugin_art::brand_icon())).size_full().object_fit(ObjectFit::Contain)).into_any_element();
+    }
     if let Some(name) = ICON_NAMES.iter().find(|n| **n == spec) {
         return icon(name, size, tint).into_any_element();
     }

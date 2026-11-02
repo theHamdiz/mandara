@@ -53,7 +53,8 @@ fn cached(id: &str, variant: Variant) -> Option<Arc<Image>> {
     Some(image)
 }
 
-/// The Mandara app icon (256 px), for Studio's About page.
+/// The Mandara app icon (256 px): Studio's About page and the launcher
+/// button's default icon.
 const BRAND_ICON: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/brand/mandara-256.png"));
 
 thread_local! {

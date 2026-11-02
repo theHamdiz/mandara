@@ -19,6 +19,7 @@ assets/artwork/scenes/desktop-weather.jpg
 assets/artwork/scenes/desktop-world-clock.jpg
 assets/artwork/scenes/wallpaper-depth.jpg
 assets/artwork/twilight.png
+assets/brand/mandara-1024.png
 assets/brand/mandara-128.png
 assets/brand/mandara-256.png
 assets/brand/mandara-512.png
@@ -31,7 +32,6 @@ assets/brand/mandara-studio-256.png
 assets/brand/mandara-studio-512.png
 assets/brand/mandara-studio.svg
 assets/brand/mandara-symbolic.svg
-assets/brand/mandara.svg
 assets/catalog.json
 assets/plugins/active-window/cover.png
 assets/plugins/active-window/icon.png

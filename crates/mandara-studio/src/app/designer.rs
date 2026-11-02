@@ -6,6 +6,7 @@
 
 use mandara_ui::bidi::Bidi as _;
 use gpui::{AnyElement, App, AppContext as _, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px};
+use mandara_config::side_bars::SideZone;
 use mandara_config::{BarLayout, BarPosition, ShellConfig};
 use mandara_core::ToGpui;
 use mandara_i18n::{t, tk, tr};
@@ -27,6 +28,8 @@ pub enum Lane {
     Sidebar,
     /// One sidebar tab, by index.
     Tab(usize),
+    /// A group of the left (`false`) or right side bar.
+    Side(bool, SideZone),
     Tray,
 }
 
@@ -36,6 +39,7 @@ impl Lane {
             Lane::Left => Some(&mut c.bar.left),
             Lane::Center => Some(&mut c.bar.center),
             Lane::Right => Some(&mut c.bar.right),
+            Lane::Side(right, zone) => Some(c.side_bars.side_mut(right).zone_mut(zone)),
             Lane::Sidebar => c.sidebar.tabs.first_mut().map(|t| &mut t.cards),
             Lane::Tab(i) => c.sidebar.tabs.get_mut(i).map(|t| &mut t.cards),
             Lane::Tray => None,
@@ -351,7 +355,9 @@ impl StudioView {
     /// The bar designer with presets (Studio → Bar).
     pub(super) fn bar_designer(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let registry = cx.global::<PluginRegistry>();
-        let placed: Vec<&String> = cfg.bar.left.iter().chain(&cfg.bar.center).chain(&cfg.bar.right).collect();
+        let sides = cfg.side_bars.enabled;
+        let side_ids = [&cfg.side_bars.left, &cfg.side_bars.right].into_iter().filter(|_| sides).flat_map(|s| s.zones().into_iter().flatten());
+        let placed: Vec<&String> = cfg.bar.left.iter().chain(&cfg.bar.center).chain(&cfg.bar.right).chain(side_ids).collect();
         let mut tray: Vec<String> = registry
             .manifests()
             .filter(|m| !NO_BAR.contains(&m.id.as_str()) && !placed.contains(&&m.id) && !cfg.plugins.is_removed(&m.id))
@@ -418,6 +424,38 @@ impl StudioView {
             .child(self.lane(Lane::Left, tk("Left"), &cfg.bar.left, false, p, cx))
             .child(self.lane(Lane::Center, tk("Center"), &cfg.bar.center, false, p, cx))
             .child(self.lane(Lane::Right, tk("Right"), &cfg.bar.right, false, p, cx));
+        // With side bars on, their groups flank the screen under the bar,
+        // like the frame they make on the desktop.
+        let bar = if sides {
+            let mut side_col = |right: bool, title: &'static str| {
+                let s = cfg.side_bars.side(right);
+                div()
+                    .w(px(DIM_180_PX))
+                    .flex_none()
+                    .row()
+                    .flex_col()
+                    .gap(px(SPACE_6_PX))
+                    .when(!s.enabled, |el| el.opacity(ALPHA_60))
+                    .child(div().px(px(SPACE_6_PX)).text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(title))))
+                    // (Each lane in its own box: a lane grows to fit its
+                    // chips instead of sharing the column's height.)
+                    .child(div().child(self.lane(Lane::Side(right, SideZone::Top), tk("Top"), &s.top, false, p, cx)))
+                    .child(div().child(self.lane(Lane::Side(right, SideZone::Middle), tk("Middle"), &s.middle, false, p, cx)))
+                    .child(div().child(self.lane(Lane::Side(right, SideZone::Bottom), tk("Bottom"), &s.bottom, false, p, cx)))
+            };
+            let (left, right) = (side_col(false, tk("Left side bar")), side_col(true, tk("Right side bar")));
+            let frame = div()
+                .ltr_row()
+                .when(self.stack_rows, |el| el.flex_col())
+                .gap(px(SPACE_8_PX))
+                .child(left)
+                // The screen between them.
+                .child(div().flex_1().min_h(px(DIM_120_PX)).rounded(px(RADIUS_16_PX)).bg(p.on_surface.with_alpha(ALPHA_3).hsla()))
+                .child(right);
+            div().row().flex_col().gap(px(SPACE_8_PX)).child(bar).child(div().rounded(px(RADIUS_20_PX)).p(px(SPACE_10_PX)).bg(p.surface_container.hsla()).child(frame)).into_any_element()
+        } else {
+            bar.into_any_element()
+        };
         let tray_el = self.lane(Lane::Tray, tk("All plugins — drag onto the bar (turns it on), or drop here to remove"), &tray, false, p, cx);
         let header = |title: &'static str, sub: &'static str| {
             div()

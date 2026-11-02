@@ -81,6 +81,8 @@ pub struct ShellConfig {
     pub integrations: IntegrationsConfig,
     pub plugins: PluginsConfig,
     pub sidebar: SidebarConfig,
+    /// The left and right side bars of plugin chips (`crate::side_bars`).
+    pub side_bars: crate::side_bars::SideBarsConfig,
     /// Drop-down panels opened from the bar (`crate::surfaces`).
     pub panels: crate::surfaces::PanelsConfig,
     pub edges: EdgeTriggers,
@@ -154,9 +156,10 @@ impl ShellConfig {
     pub fn dock_sanitized(&self) -> crate::dock::DockConfig {
         use crate::dock::DockPosition;
         let mut d = self.dock.sanitized();
-        let taken = match self.bar.position {
-            BarPosition::Left => d.position == DockPosition::Left,
-            BarPosition::Right => d.position == DockPosition::Right,
+        // (Side bars from `[side_bars]` hold their edges too.)
+        let taken = match d.position {
+            DockPosition::Left => self.bar.position == BarPosition::Left || self.side_bar_on(false),
+            DockPosition::Right => self.bar.position == BarPosition::Right || self.side_bar_on(true),
             _ => false,
         };
         if taken {
@@ -606,7 +609,7 @@ pub struct AppearanceConfig {
 
 impl Default for AppearanceConfig {
     fn default() -> Self {
-        Self { icon_theme: None, bar_icons: IconStyle::Monochrome, launcher_icons: IconStyle::Color, launcher_icon: "grid".into() }
+        Self { icon_theme: None, bar_icons: IconStyle::Monochrome, launcher_icons: IconStyle::Color, launcher_icon: "mandara".into() }
     }
 }
 

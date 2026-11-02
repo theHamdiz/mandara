@@ -276,19 +276,27 @@ pub struct PanelShape {
 }
 
 impl PanelShape {
+    /// The silhouette of the panel being drawn (one opened from a side bar
+    /// beside a top bar is free at both ends, see [`crate::bar::vertical`]).
     pub fn of(cx: &App) -> Self {
-        Self::for_config(crate::state::config(cx).read(cx).get())
+        Self::with_axis(crate::state::config(cx).read(cx).get(), crate::bar::vertical(cx))
     }
 
     /// The silhouette for `cfg`: the panel radius (after the global
     /// roundness) less the panel's inner padding, so content corners stay
     /// concentric with the panel's own.
     pub fn for_config(cfg: &mandara_config::ShellConfig) -> Self {
+        Self::with_axis(cfg, cfg.bar.position.is_vertical())
+    }
+
+    /// [`Self::for_config`] for a panel opened from a side bar (`vertical`)
+    /// or a top / bottom one.
+    fn with_axis(cfg: &mandara_config::ShellConfig, vertical: bool) -> Self {
         let bar = &cfg.bar;
-        let attached = bar.effective_layout().is_attached();
+        let attached = cfg.bar_layout().is_attached();
         let r = crate::style::concentric(crate::style::panel_radius(bar), cfg.panels.padding_for(attached));
         // (Beside a side bar the panel's top and bottom are both free.)
-        if attached && !bar.position.is_vertical() {
+        if attached && !vertical {
             // Attached panels grow out of the bar: square on the bar side.
             if bar.position == mandara_config::BarPosition::Bottom { Self { top: r, bottom: 0.0 } } else { Self { top: 0.0, bottom: r } }
         } else {

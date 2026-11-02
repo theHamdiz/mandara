@@ -20,6 +20,6 @@ pub mod wasm;
 pub use guard::{guard, install_panic_hook};
 pub use command::{ArgKind, ArgSpec, Args, CommandGate, CommandRegistry, CommandSpec, Output};
 pub use plugin::{
-    ClickHandler, DesktopWidgetType, MakeWidgets, ManifestSetting, ManifestText, ManifestWidget, SettingChoice, SettingKind, PanelCx, PanelSpec, PluginFactory, PluginInstance, PluginManifest, PluginOrigin, PluginRegistry,
+    ClickHandler, DesktopWidgetStyle, DesktopWidgetType, MakeWidgets, ManifestSetting, ManifestText, ManifestWidget, SettingChoice, SettingKind, PanelCx, PanelSpec, PluginFactory, PluginInstance, PluginManifest, PluginOrigin, PluginRegistry,
     Reveal, Zone, discover_third_party, split_settings, split_widgets, valid_settings,
 };

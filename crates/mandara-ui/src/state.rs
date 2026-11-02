@@ -19,6 +19,9 @@ pub struct ShellState {
     /// The open panel is pinned: dismissals leave it open (see
     /// [`crate::floating::dock`]).
     pub panel_pinned: bool,
+    /// The panel was closed for a capture: bars drop it at once instead of
+    /// folding it back, so it is not in the frame. Reset when one opens.
+    pub panel_close_at_once: bool,
     /// The output whose bar shows the open panel (`None`: every bar).
     panel_output: Option<String>,
     /// The output the sidebar was revealed on (`None`: every output).
@@ -49,6 +52,7 @@ impl ShellState {
         let (out, effect) = f(&mut d);
         if d.open.is_some() && d.open != before.open {
             self.panel_output = self.opening_output(cx);
+            self.panel_close_at_once = false;
         }
         if d != before {
             self.snap_open = None;
@@ -83,6 +87,17 @@ impl ShellState {
                 self.dock(cx, |d| ((), d.open(&id, floating)))
             }
         }
+    }
+
+    /// Closes the bar's panel with no closing animation (a screenshot is
+    /// about to be taken). Returns whether one was open.
+    pub fn close_panel_now(&mut self, cx: &mut Context<Self>) -> bool {
+        let open = self.panel.is_some();
+        if open {
+            self.panel_close_at_once = true;
+            self.set_panel(None, cx);
+        }
+        open
     }
 
     /// Closes the open panel unless it is pinned (outside clicks, focus

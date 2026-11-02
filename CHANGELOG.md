@@ -6,6 +6,19 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Side bars.** A slim bar of icons and pills on the left and right
+  edges, holding any plugins you like in three groups; their panels pour
+  out sideways. By default they join the top bar into one frame with
+  curved corners, or they float apart as glass pills, an island or a slab.
+  Pin each one, or let it slide away until your pointer touches its edge,
+  and style them to your heart's content: width, item size and style,
+  corners, glass, rim light, an accent colour per side and more. Turn them
+  on in Studio → Bar → Side bars (or `mandara msg side-bars on`). While
+  they're on they take over the widget sidebar's edge; your sidebar comes
+  back just as you left it when you turn them off.
+
 ### Changed
 
 - **Tidier Launcher and Displays pages in Studio.** The launcher looks are
@@ -15,6 +28,29 @@ About → What's new shows it too.
   switched-off display is easy to pick again), the selected display's
   settings in neat aligned rows, which displays show each part of the
   shell, and your profiles as equal cards with Apply and Delete.
+- **A new logo.** Mandara's logo is now a phoenix rising from a
+  Mediterranean wave, in violet, cyan and silver, and the launcher button
+  in the bar shows it in colour. Prefer another icon? Pick one in Studio →
+  Launcher → Button icon. ([#23](https://github.com/theHamdiz/mandara/issues/23))
+- **A tidier widget gallery.** Look-alike widgets now share one tile in
+  Studio → Desktop widgets: the clocks are Stacked, Headline, Day block,
+  Analog, Digital, Progress, Greeting and Text (plus the depth clock), and
+  the monitors are System monitor and Thermals. Pick a look from the
+  widget's new **Style** row, with a small preview of each; the widget
+  stays where it is and keeps your colours and font. Widgets you already
+  placed keep their exact look. ([#23](https://github.com/theHamdiz/mandara/issues/23))
+
+### Fixed
+
+- **The Screenshot panel gets out of the way at once.** Clicking Region,
+  Window, Screen or Record region in the bar's Screenshot panel used to
+  fold the panel away slowly, so it lingered on screen and could end up in
+  the shot. It now disappears instantly, and the capture waits until it's
+  gone.
+- **A region selection never gets stuck.** Letting go of the mouse over the
+  capture toolbar or past the edge of the screen left the selection stuck,
+  and the next click didn't capture. The drag now always ends where you
+  let go.
 
 ## 0.7.0 — 2026-11-02
 

@@ -54,7 +54,10 @@
   grows out of the bar like a panel (flares on the edge frame, a floating
   card under pills or the island), optionally out of the launcher button
   itself. Pick the spot on a screen diagram in Studio → Launcher, or run
-  `mandara msg launcher placement top-left`.
+  `mandara msg launcher placement top-left`. The launcher button in the bar
+  shows Mandara's logo in colour; Studio → Launcher → Button icon swaps it
+  for a bundled icon, your distribution's logo, any icon from your theme or
+  your own image (`[appearance] launcher_icon`).
   **Three looks, one click each** (Studio → Launcher → Launcher looks, or
   `mandara msg launcher look classic|grid|beacon`; `launcher looks` lists
   them): **Classic** is the list drawer above (the default). **Grid** shows
