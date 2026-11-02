@@ -63,10 +63,19 @@ impl Kiosk {
         }
     }
 
+    /// Whether greetd runs an older command of this kiosk that an update
+    /// replaces: cage without `-m last` stretched the login screen across
+    /// every monitor.
+    pub fn outdated_command(self, command: &str) -> bool {
+        self == Kiosk::Cage && command.trim() == format!("cage -s -- {INSTALLED_EXE} greeter")
+    }
+
     /// greetd's `default_session.command`.
     pub fn command(self) -> String {
         match self {
-            Kiosk::Cage => format!("cage -s -- {INSTALLED_EXE} greeter"),
+            // One output (`-m last`): cage stretches its window across every
+            // monitor otherwise.
+            Kiosk::Cage => format!("cage -s -m last -- {INSTALLED_EXE} greeter"),
             Kiosk::Niri => "niri -c /etc/mandara/greeter-niri.kdl".to_string(),
             Kiosk::Hyprland => format!("Hyprland --config {}", hyprland_greeter_config(hyprland_lua()).0),
         }
@@ -444,7 +453,7 @@ mod tests {
         assert!(out.starts_with(MARKER));
         let t: toml::Table = toml::from_str(&out).unwrap();
         assert_eq!(t["terminal"]["vt"].as_integer(), Some(2));
-        assert_eq!(t["default_session"]["command"].as_str(), Some(format!("cage -s -- {INSTALLED_EXE} greeter").as_str()));
+        assert_eq!(t["default_session"]["command"].as_str(), Some(format!("cage -s -m last -- {INSTALLED_EXE} greeter").as_str()));
         assert_eq!(t["default_session"]["user"].as_str(), Some("greeter"));
         assert_eq!(t["initial_session"]["command"].as_str(), Some("sway"));
     }
@@ -473,6 +482,12 @@ mod tests {
         assert_eq!(Kiosk::parse("hyprland"), Some(Kiosk::Hyprland));
         assert_eq!(Kiosk::parse("weston"), None);
         assert!(Kiosk::Cage.config_file().is_none());
+        // The login screen shows on one monitor, and an update moves older
+        // installs (stretched across every monitor) onto that command.
+        assert!(Kiosk::Cage.command().contains(" -m last "));
+        assert!(Kiosk::Cage.outdated_command(&format!("cage -s -- {INSTALLED_EXE} greeter")));
+        assert!(!Kiosk::Cage.outdated_command(&Kiosk::Cage.command()));
+        assert!(!Kiosk::Niri.outdated_command(&format!("cage -s -- {INSTALLED_EXE} greeter")));
         assert!(Kiosk::Niri.config_file().unwrap().1.contains("spawn-at-startup"));
         assert!(Kiosk::Hyprland.command().contains("--config /etc/mandara/greeter-hyprland."));
         // hyprlang (≤ 0.56): current rule syntax (`windowrulev2` is an error).

@@ -367,7 +367,10 @@ impl ShellView {
         .detach();
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
         cx.observe_in(&shell, window, |this: &mut Self, shell, window, cx| {
-            if shell.read(cx).panel.is_some() || shell.read(cx).sidebar_open {
+            // Only the output showing them takes the keyboard (two bars
+            // focusing at once would steal it from each other).
+            let s = shell.read(cx);
+            if s.panel_on(&this.monitor).is_some() || (s.sidebar_open && s.sidebar_visible_on(&this.monitor)) {
                 this.focus.focus(window, cx);
             }
             cx.notify();
@@ -420,6 +423,12 @@ impl ShellView {
         let monitor_for_autohide = monitor.clone();
         let monitor_for_corners = monitor.clone();
         crate::floating::register_shell(&monitor, cx.weak_entity(), cx);
+        shell.update(cx, |s, _| s.bar_added(&monitor));
+        cx.on_release({
+            let monitor = monitor.clone();
+            move |_, cx| crate::state::shell(cx).update(cx, |s, _| s.bar_gone(&monitor))
+        })
+        .detach();
         Self {
             config,
             shell,
@@ -695,7 +704,7 @@ impl ShellView {
 
     /// Instantiates the plugin of a requested panel that isn't in the bar.
     fn ensure_detached(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(id) = self.shell.read(cx).panel.clone() else { return };
+        let Some(id) = self.shell.read(cx).panel_on(&self.monitor).map(str::to_string) else { return };
         if id == crate::plugins::main_menu::ID || self.find_slot(&id).is_some() || self.detached.as_ref().is_some_and(|(d, _, _)| *d == id) {
             return;
         }
@@ -805,9 +814,12 @@ impl ShellView {
             }
             mandara_config::surfaces::BarRightClick::MainMenu => {
                 let along = if self.metrics.vertical { y } else { x };
-                self.shell.update(cx, |s, cx| {
-                    s.panel_anchor = Some(along);
-                    s.toggle_panel(crate::plugins::main_menu::ID, cx);
+                let shell = self.shell.clone();
+                crate::state::on_bar(&self.monitor, cx, |cx| {
+                    shell.update(cx, |s, cx| {
+                        s.panel_anchor = Some(along);
+                        s.toggle_panel(crate::plugins::main_menu::ID, cx);
+                    })
                 })
             }
         }
@@ -878,7 +890,7 @@ impl ShellView {
         if state.snap_open.is_none() {
             self.landed = None;
         }
-        let wanted = match state.panel.as_deref() {
+        let wanted = match state.panel_on(&self.monitor) {
             Some(id) if id == crate::plugins::main_menu::ID && self.menu.is_some() => {
                 // (Along the bar: x, or y beside a side bar.)
                 self.menu_anchor = state.panel_anchor.unwrap_or(layout::bar_axes(&self.metrics, self.surface).0 / 2.0);
@@ -1070,7 +1082,7 @@ impl ShellView {
             return;
         }
         let state = self.shell.read(cx);
-        if (state.panel.is_some() && !state.panel_pinned) || state.sidebar_visible() {
+        if (state.panel_on(&self.monitor).is_some() && !state.panel_pinned) || state.sidebar_visible_on(&self.monitor) {
             tracing::info!(target: "mandara::dismiss", "dismiss: {reason}");
             self.shell.update(cx, |s, cx| {
                 s.dismiss_panel(cx);
@@ -1179,8 +1191,8 @@ impl Render for ShellView {
         // the desktop's widgets.
         let menu_frost = if self.panel_slot == Some(MENU_SLOT) && cfg.panels.menu_translucent { self.menu_frost(&cfg, window, cx) } else { None };
         let shell_state = self.shell.read(cx);
-        let panel_open = shell_state.panel.is_some();
-        let sidebar_target = if cfg.sidebar.enabled && (cfg.sidebar.pinned() || shell_state.sidebar_visible()) { 1.0 } else { 0.0 };
+        let panel_open = shell_state.panel_on(&self.monitor).is_some();
+        let sidebar_target = if cfg.sidebar.enabled && (cfg.sidebar.pinned() || shell_state.sidebar_visible_on(&self.monitor)) { 1.0 } else { 0.0 };
         self.sidebar.set_target(sidebar_target);
         self.autohide.update(&cfg, &self.monitor, panel_open || sidebar_target > 0.0);
         // The corner tab shows on a settled plugin panel while hovered, and
@@ -1309,8 +1321,8 @@ impl Render for ShellView {
                 this.last_press = Some(Instant::now());
             }))
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
-                let sidebar_up = this.shell.read(cx).sidebar_visible() || crate::state::config(cx).read(cx).get().sidebar.pinned();
-                if sidebar_up && this.shell.read(cx).panel.is_none() {
+                let sidebar_up = this.shell.read(cx).sidebar_visible_on(&this.monitor) || crate::state::config(cx).read(cx).get().sidebar.pinned();
+                if sidebar_up && this.shell.read(cx).panel_on(&this.monitor).is_none() {
                     let cfg = crate::state::config(cx).read(cx).snapshot();
                     let notifications = this.sidebar_notifications.is_some();
                     if this.tabs.handle_key(e, &cfg.sidebar, notifications, cx) {
@@ -1338,7 +1350,7 @@ impl Render for ShellView {
         // sees a hover-out, and a click on the already-focused window gives
         // no focus change either — the sidebar would stay open.
         // A pinned panel lets clicks through to your windows.
-        let catcher_active = (panel_open && !shell_state.panel_pinned) || (cfg.sidebar.enabled && shell_state.sidebar_visible() && !cfg.sidebar.pinned());
+        let catcher_active = (panel_open && !shell_state.panel_pinned) || (cfg.sidebar.enabled && shell_state.sidebar_visible_on(&self.monitor) && !cfg.sidebar.pinned());
         if catcher_active {
             root = root.child(
                 div()
@@ -1716,21 +1728,25 @@ impl Render for ShellView {
                             }))
                             .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                                 let Some(slot) = this.zones[z].get(i) else { return };
+                                let (handler, has_panel, shell) = (slot.on_click.clone(), slot.panel.is_some(), this.shell.clone());
                                 // A plugin's own click handler wins (it may
                                 // toggle its panel itself); otherwise the
-                                // chip toggles the panel.
-                                if let Some(handler) = slot.on_click.clone() {
-                                    mandara_plugins::guard(&format!("plugin `{id}` click"), || handler(window, cx));
-                                } else if slot.panel.is_some() {
-                                    this.shell.update(cx, |s, cx| s.toggle_panel(&id, cx));
-                                }
+                                // chip toggles the panel. Either opens on
+                                // this bar's output only.
+                                crate::state::on_bar(&this.monitor, cx, |cx| {
+                                    if let Some(handler) = handler {
+                                        mandara_plugins::guard(&format!("plugin `{id}` click"), || handler(window, cx));
+                                    } else if has_panel {
+                                        shell.update(cx, |s, cx| s.toggle_panel(&id, cx));
+                                    }
+                                });
                             }))
                             .on_mouse_down(gpui::MouseButton::Right, cx.listener(move |this, _: &gpui::MouseDownEvent, window, cx| {
                                 // A plugin's chip owns its right-click; never
                                 // fall through to the bar's main menu.
                                 cx.stop_propagation();
                                 if let Some(handler) = this.zones[z].get(i).and_then(|s| s.on_secondary_click.clone()) {
-                                    mandara_plugins::guard(&format!("plugin `{id2}` right-click"), || handler(window, cx));
+                                    crate::state::on_bar(&this.monitor, cx, |cx| mandara_plugins::guard(&format!("plugin `{id2}` right-click"), || handler(window, cx)));
                                 }
                             })),
                     );
@@ -2143,7 +2159,7 @@ impl Render for ShellView {
                         }
                         if *hovered {
                             this.cancel_leave();
-                            this.shell.update(cx, |s, cx| s.set_sidebar_hover(true, cx));
+                            this.shell.update(cx, |s, cx| s.hover_sidebar(&this.monitor, cx));
                         }
                     }))
                     // Real motion on the edge: the arrival GPUI's hover state
@@ -2151,7 +2167,7 @@ impl Render for ShellView {
                     .on_mouse_move(cx.listener(|this, _: &gpui::MouseMoveEvent, window, cx| {
                         if window.is_window_hovered() {
                             this.cancel_leave();
-                            this.shell.update(cx, |s, cx| s.set_sidebar_hover(true, cx));
+                            this.shell.update(cx, |s, cx| s.hover_sidebar(&this.monitor, cx));
                         }
                     }))
                     .child(self.mask.region()),
@@ -2287,7 +2303,7 @@ pub fn open_exclusion_strips(display: Option<gpui::DisplayId>, output: (f32, f32
             state[slot] = true;
             let edge = if right { Anchor::RIGHT } else { Anchor::LEFT };
             let strip = LayerSurfaceSpec::exclusion_strip(Anchor::TOP | Anchor::BOTTOM | edge, px(output.1), px(0.0), display);
-            if let Err(err) = cx.open_window(strip.window_options(), move |_, cx| cx.new(|cx| SidebarExclusionView::new(right, cx))) {
+            if let Err(err) = cx.open_window(strip.window_options(), { let monitor = monitor.clone(); move |_, cx| cx.new(|cx| SidebarExclusionView::new(right, monitor, cx)) }) {
                 tracing::error!("sidebar exclusion strip: {err:#}");
             }
         }
@@ -2320,23 +2336,25 @@ pub struct SidebarExclusionView {
     shell: Entity<ShellState>,
     applied: f32,
     right: bool,
+    /// The output this strip reserves room on.
+    monitor: String,
 }
 
 impl SidebarExclusionView {
-    pub fn new(right: bool, cx: &mut Context<Self>) -> Self {
+    pub fn new(right: bool, monitor: String, cx: &mut Context<Self>) -> Self {
         let config = config(cx);
         let shell = crate::state::shell(cx);
         cx.observe(&config, |_, _, cx| cx.notify()).detach();
         // Push mode follows the sidebar opening and closing.
         cx.observe(&shell, |_, _, cx| cx.notify()).detach();
-        Self { config, shell, applied: -1.0, right }
+        Self { config, shell, applied: -1.0, right, monitor }
     }
 }
 
 impl Render for SidebarExclusionView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let cfg = self.config.read(cx).snapshot();
-        let open = self.shell.read(cx).sidebar_visible();
+        let open = self.shell.read(cx).sidebar_visible_on(&self.monitor);
         let zone = if sidebar_reserves_space(&cfg, open) && cfg.sidebar_on_right() == self.right { cfg.sidebar.width + cfg.sidebar.look.inset_with(&cfg.bar) } else { 0.0 };
         if (zone - self.applied).abs() > ZONE_EPSILON_PX {
             window.set_exclusive_zone(px(zone));

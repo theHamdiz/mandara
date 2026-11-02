@@ -7875,3 +7875,7 @@
 "Where the Beacon bar sits, as a share of the screen height from the top" = "Wo die Leuchtfeuer-Leiste sitzt, als Anteil der Bildschirmhöhe von oben"
 "Width of the Beacon search bar (its mode buttons sit beside it)" = "Breite der Leuchtfeuer-Suchleiste (ihre Modus-Tasten sitzen daneben)"
 "classic, grid or beacon" = "classic, grid oder beacon"
+
+# ── Desktop widgets per display ──
+"Only on this display" = "Nur auf diesem Bildschirm"
+"Show on every display" = "Auf allen Bildschirmen zeigen"

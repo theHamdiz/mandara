@@ -131,6 +131,8 @@ pub enum Action {
     Remove(String),
     Duplicate(String),
     Hide(String),
+    /// Shows the widget on one output only (`None`: on every one).
+    ShowOn(String, Option<String>),
     WidgetSettings,
 }
 
@@ -434,7 +436,7 @@ pub fn run(action: &Action, output: &str, at: (f32, f32), size: (f32, f32), cx: 
             })
             .detach();
         }
-        Action::AddMenu | Action::Remove(_) | Action::Duplicate(_) | Action::Hide(_) | Action::WidgetSettings => {}
+        Action::AddMenu | Action::Remove(_) | Action::Duplicate(_) | Action::Hide(_) | Action::ShowOn(..) | Action::WidgetSettings => {}
     }
 }
 

@@ -7629,3 +7629,7 @@
 "Where the Beacon bar sits, as a share of the screen height from the top" = "Posisi bilah Mercusuar, sebagai bagian dari tinggi layar dihitung dari atas"
 "Width of the Beacon search bar (its mode buttons sit beside it)" = "Lebar bilah pencarian Mercusuar (tombol modenya ada di sampingnya)"
 "classic, grid or beacon" = "classic, grid, atau beacon"
+
+# ── Desktop widgets per display ──
+"Only on this display" = "Hanya di layar ini"
+"Show on every display" = "Tampilkan di semua layar"

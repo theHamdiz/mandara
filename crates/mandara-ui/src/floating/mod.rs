@@ -284,15 +284,18 @@ pub fn dock(id: &str, pinned: bool, cx: &mut App) -> Result<(), String> {
 /// where the card landed when `snap`).
 pub(crate) fn docked(id: &str, output: &str, pinned: bool, snap: bool, cx: &mut App) {
     let shell = shell(cx);
-    shell.update(cx, |s, cx| {
-        if pinned {
-            s.pin_panel(id, cx);
-        } else {
-            s.set_panel(Some(id.to_string()), cx);
-        }
-        if snap {
-            s.snap_open = Some((id.to_string(), output.to_string()));
-        }
+    // The panel opens on the bar the card docked into.
+    crate::state::on_bar(output, cx, |cx| {
+        shell.update(cx, |s, cx| {
+            if pinned {
+                s.pin_panel(id, cx);
+            } else {
+                s.set_panel(Some(id.to_string()), cx);
+            }
+            if snap {
+                s.snap_open = Some((id.to_string(), output.to_string()));
+            }
+        })
     });
 }
 

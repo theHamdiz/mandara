@@ -7880,3 +7880,7 @@
 "Where the Beacon bar sits, as a share of the screen height from the top" = "موضع شريط المنارة، كنسبة من ارتفاع الشاشة بدءًا من الأعلى"
 "Width of the Beacon search bar (its mode buttons sit beside it)" = "عرض شريط بحث المنارة (أزرار الأوضاع بجانبه)"
 "classic, grid or beacon" = "classic أو grid أو beacon"
+
+# ── Desktop widgets per display ──
+"Only on this display" = "على هذه الشاشة فقط"
+"Show on every display" = "اعرض على كل الشاشات"

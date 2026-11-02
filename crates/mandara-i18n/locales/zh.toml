@@ -7871,3 +7871,7 @@
 "Where the Beacon bar sits, as a share of the screen height from the top" = "信标栏的位置，以距顶部的屏幕高度比例表示"
 "Width of the Beacon search bar (its mode buttons sit beside it)" = "信标搜索栏的宽度（模式按钮位于其旁边）"
 "classic, grid or beacon" = "classic、grid 或 beacon"
+
+# ── Desktop widgets per display ──
+"Only on this display" = "仅在此显示器"
+"Show on every display" = "在所有显示器上显示"

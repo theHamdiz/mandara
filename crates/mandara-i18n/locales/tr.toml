@@ -7876,3 +7876,7 @@
 "Where the Beacon bar sits, as a share of the screen height from the top" = "Fener çubuğunun konumu, üstten ekran yüksekliğinin bir payı olarak"
 "Width of the Beacon search bar (its mode buttons sit beside it)" = "Fener arama çubuğunun genişliği (mod düğmeleri yanında durur)"
 "classic, grid or beacon" = "classic, grid veya beacon"
+
+# ── Desktop widgets per display ──
+"Only on this display" = "Yalnızca bu ekranda"
+"Show on every display" = "Tüm ekranlarda göster"

@@ -434,6 +434,12 @@ fn hide(id: &str, cx: &mut App) {
     write(id, |w| w.enabled = false, cx);
 }
 
+/// Shows `id` on `output` only, or (`None`) on every display.
+fn show_on(id: &str, output: Option<String>, cx: &mut App) {
+    push_undo(cx);
+    write(id, move |w| w.place.displays = output.into_iter().collect(), cx);
+}
+
 /// The depth clock can't be duplicated (only the first depth face shows).
 fn can_duplicate(id: &str, cfg: &ShellConfig) -> bool {
     cfg.desktop.widgets.get(id).is_some_and(|w| !matches!(&w.kind, WidgetKind::Clock(c) if c.face.depth_style().is_some()))
@@ -457,20 +463,33 @@ fn run_popup(action: Action, popup: &Popup, cx: &mut App) {
         Action::Remove(id) => remove(&id, cx),
         Action::Duplicate(id) => duplicate(&id, cx),
         Action::Hide(id) => hide(&id, cx),
+        Action::ShowOn(id, output) => show_on(&id, output, cx),
         Action::WidgetSettings => crate::state::open_studio_at(Some("desktop-widgets".into()), cx),
         _ => {}
     }
 }
 
-fn popup_entries(kind: &PopupKind, cfg: &ShellConfig, cx: &App) -> Vec<Entry> {
+fn popup_entries(kind: &PopupKind, output: &str, cfg: &ShellConfig, cx: &App) -> Vec<Entry> {
     match kind {
         PopupKind::Add(_) => menu::add_entries(cx),
-        PopupKind::Widget(id) => vec![
-            menu::entry(0, "copy", t("Duplicate"), Action::Duplicate(id.clone())).enabled(can_duplicate(id, cfg)),
-            menu::entry(0, "eye-off", t("Hide"), Action::Hide(id.clone())),
-            menu::entry(1, "sliders", t("Settings in Studio"), Action::WidgetSettings),
-            menu::entry(2, "trash", t("Remove"), Action::Remove(id.clone())).danger(),
-        ],
+        PopupKind::Widget(id) => {
+            let mut entries = vec![
+                menu::entry(0, "copy", t("Duplicate"), Action::Duplicate(id.clone())).enabled(can_duplicate(id, cfg)),
+                menu::entry(0, "eye-off", t("Hide"), Action::Hide(id.clone())),
+            ];
+            // Several displays: keep it to this one, or show it on all.
+            if outputs(cx).len() > 1 {
+                let only_here = cfg.desktop.widgets.get(id).is_some_and(|w| matches!(w.place.displays.as_slice(), [d] if d.eq_ignore_ascii_case(output)));
+                entries.push(if only_here {
+                    menu::entry(0, "monitor", t("Show on every display"), Action::ShowOn(id.clone(), None))
+                } else {
+                    menu::entry(0, "monitor", t("Only on this display"), Action::ShowOn(id.clone(), Some(output.to_string())))
+                });
+            }
+            entries.push(menu::entry(1, "sliders", t("Settings in Studio"), Action::WidgetSettings));
+            entries.push(menu::entry(2, "trash", t("Remove"), Action::Remove(id.clone())).danger());
+            entries
+        }
     }
 }
 
@@ -1037,7 +1056,7 @@ impl Render for EditView {
             Guide::Horizontal(y) => div().absolute().left_0().top(px(y - GUIDE_W / 2.0)).h(px(GUIDE_W)).w(px(size.0)).bg(accent.with_alpha(GUIDE_ALPHA).hsla()),
         });
         let popup_el = popup.map(|pp| {
-            let entries = popup_entries(&pp.kind, &cfg, cx);
+            let entries = popup_entries(&pp.kind, &pp.output, &cfg, cx);
             let h = menu::height(&entries);
             let w = menu::MENU_W;
             let at = if pp.up { (pp.at.0 - w / 2.0, pp.at.1) } else { pp.at };
@@ -1045,7 +1064,7 @@ impl Render for EditView {
             let pick: OnRow<Self> = Rc::new(move |this, i, _, cx| {
                 let Some(pp) = this.model.read(cx).popup.clone() else { return };
                 let cfg = config(cx).read(cx).snapshot();
-                if let Some(e) = popup_entries(&pp.kind, &cfg, cx).get(i).filter(|e| e.enabled) {
+                if let Some(e) = popup_entries(&pp.kind, &pp.output, &cfg, cx).get(i).filter(|e| e.enabled) {
                     let action = e.action.clone();
                     cx.defer(move |cx| run_popup(action, &pp, cx));
                 }

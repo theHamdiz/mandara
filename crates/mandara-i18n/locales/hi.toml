@@ -7877,3 +7877,7 @@
 "Where the Beacon bar sits, as a share of the screen height from the top" = "दीपस्तंभ बार कहाँ रहता है, ऊपर से स्क्रीन की ऊँचाई के हिस्से के रूप में"
 "Width of the Beacon search bar (its mode buttons sit beside it)" = "दीपस्तंभ सर्च बार की चौड़ाई (इसके मोड बटन बगल में रहते हैं)"
 "classic, grid or beacon" = "classic, grid या beacon"
+
+# ── Desktop widgets per display ──
+"Only on this display" = "सिर्फ़ इस डिस्प्ले पर"
+"Show on every display" = "हर डिस्प्ले पर दिखाएँ"

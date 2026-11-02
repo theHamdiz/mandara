@@ -19,6 +19,14 @@ pub struct ShellState {
     /// The open panel is pinned: dismissals leave it open (see
     /// [`crate::floating::dock`]).
     pub panel_pinned: bool,
+    /// The output whose bar shows the open panel (`None`: every bar).
+    panel_output: Option<String>,
+    /// The output the sidebar was revealed on (`None`: every output).
+    sidebar_output: Option<String>,
+    /// The output of the bar being clicked right now (see [`on_bar`]).
+    click_output: Option<String>,
+    /// Outputs with a bar, one entry per live bar.
+    bars: Vec<String>,
     /// `(plugin, output)`: a floating card just docked into the bar there,
     /// so that output's panel opens already expanded where the card landed.
     pub snap_open: Option<(String, String)>,
@@ -39,6 +47,9 @@ impl ShellState {
         let mut d = PanelDock { open: self.panel.take(), pinned: self.panel_pinned };
         let before = d.clone();
         let (out, effect) = f(&mut d);
+        if d.open.is_some() && d.open != before.open {
+            self.panel_output = self.opening_output(cx);
+        }
         if d != before {
             self.snap_open = None;
             cx.notify();
@@ -97,17 +108,65 @@ impl ShellState {
         self.panel_pinned && self.panel.as_deref() == Some(id)
     }
 
+    /// The output a panel or the sidebar opens on: the bar you clicked,
+    /// else the monitor you're on. `None` (every bar) when that output has
+    /// no bar.
+    fn opening_output(&self, cx: &App) -> Option<String> {
+        let name = self.click_output.clone().or_else(|| crate::outputs::focused_monitor(cx))?;
+        self.bars.iter().any(|b| b.eq_ignore_ascii_case(&name)).then_some(name)
+    }
+
+    /// Whether a surface on `output` shows what was opened on `opened`.
+    fn shows_on(opened: Option<&str>, output: &str) -> bool {
+        opened.is_none_or(|o| o.eq_ignore_ascii_case(output))
+    }
+
+    /// The plugin whose panel `output`'s bar shows: the open panel, on the
+    /// output it was opened on only.
+    pub fn panel_on(&self, output: &str) -> Option<&str> {
+        self.panel.as_deref().filter(|_| Self::shows_on(self.panel_output.as_deref(), output))
+    }
+
+    /// Whether the sidebar shows on `output` (a pinned one, which config
+    /// decides, shows on every output).
+    pub fn sidebar_visible_on(&self, output: &str) -> bool {
+        self.sidebar_visible() && Self::shows_on(self.sidebar_output.as_deref(), output)
+    }
+
+    /// A bar came up on `output`.
+    pub fn bar_added(&mut self, output: &str) {
+        self.bars.push(output.to_string());
+    }
+
+    /// A bar on `output` closed.
+    pub fn bar_gone(&mut self, output: &str) {
+        if let Some(i) = self.bars.iter().position(|b| b == output) {
+            self.bars.swap_remove(i);
+        }
+    }
+
     /// Open by command, hover, or pin (pin lives in config).
     pub fn sidebar_visible(&self) -> bool {
         self.sidebar_open || self.sidebar_hover
     }
 
     pub fn set_sidebar(&mut self, open: bool, cx: &mut Context<Self>) {
+        if open && !self.sidebar_visible() {
+            self.sidebar_output = self.opening_output(cx);
+        }
         self.sidebar_open = open;
         if !open {
             self.sidebar_hover = false;
         }
         cx.notify();
+    }
+
+    /// The pointer reached the sidebar's edge on `output`'s bar.
+    pub fn hover_sidebar(&mut self, output: &str, cx: &mut Context<Self>) {
+        if !self.sidebar_visible() {
+            self.sidebar_output = Some(output.to_string());
+        }
+        self.set_sidebar_hover(true, cx);
     }
 
     pub fn set_sidebar_hover(&mut self, hover: bool, cx: &mut Context<Self>) {
@@ -167,6 +226,16 @@ impl ShellState {
             cx.notify();
         }
     }
+}
+
+/// Runs `f` as a click on `output`'s bar: a panel or the sidebar it opens
+/// shows on that output, not on every monitor's bar.
+pub fn on_bar<R>(output: &str, cx: &mut App, f: impl FnOnce(&mut App) -> R) -> R {
+    let state = shell(cx);
+    state.update(cx, |s, _| s.click_output = Some(output.to_string()));
+    let out = f(cx);
+    state.update(cx, |s, _| s.click_output = None);
+    out
 }
 
 /// Opens Mandara Studio (installed by the app, which owns the Studio crate).
@@ -534,5 +603,27 @@ mod tests {
         assert_eq!(theme_transition(&cfg), Duration::from_millis(700));
         cfg.motion.reduce_motion = true;
         assert_eq!(theme_transition(&cfg), Duration::ZERO);
+    }
+
+    /// #22: a panel or the sidebar opened on one monitor shows on that
+    /// monitor's bar only; with no output known, every bar shows it.
+    #[test]
+    fn panels_and_the_sidebar_show_on_their_own_output() {
+        let mut s = ShellState { panel: Some("weather".into()), panel_output: Some("DP-1".into()), ..Default::default() };
+        assert_eq!(s.panel_on("DP-1"), Some("weather"));
+        assert_eq!(s.panel_on("dp-1"), Some("weather"));
+        assert_eq!(s.panel_on("HDMI-A-1"), None);
+        s.panel_output = None;
+        assert_eq!(s.panel_on("HDMI-A-1"), Some("weather"));
+
+        s.sidebar_open = true;
+        s.sidebar_output = Some("HDMI-A-1".into());
+        assert!(s.sidebar_visible_on("HDMI-A-1"));
+        assert!(!s.sidebar_visible_on("DP-1"));
+
+        s.bar_added("DP-1");
+        s.bar_added("HDMI-A-1");
+        s.bar_gone("DP-1");
+        assert_eq!(s.bars, vec!["HDMI-A-1".to_string()]);
     }
 }

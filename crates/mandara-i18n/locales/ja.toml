@@ -7877,3 +7877,7 @@
 "Where the Beacon bar sits, as a share of the screen height from the top" = "ビーコンバーの位置（上端からの画面の高さに対する割合）"
 "Width of the Beacon search bar (its mode buttons sit beside it)" = "ビーコン検索バーの幅（モードボタンはその横に並びます）"
 "classic, grid or beacon" = "classic、grid、beacon のいずれか"
+
+# ── Desktop widgets per display ──
+"Only on this display" = "このディスプレイのみ"
+"Show on every display" = "すべてのディスプレイに表示"

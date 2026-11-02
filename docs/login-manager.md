@@ -85,7 +85,7 @@ Login screen — switch plan
     install  /usr/local/lib/mandara/mandara-greeter (copy of ~/.local/bin/mandara), media folders, state dir
     update   /etc/greetd/config.toml
         - command = "agreety --cmd /bin/sh"
-        + command = "cage -s -- /usr/local/lib/mandara/mandara-greeter greeter"
+        + command = "cage -s -m last -- /usr/local/lib/mandara/mandara-greeter greeter"
         (every other line is kept; user = "greeter")
 
   Services (run with --apply; nothing is started or stopped):
@@ -145,7 +145,7 @@ never runs on its own):
 
    ```toml
    [default_session]
-   command = "cage -s -- /usr/local/lib/mandara/mandara-greeter greeter"
+   command = "cage -s -m last -- /usr/local/lib/mandara/mandara-greeter greeter"
    user = "greeter"
    ```
 6. detects the enabled display manager (`display-manager.service` → sddm,

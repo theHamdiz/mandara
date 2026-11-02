@@ -30,7 +30,7 @@ impl LoginProbe for InstallerProbe {
     }
 
     fn outdated(&self, exe: &Path) -> bool {
-        Self::plan(exe).is_ok_and(|p| p.already_active && p.install_mandara)
+        Self::plan(exe).is_ok_and(|p| (p.already_active && p.install_mandara) || p.detection.greetd.command.as_deref().is_some_and(|c| p.kiosk.outdated_command(c)))
     }
 
     fn switch_plan(&self, exe: &Path, after_packages: bool) -> String {

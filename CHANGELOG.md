@@ -108,6 +108,20 @@ developer tools.
   while the depth model downloads, an error with **Retry** if it fails, and
   **Installed** once it's there, with a button to start using it. Before,
   the Download button gave no sign of anything happening.
+- **Two monitors, one panel.** Clicking something in the bar opened its
+  panel on every monitor's bar at once, and the sidebar slid in on every
+  screen. A panel and the sidebar now open only on the monitor you used
+  (a shortcut or command opens them on the monitor you're on).
+  ([#22](https://github.com/theHamdiz/mandara/issues/22))
+- **Desktop widgets per monitor.** Right-click a widget in edit mode and
+  pick **Only on this display**, so each screen keeps its own widgets.
+  Studio → Desktop widgets → Displays now lists every connected monitor,
+  not just the ones in a saved display profile.
+  ([#22](https://github.com/theHamdiz/mandara/issues/22))
+- **The login screen stays on one monitor.** With two monitors, the
+  login screen was stretched across both. It now shows on one, and
+  updating Mandara moves an existing login screen over too.
+  ([#22](https://github.com/theHamdiz/mandara/issues/22))
 - **Filter chips scroll with any mouse.** The clipboard's categories, the
   to-do lists, the note topics and the dock's app categories now scroll
   sideways with a normal mouse wheel, can be grabbed and dragged, and show

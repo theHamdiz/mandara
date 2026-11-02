@@ -3951,6 +3951,7 @@ Only Mandara's own plugins are removed this way; uninstall third-party plugins f
 Only at certain times
 Only each app's most recent window
 Only in {desktops}
+Only on this display
 Only tags and workspaces with windows (plus the one you are on)
 Only the first {count} checks run
 Only the main display shows the lock screen; others stay black (OLED friendly)
@@ -5169,6 +5170,7 @@ Show more
 Show names
 Show names on hover
 Show on
+Show on every display
 Show on the login screen
 Show on-screen displays
 Show one list (or all) in the card and panel

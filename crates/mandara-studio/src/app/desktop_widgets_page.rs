@@ -1703,6 +1703,8 @@ fn anchors(id: &str, current: Anchor, p: &MandaraPalette, cx: &mut Context<Studi
 
 fn displays(id: &str, current: &[String], cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<StudioView>) -> AnyElement {
     let mut names: Vec<String> = cfg.displays.profiles.iter().flat_map(|pr| pr.outputs.iter().map(|o| o.name.clone())).chain(cfg.displays.primary.clone()).collect();
+    // The displays connected now, saved display profiles or not.
+    names.extend(mandara_ui::outputs::geometries(cx).into_iter().map(|g| g.name).filter(|n| !n.is_empty()));
     names.extend(current.iter().cloned());
     names.sort();
     names.dedup();

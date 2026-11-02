@@ -7877,3 +7877,7 @@
 "Where the Beacon bar sits, as a share of the screen height from the top" = "Position de la barre Phare, en part de la hauteur de l'écran depuis le haut"
 "Width of the Beacon search bar (its mode buttons sit beside it)" = "Largeur de la barre de recherche Phare (ses boutons de mode sont à côté)"
 "classic, grid or beacon" = "classic, grid ou beacon"
+
+# ── Desktop widgets per display ──
+"Only on this display" = "Uniquement sur cet écran"
+"Show on every display" = "Afficher sur tous les écrans"

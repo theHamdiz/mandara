@@ -231,7 +231,11 @@ How Mandara looks and feels, and how much of it you can shape.
 - **Edit the desktop in place:** every widget gets an outline and its name.
   Drag to move it, pull the corner to resize, and it snaps to the screen's
   edges and centre lines. The × on a widget's name removes it in one click;
-  right-click it to duplicate or hide it. A floating toolbar has Add widget,
+  right-click it to duplicate or hide it. With more than one monitor, the
+  same menu keeps a widget **Only on this display** (or shows it on every
+  display again), and a widget you add goes on the monitor you added it on,
+  so each screen can have its own set. Studio → Desktop widgets → Displays
+  picks them too. A floating toolbar has Add widget,
   Undo, Open in Studio and Done. New widgets start in front of the
   wallpaper's subject and on a free spot, so they show the moment you add
   them. Nothing of it stays in memory once you're done. The same widgets

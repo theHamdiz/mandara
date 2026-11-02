@@ -61,7 +61,7 @@ pub struct GreeterOptions {
 /// the demo is closed.
 pub fn run(opts: GreeterOptions) -> Result<()> {
     if std::env::var_os("WAYLAND_DISPLAY").is_none() {
-        bail!("the greeter needs a Wayland compositor (WAYLAND_DISPLAY is not set); greetd should start it inside one, e.g. `cage -s -- mandara greeter`");
+        bail!("the greeter needs a Wayland compositor (WAYLAND_DISPLAY is not set); greetd should start it inside one, e.g. `cage -s -m last -- mandara greeter`");
     }
     if !opts.demo && std::env::var_os("GREETD_SOCK").is_none() {
         bail!("GREETD_SOCK is not set: `mandara greeter` must be started by greetd. Try `mandara greeter --demo` to preview it on this session.");

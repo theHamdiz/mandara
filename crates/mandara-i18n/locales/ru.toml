@@ -7876,3 +7876,7 @@
 "Where the Beacon bar sits, as a share of the screen height from the top" = "Где находится строка «Маяк»: доля высоты экрана от верхнего края"
 "Width of the Beacon search bar (its mode buttons sit beside it)" = "Ширина строки поиска «Маяк» (кнопки режимов рядом с ней)"
 "classic, grid or beacon" = "classic, grid или beacon"
+
+# ── Desktop widgets per display ──
+"Only on this display" = "Только на этом экране"
+"Show on every display" = "Показывать на всех экранах"
