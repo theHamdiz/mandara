@@ -79,6 +79,10 @@ pub mod ports;
 pub mod git_repos;
 pub mod ci;
 pub mod crashes;
+pub mod tailscale;
+pub mod uptime;
+pub mod local_ai;
+pub mod share;
 
 pub use actor::ServiceHandle;
 pub use audio::{AudioCommand, AudioService, AudioState, spawn_audio_service};

@@ -768,6 +768,12 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Color picker"), "/plugins/settings/color-picker/copy_format", tk("Copy as"), tk("Format copied when a color is picked"), Choice(const { &[("hex", "HEX"), ("rgb", "RGB"), ("hsl", "HSL"), ("oklch", "OKLCH")] }), Value::from("hex")),
         sd(Plugins, tk("Color picker"), "/plugins/settings/color-picker/open_after_pick", tk("Open the panel after picking"), tk("Show formats, ramp and contrast for the new color"), Toggle, Value::from(true)),
         sd(Plugins, tk("Soundscapes"), "/plugins/settings/soundscapes/bar_timer", tk("Sleep timer in the bar"), tk("Show the minutes left next to the playing indicator"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Uptime monitor"), "/plugins/settings/uptime/checks", tk("Checks"), tk("Comma-separated https:// or http:// addresses, or host:port for a TCP check; name one with Name=target"), Text { placeholder: "Home NAS=nas.local:22, Blog=https://example.com" }, Value::from("")),
+        sd(Plugins, tk("Uptime monitor"), "/plugins/settings/uptime/interval_s", tk("Check every"), tk("How often every check runs in the background"), slider(10.0, 3600.0, 10.0, " s"), Value::from(60)),
+        sd(Plugins, tk("Uptime monitor"), "/plugins/settings/uptime/notify", tk("Notify on changes"), tk("Send a notification when a check goes down or comes back up"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Local AI"), "/plugins/settings/local-ai/url", tk("Ollama address"), tk("Where the Ollama server listens"), Text { placeholder: "http://127.0.0.1:11434" }, Value::from("http://127.0.0.1:11434")),
+        sd(Plugins, tk("Share to phone"), "/plugins/settings/share/minutes", tk("Stop sharing after"), tk("The link stops working after this long"), slider(1.0, 120.0, 1.0, " min"), Value::from(10)),
+        sd(Plugins, tk("Share to phone"), "/plugins/settings/share/once", tk("Stop after the first download"), tk("The link stops working once your phone has downloaded the item"), Toggle, Value::from(true)),
         // Compositor
         s(Compositor, tk("Integration"), "/compositor/manage", tk("Manage compositor drop-in"), tk("Write rules, binds and colors to ~/.config/mandara/generated"), Toggle),
         s(Compositor, tk("Integration"), "/integrations/compositor_borders", tk("Sync border colors"), tk("Window borders follow the theme"), Toggle),

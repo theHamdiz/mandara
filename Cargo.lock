@@ -3832,6 +3832,7 @@ dependencies = [
  "parking_lot",
  "pulseaudio",
  "pure-onnx-ocr",
+ "qrcodegen",
  "rav1e",
  "regex",
  "rqrr",

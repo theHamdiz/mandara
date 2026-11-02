@@ -59,6 +59,10 @@ pub mod ports;
 pub mod git_repos;
 pub mod ci;
 pub mod crashes;
+pub mod tailscale;
+pub mod local_ai;
+pub mod uptime;
+pub mod share;
 
 use std::time::Duration;
 
@@ -223,6 +227,10 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     color_picker::register(registry);
     authenticator::register(registry);
     soundscapes::register(registry);
+    tailscale::register(registry);
+    local_ai::register(registry);
+    uptime::register(registry);
+    share::register(registry);
     crate::osd::register(registry);
     crate::corners::register(registry);
     crate::night_light::register(registry);
