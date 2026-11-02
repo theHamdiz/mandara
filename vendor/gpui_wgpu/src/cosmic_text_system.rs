@@ -585,19 +585,7 @@ impl CosmicTextSystemState {
             .clone();
         let mut chain: Vec<(FontId, SharedString)> = Vec::with_capacity(families.len());
         for family in &families {
-            let std::result::Result::Ok(ids) = self.load_family(family, &FontFeatures::default(), None) else {
-                continue;
-            };
-            // Prefer the upright regular face: its charmap decides coverage.
-            let best = ids.iter().copied().min_by_key(|id| {
-                let face = self.font_system.db().face(self.loaded_fonts[id.0].font.id());
-                face.map_or(u32::MAX, |face| {
-                    let slanted = !matches!(face.style, Style::Normal);
-                    u32::from(slanted) * u32::from(u16::MAX)
-                        + u32::from(face.weight.0.abs_diff(CSS_NORMAL_WEIGHT))
-                })
-            });
-            if let Some(id) = best
+            if let Some(id) = self.load_chain_face(family)
                 && !chain.iter().any(|(_, name)| name.as_ref() == family.as_str())
             {
                 chain.push((id, SharedString::from(family.clone())));
@@ -605,6 +593,66 @@ impl CosmicTextSystemState {
         }
         self.default_chain = Arc::from(chain);
         self.default_chain_generation = generation;
+    }
+
+    /// Mandara patch 11: the face of `family` that stands for it in the
+    /// default chain (its charmap decides coverage): the upright face
+    /// closest to regular among those [`Self::load_family`] would accept as
+    /// a primary font, loaded alone. Loading the whole family (every weight,
+    /// width and slant) mapped all of their files and shaper data although
+    /// text in the chain's script asks cosmic-text for the face it needs at
+    /// its weight anyway: for an English interface, five Arabic families'
+    /// 53 files for a script that may never appear.
+    fn load_chain_face(&mut self, family: &str) -> Option<FontId> {
+        let name = gpui::font_name_with_fallbacks(family, &self.system_font_fallback);
+        // Upright first, then nearest to regular; ties keep database order.
+        let mut faces: SmallVec<[(cosmic_text::fontdb::ID, String, u32); 16]> = self
+            .font_system
+            .db()
+            .faces()
+            .filter(|face| face.families.iter().any(|(face_family, _)| *name == *face_family))
+            .map(|face| {
+                let slanted = !matches!(face.style, Style::Normal);
+                let rank = u32::from(slanted) * u32::from(u16::MAX)
+                    + u32::from(face.weight.0.abs_diff(CSS_NORMAL_WEIGHT));
+                (face.id, face.post_script_name.clone(), rank)
+            })
+            .collect();
+        faces.sort_by_key(|(_, _, rank)| *rank);
+        let font_key = FontKey::new(SharedString::from(family.to_owned()), FontFeatures::default(), None);
+        for (database_id, postscript_name, _) in faces {
+            let key = LoadedFontKey { database_id, font: font_key.clone() };
+            if let Some(&font_id) = self.loaded_font_ids_by_key.get(&key) {
+                self.loaded_fonts[font_id.0].user_fallback_chain = Arc::from(Vec::new());
+                return Some(font_id);
+            }
+            // The same test as `load_family`, read from the file without
+            // loading the face.
+            let has_m = self
+                .font_system
+                .db()
+                .with_face_data(database_id, |data, index| {
+                    swash::FontRef::from_index(data, index as usize).map(|font| font.charmap().map('m') != 0)
+                })
+                .flatten()
+                .unwrap_or(false);
+            if !has_m && !check_is_known_emoji_font(&postscript_name) {
+                continue;
+            }
+            let font = self.font_system.get_font(database_id, cosmic_text::Weight::NORMAL)?;
+            let font_id = FontId(self.loaded_fonts.len());
+            self.loaded_fonts.push(LoadedFont {
+                font,
+                features: CosmicFontFeatures::new(),
+                is_known_emoji_font: check_is_known_emoji_font(&postscript_name),
+                user_fallback_chain: Arc::from(Vec::new()),
+                instance_weight: None,
+                coords: SmallVec::new(),
+            });
+            self.loaded_font_ids_by_key.insert(key, font_id);
+            return Some(font_id);
+        }
+        None
     }
 
     /// Mandara patch 6: the `wght` axis range of a face, if it has one.
