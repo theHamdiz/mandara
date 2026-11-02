@@ -6,6 +6,16 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Changed
+
+- **Tidier Launcher and Displays pages in Studio.** The launcher looks are
+  now three cards of exactly the same size, followed by placement, the
+  launcher button, search & results, behaviour and your apps, in that
+  order. Displays shows the arrangement with a card per display (so a
+  switched-off display is easy to pick again), the selected display's
+  settings in neat aligned rows, which displays show each part of the
+  shell, and your profiles as equal cards with Apply and Delete.
+
 ## 0.7.0 — 2026-11-02
 
 Shortcuts cheatsheet. Task progress. Eye breaks. Presentation mode.

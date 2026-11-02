@@ -7633,3 +7633,12 @@
 # ── Desktop widgets per display ──
 "Only on this display" = "Hanya di layar ini"
 "Show on every display" = "Tampilkan di semua layar"
+
+# ── Launcher & Displays pages ──
+"External monitors over DDC/CI, and how the brightness keys move them" = "Monitor eksternal lewat DDC/CI, dan cara tombol kecerahan mengaturnya"
+"Pin, hide, rename or re-icon apps in the launcher" = "Sematkan, sembunyikan, ganti nama atau ikon aplikasi di peluncur"
+"Search & results" = "Pencarian & hasil"
+"The icon on the bar's launcher button" = "Ikon tombol peluncur di bilah"
+"Turning the launcher on, dimming the screen, the keyboard and how apps start" = "Menyalakan peluncur, meredupkan layar, keyboard, dan cara aplikasi dibuka"
+"Warmer colours in the evening, on a schedule" = "Warna lebih hangat di malam hari, sesuai jadwal"
+"What the launcher searches, how results look and how they are ranked" = "Apa yang dicari peluncur, tampilan hasil, dan cara mengurutkannya"

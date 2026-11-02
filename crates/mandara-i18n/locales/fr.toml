@@ -7881,3 +7881,12 @@
 # ── Desktop widgets per display ──
 "Only on this display" = "Uniquement sur cet écran"
 "Show on every display" = "Afficher sur tous les écrans"
+
+# ── Launcher & Displays pages ──
+"External monitors over DDC/CI, and how the brightness keys move them" = "Écrans externes via DDC/CI, et comment les touches de luminosité les règlent"
+"Pin, hide, rename or re-icon apps in the launcher" = "Épinglez, masquez, renommez ou changez l'icône des apps dans le lanceur"
+"Search & results" = "Recherche et résultats"
+"The icon on the bar's launcher button" = "L'icône du bouton du lanceur dans la barre"
+"Turning the launcher on, dimming the screen, the keyboard and how apps start" = "Activer le lanceur, assombrir l'écran, le clavier et le lancement des apps"
+"Warmer colours in the evening, on a schedule" = "Des couleurs plus chaudes le soir, selon un horaire"
+"What the launcher searches, how results look and how they are ranked" = "Ce que le lanceur cherche, l'aspect des résultats et leur classement"

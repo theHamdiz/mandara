@@ -7875,3 +7875,12 @@
 # ── Desktop widgets per display ──
 "Only on this display" = "仅在此显示器"
 "Show on every display" = "在所有显示器上显示"
+
+# ── Launcher & Displays pages ──
+"External monitors over DDC/CI, and how the brightness keys move them" = "通过 DDC/CI 控制外接显示器，以及亮度键如何调节它们"
+"Pin, hide, rename or re-icon apps in the launcher" = "在启动器中固定、隐藏、重命名应用或更换图标"
+"Search & results" = "搜索与结果"
+"The icon on the bar's launcher button" = "栏上启动器按钮的图标"
+"Turning the launcher on, dimming the screen, the keyboard and how apps start" = "开启启动器、调暗屏幕、键盘以及应用的启动方式"
+"Warmer colours in the evening, on a schedule" = "傍晚按计划使用更暖的颜色"
+"What the launcher searches, how results look and how they are ranked" = "启动器搜索什么、结果的样式以及排序方式"

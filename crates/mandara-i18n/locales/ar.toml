@@ -7884,3 +7884,12 @@
 # ── Desktop widgets per display ──
 "Only on this display" = "على هذه الشاشة فقط"
 "Show on every display" = "اعرض على كل الشاشات"
+
+# ── Launcher & Displays pages ──
+"External monitors over DDC/CI, and how the brightness keys move them" = "الشاشات الخارجية عبر DDC/CI، وكيف تحرّكها مفاتيح السطوع"
+"Pin, hide, rename or re-icon apps in the launcher" = "ثبّت التطبيقات في المشغّل أو أخفها أو غيّر أسماءها وأيقوناتها"
+"Search & results" = "البحث والنتائج"
+"The icon on the bar's launcher button" = "أيقونة زر المشغّل في الشريط"
+"Turning the launcher on, dimming the screen, the keyboard and how apps start" = "تشغيل المشغّل وتعتيم الشاشة ولوحة المفاتيح وطريقة فتح التطبيقات"
+"Warmer colours in the evening, on a schedule" = "ألوان أدفأ في المساء، وفق جدول"
+"What the launcher searches, how results look and how they are ranked" = "ما يبحث فيه المشغّل، وشكل النتائج وطريقة ترتيبها"

@@ -1080,18 +1080,16 @@ impl StudioView {
                 c.launcher.skills.push(mandara_config::Skill { name: t("New skill").into(), description: String::new(), steps: vec!["theme mode toggle".into()], icon: "grid".into() })
             });
         }))));
+        // A page section each (launcher_page.rs): the heading with its
+        // help, then the list in a card.
+        let display = mandara_ui::fonts::fonts(cx).display.clone();
         let group = |title: &'static str, help: &'static str, body: gpui::Div, p: &MandaraPalette| {
-            div()
-                .row()
-                .flex_col()
-                .gap(px(SPACE_10_PX))
-                .child(div().px(px(SPACE_10_PX)).text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(title))
-                .child(div().p(px(SPACE_14_PX)).rounded(px(RADIUS_20_PX)).bg(p.surface_container.hsla()).row().flex_col().gap(px(SPACE_10_PX)).child(div().px(px(SPACE_4_PX)).text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(help)).child(body))
+            launcher_page::page_section(themes_page::section_head(title, help, vec![], display.clone(), p), [div().p(px(SPACE_14_PX)).rounded(px(RADIUS_20_PX)).bg(p.surface_container.hsla()).child(body).into_any_element()])
         };
         div()
             .row()
             .flex_col()
-            .gap(px(SPACE_26_PX))
+            .gap(px(PAGE_SECTION_GAP_PX))
             .child(group(
                 t("Slash commands"),
                 t("Type /trigger and your words in the launcher. Actions: url:<address with {query}> opens the browser, mandara:<command> runs a Mandara command (see `mandara commands`), exec:<shell command> runs a program; {query} is replaced by what you typed."),
@@ -1619,16 +1617,9 @@ impl Render for StudioView {
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(picker).child(rows).child(keyrings).into_any_element()
                 }
                 Section::Shortcuts => self.shortcuts(&cfg, &p, cx),
-                Section::Launcher => {
-                    // The ready-made looks first; the placement diagram
-                    // stands in for its choice row.
-                    let looks = self.launcher_looks(&cfg, &p, cx);
-                    let placement = self.launcher_placement(&cfg, &p, cx);
-                    let rows = self.rows(registry::in_section(Section::Launcher).filter(|s| s.path != LAUNCHER_POSITION_PATH), &cfg, &p, cx);
-                    let editor = self.launcher_editor(&cfg, &p, cx);
-                    let extras = self.launcher_extras(&cfg, &p, cx);
-                    div().row().flex_col().gap(px(SPACE_26_PX)).child(looks).child(placement).child(rows).child(extras).child(editor).into_any_element()
-                }
+                // The ready-made looks first, then the sections in setup
+                // order (launcher_page.rs).
+                Section::Launcher => self.launcher_page(&cfg, &p, cx),
                 Section::Dock => self.dock_page(&cfg, &p, cx),
                 Section::DateTime => {
                     // The system clock first: time zone, network time and
@@ -1832,8 +1823,6 @@ const ICON_MATCHES_MAX: usize = 64;
 
 /// Config path of the language setting (Studio → General shows it as a picker).
 const LOCALE_PATH: &str = "/general/locale";
-/// The launcher's placement (drawn as a screen diagram on its page).
-const LAUNCHER_POSITION_PATH: &str = "/launcher/look/position";
 
 
 /// Settings grouped into cards by their group title, in order of first
@@ -1847,7 +1836,7 @@ fn group_order(section: Section) -> Option<&'static [&'static str]> {
     use registry::surface_settings::{APPEARANCE, PANEL_MOTION, PANELS};
     Some(match section {
         Section::Bar => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", PANELS, PANEL_MOTION],
-        Section::Launcher => &["Launcher", "Results", "Size & placement", "Search providers", "Ranking", "Starting apps", "Pinned & hidden apps", "Button"],
+        Section::Launcher => &["Size & placement", "Button", "Results", "Grid", "Beacon search bar", "Search providers", "Ranking", "General", "Starting apps", "Pinned & hidden apps"],
         Section::Themes => &["Mode", "Style", "Tuning", "Accessibility", "Wallpaper colors", "Icons", "Cursor", "App themes"],
         Section::Wallpaper => &["Desktop", "Light & dark", "Video", "Depth clock", "Picker", "Slideshow", "Source", "When to change", "Slideshow transition", "Displays", "Wallhaven"],
         _ => return None,

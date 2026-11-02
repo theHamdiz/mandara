@@ -7880,3 +7880,12 @@
 # ── Desktop widgets per display ──
 "Only on this display" = "Yalnızca bu ekranda"
 "Show on every display" = "Tüm ekranlarda göster"
+
+# ── Launcher & Displays pages ──
+"External monitors over DDC/CI, and how the brightness keys move them" = "DDC/CI üzerinden harici monitörler ve parlaklık tuşlarının onları nasıl değiştirdiği"
+"Pin, hide, rename or re-icon apps in the launcher" = "Başlatıcıdaki uygulamaları sabitleyin, gizleyin, yeniden adlandırın ya da simgesini değiştirin"
+"Search & results" = "Arama ve sonuçlar"
+"The icon on the bar's launcher button" = "Çubuktaki başlatıcı düğmesinin simgesi"
+"Turning the launcher on, dimming the screen, the keyboard and how apps start" = "Başlatıcıyı açma, ekranı karartma, klavye ve uygulamaların nasıl başladığı"
+"Warmer colours in the evening, on a schedule" = "Akşamları bir programa göre daha sıcak renkler"
+"What the launcher searches, how results look and how they are ranked" = "Başlatıcının neyi aradığı, sonuçların görünümü ve sıralanışı"
