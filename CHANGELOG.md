@@ -126,6 +126,15 @@ developer tools.
   login screen was stretched across both. It now shows on one, and
   updating Mandara moves an existing login screen over too.
   ([#22](https://github.com/theHamdiz/mandara/issues/22))
+- **The Screenshot panel gets out of the way at once.** Clicking Region,
+  Window, Screen or Record region in the bar's Screenshot panel used to
+  fold the panel away slowly, so it lingered on screen and could end up in
+  the shot. It now disappears instantly, and the capture waits until it's
+  gone.
+- **A region selection never gets stuck.** Letting go of the mouse over the
+  capture toolbar or past the edge of the screen left the selection stuck,
+  and the next click didn't capture. The drag now always ends where you
+  let go.
 - **Filter chips scroll with any mouse.** The clipboard's categories, the
   to-do lists, the note topics and the dock's app categories now scroll
   sideways with a normal mouse wheel, can be grabbed and dragged, and show

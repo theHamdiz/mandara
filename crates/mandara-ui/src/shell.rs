@@ -942,9 +942,10 @@ impl ShellView {
                 self.panel.set_target(expanded);
             }
             None if self.panel_visible => {
-                // Popped out into a floating card, which lifts off it: the
-                // docked panel goes at once instead of folding back.
-                if self.panel_slot.and_then(|s| self.slot_plugin(s)).is_some_and(|id| crate::floating::is_floating(id, cx)) {
+                // Popped out into a floating card, which lifts off it, or
+                // closed for a screenshot: the docked panel goes at once
+                // instead of folding back.
+                if state.panel_close_at_once || self.panel_slot.and_then(|s| self.slot_plugin(s)).is_some_and(|id| crate::floating::is_floating(id, cx)) {
                     self.panel_visible = false;
                     self.panel_slot = None;
                 }

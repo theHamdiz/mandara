@@ -23,6 +23,9 @@ const MAX_DELAY_S: u64 = 60;
 /// Lead-in before a screen recording starts from the panel (lets the panel
 /// close first).
 const RECORD_LEAD_IN: std::time::Duration = std::time::Duration::from_millis(250);
+/// After the panel is dropped, the compositor needs a frame or two before
+/// a capture no longer shows it.
+const PANEL_GONE: std::time::Duration = std::time::Duration::from_millis(120);
 /// Bar chip glyph, recording dot and gap.
 const BAR_ICON_PX: f32 = 15.0;
 const REC_DOT_PX: f32 = 9.0;
@@ -111,12 +114,30 @@ fn parse_delay(words: &[String], countdown: u64) -> Result<Option<u64>, String> 
 /// overrides the panel timer; a delayed capture shows a countdown (Esc
 /// cancels) and nothing of it is in the frame.
 pub(crate) fn start_delayed(mode: &str, delay: Option<u64>, cx: &mut App) -> Result<Option<async_channel::Receiver<Result<String, String>>>, String> {
-    shell(cx).update(cx, |s, cx| s.set_panel(None, cx));
+    // The panel (this one, from its Region button) goes at once, not
+    // folding back over the screen being captured.
+    let panel_was_open = shell(cx).update(cx, |s, cx| s.close_panel_now(cx));
     if !matches!(mode, "region" | "pick-window" | "window" | "screen") {
         return Err(format!("unknown mode {mode:?}"));
     }
     // The timer waits before capturing (the panel has already closed).
     let delay = delay.unwrap_or(options(cx).delay);
+    if delay == 0 && panel_was_open {
+        // Give the bar a frame or two to repaint without it first.
+        let (tx, rx) = async_channel::bounded(1);
+        let mode = mode.to_string();
+        cx.spawn(async move |cx| {
+            cx.background_executor().timer(PANEL_GONE).await;
+            let result = match cx.update(|cx| start_delayed(&mode, Some(0), cx)) {
+                Ok(Some(pending)) => pending.recv().await.unwrap_or_else(|_| Err("capture was cancelled".into())),
+                Ok(None) => Ok("snipping tool opened".into()),
+                Err(err) => Err(err),
+            };
+            let _ = tx.send(result).await;
+        })
+        .detach();
+        return Ok(Some(rx));
+    }
     if delay > 0 {
         let (tx, rx) = async_channel::bounded(1);
         let edit_after = mandara_config::workflow::ScreenshotSettings::from_plugins(&config(cx).read(cx).get().plugins).edit_after;
@@ -230,7 +251,7 @@ pub fn register(r: &mut PluginRegistry) {
                         recording,
                         palette,
                         move |_, cx| {
-                            shell(cx).update(cx, |s, cx| s.set_panel(None, cx));
+                            shell(cx).update(cx, |s, cx| s.close_panel_now(cx));
                             if recording {
                                 let _ = crate::recorder::stop(cx);
                             } else {
@@ -239,8 +260,15 @@ pub fn register(r: &mut PluginRegistry) {
                         },
                     ))
                     .child(toggle_tile("rec-region", "crop", mandara_i18n::t("Record region"), Some(mandara_i18n::t("Select an area").into()), false, palette, |_, cx| {
-                        shell(cx).update(cx, |s, cx| s.set_panel(None, cx));
-                        crate::snip::open_for_recording(cx);
+                        if shell(cx).update(cx, |s, cx| s.close_panel_now(cx)) {
+                            cx.spawn(async move |cx| {
+                                cx.background_executor().timer(PANEL_GONE).await;
+                                cx.update(crate::snip::open_for_recording);
+                            })
+                            .detach();
+                        } else {
+                            crate::snip::open_for_recording(cx);
+                        }
                     }));
                 let opts = div()
                     .flex()
