@@ -117,6 +117,13 @@ pub struct ShellView {
     /// Where the open panel rested before its content resized it: a leave
     /// or an outside press inside it was caused by the panel moving.
     panel_shadow: crate::dismiss::ResizeShadow,
+    /// The pointer is over the open panel / over its corner tab.
+    panel_hovered: bool,
+    tab_hovered: bool,
+    /// The corner tab (pin, pop out) sliding out of the panel's far edge.
+    tab: SpringValue<f32>,
+    /// The docked landing ([`ShellState::snap_open`]) already applied.
+    landed: Option<(String, String)>,
     sidebar: SpringValue<f32>,
     leave_task: Option<Task<()>>,
     edge_task: Option<Task<()>>,
@@ -301,6 +308,15 @@ const MENU_SLOT: (usize, usize) = (usize::MAX, 0);
 const DETACHED_SLOT: (usize, usize) = (usize::MAX - 1, 0);
 
 use mandara_config::surfaces::defaults as surface_defaults;
+/// The docked panel's corner tab: button side, padding, gap between the
+/// buttons, its concave fillets and its slide spring.
+const TAB_BUTTON_PX: f32 = 22.0;
+const TAB_PAD_PX: f32 = 3.0;
+const TAB_GAP_PX: f32 = 2.0;
+const TAB_FLARE_PX: f32 = 6.0;
+const TAB_SPRING: SpringConfig = SpringConfig::SNAPPY;
+/// The tab's buttons fade in over the last part of its slide.
+const TAB_CONTENT_FROM: f32 = 0.55;
 const PANEL_SPRING: SpringConfig = SpringConfig::new(surface_defaults::PANEL_SPRING_STIFFNESS, surface_defaults::PANEL_SPRING_DAMPING, 1.0);
 const SIDEBAR_SPRING: SpringConfig = SpringConfig::new(surface_defaults::SIDEBAR_SPRING_STIFFNESS, surface_defaults::SIDEBAR_SPRING_DAMPING, 1.0);
 
@@ -311,6 +327,12 @@ pub(crate) fn spring_for(shipped: SpringConfig, o: &mandara_config::surfaces::Sp
         Some((stiffness, damping)) => (SpringConfig::new(stiffness, damping, shipped.mass), true),
         None => (shipped, false),
     }
+}
+
+/// The spring docked panels and floating cards run on (`[panels]
+/// spring`), and whether it is a custom one.
+pub(crate) fn panel_spring(cfg: &ShellConfig) -> (SpringConfig, bool) {
+    spring_for(PANEL_SPRING, &cfg.panels.spring)
 }
 
 /// Steps `spring` under the global profile, or — for a custom spring —
@@ -388,6 +410,7 @@ impl ShellView {
         let spring = SpringConfig::default();
         let monitor_for_autohide = monitor.clone();
         let monitor_for_corners = monitor.clone();
+        crate::floating::register_shell(&monitor, cx.weak_entity(), cx);
         Self {
             config,
             shell,
@@ -417,6 +440,10 @@ impl ShellView {
             panel_entered: false,
             panel_committed: false,
             panel_shadow: Default::default(),
+            panel_hovered: false,
+            tab_hovered: false,
+            tab: SpringValue::new(0.0, TAB_SPRING),
+            landed: None,
             sidebar: SpringValue::new(0.0, SIDEBAR_SPRING),
             leave_task: None,
             edge_task: None,
@@ -657,6 +684,36 @@ impl ShellView {
         self.zones.iter().enumerate().find_map(|(z, slots)| slots.iter().position(|s| s.id == id).map(|i| (z, i)))
     }
 
+    /// The plugin a panel slot shows.
+    fn slot_plugin(&self, (z, i): (usize, usize)) -> Option<&str> {
+        if z == MENU_SLOT.0 {
+            Some(crate::plugins::main_menu::ID)
+        } else if z == DETACHED_SLOT.0 {
+            self.detached.as_ref().map(|(id, _, _)| id.as_str())
+        } else {
+            self.zones.get(z)?.get(i).map(|s| s.id.as_str())
+        }
+    }
+
+    /// The open docked panel's current rect, when it is `id`'s.
+    pub(crate) fn shown_rect(&self, id: &str) -> Option<Bounds<Pixels>> {
+        let slot = self.panel_slot.filter(|_| self.panel_visible)?;
+        (self.slot_plugin(slot)? == id).then(|| self.panel.value())
+    }
+
+    /// `id`'s chip in the bar, when it is placed and visible.
+    pub(crate) fn chip_rect(&self, id: &str) -> Option<Bounds<Pixels>> {
+        let (z, i) = self.find_slot(id)?;
+        self.slot_rects(z).get(i).copied().flatten()
+    }
+
+    /// Where `id`'s panel rests when open in the bar with content of
+    /// `size` (under its chip, or at the bar's centre without one).
+    pub(crate) fn dock_target(&self, cfg: &ShellConfig, id: &str, size: gpui::Size<Pixels>) -> Option<Bounds<Pixels>> {
+        let slot = self.find_slot(id).filter(|_| self.chip_rect(id).is_some()).unwrap_or(DETACHED_SLOT);
+        self.rects_sized(cfg, slot, size).map(|(_, expanded)| expanded)
+    }
+
     fn panel_spec(&self, (z, i): (usize, usize)) -> Option<&PanelSpec> {
         if z == MENU_SLOT.0 {
             self.menu.as_ref().map(|(p, _)| p)
@@ -670,7 +727,13 @@ impl ShellView {
     /// Collapsed and expanded rects of a panel, in surface coordinates. The
     /// geometry is solved top-oriented and mirrored for a bottom bar, so the
     /// panel springs upward from it.
-    fn panel_rects(&self, cfg: &ShellConfig, (z, i): (usize, usize)) -> Option<(Bounds<Pixels>, Bounds<Pixels>)> {
+    fn panel_rects(&self, cfg: &ShellConfig, slot: (usize, usize)) -> Option<(Bounds<Pixels>, Bounds<Pixels>)> {
+        let target = self.panel_spec(slot)?.size.get();
+        self.rects_sized(cfg, slot, target)
+    }
+
+    /// [`Self::panel_rects`] for content of `target` size.
+    fn rects_sized(&self, cfg: &ShellConfig, (z, i): (usize, usize), target: gpui::Size<Pixels>) -> Option<(Bounds<Pixels>, Bounds<Pixels>)> {
         let m = &self.metrics;
         let (pos, surface) = (m.position, self.surface);
         let (along, away) = layout::bar_axes(m, surface);
@@ -684,7 +747,6 @@ impl ShellView {
         } else {
             layout::unorient(pos, self.slot_rects(z).get(i).copied().flatten()?, surface)
         };
-        let target = self.panel_spec((z, i))?.size.get();
         // Beside a side bar the screen frame takes the far edge.
         let free_h = away - layout::exclusive_zone(m) - m.screen_frame;
         let expanded = layout::dashboard_rect(m, chip, target, along, free_h);
@@ -776,6 +838,9 @@ impl ShellView {
 
     fn update_panel(&mut self, cfg: &ShellConfig, cx: &App) {
         let state = self.shell.read(cx);
+        if state.snap_open.is_none() {
+            self.landed = None;
+        }
         let wanted = match state.panel.as_deref() {
             Some(id) if id == crate::plugins::main_menu::ID && self.menu.is_some() => {
                 // (Along the bar: x, or y beside a side bar.)
@@ -790,16 +855,30 @@ impl ShellView {
         match wanted {
             Some(slot) => {
                 let Some((collapsed, expanded)) = self.panel_rects(cfg, slot) else { return };
-                if !self.panel_visible {
-                    self.panel.snap_to(collapsed);
+                // A floating card just docked here: open where it landed.
+                let landed = state.snap_open != self.landed && state.snap_open.as_ref().is_some_and(|(id, out)| *out == self.monitor && self.slot_plugin(slot) == Some(id.as_str()));
+                if landed {
+                    self.landed = state.snap_open.clone();
+                }
+                // The previous panel popped out into a card: no morph from it.
+                let left_floating = self.panel_slot.and_then(|s| self.slot_plugin(s)).is_some_and(|id| crate::floating::is_floating(id, cx));
+                if !self.panel_visible || landed {
+                    self.panel.snap_to(if landed { expanded } else { collapsed });
                     self.panel_visible = true;
+                    self.panel_hovered = false;
+                    self.tab_hovered = false;
                     self.panel_entered = false;
                     self.panel_committed = false;
                     self.panel_shadow.clear();
                     // A close scheduled for the previous panel must never
                     // hit the one just opened.
                     self.leave_task = None;
+                    // Docked on purpose: it stays until dismissed.
+                    self.panel_committed = landed;
                 } else if self.panel_slot != Some(slot) {
+                    if left_floating {
+                        self.panel.snap_to(collapsed);
+                    }
                     self.panel_entered = false;
                     self.panel_committed = false;
                     self.panel_shadow.clear();
@@ -814,9 +893,17 @@ impl ShellView {
                 self.panel.set_target(expanded);
             }
             None if self.panel_visible => {
+                // Popped out into a floating card, which lifts off it: the
+                // docked panel goes at once instead of folding back.
+                if self.panel_slot.and_then(|s| self.slot_plugin(s)).is_some_and(|id| crate::floating::is_floating(id, cx)) {
+                    self.panel_visible = false;
+                    self.panel_slot = None;
+                }
                 // Closing: forget hover/commit state and any pending close,
                 // so reopening (even the same panel) starts clean.
                 self.panel_entered = false;
+                self.panel_hovered = false;
+                self.tab_hovered = false;
                 self.panel_committed = false;
                 self.panel_shadow.clear();
                 self.leave_task = None;
@@ -856,6 +943,7 @@ impl ShellView {
         animating |= self.pill_radius.step(dt);
         animating |= self.pill_alpha.step(dt);
         animating |= step_spring(&mut self.sidebar, self.sidebar_custom, dt);
+        animating |= self.tab.step(dt);
         animating |= self.tabs.step(dt);
         animating |= self.autohide.step(dt);
         if self.panel_visible {
@@ -880,7 +968,9 @@ impl ShellView {
             let _ = this.update(cx, |this, cx| {
                 tracing::info!(target: "mandara::dismiss", "pointer left {}", match what { Leave::Panel => "panel", Leave::Sidebar => "sidebar" });
                 this.shell.update(cx, |s, cx| match what {
-                    Leave::Panel => s.set_panel(None, cx),
+                    Leave::Panel => {
+                        s.dismiss_panel(cx);
+                    }
                     Leave::Sidebar => s.set_sidebar_hover(false, cx),
                 });
             });
@@ -927,7 +1017,7 @@ impl ShellView {
     fn close_all(&mut self, reason: &str, cx: &mut Context<Self>) {
         tracing::info!(target: "mandara::dismiss", "close all: {reason}");
         self.shell.update(cx, |s, cx| {
-            s.set_panel(None, cx);
+            s.dismiss_panel(cx);
             s.set_sidebar(false, cx);
         });
     }
@@ -943,10 +1033,10 @@ impl ShellView {
             return;
         }
         let state = self.shell.read(cx);
-        if state.panel.is_some() || state.sidebar_visible() {
+        if (state.panel.is_some() && !state.panel_pinned) || state.sidebar_visible() {
             tracing::info!(target: "mandara::dismiss", "dismiss: {reason}");
             self.shell.update(cx, |s, cx| {
-                s.set_panel(None, cx);
+                s.dismiss_panel(cx);
                 s.set_sidebar(false, cx);
             });
         }
@@ -994,6 +1084,10 @@ fn capsule_colors(bar: &mandara_config::BarConfig, palette: &MandaraPalette) -> 
         BarCapsuleFill::Accent => palette.primary.with_alpha(CAPSULE_ACCENT_ALPHA * k),
     };
     (fill, palette.outline.with_alpha((CAPSULE_OUTLINE_ALPHA * k).min(1.0)))
+}
+
+fn bounds_of(r: crate::dismiss::Rect) -> Bounds<Pixels> {
+    Bounds { origin: point(px(r.x), px(r.y)), size: size(px(r.w), px(r.h)) }
 }
 
 fn rect_of(b: Bounds<Pixels>) -> crate::dismiss::Rect {
@@ -1052,6 +1146,14 @@ impl Render for ShellView {
         let sidebar_target = if cfg.sidebar.enabled && (cfg.sidebar.pinned() || shell_state.sidebar_visible()) { 1.0 } else { 0.0 };
         self.sidebar.set_target(sidebar_target);
         self.autohide.update(&cfg, &self.monitor, panel_open || sidebar_target > 0.0);
+        // The corner tab shows on a settled plugin panel while hovered, and
+        // always while pinned.
+        let tab_wanted = panel_open
+            && self.panel_visible
+            && self.panel_slot.is_some_and(|s| s != MENU_SLOT)
+            && self.panel_progress(&cfg) > PANEL_SETTLED_PROGRESS
+            && (self.panel_hovered || self.tab_hovered || shell_state.panel_pinned);
+        self.tab.set_target(if tab_wanted { 1.0 } else { 0.0 });
         let dt = self.clock.tick_vsync(now, window.refresh_interval(cx));
         if self.step(dt, panel_open) {
             window.request_animation_frame();
@@ -1198,7 +1300,8 @@ impl Render for ShellView {
         // pointer leaves the shell surface straight onto a window, GPUI never
         // sees a hover-out, and a click on the already-focused window gives
         // no focus change either — the sidebar would stay open.
-        let catcher_active = panel_open || (cfg.sidebar.enabled && shell_state.sidebar_visible() && !cfg.sidebar.pinned());
+        // A pinned panel lets clicks through to your windows.
+        let catcher_active = (panel_open && !shell_state.panel_pinned) || (cfg.sidebar.enabled && shell_state.sidebar_visible() && !cfg.sidebar.pinned());
         if catcher_active {
             root = root.child(
                 div()
@@ -1456,6 +1559,8 @@ impl Render for ShellView {
 
         // ── Slot chips + content ──────────────────────────────────────────
         let active_slot = if panel_open { self.panel_slot } else { None };
+        // A floating panel's chip stays lit like an open one.
+        let floating_ids = crate::floating::live_ids(cx);
         let bar_text_px = BASE_TEXT_PX * cfg.typography.scale * cfg.bar.text_scale();
         let bar_weight = gpui::FontWeight(f32::from(cfg.bar.font_weight(cfg.typography.weight)));
         let (capsule_fill, capsule_edge) = capsule_colors(&cfg.bar, &palette);
@@ -1541,7 +1646,7 @@ impl Render for ShellView {
             }
             for (i, slot) in self.zones[z].iter().enumerate() {
                 let lift = slot.hover.value().clamp(0.0, 1.0);
-                let active = active_slot == Some((z, i));
+                let active = active_slot == Some((z, i)) || floating_ids.contains(&slot.id);
                 if let Some(r) = rects[i] {
                     let tint = if active { palette.primary.with_alpha(ACTIVE_CHIP_TINT_ALPHA) } else { palette.on_surface.with_alpha(hover_k * lift) };
                     let has_action = slot.panel.is_some() || slot.on_click.is_some();
@@ -1693,13 +1798,15 @@ impl Render for ShellView {
                         if *hovered && !window.is_window_hovered() {
                             return;
                         }
+                        this.panel_hovered = *hovered;
+                        cx.notify();
                         if *hovered {
                             if settled {
                                 this.panel_entered = true;
                             }
                             this.panel_shadow.clear();
                             this.cancel_leave();
-                        } else if this.panel_entered && !this.panel_committed {
+                        } else if this.panel_entered && !this.panel_committed && !this.tab_hovered {
                             let pointer = window.mouse_position();
                             if this.panel_shadow.leave_counts(f32::from(pointer.x), f32::from(pointer.y)) {
                                 this.schedule_leave(Leave::Panel, cx);
@@ -1757,6 +1864,86 @@ impl Render for ShellView {
                         .absolute()
                         .size_0()
                     })
+                    .child(self.mask.region()),
+            );
+        }
+
+        // ── The panel's corner tab: pin and pop out ───────────────────────
+        let tab_p = self.tab.value().clamp(0.0, 1.0);
+        if tab_p > HIDDEN_EPSILON
+            && self.panel_visible
+            && let Some(slot) = self.panel_slot.filter(|s| *s != MENU_SLOT)
+            && let Some(id) = self.slot_plugin(slot).map(str::to_string)
+        {
+            let pinned = self.shell.read(cx).is_pinned(&id);
+            let fill = if attached { bar_fill.with_alpha(fill.alpha() * ranges::OPACITY.clamp(cfg.bar.opacity, 1.0) * panel_alpha) } else { fill.with_alpha(fill.alpha() * panel_alpha) };
+            let len = 2.0 * TAB_BUTTON_PX + TAB_GAP_PX + 2.0 * TAB_PAD_PX;
+            let depth = TAB_BUTTON_PX + 2.0 * TAB_PAD_PX;
+            let t = crate::floating::geom::tab(rect_of(self.panel.value()), cfg.bar.position, len, depth, panel_radius + TAB_FLARE_PX, crate::bidi::rtl());
+            let d = depth * tab_p;
+            // The part slid out so far, overlapping the panel by the seam.
+            let (dx, dy, dw, dh) = match t.edge {
+                Edge::Top => (t.rect.x, t.rect.y - seam, t.rect.w, d + seam),
+                Edge::Bottom => (t.rect.x, t.rect.y + depth - d, t.rect.w, d + seam),
+                Edge::Left => (t.rect.x - seam, t.rect.y, d + seam, t.rect.h),
+                Edge::Right => (t.rect.x + depth - d, t.rect.y, d + seam, t.rect.h),
+            };
+            let end = DrawerEnd::flared(depth / 2.0, TAB_FLARE_PX);
+            let drawer = edge_drawer_ends(t.edge, dx, dy, dw, dh, end, end, fill.hsla(), scale);
+            let (pin_id, float_id, monitor) = (id.clone(), id.clone(), self.monitor.clone());
+            let ink = palette.on_surface_variant;
+            root = root.child(if panel_fade < 1.0 { div().absolute().size_full().opacity(panel_fade).child(drawer).into_any_element() } else { drawer }).child(
+                place(bounds_of(t.rect))
+                    .id("panel-tab")
+                    .flex()
+                    .when(t.vertical, |el| el.flex_col())
+                    .items_center()
+                    .justify_center()
+                    .gap(px(TAB_GAP_PX))
+                    .opacity(smoothstep(TAB_CONTENT_FROM, 1.0, tab_p) * panel_fade)
+                    .occlude()
+                    .capture_any_mouse_down(cx.listener(|this, _: &gpui::MouseDownEvent, _, _| {
+                        this.panel_committed = true;
+                        this.cancel_leave();
+                    }))
+                    .on_hover(cx.listener(move |this, hovered: &bool, window, cx| {
+                        // GPUI re-tests hover on repaint against the last pointer position, stale once the pointer left the surface.
+                        if *hovered && !window.is_window_hovered() {
+                            return;
+                        }
+                        this.tab_hovered = *hovered;
+                        if *hovered {
+                            this.cancel_leave();
+                        } else if this.panel_entered && !this.panel_committed && !this.panel_hovered {
+                            this.schedule_leave(Leave::Panel, cx);
+                        }
+                        cx.notify();
+                    }))
+                    .child(crate::kit::icon_button(
+                        "panel-pin",
+                        if pinned { "pin" } else { "pin-off" },
+                        TAB_BUTTON_PX,
+                        if pinned { palette.primary } else { ink },
+                        pinned.then_some(palette.primary.with_alpha(PIN_TINT_ALPHA)),
+                        move |_, cx| {
+                            let shell = crate::state::shell(cx);
+                            shell.update(cx, |s, cx| {
+                                if s.is_pinned(&pin_id) {
+                                    s.unpin_panel(&pin_id, cx);
+                                } else {
+                                    s.pin_panel(&pin_id, cx);
+                                }
+                            });
+                        },
+                    ))
+                    .child(crate::kit::icon_button("panel-float", "external", TAB_BUTTON_PX, ink, None, move |_, cx| {
+                        let (id, monitor) = (float_id.clone(), monitor.clone());
+                        cx.defer(move |cx| {
+                            if let Err(err) = crate::floating::float(&id, Some(&monitor), None, cx) {
+                                tracing::warn!("floating `{id}`: {err}");
+                            }
+                        });
+                    }))
                     .child(self.mask.region()),
             );
         }

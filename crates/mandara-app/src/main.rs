@@ -493,6 +493,8 @@ fn run_shell() -> Result<()> {
         .detach();
 
         open_surfaces(&outputs, cx);
+        // Panels that floated when the shell last stopped come back.
+        mandara_ui::floating::init(cx);
         if mandara_ui::backdrop::software_enabled() {
             // Falls back to the GPUI windows if it cannot start.
             let fallback_outputs = outputs.clone();

@@ -103,6 +103,7 @@ pub fn entries() -> Vec<Setting> {
         s(Bar, PANELS, "/panels/anchor", tk("Horizontal position"), tk("Center panels under their button, on the screen, or push them to the screen edge on their side"), Choice(ANCHORS)),
         s(Bar, PANELS, "/panels/opacity", tk("Background opacity"), tk("Lower it to let the desktop show through panels"), span(ranges::OPACITY, "")),
         s(Bar, PANELS, "/panels/shadow_strength", tk("Shadow strength"), tk("Shadow under floating panels and floating side panels"), span(ranges::INTENSITY, "×")),
+        s(Bar, PANELS, "/panels/remember_floating", tk("Remember floating panels"), tk("Panels you popped out of the bar come back where they were after a restart"), Toggle),
         s(Bar, PANEL_MOTION, "/panels/animation", tk("Open animation"), tk("How panels appear"), Choice(ANIMATIONS)),
         s(Bar, PANEL_MOTION, "/panels/spring/custom", tk("Custom spring"), tk("Use your own stiffness and damping instead of the global motion settings"), Toggle),
         s(Bar, PANEL_MOTION, "/panels/spring/stiffness", tk("Stiffness"), tk("Higher is snappier"), span(ranges::SPRING_STIFFNESS, "")),

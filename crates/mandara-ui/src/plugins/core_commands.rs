@@ -47,6 +47,12 @@ fn set_pointer(root: &mut serde_json::Value, ptr: &str, new: serde_json::Value) 
     Err(format!("no setting at {ptr}"))
 }
 
+/// The bar's panel, its pin and the floating panels (`panel …` replies).
+fn panel_state(cx: &gpui::App) -> serde_json::Value {
+    let s = shell(cx).read(cx);
+    json!({ "panel": s.panel, "pinned": s.panel_pinned, "floating": crate::floating::live_ids(cx) })
+}
+
 pub fn register(r: &mut PluginRegistry) {
     let core = "core";
     // Debug builds only: proves a panicking plugin command is isolated.
@@ -81,6 +87,8 @@ pub fn register(r: &mut PluginRegistry) {
             let cfg = config(cx).read(cx).snapshot();
             Ok(json!({
                 "panel": s.panel,
+                "panel_pinned": s.panel_pinned,
+                "floating_panels": crate::floating::live_ids(cx),
                 "sidebar": s.sidebar_visible(),
                 "sidebar_pinned": cfg.sidebar.pinned(),
                 "sidebar_mode": cfg.sidebar.mode,
@@ -96,22 +104,104 @@ pub fn register(r: &mut PluginRegistry) {
 
     r.command(
         core,
-        CommandSpec::new("panel", mandara_i18n::tk("Open, close or toggle a plugin's panel"), |a, cx| {
-            let action = a.str(0)?.to_string();
-            let id = a.get(1).map(str::to_string);
-            let shell = shell(cx);
-            match (action.as_str(), id) {
-                ("close", _) => shell.update(cx, |s, cx| s.set_panel(None, cx)),
-                ("open", Some(id)) => shell.update(cx, |s, cx| s.set_panel(Some(id), cx)),
-                ("toggle", Some(id)) => shell.update(cx, |s, cx| s.toggle_panel(&id, cx)),
-                _ => return Err("usage: panel <open|toggle> <plugin-id> | panel close".into()),
-            }
-            Ok(json!({ "panel": shell.read(cx).panel }))
-        })
+        CommandSpec::new(
+            "panel",
+            mandara_i18n::tk("Open, close or toggle a plugin's panel. A floating panel is brought to the front by open and closed by toggle or close <plugin>; close without a plugin closes the bar's panel, pinned or not"),
+            |a, cx| {
+                let action = a.str(0)?.to_string();
+                let id = a.get(1).map(str::to_string);
+                let shell = shell(cx);
+                match (action.as_str(), id) {
+                    ("close", Some(id)) if crate::floating::is_floating(&id, cx) => {
+                        crate::floating::close(&id, cx);
+                    }
+                    ("close", Some(id)) => shell.update(cx, |s, cx| {
+                        if s.panel.as_deref() == Some(id.as_str()) {
+                            s.set_panel(None, cx);
+                        }
+                    }),
+                    ("close", None) => shell.update(cx, |s, cx| s.set_panel(None, cx)),
+                    ("open", Some(id)) => shell.update(cx, |s, cx| s.set_panel(Some(id), cx)),
+                    ("toggle", Some(id)) => shell.update(cx, |s, cx| s.toggle_panel(&id, cx)),
+                    _ => return Err("usage: panel <open|toggle> <plugin-id> | panel close [plugin-id]".into()),
+                }
+                Ok(panel_state(cx))
+            },
+        )
         .arg(open_close_toggle())
         .arg(ArgSpec::optional("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network")))
         .example("panel toggle media")
-        .example("panel close"),
+        .example("panel close")
+        .example("panel close weather"),
+    );
+    r.command(
+        core,
+        CommandSpec::new(
+            "panel pin",
+            mandara_i18n::tk("Pin a plugin's panel open in the bar: outside clicks, focus changes and the launcher leave it open (its chip, Esc or panel close still close it). A floating panel docks back pinned"),
+            |a, cx| {
+                let id = a.str(0)?.to_string();
+                if id == crate::plugins::main_menu::ID {
+                    return Err("the main menu opens from the bar only".into());
+                }
+                if crate::floating::is_floating(&id, cx) {
+                    crate::floating::dock(&id, true, cx)?;
+                } else {
+                    shell(cx).update(cx, |s, cx| s.pin_panel(&id, cx));
+                }
+                Ok(panel_state(cx))
+            },
+        )
+        .arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network")))
+        .example("panel pin media"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("panel unpin", mandara_i18n::tk("Unpin a plugin's panel: it stays open until the next outside click"), |a, cx| {
+            let id = a.str(0)?.to_string();
+            let was = shell(cx).update(cx, |s, cx| s.unpin_panel(&id, cx));
+            let mut state = panel_state(cx);
+            state["unpinned"] = json!(was);
+            Ok(state)
+        })
+        .arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network")))
+        .example("panel unpin media"),
+    );
+    r.command(
+        core,
+        CommandSpec::new(
+            "panel float",
+            mandara_i18n::tk("Pop a plugin's panel out of the bar into a floating card you can drag anywhere on the output its panel is open on (else the focused one): at x y when given (logical px from the output's top-left), else where it last floated there. A floating card moves to x y"),
+            |a, cx| {
+                let id = a.str(0)?.to_string();
+                let at = match (a.get(1), a.get(2)) {
+                    (Some(_), Some(_)) => Some((a.number(1)? as f32, a.number(2)? as f32)),
+                    (None, None) => None,
+                    _ => return Err("usage: panel float <plugin-id> [x y]".into()),
+                };
+                crate::floating::float(&id, None, at, cx)
+            },
+        )
+        .arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network")))
+        .arg(ArgSpec::optional("x", ArgKind::Number, mandara_i18n::tk("left edge, logical px from the output's left")))
+        .arg(ArgSpec::optional("y", ArgKind::Number, mandara_i18n::tk("top edge, logical px from the output's top")))
+        .example("panel float media")
+        .example("panel float weather 80 120"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("panel dock", mandara_i18n::tk("Send a floating panel back into the bar (it opens there)"), |a, cx| {
+            let id = a.str(0)?.to_string();
+            crate::floating::dock(&id, false, cx)?;
+            Ok(panel_state(cx))
+        })
+        .arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network")))
+        .example("panel dock media"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("panel floating", mandara_i18n::tk("The floating panels with their output, position and size, and every remembered position"), |_, cx| Ok(crate::floating::list(cx)))
+            .example("panel floating"),
     );
 
     r.command(

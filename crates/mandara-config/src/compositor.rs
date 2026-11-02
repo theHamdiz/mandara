@@ -819,13 +819,19 @@ fn b(v: bool) -> u8 {
 /// surface is handled separately because it keeps the compositor's blur).
 pub const SHELL_SURFACES: &[&str] = &["mandara-bar", "mandara-exclusion", "mandara-launcher", "mandara-switcher", "mandara-dock", "mandara-wallpaper", "mandara-osd", "mandara-notifications", "mandara-installer", "mandara-desktop", "mandara-desktop-menu", "mandara-desktop-edit"];
 
+/// Shell surfaces whose rules were checked only by MangoWM's and Niri's
+/// own checkers so far (`mango_itself_accepts_the_drop_in`,
+/// `niri_itself_accepts_the_drop_in`): emitted for those two only, until
+/// Hyprland's and Umbriel's checkers have accepted them too.
+pub const MANGO_NIRI_SURFACES: &[&str] = &["mandara-floating"];
+
 /// `~/.config/mandara/generated/mango.conf`
 pub fn emit_mango(cfg: &ManagedConfig) -> Emitted {
     let c = cfg.config;
     let mut s = String::new();
     let _ = writeln!(s, "# {HEADER}\n");
     let _ = writeln!(s, "# Shell surfaces: no compositor animation or shadow (Mandara animates itself).");
-    for ns in SHELL_SURFACES {
+    for ns in SHELL_SURFACES.iter().chain(MANGO_NIRI_SURFACES) {
         let _ = writeln!(s, "layer_rule=no_animation:1,no_shadow:1,no_blur:1,layer_name:{ns}");
     }
     // The lock screen and dialogs on its surface keep the compositor's blur.
@@ -992,7 +998,7 @@ pub fn emit_niri(cfg: &ManagedConfig) -> Emitted {
     let c = cfg.config;
     let mut s = String::new();
     let _ = writeln!(s, "// {HEADER}\n");
-    for ns in SHELL_SURFACES {
+    for ns in SHELL_SURFACES.iter().chain(MANGO_NIRI_SURFACES) {
         let _ = writeln!(s, "layer-rule {{\n    match namespace={}\n    shadow {{ off; }}\n}}", kdl_str(&format!("^{ns}$")));
     }
     let _ = writeln!(s, "layer-rule {{\n    match namespace=\"^mandara-wallpaper$\"\n    place-within-backdrop true\n}}");
@@ -2553,6 +2559,18 @@ mod tests {
         assert!(rule.contains("title:xexec = rm -rf ~. float on"), "commas can't split the rule: {rule}");
         assert_eq!(rule_value("a,b\u{7}c"), "a.bc");
         assert_eq!(kdl_str("a\nb\""), "\"a\\nb\\\"\"");
+    }
+
+    /// The floating panels' surface gets its rule only where the
+    /// compositor's own checker has accepted it.
+    #[test]
+    fn floating_surface_rules_only_where_checked() {
+        let cfg = CompositorConfig::default();
+        let m = managed(&cfg, &[]);
+        assert!(emit_mango(&m).text.contains("layer_rule=no_animation:1,no_shadow:1,no_blur:1,layer_name:mandara-floating"));
+        assert!(emit_niri(&m).text.contains("match namespace=\"^mandara-floating$\""));
+        assert!(!emit_hyprland(&m).text.contains("mandara-floating"), "not verified with Hyprland's checker");
+        assert!(!emit_umbriel(&m).text.contains("mandara-floating"), "not verified with Umbriel's checker");
     }
 
     #[test]

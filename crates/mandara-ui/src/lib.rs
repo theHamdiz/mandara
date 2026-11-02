@@ -23,6 +23,7 @@ pub mod desktop_info;
 pub mod desktop_menu;
 pub mod desktop_plugins;
 pub mod dismiss;
+pub mod floating;
 pub mod fonts;
 pub mod hub;
 pub mod icon_theme;
