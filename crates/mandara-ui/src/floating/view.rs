@@ -3,8 +3,13 @@
 //! A card is the plugin's panel on an opaque rounded surface (the docked
 //! panels' fill, hairline edge and elevation) with a slim grab pill on a
 //! strip along its top; hovering the card reveals its dock and close
-//! buttons at the strip's end. Dragging the strip moves the card inside
-//! the surface, clamped clear of the bar's band and the output's edges.
+//! buttons at the strip's end. Pressing anywhere on the card's chrome (the
+//! strip or the edge around the plugin's content, never the content
+//! itself) and moving a few pixels drags the card inside the surface,
+//! clamped clear of the bar's band and the output's edges. The drag
+//! listens window-wide, so the card follows the pointer wherever it goes;
+//! pointer moves are applied once per frame and the place is saved once,
+//! on release.
 //! Its rect is one spring: it morphs out of the docked panel or chip,
 //! follows the plugin's size, and morphs back into the bar when docked.
 //!
@@ -18,7 +23,7 @@ use std::time::Instant;
 use crate::bidi::Bidi as _;
 
 use gpui::{
-    AnyElement, App, Bounds, Context, CursorStyle, FocusHandle, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, ParentElement, Pixels,
+    AnyElement, App, Bounds, Context, CursorStyle, DispatchPhase, FocusHandle, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels,
     Render, SharedString, Size, StatefulInteractiveElement, StyleRefinement, Styled, Window, canvas, div, point, prelude::FluentBuilder as _, px,
 };
 use mandara_config::{BarPosition, ShellConfig};
@@ -35,9 +40,9 @@ use crate::plugins::panel_fx::{elevation_scaled, surface_edge};
 use crate::state::config;
 
 /// Height of the grab strip along a card's top.
-const STRIP_PX: f32 = 22.0;
+const STRIP_PX: f32 = 28.0;
 /// The grab pill in it.
-const GRAB_W_PX: f32 = 36.0;
+const GRAB_W_PX: f32 = 40.0;
 const GRAB_H_PX: f32 = 4.0;
 /// Grab pill ink: resting, and while hovered or dragged.
 const GRAB_ALPHA: (f32, f32) = (0.2, 0.45);
@@ -45,6 +50,9 @@ const GRAB_ALPHA: (f32, f32) = (0.2, 0.45);
 const CONTROL_PX: f32 = 20.0;
 const CONTROL_GAP_PX: f32 = 2.0;
 const CONTROL_INSET_PX: f32 = 6.0;
+/// How far the pointer moves (logical px) before a press on the chrome
+/// becomes a drag: a plain click never nudges the card.
+const DRAG_SLOP_PX: f32 = 3.0;
 /// Space kept between a card and the output's edges / the bar's band.
 const EDGE_MARGIN_PX: f32 = 8.0;
 /// How far a card lifts off the docked panel it pops out of.
@@ -113,6 +121,12 @@ struct Drag {
     id: String,
     /// Pointer minus the card's origin at the press.
     grab: (f32, f32),
+    /// Where the press was.
+    press: (f32, f32),
+    /// The pointer's latest position, applied at the next frame.
+    pointer: Option<(f32, f32)>,
+    /// Past [`DRAG_SLOP_PX`]: the card follows, and its place is saved on
+    /// release.
     moved: bool,
 }
 
@@ -347,40 +361,67 @@ impl FloatingView {
 
     // ── Dragging ─────────────────────────────────────────────────────────
 
+    /// A press on `id`'s card: starts a drag when it landed on the chrome.
     fn start_drag(&mut self, id: &str, e: &MouseDownEvent, cx: &mut Context<Self>) {
+        let cfg = config(cx).read(cx).snapshot();
         let Some(card) = self.card(id).filter(|c| c.leaving.is_none()) else { return };
         let b = card.bounds.value();
-        let grab = (f32::from(e.position.x - b.origin.x), f32::from(e.position.y - b.origin.y));
-        self.drag = Some(Drag { id: id.to_string(), grab, moved: false });
+        let press = (f32::from(e.position.x), f32::from(e.position.y));
+        if !geom::on_chrome(rect_of(b), card.content, chrome(&cfg), press) {
+            return;
+        }
+        let grab = (press.0 - f32::from(b.origin.x), press.1 - f32::from(b.origin.y));
+        self.drag = Some(Drag { id: id.to_string(), grab, press, pointer: None, moved: false });
         cx.notify();
     }
 
-    fn drag_to(&mut self, e: &MouseMoveEvent, cx: &mut Context<Self>) {
+    /// Any pointer move while dragging (window-wide): remembered for the
+    /// next frame, which moves the card.
+    fn pointer_moved(&mut self, e: &MouseMoveEvent, cx: &mut Context<Self>) {
         let Some(drag) = self.drag.as_mut() else { return };
         if e.pressed_button != Some(MouseButton::Left) {
             self.end_drag(cx);
             return;
         }
-        drag.moved = true;
-        let (id, grab) = (drag.id.clone(), drag.grab);
-        let cfg = config(cx).read(cx).snapshot();
-        let area = self.area(&cfg);
-        let Some(card) = self.card_mut(&id) else {
+        let p = (f32::from(e.position.x), f32::from(e.position.y));
+        if !drag.moved {
+            if (p.0 - drag.press.0).hypot(p.1 - drag.press.1) < DRAG_SLOP_PX {
+                return;
+            }
+            drag.moved = true;
+        }
+        drag.pointer = Some(p);
+        cx.notify();
+    }
+
+    /// Moves the dragged card under the pointer's latest position (once
+    /// per frame, however many moves arrived).
+    fn apply_drag(&mut self, cfg: &ShellConfig) {
+        let area = self.area(cfg);
+        let Some(drag) = self.drag.as_mut() else { return };
+        let Some(p) = drag.pointer.take() else { return };
+        let grab = drag.grab;
+        let Some(card) = self.cards.iter_mut().find(|c| c.id == drag.id && c.leaving.is_none()) else {
             self.drag = None;
             return;
         };
         let t = card.bounds.target();
         let size = (f32::from(t.size.width), f32::from(t.size.height));
-        let at = (f32::from(e.position.x) - grab.0, f32::from(e.position.y) - grab.1);
-        card.origin = geom::clamp_origin(at, size, area, EDGE_MARGIN_PX);
+        card.origin = geom::clamp_origin((p.0 - grab.0, p.1 - grab.1), size, area, EDGE_MARGIN_PX);
         // The card follows the pointer exactly; only its size springs.
         let cur = card.bounds.value();
         card.bounds.snap_to(Bounds { origin: point(px(card.origin.0), px(card.origin.1)), size: cur.size });
         card.bounds.set_target(bounds_at(card.origin, size));
-        cx.notify();
     }
 
+    /// The button went up: the card lands where the pointer let go and
+    /// its place is saved (once per drag).
     fn end_drag(&mut self, cx: &mut Context<Self>) {
+        if self.drag.is_none() {
+            return;
+        }
+        let cfg = config(cx).read(cx).snapshot();
+        self.apply_drag(&cfg);
         let Some(drag) = self.drag.take() else { return };
         cx.notify();
         if !drag.moved {
@@ -514,15 +555,15 @@ impl FloatingView {
                 });
             }));
         let drag_id = id.clone();
+        // The chrome's hand cursor: everywhere on the card under the
+        // content (which sets its own).
+        let grip = div().absolute().top_0().left_0().size_full().cursor(if dragging { CursorStyle::ClosedHand } else { CursorStyle::OpenHand });
         let strip = div()
-            .id(SharedString::from(format!("float-strip-{id}")))
             .absolute()
             .top_0()
             .left_0()
             .w_full()
             .h(px(STRIP_PX))
-            .cursor(if dragging { CursorStyle::ClosedHand } else { CursorStyle::OpenHand })
-            .on_mouse_down(MouseButton::Left, cx.listener(move |this, e: &MouseDownEvent, _, cx| this.start_drag(&drag_id, e, cx)))
             .child(
                 div()
                     .absolute()
@@ -540,6 +581,7 @@ impl FloatingView {
             .top(px(STRIP_PX))
             .w(px(cw))
             .h(px(ch))
+            .cursor(CursorStyle::Arrow)
             .opacity(smoothstep(0.0, 1.0, a))
             // Typography → Panels & plugins font.
             .font_family(panels_font)
@@ -596,6 +638,10 @@ impl FloatingView {
                     cx.notify();
                 }
             }))
+            // Presses on the chrome drag (the dock / close buttons stop
+            // theirs; presses on the content are the plugin's).
+            .on_mouse_down(MouseButton::Left, cx.listener(move |this, e: &MouseDownEvent, _, cx| this.start_drag(&drag_id, e, cx)))
+            .child(grip)
             .child(content)
             .child(strip)
             .child(resize)
@@ -616,6 +662,7 @@ impl Render for FloatingView {
             self.surface = (f32::from(viewport.width), f32::from(viewport.height));
         }
         let dt = self.clock.tick_vsync(now, window.refresh_interval(cx));
+        self.apply_drag(&cfg);
         if self.step(&cfg, dt, cx) {
             window.request_animation_frame();
         } else {
@@ -634,9 +681,34 @@ impl Render for FloatingView {
             // After any press: did it focus something that wants keys?
             .capture_any_mouse_down(cx.listener(|_, _: &MouseDownEvent, window, cx| {
                 cx.defer_in(window, |this, window, cx| this.sync_keyboard(window, cx));
-            }))
-            .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| this.drag_to(e, cx)))
-            .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, cx| this.end_drag(cx)));
+            }));
+        if self.drag.is_some() {
+            // Window-wide, not on an element: the cards occlude everything
+            // beneath them, so an element's move / release listeners would
+            // miss every event over the dragged card itself.
+            let view = cx.entity().downgrade();
+            root = root.child(
+                canvas(
+                    |_, _, _| {},
+                    move |_, _, window, _| {
+                        let moves = view.clone();
+                        window.on_mouse_event(move |e: &MouseMoveEvent, phase, _, cx| {
+                            if phase == DispatchPhase::Bubble {
+                                let _ = moves.update(cx, |this, cx| this.pointer_moved(e, cx));
+                            }
+                        });
+                        let ups = view.clone();
+                        window.on_mouse_event(move |e: &MouseUpEvent, phase, _, cx| {
+                            if phase == DispatchPhase::Bubble && e.button == MouseButton::Left {
+                                let _ = ups.update(cx, |this, cx| this.end_drag(cx));
+                            }
+                        });
+                    },
+                )
+                .absolute()
+                .size_0(),
+            );
+        }
         // While dragging or typing every press counts: the whole surface
         // joins the input region, beneath the cards. A press outside the
         // cards stops typing (and is used up, like a menu's outside click).

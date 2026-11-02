@@ -6,6 +6,16 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **Floating panels drag smoothly.** A panel popped out onto the desktop
+  now follows your pointer exactly, frame by frame, wherever you drag it.
+  Before, it only moved once the pointer had slipped off its grab strip,
+  so it stuck and jumped, and letting go over the card often didn't save
+  where you put it. You can grab it by its whole top strip or its edges
+  (never the panel's own buttons), a plain click never nudges it, and its
+  place is saved once, when you let go.
+
 ## 0.7.0 — 2026-11-02
 
 Shortcuts cheatsheet. Task progress. Eye breaks. Presentation mode.
