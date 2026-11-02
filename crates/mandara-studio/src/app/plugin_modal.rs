@@ -436,6 +436,8 @@ fn lane_label(lane: Lane) -> &'static str {
         Lane::Left => tk("Left"),
         Lane::Center => tk("Center"),
         Lane::Right => tk("Right"),
+        Lane::Side(false, _) => tk("Left side bar"),
+        Lane::Side(true, _) => tk("Right side bar"),
         Lane::Sidebar | Lane::Tab(_) => tk("Sidebar"),
         Lane::Tray => tk("Not placed"),
     }

@@ -599,6 +599,90 @@ screen edges and the bar.
 out, as with auto-hide. It isn't saved: a restart brings the bar back. A
 side bar always stays.
 
+## Side bars (`[side_bars]`)
+
+Besides the main bar, a slim **left and right side bar** can hold plugin
+chips: icons, pills and islands, never widget cards. Each side has three
+groups (top, middle, bottom), and a chip opens its plugin's panel sideways
+out of its bar, on that monitor only, like a chip in the main bar. Plugins
+draw their column form there (stacked clock digits, a vertical workspace
+strip, icon over value), whatever edge the main bar is on. Side bars
+appear on the outputs that show the bar (`[displays.surfaces.bar]`), and
+never on the main bar's own edge. They are off by default:
+
+```toml
+[side_bars]
+enabled = false          # the master switch
+joined = true            # one frame with the top / bottom bar (see below)
+shape = "pills"          # separate side bars: pills | island | slab
+width = 40               # 28–72 px
+edge_gap = 6             # 0–32: gap to the screen edge (separate) and around the end groups
+chip_size = 34           # 16–72: an item's extent across the bar (at most the width)
+chip_padding = 7         # 0–20: space above and below an item's content
+chip_spacing = 4         # 0–24: gap between items
+chips = "icons"          # icons | pills (a pill per item) | island (one per group)
+chip_fill = 1.0          # 0–3: strength of the pill / island wash
+align = "screen"         # middle group: screen (middle of the edge) | between | start | end
+corner_radius = 16       # 0–36: pills, island, slab and items (times Style → roundness)
+flare_radius = 18        # 0–40: the curves where it meets the bar, the screen edge and its panels
+opacity = 1.0            # separate side bars: background opacity (0–1)
+tint = 0.0               # separate: share of the side's accent in the fill (0–0.6)
+glass = false            # separate: your wallpaper, frosted, under the fill
+rim = true               # separate: the specular rim light…
+rim_intensity = 1.0      # …and its strength (0–2)
+shadow = true            # separate: a soft shadow (strength: bar.shadow_strength)
+reveal_delay_ms = 150    # unpinned: rest on the edge this long to slide it out (0–1500)
+hide_delay_ms = 600      # unpinned: it slides away this long after the pointer leaves (0–3000)
+
+[side_bars.left]
+enabled = true
+pinned = true            # stays, with its depth reserved so windows tile beside it
+accent = "theme"         # theme | secondary | tertiary | emerald | amber | coral
+top = ["workspaces"]
+middle = []
+bottom = ["wallpaper", "screenshot"]
+
+[side_bars.right]
+enabled = true
+pinned = true
+accent = "theme"
+top = ["clock"]
+middle = ["power"]
+bottom = ["notifications"]
+```
+
+- **Joined (the default).** The top (or bottom) bar and the side bars
+  become one frame, like a puzzle piece: each side bar is a column of the
+  bar's own fill hanging from it, with concave curves where it meets the
+  bar and the far screen edge. The bar is drawn as the **edge frame**
+  while they're joined (not floating); `bar.layout` and
+  `bar.floating_frame` are kept and come back when they're separate. The
+  frame shares the bar's material (`bar.opacity`, `bar.tint`), so the
+  separate-only material settings above don't apply. Only a top or bottom
+  bar joins; beside a left or right main bar the other side bar floats.
+- **Separate.** Each side bar floats `edge_gap` clear of its edge, below
+  the bar's reserved band: a glass pill per group, one island packing the
+  groups, or a slab along the whole edge (panels pour out of the slab; they
+  float beside pills and islands). They have their own opacity, accent
+  tint, frosted glass, rim light and shadow.
+- **Pinned or not.** A pinned side bar reserves its depth (plus
+  `bar.window_gap`) as an exclusive zone. Unpinned, it slides off its
+  edge and reserves nothing; resting the pointer on that edge for
+  `reveal_delay_ms` brings it back, and it stays out while the pointer is
+  on it or one of its panels is open.
+- **The widget sidebar gives way.** While a side bar holds the sidebar's
+  edge, the sidebar (and its hover trigger, pin and reserved space) is not
+  used; `[sidebar]` is kept unchanged and comes back when side bars are
+  off or that side is switched off. The power dock's hover edge is off on
+  an edge with a side bar.
+
+Arrange each group's plugins in Studio → Bar's layout designer (the side
+bars' groups flank the screen there while they're on); the rest is in
+Studio → Bar → Side bars, Side bar shape, Side bar items and Side bar
+material. Commands: `mandara msg side-bars on|off|toggle`, `side-bars join
+on|off|toggle`, `side-bar pin left|right [on|off|toggle]`, `side-bar show
+left|right [on|off|toggle]`, `side-bars status`.
+
 ## Looks
 
 `[looks]` remembers which one-click look is applied (`active`, empty = your

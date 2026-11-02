@@ -18,6 +18,7 @@ mod desktop_settings;
 mod look_tests;
 pub mod surface_settings;
 pub mod system_settings;
+pub mod side_bar_settings;
 mod tuning_settings;
 pub mod workflow_settings;
 
@@ -424,6 +425,7 @@ pub fn settings() -> &'static [Setting] {
         all.extend(system_settings::entries());
         all.extend(workflow_settings::entries());
         all.extend(tuning_settings::entries());
+        all.extend(side_bar_settings::entries());
         all
     })
 }
@@ -461,7 +463,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/wallpaper/depth/split" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
         "/wallpaper/depth/split" if cfg.wallpaper.depth.auto_split => Some(tk("Set per wallpaper while the automatic split is on")),
         "/wallpaper/depth/regenerate" | "/wallpaper/depth/place_clock" if !cfg.wallpaper.depth_effect => Some(tk("Turn on the depth effect first")),
-        path => surface_settings::locked(path, cfg),
+        path => side_bar_settings::locked(path, cfg).or_else(|| surface_settings::locked(path, cfg)),
     }
 }
 

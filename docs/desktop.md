@@ -34,6 +34,17 @@ How Mandara looks and feels, and how much of it you can shape.
   groups never overlap: a group gets the room up to its neighbour, a long
   window title ends in an ellipsis there, and on a very narrow bar the
   items nearest the middle make way first.
+- **Side bars of icons and pills:** turn on a slim bar on the left and
+  right edges (Studio → Bar → Side bars) and fill its top, middle and
+  bottom groups with any plugins; their panels pour out sideways. By
+  default the top bar and both side bars join into one frame with curved
+  corners; or let them float apart as glass pills, an island or a slab with
+  their own opacity, accent tint, frosted glass, rim light and shadow. Pin
+  each side so windows tile beside it, or let it slide away until your
+  pointer rests on its edge. Width, item size, padding, spacing and style,
+  corners, curves, the middle group's place and an accent colour per side
+  are all yours. They take over the widget sidebar's edge while they're on.
+  [Details](configuration.md#side-bars-side_bars)
 - **Sidebars fit like puzzle pieces:** a flush sidebar takes the bar's
   material and meets it with the same concave curves: it hangs from the
   edge frame, turns the hairline's accent line down its edge, merges into

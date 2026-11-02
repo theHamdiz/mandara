@@ -22,6 +22,7 @@ pub mod paths;
 pub mod power;
 pub mod profiles;
 pub mod schema;
+pub mod side_bars;
 pub mod sidebar;
 pub mod store;
 pub mod surfaces;

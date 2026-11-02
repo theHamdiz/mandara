@@ -6,6 +6,19 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Side bars.** A slim bar of icons and pills on the left and right
+  edges, holding any plugins you like in three groups; their panels pour
+  out sideways. By default they join the top bar into one frame with
+  curved corners, or they float apart as glass pills, an island or a slab.
+  Pin each one, or let it slide away until your pointer touches its edge,
+  and style them to your heart's content: width, item size and style,
+  corners, glass, rim light, an accent colour per side and more. Turn them
+  on in Studio → Bar → Side bars (or `mandara msg side-bars on`). While
+  they're on they take over the widget sidebar's edge; your sidebar comes
+  back just as you left it when you turn them off.
+
 ### Changed
 
 - **A new logo.** Mandara's logo is now a phoenix rising from a

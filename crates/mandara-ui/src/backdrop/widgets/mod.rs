@@ -783,6 +783,13 @@ pub fn safe_insets(cfg: &mandara_config::ShellConfig, bar_here: bool) -> Insets 
             BarPosition::Left => i.left = zone,
             BarPosition::Right => i.right = zone,
         }
+        // Pinned side bars (`[side_bars]`) keep their edges too.
+        for right in [false, true] {
+            if cfg.side_bar_on(right) && cfg.side_bars.side(right).pinned {
+                let depth = crate::bar::layout::exclusive_zone(&crate::bar::side::metrics(cfg, right, 1.0));
+                if right { i.right = i.right.max(depth) } else { i.left = i.left.max(depth) }
+            }
+        }
     }
     Insets { top: i.top + SAFE_MARGIN_PX, right: i.right + SAFE_MARGIN_PX, bottom: i.bottom + SAFE_MARGIN_PX, left: i.left + SAFE_MARGIN_PX }
 }

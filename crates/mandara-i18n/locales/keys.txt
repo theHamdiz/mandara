@@ -131,6 +131,7 @@ A folder in /usr/share/sounds; empty follows your GTK setting
 A folder of pictures (empty: ~/Pictures)
 A folder, or the wallpapers you picked into the playlist
 A folding Completed group under each list
+A full-length slab
 A full-width strip of bars mirrored round its middle
 A gentle daily reminder of Paradise: a verse or hadith, its meaning and one good step for today (opt-in)
 A gentle notification once an app has had this much of your day.
@@ -179,6 +180,8 @@ A permission this version of Mandara doesn't know; it has no effect
 A picture file (PNG with a transparent background looks best)
 A picture in a white print border, a little crooked
 A pilgrimage done well and sincerely has a reward beyond measure.
+A pill per group
+A pill per item
 A pill with a label that sends its action
 A plugin is a folder with a manifest and a WebAssembly component. This example contains every field and every setting type.
 A popup under the pointer doesn't time out
@@ -194,13 +197,16 @@ A second, stronger warning
 A sense of humour is a sense of proportion.
 A shutter when a capture is taken
 A side bar always stays on screen
+A side bar holds this edge now; turn side bars off (Bar page) to use the sidebar here
 A side bar is always an edge frame
 A side bar shares no edge with the launcher: it opens from the bare screen edge, beside the bar.
 A side bar uses Side bar width
 A single TOML file you can keep, share or import on another machine. Existing files are never overwritten.
 A single column sits in the middle instead of at the left edge
+A slim bar of plugin icons and pills on the left and right edges; panels pour out sideways. They replace the widget sidebar on their edges
 A slim bar on the left edge; panels open sideways
 A smoothed spectrum along the screen edge, with a soft glow; only while music plays
+A soft shadow under separate side bars
 A soft shadow under the bar
 A soft tick as the volume moves
 A strip of key hints under the results
@@ -209,6 +215,7 @@ A talent is formed in stillness, a character in the world's torrent.
 A tall pill with the track down its side
 A thin border round the whole display, joined to the side bar; it reserves no space of its own
 A thin line along a popup's edge shows the time left
+A thin specular highlight around the glass
 A thin strip dense with live stats
 A title is needed
 A to Z
@@ -445,6 +452,7 @@ An app starts or stops using the microphone, camera or screen
 An app wants access to the keyring “Login”, but it is locked (preview: nothing is unlocked)
 An app wants to create a new keyring called “Mandara”. Choose the password you want to use for it (preview: nothing is created)
 An interactive card — its own settings are with the cards.
+An island per group
 An-Nawawi's Forty
 Analects 1.1
 Analects 13.17
@@ -680,6 +688,8 @@ Bar text relative to the interface text size
 Bar thickness
 Bar time format
 Bar, dock, launcher and popups
+Bare icons
+Bare icons, every item on its own pill, or each group on one island
 Bars
 Base currency
 Batt.
@@ -713,6 +723,7 @@ Below this, notifications go straight to the history
 Benjamin Franklin
 Bessie Head
 Between focus sessions
+Between the others
 Between the sides
 Bhagavad Gita
 Bigger images aren't recorded
@@ -1215,6 +1226,8 @@ Copy to clipboard
 Copy with meaning
 Copy {file} ({size}) to {dir}
 Copying…
+Coral
+Corner curves
 Corner cut
 Corner radius
 Corner radius of cards in the sidebar and panels
@@ -1709,6 +1722,7 @@ Egyptian
 Eject
 El-Mandara, Alexandria
 Elevation tint
+Emerald
 Emily Dickinson
 Emma
 Emoji
@@ -1843,9 +1857,11 @@ Expected a local time as HH:MM
 Expected a number
 Expected a time such as 45, 30m, 2h or 1d
 Expected key=value, got {value}
+Expected left or right, not {value}
 Expected minutes or off
 Expected off or a range such as 08:00-22:00
 Expected on, off or toggle
+Expected on, off or toggle, not {value}
 Expected on, off, toggle or a number of minutes
 Expected {want} surahs, got {got}
 Explicit sync
@@ -2113,6 +2129,7 @@ From your wallpaper
 From {file}
 From {folder}
 Frost
+Frosted glass
 Frosted glass prisms with light caustics
 Fruit salad
 Full HD (1080p)
@@ -2144,6 +2161,7 @@ Gap
 Gap between a floating side panel and the screen edges and bar
 Gap between icons
 Gap between neighbouring bar items
+Gap between neighbouring items
 Gap between sidebar cards
 Gap between the dock and the screen edge
 Gap to the bar
@@ -2403,12 +2421,14 @@ How large the verses and hadith are set
 How long a key is held before it repeats
 How long a panel's result message (stopped, copied, failed…) stays up
 How long a slideshow change takes
+How long an unpinned side bar waits after the pointer leaves before it slides away
 How long hover-opened panels, the launcher and the session menu wait after the pointer leaves
 How long popups stay
 How long the bar stays after the pointer leaves
 How long the fade after each change takes
 How long the pointer must rest in the corner
 How long the pointer must rest on an edge first
+How long the pointer rests on the edge before an unpinned side bar slides out
 How long to hold
 How long to look at something 6 metres away
 How long you spend in each app, per day, with limits
@@ -2444,11 +2464,14 @@ How panels appear
 How see-through the main menu's glass is
 How slideshow changes look: the desktop's transition or their own, with a length in ms
 How strongly the capsules stand out from the bar
+How strongly the pills and islands behind items stand out
 How the critical warning appears
 How the media panel draws the live audio spectrum
 How the warning appears
 How to publish a plugin
 How well said the aged farmer to his son, O light of my eyes, thou wilt not reap save that which thou hast sown.
+How wide each item is across the side bar
+How wide each side bar is
 However hard it is, do not be the one who breaks the bond.
 Hue shift
 Humidity
@@ -2670,7 +2693,9 @@ It's Mandara's {example} example, republished unchanged
 It's the unchanged plugin template (still named {name})
 Item capsules
 Item padding
+Item size
 Item spacing
+Item style
 Its name (optional)
 Its people
 JPEG
@@ -2690,6 +2715,12 @@ Join
 Join a hidden network
 Join a saved network automatically, or not
 Join the docker group (sudo usermod -aG docker $USER), then log out and back in
+Join the top bar and the side bars into one frame, or let them float apart
+Join with the bar
+Joined side bars and the slab only
+Joined side bars draw the bar as the edge frame; your style comes back when they're separate
+Joined side bars hang from the bar as one frame
+Joined side bars share the bar's material, so the frame reads as one piece
 Joining {name}…
 Joins automatically
 Jorge Luis Borges
@@ -2838,8 +2869,10 @@ Leave undone whatever you hesitate to do.
 Left
 Left (vertical)
 Left / top
+Left accent
 Left click
 Left or right bar only
+Left side bar
 Left-handed
 Length
 Length of a focus session
@@ -3049,6 +3082,7 @@ Low poly
 Low urgency
 Low-urgency notifications
 Lower is warmer; 6500 K is untinted
+Lower it to let the desktop (or the frosted glass) show through
 Lower it to let the desktop show through (floating or rounded side panels)
 Lower it to let the desktop show through panels
 Lower it to let your wallpaper and windows show through the bar
@@ -3246,7 +3280,10 @@ Microphone in use
 Microphone mute
 Microphone released
 Microphone: {apps}
+Middle
 Middle click
+Middle group
+Middle of the edge
 Middle-click command
 Middle-click emulation
 Middle-click on empty bar space
@@ -3281,6 +3318,7 @@ Mix matching emoji into every search
 Mix matching files into every search
 Mix matching wallpapers into every search
 Mix matching windows into every search
+Mixes each side bar's accent into its background
 Mixes the theme accent into the bar's background
 Mixes the theme accent into the glass
 Miyamoto Musashi
@@ -3930,6 +3968,7 @@ One dot
 One entry per app
 One good deed for today, with its check and your week
 One half of the world cannot understand the pleasures of the other.
+One island
 One light line, stacked hours over minutes, or a small clock
 One line
 One line of body text in popups
@@ -3947,6 +3986,7 @@ One-bit dither
 Online
 Only HOTP accounts have a counter
 Only Mandara's own plugins are removed this way; uninstall third-party plugins from their page in Studio → Plugins
+Only a top or bottom bar joins the side bars
 Only at certain times
 Only each app's most recent window
 Only in {desktops}
@@ -4066,6 +4106,7 @@ Output volume and mute
 Outputs
 Outputs as the compositor sees them
 Over fullscreen apps
+Over the bottom group
 Overlay
 Override
 Override the unit for wind
@@ -4205,6 +4246,7 @@ Pick a window to make a rule for
 Pick any pixel on screen
 Pick colors from the screen, with formats, tonal ramps and contrast
 Pick one from your folder below; it fades in on the desktop.
+Pick pills or islands for the items first
 Pick running window
 Pick the displays each part of the shell appears on. Main display follows the one marked as main above.
 Pick the displays for the {surface} under Displays → Shell on each display
@@ -4217,8 +4259,11 @@ Picture-in-picture floats on every workspace
 Pictures from a folder, a new one every so often
 Pill labels
 Pin a plugin's panel open in the bar: outside clicks, focus changes and the launcher leave it open (its chip, Esc or panel close still close it). A floating panel docks back pinned
+Pin a side bar (it stays and windows tile beside it) or let it slide away until the pointer touches its edge
 Pin an app to the top of the launcher
 Pin an entry (survives clears)
+Pin the left side bar
+Pin the right side bar
 Pin, unpin or toggle-pin the sidebar (pinned pushes windows aside)
 Pink noise
 Pinned
@@ -4227,6 +4272,7 @@ Pinned apps
 Pinned entries
 Pinned entries listed above the history in the panel
 Pinned rows shown
+Pinned, it stays and windows tile beside it; unpinned, it slides away and comes back when the pointer touches the edge
 Pinned, running and recent apps, stacks and the Trash on a glass strip at the screen edge. Right-click an icon for its windows and Options; drag icons to reorder, or away from the dock to remove them.
 Pipe each capture (PNG on stdin) to a command, e.g. satty -f -
 PipeWire (pipewire-pulse) or PulseAudio must be running: {error}
@@ -4739,12 +4785,15 @@ Ridge layers
 Right
 Right (vertical)
 Right / bottom
+Right accent
 Right click
+Right side bar
 Right tile
 Right-click empty bar space
 Right-click on empty bar space
 Rim brightness
 Rim intensity
+Rim light
 Rim width
 Ring
 Ring shows
@@ -4761,6 +4810,7 @@ Rounded screen corners
 Rounded window corners
 Rounded, material-inspired cursors: the most installed theme in ricing setups
 Roundness
+Roundness of the pills, island, slab and items
 Route traffic through a peer, or stop with none
 Rows
 Rows shown before the list scrolls
@@ -5031,6 +5081,7 @@ Sent to KeePassXC. It can't confirm the result without its Secret Service integr
 Sentence
 Sentences, 358
 Sentences, 439
+Separate side bars: a glass pill per group, one island, or a slab along the whole edge
 Separators
 Service accounts belong to your distribution and are shown read-only.
 Services
@@ -5173,6 +5224,7 @@ Show one list (or all) in the card and panel
 Show one topic (or all) in the card and panel
 Show only this tag / focus this workspace
 Show or hide every desktop widget at once (none is switched off)
+Show or hide one side bar
 Show or regenerate the depth mask of the current wallpaper (the depth plugin's `depth status` / `depth regenerate`)
 Show over fullscreen apps
 Show over fullscreen windows
@@ -5183,6 +5235,8 @@ Show stopped containers
 Show suggested and recent apps in Dock
 Show system accounts ({n})
 Show system partitions
+Show the bar on the left edge
+Show the bar on the right edge
 Show the chain of narrators
 Show the confirmation card for AppImages, Flatpaks and portable apps too (native packages always ask)
 Show the date
@@ -5221,7 +5275,11 @@ Shut down
 Shutter sound
 Side
 Side bar
+Side bar items
+Side bar material
+Side bar shape
 Side bar width
+Side bars
 Side by side
 Side inset
 Side pill
@@ -5324,8 +5382,10 @@ Soundscapes
 Source
 Source code
 Space
+Space above and below each item's content
 Space between a floating bar and its panels
 Space between a panel's edge and its content (unset: none for the edge frame, a little for floating styles)
+Space between a separate side bar and the screen edge, and around the groups at its ends
 Space inside cards
 Space inside each bar item, around its content
 Spacing
@@ -5454,6 +5514,7 @@ Stray Birds 6
 Strength
 Strength of glass edge highlights
 Strength of the glass edge highlight and shade
+Strength of the highlight and shade
 Stretch
 Stripes
 Strong
@@ -5737,6 +5798,7 @@ The clock keeps its own time now
 The clock now sets itself from internet time servers
 The clock's time zone, network time, and the shared location's time zone
 The collections come from the hadith-api dataset, released into the public domain (the Unlicense). Each one is downloaded when you ask for it, checked, and kept on this computer in ~/.local/share/mandara/hadith.
+The colour its items light up and wash with
 The command is empty
 The compiled WebAssembly component (manifest `entry`)
 The compositor did not answer
@@ -5749,6 +5811,7 @@ The current recipe (style, seed, palette and every parameter)
 The current time, in milliseconds since the Unix epoch.
 The cursor disappears on a key press and returns when the pointer moves
 The cursor theme catalog (variants, licence, installed, active) and other installed themes
+The curves where a side bar meets the bar and the screen edge, and where its panels pour out
 The date next to the time
 The date under the clock
 The date, the weather and the one thing worth knowing now
@@ -5874,6 +5937,7 @@ The shell didn't answer: {error}
 The shell isn't running
 The shell restarts on the new version. Reopen Studio to use it here too.
 The shell's folder watcher waits {ms} ms for writes to settle
+The side bars' switches, pins and plugins
 The sidebar keeps at least one tab
 The sidebar's tabs and their widgets
 The slideshow playlist is empty
@@ -5892,6 +5956,7 @@ The terminal, file manager and browser Mandara launches
 The text and the meaning in your language, about {size} MB, kept on this computer
 The text: Tanzil's Uthmani script
 The time in other cities on the desktop, with how far ahead or behind they are
+The top bar and the side bars become one frame with curved corners. The bar is drawn as the edge frame while they're joined; its own style comes back when they're separate
 The track that is playing
 The track's title beside the music icon; off shows the icon alone
 The translations available in your language (for Studio's translation setting)
@@ -5914,6 +5979,7 @@ The × on a popup only hides it; it stays in the history
 Their files stay in {home}
 Their old age is an open door; serve them with love while you can.
 Theme
+Theme accent
 Theme crossfade
 Theme follows these colors
 Theme, bar, motion, typography, wallpaper, sidebar and window look
@@ -6157,10 +6223,13 @@ Turn off for now
 Turn on
 Turn on Custom spring first
 Turn on Only at certain times first
+Turn on Rim light first
 Turn on Screen frame (side bar) first
 Turn on Shadow first
+Turn on Side bars first
 Turn on group or item capsules first
 Turn on the depth effect first
+Turn on this side bar first
 Turn on while an app shares your screen, and off again when sharing stops
 Turn on “Control external monitors” below.
 Turn on “Manage compositor drop-in” (Compositor page) first: Mandara writes no drop-in while it's off
@@ -6174,6 +6243,7 @@ Turn the adapter on or off
 Turn the battery charge limit on or off (UPower 1.90+, polkit may ask)
 Turn the dial
 Turn the dock on or off, or reveal a hidden one for a few seconds
+Turn the left and right side bars of plugin chips on or off (they replace the widget sidebar on their edges)
 Turn the opt-in schedule on or off, or show it; flags: --every 6h, --mode random|variation|reseed, --keep N, --video|--still, --apply|--no-apply
 Turn the screens off
 Turn the screens off after this much idle time on the lock screen, even while a video keeps the session awake (0 = never)
@@ -6220,6 +6290,7 @@ Under each running app
 Under its button
 Under the dial
 Under the hood
+Under the top group
 Undo
 Undo the display change being tested right away
 Undone
@@ -6306,6 +6377,7 @@ Unmute
 Unmute all
 Unpack {file} ({size}) into {dir}
 Unpin a plugin's panel: it stays open until the next outside click
+Unpin a side bar first
 Unpin an app
 Unpin an entry
 Unpinned entries are forgotten when Mandara starts
@@ -6509,6 +6581,7 @@ Warn once when the charge drops to this while discharging
 Warn when a mouse, keyboard or headset runs low
 Warning
 Warning before the action
+Wash strength
 Wash with care, then pray two rak'ahs with your whole heart.
 Washi tape
 Watches your sites and services and tells you when one goes down
@@ -6613,6 +6686,7 @@ Where the Ollama server listens
 Where the launcher opens
 Where the launcher opens: in the middle of the screen or attached to the top / bottom edge at the left, middle or right (no argument: the current one)
 Where the middle group sits
+Where the middle group sits along the edge
 Whether Mandara's pairing agent is registered with BlueZ
 Whether presentation mode is on, for how long, and what it will restore (JSON)
 Whether the hotspot runs, and its network name
@@ -6787,6 +6861,7 @@ Your text (“ / ” starts a new line or column)
 Your theme's colours; a click copies one
 Your to-dos, a sticky note, the focus timer, a quote and notebook tabs on the desktop; tick tasks and run the timer right there
 Your wallpaper, an image of your choice or a solid color
+Your wallpaper, frosted, behind the side bars; lower the opacity to see it
 Your words in the field (optional)
 Yours
 Zhuangzi
@@ -7069,6 +7144,7 @@ on theme
 on white
 on, off or show
 on, off or toggle
+on, off or toggle (default)
 on, off, toggle or an interval
 one source only
 only this rule (its position in [[hooks.rules]], from 0), even when off
@@ -7251,6 +7327,7 @@ which kind of file or link
 which option
 which prompt
 which recognizer(s)
+which side bar
 which sound
 widget id (config get /desktop/widgets/items)
 widgets

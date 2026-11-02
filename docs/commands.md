@@ -65,6 +65,10 @@ mandara msg look apply corniche-dusk        # look list; look restore brings bac
 mandara msg bar position left               # top|bottom|left|right (left/right = the side bar)
 mandara msg bar layout hairline             # edge-frame|glass-pills|island|hairline|micro|notch|next
 mandara msg bar hide                        # put the bar away and free its space until bar show (bar toggle flips it; not saved)
+mandara msg side-bars on                    # the left and right side bars of plugin chips: on|off|toggle; side-bars status
+mandara msg side-bars join off              # one frame with the top bar, or floating apart: on|off|toggle
+mandara msg side-bar pin right off          # pinned (reserves space) or sliding away until the pointer touches the edge
+mandara msg side-bar show left off          # show or hide one side: on|off|toggle
 mandara msg desktop edit                    # move, resize, add and remove desktop widgets on the desktop (off|toggle)
 mandara msg desktop widgets hide            # show|hide|toggle every desktop widget at once
 mandara msg desktop widgets press todo-1 todo:3   # what a click on a widget does: todo:<id>, toggle:<wifi|dnd|…>, pomodoro, media:<play-pause|next|previous>, level:volume:0.4, step:brightness:1, copy:<text>, open:<path|url>, launch:<app>, next, refresh, panel:<id>, search
