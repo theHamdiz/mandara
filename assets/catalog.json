@@ -728,5 +728,13 @@
     "motif": "frame",
     "angle": 6,
     "panel": null
+  },
+  {
+    "id": "jannah",
+    "name": "Jannah",
+    "palette": "twilight",
+    "motif": "dawn",
+    "angle": -5,
+    "panel": null
   }
 ]

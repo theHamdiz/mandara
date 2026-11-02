@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>Jannah</title>
+  <defs>
+    <linearGradient id="tile" x1="64" y1="40" x2="448" y2="496" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7063B5"/><stop offset="1" stop-color="#30265E"/>
+    </linearGradient>
+    <radialGradient id="light" cx="0" cy="0" r="1" gradientTransform="translate(98 48) rotate(45) scale(440 354)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="76" y1="28" x2="446" y2="482" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".72"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".08"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".24"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(256 270) scale(116 154)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD58A" stop-opacity=".3"/><stop offset="1" stop-color="#FFD58A" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="tile-clip"><rect x="16" y="16" width="480" height="480" rx="108"/></clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#tile)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#light)"/>
+  <g clip-path="url(#tile-clip)">
+    <path d="M-28 324C126 476 349 518 544 274v238H-28z" fill="#FFFFFF" opacity=".045"/>
+  </g>
+  <rect x="19" y="19" width="474" height="474" rx="105" stroke="url(#rim)" stroke-width="2"/>
+  <path d="M152 388V248c0-58 56-94 104-132 48 38 104 74 104 132v140Z" fill="url(#glow)"/>
+  <g stroke="#FFF2D5" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M152 388V248c0-58 56-94 104-132 48 38 104 74 104 132v140"/>
+    <path d="m256 220 10 20 18-8-8 18 20 10-20 10 8 18-18-8-10 20-10-20-18 8 8-18-20-10 20-10-8-18 18 8Z" fill="#FFD58A" stroke="none"/>
+    <path d="M152 388h208" stroke="#FFD58A"/>
+  </g>
+</svg>

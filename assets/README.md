@@ -88,6 +88,7 @@ Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900
 | <img src="plugins/progress/icon.png" width="40" alt="Task progress icon"> <img src="plugins/progress/cover.png" width="128" alt="Task progress cover"> | **Task progress** · [SVG](plugins/progress/icon.svg) · [256 PNG](plugins/progress/icon.png) · [Cover](plugins/progress/cover.png) | Obsidian · illustration |
 | <img src="plugins/breaks/icon.png" width="40" alt="Eye breaks icon"> <img src="plugins/breaks/cover.png" width="128" alt="Eye breaks cover"> | **Eye breaks** · [SVG](plugins/breaks/icon.svg) · [256 PNG](plugins/breaks/icon.png) · [Cover](plugins/breaks/cover.png) | Twilight · illustration |
 | <img src="plugins/presentation/icon.png" width="40" alt="Presentation mode icon"> <img src="plugins/presentation/cover.png" width="128" alt="Presentation mode cover"> | **Presentation mode** · [SVG](plugins/presentation/icon.svg) · [256 PNG](plugins/presentation/icon.png) · [Cover](plugins/presentation/cover.png) | Twilight · illustration |
+| <img src="plugins/jannah/icon.png" width="40" alt="Jannah icon"> <img src="plugins/jannah/cover.png" width="128" alt="Jannah cover"> | **Jannah** · [SVG](plugins/jannah/icon.svg) · [256 PNG](plugins/jannah/icon.png) · [Cover](plugins/jannah/cover.png) | Twilight · pointed arch and gold eight-pointed star · illustration |
 
 ## Palette and grid
 
@@ -107,7 +108,7 @@ SVGs store sRGB values for desktop renderer compatibility. Use the OKLCH anchors
 | Media | `#40316F` → `#8666AA` | Media, Audio, Screenshot, Color picker, Local AI, Share to phone |
 | Productivity | `#843D58` → `#C47268` | Clipboard, Notifications, To-do, Notes, Pomodoro, Authenticator, Screen time |
 | Time | `#765323` → `#B78D47` | Clock, World clock |
-| Sky | `#30265E` → `#7063B5` | Prayer times, Weather, Wallpaper, Moon phase, Soundscapes, Eye breaks, Presentation mode |
+| Sky | `#30265E` → `#7063B5` | Prayer times, Weather, Wallpaper, Moon phase, Soundscapes, Eye breaks, Presentation mode, Jannah |
 | Creation | `#185D54` → `#40C8BD` | Wallpaper generator |
 | Maintenance | `#14303A` → `#2F6C70` | Updates, Services, Containers, App installer, Listening ports, Git repositories, Crash reports |
 
@@ -117,6 +118,7 @@ SVGs store sRGB values for desktop renderer compatibility. Use the OKLCH anchors
 - Covers: name at the upper left in Inter; a large icon; restrained thematic linework; a floating real panel where supplied. Preserve panel proportions and use a soft shadow. UI appears only in the 21 real captures linked through the catalog; captures never show private data (demo accounts, blurred addresses, or a crop to non-identifying parts). The dock retains its full transparent capture and source corner shape, with no desktop background. The other new covers use illustrations because no suitable isolated capture is available. The desktop widget plugins and Wallpaper depth have painted scenes of their own (`assets/artwork/scenes/`, the catalog's `scene`) behind the name and icon; screenshots of the widgets themselves are in [docs/desktop.md](../docs/desktop.md#desktop-widgets).
 - The added cover motifs are `watch` (eye contours), `shelf` (dock rails), `package` (open carton), `hourglass` and `aurora` (flowing contours and a sparkle). System tray and Mini stats reuse `peers` and `bars` respectively. Mini stats is visible in Studio's uncategorized store group; the internal Compositor commands are hidden and have no marketplace art.
 - Listening ports, Git repositories, CI status, Crash reports, Tailscale, Uptime monitor, Local AI, Share to phone, Shortcuts cheatsheet, Task progress, Eye breaks and Presentation mode reuse the existing motifs and palette backgrounds. Their covers are illustrations with no panel capture. Their glyph and motif notes are in `artwork/prompts.json`.
+- Jannah uses the Twilight background and existing `dawn` motif. Its cream pointed doorway frames a gold eight-pointed star and a soft glow, suggesting a gate opening onto light. The cover is an illustration with no panel capture; the glyph note is in `artwork/prompts.json`.
 
 ## Sources and checks
 
@@ -139,7 +141,7 @@ The whole pipeline is Rust (`xtask/src/art.rs`): SVGs render with [resvg](https:
 
 `cargo xtask art` turns every built-in plugin's art into the compact set the shell and Studio embed, in [`crates/mandara-ui/assets/plugin-art/<id>/`](../crates/mandara-ui/assets/plugin-art): `icon.webp` (128 px, rendered from the SVG), `icon@2x.webp` (256 px) and `cover.jpg` (960×540, JPEG quality 82; lossless `cover.webp` when the cover has transparency), plus the generated `index.rs` table. The generated files are committed — they are build inputs. Example plugins in `plugins/examples/` ship their own `icon.png` / `cover.png` inside their package instead.
 
-The embedded-art ceiling is **7,400,000 bytes (7.06 MiB)**, rounded to 100,000 bytes to leave roughly 400 KiB for artwork revisions and small additions. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 70-plugin set uses **7,002,322 bytes (6.68 MiB)**, leaving **397,678 bytes (388 KiB)** of headroom.
+The embedded-art ceiling is **7,400,000 bytes (7.06 MiB)**, rounded to 100,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 71-plugin set uses **7,095,587 bytes (6.77 MiB)**, leaving **304,413 bytes (297 KiB)** of headroom for artwork revisions and small additions.
 
 ```sh
 cargo xtask art --compose            # render source icons and compose covers (--only ID)

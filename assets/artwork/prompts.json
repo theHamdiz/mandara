@@ -119,6 +119,12 @@
       "motif": "frame",
       "panel": null
     },
+    "jannah": {
+      "glyph": "Cream pointed arch doorway with a gold eight-pointed star, a soft interior glow and a gold threshold; Twilight indigo tile with the shared light, rim and shoreline. Suggests a gate opening onto light. No living beings, figures, text, calligraphy or symbols beyond the arch and star.",
+      "palette": "twilight",
+      "motif": "dawn",
+      "panel": null
+    },
     "excluded": "Compositor is hidden infrastructure and registers commands only; no marketplace art."
   },
   "corniche": "Use case: stylized-concept. Asset type: reusable art background for Mandara Shell plugin marketplace covers, horizontal 16:9. Create one original premium abstract Mediterranean chromatic-glass artwork: wide ribbons of translucent turquoise sea glass flow in a slow S-curve through deep midnight Mediterranean blue, a sliver of warm limestone gold refracted light near the lower-right edge. Evoke water at Alexandria's Corniche without buildings. Perspective almost flat, sculptural frosted glass, soft specular edges, gentle luminous caustics, exquisitely restrained, broad simple shapes and generous dark negative space on the left half for future typesetting. Most visual movement in the right half and bottom edge. Palette deep navy #103C63, sea-glass #40C8BD, limestone #FFE4AB. No text, no logos, no icons, no UI, no devices, no objects other than abstract flowing glass. Avoid generic neon cyberpunk, tiny details, grain and noise. Output single landscape background.",
