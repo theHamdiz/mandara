@@ -8008,7 +8008,7 @@
 "The plugin's own language (a code such as ar or en), or follow to use Mandara's" = "プラグイン独自の言語（ar や en などのコード）、または Mandara に合わせる follow"
 "The prayer times of another day (days after today, or before it when negative)" = "別の日の礼拝時刻（今日から何日後、負の数なら前）"
 "Unknown language {code}: use follow or one of {codes}" = "不明な言語 {code}：follow か次のいずれかを使ってください：{codes}"
-"follow, or a language code: en, ar, es, fr, de, tr, ru, hi, id, zh, ja" = "follow、または言語コード：en, ar, es, fr, de, tr, ru, hi, id, zh, ja"
+"follow, or a language code: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko" = "follow、または言語コード：en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko"
 "how many ahead (1 when left out; negative looks back)" = "いくつ先か（省略時は 1、負の数は前を見る）"
 "how many days ahead (1 when left out; negative looks back)" = "何日先か（省略時は 1、負の数は前を見る）"
 "how many items ahead (1 when left out; negative looks back)" = "いくつ先の項目か（省略時は 1、負の数は前を見る）"

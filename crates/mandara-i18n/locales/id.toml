@@ -7760,7 +7760,7 @@
 "The plugin's own language (a code such as ar or en), or follow to use Mandara's" = "Bahasa plugin sendiri (kode seperti ar atau en), atau follow untuk mengikuti bahasa Mandara"
 "The prayer times of another day (days after today, or before it when negative)" = "Waktu salat hari lain (beberapa hari setelah hari ini, atau sebelumnya dengan angka negatif)"
 "Unknown language {code}: use follow or one of {codes}" = "Bahasa {code} tidak dikenal: gunakan follow atau salah satu dari {codes}"
-"follow, or a language code: en, ar, es, fr, de, tr, ru, hi, id, zh, ja" = "follow, atau kode bahasa: en, ar, es, fr, de, tr, ru, hi, id, zh, ja"
+"follow, or a language code: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko" = "follow, atau kode bahasa: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko"
 "how many ahead (1 when left out; negative looks back)" = "berapa banyak ke depan (1 jika dikosongkan; angka negatif melihat ke belakang)"
 "how many days ahead (1 when left out; negative looks back)" = "berapa hari ke depan (1 jika dikosongkan; angka negatif melihat ke belakang)"
 "how many items ahead (1 when left out; negative looks back)" = "berapa item ke depan (1 jika dikosongkan; angka negatif melihat ke belakang)"

@@ -30,7 +30,7 @@ use crate::kit::{text, tokens};
 pub const FOLLOW: &str = "follow";
 
 /// The `language` setting's values: [`FOLLOW`] and every language code.
-pub const CHOICES: [&str; 12] = [FOLLOW, "en", "ar", "es", "fr", "de", "tr", "ru", "hi", "id", "zh", "ja"];
+pub const CHOICES: [&str; 16] = [FOLLOW, "en", "ar", "fa", "ur", "es", "fr", "de", "tr", "ru", "hi", "bn", "id", "zh", "ja", "ko"];
 
 /// A plugin's own language from its `language` setting (`None`: follow
 /// the shell; unknown codes follow it too).
@@ -82,7 +82,7 @@ pub fn language_command(id: &'static str, path: &'static str, example: &'static 
         let own = own_language(&code);
         Ok(json!({ "language": if own.is_some() { code.as_str() } else { FOLLOW }, "speaks": resolved(own).code(), "follows_mandara": own.is_none() }))
     })
-    .arg(ArgSpec::optional("language", ArgKind::Enum, tk("follow, or a language code: en, ar, es, fr, de, tr, ru, hi, id, zh, ja")).choices(&CHOICES))
+    .arg(ArgSpec::optional("language", ArgKind::Enum, tk("follow, or a language code: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko")).choices(&CHOICES))
     .example(example)
 }
 

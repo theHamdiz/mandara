@@ -8002,7 +8002,7 @@
 "The plugin's own language (a code such as ar or en), or follow to use Mandara's" = "插件自己的语言（如 ar 或 en 的代码），或用 follow 跟随 Mandara 的语言"
 "The prayer times of another day (days after today, or before it when negative)" = "其他日子的礼拜时间（今天之后的天数，负数表示之前）"
 "Unknown language {code}: use follow or one of {codes}" = "未知语言 {code}：请使用 follow 或以下之一：{codes}"
-"follow, or a language code: en, ar, es, fr, de, tr, ru, hi, id, zh, ja" = "follow，或语言代码：en, ar, es, fr, de, tr, ru, hi, id, zh, ja"
+"follow, or a language code: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko" = "follow，或语言代码：en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko"
 "how many ahead (1 when left out; negative looks back)" = "向前多少个（省略时为 1；负数表示向后）"
 "how many days ahead (1 when left out; negative looks back)" = "向前多少天（省略时为 1；负数表示向后）"
 "how many items ahead (1 when left out; negative looks back)" = "向前多少条（省略时为 1；负数表示向后）"

@@ -8007,7 +8007,7 @@
 "The plugin's own language (a code such as ar or en), or follow to use Mandara's" = "Собственный язык плагина (код вроде ar или en) или follow, чтобы следовать языку Mandara"
 "The prayer times of another day (days after today, or before it when negative)" = "Время намаза другого дня (через несколько дней или раньше — с отрицательным числом)"
 "Unknown language {code}: use follow or one of {codes}" = "Неизвестный язык {code}: используйте follow или один из: {codes}"
-"follow, or a language code: en, ar, es, fr, de, tr, ru, hi, id, zh, ja" = "follow или код языка: en, ar, es, fr, de, tr, ru, hi, id, zh, ja"
+"follow, or a language code: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko" = "follow или код языка: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko"
 "how many ahead (1 when left out; negative looks back)" = "на сколько вперёд (1, если не указано; отрицательное число смотрит назад)"
 "how many days ahead (1 when left out; negative looks back)" = "на сколько дней вперёд (1, если не указано; отрицательное число смотрит назад)"
 "how many items ahead (1 when left out; negative looks back)" = "на сколько позиций вперёд (1, если не указано; отрицательное число смотрит назад)"

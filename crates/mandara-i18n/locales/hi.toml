@@ -8008,7 +8008,7 @@
 "The plugin's own language (a code such as ar or en), or follow to use Mandara's" = "प्लगइन की अपनी भाषा (ar या en जैसा कोड), या Mandara की भाषा अपनाने के लिए follow"
 "The prayer times of another day (days after today, or before it when negative)" = "किसी और दिन के नमाज़ के समय (आज के कुछ दिन बाद, या ऋणात्मक संख्या से पहले)"
 "Unknown language {code}: use follow or one of {codes}" = "अज्ञात भाषा {code}: follow या इनमें से कोई एक इस्तेमाल करें: {codes}"
-"follow, or a language code: en, ar, es, fr, de, tr, ru, hi, id, zh, ja" = "follow, या कोई भाषा कोड: en, ar, es, fr, de, tr, ru, hi, id, zh, ja"
+"follow, or a language code: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko" = "follow, या कोई भाषा कोड: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko"
 "how many ahead (1 when left out; negative looks back)" = "कितने आगे (न देने पर 1; ऋणात्मक संख्या पीछे देखती है)"
 "how many days ahead (1 when left out; negative looks back)" = "कितने दिन आगे (न देने पर 1; ऋणात्मक संख्या पीछे देखती है)"
 "how many items ahead (1 when left out; negative looks back)" = "कितने आइटम आगे (न देने पर 1; ऋणात्मक संख्या पीछे देखती है)"

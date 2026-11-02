@@ -8011,7 +8011,7 @@
 "The plugin's own language (a code such as ar or en), or follow to use Mandara's" = "لغة الإضافة الخاصة بها (رمز مثل ar أو en)، أو follow لاتباع لغة المندرة"
 "The prayer times of another day (days after today, or before it when negative)" = "مواقيت الصلاة ليوم آخر (بعد اليوم بأيام، أو قبله بقيمة سالبة)"
 "Unknown language {code}: use follow or one of {codes}" = "لغة غير معروفة {code}: استخدم follow أو إحدى هذه: {codes}"
-"follow, or a language code: en, ar, es, fr, de, tr, ru, hi, id, zh, ja" = "follow، أو رمز لغة: en, ar, es, fr, de, tr, ru, hi, id, zh, ja"
+"follow, or a language code: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko" = "follow، أو رمز لغة: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko"
 "how many ahead (1 when left out; negative looks back)" = "كم عنصرًا إلى الأمام (1 إن لم يُحدَّد؛ والقيمة السالبة تعود إلى الوراء)"
 "how many days ahead (1 when left out; negative looks back)" = "كم يومًا إلى الأمام (1 إن لم يُحدَّد؛ والقيمة السالبة تعود إلى الوراء)"
 "how many items ahead (1 when left out; negative looks back)" = "كم تذكيرًا إلى الأمام (1 إن لم يُحدَّد؛ والقيمة السالبة تعود إلى الوراء)"

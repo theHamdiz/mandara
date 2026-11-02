@@ -8007,7 +8007,7 @@
 "The plugin's own language (a code such as ar or en), or follow to use Mandara's" = "Eklentinin kendi dili (ar ya da en gibi bir kod) ya da Mandara'nınkini izlemek için follow"
 "The prayer times of another day (days after today, or before it when negative)" = "Başka bir günün namaz vakitleri (bugünden günler sonrası ya da negatif sayıyla öncesi)"
 "Unknown language {code}: use follow or one of {codes}" = "Bilinmeyen dil {code}: follow ya da şunlardan birini kullan: {codes}"
-"follow, or a language code: en, ar, es, fr, de, tr, ru, hi, id, zh, ja" = "follow ya da bir dil kodu: en, ar, es, fr, de, tr, ru, hi, id, zh, ja"
+"follow, or a language code: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko" = "follow ya da bir dil kodu: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko"
 "how many ahead (1 when left out; negative looks back)" = "kaç tane ileri (verilmezse 1; negatif sayı geriye bakar)"
 "how many days ahead (1 when left out; negative looks back)" = "kaç gün ileri (verilmezse 1; negatif sayı geriye bakar)"
 "how many items ahead (1 when left out; negative looks back)" = "kaç öğe ileri (verilmezse 1; negatif sayı geriye bakar)"

@@ -7046,7 +7046,7 @@ failed
 folder name or path of the repository
 folder path, name or index
 folder to write into (made if missing)
-follow, or a language code: en, ar, es, fr, de, tr, ru, hi, id, zh, ja
+follow, or a language code: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko
 fps
 front
 function / dispatcher / action name, then its arguments

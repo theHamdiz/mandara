@@ -418,15 +418,19 @@ const PLUGIN_LANGUAGES: &[(&str, &str)] = &[
     ("follow", tk("Follow Mandara")),
     ("en", "English"),
     ("ar", "العربية"),
+    ("fa", "فارسی"),
+    ("ur", "اردو"),
     ("es", "Español"),
     ("fr", "Français"),
     ("de", "Deutsch"),
     ("tr", "Türkçe"),
     ("ru", "Русский"),
     ("hi", "हिन्दी"),
+    ("bn", "বাংলা"),
     ("id", "Bahasa Indonesia"),
     ("zh", "简体中文"),
     ("ja", "日本語"),
+    ("ko", "한국어"),
 ];
 const BOOL_SCHEMES: &[(&str, &str)] = &[("tonal-spot", tk("Tonal spot")), ("vibrant", tk("Vibrant")), ("expressive", tk("Expressive")), ("fidelity", tk("Fidelity")), ("fruit-salad", tk("Fruit salad")), ("monochrome", tk("Monochrome"))];
 
@@ -1044,6 +1048,15 @@ mod tests {
             assert_eq!(entry.1, lang.native_name(), "{lang:?} is named in its own script");
         }
         assert_eq!(LOCALES.len(), mandara_i18n::Lang::ALL.len() + 1, "every language plus System");
+    }
+
+    #[test]
+    fn every_language_is_a_plugin_language_choice() {
+        for lang in mandara_i18n::Lang::ALL {
+            let entry = PLUGIN_LANGUAGES.iter().find(|(v, _)| *v == lang.code()).unwrap_or_else(|| panic!("{lang:?} is missing from the plugin language choices"));
+            assert_eq!(entry.1, lang.native_name(), "{lang:?} is named in its own script");
+        }
+        assert_eq!(PLUGIN_LANGUAGES.len(), mandara_i18n::Lang::ALL.len() + 1, "every language plus Follow Mandara");
     }
 
     #[test]

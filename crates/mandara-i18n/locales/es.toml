@@ -8002,7 +8002,7 @@
 "The plugin's own language (a code such as ar or en), or follow to use Mandara's" = "El idioma propio del complemento (un código como ar o en), o follow para usar el de Mandara"
 "The prayer times of another day (days after today, or before it when negative)" = "Los horarios de oración de otro día (días después de hoy, o antes con un número negativo)"
 "Unknown language {code}: use follow or one of {codes}" = "Idioma desconocido {code}: usa follow o uno de {codes}"
-"follow, or a language code: en, ar, es, fr, de, tr, ru, hi, id, zh, ja" = "follow, o un código de idioma: en, ar, es, fr, de, tr, ru, hi, id, zh, ja"
+"follow, or a language code: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko" = "follow, o un código de idioma: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko"
 "how many ahead (1 when left out; negative looks back)" = "cuántos hacia delante (1 si se omite; un número negativo mira hacia atrás)"
 "how many days ahead (1 when left out; negative looks back)" = "cuántos días hacia delante (1 si se omite; un número negativo mira hacia atrás)"
 "how many items ahead (1 when left out; negative looks back)" = "cuántos elementos hacia delante (1 si se omite; un número negativo mira hacia atrás)"
