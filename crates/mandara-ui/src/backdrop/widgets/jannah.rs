@@ -30,7 +30,7 @@ use super::productive::{AUTHOR_TRACKING, QUOTE_AUTHOR, QUOTE_GAP, QUOTE_MARK};
 const ARABIC_LEADING: f32 = 1.32;
 /// How far below the top of the ornate opening mark the Arabic starts (of
 /// the mark's height).
-const ARABIC_MARK_DROP: f32 = 1.05;
+const ARABIC_MARK_DROP: f32 = 1.2;
 /// Alignments: centred, right edge; and how close counts as centred.
 const CENTRED: f32 = 0.5;
 const RIGHT: f32 = 1.0;
