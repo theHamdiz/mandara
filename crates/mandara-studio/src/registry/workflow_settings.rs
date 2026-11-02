@@ -12,6 +12,10 @@ use mandara_config::workflow::defaults as launcher;
 
 /// Step of the launcher size sliders, px.
 const LAUNCHER_SIZE_STEP_PX: f64 = 10.0;
+/// Step of the grid icon size slider, px.
+const GRID_ICON_STEP_PX: f64 = 4.0;
+/// Step of the Beacon bar's height-on-screen slider (share of the screen).
+const BEACON_TOP_STEP: f64 = 0.01;
 
 use super::{Control, Section, Setting, s, sd, span};
 
@@ -46,6 +50,9 @@ pub const POSITIONS: &[(&str, &str)] = &[
 ];
 const SEARCH_POSITIONS: &[(&str, &str)] = &[("auto", tk("Next to the edge")), ("top", tk("Top")), ("bottom", tk("Bottom"))];
 const LAYOUTS: &[(&str, &str)] = &[("list", tk("List")), ("grid", tk("Grid"))];
+const STYLES_LAUNCHER: &[(&str, &str)] = &[("classic", tk("Classic")), ("beacon", tk("Beacon (centred search bar)"))];
+/// The Beacon style's own rows.
+pub const BEACON: &str = tk("Beacon search bar");
 const DOCK_POSITIONS: &[(&str, &str)] = &[("bottom", tk("Bottom")), ("left", tk("Left")), ("right", tk("Right"))];
 const ALIGNMENTS: &[(&str, &str)] = &[("start", tk("Start")), ("center", tk("Center")), ("end", tk("End"))];
 const INDICATORS: &[(&str, &str)] = &[("dot", tk("One dot")), ("dots", tk("A dot per window")), ("bar", tk("Bar")), ("none", tk("None"))];
@@ -102,9 +109,16 @@ pub fn entries() -> Vec<Setting> {
         s(Launcher, LOOK, "/launcher/look/height", tk("Height when attached"), tk("Tallest it grows; fewer rows show when this is low"), px_range(launcher::LAUNCHER_HEIGHT_RANGE_PX)),
         s(Launcher, LOOK, "/launcher/look/center_width", tk("Width in the center"), tk("Size of the floating card in the middle of the screen"), px_range(launcher::LAUNCHER_CENTER_WIDTH_RANGE_PX)),
         s(Launcher, LOOK, "/launcher/look/center_height", tk("Height in the center"), tk("Tallest the floating card grows"), px_range(launcher::LAUNCHER_HEIGHT_RANGE_PX)),
-        s(Launcher, tk("Results"), "/launcher/look/layout", tk("Layout"), tk("Grid shows app tiles while nothing is typed"), Choice(LAYOUTS)),
-        s(Launcher, tk("Results"), "/launcher/look/grid_columns", tk("Grid columns"), tk("App tiles per row"), slider(3.0, 10.0, 1.0, "")),
+        s(Launcher, tk("Results"), "/launcher/look/style", tk("Style"), tk("Classic: one surface with the search field and results. Beacon: a centred search bar with results under it once you type"), Choice(STYLES_LAUNCHER)),
+        s(Launcher, tk("Results"), "/launcher/look/layout", tk("Layout"), tk("Grid shows app icons while browsing and while you type plain words; prefixed searches stay a list"), Choice(LAYOUTS)),
+        s(Launcher, tk("Results"), "/launcher/look/grid_columns", tk("Most grid columns"), tk("App tiles per row; fewer fit a narrower launcher"), slider(3.0, 10.0, 1.0, "")),
+        s(Launcher, tk("Results"), "/launcher/look/grid_icon_size", tk("Grid icon size"), tk("Size of the app icons in the grid"), slider(f64::from(launcher::LAUNCHER_GRID_ICON_RANGE_PX.0), f64::from(launcher::LAUNCHER_GRID_ICON_RANGE_PX.1), GRID_ICON_STEP_PX, " px")),
+        s(Launcher, tk("Results"), "/launcher/look/grid_categories", tk("Category chips"), tk("All, Pinned and app categories above the grid (Tab switches)"), Toggle),
+        s(Launcher, tk("Results"), "/launcher/look/group_results", tk("Group results"), tk("A top hit, then results under headings by kind: Applications, Actions & settings, Files…"), Toggle),
+        s(Launcher, tk("Results"), "/launcher/look/hints", tk("Keyboard hints"), tk("A strip of key hints under the results"), Toggle),
         s(Launcher, tk("Results"), "/launcher/look/compact", tk("Compact rows"), tk("One line per result"), Toggle),
+        s(Launcher, BEACON, "/launcher/look/beacon_width", tk("Search bar width"), tk("Width of the Beacon search bar (its mode buttons sit beside it)"), px_range(launcher::LAUNCHER_BEACON_WIDTH_RANGE_PX)),
+        s(Launcher, BEACON, "/launcher/look/beacon_top", tk("Height on the screen"), tk("Where the Beacon bar sits, as a share of the screen height from the top"), slider(f64::from(launcher::LAUNCHER_BEACON_TOP_RANGE.0), f64::from(launcher::LAUNCHER_BEACON_TOP_RANGE.1), BEACON_TOP_STEP, "")),
         s(Launcher, tk("Launcher"), "/launcher/look/dim", tk("Dim the screen"), tk("Darken everything behind the launcher (a bar it hangs from stays bright)"), slider(0.0, 0.7, 0.05, "")),
         s(Launcher, tk("Launcher"), "/launcher/look/ignore_mouse", tk("Keyboard only"), tk("Hovering never moves the selection"), Toggle),
         s(Launcher, tk("Results"), "/launcher/look/remember_query", tk("Remember the last search"), tk("Reopen with what you typed last (selected, so typing replaces it)"), Toggle),

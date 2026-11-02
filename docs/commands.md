@@ -150,6 +150,7 @@ mandara msg notes export Recipes ~/Documents/recipes   # or `all`; writes .md fi
 ```bash
 mandara msg launcher pin firefox     # unpin|hide|unhide|rename|icon <app>; launcher usage list|reset; launcher emoji <words>
 mandara msg launcher placement top-left   # center|top-*|bottom-* (left/center/right); no argument reports it; re-places an open launcher live
+mandara msg launcher look grid       # classic|grid|beacon: a ready-made look (no argument reports it); launcher looks lists them (JSON)
 mandara msg dock on                  # off|show (reveals a hidden dock for 3 s); dock status (works while off)
 mandara msg dock pin firefox         # unpin|toggle-pin <app> (desktop id or name; pin also fuzzy-matches)
 mandara msg dock move firefox 0      # reorder a pinned app (0 = first)

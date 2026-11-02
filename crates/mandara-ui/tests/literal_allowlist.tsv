@@ -12,7 +12,7 @@ mandara-studio/src/app/plugins_local.rs	px	113	Studio window layout (Studio's ow
 mandara-studio/src/app/users_page.rs	px	4	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
 mandara-ui/src/desktop.rs	px	1	desktop widget metric (fixed design; wallpaper clock position/scale are settings)
 mandara-ui/src/icons.rs	px	5	icon glyph metrics (bar icons follow bar.icon_scale)
-mandara-ui/src/overlays.rs	px	12	launcher row geometry (launcher width, layout, columns and compact mode are settings)
+mandara-ui/src/overlays.rs	px	9	launcher row geometry (launcher width, layout, columns and compact mode are settings)
 mandara-ui/src/plugins/containers.rs	px	2	container row metrics (fixed design; panels.width_scale applies)
 mandara-ui/src/plugins/mod.rs	px	2	shared plugin chrome metrics (fixed design)
 mandara-ui/src/plugins/screen_time.rs	px	8	screen-time chart geometry (fixed design)

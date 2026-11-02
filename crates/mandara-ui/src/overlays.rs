@@ -7,11 +7,20 @@
 //!   appearance, session), `=` evaluates arithmetic, and the providers in
 //!   [`crate::launcher_ext`] answer their prefixes (`:` emoji, `@` windows,
 //!   `#` clipboard, `*` wallpapers, `~` files).
+//!   Its looks (Classic list, Grid, grouped results and the Beacon search
+//!   bar) are in [`launcher_looks`]. The colour icons it decodes are kept
+//!   in an [`IconLedger`]: bounded while it is open, all freed when it
+//!   closes (with its image thumbnails); nothing ticks once it is closed
+//!   (the surface and its tasks are gone).
 //! * **Session dock** — slides in from its edge (opposite the sidebar; left
 //!   in RTL) over a scrim: big
 //!   rounded buttons whose corner radius morphs on focus / press.
 
+mod launcher_looks;
+
 use crate::bidi::Bidi as _;
+use crate::launcher_icons::IconLedger;
+use launcher_looks::{BeaconMode, GridFilter};
 use std::time::Instant;
 
 use gpui::layer_shell::{Anchor, KeyboardInteractivity, Layer};
@@ -45,11 +54,6 @@ const CARET_BLINK: std::time::Duration = std::time::Duration::from_millis(530);
 const ROW_H: f32 = 52.0;
 /// Row height in the compact list.
 const ROW_H_COMPACT: f32 = 38.0;
-/// Grid layout: column bounds, tile height and icon size.
-const GRID_COLUMNS_MIN: usize = 3;
-const GRID_COLUMNS_MAX: usize = 10;
-const GRID_TILE_H: f32 = 92.0;
-const GRID_ICON: f32 = 44.0;
 /// Emoji glyph size in result rows.
 const EMOJI_LEAD_PX: f32 = 24.0;
 /// Corner radius of image thumbnails in result rows.
@@ -72,6 +76,9 @@ const PAD: f32 = 14.0;
 /// Slightly under-damped (ζ ≈ 0.6) so the drawer springs up with a touch of
 /// overshoot (`[panels] spring` overrides it, as for panels).
 const DRAWER_SPRING: SpringConfig = SpringConfig::new(320.0, 21.5, 1.0);
+/// The selection highlight (and the grouped list's scroll) following the
+/// selection: quick and barely overshooting.
+const HIGHLIGHT_SPRING: SpringConfig = SpringConfig::new(520.0, 38.0, 1.0);
 /// Closing: critically damped, quicker than the opening.
 const CLOSE_STIFFNESS: f32 = 420.0;
 /// Open progress (0–1) resolution: invisible below ~half a pixel of travel.
@@ -511,7 +518,7 @@ const OUTPUT_COMMANDS: &[&str] = &[
     "prayer today", "processes list", "services failed", "services list", "services logs", "services status",
     "soundscapes status", "system resources", "theme current", "theme list", "theme seeds", "todo list", "tray menu",
     "tray status", "updates check", "updates list", "updates news", "updates sources", "wallpaper current", "window list",
-    "launcher usage list", "launcher emoji", "dock status", "screentime today", "screentime week", "screentime app",
+    "launcher usage list", "launcher looks", "launcher emoji", "dock status", "screentime today", "screentime week", "screentime app",
     "wallpaper list", "wallgen list", "wallgen recipe show", "wallgen status", "weather", "window active", "workspace list", "world-clock at", "world-clock list",
     "world-clock search",
     // Power & idle (powerctl).
@@ -1096,8 +1103,34 @@ pub struct LauncherView {
     /// `rest` has been placed (snapped) once.
     placed: bool,
     highlight: SpringValue<f32>,
-    /// Horizontal highlight position (grid layout).
-    highlight_x: SpringValue<f32>,
+    /// `[launcher.look]` as of the last config change.
+    look: mandara_config::workflow::LauncherLook,
+    /// Grouped results: `(first index, heading)` per section (empty when
+    /// not grouped).
+    sections: Vec<(usize, &'static str)>,
+    /// Scroll offset of the grouped list (springs to follow the selection).
+    list_scroll: SpringValue<f32>,
+    /// Grid: its scroll position, columns last laid out, the category chip
+    /// picked (`None`: All), the chips offered, and the reflow (0 → 1)
+    /// from the slots tiles had before the last keystroke.
+    grid_scroll: gpui::UniformListScrollHandle,
+    grid_cols: usize,
+    category: Option<GridFilter>,
+    categories: Vec<GridFilter>,
+    reflow: SpringValue<f32>,
+    reflow_from: std::collections::HashMap<String, usize>,
+    /// Beacon: the browse mode picked (Ctrl+1–4) and the results card's
+    /// height.
+    mode: Option<BeaconMode>,
+    card_h: SpringValue<f32>,
+    /// Size of the query text (click-to-place-caret shapes at it).
+    field_px: f32,
+    /// Colour icons decoded for this launcher (bounded; freed on close).
+    icons: IconLedger,
+    /// The output's scale (decoded icon sizes; freeing without a window).
+    scale: f32,
+    /// What it decoded has been freed (it is closing).
+    released: bool,
     /// Thumbnails of image results (`None` while being made).
     thumbs: std::collections::HashMap<std::path::PathBuf, Option<std::path::PathBuf>>,
     clock: FrameClock,
@@ -1115,6 +1148,11 @@ pub struct LauncherView {
     output: Option<String>,
     /// When the surface was created (open latency, logged at debug level).
     created: Instant,
+}
+
+/// The colour icon files the dock shows (the launcher leaves them decoded).
+fn dock_icon_paths(cx: &mut App) -> Vec<std::path::PathBuf> {
+    crate::plugins::dock::dock_icon_ids(cx).iter().filter_map(|id| crate::plugins::workspaces::raster_icon_path(id)).map(|p| p.to_path_buf()).collect()
 }
 
 /// Whether a viewport is `size` (within the settle slack).
@@ -1146,8 +1184,20 @@ impl LauncherView {
         })
         .detach();
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
-        // Studio / `launcher placement` edits re-place it while open.
-        cx.observe(&config(cx), |_, _, cx| cx.notify()).detach();
+        // Studio / `launcher placement` / `launcher look` edits re-place
+        // and restyle it while open.
+        cx.observe(&config(cx), |this: &mut Self, config, cx| {
+            let look = config.read(cx).get().launcher.look.clone();
+            if look != this.look {
+                this.look = look;
+                this.refilter();
+            }
+            cx.notify();
+        })
+        .detach();
+        // Removed without its last frame (a crash of the close animation,
+        // an output unplugged): still free the icons it decoded.
+        cx.on_release(|this: &mut Self, cx| this.forget_decoded(cx)).detach();
         let focus = cx.focus_handle();
         focus.focus(window, cx);
         let mut this = Self {
@@ -1170,8 +1220,22 @@ impl LauncherView {
             rest: SpringValue::new(gpui::Bounds::default(), DRAWER_SPRING),
             open: SpringValue::new(0.0, DRAWER_SPRING).with_rest_epsilon(OPEN_REST_EPSILON),
             placed: false,
-            highlight: SpringValue::new(0.0, SpringConfig::new(520.0, 38.0, 1.0)),
-            highlight_x: SpringValue::new(0.0, SpringConfig::new(520.0, 38.0, 1.0)),
+            highlight: SpringValue::new(0.0, HIGHLIGHT_SPRING),
+            look: config(cx).read(cx).get().launcher.look.clone(),
+            sections: Vec::new(),
+            list_scroll: SpringValue::new(0.0, HIGHLIGHT_SPRING),
+            grid_scroll: gpui::UniformListScrollHandle::new(),
+            grid_cols: 0,
+            category: None,
+            categories: Vec::new(),
+            reflow: SpringValue::new(1.0, launcher_looks::REFLOW_SPRING),
+            reflow_from: Default::default(),
+            mode: None,
+            card_h: SpringValue::new(0.0, launcher_looks::CARD_SPRING),
+            field_px: text::BODY + 1.0,
+            icons: IconLedger::default(),
+            scale: window.scale_factor(),
+            released: false,
             thumbs: Default::default(),
             clock: FrameClock::new(),
             closing: false,
@@ -1184,13 +1248,16 @@ impl LauncherView {
         };
         this.apps = launcher_apps(cx);
         this.ctx = SearchCtx::gather(&this.apps, cx);
-        if config(cx).read(cx).get().launcher.look.remember_query {
+        this.categories = launcher_looks::categories(&this.apps, &this.ctx.pinned);
+        if this.look.remember_query {
             let q = launcher_ext::last_query();
             this.caret = q.chars().count();
             this.query = q;
             this.select_all = !this.query.is_empty();
         }
         this.refilter();
+        // Opening is the drawer's animation; tiles don't also reflow in.
+        this.reflow.snap_to(1.0);
         // Caret blink: re-render twice a second while open.
         this.blink_task = Some(cx.spawn(async move |this, cx| {
             loop {
@@ -1208,7 +1275,7 @@ impl LauncherView {
         let Some(bounds) = self.text_bounds.get() else { return };
         let font = gpui::font(fonts(cx).ui.clone());
         let run = gpui::TextRun { len: self.query.len(), font, color: gpui::black(), background_color: None, underline: None, strikethrough: None };
-        let line = window.text_system().shape_line(self.query.clone().into(), px(text::BODY + 1.0), &[run], None);
+        let line = window.text_system().shape_line(self.query.clone().into(), px(self.field_px), &[run], None);
         let byte = line.closest_index_for_x(x - bounds.origin.x);
         self.caret = self.query[..byte.min(self.query.len())].chars().count();
         self.select_all = false;
@@ -1225,14 +1292,127 @@ impl LauncherView {
     }
 
     fn refilter(&mut self) {
-        self.results = search_with(&self.query, &self.apps, &self.index, &self.ctx);
+        // Where the tiles were (the grid reflows from there).
+        let was_grid = self.grid_active();
+        let before: std::collections::HashMap<String, usize> = if was_grid { self.results.iter().enumerate().map(|(i, it)| (usage_key(it), i)).collect() } else { Default::default() };
+        let mut results = search_with(&self.effective_query(), &self.apps, &self.index, &self.ctx);
+        if self.mode == Some(BeaconMode::Apps) {
+            results.retain(|i| matches!(i, Item::App(_)));
+        }
+        let grid = self.grid_active();
+        if grid && let Some(f) = self.category {
+            results.retain(|i| f.keeps(i, &self.ctx.pinned));
+        }
+        if self.grouped() {
+            results.truncate(MAX_RESULTS);
+            let (ordered, sections) = launcher_looks::group_results(results, self.mode.is_none());
+            results = ordered;
+            self.sections = sections;
+        } else {
+            self.sections.clear();
+        }
+        self.results = results;
         self.selected = 0;
+        self.list_scroll.snap_to(0.0);
+        if grid {
+            self.reflow_from = if was_grid { before } else { Default::default() };
+            self.reflow.snap_to(0.0);
+            self.reflow.set_target(1.0);
+            self.grid_scroll.scroll_to_item(0, gpui::ScrollStrategy::Top);
+        } else {
+            self.reflow_from.clear();
+            self.reflow.snap_to(1.0);
+        }
     }
 
-    /// The grid shows (app tiles while browsing), with its column count.
-    fn grid_columns(&self, cx: &App) -> Option<usize> {
-        let look = &config(cx).read(cx).get().launcher.look;
-        (look.layout == mandara_config::workflow::LauncherLayout::Grid && self.query.trim().is_empty()).then(|| (look.grid_columns as usize).clamp(GRID_COLUMNS_MIN, GRID_COLUMNS_MAX))
+    /// The query searched: a Beacon mode's provider prefix before the text.
+    fn effective_query(&self) -> String {
+        match self.mode.and_then(|m| m.prefix(&self.ctx.providers)) {
+            Some(prefix) => format!("{prefix}{}", self.query),
+            None => self.query.clone(),
+        }
+    }
+
+    /// The grid shows: the Grid layout while browsing or typing plain
+    /// words, and the Beacon's Apps mode.
+    fn grid_active(&self) -> bool {
+        use mandara_config::workflow::{LauncherLayout, LauncherStyle};
+        match self.look.style {
+            LauncherStyle::Classic => self.look.layout == LauncherLayout::Grid && launcher_looks::is_plain(&self.query, &self.ctx.providers),
+            LauncherStyle::Beacon => self.mode == Some(BeaconMode::Apps),
+        }
+    }
+
+    /// Results are listed under headings (something typed, or a mode).
+    fn grouped(&self) -> bool {
+        self.look.group_results && !self.grid_active() && (!self.query.trim().is_empty() || self.mode.is_some())
+    }
+
+    /// Results the keyboard walks through (the grid shows them all; the
+    /// lists the first [`MAX_RESULTS`]).
+    fn count(&self) -> usize {
+        if self.grid_active() { self.results.len() } else { self.results.len().min(MAX_RESULTS) }
+    }
+
+    /// A wheel notch (or a touchpad's pixels adding up to `row` px) steps
+    /// the selection by `step`; rows sliding under a still pointer don't
+    /// take it back by hover until the pointer moves.
+    fn wheel_select(&mut self, e: &ScrollEvent, row: f32, step: usize, cx: &mut Context<Self>) {
+        let count = self.count();
+        if count == 0 {
+            return;
+        }
+        // Down is negative.
+        let rows = match e.delta {
+            gpui::ScrollDelta::Lines(l) => -l.y.signum(),
+            gpui::ScrollDelta::Pixels(p) => {
+                self.wheel -= f32::from(p.y);
+                let whole = (self.wheel / row).trunc();
+                self.wheel -= whole * row;
+                whole
+            }
+        };
+        if rows == 0.0 {
+            return;
+        }
+        let next = self.selected as isize + rows as isize * step as isize;
+        self.selected = next.clamp(0, count as isize - 1) as usize;
+        self.wheel_hold = true;
+        cx.stop_propagation();
+        cx.notify();
+    }
+
+    /// Frees what this launcher decoded: its colour icons (bitmaps and
+    /// atlas textures; not the ones the dock shows) and image thumbnails.
+    fn release(&mut self, window: &mut Window, cx: &mut App) {
+        if std::mem::replace(&mut self.released, true) {
+            return;
+        }
+        let keep = dock_icon_paths(cx);
+        for (path, edge) in self.icons.drain() {
+            if !keep.contains(&path) {
+                crate::icon_raster::forget_edge(&path, edge, window, cx);
+            }
+        }
+        for thumb in std::mem::take(&mut self.thumbs).into_values().flatten() {
+            crate::image_cache::evict_path(&thumb, window, cx);
+        }
+    }
+
+    /// [`Self::release`] once the window is gone (its atlas went with it).
+    fn forget_decoded(&mut self, cx: &mut App) {
+        if std::mem::replace(&mut self.released, true) {
+            return;
+        }
+        let keep = dock_icon_paths(cx);
+        for (path, edge) in self.icons.drain() {
+            if !keep.contains(&path) {
+                crate::icon_raster::forget_cached_edge(&path, edge, cx);
+            }
+        }
+        for thumb in std::mem::take(&mut self.thumbs).into_values().flatten() {
+            crate::image_cache::forget_path(&thumb, cx);
+        }
     }
 
     fn close(&mut self, cx: &mut Context<Self>) {
@@ -1244,6 +1424,10 @@ impl LauncherView {
     /// Enter / click: prompts for missing arguments (the launcher stays
     /// open), otherwise closes the launcher and runs the result.
     fn activate(&mut self, index: usize, cx: &mut Context<Self>) {
+        // The Beacon bar alone (nothing typed) has no results to open.
+        if self.look.style == mandara_config::workflow::LauncherStyle::Beacon && !self.beacon_open_results() {
+            return;
+        }
         let Some(item) = self.results.get(index) else { return };
         match plan(item, &self.query) {
             Effect::Prompt(query) => {
@@ -1271,19 +1455,33 @@ impl LauncherView {
 
     fn on_key(&mut self, e: &KeyDownEvent, cx: &mut Context<Self>) {
         let k = &e.keystroke;
-        let count = self.results.len().min(MAX_RESULTS);
+        let count = self.count();
         self.blink_from = Instant::now();
-        // Grid browsing: arrows move in two dimensions.
-        if let Some(cols) = self.grid_columns(cx).filter(|_| count > 0 && !k.modifiers.control) {
-            let step: Option<isize> = match k.key.as_str() {
-                "left" => Some(-1),
-                "right" | "tab" => Some(1),
-                "up" => Some(-(cols as isize)),
-                "down" => Some(cols as isize),
-                _ => None,
-            };
-            if let Some(d) = step {
+        let beacon = self.look.style == mandara_config::workflow::LauncherStyle::Beacon;
+        // Beacon: Ctrl+1–4 pick a mode; Backspace on an empty field or
+        // Escape leaves it.
+        if beacon && k.modifiers.control
+            && let Some(mode) = BeaconMode::from_digit(&k.key)
+        {
+            self.toggle_mode(mode, cx);
+            return;
+        }
+        if beacon && self.mode.is_some() && (k.key == "escape" || (k.key == "backspace" && self.query.is_empty())) {
+            self.mode = None;
+            self.refilter();
+            cx.notify();
+            return;
+        }
+        // Grid: arrows move in two dimensions, Tab switches the category.
+        if self.grid_active() && !k.modifiers.control {
+            if k.key == "tab" && self.look.grid_categories && !self.categories.is_empty() {
+                let next = launcher_looks::cycle(self.category, &self.categories, k.modifiers.shift);
+                self.set_category(next, cx);
+                return;
+            }
+            if let Some(d) = launcher_looks::grid_step(&k.key, self.grid_cols.max(1), crate::bidi::rtl()).filter(|_| count > 0) {
                 self.selected = (self.selected as isize + d).clamp(0, count as isize - 1) as usize;
+                self.reveal_selected();
                 cx.notify();
                 return;
             }
@@ -1465,6 +1663,98 @@ impl LauncherView {
         None
     }
 
+    /// One list row: lead tile, title and detail, badge. `on_accent`: the
+    /// row sits on the accent-filled highlight (Beacon), its text follows.
+    fn list_row(&mut self, i: usize, item: &Item, row_h: f32, lead_px: f32, look: &mandara_config::workflow::LauncherLook, on_accent: bool, palette: &MandaraPalette, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let ignore_mouse = look.ignore_mouse;
+        let badge = self.badge(i, item, look);
+        let hover = cx.listener(move |this, hovered: &bool, _, cx| {
+            if *hovered && !ignore_mouse && !this.wheel_hold {
+                this.selected = i;
+                cx.notify();
+            }
+        });
+        let click = cx.listener(move |this, _: &ClickEvent, _, cx| this.activate(i, cx));
+        let lead = self.lead(item, lead_px, palette, cx);
+        let (title, sub) = match item {
+            Item::App(app) => (app.name.clone(), app.comment.clone()),
+            Item::Entry(e) => (e.label.clone(), e.detail.clone()),
+            Item::Hit(h) => (h.label.clone(), h.detail.clone()),
+            Item::Calc { expr, value } => (format_number(*value), tf("{expression} · Enter copies", &[("expression", expr)])),
+        };
+        let fg = crate::plugins::panel_fx::readable(palette.primary, palette).best_on(Color::hex("#ffffff"), Color::hex("#101010"));
+        let (title_c, sub_c, badge_bg, badge_fg) = if on_accent {
+            (fg, fg.with_alpha(launcher_looks::SUB_ON_ACCENT_ALPHA), fg.with_alpha(launcher_looks::BADGE_ON_ACCENT_ALPHA), fg)
+        } else {
+            (palette.on_surface, palette.on_surface_variant, palette.on_surface.with_alpha(0.06), palette.on_surface_variant)
+        };
+        div()
+            .id(("row", i))
+            .h(px(row_h))
+            .px(px(12.0))
+            .flex()
+            .items_center()
+            .gap(px(12.0))
+            .cursor_pointer()
+            .child(lead)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.0))
+                    .flex()
+                    .flex_col()
+                    .child(div().truncate().text_size(px(text::BODY)).when(on_accent, |el| el.text_color(title_c.hsla())).child(title))
+                    .when(!look.compact && !sub.is_empty(), |el| el.child(div().truncate().text_size(px(text::LABEL)).text_color(sub_c.hsla()).child(sub))),
+            )
+            .when_some(badge, |el, b| el.child(div().flex_none().px(px(8.0)).h(px(20.0)).rounded_full().flex().items_center().bg(badge_bg.hsla()).text_size(px(10.5)).text_color(badge_fg.hsla()).child(b)))
+            .on_hover(hover)
+            .on_click(click)
+            .into_any_element()
+    }
+
+    /// The query text with its blinking caret (solid for half a second
+    /// after each edit), the selection, or `placeholder` while empty;
+    /// `size` px type. Records where the text lies (click-to-place-caret).
+    fn query_field(&self, size: f32, placeholder: String, palette: &MandaraPalette) -> gpui::Div {
+        let caret_on = (self.blink_from.elapsed().as_millis() / CARET_BLINK.as_millis()).is_multiple_of(2);
+        let caret = div().w(px(2.0)).h(px(size + 5.0)).rounded(px(crate::style::radius(1.0))).flex_none().bg(palette.primary.hsla()).when(!caret_on, |el| el.opacity(0.0));
+        let bounds = self.text_bounds.clone();
+        let field = div()
+            .flex_1()
+            .min_w(px(0.0))
+            .relative()
+            .h_full()
+            .flex()
+            .items_center()
+            .cursor_text()
+            .text_size(px(size))
+            .child(gpui::canvas(move |b, _, _| bounds.set(Some(b)), |_, _, _, _| {}).absolute().inset_0());
+        if self.query.is_empty() {
+            field.child(caret).child(div().pl(px(2.0)).truncate().text_color(palette.on_surface_variant.with_alpha(0.7).hsla()).child(placeholder))
+        } else if self.select_all {
+            field.child(div().px(px(1.0)).rounded(px(crate::style::radius(3.0))).bg(palette.primary.with_alpha(0.28).hsla()).text_color(palette.on_surface.hsla()).child(self.query.clone()))
+        } else {
+            let (head, tail) = self.query.split_at(self.caret_byte());
+            field
+                .text_color(palette.on_surface.hsla())
+                .when(!head.is_empty(), |el| el.child(head.to_string()))
+                .child(caret)
+                .when(!tail.is_empty(), |el| el.child(tail.to_string()))
+        }
+    }
+
+    /// A colour icon file decoded at the size it is drawn and recorded in
+    /// the ledger (formats the sized decoder doesn't take, like XPM, load
+    /// as they are).
+    fn colour_icon(&mut self, path: &std::path::Path, size: f32) -> gpui::AnyElement {
+        let el = div().size(px(size)).flex_none();
+        if !crate::icon_raster::handles(path) {
+            return el.child(img(path.to_path_buf()).size_full().object_fit(ObjectFit::Contain)).into_any_element();
+        }
+        self.icons.touch(path, crate::icon_raster::edge_for(size, self.scale));
+        el.child(img(crate::icon_raster::source(path, size)).size_full().object_fit(ObjectFit::Contain)).into_any_element()
+    }
+
     /// The small badge of a result row (`App`, `Pinned`, `Flatpak`…).
     fn badge(&self, i: usize, item: &Item, look: &mandara_config::workflow::LauncherLook) -> Option<String> {
         match item {
@@ -1489,14 +1779,17 @@ impl LauncherView {
         }
         match item {
             Item::App(app) => match &app.icon {
-                Some(path) => div().size(px(size)).flex_none().child(img(path.clone()).size_full().object_fit(ObjectFit::Contain)).into_any_element(),
+                Some(path) => self.colour_icon(path, size),
                 None => monogram(&app.name, size, palette).into_any_element(),
             },
             Item::Entry(e) => tile().bg(palette.surface_container_high.hsla()).child(icon(e.icon, size * LEAD_ICON_FRAC, palette.primary)).into_any_element(),
             Item::Calc { .. } => tile().bg(palette.primary_container.hsla()).text_color(palette.primary.hsla()).child("=").into_any_element(),
             Item::Hit(h) => match &h.lead {
                 Lead::Glyph(g) => tile().bg(palette.surface_container_high.hsla()).text_size(px(EMOJI_LEAD_PX * size / ROW_LEAD_PX)).child(g.clone()).into_any_element(),
-                Lead::AppIcon(id) => tile().child(crate::plugins::workspaces::app_icon(id, size * APP_ICON_FRAC, palette.on_surface, false, palette)).into_any_element(),
+                Lead::AppIcon(id) => match crate::plugins::workspaces::raster_icon_path(id) {
+                    Some(path) => tile().child(self.colour_icon(&path, size * APP_ICON_FRAC)).into_any_element(),
+                    None => tile().child(crate::plugins::workspaces::app_icon(id, size * APP_ICON_FRAC, palette.on_surface, false, palette)).into_any_element(),
+                },
                 Lead::Icon(name) => tile().bg(palette.surface_container_high.hsla()).child(icon(name, size * LEAD_ICON_FRAC, palette.primary)).into_any_element(),
                 Lead::Image(path) => match self.thumb(path, cx) {
                     Some(thumb) => img(thumb).size(px(size)).flex_none().rounded(px(crate::style::radius(THUMB_RADIUS))).object_fit(ObjectFit::Cover).into_any_element(),
@@ -1549,44 +1842,58 @@ impl Render for LauncherView {
             window.request_animation_frame();
             return div().id("launcher-root").size_full().track_focus(&self.focus).into_any_element();
         }
+        // Icons scrolled out of view beyond the budget go before this frame.
+        self.scale = window.scale_factor();
+        for (path, edge) in self.icons.begin_frame() {
+            crate::icon_raster::forget_edge(&path, edge, window, cx);
+        }
+        if self.look.style == mandara_config::workflow::LauncherStyle::Beacon {
+            return self.render_beacon(window, cx);
+        }
         let palette = mandara_core::frame_palette(window, cx);
         let f = fonts(cx);
         let cfg = config(cx).read(cx).snapshot();
-        let look = cfg.launcher.look.clone();
+        let look = self.look.clone();
         let viewport = window.viewport_size();
         let (sw, sh) = (f32::from(viewport.width), f32::from(viewport.height));
         let row_h = if look.compact { ROW_H_COMPACT } else { ROW_H };
         let lead_px = if look.compact { ROW_LEAD_COMPACT_PX } else { ROW_LEAD_PX };
+        let grid = self.grid_active();
+        let grouped = !grid && !self.sections.is_empty();
+        let chips = grid && look.grid_categories && !self.categories.is_empty();
+        let chips_h = if chips { launcher_looks::CHIPS_H + LIST_GAP } else { 0.0 };
+        let hints_h = if look.hints { launcher_looks::HINTS_H + LIST_GAP } else { 0.0 };
         // Rows: as many results as configured, as fit the height setting.
-        let chrome = PAD * 2.0 + LIST_GAP + SEARCH_H;
+        let chrome = PAD * 2.0 + LIST_GAP + SEARCH_H + chips_h + hints_h;
         let fit = ((look.size().1 - chrome) / row_h).floor().max(0.0) as usize;
         let max_rows = cfg.launcher.max_results.clamp(3, 12).min(fit).max(MIN_ROWS);
-        let grid = self.grid_columns(cx);
-        let n = self.results.len().min(MAX_RESULTS);
+        let n = self.count();
+        let output = self.output.as_deref();
+        let bar_here = output.is_none_or(|o| cfg.bar_on_output(o));
+        let button = crate::launcher_place::button_on(output, cx);
+        // The grid's columns follow the width this placement gives.
+        let g = grid.then(|| {
+            let width = crate::launcher_place::for_config(&cfg, (sw, sh), look.size().1, bar_here, button).rect.w;
+            launcher_looks::grid_geom(width - PAD * 2.0, look.grid_icon(), look.grid_columns)
+        });
+        let lay = if grouped { launcher_looks::list_layout(n, &self.sections, row_h, launcher_looks::HEADER_H) } else { Default::default() };
         // Visible window and list height (the width comes from the placement).
-        let (list_h, first_visible, shown, cell_h) = match grid {
-            Some(cols) => {
-                let total_rows = n.div_ceil(cols).max(1);
-                let vis_rows = (((max_rows as f32 * ROW_H) / GRID_TILE_H).floor() as usize).max(MIN_ROWS).min(total_rows);
-                let first_row = (self.selected / cols).saturating_sub(vis_rows - 1);
-                ((vis_rows as f32) * GRID_TILE_H, first_row * cols, vis_rows * cols, GRID_TILE_H)
-            }
-            None => {
-                let rows = n.min(max_rows);
-                (if rows == 0 { row_h } else { rows as f32 * row_h }, self.selected.saturating_sub(max_rows - 1), max_rows, row_h)
-            }
+        let (list_h, first_visible, shown, cell_h) = if let Some(g) = g {
+            self.grid_cols = g.cols;
+            let total_rows = n.div_ceil(g.cols).max(1);
+            let room = (look.size().1 - chrome).max(g.tile_h);
+            let vis_rows = ((room / g.tile_h).floor() as usize).max(1).min(total_rows);
+            (vis_rows as f32 * g.tile_h, 0, 0, g.tile_h)
+        } else if grouped {
+            (lay.total.min(max_rows as f32 * row_h).max(row_h), 0, 0, row_h)
+        } else {
+            let rows = n.min(max_rows);
+            (if rows == 0 { row_h } else { rows as f32 * row_h }, self.selected.saturating_sub(max_rows - 1), max_rows, row_h)
         };
         let full_h = chrome + list_h;
         // Where it rests for this placement, bar style, dock and output.
-        let output = self.output.as_deref();
-        let bar_here = output.is_none_or(|o| cfg.bar_on_output(o));
-        let place = crate::launcher_place::for_config(&cfg, (sw, sh), full_h, bar_here, crate::launcher_place::button_on(output, cx));
-        let width = place.rect.w;
+        let place = crate::launcher_place::for_config(&cfg, (sw, sh), full_h, bar_here, button);
         let full_h = place.rect.h;
-        let cell_w = match grid {
-            Some(cols) => (width - PAD * 2.0) / cols as f32,
-            None => width - PAD * 2.0,
-        };
         // Springs: the panels' spring (or the user's own), the panels'
         // animation style; reduced motion snaps (inside the step).
         let (spring, custom) = crate::shell::spring_for(DRAWER_SPRING, &cfg.panels.spring);
@@ -1603,25 +1910,27 @@ impl Render for LauncherView {
         self.open.set_instant(instant);
         self.rest.set_target(place.rect.to_bounds());
         self.open.set_target(if self.closing { 0.0 } else { 1.0 });
-        let rel = self.selected.saturating_sub(first_visible);
-        match grid {
-            Some(cols) => {
-                self.highlight.set_target((rel / cols) as f32 * cell_h);
-                self.highlight_x.set_target((rel % cols) as f32 * cell_w);
+        if grouped {
+            // The highlight and the scroll follow the selected row (and its
+            // heading, scrolling up to the first row of a section).
+            if let Some(&top) = lay.item_y.get(self.selected) {
+                let above = if lay.headers.iter().any(|(y, _)| (top - launcher_looks::HEADER_H - y).abs() < 0.5) { launcher_looks::HEADER_H } else { 0.0 };
+                self.list_scroll.set_target(launcher_looks::follow(self.list_scroll.target(), top, row_h, above, list_h, lay.total));
+                self.highlight.set_target(top);
             }
-            None => {
-                self.highlight.set_target(rel as f32 * cell_h);
-                self.highlight_x.set_target(0.0);
-            }
+        } else if !grid {
+            self.highlight.set_target(self.selected.saturating_sub(first_visible) as f32 * cell_h);
         }
         let dt = self.clock.tick(Instant::now());
         let a = crate::shell::step_spring(&mut self.rest, custom, dt);
         let opening = crate::shell::step_spring(&mut self.open, custom, dt);
         let b = self.highlight.step(dt);
-        let c = self.highlight_x.step(dt);
+        let c = self.list_scroll.step(dt);
+        let d = self.reflow.step(dt);
         if self.closing && !opening {
+            self.release(window, cx);
             window.remove_window();
-        } else if a || opening || b || c {
+        } else if a || opening || b || c || d {
             window.request_animation_frame();
         } else {
             self.clock.idle();
@@ -1640,118 +1949,30 @@ impl Render for LauncherView {
             SearchPosition::Auto => place.edge != Some(LauncherEdge::Bottom),
         };
 
-        let ignore_mouse = look.ignore_mouse;
-        let mut rows_el: Vec<gpui::AnyElement> = Vec::new();
-        let items: Vec<(usize, Item)> = self.results.iter().enumerate().skip(first_visible).take(shown).map(|(i, it)| (i, it.clone())).collect();
-        for (i, item) in items {
-            let badge = self.badge(i, &item, &look);
-            let hover = cx.listener(move |this, hovered: &bool, _, cx| {
-                if *hovered && !ignore_mouse && !this.wheel_hold {
-                    this.selected = i;
-                    cx.notify();
-                }
-            });
-            let click = cx.listener(move |this, _: &ClickEvent, _, cx| this.activate(i, cx));
-            if grid.is_some() {
-                let lead = self.lead(&item, GRID_ICON, &palette, cx);
-                let title = match &item {
-                    Item::App(a) => a.name.clone(),
-                    Item::Entry(e) => e.label.clone(),
-                    Item::Hit(h) => h.label.clone(),
-                    Item::Calc { value, .. } => format_number(*value),
-                };
-                rows_el.push(
-                    div()
-                        .id(("tile", i))
-                        .w(px(cell_w))
-                        .h(px(cell_h))
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .justify_center()
-                        .gap(px(6.0))
-                        .cursor_pointer()
-                        .child(lead)
-                        .child(div().w_full().px(px(6.0)).text_center().truncate().text_size(px(text::LABEL)).child(title))
-                        .on_hover(hover)
-                        .on_click(click)
-                        .into_any_element(),
-                );
-                continue;
-            }
-            let lead = self.lead(&item, lead_px, &palette, cx);
-            let (title, sub) = match &item {
-                Item::App(app) => (app.name.clone(), app.comment.clone()),
-                Item::Entry(e) => (e.label.clone(), e.detail.clone()),
-                Item::Hit(h) => (h.label.clone(), h.detail.clone()),
-                Item::Calc { expr, value } => (format_number(*value), tf("{expression} · Enter copies", &[("expression", expr)])),
-            };
-            rows_el.push(
-                div()
-                    .id(("row", i))
-                    .h(px(row_h))
-                    .px(px(12.0))
-                    .flex()
-                    .items_center()
-                    .gap(px(12.0))
-                    .cursor_pointer()
-                    .child(lead)
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.0))
-                            .flex()
-                            .flex_col()
-                            .child(div().truncate().text_size(px(text::BODY)).child(title))
-                            .when(!look.compact && !sub.is_empty(), |el| el.child(div().truncate().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(sub))),
-                    )
-                    .when_some(badge, |el, b| {
-                        el.child(div().flex_none().px(px(8.0)).h(px(20.0)).rounded_full().flex().items_center().bg(palette.on_surface.with_alpha(0.06).hsla()).text_size(px(10.5)).text_color(palette.on_surface_variant.hsla()).child(b))
-                    })
-                    .on_hover(hover)
-                    .on_click(click)
-                    .into_any_element(),
-            );
-        }
         // The wheel (or a touchpad) steps the selection a row at a time, and
-        // the window follows it like the arrow keys.
-        let wheel_step = grid.unwrap_or(1);
+        // the window follows it like the arrow keys (the grid scrolls
+        // smoothly on its own).
         let wheel_row = cell_h;
         let list = div()
             .relative()
             .h(px(list_h))
-            .on_scroll(cx.listener(move |this, e: &ScrollEvent, _, cx| {
-                let count = this.results.len().min(MAX_RESULTS);
-                if count == 0 {
-                    return;
-                }
-                // A wheel notch is one row; a touchpad's pixels add up to
-                // rows. Down is negative.
-                let rows = match e.delta {
-                    gpui::ScrollDelta::Lines(l) => -l.y.signum(),
-                    gpui::ScrollDelta::Pixels(p) => {
-                        this.wheel -= f32::from(p.y);
-                        let whole = (this.wheel / wheel_row).trunc();
-                        this.wheel -= whole * wheel_row;
-                        whole
-                    }
-                };
-                if rows == 0.0 {
-                    return;
-                }
-                let next = this.selected as isize + rows as isize * wheel_step as isize;
-                this.selected = next.clamp(0, count as isize - 1) as usize;
-                this.wheel_hold = true;
-                cx.stop_propagation();
-                cx.notify();
-            }))
-            .on_mouse_move(cx.listener(|this, _: &gpui::MouseMoveEvent, _, _| this.wheel_hold = false))
-            .child(
+            .when(!grid, |el| el.on_scroll(cx.listener(move |this, e: &ScrollEvent, _, cx| this.wheel_select(e, wheel_row, 1, cx))))
+            .on_mouse_move(cx.listener(|this, _: &gpui::MouseMoveEvent, _, _| this.wheel_hold = false));
+        let list = if let Some(g) = g {
+            let grid_el = self.grid_element(g, list_h, &palette, cx);
+            list.child(grid_el)
+        } else if grouped {
+            let grouped_el = self.grouped_element(&lay, list_h, row_h, lead_px, false, &palette, cx);
+            list.child(grouped_el)
+        } else {
+            let items: Vec<(usize, Item)> = self.results.iter().enumerate().skip(first_visible).take(shown).map(|(i, it)| (i, it.clone())).collect();
+            let rows_el: Vec<gpui::AnyElement> = items.into_iter().map(|(i, item)| self.list_row(i, &item, row_h, lead_px, &look, false, &palette, cx)).collect();
+            list.child(
                 div()
                     .absolute()
-                    .left(px(self.highlight_x.value()))
+                    .left_0()
                     .top(px(self.highlight.value()))
-                    .w(px(cell_w))
+                    .w(px(place.rect.w - PAD * 2.0))
                     .h(px(cell_h))
                     .rounded(px(crate::style::radius(16.0)))
                     .bg(palette.on_surface.with_alpha(0.08).hsla())
@@ -1760,8 +1981,11 @@ impl Render for LauncherView {
             .when(self.results.is_empty(), |el| {
                 el.child(div().size_full().flex().items_center().justify_center().text_color(palette.on_surface_variant.hsla()).child(t("No results")))
             })
-            .child(div().flex().when(grid.is_some(), |el| el.flex_wrap()).when(grid.is_none(), |el| el.flex_col()).children(rows_el));
-        let placeholder = self.query.is_empty();
+            .child(div().flex().flex_col().children(rows_el))
+        };
+        let chips_el = chips.then(|| self.chips_element(&palette, cx));
+        let hints_el = look.hints.then(|| self.classic_hints(grid, chips, &palette));
+        self.field_px = text::BODY + 1.0;
         let hint = {
             let p = &cfg.launcher.providers;
             let mut parts = vec![t("Apps, settings, commands").to_string(), t("“/” slash commands").to_string(), t("“=” calculate").to_string()];
@@ -1786,34 +2010,7 @@ impl Render for LauncherView {
             .border_2()
             .border_color(palette.primary.with_alpha(0.55).hsla())
             .child(icon("search", 18.0, palette.on_surface_variant))
-            .child({
-                // Blinking caret, solid for half a second after each edit.
-                let caret_on = (self.blink_from.elapsed().as_millis() / 530).is_multiple_of(2);
-                let caret = div().w(px(2.0)).h(px(19.0)).rounded(px(crate::style::radius(1.0))).flex_none().bg(palette.primary.hsla()).when(!caret_on, |el| el.opacity(0.0));
-                let bounds = self.text_bounds.clone();
-                let field = div()
-                    .flex_1()
-                    .min_w(px(0.0))
-                    .relative()
-                    .h_full()
-                    .flex()
-                    .items_center()
-                    .cursor_text()
-                    .text_size(px(text::BODY + 1.0))
-                    .child(gpui::canvas(move |b, _, _| bounds.set(Some(b)), |_, _, _, _| {}).absolute().inset_0());
-                if placeholder {
-                    field.child(caret).child(div().pl(px(2.0)).truncate().text_color(palette.on_surface_variant.with_alpha(0.7).hsla()).child(hint))
-                } else if self.select_all {
-                    field.child(div().px(px(1.0)).rounded(px(crate::style::radius(3.0))).bg(palette.primary.with_alpha(0.28).hsla()).text_color(palette.on_surface.hsla()).child(self.query.clone()))
-                } else {
-                    let (head, tail) = self.query.split_at(self.caret_byte());
-                    field
-                        .text_color(palette.on_surface.hsla())
-                        .when(!head.is_empty(), |el| el.child(head.to_string()))
-                        .child(caret)
-                        .when(!tail.is_empty(), |el| el.child(tail.to_string()))
-                }
-            })
+            .child(self.query_field(text::BODY + 1.0, hint, &palette))
             // Clicking the field focuses it and puts the caret where you clicked.
             .on_mouse_down(MouseButton::Left, cx.listener(|this, e: &gpui::MouseDownEvent, window, cx| {
                 this.focus.focus(window, cx);
@@ -1850,7 +2047,12 @@ impl Render for LauncherView {
             .opacity(((progress - 0.3) / 0.5).clamp(0.0, 1.0));
         // The search field sits on the side the drawer comes from (or as
         // configured), and leads as the drawer opens.
-        let body = if search_top { body.flex_col().child(search).child(list) } else { body.flex_col().justify_end().child(list).child(search) };
+        // The category chips sit above the grid; the hints under the results.
+        let body = if search_top {
+            body.flex_col().child(search).children(chips_el).child(list).children(hints_el)
+        } else {
+            body.flex_col().justify_end().children(chips_el).child(list).children(hints_el).child(search)
+        };
         // Fills as panels: joined to the bar it takes the bar's own fill
         // (tint, opacity) so the join is seamless; otherwise the panel fill.
         let frame = frame_color(&palette);
@@ -2300,6 +2502,37 @@ mod tests {
         assert_eq!(summarize(&serde_json::json!("pong")), "pong");
         let many: Vec<u32> = (0..15).collect();
         assert!(summarize(&serde_json::json!(many)).ends_with("…and 5 more"));
+    }
+
+    /// What one keystroke costs the looks' models with 600 apps and every
+    /// plugin's commands: the fuzzy search, regrouping it, and the grid's
+    /// reflow map. All of it must leave most of a 144 Hz frame (6.94 ms)
+    /// for layout and painting; the bound is loose for debug builds, the
+    /// measured numbers are printed.
+    #[test]
+    fn a_keystroke_stays_well_inside_the_frame_budget() {
+        let (_registry, _cfg, index) = fixture();
+        let apps: Vec<DesktopApp> = (0..600)
+            .map(|i| DesktopApp { id: format!("org.example.App{i}"), name: format!("Example {i} {}", ["Firefox", "Files", "Terminal", "Editor", "Music"][i % 5]), categories: "Utility".into(), ..Default::default() })
+            .collect();
+        let ctx = SearchCtx::default();
+        let runs = 20;
+        let start = Instant::now();
+        for _ in 0..runs {
+            let found = search_with("fi", &apps, &index, &ctx);
+            let before: std::collections::HashMap<String, usize> = found.iter().enumerate().map(|(i, it)| (usage_key(it), i)).collect();
+            assert!(!before.is_empty());
+            let (grouped, sections) = launcher_looks::group_results(found.into_iter().take(MAX_RESULTS).collect(), true);
+            assert!(!grouped.is_empty() && !sections.is_empty());
+        }
+        let per_key = start.elapsed().as_secs_f64() * 1000.0 / runs as f64;
+        let start = Instant::now();
+        for _ in 0..runs {
+            assert_eq!(search_with("", &apps, &index, &ctx).len(), 600, "the grid browses every app");
+        }
+        let browse = start.elapsed().as_secs_f64() * 1000.0 / runs as f64;
+        eprintln!("launcher keystroke (600 apps, debug build): search + group + reflow map {per_key:.2} ms, browse order {browse:.2} ms");
+        assert!(per_key < 40.0 && browse < 40.0, "{per_key:.2} / {browse:.2} ms");
     }
 
     #[test]

@@ -26,8 +26,18 @@ pub mod defaults {
     /// Bounds of the center card's width and of both height sliders, px.
     pub const LAUNCHER_CENTER_WIDTH_RANGE_PX: (f32, f32) = (480.0, 1280.0);
     pub const LAUNCHER_HEIGHT_RANGE_PX: (f32, f32) = (240.0, 1000.0);
-    /// App tiles per row in the grid layout.
+    /// Most app tiles per row in the grid layout (fewer when narrower).
     pub const LAUNCHER_GRID_COLUMNS: u32 = 6;
+    /// App icon size in the grid layout, and its bounds, logical px.
+    pub const LAUNCHER_GRID_ICON_PX: f32 = 48.0;
+    pub const LAUNCHER_GRID_ICON_RANGE_PX: (f32, f32) = (32.0, 96.0);
+    /// The Beacon style's search bar width and its bounds, logical px.
+    pub const LAUNCHER_BEACON_WIDTH_PX: f32 = 680.0;
+    pub const LAUNCHER_BEACON_WIDTH_RANGE_PX: (f32, f32) = (480.0, 960.0);
+    /// Where the Beacon bar's top sits, a share of the screen height, and
+    /// its bounds.
+    pub const LAUNCHER_BEACON_TOP: f32 = 0.24;
+    pub const LAUNCHER_BEACON_TOP_RANGE: (f32, f32) = (0.08, 0.45);
     /// Usage counts halve every this many days (frecency).
     pub const USAGE_HALF_LIFE_DAYS: f32 = 14.0;
     /// Recently used apps listed when the query is empty.
@@ -291,8 +301,32 @@ pub enum SearchPosition {
 pub enum LauncherLayout {
     #[default]
     List,
-    /// App tiles in a grid while browsing (searches stay a list).
+    /// App tiles in a grid while browsing and while typing plain words
+    /// (prefixed searches, `/` and `=` stay a list).
     Grid,
+}
+
+/// The launcher's overall shape.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LauncherStyle {
+    /// One surface holding the search field and the results, placed by
+    /// [`LauncherLook::position`].
+    #[default]
+    Classic,
+    /// A centred glass search bar in the upper part of the screen with
+    /// mode buttons beside it; results open in their own glass card under
+    /// it once you type (the placement doesn't apply).
+    Beacon,
+}
+
+impl LauncherStyle {
+    pub fn id(self) -> &'static str {
+        match self {
+            LauncherStyle::Classic => "classic",
+            LauncherStyle::Beacon => "beacon",
+        }
+    }
 }
 
 /// The launcher's size, placement and behaviour.
@@ -312,8 +346,26 @@ pub struct LauncherLook {
     /// button: grow out of the button instead of the zone's edge / middle.
     pub align_to_button: bool,
     pub search_position: SearchPosition,
+    /// Classic (one surface) or Beacon (a centred search bar).
+    pub style: LauncherStyle,
     pub layout: LauncherLayout,
+    /// Most tiles per row in the grid (fewer fit a narrower launcher).
     pub grid_columns: u32,
+    /// App icon size in the grid, logical px.
+    pub grid_icon_size: f32,
+    /// A row of category chips (All, Pinned, Internet, Office…) above the
+    /// grid.
+    pub grid_categories: bool,
+    /// Results under headings by kind (Top hit, Applications, Actions,
+    /// Files…).
+    pub group_results: bool,
+    /// Keyboard hints under the results (↑↓ move, Enter opens…).
+    pub hints: bool,
+    /// The Beacon search bar's width, logical px.
+    pub beacon_width: f32,
+    /// The Beacon bar's top, a share of the screen height (0.24: about a
+    /// quarter of the way down).
+    pub beacon_top: f32,
     /// Shorter rows without the second line.
     pub compact: bool,
     /// Darken the screen behind the launcher (0–0.7).
@@ -338,8 +390,15 @@ impl Default for LauncherLook {
             position: LauncherPosition::BottomCenter,
             align_to_button: true,
             search_position: SearchPosition::Auto,
+            style: LauncherStyle::Classic,
             layout: LauncherLayout::List,
             grid_columns: defaults::LAUNCHER_GRID_COLUMNS,
+            grid_icon_size: defaults::LAUNCHER_GRID_ICON_PX,
+            grid_categories: true,
+            group_results: false,
+            hints: false,
+            beacon_width: defaults::LAUNCHER_BEACON_WIDTH_PX,
+            beacon_top: defaults::LAUNCHER_BEACON_TOP,
             compact: false,
             dim: defaults::LAUNCHER_DIM,
             ignore_mouse: false,
@@ -354,13 +413,162 @@ impl LauncherLook {
     /// Width and tallest height for the current placement, clamped to the
     /// Studio slider bounds (the center card has its own size).
     pub fn size(&self) -> (f32, f32) {
-        let clamp = |v: f32, (lo, hi): (f32, f32), d: f32| if v.is_finite() { v.clamp(lo, hi) } else { d };
-        let h = |v: f32, d: f32| clamp(v, defaults::LAUNCHER_HEIGHT_RANGE_PX, d);
         if self.position.is_center() {
-            (clamp(self.center_width, defaults::LAUNCHER_CENTER_WIDTH_RANGE_PX, defaults::LAUNCHER_CENTER_WIDTH_PX), h(self.center_height, defaults::LAUNCHER_CENTER_HEIGHT_PX))
+            self.size_for_center()
         } else {
-            (clamp(self.width, defaults::LAUNCHER_WIDTH_RANGE_PX, defaults::LAUNCHER_WIDTH_PX), h(self.height, defaults::LAUNCHER_HEIGHT_PX))
+            (clamp_or(self.width, defaults::LAUNCHER_WIDTH_RANGE_PX, defaults::LAUNCHER_WIDTH_PX), clamp_or(self.height, defaults::LAUNCHER_HEIGHT_RANGE_PX, defaults::LAUNCHER_HEIGHT_PX))
         }
+    }
+
+    /// The floating card's width and tallest height, clamped (the Beacon
+    /// style's results card grows up to this height too).
+    pub fn size_for_center(&self) -> (f32, f32) {
+        (
+            clamp_or(self.center_width, defaults::LAUNCHER_CENTER_WIDTH_RANGE_PX, defaults::LAUNCHER_CENTER_WIDTH_PX),
+            clamp_or(self.center_height, defaults::LAUNCHER_HEIGHT_RANGE_PX, defaults::LAUNCHER_CENTER_HEIGHT_PX),
+        )
+    }
+
+    /// The grid's icon size, clamped to its range.
+    pub fn grid_icon(&self) -> f32 {
+        clamp_or(self.grid_icon_size, defaults::LAUNCHER_GRID_ICON_RANGE_PX, defaults::LAUNCHER_GRID_ICON_PX)
+    }
+
+    /// The Beacon bar's width and top (share of the screen height),
+    /// clamped to their ranges.
+    pub fn beacon(&self) -> (f32, f32) {
+        (
+            clamp_or(self.beacon_width, defaults::LAUNCHER_BEACON_WIDTH_RANGE_PX, defaults::LAUNCHER_BEACON_WIDTH_PX),
+            clamp_or(self.beacon_top, defaults::LAUNCHER_BEACON_TOP_RANGE, defaults::LAUNCHER_BEACON_TOP),
+        )
+    }
+}
+
+/// `v` clamped to `(lo, hi)`, or `d` when it isn't a number.
+fn clamp_or(v: f32, (lo, hi): (f32, f32), d: f32) -> f32 {
+    if v.is_finite() { v.clamp(lo, hi) } else { d }
+}
+
+// ── Launcher looks ───────────────────────────────────────────────────────
+
+/// One ready-made launcher look: a named set of [`LauncherLook`] values
+/// applied together (Studio → Launcher → Launcher looks, `launcher look
+/// <id>`). Every value can still be changed on its own afterwards; the
+/// look then shows as customized.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct LauncherLookPreset {
+    pub id: &'static str,
+    /// Display name and one-line description (i18n keys).
+    pub name: &'static str,
+    pub blurb: &'static str,
+    pub style: LauncherStyle,
+    pub layout: LauncherLayout,
+    pub position: LauncherPosition,
+    pub search_position: SearchPosition,
+    pub compact: bool,
+    pub group_results: bool,
+    pub hints: bool,
+    pub grid_columns: u32,
+    pub grid_icon_size: f32,
+    pub grid_categories: bool,
+    pub center_width: f32,
+    pub center_height: f32,
+    pub dim: f32,
+}
+
+/// The shipped launcher looks; the first (Classic) is the default.
+pub const LAUNCHER_LOOKS: [LauncherLookPreset; 3] = [
+    LauncherLookPreset {
+        id: "classic",
+        name: mandara_i18n::tk("Classic"),
+        blurb: mandara_i18n::tk("The list launcher: a drawer rising from the bottom edge, search next to the edge"),
+        style: LauncherStyle::Classic,
+        layout: LauncherLayout::List,
+        position: LauncherPosition::BottomCenter,
+        search_position: SearchPosition::Auto,
+        compact: false,
+        group_results: false,
+        hints: false,
+        grid_columns: defaults::LAUNCHER_GRID_COLUMNS,
+        grid_icon_size: defaults::LAUNCHER_GRID_ICON_PX,
+        grid_categories: true,
+        center_width: defaults::LAUNCHER_CENTER_WIDTH_PX,
+        center_height: defaults::LAUNCHER_CENTER_HEIGHT_PX,
+        dim: defaults::LAUNCHER_DIM,
+    },
+    LauncherLookPreset {
+        id: "grid",
+        name: mandara_i18n::tk("Grid"),
+        blurb: mandara_i18n::tk("Every app as a large icon in a card in the middle of the screen, with category chips"),
+        style: LauncherStyle::Classic,
+        layout: LauncherLayout::Grid,
+        position: LauncherPosition::Center,
+        search_position: SearchPosition::Top,
+        compact: false,
+        group_results: false,
+        hints: false,
+        grid_columns: 8,
+        grid_icon_size: 56.0,
+        grid_categories: true,
+        center_width: 880.0,
+        center_height: 660.0,
+        dim: 0.2,
+    },
+    LauncherLookPreset {
+        id: "beacon",
+        name: mandara_i18n::tk("Beacon"),
+        blurb: mandara_i18n::tk("A centred glass search bar in the style of macOS Spotlight; grouped results open under it as you type"),
+        style: LauncherStyle::Beacon,
+        layout: LauncherLayout::List,
+        position: LauncherPosition::Center,
+        search_position: SearchPosition::Top,
+        compact: false,
+        group_results: true,
+        hints: true,
+        grid_columns: defaults::LAUNCHER_GRID_COLUMNS,
+        grid_icon_size: defaults::LAUNCHER_GRID_ICON_PX,
+        grid_categories: true,
+        center_width: defaults::LAUNCHER_CENTER_WIDTH_PX,
+        center_height: defaults::LAUNCHER_CENTER_HEIGHT_PX,
+        dim: defaults::LAUNCHER_DIM,
+    },
+];
+
+impl LauncherLookPreset {
+    /// The look with this id (case and spacing forgiven).
+    pub fn find(id: &str) -> Option<&'static LauncherLookPreset> {
+        let id = id.trim().to_ascii_lowercase();
+        LAUNCHER_LOOKS.iter().find(|l| l.id == id)
+    }
+
+    /// Writes this look's values into `look` (sizes, providers and
+    /// behaviour settings it doesn't name are kept).
+    pub fn apply(&self, look: &mut LauncherLook) {
+        look.style = self.style;
+        look.layout = self.layout;
+        look.position = self.position;
+        look.search_position = self.search_position;
+        look.compact = self.compact;
+        look.group_results = self.group_results;
+        look.hints = self.hints;
+        look.grid_columns = self.grid_columns;
+        look.grid_icon_size = self.grid_icon_size;
+        look.grid_categories = self.grid_categories;
+        look.center_width = self.center_width;
+        look.center_height = self.center_height;
+        look.dim = self.dim;
+    }
+
+    /// Whether `look` has exactly this look's values.
+    pub fn matches(&self, look: &LauncherLook) -> bool {
+        let mut applied = look.clone();
+        self.apply(&mut applied);
+        applied == *look
+    }
+
+    /// The look `look` matches, if any (`None`: customized).
+    pub fn active(look: &LauncherLook) -> Option<&'static LauncherLookPreset> {
+        LAUNCHER_LOOKS.iter().find(|l| l.matches(look))
     }
 }
 
@@ -804,6 +1012,44 @@ mod tests {
         look.center_width = 9999.0;
         look.center_height = f32::NAN;
         assert_eq!(look.size(), (defaults::LAUNCHER_CENTER_WIDTH_RANGE_PX.1, defaults::LAUNCHER_CENTER_HEIGHT_PX));
+    }
+
+    #[test]
+    fn classic_is_the_default_look_and_every_look_round_trips() {
+        let default = LauncherLook::default();
+        assert_eq!(LauncherLookPreset::active(&default).map(|l| l.id), Some("classic"), "today's launcher is Classic");
+        let ids: Vec<&str> = LAUNCHER_LOOKS.iter().map(|l| l.id).collect();
+        assert_eq!(ids, ["classic", "grid", "beacon"]);
+        for preset in &LAUNCHER_LOOKS {
+            let mut look = default.clone();
+            look.width = 700.0;
+            look.ignore_mouse = true;
+            preset.apply(&mut look);
+            assert_eq!(LauncherLookPreset::active(&look).map(|l| l.id), Some(preset.id), "only {} matches itself", preset.id);
+            assert!(look.width == 700.0 && look.ignore_mouse, "a look keeps settings it doesn't name");
+            // Every value a look sets is inside its Studio range.
+            assert_eq!(look.grid_icon(), preset.grid_icon_size);
+            assert_eq!(look.size().0, if look.position.is_center() { preset.center_width } else { 700.0 });
+            // Tweaking one value afterwards makes it a customized look.
+            look.compact = !look.compact;
+            assert!(LauncherLookPreset::active(&look).is_none());
+            assert_eq!(LauncherLookPreset::find(&format!(" {} ", preset.id.to_uppercase())).map(|l| l.id), Some(preset.id));
+        }
+        assert!(LauncherLookPreset::find("spotlight").is_none());
+    }
+
+    #[test]
+    fn older_launcher_configs_load_as_classic_and_new_values_clamp() {
+        let cfg: ShellConfig = toml::from_str("[launcher.look]\nlayout = \"grid\"\ngrid_columns = 7\n").unwrap();
+        assert_eq!(cfg.launcher.look.style, LauncherStyle::Classic);
+        assert_eq!(cfg.launcher.look.grid_icon_size, defaults::LAUNCHER_GRID_ICON_PX);
+        let cfg: ShellConfig = toml::from_str("[launcher.look]\nstyle = \"beacon\"\nbeacon_width = 5000.0\nbeacon_top = -1.0\ngrid_icon_size = 4.0\n").unwrap();
+        let look = &cfg.launcher.look;
+        assert_eq!(look.style, LauncherStyle::Beacon);
+        assert_eq!(look.beacon(), (defaults::LAUNCHER_BEACON_WIDTH_RANGE_PX.1, defaults::LAUNCHER_BEACON_TOP_RANGE.0));
+        assert_eq!(look.grid_icon(), defaults::LAUNCHER_GRID_ICON_RANGE_PX.0);
+        let text = toml::to_string(&cfg).unwrap();
+        assert_eq!(toml::from_str::<ShellConfig>(&text).unwrap().launcher.look, cfg.launcher.look);
     }
 
     #[test]
