@@ -776,6 +776,42 @@ impl Default for JannahWidget {
     }
 }
 
+/// How the Qur'an widget lays out.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum QuranLayout {
+    /// The ayah of the day in calligraphy under a pointed arch, with its
+    /// meaning and reference.
+    #[default]
+    Ayah,
+    /// The ayah of the day in the quote card's design.
+    Quote,
+    /// The khatm as a ring, with the surah you're reading and "continue".
+    Progress,
+}
+
+/// The Qur'an plugin's ayah of the day or khatm progress (it changes with
+/// the day and your reading, nothing in between).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct QuranWidget {
+    pub layout: QuranLayout,
+    /// The card's width and the meaning's text size (the ayah layouts; the
+    /// Arabic is set larger), reference px.
+    pub width: f32,
+    pub text_size: f32,
+    /// The large ornate opening mark (the quote layout).
+    pub mark: bool,
+    pub look: Look,
+    pub locale: TextOptions,
+}
+
+impl Default for QuranWidget {
+    fn default() -> Self {
+        Self { layout: QuranLayout::Ayah, width: ranges::QUOTE_WIDTH_DEFAULT_PX, text_size: ranges::QUOTE_TEXT_DEFAULT_PX, mark: true, look: Look::default(), locale: TextOptions::default() }
+    }
+}
+
 /// A search field on the desktop: a click opens the launcher.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]

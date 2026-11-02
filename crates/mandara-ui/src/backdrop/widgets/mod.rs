@@ -25,6 +25,7 @@ pub mod fun;
 pub mod identity;
 pub mod info;
 pub mod jannah;
+pub mod quran;
 pub mod layout;
 pub mod lingo;
 pub mod media_view;
@@ -169,6 +170,8 @@ pub struct WidgetData {
     pub prayer: Option<PrayerInfo>,
     /// Today's Jannah reminder and step (while a Jannah widget shows).
     pub jannah: Option<JannahInfo>,
+    /// The ayah of the day and your khatm (while a Qur'an widget shows).
+    pub quran: Option<QuranInfo>,
     pub glance: Option<GlanceInfo>,
     /// Each GitHub, exchange rate and AI usage widget's feed, by widget id.
     pub github: std::collections::BTreeMap<String, Feed<Vec<mandara_services::desktop_feeds::ContributionDay>>>,
@@ -259,6 +262,31 @@ pub struct JannahInfo {
     /// This week's days, done or not, and which is today.
     pub week: [bool; 7],
     pub today: usize,
+}
+
+/// The Qur'an plugin's ayah of the day and where you are in your khatm.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct QuranInfo {
+    /// The ayah of the day, verbatim, and its ornate number (`﴿٢٥٥﴾`).
+    pub arabic: String,
+    pub ayah_mark: String,
+    /// Its meaning in the interface language, when downloaded.
+    pub meaning: Option<String>,
+    /// Its reference (`Al-Baqara 2:255`) and in Arabic (`البقرة ٢:٢٥٥`).
+    pub reference: String,
+    pub reference_ar: String,
+    /// This khatm's progress (0–1) and the khatms completed.
+    pub progress: f32,
+    pub khatms: u32,
+    /// Where you read: the surah (Arabic and transliterated), the ayah,
+    /// its ayah count and juz.
+    pub surah_ar: String,
+    pub surah: String,
+    pub ayah: u16,
+    pub ayahs: u16,
+    pub juz: u8,
+    /// The ayah being recited (`2:255`), while a recitation plays.
+    pub reciting: Option<String>,
 }
 
 /// The one thing worth knowing now: an icon, a sentence and what a click
@@ -514,6 +542,7 @@ fn data_key(w: &DesktopWidget, scene: &WidgetScene) -> u64 {
         WidgetKind::ScreenTime(_) => key(format!("{:?}", scene.data.screen)),
         WidgetKind::Prayer(_) => key(format!("{:?}", scene.data.prayer)),
         WidgetKind::Jannah(_) => key(format!("{:?}", scene.data.jannah)),
+        WidgetKind::Quran(_) => key(format!("{:?}", scene.data.quran)),
         WidgetKind::Glance(_) => key(format!("{:?}{:?}", scene.data.glance, scene.weather)),
         WidgetKind::Github(_) => key(format!("{:?}", scene.data.github.get(&w.id))),
         WidgetKind::Currency(_) => key(format!("{:?}", scene.data.rates.get(&w.id))),
@@ -1018,6 +1047,7 @@ pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler
         WidgetKind::ScreenTime(st) => (info::screen_time(st, &scene.data.screen.clone().unwrap_or_default(), &Lingo::of(&st.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Prayer(p) => (info::prayer(p, scene.data.prayer.as_ref()?, now, &Lingo::of(&p.locale, scene.rtl, None), scene.h24, k, &mut m), 0.0),
         WidgetKind::Jannah(jw) => (jannah::jannah(jw, scene.data.jannah.as_ref()?, &Lingo::of(&jw.locale, scene.rtl, None), k, align, &mut m), 0.0),
+        WidgetKind::Quran(qw) => (quran::quran(qw, scene.data.quran.as_ref()?, &Lingo::of(&qw.locale, scene.rtl, None), k, align, &mut m), 0.0),
         WidgetKind::Search(sw) => (info::search(sw, &Lingo::of(&sw.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Glance(g) => {
             let gi = scene.data.glance.clone().unwrap_or(GlanceInfo { icon: "sparkles", text: String::new(), action: None });

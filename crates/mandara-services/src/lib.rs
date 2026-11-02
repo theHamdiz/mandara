@@ -28,6 +28,7 @@ pub mod file_chooser;
 pub mod hooks;
 pub mod idle;
 pub mod jannah;
+pub mod quran;
 pub mod keepassxc;
 pub mod keyring_prompt;
 pub mod location;

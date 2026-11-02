@@ -185,7 +185,8 @@ impl AssetSource for MandaraAssets {
     fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
         // Plugin artwork (monochrome masks, tinted like icons).
         if let Some(name) = path.strip_prefix("art/").and_then(|p| p.strip_suffix(".svg")) {
-            return Ok(crate::plugins::jannah::art::asset(name).map(|svg| Cow::Owned(svg.into_bytes())));
+            let svg = crate::plugins::jannah::art::asset(name).or_else(|| crate::plugins::quran::art::asset(name));
+            return Ok(svg.map(|svg| Cow::Owned(svg.into_bytes())));
         }
         let Some(name) = path.strip_prefix("icons/").and_then(|p| p.strip_suffix(".svg")) else {
             return Ok(None);

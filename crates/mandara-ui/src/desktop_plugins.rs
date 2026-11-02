@@ -19,7 +19,7 @@ use mandara_config::ShellConfig;
 use mandara_config::desktop_cards::{self as dc, CALENDAR, NOW_PLAYING};
 use mandara_config::desktop_widgets::{
     AnalogOptions, Anchor, ClockFace, ClockWidget, CountdownWidget, DateStyle, DesktopWidget, DialMarks, FontRole, HandStyle, MonitorStyle, MonitorWidget, Period, Placement, PlaneVisualizer, Plate, PlateShape, Preset,
-    ProgressStyle, ProgressWidget, SecondsStyle, ShadowKind, TemplateLine, Tone, Look, Chrome, MediaLayout, MediaWidget, MonitorRow, FetchWidget, FetchLayout, ScreenTimeWidget, PrayerWidget, PrayerLayout, JannahLayout, SearchWidget, GlanceWidget, GithubWidget, CurrencyWidget, AiUsageWidget, GamesWidget, ProfileWidget, ShortcutsWidget, TileLayout, TogglesWidget, SlidersWidget, PaletteWidget, PetWidget, BubblesWidget, PhotoWidget, StickerWidget, DateLayout, DateWidget, SkyLayout, SkyWidget, TodoWidget, NoteWidget, NoteSheet, PomodoroWidget, QuoteWidget, NotebookWidget, VisualizerShape, WeatherLayout, WeatherWidget, WidgetKind, WorldClockWidget, plugin_ids as ids,
+    ProgressStyle, ProgressWidget, SecondsStyle, ShadowKind, TemplateLine, Tone, Look, Chrome, MediaLayout, MediaWidget, MonitorRow, FetchWidget, FetchLayout, ScreenTimeWidget, PrayerWidget, PrayerLayout, JannahLayout, QuranLayout, SearchWidget, GlanceWidget, GithubWidget, CurrencyWidget, AiUsageWidget, GamesWidget, ProfileWidget, ShortcutsWidget, TileLayout, TogglesWidget, SlidersWidget, PaletteWidget, PetWidget, BubblesWidget, PhotoWidget, StickerWidget, DateLayout, DateWidget, SkyLayout, SkyWidget, TodoWidget, NoteWidget, NoteSheet, PomodoroWidget, QuoteWidget, NotebookWidget, VisualizerShape, WeatherLayout, WeatherWidget, WidgetKind, WorldClockWidget, plugin_ids as ids,
 };
 use mandara_i18n::tk;
 use mandara_plugins::{DesktopWidgetType, PluginInstance, PluginManifest, PluginRegistry};
@@ -89,6 +89,10 @@ pub fn label(w: &DesktopWidget) -> (&'static str, &'static str) {
             JannahLayout::Verse => (tk("Jannah verse"), "arch"),
             JannahLayout::Quote => (tk("Jannah quote"), "arch"),
             JannahLayout::Step => (tk("Today's step"), "arch"),
+        },
+        WidgetKind::Quran(q) => match q.layout {
+            QuranLayout::Ayah | QuranLayout::Quote => (tk("Ayah of the day"), "book"),
+            QuranLayout::Progress => (tk("Khatm progress"), "book"),
         },
         WidgetKind::Search(_) => (tk("Search field"), "search"),
         WidgetKind::Glance(_) => (tk("At a glance"), "sparkles"),

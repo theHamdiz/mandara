@@ -80,6 +80,7 @@ pub fn perform(widget: &str, action: &Action, cx: &mut App) -> Result<(), String
         Action::JannahStep => {
             crate::plugins::jannah::mark_step_done(cx);
         }
+        Action::QuranContinue => crate::plugins::quran::continue_reading(cx),
     }
     Ok(())
 }
