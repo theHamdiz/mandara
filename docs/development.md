@@ -51,7 +51,9 @@ eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual c
 
 - **Configs:** `--config demo` is the default the first time. It gives
   Papirus icons, the dock with demo apps, a stacked clock and the harbour
-  wallpaper. `--config hero` is the README hero shot. `--config FILE` copies
+  wallpaper. `--config hero` is the README hero shot. The README's setups gallery
+  is shot from `xtask/src/sandbox/setups/*.toml` the same way (`--config FILE`;
+  each file says how). `--config FILE` copies
   your own config. Both presets are small overlays on the shell's defaults
   (`xtask/src/sandbox/config.*.toml`).
 - **Matte:** `matte` cuts out the open surfaces as a transparent PNG. It

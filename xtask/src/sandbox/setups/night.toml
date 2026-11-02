@@ -1,0 +1,80 @@
+# README setup "Night sky": the notch bar, a big analog clock on a cookie
+# dial, tonight's moon, the sun's arc and a weather disc over violet night.
+# `cargo xtask sandbox up --config xtask/src/sandbox/setups/night.toml --size 2880x1620 --scale 1.5`.
+
+[appearance]
+icon_theme = "Papirus-Dark"
+
+[bar]
+layout = "notch"
+
+[desktop.widgets]
+migrated = true
+
+[[desktop.widgets.items]]
+id = "night-clock"
+kind = "clock"
+face = "analog"
+date = true
+seconds = false
+
+[desktop.widgets.items.look]
+plate = "solid"
+plate_shape = "cookie"
+plate_opacity = 0.92
+
+[desktop.widgets.items.place]
+anchor = "left"
+x = 0.07
+y = -0.08
+scale = 0.95
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "night-moon"
+kind = "sky"
+layout = "moon"
+size = 240.0
+
+[desktop.widgets.items.place]
+anchor = "top-right"
+x = -0.08
+y = 0.1
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "night-weather"
+kind = "weather"
+layout = "disc"
+disc = 240.0
+
+[desktop.widgets.items.place]
+anchor = "bottom-right"
+x = -0.09
+y = -0.15
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "night-arc"
+kind = "sky"
+layout = "sun-arc"
+size = 520.0
+
+[desktop.widgets.items.place]
+anchor = "bottom"
+x = 0.08
+y = -0.13
+depth = "front"
+
+[dock]
+pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
+
+[location]
+shared = true
+
+[plugins]
+defaults_version = 1
+enabled = ["dock", "desktop-clocks", "desktop-sky", "desktop-weather"]
+
+[wallpaper]
+path = "/home/demo/Pictures/Wallpapers/violet-night.png"

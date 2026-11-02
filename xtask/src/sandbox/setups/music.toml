@@ -1,0 +1,80 @@
+# README setup "Music corner": glass pills, a turning record, a pocket
+# player and a wave visualizer over the lagoon. Shot with
+# `cargo xtask sandbox up --config xtask/src/sandbox/setups/music.toml --size 2880x1620 --scale 1.5`,
+# then `sandbox audio play` and `sandbox shot`.
+
+[appearance]
+icon_theme = "Papirus-Dark"
+
+[bar]
+layout = "floating-pills"
+height = 32.0
+edge_gap = 2.0
+side_gap = 10.0
+
+[desktop.widgets]
+migrated = true
+
+[[desktop.widgets.items]]
+id = "music-record"
+kind = "media"
+layout = "vinyl"
+size = 420.0
+
+[desktop.widgets.items.place]
+anchor = "left"
+x = 0.07
+y = -0.04
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "music-player"
+kind = "media"
+layout = "device"
+size = 380.0
+
+[desktop.widgets.items.place]
+anchor = "right"
+x = -0.07
+y = -0.06
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "music-bars"
+kind = "visualizer"
+shape = "wave"
+bars = 64
+length = 760.0
+height = 150.0
+
+[desktop.widgets.items.place]
+anchor = "bottom"
+x = 0.0
+y = -0.16
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "music-clock"
+kind = "clock"
+face = "dot-matrix"
+date = true
+seconds = false
+
+[desktop.widgets.items.place]
+anchor = "top"
+x = 0.0
+y = 0.09
+depth = "front"
+
+[dock]
+pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
+
+[plugins]
+defaults_version = 1
+enabled = ["dock", "desktop-now-playing", "desktop-visualizers", "desktop-clocks"]
+
+[plugins.settings.media]
+lyrics = true
+
+[wallpaper]
+path = "/home/demo/Pictures/Wallpapers/lagoon.png"
