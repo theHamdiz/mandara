@@ -209,6 +209,26 @@ renderer): a quad and a path drawn through a 64 px mask with 16 px corners
 fill its inside and straight edges fully, leave all four corners outside the
 arcs empty, antialias the arc pixel, and a zero-radius mask still clips hard.
 
+## 10. Pipelines shared between windows (`wgpu_renderer.rs`, `wgpu_context.rs`)
+
+Every `WgpuRendererCore` parsed and validated the WGSL shaders (naga keeps the
+module and its validation info alive with the pipelines) and built all its
+render pipelines and bind group layouts itself, so each window held its own
+copy: the bar / panel surface, every exclusion strip, the dock, each popover.
+They depend only on the device and on `PipelineKey` (target format, alpha
+mode, path sample count, dual-source blending, WebGL instance data), so
+`WgpuContext::shared_pipelines` now builds one `SharedPipelines` per key the
+first time a renderer asks and hands every later renderer clones of the same
+wgpu handles. A recovered device is a new `WgpuContext` with an empty cache.
+`update_transparency` still rebuilds against the shared layouts.
+
+Measured with `cargo xtask resource-check` (headless 4K at 1.5, Vulkan / RADV,
+default config: bar surface and one exclusion strip), 15–90 s after start:
+heap 10.0–10.2 → 8.7–8.8 MiB, VRAM unchanged (166 MiB). The demo sandbox
+(OpenGL there, bar, dock and a strip) went from 36.4 to 32.4 MiB anonymous.
+Windows opened later (popovers, the launcher, floating cards) also skip the
+shader parse and pipeline build.
+
 ## Tests
 
 * New `paths_render_through_bounding_box_textures` (headless renderer): a solid
@@ -241,8 +261,8 @@ crate's own tests run) are kept.
 
 ## Upstreaming notes
 
-Patches 1, 2, 4 and 5 are self-contained and behaviour-preserving (identical
-output, less memory); patch 2 also fixes a latent validation error. Patch 3's
+Patches 1, 2, 4, 5 and 10 are self-contained and behaviour-preserving
+(identical output, less memory); patch 2 also fixes a latent validation error. Patch 3's
 knobs are opt-in. Further steps not taken here:
 
 * one path texture per path *batch* instead of the frame's union: paths in

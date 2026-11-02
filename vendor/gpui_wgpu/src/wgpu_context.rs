@@ -23,6 +23,9 @@ pub struct WgpuContext {
     dual_source_blending: bool,
     color_texture_format: wgpu::TextureFormat,
     errors: Arc<DeviceErrorState>,
+    /// Render pipelines built on this device, shared by every renderer that
+    /// draws to the same kind of target (Mandara patch 10).
+    pipelines: Arc<Mutex<Vec<crate::wgpu_renderer::SharedPipelines>>>,
 }
 
 /// Errors reported by wgpu's device-wide callbacks.
@@ -319,6 +322,7 @@ impl WgpuContext {
             dual_source_blending,
             color_texture_format,
             errors,
+            pipelines: Arc::default(),
         }
     }
 
@@ -418,6 +422,7 @@ impl WgpuContext {
             dual_source_blending,
             color_texture_format,
             errors,
+            pipelines: Arc::default(),
         };
         Ok(PreparedWebGraphics { context, surface })
     }
@@ -790,6 +795,22 @@ impl WgpuContext {
     /// The device-wide error state, shared with renderers on this device.
     pub fn errors(&self) -> &Arc<DeviceErrorState> {
         &self.errors
+    }
+
+    /// The pipelines for `key`, built by `build` the first time a renderer
+    /// on this device asks for them (Mandara patch 10).
+    pub(crate) fn shared_pipelines(
+        &self,
+        key: crate::wgpu_renderer::PipelineKey,
+        build: impl FnOnce() -> crate::wgpu_renderer::SharedPipelines,
+    ) -> crate::wgpu_renderer::SharedPipelines {
+        let mut cache = self.pipelines.lock();
+        if let Some(shared) = cache.iter().find(|p| p.key == key) {
+            return shared.clone();
+        }
+        let shared = build();
+        cache.push(shared.clone());
+        shared
     }
 }
 

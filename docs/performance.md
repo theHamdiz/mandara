@@ -38,9 +38,10 @@ browser tab, without trading away speed. It took deliberate work at every layer:
   path and anti-aliasing textures allocated lazily and sized to what is
   actually drawn (stock GPUI reserves ~166 MiB for a 4K surface that may
   never draw a path), configurable MSAA, small initial glyph/icon atlases
-  that grow on demand, and GPU suballocation blocks capped at 16 MiB instead
-  of 64 MiB kept forever. A full-screen shell surface needs about half the
-  video memory of stock GPUI.
+  that grow on demand, GPU suballocation blocks capped at 16 MiB instead
+  of 64 MiB kept forever, and shaders and render pipelines built once and
+  shared by every window instead of once per window. A full-screen shell
+  surface needs about half the video memory of stock GPUI.
 - **A wallpaper that costs no video memory.** The desktop background is
   painted in software on a separate thread into shared-memory buffers.
   Crossfades run inside the compositor (`wp_alpha_modifier_v1`), and once

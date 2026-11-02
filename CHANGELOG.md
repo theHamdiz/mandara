@@ -6,6 +6,16 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Changed
+
+- **Less memory from the start.** Every surface the shell opens (the bar,
+  the dock, the invisible strips that reserve the bar's space, popovers,
+  the launcher) used to compile its own copy of the drawing shaders. They
+  are built once now and shared. Measured right after start: about
+  1.4 MiB less of the shell's own memory with the default setup on a 4K
+  test session, and 4 MiB less (36.4 → 32.4 MiB) in the demo desktop with
+  the dock. Windows that open later skip that work too.
+
 ### Fixed
 
 - **Floating panels drag smoothly.** A panel popped out onto the desktop
