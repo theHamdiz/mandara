@@ -34,6 +34,11 @@ const PATH_TEXTURE_GRANULARITY_PX: u32 = 128;
 /// (Mandara patch.)
 const PATH_TEXTURE_IDLE_FRAMES: u32 = 60;
 
+/// ... or after this long, whichever comes first: an idle shell draws only
+/// an occasional frame, so a frame count alone could keep a texture sized for
+/// a closed panel for minutes. (Mandara patch.)
+const PATH_TEXTURE_IDLE_TIME: std::time::Duration = std::time::Duration::from_millis(1500);
+
 /// A path texture whose area exceeds the frame's need by this factor for
 /// [`PATH_TEXTURE_IDLE_FRAMES`] consecutive frames is reallocated smaller.
 /// (Mandara patch.)
@@ -261,6 +266,16 @@ impl PathTextureRect {
 struct PathTextureUsage {
     frames_without_paths: u32,
     frames_oversized: u32,
+    /// When the current run of path-less / oversized frames began.
+    without_paths_since: Option<std::time::Instant>,
+    oversized_since: Option<std::time::Instant>,
+}
+
+impl PathTextureUsage {
+    /// A run that lasted long enough, in frames or in time.
+    fn expired(frames: u32, since: Option<std::time::Instant>) -> bool {
+        frames >= PATH_TEXTURE_IDLE_FRAMES || since.is_some_and(|t| t.elapsed() >= PATH_TEXTURE_IDLE_TIME)
+    }
 }
 
 struct WgpuRendererCore {
@@ -1441,7 +1456,8 @@ impl WgpuRendererCore {
         let Some((origin, needed)) = paths_bounding_box(scene, size) else {
             let usage = &mut self.path_texture_usage;
             usage.frames_without_paths = usage.frames_without_paths.saturating_add(1);
-            if usage.frames_without_paths >= PATH_TEXTURE_IDLE_FRAMES
+            let since = *usage.without_paths_since.get_or_insert_with(std::time::Instant::now);
+            if PathTextureUsage::expired(usage.frames_without_paths, Some(since))
                 && self.resources.path_intermediate_texture.is_some()
             {
                 log::debug!("path textures released after {PATH_TEXTURE_IDLE_FRAMES} frames without paths");
@@ -1451,6 +1467,7 @@ impl WgpuRendererCore {
             return PathTextureRect::UNUSED;
         };
         self.path_texture_usage.frames_without_paths = 0;
+        self.path_texture_usage.without_paths_since = None;
 
         let round_up = |extent: u32, limit: i32| {
             extent
@@ -1471,10 +1488,12 @@ impl WgpuRendererCore {
                 let usage = &mut self.path_texture_usage;
                 if area > wanted_area * PATH_TEXTURE_SHRINK_FACTOR {
                     usage.frames_oversized = usage.frames_oversized.saturating_add(1);
+                    usage.oversized_since.get_or_insert_with(std::time::Instant::now);
                 } else {
                     usage.frames_oversized = 0;
+                    usage.oversized_since = None;
                 }
-                usage.frames_oversized >= PATH_TEXTURE_IDLE_FRAMES
+                PathTextureUsage::expired(usage.frames_oversized, usage.oversized_since)
             }
             Some((width, height)) => {
                 // Too small on some side: grow without shrinking the other
@@ -1492,6 +1511,7 @@ impl WgpuRendererCore {
                 self.rendering_params.path_sample_count
             );
             self.path_texture_usage.frames_oversized = 0;
+            self.path_texture_usage.oversized_since = None;
             let format = self.target_format;
             let path_sample_count = self.rendering_params.path_sample_count;
             let resources = &mut self.resources;

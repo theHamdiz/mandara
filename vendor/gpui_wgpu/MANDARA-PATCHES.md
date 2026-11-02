@@ -43,7 +43,10 @@ window, a full-frame path intermediate texture (4 B/px) plus a 4× MSAA target
   `PATH_TEXTURE_GRANULARITY_PX` so an animating sparkline reuses them).
 * They are dropped after `PATH_TEXTURE_IDLE_FRAMES` frames without paths and
   reallocated smaller after the same number of frames in which they were more
-  than `PATH_TEXTURE_SHRINK_FACTOR`× larger than needed.
+  than `PATH_TEXTURE_SHRINK_FACTOR`× larger than needed, or once either
+  condition has lasted `PATH_TEXTURE_IDLE_TIME` (1.5 s), whichever comes
+  first: an idle shell draws only an occasional frame, and a frame count
+  alone kept textures sized for a closed sidebar for minutes (~60 MB at 4K).
 * `GlobalParams` gains `path_texture_origin` / `path_texture_size`. Path
   rasterization shifts vertices into texture space (its globals' viewport is
   the texture) and evaluates gradients back in frame space; the composite pass
