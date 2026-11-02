@@ -172,6 +172,11 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "arch" => r#"<path d="M5 21V11.6c0-3.9 3-6.8 7-8.6 4 1.8 7 4.7 7 8.6V21"/><path d="M3.5 21h17"/><path d="M9.5 21v-4.6c0-1.3 1-2.4 2.5-3.3 1.5.9 2.5 2 2.5 3.3V21"/>"#.into(),
         // An open book: reading (the Qur'an tab).
         "book" => r#"<path d="M12 6.5C10.2 5.1 7.4 4.5 4 4.5V18c3.4 0 6.2.6 8 2 1.8-1.4 4.6-2 8-2V4.5c-3.4 0-6.2.6-8 2z"/><path d="M12 6.5V20"/>"#.into(),
+        // A bound manuscript with a lozenge medallion on its cover: the
+        // Hadith library.
+        "hadith" => r#"<path d="M6.5 3.5h12v14h-12A2 2 0 0 0 4.5 19.5V5.5a2 2 0 0 1 2-2z"/><path d="M4.5 19.5a2 2 0 0 0 2 2h12v-4"/><path d="M12.5 7.2l2.6 3.3-2.6 3.3-2.6-3.3z"/>"#.into(),
+        // A ribbon marker: bookmarks.
+        "bookmark" => r#"<path d="M7 3.5h10a1.5 1.5 0 0 1 1.5 1.5v15.5L12 16.2l-6.5 4.3V5A1.5 1.5 0 0 1 7 3.5z"/>"#.into(),
         // An "i" in a circle: more about something.
         "info" => r#"<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.6h.01"/>"#.into(),
         _ => return None,
@@ -185,7 +190,7 @@ impl AssetSource for MandaraAssets {
     fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
         // Plugin artwork (monochrome masks, tinted like icons).
         if let Some(name) = path.strip_prefix("art/").and_then(|p| p.strip_suffix(".svg")) {
-            return Ok(crate::plugins::jannah::art::asset(name).map(|svg| Cow::Owned(svg.into_bytes())));
+            return Ok(crate::plugins::jannah::art::asset(name).or_else(|| crate::plugins::hadith::art::asset(name)).map(|svg| Cow::Owned(svg.into_bytes())));
         }
         let Some(name) = path.strip_prefix("icons/").and_then(|p| p.strip_suffix(".svg")) else {
             return Ok(None);
@@ -217,6 +222,7 @@ pub const ICON_NAMES: &[&str] = &[
     "user", "user-plus", "key", "tiles", "eye", "eye-off", "pencil", "sparkles", "brush", "dice", "release-notes", "home", "palette",
     "git-branch", "workflow", "bug",
     "arch", "book", "info",
+    "hadith", "bookmark",
 ];
 
 /// An icon element tinted with `color`.

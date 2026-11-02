@@ -776,6 +776,95 @@ impl Default for JannahWidget {
     }
 }
 
+/// A hadith collection of the Hadith plugin's library (the ids are the
+/// hadith-api dataset's).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HadithCollection {
+    #[default]
+    Bukhari,
+    Muslim,
+    Abudawud,
+    Tirmidhi,
+    Nasai,
+    Ibnmajah,
+    Malik,
+    Nawawi,
+    Qudsi,
+    Dehlawi,
+}
+
+impl HadithCollection {
+    /// Every collection, in the library's order.
+    pub const ALL: [HadithCollection; 10] = [
+        HadithCollection::Bukhari,
+        HadithCollection::Muslim,
+        HadithCollection::Abudawud,
+        HadithCollection::Tirmidhi,
+        HadithCollection::Nasai,
+        HadithCollection::Ibnmajah,
+        HadithCollection::Malik,
+        HadithCollection::Nawawi,
+        HadithCollection::Qudsi,
+        HadithCollection::Dehlawi,
+    ];
+
+    /// The dataset's id (`bukhari`, `abudawud`).
+    pub fn id(self) -> &'static str {
+        match self {
+            HadithCollection::Bukhari => "bukhari",
+            HadithCollection::Muslim => "muslim",
+            HadithCollection::Abudawud => "abudawud",
+            HadithCollection::Tirmidhi => "tirmidhi",
+            HadithCollection::Nasai => "nasai",
+            HadithCollection::Ibnmajah => "ibnmajah",
+            HadithCollection::Malik => "malik",
+            HadithCollection::Nawawi => "nawawi",
+            HadithCollection::Qudsi => "qudsi",
+            HadithCollection::Dehlawi => "dehlawi",
+        }
+    }
+
+    /// The collection with this id.
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|c| c.id() == id)
+    }
+}
+
+/// How the Hadith widget lays out.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HadithLayout {
+    /// The hadith of the day in the quote card's design: the words in
+    /// Amiri, the meaning and the reference.
+    #[default]
+    Hadith,
+    /// A tile with your reading progress through one collection.
+    Collection,
+}
+
+/// The Hadith plugin's widgets (the hadith of the day changes with the
+/// plugin's rotation; the progress tile with what you read).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HadithWidget {
+    pub layout: HadithLayout,
+    /// The card's width and the meaning's text size (the hadith layout;
+    /// the Arabic is set larger), reference px.
+    pub width: f32,
+    pub text_size: f32,
+    /// The collection whose progress the tile shows.
+    pub collection: HadithCollection,
+    pub look: Look,
+    pub locale: TextOptions,
+}
+
+impl Default for HadithWidget {
+    fn default() -> Self {
+        Self { layout: HadithLayout::Hadith, width: ranges::QUOTE_WIDTH_DEFAULT_PX, text_size: ranges::QUOTE_TEXT_DEFAULT_PX, collection: HadithCollection::Bukhari, look: Look::default(), locale: TextOptions::default() }
+    }
+}
+
 /// A search field on the desktop: a click opens the launcher.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]

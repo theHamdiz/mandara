@@ -111,7 +111,7 @@ fn arabic_text(info: &JannahInfo) -> String {
 
 /// Arabic lines placed in `width` (right to left, each aligned by `align`
 /// where 1 is the right edge), from `y`; returns the bottom.
-fn arabic_block(text: &str, st: &TextStyle, width: f32, align: f32, mut y: f32, marks: &mut Vec<Mark>, m: &mut dyn Measure) -> f32 {
+pub(crate) fn arabic_block(text: &str, st: &TextStyle, width: f32, align: f32, mut y: f32, marks: &mut Vec<Mark>, m: &mut dyn Measure) -> f32 {
     for line in wrap(text, st, width, ARABIC_LINES, m) {
         let (lw, lh) = m.measure(&line, st);
         let lead = lh * (ARABIC_LEADING - 1.0);
@@ -123,7 +123,7 @@ fn arabic_block(text: &str, st: &TextStyle, width: f32, align: f32, mut y: f32, 
 
 /// Plain lines (the meaning) in `width`, aligned by `align`; returns the
 /// bottom.
-fn text_block(text: &str, st: &TextStyle, width: f32, align: f32, max: usize, ink: InkRole, alpha: f32, mut y: f32, marks: &mut Vec<Mark>, m: &mut dyn Measure) -> f32 {
+pub(crate) fn text_block(text: &str, st: &TextStyle, width: f32, align: f32, max: usize, ink: InkRole, alpha: f32, mut y: f32, marks: &mut Vec<Mark>, m: &mut dyn Measure) -> f32 {
     for line in wrap(text, st, width, max, m) {
         let (lw, lh) = m.measure(&line, st);
         marks.push(Mark::new(MarkKind::Text { text: line, style: st.clone(), x: (width - lw) * align, y, w: lw, h: lh }, ink).dim(alpha));
@@ -135,7 +135,7 @@ fn text_block(text: &str, st: &TextStyle, width: f32, align: f32, max: usize, in
 /// The Arabic block's alignment: it starts at the right edge, as right-to-
 /// left text does, whichever side the card is anchored to; only a centred
 /// card centres it.
-fn arabic_align(align: f32) -> f32 {
+pub(crate) fn arabic_align(align: f32) -> f32 {
     if (align - CENTRED).abs() < ALIGN_EPSILON { CENTRED } else { RIGHT }
 }
 

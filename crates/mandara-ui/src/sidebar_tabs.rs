@@ -40,7 +40,7 @@ use crate::state::{config, shell, update_config};
 use crate::text_field::TextField;
 
 /// Built-in plugins that have a sidebar card (third-party plugins all may).
-pub const SIDEBAR_WIDGETS: &[&str] = &["quick-settings", "weather", "notifications", "media", "pomodoro", "todo", "notes", "audio", "resources", "prayer-times", "jannah"];
+pub const SIDEBAR_WIDGETS: &[&str] = &["quick-settings", "weather", "notifications", "media", "pomodoro", "todo", "notes", "audio", "resources", "prayer-times", "jannah", "hadith"];
 /// Icons offered for a tab (Mandara's own set).
 pub const TAB_ICONS: &[&str] = &[
     "grid", "tiles", "bell", "calendar", "list-check", "note", "music", "headphones", "cpu", "monitor", "cloud-sun", "coffee", "heart",

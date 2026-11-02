@@ -246,8 +246,10 @@ impl CommandRegistry {
     pub fn register(&mut self, owner: &str, mut spec: CommandSpec) {
         spec.owner = owner.to_string();
         self.commands.retain(|c| c.path != spec.path);
-        self.commands.push(spec);
-        self.commands.sort_by(|a, b| a.path.cmp(b.path));
+        // Kept sorted by inserting in place (a sort per command allocated
+        // its scratch buffer every time).
+        let at = self.commands.partition_point(|c| c.path < spec.path);
+        self.commands.insert(at, spec);
     }
 
     pub fn all(&self) -> &[CommandSpec] {

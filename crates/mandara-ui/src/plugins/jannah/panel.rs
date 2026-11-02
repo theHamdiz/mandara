@@ -56,9 +56,9 @@ const INNER_W: f32 = PANEL_W - PAD * 2.0;
 
 // Hero.
 /// Hero tones `(lightness, chroma share, chroma cap)` on dark and light.
-const HERO_DARK: [(f32, f32, f32); 2] = [(0.31, 0.75, 0.09), (0.23, 0.7, 0.07)];
-const HERO_LIGHT: [(f32, f32, f32); 2] = [(0.94, 0.4, 0.05), (0.965, 0.32, 0.04)];
-const HERO_ANGLE_DEG: f32 = 165.0;
+pub(crate) const HERO_DARK: [(f32, f32, f32); 2] = [(0.31, 0.75, 0.09), (0.23, 0.7, 0.07)];
+pub(crate) const HERO_LIGHT: [(f32, f32, f32); 2] = [(0.94, 0.4, 0.05), (0.965, 0.32, 0.04)];
+pub(crate) const HERO_ANGLE_DEG: f32 = 165.0;
 /// How much of the primary tints the emerald.
 const HERO_PRIMARY_SHARE: f32 = 0.35;
 /// The arch: inset from the card's edge, its alpha, the inner arch's.
@@ -66,14 +66,14 @@ const ARCH_INSET: f32 = 10.0;
 const ARCH_ALPHA: (f32, f32) = (0.62, 0.7);
 const ARCH_INNER_SHARE: f32 = 0.5;
 /// The lattice's alpha `(dark, light)`.
-const LATTICE_ALPHA: (f32, f32) = (0.11, 0.13);
+pub(crate) const LATTICE_ALPHA: (f32, f32) = (0.11, 0.13);
 /// Dawn light: a fill-less source (size, offset into the crown) whose
 /// wide blurred shadow is the glow (alpha, blur, spread): soft at every
 /// edge, never a visible shape.
 const DAWN_W: f32 = 84.0;
 const DAWN_H: f32 = 18.0;
 const DAWN_TOP_SHARE: f32 = 0.5;
-const DAWN_GLOW: (f32, f32, f32) = (0.34, 64.0, 4.0);
+pub(crate) const DAWN_GLOW: (f32, f32, f32) = (0.34, 64.0, 4.0);
 /// The words start this share of the crown down; side and bottom room.
 const CONTENT_TOP_SHARE: f32 = 0.6;
 const CONTENT_SIDE: f32 = 18.0;
@@ -87,9 +87,9 @@ const ACTION_BTN: f32 = 30.0;
 /// The reference chip.
 const CHIP_H: f32 = 26.0;
 const CHIP_PAD_X: f32 = 10.0;
-const CHIP_FILL: (f32, f32) = (0.16, 0.14);
+pub(crate) const CHIP_FILL: (f32, f32) = (0.16, 0.14);
 /// Meaning: line height and the alpha of its credit.
-const MEANING_LINE_EM: f32 = 1.5;
+pub(crate) const MEANING_LINE_EM: f32 = 1.5;
 /// The reader's chain of narrators.
 const CHAIN_PX: f32 = 14.5;
 /// Slide on previous / next: distance, how long it may run, fade.
@@ -205,7 +205,7 @@ fn refresh(shared: &Shared, cx: &mut App) {
 }
 
 /// Hero backdrop tone from a theme colour.
-fn tone(c: Color, (l, share, cap): (f32, f32, f32)) -> Color {
+pub(crate) fn tone(c: Color, (l, share, cap): (f32, f32, f32)) -> Color {
     c.with_lightness(l).with_chroma((c.chroma() * share).min(cap))
 }
 

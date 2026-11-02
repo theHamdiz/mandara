@@ -21,6 +21,9 @@ pub struct Fonts {
     /// Qur'anic Naskh for scripture (Jannah): Amiri Quran when installed,
     /// else Amiri, Noto Naskh Arabic, else the Arabic face.
     pub scripture: SharedString,
+    /// Naskh for hadith (the Hadith plugin): Amiri when installed, else
+    /// Amiri Quran, Noto Naskh Arabic, else the Arabic face.
+    pub hadith: SharedString,
     /// An installed colour emoji family, for text made only of emoji (the
     /// fallback chain would pick a text font's flat symbol first).
     pub emoji: Option<SharedString>,
@@ -93,6 +96,14 @@ pub fn pick_scripture(installed: &[String], arabic: &SharedString) -> SharedStri
     SCRIPTURE_FAMILIES.iter().find_map(|name| installed.iter().find(|f| f.eq_ignore_ascii_case(name))).map(|f| SharedString::from(f.clone())).unwrap_or_else(|| arabic.clone())
 }
 
+/// Hadith faces, best first (the same downloads as scripture).
+pub const HADITH_FAMILIES: &[&str] = &["Amiri", "Amiri Quran", "Noto Naskh Arabic"];
+
+/// The first installed [`HADITH_FAMILIES`] face, else `arabic`.
+pub fn pick_hadith(installed: &[String], arabic: &SharedString) -> SharedString {
+    HADITH_FAMILIES.iter().find_map(|name| installed.iter().find(|f| f.eq_ignore_ascii_case(name))).map(|f| SharedString::from(f.clone())).unwrap_or_else(|| arabic.clone())
+}
+
 /// Monospace families tried after the configured one, best first. GPUI
 /// resolves fonts by family *name*, so a generic `monospace` never matches:
 /// without one of these the code would fall back to the UI's sans font.
@@ -153,6 +164,7 @@ impl Fonts {
             ui: ui.clone(),
             display,
             scripture: pick_scripture(&installed, &arabic),
+            hadith: pick_hadith(&installed, &arabic),
             arabic,
             mono: pick_mono(&installed, &cfg.mono_font, system_fixed_pitch_family),
             emoji: EMOJI_FAMILIES.iter().find(|name| installed.iter().any(|f| f.eq_ignore_ascii_case(name))).map(|f| SharedString::from(*f)),

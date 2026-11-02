@@ -1020,6 +1020,28 @@ impl StudioView {
                 }
                 rows.push(hint(t("Needs the Jannah plugin; today's reminder, its rotation and the meaning follow its settings."), p));
             }
+            WidgetKind::Hadith(x) => {
+                rows.push(row(p, t("Layout"), choice(&id, "hlayout", x.layout, &[(dw::HadithLayout::Hadith, tk("Hadith of the day")), (dw::HadithLayout::Collection, tk("Reading progress"))], hadith_set(|x, v| x.layout = v), p, cx)));
+                if x.layout == dw::HadithLayout::Collection {
+                    const COLLECTIONS: [(dw::HadithCollection, &str); 10] = [
+                        (dw::HadithCollection::Bukhari, tk("Bukhari")),
+                        (dw::HadithCollection::Muslim, tk("Muslim")),
+                        (dw::HadithCollection::Abudawud, tk("Abu Dawud")),
+                        (dw::HadithCollection::Tirmidhi, tk("Tirmidhi")),
+                        (dw::HadithCollection::Nasai, tk("Nasa'i")),
+                        (dw::HadithCollection::Ibnmajah, tk("Ibn Majah")),
+                        (dw::HadithCollection::Malik, tk("Malik")),
+                        (dw::HadithCollection::Nawawi, tk("Nawawi")),
+                        (dw::HadithCollection::Qudsi, tk("Qudsi")),
+                        (dw::HadithCollection::Dehlawi, tk("Dehlawi")),
+                    ];
+                    rows.push(row(p, t("Collection"), choice(&id, "hcol", x.collection, &COLLECTIONS, hadith_set(|x, v| x.collection = v), p, cx)));
+                } else {
+                    rows.push(row(p, t("Width"), slider(&id, "hwidth", x.width, kr::WIDTH_PX, 4.0, " px", hadith_set(|x, v| x.width = v), p)));
+                    rows.push(row(p, t("Text size"), slider(&id, "htext", x.text_size, kr::TEXT_PX, 1.0, " px", hadith_set(|x, v| x.text_size = v), p)));
+                }
+                rows.push(hint(t("Needs the Hadith plugin; today's hadith, its rotation and the meaning follow its settings."), p));
+            }
             WidgetKind::Search(x) => {
                 rows.push(row(p, t("Width"), slider(&id, "swidth", x.width, kr::WIDTH_PX, 4.0, " px", search_set(|x, v| x.width = v), p)));
                 rows.push(row(p, t("Shape"), choice(&id, "sshape", x.shape, &SHAPES, search_set(|x, v| x.shape = v), p, cx)));
@@ -1379,7 +1401,7 @@ macro_rules! kind_setter {
     )*};
 }
 
-kind_setter!(media_set: Media(dw::MediaWidget), fetch_set: Fetch(dw::FetchWidget), screen_set: ScreenTime(dw::ScreenTimeWidget), prayer_set: Prayer(dw::PrayerWidget), search_set: Search(dw::SearchWidget), glance_set: Glance(dw::GlanceWidget), monitor_set: Monitor(dw::MonitorWidget), profile_set: Profile(dw::ProfileWidget), tiles_set: Shortcuts(dw::ShortcutsWidget), toggles_set: Toggles(dw::TogglesWidget), sliders_set: Sliders(dw::SlidersWidget), palette_set: Palette(dw::PaletteWidget), pet_set: Pet(dw::PetWidget), bubbles_set: Bubbles(dw::BubblesWidget), photo_set: Photo(dw::PhotoWidget), sticker_set: Sticker(dw::StickerWidget), weather_set: Weather(dw::WeatherWidget), date_set: Date(dw::DateWidget), sky_set: Sky(dw::SkyWidget), todo_set: Todo(dw::TodoWidget), note_set: Note(dw::NoteWidget), timer_set: Pomodoro(dw::PomodoroWidget), quote_set: Quote(dw::QuoteWidget), notebook_set: Notebook(dw::NotebookWidget), github_set: Github(dw::GithubWidget), currency_set: Currency(dw::CurrencyWidget), ai_set: AiUsage(dw::AiUsageWidget), games_set: Games(dw::GamesWidget), jannah_set: Jannah(dw::JannahWidget));
+kind_setter!(media_set: Media(dw::MediaWidget), fetch_set: Fetch(dw::FetchWidget), screen_set: ScreenTime(dw::ScreenTimeWidget), prayer_set: Prayer(dw::PrayerWidget), search_set: Search(dw::SearchWidget), glance_set: Glance(dw::GlanceWidget), monitor_set: Monitor(dw::MonitorWidget), profile_set: Profile(dw::ProfileWidget), tiles_set: Shortcuts(dw::ShortcutsWidget), toggles_set: Toggles(dw::TogglesWidget), sliders_set: Sliders(dw::SlidersWidget), palette_set: Palette(dw::PaletteWidget), pet_set: Pet(dw::PetWidget), bubbles_set: Bubbles(dw::BubblesWidget), photo_set: Photo(dw::PhotoWidget), sticker_set: Sticker(dw::StickerWidget), weather_set: Weather(dw::WeatherWidget), date_set: Date(dw::DateWidget), sky_set: Sky(dw::SkyWidget), todo_set: Todo(dw::TodoWidget), note_set: Note(dw::NoteWidget), timer_set: Pomodoro(dw::PomodoroWidget), quote_set: Quote(dw::QuoteWidget), notebook_set: Notebook(dw::NotebookWidget), github_set: Github(dw::GithubWidget), currency_set: Currency(dw::CurrencyWidget), ai_set: AiUsage(dw::AiUsageWidget), games_set: Games(dw::GamesWidget), jannah_set: Jannah(dw::JannahWidget), hadith_set: Hadith(dw::HadithWidget));
 
 /// A count slider's setter (the slider works in `f32`).
 /// Adds or removes `level` from a sliders widget's list (empty = both).
