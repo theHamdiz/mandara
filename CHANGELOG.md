@@ -17,6 +17,11 @@ About → What's new shows it too.
 
 ### Fixed
 
+- **Smart updates work after skipping releases.** A release only carried a
+  binary patch from the release right before it, so if you skipped one,
+  updating fell back to the full ~70 MB download. Each release now carries
+  patches from the five releases before it: updating from any of them is a
+  ~5 MB download.
 - **Pointing at a notification always pauses it.** A notification that
   popped up right where the pointer had last left the notifications kept
   counting down while you pointed at it. Now it waits for you.

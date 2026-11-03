@@ -1,8 +1,9 @@
 //! Mandara's own updates: **delta first, full download as the fallback**.
 //!
 //! Every release publishes `update.json` (see `tools/mandara-delta`): per
-//! target the full tarball, the `bin/mandara` inside it, and a bsdiff-style
-//! patch from the previous release. Updating:
+//! target the full tarball, the `bin/mandara` inside it, and bsdiff-style
+//! patches from each of the last few releases (so an install that skipped
+//! releases still patches). Updating:
 //!
 //! 1. **Check** — `releases/latest` of [`REPO`] (or `MANDARA_UPDATE_API`);
 //!    semver against the running build. A newer release must be **signed**:

@@ -147,8 +147,8 @@ fn self_update_and_plugin_updates_end_to_end() {
     let top = format!("mandara-{NEW}-{target}");
     let tarball_name = format!("{top}.tar.gz");
     let tarball = tar_gz(&[(format!("{top}/{SHELL_BINARY}"), &new_bin), (format!("{top}/README.md"), b"readme")]);
-    let (entry, patch) = mandara_delta::create::target_entry("mandara", NEW, Some(&target), &(tarball_name.clone(), tarball.clone()), SHELL_BINARY, &new_bin, Some((OLD, &old_bin))).unwrap();
-    let (patch_name, patch_bytes) = patch.unwrap();
+    let (entry, patch) = mandara_delta::create::target_entry("mandara", NEW, Some(&target), &(tarball_name.clone(), tarball.clone()), SHELL_BINARY, &new_bin, &[(OLD, &old_bin)]).unwrap();
+    let (patch_name, patch_bytes) = patch.into_iter().next().unwrap();
     assert!(patch_bytes.len() * 20 < tarball.len(), "patch {} vs tarball {}", patch_bytes.len(), tarball.len());
     let mut manifest = Manifest { schema: SCHEMA, name: "mandara".into(), version: NEW.into(), ..Default::default() };
     manifest.targets.insert(target.clone(), entry);
