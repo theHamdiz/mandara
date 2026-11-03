@@ -531,12 +531,6 @@ impl CosmicTextSystemState {
                 .get_font(database_id, cosmic_text::Weight::NORMAL)
                 .context("Could not load font")?;
 
-            // HACK: To let the storybook run and render Windows caption icons. We should actually do better font fallback.
-            let allowed_bad_font_names = [
-                "SegoeFluentIcons", // NOTE: Segoe fluent icons postscript name is inconsistent
-                "Segoe Fluent Icons",
-            ];
-
             // This only decides whether a face can be a primary font. The
             // editor measures layout with the width of 'm' and would panic
             // without it.
@@ -550,10 +544,7 @@ impl CosmicTextSystemState {
             // for text that is only emoji (Mandara asks for it by name only
             // there); otherwise its glyphs are reached only through the
             // fallback, which picks a text font's flat symbol first.
-            if font.as_swash().charmap().map('m') == 0
-                && !allowed_bad_font_names.contains(&postscript_name.as_str())
-                && !check_is_known_emoji_font(&postscript_name)
-            {
+            if !can_be_primary(font.as_swash().charmap().map('m') != 0, &postscript_name) {
                 continue;
             };
 
@@ -636,7 +627,7 @@ impl CosmicTextSystemState {
                 })
                 .flatten()
                 .unwrap_or(false);
-            if !has_m && !check_is_known_emoji_font(&postscript_name) {
+            if !can_be_primary(has_m, &postscript_name) {
                 continue;
             }
             let font = self.font_system.get_font(database_id, cosmic_text::Weight::NORMAL)?;
@@ -1628,6 +1619,19 @@ fn face_info_into_properties(
     }
 }
 
+/// Whether a face may be a primary font (see [`CosmicTextSystemState::load_family`]):
+/// it has an 'm' to measure with, or it is a known emoji font or one of
+/// the icon fonts let through without one. Shared with the default chain
+/// ([`CosmicTextSystemState::load_chain_face`]) so both accept the same faces.
+fn can_be_primary(has_m: bool, postscript_name: &str) -> bool {
+    // HACK: To let the storybook run and render Windows caption icons. We should actually do better font fallback.
+    const ALLOWED_BAD_FONT_NAMES: [&str; 2] = [
+        "SegoeFluentIcons", // NOTE: Segoe fluent icons postscript name is inconsistent
+        "Segoe Fluent Icons",
+    ];
+    has_m || ALLOWED_BAD_FONT_NAMES.contains(&postscript_name) || check_is_known_emoji_font(postscript_name)
+}
+
 fn check_is_known_emoji_font(postscript_name: &str) -> bool {
     // TODO: Include other common emoji fonts
     postscript_name == "NotoColorEmoji"
@@ -1644,6 +1648,14 @@ mod tests {
         thread,
         time::{Duration, Instant},
     };
+
+    #[test]
+    fn the_default_chain_accepts_the_faces_load_family_accepts() {
+        assert!(can_be_primary(true, "Cairo-Regular"));
+        assert!(!can_be_primary(false, "NotoSansArabicUI-Regular"));
+        assert!(can_be_primary(false, "NotoColorEmoji"));
+        assert!(can_be_primary(false, "Segoe Fluent Icons") && can_be_primary(false, "SegoeFluentIcons"));
+    }
 
     #[test]
     fn all_font_names_tracks_available_families() -> Result<()> {

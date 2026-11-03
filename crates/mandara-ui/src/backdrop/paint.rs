@@ -109,6 +109,12 @@ pub fn background(img: DynamicImage, fill: WallpaperFill, (w, h): (u32, u32), fi
             let (cols, rows, k) = crate::wallpaper_fill::tile_grid(w as f32, h as f32, iw as f32, ih as f32);
             let (tw, th) = (((iw as f32 * k).round() as u32).max(1), ((ih as f32 * k).round() as u32).max(1));
             let tile = if (tw, th) == (iw, ih) { img } else { resampled(img, |img| crate::resample::triangle(img, (0, 0, iw, ih), tw, th)) };
+            // Copied up to 256 times: a layout `over` can't read in place
+            // (gray, 16-bit) is converted once here, not once per tile.
+            let tile = match tile {
+                DynamicImage::ImageRgb8(_) | DynamicImage::ImageRgba8(_) => tile,
+                other => DynamicImage::ImageRgba8(other.to_rgba8()),
+            };
             (tile, (0, 0), Some((cols, rows, tw, th)))
         }
     };
@@ -756,6 +762,20 @@ mod tests {
                 let from_rgb = background(DynamicImage::ImageRgb8(rgb.clone()), mode, size, fill).unwrap();
                 let from_rgba = background(DynamicImage::ImageRgba8(DynamicImage::ImageRgb8(rgb.clone()).to_rgba8()), mode, size, fill).unwrap();
                 assert_eq!(from_rgb.pixmap.data(), from_rgba.pixmap.data(), "{mode:?} at {size:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn gray_and_16_bit_tiles_are_placed_like_their_rgba_copies() {
+        let gray = image::GrayImage::from_fn(13, 9, |x, y| image::Luma([(x * 17 + y * 5) as u8]));
+        let fill = Color::hex("#203040");
+        let wide = DynamicImage::ImageRgb16(DynamicImage::ImageLuma8(gray.clone()).to_rgb16());
+        for img in [DynamicImage::ImageLuma8(gray), wide] {
+            for size in [(13, 9), (100, 50), (40, 70)] {
+                let ours = background(img.clone(), WallpaperFill::Tile, size, fill).unwrap();
+                let rgba = background(DynamicImage::ImageRgba8(img.to_rgba8()), WallpaperFill::Tile, size, fill).unwrap();
+                assert_eq!(ours.pixmap.data(), rgba.pixmap.data(), "{:?} at {size:?}", img.color());
             }
         }
     }
