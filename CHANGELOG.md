@@ -6,6 +6,18 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Under the hood
+
+- **A leaner build.** Mandara no longer builds image formats it never
+  opens (EXR, HDR, DDS, QOI, TGA, farbfeld, and an AVIF encoder nothing
+  used), an unused date library and a second copy of a small folder
+  helper: 18 fewer crates go into the shell. The `mandara` binary is
+  3.1 MiB smaller (160.8 → 157.7 MiB), the release download 1.3 MiB
+  smaller (66.2 → 65.0 MiB), and a clean release build took 1,037 s
+  instead of 1,084 s on the same machine. Every image Mandara shows
+  (PNG, JPEG, WebP, GIF, BMP, SVG, and TIFF, ICO and PNM previews) still
+  opens.
+
 ## 0.10.2 — 2026-11-03
 
 Notifications joined to the bar, on more setups. No notification is cut
