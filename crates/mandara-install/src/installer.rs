@@ -15,8 +15,8 @@ use crate::args::InstallArgs;
 use crate::family::{Family, OsRelease};
 use crate::files::{self, Paths};
 use crate::host::{Cmd, Fetch, Host, Io, Level, TempDir};
-use crate::packages;
 use crate::pkg::{PackageManager, Privilege};
+use crate::{index, packages};
 use crate::platform::{self, MIN_RUST, RELEASED_ARCHES};
 use crate::release::{self, ARCHIVE_SUFFIX, MAX_ARCHIVE_BYTES, MAX_JSON_BYTES, SUMS_FILE, SelfCheck};
 
@@ -181,6 +181,9 @@ pub struct Installer<'a> {
     paths: Paths,
     privilege: Privilege,
     tmp: Option<TempDir>,
+    /// The package databases were brought up to date in this run (or, in a
+    /// dry run, would have been).
+    synced: bool,
 }
 
 impl<'a> Installer<'a> {
@@ -192,7 +195,7 @@ impl<'a> Installer<'a> {
         };
         let paths = Paths::new(args.prefix.as_deref(), &facts.home, xdg);
         let privilege = Privilege::detect(facts.is_root, |p| host.has_program(p));
-        Installer { host, probe, facts, args, paths, privilege, tmp: None }
+        Installer { host, probe, facts, args, paths, privilege, tmp: None, synced: false }
     }
 
     pub fn paths(&self) -> &Paths {
@@ -382,17 +385,25 @@ impl<'a> Installer<'a> {
             return Ok(());
         };
         let Some(pm) = self.package_manager() else { return Ok(()) };
-        if let Some(refresh) = pm.refresh_argv() {
-            // A stale index only makes installs fail; ignore errors here.
-            self.as_root(Cmd::from_argv(refresh).io(Io::Quiet));
-        }
         self.say(Level::Step, "Installing system packages");
+        self.prepare_index(pm)?;
         let mut required: Vec<&str> = set.run.to_vec();
         if from_source {
             required.extend(set.build);
         }
         if !self.as_root(Cmd::from_argv(pm.install_argv(&required))) {
-            return Err(format!("could not install required packages: {}", required.join(" ")));
+            let failed = || format!("could not install required packages: {}", required.join(" "));
+            // Databases that were never synced or are out of date make every
+            // install fail: bring them up to date once and try again.
+            if self.synced || self.privilege == Privilege::Unavailable || index::sync_argv(pm, true).is_none() {
+                return Err(failed());
+            }
+            self.say(Level::Warn, "installing the required packages failed");
+            let missing = index::missing(pm, &self.facts.root);
+            self.sync_index(pm, &missing, true)?;
+            if !self.as_root(Cmd::from_argv(pm.install_argv(&required))) {
+                return Err(failed());
+            }
         }
         if !self.dry() {
             self.say(Level::Ok, if from_source { "runtime and build dependencies" } else { "runtime libraries" });
@@ -410,6 +421,64 @@ impl<'a> Installer<'a> {
             }
         }
         self.services_hint();
+        Ok(())
+    }
+
+    /// Makes sure the package databases can be used before installing: apt's
+    /// lists are refreshed every time (cheap, harmless); other managers'
+    /// databases only when they are missing ([`index::missing`]).
+    fn prepare_index(&mut self, pm: PackageManager) -> Result<(), String> {
+        let missing = index::missing(pm, &self.facts.root);
+        if index::sync_before_install(pm) {
+            let Some(argv) = index::sync_argv(pm, true) else { return Ok(()) };
+            let shown = self.root_hint(&argv);
+            let io = if missing.is_empty() { Io::Quiet } else { Io::Inherit };
+            if !missing.is_empty() {
+                self.say(Level::Info, format!("no package lists yet: downloading them ({shown})"));
+            }
+            if self.as_root(Cmd::from_argv(argv).io(io)) {
+                self.synced = true;
+            } else if !missing.is_empty() {
+                return Err(format!("`{shown}` failed, and without package lists nothing can be installed: check your network and your package sources, then run `mandara install` again (or pass --no-deps to skip system packages)"));
+            }
+            // Lists that exist but couldn't be refreshed still work.
+            return Ok(());
+        }
+        if missing.is_empty() {
+            return Ok(());
+        }
+        self.sync_index(pm, &missing, false)
+    }
+
+    /// Brings the package databases up to date: asked first when that
+    /// upgrades the whole system (pacman's `-Syu`), announced otherwise.
+    /// `missing`: the databases found missing (empty: they may only be
+    /// stale); `after_failure`: an install already failed.
+    fn sync_index(&mut self, pm: PackageManager, missing: &[String], after_failure: bool) -> Result<(), String> {
+        let unattended = self.args.yes || !self.host.interactive();
+        let Some(argv) = index::sync_argv(pm, unattended) else { return Ok(()) };
+        let shown = self.root_hint(&argv);
+        let what = if missing.is_empty() { "Your package databases may be out of date".to_string() } else { format!("Your package databases are missing or out of date ({})", missing.join(", ")) };
+        if index::sync_upgrades_system(pm) {
+            let again = if after_failure { " and try again" } else { "" };
+            if unattended && !self.dry() {
+                // Nobody is asked: say what the default answer does.
+                let why = if self.args.yes { "--yes" } else { "no terminal to ask on" };
+                self.say(Level::Info, format!("{what}: updating them with `{shown}`, a full system upgrade ({why}: the default answer)"));
+            }
+            if !self.ask(&format!("{what}. Update them now{again}? This runs `{shown}`, a full system upgrade."), true) {
+                return Err(format!("the package databases need updating before anything can be installed: run `{shown}`, then `mandara install` again (or pass --no-deps to skip system packages)"));
+            }
+        } else {
+            self.say(Level::Info, format!("{what}: updating them ({shown})"));
+        }
+        if !self.as_root(Cmd::from_argv(argv)) {
+            return Err(format!("`{shown}` failed: fix what it reports, then run `mandara install` again"));
+        }
+        self.synced = true;
+        if !self.dry() {
+            self.say(Level::Ok, "package databases up to date");
+        }
         Ok(())
     }
 

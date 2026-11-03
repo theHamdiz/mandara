@@ -14,6 +14,8 @@
 //! * [`packages`] — what each family installs (data tables);
 //! * [`pkg`] — package managers and privilege helpers, shared with
 //!   `mandara greeter use --install`;
+//! * [`index`] — package databases: missing ones found before installing,
+//!   and how each manager brings them up to date;
 //! * [`installer`] — the flows, against a [`host::Host`] so tests (and
 //!   `--dry-run`) change nothing.
 
@@ -21,6 +23,7 @@ pub mod args;
 pub mod family;
 pub mod files;
 pub mod host;
+pub mod index;
 pub mod installer;
 pub mod packages;
 pub mod pkg;

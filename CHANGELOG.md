@@ -6,6 +6,18 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The installer copes with package databases that were never synced.
+
+### Fixed
+
+- **Installing on a system whose package databases were never synced
+  works**: instead of failing with "target not found" for every package,
+  the installer notices the missing databases and, after asking, updates
+  them the right way for your distribution (on Arch and CachyOS a full
+  `sudo pacman -Syu`, never a partial upgrade; on Debian and Ubuntu
+  `apt-get update`), then installs. Say no and it tells you what to run.
+  Thanks for reporting it in #45.
+
 ## 0.12.0 — 2026-11-03
 
 A much better screen recorder.

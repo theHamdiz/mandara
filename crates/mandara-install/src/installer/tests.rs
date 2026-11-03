@@ -30,9 +30,13 @@ struct FakeHost {
     fetches: HashMap<String, Vec<u8>>,
     /// Commands (argv joined by spaces) that fail.
     failing: HashSet<String>,
+    /// Commands that fail the first time only.
+    failing_once: HashSet<String>,
     /// Commands that fail with this exit code.
     codes: HashMap<String, i32>,
     answers: Option<bool>,
+    /// A terminal is attached.
+    tty: bool,
     ran: Vec<Cmd>,
     out: Vec<(Level, String)>,
 }
@@ -55,15 +59,21 @@ impl Host for FakeHost {
     fn run(&mut self, cmd: &Cmd) -> std::io::Result<Output> {
         self.ran.push(cmd.clone());
         let code = self.codes.get(&cmd.display()).copied();
-        Ok(Output { success: !self.failing.contains(&cmd.display()) && code.is_none(), code, ..Default::default() })
+        let failed_once = self.failing_once.remove(&cmd.display());
+        Ok(Output { success: !failed_once && !self.failing.contains(&cmd.display()) && code.is_none(), code, ..Default::default() })
     }
 
     fn has_program(&self, name: &str) -> bool {
         self.programs.contains(name)
     }
 
-    fn ask(&mut self, _question: &str, default: bool) -> bool {
+    fn ask(&mut self, question: &str, default: bool) -> bool {
+        self.out.push((Level::Info, format!("asked: {question}")));
         self.answers.unwrap_or(default)
+    }
+
+    fn interactive(&self) -> bool {
+        self.tty
     }
 
     fn fetch(&mut self, url: &str, _limit: u64) -> Result<Vec<u8>, Fetch> {
@@ -197,9 +207,12 @@ fn dry_run_prints_every_package_per_family_and_changes_nothing() {
         assert!(!text.contains(&pm.install_argv(set.build).join(" ")), "{family}: build tools without --from-source");
         // The compositor's portal (MangoWM → wlr).
         assert!(text.contains("xdg-desktop-portal-wlr"), "{family}: no portal");
-        if let Some(refresh) = pm.refresh_argv() {
-            assert!(text.contains(&format!("would run: sudo {}", refresh.join(" "))));
+        // apt's lists are refreshed every time; the fixture's empty root
+        // has no Gentoo tree, so that one is synced first.
+        if index::sync_before_install(pm) || pm == PackageManager::Emerge {
+            assert!(text.contains(&format!("would run: sudo {}\n", index::sync_argv(pm, false).unwrap().join(" "))), "{family}\n{text}");
         }
+        assert!(!text.contains("pacman -Sy"), "{family}: pacman's databases are fine here\n{text}");
         // Login screen: greetd + cage, then the switch and the keyring offer.
         if set.greeter.is_empty() {
             assert!(text.contains("install greetd and cage with your package manager"), "{family}\n{text}");
@@ -630,4 +643,122 @@ fn config_errors_are_reported_without_retiring() {
     let ran = host.ran();
     assert!(!ran.contains(&format!("{b} setup --fix-conflicts")), "{ran:#?}");
     assert!(host.text().contains("Config doctor"));
+}
+
+// ── Package databases (issue #45) ───────────────────────────────────────
+
+/// CachyOS's `pacman.conf`, its databases never synced.
+fn unsynced_pacman(f: &Fixture) {
+    std::fs::write(f.root().join("etc/pacman.conf"), "[options]\nArchitecture = auto\n\n[cachyos]\nInclude = /etc/pacman.d/cachyos-mirrorlist\n[core]\nInclude = /etc/pacman.d/mirrorlist\n[extra]\nInclude = /etc/pacman.d/mirrorlist\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n").unwrap();
+}
+
+const ARCH_RUN: &str = "pacman -S --needed --noconfirm libxkbcommon wayland vulkan-icd-loader mesa fontconfig freetype2";
+const SYNC_QUESTION: &str = "Your package databases are missing or out of date (cachyos, core, extra, multilib). Update them now? This runs `sudo pacman -Syu`, a full system upgrade.";
+
+#[test]
+fn missing_pacman_databases_are_synced_with_a_full_upgrade_first() {
+    // Dry run: the question and the plan, nothing run as root.
+    let f = Fixture::new();
+    unsynced_pacman(&f);
+    let mut host = FakeHost::with(&["pacman", "sudo", "mango"]);
+    host.tty = true;
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(InstallArgs { no_greeter: true, ..Default::default() })).unwrap();
+    let text = host.text();
+    assert!(text.contains(&format!("would ask: {SYNC_QUESTION} [Y/n] (assuming yes)")), "{text}");
+    let sync = text.find("would run: sudo pacman -Syu\n").expect("sync planned");
+    let install = text.find(&format!("would run: sudo {ARCH_RUN}\n")).expect("install planned");
+    assert!(sync < install);
+    assert!(!text.contains("pacman -Sy ") && !text.contains("pacman -Sy\n"), "never a bare -Sy");
+    assert!(host.ran().iter().all(|c| !c.starts_with("sudo")), "{:?}", host.ran());
+
+    // Asked at a terminal and accepted: pacman shows the upgrade itself.
+    let mut host = FakeHost::with(&["pacman", "sudo", "mango"]);
+    host.tty = true;
+    host.answers = Some(true);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_greeter: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    let sync = ran.iter().position(|c| c == "sudo pacman -Syu").unwrap_or_else(|| panic!("{ran:#?}"));
+    let install = ran.iter().position(|c| c == &format!("sudo {ARCH_RUN}")).unwrap();
+    assert!(sync < install);
+    assert!(host.text().contains(&format!("asked: {SYNC_QUESTION}")));
+    assert!(host.text().contains("package databases up to date"));
+
+    // --yes: the default answer, unattended.
+    let mut host = FakeHost::with(&["pacman", "sudo", "mango"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap();
+    assert!(host.ran().contains(&"sudo pacman -Syu --noconfirm".to_string()), "{:?}", host.ran());
+    assert!(host.text().contains("updating them with `sudo pacman -Syu --noconfirm`, a full system upgrade (--yes: the default answer)"), "{}", host.text());
+}
+
+#[test]
+fn declining_the_upgrade_stops_with_what_to_do() {
+    let f = Fixture::new();
+    unsynced_pacman(&f);
+    let mut host = FakeHost::with(&["pacman", "sudo", "mango"]);
+    host.tty = true;
+    host.answers = Some(false);
+    let err = run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_greeter: true, ..Default::default() }).unwrap_err();
+    assert!(err.contains("run `sudo pacman -Syu`, then `mandara install` again") && err.contains("--no-deps"), "{err}");
+    assert!(host.ran().iter().all(|c| !c.starts_with("sudo")), "{:?}", host.ran());
+    assert!(f.home_files().is_empty());
+    // A failed upgrade stops too, with its command.
+    let mut host = FakeHost::with(&["pacman", "sudo", "mango"]);
+    host.failing.insert("sudo pacman -Syu --noconfirm".into());
+    let err = run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap_err();
+    assert!(err.contains("`sudo pacman -Syu --noconfirm` failed"), "{err}");
+    assert!(!host.ran().contains(&format!("sudo {ARCH_RUN}")));
+}
+
+#[test]
+fn a_failed_install_syncs_once_and_retries() {
+    // pacman: databases present but stale (a 404 from the mirror, say).
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo", "mango"]);
+    host.tty = true;
+    host.failing_once.insert(format!("sudo {ARCH_RUN}"));
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_greeter: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    let installs: Vec<usize> = ran.iter().enumerate().filter(|(_, c)| **c == format!("sudo {ARCH_RUN}")).map(|(i, _)| i).collect();
+    let sync = ran.iter().position(|c| c == "sudo pacman -Syu").unwrap_or_else(|| panic!("{ran:#?}"));
+    assert!(installs.len() == 2 && installs[0] < sync && sync < installs[1], "{ran:#?}");
+    assert!(host.text().contains("asked: Your package databases may be out of date. Update them now and try again? This runs `sudo pacman -Syu`, a full system upgrade."), "{}", host.text());
+    // dnf refreshes its metadata without asking (no upgrade).
+    let mut host = FakeHost::with(&["dnf", "sudo", "niri"]);
+    let required = "sudo dnf install -y libxkbcommon libwayland-client vulkan-loader mesa-vulkan-drivers fontconfig freetype";
+    host.failing_once.insert(required.into());
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    let refresh = ran.iter().position(|c| c == "sudo dnf makecache --refresh").unwrap_or_else(|| panic!("{ran:#?}"));
+    assert_eq!(ran.iter().filter(|c| *c == required).count(), 2);
+    assert!(ran.iter().rposition(|c| c == required).unwrap() > refresh);
+    // Failing again after the sync: the usual error, no loop.
+    let mut host = FakeHost::with(&["dnf", "sudo", "niri"]);
+    host.failing.insert(required.into());
+    let err = run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap_err();
+    assert!(err.contains("could not install required packages"));
+    assert_eq!(host.ran().iter().filter(|c| *c == "sudo dnf makecache --refresh").count(), 1);
+}
+
+#[test]
+fn apt_downloads_missing_package_lists_first() {
+    let f = Fixture::new();
+    std::fs::create_dir_all(f.root().join("var/lib/apt/lists/partial")).unwrap();
+    let required = "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libxkbcommon0 libwayland-client0 libvulkan1 mesa-vulkan-drivers libfontconfig1 libfreetype6 ca-certificates";
+    let mut host = FakeHost::with(&["apt-get", "sudo", "niri"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Debian), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    assert!(ran.iter().position(|c| c == "sudo apt-get update").unwrap() < ran.iter().position(|c| c == required).unwrap(), "{ran:#?}");
+    assert!(host.text().contains("no package lists yet: downloading them (sudo apt-get update)"));
+    // It can't download them: a clear stop, not apt's "Unable to locate package".
+    let mut host = FakeHost::with(&["apt-get", "sudo", "niri"]);
+    host.failing.insert("sudo apt-get update".into());
+    let err = run(&mut host, &FakeProbe::default(), f.facts(Family::Debian), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap_err();
+    assert!(err.contains("without package lists nothing can be installed"), "{err}");
+    assert!(!host.ran().contains(&required.to_string()));
+    // Lists present: a failed refresh is only a stale index; installing goes on.
+    std::fs::write(f.root().join("var/lib/apt/lists/deb.debian.org_debian_dists_sid_main_binary-amd64_Packages"), "x").unwrap();
+    let mut host = FakeHost::with(&["apt-get", "sudo", "niri"]);
+    host.failing.insert("sudo apt-get update".into());
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Debian), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap();
+    assert!(host.ran().contains(&required.to_string()));
 }

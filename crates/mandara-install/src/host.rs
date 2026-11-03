@@ -16,6 +16,8 @@ const FETCH_TIMEOUT: Duration = Duration::from_secs(600);
 const FETCH_CHUNK: usize = 64 << 10;
 /// Any execute bit.
 const EXEC_BITS: u32 = 0o111;
+/// The terminal questions go to (also with stdin redirected).
+const TTY: &str = "/dev/tty";
 
 /// How a command's output is handled.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -124,6 +126,8 @@ pub trait Host {
     fn has_program(&self, name: &str) -> bool;
     /// Asks a yes/no question on the terminal; without one, `default`.
     fn ask(&mut self, question: &str, default: bool) -> bool;
+    /// Whether someone can answer questions (a terminal is attached).
+    fn interactive(&self) -> bool;
     /// Downloads `url`, at most `limit` bytes.
     fn fetch(&mut self, url: &str, limit: u64) -> Result<Vec<u8>, Fetch>;
     /// Prints one line of installer output.
@@ -194,21 +198,15 @@ impl Host for SystemHost {
     }
 
     fn ask(&mut self, question: &str, default: bool) -> bool {
-        // The terminal itself, so it works with stdin redirected too.
-        let Ok(mut tty) = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty") else { return default };
         let hint = if default { "[Y/n]" } else { "[y/N]" };
-        if write!(tty, "    {question} {hint} ").and_then(|_| tty.flush()).is_err() {
-            return default;
+        match ask_tty(&format!("{question} {hint}")).as_deref() {
+            None | Some("") => default,
+            Some(a) => matches!(a, "y" | "Y" | "yes" | "YES" | "Yes"),
         }
-        let mut answer = Vec::new();
-        let mut byte = [0u8; 1];
-        while tty.read(&mut byte).is_ok_and(|n| n == 1) && byte[0] != b'\n' {
-            answer.push(byte[0]);
-        }
-        match String::from_utf8_lossy(&answer).trim() {
-            "" => default,
-            a => matches!(a, "y" | "Y" | "yes" | "YES" | "Yes"),
-        }
+    }
+
+    fn interactive(&self) -> bool {
+        std::fs::OpenOptions::new().read(true).write(true).open(TTY).is_ok()
     }
 
     fn fetch(&mut self, url: &str, limit: u64) -> Result<Vec<u8>, Fetch> {
@@ -252,6 +250,19 @@ impl Host for SystemHost {
             Level::Done => println!("\n{g}{b}{text}{n}"),
         }
     }
+}
+
+/// Prints `prompt` on the terminal itself (so it works with stdin
+/// redirected too) and reads one trimmed line. `None` without a terminal.
+fn ask_tty(prompt: &str) -> Option<String> {
+    let mut tty = std::fs::OpenOptions::new().read(true).write(true).open(TTY).ok()?;
+    write!(tty, "    {prompt} ").and_then(|_| tty.flush()).ok()?;
+    let mut answer = Vec::new();
+    let mut byte = [0u8; 1];
+    while tty.read(&mut byte).is_ok_and(|n| n == 1) && byte[0] != b'\n' {
+        answer.push(byte[0]);
+    }
+    Some(String::from_utf8_lossy(&answer).trim().to_string())
 }
 
 /// A private temporary folder, removed on drop.

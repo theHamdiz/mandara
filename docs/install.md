@@ -53,6 +53,10 @@ with its PAM module, AccountsService (Users), GeoClue (location), UDisks2
 (drives), UPower and power-profiles-daemon (battery, profiles), i2c-tools
 (DDC/CI monitor brightness) and the freedesktop sound theme (event sounds).
 
+Before installing anything it checks that your package databases can be
+used, and brings them up to date when they can't (see
+[Package databases missing or out of date](#package-databases-missing-or-out-of-date)).
+
 | Option | Meaning |
 |---|---|
 | `--latest` | Download and install the latest release instead of this binary |
@@ -70,6 +74,36 @@ with its PAM module, AccountsService (Users), GeoClue (location), UDisks2
 
 `mandara uninstall` removes the binary and desktop entry and empties the
 compositor drop-ins; your settings are kept.
+
+## Package databases missing or out of date
+
+A system whose package databases were never downloaded (a fresh install,
+a container, a cleared cache) can't install anything: pacman reports
+`database file for 'core' does not exist` and `target not found` for every
+package, apt says `Unable to locate package`. The installer checks the
+files before it installs anything, the same in every language:
+
+| | It checks | It runs |
+|---|---|---|
+| Arch (pacman) | a database in `/var/lib/pacman/sync/` for every repository in `pacman.conf` | `sudo pacman -Syu`, a full system upgrade, after asking |
+| Debian, Ubuntu (apt) | the package lists in `/var/lib/apt/lists/` | `sudo apt-get update` (every time; it changes no packages) |
+| Gentoo | the repository tree in `/var/db/repos/gentoo` | `sudo emerge --sync` |
+| Fedora, openSUSE, Alpine, Solus | nothing: they fetch their metadata themselves | `dnf makecache --refresh`, `zypper refresh`, `apk update` or `eopkg update-repo`, only if installing failed |
+
+On Arch it is always the full `pacman -Syu`, never `pacman -Sy` followed by
+an install: that is a partial upgrade, which Arch doesn't support. Since it
+upgrades the whole system, it is asked first:
+
+```text
+Your package databases are missing or out of date (core, extra). Update them now? This runs `sudo pacman -Syu`, a full system upgrade. [Y/n]
+```
+
+Answer no and the installer stops, telling you to run `sudo pacman -Syu`
+yourself and then `mandara install` again (or `mandara install --no-deps`
+to skip system packages). When the databases exist but installing still
+fails (they may be out of date and the mirror no longer has those package
+versions), it offers the same update once and tries again. `--dry-run`
+shows the question and the commands; `--yes` takes the default answer.
 
 ## Arch Linux
 
