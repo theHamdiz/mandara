@@ -72,6 +72,7 @@ pub mod slider;
 pub mod slider_model;
 pub mod todo_lists;
 pub mod recorder;
+pub(crate) mod resample;
 pub mod widgets;
 pub mod windows;
 pub mod workflow;

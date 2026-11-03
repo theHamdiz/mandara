@@ -21,6 +21,22 @@ About → What's new shows it too.
   popped up right where the pointer had last left the notifications kept
   counting down while you pointed at it. Now it waits for you.
 
+## 0.8.3 — 2026-11-03
+
+Lighter wallpapers.
+
+### Changed
+
+- **Lighter wallpapers.** A wallpaper smaller than your screen, and the
+  depth clock's mask, are now scaled up a row at a time instead of through
+  a full-size working copy. On a 4K display, switching to a 2880 × 1620
+  wallpaper peaks at 125 MiB instead of 200 MiB, and the start-up peak
+  with a 1080p wallpaper and the depth clock drops from 205 to 170 MiB
+  (147 to 116 MiB on a 1600 × 1000 display). The scaling is faster too:
+  53 ms instead of 96 ms to bring a 1080p picture to 4K. The picture is
+  pixel-for-pixel the same, and memory once settled, video memory and
+  frame times are unchanged.
+
 ## 0.8.2 — 2026-11-03
 
 The sidebar stays open at the screen edge. The session dock stays on its

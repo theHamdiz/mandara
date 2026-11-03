@@ -52,7 +52,10 @@ browser tab, without trading away speed. It took deliberate work at every layer:
   for other scripts load one face each until text in that script appears
   (2 font files at start instead of 52 for an English desktop), and a
   wallpaper is placed on screen without full-size copies of itself
-  ([numbers](releasing.md#start-up-memory)).
+  ([numbers](releasing.md#start-up-memory)). A wallpaper or depth mask
+  smaller than the screen is scaled up one row at a time, not through a
+  full-size float copy: a wallpaper switch on a 4K display peaks 80 MiB
+  lower ([numbers](releasing.md#settled-memory-video-memory-and-residue)).
 - **Few threads.** All D-Bus, network and audio services share one tokio
   runtime with two workers, and GPUI's worker pool is capped at four.
 - **Nothing ticks off screen.** Spectrum, graphs, timers and network
