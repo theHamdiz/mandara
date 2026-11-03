@@ -8043,3 +8043,9 @@
 "Power panel style" = "पावर पैनल की शैली"
 "Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "क्लासिक: बैटरी कार्ड के ऊपर प्रोफ़ाइल कार्ड। मॉडर्न: पहले बैटरी, बड़ी चार्ज रिंग और चार्ज ग्राफ़ के साथ, एक प्रोफ़ाइल स्विच, और तकनीकी विवरण छिपे हुए"
 "Modern" = "मॉडर्न"
+
+# ── Popups joined to the bar ──
+"Join the bar" = "बार से जोड़ें"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "पॉपअप बार के रंग में उससे लटकते हैं, उसी के एक हिस्से की तरह; बिना बार वाले किनारे पर, स्क्रीन के किनारे से"
+"The dock holds the bottom edge; popups there stay cards" = "डॉक नीचे का किनारा घेरता है; वहाँ पॉपअप कार्ड ही रहते हैं"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "तैरते बार में लटकने के लिए कोई किनारा नहीं होता; उसके किनारे पर पॉपअप कार्ड ही रहते हैं"

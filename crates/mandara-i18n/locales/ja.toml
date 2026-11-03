@@ -8043,3 +8043,9 @@
 "Power panel style" = "電源パネルのスタイル"
 "Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "クラシック: バッテリーカードの上にプロファイルカード。モダン: 大きな充電リングと充電グラフでバッテリーを先頭に、プロファイル切り替えは 1 つ、技術的な詳細は折りたたみ"
 "Modern" = "モダン"
+
+# ── Popups joined to the bar ──
+"Join the bar" = "バーにつなげる"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "ポップアップがバーの色でバーから垂れ下がり、一体に見えます。バーのない辺では画面の端から垂れ下がります"
+"The dock holds the bottom edge; popups there stay cards" = "ドックが下端を使っているため、そこのポップアップはカードのままです"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "フローティングバーには垂れ下がる辺がないため、その辺のポップアップはカードのままです"

@@ -7794,3 +7794,9 @@
 "Power panel style" = "전원 패널 스타일"
 "Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "클래식: 배터리 카드 위에 프로필 카드. 모던: 큰 충전 링과 충전 그래프로 배터리를 먼저 보여 주고, 프로필 전환은 하나, 기술 정보는 접어 둠"
 "Modern" = "모던"
+
+# ── Popups joined to the bar ──
+"Join the bar" = "바에 붙이기"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "팝업이 바의 색으로 바에서 내려와 하나로 이어집니다. 바가 없는 가장자리에서는 화면 가장자리에서 내려옵니다"
+"The dock holds the bottom edge; popups there stay cards" = "Dock이 아래쪽 가장자리를 차지하므로 그곳의 팝업은 카드로 남습니다"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "떠 있는 바에는 매달릴 가장자리가 없어 그 가장자리의 팝업은 카드로 남습니다"

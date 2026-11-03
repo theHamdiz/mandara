@@ -8042,3 +8042,9 @@
 "Power panel style" = "Güç paneli stili"
 "Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "Klasik: pil kartının üstünde profil kartları. Modern: önce büyük bir şarj halkası ve şarj grafiğiyle pil, tek bir profil anahtarı ve katlanmış teknik ayrıntılar"
 "Modern" = "Modern"
+
+# ── Popups joined to the bar ──
+"Join the bar" = "Çubuğa bağla"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "Açılır bildirimler çubuğun renginde ondan sarkar, onunla tek parça olur; çubuk olmayan kenarda ekran kenarından"
+"The dock holds the bottom edge; popups there stay cards" = "Alt kenarı dock kaplıyor; oradaki açılır bildirimler kart olarak kalır"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "Yüzen çubuğun asılacak bir kenarı yok; onun kenarındaki açılır bildirimler kart olarak kalır"

@@ -7795,3 +7795,9 @@
 "Power panel style" = "پاور پینل کا انداز"
 "Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "کلاسک: بیٹری کارڈ کے اوپر پروفائل کارڈ۔ ماڈرن: پہلے بیٹری، بڑے چارج رنگ اور چارج گراف کے ساتھ، ایک پروفائل سوئچ، اور تکنیکی تفصیلات بند"
 "Modern" = "ماڈرن"
+
+# ── Popups joined to the bar ──
+"Join the bar" = "بار سے جوڑیں"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "پاپ اپس بار کے رنگ میں اس سے لٹکتے ہیں، اس کے ساتھ ایک ٹکڑے کی طرح؛ بغیر بار والے کنارے پر، اسکرین کے کنارے سے"
+"The dock holds the bottom edge; popups there stay cards" = "ڈاک نیچے کا کنارہ گھیرے ہوئے ہے؛ وہاں پاپ اپس کارڈ ہی رہتے ہیں"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "تیرتے بار کا لٹکنے کے لیے کوئی کنارہ نہیں؛ اس کے کنارے کے پاپ اپس کارڈ ہی رہتے ہیں"

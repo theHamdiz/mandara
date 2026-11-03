@@ -8046,3 +8046,9 @@
 "Power panel style" = "نمط لوحة الطاقة"
 "Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "كلاسيكي: بطاقات الأوضاع فوق بطاقة البطارية. حديث: البطارية أولًا بحلقة شحن كبيرة ورسم للشحن، ومبدّل واحد للأوضاع، والتفاصيل التقنية مطويّة"
 "Modern" = "حديث"
+
+# ── Popups joined to the bar ──
+"Join the bar" = "الالتحام بالشريط"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "تتدلّى النوافذ المنبثقة من الشريط بلونه كقطعة واحدة معه؛ وعلى حافة بلا شريط، من حافة الشاشة"
+"The dock holds the bottom edge; popups there stay cards" = "المرسى يشغل الحافة السفلية؛ تبقى النوافذ المنبثقة هناك بطاقات"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "الشريط العائم ليس له حافة تتدلّى منها؛ تبقى النوافذ المنبثقة على حافته بطاقات"

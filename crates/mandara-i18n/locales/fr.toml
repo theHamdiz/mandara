@@ -8043,3 +8043,9 @@
 "Power panel style" = "Style du panneau d'alimentation"
 "Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "Classique : les cartes de profil au-dessus de la carte de batterie. Moderne : la batterie d'abord, avec un grand anneau de charge et un graphique de charge, un seul sélecteur de profil et les détails techniques repliés"
 "Modern" = "Moderne"
+
+# ── Popups joined to the bar ──
+"Join the bar" = "Attacher à la barre"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "Les fenêtres contextuelles pendent de la barre, dans sa couleur, d'un seul tenant ; sur un bord sans barre, du bord de l'écran"
+"The dock holds the bottom edge; popups there stay cards" = "Le dock occupe le bord inférieur ; les fenêtres contextuelles y restent des cartes"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "Une barre flottante n'a pas de bord où s'accrocher ; les fenêtres contextuelles de son bord restent des cartes"

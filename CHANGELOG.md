@@ -6,8 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
-A new Modern style for the Power panel and a battery that breathes while it
-charges.
+A new Modern style for the Power panel, a battery that breathes while it
+charges, and notifications that can join the bar.
 
 ### New
 
@@ -27,6 +27,12 @@ charges.
   glance that power is going in. It stays still with Reduce motion on, and
   you can turn it off in Studio → Power & idle (*Pulse the battery while
   charging*).
+- **Notifications can join the bar.** Turn on Studio → Notifications →
+  **Join the bar** and new notifications drop out of the bar in a drawer of
+  its own colour, curving into it, so the two read as one piece. It works
+  with a top or bottom bar, notifications on the left, middle or right, and
+  follows the bar when it hides. Floating pill bars keep the usual floating
+  cards. Off by default.
 
 ### Changed
 
@@ -34,6 +40,12 @@ charges.
   its look, but no longer shows the CPU driver (`intel_pstate` and
   friends) in its header or under each power profile; each profile keeps
   its short description.
+
+### Fixed
+
+- **Pointing at a notification always pauses it.** A notification that
+  popped up right where the pointer had last left the notifications kept
+  counting down while you pointed at it. Now it waits for you.
 
 ## 0.8.3 — 2026-11-03
 
