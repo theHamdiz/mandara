@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.15.0 — 2026-11-03
+
 Fresh screenshots everywhere. Cleaner main menu tiles.
 
 ### Improved
