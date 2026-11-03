@@ -225,6 +225,19 @@ fn grid_columns(menu: &SessionMenuConfig, count: usize) -> usize {
     usize::from(menu.grid_columns).clamp(1, GRID_COLUMNS_MAX).min(count.max(1))
 }
 
+/// A flush drawer's `(x, width)` that keeps it on its screen edge: past the
+/// slide's end (spring overshoot) it stretches, rather than leave a gap.
+/// At rest it reaches 2 px past the edge (`x = -2` on the left).
+fn edge_attached(on_left: bool, x: f32, w: f32, screen_w: f32) -> (f32, f32) {
+    if on_left {
+        let edge = -2.0;
+        if x > edge { (edge, w + x - edge) } else { (x, w) }
+    } else {
+        let edge = screen_w + 2.0;
+        (x, w.max(edge - x))
+    }
+}
+
 pub struct SessionView {
     shell: Entity<ShellState>,
     focus: FocusHandle,
@@ -593,6 +606,9 @@ impl Render for SessionView {
         let (radius, flare) = (crate::style::side_panel_radius(look), if look.floats_with(&cfg.bar) { 0.0 } else { crate::style::flare_radius(&cfg.bar) });
         let fill = fill.opacity(mandara_config::surfaces::ranges::OPACITY.clamp(look.opacity, 1.0));
         let y = (sh - dock_h) / 2.0;
+        let floats = look.floats_with(&cfg.bar);
+        // A flush drawer stretches through the overshoot instead of leaving the edge.
+        let (drawer_x, drawer_w) = if floats { (x, dock_w + 2.0) } else { edge_attached(on_left, x, dock_w + 2.0, sw) };
         root.on_mouse_move(cx.listener(move |this, e: &gpui::MouseMoveEvent, window, cx| {
             let vp = window.viewport_size();
             let y0 = (f32::from(vp.height) - dock_h) / 2.0 - DOCK_REACH_Y_PX;
@@ -611,13 +627,13 @@ impl Render for SessionView {
                 }));
             }
         }))
-        .child(if look.floats_with(&cfg.bar) {
+        .child(if floats {
             div().absolute().left(px(x)).top(px(y)).w(px(dock_w + 2.0)).h(px(dock_h)).rounded(px(radius)).bg(fill).into_any_element()
         } else {
-            edge_drawer_snapped(if on_left { Edge::Left } else { Edge::Right }, x, y, dock_w + 2.0, dock_h, radius, flare, fill, window.scale_factor())
+            edge_drawer_snapped(if on_left { Edge::Left } else { Edge::Right }, drawer_x, y, drawer_w, dock_h, radius, flare, fill, window.scale_factor())
         })
         // Occludes the scrim over the drawer and its edge flares.
-        .child(div().id("dock-body").absolute().left(px(x)).top(px(y - flare)).w(px(dock_w + 2.0)).h(px(dock_h + 2.0 * flare)).occlude())
+        .child(div().id("dock-body").absolute().left(px(drawer_x)).top(px(y - flare)).w(px(drawer_w)).h(px(dock_h + 2.0 * flare)).occlude())
         .child(
             div()
                 .absolute()
@@ -731,6 +747,19 @@ mod tests {
         }
         assert_eq!(visible(&menu).0.len(), 1);
         assert_eq!(grid_columns(&SessionMenuConfig { grid_columns: 9, ..Default::default() }, 4), 4);
+    }
+
+    #[test]
+    fn a_flush_drawer_stays_on_its_edge_through_the_overshoot() {
+        let (w, sw) = (82.0, 1920.0);
+        // At rest and while sliding in, the drawer keeps its own width.
+        assert_eq!(edge_attached(true, -2.0, w, sw), (-2.0, w));
+        assert_eq!(edge_attached(true, -40.0, w, sw), (-40.0, w));
+        assert_eq!(edge_attached(false, sw - 80.0, w, sw), (sw - 80.0, w));
+        // Overshooting, it stretches back to the edge instead of leaving a gap.
+        assert_eq!(edge_attached(true, 14.0, w, sw), (-2.0, w + 16.0));
+        let (x, width) = edge_attached(false, sw - 96.0, w, sw);
+        assert_eq!((x, x + width), (sw - 96.0, sw + 2.0));
     }
 
     #[test]
