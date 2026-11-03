@@ -82,13 +82,14 @@ pub struct Background {
 /// Places `img` on a `w × h` canvas for `fill` (bands in `fill_color`).
 ///
 /// Memory: the picture is resampled first and the canvas allocated after,
-/// with the source already dropped when it was resampled, so the
-/// resampler's float buffer, the source and the canvas are never alive
-/// together; and the picture is copied onto the canvas straight from its
-/// own pixels (no RGBA copy of it). At 4K that is one to two full-frame
-/// buffers (33 MB each) less at the moment a wallpaper loads.
+/// with the source already dropped when it was resampled, so the source and
+/// the canvas are never alive together; the resampler keeps one filtered
+/// row, not a full-size float copy ([`crate::resample::triangle`]); and the
+/// picture is copied onto the canvas straight from its own pixels (no RGBA
+/// copy of it). At 4K that is one to two full-frame buffers (33 MB each)
+/// less at the moment a wallpaper loads, plus the float copy (63 MB for a
+/// 1080p picture) when it is smaller than the output.
 pub fn background(img: DynamicImage, fill: WallpaperFill, (w, h): (u32, u32), fill_color: Color) -> Result<Background, String> {
-    use image::imageops::FilterType::Triangle;
     let (iw, ih) = (img.width().max(1), img.height().max(1));
     let centered = |cw: u32, ch: u32| ((w as i32 - cw as i32) / 2, (h as i32 - ch as i32) / 2);
     // What goes on the canvas and where: one placement, or a grid of tiles.
@@ -96,18 +97,18 @@ pub fn background(img: DynamicImage, fill: WallpaperFill, (w, h): (u32, u32), fi
         // The cached display copy usually has the output's size already.
         WallpaperFill::Cover | WallpaperFill::Stretch if (iw, ih) == (w, h) => (img, (0, 0), None),
         WallpaperFill::Cover => (resampled(img, |img| crate::wallpaper::cover(img, w, h)), (0, 0), None),
-        WallpaperFill::Stretch => (resampled(img, |img| img.resize_exact(w, h, Triangle)), (0, 0), None),
+        WallpaperFill::Stretch => (resampled(img, |img| crate::resample::triangle(img, (0, 0, iw, ih), w, h)), (0, 0), None),
         WallpaperFill::Contain => {
             let s = (w as f32 / iw as f32).min(h as f32 / ih as f32);
             let (fw, fh) = (((iw as f32 * s).round() as u32).max(1), ((ih as f32 * s).round() as u32).max(1));
-            let fit = if (fw, fh) == (iw, ih) { img } else { resampled(img, |img| img.resize_exact(fw, fh, Triangle)) };
+            let fit = if (fw, fh) == (iw, ih) { img } else { resampled(img, |img| crate::resample::triangle(img, (0, 0, iw, ih), fw, fh)) };
             (fit, centered(fw, fh), None)
         }
         WallpaperFill::Center => (img, centered(iw, ih), None),
         WallpaperFill::Tile => {
             let (cols, rows, k) = crate::wallpaper_fill::tile_grid(w as f32, h as f32, iw as f32, ih as f32);
             let (tw, th) = (((iw as f32 * k).round() as u32).max(1), ((ih as f32 * k).round() as u32).max(1));
-            let tile = if (tw, th) == (iw, ih) { img } else { resampled(img, |img| img.resize_exact(tw, th, Triangle)) };
+            let tile = if (tw, th) == (iw, ih) { img } else { resampled(img, |img| crate::resample::triangle(img, (0, 0, iw, ih), tw, th)) };
             (tile, (0, 0), Some((cols, rows, tw, th)))
         }
     };

@@ -124,12 +124,13 @@ pub(crate) fn shrink(img: &image::DynamicImage, w: u32, h: u32) -> image::Dynami
 
 /// The `(x, y, width, height)` region of `img`, resized to exactly
 /// `w × h`. A large shrink reads the region in place (no cropped copy) and
-/// box-averages it; anything else is cropped and resampled.
+/// box-averages it; anything else (an upscale) is resampled from the
+/// region in place, one row at a time ([`crate::resample::triangle`]).
 pub(crate) fn shrink_region(img: &image::DynamicImage, (x, y, cw, ch): (u32, u32, u32, u32), w: u32, h: u32) -> image::DynamicImage {
     use image::{DynamicImage, GenericImageView as _, imageops};
     let (w, h) = (w.max(1), h.max(1));
     if (cw as f32) < w as f32 * BOX_SHRINK || (ch as f32) < h as f32 * BOX_SHRINK {
-        return img.crop_imm(x, y, cw, ch).resize_exact(w, h, imageops::FilterType::Triangle);
+        return crate::resample::triangle(img, (x, y, cw, ch), w, h);
     }
     match img {
         DynamicImage::ImageRgb8(b) => DynamicImage::ImageRgb8(imageops::thumbnail(&*b.view(x, y, cw, ch), w, h)),

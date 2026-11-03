@@ -269,7 +269,7 @@ pub(crate) fn mask_sized(img: &DynamicImage) -> DynamicImage {
 pub fn align(alpha: &GrayImage, size: (u32, u32), cropped: bool) -> GrayImage {
     let (w, h) = size;
     if !cropped || (alpha.width(), alpha.height()) == (w, h) {
-        return image::imageops::resize(alpha, w, h, image::imageops::FilterType::Triangle);
+        return crate::resample::triangle_gray(alpha, w, h);
     }
     let dynimg = DynamicImage::ImageLuma8(alpha.clone());
     crate::wallpaper::cover(&dynimg, w, h).to_luma8()
