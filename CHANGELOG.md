@@ -6,6 +6,17 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Changed
+
+- **A tidier layout designer, with search.** In Studio → Bar, the Left,
+  Center and Right zones are now neat columns with their plugins stacked
+  in order, and every plugin sits in an aligned grid underneath, grouped
+  by category, with a search box that filters as you type. Plugins already
+  on the bar show where they are. Click any plugin (or bar item) for a
+  small menu to add it to a zone, move it up, down or across, or take it
+  off, so dragging is no longer the only way. Thanks for the suggestion
+  in #26!
+
 ## 0.9.0 — 2026-11-03
 
 Notifications can join the bar. Pointing at a notification always pauses
@@ -19,17 +30,6 @@ it.
   with a top or bottom bar, notifications on the left, middle or right, and
   follows the bar when it hides. Floating pill bars keep the usual floating
   cards. Off by default.
-
-### Changed
-
-- **A tidier layout designer, with search.** In Studio → Bar, the Left,
-  Center and Right zones are now neat columns with their plugins stacked
-  in order, and every plugin sits in an aligned grid underneath, grouped
-  by category, with a search box that filters as you type. Plugins already
-  on the bar show where they are. Click any plugin (or bar item) for a
-  small menu to add it to a zone, move it up, down or across, or take it
-  off, so dragging is no longer the only way. Thanks for the suggestion
-  in #26!
 
 ### Fixed
 
