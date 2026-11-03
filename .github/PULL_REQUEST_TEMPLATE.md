@@ -30,11 +30,11 @@
       `docs/commands.md`; new built-in plugins have art in
       `assets/plugins/<id>/`, a `assets/catalog.json` entry and `cargo xtask art`
       re-run.
-- [ ] **Compositors:** a compositor feature works on MangoWM, Niri, Hyprland
-      and Umbriel, or is locked in Studio with a sentence saying why.
+- [ ] **Compositors:** a compositor feature works on MangoWM, Niri, Hyprland,
+      Umbriel, Sway and River Classic, or is locked in Studio with a sentence saying why.
 - [ ] **User files untouched:** generated config goes in
       `~/.config/mandara/generated/`, one include line is added to the user's
-      file, and any edit is validated by the compositor's own checker and rolled
+      file (River: the user adds one startup line themselves), and any edit is validated by the compositor's own checker and rolled
       back if it is worse.
 
 ## How it was tested

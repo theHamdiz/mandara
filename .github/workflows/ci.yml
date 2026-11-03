@@ -104,6 +104,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # A release build with fat LTO plus a NixOS system closure needs more
       # room than the runner leaves free.

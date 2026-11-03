@@ -1,5 +1,5 @@
 {
-  description = "Mandara Shell: a design-first Wayland desktop shell for MangoWM, Niri, Hyprland and Umbriel";
+  description = "Mandara Shell: a design-first Wayland desktop shell for MangoWM, Niri, Hyprland, Sway, River Classic and Umbriel";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 

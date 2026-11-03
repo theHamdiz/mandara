@@ -280,8 +280,13 @@ fn ask_tty(prompt: &str) -> Option<String> {
     write!(tty, "    {prompt} ").and_then(|_| tty.flush()).ok()?;
     let mut answer = Vec::new();
     let mut byte = [0u8; 1];
-    while tty.read(&mut byte).is_ok_and(|n| n == 1) && byte[0] != b'\n' {
-        answer.push(byte[0]);
+    loop {
+        match tty.read(&mut byte) {
+            Ok(1) if byte[0] == b'\n' => break,
+            Ok(1) => answer.push(byte[0]),
+            // EOF or a read error before Enter: no answer, not an empty one.
+            _ => return None,
+        }
     }
     Some(String::from_utf8_lossy(&answer).trim().to_string())
 }

@@ -334,10 +334,7 @@ pub fn register(r: &mut PluginRegistry) {
     r.command(
         ID,
         CommandSpec::new_output("compositor install-include", mandara_i18n::tk("Append the single include line to your compositor config (backup kept)"), |a, cx| {
-            let target = match a.get(0).and_then(Target::parse) {
-                Some(target) => target,
-                None => backend(cx)?.target(),
-            };
+            let target = target_arg(a.get(0), cx)?;
             let inputs = sync_inputs(cx);
             Ok(pending(move || {
                 let added = install_include(target).map_err(|e| format!("{e:#}"))?;

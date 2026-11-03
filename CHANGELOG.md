@@ -117,6 +117,11 @@ About → What's new shows it too.
 
 ### Fixed
 
+- **A mistyped compositor name no longer edits the wrong config**:
+  `mandara msg compositor install-include` now stops on an unknown name
+  instead of adding the include line to the running compositor's file.
+  Closing the installer's prompt also counts as no answer.
+
 - **Installing on a system whose package databases were never synced
   works**: instead of failing with "target not found" for every package,
   the installer notices the missing databases and, after asking, updates

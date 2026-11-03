@@ -278,7 +278,10 @@ fn svg(body: &str) -> String {
 /// A fade from full coverage at `(x1, y1)` to none at `(x2, y2)`
 /// (fractions of the canvas), for motifs that dissolve into the tile.
 fn fade(x1: f32, y1: f32, x2: f32, y2: f32) -> String {
-    format!(r#"<defs><linearGradient id="f" x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}"><stop offset="0" stop-color="black"/><stop offset="1" stop-color="black" stop-opacity="0"/></linearGradient></defs>"#)
+    // User-space units: the fade spans the whole canvas, and straight lattice
+    // lines (zero-height boxes) still get a stroke.
+    let [x1, y1, x2, y2] = [x1, y1, x2, y2].map(|v| v * VIEW);
+    format!(r#"<defs><linearGradient id="f" gradientUnits="userSpaceOnUse" x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}"><stop offset="0" stop-color="black"/><stop offset="1" stop-color="black" stop-opacity="0"/></linearGradient></defs>"#)
 }
 
 fn poly(pts: &[(f32, f32)]) -> String {
