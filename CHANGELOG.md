@@ -17,6 +17,14 @@ About → What's new shows it too.
   53 ms instead of 96 ms to bring a 1080p picture to 4K. The picture is
   pixel-for-pixel the same, and memory once settled, video memory and
   frame times are unchanged.
+- **A tidier layout designer, with search.** In Studio → Bar, the Left,
+  Center and Right zones are now neat columns with their plugins stacked
+  in order, and every plugin sits in an aligned grid underneath, grouped
+  by category, with a search box that filters as you type. Plugins already
+  on the bar show where they are. Click any plugin (or bar item) for a
+  small menu to add it to a zone, move it up, down or across, or take it
+  off, so dragging is no longer the only way. Thanks for the suggestion
+  in #26!
 
 ## 0.8.2 — 2026-11-03
 
