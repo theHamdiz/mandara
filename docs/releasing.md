@@ -210,8 +210,9 @@ One short paragraph saying what the release is about.
 ```
 
 Keep the format strict (it is parsed): `##` version headings, a summary
-paragraph, `###` sections and `-` items. A unit test checks the shipped
-file. Text after a `---` rule in a release body (the install command) isn't
+paragraph, `###` sections and `-` items. The sections are New, Improved,
+Fixed and Under the hood only (Studio styles and translates just those).
+A unit test checks the shipped file, headings included. Text after a `---` rule in a release body (the install command) isn't
 shown in Studio. Don't edit released entries except to fix mistakes, and
 never add the version heading yourself: the release bump does it.
 
@@ -616,8 +617,9 @@ catalogs, for one, are parsed only for the active language (none for
 English).
 
 Video memory: 143.4 at 3840 × 2160 and 37.8 at 1600 × 1000, the same in
-every run. The difference is exactly four swapchain images of the
-full-output bar surface (4 bytes per pixel each). Mesa's Wayland WSI
+every run. Most of the 105.6 MiB difference is the full-output bar
+surface's four swapchain images (4 bytes per pixel each): they are
+102.2 MiB larger at 3840 × 2160 than at 1600 × 1000. Mesa's Wayland WSI
 requires four images for mailbox presentation; FIFO could use two but
 blocks the UI thread whenever the output stops sending frame callbacks, so
 it stays as it is.
