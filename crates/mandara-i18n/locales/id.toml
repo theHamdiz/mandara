@@ -7942,3 +7942,6 @@
 "Couldn't unmute the microphone: {error}" = "Tidak dapat membunyikan mikrofon: {error}"
 "Pick Microphone or Both under Sound first" = "Pilih Mikrofon atau Keduanya di Suara dulu"
 "Pick System sound or Both under Sound first" = "Pilih Suara sistem atau Keduanya di Suara dulu"
+"Full" = "Penuh"
+"Rail" = "Rel"
+"Every entry's name beside its icon, or a narrow icon-only column" = "Nama setiap entri di samping ikonnya, atau kolom sempit berisi ikon saja"

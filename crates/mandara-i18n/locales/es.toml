@@ -8183,3 +8183,6 @@
 "Couldn't unmute the microphone: {error}" = "No se pudo reactivar el micrófono: {error}"
 "Pick Microphone or Both under Sound first" = "Elige primero Micrófono o Ambos en Sonido"
 "Pick System sound or Both under Sound first" = "Elige primero Sonido del sistema o Ambos en Sonido"
+"Full" = "Completo"
+"Rail" = "Barra lateral"
+"Every entry's name beside its icon, or a narrow icon-only column" = "El nombre de cada entrada junto a su icono, o una columna estrecha solo con iconos"

@@ -8183,3 +8183,6 @@
 "Couldn't unmute the microphone: {error}" = "无法取消麦克风静音：{error}"
 "Pick Microphone or Both under Sound first" = "请先在“声音”中选择“麦克风”或“两者”"
 "Pick System sound or Both under Sound first" = "请先在“声音”中选择“系统声音”或“两者”"
+"Full" = "完整"
+"Rail" = "侧栏"
+"Every entry's name beside its icon, or a narrow icon-only column" = "每项名称显示在图标旁，或使用只有图标的窄栏"

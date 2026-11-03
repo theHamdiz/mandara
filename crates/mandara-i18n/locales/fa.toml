@@ -7942,3 +7942,6 @@
 "Couldn't unmute the microphone: {error}" = "صدادار کردن میکروفون ممکن نشد: {error}"
 "Pick Microphone or Both under Sound first" = "اول در «صدا»، «میکروفون» یا «هر دو» را برگزینید"
 "Pick System sound or Both under Sound first" = "اول در «صدا»، «صدای سیستم» یا «هر دو» را برگزینید"
+"Full" = "کامل"
+"Rail" = "نوار کناری"
+"Every entry's name beside its icon, or a narrow icon-only column" = "نام هر مورد کنار نماد آن، یا ستونی باریک تنها با نمادها"

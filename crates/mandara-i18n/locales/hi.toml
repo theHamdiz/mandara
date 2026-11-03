@@ -8189,3 +8189,6 @@
 "Couldn't unmute the microphone: {error}" = "माइक्रोफ़ोन अनम्यूट नहीं हो सका: {error}"
 "Pick Microphone or Both under Sound first" = "पहले «ध्वनि» में «माइक्रोफ़ोन» या «दोनों» चुनें"
 "Pick System sound or Both under Sound first" = "पहले «ध्वनि» में «सिस्टम की आवाज़» या «दोनों» चुनें"
+"Full" = "पूरा"
+"Rail" = "रेल"
+"Every entry's name beside its icon, or a narrow icon-only column" = "हर प्रविष्टि का नाम उसके आइकन के बगल में, या केवल आइकन वाला एक संकरा कॉलम"

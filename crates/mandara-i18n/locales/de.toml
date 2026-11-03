@@ -8187,3 +8187,6 @@
 "Couldn't unmute the microphone: {error}" = "Die Stummschaltung des Mikrofons ließ sich nicht aufheben: {error}"
 "Pick Microphone or Both under Sound first" = "Wähle zuerst unter „Ton“ „Mikrofon“ oder „Beide“"
 "Pick System sound or Both under Sound first" = "Wähle zuerst unter „Ton“ „Systemton“ oder „Beide“"
+"Full" = "Voll"
+"Rail" = "Leiste"
+"Every entry's name beside its icon, or a narrow icon-only column" = "Der Name jeder Zeile neben ihrem Symbol, oder eine schmale Spalte nur mit Symbolen"

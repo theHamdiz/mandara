@@ -7941,3 +7941,6 @@
 "Couldn't unmute the microphone: {error}" = "마이크 음소거를 해제할 수 없습니다: {error}"
 "Pick Microphone or Both under Sound first" = "먼저 ‘사운드’에서 ‘마이크’ 또는 ‘둘 다’를 고르세요"
 "Pick System sound or Both under Sound first" = "먼저 ‘사운드’에서 ‘시스템 소리’ 또는 ‘둘 다’를 고르세요"
+"Full" = "전체"
+"Rail" = "레일"
+"Every entry's name beside its icon, or a narrow icon-only column" = "각 항목의 이름을 아이콘 옆에 표시하거나, 아이콘만 있는 좁은 열로 표시합니다"

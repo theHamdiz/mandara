@@ -8192,3 +8192,6 @@
 "Couldn't unmute the microphone: {error}" = "تعذّر إلغاء كتم الميكروفون: {error}"
 "Pick Microphone or Both under Sound first" = "اختر «الميكروفون» أو «كلاهما» في «الصوت» أولًا"
 "Pick System sound or Both under Sound first" = "اختر «صوت النظام» أو «كلاهما» في «الصوت» أولًا"
+"Full" = "كامل"
+"Rail" = "الشريط الجانبي"
+"Every entry's name beside its icon, or a narrow icon-only column" = "اسم كل عنصر بجانب أيقونته، أو عمود ضيق بالأيقونات فقط"

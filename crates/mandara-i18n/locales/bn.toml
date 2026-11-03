@@ -7942,3 +7942,6 @@
 "Couldn't unmute the microphone: {error}" = "মাইক্রোফোন আনমিউট করা যায়নি: {error}"
 "Pick Microphone or Both under Sound first" = "আগে «শব্দ»-এ «মাইক্রোফোন» বা «দুটোই» বেছে নিন"
 "Pick System sound or Both under Sound first" = "আগে «শব্দ»-এ «সিস্টেমের শব্দ» বা «দুটোই» বেছে নিন"
+"Full" = "পূর্ণ"
+"Rail" = "রেল"
+"Every entry's name beside its icon, or a narrow icon-only column" = "প্রতিটি এন্ট্রির নাম তার আইকনের পাশে, অথবা শুধু আইকনের সরু কলাম"

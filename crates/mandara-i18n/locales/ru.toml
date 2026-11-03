@@ -8188,3 +8188,6 @@
 "Couldn't unmute the microphone: {error}" = "Не удалось включить микрофон: {error}"
 "Pick Microphone or Both under Sound first" = "Сначала выберите «Микрофон» или «Оба» в разделе «Звук»"
 "Pick System sound or Both under Sound first" = "Сначала выберите «Системный звук» или «Оба» в разделе «Звук»"
+"Full" = "Полный"
+"Rail" = "Панель"
+"Every entry's name beside its icon, or a narrow icon-only column" = "Название каждого пункта рядом со значком или узкий столбец только со значками"

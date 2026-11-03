@@ -521,7 +521,15 @@ fn bwrap_args(sb: &Sandbox, bin: &Path) -> Vec<String> {
     for f in ["passwd", "group", "hostname"] {
         a.extend(["--ro-bind".into(), s(etc.join(f)), format!("/etc/{f}")]);
     }
-    a.extend(["--tmpfs", "/var/lib/flatpak", "--tmpfs", "/var/lib/snapd", "--tmpfs", "/home"].map(String::from));
+    // Hide the host's Flatpak and Snap trees, when they exist: a mount
+    // point bwrap can't create (no snapd installed) fails the whole
+    // namespace with "Can't create file", and there is nothing to hide.
+    for dir in ["/var/lib/flatpak", "/var/lib/snapd"] {
+        if Path::new(dir).exists() {
+            a.extend(["--tmpfs".to_string(), dir.to_string()]);
+        }
+    }
+    a.extend(["--tmpfs".to_string(), "/home".to_string()]);
     // The real /home is hidden: keep the sandbox and the binary reachable
     // when they live under it.
     for keep in [sb.root.clone(), bin.to_path_buf()] {

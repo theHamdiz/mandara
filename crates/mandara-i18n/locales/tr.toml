@@ -8188,3 +8188,6 @@
 "Couldn't unmute the microphone: {error}" = "Mikrofonun sesi açılamadı: {error}"
 "Pick Microphone or Both under Sound first" = "Önce Ses altında Mikrofon veya İkisi de seçin"
 "Pick System sound or Both under Sound first" = "Önce Ses altında Sistem sesi veya İkisi de seçin"
+"Full" = "Tam"
+"Rail" = "Ray"
+"Every entry's name beside its icon, or a narrow icon-only column" = "Her girdinin adı simgesinin yanında, ya da yalnızca simgelerden oluşan dar bir sütun"

@@ -8189,3 +8189,6 @@
 "Couldn't unmute the microphone: {error}" = "マイクのミュートを解除できませんでした: {error}"
 "Pick Microphone or Both under Sound first" = "先に「サウンド」で「マイク」か「両方」を選んでください"
 "Pick System sound or Both under Sound first" = "先に「サウンド」で「システム音」か「両方」を選んでください"
+"Full" = "フル"
+"Rail" = "レール"
+"Every entry's name beside its icon, or a narrow icon-only column" = "各項目の名前をアイコンの横に表示するか、アイコンだけの細い列にします"
