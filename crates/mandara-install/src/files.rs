@@ -136,7 +136,8 @@ const SHIPPED_ICONS: &[&str] = &["7f18b7d0abae5b92464d5c52867434d829b4b61895632e
 pub fn refresh_installed_icon(icon: &Path) -> std::io::Result<bool> {
     match std::fs::read(icon) {
         Ok(old) if old != ICON_SVG && SHIPPED_ICONS.contains(&mandara_delta::sha256_hex(&old).as_str()) => {
-            let tmp = icon.with_extension("svg.new");
+            // Per process: two shells starting at once never share a half-written file.
+            let tmp = icon.with_extension(format!("svg.{}.new", std::process::id()));
             std::fs::write(&tmp, ICON_SVG)?;
             std::fs::rename(&tmp, icon)?;
             Ok(true)
