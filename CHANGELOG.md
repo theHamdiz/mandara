@@ -6,6 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.10.2 — 2026-11-03
+
+Notifications joined to the bar, on more setups. No notification is cut
+off on a short screen. Studio shows what's saved, even when it can't
+apply. Better translations.
+
 ### Fixed
 
 - **Notifications joined to the bar, on more setups.** With a bottom dock
