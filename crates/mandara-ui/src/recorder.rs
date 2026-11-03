@@ -44,9 +44,10 @@ pub struct Recorder {
     pub counting: Option<Countdown>,
     /// Set while starting or finishing (the file being written).
     pub busy: bool,
-    /// The microphone was muted from the recorder (unmuted again when the
-    /// recording ends).
-    pub mic_muted: bool,
+    /// The input the recorder muted (`""` = the default input), confirmed by
+    /// the sound server; that same input is unmuted once the recording has
+    /// stopped capturing.
+    muted_input: Option<String>,
     /// Recent recordings, read in the background when first shown.
     recent: Option<Vec<Recent>>,
     loading_recent: bool,
@@ -56,6 +57,11 @@ pub struct Recorder {
 }
 
 impl Recorder {
+    /// The recorder muted the recorded microphone.
+    pub fn mic_muted(&self) -> bool {
+        self.muted_input.is_some()
+    }
+
     pub fn elapsed(&self) -> Option<Duration> {
         self.active.as_ref().map(Session::elapsed)
     }
@@ -104,7 +110,7 @@ impl Global for GlobalRecorder {}
 
 pub fn init(cx: &mut App) -> Entity<Recorder> {
     let clock = cx.new(|_| RecorderClock);
-    let entity = cx.new(|_| Recorder { active: None, counting: None, busy: false, mic_muted: false, recent: None, loading_recent: false, generation: 0, ticker: None, clock });
+    let entity = cx.new(|_| Recorder { active: None, counting: None, busy: false, muted_input: None, recent: None, loading_recent: false, generation: 0, ticker: None, clock });
     cx.set_global(GlobalRecorder(entity.clone()));
     entity
 }
@@ -350,17 +356,39 @@ fn watch_end(rec: Entity<Recorder>, ended: async_channel::Receiver<()>, path: Pa
     .detach();
 }
 
-/// Unmutes the microphone if the recorder muted it.
-fn restore_mic(rec: &Entity<Recorder>, cx: &mut App) {
-    if rec.update(cx, |r, _| std::mem::take(&mut r.mic_muted)) {
-        let input = settings(cx).audio_input;
-        send_audio(AudioCommand::SetInputMute(Some(input).filter(|i| !i.is_empty()), false), cx);
-    }
+/// The sound server's name for an input: `None` (the default input) for
+/// an empty or blank one, as the recording plan reads it.
+fn input_arg(name: &str) -> Option<String> {
+    Some(name.trim().to_string()).filter(|n| !n.is_empty())
 }
 
-fn send_audio(command: AudioCommand, cx: &mut App) {
-    if let Some(service) = crate::hub::hub(cx).read(cx).audio_service.clone() {
-        service.send(command);
+/// The input a mute or unmute acts on: muting takes the one the recording
+/// records; unmuting the one that was muted (even if the settings changed
+/// since).
+fn mute_target(want: bool, recorded: &str, muted: Option<&str>) -> Option<String> {
+    input_arg(if want { recorded } else { muted.unwrap_or(recorded) })
+}
+
+/// Asks the sound server to mute or unmute an input; the reply says
+/// whether it did.
+fn request_mute(input: Option<String>, mute: bool, cx: &mut App) -> Result<async_channel::Receiver<Result<String, String>>, String> {
+    let service = crate::hub::hub(cx).read(cx).audio_service.clone().ok_or_else(|| t("The audio server isn't reachable").to_string())?;
+    Ok(service.request(AudioCommand::SetInputMute(input, mute)))
+}
+
+/// Unmutes the microphone the recorder muted, if it did. Call once the
+/// recording has stopped capturing.
+fn restore_mic(rec: &Entity<Recorder>, cx: &mut App) {
+    let Some(input) = rec.update(cx, |r, _| r.muted_input.take()) else { return };
+    match request_mute(input_arg(&input), false, cx) {
+        Ok(reply) => cx
+            .spawn(async move |cx| {
+                if let Ok(Err(err)) = reply.recv().await {
+                    cx.update(|cx| notify(Err(tf("Couldn't unmute the microphone: {error}", &[("error", &err)])), cx));
+                }
+            })
+            .detach(),
+        Err(err) => notify(Err(tf("Couldn't unmute the microphone: {error}", &[("error", &err)])), cx),
     }
 }
 
@@ -388,7 +416,6 @@ pub fn stop(cx: &mut App) -> Result<async_channel::Receiver<Result<String, Strin
     }) else {
         return Err(t("not recording").into());
     };
-    restore_mic(&rec, cx);
     let open_folder = settings(cx).open_folder;
     cx.spawn(async move |cx| {
         let result = cx
@@ -404,6 +431,8 @@ pub fn stop(cx: &mut App) -> Result<async_channel::Receiver<Result<String, Strin
             .await;
         let text = result.as_ref().map(describe).map_err(Clone::clone);
         cx.update(|cx| {
+            // Only now has the recorder stopped listening to the microphone.
+            restore_mic(&rec, cx);
             rec.update(cx, |r, cx| {
                 r.busy = false;
                 r.recent = None;
@@ -433,21 +462,44 @@ pub fn set_paused(paused: Option<bool>, cx: &mut App) -> Result<bool, String> {
     })
 }
 
-/// Mutes or unmutes the recorded microphone (`None` toggles).
-pub fn set_mic_muted(muted: Option<bool>, cx: &mut App) -> Result<bool, String> {
+/// Mutes or unmutes the microphone the recording records (`None`
+/// toggles). The panel shows "Muted" only once the sound server did it;
+/// the reply arrives on the returned channel.
+pub fn set_mic_muted(muted: Option<bool>, cx: &mut App) -> Result<async_channel::Receiver<Result<String, String>>, String> {
     let Some(rec) = recorder(cx) else { return Err(t("recorder not initialised").into()) };
-    let records_mic = rec.read(cx).active.as_ref().is_some_and(|s| s.plan.audio.mic());
-    if !records_mic {
-        return Err(t("This recording has no microphone").into());
+    let (recorded, path, current) = {
+        let r = rec.read(cx);
+        let Some(s) = r.active.as_ref().filter(|s| s.plan.audio.mic()) else { return Err(t("This recording has no microphone").into()) };
+        (s.plan.audio_input.clone(), s.path.clone(), r.muted_input.clone())
+    };
+    let want = muted.unwrap_or(current.is_none());
+    let (tx, rx) = async_channel::bounded(1);
+    if want == current.is_some() {
+        let _ = tx.try_send(Ok(if want { "mic muted" } else { "mic unmuted" }.to_string()));
+        return Ok(rx);
     }
-    let want = muted.unwrap_or(!rec.read(cx).mic_muted);
-    rec.update(cx, |r, cx| {
-        r.mic_muted = want;
-        cx.notify();
-    });
-    let input = settings(cx).audio_input;
-    send_audio(AudioCommand::SetInputMute(Some(input).filter(|i| !i.is_empty()), want), cx);
-    Ok(want)
+    let input = mute_target(want, &recorded, current.as_deref());
+    let reply = request_mute(input.clone(), want, cx)?;
+    cx.spawn(async move |cx| {
+        let result = reply.recv().await.unwrap_or_else(|_| Err(t("The audio server isn't reachable").into()));
+        cx.update(|cx| {
+            let ours = rec.read(cx).active.as_ref().is_some_and(|s| s.path == path);
+            match &result {
+                // The recording ended meanwhile: don't leave it muted.
+                Ok(_) if want && !ours => {
+                    let _ = request_mute(input, false, cx);
+                }
+                Ok(_) => rec.update(cx, |r, cx| {
+                    r.muted_input = want.then(|| input.unwrap_or_default());
+                    cx.notify();
+                }),
+                Err(err) => notify(Err(tf("Couldn't change the microphone: {error}", &[("error", err)])), cx),
+            }
+        });
+        let _ = tx.send(result).await;
+    })
+    .detach();
+    Ok(rx)
 }
 
 /// Stops a recording (or countdown) if one runs, else starts the default
@@ -552,7 +604,25 @@ pub fn status(cx: &App) -> serde_json::Value {
         "path": s.map(|s| s.path.display().to_string()),
         "backend": s.map(|s| s.backend()),
         "settings": s.map(|s| s.plan.summary()),
-        "mic_muted": r.mic_muted,
+        "mic_muted": r.mic_muted(),
         "notes": s.map(|s| s.plan.notes.iter().map(|n| tr(n)).collect::<Vec<_>>()),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Muting takes the input the recording records; unmuting the one that
+    /// was muted, even after the setting changed; blank means the default.
+    #[test]
+    fn mute_targets_the_recorded_input() {
+        assert_eq!(mute_target(true, "usb-mic", None), Some("usb-mic".into()));
+        assert_eq!(mute_target(true, "", None), None, "the default input");
+        assert_eq!(mute_target(false, "usb-mic", Some("usb-mic")), Some("usb-mic".into()));
+        assert_eq!(mute_target(false, "headset", Some("usb-mic")), Some("usb-mic".into()), "the muted one comes back, not a newer choice");
+        assert_eq!(mute_target(false, "headset", Some("")), None, "the default input was muted");
+        assert_eq!(input_arg("   "), None, "blank is the default input, as in the plan");
+        assert_eq!(input_arg(" usb-mic "), Some("usb-mic".into()));
+    }
 }

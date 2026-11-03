@@ -208,20 +208,39 @@ fn stamp(path: &Path) -> Option<SystemTime> {
 /// at `path`; otherwise starts reading it in the background and returns
 /// `None` (callers fall back to the general capability table).
 pub fn gsr_info(path: &Path) -> Option<GsrInfo> {
+    match gsr_probe(path) {
+        GsrProbe::Read(info) => Some(info),
+        GsrProbe::Pending | GsrProbe::Failed => None,
+    }
+}
+
+/// Where reading GPU Screen Recorder's `--info` stands.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GsrProbe {
+    /// Not read yet for this binary (a read has been started).
+    Pending,
+    Read(GsrInfo),
+    /// It ran but reported no codecs (failed, or no usable GPU).
+    Failed,
+}
+
+/// [`gsr_info`] with "not read yet" and "could not be read" apart.
+pub fn gsr_probe(path: &Path) -> GsrProbe {
+    let known = |c: &GsrCache| c.info.clone().map_or(GsrProbe::Failed, GsrProbe::Read);
     if let Ok(mut cache) = GSR_INFO.lock()
         && let Some(c) = cache.as_mut()
         && c.path == path
     {
         if c.checked.elapsed() < DETECT_TTL {
-            return c.info.clone();
+            return known(c);
         }
         if c.modified == stamp(path) {
             c.checked = Instant::now();
-            return c.info.clone();
+            return known(c);
         }
     }
     probe_in_background(path.to_path_buf());
-    None
+    GsrProbe::Pending
 }
 
 /// Reads `--info` now (blocking, a fraction of a second) and caches it.
@@ -300,6 +319,14 @@ pub fn caps(backend: Backend, info: Option<&GsrInfo>) -> Caps {
     }
 }
 
+/// The codec `backend` really records when `chosen` is asked for: the
+/// chosen one if it can, else its first (the recording plan and Studio's
+/// disabled choices agree through this).
+pub fn codec_used(backend: Backend, chosen: RecordCodec, info: Option<&GsrInfo>) -> RecordCodec {
+    let codecs = caps(backend, info).codecs;
+    if codecs.contains(&chosen) { chosen } else { codecs.first().copied().unwrap_or(RecordCodec::H264) }
+}
+
 /// Why `backend` can't record `codec` (`tk` text).
 pub fn codec_reason(backend: Backend, codec: RecordCodec, info: Option<&GsrInfo>) -> Option<&'static str> {
     if caps(backend, info).codecs.contains(&codec) {
@@ -357,6 +384,8 @@ pub struct BackendStatus {
     pub caps: Caps,
     /// `--info` was read (codecs reflect this graphics card).
     pub probed: bool,
+    /// `--info` ran but told nothing: every codec stays offered.
+    pub probe_failed: bool,
 }
 
 /// Every backend with whether it is installed and what it supports (the
@@ -370,8 +399,15 @@ pub fn statuses(installed: &Installed) -> Vec<BackendStatus> {
                 Backend::WfRecorder => installed.wf_recorder.clone(),
                 Backend::Builtin => None,
             };
-            let info = (backend == Backend::GpuScreenRecorder).then(|| path.as_deref().and_then(gsr_info)).flatten();
-            BackendStatus { backend, installed: installed.has(backend), caps: caps(backend, info.as_ref()), probed: info.is_some(), path }
+            let probe = match (backend, path.as_deref()) {
+                (Backend::GpuScreenRecorder, Some(p)) => gsr_probe(p),
+                _ => GsrProbe::Pending,
+            };
+            let info = match &probe {
+                GsrProbe::Read(info) => Some(info),
+                _ => None,
+            };
+            BackendStatus { backend, installed: installed.has(backend), caps: caps(backend, info), probed: info.is_some(), probe_failed: probe == GsrProbe::Failed, path }
         })
         .collect()
 }
@@ -411,6 +447,52 @@ mod tests {
         assert_eq!(c.codecs, [RecordCodec::H264, RecordCodec::Hevc]);
         assert_eq!(codec_reason(Backend::GpuScreenRecorder, RecordCodec::Av1, Some(&info)), Some(tk("Your graphics card can't encode this with GPU Screen Recorder")));
         assert_eq!(codec_reason(Backend::GpuScreenRecorder, RecordCodec::Av1, None), None, "unknown hardware: offered");
+    }
+
+    /// An unsupported codec falls back to the backend's first one, and a
+    /// WebM choice is judged against that codec (HEVC asked on a card
+    /// without it records H.264, so WebM is not offered).
+    #[test]
+    fn codec_used_falls_back_like_the_plan() {
+        let info = GsrInfo { codecs: vec!["h264".into(), "av1".into()], containers: vec![] };
+        assert_eq!(codec_used(Backend::GpuScreenRecorder, RecordCodec::Hevc, Some(&info)), RecordCodec::H264);
+        assert_eq!(codec_used(Backend::GpuScreenRecorder, RecordCodec::Av1, Some(&info)), RecordCodec::Av1);
+        assert_eq!(codec_used(Backend::Builtin, RecordCodec::H264, None), RecordCodec::Av1);
+        let used = codec_used(Backend::GpuScreenRecorder, RecordCodec::Hevc, Some(&info));
+        assert!(container_reason(Backend::GpuScreenRecorder, RecordContainer::Webm, used, Some(&info)).is_some());
+        use mandara_config::recorder::RecorderSettings;
+        let s = RecorderSettings { codec: RecordCodec::Hevc, container: RecordContainer::Webm, ..RecorderSettings::default() };
+        let p = super::super::plan::plan(&s, Backend::GpuScreenRecorder, Some(&info));
+        assert_eq!((p.codec, p.container), (used, RecordContainer::Mp4), "the plan agrees");
+    }
+
+    /// A probe that ran and told nothing is "failed", not "checking"
+    /// forever; one that read codecs narrows the table.
+    #[test]
+    fn probe_failure_is_told_apart_from_pending() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = std::env::temp_dir().join(format!("mandara-gsr-probe-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let fake = |name: &str, body: &str| {
+            let p = dir.join(name);
+            std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+            p
+        };
+        let broken = fake("gsr-broken", "echo 'gsr error: no gpu' >&2; exit 1");
+        assert_eq!(gsr_info_now(&broken), None);
+        assert_eq!(gsr_probe(&broken), GsrProbe::Failed);
+        let installed = Installed { gpu_screen_recorder: Some(broken), wf_recorder: None };
+        let s = &statuses(&installed)[0];
+        assert!(s.probe_failed && !s.probed, "{s:?}");
+        let good = fake("gsr-good", &format!("printf '{}'", INFO.replace('\n', "\\n")));
+        assert!(gsr_info_now(&good).is_some());
+        assert!(matches!(gsr_probe(&good), GsrProbe::Read(_)));
+        let installed = Installed { gpu_screen_recorder: Some(good), wf_recorder: None };
+        let s = &statuses(&installed)[0];
+        assert!(s.probed && !s.probe_failed);
+        assert_eq!(s.caps.codecs, [RecordCodec::H264, RecordCodec::Hevc]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

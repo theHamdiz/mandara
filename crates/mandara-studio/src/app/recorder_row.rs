@@ -3,6 +3,8 @@
 //! (live lists, read once in the background when first shown), and the
 //! segmented choice that shows disabled options with their reason.
 
+use std::time::{Duration, Instant};
+
 use gpui::{AnyElement, ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px};
 use mandara_config::ShellConfig;
 use mandara_config::recorder::{RecordAudio, RecordCodec, RecordContainer, RecorderSettings};
@@ -25,16 +27,60 @@ const BADGE_PAD_Y_PX: f32 = 1.0;
 /// Width of the recorders list.
 const BACKENDS_W_PX: f32 = 360.0;
 
-/// The lists the pickers offer, read off the UI thread.
+/// A list that couldn't be read is read again once this long has passed
+/// (the sound server restarting, a display waking up).
+const RETRY_AFTER: Duration = Duration::from_secs(3);
+
+/// Sound devices `(outputs, inputs)` as `(name, description)`.
+type Devices = (Vec<(String, String)>, Vec<(String, String)>);
+
+/// One live list: what was read and whether the read failed (and when).
+pub(super) struct Lookup<T> {
+    value: Option<T>,
+    failed_at: Option<Instant>,
+    loading: bool,
+}
+
+impl<T> Default for Lookup<T> {
+    fn default() -> Self {
+        Lookup { value: None, failed_at: None, loading: false }
+    }
+}
+
+impl<T: Clone> Lookup<T> {
+    /// Whether a read should start now: nothing read yet, or the last read
+    /// failed at least [`RETRY_AFTER`] ago (never while one runs).
+    fn due(&self, now: Instant) -> bool {
+        !self.loading && (self.value.is_none() || self.failed_at.is_some_and(|at| now.duration_since(at) >= RETRY_AFTER))
+    }
+
+    /// A read finished: its result, or what to show after a failure.
+    fn done(&mut self, read: Result<T, T>, now: Instant) {
+        self.loading = false;
+        let (value, failed) = match read {
+            Ok(v) => (v, None),
+            Err(fallback) => (fallback, Some(now)),
+        };
+        self.value = Some(value);
+        self.failed_at = failed;
+    }
+}
+
+/// The lists the pickers offer, read off the UI thread once per visit to
+/// the recorder settings (and again after a failed read).
 #[derive(Default)]
 pub struct RecorderRow {
-    /// Sound devices `(outputs, inputs)` as `(name, description)`.
-    devices: Option<(Vec<(String, String)>, Vec<(String, String)>)>,
-    displays: Option<Vec<String>>,
-    loading_devices: bool,
-    loading_displays: bool,
-    /// GPU Screen Recorder's `--info` was read (once per visit).
+    devices: Lookup<Devices>,
+    displays: Lookup<Vec<String>>,
+    /// GPU Screen Recorder's `--info` was read on this visit.
     probed: bool,
+}
+
+impl RecorderRow {
+    /// A new visit: devices, displays and the codec report are read again.
+    pub(super) fn new_visit(&mut self) {
+        *self = RecorderRow::default();
+    }
 }
 
 /// One option of a segmented choice: value, label, why it is disabled.
@@ -132,45 +178,53 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// Reads the sound devices once (in the background).
-    fn recorder_devices(&mut self, cx: &mut Context<Self>) -> Option<(Vec<(String, String)>, Vec<(String, String)>)> {
-        if self.recorder_row.devices.is_none() && !self.recorder_row.loading_devices {
-            self.recorder_row.loading_devices = true;
+    /// The sound devices, read in the background on each visit (and again
+    /// after a failed read).
+    fn recorder_devices(&mut self, cx: &mut Context<Self>) -> Option<Devices> {
+        if self.recorder_row.devices.due(Instant::now()) {
+            self.recorder_row.devices.loading = true;
             cx.spawn(async move |this, cx| {
                 let mixer = cx.background_executor().spawn(async { mandara_services::audio::mixer() }).await;
                 let lists = match mixer {
-                    Ok(m) => (m.outputs.into_iter().map(|d| (d.name, d.description)).collect(), m.inputs.into_iter().map(|d| (d.name, d.description)).collect()),
+                    Ok(m) => Ok((m.outputs.into_iter().map(|d| (d.name, d.description)).collect(), m.inputs.into_iter().map(|d| (d.name, d.description)).collect())),
                     Err(e) => {
                         tracing::warn!("recorder devices: {e}");
-                        (Vec::new(), Vec::new())
+                        Err((Vec::new(), Vec::new()))
                     }
                 };
                 let _ = this.update(cx, |view, cx| {
-                    view.recorder_row.devices = Some(lists);
-                    view.recorder_row.loading_devices = false;
+                    view.recorder_row.devices.done(lists, Instant::now());
                     cx.notify();
                 });
             })
             .detach();
         }
-        self.recorder_row.devices.clone()
+        self.recorder_row.devices.value.clone()
     }
 
-    /// Reads the displays once (in the background).
+    /// The displays, read in the background on each visit (and again
+    /// after a failed read).
     fn recorder_displays(&mut self, cx: &mut Context<Self>) -> Option<Vec<String>> {
-        if self.recorder_row.displays.is_none() && !self.recorder_row.loading_displays {
-            self.recorder_row.loading_displays = true;
+        if self.recorder_row.displays.due(Instant::now()) {
+            self.recorder_row.displays.loading = true;
             cx.spawn(async move |this, cx| {
-                let outputs = cx.background_executor().spawn(async { mandara_core::query_outputs().unwrap_or_default() }).await;
+                let outputs = cx.background_executor().spawn(async { mandara_core::query_outputs() }).await;
+                let names = match outputs {
+                    Ok(list) if !list.is_empty() => Ok(list.into_iter().map(|o| o.name).collect()),
+                    Ok(_) => Err(Vec::new()),
+                    Err(e) => {
+                        tracing::warn!("recorder displays: {e:#}");
+                        Err(Vec::new())
+                    }
+                };
                 let _ = this.update(cx, |view, cx| {
-                    view.recorder_row.displays = Some(outputs.into_iter().map(|o| o.name).collect());
-                    view.recorder_row.loading_displays = false;
+                    view.recorder_row.displays.done(names, Instant::now());
                     cx.notify();
                 });
             })
             .detach();
         }
-        self.recorder_row.displays.clone()
+        self.recorder_row.displays.value.clone()
     }
 
     /// A sound device picker: Default plus the server's devices.
@@ -186,7 +240,19 @@ impl StudioView {
             options.push(ChipOption { value: Value::from(current.clone()), raw: current.clone(), label: current.clone(), locked: None });
         }
         options.extend(list.into_iter().map(|(name, description)| ChipOption { value: Value::from(name.clone()), raw: name, label: description, locked: None }));
-        self.chip_choice(setting, options, &current, p, cx)
+        let chips = self.chip_choice(setting, options, &current, p, cx);
+        if self.recorder_row.devices.failed_at.is_none() {
+            return chips;
+        }
+        // Only Default can be offered until the sound server answers.
+        div()
+            .row()
+            .flex_col()
+            .cross_end()
+            .gap(px(SPACE_6_PX))
+            .child(chips)
+            .child(div().max_w(px(super::LOCKED_NOTE_MAX_W_PX)).text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("The audio server isn't reachable"))))
+            .into_any_element()
     }
 
     /// A display picker: Focused plus every output.
@@ -239,9 +305,37 @@ impl StudioView {
                         .child(div().px(px(SPACE_8_PX)).py(px(BADGE_PAD_Y_PX)).rounded_full().bg(color.with_alpha(ALPHA_14).hsla()).text_color(color.hsla()).text_size(px(TEXT_11_PX)).child(badge)),
                 )
                 .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(caps_line(&s))))
-                .when(s.backend == backend::Backend::GpuScreenRecorder && s.installed && !s.probed, |el| el.child(div().text_size(px(TEXT_11_PX)).text_color(p.on_surface_variant.hsla()).child(t("Checking which codecs your graphics card encodes…"))))
+                .when_some((s.backend == backend::Backend::GpuScreenRecorder && s.installed && !s.probed).then_some(s.probe_failed), |el, failed| {
+                    let note = if failed { t("Couldn't read which codecs your graphics card encodes, so all of them are offered") } else { t("Checking which codecs your graphics card encodes…") };
+                    el.child(div().text_size(px(TEXT_11_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(note)))
+                })
                 .when(s.backend == backend::Backend::WfRecorder && s.installed && settings.audio == RecordAudio::Both, |el| el.child(div().text_size(px(TEXT_11_PX)).text_color(p.warning_amber.hsla()).child(tr(backend::audio_reason(s.backend, RecordAudio::Both).unwrap_or_default()))))
         });
         div().max_w(px(BACKENDS_W_PX)).row().flex_col().gap(px(SPACE_10_PX)).children(rows).into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A list is read once per visit; a failed read is tried again after a
+    /// pause, a good one isn't; a new visit reads everything again.
+    #[test]
+    fn lookups_retry_failures_and_refresh_per_visit() {
+        let t0 = Instant::now();
+        let mut l: Lookup<Vec<String>> = Lookup::default();
+        assert!(l.due(t0), "nothing read yet");
+        l.loading = true;
+        assert!(!l.due(t0), "never two reads at once");
+        l.done(Err(Vec::new()), t0);
+        assert_eq!(l.value, Some(Vec::new()), "a failure still shows the fallback");
+        assert!(!l.due(t0), "not at once after a failure");
+        assert!(l.due(t0 + RETRY_AFTER), "a failed read is tried again");
+        l.done(Ok(vec!["DP-1".into()]), t0 + RETRY_AFTER);
+        assert!(!l.due(t0 + RETRY_AFTER * 10), "a good read stays for the visit");
+        let mut row = RecorderRow { displays: l, probed: true, ..RecorderRow::default() };
+        row.new_visit();
+        assert!(row.displays.due(t0) && row.devices.due(t0) && !row.probed, "a new visit reads again");
     }
 }

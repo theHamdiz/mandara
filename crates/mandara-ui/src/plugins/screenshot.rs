@@ -349,7 +349,8 @@ pub fn register(r: &mut PluginRegistry) {
                             Some("on") | Some("unmute") => Some(false),
                             Some(other) => return Err(format!("mic: {other:?} (expected on, off or toggle)")),
                         };
-                        reply(serde_json::json!({ "mic_muted": crate::recorder::set_mic_muted(want, cx)? }))
+                        // Replies once the sound server has (un)muted it.
+                        Ok(Output::Pending(crate::recorder::set_mic_muted(want, cx)?))
                     }
                     "status" => reply(crate::recorder::status(cx)),
                     "backends" => {

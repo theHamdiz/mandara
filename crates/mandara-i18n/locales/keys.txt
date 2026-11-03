@@ -1278,6 +1278,7 @@ Could not start the lock screen
 Could not start {program}: {error}
 Could not start {terminal}: {error}
 Could not write {path}: {error}
+Couldn't change the microphone: {error}
 Couldn't create {path}: {error}
 Couldn't download {collection}
 Couldn't install
@@ -1298,9 +1299,11 @@ Couldn't read the clipboard: {error}
 Couldn't read the clock: {error}
 Couldn't read the crash log
 Couldn't read the keyring
+Couldn't read which codecs your graphics card encodes, so all of them are offered
 Couldn't start KeePassXC: {error}
 Couldn't uninstall {app}: {error}
 Couldn't uninstall: {error}
+Couldn't unmute the microphone: {error}
 Couldn't write {path}: {error}
 Count the days since
 Countdown
@@ -4305,6 +4308,8 @@ Phones and laptops can join this network; they use this computer's connection.
 Photo frame
 Pick
 Pick Command as the action first
+Pick Microphone or Both under Sound first
+Pick System sound or Both under Sound first
 Pick a network below
 Pick a picture for the sticker
 Pick a pixel anywhere on screen — it lands here
@@ -4690,9 +4695,7 @@ Record player
 Record region
 Record screen
 Record screen time
-Record the microphone first
 Record the screen
-Record the system sound first
 Recorder
 Recording
 Recording failed

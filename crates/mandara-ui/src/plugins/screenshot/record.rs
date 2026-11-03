@@ -139,7 +139,7 @@ pub(super) fn section(p: &PanelCx, first: usize, palette: &MandaraPalette, cx: &
     let Some(rec) = recorder::recorder(cx) else { return (blocks, height) };
     let (left, busy, active) = {
         let r = rec.read(cx);
-        let active = r.active.as_ref().map(|s| (r.clock().unwrap_or_default(), s.is_paused(), s.pause_reason(), s.plan.audio.mic(), r.mic_muted));
+        let active = r.active.as_ref().map(|s| (r.clock().unwrap_or_default(), s.is_paused(), s.pause_reason(), s.plan.audio.mic(), r.mic_muted()));
         (r.countdown_left(), r.busy, active)
     };
     let mut row = div().row().gap(px(tokens::SM));

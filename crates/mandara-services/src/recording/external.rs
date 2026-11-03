@@ -64,7 +64,12 @@ pub fn spawn(program: &Path, args: Vec<OsString>, path: PathBuf, ended: async_ch
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| tf("Could not start {program}: {error}", &[("program", &name), ("error", &e)]))?;
-    let pid = Pid::from_raw(i32::try_from(child.id()).unwrap_or(0)).ok_or_else(|| tf("Could not start {program}: {error}", &[("program", &name), ("error", &"no process id")]))?;
+    let Some(pid) = Pid::from_raw(i32::try_from(child.id()).unwrap_or(0)) else {
+        // Never leave a recorder running that nothing controls.
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(tf("Could not start {program}: {error}", &[("program", &name), ("error", &"no process id")]));
+    };
     let tail = Arc::new(Mutex::new(VecDeque::<String>::new()));
     let reader = child.stderr.take().map(|err| {
         let tail = tail.clone();
@@ -83,7 +88,7 @@ pub fn spawn(program: &Path, args: Vec<OsString>, path: PathBuf, ended: async_ch
     let exited = Arc::new(AtomicBool::new(false));
     let (tx, done) = std::sync::mpsc::channel();
     let exited2 = exited.clone();
-    std::thread::Builder::new()
+    let waiter = std::thread::Builder::new()
         .name("mandara-rec-wait".into())
         .spawn(move || {
             let status = child.wait();
@@ -97,9 +102,20 @@ pub fn spawn(program: &Path, args: Vec<OsString>, path: PathBuf, ended: async_ch
             tracing::info!(target: "mandara::recorder", ?code, "recorder exited");
             let _ = tx.send(Exit { code, stderr });
             drop(ended);
-        })
-        .map_err(|e| e.to_string())?;
+        });
+    if let Err(e) = waiter {
+        // The thread (and the child handle in it) is gone: stop and reap
+        // the recorder by its pid so it never records unattended.
+        reap(pid);
+        return Err(tf("Could not start {program}: {error}", &[("program", &name), ("error", &e)]));
+    }
     Ok(External { program: name, pid, exited, done, path })
+}
+
+/// Kills and reaps a recorder whose `Child` handle was lost.
+fn reap(pid: Pid) {
+    let _ = kill_process(pid, Signal::KILL);
+    let _ = rustix::process::waitpid(Some(pid), rustix::process::WaitOptions::empty());
 }
 
 impl External {
@@ -200,6 +216,18 @@ mod tests {
         assert_eq!(exit.code, Some(2));
         assert_eq!(exit.reason().as_deref(), Some("error: bad option -k"));
         assert!(p.toggle_pause().is_err(), "no signals to a finished process");
+    }
+
+    /// A recorder whose handle was lost is killed and reaped by pid (no
+    /// process, not even a zombie, is left).
+    #[test]
+    fn reap_stops_an_orphaned_recorder() {
+        let Some(sleep) = super::super::backend::which("sleep") else { return };
+        let child = Command::new(sleep).arg("30").spawn().unwrap();
+        let pid = Pid::from_raw(i32::try_from(child.id()).unwrap()).unwrap();
+        drop(child);
+        reap(pid);
+        assert!(!std::path::Path::new(&format!("/proc/{}", pid.as_raw_nonzero())).exists(), "killed and reaped");
     }
 
     #[test]

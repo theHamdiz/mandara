@@ -88,12 +88,10 @@ pub fn plan(s: &RecorderSettings, backend: Backend, info: Option<&GsrInfo>) -> P
             notes.push(r);
         }
     };
-    let codec = if caps.codecs.contains(&s.codec) {
-        s.codec
-    } else {
+    let codec = backend::codec_used(backend, s.codec, info);
+    if codec != s.codec {
         note(backend::codec_reason(backend, s.codec, info));
-        caps.codecs.first().copied().unwrap_or(RecordCodec::H264)
-    };
+    }
     let container = match backend::container_reason(backend, s.container, codec, info) {
         None => s.container,
         reason => {

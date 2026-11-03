@@ -5,7 +5,7 @@
 //! ([`locked`]).
 
 use mandara_config::ShellConfig;
-use mandara_config::recorder::{RecordAudio, RecordCodec, RecordContainer, RecordQuality, RecorderBackend, RecorderSettings, defaults};
+use mandara_config::recorder::{RecordAudio, RecordContainer, RecordQuality, RecorderBackend, RecorderSettings, defaults};
 use mandara_i18n::tk;
 use mandara_services::recording::backend::{self, Backend, GsrInfo, Installed};
 use serde_json::Value;
@@ -91,8 +91,8 @@ pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
         "record_bitrate" if s.quality != RecordQuality::Custom => Some(tk("For the Custom quality")),
         "record_width" if backend != Backend::Builtin => Some(tk("Only the built-in encoder uses this; the others follow Resolution")),
         "record_audio_output" | "record_audio_input" if backend == Backend::Builtin => Some(tk("The built-in encoder records no sound")),
-        "record_audio_output" if !s.audio.system() => Some(tk("Record the system sound first")),
-        "record_audio_input" if !s.audio.mic() => Some(tk("Record the microphone first")),
+        "record_audio_output" if !s.audio.system() => Some(tk("Pick System sound or Both under Sound first")),
+        "record_audio_input" if !s.audio.mic() => Some(tk("Pick Microphone or Both under Sound first")),
         _ => None,
     }
 }
@@ -117,9 +117,8 @@ pub fn choice_locked(path: &str, raw: &str, cfg: &ShellConfig) -> Option<&'stati
         "record_codec" => backend::codec_reason(backend, parse(raw)?, info.as_ref()),
         "record_container" => {
             let container: RecordContainer = parse(raw)?;
-            // The codec this backend really uses.
-            let codec = if backend::caps(backend, info.as_ref()).codecs.contains(&s.codec) { s.codec } else { RecordCodec::Av1 };
-            backend::container_reason(backend, container, codec, info.as_ref())
+            // The codec this backend really uses (as the recording plan does).
+            backend::container_reason(backend, container, backend::codec_used(backend, s.codec, info.as_ref()), info.as_ref())
         }
         "record_fps" => backend::fps_reason(backend, raw.parse().ok()?),
         "record_quality" => backend::quality_reason(backend, parse(raw)?),
@@ -184,7 +183,7 @@ mod tests {
         assert_eq!(locked(&path("record_bitrate"), &cfg), Some(tk("For the Custom quality")));
         assert!(locked(&path("record_width"), &cfg).is_some(), "only the built-in encoder");
         assert!(locked(&path("record_audio_output"), &cfg).is_none());
-        assert_eq!(locked(&path("record_audio_input"), &cfg), Some(tk("Record the microphone first")));
+        assert_eq!(locked(&path("record_audio_input"), &cfg), Some(tk("Pick Microphone or Both under Sound first")));
         let cfg = cfg_with(&[("record_backend", toml::Value::from("gpu-screen-recorder")), ("record_quality", toml::Value::from("custom")), ("record_codec", toml::Value::from("h264"))]);
         assert!(locked(&path("record_bitrate"), &cfg).is_none());
         assert!(choice_locked(&path("record_container"), "webm", &cfg).is_some(), "WebM needs AV1");

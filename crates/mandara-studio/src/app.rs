@@ -221,6 +221,8 @@ impl StudioView {
             self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
             self.themes = None;
             self.icon_matches = None;
+            // The recorder's device and display lists are read afresh.
+            self.recorder_row.new_visit();
             plugin_art_cache_clear();
             if self.section == Section::LoginScreen {
                 greeter_page::release(cx);
