@@ -115,6 +115,11 @@ pub struct NotificationsConfig {
     pub markup: bool,
     /// Toasts sit above fullscreen windows (overlay layer).
     pub over_fullscreen: bool,
+    /// The toast stack hangs from the bar (or its bare screen edge) as one
+    /// drawer in the bar's colour, joined with concave flares, instead of
+    /// floating free. Floating pill bars on the popups' edge, and a bottom
+    /// dock under bottom popups, leave nothing to join: popups stay cards.
+    pub joined: bool,
     /// Toasts hide their body text until opened in the notification center.
     pub privacy: bool,
     /// A repeat of the same app + summary + body replaces the earlier one.
@@ -165,6 +170,7 @@ impl Default for NotificationsConfig {
             compact: false,
             markup: true,
             over_fullscreen: false,
+            joined: false,
             privacy: false,
             dedupe: true,
             min_urgency: UrgencyLevel::Low,

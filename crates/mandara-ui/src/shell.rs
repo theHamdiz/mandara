@@ -2372,6 +2372,10 @@ impl Render for ShellView {
         // ── Unpinned side bars: edge reveal strips / hover bands (on top) ─
         root = root.children(self.side_triggers(&cfg, cx));
 
+        // Popups joined to the bar slide with it.
+        if cfg.notifications.joined {
+            crate::toasts::publish_bar_slide(&self.monitor, self.bar_shift.abs(), cx);
+        }
         root.child(self.mask.commit())
     }
 }

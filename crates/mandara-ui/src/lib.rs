@@ -59,6 +59,7 @@ pub mod switcher;
 pub mod text_field;
 pub mod theme_auto;
 pub mod update_watch;
+pub mod toast_drawer;
 pub mod toasts;
 pub mod slideshow;
 pub mod wallpaper;

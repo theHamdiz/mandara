@@ -8025,3 +8025,9 @@
 "App icon shape" = "アプリアイコンの形"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "ランチャーとドックのアプリアイコンをすべて同じ形の上に置き、統一感を出します。「テーマのまま」は各アイコンを描かれたままにします"
 "Theme's own" = "テーマのまま"
+
+# ── Popups joined to the bar ──
+"Join the bar" = "バーにつなげる"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "ポップアップがバーの色でバーから垂れ下がり、一体に見えます。バーのない辺では画面の端から垂れ下がります"
+"The dock holds the bottom edge; popups there stay cards" = "ドックが下端を使っているため、そこのポップアップはカードのままです"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "フローティングバーには垂れ下がる辺がないため、その辺のポップアップはカードのままです"

@@ -7777,3 +7777,9 @@
 "Turning the launcher on, dimming the screen, the keyboard and how apps start" = "লঞ্চার চালু করা, স্ক্রিন ম্লান করা, কিবোর্ড ও অ্যাপ কীভাবে খোলে"
 "Warmer colours in the evening, on a schedule" = "সন্ধ্যায় উষ্ণ রং, সময়সূচি অনুযায়ী"
 "What the launcher searches, how results look and how they are ranked" = "লঞ্চার কী খোঁজে, ফলাফল কেমন দেখায় ও কীভাবে সাজানো হয়"
+
+# ── Popups joined to the bar ──
+"Join the bar" = "বারের সাথে জুড়ুন"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "পপআপ বারের রঙে বার থেকে ঝোলে, তার সাথে এক টুকরো হয়ে; বার নেই এমন কিনারায়, স্ক্রিনের কিনারা থেকে"
+"The dock holds the bottom edge; popups there stay cards" = "ডক নিচের কিনারা দখল করে আছে; সেখানের পপআপ কার্ডই থাকে"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "ভাসমান বারের ঝোলার মতো কোনো কিনারা নেই; তার কিনারার পপআপ কার্ডই থাকে"

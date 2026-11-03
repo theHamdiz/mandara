@@ -8024,3 +8024,9 @@
 "App icon shape" = "Uygulama simgesi şekli"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "Başlatıcıdaki ve Dock'taki her uygulama simgesi aynı şeklin üzerinde durur, böylece bir set gibi görünürler; “Temadaki gibi” her simgeyi çizildiği gibi bırakır"
 "Theme's own" = "Temadaki gibi"
+
+# ── Popups joined to the bar ──
+"Join the bar" = "Çubuğa bağla"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "Açılır bildirimler çubuğun renginde ondan sarkar, onunla tek parça olur; çubuk olmayan kenarda ekran kenarından"
+"The dock holds the bottom edge; popups there stay cards" = "Alt kenarı dock kaplıyor; oradaki açılır bildirimler kart olarak kalır"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "Yüzen çubuğun asılacak bir kenarı yok; onun kenarındaki açılır bildirimler kart olarak kalır"

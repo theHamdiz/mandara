@@ -8,6 +8,12 @@
 //! close the gap smoothly when one leaves, pause their countdown while
 //! hovered and draw a thin countdown line. Only the toasts take input: the
 //! rest of the surface passes clicks through (`set_input_region`).
+//!
+//! Joined (`notifications.joined`), the stack hangs from the bar (or its
+//! bare screen edge) as one drawer in the bar's colour, with concave flares
+//! where it meets it ([`crate::toast_drawer`]); the surface then reaches
+//! over the bar's reserved band so the drawer can touch the bar, and
+//! follows the bar while it auto-hides ([`publish_bar_slide`]).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -16,19 +22,22 @@ use std::time::{Duration, Instant};
 
 use gpui::layer_shell::{Anchor, KeyboardInteractivity, Layer};
 use gpui::{
-    App, AppContext as _, BoxShadow, Context, DispatchPhase, Entity, Global, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Render,
-    StatefulInteractiveElement as _, Styled, Task, Window, WindowHandle, canvas, div, point,
-    prelude::FluentBuilder as _, px,
+    AnyElement, App, AppContext as _, BoxShadow, Context, DispatchPhase, Entity, Global, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement,
+    Render, StatefulInteractiveElement as _, Styled, Task, Window, WindowHandle, canvas, div, point, prelude::FluentBuilder as _, px,
 };
 use mandara_config::alerts::{NotificationsConfig, ToastPosition};
 use mandara_config::outputs::SurfaceKind;
-use mandara_core::{FrameClock, InputMaskRegistry, LayerSurfaceSpec, SpringConfig, SpringValue, SurfaceRole, ToGpui, oklab_gradient};
+use mandara_config::surfaces::ranges;
+use mandara_config::{BarPosition, ShellConfig};
+use mandara_core::{Edge, FrameClock, InputMaskRegistry, LayerSurfaceSpec, SpringConfig, SpringValue, SurfaceRole, ToGpui, edge_drawer_snapped, oklab_gradient};
+use smallvec::SmallVec;
 use mandara_services::{Notification, NotificationCommand};
 
 use crate::plugins::notifications::{CardStyle, notification_card_styled};
 use crate::plugins::panel_fx::{partner, readable};
 use crate::state::config;
 use crate::style::ClipRounded as _;
+use crate::toast_drawer::{self, Drawer};
 
 /// Distance between the toasts and the screen edges, logical px.
 const EDGE_GAP_PX: f32 = 14.0;
@@ -74,6 +83,79 @@ const SWIPE_DISMISS_SHARE: f32 = 0.35;
 /// How much a toast fades over a swipe as long as its width.
 const SWIPE_FADE: f32 = 0.7;
 const SWIPE_SPRING: SpringConfig = SpringConfig::new(420.0, 34.0, 1.0);
+/// Joined: room between the drawer's edges and the popups in it (and its
+/// corners' extra radius, so popup and drawer corners stay concentric),
+/// before scaling.
+const DRAWER_PAD_PX: f32 = 8.0;
+/// A bar at least this opaque lets the drawer overlap it by a pixel to hide
+/// the seam (a translucent one would show the overlap darker).
+const OPAQUE_ALPHA: f32 = 0.999;
+/// Joined drawers shorter than this (px) are not drawn.
+const MIN_DRAWER_PX: f32 = 0.5;
+/// Output width assumed before outputs are known.
+const FALLBACK_OUTPUT_W: f32 = 1920.0;
+
+/// How far each output's bar has slid toward its edge (auto-hide), px. The
+/// bar publishes it only while popups are joined, and only when it changes,
+/// so the joined drawer slides with the bar.
+#[derive(Default)]
+pub struct BarSlides(SmallVec<[(String, f32); 2]>);
+impl Global for BarSlides {}
+
+/// Records how far `output`'s bar has slid (`slid` px; 0 = fully out).
+pub fn publish_bar_slide(output: &str, slid: f32, cx: &mut App) {
+    let current = cx.try_global::<BarSlides>().and_then(|b| b.0.iter().find(|(o, _)| o == output).map(|(_, s)| *s));
+    if current == Some(slid) || (current.is_none() && slid == 0.0) {
+        return;
+    }
+    let slides = cx.default_global::<BarSlides>();
+    match slides.0.iter_mut().find(|(o, _)| o == output) {
+        Some(entry) => entry.1 = slid,
+        None => slides.0.push((output.to_string(), slid)),
+    }
+}
+
+/// How far the bar on `output` has slid (0 when unknown: fully out).
+fn bar_slid(output: Option<&str>, cx: &App) -> f32 {
+    let Some(slides) = cx.try_global::<BarSlides>() else { return 0.0 };
+    output.and_then(|o| slides.0.iter().find(|(name, _)| name == o)).map_or(0.0, |(_, s)| *s)
+}
+
+/// The output popups show on, `(name, logical width)`: the one they're
+/// assigned to, else the focused window's (the compositor's pick).
+fn popup_output(cx: &App) -> Option<(String, f32)> {
+    let outputs = &cx.try_global::<crate::overlays::Outputs>()?.0;
+    let displays = &config(cx).read(cx).get().displays;
+    let o = crate::outputs::pick_output(outputs, focused_window_monitor(cx).as_deref(), displays, SurfaceKind::Notifications)?;
+    Some((o.name.clone(), o.width as f32))
+}
+
+/// The joined drawer on `output` with the bar slid `slid` px (`None`:
+/// joining is off, or there is nothing to join there).
+fn joined_drawer(cfg: &ShellConfig, output: Option<&(String, f32)>, slid: f32) -> Option<Drawer> {
+    let ncfg = &cfg.notifications;
+    if !ncfg.joined {
+        return None;
+    }
+    let bar = crate::bar::layout::Metrics::of(cfg, crate::style::radius_scale());
+    // A side bar's (or a pinned flush sidebar's) fillet where it meets the
+    // popups' edge.
+    let fillet = |right: bool| {
+        let side_bar = if cfg.side_bar_on(right) { cfg.side_bars.flare_radius() } else { 0.0 };
+        let sidebar = if crate::shell::sidebar_reserves_space(cfg, false) && cfg.sidebar_on_right() == right { bar.flare } else { 0.0 };
+        side_bar.max(sidebar)
+    };
+    toast_drawer::solve(&toast_drawer::Inputs {
+        position: ncfg.position,
+        bar,
+        bar_here: output.is_none_or(|(name, _)| cfg.bar_on_output(name)),
+        bar_slid: slid,
+        screen_w: output.map_or(FALLBACK_OUTPUT_W, |(_, w)| *w),
+        min_margin: EDGE_GAP_PX,
+        dock_bottom: cfg.dock_bottom_clearance().is_some(),
+        side_fillets: (fillet(false), fillet(true)),
+    })
+}
 
 /// The focused window's monitor: cheap enough for every hub update (the
 /// surface key is rebuilt on each one while toasts are up).
@@ -88,15 +170,35 @@ struct SurfaceKey {
     overlay: bool,
     size: (f32, f32),
     display: Option<gpui::DisplayId>,
+    /// Joined: how far the surface reaches back over the bar's reserved
+    /// band on its edge (a negative margin), so the drawer can touch the
+    /// bar. 0 otherwise.
+    pull: f32,
 }
 
 impl SurfaceKey {
-    fn of(cfg: &NotificationsConfig, cx: &App) -> Self {
+    fn of(shell: &ShellConfig, output: Option<&(String, f32)>, cx: &App) -> Self {
+        let cfg = &shell.notifications;
         let scale = cfg.scale.clamp(crate::plugins::notifications::TOAST_SCALE.0, crate::plugins::notifications::TOAST_SCALE.1);
-        let w = cfg.width * scale + (EDGE_GAP_PX + SHADOW_ROOM_PX) * 2.0;
+        let card_w = cfg.width * scale;
         let output_h = cx.try_global::<crate::overlays::Outputs>().and_then(|o| o.0.first().map(|g| g.height as f32)).unwrap_or(FALLBACK_OUTPUT_H);
-        let h = (cfg.max_visible.max(1) as f32 * (TOAST_MAX_H_PX * scale + STACK_GAP_PX) + EDGE_GAP_PX * 2.0).min(output_h * MAX_SURFACE_SHARE);
-        Self { position: cfg.position, overlay: cfg.over_fullscreen, size: (w.round(), h.round()), display: crate::outputs::transient_display(SurfaceKind::Notifications, focused_window_monitor, cx) }
+        let stack_h = cfg.max_visible.max(1) as f32 * (TOAST_MAX_H_PX * scale + STACK_GAP_PX) + EDGE_GAP_PX * 2.0;
+        let display = crate::outputs::transient_display(SurfaceKind::Notifications, focused_window_monitor, cx);
+        let (w, h, pull) = match joined_drawer(shell, output, 0.0) {
+            Some(d) => {
+                // From the screen edge: over the bar's band (or the screen
+                // frame's strip) to the drawer's far end.
+                let edge = if cfg.position.is_bottom() { BarPosition::Bottom } else { BarPosition::Top };
+                let monitor = output.map_or("", |(name, _)| name.as_str());
+                let pull = crate::shell::ExclusionView::zone_for(edge, shell, monitor);
+                let m = crate::bar::layout::Metrics::of(shell, crate::style::radius_scale());
+                let reach = pull.max(m.bar_far_edge() + m.screen_frame);
+                let w = toast_drawer::surface_width(&d, card_w + DRAWER_PAD_PX * scale * 2.0);
+                (w, (stack_h + reach).min(output_h * MAX_SURFACE_SHARE + reach), pull)
+            }
+            None => (card_w + (EDGE_GAP_PX + SHADOW_ROOM_PX) * 2.0, stack_h.min(output_h * MAX_SURFACE_SHARE), 0.0),
+        };
+        Self { position: cfg.position, overlay: cfg.over_fullscreen, size: (w.round(), h.round()), display, pull: pull.round() }
     }
 
     fn spec(&self) -> LayerSurfaceSpec {
@@ -111,7 +213,9 @@ impl SurfaceKey {
             layer: if self.overlay { Layer::Overlay } else { Layer::Top },
             anchor: vertical | horizontal,
             size: gpui::size(px(self.size.0), px(self.size.1)),
-            margin: (px(0.0), px(0.0), px(0.0), px(0.0)),
+            // Joined: reach back over the bar's band (the other edges keep
+            // clear of whatever reserves them).
+            margin: if self.position.is_bottom() { (px(0.0), px(0.0), px(-self.pull), px(0.0)) } else { (px(-self.pull), px(0.0), px(0.0), px(0.0)) },
             // Stay clear of the bar's reserved band.
             exclusive_zone: Some(px(0.0)),
             keyboard: KeyboardInteractivity::None,
@@ -124,6 +228,9 @@ impl SurfaceKey {
 struct Toasts {
     window: Option<WindowHandle<ToastView>>,
     key: Option<SurfaceKey>,
+    /// The output the popups show on, `(name, logical width)` (joined
+    /// popups shape themselves after its bar).
+    output: Option<(String, f32)>,
 }
 
 #[derive(Clone)]
@@ -134,7 +241,7 @@ impl Global for GlobalToasts {}
 fn sync(cx: &mut App) {
     let Some(host) = cx.try_global::<GlobalToasts>().map(|g| g.0.clone()) else { return };
     let any_popup = crate::hub::hub(cx).read(cx).notifications.items.iter().any(|n| n.popup);
-    let cfg = config(cx).read(cx).get().notifications.clone();
+    let cfg = config(cx).read(cx).snapshot();
     let alive = host.read(cx).window.as_ref().is_some_and(|h| cx.windows().iter().any(|w| w.window_id() == h.window_id()));
     if !alive {
         host.update(cx, |t, _| {
@@ -146,7 +253,9 @@ fn sync(cx: &mut App) {
         // An open surface lets its last toasts leave and then closes itself.
         return;
     }
-    let key = SurfaceKey::of(&cfg, cx);
+    let output = popup_output(cx);
+    let key = SurfaceKey::of(&cfg, output.as_ref(), cx);
+    host.update(cx, |t, _| t.output = output);
     let current = host.read(cx).key.clone();
     if alive && current.as_ref() == Some(&key) {
         return;
@@ -183,7 +292,7 @@ pub fn sync_list(cx: &mut App) {
 
 /// Installs the popup surface; it follows the hub and the config.
 pub fn init(cx: &mut App) {
-    let host = cx.new(|_| Toasts { window: None, key: None });
+    let host = cx.new(|_| Toasts { window: None, key: None, output: None });
     cx.set_global(GlobalToasts(host));
     let hub = crate::hub::hub(cx);
     let mut last: Vec<u32> = Vec::new();
@@ -202,12 +311,17 @@ pub fn init(cx: &mut App) {
             list_was_open = open;
             sync_list(cx);
         }
+        // Joined popups follow the bar's reserved band (`bar hide`).
+        if config(cx).read(cx).get().notifications.joined {
+            sync(cx);
+        }
     })
     .detach();
     let mut last_cfg: Option<NotificationsConfig> = None;
     cx.observe(&config(cx), move |cfg, cx| {
         let next = cfg.read(cx).get().notifications.clone();
-        if last_cfg.as_ref() != Some(&next) {
+        // Joined popups also follow the bar's shape and edge.
+        if last_cfg.as_ref() != Some(&next) || next.joined {
             last_cfg = Some(next);
             sync(cx);
         }
@@ -321,6 +435,8 @@ impl ToastView {
         cx.observe(&crate::hub::hub(cx), |_, _, cx| cx.notify()).detach();
         cx.observe(&config(cx), |_, _, cx| cx.notify()).detach();
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
+        // The bar sliding (auto-hide) moves a joined drawer with it.
+        cx.observe_global::<BarSlides>(|_, cx| cx.notify()).detach();
         Self { items: Vec::new(), heights: Rc::default(), clock: FrameClock::new(), mask: InputMaskRegistry::new(), timer: None }
     }
 
@@ -383,7 +499,20 @@ impl Render for ToastView {
         // Stack: target offsets from measured heights.
         let style = CardStyle::toast(ncfg);
         let scale = style.scale;
-        let w = ncfg.width * scale;
+        // Joined: the drawer on the popups' output, following the bar.
+        let joined = if ncfg.joined {
+            let output = cx.try_global::<GlobalToasts>().and_then(|g| g.0.read(cx).output.clone());
+            let slid = bar_slid(output.as_ref().map(|(name, _)| name.as_str()), cx);
+            joined_drawer(&cfg, output.as_ref(), slid)
+        } else {
+            None
+        };
+        let pad = if joined.is_some() { DRAWER_PAD_PX * scale } else { 0.0 };
+        // (A drawer narrower than the popups, on a small notch, narrows them.)
+        let w = match &joined {
+            Some(d) => ((ncfg.width * scale + pad * 2.0).min(d.max_width) - pad * 2.0).max(0.0),
+            None => ncfg.width * scale,
+        };
         let vp = window.viewport_size();
         let (sw, sh) = (f32::from(vp.width), f32::from(vp.height));
         // Until the compositor configures the requested size, draw nothing
@@ -434,8 +563,15 @@ impl Render for ToastView {
         }
 
         let palette = mandara_core::frame_palette(window, cx);
-        let fill = crate::shell::frame_color(&palette);
-        let fill = fill.with_alpha(fill.alpha() * ncfg.opacity.clamp(0.0, 1.0)).hsla();
+        let frame = crate::shell::frame_color(&palette);
+        let fill = match &joined {
+            // The bar's own material (tint, opacity), so the join is seamless.
+            Some(_) => {
+                let tinted = if cfg.bar.tint > 0.0 { frame.mix(palette.primary, ranges::BAR_TINT.clamp(cfg.bar.tint, 0.0)) } else { frame };
+                tinted.with_alpha(frame.alpha() * ranges::OPACITY.clamp(cfg.bar.opacity, 1.0) * ncfg.opacity.clamp(0.0, 1.0)).hsla()
+            }
+            None => frame.with_alpha(frame.alpha() * ncfg.opacity.clamp(0.0, 1.0)).hsla(),
+        };
         let accent = readable(palette.primary, &palette);
         let bottom = ncfg.position.is_bottom();
         let column = ncfg.position.column();
@@ -444,19 +580,35 @@ impl Render for ToastView {
             1 => sw - w - EDGE_GAP_PX - SHADOW_ROOM_PX,
             _ => (sw - w) / 2.0,
         };
+        // Joined: how far the drawer reaches from its line right now, and
+        // where it starts.
+        let drawer = joined.map(|d| {
+            let reach = toast_drawer::extent(self.items.iter().map(|i| (i.slot.value(), heights.get(&i.n.id).copied().unwrap_or(TOAST_GUESS_H_PX * scale), i.presence.value())), pad);
+            let dw = w + pad * 2.0;
+            let (x, y) = toast_drawer::body_origin(&d, column, bottom, (sw, sh), (dw, reach));
+            (d, x, y, dw, reach)
+        });
         let mut root = div().size_full().relative();
+        let mut toasts: Vec<AnyElement> = Vec::with_capacity(self.items.len());
         let this = cx.entity().downgrade();
         for item in &self.items {
             let id = item.n.id;
             let p = item.presence.value().clamp(0.0, 1.0);
             let travel = (1.0 - p) * SLIDE_PX;
-            let (dx, dy) = match column {
-                -1 => (-travel, 0.0),
-                1 => (travel, 0.0),
-                _ => (0.0, if bottom { travel } else { -travel }),
-            };
             let h = heights.get(&id).copied().unwrap_or(TOAST_GUESS_H_PX * scale);
-            let y = if bottom { sh - EDGE_GAP_PX - item.slot.value() - h } else { EDGE_GAP_PX + item.slot.value() };
+            let (left, top) = match drawer {
+                // Inside the drawer: they come out of the bar's edge.
+                Some((_, _, _, _, reach)) => (pad, if bottom { reach - pad - item.slot.value() - h + travel } else { pad + item.slot.value() - travel }),
+                None => {
+                    let (dx, dy) = match column {
+                        -1 => (-travel, 0.0),
+                        1 => (travel, 0.0),
+                        _ => (0.0, if bottom { travel } else { -travel }),
+                    };
+                    let y = if bottom { sh - EDGE_GAP_PX - item.slot.value() - h } else { EDGE_GAP_PX + item.slot.value() };
+                    (x0 + dx, y + dy)
+                }
+            };
             let measured = self.heights.clone();
             let entity = cx.entity().clone();
             let progress = ncfg.progress_bar.then(|| item.elapsed_fraction(now)).flatten();
@@ -465,12 +617,12 @@ impl Render for ToastView {
             let press_view = this.clone();
             let swipe = item.swipe.value();
             let swipe_fade = 1.0 - (swipe.abs() / w).min(1.0) * SWIPE_FADE;
-            root = root.child(
+            toasts.push(
                 div()
                     .id(("toast", id as usize))
                     .absolute()
-                    .left(px(x0 + dx + swipe))
-                    .top(px(y + dy))
+                    .left(px(left + swipe))
+                    .top(px(top))
                     .w(px(w))
                     .opacity(p * swipe_fade)
                     // A press may become a swipe (followed by the listeners below).
@@ -487,14 +639,16 @@ impl Render for ToastView {
                     // The card's hover fill, image and progress bar stay inside the corners.
                     .clip_rounded()
                     .rounded(px(crate::style::radius(TOAST_RADIUS_PX * scale)))
-                    .bg(fill)
-                    .shadow(vec![BoxShadow {
-                        color: gpui::black().opacity(SHADOW_ALPHA),
-                        offset: point(px(0.0), px(SHADOW_Y_PX)),
-                        blur_radius: px(SHADOW_BLUR_PX),
-                        spread_radius: px(0.0),
-                        inset: false,
-                    }])
+                    // Joined, the drawer is the backdrop.
+                    .when(drawer.is_none(), |el| {
+                        el.bg(fill).shadow(vec![BoxShadow {
+                            color: gpui::black().opacity(SHADOW_ALPHA),
+                            offset: point(px(0.0), px(SHADOW_Y_PX)),
+                            blur_radius: px(SHADOW_BLUR_PX),
+                            spread_radius: px(0.0),
+                            inset: false,
+                        }])
+                    })
                     .when(ncfg.pause_on_hover, |el| {
                         el.on_hover(move |hovered: &bool, window, cx| {
                             // GPUI re-tests hover on repaint against the last
@@ -550,9 +704,26 @@ impl Render for ToastView {
                         .left_0()
                         .size_full(),
                     )
-                    .when(!item.leaving, |el| el.child(self.mask.region())),
+                    .when(!item.leaving, |el| el.child(self.mask.region()))
+                    .into_any_element(),
             );
         }
+        root = match drawer {
+            Some((d, x, y, dw, reach)) if reach > MIN_DRAWER_PX => {
+                // Overlap an opaque bar by a pixel: no seam.
+                let seam = if d.on_bar && cfg.bar.opacity >= OPAQUE_ALPHA && !cfg.bar.frame_floats() { 1.0 } else { 0.0 };
+                let radius = crate::style::radius(TOAST_RADIUS_PX * scale) + pad;
+                let (edge, shape_y) = if bottom { (Edge::Bottom, y) } else { (Edge::Top, y - seam) };
+                let shape = edge_drawer_snapped(edge, x, shape_y, dw, reach + seam, radius, d.flare, fill, window.scale_factor());
+                // The popups are clipped to the drawer, so they come out
+                // of the bar's edge and swipe out of the drawer's side.
+                let body = div().absolute().left(px(x)).top(px(y)).w(px(dw)).h(px(reach)).clip_rounded();
+                let body = if bottom { body.rounded_t(px(radius)) } else { body.rounded_b(px(radius)) };
+                root.child(shape).child(body.child(self.mask.region()).children(toasts))
+            }
+            Some(_) => root,
+            None => root.children(toasts),
+        };
         // The button is down on a toast: follow the pointer wherever it goes
         // (the surface keeps it until release) and settle the swipe then.
         if let Some(id) = self.items.iter().find(|i| i.drag.is_some()).map(|i| i.n.id) {
@@ -686,12 +857,18 @@ mod tests {
 
     #[test]
     fn surface_specs_follow_position() {
-        let key = SurfaceKey { position: ToastPosition::BottomLeft, overlay: true, size: (400.0, 600.0), display: None };
+        let key = SurfaceKey { position: ToastPosition::BottomLeft, overlay: true, size: (400.0, 600.0), display: None, pull: 0.0 };
         let spec = key.spec();
         assert_eq!(spec.anchor, Anchor::BOTTOM | Anchor::LEFT);
         assert_eq!(spec.layer, Layer::Overlay);
         let centre = SurfaceKey { position: ToastPosition::TopCenter, overlay: false, ..key };
         assert_eq!(centre.spec().anchor, Anchor::TOP);
         assert_eq!(centre.spec().layer, Layer::Top);
+        // Joined: the surface reaches back over the bar's band on its edge.
+        let joined = SurfaceKey { position: ToastPosition::TopRight, pull: 36.0, ..centre.clone() };
+        assert_eq!(joined.spec().margin.0, px(-36.0));
+        let bottom = SurfaceKey { position: ToastPosition::BottomCenter, ..joined };
+        assert_eq!(bottom.spec().margin.2, px(-36.0));
+        assert_eq!(bottom.spec().margin.0, px(0.0));
     }
 }

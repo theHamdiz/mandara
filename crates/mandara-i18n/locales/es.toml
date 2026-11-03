@@ -8019,3 +8019,9 @@
 "App icon shape" = "Forma de los iconos de apps"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "Cada icono de app del lanzador y del dock se asienta sobre la misma forma, para que se vean como un conjunto; «Como en el tema» deja cada icono tal como está dibujado"
 "Theme's own" = "Como en el tema"
+
+# ── Popups joined to the bar ──
+"Join the bar" = "Unir a la barra"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "Las ventanas emergentes cuelgan de la barra con su color, como una sola pieza; en un borde sin barra, del borde de la pantalla"
+"The dock holds the bottom edge; popups there stay cards" = "El dock ocupa el borde inferior; las ventanas emergentes de ahí siguen siendo tarjetas"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "Una barra flotante no tiene borde del que colgar; las ventanas emergentes de su borde siguen siendo tarjetas"
