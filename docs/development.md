@@ -36,6 +36,7 @@ tests. It never touches the real session.
 cargo build --release -p mandara-app              # or pass --bin to `up`
 cargo xtask sandbox up                            # 2560x1440 at 1.5, the demo config
 cargo xtask sandbox up --config hero --size 2880x1620 --scale 1.5 --bin target/debug/mandara
+cargo xtask sandbox up --no-langpacks             # no language packs: the download path
 cargo xtask sandbox shot out.png                  # screenshot of the sandbox output
 cargo xtask sandbox msg panel open media          # any `mandara msg` command
 cargo xtask sandbox pointer click 900 500         # move / click / drag / flyby / scroll, logical px
@@ -56,6 +57,13 @@ eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual c
   each file says how). `--config FILE` copies
   your own config. Both presets are small overlays on the shell's defaults
   (`xtask/src/sandbox/config.*.toml`).
+- **Languages:** `up` compiles every language pack for the binary's
+  version (`mandara --version`) into the demo user's
+  `data/mandara/locales/<version>/`, as `mandara install` would; a release
+  build reads translations only from packs. `--no-langpacks` leaves them
+  out, to try the download path (with the sandbox offline it stays in
+  English and Studio shows the error with Retry). `cargo xtask langpacks
+  --bin PATH --dir DIR` builds the same packs anywhere.
 - **Matte:** `matte` cuts out the open surfaces as a transparent PNG. It
   shoots once over a black wallpaper and once over a white one, then
   difference-mattes the pair. Give it a region (physical pixels) that leaves

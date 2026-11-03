@@ -6,6 +6,35 @@ About → What's new shows it too.
 
 ## Unreleased
 
+A much smaller Mandara: translations now come as language packs you
+download only for the languages you use.
+
+### Improved
+
+- **A smaller Mandara.** The translations for all fifteen languages used
+  to be built into Mandara itself. They now live in language packs next to
+  it, so the program is 9.2 MB smaller (169 MB → 159 MB), which also makes
+  this update's patch smaller. Packages and the release tarballs still
+  include every language (the tarball stays about the same size, 69 →
+  71 MB), so nothing changes when you install, and a language added later
+  is a download of about 300 KB.
+- **Languages download when you pick them.** Choose a language in Studio
+  (or for the login screen, or as a plugin's own language) and Mandara
+  fetches its pack if it's missing, checked against the release's
+  signature, then switches over. Studio shows the download under the
+  language cards ("Downloading Arabic… 180 KB"), and if it can't finish
+  (offline mode, no network) it says why, offers **Retry** and keeps
+  everything in English, laid out left to right, meanwhile. Each pack belongs to exactly the version
+  you run, and every update brings the new version's packs for the
+  languages you use before it restarts the shell.
+- **Switching languages is instant.** A language pack is read in place
+  rather than parsed, so switching takes under a millisecond instead of
+  about 5 ms, looking up a word is a little faster, and the shell uses
+  about 2 MB less memory in another language.
+- **Updates say how much smaller (or bigger) the new version is.** Studio
+  → About and `mandara update` now show the size change next to the
+  download size, for example "The new version is 9.2 MB smaller".
+
 ## 0.10.2 — 2026-11-03
 
 Notifications joined to the bar, on more setups. No notification is cut

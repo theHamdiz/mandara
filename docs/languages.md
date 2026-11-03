@@ -7,6 +7,36 @@ the login screen. Pick one in Studio → General → Language, or leave it on
 **System** to follow your desktop's language (`LANG`, `LC_MESSAGES`,
 `LC_ALL`).
 
+## Language packs
+
+Translations live outside the binary, one **language pack** per language
+and Mandara version (`<code>.mlang`). English needs none: it's what every
+string is written in, and anything without a translation shows in English.
+
+- **Packages and tarballs** ship every pack, so most installs never
+  download one.
+- **Picking a language** in Studio (or with `mandara msg`, the language
+  plugin, a plugin's own language or the login screen's) downloads its
+  pack when it's missing, or when the release now publishes a newer one.
+  Studio shows it under the language cards ("Downloading Arabic… 180 KB");
+  the interface switches as soon as it's in. If it can't be downloaded
+  (offline mode, no network, a release that isn't signed), Studio says why
+  and offers **Retry**; meanwhile everything stays in English.
+- **Packs belong to one version.** Mandara only reads packs made for the
+  version that is running, and downloads them from that version's own
+  release, checked against its signed `SHA256SUMS`. An update fetches the
+  new version's packs for every language you use before it restarts the
+  shell, and keeps the previous version's for `mandara update rollback`.
+
+Where they live, first match wins:
+`~/.local/share/mandara/locales/<version>/` (downloads and
+`mandara install`), `share/mandara/locales/<version>/` next to the binary
+(an unpacked tarball), then `/usr/local/share` and `/usr/share`
+(packages, and the copy Mandara Login uses). Packs are memory-mapped and
+read in place: switching to a language takes well under a millisecond and
+costs no extra memory for its strings. The format is described in
+[releasing.md](releasing.md#language-packs).
+
 ## Right to left
 
 Arabic, Persian and Urdu are laid out right to left. Studio mirrors every
