@@ -16,10 +16,13 @@
 //!   `mandara greeter use --install`;
 //! * [`index`] — package databases: missing ones found before installing,
 //!   and how each manager brings them up to date;
+//! * [`compositors`] — the compositors Mandara runs on and their packages,
+//!   offered when none is installed;
 //! * [`installer`] — the flows, against a [`host::Host`] so tests (and
 //!   `--dry-run`) change nothing.
 
 pub mod args;
+pub mod compositors;
 pub mod family;
 pub mod files;
 pub mod host;

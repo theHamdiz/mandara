@@ -12,6 +12,7 @@ use mandara_delta::signing::{self, PublicKey, SIG_FILE};
 use mandara_delta::{MANIFEST_FILE, SHELL_BINARY};
 
 use crate::args::InstallArgs;
+use crate::compositors::{self, Compositor};
 use crate::family::{Family, OsRelease};
 use crate::files::{self, Paths};
 use crate::host::{Cmd, Fetch, Host, Io, Level, TempDir};
@@ -327,6 +328,7 @@ impl<'a> Installer<'a> {
         if deps {
             self.deps(source == Source::Build)?;
         }
+        self.offer_compositor();
         let stage = match source {
             Source::This => Some(self.verify_self()?),
             Source::Build => self.build_source()?,
@@ -480,6 +482,125 @@ impl<'a> Installer<'a> {
             self.say(Level::Ok, "package databases up to date");
         }
         Ok(())
+    }
+
+    // ── A compositor ────────────────────────────────────────────────────
+
+    /// Installs a compositor from the distribution's own repositories: the
+    /// one `--compositor` names when it is missing (after asking; `--yes`
+    /// counts, since it was named), or, when no supported compositor is
+    /// installed, the one picked from a numbered list (only when someone
+    /// answers: never unattended without `--compositor`). `mandara setup`
+    /// then hooks Mandara into it.
+    fn offer_compositor(&mut self) {
+        let distro = self.facts.os.display_name().to_string();
+        if let Some(name) = self.args.compositor.clone() {
+            let Some(c) = compositors::by_name(&name) else { return };
+            if c.installed(|p| self.has(p)) {
+                return;
+            }
+            self.say(Level::Step, "Installing a compositor");
+            let setup = format!("mandara setup --compositor {}", c.id);
+            if self.args.no_deps {
+                self.say(Level::Warn, format!("{} isn't installed (--no-deps): install it with your package manager, then run `{setup}`", c.label));
+                return;
+            }
+            let Some(package) = self.compositor_package(c) else {
+                self.say(Level::Warn, format!("{} isn't installed, and {distro}'s repositories don't carry it: install it yourself, then run `{setup}`", c.label));
+                return;
+            };
+            if self.ask(&format!("{} isn't installed. Install it now ({package}, from your distribution's repositories)?", c.label), true) {
+                self.install_compositor(c, package);
+            } else {
+                self.say(Level::Info, format!("skipped; install {} yourself, then run `{setup}`", c.label));
+            }
+            return;
+        }
+        if compositors::any_installed(|p| self.has(p)) {
+            return;
+        }
+        self.say(Level::Step, "Installing a compositor");
+        self.say(Level::Info, "No compositor Mandara runs on is installed (MangoWM, Niri, Hyprland or Umbriel).");
+        if self.args.no_deps {
+            self.say(Level::Info, "install one with your package manager (--no-deps), then run `mandara setup`");
+            return;
+        }
+        let mut offered: Vec<(&'static Compositor, &'static str)> = Vec::new();
+        let mut elsewhere: Vec<&'static str> = Vec::new();
+        for c in compositors::SUPPORTED {
+            match self.compositor_package(c) {
+                Some(p) => offered.push((c, p)),
+                None => elsewhere.push(c.label),
+            }
+        }
+        if offered.is_empty() {
+            self.say(Level::Warn, format!("{distro}'s repositories don't carry any of them: install one yourself, then run `mandara setup`"));
+            return;
+        }
+        let names: Vec<&str> = offered.iter().map(|(c, _)| c.id).collect();
+        if self.args.yes && !self.dry() {
+            self.say(Level::Info, format!("not installing one unasked (--yes): rerun with --compositor {}, or install one yourself and run `mandara setup`", names.join("|")));
+            return;
+        }
+        for (i, (c, package)) in offered.iter().enumerate() {
+            let recommended = if i == 0 { " (recommended)" } else { "" };
+            self.say(Level::Info, format!("  {}) {}{recommended} · {package}", i + 1, c.label));
+        }
+        self.say(Level::Info, "  0) None: I'll install one myself");
+        if !elsewhere.is_empty() {
+            self.say(Level::Detail, format!("not in {distro}'s repositories: {}", elsewhere.join(", ")));
+        }
+        if self.dry() && self.package_manager().is_some_and(|pm| !index::missing(pm, &self.facts.root).is_empty()) {
+            self.say(Level::Detail, "from Mandara's package table: the package databases aren't downloaded yet, so a real run checks them first");
+        }
+        const QUESTION: &str = "Install which one?";
+        const RECOMMENDED: usize = 1;
+        let picked = if self.dry() {
+            self.say(Level::Detail, format!("would ask: {QUESTION} [{RECOMMENDED}] (assuming {RECOMMENDED})"));
+            Some(RECOMMENDED)
+        } else {
+            self.host.choose(QUESTION, offered.len(), RECOMMENDED)
+        };
+        match picked.and_then(|n| n.checked_sub(1)).and_then(|i| offered.get(i).copied()) {
+            Some((c, package)) => self.install_compositor(c, package),
+            None => self.say(Level::Info, format!("none installed; install one yourself and run `mandara setup`, or rerun with --compositor {}", names.join("|"))),
+        }
+    }
+
+    /// `c`'s package on this system: in the family's table, and in the
+    /// repositories when the package manager can say so quickly.
+    fn compositor_package(&mut self, c: &Compositor) -> Option<&'static str> {
+        let package = c.package(self.facts.family)?;
+        let pm = self.package_manager()?;
+        // A dry run that would sync missing databases first can't ask them.
+        let databases_ready = !self.dry() || index::missing(pm, &self.facts.root).is_empty();
+        if databases_ready
+            && let Some((argv, available)) = index::available_query(pm, package)
+            && let Some(out) = self.run(Cmd::from_argv(argv).env("LC_ALL", "C").io(Io::Capture))
+        {
+            return available(&out).then_some(package);
+        }
+        Some(package)
+    }
+
+    /// Installs `c` (and its desktop portal, when it has one), then points
+    /// `mandara setup` at it.
+    fn install_compositor(&mut self, c: &Compositor, package: &str) {
+        let Some(pm) = self.package_manager() else { return };
+        if !self.as_root(Cmd::from_argv(pm.install_argv(&[package]))) {
+            self.say(Level::Warn, format!("could not install {package}; install {} yourself, then run `mandara setup --compositor {}`", c.label, c.id));
+            return;
+        }
+        if !self.dry() {
+            self.say(Level::Ok, format!("{} ({package})", c.label));
+        }
+        for portal in packages::portal_packages(self.facts.family, |p| c.programs.contains(&p)) {
+            if self.as_root(Cmd::from_argv(pm.install_argv(&[portal])).io(Io::Quiet)) && !self.dry() {
+                self.say(Level::Ok, portal);
+            }
+        }
+        self.args.compositor = Some(c.id.to_string());
+        self.say(Level::Detail, format!("pick {} on your login screen to start it", c.label));
     }
 
     /// Installing a package doesn't start its service. Bluetooth is turned

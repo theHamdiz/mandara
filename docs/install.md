@@ -56,6 +56,8 @@ with its PAM module, AccountsService (Users), GeoClue (location), UDisks2
 Before installing anything it checks that your package databases can be
 used, and brings them up to date when they can't (see
 [Package databases missing or out of date](#package-databases-missing-or-out-of-date)).
+When no compositor Mandara runs on is installed yet, it offers to install
+one (see [No compositor yet](#no-compositor-yet)).
 
 | Option | Meaning |
 |---|---|
@@ -66,7 +68,7 @@ used, and brings them up to date when they can't (see
 | `--no-deps` | Skip system packages |
 | `--no-autostart` | Don't start Mandara with the compositor |
 | `--no-greeter` | Keep your login screen |
-| `--compositor mango\|niri\|hyprland` | Pick the compositor to integrate with |
+| `--compositor mango\|niri\|hyprland\|umbriel` | Pick the compositor to integrate with; when it isn't installed, install it from your distribution's repositories first (asked; `--yes` installs it) |
 | `--repo OWNER/NAME` | Releases and sources from another repository |
 | `--dry-run` | Show everything that would happen, change nothing |
 | `--yes` | Don't ask; take every default |
@@ -74,6 +76,47 @@ used, and brings them up to date when they can't (see
 
 `mandara uninstall` removes the binary and desktop entry and empties the
 compositor drop-ins; your settings are kept.
+
+## No compositor yet
+
+When none of MangoWM, Niri, Hyprland or Umbriel is installed, the installer
+lists the ones your distribution's own repositories carry and asks which
+to install, with the first one as the recommended default:
+
+```text
+==> Installing a compositor
+    No compositor Mandara runs on is installed (MangoWM, Niri, Hyprland or Umbriel).
+      1) MangoWM (recommended) · mangowm
+      2) Niri · niri
+      3) Hyprland · hyprland
+      0) None: I'll install one myself
+    Install which one? [1]
+```
+
+It installs your pick with its desktop portal (screen sharing), then hooks
+Mandara into it as usual. Choose it on your login screen to start it. To
+skip the question, name one: `mandara install --compositor niri` installs
+Niri when it is missing (after asking; with `--yes` without asking). With
+`--yes` alone, or without a terminal to answer on, nothing is installed:
+the installer only says how.
+
+Only official repositories are used; the installer never adds one. Where
+a compositor comes only from a third-party source (the AUR, Copr, a PPA,
+Gentoo's GURU), install it yourself and run `mandara setup`.
+
+| | MangoWM | Niri | Hyprland |
+|---|---|---|---|
+| Arch and derivatives | `mangowm` | `niri` | `hyprland` |
+| Debian, Ubuntu | | | `hyprland` (Debian unstable, Ubuntu 26.04; not Debian 13) |
+| Fedora | | `niri` | |
+| openSUSE Tumbleweed | | `niri` | `hyprland` |
+| Void | | `niri` | |
+| Alpine | `mangowm` | `niri` | `hyprland` |
+
+Before offering one it also asks the package manager whether your release
+has it (pacman, apt, xbps and apk can say so quickly), so Debian stable,
+which has no Hyprland package, isn't offered one. Umbriel isn't packaged
+by any distribution yet.
 
 ## Package databases missing or out of date
 
@@ -291,9 +334,9 @@ glibc systems use the tarball.
 From a clone, `cargo xtask build && target/release/mandara install`
 installs that checkout (or `mandara install --from-source` builds it).
 
-**Requirements:** Linux with a Wayland compositor (MangoWM, Niri or
-Hyprland), a Vulkan-capable GPU, and PipeWire or PulseAudio for sound
-features.
+**Requirements:** Linux with a Wayland compositor (MangoWM, Niri,
+Hyprland or Umbriel; the installer can install one), a Vulkan-capable
+GPU, and PipeWire or PulseAudio for sound features.
 
 ## Versioning
 

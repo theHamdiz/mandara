@@ -6,7 +6,18 @@ About → What's new shows it too.
 
 ## Unreleased
 
-The installer copes with package databases that were never synced.
+The installer copes with package databases that were never synced, and can
+install your compositor too.
+
+### New
+
+- **The installer can install your compositor.** When none of MangoWM,
+  Niri, Hyprland or Umbriel is installed yet, `mandara install` lists the
+  ones your distribution's own repositories carry and asks which one you'd
+  like (it never adds a repository), installs it with its screen-sharing
+  portal and hooks Mandara into it. Or name one: `mandara install
+  --compositor niri` installs Niri first when it's missing. Thanks for the
+  idea in #45.
 
 ### Fixed
 

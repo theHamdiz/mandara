@@ -35,8 +35,12 @@ struct FakeHost {
     /// Commands that fail with this exit code.
     codes: HashMap<String, i32>,
     answers: Option<bool>,
+    /// What a numbered choice gets (`None`: no terminal).
+    choice: Option<usize>,
     /// A terminal is attached.
     tty: bool,
+    /// Commands (argv joined by spaces) whose captured stdout is this.
+    stdout: HashMap<String, String>,
     ran: Vec<Cmd>,
     out: Vec<(Level, String)>,
 }
@@ -59,8 +63,9 @@ impl Host for FakeHost {
     fn run(&mut self, cmd: &Cmd) -> std::io::Result<Output> {
         self.ran.push(cmd.clone());
         let code = self.codes.get(&cmd.display()).copied();
+        let stdout = self.stdout.get(&cmd.display()).cloned().unwrap_or_default();
         let failed_once = self.failing_once.remove(&cmd.display());
-        Ok(Output { success: !failed_once && !self.failing.contains(&cmd.display()) && code.is_none(), code, ..Default::default() })
+        Ok(Output { success: !failed_once && !self.failing.contains(&cmd.display()) && code.is_none(), code, stdout, ..Default::default() })
     }
 
     fn has_program(&self, name: &str) -> bool {
@@ -70,6 +75,11 @@ impl Host for FakeHost {
     fn ask(&mut self, question: &str, default: bool) -> bool {
         self.out.push((Level::Info, format!("asked: {question}")));
         self.answers.unwrap_or(default)
+    }
+
+    fn choose(&mut self, question: &str, max: usize, _default: usize) -> Option<usize> {
+        self.out.push((Level::Info, format!("asked: {question} (0-{max})")));
+        self.choice
     }
 
     fn interactive(&self) -> bool {
@@ -761,4 +771,127 @@ fn apt_downloads_missing_package_lists_first() {
     host.failing.insert("sudo apt-get update".into());
     run(&mut host, &FakeProbe::default(), f.facts(Family::Debian), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap();
     assert!(host.ran().contains(&required.to_string()));
+}
+
+// ── Installing a compositor ─────────────────────────────────────────────
+
+#[test]
+fn no_compositor_offers_a_numbered_choice() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.tty = true;
+    host.choice = Some(2);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
+    let text = host.text();
+    assert!(text.contains("  1) MangoWM (recommended) · mangowm\n  2) Niri · niri\n  3) Hyprland · hyprland\n  0) None: I'll install one myself\n"), "{text}");
+    assert!(text.contains("not in Test arch's repositories: Umbriel"));
+    assert!(text.contains("asked: Install which one? (0-3)"));
+    let ran = host.ran();
+    // Availability asked read-only, in the C locale.
+    assert!(ran.contains(&"pacman -Si mangowm".to_string()));
+    let query = host.ran.iter().find(|c| c.display() == "pacman -Si niri").unwrap();
+    assert!(query.env.contains(&("LC_ALL".into(), "C".into())) && query.io == Io::Capture);
+    let b = f.home().join(".local/bin/mandara").display().to_string();
+    let niri = ran.iter().position(|c| c == "sudo pacman -S --needed --noconfirm niri").unwrap_or_else(|| panic!("{ran:#?}"));
+    assert!(ran.contains(&"sudo pacman -S --needed --noconfirm xdg-desktop-portal-gnome".to_string()));
+    let setup = ran.iter().position(|c| *c == format!("{b} setup --compositor niri")).unwrap_or_else(|| panic!("{ran:#?}"));
+    assert!(niri < setup);
+    assert!(!ran.iter().any(|c| c.ends_with(" mangowm") && c.starts_with("sudo")));
+
+    // 0, or no terminal: nothing installed, setup finds what it finds.
+    for choice in [Some(0), None] {
+        let mut host = FakeHost::with(&["pacman", "sudo"]);
+        host.choice = choice;
+        run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
+        assert!(!host.ran().iter().any(|c| ["mangowm", "niri", "hyprland"].iter().any(|p| *c == format!("sudo pacman -S --needed --noconfirm {p}"))), "{:?}", host.ran());
+        assert!(host.text().contains("none installed; install one yourself"));
+        assert!(host.ran().contains(&format!("{b} setup")));
+    }
+}
+
+#[test]
+fn unattended_installs_only_the_named_compositor() {
+    let f = Fixture::new();
+    // --yes alone never picks one.
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.choice = Some(1);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap();
+    assert!(host.text().contains("not installing one unasked (--yes): rerun with --compositor mango|niri|hyprland"), "{}", host.text());
+    assert!(!host.ran().iter().any(|c| c == "sudo pacman -S --needed --noconfirm mangowm"));
+    // --compositor hypr --yes: installed, then set up.
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_greeter: true, compositor: Some("hypr".into()), ..Default::default() }).unwrap();
+    let ran = host.ran();
+    assert!(ran.contains(&"sudo pacman -S --needed --noconfirm hyprland".to_string()), "{ran:#?}");
+    assert!(ran.contains(&"sudo pacman -S --needed --noconfirm xdg-desktop-portal-hyprland".to_string()));
+    let b = f.home().join(".local/bin/mandara").display().to_string();
+    assert!(ran.contains(&format!("{b} setup --compositor hyprland --autostart")), "{ran:#?}");
+    // Named with --yes: installed without a question.
+    assert!(host.text().contains("Hyprland (hyprland)") && !host.text().contains("asked:"), "{}", host.text());
+    // Already installed: nothing to do.
+    let mut host = FakeHost::with(&["pacman", "sudo", "Hyprland"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_greeter: true, compositor: Some("hyprland".into()), ..Default::default() }).unwrap();
+    assert!(!host.text().contains("Installing a compositor"));
+    // Declined: kept as it is.
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.answers = Some(false);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_greeter: true, compositor: Some("niri".into()), ..Default::default() }).unwrap();
+    assert!(!host.ran().contains(&"sudo pacman -S --needed --noconfirm niri".to_string()));
+    assert!(host.text().contains("asked: Niri isn't installed. Install it now (niri, from your distribution's repositories)?"));
+    assert!(host.text().contains("skipped; install Niri yourself, then run `mandara setup --compositor niri`"));
+}
+
+#[test]
+fn compositors_follow_each_familys_repositories() {
+    let f = Fixture::new();
+    // Debian stable lacks Hyprland: apt says so, nothing is offered.
+    let mut host = FakeHost::with(&["apt-get", "sudo"]);
+    host.failing.insert("apt-cache show hyprland".into());
+    host.choice = Some(1);
+    std::fs::create_dir_all(f.root().join("var/lib/apt/lists")).unwrap();
+    std::fs::write(f.root().join("var/lib/apt/lists/deb.debian.org_debian_dists_trixie_main_binary-amd64_Packages"), "x").unwrap();
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Debian), InstallArgs { no_greeter: true, ..Default::default() }).unwrap();
+    assert!(host.text().contains("Test debian's repositories don't carry any of them"), "{}", host.text());
+    assert!(!host.ran().iter().any(|c| c.contains("install") && c.ends_with(" hyprland")));
+    // Fedora: Niri only.
+    let mut host = FakeHost::with(&["dnf", "sudo"]);
+    host.choice = Some(1);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs { no_greeter: true, ..Default::default() }).unwrap();
+    assert!(host.text().contains("  1) Niri (recommended) · niri\n  0) None"), "{}", host.text());
+    assert!(host.ran().contains(&"sudo dnf install -y niri".to_string()));
+    // apk lists nothing for a package it lacks.
+    let mut host = FakeHost::with(&["apk", "sudo"]);
+    host.stdout.insert("apk search -x niri".into(), "niri-25.11-r2\n".into());
+    host.choice = Some(1);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Alpine), InstallArgs { no_greeter: true, ..Default::default() }).unwrap();
+    assert!(host.text().contains("  1) Niri (recommended) · niri\n  0) None"), "{}", host.text());
+    // Named but not carried: a hint, no install.
+    let mut host = FakeHost::with(&["emerge", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Gentoo), dry(InstallArgs { no_greeter: true, compositor: Some("niri".into()), ..Default::default() })).unwrap();
+    assert!(host.text().contains("Niri isn't installed, and Test gentoo's repositories don't carry it"), "{}", host.text());
+    // --no-deps: hints only.
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, compositor: Some("niri".into()), ..Default::default() }).unwrap();
+    assert!(host.text().contains("Niri isn't installed (--no-deps)"));
+    assert!(!host.ran().iter().any(|c| c.starts_with("sudo pacman") || c.starts_with("pacman")));
+}
+
+#[test]
+fn dry_run_shows_the_compositor_plan() {
+    let f = Fixture::new();
+    unsynced_pacman(&f);
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.tty = true;
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(InstallArgs { no_greeter: true, ..Default::default() })).unwrap();
+    let text = host.text();
+    assert!(text.contains("would ask: Install which one? [1] (assuming 1)"), "{text}");
+    let sync = text.find("would run: sudo pacman -Syu\n").unwrap();
+    let mango = text.find("would run: sudo pacman -S --needed --noconfirm mangowm\n").unwrap();
+    assert!(sync < mango);
+    assert!(text.contains("would run: sudo pacman -S --needed --noconfirm xdg-desktop-portal-wlr\n"));
+    assert!(text.contains("then run: mandara setup --compositor mango --autostart"));
+    // The databases aren't synced yet in a dry run: the table is trusted
+    // (and says so) and nothing is queried.
+    assert!(host.ran().iter().all(|c| !c.contains("pacman")), "{:?}", host.ran());
+    assert!(text.contains("from Mandara's package table: the package databases aren't downloaded yet"));
 }

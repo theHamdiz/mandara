@@ -225,8 +225,8 @@ sh -c 'cd "$(mktemp -d)" && curl -fsSL "https://github.com/theHamdiz/mandara/rel
 
 The installer checks its own signature, sets up what your distribution
 needs, and hooks into your compositor without touching your own config
-files. It works on Arch, Debian and Ubuntu, Fedora, openSUSE, Void, Alpine,
-Gentoo and Solus. Updates arrive by small binary patch: Studio → About →
+files (no compositor yet? it offers to install one). It works on Arch,
+Debian and Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus. Updates arrive by small binary patch: Studio → About →
 **Update now**.
 
 → **[Install guide](docs/install.md)**: Arch packages, other options,

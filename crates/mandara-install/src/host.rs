@@ -16,6 +16,8 @@ const FETCH_TIMEOUT: Duration = Duration::from_secs(600);
 const FETCH_CHUNK: usize = 64 << 10;
 /// Any execute bit.
 const EXEC_BITS: u32 = 0o111;
+/// Unusable answers to a numbered choice before giving up.
+const CHOICE_ATTEMPTS: usize = 3;
 /// The terminal questions go to (also with stdin redirected).
 const TTY: &str = "/dev/tty";
 
@@ -126,6 +128,10 @@ pub trait Host {
     fn has_program(&self, name: &str) -> bool;
     /// Asks a yes/no question on the terminal; without one, `default`.
     fn ask(&mut self, question: &str, default: bool) -> bool;
+    /// Asks for a number from 0 to `max` on the terminal (Enter picks
+    /// `default`). `None` without a terminal or after unusable answers: a
+    /// choice that installs something is never made for the user.
+    fn choose(&mut self, question: &str, max: usize, default: usize) -> Option<usize>;
     /// Whether someone can answer questions (a terminal is attached).
     fn interactive(&self) -> bool;
     /// Downloads `url`, at most `limit` bytes.
@@ -203,6 +209,21 @@ impl Host for SystemHost {
             None | Some("") => default,
             Some(a) => matches!(a, "y" | "Y" | "yes" | "YES" | "Yes"),
         }
+    }
+
+    fn choose(&mut self, question: &str, max: usize, default: usize) -> Option<usize> {
+        for _ in 0..CHOICE_ATTEMPTS {
+            let answer = ask_tty(&format!("{question} [{default}]"))?;
+            if answer.is_empty() {
+                return Some(default);
+            }
+            if let Ok(n) = answer.parse::<usize>()
+                && n <= max
+            {
+                return Some(n);
+            }
+        }
+        None
     }
 
     fn interactive(&self) -> bool {
