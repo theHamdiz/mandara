@@ -123,13 +123,32 @@ The rest of what's built in.
   never move under the pointer.
 - **Screenshot studio**: region, window or screen; arrows, boxes and
   circles; copy, save or clipboard-only; **copy text (OCR)**, offline and pure
-  Rust (PP-OCRv5); and **screen recording** to AV1/WebM. **Esc pauses
+  Rust (PP-OCRv5); and **screen recording** (below). **Esc pauses
   snipping without closing the tool**: the frozen frame goes away and a
   compact toolbar stays, so you can open a bar panel first, then pick
   **Capture now** or **Capture in 3 s** (a countdown that is never in the
   frame; Esc cancels it). The toolbar moves between the top and bottom edge
   with one click (or M), and `mandara msg screenshot region --delay 3` does
   the same from a keybind.
+- **Screen recorder**: the screenshot panel records the screen (the display
+  with the focused window, or one you pick), an area or the focused window.
+  It records with **GPU Screen Recorder** (encoded on the graphics card) or
+  **wf-recorder** when one is installed, and otherwise with Mandara's
+  built-in encoder (AV1 in WebM, no sound). Studio → Plugins → Screenshot
+  shows which recorders are installed and what each can do, and sets the
+  resolution (native, 1080p, 1440p, 4K), frame rate (24–120), codec (H.264,
+  HEVC, AV1), quality (low, medium, high or a custom bitrate), format (MP4,
+  MKV, WebM), sound (system, microphone or both, from the devices you
+  choose), a countdown (off, 3, 5 or 10 s; Esc cancels), the folder, the
+  file name pattern and whether the folder opens afterwards. A choice the
+  recorder in use can't do is greyed out with the reason. While recording,
+  the bar shows a red dot and the time (a pause sign while paused): click
+  it to stop, right-click it for pause / resume and muting the microphone
+  (GPU Screen Recorder and the built-in encoder can pause, wf-recorder
+  can't). The panel lists your last recordings with their length and size
+  to play, show in the folder or move to the Trash. Every action is a
+  command (`record toggle`, `record pause-toggle`, `record window`, …) you
+  can bind to keys in Studio → Keyboard shortcuts.
 - **Process hunter**: find any process by name, command line or PID, and end
   or force-kill it.
 - **Drives**: UDisks2 storage panel with usage rings, filesystem and
