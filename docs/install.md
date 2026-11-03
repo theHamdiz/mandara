@@ -43,7 +43,7 @@ KWallet with your login password. Updates come later by binary patch
 (`mandara update`).
 
 It works on **Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo
-and Solus**, and prints the configuration to add on NixOS. Besides the
+and Solus**; on NixOS, use the [flake](#nixos) instead. Besides the
 runtime libraries it installs, one by one so a missing package never stops
 it, fonts and colour emoji, Papirus icons, `xdg-utils`, the desktop portals
 of your compositors, and the services Studio talks to: PipeWire and
@@ -111,6 +111,149 @@ mandara setup
 
 The recipes live in [`packaging/aur/`](../packaging/aur) and follow the
 [AUR submission guidelines](https://wiki.archlinux.org/title/AUR_submission_guidelines).
+
+## NixOS
+
+Mandara is a flake: Nix builds it from source (a release build, like the
+tarballs) and keeps it updated, so the built-in updater stays out of the
+way. Studio → About says "Installed by Nix" and `mandara update apply`
+refuses; you update with `nix flake update` and a rebuild instead.
+
+Try it without installing anything:
+
+```bash
+nix run github:theHamdiz/mandara
+```
+
+Or install it into your profile with
+`nix profile install github:theHamdiz/mandara` (update with
+`nix profile upgrade mandara`).
+
+### NixOS module
+
+The module sets up, system-wide, what `mandara install` sets up on other
+distributions. Add the flake to your system flake:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    mandara.url = "github:theHamdiz/mandara";
+    mandara.inputs.nixpkgs.follows = "nixpkgs";
+  };
+
+  outputs = { nixpkgs, mandara, ... }: {
+    nixosConfigurations.my-machine = nixpkgs.lib.nixosSystem {
+      modules = [
+        ./configuration.nix
+        mandara.nixosModules.default
+        {
+          programs.mandara.enable = true;
+          # programs.mandara.greeter.enable = true;  # Mandara Login
+        }
+      ];
+    };
+  };
+}
+```
+
+Then `sudo nixos-rebuild switch`. With `programs.mandara.enable` you get:
+
+| | |
+|---|---|
+| The package | `mandara` on your `PATH`, Mandara Studio in your app launcher |
+| Lock screen | the `mandara-lock` PAM service `mandara lock` checks your password with |
+| polkit | enabled; Mandara is your session's authentication agent, so don't run another one |
+| Desktop portals | `xdg.portal` with GTK's portal as the fallback; your compositor's NixOS module adds its own |
+| Fonts and icons | Inter, JetBrains Mono, Noto (with CJK and colour emoji), Papirus icons, the freedesktop sound theme |
+| Services | AccountsService, GeoClue, UDisks2, UPower, power-profiles-daemon (unless TLP or auto-cpufreq is on) and GNOME Keyring, each a default you can override |
+
+| Option | Default | Meaning |
+|---|---|---|
+| `programs.mandara.enable` | `false` | Everything in the table above |
+| `programs.mandara.package` | this flake's build | The Mandara package |
+| `programs.mandara.fonts.enable` | `true` | Install the fonts |
+| `programs.mandara.services.enable` | `true` | Enable the services Studio talks to |
+| `programs.mandara.monitorBrightness.enable` | `false` | Load `i2c-dev` for external monitor brightness (DDC/CI); add yourself to the `i2c` group |
+| `programs.mandara.greeter.enable` | `false` | Mandara Login on greetd, in `cage`, listing the sessions of every compositor you enabled; turn your other display manager off |
+| `programs.mandara.greeter.unlockKeyring` | GNOME Keyring's state | Unlock GNOME Keyring with the password you type at Mandara Login |
+
+The module doesn't enable a compositor (`programs.hyprland.enable`,
+`programs.niri.enable`, … stay yours), PipeWire, NetworkManager or
+Bluetooth: turn those on as usual for the sound, Network and Bluetooth
+panels. The Alexandria and Cairo display fonts are Google Fonts; add them
+with `fonts.packages = [ (pkgs.google-fonts.override { fonts = [ "Alexandria" "Cairo" ]; }) ];`.
+
+Then hook Mandara into your compositor, as on any distribution:
+
+```bash
+mandara setup --autostart
+```
+
+That adds the one include line to your compositor config and starts
+Mandara with it (see [below](#mangowm-niri-hyprland-and-umbriel)). If Home
+Manager writes your compositor config, add the line there instead (next
+section).
+
+### Home Manager
+
+For per-user settings, import the Home Manager module:
+
+```nix
+{
+  imports = [ inputs.mandara.homeManagerModules.default ];
+
+  programs.mandara = {
+    enable = true;
+    # Optional: start Mandara as a systemd user service with your session.
+    systemd.enable = true;
+    # Optional: manage ~/.config/mandara/config.toml from Nix (see below).
+    # settings = { bar.height = 30; };
+  };
+}
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `programs.mandara.enable` | `false` | Install Mandara for this user |
+| `programs.mandara.package` | this flake's build | The Mandara package |
+| `programs.mandara.settings` | `{ }` | Settings written to `~/.config/mandara/config.toml` ([configuration.md](configuration.md)) |
+| `programs.mandara.systemd.enable` | `false` | Start Mandara as a systemd user service |
+| `programs.mandara.systemd.target` | `graphical-session.target` | The user target that starts and stops it |
+
+**Settings and Studio.** Studio edits `config.toml` live. While
+`settings` is empty (the default) Home Manager leaves the file alone and
+everything you change in Studio is kept. Once you set `settings`, the file
+belongs to Home Manager: Studio's changes still preview live, but they
+aren't saved, and the next `home-manager switch` brings your Nix settings
+back. Keys you leave out keep Mandara's defaults.
+
+**Starting Mandara.** Either let your compositor start it
+(`mandara setup --autostart`, or a line in your Home Manager compositor
+config), or use `systemd.enable`, not both. The service needs your
+compositor to start `graphical-session.target` and pass `WAYLAND_DISPLAY`
+and its socket variables to the systemd user manager: Niri does, and so do
+the Hyprland and MangoWM Home Manager modules with their systemd
+integration on.
+
+**Your compositor config.** Mandara writes its rules, binds and border
+colours to `~/.config/mandara/generated/` and never edits a file Home
+Manager made (it can't: those live in the read-only Nix store). Add the
+include line to your compositor's Home Manager config yourself:
+
+| Compositor | Add to your Home Manager config |
+|---|---|
+| **MangoWM** | `source_optional=~/.config/mandara/generated/mango.conf` in the config text |
+| **Niri** 25.11+ | `include optional=true "/home/you/.config/mandara/generated/niri.kdl"` in `config.kdl` (plain `include` before 26.04) |
+| **Hyprland 0.57+** | `pcall(dofile, "/home/you/.config/mandara/generated/hyprland.lua")` in `hyprland.lua` |
+| **Hyprland ≤ 0.56** | `source = ~/.config/mandara/generated/hyprland.conf`, e.g. `wayland.windowManager.hyprland.settings.source = [ "~/.config/mandara/generated/hyprland.conf" ];` |
+| **Umbriel** | `"/home/you/.config/mandara/generated/umbriel.toml"` in `[include.optional] files` of `config.toml` |
+| **Sway** | `include ~/.config/mandara/generated/sway.conf` at the end, e.g. `wayland.windowManager.sway.extraConfig` |
+| **River Classic** | no include line: add `riverctl spawn mandara` to your `init` |
+
+After `home-manager switch`, run `mandara setup` once: it finds your line
+and writes the drop-in. Run it before adding the line and it changes
+nothing in the read-only config; it prints the line to add instead.
 
 ## MangoWM, Niri, Hyprland and Umbriel
 
@@ -251,8 +394,9 @@ Plus the bundled plugins, a build manifest per binary (source fingerprint,
 toolchain, SHA-256, lines of code), binary patches from the last five
 releases for [smart updates](apps-and-updates.md#updates-by-binary-patch), `update.json` and
 `SHA256SUMS`. The installer picks the right build for your system (glibc or
-musl, x86-64-v3 when your CPU supports it); Gentoo, Solus, NixOS and other
-glibc systems use the tarball.
+musl, x86-64-v3 when your CPU supports it); Gentoo, Solus and other glibc
+systems use the tarball. NixOS builds from source with the
+[flake](#nixos).
 
 From a clone, `cargo xtask build && target/release/mandara install`
 installs that checkout (or `mandara install --from-source` builds it).

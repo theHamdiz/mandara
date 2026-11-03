@@ -129,7 +129,8 @@ around, each one measured or shipped today:
 11. **Installs and updates itself, safely.** One command sets it up on Arch,
     Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus,
     takes over an existing setup without losing it, and updates arrive as
-    small, signed binary patches from Studio → About → Update now.
+    small, signed binary patches from Studio → About → Update now. NixOS
+    gets a flake with NixOS and Home Manager modules.
 12. **Made for everyone.** 15 interface languages, right-to-left Arabic,
     Persian and Urdu included, and fonts chosen for every script it shows.
 
@@ -229,8 +230,13 @@ files. It works on Arch, Debian and Ubuntu, Fedora, openSUSE, Void, Alpine,
 Gentoo and Solus. Updates arrive by small binary patch: Studio → About →
 **Update now**.
 
-→ **[Install guide](docs/install.md)**: Arch packages, other options,
-coming from another setup.
+On **NixOS**, Mandara is a flake: try it with
+`nix run github:theHamdiz/mandara`, or add it to your system with
+`programs.mandara.enable = true;` (a NixOS module and a Home Manager
+module come with it). Nix keeps it updated.
+
+→ **[Install guide](docs/install.md)**: Arch packages, NixOS, other
+options, coming from another setup.
 
 ## Common questions
 
