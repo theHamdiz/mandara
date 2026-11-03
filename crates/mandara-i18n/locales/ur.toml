@@ -2268,6 +2268,7 @@
 "Installed by distribution packages: off until you turn them on, and read-only." = "ڈسٹری بیوشن پیکیجز سے انسٹال شدہ: آپ کے آن کرنے تک آف، اور صرف پڑھنے کے لیے۔"
 "Installed by your NixOS configuration: remove it from configuration.nix" = "آپ کی NixOS کنفیگریشن سے انسٹال شدہ: اسے configuration.nix سے ہٹائیں"
 "Installed by your system — update through your package manager" = "آپ کے سسٹم نے انسٹال کیا — اپنے پیکیج مینیجر سے اپ ڈیٹ کریں"
+"Installed by Nix — update it with your flake (nixos-rebuild switch, home-manager switch or nix profile upgrade)" = "Nix سے انسٹال کیا گیا — اپنے flake کے ذریعے اپ ڈیٹ کریں (nixos-rebuild switch، home-manager switch یا nix profile upgrade)"
 "Installed cursor themes" = "انسٹال شدہ کرسر تھیمز"
 "Installed folder" = "انسٹال شدہ فولڈر"
 "Installed for everyone: Flatpak asks for your password" = "سب کے لیے انسٹال: Flatpak آپ کا پاس ورڈ مانگتا ہے"

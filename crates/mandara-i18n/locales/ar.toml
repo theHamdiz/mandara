@@ -4189,6 +4189,7 @@
 "Include marketplace plugins" = "تضمين إضافات المتجر"
 "Install it from Studio → About." = "ثبّته من الاستوديو ← حول."
 "Installed by your system — update through your package manager" = "مثبّت من النظام — حدّثه عبر مدير الحزم"
+"Installed by Nix — update it with your flake (nixos-rebuild switch, home-manager switch or nix profile upgrade)" = "مثبّت عبر Nix — حدّثه من خلال الـ flake الخاص بك (nixos-rebuild switch أو home-manager switch أو nix profile upgrade)"
 "Installed with {manager} — update through your package manager" = "مثبّت عبر {manager} — حدّثه عبر مدير الحزم"
 "Looks for new Mandara releases in the background and tells you once per version. Updates install as small binary patches, with the full download as the fallback" = "يبحث عن إصدارات Mandara الجديدة في الخلفية وينبّهك مرة لكل إصدار. تُثبَّت التحديثات كرقع ثنائية صغيرة، مع التنزيل الكامل كبديل"
 "Mandara updates" = "تحديثات Mandara"

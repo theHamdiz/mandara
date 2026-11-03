@@ -8,6 +8,18 @@ About → What's new shows it too.
 
 ### New
 
+- **Mandara on NixOS.** Mandara is now a Nix flake: try it with
+  `nix run github:theHamdiz/mandara`, install it with
+  `nix profile install`, or add it to your system flake and turn it on
+  with `programs.mandara.enable = true;`. The NixOS module sets up what
+  the installer does on other distributions (the lock screen's PAM
+  service, polkit, desktop portals, fonts and the services Studio talks
+  to), and `programs.mandara.greeter.enable` makes Mandara Login your
+  login screen. A Home Manager module manages your settings and can start
+  Mandara as a user service. Nix keeps Mandara updated, so Studio's
+  updater steps aside and says so. See the
+  [install guide](https://github.com/theHamdiz/mandara/blob/main/docs/install.md#nixos).
+  Thanks for asking! ([#39](https://github.com/theHamdiz/mandara/issues/39))
 - **Mandara now runs on Sway.** The bar shows each screen's workspaces
   (which are in use, which needs you, which is showing), the windows on
   them and the layout of the focused workspace, plus a badge while you're

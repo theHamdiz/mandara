@@ -16,9 +16,15 @@ pub const ADMIN_EXE: &str = "/usr/local/lib/mandara/mandara-admin";
 pub const GREETER_EXE: &str = "/usr/local/lib/mandara/mandara-greeter";
 /// Group / other write bits.
 const SHARED_WRITE: u32 = 0o022;
+/// The sticky bit: in such a folder only an entry's owner (or root) can
+/// rename or delete it.
+const STICKY: u32 = 0o1000;
 
 /// Whether `path` and every folder above it are owned by root and writable
-/// by root alone, so no other account can replace what runs as root.
+/// by root alone, so no other account can replace what runs as root. A
+/// root-owned sticky folder that others may add to also counts (the Nix
+/// store, `drwxrwxr-t root nixbld`): nobody else can replace the
+/// root-owned entries in it.
 pub fn trusted_root_file(path: &Path) -> bool {
     trusted_with(path, |p| std::fs::metadata(p).ok().map(|m| (m.uid(), m.mode())))
 }
@@ -27,7 +33,7 @@ fn trusted_with(path: &Path, meta: impl Fn(&Path) -> Option<(u32, u32)>) -> bool
     if !path.is_absolute() {
         return false;
     }
-    path.ancestors().all(|p| meta(p).is_some_and(|(uid, mode)| uid == 0 && mode & SHARED_WRITE == 0))
+    path.ancestors().enumerate().all(|(depth, p)| meta(p).is_some_and(|(uid, mode)| uid == 0 && (mode & SHARED_WRITE == 0 || (depth > 0 && mode & STICKY != 0))))
 }
 
 /// The binary to run as root: the running one when it's already root-owned
@@ -87,6 +93,25 @@ mod tests {
         assert!(!trusted_with(Path::new("/usr/local/lib/mandara/group-writable"), meta), "group-writable");
         assert!(!trusted_with(Path::new("/usr/local/lib/mandara/missing"), meta));
         assert!(!trusted_with(Path::new("relative/mandara"), meta));
+    }
+
+    /// Issue #39: NixOS's `mandara` lives in the Nix store, a root-owned
+    /// sticky folder the build users may add to; a single-user Nix store
+    /// (owned by you) is not trusted.
+    #[test]
+    fn the_nix_store_is_trusted_when_root_owns_it() {
+        let store = "/nix/store/0c5mr2ljm3b4kx4ij2yr6dqyqv5p6fla-mandara-0.10.1";
+        let exe = format!("{store}/bin/mandara");
+        let bin = format!("{store}/bin");
+        let mut fs: HashMap<&str, (u32, u32)> = HashMap::from([("/", (0, 0o755)), ("/nix", (0, 0o755)), ("/nix/store", (0, 0o1775)), (store, (0, 0o555)), (bin.as_str(), (0, 0o555)), (exe.as_str(), (0, 0o555))]);
+        assert!(trusted_with(Path::new(&exe), |p: &Path| fs.get(p.to_str().unwrap()).copied()));
+        fs.insert("/nix/store", (0, 0o775));
+        assert!(!trusted_with(Path::new(&exe), |p: &Path| fs.get(p.to_str().unwrap()).copied()), "group-writable without the sticky bit");
+        fs.insert("/nix/store", (1000, 0o1775));
+        assert!(!trusted_with(Path::new(&exe), |p: &Path| fs.get(p.to_str().unwrap()).copied()), "a store you own");
+        fs.insert("/nix/store", (0, 0o1775));
+        fs.insert(exe.as_str(), (0, 0o1777));
+        assert!(!trusted_with(Path::new(&exe), |p: &Path| fs.get(p.to_str().unwrap()).copied()), "the sticky bit never excuses the file itself");
     }
 
     /// On the real filesystem: a system folder is trusted, and the test

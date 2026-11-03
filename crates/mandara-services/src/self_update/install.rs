@@ -14,8 +14,13 @@ use mandara_i18n::{t, tf};
 
 /// Folders owned by the system or a package manager (`/usr/local` is the
 /// admin's own and is judged by writability instead).
-const SYSTEM_PREFIXES: &[&str] = &["/usr/", "/bin/", "/sbin/", "/lib/", "/lib64/", "/opt/", "/snap/", "/nix/store/", "/var/lib/flatpak/", "/gnu/store/"];
+const SYSTEM_PREFIXES: &[&str] = &["/usr/", "/bin/", "/sbin/", "/lib/", "/lib64/", "/opt/", "/snap/", "/var/lib/flatpak/", "/gnu/store/"];
 const LOCAL_PREFIX: &str = "/usr/local/";
+/// Where Nix installs everything (Mandara's flake, NixOS, Home Manager,
+/// `nix profile`); a profile's `bin/mandara` link resolves into it.
+const NIX_STORE: &str = "/nix/store/";
+/// The manager name of a Nix store install.
+pub const NIX: &str = "nix";
 /// Cargo profile folders (`target/<profile>/mandara`,
 /// `target/<triple>/<profile>/mandara`).
 const CARGO_PROFILES: &[&str] = &["debug", "release", "release-native", "profiling"];
@@ -65,7 +70,11 @@ impl Install {
 
 /// "Installed with pacman — update through your package manager".
 pub fn managed_note(manager: &str) -> String {
-    if manager.is_empty() { t("Installed by your system — update through your package manager").to_string() } else { tf("Installed with {manager} — update through your package manager", &[("manager", &manager)]) }
+    match manager {
+        "" => t("Installed by your system — update through your package manager").to_string(),
+        NIX => t("Installed by Nix — update it with your flake (nixos-rebuild switch, home-manager switch or nix profile upgrade)").to_string(),
+        _ => tf("Installed with {manager} — update through your package manager", &[("manager", &manager)]),
+    }
 }
 
 /// The running binary's install.
@@ -81,8 +90,13 @@ pub fn classify(path: &Path, owner: &dyn Fn(&Path) -> Option<String>) -> Install
         return Install::Dev(path);
     }
     let text = path.to_string_lossy();
+    // The Nix store is read-only and Nix's alone (a flake, NixOS, Home
+    // Manager or `nix profile`); no other package manager is asked.
+    if text.starts_with(NIX_STORE) {
+        return Install::Managed { path, manager: NIX.into() };
+    }
     if !text.starts_with(LOCAL_PREFIX) && SYSTEM_PREFIXES.iter().any(|p| text.starts_with(p)) {
-        let manager = owner(&path).unwrap_or_else(|| if text.starts_with("/nix/") { "nix".into() } else { String::new() });
+        let manager = owner(&path).unwrap_or_default();
         return Install::Managed { path, manager };
     }
     if dir_writable(&path) { Install::SelfManaged(path) } else { Install::ReadOnly(path) }
@@ -220,10 +234,27 @@ mod tests {
         assert_eq!(classify(Path::new("/usr/bin/mandara"), &pacman), Install::Managed { path: "/usr/bin/mandara".into(), manager: "pacman".into() });
         assert_eq!(classify(Path::new("/usr/bin/mandara"), &nobody), Install::Managed { path: "/usr/bin/mandara".into(), manager: String::new() });
         assert!(matches!(classify(Path::new("/opt/mandara/bin/mandara"), &nobody), Install::Managed { .. }));
-        assert_eq!(classify(Path::new("/nix/store/abc-mandara/bin/mandara"), &nobody), Install::Managed { path: "/nix/store/abc-mandara/bin/mandara".into(), manager: "nix".into() });
         // Managed installs explain themselves and refuse.
         let err = classify(Path::new("/usr/bin/mandara"), &pacman).updatable(true).unwrap_err();
         assert!(err.contains("pacman"), "{err}");
+    }
+
+    /// Issue #39: a Nix build (flake, NixOS module, Home Manager, `nix
+    /// profile`) is never replaced in place, whatever else claims it, and
+    /// says how Nix updates it.
+    #[test]
+    fn nix_store_installs_update_through_nix() {
+        let pacman = |_: &Path| Some("pacman".to_string());
+        for p in ["/nix/store/0c5mr2ljm3b4kx4ij2yr6dqyqv5p6fla-mandara-0.10.1/bin/mandara", "/nix/store/abc-mandara/bin/.mandara-wrapped"] {
+            let install = classify(Path::new(p), &pacman);
+            assert_eq!(install, Install::Managed { path: p.into(), manager: NIX.into() }, "{p}");
+            for force_dev in [false, true] {
+                let err = install.updatable(force_dev).unwrap_err();
+                assert!(err.contains("Nix") && err.contains("nixos-rebuild"), "{err}");
+            }
+        }
+        // Only the store itself: a home folder named nix stays yours.
+        assert!(!matches!(classify(Path::new("/home/u/nix/store/bin/mandara"), &pacman), Install::Managed { .. }));
     }
 
     #[test]

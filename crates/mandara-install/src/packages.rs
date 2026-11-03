@@ -172,19 +172,15 @@ pub fn login_package(family: Family, program: &str) -> String {
     name
 }
 
-/// NixOS: what to add to `configuration.nix` (then rerun with `--no-deps`).
+/// NixOS: Mandara's flake and NixOS module (`flake.nix`, `nix/`) set up
+/// what the package tables do elsewhere, and Nix keeps it updated.
 pub const NIXOS_HINT: &[&str] = &[
-    "environment.systemPackages = with pkgs; [ libxkbcommon wayland vulkan-loader fontconfig freetype ];",
-    "fonts.packages = with pkgs; [ noto-fonts noto-fonts-cjk-sans inter jetbrains-mono ];",
-    "xdg.portal.enable = true;",
-    "services.accounts-daemon.enable = true; services.geoclue2.enable = true; services.udisks2.enable = true;",
-    "services.upower.enable = true; services.power-profiles-daemon.enable = true; hardware.i2c.enable = true;",
-    "networking.networkmanager.plugins = with pkgs; [ networkmanager-openvpn ];",
-    "environment.systemPackages = with pkgs; [ sound-theme-freedesktop papirus-icon-theme xdg-utils ];",
-    "fonts.packages = with pkgs; [ noto-fonts-color-emoji ];",
-    "networking.networkmanager.enable = true; hardware.bluetooth.enable = true; security.polkit.enable = true;",
-    "services.pipewire = { enable = true; pulse.enable = true; wireplumber.enable = true; };",
-    "services.gnome.gnome-keyring.enable = true;",
+    "inputs.mandara.url = \"github:theHamdiz/mandara\";      # in your flake.nix",
+    "imports = [ inputs.mandara.nixosModules.default ];      # in configuration.nix",
+    "programs.mandara.enable = true;                          # PAM, polkit, portals, fonts, services",
+    "programs.mandara.greeter.enable = true;                  # optional: Mandara Login on greetd",
+    "then `sudo nixos-rebuild switch`, and `mandara setup` to hook into your compositor",
+    "Home Manager, `nix run` and `nix profile install`: https://github.com/theHamdiz/mandara/blob/main/docs/install.md#nixos",
 ];
 
 /// Unknown systems: what to install by hand (then rerun with `--no-deps`).

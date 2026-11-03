@@ -2268,6 +2268,7 @@
 "Installed by distribution packages: off until you turn them on, and read-only." = "نصب‌شده توسط بسته‌های توزیع: تا وقتی روشنشان نکنید خاموش‌اند، و فقط‌خواندنی‌اند."
 "Installed by your NixOS configuration: remove it from configuration.nix" = "نصب‌شده توسط پیکربندی NixOS شما: آن را از configuration.nix حذف کنید"
 "Installed by your system — update through your package manager" = "نصب‌شده توسط سیستم شما — از طریق مدیر بسته به‌روزرسانی کنید"
+"Installed by Nix — update it with your flake (nixos-rebuild switch, home-manager switch or nix profile upgrade)" = "نصب‌شده با Nix — آن را از طریق flake خود به‌روزرسانی کنید (nixos-rebuild switch، home-manager switch یا nix profile upgrade)"
 "Installed cursor themes" = "تم‌های نشانگر نصب‌شده"
 "Installed folder" = "پوشهٔ نصب‌شده"
 "Installed for everyone: Flatpak asks for your password" = "نصب‌شده برای همه: Flatpak گذرواژهٔ شما را می‌خواهد"

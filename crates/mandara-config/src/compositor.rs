@@ -2759,6 +2759,11 @@ fn include_installed_at(target: Target, config: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Whether a resolved path lies in the Nix store, which nobody edits.
+fn in_nix_store(real: &Path) -> bool {
+    real.starts_with("/nix/store")
+}
+
 /// Appends the include line to the user's config if missing. Nothing else in
 /// the file is touched; a backup is written first.
 ///
@@ -2790,6 +2795,13 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
     }
     if target == Target::River {
         anyhow::bail!("Mandara doesn't edit River's init ({}); it sends its settings over river-control instead. To start Mandara with River, add this line to it:\n  {}", path.display(), target.include_line());
+    }
+    // A config Home Manager or NixOS made is a link into the read-only Nix
+    // store: the line goes into its Nix source instead.
+    if let Ok(real) = std::fs::canonicalize(path)
+        && in_nix_store(&real)
+    {
+        anyhow::bail!("{} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {}", path.display(), target.include_line());
     }
     if target == Target::Sway && !path.exists() {
         seed_sway_config(path, Path::new(SWAY_SYSTEM_CONFIG))?;
@@ -3230,6 +3242,16 @@ mod tests {
             version: None,
             user_autostarts: false,
         }
+    }
+
+    /// Issue #39: Home Manager's compositor configs are links into the Nix
+    /// store; Mandara never tries to write there (a dotfiles link elsewhere
+    /// is still written through).
+    #[test]
+    fn nix_store_configs_are_left_to_nix() {
+        assert!(in_nix_store(Path::new("/nix/store/8f1x-home-manager-files/.config/hypr/hyprland.conf")));
+        assert!(!in_nix_store(Path::new("/home/u/dotfiles/hypr/hyprland.conf")));
+        assert!(!in_nix_store(Path::new("/nix/storefront/hyprland.conf")));
     }
 
     #[test]
