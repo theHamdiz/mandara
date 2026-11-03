@@ -4,8 +4,8 @@
 
 [mandara-app]
 kind = "binary"
-version = "0.10.0"
-hash = "4600dbae0fe06cc28250db94318a0170"
+version = "0.10.1"
+hash = "c930762f4acc789a6489224a70c32ae6"
 
 [mandara-compositor]
 kind = "library"
@@ -24,13 +24,13 @@ hash = "56b4b5c7dae24ca4ad6492a420cd5701"
 
 [mandara-delta]
 kind = "tool"
-version = "0.4.2"
-hash = "b5ab20189b3ce5cf46ec6dbb24d49a56"
+version = "0.4.3"
+hash = "729cea39b73c93fef11dfff45197edd1"
 
 [mandara-greeter]
 kind = "library"
-version = "0.8.0"
-hash = "6b97f0c1cfc3bf0c3ca7fbcae20782d3"
+version = "0.8.1"
+hash = "a10d3f5657ade945469e2f4f5b051126"
 
 [mandara-i18n]
 kind = "library"
@@ -39,8 +39,8 @@ hash = "63734a0f6498271574965ec5c6955877"
 
 [mandara-install]
 kind = "library"
-version = "0.5.1"
-hash = "da1339f9cf4f4dfd217c9ab930886b2c"
+version = "0.5.2"
+hash = "7924ecf51aa4bd139daf9a06b1f3bd37"
 
 [mandara-media]
 kind = "library"
@@ -49,18 +49,18 @@ hash = "499cdb1399ecd8f99b05805895f21d07"
 
 [mandara-plugins]
 kind = "library"
-version = "0.8.0"
-hash = "a7f656e576f3d7385275ceb749fb5fba"
+version = "0.8.1"
+hash = "abb67302b4a1814e1a3112be7914764d"
 
 [mandara-services]
 kind = "library"
-version = "0.11.0"
-hash = "6f8f24752962a51dfaa0be370169cd85"
+version = "0.11.1"
+hash = "1f696b2456f2e9bf34c40f40a5efdb25"
 
 [mandara-studio]
 kind = "library"
-version = "0.10.0"
-hash = "1929317c2beef5188833f4a3a72393a8"
+version = "0.10.1"
+hash = "b1a28b6c487c3c75b3063f62bf6167a8"
 
 [mandara-theme]
 kind = "library"
@@ -69,8 +69,8 @@ hash = "f9a04878389b27416d1ba1ae47c28dfa"
 
 [mandara-ui]
 kind = "library"
-version = "0.9.0"
-hash = "36137c47f0c6745a1703576894a74091"
+version = "0.9.1"
+hash = "24fac702570d7567b3ec1f160419de4d"
 
 [mandara-version]
 kind = "library"
@@ -79,8 +79,8 @@ hash = "454189cd781d1c145c1ca58c13bfa7ac"
 
 [mandara-wallgen]
 kind = "library"
-version = "0.8.0"
-hash = "a37f0f3da5157475074705ac531232d0"
+version = "0.8.1"
+hash = "fb672c3ee9bfa71551c9d59765acbf95"
 
 [mandara-webp]
 kind = "library"
@@ -94,5 +94,5 @@ hash = "e853d20952313dbae9b56ea3321c7321"
 
 [xtask]
 kind = "tool"
-version = "0.6.1"
-hash = "5b878651ca8175aefb9695504fb162d3"
+version = "0.6.2"
+hash = "6b7c76beded0979c991fcf7b97e7dfea"
