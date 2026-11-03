@@ -789,9 +789,9 @@ fn no_compositor_offers_a_numbered_choice() {
     host.choice = Some(2);
     run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
     let text = host.text();
-    assert!(text.contains("  1) MangoWM (recommended) · mangowm\n  2) Niri · niri\n  3) Hyprland · hyprland\n  0) None: I'll install one myself\n"), "{text}");
+    assert!(text.contains("  1) MangoWM (recommended) · mangowm\n  2) Niri · niri\n  3) Hyprland · hyprland\n  4) Sway · sway\n  5) River Classic · river-classic\n  0) None: I'll install one myself\n"), "{text}");
     assert!(text.contains("not in Test arch's repositories: Umbriel"));
-    assert!(text.contains("asked: Install which one? (0-3)"));
+    assert!(text.contains("asked: Install which one? (0-5)"));
     let ran = host.ran();
     // Availability asked read-only, in the C locale.
     assert!(ran.contains(&"pacman -Si mangowm".to_string()));
@@ -850,9 +850,10 @@ fn unattended_installs_only_the_named_compositor() {
 #[test]
 fn compositors_follow_each_familys_repositories() {
     let f = Fixture::new();
-    // Debian stable lacks Hyprland: apt says so, nothing is offered.
+    // A Debian without Hyprland or Sway: apt says so, nothing is offered.
     let mut host = FakeHost::with(&["apt-get", "sudo"]);
     host.failing.insert("apt-cache show hyprland".into());
+    host.failing.insert("apt-cache show sway".into());
     host.choice = Some(1);
     std::fs::create_dir_all(f.root().join("var/lib/apt/lists")).unwrap();
     std::fs::write(f.root().join("var/lib/apt/lists/deb.debian.org_debian_dists_trixie_main_binary-amd64_Packages"), "x").unwrap();
@@ -863,7 +864,7 @@ fn compositors_follow_each_familys_repositories() {
     let mut host = FakeHost::with(&["dnf", "sudo"]);
     host.choice = Some(1);
     run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs { no_greeter: true, ..Default::default() }).unwrap();
-    assert!(host.text().contains("  1) Niri (recommended) · niri\n  0) None"), "{}", host.text());
+    assert!(host.text().contains("  1) Niri (recommended) · niri\n  2) Sway · sway\n  0) None"), "{}", host.text());
     assert!(host.ran().contains(&"sudo dnf install -y niri".to_string()));
     // apk lists nothing for a package it lacks.
     let mut host = FakeHost::with(&["apk", "sudo"]);

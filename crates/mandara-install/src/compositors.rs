@@ -40,7 +40,7 @@ pub const SUPPORTED: &[Compositor] = &[
     Compositor { id: "sway", aliases: &[], label: "Sway", programs: &["sway"], packages: &[(Family::Arch, "sway"), (Family::Debian, "sway"), (Family::Fedora, "sway"), (Family::Suse, "sway"), (Family::Void, "sway"), (Family::Alpine, "sway")] },
     // River's classic line (0.3): Arch packages it as `river-classic`;
     // elsewhere `river` may be 0.4+, which Mandara can't drive.
-    Compositor { id: "river", aliases: &["river-classic"], label: "River Classic", programs: &["river"], packages: &[(Family::Arch, "river-classic")] },
+    Compositor { id: "river", aliases: &[], label: "River Classic", programs: &["river"], packages: &[(Family::Arch, "river-classic")] },
     // Not packaged by any distribution yet: supported once installed.
     Compositor { id: "umbriel", aliases: &[], label: "Umbriel", programs: &["umbriel"], packages: &[] },
 ];
@@ -88,12 +88,12 @@ mod tests {
     #[test]
     fn package_map() {
         let names = |family| SUPPORTED.iter().filter_map(|c| c.package(family).map(|p| (c.id, p))).collect::<Vec<_>>();
-        assert_eq!(names(Family::Arch), [("mango", "mangowm"), ("niri", "niri"), ("hyprland", "hyprland")]);
-        assert_eq!(names(Family::Alpine), [("mango", "mangowm"), ("niri", "niri"), ("hyprland", "hyprland")]);
-        assert_eq!(names(Family::Debian), [("hyprland", "hyprland")]);
-        assert_eq!(names(Family::Fedora), [("niri", "niri")]);
-        assert_eq!(names(Family::Suse), [("niri", "niri"), ("hyprland", "hyprland")]);
-        assert_eq!(names(Family::Void), [("niri", "niri")]);
+        assert_eq!(names(Family::Arch), [("mango", "mangowm"), ("niri", "niri"), ("hyprland", "hyprland"), ("sway", "sway"), ("river", "river-classic")]);
+        assert_eq!(names(Family::Alpine), [("mango", "mangowm"), ("niri", "niri"), ("hyprland", "hyprland"), ("sway", "sway")]);
+        assert_eq!(names(Family::Debian), [("hyprland", "hyprland"), ("sway", "sway")]);
+        assert_eq!(names(Family::Fedora), [("niri", "niri"), ("sway", "sway")]);
+        assert_eq!(names(Family::Suse), [("niri", "niri"), ("hyprland", "hyprland"), ("sway", "sway")]);
+        assert_eq!(names(Family::Void), [("niri", "niri"), ("sway", "sway")]);
         // Overlays and hand-built systems: nothing offered.
         for f in [Family::Gentoo, Family::Solus, Family::NixOS, Family::Unknown] {
             assert!(names(f).is_empty(), "{f}");
