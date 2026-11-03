@@ -103,7 +103,7 @@ const CONFIG_DEMO: &str = include_str!("config.demo.toml");
 const CONFIG_HERO: &str = include_str!("config.hero.toml");
 
 const USAGE: &str = "usage: cargo xtask sandbox <command>
-  up [--bin PATH] [--size WxH] [--scale S] [--second WxH] [--config demo|hero|FILE] [--studio-size WxH]
+  up [--bin PATH] [--no-langpacks] [--size WxH] [--scale S] [--second WxH] [--config demo|hero|FILE] [--studio-size WxH]
   down
   shot OUT.png
   matte OUT.png [--region X0 Y0 X1 Y1] [--margin PX]
@@ -432,6 +432,15 @@ fn up(sb: &Sandbox, args: &[String]) -> Result<()> {
 
     fresh_runtime(sb)?;
     demo::ensure(sb)?;
+    // Language packs for the binary's version, compiled from the sources
+    // into the demo user's data dir (release builds read nothing else);
+    // `--no-langpacks` leaves them out (the download path).
+    let locales = sb.home().join("data").join(mandara_i18n::packs::DIR);
+    let _ = std::fs::remove_dir_all(&locales);
+    if !crate::flag(args, "--no-langpacks") {
+        let version = crate::langpacks::binary_version(&state.bin).ok_or_else(|| format!("{} --version didn't report a version", state.bin.display()))?;
+        crate::langpacks::write_dir(&locales.join(&version), &version)?;
+    }
     let config = sb.home().join("config/mandara/config.toml");
     match opt(args, "--config").as_deref() {
         Some("demo") => write(&config, CONFIG_DEMO)?,
