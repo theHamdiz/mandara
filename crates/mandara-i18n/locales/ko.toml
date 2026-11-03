@@ -7914,3 +7914,8 @@
 "Couldn't unmute the microphone: {error}" = "마이크 음소거를 해제할 수 없습니다: {error}"
 "Pick Microphone or Both under Sound first" = "먼저 ‘사운드’에서 ‘마이크’ 또는 ‘둘 다’를 고르세요"
 "Pick System sound or Both under Sound first" = "먼저 ‘사운드’에서 ‘시스템 소리’ 또는 ‘둘 다’를 고르세요"
+"3D" = "3D"
+"Tile surface" = "타일 표면"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "평면 채우기, 유리 테두리가 있는 입체 3D 타일, 또는 비치는 유리"
+"Tile shadow" = "타일 그림자"
+"How strong the shadow under each shortcut tile is (0 for none)" = "각 바로 가기 타일 아래 그림자의 세기 (0이면 없음)"

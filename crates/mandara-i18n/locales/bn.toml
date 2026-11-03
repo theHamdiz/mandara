@@ -7915,3 +7915,8 @@
 "Couldn't unmute the microphone: {error}" = "মাইক্রোফোন আনমিউট করা যায়নি: {error}"
 "Pick Microphone or Both under Sound first" = "আগে «শব্দ»-এ «মাইক্রোফোন» বা «দুটোই» বেছে নিন"
 "Pick System sound or Both under Sound first" = "আগে «শব্দ»-এ «সিস্টেমের শব্দ» বা «দুটোই» বেছে নিন"
+"3D" = "3D"
+"Tile surface" = "টাইলের পৃষ্ঠ"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "সমতল রং, কাচের কিনারাসহ উঁচু 3D টাইল, অথবা স্বচ্ছ কাচ"
+"Tile shadow" = "টাইলের ছায়া"
+"How strong the shadow under each shortcut tile is (0 for none)" = "প্রতিটি শর্টকাট টাইলের নিচের ছায়া কতটা গাঢ় (0 মানে নেই)"

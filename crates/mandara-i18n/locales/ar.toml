@@ -8165,3 +8165,8 @@
 "Couldn't unmute the microphone: {error}" = "تعذّر إلغاء كتم الميكروفون: {error}"
 "Pick Microphone or Both under Sound first" = "اختر «الميكروفون» أو «كلاهما» في «الصوت» أولًا"
 "Pick System sound or Both under Sound first" = "اختر «صوت النظام» أو «كلاهما» في «الصوت» أولًا"
+"3D" = "ثلاثي الأبعاد"
+"Tile surface" = "سطح المربعات"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "تعبئة مسطحة، أو مربعات بارزة ثلاثية الأبعاد بحافة زجاجية، أو زجاج شفاف"
+"Tile shadow" = "ظل المربعات"
+"How strong the shadow under each shortcut tile is (0 for none)" = "مدى قوة الظل تحت كل مربع اختصار (0 بلا ظل)"

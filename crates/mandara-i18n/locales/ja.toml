@@ -8162,3 +8162,8 @@
 "Couldn't unmute the microphone: {error}" = "マイクのミュートを解除できませんでした: {error}"
 "Pick Microphone or Both under Sound first" = "先に「サウンド」で「マイク」か「両方」を選んでください"
 "Pick System sound or Both under Sound first" = "先に「サウンド」で「システム音」か「両方」を選んでください"
+"3D" = "3D"
+"Tile surface" = "タイルの表面"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "フラットな塗り、ガラスの縁取りのある立体的な3Dタイル、または透けるガラス"
+"Tile shadow" = "タイルの影"
+"How strong the shadow under each shortcut tile is (0 for none)" = "各ショートカットタイルの下の影の強さ（0で影なし）"

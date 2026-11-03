@@ -8162,3 +8162,8 @@
 "Couldn't unmute the microphone: {error}" = "Impossible de rétablir le micro : {error}"
 "Pick Microphone or Both under Sound first" = "Choisissez d'abord Microphone ou Les deux dans Son"
 "Pick System sound or Both under Sound first" = "Choisissez d'abord Son du système ou Les deux dans Son"
+"3D" = "3D"
+"Tile surface" = "Surface des tuiles"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "Aplat, tuiles 3D en relief avec un liseré de verre, ou verre translucide"
+"Tile shadow" = "Ombre des tuiles"
+"How strong the shadow under each shortcut tile is (0 for none)" = "Intensité de l’ombre sous chaque tuile de raccourci (0 pour aucune)"

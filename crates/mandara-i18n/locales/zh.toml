@@ -8156,3 +8156,8 @@
 "Couldn't unmute the microphone: {error}" = "无法取消麦克风静音：{error}"
 "Pick Microphone or Both under Sound first" = "请先在“声音”中选择“麦克风”或“两者”"
 "Pick System sound or Both under Sound first" = "请先在“声音”中选择“系统声音”或“两者”"
+"3D" = "3D"
+"Tile surface" = "磁贴表面"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "平面填充、带玻璃边缘的立体 3D 磁贴，或透明玻璃"
+"Tile shadow" = "磁贴阴影"
+"How strong the shadow under each shortcut tile is (0 for none)" = "每个快捷磁贴下方阴影的强度（0 为无阴影）"

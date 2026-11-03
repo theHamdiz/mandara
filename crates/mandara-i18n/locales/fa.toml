@@ -7915,3 +7915,8 @@
 "Couldn't unmute the microphone: {error}" = "صدادار کردن میکروفون ممکن نشد: {error}"
 "Pick Microphone or Both under Sound first" = "اول در «صدا»، «میکروفون» یا «هر دو» را برگزینید"
 "Pick System sound or Both under Sound first" = "اول در «صدا»، «صدای سیستم» یا «هر دو» را برگزینید"
+"3D" = "سه‌بعدی"
+"Tile surface" = "سطح کاشی‌ها"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "رنگ تخت، کاشی‌های برجستهٔ سه‌بعدی با لبهٔ شیشه‌ای، یا شیشهٔ شفاف"
+"Tile shadow" = "سایهٔ کاشی‌ها"
+"How strong the shadow under each shortcut tile is (0 for none)" = "شدت سایهٔ زیر هر کاشی میان‌بر (0 یعنی بدون سایه)"

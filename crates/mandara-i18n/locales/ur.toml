@@ -7915,3 +7915,8 @@
 "Couldn't unmute the microphone: {error}" = "مائیکروفون کی آواز نہیں کھل سکی: {error}"
 "Pick Microphone or Both under Sound first" = "پہلے «آواز» میں «مائیکروفون» یا «دونوں» چنیں"
 "Pick System sound or Both under Sound first" = "پہلے «آواز» میں «سسٹم کی آواز» یا «دونوں» چنیں"
+"3D" = "سہ جہتی"
+"Tile surface" = "ٹائلوں کی سطح"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "سادہ رنگ، شیشے کے کنارے والی ابھری سہ جہتی ٹائلیں، یا شفاف شیشہ"
+"Tile shadow" = "ٹائلوں کا سایہ"
+"How strong the shadow under each shortcut tile is (0 for none)" = "ہر شارٹ کٹ ٹائل کے نیچے سائے کی شدت (0 یعنی کوئی سایہ نہیں)"

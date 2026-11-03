@@ -8160,3 +8160,8 @@
 "Couldn't unmute the microphone: {error}" = "Die Stummschaltung des Mikrofons ließ sich nicht aufheben: {error}"
 "Pick Microphone or Both under Sound first" = "Wähle zuerst unter „Ton“ „Mikrofon“ oder „Beide“"
 "Pick System sound or Both under Sound first" = "Wähle zuerst unter „Ton“ „Systemton“ oder „Beide“"
+"3D" = "3D"
+"Tile surface" = "Kacheloberfläche"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "Flache Füllung, erhabene 3D-Kacheln mit Glaskante oder durchscheinendes Glas"
+"Tile shadow" = "Kachelschatten"
+"How strong the shadow under each shortcut tile is (0 for none)" = "Wie stark der Schatten unter jeder Verknüpfungskachel ist (0 für keinen)"

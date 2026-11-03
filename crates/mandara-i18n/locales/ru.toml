@@ -8161,3 +8161,8 @@
 "Couldn't unmute the microphone: {error}" = "Не удалось включить микрофон: {error}"
 "Pick Microphone or Both under Sound first" = "Сначала выберите «Микрофон» или «Оба» в разделе «Звук»"
 "Pick System sound or Both under Sound first" = "Сначала выберите «Системный звук» или «Оба» в разделе «Звук»"
+"3D" = "3D"
+"Tile surface" = "Поверхность плиток"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "Плоская заливка, объёмные 3D-плитки со стеклянной кромкой или прозрачное стекло"
+"Tile shadow" = "Тень плиток"
+"How strong the shadow under each shortcut tile is (0 for none)" = "Насколько сильна тень под каждой плиткой-ярлыком (0 — без тени)"

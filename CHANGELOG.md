@@ -17,8 +17,10 @@ About → What's new shows it too.
   waves on Sleep to the Pharos sweeping its beams on Reload. They're
   engraved into the tile like etched glass, deepen gently under the
   pointer, keep every label at full readable contrast in light and dark
-  themes, and follow right-to-left layouts. Prefer plain tiles? Turn off
-  *Tile patterns* in Studio → Bar → Main menu.
+  themes, and follow right-to-left layouts. Studio → Bar → Main menu
+  lets you make them yours: turn *Tile patterns* off for plain tiles, pick
+  a *Tile surface* (Flat, 3D or see-through Glass) and give the tiles a
+  *Tile shadow*.
 
 ## 0.13.0 — 2026-11-03
 

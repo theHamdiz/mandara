@@ -36,6 +36,7 @@ use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
 use crate::kit::{card, icon_button, reveal, text, tokens};
 use crate::state::{config, shell, update_config};
+use mandara_config::surfaces::MenuTileSurface;
 use ornament::{Motif, Ornament};
 
 pub const ID: &str = "main-menu";
@@ -128,6 +129,16 @@ const WASH_ANGLE_LTR: f32 = 135.0;
 const WASH_ANGLE_RTL: f32 = 225.0;
 /// Under the pointer the ornament drifts this far into the tile.
 const DRIFT_PX: f32 = 3.0;
+/// Glass tiles (`panels.menu_tile_surface`): how much of the tile's fill
+/// covers the menu's glass behind it.
+const GLASS_FILL: f32 = 0.55;
+/// The tiles' drop shadow at full strength (`panels.menu_tile_shadow`):
+/// kept tight, since compositors blur layer surfaces wherever alpha > 0.
+const SHADOW_ALPHA: f32 = 0.45;
+const SHADOW_OFFSET_PX: f32 = 3.0;
+const SHADOW_BLUR_PX: f32 = 10.0;
+/// OKLCH lightness of the shadow's ink (a near-black).
+const SHADOW_LIGHTNESS: f32 = 0.08;
 /// The hover glow's spring: quick and settled, no overshoot to speak of.
 const GLOW_SPRING: SpringConfig = SpringConfig::new(320.0, 34.0, 1.0);
 
@@ -538,6 +549,10 @@ struct TileCx<'a> {
     patterns: bool,
     /// Short tiles (the Look page's one row).
     compact: bool,
+    /// `panels.menu_tile_surface`.
+    surface: mandara_config::surfaces::MenuTileSurface,
+    /// `panels.menu_tile_shadow`, 0–1.
+    shadow: f32,
 }
 
 /// A tile's ornament (its lip, then its body), its icon colour and its
@@ -592,27 +607,47 @@ fn tiles(actions: &[Action], palette: &MandaraPalette, p: &PanelCx, tc: &TileCx,
                 .flex()
                 .flex_col()
                 .justify_between();
+            let (plain_rest, plain_high): (gpui::Background, gpui::Background) = match tc.surface {
+                MenuTileSurface::Glass => (palette.surface_container.with_alpha(GLASS_FILL).hsla().into(), palette.surface_container_high.with_alpha(GLASS_FILL).hsla().into()),
+                _ => (palette.surface_container.hsla().into(), palette.surface_container_high.hsla().into()),
+            };
+            // Raised and glass tiles wear the specular rim; any tile may
+            // cast a shadow.
+            let mut shadows = if tc.surface == MenuTileSurface::Flat { Vec::new() } else { mandara_core::glass_rim(palette.specular_rim_light, palette.specular_rim_shadow) };
+            if tc.shadow > 0.0 {
+                shadows.push(gpui::BoxShadow {
+                    color: mandara_theme::Color::oklcha(SHADOW_LIGHTNESS, 0.0, 0.0, SHADOW_ALPHA * tc.shadow).hsla(),
+                    offset: gpui::point(px(0.0), px(SHADOW_OFFSET_PX * tc.shadow)),
+                    blur_radius: px(SHADOW_BLUR_PX * tc.shadow),
+                    spread_radius: px(0.0),
+                    inset: false,
+                });
+            }
+            tile = tile.shadow(shadows);
             let glyph = if tc.patterns {
                 let ([lip, body], ink, rest, high) = {
                     let mut g = tc.glow.borrow_mut();
                     let ink = g.ink(a, palette);
                     ornament_layer(a, &ink, palette, g.value(a.label), tc.compact)
                 };
+                // Only raised tiles lean into their accent; flat and glass
+                // keep their plain fill.
+                let (rest, high) = if tc.surface == MenuTileSurface::Raised { (rest, high) } else { (plain_rest, plain_high) };
                 let glow = tc.glow.clone();
                 let key = a.label;
                 tile = crate::style::ClipRounded::clip_rounded(tile)
                     .bg(rest)
                     .hover(move |s| s.bg(high))
-                    .shadow(mandara_core::glass_rim(palette.specular_rim_light, palette.specular_rim_shadow))
                     .on_hover(move |on: &bool, window, _| {
                         glow.borrow_mut().aim(key, *on);
                         window.refresh();
                     })
-                    .child(lip)
+                    // A flat tile's ornament has no engraved lip.
+                    .when(tc.surface != MenuTileSurface::Flat, |el| el.child(lip))
                     .child(body);
                 ink
             } else {
-                tile = tile.bg(palette.surface_container.hsla()).hover(|s| s.bg(palette.surface_container_high.hsla()));
+                tile = tile.bg(plain_rest).hover(move |s| s.bg(plain_high));
                 palette.primary
             };
             row = row.child(
@@ -753,7 +788,8 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, fit: &Rc<Cell<gpui::S
             shell(cx).update(cx, |s, cx| s.set_session(true, cx));
         }))
         .child(icon_button("menu-close", "close", HEADER_BUTTON, palette.on_surface_variant, None, |_, cx| close(cx)));
-    let tc = TileCx { glow, patterns: config(cx).read(cx).get().panels.menu_patterns, compact: false };
+    let panels = &config(cx).read(cx).get().panels;
+    let tc = TileCx { glow, patterns: panels.menu_patterns, compact: false, surface: panels.menu_tile_surface, shadow: panels.menu_tile_shadow() };
     let body = match now {
         Page::Home => home(palette, p, cx),
         Page::Apps => tiles(APPS, palette, p, &tc, window),

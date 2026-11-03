@@ -8156,3 +8156,8 @@
 "Couldn't unmute the microphone: {error}" = "No se pudo reactivar el micrófono: {error}"
 "Pick Microphone or Both under Sound first" = "Elige primero Micrófono o Ambos en Sonido"
 "Pick System sound or Both under Sound first" = "Elige primero Sonido del sistema o Ambos en Sonido"
+"3D" = "3D"
+"Tile surface" = "Superficie de los mosaicos"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "Relleno plano, mosaicos 3D en relieve con borde de cristal o cristal translúcido"
+"Tile shadow" = "Sombra de los mosaicos"
+"How strong the shadow under each shortcut tile is (0 for none)" = "Intensidad de la sombra bajo cada mosaico de acceso directo (0 para ninguna)"

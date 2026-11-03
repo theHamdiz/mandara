@@ -7915,3 +7915,8 @@
 "Couldn't unmute the microphone: {error}" = "Tidak dapat membunyikan mikrofon: {error}"
 "Pick Microphone or Both under Sound first" = "Pilih Mikrofon atau Keduanya di Suara dulu"
 "Pick System sound or Both under Sound first" = "Pilih Suara sistem atau Keduanya di Suara dulu"
+"3D" = "3D"
+"Tile surface" = "Permukaan ubin"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "Isian datar, ubin 3D timbul dengan tepi kaca, atau kaca tembus pandang"
+"Tile shadow" = "Bayangan ubin"
+"How strong the shadow under each shortcut tile is (0 for none)" = "Seberapa kuat bayangan di bawah setiap ubin pintasan (0 berarti tanpa bayangan)"

@@ -8161,3 +8161,8 @@
 "Couldn't unmute the microphone: {error}" = "Mikrofonun sesi açılamadı: {error}"
 "Pick Microphone or Both under Sound first" = "Önce Ses altında Mikrofon veya İkisi de seçin"
 "Pick System sound or Both under Sound first" = "Önce Ses altında Sistem sesi veya İkisi de seçin"
+"3D" = "3B"
+"Tile surface" = "Kutucuk yüzeyi"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "Düz dolgu, cam kenarlı kabarık 3B kutucuklar ya da saydam cam"
+"Tile shadow" = "Kutucuk gölgesi"
+"How strong the shadow under each shortcut tile is (0 for none)" = "Her kısayol kutucuğunun altındaki gölgenin gücü (0: gölge yok)"
