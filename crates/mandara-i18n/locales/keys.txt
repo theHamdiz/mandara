@@ -125,6 +125,7 @@ A few extra rak'ahs each day quietly build you a home.
 A filesystem this full turns amber
 A filesystem this full turns coral
 A fixed light or dark wallpaper is set under Fit & effects; it shows instead of the slideshow while the theme is in that mode.
+A floating bar has no edge to hang from; popups on its edge stay cards
 A floating card under the bar, the panels' gap away from it.
 A folder
 A folder in /usr/share/sounds; empty follows your GTK setting
@@ -2738,6 +2739,7 @@ Johann Wolfgang von Goethe
 Join
 Join a hidden network
 Join a saved network automatically, or not
+Join the bar
 Join the docker group (sudo usermod -aG docker $USER), then log out and back in
 Join the top bar and the side bars into one frame, or let them float apart
 Join with the bar
@@ -4383,6 +4385,7 @@ Popup width
 Popups
 Popups appear above games and videos in fullscreen
 Popups at once
+Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge
 Popups show the app and title only; open the notification center to read
 Port or process…
 Port {port} belongs to another user's process; end it with your system tools
@@ -5868,6 +5871,7 @@ The desktop's menu
 The displays changed meanwhile; try again
 The dock hides until you touch the screen edge.
 The dock hides while a window covers it. Touch the screen edge to bring it back.
+The dock holds the bottom edge; popups there stay cards
 The dock is on: the launcher floats above it and opens on click only.
 The dock isn't showing
 The download didn't finish

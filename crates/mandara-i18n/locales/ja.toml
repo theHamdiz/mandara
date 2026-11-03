@@ -8038,3 +8038,8 @@
 "One click sets the style, position, height and arrangement" = "ワンクリックでスタイル・位置・高さ・配置を設定"
 "Presets" = "プリセット"
 "Remove from bar" = "バーから外す"
+# ── Popups joined to the bar ──
+"Join the bar" = "バーにつなげる"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "ポップアップがバーの色でバーから垂れ下がり、一体に見えます。バーのない辺では画面の端から垂れ下がります"
+"The dock holds the bottom edge; popups there stay cards" = "ドックが下端を使っているため、そこのポップアップはカードのままです"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "フローティングバーには垂れ下がる辺がないため、その辺のポップアップはカードのままです"

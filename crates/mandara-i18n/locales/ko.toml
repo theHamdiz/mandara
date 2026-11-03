@@ -7790,3 +7790,8 @@
 "One click sets the style, position, height and arrangement" = "한 번의 클릭으로 스타일, 위치, 높이, 배치를 설정"
 "Presets" = "프리셋"
 "Remove from bar" = "막대에서 제거"
+# ── Popups joined to the bar ──
+"Join the bar" = "바에 붙이기"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "팝업이 바의 색으로 바에서 내려와 하나로 이어집니다. 바가 없는 가장자리에서는 화면 가장자리에서 내려옵니다"
+"The dock holds the bottom edge; popups there stay cards" = "Dock이 아래쪽 가장자리를 차지하므로 그곳의 팝업은 카드로 남습니다"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "떠 있는 바에는 매달릴 가장자리가 없어 그 가장자리의 팝업은 카드로 남습니다"

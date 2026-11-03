@@ -8037,3 +8037,8 @@
 "One click sets the style, position, height and arrangement" = "Tek tıkla stil, konum, yükseklik ve düzen"
 "Presets" = "Hazır ayarlar"
 "Remove from bar" = "Çubuktan kaldır"
+# ── Popups joined to the bar ──
+"Join the bar" = "Çubuğa bağla"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "Açılır bildirimler çubuğun renginde ondan sarkar, onunla tek parça olur; çubuk olmayan kenarda ekran kenarından"
+"The dock holds the bottom edge; popups there stay cards" = "Alt kenarı dock kaplıyor; oradaki açılır bildirimler kart olarak kalır"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "Yüzen çubuğun asılacak bir kenarı yok; onun kenarındaki açılır bildirimler kart olarak kalır"

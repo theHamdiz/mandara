@@ -7791,3 +7791,8 @@
 "One click sets the style, position, height and arrangement" = "Satu klik mengatur gaya, posisi, tinggi, dan susunan"
 "Presets" = "Preset"
 "Remove from bar" = "Hapus dari bilah"
+# ── Popups joined to the bar ──
+"Join the bar" = "Gabungkan dengan bilah"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "Popup menggantung dari bilah dengan warnanya, menyatu dengannya; di tepi tanpa bilah, dari tepi layar"
+"The dock holds the bottom edge; popups there stay cards" = "Dok menempati tepi bawah; popup di sana tetap berupa kartu"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "Bilah mengambang tidak punya tepi untuk digantungi; popup di tepinya tetap berupa kartu"

@@ -330,9 +330,10 @@ narrow ones; everything mirrors for right-to-left languages.
   changes. The same is `mandara msg compositor check` / `fix`, and
   `mandara setup --check` / `--fix` without a running shell (see
   [install](install.md#config-doctor)).
-- **Notifications, On-screen displays, Privacy**: popup placement and
-  timeouts per urgency, a rules editor with one-click rules for recent
-  apps, quiet modes, history limits; every OSD kind; indicator ignore lists.
+- **Notifications, On-screen displays, Privacy**: popup placement (or joined
+  to the bar) and timeouts per urgency, a rules editor with one-click rules
+  for recent apps, quiet modes, history limits; every OSD kind; indicator
+  ignore lists.
 - **Audio & media**: per-app mixer, default devices you can rename and
   hide, per-app outputs (calls to the headset, music to speakers), volume
   step and 100 % / 150 % ceiling, ignored media players, shell sounds with
