@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.13.0 — 2026-11-03
+
+Mandara Studio wears the phoenix.
+
 ### Improved
 
 - **Mandara Studio wears the phoenix.** Studio's app icon in your
