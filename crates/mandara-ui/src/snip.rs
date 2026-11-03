@@ -345,8 +345,9 @@ impl SnipView {
                 return;
             }
             let region = (self.mode != SnipMode::Screen).then(|| (r.x.round() as i32, r.y.round() as i32, r.w.round() as i32, r.h.round() as i32));
-            // Start once the overlay has faded so it isn't in the video.
-            if let Err(err) = crate::recorder::start(self.capture.output.clone(), region, RECORD_START_DELAY, cx) {
+            // Starts once the overlay has faded so it isn't in the video
+            // (after the countdown setting, if any).
+            if let Err(err) = crate::recorder::record_area(self.capture.output.clone(), region, cx) {
                 report(Err(err), cx);
             }
             self.close(cx);
@@ -979,6 +980,11 @@ pub fn open_editor(preselect: Preselect, cx: &mut App) {
 /// record as video.
 pub fn open_for_recording(cx: &mut App) {
     begin(SnipMode::Region, true, Preselect::None, 0, None, None, cx);
+}
+
+/// Closes the snipping tool and whatever it shows (a countdown included).
+pub fn close(cx: &mut App) {
+    session::send(Input::Close, cx);
 }
 
 /// Non-interactive capture for commands: the focused window or the screen.

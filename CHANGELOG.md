@@ -6,9 +6,6 @@ About → What's new shows it too.
 
 ## Unreleased
 
-A much smaller Mandara: translations now come as language packs you
-download only for the languages you use.
-
 ### Improved
 
 - **A smaller Mandara.** The translations for all fifteen languages used
@@ -42,6 +39,69 @@ download only for the languages you use.
 - **Updates say how much smaller (or bigger) the new version is.** Studio
   → About and `mandara update` now show the size change next to the
   download size, for example "The new version is 9.2 MB smaller".
+
+## 0.13.0 — 2026-11-03
+
+Mandara Studio wears the phoenix.
+
+### Improved
+
+- **Mandara Studio wears the phoenix.** Studio's app icon in your
+  launcher, dock and app menus is now the new phoenix logo instead of the
+  old shoreline mark. Installs that update themselves pick it up the next
+  time the shell starts.
+
+## 0.12.0 — 2026-11-03
+
+A much better screen recorder.
+
+### New
+
+- **A much better screen recorder.** Recording now uses GPU Screen
+  Recorder or wf-recorder when you have one installed (falling back to
+  Mandara's own encoder), so you get MP4 and MKV files, H.264, HEVC or
+  AV1, up to 120 fps and a resolution and quality of your choice, and
+  sound too: turn on system sound, your microphone or both in Studio →
+  Plugins → Screenshot (Mandara's own encoder records video only). Record
+  the whole screen, a display you pick, an area or the focused window, with
+  an optional countdown. While recording, the bar shows the time: click it
+  to stop, right-click it to pause, resume or mute your microphone. The
+  screenshot panel lists your recent recordings to play, show in the folder
+  or move to the Trash. Studio → Plugins → Screenshot shows which recorders
+  are installed and greys out what the one in use can't do, with the
+  reason. Every action is a command you can put on a key, such as
+  `record toggle` and `record pause-toggle`.
+
+## 0.11.0 — 2026-11-03
+
+A Modern style for the Power panel. The battery breathes while it charges.
+No more CPU driver names in the Power panel.
+
+### New
+
+- **A Modern style for the Power panel.** Pick it in Studio → Power &
+  idle (*Power panel style*) and the battery leads: a large charge ring
+  with the percentage and its state inside, the time left right under it,
+  health, capacity and chemistry at a glance, and a smooth graph of the
+  last hours of charge. The power profiles become one simple Power saver /
+  Balanced / Performance switch showing only the profiles your computer
+  has, and the charge limit is a single switch that says when charging
+  stops and resumes (shown only where it can really be changed). Voltage,
+  cycles, temperature and the CPU driver wait in a *Details* section that
+  stays folded until you open it. The panel you know stays the default,
+  as the Classic style. The design follows a suggestion in #26.
+- **The battery breathes while it charges.** Plug in and the battery in
+  the bar gently pulses until it stops charging, so you can tell at a
+  glance that power is going in. It stays still with Reduce motion on, and
+  you can turn it off in Studio → Power & idle (*Pulse the battery while
+  charging*).
+
+### Improved
+
+- **No more CPU driver names in the Power panel.** The Power panel keeps
+  its look, but no longer shows the CPU driver (`intel_pstate` and
+  friends) in its header or under each power profile; each profile keeps
+  its short description.
 
 ## 0.10.2 — 2026-11-03
 

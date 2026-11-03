@@ -19,6 +19,7 @@ mod look_tests;
 pub mod surface_settings;
 pub mod system_settings;
 pub mod side_bar_settings;
+pub mod recorder_settings;
 mod tuning_settings;
 pub mod workflow_settings;
 
@@ -323,6 +324,21 @@ pub enum Control {
     /// typed name is allowed too). `follows`: the setting an empty value
     /// falls back to (offered as "Default"); `None` = always set.
     Font { follows: Option<&'static str> },
+    /// The screen recorders on this computer and what each supports (no
+    /// value of its own).
+    RecorderBackends,
+    /// A sound device by server name from the live list (`""` = the
+    /// default one): an input (microphone) or an output.
+    Device { input: bool },
+    /// A display (output name) from the live list (`""` = the focused one).
+    Display,
+}
+
+impl Control {
+    /// Whether the control edits a value (else it is a button or a status).
+    pub fn has_value(&self) -> bool {
+        !matches!(self, Control::Command { .. } | Control::DepthModel | Control::RecorderBackends)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -410,6 +426,7 @@ const ALERT_STYLES: &[(&str, &str)] = &[("both", tk("Notification + OSD")), ("no
 const CRITICAL_ACTIONS: &[(&str, &str)] = &[("nothing", tk("Nothing")), ("suspend", tk("Sleep")), ("hibernate", tk("Hibernate")), ("shutdown", tk("Shut down"))];
 const PROFILES: &[(&str, &str)] = &[("null", tk("Leave it")), ("power-saver", tk("Power saver")), ("balanced", tk("Balanced")), ("performance", tk("Performance"))];
 const MENU_STYLES: &[(&str, &str)] = &[("dock", tk("Edge dock")), ("grid", tk("Grid"))];
+const POWER_PANEL_STYLES: &[(&str, &str)] = &[("classic", tk("Classic")), ("modern", tk("Modern"))];
 const MENU_DEFAULTS: &[(&str, &str)] = &[("lock", tk("Lock")), ("suspend", tk("Sleep")), ("logout", tk("Log out")), ("reboot", tk("Restart")), ("shutdown", tk("Shut down"))];
 const SCHOOLS: &[(&str, &str)] = &[("shafii", tk("Shafi'i")), ("hanafi", tk("Hanafi"))];
 /// A faith plugin's own language: Mandara's, or one of its languages (each
@@ -451,6 +468,7 @@ pub fn settings() -> &'static [Setting] {
         all.extend(alert_settings::entries());
         all.extend(system_settings::entries());
         all.extend(workflow_settings::entries());
+        all.extend(recorder_settings::entries());
         all.extend(tuning_settings::entries());
         all.extend(side_bar_settings::entries());
         all
@@ -491,8 +509,15 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/wallpaper/depth/split" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
         "/wallpaper/depth/split" if cfg.wallpaper.depth.auto_split => Some(tk("Set per wallpaper while the automatic split is on")),
         "/wallpaper/depth/regenerate" | "/wallpaper/depth/place_clock" if !cfg.wallpaper.depth_effect => Some(tk("Turn on the depth effect first")),
+        path if path.starts_with("/plugins/settings/screenshot/record_") => recorder_settings::locked(path, cfg),
         path => side_bar_settings::locked(path, cfg).or_else(|| surface_settings::locked(path, cfg)),
     }
+}
+
+/// Why choice `raw` of `setting` can't be picked under `cfg` right now
+/// (shown disabled, with the reason under the choices).
+pub fn choice_locked(setting: &Setting, raw: &str, cfg: &ShellConfig) -> Option<&'static str> {
+    if setting.path.starts_with("/plugins/settings/screenshot/record_") { recorder_settings::choice_locked(setting.path, raw, cfg) } else { None }
 }
 
 /// What a click on a locked toggle saves: a toggle that can't apply right
@@ -679,6 +704,8 @@ fn build() -> Vec<Setting> {
         s(Power, tk("Battery alerts"), "/power/peripheral_low_percent", tk("Peripheral low at"), tk("Threshold for peripherals (per-device overrides in config.toml under [power.device_thresholds])"), slider(5.0, 50.0, 1.0, "%")),
         s(Power, tk("Battery alerts"), "/power/notify_full", tk("Tell me when charged"), tk("A notice when the battery is full or reaches its charge limit"), Toggle),
         s(Power, tk("Battery alerts"), "/power/critical_pulse", tk("Pulse the battery when critical"), tk("The bar's battery chip breathes coral while the charge is critical"), Toggle),
+        s(Power, tk("Battery alerts"), "/power/panel_style", tk("Power panel style"), tk("Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away"), Choice(POWER_PANEL_STYLES)),
+        s(Power, tk("Battery alerts"), "/power/charging_pulse", tk("Pulse the battery while charging"), tk("The bar's battery chip breathes gently while it charges (never with Reduce motion)"), Toggle),
         s(Power, tk("Power profiles"), "/power/profile_ac", tk("On mains power"), tk("Switch to this profile when the charger is plugged in"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/profile_battery", tk("On battery"), tk("Switch to this profile when running on battery"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/saver_at_low", tk("Power saver at low battery"), tk("Switch to power-saver at the low threshold and back when charging"), Toggle),
@@ -1024,7 +1051,8 @@ mod tests {
     #[test]
     fn every_path_resolves_and_round_trips() {
         let cfg = ShellConfig::default();
-        for setting in settings() {
+        // A status or a button has no value to write back.
+        for setting in settings().iter().filter(|s| s.control.has_value()) {
             let v = get(&cfg, setting);
             // Writing the current value back must always be valid.
             let back = set(&cfg, setting, v.clone()).unwrap_or_else(|e| panic!("{}: {e}", setting.path));

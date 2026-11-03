@@ -89,6 +89,9 @@ pub enum AudioCommand {
     ToggleMute,
     SetMicVolume(f32),
     ToggleMicMute,
+    /// Mutes or unmutes an input by name (`None`: the default input), e.g.
+    /// the microphone a screen recording takes.
+    SetInputMute(Option<String>, bool),
     /// Global mute on / off: every sink and app stream ([`mute`]).
     SetMuteAll(bool),
     ToggleMuteAll,
@@ -261,6 +264,14 @@ fn execute(p: &mut Pulse, state: &AudioState, command: AudioCommand, global: &mu
             let mute = !p.source(name.clone())?.muted;
             p.ack(Command::SetSourceMute(protocol::SetDeviceMuteParams { device_index: None, device_name: Some(name), mute }))?;
             Ok(if mute { "mic muted" } else { "mic unmuted" }.into())
+        }
+        AudioCommand::SetInputMute(name, mute) => {
+            let name = match name.filter(|n| !n.is_empty()) {
+                Some(n) => CString::new(n).map_err(|e| e.to_string())?,
+                None => source.ok_or("no default input")?,
+            };
+            p.ack(Command::SetSourceMute(protocol::SetDeviceMuteParams { device_index: None, device_name: Some(name), mute }))?;
+            Ok(if mute { "input muted" } else { "input unmuted" }.into())
         }
         AudioCommand::SetStreamVolume(indices, v) => {
             let v = v.clamp(0.0, volume_limit());

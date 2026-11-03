@@ -187,7 +187,7 @@ narrow ones; everything mirrors for right-to-left languages.
 | **Displays** | **Arrangement**: the canvas, a card per display under it with two or more (also one that's off), Apply / Reset with a keep-or-revert countdown, and the selected display's power, resolution, refresh rate, scale, rotation and adaptive sync in aligned rows; **Shell on each display** (bar, dock, OSDs, launcher & pop-ups, notifications, wallpaper); **Profiles** as same-size cards (Apply, Delete, *Connected*), *Save as profile*, keep after restart and the revert / auto-profile settings; **Monitor brightness** (DDC/CI); **Night light**. |
 | **Audio & media** | Per-app mixer and outputs, default devices (rename, hide), volume step and ceiling, ignored players, shell sounds, visualizer and lyrics. |
 | **Network & Bluetooth** | Connection details, VPNs (WireGuard / OpenVPN import), hotspot with QR, saved networks, static IP / DNS; Bluetooth devices, pairing dialog, auto-connect, adapter. |
-| **Power & idle** | Status, idle timeouts (mains / battery), lock behaviour, idle commands, battery alerts and profiles, the power menu editor, event hooks. |
+| **Power & idle** | Status, idle timeouts (mains / battery), lock behaviour, idle commands, battery alerts (the Power panel's style, Classic or Modern, and the bar battery's pulses: coral while critical, a gentle breath while charging) and profiles, the power menu editor, event hooks. |
 | **Input** | Keyboard layouts and labels, repeat, Num Lock; mouse and touchpad; focus follows mouse. The cursor lives on Themes → Cursor (a card here links there). |
 | **Keyboard shortcuts** | Mandara's compositor binds with chord capture and conflict detection. |
 | **Date, time & location** | The system clock (time zone with search, set time automatically, and a one-click fix when it doesn't match your location's time zone), clock and date formats, the calendar's week numbers, weekend days, Hijri dates and Eastern Arabic numerals, calendar subscriptions and reminders, the shared location (weather and prayer times follow it unless they have their own), weather. |
@@ -392,7 +392,11 @@ narrow ones; everything mirrors for right-to-left languages.
   owns, from its own options to the shell sections it drives (Weather:
   place, units, animation; Prayer times: location, method, Asr school,
   Hijri adjustment; Screenshot: copy, save, timer, countdown, text
-  recognition, toolbar position and size),
+  recognition, toolbar position and size, and the screen recorder: which
+  recorder (with the installed ones and what each supports), source,
+  display, countdown, resolution, frame rate, codec, quality, format,
+  sound and devices, folder and file name; choices the recorder in use
+  can't do are greyed out with the reason),
   including the `[[settings]]` a third-party plugin declares.
 - **Users**: create, edit and delete accounts through AccountsService:
   full name, e-mail, language, administrator or standard, automatic login,
