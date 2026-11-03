@@ -223,13 +223,10 @@ impl SurfaceKey {
         let scale = cfg.scale.clamp(crate::plugins::notifications::TOAST_SCALE.0, crate::plugins::notifications::TOAST_SCALE.1);
         let card_w = cfg.width * scale;
         let joined = joined_drawer(shell, output, 0.0);
-        // A joined drawer opens on its own display, so it's capped by that
-        // display's height; free cards keep the first output's.
+        // Capped by the popups' own display, joined or not; the first
+        // output only when it isn't known.
         let first_h = || cx.try_global::<crate::overlays::Outputs>().and_then(|o| o.0.first().map(|g| g.height as f32)).unwrap_or(FALLBACK_OUTPUT_H);
-        let output_h = match (&joined, output) {
-            (Some(_), Some(o)) => o.height,
-            _ => first_h(),
-        };
+        let output_h = output.map_or_else(first_h, |o| o.height);
         let card_h = TOAST_MAX_H_PX * scale + STACK_GAP_PX;
         let cards = cards_that_fit(cfg.max_visible, card_h, output_h * MAX_SURFACE_SHARE);
         let stack_h = cards as f32 * card_h + EDGE_GAP_PX * 2.0;
