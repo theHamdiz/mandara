@@ -126,10 +126,10 @@ fn caps_line(s: &BackendStatus) -> String {
 
 impl StudioView {
     /// A setting's choice on Studio's one choice control
-    /// ([`super::choice::segmented`]): one line when it fits `avail`, else a
+    /// ([`super::choice::segmented`]): one line when it fits `room`, else a
     /// balanced grid; disabled options are dimmed and their reasons listed
     /// underneath.
-    pub(super) fn chip_choice(&mut self, setting: &Setting, options: Vec<ChipOption>, current: &str, avail: f32, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn chip_choice(&mut self, setting: &Setting, options: Vec<ChipOption>, current: &str, room: choice::Room, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let items = options
             .into_iter()
             .map(|o| {
@@ -139,7 +139,7 @@ impl StudioView {
                     .locked(o.locked.map(|r| SharedString::from(tr(r))))
             })
             .collect();
-        choice::segmented(avail, &choice::SETTING_CHOICE, items, p)
+        choice::segmented(room, &choice::SETTING_CHOICE, items, p)
     }
 
     /// The sound devices, read in the background on each visit (and again
@@ -207,12 +207,12 @@ impl StudioView {
     }
 
     /// A sound device picker: Default plus the server's devices.
-    pub(super) fn recorder_device_control(&mut self, setting: &Setting, input: bool, avail: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn recorder_device_control(&mut self, setting: &Setting, input: bool, room: choice::Room, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let current = crate::registry::get(cfg, setting).as_str().unwrap_or_default().to_string();
         let Some(options) = self.recorder_device_options(setting, input, cfg, cx) else {
             return div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("Reading audio devices…")).into_any_element();
         };
-        let chips = self.chip_choice(setting, options, &current, avail, p, cx);
+        let chips = self.chip_choice(setting, options, &current, room, p, cx);
         if self.recorder_row.devices.failed_at.is_none() {
             return chips;
         }
@@ -220,7 +220,8 @@ impl StudioView {
         div()
             .row()
             .flex_col()
-            .cross_end()
+            .when(!room.under, |el| el.cross_end())
+            .when(room.under, |el| el.cross_start())
             .gap(px(SPACE_6_PX))
             .child(chips)
             .child(div().max_w(px(super::LOCKED_NOTE_MAX_W_PX)).text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("The audio server isn't reachable"))))
@@ -240,10 +241,10 @@ impl StudioView {
     }
 
     /// A display picker: Focused plus every output.
-    pub(super) fn recorder_display_control(&mut self, setting: &Setting, avail: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn recorder_display_control(&mut self, setting: &Setting, room: choice::Room, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let current = crate::registry::get(cfg, setting).as_str().unwrap_or_default().to_string();
         let options = self.recorder_display_options(setting, cfg, cx);
-        self.chip_choice(setting, options, &current, avail, p, cx)
+        self.chip_choice(setting, options, &current, room, p, cx)
     }
 
     /// The recorders on this computer: installed or not, the one in use,

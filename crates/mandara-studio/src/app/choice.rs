@@ -66,6 +66,26 @@ pub const GREETER_CHOICE: ChoiceStyle = ChoiceStyle { pad_x: SPACE_10_PX, text_p
 /// Weight labels are measured at: the active pill's, the widest one drawn.
 const MEASURE_WEIGHT: FontWeight = FontWeight::MEDIUM;
 
+/// Where a choice sits and how wide it may grow.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Room {
+    /// The most width the control may take.
+    pub width: f32,
+    /// It sits under its label (notes start at its leading edge), not
+    /// beside it at the row's end (notes end at its trailing edge).
+    pub under: bool,
+}
+
+impl Room {
+    pub fn beside(width: f32) -> Self {
+        Room { width, under: false }
+    }
+
+    pub fn under(width: f32) -> Self {
+        Room { width, under: true }
+    }
+}
+
 /// How a choice lays out its options.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Shape {
@@ -175,12 +195,13 @@ pub fn fits_line(labels: &[SharedString], avail: f32, style: &ChoiceStyle) -> bo
 pub fn placed(items: Vec<ChoiceItem>, beside: f32, under: f32, style: &ChoiceStyle, p: &MandaraPalette) -> (AnyElement, bool) {
     let labels: Vec<SharedString> = items.iter().map(|i| i.label.clone()).collect();
     let fits = fits_line(&labels, beside, style);
-    (segmented(if fits { beside } else { under }, style, items, p), !fits)
+    (segmented(if fits { Room::beside(beside) } else { Room::under(under) }, style, items, p), !fits)
 }
 
 /// The control: options on a track, one line or a balanced grid that fits
-/// `avail` logical px (see the module docs).
-pub fn segmented(avail: f32, style: &ChoiceStyle, items: Vec<ChoiceItem>, p: &MandaraPalette) -> AnyElement {
+/// `room` (see the module docs).
+pub fn segmented(room: Room, style: &ChoiceStyle, items: Vec<ChoiceItem>, p: &MandaraPalette) -> AnyElement {
+    let avail = room.width;
     let widths: Option<Vec<f32>> = items.iter().map(|i| label_width(&i.label, style.text_px)).collect();
     let shape = widths.map_or(Shape::Line, |w| shape(&w, avail, style));
     let notes = lock_notes(&items);
@@ -212,13 +233,13 @@ pub fn segmented(avail: f32, style: &ChoiceStyle, items: Vec<ChoiceItem>, p: &Ma
     if notes.is_empty() {
         return control;
     }
-    // The reasons under the track: at its end beside a label (where a line
-    // sits), at its start under one (where a grid sits).
+    // The reasons under the track: at its end beside a label, at its start
+    // under one.
     div()
         .row()
         .flex_col()
-        .when(shape == Shape::Line, |el| el.cross_end())
-        .when(shape != Shape::Line, |el| el.cross_start())
+        .when(!room.under, |el| el.cross_end())
+        .when(room.under, |el| el.cross_start())
         .gap(px(SPACE_6_PX))
         .child(control)
         .children(notes.into_iter().map(|r| div().max_w(px(super::LOCKED_NOTE_MAX_W_PX)).text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(r))))

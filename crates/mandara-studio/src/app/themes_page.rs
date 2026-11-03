@@ -357,7 +357,7 @@ impl StudioView {
         let mock = shell_mock(p, thumb, mock_w, (mock_w * HERO_MOCK_ASPECT).floor(), RADIUS_18_PX, true);
         // The info column beside (or under) the mock, less its padding.
         let info_w = if split { inner_w - mock_w - SPACE_20_PX } else { inner_w } - 2.0 * SPACE_6_PX;
-        let mode = registry::by_path(THEME_MODE_PATH).map(|setting| self.control(setting, info_w, cfg, p, cx));
+        let mode = registry::by_path(THEME_MODE_PATH).map(|setting| self.control(setting, super::choice::Room::under(info_w), cfg, p, cx));
         let info = div()
             .flex_1()
             .min_w(px(0.0))

@@ -313,9 +313,10 @@ impl StudioView {
         field
     }
 
-    /// A setting's control. `avail` is the most width it may take (a long
-    /// choice turns into a balanced grid that fits it).
-    fn control(&mut self, setting: &Setting, avail: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    /// A setting's control. `room` is the most width it may take (a long
+    /// choice turns into a balanced grid that fits it) and whether it sits
+    /// under its label.
+    fn control(&mut self, setting: &Setting, room: choice::Room, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let value = registry::get(cfg, setting);
         match setting.control.clone() {
             Control::Time => {
@@ -422,11 +423,11 @@ impl StudioView {
             Control::Choice(choices) => {
                 let current = choice_current(&value);
                 let options = self.choice_options(setting, choices, &current, cfg);
-                self.chip_choice(setting, options, &current, avail, p, cx)
+                self.chip_choice(setting, options, &current, room, p, cx)
             }
             Control::RecorderBackends => self.recorder_backends_control(cfg, p, cx),
-            Control::Device { input } => self.recorder_device_control(setting, input, avail, cfg, p, cx),
-            Control::Display => self.recorder_display_control(setting, avail, cfg, p, cx),
+            Control::Device { input } => self.recorder_device_control(setting, input, room, cfg, p, cx),
+            Control::Display => self.recorder_display_control(setting, room, cfg, p, cx),
             Control::Text { placeholder } | Control::OptionalText { placeholder } => {
                 let current = value.as_str().unwrap_or_default().to_string();
                 self.field(setting, current, placeholder, cx).into_any_element()
@@ -630,7 +631,7 @@ impl StudioView {
                 // it, where its grid gets the whole row (fewer, wider rows)
                 // and the label and help keep their measure.
                 let stack = self.stack_rows || (locked.is_none() && self.choice_labels(s, cfg, cx).is_some_and(|labels| !choice::fits_line(&labels, beside, &choice::SETTING_CHOICE)));
-                let avail = if stack { under } else { beside };
+                let room = if stack { choice::Room::under(under) } else { choice::Room::beside(beside) };
                 // A control that does nothing in the current setup shows why
                 // instead (toggles render their own locked state).
                 let control = match locked {
@@ -640,7 +641,7 @@ impl StudioView {
                         .text_color(p.on_surface_variant.with_alpha(LOCKED_OPACITY).hsla())
                         .child(mandara_ui::bidi::paragraph(tr(reason)))
                         .into_any_element(),
-                    _ => self.control(s, avail, cfg, p, cx),
+                    _ => self.control(s, room, cfg, p, cx),
                 };
                 let picker = (s.control == Control::Icon).then(|| self.icon_picker(s, cfg, p, cx));
                 card = card.child(
