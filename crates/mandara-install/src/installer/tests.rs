@@ -325,6 +325,11 @@ fn real_install_puts_files_in_place_and_runs_setup_and_greeter() {
     let text = host.text();
     assert!(text.contains("Mandara is installed.") && text.contains("Upgrade:         mandara update"));
     assert!(text.contains("is not on your PATH"));
+    // `--yes` takes the default: the folder goes on PATH, once.
+    let profile = std::fs::read_to_string(f.home().join(".profile")).unwrap();
+    assert!(profile.contains(&format!("export PATH=\"{}:$PATH\"", f.home().join(".local/bin").display())));
+    assert!(std::fs::read_to_string(f.home().join(".bashrc")).unwrap().contains("Mandara installer"));
+    assert!(super::add_to_path(&f.home(), &f.home().join(".local/bin")).unwrap().is_empty());
     // No published checksum reachable: installed with a warning.
     assert!(text.contains("couldn't verify this binary"));
 }

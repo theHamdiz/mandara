@@ -31,7 +31,8 @@ signed by Mandara's release key in `SHA256SUMS.sig`: `mandara install` and
 every update check that signature and refuse a release without it.
 
 `mandara install` copies itself to `~/.local/bin`, after **checking its own
-SHA-256** against the release's published checksums. Then it installs the
+SHA-256** against the release's published checksums (and offers to put that
+folder on your PATH if it isn't). Then it installs the
 runtime packages your distribution needs (asking for sudo, doas, run0 or
 pkexec only for that), installs a root-owned **admin helper** (a copy of
 Mandara only root can change, the one Studio's administrator actions run,

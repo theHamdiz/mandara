@@ -976,7 +976,19 @@ impl<'a> Installer<'a> {
         self.say(Level::Ok, "Mandara Studio desktop entry");
         let bin_dir = self.paths.bin_dir.clone();
         if !std::env::split_paths(&self.facts.path_var).any(|p| p == bin_dir) {
-            self.say(Level::Warn, format!("{} is not on your PATH — add it in your shell profile (e.g. export PATH=\"{}:$PATH\")", bin_dir.display(), bin_dir.display()));
+            self.say(Level::Warn, format!("{} is not on your PATH", bin_dir.display()));
+            if self.ask(&format!("Add {} to your PATH in your shell profiles?", bin_dir.display()), true) && !self.dry() {
+                match add_to_path(&self.facts.home, &bin_dir) {
+                    Ok(files) if files.is_empty() => {}
+                    Ok(files) => {
+                        let names: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
+                        self.say(Level::Ok, format!("on your PATH in new terminals ({})", names.join(", ")));
+                    }
+                    Err(e) => self.say(Level::Warn, format!("couldn't add it to your PATH ({e}) — add export PATH=\"{}:$PATH\" to your shell profile", bin_dir.display())),
+                }
+            } else {
+                self.say(Level::Detail, format!("add it yourself: export PATH=\"{}:$PATH\"", bin_dir.display()));
+            }
         }
         Ok(())
     }
@@ -1335,3 +1347,35 @@ fn user_in_group(user: &str, group: &str, groups: &str, passwd: &str) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+/// Marks the lines [`add_to_path`] writes, so a second install adds nothing.
+const PATH_MARK: &str = "# Added by the Mandara installer";
+
+/// Puts `bin_dir` on `PATH` in `~/.profile`, `~/.bashrc`, an existing
+/// `~/.zshrc` and, when fish is set up, a fish `conf.d` snippet. Returns the
+/// files it changed; a file that already has the line is left alone.
+fn add_to_path(home: &Path, bin_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
+    use std::io::Write as _;
+    let dir = bin_dir.display();
+    let posix = format!("\n{PATH_MARK}\ncase \":$PATH:\" in *\":{dir}:\"*) ;; *) export PATH=\"{dir}:$PATH\" ;; esac\n");
+    let mut targets = vec![(home.join(".profile"), posix.clone()), (home.join(".bashrc"), posix.clone())];
+    if home.join(".zshrc").is_file() {
+        targets.push((home.join(".zshrc"), posix));
+    }
+    let fish = home.join(".config/fish");
+    if fish.is_dir() {
+        targets.push((fish.join("conf.d/mandara-path.fish"), format!("{PATH_MARK}\nfish_add_path --path {dir}\n")));
+    }
+    let mut changed = Vec::new();
+    for (file, line) in targets {
+        if std::fs::read_to_string(&file).is_ok_and(|s| s.contains(PATH_MARK)) {
+            continue;
+        }
+        if let Some(parent) = file.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::OpenOptions::new().create(true).append(true).open(&file)?.write_all(line.as_bytes())?;
+        changed.push(file);
+    }
+    Ok(changed)
+}
