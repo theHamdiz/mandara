@@ -3042,7 +3042,6 @@ dependencies = [
  "qoi",
  "ravif",
  "rayon",
- "rgb",
  "tiff",
  "zune-core",
  "zune-jpeg",
@@ -5391,8 +5390,6 @@ dependencies = [
 [[package]]
 name = "pure-onnx-ocr"
 version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ec2635a365fa300c8e0a9b517fe5a70253f4d13e5b9d8d2f49f728d4a832aa6"
 dependencies = [
  "geo-types",
  "getrandom 0.4.3",
@@ -5402,7 +5399,6 @@ dependencies = [
  "log",
  "ndarray",
  "rayon",
- "time",
  "tract-linalg",
  "tract-onnx",
  "web-time",

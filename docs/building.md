@@ -76,6 +76,9 @@ is GPUI itself with rounded content masks, so a rounded card that hides its
 overflow clips covers and art to its corners, and hover styles that follow
 the pointer on every element, with or without an id
 ([`MANDARA-PATCHES.md`](../vendor/gpui/MANDARA-PATCHES.md)).
+`vendor/pure-onnx-ocr` is the OCR engine with upstream's sources and a
+manifest that no longer turns on every codec of the `image` crate
+([`MANDARA-PATCHES.md`](../vendor/pure-onnx-ocr/MANDARA-PATCHES.md)).
 
 ## Build fingerprint
 

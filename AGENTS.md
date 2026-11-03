@@ -66,7 +66,8 @@ Zed's GPU-accelerated UI framework.
 | `crates/mandara-install` | `mandara install` / `uninstall`: per-distribution package tables and the package-manager abstraction. |
 | `crates/mandara-version` | Build identity: component versions, content hashes, git revision, source fingerprint. |
 | `vendor/gpui_wgpu` | GPUI's wgpu renderer, vendored with Mandara's patches (GPU memory, fonts, colour emoji, Vulkan first, rounded clipping). Every change is listed in [`MANDARA-PATCHES.md`](vendor/gpui_wgpu/MANDARA-PATCHES.md) and marked `Mandara patch` in the source. |
-| `vendor/gpui` | GPUI core, vendored for rounded content masks (a rounded element whose overflow is hidden or clipped clips its children to its rounded shape) and for `.hover()` on elements without an `.id()`, which upstream only repaints when something else re-renders the view ([`MANDARA-PATCHES.md`](vendor/gpui/MANDARA-PATCHES.md)). |
+| `vendor/gpui` | GPUI core, vendored for rounded content masks (a rounded element whose overflow is hidden or clipped clips its children to its rounded shape) and for `.hover()` on elements without an `.id()`, which upstream only repaints when something else re-renders the view, and with only the image decoders its `ImageFormat` names ([`MANDARA-PATCHES.md`](vendor/gpui/MANDARA-PATCHES.md)). |
+| `vendor/pure-onnx-ocr` | The PaddleOCR engine behind text recognition, vendored with an unchanged `src/` and a manifest that stops it turning on every codec of the `image` crate ([`MANDARA-PATCHES.md`](vendor/pure-onnx-ocr/MANDARA-PATCHES.md)). |
 | `xtask` | `cargo xtask`: versioning, fingerprinted builds, packaging, artwork, delta updates, the resource budget and the demo sandbox. |
 | `tools/mandara-delta` | The delta-update format and CLI, outside the workspace so plugin authors can `cargo install` it alone. |
 | `plugins/examples` | Example third-party plugins (`moon-phase`), built on their own for `wasm32-wasip2`. |
