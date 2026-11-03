@@ -1575,15 +1575,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dirs"
-version = "7.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d57d423b3c82e89b9a24ca3091fee61f456a26edbd28d26c65906f4bc1dcd8f"
-dependencies = [
- "dirs-sys",
-]
-
-[[package]]
 name = "dirs-sys"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3051,7 +3042,6 @@ dependencies = [
  "qoi",
  "ravif",
  "rayon",
- "rgb",
  "tiff",
  "zune-core",
  "zune-jpeg",
@@ -3657,7 +3647,7 @@ version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-channel",
- "dirs 7.0.0",
+ "dirs",
  "kdl 6.7.1",
  "mandara-i18n",
  "mandara-theme",
@@ -3720,7 +3710,7 @@ dependencies = [
  "async-channel",
  "chrono",
  "clap",
- "dirs 7.0.0",
+ "dirs",
  "gpui",
  "gpui_platform",
  "image",
@@ -3815,7 +3805,7 @@ dependencies = [
  "cbc",
  "chrono",
  "chrono-tz",
- "dirs 7.0.0",
+ "dirs",
  "flate2",
  "fontdb",
  "futures",
@@ -3876,7 +3866,7 @@ dependencies = [
  "async-channel",
  "chrono",
  "chrono-tz",
- "dirs 7.0.0",
+ "dirs",
  "gpui",
  "image",
  "kdl 6.7.1",
@@ -3910,7 +3900,7 @@ version = "0.3.3"
 dependencies = [
  "anyhow",
  "approx",
- "dirs 7.0.0",
+ "dirs",
  "image",
  "mandara-media",
  "material-colors",
@@ -3926,12 +3916,11 @@ dependencies = [
 name = "mandara-ui"
 version = "0.11.0"
 dependencies = [
- "ab_glyph",
  "anyhow",
  "async-channel",
  "chrono",
  "cosmic-text",
- "dirs 7.0.0",
+ "dirs",
  "fontdb",
  "gpui",
  "gpui_platform",
@@ -5406,8 +5395,6 @@ dependencies = [
 [[package]]
 name = "pure-onnx-ocr"
 version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ec2635a365fa300c8e0a9b517fe5a70253f4d13e5b9d8d2f49f728d4a832aa6"
 dependencies = [
  "geo-types",
  "getrandom 0.4.3",
@@ -5417,7 +5404,6 @@ dependencies = [
  "log",
  "ndarray",
  "rayon",
- "time",
  "tract-linalg",
  "tract-onnx",
  "web-time",
@@ -8900,7 +8886,7 @@ dependencies = [
  "core-foundation",
  "core-graphics",
  "core-text",
- "dirs 6.0.0",
+ "dirs",
  "dwrote",
  "float-ord",
  "freetype-sys",

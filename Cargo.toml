@@ -91,7 +91,8 @@ xkbcommon = { version = "0.8", default-features = false }
 smallvec = { version = "1.16.4", features = ["union", "const_new"] }
 
 # Color science & imaging
-palette = { version = "0.7.7", default-features = false, features = ["std", "approx"] }
+# No `approx`: the tests compare plain floats, never palette types.
+palette = { version = "0.7.7", default-features = false, features = ["std"] }
 material-colors = { version = "0.5", features = ["std", "quantize"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 
@@ -113,7 +114,9 @@ sha-crypt = { version = "0.5", default-features = false }
 kdl = { version = "6", default-features = false, features = ["v1"] }
 # No `macos_fsevent`: inotify is the Linux backend and is always built.
 notify = { version = "8", default-features = false }
-dirs = "7.0.0"
+# 6: the version GPUI's font-kit links. On Linux it is identical to 7, which
+# only changes Windows' `preference_dir`, so one copy is linked.
+dirs = "6"
 
 # Wi-Fi share QR codes (hotspot, saved networks): pure Rust, no deps.
 qrcodegen = "1.8"
@@ -180,6 +183,10 @@ approx = "0.5"
 async-task = { git = "https://github.com/zed-industries/async-task.git", rev = "015845a19fc31752c02367567d3b8900a406f9da" }
 calloop = { git = "https://github.com/zed-industries/calloop", rev = "3759371fee14c40066d64777e2a36b6ffcc22590" }
 khronos-egl = { git = "https://github.com/zed-industries/khronos-egl", rev = "42214b36347b108fd9630ca6254b96dde59e04fe" }
+# The OCR engine without the `image` crate's default features, which turned
+# on every codec (and the AVIF encoder) in the whole shell:
+# vendor/pure-onnx-ocr/MANDARA-PATCHES.md.
+pure-onnx-ocr = { path = "vendor/pure-onnx-ocr" }
 
 # GPUI's wgpu renderer with Mandara's per-window GPU-memory patches (lazy,
 # bounding-box-sized path/MSAA textures, tunable MSAA / present mode, smaller

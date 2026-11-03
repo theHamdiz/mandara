@@ -89,20 +89,16 @@ futures-concurrency = { version = "7.7.1", optional = true }
 gpui_macros = { git = "https://github.com/zed-industries/zed", rev = "ec86047d67acd6fddd81392f44ed6ebcc6e7f531" }
 gpui_shared_string = { git = "https://github.com/zed-industries/zed", rev = "ec86047d67acd6fddd81392f44ed6ebcc6e7f531" }
 http_client = { git = "https://github.com/zed-industries/zed", rev = "ec86047d67acd6fddd81392f44ed6ebcc6e7f531" }
+# Mandara patch 3: only the formats GPUI's own `ImageFormat` names (no DDS,
+# EXR, farbfeld, HDR, QOI or TGA decoders).
 image = { version = "0.25.1", default-features = false, features = [
     "bmp",
-    "dds",
-    "exr",
-    "ff",
     "gif",
-    "hdr",
     "ico",
     "jpeg",
     "png",
     "pnm",
-    "qoi",
     "rayon",
-    "tga",
     "tiff",
     "webp",
 ] }

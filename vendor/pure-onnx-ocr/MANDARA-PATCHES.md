@@ -1,0 +1,47 @@
+# Mandara patches to `pure-onnx-ocr`
+
+Vendored from crates.io, `pure-onnx-ocr` 0.3.2
+([siska-tech/pure-onnx-ocr](https://github.com/siska-tech/pure-onnx-ocr),
+Apache-2.0, see `LICENSE-APACHE`), the pure-Rust PaddleOCR engine behind
+Mandara's text recognition (`crates/mandara-services/src/ocr.rs`), and wired
+in through the workspace's `[patch.crates-io]`. The Rust sources are
+upstream's, unchanged; only the manifest differs.
+
+## 1. No default features of `image` and `imageproc` (`Cargo.toml`)
+
+Upstream depends on `image = "0.25"` and `imageproc = "0.25"` with their
+default features. Cargo unifies features across the build, so that turned on
+every codec of the `image` crate in the whole shell, the AVIF *encoder*
+(`ravif`) included, although nothing in Mandara writes AVIF and the engine
+itself never decodes a file: Mandara hands it pixels in memory
+(`OcrEngine::run_from_image`). Both now have `default-features = false` and
+keep only `rayon` (imageproc's default, and the parallel pixel iterators the
+default gave `image`). The codecs the shell decodes are chosen by the crates
+that decode them (`image` in the workspace manifest, GPUI's patch 3). This
+removes `ravif`, `avif-serialize`, `imgref` and `loop9` from the build, and
+with GPUI's patch 3 the EXR, QOI, DDS, HDR, TGA and farbfeld decoders.
+
+The engine's own `run_from_path` / `run_from_bytes` decode with whichever
+codecs the build has, which in Mandara are PNG, JPEG, WebP, GIF, BMP, ICO,
+TIFF and PNM.
+
+## 2. No `time` dependency (`Cargo.toml`)
+
+Upstream lists `time = "0.3.44"`, but no source file uses the crate: the
+engine's clock is `std::time::Instant` (`web_time::Instant` in browsers, see
+`src/time.rs`). Dropping it takes `time`, `time-core`, `deranged`,
+`powerfmt` and `num-conv` out of the build; nothing else in Mandara links
+them.
+
+## Packaging changes
+
+Vendored: `src/` (without `src/bin/`, the `ocr_smoke` binary), `Cargo.toml`
+and `LICENSE-APACHE` (the Apache-2.0 text, as in `vendor/gpui`). Not vendored:
+the smoke binary, examples, integration tests, docs and scripts. The manifest
+keeps upstream's package fields, library target, features and dependency
+versions; it drops the binary, example and test targets and the
+dev-dependencies, sets `publish = false` and declares its own empty
+`[workspace]` so it stays outside Mandara's.
+
+To move to a new upstream release, copy its `src/` (minus `src/bin/`), carry
+the dependency versions over into this `Cargo.toml` and keep patch 1.
