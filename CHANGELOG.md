@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.11.0 — 2026-11-03
+
+A Modern style for the Power panel. The battery breathes while it charges.
+No more CPU driver names in the Power panel.
+
 ### New
 
 - **A Modern style for the Power panel.** Pick it in Studio → Power &
