@@ -1,6 +1,8 @@
 # README setup "Daylight": light theme, a minimal island bar, the month,
 # a to-do list, the focus timer and a quote over a pastel sky.
-# `cargo xtask sandbox up --config xtask/src/sandbox/setups/daylight.toml --size 2880x1620 --scale 1.5`,
+# `cargo xtask sandbox up --config xtask/src/sandbox/setups/daylight.toml --size 2880x1620 --scale 2`,
+# the wallpaper once:
+#   sandbox msg wallgen generate mesh --palette rose-pine --seed 0x27 --size 2880x1620 --format png --no-apply --light
 # then `sandbox msg theme mode light`.
 
 [appearance]
@@ -71,11 +73,11 @@ pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.dem
 
 [plugins]
 defaults_version = 1
-enabled = ["dock", "todo", "pomodoro", "desktop-productivity", "desktop-calendar", "desktop-clocks"]
+enabled = ["dock", "todo", "pomodoro", "desktop-productivity", "desktop-calendar", "desktop-clocks", "wallpaper-generator"]
 
 [wallpaper]
-path = "/home/demo/Pictures/Wallpapers/pastel-sky.png"
+path = "/home/demo/Pictures/Wallpapers/Generated/mesh-000027-2880x1620.png"
 
 [wallpaper.variants]
-light = "/home/demo/Pictures/Wallpapers/pastel-sky.png"
+light = "/home/demo/Pictures/Wallpapers/Generated/mesh-000027-2880x1620.png"
 dark = "/home/demo/Pictures/Wallpapers/lagoon.png"

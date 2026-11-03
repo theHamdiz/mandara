@@ -1,0 +1,143 @@
+# README widgets "Your day": a cookie-dial clock, a quote, the month, a taped
+# to-do list on torn paper, a sticky note, the focus timer and the agenda.
+# `cargo xtask sandbox up --config xtask/src/sandbox/setups/widgets-desk.toml --size 2880x1620 --scale 2`,
+# then the demo content of `config.hero.toml` (to-dos, the "Weekend plans"
+# note, ~/Documents/demo.ics), the wallpaper once:
+#   sandbox msg wallgen generate mesh --palette kanagawa --seed 0x22 --size 2880x1620 --format png --no-apply
+#   sandbox msg theme wallpaper tonal-spot
+# then `sandbox msg notifications clear` and `sandbox shot`.
+
+[appearance]
+icon_theme = "Papirus-Dark"
+
+[desktop.widgets]
+migrated = true
+
+[[desktop.widgets.items]]
+id = "desk-clock"
+kind = "clock"
+face = "analog"
+date = false
+seconds = false
+
+[desktop.widgets.items.analog]
+dial = "cookie"
+dial_fill = true
+
+[desktop.widgets.items.place]
+anchor = "top-left"
+x = 0.05
+y = 0.07
+scale = 1.05
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "desk-quote"
+kind = "quote"
+width = 560.0
+
+[desktop.widgets.items.place]
+anchor = "top"
+x = 0.0
+y = 0.1
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "desk-month"
+kind = "date"
+layout = "month"
+
+[desktop.widgets.items.look]
+plate = "solid"
+plate_opacity = 0.9
+
+[desktop.widgets.items.place]
+anchor = "top-right"
+x = -0.05
+y = 0.07
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "desk-todo"
+kind = "todo"
+rows = 5
+show_done = true
+title = true
+add_row = true
+width = 380.0
+
+[desktop.widgets.items.look]
+plate = "solid"
+plate_shape = "deckle"
+plate_opacity = 0.96
+chrome = "tape"
+shadow = "soft"
+
+[desktop.widgets.items.place]
+anchor = "bottom-left"
+x = 0.06
+y = -0.13
+rotation = -2.0
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "desk-note"
+kind = "note"
+note = "Weekend plans"
+lines = 5
+sheet = "pastel"
+ruling = "ruled"
+width = 330.0
+
+[desktop.widgets.items.look]
+shadow = "soft"
+
+[desktop.widgets.items.place]
+anchor = "bottom"
+x = -0.03
+y = -0.15
+rotation = 3.0
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "desk-focus"
+kind = "pomodoro"
+style = "ring"
+controls = true
+size = 250.0
+
+[desktop.widgets.items.place]
+anchor = "bottom"
+x = 0.17
+y = -0.17
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "desk-agenda"
+kind = "date"
+layout = "agenda"
+rows = 4
+
+[desktop.widgets.items.place]
+anchor = "bottom-right"
+x = -0.05
+y = -0.13
+depth = "front"
+
+[dock]
+pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
+
+[location]
+shared = true
+
+[plugins]
+defaults_version = 1
+enabled = ["dock", "todo", "notes", "desktop-productivity", "desktop-calendar", "desktop-clocks", "wallpaper-generator"]
+
+[[calendar.sources]]
+name = "Demo"
+location = "/home/demo/Documents/demo.ics"
+enabled = true
+
+[wallpaper]
+path = "/home/demo/Pictures/Wallpapers/Generated/mesh-000022-2880x1620.png"

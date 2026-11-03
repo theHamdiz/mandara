@@ -801,6 +801,24 @@ mod tests {
     }
 
     #[test]
+    fn screenshot_setups_parse_and_say_how_they_are_shot() {
+        let dir = crate::root().join("xtask/src/sandbox/setups");
+        let mut seen = 0;
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.extension().is_none_or(|e| e != "toml") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            let table: toml::Table = toml::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            assert!(text.starts_with('#') && text.contains("sandbox up --config"), "{}: the header says how it is shot", path.display());
+            assert!(table.get("wallpaper").and_then(|w| w.get("path")).is_some(), "{}: a wallpaper of its own", path.display());
+            seen += 1;
+        }
+        assert!(seen >= 9, "the README's setups and widget shots");
+    }
+
+    #[test]
     fn presets_parse() {
         for preset in [CONFIG_DEMO, CONFIG_HERO] {
             let table: toml::Table = toml::from_str(preset).unwrap();
