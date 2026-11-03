@@ -11,7 +11,7 @@ The rest of what's built in.
 
 <table>
 <tr>
-<td width="33%" valign="top"><img src="screenshots/clock-agenda.png" alt="Clock panel: the time, a month calendar with week numbers, Hijri dates and event dots, and today's agenda" width="100%"/><br/><sub><b>Clock and calendar</b> with ICS feeds, Hijri dates and an agenda</sub></td>
+<td width="33%" valign="top"><img src="screenshots/clock-agenda.webp" alt="Clock panel: the time, a month calendar with week numbers, Hijri dates and event dots, and today's agenda" width="100%"/><br/><sub><b>Clock and calendar</b> with ICS feeds, Hijri dates and an agenda</sub></td>
 <td width="33%" valign="top"><img src="screenshots/world-clock.png" alt="World clock with a meeting planner" width="100%"/><br/><sub><b>World clock</b> and meeting planner</sub></td>
 <td width="33%" valign="top"><img src="screenshots/color-picker.png" alt="Color picker with formats, tonal ramp and contrast" width="100%"/><br/><sub><b>Color picker</b> with OKLCH ramps and WCAG contrast</sub></td>
 </tr>
@@ -68,8 +68,8 @@ The rest of what's built in.
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/clipboard.png" alt="The clipboard panel: filter chips, a pinned note, a link shown by its site, a CSS rule in monospace, an image thumbnail, a PDF from Downloads, an OKLCH colour swatch and rendered Markdown" width="100%"/><br/><sub><b>Clipboard</b>: every kind shown the way it looks best</sub></td>
-<td width="50%" valign="top"><img src="screenshots/clipboard-collection.png" alt="The clipboard filtered to the Palette collection: two colours with their swatches, hex and OKLCH" width="100%"/><br/><sub><b>Collections</b>: a palette kept together, with rename and delete</sub></td>
+<td width="50%" valign="top"><img src="screenshots/clipboard.webp" alt="The clipboard panel: filter chips, a pinned note, a link shown by its site, a CSS rule in monospace, an image thumbnail, a PDF from Downloads, an OKLCH colour swatch and rendered Markdown" width="100%"/><br/><sub><b>Clipboard</b>: every kind shown the way it looks best</sub></td>
+<td width="50%" valign="top"><img src="screenshots/clipboard-collection.webp" alt="The clipboard filtered to the Palette collection: two colours with their swatches, hex and OKLCH" width="100%"/><br/><sub><b>Collections</b>: a palette kept together, with rename and delete</sub></td>
 </tr>
 </table>
 

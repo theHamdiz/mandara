@@ -2,8 +2,11 @@
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/greeter.webp" alt="Mandara Login" width="100%"/><br/><sub><b>Mandara Login</b>, the login manager</sub></td>
-<td width="50%" valign="top"><img src="screenshots/lock-screen.webp" alt="Lock screen" width="100%"/><br/><sub><b>Lock screen</b></sub></td>
+<td width="50%" valign="top"><img src="screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons" width="100%"/><br/><sub><b>Mandara Login</b>, the login manager: the <b>Mandara</b> design</sub></td>
+<td width="50%" valign="top"><img src="screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" width="100%"/><br/><sub>The <b>Midnight card</b> design</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="screenshots/lock-screen.webp" alt="The lock screen: the date, a big clock, the avatar and the password field over soft violet and coral waves" width="50%"/><br/><sub><b>Lock screen</b></sub></td>
 </tr>
 </table>
 
@@ -60,7 +63,7 @@
   `loginctl lock-session` locks it; preview it with `mandara lock --demo`.
 
 <p align="center">
-  <img src="screenshots/studio-login.png" alt="Studio: the login screen designer with a live preview" width="100%"/>
+  <img src="screenshots/studio-login.webp" alt="Studio: the login screen designer with a live preview" width="100%"/>
   <br/>
   <sub>Studio → Login screen: the designer with a live preview.</sub>
 </p>
