@@ -35,7 +35,8 @@ pub type Asset = (String, Vec<u8>);
 /// One target's manifest entry for a release, with a patch (verified,
 /// returned as an asset) from each of the `previous` releases (version and
 /// binary), so an install that skipped releases still updates by patch.
-/// A previous version listed twice gets one patch.
+/// A previous version listed twice gets one patch, and the release itself
+/// (a rebuild) none.
 pub fn target_entry(name: &str, version: &str, target: Option<&str>, archive: &Asset, binary_path: &str, new_bin: &[u8], previous: &[(&str, &[u8])]) -> Result<(Target, Vec<Asset>), String> {
     let mut entry = Target {
         archive: FileRef { file: archive.0.clone(), sha256: sha256_hex(&archive.1), size: archive.1.len() as u64 },
@@ -44,9 +45,11 @@ pub fn target_entry(name: &str, version: &str, target: Option<&str>, archive: &A
         meta: None,
     };
     let mut patches = Vec::new();
+    let current = version.trim_start_matches('v');
     for &(from, old_bin) in previous {
         let from = from.trim_start_matches('v');
-        if entry.patches.iter().any(|p| p.from == from) {
+        // The release itself (a rebuild, `v` or not) and repeats get none.
+        if from == current || entry.patches.iter().any(|p| p.from == from) {
             continue;
         }
         let patch = diff_verified(old_bin, new_bin)?;
@@ -180,9 +183,10 @@ mod tests {
         let mut v3 = v2.clone();
         v3.drain(100_000..110_000);
         let archive = ("mandara-0.3.0-x86_64-linux-gnu.tar.gz".to_string(), b"tarball".to_vec());
-        let previous = [("v0.2.0", v2.as_slice()), ("0.1.0", v1.as_slice()), ("0.2.0", v2.as_slice())];
+        let previous = [("v0.2.0", v2.as_slice()), ("0.1.0", v1.as_slice()), ("0.2.0", v2.as_slice()), ("v0.3.0", v3.as_slice())];
         let (entry, assets) = target_entry("mandara", "0.3.0", Some("x86_64-linux-gnu"), &archive, "bin/mandara", &v3, &previous).unwrap();
-        // One patch per version, the repeated 0.2.0 included once.
+        // One patch per version: the repeated 0.2.0 once, the release
+        // itself (v0.3.0) none.
         assert_eq!(entry.patches.iter().map(|p| p.from.as_str()).collect::<Vec<_>>(), ["0.2.0", "0.1.0"]);
         assert_eq!(assets.len(), 2);
         for (old, from) in [(&v1, "0.1.0"), (&v2, "0.2.0")] {
