@@ -138,6 +138,8 @@ pub struct ShellView {
     landed: Option<(String, String)>,
     sidebar: SpringValue<f32>,
     leave_task: Option<Task<()>>,
+    /// Where the sidebar was drawn this frame, if it was.
+    sidebar_bounds: Option<Bounds<Pixels>>,
     edge_task: Option<Task<()>>,
     menu_anchor: f32,
     /// Last mouse press anywhere on this surface. Focus/activation changes
@@ -475,6 +477,7 @@ impl ShellView {
             landed: None,
             sidebar: SpringValue::new(0.0, SIDEBAR_SPRING),
             leave_task: None,
+            sidebar_bounds: None,
             edge_task: None,
             last_press: None,
             deactivate_task: None,
@@ -1051,21 +1054,18 @@ impl ShellView {
         animating
     }
 
-    /// Closes the panel / sidebar shortly after the pointer leaves, unless it
-    /// comes back.
-    fn schedule_leave(&mut self, what: Leave, cx: &mut Context<Self>) {
+    /// Closes the panel shortly after the pointer leaves, unless it comes
+    /// back.
+    fn schedule_panel_leave(&mut self, cx: &mut Context<Self>) {
         // How long the pointer may be away before a hover-opened panel or
         // sidebar closes (`panels.leave_delay_ms`).
         let delay = crate::state::config(cx).read(cx).snapshot().panels.leave_delay();
         self.leave_task = Some(cx.spawn(async move |this, cx| {
             cx.background_executor().timer(delay).await;
             let _ = this.update(cx, |this, cx| {
-                tracing::info!(target: "mandara::dismiss", "pointer left {}", match what { Leave::Panel => "panel", Leave::Sidebar => "sidebar" });
-                this.shell.update(cx, |s, cx| match what {
-                    Leave::Panel => {
-                        s.dismiss_panel(cx);
-                    }
-                    Leave::Sidebar => s.set_sidebar_hover(false, cx),
+                tracing::info!(target: "mandara::dismiss", "pointer left panel");
+                this.shell.update(cx, |s, cx| {
+                    s.dismiss_panel(cx);
                 });
             });
         }));
@@ -1073,6 +1073,33 @@ impl ShellView {
 
     fn cancel_leave(&mut self) {
         self.leave_task = None;
+    }
+
+    /// [`Self::schedule_panel_leave`] for the sidebar, which closes only once the
+    /// pointer is really off it. A visible scrollbar takes the hover from
+    /// the sidebar under it, so losing the hover isn't proof of leaving: at
+    /// the screen edge that closed the sidebar, the edge trigger reopened
+    /// it, and the two took turns.
+    fn schedule_sidebar_leave(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let delay = crate::state::config(cx).read(cx).snapshot().panels.leave_delay();
+        self.leave_task = Some(cx.spawn_in(window, async move |this, cx| {
+            loop {
+                cx.background_executor().timer(delay).await;
+                match this.update_in(cx, |this, window, _| this.pointer_on_sidebar(window)) {
+                    Ok(true) => continue,
+                    Ok(false) => break,
+                    Err(_) => return,
+                }
+            }
+            let _ = this.update(cx, |this, cx| {
+                tracing::info!(target: "mandara::dismiss", "pointer left sidebar");
+                this.shell.update(cx, |s, cx| s.set_sidebar_hover(false, cx));
+            });
+        }));
+    }
+
+    fn pointer_on_sidebar(&self, window: &Window) -> bool {
+        window.is_window_hovered() && self.sidebar_bounds.is_some_and(|b| b.contains(&window.mouse_position()))
     }
 
     /// Fires an edge action after the configured dwell, unless the pointer
@@ -1141,12 +1168,6 @@ impl ShellView {
 enum EdgeAction {
     Launcher,
     Session,
-}
-
-#[derive(Copy, Clone)]
-enum Leave {
-    Panel,
-    Sidebar,
 }
 
 /// Rounds the auto-hide shift to device pixels (no blurry bar edges).
@@ -1352,6 +1373,7 @@ impl Render for ShellView {
             col
         });
 
+        self.sidebar_bounds = None;
         let mut root = div()
             .id("mandara-shell")
             .size_full()
@@ -1421,7 +1443,7 @@ impl Render for ShellView {
                     .on_mouse_move(cx.listener(|this, e: &gpui::MouseMoveEvent, _, cx| {
                         let (x, y) = (f32::from(e.position.x), f32::from(e.position.y));
                         if this.panel_shadow.pointer_moved(x, y) && !this.panel_committed && this.leave_task.is_none() {
-                            this.schedule_leave(Leave::Panel, cx);
+                            this.schedule_panel_leave(cx);
                         }
                     }))
                     .child(self.mask.region()),
@@ -1967,7 +1989,7 @@ impl Render for ShellView {
                         } else if this.panel_entered && !this.panel_committed && !this.tab_hovered {
                             let pointer = window.mouse_position();
                             if this.panel_shadow.leave_counts(f32::from(pointer.x), f32::from(pointer.y)) {
-                                this.schedule_leave(Leave::Panel, cx);
+                                this.schedule_panel_leave(cx);
                             } else {
                                 tracing::debug!(target: "mandara::dismiss", "leave deferred: the panel resized under the pointer");
                             }
@@ -2074,7 +2096,7 @@ impl Render for ShellView {
                         if *hovered {
                             this.cancel_leave();
                         } else if this.panel_entered && !this.panel_committed && !this.panel_hovered {
-                            this.schedule_leave(Leave::Panel, cx);
+                            this.schedule_panel_leave(cx);
                         }
                         cx.notify();
                     }))
@@ -2140,6 +2162,7 @@ impl Render for ShellView {
                 TabPosition::Bottom => SIDEBAR_PAD_PX,
             };
             let tab_menu = self.tabs.menu_overlay(&cfg, menu_top, &palette, |v: &mut ShellView| &mut v.tabs, cx);
+            self.sidebar_bounds = Some(Bounds::new(point(px(sidebar_x), px(side_top)), size(px(sidebar_w), px(h))));
             root = root.child(
                 div()
                     .id("sidebar")
@@ -2167,7 +2190,7 @@ impl Render for ShellView {
                         if *hovered {
                             this.cancel_leave();
                         } else if !this.shell.read(cx).sidebar_open && !crate::state::config(cx).read(cx).get().sidebar.pinned() {
-                            this.schedule_leave(Leave::Sidebar, cx);
+                            this.schedule_sidebar_leave(window, cx);
                         }
                     }))
                     .child({
@@ -2232,7 +2255,7 @@ impl Render for ShellView {
                         if *hovered {
                             this.cancel_leave();
                         } else if !this.shell.read(cx).sidebar_open && !crate::state::config(cx).read(cx).get().sidebar.pinned() {
-                            this.schedule_leave(Leave::Sidebar, cx);
+                            this.schedule_sidebar_leave(window, cx);
                         }
                     }))
                     .child(self.mask.region()),

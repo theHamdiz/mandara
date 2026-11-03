@@ -18,6 +18,21 @@ About → What's new shows it too.
   pixel-for-pixel the same, and memory once settled, video memory and
   frame times are unchanged.
 
+## 0.8.2 — 2026-11-03
+
+The sidebar stays open at the screen edge. The session dock stays on its
+edge.
+
+### Fixed
+
+- **The sidebar stays open at the screen edge.** With hover to open on,
+  resting the pointer on the sidebar's outer edge no longer makes it close
+  and reopen over and over. Its scrollbar sits there, and the sidebar took
+  the pointer reaching the scrollbar for the pointer leaving.
+- **The session dock stays on its edge.** While it springs open, the
+  session dock no longer pulls away from the screen edge and leaves a gap;
+  it stretches through the bounce instead.
+
 ## 0.8.1 — 2026-11-03
 
 A lighter start.
