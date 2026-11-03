@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.12.0 — 2026-11-03
+
+A much better screen recorder.
+
 ### New
 
 - **A much better screen recorder.** Recording now uses GPU Screen
