@@ -1,4 +1,11 @@
 //! Studio's segmented choice control: a pill per option on one track.
+//! Every choice in Studio uses it: settings rows, plugin settings, the
+//! screen recorder's pickers, the desktop widget editor and the login
+//! screen designer.
+//!
+//! An option that can't be picked right now (a codec the recorder in use
+//! can't encode, a backend that isn't installed) is dimmed and inert, and
+//! its reason is written under the track, once per distinct reason.
 //!
 //! When every option fits on one line the control is a compact row of
 //! pills at their natural width. When they don't, it becomes a balanced
@@ -126,13 +133,32 @@ pub struct ChoiceItem {
     pub id: ElementId,
     pub label: SharedString,
     pub active: bool,
+    /// Why it can't be picked right now (translated); `None`: it can.
+    pub locked: Option<SharedString>,
     pub on_click: Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>,
 }
 
 impl ChoiceItem {
     pub fn new(id: impl Into<ElementId>, label: impl Into<SharedString>, active: bool, on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
-        Self { id: id.into(), label: label.into(), active, on_click: Box::new(on_click) }
+        Self { id: id.into(), label: label.into(), active, locked: None, on_click: Box::new(on_click) }
     }
+
+    /// Disabled, with the reason shown under the control.
+    pub fn locked(mut self, reason: Option<SharedString>) -> Self {
+        self.locked = reason;
+        self
+    }
+}
+
+/// The distinct reasons of the disabled options, in order.
+pub fn lock_notes(items: &[ChoiceItem]) -> Vec<SharedString> {
+    let mut notes: Vec<SharedString> = Vec::new();
+    for reason in items.iter().filter_map(|i| i.locked.as_ref()) {
+        if !notes.contains(reason) {
+            notes.push(reason.clone());
+        }
+    }
+    notes
 }
 
 /// Whether options labelled `labels` fit on one line in `avail` logical px
@@ -157,8 +183,9 @@ pub fn placed(items: Vec<ChoiceItem>, beside: f32, under: f32, style: &ChoiceSty
 pub fn segmented(avail: f32, style: &ChoiceStyle, items: Vec<ChoiceItem>, p: &MandaraPalette) -> AnyElement {
     let widths: Option<Vec<f32>> = items.iter().map(|i| label_width(&i.label, style.text_px)).collect();
     let shape = widths.map_or(Shape::Line, |w| shape(&w, avail, style));
+    let notes = lock_notes(&items);
     let track = div().p(px(style.inset)).rounded(px(RADIUS_12_PX)).bg(p.surface_container_high.hsla());
-    match shape {
+    let control = match shape {
         // A row that wraps only if a font changed under a cached width.
         Shape::Line => track.row().flex_wrap().gap(px(style.gap)).children(items.into_iter().map(|i| pill(i, None, style, p))).into_any_element(),
         Shape::Grid(fit) => {
@@ -181,14 +208,28 @@ pub fn segmented(avail: f32, style: &ChoiceStyle, items: Vec<ChoiceItem>, p: &Ma
                 }))
                 .into_any_element()
         }
+    };
+    if notes.is_empty() {
+        return control;
     }
+    // The reasons under the track: at its end beside a label (where a line
+    // sits), at its start under one (where a grid sits).
+    div()
+        .row()
+        .flex_col()
+        .when(shape == Shape::Line, |el| el.cross_end())
+        .when(shape != Shape::Line, |el| el.cross_start())
+        .gap(px(SPACE_6_PX))
+        .child(control)
+        .children(notes.into_iter().map(|r| div().max_w(px(super::LOCKED_NOTE_MAX_W_PX)).text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(r))))
+        .into_any_element()
 }
 
 /// One pill: its natural width on a line, `cell` wide (label centred) in a
-/// grid.
+/// grid. A disabled one is dimmed and ignores the pointer.
 fn pill(item: ChoiceItem, cell: Option<f32>, style: &ChoiceStyle, p: &MandaraPalette) -> AnyElement {
-    let ChoiceItem { id, label, active, on_click } = item;
-    div()
+    let ChoiceItem { id, label, active, locked, on_click } = item;
+    let pill = div()
         .id(id)
         .px(px(style.pad_x))
         .h(px(style.pill_h))
@@ -196,13 +237,14 @@ fn pill(item: ChoiceItem, cell: Option<f32>, style: &ChoiceStyle, p: &MandaraPal
         .row()
         .items_center()
         .when_some(cell, |el, w| el.flex_none().w(px(w)).justify_center())
-        .cursor_pointer()
         .text_size(px(style.text_px))
         .when(active, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()).font_weight(FontWeight::MEDIUM))
-        .when(!active, |el| el.text_color(p.on_surface_variant.hsla()).hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_6).hsla())))
-        .child(mandara_ui::bidi::paragraph(label))
-        .on_click(on_click)
-        .into_any_element()
+        .when(!active, |el| el.text_color(p.on_surface_variant.hsla()))
+        .child(mandara_ui::bidi::paragraph(label));
+    match locked {
+        Some(_) => pill.opacity(super::LOCKED_OPACITY).into_any_element(),
+        None => pill.cursor_pointer().when(!active, |el| el.hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_6).hsla()))).on_click(on_click).into_any_element(),
+    }
 }
 
 /// What labels are measured with this frame: the window's text system and
@@ -332,6 +374,14 @@ mod tests {
                 avail += 13.0;
             }
         }
+    }
+
+    #[test]
+    fn each_lock_reason_is_noted_once() {
+        let item = |reason: Option<&'static str>| ChoiceItem::new("x", "x", false, |_, _, _| {}).locked(reason.map(SharedString::from));
+        let items = [item(Some("WebM needs AV1")), item(None), item(Some("Not installed")), item(Some("WebM needs AV1"))];
+        assert_eq!(lock_notes(&items), [SharedString::from("WebM needs AV1"), SharedString::from("Not installed")]);
+        assert!(lock_notes(&[item(None)]).is_empty());
     }
 
     #[test]

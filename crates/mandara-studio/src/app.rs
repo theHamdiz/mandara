@@ -22,6 +22,7 @@ use serde_json::Value;
 
 mod maint_page;
 mod depth_model_row;
+mod recorder_row;
 mod nav;
 mod market_page;
 mod store_page;
@@ -129,6 +130,7 @@ pub struct StudioView {
     focus: gpui::FocusHandle,
     maint: maint_page::Maint,
     depth_model: depth_model_row::DepthModelRow,
+    recorder_row: recorder_row::RecorderRow,
     /// About → Mandara updates, and marketplace plugin updates.
     updates: updates_card::Updates,
     /// Plugins page: the plugin detail / settings modal.
@@ -208,7 +210,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { section: Section::Home, search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new() }
+        Self { section: Section::Home, recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -220,6 +222,8 @@ impl StudioView {
             self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
             self.themes = None;
             self.icon_matches = None;
+            // The recorder's device and display lists are read afresh.
+            self.recorder_row.new_visit();
             plugin_art_cache_clear();
             if self.section == Section::LoginScreen {
                 greeter_page::release(cx);
@@ -416,24 +420,13 @@ impl StudioView {
                     .into_any_element()
             }
             Control::Choice(choices) => {
-                let current = match &value {
-                    Value::String(s) => s.clone(),
-                    other => other.to_string(),
-                };
-                let items = choices
-                    .iter()
-                    .map(|(raw, label)| {
-                        let setting = setting.clone();
-                        choice::ChoiceItem::new(
-                            SharedString::from(format!("c{}{raw}", setting.path)),
-                            tr(label),
-                            *raw == current,
-                            cx.listener(move |this, _: &ClickEvent, _, cx| this.apply(&setting, registry::choice_value(raw), cx)),
-                        )
-                    })
-                    .collect();
-                choice::segmented(avail, &choice::SETTING_CHOICE, items, p)
+                let current = choice_current(&value);
+                let options = self.choice_options(setting, choices, &current, cfg);
+                self.chip_choice(setting, options, &current, avail, p, cx)
             }
+            Control::RecorderBackends => self.recorder_backends_control(cfg, p, cx),
+            Control::Device { input } => self.recorder_device_control(setting, input, avail, cfg, p, cx),
+            Control::Display => self.recorder_display_control(setting, avail, cfg, p, cx),
             Control::Text { placeholder } | Control::OptionalText { placeholder } => {
                 let current = value.as_str().unwrap_or_default().to_string();
                 self.field(setting, current, placeholder, cx).into_any_element()
@@ -577,7 +570,7 @@ impl StudioView {
     /// A group's "Reset", shown once a setting in it differs from the
     /// defaults.
     fn group_reset(&mut self, title: &'static str, list: &[&Setting], cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let resettable: Vec<Setting> = list.iter().filter(|s| !matches!(s.control, Control::Command { .. } | Control::DepthModel)).map(|s| (*s).clone()).collect();
+        let resettable: Vec<Setting> = list.iter().filter(|s| s.control.has_value()).map(|s| (*s).clone()).collect();
         let changed = resettable.iter().any(|s| registry::get(cfg, s) != registry::default_value(s));
         changed.then(|| {
             div()
@@ -600,6 +593,28 @@ impl StudioView {
         })
     }
 
+    /// A registry choice's options, each with why it can't be picked right
+    /// now (if it can't). The one place a choice's options are listed, for
+    /// its control and for its row's layout (filter `choices` here).
+    fn choice_options(&self, setting: &Setting, choices: &'static [(&'static str, &'static str)], _current: &str, cfg: &ShellConfig) -> Vec<recorder_row::ChipOption> {
+        choices
+            .iter()
+            .map(|(raw, label)| recorder_row::ChipOption { value: registry::choice_value(raw), raw: raw.to_string(), label: tr(label), locked: registry::choice_locked(setting, raw, cfg) })
+            .collect()
+    }
+
+    /// The labels of a setting's choice (registry choices, sound devices,
+    /// displays), or `None` for other controls.
+    fn choice_labels(&mut self, setting: &Setting, cfg: &ShellConfig, cx: &mut Context<Self>) -> Option<Vec<SharedString>> {
+        let options = match setting.control {
+            Control::Choice(choices) => self.choice_options(setting, choices, &choice_current(&registry::get(cfg, setting)), cfg),
+            Control::Device { input } => self.recorder_device_options(setting, input, cfg, cx)?,
+            Control::Display => self.recorder_display_options(setting, cfg, cx),
+            _ => return None,
+        };
+        Some(options.into_iter().map(|o| SharedString::from(o.label)).collect())
+    }
+
     /// One group's rows (inside a fold or a plain card) on a card `width`
     /// logical px wide.
     fn group_card(&mut self, list: &[&Setting], width: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> gpui::Div {
@@ -610,15 +625,15 @@ impl StudioView {
         let under = (width - 2.0 * pad).max(0.0);
         let beside = (under - SPACE_24_PX - ROW_LABEL_MIN_PX).max(0.0);
             for s in list.iter() {
+                let locked = registry::locked(s, cfg);
                 // A choice too long for one line beside its label goes under
                 // it, where its grid gets the whole row (fewer, wider rows)
                 // and the label and help keep their measure.
-                let stack = self.stack_rows
-                    || matches!(s.control, Control::Choice(choices) if !choice::fits_line(&choices.iter().map(|(_, l)| SharedString::from(tr(l))).collect::<Vec<_>>(), beside, &choice::SETTING_CHOICE));
+                let stack = self.stack_rows || (locked.is_none() && self.choice_labels(s, cfg, cx).is_some_and(|labels| !choice::fits_line(&labels, beside, &choice::SETTING_CHOICE)));
                 let avail = if stack { under } else { beside };
                 // A control that does nothing in the current setup shows why
                 // instead (toggles render their own locked state).
-                let control = match registry::locked(s, cfg) {
+                let control = match locked {
                     Some(reason) if s.control != Control::Toggle => div()
                         .max_w(px(LOCKED_NOTE_MAX_W_PX))
                         .text_size(px(TEXT_12_PX))
@@ -676,7 +691,7 @@ impl StudioView {
         let sides = grid::two_columns(&groups.iter().map(|(_, l)| l.len()).collect::<Vec<_>>());
         let mut cols = [div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_12_PX)), div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_12_PX))];
         for (n, (title, list)) in groups.into_iter().enumerate() {
-            let changed = list.iter().filter(|s| !matches!(s.control, Control::Command { .. } | Control::DepthModel) && registry::get(cfg, s) != registry::default_value(s)).count();
+            let changed = list.iter().filter(|s| s.control.has_value() && registry::get(cfg, s) != registry::default_value(s)).count();
             let preview = fold::preview_of(list.iter().map(|s| s.label));
             let badge = Some(if changed > 0 { tf("{changed} of {count} changed", &[("changed", &changed), ("count", &list.len())]) } else { list.len().to_string() });
             // The Reset button lives in the header, so it works while closed.
@@ -870,7 +885,9 @@ impl StudioView {
             (tk("Launcher"), "launcher toggle"),
             (tk("Wallpapers"), "wallpaper picker toggle"),
             (tk("Screenshot"), "screenshot region"),
+            (tk("Record screen"), "record toggle"),
             (tk("Record region"), "record region"),
+            (tk("Pause recording"), "record pause-toggle"),
             (tk("Stop recording"), "record stop"),
             (tk("Sidebar"), "sidebar toggle"),
             (tk("Power menu"), "session menu toggle"),
@@ -1830,6 +1847,14 @@ fn slider_text(v: f64, step: f64, unit: &str) -> String {
         format!("{v:.2}{unit}")
     } else {
         format!("{v:.3}{unit}")
+    }
+}
+
+/// A choice setting's current value as its raw option.
+fn choice_current(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
     }
 }
 

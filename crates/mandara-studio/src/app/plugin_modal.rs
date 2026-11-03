@@ -557,6 +557,8 @@ impl StudioView {
             self.modal.confirm_uninstall = false;
             self.modal.confirm_remove = false;
             self.modal.message = None;
+            // A new visit to the recorder's settings reads its lists afresh.
+            self.recorder_row.new_visit();
         }
         self.modal.open = true;
         self.modal.appear.set_config(APPEAR_SPRING);
