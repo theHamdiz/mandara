@@ -71,10 +71,9 @@ jobs:
           done
 
       # Warnings are errors ([workspace.lints] in Cargo.toml): any rustc or
-      # clippy warning fails the build.
+      # clippy warning fails the build, so this step gates the PR.
       - name: Clippy
         run: cargo clippy --workspace --locked --all-targets
-        continue-on-error: true
 
       - name: Component versions
         run: cargo xtask status
