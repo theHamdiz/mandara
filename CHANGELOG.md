@@ -6,6 +6,14 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **The process table counts the whole machine.** A busy build used to
+  read "405.5%" for `rustc`, because the list measured each process
+  against a single core while the Resources panel measured all of them.
+  Both now show a share of your whole machine, so no row goes past 100%,
+  and the *hot* colour still starts at the same amount of work as before.
+
 ## 0.15.0 — 2026-11-03
 
 Fresh screenshots everywhere. Cleaner main menu tiles.
