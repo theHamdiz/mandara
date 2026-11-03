@@ -3887,6 +3887,7 @@ dependencies = [
  "mandara-version",
  "mandara-wallgen",
  "notify",
+ "nucleo-matcher",
  "qrcodegen",
  "rustix",
  "serde",

@@ -35,6 +35,8 @@ notify.workspace = true
 async-channel.workspace = true
 qrcodegen.workspace = true
 anyhow.workspace = true
+# The layout designer's plugin search (fuzzy, like the launcher).
+nucleo-matcher.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
