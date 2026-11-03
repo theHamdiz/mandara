@@ -2086,6 +2086,11 @@ fn include_installed_at(target: Target, config: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Whether a resolved path lies in the Nix store, which nobody edits.
+fn in_nix_store(real: &Path) -> bool {
+    real.starts_with("/nix/store")
+}
+
 /// Appends the include line to the user's config if missing. Nothing else in
 /// the file is touched; a backup is written first.
 ///
@@ -2110,6 +2115,13 @@ pub fn install_include(target: Target) -> Result<bool> {
 fn install_include_at(target: Target, path: &Path) -> Result<bool> {
     if include_installed_at(target, path) {
         return Ok(false);
+    }
+    // A config Home Manager or NixOS made is a link into the read-only Nix
+    // store: the line goes into its Nix source instead.
+    if let Ok(real) = std::fs::canonicalize(path)
+        && in_nix_store(&real)
+    {
+        anyhow::bail!("{} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {}", path.display(), target.include_line());
     }
     let original = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     // Umbriel's include is a TOML array: worked out (and the file checked
@@ -2525,6 +2537,16 @@ mod tests {
             version: None,
             user_autostarts: false,
         }
+    }
+
+    /// Issue #39: Home Manager's compositor configs are links into the Nix
+    /// store; Mandara never tries to write there (a dotfiles link elsewhere
+    /// is still written through).
+    #[test]
+    fn nix_store_configs_are_left_to_nix() {
+        assert!(in_nix_store(Path::new("/nix/store/8f1x-home-manager-files/.config/hypr/hyprland.conf")));
+        assert!(!in_nix_store(Path::new("/home/u/dotfiles/hypr/hyprland.conf")));
+        assert!(!in_nix_store(Path::new("/nix/storefront/hyprland.conf")));
     }
 
     #[test]

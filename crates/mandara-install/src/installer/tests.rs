@@ -249,8 +249,14 @@ fn nixos_and_unknown_systems_get_hints() {
     let mut host = FakeHost::with(&["sudo"]);
     run(&mut host, &FakeProbe::default(), f.facts(Family::NixOS), dry(InstallArgs { no_greeter: true, ..Default::default() })).unwrap();
     let text = host.text();
-    assert!(text.contains("NixOS: add to your configuration") && text.contains("services.gnome.gnome-keyring.enable = true;"));
+    assert!(text.contains("NixOS: install Mandara with its flake") && text.contains("programs.mandara.enable = true;"), "{text}");
+    assert!(text.contains("docs/install.md#nixos"), "{text}");
     assert!(!text.contains("would run: sudo"));
+    // Mandara Login comes from the NixOS module, not greetd + cage packages.
+    let mut host = FakeHost::with(&["sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::NixOS), dry(InstallArgs::default())).unwrap();
+    let text = host.text();
+    assert!(text.contains("programs.mandara.greeter.enable = true; and rebuild") && !text.contains("install greetd and cage"), "{text}");
     let mut host = FakeHost::with(&["sudo"]);
     run(&mut host, &FakeProbe::default(), f.facts(Family::Unknown), dry(InstallArgs::default())).unwrap();
     assert!(host.text().contains("Unknown distribution"));

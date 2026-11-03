@@ -2268,6 +2268,7 @@
 "Installed by distribution packages: off until you turn them on, and read-only." = "ডিস্ট্রিবিউশনের প্যাকেজ দিয়ে ইনস্টল করা: আপনি চালু না করা পর্যন্ত বন্ধ থাকে, এবং শুধু পড়ার জন্য।"
 "Installed by your NixOS configuration: remove it from configuration.nix" = "আপনার NixOS কনফিগারেশন দিয়ে ইনস্টল করা: configuration.nix থেকে এটি সরান"
 "Installed by your system — update through your package manager" = "আপনার সিস্টেম ইনস্টল করেছে — আপনার প্যাকেজ ম্যানেজারের মাধ্যমে আপডেট করুন"
+"Installed by Nix — update it with your flake (nixos-rebuild switch, home-manager switch or nix profile upgrade)" = "Nix দিয়ে ইনস্টল করা — আপনার flake দিয়ে আপডেট করুন (nixos-rebuild switch, home-manager switch বা nix profile upgrade)"
 "Installed cursor themes" = "ইনস্টল করা কার্সার থিম"
 "Installed folder" = "ইনস্টল ফোল্ডার"
 "Installed for everyone: Flatpak asks for your password" = "সবার জন্য ইনস্টল করা হয়: Flatpak আপনার পাসওয়ার্ড চাইবে"

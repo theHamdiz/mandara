@@ -4178,6 +4178,7 @@
 "Include marketplace plugins" = "Incluir plugins del mercado"
 "Install it from Studio → About." = "Instálala desde Studio → Acerca de."
 "Installed by your system — update through your package manager" = "Instalado por tu sistema: actualiza con tu gestor de paquetes"
+"Installed by Nix — update it with your flake (nixos-rebuild switch, home-manager switch or nix profile upgrade)" = "Instalado con Nix: actualízalo con tu flake (nixos-rebuild switch, home-manager switch o nix profile upgrade)"
 "Installed with {manager} — update through your package manager" = "Instalado con {manager}: actualiza con tu gestor de paquetes"
 "Looks for new Mandara releases in the background and tells you once per version. Updates install as small binary patches, with the full download as the fallback" = "Busca nuevas versiones de Mandara en segundo plano y avisa una vez por versión. Las actualizaciones se instalan como pequeños parches binarios, con la descarga completa como respaldo"
 "Mandara updates" = "Actualizaciones de Mandara"

@@ -2630,6 +2630,7 @@ Installed
 Installed Ollama models (JSON)
 Installed apps with where each came from (package manager, Flatpak, Snap, AppImage, Mandara, local); --by-mandara lists what Mandara's installer installed, with every file it wrote
 Installed by Mandara
+Installed by Nix — update it with your flake (nixos-rebuild switch, home-manager switch or nix profile upgrade)
 Installed by distribution packages: off until you turn them on, and read-only.
 Installed by your NixOS configuration: remove it from configuration.nix
 Installed by your system — update through your package manager

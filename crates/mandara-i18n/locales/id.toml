@@ -2268,6 +2268,7 @@
 "Installed by distribution packages: off until you turn them on, and read-only." = "Dipasang oleh paket distribusi: nonaktif sampai Anda mengaktifkannya, dan hanya-baca."
 "Installed by your NixOS configuration: remove it from configuration.nix" = "Dipasang oleh konfigurasi NixOS Anda: hapus dari configuration.nix"
 "Installed by your system — update through your package manager" = "Dipasang oleh sistem Anda — perbarui lewat pengelola paket"
+"Installed by Nix — update it with your flake (nixos-rebuild switch, home-manager switch or nix profile upgrade)" = "Dipasang dengan Nix — perbarui lewat flake Anda (nixos-rebuild switch, home-manager switch, atau nix profile upgrade)"
 "Installed cursor themes" = "Tema kursor terpasang"
 "Installed folder" = "Folder pemasangan"
 "Installed for everyone: Flatpak asks for your password" = "Dipasang untuk semua orang: Flatpak meminta kata sandi Anda"

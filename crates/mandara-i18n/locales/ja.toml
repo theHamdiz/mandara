@@ -4186,6 +4186,7 @@
 "Include marketplace plugins" = "マーケットプレイスのプラグインも含める"
 "Install it from Studio → About." = "Studio → 情報 からインストールできます。"
 "Installed by your system — update through your package manager" = "システムによりインストール済み — パッケージマネージャーで更新してください"
+"Installed by Nix — update it with your flake (nixos-rebuild switch, home-manager switch or nix profile upgrade)" = "Nix でインストール済み — flake から更新してください（nixos-rebuild switch、home-manager switch、nix profile upgrade）"
 "Installed with {manager} — update through your package manager" = "{manager} でインストール済み — パッケージマネージャーで更新してください"
 "Looks for new Mandara releases in the background and tells you once per version. Updates install as small binary patches, with the full download as the fallback" = "バックグラウンドで Mandara の新しいリリースを探し、バージョンごとに一度だけお知らせします。更新は小さなバイナリパッチで入り、完全版のダウンロードが予備になります"
 "Mandara updates" = "Mandara のアップデート"

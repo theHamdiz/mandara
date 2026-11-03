@@ -4185,6 +4185,7 @@
 "Include marketplace plugins" = "Mağaza eklentilerini dahil et"
 "Install it from Studio → About." = "Studio → Hakkında bölümünden kurun."
 "Installed by your system — update through your package manager" = "Sisteminiz tarafından kuruldu — paket yöneticinizle güncelleyin"
+"Installed by Nix — update it with your flake (nixos-rebuild switch, home-manager switch or nix profile upgrade)" = "Nix ile kuruldu — flake'iniz üzerinden güncelleyin (nixos-rebuild switch, home-manager switch veya nix profile upgrade)"
 "Installed with {manager} — update through your package manager" = "{manager} ile kuruldu — paket yöneticinizle güncelleyin"
 "Looks for new Mandara releases in the background and tells you once per version. Updates install as small binary patches, with the full download as the fallback" = "Yeni Mandara sürümlerini arka planda arar ve her sürüm için bir kez bildirir. Güncellemeler küçük ikili yamalar olarak kurulur, tam indirme yedek yöntemdir"
 "Mandara updates" = "Mandara güncellemeleri"
