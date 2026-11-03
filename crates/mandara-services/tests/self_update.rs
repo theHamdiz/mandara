@@ -20,6 +20,8 @@ use mandara_services::marketplace::{self, Class, Finding, Vetting};
 use mandara_services::self_update::{self as su, ApplyOptions, Method, install, plugins};
 
 const OLD: &str = "0.1.0";
+/// A release before OLD: an install that skipped OLD still gets a patch.
+const OLDER: &str = "0.0.9";
 const NEW: &str = "0.2.0";
 const PLUGIN_REPO: &str = "mock-author/mandara-demo";
 const PLUGIN_ID: &str = "demo";
@@ -144,11 +146,15 @@ fn self_update_and_plugin_updates_end_to_end() {
     // ── The shell release ────────────────────────────────────────────────
     let target = su::running_target();
     let (old_bin, new_bin) = binaries();
+    let mut older_bin = old_bin.clone();
+    older_bin.splice(500_000..500_000, noise(7_000, 4));
     let top = format!("mandara-{NEW}-{target}");
     let tarball_name = format!("{top}.tar.gz");
     let tarball = tar_gz(&[(format!("{top}/{SHELL_BINARY}"), &new_bin), (format!("{top}/README.md"), b"readme")]);
-    let (entry, patch) = mandara_delta::create::target_entry("mandara", NEW, Some(&target), &(tarball_name.clone(), tarball.clone()), SHELL_BINARY, &new_bin, &[(OLD, &old_bin)]).unwrap();
-    let (patch_name, patch_bytes) = patch.into_iter().next().unwrap();
+    let (entry, patch) = mandara_delta::create::target_entry("mandara", NEW, Some(&target), &(tarball_name.clone(), tarball.clone()), SHELL_BINARY, &new_bin, &[(OLD, &old_bin), (OLDER, &older_bin)]).unwrap();
+    let mut patch = patch.into_iter();
+    let (patch_name, patch_bytes) = patch.next().unwrap();
+    let (older_patch_name, older_patch_bytes) = patch.next().unwrap();
     assert!(patch_bytes.len() * 20 < tarball.len(), "patch {} vs tarball {}", patch_bytes.len(), tarball.len());
     let mut manifest = Manifest { schema: SCHEMA, name: "mandara".into(), version: NEW.into(), ..Default::default() };
     manifest.targets.insert(target.clone(), entry);
@@ -159,7 +165,7 @@ fn self_update_and_plugin_updates_end_to_end() {
     let sums = format!("{}  {tarball_name}\n{}  {MANIFEST_FILE}\n", mandara_delta::sha256_hex(&tarball), mandara_delta::sha256_hex(manifest_json.as_bytes()));
     let sig = mandara_delta::signing::sign::sign(&private, sums.as_bytes()).unwrap();
     let release = |with_manifest: bool| {
-        let mut assets = vec![asset(&base, &tarball_name, tarball.len()), asset(&base, &patch_name, patch_bytes.len()), asset(&base, "SHA256SUMS", sums.len()), asset(&base, "SHA256SUMS.sig", sig.len())];
+        let mut assets = vec![asset(&base, &tarball_name, tarball.len()), asset(&base, &patch_name, patch_bytes.len()), asset(&base, &older_patch_name, older_patch_bytes.len()), asset(&base, "SHA256SUMS", sums.len()), asset(&base, "SHA256SUMS.sig", sig.len())];
         if with_manifest {
             assets.push(asset(&base, MANIFEST_FILE, 1));
         }
@@ -171,6 +177,7 @@ fn self_update_and_plugin_updates_end_to_end() {
         r.insert(format!("/download/{MANIFEST_FILE}"), manifest_json.clone().into_bytes());
         r.insert(format!("/download/{tarball_name}"), tarball.clone());
         r.insert(format!("/download/{patch_name}"), patch_bytes.clone());
+        r.insert(format!("/download/{older_patch_name}"), older_patch_bytes.clone());
         r.insert("/download/SHA256SUMS".into(), sums.clone().into_bytes());
         r.insert("/download/SHA256SUMS.sig".into(), sig.clone().into_bytes());
     }
@@ -248,6 +255,19 @@ fn self_update_and_plugin_updates_end_to_end() {
     assert!(steps.lock().unwrap().iter().any(|p| matches!(p, su::Progress::Bytes { .. })));
     install::rollback(&exe).unwrap();
     assert_eq!(std::fs::read(&exe).unwrap(), old_bin);
+
+    // An install that skipped OLD takes its own patch (not the first one
+    // listed), downloads only that, and lands on the same new binary.
+    std::fs::write(&exe, &older_bin).unwrap();
+    let skipped = su::check_with(&base, OLDER, &target).unwrap();
+    assert_eq!(skipped.patch.as_ref().map(|p| (p.from.as_str(), p.download.file.as_str())), Some((OLDER, older_patch_name.as_str())));
+    let report = su::apply(&skipped, &exe, ApplyOptions::default(), &|_| {}).unwrap();
+    assert_eq!((report.method, report.downloaded), (Method::Delta, older_patch_bytes.len() as u64));
+    assert!(report.fallback.is_none());
+    assert_eq!(std::fs::read(&exe).unwrap(), new_bin);
+    install::rollback(&exe).unwrap();
+    assert_eq!(std::fs::read(&exe).unwrap(), older_bin);
+    reset();
 
     // A corrupt patch fails its checksum → the full download, verified.
     let mut corrupt = patch_bytes.clone();
