@@ -7827,6 +7827,8 @@
 "Downloading {language}… {size}" = "Mengunduh {language}… {size}"
 "Couldn't download {language}: {error}" = "Tidak bisa mengunduh {language}: {error}"
 "The update didn't install" = "Pembaruan tidak terpasang"
+"Tile patterns" = "Pola ubin"
+"Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif" = "Setiap ubin pintasan di menu utama memiliki ornamen samarnya sendiri: sebuah kata Kufi atau motif geometris"
 
 # ── Sway ──
 "Split horizontally" = "Terbagi mendatar"
@@ -7946,3 +7948,8 @@
 "Full" = "Penuh"
 "Rail" = "Rel"
 "Every entry's name beside its icon, or a narrow icon-only column" = "Nama setiap entri di samping ikonnya, atau kolom sempit berisi ikon saja"
+"3D" = "3D"
+"Tile surface" = "Permukaan ubin"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "Isian datar, ubin 3D timbul dengan tepi kaca, atau kaca tembus pandang"
+"Tile shadow" = "Bayangan ubin"
+"How strong the shadow under each shortcut tile is (0 for none)" = "Seberapa kuat bayangan di bawah setiap ubin pintasan (0 berarti tanpa bayangan)"

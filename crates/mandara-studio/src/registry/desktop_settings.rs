@@ -8,6 +8,7 @@ use mandara_i18n::tk;
 use super::{Control, Section, Setting, s};
 
 /// `bar.right_click`.
+const MENU_TILE_SURFACE: &[(&str, &str)] = &[("flat", tk("Flat")), ("3d", tk("3D")), ("glass", tk("Glass"))];
 const BAR_RIGHT_CLICK: &[(&str, &str)] = &[("main-menu", tk("The bar's main menu")), ("desktop-menu", tk("The desktop's menu"))];
 /// `panels.menu_rail`: names beside the main menu's icons, or icons only.
 const MENU_RAIL: &[(&str, &str)] = &[("compact", tk("Compact")), ("full", tk("Full"))];
@@ -81,6 +82,9 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Bar, tk("Main menu"), "/panels/menu_translucent", tk("Glass menu"), tk("The main menu is see-through glass with solid cards on it"), Toggle),
         s(Bar, tk("Main menu"), "/panels/menu_opacity", tk("Glass opacity"), tk("How see-through the main menu's glass is"), Control::Slider { min: 0.2, max: 1.0, step: 0.01, unit: "" }),
         s(Bar, tk("Main menu"), "/panels/menu_rail", tk("Rail"), tk("Every entry's name beside its icon, or a narrow icon-only column"), Choice(MENU_RAIL)),
+        s(Bar, tk("Main menu"), "/panels/menu_patterns", tk("Tile patterns"), tk("Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif"), Toggle),
+        s(Bar, tk("Main menu"), "/panels/menu_tile_surface", tk("Tile surface"), tk("Flat fills, raised 3D tiles with a glass rim, or see-through glass"), Choice(MENU_TILE_SURFACE)),
+        s(Bar, tk("Main menu"), "/panels/menu_tile_shadow", tk("Tile shadow"), tk("How strong the shadow under each shortcut tile is (0 for none)"), Control::Slider { min: 0.0, max: 1.0, step: 0.05, unit: "" }),
         s(Bar, tk("Behaviour"), "/bar/over_fullscreen", tk("Show over fullscreen windows"), tk("Keeps the bar and its panels above fullscreen apps; applies after a shell restart"), Toggle),
         // Wallpaper
         s(Wallpaper, tk("Desktop"), "/wallpaper/fill", tk("Fill mode"), tk("How images that don't match the screen are placed"), Choice(FILL)),

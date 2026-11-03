@@ -74,6 +74,7 @@
 2:255, 2:255-257, 2:255- (to the surah's end), 36 or yaseen
 2K
 2K (1440p)
+3D
 4K
 5 GHz (speed)
 5K
@@ -1729,6 +1730,7 @@ Each note is a Markdown file, each topic a folder in here — point it at a sync
 Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence.
 Each repair is safe: your compositor config only ever gets one include line, with a backup.
 Each sets the launcher's style, layout and placement together; change any setting below afterwards.
+Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif
 Each surface
 Each walk to the mosque, morning or evening, is a welcome being prepared.
 Ease someone's hardship
@@ -2045,6 +2047,7 @@ Fixed schedule: start of the night
 Fixed times
 Flare radius
 Flat
+Flat fills, raised 3D tiles with a glass rim, or see-through glass
 Flat moves the pointer exactly as far as the mouse
 Flat, softly shadowed cursors from the Qogir icon theme
 Flatpak applies the app's sandbox from its remote
@@ -2519,6 +2522,7 @@ How often transfer rates are measured
 How panels appear
 How see-through the main menu's glass is
 How slideshow changes look: the desktop's transition or their own, with a length in ms
+How strong the shadow under each shortcut tile is (0 for none)
 How strongly the capsules stand out from the bar
 How strongly the pills and islands behind items stand out
 How the critical warning appears
@@ -6232,8 +6236,11 @@ Thunderstorm
 Thunderstorms around. Better stay in.
 Ticks
 Tile
+Tile patterns
+Tile shadow
 Tile shape
 Tile size
+Tile surface
 Tiles per row in the grid style
 Tiling layout
 Tilt

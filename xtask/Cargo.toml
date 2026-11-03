@@ -21,6 +21,9 @@ image.workspace = true
 resvg = { version = "0.46", default-features = false }
 roxmltree = { version = "0.21", default-features = false, features = ["std"] }
 ab_glyph = "0.2"
+# `cargo xtask art --calligraphy`: Arabic shaping for the main menu's Kufic
+# words (the version GPUI's text stack already locks).
+rustybuzz = "0.20"
 # 1.x: the version image / gif link; 2.0 would be a second copy.
 color_quant = "1.1"
 png = "0.18"

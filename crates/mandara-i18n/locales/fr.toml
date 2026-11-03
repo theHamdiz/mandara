@@ -8074,6 +8074,8 @@
 "Downloading {language}… {size}" = "Téléchargement de {language}… {size}"
 "Couldn't download {language}: {error}" = "Impossible de télécharger {language} : {error}"
 "The update didn't install" = "La mise à jour ne s'est pas installée"
+"Tile patterns" = "Motifs des tuiles"
+"Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif" = "Chaque tuile de raccourci du menu principal porte son propre ornement discret : un mot en coufique ou un motif géométrique"
 
 # ── Sway ──
 "Split horizontally" = "Division horizontale"
@@ -8193,3 +8195,8 @@
 "Full" = "Complet"
 "Rail" = "Rail"
 "Every entry's name beside its icon, or a narrow icon-only column" = "Le nom de chaque entrée à côté de son icône, ou une colonne étroite d'icônes seules"
+"3D" = "3D"
+"Tile surface" = "Surface des tuiles"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "Aplat, tuiles 3D en relief avec un liseré de verre, ou verre translucide"
+"Tile shadow" = "Ombre des tuiles"
+"How strong the shadow under each shortcut tile is (0 for none)" = "Intensité de l’ombre sous chaque tuile de raccourci (0 pour aucune)"

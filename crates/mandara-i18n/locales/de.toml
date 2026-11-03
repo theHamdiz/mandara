@@ -8072,6 +8072,8 @@
 "Downloading {language}… {size}" = "{language} wird heruntergeladen… {size}"
 "Couldn't download {language}: {error}" = "{language} konnte nicht heruntergeladen werden: {error}"
 "The update didn't install" = "Das Update wurde nicht installiert"
+"Tile patterns" = "Kachelmuster"
+"Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif" = "Jede Verknüpfungskachel im Hauptmenü trägt ihr eigenes zartes Ornament: ein kufisches Wort oder ein geometrisches Motiv"
 
 # ── Sway ──
 "Split horizontally" = "Horizontal geteilt"
@@ -8191,3 +8193,8 @@
 "Full" = "Voll"
 "Rail" = "Leiste"
 "Every entry's name beside its icon, or a narrow icon-only column" = "Der Name jeder Zeile neben ihrem Symbol, oder eine schmale Spalte nur mit Symbolen"
+"3D" = "3D"
+"Tile surface" = "Kacheloberfläche"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "Flache Füllung, erhabene 3D-Kacheln mit Glaskante oder durchscheinendes Glas"
+"Tile shadow" = "Kachelschatten"
+"How strong the shadow under each shortcut tile is (0 for none)" = "Wie stark der Schatten unter jeder Verknüpfungskachel ist (0 für keinen)"

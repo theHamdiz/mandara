@@ -8074,6 +8074,8 @@
 "Downloading {language}… {size}" = "{language} डाउनलोड हो रही है… {size}"
 "Couldn't download {language}: {error}" = "{language} डाउनलोड नहीं हो सकी: {error}"
 "The update didn't install" = "अपडेट इंस्टॉल नहीं हुआ"
+"Tile patterns" = "टाइल पैटर्न"
+"Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif" = "मुख्य मेन्यू की हर शॉर्टकट टाइल पर उसका अपना हल्का अलंकरण होता है: एक कूफ़ी शब्द या एक ज्यामितीय आकृति"
 
 # ── Sway ──
 "Split horizontally" = "क्षैतिज विभाजन"
@@ -8193,3 +8195,8 @@
 "Full" = "पूरा"
 "Rail" = "रेल"
 "Every entry's name beside its icon, or a narrow icon-only column" = "हर प्रविष्टि का नाम उसके आइकन के बगल में, या केवल आइकन वाला एक संकरा कॉलम"
+"3D" = "3D"
+"Tile surface" = "टाइल की सतह"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "सपाट रंग, काँच की किनारी वाली उभरी 3D टाइलें, या पारदर्शी काँच"
+"Tile shadow" = "टाइल की छाया"
+"How strong the shadow under each shortcut tile is (0 for none)" = "हर शॉर्टकट टाइल के नीचे की छाया कितनी गहरी हो (0 यानी कोई नहीं)"

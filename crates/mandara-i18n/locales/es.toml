@@ -8068,6 +8068,8 @@
 "Downloading {language}… {size}" = "Descargando {language}… {size}"
 "Couldn't download {language}: {error}" = "No se pudo descargar {language}: {error}"
 "The update didn't install" = "La actualización no se instaló"
+"Tile patterns" = "Patrones de los mosaicos"
+"Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif" = "Cada mosaico de acceso directo del menú principal lleva su propio adorno tenue: una palabra cúfica o un motivo geométrico"
 
 # ── Sway ──
 "Split horizontally" = "División horizontal"
@@ -8187,3 +8189,8 @@
 "Full" = "Completo"
 "Rail" = "Barra lateral"
 "Every entry's name beside its icon, or a narrow icon-only column" = "El nombre de cada entrada junto a su icono, o una columna estrecha solo con iconos"
+"3D" = "3D"
+"Tile surface" = "Superficie de los mosaicos"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "Relleno plano, mosaicos 3D en relieve con borde de cristal o cristal translúcido"
+"Tile shadow" = "Sombra de los mosaicos"
+"How strong the shadow under each shortcut tile is (0 for none)" = "Intensidad de la sombra bajo cada mosaico de acceso directo (0 para ninguna)"

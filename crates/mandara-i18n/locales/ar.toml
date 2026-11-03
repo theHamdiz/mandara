@@ -8077,6 +8077,8 @@
 "Downloading {language}… {size}" = "جارٍ تنزيل {language}… {size}"
 "Couldn't download {language}: {error}" = "تعذّر تنزيل {language}: {error}"
 "The update didn't install" = "لم يُثبَّت التحديث"
+"Tile patterns" = "زخارف المربعات"
+"Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif" = "يحمل كل مربع اختصار في القائمة الرئيسية زخرفته الخافتة الخاصة: كلمة بالخط الكوفي أو نقشًا هندسيًا"
 
 # ── Sway ──
 "Split horizontally" = "مقسوم أفقيًا"
@@ -8196,3 +8198,8 @@
 "Full" = "كامل"
 "Rail" = "الشريط الجانبي"
 "Every entry's name beside its icon, or a narrow icon-only column" = "اسم كل عنصر بجانب أيقونته، أو عمود ضيق بالأيقونات فقط"
+"3D" = "ثلاثي الأبعاد"
+"Tile surface" = "سطح المربعات"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "تعبئة مسطحة، أو مربعات بارزة ثلاثية الأبعاد بحافة زجاجية، أو زجاج شفاف"
+"Tile shadow" = "ظل المربعات"
+"How strong the shadow under each shortcut tile is (0 for none)" = "مدى قوة الظل تحت كل مربع اختصار (0 بلا ظل)"

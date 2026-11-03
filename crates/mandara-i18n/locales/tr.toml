@@ -8073,6 +8073,8 @@
 "Downloading {language}… {size}" = "{language} indiriliyor… {size}"
 "Couldn't download {language}: {error}" = "{language} indirilemedi: {error}"
 "The update didn't install" = "Güncelleme yüklenmedi"
+"Tile patterns" = "Kutucuk desenleri"
+"Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif" = "Ana menüdeki her kısayol kutucuğu kendi soluk süslemesini taşır: Kufi yazıyla bir sözcük ya da geometrik bir motif"
 
 # ── Sway ──
 "Split horizontally" = "Yatay bölünmüş"
@@ -8192,3 +8194,8 @@
 "Full" = "Tam"
 "Rail" = "Ray"
 "Every entry's name beside its icon, or a narrow icon-only column" = "Her girdinin adı simgesinin yanında, ya da yalnızca simgelerden oluşan dar bir sütun"
+"3D" = "3B"
+"Tile surface" = "Kutucuk yüzeyi"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "Düz dolgu, cam kenarlı kabarık 3B kutucuklar ya da saydam cam"
+"Tile shadow" = "Kutucuk gölgesi"
+"How strong the shadow under each shortcut tile is (0 for none)" = "Her kısayol kutucuğunun altındaki gölgenin gücü (0: gölge yok)"

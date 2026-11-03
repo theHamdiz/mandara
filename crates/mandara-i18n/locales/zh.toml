@@ -8068,6 +8068,8 @@
 "Downloading {language}… {size}" = "正在下载{language}… {size}"
 "Couldn't download {language}: {error}" = "无法下载{language}：{error}"
 "The update didn't install" = "更新未能安装"
+"Tile patterns" = "磁贴纹样"
+"Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif" = "主菜单中的每个快捷磁贴都带有自己淡淡的纹饰：一个库法体文字或一个几何图案"
 
 # ── Sway ──
 "Split horizontally" = "水平分割"
@@ -8187,3 +8189,8 @@
 "Full" = "完整"
 "Rail" = "侧栏"
 "Every entry's name beside its icon, or a narrow icon-only column" = "每项名称显示在图标旁，或使用只有图标的窄栏"
+"3D" = "3D"
+"Tile surface" = "磁贴表面"
+"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "平面填充、带玻璃边缘的立体 3D 磁贴，或透明玻璃"
+"Tile shadow" = "磁贴阴影"
+"How strong the shadow under each shortcut tile is (0 for none)" = "每个快捷磁贴下方阴影的强度（0 为无阴影）"

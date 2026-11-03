@@ -27,10 +27,11 @@
 //!   release build — source fingerprint, binary SHA-256s and lines of code
 //!   in `<out>/mandara-<v>-<target>.build.toml` and the build-info
 //!   block (see [`buildinfo`]).
-//! - `art [--check | --compose [--only ID] [--out DIR]]`: plugin artwork —
-//!   builds the icons and covers embedded in the binaries, re-composes the
-//!   marketplace covers, or validates every artwork deliverable (see
-//!   [`art`]).
+//! - `art [--check | --compose [--only ID] [--out DIR] | --calligraphy]`:
+//!   plugin artwork — builds the icons and covers embedded in the binaries,
+//!   re-composes the marketplace covers, outlines the main menu's Kufic
+//!   words (see [`calligraphy`]), or validates every artwork deliverable
+//!   (see [`art`]).
 //! - `delta`, `apply-delta`, `update-part`, `plugin-delta`: delta updates —
 //!   binary patches and the release's `update.json` (see [`delta`]).
 //! - `resource-check <BIN> [config.toml]`: the idle resource budget of a
@@ -43,6 +44,7 @@
 
 mod art;
 mod buildinfo;
+mod calligraphy;
 mod delta;
 mod fingerprint;
 mod headless;
@@ -535,7 +537,7 @@ fn main() {
         Some("prune") => prune::prune(rest),
         Some("release-key") => release_key::release_key(rest),
         _ => {
-            eprintln!("usage: cargo xtask <status [--json] | bump [--dry-run] [--commit] [--tag] [--init] | verify | changelog [VERSION] | dist --target <triple> [--bin PATH] [--variant NAME] [--out DIR] | plugins [--out DIR] | checksums [--out DIR] | build [--target <triple>] [--variant NAME] [--profile P] [--features F] [--no-default-features] [--out DIR] [--no-readme] | art [--check | --compose [--only ID] [--out DIR]] | delta --old BIN --new BIN --out PATCH | apply-delta --old BIN --patch PATCH --out BIN [--sha256 HEX] | update-part --target <triple> [--variant NAME] [--out DIR] [--previous OLD.tar.gz] | plugin-delta --new ARCHIVE [--old ARCHIVE] --out DIR | langpacks [--version V | --bin PATH] [--dir DIR] [--out DIR] | resource-check BIN [config.toml] | sandbox <up | down | shot | matte | msg | pointer | studio | shell | audio | notify | env> … | prune [--max-gib N] [--watch MINUTES] [--dir PATH]… [--cargo-cache] [--dry-run] | release-key <new [--repo OWNER/NAME] [--secret NAME] [--backup PATH] [--force] | sign FILE [--env NAME]>>");
+            eprintln!("usage: cargo xtask <status [--json] | bump [--dry-run] [--commit] [--tag] [--init] | verify | changelog [VERSION] | dist --target <triple> [--bin PATH] [--variant NAME] [--out DIR] | plugins [--out DIR] | checksums [--out DIR] | build [--target <triple>] [--variant NAME] [--profile P] [--features F] [--no-default-features] [--out DIR] [--no-readme] | art [--check | --compose [--only ID] [--out DIR] | --calligraphy] | delta --old BIN --new BIN --out PATCH | apply-delta --old BIN --patch PATCH --out BIN [--sha256 HEX] | update-part --target <triple> [--variant NAME] [--out DIR] [--previous OLD.tar.gz] | plugin-delta --new ARCHIVE [--old ARCHIVE] --out DIR | langpacks [--version V | --bin PATH] [--dir DIR] [--out DIR] | resource-check BIN [config.toml] | sandbox <up | down | shot | matte | msg | pointer | studio | shell | audio | notify | env> … | prune [--max-gib N] [--watch MINUTES] [--dir PATH]… [--cargo-cache] [--dry-run] | release-key <new [--repo OWNER/NAME] [--secret NAME] [--backup PATH] [--force] | sign FILE [--env NAME]>>");
             std::process::exit(EXIT_USAGE);
         }
     };
