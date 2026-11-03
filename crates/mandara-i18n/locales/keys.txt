@@ -4858,6 +4858,7 @@ Ring shows
 Ring starts at
 Ring width
 River has no such setting
+River keeps no display settings of its own: set them in your init with a tool such as wlr-randr or kanshi
 River runs {file} as a program, but it isn't executable, so River starts without it (chmod +x makes it run).
 River {version} runs window management in a separate program and no longer has the river-control and river-status protocols, so Mandara can't show or switch its tags, send its binds or follow its windows. Mandara works with River's classic line (0.3, packaged as river-classic).
 River's config is your init program, which Mandara never edits: Mandara sends River its colours, rules, input settings and keys when the shell starts and on every change. To start Mandara with River, add this line to your init: {line}

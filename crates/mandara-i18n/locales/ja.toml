@@ -8077,3 +8077,4 @@
 "River's config is your init program, which Mandara never edits: Mandara sends River its colours, rules, input settings and keys when the shell starts and on every change. To start Mandara with River, add this line to your init: {line}" = "River の設定は init プログラムで、Mandara は決して編集しません。Mandara はシェルの起動時と変更のたびに、色・ルール・入力設定・キーを River に送ります。River と一緒に Mandara を起動するには、init に次の行を追加してください: {line}"
 "Your River init doesn't start Mandara. Mandara never edits it: add this line to it yourself: {line}" = "River の init は Mandara を起動しません。Mandara は init を編集しないので、次の行をご自身で追加してください: {line}"
 "Your init maps {chord}, which Mandara binds too: Mandara leaves yours and skips its own." = "init で {chord} が割り当てられており、Mandara も使うキーです。Mandara はあなたの割り当てを残し、自分のものを省きます。"
+"River keeps no display settings of its own: set them in your init with a tool such as wlr-randr or kanshi" = "River は独自のディスプレイ設定を保存しません。wlr-randr や kanshi などのツールで init に設定してください"

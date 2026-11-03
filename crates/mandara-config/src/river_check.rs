@@ -45,7 +45,10 @@ pub(crate) fn run_commands_with_init(init: &str, commands: &[Vec<String>]) -> Op
     let config = dir.path().join("config");
     std::fs::create_dir_all(config.join("river")).unwrap();
     let init_path = config.join("river/init");
-    std::fs::write(&init_path, format!("#!/bin/sh\n{init}\n")).unwrap();
+    // init's last line marks it done, so its maps are all in before
+    // Mandara's commands run.
+    let done = dir.path().join("init-done");
+    std::fs::write(&init_path, format!("#!/bin/sh\n{init}\ntouch {}\n", crate::compositor::shell_quote(&done.display().to_string()))).unwrap();
     {
         use std::os::unix::fs::PermissionsExt as _;
         std::fs::set_permissions(&init_path, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -70,8 +73,11 @@ pub(crate) fn run_commands_with_init(init: &str, commands: &[Vec<String>]) -> Op
     env(&mut river);
     let _river = Running(river.stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap());
     let display = wait_for_socket(&runtime).expect("River created no Wayland socket");
-    // Let init's own commands land first (they are the user's binds).
-    std::thread::sleep(Duration::from_millis(300));
+    let deadline = Instant::now() + START_TIMEOUT;
+    while !done.exists() {
+        assert!(Instant::now() < deadline, "River's init never finished");
+        std::thread::sleep(POLL);
+    }
     let mut failures = Vec::new();
     for words in commands {
         let mut ctl = Command::new("riverctl");

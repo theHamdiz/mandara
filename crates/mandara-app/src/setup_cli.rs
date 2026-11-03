@@ -118,29 +118,29 @@ pub fn setup(o: Options) -> Result<()> {
                 for note in last.borrow().as_ref().map(|(_, e)| e.skipped.clone()).unwrap_or_default() {
                     println!("  note: {note}");
                 }
-                continue;
-            }
-            let user_before = std::fs::read_to_string(target.user_config())?;
-            let added = install_include(target)?;
-            if added {
-                let after = doctor::check(target);
-                if dfix::is_worse(&report, &after) {
-                    // Our include made it worse: undo exactly that.
-                    mandara_config::write_atomic(&target.user_config(), user_before.as_bytes())?;
-                    println!("{target:?}: {} rejects the config with Mandara's include, so it was removed again:", target.name());
-                    print_report(&after);
-                    config_errors += after.errors();
-                    continue;
+            } else {
+                let user_before = std::fs::read_to_string(target.user_config())?;
+                let added = install_include(target)?;
+                if added {
+                    let after = doctor::check(target);
+                    if dfix::is_worse(&report, &after) {
+                        // Our include made it worse: undo exactly that.
+                        mandara_config::write_atomic(&target.user_config(), user_before.as_bytes())?;
+                        println!("{target:?}: {} rejects the config with Mandara's include, so it was removed again:", target.name());
+                        print_report(&after);
+                        config_errors += after.errors();
+                        continue;
+                    }
+                    report = after;
                 }
-                report = after;
-            }
-            let path = last.borrow().as_ref().map(|(p, _)| p.clone()).unwrap_or_else(|| target.generated_file());
-            println!("{target:?}: drop-in {} · include {} {}", path.display(), if added { "added to" } else { "already in" }, target.user_config().display());
-            if cfg.compositor.autostart {
-                println!("  autostart: {}", if user_autostarts(target) { "your config already starts Mandara" } else { "on (from the drop-in)" });
-            }
-            for note in last.borrow().as_ref().map(|(_, e)| e.skipped.clone()).unwrap_or_default() {
-                println!("  note: {note}");
+                let path = last.borrow().as_ref().map(|(p, _)| p.clone()).unwrap_or_else(|| target.generated_file());
+                println!("{target:?}: drop-in {} · include {} {}", path.display(), if added { "added to" } else { "already in" }, target.user_config().display());
+                if cfg.compositor.autostart {
+                    println!("  autostart: {}", if user_autostarts(target) { "your config already starts Mandara" } else { "on (from the drop-in)" });
+                }
+                for note in last.borrow().as_ref().map(|(_, e)| e.skipped.clone()).unwrap_or_default() {
+                    println!("  note: {note}");
+                }
             }
         }
         if !has_config {
@@ -186,7 +186,10 @@ pub fn setup(o: Options) -> Result<()> {
             println!("  {} {}:{} — {}", if c.is_conflict() { "conflict:" } else { "note:" }, c.file.display(), c.lines[0] + 1, c.summary());
             println!("      {}", c.text);
         }
-        if o.fix_conflicts && !o.check && !fixable.is_empty() {
+        if o.fix_conflicts && !o.check && !fixable.is_empty() && target == Target::River {
+            // River's init is a program Mandara never edits.
+            println!("  River: Mandara doesn't edit {}; remove or comment the lines above yourself", target.user_config().display());
+        } else if o.fix_conflicts && !o.check && !fixable.is_empty() {
             let backup = conflicts::retire(target, &fixable)?;
             let after = doctor::check(target);
             if dfix::is_worse(&report, &after) {

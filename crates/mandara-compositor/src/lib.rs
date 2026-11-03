@@ -33,9 +33,10 @@ pub use umbriel::UmbrielDriver;
 /// says `sway`, it wins the same way; otherwise `SWAYSOCK` is checked after
 /// the others, so a compositor nested inside sway (inheriting `SWAYSOCK`)
 /// is still found by its own variable. River sets no variable of its own:
-/// a session that names it (`XDG_CURRENT_DESKTOP=river`) is River, and
-/// when nothing else matched, the display is asked once whether it offers
-/// River's control and status protocols.
+/// a session that names it (`XDG_CURRENT_DESKTOP=river`) is River once no
+/// compositor's own variable matched (a compositor nested in River keeps
+/// its own), and when nothing matched at all, the display is asked once
+/// whether it offers River's control and status protocols.
 pub fn detect() -> Option<CompositorKind> {
     detect_from(|name| std::env::var_os(name)).or_else(|| (std::env::var_os("WAYLAND_DISPLAY").is_some() && river::running()).then_some(CompositorKind::River))
 }
@@ -48,8 +49,6 @@ pub fn detect_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<C
         Some(CompositorKind::Umbriel)
     } else if desktop("sway") && set("SWAYSOCK") {
         Some(CompositorKind::Sway)
-    } else if desktop("river") {
-        Some(CompositorKind::River)
     } else if set("MANGO_INSTANCE_SIGNATURE") || desktop("mango") {
         Some(CompositorKind::MangoWM)
     } else if set("NIRI_SOCKET") {
@@ -60,6 +59,8 @@ pub fn detect_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<C
         Some(CompositorKind::Umbriel)
     } else if set("SWAYSOCK") {
         Some(CompositorKind::Sway)
+    } else if desktop("river") {
+        Some(CompositorKind::River)
     } else {
         None
     }
@@ -120,10 +121,12 @@ mod tests {
         assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "sway:wlroots"), ("SWAYSOCK", "/s")]), Some(CompositorKind::Sway));
         assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "umbriel"), ("SWAYSOCK", "/s")]), Some(CompositorKind::Umbriel));
         assert_eq!(detect_with(&[("SWAYSOCK", "")]), None, "an empty variable is unset");
-        // River sets nothing itself; a session naming it is River (a nested
-        // Niri in it is still Niri).
+        // River sets nothing itself; a session naming it is River, and a
+        // compositor nested in it (inheriting that name) is still found by
+        // its own variable.
         assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "river")]), Some(CompositorKind::River));
-        assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "river"), ("NIRI_SOCKET", "/n")]), Some(CompositorKind::River));
+        assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "river"), ("NIRI_SOCKET", "/n")]), Some(CompositorKind::Niri));
+        assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "river"), ("SWAYSOCK", "/s")]), Some(CompositorKind::Sway));
         assert_eq!(detect_with(&[("NIRI_SOCKET", "/n")]), Some(CompositorKind::Niri));
     }
 }

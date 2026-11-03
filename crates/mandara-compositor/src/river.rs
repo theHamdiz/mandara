@@ -122,6 +122,7 @@ pub struct RiverOutput {
     pub width: i32,
     pub height: i32,
     pub mode_width: i32,
+    pub mode_height: i32,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -151,7 +152,10 @@ impl RiverState {
             OutputGone { output } => {
                 self.outputs.remove(&output);
             }
-            OutputMode { output, width, .. } => self.outputs.entry(output).or_default().mode_width = width,
+            OutputMode { output, width, height } => {
+                let o = self.outputs.entry(output).or_default();
+                (o.mode_width, o.mode_height) = (width, height);
+            }
             OutputPosition { output, x, y } => {
                 let o = self.outputs.entry(output).or_default();
                 (o.x, o.y) = (x, y);
@@ -253,7 +257,11 @@ impl RiverState {
                 y: o.y,
                 width: o.width,
                 height: o.height,
-                scale: if o.width > 0 && o.mode_width > 0 { o.mode_width as f32 / o.width as f32 } else { 1.0 },
+                // The longer sides match whatever the rotation.
+                scale: match (o.width.max(o.height), o.mode_width.max(o.mode_height)) {
+                    (logical, mode) if logical > 0 && mode > 0 => mode as f32 / logical as f32,
+                    _ => 1.0,
+                },
                 active: self.focused_output == Some(*id),
             })
             .collect()
@@ -816,6 +824,16 @@ mod tests {
         let NavigationModel::BitmaskTags { tags, .. } = &s.navigation()[0].1 else { panic!() };
         assert_eq!(tags.len(), 12);
         assert!(tags[11].occupied && tags[11].client_count == 1);
+    }
+
+    #[test]
+    fn rotated_outputs_keep_their_scale() {
+        let mut s = RiverState::default();
+        s.apply(RiverEvent::OutputName { output: 1, name: "eDP-1".into() });
+        s.apply(RiverEvent::OutputMode { output: 1, width: 2880, height: 1800 });
+        // Rotated 90° at 1.5: the logical size is 1200 × 1920.
+        s.apply(RiverEvent::OutputSize { output: 1, width: 1200, height: 1920 });
+        assert_eq!(s.monitors()[0].scale, 1.5);
     }
 
     #[test]

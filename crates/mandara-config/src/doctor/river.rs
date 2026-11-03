@@ -44,7 +44,10 @@ impl CompositorCheck for River {
     }
 
     fn parse(&self, out: &Output, ctx: &ParseContext) -> Vec<Diagnostic> {
-        let mandara: Vec<String> = crate::ConfigStore::open_default().map(|s| s.get().compositor.keybinds.iter().map(|k| k.chord()).collect()).unwrap_or_default();
+        // Mandara's binds from its config, read only when there is one (a
+        // check never creates it).
+        let file = crate::paths::config_file();
+        let mandara: Vec<String> = if file.is_file() { crate::ConfigStore::open(file).map(|s| s.get().compositor.keybinds.iter().map(|k| k.chord()).collect()).unwrap_or_default() } else { Vec::new() };
         let mandara_bin = crate::paths::self_exe().display().to_string();
         check(&out.text(), &ctx.root, &mandara, &mandara_bin)
     }
