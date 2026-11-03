@@ -6,8 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
-A new Modern style for the Power panel, a battery that breathes while it
-charges, and lighter wallpapers.
+A new Modern style for the Power panel and a battery that breathes while it
+charges.
 
 ### New
 
@@ -34,6 +34,13 @@ charges, and lighter wallpapers.
   its look, but no longer shows the CPU driver (`intel_pstate` and
   friends) in its header or under each power profile; each profile keeps
   its short description.
+
+## 0.8.3 — 2026-11-03
+
+Lighter wallpapers.
+
+### Changed
+
 - **Lighter wallpapers.** A wallpaper smaller than your screen, and the
   depth clock's mask, are now scaled up a row at a time instead of through
   a full-size working copy. On a 4K display, switching to a 2880 × 1620
