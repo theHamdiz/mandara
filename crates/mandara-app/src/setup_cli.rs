@@ -69,6 +69,12 @@ pub fn setup(o: Options) -> Result<()> {
     // `--fix` ids that matched a problem of some compositor.
     let mut fixed_ids: Vec<String> = Vec::new();
     for target in targets {
+        // Sway without a config of its own runs the system one: the user's
+        // starts as a copy of it (sway's documented first step), so the
+        // include line has somewhere to go and sway's defaults stay.
+        if target == Target::Sway && !o.check && o.fix.is_empty() && mandara_config::compositor::seed_sway_user_config()? {
+            println!("Sway: started {} as a copy of {}", target.user_config().display(), mandara_config::compositor::SWAY_SYSTEM_CONFIG);
+        }
         let has_config = target.user_config().exists();
         let env = CheckEnv::default();
         // The config as the compositor reads it before Mandara touches it.

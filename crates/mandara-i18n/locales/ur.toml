@@ -7819,5 +7819,5 @@
 "Split horizontally" = "افقی تقسیم"
 "Split vertically" = "عمودی تقسیم"
 "Tabbed" = "ٹیب والا"
-"Sway has no such setting" = "Sway میں یہ ترتیب نہیں ہے"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "Sway، Mandara کی فائل وہیں پڑھتا ہے جہاں آپ کی کنفیگ اسے شامل کرتی ہے، یعنی آخر میں، اس لیے Mandara کے رنگ اور فاصلے آپ کی ترتیبات کے اوپر لاگو ہوتے ہیں۔ Sway میں گول کونے، شفافیت، دھندلاہٹ، سائے یا اینیمیشن نہیں ہیں؛ بار کی لے آؤٹ پِل فوکس شدہ کنٹینر کا لے آؤٹ بدلتی ہے۔"
+"Mandara can't set this on Sway" = "Mandara اسے Sway پر سیٹ نہیں کر سکتا"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "Sway، Mandara کی فائل وہیں پڑھتا ہے جہاں آپ کی کنفیگ اسے شامل کرتی ہے۔ Mandara یہ لائن آخر میں جوڑتا ہے، اس لیے اس کے رنگ اور فاصلے اس سے پہلے کی ترتیبات پر لاگو ہوتے ہیں، بعد میں جوڑی گئی ترتیبات پر نہیں۔ Mandara، Sway پر گول کونے، شفافیت، دھندلاہٹ، سائے یا اینیمیشن سیٹ نہیں کرتا؛ بار کی لے آؤٹ پِل فوکس شدہ کنٹینر کے لے آؤٹس کے درمیان باری باری بدلتی ہے۔"

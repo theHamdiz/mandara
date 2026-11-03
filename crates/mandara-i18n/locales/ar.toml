@@ -8069,5 +8069,5 @@
 "Split horizontally" = "مقسوم أفقيًا"
 "Split vertically" = "مقسوم عموديًا"
 "Tabbed" = "ألسنة"
-"Sway has no such setting" = "لا يملك Sway هذا الإعداد"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "يقرأ Sway ملف المندرة حيث يضمّنه ملف إعداداتك، أي في نهايته، فتُطبَّق ألوان المندرة وفجواتها فوق إعداداتك. لا يدعم Sway الزوايا المستديرة ولا الشفافية ولا الضبابية ولا الظلال ولا الحركات؛ وزر التخطيط في الشريط يبدّل تخطيط الحاوية المحددة."
+"Mandara can't set this on Sway" = "لا تستطيع المندرة ضبط هذا على Sway"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "يقرأ Sway ملف المندرة حيث يضمّنه ملف إعداداتك. تضيف المندرة ذلك السطر في النهاية، فتُطبَّق ألوانها وفجواتها فوق الإعدادات التي قبله، لا فوق ما تضيفه بعده. لا تضبط المندرة على Sway زوايا مستديرة ولا شفافية ولا ضبابية ولا ظلالًا ولا حركات؛ وزر التخطيط في الشريط يتنقّل بين تخطيطات الحاوية المحددة."

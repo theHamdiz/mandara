@@ -8066,5 +8066,5 @@
 "Split horizontally" = "क्षैतिज विभाजन"
 "Split vertically" = "लंबवत विभाजन"
 "Tabbed" = "टैब वाला"
-"Sway has no such setting" = "Sway में यह सेटिंग नहीं है"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "आपका कॉन्फ़िग जहाँ Mandara की फ़ाइल शामिल करता है, यानी अंत में, Sway उसे वहीं पढ़ता है, इसलिए Mandara के रंग और गैप आपकी सेटिंग्स के ऊपर लागू होते हैं। Sway में गोल कोने, अपारदर्शिता, ब्लर, छाया या एनिमेशन नहीं हैं; बार की लेआउट पिल फ़ोकस वाले कंटेनर का लेआउट बदलती है।"
+"Mandara can't set this on Sway" = "Mandara इसे Sway पर सेट नहीं कर सकता"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "आपका कॉन्फ़िग जहाँ Mandara की फ़ाइल शामिल करता है, Sway उसे वहीं पढ़ता है। Mandara वह लाइन अंत में जोड़ता है, इसलिए उसके रंग और गैप उससे पहले की सेटिंग्स के ऊपर लागू होते हैं, उसके बाद जोड़ी गई सेटिंग्स के ऊपर नहीं। Mandara Sway पर गोल कोने, अपारदर्शिता, ब्लर, छाया या एनिमेशन सेट नहीं करता; बार की लेआउट पिल फ़ोकस वाले कंटेनर के लेआउट में एक-एक करके बदलती है।"

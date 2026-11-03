@@ -7818,5 +7818,5 @@
 "Split horizontally" = "가로 분할"
 "Split vertically" = "세로 분할"
 "Tabbed" = "탭"
-"Sway has no such setting" = "Sway에는 이 설정이 없습니다"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "Sway는 설정 파일 끝에서 포함된 Mandara의 파일을 읽으므로 Mandara의 색과 간격이 사용자 설정 위에 적용됩니다. Sway에는 둥근 모서리, 불투명도, 흐림, 그림자, 애니메이션이 없으며, 바의 레이아웃 필은 포커스된 컨테이너의 레이아웃을 전환합니다."
+"Mandara can't set this on Sway" = "Mandara는 Sway에서 이것을 설정할 수 없습니다"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "Sway는 설정 파일이 Mandara의 파일을 포함하는 위치에서 그 파일을 읽습니다. Mandara는 그 줄을 끝에 추가하므로 색과 간격이 그 앞의 설정 위에는 적용되지만, 그 뒤에 추가한 설정 위에는 적용되지 않습니다. Mandara는 Sway에서 둥근 모서리, 불투명도, 흐림, 그림자, 애니메이션을 설정하지 않으며, 바의 레이아웃 필은 포커스된 컨테이너의 레이아웃을 차례로 전환합니다."

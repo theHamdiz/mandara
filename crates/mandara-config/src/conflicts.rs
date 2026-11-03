@@ -811,22 +811,27 @@ pub fn validate_file(target: Target, config: &Path) -> Validation {
         Target::Umbriel => ("umbriel", vec!["config".into(), "validate".into(), "-c".into(), config.display().to_string()]),
         Target::Sway => ("sway", vec!["--validate".into(), "--config".into(), config.display().to_string()]),
     };
-    let mut cmd = std::process::Command::new(tool);
-    cmd.args(&args).stdin(std::process::Stdio::null());
-    // Sway builds its (headless, software) backend before it reads the
-    // config, even to validate: in its own private runtime dir.
-    let runtime = (target == Target::Sway).then(crate::doctor::PrivateDir::new).and_then(Result::ok);
-    if let Some(dir) = &runtime {
-        cmd.envs(crate::doctor::SWAY_CHECK_ENV.iter().copied()).env("XDG_RUNTIME_DIR", dir.path()).env_remove("WAYLAND_DISPLAY").env_remove("DISPLAY").env_remove("SWAYSOCK");
-    }
-    let Ok(out) = cmd.output() else { return Validation::Unchecked };
-    let report = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    let (success, report) = if target == Target::Sway {
+        // Sway builds its (headless, software) backend before it reads the
+        // config, even to validate: through the doctor's runner (its own
+        // private runtime dir, no display, a time limit). If that can't be
+        // set up, the config is left unchecked rather than checked against
+        // the running session.
+        let argv: Vec<std::ffi::OsString> = std::iter::once(tool.into()).chain(args.iter().map(Into::into)).collect();
+        match crate::doctor::run_isolated(&argv, crate::doctor::SWAY_CHECK_ENV) {
+            Some(out) => (out.success, format!("{}{}", out.stdout, out.stderr)),
+            None => return Validation::Unchecked,
+        }
+    } else {
+        let Ok(out) = std::process::Command::new(tool).args(&args).stdin(std::process::Stdio::null()).output() else { return Validation::Unchecked };
+        (out.status.success(), format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)))
+    };
     let failed = match target {
         // mango -p prints problems; it exits 0 either way.
         Target::Mango => report.contains("ERROR"),
         // Sway exits 0 when the error is in an included file.
-        Target::Sway => !out.status.success() || report.contains("[ERROR]"),
-        _ => !out.status.success(),
+        Target::Sway => !success || report.contains("[ERROR]"),
+        _ => !success,
     };
     if failed { Validation::Invalid { tool, report: report.trim().to_string() } } else { Validation::Valid { tool } }
 }
@@ -989,6 +994,23 @@ mod tests {
         assert!(scan_files(Target::Sway, &cfg(), &files).iter().all(|c| !c.is_conflict()), "retired lines are not found again");
         restore(&b).unwrap();
         assert!(std::fs::read_to_string(d.join("config")).unwrap().contains("\nbar {\n    position top"));
+        std::fs::remove_dir_all(d).ok();
+    }
+
+    /// Sway's check runs isolated (the doctor's runner) and still tells a
+    /// good config from a broken one, an included file's error too.
+    #[test]
+    fn sway_validation_tells_good_from_broken() {
+        if std::process::Command::new("sway").arg("--version").output().is_err() {
+            eprintln!("sway isn't installed; skipped");
+            return;
+        }
+        let d = tmp("sway-validate");
+        std::fs::write(d.join("good"), "bindsym Mod4+q kill\n").unwrap();
+        std::fs::write(d.join("child.conf"), "frobnicate on\n").unwrap();
+        std::fs::write(d.join("broken"), format!("include {}\n", d.join("child.conf").display())).unwrap();
+        assert_eq!(validate_file(Target::Sway, &d.join("good")), Validation::Valid { tool: "sway" });
+        assert!(matches!(validate_file(Target::Sway, &d.join("broken")), Validation::Invalid { report, .. } if report.contains("frobnicate")));
         std::fs::remove_dir_all(d).ok();
     }
 

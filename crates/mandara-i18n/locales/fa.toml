@@ -7819,5 +7819,5 @@
 "Split horizontally" = "تقسیم افقی"
 "Split vertically" = "تقسیم عمودی"
 "Tabbed" = "زبانه‌ای"
-"Sway has no such setting" = "Sway چنین تنظیمی ندارد"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "Sway فایل Mandara را همان‌جا که پیکربندی شما آن را include می‌کند، یعنی در انتها، می‌خواند؛ پس رنگ‌ها و فاصله‌های Mandara روی تنظیمات شما اعمال می‌شوند. Sway گوشهٔ گرد، شفافیت، تاری، سایه یا پویانمایی ندارد؛ کپسول چیدمان در نوار، چیدمان ظرف فعال را عوض می‌کند."
+"Mandara can't set this on Sway" = "Mandara نمی‌تواند این را در Sway تنظیم کند"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "Sway فایل Mandara را همان‌جا که پیکربندی شما آن را include می‌کند می‌خواند. Mandara آن خط را در انتها می‌گذارد، پس رنگ‌ها و فاصله‌هایش روی تنظیمات پیش از آن اعمال می‌شوند، نه روی تنظیماتی که بعد از آن اضافه کنید. Mandara در Sway گوشهٔ گرد، تیرگی، تاری، سایه یا پویانمایی تنظیم نمی‌کند؛ کپسول چیدمان در نوار بین چیدمان‌های کانتینر فعال جابه‌جا می‌شود."

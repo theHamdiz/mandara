@@ -2513,6 +2513,16 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
     Ok(true)
 }
 
+/// Starts the user's sway config as a copy of [`SWAY_SYSTEM_CONFIG`] when
+/// they have none (`Ok(false)` when they do, or there is nothing to copy).
+pub fn seed_sway_user_config() -> Result<bool> {
+    let (user, system) = (Target::Sway.user_config(), Path::new(SWAY_SYSTEM_CONFIG));
+    if user.exists() || !system.is_file() {
+        return Ok(false);
+    }
+    seed_sway_config(&user, system).map(|()| true)
+}
+
 /// A Sway user without a config of their own runs the system-wide one:
 /// theirs starts as a copy of it (sway's documented first step), so adding
 /// the include changes nothing else. Never overwrites an existing file.

@@ -487,7 +487,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
         path if path.starts_with("/compositor/input/cursor/") => system_settings::cursor_locked(path, running_compositor()),
-        path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Sway has no such setting")),
+        path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Mandara can't set this on Sway")),
         path if path.starts_with("/wallpaper/slideshow/") => desktop_settings::slideshow_locked(path, cfg),
         "/wallpaper/depth/auto_split" | "/wallpaper/depth/download" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
         "/wallpaper/depth/split" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
@@ -497,8 +497,9 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     }
 }
 
-/// Window-look settings sway has no equivalent of (its drop-in leaves them
-/// out): rounded corners, opacity, blur, shadows and animations.
+/// Window-look settings Mandara's sway drop-in leaves out: sway has no
+/// rounded corners, blur, shadows or animations, and its opacity is a
+/// per-window command, not a focused / unfocused setting.
 pub(crate) const SWAY_LACKS: &[&str] = &["/compositor/look/rounding", "/compositor/look/active_opacity", "/compositor/look/inactive_opacity", "/compositor/look/blur", "/compositor/look/shadows", "/compositor/look/animations"];
 
 /// What a click on a locked toggle saves: a toggle that can't apply right
@@ -507,6 +508,15 @@ pub(crate) const SWAY_LACKS: &[&str] = &["/compositor/look/rounding", "/composit
 /// one on waits until it can apply.
 pub fn locked_toggle_click(on: bool) -> Option<bool> {
     on.then_some(false)
+}
+
+/// A choice the running compositor can't carry out, left out of its control
+/// (a value already saved still shows, so it can be changed; the shell
+/// does nothing for it): the Overview corner and bar action where the
+/// compositor has no overview (Sway).
+pub fn choice_hidden(path: &str, raw: &str) -> bool {
+    let corner_action = path == "/bar/middle_click/action" || (path.starts_with("/hot_corners/") && path.ends_with("/action"));
+    raw == "overview" && corner_action && matches!(running_compositor(), Some(mandara_config::compositor::Target::Sway))
 }
 
 /// The compositor Studio runs under, detected once (it can't change while

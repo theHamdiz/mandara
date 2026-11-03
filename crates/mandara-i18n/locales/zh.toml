@@ -8060,5 +8060,5 @@
 "Split horizontally" = "水平分割"
 "Split vertically" = "垂直分割"
 "Tabbed" = "标签页"
-"Sway has no such setting" = "Sway 没有此设置"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "Sway 会在你的配置包含 Mandara 文件的位置（末尾）读取它，因此 Mandara 的颜色和间距会叠加在你的设置之上。Sway 没有圆角、不透明度、模糊、阴影或动画；栏上的布局胶囊会切换当前聚焦容器的布局。"
+"Mandara can't set this on Sway" = "Mandara 无法在 Sway 上设置此项"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "Sway 会在你的配置包含 Mandara 文件的位置读取它。Mandara 把这一行加在末尾，因此它的颜色和间距会覆盖这一行之前的设置，但不会覆盖你在之后添加的设置。Mandara 不会在 Sway 上设置圆角、不透明度、模糊、阴影或动画；栏上的布局胶囊会在当前聚焦容器的各种布局之间轮换。"

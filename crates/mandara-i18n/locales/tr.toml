@@ -8065,5 +8065,5 @@
 "Split horizontally" = "Yatay bölünmüş"
 "Split vertically" = "Dikey bölünmüş"
 "Tabbed" = "Sekmeli"
-"Sway has no such setting" = "Sway'de böyle bir ayar yok"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "Sway, Mandara'nın dosyasını yapılandırmanın onu dahil ettiği yerde, yani sonda okur; bu yüzden Mandara'nın renkleri ve boşlukları seninkilerin üzerine uygulanır. Sway'de yuvarlak köşe, opaklık, bulanıklık, gölge veya animasyon yoktur; çubuktaki düzen hapı odaktaki kabın düzenini değiştirir."
+"Mandara can't set this on Sway" = "Mandara bunu Sway'de ayarlayamaz"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "Sway, Mandara'nın dosyasını yapılandırmanın onu dahil ettiği yerde okur. Mandara bu satırı sona ekler; bu yüzden renkleri ve boşlukları ondan önceki ayarların üzerine uygulanır, sonradan eklediklerinin üzerine uygulanmaz. Mandara, Sway'de yuvarlak köşe, opaklık, bulanıklık, gölge veya animasyon ayarlamaz; çubuktaki düzen hapı odaktaki kapsayıcının düzenleri arasında geçiş yapar."

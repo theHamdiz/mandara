@@ -3187,6 +3187,7 @@ Mandara answers pairing codes and connection requests (restart the shell to appl
 Mandara asks for your administrator password, backs up greetd's PAM file and changes only its own marked lines.
 Mandara asks for your keyring password when an app needs a saved secret (gnome-keyring / Secret Service). Skipped while another prompter, such as GNOME Shell, is running
 Mandara asks for your password when an app needs administrator rights (polkit). Skipped if another agent is already running
+Mandara can't set this on Sway
 Mandara can't uninstall itself from here
 Mandara command, e.g. launcher toggle
 Mandara couldn't write where this app goes.
@@ -5623,8 +5624,7 @@ Suspend, then hibernate
 Swahili proverb
 Swap the left and right buttons
 Swatch shape
-Sway has no such setting
-Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout.
+Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts.
 Swirl
 Switch
 Switch automatically

@@ -424,7 +424,7 @@ impl StudioView {
                     .p(px(SPACE_3_PX))
                     .rounded(px(RADIUS_12_PX))
                     .bg(p.surface_container_high.hsla())
-                    .children(choices.iter().map(|(raw, label)| {
+                    .children(choices.iter().filter(|(raw, _)| *raw == current || !registry::choice_hidden(setting.path, raw)).map(|(raw, label)| {
                         let active = *raw == current;
                         let setting = setting.clone();
                         div()

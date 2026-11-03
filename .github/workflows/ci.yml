@@ -125,8 +125,13 @@ jobs:
   compositor-checkers:
     name: Compositor checkers (Sway)
     runs-on: ubuntu-24.04
+    # It only reads the checkout; the token stays out of the container.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Checker tests in Arch
         run: |
           docker run --rm -v "$PWD:/src" -w /src archlinux:latest sh -euc '

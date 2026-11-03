@@ -523,7 +523,7 @@ impl StudioView {
                 .text_size(px(TEXT_12_PX))
                 .line_height(px(LEADING_17_PX))
                 .text_color(p.on_surface_variant.hsla())
-                .child(t("Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout."))
+                .child(t("Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts."))
                 .into_any_element(),
         };
         let preview = self.dropin_preview(cfg, tab, p, cx);

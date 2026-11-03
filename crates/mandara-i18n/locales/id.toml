@@ -7819,5 +7819,5 @@
 "Split horizontally" = "Terbagi mendatar"
 "Split vertically" = "Terbagi menurun"
 "Tabbed" = "Bertab"
-"Sway has no such setting" = "Sway tidak punya pengaturan ini"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "Sway membaca file Mandara di tempat konfigurasi Anda menyertakannya, yaitu di akhir, sehingga warna dan celah Mandara berlaku di atas milik Anda. Sway tidak punya sudut membulat, opasitas, blur, bayangan, atau animasi; pil tata letak di bilah mengganti tata letak kontainer yang difokuskan."
+"Mandara can't set this on Sway" = "Mandara tidak bisa mengatur ini di Sway"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "Sway membaca file Mandara di tempat konfigurasi Anda menyertakannya. Mandara menambahkan baris itu di akhir, sehingga warna dan celahnya berlaku di atas pengaturan sebelum baris itu, tetapi tidak di atas yang Anda tambahkan setelahnya. Di Sway, Mandara tidak mengatur sudut membulat, opasitas, blur, bayangan, atau animasi; pil tata letak di bilah berganti di antara tata letak kontainer yang difokuskan."

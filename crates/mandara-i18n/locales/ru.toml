@@ -8065,5 +8065,5 @@
 "Split horizontally" = "Разделено по горизонтали"
 "Split vertically" = "Разделено по вертикали"
 "Tabbed" = "Вкладками"
-"Sway has no such setting" = "В Sway нет такой настройки"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "Sway читает файл Mandara там, где его подключает ваш конфиг, — в конце, поэтому цвета и отступы Mandara применяются поверх ваших. В Sway нет скруглённых углов, прозрачности, размытия, теней и анимаций; кнопка раскладки на панели переключает раскладку контейнера в фокусе."
+"Mandara can't set this on Sway" = "Mandara не может задать это в Sway"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "Sway читает файл Mandara там, где его подключает ваш конфиг. Mandara добавляет эту строку в конец, поэтому её цвета и отступы применяются поверх настроек выше, но не поверх тех, что вы добавите ниже. В Sway Mandara не задаёт скруглённые углы, прозрачность, размытие, тени и анимации; кнопка раскладки на панели перебирает раскладки контейнера в фокусе."
