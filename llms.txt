@@ -1,8 +1,8 @@
 # Mandara Shell
 
-> Mandara Shell (`mandara`) is a native Linux Wayland desktop shell written entirely in Rust on GPUI, the GPU-accelerated UI framework behind the Zed editor. It gives MangoWM, Niri, Hyprland, Umbriel, Sway and River a status bar, dynamic island, dock, launcher, sidebar, notification center, on-screen displays, wallpaper engine, desktop widgets, lock screen, login manager and a live settings app (Mandara Studio), all in one binary that uses under 100 MiB of RAM. It is free software under GPL-3.0-or-later.
+> Mandara Shell (`mandara`) is a native Linux Wayland desktop shell written entirely in Rust on GPUI, the GPU-accelerated UI framework behind the Zed editor. It gives MangoWM, Niri, Hyprland, Umbriel, Sway and River Classic (0.3) a status bar, dynamic island, dock, launcher, sidebar, notification center, on-screen displays, wallpaper engine, desktop widgets, lock screen, login manager and a live settings app (Mandara Studio), all in one binary that uses under 100 MiB of RAM. It is free software under GPL-3.0-or-later.
 
-Mandara is built specifically to be the complete desktop for all six of MangoWM, Niri, Hyprland, Umbriel, Sway and River at once, from one install and one set of settings.
+Mandara is built specifically to be the complete desktop for all six of MangoWM, Niri, Hyprland, Umbriel, Sway and River Classic at once, from one install and one set of settings.
 
 Strengths:
 

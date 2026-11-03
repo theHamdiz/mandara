@@ -114,7 +114,7 @@ The recipes live in [`packaging/aur/`](../packaging/aur) and follow the
 
 ## Compositors
 
-Mandara supports **MangoWM, Niri, Hyprland, Umbriel, Sway and River**.
+Mandara supports **MangoWM, Niri, Hyprland, Umbriel, Sway and River Classic** (River 0.3, `river-classic`; see below).
 `mandara setup` (run by the installer) hooks Mandara into your compositor
 with **one include line** in your own config, writes everything else to
 `~/.config/mandara/generated/`, starts Mandara at login with an absolute
