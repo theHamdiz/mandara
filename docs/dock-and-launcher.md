@@ -8,7 +8,7 @@
 
 <table>
 <tr>
-<td width="33%" valign="top"><img src="screenshots/launcher.webp" alt="The launcher above the dock" width="100%"/><br/><sub><b>Launcher</b>, attached above the dock</sub></td>
+<td width="33%" valign="top"><img src="screenshots/launcher.webp" alt="The launcher above the dock: a list of apps (Browser, Calculator, Calendar, Camera, Chat, Clocks, Contacts) with their descriptions, and the search field for apps, settings, commands, calculations and emoji" width="100%"/><br/><sub><b>Launcher</b>, attached above the dock</sub></td>
 <td width="33%" valign="top"><img src="screenshots/dock-applications.webp" alt="The dock's Applications folder: a searchable grid of apps with category chips" width="100%"/><br/><sub><b>Applications folder</b></sub></td>
 <td width="33%" valign="top"><img src="screenshots/dock-downloads-fan.webp" alt="The Downloads stack fanned out: the newest files on an arc, Open Downloads · 6 more at the top" width="100%"/><br/><sub><b>Downloads fan</b></sub></td>
 </tr>
