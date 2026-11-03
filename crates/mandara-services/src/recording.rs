@@ -7,14 +7,20 @@
 use std::fs::File;
 use std::io::{BufWriter, Seek, SeekFrom, Write};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use mandara_i18n::{t, tf};
 use rav1e::prelude::*;
 
 use crate::screencopy::FrameSource;
+
+pub mod backend;
+pub mod external;
+pub mod history;
+pub mod plan;
+pub mod session;
 
 /// The encoder thread must report ready within this (failure detection).
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -28,9 +34,53 @@ pub struct RecordOptions {
     /// Logical region relative to the output (`x, y, w, h`), or the whole output.
     pub region: Option<(i32, i32, i32, i32)>,
     pub fps: u32,
-    /// Encoded frames are scaled down to at most this width.
+    /// Encoded frames are scaled down to fit within this width and height
+    /// (never up).
     pub max_width: u32,
+    pub max_height: u32,
+    /// Base quantizer, 0–255 (lower is better quality and a larger file).
+    pub quantizer: u8,
     pub path: PathBuf,
+}
+
+impl RecordOptions {
+    /// Whole-output (or region) recording at the default quality, no
+    /// height limit.
+    pub fn new(output: String, region: Option<(i32, i32, i32, i32)>, fps: u32, max_width: u32, path: PathBuf) -> Self {
+        RecordOptions { output, region, fps, max_width, max_height: u32::MAX, quantizer: RECORD_QUANTIZER, path }
+    }
+}
+
+/// The capture thread waits here while a recording is paused.
+#[derive(Default)]
+struct Gate {
+    paused: Mutex<bool>,
+    wake: Condvar,
+}
+
+impl Gate {
+    fn set(&self, paused: bool) {
+        if let Ok(mut p) = self.paused.lock() {
+            *p = paused;
+        }
+        self.wake.notify_all();
+    }
+
+    /// Blocks while paused (until resumed or `stop`); returns how long.
+    fn wait(&self, stop: &AtomicBool) -> Duration {
+        let Ok(mut p) = self.paused.lock() else { return Duration::ZERO };
+        if !*p {
+            return Duration::ZERO;
+        }
+        let since = Instant::now();
+        while *p && !stop.load(Ordering::SeqCst) {
+            p = match self.wake.wait(p) {
+                Ok(p) => p,
+                Err(_) => break,
+            };
+        }
+        since.elapsed()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -47,8 +97,11 @@ pub struct RecordingResult {
 /// A running recording; [`Recording::stop`] finishes and returns the file.
 pub struct Recording {
     stop: Arc<AtomicBool>,
+    gate: Arc<Gate>,
     frames: Arc<AtomicU64>,
     thread: Option<std::thread::JoinHandle<Result<RecordingResult, String>>>,
+    /// Closes when the recording thread ends (stopped or failed).
+    pub ended: async_channel::Receiver<()>,
     pub started: Instant,
     pub path: PathBuf,
 }
@@ -62,9 +115,15 @@ impl Recording {
         self.thread.as_ref().is_some_and(|t| !t.is_finished())
     }
 
+    /// Pauses or resumes capturing; paused time is left out of the file.
+    pub fn set_paused(&self, paused: bool) {
+        self.gate.set(paused);
+    }
+
     /// Stops capturing, flushes the encoder and finalizes the file.
     pub fn stop(mut self) -> Result<RecordingResult, String> {
         self.stop.store(true, Ordering::SeqCst);
+        self.gate.set(false);
         match self.thread.take() {
             Some(thread) => thread.join().map_err(|_| t("The recording thread crashed").to_string())?,
             None => Err(t("The recording already finished").into()),
@@ -75,6 +134,7 @@ impl Recording {
 impl Drop for Recording {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
+        self.gate.set(false);
     }
 }
 
@@ -88,8 +148,22 @@ struct Yuv {
 
 /// Even dimensions no wider than `max_w`, keeping the aspect ratio.
 pub fn encode_size(w: u32, h: u32, max_w: u32) -> (u32, u32) {
-    let (w2, h2) = if w > max_w { (max_w, (h as u64 * max_w as u64 / w as u64) as u32) } else { (w, h) };
-    ((w2 & !1).max(2), (h2 & !1).max(2))
+    encode_size_within(w, h, max_w, u32::MAX)
+}
+
+/// Even dimensions within `max_w × max_h` (never larger than `w × h`),
+/// keeping the aspect ratio.
+pub fn encode_size_within(w: u32, h: u32, max_w: u32, max_h: u32) -> (u32, u32) {
+    let (w64, h64) = (u64::from(w.max(1)), u64::from(h.max(1)));
+    let (mut w2, mut h2) = (w64, h64);
+    if w2 > u64::from(max_w) {
+        (w2, h2) = (u64::from(max_w), h64 * u64::from(max_w) / w64);
+    }
+    if h2 > u64::from(max_h) {
+        (w2, h2) = (w64 * u64::from(max_h) / h64, u64::from(max_h));
+    }
+    let even = |v: u64| (u32::try_from(v).unwrap_or(u32::MAX) & !1).max(2);
+    (even(w2), even(h2))
 }
 
 /// Converts a raw screencopy frame (BGRx / RGBx byte order) to BT.709
@@ -171,16 +245,23 @@ pub fn to_yuv420(data: &[u8], sw: u32, sh: u32, stride: u32, bgr: bool, y_invert
 /// Starts recording on two threads (capture → encode).
 pub fn start(opts: RecordOptions) -> Result<Recording, String> {
     let stop = Arc::new(AtomicBool::new(false));
+    let gate = Arc::new(Gate::default());
     let frames = Arc::new(AtomicU64::new(0));
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), String>>();
-    let (stop2, frames2, path) = (stop.clone(), frames.clone(), opts.path.clone());
+    let (ended_tx, ended) = async_channel::bounded::<()>(1);
+    let (stop2, gate2, frames2, path) = (stop.clone(), gate.clone(), frames.clone(), opts.path.clone());
     let thread = std::thread::Builder::new()
         .name("mandara-record".into())
-        .spawn(move || run(opts, stop2, frames2, ready_tx))
+        .spawn(move || {
+            let result = run(opts, stop2, gate2, frames2, ready_tx);
+            // Dropping the sender tells the shell the recording ended.
+            drop(ended_tx);
+            result
+        })
         .map_err(|e| e.to_string())?;
     // Surface setup errors (no screencopy, bad region…) to the caller.
     match ready_rx.recv_timeout(READY_TIMEOUT) {
-        Ok(Ok(())) => Ok(Recording { stop, frames, thread: Some(thread), started: Instant::now(), path }),
+        Ok(Ok(())) => Ok(Recording { stop, gate, frames, thread: Some(thread), ended, started: Instant::now(), path }),
         Ok(Err(err)) => {
             let _ = thread.join();
             Err(err)
@@ -189,7 +270,7 @@ pub fn start(opts: RecordOptions) -> Result<Recording, String> {
     }
 }
 
-fn run(opts: RecordOptions, stop: Arc<AtomicBool>, frames: Arc<AtomicU64>, ready: std::sync::mpsc::Sender<Result<(), String>>) -> Result<RecordingResult, String> {
+fn run(opts: RecordOptions, stop: Arc<AtomicBool>, gate: Arc<Gate>, frames: Arc<AtomicU64>, ready: std::sync::mpsc::Sender<Result<(), String>>) -> Result<RecordingResult, String> {
     let setup = (|| -> Result<_, String> {
         let mut source = FrameSource::new(&opts.output, opts.region).map_err(|e| format!("{e:#}"))?.with_cursor(true);
         let (w, h) = {
@@ -205,9 +286,10 @@ fn run(opts: RecordOptions, stop: Arc<AtomicBool>, frames: Arc<AtomicU64>, ready
             return Err(e);
         }
     };
-    let (dw, dh) = encode_size(sw, sh, opts.max_width);
-    let fps = opts.fps.clamp(5, 60);
-    let mut sink = match VideoSink::create(&opts.path, &SinkOptions::new(dw, dh, fps)) {
+    let (dw, dh) = encode_size_within(sw, sh, opts.max_width, opts.max_height);
+    let fps = opts.fps.clamp(MIN_FPS, MAX_FPS);
+    let sink_opts = SinkOptions { quantizer: opts.quantizer, min_quantizer: opts.quantizer.min(RECORD_MIN_QUANTIZER), ..SinkOptions::new(dw, dh, fps) };
+    let mut sink = match VideoSink::create(&opts.path, &sink_opts) {
         Ok(s) => s,
         Err(e) => {
             let _ = ready.send(Err(e.clone()));
@@ -224,7 +306,15 @@ fn run(opts: RecordOptions, stop: Arc<AtomicBool>, frames: Arc<AtomicU64>, ready
         let t0 = Instant::now();
         let interval = Duration::from_secs_f64(1.0 / fps as f64);
         let mut next = t0;
+        // Time spent paused, left out of the timestamps.
+        let mut paused = Duration::ZERO;
         while !cap_stop.load(Ordering::SeqCst) {
+            let waited = gate.wait(&cap_stop);
+            if !waited.is_zero() {
+                paused += waited;
+                next = Instant::now();
+                continue;
+            }
             let now = Instant::now();
             if now < next {
                 std::thread::sleep(next - now);
@@ -232,7 +322,7 @@ fn run(opts: RecordOptions, stop: Arc<AtomicBool>, frames: Arc<AtomicU64>, ready
             next += interval;
             let Ok(f) = source.next_frame() else { break };
             let (y, u, v) = to_yuv420(f.data, f.width, f.height, f.stride, f.bgr, f.y_invert, dw, dh);
-            match tx.try_send(Yuv { y, u, v, at: t0.elapsed() }) {
+            match tx.try_send(Yuv { y, u, v, at: t0.elapsed().saturating_sub(paused) }) {
                 Ok(()) => {}
                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
                     cap_dropped.fetch_add(1, Ordering::Relaxed);
@@ -269,8 +359,11 @@ fn run(opts: RecordOptions, stop: Arc<AtomicBool>, frames: Arc<AtomicU64>, ready
 
 /// rav1e's fastest speed preset (the recorder's real-time setting).
 const FASTEST_SPEED: u8 = 10;
+/// The built-in encoder's frame-rate range (real-time AV1 on the CPU).
+pub const MIN_FPS: u32 = 5;
+pub const MAX_FPS: u32 = 60;
 /// Recorder quantizers: base and floor (0–255, lower is better).
-const RECORD_QUANTIZER: u8 = 110;
+pub const RECORD_QUANTIZER: u8 = 110;
 const RECORD_MIN_QUANTIZER: u8 = 40;
 /// The recorder forces a key frame at least this many seconds apart…
 const RECORD_KEY_SECONDS: u32 = 4;

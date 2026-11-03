@@ -19,6 +19,7 @@ mod look_tests;
 pub mod surface_settings;
 pub mod system_settings;
 pub mod side_bar_settings;
+pub mod recorder_settings;
 mod tuning_settings;
 pub mod workflow_settings;
 
@@ -323,6 +324,21 @@ pub enum Control {
     /// typed name is allowed too). `follows`: the setting an empty value
     /// falls back to (offered as "Default"); `None` = always set.
     Font { follows: Option<&'static str> },
+    /// The screen recorders on this computer and what each supports (no
+    /// value of its own).
+    RecorderBackends,
+    /// A sound device by server name from the live list (`""` = the
+    /// default one): an input (microphone) or an output.
+    Device { input: bool },
+    /// A display (output name) from the live list (`""` = the focused one).
+    Display,
+}
+
+impl Control {
+    /// Whether the control edits a value (else it is a button or a status).
+    pub fn has_value(&self) -> bool {
+        !matches!(self, Control::Command { .. } | Control::DepthModel | Control::RecorderBackends)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -451,6 +467,7 @@ pub fn settings() -> &'static [Setting] {
         all.extend(alert_settings::entries());
         all.extend(system_settings::entries());
         all.extend(workflow_settings::entries());
+        all.extend(recorder_settings::entries());
         all.extend(tuning_settings::entries());
         all.extend(side_bar_settings::entries());
         all
@@ -491,8 +508,15 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/wallpaper/depth/split" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
         "/wallpaper/depth/split" if cfg.wallpaper.depth.auto_split => Some(tk("Set per wallpaper while the automatic split is on")),
         "/wallpaper/depth/regenerate" | "/wallpaper/depth/place_clock" if !cfg.wallpaper.depth_effect => Some(tk("Turn on the depth effect first")),
+        path if path.starts_with("/plugins/settings/screenshot/record_") => recorder_settings::locked(path, cfg),
         path => side_bar_settings::locked(path, cfg).or_else(|| surface_settings::locked(path, cfg)),
     }
+}
+
+/// Why choice `raw` of `setting` can't be picked under `cfg` right now
+/// (shown disabled, with the reason under the choices).
+pub fn choice_locked(setting: &Setting, raw: &str, cfg: &ShellConfig) -> Option<&'static str> {
+    if setting.path.starts_with("/plugins/settings/screenshot/record_") { recorder_settings::choice_locked(setting.path, raw, cfg) } else { None }
 }
 
 /// The compositor Studio runs under, detected once (it can't change while
@@ -1016,7 +1040,8 @@ mod tests {
     #[test]
     fn every_path_resolves_and_round_trips() {
         let cfg = ShellConfig::default();
-        for setting in settings() {
+        // A status or a button has no value to write back.
+        for setting in settings().iter().filter(|s| s.control.has_value()) {
             let v = get(&cfg, setting);
             // Writing the current value back must always be valid.
             let back = set(&cfg, setting, v.clone()).unwrap_or_else(|e| panic!("{}: {e}", setting.path));
