@@ -18,7 +18,7 @@ pub const BINARY: &str = "mandara";
 pub const PLUGIN_DIRS: &[&str] = &["mandara/plugins", "mandara/plugins-dev"];
 /// The compositor drop-ins Mandara generates (`~/.config/mandara/generated/`).
 pub const GENERATED_DIR: &str = "mandara/generated";
-pub const GENERATED_DROPINS: &[&str] = &["mango.conf", "hyprland.conf", "niri.kdl", "hyprland.lua", "umbriel.toml", "sway.conf"];
+pub const GENERATED_DROPINS: &[&str] = &["mango.conf", "hyprland.conf", "niri.kdl", "hyprland.lua", "umbriel.toml", "sway.conf", "river.conf"];
 /// Mode of the installed binary.
 const MODE_EXECUTABLE: u32 = 0o755;
 /// The `Exec=` value the packaged desktop entry starts with.

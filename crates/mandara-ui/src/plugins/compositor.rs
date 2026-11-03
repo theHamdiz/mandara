@@ -363,7 +363,7 @@ pub fn register(r: &mut PluginRegistry) {
     }));
     r.command(
         ID,
-        CommandSpec::new("compositor dispatch", mandara_i18n::tk("Raw compositor dispatch (MangoWM function, Hyprland dispatcher, Niri or Umbriel action, Sway command)"), |a, cx| {
+        CommandSpec::new("compositor dispatch", mandara_i18n::tk("Raw compositor dispatch (MangoWM function, Hyprland dispatcher, Niri or Umbriel action, Sway or River command)"), |a, cx| {
             let cmd = a.str(0)?.to_string();
             let rest: Vec<String> = a.0.iter().skip(1).cloned().collect();
             let args: Vec<&str> = rest.iter().map(String::as_str).collect();

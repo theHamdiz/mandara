@@ -1,6 +1,6 @@
 //! The shortcuts cheatsheet's model: normalized chords split into keycaps
 //! (`shift+super+e` → `Super` `Shift` `E`), what a bind line of MangoWM,
-//! Niri, Hyprland, Umbriel or Sway does (`bind=SUPER,Q,killclient` → "Close
+//! Niri, Hyprland, Umbriel, Sway or River does (`bind=SUPER,Q,killclient` → "Close
 //! window"), and which group a bind belongs to (Mandara, windows,
 //! workspaces / tags, apps, media & system, other).
 //!
@@ -193,6 +193,13 @@ pub fn bind_text(target: Target, body: &str) -> BindText {
             let words = body.strip_prefix("bindsym").unwrap_or(body).split_whitespace().skip_while(|w| w.starts_with("--")).skip(1);
             BindText { action: words.collect::<Vec<_>>().join(" "), description: None }
         }
+        // `riverctl map [-flags] normal Super Q close` in River's init.
+        Target::River => {
+            let words = mandara_config::compositor::shell_words(body);
+            let after_map = words.iter().position(|w| w == "map").map_or(&words[..], |at| &words[at + 1..]);
+            let args: Vec<&String> = after_map.iter().filter(|w| !w.starts_with('-')).collect();
+            BindText { action: args.get(3..).unwrap_or_default().iter().map(|w| w.as_str()).collect::<Vec<_>>().join(" "), description: None }
+        }
         Target::Hyprland if body.contains("hl.bind(") => lua_text(body),
         Target::Hyprland | Target::Mango => {
             let Some((keyword, value)) = body.split_once('=') else { return BindText { action: squash(body), description: None } };
@@ -354,12 +361,12 @@ pub fn describe(action: &str) -> Option<String> {
             }
             tf("Run {program}", &[("program", &name)])
         }
-        "killclient" | "killactive" | "close_window" | "kill" => t("Close window").to_string(),
+        "killclient" | "killactive" | "close_window" | "kill" | "close" => t("Close window").to_string(),
         "quit" | "exit" => t("Quit the compositor").to_string(),
         "reload_config" | "load_config_file" | "reload" => t("Reload the config").to_string(),
-        "togglefloating" | "toggle_window_floating" | "setfloating" => t("Toggle floating").to_string(),
+        "togglefloating" | "toggle_window_floating" | "setfloating" | "toggle_float" => t("Toggle floating").to_string(),
         "floating" if arg == "toggle" => t("Toggle floating").to_string(),
-        "togglefullscreen" | "fullscreen" | "fullscreen_window" | "togglefakefullscreen" => t("Toggle fullscreen").to_string(),
+        "togglefullscreen" | "fullscreen" | "fullscreen_window" | "togglefakefullscreen" | "toggle_fullscreen" => t("Toggle fullscreen").to_string(),
         "togglemaximizescreen" | "maximize_column" | "maximize" | "maximize_window_to_edges" => t("Maximize").to_string(),
         "minimized" | "minimize" | "toggle_minimize" => t("Minimize").to_string(),
         "toggleoverview" | "toggle_overview" | "overview" => t("Overview").to_string(),
@@ -520,6 +527,10 @@ mod tests {
         assert_eq!(bind_text(Target::Umbriel, "\"Mod+T\" = \"spawn foot\"").action, "spawn foot");
         assert_eq!(bind_text(Target::Sway, "bindsym --locked --no-warn $mod+Return exec foot -e btop").action, "exec foot -e btop");
         assert_eq!(bind_text(Target::Sway, "Mod4+Shift+q kill").action, "kill", "a line of a `bindsym {{ … }}` block");
+        assert_eq!(bind_text(Target::River, "riverctl map -repeat normal Super+Shift Return spawn 'foot -e btop'").action, "spawn foot -e btop");
+        for (action, want) in [("close", "Close window"), ("toggle-float", "Toggle floating"), ("toggle-fullscreen", "Toggle fullscreen"), ("spawn foot", "Run foot")] {
+            assert_eq!(describe(action).as_deref(), Some(want), "river `{action}`");
+        }
         for (action, want) in [
             ("exec foot", "Run foot"),
             ("kill", "Close window"),

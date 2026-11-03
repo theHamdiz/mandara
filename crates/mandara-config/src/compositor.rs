@@ -2,7 +2,7 @@
 //!
 //! Mandara never rewrites the user's own compositor config. Rules, keybinds
 //! and live border colors go to `~/.config/mandara/generated/{mango.conf,
-//! niri.kdl, hyprland.conf, umbriel.toml, sway.conf}`, and the user's main file only
+//! niri.kdl, hyprland.conf, umbriel.toml, sway.conf, river.conf}`, and the user's main file only
 //! ever gains one include line (installed on request, verified at startup):
 //!
 //! * MangoWM — `source_optional=~/.config/mandara/generated/mango.conf`
@@ -16,6 +16,12 @@
 //!   [`umbriel_add_include`])
 //! * Sway — `include <abs path>/sway.conf` (sway reads its config in order,
 //!   so the line goes at the end; see [`sway_include_line`])
+//! * River — none: its config is an executable `init` program, which
+//!   Mandara never edits. Mandara's settings are River commands it sends
+//!   over `river-control` when the shell starts and whenever they change
+//!   ([`river_commands`]; `river.conf` keeps a record of them). The one
+//!   line a user adds is the one that starts Mandara from `init`
+//!   ([`river_spawn_line`]).
 //!
 //! Keybinds that collide with binds already in the user's config are
 //! skipped and reported instead of silently overriding them.
@@ -37,13 +43,14 @@ pub enum Target {
     Hyprland,
     Umbriel,
     Sway,
+    River,
 }
 
 impl Target {
-    pub const ALL: [Target; 5] = [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway];
+    pub const ALL: [Target; 6] = [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway, Target::River];
 
     /// This compositor's column in the `[MangoWM, Niri, Hyprland, Umbriel,
-    /// Sway]` support tables ([`RULE_OPTIONS`], `input::INPUT_OPTIONS`).
+    /// Sway, River]` support tables ([`RULE_OPTIONS`], `input::INPUT_OPTIONS`).
     pub const fn index(self) -> usize {
         match self {
             Target::Mango => 0,
@@ -51,6 +58,7 @@ impl Target {
             Target::Hyprland => 2,
             Target::Umbriel => 3,
             Target::Sway => 4,
+            Target::River => 5,
         }
     }
 
@@ -63,6 +71,7 @@ impl Target {
             "hyprland" | "hypr" => Some(Target::Hyprland),
             "umbriel" => Some(Target::Umbriel),
             "sway" | "swaywm" => Some(Target::Sway),
+            "river" | "river-classic" => Some(Target::River),
             _ => None,
         }
     }
@@ -75,6 +84,7 @@ impl Target {
             Target::Hyprland => "hyprland",
             Target::Umbriel => "umbriel",
             Target::Sway => "sway",
+            Target::River => "river",
         }
     }
 
@@ -86,6 +96,7 @@ impl Target {
             Target::Hyprland => "Hyprland",
             Target::Umbriel => "Umbriel",
             Target::Sway => "Sway",
+            Target::River => "River",
         }
     }
 
@@ -104,6 +115,9 @@ impl Target {
             Target::Hyprland => "hyprland.conf",
             Target::Umbriel => "umbriel.toml",
             Target::Sway => "sway.conf",
+            // Not read by River: the commands Mandara sent, for the record
+            // (and to take its own binds and rules back on the next sync).
+            Target::River => "river.conf",
         })
     }
 
@@ -118,6 +132,8 @@ impl Target {
             // Umbriel reads `$XDG_CONFIG_HOME/umbriel/config.toml` first.
             Target::Umbriel => config.join("umbriel/config.toml"),
             Target::Sway => sway_user_config(&config, &paths::home()),
+            // River runs `$XDG_CONFIG_HOME/river/init` at start-up.
+            Target::River => config.join("river/init"),
         }
     }
 
@@ -133,8 +149,61 @@ impl Target {
             // the config has no `[include.optional]` yet.
             Target::Umbriel => format!("[include.optional]\nfiles = [{}]", toml_str(&self.generated_file().display().to_string())),
             Target::Sway => sway_include_line(&self.generated_file().display().to_string()),
+            Target::River => river_spawn_line(&paths::self_exe().display().to_string()),
         }
     }
+}
+
+/// The line that starts Mandara from River's `init` (which Mandara never
+/// edits: the user adds it; `riverctl spawn` runs it through `/bin/sh -c`).
+pub fn river_spawn_line(mandara: &str) -> String {
+    format!("riverctl spawn {}", shell_quote(mandara))
+}
+
+/// `s` as one POSIX shell word (single quotes when it needs any).
+pub fn shell_quote(s: &str) -> String {
+    if !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || "/._-+=:,@%".contains(c)) {
+        s.to_string()
+    } else {
+        format!("'{}'", s.replace('\'', "'\\''"))
+    }
+}
+
+/// Shell words of one line: single and double quotes and backslashes
+/// undone, a `#` comment dropped (enough for `riverctl …` lines).
+pub fn shell_words(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut word: Option<String> = None;
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\'' => {
+                let w = word.get_or_insert_with(String::new);
+                for c in chars.by_ref() {
+                    if c == '\'' {
+                        break;
+                    }
+                    w.push(c);
+                }
+            }
+            '"' => {
+                let w = word.get_or_insert_with(String::new);
+                while let Some(c) = chars.next() {
+                    match c {
+                        '"' => break,
+                        '\\' => w.extend(chars.next()),
+                        c => w.push(c),
+                    }
+                }
+            }
+            '\\' => word.get_or_insert_with(String::new).extend(chars.next()),
+            '#' if word.is_none() => break,
+            c if c.is_whitespace() => out.extend(word.take()),
+            c => word.get_or_insert_with(String::new).push(c),
+        }
+    }
+    out.extend(word);
+    out
 }
 
 /// The config file sway reads, in sway's own search order
@@ -222,10 +291,13 @@ pub fn installed_version(target: Target) -> Option<(u32, u32)> {
         Target::Umbriel => "umbriel",
         // `sway version 1.12`.
         Target::Sway => "sway",
+        // `river -version`: `0.3.17` (handled below).
+        Target::River => "river",
     };
     let slot = &CACHE[target.index()];
     *slot.get_or_init(|| {
-        let out = std::process::Command::new(program).arg("--version").stdin(std::process::Stdio::null()).output().ok()?;
+        let flag = if target == Target::River { "-version" } else { "--version" };
+        let out = std::process::Command::new(program).arg(flag).stdin(std::process::Stdio::null()).output().ok()?;
         parse_version(&String::from_utf8_lossy(&out.stdout))
     })
 }
@@ -270,21 +342,22 @@ pub struct TagRule {
 }
 
 /// Window-rule options and the compositors whose drop-in honours them
-/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway]`). Studio greys out the rest.
+/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway, River]`). Studio greys out the rest.
 /// Umbriel's `global` is its `default_pinned` (above other windows on every
 /// workspace of the output, like Hyprland's `pin`); Sway's is `sticky` (a
-/// floating window shown on every workspace of its output). Sway has no
+/// floating window shown on every workspace of its output); River's is a
+/// `tags` rule putting new windows on every tag. Sway and River have no
 /// per-focus opacity, blur or shadows.
 pub const RULE_OPTIONS: &[(&str, [bool; Target::ALL.len()])] = &[
-    ("floating", [true, true, true, true, true]),
-    ("global", [true, false, true, true, true]),
-    ("overlay", [true, false, false, false, false]),
-    ("focused_opacity", [true, true, true, true, false]),
-    ("unfocused_opacity", [true, true, true, true, false]),
-    ("no_blur", [true, false, true, true, false]),
-    ("no_shadow", [true, true, true, true, false]),
-    ("confine_pointer", [true, false, false, true, false]),
-    ("force_tiled_state", [true, false, false, false, false]),
+    ("floating", [true, true, true, true, true, true]),
+    ("global", [true, false, true, true, true, true]),
+    ("overlay", [true, false, false, false, false, false]),
+    ("focused_opacity", [true, true, true, true, false, false]),
+    ("unfocused_opacity", [true, true, true, true, false, false]),
+    ("no_blur", [true, false, true, true, false, false]),
+    ("no_shadow", [true, true, true, true, false, false]),
+    ("confine_pointer", [true, false, false, true, false, false]),
+    ("force_tiled_state", [true, false, false, false, false, false]),
 ];
 
 /// Whether `target`'s emitter writes window-rule option `option`.
@@ -529,18 +602,19 @@ fn normalize_mod(m: &str) -> Option<&'static str> {
 }
 
 /// The modifiers a Studio-captured chord may carry, as each compositor
-/// spells them: `(normalized, [MangoWM, Niri, Hyprland, Umbriel, Sway])`.
+/// spells them: `(normalized, [MangoWM, Niri, Hyprland, Umbriel, Sway, River])`.
 /// Umbriel documents Super, Ctrl, Alt and Shift only (its `Mod` follows
 /// `general.mod_key`, so Mandara spells Super out). Sway takes xkb's
 /// modifier names (`Mod4`, `Ctrl`, `Alt`, `Shift`, `Mod3`, `Mod5`) and
-/// rejects `Hyper`.
+/// rejects `Hyper`; River takes `Super`, `Control`, `Alt`, `Shift`, `Mod3`
+/// and `Mod5` (`riverctl(1)`).
 const MOD_NAMES: &[(&str, [&str; Target::ALL.len()])] = &[
-    ("super", ["SUPER", "Mod", "SUPER", "Super", "Mod4"]),
-    ("ctrl", ["CTRL", "Ctrl", "CTRL", "Ctrl", "Ctrl"]),
-    ("alt", ["ALT", "Alt", "ALT", "Alt", "Alt"]),
-    ("shift", ["SHIFT", "Shift", "SHIFT", "Shift", "Shift"]),
-    ("hyper", ["HYPER", "Mod3", "MOD3", "", "Mod3"]),
-    ("mod5", ["", "ISO_Level3_Shift", "MOD5", "", "Mod5"]),
+    ("super", ["SUPER", "Mod", "SUPER", "Super", "Mod4", "Super"]),
+    ("ctrl", ["CTRL", "Ctrl", "CTRL", "Ctrl", "Ctrl", "Control"]),
+    ("alt", ["ALT", "Alt", "ALT", "Alt", "Alt", "Alt"]),
+    ("shift", ["SHIFT", "Shift", "SHIFT", "Shift", "Shift", "Shift"]),
+    ("hyper", ["HYPER", "Mod3", "MOD3", "", "Mod3", "Mod3"]),
+    ("mod5", ["", "ISO_Level3_Shift", "MOD5", "", "Mod5", "Mod5"]),
 ];
 
 /// A key typed as a character (`,`) or a GPUI key name (`pageup`) → its
@@ -812,6 +886,9 @@ pub fn user_autostarts(target: Target) -> bool {
     // The main file and every file it sources / includes (never Mandara's
     // own drop-in).
     let texts: Vec<String> = crate::conflicts::config_files(target).iter().filter_map(|f| std::fs::read_to_string(f).ok()).collect();
+    if target == Target::River {
+        return texts.iter().any(|t| river_starts_mandara(t));
+    }
     if target == Target::Umbriel {
         // `general.autostart` entries (an array, possibly over several
         // lines) rather than keyword lines.
@@ -1833,6 +1910,185 @@ pub fn emit_sway(cfg: &ManagedConfig) -> Emitted {
     Emitted { text: s, skipped }
 }
 
+/// Whether River's `init` text starts Mandara: a `riverctl spawn …` of it
+/// or a plain command line running it (`mandara &`), not a bind running
+/// `mandara msg …`.
+pub fn river_starts_mandara(init: &str) -> bool {
+    init.lines().map(shell_words).any(|w| {
+        let is_mandara = |s: &str| s.split_whitespace().next().is_some_and(|p| p == "mandara" || p.ends_with("/mandara")) && !s.split_whitespace().any(|a| a == "msg");
+        match w.as_slice() {
+            [ctl, spawn, cmd, ..] if ctl.ends_with("riverctl") && spawn == "spawn" => is_mandara(cmd),
+            [first, ..] => (first == "mandara" || first.ends_with("/mandara")) && !w.iter().any(|a| a == "msg"),
+            [] => false,
+        }
+    })
+}
+
+/// A Mandara window rule's regex as a River glob (`riverctl(1)`: a `*` may
+/// start and / or end it; nothing else is special). `^org\.app$` → `org.app`,
+/// `^steam_app_.*` → `steam_app_*`; `None` when the regex needs more than
+/// that (alternatives, classes, wildcards inside).
+pub fn river_glob(regex: &str) -> Option<String> {
+    let mut r = regex.trim();
+    let (mut lead, mut trail) = (true, true);
+    if let Some(rest) = r.strip_prefix('^') {
+        r = rest;
+        lead = false;
+    }
+    if let Some(rest) = r.strip_suffix('$').filter(|rest| !rest.ends_with('\\')) {
+        r = rest;
+        trail = false;
+    }
+    if let Some(rest) = r.strip_prefix(".*") {
+        r = rest;
+        lead = true;
+    }
+    if let Some(rest) = r.strip_suffix(".*") {
+        r = rest;
+        trail = true;
+    }
+    let mut out = String::new();
+    let mut chars = r.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => out.push(chars.next().filter(|c| !c.is_alphanumeric())?),
+            '.' | '*' | '+' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '|' | '^' | '$' => return None,
+            c if c.is_control() => return None,
+            c => out.push(c),
+        }
+    }
+    if out.is_empty() {
+        return None;
+    }
+    Some(format!("{}{out}{}", if lead { "*" } else { "" }, if trail { "*" } else { "" }))
+}
+
+/// A River colour argument (`0xRRGGBBAA`).
+fn river_color(hex: &str) -> String {
+    format!("0x{}", hex_bare(hex))
+}
+
+/// The tag bitmask a `global` rule gives new windows: every tag.
+const RIVER_ALL_TAGS: u32 = u32::MAX;
+
+/// The River commands (argv for `river-control`, as `riverctl` takes them)
+/// that carry Mandara's settings, and the notes on what was left out.
+/// Every command and option comes from `riverctl(1)`; the tests run each
+/// through River itself. River has no gaps, rounded corners, blur, shadows,
+/// animations, opacity rules or output settings of its own: those Studio
+/// settings are left out (and locked in Studio).
+pub fn river_commands(cfg: &ManagedConfig) -> (Vec<Vec<String>>, Vec<String>) {
+    let c = cfg.config;
+    let mut out: Vec<Vec<String>> = Vec::new();
+    let mut cmd = |words: &[&str]| out.push(words.iter().map(|w| w.to_string()).collect());
+    if let Some(w) = c.border_width {
+        cmd(&["border-width", &w.to_string()]);
+    }
+    if let Some(bc) = &cfg.borders {
+        cmd(&["border-color-focused", &river_color(&bc.active)]);
+        cmd(&["border-color-unfocused", &river_color(&bc.inactive)]);
+        cmd(&["border-color-urgent", &river_color(&bc.urgent)]);
+    }
+    for words in crate::input::river_commands(&c.input) {
+        out.push(words);
+    }
+    let mut skipped = Vec::new();
+    for r in &c.window_rules {
+        let mut matchers: Vec<String> = Vec::new();
+        let mut usable = true;
+        for (flag, regex) in [("-app-id", &r.app_id), ("-title", &r.title)] {
+            if let Some(regex) = regex {
+                match river_glob(regex) {
+                    Some(glob) => matchers.extend([flag.to_string(), glob]),
+                    None => usable = false,
+                }
+            }
+        }
+        if !usable || matchers.is_empty() {
+            if r.floating.is_some() || r.global.is_some() {
+                skipped.push(format!("rule for {} skipped: River matches with simple globs (a `*` at the start or end)", r.app_id.as_deref().or(r.title.as_deref()).unwrap_or("?")));
+            }
+            continue;
+        }
+        if let Some(f) = r.floating {
+            out.push(matchers.iter().cloned().chain([if f { "float" } else { "no-float" }.to_string()]).fold(vec!["rule-add".to_string()], |mut v, w| {
+                v.push(w);
+                v
+            }));
+        }
+        if r.global == Some(true) {
+            out.push(matchers.iter().cloned().chain(["tags".to_string(), RIVER_ALL_TAGS.to_string()]).fold(vec!["rule-add".to_string()], |mut v, w| {
+                v.push(w);
+                v
+            }));
+        }
+    }
+    let (binds, bind_skips) = split_binds(cfg, Target::River);
+    skipped.extend(bind_skips);
+    for k in binds {
+        let mods = if k.mods.is_empty() { "None".to_string() } else { k.mods.join("+") };
+        out.push(vec!["map".into(), "normal".into(), mods, k.key.clone(), "spawn".into(), k.bind.action.shell_command_with(&cfg.mandara_bin)]);
+    }
+    (out, skipped)
+}
+
+/// One command as a `riverctl` line (shell-quoted).
+pub fn riverctl_line(words: &[String]) -> String {
+    std::iter::once("riverctl".to_string()).chain(words.iter().map(|w| shell_quote(w))).collect::<Vec<_>>().join(" ")
+}
+
+/// `~/.config/mandara/generated/river.conf`: the record of the River
+/// commands Mandara sends (one `riverctl` line each). River doesn't read
+/// it; see [`river_commands`].
+pub fn emit_river(cfg: &ManagedConfig) -> Emitted {
+    let (commands, skipped) = river_commands(cfg);
+    let mut s = String::new();
+    let _ = writeln!(s, "# {HEADER}");
+    let _ = writeln!(s, "# River doesn't read this file: Mandara sends these commands over river-control when the shell starts and on every change.");
+    let _ = writeln!(s, "# To start Mandara with River, add this line to ~/.config/river/init:\n#   {}\n", river_spawn_line(&cfg.mandara_bin));
+    for words in &commands {
+        let _ = writeln!(s, "{}", riverctl_line(words));
+    }
+    for note in &skipped {
+        let _ = writeln!(s, "# {note}");
+    }
+    Emitted { text: s, skipped }
+}
+
+/// The commands recorded in a `river.conf` (see [`emit_river`]).
+pub fn parse_river_record(text: &str) -> Vec<Vec<String>> {
+    text.lines().map(shell_words).filter(|w| w.first().is_some_and(|c| c == "riverctl")).map(|w| w[1..].to_vec()).filter(|w| !w.is_empty()).collect()
+}
+
+/// The commands that take back what `previous` set and the next sync may
+/// not set again: Mandara's own binds (`unmap`) and rules (`rule-del`).
+/// Settings such as colours are simply set again.
+pub fn river_undo(previous: &[Vec<String>]) -> Vec<Vec<String>> {
+    previous
+        .iter()
+        .filter_map(|w| match w.first().map(String::as_str) {
+            Some("map") if w.len() >= 4 => Some(vec!["unmap".to_string(), w[1].clone(), w[2].clone(), w[3].clone()]),
+            Some("rule-add") if w.len() >= 2 => {
+                // `rule-add [matchers] action [args]` → `rule-del [matchers] action`.
+                let mut del = vec!["rule-del".to_string()];
+                let mut i = 1;
+                while i + 1 < w.len() && w[i].starts_with('-') {
+                    del.extend([w[i].clone(), w[i + 1].clone()]);
+                    i += 2;
+                }
+                // Float and no-float share a list, as do the others.
+                del.push(match w.get(i).map(String::as_str) {
+                    Some("no-float") => "float".to_string(),
+                    Some(action) => action.to_string(),
+                    None => return None,
+                });
+                Some(del)
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 pub fn emit(target: Target, cfg: &ManagedConfig) -> Emitted {
     match target {
         Target::Mango => emit_mango(cfg),
@@ -1840,6 +2096,7 @@ pub fn emit(target: Target, cfg: &ManagedConfig) -> Emitted {
         Target::Hyprland => emit_hyprland(cfg),
         Target::Umbriel => emit_umbriel(cfg),
         Target::Sway => emit_sway(cfg),
+        Target::River => emit_river(cfg),
     }
 }
 
@@ -1863,6 +2120,8 @@ pub(crate) fn include_path(target: Target, line: &str) -> Option<String> {
         // Umbriel's includes are TOML arrays, read whole-file by
         // [`includes_in`].
         Target::Mango | Target::Umbriel => None,
+        // River's init is a program, not a config with includes.
+        Target::River => None,
         // `include <path>`: a shell word (`~`, `$VAR`, globs), expanded by
         // [`included_files`].
         Target::Sway => line.strip_prefix("include").filter(|r| r.starts_with(char::is_whitespace)).map(|r| r.trim().to_string()).filter(|r| !r.is_empty()),
@@ -2140,7 +2399,49 @@ pub fn chords_by_line(target: Target, text: &str) -> Vec<(usize, String)> {
         Target::Hyprland => hyprland_chords(text),
         Target::Umbriel => umbriel_chords(text),
         Target::Sway => sway_binds(text).into_iter().map(|b| (b.line, b.chord)).collect(),
+        Target::River => river_binds(text).into_iter().map(|b| (b.line, b.chord)).collect(),
     }
+}
+
+/// One `riverctl map` of River's `init`: 0-based line, chord, command.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RiverBind {
+    pub line: usize,
+    pub chord: String,
+    pub command: String,
+}
+
+/// The `riverctl map [-flags] normal MODS KEY command…` lines of an `init`
+/// script (normal mode; maps built in shell loops or with variables can't
+/// be read and are left out).
+pub fn river_binds(text: &str) -> Vec<RiverBind> {
+    let mut out = Vec::new();
+    for (i, line) in text.lines().enumerate() {
+        let words = shell_words(line);
+        let Some(at) = words.iter().position(|w| w == "riverctl" || w.ends_with("/riverctl")) else { continue };
+        let mut rest = words[at + 1..].iter().map(String::as_str);
+        if rest.next() != Some("map") {
+            continue;
+        }
+        let mut args: Vec<&str> = Vec::new();
+        let mut rest = rest.peekable();
+        while let Some(w) = rest.next() {
+            match w {
+                "-release" | "-repeat" => {}
+                "-layout" => {
+                    rest.next();
+                }
+                w => args.push(w),
+            }
+        }
+        let [mode, mods, key, command @ ..] = args.as_slice() else { continue };
+        if *mode != "normal" || mods.contains('$') || key.contains('$') {
+            continue;
+        }
+        let mods = mods.split('+').filter(|m| !m.eq_ignore_ascii_case("none"));
+        out.push(RiverBind { line: i, chord: chord(mods, &keysym_for(key)), command: command.join(" ") });
+    }
+    out
 }
 
 /// One sway key bind: its 0-based line, its chord and the command it runs.
@@ -2447,6 +2748,10 @@ pub fn include_installed(target: Target) -> bool {
 }
 
 fn include_installed_at(target: Target, config: &Path) -> bool {
+    if target == Target::River {
+        // Nothing to include: what counts is that init starts Mandara.
+        return std::fs::read_to_string(config).is_ok_and(|t| river_starts_mandara(&t));
+    }
     let needle = target.generated_file();
     let needle_name = needle.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
     std::fs::read_to_string(config)
@@ -2482,6 +2787,9 @@ pub fn install_include(target: Target) -> Result<bool> {
 fn install_include_at(target: Target, path: &Path) -> Result<bool> {
     if include_installed_at(target, path) {
         return Ok(false);
+    }
+    if target == Target::River {
+        anyhow::bail!("Mandara doesn't edit River's init ({}); it sends its settings over river-control instead. To start Mandara with River, add this line to it:\n  {}", path.display(), target.include_line());
     }
     if target == Target::Sway && !path.exists() {
         seed_sway_config(path, Path::new(SWAY_SYSTEM_CONFIG))?;
@@ -3470,6 +3778,97 @@ mod tests {
         assert_eq!(report.status, crate::doctor::CheckerStatus::Ran, "{report:#?}");
         assert!(report.files.contains(&dropin), "sway read the drop-in through the include line: {:?}", report.files);
         Some(report.diagnostics.iter().map(|d| format!("{}: {}", d.place().unwrap_or_default(), d.message)).collect())
+    }
+
+    /// A user's River init: maps (one in a loop, which can't be read), a
+    /// bar and Mandara started the usual way.
+    const RIVER_INIT: &str = "#!/bin/sh\nriverctl map normal Super Space spawn 'fuzzel'\nriverctl map -repeat normal Super+Shift E exit\nriverctl map normal None XF86AudioPlay spawn \"playerctl play-pause\"\nriverctl map locked None XF86AudioMute spawn 'wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle'\nfor i in $(seq 1 9); do\n    riverctl map normal Super $i set-focused-tags $((1 << ($i - 1)))\ndone\nriverctl spawn waybar\nriverctl default-layout rivertile\nrivertile -view-padding 6 &\n";
+
+    #[test]
+    fn river_init_binds_and_autostart() {
+        let chords: Vec<String> = river_binds(RIVER_INIT).into_iter().map(|b| b.chord).collect();
+        assert_eq!(chords, ["super+space", "shift+super+e", "xf86audioplay"], "normal mode only; a loop variable can't be read");
+        assert!(!river_starts_mandara(RIVER_INIT));
+        assert!(river_starts_mandara("riverctl spawn /home/u/.local/bin/mandara\n"));
+        assert!(river_starts_mandara("mandara &\n"));
+        assert!(!river_starts_mandara("riverctl map normal Super B spawn 'mandara msg sidebar toggle'\n"), "a bind isn't a start");
+        assert_eq!(river_spawn_line("/home/u/My Apps/mandara"), "riverctl spawn '/home/u/My Apps/mandara'");
+        assert_eq!(shell_words("riverctl map normal Super Q spawn 'a b' \"c \\\"d\\\"\" # x"), ["riverctl", "map", "normal", "Super", "Q", "spawn", "a b", "c \"d\""]);
+        assert_eq!(shell_quote("it's"), "'it'\\''s'");
+        assert_eq!(shell_words(&shell_quote("it's")), ["it's"]);
+    }
+
+    #[test]
+    fn regexes_become_river_globs() {
+        assert_eq!(river_glob("^org\\.mandara\\.studio$").as_deref(), Some("org.mandara.studio"));
+        assert_eq!(river_glob("^steam_app_.*").as_deref(), Some("steam_app_*"));
+        assert_eq!(river_glob("Volume").as_deref(), Some("*Volume*"), "an unanchored regex matches anywhere");
+        assert_eq!(river_glob(".*Firefox$").as_deref(), Some("*Firefox"));
+        for unusable in ["^(a|b)$", "^a.c$", "^[ab]$", "^a+$", "", "^\\d$"] {
+            assert_eq!(river_glob(unusable), None, "{unusable}");
+        }
+    }
+
+    #[test]
+    fn river_commands_skip_the_users_keys_and_undo_their_own() {
+        let mut cfg = CompositorConfig { border_width: Some(2), ..Default::default() };
+        cfg.window_rules.push(WindowRule { app_id: Some("^pavucontrol$".into()), title: Some("Volume".into()), floating: Some(true), global: Some(true), no_blur: Some(true), ..Default::default() });
+        cfg.window_rules.push(WindowRule { app_id: Some("^(a|b)$".into()), floating: Some(true), ..Default::default() });
+        let existing = parse_chords(Target::River, RIVER_INIT);
+        let existing: Vec<&str> = existing.iter().map(String::as_str).collect();
+        let (commands, skipped) = river_commands(&managed(&cfg, &existing));
+        let lines: Vec<String> = commands.iter().map(|w| riverctl_line(w)).collect();
+        let has = |l: &str| lines.iter().any(|x| x == l);
+        assert!(has("riverctl border-width 2") && has("riverctl border-color-focused 0x5eead4ff") && has("riverctl border-color-urgent 0xf87171ff"), "{lines:#?}");
+        assert!(has("riverctl rule-add -app-id org.mandara.studio float"), "{lines:#?}");
+        assert!(has("riverctl rule-add -app-id pavucontrol -title '*Volume*' float") && has("riverctl rule-add -app-id pavucontrol -title '*Volume*' tags 4294967295"), "{lines:#?}");
+        assert!(has("riverctl map normal Super+Alt space spawn 'mandara msg launcher toggle'"), "{lines:#?}");
+        assert!(!lines.iter().any(|l| l.contains(" Super space ") || l.contains(" XF86AudioPlay ")), "the init's own keys win: {lines:#?}");
+        assert!(skipped.iter().any(|s| s.contains("simple globs")) && skipped.iter().any(|s| s.contains("already bound")), "{skipped:?}");
+        let text = emit_river(&managed(&cfg, &existing)).text;
+        assert!(text.contains("#   riverctl spawn mandara"), "the line to add to init: {text}");
+        assert_eq!(parse_river_record(&text), commands, "the record reads back");
+        let undo = river_undo(&commands);
+        assert!(undo.contains(&vec!["unmap".to_string(), "normal".into(), "Super+Alt".into(), "space".into()]));
+        assert!(undo.contains(&vec!["rule-del".to_string(), "-app-id".into(), "pavucontrol".into(), "-title".into(), "*Volume*".into(), "tags".into()]));
+        assert!(undo.iter().all(|u| u[0] == "unmap" || u[0] == "rule-del"), "settings are just set again: {undo:?}");
+    }
+
+    #[test]
+    fn river_init_is_never_edited() {
+        let dir = tempfile::tempdir().unwrap();
+        let init = dir.path().join("init");
+        std::fs::write(&init, RIVER_INIT).unwrap();
+        let err = install_include_at(Target::River, &init).unwrap_err().to_string();
+        assert!(err.contains("doesn't edit River's init") && err.contains("riverctl spawn"), "{err}");
+        assert_eq!(std::fs::read_to_string(&init).unwrap(), RIVER_INIT);
+        assert!(!include_installed_at(Target::River, &init));
+        std::fs::write(&init, format!("{RIVER_INIT}riverctl spawn /usr/bin/mandara\n")).unwrap();
+        assert!(include_installed_at(Target::River, &init), "init starts Mandara: nothing to add");
+    }
+
+    /// River has no config checker: every command Mandara would send goes
+    /// to a headless River through riverctl (the same protocol), beside an
+    /// init with the user's own maps; each must be accepted without a
+    /// word, and taking Mandara's own binds and rules back must be too.
+    #[test]
+    fn river_itself_accepts_the_commands() {
+        let existing = parse_chords(Target::River, RIVER_INIT);
+        let existing: Vec<&str> = existing.iter().map(String::as_str).collect();
+        let mut sink = mango_kitchen_sink();
+        sink.keybinds.push(Keybind::new(&["super", "ctrl", "alt", "shift", "hyper", "mod5"], ",", BindAction::Mandara("launcher toggle".into())));
+        sink.keybinds.push(Keybind::new(&["super"], "x", BindAction::Spawn("notify-send a; notify-send \"b, c\"".into())));
+        sink.window_rules.push(WindowRule { app_id: Some("^steam_app_.*".into()), floating: Some(false), ..Default::default() });
+        let mut all = Vec::new();
+        for cfg in [CompositorConfig::default(), sink] {
+            let (commands, _) = river_commands(&ManagedConfig { mandara_bin: "/home/u/.local/bin/mandara".into(), ..managed(&cfg, &existing) });
+            all.extend(river_undo(&commands));
+            all.extend(commands.clone());
+            all.extend(river_undo(&commands));
+            all.extend(commands);
+        }
+        let Some(failures) = crate::river_check::run_commands_with_init(RIVER_INIT, &all) else { return };
+        assert!(failures.is_empty(), "River rejected Mandara's commands:\n{}", failures.join("\n"));
     }
 
     /// Sway accepts Mandara's drop-in without an error or an overwritten

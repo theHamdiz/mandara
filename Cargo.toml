@@ -81,6 +81,9 @@ wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 wayland-protocols-misc = { version = "0.3", features = ["client"] }
+# Client code for protocols no crate carries (River's control and status).
+wayland-scanner = "0.31"
+wayland-backend = "0.3"
 wl-clipboard-rs = "0.9"
 # 0.8: the version GPUI's Linux platform (gpui_linux) links; 0.9 would be a
 # second copy of the bindings.

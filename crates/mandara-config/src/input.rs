@@ -210,39 +210,39 @@ impl InputConfig {
 }
 
 /// Input options and the compositors whose drop-in honours them
-/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway]`), for Studio's support dots.
+/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway, River]`), for Studio's support dots.
 pub const INPUT_OPTIONS: &[(&str, [bool; crate::compositor::Target::ALL.len()])] = &[
-    ("keyboard.layouts", [true, true, true, true, true]),
-    ("keyboard.repeat", [true, true, true, true, true]),
-    ("keyboard.numlock", [true, true, true, true, true]),
-    ("keyboard.per_window_layout", [false, true, false, true, false]),
-    ("mouse.accel_profile", [true, true, true, true, true]),
-    ("mouse.speed", [true, true, true, true, true]),
-    ("mouse.natural_scroll", [true, true, true, true, true]),
-    ("mouse.left_handed", [true, true, true, true, true]),
-    ("mouse.scroll_method", [true, true, true, false, true]),
-    ("mouse.scroll_factor", [true, true, true, false, true]),
-    ("mouse.middle_emulation", [true, true, false, false, true]),
-    ("touchpad.accel_profile", [true, true, false, true, true]),
-    ("touchpad.speed", [true, true, false, true, true]),
-    ("touchpad.natural_scroll", [true, true, true, true, true]),
-    ("touchpad.left_handed", [true, true, false, true, true]),
-    ("touchpad.scroll_method", [true, true, false, true, true]),
-    ("touchpad.scroll_factor", [true, true, true, true, true]),
-    ("touchpad.middle_emulation", [true, true, true, false, true]),
-    ("touchpad.tap_to_click", [true, true, true, true, true]),
-    ("touchpad.tap_and_drag", [true, true, true, true, true]),
-    ("touchpad.drag_lock", [true, true, true, true, true]),
-    ("touchpad.disable_while_typing", [true, true, true, true, true]),
-    ("touchpad.click_method", [true, true, true, true, true]),
-    ("touchpad.disable_with_mouse", [true, true, false, true, true]),
-    ("cursor.theme", [true, true, true, true, true]),
-    ("cursor.size", [true, true, true, true, true]),
-    ("cursor.hide_when_typing", [true, true, true, true, true]),
-    ("cursor.hide_after_secs", [true, true, true, true, true]),
-    ("cursor.no_hardware_cursors", [false, false, true, true, false]),
-    ("cursor.hide_on_touch", [false, false, true, false, false]),
-    ("focus_follows_mouse", [true, true, true, true, true]),
+    ("keyboard.layouts", [true, true, true, true, true, true]),
+    ("keyboard.repeat", [true, true, true, true, true, true]),
+    ("keyboard.numlock", [true, true, true, true, true, false]),
+    ("keyboard.per_window_layout", [false, true, false, true, false, false]),
+    ("mouse.accel_profile", [true, true, true, true, true, true]),
+    ("mouse.speed", [true, true, true, true, true, true]),
+    ("mouse.natural_scroll", [true, true, true, true, true, true]),
+    ("mouse.left_handed", [true, true, true, true, true, true]),
+    ("mouse.scroll_method", [true, true, true, false, true, true]),
+    ("mouse.scroll_factor", [true, true, true, false, true, true]),
+    ("mouse.middle_emulation", [true, true, false, false, true, true]),
+    ("touchpad.accel_profile", [true, true, false, true, true, true]),
+    ("touchpad.speed", [true, true, false, true, true, true]),
+    ("touchpad.natural_scroll", [true, true, true, true, true, true]),
+    ("touchpad.left_handed", [true, true, false, true, true, true]),
+    ("touchpad.scroll_method", [true, true, false, true, true, true]),
+    ("touchpad.scroll_factor", [true, true, true, true, true, true]),
+    ("touchpad.middle_emulation", [true, true, true, false, true, true]),
+    ("touchpad.tap_to_click", [true, true, true, true, true, true]),
+    ("touchpad.tap_and_drag", [true, true, true, true, true, true]),
+    ("touchpad.drag_lock", [true, true, true, true, true, true]),
+    ("touchpad.disable_while_typing", [true, true, true, true, true, true]),
+    ("touchpad.click_method", [true, true, true, true, true, true]),
+    ("touchpad.disable_with_mouse", [true, true, false, true, true, true]),
+    ("cursor.theme", [true, true, true, true, true, true]),
+    ("cursor.size", [true, true, true, true, true, true]),
+    ("cursor.hide_when_typing", [true, true, true, true, true, true]),
+    ("cursor.hide_after_secs", [true, true, true, true, true, true]),
+    ("cursor.no_hardware_cursors", [false, false, true, true, false, false]),
+    ("cursor.hide_on_touch", [false, false, true, false, false, false]),
+    ("focus_follows_mouse", [true, true, true, true, true, true]),
 ];
 
 fn clamp_u(v: u32, (lo, hi): (u32, u32)) -> u32 {
@@ -1010,6 +1010,118 @@ pub fn emit_sway(input: &InputConfig) -> String {
     out
 }
 
+/// River's `scroll-method` names (`riverctl(1)`).
+fn river_scroll(m: ScrollMethod) -> &'static str {
+    match m {
+        ScrollMethod::TwoFinger => "two-finger",
+        ScrollMethod::Edge => "edge",
+        ScrollMethod::OnButtonDown => "button",
+        ScrollMethod::NoScroll => "none",
+    }
+}
+
+/// River's key repeat defaults (`riverctl(1)` `set-repeat`): it takes the
+/// rate and the delay together, so the one Studio leaves unset keeps
+/// River's own default.
+const RIVER_DEFAULT_REPEAT_RATE: u32 = 25;
+const RIVER_DEFAULT_REPEAT_DELAY_MS: u32 = 600;
+/// Input device names River's `input` command matches: every pointer
+/// (mice and touchpads), then touchpads, which libinput names "…Touchpad"
+/// (globs may only start or end with `*`).
+const RIVER_POINTERS: &str = "pointer-*";
+const RIVER_TOUCHPADS: &str = "*Touchpad*";
+
+/// River commands (`riverctl(1)` argv) for the input settings: the keyboard
+/// layout (only with layouts chosen: River replaces the whole keymap at
+/// once), key repeat, pointer settings for every pointer and then the
+/// touchpad's on top, the cursor and focus-follows-cursor.
+pub fn river_commands(input: &InputConfig) -> Vec<Vec<String>> {
+    let mut out: Vec<Vec<String>> = Vec::new();
+    if input.is_empty() {
+        return out;
+    }
+    let mut cmd = |words: Vec<String>| out.push(words);
+    let k = &input.keyboard;
+    if let Some((layouts, variants)) = k.xkb_layouts() {
+        let mut words = vec!["keyboard-layout".to_string()];
+        if let Some(m) = k.model.as_deref().map(str::trim).filter(|m| !m.is_empty()) {
+            words.extend(["-model".to_string(), m.to_string()]);
+        }
+        if !variants.is_empty() {
+            words.extend(["-variant".to_string(), variants]);
+        }
+        if let Some(o) = k.xkb_options() {
+            words.extend(["-options".to_string(), o]);
+        }
+        words.push(layouts);
+        cmd(words);
+    }
+    if k.repeat_rate.is_some() || k.repeat_delay.is_some() {
+        let rate = clamp_u(k.repeat_rate.unwrap_or(RIVER_DEFAULT_REPEAT_RATE), limits::REPEAT_RATE);
+        let delay = clamp_u(k.repeat_delay.unwrap_or(RIVER_DEFAULT_REPEAT_DELAY_MS), limits::REPEAT_DELAY_MS);
+        cmd(vec!["set-repeat".into(), rate.to_string(), delay.to_string()]);
+    }
+    let switch = |v: bool| if v { "enabled" } else { "disabled" }.to_string();
+    let device = |name: &str, setting: &str, value: String| vec!["input".to_string(), name.to_string(), setting.to_string(), value];
+    for (name, p) in [(RIVER_POINTERS, &input.mouse), (RIVER_TOUCHPADS, &input.touchpad.pointer)] {
+        if let Some(v) = p.accel_profile {
+            cmd(device(name, "accel-profile", kebab_profile(v).into()));
+        }
+        if let Some(v) = p.speed {
+            cmd(device(name, "pointer-accel", format!("{:.2}", clamp_f(v, limits::SPEED))));
+        }
+        if let Some(v) = p.natural_scroll {
+            cmd(device(name, "natural-scroll", switch(v)));
+        }
+        if let Some(v) = p.left_handed {
+            cmd(device(name, "left-handed", switch(v)));
+        }
+        if let Some(v) = p.scroll_method {
+            cmd(device(name, "scroll-method", river_scroll(v).into()));
+        }
+        if let Some(v) = p.scroll_factor {
+            cmd(device(name, "scroll-factor", format!("{:.2}", clamp_f(v, limits::SCROLL_FACTOR))));
+        }
+        if let Some(v) = p.middle_emulation {
+            cmd(device(name, "middle-emulation", switch(v)));
+        }
+    }
+    let t = &input.touchpad;
+    for (setting, v) in [("tap", t.tap_to_click), ("drag", t.tap_and_drag), ("drag-lock", t.drag_lock), ("disable-while-typing", t.disable_while_typing)] {
+        if let Some(v) = v {
+            cmd(device(RIVER_TOUCHPADS, setting, switch(v)));
+        }
+    }
+    if let Some(v) = t.click_method {
+        cmd(device(RIVER_TOUCHPADS, "click-method", niri_click(v).into()));
+    }
+    if let Some(v) = t.disable_with_mouse {
+        cmd(device(RIVER_TOUCHPADS, "events", if v { "disabled-on-external-mouse" } else { "enabled" }.into()));
+    }
+    let c = &input.cursor;
+    let theme = c.theme.as_deref().map(str::trim).filter(|t| !t.is_empty());
+    if theme.is_some() || c.size.is_some() {
+        let mut words = vec!["xcursor-theme".to_string(), theme.unwrap_or(SWAY_DEFAULT_CURSOR_THEME).to_string()];
+        words.extend(c.size.map(|v| clamp_u(v, limits::CURSOR_SIZE).to_string()));
+        cmd(words);
+    }
+    if let Some(v) = c.hide_after_secs {
+        cmd(vec!["hide-cursor".into(), "timeout".into(), (clamp_u(v, limits::CURSOR_HIDE_SECS) * MS_PER_SECOND).to_string()]);
+    }
+    if let Some(v) = c.hide_when_typing {
+        cmd(vec!["hide-cursor".into(), "when-typing".into(), switch(v)]);
+    }
+    if let Some(v) = input.focus_follows_mouse {
+        cmd(vec!["focus-follows-cursor".into(), if v { "normal" } else { "disabled" }.into()]);
+    }
+    out
+}
+
+/// [`river_commands`] as `riverctl` lines (Studio's preview, the record).
+pub fn emit_river(input: &InputConfig) -> String {
+    river_commands(input).iter().map(|w| format!("{}\n", crate::compositor::riverctl_line(w))).collect()
+}
+
 /// Installed cursor themes (folders with a `cursors/` directory), sorted
 /// and deduplicated. `default` is skipped: it only points at another theme.
 pub fn cursor_themes_in(dirs: &[PathBuf]) -> Vec<String> {
@@ -1476,6 +1588,7 @@ mod dropin_tests {
         let has_settings = |text: &str| text.lines().map(str::trim).any(|l| !l.is_empty() && !l.starts_with('#') && !l.starts_with("//") && l != "}" && !l.ends_with('{'));
         let mut mango_all = String::new();
         let mut sway_all = String::new();
+        let mut river_all: Vec<Vec<String>> = Vec::new();
         for (key, input) in single_options() {
             let support = INPUT_OPTIONS.iter().find(|(k, _)| *k == key).unwrap_or_else(|| panic!("{key} missing from INPUT_OPTIONS")).1;
             let c = CompositorConfig { input: input.clone(), ..Default::default() };
@@ -1531,6 +1644,12 @@ mod dropin_tests {
                 assert!(ok, "{key}: not a sway input, seat or focus line: {line:?}");
             }
             sway_all.push_str(&sway_input);
+            let river_input = super::emit_river(&input);
+            // River's keyboard-layout replaces the whole keymap: options or
+            // a model alone wait until layouts are chosen.
+            let river_expected = support[5] && !(key == "keyboard.layouts" && input.keyboard.layouts.is_empty());
+            assert_eq!(has_settings(&river_input), river_expected, "River support of {key}:\n{river_input}");
+            river_all.extend(super::river_commands(&input));
         }
         // Sway's own checker over every case at once (later lines win).
         let dir = tempfile::tempdir().unwrap();
@@ -1539,6 +1658,11 @@ mod dropin_tests {
         let report = crate::doctor::check_with(crate::compositor::Target::Sway, &path, &crate::doctor::CheckEnv { home: Some(dir.path().to_path_buf()), ..Default::default() });
         if report.status != crate::doctor::CheckerStatus::NotInstalled {
             assert!(report.is_clean(), "sway --validate rejected an input option:\n{report:#?}\n{sway_all}");
+        }
+        // River itself, over every case (it has no config checker: each
+        // command goes to a headless River through riverctl).
+        if let Some(failures) = crate::river_check::run_commands(&river_all) {
+            assert!(failures.is_empty(), "River rejected input commands:\n{}", failures.join("\n"));
         }
         // MangoWM's own parser, over every case at once (later lines win).
         if std::process::Command::new("mango").arg("-v").output().is_ok() {

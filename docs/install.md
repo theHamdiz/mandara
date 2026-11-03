@@ -114,7 +114,7 @@ The recipes live in [`packaging/aur/`](../packaging/aur) and follow the
 
 ## Compositors
 
-Mandara supports **MangoWM, Niri, Hyprland, Umbriel and Sway**.
+Mandara supports **MangoWM, Niri, Hyprland, Umbriel, Sway and River**.
 `mandara setup` (run by the installer) hooks Mandara into your compositor
 with **one include line** in your own config, writes everything else to
 `~/.config/mandara/generated/`, starts Mandara at login with an absolute
@@ -131,6 +131,7 @@ path, and checks the result with the compositor's own validator
 | **Hyprland ≤ 0.56** | `source = ~/.config/mandara/generated/hyprland.conf` | `exec-once =` |
 | **Umbriel** | `"…/mandara/generated/umbriel.toml"` in `[include.optional] files` of `~/.config/umbriel/config.toml` (added to your list if you have one) | `general.autostart` |
 | **Sway** | `include …/mandara/generated/sway.conf` at the end of `~/.config/sway/config` (or whichever file sway reads: `~/.sway/config`, `~/.i3/config`…) | `exec` |
+| **River** 0.3 | none: Mandara never edits `~/.config/river/init` | the one line you add to `init`: `riverctl spawn /path/to/mandara` |
 
 Mandara detects the installed version and speaks its dialect, including
 Hyprland 0.57's Lua dispatches. On Niri the drop-in makes workspace
@@ -163,6 +164,39 @@ those Studio rows are locked while it runs; `bar { … }` blocks (swaybar)
 and `output * bg …` (swaybg) are found as another bar and wallpaper (see
 below).
 
+**River**'s config is its `init` file, an executable program (usually a
+shell script of `riverctl` commands), so Mandara never edits it and adds no
+include line. Instead the shell sends River its settings over River's own
+`river-control` protocol when it starts and on every change: border colours
+and width, window rules (`rule-add` float / no-float and `tags` for windows
+on every tag; River matches with simple globs, so a rule whose regex needs
+more than a `*` at either end is left out and reported), keyboard layout
+and repeat, mouse and touchpad settings (every pointer first, then devices
+named `…Touchpad…`), the cursor, focus-follows-cursor and its keys (`map
+normal …`). Before each sync it takes its own previous binds and rules back
+(`unmap`, `rule-del`), and keys your `init` maps are left alone; a record of
+what it sent is kept in `~/.config/mandara/generated/river.conf` (River
+doesn't read that file). To start Mandara with River, add one line to your
+`init`:
+
+```sh
+riverctl spawn /home/you/.local/bin/mandara
+```
+
+The bar follows River over its `river-status` protocol: each output's tags
+as a bitmask, like MangoWM's (click shows a tag, right-click adds it to the
+view, middle-click toggles it on the focused window), which are in use or
+urgent, the layout generator's name (with rivertile, the pill moves the
+main area round the screen) and the active mode. River's protocols don't
+say which window is on which tag, so the tag pills show no app icons;
+windows come from the foreign-toplevel protocol. River has no gaps (they are
+the layout generator's), rounded corners, blur, shadows, animations,
+opacity rules, output settings or Num Lock option, so those Studio rows are
+locked while it runs. This is River's classic line, 0.3 (`river-classic` in
+Arch): River 0.4 moved window management into separate programs and dropped
+`river-control` and `river-status`, so on 0.4 and later Mandara can't
+drive it, and the Config doctor says so.
+
 ## Coming from another setup
 
 Mandara never rewrites your compositor config; it only adds one include
@@ -178,7 +212,9 @@ includes**, for MangoWM, Niri, Hyprland (`.conf` and `.lua`), Umbriel
 (`[include]` lists, `[keybinds]` and `general.autostart`) and Sway
 (`include` globs such as `/etc/sway/config.d/*`, `set $var` variables,
 `bindsym` lines and blocks, `exec` / `exec_always`, `bar { … }` blocks and
-`output … bg` lines).
+`output … bg` lines). River's `init` is read too (`riverctl map`,
+`riverctl spawn`, programs started with `&`) but never changed: what it
+finds there is reported for you to remove.
 
 ```bash
 mandara setup --check            # list conflicts, change nothing
@@ -211,7 +247,7 @@ compositor itself: it runs its own checker (`mango -p`, `niri validate`,
 `Hyprland --verify-config`, `umbriel config validate --json`,
 `sway --validate --verbose`) on your real config and every file it
 includes, read-only (a private runtime folder, no display, a time limit),
-and explains each problem it reports:
+and explains each problem it reports (River has no checker; see below):
 
 - **where**: the file and line, with the line itself;
 - **whose**: your own files, or Mandara's generated drop-in;
@@ -263,6 +299,14 @@ runtime folder: nothing touches your screens, seat or GPU. Sway names no
 line for a key bound twice (it says "Overwriting binding"), so the doctor
 finds that line by its key combination; and it skips an `include` that
 matches no file without a word, so a missing include isn't reported.
+
+River has no config checker, so for River the doctor checks what it can,
+without ever changing `init`: that River's version still has the protocols
+Mandara needs (0.3; it explains what changed in 0.4), that `init` is
+executable, that it starts Mandara (and the one line to add if it
+doesn't), and which keys it maps that Mandara binds too. Those findings
+offer no comment or remove fixes. Mandara's own tests run every River
+command it can send in a headless River.
 
 ## Packages
 

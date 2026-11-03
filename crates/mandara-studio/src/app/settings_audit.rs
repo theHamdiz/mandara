@@ -534,6 +534,9 @@ fn every_compositor_setting_reaches_its_drop_ins() {
             if *target == mandara_config::compositor::Target::Sway && crate::registry::SWAY_LACKS.contains(&s.path) {
                 continue;
             }
+            if *target == mandara_config::compositor::Target::River && crate::registry::RIVER_LACKS.contains(&s.path) {
+                continue;
+            }
             // Niri can't blur before 26.04: the version-gated note counts.
             let changed = before.iter().zip(&after).filter(|((t, _), _)| t == target).any(|((_, a), (_, b))| a != b);
             assert!(changed, "{} = {value} doesn't change the {target:?} drop-in", s.path);

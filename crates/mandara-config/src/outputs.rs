@@ -749,6 +749,9 @@ pub fn emit_outputs(target: Target, outputs: &[OutputConfig], hyprland_lua: bool
         Target::Hyprland => ("#", hyprland_conf_lines(outputs)),
         Target::Umbriel => ("#", umbriel_tables(outputs)),
         Target::Sway => ("#", sway_lines(outputs)),
+        // River has no output settings (outputs are set with
+        // wlr-output-management tools; Studio → Displays applies them live).
+        Target::River => ("#", String::new()),
     };
     if body.trim().is_empty() {
         return String::new();
@@ -794,6 +797,7 @@ pub fn parse_output_rules(target: Target, text: &str) -> Vec<String> {
             Target::Niri => line.strip_prefix("output ").and_then(|r| r.trim().strip_prefix('"')).and_then(|r| r.split('"').next()).map(str::to_string),
             // Read whole-file above.
             Target::Umbriel => None,
+            Target::River => None,
             // `output NAME …` / `output "NAME" …` (`*` means every output).
             Target::Sway => line.strip_prefix("output").filter(|r| r.starts_with(char::is_whitespace)).and_then(|r| {
                 let r = r.trim_start();

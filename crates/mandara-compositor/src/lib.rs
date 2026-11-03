@@ -1,14 +1,16 @@
 //! First-class compositor integration behind one [`CompositorBackend`]
 //! trait: MangoWM (bitmask tags, native socket), Niri (scrollable
 //! workspaces, JSON socket), Hyprland (workspaces, socket/socket2),
-//! Umbriel (per-output workspaces, JSON-lines socket) and Sway (per-output
-//! workspaces, i3 IPC).
+//! Umbriel (per-output workspaces, JSON-lines socket), Sway (per-output
+//! workspaces, i3 IPC) and River (bitmask tags, its own Wayland
+//! protocols).
 
 pub mod backend;
 pub mod hyprland;
 pub mod mango;
 pub mod model;
 pub mod niri;
+pub mod river;
 pub mod sway;
 pub mod umbriel;
 
@@ -19,6 +21,7 @@ pub use hyprland::HyprlandDriver;
 pub use mango::MangoDriver;
 pub use model::*;
 pub use niri::NiriDriver;
+pub use river::RiverDriver;
 pub use sway::SwayDriver;
 pub use umbriel::UmbrielDriver;
 
@@ -29,9 +32,12 @@ pub use umbriel::UmbrielDriver;
 /// `I3SOCK`) but leaves `XDG_CURRENT_DESKTOP` to the session: when that
 /// says `sway`, it wins the same way; otherwise `SWAYSOCK` is checked after
 /// the others, so a compositor nested inside sway (inheriting `SWAYSOCK`)
-/// is still found by its own variable.
+/// is still found by its own variable. River sets no variable of its own:
+/// a session that names it (`XDG_CURRENT_DESKTOP=river`) is River, and
+/// when nothing else matched, the display is asked once whether it offers
+/// River's control and status protocols.
 pub fn detect() -> Option<CompositorKind> {
-    detect_from(|name| std::env::var_os(name))
+    detect_from(|name| std::env::var_os(name)).or_else(|| (std::env::var_os("WAYLAND_DISPLAY").is_some() && river::running()).then_some(CompositorKind::River))
 }
 
 /// [`detect`] over any environment.
@@ -42,6 +48,8 @@ pub fn detect_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<C
         Some(CompositorKind::Umbriel)
     } else if desktop("sway") && set("SWAYSOCK") {
         Some(CompositorKind::Sway)
+    } else if desktop("river") {
+        Some(CompositorKind::River)
     } else if set("MANGO_INSTANCE_SIGNATURE") || desktop("mango") {
         Some(CompositorKind::MangoWM)
     } else if set("NIRI_SOCKET") {
@@ -76,6 +84,7 @@ pub fn connect() -> Option<Arc<dyn CompositorBackend>> {
         CompositorKind::Hyprland => HyprlandDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
         CompositorKind::Umbriel => UmbrielDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
         CompositorKind::Sway => SwayDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
+        CompositorKind::River => RiverDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
     }
 }
 
@@ -111,5 +120,10 @@ mod tests {
         assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "sway:wlroots"), ("SWAYSOCK", "/s")]), Some(CompositorKind::Sway));
         assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "umbriel"), ("SWAYSOCK", "/s")]), Some(CompositorKind::Umbriel));
         assert_eq!(detect_with(&[("SWAYSOCK", "")]), None, "an empty variable is unset");
+        // River sets nothing itself; a session naming it is River (a nested
+        // Niri in it is still Niri).
+        assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "river")]), Some(CompositorKind::River));
+        assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "river"), ("NIRI_SOCKET", "/n")]), Some(CompositorKind::River));
+        assert_eq!(detect_with(&[("NIRI_SOCKET", "/n")]), Some(CompositorKind::Niri));
     }
 }

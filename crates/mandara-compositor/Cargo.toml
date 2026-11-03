@@ -1,6 +1,6 @@
 [package]
 name = "mandara-compositor"
-description = "First-class MangoWM, Niri, Hyprland, Umbriel and Sway IPC drivers for Mandara Shell"
+description = "First-class MangoWM, Niri, Hyprland, Umbriel, Sway and River IPC drivers for Mandara Shell"
 version = "0.7.0"
 edition.workspace = true
 license.workspace = true
@@ -15,6 +15,13 @@ tracing.workspace = true
 mandara-config.workspace = true
 # poll(2): one thread multiplexes every Mango watch stream.
 rustix = { workspace = true, features = ["event"] }
+# River: its control and status protocols (generated from protocols/*.xml),
+# outputs (xdg-output) and windows (wlr foreign toplevel).
+wayland-client.workspace = true
+wayland-scanner.workspace = true
+wayland-backend.workspace = true
+wayland-protocols.workspace = true
+wayland-protocols-wlr.workspace = true
 
 [lints]
 workspace = true

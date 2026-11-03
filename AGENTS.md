@@ -22,7 +22,7 @@ write a third-party plugin, [PLUGINS.md](PLUGINS.md) is all you need.
 
 ## What Mandara is
 
-Mandara is a Wayland desktop shell for **MangoWM, Niri, Hyprland, Umbriel and Sway**: the
+Mandara is a Wayland desktop shell for **MangoWM, Niri, Hyprland, Umbriel, Sway and River**: the
 bar, panels, sidebar, dock, launcher, notifications, on-screen displays,
 wallpaper engine, lock screen, login manager and more, shipped as **one
 native Rust binary** (`mandara`) built on [GPUI](https://github.com/zed-industries/zed),
@@ -41,8 +41,8 @@ Zed's GPU-accelerated UI framework.
 - **Everything is a plugin.** Bar items, panels and sidebar cards are
   plugins: first-party ones compiled into the shell, and third-party ones
   written in Rust, compiled to WebAssembly and run sandboxed.
-- **Every compositor is first-class.** MangoWM's bitmask tags and per-tag
-  layouts and Niri's, Hyprland's, Umbriel's and Sway's workspaces are modelled natively, not
+- **Every compositor is first-class.** MangoWM's and River's bitmask tags and
+  Niri's, Hyprland's, Umbriel's and Sway's workspaces are modelled natively, not
   squeezed into a lowest common denominator.
 
 ## Repository map
@@ -51,9 +51,9 @@ Zed's GPU-accelerated UI framework.
 |---|---|
 | `crates/mandara-app` | The `mandara` binary: CLI (`msg`, `commands`, `studio`, `setup`, `update`, `install`, …), the restart supervisor, IPC and app bootstrap. |
 | `crates/mandara-core` | GPUI layer-shell surface specs, the analytical spring solver, OKLCH tweening, frame-synced input-region masking, the chromatic-glass material, output geometry and the software (`wl_shm`) canvas. |
-| `crates/mandara-config` | The TOML schema and defaults, the reactive `ConfigStore` with its file watcher, XDG paths, and the non-destructive MangoWM / Niri / Hyprland / Umbriel / Sway emitters and conflict scanner. |
+| `crates/mandara-config` | The TOML schema and defaults, the reactive `ConfigStore` with its file watcher, XDG paths, and the non-destructive MangoWM / Niri / Hyprland / Umbriel / Sway / River emitters and conflict scanner. |
 | `crates/mandara-theme` | The color engine: `Color` (OKLCH, gamut mapping, WCAG contrast), `MandaraPalette` tokens, HCT wallpaper quantization, the theme catalog (`themes/*.toml`) and app theme templates. |
-| `crates/mandara-compositor` | The `CompositorBackend` trait, the navigation model, and the MangoWM, Niri, Hyprland, Umbriel and Sway IPC drivers. |
+| `crates/mandara-compositor` | The `CompositorBackend` trait, the navigation model, and the MangoWM, Niri, Hyprland, Umbriel, Sway and River drivers (River's control and status protocols generated from `protocols/*.xml`). |
 | `crates/mandara-services` | D-Bus and system service actors (MPRIS, notifications, tray, UPower, NetworkManager, polkit, audio, keyrings, …), the marketplace client and the self-updater. |
 | `crates/mandara-plugins` | The plugin runtime: manifests, the registry, `CommandSpec` and the command catalog, plugin lifecycle, the wasmtime host and the WIT contract (`wit/plugin.wit`). |
 | `crates/mandara-ui` | The shell's views: bar, panels, sidebar, launcher, OSDs, lock screen, desktop and backdrop, the UI kit and every first-party plugin (`src/plugins/`). |
@@ -132,9 +132,10 @@ Checks that guard the codebase and fail `cargo test` when you break a rule:
   icons and covers, `assets/catalog.json`, the links in
   `assets/README.md` and the embedded art.
 - **Compositor configs:** the emitter tests feed generated configs to each
-  compositor's own checker when it is installed. CI's
-  `compositor-checkers` job installs sway in an Arch container and runs
-  its checker tests for real.
+  compositor's own checker when it is installed (River has none: its
+  commands go to a headless River). CI's `compositor-checkers` job installs
+  sway and river-classic in an Arch container and runs those tests for
+  real.
 
 ## Driving and inspecting the shell from the CLI
 
@@ -214,7 +215,10 @@ by tests.
    backup first, is validated with the compositor's own checker
    (`mango -p`, `niri validate`, `Hyprland --verify-config`,
    `umbriel config validate`, `sway --validate`) and rolls
-   back on failure. Binds that collide with the user's are skipped and
+   back on failure. River is the exception: its config is an executable
+   `init` program Mandara never edits; its settings are River commands
+   sent over `river-control` (`river_commands`), and its tests run every
+   one through a headless River. Binds that collide with the user's are skipped and
    reported, never overridden, and "collide" means what the compositor
    means: MangoWM's plain `bind` compares keycodes (Play and Pause are one
    key), every compositor compares keysyms, not their spellings
@@ -403,11 +407,11 @@ add a Studio control.
 ### A compositor feature
 
 Implement it for **every** backend (`crates/mandara-compositor/src/`
-`mango.rs`, `niri.rs`, `hyprland.rs`, `umbriel.rs`, `sway.rs`, behind
+`mango.rs`, `niri.rs`, `hyprland.rs`, `umbriel.rs`, `sway.rs`, `river.rs`, behind
 `CompositorBackend` in `backend.rs`), or lock it in Studio with a reason
 where a compositor can't do it. Generated config goes through the emitters
 in `crates/mandara-config/src/compositor.rs` (`emit_mango`, `emit_niri`,
-`emit_hyprland`, `emit_umbriel`, `emit_sway`), with unit tests and, where the compositor
+`emit_hyprland`, `emit_umbriel`, `emit_sway`; River's `river_commands`), with unit tests and, where the compositor
 is installed, its own checker (`validator_tests.rs`). Window-rule options
 one compositor lacks are gated with `rule_option_supported`, and include
 lines follow the installed version (`installed_version`). Umbriel applies

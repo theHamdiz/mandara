@@ -1,6 +1,6 @@
 //! Compositor-neutral navigation model.
 //!
-//! MangoWM's bitmask tags and Niri/Hyprland/Umbriel/Sway's linear workspaces are
+//! MangoWM's and River's bitmask tags and Niri/Hyprland/Umbriel/Sway's linear workspaces are
 //! modelled natively rather than squeezed into a lowest-common-denominator
 //! struct.
 
@@ -13,6 +13,7 @@ pub enum CompositorKind {
     Hyprland,
     Umbriel,
     Sway,
+    River,
 }
 
 impl CompositorKind {
@@ -25,11 +26,12 @@ impl CompositorKind {
             CompositorKind::Hyprland => Target::Hyprland,
             CompositorKind::Umbriel => Target::Umbriel,
             CompositorKind::Sway => Target::Sway,
+            CompositorKind::River => Target::River,
         }
     }
 }
 
-/// One MangoWM tag.
+/// One MangoWM or River tag.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TagStatus {
     /// `1..=9`.

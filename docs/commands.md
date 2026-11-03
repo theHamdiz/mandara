@@ -315,7 +315,7 @@ mandara msg prayer peek 1              # today, next, peek [days], language [cod
 ```bash
 mandara msg compositor status        # detected compositor, drop-in, include line
 mandara msg compositor sync          # regenerate the drop-in (checked, rolled back if the compositor rejects it) and reload
-mandara msg compositor install-include [mango|niri|hyprland|umbriel|sway]
+mandara msg compositor install-include [mango|niri|hyprland|umbriel|sway]   # river: prints the line to add to init
 mandara msg --json compositor check  # Config doctor: the compositor's own checker on your config; each problem with id, file, line, kind, owner, explanation and fixes
 mandara msg compositor fix 1a2b3c4d comment   # comment | remove (your files) | regenerate (Mandara's drop-in); backed up, re-checked, rolled back if worse
 mandara msg compositor snooze        # no reminders about the current problems until the config or the compositor changes

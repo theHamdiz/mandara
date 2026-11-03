@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use clap::Args;
 
 /// Compositor names `--compositor` accepts (passed on to `mandara setup`).
-pub const COMPOSITORS: &[&str] = &["mango", "mangowm", "niri", "hyprland", "hypr", "umbriel", "sway"];
+pub const COMPOSITORS: &[&str] = &["mango", "mangowm", "niri", "hyprland", "hypr", "umbriel", "sway", "river"];
 
 #[derive(Args, Debug, Clone, Default, PartialEq, Eq)]
 pub struct InstallArgs {
@@ -34,7 +34,7 @@ pub struct InstallArgs {
     /// Keep your login screen (default: switch to Mandara Login, after asking).
     #[arg(long)]
     pub no_greeter: bool,
-    /// mango, niri, hyprland, umbriel or sway (default: detected).
+    /// mango, niri, hyprland, umbriel, sway or river (default: detected).
     #[arg(long, value_name = "NAME", value_parser = clap::builder::PossibleValuesParser::new(COMPOSITORS))]
     pub compositor: Option<String>,
     /// GitHub repository releases and sources come from (default

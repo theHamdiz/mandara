@@ -378,7 +378,7 @@ impl Render for SheetView {
         let query = self.field.read(cx).value.trim().to_string();
         let Laid { entries, cols, shown, .. } = self.laid(&query);
         let (kind, height) = self.sheet.as_ref().map_or((compositor(cx), EMPTY_H), |s| (s.compositor, s.height));
-        let tags = kind == Some(CompositorKind::MangoWM);
+        let tags = matches!(kind, Some(CompositorKind::MangoWM | CompositorKind::River));
         let accent = readable(palette.primary, &palette);
         let subtitle = match kind {
             Some(k) => tf("{n} shortcuts · Mandara and {compositor}", &[("n", &entries.len()), ("compositor", &format!("{k:?}"))]),

@@ -1,6 +1,6 @@
 //! Studio → Compositor: the adaptive compositor control center.
 //!
-//! * The running compositor (MangoWM, Niri, Hyprland, Umbriel or Sway) is detected and its
+//! * The running compositor (MangoWM, Niri, Hyprland, Umbriel, Sway or River) is detected and its
 //!   tab opens first; the others stay editable (their drop-ins are written
 //!   whenever that compositor runs).
 //! * **Window rules**: a visual builder over `compositor.window_rules` with
@@ -9,7 +9,7 @@
 //! * **Tag & Layout Studio** (MangoWM): a 3×3 tag grid with layout glyphs
 //!   editing `compositor.tag_rules`, plus SceneFX tuning.
 //! * **Columns & outputs** (Niri) and **Decoration** (Hyprland); Umbriel
-//!   and Sway share the common rows and rules.
+//!   Sway and River share the common rows and rules.
 //!
 //! Everything writes the config; the shell's compositor sync regenerates
 //! `~/.config/mandara/generated/<compositor>` and reloads — the user's own
@@ -524,6 +524,13 @@ impl StudioView {
                 .line_height(px(LEADING_17_PX))
                 .text_color(p.on_surface_variant.hsla())
                 .child(t("Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout."))
+                .into_any_element(),
+            // River reads no file: what Mandara sends it, and the one line.
+            Target::River => div()
+                .text_size(px(TEXT_12_PX))
+                .line_height(px(LEADING_17_PX))
+                .text_color(p.on_surface_variant.hsla())
+                .child(tf("River's config is your init program, which Mandara never edits: Mandara sends River its colours, rules, input settings and keys when the shell starts and on every change. To start Mandara with River, add this line to your init: {line}", &[("line", &tab.include_line())]))
                 .into_any_element(),
         };
         let preview = self.dropin_preview(cfg, tab, p, cx);

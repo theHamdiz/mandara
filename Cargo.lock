@@ -3644,6 +3644,11 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
+ "wayland-protocols-wlr",
+ "wayland-scanner",
 ]
 
 [[package]]

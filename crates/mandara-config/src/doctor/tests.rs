@@ -104,7 +104,7 @@ fn root_of(target: Target, case: &str) -> String {
         Target::Mango => "conf",
         Target::Niri => "kdl",
         Target::Umbriel => "toml",
-        Target::Hyprland | Target::Sway => "conf",
+        Target::Hyprland | Target::Sway | Target::River => "conf",
     };
     format!("{}/{case}.{ext}", target.name().to_lowercase().replace("mangowm", "mango"))
 }
@@ -115,7 +115,7 @@ fn table(target: Target) -> &'static [(&'static str, &'static [Expect])] {
         Target::Niri => NIRI,
         Target::Umbriel => UMBRIEL,
         Target::Sway => SWAY,
-        Target::Hyprland => &[],
+        Target::Hyprland | Target::River => &[],
     }
 }
 
@@ -138,6 +138,32 @@ fn golden_outputs_parse_into_diagnostics() {
             assert_matches(&format!("{dir}/{case}"), &got, want);
         }
     }
+}
+
+/// River has no checker: the doctor reads `river -version` (as River
+/// 0.3.17 and 0.5.0 print it) and the init, and offers no edits.
+#[test]
+fn river_checks_version_and_init() {
+    let dir = tempfile::tempdir().unwrap();
+    let init = dir.path().join("init");
+    std::fs::write(&init, "#!/bin/sh\nriverctl map normal Super Space spawn fuzzel\nriverctl map normal Super Return spawn foot\n").unwrap();
+    let chords = vec!["super+space".to_string()];
+    let classic = river::check("0.3.17\n", &init, &chords, "/usr/bin/mandara");
+    // Not executable, Mandara not started, one shared key.
+    assert_eq!(classic.iter().map(|d| (d.severity, d.kind)).collect::<Vec<_>>(), [(Severity::Error, DiagKind::Other), (Severity::Warning, DiagKind::Other), (Severity::Info, DiagKind::BindConflict)], "{classic:#?}");
+    assert!(classic[1].message.contains("riverctl spawn /usr/bin/mandara"));
+    assert_eq!(classic[2].line, Some(2));
+    assert!(classic.iter().all(|d| d.read_only && fixes_for(d).is_empty()), "init is never edited");
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(&init, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    std::fs::write(&init, "#!/bin/sh\nriverctl spawn /usr/bin/mandara\n").unwrap();
+    assert!(river::check("0.3.17\n", &init, &chords, "/usr/bin/mandara").is_empty());
+    let new = river::check("0.5.0\n", &init, &chords, "/usr/bin/mandara");
+    assert_eq!(new.len(), 1);
+    assert!(new[0].severity == Severity::Error && new[0].message.contains("river-classic"), "{new:#?}");
+    assert_eq!(explain(&new[0], Target::River, Some("0.5.0")), new[0].message, "Mandara's own finding explains itself");
 }
 
 #[test]

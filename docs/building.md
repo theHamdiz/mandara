@@ -60,7 +60,7 @@ The workspace contains these crates:
 | `mandara-core` | layer-shell surfaces, input masking, springs, OKLCH |
 | `mandara-config` | reactive config store, compositor emitters |
 | `mandara-theme` | HCT + OKLCH engine, presets, app theme templates |
-| `mandara-compositor` | MangoWM, Niri, Hyprland, Umbriel and Sway drivers |
+| `mandara-compositor` | MangoWM, Niri, Hyprland, Umbriel, Sway and River drivers |
 | `mandara-services` | D-Bus services, audio, spectrum, OCR, screenshots, recording, Wallhaven, marketplace |
 | `mandara-plugins` | plugin registry, commands, WebAssembly host |
 | `mandara-i18n` | localization |

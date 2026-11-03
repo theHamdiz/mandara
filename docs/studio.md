@@ -68,7 +68,7 @@ ultra-wide.
 - **Extend**: a plugin store (featured hero, curated shelves, search,
   one-click Get / On, product pages, installed library, updates, the GitHub
   marketplace, a local authoring handbook and validator, per-plugin settings) and compositor control for
-  MangoWM, Niri, Hyprland, Umbriel and Sway written to `~/.config/mandara/generated/*`;
+  MangoWM, Niri, Hyprland, Umbriel, Sway and River written to `~/.config/mandara/generated/*` (sent over River's protocol on River);
   **your own config only gets one include line** (with a backup).
 - **Mandara**: language, profiles with undo / export / import, performance,
   maintenance (health checks, repair, factory reset) and about.
@@ -207,7 +207,7 @@ narrow ones; everything mirrors for right-to-left languages.
 | Page | What it covers |
 |---|---|
 | **Plugins** | A plugin store: Discover (featured hero, curated shelves, search with filter chips), Installed, Updates, Community (the GitHub marketplace) and Develop (the authoring handbook and validator); per-plugin product pages and settings modals, which hold each plugin's own options (clipboard history, screenshot, weather, prayer times…) — including refresh intervals, how many rows a list shows and alert thresholds (Resources, Process hunter, Containers, Services, Drives, Network speed, Network, Clock, To-do, Bluetooth, Authenticator). To-do adds its default list, show completed, sort order and what the bar counts; Notes its default topic, the notes folder (point it at a synced folder or an Obsidian vault), preview by default and the editor font and size. [Configuration](configuration.md) lists every setting by page. Every Mandara plugin can be switched off (it then stops everything it runs: bar item, sidebar card, launcher entries, background polling) or **removed** from the detail modal: off, out of the bar and sidebar, and parked under *Removed Mandara plugins* (their store cards offer *Add back*) until **Restore** puts it back where it was. Core plugins (launcher, session menu, main menu) show *Always on*. The dock, mini stats, screen time and prayer times ship off. |
-| **Compositor** | The **Config doctor** (your compositor's own checker on your config: problems by file and line, explained, with reversible fixes), then MangoWM / Niri / Hyprland / Umbriel / Sway gaps, borders, rounding, blur, rules, tags, layouts; all written to `~/.config/mandara/generated/`. |
+| **Compositor** | The **Config doctor** (your compositor's own checker on your config: problems by file and line, explained, with reversible fixes), then MangoWM / Niri / Hyprland / Umbriel / Sway / River gaps, borders, rounding, blur, rules, tags, layouts; all written to `~/.config/mandara/generated/`. |
 
 ### Mandara
 
@@ -285,7 +285,7 @@ narrow ones; everything mirrors for right-to-left languages.
   appears once something in the group differs from them.
 - **Everything is live**: the bar, open panels, the sidebar, the launcher,
   OSDs and the dock redraw in place on every edit, without reopening.
-- **Compositor control** for MangoWM, Niri, Hyprland, Umbriel and Sway: gaps, borders,
+- **Compositor control** for MangoWM, Niri, Hyprland, Umbriel, Sway and River: gaps, borders,
   rounding, blur, shadows, opacity, window rules and keybinds, one-click
   window-look presets and common window rules, gaps that follow the bar,
   and Hyprland's layout (dwindle / master), border resizing and group tabs.
@@ -301,6 +301,7 @@ narrow ones; everything mirrors for right-to-left languages.
   | Hyprland 0.57+ (Lua only) | `pcall(dofile, "/home/you/.config/mandara/generated/hyprland.lua")` in `hyprland.lua` | `hl.on("hyprland.start", …)` |
   | Umbriel | `"/home/you/.config/mandara/generated/umbriel.toml"` in `[include.optional] files` (added to your list if you have one) | `general.autostart = ["/abs/path/mandara"]` |
   | Sway | `include /home/you/.config/mandara/generated/sway.conf` | `exec /abs/path/mandara` |
+  | River | none (Mandara never edits `init`; its settings go over `river-control`) | `riverctl spawn /abs/path/mandara`, a line you add to `init` |
 
   The dialect follows the installed version (`niri --version`,
   `Hyprland --version`); each compositor's own checker (`mango -p`,
@@ -310,7 +311,10 @@ narrow ones; everything mirrors for right-to-left languages.
   it runs those rows are locked with that reason, and its tab says what
   its drop-in carries (gaps, pixel borders, `client.*` colours, `for_window`
   floating / sticky rules for both Wayland `app_id`s and X11 classes,
-  `input` / `seat` settings, `output` lines and `bindsym` keys). Umbriel is the
+  `input` / `seat` settings, `output` lines and `bindsym` keys). River's
+  tab says how its settings travel and shows the line to add to `init`;
+  gaps (including *Gaps follow the bar*), rounded corners, opacity, blur,
+  shadows and animations are locked there. Umbriel is the
   exception to "Mandara's values win": it applies your `config.toml`
   after its includes, so what you set there wins (rules from both files
   are kept), and the Umbriel tab says so. On Niri the drop-in also makes workspace
@@ -427,7 +431,7 @@ narrow ones; everything mirrors for right-to-left languages.
     pointer, link, text, busy, precision, the three resizes and move — at
     the chosen size, with 24 / 32 / 48 / 64 px chips beside the size
     slider. The rows next to it: *Hide while typing*, *Hide when idle*
-    (MangoWM, Niri, Hyprland, Umbriel, Sway), *Software cursor* (Hyprland and
+    (MangoWM, Niri, Hyprland, Umbriel, Sway, River), *Software cursor* (Hyprland and
     Umbriel) and *Hide on touch* (Hyprland only); where a compositor lacks
     one, the row says so in place of the control.
   - **The gallery**: Bibata Modern, macOS, Qogir, Phinger, Catppuccin,
@@ -452,7 +456,7 @@ narrow ones; everything mirrors for right-to-left languages.
     `env=XCURSOR_*` for MangoWM, `cursor { xcursor-theme … }` for Niri,
     `env = XCURSOR_* / HYPRCURSOR_*` + `cursor {}` and a live `setcursor`
     for Hyprland, `[input.cursor]` for Umbriel, `seat * xcursor_theme` and a
-    live `seat` command for Sway) and reloads the compositor, so the cursor changes at
+    live `seat` command for Sway, `xcursor-theme` for River) and reloads the compositor, so the cursor changes at
     once. X11 and older toolkit apps follow through
     `~/.icons/default/index.theme`, created only when you have none and
     removed again when you go back to "Your config".
@@ -464,7 +468,9 @@ narrow ones; everything mirrors for right-to-left languages.
   focus follows the pointer.
   Written to the compositor drop-in (`mango.conf`, `niri.kdl` `input {}`,
   Hyprland `input {}` / `hl.config({ input = … })`, Umbriel `[input.*]`,
-  Sway `input type:keyboard|pointer|touchpad …` and `seat * …`); "Your config" keeps
+  Sway `input type:keyboard|pointer|touchpad …` and `seat * …`, River
+  `keyboard-layout`, `set-repeat` and `input pointer-*|*Touchpad* …`
+  commands); "Your config" keeps
   your own value. On Niri a touchpad or mouse setting replaces your whole
   `touchpad {}` / `mouse {}` block (Niri merges those blocks as a unit),
   and "focus follows the pointer: off" can't be set from an include —

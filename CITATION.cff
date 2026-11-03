@@ -3,7 +3,7 @@ message: "If you refer to Mandara Shell in your work, please cite it like this."
 title: "Mandara Shell"
 abstract: >-
   Mandara Shell is a native Linux Wayland desktop shell written in Rust on
-  GPUI. It gives MangoWM, Niri, Hyprland, Umbriel and Sway a status bar, dynamic
+  GPUI. It gives MangoWM, Niri, Hyprland, Umbriel, Sway and River a status bar, dynamic
   island, dock, launcher, sidebar, notifications, wallpaper engine, desktop
   widgets, lock screen, login manager and a live settings app, in one binary
   that uses under 100 MiB of RAM. Third-party plugins are sandboxed
@@ -27,4 +27,5 @@ keywords:
   - mangowm
   - umbriel
   - sway
+  - river
   - webassembly plugins

@@ -26,10 +26,10 @@ The rest of what's built in.
   that stretches as it travels. Neighbouring tags viewed together on MangoWM
   (right-click, `toggleview`) melt into one shape with a soft waist (a
   smooth minimum of their distance fields), and one Oklab gradient runs
-  across them all. Next to them, MangoWM shows the tag's layout, Umbriel the
-  active workspace's own layout and Sway its container layout (click to
-  cycle), plus a badge for a non-default keymode, keybind submap or binding
-  mode.
+  across them all (River's tags work the same way). Next to them, MangoWM
+  shows the tag's layout, Umbriel the active workspace's own layout, Sway
+  its container layout and River its layout generator (click to cycle),
+  plus a badge for a non-default keymode, keybind submap or binding mode.
 - **Sidebar** with Overview and Notifications tabs, quick settings, weather
   (animated sky), media, Pomodoro, to-do, notes, sound and more. It opens on
   hover or Super+B and sits left or right (the power dock takes the opposite

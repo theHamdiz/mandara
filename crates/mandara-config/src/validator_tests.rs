@@ -263,6 +263,26 @@ fn sway_validates_every_dropin() {
     }
 }
 
+/// River has no checker: every River command for every representative
+/// config (with and without colours) goes to a headless River through
+/// riverctl and must be accepted (see `river_check`).
+#[test]
+fn river_accepts_every_command_set() {
+    // One River session, as the shell syncs: each set takes the previous
+    // one's binds and rules back first.
+    let mut all = Vec::new();
+    let mut previous: Vec<Vec<String>> = Vec::new();
+    for (_, cfg, colors) in configs() {
+        let (commands, _) = river_commands(&managed(&cfg, colors, None));
+        all.extend(river_undo(&previous));
+        all.extend(commands.clone());
+        previous = commands;
+    }
+    if let Some(failures) = crate::river_check::run_commands(&all) {
+        assert!(failures.is_empty(), "River rejected:\n{}", failures.join("\n"));
+    }
+}
+
 /// A user's Umbriel config with its own binds and an output, and Mandara's
 /// include added the way `mandara setup` adds it.
 fn umbriel_main(dir: &Path, dropin: &Path) -> std::path::PathBuf {

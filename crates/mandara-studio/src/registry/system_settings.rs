@@ -43,15 +43,15 @@ pub const CURSOR_SIZE_MIN: f64 = 16.0;
 pub const CURSOR_SIZE_MAX: f64 = 128.0;
 
 /// Why a cursor option does nothing under the running compositor
-/// (`running`: MangoWM, Niri, Hyprland, Umbriel, Sway), from `INPUT_OPTIONS`.
+/// (`running`: MangoWM, Niri, Hyprland, Umbriel, Sway, River), from `INPUT_OPTIONS`.
 pub fn cursor_locked(path: &str, running: Option<mandara_config::compositor::Target>) -> Option<&'static str> {
     let key = path.strip_prefix("/compositor/input/cursor/").map(|k| format!("cursor.{k}"))?;
     let support = mandara_config::input::INPUT_OPTIONS.iter().find(|(k, _)| *k == key)?.1;
     match support {
         _ if support[running?.index()] => None,
-        [false, false, true, false, false] => Some(HYPRLAND_ONLY),
-        [false, false, true, true, false] => Some(HYPRLAND_UMBRIEL_ONLY),
-        [true, true, false, false, false] => Some(MANGO_NIRI_ONLY),
+        [false, false, true, false, false, false] => Some(HYPRLAND_ONLY),
+        [false, false, true, true, false, false] => Some(HYPRLAND_UMBRIEL_ONLY),
+        [true, true, false, false, false, false] => Some(MANGO_NIRI_ONLY),
         _ => Some(tk("Not supported by this compositor")),
     }
 }
@@ -70,7 +70,7 @@ pub fn entries() -> Vec<Setting> {
         // Input: keyboard
         s(Input, KEYBOARD, "/compositor/input/keyboard/repeat_delay", tk("Repeat delay"), tk("How long a key is held before it repeats"), optional(100.0, 1500.0, 10.0, " ms", 600.0)),
         s(Input, KEYBOARD, "/compositor/input/keyboard/repeat_rate", tk("Repeat rate"), tk("Characters per second while a key is held"), optional(5.0, 80.0, 1.0, " /s", 25.0)),
-        s(Input, KEYBOARD, "/compositor/input/keyboard/numlock", tk("Num Lock on at login"), "", Choice(TRI)),
+        s(Input, KEYBOARD, "/compositor/input/keyboard/numlock", tk("Num Lock on at login"), tk("MangoWM, Niri, Hyprland, Umbriel, Sway"), Choice(TRI)),
         s(Input, KEYBOARD, "/compositor/input/keyboard/per_window_layout", tk("Remember the layout per window"), tk("Niri, Umbriel"), Choice(TRI)),
         s(Input, KEYBOARD, "/compositor/input/keyboard/options", tk("Other xkb options"), tk("Comma-separated, e.g. ctrl:nocaps,compose:ralt"), OptionalText { placeholder: tk("Your config") }),
         s(Input, KEYBOARD, "/compositor/input/keyboard/model", tk("Keyboard model"), tk("Rarely needed, e.g. pc105"), OptionalText { placeholder: tk("Your config") }),
@@ -79,23 +79,23 @@ pub fn entries() -> Vec<Setting> {
         s(Input, MOUSE, "/compositor/input/mouse/accel_profile", tk("Acceleration"), tk("Flat moves the pointer exactly as far as the mouse"), Choice(ACCEL)),
         s(Input, MOUSE, "/compositor/input/mouse/natural_scroll", tk("Natural scrolling"), tk("Content follows the wheel, like a touchscreen"), Choice(TRI)),
         s(Input, MOUSE, "/compositor/input/mouse/left_handed", tk("Left-handed"), tk("Swap the left and right buttons"), Choice(TRI)),
-        s(Input, MOUSE, "/compositor/input/mouse/scroll_factor", tk("Scroll speed"), tk("MangoWM, Niri, Hyprland, Sway"), optional(0.1, 5.0, 0.1, "×", 1.0)),
-        s(Input, MOUSE, "/compositor/input/mouse/scroll_method", tk("Scroll method"), tk("MangoWM, Niri, Hyprland, Sway"), Choice(SCROLL)),
-        s(Input, MOUSE, "/compositor/input/mouse/middle_emulation", tk("Middle-click emulation"), tk("Both buttons together click the middle one (MangoWM, Niri, Sway)"), Choice(TRI)),
+        s(Input, MOUSE, "/compositor/input/mouse/scroll_factor", tk("Scroll speed"), tk("MangoWM, Niri, Hyprland, Sway, River"), optional(0.1, 5.0, 0.1, "×", 1.0)),
+        s(Input, MOUSE, "/compositor/input/mouse/scroll_method", tk("Scroll method"), tk("MangoWM, Niri, Hyprland, Sway, River"), Choice(SCROLL)),
+        s(Input, MOUSE, "/compositor/input/mouse/middle_emulation", tk("Middle-click emulation"), tk("Both buttons together click the middle one (MangoWM, Niri, Sway, River)"), Choice(TRI)),
         // Input: touchpad
         s(Input, TOUCHPAD, "/compositor/input/touchpad/tap_to_click", tk("Tap to click"), "", Choice(TRI)),
         s(Input, TOUCHPAD, "/compositor/input/touchpad/natural_scroll", tk("Natural scrolling"), tk("Content follows your fingers"), Choice(TRI)),
         s(Input, TOUCHPAD, "/compositor/input/touchpad/disable_while_typing", tk("Disable while typing"), "", Choice(TRI)),
         s(Input, TOUCHPAD, "/compositor/input/touchpad/tap_and_drag", tk("Tap and drag"), tk("Tap, then slide to drag"), Choice(TRI)),
         s(Input, TOUCHPAD, "/compositor/input/touchpad/drag_lock", tk("Drag lock"), tk("A drag continues briefly after lifting the finger"), Choice(TRI)),
-        s(Input, TOUCHPAD, "/compositor/input/touchpad/speed", tk("Pointer speed"), tk("MangoWM, Niri, Umbriel, Sway"), optional(-1.0, 1.0, 0.05, "", 0.0)),
-        s(Input, TOUCHPAD, "/compositor/input/touchpad/accel_profile", tk("Acceleration"), tk("MangoWM, Niri, Umbriel, Sway"), Choice(ACCEL)),
-        s(Input, TOUCHPAD, "/compositor/input/touchpad/scroll_method", tk("Scroll method"), tk("MangoWM, Niri, Umbriel, Sway"), Choice(SCROLL)),
+        s(Input, TOUCHPAD, "/compositor/input/touchpad/speed", tk("Pointer speed"), tk("MangoWM, Niri, Umbriel, Sway, River"), optional(-1.0, 1.0, 0.05, "", 0.0)),
+        s(Input, TOUCHPAD, "/compositor/input/touchpad/accel_profile", tk("Acceleration"), tk("MangoWM, Niri, Umbriel, Sway, River"), Choice(ACCEL)),
+        s(Input, TOUCHPAD, "/compositor/input/touchpad/scroll_method", tk("Scroll method"), tk("MangoWM, Niri, Umbriel, Sway, River"), Choice(SCROLL)),
         s(Input, TOUCHPAD, "/compositor/input/touchpad/click_method", tk("Right click"), tk("Bottom-right corner, or two fingers"), Choice(CLICK)),
         s(Input, TOUCHPAD, "/compositor/input/touchpad/scroll_factor", tk("Scroll speed"), "", optional(0.1, 5.0, 0.1, "×", 1.0)),
-        s(Input, TOUCHPAD, "/compositor/input/touchpad/middle_emulation", tk("Middle-click emulation"), tk("MangoWM, Niri, Hyprland, Sway"), Choice(TRI)),
-        s(Input, TOUCHPAD, "/compositor/input/touchpad/left_handed", tk("Left-handed"), tk("MangoWM, Niri, Umbriel, Sway"), Choice(TRI)),
-        s(Input, TOUCHPAD, "/compositor/input/touchpad/disable_with_mouse", tk("Off while a mouse is plugged in"), tk("MangoWM, Niri, Umbriel, Sway"), Choice(TRI)),
+        s(Input, TOUCHPAD, "/compositor/input/touchpad/middle_emulation", tk("Middle-click emulation"), tk("MangoWM, Niri, Hyprland, Sway, River"), Choice(TRI)),
+        s(Input, TOUCHPAD, "/compositor/input/touchpad/left_handed", tk("Left-handed"), tk("MangoWM, Niri, Umbriel, Sway, River"), Choice(TRI)),
+        s(Input, TOUCHPAD, "/compositor/input/touchpad/disable_with_mouse", tk("Off while a mouse is plugged in"), tk("MangoWM, Niri, Umbriel, Sway, River"), Choice(TRI)),
         // Themes → Cursor (the theme gallery is `app/cursor_page.rs`; the
         // theme row is for search and the command line)
         s(Themes, CURSOR, CURSOR_THEME_PATH, tk("Cursor theme"), tk("The XCursor theme name, e.g. Bibata-Modern-Ice; pick one from the gallery above"), OptionalText { placeholder: tk("Your config") }),
@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn every_input_control_reaches_the_right_drop_ins() {
         use mandara_config::compositor::Target;
-        use mandara_config::input::{INPUT_OPTIONS, emit_hyprland_conf, emit_mango, emit_niri, emit_sway, emit_umbriel};
+        use mandara_config::input::{INPUT_OPTIONS, emit_hyprland_conf, emit_mango, emit_niri, emit_river, emit_sway, emit_umbriel};
         let base = ShellConfig::default();
         // A setting line: not blank, a comment, section punctuation or a
         // TOML table header.
@@ -204,8 +204,11 @@ mod tests {
             let support = INPUT_OPTIONS.iter().find(|(k, _)| *k == key).unwrap_or_else(|| panic!("{} → {key} not in INPUT_OPTIONS", s.path)).1;
             let cfg = set(&base, &s, engaged(&s)).unwrap_or_else(|e| panic!("{}: {e}", s.path));
             let input = &cfg.compositor.input;
-            let got = [has_settings(&emit_mango(input)), has_settings(&emit_niri(input)), has_settings(&emit_hyprland_conf(input)), has_settings(&emit_umbriel(input)), has_settings(&emit_sway(input))];
-            assert_eq!(got, support, "{} ({key}): [MangoWM, Niri, Hyprland, Umbriel, Sway]", s.path);
+            // River's keyboard-layout needs layouts: a model or options
+            // alone wait for them.
+            let river_waits = key == "keyboard.layouts" && input.keyboard.layouts.is_empty();
+            let got = [has_settings(&emit_mango(input)), has_settings(&emit_niri(input)), has_settings(&emit_hyprland_conf(input)), has_settings(&emit_umbriel(input)), has_settings(&emit_sway(input)), has_settings(&emit_river(input)) || river_waits];
+            assert_eq!(got, support, "{} ({key}): [MangoWM, Niri, Hyprland, Umbriel, Sway, River]", s.path);
             // The help text tells the truth about partial support: it names
             // exactly the compositors that carry the option.
             if support.contains(&false) {
@@ -232,6 +235,7 @@ mod tests {
         assert_eq!(cursor_locked(hw, Some(Target::Umbriel)), None);
         assert_eq!(cursor_locked("/compositor/input/cursor/hide_on_touch", Some(Target::Umbriel)), Some(HYPRLAND_ONLY));
         assert_eq!(cursor_locked(hw, Some(Target::Sway)), Some(HYPRLAND_UMBRIEL_ONLY));
+        assert_eq!(cursor_locked(hw, Some(Target::River)), Some(HYPRLAND_UMBRIEL_ONLY));
         assert_eq!(cursor_locked(hw, None), None, "no compositor: saved for later, not locked");
         for p in [CURSOR_THEME_PATH, CURSOR_SIZE_PATH, "/compositor/input/cursor/hide_when_typing", "/compositor/input/cursor/hide_after_secs"] {
             for t in Target::ALL {

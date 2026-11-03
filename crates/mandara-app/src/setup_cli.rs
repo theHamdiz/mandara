@@ -101,6 +101,19 @@ pub fn setup(o: Options) -> Result<()> {
                 continue;
             }
             report = guarded.after;
+            if target == Target::River {
+                // River's init is a program Mandara never edits: the shell
+                // sends the settings over river-control when it runs.
+                let path = last.borrow().as_ref().map(|(p, _)| p.clone()).unwrap_or_else(|| target.generated_file());
+                println!("River: settings recorded in {}; the shell sends them to River when it starts and on every change", path.display());
+                if !mandara_config::compositor::include_installed(target) {
+                    println!("  to start Mandara with River, add this line to {}: {}", target.user_config().display(), target.include_line());
+                }
+                for note in last.borrow().as_ref().map(|(_, e)| e.skipped.clone()).unwrap_or_default() {
+                    println!("  note: {note}");
+                }
+                continue;
+            }
             let user_before = std::fs::read_to_string(target.user_config())?;
             let added = install_include(target)?;
             if added {

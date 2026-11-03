@@ -139,10 +139,11 @@ pub fn for_family(family: Family) -> Option<&'static PackageSet> {
 }
 
 /// A compositor's screen-sharing / remote-desktop portal: (compositor
-/// program, package, Gentoo atom). MangoWM and Sway use wlr's, Niri GNOME's.
+/// program, package, Gentoo atom). MangoWM, Sway and River use wlr's, Niri GNOME's.
 const PORTALS: &[(&str, &str, &str)] = &[
     ("mango", "xdg-desktop-portal-wlr", "gui-libs/xdg-desktop-portal-wlr"),
     ("sway", "xdg-desktop-portal-wlr", "gui-libs/xdg-desktop-portal-wlr"),
+    ("river", "xdg-desktop-portal-wlr", "gui-libs/xdg-desktop-portal-wlr"),
     ("Hyprland", "xdg-desktop-portal-hyprland", "gui-libs/xdg-desktop-portal-hyprland"),
     ("niri", "xdg-desktop-portal-gnome", "sys-apps/xdg-desktop-portal-gnome"),
 ];

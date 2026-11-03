@@ -778,7 +778,7 @@ Border grab area
 Border width
 Both
 Both Shift keys
-Both buttons together click the middle one (MangoWM, Niri, Sway)
+Both buttons together click the middle one (MangoWM, Niri, Sway, River)
 Both take turns: a verse, then a hadith
 Bottom
 Bottom center
@@ -3218,8 +3218,9 @@ Mandara's drop-in
 Mandara's shortcuts and your compositor's appear here
 MangoWM
 MangoWM and Niri only
-MangoWM, Niri, Hyprland, Sway
-MangoWM, Niri, Umbriel, Sway
+MangoWM, Niri, Hyprland, Sway, River
+MangoWM, Niri, Hyprland, Umbriel, Sway
+MangoWM, Niri, Umbriel, Sway, River
 Manifest: id, name, zone, permissions, settings
 Manual
 Marcus Aurelius
@@ -4559,7 +4560,7 @@ Rasselas
 Rates by ExchangeRate-API · {date}
 Rates in bytes (MB/s) or bits (Mb/s)
 Rather than love, than money, than fame, give me truth.
-Raw compositor dispatch (MangoWM function, Hyprland dispatcher, Niri or Umbriel action, Sway command)
+Raw compositor dispatch (MangoWM function, Hyprland dispatcher, Niri or Umbriel action, Sway or River command)
 Ray detail
 Re-derive the theme (Material You) from each wallpaper you pick
 Re-export
@@ -4842,6 +4843,10 @@ Ring
 Ring shows
 Ring starts at
 Ring width
+River has no such setting
+River runs {file} as a program, but it isn't executable, so River starts without it (chmod +x makes it run).
+River {version} runs window management in a separate program and no longer has the river-control and river-status protocols, so Mandara can't show or switch its tags, send its binds or follow its windows. Mandara works with River's classic line (0.3, packaged as river-classic).
+River's config is your init program, which Mandara never edits: Mandara sends River its colours, rules, input settings and keys when the shell starts and on every change. To start Mandara with River, add this line to your init: {line}
 Room around the icons
 Rose
 Rose Gold
@@ -6869,6 +6874,7 @@ You're logged out
 You're offline
 You're presenting
 Your GitHub user name
+Your River init doesn't start Mandara. Mandara never edits it: add this line to it yourself: {line}
 Your Steam games as covers; a click starts one
 Your UPower is too old to change the charge limit
 Your World clock cities, or a list of its own
@@ -6893,6 +6899,7 @@ Your home folder
 Your home folders; a click opens one
 Your hooks
 Your idle commands
+Your init maps {chord}, which Mandara binds too: Mandara leaves yours and skips its own.
 Your installed Steam games, the most recently played first.
 Your keyring may ask you to unlock it
 Your keys

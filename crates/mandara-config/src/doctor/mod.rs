@@ -6,7 +6,8 @@
 //! the doctor runs each compositor's **own** checker on the user's real
 //! config tree, read-only and sandboxed (`mango -p -c`, `niri validate -c`,
 //! `Hyprland --verify-config -c`, `umbriel config validate -c --json`,
-//! `sway --validate --verbose --config`; see [`CompositorCheck`]), and
+//! `sway --validate --verbose --config`; River has no checker, so its
+//! version and `init` are checked instead; see [`CompositorCheck`]), and
 //! turns its output into structured
 //! [`Diagnostic`]s:
 //!
@@ -35,6 +36,7 @@ pub mod state;
 mod hyprland;
 mod mango;
 mod niri;
+mod river;
 mod sway;
 mod umbriel;
 
@@ -160,12 +162,16 @@ pub struct Diagnostic {
     pub related: Vec<Location>,
     /// The checker named no line; it was found by searching for `key`.
     pub guessed: bool,
+    /// In a file Mandara never edits (River's `init` program): no comment
+    /// or remove fixes, only the explanation.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub read_only: bool,
 }
 
 impl Diagnostic {
     /// A diagnostic with only a message (parsers fill in the rest).
     pub fn new(severity: Severity, message: impl Into<String>) -> Self {
-        Self { id: String::new(), severity, file: None, line: None, column: None, message: message.into(), kind: DiagKind::Other, owner: Owner::User, key: None, text: None, related: Vec::new(), guessed: false }
+        Self { id: String::new(), severity, file: None, line: None, column: None, message: message.into(), kind: DiagKind::Other, owner: Owner::User, key: None, text: None, related: Vec::new(), guessed: false, read_only: false }
     }
 
     pub fn at(mut self, file: impl Into<PathBuf>, line: usize, column: Option<usize>) -> Self {
@@ -418,6 +424,7 @@ pub fn checker(target: Target) -> &'static dyn CompositorCheck {
         Target::Hyprland => &hyprland::Hyprland,
         Target::Umbriel => &umbriel::Umbriel,
         Target::Sway => &sway::Sway,
+        Target::River => &river::River,
     }
 }
 
@@ -761,6 +768,8 @@ pub fn explain(d: &Diagnostic, target: Target, version: Option<&str>) -> String 
         DiagKind::InvalidValue => tf("{compositor} knows `{key}`, but not the value it is given here.", &[("compositor", &compositor), ("key", &key)]),
         DiagKind::BindConflict => tf("This key combination is bound more than once; {compositor} uses only one of the binds.", &[("compositor", &compositor)]),
         DiagKind::MissingInclude => tf("This line includes a file that isn't there, so {compositor} can't load it.", &[("compositor", &compositor)]),
+        // Mandara's own findings (River has no checker) explain themselves.
+        DiagKind::Other if target == Target::River => d.message.clone(),
         DiagKind::Other => tf("{compositor} reported a problem here.", &[("compositor", &compositor)]),
     }
 }
@@ -769,6 +778,9 @@ pub fn explain(d: &Diagnostic, target: Target, version: Option<&str>) -> String 
 pub fn fixes_for(d: &Diagnostic) -> Vec<fix::Fix> {
     use fix::Fix;
     let mut out = Vec::new();
+    if d.read_only {
+        return out;
+    }
     match d.owner {
         Owner::Mandara => out.push(Fix::Regenerate),
         Owner::User if d.file.is_some() && d.line.is_some() && d.text.is_some() => {

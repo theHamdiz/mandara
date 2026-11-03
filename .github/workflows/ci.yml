@@ -117,23 +117,26 @@ jobs:
           path: dist/*.mandara.tar.gz
 
   # Every line Mandara writes into a compositor's config must pass that
-  # compositor's own checker. Sway ships in Arch, so its checker tests run
-  # for real here: the drop-ins and the include line through
+  # compositor's own checker. Sway and River ship in Arch, so their checker
+  # tests run for real here: Sway's drop-ins and include line through
   # `sway --validate` (headless backend), the Config doctor's parser against
-  # the live checker, and sway's own verdict on retired configs. Only those
-  # tests run, so the GUI crates aren't built.
+  # the live checker and sway's own verdict on retired configs; River has no
+  # checker, so every command Mandara sends it goes to a headless River
+  # (river-classic, the line with river-control) through riverctl. Only
+  # those tests run, so the GUI crates aren't built.
   compositor-checkers:
-    name: Compositor checkers (Sway)
+    name: Compositor checkers (Sway, River)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Checker tests in Arch
         run: |
           docker run --rm -v "$PWD:/src" -w /src archlinux:latest sh -euc '
-            pacman -Syu --noconfirm --needed rust gcc pkgconf libxkbcommon sway >/dev/null
+            pacman -Syu --noconfirm --needed rust gcc pkgconf libxkbcommon sway river-classic >/dev/null
             # sway carries a file capability (cap_sys_nice) that a container
             # cannot grant; a plain copy earlier on PATH runs without it.
             cp /usr/bin/sway /usr/local/bin/sway
             sway --version
-            cargo test --locked -p mandara-config -- --nocapture sway real_checkers every_option_alone
+            river -version
+            cargo test --locked -p mandara-config -- --nocapture sway river real_checkers every_option_alone
           '

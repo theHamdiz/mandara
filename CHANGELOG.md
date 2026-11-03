@@ -19,6 +19,18 @@ About → What's new shows it too.
   `sway --validate` first, the Config doctor reads sway's own verdict on
   your config, and moving over from swaybar or swaybg is part of the usual
   takeover. Thanks for asking in #33!
+- **Mandara now runs on River.** River's tags work like MangoWM's: click
+  to show one, right-click to add it to the view, middle-click to put the
+  focused window on it too, with the tags in use and the urgent ones
+  marked and the current mode shown. River's config is your own `init`
+  program, so Mandara never touches it: it sends River its border
+  colours, window rules, keyboard, mouse, touchpad and cursor settings
+  and its keys over River's own protocol whenever the shell starts or a
+  setting changes, leaving the keys your `init` maps alone. Add one line
+  to `init` to start Mandara with River (Studio and the Config doctor
+  show it). This is for River 0.3 (`river-classic`); River 0.4 moved
+  window management out of River, and the Config doctor explains that if
+  it finds it. Thanks for asking in #34!
 
 ### Changed
 

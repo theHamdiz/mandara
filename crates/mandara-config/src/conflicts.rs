@@ -207,6 +207,16 @@ fn autostart_command(target: Target, line: &str) -> Option<String> {
         // A TOML array that can span lines: read whole-file by
         // [`umbriel_autostarts`].
         Target::Umbriel => None,
+        // `riverctl spawn 'cmd'`, or a program started in the background
+        // (`waybar &`) by River's init script.
+        Target::River => {
+            let words = crate::compositor::shell_words(t);
+            match words.as_slice() {
+                [ctl, spawn, cmd, ..] if ctl.ends_with("riverctl") && spawn == "spawn" => Some(cmd.clone()),
+                [first, ..] if t.ends_with('&') && !first.ends_with("riverctl") => Some(t.trim_end_matches('&').trim().to_string()),
+                _ => None,
+            }
+        }
         // `exec [--no-startup-id] cmd` (start-up) and `exec_always cmd`
         // (every reload).
         Target::Sway => ["exec ", "exec_always "].iter().find_map(|p| t.strip_prefix(p)).map(|r| r.trim_start().trim_start_matches("--no-startup-id").trim().to_string()),
@@ -705,6 +715,9 @@ pub fn retire(target: Target, conflicts: &[Conflict]) -> Result<PathBuf> {
 /// [`retire`] with its backups under `root`. Folder names carry the time in
 /// nanoseconds, so two retires in the same second never share a folder.
 pub fn retire_into(target: Target, conflicts: &[Conflict], root: &Path) -> Result<PathBuf> {
+    if target == Target::River && !conflicts.is_empty() {
+        anyhow::bail!("Mandara doesn't edit River's init: remove or comment these lines yourself:\n{}", conflicts.iter().map(|c| format!("  {}:{}: {}", c.file.display(), c.lines.first().map_or(0, |l| l + 1), c.text)).collect::<Vec<_>>().join("\n"));
+    }
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
     let dir = root.join(format!("{}-{:09}-{}", now.as_secs(), now.subsec_nanos(), format!("{target:?}").to_lowercase()));
     std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
@@ -810,6 +823,8 @@ pub fn validate_file(target: Target, config: &Path) -> Validation {
         // running compositor).
         Target::Umbriel => ("umbriel", vec!["config".into(), "validate".into(), "-c".into(), config.display().to_string()]),
         Target::Sway => ("sway", vec!["--validate".into(), "--config".into(), config.display().to_string()]),
+        // River has no config checker (its config is a program).
+        Target::River => return Validation::Unchecked,
     };
     let mut cmd = std::process::Command::new(tool);
     cmd.args(&args).stdin(std::process::Stdio::null());
@@ -989,6 +1004,29 @@ mod tests {
         assert!(scan_files(Target::Sway, &cfg(), &files).iter().all(|c| !c.is_conflict()), "retired lines are not found again");
         restore(&b).unwrap();
         assert!(std::fs::read_to_string(d.join("config")).unwrap().contains("\nbar {\n    position top"));
+        std::fs::remove_dir_all(d).ok();
+    }
+
+    /// River: maps and autostarts in the init script are found, but never
+    /// retired (Mandara doesn't edit init).
+    #[test]
+    fn river_init_is_scanned_not_edited() {
+        let d = tmp("river");
+        let init = d.join("init");
+        let text = "#!/bin/sh\nriverctl map normal Super Space spawn 'wofi --show drun'\nriverctl spawn waybar\nmako &\nriverctl map normal Super Return spawn foot\n";
+        std::fs::write(&init, text).unwrap();
+        let found = scan_files(Target::River, &cfg(), std::slice::from_ref(&init));
+        let mut programs: Vec<&str> = found.iter().filter_map(|c| match &c.kind {
+            Kind::Autostart { program, .. } => Some(program.as_str()),
+            _ => None,
+        }).collect();
+        programs.sort();
+        assert_eq!(programs, ["mako", "waybar"], "{found:#?}");
+        assert!(found.iter().any(|c| matches!(&c.kind, Kind::Keybind { chord, replaces: Some(tool), .. } if chord == "super+space" && tool == "wofi")), "{found:#?}");
+        let err = retire_into(Target::River, &found, &d.join("backup")).unwrap_err().to_string();
+        assert!(err.contains("doesn't edit River's init"), "{err}");
+        assert_eq!(std::fs::read_to_string(&init).unwrap(), text, "untouched");
+        assert_eq!(validate_file(Target::River, &init), Validation::Unchecked);
         std::fs::remove_dir_all(d).ok();
     }
 

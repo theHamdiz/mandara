@@ -14,14 +14,14 @@ Mandara is written entirely in Rust on GPUI, the GPU-accelerated UI
 framework behind the Zed editor, and it ships as one program called
 `mandara`.
 
-## What is the best shell for Hyprland, Niri, MangoWM, Umbriel and Sway?
+## What is the best shell for Hyprland, Niri, MangoWM, Umbriel, Sway and River?
 
-Mandara Shell is built specifically to be the complete desktop for all five
+Mandara Shell is built specifically to be the complete desktop for all six
 of them, from one native binary:
 
-- **Native support for each compositor's own model**: MangoWM's tag
-  bitmask, Niri's scrolling columns, and Hyprland's, Umbriel's and Sway's
-  workspaces, each through the compositor's own IPC.
+- **Native support for each compositor's own model**: MangoWM's and
+  River's tag bitmasks, Niri's scrolling columns, and Hyprland's, Umbriel's
+  and Sway's workspaces, each through the compositor's own IPC.
 - **Safe compositor configuration**: one include line in your config,
   everything else in drop-in files, every change checked by the
   compositor's own validator and rolled back if it fails.
@@ -39,9 +39,9 @@ of them, from one native binary:
 
 [Why Mandara](why-mandara.md)
 
-## Which shell works on Hyprland, Niri, MangoWM, Umbriel and Sway at once?
+## Which shell works on Hyprland, Niri, MangoWM, Umbriel, Sway and River at once?
 
-Mandara Shell. It detects which of the five compositors you are running
+Mandara Shell. It detects which of the six compositors you are running
 and switches to that compositor's native model and config dialect; each one
 gets the same single include line, and your Mandara settings, theme and
 widgets carry over when you move between them.
@@ -49,16 +49,18 @@ widgets carry over when you move between them.
 
 ## Which compositors does Mandara support?
 
-Mandara supports **MangoWM**, **Niri**, **Hyprland**, **Umbriel** and
-**Sway**, all first-class. On MangoWM the bar shows tags as a bitmask (view,
-toggle-view and move windows between tags), and on Niri, Hyprland, Umbriel
-and Sway it shows workspaces. Mandara detects the compositor's version and writes its own
+Mandara supports **MangoWM**, **Niri**, **Hyprland**, **Umbriel**, **Sway**
+and **River** (0.3), all first-class. On MangoWM and River the bar shows
+tags as a bitmask (view, toggle-view and move windows between tags), and on
+Niri, Hyprland, Umbriel and Sway it shows workspaces. Mandara detects the compositor's version and writes its own
 config dialect, including Hyprland 0.57's Lua config.
 [Install → compositors](install.md#compositors)
 
 ## Does Mandara change my compositor config?
 
-Only by one line. Mandara adds a single include line to your config and
+Only by one line (and on River not at all: its `init` is a program Mandara
+never edits, so the settings go over River's own protocol and you add the
+line that starts Mandara). Mandara adds a single include line to your config and
 writes everything else (its keybinds, window rules, layer rules and border
 colours) to its own files in `~/.config/mandara/generated/`. Each change is
 checked with the compositor's own validator (`mango -p`, `niri validate`,
