@@ -27,7 +27,7 @@
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/notification-toasts.png" alt="Notification cards" width="100%"/><br/><sub><b>Notification cards</b> with actions</sub></td>
+<td width="50%" valign="top"><img src="screenshots/notification-toasts.webp" alt="Notification cards" width="100%"/><br/><sub><b>Notification cards</b> with actions</sub></td>
 <td width="50%" valign="top"><img src="screenshots/notifications.png" alt="Notification center" width="100%"/><br/><sub><b>Notification center</b></sub></td>
 </tr>
 </table>

@@ -44,7 +44,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/hero.webp" alt="Mandara Shell desktop at dusk: the edge-frame bar with rounded screen corners and the song playing, a headline clock, a to-do list taped on torn paper, two sticky notes (Weekend plans and Ideas), a month calendar, the agenda of upcoming events and the dock" width="100%"/>
+  <img src="docs/screenshots/hero.webp" alt="Mandara Shell desktop over the Corniche at sunset: the edge-frame bar with rounded screen corners and the song playing, a headline clock, a to-do list taped on torn paper, two sticky notes (Weekend plans and Ideas), a month calendar, the agenda of upcoming events and the dock" width="100%"/>
 </p>
 
 <p align="center">
@@ -78,9 +78,9 @@ widget can be moved, resized and restyled right on the desktop.
 
 <table>
 <tr>
-<td width="33%" valign="top"><img src="docs/screenshots/setup-music.webp" alt="A music desktop: floating glass-pill bar, a turning vinyl record with the album art and controls, a pocket player, a dot-matrix clock and a flowing wave visualizer over a teal lagoon wallpaper" width="100%"/><br/><sub><b>Music corner</b>: glass pills, a turning record, a pocket player and a live wave visualizer.</sub></td>
-<td width="33%" valign="top"><img src="docs/screenshots/setup-night.webp" alt="A night desktop: the notch bar, an analog clock on a scalloped cookie dial, tonight's moon, the sun's arc with the time to sunset and a dotted weather disc over a violet night wallpaper" width="100%"/><br/><sub><b>Night sky</b>: the notch bar, a cookie-dial clock, the moon, the sun's arc and the weather.</sub></td>
-<td width="33%" valign="top"><img src="docs/screenshots/setup-daylight.webp" alt="A light desktop: the island bar, a quote by Epictetus, a to-do list on a soft card, the focus timer and the month calendar over a pastel sky, in light mode" width="100%"/><br/><sub><b>Daylight</b>: light mode, the island bar, a quote, your to-dos, the focus timer and the month.</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/setup-music.webp" alt="A music desktop: floating glass-pill bar, a turning vinyl record with the album art and controls, a pocket player, a dot-matrix clock and a flowing wave visualizer over glossy ribbons in sunset colours" width="100%"/><br/><sub><b>Music corner</b>: glass pills, a turning record, a pocket player and a live wave visualizer.</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/setup-night.webp" alt="A night desktop: the notch bar, an analog clock on a scalloped cookie dial, tonight's moon, the sun's arc with the time to sunset and a dotted weather disc under the northern lights" width="100%"/><br/><sub><b>Night sky</b>: the notch bar, a cookie-dial clock, the moon, the sun's arc and the weather.</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/setup-daylight.webp" alt="A light desktop: the island bar, a quote by Epictetus, a to-do list on a soft card, the focus timer and the month calendar over a pastel mesh of rose and lilac, in light mode" width="100%"/><br/><sub><b>Daylight</b>: light mode, the island bar, a quote, your to-dos, the focus timer and the month.</sub></td>
 </tr>
 </table>
 
@@ -194,20 +194,27 @@ around, each one measured or shipped today:
 </table>
 
 <p align="center">
-  <img src="docs/screenshots/looks.png" alt="The six Looks: Corniche Dusk, Pharos Ink, Montaza Crimson, Qaitbay Forest, Anfushi Wave and Night Frame" width="100%"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/looks-dark.webp"/>
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/looks-light.webp"/>
+    <img src="docs/screenshots/looks-light.webp" alt="The six Looks, each on a wallpaper of its own: Corniche Dusk (glass pills and a headline clock over a rose sunset), Pharos Ink (a hairline bar over ink contours), Montaza Crimson (an Arabic clock over a red and amber glow), Qaitbay Forest (a giant stacked clock over green hills), Anfushi Wave (a glowing wave over layered sea) and Night Frame (a side bar framing the northern lights), in dark mode or light mode to match your page" width="100%"/>
+  </picture>
   <br/>
   <sub>Six Looks, one click each: the bar, widgets, colours and fonts change together.</sub>
 </p>
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="docs/screenshots/greeter.webp" alt="Mandara Login" width="100%"/><br/><sub><b>Mandara Login</b>, the login screen</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/lock-screen.webp" alt="Lock screen" width="100%"/><br/><sub><b>The lock screen</b>, made to match</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons" width="100%"/><br/><sub><b>Mandara Login</b>, the login screen: the <b>Mandara</b> design</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine over dusk waves" width="100%"/><br/><sub>…and its <b>Midnight card</b> design</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/screenshots/lock-screen.webp" alt="The lock screen over soft violet and coral waves: the date, a big clock, the avatar and the password field" width="50%"/><br/><sub><b>The lock screen</b>, made to match</sub></td>
 </tr>
 </table>
 
 <p align="center">
-  <img src="docs/screenshots/studio-login.png" alt="Studio: the login screen designer with a live preview" width="100%"/>
+  <img src="docs/screenshots/studio-login.webp" alt="Studio: the login screen designer with a live preview" width="100%"/>
   <br/>
   <sub><b>Mandara Studio</b>: every setting, live, with previews like this login screen designer.</sub>
 </p>
@@ -230,8 +237,8 @@ you turn on only the ones you want, and plugins can add their own.
 <td width="50%" valign="top"><img src="docs/screenshots/widgets-music.webp" alt="Music widgets: a turning record, a pocket player, a cover cut to a flower, a side pill, an LED meter, a dot-matrix clock and the desk cat" width="100%"/><br/><sub><b>What's playing</b>, painted six ways, with the desk cat bobbing along.</sub></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><img src="docs/screenshots/widgets-sky.webp" alt="Sky and weather widgets: a slanted HUD clock, an at-a-glance line, the sun's arc, a globe, the moon, a weather disc, an hourly curve and the next prayer" width="100%"/><br/><sub><b>The sky</b>: the sun's arc, the moon, the weather and the next prayer.</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/widgets-arabic.webp" alt="Widgets in Arabic: a dot-matrix clock in Eastern Arabic digits, an orbit clock, a Hijri month, prayer times, a countdown and a date tile on a scalloped plate" width="100%"/><br/><sub><b>Your language</b>: Eastern Arabic digits and the Hijri calendar.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/widgets-sky.webp" alt="A sky dashboard over the sea at golden hour: the sun's arc with sunrise and sunset rising over the horizon, a clock, a weather disc, the next hours as a temperature curve, tonight's moon and a day-and-night globe" width="100%"/><br/><sub><b>The sky</b>: the sun's arc, the moon, the globe and the weather, as one dashboard.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/widgets-arabic.webp" alt="Widgets in Arabic over desert dunes: a dot-matrix clock in Eastern Arabic digits with the Gregorian and Hijri dates, an orbit clock, a Hijri month, the weather in words, a countdown and a date tile on a scalloped plate" width="100%"/><br/><sub><b>Your language</b>: Eastern Arabic digits and the Hijri calendar.</sub></td>
 </tr>
 </table>
 

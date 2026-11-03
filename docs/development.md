@@ -57,6 +57,13 @@ eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual c
   each file says how). `--config FILE` copies
   your own config. Both presets are small overlays on the shell's defaults
   (`xtask/src/sandbox/config.*.toml`).
+- **Screenshot setups:** the README's widget shots, the sky dashboard and
+  the Looks come from `xtask/src/sandbox/setups/*.toml` too (`sky`,
+  `widgets-desk`, `widgets-music`, `widgets-you`, `widgets-arabic`,
+  `looks`). Their wallpapers are made once in the sandbox with the
+  wallpaper generator (`sandbox msg wallgen generate STYLE --palette P
+  --seed S --size 2880x1620 --format png --no-apply`); each file names
+  its style, palette and seed, so every shot has a wallpaper of its own.
 - **Languages:** `up` compiles every language pack for the binary's
   version (`mandara --version`) into the demo user's
   `data/mandara/locales/<version>/`, as `mandara install` would; a release
@@ -86,6 +93,21 @@ eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual c
   - `SANDBOX_TZ` sets the time zone (default `Africa/Cairo`).
 - **Debug builds** are fine here. In the real session, run only release
   builds.
+
+## Screenshot grids: `cargo xtask mosaic`
+
+```bash
+cargo xtask mosaic docs/screenshots/looks-dark.png --cols 2 --theme dark \
+    look-corniche-dusk-dark.png="Corniche Dusk" look-pharos-ink-dark.png="Pharos Ink" …
+```
+
+Lays screenshots out as a grid of rounded tiles with a soft shadow and a
+label under each, on a transparent background, so the image sits well on
+GitHub's dark and light pages. `--theme dark|light` sets the label colour
+and the shadow's strength; `--width`, `--gap` and `--radius` size the
+tiles (1280, 56 and 28 px by default). Every tile is scaled to cover the
+first tile's shape. The README's Looks image is two of these (dark and
+light, shown with `<picture>`), converted to WebP.
 
 ## Resource budget: `cargo xtask resource-check`
 

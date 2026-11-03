@@ -6,6 +6,24 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Fresh screenshots everywhere. Cleaner main menu tiles.
+
+### Improved
+
+- **Cleaner main menu tiles.** The shortcut tiles are now flat by default,
+  and every tile wears a faint geometric pattern of its own: a grid for the
+  launcher, rising hills for wallpapers, a honeycomb for Studio and more.
+  The Kufic calligraphy is still there if you liked it: turn on Studio →
+  Bar → Main menu → *Kufic calligraphy*. Raised 3D and glass tiles are a
+  choice away under *Tile surface*.
+
+- **Fresh screenshots.** Every desktop in the README and the guides was
+  shot again on its own wallpaper, so they no longer blur together and the
+  text is easy to read. The six Looks now sit in a neat grid in dark or light
+  mode to match your page, Mandara Login shows both of its designs (Mandara
+  and Midnight card) on bolder backdrops, and the sky widgets come together as
+  one golden-hour sky dashboard.
+
 ## 0.14.0 — 2026-11-03
 
 A Mandara Discord. Mandara on NixOS. Mandara now runs on Sway. Mandara now
