@@ -13,6 +13,27 @@ About → What's new shows it too.
   old shoreline mark. Installs that update themselves pick it up the next
   time the shell starts.
 
+## 0.12.0 — 2026-11-03
+
+A much better screen recorder.
+
+### New
+
+- **A much better screen recorder.** Recording now uses GPU Screen
+  Recorder or wf-recorder when you have one installed (falling back to
+  Mandara's own encoder), so you get MP4 and MKV files, H.264, HEVC or
+  AV1, up to 120 fps and a resolution and quality of your choice, and
+  sound too: turn on system sound, your microphone or both in Studio →
+  Plugins → Screenshot (Mandara's own encoder records video only). Record
+  the whole screen, a display you pick, an area or the focused window, with
+  an optional countdown. While recording, the bar shows the time: click it
+  to stop, right-click it to pause, resume or mute your microphone. The
+  screenshot panel lists your recent recordings to play, show in the folder
+  or move to the Trash. Studio → Plugins → Screenshot shows which recorders
+  are installed and greys out what the one in use can't do, with the
+  reason. Every action is a command you can put on a key, such as
+  `record toggle` and `record pause-toggle`.
+
 ## 0.11.0 — 2026-11-03
 
 A Modern style for the Power panel. The battery breathes while it charges.

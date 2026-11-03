@@ -221,8 +221,11 @@ fn actions() -> Vec<Item> {
         a(t("Change wallpaper"), t("Open the wallpaper picker"), "image", "wallpaper background backdrop desktop picture photo", "wallpaper picker open"),
         a(t("Random wallpaper"), t("Pick a random image from your wallpaper folder"), "refresh", "wallpaper background shuffle desktop picture", "wallpaper random"),
         a(t("Take a screenshot"), t("Select a region to capture"), "crop", SNIP_WORDS, "screenshot region"),
-        a(t("Record the screen"), t("AV1 video of the whole screen"), "circle", "screen recording video capture", "record start"),
+        a(t("Record the screen"), t("Video of the whole screen"), "circle", "screen recording video capture", "record screen"),
         a(t("Record a region"), t("Choose an area to record"), "crop", "screen recording video capture area", "record region"),
+        a(t("Record a window"), t("Video of the focused window"), "window", "screen recording video capture window", "record window"),
+        a(t("Stop recording"), t("Save the screen recording"), "stop", "screen recording video stop save", "record stop"),
+        a(t("Pause or resume recording"), "record pause-toggle", "pause", "screen recording video pause resume", "record pause-toggle"),
         a(t("Clipboard history"), t("Recent copies"), "clipboard", "paste copy history", "panel open clipboard"),
     ]);
     if mandara_services::keepassxc::installed() {
