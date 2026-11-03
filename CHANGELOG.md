@@ -6,6 +6,29 @@ About → What's new shows it too.
 
 ## Unreleased
 
+A redesigned Power panel, and a battery that breathes while it charges.
+
+### New
+
+- **The battery breathes while it charges.** Plug in and the battery in
+  the bar gently pulses until it stops charging, so you can tell at a
+  glance that power is going in. It stays still with Reduce motion on, and
+  you can turn it off in Studio → Power & idle (*Pulse the battery while
+  charging*).
+
+### Changed
+
+- **A calmer, clearer Power panel.** The battery now leads: a large charge
+  ring with the percentage and its state inside, the time left right
+  under it, then health, capacity and chemistry at a glance, and a smooth
+  graph of the last hours of charge. The power profiles became one simple
+  Power saver / Balanced / Performance switch showing only the profiles your
+  computer has, and the charge limit is a single switch that says when
+  charging stops and resumes (shown only where it can really be changed).
+  Technical details such as the CPU driver (`intel_pstate` and friends),
+  voltage, cycles and temperature moved into a *Details* section that
+  stays folded until you open it. The design follows a suggestion in #26.
+
 ## 0.8.2 — 2026-11-03
 
 The sidebar stays open at the screen edge. The session dock stays on its

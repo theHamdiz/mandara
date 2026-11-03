@@ -294,6 +294,9 @@ pub struct PowerConfig {
     pub notify_full: bool,
     /// The battery chip pulses while the charge is critical.
     pub critical_pulse: bool,
+    /// The battery chip breathes gently while it charges (never with
+    /// reduced motion).
+    pub charging_pulse: bool,
 }
 
 impl Default for PowerConfig {
@@ -314,6 +317,7 @@ impl Default for PowerConfig {
             profile_battery: None,
             notify_full: false,
             critical_pulse: true,
+            charging_pulse: true,
         }
     }
 }

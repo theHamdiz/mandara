@@ -145,16 +145,26 @@ The rest of what's built in.
   when units have failed, search and filters, state pills, start / stop /
   restart / enable / disable (system units ask through polkit) and each
   unit's recent journal (read with `journalctl`).
-- **Power**: power-profiles-daemon cards (Performance / Balanced / Power
-  saver) with drivers, holds and the "performance degraded" reason; battery
-  health (full vs design capacity), cycles, rate in watts, time estimates,
-  charge limit and a charge-history sparkline from UPower; peripheral
-  batteries. Desktops simply show *No battery*. Right-click the chip to cycle
-  profiles. Low and critical battery alerts (notification and/or OSD, once
-  per discharge), a critical action (sleep, hibernate or shut down after a
-  warning; plugging in cancels), peripheral warnings with per-device
-  thresholds, a profile per power source plus power-saver at low battery,
-  "fully charged" notices and a coral pulse on the chip while critical.
+- **Power**: each battery leads with a large charge gauge (the percentage
+  and its state inside), the time left, health, capacity against the
+  design capacity and the chemistry, and a charge-history graph read from
+  UPower while the panel is open (hidden when UPower keeps no history).
+  Below it, the power profiles your power-profiles-daemon offers form one
+  segmented switch (Power saver / Balanced / Performance), with the apps
+  holding a profile and the "performance degraded" reason; then the charge
+  limit switch (only where UPower can change it) and peripheral batteries.
+  The technical readouts (rate in watts, energy, voltage, cycles,
+  temperature, the CPU scaling and platform drivers such as `intel_pstate`,
+  a charge limit set by the firmware) wait in a collapsed *Details* fold.
+  Desktops simply show *No battery* above the profiles. Right-click the chip
+  to cycle profiles. The chip breathes gently while the battery charges
+  (Studio → Power & idle → *Pulse the battery while charging*; never with
+  Reduce motion). Low and critical battery alerts (notification and/or OSD,
+  once per discharge), a critical action (sleep, hibernate or shut down
+  after a warning; plugging in cancels), peripheral warnings with
+  per-device thresholds, a profile per power source plus power-saver at low
+  battery, "fully charged" notices and a coral pulse on the chip while
+  critical.
 - **Idle & sleep** (Studio → Power & idle, opt-in): fade → lock → screens off
   → sleep with separate mains and battery timeouts, read from the
   compositor (`ext-idle-notify-v1`, so a fullscreen video's inhibitor

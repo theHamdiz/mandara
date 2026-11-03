@@ -670,6 +670,7 @@ fn build() -> Vec<Setting> {
         s(Power, tk("Battery alerts"), "/power/peripheral_low_percent", tk("Peripheral low at"), tk("Threshold for peripherals (per-device overrides in config.toml under [power.device_thresholds])"), slider(5.0, 50.0, 1.0, "%")),
         s(Power, tk("Battery alerts"), "/power/notify_full", tk("Tell me when charged"), tk("A notice when the battery is full or reaches its charge limit"), Toggle),
         s(Power, tk("Battery alerts"), "/power/critical_pulse", tk("Pulse the battery when critical"), tk("The bar's battery chip breathes coral while the charge is critical"), Toggle),
+        s(Power, tk("Battery alerts"), "/power/charging_pulse", tk("Pulse the battery while charging"), tk("The bar's battery chip breathes gently while it charges (never with Reduce motion)"), Toggle),
         s(Power, tk("Power profiles"), "/power/profile_ac", tk("On mains power"), tk("Switch to this profile when the charger is plugged in"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/profile_battery", tk("On battery"), tk("Switch to this profile when running on battery"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/saver_at_low", tk("Power saver at low battery"), tk("Switch to power-saver at the low threshold and back when charging"), Toggle),

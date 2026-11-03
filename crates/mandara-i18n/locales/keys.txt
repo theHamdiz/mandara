@@ -699,7 +699,6 @@ Bare icons, every item on its own pill, or each group on one island
 Bars
 Base currency
 Batt.
-Batteries
 Battery
 Battery alert thresholds, the battery summary and a pending critical action (JSON)
 Battery alerts
@@ -844,6 +843,7 @@ CONTINUE READING
 CONTRAST · WCAG 2
 CPU
 CPU graph
+CPU scaling driver
 CPU temp
 CPU, memory and disk usage
 CPU, memory, GPUs, temperatures, disks and uptime
@@ -960,6 +960,7 @@ Charge limit on
 Charger
 Charger and battery
 Charging
+Charging rate
 Charging — critical action cancelled
 Charles Darwin
 Charles Dickens
@@ -993,6 +994,7 @@ Checking your installation…
 Checking your {compositor} config…
 Checking…
 Checks
+Chemistry
 Cherish your children
 Children side by side, gap apart
 Children stacked, gap apart
@@ -1205,7 +1207,6 @@ Control the focus timer
 Controller
 Conversations with Maya Angelou
 Cookie
-Cooler, quieter, longer
 Copied
 Copied images and screenshots
 Copied text and images appear here
@@ -1480,6 +1481,7 @@ Depth · stacked
 Describe the active theme
 Desert
 Design a wallpaper, then generate it at full size. Every file remembers its recipe, so you can remix it later.
+Design capacity
 Designed theme
 Designed themes
 Desk cat
@@ -1776,6 +1778,7 @@ End a process by PID (SIGTERM; --force sends SIGKILL)
 End all
 End the process listening on a port (SIGTERM)
 Ending…
+Energy now
 Engine
 Engine unreachable
 English
@@ -2157,7 +2160,6 @@ Full in {time}
 Full moon
 Full name
 Full name, e.g. Salma Adel
-Full speed, more heat
 Full update: {size} (no patch from your version)
 Fullscreen only
 Fully charged
@@ -3970,7 +3972,6 @@ On battery — the battery timeouts apply
 On for {time}
 On for {time} · started by screen sharing
 On mains power
-On mains power · {profile}
 On mains power — the mains timeouts apply
 On the Shortness of Life
 On the Statue of Liberty
@@ -4320,6 +4321,7 @@ Plate
 Plate corners
 Plate opacity
 Plate padding
+Platform driver
 Plato
 Play
 Play / pause
@@ -4391,10 +4393,11 @@ Power
 Power & idle
 Power and session menu
 Power dock
+Power draw
 Power menu
 Power mode
 Power policy is not running
-Power profile
+Power profile · {profile}
 Power profile, batteries and peripheral batteries (JSON)
 Power profiles
 Power profiles unavailable
@@ -4452,6 +4455,7 @@ Productive
 Productivity
 Profile
 Profile card
+Profile driver
 Profile name, e.g. Night
 Profile photo
 Profile photo updated
@@ -4478,6 +4482,7 @@ Publish to the marketplace
 Pudd'nhead Wilson
 Pull one with: ollama pull llama3.2
 Pulse the battery when critical
+Pulse the battery while charging
 Push
 Pushes text and surfaces apart to WCAG AAA (7:1)
 Put a device in pairing mode, then search
@@ -4568,7 +4573,6 @@ Reading audio devices…
 Reading desktop entries and where each one came from.
 Reading displays…
 Reading drives…
-Reading history…
 Reading it from this computer
 Reading maketh a full man; conference a ready man; and writing an exact man.
 Reading network devices…
@@ -5424,7 +5428,6 @@ Speakers
 Specular rim
 Speech, 1997
 Speed
-Speed and efficiency
 Speed test cancelled
 Speed test failed
 Speed test size
@@ -5531,6 +5534,7 @@ Stopped {name}
 Stopped {unit}
 Stopping…
 Stops after the first download
+Stops at {end}%, resumes below {start}%
 Stops charging at {end}%
 Stops charging early to slow wear
 Stops in {time}
@@ -5619,7 +5623,6 @@ Switched to {name} — Undo is under Recent changes
 Switched to {name}.
 Switching input languages
 Switching speakers / headphones
-Switching…
 Sync border colors
 Synced lyrics
 Synced lyrics, the current line lit
@@ -5816,6 +5819,7 @@ The bar item goes away while nothing is playing
 The bar item, or none for no bar item.
 The bar item, panel and sidebar card re-render: no restart
 The bar's battery chip breathes coral while the charge is critical
+The bar's battery chip breathes gently while it charges (never with Reduce motion)
 The bar's items
 The bar's main menu
 The bar, the lock screen and prayer times all follow the clock, so they show the wrong time there.
@@ -6317,7 +6321,6 @@ UDP
 UDisks2 is not available
 UDisks2 isn't running — install or start udisks2
 UPS
-UPower has no history for this span yet
 UPower is not running
 URL or path
 USB controller
@@ -6565,6 +6568,7 @@ Visual window rule builder
 Visualizer
 Visualizer preview
 Visualizer style
+Voltage
 Voltaire
 Volume
 Volume and brightness
@@ -7100,7 +7104,6 @@ just now
 key=value pairs, or a TOML recipe
 khatm
 khatm {n}
-last {hours} h
 layout
 left
 left edge, logical px from the output's left
@@ -7172,6 +7175,7 @@ of this week
 of this year
 of today
 of {cores} cores
+of {design} Wh
 of {limit} daily limit
 of {total}
 of {total} loaded
@@ -7541,7 +7545,6 @@ your default
 {kind} · {lines} lines
 {language} · follows your desktop
 {layout}: choose a variant
-{limit} · resumes below {start}%
 {limit} · set by firmware or root (read-only)
 {list} and {count} more
 {manager} also removes:
@@ -7634,8 +7637,6 @@ your default
 {path} isn't writable; re-run `mandara install` to update it
 {path} wasn't made by the wallpaper generator
 {path}: {error}
-{pct}% · {state}
-{pct}% · {state} · {profile}
 {percent} lit
 {percent}% left
 {percent}% left — plug in now
