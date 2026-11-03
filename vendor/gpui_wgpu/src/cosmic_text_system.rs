@@ -1619,6 +1619,7 @@ fn face_info_into_properties(
     }
 }
 
+// Mandara patch 11: one acceptance check for the default chain and load_family.
 /// Whether a face may be a primary font (see [`CosmicTextSystemState::load_family`]):
 /// it has an 'm' to measure with, or it is a known emoji font or one of
 /// the icon fonts let through without one. Shared with the default chain
@@ -1649,6 +1650,7 @@ mod tests {
         time::{Duration, Instant},
     };
 
+    // Mandara patch 11.
     #[test]
     fn the_default_chain_accepts_the_faces_load_family_accepts() {
         assert!(can_be_primary(true, "Cairo-Regular"));

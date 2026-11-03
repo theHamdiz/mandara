@@ -127,6 +127,8 @@ struct PopupOutput {
     name: String,
     /// Logical width.
     width: f32,
+    /// Logical height.
+    height: f32,
     /// Its place in the output list (the dock's "first display" counts by
     /// it).
     index: usize,
@@ -139,7 +141,7 @@ fn popup_output(cx: &App) -> Option<PopupOutput> {
     let displays = &config(cx).read(cx).get().displays;
     let o = crate::outputs::pick_output(outputs, focused_window_monitor(cx).as_deref(), displays, SurfaceKind::Notifications)?;
     let index = outputs.iter().position(|g| g.name == o.name).unwrap_or(0);
-    Some(PopupOutput { name: o.name.clone(), width: o.width as f32, index })
+    Some(PopupOutput { name: o.name.clone(), width: o.width as f32, height: o.height as f32, index })
 }
 
 /// Whether a bottom dock shows on `output` (on every output it may show
@@ -209,9 +211,15 @@ impl SurfaceKey {
         let cfg = &shell.notifications;
         let scale = cfg.scale.clamp(crate::plugins::notifications::TOAST_SCALE.0, crate::plugins::notifications::TOAST_SCALE.1);
         let card_w = cfg.width * scale;
-        let output_h = cx.try_global::<crate::overlays::Outputs>().and_then(|o| o.0.first().map(|g| g.height as f32)).unwrap_or(FALLBACK_OUTPUT_H);
-        let stack_h = cfg.max_visible.max(1) as f32 * (TOAST_MAX_H_PX * scale + STACK_GAP_PX) + EDGE_GAP_PX * 2.0;
         let joined = joined_drawer(shell, output, 0.0);
+        // A joined drawer opens on its own display, so it's capped by that
+        // display's height; free cards keep the first output's.
+        let first_h = || cx.try_global::<crate::overlays::Outputs>().and_then(|o| o.0.first().map(|g| g.height as f32)).unwrap_or(FALLBACK_OUTPUT_H);
+        let output_h = match (&joined, output) {
+            (Some(_), Some(o)) => o.height,
+            _ => first_h(),
+        };
+        let stack_h = cfg.max_visible.max(1) as f32 * (TOAST_MAX_H_PX * scale + STACK_GAP_PX) + EDGE_GAP_PX * 2.0;
         let display = surface_display(joined.is_some(), || output.and_then(|o| crate::outputs::display_for(&o.name, cx)), || {
             crate::outputs::transient_display(SurfaceKind::Notifications, focused_window_monitor, cx)
         });
@@ -903,7 +911,7 @@ mod tests {
     }
 
     fn output(name: &str, index: usize) -> PopupOutput {
-        PopupOutput { name: name.into(), width: 2560.0, index }
+        PopupOutput { name: name.into(), width: 2560.0, height: 1440.0, index }
     }
 
     #[test]

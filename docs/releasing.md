@@ -612,9 +612,9 @@ catalogs, for one, are parsed only for the active language (none for
 English).
 
 Video memory: 143.4 at 3840 × 2160 and 37.8 at 1600 × 1000, the same in
-every run. Most of the difference is four swapchain images of the
-full-output bar surface (4 bytes per pixel each: about 102 of the 105.6
-MiB). Mesa's Wayland WSI
+every run. Most of the 105.6 MiB difference is the full-output bar
+surface's four swapchain images (4 bytes per pixel each): they are
+102.2 MiB larger at 3840 × 2160 than at 1600 × 1000. Mesa's Wayland WSI
 requires four images for mailbox presentation; FIFO could use two but
 blocks the UI thread whenever the output stops sending frame callbacks, so
 it stays as it is.
