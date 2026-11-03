@@ -11,7 +11,7 @@
   <br/>
   Design-first, spring-animated and written entirely in Rust.
   <br/>
-  <i>Frames built in under a millisecond, motion tuned for 144 Hz: a shell that feels like an instrument, not a toolkit.</i>
+  <i>Frames built in about 0.1 ms, ready for 1000 Hz displays: a shell that feels like an instrument, not a toolkit.</i>
 </p>
 
 <p align="center">
@@ -124,7 +124,8 @@ around, each one measured or shipped today:
    Python or shell glue.
 4. **Fast by measurement, not by claim.** Under 100 MiB of RAM, under
    190 MiB of video memory, about 0.1 % CPU idle, and frames built in
-   0.1–0.2 ms, a sliver of the 6.94 ms a 144 Hz display allows.
+   0.1–0.2 ms: 95% of frames finish inside the 1 ms a 1000 Hz display
+   allows.
    [How it's measured](docs/performance.md)
 5. **Real motion.** Analytical spring physics that can be interrupted
    mid-flight, and OKLCH colour blending, so every morph, slide and theme

@@ -3,7 +3,7 @@
 Mandara Studio (`mandara studio`, app id `org.mandara.studio`) is the one
 place where Mandara is configured. It runs as its own process, so its CPU and
 memory never count against the shell, and every change is mirrored to the
-running shell over IPC: drag a slider and the bar follows at 144 Hz.
+running shell over IPC: drag a slider and the bar follows on the very next frame.
 Settings never live in bar dropdowns.
 
 <p align="center">
@@ -34,7 +34,7 @@ Settings never live in bar dropdowns.
 </tr>
 </table>
 
-Every setting is live: drag a slider and the bar changes at 144 Hz. The
+Every setting is live: drag a slider and the bar changes on the very next frame. The
 slider's handle and its value bubble follow the pointer on the next frame;
 the setting is applied at most once a frame and saved to disk once it rests.
 Changes that make the compositor re-tile your windows (the bar's height and

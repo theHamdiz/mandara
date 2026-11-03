@@ -64,6 +64,11 @@ About → What's new shows it too.
 
 ### Improved
 
+- **Ready for 1000 Hz displays.** A typical frame builds in 0.1 ms, and
+  95% of frames finish inside the 1 ms a 1000 Hz display allows. The
+  numbers and how to check them on your machine are in the performance
+  docs.
+
 - **A smaller Mandara.** The translations for all fifteen languages used
   to be built into Mandara itself. They now live in language packs next to
   it, so the program is 9.2 MB smaller (169 MB → 159 MB), which also makes

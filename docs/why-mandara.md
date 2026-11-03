@@ -45,7 +45,7 @@ WebAssembly.
 |---|---|---|---|---|
 | Runtime | **Native Rust binary (GPUI, wgpu/Vulkan)** | Native C++ binary (OpenGL ES, no Qt/GTK) | Quickshell + QML (+ Go) | Quickshell + QML |
 | Interpreted UI layer | **None** | None in the core; Luau for scripted widgets | QML/JS | QML/JS |
-| Animation | **Analytical spring physics, interruptible, 144 Hz** | Native (C++) | Qt animations | Qt animations |
+| Animation | **Analytical spring physics, interruptible, ready for 1000 Hz** | Native (C++) | Qt animations | Qt animations |
 | Color engine | **Material You (HCT) palettes + OKLCH tweening** | Material You | Material You (matugen) | Material You |
 | Plugins | **Rust → sandboxed WebAssembly, hot-reloaded, GitHub marketplace** | Luau | QML | — |
 | Plugin crash isolation | **A trapping plugin is disabled; the shell keeps running** | In-process Luau VM | Shared process | Shared process |
