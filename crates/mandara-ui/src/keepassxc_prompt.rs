@@ -34,6 +34,7 @@ use serde_json::json;
 use zeroize::Zeroizing;
 
 use crate::bidi::Bidi as _;
+use crate::first_frame::{self, FirstFrame};
 use crate::icons::icon;
 use crate::keyring_prompt::{flow_text, soft_shadow};
 
@@ -119,8 +120,6 @@ mod dim {
     pub const CARD_SHADOW_Y: f32 = 18.0;
     pub const GLOW_BLUR: f32 = 16.0;
     pub const GLOW_Y: f32 = 4.0;
-    /// The viewport is "settled" when within this of the output size.
-    pub const SETTLE_EPS: f32 = 2.0;
 }
 
 /// Alphas.
@@ -316,7 +315,9 @@ pub struct KeepassDialog {
     closing: bool,
     /// Closing to show the key-file chooser (reopens afterwards).
     picking: bool,
-    expected: (f32, f32),
+    /// Waits for the size of the output it opened for, a few frames at
+    /// most ([`crate::first_frame`]).
+    first: FirstFrame,
     blink_from: Instant,
     _blink: gpui::Task<()>,
 }
@@ -332,6 +333,7 @@ impl KeepassDialog {
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
         let focus = cx.focus_handle();
         focus.focus(window, cx);
+        first_frame::guard("KeePassXC prompt", window, cx, |this| this.first.drawn(), |this, cx| this.cancel(cx));
         let mut appear = SpringValue::new(0.0, APPEAR);
         appear.set_target(1.0);
         let blink = cx.spawn(async move |this, cx| {
@@ -354,7 +356,7 @@ impl KeepassDialog {
             clock: FrameClock::new(),
             closing: false,
             picking: false,
-            expected,
+            first: FirstFrame::new(expected),
             blink_from: Instant::now(),
             _blink: blink,
         }
@@ -585,7 +587,7 @@ fn short_path(p: &std::path::Path) -> String {
 impl Render for KeepassDialog {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let vp = window.viewport_size();
-        let settled = (f32::from(vp.width) - self.expected.0).abs() < dim::SETTLE_EPS && (f32::from(vp.height) - self.expected.1).abs() < dim::SETTLE_EPS;
+        let settled = self.first.ready((f32::from(vp.width), f32::from(vp.height)));
         if self.picking {
             return div().id("keepassxc-root").size_full().into_any_element();
         }

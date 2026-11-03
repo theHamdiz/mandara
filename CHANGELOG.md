@@ -126,6 +126,17 @@ About → What's new shows it too.
 
 ### Fixed
 
+- **The power menu no longer freezes a second display**: opened on a
+  display of another size than your first one (by the right screen edge
+  or the bar's Sessions button), the power menu waited for the wrong size,
+  never appeared, and kept the keyboard and mouse, so the dock, launcher
+  and bar stopped answering until you restarted the compositor. It now
+  opens at the size of the display you're on. As a safety net, the
+  launcher, power menu, wallpaper picker and password prompts now draw
+  within a few frames whatever size they get, and one that still can't
+  draw closes itself after two seconds and hands your keyboard and mouse
+  back. Thanks for reporting it in #55.
+
 - **Profiles & backup is smooth again**: the page used to re-check every
   setting against a freshly built default configuration each time it was
   drawn, so scrolling and hovering over it stuttered. That check now takes

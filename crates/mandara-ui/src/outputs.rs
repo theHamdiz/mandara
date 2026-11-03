@@ -79,7 +79,13 @@ pub fn overlay_target(cx: &App) -> (Option<DisplayId>, (f32, f32)) {
     let geo = overlay_output(&outputs, cx);
     let Some(geo) = geo else { return (None, FALLBACK_SIZE) };
     let display = paired_with(&outputs, cx).into_iter().find(|(_, g)| g.as_ref().is_some_and(|g| g.name == geo.name)).map(|(id, _)| id);
-    (display, (geo.width as f32, geo.height as f32))
+    (display, logical_size(geo))
+}
+
+/// An output's logical size (xdg-output: already divided by its scale), the
+/// size a full-screen overlay on it takes.
+pub fn logical_size(geo: &OutputGeometry) -> (f32, f32) {
+    (geo.width as f32, geo.height as f32)
 }
 
 /// The output among `outputs` that full-screen overlays open on.

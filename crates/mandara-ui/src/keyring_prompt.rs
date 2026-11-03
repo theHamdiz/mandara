@@ -36,6 +36,7 @@ use serde_json::json;
 use zeroize::Zeroizing;
 
 use crate::bidi::Bidi as _;
+use crate::first_frame::{self, FirstFrame};
 use crate::icons::icon;
 use crate::polkit::m;
 
@@ -206,7 +207,9 @@ pub struct KeyringDialog {
     flash: SpringValue<f32>,
     clock: FrameClock,
     closing: bool,
-    expected: (f32, f32),
+    /// Waits for the size of the output it opened for, a few frames at
+    /// most ([`crate::first_frame`]).
+    first: FirstFrame,
     blink_from: Instant,
     _blink: gpui::Task<()>,
 }
@@ -222,6 +225,7 @@ impl KeyringDialog {
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
         let focus = cx.focus_handle();
         focus.focus(window, cx);
+        first_frame::guard("keyring prompt", window, cx, |this| this.first.drawn(), |this, cx| this.cancel(cx));
         let mut appear = SpringValue::new(0.0, APPEAR);
         appear.set_target(1.0);
         let blink = cx.spawn(async move |this, cx| {
@@ -248,7 +252,7 @@ impl KeyringDialog {
             flash: SpringValue::new(0.0, SpringConfig::critical(90.0)),
             clock: FrameClock::new(),
             closing: false,
-            expected,
+            first: FirstFrame::new(expected),
             blink_from: Instant::now(),
             _blink: blink,
         }
@@ -403,7 +407,7 @@ fn strength_style(score: i32, p: &MandaraPalette) -> (Color, String) {
 impl Render for KeyringDialog {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let vp = window.viewport_size();
-        let settled = (f32::from(vp.width) - self.expected.0).abs() < 2.0 && (f32::from(vp.height) - self.expected.1).abs() < 2.0;
+        let settled = self.first.ready((f32::from(vp.width), f32::from(vp.height)));
         if !settled && !self.closing {
             window.request_animation_frame();
             return div().id("keyring-root").size_full().track_focus(&self.focus).into_any_element();
