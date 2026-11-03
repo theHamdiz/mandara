@@ -7776,6 +7776,24 @@
 "Turning the launcher on, dimming the screen, the keyboard and how apps start" = "লঞ্চার চালু করা, স্ক্রিন ম্লান করা, কিবোর্ড ও অ্যাপ কীভাবে খোলে"
 "Warmer colours in the evening, on a schedule" = "সন্ধ্যায় উষ্ণ রং, সময়সূচি অনুযায়ী"
 "What the launcher searches, how results look and how they are ranked" = "লঞ্চার কী খোঁজে, ফলাফল কেমন দেখায় ও কীভাবে সাজানো হয়"
+# ── Power panel (#26) ──
+"Pulse the battery while charging" = "চার্জ হওয়ার সময় ব্যাটারি স্পন্দিত করুন"
+"The bar's battery chip breathes gently while it charges (never with Reduce motion)" = "চার্জ হওয়ার সময় বারের ব্যাটারি চিহ্ন ধীরে ধীরে স্পন্দিত হয় (গতি কমান চালু থাকলে কখনো নয়)"
+"Stops at {end}%, resumes below {start}%" = "{end}%-এ থামে, {start}%-এর নিচে নামলে আবার শুরু হয়"
+"of {design} Wh" = "{design} Wh-এর মধ্যে"
+"Chemistry" = "রসায়ন"
+"Charging rate" = "চার্জিং হার"
+"Power draw" = "বিদ্যুৎ খরচ"
+"Energy now" = "বর্তমান শক্তি"
+"Design capacity" = "নকশাকৃত ধারণক্ষমতা"
+"Voltage" = "ভোল্টেজ"
+"CPU scaling driver" = "CPU স্কেলিং ড্রাইভার"
+"Platform driver" = "প্ল্যাটফর্ম ড্রাইভার"
+"Profile driver" = "প্রোফাইল ড্রাইভার"
+"Power profile · {profile}" = "পাওয়ার প্রোফাইল · {profile}"
+"Power panel style" = "পাওয়ার প্যানেলের ধরন"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "ক্লাসিক: ব্যাটারি কার্ডের ওপরে প্রোফাইল কার্ড। মডার্ন: আগে ব্যাটারি, বড় চার্জ রিং ও চার্জ গ্রাফসহ, একটি প্রোফাইল সুইচ, আর প্রযুক্তিগত বিবরণ ভাঁজ করা"
+"Modern" = "মডার্ন"
 
 # ── Studio → Bar → Layout designer ──
 "Add to {zone}" = "{zone}-এ যোগ করুন"
@@ -7793,15 +7811,15 @@
 # ── Popups joined to the bar ──
 "Join the bar" = "বারের সাথে জুড়ুন"
 "Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "পপআপ বারের রঙে বার থেকে ঝোলে, তার সাথে এক টুকরো হয়ে; বার নেই এমন কিনারায়, স্ক্রিনের কিনারা থেকে"
-"The dock holds the bottom edge; popups there stay cards" = "ডক নিচের কিনারা দখল করে আছে; সেখানের পপআপ কার্ডই থাকে"
+"The dock holds the bottom edge; popups there stay cards" = "ডক নিচের প্রান্ত দখল করে আছে; সেখানকার পপআপগুলো কার্ড হিসেবেই থাকে"
 "A floating bar has no edge to hang from; popups on its edge stay cards" = "ভাসমান বারের ঝোলার মতো কোনো কিনারা নেই; তার কিনারার পপআপ কার্ডই থাকে"
 
 # ── Sway ──
 "Split horizontally" = "আনুভূমিকভাবে বিভক্ত"
 "Split vertically" = "উল্লম্বভাবে বিভক্ত"
 "Tabbed" = "ট্যাবযুক্ত"
-"Sway has no such setting" = "Sway-এ এই সেটিং নেই"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "আপনার কনফিগ যেখানে Mandara-র ফাইল যুক্ত করে, অর্থাৎ শেষে, Sway সেখানেই সেটি পড়ে, তাই Mandara-র রং ও ফাঁক আপনার সেটিংসের ওপরে প্রয়োগ হয়। Sway-এ গোল কোণ, স্বচ্ছতা, ব্লার, ছায়া বা অ্যানিমেশন নেই; বারের লেআউট পিল ফোকাস করা কন্টেইনারের লেআউট বদলায়।"
+"Mandara can't set this on Sway" = "Mandara Sway-এ এটি সেট করতে পারে না"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "আপনার কনফিগ যেখানে Mandara-র ফাইল যুক্ত করে, Sway সেখানেই সেটি পড়ে। Mandara লাইনটি শেষে যোগ করে, তাই এর রং ও ফাঁক তার আগের সেটিংসের ওপরে প্রয়োগ হয়, কিন্তু তার পরে যোগ করা সেটিংসের ওপরে নয়। Mandara Sway-এ গোল কোণ, স্বচ্ছতা, ব্লার, ছায়া বা অ্যানিমেশন সেট করে না; বারের লেআউট পিল ফোকাস করা কন্টেইনারের লেআউটগুলোর মধ্যে ঘোরে।"
 
 # ── River ──
 "MangoWM, Niri, Umbriel, Sway, River" = "MangoWM, Niri, Umbriel, Sway, River"

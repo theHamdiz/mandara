@@ -170,7 +170,7 @@ On every push to `main` (not on its own `chore(release)` commits):
    | `PKGBUILD` | Arch (`mandara-shell-bin`, the same recipe as the AUR package) |
    | `<plugin>.mandara.tar.gz` | bundled plugins |
    | `mandara-<v>-<target>[-<variant>].build.toml` | build manifest: source fingerprint, toolchain, binary SHA-256, lines of code |
-   | `mandara-<old>-to-<v>-<target>[-<variant>].patch.zst` | delta update from the previous release (see below) |
+   | `mandara-<old>-to-<v>-<target>[-<variant>].patch.zst` | delta update from each of the last five releases (see below) |
    | `update.json` | update manifest: per target the tarball, `bin/mandara` and patches, with SHA-256s and sizes |
    | `SHA256SUMS` | checksums of everything |
    | `SHA256SUMS.sig` | Ed25519 signature of `SHA256SUMS` by the release key (see [Signed releases](#signed-releases)) |
@@ -210,8 +210,9 @@ One short paragraph saying what the release is about.
 ```
 
 Keep the format strict (it is parsed): `##` version headings, a summary
-paragraph, `###` sections and `-` items. A unit test checks the shipped
-file. Text after a `---` rule in a release body (the install command) isn't
+paragraph, `###` sections and `-` items. The sections are New, Improved,
+Fixed and Under the hood only (Studio styles and translates just those).
+A unit test checks the shipped file, headings included. Text after a `---` rule in a release body (the install command) isn't
 shown in Studio. Don't edit released entries except to fix mistakes, and
 never add the version heading yourself: the release bump does it.
 
@@ -277,20 +278,25 @@ atomically (`mandara.new` → fsync → rename) and the old one stays as
 **In CI**, each build job runs, after `cargo xtask dist`:
 
 ```bash
-gh release download <previous tag> --pattern 'mandara-<old>-<target>.tar.gz'
-cargo xtask update-part --target <triple> [--variant v3] --out dist --previous mandara-<old>-<target>.tar.gz
+# for each of the last DELTA_FROM_RELEASES (5) published releases:
+gh release download <earlier tag> --pattern 'mandara-<old>-<target>.tar.gz'
+cargo xtask update-part --target <triple> [--variant v3] --out dist \
+  --previous mandara-<old1>-<target>.tar.gz --previous mandara-<old2>-<target>.tar.gz …
 ```
 
-`update-part` extracts `bin/mandara` from both tarballs, creates the patch,
-verifies it by applying it with the updater's decoder, and writes this
-target's part of the manifest (`*.update-part.json`). The previous release
-is the newest published, non-pre-release `v*` release other than the one
-being built; on the first release, or when it lacks the target, the part
-lists the full download only. The publish job merges the parts with `jq`
-into `update.json`, and patches and manifest go into `SHA256SUMS` and the
-provenance attestation like every other artifact. Patches are only made
-from the immediately previous release; older installs take the full
-download.
+`update-part` extracts `bin/mandara` from each tarball, creates a patch
+from every earlier release given (one per version), verifies each by
+applying it with the updater's decoder, and writes this target's part of
+the manifest (`*.update-part.json`) listing all of them. The earlier
+releases are the newest `DELTA_FROM_RELEASES` (5, set at the top of
+`release.yml`) published, non-pre-release `v*` releases other than the one
+being built; on the first release, or for a target none of them had, the
+part lists the full download only. The updater takes the patch whose
+`from` is the installed version, so an install that skipped up to four
+releases still updates by patch; anything older takes the full download.
+The publish job merges the parts with `jq` into `update.json`, and patches
+and manifest go into `SHA256SUMS` and the provenance attestation like
+every other artifact. Each extra patch adds about a minute to a build job.
 
 ```json
 {
@@ -611,8 +617,9 @@ catalogs, for one, are parsed only for the active language (none for
 English).
 
 Video memory: 143.4 at 3840 × 2160 and 37.8 at 1600 × 1000, the same in
-every run. The difference is exactly four swapchain images of the
-full-output bar surface (4 bytes per pixel each). Mesa's Wayland WSI
+every run. Most of the 105.6 MiB difference is the full-output bar
+surface's four swapchain images (4 bytes per pixel each): they are
+102.2 MiB larger at 3840 × 2160 than at 1600 × 1000. Mesa's Wayland WSI
 requires four images for mailbox presentation; FIFO could use two but
 blocks the UI thread whenever the output stops sending frame callbacks, so
 it stays as it is.

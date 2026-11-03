@@ -53,8 +53,11 @@
     or beside a side bar): out of the bare screen edge, or out of the screen
     frame's strip around a side bar.
   - **Glass pills, island and micro pill** on the cards' edge have no edge
-    to hang from, and a dock holds the bottom edge: cards there stay
-    floating cards, and Studio shows why.
+    to hang from, and a bottom dock holds the bottom edge of the displays
+    it shows on: cards there stay floating cards, and Studio shows why
+    (when the dock is on every display; on a display without the dock,
+    bottom cards still join). A screen too narrow for a readable card
+    beside a wide notch keeps floating cards too.
   - When the bar hides itself, the drawer slides with it and hangs from the
     screen edge until the bar comes back.
 - Opening the notification center (its panel or the sidebar tab) moves the

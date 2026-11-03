@@ -44,7 +44,7 @@ pub fn entries() -> Vec<Setting> {
         // Notifications
         s(Notifications, POPUPS, "/notifications/position", tk("Position"), tk("Where popups stack; they always stay clear of the bar"), Choice(POSITIONS)),
         s(Notifications, POPUPS, "/notifications/max_visible", tk("Popups at once"), tk("More wait their turn; all of them are in the history"), slider(1.0, 8.0, 1.0, "")),
-        s(Notifications, POPUPS, "/notifications/width", tk("Width"), tk("Popup width"), slider(300.0, 560.0, 4.0, " px")),
+        s(Notifications, POPUPS, "/notifications/width", tk("Width"), tk("Popup width"), slider(f64::from(mandara_config::alerts::defaults::TOAST_MIN_WIDTH_PX), 560.0, 4.0, " px")),
         s(Notifications, POPUPS, "/notifications/scale", tk("Size"), tk("Scales popup text, icons and spacing"), slider(0.75, 1.5, 0.05, "×")),
         s(Notifications, POPUPS, "/notifications/opacity", tk("Background opacity"), tk("Lower lets windows show through popups"), slider(0.3, 1.0, 0.05, "")),
         s(Notifications, POPUPS, "/notifications/over_fullscreen", tk("Show over fullscreen apps"), tk("Popups appear above games and videos in fullscreen"), Toggle),
@@ -127,10 +127,11 @@ pub fn entries() -> Vec<Setting> {
 }
 
 /// Why joining popups to the bar can't apply with `cfg`'s bar and dock
-/// (the setting stays saved and applies again once it can).
+/// (the setting stays saved and applies again once it can). A bottom dock
+/// narrowed down to some displays leaves the others free to join.
 pub fn joined_locked(cfg: &ShellConfig) -> Option<&'static str> {
     let bottom = cfg.notifications.position.is_bottom();
-    if bottom && cfg.dock_bottom_clearance().is_some() {
+    if bottom && cfg.dock_bottom_clearance().is_some() && cfg.dock_on_every_output() {
         return Some(tk("The dock holds the bottom edge; popups there stay cards"));
     }
     let edge = if bottom { BarPosition::Bottom } else { BarPosition::Top };
@@ -155,5 +156,36 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Joined popups under a floating pill bar: the toggle is locked, but
+    /// shows that joining is still saved, and a click turns it off.
+    #[test]
+    fn a_locked_join_shows_its_saved_value_and_turns_off() {
+        let mut cfg = ShellConfig::default();
+        cfg.notifications.joined = true;
+        cfg.bar.layout = mandara_config::BarLayout::FloatingPills;
+        let setting = entries().into_iter().find(|s| s.path == "/notifications/joined").expect("the join toggle");
+        assert!(super::super::locked(&setting, &cfg).is_some());
+        let on = super::super::get(&cfg, &setting).as_bool().unwrap_or(false);
+        assert!(on, "the saved value, not the fallback");
+        let next = super::super::locked_toggle_click(on).expect("an on toggle can be turned off");
+        let off = super::super::set(&cfg, &setting, serde_json::Value::from(next)).unwrap();
+        assert!(!off.notifications.joined);
+        assert_eq!(super::super::locked_toggle_click(false), None, "turning on waits until it can apply");
+    }
+
+    #[test]
+    fn a_dock_on_some_displays_leaves_joining_free_for_the_others() {
+        use mandara_config::alerts::ToastPosition;
+        use mandara_config::outputs::{ScreenChoice, ScreenSet};
+        use mandara_config::workflow::{DOCK_PLUGIN_ID, DockPosition};
+        let mut cfg = ShellConfig::default();
+        cfg.plugins.enabled.push(DOCK_PLUGIN_ID.into());
+        cfg.dock.position = DockPosition::Bottom;
+        cfg.notifications.position = ToastPosition::BottomRight;
+        assert!(joined_locked(&cfg).is_some(), "the dock on every display holds every bottom edge");
+        cfg.displays.surfaces.dock = ScreenSet { show_on: ScreenChoice::Selected, outputs: vec!["DP-1".into()] };
+        assert!(joined_locked(&cfg).is_none());
     }
 }

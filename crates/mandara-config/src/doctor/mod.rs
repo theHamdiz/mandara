@@ -521,8 +521,16 @@ pub fn check_with(target: Target, root: &Path, env: &CheckEnv) -> Report {
             report.raw = raw;
             let mut diags = check.parse(&out, &ctx);
             if diags.is_empty() && check.rejected(&out) {
-                // An output format this parser doesn't know: keep the text.
-                let text = report.raw.lines().filter(|l| !l.trim().is_empty()).take(MAX_RAW_LINES).collect::<Vec<_>>().join("\n");
+                // An output format this parser doesn't know: keep the text
+                // (the end of the whole output when the kept part is empty,
+                // as Sway's is without an `[ERROR]` line).
+                let text = if report.raw.trim().is_empty() {
+                    let full = out.text();
+                    let lines: Vec<&str> = full.lines().filter(|l| !l.trim().is_empty()).collect();
+                    lines[lines.len().saturating_sub(MAX_RAW_LINES)..].join("\n")
+                } else {
+                    report.raw.lines().filter(|l| !l.trim().is_empty()).take(MAX_RAW_LINES).collect::<Vec<_>>().join("\n")
+                };
                 diags.push(Diagnostic::new(Severity::Error, if text.is_empty() { t("The checker rejected the config without saying why.").to_string() } else { text }));
             }
             report.diagnostics = finish(target, diags, &ctx, check);
@@ -624,6 +632,13 @@ fn run(argv: &[OsString], cwd: &Path, env: &CheckEnv, extra: &[(&str, &str)]) ->
     let stdout = out_thread.join().unwrap_or_default();
     let stderr = err_thread.join().unwrap_or_default();
     Ok(Output { stdout, stderr, success: status.success() })
+}
+
+/// Runs `argv` the way checkers run (no display, a private runtime dir,
+/// [`CHECK_TIMEOUT`], `extra` environment): its output, or `None` when it
+/// couldn't be started, set up or finished in time.
+pub(crate) fn run_isolated(argv: &[OsString], extra: &[(&str, &str)]) -> Option<Output> {
+    run(argv, Path::new("/"), &CheckEnv::default(), extra).ok()
 }
 
 /// A private `0700` folder, removed again when dropped.

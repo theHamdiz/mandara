@@ -22,6 +22,13 @@ pub const TEXT: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../
 /// The heading of the notes for the next release.
 pub const UNRELEASED: &str = "Unreleased";
 
+/// The `###` sections a release's notes may have, in their usual order.
+/// Studio → About → What's new styles and translates exactly these.
+pub const SECTIONS: [&str; 4] = ["New", "Improved", "Fixed", "Under the hood"];
+
+/// The section [`stamp`] fills from commit subjects when nobody wrote notes.
+pub const FALLBACK_SECTION: &str = "Changes";
+
 /// One release's notes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Release {
@@ -267,7 +274,7 @@ pub fn stamp(text: &str, version: &str, date: &str, fallback: &[String]) -> Stri
         }
     }
     if !notes_written && !fallback.is_empty() {
-        fresh.push_str("\nThe changes in this release, taken from its commit history.\n\n### Changes\n\n");
+        fresh.push_str(&format!("\nThe changes in this release, taken from its commit history.\n\n### {FALLBACK_SECTION}\n\n"));
         for item in fallback {
             fresh.push_str(&format!("- {item}\n"));
         }
@@ -441,6 +448,19 @@ mod tests {
             assert!(r.date.as_deref().is_some_and(|d| d.len() == 10), "{} has no YYYY-MM-DD date", r.version);
             assert!(!r.summary.is_empty(), "{} has no summary", r.version);
             assert!(r.sections.iter().all(|s| !s.title.is_empty() && !s.items.is_empty()), "{} has an empty or untitled section", r.version);
+        }
+        // Only the sections Studio knows (Unreleased included: it becomes
+        // the next release as written).
+        for r in &all {
+            for s in &r.sections {
+                assert!(
+                    SECTIONS.contains(&s.title.as_str()) || s.title == FALLBACK_SECTION,
+                    "{}: `### {}` isn't one of the changelog's sections ({})",
+                    r.version,
+                    s.title,
+                    SECTIONS.join(", ")
+                );
+            }
         }
         assert!(release(&all, "0.1.0").is_some());
     }

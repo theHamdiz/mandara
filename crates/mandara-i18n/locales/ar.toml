@@ -8027,6 +8027,24 @@
 "App icon shape" = "شكل أيقونات التطبيقات"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "تجلس كل أيقونة تطبيق في المشغّل والمرسى على الشكل نفسه فتبدو مجموعة واحدة؛ «كما في السمة» يُبقي كل أيقونة كما رُسمت"
 "Theme's own" = "كما في السمة"
+# ── Power panel (#26) ──
+"Pulse the battery while charging" = "نبض البطارية أثناء الشحن"
+"The bar's battery chip breathes gently while it charges (never with Reduce motion)" = "يتنفّس رمز البطارية في الشريط بهدوء أثناء الشحن (لا يحدث مع «تقليل الحركة»)"
+"Stops at {end}%, resumes below {start}%" = "يتوقف عند {end}%، ويُستأنف تحت {start}%"
+"of {design} Wh" = "من {design} واط ساعة"
+"Chemistry" = "الكيمياء"
+"Charging rate" = "قدرة الشحن"
+"Power draw" = "الاستهلاك"
+"Energy now" = "الطاقة الحالية"
+"Design capacity" = "السعة التصميمية"
+"Voltage" = "الجهد"
+"CPU scaling driver" = "مشغّل تحجيم المعالج"
+"Platform driver" = "مشغّل المنصة"
+"Profile driver" = "مشغّل الوضع"
+"Power profile · {profile}" = "وضع الطاقة · {profile}"
+"Power panel style" = "نمط لوحة الطاقة"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "كلاسيكي: بطاقات الأوضاع فوق بطاقة البطارية. حديث: البطارية أولًا بحلقة شحن كبيرة ورسم للشحن، ومبدّل واحد للأوضاع، والتفاصيل التقنية مطويّة"
+"Modern" = "حديث"
 
 # ── Studio → Bar → Layout designer ──
 "Add to {zone}" = "إضافة إلى {zone}"
@@ -8050,8 +8068,8 @@
 "Split horizontally" = "مقسوم أفقيًا"
 "Split vertically" = "مقسوم عموديًا"
 "Tabbed" = "ألسنة"
-"Sway has no such setting" = "لا يملك Sway هذا الإعداد"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "يقرأ Sway ملف المندرة حيث يضمّنه ملف إعداداتك، أي في نهايته، فتُطبَّق ألوان المندرة وفجواتها فوق إعداداتك. لا يدعم Sway الزوايا المستديرة ولا الشفافية ولا الضبابية ولا الظلال ولا الحركات؛ وزر التخطيط في الشريط يبدّل تخطيط الحاوية المحددة."
+"Mandara can't set this on Sway" = "لا تستطيع المندرة ضبط هذا على Sway"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "يقرأ Sway ملف المندرة حيث يضمّنه ملف إعداداتك. تضيف المندرة ذلك السطر في النهاية، فتُطبَّق ألوانها وفجواتها فوق الإعدادات التي قبله، لا فوق ما تضيفه بعده. لا تضبط المندرة على Sway زوايا مستديرة ولا شفافية ولا ضبابية ولا ظلالًا ولا حركات؛ وزر التخطيط في الشريط يتنقّل بين تخطيطات الحاوية المحددة."
 
 # ── River ──
 "MangoWM, Niri, Umbriel, Sway, River" = "MangoWM وNiri وUmbriel وSway وRiver"

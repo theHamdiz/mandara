@@ -327,6 +327,20 @@ fn a_fix_that_makes_things_worse_is_rolled_back() {
     assert!(fix::apply_in(&before, &id, fix::Fix::Remove, &env, &|| Ok(()), &store).is_err());
 }
 
+/// Sway keeps only its `[ERROR]` lines in a report: when it rejects a
+/// config without one, the end of what it printed explains the rejection.
+#[test]
+fn a_rejection_without_error_lines_keeps_the_checker_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("config");
+    std::fs::write(&root, "bindsym Mod4+q kill\n").unwrap();
+    let argv = ["sh", "-c", "echo 'Unable to create backend' >&2; exit 1"].iter().map(OsString::from).collect();
+    let env = CheckEnv { argv: Some(argv), version: Some("1.12".into()), ..CheckEnv::default() };
+    let report = check_with(Target::Sway, &root, &env);
+    assert_eq!(report.diagnostics.len(), 1, "{report:#?}");
+    assert!(report.diagnostics[0].message.contains("Unable to create backend"), "{report:#?}");
+}
+
 #[test]
 fn a_hung_checker_times_out() {
     let dir = tempfile::tempdir().unwrap();

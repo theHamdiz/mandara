@@ -338,6 +338,7 @@ pub fn run(action: CornerAction, command: &str, cx: &mut App) {
                 // Hyprland ships no overview; hyprexpo is the common plugin.
                 mandara_compositor::CompositorKind::Hyprland => ("hyprexpo:expo", &["toggle"]),
                 mandara_compositor::CompositorKind::Umbriel => ("overview-toggle", &[]),
+                // No overview: Studio leaves the choice out there.
                 mandara_compositor::CompositorKind::Sway | mandara_compositor::CompositorKind::River => {
                     tracing::info!("overview: {:?} has none", backend.kind());
                     return;

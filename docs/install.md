@@ -323,8 +323,8 @@ attestations:
 | Arch, Manjaro, EndeavourOS, CachyOS (`PKGBUILD`) | ✓ | | ✓ |
 
 Plus the bundled plugins, a build manifest per binary (source fingerprint,
-toolchain, SHA-256, lines of code), binary patches from the previous
-release for [smart updates](apps-and-updates.md#updates-by-binary-patch), `update.json` and
+toolchain, SHA-256, lines of code), binary patches from the last five
+releases for [smart updates](apps-and-updates.md#updates-by-binary-patch), `update.json` and
 `SHA256SUMS`. The installer picks the right build for your system (glibc or
 musl, x86-64-v3 when your CPU supports it); Gentoo, Solus, NixOS and other
 glibc systems use the tarball.

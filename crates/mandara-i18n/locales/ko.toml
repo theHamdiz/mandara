@@ -7775,6 +7775,24 @@
 "Turning the launcher on, dimming the screen, the keyboard and how apps start" = "런처 켜기, 화면 어둡게 하기, 키보드, 앱 실행 방식"
 "Warmer colours in the evening, on a schedule" = "저녁에 일정에 맞춰 따뜻한 색으로"
 "What the launcher searches, how results look and how they are ranked" = "런처가 검색하는 대상, 결과의 모양과 순위"
+# ── Power panel (#26) ──
+"Pulse the battery while charging" = "충전 중 배터리 깜박이기"
+"The bar's battery chip breathes gently while it charges (never with Reduce motion)" = "충전 중에는 바의 배터리 표시가 부드럽게 깜박입니다(동작 줄이기가 켜져 있으면 깜박이지 않음)"
+"Stops at {end}%, resumes below {start}%" = "{end}%에서 멈추고 {start}% 미만이면 다시 충전"
+"of {design} Wh" = "/ {design} Wh"
+"Chemistry" = "종류"
+"Charging rate" = "충전 전력"
+"Power draw" = "소비 전력"
+"Energy now" = "현재 에너지"
+"Design capacity" = "설계 용량"
+"Voltage" = "전압"
+"CPU scaling driver" = "CPU 스케일링 드라이버"
+"Platform driver" = "플랫폼 드라이버"
+"Profile driver" = "프로필 드라이버"
+"Power profile · {profile}" = "전원 프로필 · {profile}"
+"Power panel style" = "전원 패널 스타일"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "클래식: 배터리 카드 위에 프로필 카드. 모던: 큰 충전 링과 충전 그래프로 배터리를 먼저 보여 주고, 프로필 전환은 하나, 기술 정보는 접어 둠"
+"Modern" = "모던"
 
 # ── Studio → Bar → Layout designer ──
 "Add to {zone}" = "{zone}에 추가"
@@ -7799,8 +7817,8 @@
 "Split horizontally" = "가로 분할"
 "Split vertically" = "세로 분할"
 "Tabbed" = "탭"
-"Sway has no such setting" = "Sway에는 이 설정이 없습니다"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "Sway는 설정 파일 끝에서 포함된 Mandara의 파일을 읽으므로 Mandara의 색과 간격이 사용자 설정 위에 적용됩니다. Sway에는 둥근 모서리, 불투명도, 흐림, 그림자, 애니메이션이 없으며, 바의 레이아웃 필은 포커스된 컨테이너의 레이아웃을 전환합니다."
+"Mandara can't set this on Sway" = "Mandara는 Sway에서 이것을 설정할 수 없습니다"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "Sway는 설정 파일이 Mandara의 파일을 포함하는 위치에서 그 파일을 읽습니다. Mandara는 그 줄을 끝에 추가하므로 색과 간격이 그 앞의 설정 위에는 적용되지만, 그 뒤에 추가한 설정 위에는 적용되지 않습니다. Mandara는 Sway에서 둥근 모서리, 불투명도, 흐림, 그림자, 애니메이션을 설정하지 않으며, 바의 레이아웃 필은 포커스된 컨테이너의 레이아웃을 차례로 전환합니다."
 
 # ── River ──
 "MangoWM, Niri, Umbriel, Sway, River" = "MangoWM, Niri, Umbriel, Sway, River"

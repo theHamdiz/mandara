@@ -15,10 +15,11 @@ About → What's new shows it too.
   moves windows. `mandara setup` adds one `include` line to the end of
   your sway config (starting your own copy of the system config if you
   have none) and keeps Mandara's colours, gaps, window rules, input,
-  display and key settings in their own file. Every line is checked with
-  `sway --validate` first, the Config doctor reads sway's own verdict on
-  your config, and moving over from swaybar or swaybg is part of the usual
-  takeover (#33).
+  display and key settings in their own file. Where sway is installed,
+  every line is checked with `sway --validate` first and a change sway
+  rejects is rolled back; the Config doctor reads sway's own verdict on
+  your config, and moving over from swaybar or swaybg is part of the
+  usual takeover (#33).
 - **Mandara now runs on River Classic.** River's tags work like MangoWM's:
   click to show one, right-click to add it to the view, middle-click to
   put the focused window on it too, with the tags in use and the urgent
@@ -32,11 +33,91 @@ About → What's new shows it too.
   management out of River, and the Config doctor explains that if it finds
   it (#34).
 
+## 0.11.0 — 2026-11-03
+
+A Modern style for the Power panel. The battery breathes while it charges.
+No more CPU driver names in the Power panel.
+
+### New
+
+- **A Modern style for the Power panel.** Pick it in Studio → Power &
+  idle (*Power panel style*) and the battery leads: a large charge ring
+  with the percentage and its state inside, the time left right under it,
+  health, capacity and chemistry at a glance, and a smooth graph of the
+  last hours of charge. The power profiles become one simple Power saver /
+  Balanced / Performance switch showing only the profiles your computer
+  has, and the charge limit is a single switch that says when charging
+  stops and resumes (shown only where it can really be changed). Voltage,
+  cycles, temperature and the CPU driver wait in a *Details* section that
+  stays folded until you open it. The panel you know stays the default,
+  as the Classic style. The design follows a suggestion in #26.
+- **The battery breathes while it charges.** Plug in and the battery in
+  the bar gently pulses until it stops charging, so you can tell at a
+  glance that power is going in. It stays still with Reduce motion on, and
+  you can turn it off in Studio → Power & idle (*Pulse the battery while
+  charging*).
+
+### Improved
+
+- **No more CPU driver names in the Power panel.** The Power panel keeps
+  its look, but no longer shows the CPU driver (`intel_pstate` and
+  friends) in its header or under each power profile; each profile keeps
+  its short description.
+
+## 0.10.2 — 2026-11-03
+
+Notifications joined to the bar, on more setups. No notification is cut
+off on a short screen. Studio shows what's saved, even when it can't
+apply. Better translations.
+
+### Fixed
+
+- **Notifications joined to the bar, on more setups.** With a bottom dock
+  on one display only, bottom notifications on another display now join
+  the bar there instead of staying floating cards (Studio no longer locks
+  *Join the bar* for them). Joined notifications also open on the display
+  whose bar they're shaped for, rather than sometimes taking one
+  display's shape on another. And on a narrow screen under a wide notch,
+  notifications stay as floating cards instead of squeezing into a
+  sliver.
+- **No notification is cut off on a short screen.** When a screen is too
+  short for as many notifications as you asked to see at once, Mandara
+  shows the ones that fit and the rest wait their turn; before, the last
+  ones could hang off the edge and time out unseen.
+- **Studio shows what's saved, even when it can't apply.** A switch that
+  doesn't work with your current setup (like *Join the bar* under a
+  floating bar) used to show as off although it was still on. It now
+  shows its saved state, dimmed, and you can still turn it off.
+- **Better translations.** In the bar designer, Russian *Move up* and
+  *Move down* now read as actions, and the presets' description is a
+  full sentence in Hindi, Urdu and Turkish. The Bengali note about the
+  dock and notifications reads more naturally.
+
+### Under the hood
+
+- **Small wallpaper and font tidy-ups.** A tiled wallpaper in grayscale or
+  16-bit colour is converted once instead of once per tile, scaling a
+  whole picture in those formats skips a needless copy, and the Arabic
+  font chain accepts exactly the fonts the rest of the text system does.
+  The changelog check now also catches section headings Studio can't show.
+
+## 0.10.1 — 2026-11-03
+
+Smart updates work after skipping releases.
+
+### Fixed
+
+- **Smart updates work after skipping releases.** A release only carried a
+  binary patch from the release right before it, so if you skipped one,
+  updating fell back to the full ~70 MB download. Each release now carries
+  patches from the five releases before it: updating from any of them is a
+  ~5 MB download.
+
 ## 0.10.0 — 2026-11-03
 
 A tidier layout designer, with search.
 
-### Changed
+### Improved
 
 - **A tidier layout designer, with search.** In Studio → Bar, the Left,
   Center and Right zones are now neat columns with their plugins stacked
@@ -71,12 +152,12 @@ it.
 
 Lighter wallpapers.
 
-### Changed
+### Improved
 
 - **Lighter wallpapers.** A wallpaper smaller than your screen, and the
   depth clock's mask, are now scaled up a row at a time instead of through
   a full-size working copy. On a 4K display, switching to a 2880 × 1620
-  wallpaper peaks at 125 MiB instead of 200 MiB, and the start-up peak
+  wallpaper peaks at 125 MiB instead of 202 MiB, and the start-up peak
   with a 1080p wallpaper and the depth clock drops from 205 to 170 MiB
   (147 to 116 MiB on a 1600 × 1000 display). The scaling is faster too:
   53 ms instead of 96 ms to bring a 1080p picture to 4K. The picture is
@@ -102,7 +183,7 @@ edge.
 
 A lighter start.
 
-### Changed
+### Improved
 
 - **A lighter start.** Right after it starts, the shell now holds far less
   memory: 15 seconds in, 37–39 MiB instead of 111–123 MiB on a 4K display.
@@ -136,7 +217,7 @@ notification away. App icons share one shape.
   go: it leaves the screen but stays in the notification center. The × still
   dismisses it for good. ([#24](https://github.com/theHamdiz/mandara/issues/24))
 
-### Changed
+### Improved
 
 - **App icons share one shape.** Every app icon in the launcher (all three
   looks), the dock and its Applications drawer now sits on the same
@@ -338,7 +419,7 @@ developer tools.
   sideways with a normal mouse wheel, can be grabbed and dragged, and show
   arrows when there are more chips off to the side.
 
-### Changed
+### Improved
 
 - **Sliders have a new look.** Every slider, in Studio and in the shell's
   panels and sidebar, now has a rounded fill, a slim upright handle with a
@@ -357,7 +438,7 @@ developer tools.
 
 Rounded screen corners are on by default.
 
-### Changed
+### Improved
 
 - **Rounded screen corners are on by default.** New setups round all four
   corners of every display, and the edge-frame bar's outer corners round

@@ -7776,6 +7776,24 @@
 "App icon shape" = "Bentuk ikon aplikasi"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "Setiap ikon aplikasi di peluncur dan dok diletakkan di atas bentuk yang sama agar terlihat serasi; “Sesuai tema” membiarkan setiap ikon seperti aslinya"
 "Theme's own" = "Sesuai tema"
+# ── Power panel (#26) ──
+"Pulse the battery while charging" = "Denyutkan baterai saat mengisi daya"
+"The bar's battery chip breathes gently while it charges (never with Reduce motion)" = "Ikon baterai di bilah berdenyut lembut saat mengisi daya (tidak pernah dengan Kurangi gerakan)"
+"Stops at {end}%, resumes below {start}%" = "Berhenti di {end}%, dilanjutkan di bawah {start}%"
+"of {design} Wh" = "dari {design} Wh"
+"Chemistry" = "Kimia"
+"Charging rate" = "Daya pengisian"
+"Power draw" = "Pemakaian daya"
+"Energy now" = "Energi saat ini"
+"Design capacity" = "Kapasitas desain"
+"Voltage" = "Tegangan"
+"CPU scaling driver" = "Driver penskalaan CPU"
+"Platform driver" = "Driver platform"
+"Profile driver" = "Driver profil"
+"Power profile · {profile}" = "Profil daya · {profile}"
+"Power panel style" = "Gaya panel daya"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "Klasik: kartu profil di atas kartu baterai. Modern: baterai lebih dulu dengan cincin daya besar dan grafik pengisian, satu pengalih profil, dan detail teknis dilipat"
+"Modern" = "Modern"
 
 # ── Studio → Bar → Layout designer ──
 "Add to {zone}" = "Tambahkan ke {zone}"
@@ -7800,8 +7818,8 @@
 "Split horizontally" = "Terbagi mendatar"
 "Split vertically" = "Terbagi menurun"
 "Tabbed" = "Bertab"
-"Sway has no such setting" = "Sway tidak punya pengaturan ini"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "Sway membaca file Mandara di tempat konfigurasi Anda menyertakannya, yaitu di akhir, sehingga warna dan celah Mandara berlaku di atas milik Anda. Sway tidak punya sudut membulat, opasitas, blur, bayangan, atau animasi; pil tata letak di bilah mengganti tata letak kontainer yang difokuskan."
+"Mandara can't set this on Sway" = "Mandara tidak bisa mengatur ini di Sway"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "Sway membaca file Mandara di tempat konfigurasi Anda menyertakannya. Mandara menambahkan baris itu di akhir, sehingga warna dan celahnya berlaku di atas pengaturan sebelum baris itu, tetapi tidak di atas yang Anda tambahkan setelahnya. Di Sway, Mandara tidak mengatur sudut membulat, opasitas, blur, bayangan, atau animasi; pil tata letak di bilah berganti di antara tata letak kontainer yang difokuskan."
 
 # ── River ──
 "MangoWM, Niri, Umbriel, Sway, River" = "MangoWM, Niri, Umbriel, Sway, River"

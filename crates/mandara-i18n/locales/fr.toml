@@ -8024,6 +8024,24 @@
 "App icon shape" = "Forme des icônes d'applications"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "Chaque icône d'application du lanceur et du dock repose sur la même forme, pour former un ensemble ; « Comme dans le thème » garde chaque icône telle qu'elle est dessinée"
 "Theme's own" = "Comme dans le thème"
+# ── Power panel (#26) ──
+"Pulse the battery while charging" = "Faire pulser la batterie pendant la charge"
+"The bar's battery chip breathes gently while it charges (never with Reduce motion)" = "L'icône de batterie de la barre pulse doucement pendant la charge (jamais avec Réduire les animations)"
+"Stops at {end}%, resumes below {start}%" = "S'arrête à {end} %, reprend sous {start} %"
+"of {design} Wh" = "sur {design} Wh"
+"Chemistry" = "Chimie"
+"Charging rate" = "Puissance de charge"
+"Power draw" = "Consommation"
+"Energy now" = "Énergie actuelle"
+"Design capacity" = "Capacité nominale"
+"Voltage" = "Tension"
+"CPU scaling driver" = "Pilote de fréquence du processeur"
+"Platform driver" = "Pilote de plateforme"
+"Profile driver" = "Pilote du profil"
+"Power profile · {profile}" = "Profil d'alimentation · {profile}"
+"Power panel style" = "Style du panneau d'alimentation"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "Classique : les cartes de profil au-dessus de la carte de batterie. Moderne : la batterie d'abord, avec un grand anneau de charge et un graphique de charge, un seul sélecteur de profil et les détails techniques repliés"
+"Modern" = "Moderne"
 
 # ── Studio → Bar → Layout designer ──
 "Add to {zone}" = "Ajouter à {zone}"
@@ -8044,11 +8062,11 @@
 "A floating bar has no edge to hang from; popups on its edge stay cards" = "Une barre flottante n'a pas de bord où s'accrocher ; les fenêtres contextuelles de son bord restent des cartes"
 
 # ── Sway ──
-"Split horizontally" = "Partagé horizontalement"
-"Split vertically" = "Partagé verticalement"
+"Split horizontally" = "Division horizontale"
+"Split vertically" = "Division verticale"
 "Tabbed" = "En onglets"
-"Sway has no such setting" = "Sway n'a pas ce réglage"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "Sway lit le fichier de Mandara là où votre configuration l'inclut, à la fin : les couleurs et les espacements de Mandara s'appliquent par-dessus les vôtres. Sway n'a ni coins arrondis, ni opacité, ni flou, ni ombres, ni animations ; la pastille de disposition de la barre change la disposition du conteneur actif."
+"Mandara can't set this on Sway" = "Mandara ne peut pas régler ceci sous Sway"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "Sway lit le fichier de Mandara là où votre configuration l'inclut. Mandara ajoute cette ligne à la fin : ses couleurs et espacements s'appliquent donc par-dessus les réglages placés avant, mais pas sur ceux que vous ajoutez après. Sous Sway, Mandara ne règle ni coins arrondis, ni opacité, ni flou, ni ombres, ni animations ; la pastille de disposition de la barre passe d'une disposition à l'autre du conteneur actif."
 
 # ── River ──
 "MangoWM, Niri, Umbriel, Sway, River" = "MangoWM, Niri, Umbriel, Sway, River"

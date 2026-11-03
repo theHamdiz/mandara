@@ -359,14 +359,22 @@ impl StudioView {
                     .child(step("m+", "›", 0, TIME_STEP_MINUTES, cx))
                     .into_any_element()
             }
-            Control::Toggle if let Some(reason) = registry::locked(setting, cfg) => div()
-                .id(SharedString::from(format!("t{}", setting.path)))
-                .row()
-                .items_center()
-                .gap(px(SPACE_8_PX))
-                .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(reason))))
-                .child(div().opacity(LOCKED_OPACITY).child(mandara_ui::plugins::network::switch(false, p)))
-                .into_any_element(),
+            Control::Toggle if let Some(reason) = registry::locked(setting, cfg) => {
+                // The saved value, dimmed; one that is on can still be
+                // turned off.
+                let on = value.as_bool().unwrap_or(false);
+                let next = registry::locked_toggle_click(on);
+                let setting = setting.clone();
+                div()
+                    .id(SharedString::from(format!("t{}", setting.path)))
+                    .row()
+                    .items_center()
+                    .gap(px(SPACE_8_PX))
+                    .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(reason))))
+                    .child(div().opacity(LOCKED_OPACITY).child(mandara_ui::plugins::network::switch(on, p)))
+                    .when_some(next, |el, next| el.cursor_pointer().on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.apply(&setting, Value::from(next), cx))))
+                    .into_any_element()
+            }
             Control::Toggle => {
                 let on = value.as_bool().unwrap_or(false);
                 let setting = setting.clone();
@@ -416,7 +424,7 @@ impl StudioView {
                     .p(px(SPACE_3_PX))
                     .rounded(px(RADIUS_12_PX))
                     .bg(p.surface_container_high.hsla())
-                    .children(choices.iter().map(|(raw, label)| {
+                    .children(choices.iter().filter(|(raw, _)| *raw == current || !registry::choice_hidden(setting.path, raw)).map(|(raw, label)| {
                         let active = *raw == current;
                         let setting = setting.clone();
                         div()

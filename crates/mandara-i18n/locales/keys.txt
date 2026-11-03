@@ -846,6 +846,7 @@ CONTINUE READING
 CONTRAST · WCAG 2
 CPU
 CPU graph
+CPU scaling driver
 CPU temp
 CPU, memory and disk usage
 CPU, memory, GPUs, temperatures, disks and uptime
@@ -962,6 +963,7 @@ Charge limit on
 Charger
 Charger and battery
 Charging
+Charging rate
 Charging — critical action cancelled
 Charles Darwin
 Charles Dickens
@@ -995,6 +997,7 @@ Checking your installation…
 Checking your {compositor} config…
 Checking…
 Checks
+Chemistry
 Cherish your children
 Children side by side, gap apart
 Children stacked, gap apart
@@ -1028,6 +1031,7 @@ Clarice Lispector
 Classic
 Classic analog
 Classic: one surface with the search field and results. Beacon: a centred search bar with results under it once you type
+Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away
 Claude Code today
 Claude Code's tokens today and this week, read from its local logs once you switch it on
 Clean
@@ -1483,6 +1487,7 @@ Depth · stacked
 Describe the active theme
 Desert
 Design a wallpaper, then generate it at full size. Every file remembers its recipe, so you can remix it later.
+Design capacity
 Designed theme
 Designed themes
 Desk cat
@@ -1780,6 +1785,7 @@ End a process by PID (SIGTERM; --force sends SIGKILL)
 End all
 End the process listening on a port (SIGTERM)
 Ending…
+Energy now
 Engine
 Engine unreachable
 English
@@ -3181,6 +3187,7 @@ Mandara answers pairing codes and connection requests (restart the shell to appl
 Mandara asks for your administrator password, backs up greetd's PAM file and changes only its own marked lines.
 Mandara asks for your keyring password when an app needs a saved secret (gnome-keyring / Secret Service). Skipped while another prompter, such as GNOME Shell, is running
 Mandara asks for your password when an app needs administrator rights (polkit). Skipped if another agent is already running
+Mandara can't set this on Sway
 Mandara can't uninstall itself from here
 Mandara command, e.g. launcher toggle
 Mandara couldn't write where this app goes.
@@ -3365,6 +3372,7 @@ Model mode only: downloads the depth model once from Hugging Face
 Model mode only: runs the model once per wallpaper in a low-priority helper
 Models for copying text from screenshots and for the wallpaper depth effect's model mode. From Hugging Face, all Apache-2.0; the depth model downloads only when you pick that mode.
 Models loaded in memory with their VRAM share and unload time (JSON)
+Modern
 Modes
 Mon
 Monday
@@ -4332,6 +4340,7 @@ Plate
 Plate corners
 Plate opacity
 Plate padding
+Platform driver
 Plato
 Play
 Play / pause
@@ -4404,10 +4413,13 @@ Power
 Power & idle
 Power and session menu
 Power dock
+Power draw
 Power menu
 Power mode
+Power panel style
 Power policy is not running
 Power profile
+Power profile · {profile}
 Power profile, batteries and peripheral batteries (JSON)
 Power profiles
 Power profiles unavailable
@@ -4466,6 +4478,7 @@ Productive
 Productivity
 Profile
 Profile card
+Profile driver
 Profile name, e.g. Night
 Profile photo
 Profile photo updated
@@ -4492,6 +4505,7 @@ Publish to the marketplace
 Pudd'nhead Wilson
 Pull one with: ollama pull llama3.2
 Pulse the battery when critical
+Pulse the battery while charging
 Push
 Pushes text and surfaces apart to WCAG AAA (7:1)
 Put a device in pairing mode, then search
@@ -5552,6 +5566,7 @@ Stopped {name}
 Stopped {unit}
 Stopping…
 Stops after the first download
+Stops at {end}%, resumes below {start}%
 Stops charging at {end}%
 Stops charging early to slow wear
 Stops in {time}
@@ -5614,8 +5629,7 @@ Suspend, then hibernate
 Swahili proverb
 Swap the left and right buttons
 Swatch shape
-Sway has no such setting
-Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout.
+Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts.
 Swirl
 Switch
 Switch automatically
@@ -5840,6 +5854,7 @@ The bar item goes away while nothing is playing
 The bar item, or none for no bar item.
 The bar item, panel and sidebar card re-render: no restart
 The bar's battery chip breathes coral while the charge is critical
+The bar's battery chip breathes gently while it charges (never with Reduce motion)
 The bar's items
 The bar's main menu
 The bar, the lock screen and prayer times all follow the clock, so they show the wrong time there.
@@ -6590,6 +6605,7 @@ Visual window rule builder
 Visualizer
 Visualizer preview
 Visualizer style
+Voltage
 Voltaire
 Volume
 Volume and brightness
@@ -7199,6 +7215,7 @@ of this week
 of this year
 of today
 of {cores} cores
+of {design} Wh
 of {limit} daily limit
 of {total}
 of {total} loaded

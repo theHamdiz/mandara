@@ -410,6 +410,7 @@ const ALERT_STYLES: &[(&str, &str)] = &[("both", tk("Notification + OSD")), ("no
 const CRITICAL_ACTIONS: &[(&str, &str)] = &[("nothing", tk("Nothing")), ("suspend", tk("Sleep")), ("hibernate", tk("Hibernate")), ("shutdown", tk("Shut down"))];
 const PROFILES: &[(&str, &str)] = &[("null", tk("Leave it")), ("power-saver", tk("Power saver")), ("balanced", tk("Balanced")), ("performance", tk("Performance"))];
 const MENU_STYLES: &[(&str, &str)] = &[("dock", tk("Edge dock")), ("grid", tk("Grid"))];
+const POWER_PANEL_STYLES: &[(&str, &str)] = &[("classic", tk("Classic")), ("modern", tk("Modern"))];
 const MENU_DEFAULTS: &[(&str, &str)] = &[("lock", tk("Lock")), ("suspend", tk("Sleep")), ("logout", tk("Log out")), ("reboot", tk("Restart")), ("shutdown", tk("Shut down"))];
 const SCHOOLS: &[(&str, &str)] = &[("shafii", tk("Shafi'i")), ("hanafi", tk("Hanafi"))];
 /// A faith plugin's own language: Mandara's, or one of its languages (each
@@ -486,7 +487,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
         path if path.starts_with("/compositor/input/cursor/") => system_settings::cursor_locked(path, running_compositor()),
-        path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Sway has no such setting")),
+        path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Mandara can't set this on Sway")),
         path if running_compositor() == Some(mandara_config::compositor::Target::River) && RIVER_LACKS.contains(&path) => Some(tk("River has no such setting")),
         path if path.starts_with("/wallpaper/slideshow/") => desktop_settings::slideshow_locked(path, cfg),
         "/wallpaper/depth/auto_split" | "/wallpaper/depth/download" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
@@ -497,13 +498,31 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     }
 }
 
-/// Window-look settings sway has no equivalent of (its drop-in leaves them
-/// out): rounded corners, opacity, blur, shadows and animations.
+/// Window-look settings Mandara's sway drop-in leaves out: sway has no
+/// rounded corners, blur, shadows or animations, and its opacity is a
+/// per-window command, not a focused / unfocused setting.
 pub(crate) const SWAY_LACKS: &[&str] = &["/compositor/look/rounding", "/compositor/look/active_opacity", "/compositor/look/inactive_opacity", "/compositor/look/blur", "/compositor/look/shadows", "/compositor/look/animations"];
 
 /// Window-look settings River has no equivalent of: Sway's list plus gaps
 /// (a layout generator's padding, set when it starts).
 pub(crate) const RIVER_LACKS: &[&str] = &["/compositor/look/gaps_inner", "/compositor/look/gaps_outer", "/compositor/look/gaps_follow_bar", "/compositor/look/rounding", "/compositor/look/active_opacity", "/compositor/look/inactive_opacity", "/compositor/look/blur", "/compositor/look/shadows", "/compositor/look/animations"];
+
+/// What a click on a locked toggle saves: a toggle that can't apply right
+/// now still shows its saved value, and one that is on can be turned off
+/// (it stays saved, and would apply again once the setup allows); turning
+/// one on waits until it can apply.
+pub fn locked_toggle_click(on: bool) -> Option<bool> {
+    on.then_some(false)
+}
+
+/// A choice the running compositor can't carry out, left out of its control
+/// (a value already saved still shows, so it can be changed; the shell
+/// does nothing for it): the Overview corner and bar action where the
+/// compositor has no overview (Sway, River).
+pub fn choice_hidden(path: &str, raw: &str) -> bool {
+    let corner_action = path == "/bar/middle_click/action" || (path.starts_with("/hot_corners/") && path.ends_with("/action"));
+    raw == "overview" && corner_action && matches!(running_compositor(), Some(mandara_config::compositor::Target::Sway | mandara_config::compositor::Target::River))
+}
 
 /// The compositor Studio runs under, detected once (it can't change while
 /// Studio is open).
@@ -681,6 +700,8 @@ fn build() -> Vec<Setting> {
         s(Power, tk("Battery alerts"), "/power/peripheral_low_percent", tk("Peripheral low at"), tk("Threshold for peripherals (per-device overrides in config.toml under [power.device_thresholds])"), slider(5.0, 50.0, 1.0, "%")),
         s(Power, tk("Battery alerts"), "/power/notify_full", tk("Tell me when charged"), tk("A notice when the battery is full or reaches its charge limit"), Toggle),
         s(Power, tk("Battery alerts"), "/power/critical_pulse", tk("Pulse the battery when critical"), tk("The bar's battery chip breathes coral while the charge is critical"), Toggle),
+        s(Power, tk("Battery alerts"), "/power/panel_style", tk("Power panel style"), tk("Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away"), Choice(POWER_PANEL_STYLES)),
+        s(Power, tk("Battery alerts"), "/power/charging_pulse", tk("Pulse the battery while charging"), tk("The bar's battery chip breathes gently while it charges (never with Reduce motion)"), Toggle),
         s(Power, tk("Power profiles"), "/power/profile_ac", tk("On mains power"), tk("Switch to this profile when the charger is plugged in"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/profile_battery", tk("On battery"), tk("Switch to this profile when running on battery"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/saver_at_low", tk("Power saver at low battery"), tk("Switch to power-saver at the low threshold and back when charging"), Toggle),

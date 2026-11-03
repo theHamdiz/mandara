@@ -8022,6 +8022,24 @@
 "App icon shape" = "Form der App-Symbole"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "Jedes App-Symbol im Starter und im Dock sitzt auf derselben Form, sodass sie wie aus einem Guss wirken; „Wie im Theme“ lässt jedes Symbol, wie es gezeichnet ist"
 "Theme's own" = "Wie im Theme"
+# ── Power panel (#26) ──
+"Pulse the battery while charging" = "Akku beim Laden pulsieren lassen"
+"The bar's battery chip breathes gently while it charges (never with Reduce motion)" = "Das Akku-Symbol in der Leiste pulsiert sanft, während der Akku lädt (nie mit „Bewegung reduzieren“)"
+"Stops at {end}%, resumes below {start}%" = "Stoppt bei {end} %, lädt wieder unter {start} %"
+"of {design} Wh" = "von {design} Wh"
+"Chemistry" = "Zellchemie"
+"Charging rate" = "Ladeleistung"
+"Power draw" = "Verbrauch"
+"Energy now" = "Aktuelle Energie"
+"Design capacity" = "Nennkapazität"
+"Voltage" = "Spannung"
+"CPU scaling driver" = "CPU-Taktungstreiber"
+"Platform driver" = "Plattformtreiber"
+"Profile driver" = "Profiltreiber"
+"Power profile · {profile}" = "Energieprofil · {profile}"
+"Power panel style" = "Stil des Energie-Panels"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "Klassisch: Profilkarten über der Akkukarte. Modern: zuerst der Akku mit großem Ladering und Ladeverlauf, ein Profilschalter, und die technischen Details eingeklappt"
+"Modern" = "Modern"
 
 # ── Studio → Bar → Layout designer ──
 "Add to {zone}" = "Zu {zone} hinzufügen"
@@ -8045,8 +8063,8 @@
 "Split horizontally" = "Horizontal geteilt"
 "Split vertically" = "Vertikal geteilt"
 "Tabbed" = "Mit Tabs"
-"Sway has no such setting" = "Sway hat diese Einstellung nicht"
-"Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout." = "Sway liest Mandaras Datei dort, wo deine Konfiguration sie einbindet, am Ende, also gelten Mandaras Farben und Abstände über deinen. Sway hat keine abgerundeten Ecken, Deckkraft, Unschärfe, Schatten oder Animationen; die Layout-Pille in der Leiste wechselt das Layout des fokussierten Containers."
+"Mandara can't set this on Sway" = "Mandara kann das unter Sway nicht einstellen"
+"Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts." = "Sway liest Mandaras Datei an der Stelle, an der deine Konfiguration sie einbindet. Mandara fügt diese Zeile am Ende ein, daher gelten seine Farben und Abstände über den Einstellungen davor, aber nicht über denen, die du danach hinzufügst. Unter Sway setzt Mandara keine abgerundeten Ecken, Deckkraft, Unschärfe, Schatten oder Animationen; die Layout-Pille in der Leiste wechselt reihum durch die Layouts des fokussierten Containers."
 
 # ── River ──
 "MangoWM, Niri, Umbriel, Sway, River" = "MangoWM, Niri, Umbriel, Sway, River"
