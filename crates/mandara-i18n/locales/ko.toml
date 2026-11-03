@@ -7776,3 +7776,17 @@
 "Turning the launcher on, dimming the screen, the keyboard and how apps start" = "런처 켜기, 화면 어둡게 하기, 키보드, 앱 실행 방식"
 "Warmer colours in the evening, on a schedule" = "저녁에 일정에 맞춰 따뜻한 색으로"
 "What the launcher searches, how results look and how they are ranked" = "런처가 검색하는 대상, 결과의 모양과 순위"
+
+# ── Studio → Bar → Layout designer ──
+"Add to {zone}" = "{zone}에 추가"
+"All plugins" = "모든 플러그인"
+"Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar." = "플러그인을 클릭해 배치하거나 막대로 끌어 놓으세요. 여기에 놓으면 막대에서 빠집니다."
+"Drag items to reorder them or move them between zones; click one for more" = "항목을 끌어 순서를 바꾸거나 영역 사이로 옮기세요. 클릭하면 더 많은 옵션"
+"Faith" = "신앙"
+"Layout designer" = "레이아웃 디자이너"
+"Move down" = "아래로 이동"
+"Move to {zone}" = "{zone}(으)로 이동"
+"Move up" = "위로 이동"
+"One click sets the style, position, height and arrangement" = "한 번의 클릭으로 스타일, 위치, 높이, 배치를 설정"
+"Presets" = "프리셋"
+"Remove from bar" = "막대에서 제거"

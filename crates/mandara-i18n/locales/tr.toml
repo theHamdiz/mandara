@@ -8024,3 +8024,16 @@
 "App icon shape" = "Uygulama simgesi şekli"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "Başlatıcıdaki ve Dock'taki her uygulama simgesi aynı şeklin üzerinde durur, böylece bir set gibi görünürler; “Temadaki gibi” her simgeyi çizildiği gibi bırakır"
 "Theme's own" = "Temadaki gibi"
+
+# ── Studio → Bar → Layout designer ──
+"Add to {zone}" = "{zone} bölgesine ekle"
+"Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar." = "Yerleştirmek için bir eklentiye tıklayın ya da çubuğa sürükleyin. Çubuktan kaldırmak için buraya bırakın."
+"Drag items to reorder them or move them between zones; click one for more" = "Sıralamak ya da bölgeler arasında taşımak için öğeleri sürükleyin; daha fazlası için tıklayın"
+"Faith" = "İnanç"
+"Layout designer" = "Yerleşim tasarımcısı"
+"Move down" = "Aşağı taşı"
+"Move to {zone}" = "{zone} bölgesine taşı"
+"Move up" = "Yukarı taşı"
+"One click sets the style, position, height and arrangement" = "Tek tıkla stil, konum, yükseklik ve düzen"
+"Presets" = "Hazır ayarlar"
+"Remove from bar" = "Çubuktan kaldır"

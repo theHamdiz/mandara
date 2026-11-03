@@ -8025,3 +8025,16 @@
 "App icon shape" = "Forme des icônes d'applications"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "Chaque icône d'application du lanceur et du dock repose sur la même forme, pour former un ensemble ; « Comme dans le thème » garde chaque icône telle qu'elle est dessinée"
 "Theme's own" = "Comme dans le thème"
+
+# ── Studio → Bar → Layout designer ──
+"Add to {zone}" = "Ajouter à {zone}"
+"Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar." = "Cliquez sur un plugin pour le placer, ou faites-le glisser sur la barre. Déposez-en un ici pour le retirer de la barre."
+"Drag items to reorder them or move them between zones; click one for more" = "Faites glisser les éléments pour les réordonner ou les déplacer entre les zones ; cliquez pour plus d'options"
+"Faith" = "Foi"
+"Layout designer" = "Concepteur de disposition"
+"Move down" = "Descendre"
+"Move to {zone}" = "Déplacer vers {zone}"
+"Move up" = "Monter"
+"One click sets the style, position, height and arrangement" = "Un clic règle le style, la position, la hauteur et la disposition"
+"Presets" = "Préréglages"
+"Remove from bar" = "Retirer de la barre"

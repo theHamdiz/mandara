@@ -8019,3 +8019,16 @@
 "App icon shape" = "应用图标形状"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "启动器和停靠栏中的每个应用图标都放在同一形状上，看起来浑然一体；“保持主题原样”则让每个图标保持原本的样子"
 "Theme's own" = "保持主题原样"
+
+# ── Studio → Bar → Layout designer ──
+"Add to {zone}" = "添加到{zone}"
+"Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar." = "点击插件即可放置，或将其拖到栏上。拖回此处即可从栏中移除。"
+"Drag items to reorder them or move them between zones; click one for more" = "拖动项目可调整顺序或在区域间移动；点击可查看更多操作"
+"Faith" = "信仰"
+"Layout designer" = "布局设计器"
+"Move down" = "下移"
+"Move to {zone}" = "移到{zone}"
+"Move up" = "上移"
+"One click sets the style, position, height and arrangement" = "一键设定样式、位置、高度和排列"
+"Presets" = "预设"
+"Remove from bar" = "从栏中移除"

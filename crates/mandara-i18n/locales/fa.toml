@@ -7777,3 +7777,17 @@
 "Turning the launcher on, dimming the screen, the keyboard and how apps start" = "روشن کردن اجراگر، کم‌نور کردن صفحه، صفحه‌کلید و نحوهٔ اجرای برنامه‌ها"
 "Warmer colours in the evening, on a schedule" = "رنگ‌های گرم‌تر در شب، طبق برنامهٔ زمانی"
 "What the launcher searches, how results look and how they are ranked" = "اینکه اجراگر در چه چیزهایی جست‌وجو می‌کند و نتایج چطور نمایش داده و رتبه‌بندی می‌شوند"
+
+# ── Studio → Bar → Layout designer ──
+"Add to {zone}" = "افزودن به {zone}"
+"All plugins" = "همه افزونه‌ها"
+"Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar." = "روی یک افزونه کلیک کنید تا جای‌گذاری شود، یا آن را روی نوار بکشید. برای برداشتن از نوار، آن را اینجا رها کنید."
+"Drag items to reorder them or move them between zones; click one for more" = "موارد را بکشید تا ترتیبشان را عوض کنید یا بین بخش‌ها جابه‌جا کنید؛ برای گزینه‌های بیشتر کلیک کنید"
+"Faith" = "ایمان"
+"Layout designer" = "طراح چیدمان"
+"Move down" = "پایین بردن"
+"Move to {zone}" = "انتقال به {zone}"
+"Move up" = "بالا بردن"
+"One click sets the style, position, height and arrangement" = "یک کلیک سبک، موقعیت، ارتفاع و چیدمان را تنظیم می‌کند"
+"Presets" = "پیش‌تنظیم‌ها"
+"Remove from bar" = "برداشتن از نوار"

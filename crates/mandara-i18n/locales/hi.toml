@@ -8025,3 +8025,16 @@
 "App icon shape" = "ऐप आइकन का आकार"
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "लॉन्चर और डॉक का हर ऐप आइकन एक ही आकार पर रखा जाता है, ताकि सब एक सेट जैसे दिखें; “थीम के अनुसार” हर आइकन को वैसा ही रखता है जैसा वह बना है"
 "Theme's own" = "थीम के अनुसार"
+
+# ── Studio → Bar → Layout designer ──
+"Add to {zone}" = "{zone} में जोड़ें"
+"Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar." = "किसी प्लगइन को रखने के लिए क्लिक करें, या उसे बार पर खींचें। बार से हटाने के लिए यहाँ छोड़ें।"
+"Drag items to reorder them or move them between zones; click one for more" = "आइटम को क्रम बदलने या क्षेत्रों के बीच ले जाने के लिए खींचें; और विकल्पों के लिए क्लिक करें"
+"Faith" = "आस्था"
+"Layout designer" = "लेआउट डिज़ाइनर"
+"Move down" = "नीचे ले जाएँ"
+"Move to {zone}" = "{zone} में ले जाएँ"
+"Move up" = "ऊपर ले जाएँ"
+"One click sets the style, position, height and arrangement" = "एक क्लिक में शैली, स्थिति, ऊँचाई और व्यवस्था तय"
+"Presets" = "प्रीसेट"
+"Remove from bar" = "बार से हटाएँ"

@@ -7777,3 +7777,17 @@
 "Turning the launcher on, dimming the screen, the keyboard and how apps start" = "লঞ্চার চালু করা, স্ক্রিন ম্লান করা, কিবোর্ড ও অ্যাপ কীভাবে খোলে"
 "Warmer colours in the evening, on a schedule" = "সন্ধ্যায় উষ্ণ রং, সময়সূচি অনুযায়ী"
 "What the launcher searches, how results look and how they are ranked" = "লঞ্চার কী খোঁজে, ফলাফল কেমন দেখায় ও কীভাবে সাজানো হয়"
+
+# ── Studio → Bar → Layout designer ──
+"Add to {zone}" = "{zone}-এ যোগ করুন"
+"All plugins" = "সব প্লাগইন"
+"Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar." = "কোনো প্লাগইন বসাতে ক্লিক করুন, বা বারে টেনে আনুন। বার থেকে সরাতে এখানে ছেড়ে দিন।"
+"Drag items to reorder them or move them between zones; click one for more" = "সাজাতে বা অঞ্চলের মধ্যে সরাতে আইটেম টানুন; আরও বিকল্পের জন্য ক্লিক করুন"
+"Faith" = "ধর্ম"
+"Layout designer" = "লেআউট ডিজাইনার"
+"Move down" = "নিচে সরান"
+"Move to {zone}" = "{zone}-এ সরান"
+"Move up" = "উপরে সরান"
+"One click sets the style, position, height and arrangement" = "এক ক্লিকে শৈলী, অবস্থান, উচ্চতা ও বিন্যাস ঠিক হয়"
+"Presets" = "প্রিসেট"
+"Remove from bar" = "বার থেকে সরান"
