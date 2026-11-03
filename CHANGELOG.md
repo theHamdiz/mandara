@@ -8,6 +8,19 @@ About → What's new shows it too.
 
 ### New
 
+- **A much better screen recorder.** Recording now uses GPU Screen
+  Recorder or wf-recorder when you have one installed (falling back to
+  Mandara's own encoder), so you get sound, MP4 and MKV files, H.264, HEVC
+  or AV1, up to 120 fps and a resolution and quality of your choice. Record
+  the whole screen, a display you pick, an area or the focused window, with
+  an optional countdown. While recording, the bar shows the time: click it
+  to stop, right-click it to pause, resume or mute your microphone. The
+  screenshot panel lists your recent recordings to play, show in the folder
+  or move to the Trash. Studio → Plugins → Screenshot shows which recorders
+  are installed and greys out what the one in use can't do, with the
+  reason. Every action is a command you can put on a key, such as
+  `record toggle` and `record pause-toggle`.
+
 - **Notifications can join the bar.** Turn on Studio → Notifications →
   **Join the bar** and new notifications drop out of the bar in a drawer of
   its own colour, curving into it, so the two read as one piece. It works
