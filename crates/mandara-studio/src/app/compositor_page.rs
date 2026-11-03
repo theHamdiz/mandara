@@ -1,6 +1,6 @@
 //! Studio → Compositor: the adaptive compositor control center.
 //!
-//! * The running compositor (MangoWM, Niri, Hyprland or Umbriel) is detected and its
+//! * The running compositor (MangoWM, Niri, Hyprland, Umbriel or Sway) is detected and its
 //!   tab opens first; the others stay editable (their drop-ins are written
 //!   whenever that compositor runs).
 //! * **Window rules**: a visual builder over `compositor.window_rules` with
@@ -9,7 +9,7 @@
 //! * **Tag & Layout Studio** (MangoWM): a 3×3 tag grid with layout glyphs
 //!   editing `compositor.tag_rules`, plus SceneFX tuning.
 //! * **Columns & outputs** (Niri) and **Decoration** (Hyprland); Umbriel
-//!   shares the common rows and rules.
+//!   and Sway share the common rows and rules.
 //!
 //! Everything writes the config; the shell's compositor sync regenerates
 //! `~/.config/mandara/generated/<compositor>` and reloads — the user's own
@@ -379,13 +379,7 @@ impl StudioView {
             // (screenshots, layout testing).
             let env = std::env::var("MANDARA_STUDIO_COMPOSITOR_TAB").unwrap_or_default();
             let auto_picker = env.ends_with(",picker");
-            let tab = Some(env.trim_end_matches(",picker")).and_then(|v| match v {
-                "mango" => Some(Target::Mango),
-                "niri" => Some(Target::Niri),
-                "hyprland" => Some(Target::Hyprland),
-                "umbriel" => Some(Target::Umbriel),
-                _ => None,
-            });
+            let tab = Target::parse(env.trim_end_matches(",picker"));
             cx.set_global(CompositorStudio { tag: 1, tab, auto_picker, ..Default::default() });
         }
         cx.global_mut::<CompositorStudio>()
@@ -523,6 +517,13 @@ impl StudioView {
                 .line_height(px(LEADING_17_PX))
                 .text_color(p.on_surface_variant.hsla())
                 .child(t("Umbriel reads your config.toml after Mandara's file, so a value you set there wins. Each workspace keeps its own layout; the bar's layout pill switches it."))
+                .into_any_element(),
+            // No Sway-only settings either: what its drop-in can and can't do.
+            Target::Sway => div()
+                .text_size(px(TEXT_12_PX))
+                .line_height(px(LEADING_17_PX))
+                .text_color(p.on_surface_variant.hsla())
+                .child(t("Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout."))
                 .into_any_element(),
         };
         let preview = self.dropin_preview(cfg, tab, p, cx);

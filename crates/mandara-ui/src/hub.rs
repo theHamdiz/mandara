@@ -46,7 +46,7 @@ pub struct Hub {
     /// Started only once the weather plugin is placed somewhere (it makes
     /// network requests).
     pub weather_service: Option<mandara_services::WeatherService>,
-    /// The running compositor's native driver (MangoWM, Niri, Hyprland or Umbriel).
+    /// The running compositor's native driver (MangoWM, Niri, Hyprland, Umbriel or Sway).
     pub compositor: Option<std::sync::Arc<dyn CompositorBackend>>,
 }
 

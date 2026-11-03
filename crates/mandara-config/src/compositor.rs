@@ -2,7 +2,7 @@
 //!
 //! Mandara never rewrites the user's own compositor config. Rules, keybinds
 //! and live border colors go to `~/.config/mandara/generated/{mango.conf,
-//! niri.kdl, hyprland.conf, umbriel.toml}`, and the user's main file only
+//! niri.kdl, hyprland.conf, umbriel.toml, sway.conf}`, and the user's main file only
 //! ever gains one include line (installed on request, verified at startup):
 //!
 //! * MangoWM — `source_optional=~/.config/mandara/generated/mango.conf`
@@ -14,6 +14,8 @@
 //! * Umbriel — `"<abs path>/umbriel.toml"` in `[include.optional] files`
 //!   (added to the list when the user already has one; see
 //!   [`umbriel_add_include`])
+//! * Sway — `include <abs path>/sway.conf` (sway reads its config in order,
+//!   so the line goes at the end; see [`sway_include_line`])
 //!
 //! Keybinds that collide with binds already in the user's config are
 //! skipped and reported instead of silently overriding them.
@@ -34,19 +36,45 @@ pub enum Target {
     Niri,
     Hyprland,
     Umbriel,
+    Sway,
 }
 
 impl Target {
-    pub const ALL: [Target; 4] = [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel];
+    pub const ALL: [Target; 5] = [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway];
 
-    /// This compositor's column in the `[MangoWM, Niri, Hyprland, Umbriel]`
-    /// support tables ([`RULE_OPTIONS`], `input::INPUT_OPTIONS`).
+    /// This compositor's column in the `[MangoWM, Niri, Hyprland, Umbriel,
+    /// Sway]` support tables ([`RULE_OPTIONS`], `input::INPUT_OPTIONS`).
     pub const fn index(self) -> usize {
         match self {
             Target::Mango => 0,
             Target::Niri => 1,
             Target::Hyprland => 2,
             Target::Umbriel => 3,
+            Target::Sway => 4,
+        }
+    }
+
+    /// The compositor a name on the command line means (`mango`, `niri`,
+    /// `hyprland`, `umbriel`, `sway`, and the usual aliases).
+    pub fn parse(name: &str) -> Option<Target> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "mango" | "mangowm" | "mangowc" => Some(Target::Mango),
+            "niri" => Some(Target::Niri),
+            "hyprland" | "hypr" => Some(Target::Hyprland),
+            "umbriel" => Some(Target::Umbriel),
+            "sway" | "swaywm" => Some(Target::Sway),
+            _ => None,
+        }
+    }
+
+    /// The name [`Target::parse`] takes for this compositor, lowercase.
+    pub const fn id(self) -> &'static str {
+        match self {
+            Target::Mango => "mango",
+            Target::Niri => "niri",
+            Target::Hyprland => "hyprland",
+            Target::Umbriel => "umbriel",
+            Target::Sway => "sway",
         }
     }
 
@@ -57,6 +85,7 @@ impl Target {
             Target::Niri => "Niri",
             Target::Hyprland => "Hyprland",
             Target::Umbriel => "Umbriel",
+            Target::Sway => "Sway",
         }
     }
 
@@ -74,6 +103,7 @@ impl Target {
             Target::Hyprland if Self::hyprland_lua() => "hyprland.lua",
             Target::Hyprland => "hyprland.conf",
             Target::Umbriel => "umbriel.toml",
+            Target::Sway => "sway.conf",
         })
     }
 
@@ -87,6 +117,7 @@ impl Target {
             Target::Hyprland => config.join("hypr/hyprland.conf"),
             // Umbriel reads `$XDG_CONFIG_HOME/umbriel/config.toml` first.
             Target::Umbriel => config.join("umbriel/config.toml"),
+            Target::Sway => sway_user_config(&config, &paths::home()),
         }
     }
 
@@ -101,8 +132,42 @@ impl Target {
             // A table rather than a line: shown as the two lines to add when
             // the config has no `[include.optional]` yet.
             Target::Umbriel => format!("[include.optional]\nfiles = [{}]", toml_str(&self.generated_file().display().to_string())),
+            Target::Sway => sway_include_line(&self.generated_file().display().to_string()),
         }
     }
+}
+
+/// The config file sway reads, in sway's own search order
+/// (`~/.sway/config`, `$XDG_CONFIG_HOME/sway/config`, `~/.i3/config`,
+/// `$XDG_CONFIG_HOME/i3/config`); `$XDG_CONFIG_HOME/sway/config` when none
+/// exists yet (sway then reads the system-wide [`SWAY_SYSTEM_CONFIG`],
+/// which Mandara never edits).
+pub fn sway_user_config(config_dir: &Path, home: &Path) -> PathBuf {
+    let candidates = [home.join(".sway/config"), config_dir.join("sway/config"), home.join(".i3/config"), config_dir.join("i3/config")];
+    candidates.iter().find(|p| p.is_file()).cloned().unwrap_or_else(|| config_dir.join("sway/config"))
+}
+
+/// The system-wide config sway falls back to. When the user has no config
+/// of their own, `mandara setup` starts theirs as a copy of this one (what
+/// sway's documentation asks for) before adding the include line.
+pub const SWAY_SYSTEM_CONFIG: &str = "/etc/sway/config";
+
+/// Sway's include line for `path`. Sway expands include paths like a shell
+/// word (`wordexp`) and doesn't honour quotes, so spaces and shell
+/// characters are escaped with a backslash (checked with `sway --validate`).
+pub fn sway_include_line(path: &str) -> String {
+    format!("include {}", sway_word(path))
+}
+
+/// `s` as one shell word for sway's `include` (backslash escapes).
+fn sway_word(s: &str) -> String {
+    s.chars().filter(|c| !c.is_control()).fold(String::new(), |mut out, c| {
+        if !(c.is_ascii_alphanumeric() || "/._-+~@,:=%".contains(c)) {
+            out.push('\\');
+        }
+        out.push(c);
+        out
+    })
 }
 
 /// Niri 26.04 added `include optional=true` (a missing drop-in then only
@@ -155,6 +220,8 @@ pub fn installed_version(target: Target) -> Option<(u32, u32)> {
         Target::Niri => "niri",
         Target::Hyprland => "Hyprland",
         Target::Umbriel => "umbriel",
+        // `sway version 1.12`.
+        Target::Sway => "sway",
     };
     let slot = &CACHE[target.index()];
     *slot.get_or_init(|| {
@@ -203,19 +270,21 @@ pub struct TagRule {
 }
 
 /// Window-rule options and the compositors whose drop-in honours them
-/// (`[MangoWM, Niri, Hyprland, Umbriel]`). Studio greys out the rest.
+/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway]`). Studio greys out the rest.
 /// Umbriel's `global` is its `default_pinned` (above other windows on every
-/// workspace of the output, like Hyprland's `pin`).
+/// workspace of the output, like Hyprland's `pin`); Sway's is `sticky` (a
+/// floating window shown on every workspace of its output). Sway has no
+/// per-focus opacity, blur or shadows.
 pub const RULE_OPTIONS: &[(&str, [bool; Target::ALL.len()])] = &[
-    ("floating", [true, true, true, true]),
-    ("global", [true, false, true, true]),
-    ("overlay", [true, false, false, false]),
-    ("focused_opacity", [true, true, true, true]),
-    ("unfocused_opacity", [true, true, true, true]),
-    ("no_blur", [true, false, true, true]),
-    ("no_shadow", [true, true, true, true]),
-    ("confine_pointer", [true, false, false, true]),
-    ("force_tiled_state", [true, false, false, false]),
+    ("floating", [true, true, true, true, true]),
+    ("global", [true, false, true, true, true]),
+    ("overlay", [true, false, false, false, false]),
+    ("focused_opacity", [true, true, true, true, false]),
+    ("unfocused_opacity", [true, true, true, true, false]),
+    ("no_blur", [true, false, true, true, false]),
+    ("no_shadow", [true, true, true, true, false]),
+    ("confine_pointer", [true, false, false, true, false]),
+    ("force_tiled_state", [true, false, false, false, false]),
 ];
 
 /// Whether `target`'s emitter writes window-rule option `option`.
@@ -431,14 +500,9 @@ impl Keybind {
         // Fixed order (Super, Ctrl, Alt, Shift, …) whatever the config says.
         MOD_NAMES
             .iter()
-            .filter(|(n, ..)| set.contains(n))
-            .map(|&(_, mango, niri, hypr, umbriel)| {
-                let name = match target {
-                    Target::Mango => mango,
-                    Target::Niri => niri,
-                    Target::Hyprland => hypr,
-                    Target::Umbriel => umbriel,
-                };
+            .filter(|(n, _)| set.contains(n))
+            .map(|(_, names)| {
+                let name = names[target.index()];
                 (!name.is_empty()).then_some(name)
             })
             .collect()
@@ -465,16 +529,18 @@ fn normalize_mod(m: &str) -> Option<&'static str> {
 }
 
 /// The modifiers a Studio-captured chord may carry, as each compositor
-/// spells them: `(normalized, MangoWM, Niri, Hyprland, Umbriel)`. Umbriel
-/// documents Super, Ctrl, Alt and Shift only (its `Mod` follows
-/// `general.mod_key`, so Mandara spells Super out).
-const MOD_NAMES: &[(&str, &str, &str, &str, &str)] = &[
-    ("super", "SUPER", "Mod", "SUPER", "Super"),
-    ("ctrl", "CTRL", "Ctrl", "CTRL", "Ctrl"),
-    ("alt", "ALT", "Alt", "ALT", "Alt"),
-    ("shift", "SHIFT", "Shift", "SHIFT", "Shift"),
-    ("hyper", "HYPER", "Mod3", "MOD3", ""),
-    ("mod5", "", "ISO_Level3_Shift", "MOD5", ""),
+/// spells them: `(normalized, [MangoWM, Niri, Hyprland, Umbriel, Sway])`.
+/// Umbriel documents Super, Ctrl, Alt and Shift only (its `Mod` follows
+/// `general.mod_key`, so Mandara spells Super out). Sway takes xkb's
+/// modifier names (`Mod4`, `Ctrl`, `Alt`, `Shift`, `Mod3`, `Mod5`) and
+/// rejects `Hyper`.
+const MOD_NAMES: &[(&str, [&str; Target::ALL.len()])] = &[
+    ("super", ["SUPER", "Mod", "SUPER", "Super", "Mod4"]),
+    ("ctrl", ["CTRL", "Ctrl", "CTRL", "Ctrl", "Ctrl"]),
+    ("alt", ["ALT", "Alt", "ALT", "Alt", "Alt"]),
+    ("shift", ["SHIFT", "Shift", "SHIFT", "Shift", "Shift"]),
+    ("hyper", ["HYPER", "Mod3", "MOD3", "", "Mod3"]),
+    ("mod5", ["", "ISO_Level3_Shift", "MOD5", "", "Mod5"]),
 ];
 
 /// A key typed as a character (`,`) or a GPUI key name (`pageup`) → its
@@ -758,7 +824,7 @@ pub fn user_autostarts(target: Target) -> bool {
 /// running `mandara msg …` is not one).
 pub fn starts_mandara(text: &str) -> bool {
     text.lines().map(str::trim).filter(|l| !l.starts_with('#') && !l.starts_with("//") && !l.starts_with("--")).any(|l| {
-        let starter = l.starts_with("exec-once") || l.starts_with("exec_once") || l.starts_with("spawn-at-startup") || l.starts_with("spawn-sh-at-startup") || l.contains("hl.exec_cmd(") || l.starts_with("exec=") || l.starts_with("exec ");
+        let starter = l.starts_with("exec-once") || l.starts_with("exec_once") || l.starts_with("spawn-at-startup") || l.starts_with("spawn-sh-at-startup") || l.contains("hl.exec_cmd(") || l.starts_with("exec=") || l.starts_with("exec ") || l.starts_with("exec_always ");
         starter && l.split(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == '=' || c == ',' || c == '(').any(|w| w == "mandara" || w.ends_with("/mandara"))
     })
 }
@@ -1630,12 +1696,150 @@ pub fn emit_umbriel(cfg: &ManagedConfig) -> Emitted {
     Emitted { text: s, skipped }
 }
 
+/// Sway's default `gaps inner` (logical px): the edge gap Studio's outer gap
+/// is measured against when the inner gap is left alone.
+const SWAY_DEFAULT_GAP: u32 = 0;
+
+/// A colour as sway writes it (`#rrggbbaa`).
+fn sway_color(hex: &str) -> String {
+    format!("#{}", hex_bare(hex))
+}
+
+/// Black or white title text, whichever contrasts more with `background`
+/// (sway's `client.*` lines need a text colour; Mandara only syncs the
+/// border colours).
+fn sway_text_on(background: &str) -> &'static str {
+    use mandara_theme::Color;
+    let Ok(bg) = Color::from_hex(background) else { return SWAY_TEXT_LIGHT };
+    let (dark, light) = (Color::hex(SWAY_TEXT_DARK), Color::hex(SWAY_TEXT_LIGHT));
+    if bg.contrast_ratio(dark) >= bg.contrast_ratio(light) { SWAY_TEXT_DARK } else { SWAY_TEXT_LIGHT }
+}
+
+/// Title text on light and dark title bars.
+const SWAY_TEXT_DARK: &str = "#000000ff";
+const SWAY_TEXT_LIGHT: &str = "#ffffffff";
+
+/// A window class, app id or title as a sway criteria value: a quoted
+/// regex. Sway has no escape for `"` inside one, so a quote becomes `.`
+/// (the regex wildcard, so it still matches); control characters can't add
+/// config lines.
+fn sway_criteria_value(s: &str) -> String {
+    let v: String = s.chars().filter(|c| !c.is_control()).map(|c| if c == '"' { '.' } else { c }).collect();
+    format!("\"{v}\"")
+}
+
+/// The command a sway bind runs: `exec <command>`. Sway splits a binding's
+/// command list at `;` and `,` outside quotes, so a command containing
+/// either is double-quoted whole (sway passes what is inside, single
+/// quotes and backslashes included, to the shell as it is). There is no
+/// escape for a double quote inside: such a command can't be written
+/// (`None`). Checked by running the commands in a headless sway.
+fn sway_exec(cmd: &str) -> Option<String> {
+    let cmd: String = cmd.chars().filter(|c| !c.is_control()).collect();
+    match (cmd.contains([';', ',']), cmd.contains('"')) {
+        (false, _) => Some(format!("exec {cmd}")),
+        (true, false) => Some(format!("exec \"{cmd}\"")),
+        (true, true) => None,
+    }
+}
+
+/// `~/.config/mandara/generated/sway.conf`: sway's own commands only (from
+/// `sway(5)`, `sway-input(5)` and `sway-output(5)`; checked with
+/// `sway --validate`). Sway reads its config in order and the include sits
+/// at the end of the user's file, so these lines apply on top of theirs.
+/// Sway has no rounded corners, blur, shadows, animations, opacity rules or
+/// hot corners: those Studio settings are left out (and locked in Studio).
+pub fn emit_sway(cfg: &ManagedConfig) -> Emitted {
+    let c = cfg.config;
+    let l = &c.look;
+    let mut s = String::new();
+    let _ = writeln!(s, "# {HEADER}");
+    if cfg.autostart() {
+        // `exec` runs once at start-up (`exec_always` would start a second
+        // shell on every reload).
+        let _ = writeln!(s, "\nexec {}", cfg.mandara_bin);
+    }
+    let mut look = String::new();
+    if let Some(g) = l.gaps_inner {
+        let _ = writeln!(look, "gaps inner {g}");
+    }
+    // Sway's outer gap is added to the inner one at the screen edges.
+    if let Some(outer) = l.gaps_outer {
+        let d = outer as i64 - l.gaps_inner.unwrap_or(SWAY_DEFAULT_GAP) as i64;
+        let _ = writeln!(look, "gaps outer {d}");
+    }
+    if !look.is_empty() {
+        let _ = write!(s, "\n# Window look (Studio → Compositor)\n{look}");
+    }
+    if let Some(w) = c.border_width {
+        // Pixel borders (no title bars), as on every other compositor.
+        let _ = writeln!(s, "\n# Window border width (Studio → Compositor)\ndefault_border pixel {w}\ndefault_floating_border pixel {w}");
+    }
+    if let Some(bc) = &cfg.borders {
+        // `client.<class> <border> <background> <text> <indicator> <child_border>`.
+        let _ = writeln!(s, "\n# Live border colors from the active Mandara palette");
+        let line = |class: &str, main: &str, indicator: &str| format!("client.{class} {m} {m} {} {} {m}", sway_text_on(main), sway_color(indicator), m = sway_color(main));
+        let _ = writeln!(s, "{}", line("focused", &bc.active, &bc.active_end));
+        let _ = writeln!(s, "{}", line("focused_inactive", &bc.inactive, &bc.inactive));
+        let _ = writeln!(s, "{}", line("unfocused", &bc.inactive, &bc.inactive));
+        let _ = writeln!(s, "{}", line("urgent", &bc.urgent, &bc.urgent));
+    }
+    s.push_str(&crate::input::emit_sway(&c.input));
+    let mut rules = String::new();
+    for r in &c.window_rules {
+        let mut commands = Vec::new();
+        if let Some(f) = r.floating {
+            commands.push(format!("floating {}", if f { "enable" } else { "disable" }));
+        }
+        // Sticky only applies to floating windows (like Hyprland's pin).
+        if let Some(g) = r.global {
+            commands.push(format!("sticky {}", if g { "enable" } else { "disable" }));
+        }
+        if commands.is_empty() {
+            continue;
+        }
+        let title = r.title.as_deref().map(|t| format!(" title={}", sway_criteria_value(t))).unwrap_or_default();
+        // Wayland windows match on `app_id`, X11 ones on `class`.
+        let criteria: Vec<String> = match &r.app_id {
+            Some(a) => vec![format!("[app_id={}{title}]", sway_criteria_value(a)), format!("[class={}{title}]", sway_criteria_value(a))],
+            None if !title.is_empty() => vec![format!("[{}]", title.trim_start())],
+            None => continue,
+        };
+        for crit in criteria {
+            let _ = writeln!(rules, "for_window {crit} {}", commands.join(", "));
+        }
+    }
+    if !rules.is_empty() {
+        let _ = write!(s, "\n# Window rules\n{rules}");
+    }
+    s.push_str(&crate::outputs::emit_outputs(Target::Sway, &c.outputs, false));
+    let (binds, mut skipped) = split_binds(cfg, Target::Sway);
+    if !binds.is_empty() {
+        let _ = writeln!(s, "\n# Mandara keybinds");
+    }
+    for k in binds {
+        let combo = k.mods.iter().copied().chain(std::iter::once(k.key.as_str())).collect::<Vec<_>>().join("+");
+        let command = k.bind.action.shell_command_with(&cfg.mandara_bin);
+        match sway_exec(&command) {
+            Some(exec) => {
+                let _ = writeln!(s, "bindsym {combo} {exec}");
+            }
+            None => skipped.push(format!("{} → `{command}` skipped: sway can't quote a command with both `\"` and `;` or `,`", k.bind.display())),
+        }
+    }
+    for note in &skipped {
+        let _ = writeln!(s, "# {note}");
+    }
+    Emitted { text: s, skipped }
+}
+
 pub fn emit(target: Target, cfg: &ManagedConfig) -> Emitted {
     match target {
         Target::Mango => emit_mango(cfg),
         Target::Niri => emit_niri(cfg),
         Target::Hyprland => emit_hyprland(cfg),
         Target::Umbriel => emit_umbriel(cfg),
+        Target::Sway => emit_sway(cfg),
     }
 }
 
@@ -1659,6 +1863,9 @@ pub(crate) fn include_path(target: Target, line: &str) -> Option<String> {
         // Umbriel's includes are TOML arrays, read whole-file by
         // [`includes_in`].
         Target::Mango | Target::Umbriel => None,
+        // `include <path>`: a shell word (`~`, `$VAR`, globs), expanded by
+        // [`included_files`].
+        Target::Sway => line.strip_prefix("include").filter(|r| r.starts_with(char::is_whitespace)).map(|r| r.trim().to_string()).filter(|r| !r.is_empty()),
         Target::Hyprland => {
             let (call, at) = ["require", "dofile"].iter().find_map(|f| line.find(f).map(|i| (*f, i + f.len())))?;
             let rest = &line[at..];
@@ -1734,11 +1941,69 @@ pub(crate) fn resolve_include(base: &Path, raw: &str) -> PathBuf {
     if p.is_absolute() { p } else { base.parent().unwrap_or(Path::new(".")).join(p) }
 }
 
+/// The files `file` (whose contents are `text`) includes, resolved: one per
+/// include line, or, on Sway, every file a shell-word path names (sway
+/// expands `~`, `$VAR` and globs such as `/etc/sway/config.d/*`, and skips
+/// a pattern that matches nothing).
+pub(crate) fn included_files(target: Target, file: &Path, text: &str) -> Vec<PathBuf> {
+    includes_in(target, text)
+        .into_iter()
+        .flat_map(|raw| match target {
+            Target::Sway => sway_include_files(file, &raw),
+            _ => vec![resolve_include(file, &raw)],
+        })
+        .collect()
+}
+
+/// Sway include word → files: backslash escapes undone, `$VAR` and `~`
+/// expanded, relative to the including file, globbed (`*`, `?`) in the
+/// file name; matches sorted, like `wordexp` returns them.
+fn sway_include_files(base: &Path, raw: &str) -> Vec<PathBuf> {
+    let mut word = String::new();
+    let mut chars = raw.trim().chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => word.extend(chars.next()),
+            c => word.push(c),
+        }
+    }
+    let path = resolve_include(base, &expand_env(&word));
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    if !name.contains(['*', '?']) {
+        return vec![path];
+    }
+    let Some(dir) = path.parent() else { return Vec::new() };
+    let mut out: Vec<PathBuf> = std::fs::read_dir(dir).map(|d| d.flatten().map(|e| e.path()).filter(|p| p.file_name().is_some_and(|n| glob_match(&name, &n.to_string_lossy()))).collect()).unwrap_or_default();
+    out.sort();
+    out
+}
+
+/// Shell glob match of one path component (`*` and `?`; hidden files only
+/// match a pattern that starts with `.`).
+fn glob_match(pattern: &str, name: &str) -> bool {
+    if name.starts_with('.') && !pattern.starts_with('.') {
+        return false;
+    }
+    fn go(p: &[char], n: &[char]) -> bool {
+        match (p.first(), n.first()) {
+            (None, None) => true,
+            (Some('*'), _) => go(&p[1..], n) || (!n.is_empty() && go(p, &n[1..])),
+            (Some('?'), Some(_)) => go(&p[1..], &n[1..]),
+            (Some(a), Some(b)) if a == b => go(&p[1..], &n[1..]),
+            _ => false,
+        }
+    }
+    go(&pattern.chars().collect::<Vec<_>>(), &name.chars().collect::<Vec<_>>())
+}
+
 /// Chords bound in the user's own config, following `source=` / `include`
 /// (but never Mandara's generated file).
 pub fn existing_chords(target: Target) -> BTreeSet<String> {
     if target == Target::Mango {
         return mango_keys::with_user_keys(|keys| mango_existing_chords(&target.user_config(), keys));
+    }
+    if target == Target::Sway {
+        return sway_existing_chords(&target.user_config());
     }
     let mut out = BTreeSet::new();
     let mut stack = vec![target.user_config()];
@@ -1752,10 +2017,43 @@ pub fn existing_chords(target: Target) -> BTreeSet<String> {
         }
         let Ok(text) = std::fs::read_to_string(&file) else { continue };
         out.extend(parse_chords(target, &text));
-        for path in includes_in(target, &text) {
-            stack.push(resolve_include(&file, &path));
-        }
+        stack.extend(included_files(target, &file, &text));
     }
+    out
+}
+
+/// Sway reads `include`d files in place, and a `set $mod Mod4` in the main
+/// config holds in every file included after it (the usual
+/// `include /etc/sway/config.d/*` binds `$mod+…`): the user's binds are
+/// walked in order with the variables known at each point.
+fn sway_existing_chords(root: &Path) -> BTreeSet<String> {
+    fn walk(file: &Path, vars: &mut Vec<(String, String)>, visited: &mut BTreeSet<PathBuf>, out: &mut BTreeSet<String>) {
+        if !visited.insert(file.to_path_buf()) || file == Target::Sway.generated_file() || is_generated(file) {
+            return;
+        }
+        let Ok(text) = std::fs::read_to_string(file) else { return };
+        // Split at include lines so each part sees the variables set before it.
+        let mut chunk = String::new();
+        for line in text.lines() {
+            let included = (!line.trim_start().starts_with('#')).then(|| include_path(Target::Sway, line)).flatten();
+            match included {
+                Some(raw) => {
+                    out.extend(sway_binds_with(&chunk, vars).into_iter().map(|b| b.chord));
+                    chunk.clear();
+                    for child in sway_include_files(file, &raw) {
+                        walk(&child, vars, visited, out);
+                    }
+                }
+                None => {
+                    chunk.push_str(line);
+                    chunk.push('\n');
+                }
+            }
+        }
+        out.extend(sway_binds_with(&chunk, vars).into_iter().map(|b| b.chord));
+    }
+    let mut out = BTreeSet::new();
+    walk(root, &mut Vec::new(), &mut BTreeSet::new(), &mut out);
     out
 }
 
@@ -1841,7 +2139,77 @@ pub fn chords_by_line(target: Target, text: &str) -> Vec<(usize, String)> {
         Target::Niri => niri_chords(text),
         Target::Hyprland => hyprland_chords(text),
         Target::Umbriel => umbriel_chords(text),
+        Target::Sway => sway_binds(text).into_iter().map(|b| (b.line, b.chord)).collect(),
     }
+}
+
+/// One sway key bind: its 0-based line, its chord and the command it runs.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SwayBind {
+    pub line: usize,
+    pub chord: String,
+    pub command: String,
+}
+
+/// Sway `bindsym` binds of the default mode, as sway reads them: `set
+/// $name value` variables substituted, `--flags` skipped, `bindsym { … }`
+/// blocks read line by line, binds inside `mode "…" { … }` blocks left out
+/// (they only act in that mode). `bindcode` binds name raw keycodes and
+/// are left out too.
+pub fn sway_binds(text: &str) -> Vec<SwayBind> {
+    sway_binds_with(text, &mut Vec::new())
+}
+
+/// [`sway_binds`] with the variables already set before `text` (and
+/// those it sets added).
+fn sway_binds_with(text: &str, vars: &mut Vec<(String, String)>) -> Vec<SwayBind> {
+    let mut out = Vec::new();
+    // The command each open `{` block belongs to (`mode`, `bindsym`, …).
+    let mut blocks: Vec<String> = Vec::new();
+    for (i, raw) in text.lines().enumerate() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line == "}" {
+            blocks.pop();
+            continue;
+        }
+        let mut line = line.to_string();
+        if let Some(rest) = line.strip_prefix("set ")
+            && let Some((name, value)) = rest.trim().split_once(char::is_whitespace)
+            && name.starts_with('$')
+        {
+            vars.push((name.to_string(), value.trim().to_string()));
+            // Longest first, so `$mod` never eats `$modShift`.
+            vars.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
+            continue;
+        }
+        for (name, value) in vars.iter() {
+            line = line.replace(name.as_str(), value);
+        }
+        let opens_block = line.ends_with('{');
+        let body = line.trim_end_matches('{').trim_end();
+        let in_bind_block = blocks.last().is_some_and(|b| b == "bindsym") && blocks.len() == 1;
+        if opens_block {
+            blocks.push(body.split_whitespace().next().unwrap_or_default().to_string());
+            continue;
+        }
+        let words: Vec<&str> = if in_bind_block {
+            body.split_whitespace().collect()
+        } else if blocks.is_empty() && body.split_whitespace().next() == Some("bindsym") {
+            body.split_whitespace().skip(1).collect()
+        } else {
+            continue;
+        };
+        let mut words = words.into_iter().skip_while(|w| w.starts_with("--"));
+        let Some(combo) = words.next() else { continue };
+        let mut parts: Vec<&str> = combo.split('+').filter(|p| !p.is_empty()).collect();
+        let Some(key) = parts.pop() else { continue };
+        let command = words.collect::<Vec<_>>().join(" ");
+        out.push(SwayBind { line: i, chord: chord(parts.into_iter(), &keysym_for(key)), command });
+    }
+    out
 }
 
 /// The table a TOML header line opens (`[keybinds]` → `keybinds`,
@@ -2099,8 +2467,12 @@ pub fn install_include(target: Target) -> Result<bool> {
     let added = install_include_at(target, &path)?;
     if added
         && let crate::conflicts::Validation::Invalid { tool, report } = crate::conflicts::validate(target) {
-            if let Some(original) = before {
-                crate::store::write_atomic(&path, original.as_bytes())?;
+            match before {
+                Some(original) => crate::store::write_atomic(&path, original.as_bytes())?,
+                // A Sway config Mandara started from the system one goes again.
+                None => {
+                    let _ = std::fs::remove_file(&path);
+                }
             }
             anyhow::bail!("{tool} rejects {} with Mandara's include line, so it was not added:\n{report}", path.display());
         }
@@ -2110,6 +2482,9 @@ pub fn install_include(target: Target) -> Result<bool> {
 fn install_include_at(target: Target, path: &Path) -> Result<bool> {
     if include_installed_at(target, path) {
         return Ok(false);
+    }
+    if target == Target::Sway && !path.exists() {
+        seed_sway_config(path, Path::new(SWAY_SYSTEM_CONFIG))?;
     }
     let original = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     // Umbriel's include is a TOML array: worked out (and the file checked
@@ -2136,6 +2511,18 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
     };
     crate::store::write_atomic(path, updated.as_bytes())?;
     Ok(true)
+}
+
+/// A Sway user without a config of their own runs the system-wide one:
+/// theirs starts as a copy of it (sway's documented first step), so adding
+/// the include changes nothing else. Never overwrites an existing file.
+fn seed_sway_config(path: &Path, system: &Path) -> Result<()> {
+    let text = std::fs::read_to_string(system).with_context(|| format!("no sway config at {} and no {} to start one from", path.display(), system.display()))?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    }
+    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(path).with_context(|| format!("creating {}", path.display()))?;
+    std::io::Write::write_all(&mut file, text.as_bytes()).with_context(|| format!("writing {}", path.display()))
 }
 
 /// The comment above Mandara's include line (`#` dialects).
@@ -2947,5 +3334,161 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&file).unwrap(), after);
         let backup = dir.path().join("config.conf.mandara-backup");
         assert_eq!(std::fs::read_to_string(backup).unwrap(), "blur=1\nbind=SUPER,q,killclient");
+    }
+
+    /// A user's sway config: variables, a bind block, a mode, flags.
+    const SWAY_USER: &str = "set $mod Mod4\nset $menu fuzzel\nbindsym $mod+space exec $menu\nbindsym --locked XF86AudioPlay exec playerctl play-pause\nbindsym {\n    $mod+Shift+e exec swaynag -t warning -m Exit\n    Mod1+Tab focus next\n}\nmode \"resize\" {\n    bindsym $mod+b mode \"default\"\n}\nbindcode 133+24 kill\n";
+
+    #[test]
+    fn sway_binds_follow_variables_blocks_and_modes() {
+        let binds = sway_binds(SWAY_USER);
+        let chords: Vec<&str> = binds.iter().map(|b| b.chord.as_str()).collect();
+        assert_eq!(chords, ["super+space", "xf86audioplay", "shift+super+e", "alt+tab"], "mode binds and bindcode are left out");
+        assert_eq!(binds[0].command, "exec fuzzel", "variables substituted");
+        assert_eq!((binds[0].line, binds[2].line), (2, 5));
+        assert_eq!(parse_chords(Target::Sway, "# bindsym Mod4+q kill\nbindsym --release --no-warn Mod4+Ctrl+comma exec x\n"), vec!["ctrl+super+comma"]);
+    }
+
+    /// `$mod` set in the main config holds in the files it includes later,
+    /// the way sway reads them.
+    #[test]
+    fn sway_existing_chords_carry_variables_into_includes() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        std::fs::create_dir_all(d.join("config.d")).unwrap();
+        std::fs::write(d.join("config"), "set $mod Mod4\nbindsym $mod+Return exec foot\ninclude config.d/*\n").unwrap();
+        std::fs::write(d.join("config.d/50-menu.conf"), "set $menu wofi\nbindsym $mod+space exec $menu\nbindsym $mod+Shift+s exec grim\n").unwrap();
+        let chords = sway_existing_chords(&d.join("config"));
+        assert_eq!(chords.into_iter().collect::<Vec<_>>(), ["shift+super+s", "super+return", "super+space"]);
+    }
+
+    #[test]
+    fn sway_output() {
+        let cfg = CompositorConfig { autostart: true, ..Default::default() };
+        let existing = parse_chords(Target::Sway, SWAY_USER);
+        let existing: Vec<&str> = existing.iter().map(String::as_str).collect();
+        let out = emit_sway(&managed(&cfg, &existing));
+        let t = &out.text;
+        assert!(t.contains("\nexec mandara\n"), "{t}");
+        assert!(t.contains("for_window [app_id=\"^org\\.mandara\\.studio$\"] floating enable\nfor_window [class=\"^org\\.mandara\\.studio$\"] floating enable"), "{t}");
+        assert!(t.contains("client.focused #5eead4ff #5eead4ff #000000ff #93c5fdff #5eead4ff"), "dark text on a light accent: {t}");
+        assert!(t.contains("client.unfocused #1f2937ff #1f2937ff #ffffffff #1f2937ff #1f2937ff"), "{t}");
+        assert!(t.contains("bindsym Mod4+Alt+space exec mandara msg launcher toggle"), "{t}");
+        assert!(t.contains("bindsym XF86AudioMute exec mandara msg audio mute-all toggle"), "{t}");
+        assert!(!t.contains("bindsym Mod4+space ") && !t.contains("bindsym XF86AudioPlay "), "the user's binds win: {t}");
+        assert!(out.skipped.iter().any(|n| n.contains("already bound")), "{:?}", out.skipped);
+        // Nothing the user didn't set in Studio.
+        for absent in ["gaps", "default_border", "input ", "seat ", "output ", "focus_follows_mouse"] {
+            assert!(!t.contains(absent), "{absent} written without a Studio setting\n{t}");
+        }
+        let user = ManagedConfig { user_autostarts: true, ..managed(&cfg, &[]) };
+        assert!(!emit_sway(&user).text.contains("\nexec "), "the user's config starts Mandara already");
+    }
+
+    #[test]
+    fn sway_look_rules_and_quoting() {
+        let mut cfg = CompositorConfig {
+            border_width: Some(3),
+            keybinds: vec![
+                Keybind::new(&["super"], "x", BindAction::Spawn("notify-send a; notify-send 'b, c'".into())),
+                Keybind::new(&["hyper"], "y", BindAction::Spawn("true".into())),
+                Keybind::new(&["super"], "z", BindAction::Spawn("notify-send a; notify-send \"b\"".into())),
+            ],
+            ..Default::default()
+        };
+        cfg.look = CompositorLook { gaps_inner: Some(12), gaps_outer: Some(10), rounding: Some(9), blur: Some(true), shadows: Some(true), animations: Some(false), active_opacity: Some(0.9), inactive_opacity: Some(0.8), gaps_follow_bar: false };
+        cfg.window_rules = vec![WindowRule { title: Some("Volume \"x\"\nexec rm".into()), floating: Some(true), global: Some(true), no_blur: Some(true), ..Default::default() }];
+        let t = emit_sway(&managed(&cfg, &[])).text;
+        assert!(t.contains("gaps inner 12\ngaps outer -2\n"), "the outer gap is on top of the inner one: {t}");
+        assert!(t.contains("default_border pixel 3\ndefault_floating_border pixel 3"), "{t}");
+        assert!(t.contains("for_window [title=\"Volume .x.exec rm\"] floating enable, sticky enable\n"), "{t}");
+        assert!(!t.lines().any(|l| l.starts_with("exec rm")), "a title can't add a config line");
+        assert!(t.contains("bindsym Mod4+x exec \"notify-send a; notify-send 'b, c'\"\n"), "{t}");
+        assert!(!t.contains("bindsym Mod4+z") && t.contains("# Super+z → `notify-send a; notify-send \"b\"` skipped"), "no escape for a quote: {t}");
+        assert!(t.contains("bindsym Mod3+y exec true"), "Hyper is xkb's Mod3: {t}");
+        for absent in ["rounding", "blur", "shadow", "animation", "opacity", "Hyper"] {
+            assert!(!t.contains(absent), "{absent}: sway has no such setting\n{t}");
+        }
+    }
+
+    #[test]
+    fn sway_include_lines_and_files() {
+        assert_eq!(sway_include_line("/home/u/.config/mandara/generated/sway.conf"), "include /home/u/.config/mandara/generated/sway.conf");
+        assert_eq!(sway_include_line("/home/u/My Config/sway.conf"), "include /home/u/My\\ Config/sway.conf");
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        std::fs::create_dir_all(d.join("config.d")).unwrap();
+        std::fs::create_dir_all(d.join("with space")).unwrap();
+        for f in ["config.d/50-a.conf", "config.d/10-b.conf", "config.d/.hidden", "with space/x.conf"] {
+            std::fs::write(d.join(f), "bindsym Mod4+q kill\n").unwrap();
+        }
+        let main = d.join("config");
+        let text = "include config.d/*\ninclude with\\ space/x.conf\n# include nothing.conf\ninclude_not_this x\n";
+        std::fs::write(&main, text).unwrap();
+        let files = included_files(Target::Sway, &main, text);
+        assert_eq!(files, vec![d.join("config.d/10-b.conf"), d.join("config.d/50-a.conf"), d.join("with space/x.conf")], "globs sorted, hidden files skipped, escapes undone");
+        assert!(glob_match("*.conf", "a.conf") && glob_match("a?c", "abc") && !glob_match("*.conf", "a.kdl"));
+    }
+
+    #[test]
+    fn sway_include_install_starts_from_the_system_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let system = dir.path().join("etc-sway-config");
+        std::fs::write(&system, "set $mod Mod4\ninclude /etc/sway/config.d/*\n").unwrap();
+        let user = dir.path().join("sway/config");
+        seed_sway_config(&user, &system).unwrap();
+        assert!(seed_sway_config(&user, &system).is_err(), "an existing config is never overwritten");
+        assert!(install_include_at(Target::Sway, &user).unwrap());
+        let text = std::fs::read_to_string(&user).unwrap();
+        assert!(text.starts_with("set $mod Mod4\ninclude /etc/sway/config.d/*\n"), "{text}");
+        assert!(text.trim_end().ends_with(&Target::Sway.include_line()), "{text}");
+        assert!(include_installed_at(Target::Sway, &user));
+        assert!(!install_include_at(Target::Sway, &user).unwrap(), "idempotent");
+        let home = dir.path().join("home");
+        std::fs::create_dir_all(home.join(".i3")).unwrap();
+        std::fs::write(home.join(".i3/config"), "").unwrap();
+        assert_eq!(sway_user_config(&dir.path().join("cfg"), &home), home.join(".i3/config"), "sway's own search order");
+        assert_eq!(sway_user_config(dir.path(), &home), user, "~/.config/sway/config comes before ~/.i3/config");
+    }
+
+    /// Sway's own check through the config doctor (`sway --validate
+    /// --verbose`, headless) on `user` ending in Mandara's include line:
+    /// every problem it reports, or `None` when sway isn't installed (CI's
+    /// `compositor-checkers` job installs it).
+    fn sway_check(user: &str, generated: &str) -> Option<Vec<String>> {
+        let dir = tempfile::tempdir().unwrap();
+        let dropin = dir.path().join("generated/sway.conf");
+        std::fs::create_dir_all(dropin.parent().unwrap()).unwrap();
+        std::fs::write(&dropin, generated).unwrap();
+        let root = dir.path().join("config");
+        std::fs::write(&root, format!("{user}\n{}\n", sway_include_line(&dropin.display().to_string()))).unwrap();
+        let env = crate::doctor::CheckEnv { home: Some(dir.path().to_path_buf()), ..Default::default() };
+        let report = crate::doctor::check_with(Target::Sway, &root, &env);
+        if report.status == crate::doctor::CheckerStatus::NotInstalled {
+            return None;
+        }
+        assert_eq!(report.status, crate::doctor::CheckerStatus::Ran, "{report:#?}");
+        assert!(report.files.contains(&dropin), "sway read the drop-in through the include line: {:?}", report.files);
+        Some(report.diagnostics.iter().map(|d| format!("{}: {}", d.place().unwrap_or_default(), d.message)).collect())
+    }
+
+    /// Sway accepts Mandara's drop-in without an error or an overwritten
+    /// bind, beside a config with its own binds.
+    #[test]
+    fn sway_itself_accepts_the_drop_in() {
+        let existing = parse_chords(Target::Sway, SWAY_USER);
+        let existing: Vec<&str> = existing.iter().map(String::as_str).collect();
+        let mut sink = mango_kitchen_sink();
+        sink.keybinds.push(Keybind::new(&["super", "ctrl", "alt", "shift", "hyper", "mod5"], ",", BindAction::Mandara("launcher toggle".into())));
+        sink.keybinds.push(Keybind::new(&["super"], "x", BindAction::Spawn("notify-send a; notify-send 'b, c'".into())));
+        sink.look = CompositorLook { gaps_inner: Some(4), gaps_outer: Some(16), ..Default::default() };
+        for cfg in [CompositorConfig::default(), sink] {
+            let out = emit_sway(&ManagedConfig { mandara_bin: "/home/u/.local/bin/mandara".into(), ..managed(&cfg, &existing) });
+            let Some(problems) = sway_check(SWAY_USER, &out.text) else {
+                eprintln!("sway isn't installed; skipped");
+                return;
+            };
+            assert!(problems.is_empty(), "sway --validate complained:\n{}\n--- drop-in ---\n{}", problems.join("\n"), out.text);
+        }
     }
 }

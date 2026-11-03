@@ -214,7 +214,8 @@ pub fn node_range(target: Target, file: &Path, lines: &[&str], idx: usize) -> (u
             }
             balanced(target, lines, idx, &['[', '{'], &[']', '}'])
         }
-        Target::Niri => balanced(target, lines, idx, &['{'], &['}']),
+        // A block (`input * { … }`, `bar { … }`) through its closing brace.
+        Target::Niri | Target::Sway => balanced(target, lines, idx, &['{'], &['}']),
         Target::Hyprland if file.extension().is_some_and(|e| e == "lua") => balanced(target, lines, idx, &['(', '{', '['], &[')', '}', ']']),
         Target::Hyprland => {
             let mut end = idx;

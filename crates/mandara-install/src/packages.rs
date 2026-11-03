@@ -139,16 +139,23 @@ pub fn for_family(family: Family) -> Option<&'static PackageSet> {
 }
 
 /// A compositor's screen-sharing / remote-desktop portal: (compositor
-/// program, package, Gentoo atom). MangoWM uses wlr's, Niri GNOME's.
+/// program, package, Gentoo atom). MangoWM and Sway use wlr's, Niri GNOME's.
 const PORTALS: &[(&str, &str, &str)] = &[
     ("mango", "xdg-desktop-portal-wlr", "gui-libs/xdg-desktop-portal-wlr"),
+    ("sway", "xdg-desktop-portal-wlr", "gui-libs/xdg-desktop-portal-wlr"),
     ("Hyprland", "xdg-desktop-portal-hyprland", "gui-libs/xdg-desktop-portal-hyprland"),
     ("niri", "xdg-desktop-portal-gnome", "sys-apps/xdg-desktop-portal-gnome"),
 ];
 
 /// The portal packages of every compositor installed (`has_program`).
 pub fn portal_packages(family: Family, has_program: impl Fn(&str) -> bool) -> Vec<&'static str> {
-    PORTALS.iter().filter(|(prog, _, _)| has_program(prog)).map(|(_, plain, atom)| if family == Family::Gentoo { *atom } else { *plain }).collect()
+    let mut out: Vec<&'static str> = Vec::new();
+    for package in PORTALS.iter().filter(|(prog, _, _)| has_program(prog)).map(|(_, plain, atom)| if family == Family::Gentoo { *atom } else { *plain }) {
+        if !out.contains(&package) {
+            out.push(package);
+        }
+    }
+    out
 }
 
 /// The package providing a login-screen program (`greetd`, `cage`, a kiosk
@@ -258,5 +265,6 @@ mod tests {
         assert!(portal_packages(Family::Arch, |_| false).is_empty());
         assert_eq!(portal_packages(Family::Arch, |p| p == "mango" || p == "niri"), ["xdg-desktop-portal-wlr", "xdg-desktop-portal-gnome"]);
         assert_eq!(portal_packages(Family::Gentoo, |p| p == "Hyprland"), ["gui-libs/xdg-desktop-portal-hyprland"]);
+        assert_eq!(portal_packages(Family::Arch, |p| p == "mango" || p == "sway"), ["xdg-desktop-portal-wlr"], "one portal for both wlroots compositors");
     }
 }

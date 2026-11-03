@@ -2,13 +2,17 @@
 //! (`tests/fixtures/doctor/<compositor>/`, `*.stdout` / `*.stderr`, paths
 //! written as `@FIXTURES@`) parsed into diagnostics. MangoWM's came from
 //! `mango -p` 0.18.4, Niri's from Niri 26.04's own `niri-config` parser,
-//! Umbriel's from `umbriel config validate --json` 0.1.0. Hyprland's
+//! Umbriel's from `umbriel config validate --json` 0.1.0, Sway's from
+//! `sway --validate --verbose` 1.12 (headless, in a throwaway container;
+//! its start-up banner of environment, kernel and os-release lines and
+//! wlroots' backend lines left out). Hyprland's
 //! (`*.synthetic.stdout`) are written from Hyprland's source, as no binary
 //! was available to capture them.
 //!
 //! `real_checkers_match_the_golden_files` runs the installed checkers on the
 //! same fixtures (skipped for those not installed; `MANDARA_TEST_NIRI_CHECK`
-//! and `MANDARA_TEST_UMBRIEL` point at locally built ones).
+//! and `MANDARA_TEST_UMBRIEL` point at locally built ones). CI's
+//! `compositor-checkers` job runs it with sway installed.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -82,13 +86,25 @@ const UMBRIEL: &[(&str, &[Expect])] = &[
     ("dropin/config", &[("umbriel/dropin/mandara/generated/umbriel.toml", 4, UnsupportedByVersion, Mandara, Some("layout.blur_optimized"))]),
 ];
 
+const SWAY: &[(&str, &[Expect])] = &[
+    ("unknown", &[("sway/unknown.conf", 2, UnknownOption, User, Some("frobnicate"))]),
+    ("badvalue", &[("sway/badvalue.conf", 1, InvalidValue, User, Some("gaps"))]),
+    ("syntax", &[("sway/syntax.conf", 1, SyntaxError, User, Some("for_window"))]),
+    // Sway names no line for a bind defined twice: found by its chord.
+    ("dupbind", &[("sway/dupbind.conf", 1, BindConflict, User, Some("Mod4+q"))]),
+    // Sway skips an include that matches no file without a word.
+    ("missing", &[]),
+    ("inc/main", &[("sway/inc/child.conf", 2, UnknownOption, User, Some("border_frobnicate"))]),
+    ("dropin/config", &[("sway/dropin/mandara/generated/sway.conf", 3, UnsupportedByVersion, Mandara, Some("blur"))]),
+];
+
 /// The config file of a fixture case.
 fn root_of(target: Target, case: &str) -> String {
     let ext = match target {
         Target::Mango => "conf",
         Target::Niri => "kdl",
         Target::Umbriel => "toml",
-        Target::Hyprland => "conf",
+        Target::Hyprland | Target::Sway => "conf",
     };
     format!("{}/{case}.{ext}", target.name().to_lowercase().replace("mangowm", "mango"))
 }
@@ -98,6 +114,7 @@ fn table(target: Target) -> &'static [(&'static str, &'static [Expect])] {
         Target::Mango => MANGO,
         Target::Niri => NIRI,
         Target::Umbriel => UMBRIEL,
+        Target::Sway => SWAY,
         Target::Hyprland => &[],
     }
 }
@@ -114,7 +131,7 @@ fn fix_niri_missing_key(target: Target, mut got: Vec<Diagnostic>) -> Vec<Diagnos
 
 #[test]
 fn golden_outputs_parse_into_diagnostics() {
-    for target in [Target::Mango, Target::Niri, Target::Umbriel] {
+    for target in [Target::Mango, Target::Niri, Target::Umbriel, Target::Sway] {
         let dir = target.name().to_lowercase().replace("mangowm", "mango");
         for (case, want) in table(target) {
             let got = fix_niri_missing_key(target, diagnose(target, &root_of(target, case), &format!("{dir}/{case}")));
@@ -355,7 +372,7 @@ fn mango_fixes_resolve_real_problems() {
 fn real_checkers_match_the_golden_files() {
     let home = tempfile::tempdir().unwrap();
     let mut ran = Vec::new();
-    for target in [Target::Mango, Target::Niri, Target::Umbriel] {
+    for target in [Target::Mango, Target::Niri, Target::Umbriel, Target::Sway] {
         let argv: Option<Vec<OsString>> = match target {
             Target::Niri if !on_path("niri") => std::env::var_os("MANDARA_TEST_NIRI_CHECK").map(|p| vec![p, OsString::from(CONFIG_PLACEHOLDER)]),
             Target::Umbriel if !on_path("umbriel") => std::env::var_os("MANDARA_TEST_UMBRIEL").map(|p| ["config", "validate", "-c", CONFIG_PLACEHOLDER, "--json"].iter().map(OsString::from).fold(vec![p], |mut v, a| {

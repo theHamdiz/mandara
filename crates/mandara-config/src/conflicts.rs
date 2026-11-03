@@ -1,6 +1,6 @@
-//! Compositor conflicts — what other setups leave in a user's MangoWM, Niri
-//! or Hyprland config that would fight Mandara — and how to retire them
-//! safely.
+//! Compositor conflicts — what other setups leave in a user's MangoWM, Niri,
+//! Hyprland, Umbriel or Sway config that would fight Mandara — and how to
+//! retire them safely.
 //!
 //! Lessons from real migrations: an old launcher (fuzzel, rofi…) or wallpaper
 //! switcher bound to Super+Space / Ctrl+Shift+W silently wins over Mandara's
@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::compositor::{BindAction, CompositorConfig, Keybind, Target, chord, chords_by_line, includes_in, is_generated, resolve_include, target_chord, toml_code, toml_header, toml_line_key};
+use crate::compositor::{BindAction, CompositorConfig, Keybind, Target, chord, chords_by_line, included_files, is_generated, target_chord, toml_code, toml_header, toml_line_key};
 
 /// What a conflicting autostart program does.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -56,6 +56,8 @@ impl Role {
 /// Programs that overlap with Mandara when started alongside it.
 pub const KNOWN: &[(&str, Role)] = &[
     ("waybar", Role::Bar),
+    // Sway's own bar, started by a `bar { … }` block.
+    ("swaybar", Role::Bar),
     ("ironbar", Role::Bar),
     ("yambar", Role::Bar),
     ("sfwbar", Role::Bar),
@@ -157,7 +159,7 @@ pub fn config_files_from(target: Target, root: &Path) -> Vec<PathBuf> {
             continue;
         }
         let text = std::fs::read_to_string(&file).unwrap_or_default();
-        let mut children: Vec<PathBuf> = includes_in(target, &text).into_iter().map(|p| resolve_include(&file, &p)).collect();
+        let mut children: Vec<PathBuf> = included_files(target, &file, &text);
         children.reverse();
         out.push(file);
         stack.extend(children);
@@ -205,7 +207,53 @@ fn autostart_command(target: Target, line: &str) -> Option<String> {
         // A TOML array that can span lines: read whole-file by
         // [`umbriel_autostarts`].
         Target::Umbriel => None,
+        // `exec [--no-startup-id] cmd` (start-up) and `exec_always cmd`
+        // (every reload).
+        Target::Sway => ["exec ", "exec_always "].iter().find_map(|p| t.strip_prefix(p)).map(|r| r.trim_start().trim_start_matches("--no-startup-id").trim().to_string()),
     }
+}
+
+/// What a Sway config starts without an `exec` line: a `bar { … }` block
+/// runs swaybar (or its `swaybar_command`) and `output … bg …` runs swaybg.
+/// `(first line, last line, program, role)`, 0-based.
+fn sway_builtin_autostarts(lines: &[&str]) -> Vec<(usize, usize, String, Role)> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < lines.len() {
+        let t = lines[i].trim();
+        if is_comment(Target::Sway, t) {
+            i += 1;
+            continue;
+        }
+        let first = t.split_whitespace().next().unwrap_or_default();
+        if first == "bar" && t.ends_with('{') {
+            let mut depth = 0i32;
+            let mut end = i;
+            let mut program = "swaybar".to_string();
+            for (j, l) in lines.iter().enumerate().skip(i) {
+                let l = l.trim();
+                if !is_comment(Target::Sway, l) {
+                    depth += l.matches('{').count() as i32 - l.matches('}').count() as i32;
+                    if let Some(cmd) = l.strip_prefix("swaybar_command") {
+                        program = programs_in(cmd).into_iter().next().unwrap_or(program);
+                    }
+                }
+                end = j;
+                if depth <= 0 {
+                    break;
+                }
+            }
+            let role = KNOWN.iter().find(|(n, _)| *n == program).map_or(Role::Bar, |(_, r)| *r);
+            out.push((i, end, program, role));
+            i = end + 1;
+            continue;
+        }
+        if first == "output" && t.split_whitespace().skip(2).take(1).any(|w| w == "bg" || w == "background") {
+            out.push((i, i, "swaybg".into(), Role::Wallpaper));
+        }
+        i += 1;
+    }
+    out
 }
 
 /// The TOML string literals on one line (comments skipped), as written
@@ -426,13 +474,32 @@ fn niri_binds(text: &str) -> Vec<(usize, usize, String)> {
 /// strings joined into `hl.bind(…)` chords (0.57 Lua) resolve; Niri binds
 /// span their `{ … }` block.
 pub fn file_binds(target: Target, text: &str) -> Vec<(usize, usize, String)> {
+    file_binds_after(target, "", text)
+}
+
+/// [`file_binds`] of a file read after `earlier`: the Sway `set $var …`
+/// lines of the files before it in the tree (a `$mod` set in the main
+/// config holds in the files it includes).
+fn file_binds_after(target: Target, earlier: &str, text: &str) -> Vec<(usize, usize, String)> {
     match target {
         Target::Niri => niri_binds(text),
+        Target::Sway if !earlier.is_empty() => {
+            let offset = earlier.lines().count();
+            file_binds_after(target, "", &format!("{earlier}{text}")).into_iter().filter(|(i, ..)| *i >= offset).map(|(i, j, c)| (i - offset, j - offset, c)).collect()
+        }
         _ => {
             let lines: Vec<&str> = text.lines().collect();
             chords_by_line(target, text).into_iter().filter(|(i, _)| lines.get(*i).is_some_and(|l| !is_comment(target, l))).map(|(i, c)| (i, i, c)).collect()
         }
     }
+}
+
+/// A file's Sway `set $var …` lines, for the files read after it.
+fn sway_sets(target: Target, text: &str) -> String {
+    if target != Target::Sway {
+        return String::new();
+    }
+    text.lines().filter(|l| l.trim_start().starts_with("set ")).map(|l| format!("{}\n", l.trim())).collect()
 }
 
 /// One keybind from the user's own compositor config (Studio's shortcut
@@ -453,13 +520,15 @@ pub struct UserBind {
     pub replaces: Option<String>,
 }
 
-/// Hyprland `$name = value` definitions in `lines`, longest names first so
-/// `$mainModShift` is substituted before `$mainMod`.
+/// Hyprland `$name = value` and Sway `set $name value` definitions in
+/// `lines`, longest names first so `$mainModShift` is substituted before `$mainMod`.
 fn hypr_vars(target: Target, lines: &[&str]) -> Vec<(String, String)> {
-    if target != Target::Hyprland {
-        return Vec::new();
-    }
-    let mut v: Vec<(String, String)> = lines.iter().filter_map(|l| l.trim().strip_prefix('$')?.split_once('=').map(|(n, val)| (format!("${}", n.trim()), val.trim().to_string()))).collect();
+    let mut v: Vec<(String, String)> = match target {
+        Target::Hyprland => lines.iter().filter_map(|l| l.trim().strip_prefix('$')?.split_once('=').map(|(n, val)| (format!("${}", n.trim()), val.trim().to_string()))).collect(),
+        // Sway: `set $name value`.
+        Target::Sway => lines.iter().filter_map(|l| l.trim().strip_prefix("set ")?.trim().split_once(char::is_whitespace).filter(|(n, _)| n.starts_with('$')).map(|(n, val)| (n.to_string(), val.trim().to_string()))).collect(),
+        _ => return Vec::new(),
+    };
     v.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
     v
 }
@@ -468,9 +537,14 @@ fn hypr_vars(target: Target, lines: &[&str]) -> Vec<(String, String)> {
 /// parse as the conflict scanner ([`file_binds`]), so Hyprland's `$mainMod`
 /// variables and Lua `hl.bind` chords built from `local`s count.
 pub fn binds_in(target: Target, file: &Path, text: &str) -> Vec<UserBind> {
+    binds_in_after(target, file, text, "")
+}
+
+/// [`binds_in`] for a file read after `earlier` (see [`file_binds_after`]).
+fn binds_in_after(target: Target, file: &Path, text: &str, earlier: &str) -> Vec<UserBind> {
     let lines: Vec<&str> = text.lines().collect();
-    let vars = hypr_vars(target, &lines);
-    file_binds(target, text)
+    let vars = hypr_vars(target, &earlier.lines().chain(lines.iter().copied()).collect::<Vec<_>>());
+    file_binds_after(target, earlier, text)
         .into_iter()
         .map(|(start, end, chord)| {
             let block = lines.get(start..=end.min(lines.len().saturating_sub(1))).map(|l| l.join("\n")).unwrap_or_default();
@@ -485,11 +559,13 @@ pub fn binds_in(target: Target, file: &Path, text: &str) -> Vec<UserBind> {
 /// whose tool Mandara replaces carry it in [`UserBind::replaces`].
 pub fn user_binds(target: Target, cfg: &CompositorConfig) -> std::collections::BTreeMap<String, UserBind> {
     let mut map = std::collections::BTreeMap::new();
+    let mut earlier = String::new();
     for file in config_files(target) {
         let Ok(text) = std::fs::read_to_string(&file) else { continue };
-        for b in binds_in(target, &file, &text) {
+        for b in binds_in_after(target, &file, &text, &earlier) {
             map.insert(b.chord.clone(), b);
         }
+        earlier.push_str(&sway_sets(target, &text));
     }
     for c in scan(target, cfg) {
         if let Kind::Keybind { chord, replaces: Some(tool), .. } = c.kind
@@ -509,14 +585,16 @@ pub fn scan(target: Target, cfg: &CompositorConfig) -> Vec<Conflict> {
 pub fn scan_files(target: Target, cfg: &CompositorConfig, files: &[PathBuf]) -> Vec<Conflict> {
     let ours = mandara_chords(target, cfg);
     let mut out = Vec::new();
+    let mut earlier = String::new();
     for file in files {
         let Ok(text) = std::fs::read_to_string(file) else { continue };
         let lines: Vec<&str> = text.lines().collect();
         // Keybinds.
-        let binds = file_binds(target, &text);
-        // Hyprland `$var = value` lines, substituted into bind bodies so
-        // `exec, $menu` names the program behind it.
-        let vars = hypr_vars(target, &lines);
+        let binds = file_binds_after(target, &earlier, &text);
+        // Hyprland `$var = value` / Sway `set $var …` lines, substituted
+        // into bind bodies so `exec, $menu` names the program behind it.
+        let vars = hypr_vars(target, &earlier.lines().chain(lines.iter().copied()).collect::<Vec<_>>());
+        earlier.push_str(&sway_sets(target, &text));
         for (start, end, ch) in binds {
             let body = vars.iter().fold(lines[start..=end].join("\n"), |b, (n, val)| b.replace(n.as_str(), val));
             if body.contains("mandara") {
@@ -535,6 +613,11 @@ pub fn scan_files(target: Target, cfg: &CompositorConfig, files: &[PathBuf]) -> 
         } else {
             lines.iter().enumerate().filter(|(_, l)| !is_comment(target, l)).filter_map(|(i, l)| autostart_command(target, l).map(|cmd| (i, cmd))).collect()
         };
+        if target == Target::Sway {
+            for (start, end, program, role) in sway_builtin_autostarts(&lines) {
+                out.push(Conflict { file: file.clone(), lines: (start..=end).collect(), text: lines[start].trim().to_string(), kind: Kind::Autostart { program, role } });
+            }
+        }
         for (i, cmd) in autostarts {
             let l = lines[i];
             if cmd.contains("mandara") {
@@ -712,7 +795,7 @@ pub enum Validation {
 
 /// Runs the compositor's own config checker on the user's config:
 /// `mango -p -c`, `niri validate -c`, `Hyprland --verify-config -c`,
-/// `umbriel config validate -c`.
+/// `umbriel config validate -c`, `sway --validate --config`.
 pub fn validate(target: Target) -> Validation {
     validate_file(target, &target.user_config())
 }
@@ -726,12 +809,23 @@ pub fn validate_file(target: Target, config: &Path) -> Validation {
         // Exits non-zero when it finds a problem (and works without a
         // running compositor).
         Target::Umbriel => ("umbriel", vec!["config".into(), "validate".into(), "-c".into(), config.display().to_string()]),
+        Target::Sway => ("sway", vec!["--validate".into(), "--config".into(), config.display().to_string()]),
     };
-    let Ok(out) = std::process::Command::new(tool).args(&args).output() else { return Validation::Unchecked };
+    let mut cmd = std::process::Command::new(tool);
+    cmd.args(&args).stdin(std::process::Stdio::null());
+    // Sway builds its (headless, software) backend before it reads the
+    // config, even to validate: in its own private runtime dir.
+    let runtime = (target == Target::Sway).then(crate::doctor::PrivateDir::new).and_then(Result::ok);
+    if let Some(dir) = &runtime {
+        cmd.envs(crate::doctor::SWAY_CHECK_ENV.iter().copied()).env("XDG_RUNTIME_DIR", dir.path()).env_remove("WAYLAND_DISPLAY").env_remove("DISPLAY").env_remove("SWAYSOCK");
+    }
+    let Ok(out) = cmd.output() else { return Validation::Unchecked };
     let report = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     let failed = match target {
         // mango -p prints problems; it exits 0 either way.
         Target::Mango => report.contains("ERROR"),
+        // Sway exits 0 when the error is in an included file.
+        Target::Sway => !out.status.success() || report.contains("[ERROR]"),
         _ => !out.status.success(),
     };
     if failed { Validation::Invalid { tool, report: report.trim().to_string() } } else { Validation::Valid { tool } }
@@ -854,6 +948,47 @@ mod tests {
         assert_eq!(umbriel_retire_autostart("autostart = [\"kitty\", \"waybar\"]", "waybar"), "autostart = [\"kitty\"] # mandara-retired: \"waybar\"");
         restore(&b).unwrap();
         assert!(std::fs::read_to_string(d.join("config.toml")).unwrap().contains("[\"waybar\", \"kitty\"]"));
+        std::fs::remove_dir_all(d).ok();
+    }
+
+    /// Sway: binds (variables substituted), `exec` lines, the built-in bar
+    /// block and `output … bg` wallpaper; retiring comments the whole bar
+    /// block and sway's own checker still accepts the result.
+    #[test]
+    fn sway_binds_bars_and_wallpapers() {
+        let d = tmp("sway");
+        std::fs::create_dir_all(d.join("config.d")).unwrap();
+        std::fs::write(
+            d.join("config"),
+            "set $mod Mod4\nset $menu wofi --show drun\nbindsym $mod+space exec $menu\nbindsym $mod+Return exec foot\nexec --no-startup-id mako\nexec_always swaync\noutput * bg ~/wall.png fill\nbar {\n    position top\n    status_command while date; do sleep 1; done\n}\ninclude config.d/*\n",
+        )
+        .unwrap();
+        std::fs::write(d.join("config.d/50-bar.conf"), "bar {\n    swaybar_command waybar\n}\nbindsym $mod+Shift+w exec $menu\n").unwrap();
+        let files = config_files_from(Target::Sway, &d.join("config"));
+        assert_eq!(files, vec![d.join("config"), d.join("config.d/50-bar.conf")]);
+        let found = scan_files(Target::Sway, &cfg(), &files);
+        let program = |c: &Conflict| match &c.kind {
+            Kind::Autostart { program, .. } => Some(program.clone()),
+            _ => None,
+        };
+        let mut programs: Vec<String> = found.iter().filter_map(program).collect();
+        programs.sort();
+        assert_eq!(programs, ["mako", "swaybar", "swaybg", "swaync", "waybar"], "{found:#?}");
+        let bar = found.iter().find(|c| program(c).as_deref() == Some("swaybar")).unwrap();
+        assert_eq!(bar.lines, vec![7, 8, 9, 10], "the whole block");
+        assert!(found.iter().any(|c| matches!(&c.kind, Kind::Keybind { chord, replaces: Some(tool), .. } if chord == "super+space" && tool == "wofi")), "{found:#?}");
+        // `$mod` and `$menu` from the main config hold in the included file.
+        assert!(found.iter().any(|c| c.file == d.join("config.d/50-bar.conf") && c.lines == vec![3] && matches!(&c.kind, Kind::Takeover { chord, tool, .. } if chord == "shift+super+w" && tool == "wofi")), "{found:#?}");
+        let b = retire_into(Target::Sway, &found.iter().filter(|c| c.is_conflict()).cloned().collect::<Vec<_>>(), &d.join("backup")).unwrap();
+        let text = std::fs::read_to_string(d.join("config")).unwrap();
+        assert!(text.contains("# mandara-retired: bar {\n    # mandara-retired: position top"), "{text}");
+        assert!(text.contains("bindsym $mod+Return exec foot"), "the user's own binds stay");
+        if let Validation::Invalid { report, .. } = validate_file(Target::Sway, &d.join("config")) {
+            panic!("sway rejects the retired config:\n{report}\n{text}");
+        }
+        assert!(scan_files(Target::Sway, &cfg(), &files).iter().all(|c| !c.is_conflict()), "retired lines are not found again");
+        restore(&b).unwrap();
+        assert!(std::fs::read_to_string(d.join("config")).unwrap().contains("\nbar {\n    position top"));
         std::fs::remove_dir_all(d).ok();
     }
 

@@ -1,6 +1,6 @@
 [package]
 name = "mandara-config"
-description = "Reactive TOML ConfigStore, file watcher and non-destructive MangoWM, Niri, Hyprland and Umbriel config emitters for Mandara Shell"
+description = "Reactive TOML ConfigStore, file watcher and non-destructive MangoWM, Niri, Hyprland, Umbriel and Sway config emitters for Mandara Shell"
 version = "0.8.0"
 edition.workspace = true
 license.workspace = true

@@ -1,13 +1,13 @@
 # Mandara Shell
 
-> Mandara Shell (`mandara`) is a native Linux Wayland desktop shell written entirely in Rust on GPUI, the GPU-accelerated UI framework behind the Zed editor. It gives MangoWM, Niri, Hyprland and Umbriel a status bar, dynamic island, dock, launcher, sidebar, notification center, on-screen displays, wallpaper engine, desktop widgets, lock screen, login manager and a live settings app (Mandara Studio), all in one binary that uses under 100 MiB of RAM. It is free software under GPL-3.0-or-later.
+> Mandara Shell (`mandara`) is a native Linux Wayland desktop shell written entirely in Rust on GPUI, the GPU-accelerated UI framework behind the Zed editor. It gives MangoWM, Niri, Hyprland, Umbriel and Sway a status bar, dynamic island, dock, launcher, sidebar, notification center, on-screen displays, wallpaper engine, desktop widgets, lock screen, login manager and a live settings app (Mandara Studio), all in one binary that uses under 100 MiB of RAM. It is free software under GPL-3.0-or-later.
 
-Mandara is built specifically to be the complete desktop for all four of MangoWM, Niri, Hyprland and Umbriel at once, from one install and one set of settings.
+Mandara is built specifically to be the complete desktop for all five of MangoWM, Niri, Hyprland, Umbriel and Sway at once, from one install and one set of settings.
 
 Strengths:
 
-- Native support for each compositor's own model through its own IPC: MangoWM's tag bitmask (view, toggle-view, tag moves), Niri's scrolling columns, Hyprland's and Umbriel's workspaces. It detects the compositor version and writes its exact config dialect (including Hyprland 0.57's Lua config).
-- Safe configuration: one include line in the user's config; every change is checked by the compositor's own validator (`mango -p`, `niri validate`, `Hyprland --verify-config`, `umbriel config validate`) and rolled back if it fails.
+- Native support for each compositor's own model through its own IPC: MangoWM's tag bitmask (view, toggle-view, tag moves), Niri's scrolling columns, Hyprland's, Umbriel's and Sway's workspaces. It detects the compositor version and writes its exact config dialect (including Hyprland 0.57's Lua config).
+- Safe configuration: one include line in the user's config; every change is checked by the compositor's own validator (`mango -p`, `niri validate`, `Hyprland --verify-config`, `umbriel config validate`, `sway --validate`) and rolled back if it fails.
 - A whole desktop in one native Rust binary: bar (six styles, any edge), dynamic island, dock, launcher (three looks), side bars that join the top bar into one frame, notification center, on-screen displays, wallpaper engine with a depth effect and a generator, desktop widgets per monitor, clipboard manager, screenshots, screen recording (AV1), offline OCR, polkit agent, lock screen, login manager (greetd) and a live settings app. No QML, JavaScript, Python or shell-script layer.
 - Measured performance: under 100 MiB RAM, under 190 MiB video memory, about 0.1 % CPU idle, frames built in 0.1–0.2 ms.
 - Motion and colour: analytical, interruptible spring physics; Material You (HCT) palettes from the wallpaper; OKLCH blending; opt-in theming of Ghostty, GTK 3/4, Qt 5/6, Kvantum, Zed, kitty, foot, Alacritty and btop.
@@ -20,7 +20,7 @@ Strengths:
 Key facts:
 
 - Repository: https://github.com/theHamdiz/mandara (author: Ahmad Hamdi, `theHamdiz`).
-- Compositors: MangoWM (tags), Niri (scrollable tiling), Hyprland and Umbriel, all first-class. Mandara never edits the user's own compositor config. It writes drop-in files to `~/.config/mandara/generated/` and adds one include line.
+- Compositors: MangoWM (tags), Niri (scrollable tiling), Hyprland, Umbriel and Sway, all first-class. Mandara never edits the user's own compositor config. It writes drop-in files to `~/.config/mandara/generated/` and adds one include line.
 - Install: one command that downloads the signed release and runs `mandara install` (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo, Solus). Update from Studio → About → Update now.
 - Configuration: `~/.config/mandara/config.toml`, watched live. Mandara Studio (`mandara studio`) edits the same file, with 31 pages of settings.
 - Command line: almost everything the interface does is a documented command with JSON replies (`mandara msg <command>`, catalog via `mandara commands --json`), so scripts and AI agents can drive and inspect the desktop.

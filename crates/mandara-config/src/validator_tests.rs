@@ -1,8 +1,9 @@
 //! Every emitter's output fed to the compositor's own checker, the way the
 //! user's config loads it: a main config that includes / sources the
 //! drop-in. Each test is skipped when that compositor isn't installed
-//! (`niri validate`, `Hyprland --verify-config`; MangoWM's `mango -p` lives
-//! next to its emitter tests).
+//! (`niri validate`, `Hyprland --verify-config`, `sway --validate`;
+//! MangoWM's `mango -p` lives next to its emitter tests). CI's
+//! `compositor-checkers` job installs sway and runs the Sway ones.
 
 use std::path::Path;
 use std::process::Command;
@@ -215,6 +216,51 @@ fn hyprland_lua_uses_057_option_names() {
     let lua = emit_hyprland_lua(&managed(&cfg, colors, Some((0, 57)))).text;
     assert!(!lua.contains("[\"") && lua.contains("tap_to_click = true") && lua.contains("drag_lock = 1"), "{lua}");
     assert!(lua.contains("pcall(hl.on, \"hyprland.start\", function() hl.exec_cmd(\"/home/u/.local/bin/mandara\") end)"));
+}
+
+/// Sway's own check, through the config doctor (`sway --validate
+/// --verbose`, headless backend, private runtime dir): `None` when sway
+/// isn't installed, else every problem it reports.
+fn sway_problems(main: &Path, home: &Path) -> Option<Vec<String>> {
+    let env = crate::doctor::CheckEnv { home: Some(home.to_path_buf()), ..Default::default() };
+    let report = crate::doctor::check_with(Target::Sway, main, &env);
+    if report.status == crate::doctor::CheckerStatus::NotInstalled {
+        return None;
+    }
+    assert_eq!(report.status, crate::doctor::CheckerStatus::Ran, "{report:#?}");
+    Some(report.diagnostics.iter().map(|d| format!("{}: {}", d.place().unwrap_or_default(), d.message)).collect())
+}
+
+/// A user's sway config with its own binds and an output, ending in
+/// Mandara's include line (as `mandara setup` appends it).
+fn sway_main(dir: &Path, dropin: &Path) -> std::path::PathBuf {
+    let main = dir.join("config");
+    let text = format!("set $mod Mod4\noutput eDP-1 scale 1.25\nbindsym $mod+t exec alacritty\nbindsym $mod+q kill\ninput type:keyboard xkb_layout us\n\n{}\n", sway_include_line(&dropin.display().to_string()));
+    std::fs::write(&main, text).unwrap();
+    main
+}
+
+/// Every Sway drop-in (defaults, autostart, binds, the full Studio set with
+/// input and displays) passes `sway --validate` through the include line,
+/// without an error or an overwritten bind; the include works from a
+/// folder with a space in its name too.
+#[test]
+fn sway_validates_every_dropin() {
+    let dir = tempfile::tempdir().unwrap();
+    let generated = dir.path().join("mandara config/generated");
+    std::fs::create_dir_all(&generated).unwrap();
+    for (name, cfg, colors) in configs() {
+        let text = emit_sway(&managed(&cfg, colors, None)).text;
+        assert!(!text.contains("\n\n\n"), "{name}: tidy output\n{text}");
+        let dropin = generated.join("sway.conf");
+        std::fs::write(&dropin, &text).unwrap();
+        let main = sway_main(dir.path(), &dropin);
+        let Some(problems) = sway_problems(&main, dir.path()) else {
+            eprintln!("sway isn't installed; skipped");
+            return;
+        };
+        assert!(problems.is_empty(), "sway rejected the {name} drop-in:\n{}\n--- drop-in ---\n{text}", problems.join("\n"));
+    }
 }
 
 /// A user's Umbriel config with its own binds and an output, and Mandara's

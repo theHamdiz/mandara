@@ -30,14 +30,10 @@ pub struct Options {
     pub fix: Vec<String>,
 }
 
-fn parse_target(name: &str) -> Option<Target> {
-    match name {
-        "mango" | "mangowm" => Some(Target::Mango),
-        "niri" => Some(Target::Niri),
-        "hyprland" | "hypr" => Some(Target::Hyprland),
-        "umbriel" => Some(Target::Umbriel),
-        _ => None,
-    }
+
+/// Whether sway is installed (on `PATH`).
+fn which_sway() -> bool {
+    std::env::var_os("PATH").is_some_and(|paths| std::env::split_paths(&paths).any(|d| d.join("sway").is_file()))
 }
 
 pub fn setup(o: Options) -> Result<()> {
@@ -51,14 +47,15 @@ pub fn setup(o: Options) -> Result<()> {
         }
     }
     let targets: Vec<Target> = match o.compositor.as_deref() {
-        Some(name) => vec![parse_target(name).ok_or_else(|| anyhow::anyhow!("unknown compositor {name:?} (mango, niri, hyprland or umbriel)"))?],
+        Some(name) => vec![Target::parse(name).ok_or_else(|| anyhow::anyhow!("unknown compositor {name:?} ({})", Target::ALL.map(Target::id).join(", ")))?],
         None => match mandara_compositor::detect() {
             Some(kind) => vec![kind.target()],
-            None => Target::ALL.into_iter().filter(|t| t.user_config().exists()).collect(),
+            // Sway runs its system-wide config until the user has one.
+            None => Target::ALL.into_iter().filter(|t| t.user_config().exists() || (*t == Target::Sway && std::path::Path::new(mandara_config::compositor::SWAY_SYSTEM_CONFIG).exists() && which_sway())).collect(),
         },
     };
     if targets.is_empty() {
-        println!("No MangoWM, Niri, Hyprland or Umbriel config found — start your compositor once, then run `mandara setup` again.");
+        println!("No {} config found — start your compositor once, then run `mandara setup` again.", Target::ALL.map(Target::name).join(", "));
         return Ok(());
     }
     let mut store = mandara_config::ConfigStore::open_default()?;

@@ -6,6 +6,20 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Mandara now runs on Sway.** The bar shows each screen's workspaces
+  (which are in use, which needs you, which is showing), the windows on
+  them and the layout of the focused workspace, plus a badge while you're
+  in a binding mode such as resize; clicking switches workspaces and
+  moves windows. `mandara setup` adds one `include` line to the end of
+  your sway config (starting your own copy of the system config if you
+  have none) and keeps Mandara's colours, gaps, window rules, input,
+  display and key settings in their own file. Every line is checked with
+  `sway --validate` first, the Config doctor reads sway's own verdict on
+  your config, and moving over from swaybar or swaybg is part of the usual
+  takeover. Thanks for asking in #33!
+
 ### Changed
 
 - **A tidier layout designer, with search.** In Studio → Bar, the Left,

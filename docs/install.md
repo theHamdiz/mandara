@@ -112,15 +112,16 @@ mandara setup
 The recipes live in [`packaging/aur/`](../packaging/aur) and follow the
 [AUR submission guidelines](https://wiki.archlinux.org/title/AUR_submission_guidelines).
 
-## MangoWM, Niri, Hyprland and Umbriel
+## Compositors
 
+Mandara supports **MangoWM, Niri, Hyprland, Umbriel and Sway**.
 `mandara setup` (run by the installer) hooks Mandara into your compositor
 with **one include line** in your own config, writes everything else to
 `~/.config/mandara/generated/`, starts Mandara at login with an absolute
 path, and checks the result with the compositor's own validator
 (`mango -p`, `niri validate`, `Hyprland --verify-config`,
-`umbriel config validate`), rolling back if it objects (see
-[Config doctor](#config-doctor)).
+`umbriel config validate`, `sway --validate`), rolling back if it objects
+(see [Config doctor](#config-doctor)).
 
 | | Include line in your config | Autostart |
 |---|---|---|
@@ -129,6 +130,7 @@ path, and checks the result with the compositor's own validator
 | **Hyprland 0.57+** (Lua only) | `pcall(dofile, "…/mandara/generated/hyprland.lua")` in `hyprland.lua` | `hl.on("hyprland.start", …)` |
 | **Hyprland ≤ 0.56** | `source = ~/.config/mandara/generated/hyprland.conf` | `exec-once =` |
 | **Umbriel** | `"…/mandara/generated/umbriel.toml"` in `[include.optional] files` of `~/.config/umbriel/config.toml` (added to your list if you have one) | `general.autostart` |
+| **Sway** | `include …/mandara/generated/sway.conf` at the end of `~/.config/sway/config` (or whichever file sway reads: `~/.sway/config`, `~/.i3/config`…) | `exec` |
 
 Mandara detects the installed version and speaks its dialect, including
 Hyprland 0.57's Lua dispatches. On Niri the drop-in makes workspace
@@ -146,6 +148,21 @@ instead). Mandara reaches Umbriel over `$UMBRIEL_SOCKET`; the bar shows each
 output's workspaces, the active workspace's layout (click to cycle
 scrolling → dwindle → master → stacking) and the active keybind submap.
 
+On **Sway**, Mandara talks to the compositor over its IPC socket
+(`$SWAYSOCK`): the bar shows each output's workspaces (occupied, urgent,
+the visible one), the windows on them, the workspace's container layout
+(click to cycle stacking → tabbed → split) and the binding mode while it
+isn't `default`. Sway reads its config in order, and the include line sits
+at the end, so Mandara's border colours, gaps, window rules, input,
+display and key settings apply on top of yours (binds you already have stay
+yours: Mandara skips its own on those keys). If you have no config of your
+own yet, `mandara setup` starts `~/.config/sway/config` as a copy of
+`/etc/sway/config` (what sway asks you to do) before adding the line. Sway
+has no rounded corners, blur, shadows, animations or per-focus opacity, so
+those Studio rows are locked while it runs; `bar { … }` blocks (swaybar)
+and `output * bg …` (swaybg) are found as another bar and wallpaper (see
+below).
+
 ## Coming from another setup
 
 Mandara never rewrites your compositor config; it only adds one include
@@ -157,8 +174,11 @@ line. Leftovers from a previous setup can still fight it:
 - another wallpaper daemon (swww, hyprpaper, swaybg).
 
 The installer finds them in your config **and every file it sources or
-includes**, for MangoWM, Niri, Hyprland (`.conf` and `.lua`) and Umbriel
-(`[include]` lists, `[keybinds]` and `general.autostart`).
+includes**, for MangoWM, Niri, Hyprland (`.conf` and `.lua`), Umbriel
+(`[include]` lists, `[keybinds]` and `general.autostart`) and Sway
+(`include` globs such as `/etc/sway/config.d/*`, `set $var` variables,
+`bindsym` lines and blocks, `exec` / `exec_always`, `bar { … }` blocks and
+`output … bg` lines).
 
 ```bash
 mandara setup --check            # list conflicts, change nothing
@@ -171,12 +191,13 @@ What `--fix-conflicts` does:
 - Each conflicting line is commented out with a `mandara-retired:` marker,
   after a timestamped backup of every file it touches. On Umbriel only the
   program's entry leaves the `general.autostart` list; the rest of the list
-  stays.
+  stays. On Sway a `bar { … }` block is retired whole.
 - Keys an old tool used (an extra launcher shortcut, say) are re-bound to the
   Mandara equivalent.
 - The compositor then validates the result (`mango -p`, `niri validate`,
-  `Hyprland --verify-config`, `umbriel config validate`). If it reports
-  more problems than before, everything is rolled back.
+  `Hyprland --verify-config`, `umbriel config validate`,
+  `sway --validate`). If it reports more problems than before, everything
+  is rolled back.
 
 Binds that are yours, like quitting the compositor or launching your VPN,
 are never touched; Mandara skips its own shortcut on those keys. Studio →
@@ -187,9 +208,10 @@ Maintenance shows the same check with a one-click fix.
 Compositors change their config languages between releases: an option is
 renamed, a value tightens, a section moves. The **Config doctor** asks the
 compositor itself: it runs its own checker (`mango -p`, `niri validate`,
-`Hyprland --verify-config`, `umbriel config validate --json`) on your real
-config and every file it includes, read-only (a private runtime folder, no
-display, a time limit), and explains each problem it reports:
+`Hyprland --verify-config`, `umbriel config validate --json`,
+`sway --validate --verbose`) on your real config and every file it
+includes, read-only (a private runtime folder, no display, a time limit),
+and explains each problem it reports:
 
 - **where**: the file and line, with the line itself;
 - **whose**: your own files, or Mandara's generated drop-in;
@@ -228,10 +250,19 @@ mandara setup --fix 1a2b3c4d=comment   # fix by id from the report: comment, rem
 mandara msg --json compositor check    # the same report from the running shell, for agents
 ```
 
-MangoWM, Niri and Umbriel output is read as those checkers print it (tested
-against MangoWM 0.18.4, Niri 26.04 and Umbriel 0.1.0). Hyprland's is read
-from its documented format and hasn't been tested against a real Hyprland
-yet; an output the doctor doesn't recognise is still shown as it is.
+MangoWM, Niri, Umbriel and Sway output is read as those checkers print it
+(tested against MangoWM 0.18.4, Niri 26.04, Umbriel 0.1.0 and Sway 1.12).
+Hyprland's is read from its documented format and hasn't been tested
+against a real Hyprland yet; an output the doctor doesn't recognise is
+still shown as it is.
+
+Sway sets up its backend before it reads a config, even to validate one,
+so the doctor runs `sway --validate` with a headless backend and software
+rendering (`WLR_BACKENDS=headless`, `WLR_RENDERER=pixman`) in its private
+runtime folder: nothing touches your screens, seat or GPU. Sway names no
+line for a key bound twice (it says "Overwriting binding"), so the doctor
+finds that line by its key combination; and it skips an `include` that
+matches no file without a word, so a missing include isn't reported.
 
 ## Packages
 

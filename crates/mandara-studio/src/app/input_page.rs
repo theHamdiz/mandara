@@ -74,7 +74,7 @@ impl StudioView {
         let live = running();
         let status = match live {
             Some(t) => tf("Written to Mandara's {compositor} drop-in; “Your config” keeps your own setting.", &[("compositor", &target_name(t))]),
-            None => t("Saved now; applied the next time Mandara runs under MangoWM, Niri, Hyprland or Umbriel.").into(),
+            None => tf("Saved now; applied the next time Mandara runs under a supported compositor ({compositors}).", &[("compositors", &mandara_config::compositor::Target::ALL.map(mandara_config::compositor::Target::name).join(", "))]),
         };
         let layouts = self.input_layouts(cfg, p, cx);
         let keyboard = self.rows(group(KEYBOARD), cfg, p, cx);

@@ -1,0 +1,7 @@
+00:00:00.003 [INFO] [sway/config.c:422] Loading config from @FIXTURES@/sway/badvalue.conf
+00:00:00.003 [INFO] [sway/commands.c:381] Config command: gaps inner lots
+00:00:00.003 [INFO] [sway/commands.c:404] After replacement: gaps inner lots
+00:00:00.003 [ERROR] [sway/config.c:814] Error on line 1 'gaps inner lots': Expected 'gaps inner|outer|horizontal|vertical|top|right|bottom|left <px>' (@FIXTURES@/sway/badvalue.conf)
+00:00:00.003 [INFO] [sway/commands.c:381] Config command: default_border pixel wide
+00:00:00.003 [INFO] [sway/commands.c:404] After replacement: default_border pixel wide
+00:00:00.003 [ERROR] [sway/config.c:440] Error(s) loading config!

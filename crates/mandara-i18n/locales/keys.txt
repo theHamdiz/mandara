@@ -778,7 +778,7 @@ Border grab area
 Border width
 Both
 Both Shift keys
-Both buttons together click the middle one (MangoWM, Niri)
+Both buttons together click the middle one (MangoWM, Niri, Sway)
 Both take turns: a verse, then a hadith
 Bottom
 Bottom center
@@ -2507,7 +2507,7 @@ Hyprland
 Hyprland and Umbriel only
 Hyprland layout & groups
 Hyprland only
-Hyprland, Niri and Umbriel switch it per fullscreen window; MangoWM treats it as on
+Hyprland, Niri and Umbriel switch it per fullscreen window; MangoWM and Sway treat it as on
 I am no bird; and no net ensnares me; I am a free human being with an independent will.
 I am not sick. I am broken. But I am happy to be alive as long as I can paint.
 I did this today
@@ -3218,8 +3218,8 @@ Mandara's drop-in
 Mandara's shortcuts and your compositor's appear here
 MangoWM
 MangoWM and Niri only
-MangoWM, Niri, Hyprland
-MangoWM, Niri, Umbriel
+MangoWM, Niri, Hyprland, Sway
+MangoWM, Niri, Umbriel, Sway
 Manifest: id, name, zone, permissions, settings
 Manual
 Marcus Aurelius
@@ -3767,7 +3767,7 @@ No such task (see `todo list`)
 No such topic (use its name or id; see `notes topics`)
 No such unit
 No supported compositor detected
-No supported compositor detected (MangoWM, Niri, Hyprland, Umbriel)
+No supported compositor detected ({compositors})
 No surah matches
 No surah or ayah {reference}
 No surah or ayah {reference} (try 2, 2:255, 2:255-260 or al-baqara)
@@ -4559,7 +4559,7 @@ Rasselas
 Rates by ExchangeRate-API · {date}
 Rates in bytes (MB/s) or bits (Mb/s)
 Rather than love, than money, than fame, give me truth.
-Raw compositor dispatch (MangoWM function, Hyprland dispatcher, Niri or Umbriel action)
+Raw compositor dispatch (MangoWM function, Hyprland dispatcher, Niri or Umbriel action, Sway command)
 Ray detail
 Re-derive the theme (Material You) from each wallpaper you pick
 Re-export
@@ -4942,7 +4942,7 @@ Saved colors: {n}
 Saved display profiles and which one matches the connected monitors
 Saved files; the clipboard always gets PNG
 Saved in ~/.cache/mandara/clipboard; off keeps it in memory only
-Saved now; applied the next time Mandara runs under MangoWM, Niri, Hyprland or Umbriel.
+Saved now; applied the next time Mandara runs under a supported compositor ({compositors}).
 Saved now; {file} is generated the next time Mandara runs under {compositor}.
 Saved profiles
 Saved settings profiles
@@ -5442,7 +5442,9 @@ Speed and efficiency
 Speed test cancelled
 Speed test failed
 Speed test size
+Split horizontally
 Split toward the pointer
+Split vertically
 Spread salam
 Springs
 Square dots
@@ -5607,6 +5609,8 @@ Suspend, then hibernate
 Swahili proverb
 Swap the left and right buttons
 Swatch shape
+Sway has no such setting
+Sway reads Mandara's file where your config includes it, at the end, so Mandara's colours and gaps apply on top of yours. Sway has no rounded corners, opacity, blur, shadows or animations; the bar's layout pill cycles the focused container's layout.
 Swirl
 Switch
 Switch automatically
@@ -5666,6 +5670,7 @@ TOP APPS TODAY
 Tab
 Tab name
 Tab shape
+Tabbed
 Tablet
 Tabs
 Tabs and buttons above the cards, or pinned at the bottom

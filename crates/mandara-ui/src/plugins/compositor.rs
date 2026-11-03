@@ -155,14 +155,21 @@ async fn announce(report: Report, cx: &mut AsyncApp) {
     }
 }
 
+/// What a command's `compositor` argument takes: every compositor's id.
+const COMPOSITOR_NAMES: [&str; Target::ALL.len()] = {
+    let mut names = [""; Target::ALL.len()];
+    let mut i = 0;
+    while i < names.len() {
+        names[i] = Target::ALL[i].id();
+        i += 1;
+    }
+    names
+};
+
 /// The compositor a command names (`mango`, `niri`…), else the running one.
 fn target_arg(name: Option<&str>, cx: &App) -> Result<Target, String> {
     match name {
-        Some("mango") | Some("mangowm") => Ok(Target::Mango),
-        Some("niri") => Ok(Target::Niri),
-        Some("hyprland") => Ok(Target::Hyprland),
-        Some("umbriel") => Ok(Target::Umbriel),
-        Some(other) => Err(format!("unknown compositor {other:?} (mango, niri, hyprland or umbriel)")),
+        Some(name) => Target::parse(name).ok_or_else(|| format!("unknown compositor {name:?} ({})", COMPOSITOR_NAMES.join(", "))),
         None => Ok(backend(cx)?.target()),
     }
 }
@@ -287,7 +294,7 @@ pub fn register(r: &mut PluginRegistry) {
             let target = target_arg(a.get(0), cx)?;
             Ok(pending(move || Ok(dstate::record(doctor::check(target)).to_json())))
         })
-        .arg(ArgSpec::optional("compositor", ArgKind::Enum, mandara_i18n::tk("defaults to the running one")).choices(&["mango", "niri", "hyprland", "umbriel"]))
+        .arg(ArgSpec::optional("compositor", ArgKind::Enum, mandara_i18n::tk("defaults to the running one")).choices(&COMPOSITOR_NAMES))
         .example("compositor check"),
     );
     r.command(
@@ -311,7 +318,7 @@ pub fn register(r: &mut PluginRegistry) {
         })
         .arg(ArgSpec::required("id", ArgKind::String, mandara_i18n::tk("the problem's id from `compositor check`")))
         .arg(ArgSpec::required("fix", ArgKind::Enum, mandara_i18n::tk("comment or remove (your files), regenerate (Mandara's drop-in)")).choices(&["comment", "remove", "regenerate"]))
-        .arg(ArgSpec::optional("compositor", ArgKind::Enum, mandara_i18n::tk("defaults to the running one")).choices(&["mango", "niri", "hyprland", "umbriel"]))
+        .arg(ArgSpec::optional("compositor", ArgKind::Enum, mandara_i18n::tk("defaults to the running one")).choices(&COMPOSITOR_NAMES))
         .example("compositor fix 1a2b3c4d comment"),
     );
     r.command(
@@ -322,17 +329,14 @@ pub fn register(r: &mut PluginRegistry) {
             dstate::snooze(&report);
             Ok(json!({ "snoozed": report.diagnostics.len() }))
         })
-        .arg(ArgSpec::optional("compositor", ArgKind::Enum, mandara_i18n::tk("defaults to the running one")).choices(&["mango", "niri", "hyprland", "umbriel"])),
+        .arg(ArgSpec::optional("compositor", ArgKind::Enum, mandara_i18n::tk("defaults to the running one")).choices(&COMPOSITOR_NAMES)),
     );
     r.command(
         ID,
         CommandSpec::new_output("compositor install-include", mandara_i18n::tk("Append the single include line to your compositor config (backup kept)"), |a, cx| {
-            let target = match a.get(0) {
-                Some("mango") => Target::Mango,
-                Some("niri") => Target::Niri,
-                Some("hyprland") => Target::Hyprland,
-                Some("umbriel") => Target::Umbriel,
-                _ => backend(cx)?.target(),
+            let target = match a.get(0).and_then(Target::parse) {
+                Some(target) => target,
+                None => backend(cx)?.target(),
             };
             let inputs = sync_inputs(cx);
             Ok(pending(move || {
@@ -344,7 +348,7 @@ pub fn register(r: &mut PluginRegistry) {
                 Ok(json!({ "file": target.user_config(), "added": added, "line": target.include_line(), "sync": report }))
             }))
         })
-        .arg(ArgSpec::optional("compositor", ArgKind::Enum, mandara_i18n::tk("defaults to the running one")).choices(&["mango", "niri", "hyprland", "umbriel"]))
+        .arg(ArgSpec::optional("compositor", ArgKind::Enum, mandara_i18n::tk("defaults to the running one")).choices(&COMPOSITOR_NAMES))
         .example("compositor install-include"),
     );
     r.command(ID, CommandSpec::new("compositor reload", mandara_i18n::tk("Ask the compositor to reload its config"), |_, cx| {
@@ -359,7 +363,7 @@ pub fn register(r: &mut PluginRegistry) {
     }));
     r.command(
         ID,
-        CommandSpec::new("compositor dispatch", mandara_i18n::tk("Raw compositor dispatch (MangoWM function, Hyprland dispatcher, Niri or Umbriel action)"), |a, cx| {
+        CommandSpec::new("compositor dispatch", mandara_i18n::tk("Raw compositor dispatch (MangoWM function, Hyprland dispatcher, Niri or Umbriel action, Sway command)"), |a, cx| {
             let cmd = a.str(0)?.to_string();
             let rest: Vec<String> = a.0.iter().skip(1).cloned().collect();
             let args: Vec<&str> = rest.iter().map(String::as_str).collect();

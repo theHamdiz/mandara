@@ -279,11 +279,16 @@ impl StudioView {
 }
 
 fn running_target() -> Option<Target> {
+    // Sway leaves XDG_CURRENT_DESKTOP to the session: its socket says it.
+    if let Some(kind) = mandara_compositor::detect() {
+        return Some(kind.target());
+    }
     match std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_lowercase().as_str() {
         d if d.contains("mango") => Some(Target::Mango),
         d if d.contains("niri") => Some(Target::Niri),
         d if d.contains("hyprland") => Some(Target::Hyprland),
         d if d.contains("umbriel") => Some(Target::Umbriel),
+        d if d.contains("sway") => Some(Target::Sway),
         _ => None,
     }
 }
@@ -796,7 +801,7 @@ impl StudioView {
             chips()
                 .child(chip(SharedString::from(format!("d{i}-vrr-off")), t("Off"), cur == VrrMode::Off, p).on_click(Self::edit(i, |c| c.vrr = Some(VrrMode::Off))))
                 .child(chip(SharedString::from(format!("d{i}-vrr-on")), t("On"), cur == VrrMode::On, p).on_click(Self::edit(i, |c| c.vrr = Some(VrrMode::On))))
-                .child(chip(SharedString::from(format!("d{i}-vrr-fs")), t("Fullscreen only"), cur == VrrMode::Fullscreen, p).tooltip(tip(t("Hyprland, Niri and Umbriel switch it per fullscreen window; MangoWM treats it as on"), p)).on_click(Self::edit(i, |c| c.vrr = Some(VrrMode::Fullscreen))))
+                .child(chip(SharedString::from(format!("d{i}-vrr-fs")), t("Fullscreen only"), cur == VrrMode::Fullscreen, p).tooltip(tip(t("Hyprland, Niri and Umbriel switch it per fullscreen window; MangoWM and Sway treat it as on"), p)).on_click(Self::edit(i, |c| c.vrr = Some(VrrMode::Fullscreen))))
         });
         let name = c.name.clone();
         let is_primary = cfg.displays.primary.as_deref() == Some(c.name.as_str());

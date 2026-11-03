@@ -279,7 +279,7 @@ pub fn filter_emitted(target: Target, file: &Path, text: &str, options: &[String
             notes.insert(start, name.clone());
         }
         // Brace blocks (Niri nodes, hyprlang categories) name nested keys.
-        if matches!(target, Target::Niri | Target::Hyprland) {
+        if matches!(target, Target::Niri | Target::Hyprland | Target::Sway) {
             let opens = line.matches('{').count();
             let closes = line.matches('}').count();
             if opens > closes

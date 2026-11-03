@@ -210,39 +210,39 @@ impl InputConfig {
 }
 
 /// Input options and the compositors whose drop-in honours them
-/// (`[MangoWM, Niri, Hyprland, Umbriel]`), for Studio's support dots.
+/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway]`), for Studio's support dots.
 pub const INPUT_OPTIONS: &[(&str, [bool; crate::compositor::Target::ALL.len()])] = &[
-    ("keyboard.layouts", [true, true, true, true]),
-    ("keyboard.repeat", [true, true, true, true]),
-    ("keyboard.numlock", [true, true, true, true]),
-    ("keyboard.per_window_layout", [false, true, false, true]),
-    ("mouse.accel_profile", [true, true, true, true]),
-    ("mouse.speed", [true, true, true, true]),
-    ("mouse.natural_scroll", [true, true, true, true]),
-    ("mouse.left_handed", [true, true, true, true]),
-    ("mouse.scroll_method", [true, true, true, false]),
-    ("mouse.scroll_factor", [true, true, true, false]),
-    ("mouse.middle_emulation", [true, true, false, false]),
-    ("touchpad.accel_profile", [true, true, false, true]),
-    ("touchpad.speed", [true, true, false, true]),
-    ("touchpad.natural_scroll", [true, true, true, true]),
-    ("touchpad.left_handed", [true, true, false, true]),
-    ("touchpad.scroll_method", [true, true, false, true]),
-    ("touchpad.scroll_factor", [true, true, true, true]),
-    ("touchpad.middle_emulation", [true, true, true, false]),
-    ("touchpad.tap_to_click", [true, true, true, true]),
-    ("touchpad.tap_and_drag", [true, true, true, true]),
-    ("touchpad.drag_lock", [true, true, true, true]),
-    ("touchpad.disable_while_typing", [true, true, true, true]),
-    ("touchpad.click_method", [true, true, true, true]),
-    ("touchpad.disable_with_mouse", [true, true, false, true]),
-    ("cursor.theme", [true, true, true, true]),
-    ("cursor.size", [true, true, true, true]),
-    ("cursor.hide_when_typing", [true, true, true, true]),
-    ("cursor.hide_after_secs", [true, true, true, true]),
-    ("cursor.no_hardware_cursors", [false, false, true, true]),
-    ("cursor.hide_on_touch", [false, false, true, false]),
-    ("focus_follows_mouse", [true, true, true, true]),
+    ("keyboard.layouts", [true, true, true, true, true]),
+    ("keyboard.repeat", [true, true, true, true, true]),
+    ("keyboard.numlock", [true, true, true, true, true]),
+    ("keyboard.per_window_layout", [false, true, false, true, false]),
+    ("mouse.accel_profile", [true, true, true, true, true]),
+    ("mouse.speed", [true, true, true, true, true]),
+    ("mouse.natural_scroll", [true, true, true, true, true]),
+    ("mouse.left_handed", [true, true, true, true, true]),
+    ("mouse.scroll_method", [true, true, true, false, true]),
+    ("mouse.scroll_factor", [true, true, true, false, true]),
+    ("mouse.middle_emulation", [true, true, false, false, true]),
+    ("touchpad.accel_profile", [true, true, false, true, true]),
+    ("touchpad.speed", [true, true, false, true, true]),
+    ("touchpad.natural_scroll", [true, true, true, true, true]),
+    ("touchpad.left_handed", [true, true, false, true, true]),
+    ("touchpad.scroll_method", [true, true, false, true, true]),
+    ("touchpad.scroll_factor", [true, true, true, true, true]),
+    ("touchpad.middle_emulation", [true, true, true, false, true]),
+    ("touchpad.tap_to_click", [true, true, true, true, true]),
+    ("touchpad.tap_and_drag", [true, true, true, true, true]),
+    ("touchpad.drag_lock", [true, true, true, true, true]),
+    ("touchpad.disable_while_typing", [true, true, true, true, true]),
+    ("touchpad.click_method", [true, true, true, true, true]),
+    ("touchpad.disable_with_mouse", [true, true, false, true, true]),
+    ("cursor.theme", [true, true, true, true, true]),
+    ("cursor.size", [true, true, true, true, true]),
+    ("cursor.hide_when_typing", [true, true, true, true, true]),
+    ("cursor.hide_after_secs", [true, true, true, true, true]),
+    ("cursor.no_hardware_cursors", [false, false, true, true, false]),
+    ("cursor.hide_on_touch", [false, false, true, false, false]),
+    ("focus_follows_mouse", [true, true, true, true, true]),
 ];
 
 fn clamp_u(v: u32, (lo, hi): (u32, u32)) -> u32 {
@@ -883,6 +883,133 @@ pub fn emit_umbriel(input: &InputConfig) -> String {
     if s.is_empty() { s } else { format!("\n# Input (Studio → Input)\n{}", s.trim_start_matches('\n')) }
 }
 
+/// Sway's `scroll_method` names (`sway-input(5)`).
+fn sway_scroll(m: ScrollMethod) -> &'static str {
+    match m {
+        ScrollMethod::TwoFinger => "two_finger",
+        ScrollMethod::Edge => "edge",
+        ScrollMethod::OnButtonDown => "on_button_down",
+        ScrollMethod::NoScroll => "none",
+    }
+}
+
+/// Sway's `click_method` names.
+fn sway_click(m: ClickMethod) -> &'static str {
+    match m {
+        ClickMethod::ButtonAreas => "button_areas",
+        ClickMethod::Clickfinger => "clickfinger",
+    }
+}
+
+/// `enabled` / `disabled`, sway's input switch values.
+fn sway_switch(v: bool) -> &'static str {
+    if v { "enabled" } else { "disabled" }
+}
+
+/// The cursor theme sway is given when only a size is set (`xcursor_theme`
+/// takes the theme first): XCursor's own fallback name.
+const SWAY_DEFAULT_CURSOR_THEME: &str = "default";
+
+/// Sway lines (`sway-input(5)`): `input type:keyboard|pointer|touchpad …`
+/// for every device of that kind, `seat * …` for the cursor and
+/// `focus_follows_mouse`. Empty when nothing is set.
+pub fn emit_sway(input: &InputConfig) -> String {
+    if input.is_empty() {
+        return String::new();
+    }
+    let mut s = String::new();
+    let mut line = |device: &str, setting: String| {
+        let _ = writeln!(s, "input type:{device} {setting}");
+    };
+    let k = &input.keyboard;
+    if let Some((layouts, variants)) = k.xkb_layouts() {
+        line("keyboard", format!("xkb_layout {layouts}"));
+        if !variants.is_empty() {
+            line("keyboard", format!("xkb_variant {variants}"));
+        }
+    }
+    if let Some(o) = k.xkb_options() {
+        line("keyboard", format!("xkb_options {o}"));
+    }
+    if let Some(m) = k.model.as_deref().map(str::trim).filter(|m| !m.is_empty() && !m.contains(char::is_whitespace)) {
+        line("keyboard", format!("xkb_model {m}"));
+    }
+    if let Some(v) = k.repeat_rate {
+        line("keyboard", format!("repeat_rate {}", clamp_u(v, limits::REPEAT_RATE)));
+    }
+    if let Some(v) = k.repeat_delay {
+        line("keyboard", format!("repeat_delay {}", clamp_u(v, limits::REPEAT_DELAY_MS)));
+    }
+    if let Some(v) = k.numlock {
+        line("keyboard", format!("xkb_numlock {}", sway_switch(v)));
+    }
+    let pointer = |device: &str, p: &PointerInput, line: &mut dyn FnMut(&str, String)| {
+        if let Some(v) = p.accel_profile {
+            line(device, format!("accel_profile {}", kebab_profile(v)));
+        }
+        if let Some(v) = p.speed {
+            line(device, format!("pointer_accel {:.2}", clamp_f(v, limits::SPEED)));
+        }
+        if let Some(v) = p.natural_scroll {
+            line(device, format!("natural_scroll {}", sway_switch(v)));
+        }
+        if let Some(v) = p.left_handed {
+            line(device, format!("left_handed {}", sway_switch(v)));
+        }
+        if let Some(v) = p.scroll_method {
+            line(device, format!("scroll_method {}", sway_scroll(v)));
+        }
+        if let Some(v) = p.scroll_factor {
+            line(device, format!("scroll_factor {:.2}", clamp_f(v, limits::SCROLL_FACTOR)));
+        }
+        if let Some(v) = p.middle_emulation {
+            line(device, format!("middle_emulation {}", sway_switch(v)));
+        }
+    };
+    pointer("pointer", &input.mouse, &mut line);
+    let t = &input.touchpad;
+    pointer("touchpad", &t.pointer, &mut line);
+    for (key, v) in [("tap", t.tap_to_click), ("drag", t.tap_and_drag), ("drag_lock", t.drag_lock), ("dwt", t.disable_while_typing)] {
+        if let Some(v) = v {
+            line("touchpad", format!("{key} {}", sway_switch(v)));
+        }
+    }
+    if let Some(v) = t.click_method {
+        line("touchpad", format!("click_method {}", sway_click(v)));
+    }
+    if let Some(v) = t.disable_with_mouse {
+        line("touchpad", format!("events {}", if v { "disabled_on_external_mouse" } else { "enabled" }));
+    }
+    let c = &input.cursor;
+    let theme = c.theme.as_deref().map(str::trim).filter(|t| !t.is_empty() && !t.contains(char::is_whitespace));
+    let mut cursor = String::new();
+    if theme.is_some() || c.size.is_some() {
+        let size = c.size.map(|v| format!(" {}", clamp_u(v, limits::CURSOR_SIZE))).unwrap_or_default();
+        let _ = writeln!(cursor, "seat * xcursor_theme {}{size}", theme.unwrap_or(SWAY_DEFAULT_CURSOR_THEME));
+    }
+    if let Some(v) = c.hide_after_secs {
+        let _ = writeln!(cursor, "seat * hide_cursor {}", clamp_u(v, limits::CURSOR_HIDE_SECS) * MS_PER_SECOND);
+    }
+    if let Some(v) = c.hide_when_typing {
+        let _ = writeln!(cursor, "seat * hide_cursor when-typing {}", if v { "enable" } else { "disable" });
+    }
+    if let Some(v) = input.focus_follows_mouse {
+        let _ = writeln!(s, "focus_follows_mouse {}", if v { "yes" } else { "no" });
+    }
+    let mut out = String::new();
+    if !s.is_empty() {
+        out.push('\n');
+        out.push_str(INPUT_HEADER);
+        out.push_str(&s);
+    }
+    if !cursor.is_empty() {
+        out.push('\n');
+        out.push_str(CURSOR_HEADER);
+        out.push_str(&cursor);
+    }
+    out
+}
+
 /// Installed cursor themes (folders with a `cursors/` directory), sorted
 /// and deduplicated. `default` is skipped: it only points at another theme.
 pub fn cursor_themes_in(dirs: &[PathBuf]) -> Vec<String> {
@@ -1348,6 +1475,7 @@ mod dropin_tests {
         // A setting line: not blank, a comment, or bare section punctuation.
         let has_settings = |text: &str| text.lines().map(str::trim).any(|l| !l.is_empty() && !l.starts_with('#') && !l.starts_with("//") && l != "}" && !l.ends_with('{'));
         let mut mango_all = String::new();
+        let mut sway_all = String::new();
         for (key, input) in single_options() {
             let support = INPUT_OPTIONS.iter().find(|(k, _)| *k == key).unwrap_or_else(|| panic!("{key} missing from INPUT_OPTIONS")).1;
             let c = CompositorConfig { input: input.clone(), ..Default::default() };
@@ -1390,6 +1518,27 @@ mod dropin_tests {
             assert_eq!(has_settings(&umbriel_input), support[3], "Umbriel support of {key}:\n{umbriel_input}");
             let umbriel = crate::compositor::emit_umbriel(&managed(&c)).text;
             umbriel.parse::<toml::Table>().unwrap_or_else(|e| panic!("{key}: invalid TOML: {e}\n{umbriel}"));
+            let sway_input = super::emit_sway(&input);
+            assert_eq!(has_settings(&sway_input), support[4], "Sway support of {key}:\n{sway_input}");
+            for line in sway_input.lines().filter(|l| !l.trim().is_empty() && !l.starts_with('#')) {
+                let words: Vec<&str> = line.split_whitespace().collect();
+                let ok = match words.as_slice() {
+                    ["input", device, _, _, ..] => device.starts_with("type:"),
+                    ["seat", "*", _, _, ..] => true,
+                    ["focus_follows_mouse", "yes" | "no"] => true,
+                    _ => false,
+                };
+                assert!(ok, "{key}: not a sway input, seat or focus line: {line:?}");
+            }
+            sway_all.push_str(&sway_input);
+        }
+        // Sway's own checker over every case at once (later lines win).
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config");
+        std::fs::write(&path, &sway_all).unwrap();
+        let report = crate::doctor::check_with(crate::compositor::Target::Sway, &path, &crate::doctor::CheckEnv { home: Some(dir.path().to_path_buf()), ..Default::default() });
+        if report.status != crate::doctor::CheckerStatus::NotInstalled {
+            assert!(report.is_clean(), "sway --validate rejected an input option:\n{report:#?}\n{sway_all}");
         }
         // MangoWM's own parser, over every case at once (later lines win).
         if std::process::Command::new("mango").arg("-v").output().is_ok() {

@@ -5,8 +5,9 @@
 //! renamed, a value type tightens, a section moves. Instead of guessing,
 //! the doctor runs each compositor's **own** checker on the user's real
 //! config tree, read-only and sandboxed (`mango -p -c`, `niri validate -c`,
-//! `Hyprland --verify-config -c`, `umbriel config validate -c --json`; see
-//! [`CompositorCheck`]), and turns its output into structured
+//! `Hyprland --verify-config -c`, `umbriel config validate -c --json`,
+//! `sway --validate --verbose --config`; see [`CompositorCheck`]), and
+//! turns its output into structured
 //! [`Diagnostic`]s:
 //!
 //! - **where**: file, line, column (relative names and includes resolved
@@ -34,6 +35,7 @@ pub mod state;
 mod hyprland;
 mod mango;
 mod niri;
+mod sway;
 mod umbriel;
 
 #[cfg(test)]
@@ -48,7 +50,7 @@ use std::time::{Duration, Instant};
 use mandara_i18n::{t, tf};
 use serde::{Deserialize, Serialize};
 
-use crate::compositor::{Target, includes_in, is_generated, resolve_include};
+use crate::compositor::{Target, included_files, is_generated};
 
 /// A checker that takes longer than this is stopped and reported as hung.
 pub const CHECK_TIMEOUT: Duration = Duration::from_secs(10);
@@ -62,6 +64,10 @@ const MAX_FILE_BYTES: u64 = 4 << 20;
 const ID_DIGITS: usize = 8;
 /// Placeholder for the config path in an [`CheckEnv::argv`] override.
 pub const CONFIG_PLACEHOLDER: &str = "{config}";
+/// What `sway --validate` needs: sway sets up a backend before it reads the
+/// config, so it gets a headless one with the software renderer and no
+/// input devices (it never touches a display, seat or GPU).
+pub const SWAY_CHECK_ENV: &[(&str, &str)] = &[("WLR_BACKENDS", "headless"), ("WLR_RENDERER", "pixman"), ("WLR_LIBINPUT_NO_DEVICES", "1")];
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -378,6 +384,16 @@ pub trait CompositorCheck: Sync {
     fn version_flag(&self) -> &'static str {
         "--version"
     }
+    /// Extra environment the checker needs (on top of the private runtime
+    /// dir; see [`SWAY_CHECK_ENV`]).
+    fn env(&self) -> &'static [(&'static str, &'static str)] {
+        &[]
+    }
+    /// The part of the checker's output worth keeping in a report (Sway's
+    /// verbose log also prints the environment and kernel).
+    fn clean_raw(&self, text: &str) -> String {
+        text.to_string()
+    }
     /// Diagnostics in the checker's output (locations as printed; the
     /// doctor resolves and classifies them afterwards).
     fn parse(&self, out: &Output, ctx: &ParseContext) -> Vec<Diagnostic>;
@@ -401,6 +417,7 @@ pub fn checker(target: Target) -> &'static dyn CompositorCheck {
         Target::Niri => &niri::Niri,
         Target::Hyprland => &hyprland::Hyprland,
         Target::Umbriel => &umbriel::Umbriel,
+        Target::Sway => &sway::Sway,
     }
 }
 
@@ -415,7 +432,7 @@ pub fn config_tree(target: Target, root: &Path) -> Vec<PathBuf> {
             continue;
         }
         let text = read_small(&file).unwrap_or_default();
-        let mut children: Vec<PathBuf> = includes_in(target, &text).into_iter().map(|p| normalize(&resolve_include(&file, &p))).collect();
+        let mut children: Vec<PathBuf> = included_files(target, &file, &text).into_iter().map(|p| normalize(&p)).collect();
         children.reverse();
         out.push(file);
         stack.extend(children);
@@ -481,12 +498,12 @@ pub fn check_with(target: Target, root: &Path, env: &CheckEnv) -> Report {
         Some(argv) => argv.iter().map(|a| if a == CONFIG_PLACEHOLDER { root.as_os_str().to_owned() } else { a.clone() }).collect(),
         None => std::iter::once(OsString::from(check.program())).chain(check.args(root)).collect::<Vec<_>>(),
     };
-    match run(&argv, root.parent().unwrap_or(Path::new("/")), env) {
+    match run(&argv, root.parent().unwrap_or(Path::new("/")), env, check.env()) {
         Err(RunError::NotFound) => report.status = CheckerStatus::NotInstalled,
         Err(RunError::TimedOut) => report.status = CheckerStatus::TimedOut,
         Err(RunError::Other(e)) => report.status = CheckerStatus::Failed(e),
         Ok(out) => {
-            let mut raw = out.text().trim().to_string();
+            let mut raw = check.clean_raw(&out.text()).trim().to_string();
             if raw.len() > RAW_LIMIT {
                 let mut cut = RAW_LIMIT;
                 while !raw.is_char_boundary(cut) {
@@ -526,7 +543,7 @@ pub(crate) fn now_secs() -> u64 {
 /// → `0.18.4`).
 fn probe_version(check: &dyn CompositorCheck, env: &CheckEnv) -> Option<String> {
     let program = env.argv.as_ref().and_then(|a| a.first().cloned()).unwrap_or_else(|| check.program().into());
-    let out = run(&[program, check.version_flag().into()], Path::new("/"), env).ok()?;
+    let out = run(&[program, check.version_flag().into()], Path::new("/"), env, &[]).ok()?;
     version_in(&out.text())
 }
 
@@ -555,8 +572,8 @@ enum RunError {
 
 /// Runs `argv` read-only: stdin closed, a private empty runtime dir, no
 /// display, a timeout; both pipes drained on their own threads so a chatty
-/// checker never blocks.
-fn run(argv: &[OsString], cwd: &Path, env: &CheckEnv) -> Result<Output, RunError> {
+/// checker never blocks. `extra` is the checker's own environment.
+fn run(argv: &[OsString], cwd: &Path, env: &CheckEnv, extra: &[(&str, &str)]) -> Result<Output, RunError> {
     use std::process::{Command, Stdio};
     let (program, args) = argv.split_first().ok_or(RunError::NotFound)?;
     let runtime = PrivateDir::new().map_err(|e| RunError::Other(e.to_string()))?;
@@ -571,7 +588,7 @@ fn run(argv: &[OsString], cwd: &Path, env: &CheckEnv) -> Result<Output, RunError
         cmd.env("HOME", home);
     }
     // Plain output: no colours, and Niri's narrated (line-exact) reports.
-    cmd.env("XDG_RUNTIME_DIR", runtime.path()).env("NO_COLOR", "1").env("NO_GRAPHICS", "1").env("TERM", "dumb");
+    cmd.env("XDG_RUNTIME_DIR", runtime.path()).env("NO_COLOR", "1").env("NO_GRAPHICS", "1").env("TERM", "dumb").envs(extra.iter().copied());
     let mut child = cmd.spawn().map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { RunError::NotFound } else { RunError::Other(e.to_string()) })?;
     let drain = |pipe: Option<Box<dyn std::io::Read + Send>>| {
         std::thread::spawn(move || {
@@ -603,10 +620,10 @@ fn run(argv: &[OsString], cwd: &Path, env: &CheckEnv) -> Result<Output, RunError
 }
 
 /// A private `0700` folder, removed again when dropped.
-struct PrivateDir(PathBuf);
+pub(crate) struct PrivateDir(PathBuf);
 
 impl PrivateDir {
-    fn new() -> std::io::Result<Self> {
+    pub(crate) fn new() -> std::io::Result<Self> {
         use std::os::unix::fs::DirBuilderExt as _;
         let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or_default();
         let dir = std::env::temp_dir().join(format!("mandara-doctor-{}-{nanos}", std::process::id()));
@@ -614,7 +631,7 @@ impl PrivateDir {
         Ok(Self(dir))
     }
 
-    fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.0
     }
 }

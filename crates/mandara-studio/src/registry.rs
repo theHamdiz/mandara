@@ -486,6 +486,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
         path if path.starts_with("/compositor/input/cursor/") => system_settings::cursor_locked(path, running_compositor()),
+        path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Sway has no such setting")),
         path if path.starts_with("/wallpaper/slideshow/") => desktop_settings::slideshow_locked(path, cfg),
         "/wallpaper/depth/auto_split" | "/wallpaper/depth/download" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
         "/wallpaper/depth/split" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
@@ -494,6 +495,10 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         path => side_bar_settings::locked(path, cfg).or_else(|| surface_settings::locked(path, cfg)),
     }
 }
+
+/// Window-look settings sway has no equivalent of (its drop-in leaves them
+/// out): rounded corners, opacity, blur, shadows and animations.
+pub(crate) const SWAY_LACKS: &[&str] = &["/compositor/look/rounding", "/compositor/look/active_opacity", "/compositor/look/inactive_opacity", "/compositor/look/blur", "/compositor/look/shadows", "/compositor/look/animations"];
 
 /// The compositor Studio runs under, detected once (it can't change while
 /// Studio is open).

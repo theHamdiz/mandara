@@ -1,6 +1,6 @@
 //! The shortcuts cheatsheet's model: normalized chords split into keycaps
 //! (`shift+super+e` → `Super` `Shift` `E`), what a bind line of MangoWM,
-//! Niri, Hyprland or Umbriel does (`bind=SUPER,Q,killclient` → "Close
+//! Niri, Hyprland, Umbriel or Sway does (`bind=SUPER,Q,killclient` → "Close
 //! window"), and which group a bind belongs to (Mandara, windows,
 //! workspaces / tags, apps, media & system, other).
 //!
@@ -187,6 +187,12 @@ pub fn bind_text(target: Target, body: &str) -> BindText {
             let value = body.split_once('=').map(|(_, v)| v.trim()).unwrap_or(body);
             BindText { action: squash(value.trim_matches(|c| c == '"' || c == '\'')), description: None }
         }
+        // `bindsym [--flags] Mod4+q kill`, or `Mod4+q kill` inside a
+        // `bindsym { … }` block.
+        Target::Sway => {
+            let words = body.strip_prefix("bindsym").unwrap_or(body).split_whitespace().skip_while(|w| w.starts_with("--")).skip(1);
+            BindText { action: words.collect::<Vec<_>>().join(" "), description: None }
+        }
         Target::Hyprland if body.contains("hl.bind(") => lua_text(body),
         Target::Hyprland | Target::Mango => {
             let Some((keyword, value)) = body.split_once('=') else { return BindText { action: squash(body), description: None } };
@@ -314,6 +320,10 @@ fn mandara_group(words: &str) -> Group {
 /// action is better shown as written.
 pub fn describe(action: &str) -> Option<String> {
     let (v, rest) = verb(action);
+    // Sway: `workspace number 3`, `move container to workspace number 3`.
+    let sway_move = (v == "move").then(|| ["container to workspace ", "window to workspace ", "to workspace "].iter().find_map(|p| rest.strip_prefix(p)).map(str::to_string)).flatten();
+    let rest = sway_move.clone().unwrap_or(rest);
+    let rest = rest.strip_prefix("number ").map_or_else(|| rest.clone(), str::to_string);
     let arg = rest.split_whitespace().next().unwrap_or_default().trim_matches(|c| c == '"' || c == ',').to_string();
     let dir = || match arg.to_ascii_lowercase().as_str() {
         "l" | "left" => Some(t("left")),
@@ -348,12 +358,14 @@ pub fn describe(action: &str) -> Option<String> {
         "quit" | "exit" => t("Quit the compositor").to_string(),
         "reload_config" | "load_config_file" | "reload" => t("Reload the config").to_string(),
         "togglefloating" | "toggle_window_floating" | "setfloating" => t("Toggle floating").to_string(),
+        "floating" if arg == "toggle" => t("Toggle floating").to_string(),
         "togglefullscreen" | "fullscreen" | "fullscreen_window" | "togglefakefullscreen" => t("Toggle fullscreen").to_string(),
         "togglemaximizescreen" | "maximize_column" | "maximize" | "maximize_window_to_edges" => t("Maximize").to_string(),
         "minimized" | "minimize" | "toggle_minimize" => t("Minimize").to_string(),
         "toggleoverview" | "toggle_overview" | "overview" => t("Overview").to_string(),
-        "focusdir" | "movefocus" => tf("Focus {direction}", &[("direction", &dir()?)]),
-        "exchange_client" | "swapwindow" | "movewindow" if dir().is_some() => tf("Move window {direction}", &[("direction", &dir()?)]),
+        "focusdir" | "movefocus" | "focus" if dir().is_some() => tf("Focus {direction}", &[("direction", &dir()?)]),
+        "exchange_client" | "swapwindow" | "movewindow" | "move" if sway_move.is_none() && dir().is_some() => tf("Move window {direction}", &[("direction", &dir()?)]),
+        "move" if sway_move.is_some() && !arg.is_empty() => tf("Move window to {place} {n}", &[("place", &t("workspace")), ("n", &arg)]),
         "focusstack" | "cyclenext" => t("Focus next window").to_string(),
         "view" | "workspace" | "focus_workspace" if !arg.is_empty() => tf("Go to {place} {n}", &[("place", &if v == "view" { t("tag") } else { t("workspace") }), ("n", &arg)]),
         "tag" | "movetoworkspace" | "movetoworkspacesilent" | "move_column_to_workspace" | "move_window_to_workspace" if !arg.is_empty() => {
@@ -361,7 +373,7 @@ pub fn describe(action: &str) -> Option<String> {
         }
         "toggleview" if !arg.is_empty() => tf("Also show tag {n}", &[("n", &arg)]),
         "toggletag" if !arg.is_empty() => tf("Also put the window on tag {n}", &[("n", &arg)]),
-        "setlayout" | "switch_layout" => t("Switch layout").to_string(),
+        "setlayout" | "switch_layout" | "layout" => t("Switch layout").to_string(),
         "power_off_monitors" | "dpms" => t("Turn the screens off").to_string(),
         "screenshot" | "screenshot_screen" | "screenshot_window" => t("Take a screenshot").to_string(),
         "show_hotkey_overlay" => t("Show the shortcuts overlay").to_string(),
@@ -506,6 +518,22 @@ mod tests {
         assert_eq!(bind_text(Target::Niri, "    Mod+Shift+E {\n        quit;\n    }").action, "quit");
         assert_eq!(bind_text(Target::Hyprland, "hl.bind(mod .. \" + Return\", hl.exec(\"kitty\"))").action, "exec(\"kitty\")");
         assert_eq!(bind_text(Target::Umbriel, "\"Mod+T\" = \"spawn foot\"").action, "spawn foot");
+        assert_eq!(bind_text(Target::Sway, "bindsym --locked --no-warn $mod+Return exec foot -e btop").action, "exec foot -e btop");
+        assert_eq!(bind_text(Target::Sway, "Mod4+Shift+q kill").action, "kill", "a line of a `bindsym {{ … }}` block");
+        for (action, want) in [
+            ("exec foot", "Run foot"),
+            ("kill", "Close window"),
+            ("workspace number 3", "Go to workspace 3"),
+            ("move container to workspace number 3", "Move window to workspace 3"),
+            ("focus left", "Focus left"),
+            ("move right", "Move window right"),
+            ("floating toggle", "Toggle floating"),
+            ("fullscreen toggle", "Toggle fullscreen"),
+            ("layout toggle split", "Switch layout"),
+            ("reload", "Reload the config"),
+        ] {
+            assert_eq!(describe(action).as_deref(), Some(want), "sway `{action}`");
+        }
     }
 
     #[test]

@@ -1,6 +1,6 @@
 //! Compositor-neutral navigation model.
 //!
-//! MangoWM's bitmask tags and Niri/Hyprland/Umbriel's linear workspaces are
+//! MangoWM's bitmask tags and Niri/Hyprland/Umbriel/Sway's linear workspaces are
 //! modelled natively rather than squeezed into a lowest-common-denominator
 //! struct.
 
@@ -12,6 +12,7 @@ pub enum CompositorKind {
     Niri,
     Hyprland,
     Umbriel,
+    Sway,
 }
 
 impl CompositorKind {
@@ -23,6 +24,7 @@ impl CompositorKind {
             CompositorKind::Niri => Target::Niri,
             CompositorKind::Hyprland => Target::Hyprland,
             CompositorKind::Umbriel => Target::Umbriel,
+            CompositorKind::Sway => Target::Sway,
         }
     }
 }
@@ -40,7 +42,7 @@ pub struct TagStatus {
     pub layout: String,
 }
 
-/// One linear / scrollable workspace (Niri, Hyprland, Umbriel).
+/// One linear / scrollable workspace (Niri, Hyprland, Umbriel, Sway).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkspaceStatus {
     pub id: u32,
@@ -49,8 +51,9 @@ pub struct WorkspaceStatus {
     pub occupied: bool,
     pub urgent: bool,
     /// The workspace's own layout where the compositor has one per
-    /// workspace (Umbriel: `scrolling`, `dwindle`, `master`, `stacking`);
-    /// empty elsewhere.
+    /// workspace (Umbriel: `scrolling`, `dwindle`, `master`, `stacking`;
+    /// Sway: its container layout, `splith`, `splitv`, `tabbed`,
+    /// `stacked`); empty elsewhere.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub layout: String,
 }
