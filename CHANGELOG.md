@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.9.0 — 2026-11-03
+
+Notifications can join the bar. Pointing at a notification always pauses
+it.
+
 ### New
 
 - **Notifications can join the bar.** Turn on Studio → Notifications →
