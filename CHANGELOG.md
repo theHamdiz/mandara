@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.8.2 — 2026-11-03
+
+The sidebar stays open at the screen edge. The session dock stays on its
+edge.
+
 ### Fixed
 
 - **The sidebar stays open at the screen edge.** With hover to open on,
