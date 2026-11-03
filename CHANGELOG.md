@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.14.0 — 2026-11-03
+
+A Mandara Discord. Mandara on NixOS. Mandara now runs on Sway. Mandara now
+runs on River Classic.
+
 ### New
 
 - **A Mandara Discord.** Share your setup, ask for help and suggest ideas
