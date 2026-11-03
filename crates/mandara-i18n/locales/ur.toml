@@ -7828,7 +7828,9 @@
 "Couldn't download {language}: {error}" = "{language} ڈاؤن لوڈ نہیں ہو سکی: {error}"
 "The update didn't install" = "اپ ڈیٹ انسٹال نہیں ہوئی"
 "Tile patterns" = "ٹائلوں کے نقش"
-"Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif" = "مرکزی مینو کی ہر شارٹ کٹ ٹائل پر اپنا ہلکا سا نقش ہوتا ہے: کوفی خط میں ایک لفظ یا ایک ہندسی نقش"
+"Each shortcut tile in the main menu wears its own faint geometric pattern" = "مرکزی مینو میں ہر شارٹ کٹ ٹائل کا اپنا ہلکا جیومیٹری نقش ہوتا ہے"
+"Kufic calligraphy" = "کوفی خطاطی"
+"The app and tool tiles wear a Kufic word instead of their geometric pattern" = "ایپ اور ٹول ٹائلوں پر جیومیٹری نقش کے بجائے کوفی لفظ ہوتا ہے"
 
 # ── Sway ──
 "Split horizontally" = "افقی تقسیم"
@@ -7950,6 +7952,6 @@
 "Every entry's name beside its icon, or a narrow icon-only column" = "ہر اندراج کا نام اس کے آئیکن کے ساتھ، یا صرف آئیکن والا ایک تنگ کالم"
 "3D" = "سہ جہتی"
 "Tile surface" = "ٹائلوں کی سطح"
-"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "سادہ رنگ، شیشے کے کنارے والی ابھری سہ جہتی ٹائلیں، یا شفاف شیشہ"
+"Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "سادہ بھرائی (طے شدہ)، شیشے کے کنارے والی ابھری ہوئی 3D ٹائلیں، یا شفاف شیشہ"
 "Tile shadow" = "ٹائلوں کا سایہ"
 "How strong the shadow under each shortcut tile is (0 for none)" = "ہر شارٹ کٹ ٹائل کے نیچے سائے کی شدت (0 یعنی کوئی سایہ نہیں)"

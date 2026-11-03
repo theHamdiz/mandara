@@ -1730,7 +1730,7 @@ Each note is a Markdown file, each topic a folder in here — point it at a sync
 Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence.
 Each repair is safe: your compositor config only ever gets one include line, with a backup.
 Each sets the launcher's style, layout and placement together; change any setting below afterwards.
-Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif
+Each shortcut tile in the main menu wears its own faint geometric pattern
 Each surface
 Each walk to the mosque, morning or evening, is a welcome being prepared.
 Ease someone's hardship
@@ -2047,7 +2047,7 @@ Fixed schedule: start of the night
 Fixed times
 Flare radius
 Flat
-Flat fills, raised 3D tiles with a glass rim, or see-through glass
+Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass
 Flat moves the pointer exactly as far as the mouse
 Flat, softly shadowed cursors from the Qogir icon theme
 Flatpak applies the app's sandbox from its remote
@@ -2877,6 +2877,7 @@ Killed {name} ({pid})
 Kind
 Knots
 Knowledge is like water and air: it is every citizen's right to enjoy it for free.
+Kufic calligraphy
 LAST 7 DAYS
 LAYERS
 LED meter
@@ -5899,6 +5900,7 @@ The adhan isn't downloaded
 The adhan isn't downloaded: turn it on in Studio, or run `prayer adhan download`
 The adhan: whether it is on, downloaded or playing, and where it comes from
 The admin helper couldn't be installed, so nothing was changed.
+The app and tool tiles wear a Kufic word instead of their geometric pattern
 The app each kind of file or link opens in, for every app that asks the system (mimeapps.list).
 The app's name, the window's title, or both
 The archive contains unsafe paths

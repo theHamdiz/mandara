@@ -7827,7 +7827,9 @@
 "Couldn't download {language}: {error}" = "{language}을(를) 받지 못했습니다: {error}"
 "The update didn't install" = "업데이트를 설치하지 못했습니다"
 "Tile patterns" = "타일 무늬"
-"Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif" = "메인 메뉴의 바로 가기 타일마다 은은한 장식이 들어갑니다: 쿠파체 단어 또는 기하학 무늬"
+"Each shortcut tile in the main menu wears its own faint geometric pattern" = "메인 메뉴의 각 바로 가기 타일에 저마다 은은한 기하학 무늬가 들어갑니다"
+"Kufic calligraphy" = "쿠픽 서예"
+"The app and tool tiles wear a Kufic word instead of their geometric pattern" = "앱과 도구 타일에 기하학 무늬 대신 쿠픽 서체 단어를 표시합니다"
 
 # ── Sway ──
 "Split horizontally" = "가로 분할"
@@ -7949,6 +7951,6 @@
 "Every entry's name beside its icon, or a narrow icon-only column" = "각 항목의 이름을 아이콘 옆에 표시하거나, 아이콘만 있는 좁은 열로 표시합니다"
 "3D" = "3D"
 "Tile surface" = "타일 표면"
-"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "평면 채우기, 유리 테두리가 있는 입체 3D 타일, 또는 비치는 유리"
+"Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "평면 채우기(기본값), 유리 테두리가 있는 입체 3D 타일, 또는 투명한 유리"
 "Tile shadow" = "타일 그림자"
 "How strong the shadow under each shortcut tile is (0 for none)" = "각 바로 가기 타일 아래 그림자의 세기 (0이면 없음)"

@@ -7828,7 +7828,9 @@
 "Couldn't download {language}: {error}" = "{language} ডাউনলোড করা যায়নি: {error}"
 "The update didn't install" = "আপডেট ইনস্টল হয়নি"
 "Tile patterns" = "টাইলের নকশা"
-"Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif" = "মূল মেনুর প্রতিটি শর্টকাট টাইলে থাকে নিজস্ব হালকা অলংকরণ: একটি কুফি শব্দ বা একটি জ্যামিতিক নকশা"
+"Each shortcut tile in the main menu wears its own faint geometric pattern" = "প্রধান মেনুর প্রতিটি শর্টকাট টাইলে তার নিজস্ব হালকা জ্যামিতিক নকশা থাকে"
+"Kufic calligraphy" = "কুফি ক্যালিগ্রাফি"
+"The app and tool tiles wear a Kufic word instead of their geometric pattern" = "অ্যাপ ও টুল টাইলে জ্যামিতিক নকশার বদলে একটি কুফি শব্দ থাকে"
 
 # ── Sway ──
 "Split horizontally" = "আনুভূমিকভাবে বিভক্ত"
@@ -7950,6 +7952,6 @@
 "Every entry's name beside its icon, or a narrow icon-only column" = "প্রতিটি এন্ট্রির নাম তার আইকনের পাশে, অথবা শুধু আইকনের সরু কলাম"
 "3D" = "3D"
 "Tile surface" = "টাইলের পৃষ্ঠ"
-"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "সমতল রং, কাচের কিনারাসহ উঁচু 3D টাইল, অথবা স্বচ্ছ কাচ"
+"Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "সমতল ভরাট (ডিফল্ট), কাচের কিনারাসহ উঁচু 3D টাইল, অথবা স্বচ্ছ কাচ"
 "Tile shadow" = "টাইলের ছায়া"
 "How strong the shadow under each shortcut tile is (0 for none)" = "প্রতিটি শর্টকাট টাইলের নিচের ছায়া কতটা গাঢ় (0 মানে নেই)"

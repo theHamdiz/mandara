@@ -203,32 +203,32 @@ fn close(cx: &mut App) {
 }
 
 const APPS: &[Action] = &[
-    Action { icon: "grid", label: tk("Launcher"), ornament: Ornament::word("launcher", 0.0), hint: "Super+Space", run: |cx| {
+    Action { icon: "grid", label: tk("Launcher"), ornament: Ornament::word("launcher", Motif::Grid, 0.0), hint: "Super+Space", run: |cx| {
         close(cx);
         shell(cx).update(cx, |s, cx| s.set_launcher(true, cx));
     } },
-    Action { icon: "image", label: tk("Wallpapers"), ornament: Ornament::word("wallpapers", 24.0), hint: tk("picker"), run: |cx| {
+    Action { icon: "image", label: tk("Wallpapers"), ornament: Ornament::word("wallpapers", Motif::Chevrons, 24.0), hint: tk("picker"), run: |cx| {
         close(cx);
         shell(cx).update(cx, |s, cx| s.set_wallpaper_picker(true, cx));
     } },
-    Action { icon: "sidebar", label: tk("Sidebar"), ornament: Ornament::word("sidebar", 48.0), hint: tk("toggle"), run: |cx| {
+    Action { icon: "sidebar", label: tk("Sidebar"), ornament: Ornament::word("sidebar", Motif::Columns, 48.0), hint: tk("toggle"), run: |cx| {
         close(cx);
         let s = shell(cx);
         let open = !s.read(cx).sidebar_visible();
         s.update(cx, |s, cx| s.set_sidebar(open, cx));
     } },
-    Action { icon: "monitor", label: tk("Mandara Studio"), ornament: Ornament::word("studio", -24.0), hint: tk("settings"), run: |cx| {
+    Action { icon: "monitor", label: tk("Mandara Studio"), ornament: Ornament::word("studio", Motif::Honeycomb, -24.0), hint: tk("settings"), run: |cx| {
         close(cx);
         crate::state::open_studio(cx);
     } },
-    Action { icon: "crop", label: tk("Screenshot"), ornament: Ornament::word("screenshot", -48.0), hint: "Super+Shift+S", run: |cx| {
+    Action { icon: "crop", label: tk("Screenshot"), ornament: Ornament::word("screenshot", Motif::Frames, -48.0), hint: "Super+Shift+S", run: |cx| {
         close(cx);
         crate::snip::open(crate::snip::SnipMode::Region, cx);
     } },
-    Action { icon: "clipboard", label: tk("Clipboard history"), ornament: Ornament::word("clipboard", 72.0), hint: "Super+Shift+V", run: |cx| {
+    Action { icon: "clipboard", label: tk("Clipboard history"), ornament: Ornament::word("clipboard", Motif::Sheets, 72.0), hint: "Super+Shift+V", run: |cx| {
         shell(cx).update(cx, |s, cx| s.set_panel(Some("clipboard".into()), cx));
     } },
-    Action { icon: "pencil", label: tk("Edit desktop"), ornament: Ornament::word("edit", -72.0), hint: tk("widgets"), run: |cx| {
+    Action { icon: "pencil", label: tk("Edit desktop"), ornament: Ornament::word("edit", Motif::Lattice, -72.0), hint: tk("widgets"), run: |cx| {
         close(cx);
         crate::desktop_edit::enter(cx);
     } },
@@ -246,7 +246,7 @@ const LOOK: &[Action] = &[
         };
         apply_theme(next, cx);
     } },
-    Action { icon: "image", label: tk("Wallpapers"), ornament: Ornament::word("wallpapers", 24.0), hint: tk("picker"), run: |cx| {
+    Action { icon: "image", label: tk("Wallpapers"), ornament: Ornament::word("wallpapers", Motif::Chevrons, 24.0), hint: tk("picker"), run: |cx| {
         close(cx);
         shell(cx).update(cx, |s, cx| s.set_wallpaper_picker(true, cx));
     } },
@@ -463,7 +463,7 @@ struct Glow {
     /// The palette the colours were worked out for, and the colours per
     /// tile (by label).
     palette: Option<PaletteKey>,
-    inks: HashMap<&'static str, TileInk>,
+    inks: HashMap<(&'static str, bool), TileInk>,
 }
 
 /// The palette roles a tile's colours depend on, as their OKLCH bits
@@ -550,8 +550,8 @@ impl Glow {
 
     /// `a`'s colours, worked out on first use and kept until the palette
     /// changes ([`Self::follow`]).
-    fn ink(&mut self, a: &Action, palette: &MandaraPalette) -> TileInk {
-        self.inks.entry(a.label).or_insert_with(|| TileInk::new(a.ornament, palette)).clone()
+    fn ink(&mut self, a: &Action, o: Ornament, palette: &MandaraPalette) -> TileInk {
+        self.inks.entry((a.label, o.is_word())).or_insert_with(|| TileInk::new(o, palette)).clone()
     }
 }
 
@@ -561,6 +561,8 @@ struct TileCx<'a> {
     glow: &'a Rc<RefCell<Glow>>,
     /// `panels.menu_patterns`.
     patterns: bool,
+    /// `panels.menu_calligraphy`: Kufic words on the app and tool tiles.
+    calligraphy: bool,
     /// Short tiles (the Look page's one row).
     compact: bool,
     /// `panels.menu_tile_surface`.
@@ -571,9 +573,8 @@ struct TileCx<'a> {
 
 /// A tile's ornament (its lip, then its body), its icon colour and its
 /// surface (rest, hover).
-fn ornament_layer(a: &Action, ink: &TileInk, palette: &MandaraPalette, glow: f32, compact: bool) -> ([gpui::AnyElement; 2], mandara_theme::Color, gpui::Background, gpui::Background) {
+fn ornament_layer(o: Ornament, ink: &TileInk, palette: &MandaraPalette, glow: f32, compact: bool) -> ([gpui::AnyElement; 2], mandara_theme::Color, gpui::Background, gpui::Background) {
     let rtl = crate::bidi::rtl();
-    let o = a.ornament;
     let angle = if rtl { WASH_ANGLE_RTL } else { WASH_ANGLE_LTR };
     let drift = DRIFT_PX * glow;
     let (k, motif_inset) = if compact { (COMPACT, COMPACT_MOTIF_INSET) } else { (1.0, MOTIF_INSET) };
@@ -641,8 +642,9 @@ fn tiles(actions: &[Action], palette: &MandaraPalette, p: &PanelCx, tc: &TileCx,
             let glyph = if tc.patterns {
                 let ([lip, body], ink, rest, high) = {
                     let mut g = tc.glow.borrow_mut();
-                    let ink = g.ink(a, palette);
-                    ornament_layer(a, &ink, palette, g.value(a.label), tc.compact)
+                    let o = a.ornament.shown(tc.calligraphy);
+                    let ink = g.ink(a, o, palette);
+                    ornament_layer(o, &ink, palette, g.value(a.label), tc.compact)
                 };
                 // Only raised tiles lean into their accent; flat and glass
                 // keep their plain fill.
@@ -839,7 +841,7 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, fit: &Rc<Cell<gpui::S
         }))
         .child(icon_button("menu-close", "close", HEADER_BUTTON, palette.on_surface_variant, None, |_, cx| close(cx)));
     let panels = &config(cx).read(cx).get().panels;
-    let tc = TileCx { glow, patterns: panels.menu_patterns, compact: false, surface: panels.menu_tile_surface, shadow: panels.menu_tile_shadow() };
+    let tc = TileCx { glow, patterns: panels.menu_patterns, calligraphy: panels.menu_calligraphy, compact: false, surface: panels.menu_tile_surface, shadow: panels.menu_tile_shadow() };
     let body = match now {
         Page::Home => home(palette, p, cx),
         Page::Apps => tiles(APPS, palette, p, &tc, window),

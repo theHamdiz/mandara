@@ -48,10 +48,40 @@ pub enum Motif {
     Sunset,
     /// The Pharos of Alexandria sweeping its beams: reload.
     Pharos,
+    /// A grid of rounded squares, one picked out: the launcher.
+    Grid,
+    /// Stacked chevrons rising like hills: wallpapers.
+    Chevrons,
+    /// Tall panels side by side, the last one open: the sidebar.
+    Columns,
+    /// A honeycomb of hexagons: Mandara Studio.
+    Honeycomb,
+    /// Nested frames with crop corners: screenshot.
+    Frames,
+    /// Sheets fanned one over another: clipboard history.
+    Sheets,
+    /// A diagonal lattice with a few cells filled: edit the desktop.
+    Lattice,
 }
 
 impl Motif {
-    const ALL: [Motif; 8] = [Motif::Shamsa, Motif::Zellige, Motif::Mashrabiya, Motif::Doorway, Motif::Waves, Motif::Rings, Motif::Sunset, Motif::Pharos];
+    const ALL: [Motif; 15] = [
+        Motif::Shamsa,
+        Motif::Zellige,
+        Motif::Mashrabiya,
+        Motif::Doorway,
+        Motif::Waves,
+        Motif::Rings,
+        Motif::Sunset,
+        Motif::Pharos,
+        Motif::Grid,
+        Motif::Chevrons,
+        Motif::Columns,
+        Motif::Honeycomb,
+        Motif::Frames,
+        Motif::Sheets,
+        Motif::Lattice,
+    ];
 
     fn name(self) -> &'static str {
         match self {
@@ -63,6 +93,13 @@ impl Motif {
             Motif::Rings => "rings",
             Motif::Sunset => "sunset",
             Motif::Pharos => "pharos",
+            Motif::Grid => "grid",
+            Motif::Chevrons => "chevrons",
+            Motif::Columns => "columns",
+            Motif::Honeycomb => "honeycomb",
+            Motif::Frames => "frames",
+            Motif::Sheets => "sheets",
+            Motif::Lattice => "lattice",
         }
     }
 }
@@ -82,15 +119,23 @@ pub enum Art {
 pub struct Ornament {
     pub art: Art,
     pub hue: f32,
+    /// The geometric motif a word tile wears while calligraphy is off.
+    pub geometric: Motif,
 }
 
 impl Ornament {
-    pub const fn word(key: &'static str, hue: f32) -> Self {
-        Self { art: Art::Word(key), hue }
+    pub const fn word(key: &'static str, geometric: Motif, hue: f32) -> Self {
+        Self { art: Art::Word(key), hue, geometric }
     }
 
     pub const fn motif(motif: Motif, hue: f32) -> Self {
-        Self { art: Art::Motif(motif), hue }
+        Self { art: Art::Motif(motif), hue, geometric: motif }
+    }
+
+    /// What the tile draws: its word only with `calligraphy` on
+    /// (`panels.menu_calligraphy`), otherwise its geometric motif.
+    pub fn shown(self, calligraphy: bool) -> Self {
+        if calligraphy || !self.is_word() { self } else { Self { art: Art::Motif(self.geometric), ..self } }
     }
 
     /// The `gpui::svg()` asset path.
@@ -470,6 +515,120 @@ fn pharos() -> String {
     svg(&body)
 }
 
+/// A rounded rectangle's outline.
+fn rounded(x: f32, y: f32, w: f32, h: f32, r: f32) -> String {
+    format!(r#"<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{r}"/>"#)
+}
+
+fn grid() -> String {
+    // Four by four rounded squares, the one under the cursor picked out.
+    let (step, size) = (26.0, 18.0);
+    let mut lit = String::new();
+    let mut dim = String::new();
+    for row in 0..4 {
+        for col in 0..4 {
+            let (x, y) = (12.0 + col as f32 * step, 12.0 + row as f32 * step);
+            let cell = rounded(x, y, size, size, 4.0);
+            if (row, col) == (1, 2) || (row + col) % 3 == 0 { lit.push_str(&cell) } else { dim.push_str(&cell) }
+        }
+    }
+    svg(&format!(r#"{lit}<g stroke-opacity="{DIM}">{dim}</g>"#))
+}
+
+fn chevrons() -> String {
+    // Rows of chevrons, each row a little lower and fainter: far hills.
+    let mut body = String::new();
+    for (i, y) in [40.0_f32, 58.0, 76.0, 94.0, 112.0].iter().enumerate() {
+        let (w, rise) = (24.0, 10.0 + i as f32 * 2.0);
+        let shift = if i % 2 == 0 { 0.0 } else { w / 2.0 };
+        let mut d = format!("M{} {y}", -shift);
+        let mut x = -shift;
+        while x < VIEW {
+            let _ = write!(d, "L{} {}L{} {y}", x + w / 2.0, y - rise, x + w);
+            x += w;
+        }
+        let o = 1.0 - i as f32 * 0.12;
+        let _ = write!(body, r#"<path d="{d}" stroke-opacity="{o:.2}"/>"#);
+    }
+    svg(&body)
+}
+
+fn columns() -> String {
+    // Tall panels; the last is wider, as if slid open.
+    let mut body = String::new();
+    for (i, (x, w)) in [(10.0_f32, 14.0_f32), (30.0, 14.0), (50.0, 14.0), (72.0, 38.0)].iter().enumerate() {
+        let cell = rounded(*x, 14.0, *w, 92.0, 4.0);
+        if i == 3 { body.push_str(&cell) } else { let _ = write!(body, r#"<g stroke-opacity="{DIM}">{cell}</g>"#); }
+    }
+    // Rows of content in the open panel.
+    for y in [30.0_f32, 42.0, 54.0, 66.0] {
+        let _ = write!(body, r#"<path d="M80 {y}H{}"/>"#, if y == 42.0 { 96.0 } else { 102.0 });
+    }
+    svg(&body)
+}
+
+fn honeycomb() -> String {
+    // Flat-topped hexagons on an offset grid, fading in from a corner.
+    let r = 12.0;
+    let (dx, dy) = (r * 1.5, r * 3.0_f32.sqrt());
+    let mut body = String::new();
+    let n = (VIEW / dx) as i32 + 1;
+    for col in 0..=n {
+        let off = if col % 2 == 0 { 0.0 } else { dy / 2.0 };
+        let mut y = off;
+        while y <= VIEW + dy {
+            let c = (col as f32 * dx, y);
+            let pts: Vec<(f32, f32)> = (0..6).map(|i| { let a = i as f32 * TAU / 6.0; (c.0 + r * a.cos(), c.1 + r * a.sin()) }).collect();
+            let _ = write!(body, r#"<path d="{}"/>"#, poly(&pts));
+            y += dy;
+        }
+    }
+    svg(&format!(r#"{}<g stroke="url(#f)">{body}</g>"#, fade(1.0, 1.0, 0.1, 0.15)))
+}
+
+fn frames() -> String {
+    // Nested frames, then crop corners round the innermost.
+    let mut body = String::new();
+    for (i, inset) in [8.0_f32, 22.0, 36.0].iter().enumerate() {
+        let side = VIEW - 2.0 * inset;
+        let cell = rounded(*inset, *inset, side, side, 6.0);
+        if i == 0 { let _ = write!(body, r#"<g stroke-opacity="{DIM}">{cell}</g>"#); } else { body.push_str(&cell) }
+    }
+    let (a, b, k) = (46.0, VIEW - 46.0, 10.0);
+    let _ = write!(body, "<path d=\"M{a} {}V{a}H{}M{} {a}H{b}V{}M{b} {}V{b}H{}M{} {b}H{a}V{}\"/>", a + k, a + k, b - k, a + k, b - k, b - k, a + k, b - k);
+    svg(&body)
+}
+
+fn sheets() -> String {
+    // Three sheets fanned from the corner, lines on the top one.
+    let mut body = String::new();
+    for (i, (x, y)) in [(14.0_f32, 34.0_f32), (26.0, 22.0), (38.0, 10.0)].iter().enumerate() {
+        let cell = rounded(*x, *y, 66.0, 80.0, 6.0);
+        if i == 2 { body.push_str(&cell) } else { let _ = write!(body, r#"<g stroke-opacity="{DIM}">{cell}</g>"#); }
+    }
+    for (y, end) in [(28.0_f32, 92.0_f32), (40.0, 96.0), (52.0, 84.0), (64.0, 94.0)] {
+        let _ = write!(body, r#"<path d="M48 {y}H{end}"/>"#);
+    }
+    svg(&body)
+}
+
+fn lattice() -> String {
+    // A diagonal lattice; a few of its diamonds are inked in.
+    let step = 20.0;
+    let mut body = String::new();
+    let mut k = -VIEW;
+    while k <= VIEW * 2.0 {
+        let _ = write!(body, r#"<path d="M{k} 0L{} {VIEW}"/><path d="M{k} {VIEW}L{} 0"/>"#, k + VIEW, k + VIEW);
+        k += step;
+    }
+    let mut cells = String::new();
+    for (cx, cy) in [(60.0_f32, 50.0_f32), (80.0, 70.0), (40.0, 90.0)] {
+        let s = step / 2.0 - 3.0;
+        let _ = write!(cells, r#"<path d="{}"/>"#, poly(&[(cx, cy - s), (cx + s, cy), (cx, cy + s), (cx - s, cy)]));
+    }
+    svg(&format!(r#"{}<g stroke="url(#f)">{body}</g><g fill="black" fill-opacity="{DIM}" stroke="none">{cells}</g>"#, fade(1.0, 1.0, 0.1, 0.1)))
+}
+
 fn word_svg(w: &Word) -> String {
     format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {} {}"><path d="{}" fill="black"/></svg>"#, w.2, w.3, w.4)
 }
@@ -484,6 +643,13 @@ fn motif_svg(m: Motif) -> String {
         Motif::Rings => rings(),
         Motif::Sunset => sunset(),
         Motif::Pharos => pharos(),
+        Motif::Grid => grid(),
+        Motif::Chevrons => chevrons(),
+        Motif::Columns => columns(),
+        Motif::Honeycomb => honeycomb(),
+        Motif::Frames => frames(),
+        Motif::Sheets => sheets(),
+        Motif::Lattice => lattice(),
     }
 }
 
@@ -519,7 +685,7 @@ mod tests {
     const VISIBLE_INK: f32 = 0.04;
 
     fn ornaments() -> Vec<Ornament> {
-        WORDS.iter().map(|w| Ornament::word(w.0, 0.0)).chain(Motif::ALL.iter().map(|m| Ornament::motif(*m, 0.0))).collect()
+        WORDS.iter().map(|w| Ornament::word(w.0, Motif::Grid, 0.0)).chain(Motif::ALL.iter().map(|m| Ornament::motif(*m, 0.0))).collect()
     }
 
     #[test]

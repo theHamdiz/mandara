@@ -366,10 +366,12 @@ pub struct PanelsConfig {
     pub menu_opacity: f32,
     /// The main menu's rail: names beside the icons, or icons only.
     pub menu_rail: MenuRail,
-    /// The main menu's shortcut tiles each wear their own ornament: a Kufic
-    /// word for apps and tools, a geometric motif for look and session.
+    /// The main menu's shortcut tiles each wear their own faint geometric
+    /// pattern.
     pub menu_patterns: bool,
-    /// How those tiles are drawn: flat, raised (the default) or glass.
+    /// The app and tool tiles wear a Kufic word instead of their pattern.
+    pub menu_calligraphy: bool,
+    /// How those tiles are drawn: flat (the default), raised or glass.
     pub menu_tile_surface: MenuTileSurface,
     /// The tiles' drop shadow, 0 (none, the default) to 1.
     pub menu_tile_shadow: f32,
@@ -398,9 +400,9 @@ pub enum MenuRail {
 #[serde(rename_all = "kebab-case")]
 pub enum MenuTileSurface {
     /// A plain fill: no rim, no wash, ornaments drawn without depth.
+    #[default]
     Flat,
     /// Raised glass-rimmed tiles with an accent wash and engraved ornaments.
-    #[default]
     #[serde(rename = "3d")]
     Raised,
     /// See-through tiles with the specular rim.
@@ -438,7 +440,8 @@ impl Default for PanelsConfig {
             menu_opacity: 0.62,
             menu_rail: MenuRail::Compact,
             menu_patterns: true,
-            menu_tile_surface: MenuTileSurface::Raised,
+            menu_calligraphy: false,
+            menu_tile_surface: MenuTileSurface::Flat,
             menu_tile_shadow: 0.0,
             remember_floating: true,
             floating: Vec::new(),
@@ -493,9 +496,9 @@ mod tests {
     #[test]
     fn menu_tiles_default_to_raised_without_shadow_and_parse() {
         let p = PanelsConfig::default();
-        assert_eq!((p.menu_tile_surface, p.menu_tile_shadow(), p.menu_patterns), (MenuTileSurface::Raised, 0.0, true));
+        assert_eq!((p.menu_tile_surface, p.menu_tile_shadow(), p.menu_patterns, p.menu_calligraphy), (MenuTileSurface::Flat, 0.0, true, false));
         let old: PanelsConfig = toml::from_str("menu_patterns = false").unwrap();
-        assert_eq!((old.menu_tile_surface, old.menu_tile_shadow), (MenuTileSurface::Raised, 0.0));
+        assert_eq!((old.menu_tile_surface, old.menu_tile_shadow, old.menu_calligraphy), (MenuTileSurface::Flat, 0.0, false));
         for (text, surface) in [("flat", MenuTileSurface::Flat), ("3d", MenuTileSurface::Raised), ("glass", MenuTileSurface::Glass)] {
             let p: PanelsConfig = toml::from_str(&format!("menu_tile_surface = \"{text}\"\nmenu_tile_shadow = 1.7")).unwrap();
             assert_eq!((p.menu_tile_surface, p.menu_tile_shadow()), (surface, 1.0));

@@ -8074,7 +8074,9 @@
 "Couldn't download {language}: {error}" = "Не удалось загрузить {language}: {error}"
 "The update didn't install" = "Обновление не установилось"
 "Tile patterns" = "Узоры плиток"
-"Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif" = "Каждая плитка-ярлык в главном меню несёт свой неяркий орнамент: слово куфическим письмом или геометрический мотив"
+"Each shortcut tile in the main menu wears its own faint geometric pattern" = "Каждая плитка ярлыка в главном меню несёт свой неяркий геометрический узор"
+"Kufic calligraphy" = "Куфическая каллиграфия"
+"The app and tool tiles wear a Kufic word instead of their geometric pattern" = "Плитки приложений и инструментов показывают куфическое слово вместо геометрического узора"
 
 # ── Sway ──
 "Split horizontally" = "Разделено по горизонтали"
@@ -8196,6 +8198,6 @@
 "Every entry's name beside its icon, or a narrow icon-only column" = "Название каждого пункта рядом со значком или узкий столбец только со значками"
 "3D" = "3D"
 "Tile surface" = "Поверхность плиток"
-"Flat fills, raised 3D tiles with a glass rim, or see-through glass" = "Плоская заливка, объёмные 3D-плитки со стеклянной кромкой или прозрачное стекло"
+"Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "Плоская заливка (по умолчанию), объёмные 3D-плитки со стеклянной кромкой или прозрачное стекло"
 "Tile shadow" = "Тень плиток"
 "How strong the shadow under each shortcut tile is (0 for none)" = "Насколько сильна тень под каждой плиткой-ярлыком (0 — без тени)"
