@@ -3,6 +3,7 @@
 //! sounds). The bespoke parts (notification rules, ignore lists, device
 //! names, per-app outputs) live in `app/{notifications,osd,audio}_page.rs`.
 
+use mandara_config::{BarPosition, ShellConfig};
 use mandara_i18n::tk;
 
 use super::{Control, Section, Setting, s};
@@ -47,6 +48,7 @@ pub fn entries() -> Vec<Setting> {
         s(Notifications, POPUPS, "/notifications/scale", tk("Size"), tk("Scales popup text, icons and spacing"), slider(0.75, 1.5, 0.05, "×")),
         s(Notifications, POPUPS, "/notifications/opacity", tk("Background opacity"), tk("Lower lets windows show through popups"), slider(0.3, 1.0, 0.05, "")),
         s(Notifications, POPUPS, "/notifications/over_fullscreen", tk("Show over fullscreen apps"), tk("Popups appear above games and videos in fullscreen"), Toggle),
+        s(Notifications, POPUPS, "/notifications/joined", tk("Join the bar"), tk("Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge"), Toggle),
         s(Notifications, POPUP_CONTENT, "/notifications/show_app_name", tk("App name"), tk("The sending app's name above the title"), Toggle),
         s(Notifications, POPUP_CONTENT, "/notifications/show_actions", tk("Action buttons"), tk("Buttons apps attach, like Reply or Open"), Toggle),
         s(Notifications, POPUP_CONTENT, "/notifications/click_action", tk("Click opens the app"), tk("Clicking a popup runs its default action"), Toggle),
@@ -122,6 +124,17 @@ pub fn entries() -> Vec<Setting> {
         s(Audio, SOUND_EVENTS, "/sounds/screenshot", tk("Screenshots"), tk("A shutter when a capture is taken"), Toggle),
         s(Audio, SOUND_EVENTS, "/sounds/login", tk("Logging in"), tk("Once per session"), Toggle),
     ]
+}
+
+/// Why joining popups to the bar can't apply with `cfg`'s bar and dock
+/// (the setting stays saved and applies again once it can).
+pub fn joined_locked(cfg: &ShellConfig) -> Option<&'static str> {
+    let bottom = cfg.notifications.position.is_bottom();
+    if bottom && cfg.dock_bottom_clearance().is_some() {
+        return Some(tk("The dock holds the bottom edge; popups there stay cards"));
+    }
+    let edge = if bottom { BarPosition::Bottom } else { BarPosition::Top };
+    (cfg.bar.position == edge && !cfg.bar_layout().is_attached()).then_some(tk("A floating bar has no edge to hang from; popups on its edge stay cards"))
 }
 
 #[cfg(test)]

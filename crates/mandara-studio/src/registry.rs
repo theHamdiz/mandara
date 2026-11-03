@@ -484,6 +484,7 @@ pub fn required_plugin(path: &str) -> Option<&'static str> {
 pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     match setting.path {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
+        "/notifications/joined" => alert_settings::joined_locked(cfg),
         path if path.starts_with("/compositor/input/cursor/") => system_settings::cursor_locked(path, running_compositor()),
         path if path.starts_with("/wallpaper/slideshow/") => desktop_settings::slideshow_locked(path, cfg),
         "/wallpaper/depth/auto_split" | "/wallpaper/depth/download" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),

@@ -38,6 +38,25 @@
   it leaves the screen but stays in the notification center (× dismisses it
   for good). Only the cards take clicks; the rest of the surface passes them
   through to your windows.
+- **Joined to the bar** (Studio → Notifications → Popups → **Join the
+  bar**, `notifications.joined`, off by default): the cards drop out of the
+  bar in one drawer of the bar's own colour, with curved corners where it
+  meets the bar, so bar and notifications read as one piece. Cards still
+  spring in, pause under the pointer, swipe away, close with × and count
+  down. How it joins depends on the bar:
+  - **Edge frame and hairline:** out of the bar's lower edge (its upper
+    edge for a bottom bar), clear of the bar's curved screen corners.
+  - **Floating frame:** out of the floating bar, on its straight part.
+  - **Notch:** out of the notch, even for cards at a corner (it spans most
+    of the edge, so they hang from its end).
+  - **On the edge without the bar** (cards at the bottom under a top bar,
+    or beside a side bar): out of the bare screen edge, or out of the screen
+    frame's strip around a side bar.
+  - **Glass pills, island and micro pill** on the cards' edge have no edge
+    to hang from, and a dock holds the bottom edge: cards there stay
+    floating cards, and Studio shows why.
+  - When the bar hides itself, the drawer slides with it and hangs from the
+    screen edge until the bar comes back.
 - Opening the notification center (its panel or the sidebar tab) moves the
   cards on screen into it, and new notifications go straight into the list
   until you close it, so cards never cover the center.

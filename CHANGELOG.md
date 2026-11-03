@@ -6,6 +6,21 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Notifications can join the bar.** Turn on Studio → Notifications →
+  **Join the bar** and new notifications drop out of the bar in a drawer of
+  its own colour, curving into it, so the two read as one piece. It works
+  with a top or bottom bar, notifications on the left, middle or right, and
+  follows the bar when it hides. Floating pill bars keep the usual floating
+  cards. Off by default.
+
+### Fixed
+
+- **Pointing at a notification always pauses it.** A notification that
+  popped up right where the pointer had last left the notifications kept
+  counting down while you pointed at it. Now it waits for you.
+
 ## 0.8.3 — 2026-11-03
 
 Lighter wallpapers.

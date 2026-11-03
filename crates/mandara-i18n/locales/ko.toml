@@ -7776,3 +7776,9 @@
 "Turning the launcher on, dimming the screen, the keyboard and how apps start" = "런처 켜기, 화면 어둡게 하기, 키보드, 앱 실행 방식"
 "Warmer colours in the evening, on a schedule" = "저녁에 일정에 맞춰 따뜻한 색으로"
 "What the launcher searches, how results look and how they are ranked" = "런처가 검색하는 대상, 결과의 모양과 순위"
+
+# ── Popups joined to the bar ──
+"Join the bar" = "바에 붙이기"
+"Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "팝업이 바의 색으로 바에서 내려와 하나로 이어집니다. 바가 없는 가장자리에서는 화면 가장자리에서 내려옵니다"
+"The dock holds the bottom edge; popups there stay cards" = "Dock이 아래쪽 가장자리를 차지하므로 그곳의 팝업은 카드로 남습니다"
+"A floating bar has no edge to hang from; popups on its edge stay cards" = "떠 있는 바에는 매달릴 가장자리가 없어 그 가장자리의 팝업은 카드로 남습니다"
