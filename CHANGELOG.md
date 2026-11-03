@@ -18,7 +18,11 @@ About → What's new shows it too.
   display and key settings in their own file. Every line is checked with
   `sway --validate` first, the Config doctor reads sway's own verdict on
   your config, and moving over from swaybar or swaybg is part of the usual
-  takeover. Thanks for asking in #33!
+  takeover (#33).
+
+## 0.10.0 — 2026-11-03
+
+A tidier layout designer, with search.
 
 ### Changed
 
