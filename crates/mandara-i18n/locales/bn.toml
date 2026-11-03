@@ -7814,3 +7814,6 @@
 "Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "পপআপ বারের রঙে বার থেকে ঝোলে, তার সাথে এক টুকরো হয়ে; বার নেই এমন কিনারায়, স্ক্রিনের কিনারা থেকে"
 "The dock holds the bottom edge; popups there stay cards" = "ডক নিচের প্রান্ত দখল করে আছে; সেখানকার পপআপগুলো কার্ড হিসেবেই থাকে"
 "A floating bar has no edge to hang from; popups on its edge stay cards" = "ভাসমান বারের ঝোলার মতো কোনো কিনারা নেই; তার কিনারার পপআপ কার্ডই থাকে"
+"Full" = "পূর্ণ"
+"Rail" = "রেল"
+"Every entry's name beside its icon, or a narrow icon-only column" = "প্রতিটি এন্ট্রির নাম তার আইকনের পাশে, অথবা শুধু আইকনের সরু কলাম"

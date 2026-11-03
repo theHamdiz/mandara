@@ -364,11 +364,25 @@ pub struct PanelsConfig {
     pub menu_translucent: bool,
     /// Its glass opacity (0–1) while translucent.
     pub menu_opacity: f32,
+    /// The main menu's rail: names beside the icons, or icons only.
+    pub menu_rail: MenuRail,
     /// Panels floating when the shell stopped come back where they were.
     pub remember_floating: bool,
     /// Where each plugin's floating card sat on each output
     /// (`[[panels.floating]]`, see [`crate::floating`]).
     pub floating: Vec<crate::floating::FloatingPanel>,
+}
+
+/// The main menu's side rail: every entry's name beside its icon, or the
+/// compact icon-only column.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MenuRail {
+    /// Icon and name (the default): easier to read, a wider menu.
+    #[default]
+    Full,
+    /// Icons only, in a narrower menu.
+    Compact,
 }
 
 /// What a right-click on empty bar space (between and around its items)
@@ -400,6 +414,7 @@ impl Default for PanelsConfig {
             toast_ms: defaults::TOAST_MS,
             menu_translucent: true,
             menu_opacity: 0.62,
+            menu_rail: MenuRail::Full,
             remember_floating: true,
             floating: Vec::new(),
         }

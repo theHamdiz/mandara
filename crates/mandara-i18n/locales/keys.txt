@@ -1840,6 +1840,7 @@ Every day is a new beginning
 Every display
 Every display gets its own wallpaper from the slideshow; off, they all change together
 Every display is off
+Every entry's name beside its icon, or a narrow icon-only column
 Every fast you keep is remembered at a gate of its own.
 Every folder Mandara found, with what it made of it: start here when a plugin doesn't show up.
 Every hour
@@ -2162,6 +2163,7 @@ Frost
 Frosted glass
 Frosted glass prisms with light caustics
 Fruit salad
+Full
 Full HD (1080p)
 Full WIT
 Full in {time}
@@ -4554,6 +4556,7 @@ Rabi al-Thani
 Rabindranath Tagore
 Radial
 Radius
+Rail
 Rain
 Rain today. Don't forget an umbrella.
 Rainy study

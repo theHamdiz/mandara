@@ -8059,3 +8059,6 @@
 "Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "Pop-ups hängen in der Farbe der Leiste an ihr, wie aus einem Stück; an einem Rand ohne Leiste am Bildschirmrand"
 "The dock holds the bottom edge; popups there stay cards" = "Das Dock belegt den unteren Rand; Pop-ups dort bleiben Karten"
 "A floating bar has no edge to hang from; popups on its edge stay cards" = "Eine schwebende Leiste hat keinen Rand zum Anhängen; Pop-ups an ihrem Rand bleiben Karten"
+"Full" = "Voll"
+"Rail" = "Leiste"
+"Every entry's name beside its icon, or a narrow icon-only column" = "Der Name jeder Zeile neben ihrem Symbol, oder eine schmale Spalte nur mit Symbolen"

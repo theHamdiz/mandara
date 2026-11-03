@@ -8060,3 +8060,6 @@
 "Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "Уведомления свисают с панели в её цвете, как одно целое с ней; на краю без панели — с края экрана"
 "The dock holds the bottom edge; popups there stay cards" = "Нижний край занят доком; уведомления там остаются карточками"
 "A floating bar has no edge to hang from; popups on its edge stay cards" = "У плавающей панели нет края, с которого можно свисать; уведомления на её краю остаются карточками"
+"Full" = "Полный"
+"Rail" = "Панель"
+"Every entry's name beside its icon, or a narrow icon-only column" = "Название каждого пункта рядом со значком или узкий столбец только со значками"

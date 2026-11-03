@@ -23,10 +23,12 @@ use mandara_i18n::{t, tf, tk, tr};
 use mandara_plugins::{CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry};
 use mandara_services::MediaCommand;
 use mandara_config::power::{SessionEntry, SessionEntryKind};
+use mandara_config::surfaces::MenuRail;
 use mandara_theme::{MandaraPalette, ThemeSource, catalog};
 use serde_json::json;
 
 use super::fn_view;
+use crate::bidi::Bidi as _;
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
 use crate::kit::{card, icon_button, reveal, text, tokens};
@@ -34,20 +36,28 @@ use crate::state::{config, shell, update_config};
 
 pub const ID: &str = "main-menu";
 
-const WIDTH: f32 = 640.0;
+const WIDTH: f32 = 760.0;
+/// With the compact rail (icons only) the menu is narrower by the width the
+/// labels took, so the cards keep their size either way.
+const WIDTH_COMPACT: f32 = 640.0;
 /// Before the first measurement (the menu is as tall as its page).
 const HEIGHT: f32 = 468.0;
 /// Size changes smaller than this don't resize the panel.
 const SIZE_EPSILON: f32 = 0.5;
 const PAD: f32 = 12.0;
-/// The rail: pages, then shortcuts, then settings.
-const RAIL_W: f32 = 48.0;
+/// The rail: pages, then shortcuts, then settings. Each row shows its name
+/// beside the icon, so the rail is wide enough for the longest label at the
+/// default size (a longer translation truncates rather than clipping the
+/// panel) and the panel grew by the same amount to keep the cards their
+/// width. Compact hides the names and takes the old icon-only width back.
+const RAIL_W: f32 = 168.0;
+const RAIL_COMPACT_W: f32 = 48.0;
 const RAIL_BUTTON: f32 = 32.0;
-const RAIL_ICON: f32 = 16.0;
+const RAIL_ICON: f32 = 17.0;
 const RAIL_GAP: f32 = 3.0;
-/// The hairline between the rail's groups.
-const RAIL_RULE_W: f32 = 20.0;
+/// The hairline between the rail's groups (as wide as the icons).
 const RAIL_RULE_ALPHA: f32 = 0.3;
+const RAIL_COMPACT_RULE_W: f32 = 20.0;
 
 /// Rail shortcuts: a panel of its own each (icon, plugin id, name).
 const SHORTCUTS: [(&str, &str, &str); 7] = [
@@ -492,37 +502,63 @@ fn look(palette: &MandaraPalette, p: &PanelCx, cx: &App) -> gpui::AnyElement {
 
 fn render(page: &Rc<Cell<Page>>, fit: &Rc<Cell<gpui::Size<gpui::Pixels>>>, palette: &MandaraPalette, p: &PanelCx, window: &mut Window, cx: &mut App) -> gpui::AnyElement {
     let now = page.get();
-    let rail_button = |id: (&'static str, usize), glyph: &'static str, on: bool| {
-        div()
+    let compact = config(cx).read(cx).get().panels.menu_rail == MenuRail::Compact;
+    let width = if compact { WIDTH_COMPACT } else { WIDTH };
+    // A rail row: the entry's icon and name (or just the icon in compact),
+    // filled with the primary colour while its page is open (like the
+    // sidebar's tabs).
+    let rail_button = |id: (&'static str, usize), glyph: &'static str, label: &'static str, on: bool| {
+        let row = div()
             .id(id)
-            .size(px(RAIL_BUTTON))
+            .h(px(RAIL_BUTTON))
             .rounded(px(crate::style::radius(tokens::MD)))
-            .flex()
+            .row()
             .items_center()
-            .justify_center()
             .cursor_pointer()
-            .when(on, |el| el.bg(palette.primary.with_alpha(0.18).hsla()))
-            .hover(|s| s.bg(palette.surface_container_high.hsla()))
-            .child(icon(glyph, RAIL_ICON, if on { palette.primary } else { palette.on_surface_variant }))
+            .text_size(px(text::BODY_S))
+            .font_weight(FontWeight::MEDIUM)
+            .when(compact, |el| el.w(px(RAIL_BUTTON)).justify_center())
+            .when(!compact, |el| el.w_full().px(px(tokens::SM)).gap(px(tokens::SM)))
+            .when(on, |el| el.bg(palette.primary.hsla()).text_color(palette.on_primary.hsla()).font_weight(FontWeight::SEMIBOLD))
+            .when(!on, |el| el.text_color(palette.on_surface_variant.hsla()).hover(|s| s.bg(palette.surface_container_high.hsla())))
+            .child(icon(glyph, RAIL_ICON, if on { palette.on_primary } else { palette.on_surface_variant }));
+        if compact { row } else { row.child(div().flex_1().min_w(px(0.0)).truncate().text_start().child(crate::bidi::paragraph(tr(label)))) }
     };
-    let rule = || div().w(px(RAIL_RULE_W)).h(px(1.0)).my(px(RAIL_GAP)).bg(palette.outline.with_alpha(RAIL_RULE_ALPHA).hsla());
+    let rule = || {
+        div()
+            .h(px(1.0))
+            .my(px(RAIL_GAP))
+            .when(compact, |el| el.w(px(RAIL_COMPACT_RULE_W)))
+            .when(!compact, |el| el.mx(px(tokens::SM)))
+            .bg(palette.outline.with_alpha(RAIL_RULE_ALPHA).hsla())
+    };
     // As tall as its buttons, centred in the menu's height.
-    let mut rail = div().w(px(RAIL_W)).flex_none().flex().flex_col().items_center().justify_center().gap(px(RAIL_GAP)).py(px(tokens::SM)).rounded(px(crate::style::card_radius())).bg(palette.surface_container.hsla());
+    let mut rail = div()
+        .w(px(if compact { RAIL_COMPACT_W } else { RAIL_W }))
+        .flex_none()
+        .flex()
+        .flex_col()
+        .justify_center()
+        .gap(px(RAIL_GAP))
+        .p(px(tokens::XS))
+        .rounded(px(crate::style::card_radius()))
+        .bg(palette.surface_container.hsla())
+        .when(compact, |el| el.items_center());
     // The menu's own pages.
     for (i, pg) in Page::ALL.into_iter().enumerate() {
         let page = page.clone();
-        rail = rail.child(rail_button(("menu-page", i), pg.icon(), pg == now).on_click(move |_, window, _| {
+        rail = rail.child(rail_button(("menu-page", i), pg.icon(), pg.title(), pg == now).on_click(move |_, window, _| {
             page.set(pg);
             window.refresh();
         }));
     }
     // Shortcuts: each opens its own panel in the menu's place.
     rail = rail.child(rule());
-    for (i, (glyph, id, _)) in SHORTCUTS.into_iter().enumerate() {
-        rail = rail.child(rail_button(("menu-shortcut", i), glyph, false).on_click(move |_, _, cx| shell(cx).update(cx, |s, cx| s.set_panel(Some(id.into()), cx))));
+    for (i, (glyph, id, name)) in SHORTCUTS.into_iter().enumerate() {
+        rail = rail.child(rail_button(("menu-shortcut", i), glyph, name, false).on_click(move |_, _, cx| shell(cx).update(cx, |s, cx| s.set_panel(Some(id.into()), cx))));
     }
     // Settings.
-    rail = rail.child(rule()).child(rail_button(("menu-settings", 0), "sliders", false).on_click(|_, _, cx| {
+    rail = rail.child(rule()).child(rail_button(("menu-settings", 0), "sliders", tk("Mandara Studio"), false).on_click(|_, _, cx| {
         close(cx);
         crate::state::open_studio(cx);
     }));
@@ -555,9 +591,19 @@ fn render(page: &Rc<Cell<Page>>, fit: &Rc<Cell<gpui::Size<gpui::Pixels>>>, palet
     let inner = f32::from(fit.get().height) - PAD * 2.0;
     let probe = gpui::canvas(
         move |b, _, _| {
+            let cur = fit.get();
             let h = f32::from(b.size.height) + PAD * 2.0;
-            if home_page && (f32::from(fit.get().height) - h).abs() > SIZE_EPSILON {
-                fit.set(size(px(WIDTH), px(h)));
+            // Home sets the height (it's the fullest page); the width follows
+            // the rail mode on whichever page is open.
+            let next = if home_page && (f32::from(cur.height) - h).abs() > SIZE_EPSILON {
+                size(px(width), px(h))
+            } else if (f32::from(cur.width) - width).abs() > SIZE_EPSILON {
+                size(px(width), cur.height)
+            } else {
+                cur
+            };
+            if next != cur {
+                fit.set(next);
             }
         },
         |_, _, _, _| {},
@@ -601,6 +647,14 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Each rail mode only takes the width the menu gained: the cards keep
+    /// the width they had when the rail was icon-only (640 − 48).
+    #[test]
+    fn each_rail_keeps_the_cards_their_width() {
+        assert_eq!(WIDTH - RAIL_W, 640.0 - 48.0);
+        assert_eq!(WIDTH_COMPACT - RAIL_COMPACT_W, WIDTH - RAIL_W);
+    }
 
     /// Every entry of the old list is still on a page.
     #[test]
