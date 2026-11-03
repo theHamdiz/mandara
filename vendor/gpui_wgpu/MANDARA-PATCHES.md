@@ -245,8 +245,9 @@ files mapped and parsed at the first frame.
 `load_chain_face` picks that same face without loading the others: the
 family's faces are ranked as before (upright, then nearest to 400, ties in
 database order) and the first one `load_family` would accept as a primary
-font (a Latin `m`, or a known colour emoji font) is loaded alone, the `m`
-read straight from the file. Families without such a face still drop out
+font (a Latin `m`, a known colour emoji font, or one of upstream's icon
+fonts let through without an `m`; one `can_be_primary` test serves both)
+is loaded alone, the `m` read straight from the file. Families without such a face still drop out
 of the chain, as before. Faces loaded later by name (a family chosen as
 the UI font, a fallback run's weight) load as they did.
 

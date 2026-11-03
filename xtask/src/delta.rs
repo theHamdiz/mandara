@@ -4,10 +4,12 @@
 //!   applying it with the updater's pure-Rust decoder.
 //! - `apply-delta --old BIN --patch FILE --out BIN [--sha256 HEX]`.
 //! - `update-part --target <triple> [--variant NAME] [--out dist]
-//!   [--previous OLD.tar.gz]`: after `dist`, this target's `update.json`
+//!   [--previous OLD.tar.gz]…`: after `dist`, this target's `update.json`
 //!   entry (`mandara-<v>-<target>.update-part.json`; the release job merges
-//!   the parts) and, given the previous release's tarball of the same
-//!   target, the patch `mandara-<old>-to-<v>-<target>.patch.zst`.
+//!   the parts) and, for each earlier release's tarball of the same target
+//!   given (`--previous` repeats), the patch
+//!   `mandara-<old>-to-<v>-<target>.patch.zst`, so an install that skipped
+//!   releases still updates by patch.
 //! - `plugin-delta --new <id>.mandara.tar.gz [--old PREVIOUS] --out DIR`:
 //!   a plugin release's `update.json`, meta archive and patch.
 
@@ -15,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 use mandara_delta::{Manifest, SCHEMA, SHELL_BINARY};
 
-use crate::{Result, opt, root, short_target, state};
+use crate::{Result, opt, opts, root, short_target, state};
 
 /// Name of the shell in manifests and asset names.
 const SHELL_NAME: &str = "mandara";
@@ -77,27 +79,26 @@ pub fn update_part(args: &[String]) -> Result<()> {
     let archive_path = out.join(&archive_name);
     let archive = (archive_name.clone(), read(&archive_path).map_err(|e| format!("{e} — run `cargo xtask dist` first"))?);
     let new_bin = tarball_binary(&archive_path)?;
-    // The previous release's tarball of the same target: its version is in
-    // its name (`mandara-<old>-<key>.tar.gz`).
-    let previous = match opt(args, "--previous").map(PathBuf::from) {
-        Some(p) => {
-            let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-            let old_version = name.strip_prefix(&format!("{SHELL_NAME}-")).and_then(|n| n.strip_suffix(&format!("-{key}.tar.gz"))).ok_or_else(|| format!("{name} is not a {key} release tarball"))?.to_string();
-            if old_version == version {
-                println!("previous release is {version} itself (a rebuild): no patch");
-                None
-            } else {
-                Some((old_version, tarball_binary(&p)?))
-            }
+    // Earlier releases' tarballs of the same target: each one's version is
+    // in its name (`mandara-<old>-<key>.tar.gz`).
+    let mut previous = Vec::new();
+    for p in opts(args, "--previous").into_iter().map(PathBuf::from) {
+        let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let old_version = name.strip_prefix(&format!("{SHELL_NAME}-")).and_then(|n| n.strip_suffix(&format!("-{key}.tar.gz"))).ok_or_else(|| format!("{name} is not a {key} release tarball"))?.to_string();
+        if old_version == version {
+            println!("{name} is {version} itself (a rebuild): no patch from it");
+        } else {
+            previous.push((old_version, tarball_binary(&p)?));
         }
-        None => None,
-    };
-    let (entry, patch) = mandara_delta::create::target_entry(SHELL_NAME, &version, Some(&key), &archive, SHELL_BINARY, &new_bin, previous.as_ref().map(|(v, b)| (v.as_str(), b.as_slice())))?;
-    if let Some((file, data)) = &patch {
+    }
+    let previous: Vec<(&str, &[u8])> = previous.iter().map(|(v, b)| (v.as_str(), b.as_slice())).collect();
+    let (entry, patches) = mandara_delta::create::target_entry(SHELL_NAME, &version, Some(&key), &archive, SHELL_BINARY, &new_bin, &previous)?;
+    for (file, data) in &patches {
         write(&out.join(file), data)?;
         println!("{file}: {} bytes ({:.2}% of the {} byte tarball)", data.len(), percent(data.len(), archive.1.len()), archive.1.len());
-    } else {
-        println!("no previous {key} release: full update only");
+    }
+    if patches.is_empty() {
+        println!("no earlier {key} release: full update only");
     }
     let mut part = Manifest { schema: SCHEMA, name: SHELL_NAME.into(), version: version.clone(), ..Default::default() };
     part.targets.insert(key.clone(), entry);

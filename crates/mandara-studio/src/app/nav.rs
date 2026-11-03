@@ -659,8 +659,8 @@ impl StudioView {
             .items_center()
             .gap(px(SPACE_10_PX))
             .when(locked.is_some(), |el| el.opacity(QUICK_LOCKED_OPACITY))
-            .when(locked.is_none(), |el| {
-                el.cursor_pointer().hover(|st| st.bg(bg.lighten(if p.is_dark { QUICK_HOVER_LIFT } else { -QUICK_HOVER_LIFT }).hsla())).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.apply(&setting, serde_json::Value::from(!on), cx)))
+            .when_some(if locked.is_some() { registry::locked_toggle_click(on) } else { Some(!on) }, |el, next| {
+                el.cursor_pointer().hover(|st| st.bg(bg.lighten(if p.is_dark { QUICK_HOVER_LIFT } else { -QUICK_HOVER_LIFT }).hsla())).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.apply(&setting, serde_json::Value::from(next), cx)))
             })
             .child(div().size(px(DIM_32_PX)).flex_none().rounded_full().bg(chip_bg.hsla()).row().items_center().justify_center().child(icon(quick_icon(s.path), ICON_15_PX, glyph)))
             .child(
