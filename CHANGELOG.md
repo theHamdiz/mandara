@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.8.3 — 2026-11-03
+
+Lighter wallpapers.
+
 ### Changed
 
 - **Lighter wallpapers.** A wallpaper smaller than your screen, and the
