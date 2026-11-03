@@ -32,23 +32,32 @@ pub fn diff_verified(old: &[u8], new: &[u8]) -> Result<Vec<u8>, String> {
 /// A release file: its asset name and bytes.
 pub type Asset = (String, Vec<u8>);
 
-/// One target's manifest entry for a release. With `previous` (its version
-/// and binary), also the patch from it (verified), returned as an asset.
-pub fn target_entry(name: &str, version: &str, target: Option<&str>, archive: &Asset, binary_path: &str, new_bin: &[u8], previous: Option<(&str, &[u8])>) -> Result<(Target, Option<Asset>), String> {
+/// One target's manifest entry for a release, with a patch (verified,
+/// returned as an asset) from each of the `previous` releases (version and
+/// binary), so an install that skipped releases still updates by patch.
+/// A previous version listed twice gets one patch, and the release itself
+/// (a rebuild) none.
+pub fn target_entry(name: &str, version: &str, target: Option<&str>, archive: &Asset, binary_path: &str, new_bin: &[u8], previous: &[(&str, &[u8])]) -> Result<(Target, Vec<Asset>), String> {
     let mut entry = Target {
         archive: FileRef { file: archive.0.clone(), sha256: sha256_hex(&archive.1), size: archive.1.len() as u64 },
         binary: Binary { path: binary_path.to_string(), sha256: sha256_hex(new_bin), size: new_bin.len() as u64 },
         patches: Vec::new(),
         meta: None,
     };
-    let mut patch_asset = None;
-    if let Some((from, old_bin)) = previous {
+    let mut patches = Vec::new();
+    let current = version.trim_start_matches('v');
+    for &(from, old_bin) in previous {
+        let from = from.trim_start_matches('v');
+        // The release itself (a rebuild, `v` or not) and repeats get none.
+        if from == current || entry.patches.iter().any(|p| p.from == from) {
+            continue;
+        }
         let patch = diff_verified(old_bin, new_bin)?;
         let file = patch_name(name, from, version, target);
-        entry.patches.push(Patch { from: from.trim_start_matches('v').to_string(), from_sha256: sha256_hex(old_bin), file: file.clone(), sha256: sha256_hex(&patch), size: patch.len() as u64 });
-        patch_asset = Some((file, patch));
+        entry.patches.push(Patch { from: from.to_string(), from_sha256: sha256_hex(old_bin), file: file.clone(), sha256: sha256_hex(&patch), size: patch.len() as u64 });
+        patches.push((file, patch));
     }
-    Ok((entry, patch_asset))
+    Ok((entry, patches))
 }
 
 /// A plugin archive's files (paths relative to its plugin.toml) with the
@@ -123,14 +132,14 @@ pub fn plugin_release(new_archive: &Asset, old_archive: Option<&[u8]>) -> Result
         return Err(format!("plugin id changed ({} → {}); no patch possible", old.id, new.id));
     }
     let previous = old.as_ref().and_then(|o| o.file(PLUGIN_BINARY).map(|w| (o.version.as_str(), w)));
-    let (mut entry, patch) = target_entry(&new.id, &new.version, None, new_archive, PLUGIN_BINARY, new_wasm, previous)?;
+    let (mut entry, patches) = target_entry(&new.id, &new.version, None, new_archive, PLUGIN_BINARY, new_wasm, previous.as_slice())?;
     let meta = new.meta_archive()?;
     let meta_name = format!("{}-{}.meta.tar.gz", new.id, new.version.trim_start_matches('v'));
     entry.meta = Some(FileRef { file: meta_name.clone(), sha256: sha256_hex(&meta), size: meta.len() as u64 });
     let mut manifest = Manifest { schema: SCHEMA, name: new.id.clone(), version: new.version.trim_start_matches('v').to_string(), ..Default::default() };
     manifest.targets.insert(PLUGIN_TARGET.to_string(), entry);
     let mut assets = vec![(meta_name, meta)];
-    assets.extend(patch);
+    assets.extend(patches);
     Ok((manifest, assets))
 }
 
@@ -162,6 +171,35 @@ mod tests {
         let patch = diff_verified(&old, &new).unwrap();
         assert!(patch.len() < new.len() / 50, "patch of {} bytes for a {} byte file", patch.len(), new.len());
         assert_eq!(crate::apply(&old, &patch, new.len() as u64).unwrap(), new);
+    }
+
+    #[test]
+    fn a_release_patches_from_every_earlier_release_given() {
+        // Three releases: 0.1.0 → 0.2.0 → 0.3.0. An install of either
+        // earlier one updates to 0.3.0 by its own patch.
+        let v1 = noise(300_000, 11);
+        let mut v2 = v1.clone();
+        v2.splice(1000..1000, noise(2000, 12));
+        let mut v3 = v2.clone();
+        v3.drain(100_000..110_000);
+        let archive = ("mandara-0.3.0-x86_64-linux-gnu.tar.gz".to_string(), b"tarball".to_vec());
+        let previous = [("v0.2.0", v2.as_slice()), ("0.1.0", v1.as_slice()), ("0.2.0", v2.as_slice()), ("v0.3.0", v3.as_slice())];
+        let (entry, assets) = target_entry("mandara", "0.3.0", Some("x86_64-linux-gnu"), &archive, "bin/mandara", &v3, &previous).unwrap();
+        // One patch per version: the repeated 0.2.0 once, the release
+        // itself (v0.3.0) none.
+        assert_eq!(entry.patches.iter().map(|p| p.from.as_str()).collect::<Vec<_>>(), ["0.2.0", "0.1.0"]);
+        assert_eq!(assets.len(), 2);
+        for (old, from) in [(&v1, "0.1.0"), (&v2, "0.2.0")] {
+            let p = entry.patches.iter().find(|p| p.from == from).unwrap();
+            assert_eq!(p.file, format!("mandara-{from}-to-0.3.0-x86_64-linux-gnu.patch.zst"));
+            assert_eq!(p.from_sha256, sha256_hex(old));
+            let bytes = &assets.iter().find(|(n, _)| *n == p.file).unwrap().1;
+            assert_eq!((p.size, p.sha256.as_str()), (bytes.len() as u64, sha256_hex(bytes).as_str()));
+            assert_eq!(crate::apply(old, bytes, v3.len() as u64).unwrap(), v3);
+        }
+        // No earlier release: the full download only.
+        let (entry, assets) = target_entry("mandara", "0.3.0", Some("x86_64-linux-gnu"), &archive, "bin/mandara", &v3, &[]).unwrap();
+        assert!(entry.patches.is_empty() && assets.is_empty());
     }
 
     fn plugin_tar(version: &str, wasm: &[u8]) -> Vec<u8> {

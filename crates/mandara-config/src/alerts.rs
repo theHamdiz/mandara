@@ -16,6 +16,9 @@ use serde::{Deserialize, Serialize};
 pub mod defaults {
     /// Notification popup (toast) width, logical px.
     pub const TOAST_WIDTH_PX: f32 = 380.0;
+    /// The narrowest popup Studio offers, logical px (a joined drawer with
+    /// less room than this keeps the floating cards).
+    pub const TOAST_MIN_WIDTH_PX: f32 = 300.0;
     /// Toasts stacked at once; older ones wait in the history.
     pub const TOAST_MAX_VISIBLE: usize = 4;
     /// How long toasts stay, per urgency, seconds (0 = until dismissed).

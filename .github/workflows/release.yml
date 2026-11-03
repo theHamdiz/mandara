@@ -24,10 +24,11 @@
 #                                                  fingerprint, toolchain,
 #                                                  binary SHA-256, lines of code
 #   mandara-<old>-to-<v>-<target>[-<variant>].patch.zst
-#                                                  delta update from the
-#                                                  previous release (bsdiff-
-#                                                  style, zstd); the updater's
-#                                                  main method
+#                                                  delta update from each of
+#                                                  the last DELTA_FROM_RELEASES
+#                                                  releases (bsdiff-style,
+#                                                  zstd); the updater's main
+#                                                  method
 #   update.json                                    update manifest: per target
 #                                                  the tarball, bin/mandara and
 #                                                  patches, with SHA-256s/sizes
@@ -62,6 +63,10 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  # Patches go from each of this many earlier releases, so an install that
+  # skipped releases still updates by patch; older ones take the full
+  # download.
+  DELTA_FROM_RELEASES: "5"
 
 jobs:
   version:
@@ -199,31 +204,29 @@ jobs:
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           cargo xtask dist --target ${{ matrix.target }} ${{ matrix.variant && format('--variant {0}', matrix.variant) || '' }} --out dist
 
-      # Delta update: the previous published release's tarball of this
-      # same target → mandara-<old>-to-<v>-<target>.patch.zst (verified by
-      # applying it with the updater's own decoder) and this target's part
-      # of update.json. The first release, or a target the previous release
-      # didn't have, gets the full download only.
-      - name: Delta update from the previous release
+      # Delta update: each of the last DELTA_FROM_RELEASES published
+      # releases' tarball of this same target → mandara-<old>-to-<v>-<target>
+      # .patch.zst (verified by applying it with the updater's own decoder)
+      # and this target's part of update.json. The first release, or a
+      # target no earlier release had, gets the full download only.
+      - name: Delta updates from earlier releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           key="$(echo '${{ matrix.target }}' | sed 's/-unknown-/-/')${{ matrix.variant && format('-{0}', matrix.variant) || '' }}"
-          prev=""
+          prevs=""
           if command -v gh >/dev/null 2>&1; then
-            prev="$(gh release list --exclude-drafts --exclude-pre-releases --limit 20 --json tagName --jq '.[].tagName' \
-              | grep -E '^v[0-9]' | grep -vxF '${{ needs.version.outputs.tag }}' | head -n 1 || true)"
+            prevs="$(gh release list --exclude-drafts --exclude-pre-releases --limit 40 --json tagName --jq '.[].tagName' \
+              | grep -E '^v[0-9]' | grep -vxF '${{ needs.version.outputs.tag }}' | head -n "$DELTA_FROM_RELEASES" || true)"
           fi
           mkdir -p "$RUNNER_TEMP/previous"
-          if [ -n "$prev" ]; then
+          args=()
+          for prev in $prevs; do
+            old="$RUNNER_TEMP/previous/mandara-${prev#v}-${key}.tar.gz"
             gh release download "$prev" --dir "$RUNNER_TEMP/previous" --pattern "mandara-${prev#v}-${key}.tar.gz" || echo "no ${key} tarball in ${prev}"
-          fi
-          old="$RUNNER_TEMP/previous/mandara-${prev#v}-${key}.tar.gz"
-          if [ -n "$prev" ] && [ -f "$old" ]; then
-            cargo run --locked --quiet -p xtask -- update-part --target ${{ matrix.target }} ${{ matrix.variant && format('--variant {0}', matrix.variant) || '' }} --out dist --previous "$old"
-          else
-            cargo run --locked --quiet -p xtask -- update-part --target ${{ matrix.target }} ${{ matrix.variant && format('--variant {0}', matrix.variant) || '' }} --out dist
-          fi
+            if [ -f "$old" ]; then args+=(--previous "$old"); fi
+          done
+          cargo run --locked --quiet -p xtask -- update-part --target ${{ matrix.target }} ${{ matrix.variant && format('--variant {0}', matrix.variant) || '' }} --out dist "${args[@]}"
           ls -la dist/*.patch.zst 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || true
 
       - name: Install packagers
@@ -288,23 +291,21 @@ jobs:
             '
           { echo '```toml'; cat dist/*.build.toml; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Delta update from the previous release
+      - name: Delta updates from earlier releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           key="$(echo '${{ matrix.target }}' | sed 's/-unknown-/-/')"
-          prev="$(gh release list --exclude-drafts --exclude-pre-releases --limit 20 --json tagName --jq '.[].tagName' \
-            | grep -E '^v[0-9]' | grep -vxF '${{ needs.version.outputs.tag }}' | head -n 1 || true)"
+          prevs="$(gh release list --exclude-drafts --exclude-pre-releases --limit 40 --json tagName --jq '.[].tagName' \
+            | grep -E '^v[0-9]' | grep -vxF '${{ needs.version.outputs.tag }}' | head -n "$DELTA_FROM_RELEASES" || true)"
           mkdir -p "$RUNNER_TEMP/previous"
-          if [ -n "$prev" ]; then
+          args=()
+          for prev in $prevs; do
+            old="$RUNNER_TEMP/previous/mandara-${prev#v}-${key}.tar.gz"
             gh release download "$prev" --dir "$RUNNER_TEMP/previous" --pattern "mandara-${prev#v}-${key}.tar.gz" || echo "no ${key} tarball in ${prev}"
-          fi
-          old="$RUNNER_TEMP/previous/mandara-${prev#v}-${key}.tar.gz"
-          if [ -n "$prev" ] && [ -f "$old" ]; then
-            cargo run --locked --quiet -p xtask -- update-part --target ${{ matrix.target }} --out dist --previous "$old"
-          else
-            cargo run --locked --quiet -p xtask -- update-part --target ${{ matrix.target }} --out dist
-          fi
+            if [ -f "$old" ]; then args+=(--previous "$old"); fi
+          done
+          cargo run --locked --quiet -p xtask -- update-part --target ${{ matrix.target }} --out dist "${args[@]}"
 
       - uses: actions/upload-artifact@v4
         with:

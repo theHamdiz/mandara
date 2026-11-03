@@ -18,7 +18,11 @@
 //! * **The other edge** (the bar elsewhere, a side bar, no bar on this
 //!   output): out of the bare screen edge with flares, or out of the screen
 //!   frame's strip beside a side bar.
-//! * **A bottom dock** holds the bottom edge: bottom popups stay cards.
+//! * **A bottom dock** on the popups' output holds the bottom edge: bottom
+//!   popups there stay cards.
+//! * **Too narrow**: when the screen leaves the drawer less room than the
+//!   smallest readable card (a small screen beside a wide notch), popups
+//!   stay cards rather than shrink to a sliver.
 //!
 //! While the bar auto-hides the line follows it, so the drawer slides with
 //! the bar and hangs from the screen edge once it is gone.
@@ -49,8 +53,11 @@ pub struct Inputs {
     pub screen_w: f32,
     /// Closest the drawer comes to a screen side, px.
     pub min_margin: f32,
-    /// A dock holds the bottom edge.
+    /// A dock holds the bottom edge of the popups' output.
     pub dock_bottom: bool,
+    /// Narrowest drawer worth drawing: the smallest readable card plus the
+    /// drawer's padding on both sides.
+    pub min_width: f32,
     /// Fillet radius where a side bar or a pinned sidebar meets the
     /// popups' edge, `(left, right)` (0: nothing there).
     pub side_fillets: (f32, f32),
@@ -118,6 +125,9 @@ pub fn solve(i: &Inputs) -> Option<Drawer> {
         (0.0, room(side(fillet_l, fillet_r)))
     };
     let max_width = (i.screen_w - margin * 2.0).max(0.0);
+    if max_width < i.min_width {
+        return None;
+    }
     Some(Drawer { line, on_bar, margin, flare, max_width })
 }
 
@@ -160,6 +170,8 @@ mod tests {
 
     const SCREEN_W: f32 = 1600.0;
     const MIN: f32 = 14.0;
+    /// The smallest card the settings offer, plus 8 px of padding a side.
+    const MIN_DRAWER: f32 = 300.0 + 16.0;
 
     fn metrics(layout: BarLayout, position: BarPosition, floating: bool) -> Metrics {
         let mut cfg = ShellConfig::default();
@@ -170,7 +182,7 @@ mod tests {
     }
 
     fn inputs(position: ToastPosition, bar: Metrics) -> Inputs {
-        Inputs { position, bar, bar_here: true, bar_slid: 0.0, screen_w: SCREEN_W, min_margin: MIN, dock_bottom: false, side_fillets: (0.0, 0.0) }
+        Inputs { position, bar, bar_here: true, bar_slid: 0.0, screen_w: SCREEN_W, min_margin: MIN, dock_bottom: false, min_width: MIN_DRAWER, side_fillets: (0.0, 0.0) }
     }
 
     #[test]
@@ -229,6 +241,23 @@ mod tests {
         let i = Inputs { dock_bottom: true, ..inputs(ToastPosition::BottomRight, m) };
         assert!(solve(&i).is_none());
         assert!(solve(&Inputs { position: ToastPosition::TopRight, ..i }).is_some());
+    }
+
+    #[test]
+    fn too_little_room_for_a_readable_card_keeps_the_cards() {
+        // A 320 px wide output under a notch: the drawer would leave a
+        // sliver of a card.
+        let m = metrics(BarLayout::Notch, BarPosition::Top, false);
+        let narrow = Inputs { screen_w: 320.0, ..inputs(ToastPosition::TopRight, m) };
+        assert!(solve(&narrow).is_none());
+        assert!(solve(&inputs(ToastPosition::TopRight, m)).is_some(), "a usual screen joins");
+        // Exactly enough room still joins, at the readable minimum; a
+        // pixel less keeps the cards.
+        let m = metrics(BarLayout::MinimalEdge, BarPosition::Top, false);
+        let margin = solve(&inputs(ToastPosition::TopRight, m)).unwrap().margin;
+        let at = |screen_w: f32| solve(&Inputs { screen_w, ..inputs(ToastPosition::TopRight, m) });
+        assert_eq!(at(MIN_DRAWER + margin * 2.0).map(|d| d.max_width), Some(MIN_DRAWER));
+        assert!(at(MIN_DRAWER + margin * 2.0 - 1.0).is_none());
     }
 
     #[test]

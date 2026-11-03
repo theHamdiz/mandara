@@ -92,6 +92,11 @@ fn opt(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
 }
 
+/// Every value of an option that may repeat (`--previous A --previous B`).
+fn opts(args: &[String], name: &str) -> Vec<String> {
+    args.windows(2).filter(|w| w[0] == name).map(|w| w[1].clone()).collect()
+}
+
 fn tag_for(c: &Component, version: &str) -> String {
     if c.name == "mandara-app" { format!("v{version}") } else { format!("{}-v{version}", c.name) }
 }
