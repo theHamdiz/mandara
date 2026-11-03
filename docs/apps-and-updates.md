@@ -76,9 +76,11 @@ scriptable too: `mandara msg apps owner <id>` and
   version to the new one: in our measurements 7–16 MB instead of a 42–50 MB
   download. The patch is verified, the rebuilt binary is checked byte for
   byte against the published SHA-256, and it is swapped in atomically before
-  the shell restarts. If a patch can't be used for any reason, Mandara falls
-  back to the full download, verified the same way; `mandara update rollback`
-  restores the previous version.
+  the shell restarts. Each release carries patches from the five releases
+  before it, so skipping a few updates still takes the small download. If a
+  patch can't be used for any reason (or your version is older than that),
+  Mandara falls back to the full download, verified the same way;
+  `mandara update rollback` restores the previous version.
 - **Plugins too.** Mandara's own plugins are built in and update with the
   shell. Marketplace plugins update the same way, patch first with a full
   fallback (`mandara update plugins`, or **Update all** in Studio), reload

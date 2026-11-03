@@ -21,6 +21,14 @@ A tidier layout designer, with search.
   off, so dragging is no longer the only way. Thanks for the suggestion
   in #26!
 
+### Fixed
+
+- **Smart updates work after skipping releases.** A release only carried a
+  binary patch from the release right before it, so if you skipped one,
+  updating fell back to the full ~70 MB download. Each release now carries
+  patches from the five releases before it: updating from any of them is a
+  ~5 MB download.
+
 ## 0.9.0 — 2026-11-03
 
 Notifications can join the bar. Pointing at a notification always pauses
