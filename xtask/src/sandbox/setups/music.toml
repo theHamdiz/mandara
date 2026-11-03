@@ -1,6 +1,9 @@
 # README setup "Music corner": glass pills, a turning record, a pocket
-# player and a wave visualizer over the lagoon. Shot with
-# `cargo xtask sandbox up --config xtask/src/sandbox/setups/music.toml --size 2880x1620 --scale 1.5`,
+# player and a wave visualizer over glossy liquid ribbons. Shot with
+# `cargo xtask sandbox up --config xtask/src/sandbox/setups/music.toml --size 2880x1620 --scale 2`,
+# the wallpaper once:
+#   sandbox msg wallgen generate liquid --palette sunset --seed 0x2a --size 2880x1620 --format png --no-apply
+#   sandbox msg theme wallpaper vibrant
 # then `sandbox audio play` and `sandbox shot`.
 
 [appearance]
@@ -71,10 +74,10 @@ pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.dem
 
 [plugins]
 defaults_version = 1
-enabled = ["dock", "desktop-now-playing", "desktop-visualizers", "desktop-clocks"]
+enabled = ["dock", "desktop-now-playing", "desktop-visualizers", "desktop-clocks", "wallpaper-generator"]
 
 [plugins.settings.media]
 lyrics = true
 
 [wallpaper]
-path = "/home/demo/Pictures/Wallpapers/lagoon.png"
+path = "/home/demo/Pictures/Wallpapers/Generated/liquid-00002a-2880x1620.png"

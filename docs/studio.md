@@ -7,30 +7,30 @@ running shell over IPC: drag a slider and the bar follows on the very next frame
 Settings never live in bar dropdowns.
 
 <p align="center">
-  <img src="screenshots/studio-home.png" alt="Studio Home: a greeting over the wallpaper, live shell status, the theme with one-click switching, quick settings, recent changes and a card per group" width="100%"/>
+  <img src="screenshots/studio-home.webp" alt="Studio Home: a greeting over the wallpaper, live shell status, the theme with one-click switching, quick settings, recent changes and a card per group" width="100%"/>
   <br/><sub><b>Home</b>: a widget dashboard with live shell status, the current theme and its one-click switches, quick settings and recent changes</sub>
 </p>
 
 <p align="center">
-  <img src="screenshots/studio-themes.png" alt="Studio Themes: a live preview of the shell in the current theme with its palette and text contrast, light / dark, and the six Looks" width="100%"/>
+  <img src="screenshots/studio-themes.webp" alt="Studio Themes: a live preview of the shell in the current theme with its palette and text contrast, light / dark, and the six Looks" width="100%"/>
   <br/><sub><b>Themes</b>: a live preview of the shell in the current theme, its palette and contrast, light / dark, then the Looks, designed themes, wallpaper colors and cursors</sub>
 </p>
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/studio-nav.png" alt="Grouped, collapsible navigation" width="100%"/><br/><sub><b>Navigation</b>: grouped, collapsible, searchable</sub></td>
-<td width="50%" valign="top"><img src="screenshots/studio-desktop-widgets.png" alt="Desktop widgets: a live preview of the desktop beside the list of placed widgets, then the Add a widget gallery grouped by plugin as an even grid of same-size tiles" width="100%"/><br/><sub><b>Desktop widgets</b>: the preview, your widgets and the gallery</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-nav.webp" alt="Grouped, collapsible navigation" width="100%"/><br/><sub><b>Navigation</b>: grouped, collapsible, searchable</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-desktop-widgets.webp" alt="Desktop widgets: a live preview of the desktop beside the list of placed widgets, then the Add a widget gallery grouped by plugin as an even grid of same-size tiles" width="100%"/><br/><sub><b>Desktop widgets</b>: the preview, your widgets and the gallery</sub></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/studio-bar.png" alt="Bar: Shape, Appearance and Capsules sections with item capsules switched on, their colour, strength and outline" width="100%"/><br/><sub><b>Bar</b>: shape, appearance and item capsules</sub></td>
-<td width="50%" valign="top"><img src="screenshots/studio-plugins.png" alt="Plugins → Installed: all 58 Mandara plugins with on / off counts, filter chips and switches" width="100%"/><br/><sub><b>Plugins → Installed</b></sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-bar.webp" alt="Bar: Shape, Appearance and Capsules sections with item capsules switched on, their colour, strength and outline" width="100%"/><br/><sub><b>Bar</b>: shape, appearance and item capsules</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-plugins.webp" alt="Plugins → Installed: all 58 Mandara plugins with on / off counts, filter chips and switches" width="100%"/><br/><sub><b>Plugins → Installed</b></sub></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/studio-power-menu.png" alt="Power & idle: session menu editor" width="100%"/><br/><sub><b>Power &amp; idle</b>: the session menu editor</sub></td>
-<td width="50%" valign="top"><img src="screenshots/studio-about.png" alt="About: the version, license badges and updates" width="100%"/><br/><sub><b>About</b>: version and binary-patch updates</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-power-menu.webp" alt="Power & idle: session menu editor" width="100%"/><br/><sub><b>Power &amp; idle</b>: the session menu editor</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-about.webp" alt="About: the version, license badges and updates" width="100%"/><br/><sub><b>About</b>: version and binary-patch updates</sub></td>
 </tr>
 <tr>
-<td colspan="2" align="center"><img src="screenshots/studio-home-ar.png" alt="العربية: right to left, «ستوديو المندرة»" width="100%"/><br/><sub><b>العربية</b>: every page mirrored right to left, «ستوديو المندرة»</sub></td>
+<td colspan="2" align="center"><img src="screenshots/studio-home-ar.webp" alt="العربية: right to left, «ستوديو المندرة»" width="100%"/><br/><sub><b>العربية</b>: every page mirrored right to left, «ستوديو المندرة»</sub></td>
 </tr>
 </table>
 
@@ -129,7 +129,7 @@ how many of its settings match, and pages without matches fade.
 | Enter · Space (sidebar focused) | Toggle the current group |
 | Esc (sidebar focused) | Leave the sidebar |
 
-<img src="screenshots/studio-nav.png" alt="Collapsed groups and the Dock page"/>
+<img src="screenshots/studio-nav.webp" alt="Collapsed groups and the Dock page"/>
 
 ## Pages
 
@@ -430,7 +430,7 @@ narrow ones; everything mirrors for right-to-left languages.
 - **Cursor themes** (Themes → Cursor, `mandara studio themes/cursor`; the
   opt-in `cursors` plugin — switched off, Mandara writes no cursor setting
   anywhere, applies none live and leaves `~/.icons/default` alone):
-  ![Cursor themes](screenshots/studio-cursors.png)
+  ![Cursor themes](screenshots/studio-cursors.webp)
   - **Your cursor** draws the applied theme from its own XCursor files —
     pointer, link, text, busy, precision, the three resizes and move — at
     the chosen size, with 24 / 32 / 48 / 64 px chips beside the size

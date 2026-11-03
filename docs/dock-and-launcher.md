@@ -8,9 +8,9 @@
 
 <table>
 <tr>
-<td width="33%" valign="top"><img src="screenshots/launcher.png" alt="The launcher above the dock" width="100%"/><br/><sub><b>Launcher</b>, attached above the dock</sub></td>
-<td width="33%" valign="top"><img src="screenshots/dock-applications.png" alt="The dock's Applications folder: a searchable grid of apps with category chips" width="100%"/><br/><sub><b>Applications folder</b></sub></td>
-<td width="33%" valign="top"><img src="screenshots/dock-downloads-fan.png" alt="The Downloads stack fanned out: the newest files on an arc, Open Downloads · 6 more at the top" width="100%"/><br/><sub><b>Downloads fan</b></sub></td>
+<td width="33%" valign="top"><img src="screenshots/launcher.webp" alt="The launcher above the dock" width="100%"/><br/><sub><b>Launcher</b>, attached above the dock</sub></td>
+<td width="33%" valign="top"><img src="screenshots/dock-applications.webp" alt="The dock's Applications folder: a searchable grid of apps with category chips" width="100%"/><br/><sub><b>Applications folder</b></sub></td>
+<td width="33%" valign="top"><img src="screenshots/dock-downloads-fan.webp" alt="The Downloads stack fanned out: the newest files on an arc, Open Downloads · 6 more at the top" width="100%"/><br/><sub><b>Downloads fan</b></sub></td>
 </tr>
 </table>
 

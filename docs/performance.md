@@ -24,7 +24,7 @@ frame times live, so you can check these numbers on your machine (Studio
 runs as its own process and is measured separately):
 
 <p align="center">
-  <img src="screenshots/studio-performance.png" alt="Studio Performance: the shell's CPU, memory, video memory and frame times" width="100%"/>
+  <img src="screenshots/studio-performance.webp" alt="Studio Performance: the shell's CPU, memory, video memory and frame times" width="100%"/>
   <br/>
   <sub>Studio → Performance in the demo session the screenshots are taken in.</sub>
 </p>
