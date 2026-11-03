@@ -7778,6 +7778,19 @@
 "Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn" = "Setiap ikon aplikasi di peluncur dan dok diletakkan di atas bentuk yang sama agar terlihat serasi; “Sesuai tema” membiarkan setiap ikon seperti aslinya"
 "Theme's own" = "Sesuai tema"
 
+# ── Studio → Bar → Layout designer ──
+"Add to {zone}" = "Tambahkan ke {zone}"
+"All plugins" = "Semua plugin"
+"Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar." = "Klik plugin untuk menempatkannya, atau seret ke bilah. Lepaskan di sini untuk mengeluarkannya dari bilah."
+"Drag items to reorder them or move them between zones; click one for more" = "Seret item untuk mengurutkan atau memindahkannya antarzona; klik untuk opsi lainnya"
+"Faith" = "Iman"
+"Layout designer" = "Perancang tata letak"
+"Move down" = "Pindah ke bawah"
+"Move to {zone}" = "Pindahkan ke {zone}"
+"Move up" = "Pindah ke atas"
+"One click sets the style, position, height and arrangement" = "Satu klik mengatur gaya, posisi, tinggi, dan susunan"
+"Presets" = "Preset"
+"Remove from bar" = "Hapus dari bilah"
 # ── Popups joined to the bar ──
 "Join the bar" = "Gabungkan dengan bilah"
 "Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "Popup menggantung dari bilah dengan warnanya, menyatu dengannya; di tepi tanpa bilah, dari tepi layar"

@@ -21,6 +21,28 @@ About → What's new shows it too.
   reason. Every action is a command you can put on a key, such as
   `record toggle` and `record pause-toggle`.
 
+## 0.10.0 — 2026-11-03
+
+A tidier layout designer, with search.
+
+### Changed
+
+- **A tidier layout designer, with search.** In Studio → Bar, the Left,
+  Center and Right zones are now neat columns with their plugins stacked
+  in order, and every plugin sits in an aligned grid underneath, grouped
+  by category, with a search box that filters as you type. Plugins already
+  on the bar show where they are. Click any plugin (or bar item) for a
+  small menu to add it to a zone, move it up, down or across, or take it
+  off, so dragging is no longer the only way. Thanks for the suggestion
+  in #26!
+
+## 0.9.0 — 2026-11-03
+
+Notifications can join the bar. Pointing at a notification always pauses
+it.
+
+### New
+
 - **Notifications can join the bar.** Turn on Studio → Notifications →
   **Join the bar** and new notifications drop out of the bar in a drawer of
   its own colour, curving into it, so the two read as one piece. It works

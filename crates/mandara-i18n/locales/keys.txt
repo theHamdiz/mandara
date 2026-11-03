@@ -337,6 +337,7 @@ Add to PATH by default
 Add to bar
 Add to sidebar
 Add to the slideshow playlist
+Add to {zone}
 Add user
 Add widget
 Add widgets
@@ -400,7 +401,7 @@ All good — checked {when} with {compositor}
 All interfaces
 All lists
 All men by nature desire to know.
-All plugins — drag onto the bar (turns it on), or drop here to remove
+All plugins
 All processes
 All sound
 All sound muted
@@ -1050,6 +1051,7 @@ Clears today's screen time
 Click
 Click a code to copy it
 Click a code to copy it · the clipboard clears after {n} s
+Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar.
 Click a spot. Spots on the bar's edge grow out of the bar like its panels; the middle one floats over everything. Left and right are the screen's own sides.
 Click a window to match its app; “App + title” matches that exact title too.
 Click a window to pick it, again to capture · {enter}
@@ -1665,6 +1667,7 @@ Dracula
 Drag around the QR code · Enter scans the whole screen · Esc cancels
 Drag displays to arrange them
 Drag inside the selection to annotate · Ctrl+Z undo · {enter}
+Drag items to reorder them or move them between zones; click one for more
 Drag lock
 Drag the photo to position it.
 Drag to choose the area to record · Enter to start · Esc to cancel
@@ -1926,6 +1929,7 @@ Failed to load
 Failed units on the system and user managers
 Failed-unit alert
 Fair
+Faith
 Fajr
 Fall down seven times, get up eight.
 Families
@@ -2899,6 +2903,7 @@ Launches count more when recent; the weight halves every few days (Ranking above
 Launching
 Layered glassy waves
 Layout
+Layout designer
 Lead color
 Leading zero
 Lean on Him rather than charms and omens, and walk on without fear.
@@ -3431,6 +3436,7 @@ Move a pinned app to a position (0 = first)
 Move a sidebar tab to a 1-based position
 Move a task to another list
 Move a topic to a 1-based position
+Move down
 Move it to the Trash
 Move left
 Move notes to Notes
@@ -3443,8 +3449,10 @@ Move the toolbar to the bottom · M
 Move the toolbar to the top · M
 Move to
 Move to Trash
+Move to {zone}
 Move today's reminder back one item
 Move today's reminder forward one item (every surface follows)
+Move up
 Move window to {place} {n}
 Move window {direction}
 Moves with the music
@@ -4013,6 +4021,7 @@ Once per session
 One app's screen time over the last seven days
 One centered island that morphs
 One click sets the bar, desktop widgets, colors, fonts and roundness together. Your own setup is saved first, so you can always go back. Looks never change your wallpaper.
+One click sets the style, position, height and arrangement
 One dot
 One entry per app
 One good deed for today, with its check and your week
@@ -4445,6 +4454,7 @@ Preparing…
 Presentation mode
 Presenting
 Preset column widths
+Presets
 Press Check now to look for updates
 Press Enter to close
 Press keys…
@@ -4739,6 +4749,7 @@ Remove duplicates ({n})
 Remove every finished task
 Remove from Dock
 Remove from Mandara
+Remove from bar
 Remove from bar ({zone})
 Remove from sidebar
 Remove from the playlist
@@ -7248,7 +7259,6 @@ of {cores} cores
 of {limit} daily limit
 of {total}
 of {total} loaded
-off
 off, or HH:MM-HH:MM
 on (default) or off
 on / off
