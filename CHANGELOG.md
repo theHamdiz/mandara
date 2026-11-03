@@ -10,7 +10,7 @@ About → What's new shows it too.
 
 A tidier layout designer, with search.
 
-### Changed
+### Improved
 
 - **A tidier layout designer, with search.** In Studio → Bar, the Left,
   Center and Right zones are now neat columns with their plugins stacked
@@ -45,7 +45,7 @@ it.
 
 Lighter wallpapers.
 
-### Changed
+### Improved
 
 - **Lighter wallpapers.** A wallpaper smaller than your screen, and the
   depth clock's mask, are now scaled up a row at a time instead of through
@@ -76,7 +76,7 @@ edge.
 
 A lighter start.
 
-### Changed
+### Improved
 
 - **A lighter start.** Right after it starts, the shell now holds far less
   memory: 15 seconds in, 37–39 MiB instead of 111–123 MiB on a 4K display.
@@ -110,7 +110,7 @@ notification away. App icons share one shape.
   go: it leaves the screen but stays in the notification center. The × still
   dismisses it for good. ([#24](https://github.com/theHamdiz/mandara/issues/24))
 
-### Changed
+### Improved
 
 - **App icons share one shape.** Every app icon in the launcher (all three
   looks), the dock and its Applications drawer now sits on the same
@@ -312,7 +312,7 @@ developer tools.
   sideways with a normal mouse wheel, can be grabbed and dragged, and show
   arrows when there are more chips off to the side.
 
-### Changed
+### Improved
 
 - **Sliders have a new look.** Every slider, in Studio and in the shell's
   panels and sidebar, now has a rounded fill, a slim upright handle with a
@@ -331,7 +331,7 @@ developer tools.
 
 Rounded screen corners are on by default.
 
-### Changed
+### Improved
 
 - **Rounded screen corners are on by default.** New setups round all four
   corners of every display, and the edge-frame bar's outer corners round

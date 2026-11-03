@@ -210,8 +210,9 @@ One short paragraph saying what the release is about.
 ```
 
 Keep the format strict (it is parsed): `##` version headings, a summary
-paragraph, `###` sections and `-` items. A unit test checks the shipped
-file. Text after a `---` rule in a release body (the install command) isn't
+paragraph, `###` sections and `-` items. The sections are New, Improved,
+Fixed and Under the hood only (Studio styles and translates just those).
+A unit test checks the shipped file, headings included. Text after a `---` rule in a release body (the install command) isn't
 shown in Studio. Don't edit released entries except to fix mistakes, and
 never add the version heading yourself: the release bump does it.
 
