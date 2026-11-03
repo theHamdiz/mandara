@@ -151,15 +151,17 @@ The rest of what's built in.
   one-line description), the apps holding a profile and the "performance
   degraded" reason, then each battery as a card: a dotted charge ring,
   state, rate in watts and the time estimate, health (full vs design
-  capacity), cycles, capacity, temperature, a charge-history sparkline
+  capacity), cycles and capacity (a dash where UPower doesn't report
+  them), the temperature when reported, a charge-history sparkline
   from UPower and the charge limit (a switch where UPower can change it,
   read-only otherwise). **Modern** leads with each battery: a large charge
-  gauge (the percentage and its state inside), the time left, health,
-  capacity against the design capacity and the chemistry, and a
+  gauge (the percentage and its state inside), the time left, then
+  health, capacity against the design capacity and the chemistry when
+  UPower reports them, and a
   charge-history graph (hidden when UPower keeps no history); below it the
   profiles your daemon offers form one segmented switch, then the charge
   limit switch (only where UPower can change it); the technical readouts
-  (rate, energy, voltage, cycles, temperature, the CPU scaling and platform
+  UPower reports (rate, energy, voltage, cycles, temperature, the CPU scaling and platform
   drivers, a charge limit set by the firmware) wait in a collapsed
   *Details* fold. Classic names no CPU driver at all. Both read the
   charge history only while the panel is open, list peripheral batteries,

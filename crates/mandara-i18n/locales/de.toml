@@ -8025,7 +8025,7 @@
 "Theme's own" = "Wie im Theme"
 # ── Power panel (#26) ──
 "Pulse the battery while charging" = "Akku beim Laden pulsieren lassen"
-"The bar's battery chip breathes gently while it charges (never with Reduce motion)" = "Das Akku-Symbol in der Leiste pulsiert sanft, während er lädt (nie mit „Bewegung reduzieren“)"
+"The bar's battery chip breathes gently while it charges (never with Reduce motion)" = "Das Akku-Symbol in der Leiste pulsiert sanft, während der Akku lädt (nie mit „Bewegung reduzieren“)"
 "Stops at {end}%, resumes below {start}%" = "Stoppt bei {end} %, lädt wieder unter {start} %"
 "of {design} Wh" = "von {design} Wh"
 "Chemistry" = "Zellchemie"
