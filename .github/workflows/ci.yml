@@ -97,6 +97,30 @@ jobs:
               ./target/debug/mandara --version
             '
 
+  # NixOS (flake.nix, nix/): the package builds from source as Nix builds it
+  # for users, and the NixOS and Home Manager modules evaluate (the NixOS
+  # check builds a minimal system with the module and Mandara Login on).
+  nix:
+    name: Nix flake (x86_64)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # A release build with fat LTO plus a NixOS system closure needs more
+      # room than the runner leaves free.
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: Build
+        run: |
+          nix build .#mandara --print-build-logs
+          ./result/bin/mandara --version
+
+      - name: Flake check
+        run: nix flake check --print-build-logs
+
   plugins:
     name: Plugins (wasm32-wasip2)
     runs-on: ubuntu-24.04

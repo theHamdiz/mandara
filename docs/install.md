@@ -232,9 +232,10 @@ back. Keys you leave out keep Mandara's defaults.
 (`mandara setup --autostart`, or a line in your Home Manager compositor
 config), or use `systemd.enable`, not both. The service needs your
 compositor to start `graphical-session.target` and pass `WAYLAND_DISPLAY`
-and its socket variables to the systemd user manager: Niri does, and so do
-the Hyprland and MangoWM Home Manager modules with their systemd
-integration on.
+and its socket variables to the systemd user manager: Niri does, and so
+does Hyprland's Home Manager module with its systemd integration
+(`wayland.windowManager.hyprland.systemd.enable`); for others, check your
+compositor's documentation.
 
 **Your compositor config.** Mandara writes its rules, binds and border
 colours to `~/.config/mandara/generated/` and never edits a file Home
