@@ -192,7 +192,8 @@ fn every_plugin_setting_in_studio_is_read_by_its_plugin() {
     let mut dead = Vec::new();
     for s in registry::settings() {
         let Some((id, key)) = plugin_key(s.path) else { continue };
-        if NON_BUILTIN_TABLES.contains(&id) {
+        // A status or a button has nothing to read.
+        if NON_BUILTIN_TABLES.contains(&id) || !s.control.has_value() {
             continue;
         }
         if !plugin_reads(id, key) {
@@ -225,7 +226,7 @@ fn every_builtin_plugin_settings_modal_lists_only_live_settings() {
             checked += 1;
             if let Some((id, key)) = plugin_key(s.path) {
                 assert_eq!(id, m.id, "{} lists another plugin's setting {}", m.id, s.path);
-                assert!(plugin_reads(id, key), "{}: modal shows {} but the plugin never reads it", m.id, s.path);
+                assert!(!s.control.has_value() || plugin_reads(id, key), "{}: modal shows {} but the plugin never reads it", m.id, s.path);
             } else {
                 // A shell setting the plugin drives: some consumer reads it.
                 assert!(shell_setting_is_read(&s), "{}: modal shows {} but nothing reads it", m.id, s.path);
@@ -254,7 +255,7 @@ fn builtin_plugins_are_all_registered() {
 fn screenshot_struct_and_studio_agree() {
     let fields: BTreeSet<String> = toml::Table::try_from(mandara_config::workflow::ScreenshotSettings::default()).unwrap().keys().cloned().collect();
     let shown: BTreeSet<String> = registry::settings().iter().filter_map(|s| plugin_key(s.path)).filter(|(id, _)| *id == "screenshot").map(|(_, k)| k.to_string()).collect();
-    let recorder: BTreeSet<String> = ["record_directory", "record_fps", "record_width"].map(String::from).into();
+    let recorder: BTreeSet<String> = toml::Table::try_from(mandara_config::recorder::RecorderSettings::default()).unwrap().keys().cloned().chain(["record_backends".to_string()]).collect();
     let missing: Vec<_> = fields.difference(&shown).collect();
     assert!(missing.is_empty(), "screenshot fields without a Studio control: {missing:?}");
     let extra: Vec<_> = shown.difference(&fields).filter(|k| !recorder.contains(*k)).collect();
@@ -270,7 +271,7 @@ fn screenshot_controls_reach_the_struct() {
         let Some(value) = changed_value(s, &registry::get(&cfg, s)) else { continue };
         let next = registry::set(&cfg, s, value).unwrap_or_else(|e| panic!("{}: {e}", s.path));
         let (_, key) = plugin_key(s.path).unwrap();
-        if ["record_directory", "record_fps", "record_width"].contains(&key) {
+        if key.starts_with("record_") {
             continue;
         }
         assert_ne!(ScreenshotSettings::from_plugins(&next.plugins), ScreenshotSettings::default(), "{} doesn't change ScreenshotSettings", s.path);
@@ -285,7 +286,7 @@ fn field(path: &str) -> &str {
 /// Whether consumer code reads a shell (non-plugin-table) setting: its
 /// field is accessed somewhere outside its definition.
 fn shell_setting_is_read(s: &Setting) -> bool {
-    if matches!(s.control, Control::Command { .. } | Control::DepthModel) {
+    if !s.control.has_value() {
         return true;
     }
     let name = field(s.path);
@@ -340,7 +341,8 @@ pub(super) fn changed_value(s: &Setting, current: &Value) -> Option<Value> {
         Control::Text { .. } | Control::OptionalText { .. } | Control::Font { .. } => Some(Value::from(format!("{}-audit", current.as_str().unwrap_or("x")))),
         Control::List { .. } => Some(Value::from(vec!["audit.example"])),
         Control::Time => Some(Value::from(if current.as_str() == Some("06:15") { "06:45" } else { "06:15" })),
-        Control::Icon | Control::Command { .. } | Control::DepthModel => None,
+        Control::Device { .. } | Control::Display => Some(Value::from(format!("{}-audit", current.as_str().unwrap_or("x")))),
+        Control::Icon | Control::Command { .. } | Control::DepthModel | Control::RecorderBackends => None,
     }
 }
 
@@ -622,7 +624,7 @@ fn scanner_sees_reads_and_misses() {
     assert!(plugin_reads("pomodoro", "focus_minutes"), "key passed through a helper");
     assert!(plugin_reads("screenshot", "capture_on_release"), "struct field read");
     let reads = setting_reads();
-    for (id, key) in [("screenshot", "record_fps"), ("weather", "animate"), ("prayer-times", "hijri_offset"), ("world-clock", "cities"), ("pomodoro", "long_break_every")] {
+    for (id, key) in [("screenshot", "copy"), ("weather", "animate"), ("prayer-times", "hijri_offset"), ("world-clock", "cities"), ("pomodoro", "long_break_every")] {
         assert!(reads.contains(&(id.to_string(), key.to_string())), "{id}/{key} not resolved");
     }
     let fake = Setting { section: Section::General, group: "", path: "/general/no_such_audit_field", label: "", help: "", control: Control::Toggle, default: None };
