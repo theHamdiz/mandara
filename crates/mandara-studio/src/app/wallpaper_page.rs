@@ -571,7 +571,7 @@ impl StudioView {
     /// The folder setting, opened from "Change folder".
     fn wp_folder_editor(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let Some(setting) = registry::by_path("/wallpaper/directory") else { return div().into_any_element() };
-        let rows = self.group_card(&[setting], cfg, p, cx);
+        let rows = self.group_card(&[setting], self.page.column_w - 2.0 * SPACE_6_PX, cfg, p, cx);
         div()
             .rounded(px(RADIUS_20_PX))
             .bg(p.surface_container.hsla())

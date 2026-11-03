@@ -1,11 +1,12 @@
 //! Studio's screen-recorder controls (Plugins → Screenshot): the installed
 //! recorders and what each can do, the sound-device and display pickers
 //! (live lists, read once in the background when first shown), and the
-//! segmented choice that shows disabled options with their reason.
+//! options of the setting choices, which Studio's one choice control
+//! ([`super::choice`]) draws, disabled options with their reason.
 
 use std::time::{Duration, Instant};
 
-use gpui::{AnyElement, ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px};
+use gpui::{AnyElement, ClickEvent, Context, FontWeight, IntoElement, ParentElement as _, SharedString, Styled as _, div, prelude::FluentBuilder as _, px};
 use mandara_config::ShellConfig;
 use mandara_config::recorder::{RecordAudio, RecordCodec, RecordContainer, RecorderSettings};
 use mandara_core::ToGpui as _;
@@ -16,12 +17,12 @@ use mandara_ui::bidi::Bidi as _;
 use serde_json::Value;
 
 use super::StudioView;
+use super::choice::{self, ChoiceItem};
 use crate::registry::Setting;
 use crate::tokens::*;
 
-/// Gap between the options of a segmented choice and between a recorder's
-/// name and its line (the same as every other choice).
-const CHIP_GAP_PX: f32 = 2.0;
+/// Gap between a recorder's name and its line.
+const CHIP_GAP_PX: f32 = super::choice::CHOICE_GAP_PX;
 /// Vertical padding of a recorder's status badge.
 const BADGE_PAD_Y_PX: f32 = 1.0;
 /// Width of the recorders list.
@@ -124,58 +125,21 @@ fn caps_line(s: &BackendStatus) -> String {
 }
 
 impl StudioView {
-    /// A segmented choice; disabled options are dimmed and their reasons
-    /// listed underneath.
-    pub(super) fn chip_choice(&mut self, setting: &Setting, options: Vec<ChipOption>, current: &str, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let mut reasons: Vec<&'static str> = Vec::new();
-        for o in &options {
-            if let Some(r) = o.locked
-                && !reasons.contains(&r)
-            {
-                reasons.push(r);
-            }
-        }
-        let chips = div()
-            .row()
-            .flex_wrap()
-            .gap(px(CHIP_GAP_PX))
-            .p(px(SPACE_3_PX))
-            .rounded(px(RADIUS_12_PX))
-            .bg(p.surface_container_high.hsla())
-            .children(options.into_iter().map(|o| {
-                let active = o.raw == current;
+    /// A setting's choice on Studio's one choice control
+    /// ([`super::choice::segmented`]): one line when it fits `room`, else a
+    /// balanced grid; disabled options are dimmed and their reasons listed
+    /// underneath.
+    pub(super) fn chip_choice(&mut self, setting: &Setting, options: Vec<ChipOption>, current: &str, room: choice::Room, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let items = options
+            .into_iter()
+            .map(|o| {
                 let setting = setting.clone();
-                let chip = div()
-                    .id(SharedString::from(format!("c{}{}", setting.path, o.raw)))
-                    .px(px(SPACE_12_PX))
-                    .h(px(DIM_28_PX))
-                    .rounded(px(RADIUS_9_PX))
-                    .row()
-                    .items_center()
-                    .text_size(px(TEXT_12_5_PX))
-                    .when(active, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()).font_weight(FontWeight::MEDIUM))
-                    .when(!active, |el| el.text_color(p.on_surface_variant.hsla()))
-                    .when(o.locked.is_some(), |el| el.opacity(super::LOCKED_OPACITY))
-                    .child(mandara_ui::bidi::paragraph(o.label));
-                match o.locked {
-                    Some(_) => chip,
-                    None => {
-                        let value = o.value;
-                        chip.cursor_pointer().when(!active, |el| el.hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_6).hsla()))).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.apply(&setting, value.clone(), cx)))
-                    }
-                }
-            }));
-        if reasons.is_empty() {
-            return chips.into_any_element();
-        }
-        div()
-            .row()
-            .flex_col()
-            .cross_end()
-            .gap(px(SPACE_6_PX))
-            .child(chips)
-            .children(reasons.into_iter().map(|r| div().max_w(px(super::LOCKED_NOTE_MAX_W_PX)).text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(r)))))
-            .into_any_element()
+                let value = o.value;
+                ChoiceItem::new(SharedString::from(format!("c{}{}", setting.path, o.raw)), o.label, o.raw == current, cx.listener(move |this, _: &ClickEvent, _, cx| this.apply(&setting, value.clone(), cx)))
+                    .locked(o.locked.map(|r| SharedString::from(tr(r))))
+            })
+            .collect();
+        choice::segmented(room, &choice::SETTING_CHOICE, items, p)
     }
 
     /// The sound devices, read in the background on each visit (and again
@@ -227,12 +191,11 @@ impl StudioView {
         self.recorder_row.displays.value.clone()
     }
 
-    /// A sound device picker: Default plus the server's devices.
-    pub(super) fn recorder_device_control(&mut self, setting: &Setting, input: bool, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    /// A sound device picker's options (Default plus the server's
+    /// devices), or `None` while the devices are being read.
+    pub(super) fn recorder_device_options(&mut self, setting: &Setting, input: bool, cfg: &ShellConfig, cx: &mut Context<Self>) -> Option<Vec<ChipOption>> {
         let current = crate::registry::get(cfg, setting).as_str().unwrap_or_default().to_string();
-        let Some((outputs, inputs)) = self.recorder_devices(cx) else {
-            return div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("Reading audio devices…")).into_any_element();
-        };
+        let (outputs, inputs) = self.recorder_devices(cx)?;
         let list = if input { inputs } else { outputs };
         let mut options = vec![ChipOption { value: Value::from(""), raw: String::new(), label: t("Default").into(), locked: None }];
         // A device that is gone stays listed while it is chosen.
@@ -240,7 +203,16 @@ impl StudioView {
             options.push(ChipOption { value: Value::from(current.clone()), raw: current.clone(), label: current.clone(), locked: None });
         }
         options.extend(list.into_iter().map(|(name, description)| ChipOption { value: Value::from(name.clone()), raw: name, label: description, locked: None }));
-        let chips = self.chip_choice(setting, options, &current, p, cx);
+        Some(options)
+    }
+
+    /// A sound device picker: Default plus the server's devices.
+    pub(super) fn recorder_device_control(&mut self, setting: &Setting, input: bool, room: choice::Room, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let current = crate::registry::get(cfg, setting).as_str().unwrap_or_default().to_string();
+        let Some(options) = self.recorder_device_options(setting, input, cfg, cx) else {
+            return div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("Reading audio devices…")).into_any_element();
+        };
+        let chips = self.chip_choice(setting, options, &current, room, p, cx);
         if self.recorder_row.devices.failed_at.is_none() {
             return chips;
         }
@@ -248,15 +220,16 @@ impl StudioView {
         div()
             .row()
             .flex_col()
-            .cross_end()
+            .when(!room.under, |el| el.cross_end())
+            .when(room.under, |el| el.cross_start())
             .gap(px(SPACE_6_PX))
             .child(chips)
             .child(div().max_w(px(super::LOCKED_NOTE_MAX_W_PX)).text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("The audio server isn't reachable"))))
             .into_any_element()
     }
 
-    /// A display picker: Focused plus every output.
-    pub(super) fn recorder_display_control(&mut self, setting: &Setting, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    /// A display picker's options: Focused plus every output.
+    pub(super) fn recorder_display_options(&mut self, setting: &Setting, cfg: &ShellConfig, cx: &mut Context<Self>) -> Vec<ChipOption> {
         let current = crate::registry::get(cfg, setting).as_str().unwrap_or_default().to_string();
         let displays = self.recorder_displays(cx).unwrap_or_default();
         let mut options = vec![ChipOption { value: Value::from(""), raw: String::new(), label: t("Focused display").into(), locked: None }];
@@ -264,7 +237,14 @@ impl StudioView {
             options.push(ChipOption { value: Value::from(current.clone()), raw: current.clone(), label: current.clone(), locked: None });
         }
         options.extend(displays.into_iter().map(|d| ChipOption { value: Value::from(d.clone()), raw: d.clone(), label: d, locked: None }));
-        self.chip_choice(setting, options, &current, p, cx)
+        options
+    }
+
+    /// A display picker: Focused plus every output.
+    pub(super) fn recorder_display_control(&mut self, setting: &Setting, room: choice::Room, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let current = crate::registry::get(cfg, setting).as_str().unwrap_or_default().to_string();
+        let options = self.recorder_display_options(setting, cfg, cx);
+        self.chip_choice(setting, options, &current, room, p, cx)
     }
 
     /// The recorders on this computer: installed or not, the one in use,

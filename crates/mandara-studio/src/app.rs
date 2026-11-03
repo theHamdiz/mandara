@@ -72,6 +72,7 @@ mod wallgen_logic;
 mod wallgen_page;
 pub mod wallpaper_page;
 pub(crate) mod grid;
+mod choice;
 pub mod plugin_modal;
 pub mod plugins_local;
 #[cfg(test)]
@@ -314,7 +315,10 @@ impl StudioView {
         field
     }
 
-    fn control(&mut self, setting: &Setting, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    /// A setting's control. `room` is the most width it may take (a long
+    /// choice turns into a balanced grid that fits it) and whether it sits
+    /// under its label.
+    fn control(&mut self, setting: &Setting, room: choice::Room, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let value = registry::get(cfg, setting);
         match setting.control.clone() {
             Control::Time => {
@@ -419,21 +423,13 @@ impl StudioView {
                     .into_any_element()
             }
             Control::Choice(choices) => {
-                let current = match &value {
-                    Value::String(s) => s.clone(),
-                    other => other.to_string(),
-                };
-                let options = choices
-                    .iter()
-                    // Choices the running compositor can't do stay hidden (unless already saved).
-                    .filter(|(raw, _)| *raw == current || !registry::choice_hidden(setting.path, raw))
-                    .map(|(raw, label)| recorder_row::ChipOption { value: registry::choice_value(raw), raw: raw.to_string(), label: tr(label), locked: registry::choice_locked(setting, raw, cfg) })
-                    .collect();
-                self.chip_choice(setting, options, &current, p, cx)
+                let current = choice_current(&value);
+                let options = self.choice_options(setting, choices, &current, cfg);
+                self.chip_choice(setting, options, &current, room, p, cx)
             }
             Control::RecorderBackends => self.recorder_backends_control(cfg, p, cx),
-            Control::Device { input } => self.recorder_device_control(setting, input, cfg, p, cx),
-            Control::Display => self.recorder_display_control(setting, cfg, p, cx),
+            Control::Device { input } => self.recorder_device_control(setting, input, room, cfg, p, cx),
+            Control::Display => self.recorder_display_control(setting, room, cfg, p, cx),
             Control::Text { placeholder } | Control::OptionalText { placeholder } => {
                 let current = value.as_str().unwrap_or_default().to_string();
                 self.field(setting, current, placeholder, cx).into_any_element()
@@ -600,27 +596,62 @@ impl StudioView {
         })
     }
 
-    /// One group's rows (inside a fold or a plain card).
-    fn group_card(&mut self, list: &[&Setting], cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> gpui::Div {
-        let mut card = div().row().flex_col().gap(px(2.0));
+    /// A registry choice's options, each with why it can't be picked right
+    /// now (if it can't). The one place a choice's options are listed, for
+    /// its control and for its row's layout (filter `choices` here).
+    fn choice_options(&self, setting: &Setting, choices: &'static [(&'static str, &'static str)], current: &str, cfg: &ShellConfig) -> Vec<recorder_row::ChipOption> {
+        choices
+            .iter()
+            // Choices the running compositor can't do stay hidden (unless already saved).
+            .filter(|(raw, _)| *raw == current || !registry::choice_hidden(setting.path, raw))
+            .map(|(raw, label)| recorder_row::ChipOption { value: registry::choice_value(raw), raw: raw.to_string(), label: tr(label), locked: registry::choice_locked(setting, raw, cfg) })
+            .collect()
+    }
+
+    /// The labels of a setting's choice (registry choices, sound devices,
+    /// displays), or `None` for other controls.
+    fn choice_labels(&mut self, setting: &Setting, cfg: &ShellConfig, cx: &mut Context<Self>) -> Option<Vec<SharedString>> {
+        let options = match setting.control {
+            Control::Choice(choices) => self.choice_options(setting, choices, &choice_current(&registry::get(cfg, setting)), cfg),
+            Control::Device { input } => self.recorder_device_options(setting, input, cfg, cx)?,
+            Control::Display => self.recorder_display_options(setting, cfg, cx),
+            _ => return None,
+        };
+        Some(options.into_iter().map(|o| SharedString::from(o.label)).collect())
+    }
+
+    /// One group's rows (inside a fold or a plain card) on a card `width`
+    /// logical px wide.
+    fn group_card(&mut self, list: &[&Setting], width: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> gpui::Div {
+        let mut card = div().row().flex_col().gap(px(ROW_GAP_PX));
+        let pad = if self.stack_rows { SPACE_14_PX } else { SPACE_18_PX };
+        // The room a control gets: the row's inner width under its label,
+        // or beside a label squeezed to its minimum.
+        let under = (width - 2.0 * pad).max(0.0);
+        let beside = (under - SPACE_24_PX - ROW_LABEL_MIN_PX).max(0.0);
             for s in list.iter() {
+                let locked = registry::locked(s, cfg);
+                // A choice too long for one line beside its label goes under
+                // it, where its grid gets the whole row (fewer, wider rows)
+                // and the label and help keep their measure.
+                let stack = self.stack_rows || (locked.is_none() && self.choice_labels(s, cfg, cx).is_some_and(|labels| !choice::fits_line(&labels, beside, &choice::SETTING_CHOICE)));
+                let room = if stack { choice::Room::under(under) } else { choice::Room::beside(beside) };
                 // A control that does nothing in the current setup shows why
                 // instead (toggles render their own locked state).
-                let control = match registry::locked(s, cfg) {
+                let control = match locked {
                     Some(reason) if s.control != Control::Toggle => div()
                         .max_w(px(LOCKED_NOTE_MAX_W_PX))
                         .text_size(px(TEXT_12_PX))
                         .text_color(p.on_surface_variant.with_alpha(LOCKED_OPACITY).hsla())
                         .child(mandara_ui::bidi::paragraph(tr(reason)))
                         .into_any_element(),
-                    _ => self.control(s, cfg, p, cx),
+                    _ => self.control(s, room, cfg, p, cx),
                 };
                 let picker = (s.control == Control::Icon).then(|| self.icon_picker(s, cfg, p, cx));
-                let stack = self.stack_rows;
                 card = card.child(
                     div()
                         .min_h(px(DIM_68_PX))
-                        .px(px(if stack { SPACE_14_PX } else { SPACE_18_PX }))
+                        .px(px(pad))
                         .py(px(SPACE_14_PX))
                         .rounded(px(RADIUS_14_PX))
                         .row()
@@ -642,7 +673,7 @@ impl StudioView {
                                 .flex_col()
                                 .gap(px(SPACE_3_PX))
                                 .child(div().text_size(px(TEXT_13_5_PX)).font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(tr(s.label))))
-                                .child(div().text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(s.help)))),
+                                .when(!s.help.is_empty(), |el| el.child(div().text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(s.help))))),
                         )
                         .child(control),
                 );
@@ -660,6 +691,8 @@ impl StudioView {
     fn rows<'a>(&mut self, settings: impl IntoIterator<Item = &'a Setting>, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let groups = self.visible_groups(settings, cfg, cx);
         let two = self.page.column_w >= TWO_COLUMNS_FROM_PX && groups.len() > 1;
+        // A fold's settings card: its column, less the fold body's padding.
+        let card_w = (if two { (self.page.column_w - SPACE_12_PX) / 2.0 } else { self.page.column_w }) - 2.0 * SPACE_6_PX;
         let sides = grid::two_columns(&groups.iter().map(|(_, l)| l.len()).collect::<Vec<_>>());
         let mut cols = [div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_12_PX)), div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_12_PX))];
         for (n, (title, list)) in groups.into_iter().enumerate() {
@@ -673,7 +706,7 @@ impl StudioView {
             let fold = self.fold(title, head, p, cx, move |this, cx| {
                 let refs: Vec<&Setting> = list.iter().collect();
                 let cfg = config(cx).read(cx).snapshot();
-                this.group_card(&refs, &cfg, p, cx).into_any_element()
+                this.group_card(&refs, card_w, &cfg, p, cx).into_any_element()
             });
             let side = if two { sides[n] } else { 0 };
             let [first, second] = cols;
@@ -684,13 +717,13 @@ impl StudioView {
     }
 
     /// Settings as plain titled cards, always open (inside a dialog or
-    /// another card, where a fold would nest).
-    fn rows_plain<'a>(&mut self, settings: impl IntoIterator<Item = &'a Setting>, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    /// another card, where a fold would nest), `width` logical px wide.
+    fn rows_plain<'a>(&mut self, settings: impl IntoIterator<Item = &'a Setting>, width: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let groups = self.visible_groups(settings, cfg, cx);
         let mut col = div().row().flex_col().gap(px(SPACE_26_PX));
         for (title, list) in groups {
             let reset = self.group_reset(title, &list, cfg, p, cx);
-            let card = self.group_card(&list, cfg, p, cx);
+            let card = self.group_card(&list, width - 2.0 * SPACE_6_PX, cfg, p, cx);
             col = col.child(
                 div()
                     .row()
@@ -1612,6 +1645,8 @@ impl Render for StudioView {
         let cfg = config(cx).read(cx).snapshot();
         registry::prime(&cfg);
         let fonts = mandara_ui::fonts::fonts(cx);
+        // Choices measure their labels in Studio's font this frame.
+        choice::begin_frame(window, fonts.studio.clone());
         // Breakpoints: icon rail under 900 px; stacked rows when the content
         // column gets too narrow for label + control side by side.
         self.page = grid::PageMetrics::of(window);
@@ -1868,6 +1903,14 @@ fn slider_text(v: f64, step: f64, unit: &str) -> String {
     }
 }
 
+/// A choice setting's current value as its raw option.
+fn choice_current(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
+}
+
 /// What a setting slider's readout shows: the value under the knob while
 /// the slider is held, so the number follows the pointer at once (the
 /// config catches up at most a frame later), else the setting's `value`.
@@ -1881,6 +1924,8 @@ const LOCKED_OPACITY: f32 = 0.45;
 const LOCKED_NOTE_MAX_W_PX: f32 = 260.0;
 /// Narrowest a setting's label column gets beside a wide control.
 const ROW_LABEL_MIN_PX: f32 = 160.0;
+/// Space between a settings card's rows.
+const ROW_GAP_PX: f32 = 2.0;
 
 /// Most theme icons the icon picker lists for a search.
 const ICON_MATCHES_MAX: usize = 64;

@@ -2,9 +2,9 @@
 # file	kind	count	reason — counts must match the sources exactly.
 mandara-greeter/src/lib.rs	px	2	greeter layout metric (the greeter's look is set in Studio → Login screen designer)
 mandara-greeter/src/view.rs	px	3	greeter layout metric (the greeter's look is set in Studio → Login screen designer)
-mandara-studio/src/app.rs	px	2	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
+mandara-studio/src/app.rs	px	1	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
 mandara-studio/src/app/diagnostics_page.rs	px	2	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
-mandara-studio/src/app/greeter_page.rs	px	4	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
+mandara-studio/src/app/greeter_page.rs	px	1	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
 mandara-studio/src/app/maint_page.rs	px	2	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
 mandara-studio/src/app/plugin_modal.rs	px	1	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
 mandara-studio/src/app/plugins_local.rs	px	113	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
