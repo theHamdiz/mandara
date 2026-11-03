@@ -18,6 +18,17 @@ About → What's new shows it too.
   (PNG, JPEG, WebP, GIF, BMP, SVG, and TIFF, ICO and PNM previews) still
   opens.
 
+## 0.13.0 — 2026-11-03
+
+Mandara Studio wears the phoenix.
+
+### Improved
+
+- **Mandara Studio wears the phoenix.** Studio's app icon in your
+  launcher, dock and app menus is now the new phoenix logo instead of the
+  old shoreline mark. Installs that update themselves pick it up the next
+  time the shell starts.
+
 ## 0.12.0 — 2026-11-03
 
 A much better screen recorder.

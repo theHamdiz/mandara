@@ -3596,7 +3596,7 @@ checksum = "fc04a4c58212d57930a24bf47d3fa87485264a3a054e9c10e042eb373573ad3c"
 
 [[package]]
 name = "mandara-app"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -3699,7 +3699,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-greeter"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -3736,7 +3736,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-install"
-version = "0.5.3"
+version = "0.6.0"
 dependencies = [
  "clap",
  "flate2",
@@ -3855,7 +3855,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-studio"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -8688,7 +8688,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.6.3"
+version = "0.7.0"
 dependencies = [
  "ab_glyph",
  "anyhow",
