@@ -15,6 +15,12 @@ About → What's new shows it too.
   follows the bar when it hides. Floating pill bars keep the usual floating
   cards. Off by default.
 
+### Fixed
+
+- **Pointing at a notification always pauses it.** A notification that
+  popped up right where the pointer had last left the notifications kept
+  counting down while you pointed at it. Now it waits for you.
+
 ## 0.8.2 — 2026-11-03
 
 The sidebar stays open at the screen edge. The session dock stays on its

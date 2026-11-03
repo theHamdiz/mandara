@@ -615,6 +615,7 @@ impl Render for ToastView {
             let card = notification_card_styled(&item.n, &palette, &style);
             let hover_view = this.clone();
             let press_view = this.clone();
+            let move_view = this.clone();
             let swipe = item.swipe.value();
             let swipe_fade = 1.0 - (swipe.abs() / w).min(1.0) * SWIPE_FADE;
             toasts.push(
@@ -670,6 +671,21 @@ impl Render for ToastView {
                                     }
                                 }
                                 cx.notify();
+                            });
+                        })
+                        // A popup that arrived under that stale position
+                        // already counts as hovered for GPUI, so the real
+                        // hover sends no event: the pointer moving over it
+                        // starts the pause instead.
+                        .on_mouse_move(move |_: &MouseMoveEvent, window, cx| {
+                            if !window.is_window_hovered() {
+                                return;
+                            }
+                            let _ = move_view.update(cx, |v, cx| {
+                                if let Some(item) = v.items.iter_mut().find(|i| i.n.id == id && i.hovered_since.is_none()) {
+                                    item.hovered_since = Some(Instant::now());
+                                    cx.notify();
+                                }
                             });
                         })
                     })
