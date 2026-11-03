@@ -21,6 +21,17 @@ About → What's new shows it too.
   your config, and moving over from swaybar or swaybg is part of the
   usual takeover (#33).
 
+## 0.13.0 — 2026-11-03
+
+Mandara Studio wears the phoenix.
+
+### Improved
+
+- **Mandara Studio wears the phoenix.** Studio's app icon in your
+  launcher, dock and app menus is now the new phoenix logo instead of the
+  old shoreline mark. Installs that update themselves pick it up the next
+  time the shell starts.
+
 ## 0.12.0 — 2026-11-03
 
 A much better screen recorder.
