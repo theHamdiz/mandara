@@ -16,6 +16,10 @@ About → What's new shows it too.
   display's shape on another. And on a narrow screen under a wide notch,
   notifications stay as floating cards instead of squeezing into a
   sliver.
+- **No notification is cut off on a short screen.** When a screen is too
+  short for as many notifications as you asked to see at once, Mandara
+  shows the ones that fit and the rest wait their turn; before, the last
+  ones could hang off the edge and time out unseen.
 - **Studio shows what's saved, even when it can't apply.** A switch that
   doesn't work with your current setup (like *Join the bar* under a
   floating bar) used to show as off although it was still on. It now

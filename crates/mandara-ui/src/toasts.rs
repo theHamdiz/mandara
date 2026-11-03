@@ -204,6 +204,17 @@ struct SurfaceKey {
     /// band on its edge (a negative margin), so the drawer can touch the
     /// bar. 0 otherwise.
     pull: f32,
+    /// How many popups show at once: the setting, or fewer when the
+    /// surface's height cap can't hold that many (a short display). The
+    /// rest wait their turn, their countdown not yet started.
+    cards: usize,
+}
+
+/// How many cards of `card_h` (gap included) fit in a stack capped at
+/// `cap`, at least one and at most `max_visible`.
+fn cards_that_fit(max_visible: usize, card_h: f32, cap: f32) -> usize {
+    let fit = ((cap - EDGE_GAP_PX * 2.0) / card_h.max(1.0)).floor().max(1.0) as usize;
+    fit.min(max_visible.max(1))
 }
 
 impl SurfaceKey {
@@ -219,7 +230,9 @@ impl SurfaceKey {
             (Some(_), Some(o)) => o.height,
             _ => first_h(),
         };
-        let stack_h = cfg.max_visible.max(1) as f32 * (TOAST_MAX_H_PX * scale + STACK_GAP_PX) + EDGE_GAP_PX * 2.0;
+        let card_h = TOAST_MAX_H_PX * scale + STACK_GAP_PX;
+        let cards = cards_that_fit(cfg.max_visible, card_h, output_h * MAX_SURFACE_SHARE);
+        let stack_h = cards as f32 * card_h + EDGE_GAP_PX * 2.0;
         let display = surface_display(joined.is_some(), || output.and_then(|o| crate::outputs::display_for(&o.name, cx)), || {
             crate::outputs::transient_display(SurfaceKind::Notifications, focused_window_monitor, cx)
         });
@@ -237,7 +250,7 @@ impl SurfaceKey {
             }
             None => (card_w + (EDGE_GAP_PX + SHADOW_ROOM_PX) * 2.0, stack_h.min(output_h * MAX_SURFACE_SHARE), 0.0),
         };
-        Self { position: cfg.position, overlay: cfg.over_fullscreen, size: (w.round(), h.round()), display, pull: pull.round() }
+        Self { position: cfg.position, overlay: cfg.over_fullscreen, size: (w.round(), h.round()), display, pull: pull.round(), cards }
     }
 
     fn spec(&self) -> LayerSurfaceSpec {
@@ -516,7 +529,9 @@ impl Render for ToastView {
         let ncfg = &cfg.notifications;
         let reduce = cfg.motion.reduce_motion;
         let now = Instant::now();
-        let popups: Vec<Notification> = crate::hub::hub(cx).read(cx).notifications.items.iter().filter(|n| n.popup).take(ncfg.max_visible.max(1)).cloned().collect();
+        // As many as the surface was sized for (fewer on a short display).
+        let shown = cx.try_global::<GlobalToasts>().and_then(|g| g.0.read(cx).key.as_ref().map(|k| k.cards)).unwrap_or(ncfg.max_visible.max(1));
+        let popups: Vec<Notification> = crate::hub::hub(cx).read(cx).notifications.items.iter().filter(|n| n.popup).take(shown).cloned().collect();
         self.reconcile(&popups, reduce, now);
 
         // The pointer is gone without a hover-out (clicking a toast raises
@@ -954,7 +969,7 @@ mod tests {
 
     #[test]
     fn surface_specs_follow_position() {
-        let key = SurfaceKey { position: ToastPosition::BottomLeft, overlay: true, size: (400.0, 600.0), display: None, pull: 0.0 };
+        let key = SurfaceKey { position: ToastPosition::BottomLeft, overlay: true, size: (400.0, 600.0), display: None, pull: 0.0, cards: 3 };
         let spec = key.spec();
         assert_eq!(spec.anchor, Anchor::BOTTOM | Anchor::LEFT);
         assert_eq!(spec.layer, Layer::Overlay);
@@ -967,5 +982,18 @@ mod tests {
         let bottom = SurfaceKey { position: ToastPosition::BottomCenter, ..joined };
         assert_eq!(bottom.spec().margin.2, px(-36.0));
         assert_eq!(bottom.spec().margin.0, px(0.0));
+    }
+
+    #[test]
+    fn a_short_display_shows_only_the_popups_that_fit() {
+        let card = 100.0;
+        // Room for everything: the setting wins.
+        assert_eq!(cards_that_fit(3, card, 2000.0), 3);
+        // A short display: only what fits the cap, never more.
+        let cap = EDGE_GAP_PX * 2.0 + card * 2.0 + 10.0;
+        assert_eq!(cards_that_fit(5, card, cap), 2);
+        // Always at least one, and a zero setting still shows one.
+        assert_eq!(cards_that_fit(4, card, 10.0), 1);
+        assert_eq!(cards_that_fit(0, card, 2000.0), 1);
     }
 }
