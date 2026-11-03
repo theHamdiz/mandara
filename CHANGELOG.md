@@ -50,6 +50,13 @@ About → What's new shows it too.
   accent colour; the menu grows a little so the cards keep their size.
   **Compact**, the icon-only rail you know, stays the default.
   Contributed by Hedayatbakhshi (#41).
+- **The installer can install your compositor.** When none of MangoWM,
+  Niri, Hyprland or Umbriel is installed yet, `mandara install` lists the
+  ones your distribution's own repositories carry and asks which one you'd
+  like (it never adds a repository), installs it with its screen-sharing
+  portal and hooks Mandara into it. Or name one: `mandara install
+  --compositor niri` installs Niri first when it's missing. Thanks for the
+  idea in #45.
 
 ### Improved
 
@@ -94,6 +101,29 @@ About → What's new shows it too.
   option starts on the right. Options that can't be picked right now,
   such as the screen recorder's, stay greyed out with the reason
   underneath. Short choices that fit on one line look exactly as before.
+- **The main menu's shortcut tiles have character now.** Every tile on the
+  Apps & tools, Look and Session pages wears its own faint ornament in its
+  own shade of your theme's accent: the apps and tools get a word in
+  Fatimid Kufic calligraphy (انطلق on the launcher, المندرة on Studio,
+  لقطة on the screenshot tool…), and the look and session controls get
+  Alexandrian geometry, from a mashrabiya screen on Lock and Corniche
+  waves on Sleep to the Pharos sweeping its beams on Reload. They're
+  engraved into the tile like etched glass, deepen gently under the
+  pointer, keep every label at full readable contrast in light and dark
+  themes, and follow right-to-left layouts. Studio → Bar → Main menu
+  lets you make them yours: turn *Tile patterns* off for plain tiles, pick
+  a *Tile surface* (Flat, 3D or see-through Glass) and give the tiles a
+  *Tile shadow*.
+
+### Fixed
+
+- **Installing on a system whose package databases were never synced
+  works**: instead of failing with "target not found" for every package,
+  the installer notices the missing databases and, after asking, updates
+  them the right way for your distribution (on Arch and CachyOS a full
+  `sudo pacman -Syu`, never a partial upgrade; on Debian and Ubuntu
+  `apt-get update`), then installs. Say no and it tells you what to run.
+  Thanks for reporting it in #45.
 
 ### Under the hood
 

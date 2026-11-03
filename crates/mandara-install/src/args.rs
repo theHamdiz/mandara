@@ -35,6 +35,8 @@ pub struct InstallArgs {
     #[arg(long)]
     pub no_greeter: bool,
     /// mango, niri, hyprland, umbriel, sway or river (default: detected).
+    /// When it isn't installed, it is installed from your distribution's
+    /// repositories first (after asking; --yes installs it).
     #[arg(long, value_name = "NAME", value_parser = clap::builder::PossibleValuesParser::new(COMPOSITORS))]
     pub compositor: Option<String>,
     /// GitHub repository releases and sources come from (default

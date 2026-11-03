@@ -53,6 +53,12 @@ with its PAM module, AccountsService (Users), GeoClue (location), UDisks2
 (drives), UPower and power-profiles-daemon (battery, profiles), i2c-tools
 (DDC/CI monitor brightness) and the freedesktop sound theme (event sounds).
 
+Before installing anything it checks that your package databases can be
+used, and brings them up to date when they can't (see
+[Package databases missing or out of date](#package-databases-missing-or-out-of-date)).
+When no compositor Mandara runs on is installed yet, it offers to install
+one (see [No compositor yet](#no-compositor-yet)).
+
 | Option | Meaning |
 |---|---|
 | `--latest` | Download and install the latest release instead of this binary |
@@ -62,7 +68,7 @@ with its PAM module, AccountsService (Users), GeoClue (location), UDisks2
 | `--no-deps` | Skip system packages |
 | `--no-autostart` | Don't start Mandara with the compositor |
 | `--no-greeter` | Keep your login screen |
-| `--compositor mango\|niri\|hyprland` | Pick the compositor to integrate with |
+| `--compositor mango\|niri\|hyprland\|umbriel` | Pick the compositor to integrate with; when it isn't installed, install it from your distribution's repositories first (asked; `--yes` installs it) |
 | `--repo OWNER/NAME` | Releases and sources from another repository |
 | `--dry-run` | Show everything that would happen, change nothing |
 | `--yes` | Don't ask; take every default |
@@ -84,6 +90,78 @@ Mandara that is missing a pack (an install from an older tarball, or a
 language picked later) downloads just that one from its own version's
 signed release, and every update brings the new version's packs for the
 languages you use.
+
+## No compositor yet
+
+When none of MangoWM, Niri, Hyprland, Sway, River Classic or Umbriel is
+installed, the installer
+lists the ones your distribution's own repositories carry and asks which
+to install, with the first one as the recommended default:
+
+```text
+==> Installing a compositor
+    No compositor Mandara runs on is installed (MangoWM, Niri, Hyprland, Sway, River Classic or Umbriel).
+      1) MangoWM (recommended) · mangowm
+      2) Niri · niri
+      3) Hyprland · hyprland
+      0) None: I'll install one myself
+    Install which one? [1]
+```
+
+It installs your pick with its desktop portal (screen sharing), then hooks
+Mandara into it as usual. Choose it on your login screen to start it. To
+skip the question, name one: `mandara install --compositor niri` installs
+Niri when it is missing (after asking; with `--yes` without asking). With
+`--yes` alone, or without a terminal to answer on, nothing is installed:
+the installer only says how.
+
+Only official repositories are used; the installer never adds one. Where
+a compositor comes only from a third-party source (the AUR, Copr, a PPA,
+Gentoo's GURU), install it yourself and run `mandara setup`.
+
+| | MangoWM | Niri | Hyprland |
+|---|---|---|---|
+| Arch and derivatives | `mangowm` | `niri` | `hyprland` |
+| Debian, Ubuntu | | | `hyprland` (Debian unstable, Ubuntu 26.04; not Debian 13) |
+| Fedora | | `niri` | |
+| openSUSE Tumbleweed | | `niri` | `hyprland` |
+| Void | | `niri` | |
+| Alpine | `mangowm` | `niri` | `hyprland` |
+
+Before offering one it also asks the package manager whether your release
+has it (pacman, apt, xbps and apk can say so quickly), so Debian stable,
+which has no Hyprland package, isn't offered one. Umbriel isn't packaged
+by any distribution yet.
+
+## Package databases missing or out of date
+
+A system whose package databases were never downloaded (a fresh install,
+a container, a cleared cache) can't install anything: pacman reports
+`database file for 'core' does not exist` and `target not found` for every
+package, apt says `Unable to locate package`. The installer checks the
+files before it installs anything, the same in every language:
+
+| | It checks | It runs |
+|---|---|---|
+| Arch (pacman) | a database in `/var/lib/pacman/sync/` for every repository in `pacman.conf` | `sudo pacman -Syu`, a full system upgrade, after asking |
+| Debian, Ubuntu (apt) | the package lists in `/var/lib/apt/lists/` | `sudo apt-get update` (every time; it changes no packages) |
+| Gentoo | the repository tree in `/var/db/repos/gentoo` | `sudo emerge --sync` |
+| Fedora, openSUSE, Alpine, Solus | nothing: they fetch their metadata themselves | `dnf makecache --refresh`, `zypper refresh`, `apk update` or `eopkg update-repo`, only if installing failed |
+
+On Arch it is always the full `pacman -Syu`, never `pacman -Sy` followed by
+an install: that is a partial upgrade, which Arch doesn't support. Since it
+upgrades the whole system, it is asked first:
+
+```text
+Your package databases are missing or out of date (core, extra). Update them now? This runs `sudo pacman -Syu`, a full system upgrade. [Y/n]
+```
+
+Answer no and the installer stops, telling you to run `sudo pacman -Syu`
+yourself and then `mandara install` again (or `mandara install --no-deps`
+to skip system packages). When the databases exist but installing still
+fails (they may be out of date and the mirror no longer has those package
+versions), it offers the same update once and tries again. `--dry-run`
+shows the question and the commands; `--yes` takes the default answer.
 
 ## Arch Linux
 
@@ -493,9 +571,9 @@ systems use the tarball. NixOS builds from source with the
 From a clone, `cargo xtask build && target/release/mandara install`
 installs that checkout (or `mandara install --from-source` builds it).
 
-**Requirements:** Linux with a Wayland compositor (MangoWM, Niri or
-Hyprland), a Vulkan-capable GPU, and PipeWire or PulseAudio for sound
-features.
+**Requirements:** Linux with a Wayland compositor (MangoWM, Niri,
+Hyprland, Sway, River Classic or Umbriel; the installer can install one), a Vulkan-capable
+GPU, and PipeWire or PulseAudio for sound features.
 
 ## Versioning
 
