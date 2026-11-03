@@ -24,8 +24,8 @@ use super::super::panel_fx::{
     section, switch,
 };
 use super::{
-    HOLD_H, NOTICE_H, PERCENT_FULL, ROW_INSET_PX, SECS_PER_HOUR, SECTION_GAP, SECTION_H, Shared, WORN_HEALTH, degraded_text, estimate_text, hashed_id,
-    hold_row, level_colors, level_fraction, notice, now_unix, profile_accent, profile_icon, profile_label, set_limit, set_profile, state_text,
+    HOLD_H, NOTICE_H, PERCENT_FULL, ROW_INSET_PX, SECS_PER_HOUR, SECTION_GAP, SECTION_H, Shared, WORN_HEALTH, degraded_text, hashed_id,
+    hold_row, level_colors, level_fraction, notice, now_unix, profile_accent, profile_icon, profile_label, set_limit, set_profile, state_text, time_line,
 };
 use crate::fonts::tabular_nums;
 use crate::icons::icon;
@@ -304,7 +304,7 @@ fn battery_card(d: &PowerDevice, history: Option<&(Instant, Duration, Vec<Histor
         .gap(px(HEADLINE_GAP_PX))
         .child(div().text_size(px(text::LABEL)).font_weight(FontWeight::SEMIBOLD).text_color(palette.on_surface_variant.hsla()).truncate().child(d.display_name()))
         .child(div().text_size(px(STATE_TEXT_PX)).font_weight(FontWeight::SEMIBOLD).child(state_text(d)))
-        .child(div().font_features(tabular_nums()).text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(estimate_text(d).unwrap_or_else(|| t("Estimating…").into())))
+        .children(time_line(d).map(|line| div().font_features(tabular_nums()).text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(line)))
         .child(
             div()
                 .flex()

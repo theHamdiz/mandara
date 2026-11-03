@@ -1189,6 +1189,18 @@ fn detail_groups(batteries: &[&PowerDevice], profiles: Option<&Profiles>) -> Vec
     groups
 }
 
+/// How far the *Details* chevron turns: none when closed; a quarter turn
+/// when open, clockwise for the right-pointing chevron and anticlockwise
+/// for the left-pointing one right-to-left languages get, so it points
+/// down either way.
+fn fold_chevron_turn(open: bool, rtl: bool) -> f32 {
+    match (open, rtl) {
+        (false, _) => 0.0,
+        (true, false) => std::f32::consts::FRAC_PI_2,
+        (true, true) => -std::f32::consts::FRAC_PI_2,
+    }
+}
+
 /// The *Details* fold: a header row, and when open a card of groups.
 fn details(groups: &[DetailGroup], open: bool, m: &Shared, radius: f32, palette: &MandaraPalette) -> (AnyElement, f32) {
     let muted = palette.on_surface_variant;
@@ -1199,7 +1211,7 @@ fn details(groups: &[DetailGroup], open: bool, m: &Shared, radius: f32, palette:
         .size(px(FOLD_CHEVRON_PX))
         .flex_none()
         .text_color(muted.hsla())
-        .with_transformation(gpui::Transformation::rotate(gpui::radians(if open { std::f32::consts::FRAC_PI_2 } else { 0.0 })));
+        .with_transformation(gpui::Transformation::rotate(gpui::radians(fold_chevron_turn(open, crate::bidi::rtl()))));
     let head = div()
         .id("power-details")
         .h(px(FOLD_H))
@@ -1769,8 +1781,24 @@ mod tests {
         assert_eq!(time_line(&d).as_deref(), Some("3 h 49 min left"));
         d.state = ChargeState::FullyCharged;
         assert_eq!(time_line(&d).as_deref(), Some("On mains power"));
+        // Held at the charge limit with no estimate: mains power, never
+        // "Estimating…" (both styles show this line).
+        d = PowerDevice { state: ChargeState::PendingCharge, ..Default::default() };
+        assert_eq!(time_line(&d).as_deref(), Some("On mains power"));
         d.state = ChargeState::Unknown;
         assert_eq!(time_line(&d), None);
+    }
+
+    #[test]
+    fn the_open_details_chevron_points_down_in_both_directions() {
+        // Screen coordinates (y grows down): the closed chevron points to
+        // the reading end, the open one down.
+        let turned = |(x, y): (f32, f32), a: f32| (x * a.cos() - y * a.sin(), x * a.sin() + y * a.cos());
+        for (rtl, closed) in [(false, (1.0, 0.0)), (true, (-1.0, 0.0))] {
+            assert_eq!(fold_chevron_turn(false, rtl), 0.0);
+            let (x, y) = turned(closed, fold_chevron_turn(true, rtl));
+            assert!(x.abs() < 1e-6 && (y - 1.0).abs() < 1e-6, "rtl={rtl}: ({x}, {y})");
+        }
     }
 
     #[test]
