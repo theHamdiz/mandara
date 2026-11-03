@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.10.0 — 2026-11-03
+
+A tidier layout designer, with search.
+
 ### Changed
 
 - **A tidier layout designer, with search.** In Studio → Bar, the Left,
