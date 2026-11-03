@@ -9,6 +9,7 @@ Mandara's logo is a **phoenix rising from a Mediterranean wave**, in violet, cya
 | <img src="brand/mandara-128.png" width="64" alt="Mandara Shell"> | [1024 PNG master](brand/mandara-1024.png) · [512 PNG](brand/mandara-512.png) · [256 PNG](brand/mandara-256.png) · [128 PNG](brand/mandara-128.png) | A phoenix rising from a Mediterranean wave, in violet, cyan and silver |
 | <img src="brand/mandara-studio-128.png" width="64" alt="Mandara Studio"> | [Mandara Studio SVG](brand/mandara-studio.svg) · [512 PNG](brand/mandara-studio-512.png) · [256 PNG](brand/mandara-studio-256.png) · [128 PNG](brand/mandara-studio-128.png) | Sea-glass shoreline with tuning rails |
 | <img src="brand/mandara-login-128.png" width="64" alt="Mandara Login"> | [Mandara Login SVG](brand/mandara-login.svg) · [512 PNG](brand/mandara-login-512.png) · [256 PNG](brand/mandara-login-256.png) · [128 PNG](brand/mandara-login-128.png) | Montaza Twilight with a dawn keyhole |
+| <img src="brand/mandara-banner-dark.webp" width="160" alt="Mandara banner"> | [Dark-theme banner](brand/mandara-banner-dark.webp) · [Light-theme banner](brand/mandara-banner-light.webp) (2560×800, transparent) | The README header: the phoenix in a soft bloom beside the Alexandria wordmark; GitHub shows the one matching the reader's theme |
 | <img src="brand/mandara-symbolic.svg" width="48" alt="Symbolic phoenix"> | [Symbolic SVG](brand/mandara-symbolic.svg) | The phoenix in one colour (`currentColor`), transparent: panels and the login screen |
 
 ## Plugins

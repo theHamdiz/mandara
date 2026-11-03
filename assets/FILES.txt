@@ -23,6 +23,8 @@ assets/brand/mandara-1024.png
 assets/brand/mandara-128.png
 assets/brand/mandara-256.png
 assets/brand/mandara-512.png
+assets/brand/mandara-banner-dark.webp
+assets/brand/mandara-banner-light.webp
 assets/brand/mandara-login-128.png
 assets/brand/mandara-login-256.png
 assets/brand/mandara-login-512.png
