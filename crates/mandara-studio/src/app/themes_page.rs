@@ -349,13 +349,15 @@ impl StudioView {
             ThemeSource::Wallpaper { variant, .. } => tf("Generated from your wallpaper · {style}", &[("style", &tr(variant.display_name()))]),
             _ => String::new(),
         };
-        let mode = registry::by_path(THEME_MODE_PATH).map(|setting| self.control(setting, cfg, p, cx));
         let contrast = p.on_surface.contrast_ratio(p.surface_base);
         let split = self.page.column_w >= HERO_SPLIT_MIN_W_PX;
         let inner_w = self.page.column_w - 2.0 * SPACE_16_PX;
         let grows = HERO_MOCK_GROW + HERO_INFO_GROW;
         let mock_w = if split { ((inner_w - SPACE_20_PX) * HERO_MOCK_GROW / grows).floor() } else { inner_w };
         let mock = shell_mock(p, thumb, mock_w, (mock_w * HERO_MOCK_ASPECT).floor(), RADIUS_18_PX, true);
+        // The info column beside (or under) the mock, less its padding.
+        let info_w = if split { inner_w - mock_w - SPACE_20_PX } else { inner_w } - 2.0 * SPACE_6_PX;
+        let mode = registry::by_path(THEME_MODE_PATH).map(|setting| self.control(setting, info_w, cfg, p, cx));
         let info = div()
             .flex_1()
             .min_w(px(0.0))

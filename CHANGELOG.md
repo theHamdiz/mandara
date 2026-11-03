@@ -6,6 +6,18 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **Long lists of choices line up neatly.** When a choice in Studio has
+  more options than fit on one line (a plugin's language with sixteen
+  languages, a hot corner's actions, a desktop widget's shapes, the login
+  screen's languages), it no longer leaves one or two stragglers alone on
+  a second line. The options now sit in tidy, equal rows of equal-width
+  buttons that line up in columns, with a shorter last row centred under
+  the others, and in Arabic and other right-to-left languages the first
+  option starts on the right. Short choices that fit on one line look
+  exactly as before.
+
 ## 0.11.0 — 2026-11-03
 
 A Modern style for the Power panel. The battery breathes while it charges.

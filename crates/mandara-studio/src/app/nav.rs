@@ -622,7 +622,7 @@ impl StudioView {
                 tiles.push(self.quick_tile(s, cfg, p, cx));
                 continue;
             }
-            let control = self.control(s, cfg, p, cx);
+            let control = self.control(s, inner_w, cfg, p, cx);
             choices = choices.child(
                 div()
                     .row()
