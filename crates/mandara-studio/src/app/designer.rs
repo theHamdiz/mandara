@@ -1,11 +1,14 @@
 //! Studio → Bar / Sidebars: the drag-and-drop layout designer and bar
-//! presets. Plugins are chips: drag them between the bar's left / center /
-//! right lanes and the sidebar, reorder them, drop them on the tray to
-//! remove them, or start from a preset. Every drop writes the config, so the
-//! live shell follows instantly.
+//! presets. The bar's left / center / right zones (and the side bars'
+//! groups while they're on) are columns of items stacked in order: drag
+//! them to reorder or move them, × takes one off, a click opens a menu
+//! (move up / down, move to another zone, remove). Under them, the plugin
+//! pool ([`super::plugin_pool`]) finds and adds plugins. Or start from a
+//! preset. Every edit writes the config, so the live shell follows
+//! instantly.
 
 use mandara_ui::bidi::Bidi as _;
-use gpui::{AnyElement, App, AppContext as _, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px};
+use gpui::{AnyElement, App, AppContext as _, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px};
 use mandara_config::side_bars::SideZone;
 use mandara_config::{BarLayout, BarPosition, ShellConfig};
 use mandara_core::ToGpui;
@@ -15,7 +18,8 @@ use mandara_theme::{Color, MandaraPalette};
 use mandara_ui::icons::icon;
 use mandara_ui::state::update_config;
 
-use super::{StudioView, plugin_icon};
+use super::plugin_pool::{Menu, MenuFor, zone_title};
+use super::{StudioView, plugin_icon, plugin_tile};
 use crate::tokens::*;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -34,7 +38,7 @@ pub enum Lane {
 }
 
 impl Lane {
-    fn list(self, c: &mut ShellConfig) -> Option<&mut Vec<String>> {
+    pub(crate) fn list(self, c: &mut ShellConfig) -> Option<&mut Vec<String>> {
         match self {
             Lane::Left => Some(&mut c.bar.left),
             Lane::Center => Some(&mut c.bar.center),
@@ -85,36 +89,43 @@ impl Render for DragChip {
 
 /// Moves `id` from `from` to `to` at `index` (None = end).
 pub(super) fn place(id: &str, from: Lane, to: Lane, index: Option<usize>, cx: &mut App) {
-    update_config(cx, |c| {
-        // Index in the target before removal (same-lane reorders shift).
-        let mut index = index;
-        if from == to
-            && let (Some(list), Some(i)) = (to.list(c), index.as_mut())
-                && let Some(old) = list.iter().position(|x| x == id)
-                    && old < *i {
-                        *i -= 1;
-                    }
-        if from == Lane::Sidebar && to == Lane::Tray {
-            for tab in &mut c.sidebar.tabs {
-                tab.cards.retain(|x| x != id);
-            }
+    update_config(cx, |c| place_in(c, id, from, to, index));
+}
+
+/// [`place`] on a config: takes `id` out of `from` (out of every sidebar
+/// tab when the sidebar's card goes to the tray) and inserts it into `to`
+/// at `index` (None = end), turning the plugin on (and bringing back a
+/// removed one). Dropping on the tray only takes it out.
+pub(crate) fn place_in(c: &mut ShellConfig, id: &str, from: Lane, to: Lane, index: Option<usize>) {
+    // Index in the target before removal (same-lane reorders shift).
+    let mut index = index;
+    if from == to
+        && let (Some(list), Some(i)) = (to.list(c), index.as_mut())
+        && let Some(old) = list.iter().position(|x| x == id)
+        && old < *i
+    {
+        *i -= 1;
+    }
+    if from == Lane::Sidebar && to == Lane::Tray {
+        for tab in &mut c.sidebar.tabs {
+            tab.cards.retain(|x| x != id);
         }
-        if let Some(list) = from.list(c) {
-            list.retain(|x| x != id);
+    }
+    if let Some(list) = from.list(c) {
+        list.retain(|x| x != id);
+    }
+    if let Some(list) = to.list(c) {
+        list.retain(|x| x != id);
+        let i = index.unwrap_or(list.len()).min(list.len());
+        list.insert(i, id.to_string());
+        // Placing a plugin turns it on (and brings back a removed one).
+        c.plugins.disabled.retain(|x| x != id);
+        c.plugins.removed.retain(|x| x != id);
+        c.plugins.removed_places.remove(id);
+        if !c.plugins.enabled.iter().any(|x| x == id) {
+            c.plugins.enabled.push(id.to_string());
         }
-        if let Some(list) = to.list(c) {
-            list.retain(|x| x != id);
-            let i = index.unwrap_or(list.len()).min(list.len());
-            list.insert(i, id.to_string());
-            // Placing a plugin turns it on (and brings back a removed one).
-            c.plugins.disabled.retain(|x| x != id);
-            c.plugins.removed.retain(|x| x != id);
-            c.plugins.removed_places.remove(id);
-            if !c.plugins.enabled.iter().any(|x| x == id) {
-                c.plugins.enabled.push(id.to_string());
-            }
-        }
-    });
+    }
 }
 
 /// Sidebar-capable built-ins (third-party plugins all can).
@@ -122,9 +133,16 @@ pub(super) const SIDEBAR_CAPABLE: &[&str] = mandara_ui::sidebar_tabs::SIDEBAR_WI
 /// Built-ins without a bar item.
 pub(super) const NO_BAR: &[&str] = &["main-menu", "compositor"];
 
-/// Minimum height of a widget lane (vertical bars stack their chips).
-const LANE_MIN_H_PX: f32 = 46.0;
-const LANE_MIN_H_VERTICAL_PX: f32 = 120.0;
+/// Minimum height of a zone (a sidebar tab's list is taller).
+const LANE_MIN_H_PX: f32 = 96.0;
+const LANE_MIN_H_TALL_PX: f32 = 120.0;
+/// A zone item's height and artwork.
+const ZONE_ITEM_H_PX: f32 = DIM_34_PX;
+const ZONE_TILE_PX: f32 = DIM_20_PX;
+/// The bar's three zones sit side by side while each gets this much.
+const ZONE_MIN_W_PX: f32 = DIM_200_PX;
+/// A side bar's column of groups beside the screen.
+const SIDE_COL_W_PX: f32 = DIM_220_PX;
 /// Widths of the widget pills in a preset's tiny bar drawing.
 const MOCK_PILL_A_PX: f32 = 18.0;
 const MOCK_PILL_B_PX: f32 = 14.0;
@@ -265,56 +283,75 @@ fn apply_preset(p: &'static Preset, cx: &mut App) {
 }
 
 impl StudioView {
-    fn chip(&self, id: &str, lane: Lane, index: usize, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let name = cx.global::<PluginRegistry>().manifests().find(|m| m.id == id).map(|m| m.display_name()).unwrap_or_else(|| id.to_string());
-        let ic = plugin_icon(id);
+    /// One item of a zone: grip, artwork, name, "off" while the plugin is
+    /// off, and × to take it off. Drag to reorder or move it (dropping on
+    /// an item inserts before it); click for the plugin menu.
+    fn zone_item(&self, id: &str, lane: Lane, index: usize, len: usize, scale: f32, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let registry = cx.global::<PluginRegistry>();
+        let manifest = registry.manifests().find(|m| m.id == id).cloned();
+        let name = manifest.as_ref().map(|m| m.display_name()).unwrap_or_else(|| id.to_string());
         let enabled = {
             let cfg = mandara_ui::state::config(cx).read(cx).snapshot();
             cx.global::<PluginRegistry>().is_enabled(id, &cfg.plugins)
         };
+        let ic = plugin_icon(id);
         let drag = DragChip { id: id.to_string(), from: lane, label: name.clone().into(), icon: ic, bg: p.primary, fg: p.on_primary };
-        let (id_rm, id_drop) = (id.to_string(), id.to_string());
+        let (id_rm, id_drop, id_menu, name_menu) = (id.to_string(), id.to_string(), id.to_string(), name.clone());
+        let tile = match &manifest {
+            Some(m) => plugin_tile(m, ZONE_TILE_PX, enabled, scale, p),
+            None => div().size(px(ZONE_TILE_PX)).flex_none().row().items_center().justify_center().child(icon(ic, ICON_13_PX, p.on_surface_variant)).into_any_element(),
+        };
         div()
-            .id(SharedString::from(format!("chip-{lane:?}-{id}")))
-            .group("chip")
-            .h(px(DIM_30_PX))
-            .pl(px(SPACE_10_PX))
-            .pr(px(if lane == Lane::Tray { SPACE_12_PX } else { SPACE_6_PX }))
-            .rounded_full()
-            .row()
+            .id(SharedString::from(format!("zone-{lane:?}-{id}")))
+            .group("zone-item")
+            .h(px(ZONE_ITEM_H_PX))
             .flex_none()
+            .w_full()
+            .pad_start(px(SPACE_6_PX))
+            .pad_end(px(SPACE_4_PX))
+            .rounded(px(RADIUS_10_PX))
+            .row()
             .items_center()
-            .gap(px(SPACE_6_PX))
+            .gap(px(SPACE_8_PX))
             .cursor_grab()
-            .bg(if lane == Lane::Tray { p.surface_container_high.hsla() } else { p.surface_base.hsla() })
+            .bg(p.surface_base.hsla())
             .border_1()
             .border_color(p.on_surface.with_alpha(ALPHA_8).hsla())
-            .text_size(px(TEXT_12_PX))
-            .font_weight(FontWeight::MEDIUM)
+            .shadow(mandara_core::glass_rim(p.specular_rim_light, p.specular_rim_shadow))
             .hover(|s| s.border_color(p.primary.with_alpha(ALPHA_60).hsla()))
-            .when(!enabled, |el| el.opacity(ALPHA_60))
-            .child(icon(ic, ICON_13_PX, p.on_surface_variant))
-            .child(name)
-            .when(!enabled, |el| el.child(div().px(px(SPACE_5_PX)).rounded(px(RADIUS_5_PX)).bg(p.on_surface.with_alpha(ALPHA_8).hsla()).text_size(px(TEXT_10_PX)).child(t("off"))))
-            .when(lane != Lane::Tray, |el| {
-                el.child(
-                    div()
-                        .id(SharedString::from(format!("chip-rm-{lane:?}-{id}")))
-                        .size(px(DIM_18_PX))
-                        .rounded_full()
-                        .row()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .invisible()
-                        .group_hover("chip", |s| s.visible())
-                        .hover(|s| s.bg(p.urgent_coral.with_alpha(ALPHA_16).hsla()))
-                        .child(icon("close", ICON_10_PX, p.on_surface_variant))
-                        .on_click(move |_, _, cx| place(&id_rm, lane, Lane::Tray, None, cx)),
-                )
+            .child(div().flex_none().opacity(ALPHA_50).group_hover("zone-item", |s| s.opacity(1.0)).child(icon("grid", ICON_11_PX, p.on_surface_variant)))
+            .child(tile)
+            .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(TEXT_12_5_PX)).font_weight(FontWeight::MEDIUM).when(!enabled, |el| el.text_color(p.on_surface_variant.hsla())).child(name))
+            .when(!enabled, |el| el.child(div().flex_none().px(px(SPACE_5_PX)).rounded(px(RADIUS_5_PX)).bg(p.on_surface.with_alpha(ALPHA_8).hsla()).text_size(px(TEXT_10_PX)).text_color(p.on_surface_variant.hsla()).child(t("Off"))))
+            .child(
+                div()
+                    .id(SharedString::from(format!("zone-rm-{lane:?}-{id}")))
+                    .size(px(DIM_22_PX))
+                    .flex_none()
+                    .rounded_full()
+                    .row()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .opacity(ALPHA_45)
+                    .group_hover("zone-item", |s| s.opacity(1.0))
+                    .hover(|s| s.bg(p.urgent_coral.with_alpha(ALPHA_16).hsla()))
+                    .child(icon("close", ICON_10_PX, p.on_surface_variant))
+                    .on_click(move |_, _, cx| {
+                        cx.stop_propagation();
+                        place(&id_rm, lane, Lane::Tray, None, cx);
+                    }),
+            )
+            // The plugin menu belongs to the bar's designer (a sidebar tab's
+            // items keep drag and ×).
+            .when(matches!(lane, Lane::Left | Lane::Center | Lane::Right | Lane::Side(..)), |el| {
+                el.on_click(cx.listener(move |this, e: &ClickEvent, _, cx| {
+                    let at = e.position();
+                    this.open_plugin_menu(Menu { id: id_menu.clone(), name: name_menu.clone(), from: lane, kind: MenuFor::Zone { index, len }, at: (f32::from(at.x), f32::from(at.y)) }, cx);
+                }))
             })
             .on_drag(drag, |chip, _, _, cx| cx.new(|_| chip.clone()))
-            // Dropping on a chip inserts before it.
+            // Dropping on an item inserts before it.
             .drag_over::<DragChip>(move |s, _, _, _| s.border_color(gpui::rgb(0x6aa0ff)).border_2())
             .on_drop(move |chip: &DragChip, _, cx| {
                 if chip.id != id_drop {
@@ -324,46 +361,66 @@ impl StudioView {
             .into_any_element()
     }
 
-    pub(super) fn lane(&self, lane: Lane, title: &'static str, ids: &[String], vertical: bool, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let chips: Vec<AnyElement> = ids.iter().enumerate().map(|(i, id)| self.chip(id, lane, i, p, cx)).collect();
-        let empty = chips.is_empty();
+    /// A zone (a bar zone, a side bar group, a sidebar tab): its title and
+    /// count, then its items stacked top to bottom in order. Dropping on
+    /// the zone's free space appends.
+    pub(super) fn lane(&self, lane: Lane, title: &'static str, ids: &[String], tall: bool, scale: f32, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let len = ids.len();
+        let items: Vec<AnyElement> = ids.iter().enumerate().map(|(i, id)| self.zone_item(id, lane, i, len, scale, p, cx)).collect();
         div()
             .id(SharedString::from(format!("lane-{lane:?}")))
             .flex_1()
             .min_w(px(0.0))
-            .min_h(px(if vertical { LANE_MIN_H_VERTICAL_PX } else { LANE_MIN_H_PX }))
+            .min_h(px(if tall { LANE_MIN_H_TALL_PX } else { LANE_MIN_H_PX }))
             .p(px(SPACE_8_PX))
+            .pb(px(SPACE_12_PX))
             .rounded(px(RADIUS_16_PX))
             .border_1()
             .border_color(p.on_surface.with_alpha(ALPHA_6).hsla())
             .bg(p.on_surface.with_alpha(ALPHA_3).hsla())
-            // Bar zones mirror the bar itself: physical left to right in
-            // every language; the plugin tray reads in reading order.
-            .when(lane == Lane::Tray, |el| el.row())
-            .when(lane != Lane::Tray, |el| el.ltr_row())
-            .when(vertical, |el| el.flex_col())
-            .when(!vertical, |el| el.flex_wrap().items_center())
-            .gap(px(SPACE_6_PX))
+            .row()
+            .flex_col()
+            .gap(px(SPACE_4_PX))
             .drag_over::<DragChip>(|s, _, _, _| s.bg(gpui::rgba(0x6aa0ff22)).border_color(gpui::rgba(0x6aa0ffaa)))
             .on_drop(move |chip: &DragChip, _, cx| place(&chip.id, chip.from, lane, None, cx))
-            .child(div().w_full().text_size(px(TEXT_10_5_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface_variant.with_alpha(ALPHA_80).hsla()).child(mandara_ui::bidi::paragraph(tr(title))))
-            .children(chips)
-            .when(empty, |el| el.child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.with_alpha(ALPHA_60).hsla()).child(t("Drop plugins here"))))
+            .child(
+                div()
+                    .px(px(SPACE_4_PX))
+                    .pb(px(SPACE_4_PX))
+                    .row()
+                    .items_center()
+                    .gap(px(SPACE_6_PX))
+                    .text_size(px(TEXT_11_PX))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(p.on_surface_variant.with_alpha(ALPHA_80).hsla())
+                    .child(div().min_w(px(0.0)).truncate().child(tr(title)))
+                    .child(div().flex_none().text_color(p.on_surface_variant.with_alpha(ALPHA_55).hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(len.to_string())),
+            )
+            .children(items)
+            .when(len == 0, |el| {
+                el.child(
+                    div()
+                        .flex_1()
+                        .min_h(px(ZONE_ITEM_H_PX))
+                        .rounded(px(RADIUS_10_PX))
+                        .border_1()
+                        .border_color(p.on_surface.with_alpha(ALPHA_10).hsla())
+                        .row()
+                        .items_center()
+                        .justify_center()
+                        .text_size(px(TEXT_11_5_PX))
+                        .text_color(p.on_surface_variant.with_alpha(ALPHA_60).hsla())
+                        .child(t("Drop plugins here")),
+                )
+            })
             .into_any_element()
     }
 
     /// The bar designer with presets (Studio → Bar).
-    pub(super) fn bar_designer(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let registry = cx.global::<PluginRegistry>();
+    pub(super) fn bar_designer(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let sides = cfg.side_bars.enabled;
-        let side_ids = [&cfg.side_bars.left, &cfg.side_bars.right].into_iter().filter(|_| sides).flat_map(|s| s.zones().into_iter().flatten());
-        let placed: Vec<&String> = cfg.bar.left.iter().chain(&cfg.bar.center).chain(&cfg.bar.right).chain(side_ids).collect();
-        let mut tray: Vec<String> = registry
-            .manifests()
-            .filter(|m| !NO_BAR.contains(&m.id.as_str()) && !placed.contains(&&m.id) && !cfg.plugins.is_removed(&m.id))
-            .map(|m| m.id.clone())
-            .collect();
-        tray.sort();
+        let scale = window.scale_factor();
+        let vertical = cfg.bar.position.is_vertical();
 
         // Presets.
         let mut presets: Vec<AnyElement> = Vec::with_capacity(PRESETS.len());
@@ -413,25 +470,28 @@ impl StudioView {
         }
         let presets = super::grid::fit(self.page.column_w, BAR_PRESET_GRID).balanced(presets.len()).render(presets);
 
+        // The bar's zones as columns, items stacked in order. Left / Center
+        // / Right are screen sides, not reading order (Top / Middle /
+        // Bottom on a bar standing on a side edge); they stack on narrow
+        // pages.
+        let side_by_side = self.page.column_w - 2.0 * SPACE_10_PX - 2.0 * SPACE_8_PX >= 3.0 * ZONE_MIN_W_PX;
         let bar = div()
             .rounded(px(RADIUS_20_PX))
             .p(px(SPACE_10_PX))
             .bg(p.surface_container.hsla())
-            // Left / Center / Right are screen sides, not reading order.
             .ltr_row()
-            .when(self.stack_rows, |el| el.flex_col())
+            .when(!side_by_side, |el| el.flex_col())
             .gap(px(SPACE_8_PX))
-            .child(self.lane(Lane::Left, tk("Left"), &cfg.bar.left, false, p, cx))
-            .child(self.lane(Lane::Center, tk("Center"), &cfg.bar.center, false, p, cx))
-            .child(self.lane(Lane::Right, tk("Right"), &cfg.bar.right, false, p, cx));
+            .child(self.lane(Lane::Left, zone_title(Lane::Left, vertical), &cfg.bar.left, false, scale, p, cx))
+            .child(self.lane(Lane::Center, zone_title(Lane::Center, vertical), &cfg.bar.center, false, scale, p, cx))
+            .child(self.lane(Lane::Right, zone_title(Lane::Right, vertical), &cfg.bar.right, false, scale, p, cx));
         // With side bars on, their groups flank the screen under the bar,
         // like the frame they make on the desktop.
         let bar = if sides {
             let mut side_col = |right: bool, title: &'static str| {
                 let s = cfg.side_bars.side(right);
                 div()
-                    .w(px(DIM_180_PX))
-                    .flex_none()
+                    .when(!self.stack_rows, |el| el.w(px(SIDE_COL_W_PX)).flex_none())
                     .row()
                     .flex_col()
                     .gap(px(SPACE_6_PX))
@@ -439,9 +499,9 @@ impl StudioView {
                     .child(div().px(px(SPACE_6_PX)).text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(title))))
                     // (Each lane in its own box: a lane grows to fit its
                     // chips instead of sharing the column's height.)
-                    .child(div().child(self.lane(Lane::Side(right, SideZone::Top), tk("Top"), &s.top, false, p, cx)))
-                    .child(div().child(self.lane(Lane::Side(right, SideZone::Middle), tk("Middle"), &s.middle, false, p, cx)))
-                    .child(div().child(self.lane(Lane::Side(right, SideZone::Bottom), tk("Bottom"), &s.bottom, false, p, cx)))
+                    .child(div().child(self.lane(Lane::Side(right, SideZone::Top), tk("Top"), &s.top, false, scale, p, cx)))
+                    .child(div().child(self.lane(Lane::Side(right, SideZone::Middle), tk("Middle"), &s.middle, false, scale, p, cx)))
+                    .child(div().child(self.lane(Lane::Side(right, SideZone::Bottom), tk("Bottom"), &s.bottom, false, scale, p, cx)))
             };
             let (left, right) = (side_col(false, tk("Left side bar")), side_col(true, tk("Right side bar")));
             let frame = div()
@@ -456,25 +516,27 @@ impl StudioView {
         } else {
             bar.into_any_element()
         };
-        let tray_el = self.lane(Lane::Tray, tk("All plugins — drag onto the bar (turns it on), or drop here to remove"), &tray, false, p, cx);
+        let pool = self.plugin_pool(cfg, p, window, cx);
+        let menu = self.plugin_menu(cfg, p, window, cx);
         let header = |title: &'static str, sub: &'static str| {
             div()
                 .px(px(SPACE_6_PX))
                 .row()
                 .flex_col()
-                .gap(px(2.0))
+                .gap(px(SPACE_3_PX))
                 .child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(t(title)))
-                .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(t(sub)))
+                .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t(sub))))
         };
         div()
             .row()
             .flex_col()
             .gap(px(SPACE_12_PX))
-            .child(header("Presets", "One click sets the style, position, height and arrangement"))
+            .child(header(tk("Presets"), tk("One click sets the style, position, height and arrangement")))
             .child(presets)
-            .child(header("Layout designer", "Drag plugins between zones, reorder them, or drop them on the tray to remove"))
+            .child(header(tk("Layout designer"), tk("Drag items to reorder them or move them between zones; click one for more")))
             .child(bar)
-            .child(tray_el)
+            .child(pool)
+            .children(menu)
             .into_any_element()
     }
 }
@@ -489,5 +551,49 @@ mod tests {
             assert!(!p.center.is_empty() || !p.left.is_empty());
             assert!(p.height >= 24.0 && p.height <= 40.0);
         }
+    }
+
+    fn bar() -> ShellConfig {
+        let mut c = ShellConfig::default();
+        c.bar.left = vec!["launcher".into(), "workspaces".into(), "active-window".into()];
+        c.bar.center = vec!["clock".into()];
+        c.bar.right = vec!["audio".into(), "session".into()];
+        c
+    }
+
+    #[test]
+    fn reordering_in_a_zone_lands_before_the_drop_target() {
+        let mut c = bar();
+        // Dragged down onto the last item: it goes before it.
+        place_in(&mut c, "launcher", Lane::Left, Lane::Left, Some(2));
+        assert_eq!(c.bar.left, ["workspaces", "launcher", "active-window"]);
+        // Dragged up onto the first item.
+        place_in(&mut c, "active-window", Lane::Left, Lane::Left, Some(0));
+        assert_eq!(c.bar.left, ["active-window", "workspaces", "launcher"]);
+        // Dropped on the zone's free space: the end.
+        place_in(&mut c, "active-window", Lane::Left, Lane::Left, None);
+        assert_eq!(c.bar.left, ["workspaces", "launcher", "active-window"]);
+    }
+
+    #[test]
+    fn moving_between_zones_and_off_the_bar() {
+        let mut c = bar();
+        place_in(&mut c, "clock", Lane::Center, Lane::Right, Some(1));
+        assert!(c.bar.center.is_empty());
+        assert_eq!(c.bar.right, ["audio", "clock", "session"]);
+        place_in(&mut c, "clock", Lane::Right, Lane::Tray, None);
+        assert_eq!(c.bar.right, ["audio", "session"]);
+    }
+
+    #[test]
+    fn placing_a_plugin_turns_it_on() {
+        let mut c = bar();
+        c.plugins.disabled.push("weather".into());
+        c.plugins.removed.push("weather".into());
+        place_in(&mut c, "weather", Lane::Tray, Lane::Center, None);
+        assert_eq!(c.bar.center, ["clock", "weather"]);
+        assert!(!c.plugins.disabled.iter().any(|x| x == "weather"));
+        assert!(!c.plugins.is_removed("weather"));
+        assert!(c.plugins.enabled.iter().any(|x| x == "weather"));
     }
 }
