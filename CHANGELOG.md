@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.8.1 — 2026-11-03
+
+A lighter start.
+
 ### Changed
 
 - **A lighter start.** Right after it starts, the shell now holds far less
