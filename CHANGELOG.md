@@ -8,6 +8,10 @@ About → What's new shows it too.
 
 ### New
 
+- **A Mandara Discord.** Share your setup, ask for help and suggest ideas
+  at [discord.gg/kPBaS2reQ3](https://discord.gg/kPBaS2reQ3). The link is
+  also on the README.
+
 - **Mandara on NixOS.** Mandara is now a Nix flake: try it with
   `nix run github:theHamdiz/mandara`, install it with
   `nix profile install`, or add it to your system flake and turn it on
