@@ -121,22 +121,50 @@ fn bar_slid(output: Option<&str>, cx: &App) -> f32 {
     output.and_then(|o| slides.0.iter().find(|(name, _)| name == o)).map_or(0.0, |(_, s)| *s)
 }
 
-/// The output popups show on, `(name, logical width)`: the one they're
-/// assigned to, else the focused window's (the compositor's pick).
-fn popup_output(cx: &App) -> Option<(String, f32)> {
+/// The output popups show on.
+#[derive(Clone, Debug, PartialEq)]
+struct PopupOutput {
+    name: String,
+    /// Logical width.
+    width: f32,
+    /// Logical height.
+    height: f32,
+    /// Its place in the output list (the dock's "first display" counts by
+    /// it).
+    index: usize,
+}
+
+/// The output popups show on: the one they're assigned to, else the
+/// focused window's (the compositor's pick).
+fn popup_output(cx: &App) -> Option<PopupOutput> {
     let outputs = &cx.try_global::<crate::overlays::Outputs>()?.0;
     let displays = &config(cx).read(cx).get().displays;
     let o = crate::outputs::pick_output(outputs, focused_window_monitor(cx).as_deref(), displays, SurfaceKind::Notifications)?;
-    Some((o.name.clone(), o.width as f32))
+    let index = outputs.iter().position(|g| g.name == o.name).unwrap_or(0);
+    Some(PopupOutput { name: o.name.clone(), width: o.width as f32, height: o.height as f32, index })
+}
+
+/// Whether a bottom dock shows on `output` (on every output it may show
+/// on while the popups' output is unknown).
+fn dock_holds_bottom(cfg: &ShellConfig, output: Option<&PopupOutput>) -> bool {
+    cfg.dock_bottom_clearance().is_some() && output.is_none_or(|o| cfg.dock_on_output(&o.name, o.index))
+}
+
+/// The display a popup surface opens on: joined popups take their shape
+/// from one output's bar, so they open on that output; others go where
+/// the compositor (or the notifications' screen choice) puts them.
+fn surface_display<T>(joined: bool, on_popup_output: impl FnOnce() -> Option<T>, otherwise: impl FnOnce() -> Option<T>) -> Option<T> {
+    if joined { on_popup_output().or_else(otherwise) } else { otherwise() }
 }
 
 /// The joined drawer on `output` with the bar slid `slid` px (`None`:
 /// joining is off, or there is nothing to join there).
-fn joined_drawer(cfg: &ShellConfig, output: Option<&(String, f32)>, slid: f32) -> Option<Drawer> {
+fn joined_drawer(cfg: &ShellConfig, output: Option<&PopupOutput>, slid: f32) -> Option<Drawer> {
     let ncfg = &cfg.notifications;
     if !ncfg.joined {
         return None;
     }
+    let scale = ncfg.scale.clamp(crate::plugins::notifications::TOAST_SCALE.0, crate::plugins::notifications::TOAST_SCALE.1);
     let bar = crate::bar::layout::Metrics::of(cfg, crate::style::radius_scale());
     // A side bar's (or a pinned flush sidebar's) fillet where it meets the
     // popups' edge.
@@ -148,11 +176,13 @@ fn joined_drawer(cfg: &ShellConfig, output: Option<&(String, f32)>, slid: f32) -
     toast_drawer::solve(&toast_drawer::Inputs {
         position: ncfg.position,
         bar,
-        bar_here: output.is_none_or(|(name, _)| cfg.bar_on_output(name)),
+        bar_here: output.is_none_or(|o| cfg.bar_on_output(&o.name)),
         bar_slid: slid,
-        screen_w: output.map_or(FALLBACK_OUTPUT_W, |(_, w)| *w),
+        screen_w: output.map_or(FALLBACK_OUTPUT_W, |o| o.width),
         min_margin: EDGE_GAP_PX,
-        dock_bottom: cfg.dock_bottom_clearance().is_some(),
+        dock_bottom: dock_holds_bottom(cfg, output),
+        // The narrowest card Studio offers (or a narrower one set by hand).
+        min_width: (ncfg.width.min(mandara_config::alerts::defaults::TOAST_MIN_WIDTH_PX) + DRAWER_PAD_PX * 2.0) * scale,
         side_fillets: (fillet(false), fillet(true)),
     })
 }
@@ -174,22 +204,41 @@ struct SurfaceKey {
     /// band on its edge (a negative margin), so the drawer can touch the
     /// bar. 0 otherwise.
     pull: f32,
+    /// How many popups show at once: the setting, or fewer when the
+    /// surface's height cap can't hold that many (a short display). The
+    /// rest wait their turn, their countdown not yet started.
+    cards: usize,
+}
+
+/// How many cards of `card_h` (gap included) fit in a stack capped at
+/// `cap`, at least one and at most `max_visible`.
+fn cards_that_fit(max_visible: usize, card_h: f32, cap: f32) -> usize {
+    let fit = ((cap - EDGE_GAP_PX * 2.0) / card_h.max(1.0)).floor().max(1.0) as usize;
+    fit.min(max_visible.max(1))
 }
 
 impl SurfaceKey {
-    fn of(shell: &ShellConfig, output: Option<&(String, f32)>, cx: &App) -> Self {
+    fn of(shell: &ShellConfig, output: Option<&PopupOutput>, cx: &App) -> Self {
         let cfg = &shell.notifications;
         let scale = cfg.scale.clamp(crate::plugins::notifications::TOAST_SCALE.0, crate::plugins::notifications::TOAST_SCALE.1);
         let card_w = cfg.width * scale;
-        let output_h = cx.try_global::<crate::overlays::Outputs>().and_then(|o| o.0.first().map(|g| g.height as f32)).unwrap_or(FALLBACK_OUTPUT_H);
-        let stack_h = cfg.max_visible.max(1) as f32 * (TOAST_MAX_H_PX * scale + STACK_GAP_PX) + EDGE_GAP_PX * 2.0;
-        let display = crate::outputs::transient_display(SurfaceKind::Notifications, focused_window_monitor, cx);
-        let (w, h, pull) = match joined_drawer(shell, output, 0.0) {
+        let joined = joined_drawer(shell, output, 0.0);
+        // Capped by the popups' own display, joined or not; the first
+        // output only when it isn't known.
+        let first_h = || cx.try_global::<crate::overlays::Outputs>().and_then(|o| o.0.first().map(|g| g.height as f32)).unwrap_or(FALLBACK_OUTPUT_H);
+        let output_h = output.map_or_else(first_h, |o| o.height);
+        let card_h = TOAST_MAX_H_PX * scale + STACK_GAP_PX;
+        let cards = cards_that_fit(cfg.max_visible, card_h, output_h * MAX_SURFACE_SHARE);
+        let stack_h = cards as f32 * card_h + EDGE_GAP_PX * 2.0;
+        let display = surface_display(joined.is_some(), || output.and_then(|o| crate::outputs::display_for(&o.name, cx)), || {
+            crate::outputs::transient_display(SurfaceKind::Notifications, focused_window_monitor, cx)
+        });
+        let (w, h, pull) = match joined {
             Some(d) => {
                 // From the screen edge: over the bar's band (or the screen
                 // frame's strip) to the drawer's far end.
                 let edge = if cfg.position.is_bottom() { BarPosition::Bottom } else { BarPosition::Top };
-                let monitor = output.map_or("", |(name, _)| name.as_str());
+                let monitor = output.map_or("", |o| o.name.as_str());
                 let pull = crate::shell::ExclusionView::zone_for(edge, shell, monitor);
                 let m = crate::bar::layout::Metrics::of(shell, crate::style::radius_scale());
                 let reach = pull.max(m.bar_far_edge() + m.screen_frame);
@@ -198,7 +247,7 @@ impl SurfaceKey {
             }
             None => (card_w + (EDGE_GAP_PX + SHADOW_ROOM_PX) * 2.0, stack_h.min(output_h * MAX_SURFACE_SHARE), 0.0),
         };
-        Self { position: cfg.position, overlay: cfg.over_fullscreen, size: (w.round(), h.round()), display, pull: pull.round() }
+        Self { position: cfg.position, overlay: cfg.over_fullscreen, size: (w.round(), h.round()), display, pull: pull.round(), cards }
     }
 
     fn spec(&self) -> LayerSurfaceSpec {
@@ -228,9 +277,9 @@ impl SurfaceKey {
 struct Toasts {
     window: Option<WindowHandle<ToastView>>,
     key: Option<SurfaceKey>,
-    /// The output the popups show on, `(name, logical width)` (joined
-    /// popups shape themselves after its bar).
-    output: Option<(String, f32)>,
+    /// The output the popups show on (joined popups shape themselves after
+    /// its bar).
+    output: Option<PopupOutput>,
 }
 
 #[derive(Clone)]
@@ -477,7 +526,9 @@ impl Render for ToastView {
         let ncfg = &cfg.notifications;
         let reduce = cfg.motion.reduce_motion;
         let now = Instant::now();
-        let popups: Vec<Notification> = crate::hub::hub(cx).read(cx).notifications.items.iter().filter(|n| n.popup).take(ncfg.max_visible.max(1)).cloned().collect();
+        // As many as the surface was sized for (fewer on a short display).
+        let shown = cx.try_global::<GlobalToasts>().and_then(|g| g.0.read(cx).key.as_ref().map(|k| k.cards)).unwrap_or(ncfg.max_visible.max(1));
+        let popups: Vec<Notification> = crate::hub::hub(cx).read(cx).notifications.items.iter().filter(|n| n.popup).take(shown).cloned().collect();
         self.reconcile(&popups, reduce, now);
 
         // The pointer is gone without a hover-out (clicking a toast raises
@@ -502,7 +553,7 @@ impl Render for ToastView {
         // Joined: the drawer on the popups' output, following the bar.
         let joined = if ncfg.joined {
             let output = cx.try_global::<GlobalToasts>().and_then(|g| g.0.read(cx).output.clone());
-            let slid = bar_slid(output.as_ref().map(|(name, _)| name.as_str()), cx);
+            let slid = bar_slid(output.as_ref().map(|o| o.name.as_str()), cx);
             joined_drawer(&cfg, output.as_ref(), slid)
         } else {
             None
@@ -871,9 +922,51 @@ mod tests {
         assert!(item(0, t0).elapsed_fraction(t2).is_none());
     }
 
+    fn output(name: &str, index: usize) -> PopupOutput {
+        PopupOutput { name: name.into(), width: 2560.0, height: 1440.0, index }
+    }
+
+    #[test]
+    fn only_a_dock_on_the_popups_output_holds_their_bottom_edge() {
+        use mandara_config::outputs::{ScreenChoice, ScreenSet};
+        use mandara_config::workflow::{DOCK_PLUGIN_ID, DockPosition};
+        let mut cfg = ShellConfig::default();
+        cfg.plugins.enabled.push(DOCK_PLUGIN_ID.into());
+        cfg.dock.position = DockPosition::Bottom;
+        cfg.displays.surfaces.dock = ScreenSet { show_on: ScreenChoice::Selected, outputs: vec!["DP-1".into()] };
+        assert!(dock_holds_bottom(&cfg, Some(&output("DP-1", 0))));
+        assert!(!dock_holds_bottom(&cfg, Some(&output("DP-2", 1))), "the dock is on the other display");
+        assert!(dock_holds_bottom(&cfg, None), "output unknown: assume the dock is there");
+        cfg.dock.position = DockPosition::Left;
+        assert!(!dock_holds_bottom(&cfg, Some(&output("DP-1", 0))));
+        // Joined bottom popups on DP-2 hang from its free bottom edge.
+        cfg.dock.position = DockPosition::Bottom;
+        cfg.notifications.joined = true;
+        cfg.notifications.position = ToastPosition::BottomRight;
+        assert!(joined_drawer(&cfg, Some(&output("DP-2", 1)), 0.0).is_some());
+        assert!(joined_drawer(&cfg, Some(&output("DP-1", 0)), 0.0).is_none());
+    }
+
+    #[test]
+    fn joined_popups_open_on_the_output_they_are_shaped_for() {
+        assert_eq!(surface_display(true, || Some(2), || None), Some(2));
+        assert_eq!(surface_display(true, || None, || Some(1)), Some(1), "that output has no display yet");
+        assert_eq!(surface_display(false, || Some(2), || None::<u32>), None, "cards: the compositor's pick");
+    }
+
+    #[test]
+    fn a_narrow_output_keeps_joined_popups_as_cards() {
+        let mut cfg = ShellConfig::default();
+        cfg.notifications.joined = true;
+        cfg.bar.layout = mandara_config::BarLayout::Notch;
+        let narrow = PopupOutput { width: 320.0, ..output("DP-1", 0) };
+        assert!(joined_drawer(&cfg, Some(&narrow), 0.0).is_none());
+        assert!(joined_drawer(&cfg, Some(&output("DP-1", 0)), 0.0).is_some());
+    }
+
     #[test]
     fn surface_specs_follow_position() {
-        let key = SurfaceKey { position: ToastPosition::BottomLeft, overlay: true, size: (400.0, 600.0), display: None, pull: 0.0 };
+        let key = SurfaceKey { position: ToastPosition::BottomLeft, overlay: true, size: (400.0, 600.0), display: None, pull: 0.0, cards: 3 };
         let spec = key.spec();
         assert_eq!(spec.anchor, Anchor::BOTTOM | Anchor::LEFT);
         assert_eq!(spec.layer, Layer::Overlay);
@@ -886,5 +979,18 @@ mod tests {
         let bottom = SurfaceKey { position: ToastPosition::BottomCenter, ..joined };
         assert_eq!(bottom.spec().margin.2, px(-36.0));
         assert_eq!(bottom.spec().margin.0, px(0.0));
+    }
+
+    #[test]
+    fn a_short_display_shows_only_the_popups_that_fit() {
+        let card = 100.0;
+        // Room for everything: the setting wins.
+        assert_eq!(cards_that_fit(3, card, 2000.0), 3);
+        // A short display: only what fits the cap, never more.
+        let cap = EDGE_GAP_PX * 2.0 + card * 2.0 + 10.0;
+        assert_eq!(cards_that_fit(5, card, cap), 2);
+        // Always at least one, and a zero setting still shows one.
+        assert_eq!(cards_that_fit(4, card, 10.0), 1);
+        assert_eq!(cards_that_fit(0, card, 2000.0), 1);
     }
 }

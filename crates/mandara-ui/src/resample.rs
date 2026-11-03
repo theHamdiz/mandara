@@ -61,6 +61,8 @@ pub fn triangle(img: &DynamicImage, (x, y, cw, ch): (u32, u32, u32, u32), w: u32
         DynamicImage::ImageRgb8(b) if region_ok => DynamicImage::ImageRgb8(resize_px::<3, image::Rgb<u8>>(b.as_raw(), b.width(), (x, y, cw, ch), w, h)),
         DynamicImage::ImageRgba8(b) if region_ok => DynamicImage::ImageRgba8(resize_px::<4, image::Rgba<u8>>(b.as_raw(), b.width(), (x, y, cw, ch), w, h)),
         DynamicImage::ImageLuma8(b) if region_ok => DynamicImage::ImageLuma8(resize_px::<1, image::Luma<u8>>(b.as_raw(), b.width(), (x, y, cw, ch), w, h)),
+        // The whole picture needs no cropped copy first.
+        other if (x, y, cw, ch) == (0, 0, other.width(), other.height()) => other.resize_exact(w, h, image::imageops::FilterType::Triangle),
         other => other.crop_imm(x, y, cw, ch).resize_exact(w, h, image::imageops::FilterType::Triangle),
     }
 }
@@ -189,6 +191,8 @@ mod tests {
     fn other_layouts_and_bad_regions_take_images_path() {
         let gray16 = DynamicImage::ImageLuma16(image::ImageBuffer::from_fn(40, 30, |x, y| image::Luma([(x * 900 + y * 7) as u16])));
         assert_eq!(triangle(&gray16, (0, 0, 40, 30), 80, 60).as_bytes(), reference(&gray16, (0, 0, 40, 30), 80, 60).as_bytes());
+        // A part of it still goes through the crop.
+        assert_eq!(triangle(&gray16, (4, 2, 30, 20), 45, 30).as_bytes(), reference(&gray16, (4, 2, 30, 20), 45, 30).as_bytes());
         let rgb = picture(40, 30, false, 9);
         // A region reaching past the picture is clamped by `crop_imm`.
         assert_eq!(triangle(&rgb, (30, 20, 40, 30), 16, 12).as_bytes(), reference(&rgb, (30, 20, 40, 30), 16, 12).as_bytes());

@@ -7777,6 +7777,24 @@
 "Turning the launcher on, dimming the screen, the keyboard and how apps start" = "لانچر آن کرنا، اسکرین مدھم کرنا، کی بورڈ اور ایپس کے کھلنے کا طریقہ"
 "Warmer colours in the evening, on a schedule" = "شام کو گرم رنگ، طے شدہ وقت پر"
 "What the launcher searches, how results look and how they are ranked" = "لانچر کیا تلاش کرتا ہے، نتائج کیسے دکھتے ہیں اور ان کی ترتیب کیسے ہوتی ہے"
+# ── Power panel (#26) ──
+"Pulse the battery while charging" = "چارج ہوتے وقت بیٹری دھڑکے"
+"The bar's battery chip breathes gently while it charges (never with Reduce motion)" = "چارج ہوتے وقت بار کا بیٹری نشان آہستہ آہستہ دھڑکتا ہے (حرکت کم کریں کے ساتھ کبھی نہیں)"
+"Stops at {end}%, resumes below {start}%" = "{end}% پر رکتا ہے، {start}% سے نیچے دوبارہ شروع"
+"of {design} Wh" = "{design} واٹ گھنٹے میں سے"
+"Chemistry" = "کیمسٹری"
+"Charging rate" = "چارجنگ کی طاقت"
+"Power draw" = "بجلی کا خرچ"
+"Energy now" = "موجودہ توانائی"
+"Design capacity" = "ڈیزائن گنجائش"
+"Voltage" = "وولٹیج"
+"CPU scaling driver" = "CPU اسکیلنگ ڈرائیور"
+"Platform driver" = "پلیٹ فارم ڈرائیور"
+"Profile driver" = "پروفائل ڈرائیور"
+"Power profile · {profile}" = "پاور پروفائل · {profile}"
+"Power panel style" = "پاور پینل کا انداز"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "کلاسک: بیٹری کارڈ کے اوپر پروفائل کارڈ۔ ماڈرن: پہلے بیٹری، بڑے چارج رنگ اور چارج گراف کے ساتھ، ایک پروفائل سوئچ، اور تکنیکی تفصیلات بند"
+"Modern" = "ماڈرن"
 
 # ── Studio → Bar → Layout designer ──
 "Add to {zone}" = "{zone} میں شامل کریں"
@@ -7788,7 +7806,7 @@
 "Move down" = "نیچے لے جائیں"
 "Move to {zone}" = "{zone} میں منتقل کریں"
 "Move up" = "اوپر لے جائیں"
-"One click sets the style, position, height and arrangement" = "ایک کلک سے انداز، جگہ، اونچائی اور ترتیب طے"
+"One click sets the style, position, height and arrangement" = "ایک کلک سے انداز، جگہ، اونچائی اور ترتیب طے ہو جاتی ہے"
 "Presets" = "پری سیٹس"
 "Remove from bar" = "بار سے ہٹائیں"
 # ── Popups joined to the bar ──

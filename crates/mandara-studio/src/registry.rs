@@ -410,6 +410,7 @@ const ALERT_STYLES: &[(&str, &str)] = &[("both", tk("Notification + OSD")), ("no
 const CRITICAL_ACTIONS: &[(&str, &str)] = &[("nothing", tk("Nothing")), ("suspend", tk("Sleep")), ("hibernate", tk("Hibernate")), ("shutdown", tk("Shut down"))];
 const PROFILES: &[(&str, &str)] = &[("null", tk("Leave it")), ("power-saver", tk("Power saver")), ("balanced", tk("Balanced")), ("performance", tk("Performance"))];
 const MENU_STYLES: &[(&str, &str)] = &[("dock", tk("Edge dock")), ("grid", tk("Grid"))];
+const POWER_PANEL_STYLES: &[(&str, &str)] = &[("classic", tk("Classic")), ("modern", tk("Modern"))];
 const MENU_DEFAULTS: &[(&str, &str)] = &[("lock", tk("Lock")), ("suspend", tk("Sleep")), ("logout", tk("Log out")), ("reboot", tk("Restart")), ("shutdown", tk("Shut down"))];
 const SCHOOLS: &[(&str, &str)] = &[("shafii", tk("Shafi'i")), ("hanafi", tk("Hanafi"))];
 /// A faith plugin's own language: Mandara's, or one of its languages (each
@@ -499,6 +500,14 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
 /// Window-look settings sway has no equivalent of (its drop-in leaves them
 /// out): rounded corners, opacity, blur, shadows and animations.
 pub(crate) const SWAY_LACKS: &[&str] = &["/compositor/look/rounding", "/compositor/look/active_opacity", "/compositor/look/inactive_opacity", "/compositor/look/blur", "/compositor/look/shadows", "/compositor/look/animations"];
+
+/// What a click on a locked toggle saves: a toggle that can't apply right
+/// now still shows its saved value, and one that is on can be turned off
+/// (it stays saved, and would apply again once the setup allows); turning
+/// one on waits until it can apply.
+pub fn locked_toggle_click(on: bool) -> Option<bool> {
+    on.then_some(false)
+}
 
 /// The compositor Studio runs under, detected once (it can't change while
 /// Studio is open).
@@ -676,6 +685,8 @@ fn build() -> Vec<Setting> {
         s(Power, tk("Battery alerts"), "/power/peripheral_low_percent", tk("Peripheral low at"), tk("Threshold for peripherals (per-device overrides in config.toml under [power.device_thresholds])"), slider(5.0, 50.0, 1.0, "%")),
         s(Power, tk("Battery alerts"), "/power/notify_full", tk("Tell me when charged"), tk("A notice when the battery is full or reaches its charge limit"), Toggle),
         s(Power, tk("Battery alerts"), "/power/critical_pulse", tk("Pulse the battery when critical"), tk("The bar's battery chip breathes coral while the charge is critical"), Toggle),
+        s(Power, tk("Battery alerts"), "/power/panel_style", tk("Power panel style"), tk("Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away"), Choice(POWER_PANEL_STYLES)),
+        s(Power, tk("Battery alerts"), "/power/charging_pulse", tk("Pulse the battery while charging"), tk("The bar's battery chip breathes gently while it charges (never with Reduce motion)"), Toggle),
         s(Power, tk("Power profiles"), "/power/profile_ac", tk("On mains power"), tk("Switch to this profile when the charger is plugged in"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/profile_battery", tk("On battery"), tk("Switch to this profile when running on battery"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/saver_at_low", tk("Power saver at low battery"), tk("Switch to power-saver at the low threshold and back when charging"), Toggle),
