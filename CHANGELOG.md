@@ -6,6 +6,13 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **Mandara Studio wears the phoenix.** Studio's app icon in your
+  launcher, dock and app menus is now the new phoenix logo instead of the
+  old shoreline mark. Installs that update themselves pick it up the next
+  time the shell starts.
+
 ## 0.12.0 — 2026-11-03
 
 A much better screen recorder.
