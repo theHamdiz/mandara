@@ -587,6 +587,92 @@ copies survive a drop, the folio probe unmaps its mapping),
 `icon_raster` decode-size tests, and `cargo xtask resource-check` before a
 release (see [development.md](development.md)).
 
+### Settled memory, video memory and residue
+
+Measured 2026-11-03 in the demo sandbox (Vulkan / RADV, scale 1.5, the
+shell in a scope that cannot swap, the binary evicted from the page cache
+before each start, base and new binary alternating, median and range),
+release builds, MiB.
+
+What the settled shell holds, default config at 3840 × 2160: anonymous
+memory 18.2 (18.1–18.3). By mapping, 40 s after start: the main malloc heap
+10.1, the binary's relocated read-only data 3.6, other anonymous mappings
+3.2 (a second malloc arena's 1.3 and GPUI's 1 MiB arena chunks among them),
+libLLVM's relocated data 1.3 (RADV links it), the rest under 1. A
+sampling heap profiler (a sandbox-only build, not shipped) puts the Rust
+heap at 7.2 MiB live: GPUI's element and event arenas 2.0 (allocated,
+touched as used), the shaders' naga IR 1.1 (wgpu keeps it beside the
+pipelines because its Vulkan backend compiles each entry point
+separately), the font database 0.8 (1,421 installed faces), GPUI's frame
+structures 0.6, D-Bus message queues 0.55, the command and plugin
+registry 0.44, taffy 0.37. The rest of the heap is Mesa's. Nothing there is
+built for something the default config does not use; the language
+catalogs, for one, are parsed only for the active language (none for
+English).
+
+Video memory: 143.4 at 3840 × 2160 and 37.8 at 1600 × 1000, the same in
+every run. The difference is exactly four swapchain images of the
+full-output bar surface (4 bytes per pixel each). Mesa's Wayland WSI
+requires four images for mailbox presentation; FIFO could use two but
+blocks the UI thread whenever the output stops sending frame callbacks, so
+it stays as it is.
+
+Residue: opening and closing the launcher, the sidebar and the media,
+quick settings, clipboard and notification panels three times, plus three
+notifications, leaves anonymous memory at 23.7 (23.5–24.8) 30 s later
+(+5.5), with video memory back where it was. Ten rounds level off at the
+same height from the second round on, so it's bounded: GPUI keeps frame
+buffers and layout storage at their peak (+1.9 live in the heap profile),
+and the rest is malloc fragmentation. Giving it back would make the next
+open pay for it again. Resident code grows by about 25 MiB after such use
+until the next 10-minute drop (see [Resident code](#resident-code)). A
+wallpaper switch leaves nothing behind. Studio runs as its own process.
+
+Threads: 27–28 with the default config (a job thread comes and goes). The main
+thread; GPUI's four workers, its timer and three threads of its
+accessibility bridge and power listener (an executor and a D-Bus
+connection among them); two service executors, the async-io reactor and
+one blocking-pool thread; four Mesa shader-cache threads (two per Vulkan
+GPU, and the test machine has an integrated one too); three file watchers
+(config, plugin folders, notes); and one thread each for IPC, the
+wallpaper, toplevels, the clipboard, compositor events, audio events and
+clock steps. The file watchers could share one thread and the clock-step
+timer could run on a service executor; neither changes memory measurably,
+so they were left.
+
+* **Wallpapers and depth masks resampled one row at a time**
+  (`resample::triangle`, used by `wallpaper::shrink_region`,
+  `backdrop::paint::background` and the depth mask's `align`). `image`'s
+  triangle-filter resize first filters the whole picture vertically into
+  an `f32` RGBA copy of *source width × new height* (16 bytes a pixel),
+  plus a cropped copy of the source: 63 MiB to bring a 1080p wallpaper to
+  4K, 95 MiB for a 2880 × 1620 one, 53 MiB for a 1600 × 900 depth mask.
+  The new resampler does the same arithmetic in the same order with one
+  filtered row alive at a time and reads the crop in place. Pixels are
+  identical (unit test `matches_image_resize_exactly`), and it is faster:
+  1920 × 1080 → 3840 × 2160 in 53 instead of 96 ms, 1920 × 1080 →
+  1600 × 1000 in 13 instead of 24 ms. Peak RSS, demo config (a 1080p
+  wallpaper with the depth clock); a switch's peak is `VmHWM` reset just
+  before it:
+
+  | Setup | Before | After |
+  |---|---|---|
+  | 3840 × 2160, start-up (`VmHWM` at 20 s) | 204.9 (204.1–205.0) | 169.9 (169.5–170.8) |
+  | 3840 × 2160, switch to a 2880 × 1620 wallpaper | 201.6 (193.6–205.3) | 124.7 (123.1–125.4) |
+  | 3840 × 2160, switch to one with a depth mask | 238.0 (229.5–239.9) | 149.4 (149.3–149.8) |
+  | 3840 × 2160, switch to the 1080p wallpaper | 160.5 (152.1–161.8) | 127.2 (126.9–127.3) |
+  | 1600 × 1000, start-up | 147.1 (145.6–148.0) | 116.2 (115.6–117.2) |
+  | 1600 × 1000, switch to one with a depth mask | 102.3 (102.2–103.1) | 86.9 (86.1–87.1) |
+  | 1600 × 1000, switch to the 1080p wallpaper | 104.8 (104.7–106.0) | 74.0 (73.8–74.6) |
+
+  A 2880 × 1620 wallpaper on the 1600 × 1000 output is box-averaged as
+  before (71.6 → 71.4). Settled anonymous memory (21.1 at 4K, 21.0 at
+  1600 × 1000), video memory (158.4 / 44.4) and the default config's
+  numbers above are unchanged, and so are frame times: panel workload at
+  4K, view build p50 0.060 (0.058–0.062) → 0.061 (0.058–0.062) ms, p95
+  0.095 (0.091–0.101) → 0.091 (0.091–0.098) ms, frame interval p50 16.1 ms
+  in every run (the sandbox output runs at 60 Hz).
+
 ## The installer and releases
 
 The installer is the binary itself (`crates/mandara-install`); there is no
