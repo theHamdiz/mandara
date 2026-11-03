@@ -111,7 +111,8 @@ pub fn toggle_tile(
         .bg(bg.hsla())
         .hover(move |s| s.bg(bg.mix(fg, alpha::HOVER_FILLED).hsla()))
         .cursor_pointer()
-        .flex()
+        // Icon then label in reading order (mirrored right to left).
+        .row()
         .items_center()
         .gap(px(tokens::SM + metrics::NUDGE))
         .child(icon(icon_name, metrics::TILE_ICON, fg))

@@ -241,7 +241,6 @@ AM
 APP
 APPS
 AUR packages
-AV1 video of the whole screen
 AYAH FOR {date}
 AYAH OF THE DAY
 Aborted
@@ -444,6 +443,7 @@ AltGr
 Although the world is full of suffering, it is full also of the overcoming of it.
 Always
 Always above other windows
+Always available
 Always clear of the bar; left and right draw a vertical pill
 Always on
 Always open on the first tab
@@ -643,6 +643,7 @@ Automatic
 Automatic (DHCP)
 Automatic depth split
 Automatic login
+Automatic picks GPU Screen Recorder, then wf-recorder, then the built-in encoder (AV1, no sound)
 Automatically hide and show the Dock
 Automatically unlock this keyring whenever I'm logged in
 Available
@@ -736,6 +737,7 @@ Between the sides
 Bhagavad Gita
 Bigger images aren't recorded
 Bind Alt+Tab
+Bitrate
 Bits · Mb/s
 Black
 Black rounded corners drawn over the desktop
@@ -821,6 +823,8 @@ Build your own plugins
 Built for {arch}, but this computer is {host}: it probably won't start.
 Built in
 Built-in
+Built-in encoder
+Built-in encoder width
 Built-in ids can't be overridden: a plugin whose id matches a built-in plugin is skipped.
 Bukhari
 Bundled, your distro's logo, any icon from your theme, or your own image
@@ -992,6 +996,7 @@ Checking every surah and saving
 Checking for updates…
 Checking the files
 Checking the plugin…
+Checking which codecs your graphics card encodes…
 Checking who installed it…
 Checking your installation…
 Checking your {compositor} config…
@@ -1099,6 +1104,7 @@ Code
 Code and numbers
 Code copied
 Code copied · clears in {n} s
+Codec
 Collapse all
 Collecting 10-second averages…
 Collection
@@ -1252,9 +1258,11 @@ Corners: top-left, top-right, bottom-left, bottom-right
 Corniche
 Corniche night
 Corniche waves
+Could not create {path}: {error}
 Could not encode the wallpaper: {error}
 Could not keep the screen awake: {error}
 Could not load the OCR models: {error}
+Could not move {path} to the Trash: {error}
 Could not open {uri}: {error}
 Could not reach the engine: {error}
 Could not read the logs
@@ -1267,8 +1275,10 @@ Could not signal PID {pid}: {error}
 Could not sleep ({mode}): {error}
 Could not start PAM ({code})
 Could not start the lock screen
+Could not start {program}: {error}
 Could not start {terminal}: {error}
 Could not write {path}: {error}
+Couldn't change the microphone: {error}
 Couldn't create {path}: {error}
 Couldn't download {collection}
 Couldn't install
@@ -1289,9 +1299,11 @@ Couldn't read the clipboard: {error}
 Couldn't read the clock: {error}
 Couldn't read the crash log
 Couldn't read the keyring
+Couldn't read which codecs your graphics card encodes, so all of them are offered
 Couldn't start KeePassXC: {error}
 Couldn't uninstall {app}: {error}
 Couldn't uninstall: {error}
+Couldn't unmute the microphone: {error}
 Couldn't write {path}: {error}
 Count the days since
 Countdown
@@ -1347,6 +1359,7 @@ Curtains
 Curtains of northern light over a starry night
 Custom
 Custom accent
+Custom bitrate
 Custom colour
 Custom command
 Custom greetd greeter
@@ -1427,6 +1440,7 @@ Default apps per category (from mimeapps.list)
 Default column width
 Default list
 Default search
+Default source
 Default topic
 Default view
 Default: El-Mandara, Alexandria
@@ -2061,8 +2075,10 @@ Focus session {count} done
 Focus timer
 Focus timer with breaks and session tracking
 Focus {direction}
+Focused display
 Focused opacity
 Focused tile size
+Focused window
 Focused window opacity
 Focused window title
 Fog
@@ -2096,6 +2112,7 @@ For everyone (--system)
 For me (--user)
 For sessions that don't start them (MangoWM, Niri, Hyprland without uwsm). Skipped when systemd's xdg-autostart does; leave off if your compositor config starts the same apps
 For terminal apps; empty uses your preferred terminal (Applications), then $TERMINAL, then the first installed one
+For the Custom quality
 For the Model mode
 For the things we have to learn before we can do, we learn by doing.
 For windows whose app id doesn't name their app (games, web apps): * matches anything, e.g. steam_app_* → steam.
@@ -2132,7 +2149,7 @@ Frame thickness
 Frame timing
 Framed HUD
 Framed bars
-Frames per second of screen recordings
+Frames per second
 Francis Bacon
 Frankenstein
 Free and open: plugins are GitHub repositories tagged mandara-plugin. They run sandboxed — no files, network or system access unless they ask for commands.
@@ -2177,6 +2194,7 @@ Fuzzy search over every note's title and text
 GB
 GNOME Keyring prompts
 GPU
+GPU Screen Recorder isn't installed
 GPU busy
 GPU power
 GPU temp
@@ -2289,6 +2307,7 @@ Guard what you say and keep your desires within what is lawful.
 Gulistan II
 Gulistan III
 H {high}  L {low}
+H.264 plays everywhere; HEVC and AV1 are smaller at the same quality
 HADITH OF THE DAY
 HISTORY
 HTTP {code}
@@ -2370,6 +2389,7 @@ Hide when idle
 Hide when paused
 Hide while typing
 Hides the cursor while you use a touchscreen (Hyprland)
+High
 High / low in the bar
 High contrast
 Higher is sharper and larger
@@ -2593,6 +2613,7 @@ In the slideshow playlist: click to remove
 In the store
 In the zone holding the bar's launcher button, it grows out of the button.
 In this folder
+In use
 In your language, the hadith meanings are AI renderings of the meaning, not published translations.
 In {minutes} min
 In {n} days
@@ -2643,6 +2664,7 @@ Installed cursor themes
 Installed folder
 Installed for everyone: Flatpak asks for your password
 Installed for you only: no password needed
+Installed recorders
 Installed sound themes
 Installed with {manager} — update through your package manager
 Installed {fonts} into {folder} — restart the shell to use them
@@ -2859,6 +2881,7 @@ Laptops with a lit keyboard
 Large
 Large clocks and headings
 Large icons, or rows with each app's description
+Larger screens are scaled down to fit; smaller ones keep their size
 Largest
 Largest image
 Largest text
@@ -3135,6 +3158,7 @@ MAC
 MB
 MEMORY
 MICROPHONE
+MKV survives a crash; MP4 plays everywhere; WebM holds AV1
 MPRIS now playing and controls
 MWL
 Macchiato Dark
@@ -3454,8 +3478,10 @@ Mute
 Mute all
 Mute all sound
 Mute all sound: every output and app at once; off restores your own mutes
+Mute mic
 Mute or unmute one app stream
 Mute the microphone
+Mute the recorded microphone
 Muted
 Muwatta Malik
 My command
@@ -3799,6 +3825,7 @@ No wallpapers in {folder} yet: add images or AV1 videos (.webm, .mkv, .ivf), or 
 No wallpapers to show
 No widgets match “{query}”
 No widgets yet.
+No window has focus
 No window rules yet. Add one, or pick a running window to start from it.
 No window {id}
 No workflow runs yet
@@ -4033,6 +4060,7 @@ Only each app's most recent window
 Only in {desktops}
 Only on this display
 Only tags and workspaces with windows (plus the one you are on)
+Only the built-in encoder uses this; the others follow Resolution
 Only the first {count} checks run
 Only the main display shows the lock screen; others stay black (OLED friendly)
 Only this display's windows
@@ -4079,6 +4107,7 @@ Open the desktop's right-click menu at a point of a display (logical px)
 Open the development folder
 Open the drives panel to mount or safely remove it
 Open the eyedropper; replies with the picked color's formats (or an error if cancelled)
+Open the folder afterwards
 Open the panel after picking
 Open the panel to download the Qur'an
 Open the reader at a surah or ayah and return its text and meaning
@@ -4224,8 +4253,10 @@ Pause for fullscreen windows
 Pause for these apps
 Pause on battery
 Pause on hover
+Pause or resume recording
 Pause or resume recording screen time
 Pause or resume recording what you copy
+Pause recording
 Pause the recitation
 Pause while locked
 Paused
@@ -4277,6 +4308,8 @@ Phones and laptops can join this network; they use this computer's connection.
 Photo frame
 Pick
 Pick Command as the action first
+Pick Microphone or Both under Sound first
+Pick System sound or Both under Sound first
 Pick a network below
 Pick a picture for the sticker
 Pick a pixel anywhere on screen — it lands here
@@ -4519,6 +4552,7 @@ Pywal-style colors.json and userChrome.css in ~/.cache/mandara/themes/firefox (s
 Qaitbay Citadel
 Qibla
 Qt 5 / 6 (qt6ct, qt5ct)
+Quality
 Qudsi
 Queried once when the panel opens; must answer with the address as plain text
 Queued
@@ -4639,6 +4673,7 @@ Recent hook runs with exit codes and durations (JSON)
 Recent journal lines of a unit
 Recent log
 Recent log lines shown for a selected unit
+Recent recordings
 Recent runs
 Recent shell frame timings with p50 / p95 / p99 (build time and frame interval)
 Recently used apps listed under the pinned ones before you type
@@ -4653,6 +4688,7 @@ Reconnect trusted devices
 Reconnect trusted devices when Bluetooth turns on
 Record
 Record a region
+Record a window
 Record history
 Record images
 Record player
@@ -4660,12 +4696,13 @@ Record region
 Record screen
 Record screen time
 Record the screen
+Recorder
+Recording
 Recording failed
-Recording frame rate
+Recording files
 Recording saved
-Recording width
-Recordings are scaled down to at most this width
-Recordings folder
+Recording sound
+Recording video
 Rectangle
 Red
 Redact personal values
@@ -4684,7 +4721,7 @@ Regenerate the drop-in (rules, binds, border colors) and reload
 Regenerated Mandara's drop-in.
 Regenerating the drop-in
 Region
-Region, window and screen capture
+Region, window and screen capture, and screen recording
 Regular
 Reinstall
 Release notes
@@ -4945,6 +4982,7 @@ Save profile
 Save the current arrangement as a profile (applied automatically when the same monitors connect)
 Save the current arrangement; when the same monitors connect again the shell switches to it on its own.
 Save the current settings as a profile (look = appearance only)
+Save the screen recording
 Save to disk
 Saved
 Saved VPNs and which are connected
@@ -5000,7 +5038,7 @@ Screen frame
 Screen power ✓
 Screen recorder
 Screen recording
-Screen recording: start (screen), region (pick an area), stop, status
+Screen recording: start [screen|region|window], screen [display], region, window, stop, toggle, pause, resume, pause-toggle, mic [on|off], status, backends, recent
 Screen sharing
 Screen sharing stopped
 Screen time
@@ -5096,6 +5134,7 @@ Seconds
 Seconds (empty: default)
 Seconds after login before the first update check
 Seconds as
+Seconds before recording starts (Esc cancels)
 Seconds in the bar clock
 Seconds must be a number
 Seconds on screen; 0 keeps it until you close it
@@ -5323,6 +5362,7 @@ Shows it for a few seconds without locking
 Shows on: {displays}
 Shows only while a player is loaded.
 Shows the most pressing of: an event soon, the next prayer, a low battery, unread notifications, what plays.
+Shows the new recording in your file manager
 Shows the switcher for three seconds without taking the keyboard
 Shows when apps use your microphone, camera or screen
 Shows {kelvin} K for a few seconds
@@ -5473,6 +5513,7 @@ Standard
 Stanley Sunset
 Stars
 Start
+Start / stop recording
 Start KeePassXC
 Start Mandara to manage devices here ({error}).
 Start a dev server and it shows up here
@@ -5490,6 +5531,7 @@ Start it with ollama serve, or set its address in Studio → Plugins
 Start it with: sudo systemctl enable --now tailscaled
 Start or stop discovery
 Start ranking from scratch
+Start recording
 Start the Docker or Podman service (for Podman: systemctl --user enable --now podman.socket)
 Start the ambient mix
 Start the next phase automatically
@@ -5504,10 +5546,12 @@ Starting KeePassXC…
 Starting a private link on your network
 Starting apps
 Starting now
+Starting or saving the recording
 Starting the loop…
 Starting…
 Starts as {name}. Wi-Fi is taken over while it runs.
 Starts at your next login
+Starts in {seconds} s
 Starts the apps and commands you pick
 Starts the apps you click
 Startup
@@ -5666,6 +5710,8 @@ System meters
 System monitor
 System process
 System services
+System sound
+System sound, the microphone or both (mixed into one track)
 System tools
 System tray
 System units · changes ask for your password
@@ -5853,6 +5899,12 @@ The battery reading turns coral at or below this charge
 The battery's percentage beside its icon
 The beginning is the most important part of any work.
 The big clock on the lock screen
+The built-in encoder has quality presets only
+The built-in encoder records AV1 only
+The built-in encoder records at most 60 fps
+The built-in encoder records no sound
+The built-in encoder scales recordings down to at most this width
+The built-in encoder writes WebM only
 The carousel opened from the bar, the main menu or `mandara msg wallpaper picker toggle`
 The checker rejected the config without saying why.
 The clipboard holds a password, so it isn't shared
@@ -5927,6 +5979,7 @@ The i2c-dev kernel module isn't loaded
 The icon on the bar's launcher button
 The icons of the apps on each tag or workspace
 The idle manager is not running
+The input recorded as the microphone
 The interface between your plugin and Mandara, read from the plugin.wit this build was compiled with.
 The interface language as an ISO 639-1 code; right-to-left for ar.
 The interface's
@@ -5979,8 +6032,10 @@ The prayer times of another day (days after today, or before it when negative)
 The public IP endpoint must be an http(s) URL
 The reader shows the Prophet's words first; the chain opens with a tap
 The ready-made launcher looks (Classic, Grid, Beacon) and which one is applied
+The recorder saved nothing
 The recording already finished
 The recording did not start in time
+The recording ended by itself
 The recording thread crashed
 The release has no download for this system
 The release has no plugin archive
@@ -5994,6 +6049,7 @@ The same message from the same app replaces the earlier one with a ×2 badge
 The sandbox
 The screen fades out this long before it locks or turns off; any input cancels
 The screen frame already joins the bar to the edges
+The screen recorded; Focused display follows the focused window
 The secret is too short
 The sending app's name above the title
 The service did not reply
@@ -6060,6 +6116,7 @@ Themes, session actions, plugins, Studio pages, commands and skills
 Then {collection}
 There is already a collection called {name}
 There is no default keyring; create one in your keyring app
+There is no display named {name}
 There is no rule {n}
 There is no text to share
 There is nothing either good or bad, but thinking makes it so.
@@ -6125,6 +6182,8 @@ This package is made for a different kind of Linux. The same app may be on Flath
 This pattern {problem}
 This plugin has no published release yet
 This plugin works without settings.
+This recorder can't write that format here
+This recording has no microphone
 This restarts the computer; repeat as `session reboot-to {target} confirm`
 This session
 This sign-in method needs more than a password
@@ -6447,6 +6506,7 @@ Unmount and lock an unlocked encrypted volume
 Unmounted {device}
 Unmute
 Unmute all
+Unmute mic
 Unpack {file} ({size}) into {dir}
 Unpin a plugin's panel: it stays open until the next outside click
 Unpin a side bar first
@@ -6578,9 +6638,12 @@ Very little indeed is necessary for living a happy life.
 Vesktop / Vencord
 Vibrant
 Video
+Video bitrate of the Custom quality
 Video encoder failed: {error}
 Video loop
 Video memory
+Video of the focused window
+Video of the whole screen
 View as
 Views
 Vignette
@@ -6683,6 +6746,7 @@ Weather, prayer times, world clocks and more at a glance
 Web & shortcuts
 Web addresses as colourful tiles
 WebAssembly component
+WebM holds AV1 video only: pick AV1, or MP4 or MKV
 WebP
 WebP (lossless)
 WebP images must be 1 to 16384 pixels on each side
@@ -6705,6 +6769,7 @@ What a middle click between and around the bar's items does
 What changed in each release, in plain words. Run mandara changelog to see it in a terminal.
 What clicking an entry does
 What do we live for, if it is not to make life less difficult to each other?
+What each recorder can do on this computer
 What each tag or workspace pill says
 What happens
 What happens (needs your password)
@@ -6725,6 +6790,7 @@ What the idle stage, the critical battery action and the session menu's Sleep do
 What the launcher has learnt
 What the launcher searches, how results look and how they are ranked
 What the launcher shows for a query (apps, settings, commands, slash commands, skills)
+What the record shortcut and `record start` capture
 What you do not want done to yourself, do not do to others.
 What's in {version}
 What's new
@@ -6781,6 +6847,7 @@ Whoever strives, succeeds.
 Whoever you are responsible for, never deceive or neglect them.
 Whole output
 Whose recitation plays; each ayah is downloaded once from cdn.islamic.network and kept
+Whose sound is recorded as system sound
 Wi-Fi
 Wi-Fi and wired connectivity
 Wi-Fi is off
@@ -6899,6 +6966,7 @@ Your contribution calendar (fetched from github.com once you switch it on)
 Your cursor
 Your devices
 Your dock's apps, or any apps and links, as tiles
+Your graphics card can't encode this with GPU Screen Recorder
 Your hadith library
 Your home folder
 Your home folders; a click opens one
@@ -7026,6 +7094,7 @@ coredumpctl isn't installed
 coredumpctl isn't installed, so systemd-coredump isn't collecting crashes
 coredumpctl printed something unexpected: {error}
 could not capture the screen: {error}
+countdown cancelled
 crash in the last 7 days
 crash in the last 7 days · new
 crashes in the last 7 days
@@ -7119,6 +7188,7 @@ in {time}
 inactive
 index from `audio streams`
 installed model name, e.g. llama3.2:3b
+internal error (logged)
 internal error while capturing (logged)
 internal error while encoding (logged)
 internal error while reading text (logged)
@@ -7184,6 +7254,8 @@ no core
 no outputs
 no outputs to capture
 no patch from your version is published
+no pause
+no sound
 no supported compositor detected
 none
 none found
@@ -7223,6 +7295,7 @@ on, off or show
 on, off or toggle
 on, off or toggle (default)
 on, off, toggle or an interval
+one sound source
 one source only
 only this rule (its position in [[hooks.rules]], from 0), even when off
 open, close or toggle
@@ -7235,6 +7308,7 @@ palette source
 part of a name, e.g. cairo
 part of a unit name or description
 path to the profile file
+pause
 paused
 peak {rate}
 peer name, MagicDNS name or IP, or none
@@ -7296,11 +7370,13 @@ settings
 short or long (default: the one due, else short)
 slash command /{trigger}: unknown action {action} (use url:, mandara: or exec:)
 start at boot or login
+start: screen, region or window; screen: a display name; mic: on, off or toggle
 starting
 status or empty
 stays loaded
 steps
 strftime pattern, e.g. %H:%M or %-I:%M %p; empty follows the switches above
+strftime pattern, e.g. Recording_%Y-%m-%d_%H-%M-%S
 strftime pattern, e.g. Screenshot_%Y-%m-%d_%H-%M-%S
 strftime pattern; empty follows the 24-hour switch
 strftime pattern; empty uses the long date
@@ -7308,6 +7384,7 @@ substring of the file name
 sun / fixed / always
 swap {size}
 system (default) or user
+system sound and microphone
 systemctl soft-reboot failed ({status})
 systemd is not reachable on this bus
 systemd units: failed alerts, start, stop, enable and journal
@@ -7383,6 +7460,9 @@ user@host
 username
 volume-change, notification, notification-critical, power-plug, screenshot, login, battery-low… or a sound name
 waits for it
+wf-recorder can't pause: stop, and start a new recording
+wf-recorder isn't installed
+wf-recorder records one sound source at a time
 what happens to its notes
 what happens to its tasks
 what it is doing
@@ -7440,6 +7520,7 @@ your default
 {changed} of {count} changed
 {city} is already on the clock
 {city} is not on the clock
+{codecs} · {formats} · up to {fps} fps · {sound} · {pause}
 {collection} couldn't be opened
 {collection} isn't downloaded
 {collection} isn't downloaded: run `hadith download {id}`
@@ -7526,6 +7607,9 @@ your default
 {drive} can be removed safely
 {drive} can't be ejected or powered off
 {drive} connected
+{duration} · {size} MB
+{duration} · {size} MB saved to {path}
+{duration} · {width}×{height} · {size} MB saved to {path}
 {d} d {h} h
 {edition} doesn't line up with the Arabic
 {edition} has Arabic for {got} hadith, expected {expected}
@@ -7689,9 +7773,13 @@ your default
 {prayer} in {span}
 {prayer} in {time}
 {program} exited with status {code}
+{program} is no longer running
 {program} timed out
 {program} was interrupted
 {read} of {total} read
+{reason}. Install it, or choose another recorder in Studio → Plugins → Screenshot
+{recorder} stopped unexpectedly
+{recorder} stopped: {reason}
 {region} memory
 {running} of {count} running
 {running} running · {finished} finished

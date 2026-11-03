@@ -392,7 +392,11 @@ narrow ones; everything mirrors for right-to-left languages.
   owns, from its own options to the shell sections it drives (Weather:
   place, units, animation; Prayer times: location, method, Asr school,
   Hijri adjustment; Screenshot: copy, save, timer, countdown, text
-  recognition, toolbar position and size),
+  recognition, toolbar position and size, and the screen recorder: which
+  recorder (with the installed ones and what each supports), source,
+  display, countdown, resolution, frame rate, codec, quality, format,
+  sound and devices, folder and file name; choices the recorder in use
+  can't do are greyed out with the reason),
   including the `[[settings]]` a third-party plugin declares.
 - **Users**: create, edit and delete accounts through AccountsService:
   full name, e-mail, language, administrator or standard, automatic login,

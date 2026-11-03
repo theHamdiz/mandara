@@ -49,7 +49,7 @@ The 73 first-party plugins (37 of them ship switched off, marked *opt-in*):
 | **Bluetooth** | Bluetooth devices |
 | **Audio** | Volume and microphone |
 | **Quick settings** | Toggles for the sidebar |
-| **Screenshot** | Region, window and screen capture |
+| **Screenshot** | Region, window and screen capture, and screen recording (GPU Screen Recorder, wf-recorder or the built-in AV1 encoder) with pause, sound and recent recordings |
 | **Clipboard** | Clipboard history sorted by kind, with collections |
 | **Main menu** | Right-click empty bar space |
 | **Notifications** | Notification center with history and do-not-disturb |
