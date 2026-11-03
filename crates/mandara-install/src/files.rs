@@ -124,13 +124,18 @@ pub fn checkout_of(exe: &Path) -> Option<PathBuf> {
     exe.ancestors().skip(1).take(4).find(|d| d.file_name().is_some_and(|n| n == "target")).and_then(Path::parent).filter(|d| is_checkout(d)).map(Path::to_path_buf)
 }
 
+/// SHA-256 of every Studio icon earlier releases installed (the shoreline
+/// mark). Only these are replaced; an icon the user put there is kept.
+const SHIPPED_ICONS: &[&str] = &["7f18b7d0abae5b92464d5c52867434d829b4b61895632e56e55998fac72243bf"];
+
 /// Replaces the Studio icon an earlier `mandara install` put at `icon`
-/// when it differs from this build's (a new logo), so self-updated installs
-/// show it too: the updater only swaps the binary. Nothing happens when no
-/// icon is installed there (package-managed installs keep theirs).
+/// with this build's (a new logo), so self-updated installs show it too:
+/// the updater only swaps the binary. Nothing happens when no icon is
+/// installed there (package-managed installs keep theirs) or when it isn't
+/// one Mandara shipped (a customized icon stays).
 pub fn refresh_installed_icon(icon: &Path) -> std::io::Result<bool> {
     match std::fs::read(icon) {
-        Ok(old) if old != ICON_SVG => {
+        Ok(old) if old != ICON_SVG && SHIPPED_ICONS.contains(&mandara_delta::sha256_hex(&old).as_str()) => {
             let tmp = icon.with_extension("svg.new");
             std::fs::write(&tmp, ICON_SVG)?;
             std::fs::rename(&tmp, icon)?;
@@ -220,8 +225,14 @@ mod tests {
         let icon = dir.join(ICON_FILE);
         // Not installed: nothing written.
         assert!(!refresh_installed_icon(&icon).unwrap() && !icon.exists());
-        // An old icon is replaced, a current one left alone.
-        std::fs::write(&icon, b"<svg>old</svg>").unwrap();
+        // A customized icon stays.
+        std::fs::write(&icon, b"<svg>mine</svg>").unwrap();
+        assert!(!refresh_installed_icon(&icon).unwrap());
+        assert_eq!(std::fs::read(&icon).unwrap(), b"<svg>mine</svg>");
+        // The icon an earlier release shipped is replaced, a current one left alone.
+        let shipped = include_bytes!("../tests/fixtures/studio-icon-shoreline.svg");
+        assert!(SHIPPED_ICONS.contains(&mandara_delta::sha256_hex(shipped).as_str()));
+        std::fs::write(&icon, shipped).unwrap();
         assert!(refresh_installed_icon(&icon).unwrap());
         assert_eq!(std::fs::read(&icon).unwrap(), ICON_SVG);
         assert!(!refresh_installed_icon(&icon).unwrap());
