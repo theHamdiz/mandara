@@ -7795,6 +7795,19 @@
 "Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "클래식: 배터리 카드 위에 프로필 카드. 모던: 큰 충전 링과 충전 그래프로 배터리를 먼저 보여 주고, 프로필 전환은 하나, 기술 정보는 접어 둠"
 "Modern" = "모던"
 
+# ── Studio → Bar → Layout designer ──
+"Add to {zone}" = "{zone}에 추가"
+"All plugins" = "모든 플러그인"
+"Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar." = "플러그인을 클릭해 배치하거나 막대로 끌어 놓으세요. 여기에 놓으면 막대에서 빠집니다."
+"Drag items to reorder them or move them between zones; click one for more" = "항목을 끌어 순서를 바꾸거나 영역 사이로 옮기세요. 클릭하면 더 많은 옵션"
+"Faith" = "신앙"
+"Layout designer" = "레이아웃 디자이너"
+"Move down" = "아래로 이동"
+"Move to {zone}" = "{zone}(으)로 이동"
+"Move up" = "위로 이동"
+"One click sets the style, position, height and arrangement" = "한 번의 클릭으로 스타일, 위치, 높이, 배치를 설정"
+"Presets" = "프리셋"
+"Remove from bar" = "막대에서 제거"
 # ── Popups joined to the bar ──
 "Join the bar" = "바에 붙이기"
 "Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "팝업이 바의 색으로 바에서 내려와 하나로 이어집니다. 바가 없는 가장자리에서는 화면 가장자리에서 내려옵니다"

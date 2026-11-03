@@ -30,6 +30,7 @@ mod plugin_updates;
 mod updates_card;
 mod whats_new;
 mod designer;
+mod plugin_pool;
 mod sidebar_tabs_page;
 mod greeter_page;
 mod keyrings_card;
@@ -113,6 +114,8 @@ pub struct StudioView {
     icon_matches: Option<(String, Rc<[String]>)>,
     /// Studio → Sidebars & hover → Tabs editor state.
     sidebar_tabs: sidebar_tabs_page::TabsEditor,
+    /// Studio → Bar → Layout designer: the plugin pool's search and menu.
+    designer: plugin_pool::Designer,
     /// Responsive breakpoints, recomputed from the window width each frame.
     rail: bool,
     stack_rows: bool,
@@ -204,7 +207,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { section: Section::Home, search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new() }
+        Self { section: Section::Home, search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -1610,7 +1613,7 @@ impl Render for StudioView {
                 Section::LoginScreen => greeter_page::element(cx),
                 Section::Users => users_page::element(cx),
                 Section::Bar => {
-                    let designer = self.bar_designer(&cfg, &p, cx);
+                    let designer = self.bar_designer(&cfg, &p, window, cx);
                     let rows = self.rows(registry::in_section(Section::Bar), &cfg, &p, cx);
                     let displays = self.displays_link(mandara_config::outputs::SurfaceKind::Bar, &cfg, &p, cx);
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(designer).child(rows).child(displays).into_any_element()

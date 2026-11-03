@@ -6,9 +6,6 @@ About → What's new shows it too.
 
 ## Unreleased
 
-A new Modern style for the Power panel, a battery that breathes while it
-charges, and notifications that can join the bar.
-
 ### New
 
 - **A Modern style for the Power panel.** Pick it in Studio → Power &
@@ -27,12 +24,6 @@ charges, and notifications that can join the bar.
   glance that power is going in. It stays still with Reduce motion on, and
   you can turn it off in Studio → Power & idle (*Pulse the battery while
   charging*).
-- **Notifications can join the bar.** Turn on Studio → Notifications →
-  **Join the bar** and new notifications drop out of the bar in a drawer of
-  its own colour, curving into it, so the two read as one piece. It works
-  with a top or bottom bar, notifications on the left, middle or right, and
-  follows the bar when it hides. Floating pill bars keep the usual floating
-  cards. Off by default.
 
 ### Changed
 
@@ -40,6 +31,28 @@ charges, and notifications that can join the bar.
   its look, but no longer shows the CPU driver (`intel_pstate` and
   friends) in its header or under each power profile; each profile keeps
   its short description.
+- **A tidier layout designer, with search.** In Studio → Bar, the Left,
+  Center and Right zones are now neat columns with their plugins stacked
+  in order, and every plugin sits in an aligned grid underneath, grouped
+  by category, with a search box that filters as you type. Plugins already
+  on the bar show where they are. Click any plugin (or bar item) for a
+  small menu to add it to a zone, move it up, down or across, or take it
+  off, so dragging is no longer the only way. Thanks for the suggestion
+  in #26!
+
+## 0.9.0 — 2026-11-03
+
+Notifications can join the bar. Pointing at a notification always pauses
+it.
+
+### New
+
+- **Notifications can join the bar.** Turn on Studio → Notifications →
+  **Join the bar** and new notifications drop out of the bar in a drawer of
+  its own colour, curving into it, so the two read as one piece. It works
+  with a top or bottom bar, notifications on the left, middle or right, and
+  follows the bar when it hides. Floating pill bars keep the usual floating
+  cards. Off by default.
 
 ### Fixed
 

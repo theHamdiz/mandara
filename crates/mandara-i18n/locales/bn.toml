@@ -7796,6 +7796,19 @@
 "Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "ক্লাসিক: ব্যাটারি কার্ডের ওপরে প্রোফাইল কার্ড। মডার্ন: আগে ব্যাটারি, বড় চার্জ রিং ও চার্জ গ্রাফসহ, একটি প্রোফাইল সুইচ, আর প্রযুক্তিগত বিবরণ ভাঁজ করা"
 "Modern" = "মডার্ন"
 
+# ── Studio → Bar → Layout designer ──
+"Add to {zone}" = "{zone}-এ যোগ করুন"
+"All plugins" = "সব প্লাগইন"
+"Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar." = "কোনো প্লাগইন বসাতে ক্লিক করুন, বা বারে টেনে আনুন। বার থেকে সরাতে এখানে ছেড়ে দিন।"
+"Drag items to reorder them or move them between zones; click one for more" = "সাজাতে বা অঞ্চলের মধ্যে সরাতে আইটেম টানুন; আরও বিকল্পের জন্য ক্লিক করুন"
+"Faith" = "ধর্ম"
+"Layout designer" = "লেআউট ডিজাইনার"
+"Move down" = "নিচে সরান"
+"Move to {zone}" = "{zone}-এ সরান"
+"Move up" = "উপরে সরান"
+"One click sets the style, position, height and arrangement" = "এক ক্লিকে শৈলী, অবস্থান, উচ্চতা ও বিন্যাস ঠিক হয়"
+"Presets" = "প্রিসেট"
+"Remove from bar" = "বার থেকে সরান"
 # ── Popups joined to the bar ──
 "Join the bar" = "বারের সাথে জুড়ুন"
 "Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "পপআপ বারের রঙে বার থেকে ঝোলে, তার সাথে এক টুকরো হয়ে; বার নেই এমন কিনারায়, স্ক্রিনের কিনারা থেকে"

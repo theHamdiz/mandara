@@ -4,18 +4,18 @@
 
 [mandara-app]
 kind = "binary"
-version = "0.8.3"
-hash = "05925d693952ceadd31ee891e94382f3"
+version = "0.9.0"
+hash = "357a915154f1d7daf37486dc27581171"
 
 [mandara-compositor]
 kind = "library"
-version = "0.6.0"
-hash = "316279feb998f38dc9024f093d43ab58"
+version = "0.7.0"
+hash = "462fcc981b2526175ca03cb14f62e234"
 
 [mandara-config]
 kind = "library"
-version = "0.7.0"
-hash = "75d157d4f230fb99286d293d967060f4"
+version = "0.8.0"
+hash = "f7c361dfea196fb6c17a8fe26ae6ae0a"
 
 [mandara-core]
 kind = "library"
@@ -29,13 +29,13 @@ hash = "1d08a71052daefa4911f8af5bae4da27"
 
 [mandara-greeter]
 kind = "library"
-version = "0.6.3"
-hash = "ce83d1377dd73ef1f09eea4ea5d31c36"
+version = "0.7.0"
+hash = "0e80e38fccf8fdef6ff96cff2e4a6b44"
 
 [mandara-i18n]
 kind = "library"
-version = "0.8.0"
-hash = "fa2d3e8839987e80514a66d2d5a471a4"
+version = "0.9.0"
+hash = "25b7c2d5bde385a9d5f51d3051974767"
 
 [mandara-install]
 kind = "library"
@@ -49,18 +49,18 @@ hash = "5c5803e05579b15a248aca82ce755966"
 
 [mandara-plugins]
 kind = "library"
-version = "0.6.0"
-hash = "32fcaabb4df16c250221cd2c512a989f"
+version = "0.7.0"
+hash = "cfcc3483125798d3538cd69afb9aa093"
 
 [mandara-services]
 kind = "library"
-version = "0.9.0"
-hash = "1e72f86ec32f1f7016218c6a5a4d2531"
+version = "0.10.0"
+hash = "d17188330eb53bf2b8238200e0f2d638"
 
 [mandara-studio]
 kind = "library"
-version = "0.8.3"
-hash = "d04a0db519030dd4194d4aafe32abbdf"
+version = "0.9.0"
+hash = "9fe0d18f9d6b2dd0e6a1e5bf5428fe69"
 
 [mandara-theme]
 kind = "library"
@@ -69,8 +69,8 @@ hash = "70e530d6570e8910538e757e607d953c"
 
 [mandara-ui]
 kind = "library"
-version = "0.7.3"
-hash = "68171805e1b932eb2efbf78dbcf70fb4"
+version = "0.8.0"
+hash = "e65492246fb52a6a2917f6f84024e80b"
 
 [mandara-version]
 kind = "library"
@@ -79,8 +79,8 @@ hash = "2d84e22e72d733e3ee779896654c4799"
 
 [mandara-wallgen]
 kind = "library"
-version = "0.6.0"
-hash = "52f57f9c833606eef1348541eee495c4"
+version = "0.7.0"
+hash = "55f72519b3fbcc9d8eaae0fad132bbbc"
 
 [mandara-webp]
 kind = "library"

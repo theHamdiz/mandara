@@ -8044,6 +8044,18 @@
 "Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "Classique : les cartes de profil au-dessus de la carte de batterie. Moderne : la batterie d'abord, avec un grand anneau de charge et un graphique de charge, un seul sélecteur de profil et les détails techniques repliés"
 "Modern" = "Moderne"
 
+# ── Studio → Bar → Layout designer ──
+"Add to {zone}" = "Ajouter à {zone}"
+"Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar." = "Cliquez sur un plugin pour le placer, ou faites-le glisser sur la barre. Déposez-en un ici pour le retirer de la barre."
+"Drag items to reorder them or move them between zones; click one for more" = "Faites glisser les éléments pour les réordonner ou les déplacer entre les zones ; cliquez pour plus d'options"
+"Faith" = "Foi"
+"Layout designer" = "Concepteur de disposition"
+"Move down" = "Descendre"
+"Move to {zone}" = "Déplacer vers {zone}"
+"Move up" = "Monter"
+"One click sets the style, position, height and arrangement" = "Un clic règle le style, la position, la hauteur et la disposition"
+"Presets" = "Préréglages"
+"Remove from bar" = "Retirer de la barre"
 # ── Popups joined to the bar ──
 "Join the bar" = "Attacher à la barre"
 "Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "Les fenêtres contextuelles pendent de la barre, dans sa couleur, d'un seul tenant ; sur un bord sans barre, du bord de l'écran"

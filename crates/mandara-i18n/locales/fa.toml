@@ -7796,6 +7796,19 @@
 "Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "کلاسیک: کارت‌های نمایه بالای کارت باتری. مدرن: اول باتری با حلقهٔ بزرگ شارژ و نمودار شارژ، یک کلید نمایه، و جزئیات فنی جمع‌شده"
 "Modern" = "مدرن"
 
+# ── Studio → Bar → Layout designer ──
+"Add to {zone}" = "افزودن به {zone}"
+"All plugins" = "همه افزونه‌ها"
+"Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar." = "روی یک افزونه کلیک کنید تا جای‌گذاری شود، یا آن را روی نوار بکشید. برای برداشتن از نوار، آن را اینجا رها کنید."
+"Drag items to reorder them or move them between zones; click one for more" = "موارد را بکشید تا ترتیبشان را عوض کنید یا بین بخش‌ها جابه‌جا کنید؛ برای گزینه‌های بیشتر کلیک کنید"
+"Faith" = "ایمان"
+"Layout designer" = "طراح چیدمان"
+"Move down" = "پایین بردن"
+"Move to {zone}" = "انتقال به {zone}"
+"Move up" = "بالا بردن"
+"One click sets the style, position, height and arrangement" = "یک کلیک سبک، موقعیت، ارتفاع و چیدمان را تنظیم می‌کند"
+"Presets" = "پیش‌تنظیم‌ها"
+"Remove from bar" = "برداشتن از نوار"
 # ── Popups joined to the bar ──
 "Join the bar" = "چسباندن به نوار"
 "Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "پنجره‌های بازشو به رنگ نوار از آن آویزان می‌شوند و با آن یکپارچه‌اند؛ در لبه‌ای بدون نوار، از لبهٔ صفحه"

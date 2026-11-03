@@ -8038,6 +8038,18 @@
 "Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "经典:电池卡片上方是模式卡片。现代:电池在前,配大号充电环和充电曲线,一个模式切换器,技术细节默认折叠"
 "Modern" = "现代"
 
+# ── Studio → Bar → Layout designer ──
+"Add to {zone}" = "添加到{zone}"
+"Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar." = "点击插件即可放置，或将其拖到栏上。拖回此处即可从栏中移除。"
+"Drag items to reorder them or move them between zones; click one for more" = "拖动项目可调整顺序或在区域间移动；点击可查看更多操作"
+"Faith" = "信仰"
+"Layout designer" = "布局设计器"
+"Move down" = "下移"
+"Move to {zone}" = "移到{zone}"
+"Move up" = "上移"
+"One click sets the style, position, height and arrangement" = "一键设定样式、位置、高度和排列"
+"Presets" = "预设"
+"Remove from bar" = "从栏中移除"
 # ── Popups joined to the bar ──
 "Join the bar" = "与状态栏相连"
 "Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge" = "弹出通知以状态栏的颜色从状态栏垂下，与它连成一体；在没有状态栏的边上，则从屏幕边缘垂下"

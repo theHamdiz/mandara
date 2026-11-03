@@ -373,7 +373,7 @@ impl StudioView {
             });
             div().p(px(SPACE_10_PX)).rounded(px(RADIUS_14_PX)).bg(p.surface_base.with_alpha(ALPHA_55).hsla()).row().flex_wrap().gap(px(SPACE_6_PX)).children(tiles)
         });
-        let lane = self.lane(Lane::Tab(sel), tk("On this tab"), &tab.cards, true, p, cx);
+        let lane = self.lane(Lane::Tab(sel), tk("On this tab"), &tab.cards, true, window.scale_factor(), p, cx);
 
         // Picker: every widget, filtered by the search.
         let search = self.widget_search(cx);
