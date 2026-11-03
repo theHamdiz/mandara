@@ -6,17 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
-## 0.10.1 — 2026-11-03
-
-Smart updates work after skipping releases.
-
 ### Fixed
 
-- **Smart updates work after skipping releases.** A release only carried a
-  binary patch from the release right before it, so if you skipped one,
-  updating fell back to the full ~70 MB download. Each release now carries
-  patches from the five releases before it: updating from any of them is a
-  ~5 MB download.
 - **Notifications joined to the bar, on more setups.** With a bottom dock
   on one display only, bottom notifications on another display now join
   the bar there instead of staying floating cards (Studio no longer locks
@@ -41,6 +32,18 @@ Smart updates work after skipping releases.
   whole picture in those formats skips a needless copy, and the Arabic
   font chain accepts exactly the fonts the rest of the text system does.
   The changelog check now also catches section headings Studio can't show.
+
+## 0.10.1 — 2026-11-03
+
+Smart updates work after skipping releases.
+
+### Fixed
+
+- **Smart updates work after skipping releases.** A release only carried a
+  binary patch from the release right before it, so if you skipped one,
+  updating fell back to the full ~70 MB download. Each release now carries
+  patches from the five releases before it: updating from any of them is a
+  ~5 MB download.
 
 ## 0.10.0 — 2026-11-03
 
