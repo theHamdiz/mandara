@@ -103,6 +103,9 @@ pub fn apply_in(report: &Report, id: &str, fix: Fix, env: &CheckEnv, regenerate:
             if d.owner != Owner::User {
                 bail!("{id} is in Mandara's generated file; regenerate it instead");
             }
+            if d.read_only || target == Target::River {
+                bail!("Mandara never edits {}: change it yourself", d.file.as_deref().map_or_else(|| target.name().to_string(), |f| f.display().to_string()));
+            }
             let (Some(file), Some(line), Some(text)) = (d.file.clone(), d.line, d.text.clone()) else { bail!("{id} has no line to change") };
             if is_generated(&file) || !report.files.contains(&file) {
                 bail!("{} is not one of your {} config files", file.display(), target.name());
@@ -214,7 +217,8 @@ pub fn node_range(target: Target, file: &Path, lines: &[&str], idx: usize) -> (u
             }
             balanced(target, lines, idx, &['[', '{'], &[']', '}'])
         }
-        Target::Niri => balanced(target, lines, idx, &['{'], &['}']),
+        // A block (`input * { … }`, `bar { … }`) through its closing brace.
+        Target::Niri | Target::Sway => balanced(target, lines, idx, &['{'], &['}']),
         Target::Hyprland if file.extension().is_some_and(|e| e == "lua") => balanced(target, lines, idx, &['(', '{', '['], &[')', '}', ']']),
         Target::Hyprland => {
             let mut end = idx;
@@ -224,7 +228,7 @@ pub fn node_range(target: Target, file: &Path, lines: &[&str], idx: usize) -> (u
             let (_, block_end) = balanced(target, lines, idx, &['{'], &['}']);
             (idx, end.max(block_end))
         }
-        Target::Mango => (idx, idx),
+        Target::Mango | Target::River => (idx, idx),
     }
 }
 

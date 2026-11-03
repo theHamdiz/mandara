@@ -74,6 +74,7 @@
 2:255, 2:255-257, 2:255- (to the surah's end), 36 or yaseen
 2K
 2K (1440p)
+3D
 4K
 5 GHz (speed)
 5K
@@ -780,7 +781,7 @@ Border grab area
 Border width
 Both
 Both Shift keys
-Both buttons together click the middle one (MangoWM, Niri)
+Both buttons together click the middle one (MangoWM, Niri, Sway, River)
 Both take turns: a verse, then a hadith
 Bottom
 Bottom center
@@ -1281,6 +1282,7 @@ Could not write {path}: {error}
 Couldn't change the microphone: {error}
 Couldn't create {path}: {error}
 Couldn't download {collection}
+Couldn't download {language}: {error}
 Couldn't install
 Couldn't install {app}
 Couldn't install {app}: {error}
@@ -1654,6 +1656,7 @@ Downloaded once
 Downloaded {count} times
 Downloaded: sharing stopped
 Downloading in the Hadith panel
+Downloading languages for the new version…
 Downloading models {percent}%
 Downloading the Qur'an
 Downloading the adhan: {error}
@@ -1664,6 +1667,8 @@ Downloading the recitation of ayah {n}: {error}
 Downloading the smart update ({size})…
 Downloading {collection}
 Downloading {file}: {error}
+Downloading {language}…
+Downloading {language}… {size}
 Downloading {model} ({file}): {error}
 Downloading {url}: {error}
 Downloading…
@@ -1725,6 +1730,7 @@ Each note is a Markdown file, each topic a folder in here — point it at a sync
 Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence.
 Each repair is safe: your compositor config only ever gets one include line, with a backup.
 Each sets the launcher's style, layout and placement together; change any setting below afterwards.
+Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif
 Each surface
 Each walk to the mosque, morning or evening, is a welcome being prepared.
 Ease someone's hardship
@@ -1854,6 +1860,7 @@ Every day is a new beginning
 Every display
 Every display gets its own wallpaper from the slideshow; off, they all change together
 Every display is off
+Every entry's name beside its icon, or a narrow icon-only column
 Every fast you keep is remembered at a gate of its own.
 Every folder Mandara found, with what it made of it: start here when a plugin doesn't show up.
 Every hour
@@ -2040,6 +2047,7 @@ Fixed schedule: start of the night
 Fixed times
 Flare radius
 Flat
+Flat fills, raised 3D tiles with a glass rim, or see-through glass
 Flat moves the pointer exactly as far as the mouse
 Flat, softly shadowed cursors from the Qogir icon theme
 Flatpak applies the app's sandbox from its remote
@@ -2179,6 +2187,7 @@ Frost
 Frosted glass
 Frosted glass prisms with light caustics
 Fruit salad
+Full
 Full HD (1080p)
 Full WIT
 Full in {time}
@@ -2513,6 +2522,7 @@ How often transfer rates are measured
 How panels appear
 How see-through the main menu's glass is
 How slideshow changes look: the desktop's transition or their own, with a length in ms
+How strong the shadow under each shortcut tile is (0 for none)
 How strongly the capsules stand out from the bar
 How strongly the pills and islands behind items stand out
 How the critical warning appears
@@ -2533,7 +2543,7 @@ Hyprland
 Hyprland and Umbriel only
 Hyprland layout & groups
 Hyprland only
-Hyprland, Niri and Umbriel switch it per fullscreen window; MangoWM treats it as on
+Hyprland, Niri and Umbriel switch it per fullscreen window; MangoWM and Sway treat it as on
 I am no bird; and no net ensnares me; I am a free human being with an independent will.
 I am not sick. I am broken. But I am happy to be alive as long as I can paint.
 I did this today
@@ -2657,6 +2667,7 @@ Installed
 Installed Ollama models (JSON)
 Installed apps with where each came from (package manager, Flatpak, Snap, AppImage, Mandara, local); --by-mandara lists what Mandara's installer installed, with every file it wrote
 Installed by Mandara
+Installed by Nix — update it with your flake (nixos-rebuild switch, home-manager switch or nix profile upgrade)
 Installed by distribution packages: off until you turn them on, and read-only.
 Installed by your NixOS configuration: remove it from configuration.nix
 Installed by your system — update through your package manager
@@ -3211,6 +3222,7 @@ Mandara answers pairing codes and connection requests (restart the shell to appl
 Mandara asks for your administrator password, backs up greetd's PAM file and changes only its own marked lines.
 Mandara asks for your keyring password when an app needs a saved secret (gnome-keyring / Secret Service). Skipped while another prompter, such as GNOME Shell, is running
 Mandara asks for your password when an app needs administrator rights (polkit). Skipped if another agent is already running
+Mandara can't set this on Sway
 Mandara can't uninstall itself from here
 Mandara command, e.g. launcher toggle
 Mandara couldn't write where this app goes.
@@ -3239,6 +3251,9 @@ Mandara starts these at login
 Mandara updates
 Mandara writes nothing to other apps until you switch them on. Switching one off takes back exactly what Mandara changed, and any file it replaced comes back from its backup.
 Mandara wrote `{key}`, which {compositor} {version} doesn't support. Regenerating stops Mandara from writing it for this version.
+Mandara {version} has no language packs to download
+Mandara {version} has no published release to download languages from
+Mandara {version} has no {language} language pack to download
 Mandara {version} is already the latest version
 Mandara {version} is available
 Mandara {version} is the latest version
@@ -3248,8 +3263,9 @@ Mandara's drop-in
 Mandara's shortcuts and your compositor's appear here
 MangoWM
 MangoWM and Niri only
-MangoWM, Niri, Hyprland
-MangoWM, Niri, Umbriel
+MangoWM, Niri, Hyprland, Sway, River
+MangoWM, Niri, Hyprland, Umbriel, Sway
+MangoWM, Niri, Umbriel, Sway, River
 Manifest: id, name, zone, permissions, settings
 Manual
 Marcus Aurelius
@@ -3800,7 +3816,7 @@ No such task (see `todo list`)
 No such topic (use its name or id; see `notes topics`)
 No such unit
 No supported compositor detected
-No supported compositor detected (MangoWM, Niri, Hyprland, Umbriel)
+No supported compositor detected ({compositors})
 No surah matches
 No surah or ayah {reference}
 No surah or ayah {reference} (try 2, 2:255, 2:255-260 or al-baqara)
@@ -4588,6 +4604,7 @@ Rabi al-Thani
 Rabindranath Tagore
 Radial
 Radius
+Rail
 Rain
 Rain today. Don't forget an umbrella.
 Rainy study
@@ -4606,7 +4623,7 @@ Rasselas
 Rates by ExchangeRate-API · {date}
 Rates in bytes (MB/s) or bits (Mb/s)
 Rather than love, than money, than fame, give me truth.
-Raw compositor dispatch (MangoWM function, Hyprland dispatcher, Niri or Umbriel action)
+Raw compositor dispatch (MangoWM function, Hyprland dispatcher, Niri or Umbriel action, Sway or River command)
 Ray detail
 Re-derive the theme (Material You) from each wallpaper you pick
 Re-export
@@ -4892,6 +4909,11 @@ Ring
 Ring shows
 Ring starts at
 Ring width
+River has no such setting
+River keeps no display settings of its own: set them in your init with a tool such as wlr-randr or kanshi
+River runs {file} as a program, but it isn't executable, so River starts without it (chmod +x makes it run).
+River {version} runs window management in a separate program and no longer has the river-control and river-status protocols, so Mandara can't show or switch its tags, send its binds or follow its windows. Mandara works with River's classic line (0.3, packaged as river-classic).
+River's config is your init program, which Mandara never edits: Mandara sends River its colours, rules, input settings and keys when the shell starts and on every change. To start Mandara with River, add this line to your init: {line}
 Room around the icons
 Rose
 Rose Gold
@@ -4993,7 +5015,7 @@ Saved colors: {n}
 Saved display profiles and which one matches the connected monitors
 Saved files; the clipboard always gets PNG
 Saved in ~/.cache/mandara/clipboard; off keeps it in memory only
-Saved now; applied the next time Mandara runs under MangoWM, Niri, Hyprland or Umbriel.
+Saved now; applied the next time Mandara runs under a supported compositor ({compositors}).
 Saved now; {file} is generated the next time Mandara runs under {compositor}.
 Saved profiles
 Saved settings profiles
@@ -5495,7 +5517,9 @@ Speed and efficiency
 Speed test cancelled
 Speed test failed
 Speed test size
+Split horizontally
 Split toward the pointer
+Split vertically
 Spread salam
 Springs
 Square dots
@@ -5665,6 +5689,7 @@ Suspend, then hibernate
 Swahili proverb
 Swap the left and right buttons
 Swatch shape
+Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts.
 Swirl
 Switch
 Switch automatically
@@ -5726,6 +5751,7 @@ TOP APPS TODAY
 Tab
 Tab name
 Tab shape
+Tabbed
 Tablet
 Tabs
 Tabs and buttons above the cards, or pinned at the bottom
@@ -6009,6 +6035,9 @@ The name is empty
 The network name is empty
 The new release is plugin {new}, not {old}; reinstall it from the marketplace
 The new track when music changes
+The new version is the same size
+The new version is {size} larger
+The new version is {size} smaller
 The newest one saved
 The next prayer and the time to it (needs the Prayer times plugin)
 The next prayer and time remaining
@@ -6088,6 +6117,7 @@ The translations available in your language (for Studio's translation setting)
 The tray service is not running
 The unit is masked
 The unlock password was incorrect
+The update didn't install
 The upright line between a slider's fill and its track; None shows the fill alone
 The uptime monitor stopped
 The volume beside the speaker icon
@@ -6100,6 +6130,7 @@ The window switcher is turned off (Studio → Window switcher)
 The world clock holds up to {n} cities
 The world is like a Mask dancing. If you want to see it well, you do not stand in one place.
 The {corner} corner has no action
+The {language} language pack was downloaded but couldn't be loaded
 The × on a popup only hides it; it stays in the history
 Their files stay in {home}
 Their old age is an open door; serve them with love while you can.
@@ -6205,8 +6236,11 @@ Thunderstorm
 Thunderstorms around. Better stay in.
 Ticks
 Tile
+Tile patterns
+Tile shadow
 Tile shape
 Tile size
+Tile surface
 Tiles per row in the grid style
 Tiling layout
 Tilt
@@ -6947,6 +6981,7 @@ You're logged out
 You're offline
 You're presenting
 Your GitHub user name
+Your River init doesn't start Mandara. Mandara never edits it: add this line to it yourself: {line}
 Your Steam games as covers; a click starts one
 Your UPower is too old to change the charge limit
 Your World clock cities, or a list of its own
@@ -6972,6 +7007,7 @@ Your home folder
 Your home folders; a click opens one
 Your hooks
 Your idle commands
+Your init maps {chord}, which Mandara binds too: Mandara leaves yours and skips its own.
 Your installed Steam games, the most recently played first.
 Your keyring may ask you to unlock it
 Your keys
@@ -7625,6 +7661,7 @@ your default
 {file} doesn't compile: {error}
 {file} doesn't include {drop_in}
 {file} doesn't match the signed checksums
+{file} failed verification
 {file} failed verification (sha256 {got})
 {file} has no published checksum; not installing it
 {file} is a program, not an app package: move it to ~/.local/bin to use it.

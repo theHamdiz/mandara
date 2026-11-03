@@ -72,6 +72,7 @@ mod wallgen_logic;
 mod wallgen_page;
 pub mod wallpaper_page;
 pub(crate) mod grid;
+mod choice;
 pub mod plugin_modal;
 pub mod plugins_local;
 #[cfg(test)]
@@ -132,6 +133,8 @@ pub struct StudioView {
     recorder_row: recorder_row::RecorderRow,
     /// About → Mandara updates, and marketplace plugin updates.
     updates: updates_card::Updates,
+    /// Each language card's download fill (Studio → General → Language).
+    lang_fills: mandara_ui::progress_fill::LanguageFills,
     /// Plugins page: the plugin detail / settings modal.
     modal: plugin_modal::PluginModal,
     /// Plugins page tab (Installed / Marketplace / Local).
@@ -209,7 +212,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { section: Section::Home, recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new() }
+        Self { section: Section::Home, recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -312,7 +315,10 @@ impl StudioView {
         field
     }
 
-    fn control(&mut self, setting: &Setting, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    /// A setting's control. `room` is the most width it may take (a long
+    /// choice turns into a balanced grid that fits it) and whether it sits
+    /// under its label.
+    fn control(&mut self, setting: &Setting, room: choice::Room, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let value = registry::get(cfg, setting);
         match setting.control.clone() {
             Control::Time => {
@@ -417,19 +423,13 @@ impl StudioView {
                     .into_any_element()
             }
             Control::Choice(choices) => {
-                let current = match &value {
-                    Value::String(s) => s.clone(),
-                    other => other.to_string(),
-                };
-                let options = choices
-                    .iter()
-                    .map(|(raw, label)| recorder_row::ChipOption { value: registry::choice_value(raw), raw: raw.to_string(), label: tr(label), locked: registry::choice_locked(setting, raw, cfg) })
-                    .collect();
-                self.chip_choice(setting, options, &current, p, cx)
+                let current = choice_current(&value);
+                let options = self.choice_options(setting, choices, &current, cfg);
+                self.chip_choice(setting, options, &current, room, p, cx)
             }
             Control::RecorderBackends => self.recorder_backends_control(cfg, p, cx),
-            Control::Device { input } => self.recorder_device_control(setting, input, cfg, p, cx),
-            Control::Display => self.recorder_display_control(setting, cfg, p, cx),
+            Control::Device { input } => self.recorder_device_control(setting, input, room, cfg, p, cx),
+            Control::Display => self.recorder_display_control(setting, room, cfg, p, cx),
             Control::Text { placeholder } | Control::OptionalText { placeholder } => {
                 let current = value.as_str().unwrap_or_default().to_string();
                 self.field(setting, current, placeholder, cx).into_any_element()
@@ -596,27 +596,62 @@ impl StudioView {
         })
     }
 
-    /// One group's rows (inside a fold or a plain card).
-    fn group_card(&mut self, list: &[&Setting], cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> gpui::Div {
-        let mut card = div().row().flex_col().gap(px(2.0));
+    /// A registry choice's options, each with why it can't be picked right
+    /// now (if it can't). The one place a choice's options are listed, for
+    /// its control and for its row's layout (filter `choices` here).
+    fn choice_options(&self, setting: &Setting, choices: &'static [(&'static str, &'static str)], current: &str, cfg: &ShellConfig) -> Vec<recorder_row::ChipOption> {
+        choices
+            .iter()
+            // Choices the running compositor can't do stay hidden (unless already saved).
+            .filter(|(raw, _)| *raw == current || !registry::choice_hidden(setting.path, raw))
+            .map(|(raw, label)| recorder_row::ChipOption { value: registry::choice_value(raw), raw: raw.to_string(), label: tr(label), locked: registry::choice_locked(setting, raw, cfg) })
+            .collect()
+    }
+
+    /// The labels of a setting's choice (registry choices, sound devices,
+    /// displays), or `None` for other controls.
+    fn choice_labels(&mut self, setting: &Setting, cfg: &ShellConfig, cx: &mut Context<Self>) -> Option<Vec<SharedString>> {
+        let options = match setting.control {
+            Control::Choice(choices) => self.choice_options(setting, choices, &choice_current(&registry::get(cfg, setting)), cfg),
+            Control::Device { input } => self.recorder_device_options(setting, input, cfg, cx)?,
+            Control::Display => self.recorder_display_options(setting, cfg, cx),
+            _ => return None,
+        };
+        Some(options.into_iter().map(|o| SharedString::from(o.label)).collect())
+    }
+
+    /// One group's rows (inside a fold or a plain card) on a card `width`
+    /// logical px wide.
+    fn group_card(&mut self, list: &[&Setting], width: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> gpui::Div {
+        let mut card = div().row().flex_col().gap(px(ROW_GAP_PX));
+        let pad = if self.stack_rows { SPACE_14_PX } else { SPACE_18_PX };
+        // The room a control gets: the row's inner width under its label,
+        // or beside a label squeezed to its minimum.
+        let under = (width - 2.0 * pad).max(0.0);
+        let beside = (under - SPACE_24_PX - ROW_LABEL_MIN_PX).max(0.0);
             for s in list.iter() {
+                let locked = registry::locked(s, cfg);
+                // A choice too long for one line beside its label goes under
+                // it, where its grid gets the whole row (fewer, wider rows)
+                // and the label and help keep their measure.
+                let stack = self.stack_rows || (locked.is_none() && self.choice_labels(s, cfg, cx).is_some_and(|labels| !choice::fits_line(&labels, beside, &choice::SETTING_CHOICE)));
+                let room = if stack { choice::Room::under(under) } else { choice::Room::beside(beside) };
                 // A control that does nothing in the current setup shows why
                 // instead (toggles render their own locked state).
-                let control = match registry::locked(s, cfg) {
+                let control = match locked {
                     Some(reason) if s.control != Control::Toggle => div()
                         .max_w(px(LOCKED_NOTE_MAX_W_PX))
                         .text_size(px(TEXT_12_PX))
                         .text_color(p.on_surface_variant.with_alpha(LOCKED_OPACITY).hsla())
                         .child(mandara_ui::bidi::paragraph(tr(reason)))
                         .into_any_element(),
-                    _ => self.control(s, cfg, p, cx),
+                    _ => self.control(s, room, cfg, p, cx),
                 };
                 let picker = (s.control == Control::Icon).then(|| self.icon_picker(s, cfg, p, cx));
-                let stack = self.stack_rows;
                 card = card.child(
                     div()
                         .min_h(px(DIM_68_PX))
-                        .px(px(if stack { SPACE_14_PX } else { SPACE_18_PX }))
+                        .px(px(pad))
                         .py(px(SPACE_14_PX))
                         .rounded(px(RADIUS_14_PX))
                         .row()
@@ -638,7 +673,7 @@ impl StudioView {
                                 .flex_col()
                                 .gap(px(SPACE_3_PX))
                                 .child(div().text_size(px(TEXT_13_5_PX)).font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(tr(s.label))))
-                                .child(div().text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(s.help)))),
+                                .when(!s.help.is_empty(), |el| el.child(div().text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(s.help))))),
                         )
                         .child(control),
                 );
@@ -656,6 +691,8 @@ impl StudioView {
     fn rows<'a>(&mut self, settings: impl IntoIterator<Item = &'a Setting>, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let groups = self.visible_groups(settings, cfg, cx);
         let two = self.page.column_w >= TWO_COLUMNS_FROM_PX && groups.len() > 1;
+        // A fold's settings card: its column, less the fold body's padding.
+        let card_w = (if two { (self.page.column_w - SPACE_12_PX) / 2.0 } else { self.page.column_w }) - 2.0 * SPACE_6_PX;
         let sides = grid::two_columns(&groups.iter().map(|(_, l)| l.len()).collect::<Vec<_>>());
         let mut cols = [div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_12_PX)), div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_12_PX))];
         for (n, (title, list)) in groups.into_iter().enumerate() {
@@ -669,7 +706,7 @@ impl StudioView {
             let fold = self.fold(title, head, p, cx, move |this, cx| {
                 let refs: Vec<&Setting> = list.iter().collect();
                 let cfg = config(cx).read(cx).snapshot();
-                this.group_card(&refs, &cfg, p, cx).into_any_element()
+                this.group_card(&refs, card_w, &cfg, p, cx).into_any_element()
             });
             let side = if two { sides[n] } else { 0 };
             let [first, second] = cols;
@@ -680,13 +717,13 @@ impl StudioView {
     }
 
     /// Settings as plain titled cards, always open (inside a dialog or
-    /// another card, where a fold would nest).
-    fn rows_plain<'a>(&mut self, settings: impl IntoIterator<Item = &'a Setting>, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    /// another card, where a fold would nest), `width` logical px wide.
+    fn rows_plain<'a>(&mut self, settings: impl IntoIterator<Item = &'a Setting>, width: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let groups = self.visible_groups(settings, cfg, cx);
         let mut col = div().row().flex_col().gap(px(SPACE_26_PX));
         for (title, list) in groups {
             let reset = self.group_reset(title, &list, cfg, p, cx);
-            let card = self.group_card(&list, cfg, p, cx);
+            let card = self.group_card(&list, width - 2.0 * SPACE_6_PX, cfg, p, cx);
             col = col.child(
                 div()
                     .row()
@@ -1194,42 +1231,88 @@ impl StudioView {
 
     /// Language picker: every supported language as a card, in its own
     /// script, plus "System".
-    fn language_picker(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    fn language_picker(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         use mandara_config::Locale;
         use mandara_i18n::Lang;
+        use mandara_services::self_update::langpacks;
+        use mandara_ui::progress_fill::{self as fill, Tone, Visual};
         let current = cfg.general.locale;
         let system = Lang::from_env();
         let fonts = mandara_ui::fonts::fonts(cx);
-        let card = |id: String, sample: String, native: String, english: String, selected: bool, rtl: bool, locale: Locale, cx: &mut Context<Self>| {
-            div()
-                .id(SharedString::from(id))
+        // Each card's background follows its language pack's download.
+        let ui_rtl = mandara_ui::bidi::rtl();
+        let mut wakes = Vec::new();
+        let visuals = self.lang_fills.frame(cfg.motion.reduce_motion, window, |after| wakes.push(after));
+        for after in wakes {
+            cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(after).await;
+                let _ = this.update(cx, |_, cx| cx.notify());
+            })
+            .detach();
+        }
+        let idle: (Visual, Option<String>) = (fill::IDLE, None);
+        let card = |id: String, sample: String, native: String, english: String, selected: bool, rtl: bool, locale: Locale, status: (Visual, Option<String>), cx: &mut Context<Self>| {
+            let (visual, line) = status;
+            let failed = visual.tone == Tone::Error;
+            let lang = locale.lang();
+            let accent = match visual.tone {
+                Tone::Error => p.urgent_coral,
+                Tone::Success => p.success_emerald,
+                _ => p.primary,
+            };
+            let corner = if let Some(badge) = fill::check_badge(&visual, p) {
+                Some(badge)
+            } else if failed {
+                Some(
+                    compositor_page::button(SharedString::from(format!("lang-retry-{}", lang.code())), "refresh", t("Retry"), false, p)
+                        .on_click(move |_, _, cx| {
+                            cx.stop_propagation();
+                            langpacks::retry(lang);
+                        })
+                        .into_any_element(),
+                )
+            } else if selected {
+                Some(div().size(px(DIM_20_PX)).rounded_full().bg(p.primary.hsla()).row().items_center().justify_center().child(icon("check", ICON_12_PX, p.on_primary)).into_any_element())
+            } else {
+                None
+            };
+            let detail = match &line {
+                Some(text) => div().text_size(px(TEXT_11_5_PX)).font_features(mandara_ui::fonts::tabular_nums()).text_color(if failed { p.urgent_coral.hsla() } else { p.on_surface.hsla() }).truncate().child(text.clone()),
+                None => div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(english),
+            };
+            mandara_ui::style::ClipRounded::clip_rounded(div().id(SharedString::from(id)))
+                .relative()
                 .flex_1()
+                .min_w_0()
                 .rounded(px(RADIUS_16_PX))
                 .p(px(SPACE_14_PX))
                 .row()
                 .flex_col()
                 .gap(px(SPACE_6_PX))
                 .cursor_pointer()
-                .bg(if selected { p.primary.with_alpha(ALPHA_14).hsla() } else { p.surface_container_high.hsla() })
+                .bg(fill::base(&visual, if selected { p.primary.with_alpha(ALPHA_14) } else { p.surface_container_high }, p.surface_container_high).hsla())
                 .border_2()
-                .border_color(if selected { p.primary.hsla() } else { gpui::transparent_black() })
+                .border_color(if visual.tone != Tone::None && visual.tone != Tone::Progress { accent.hsla() } else if selected { p.primary.hsla() } else { gpui::transparent_black() })
                 .hover(|s| s.bg(p.primary.with_alpha(ALPHA_10).hsla()))
+                .children(fill::layer(&visual, ui_rtl, p))
                 .child(
                     div()
                         .row()
                         .items_center()
                         .justify_between()
+                        .gap(px(SPACE_6_PX))
                         .child(div().text_size(px(TEXT_20_PX)).font_weight(FontWeight::SEMIBOLD).when(rtl, |el| el.font_family(fonts.arabic.clone())).child(sample))
-                        .when(selected, |el| el.child(div().size(px(DIM_20_PX)).rounded_full().bg(p.primary.hsla()).row().items_center().justify_center().child(icon("check", ICON_12_PX, p.on_primary)))),
+                        .children(corner),
                 )
                 .child(div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).when(rtl, |el| el.font_family(fonts.arabic.clone())).child(native))
-                .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(english))
+                .child(detail)
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     if let Some(setting) = registry::by_path(LOCALE_PATH) {
                         this.apply(setting, serde_json::to_value(locale).unwrap_or(Value::Null), cx);
                     }
                 }))
         };
+        let status_of = |lang: Lang| visuals.get(&lang).cloned().unwrap_or_else(|| idle.clone());
         let mut cards = vec![card(
             "lang-auto".into(),
             system.sample().into(),
@@ -1238,11 +1321,12 @@ impl StudioView {
             current == Locale::Auto,
             system.is_rtl(),
             Locale::Auto,
+            if current == Locale::Auto { status_of(system) } else { idle.clone() },
             cx,
         )];
         for lang in Lang::ALL {
             let locale = Locale::from_lang(lang);
-            cards.push(card(format!("lang-{}", lang.code()), lang.sample().into(), lang.native_name().into(), tr(lang.english_name()), current == locale, lang.is_rtl(), locale, cx));
+            cards.push(card(format!("lang-{}", lang.code()), lang.sample().into(), lang.native_name().into(), tr(lang.english_name()), current == locale, lang.is_rtl(), locale, status_of(lang), cx));
         }
         let grid = grid::fit(self.page.column_w, LANGUAGE_GRID).balanced(cards.len()).render(cards);
         div()
@@ -1251,6 +1335,7 @@ impl StudioView {
             .gap(px(SPACE_10_PX))
             .child(div().px(px(SPACE_6_PX)).text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(mandara_i18n::t("Language")))
             .child(grid)
+            .children(language_downloads(p, cx))
             .into_any_element()
     }
 
@@ -1374,9 +1459,9 @@ impl StudioView {
         div().row().flex_col().gap(px(SPACE_14_PX)).child(shell).child(studio).child(controls).into_any_element()
     }
 
-    fn about(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    fn about(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         // Updates: the patch-first update card (updates_card.rs).
-        let updates = self.updates_card(cfg, p, cx);
+        let updates = self.updates_card(cfg, p, window, cx);
         let build = mandara_core::build_info(cx);
         let registry = cx.global::<PluginRegistry>();
         let commands = registry.commands.all().len();
@@ -1560,6 +1645,8 @@ impl Render for StudioView {
         let cfg = config(cx).read(cx).snapshot();
         registry::prime(&cfg);
         let fonts = mandara_ui::fonts::fonts(cx);
+        // Choices measure their labels in Studio's font this frame.
+        choice::begin_frame(window, fonts.studio.clone());
         // Breakpoints: icon rail under 900 px; stacked rows when the content
         // column gets too narrow for label + control side by side.
         self.page = grid::PageMetrics::of(window);
@@ -1590,7 +1677,7 @@ impl Render for StudioView {
                 Section::Home => self.home_page(&cfg, &p, window, cx),
                 Section::Themes => self.themes_page(&cfg, &p, cx),
                 Section::Plugins => self.store_page(&cfg, &p, window, cx),
-                Section::About => self.about(&cfg, &p, cx),
+                Section::About => self.about(&cfg, &p, window, cx),
                 Section::Performance => {
                     let base = self.performance(&p, cx);
                     let diagnostics = self.diagnostics(&p, cx);
@@ -1622,7 +1709,7 @@ impl Render for StudioView {
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(designer).child(rows).into_any_element()
                 }
                 Section::General => {
-                    let picker = self.language_picker(&cfg, &p, cx);
+                    let picker = self.language_picker(&cfg, &p, window, cx);
                     let rows = self.rows(registry::in_section(Section::General).filter(|s| s.path != LOCALE_PATH), &cfg, &p, cx);
                     // Under the Keyrings & passwords rows: what unlocks at login.
                     let keyrings = keyrings_card::element(cx);
@@ -1816,6 +1903,14 @@ fn slider_text(v: f64, step: f64, unit: &str) -> String {
     }
 }
 
+/// A choice setting's current value as its raw option.
+fn choice_current(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
+}
+
 /// What a setting slider's readout shows: the value under the knob while
 /// the slider is held, so the number follows the pointer at once (the
 /// config catches up at most a frame later), else the setting's `value`.
@@ -1829,6 +1924,8 @@ const LOCKED_OPACITY: f32 = 0.45;
 const LOCKED_NOTE_MAX_W_PX: f32 = 260.0;
 /// Narrowest a setting's label column gets beside a wide control.
 const ROW_LABEL_MIN_PX: f32 = 160.0;
+/// Space between a settings card's rows.
+const ROW_GAP_PX: f32 = 2.0;
 
 /// Most theme icons the icon picker lists for a search.
 const ICON_MATCHES_MAX: usize = 64;
@@ -1878,6 +1975,39 @@ pub(crate) const SUPPORT_URL: &str = "https://ko-fi.com/thehamdiz";
 const LICENSE: &str = "GPL-3.0-or-later";
 /// Direction of the About page's accent washes, degrees.
 const ABOUT_WASH_ANGLE: f32 = 135.0;
+
+/// Under the language picker: the full reason a language pack couldn't be
+/// downloaded, with Retry (the card itself turns red with a short version;
+/// downloads show on their cards). The interface stays in English
+/// meanwhile.
+fn language_downloads(p: &MandaraPalette, _cx: &mut Context<StudioView>) -> Option<AnyElement> {
+    use mandara_services::self_update::langpacks::{self, State};
+    let rows: Vec<AnyElement> = langpacks::active()
+        .into_iter()
+        .filter(|(_, state)| matches!(state, State::Failed(_)))
+        .filter_map(|(lang, state)| {
+            let line = langpacks::describe(lang, &state)?;
+            let tone = p.urgent_coral;
+            Some(
+                div()
+                    .px(px(SPACE_14_PX))
+                    .py(px(SPACE_10_PX))
+                    .rounded(px(RADIUS_12_PX))
+                    .bg(tone.with_alpha(ALPHA_12).hsla())
+                    .row()
+                    .items_center()
+                    .gap(px(SPACE_8_PX))
+                    .text_size(px(TEXT_12_5_PX))
+                    .text_color(tone.hsla())
+                    .child(icon("close", ICON_14_PX, tone))
+                    .child(div().flex_1().min_w_0().child(mandara_ui::bidi::paragraph(line)))
+                    .child(compositor_page::button(SharedString::from(format!("lang-retry-all-{}", lang.code())), "refresh", t("Retry"), false, p).on_click(move |_, _, _| langpacks::retry(lang)))
+                    .into_any_element(),
+            )
+        })
+        .collect();
+    (!rows.is_empty()).then(|| div().row().flex_col().gap(px(SPACE_8_PX)).children(rows).into_any_element())
+}
 
 /// Opens a web link in the default browser, off the UI thread.
 fn open_link(url: &'static str) {

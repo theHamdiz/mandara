@@ -269,7 +269,7 @@ impl StudioView {
         );
 
         let button_list: Vec<&'static registry::Setting> = in_groups(BUTTON_GROUPS).collect();
-        let button_rows = self.group_card(&button_list, cfg, p, cx);
+        let button_rows = self.group_card(&button_list, self.page.column_w - 2.0 * SPACE_6_PX, cfg, p, cx);
         let launcher_button = page_section(
             section_head(t("Launcher button"), t("The icon on the bar's launcher button"), vec![], display.clone(), p),
             [div().rounded(px(RADIUS_20_PX)).bg(p.surface_container.hsla()).p(px(SPACE_6_PX)).child(button_rows).into_any_element()],

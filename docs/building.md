@@ -60,7 +60,7 @@ The workspace contains these crates:
 | `mandara-core` | layer-shell surfaces, input masking, springs, OKLCH |
 | `mandara-config` | reactive config store, compositor emitters |
 | `mandara-theme` | HCT + OKLCH engine, presets, app theme templates |
-| `mandara-compositor` | MangoWM, Niri, Hyprland and Umbriel drivers |
+| `mandara-compositor` | MangoWM, Niri, Hyprland, Umbriel, Sway and River drivers |
 | `mandara-services` | D-Bus services, audio, spectrum, OCR, screenshots, recording, Wallhaven, marketplace |
 | `mandara-plugins` | plugin registry, commands, WebAssembly host |
 | `mandara-i18n` | localization |
@@ -76,6 +76,9 @@ is GPUI itself with rounded content masks, so a rounded card that hides its
 overflow clips covers and art to its corners, and hover styles that follow
 the pointer on every element, with or without an id
 ([`MANDARA-PATCHES.md`](../vendor/gpui/MANDARA-PATCHES.md)).
+`vendor/pure-onnx-ocr` is the OCR engine with upstream's sources and a
+manifest that no longer turns on every codec of the `image` crate
+([`MANDARA-PATCHES.md`](../vendor/pure-onnx-ocr/MANDARA-PATCHES.md)).
 
 ## Build fingerprint
 

@@ -6,6 +6,173 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **A Mandara Discord.** Share your setup, ask for help and suggest ideas
+  at [discord.gg/kPBaS2reQ3](https://discord.gg/kPBaS2reQ3). The link is
+  also on the README.
+
+- **Mandara on NixOS.** Mandara is now a Nix flake: try it with
+  `nix run github:theHamdiz/mandara`, install it with
+  `nix profile install`, or add it to your system flake and turn it on
+  with `programs.mandara.enable = true;`. The NixOS module sets up what
+  the installer does on other distributions (the lock screen's PAM
+  service, polkit, desktop portals, fonts and the services Studio talks
+  to), and `programs.mandara.greeter.enable` makes Mandara Login your
+  login screen. A Home Manager module manages your settings and can start
+  Mandara as a user service. Nix keeps Mandara updated, so Studio's
+  updater steps aside and says so. See the
+  [install guide](https://github.com/theHamdiz/mandara/blob/main/docs/install.md#nixos).
+  Thanks for asking! ([#39](https://github.com/theHamdiz/mandara/issues/39))
+- **Mandara now runs on Sway.** The bar shows each screen's workspaces
+  (which are in use, which needs you, which is showing), the windows on
+  them and the layout of the focused workspace, plus a badge while you're
+  in a binding mode such as resize; clicking switches workspaces and
+  moves windows. `mandara setup` adds one `include` line to the end of
+  your sway config (starting your own copy of the system config if you
+  have none) and keeps Mandara's colours, gaps, window rules, input,
+  display and key settings in their own file. Where sway is installed,
+  every line is checked with `sway --validate` first and a change sway
+  rejects is rolled back; the Config doctor reads sway's own verdict on
+  your config, and moving over from swaybar or swaybg is part of the
+  usual takeover (#33).
+- **Mandara now runs on River Classic.** River's tags work like MangoWM's:
+  click to show one, right-click to add it to the view, middle-click to
+  put the focused window on it too, with the tags in use and the urgent
+  ones marked and the current mode shown. River's config is your own
+  `init` program, so Mandara never touches it: it sends River its border
+  colours, window rules, keyboard, mouse, touchpad and cursor settings and
+  its keys over River's own protocol whenever the shell starts or a
+  setting changes, leaving the keys your `init` maps alone. Add one line
+  to `init` to start Mandara with River (Studio and the Config doctor show
+  it). This is for River 0.3 (`river-classic`); River 0.4 moved window
+  management out of River, and the Config doctor explains that if it finds
+  it (#34).
+- **A main menu rail with names.** Studio → Bar → Main menu → **Rail** now
+  offers **Full**: every page and shortcut in the main menu's side rail
+  shows its name beside its icon, and the open page is filled in the
+  accent colour; the menu grows a little so the cards keep their size.
+  **Compact**, the icon-only rail you know, stays the default.
+  Contributed by Hedayatbakhshi (#41).
+- **The installer can install your compositor.** When none of MangoWM,
+  Niri, Hyprland or Umbriel is installed yet, `mandara install` lists the
+  ones your distribution's own repositories carry and asks which one you'd
+  like (it never adds a repository), installs it with its screen-sharing
+  portal and hooks Mandara into it. Or name one: `mandara install
+  --compositor niri` installs Niri first when it's missing. Thanks for the
+  idea in #45.
+
+### Improved
+
+- **Ready for 1000 Hz displays.** A typical frame builds in 0.1 ms, and
+  95% of frames finish inside the 1 ms a 1000 Hz display allows. The
+  numbers and how to check them on your machine are in the performance
+  docs.
+
+- **A smaller Mandara.** The translations for all fifteen languages used
+  to be built into Mandara itself. They now live in language packs next to
+  it, so the program is 9.2 MB smaller (169 MB → 159 MB), which also makes
+  this update's patch smaller. Packages and the release tarballs still
+  include every language (the tarball stays about the same size, 69 →
+  71 MB), so nothing changes when you install, and a language added later
+  is a download of about 300 KB.
+- **Languages download when you pick them.** Choose a language in Studio
+  (or for the login screen, or as a plugin's own language) and Mandara
+  fetches its pack if it's missing, checked against the release's
+  signature, then switches over. The language's own card fills up as the
+  download comes in ("Downloading Arabic… 180 KB"), from the right in
+  right-to-left languages; it turns green with a check when it's done, or
+  red with the reason and **Retry** if it can't finish (offline mode, no
+  network), keeping everything in English, laid out left to right,
+  meanwhile. The language panel in the bar does the same. Each pack
+  belongs to exactly the version you run, and every update brings the new
+  version's packs for the languages you use before it restarts the shell.
+- **Update now shows the update as it happens.** In Studio → About, the
+  update card fills with the real download (the patch or the full
+  download), stays full while the update is applied and checked, then
+  turns green with a check before the shell restarts, or red with the
+  reason if it didn't install. With Reduce motion on, it changes without
+  animation.
+- **Switching languages is instant.** A language pack is read in place
+  rather than parsed, so switching takes under a millisecond instead of
+  about 5 ms, looking up a word is a little faster, and the shell uses
+  about 2 MB less memory in another language.
+- **Updates say how much smaller (or bigger) the new version is.** Studio
+  → About and `mandara update` now show the size change next to the
+  download size, for example "The new version is 9.2 MB smaller".
+- **Long lists of choices line up neatly.** When a choice in Studio has
+  more options than fit on one line (a plugin's language with sixteen
+  languages, a hot corner's actions, a desktop widget's shapes, the login
+  screen's languages), it no longer leaves one or two stragglers alone on
+  a second line. The options now sit in tidy, equal rows of equal-width
+  buttons that line up in columns, with a shorter last row centred under
+  the others, and in Arabic and other right-to-left languages the first
+  option starts on the right. Options that can't be picked right now,
+  such as the screen recorder's, stay greyed out with the reason
+  underneath. Short choices that fit on one line look exactly as before.
+- **The main menu's shortcut tiles have character now.** Every tile on the
+  Apps & tools, Look and Session pages wears its own faint ornament in its
+  own shade of your theme's accent: the apps and tools get a word in
+  Fatimid Kufic calligraphy (انطلق on the launcher, المندرة on Studio,
+  لقطة on the screenshot tool…), and the look and session controls get
+  Alexandrian geometry, from a mashrabiya screen on Lock and Corniche
+  waves on Sleep to the Pharos sweeping its beams on Reload. They're
+  engraved into the tile like etched glass, deepen gently under the
+  pointer, keep every label at full readable contrast in light and dark
+  themes, and follow right-to-left layouts. Studio → Bar → Main menu
+  lets you make them yours: turn *Tile patterns* off for plain tiles, pick
+  a *Tile surface* (Flat, 3D or see-through Glass) and give the tiles a
+  *Tile shadow*.
+
+### Fixed
+
+- **The power menu no longer freezes a second display**: opened on a
+  display of another size than your first one (by the right screen edge
+  or the bar's Sessions button), the power menu waited for the wrong size,
+  never appeared, and kept the keyboard and mouse, so the dock, launcher
+  and bar stopped answering until you restarted the compositor. It now
+  opens at the size of the display you're on. As a safety net, the
+  launcher, power menu, wallpaper picker and password prompts now draw
+  within a few frames whatever size they get, and one that still can't
+  draw closes itself after two seconds and hands your keyboard and mouse
+  back. Thanks for reporting it in #55.
+
+- **Profiles & backup is smooth again**: the page used to re-check every
+  setting against a freshly built default configuration each time it was
+  drawn, so scrolling and hovering over it stuttered. That check now takes
+  a fraction of a millisecond, and every edit you make in Studio is
+  recorded for Undo much faster too. Thanks for reporting it in #51.
+
+- **Mandara is on your PATH right after installing**: when `~/.local/bin`
+  isn't on your PATH, the installer now offers to add it to your shell
+  profiles (bash, zsh and fish) instead of only warning, so `mandara` works
+  in the next terminal you open.
+
+- **A mistyped compositor name no longer edits the wrong config**:
+  `mandara msg compositor install-include` now stops on an unknown name
+  instead of adding the include line to the running compositor's file.
+  Closing the installer's prompt also counts as no answer.
+
+- **Installing on a system whose package databases were never synced
+  works**: instead of failing with "target not found" for every package,
+  the installer notices the missing databases and, after asking, updates
+  them the right way for your distribution (on Arch and CachyOS a full
+  `sudo pacman -Syu`, never a partial upgrade; on Debian and Ubuntu
+  `apt-get update`), then installs. Say no and it tells you what to run.
+  Thanks for reporting it in #45.
+
+### Under the hood
+
+- **A leaner build.** Mandara no longer builds image formats it never
+  opens (EXR, HDR, DDS, QOI, TGA, farbfeld, and an AVIF encoder nothing
+  used), an unused date library and a second copy of a small folder
+  helper: 18 fewer crates go into the shell. The `mandara` binary is
+  3.1 MiB smaller (160.8 → 157.7 MiB), the release download 1.3 MiB
+  smaller (66.2 → 65.0 MiB), and a clean release build took 1,037 s
+  instead of 1,084 s on the same machine. Every image Mandara shows
+  (PNG, JPEG, WebP, GIF, BMP, SVG, and TIFF, ICO and PNM previews) still
+  opens.
+
 ## 0.13.0 — 2026-11-03
 
 Mandara Studio wears the phoenix.

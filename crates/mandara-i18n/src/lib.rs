@@ -6,24 +6,32 @@
 //! ```
 //! use mandara_i18n::{Lang, set_language, t, tf};
 //! set_language(Lang::Ar);
-//! assert_eq!(t("Settings"), "الإعدادات");
+//! // "الإعدادات" with the Arabic pack, "Settings" (English) without it.
+//! let settings = t("Settings");
+//! assert!(settings == "الإعدادات" || settings == "Settings");
 //! assert!(tf("{n} processes", &[("n", &3)]).contains('3'));
 //! set_language(Lang::En);
 //! assert_eq!(t("Settings"), "Settings");
 //! ```
 //!
-//! Catalogs live in `locales/<code>.toml` as `"English" = "Translation"`
-//! pairs and are compiled in. Placeholders are `{name}` and must survive
-//! translation unchanged (checked by the tests). Plugins bring their own
-//! catalogs in the same format ([`Catalog`]).
+//! Translations are written in `locales/<code>.toml` as
+//! `"English" = "Translation"` pairs. They are **not** compiled into the
+//! binary: releases ship them as language packs ([`pack`], `.mlang`), one
+//! file per language and Mandara version, memory-mapped and read in place
+//! ([`packs`] says where they live and how a missing one is downloaded).
+//! Debug builds without a pack read the source catalogs instead. Placeholders
+//! are `{name}` and must survive translation unchanged (checked by the
+//! tests). Plugins bring their own catalogs in the TOML format ([`Catalog`]).
 
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU8, Ordering};
 
+pub mod pack;
+pub mod packs;
+
 /// The supported languages.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum Lang {
     #[default]
@@ -190,8 +198,17 @@ pub fn set_language(lang: Lang) {
 }
 
 /// The language strings are translated into: a [`scoped`] override on this
-/// thread, else the shell's.
+/// thread, else the shell's; English while that language's pack isn't
+/// there yet (so layout direction, dates and digits match the English text
+/// shown meanwhile). [`requested_language`] is the one asked for.
 pub fn language() -> Lang {
+    let lang = requested_language();
+    if packs::is_available(lang) { lang } else { Lang::En }
+}
+
+/// The language asked for (a [`scoped`] override, else the shell's), whether
+/// or not its pack is loaded.
+pub fn requested_language() -> Lang {
     OVERRIDE.with(std::cell::Cell::get).unwrap_or_else(shell_language)
 }
 
@@ -232,24 +249,32 @@ pub fn with_language<R>(lang: Option<Lang>, f: impl FnOnce() -> R) -> R {
     f()
 }
 
+/// The translation of `key` in `lang` (`None`: English, untranslated, or
+/// no pack for `lang`).
+#[inline]
+pub fn lookup(lang: Lang, key: &str) -> Option<&'static str> {
+    packs::pack(lang)?.get(key)
+}
+
 /// [`t`] in an explicit language.
+#[inline]
 pub fn t_in(lang: Lang, key: &'static str) -> &'static str {
-    match lang {
-        Lang::En => key,
-        lang => catalog(lang).get(key).unwrap_or(key),
-    }
+    lookup(lang, key).unwrap_or(key)
 }
 
 /// [`tr`] in an explicit language.
 pub fn tr_in(lang: Lang, key: &str) -> String {
-    match lang {
-        Lang::En => key.to_string(),
-        lang => catalog(lang).get(key).unwrap_or(key).to_string(),
-    }
+    lookup(lang, key).unwrap_or(key).to_string()
 }
 
-/// An English-keyed string table.
-/// One language's translations. Keys and values are exact-size boxed
+/// Compiles a `locales/<code>.toml` catalog into `lang`'s language pack for
+/// Mandara `version` (release tooling, the sandbox and tests).
+pub fn compile(lang: Lang, version: &str, toml_text: &str) -> Result<Vec<u8>, String> {
+    pack::build(lang, version, Catalog::parse(toml_text)?.iter())
+}
+
+/// An English-keyed string table parsed from TOML: plugins' own catalogs,
+/// and the input of [`compile`]. Keys and values are exact-size boxed
 /// strings (no spare capacity), moved out of the parsed TOML, not cloned.
 #[derive(Clone, Debug, Default)]
 pub struct Catalog {
@@ -293,48 +318,21 @@ impl Catalog {
     pub fn keys(&self) -> impl Iterator<Item = &str> {
         self.map.keys().map(|k| &**k)
     }
-}
 
-fn source(lang: Lang) -> &'static str {
-    match lang {
-        Lang::En => "",
-        Lang::Ar => include_str!("../locales/ar.toml"),
-        Lang::Es => include_str!("../locales/es.toml"),
-        Lang::Fr => include_str!("../locales/fr.toml"),
-        Lang::Zh => include_str!("../locales/zh.toml"),
-        Lang::Tr => include_str!("../locales/tr.toml"),
-        Lang::Ja => include_str!("../locales/ja.toml"),
-        Lang::De => include_str!("../locales/de.toml"),
-        Lang::Ru => include_str!("../locales/ru.toml"),
-        Lang::Hi => include_str!("../locales/hi.toml"),
-        Lang::Id => include_str!("../locales/id.toml"),
-        Lang::Fa => include_str!("../locales/fa.toml"),
-        Lang::Ko => include_str!("../locales/ko.toml"),
-        Lang::Ur => include_str!("../locales/ur.toml"),
-        Lang::Bn => include_str!("../locales/bn.toml"),
+    /// Every `(english, translation)` pair.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.map.iter().map(|(k, v)| (&**k, &**v))
     }
-}
-
-/// The built-in catalog for `lang` (parsed once, leaked for `'static`).
-pub fn catalog(lang: Lang) -> &'static Catalog {
-    static CATALOGS: [OnceLock<Catalog>; Lang::ALL.len()] = [const { OnceLock::new() }; Lang::ALL.len()];
-    CATALOGS[lang as usize].get_or_init(|| match Catalog::parse(source(lang)) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("mandara-i18n: {} catalog is invalid: {e}", lang.code());
-            Catalog::default()
-        }
-    })
 }
 
 /// Translates `key` (English) into the current language.
 pub fn t(key: &'static str) -> &'static str {
-    t_in(language(), key)
+    t_in(requested_language(), key)
 }
 
 /// [`t`] for keys that aren't `'static` (e.g. names from data).
 pub fn tr(key: &str) -> String {
-    tr_in(language(), key)
+    tr_in(requested_language(), key)
 }
 
 /// Translates `key` and fills `{name}` placeholders.
@@ -345,10 +343,7 @@ pub fn tf(key: &'static str, args: &[(&str, &dyn Display)]) -> String {
 /// The English key of a string translated into the current language (or
 /// the string itself when it isn't a known translation).
 pub fn untranslate(s: &str) -> String {
-    match language() {
-        Lang::En => s.to_string(),
-        lang => catalog(lang).map.iter().find(|(_, v)| &***v == s).map(|(k, _)| k.to_string()).unwrap_or_else(|| s.to_string()),
-    }
+    packs::pack(requested_language()).and_then(|p| p.key_of(s)).unwrap_or(s).to_string()
 }
 
 /// Fills `{name}` placeholders in an already translated string.

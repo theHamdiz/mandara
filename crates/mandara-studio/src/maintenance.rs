@@ -172,7 +172,7 @@ pub fn check_in(roots: &Roots, id: CheckId, installed_fonts: &[String]) -> Healt
             }
         }
         CheckId::CompositorInclude => match target() {
-            None => Health::Warn(t("No supported compositor detected (MangoWM, Niri, Hyprland, Umbriel)").into()),
+            None => Health::Warn(tf("No supported compositor detected ({compositors})", &[("compositors", &Target::ALL.map(Target::name).join(", "))])),
             Some(c) if include_installed(c) => Health::Ok(tf("{file} sources Mandara's drop-in", &[("file", &c.user_config().display())])),
             Some(c) => Health::Broken(tf("{file} doesn't include {drop_in}", &[("file", &c.user_config().display()), ("drop_in", &c.generated_file().display())])),
         },

@@ -22,7 +22,7 @@ write a third-party plugin, [PLUGINS.md](PLUGINS.md) is all you need.
 
 ## What Mandara is
 
-Mandara is a Wayland desktop shell for **MangoWM, Niri, Hyprland and Umbriel**: the
+Mandara is a Wayland desktop shell for **MangoWM, Niri, Hyprland, Umbriel, Sway and River**: the
 bar, panels, sidebar, dock, launcher, notifications, on-screen displays,
 wallpaper engine, lock screen, login manager and more, shipped as **one
 native Rust binary** (`mandara`) built on [GPUI](https://github.com/zed-industries/zed),
@@ -41,8 +41,8 @@ Zed's GPU-accelerated UI framework.
 - **Everything is a plugin.** Bar items, panels and sidebar cards are
   plugins: first-party ones compiled into the shell, and third-party ones
   written in Rust, compiled to WebAssembly and run sandboxed.
-- **Every compositor is first-class.** MangoWM's bitmask tags and per-tag
-  layouts and Niri's, Hyprland's and Umbriel's workspaces are modelled natively, not
+- **Every compositor is first-class.** MangoWM's and River's bitmask tags and
+  Niri's, Hyprland's, Umbriel's and Sway's workspaces are modelled natively, not
   squeezed into a lowest common denominator.
 
 ## Repository map
@@ -51,9 +51,9 @@ Zed's GPU-accelerated UI framework.
 |---|---|
 | `crates/mandara-app` | The `mandara` binary: CLI (`msg`, `commands`, `studio`, `setup`, `update`, `install`, …), the restart supervisor, IPC and app bootstrap. |
 | `crates/mandara-core` | GPUI layer-shell surface specs, the analytical spring solver, OKLCH tweening, frame-synced input-region masking, the chromatic-glass material, output geometry and the software (`wl_shm`) canvas. |
-| `crates/mandara-config` | The TOML schema and defaults, the reactive `ConfigStore` with its file watcher, XDG paths, and the non-destructive MangoWM / Niri / Hyprland / Umbriel emitters and conflict scanner. |
+| `crates/mandara-config` | The TOML schema and defaults, the reactive `ConfigStore` with its file watcher, XDG paths, and the non-destructive MangoWM / Niri / Hyprland / Umbriel / Sway / River emitters and conflict scanner. |
 | `crates/mandara-theme` | The color engine: `Color` (OKLCH, gamut mapping, WCAG contrast), `MandaraPalette` tokens, HCT wallpaper quantization, the theme catalog (`themes/*.toml`) and app theme templates. |
-| `crates/mandara-compositor` | The `CompositorBackend` trait, the navigation model, and the MangoWM, Niri, Hyprland and Umbriel IPC drivers. |
+| `crates/mandara-compositor` | The `CompositorBackend` trait, the navigation model, and the MangoWM, Niri, Hyprland, Umbriel, Sway and River drivers (River's control and status protocols generated from `protocols/*.xml`). |
 | `crates/mandara-services` | D-Bus and system service actors (MPRIS, notifications, tray, UPower, NetworkManager, polkit, audio, keyrings, …), the marketplace client and the self-updater. |
 | `crates/mandara-plugins` | The plugin runtime: manifests, the registry, `CommandSpec` and the command catalog, plugin lifecycle, the wasmtime host and the WIT contract (`wit/plugin.wit`). |
 | `crates/mandara-ui` | The shell's views: bar, panels, sidebar, launcher, OSDs, lock screen, desktop and backdrop, the UI kit and every first-party plugin (`src/plugins/`). |
@@ -62,11 +62,12 @@ Zed's GPU-accelerated UI framework.
 | `crates/mandara-media` | The pure-Rust video pipeline: WebM / IVF demuxing, AV1 decoding (rav1d), YUV conversion straight into caller buffers, the greeter's player, the desktop's frame stream and first / representative frames. No GUI types. |
 | `crates/mandara-wallgen` | The procedural wallpaper engine: twelve resolution-independent styles with generic parameter specs, OKLab palettes, recipes (TOML sidecars), deterministic row-parallel rendering, lossless WebP output through `mandara-webp` and seamless AV1 video loops through the recorder's `VideoSink`. No GUI types. The `wallpaper-generator` plugin (`crates/mandara-ui/src/plugins/wallpaper_generator.rs` and its folder: jobs, schedule, CLI) and Studio's generator (`crates/mandara-studio/src/app/wallgen_page.rs`) build on it. |
 | `crates/mandara-webp` | A pure-Rust lossless WebP (VP8L) encoder with no dependencies: generated wallpapers (searching their dither period for back references) and the plugin icons embedded in the shell. |
-| `crates/mandara-i18n` | Localization: English-keyed catalogs for fifteen languages and the coverage tests. |
+| `crates/mandara-i18n` | Localization: English-keyed catalogs for fifteen languages (`locales/*.toml`), compiled into memory-mapped language packs (`.mlang`, `src/pack.rs`) that ship beside the binary and download on demand (`src/packs.rs`), and the coverage tests. |
 | `crates/mandara-install` | `mandara install` / `uninstall`: per-distribution package tables and the package-manager abstraction. |
 | `crates/mandara-version` | Build identity: component versions, content hashes, git revision, source fingerprint. |
 | `vendor/gpui_wgpu` | GPUI's wgpu renderer, vendored with Mandara's patches (GPU memory, fonts, colour emoji, Vulkan first, rounded clipping). Every change is listed in [`MANDARA-PATCHES.md`](vendor/gpui_wgpu/MANDARA-PATCHES.md) and marked `Mandara patch` in the source. |
-| `vendor/gpui` | GPUI core, vendored for rounded content masks (a rounded element whose overflow is hidden or clipped clips its children to its rounded shape) and for `.hover()` on elements without an `.id()`, which upstream only repaints when something else re-renders the view ([`MANDARA-PATCHES.md`](vendor/gpui/MANDARA-PATCHES.md)). |
+| `vendor/gpui` | GPUI core, vendored for rounded content masks (a rounded element whose overflow is hidden or clipped clips its children to its rounded shape) and for `.hover()` on elements without an `.id()`, which upstream only repaints when something else re-renders the view, and with only the image decoders its `ImageFormat` names ([`MANDARA-PATCHES.md`](vendor/gpui/MANDARA-PATCHES.md)). |
+| `vendor/pure-onnx-ocr` | The PaddleOCR engine behind text recognition, vendored with an unchanged `src/` and a manifest that stops it turning on every codec of the `image` crate ([`MANDARA-PATCHES.md`](vendor/pure-onnx-ocr/MANDARA-PATCHES.md)). |
 | `xtask` | `cargo xtask`: versioning, fingerprinted builds, packaging, artwork, delta updates, the resource budget and the demo sandbox. |
 | `tools/mandara-delta` | The delta-update format and CLI, outside the workspace so plugin authors can `cargo install` it alone. |
 | `plugins/examples` | Example third-party plugins (`moon-phase`), built on their own for `wasm32-wasip2`. |
@@ -106,6 +107,7 @@ conversation rely on `catch_unwind`, so never switch them to `abort`.
 | `cargo xtask verify` | Fails if a component changed without a bump. |
 | `cargo xtask build` | A fingerprinted release build, its manifest and the build-fingerprint table in `docs/building.md`. |
 | `cargo xtask plugins` | Builds the example plugins and packages them in marketplace format. |
+| `cargo xtask langpacks --bin PATH --dir DIR` | Compiles every language pack for a binary's version (`--out DIR`: the release assets and their part of `update.json`). |
 | `cargo xtask art [--check]` | Regenerates (or validates) the plugin artwork embedded in the binary. |
 | `cargo xtask resource-check target/release/mandara` | Runs a release binary in a throw-away headless session and checks its idle memory, threads and CPU against the budget. |
 | `cargo xtask sandbox up` / `shot` / `msg` / `studio` / `down` | A private headless demo desktop for screenshots and end-to-end tests ([docs/development.md](docs/development.md)). |
@@ -132,7 +134,10 @@ Checks that guard the codebase and fail `cargo test` when you break a rule:
   icons and covers, `assets/catalog.json`, the links in
   `assets/README.md` and the embedded art.
 - **Compositor configs:** the emitter tests feed generated configs to each
-  compositor's own checker when it is installed.
+  compositor's own checker when it is installed (River has none: its
+  commands go to a headless River). CI's `compositor-checkers` job installs
+  sway and river-classic in an Arch container and runs those tests for
+  real.
 
 ## Driving and inspecting the shell from the CLI
 
@@ -211,8 +216,11 @@ by tests.
    gains one include line. Any edit to a user file takes a timestamped
    backup first, is validated with the compositor's own checker
    (`mango -p`, `niri validate`, `Hyprland --verify-config`,
-   `umbriel config validate`) and rolls
-   back on failure. Binds that collide with the user's are skipped and
+   `umbriel config validate`, `sway --validate`) and rolls
+   back on failure. River is the exception: its config is an executable
+   `init` program Mandara never edits; its settings are River commands
+   sent over `river-control` (`river_commands`), and its tests run every
+   one through a headless River. Binds that collide with the user's are skipped and
    reported, never overridden, and "collide" means what the compositor
    means: MangoWM's plain `bind` compares keycodes (Play and Pause are one
    key), every compositor compares keysyms, not their spellings
@@ -400,12 +408,12 @@ add a Studio control.
 
 ### A compositor feature
 
-Implement it for **all four** backends (`crates/mandara-compositor/src/`
-`mango.rs`, `niri.rs`, `hyprland.rs`, `umbriel.rs`, behind
+Implement it for **every** backend (`crates/mandara-compositor/src/`
+`mango.rs`, `niri.rs`, `hyprland.rs`, `umbriel.rs`, `sway.rs`, `river.rs`, behind
 `CompositorBackend` in `backend.rs`), or lock it in Studio with a reason
 where a compositor can't do it. Generated config goes through the emitters
 in `crates/mandara-config/src/compositor.rs` (`emit_mango`, `emit_niri`,
-`emit_hyprland`, `emit_umbriel`), with unit tests and, where the compositor
+`emit_hyprland`, `emit_umbriel`, `emit_sway`; River's `river_commands`), with unit tests and, where the compositor
 is installed, its own checker (`validator_tests.rs`). Window-rule options
 one compositor lacks are gated with `rule_option_supported`, and include
 lines follow the installed version (`installed_version`). Umbriel applies
@@ -431,7 +439,10 @@ and examples with `.example(…)`; replies are JSON. It then shows up in
 Write the English text in a `t`, `tf`, `tr` or `tk` call, run
 `MANDARA_I18N_DUMP=1 cargo test -p mandara-i18n`, add the translation to
 each of the fourteen catalogs in `crates/mandara-i18n/locales/`, and run
-`cargo test -p mandara-i18n` until it passes.
+`cargo test -p mandara-i18n` until it passes. Debug builds read the
+catalogs straight from the source tree; a release build only reads
+language packs, so try a translated release build in the sandbox (`cargo
+xtask sandbox up` compiles the packs for it) rather than on its own.
 
 ## Writing a third-party WebAssembly plugin
 

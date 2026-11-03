@@ -1,0 +1,10 @@
+[
+ {
+  "success": true
+ },
+ {
+  "success": false,
+  "parse_error": true,
+  "error": "Unknown/invalid command 'bogus'"
+ }
+]

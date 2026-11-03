@@ -28,6 +28,7 @@ use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
 
 use crate::bidi::Bidi as _;
+use crate::first_frame::{self, FirstFrame};
 use crate::icons::icon;
 
 /// Text caret blink half-period (platform convention).
@@ -251,7 +252,9 @@ pub struct PolkitDialog {
     clock: FrameClock,
     closing: bool,
     outcome: Option<Outcome>,
-    expected: (f32, f32),
+    /// Waits for the size of the output it opened for, a few frames at
+    /// most ([`crate::first_frame`]).
+    first: FirstFrame,
     blink_from: Instant,
     _blink: gpui::Task<()>,
 }
@@ -267,6 +270,7 @@ impl PolkitDialog {
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
         let focus = cx.focus_handle();
         focus.focus(window, cx);
+        first_frame::guard("polkit prompt", window, cx, |this| this.first.drawn(), |this, cx| this.cancel(cx));
         let mut appear = SpringValue::new(0.0, APPEAR);
         appear.set_target(1.0);
         let blink = cx.spawn(async move |this, cx| {
@@ -293,7 +297,7 @@ impl PolkitDialog {
             clock: FrameClock::new(),
             closing: false,
             outcome: None,
-            expected,
+            first: FirstFrame::new(expected),
             blink_from: Instant::now(),
             _blink: blink,
         }
@@ -436,7 +440,7 @@ fn soft_shadow(blur: f32, alpha: f32, y: f32) -> BoxShadow {
 impl Render for PolkitDialog {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let vp = window.viewport_size();
-        let settled = (f32::from(vp.width) - self.expected.0).abs() < 2.0 && (f32::from(vp.height) - self.expected.1).abs() < 2.0;
+        let settled = self.first.ready((f32::from(vp.width), f32::from(vp.height)));
         if !settled && !self.closing {
             window.request_animation_frame();
             return div().id("polkit-root").size_full().track_focus(&self.focus).into_any_element();

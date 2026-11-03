@@ -22,6 +22,7 @@ use mandara_services::{SessionAction, hooks, sleep};
 use mandara_theme::Color;
 use serde_json::json;
 
+use crate::first_frame::{self, FirstFrame};
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::any_icon;
 use crate::kit::text;
@@ -69,8 +70,6 @@ use crate::dismiss::DEACTIVATE_SETTLE;
 const HOLD_DONE: f32 = 1.0;
 /// Hold progress fill alpha.
 const HOLD_FILL_ALPHA: f32 = 0.42;
-/// Viewport sizes within this many px count as settled.
-const SETTLE_TOLERANCE_PX: f32 = 2.0;
 /// Opacity ramps of the buttons and the label during the slide.
 const BUTTONS_FADE: (f32, f32) = (0.2, 0.6);
 const LABEL_FADE: (f32, f32) = (0.5, 0.5);
@@ -78,8 +77,6 @@ const LABEL_FADE: (f32, f32) = (0.5, 0.5);
 const CLOSED_EPSILON: f32 = 0.01;
 /// Slide overshoot cap (springy entrance without flying off).
 const SLIDE_OVERSHOOT: f32 = 1.2;
-/// Output size assumed when nothing reports one.
-const FALLBACK_OUTPUT: (f32, f32) = (1920.0, 1080.0);
 const OPEN_SPRING: SpringConfig = SpringConfig::new(280.0, 22.0, 1.0);
 const CLOSE_STIFFNESS: f32 = 420.0;
 const RADIUS_SPRING: SpringConfig = SpringConfig::new(420.0, 26.0, 1.0);
@@ -252,19 +249,20 @@ pub struct SessionView {
     closing: bool,
     entered: bool,
     leave_task: Option<gpui::Task<()>>,
-    expected: (f32, f32),
+    /// Waits for the size of the output the menu opened on (issue #55: it
+    /// waited for the first output's, so on any other display it never
+    /// drew and held the keyboard and pointer).
+    first: FirstFrame,
     /// Last press on the menu (focus changes right after it are its echo).
     last_press: Option<Instant>,
     deactivate_task: Option<gpui::Task<()>>,
     error: Option<String>,
 }
 
-fn output_size(cx: &App) -> (f32, f32) {
-    cx.try_global::<crate::overlays::Outputs>().and_then(|o| o.0.first().map(|g| (g.width as f32, g.height as f32))).unwrap_or(FALLBACK_OUTPUT)
-}
-
 impl SessionView {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    /// A menu on a surface opened for an output of logical size `expected`
+    /// ([`crate::outputs::overlay_target`]).
+    pub fn new(expected: (f32, f32), window: &mut Window, cx: &mut Context<Self>) -> Self {
         let shell = shell(cx);
         cx.observe(&shell, |this: &mut Self, shell, cx| {
             this.closing = !shell.read(cx).session_open;
@@ -292,6 +290,7 @@ impl SessionView {
         .detach();
         let focus = cx.focus_handle();
         focus.focus(window, cx);
+        first_frame::guard("session menu", window, cx, |this| this.first.drawn(), |this, cx| this.close(cx));
         let (entries, selected) = visible(&config(cx).read(cx).get().session_menu);
         Self {
             last_press: None,
@@ -308,7 +307,7 @@ impl SessionView {
             closing: false,
             entered: false,
             leave_task: None,
-            expected: output_size(cx),
+            first: FirstFrame::new(expected),
             error: None,
         }
     }
@@ -370,10 +369,8 @@ impl SessionView {
 
 impl Render for SessionView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let vp = window.viewport_size();
-        let (sw, sh) = (f32::from(vp.width), f32::from(vp.height));
-        let settled = (sw - self.expected.0).abs() < SETTLE_TOLERANCE_PX && (sh - self.expected.1).abs() < SETTLE_TOLERANCE_PX;
-        if !settled && !self.closing {
+        let (sw, sh) = first_frame::viewport(window);
+        if !self.first.ready((sw, sh)) && !self.closing {
             window.request_animation_frame();
             return div().id("session-root").size_full().track_focus(&self.focus).into_any_element();
         }
@@ -735,6 +732,42 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_menu_on_a_second_scaled_display_draws_at_that_display_size() {
+        use crate::first_frame::FALLBACK_FRAMES;
+        use crate::outputs::{logical_size, pick_output};
+        use mandara_config::outputs::{DisplaysConfig, SurfaceKind};
+        use mandara_core::OutputGeometry;
+        // Issue #55: the main display on the left, a smaller one on the
+        // right (1920x1080 at 1.25: 1536x864 logical, offset by the first).
+        let main = OutputGeometry { name: "DP-1".into(), x: 0, y: 0, width: 2560, height: 1440 };
+        let side = OutputGeometry { name: "HDMI-A-1".into(), x: 2560, y: 0, width: 1536, height: 864 };
+        let displays = DisplaysConfig::default();
+        // Either listing order: the menu waits for the display it opens on.
+        for outputs in [[main.clone(), side.clone()], [side.clone(), main.clone()]] {
+            for (focused, viewport) in [("HDMI-A-1", (1536.0, 864.0)), ("DP-1", (2560.0, 1440.0))] {
+                let target = pick_output(&outputs, Some(focused), &displays, SurfaceKind::Overlays).expect("an output");
+                assert_eq!(target.name, focused);
+                assert_eq!(logical_size(target), viewport, "logical, not the layout offset or physical pixels");
+                let mut first = FirstFrame::new(logical_size(target));
+                assert!(first.ready(viewport), "{focused}: draws on its first frame");
+            }
+        }
+        // The old expectation, the first-listed output's size, never matched
+        // on the other display: an invisible menu holding the keyboard (and
+        // on Hyprland the pointer) for good. Now it draws after a few frames.
+        let mut stale = FirstFrame::new(logical_size(&main));
+        for _ in 0..FALLBACK_FRAMES {
+            assert!(!stale.ready((1536.0, 864.0)));
+        }
+        assert!(stale.ready((1536.0, 864.0)));
+        // The dock sits on that display's own right edge (surface-local
+        // coordinates), however far right the display is in the layout.
+        let dock_w = BTN_PX + DOCK_PAD_PX * 2.0;
+        let (x, w) = edge_attached(false, 1536.0 - dock_w, dock_w, 1536.0);
+        assert!(x >= 0.0 && x + w <= 1536.0 + 2.0 + f32::EPSILON, "{x} + {w} stays on the 1536 px display");
+    }
 
     #[test]
     fn visible_entries_and_default_selection() {

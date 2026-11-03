@@ -14,8 +14,11 @@
 //! - `changelog [VERSION]`: a release's notes from `CHANGELOG.md` as
 //!   Markdown (the GitHub release body); the shell's version by default.
 //! - `dist --target <triple> [--bin <path>] [--out dist]`: the release
-//!   tarball (binary — its own installer —, desktop entry, icon, docs) and
-//!   its SHA-256.
+//!   tarball (binary — its own installer —, desktop entry, icon, language
+//!   packs in `share/mandara/locales/<v>/`, docs) and its SHA-256.
+//! - `langpacks [--version V | --bin PATH] [--dir DIR] [--out DIR]`: the
+//!   language packs, as a folder or as release assets with their part of
+//!   `update.json` (see [`langpacks`]).
 //! - `plugins [--out dist]`: builds every plugin for wasm32-wasip2 and
 //!   packages `<id>.mandara.tar.gz` (marketplace format).
 //! - `checksums [--out dist]`: `SHA256SUMS` for everything in `dist`.
@@ -24,10 +27,11 @@
 //!   release build — source fingerprint, binary SHA-256s and lines of code
 //!   in `<out>/mandara-<v>-<target>.build.toml` and the build-info
 //!   block (see [`buildinfo`]).
-//! - `art [--check | --compose [--only ID] [--out DIR]]`: plugin artwork —
-//!   builds the icons and covers embedded in the binaries, re-composes the
-//!   marketplace covers, or validates every artwork deliverable (see
-//!   [`art`]).
+//! - `art [--check | --compose [--only ID] [--out DIR] | --calligraphy]`:
+//!   plugin artwork — builds the icons and covers embedded in the binaries,
+//!   re-composes the marketplace covers, outlines the main menu's Kufic
+//!   words (see [`calligraphy`]), or validates every artwork deliverable
+//!   (see [`art`]).
 //! - `delta`, `apply-delta`, `update-part`, `plugin-delta`: delta updates —
 //!   binary patches and the release's `update.json` (see [`delta`]).
 //! - `resource-check <BIN> [config.toml]`: the idle resource budget of a
@@ -40,9 +44,11 @@
 
 mod art;
 mod buildinfo;
+mod calligraphy;
 mod delta;
 mod fingerprint;
 mod headless;
+mod langpacks;
 mod loc;
 mod proc;
 mod prune;
@@ -434,6 +440,18 @@ fn dist(args: &[String]) -> Result<()> {
             add_file(&mut tar, &r.join(doc), &format!("{name}/{doc}"), MODE_FILE)?;
         }
     }
+    // The language packs for the binary's own version (it only reads
+    // packs that name it), so offline installs never need to download.
+    let pack_version = langpacks::binary_version(&bin).unwrap_or_else(|| version.clone());
+    for (lang, bytes) in langpacks::compile_all(&pack_version)? {
+        let mut h = tar::Header::new_gnu();
+        h.set_size(bytes.len() as u64);
+        h.set_mode(MODE_FILE);
+        h.set_mtime(source_date_epoch());
+        h.set_cksum();
+        let dest = format!("{name}/share/{}/{pack_version}/{}", mandara_i18n::packs::DIR, mandara_i18n::packs::file_name(lang));
+        tar.append_data(&mut h, dest, bytes.as_slice()).map_err(|e| e.to_string())?;
+    }
     tar.into_inner().map_err(|e| e.to_string())?.finish().map_err(|e| e.to_string())?;
     let sum = sha256_file(&archive)?;
     std::fs::write(out.join(format!("{name}.tar.gz.sha256")), format!("{sum}  {name}.tar.gz\n")).map_err(|e| e.to_string())?;
@@ -513,12 +531,13 @@ fn main() {
         Some("apply-delta") => delta::apply_delta(rest),
         Some("update-part") => delta::update_part(rest),
         Some("plugin-delta") => delta::plugin_delta(rest),
+        Some("langpacks") => langpacks::langpacks(rest),
         Some("resource-check") => resource_check::resource_check(rest),
         Some("sandbox") => sandbox::sandbox(rest),
         Some("prune") => prune::prune(rest),
         Some("release-key") => release_key::release_key(rest),
         _ => {
-            eprintln!("usage: cargo xtask <status [--json] | bump [--dry-run] [--commit] [--tag] [--init] | verify | changelog [VERSION] | dist --target <triple> [--bin PATH] [--variant NAME] [--out DIR] | plugins [--out DIR] | checksums [--out DIR] | build [--target <triple>] [--variant NAME] [--profile P] [--features F] [--no-default-features] [--out DIR] [--no-readme] | art [--check | --compose [--only ID] [--out DIR]] | delta --old BIN --new BIN --out PATCH | apply-delta --old BIN --patch PATCH --out BIN [--sha256 HEX] | update-part --target <triple> [--variant NAME] [--out DIR] [--previous OLD.tar.gz] | plugin-delta --new ARCHIVE [--old ARCHIVE] --out DIR | resource-check BIN [config.toml] | sandbox <up | down | shot | matte | msg | pointer | studio | shell | audio | notify | env> … | prune [--max-gib N] [--watch MINUTES] [--dir PATH]… [--cargo-cache] [--dry-run] | release-key <new [--repo OWNER/NAME] [--secret NAME] [--backup PATH] [--force] | sign FILE [--env NAME]>>");
+            eprintln!("usage: cargo xtask <status [--json] | bump [--dry-run] [--commit] [--tag] [--init] | verify | changelog [VERSION] | dist --target <triple> [--bin PATH] [--variant NAME] [--out DIR] | plugins [--out DIR] | checksums [--out DIR] | build [--target <triple>] [--variant NAME] [--profile P] [--features F] [--no-default-features] [--out DIR] [--no-readme] | art [--check | --compose [--only ID] [--out DIR] | --calligraphy] | delta --old BIN --new BIN --out PATCH | apply-delta --old BIN --patch PATCH --out BIN [--sha256 HEX] | update-part --target <triple> [--variant NAME] [--out DIR] [--previous OLD.tar.gz] | plugin-delta --new ARCHIVE [--old ARCHIVE] --out DIR | langpacks [--version V | --bin PATH] [--dir DIR] [--out DIR] | resource-check BIN [config.toml] | sandbox <up | down | shot | matte | msg | pointer | studio | shell | audio | notify | env> … | prune [--max-gib N] [--watch MINUTES] [--dir PATH]… [--cargo-cache] [--dry-run] | release-key <new [--repo OWNER/NAME] [--secret NAME] [--backup PATH] [--force] | sign FILE [--env NAME]>>");
             std::process::exit(EXIT_USAGE);
         }
     };

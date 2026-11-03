@@ -8,7 +8,9 @@
 //!   SHA-256 before it is used.
 //! - **`update.json`**: the release manifest. One entry per target (shell
 //!   CPU variants, or [`PLUGIN_TARGET`] for a plugin) with the full archive,
-//!   the binary inside it, and the patches from earlier versions.
+//!   the binary inside it, and the patches from earlier versions; and for
+//!   the shell, its language packs ([`Manifest::locales`]), downloaded on
+//!   demand and tied to the release's version.
 //!
 //! The apply side is pure Rust (bipatch + ruzstd). The `create` feature adds
 //! bidiff and the reference zstd encoder for CI.
@@ -40,6 +42,10 @@ pub const PLUGIN_BINARY: &str = "plugin.wasm";
 pub const SHELL_BINARY: &str = "bin/mandara";
 /// Hex digits of a SHA-256.
 pub const SHA256_HEX_LEN: usize = 64;
+/// Suffix of a language pack (`.mlang`, see `mandara_i18n::pack`).
+pub const LOCALE_SUFFIX: &str = ".mlang";
+/// Suffix of a compressed language pack, the download.
+pub const LOCALE_ZST_SUFFIX: &str = ".mlang.zst";
 
 /// One release's update manifest (`update.json`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -53,6 +59,24 @@ pub struct Manifest {
     /// `aarch64-linux-gnu`, [`PLUGIN_TARGET`]) → its files.
     #[serde(default)]
     pub targets: BTreeMap<String, Target>,
+    /// The shell's language packs for this version: language code → its
+    /// compressed pack. Absent in plugin manifests and in releases before
+    /// packs existed (older clients ignore it).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub locales: BTreeMap<String, LocalePack>,
+}
+
+/// One language pack of a release.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LocalePack {
+    /// Asset name of the zstd-compressed pack (`mandara-<v>-<code>.mlang.zst`).
+    pub file: String,
+    /// SHA-256 and size of that download.
+    pub sha256: String,
+    pub size: u64,
+    /// SHA-256 and size of the uncompressed `.mlang` (the file installed).
+    pub pack_sha256: String,
+    pub pack_size: u64,
 }
 
 /// One target's files in a release.
@@ -116,6 +140,7 @@ impl Manifest {
             h.extend(t.meta.iter().map(|f| &f.sha256));
             h
         });
+        let hashes = hashes.chain(m.locales.values().flat_map(|l| [&l.sha256, &l.pack_sha256]));
         for h in hashes {
             if !is_sha256(h) {
                 return Err(format!("update.json: malformed SHA-256 {h:?}"));
@@ -168,6 +193,23 @@ pub fn patch_name(name: &str, from: &str, to: &str, target: Option<&str>) -> Str
     }
 }
 
+/// `mandara-0.10.2-ar.mlang`: a release's language pack (uncompressed).
+pub fn locale_name(version: &str, code: &str) -> String {
+    format!("mandara-{}-{code}{LOCALE_SUFFIX}", version.trim_start_matches('v'))
+}
+
+/// Decompresses zstd `data` (pure Rust), refusing more than `max_len` bytes
+/// of output (a corrupt or hostile file can't fill memory).
+pub fn decompress(data: &[u8], max_len: u64) -> io::Result<Vec<u8>> {
+    let decoder = ruzstd::decoding::StreamingDecoder::new(Cursor::new(data)).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("zstd: {e}")))?;
+    let mut out = Vec::new();
+    decoder.take(max_len.saturating_add(1)).read_to_end(&mut out)?;
+    if out.len() as u64 > max_len {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "decompressed data exceeds the expected size"));
+    }
+    Ok(out)
+}
+
 /// Rebuilds the new file from `old` and a compressed patch. Output beyond
 /// `max_len` bytes is an error (a corrupt or hostile patch can't fill the
 /// disk); the caller still verifies the result's hash.
@@ -198,7 +240,7 @@ mod tests {
 
     fn manifest() -> Manifest {
         let h = "a".repeat(SHA256_HEX_LEN);
-        let mut m = Manifest { schema: SCHEMA, name: "mandara".into(), version: "0.2.0".into(), targets: BTreeMap::new() };
+        let mut m = Manifest { schema: SCHEMA, name: "mandara".into(), version: "0.2.0".into(), targets: BTreeMap::new(), locales: BTreeMap::new() };
         m.targets.insert(
             "x86_64-linux-gnu".into(),
             Target {
@@ -240,6 +282,28 @@ mod tests {
         assert_eq!(sha256sums_lookup(&listing, "mandara-0.2.0-x86_64-linux-gnu.tar.gz"), Some(a));
         assert_eq!(sha256sums_lookup(&listing, "mandara-0.2.0-x86_64-linux-gnu-x86-64-v3.tar.gz"), Some(b.to_ascii_lowercase()));
         assert_eq!(sha256sums_lookup(&listing, "mandara-0.2.0-aarch64-linux-gnu.tar.gz"), None);
+    }
+
+    #[test]
+    fn locales_are_optional_and_checked() {
+        // An update.json from before language packs parses with none.
+        let old = r#"{"schema":1,"name":"mandara","version":"0.2.0","targets":{}}"#;
+        assert!(Manifest::parse(old.as_bytes()).unwrap().locales.is_empty());
+        let h = "b".repeat(SHA256_HEX_LEN);
+        let mut m = manifest();
+        m.locales.insert("ar".into(), LocalePack { file: format!("{}.zst", locale_name("v0.2.0", "ar")), sha256: h.clone(), size: 9, pack_sha256: h, pack_size: 30 });
+        let parsed = Manifest::parse(m.to_json().as_bytes()).unwrap();
+        assert_eq!(parsed.locales["ar"].file, "mandara-0.2.0-ar.mlang.zst");
+        assert_eq!(parsed, m);
+        // A plugin manifest (no locales) doesn't write the key at all.
+        assert!(!manifest().to_json().contains("locales"));
+        m.locales.get_mut("ar").unwrap().pack_sha256 = "short".into();
+        assert!(Manifest::parse(m.to_json().as_bytes()).is_err());
+    }
+
+    #[test]
+    fn decompress_refuses_garbage() {
+        assert!(decompress(b"not zstd", 100).is_err());
     }
 
     #[test]

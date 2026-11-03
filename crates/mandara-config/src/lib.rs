@@ -34,6 +34,8 @@ pub mod wallgen;
 pub mod workflow;
 
 #[cfg(test)]
+mod river_check;
+#[cfg(test)]
 mod validator_tests;
 
 pub use schema::*;

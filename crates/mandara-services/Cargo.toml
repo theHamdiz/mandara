@@ -6,6 +6,12 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[features]
+# Sandbox tests only, never in a shipped build: also trust the release keys
+# in MANDARA_MOCK_RELEASE_KEYS, so a mock release can be signed locally
+# (screenshots of updates and language-pack downloads).
+mock-release = []
+
 [dependencies]
 mandara-theme.workspace = true
 mandara-config.workspace = true

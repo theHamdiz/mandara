@@ -349,7 +349,67 @@ pub fn install_runtime(root: &Path, exe: &Path, greeter_user: &str) -> Result<Ve
         std::fs::write(&sys, text).map_err(|e| err(&sys, e))?;
         done.push(format!("wrote {}", crate::config::SYSTEM_CONFIG));
     }
+    // 6. The login screen's language pack, next to the copy.
+    let lang = crate::config::GreeterConfig::load_from(&sys).unwrap_or_default().lang();
+    match install_language_pack(root, lang) {
+        Ok(Some(line)) => done.push(line),
+        Ok(None) => {}
+        // Never fatal: the login screen shows English without it.
+        Err(e) => done.push(format!("the {} language pack wasn't installed ({e}); the login screen shows English until it is", lang.code())),
+    }
     Ok(done)
+}
+
+/// Where the login screen's language packs go: a system data dir it
+/// searches (`/usr/local/share/mandara/locales/<version>/`), since it runs
+/// as its own user and can't read anyone's home.
+pub const SYSTEM_LOCALES: &str = "/usr/local/share";
+
+/// Puts `lang`'s pack for this version where the installed copy finds it:
+/// copied from a pack this binary can see (its own tarball or package, the
+/// user who ran the command), else downloaded from this version's signed
+/// release. `None` for English (no pack) or when it's already there.
+pub fn install_language_pack(root: &Path, lang: mandara_i18n::Lang) -> Result<Option<String>, String> {
+    use mandara_i18n::packs;
+    if lang == mandara_i18n::Lang::En {
+        return Ok(None);
+    }
+    let version = packs::running_version();
+    let dir = under(root, SYSTEM_LOCALES).join(packs::DIR).join(version);
+    let dest = dir.join(packs::file_name(lang));
+    if packs::open(&dest, version, lang).is_ok() {
+        return Ok(None);
+    }
+    // The person who ran `sudo` / `pkexec` keeps the packs in their home.
+    let invoker = std::env::var("SUDO_UID").or_else(|_| std::env::var("PKEXEC_UID")).ok().and_then(|uid| uid.parse::<u32>().ok()).and_then(home_of);
+    let candidates = invoker.map(|home| home.join(".local/share").join(packs::DIR).join(version).join(packs::file_name(lang))).into_iter().chain(packs::find(lang, version).map(|(p, _)| p));
+    for path in candidates {
+        if let Ok(bytes) = std::fs::read(&path)
+            && packs::install(lang, version, &bytes, &dir).is_ok()
+        {
+            return Ok(Some(format!("{} language pack for the login screen (from {})", lang.code(), path.display())));
+        }
+    }
+    if root != Path::new("/") {
+        // A fixture tree (tests): never the network.
+        return Err(format!("no {} pack for {version} to copy", lang.code()));
+    }
+    let langpacks = mandara_services::self_update::langpacks::published(&mandara_services::self_update::api_base(), version)?;
+    mandara_services::self_update::langpacks::download(&langpacks, lang, &dir, &|_, _| {})?;
+    Ok(Some(format!("{} language pack for the login screen (downloaded for {version})", lang.code())))
+}
+
+/// `uid`'s home folder, from the password database.
+fn home_of(uid: u32) -> Option<PathBuf> {
+    // SAFETY: getpwuid returns a pointer into static storage or null; the
+    // fields are read before any other passwd call on this thread.
+    unsafe {
+        let pw = libc::getpwuid(uid);
+        if pw.is_null() || (*pw).pw_dir.is_null() {
+            return None;
+        }
+        Some(PathBuf::from(std::ffi::CStr::from_ptr((*pw).pw_dir).to_string_lossy().into_owned()))
+    }
 }
 
 fn run_all(commands: &[Vec<String>]) -> Result<(), String> {
@@ -397,7 +457,7 @@ impl UninstallPlan {
                 let _ = writeln!(s, "  1. Leave {GREETD_CONFIG} alone (not written by Mandara)");
             }
         }
-        let _ = writeln!(s, "  2. Remove {INSTALLED_EXE}, {NIRI_GREETER_KDL}, {HYPRLAND_GREETER_CONF}, {HYPRLAND_GREETER_LUA}");
+        let _ = writeln!(s, "  2. Remove {INSTALLED_EXE}, {NIRI_GREETER_KDL}, {HYPRLAND_GREETER_CONF}, {HYPRLAND_GREETER_LUA} and the language packs in {SYSTEM_LOCALES}/mandara/locales");
         let _ = writeln!(s, "     (kept: {}, /usr/share/mandara/login, {STATE_DIR})", crate::config::SYSTEM_CONFIG);
         match &self.previous_dm {
             Some(dm) => {
@@ -428,6 +488,10 @@ impl UninstallPlan {
             if std::fs::remove_file(f).is_ok() {
                 println!("✓ removed {f}");
             }
+        }
+        let locales = Path::new(SYSTEM_LOCALES).join(mandara_i18n::packs::DIR);
+        if std::fs::remove_dir_all(&locales).is_ok() {
+            println!("✓ removed {}", locales.display());
         }
         if apply && !self.commands.is_empty() {
             run_all(&self.commands)?;

@@ -504,6 +504,8 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
         path if path.starts_with("/compositor/input/cursor/") => system_settings::cursor_locked(path, running_compositor()),
+        path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Mandara can't set this on Sway")),
+        path if running_compositor() == Some(mandara_config::compositor::Target::River) && RIVER_LACKS.contains(&path) => Some(tk("River has no such setting")),
         path if path.starts_with("/wallpaper/slideshow/") => desktop_settings::slideshow_locked(path, cfg),
         "/wallpaper/depth/auto_split" | "/wallpaper/depth/download" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
         "/wallpaper/depth/split" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
@@ -513,6 +515,15 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         path => side_bar_settings::locked(path, cfg).or_else(|| surface_settings::locked(path, cfg)),
     }
 }
+
+/// Window-look settings Mandara's sway drop-in leaves out: sway has no
+/// rounded corners, blur, shadows or animations, and its opacity is a
+/// per-window command, not a focused / unfocused setting.
+pub(crate) const SWAY_LACKS: &[&str] = &["/compositor/look/rounding", "/compositor/look/active_opacity", "/compositor/look/inactive_opacity", "/compositor/look/blur", "/compositor/look/shadows", "/compositor/look/animations"];
+
+/// Window-look settings River has no equivalent of: Sway's list plus gaps
+/// (a layout generator's padding, set when it starts).
+pub(crate) const RIVER_LACKS: &[&str] = &["/compositor/look/gaps_inner", "/compositor/look/gaps_outer", "/compositor/look/gaps_follow_bar", "/compositor/look/rounding", "/compositor/look/active_opacity", "/compositor/look/inactive_opacity", "/compositor/look/blur", "/compositor/look/shadows", "/compositor/look/animations"];
 
 /// Why choice `raw` of `setting` can't be picked under `cfg` right now
 /// (shown disabled, with the reason under the choices).
@@ -526,6 +537,15 @@ pub fn choice_locked(setting: &Setting, raw: &str, cfg: &ShellConfig) -> Option<
 /// one on waits until it can apply.
 pub fn locked_toggle_click(on: bool) -> Option<bool> {
     on.then_some(false)
+}
+
+/// A choice the running compositor can't carry out, left out of its control
+/// (a value already saved still shows, so it can be changed; the shell
+/// does nothing for it): the Overview corner and bar action where the
+/// compositor has no overview (Sway, River).
+pub fn choice_hidden(path: &str, raw: &str) -> bool {
+    let corner_action = path == "/bar/middle_click/action" || (path.starts_with("/hot_corners/") && path.ends_with("/action"));
+    raw == "overview" && corner_action && matches!(running_compositor(), Some(mandara_config::compositor::Target::Sway | mandara_config::compositor::Target::River))
 }
 
 /// The compositor Studio runs under, detected once (it can't change while
@@ -544,7 +564,7 @@ thread_local! {
 
 /// `setting`'s value in the default config.
 pub fn default_value(setting: &Setting) -> Value {
-    DEFAULTS.with(|tree| tree.pointer(setting.path).cloned().filter(|v| !v.is_null() || setting.default.is_none()).or_else(|| setting.default.clone()).unwrap_or(Value::Null))
+    DEFAULTS.with(|tree| resolve(tree, setting).clone())
 }
 
 /// The setting at a config path.
@@ -957,10 +977,33 @@ fn build() -> Vec<Setting> {
     ]
 }
 
+/// A setting that is unset (`null`) in a config tree.
+static NULL: Value = Value::Null;
+
+/// `setting`'s value in the JSON tree `root`, borrowed: what [`get`]
+/// returns, without cloning it.
+fn resolve<'a>(root: &'a Value, setting: &'a Setting) -> &'a Value {
+    root.pointer(setting.path).filter(|v| !v.is_null() || setting.default.is_none()).or(setting.default.as_ref()).unwrap_or(&NULL)
+}
+
 /// Reads a setting's current value.
 pub fn get(cfg: &ShellConfig, setting: &Setting) -> Value {
+    resolve(&json_of(cfg), setting).clone()
+}
+
+/// The settings not at their default in `cfg`, in registry order. Compares
+/// against the cached default tree and serializes `cfg` at most once (not
+/// at all when it is the primed snapshot), so a page can call it per frame.
+pub fn non_default(cfg: &ShellConfig) -> Vec<&'static Setting> {
     let root = json_of(cfg);
-    root.pointer(setting.path).cloned().filter(|v| !v.is_null() || setting.default.is_none()).or_else(|| setting.default.clone()).unwrap_or(Value::Null)
+    DEFAULTS.with(|defaults| settings().iter().filter(|s| resolve(&root, s) != resolve(defaults, s)).collect())
+}
+
+/// The settings whose values differ between two configs, in registry
+/// order. Each config is serialized once, not once per setting.
+pub fn differing(before: &ShellConfig, after: &ShellConfig) -> Vec<&'static Setting> {
+    let (a, b) = (json_of(before), json_of(after));
+    settings().iter().filter(|s| resolve(&a, s) != resolve(&b, s)).collect()
 }
 
 /// Writes `value` at the setting's path (creating intermediate objects) and

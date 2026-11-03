@@ -1,6 +1,6 @@
 //! Workspaces / tags plugin.
 //!
-//! Each tag (MangoWM) or workspace (Niri, Hyprland, Umbriel) is a pill showing its
+//! Each tag (MangoWM, River) or workspace (Niri, Hyprland, Umbriel, Sway) is a pill showing its
 //! number and the icons of the apps on it; empty ones show only the number.
 //! Apps without a themed icon get a generated monogram tile. Every active tag
 //! carries a liquid capsule whose leading edge springs fast and trailing edge
@@ -710,8 +710,14 @@ fn layout_label(code: &str) -> (&'static str, &'static str) {
         ("dwindle", "sidebar", mandara_i18n::tk("Dwindle")),
         ("master", "sidebar", mandara_i18n::tk("Master")),
         ("stacking", "window", mandara_i18n::tk("Stacking")),
+        // Sway's container layouts.
+        ("splith", "sidebar", mandara_i18n::tk("Split horizontally")),
+        ("splitv", "sidebar", mandara_i18n::tk("Split vertically")),
+        ("tabbed", "window", mandara_i18n::tk("Tabbed")),
+        ("stacked", "window", mandara_i18n::tk("Stacked")),
     ];
-    let code = code.trim();
+    // River's layout generator names itself (`rivertile - left`).
+    let code = if code.trim().starts_with("rivertile") { "T" } else { code.trim() };
     LAYOUTS
         .iter()
         .find(|(c, ..)| c.eq_ignore_ascii_case(code))
@@ -935,6 +941,9 @@ mod tests {
         assert_eq!(layout_label("master").1, "Master");
         assert_eq!(layout_label("stacking").1, "Stacking");
         assert_eq!(layout_label("S").1, "Scroller", "MangoWM's codes still win");
+        assert_eq!(layout_label("splith").1, "Split horizontally", "Sway's container layouts");
+        assert_eq!(layout_label("tabbed").1, "Tabbed");
+        assert_eq!(layout_label("rivertile - left").1, "Tile", "River's rivertile");
         assert_eq!(layout_label("spiral").1, "Layout");
     }
 

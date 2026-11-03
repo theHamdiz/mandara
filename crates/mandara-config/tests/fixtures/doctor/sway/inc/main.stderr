@@ -1,0 +1,9 @@
+00:00:00.002 [INFO] [sway/config.c:422] Loading config from @FIXTURES@/sway/inc/main.conf
+00:00:00.002 [INFO] [sway/commands.c:381] Config command: include child.conf
+00:00:00.002 [INFO] [sway/commands.c:404] After replacement: include child.conf
+00:00:00.002 [INFO] [sway/config.c:422] Loading config from @FIXTURES@/sway/inc/child.conf
+00:00:00.002 [INFO] [sway/commands.c:381] Config command: bindsym Mod4+t exec foot
+00:00:00.002 [INFO] [sway/commands.c:404] After replacement: bindsym Mod4+t exec foot
+00:00:00.002 [INFO] [sway/commands.c:381] Config command: border_frobnicate 3
+00:00:00.002 [ERROR] [sway/config.c:814] Error on line 2 'border_frobnicate 3': Unknown/invalid command 'border_frobnicate' (@FIXTURES@/sway/inc/child.conf)
+00:00:00.002 [ERROR] [sway/config.c:440] Error(s) loading config!

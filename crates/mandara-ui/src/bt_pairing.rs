@@ -22,6 +22,7 @@ use mandara_services::bt_agent::{self, AgentStatus, PairingAgent, PairingEvent, 
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
 
+use crate::first_frame::{self, FirstFrame};
 use crate::icons::icon;
 
 /// Card geometry and type, logical px.
@@ -69,8 +70,6 @@ const HINT_ALPHA: f32 = 0.7;
 const GRADIENT_DEG: f32 = 135.0;
 /// Close when the appear spring is this close to zero.
 const GONE: f32 = 0.01;
-/// Viewport sizes within this many px count as the requested size.
-const SETTLE_EPSILON_PX: f32 = 2.0;
 /// Longest PIN BlueZ takes.
 const PIN_MAX_CHARS: usize = 16;
 const PASSKEY_DIGITS: usize = 6;
@@ -187,7 +186,9 @@ pub struct PairingDialog {
     clock: FrameClock,
     closing: bool,
     answered: bool,
-    expected: (f32, f32),
+    /// Waits for the size of the output it opened for, a few frames at
+    /// most ([`crate::first_frame`]).
+    first: FirstFrame,
 }
 
 impl PairingDialog {
@@ -195,9 +196,10 @@ impl PairingDialog {
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
         let focus = cx.focus_handle();
         focus.focus(window, cx);
+        first_frame::guard("bluetooth pairing", window, cx, |this| this.first.drawn(), |this, cx| this.answer(false, cx));
         let mut appear = SpringValue::new(0.0, APPEAR);
         appear.set_target(1.0);
-        Self { request, agent, input: String::new(), focus, appear, clock: FrameClock::new(), closing: false, answered: false, expected }
+        Self { request, agent, input: String::new(), focus, appear, clock: FrameClock::new(), closing: false, answered: false, first: FirstFrame::new(expected) }
     }
 
     fn close(&mut self, cx: &mut Context<Self>) {
@@ -301,7 +303,7 @@ fn code_cells(code: &str, entered: Option<usize>, p: &MandaraPalette, mono: gpui
 impl Render for PairingDialog {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let vp = window.viewport_size();
-        let settled = (f32::from(vp.width) - self.expected.0).abs() < SETTLE_EPSILON_PX && (f32::from(vp.height) - self.expected.1).abs() < SETTLE_EPSILON_PX;
+        let settled = self.first.ready((f32::from(vp.width), f32::from(vp.height)));
         if !settled && !self.closing {
             window.request_animation_frame();
             return div().id("bt-pair-root").size_full().track_focus(&self.focus).into_any_element();

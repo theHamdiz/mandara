@@ -1,7 +1,7 @@
 # Mandara documentation
 
 Mandara Shell is a native Linux Wayland desktop shell for MangoWM, Niri,
-Hyprland and Umbriel, written in Rust on GPUI. These pages cover
+Hyprland, Umbriel, Sway and River, written in Rust on GPUI. These pages cover
 everything about it, one topic per page. New here? Start with
 [Install](install.md), then [Usage](usage.md). Quick answers are in the
 [FAQ](faq.md).
@@ -10,7 +10,7 @@ everything about it, one topic per page. New here? Start with
 
 | Page | What's in it |
 |---|---|
-| [Install](install.md) | The one-line install, Arch packages, MangoWM / Niri / Hyprland / Umbriel, coming from another setup, versioning |
+| [Install](install.md) | The one-line install, Arch packages, MangoWM / Niri / Hyprland / Umbriel / Sway / River, coming from another setup, versioning |
 | [Usage](usage.md) | Starting Mandara, everyday commands, default shortcuts, where settings live |
 | [Mandara Studio](studio.md) | The settings app: a tour, every page, keyboard shortcuts and deep links |
 | [FAQ](faq.md) | Short answers: compositors, install, updates, memory, plugins, scripting, languages |

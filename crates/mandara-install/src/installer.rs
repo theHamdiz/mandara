@@ -10,13 +10,15 @@ use std::path::{Path, PathBuf};
 
 use mandara_delta::signing::{self, PublicKey, SIG_FILE};
 use mandara_delta::{MANIFEST_FILE, SHELL_BINARY};
+use mandara_i18n::{Lang, packs};
 
 use crate::args::InstallArgs;
+use crate::compositors::{self, Compositor};
 use crate::family::{Family, OsRelease};
 use crate::files::{self, Paths};
 use crate::host::{Cmd, Fetch, Host, Io, Level, TempDir};
-use crate::packages;
 use crate::pkg::{PackageManager, Privilege};
+use crate::{index, packages};
 use crate::platform::{self, MIN_RUST, RELEASED_ARCHES};
 use crate::release::{self, ARCHIVE_SUFFIX, MAX_ARCHIVE_BYTES, MAX_JSON_BYTES, SUMS_FILE, SelfCheck};
 
@@ -164,12 +166,31 @@ struct Stage {
     exe: PathBuf,
     desktop: String,
     icon: Vec<u8>,
+    /// The binary's version and the language packs that came with it
+    /// (`share/mandara/locales/<version>/` of a tarball), copied next to it
+    /// so a fresh install never has to download them.
+    packs: (String, Vec<(Lang, Vec<u8>)>),
 }
 
 impl Stage {
+    /// The running binary, with the packs beside it when it's an unpacked
+    /// tarball (`<dir>/bin/mandara` and `<dir>/share/mandara/locales/<v>/`).
     fn embedded(exe: PathBuf) -> Stage {
-        Stage { exe, desktop: files::DESKTOP_ENTRY.to_string(), icon: files::ICON_SVG.to_vec() }
+        let version = mandara_version::version().to_string();
+        let packs = exe.parent().and_then(Path::parent).map(|top| top.join("share").join(packs::DIR).join(&version)).map(|dir| Lang::ALL.into_iter().filter_map(|l| std::fs::read(dir.join(packs::file_name(l))).ok().map(|b| (l, b))).collect()).unwrap_or_default();
+        Stage { exe, desktop: files::DESKTOP_ENTRY.to_string(), icon: files::ICON_SVG.to_vec(), packs: (version, packs) }
     }
+}
+
+/// The packs inside a release tarball for `version`.
+fn archive_packs(archive: &[u8], version: &str) -> Result<Vec<(Lang, Vec<u8>)>, String> {
+    let mut out = Vec::new();
+    for lang in Lang::ALL.into_iter().filter(|l| *l != Lang::En) {
+        if let Some(bytes) = release::extract(archive, &format!("share/{}/{version}/{}", packs::DIR, packs::file_name(lang)))? {
+            out.push((lang, bytes));
+        }
+    }
+    Ok(out)
 }
 
 /// One run of `mandara install` / `uninstall`.
@@ -181,6 +202,9 @@ pub struct Installer<'a> {
     paths: Paths,
     privilege: Privilege,
     tmp: Option<TempDir>,
+    /// The package databases were brought up to date in this run (or, in a
+    /// dry run, would have been).
+    synced: bool,
 }
 
 impl<'a> Installer<'a> {
@@ -192,7 +216,7 @@ impl<'a> Installer<'a> {
         };
         let paths = Paths::new(args.prefix.as_deref(), &facts.home, xdg);
         let privilege = Privilege::detect(facts.is_root, |p| host.has_program(p));
-        Installer { host, probe, facts, args, paths, privilege, tmp: None }
+        Installer { host, probe, facts, args, paths, privilege, tmp: None, synced: false }
     }
 
     pub fn paths(&self) -> &Paths {
@@ -324,6 +348,7 @@ impl<'a> Installer<'a> {
         if deps {
             self.deps(source == Source::Build)?;
         }
+        self.offer_compositor();
         let stage = match source {
             Source::This => Some(self.verify_self()?),
             Source::Build => self.build_source()?,
@@ -370,7 +395,7 @@ impl<'a> Installer<'a> {
         let family = self.facts.family;
         let Some(set) = packages::for_family(family) else {
             if family == Family::NixOS {
-                self.say(Level::Warn, "NixOS: add to your configuration and rebuild, then rerun with --no-deps:");
+                self.say(Level::Warn, "NixOS: install Mandara with its flake and NixOS module instead (Nix then keeps it updated):");
                 for line in packages::NIXOS_HINT {
                     self.say(Level::Info, format!("  {line}"));
                 }
@@ -382,17 +407,25 @@ impl<'a> Installer<'a> {
             return Ok(());
         };
         let Some(pm) = self.package_manager() else { return Ok(()) };
-        if let Some(refresh) = pm.refresh_argv() {
-            // A stale index only makes installs fail; ignore errors here.
-            self.as_root(Cmd::from_argv(refresh).io(Io::Quiet));
-        }
         self.say(Level::Step, "Installing system packages");
+        self.prepare_index(pm)?;
         let mut required: Vec<&str> = set.run.to_vec();
         if from_source {
             required.extend(set.build);
         }
         if !self.as_root(Cmd::from_argv(pm.install_argv(&required))) {
-            return Err(format!("could not install required packages: {}", required.join(" ")));
+            let failed = || format!("could not install required packages: {}", required.join(" "));
+            // Databases that were never synced or are out of date make every
+            // install fail: bring them up to date once and try again.
+            if self.synced || self.privilege == Privilege::Unavailable || index::sync_argv(pm, true).is_none() {
+                return Err(failed());
+            }
+            self.say(Level::Warn, "installing the required packages failed");
+            let missing = index::missing(pm, &self.facts.root);
+            self.sync_index(pm, &missing, true)?;
+            if !self.as_root(Cmd::from_argv(pm.install_argv(&required))) {
+                return Err(failed());
+            }
         }
         if !self.dry() {
             self.say(Level::Ok, if from_source { "runtime and build dependencies" } else { "runtime libraries" });
@@ -411,6 +444,183 @@ impl<'a> Installer<'a> {
         }
         self.services_hint();
         Ok(())
+    }
+
+    /// Makes sure the package databases can be used before installing: apt's
+    /// lists are refreshed every time (cheap, harmless); other managers'
+    /// databases only when they are missing ([`index::missing`]).
+    fn prepare_index(&mut self, pm: PackageManager) -> Result<(), String> {
+        let missing = index::missing(pm, &self.facts.root);
+        if index::sync_before_install(pm) {
+            let Some(argv) = index::sync_argv(pm, true) else { return Ok(()) };
+            let shown = self.root_hint(&argv);
+            let io = if missing.is_empty() { Io::Quiet } else { Io::Inherit };
+            if !missing.is_empty() {
+                self.say(Level::Info, format!("no package lists yet: downloading them ({shown})"));
+            }
+            if self.as_root(Cmd::from_argv(argv).io(io)) {
+                self.synced = true;
+            } else if !missing.is_empty() {
+                return Err(format!("`{shown}` failed, and without package lists nothing can be installed: check your network and your package sources, then run `mandara install` again (or pass --no-deps to skip system packages)"));
+            }
+            // Lists that exist but couldn't be refreshed still work.
+            return Ok(());
+        }
+        if missing.is_empty() {
+            return Ok(());
+        }
+        self.sync_index(pm, &missing, false)
+    }
+
+    /// Brings the package databases up to date: asked first when that
+    /// upgrades the whole system (pacman's `-Syu`), announced otherwise.
+    /// `missing`: the databases found missing (empty: they may only be
+    /// stale); `after_failure`: an install already failed.
+    fn sync_index(&mut self, pm: PackageManager, missing: &[String], after_failure: bool) -> Result<(), String> {
+        let unattended = self.args.yes || !self.host.interactive();
+        let Some(argv) = index::sync_argv(pm, unattended) else { return Ok(()) };
+        let shown = self.root_hint(&argv);
+        let what = if missing.is_empty() { "Your package databases may be out of date".to_string() } else { format!("Your package databases are missing or out of date ({})", missing.join(", ")) };
+        if index::sync_upgrades_system(pm) {
+            let again = if after_failure { " and try again" } else { "" };
+            if unattended && !self.dry() {
+                // Nobody is asked: say what the default answer does.
+                let why = if self.args.yes { "--yes" } else { "no terminal to ask on" };
+                self.say(Level::Info, format!("{what}: updating them with `{shown}`, a full system upgrade ({why}: the default answer)"));
+            }
+            if !self.ask(&format!("{what}. Update them now{again}? This runs `{shown}`, a full system upgrade."), true) {
+                return Err(format!("the package databases need updating before anything can be installed: run `{shown}`, then `mandara install` again (or pass --no-deps to skip system packages)"));
+            }
+        } else {
+            self.say(Level::Info, format!("{what}: updating them ({shown})"));
+        }
+        if !self.as_root(Cmd::from_argv(argv)) {
+            return Err(format!("`{shown}` failed: fix what it reports, then run `mandara install` again"));
+        }
+        self.synced = true;
+        if !self.dry() {
+            self.say(Level::Ok, "package databases up to date");
+        }
+        Ok(())
+    }
+
+    // ── A compositor ────────────────────────────────────────────────────
+
+    /// Installs a compositor from the distribution's own repositories: the
+    /// one `--compositor` names when it is missing (after asking; `--yes`
+    /// counts, since it was named), or, when no supported compositor is
+    /// installed, the one picked from a numbered list (only when someone
+    /// answers: never unattended without `--compositor`). `mandara setup`
+    /// then hooks Mandara into it.
+    fn offer_compositor(&mut self) {
+        let distro = self.facts.os.display_name().to_string();
+        if let Some(name) = self.args.compositor.clone() {
+            let Some(c) = compositors::by_name(&name) else { return };
+            if c.installed(|p| self.has(p)) {
+                return;
+            }
+            self.say(Level::Step, "Installing a compositor");
+            let setup = format!("mandara setup --compositor {}", c.id);
+            if self.args.no_deps {
+                self.say(Level::Warn, format!("{} isn't installed (--no-deps): install it with your package manager, then run `{setup}`", c.label));
+                return;
+            }
+            let Some(package) = self.compositor_package(c) else {
+                self.say(Level::Warn, format!("{} isn't installed, and {distro}'s repositories don't carry it: install it yourself, then run `{setup}`", c.label));
+                return;
+            };
+            if self.ask(&format!("{} isn't installed. Install it now ({package}, from your distribution's repositories)?", c.label), true) {
+                self.install_compositor(c, package);
+            } else {
+                self.say(Level::Info, format!("skipped; install {} yourself, then run `{setup}`", c.label));
+            }
+            return;
+        }
+        if compositors::any_installed(|p| self.has(p)) {
+            return;
+        }
+        self.say(Level::Step, "Installing a compositor");
+        self.say(Level::Info, "No compositor Mandara runs on is installed (MangoWM, Niri, Hyprland, Sway, River Classic or Umbriel).");
+        if self.args.no_deps {
+            self.say(Level::Info, "install one with your package manager (--no-deps), then run `mandara setup`");
+            return;
+        }
+        let mut offered: Vec<(&'static Compositor, &'static str)> = Vec::new();
+        let mut elsewhere: Vec<&'static str> = Vec::new();
+        for c in compositors::SUPPORTED {
+            match self.compositor_package(c) {
+                Some(p) => offered.push((c, p)),
+                None => elsewhere.push(c.label),
+            }
+        }
+        if offered.is_empty() {
+            self.say(Level::Warn, format!("{distro}'s repositories don't carry any of them: install one yourself, then run `mandara setup`"));
+            return;
+        }
+        let names: Vec<&str> = offered.iter().map(|(c, _)| c.id).collect();
+        if self.args.yes && !self.dry() {
+            self.say(Level::Info, format!("not installing one unasked (--yes): rerun with --compositor {}, or install one yourself and run `mandara setup`", names.join("|")));
+            return;
+        }
+        for (i, (c, package)) in offered.iter().enumerate() {
+            let recommended = if i == 0 { " (recommended)" } else { "" };
+            self.say(Level::Info, format!("  {}) {}{recommended} · {package}", i + 1, c.label));
+        }
+        self.say(Level::Info, "  0) None: I'll install one myself");
+        if !elsewhere.is_empty() {
+            self.say(Level::Detail, format!("not in {distro}'s repositories: {}", elsewhere.join(", ")));
+        }
+        if self.dry() && self.package_manager().is_some_and(|pm| !index::missing(pm, &self.facts.root).is_empty()) {
+            self.say(Level::Detail, "from Mandara's package table: the package databases aren't downloaded yet, so a real run checks them first");
+        }
+        const QUESTION: &str = "Install which one?";
+        const RECOMMENDED: usize = 1;
+        let picked = if self.dry() {
+            self.say(Level::Detail, format!("would ask: {QUESTION} [{RECOMMENDED}] (assuming {RECOMMENDED})"));
+            Some(RECOMMENDED)
+        } else {
+            self.host.choose(QUESTION, offered.len(), RECOMMENDED)
+        };
+        match picked.and_then(|n| n.checked_sub(1)).and_then(|i| offered.get(i).copied()) {
+            Some((c, package)) => self.install_compositor(c, package),
+            None => self.say(Level::Info, format!("none installed; install one yourself and run `mandara setup`, or rerun with --compositor {}", names.join("|"))),
+        }
+    }
+
+    /// `c`'s package on this system: in the family's table, and in the
+    /// repositories when the package manager can say so quickly.
+    fn compositor_package(&mut self, c: &Compositor) -> Option<&'static str> {
+        let package = c.package(self.facts.family)?;
+        let pm = self.package_manager()?;
+        // A dry run that would sync missing databases first can't ask them.
+        let databases_ready = !self.dry() || index::missing(pm, &self.facts.root).is_empty();
+        if databases_ready
+            && let Some((argv, available)) = index::available_query(pm, package)
+            && let Some(out) = self.run(Cmd::from_argv(argv).env("LC_ALL", "C").io(Io::Capture))
+        {
+            return available(&out).then_some(package);
+        }
+        Some(package)
+    }
+
+    /// Installs `c` (and its desktop portal, when it has one), then points
+    /// `mandara setup` at it.
+    fn install_compositor(&mut self, c: &Compositor, package: &str) {
+        let Some(pm) = self.package_manager() else { return };
+        if !self.as_root(Cmd::from_argv(pm.install_argv(&[package]))) {
+            self.say(Level::Warn, format!("could not install {package}; install {} yourself, then run `mandara setup --compositor {}`", c.label, c.id));
+            return;
+        }
+        if !self.dry() {
+            self.say(Level::Ok, format!("{} ({package})", c.label));
+        }
+        for portal in packages::portal_packages(self.facts.family, |p| c.programs.contains(&p)) {
+            if self.as_root(Cmd::from_argv(pm.install_argv(&[portal])).io(Io::Quiet)) && !self.dry() {
+                self.say(Level::Ok, portal);
+            }
+        }
+        self.args.compositor = Some(c.id.to_string());
+        self.say(Level::Detail, format!("pick {} on your login screen to start it", c.label));
     }
 
     /// Installing a package doesn't start its service. Bluetooth is turned
@@ -587,7 +797,8 @@ impl<'a> Installer<'a> {
         write_executable(&exe, &bin)?;
         let desktop = release::extract(&archive, &format!("share/{}/{}", files::APPLICATIONS_DIR, files::DESKTOP_FILE))?.map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_else(|| files::DESKTOP_ENTRY.to_string());
         let icon = release::extract(&archive, &format!("share/{}/{}", files::ICON_DIR, files::ICON_FILE))?.unwrap_or_else(|| files::ICON_SVG.to_vec());
-        Ok(Some(Stage { exe, desktop, icon }))
+        let packs = archive_packs(&archive, &version)?;
+        Ok(Some(Stage { exe, desktop, icon, packs: (version, packs) }))
     }
 
     /// A release build from source (`cargo xtask build`). `None` in a dry run.
@@ -647,7 +858,11 @@ impl<'a> Installer<'a> {
         let packaging = src.join("packaging");
         let desktop = std::fs::read_to_string(packaging.join(files::DESKTOP_FILE)).unwrap_or_else(|_| files::DESKTOP_ENTRY.to_string());
         let icon = std::fs::read(packaging.join(files::ICON_FILE)).unwrap_or_else(|_| files::ICON_SVG.to_vec());
-        Ok(Some(Stage { exe, desktop, icon }))
+        // The packs, compiled from the same sources for the built version.
+        let built_version = version.split_whitespace().nth(1).unwrap_or_default().to_string();
+        let catalogs = src.join("crates/mandara-i18n/locales");
+        let packs = Lang::ALL.into_iter().filter(|l| *l != Lang::En).filter_map(|l| std::fs::read_to_string(catalogs.join(format!("{}.toml", l.code()))).ok().and_then(|text| mandara_i18n::compile(l, &built_version, &text).ok()).map(|b| (l, b))).collect();
+        Ok(Some(Stage { exe, desktop, icon, packs: (built_version, packs) }))
     }
 
     /// The second word of `<tool> --version`.
@@ -746,6 +961,14 @@ impl<'a> Installer<'a> {
         files::install_binary(&stage.exe, &bin).map_err(|e| err(&bin, e))?;
         let version = self.run(Cmd::new(&[bin.to_string_lossy().as_ref(), "--version"]).io(Io::Capture)).filter(|o| o.success).and_then(|o| o.stdout.lines().next().map(|l| l.split_once(' ').map_or(l, |(_, v)| v).to_string())).unwrap_or_else(|| "installed".into());
         self.say(Level::Ok, format!("{} ({version})", bin.display()));
+        // Language packs: checked (version and language in the header)
+        // and written atomically; anything missing downloads on first use.
+        let (pack_version, stage_packs) = &stage.packs;
+        if !stage_packs.is_empty() {
+            let dir = self.paths.data_dir.join(packs::DIR).join(pack_version);
+            let copied = stage_packs.iter().filter(|(lang, bytes)| packs::install(*lang, pack_version, bytes, &dir).map_err(|e| self.say(Level::Warn, format!("{} language pack: {e}", lang.code()))).is_ok()).count();
+            self.say(Level::Ok, format!("{copied} language packs in {}", dir.display()));
+        }
         let desktop = self.paths.desktop_entry();
         std::fs::write(&desktop, files::desktop_entry(&stage.desktop, &bin)).map_err(|e| err(&desktop, e))?;
         // The icon is cosmetic: a failure here never stops the install.
@@ -753,7 +976,19 @@ impl<'a> Installer<'a> {
         self.say(Level::Ok, "Mandara Studio desktop entry");
         let bin_dir = self.paths.bin_dir.clone();
         if !std::env::split_paths(&self.facts.path_var).any(|p| p == bin_dir) {
-            self.say(Level::Warn, format!("{} is not on your PATH — add it in your shell profile (e.g. export PATH=\"{}:$PATH\")", bin_dir.display(), bin_dir.display()));
+            self.say(Level::Warn, format!("{} is not on your PATH", bin_dir.display()));
+            if self.ask(&format!("Add {} to your PATH in your shell profiles?", bin_dir.display()), true) && !self.dry() {
+                match add_to_path(&self.facts.home, &bin_dir) {
+                    Ok(files) if files.is_empty() => {}
+                    Ok(files) => {
+                        let names: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
+                        self.say(Level::Ok, format!("on your PATH in new terminals ({})", names.join(", ")));
+                    }
+                    Err(e) => self.say(Level::Warn, format!("couldn't add it to your PATH ({e}) — add export PATH=\"{}:$PATH\" to your shell profile", bin_dir.display())),
+                }
+            } else {
+                self.say(Level::Detail, format!("add it yourself: export PATH=\"{}:$PATH\"", bin_dir.display()));
+            }
         }
         Ok(())
     }
@@ -821,6 +1056,11 @@ impl<'a> Installer<'a> {
     fn greeter(&mut self, exe: &Path) {
         if self.args.no_greeter {
             self.say(Level::Detail, "login screen unchanged (--no-greeter); switch any time in Studio → Login screen → Login manager");
+            return;
+        }
+        // greetd's config is generated by NixOS: the module sets it up.
+        if self.facts.family == Family::NixOS {
+            self.say(Level::Detail, "login screen: on NixOS, set programs.mandara.greeter.enable = true; and rebuild");
             return;
         }
         self.say(Level::Step, "Login screen");
@@ -942,7 +1182,8 @@ impl<'a> Installer<'a> {
 
     /// `mandara lock` uses the `login` PAM service unless its own exists.
     fn lock_hint(&mut self) {
-        if !self.facts.sys(LOCK_PAM).exists() {
+        // On NixOS `programs.mandara.enable` declares the PAM service.
+        if self.facts.family != Family::NixOS && !self.facts.sys(LOCK_PAM).exists() {
             let hint = self.root_hint(&["install", "-Dm644", "share/pam.d/mandara-lock", LOCK_PAM]);
             self.say(Level::Detail, format!("Lock screen: `mandara lock` (preview: `mandara lock --demo`). Optional dedicated PAM service, from the release tarball: {hint}"));
         }
@@ -1106,3 +1347,35 @@ fn user_in_group(user: &str, group: &str, groups: &str, passwd: &str) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+/// Marks the lines [`add_to_path`] writes, so a second install adds nothing.
+const PATH_MARK: &str = "# Added by the Mandara installer";
+
+/// Puts `bin_dir` on `PATH` in `~/.profile`, `~/.bashrc`, an existing
+/// `~/.zshrc` and, when fish is set up, a fish `conf.d` snippet. Returns the
+/// files it changed; a file that already has the line is left alone.
+fn add_to_path(home: &Path, bin_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
+    use std::io::Write as _;
+    let dir = bin_dir.display();
+    let posix = format!("\n{PATH_MARK}\ncase \":$PATH:\" in *\":{dir}:\"*) ;; *) export PATH=\"{dir}:$PATH\" ;; esac\n");
+    let mut targets = vec![(home.join(".profile"), posix.clone()), (home.join(".bashrc"), posix.clone())];
+    if home.join(".zshrc").is_file() {
+        targets.push((home.join(".zshrc"), posix));
+    }
+    let fish = home.join(".config/fish");
+    if fish.is_dir() {
+        targets.push((fish.join("conf.d/mandara-path.fish"), format!("{PATH_MARK}\nfish_add_path --path {dir}\n")));
+    }
+    let mut changed = Vec::new();
+    for (file, line) in targets {
+        if std::fs::read_to_string(&file).is_ok_and(|s| s.contains(PATH_MARK)) {
+            continue;
+        }
+        if let Some(parent) = file.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::OpenOptions::new().create(true).append(true).open(&file)?.write_all(line.as_bytes())?;
+        changed.push(file);
+    }
+    Ok(changed)
+}

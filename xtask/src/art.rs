@@ -14,6 +14,8 @@
 //!   motif linework, the icon, an optional real panel capture and the title.
 //!   Without `--out`, it also exports the 256 px icon and refreshes the
 //!   asset inventory.
+//! - `art --calligraphy` outlines the Kufic words behind the main menu's
+//!   tiles (see [`crate::calligraphy`]).
 //! - `art --check` validates the brand marks, plugin icons, covers, the
 //!   catalog, the asset index and the embedded set (also run by
 //!   `cargo test -p xtask`).
@@ -784,7 +786,7 @@ fn embed_all() -> Result<()> {
 pub struct Report(pub Vec<String>);
 
 impl Report {
-    fn ensure(&mut self, ok: bool, msg: impl FnOnce() -> String) {
+    pub(crate) fn ensure(&mut self, ok: bool, msg: impl FnOnce() -> String) {
         if !ok {
             self.0.push(msg());
         }
@@ -1111,6 +1113,7 @@ pub fn check_all() -> Report {
     check_artwork(&mut r, &records);
     check_panel_masks(&mut r, &records);
     check_embedded(&mut r);
+    crate::calligraphy::check(&mut r);
     r
 }
 
@@ -1128,6 +1131,9 @@ pub fn art(args: &[String]) -> Result<()> {
     }
     if flag(args, "--compose") {
         return compose_all(args);
+    }
+    if flag(args, "--calligraphy") {
+        return crate::calligraphy::generate();
     }
     embed_all()
 }

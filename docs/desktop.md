@@ -103,7 +103,7 @@ How Mandara looks and feels, and how much of it you can shape.
   Banana, Nordzy and Rosé Pine — with author, licence and variants. One
   click downloads the pinned GitHub release, verifies its SHA-256 and
   installs it to `~/.local/share/icons`; Apply changes the cursor live on
-  MangoWM, Niri, Hyprland and Umbriel (and X11 apps through `~/.icons/default`);
+  MangoWM, Niri, Hyprland, Umbriel, Sway and River (and X11 apps through `~/.icons/default`);
   Remove only ever deletes what Mandara installed. Nothing is bundled in the
   binary. `mandara msg cursor list|install|apply|remove` scripts it.
 
@@ -294,4 +294,5 @@ you type: **Duplicate** when two Mandara binds share a chord, **Needs
 Super, Ctrl or Alt** when a bind would swallow plain typing, and **Used by
 your config** with the exact file and line when your own compositor config
 already has that chord. Mandara never overrides a key you already use; its
-binds go into its own drop-in file for MangoWM, Niri, Hyprland or Umbriel.
+binds go into its own drop-in file for MangoWM, Niri, Hyprland, Umbriel or Sway,
+and on River are sent as `map` commands (keys your `init` maps stay yours).

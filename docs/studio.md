@@ -3,7 +3,7 @@
 Mandara Studio (`mandara studio`, app id `org.mandara.studio`) is the one
 place where Mandara is configured. It runs as its own process, so its CPU and
 memory never count against the shell, and every change is mirrored to the
-running shell over IPC: drag a slider and the bar follows at 144 Hz.
+running shell over IPC: drag a slider and the bar follows on the very next frame.
 Settings never live in bar dropdowns.
 
 <p align="center">
@@ -34,7 +34,7 @@ Settings never live in bar dropdowns.
 </tr>
 </table>
 
-Every setting is live: drag a slider and the bar changes at 144 Hz. The
+Every setting is live: drag a slider and the bar changes on the very next frame. The
 slider's handle and its value bubble follow the pointer on the next frame;
 the setting is applied at most once a frame and saved to disk once it rests.
 Changes that make the compositor re-tile your windows (the bar's height and
@@ -68,7 +68,7 @@ ultra-wide.
 - **Extend**: a plugin store (featured hero, curated shelves, search,
   one-click Get / On, product pages, installed library, updates, the GitHub
   marketplace, a local authoring handbook and validator, per-plugin settings) and compositor control for
-  MangoWM, Niri, Hyprland and Umbriel written to `~/.config/mandara/generated/*`;
+  MangoWM, Niri, Hyprland, Umbriel, Sway and River written to `~/.config/mandara/generated/*` (sent over River's protocol on River);
   **your own config only gets one include line** (with a backup).
 - **Mandara**: language, profiles with undo / export / import, performance,
   maintenance (health checks, repair, factory reset) and about.
@@ -172,7 +172,7 @@ narrow ones; everything mirrors for right-to-left languages.
 
 | Page | What it covers |
 |---|---|
-| **Bar** | Layout designer (the zones as columns of stacked items — drag to reorder or move, × to take off, click for a menu —, the side bars' top / middle / bottom groups while they're on, and every plugin in a searchable grid by category: click to add to a zone or drag it there), presets (incl. Notch, Hairline, Micro pill and Side bar); **Layout** (style — edge frame, glass pills, island, hairline, micro pill, notch —, notch width, position on any edge, height, compact height and accent line for the hairline / micro pill, side bar width and screen frame with its thickness, gaps, floating edge frame, center-group alignment, item padding / spacing, separators); **Shape** (bar radius, flare radius); **Appearance** (opacity, accent tint, group capsules, glass rim width / intensity, shadow, text and icon size); **Main menu** (what right-clicking empty bar space opens — the bar's main menu or the desktop's menu —, glass menu and its opacity); **Drop-down panels** (radius, width, maximum height, inner padding, gap to the bar, horizontal position, opacity, shadow, open animation, custom spring, close delay after the pointer leaves, how long action messages stay); **Side bars** (on / off, joined with the bar or separate, each side on / off, pinned or sliding away with its reveal and hide delays, an accent per side); **Side bar shape** (width, separate shape — pills, island, slab —, edge gap, corner radius, curves, middle group); **Side bar items** (icons, pills or islands, item size, padding, spacing, wash strength); **Side bar material** (opacity, accent tint, frosted glass, rim light and intensity, shadow); auto-hide, click-through, over fullscreen. Which displays show it is set under Displays. |
+| **Bar** | Layout designer (the zones as columns of stacked items — drag to reorder or move, × to take off, click for a menu —, the side bars' top / middle / bottom groups while they're on, and every plugin in a searchable grid by category: click to add to a zone or drag it there), presets (incl. Notch, Hairline, Micro pill and Side bar); **Layout** (style — edge frame, glass pills, island, hairline, micro pill, notch —, notch width, position on any edge, height, compact height and accent line for the hairline / micro pill, side bar width and screen frame with its thickness, gaps, floating edge frame, center-group alignment, item padding / spacing, separators); **Shape** (bar radius, flare radius); **Appearance** (opacity, accent tint, group capsules, glass rim width / intensity, shadow, text and icon size); **Main menu** (what right-clicking empty bar space opens — the bar's main menu or the desktop's menu —, glass menu and its opacity, the rail's names / icons-only style, tile patterns, tile surface — flat, 3D, glass — and tile shadow); **Drop-down panels** (radius, width, maximum height, inner padding, gap to the bar, horizontal position, opacity, shadow, open animation, custom spring, close delay after the pointer leaves, how long action messages stay); **Side bars** (on / off, joined with the bar or separate, each side on / off, pinned or sliding away with its reveal and hide delays, an accent per side); **Side bar shape** (width, separate shape — pills, island, slab —, edge gap, corner radius, curves, middle group); **Side bar items** (icons, pills or islands, item size, padding, spacing, wash strength); **Side bar material** (opacity, accent tint, frosted glass, rim light and intensity, shadow); auto-hide, click-through, over fullscreen. Which displays show it is set under Displays. |
 | **Sidebars & hover** | Sidebar side, mode (Float over windows, Push them aside while open, or Pinned with its space reserved); **Tabs** (always open on the first tab, the "+" new-tab button) and the **tab editor**: your tabs on the left (click to edit, rename in place, drag to reorder, delete asks once) and, for the selected tab, its icon (Mandara's icon set), its widgets top to bottom (drag to reorder, drop on another tab to move, × to take off) and a searchable picker of every widget with its plugin art and description — any plugin with a sidebar card, first- or third-party; off or removed ones are greyed with *Turn on*; a widget may sit on several tabs; **Layout** (width, flush or floating with a margin — beside a floating bar such as glass pills, the island, the micro pill or the notch the side panels always float, since there is no edge frame to join; it opens at the top of its tab every time — header position and size) and **Appearance** (corner radius, opacity, card radius / padding / spacing) shared by the sidebar and the power dock, and its slide spring; edge hover triggers (the launcher's bottom edge is click-only while the dock is on); hot corners (action or command per corner, delay, trigger size, over fullscreen apps); rounded screen corners (on by default) and their radius. |
 | **Dock** | A macOS-style dock. On / off (a hint and *Show it now* when auto-hide keeps it out of sight), live preview, then six groups with their own Reset: **Layout** (position, alignment, size, magnification and its size / spread, only this display's windows), **Behaviour** (automatically hide and show — off / on / when a window overlaps — reveal and hide delays, slide speed, keep windows clear, above fullscreen, animate opening applications, bounce for attention, minimize windows into application icon, names on hover), **Apps** (the apps kept in the dock with icons: drag to reorder, × to remove, **Add app…** opens a searchable picker of installed apps with pinned ones checked; running apps, open-app indicators, recent apps and how many, notification badges, progress bars, window count, most apps, launcher button, the **now-playing chip** — album art, title and play / pause at the dock's end while music plays), **Applications folder** (on / off — a folder on the right of the dock that opens a Launchpad-style grid of your apps, with search, category chips and a right-click menu, and installs apps dropped on it — view as Grid / List, order A–Z / Most used / Categories, icon size), **Stacks & Trash** (each folder with View as Automatic / Fan / Grid / List, Sort by date added / modified / name / kind, Display as Stack / Folder, add a folder; Trash, files per stack, files in a fan — Automatic always fans the newest that many files, however big the folder — and show file names) and **Appearance** (glass opacity and accent tint, corner radius, padding, icon spacing, distance from the edge, shadow, specular rim, separators, not-running opacity). Which displays show it is set under Displays. On the dock itself: right-click an icon for its windows, New Window and the app's actions, **Options ▸ Keep in Dock ✓ / Open at Login ✓ / Show in Files** (and Uninstall… for apps Mandara installed), Show All Windows, Hide and Quit (Force Quit once a quit didn't take, or with Alt held); right-click empty dock space for Add app…, auto-hide and magnification; drag icons to reorder, a running app into the pinned ones to keep it, or away from the dock to remove it; drop files on an app to open them with it, on the Trash to trash them, and installable apps on the dock or the Applications folder to install them. Click a stack for its fan (the newest files on an arc that pops up out of the icon as one piece, names in pills, *Open Downloads · N more* (the folder in your file manager) at the top) or its grid (arrow keys, Enter, type to filter, right-click for Open / Show in Files / Move to Trash); the dock stays out while a stack, the Applications grid or a menu is open. |
 | **Launcher** | Sections in setup order. **Launcher looks**: Classic, Grid and Beacon as three cards of exactly the same size (a miniature, the name, a two-to-three-line description and tags for the layout and placement), a click applies one; **Preview** opens the launcher. **Placement**: a small screen diagram with the bar along its edge and seven clickable spots — top left / middle / right, the center of the screen, bottom left / middle / right (the screen's own sides, also in right-to-left languages) — the chosen one highlighted, a line on how it looks with your bar (grows out of the bar like its panels, a floating card under floating pills, or "the bar is on the other edge" when it opens from the bare screen edge; a note when the dock makes it float above the dock, click only), and **Preview** to open it, with **Size & placement** under it (align to the launcher button, search field, width / height when attached and in the center). **Launcher button**: its icon picker. **Search & results**: style, layout, visible results, app icons, the grid and the Beacon bar, providers and prefixes, ranking, and what the ranking has learnt. **Behaviour**: on / off, dim, keyboard only, remembering the last search, launch prefix and systemd scopes. **Apps**: pinned and hidden apps and your own names and icons. Then slash commands and skills. |
@@ -207,13 +207,13 @@ narrow ones; everything mirrors for right-to-left languages.
 | Page | What it covers |
 |---|---|
 | **Plugins** | A plugin store: Discover (featured hero, curated shelves, search with filter chips), Installed, Updates, Community (the GitHub marketplace) and Develop (the authoring handbook and validator); per-plugin product pages and settings modals, which hold each plugin's own options (clipboard history, screenshot, weather, prayer times…) — including refresh intervals, how many rows a list shows and alert thresholds (Resources, Process hunter, Containers, Services, Drives, Network speed, Network, Clock, To-do, Bluetooth, Authenticator). To-do adds its default list, show completed, sort order and what the bar counts; Notes its default topic, the notes folder (point it at a synced folder or an Obsidian vault), preview by default and the editor font and size. [Configuration](configuration.md) lists every setting by page. Every Mandara plugin can be switched off (it then stops everything it runs: bar item, sidebar card, launcher entries, background polling) or **removed** from the detail modal: off, out of the bar and sidebar, and parked under *Removed Mandara plugins* (their store cards offer *Add back*) until **Restore** puts it back where it was. Core plugins (launcher, session menu, main menu) show *Always on*. The dock, mini stats, screen time and prayer times ship off. |
-| **Compositor** | The **Config doctor** (your compositor's own checker on your config: problems by file and line, explained, with reversible fixes), then MangoWM / Niri / Hyprland / Umbriel gaps, borders, rounding, blur, rules, tags, layouts; all written to `~/.config/mandara/generated/`. |
+| **Compositor** | The **Config doctor** (your compositor's own checker on your config: problems by file and line, explained, with reversible fixes), then MangoWM / Niri / Hyprland / Umbriel / Sway / River gaps, borders, rounding, blur, rules, tags, layouts; all written to `~/.config/mandara/generated/`. |
 
 ### Mandara
 
 | Page | What it covers |
 |---|---|
-| **General** | Language, units, week start, polkit agent, lock routing, keyrings & passwords (GNOME Keyring prompts, KeePassXC dialog, unlock at login), restart after a crash. |
+| **General** | Language (a language whose pack is missing downloads it: its card fills with the download, turns green with a check when it's in, or red with the reason and Retry if it fails; see [Languages](languages.md#language-packs)), units, week start, polkit agent, lock routing, keyrings & passwords (GNOME Keyring prompts, KeePassXC dialog, unlock at login), restart after a crash. |
 | **Profiles & backup** | Recent changes with undo, named profiles, export / import, reset a page, support report. |
 | **Performance** | The shell's own CPU, memory and threads, Studio's separately, frame-time diagnostics, restart / quit. |
 | **Maintenance** | Health checks with repair, downloads, cache cleanup, backups, factory reset. |
@@ -285,7 +285,7 @@ narrow ones; everything mirrors for right-to-left languages.
   appears once something in the group differs from them.
 - **Everything is live**: the bar, open panels, the sidebar, the launcher,
   OSDs and the dock redraw in place on every edit, without reopening.
-- **Compositor control** for MangoWM, Niri, Hyprland and Umbriel: gaps, borders,
+- **Compositor control** for MangoWM, Niri, Hyprland, Umbriel, Sway and River: gaps, borders,
   rounding, blur, shadows, opacity, window rules and keybinds, one-click
   window-look presets and common window rules, gaps that follow the bar,
   and Hyprland's layout (dwindle / master), border resizing and group tabs.
@@ -300,11 +300,21 @@ narrow ones; everything mirrors for right-to-left languages.
   | Hyprland ≤ 0.56 | `source = ~/.config/mandara/generated/hyprland.conf` | `exec-once = /abs/path/mandara` |
   | Hyprland 0.57+ (Lua only) | `pcall(dofile, "/home/you/.config/mandara/generated/hyprland.lua")` in `hyprland.lua` | `hl.on("hyprland.start", …)` |
   | Umbriel | `"/home/you/.config/mandara/generated/umbriel.toml"` in `[include.optional] files` (added to your list if you have one) | `general.autostart = ["/abs/path/mandara"]` |
+  | Sway | `include /home/you/.config/mandara/generated/sway.conf` | `exec /abs/path/mandara` |
+  | River | none (Mandara never edits `init`; its settings go over `river-control`) | `riverctl spawn /abs/path/mandara`, a line you add to `init` |
 
   The dialect follows the installed version (`niri --version`,
   `Hyprland --version`); each compositor's own checker (`mango -p`,
-  `niri validate`, `Hyprland --verify-config`, `umbriel config validate`)
-  must accept the result or the include is rolled back. Umbriel is the
+  `niri validate`, `Hyprland --verify-config`, `umbriel config validate`,
+  `sway --validate`) must accept the result or the include is rolled back.
+  Sway has no rounded corners, opacity, blur, shadows or animations: while
+  it runs those rows are locked with that reason, and its tab says what
+  its drop-in carries (gaps, pixel borders, `client.*` colours, `for_window`
+  floating / sticky rules for both Wayland `app_id`s and X11 classes,
+  `input` / `seat` settings, `output` lines and `bindsym` keys). River's
+  tab says how its settings travel and shows the line to add to `init`;
+  gaps (including *Gaps follow the bar*), rounded corners, opacity, blur,
+  shadows and animations are locked there. Umbriel is the
   exception to "Mandara's values win": it applies your `config.toml`
   after its includes, so what you set there wins (rules from both files
   are kept), and the Umbriel tab says so. On Niri the drop-in also makes workspace
@@ -315,8 +325,8 @@ narrow ones; everything mirrors for right-to-left languages.
   translates the common hyprlang dispatchers and passes `hl.…` text through.
 - **Config doctor** (top of the Compositor page): the compositor's own
   checker (`mango -p`, `niri validate`, `Hyprland --verify-config`,
-  `umbriel config validate`) run read-only on your config and every file it
-  includes, with its verdict in one line ("All good — checked 2 min ago
+  `umbriel config validate`, `sway --validate`) run read-only on your
+  config and every file it includes, with its verdict in one line ("All good — checked 2 min ago
   with MangoWM 0.18.4"). Problems are grouped by file, your files apart
   from Mandara's drop-in, each with its kind (unknown, removed in this
   update, deprecated, syntax error, invalid value, duplicate keybind,
@@ -425,7 +435,7 @@ narrow ones; everything mirrors for right-to-left languages.
     pointer, link, text, busy, precision, the three resizes and move — at
     the chosen size, with 24 / 32 / 48 / 64 px chips beside the size
     slider. The rows next to it: *Hide while typing*, *Hide when idle*
-    (MangoWM, Niri, Hyprland, Umbriel), *Software cursor* (Hyprland and
+    (MangoWM, Niri, Hyprland, Umbriel, Sway, River), *Software cursor* (Hyprland and
     Umbriel) and *Hide on touch* (Hyprland only); where a compositor lacks
     one, the row says so in place of the control.
   - **The gallery**: Bibata Modern, macOS, Qogir, Phinger, Catppuccin,
@@ -449,7 +459,8 @@ narrow ones; everything mirrors for right-to-left languages.
   - **Applying** writes the drop-in (`cursor_theme` / `cursor_size` +
     `env=XCURSOR_*` for MangoWM, `cursor { xcursor-theme … }` for Niri,
     `env = XCURSOR_* / HYPRCURSOR_*` + `cursor {}` and a live `setcursor`
-    for Hyprland, `[input.cursor]` for Umbriel) and reloads the compositor, so the cursor changes at
+    for Hyprland, `[input.cursor]` for Umbriel, `seat * xcursor_theme` and a
+    live `seat` command for Sway, `xcursor-theme` for River) and reloads the compositor, so the cursor changes at
     once. X11 and older toolkit apps follow through
     `~/.icons/default/index.theme`, created only when you have none and
     removed again when you go back to "Your config".
@@ -460,7 +471,10 @@ narrow ones; everything mirrors for right-to-left languages.
   lock, disable while typing, scroll and click method, left-handed),
   focus follows the pointer.
   Written to the compositor drop-in (`mango.conf`, `niri.kdl` `input {}`,
-  Hyprland `input {}` / `hl.config({ input = … })`, Umbriel `[input.*]`); "Your config" keeps
+  Hyprland `input {}` / `hl.config({ input = … })`, Umbriel `[input.*]`,
+  Sway `input type:keyboard|pointer|touchpad …` and `seat * …`, River
+  `keyboard-layout`, `set-repeat` and `input pointer-*|*Touchpad* …`
+  commands); "Your config" keeps
   your own value. On Niri a touchpad or mouse setting replaces your whole
   `touchpad {}` / `mouse {}` block (Niri merges those blocks as a unit),
   and "focus follows the pointer: off" can't be set from an include —
@@ -567,14 +581,18 @@ narrow ones; everything mirrors for right-to-left languages.
 The update card at the top of About is how Mandara updates itself. It shows
 your version and either "Up to date" or "Version X available" with a link
 to the release notes, and how much the update downloads: **"Smart update:
-7.2 MB instead of 42 MB"**. Binary patches are the main method:
+7.2 MB instead of 42 MB"**, and how the new version's size compares with
+yours ("The new version is 9.2 MB smaller"). Binary patches are the main
+method:
 
 - **Update now** downloads the patch for your version, checks the installed
   binary and the result byte for byte (SHA-256), and replaces the binary
   atomically. If anything doesn't match, it falls back to the full download
-  automatically and says why. Progress and the method used are shown; the
-  running shell restarts on the new version (reopen Studio to use it there
-  too). The previous binary is kept for `mandara update rollback`.
+  automatically and says why. The card itself fills with the download as
+  it comes in, stays full while the update is applied and checked, then
+  turns green with a check (or red with the reason if it didn't install);
+  the method used is shown, and a moment later the running shell restarts
+  on the new version (reopen Studio to use it there too). The previous binary is kept for `mandara update rollback`.
 - **Download full update** skips the patch.
 - **What's in it:** when a release is available, the card lists its notes
   (new, improved, fixed) before you install it.

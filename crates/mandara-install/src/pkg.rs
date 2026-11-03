@@ -80,20 +80,6 @@ impl PackageManager {
     pub fn install_argv<S: AsRef<str>>(self, packages: &[S]) -> Vec<String> {
         self.install_prefix().iter().map(|a| a.to_string()).chain(packages.iter().map(|p| p.as_ref().to_string())).collect()
     }
-
-    /// argv refreshing the package index before installing, for managers
-    /// whose install command doesn't (run it as root; a failure is harmless).
-    /// Never pacman: `pacman -Sy` followed by `-S` is a partial upgrade
-    /// (new packages built against libraries newer than the installed
-    /// ones), which Arch doesn't support; `-S --needed` uses the current
-    /// database, and a full `-Syu` is the user's call, not the installer's.
-    pub fn refresh_argv(self) -> Option<Vec<String>> {
-        let argv: &[&str] = match self {
-            PackageManager::AptGet => &["apt-get", "update", "-qq"],
-            _ => return None,
-        };
-        Some(argv.iter().map(|a| a.to_string()).collect())
-    }
 }
 
 /// How a user process gets root for one command.
@@ -171,13 +157,6 @@ mod tests {
         assert_eq!(PackageManager::Apk.install_argv(&pkgs), ["apk", "add", "greetd", "cage"]);
         assert_eq!(PackageManager::Emerge.install_argv(&["gui-libs/greetd"]), ["emerge", "--noreplace", "gui-libs/greetd"]);
         assert_eq!(PackageManager::Eopkg.install_argv(&pkgs), ["eopkg", "install", "-y", "greetd", "cage"]);
-    }
-
-    #[test]
-    fn refresh_only_where_install_doesnt() {
-        assert!(PackageManager::Pacman.refresh_argv().is_none(), "no partial upgrades on Arch");
-        assert_eq!(PackageManager::AptGet.refresh_argv().unwrap(), ["apt-get", "update", "-qq"]);
-        assert!(PackageManager::Dnf.refresh_argv().is_none());
     }
 
     #[test]

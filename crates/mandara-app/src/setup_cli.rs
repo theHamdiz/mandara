@@ -30,14 +30,10 @@ pub struct Options {
     pub fix: Vec<String>,
 }
 
-fn parse_target(name: &str) -> Option<Target> {
-    match name {
-        "mango" | "mangowm" => Some(Target::Mango),
-        "niri" => Some(Target::Niri),
-        "hyprland" | "hypr" => Some(Target::Hyprland),
-        "umbriel" => Some(Target::Umbriel),
-        _ => None,
-    }
+
+/// Whether sway is installed (on `PATH`).
+fn which_sway() -> bool {
+    std::env::var_os("PATH").is_some_and(|paths| std::env::split_paths(&paths).any(|d| d.join("sway").is_file()))
 }
 
 pub fn setup(o: Options) -> Result<()> {
@@ -51,14 +47,15 @@ pub fn setup(o: Options) -> Result<()> {
         }
     }
     let targets: Vec<Target> = match o.compositor.as_deref() {
-        Some(name) => vec![parse_target(name).ok_or_else(|| anyhow::anyhow!("unknown compositor {name:?} (mango, niri, hyprland or umbriel)"))?],
+        Some(name) => vec![Target::parse(name).ok_or_else(|| anyhow::anyhow!("unknown compositor {name:?} ({})", Target::ALL.map(Target::id).join(", ")))?],
         None => match mandara_compositor::detect() {
             Some(kind) => vec![kind.target()],
-            None => Target::ALL.into_iter().filter(|t| t.user_config().exists()).collect(),
+            // Sway runs its system-wide config until the user has one.
+            None => Target::ALL.into_iter().filter(|t| t.user_config().exists() || (*t == Target::Sway && std::path::Path::new(mandara_config::compositor::SWAY_SYSTEM_CONFIG).exists() && which_sway())).collect(),
         },
     };
     if targets.is_empty() {
-        println!("No MangoWM, Niri, Hyprland or Umbriel config found — start your compositor once, then run `mandara setup` again.");
+        println!("No {} config found — start your compositor once, then run `mandara setup` again.", Target::ALL.map(Target::name).join(", "));
         return Ok(());
     }
     let mut store = mandara_config::ConfigStore::open_default()?;
@@ -72,6 +69,12 @@ pub fn setup(o: Options) -> Result<()> {
     // `--fix` ids that matched a problem of some compositor.
     let mut fixed_ids: Vec<String> = Vec::new();
     for target in targets {
+        // Sway without a config of its own runs the system one: the user's
+        // starts as a copy of it (sway's documented first step), so the
+        // include line has somewhere to go and sway's defaults stay.
+        if target == Target::Sway && !o.check && o.fix.is_empty() && mandara_config::compositor::seed_sway_user_config()? {
+            println!("Sway: started {} as a copy of {}", target.user_config().display(), mandara_config::compositor::SWAY_SYSTEM_CONFIG);
+        }
         let has_config = target.user_config().exists();
         let env = CheckEnv::default();
         // The config as the compositor reads it before Mandara touches it.
@@ -104,27 +107,40 @@ pub fn setup(o: Options) -> Result<()> {
                 continue;
             }
             report = guarded.after;
-            let user_before = std::fs::read_to_string(target.user_config())?;
-            let added = install_include(target)?;
-            if added {
-                let after = doctor::check(target);
-                if dfix::is_worse(&report, &after) {
-                    // Our include made it worse: undo exactly that.
-                    mandara_config::write_atomic(&target.user_config(), user_before.as_bytes())?;
-                    println!("{target:?}: {} rejects the config with Mandara's include, so it was removed again:", target.name());
-                    print_report(&after);
-                    config_errors += after.errors();
-                    continue;
+            if target == Target::River {
+                // River's init is a program Mandara never edits: the shell
+                // sends the settings over river-control when it runs.
+                let path = last.borrow().as_ref().map(|(p, _)| p.clone()).unwrap_or_else(|| target.generated_file());
+                println!("River: settings recorded in {}; the shell sends them to River when it starts and on every change", path.display());
+                if !mandara_config::compositor::include_installed(target) {
+                    println!("  to start Mandara with River, add this line to {}: {}", target.user_config().display(), target.include_line());
                 }
-                report = after;
-            }
-            let path = last.borrow().as_ref().map(|(p, _)| p.clone()).unwrap_or_else(|| target.generated_file());
-            println!("{target:?}: drop-in {} · include {} {}", path.display(), if added { "added to" } else { "already in" }, target.user_config().display());
-            if cfg.compositor.autostart {
-                println!("  autostart: {}", if user_autostarts(target) { "your config already starts Mandara" } else { "on (from the drop-in)" });
-            }
-            for note in last.borrow().as_ref().map(|(_, e)| e.skipped.clone()).unwrap_or_default() {
-                println!("  note: {note}");
+                for note in last.borrow().as_ref().map(|(_, e)| e.skipped.clone()).unwrap_or_default() {
+                    println!("  note: {note}");
+                }
+            } else {
+                let user_before = std::fs::read_to_string(target.user_config())?;
+                let added = install_include(target)?;
+                if added {
+                    let after = doctor::check(target);
+                    if dfix::is_worse(&report, &after) {
+                        // Our include made it worse: undo exactly that.
+                        mandara_config::write_atomic(&target.user_config(), user_before.as_bytes())?;
+                        println!("{target:?}: {} rejects the config with Mandara's include, so it was removed again:", target.name());
+                        print_report(&after);
+                        config_errors += after.errors();
+                        continue;
+                    }
+                    report = after;
+                }
+                let path = last.borrow().as_ref().map(|(p, _)| p.clone()).unwrap_or_else(|| target.generated_file());
+                println!("{target:?}: drop-in {} · include {} {}", path.display(), if added { "added to" } else { "already in" }, target.user_config().display());
+                if cfg.compositor.autostart {
+                    println!("  autostart: {}", if user_autostarts(target) { "your config already starts Mandara" } else { "on (from the drop-in)" });
+                }
+                for note in last.borrow().as_ref().map(|(_, e)| e.skipped.clone()).unwrap_or_default() {
+                    println!("  note: {note}");
+                }
             }
         }
         if !has_config {
@@ -170,7 +186,10 @@ pub fn setup(o: Options) -> Result<()> {
             println!("  {} {}:{} — {}", if c.is_conflict() { "conflict:" } else { "note:" }, c.file.display(), c.lines[0] + 1, c.summary());
             println!("      {}", c.text);
         }
-        if o.fix_conflicts && !o.check && !fixable.is_empty() {
+        if o.fix_conflicts && !o.check && !fixable.is_empty() && target == Target::River {
+            // River's init is a program Mandara never edits.
+            println!("  River: Mandara doesn't edit {}; remove or comment the lines above yourself", target.user_config().display());
+        } else if o.fix_conflicts && !o.check && !fixable.is_empty() {
             let backup = conflicts::retire(target, &fixable)?;
             let after = doctor::check(target);
             if dfix::is_worse(&report, &after) {

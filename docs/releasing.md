@@ -171,7 +171,8 @@ On every push to `main` (not on its own `chore(release)` commits):
    | `<plugin>.mandara.tar.gz` | bundled plugins |
    | `mandara-<v>-<target>[-<variant>].build.toml` | build manifest: source fingerprint, toolchain, binary SHA-256, lines of code |
    | `mandara-<old>-to-<v>-<target>[-<variant>].patch.zst` | delta update from each of the last five releases (see below) |
-   | `update.json` | update manifest: per target the tarball, `bin/mandara` and patches, with SHA-256s and sizes |
+   | `mandara-<v>-<code>.mlang`, `mandara-<v>-<code>.mlang.zst` | language packs, one per language (see [Language packs](#language-packs)); the `.zst` is what the shell downloads |
+   | `update.json` | update manifest: per target the tarball, `bin/mandara` and patches, with SHA-256s and sizes; `locales`: the language packs |
    | `SHA256SUMS` | checksums of everything |
    | `SHA256SUMS.sig` | Ed25519 signature of `SHA256SUMS` by the release key (see [Signed releases](#signed-releases)) |
 
@@ -307,9 +308,19 @@ every other artifact. Each extra patch adds about a minute to a build job.
       "binary": { "path": "bin/mandara", "sha256": "…", "size": 103729296 },
       "patches": [ { "from": "0.1.9", "from_sha256": "…", "file": "mandara-0.1.9-to-0.2.0-x86_64-linux-gnu-x86-64-v3.patch.zst", "sha256": "…", "size": 7223906 } ]
     }
+  },
+  "locales": {
+    "ar": { "file": "mandara-0.2.0-ar.mlang.zst", "sha256": "…", "size": 214377, "pack_sha256": "…", "pack_size": 1015805 }
   }
 }
 ```
+
+A new binary can be **smaller** than the installed one (0.10.3 moved the
+translations out). Patches don't care which way the size goes, sizes are
+compared as signed numbers everywhere, and Studio's update card and
+`mandara update` say how the new binary compares: "The new version is
+9.2 MB smaller". `tests/self_update.rs` publishes a shrinking release and
+checks the patch rebuilds it byte for byte.
 
 Try it locally:
 
@@ -326,6 +337,89 @@ Marketplace plugins use the same format (`cargo xtask plugin-delta`, or
 `mandara-delta plugin` for plugin authors; see PLUGINS.md). A plugin patch
 rebuilds `plugin.wasm`; every other file comes from a small meta archive
 listed in the plugin's `update.json`.
+
+## Language packs
+
+Translations aren't compiled into the binary. Each language's
+`crates/mandara-i18n/locales/<code>.toml` becomes a **language pack**
+(`.mlang`) for one Mandara version, built by Rust code in the repository
+(`mandara_i18n::pack`, driven by `cargo xtask langpacks`). English is the
+keys and needs none.
+
+**Format** (version 1, little-endian; the full table is in
+`crates/mandara-i18n/src/pack.rs`): a 48-byte header (magic `MLNG`,
+format, entry count, file length, slot counts, section offsets), the exact
+Mandara version and the language code, then an index of 24-byte slots
+(`key_hash u64, key_off u32, key_len u32, val_off u32, val_len u32`) and a
+blob of UTF-8 strings (every key, then every translation). The index is a
+hash table **sorted by hash**: each entry sits in its home slot
+(`(hash × m) >> 64`, twice as many slots as entries) or just after the
+entry before it, so a lookup reads one slot, rarely two, then compares the
+stored key with the one asked for. A hash collision therefore can't return
+the wrong string, and building a pack fails if two keys share a hash. The
+hash is a folded-multiply hash over 8-byte words, documented with its
+constants in the module (byte-at-a-time hashes like FNV-1a made lookups
+slower than the old `HashMap`).
+
+**Loading** maps the file read-only (`memmap2`) and validates it once:
+magic, format, lengths and offsets, the version (it must equal the running
+`mandara --version`) and language, the index's order and placement, every
+string's bounds and UTF-8, and every key's hash. Anything wrong rejects the
+pack (English is used), never a panic. Then strings are served as slices of
+the mapping: no parsing, no allocation per string. Measured on the
+development machine (release build, Arabic, 7,929 strings): validating the
+pack takes 0.75 ms where parsing the TOML took 5 ms; a lookup takes 23 ns
+against 27 ns for the old `HashMap` (14 against 17 ns for a hot set of 200
+strings); the shell's heap in Arabic is about 2 MB smaller (sandbox, idle,
+anonymous RSS 33.3 against 35.3 MB). Until a language's pack is loaded,
+`mandara_i18n::language()` answers English, so layout direction, dates and
+digits match the English text shown meanwhile. `cargo test --release -p mandara-i18n --test packs --
+--ignored --nocapture` repeats the measurement.
+
+**Never changed under a live mapping.** Mandara writes a pack to a
+temporary file in the same folder, syncs it and renames it over the old
+one, and pruning only unlinks: a process that has the old file mapped keeps
+reading the old inode, so a download or update can never truncate a mapped
+file (`SIGBUS`). Package managers replace files the same way.
+
+**Where they live**, first match wins:
+`$XDG_DATA_HOME/mandara/locales/<v>/<code>.mlang` (downloads, and what
+`mandara install` copies from a tarball), `<exe dir>/../share/mandara/locales/<v>/`
+(an unpacked tarball, or `/usr/bin` → `/usr/share`), then every
+`$XDG_DATA_DIRS` entry plus `/usr/local/share` and `/usr/share`
+(packages; Mandara Login's copy reads `/usr/local/share`, where
+`mandara greeter use mandara` and `greeter apply-config` install its
+language's pack). Debug builds without a pack compile the source catalog
+in memory, so `cargo test` and `cargo run` stay translated; release builds
+never read the sources.
+
+**In CI:** the publish job runs
+`cargo xtask langpacks --version <v> --out dist`, which writes
+`mandara-<v>-<code>.mlang`, its zstd-compressed download
+`mandara-<v>-<code>.mlang.zst` (checked by decompressing it with the
+client's pure-Rust decoder) and the `locales` part of `update.json`
+(`file`, `sha256` and `size` of the `.zst`; `pack_sha256` and `pack_size`
+of the `.mlang`). The packs are architecture-independent and reproducible,
+so they are built once. `cargo xtask dist` puts every pack in each tarball
+(`share/mandara/locales/<v>/`), and the package jobs stage them in
+`target/langpacks/<v>/` for the `.deb` and `.rpm` (installed in
+`/usr/share/mandara/locales/<v>/`); the Arch recipes copy them from the
+tarball or build them with `cargo xtask langpacks`.
+
+**Downloading** (`mandara_services::self_update::langpacks`): a language
+used without its pack (the shell's, a plugin's own, a desktop widget's) or
+one just chosen whose pack differs from the published one is fetched from
+**the running version's release** (`releases/tags/v<running>`), whose
+`SHA256SUMS` must carry a valid signature; `update.json` must match its
+signed line; the download must match `sha256`, the decompressed pack
+`pack_sha256` and its header the version and language. A lock file next to
+the pack keeps the shell and Studio from downloading it twice. After an
+update installs a new binary, the updater downloads the new version's
+packs for every language in use into its folder, then prunes folders older
+than the version it replaced (that one stays for a rollback).
+`crates/mandara-services/tests/langpacks.rs` runs all of this against a
+local mock release, including a tampered download, a pack built for
+another version and an unsigned release.
 
 ## Memory allocator
 

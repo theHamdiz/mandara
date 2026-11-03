@@ -23,6 +23,7 @@ use mandara_services::wallhaven::{self, Wall};
 use mandara_theme::{SchemeVariant, ThemeSource};
 
 use crate::dismiss::KeepInside as _;
+use crate::first_frame::{self, FirstFrame};
 use crate::fonts::fonts;
 use crate::icons::icon;
 use crate::kit::text;
@@ -1104,7 +1105,11 @@ pub struct PickerView {
     appear: SpringValue<f32>,
     clock: FrameClock,
     closing: bool,
-    expected: (f32, f32),
+    /// Waits for the size of the output it opened for, a few frames at
+    /// most: without a limit it stayed invisible on an output of another
+    /// size, holding the keyboard, and Esc never reached it
+    /// ([`crate::first_frame`]).
+    first: FirstFrame,
     scroll_accum: f32,
     /// Wallpaper generator: the local items made by it (the "Generated"
     /// marker, Remix), the picker's own job and its last error.
@@ -1115,22 +1120,6 @@ pub struct PickerView {
     /// from GPUI's image cache when the picker goes, or every session kept
     /// its decoded pixels for good.
     painted: HashSet<PathBuf>,
-    /// Frames spent waiting for the surface to take the expected size.
-    settle_frames: u8,
-}
-
-/// Frames a new picker waits for its surface to take the expected size
-/// before drawing at the size it has (the compositor put it on an output
-/// of another size): without a limit it stayed invisible, holding the
-/// keyboard, and Esc never reached it.
-const SETTLE_FALLBACK_FRAMES: u8 = 6;
-/// Viewport sizes within this many logical px count as the expected one.
-const SETTLE_SLACK_PX: f32 = 2.0;
-
-/// Whether a picker of viewport `viewport` that expected `expected` may
-/// draw, after `waited` frames of waiting.
-fn picker_settled(viewport: (f32, f32), expected: (f32, f32), waited: u8) -> bool {
-    ((viewport.0 - expected.0).abs() <= SETTLE_SLACK_PX && (viewport.1 - expected.1).abs() <= SETTLE_SLACK_PX) || waited >= SETTLE_FALLBACK_FRAMES
 }
 
 impl PickerView {
@@ -1146,6 +1135,7 @@ impl PickerView {
         cx.observe(&config(cx), |_, _, cx| cx.notify()).detach();
         let focus = cx.focus_handle();
         focus.focus(window, cx);
+        first_frame::guard("wallpaper picker", window, cx, |this| this.first.drawn(), |this, cx| this.close(cx));
         let all = list(&directory(cx));
         let current = config(cx).read(cx).get().wallpaper.path.clone();
         let selected = current.and_then(|c| all.iter().position(|p| *p == c)).unwrap_or(0);
@@ -1168,13 +1158,12 @@ impl PickerView {
             appear: SpringValue::new(0.0, PICKER_SPRING),
             clock: FrameClock::new(),
             closing: false,
-            expected,
+            first: FirstFrame::new(expected),
             scroll_accum: 0.0,
             generated: HashSet::new(),
             gen_job: None,
             gen_error: None,
             painted: HashSet::new(),
-            settle_frames: 0,
         };
         // A picker removed without its outro (its output went away) still
         // lets go of its images.
@@ -1523,8 +1512,7 @@ impl Render for PickerView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let vp = window.viewport_size();
         let (sw, sh) = (f32::from(vp.width), f32::from(vp.height));
-        if !picker_settled((sw, sh), self.expected, self.settle_frames) && !self.closing {
-            self.settle_frames = self.settle_frames.saturating_add(1);
+        if !self.first.ready((sw, sh)) && !self.closing {
             window.request_animation_frame();
             return div().id("picker-root").size_full().track_focus(&self.focus).into_any_element();
         }
@@ -1975,21 +1963,6 @@ mod tests {
         c.wallpaper.match_colors = false;
         assert!(reconcile_theme(&mut c));
         assert_eq!(c.theme.source, ThemeSource::Preset { preset: "rose-pine".into() });
-    }
-
-    #[test]
-    fn picker_draws_on_an_output_of_another_size_after_a_few_frames() {
-        let first = (1707.0, 960.0);
-        // The expected size (within the slack) draws at once.
-        assert!(picker_settled(first, first, 0));
-        assert!(picker_settled((first.0 + SETTLE_SLACK_PX, first.1), first, 0));
-        // GPUI's first frames use a guess: wait for the real size...
-        let other = (1920.0, 1080.0);
-        assert!(!picker_settled(other, first, 0));
-        assert!(!picker_settled(other, first, SETTLE_FALLBACK_FRAMES - 1));
-        // ...but never forever (it stayed invisible, holding the keyboard).
-        assert!(picker_settled(other, first, SETTLE_FALLBACK_FRAMES));
-        assert!(picker_settled(other, first, u8::MAX));
     }
 
     #[test]

@@ -43,6 +43,7 @@ use mandara_ui::icons::icon;
 use mandara_ui::text_field::TextField;
 
 use super::StudioView;
+use super::choice::{ChoiceItem, GREETER_CHOICE, placed};
 use crate::tokens::*;
 
 mod manager;
@@ -209,6 +210,10 @@ const PAGE_CHROME_H_PX: f32 = 130.0;
 const PAGE_MIN_H_PX: f32 = 420.0;
 /// Width of a slider track.
 const TRACK_W_PX: f32 = 180.0;
+/// Widest a choice grows beside its label (longer ones go under it).
+const CHOICE_MAX_W_PX: f32 = DIM_420_PX;
+/// Room a row keeps for its label beside a choice.
+const CHOICE_LABEL_ROOM_PX: f32 = DIM_150_PX;
 /// Slider steps at least this coarse show one decimal.
 const ONE_DECIMAL_STEP: f32 = 0.1;
 /// Theme swatches: gradient angle and the accent's lightness.
@@ -424,26 +429,34 @@ impl GreeterPage {
     }
 
     fn choice<T: Copy + PartialEq + 'static>(&self, p: &MandaraPalette, id: &'static str, label: String, value: T, options: Vec<(String, T)>, set: fn(&mut GreeterConfig, T), cx: &mut Context<Self>) -> AnyElement {
-        let mut seg = div().row().flex_wrap().gap(px(2.0)).p(px(SPACE_3_PX)).rounded(px(RADIUS_12_PX)).bg(p.surface_container_high.hsla());
-        for (i, (name, v)) in options.into_iter().enumerate() {
-            let on = v == value;
-            seg = seg.child(
-                div()
-                    .id((id, i))
-                    .px(px(SPACE_10_PX))
-                    .h(px(DIM_26_PX))
-                    .row()
-                    .items_center()
-                    .rounded(px(RADIUS_9_PX))
-                    .text_size(px(TEXT_12_PX))
-                    .cursor_pointer()
-                    .when(on, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()))
-                    .when(!on, |el| el.hover(|s| s.bg(p.surface_container.hsla())))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.edit(cx, |c| set(c, v))))
-                    .child(name),
-            );
+        let items = options
+            .into_iter()
+            .enumerate()
+            .map(|(i, (name, v))| ChoiceItem::new((id, i), name, v == value, cx.listener(move |this, _: &ClickEvent, _, cx| this.edit(cx, |c| set(c, v)))))
+            .collect();
+        self.choice_row(p, label, items)
+    }
+
+    /// A labelled choice: beside its label when it fits on one line in the
+    /// room there (the page's width less the card's padding and some room
+    /// for the label, at most [`CHOICE_MAX_W_PX`]), else a balanced grid
+    /// under the label across the whole row.
+    fn choice_row(&self, p: &MandaraPalette, label: String, items: Vec<ChoiceItem>) -> AnyElement {
+        let under = (self.width.get() - 2.0 * SPACE_14_PX).max(0.0);
+        let beside = (under - SPACE_16_PX - CHOICE_LABEL_ROOM_PX).clamp(0.0, CHOICE_MAX_W_PX);
+        match placed(items, beside, under, &GREETER_CHOICE, p) {
+            (control, false) => Self::row(p, label, control),
+            (control, true) => div()
+                .px(px(SPACE_14_PX))
+                .py(px(SPACE_6_PX))
+                .row()
+                .flex_col()
+                .cross_start()
+                .gap(px(SPACE_8_PX))
+                .child(div().text_color(p.on_surface.hsla()).child(label))
+                .child(control)
+                .into_any_element(),
         }
-        Self::row(p, label, seg.into_any_element())
     }
 
     /// A font from the searchable picker; empty = `fallback` (shown as
@@ -794,29 +807,24 @@ impl GreeterPage {
         let mut sessions: Vec<(String, String)> = vec![(tl("First"), String::new())];
         sessions.extend(mandara_greeter::sessions::list_sessions(mandara_i18n::language().posix()).into_iter().map(|s| (s.name, s.id)));
         let session_id = s.default.clone();
-        let mut seg = div().row().flex_wrap().gap(px(2.0)).p(px(SPACE_3_PX)).rounded(px(RADIUS_12_PX)).bg(p.surface_container_high.hsla()).max_w(px(DIM_420_PX));
-        for (i, (name, id)) in sessions.into_iter().enumerate() {
-            let on = id == session_id;
-            seg = seg.child(
-                div()
-                    .id(("sess", i))
-                    .px(px(SPACE_10_PX))
-                    .h(px(DIM_26_PX))
-                    .row()
-                    .items_center()
-                    .rounded(px(RADIUS_9_PX))
-                    .text_size(px(TEXT_12_PX))
-                    .cursor_pointer()
-                    .when(on, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+        let items = sessions
+            .into_iter()
+            .enumerate()
+            .map(|(i, (name, id))| {
+                let on = id == session_id;
+                ChoiceItem::new(
+                    ("sess", i),
+                    name,
+                    on,
+                    cx.listener(move |this, _: &ClickEvent, _, cx| {
                         let id = id.clone();
                         this.edit(cx, move |c| c.session.default = id)
-                    }))
-                    .child(name),
-            );
-        }
+                    }),
+                )
+            })
+            .collect();
         let session = vec![
-            Self::row(p, tl("Default session"), seg.into_any_element()),
+            self.choice_row(p, tl("Default session"), items),
             self.toggle(p, "sess-x11", tl("List X11 sessions"), s.x11, |c, v| c.session.x11 = v, cx),
             self.choice(p, "sess-style", tl("Picker style"), s.style, vec![(tl("Pill"), SessionStyle::Pill), (tl("Full-width field"), SessionStyle::Field)], |c, v| c.session.style = v, cx),
         ];
@@ -847,30 +855,17 @@ impl GreeterPage {
         let mut langs = vec![(tl("Auto"), "auto")];
         langs.extend(mandara_i18n::Lang::ALL.iter().map(|l| (l.native_name().to_string(), l.code())));
         let lang = self.draft.language.clone();
-        let mut lseg = div().row().flex_wrap().gap(px(2.0)).p(px(SPACE_3_PX)).rounded(px(RADIUS_12_PX)).bg(p.surface_container_high.hsla()).max_w(px(DIM_420_PX));
-        for (i, (name, code)) in langs.into_iter().enumerate() {
-            let on = lang == code;
-            lseg = lseg.child(
-                div()
-                    .id(("lang", i))
-                    .px(px(SPACE_10_PX))
-                    .h(px(DIM_26_PX))
-                    .row()
-                    .items_center()
-                    .rounded(px(RADIUS_9_PX))
-                    .text_size(px(TEXT_12_PX))
-                    .cursor_pointer()
-                    .when(on, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.edit(cx, |c| c.language = code.to_string())))
-                    .child(name),
-            );
-        }
+        let items = langs
+            .into_iter()
+            .enumerate()
+            .map(|(i, (name, code))| ChoiceItem::new(("lang", i), name, lang == code, cx.listener(move |this, _: &ClickEvent, _, cx| this.edit(cx, |c| c.language = code.to_string()))))
+            .collect();
         vec![
             Self::card(p, tl("Session"), session),
             Self::card(p, tl("Power buttons"), power),
             Self::card(p, tl("Logo"), logo_rows),
             Self::card(p, tl("Colour scheme switcher"), schemes),
-            Self::card(p, tl("Language"), vec![Self::row(p, tl("Login screen language"), lseg.into_any_element())]),
+            Self::card(p, tl("Language"), vec![self.choice_row(p, tl("Login screen language"), items)]),
         ]
     }
 
