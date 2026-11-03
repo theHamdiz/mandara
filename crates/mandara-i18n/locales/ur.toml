@@ -7792,3 +7792,6 @@
 "Platform driver" = "پلیٹ فارم ڈرائیور"
 "Profile driver" = "پروفائل ڈرائیور"
 "Power profile · {profile}" = "پاور پروفائل · {profile}"
+"Power panel style" = "پاور پینل کا انداز"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "کلاسک: بیٹری کارڈ کے اوپر پروفائل کارڈ۔ ماڈرن: پہلے بیٹری، بڑے چارج رنگ اور چارج گراف کے ساتھ، ایک پروفائل سوئچ، اور تکنیکی تفصیلات بند"
+"Modern" = "ماڈرن"

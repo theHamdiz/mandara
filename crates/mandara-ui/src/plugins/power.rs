@@ -6,7 +6,10 @@
 //! chip breathes gently (`power.charging_pulse`, never with reduced motion);
 //! while it is critical it pulses coral (`power.critical_pulse`).
 //!
-//! The panel leads with each battery: a large charge gauge (SDF dots along
+//! The panel has two styles (`power.panel_style`). **Classic**, the
+//! default, is drawn by [`classic`]: profile cards first, then a battery
+//! card with a dotted ring, stats and charge-history bars; it names no CPU
+//! scaling driver. **Modern**, drawn here, leads with each battery: a large charge gauge (SDF dots along
 //! the arc, the state inside), the time left, health / capacity / chemistry
 //! and a charge-history area graph from UPower's `GetHistory`. Below it the
 //! profiles that exist form a segmented control with a sliding indicator,
@@ -36,6 +39,7 @@ use mandara_core::{FrameClock, SpringConfig, SpringValue, ToGpui, oklab_gradient
 use mandara_i18n::{t, tf, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, Output, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry};
 use mandara_services::power::{self, ChargeState, DeviceKind, HistoryPoint, PowerCommand, PowerDevice, PowerService, PowerState, Profiles};
+use mandara_config::power::PowerPanelStyle;
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
 
@@ -50,6 +54,8 @@ use crate::fonts::tabular_nums;
 use crate::icons::icon;
 use crate::kit::{reveal, text, tokens};
 
+mod classic;
+
 pub const ID: &str = "power";
 
 /// Defaults for `plugins.settings.power.*`.
@@ -57,7 +63,10 @@ const DEFAULT_SHOW_PERIPHERALS: bool = true;
 const DEFAULT_HISTORY_HOURS: i64 = 12;
 const HISTORY_HOURS_RANGE: (i64, i64) = (1, 48);
 
-const PANEL_W: f32 = 420.0;
+/// Panel width of the Modern and the Classic style (three profile cards
+/// side by side need the wider one).
+const MODERN_W: f32 = 420.0;
+const CLASSIC_W: f32 = 468.0;
 const PAD: f32 = 14.0;
 const GAP: f32 = tokens::MD;
 const SECTION_H: f32 = SECTION_H_PX;
@@ -908,7 +917,7 @@ fn profile_switcher(profiles: &Profiles, switching: Option<&str>, slot: f32, m: 
     let n = profiles.available.len().max(1);
     let shown = switching.unwrap_or(&profiles.active);
     let (from, to) = profile_accent(shown, palette);
-    let seg_w = (PANEL_W - PAD * 2.0 - SEG_PAD * 2.0) / n as f32;
+    let seg_w = (MODERN_W - PAD * 2.0 - SEG_PAD * 2.0) / n as f32;
     let outer_r = crate::style::radius(SEG_RADIUS_PX);
     let inner_r = crate::style::concentric(outer_r, SEG_PAD);
     let base = palette.surface_container_high;
@@ -1244,7 +1253,7 @@ fn details(groups: &[DetailGroup], open: bool, m: &Shared, radius: f32, palette:
     (col.into_any_element(), height)
 }
 
-fn toast(ok: bool, msg: SharedString, palette: &MandaraPalette) -> AnyElement {
+fn toast(ok: bool, msg: SharedString, width: f32, palette: &MandaraPalette) -> AnyElement {
     let tint = readable(if ok { palette.success_emerald } else { palette.urgent_coral }, palette);
     div()
         .absolute()
@@ -1255,7 +1264,7 @@ fn toast(ok: bool, msg: SharedString, palette: &MandaraPalette) -> AnyElement {
         .justify_center()
         .child(
             div()
-                .max_w(px(PANEL_W - PAD * TOAST_SIDE_PADS))
+                .max_w(px(width - PAD * TOAST_SIDE_PADS))
                 .h(px(TOAST_H))
                 .pl(px(TOAST_PAD_L_PX))
                 .pr(px(TOAST_PAD_R_PX))
@@ -1417,6 +1426,8 @@ impl View {
         let span = history_span(cx);
         let peripherals_on = show_peripherals(cx);
         let (low, peripheral_low) = (low_percent(cx), peripheral_low_percent(cx));
+        let classic = crate::state::config(cx).read(cx).get().power.panel_style == PowerPanelStyle::Classic;
+        let width = if classic { CLASSIC_W } else { MODERN_W };
         if self.p.progress() > 0.0 {
             refresh_history(m, span, cx);
             redraw_in(TICK, window, cx);
@@ -1442,13 +1453,17 @@ impl View {
         if let Some((_, _, at)) = &status {
             redraw_in(crate::state::config(cx).read(cx).snapshot().panels.toast().saturating_sub(at.elapsed()) + EXPIRY_MARGIN, window, cx);
         }
-        // The indicator's slot is settled before the model is borrowed for
-        // the build below.
-        let slot = {
-            let mb = m.borrow();
-            mb.state.profiles.as_ref().filter(|p| !p.available.is_empty()).map(|p| profile_slot(p, mb.switching.as_ref().map(|(s, _)| s.as_str()), crate::bidi::rtl()))
-        }
-        .map(|target| self.slide(target, window));
+        // The Modern indicator's slot is settled before the model is
+        // borrowed for the build below.
+        let slot = if classic {
+            None
+        } else {
+            let target = {
+                let mb = m.borrow();
+                mb.state.profiles.as_ref().filter(|p| !p.available.is_empty()).map(|p| profile_slot(p, mb.switching.as_ref().map(|(s, _)| s.as_str()), crate::bidi::rtl()))
+            };
+            target.map(|target| self.slide(target, window))
+        };
 
         let mb = m.borrow();
         let state = &mb.state;
@@ -1457,13 +1472,18 @@ impl View {
         let peripherals: smallvec::SmallVec<[&PowerDevice; INLINE_PERIPHERALS]> = if peripherals_on { state.peripherals().collect() } else { smallvec::SmallVec::new() };
 
         // ── Header ───────────────────────────────────────────────────────
-        let subtitle: String = match batteries.first() {
-            Some(b) => b.display_name(),
-            None if !state.ready => t("Reading power state…").into(),
-            None if state.upower => t("On mains power").into(),
-            None => state.profiles.as_ref().map(|p| profile_label(&p.active)).unwrap_or_default(),
+        let subtitle: String = if classic {
+            classic::subtitle(batteries.first().copied(), state.profiles.as_ref().map(|p| p.active.as_str()), state.ready)
+        } else {
+            match batteries.first() {
+                Some(b) => b.display_name(),
+                None if !state.ready => t("Reading power state…").into(),
+                None if state.upower => t("On mains power").into(),
+                None => state.profiles.as_ref().map(|p| profile_label(&p.active)).unwrap_or_default(),
+            }
         };
-        let head = header(if batteries.is_empty() { "gauge" } else { "battery" }, accent, t("Power"), subtitle, palette, None);
+        let glyph = if classic || batteries.is_empty() { "gauge" } else { "battery" };
+        let head = header(glyph, accent, t("Power"), subtitle, palette, None);
 
         let mut blocks: Vec<AnyElement> = Vec::new();
         let mut height = PAD * 2.0 + HEADER_H;
@@ -1475,11 +1495,33 @@ impl View {
         if !state.ready {
             push(empty_state("gauge", t("Reading power state…"), t("Asking power-profiles-daemon and UPower"), LOADING_H, palette).into_any_element(), LOADING_H, &mut blocks);
         } else {
+            let switching = mb.switching.as_ref().map(|(s, _)| s.as_str());
+            let profiles = state.profiles.as_ref().filter(|p| !p.available.is_empty());
+            let unavailable = || {
+                let hint = if state.profiles_error.as_ref().is_some_and(|e| !e.is_empty()) {
+                    t("Install and enable power-profiles-daemon to switch profiles")
+                } else {
+                    t("No profiles reported by the daemon")
+                };
+                (info_card("gauge", t("Power profiles unavailable"), hint, ERROR_H, palette.warning_amber, card_r, palette), ERROR_H)
+            };
+            // Classic: the profiles lead.
+            if classic {
+                let (el, h) = match profiles {
+                    Some(p) => classic::profiles_block(p, switching, m, card_r, palette),
+                    None => unavailable(),
+                };
+                push(el, h, &mut blocks);
+            }
+
             // ── Batteries ────────────────────────────────────────────────
             if !state.upower {
                 push(info_card("battery", t("UPower is not running"), t("Battery details need the upower service"), ERROR_H, palette.warning_amber, card_r, palette), ERROR_H, &mut blocks);
             } else if batteries.is_empty() {
                 push(info_card("plug", t("No battery"), t("This computer runs on mains power"), NO_BATTERY_H, palette.primary, card_r, palette), NO_BATTERY_H, &mut blocks);
+            } else if classic {
+                let (el, h) = classic::batteries_block(&batteries, &mb.history, span, m, mb.limit_busy, card_r, low, palette);
+                push(el, h, &mut blocks);
             } else {
                 let named = batteries.len() > 1;
                 for b in &batteries {
@@ -1488,10 +1530,10 @@ impl View {
                 }
             }
 
-            // ── Profiles ─────────────────────────────────────────────────
-            match (&state.profiles, slot) {
+            // ── Profiles (Modern) ────────────────────────────────────────
+            match (profiles, slot) {
+                _ if classic => {}
                 (Some(profiles), Some(slot)) => {
-                    let switching = mb.switching.as_ref().map(|(s, _)| s.as_str());
                     let mut col = div().flex().flex_col().gap(px(SECTION_GAP)).child(profile_switcher(profiles, switching, slot, m, palette));
                     let mut h = SEG_H;
                     if !profiles.degraded.is_empty() {
@@ -1505,17 +1547,13 @@ impl View {
                     push(col.into_any_element(), h, &mut blocks);
                 }
                 _ => {
-                    let hint = if state.profiles_error.as_ref().is_some_and(|e| !e.is_empty()) {
-                        t("Install and enable power-profiles-daemon to switch profiles")
-                    } else {
-                        t("No profiles reported by the daemon")
-                    };
-                    push(info_card("gauge", t("Power profiles unavailable"), hint, ERROR_H, palette.warning_amber, card_r, palette), ERROR_H, &mut blocks);
+                    let (el, h) = unavailable();
+                    push(el, h, &mut blocks);
                 }
             }
 
-            // ── Charge limit (only where UPower can switch it) ───────────
-            for b in &batteries {
+            // ── Charge limit (Modern; Classic shows it in the battery card) ─
+            for b in batteries.iter().filter(|_| !classic) {
                 if let Some(card) = limit_card(b, m, mb.limit_busy, card_r, palette) {
                     push(card, LIMIT_H, &mut blocks);
                 }
@@ -1528,8 +1566,8 @@ impl View {
                 push(div().flex().flex_col().gap(px(SECTION_GAP)).child(section(t("Devices"), palette, None)).child(list).into_any_element(), h, &mut blocks);
             }
 
-            // ── Details ──────────────────────────────────────────────────
-            let groups = detail_groups(&batteries, state.profiles.as_ref());
+            // ── Details (Modern) ─────────────────────────────────────────
+            let groups = if classic { Vec::new() } else { detail_groups(&batteries, state.profiles.as_ref()) };
             if !groups.is_empty() {
                 let (el, h) = details(&groups, mb.details_open, m, card_r, palette);
                 push(el, h, &mut blocks);
@@ -1537,8 +1575,9 @@ impl View {
         }
         drop((batteries, peripherals));
         drop(mb);
-        if (f32::from(self.size_cell.get().height) - height).abs() > RESIZE_EPSILON_PX {
-            self.size_cell.set(size(px(PANEL_W), px(height)));
+        let shown = self.size_cell.get();
+        if (f32::from(shown.height) - height).abs() > RESIZE_EPSILON_PX || (f32::from(shown.width) - width).abs() > RESIZE_EPSILON_PX {
+            self.size_cell.set(size(px(width), px(height)));
         }
 
         // Under the fixed header the blocks scroll when the screen is too
@@ -1559,7 +1598,7 @@ impl View {
             .flex_col()
             .child(div().flex_none().child(reveal(p, 0, head)))
             .child(crate::scrollbar::with_scrollbar(scroller, handle, bar, palette).flex_1().min_h(px(0.0)).flex().flex_col())
-            .when_some(status, |el, (ok, msg, _)| el.child(toast(ok, msg, palette)))
+            .when_some(status, |el, (ok, msg, _)| el.child(toast(ok, msg, width, palette)))
             .into_any_element()
     }
 }
@@ -1621,7 +1660,8 @@ pub fn register(r: &mut PluginRegistry) {
             window,
             cx,
         );
-        let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(PAD * 2.0 + HEADER_H + GAP + LOADING_H))));
+        let first_w = if crate::state::config(cx).read(cx).get().power.panel_style == PowerPanelStyle::Classic { CLASSIC_W } else { MODERN_W };
+        let size_cell = Rc::new(Cell::new(size(px(first_w), px(PAD * 2.0 + HEADER_H + GAP + LOADING_H))));
         let view = View { p: panel_cx.clone(), m: m.clone(), size_cell: size_cell.clone(), scroll: (gpui::ScrollHandle::new(), crate::scrollbar::ScrollbarState::new()) };
         let panel = fn_view(None, move |palette, window, cx| view.render(palette, window, cx), window, cx);
         let cycle_m = m.clone();

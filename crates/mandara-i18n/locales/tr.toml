@@ -8039,3 +8039,6 @@
 "Platform driver" = "Platform sürücüsü"
 "Profile driver" = "Profil sürücüsü"
 "Power profile · {profile}" = "Güç profili · {profile}"
+"Power panel style" = "Güç paneli stili"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "Klasik: pil kartının üstünde profil kartları. Modern: önce büyük bir şarj halkası ve şarj grafiğiyle pil, tek bir profil anahtarı ve katlanmış teknik ayrıntılar"
+"Modern" = "Modern"

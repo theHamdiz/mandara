@@ -8040,3 +8040,6 @@
 "Platform driver" = "प्लेटफ़ॉर्म ड्राइवर"
 "Profile driver" = "प्रोफ़ाइल ड्राइवर"
 "Power profile · {profile}" = "पावर प्रोफ़ाइल · {profile}"
+"Power panel style" = "पावर पैनल की शैली"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "क्लासिक: बैटरी कार्ड के ऊपर प्रोफ़ाइल कार्ड। मॉडर्न: पहले बैटरी, बड़ी चार्ज रिंग और चार्ज ग्राफ़ के साथ, एक प्रोफ़ाइल स्विच, और तकनीकी विवरण छिपे हुए"
+"Modern" = "मॉडर्न"

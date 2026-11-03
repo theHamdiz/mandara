@@ -297,6 +297,22 @@ pub struct PowerConfig {
     /// The battery chip breathes gently while it charges (never with
     /// reduced motion).
     pub charging_pulse: bool,
+    /// How the Power panel is laid out.
+    pub panel_style: PowerPanelStyle,
+}
+
+/// The Power panel's layout (`power.panel_style`).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PowerPanelStyle {
+    /// Profile cards with a line each, then the battery card with its
+    /// dotted ring, stats row and charge-history bars (the default).
+    #[default]
+    Classic,
+    /// The battery first: a large charge ring, the time left, a charge
+    /// graph and one profile switch; technical readouts in a folded
+    /// *Details* section.
+    Modern,
 }
 
 impl Default for PowerConfig {
@@ -318,6 +334,7 @@ impl Default for PowerConfig {
             notify_full: false,
             critical_pulse: true,
             charging_pulse: true,
+            panel_style: PowerPanelStyle::Classic,
         }
     }
 }
@@ -718,6 +735,23 @@ mod tests {
         let before = defaults.clone();
         SessionMenuConfig::restore_builtins(&mut defaults);
         assert_eq!(defaults, before, "the default list is already complete");
+    }
+
+    #[test]
+    fn the_power_panel_style_defaults_to_classic_and_parses() {
+        assert_eq!(PowerConfig::default().panel_style, PowerPanelStyle::Classic);
+        assert_eq!(PowerPanelStyle::default(), PowerPanelStyle::Classic);
+        // A config from before the setting existed keeps the panel it had.
+        let old: PowerConfig = toml::from_str("low_percent = 15\ncritical_pulse = false\n").unwrap();
+        assert_eq!(old.panel_style, PowerPanelStyle::Classic);
+        assert!(old.charging_pulse, "the charging pulse is on unless turned off");
+        let classic: PowerConfig = toml::from_str("panel_style = \"classic\"\n").unwrap();
+        assert_eq!(classic.panel_style, PowerPanelStyle::Classic);
+        let modern: PowerConfig = toml::from_str("panel_style = \"modern\"\n").unwrap();
+        assert_eq!(modern.panel_style, PowerPanelStyle::Modern);
+        assert!(toml::from_str::<PowerConfig>("panel_style = \"retro\"\n").is_err(), "unknown styles are rejected, not guessed");
+        let round: PowerConfig = toml::from_str(&toml::to_string(&modern).unwrap()).unwrap();
+        assert_eq!(round, modern);
     }
 
     #[test]

@@ -8039,3 +8039,6 @@
 "Platform driver" = "Драйвер платформы"
 "Profile driver" = "Драйвер профиля"
 "Power profile · {profile}" = "Профиль питания · {profile}"
+"Power panel style" = "Стиль панели питания"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "Классика: карточки профилей над карточкой батареи. Современный: сначала батарея с большим кольцом заряда и графиком заряда, один переключатель профиля, технические подробности свёрнуты"
+"Modern" = "Современный"

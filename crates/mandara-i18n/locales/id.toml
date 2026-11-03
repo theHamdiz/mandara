@@ -7792,3 +7792,6 @@
 "Platform driver" = "Driver platform"
 "Profile driver" = "Driver profil"
 "Power profile · {profile}" = "Profil daya · {profile}"
+"Power panel style" = "Gaya panel daya"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "Klasik: kartu profil di atas kartu baterai. Modern: baterai lebih dulu dengan cincin daya besar dan grafik pengisian, satu pengalih profil, dan detail teknis dilipat"
+"Modern" = "Modern"

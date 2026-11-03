@@ -7792,3 +7792,6 @@
 "Platform driver" = "درایور پلتفرم"
 "Profile driver" = "درایور نمایه"
 "Power profile · {profile}" = "نمایهٔ نیرو · {profile}"
+"Power panel style" = "سبک پنل نیرو"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "کلاسیک: کارت‌های نمایه بالای کارت باتری. مدرن: اول باتری با حلقهٔ بزرگ شارژ و نمودار شارژ، یک کلید نمایه، و جزئیات فنی جمع‌شده"
+"Modern" = "مدرن"

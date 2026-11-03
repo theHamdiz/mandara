@@ -699,6 +699,7 @@ Bare icons, every item on its own pill, or each group on one island
 Bars
 Base currency
 Batt.
+Batteries
 Battery
 Battery alert thresholds, the battery summary and a pending critical action (JSON)
 Battery alerts
@@ -1028,6 +1029,7 @@ Clarice Lispector
 Classic
 Classic analog
 Classic: one surface with the search field and results. Beacon: a centred search bar with results under it once you type
+Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away
 Claude Code today
 Claude Code's tokens today and this week, read from its local logs once you switch it on
 Clean
@@ -1207,6 +1209,7 @@ Control the focus timer
 Controller
 Conversations with Maya Angelou
 Cookie
+Cooler, quieter, longer
 Copied
 Copied images and screenshots
 Copied text and images appear here
@@ -2160,6 +2163,7 @@ Full in {time}
 Full moon
 Full name
 Full name, e.g. Salma Adel
+Full speed, more heat
 Full update: {size} (no patch from your version)
 Fullscreen only
 Fully charged
@@ -3359,6 +3363,7 @@ Model mode only: downloads the depth model once from Hugging Face
 Model mode only: runs the model once per wallpaper in a low-priority helper
 Models for copying text from screenshots and for the wallpaper depth effect's model mode. From Hugging Face, all Apache-2.0; the depth model downloads only when you pick that mode.
 Models loaded in memory with their VRAM share and unload time (JSON)
+Modern
 Modes
 Mon
 Monday
@@ -3972,6 +3977,7 @@ On battery — the battery timeouts apply
 On for {time}
 On for {time} · started by screen sharing
 On mains power
+On mains power · {profile}
 On mains power — the mains timeouts apply
 On the Shortness of Life
 On the Statue of Liberty
@@ -4396,7 +4402,9 @@ Power dock
 Power draw
 Power menu
 Power mode
+Power panel style
 Power policy is not running
+Power profile
 Power profile · {profile}
 Power profile, batteries and peripheral batteries (JSON)
 Power profiles
@@ -4573,6 +4581,7 @@ Reading audio devices…
 Reading desktop entries and where each one came from.
 Reading displays…
 Reading drives…
+Reading history…
 Reading it from this computer
 Reading maketh a full man; conference a ready man; and writing an exact man.
 Reading network devices…
@@ -5428,6 +5437,7 @@ Speakers
 Specular rim
 Speech, 1997
 Speed
+Speed and efficiency
 Speed test cancelled
 Speed test failed
 Speed test size
@@ -5623,6 +5633,7 @@ Switched to {name} — Undo is under Recent changes
 Switched to {name}.
 Switching input languages
 Switching speakers / headphones
+Switching…
 Sync border colors
 Synced lyrics
 Synced lyrics, the current line lit
@@ -6321,6 +6332,7 @@ UDP
 UDisks2 is not available
 UDisks2 isn't running — install or start udisks2
 UPS
+UPower has no history for this span yet
 UPower is not running
 URL or path
 USB controller
@@ -7104,6 +7116,7 @@ just now
 key=value pairs, or a TOML recipe
 khatm
 khatm {n}
+last {hours} h
 layout
 left
 left edge, logical px from the output's left
@@ -7545,6 +7558,7 @@ your default
 {kind} · {lines} lines
 {language} · follows your desktop
 {layout}: choose a variant
+{limit} · resumes below {start}%
 {limit} · set by firmware or root (read-only)
 {list} and {count} more
 {manager} also removes:
@@ -7637,6 +7651,8 @@ your default
 {path} isn't writable; re-run `mandara install` to update it
 {path} wasn't made by the wallpaper generator
 {path}: {error}
+{pct}% · {state}
+{pct}% · {state} · {profile}
 {percent} lit
 {percent}% left
 {percent}% left — plug in now

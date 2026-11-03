@@ -145,18 +145,26 @@ The rest of what's built in.
   when units have failed, search and filters, state pills, start / stop /
   restart / enable / disable (system units ask through polkit) and each
   unit's recent journal (read with `journalctl`).
-- **Power**: each battery leads with a large charge gauge (the percentage
-  and its state inside), the time left, health, capacity against the
-  design capacity and the chemistry, and a charge-history graph read from
-  UPower while the panel is open (hidden when UPower keeps no history).
-  Below it, the power profiles your power-profiles-daemon offers form one
-  segmented switch (Power saver / Balanced / Performance), with the apps
-  holding a profile and the "performance degraded" reason; then the charge
-  limit switch (only where UPower can change it) and peripheral batteries.
-  The technical readouts (rate in watts, energy, voltage, cycles,
-  temperature, the CPU scaling and platform drivers such as `intel_pstate`,
-  a charge limit set by the firmware) wait in a collapsed *Details* fold.
-  Desktops simply show *No battery* above the profiles. Right-click the chip
+- **Power**: two panel styles (Studio → Power & idle → *Power panel
+  style*). **Classic**, the default, shows the power-profiles-daemon
+  profiles as cards (Performance / Balanced / Power saver, each with a
+  one-line description), the apps holding a profile and the "performance
+  degraded" reason, then each battery as a card: a dotted charge ring,
+  state, rate in watts and the time estimate, health (full vs design
+  capacity), cycles, capacity, temperature, a charge-history sparkline
+  from UPower and the charge limit (a switch where UPower can change it,
+  read-only otherwise). **Modern** leads with each battery: a large charge
+  gauge (the percentage and its state inside), the time left, health,
+  capacity against the design capacity and the chemistry, and a
+  charge-history graph (hidden when UPower keeps no history); below it the
+  profiles your daemon offers form one segmented switch, then the charge
+  limit switch (only where UPower can change it); the technical readouts
+  (rate, energy, voltage, cycles, temperature, the CPU scaling and platform
+  drivers, a charge limit set by the firmware) wait in a collapsed
+  *Details* fold. Classic names no CPU driver at all. Both read the
+  charge history only while the panel is open, list peripheral batteries,
+  scroll on short screens, and on desktops show *No battery* beside the
+  profiles. Right-click the chip
   to cycle profiles. The chip breathes gently while the battery charges
   (Studio → Power & idle → *Pulse the battery while charging*; never with
   Reduce motion). Low and critical battery alerts (notification and/or OSD,

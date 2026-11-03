@@ -8034,3 +8034,6 @@
 "Platform driver" = "Controlador de plataforma"
 "Profile driver" = "Controlador del perfil"
 "Power profile · {profile}" = "Perfil de energía · {profile}"
+"Power panel style" = "Estilo del panel de energía"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "Clásico: tarjetas de perfil sobre la tarjeta de la batería. Moderno: primero la batería con un gran anillo de carga y una gráfica de carga, un único selector de perfil y los detalles técnicos plegados"
+"Modern" = "Moderno"

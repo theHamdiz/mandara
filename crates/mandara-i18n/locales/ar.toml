@@ -8043,3 +8043,6 @@
 "Platform driver" = "مشغّل المنصة"
 "Profile driver" = "مشغّل الوضع"
 "Power profile · {profile}" = "وضع الطاقة · {profile}"
+"Power panel style" = "نمط لوحة الطاقة"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "كلاسيكي: بطاقات الأوضاع فوق بطاقة البطارية. حديث: البطارية أولًا بحلقة شحن كبيرة ورسم للشحن، ومبدّل واحد للأوضاع، والتفاصيل التقنية مطويّة"
+"Modern" = "حديث"

@@ -7791,3 +7791,6 @@
 "Platform driver" = "플랫폼 드라이버"
 "Profile driver" = "프로필 드라이버"
 "Power profile · {profile}" = "전원 프로필 · {profile}"
+"Power panel style" = "전원 패널 스타일"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "클래식: 배터리 카드 위에 프로필 카드. 모던: 큰 충전 링과 충전 그래프로 배터리를 먼저 보여 주고, 프로필 전환은 하나, 기술 정보는 접어 둠"
+"Modern" = "모던"

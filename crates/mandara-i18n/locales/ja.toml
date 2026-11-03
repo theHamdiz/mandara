@@ -8040,3 +8040,6 @@
 "Platform driver" = "プラットフォームドライバー"
 "Profile driver" = "プロファイルドライバー"
 "Power profile · {profile}" = "電源プロファイル · {profile}"
+"Power panel style" = "電源パネルのスタイル"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "クラシック: バッテリーカードの上にプロファイルカード。モダン: 大きな充電リングと充電グラフでバッテリーを先頭に、プロファイル切り替えは 1 つ、技術的な詳細は折りたたみ"
+"Modern" = "モダン"

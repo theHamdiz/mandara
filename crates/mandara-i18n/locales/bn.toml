@@ -7792,3 +7792,6 @@
 "Platform driver" = "প্ল্যাটফর্ম ড্রাইভার"
 "Profile driver" = "প্রোফাইল ড্রাইভার"
 "Power profile · {profile}" = "পাওয়ার প্রোফাইল · {profile}"
+"Power panel style" = "পাওয়ার প্যানেলের ধরন"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "ক্লাসিক: ব্যাটারি কার্ডের ওপরে প্রোফাইল কার্ড। মডার্ন: আগে ব্যাটারি, বড় চার্জ রিং ও চার্জ গ্রাফসহ, একটি প্রোফাইল সুইচ, আর প্রযুক্তিগত বিবরণ ভাঁজ করা"
+"Modern" = "মডার্ন"

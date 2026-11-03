@@ -8034,3 +8034,6 @@
 "Platform driver" = "平台驱动"
 "Profile driver" = "模式驱动"
 "Power profile · {profile}" = "电源模式 · {profile}"
+"Power panel style" = "电源面板样式"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "经典:电池卡片上方是模式卡片。现代:电池在前,配大号充电环和充电曲线,一个模式切换器,技术细节默认折叠"
+"Modern" = "现代"

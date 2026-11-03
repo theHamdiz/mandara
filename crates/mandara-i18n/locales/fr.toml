@@ -8040,3 +8040,6 @@
 "Platform driver" = "Pilote de plateforme"
 "Profile driver" = "Pilote du profil"
 "Power profile · {profile}" = "Profil d'alimentation · {profile}"
+"Power panel style" = "Style du panneau d'alimentation"
+"Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away" = "Classique : les cartes de profil au-dessus de la carte de batterie. Moderne : la batterie d'abord, avec un grand anneau de charge et un graphique de charge, un seul sélecteur de profil et les détails techniques repliés"
+"Modern" = "Moderne"
