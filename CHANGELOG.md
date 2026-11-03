@@ -25,12 +25,19 @@ About → What's new shows it too.
   you can turn it off in Studio → Power & idle (*Pulse the battery while
   charging*).
 
-### Changed
+### Improved
 
 - **No more CPU driver names in the Power panel.** The Power panel keeps
   its look, but no longer shows the CPU driver (`intel_pstate` and
   friends) in its header or under each power profile; each profile keeps
   its short description.
+
+## 0.10.0 — 2026-11-03
+
+A tidier layout designer, with search.
+
+### Changed
+
 - **A tidier layout designer, with search.** In Studio → Bar, the Left,
   Center and Right zones are now neat columns with their plugins stacked
   in order, and every plugin sits in an aligned grid underneath, grouped
