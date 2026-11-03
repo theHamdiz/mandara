@@ -93,6 +93,15 @@ fn describe(r: &ApplyReport) -> String {
     s
 }
 
+/// The languages the config (shell, plugins, widgets) and the login screen
+/// speak, read without creating anything.
+fn languages_in_use() -> Vec<mandara_i18n::Lang> {
+    let path = mandara_config::paths::config_file();
+    let cfg = if path.exists() { mandara_config::ConfigStore::open(path).map(|s| s.get().clone()).unwrap_or_default() } else { mandara_config::ShellConfig::default() };
+    let greeter = mandara_greeter::config::GreeterConfig::load_from(std::path::Path::new(mandara_greeter::config::SYSTEM_CONFIG)).map(|c| c.lang());
+    su::langpacks::languages_in_use(&cfg, greeter)
+}
+
 fn restart_shell(exe: &std::path::Path) {
     if !install::running_from(exe) {
         return;
@@ -124,6 +133,9 @@ pub fn main(args: UpdateArgs) -> Result<()> {
                 (None, Some(full)) => println!("full update: {} (no patch from {})", su::human_size(full), info.current),
                 _ => println!("no download for {} in this release", info.target),
             }
+            if let Some(change) = su::binary_size(install::detect().updatable(false).ok()).and_then(|size| info.size_change(size)) {
+                println!("{}", su::size_change_text(change));
+            }
             match install::detect().updatable(false) {
                 Ok(_) => println!("install it with `mandara update apply`"),
                 Err(why) => println!("{why}"),
@@ -138,10 +150,23 @@ pub fn main(args: UpdateArgs) -> Result<()> {
                 println!("Mandara {} is up to date", info.current);
                 return Ok(());
             }
+            let old_size = su::binary_size(Some(&exe));
             let report = su::apply(&info, &exe, ApplyOptions { full_only: full, dry_run }, &print_progress).map_err(anyhow::Error::msg)?;
             println!("{}", describe(&report));
+            if let Some(change) = old_size.and_then(|size| info.size_change(size)) {
+                println!("{}", su::size_change_text(change));
+            }
             if !dry_run {
                 println!("installed {} (previous version kept as {})", exe.display(), install::backup_path(&exe).display());
+                // The new version's language packs, so it starts translated
+                // (what fails here downloads when it starts).
+                let packs = su::langpacks::prepare_update(&info.latest, &languages_in_use(), &print_progress);
+                if !packs.installed.is_empty() {
+                    println!("languages for {}: {}", info.latest, packs.installed.iter().map(|l| l.code()).collect::<Vec<_>>().join(", "));
+                }
+                for (lang, e) in &packs.failed {
+                    println!("the {} language pack downloads when {} starts ({e})", lang.code(), info.latest);
+                }
                 if let Some(notes) = crate::changelog_cli::update_notes(&info.latest, &info.notes) {
                     println!("\nWhat's new\n\n{notes}");
                 }

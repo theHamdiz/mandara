@@ -1267,6 +1267,7 @@ Could not start {terminal}: {error}
 Could not write {path}: {error}
 Couldn't create {path}: {error}
 Couldn't download {collection}
+Couldn't download {language}: {error}
 Couldn't install
 Couldn't install {app}
 Couldn't install {app}: {error}
@@ -1635,6 +1636,7 @@ Downloaded once
 Downloaded {count} times
 Downloaded: sharing stopped
 Downloading in the Hadith panel
+Downloading languages for the new version…
 Downloading models {percent}%
 Downloading the Qur'an
 Downloading the adhan: {error}
@@ -1645,6 +1647,8 @@ Downloading the recitation of ayah {n}: {error}
 Downloading the smart update ({size})…
 Downloading {collection}
 Downloading {file}: {error}
+Downloading {language}…
+Downloading {language}… {size}
 Downloading {model} ({file}): {error}
 Downloading {url}: {error}
 Downloading…
@@ -3209,6 +3213,9 @@ Mandara starts these at login
 Mandara updates
 Mandara writes nothing to other apps until you switch them on. Switching one off takes back exactly what Mandara changed, and any file it replaced comes back from its backup.
 Mandara wrote `{key}`, which {compositor} {version} doesn't support. Regenerating stops Mandara from writing it for this version.
+Mandara {version} has no language packs to download
+Mandara {version} has no published release to download languages from
+Mandara {version} has no {language} language pack to download
 Mandara {version} is already the latest version
 Mandara {version} is available
 Mandara {version} is the latest version
@@ -5941,6 +5948,9 @@ The name is empty
 The network name is empty
 The new release is plugin {new}, not {old}; reinstall it from the marketplace
 The new track when music changes
+The new version is the same size
+The new version is {size} larger
+The new version is {size} smaller
 The newest one saved
 The next prayer and the time to it (needs the Prayer times plugin)
 The next prayer and time remaining
@@ -6029,6 +6039,7 @@ The window switcher is turned off (Studio → Window switcher)
 The world clock holds up to {n} cities
 The world is like a Mask dancing. If you want to see it well, you do not stand in one place.
 The {corner} corner has no action
+The {language} language pack was downloaded but couldn't be loaded
 The × on a popup only hides it; it stays in the history
 Their files stay in {home}
 Their old age is an open door; serve them with love while you can.
@@ -7524,6 +7535,7 @@ your default
 {file} doesn't compile: {error}
 {file} doesn't include {drop_in}
 {file} doesn't match the signed checksums
+{file} failed verification
 {file} failed verification (sha256 {got})
 {file} has no published checksum; not installing it
 {file} is a program, not an app package: move it to ~/.local/bin to use it.

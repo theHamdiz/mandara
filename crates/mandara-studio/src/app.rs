@@ -1262,6 +1262,7 @@ impl StudioView {
             .gap(px(SPACE_10_PX))
             .child(div().px(px(SPACE_6_PX)).text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(mandara_i18n::t("Language")))
             .child(grid)
+            .children(language_downloads(p, cx))
             .into_any_element()
     }
 
@@ -1891,6 +1892,50 @@ const LICENSE: &str = "GPL-3.0-or-later";
 const ABOUT_WASH_ANGLE: f32 = 135.0;
 
 /// Opens a web link in the default browser, off the UI thread.
+/// Under the language picker: a language pack downloading ("Downloading
+/// Arabic… 180 KB" with a bar) or one that couldn't be, with Retry. The
+/// interface stays in English meanwhile.
+fn language_downloads(p: &MandaraPalette, _cx: &mut Context<StudioView>) -> Option<AnyElement> {
+    use mandara_services::self_update::langpacks::{self, State};
+    let rows: Vec<AnyElement> = langpacks::active()
+        .into_iter()
+        .filter_map(|(lang, state)| {
+            let line = langpacks::describe(lang, &state)?;
+            let failed = matches!(state, State::Failed(_));
+            let tone = if failed { p.urgent_coral } else { p.primary };
+            let bar = match state {
+                State::Downloading { done, total } => Some(updates_card::progress_bar(done, total, p)),
+                State::Checking => Some(updates_card::progress_bar(0, 0, p)),
+                _ => None,
+            };
+            Some(
+                div()
+                    .px(px(SPACE_14_PX))
+                    .py(px(SPACE_10_PX))
+                    .rounded(px(RADIUS_12_PX))
+                    .bg(tone.with_alpha(ALPHA_12).hsla())
+                    .row()
+                    .flex_col()
+                    .gap(px(SPACE_8_PX))
+                    .child(
+                        div()
+                            .row()
+                            .items_center()
+                            .gap(px(SPACE_8_PX))
+                            .text_size(px(TEXT_12_5_PX))
+                            .text_color(tone.hsla())
+                            .child(icon(if failed { "close" } else { "download" }, ICON_14_PX, tone))
+                            .child(div().flex_1().min_w_0().font_features(mandara_ui::fonts::tabular_nums()).child(mandara_ui::bidi::paragraph(line)))
+                            .when(failed, |el| el.child(compositor_page::button(SharedString::from(format!("lang-retry-{}", lang.code())), "refresh", t("Retry"), false, p).on_click(move |_, _, _| langpacks::retry(lang)))),
+                    )
+                    .children(bar)
+                    .into_any_element(),
+            )
+        })
+        .collect();
+    (!rows.is_empty()).then(|| div().row().flex_col().gap(px(SPACE_8_PX)).children(rows).into_any_element())
+}
+
 fn open_link(url: &'static str) {
     std::thread::spawn(move || {
         if let Err(err) = mandara_services::session::open_uri(url) {

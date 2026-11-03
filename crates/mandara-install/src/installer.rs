@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use mandara_delta::signing::{self, PublicKey, SIG_FILE};
 use mandara_delta::{MANIFEST_FILE, SHELL_BINARY};
+use mandara_i18n::{Lang, packs};
 
 use crate::args::InstallArgs;
 use crate::family::{Family, OsRelease};
@@ -164,12 +165,31 @@ struct Stage {
     exe: PathBuf,
     desktop: String,
     icon: Vec<u8>,
+    /// The binary's version and the language packs that came with it
+    /// (`share/mandara/locales/<version>/` of a tarball), copied next to it
+    /// so a fresh install never has to download them.
+    packs: (String, Vec<(Lang, Vec<u8>)>),
 }
 
 impl Stage {
+    /// The running binary, with the packs beside it when it's an unpacked
+    /// tarball (`<dir>/bin/mandara` and `<dir>/share/mandara/locales/<v>/`).
     fn embedded(exe: PathBuf) -> Stage {
-        Stage { exe, desktop: files::DESKTOP_ENTRY.to_string(), icon: files::ICON_SVG.to_vec() }
+        let version = mandara_version::version().to_string();
+        let packs = exe.parent().and_then(Path::parent).map(|top| top.join("share").join(packs::DIR).join(&version)).map(|dir| Lang::ALL.into_iter().filter_map(|l| std::fs::read(dir.join(packs::file_name(l))).ok().map(|b| (l, b))).collect()).unwrap_or_default();
+        Stage { exe, desktop: files::DESKTOP_ENTRY.to_string(), icon: files::ICON_SVG.to_vec(), packs: (version, packs) }
     }
+}
+
+/// The packs inside a release tarball for `version`.
+fn archive_packs(archive: &[u8], version: &str) -> Result<Vec<(Lang, Vec<u8>)>, String> {
+    let mut out = Vec::new();
+    for lang in Lang::ALL.into_iter().filter(|l| *l != Lang::En) {
+        if let Some(bytes) = release::extract(archive, &format!("share/{}/{version}/{}", packs::DIR, packs::file_name(lang)))? {
+            out.push((lang, bytes));
+        }
+    }
+    Ok(out)
 }
 
 /// One run of `mandara install` / `uninstall`.
@@ -587,7 +607,8 @@ impl<'a> Installer<'a> {
         write_executable(&exe, &bin)?;
         let desktop = release::extract(&archive, &format!("share/{}/{}", files::APPLICATIONS_DIR, files::DESKTOP_FILE))?.map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_else(|| files::DESKTOP_ENTRY.to_string());
         let icon = release::extract(&archive, &format!("share/{}/{}", files::ICON_DIR, files::ICON_FILE))?.unwrap_or_else(|| files::ICON_SVG.to_vec());
-        Ok(Some(Stage { exe, desktop, icon }))
+        let packs = archive_packs(&archive, &version)?;
+        Ok(Some(Stage { exe, desktop, icon, packs: (version, packs) }))
     }
 
     /// A release build from source (`cargo xtask build`). `None` in a dry run.
@@ -647,7 +668,11 @@ impl<'a> Installer<'a> {
         let packaging = src.join("packaging");
         let desktop = std::fs::read_to_string(packaging.join(files::DESKTOP_FILE)).unwrap_or_else(|_| files::DESKTOP_ENTRY.to_string());
         let icon = std::fs::read(packaging.join(files::ICON_FILE)).unwrap_or_else(|_| files::ICON_SVG.to_vec());
-        Ok(Some(Stage { exe, desktop, icon }))
+        // The packs, compiled from the same sources for the built version.
+        let built_version = version.split_whitespace().nth(1).unwrap_or_default().to_string();
+        let catalogs = src.join("crates/mandara-i18n/locales");
+        let packs = Lang::ALL.into_iter().filter(|l| *l != Lang::En).filter_map(|l| std::fs::read_to_string(catalogs.join(format!("{}.toml", l.code()))).ok().and_then(|text| mandara_i18n::compile(l, &built_version, &text).ok()).map(|b| (l, b))).collect();
+        Ok(Some(Stage { exe, desktop, icon, packs: (built_version, packs) }))
     }
 
     /// The second word of `<tool> --version`.
@@ -746,6 +771,14 @@ impl<'a> Installer<'a> {
         files::install_binary(&stage.exe, &bin).map_err(|e| err(&bin, e))?;
         let version = self.run(Cmd::new(&[bin.to_string_lossy().as_ref(), "--version"]).io(Io::Capture)).filter(|o| o.success).and_then(|o| o.stdout.lines().next().map(|l| l.split_once(' ').map_or(l, |(_, v)| v).to_string())).unwrap_or_else(|| "installed".into());
         self.say(Level::Ok, format!("{} ({version})", bin.display()));
+        // Language packs: checked (version and language in the header)
+        // and written atomically; anything missing downloads on first use.
+        let (pack_version, stage_packs) = &stage.packs;
+        if !stage_packs.is_empty() {
+            let dir = self.paths.data_dir.join(packs::DIR).join(pack_version);
+            let copied = stage_packs.iter().filter(|(lang, bytes)| packs::install(*lang, pack_version, bytes, &dir).map_err(|e| self.say(Level::Warn, format!("{} language pack: {e}", lang.code()))).is_ok()).count();
+            self.say(Level::Ok, format!("{copied} language packs in {}", dir.display()));
+        }
         let desktop = self.paths.desktop_entry();
         std::fs::write(&desktop, files::desktop_entry(&stage.desktop, &bin)).map_err(|e| err(&desktop, e))?;
         // The icon is cosmetic: a failure here never stops the install.

@@ -43,6 +43,9 @@ pub struct Updates {
     primed: bool,
     pub(super) info: Option<UpdateInfo>,
     pub(super) install: Option<Install>,
+    /// The installed binary's size (what the update replaces), for the
+    /// "N MB smaller / larger" line.
+    pub(super) binary_size: Option<u64>,
     pub(super) checking: bool,
     error: Option<String>,
     job: Option<JobHandle>,
@@ -117,6 +120,11 @@ pub(super) fn watch_job(job: JobHandle, cx: &mut Context<StudioView>, done: impl
     .detach();
 }
 
+/// The login screen's language, when Mandara Login is set up.
+pub(super) fn greeter_language() -> Option<mandara_i18n::Lang> {
+    mandara_greeter::config::GreeterConfig::load_from(std::path::Path::new(mandara_greeter::config::SYSTEM_CONFIG)).map(|c| c.lang())
+}
+
 /// Restarts the running shell when it runs the binary just replaced.
 fn restart_shell_if_running(exe: &std::path::Path, cx: &App) {
     if !install::running_from(exe) {
@@ -143,11 +151,16 @@ impl StudioView {
         self.updates.info = su::cached();
         self.updates.plugins = plugins::cached();
         let cfg = mandara_ui::state::config(cx).read(cx).snapshot().updates.clone();
-        let task = cx.background_executor().spawn(async move { install::detect() });
+        let task = cx.background_executor().spawn(async move {
+            let install = install::detect();
+            let size = su::binary_size(install.updatable(false).ok());
+            (install, size)
+        });
         cx.spawn(async move |this, cx| {
-            let install = task.await;
+            let (install, size) = task.await;
             let _ = this.update(cx, |view, cx| {
                 view.updates.install = Some(install);
+                view.updates.binary_size = size;
                 cx.notify();
             });
         })
@@ -208,8 +221,19 @@ impl StudioView {
         self.updates.outcome = None;
         let worker = job.clone();
         let target = exe.clone();
+        // The new version starts translated: its packs for every language
+        // in use download before the restart (a failure only means it
+        // downloads them when it starts).
+        let languages = su::langpacks::languages_in_use(mandara_ui::state::config(cx).read(cx).get(), greeter_language());
         std::thread::spawn(move || {
-            let result = su::apply(&info, &target, ApplyOptions { full_only, dry_run: false }, &reporter(worker.clone()));
+            let progress = reporter(worker.clone());
+            let result = su::apply(&info, &target, ApplyOptions { full_only, dry_run: false }, &progress);
+            if result.is_ok() {
+                let packs = su::langpacks::prepare_update(&info.latest, &languages, &progress);
+                for (lang, e) in &packs.failed {
+                    tracing::warn!("update: {} language pack for {}: {e}", lang.code(), info.latest);
+                }
+            }
             lock(&worker).result = Some(result);
         });
         watch_job(job, cx, move |view, result, cx| {
@@ -252,6 +276,8 @@ impl StudioView {
             (None, Some(full)) => tf("Full update: {size} (no patch from your version)", &[("size", &su::human_size(full))]),
             _ => t("No download for this system in the release").to_string(),
         });
+        // How the new binary compares with the installed one (it can shrink).
+        let change_line = available.as_ref().zip(u.binary_size).and_then(|(info, size)| info.size_change(size)).map(su::size_change_text);
 
         let header = div()
             .row()
@@ -268,7 +294,8 @@ impl StudioView {
                     .gap(px(SPACE_4_PX))
                     .child(div().text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).child(title))
                     .child(div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(subtitle))
-                    .children(size_line.map(|s| div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).text_color(p.primary.hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(s))),
+                    .children(size_line.map(|s| div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).text_color(p.primary.hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(s)))
+                    .children(change_line.map(|s| div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(s))),
             );
 
         // Actions.
