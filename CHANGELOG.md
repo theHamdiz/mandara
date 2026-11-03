@@ -32,6 +32,68 @@ About → What's new shows it too.
   it). This is for River 0.3 (`river-classic`); River 0.4 moved window
   management out of River, and the Config doctor explains that if it finds
   it (#34).
+- **A main menu rail with names.** Studio → Bar → Main menu → **Rail** now
+  offers **Full**: every page and shortcut in the main menu's side rail
+  shows its name beside its icon, and the open page is filled in the
+  accent colour; the menu grows a little so the cards keep their size.
+  **Compact**, the icon-only rail you know, stays the default.
+  Contributed by Hedayatbakhshi (#41).
+
+### Improved
+
+- **A smaller Mandara.** The translations for all fifteen languages used
+  to be built into Mandara itself. They now live in language packs next to
+  it, so the program is 9.2 MB smaller (169 MB → 159 MB), which also makes
+  this update's patch smaller. Packages and the release tarballs still
+  include every language (the tarball stays about the same size, 69 →
+  71 MB), so nothing changes when you install, and a language added later
+  is a download of about 300 KB.
+- **Languages download when you pick them.** Choose a language in Studio
+  (or for the login screen, or as a plugin's own language) and Mandara
+  fetches its pack if it's missing, checked against the release's
+  signature, then switches over. The language's own card fills up as the
+  download comes in ("Downloading Arabic… 180 KB"), from the right in
+  right-to-left languages; it turns green with a check when it's done, or
+  red with the reason and **Retry** if it can't finish (offline mode, no
+  network), keeping everything in English, laid out left to right,
+  meanwhile. The language panel in the bar does the same. Each pack
+  belongs to exactly the version you run, and every update brings the new
+  version's packs for the languages you use before it restarts the shell.
+- **Update now shows the update as it happens.** In Studio → About, the
+  update card fills with the real download (the patch or the full
+  download), stays full while the update is applied and checked, then
+  turns green with a check before the shell restarts, or red with the
+  reason if it didn't install. With Reduce motion on, it changes without
+  animation.
+- **Switching languages is instant.** A language pack is read in place
+  rather than parsed, so switching takes under a millisecond instead of
+  about 5 ms, looking up a word is a little faster, and the shell uses
+  about 2 MB less memory in another language.
+- **Updates say how much smaller (or bigger) the new version is.** Studio
+  → About and `mandara update` now show the size change next to the
+  download size, for example "The new version is 9.2 MB smaller".
+- **Long lists of choices line up neatly.** When a choice in Studio has
+  more options than fit on one line (a plugin's language with sixteen
+  languages, a hot corner's actions, a desktop widget's shapes, the login
+  screen's languages), it no longer leaves one or two stragglers alone on
+  a second line. The options now sit in tidy, equal rows of equal-width
+  buttons that line up in columns, with a shorter last row centred under
+  the others, and in Arabic and other right-to-left languages the first
+  option starts on the right. Options that can't be picked right now,
+  such as the screen recorder's, stay greyed out with the reason
+  underneath. Short choices that fit on one line look exactly as before.
+
+### Under the hood
+
+- **A leaner build.** Mandara no longer builds image formats it never
+  opens (EXR, HDR, DDS, QOI, TGA, farbfeld, and an AVIF encoder nothing
+  used), an unused date library and a second copy of a small folder
+  helper: 18 fewer crates go into the shell. The `mandara` binary is
+  3.1 MiB smaller (160.8 → 157.7 MiB), the release download 1.3 MiB
+  smaller (66.2 → 65.0 MiB), and a clean release build took 1,037 s
+  instead of 1,084 s on the same machine. Every image Mandara shows
+  (PNG, JPEG, WebP, GIF, BMP, SVG, and TIFF, ICO and PNM previews) still
+  opens.
 
 ## 0.13.0 — 2026-11-03
 
