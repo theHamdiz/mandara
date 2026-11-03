@@ -44,6 +44,8 @@ alloc-mimalloc-v2 = ["dep:mimalloc", "mimalloc/v2"]
 alloc-jemalloc = ["dep:tikv-jemallocator"]
 alloc-system = []
 alloc-system-tuned = []
+# Sandbox tests only (see mandara-services): trusts MANDARA_MOCK_RELEASE_KEYS.
+mock-release = ["mandara-services/mock-release"]
 
 # ── Distribution packages (built by the release workflow) ──────────────
 [package.metadata.deb]

@@ -230,8 +230,20 @@ pub fn trust_keys_for_tests(keys: Vec<PublicKey>) {
 }
 
 fn release_keys() -> Vec<PublicKey> {
-    TEST_KEYS.get().cloned().unwrap_or_else(signing::trusted_keys)
+    #[cfg_attr(not(feature = "mock-release"), expect(unused_mut, reason = "only the mock-release feature adds keys"))]
+    let mut keys = TEST_KEYS.get().cloned().unwrap_or_else(signing::trusted_keys);
+    // Sandbox screenshots of updates and language downloads against a mock
+    // release (`--features mock-release`, never in a shipped build): also
+    // trust the hex keys in `MANDARA_MOCK_RELEASE_KEYS`.
+    #[cfg(feature = "mock-release")]
+    keys.extend(std::env::var(MOCK_KEYS_ENV).map(|v| signing::parse_keys(&v.replace(',', "\n"))).unwrap_or_default());
+    keys
 }
+
+/// Extra trusted keys for a mock release (only with the `mock-release`
+/// feature, for sandbox tests; release builds never read it).
+#[cfg(feature = "mock-release")]
+pub const MOCK_KEYS_ENV: &str = "MANDARA_MOCK_RELEASE_KEYS";
 
 /// `SHA256SUMS` of `version`'s release, accepted only with a valid
 /// signature. Always required here: any release newer than this build

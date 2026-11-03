@@ -64,6 +64,12 @@ eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual c
   out, to try the download path (with the sandbox offline it stays in
   English and Studio shows the error with Retry). `cargo xtask langpacks
   --bin PATH --dir DIR` builds the same packs anywhere.
+- **Updates and downloads against a mock release:** a build with
+  `--features mock-release` (mandara-app; never shipped) also trusts the
+  hex release keys in `MANDARA_MOCK_RELEASE_KEYS`, so a release you sign
+  yourself and serve locally can be installed. `sandbox up` passes that
+  variable and `MANDARA_UPDATE_API` through, so a slow local server shows
+  the language cards and Studio → About filling with real progress.
 - **Matte:** `matte` cuts out the open surfaces as a transparent PNG. It
   shoots once over a black wallpaper and once over a white one, then
   difference-mattes the pair. Give it a region (physical pixels) that leaves

@@ -89,7 +89,7 @@ const STUDIO_RESTART_PAUSE: Duration = Duration::from_millis(800);
 const MANGO_REPLY_TIMEOUT: Duration = Duration::from_secs(1);
 /// Variables of the real environment passed through (no session data;
 /// `MANDARA_FRAME_STATS` logs Studio's frame pacing for measurements).
-const PASSTHROUGH: [&str; 10] = ["PATH", "LANG", "LC_ALL", "LC_MESSAGES", "TERM", "RUST_LOG", "RUST_BACKTRACE", "WLR_RENDERER", "WLR_RENDER_DRM_DEVICE", "MANDARA_FRAME_STATS"];
+const PASSTHROUGH: [&str; 12] = ["PATH", "LANG", "LC_ALL", "LC_MESSAGES", "TERM", "RUST_LOG", "RUST_BACKTRACE", "WLR_RENDERER", "WLR_RENDER_DRM_DEVICE", "MANDARA_FRAME_STATS", "MANDARA_UPDATE_API", "MANDARA_MOCK_RELEASE_KEYS"];
 /// `PATH` when the real environment has none.
 const FALLBACK_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
 /// Flags that force dry runs of everything that would change the system.
