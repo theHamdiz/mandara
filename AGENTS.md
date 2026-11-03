@@ -62,7 +62,7 @@ Zed's GPU-accelerated UI framework.
 | `crates/mandara-media` | The pure-Rust video pipeline: WebM / IVF demuxing, AV1 decoding (rav1d), YUV conversion straight into caller buffers, the greeter's player, the desktop's frame stream and first / representative frames. No GUI types. |
 | `crates/mandara-wallgen` | The procedural wallpaper engine: twelve resolution-independent styles with generic parameter specs, OKLab palettes, recipes (TOML sidecars), deterministic row-parallel rendering, lossless WebP output through `mandara-webp` and seamless AV1 video loops through the recorder's `VideoSink`. No GUI types. The `wallpaper-generator` plugin (`crates/mandara-ui/src/plugins/wallpaper_generator.rs` and its folder: jobs, schedule, CLI) and Studio's generator (`crates/mandara-studio/src/app/wallgen_page.rs`) build on it. |
 | `crates/mandara-webp` | A pure-Rust lossless WebP (VP8L) encoder with no dependencies: generated wallpapers (searching their dither period for back references) and the plugin icons embedded in the shell. |
-| `crates/mandara-i18n` | Localization: English-keyed catalogs for fifteen languages and the coverage tests. |
+| `crates/mandara-i18n` | Localization: English-keyed catalogs for fifteen languages (`locales/*.toml`), compiled into memory-mapped language packs (`.mlang`, `src/pack.rs`) that ship beside the binary and download on demand (`src/packs.rs`), and the coverage tests. |
 | `crates/mandara-install` | `mandara install` / `uninstall`: per-distribution package tables and the package-manager abstraction. |
 | `crates/mandara-version` | Build identity: component versions, content hashes, git revision, source fingerprint. |
 | `vendor/gpui_wgpu` | GPUI's wgpu renderer, vendored with Mandara's patches (GPU memory, fonts, colour emoji, Vulkan first, rounded clipping). Every change is listed in [`MANDARA-PATCHES.md`](vendor/gpui_wgpu/MANDARA-PATCHES.md) and marked `Mandara patch` in the source. |
@@ -107,6 +107,7 @@ conversation rely on `catch_unwind`, so never switch them to `abort`.
 | `cargo xtask verify` | Fails if a component changed without a bump. |
 | `cargo xtask build` | A fingerprinted release build, its manifest and the build-fingerprint table in `docs/building.md`. |
 | `cargo xtask plugins` | Builds the example plugins and packages them in marketplace format. |
+| `cargo xtask langpacks --bin PATH --dir DIR` | Compiles every language pack for a binary's version (`--out DIR`: the release assets and their part of `update.json`). |
 | `cargo xtask art [--check]` | Regenerates (or validates) the plugin artwork embedded in the binary. |
 | `cargo xtask resource-check target/release/mandara` | Runs a release binary in a throw-away headless session and checks its idle memory, threads and CPU against the budget. |
 | `cargo xtask sandbox up` / `shot` / `msg` / `studio` / `down` | A private headless demo desktop for screenshots and end-to-end tests ([docs/development.md](docs/development.md)). |
@@ -438,7 +439,10 @@ and examples with `.example(…)`; replies are JSON. It then shows up in
 Write the English text in a `t`, `tf`, `tr` or `tk` call, run
 `MANDARA_I18N_DUMP=1 cargo test -p mandara-i18n`, add the translation to
 each of the fourteen catalogs in `crates/mandara-i18n/locales/`, and run
-`cargo test -p mandara-i18n` until it passes.
+`cargo test -p mandara-i18n` until it passes. Debug builds read the
+catalogs straight from the source tree; a release build only reads
+language packs, so try a translated release build in the sandbox (`cargo
+xtask sandbox up` compiles the packs for it) rather than on its own.
 
 ## Writing a third-party WebAssembly plugin
 

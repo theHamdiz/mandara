@@ -2,7 +2,7 @@
 //! the panel shows the current language in its own script and every
 //! supported language to switch to instantly, plus the keyboard layout.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gpui::{AnyElement, FontWeight, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px, size};
@@ -14,6 +14,7 @@ use mandara_theme::MandaraPalette;
 use serde_json::json;
 
 use super::fn_view;
+use crate::progress_fill as fill;
 use super::panel_fx::ANGLE_DIAGONAL_DEG;
 use crate::fonts::fonts;
 use crate::hub::hub;
@@ -100,10 +101,17 @@ fn set(locale: Locale, cx: &mut gpui::App) {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn option(id: impl Into<gpui::ElementId>, lang: Lang, label_native: String, label_sub: String, selected: bool, locale: Locale, palette: &MandaraPalette, arabic_font: gpui::SharedString) -> AnyElement {
+fn option(id: impl Into<gpui::ElementId>, lang: Lang, label_native: String, label_sub: String, selected: bool, locale: Locale, palette: &MandaraPalette, arabic_font: gpui::SharedString, status: (fill::Visual, Option<String>)) -> AnyElement {
     let rtl = lang.is_rtl();
-    div()
-        .id(id)
+    // The option's own background follows its language pack's download:
+    // filling, red with the reason (a click retries), green with a check.
+    let (visual, line) = status;
+    let failed = visual.tone == fill::Tone::Error;
+    let label_sub = line.unwrap_or(label_sub);
+    let corner = fill::check_badge(&visual, palette).or_else(|| selected.then(|| icon("check", CHECK_PX, palette.primary).into_any_element()));
+    crate::style::ClipRounded::clip_rounded(div().id(id))
+        .relative()
+        .children(fill::layer(&visual, crate::bidi::rtl(), palette))
         .h(px(OPTION_H_PX))
         .px(px(OPTION_PAD_X_PX))
         .rounded(px(crate::style::radius(OPTION_RADIUS_PX)))
@@ -111,7 +119,7 @@ fn option(id: impl Into<gpui::ElementId>, lang: Lang, label_native: String, labe
         .items_center()
         .gap(px(OPTION_GAP_PX))
         .cursor_pointer()
-        .bg(if selected { palette.primary.with_alpha(SELECTED_ALPHA).hsla() } else { palette.on_surface.with_alpha(IDLE_ALPHA).hsla() })
+        .bg(fill::base(&visual, if selected { palette.primary.with_alpha(SELECTED_ALPHA) } else { palette.on_surface.with_alpha(IDLE_ALPHA) }, palette.surface_container_high).hsla())
         .when(selected, |el| el.border_1().border_color(palette.primary.with_alpha(OUTLINE_ALPHA).hsla()))
         .hover(|s| s.bg(palette.primary.with_alpha(HOVER_ALPHA).hsla()))
         .child(
@@ -136,10 +144,15 @@ fn option(id: impl Into<gpui::ElementId>, lang: Lang, label_native: String, labe
                 .flex()
                 .flex_col()
                 .child(div().text_size(px(text::BODY)).font_weight(FontWeight::MEDIUM).truncate().when(rtl, |el| el.font_family(arabic_font.clone())).child(label_native))
-                .child(div().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).truncate().child(label_sub)),
+                .child(div().text_size(px(text::LABEL)).font_features(crate::fonts::tabular_nums()).text_color(if failed { palette.urgent_coral.hsla() } else { palette.on_surface_variant.hsla() }).truncate().child(label_sub)),
         )
-        .when(selected, |el| el.child(icon("check", CHECK_PX, palette.primary)))
-        .on_click(move |_, _, cx| set(locale, cx))
+        .children(corner)
+        .on_click(move |_, _, cx| {
+            if failed {
+                mandara_services::self_update::langpacks::retry(lang);
+            }
+            set(locale, cx)
+        })
         .into_any_element()
 }
 
@@ -172,9 +185,10 @@ pub fn register(r: &mut PluginRegistry) {
             let p = panel_cx.clone();
             let size_cell = Rc::new(Cell::new(size(px(PANEL_W_PX), px(INITIAL_H_PX))));
             let sc = size_cell.clone();
+            let fills: Rc<RefCell<fill::LanguageFills>> = Rc::default();
             let panel = fn_view(
                 None,
-                move |palette, _, cx| {
+                move |palette, window, cx| {
                     let locale = config(cx).read(cx).get().general.locale;
                     let current = locale.lang();
                     let system = Lang::from_env();
@@ -222,7 +236,19 @@ pub fn register(r: &mut PluginRegistry) {
                         )
                         .when(rtl, |el| el.child(div().px(px(RTL_PILL_PAD_X_PX)).h(px(RTL_PILL_H_PX)).rounded_full().flex().items_center().bg(palette.on_surface.with_alpha(RTL_PILL_ALPHA).hsla()).text_size(px(BADGE_TEXT_PX)).font_weight(FontWeight::BOLD).child(t("RTL"))));
 
-                    // Every language, two columns; System first.
+                    // Every language, two columns; System first. Each option
+                    // shows its pack's download.
+                    let reduce = config(cx).read(cx).get().motion.reduce_motion;
+                    let mut wakes = Vec::new();
+                    let status = fills.borrow_mut().frame(reduce, window, |after| wakes.push(after));
+                    for after in wakes {
+                        cx.spawn(async move |cx| {
+                            cx.background_executor().timer(after).await;
+                            cx.update(|cx| cx.refresh_windows());
+                        })
+                        .detach();
+                    }
+                    let status_of = |lang: Lang| status.get(&lang).cloned().unwrap_or((fill::IDLE, None));
                     let mut grid = div().grid().grid_cols(GRID_COLS).gap(px(tokens::SM));
                     grid = grid.child(option(
                         "lang-opt-auto",
@@ -233,10 +259,11 @@ pub fn register(r: &mut PluginRegistry) {
                         Locale::Auto,
                         palette,
                         arabic.clone(),
+                        if locale == Locale::Auto { status_of(system) } else { (fill::IDLE, None) },
                     ));
                     for (i, lang) in Lang::ALL.into_iter().enumerate() {
                         let l = Locale::from_lang(lang);
-                        grid = grid.child(option(("lang-opt", i), lang, lang.native_name().into(), mandara_i18n::tr(lang.english_name()), locale == l, l, palette, arabic.clone()));
+                        grid = grid.child(option(("lang-opt", i), lang, lang.native_name().into(), mandara_i18n::tr(lang.english_name()), locale == l, l, palette, arabic.clone(), status_of(lang)));
                     }
 
                     // Keyboard layout (when the compositor reports it).

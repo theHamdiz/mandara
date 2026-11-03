@@ -71,6 +71,20 @@ with its PAM module, AccountsService (Users), GeoClue (location), UDisks2
 `mandara uninstall` removes the binary and desktop entry and empties the
 compositor drop-ins; your settings are kept.
 
+### Languages
+
+Translations aren't built into the binary: each language is a small
+**language pack** for exactly one Mandara version
+([details](languages.md#language-packs)). The tarballs carry every pack in
+`share/mandara/locales/<version>/`, and `mandara install` copies them to
+`~/.local/share/mandara/locales/<version>/`, so a fresh install speaks your
+language without going online. The `.deb`, `.rpm` and Arch packages
+install them in `/usr/share/mandara/locales/<version>/`. A self-installed
+Mandara that is missing a pack (an install from an older tarball, or a
+language picked later) downloads just that one from its own version's
+signed release, and every update brings the new version's packs for the
+languages you use.
+
 ## Arch Linux
 
 Three package recipes, pick one:
@@ -324,8 +338,10 @@ attestations:
 
 Plus the bundled plugins, a build manifest per binary (source fingerprint,
 toolchain, SHA-256, lines of code), binary patches from the last five
-releases for [smart updates](apps-and-updates.md#updates-by-binary-patch), `update.json` and
-`SHA256SUMS`. The installer picks the right build for your system (glibc or
+releases for [smart updates](apps-and-updates.md#updates-by-binary-patch), one language
+pack per language (`mandara-<v>-<code>.mlang`, and the compressed
+`.mlang.zst` the shell downloads), `update.json` and `SHA256SUMS`. Every
+package and tarball ships all language packs. The installer picks the right build for your system (glibc or
 musl, x86-64-v3 when your CPU supports it); Gentoo, Solus, NixOS and other
 glibc systems use the tarball.
 

@@ -64,7 +64,7 @@ impl Lingo {
         match self.lang {
             None => mandara_i18n::tr(key),
             Some(Lang::En) => key.to_string(),
-            Some(l) => mandara_i18n::catalog(l).get(key).unwrap_or(key).to_string(),
+            Some(l) => mandara_i18n::tr_in(l, key),
         }
     }
 

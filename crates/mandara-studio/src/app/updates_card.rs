@@ -32,6 +32,8 @@ pub(super) struct Job {
     pub(super) step: String,
     pub(super) done: u64,
     pub(super) total: u64,
+    /// The new binary is in place (only the language packs remain).
+    pub(super) installed: bool,
     pub(super) result: Option<Result<ApplyReport, String>>,
 }
 
@@ -43,6 +45,9 @@ pub struct Updates {
     primed: bool,
     pub(super) info: Option<UpdateInfo>,
     pub(super) install: Option<Install>,
+    /// The installed binary's size (what the update replaces), for the
+    /// "N MB smaller / larger" line.
+    pub(super) binary_size: Option<u64>,
     pub(super) checking: bool,
     error: Option<String>,
     job: Option<JobHandle>,
@@ -52,6 +57,9 @@ pub struct Updates {
     pub(super) plugin_message: Option<(bool, String)>,
     /// About → What's new: the release shown open (the running one first).
     pub(super) whats_new: Option<String>,
+    /// The card's own background follows the update (download, apply,
+    /// failure, success).
+    fill: mandara_ui::progress_fill::ProgressFill,
 }
 
 pub(super) fn lock(job: &JobHandle) -> std::sync::MutexGuard<'_, Job> {
@@ -117,6 +125,11 @@ pub(super) fn watch_job(job: JobHandle, cx: &mut Context<StudioView>, done: impl
     .detach();
 }
 
+/// The login screen's language, when Mandara Login is set up.
+pub(super) fn greeter_language() -> Option<mandara_i18n::Lang> {
+    mandara_greeter::config::GreeterConfig::load_from(std::path::Path::new(mandara_greeter::config::SYSTEM_CONFIG)).map(|c| c.lang())
+}
+
 /// Restarts the running shell when it runs the binary just replaced.
 fn restart_shell_if_running(exe: &std::path::Path, cx: &App) {
     if !install::running_from(exe) {
@@ -143,11 +156,16 @@ impl StudioView {
         self.updates.info = su::cached();
         self.updates.plugins = plugins::cached();
         let cfg = mandara_ui::state::config(cx).read(cx).snapshot().updates.clone();
-        let task = cx.background_executor().spawn(async move { install::detect() });
+        let task = cx.background_executor().spawn(async move {
+            let install = install::detect();
+            let size = su::binary_size(install.updatable(false).ok());
+            (install, size)
+        });
         cx.spawn(async move |this, cx| {
-            let install = task.await;
+            let (install, size) = task.await;
             let _ = this.update(cx, |view, cx| {
                 view.updates.install = Some(install);
+                view.updates.binary_size = size;
                 cx.notify();
             });
         })
@@ -208,14 +226,38 @@ impl StudioView {
         self.updates.outcome = None;
         let worker = job.clone();
         let target = exe.clone();
+        // The new version starts translated: its packs for every language
+        // in use download before the restart (a failure only means it
+        // downloads them when it starts).
+        let languages = su::langpacks::languages_in_use(mandara_ui::state::config(cx).read(cx).get(), greeter_language());
         std::thread::spawn(move || {
-            let result = su::apply(&info, &target, ApplyOptions { full_only, dry_run: false }, &reporter(worker.clone()));
+            let progress = reporter(worker.clone());
+            let result = su::apply(&info, &target, ApplyOptions { full_only, dry_run: false }, &progress);
+            if result.is_ok() {
+                // The binary is in: the card stays full while the packs
+                // (a few hundred KB) come down, saying what it does.
+                let packs_progress = |p: Progress| {
+                    if let Progress::Step(s) = p {
+                        let mut j = lock(&worker);
+                        (j.step, j.done, j.total, j.installed) = (s, 0, 0, true);
+                    }
+                };
+                let packs = su::langpacks::prepare_update(&info.latest, &languages, &packs_progress);
+                for (lang, e) in &packs.failed {
+                    tracing::warn!("update: {} language pack for {}: {e}", lang.code(), info.latest);
+                }
+            }
             lock(&worker).result = Some(result);
         });
         watch_job(job, cx, move |view, result, cx| {
             view.updates.job = None;
             if result.is_ok() {
-                restart_shell_if_running(&exe, cx);
+                // The card shows its success first, then the shell restarts.
+                cx.spawn(async move |_, cx| {
+                    cx.background_executor().timer(mandara_ui::progress_fill::SUCCESS_HOLD).await;
+                    cx.update(|cx| restart_shell_if_running(&exe, cx));
+                })
+                .detach();
             }
             view.updates.outcome = Some(result);
         });
@@ -223,8 +265,34 @@ impl StudioView {
     }
 
     /// The card (About page).
-    pub(super) fn updates_card(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn updates_card(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut gpui::Window, cx: &mut Context<Self>) -> AnyElement {
+        use mandara_ui::progress_fill::{self as fill, Observed, Tone};
         self.updates_prime(cx);
+        // The card fills with the real download, then stays full while the
+        // update is applied and verified; red on failure, green on success.
+        let now = std::time::Instant::now();
+        let observed = match (&self.updates.job, &self.updates.outcome) {
+            (Some(j), _) => {
+                let j = lock(j);
+                if j.installed || (j.total > 0 && j.done >= j.total) { Observed::Working } else { Observed::Progress { done: j.done, total: j.total } }
+            }
+            (None, Some(Ok(_))) => Observed::Done,
+            (None, Some(Err(_))) => Observed::Failed,
+            (None, None) => Observed::Idle,
+        };
+        self.updates.fill.observe(observed, now);
+        let visual = self.updates.fill.frame(cfg.motion.reduce_motion, now);
+        if visual.animating {
+            window.request_animation_frame();
+        }
+        if let Some(after) = visual.wake_in {
+            cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(after).await;
+                let _ = this.update(cx, |_, cx| cx.notify());
+            })
+            .detach();
+        }
+        let failed = matches!(self.updates.outcome, Some(Err(_)));
         let u = &self.updates;
         let current = su::running_version().to_string();
         let available = u.info.as_ref().filter(|i| i.available).cloned();
@@ -236,6 +304,8 @@ impl StudioView {
             ("download", p.primary, t("Updating Mandara…").to_string(), u.job.as_ref().map(|j| lock(j).step.clone()).unwrap_or_default())
         } else if installed {
             ("check", p.success_emerald, t("Update installed").to_string(), t("The shell restarts on the new version. Reopen Studio to use it here too.").to_string())
+        } else if failed {
+            ("close", p.urgent_coral, t("The update didn't install").to_string(), tf("You have {version}", &[("version", &current)]))
         } else if let Some(info) = &available {
             ("download", p.primary, tf("Version {version} available", &[("version", &info.latest)]), tf("You have {version}", &[("version", &current)]))
         } else if u.checking {
@@ -252,13 +322,15 @@ impl StudioView {
             (None, Some(full)) => tf("Full update: {size} (no patch from your version)", &[("size", &su::human_size(full))]),
             _ => t("No download for this system in the release").to_string(),
         });
+        // How the new binary compares with the installed one (it can shrink).
+        let change_line = available.as_ref().zip(u.binary_size).and_then(|(info, size)| info.size_change(size)).map(su::size_change_text);
 
         let header = div()
             .row()
             .flex_wrap()
             .items_center()
             .gap(px(SPACE_16_PX))
-            .child(div().flex_none().size(px(DIM_48_PX)).rounded_full().bg(tone.with_alpha(ALPHA_15).hsla()).row().items_center().justify_center().child(icon(glyph, ICON_22_PX, tone)))
+            .child(div().flex_none().size(px(DIM_48_PX)).rounded_full().bg(tone.with_alpha(ALPHA_15).hsla()).row().items_center().justify_center().child(fill::check_badge(&visual, p).unwrap_or_else(|| icon(glyph, ICON_22_PX, tone).into_any_element())))
             .child(
                 div()
                     .flex_1()
@@ -268,7 +340,8 @@ impl StudioView {
                     .gap(px(SPACE_4_PX))
                     .child(div().text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).child(title))
                     .child(div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(subtitle))
-                    .children(size_line.map(|s| div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).text_color(p.primary.hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(s))),
+                    .children(size_line.map(|s| div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).text_color(p.primary.hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(s)))
+                    .children(change_line.map(|s| div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(s))),
             );
 
         // Actions.
@@ -306,10 +379,10 @@ impl StudioView {
                 .child(div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::SEMIBOLD).child(tf("What's in {version}", &[("version", &r.version)])))
                 .child(super::whats_new::release_notes(&r, p))
         });
-        let progress = u.job.as_ref().map(|j| {
+        // The card's own background is the progress bar; the bytes say how far.
+        let progress = u.job.as_ref().and_then(|j| {
             let j = lock(j);
-            let bytes = (j.total > 0).then(|| div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(format!("{} / {}", su::human_size(j.done), su::human_size(j.total))));
-            div().row().flex_col().gap(px(SPACE_6_PX)).child(progress_bar(j.done, j.total, p)).children(bytes)
+            (j.total > 0 && !j.installed).then(|| div().text_size(px(TEXT_12_5_PX)).font_weight(FontWeight::MEDIUM).font_features(mandara_ui::fonts::tabular_nums()).child(format!("{} / {}", su::human_size(j.done), su::human_size(j.total))))
         });
         let outcome = u.outcome.as_ref().map(|r| match r {
             Ok(report) => super::form::note(&describe(report), false, p),
@@ -345,7 +418,8 @@ impl StudioView {
             .overflow_hidden()
             .rounded(px(RADIUS_22_PX))
             .bg(p.surface_container.hsla())
-            .when(available.is_some(), |el| el.child(div().absolute().inset_0().bg(mandara_core::oklab_gradient(WASH_ANGLE, p.primary.with_alpha(ALPHA_12), p.tertiary.with_alpha(ALPHA_5)))))
+            .when(available.is_some() && visual.tone == Tone::None, |el| el.child(div().absolute().inset_0().bg(mandara_core::oklab_gradient(WASH_ANGLE, p.primary.with_alpha(ALPHA_12), p.tertiary.with_alpha(ALPHA_5)))))
+            .children(fill::layer(&visual, mandara_ui::bidi::rtl(), p))
             .child(
                 div()
                     .relative()

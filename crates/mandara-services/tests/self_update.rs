@@ -325,6 +325,48 @@ fn self_update_and_plugin_updates_end_to_end() {
     assert!(su::cached().is_some());
     assert!(su::first_shell_announcement(NEW) && !su::first_shell_announcement(NEW), "each version is announced once");
 
+    // A release whose binary is smaller than the installed one (as when
+    // translations left the binary): the check reports a negative change,
+    // the patch rebuilds it byte for byte, and nothing underflows.
+    reset();
+    const SHRUNK: &str = "0.2.1";
+    let mut small_bin = old_bin.clone();
+    small_bin.drain(200_000..1_400_000);
+    small_bin.splice(50_000..50_000, noise(3_000, 31));
+    let shrink = small_bin.len() as i64 - old_bin.len() as i64;
+    assert!(shrink < 0);
+    let small_top = format!("mandara-{SHRUNK}-{target}");
+    let small_tarball_name = format!("{small_top}.tar.gz");
+    let small_tarball = tar_gz(&[(format!("{small_top}/{SHELL_BINARY}"), &small_bin)]);
+    let (small_entry, small_patches) = mandara_delta::create::target_entry("mandara", SHRUNK, Some(&target), &(small_tarball_name.clone(), small_tarball.clone()), SHELL_BINARY, &small_bin, &[(OLD, &old_bin)]).unwrap();
+    let (small_patch_name, small_patch) = small_patches.into_iter().next().unwrap();
+    let mut small_manifest = Manifest { schema: SCHEMA, name: "mandara".into(), version: SHRUNK.into(), ..Default::default() };
+    small_manifest.targets.insert(target.clone(), small_entry);
+    let small_json = small_manifest.to_json();
+    let small_sums = format!("{}  {small_tarball_name}\n{}  {MANIFEST_FILE}\n", mandara_delta::sha256_hex(&small_tarball), mandara_delta::sha256_hex(small_json.as_bytes()));
+    let small_sig = mandara_delta::signing::sign::sign(&private, small_sums.as_bytes()).unwrap();
+    let at = |name: &str| serde_json::json!({ "name": name, "browser_download_url": format!("{base}/shrunk/{name}"), "size": 1 });
+    let shrunk_release = serde_json::json!({ "tag_name": format!("v{SHRUNK}"), "html_url": "https://example.invalid/v0.2.1", "assets": [at(&small_tarball_name), at(&small_patch_name), at(MANIFEST_FILE), at("SHA256SUMS"), at("SHA256SUMS.sig")] });
+    {
+        let mut r = routes.lock().unwrap();
+        r.insert(format!("/shrunk/{small_tarball_name}"), small_tarball.clone());
+        r.insert(format!("/shrunk/{small_patch_name}"), small_patch.clone());
+        r.insert(format!("/shrunk/{MANIFEST_FILE}"), small_json.into_bytes());
+        r.insert("/shrunk/SHA256SUMS".into(), small_sums.into_bytes());
+        r.insert("/shrunk/SHA256SUMS.sig".into(), small_sig.into_bytes());
+    }
+    let genuine_latest = swap(&latest_path, Some(shrunk_release.to_string().into_bytes()));
+    let shrunk_info = su::check_with(&base, OLD, &target).unwrap();
+    assert_eq!(shrunk_info.binary_size, Some(small_bin.len() as u64));
+    assert_eq!(shrunk_info.size_change(su::binary_size(Some(&exe)).unwrap()), Some(shrink));
+    mandara_i18n::with_language(Some(mandara_i18n::Lang::En), || assert!(su::size_change_text(shrink).ends_with("smaller"), "{}", su::size_change_text(shrink)));
+    let report = su::apply(&shrunk_info, &exe, ApplyOptions::default(), &|_| {}).unwrap();
+    assert_eq!((report.method, report.downloaded), (Method::Delta, small_patch.len() as u64));
+    assert_eq!(std::fs::read(&exe).unwrap(), small_bin, "the smaller binary is rebuilt byte for byte");
+    install::rollback(&exe).unwrap();
+    assert_eq!(std::fs::read(&exe).unwrap(), old_bin);
+    swap(&latest_path, genuine_latest);
+
     // Offline mode blocks every request.
     mandara_services::offline::set(true);
     let requests = log.lock().unwrap().len();

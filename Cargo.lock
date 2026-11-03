@@ -3608,6 +3608,7 @@ dependencies = [
  "mandara-config",
  "mandara-core",
  "mandara-greeter",
+ "mandara-i18n",
  "mandara-install",
  "mandara-plugins",
  "mandara-services",
@@ -3736,6 +3737,9 @@ dependencies = [
 name = "mandara-i18n"
 version = "0.12.0"
 dependencies = [
+ "mandara-version",
+ "memmap2",
+ "tempfile",
  "toml 1.1.8+spec-1.1.0",
 ]
 
@@ -3747,6 +3751,7 @@ dependencies = [
  "flate2",
  "libc",
  "mandara-delta",
+ "mandara-i18n",
  "mandara-version",
  "serde_json",
  "tar",
@@ -8701,6 +8706,7 @@ dependencies = [
  "flate2",
  "image",
  "mandara-delta",
+ "mandara-i18n",
  "mandara-version",
  "mandara-webp",
  "png 0.18.1",

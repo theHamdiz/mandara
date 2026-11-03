@@ -67,6 +67,7 @@ pub mod wallpaper_fill;
 pub mod markdown;
 pub mod notes_store;
 pub mod productivity;
+pub mod progress_fill;
 pub mod sidebar_tabs;
 pub mod slider;
 pub mod slider_model;

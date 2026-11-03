@@ -8,6 +8,8 @@ publish = false
 
 [dependencies]
 mandara-version.workspace = true
+# `cargo xtask langpacks` / `dist` / `sandbox`: compiles the language packs.
+mandara-i18n.workspace = true
 sha2.workspace = true
 tar.workspace = true
 flate2.workspace = true

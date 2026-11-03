@@ -8,6 +8,8 @@ authors.workspace = true
 
 [dependencies]
 mandara-version.workspace = true
+# Language packs: copied next to the installed binary's version, checked first.
+mandara-i18n.workspace = true
 # Release archives: SHA-256, SHA256SUMS lookups, update.json, tar.gz entries.
 mandara-delta.workspace = true
 clap.workspace = true

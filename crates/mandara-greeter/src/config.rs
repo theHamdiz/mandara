@@ -1052,6 +1052,12 @@ pub fn apply_config(from: &Path) -> Result<String, String> {
         .map(|d| d.display().to_string())
         .collect();
     let mut msg = format!("Installed {SYSTEM_CONFIG}; it takes effect at the next login screen.");
+    // Its language's pack, where the login screen's copy reads it.
+    match crate::install::install_language_pack(Path::new("/"), cfg.lang()) {
+        Ok(Some(line)) => msg.push_str(&format!("\nInstalled the {line}.")),
+        Ok(None) => {}
+        Err(e) => msg.push_str(&format!("\nThe {} language pack wasn't installed ({e}); the login screen shows English until it is.", cfg.lang().code())),
+    }
     if !home_media.is_empty() {
         msg.push_str(&format!(
             "\nNote: the greeter user usually can't read {}; put clips and images in {SYSTEM_VIDEOS} / {SYSTEM_IMAGES}.",
