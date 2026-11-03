@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.10.1 — 2026-11-03
+
+Smart updates work after skipping releases.
+
 ### Fixed
 
 - **Smart updates work after skipping releases.** A release only carried a
