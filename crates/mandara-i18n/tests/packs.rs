@@ -45,6 +45,10 @@ fn packs_are_found_validated_and_swapped_in() {
     assert_eq!(tr_in(Lang::Ar, "Settings"), "Settings");
     assert!(!packs::is_available(Lang::Ar));
     assert_eq!(*missing.lock().unwrap(), vec![Lang::Ar]);
+    // Until the pack is in, the interface is English in every way (layout
+    // direction, dates), though Arabic stays the language asked for.
+    mandara_i18n::set_language(Lang::Ar);
+    assert_eq!((mandara_i18n::language(), mandara_i18n::requested_language()), (Lang::En, Lang::Ar));
     assert!(!packs::reload(Lang::Ar), "nothing to load yet");
     assert_eq!(loaded.load(Ordering::SeqCst), 0);
 
@@ -67,6 +71,8 @@ fn packs_are_found_validated_and_swapped_in() {
     assert!(packs::reload(Lang::Ar));
     assert_eq!(loaded.load(Ordering::SeqCst), 1);
     assert_eq!(packs::loaded_from(Lang::Ar), Some(path.clone()));
+    assert_eq!(mandara_i18n::language(), Lang::Ar, "the pack is in: Arabic, right to left");
+    assert_eq!(mandara_i18n::t("Settings"), "الإعدادات");
     let before = t_in(Lang::Ar, "Settings");
     assert_eq!(before, "الإعدادات");
     // Several keys may share a translation; any of them translates back.

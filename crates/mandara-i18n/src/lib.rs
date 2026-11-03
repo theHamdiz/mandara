@@ -198,8 +198,17 @@ pub fn set_language(lang: Lang) {
 }
 
 /// The language strings are translated into: a [`scoped`] override on this
-/// thread, else the shell's.
+/// thread, else the shell's; English while that language's pack isn't
+/// there yet (so layout direction, dates and digits match the English text
+/// shown meanwhile). [`requested_language`] is the one asked for.
 pub fn language() -> Lang {
+    let lang = requested_language();
+    if packs::is_available(lang) { lang } else { Lang::En }
+}
+
+/// The language asked for (a [`scoped`] override, else the shell's), whether
+/// or not its pack is loaded.
+pub fn requested_language() -> Lang {
     OVERRIDE.with(std::cell::Cell::get).unwrap_or_else(shell_language)
 }
 
@@ -318,12 +327,12 @@ impl Catalog {
 
 /// Translates `key` (English) into the current language.
 pub fn t(key: &'static str) -> &'static str {
-    t_in(language(), key)
+    t_in(requested_language(), key)
 }
 
 /// [`t`] for keys that aren't `'static` (e.g. names from data).
 pub fn tr(key: &str) -> String {
-    tr_in(language(), key)
+    tr_in(requested_language(), key)
 }
 
 /// Translates `key` and fills `{name}` placeholders.
@@ -334,7 +343,7 @@ pub fn tf(key: &'static str, args: &[(&str, &dyn Display)]) -> String {
 /// The English key of a string translated into the current language (or
 /// the string itself when it isn't a known translation).
 pub fn untranslate(s: &str) -> String {
-    packs::pack(language()).and_then(|p| p.key_of(s)).unwrap_or(s).to_string()
+    packs::pack(requested_language()).and_then(|p| p.key_of(s)).unwrap_or(s).to_string()
 }
 
 /// Fills `{name}` placeholders in an already translated string.
