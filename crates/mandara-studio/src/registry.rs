@@ -495,6 +495,14 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     }
 }
 
+/// What a click on a locked toggle saves: a toggle that can't apply right
+/// now still shows its saved value, and one that is on can be turned off
+/// (it stays saved, and would apply again once the setup allows); turning
+/// one on waits until it can apply.
+pub fn locked_toggle_click(on: bool) -> Option<bool> {
+    on.then_some(false)
+}
+
 /// The compositor Studio runs under, detected once (it can't change while
 /// Studio is open).
 pub fn running_compositor() -> Option<mandara_config::compositor::Target> {

@@ -334,6 +334,23 @@ impl ShellConfig {
         assignment(&self.displays, SurfaceKind::Dock, output)
     }
 
+    /// Whether the dock's displays are left at every output (none narrowed
+    /// down by a main display or a list), so it shows wherever there is an
+    /// output, whichever ones are connected.
+    pub fn dock_on_every_output(&self) -> bool {
+        use crate::outputs::{ScreenChoice, ScreenSet};
+        use crate::workflow::DockDisplays;
+        let set = &self.displays.surfaces.dock;
+        if *set == ScreenSet::default() {
+            return self.dock.displays == DockDisplays::All;
+        }
+        match set.show_on {
+            ScreenChoice::All => true,
+            ScreenChoice::Primary => self.displays.primary.as_deref().is_none_or(|p| p.trim().is_empty()),
+            ScreenChoice::Selected => set.outputs.is_empty(),
+        }
+    }
+
     /// Moves per-surface output settings that predate `[displays.surfaces]`
     /// into it: `bar.monitors` and the dock's listed displays (and its
     /// "first display" once a main display is set). A surface whose
@@ -1881,6 +1898,25 @@ mod units_tests {
         assert_eq!(cfg.displays.surfaces.dock.show_on, ScreenChoice::Selected);
         assert_eq!(cfg.dock.displays, DockDisplays::All);
         assert!(cfg.dock_on_output("HDMI-A-1", 1) && !cfg.dock_on_output("DP-1", 0));
+    }
+
+    #[test]
+    fn the_dock_is_on_every_output_until_its_displays_are_narrowed() {
+        use crate::outputs::{ScreenChoice, ScreenSet};
+        use crate::workflow::DockDisplays;
+        let mut cfg = ShellConfig::default();
+        assert!(cfg.dock_on_every_output());
+        cfg.dock.displays = DockDisplays::Primary;
+        assert!(!cfg.dock_on_every_output(), "legacy: the first output only");
+        cfg.dock.displays = DockDisplays::All;
+        cfg.displays.surfaces.dock = ScreenSet { show_on: ScreenChoice::Selected, outputs: vec!["DP-1".into()] };
+        assert!(!cfg.dock_on_every_output());
+        cfg.displays.surfaces.dock.outputs.clear();
+        assert!(cfg.dock_on_every_output(), "an empty list allows every output");
+        cfg.displays.surfaces.dock.show_on = ScreenChoice::Primary;
+        assert!(cfg.dock_on_every_output(), "no main display set: every output");
+        cfg.displays.primary = Some("DP-2".into());
+        assert!(!cfg.dock_on_every_output());
     }
 
     #[test]

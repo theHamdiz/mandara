@@ -6,6 +6,21 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **Notifications joined to the bar, on more setups.** With a bottom dock
+  on one display only, bottom notifications on another display now join
+  the bar there instead of staying floating cards (Studio no longer locks
+  *Join the bar* for them). Joined notifications also open on the display
+  whose bar they're shaped for, rather than sometimes taking one
+  display's shape on another. And on a narrow screen under a wide notch,
+  notifications stay as floating cards instead of squeezing into a
+  sliver.
+- **Studio shows what's saved, even when it can't apply.** A switch that
+  doesn't work with your current setup (like *Join the bar* under a
+  floating bar) used to show as off although it was still on. It now
+  shows its saved state, dimmed, and you can still turn it off.
+
 ## 0.10.0 — 2026-11-03
 
 A tidier layout designer, with search.
