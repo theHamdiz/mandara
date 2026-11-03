@@ -364,6 +364,9 @@ pub struct PanelsConfig {
     pub menu_translucent: bool,
     /// Its glass opacity (0–1) while translucent.
     pub menu_opacity: f32,
+    /// The main menu's shortcut tiles each wear their own ornament: a Kufic
+    /// word for apps and tools, a geometric motif for look and session.
+    pub menu_patterns: bool,
     /// Panels floating when the shell stopped come back where they were.
     pub remember_floating: bool,
     /// Where each plugin's floating card sat on each output
@@ -400,6 +403,7 @@ impl Default for PanelsConfig {
             toast_ms: defaults::TOAST_MS,
             menu_translucent: true,
             menu_opacity: 0.62,
+            menu_patterns: true,
             remember_floating: true,
             floating: Vec::new(),
         }

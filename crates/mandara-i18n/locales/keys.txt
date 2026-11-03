@@ -1711,6 +1711,7 @@ Each note is a Markdown file, each topic a folder in here — point it at a sync
 Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence.
 Each repair is safe: your compositor config only ever gets one include line, with a backup.
 Each sets the launcher's style, layout and placement together; change any setting below afterwards.
+Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif
 Each surface
 Each walk to the mosque, morning or evening, is a welcome being prepared.
 Ease someone's hardship
@@ -6146,6 +6147,7 @@ Thunderstorm
 Thunderstorms around. Better stay in.
 Ticks
 Tile
+Tile patterns
 Tile shape
 Tile size
 Tiles per row in the grid style

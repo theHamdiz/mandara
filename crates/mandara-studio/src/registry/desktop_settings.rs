@@ -78,6 +78,7 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Bar, tk("Behaviour"), "/bar/scroll", tk("Scroll on empty bar space"), tk("Scrolling between and around the bar's items switches workspace or changes the volume"), Choice(BAR_SCROLL)),
         s(Bar, tk("Main menu"), "/panels/menu_translucent", tk("Glass menu"), tk("The main menu is see-through glass with solid cards on it"), Toggle),
         s(Bar, tk("Main menu"), "/panels/menu_opacity", tk("Glass opacity"), tk("How see-through the main menu's glass is"), Control::Slider { min: 0.2, max: 1.0, step: 0.01, unit: "" }),
+        s(Bar, tk("Main menu"), "/panels/menu_patterns", tk("Tile patterns"), tk("Each shortcut tile in the main menu wears its own faint ornament: a Kufic word or a geometric motif"), Toggle),
         s(Bar, tk("Behaviour"), "/bar/over_fullscreen", tk("Show over fullscreen windows"), tk("Keeps the bar and its panels above fullscreen apps; applies after a shell restart"), Toggle),
         // Wallpaper
         s(Wallpaper, tk("Desktop"), "/wallpaper/fill", tk("Fill mode"), tk("How images that don't match the screen are placed"), Choice(FILL)),

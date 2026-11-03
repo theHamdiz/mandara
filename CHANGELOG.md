@@ -6,6 +6,20 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **The main menu's shortcut tiles have character now.** Every tile on the
+  Apps & tools, Look and Session pages wears its own faint ornament in its
+  own shade of your theme's accent: the apps and tools get a word in
+  Fatimid Kufic calligraphy (انطلق on the launcher, المندرة on Studio,
+  لقطة on the screenshot tool…), and the look and session controls get
+  Alexandrian geometry, from a mashrabiya screen on Lock and Corniche
+  waves on Sleep to the Pharos sweeping its beams on Reload. They're
+  engraved into the tile like etched glass, deepen gently under the
+  pointer, keep every label at full readable contrast in light and dark
+  themes, and follow right-to-left layouts. Prefer plain tiles? Turn off
+  *Tile patterns* in Studio → Bar → Main menu.
+
 ## 0.11.0 — 2026-11-03
 
 A Modern style for the Power panel. The battery breathes while it charges.
