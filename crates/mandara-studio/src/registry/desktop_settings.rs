@@ -10,7 +10,7 @@ use super::{Control, Section, Setting, s};
 /// `bar.right_click`.
 const BAR_RIGHT_CLICK: &[(&str, &str)] = &[("main-menu", tk("The bar's main menu")), ("desktop-menu", tk("The desktop's menu"))];
 /// `panels.menu_rail`: names beside the main menu's icons, or icons only.
-const MENU_RAIL: &[(&str, &str)] = &[("full", tk("Full")), ("compact", tk("Compact"))];
+const MENU_RAIL: &[(&str, &str)] = &[("compact", tk("Compact")), ("full", tk("Full"))];
 /// `bar.scroll`.
 const BAR_SCROLL: &[(&str, &str)] = &[("none", tk("Nothing")), ("workspaces", tk("Switch workspace")), ("volume", tk("Change volume"))];
 const AUTO_HIDE: &[(&str, &str)] = &[("never", tk("Never")), ("always", tk("Always")), ("overlap", tk("When a window covers it")), ("fullscreen", tk("Fullscreen only"))];

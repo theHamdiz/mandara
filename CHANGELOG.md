@@ -6,14 +6,14 @@ About → What's new shows it too.
 
 ## Unreleased
 
-### Changed
+### New
 
-- **The main menu's side rail has names.** Every page and shortcut in the
-  rail now shows its name next to its icon, and the open page is filled in
-  the accent colour, instead of a column of small icons you had to guess at.
-  The menu grew a little so the cards keep their size. Prefer the old
-  icon-only column? Studio → Bar → Main menu → **Rail** has **Full** and
-  **Compact**; Compact also shrinks the menu back to its old width.
+- **A main menu rail with names.** Studio → Bar → Main menu → **Rail** now
+  offers **Full**: every page and shortcut in the main menu's side rail
+  shows its name beside its icon, and the open page is filled in the
+  accent colour; the menu grows a little so the cards keep their size.
+  **Compact**, the icon-only rail you know, stays the default.
+  Contributed by Hedayatbakhshi (#41).
 
 ## 0.11.0 — 2026-11-03
 

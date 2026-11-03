@@ -54,6 +54,10 @@ const RAIL_W: f32 = 168.0;
 const RAIL_COMPACT_W: f32 = 48.0;
 const RAIL_BUTTON: f32 = 32.0;
 const RAIL_ICON: f32 = 17.0;
+/// The compact rail keeps the original icon size and the open page's
+/// light tint.
+const RAIL_COMPACT_ICON: f32 = 16.0;
+const RAIL_ON_TINT: f32 = 0.18;
 const RAIL_GAP: f32 = 3.0;
 /// The hairline between the rail's groups (as wide as the icons).
 const RAIL_RULE_ALPHA: f32 = 0.3;
@@ -504,9 +508,7 @@ fn render(page: &Rc<Cell<Page>>, fit: &Rc<Cell<gpui::Size<gpui::Pixels>>>, palet
     let now = page.get();
     let compact = config(cx).read(cx).get().panels.menu_rail == MenuRail::Compact;
     let width = if compact { WIDTH_COMPACT } else { WIDTH };
-    // A rail row: the entry's icon and name (or just the icon in compact),
-    // filled with the primary colour while its page is open (like the
-    // sidebar's tabs).
+    // A rail row: the entry's icon and name (or just the icon in compact).
     let rail_button = |id: (&'static str, usize), glyph: &'static str, label: &'static str, on: bool| {
         let row = div()
             .id(id)
@@ -519,9 +521,21 @@ fn render(page: &Rc<Cell<Page>>, fit: &Rc<Cell<gpui::Size<gpui::Pixels>>>, palet
             .font_weight(FontWeight::MEDIUM)
             .when(compact, |el| el.w(px(RAIL_BUTTON)).justify_center())
             .when(!compact, |el| el.w_full().px(px(tokens::SM)).gap(px(tokens::SM)))
-            .when(on, |el| el.bg(palette.primary.hsla()).text_color(palette.on_primary.hsla()).font_weight(FontWeight::SEMIBOLD))
-            .when(!on, |el| el.text_color(palette.on_surface_variant.hsla()).hover(|s| s.bg(palette.surface_container_high.hsla())))
-            .child(icon(glyph, RAIL_ICON, if on { palette.on_primary } else { palette.on_surface_variant }));
+            // Full fills the open page like the sidebar's tabs; compact keeps
+            // the rail's original light tint.
+            .when(on && !compact, |el| el.bg(palette.primary.hsla()).text_color(palette.on_primary.hsla()).font_weight(FontWeight::SEMIBOLD))
+            .when(on && compact, |el| el.bg(palette.primary.with_alpha(RAIL_ON_TINT).hsla()))
+            .when(!on, |el| el.text_color(palette.on_surface_variant.hsla()))
+            .when(!on || compact, |el| el.hover(|s| s.bg(palette.surface_container_high.hsla())))
+            .child(icon(
+                glyph,
+                if compact { RAIL_COMPACT_ICON } else { RAIL_ICON },
+                match (on, compact) {
+                    (true, false) => palette.on_primary,
+                    (true, true) => palette.primary,
+                    (false, _) => palette.on_surface_variant,
+                },
+            ));
         if compact { row } else { row.child(div().flex_1().min_w(px(0.0)).truncate().text_start().child(crate::bidi::paragraph(tr(label)))) }
     };
     let rule = || {

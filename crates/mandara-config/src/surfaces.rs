@@ -378,10 +378,11 @@ pub struct PanelsConfig {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MenuRail {
-    /// Icon and name (the default): easier to read, a wider menu.
-    #[default]
+    /// Icon and name: easier to read, a wider menu.
     Full,
-    /// Icons only, in a narrower menu.
+    /// Icons only, in a narrower menu (the default: the menu as it always
+    /// was).
+    #[default]
     Compact,
 }
 
@@ -414,7 +415,7 @@ impl Default for PanelsConfig {
             toast_ms: defaults::TOAST_MS,
             menu_translucent: true,
             menu_opacity: 0.62,
-            menu_rail: MenuRail::Full,
+            menu_rail: MenuRail::Compact,
             remember_floating: true,
             floating: Vec::new(),
         }
@@ -576,5 +577,15 @@ mod tests {
         assert_eq!(bar.capsule_strength(), 1.0);
         assert_eq!(bar.font_weight(400), defaults::FONT_WEIGHT_MAX);
         assert_eq!(crate::BarConfig::default().font_weight(450), 450, "0 follows the interface weight");
+    }
+
+    #[test]
+    fn the_main_menu_rail_stays_compact_unless_chosen() {
+        assert_eq!(PanelsConfig::default().menu_rail, MenuRail::Compact);
+        // A config from before the setting existed keeps the compact rail.
+        let old: PanelsConfig = toml::from_str("menu_translucent = true").unwrap();
+        assert_eq!(old.menu_rail, MenuRail::Compact);
+        let full: PanelsConfig = toml::from_str("menu_rail = \"full\"").unwrap();
+        assert_eq!(full.menu_rail, MenuRail::Full);
     }
 }
