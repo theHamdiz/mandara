@@ -4,8 +4,8 @@ A desktop shell runs all day, so Mandara treats memory and power like a
 feature. Measured on the optimized release build, on a 4K display at scale
 1.5 under MangoWM, with the bar, sidebar, notifications, wallpaper and depth
 clock running, once the shell has settled (it hands freed memory back to the
-system every 30 seconds, and program code it hasn't touched lately every 10
-minutes):
+system every 30 seconds, the program code it only needed to start 8 seconds
+after it starts, and code it hasn't touched lately every 10 minutes):
 
 | Resident memory (RSS) | Video memory | Idle CPU | Threads |
 |---|---|---|---|
@@ -47,6 +47,12 @@ browser tab, without trading away speed. It took deliberate work at every layer:
   Crossfades run inside the compositor (`wp_alpha_modifier_v1`), and once
   the compositor has the pixels, the shell keeps no copy. That removed a GPU
   window per display, about 130 MiB of swapchain at 4K.
+- **A lean start.** The code and driver pages only start-up needs are
+  let go 8 seconds after the shell starts instead of 45, the fallback fonts
+  for other scripts load one face each until text in that script appears
+  (2 font files at start instead of 52 for an English desktop), and a
+  wallpaper is placed on screen without full-size copies of itself
+  ([numbers](releasing.md#start-up-memory)).
 - **Few threads.** All D-Bus, network and audio services share one tokio
   runtime with two workers, and GPUI's worker pool is capped at four.
 - **Nothing ticks off screen.** Spectrum, graphs, timers and network

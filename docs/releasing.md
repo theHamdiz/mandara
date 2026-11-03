@@ -401,7 +401,8 @@ What made the difference, each measured by switching it off alone:
   of the instance initialized EGL and radeonsi on every start. −7 threads,
   −3.2 MiB anonymous, −13.8 MiB VRAM, no libgallium / libLLVM pages from GL.
 * **Startup-only file pages unmapped once settled** (`mandara-app`
-  `residency.rs`, 45 s after start and every 10 min): clean read-only file
+  `residency.rs`, 8 s and 45 s after start, then every 10 min; the 8 s
+  drop is described under [Start-up memory](#start-up-memory)): clean read-only file
   mappings (start-up code of the binary, libLLVM pages touched by its static
   initializers when RADV loads it, font files scanned once) are unmapped
   with `MADV_DONTNEED`; code still in use faults back from the page cache.
@@ -487,7 +488,7 @@ build, so re-check those two on a quiet machine before quoting them.
   cache as 256 KiB and larger folios, and every function run then keeps the
   whole folio around it resident — twice the code — until the file is
   evicted, which on a machine with free memory means until reboot. Right
-  after the first drop (45 s) the shell probes its own mapping (one
+  after the 45 s drop the shell probes its own mapping (one
   already-cached page touched at 32 places of a throw-away private mapping,
   `/proc/self/pagemap` read around each) and, when a fault mapped more than
   the 64 KiB window, writes back and evicts the binary's page cache
@@ -524,6 +525,58 @@ Measured and not shipped, speed first:
   — Studio, the greeter's AV1 video, the lock screen, recording, OCR — is
   then treated as cold and optimized for size, so the training would have
   to cover all of them first.
+
+### Start-up memory
+
+The idle numbers above are taken once the shell has settled. In the first
+45 seconds it held far more: the start-up code of the binary, the pages
+RADV's libLLVM touches when it loads, and the fonts it scanned stayed
+resident until the first cold-page drop, and loading a wallpaper briefly
+held several full-size copies of it. Measured 2026-11-03 in the demo
+sandbox (`cargo xtask sandbox up`, Vulkan, scale 1.5, three runs each,
+median and range; *peak* is `VmHWM` 20 s after start, *at 15 s* and
+*settled* (median over 60–90 s) are `smaps_rollup` RSS sampled every
+~0.12 s), release builds, MiB:
+
+| Setup | Peak before → after | At 15 s before → after | Settled before → after |
+|---|---|---|---|
+| 3840 × 2160, default config | 112.0 (112.0–112.1) → 101.0 (100.9–101.8) | 111.1 (110.3–111.3) → 37.3 (37.3–37.9) | 45.8 (40.2–45.8) → 42.0 (41.0–45.8) |
+| 1600 × 1000, default config | 111.8 (111.3–112.2) → 102.4 (101.9–103.5) | 111.3 (110.2–111.5) → 37.5 (36.9–37.5) | 42.2 (42.0–45.7) → 45.3 (42.2–45.8) |
+| 3840 × 2160, demo config (1080p wallpaper, depth clock, dock) | 240.8 (240.7–241.0) → 203.6 (202.9–204.6) | 122.6 (122.5–122.6) → 39.3 (39.1–39.9) | 45.0 (44.2–54.2) → 43.4 (43.1–50.8) |
+| 3840 × 2160, demo config with a 4K JPEG wallpaper | 198.4 (198.2–198.8) → 168.3 (167.3–169.3) | — | — |
+
+Settled RSS is within run-to-run noise, and anonymous memory (18.1–18.3
+MiB default, 19.8–20.3 MiB demo) and video memory (163.5 MiB default and
+178.5 MiB demo at 4K, 57.7 MiB at 1600 × 1000) are unchanged, also after
+opening and closing the sidebar, the launcher and a panel.
+
+* **An early cold-page drop** (`residency.rs`, `EARLY` = 8 s): the drop
+  described above also runs 8 s after start. The shell is up and has drawn
+  within about a second; what the idle shell still runs maps back with a
+  minor fault. The 45 s drop (with the page-cache refresh) and the
+  10-minute ones are unchanged. −73 to −83 MiB resident from 8 s to 45 s.
+* **One face per fallback-chain family** (`vendor/gpui_wgpu` patch 11, and
+  `lock::paint::TextPainter` asking a fallback family for its weight only
+  when the text reaches it): an English desktop mapped and parsed every
+  face of the five installed Arabic families at its first frame. 52 → 2
+  font files mapped (default config; 53 → 4 with the desktop clock), font
+  pages resident at 4 s 11.0 → 4.8 MiB (17.5 → 8.2 MiB). It is all of
+  the −9 to −11 MiB peak with the default config (no wallpaper there).
+* **A wallpaper placed without full-size copies** (`backdrop::paint::background`):
+  the picture is resampled before the canvas is allocated, the source
+  dropped once resampled, and copied onto the canvas from its own RGB or
+  RGBA pixels instead of an RGBA copy. At 4K that is one 31.6 MiB buffer
+  less at the peak of a wallpaper load (a same-size wallpaper: decoded
+  picture + canvas instead of picture + RGBA copy + canvas; an upscaled
+  one: the canvas no longer exists beside the resampler's float buffer).
+  The rest of the demo rows' drop: −20 to −28 MiB peak, at start and on
+  every wallpaper change. Pixels are identical (unit test
+  `rgb_pictures_are_placed_like_their_rgba_copies`).
+
+Frame times are unchanged: opening and closing the sidebar, launcher and
+media panel (demo config at 4K, three runs each), view build p50 0.096–0.123
+→ 0.093–0.118 ms and p95 0.158–0.187 → 0.140–0.183 ms, frame interval p50
+16.26–16.33 → 16.27–16.30 ms (the sandbox output runs at 60 Hz).
 
 Guards: `crates/mandara-ui/tests/startup_budget.rs` (registering every
 built-in plugin keeps ≤ 4 MiB, allocates ≤ 16 MiB and starts no thread;

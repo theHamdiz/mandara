@@ -366,8 +366,19 @@ impl TextPainter {
         }
         let primary = self.face(font.family, font.weight);
         let runs = self.script_runs(text, primary);
-        let weights: Vec<u16> =
-            self.fallbacks.clone().iter().map(|family| self.family_weight(family, font.weight)).collect();
+        // Only the fallback families this text reaches: asking a family for
+        // its weight loads its faces (all five Arabic families' files for an
+        // English clock otherwise).
+        let weights: Vec<u16> = (0..self.fallbacks.len())
+            .map(|i| {
+                if runs.iter().any(|(_, slot)| *slot == Some(i)) {
+                    let family = self.fallbacks[i].clone();
+                    self.family_weight(&family, font.weight)
+                } else {
+                    font.weight
+                }
+            })
+            .collect();
         let fonts = &mut self.fonts;
         let mut buffer = Buffer::new(fonts, Metrics::new(font.size, (font.size * 1.25).ceil()));
         buffer.set_size(None, None);

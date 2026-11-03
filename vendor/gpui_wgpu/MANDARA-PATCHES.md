@@ -229,6 +229,36 @@ heap 10.0–10.2 → 8.7–8.8 MiB, VRAM unchanged (166 MiB). The demo sandbox
 Windows opened later (popovers, the launcher, floating cards) also skip the
 shader parse and pipeline build.
 
+## 11. One face per default-chain family (`cosmic_text_system.rs`)
+
+Patch 6 resolved each family of the default fallback chain with
+`load_family`, which loads *every* face of the family (each weight, width
+and slant: a `cosmic_text::Font` with its shaper data, cached by
+cosmic-text for the life of the process, and the face's file mapped) only
+to keep one of them: the upright face nearest to regular, whose charmap
+decides coverage. Text in the chain's script asks cosmic-text for the face
+it needs at its weight anyway (`fallback_weight`), so the rest were never
+used unless that text appeared. For an English interface the chain is the
+Arabic one: Cairo, Noto Sans Arabic (UI), Noto Naskh / Kufi Arabic, 53
+files mapped and parsed at the first frame.
+
+`load_chain_face` picks that same face without loading the others: the
+family's faces are ranked as before (upright, then nearest to 400, ties in
+database order) and the first one `load_family` would accept as a primary
+font (a Latin `m`, or a known colour emoji font) is loaded alone, the `m`
+read straight from the file. Families without such a face still drop out
+of the chain, as before. Faces loaded later by name (a family chosen as
+the UI font, a fallback run's weight) load as they did.
+
+Measured in Mandara's demo sandbox (Vulkan / RADV, 3840 × 2160 at 1.5,
+default config, release builds, three runs each; the shell's
+`lock::paint::TextPainter` got the same treatment, see
+`docs/releasing.md` § Start-up memory): font files mapped 52 → 2, their
+resident pages 4 s after start 11.0 → 4.8 MiB, and the start-up peak
+(`VmHWM`) 112.0 (112.0–112.1) → 101.0 (100.9–101.8) MiB. Arabic, Persian,
+Urdu, Korean and Bengali text still renders in its faces at every weight
+(the `mandara-ui` `fonts::tests` regression tests pass unchanged).
+
 ## Tests
 
 * New `paths_render_through_bounding_box_textures` (headless renderer): a solid
