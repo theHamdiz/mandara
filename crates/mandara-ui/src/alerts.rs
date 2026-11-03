@@ -347,6 +347,20 @@ pub fn init(cx: &mut App) {
     })
     .detach();
 
+    // Mandara's own recorder starting or stopping (the hub doesn't change
+    // with it).
+    if let Some(rec) = crate::recorder::recorder(cx) {
+        let mut was = crate::recorder::is_recording(cx);
+        cx.observe(&rec, move |_, cx| {
+            let now = crate::recorder::is_recording(cx);
+            if now != was {
+                was = now;
+                sync_auto_dnd(cx);
+            }
+        })
+        .detach();
+    }
+
     // Charger and power-profile changes.
     let events = system_events::watch();
     cx.spawn(async move |cx| {

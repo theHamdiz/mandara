@@ -41,7 +41,6 @@ pub const SWITCHER_LIST: &str = tk("Which windows");
 pub const SCREEN_TIME: &str = tk("Screen time");
 pub const CLIPBOARD: &str = tk("Clipboard");
 pub const SCREENSHOT: &str = tk("Screenshot");
-pub const RECORDING: &str = tk("Screen recording");
 
 /// Launcher placements (Studio → Launcher draws them as a screen diagram).
 pub const POSITIONS: &[(&str, &str)] = &[
@@ -248,8 +247,6 @@ pub fn entries() -> Vec<Setting> {
         shot("/plugins/settings/screenshot/pipe_command", tk("Send to"), tk("Pipe each capture (PNG on stdin) to a command, e.g. satty -f -"), Text { placeholder: "satty -f -" }, Value::from("")),
         shot("/plugins/settings/screenshot/sound", tk("Shutter sound"), tk("Uses your sound theme (Studio → Audio & media → Sounds)"), Toggle, Value::from(true)),
         shot("/plugins/settings/screenshot/notify", tk("Notify"), tk("A notification after window and screen captures"), Toggle, Value::from(true)),
-        sd(Plugins, SCREENSHOT, "/plugins/settings/screenshot/record_directory", tk("Recordings folder"), tk("Where screen recordings go (empty: Videos/Recordings)"), Text { placeholder: "~/Videos/Recordings" }, Value::from("")),
-        sd(Plugins, SCREENSHOT, "/plugins/settings/screenshot/record_fps", tk("Recording frame rate"), tk("Frames per second of screen recordings"), slider(5.0, 60.0, 1.0, " fps"), Value::from(30)),
-        sd(Plugins, SCREENSHOT, "/plugins/settings/screenshot/record_width", tk("Recording width"), tk("Recordings are scaled down to at most this width"), slider(640.0, 3840.0, 80.0, " px"), Value::from(1600)),
+        // The screen recorder's `record_*` keys: `recorder_settings`.
     ]
 }

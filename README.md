@@ -1,8 +1,10 @@
 <p align="center">
-  <img src="assets/brand/mandara-256.png" alt="Mandara Shell logo" width="112"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/mandara-banner-dark.webp"/>
+    <source media="(prefers-color-scheme: light)" srcset="assets/brand/mandara-banner-light.webp"/>
+    <img src="assets/brand/mandara-banner-light.webp" alt="Mandara: the phoenix rising from a Mediterranean wave beside the wordmark. A beautiful, fast desktop shell for Wayland, in under 100 MiB, tuned for 144 Hz." width="100%"/>
+  </picture>
 </p>
-
-<h1 align="center">Mandara Shell</h1>
 
 <p align="center">
   <b>A beautiful, fast Linux desktop that fits in under 100 MiB of RAM.</b>
@@ -13,18 +15,31 @@
 </p>
 
 <p align="center">
-  <a href="docs/building.md#build-fingerprint"><img src="https://img.shields.io/badge/100%25-Rust-B7410E?logo=rust&logoColor=white" alt="100% Rust"/></a>
-  <a href="docs/desktop.md"><img src="https://img.shields.io/badge/Wayland-native-FFBC00?logo=wayland&logoColor=black" alt="Wayland native"/></a>
-  <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-5B4FE9" alt="GPU rendered"/></a>
-  <a href="docs/install.md#mangowm-niri-hyprland-and-umbriel"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel-first--class-0A7EA4" alt="MangoWM, Niri, Hyprland, Umbriel"/></a>
-  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-73%20built--in%20%2B%20WebAssembly-8250DF" alt="73 plugins plus WebAssembly"/></a>
-  <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-15%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-0E7C86" alt="15 languages"/></a>
+  <a href="docs/install.md">
+    <img src="https://img.shields.io/badge/Install_Mandara-7C3AED?style=for-the-badge&logo=linux&logoColor=white&labelColor=7C3AED" alt="Install Mandara" height="50"/>
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/theHamdiz/mandara/stargazers"><img src="https://img.shields.io/github/stars/theHamdiz/mandara?style=for-the-badge&logo=github&logoColor=E9E5FF&labelColor=0B1026&color=8B5CF6" alt="GitHub stars"/></a>
+  <a href="https://github.com/theHamdiz/mandara/releases/latest"><img src="https://img.shields.io/github/v/release/theHamdiz/mandara?style=for-the-badge&logo=rust&logoColor=E9E5FF&labelColor=0B1026&color=22D3EE&label=release" alt="Latest release"/></a>
+  <a href="https://github.com/theHamdiz/mandara/commits/main"><img src="https://img.shields.io/github/last-commit/theHamdiz/mandara?style=for-the-badge&logo=git&logoColor=E9E5FF&labelColor=0B1026&color=8B5CF6&label=commit" alt="Last commit"/></a>
+  <a href="docs/README.md"><img src="https://img.shields.io/badge/docs-22D3EE?style=for-the-badge&logo=readthedocs&logoColor=0B1026&labelColor=22D3EE" alt="Documentation"/></a>
+  <a href="#license"><img src="https://img.shields.io/badge/GPL--3.0-8B5CF6?style=for-the-badge&logo=gnu&logoColor=E9E5FF&labelColor=0B1026" alt="GPL-3.0-or-later"/></a>
+  <a href="https://ko-fi.com/thehamdiz"><img src="https://img.shields.io/badge/Ko--fi-support-22D3EE?style=for-the-badge&logo=ko-fi&logoColor=E9E5FF&labelColor=0B1026" alt="Support on Ko-fi"/></a>
+</p>
+
+<p align="center">
+  <a href="docs/building.md#build-fingerprint"><img src="https://img.shields.io/badge/100%25-Rust-8B5CF6?logo=rust&logoColor=E9E5FF&labelColor=0B1026" alt="100% Rust"/></a>
+  <a href="docs/desktop.md"><img src="https://img.shields.io/badge/Wayland-native-22D3EE?logo=wayland&logoColor=E9E5FF&labelColor=0B1026" alt="Wayland native"/></a>
+  <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-8B5CF6?labelColor=0B1026" alt="GPU rendered"/></a>
+  <a href="docs/install.md#mangowm-niri-hyprland-and-umbriel"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel"/></a>
+  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-73%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="73 plugins plus WebAssembly"/></a>
+  <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-15%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="15 languages"/></a>
   <br/>
-  <a href="docs/performance.md"><img src="https://img.shields.io/badge/RAM-under%20100%20MiB-2EA44F" alt="RAM under 100 MiB"/></a>
-  <a href="docs/performance.md"><img src="https://img.shields.io/badge/VRAM-under%20190%20MiB-2EA44F" alt="VRAM under 190 MiB"/></a>
-  <a href="docs/performance.md"><img src="https://img.shields.io/badge/idle%20CPU-0.1%25-2EA44F" alt="Idle CPU 0.1%"/></a>
-  <a href="#license"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later"/></a>
-  <a href="https://ko-fi.com/thehamdiz"><img src="https://img.shields.io/badge/Ko--fi-support-FF5E5B?logo=ko-fi&logoColor=white" alt="Support on Ko-fi"/></a>
+  <a href="docs/performance.md"><img src="https://img.shields.io/badge/RAM-under%20100%20MiB-2DD4BF?labelColor=0B1026" alt="RAM under 100 MiB"/></a>
+  <a href="docs/performance.md"><img src="https://img.shields.io/badge/VRAM-under%20190%20MiB-2DD4BF?labelColor=0B1026" alt="VRAM under 190 MiB"/></a>
+  <a href="docs/performance.md"><img src="https://img.shields.io/badge/idle%20CPU-0.1%25-2DD4BF?labelColor=0B1026" alt="Idle CPU 0.1%"/></a>
 </p>
 
 <p align="center">
@@ -260,6 +275,18 @@ More answers in the **[FAQ](docs/faq.md)**.
 - **[Why Mandara](docs/why-mandara.md)**: how it compares with other shells
 - **[Building from source](docs/building.md)** and
   **[contributing](AGENTS.md)**
+
+## Star history
+
+<p align="center">
+  <a href="https://www.star-history.com/#theHamdiz/mandara&Date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=theHamdiz/mandara&type=Date&theme=dark"/>
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=theHamdiz/mandara&type=Date"/>
+      <img alt="Mandara Shell's GitHub stars over time" src="https://api.star-history.com/svg?repos=theHamdiz/mandara&type=Date" width="100%"/>
+    </picture>
+  </a>
+</p>
 
 ## Supporting Mandara
 

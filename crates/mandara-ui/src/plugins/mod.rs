@@ -168,6 +168,26 @@ pub fn fn_view(
     .into()
 }
 
+/// [`fn_view`] that also re-renders on what `observe` subscribes it to
+/// (an entity only this view cares about, such as a running clock).
+#[track_caller]
+pub fn fn_view_observing(
+    tick: Option<Duration>,
+    observe: impl FnOnce(&mut Context<FnView>),
+    render: impl Fn(&MandaraPalette, &mut Window, &mut App) -> AnyElement + 'static,
+    window: &mut Window,
+    cx: &mut App,
+) -> AnyView {
+    let label = std::panic::Location::caller();
+    cx.new(|cx| {
+        let mut view = FnView::new(tick, render, window, cx);
+        view.label = label;
+        observe(cx);
+        view
+    })
+    .into()
+}
+
 /// Re-renders `view` whenever `source` notifies — for live data kept outside
 /// the hub (e.g. [`crate::hub::resources_entity`]) so only the views that
 /// show it redraw on each sample.

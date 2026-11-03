@@ -108,10 +108,14 @@ const AURORA_MOTIF: &str = r#"<path d="M420 730C730 820 690 160 1030 320S1300 76
 // ── Checks ───────────────────────────────────────────────────────────────
 
 /// Every brand mark exported as PNGs.
-const BRAND_NAMES: &[&str] = &["mandara", "mandara-studio", "mandara-login"];
+const BRAND_NAMES: &[&str] = &["mandara", "mandara-login"];
 /// The marks drawn as SVG (the shell's own logo is a raster master,
 /// `mandara-1024.png`).
-const BRAND_SVG_NAMES: &[&str] = &["mandara-studio", "mandara-login"];
+const BRAND_SVG_NAMES: &[&str] = &["mandara-login"];
+/// Studio's installed icon: the phoenix, its 512 PNG wrapped in an SVG so
+/// it stays at the scalable path every install already uses.
+const STUDIO_ICON: &str = "packaging/org.mandara.studio.svg";
+const STUDIO_ICON_PNG: &str = "mandara-512.png";
 const BRAND_MASTER: &str = "mandara-1024.png";
 const BRAND_MASTER_SIZE: u32 = 1024;
 /// The raster logo's gradients don't compress like the drawn marks.
@@ -807,6 +811,23 @@ fn is_rgba8_png(path: &Path) -> bool {
     image::ImageReader::open(path).ok().and_then(|r| r.with_guessed_format().ok()).and_then(|r| r.decode().ok()).is_some_and(|i| i.color() == image::ColorType::Rgba8)
 }
 
+/// Standard base64 (with `=` padding), for the PNG inside Studio's icon.
+fn base64_decode(text: &str) -> Option<Vec<u8>> {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = Vec::with_capacity(text.len() / 4 * 3);
+    let (mut acc, mut bits) = (0u32, 0u32);
+    for c in text.bytes().filter(|c| !c.is_ascii_whitespace()).take_while(|&c| c != b'=') {
+        acc = (acc << 6) | ALPHABET.iter().position(|&a| a == c)? as u32;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+            acc &= (1 << bits) - 1;
+        }
+    }
+    Some(out)
+}
+
 pub fn check_brand(r: &mut Report) {
     let brand = assets().join("brand");
     for name in BRAND_SVG_NAMES {
@@ -847,6 +868,14 @@ pub fn check_brand(r: &mut Report) {
             }
         }
         r.ensure(!doc.descendants().any(|n| matches!(n.tag_name().name(), "defs" | "text")), || "mandara-symbolic.svg: no defs or text".into());
+    }
+    if let Some(text) = r.try_or(parse_svg(&root().join(STUDIO_ICON))) {
+        let doc = roxmltree::Document::parse(&text).expect("parsed above");
+        r.ensure(doc.root_element().attribute("viewBox") == Some(BRAND_VIEWBOX), || format!("{STUDIO_ICON}: viewBox must be {BRAND_VIEWBOX}"));
+        let embedded = doc.descendants().find(|n| n.tag_name().name() == "image").and_then(|n| n.attribute(("http://www.w3.org/1999/xlink", "href"))).and_then(|h| h.strip_prefix("data:image/png;base64,"));
+        let current = std::fs::read(brand.join(STUDIO_ICON_PNG)).ok();
+        let decoded = embedded.and_then(|b| base64_decode(b.trim()));
+        r.ensure(decoded.is_some() && decoded == current, || format!("{STUDIO_ICON}: must embed brand/{STUDIO_ICON_PNG} as-is (regenerate it when the logo changes)"));
     }
     let master = brand.join(BRAND_MASTER);
     if let Some(img) = r.try_or(load_rgba(&master)) {
@@ -1142,6 +1171,14 @@ mod tests {
 
     fn records() -> Vec<Record> {
         catalog().expect("assets/catalog.json")
+    }
+
+    #[test]
+    fn base64_round_trips() {
+        assert_eq!(base64_decode("TWFu").as_deref(), Some(&b"Man"[..]));
+        assert_eq!(base64_decode("TWE=").as_deref(), Some(&b"Ma"[..]));
+        assert_eq!(base64_decode("TQ==").as_deref(), Some(&b"M"[..]));
+        assert_eq!(base64_decode("T!=="), None);
     }
 
     #[test]

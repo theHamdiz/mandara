@@ -23,14 +23,12 @@ assets/brand/mandara-1024.png
 assets/brand/mandara-128.png
 assets/brand/mandara-256.png
 assets/brand/mandara-512.png
+assets/brand/mandara-banner-dark.webp
+assets/brand/mandara-banner-light.webp
 assets/brand/mandara-login-128.png
 assets/brand/mandara-login-256.png
 assets/brand/mandara-login-512.png
 assets/brand/mandara-login.svg
-assets/brand/mandara-studio-128.png
-assets/brand/mandara-studio-256.png
-assets/brand/mandara-studio-512.png
-assets/brand/mandara-studio.svg
 assets/brand/mandara-symbolic.svg
 assets/catalog.json
 assets/plugins/active-window/cover.png
