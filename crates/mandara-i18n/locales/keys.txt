@@ -6027,6 +6027,7 @@ The translations available in your language (for Studio's translation setting)
 The tray service is not running
 The unit is masked
 The unlock password was incorrect
+The update didn't install
 The upright line between a slider's fill and its track; None shows the fill alone
 The uptime monitor stopped
 The volume beside the speaker icon

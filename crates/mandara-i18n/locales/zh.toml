@@ -8049,3 +8049,4 @@
 "Downloading {language}…" = "正在下载{language}…"
 "Downloading {language}… {size}" = "正在下载{language}… {size}"
 "Couldn't download {language}: {error}" = "无法下载{language}：{error}"
+"The update didn't install" = "更新未能安装"

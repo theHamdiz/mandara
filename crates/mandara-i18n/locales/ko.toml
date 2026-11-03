@@ -7807,3 +7807,4 @@
 "Downloading {language}…" = "{language} 받는 중…"
 "Downloading {language}… {size}" = "{language} 받는 중… {size}"
 "Couldn't download {language}: {error}" = "{language}을(를) 받지 못했습니다: {error}"
+"The update didn't install" = "업데이트를 설치하지 못했습니다"

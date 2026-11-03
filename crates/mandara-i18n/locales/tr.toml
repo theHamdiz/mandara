@@ -8054,3 +8054,4 @@
 "Downloading {language}…" = "{language} indiriliyor…"
 "Downloading {language}… {size}" = "{language} indiriliyor… {size}"
 "Couldn't download {language}: {error}" = "{language} indirilemedi: {error}"
+"The update didn't install" = "Güncelleme yüklenmedi"

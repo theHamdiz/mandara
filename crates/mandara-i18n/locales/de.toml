@@ -8053,3 +8053,4 @@
 "Downloading {language}…" = "{language} wird heruntergeladen…"
 "Downloading {language}… {size}" = "{language} wird heruntergeladen… {size}"
 "Couldn't download {language}: {error}" = "{language} konnte nicht heruntergeladen werden: {error}"
+"The update didn't install" = "Das Update wurde nicht installiert"

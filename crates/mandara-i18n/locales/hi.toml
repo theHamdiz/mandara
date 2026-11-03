@@ -8055,3 +8055,4 @@
 "Downloading {language}…" = "{language} डाउनलोड हो रही है…"
 "Downloading {language}… {size}" = "{language} डाउनलोड हो रही है… {size}"
 "Couldn't download {language}: {error}" = "{language} डाउनलोड नहीं हो सकी: {error}"
+"The update didn't install" = "अपडेट इंस्टॉल नहीं हुआ"

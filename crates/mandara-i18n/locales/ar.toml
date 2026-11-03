@@ -8058,3 +8058,4 @@
 "Downloading {language}…" = "جارٍ تنزيل {language}…"
 "Downloading {language}… {size}" = "جارٍ تنزيل {language}… {size}"
 "Couldn't download {language}: {error}" = "تعذّر تنزيل {language}: {error}"
+"The update didn't install" = "لم يُثبَّت التحديث"

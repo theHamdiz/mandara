@@ -8049,3 +8049,4 @@
 "Downloading {language}…" = "Descargando {language}…"
 "Downloading {language}… {size}" = "Descargando {language}… {size}"
 "Couldn't download {language}: {error}" = "No se pudo descargar {language}: {error}"
+"The update didn't install" = "La actualización no se instaló"

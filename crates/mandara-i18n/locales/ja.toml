@@ -8055,3 +8055,4 @@
 "Downloading {language}…" = "{language}をダウンロードしています…"
 "Downloading {language}… {size}" = "{language}をダウンロードしています… {size}"
 "Couldn't download {language}: {error}" = "{language}をダウンロードできませんでした: {error}"
+"The update didn't install" = "アップデートをインストールできませんでした"

@@ -213,7 +213,7 @@ narrow ones; everything mirrors for right-to-left languages.
 
 | Page | What it covers |
 |---|---|
-| **General** | Language (a language whose pack is missing downloads it, with its progress under the cards and Retry if it fails; see [Languages](languages.md#language-packs)), units, week start, polkit agent, lock routing, keyrings & passwords (GNOME Keyring prompts, KeePassXC dialog, unlock at login), restart after a crash. |
+| **General** | Language (a language whose pack is missing downloads it: its card fills with the download, turns green with a check when it's in, or red with the reason and Retry if it fails; see [Languages](languages.md#language-packs)), units, week start, polkit agent, lock routing, keyrings & passwords (GNOME Keyring prompts, KeePassXC dialog, unlock at login), restart after a crash. |
 | **Profiles & backup** | Recent changes with undo, named profiles, export / import, reset a page, support report. |
 | **Performance** | The shell's own CPU, memory and threads, Studio's separately, frame-time diagnostics, restart / quit. |
 | **Maintenance** | Health checks with repair, downloads, cache cleanup, backups, factory reset. |
@@ -570,9 +570,11 @@ method:
 - **Update now** downloads the patch for your version, checks the installed
   binary and the result byte for byte (SHA-256), and replaces the binary
   atomically. If anything doesn't match, it falls back to the full download
-  automatically and says why. Progress and the method used are shown; the
-  running shell restarts on the new version (reopen Studio to use it there
-  too). The previous binary is kept for `mandara update rollback`.
+  automatically and says why. The card itself fills with the download as
+  it comes in, stays full while the update is applied and checked, then
+  turns green with a check (or red with the reason if it didn't install);
+  the method used is shown, and a moment later the running shell restarts
+  on the new version (reopen Studio to use it there too). The previous binary is kept for `mandara update rollback`.
 - **Download full update** skips the patch.
 - **What's in it:** when a release is available, the card lists its notes
   (new, improved, fixed) before you install it.

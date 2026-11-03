@@ -7808,3 +7808,4 @@
 "Downloading {language}…" = "{language} ڈاؤن لوڈ ہو رہی ہے…"
 "Downloading {language}… {size}" = "{language} ڈاؤن لوڈ ہو رہی ہے… {size}"
 "Couldn't download {language}: {error}" = "{language} ڈاؤن لوڈ نہیں ہو سکی: {error}"
+"The update didn't install" = "اپ ڈیٹ انسٹال نہیں ہوئی"

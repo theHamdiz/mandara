@@ -8055,3 +8055,4 @@
 "Downloading {language}…" = "Téléchargement de {language}…"
 "Downloading {language}… {size}" = "Téléchargement de {language}… {size}"
 "Couldn't download {language}: {error}" = "Impossible de télécharger {language} : {error}"
+"The update didn't install" = "La mise à jour ne s'est pas installée"

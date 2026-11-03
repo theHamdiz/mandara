@@ -8054,3 +8054,4 @@
 "Downloading {language}…" = "Загрузка: {language}…"
 "Downloading {language}… {size}" = "Загрузка: {language}… {size}"
 "Couldn't download {language}: {error}" = "Не удалось загрузить {language}: {error}"
+"The update didn't install" = "Обновление не установилось"

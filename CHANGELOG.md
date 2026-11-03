@@ -21,12 +21,20 @@ download only for the languages you use.
 - **Languages download when you pick them.** Choose a language in Studio
   (or for the login screen, or as a plugin's own language) and Mandara
   fetches its pack if it's missing, checked against the release's
-  signature, then switches over. Studio shows the download under the
-  language cards ("Downloading Arabic… 180 KB"), and if it can't finish
-  (offline mode, no network) it says why, offers **Retry** and keeps
-  everything in English, laid out left to right, meanwhile. Each pack belongs to exactly the version
-  you run, and every update brings the new version's packs for the
-  languages you use before it restarts the shell.
+  signature, then switches over. The language's own card fills up as the
+  download comes in ("Downloading Arabic… 180 KB"), from the right in
+  right-to-left languages; it turns green with a check when it's done, or
+  red with the reason and **Retry** if it can't finish (offline mode, no
+  network), keeping everything in English, laid out left to right,
+  meanwhile. The language panel in the bar does the same. Each pack
+  belongs to exactly the version you run, and every update brings the new
+  version's packs for the languages you use before it restarts the shell.
+- **Update now shows the update as it happens.** In Studio → About, the
+  update card fills with the real download (the patch or the full
+  download), stays full while the update is applied and checked, then
+  turns green with a check before the shell restarts, or red with the
+  reason if it didn't install. With Reduce motion on, it changes without
+  animation.
 - **Switching languages is instant.** A language pack is read in place
   rather than parsed, so switching takes under a millisecond instead of
   about 5 ms, looking up a word is a little faster, and the shell uses

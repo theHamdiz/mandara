@@ -161,7 +161,22 @@ fn ensure(lang: Lang, was_present: bool) -> Result<(), String> {
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let lock_path = dir.join(format!(".{}.lock", lang.code()));
     let lock_file = std::fs::File::create(&lock_path).map_err(|e| format!("{}: {e}", lock_path.display()))?;
-    lock_file.lock().map_err(|e| format!("{}: {e}", lock_path.display()))?;
+    // While another Mandara process (the shell, or Studio) downloads it,
+    // show its progress here too: it writes the bytes so far next to the
+    // lock.
+    let progress_path = dir.join(format!(".{}.progress", lang.code()));
+    loop {
+        match lock_file.try_lock() {
+            Ok(()) => break,
+            Err(std::fs::TryLockError::WouldBlock) => {
+                if let Some((done, total)) = read_progress(&progress_path) {
+                    set_state(lang, State::Downloading { done, total });
+                }
+                std::thread::sleep(PEER_POLL);
+            }
+            Err(std::fs::TryLockError::Error(e)) => return Err(format!("{}: {e}", lock_path.display())),
+        }
+    }
     // Another process may have installed it while this one waited.
     if !was_present && packs::reload(lang) {
         return Ok(());
@@ -177,8 +192,24 @@ fn ensure(lang: Lang, was_present: bool) -> Result<(), String> {
         }
         return Ok(());
     }
-    download(&published, lang, &dir, &|done, total| set_state(lang, State::Downloading { done, total }))?;
+    let result = download(&published, lang, &dir, &|done, total| {
+        set_state(lang, State::Downloading { done, total });
+        let _ = std::fs::write(&progress_path, format!("{done} {total}"));
+    });
+    let _ = std::fs::remove_file(&progress_path);
+    result?;
     if packs::reload(lang) { Ok(()) } else { Err(tf("The {language} language pack was downloaded but couldn't be loaded", &[("language", &tr(lang.english_name()))])) }
+}
+
+/// How often a process waiting for another one's download reads its
+/// progress.
+const PEER_POLL: Duration = Duration::from_millis(100);
+
+/// `done total` written by the process downloading a pack.
+fn read_progress(path: &Path) -> Option<(u64, u64)> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let (done, total) = text.trim().split_once(' ')?;
+    Some((done.parse().ok()?, total.parse().ok()?))
 }
 
 /// What a release publishes for its language packs, its signature checked.

@@ -130,6 +130,8 @@ pub struct StudioView {
     depth_model: depth_model_row::DepthModelRow,
     /// About → Mandara updates, and marketplace plugin updates.
     updates: updates_card::Updates,
+    /// Each language card's download fill (Studio → General → Language).
+    lang_fills: mandara_ui::progress_fill::LanguageFills,
     /// Plugins page: the plugin detail / settings modal.
     modal: plugin_modal::PluginModal,
     /// Plugins page tab (Installed / Marketplace / Local).
@@ -207,7 +209,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { section: Section::Home, search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new() }
+        Self { section: Section::Home, search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), lang_fills: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -1205,42 +1207,88 @@ impl StudioView {
 
     /// Language picker: every supported language as a card, in its own
     /// script, plus "System".
-    fn language_picker(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    fn language_picker(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         use mandara_config::Locale;
         use mandara_i18n::Lang;
+        use mandara_services::self_update::langpacks;
+        use mandara_ui::progress_fill::{self as fill, Tone, Visual};
         let current = cfg.general.locale;
         let system = Lang::from_env();
         let fonts = mandara_ui::fonts::fonts(cx);
-        let card = |id: String, sample: String, native: String, english: String, selected: bool, rtl: bool, locale: Locale, cx: &mut Context<Self>| {
-            div()
-                .id(SharedString::from(id))
+        // Each card's background follows its language pack's download.
+        let ui_rtl = mandara_ui::bidi::rtl();
+        let mut wakes = Vec::new();
+        let visuals = self.lang_fills.frame(cfg.motion.reduce_motion, window, |after| wakes.push(after));
+        for after in wakes {
+            cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(after).await;
+                let _ = this.update(cx, |_, cx| cx.notify());
+            })
+            .detach();
+        }
+        let idle: (Visual, Option<String>) = (fill::IDLE, None);
+        let card = |id: String, sample: String, native: String, english: String, selected: bool, rtl: bool, locale: Locale, status: (Visual, Option<String>), cx: &mut Context<Self>| {
+            let (visual, line) = status;
+            let failed = visual.tone == Tone::Error;
+            let lang = locale.lang();
+            let accent = match visual.tone {
+                Tone::Error => p.urgent_coral,
+                Tone::Success => p.success_emerald,
+                _ => p.primary,
+            };
+            let corner = if let Some(badge) = fill::check_badge(&visual, p) {
+                Some(badge)
+            } else if failed {
+                Some(
+                    compositor_page::button(SharedString::from(format!("lang-retry-{}", lang.code())), "refresh", t("Retry"), false, p)
+                        .on_click(move |_, _, cx| {
+                            cx.stop_propagation();
+                            langpacks::retry(lang);
+                        })
+                        .into_any_element(),
+                )
+            } else if selected {
+                Some(div().size(px(DIM_20_PX)).rounded_full().bg(p.primary.hsla()).row().items_center().justify_center().child(icon("check", ICON_12_PX, p.on_primary)).into_any_element())
+            } else {
+                None
+            };
+            let detail = match &line {
+                Some(text) => div().text_size(px(TEXT_11_5_PX)).font_features(mandara_ui::fonts::tabular_nums()).text_color(if failed { p.urgent_coral.hsla() } else { p.on_surface.hsla() }).truncate().child(text.clone()),
+                None => div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(english),
+            };
+            mandara_ui::style::ClipRounded::clip_rounded(div().id(SharedString::from(id)))
+                .relative()
                 .flex_1()
+                .min_w_0()
                 .rounded(px(RADIUS_16_PX))
                 .p(px(SPACE_14_PX))
                 .row()
                 .flex_col()
                 .gap(px(SPACE_6_PX))
                 .cursor_pointer()
-                .bg(if selected { p.primary.with_alpha(ALPHA_14).hsla() } else { p.surface_container_high.hsla() })
+                .bg(fill::base(&visual, if selected { p.primary.with_alpha(ALPHA_14) } else { p.surface_container_high }, p.surface_container_high).hsla())
                 .border_2()
-                .border_color(if selected { p.primary.hsla() } else { gpui::transparent_black() })
+                .border_color(if visual.tone != Tone::None && visual.tone != Tone::Progress { accent.hsla() } else if selected { p.primary.hsla() } else { gpui::transparent_black() })
                 .hover(|s| s.bg(p.primary.with_alpha(ALPHA_10).hsla()))
+                .children(fill::layer(&visual, ui_rtl, p))
                 .child(
                     div()
                         .row()
                         .items_center()
                         .justify_between()
+                        .gap(px(SPACE_6_PX))
                         .child(div().text_size(px(TEXT_20_PX)).font_weight(FontWeight::SEMIBOLD).when(rtl, |el| el.font_family(fonts.arabic.clone())).child(sample))
-                        .when(selected, |el| el.child(div().size(px(DIM_20_PX)).rounded_full().bg(p.primary.hsla()).row().items_center().justify_center().child(icon("check", ICON_12_PX, p.on_primary)))),
+                        .children(corner),
                 )
                 .child(div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).when(rtl, |el| el.font_family(fonts.arabic.clone())).child(native))
-                .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(english))
+                .child(detail)
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     if let Some(setting) = registry::by_path(LOCALE_PATH) {
                         this.apply(setting, serde_json::to_value(locale).unwrap_or(Value::Null), cx);
                     }
                 }))
         };
+        let status_of = |lang: Lang| visuals.get(&lang).cloned().unwrap_or_else(|| idle.clone());
         let mut cards = vec![card(
             "lang-auto".into(),
             system.sample().into(),
@@ -1249,11 +1297,12 @@ impl StudioView {
             current == Locale::Auto,
             system.is_rtl(),
             Locale::Auto,
+            if current == Locale::Auto { status_of(system) } else { idle.clone() },
             cx,
         )];
         for lang in Lang::ALL {
             let locale = Locale::from_lang(lang);
-            cards.push(card(format!("lang-{}", lang.code()), lang.sample().into(), lang.native_name().into(), tr(lang.english_name()), current == locale, lang.is_rtl(), locale, cx));
+            cards.push(card(format!("lang-{}", lang.code()), lang.sample().into(), lang.native_name().into(), tr(lang.english_name()), current == locale, lang.is_rtl(), locale, status_of(lang), cx));
         }
         let grid = grid::fit(self.page.column_w, LANGUAGE_GRID).balanced(cards.len()).render(cards);
         div()
@@ -1386,9 +1435,9 @@ impl StudioView {
         div().row().flex_col().gap(px(SPACE_14_PX)).child(shell).child(studio).child(controls).into_any_element()
     }
 
-    fn about(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    fn about(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         // Updates: the patch-first update card (updates_card.rs).
-        let updates = self.updates_card(cfg, p, cx);
+        let updates = self.updates_card(cfg, p, window, cx);
         let build = mandara_core::build_info(cx);
         let registry = cx.global::<PluginRegistry>();
         let commands = registry.commands.all().len();
@@ -1602,7 +1651,7 @@ impl Render for StudioView {
                 Section::Home => self.home_page(&cfg, &p, window, cx),
                 Section::Themes => self.themes_page(&cfg, &p, cx),
                 Section::Plugins => self.store_page(&cfg, &p, window, cx),
-                Section::About => self.about(&cfg, &p, cx),
+                Section::About => self.about(&cfg, &p, window, cx),
                 Section::Performance => {
                     let base = self.performance(&p, cx);
                     let diagnostics = self.diagnostics(&p, cx);
@@ -1634,7 +1683,7 @@ impl Render for StudioView {
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(designer).child(rows).into_any_element()
                 }
                 Section::General => {
-                    let picker = self.language_picker(&cfg, &p, cx);
+                    let picker = self.language_picker(&cfg, &p, window, cx);
                     let rows = self.rows(registry::in_section(Section::General).filter(|s| s.path != LOCALE_PATH), &cfg, &p, cx);
                     // Under the Keyrings & passwords rows: what unlocks at login.
                     let keyrings = keyrings_card::element(cx);
@@ -1891,23 +1940,18 @@ const LICENSE: &str = "GPL-3.0-or-later";
 /// Direction of the About page's accent washes, degrees.
 const ABOUT_WASH_ANGLE: f32 = 135.0;
 
-/// Opens a web link in the default browser, off the UI thread.
-/// Under the language picker: a language pack downloading ("Downloading
-/// Arabic… 180 KB" with a bar) or one that couldn't be, with Retry. The
-/// interface stays in English meanwhile.
+/// Under the language picker: the full reason a language pack couldn't be
+/// downloaded, with Retry (the card itself turns red with a short version;
+/// downloads show on their cards). The interface stays in English
+/// meanwhile.
 fn language_downloads(p: &MandaraPalette, _cx: &mut Context<StudioView>) -> Option<AnyElement> {
     use mandara_services::self_update::langpacks::{self, State};
     let rows: Vec<AnyElement> = langpacks::active()
         .into_iter()
+        .filter(|(_, state)| matches!(state, State::Failed(_)))
         .filter_map(|(lang, state)| {
             let line = langpacks::describe(lang, &state)?;
-            let failed = matches!(state, State::Failed(_));
-            let tone = if failed { p.urgent_coral } else { p.primary };
-            let bar = match state {
-                State::Downloading { done, total } => Some(updates_card::progress_bar(done, total, p)),
-                State::Checking => Some(updates_card::progress_bar(0, 0, p)),
-                _ => None,
-            };
+            let tone = p.urgent_coral;
             Some(
                 div()
                     .px(px(SPACE_14_PX))
@@ -1915,20 +1959,13 @@ fn language_downloads(p: &MandaraPalette, _cx: &mut Context<StudioView>) -> Opti
                     .rounded(px(RADIUS_12_PX))
                     .bg(tone.with_alpha(ALPHA_12).hsla())
                     .row()
-                    .flex_col()
+                    .items_center()
                     .gap(px(SPACE_8_PX))
-                    .child(
-                        div()
-                            .row()
-                            .items_center()
-                            .gap(px(SPACE_8_PX))
-                            .text_size(px(TEXT_12_5_PX))
-                            .text_color(tone.hsla())
-                            .child(icon(if failed { "close" } else { "download" }, ICON_14_PX, tone))
-                            .child(div().flex_1().min_w_0().font_features(mandara_ui::fonts::tabular_nums()).child(mandara_ui::bidi::paragraph(line)))
-                            .when(failed, |el| el.child(compositor_page::button(SharedString::from(format!("lang-retry-{}", lang.code())), "refresh", t("Retry"), false, p).on_click(move |_, _, _| langpacks::retry(lang)))),
-                    )
-                    .children(bar)
+                    .text_size(px(TEXT_12_5_PX))
+                    .text_color(tone.hsla())
+                    .child(icon("close", ICON_14_PX, tone))
+                    .child(div().flex_1().min_w_0().child(mandara_ui::bidi::paragraph(line)))
+                    .child(compositor_page::button(SharedString::from(format!("lang-retry-all-{}", lang.code())), "refresh", t("Retry"), false, p).on_click(move |_, _, _| langpacks::retry(lang)))
                     .into_any_element(),
             )
         })
@@ -1936,6 +1973,7 @@ fn language_downloads(p: &MandaraPalette, _cx: &mut Context<StudioView>) -> Opti
     (!rows.is_empty()).then(|| div().row().flex_col().gap(px(SPACE_8_PX)).children(rows).into_any_element())
 }
 
+/// Opens a web link in the default browser, off the UI thread.
 fn open_link(url: &'static str) {
     std::thread::spawn(move || {
         if let Err(err) = mandara_services::session::open_uri(url) {

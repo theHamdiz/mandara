@@ -18,10 +18,12 @@ string is written in, and anything without a translation shows in English.
 - **Picking a language** in Studio (or with `mandara msg`, the language
   plugin, a plugin's own language or the login screen's) downloads its
   pack when it's missing, or when the release now publishes a newer one.
-  Studio shows it under the language cards ("Downloading Arabic… 180 KB");
-  the interface switches as soon as it's in. If it can't be downloaded
-  (offline mode, no network, a release that isn't signed), Studio says why
-  and offers **Retry**; meanwhile everything stays in English.
+  The language's own card (in Studio, and in the bar's language panel)
+  fills with the download as it comes in ("Downloading Arabic… 180 KB"),
+  from the reading start, then turns green with a check, and the interface
+  switches as soon as the pack is in. If it can't be downloaded (offline
+  mode, no network, a release that isn't signed), the card turns red with
+  the reason and **Retry**; meanwhile everything stays in English.
 - **Packs belong to one version.** Mandara only reads packs made for the
   version that is running, and downloads them from that version's own
   release, checked against its signed `SHA256SUMS`. An update fetches the
