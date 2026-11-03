@@ -13,7 +13,7 @@
 //!   text file for bug reports.
 
 use mandara_ui::bidi::Bidi as _;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -82,9 +82,11 @@ fn st(cx: &mut App) -> &mut ProfilesStudio {
     cx.default_global::<ProfilesStudio>()
 }
 
-/// The labels of registry settings that differ between two configs.
+/// The labels of registry settings that differ between two configs (runs
+/// on every config change, so each config is serialized once, not twice
+/// per setting).
 fn changed_labels(before: &ShellConfig, after: &ShellConfig) -> Vec<String> {
-    let mut out: Vec<String> = registry::settings().iter().filter(|s| registry::get(before, s) != registry::get(after, s)).map(|s| tr(s.label)).collect();
+    let mut out: Vec<String> = registry::differing(before, after).into_iter().map(|s| tr(s.label)).collect();
     out.dedup();
     if out.is_empty() && before != after {
         out.push(t("Other settings").into());
@@ -130,10 +132,9 @@ fn undo_to(i: usize, cx: &mut App) {
 
 /// `cfg` with every registry setting of `section` at its default.
 pub(super) fn reset_section(cfg: &ShellConfig, section: Section) -> ShellConfig {
-    let defaults = ShellConfig::default();
     let mut next = cfg.clone();
     for s in registry::in_section(section) {
-        let v = registry::get(&defaults, s);
+        let v = registry::default_value(s);
         if let Ok(c) = registry::set(&next, s, v) {
             next = c;
         }
@@ -182,6 +183,17 @@ fn stamp() -> String {
     chrono::Local::now().format("%Y%m%d-%H%M%S").to_string()
 }
 
+/// How many registry settings of each section differ from the defaults:
+/// one pass over the registry against the cached default tree (the page
+/// draws this every frame, so it must not serialize a config per setting).
+fn changed_per_section(cfg: &ShellConfig) -> HashMap<Section, usize> {
+    let mut out = HashMap::new();
+    for s in registry::non_default(cfg) {
+        *out.entry(s.section).or_default() += 1;
+    }
+    out
+}
+
 /// Versions, session and a redacted changes-only config, for bug reports.
 fn support_report(cfg: &ShellConfig, version: &str) -> String {
     let read = |p: &str| std::fs::read_to_string(p).unwrap_or_default();
@@ -221,7 +233,7 @@ impl StudioView {
         let note_el = st(cx).note.clone().map(|(text, error)| note(&text, error, p));
         let history = self.prof_history(p, cx);
         let saved = self.prof_profiles(p, cx);
-        let transfer = self.prof_transfer(cfg, p, cx);
+        let transfer = self.prof_transfer(p, cx);
         let reset = self.prof_reset(cfg, p, cx);
         let section = |title: String, body: AnyElement| div().row().flex_col().gap(px(SPACE_10_PX)).child(group_title(title, p)).child(body);
         div()
@@ -368,7 +380,7 @@ impl StudioView {
         col.child(div().p(px(SPACE_10_PX)).row().flex_wrap().items_center().gap(px(SPACE_8_PX)).child(div().flex_1().min_w(px(DIM_200_PX)).child(name)).child(look).child(full).child(save)).into_any_element()
     }
 
-    fn prof_transfer(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    fn prof_transfer(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let (changes_only, redact, sensitive) = {
             let s = st(cx);
             (s.changes_only, s.redact, s.sensitive.clone())
@@ -380,7 +392,6 @@ impl StudioView {
             }))
         };
         let path = form::input("export-path", t("File, e.g. ~/mandara-settings.toml"), false, cx);
-        let cfg_for_report = cfg.clone();
         let export = button("export", "download", t("Export"), true, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
             let raw = form::value("export-path", cx);
             let path = mandara_config::paths::expand_tilde(if raw.is_empty() { "~/mandara-settings.toml" } else { &raw });
@@ -434,7 +445,8 @@ impl StudioView {
         let version = mandara_core::build_info(cx).long.clone();
         let report = button("support-report", "note", t("Create support report"), false, p).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
             let path = mandara_config::paths::expand_tilde(&format!("~/mandara-support-{}.txt", stamp()));
-            let text = support_report(&cfg_for_report, &version);
+            let cfg = config(cx).read(cx).snapshot();
+            let text = support_report(&cfg, &version);
             let r = mandara_config::write_atomic(&path, text.as_bytes());
             st(cx).note = Some(match r {
                 Ok(()) => (tf("Report written to {file} (personal values redacted) — attach it to your bug report", &[("file", &path.display())]), false),
@@ -470,11 +482,11 @@ impl StudioView {
 
     fn prof_reset(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let sections: Vec<Section> = Section::ALL.into_iter().filter(|s| registry::in_section(*s).next().is_some()).collect();
-        let defaults = ShellConfig::default();
+        let changed_by = changed_per_section(cfg);
         let chips: Vec<AnyElement> = sections
             .into_iter()
             .map(|section| {
-                let changed = registry::in_section(section).filter(|s| registry::get(cfg, s) != registry::get(&defaults, s)).count();
+                let changed = changed_by.get(&section).copied().unwrap_or(0);
                 let key = format!("reset-{}", section.title());
                 let armed = Self::prof_armed(&key, cx);
                 div()
@@ -550,5 +562,53 @@ mod tests {
         cfg.plugins.settings.entry("prayer-times".into()).or_default().insert("latitude".into(), toml::Value::Float(31.2));
         let r = support_report(&cfg, "test");
         assert!(r.contains("<redacted>") && !r.contains("31.2"));
+    }
+
+    /// The per-section counts match comparing every setting's value with
+    /// a freshly built default config (what the page used to do per frame).
+    #[test]
+    fn reset_counts_match_a_full_comparison() {
+        let mut cfg = ShellConfig::default();
+        cfg.bar.height = 26.0;
+        cfg.compositor.input.keyboard.repeat_rate = Some(40);
+        let cfg = Arc::new(cfg);
+        registry::prime(&cfg);
+        let defaults = ShellConfig::default();
+        let counts = changed_per_section(&cfg);
+        for section in Section::ALL {
+            let full = registry::in_section(section).filter(|s| registry::get(&cfg, s) != registry::get(&defaults, s)).count();
+            assert_eq!(counts.get(&section).copied().unwrap_or(0), full, "{section:?}");
+        }
+        assert!(counts.get(&Section::Input).copied().unwrap_or(0) >= 1);
+        assert!(changed_per_section(&ShellConfig::default()).is_empty(), "defaults change nothing");
+    }
+
+    /// Two configs differ exactly where a per-setting comparison says so.
+    #[test]
+    fn differing_matches_get() {
+        let a = ShellConfig::default();
+        let mut b = a.clone();
+        b.bar.height = 26.0;
+        let full: Vec<&str> = registry::settings().iter().filter(|s| registry::get(&a, s) != registry::get(&b, s)).map(|s| s.path).collect();
+        let fast: Vec<&str> = registry::differing(&a, &b).into_iter().map(|s| s.path).collect();
+        assert_eq!(fast, full);
+    }
+
+    /// What the page does per frame and per config change, timed:
+    /// `cargo test --release -p mandara-studio -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "timing probe, run by hand in a release build"]
+    fn time_per_frame_work() {
+        let cfg = Arc::new(ShellConfig::default());
+        registry::prime(&cfg);
+        let started = Instant::now();
+        let counts = changed_per_section(&cfg);
+        eprintln!("reset counts: {:?} ({} sections changed)", started.elapsed(), counts.len());
+        let a = ShellConfig::default();
+        let mut b = a.clone();
+        b.bar.height = 26.0;
+        let started = Instant::now();
+        let labels = changed_labels(&a, &b);
+        eprintln!("changed_labels: {:?} ({} labels)", started.elapsed(), labels.len());
     }
 }

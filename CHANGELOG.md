@@ -117,6 +117,12 @@ About → What's new shows it too.
 
 ### Fixed
 
+- **Profiles & backup is smooth again**: the page used to re-check every
+  setting against a freshly built default configuration each time it was
+  drawn, so scrolling and hovering over it stuttered. That check now takes
+  a fraction of a millisecond, and every edit you make in Studio is
+  recorded for Undo much faster too. Thanks for reporting it in #51.
+
 - **Mandara is on your PATH right after installing**: when `~/.local/bin`
   isn't on your PATH, the installer now offers to add it to your shell
   profiles (bash, zsh and fish) instead of only warning, so `mandara` works

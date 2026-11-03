@@ -564,7 +564,7 @@ thread_local! {
 
 /// `setting`'s value in the default config.
 pub fn default_value(setting: &Setting) -> Value {
-    DEFAULTS.with(|tree| tree.pointer(setting.path).cloned().filter(|v| !v.is_null() || setting.default.is_none()).or_else(|| setting.default.clone()).unwrap_or(Value::Null))
+    DEFAULTS.with(|tree| resolve(tree, setting).clone())
 }
 
 /// The setting at a config path.
@@ -977,10 +977,33 @@ fn build() -> Vec<Setting> {
     ]
 }
 
+/// A setting that is unset (`null`) in a config tree.
+static NULL: Value = Value::Null;
+
+/// `setting`'s value in the JSON tree `root`, borrowed: what [`get`]
+/// returns, without cloning it.
+fn resolve<'a>(root: &'a Value, setting: &'a Setting) -> &'a Value {
+    root.pointer(setting.path).filter(|v| !v.is_null() || setting.default.is_none()).or(setting.default.as_ref()).unwrap_or(&NULL)
+}
+
 /// Reads a setting's current value.
 pub fn get(cfg: &ShellConfig, setting: &Setting) -> Value {
+    resolve(&json_of(cfg), setting).clone()
+}
+
+/// The settings not at their default in `cfg`, in registry order. Compares
+/// against the cached default tree and serializes `cfg` at most once (not
+/// at all when it is the primed snapshot), so a page can call it per frame.
+pub fn non_default(cfg: &ShellConfig) -> Vec<&'static Setting> {
     let root = json_of(cfg);
-    root.pointer(setting.path).cloned().filter(|v| !v.is_null() || setting.default.is_none()).or_else(|| setting.default.clone()).unwrap_or(Value::Null)
+    DEFAULTS.with(|defaults| settings().iter().filter(|s| resolve(&root, s) != resolve(defaults, s)).collect())
+}
+
+/// The settings whose values differ between two configs, in registry
+/// order. Each config is serialized once, not once per setting.
+pub fn differing(before: &ShellConfig, after: &ShellConfig) -> Vec<&'static Setting> {
+    let (a, b) = (json_of(before), json_of(after));
+    settings().iter().filter(|s| resolve(&a, s) != resolve(&b, s)).collect()
 }
 
 /// Writes `value` at the setting's path (creating intermediate objects) and
