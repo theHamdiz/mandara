@@ -20,6 +20,10 @@ About → What's new shows it too.
   doesn't work with your current setup (like *Join the bar* under a
   floating bar) used to show as off although it was still on. It now
   shows its saved state, dimmed, and you can still turn it off.
+- **Better translations.** In the bar designer, Russian *Move up* and
+  *Move down* now read as actions, and the presets' description is a
+  full sentence in Hindi, Urdu and Turkish. The Bengali note about the
+  dock and notifications reads more naturally.
 
 ## 0.10.0 — 2026-11-03
 
