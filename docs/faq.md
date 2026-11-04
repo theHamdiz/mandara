@@ -74,7 +74,7 @@ your settings. [Install](install.md)
 
 ## How do I install Mandara?
 
-Run `sh -c 'f=$(mktemp) && curl -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f"'`.
+Run `sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f"'`.
 The download command shows progress and verifies the signed release before
 opening Mandara's installer, which installs what your distribution needs (Arch,
 Debian, Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus) and

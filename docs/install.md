@@ -3,7 +3,7 @@
 One command, from any shell (bash, zsh or fish):
 
 ```bash
-sh -c 'f=$(mktemp) && curl -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f"'
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f"'
 ```
 
 The small [download script](../install.sh) shows Mandara's phoenix and the
@@ -12,9 +12,11 @@ then checks the release's Ed25519 signature and the archive's SHA-256
 **before extracting or running it**. It uses `curl`, `tar`, OpenSSL 3 or
 newer, `sha256sum` and the usual POSIX tools; it tells you when one is
 missing. Downloads retry on temporary connection errors and stop if the
-connection stalls. Release downloads are removed when the command finishes
-or is interrupted. The small download script stays in a private temporary file
-for inspection. The command runs it only after the download succeeds.
+connection stalls. The command runs the script only after the download
+succeeds. It removes temporary files on completion, failure or interruption.
+
+The verified installer runs from your cache so a `noexec` mount on `/tmp`
+does not get in the way. Set `TMPDIR` to use another download folder.
 
 Its messages follow your terminal language, with the same fifteen languages
 as Mandara.
@@ -23,8 +25,8 @@ Installation, configuration and administrator prompts stay in the Rust
 `mandara install` command. Forward its options with `"$@"`:
 
 ```bash
-sh -c 'f=$(mktemp) && curl -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --dry-run
-sh -c 'f=$(mktemp) && curl -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --compositor kwin --no-greeter
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --dry-run
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --compositor kwin --no-greeter
 ```
 
 Options are forwarded unchanged, including paths with spaces. The bootstrap
@@ -88,7 +90,7 @@ one (see [No compositor yet](#no-compositor-yet)).
 | `--no-deps` | Skip system packages |
 | `--no-autostart` | Don't start Mandara with the compositor |
 | `--no-greeter` | Keep your login screen |
-| `--compositor mango\|niri\|hyprland\|umbriel\|sway\|river\|kwin` | Pick the compositor to integrate with; when it isn't installed, install it from your distribution's repositories first (asked; `--yes` installs it) |
+| `--compositor mango\|niri\|hyprland\|umbriel\|sway\|river\|kwin` | Pick the compositor to integrate with. Missing compositors can be installed from your distribution's repositories after asking (`--yes` accepts); KWin requires an existing Plasma installation. |
 | `--repo OWNER/NAME` | Releases and sources from another repository |
 | `--dry-run` | Show everything that would happen, change nothing |
 | `--yes` | Don't ask; take every default |

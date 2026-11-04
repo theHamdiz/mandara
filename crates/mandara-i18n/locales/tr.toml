@@ -8253,3 +8253,7 @@
 "The release does not contain exactly one executable installer." = "Sürümdeki çalıştırılabilir kurulum programı sayısı tam olarak bir değil."
 "Manual downloads:" = "Elle indirme:"
 "On NixOS, install Mandara through your flake." = "NixOS üzerinde Mandara’yı flake yapılandırmanızla yükleyin."
+
+"Compositor (default: detected)" = "Compositor (varsayılan: otomatik algılanır)"
+
+"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "mango, niri, hyprland, umbriel, sway, river veya kwin seçin (varsayılan: otomatik algılanır). Eksik olanlar onayınız alındıktan sonra kurulabilir. KWin için Plasma önceden kurulmuş olmalıdır."

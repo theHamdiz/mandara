@@ -8253,3 +8253,7 @@
 "The release does not contain exactly one executable installer." = "Количество исполняемых установщиков в выпуске не равно одному."
 "Manual downloads:" = "Загрузка вручную:"
 "On NixOS, install Mandara through your flake." = "В NixOS установите Mandara через свой flake."
+
+"Compositor (default: detected)" = "Композитор (по умолчанию: определяется автоматически)"
+
+"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Выберите mango, niri, hyprland, umbriel, sway, river или kwin (по умолчанию: определяется автоматически). Отсутствующие композиторы можно установить после подтверждения. Для KWin требуется уже установленная Plasma."

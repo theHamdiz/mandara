@@ -285,19 +285,80 @@ fn documented_download_command_checks_completion_and_preserves_the_callers_direc
             client.write_all(body).unwrap();
         });
         let guide = std::fs::read_to_string(crate::root().join("docs/install.md")).unwrap();
-        let command = guide.lines().find(|line| line.starts_with("sh -c 'f=")).unwrap()
-            .replace("https://thehamdiz.github.io/mandara/install.sh", &url);
+        let command = guide.lines().find(|line| line.starts_with("sh -c 'f=")).unwrap();
+        assert!(command.contains("--proto =https"), "the initial request and redirects must stay on HTTPS");
+        let command = command.replace("https://thehamdiz.github.io/mandara/install.sh", &url).replace("--proto =https", "--proto =http");
         assert!(command.contains(&url));
         let record = dir.path().join("executed");
-        let output = Command::new("sh").args(["-c", &command]).current_dir(&caller).env("TMPDIR", dir.path())
+        let downloads = dir.path().join("downloads $(touch trap-ran)");
+        std::fs::create_dir(&downloads).unwrap();
+        let output = Command::new("sh").args(["-c", &command]).current_dir(&caller).env("TMPDIR", &downloads)
             .env("BOOTSTRAP_RECORD", &record).env("NO_PROXY", "127.0.0.1")
             .stdin(std::process::Stdio::null()).output().unwrap();
         server.join().unwrap();
         assert_eq!(output.status.success(), complete, "{}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(std::fs::read_dir(downloads).unwrap().count(), 0, "the first-stage script was not removed");
+        assert!(!caller.join("trap-ran").exists(), "cleanup interpreted the file name as code");
         if complete {
             assert_eq!(std::fs::read_to_string(record).unwrap(), caller.display().to_string());
         } else {
             assert!(!record.exists());
         }
+    }
+}
+
+#[test]
+fn download_directories_prefer_the_home_cache_and_respect_explicit_tmpdir() {
+    for explicit in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let temporary = dir.path().join("explicit temporary");
+        std::fs::create_dir(&home).unwrap();
+        std::fs::create_dir(&temporary).unwrap();
+        let functions = SCRIPT.strip_suffix("main \"$@\"\n").unwrap();
+        let code = format!("{functions}\ndownload_directory\nprintf '%s' \"$work\"\n");
+        let mut command = Command::new("sh");
+        command.args(["-c", &code]).env("HOME", &home).env_remove("XDG_CACHE_HOME").env_remove("TMPDIR");
+        if explicit { command.env("TMPDIR", &temporary); }
+        let output = command.output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let work = std::path::PathBuf::from(String::from_utf8(output.stdout).unwrap());
+        let expected = if explicit { temporary } else { home.join(".cache") };
+        assert_eq!(work.parent(), Some(expected.as_path()));
+        assert!(!work.exists(), "the release work directory was not removed");
+    }
+}
+
+#[test]
+fn the_public_command_refuses_plain_http_and_removes_its_script() {
+    let dir = tempfile::tempdir().unwrap();
+    let guide = std::fs::read_to_string(crate::root().join("docs/install.md")).unwrap();
+    let command = guide.lines().find(|line| line.starts_with("sh -c 'f=")).unwrap()
+        .replace("https://thehamdiz.github.io/mandara/install.sh", "http://127.0.0.1:9/install.sh");
+    let output = Command::new("sh").args(["-c", &command]).env("TMPDIR", dir.path()).output().unwrap();
+    // curl reports unsupported protocol before it tries the closed local port.
+    assert_eq!(output.status.code(), Some(1), "{}", String::from_utf8_lossy(&output.stderr));
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+}
+
+#[test]
+fn an_unusable_cache_falls_back_but_an_explicit_tmpdir_does_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("not-a-directory");
+    std::fs::write(&file, "keep").unwrap();
+    let functions = SCRIPT.strip_suffix("main \"$@\"\n").unwrap();
+    let code = format!("{functions}\ndownload_directory\nprintf '%s' \"$work\"\n");
+    for explicit in [false, true] {
+        let mut command = Command::new("sh");
+        command.args(["-c", &code]).env("HOME", dir.path()).env("XDG_CACHE_HOME", &file).env_remove("TMPDIR");
+        if explicit { command.env("TMPDIR", &file); }
+        let output = command.output().unwrap();
+        assert_eq!(output.status.success(), !explicit);
+        if !explicit {
+            let work = std::path::PathBuf::from(String::from_utf8(output.stdout).unwrap());
+            assert_eq!(work.parent(), Some(Path::new("/tmp")));
+            assert!(!work.exists());
+        }
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "keep");
     }
 }

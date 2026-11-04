@@ -8254,3 +8254,7 @@
 "The release does not contain exactly one executable installer." = "La version ne contient pas exactement un programme d’installation exécutable."
 "Manual downloads:" = "Téléchargements manuels :"
 "On NixOS, install Mandara through your flake." = "Sur NixOS, installez Mandara avec votre flake."
+
+"Compositor (default: detected)" = "Compositeur (par défaut : détecté)"
+
+"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Choisissez mango, niri, hyprland, umbriel, sway, river ou kwin (par défaut : détecté). Les compositeurs manquants peuvent être installés après confirmation. KWin nécessite une installation existante de Plasma."

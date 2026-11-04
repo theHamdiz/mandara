@@ -8007,3 +8007,7 @@
 "The release does not contain exactly one executable installer." = "ریلیز میں قابلِ اجرا انسٹالرز کی تعداد ایک نہیں ہے۔"
 "Manual downloads:" = "دستی ڈاؤن لوڈ:"
 "On NixOS, install Mandara through your flake." = "NixOS پر Mandara اپنی flake کے ذریعے نصب کریں۔"
+
+"Compositor (default: detected)" = "کمپوزیٹر (طے شدہ: خودکار شناخت)"
+
+"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "mango, niri, hyprland, umbriel, sway, river یا kwin منتخب کریں (طے شدہ: خودکار شناخت)۔ غیر موجود کمپوزیٹر پوچھنے کے بعد نصب کیے جا سکتے ہیں۔ KWin کے لیے Plasma پہلے سے نصب ہونا ضروری ہے۔"
