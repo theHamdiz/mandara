@@ -542,6 +542,9 @@ fn pager(ui: &Shared, pages: &[Range<usize>], page: usize, n: usize, palette: &M
                     update(&ui, cx, |u| {
                         u.page = to;
                         u.picker = None;
+                        // The keyboard selection points at a row of the page
+                        // being left, so Enter must not still run it.
+                        u.selected = None;
                     })
                 })
             })
