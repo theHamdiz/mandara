@@ -11,6 +11,15 @@ installer, display reconnection and native KWin support.
 
 ### New
 
+- **The installer opens on a setup screen.** `mandara install` now starts
+  with the MANDARA wordmark and an arrow-key menu: pick the compositor to
+  integrate with (the list starts on one you already have; left alone, the
+  row stays on *detect automatically* and `setup` picks what's running),
+  switch autostart and Mandara Login on or off, then choose Install. A
+  choice you pass as a flag is left out of the menu, and `--yes`,
+  `--dry-run` or a run without a terminal behave as before, with the
+  one-line title.
+
 - **Mandara now runs on Plasma Wayland with a native KWin driver** (#45,
   #50). The bar follows virtual desktops and windows, and the dock and
   switcher control windows through Plasma’s own protocols. Clipboard history

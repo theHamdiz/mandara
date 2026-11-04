@@ -102,6 +102,14 @@ one (see [No compositor yet](#no-compositor-yet)).
 | `--yes` | Don't ask; take every default |
 | `--no-verify` | Install even if this binary doesn't match its published checksum |
 
+With a terminal, `mandara install` opens on its own screen: the MANDARA
+wordmark and an arrow-key menu that picks the compositor to integrate with
+(one you already have is preselected) and switches autostart and the login
+screen on or off before anything is installed. Every choice there is also a
+flag: one you pass is left out of the menu, and `--yes`, `--dry-run` or a
+run without a terminal skips the screen and prints the one-line plan
+instead. Esc, `q` or Ctrl-C leaves it without changing anything.
+
 `mandara uninstall` removes the binary and desktop entry and empties the
 compositor drop-ins; your settings are kept.
 
@@ -120,6 +128,11 @@ signed release, and every update brings the new version's packs for the
 languages you use.
 
 ## No compositor yet
+
+The setup screen's *Compositor* row covers this in a terminal: leave it on
+*detect automatically* and, when nothing is installed, the installer falls
+back to this numbered list. It still needs an interactive terminal for your
+answer, but it does not need arrow keys or the setup screen.
 
 When none of MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel or KWin is
 installed, the installer
