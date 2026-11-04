@@ -103,10 +103,13 @@ fn sample_every(cx: &App) -> Duration {
     Duration::from_millis(ms.clamp(REFRESH_MS_RANGE.0, REFRESH_MS_RANGE.1) as u64)
 }
 
-/// Hot threshold in percent of one core (`hot_cpu_percent`).
+/// Hot threshold as the rows report it: `hot_cpu_percent` is a percent of
+/// one core (the setting says so, and saved values keep that meaning), while
+/// a row's CPU is a share of the whole machine, so it is divided by the
+/// machine's cores before the two are compared.
 fn hot_cpu(cx: &App) -> f32 {
     let pct: i64 = crate::state::config(cx).read(cx).snapshot().plugins.setting(ID, "hot_cpu_percent", DEFAULT_HOT_CPU_PERCENT);
-    pct.clamp(HOT_CPU_RANGE.0, HOT_CPU_RANGE.1) as f32
+    pct.clamp(HOT_CPU_RANGE.0, HOT_CPU_RANGE.1) as f32 / cores() as f32
 }
 /// CPU meters are scaled to at least one full core.
 const CPU_SCALE_FLOOR: f32 = 100.0;

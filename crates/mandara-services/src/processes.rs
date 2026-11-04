@@ -20,7 +20,8 @@ pub struct Process {
     pub uid: u32,
     /// Resident memory in bytes.
     pub rss: u64,
-    /// CPU usage since the previous sample, percent of one core.
+    /// CPU usage since the previous sample, as a share of the whole machine
+    /// (all logical cores): one core fully busy on four reads 25 %.
     pub cpu: f32,
     /// `R`unning, `S`leeping, `Z`ombie, …
     pub state: char,
@@ -86,6 +87,8 @@ pub struct Sampler {
     prev: HashMap<u32, u64>,
     at: Option<Instant>,
     users: HashMap<u32, String>,
+    /// Logical CPUs, read on the first sample (0 until then).
+    cpus: f32,
 }
 
 impl Sampler {
@@ -100,6 +103,7 @@ impl Sampler {
         }
         let hz = clock_ticks() as f32;
         let now = Instant::now();
+        let cpus = self.cpus();
         let elapsed = self.at.map(|t| now.duration_since(t).as_secs_f32()).unwrap_or(0.0);
         let mut out = Vec::with_capacity(self.prev.len());
         let Ok(dir) = std::fs::read_dir("/proc") else { return out };
@@ -111,7 +115,7 @@ impl Sampler {
             if elapsed > MIN_SAMPLE_GAP_S
                 && let Some(prev) = self.prev.get(&pid)
             {
-                p.cpu = (p.ticks.saturating_sub(*prev) as f32 / hz) / elapsed * PERCENT;
+                p.cpu = share_of_machine(p.ticks.saturating_sub(*prev), elapsed, hz, cpus);
             }
             out.push(p);
         }
@@ -124,6 +128,24 @@ impl Sampler {
 
 fn clock_ticks() -> u64 {
     rustix::param::clock_ticks_per_second()
+}
+
+impl Sampler {
+    /// Logical CPUs, cached: `available_parallelism` parses cgroup files.
+    fn cpus(&mut self) -> f32 {
+        if self.cpus < 1.0 {
+            self.cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1) as f32;
+        }
+        self.cpus
+    }
+}
+
+/// `ticks` of CPU time used over `elapsed_s` seconds, as a share of the whole
+/// machine: percent of all `cpus` logical cores together, so a busy
+/// multi-threaded process stays at or below 100 (like the Resources panel),
+/// instead of the per-core figure `top` prints.
+fn share_of_machine(ticks: u64, elapsed_s: f32, hz: f32, cpus: f32) -> f32 {
+    (ticks as f32 / hz) / elapsed_s * PERCENT / cpus.max(1.0)
 }
 
 fn page_size() -> u64 {
@@ -262,6 +284,18 @@ mod tests {
         assert_eq!(search(&list, "1234", SortBy::Cpu)[0].pid, 1234);
         assert_eq!(search(&list, "12", SortBy::Cpu)[0].pid, 1234);
         assert_eq!(search(&list, "", SortBy::Cpu)[0].pid, 30);
+    }
+
+    #[test]
+    fn cpu_is_a_share_of_the_whole_machine() {
+        // One core fully busy for a second reads 100 % on a single-core
+        // machine and a quarter of it on four.
+        assert!((share_of_machine(100, 1.0, 100.0, 1.0) - 100.0).abs() < 0.01);
+        assert!((share_of_machine(100, 1.0, 100.0, 4.0) - 25.0).abs() < 0.01);
+        // All four cores busy at once still reads 100 %, never 400.
+        assert!((share_of_machine(400, 1.0, 100.0, 4.0) - 100.0).abs() < 0.01);
+        // A missing core count can't divide by zero.
+        assert!((share_of_machine(100, 1.0, 100.0, 0.0) - 100.0).abs() < 0.01);
     }
 
     #[test]

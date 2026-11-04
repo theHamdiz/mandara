@@ -64,7 +64,10 @@ The rest of what's built in.
   - **Settings** (Studio → Plugins → Clipboard): *Filter by kind* (the
     chips), *Preview lines* (lines of code, CSS and Markdown a row shows,
     0 = one line) and *Entries in collections* (how many are kept).
-  - **Alt+V** opens it (as does Super+Shift+V).
+  - **Alt+V** opens it (as does Super+Shift+V). Arrow Up and Down move
+    through the list, turning the page when they reach its end; Enter
+    copies the selected entry (or pastes it, where the panel is set to
+    paste), and the wheel turns pages.
 
 <table>
 <tr>
@@ -151,7 +154,9 @@ The rest of what's built in.
   command (`record toggle`, `record pause-toggle`, `record window`, …) you
   can bind to keys in Studio → Keyboard shortcuts.
 - **Process hunter**: find any process by name, command line or PID, and end
-  or force-kill it.
+  or force-kill it. CPU and memory are live, and CPU is a share of all your
+  cores (as in Resources), so a busy build reads a percentage of the whole
+  machine instead of several hundred percent of one core.
 - **Drives**: UDisks2 storage panel with usage rings, filesystem and
   encryption badges, mount / unmount, open in the file manager, LUKS unlock
   from an inline passphrase sheet and one-click *Safely remove* (unmount →
