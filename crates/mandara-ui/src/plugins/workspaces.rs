@@ -503,6 +503,9 @@ fn pills<'a>(model: &'a NavigationModel, clients: &'a [ClientInfo], monitor: &st
         match (look.labels, name) {
             (Labels::Dots, _) => DOT_LABEL.into(),
             (Labels::Auto, Some(n)) if !n.is_empty() && n.chars().count() <= SHORT_NAME_CHARS => n.to_string().into(),
+            // A workspace without a number (Sway's `web`): its id is made
+            // up, so the start of its name stands in for the number.
+            (_, Some(n)) if mandara_compositor::is_unnumbered(id) && !n.is_empty() => n.chars().take(SHORT_NAME_CHARS).collect::<String>().into(),
             _ => number_label(id),
         }
     };

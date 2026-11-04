@@ -533,13 +533,17 @@ pub struct UserBind {
 /// Hyprland `$name = value` and Sway `set $name value` definitions in
 /// `lines`, longest names first so `$mainModShift` is substituted before `$mainMod`.
 fn hypr_vars(target: Target, lines: &[&str]) -> Vec<(String, String)> {
-    let mut v: Vec<(String, String)> = match target {
+    let defs: Vec<(String, String)> = match target {
         Target::Hyprland => lines.iter().filter_map(|l| l.trim().strip_prefix('$')?.split_once('=').map(|(n, val)| (format!("${}", n.trim()), val.trim().to_string()))).collect(),
-        // Sway: `set $name value`.
+        // Sway: `set $name value`; a later `set` of the same name replaces
+        // the earlier one.
         Target::Sway => lines.iter().filter_map(|l| l.trim().strip_prefix("set ")?.trim().split_once(char::is_whitespace).filter(|(n, _)| n.starts_with('$')).map(|(n, val)| (n.to_string(), val.trim().to_string()))).collect(),
         _ => return Vec::new(),
     };
-    v.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
+    let mut v = Vec::new();
+    for (name, value) in defs {
+        crate::compositor::set_var(&mut v, &name, &value);
+    }
     v
 }
 
@@ -844,8 +848,10 @@ pub fn validate_file(target: Target, config: &Path) -> Validation {
     let failed = match target {
         // mango -p prints problems; it exits 0 either way.
         Target::Mango => report.contains("ERROR"),
-        // Sway exits 0 when the error is in an included file.
-        Target::Sway => !success || report.contains("[ERROR]"),
+        // Sway exits 0 when the error is in an included file; only the
+        // level's place counts (a config line echoed in an `[INFO]` line
+        // may say `[ERROR]` itself).
+        Target::Sway => !success || crate::doctor::sway_has_error(&report),
         _ => !success,
     };
     if failed { Validation::Invalid { tool, report: report.trim().to_string() } } else { Validation::Valid { tool } }

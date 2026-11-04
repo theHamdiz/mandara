@@ -2214,27 +2214,146 @@ pub(crate) fn included_files(target: Target, file: &Path, text: &str) -> Vec<Pat
         .collect()
 }
 
-/// Sway include word → files: backslash escapes undone, `$VAR` and `~`
-/// expanded, relative to the including file, globbed (`*`, `?`) in the
-/// file name; matches sorted, like `wordexp` returns them.
+/// Sway include line → files, as sway 1.12 reads it: the rest of the line
+/// with an argument's quotes removed, then split into shell words
+/// (`wordexp`): `include a.conf b.conf` and `include "a.conf b.conf"` both
+/// load two files, `my\ dir/x.conf` is one. Each word has `$VAR` and `~`
+/// expanded, is taken relative to the including file and globbed (`*`,
+/// `?`) in every component (`conf.d/*/bindings.conf`); a word's matches are
+/// sorted, like `wordexp` returns them, and a pattern that matches nothing
+/// is skipped.
 fn sway_include_files(base: &Path, raw: &str) -> Vec<PathBuf> {
-    let mut word = String::new();
-    let mut chars = raw.trim().chars();
-    while let Some(c) = chars.next() {
-        match c {
-            '\\' => word.extend(chars.next()),
-            c => word.push(c),
+    sway_include_words(raw)
+        .into_iter()
+        .flat_map(|(word, literal)| {
+            let path = resolve_include(base, &expand_env(&word));
+            if literal || !path.to_string_lossy().contains(['*', '?']) { vec![path] } else { glob_path(&path) }
+        })
+        .collect()
+}
+
+/// The words of a Sway include line and, for each, whether it is literal
+/// (an escaped or quoted `*` or `?`, never a pattern).
+fn sway_include_words(raw: &str) -> Vec<(String, bool)> {
+    // Sway's own argument handling first: an argument that starts with a
+    // quote loses its (unescaped) quotes, backslashes stay for `wordexp`.
+    let mut line = String::new();
+    for arg in sway_args(raw.trim()) {
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        if arg.starts_with(['"', '\'']) {
+            let mut escaped = false;
+            for c in arg.chars() {
+                match c {
+                    '"' | '\'' if !escaped => {}
+                    '\\' => {
+                        escaped = !escaped;
+                        line.push(c);
+                        continue;
+                    }
+                    c => line.push(c),
+                }
+                escaped = false;
+            }
+        } else {
+            line.push_str(&arg);
         }
     }
-    let path = resolve_include(base, &expand_env(&word));
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    if !name.contains(['*', '?']) {
-        return vec![path];
+    // Then shell words: blanks split, quotes group, `\` escapes.
+    let (mut words, mut word, mut literal, mut started) = (Vec::new(), String::new(), false, false);
+    let mut chars = line.chars();
+    let mut quote: Option<char> = None;
+    while let Some(c) = chars.next() {
+        match (quote, c) {
+            (Some(q), c) if c == q => quote = None,
+            (Some('"'), '\\') => match chars.next() {
+                Some(n @ ('"' | '\\' | '$' | '`')) => word.push(n),
+                Some(n) => {
+                    word.push('\\');
+                    word.push(n);
+                }
+                None => word.push('\\'),
+            },
+            (Some(_), c) => {
+                literal |= matches!(c, '*' | '?');
+                word.push(c);
+            }
+            (None, '\'' | '"') => {
+                quote = Some(c);
+                started = true;
+            }
+            (None, '\\') => {
+                if let Some(n) = chars.next() {
+                    literal |= matches!(n, '*' | '?');
+                    word.push(n);
+                    started = true;
+                }
+            }
+            (None, c) if c.is_whitespace() => {
+                if started || !word.is_empty() {
+                    words.push((std::mem::take(&mut word), literal));
+                }
+                (literal, started) = (false, false);
+            }
+            (None, c) => word.push(c),
+        }
     }
-    let Some(dir) = path.parent() else { return Vec::new() };
-    let mut out: Vec<PathBuf> = std::fs::read_dir(dir).map(|d| d.flatten().map(|e| e.path()).filter(|p| p.file_name().is_some_and(|n| glob_match(&name, &n.to_string_lossy()))).collect()).unwrap_or_default();
-    out.sort();
-    out
+    if started || !word.is_empty() {
+        words.push((word, literal));
+    }
+    words
+}
+
+/// Sway's split of a command line into arguments: blanks outside quotes
+/// separate them; quotes and backslashes are kept.
+fn sway_args(line: &str) -> Vec<String> {
+    let (mut args, mut arg, mut quote, mut escaped) = (Vec::new(), String::new(), None, false);
+    for c in line.chars() {
+        if escaped {
+            escaped = false;
+        } else if c == '\\' {
+            escaped = true;
+        } else if let Some(q) = quote {
+            if c == q {
+                quote = None;
+            }
+        } else if c == '"' || c == '\'' {
+            quote = Some(c);
+        } else if c.is_whitespace() {
+            if !arg.is_empty() {
+                args.push(std::mem::take(&mut arg));
+            }
+            continue;
+        }
+        arg.push(c);
+    }
+    if !arg.is_empty() {
+        args.push(arg);
+    }
+    args
+}
+
+/// The existing paths an absolute glob names (`*`, `?` in any component),
+/// sorted.
+fn glob_path(pattern: &Path) -> Vec<PathBuf> {
+    let mut found = vec![PathBuf::new()];
+    for part in pattern.components() {
+        let name = part.as_os_str().to_string_lossy();
+        if !name.contains(['*', '?']) {
+            for p in &mut found {
+                p.push(part);
+            }
+            continue;
+        }
+        found = found
+            .iter()
+            .flat_map(|dir| std::fs::read_dir(dir).into_iter().flatten().flatten().filter(|e| glob_match(&name, &e.file_name().to_string_lossy())).map(|e| e.path()))
+            .collect();
+    }
+    found.retain(|p| p.exists());
+    found.sort();
+    found
 }
 
 /// Shell glob match of one path component (`*` and `?`; hidden files only
@@ -2461,6 +2580,19 @@ pub fn sway_binds(text: &str) -> Vec<SwayBind> {
     sway_binds_with(text, &mut Vec::new())
 }
 
+/// Sets `$name` in `vars`: a second `set $mod …` replaces the first (sway
+/// uses the latest value from there on), and names stay longest first, so
+/// `$mod` never eats `$modShift`.
+pub(crate) fn set_var(vars: &mut Vec<(String, String)>, name: &str, value: &str) {
+    match vars.iter_mut().find(|(n, _)| n == name) {
+        Some((_, v)) => *v = value.to_string(),
+        None => {
+            vars.push((name.to_string(), value.to_string()));
+            vars.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
+        }
+    }
+}
+
 /// [`sway_binds`] with the variables already set before `text` (and
 /// those it sets added).
 fn sway_binds_with(text: &str, vars: &mut Vec<(String, String)>) -> Vec<SwayBind> {
@@ -2481,9 +2613,7 @@ fn sway_binds_with(text: &str, vars: &mut Vec<(String, String)>) -> Vec<SwayBind
             && let Some((name, value)) = rest.trim().split_once(char::is_whitespace)
             && name.starts_with('$')
         {
-            vars.push((name.to_string(), value.trim().to_string()));
-            // Longest first, so `$mod` never eats `$modShift`.
-            vars.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
+            set_var(vars, name, value.trim());
             continue;
         }
         for (name, value) in vars.iter() {
@@ -3700,6 +3830,41 @@ mod tests {
         std::fs::write(d.join("config.d/50-menu.conf"), "set $menu wofi\nbindsym $mod+space exec $menu\nbindsym $mod+Shift+s exec grim\n").unwrap();
         let chords = sway_existing_chords(&d.join("config"));
         assert_eq!(chords.into_iter().collect::<Vec<_>>(), ["shift+super+s", "super+return", "super+space"]);
+    }
+
+    /// What sway 1.12 loaded for each line (`sway --validate --verbose`,
+    /// its "Loading config from" lines, in a container).
+    #[test]
+    fn sway_includes_expand_like_sway() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        for f in ["conf.d/a/bindings.conf", "conf.d/b/bindings.conf", "conf.d/b/other.conf", "one.conf", "two.conf", "my dir/x.conf"] {
+            std::fs::create_dir_all(d.join(f).parent().unwrap()).unwrap();
+            std::fs::write(d.join(f), "").unwrap();
+        }
+        let config = d.join("config");
+        let files = |line: &str| sway_include_files(&config, line);
+        // A wildcard in a directory component.
+        assert_eq!(files("conf.d/*/bindings.conf"), [d.join("conf.d/a/bindings.conf"), d.join("conf.d/b/bindings.conf")]);
+        assert!(files("nothing/*/x.conf").is_empty(), "a pattern that matches nothing is skipped");
+        // Every path of one include, quoted together or not.
+        assert_eq!(files("one.conf two.conf"), [d.join("one.conf"), d.join("two.conf")]);
+        assert_eq!(files(&format!("\"{0}/one.conf {0}/two.conf\"", d.display())), [d.join("one.conf"), d.join("two.conf")]);
+        // An escaped blank keeps one word; quotes alone don't (sway drops
+        // them before `wordexp` splits).
+        assert_eq!(files("my\\ dir/x.conf"), [d.join("my dir/x.conf")]);
+        assert_eq!(files("\"my\\ dir/x.conf\""), [d.join("my dir/x.conf")]);
+        assert_eq!(files("\"my dir/x.conf\""), [d.join("my"), d.join("dir/x.conf")]);
+        // An escaped wildcard is literal.
+        assert_eq!(files("conf.d/\\*/bindings.conf"), [d.join("conf.d/*/bindings.conf")]);
+    }
+
+    /// `set $mod Mod1` then `set $mod Mod4`: sway uses the latest value
+    /// (checked in sway 1.12: "After replacement: bindsym Mod4+x").
+    #[test]
+    fn sway_variables_take_their_latest_value() {
+        let binds = sway_binds("set $mod Mod1\nbindsym $mod+a exec a\nset $mod Mod4\nset $modShift Mod4+Shift\nbindsym $mod+x exec x\nbindsym $modShift+y exec y\n");
+        assert_eq!(binds.iter().map(|b| b.chord.as_str()).collect::<Vec<_>>(), ["alt+a", "super+x", "shift+super+y"]);
     }
 
     #[test]

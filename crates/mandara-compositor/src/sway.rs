@@ -10,7 +10,8 @@
 //! Sway's workspaces are dynamic and live on one output each, so they map
 //! to [`NavigationModel::Workspaces`] per output. A numbered workspace's id
 //! is its number (what `workspace number N` takes); named ones without a
-//! number get ids after the highest number (see [`workspace_ids`]). Windows
+//! number get stable ids from their name, above every number (see
+//! [`workspace_ids`]). Windows
 //! come from the layout tree: a Wayland window's `app_id`, an X11 window's
 //! class, its title, pid, floating, fullscreen and urgency. The binding
 //! mode drives the bar's keymode badge and each workspace's container
@@ -29,7 +30,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::backend::CompositorBackend;
-use crate::model::{ClientInfo, CompositorEvent, CompositorKind, MonitorInfo, NavigationModel, WorkspaceStatus};
+use crate::model::{ClientInfo, CompositorEvent, CompositorKind, MonitorInfo, NavigationModel, UNNUMBERED_ID_BASE, WorkspaceStatus};
 
 /// The bytes every message starts with.
 pub const MAGIC: &[u8; 6] = b"i3-ipc";
@@ -172,18 +173,35 @@ impl SwayNode {
 /// The scratchpad's hidden output.
 const SCRATCH_OUTPUT: &str = "__i3";
 
+/// The id a workspace without a number asks for: a hash of its name in
+/// the range from [`UNNUMBERED_ID_BASE`] (FNV-1a, so it's the same in
+/// every snapshot and every run).
+fn unnumbered_id(name: &str) -> u32 {
+    const FNV_OFFSET: u32 = 0x811c_9dc5;
+    const FNV_PRIME: u32 = 0x0100_0193;
+    let hash = name.bytes().fold(FNV_OFFSET, |h, b| (h ^ u32::from(b)).wrapping_mul(FNV_PRIME));
+    UNNUMBERED_ID_BASE | (hash & !UNNUMBERED_ID_BASE)
+}
+
 /// The bar's id for each workspace, in order: its number when it has one,
-/// otherwise the next free id after the highest number (so ids are unique
-/// across outputs, as sway's numbers are).
+/// otherwise an id from its name above every possible number
+/// ([`UNNUMBERED_ID_BASE`]). A named workspace keeps its id while other
+/// workspaces come and go (a bar click captured a moment ago still finds
+/// it), and never takes the id of a numbered workspace that doesn't exist
+/// yet (`workspace 3` stays reachable while `web` exists). Two names whose
+/// hashes meet take the next free id, in sway's order.
 pub fn workspace_ids(workspaces: &[SwayWorkspace]) -> Vec<u32> {
-    let mut next = workspaces.iter().filter_map(|w| u32::try_from(w.num).ok()).max().unwrap_or(0) + 1;
+    let mut taken = std::collections::BTreeSet::new();
     workspaces
         .iter()
         .map(|w| match u32::try_from(w.num) {
             Ok(n) => n,
             Err(_) => {
-                next += 1;
-                next - 1
+                let mut id = unnumbered_id(&w.name);
+                while !taken.insert(id) {
+                    id = if id == u32::MAX { UNNUMBERED_ID_BASE } else { id + 1 };
+                }
+                id
             }
         })
         .collect()
@@ -288,9 +306,21 @@ pub fn command_result(reply: &Value) -> Result<()> {
     }
 }
 
-/// A workspace name as a sway command argument.
+/// A workspace (or output) name as one sway command argument, so the
+/// command reaches that very workspace. Sway keeps a backslash in such an
+/// argument (`workspace "a \"b\""` makes a workspace named `a \"b\"`;
+/// checked in sway 1.12), so nothing is escaped: the name goes inside the
+/// quote it doesn't contain (`'a "b"'`). Sway itself can't write a name
+/// with both kinds of quote (a command or config line can't make one),
+/// so that case only keeps the old fallback of dropping `"`.
 fn quoted(name: &str) -> String {
-    format!("\"{}\"", name.replace('"', ""))
+    if !name.contains('"') {
+        format!("\"{name}\"")
+    } else if !name.contains('\'') {
+        format!("'{name}'")
+    } else {
+        format!("\"{}\"", name.replace('"', ""))
+    }
 }
 
 /// The command that shows the workspace the bar calls `id`: by number,
@@ -595,11 +625,13 @@ mod tests {
     #[test]
     fn workspaces_are_per_output_with_tree_occupancy() {
         let (ws, tree) = (workspaces(), tree());
-        assert_eq!(workspace_ids(&ws), vec![1, 3, 6, 5], "a named workspace gets an id after the highest number");
+        let web = unnumbered_id("web");
+        assert_eq!(workspace_ids(&ws), vec![1, 3, web, 5], "a named workspace's id is above every number");
+        assert!(crate::model::is_unnumbered(web));
         let nav = navigation(&ws, &tree);
         assert_eq!(nav.iter().map(|(o, _)| o.as_str()).collect::<Vec<_>>(), ["HEADLESS-1", "HEADLESS-2"]);
         let NavigationModel::Workspaces { workspaces } = &nav[0].1 else { panic!("{nav:?}") };
-        assert_eq!(workspaces.iter().map(|w| (w.id, w.name.as_str(), w.active, w.occupied)).collect::<Vec<_>>(), [(1, "1", true, true), (3, "3", false, true), (6, "web", false, true)]);
+        assert_eq!(workspaces.iter().map(|w| (w.id, w.name.as_str(), w.active, w.occupied)).collect::<Vec<_>>(), [(1, "1", true, true), (3, "3", false, true), (web, "web", false, true)]);
         assert_eq!(workspaces[0].layout, "splith");
         let NavigationModel::Workspaces { workspaces } = &nav[1].1 else { panic!("{nav:?}") };
         assert!(workspaces[0].urgent && workspaces[0].active && workspaces[0].id == 5);
@@ -617,7 +649,7 @@ mod tests {
         assert!(xterm.floating && xterm.tags == vec![3] && !xterm.fullscreen);
         assert_eq!(xterm.geometry, Some((716, 382, 488, 318)));
         let web = all.iter().find(|c| c.app_id == "org.example.Web").unwrap();
-        assert_eq!(web.tags, vec![6], "the named workspace's id");
+        assert_eq!(web.tags, vec![unnumbered_id("web")], "the named workspace's id");
         assert!(all.iter().any(|c| c.monitor == "HEADLESS-2" && c.tags == vec![5]));
         assert!(all.iter().all(|c| c.id > 0 && !c.title.is_empty()));
     }
@@ -647,11 +679,44 @@ mod tests {
     fn commands_for_the_bar() {
         let ws = workspaces();
         assert_eq!(select_command(&ws, 3, "HEADLESS-1"), "workspace number 3");
-        assert_eq!(select_command(&ws, 6, ""), "workspace \"web\"");
+        let web = unnumbered_id("web");
+        assert_eq!(select_command(&ws, web, ""), "workspace \"web\"");
+        // Numbered workspace 6 doesn't exist yet: still reachable with `web` there.
+        assert_eq!(select_command(&ws, 6, ""), "workspace number 6");
+        assert_eq!(move_command(&ws, None, 6), "move container to workspace number 6");
         assert_eq!(select_command(&ws, 4, "HEADLESS-2"), "focus output \"HEADLESS-2\"; workspace number 4", "a new workspace opens on the clicked bar's output");
         assert_eq!(move_command(&ws, Some(13), 3), "[con_id=13] move container to workspace number 3");
-        assert_eq!(move_command(&ws, None, 6), "move container to workspace \"web\"");
+        assert_eq!(move_command(&ws, None, web), "move container to workspace \"web\"");
         assert_eq!(move_command(&ws, None, 9), "move container to workspace number 9");
+    }
+
+    #[test]
+    fn named_workspace_ids_stay_put() {
+        let named = |name: &str, num: i32| SwayWorkspace { num, name: name.into(), output: "HEADLESS-1".into(), ..Default::default() };
+        let before = workspace_ids(&[named("1", 1), named("web", -1), named("mail", -1)]);
+        // Workspaces come and go (a higher number, one closed): `mail` keeps
+        // its id, so a bar click captured before still finds it.
+        let after = workspace_ids(&[named("mail", -1), named("1", 1), named("9", 9)]);
+        assert_eq!(before[2], after[0]);
+        assert!(before.iter().chain(&after).filter(|i| crate::model::is_unnumbered(**i)).all(|i| *i > i32::MAX as u32));
+        // Two names on the same hash take distinct ids.
+        let ws = [named("web", -1), named("web", -1)];
+        let ids = workspace_ids(&ws);
+        assert_ne!(ids[0], ids[1]);
+    }
+
+    /// What each name must look like for sway 1.12 to reach that very
+    /// workspace (`swaymsg` against a headless sway: backslashes are kept,
+    /// so quotes are chosen, never escaped).
+    #[test]
+    fn names_are_quoted_for_sway() {
+        assert_eq!(quoted("web"), "\"web\"");
+        assert_eq!(quoted("dev ops; x,y"), "\"dev ops; x,y\"");
+        assert_eq!(quoted("it's"), "\"it's\"");
+        assert_eq!(quoted("a \"b\""), "'a \"b\"'");
+        assert_eq!(quoted("back\\slash"), "\"back\\slash\"");
+        let ws = [SwayWorkspace { num: -1, name: "say \"hi\"".into(), ..Default::default() }];
+        assert_eq!(select_command(&ws, workspace_ids(&ws)[0], ""), "workspace 'say \"hi\"'");
     }
 
     /// The real event stream (type, payload), as a subscriber read it from

@@ -38,6 +38,7 @@ mod mango;
 mod niri;
 mod river;
 mod sway;
+pub(crate) use sway::has_error as sway_has_error;
 mod umbriel;
 
 #[cfg(test)]

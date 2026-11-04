@@ -44,9 +44,22 @@ pub struct TagStatus {
     pub layout: String,
 }
 
+/// The first id of a workspace that has no number (Sway's named
+/// workspaces): ids from here on are made up and stable per name, and can
+/// never equal a real workspace number (Sway's numbers stop below it).
+pub const UNNUMBERED_ID_BASE: u32 = 1 << 31;
+
+/// Whether `id` belongs to a workspace without a number
+/// ([`UNNUMBERED_ID_BASE`]): show its name, never the id.
+pub fn is_unnumbered(id: u32) -> bool {
+    id >= UNNUMBERED_ID_BASE
+}
+
 /// One linear / scrollable workspace (Niri, Hyprland, Umbriel, Sway).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkspaceStatus {
+    /// Its number (what "go to workspace N" takes), or a made-up id from
+    /// [`UNNUMBERED_ID_BASE`] up for a workspace without one.
     pub id: u32,
     pub name: String,
     pub active: bool,
