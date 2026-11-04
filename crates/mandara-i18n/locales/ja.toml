@@ -8202,3 +8202,6 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "フラットな塗り（既定）、ガラスの縁が付いた立体 3D タイル、または透明なガラス"
 "Tile shadow" = "タイルの影"
 "How strong the shadow under each shortcut tile is (0 for none)" = "各ショートカットタイルの下の影の強さ（0で影なし）"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} は Nix（Home Manager または NixOS）が生成した読み取り専用のファイルです。この行を Nix の設定に追加し、リビルドしてから、もう一度 `mandara setup` を実行してください: {line}"

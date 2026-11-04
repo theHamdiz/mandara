@@ -8202,3 +8202,6 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "Aplats (par défaut), tuiles 3D en relief avec un bord de verre, ou verre transparent"
 "Tile shadow" = "Ombre des tuiles"
 "How strong the shadow under each shortcut tile is (0 for none)" = "Intensité de l’ombre sous chaque tuile de raccourci (0 pour aucune)"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} est généré par Nix (Home Manager ou NixOS) et est en lecture seule : ajoutez cette ligne à sa configuration Nix, reconstruisez, puis relancez `mandara setup` : {line}"

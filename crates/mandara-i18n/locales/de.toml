@@ -8200,3 +8200,6 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "Flache Füllung (Standard), erhabene 3D-Kacheln mit Glaskante oder durchscheinendes Glas"
 "Tile shadow" = "Kachelschatten"
 "How strong the shadow under each shortcut tile is (0 for none)" = "Wie stark der Schatten unter jeder Verknüpfungskachel ist (0 für keinen)"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} wird von Nix (Home Manager oder NixOS) erzeugt und ist schreibgeschützt: Füge diese Zeile zu seiner Nix-Konfiguration hinzu, baue neu und führe `mandara setup` erneut aus: {line}"

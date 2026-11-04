@@ -7954,3 +7954,6 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "평면 채우기(기본값), 유리 테두리가 있는 입체 3D 타일, 또는 투명한 유리"
 "Tile shadow" = "타일 그림자"
 "How strong the shadow under each shortcut tile is (0 for none)" = "각 바로 가기 타일 아래 그림자의 세기 (0이면 없음)"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path}은(는) Nix(Home Manager 또는 NixOS)가 만든 읽기 전용 파일입니다. 이 줄을 Nix 설정에 추가하고 다시 빌드한 뒤 `mandara setup`을 다시 실행하세요: {line}"

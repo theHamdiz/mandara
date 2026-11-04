@@ -8202,3 +8202,6 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "सपाट भराव (डिफ़ॉल्ट), काँच के किनारे वाली उभरी 3D टाइलें, या पारदर्शी काँच"
 "Tile shadow" = "टाइल की छाया"
 "How strong the shadow under each shortcut tile is (0 for none)" = "हर शॉर्टकट टाइल के नीचे की छाया कितनी गहरी हो (0 यानी कोई नहीं)"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} Nix (Home Manager या NixOS) से बनी है और केवल-पढ़ने योग्य है: यह पंक्ति इसके Nix कॉन्फ़िगरेशन में जोड़ें, फिर से बिल्ड करें, और `mandara setup` दोबारा चलाएँ: {line}"

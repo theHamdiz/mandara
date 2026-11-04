@@ -8205,3 +8205,6 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "تعبئة مسطحة (الافتراضي)، أو مربعات بارزة ثلاثية الأبعاد بحافة زجاجية، أو زجاج شفاف"
 "Tile shadow" = "ظل المربعات"
 "How strong the shadow under each shortcut tile is (0 for none)" = "مدى قوة الظل تحت كل مربع اختصار (0 بلا ظل)"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} من إنشاء Nix ‏(Home Manager أو NixOS) وهو للقراءة فقط: أضف هذا السطر إلى إعدادات Nix الخاصة به، وأعد البناء، ثم شغّل `mandara setup` مرة أخرى: {line}"

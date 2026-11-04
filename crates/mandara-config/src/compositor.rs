@@ -2931,7 +2931,8 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
     if let Ok(real) = std::fs::canonicalize(path)
         && in_nix_store(&real)
     {
-        anyhow::bail!("{} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {}", path.display(), target.include_line());
+        let msg = mandara_i18n::tf("{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}", &[("path", &path.display()), ("line", &target.include_line())]);
+        anyhow::bail!("{msg}");
     }
     if target == Target::Sway && !path.exists() {
         seed_sway_config(path, Path::new(SWAY_SYSTEM_CONFIG))?;

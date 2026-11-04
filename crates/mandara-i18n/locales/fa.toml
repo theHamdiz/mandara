@@ -7955,3 +7955,6 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "رنگ‌آمیزی تخت (پیش‌فرض)، کاشی‌های برجستهٔ سه‌بعدی با لبهٔ شیشه‌ای، یا شیشهٔ شفاف"
 "Tile shadow" = "سایهٔ کاشی‌ها"
 "How strong the shadow under each shortcut tile is (0 for none)" = "شدت سایهٔ زیر هر کاشی میان‌بر (0 یعنی بدون سایه)"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} را Nix ‏(Home Manager یا NixOS) می‌سازد و فقط‌خواندنی است: این خط را به پیکربندی Nix آن بیفزایید، دوباره بسازید و `mandara setup` را دوباره اجرا کنید: {line}"

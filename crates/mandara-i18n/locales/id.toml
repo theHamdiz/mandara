@@ -7955,3 +7955,6 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "Isian datar (bawaan), ubin 3D timbul dengan tepi kaca, atau kaca tembus pandang"
 "Tile shadow" = "Bayangan ubin"
 "How strong the shadow under each shortcut tile is (0 for none)" = "Seberapa kuat bayangan di bawah setiap ubin pintasan (0 berarti tanpa bayangan)"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} dibuat oleh Nix (Home Manager atau NixOS) dan hanya-baca: tambahkan baris ini ke konfigurasi Nix-nya, bangun ulang, lalu jalankan `mandara setup` lagi: {line}"

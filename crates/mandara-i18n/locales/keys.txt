@@ -7784,6 +7784,7 @@ your default
 {path} in the archive doesn't match update.json
 {path} in the archive isn't an executable
 {path} is a development build; rebuild it from source (or pass --force-dev)
+{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}
 {path} isn't a file (folders are never shared)
 {path} isn't writable; re-run `mandara install` to update it
 {path} wasn't made by the wallpaper generator
