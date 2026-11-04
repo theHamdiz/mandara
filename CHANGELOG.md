@@ -19,6 +19,13 @@ installer and the launcher.
   the screen edge (the preview tells you which). The default stays the side
   opposite the sidebar. (#57)
 
+### Improved
+
+- **Guides that match today's shell.** The docs show the power menu at the
+  top centre and at the side, each Look's picture follows your page's light
+  or dark theme, and old panel captures that no longer looked like Mandara
+  are gone.
+
 ### Fixed
 
 - **The installer's PATH lines survive unusual folder names.** A home

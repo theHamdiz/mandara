@@ -97,30 +97,14 @@
     "name": "Resources",
     "palette": "obsidian",
     "motif": "circuit",
-    "angle": 1,
-    "panel": "docs/screenshots/resources.png",
-    "crop": [
-      2,
-      2,
-      614,
-      1257
-    ],
-    "radius": 39
+    "angle": 1
   },
   {
     "id": "processes",
     "name": "Process hunter",
     "palette": "obsidian",
     "motif": "radar",
-    "angle": -1,
-    "panel": "docs/screenshots/processes.png",
-    "crop": [
-      2,
-      2,
-      860,
-      980
-    ],
-    "radius": 39
+    "angle": -1
   },
   {
     "id": "network",
@@ -135,15 +119,7 @@
     "name": "Bluetooth",
     "palette": "corniche",
     "motif": "peers",
-    "angle": 2,
-    "panel": "docs/screenshots/bluetooth.png",
-    "crop": [
-      2,
-      2,
-      578,
-      530
-    ],
-    "radius": 39
+    "angle": 2
   },
   {
     "id": "audio",
@@ -274,15 +250,7 @@
     "name": "Color picker",
     "palette": "twilight",
     "motif": "orbits",
-    "angle": -2,
-    "panel": "docs/screenshots/color-picker.png",
-    "crop": [
-      2,
-      2,
-      626,
-      860
-    ],
-    "radius": 39
+    "angle": -2
   },
   {
     "id": "soundscapes",
@@ -319,105 +287,49 @@
     "name": "Network speed",
     "palette": "corniche",
     "motif": "signal",
-    "angle": -1,
-    "panel": "docs/screenshots/net-speed.png",
-    "crop": [
-      2,
-      2,
-      626,
-      971
-    ],
-    "radius": 39
+    "angle": -1
   },
   {
     "id": "authenticator",
     "name": "Authenticator",
     "palette": "obsidian",
     "motif": "timer",
-    "angle": 1,
-    "panel": "docs/screenshots/authenticator.png",
-    "crop": [
-      2,
-      2,
-      626,
-      659
-    ],
-    "radius": 39
+    "angle": 1
   },
   {
     "id": "drives",
     "name": "Drives",
     "palette": "obsidian",
     "motif": "bars",
-    "angle": -2,
-    "panel": "docs/screenshots/drives.png",
-    "crop": [
-      2,
-      2,
-      725,
-      590
-    ],
-    "radius": 39
+    "angle": -2
   },
   {
     "id": "containers",
     "name": "Containers",
     "palette": "obsidian",
     "motif": "tiles",
-    "angle": 2,
-    "panel": "docs/screenshots/containers.png",
-    "crop": [
-      2,
-      2,
-      920,
-      704
-    ],
-    "radius": 39
+    "angle": 2
   },
   {
     "id": "services",
     "name": "Services",
     "palette": "obsidian",
     "motif": "circuit",
-    "angle": -1,
-    "panel": "docs/screenshots/services.png",
-    "crop": [
-      2,
-      2,
-      920,
-      933
-    ],
-    "radius": 39
+    "angle": -1
   },
   {
     "id": "power",
     "name": "Power",
     "palette": "obsidian",
     "motif": "power",
-    "angle": 2,
-    "panel": "docs/screenshots/power.png",
-    "crop": [
-      2,
-      2,
-      722,
-      971
-    ],
-    "radius": 39
+    "angle": 2
   },
   {
     "id": "updates",
     "name": "Updates",
     "palette": "corniche",
     "motif": "orbits",
-    "angle": -2,
-    "panel": "docs/screenshots/updates.png",
-    "crop": [
-      2,
-      2,
-      860,
-      972
-    ],
-    "radius": 39
+    "angle": -2
   },
   {
     "id": "privacy",

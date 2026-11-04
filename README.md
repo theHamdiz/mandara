@@ -190,7 +190,7 @@ around, each one measured or shipped today:
 </tr>
 <tr>
 <td width="50%" valign="top"><img src="docs/screenshots/weather.png" alt="Weather" width="100%"/><br/><sub><b>Weather</b>: an animated sky, hourly and five-day forecasts.</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/resources.png" alt="System resources" width="100%"/><br/><sub><b>Resources</b>: CPU, memory, every GPU, temperatures and disks.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/notifications.png" alt="The notification center: notifications grouped by app (Mail with Reply and Archive actions, Corniche Radio, Calendar), do not disturb and clear" width="100%"/><br/><sub><b>Notifications</b>: grouped by app, with do not disturb.</sub></td>
 </tr>
 </table>
 

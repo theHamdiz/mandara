@@ -4,7 +4,7 @@ The rest of what's built in.
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/processes.png" alt="Process hunter" width="100%"/><br/><sub><b>Process hunter</b>: live CPU and memory, apps grouped, search by name, command or PID, end or force-kill.</sub></td>
+<td width="50%" valign="top"><img src="screenshots/pomodoro.png" alt="The Pomodoro focus timer: a 25:00 countdown ring with start, reset and skip" width="100%"/><br/><sub><b>Focus timer</b>: Pomodoro sessions with a countdown ring.</sub></td>
 <td width="50%" valign="top"><img src="screenshots/prayer-times.png" alt="Prayer times" width="100%"/><br/><sub><b>Prayer times</b> (opt-in): next-prayer countdown ring, day timeline, Hijri date and Qibla.</sub></td>
 </tr>
 </table>
@@ -13,7 +13,7 @@ The rest of what's built in.
 <tr>
 <td width="33%" valign="top"><img src="screenshots/clock-agenda.webp" alt="Clock panel: the time with the week and day of the year, a month calendar with event dots, and the upcoming events from tomorrow on" width="100%"/><br/><sub><b>Clock and calendar</b> with ICS feeds, Hijri dates and an agenda</sub></td>
 <td width="33%" valign="top"><img src="screenshots/world-clock.png" alt="World clock with a meeting planner" width="100%"/><br/><sub><b>World clock</b> and meeting planner</sub></td>
-<td width="33%" valign="top"><img src="screenshots/color-picker.png" alt="Color picker with formats, tonal ramp and contrast" width="100%"/><br/><sub><b>Color picker</b> with OKLCH ramps and WCAG contrast</sub></td>
+<td width="33%" valign="top"><img src="screenshots/soundscapes.png" alt="Soundscapes: presets such as Corniche night and Rainy study, layers (waves, rain, wind, café murmur, fireplace and noise colours) each with its own volume, and a sleep timer" width="100%"/><br/><sub><b>Soundscapes</b>: mix ambient sounds for focus</sub></td>
 </tr>
 </table>
 
@@ -213,6 +213,14 @@ The rest of what's built in.
   (by default the one opposite the sidebar) or at the top or bottom center,
   where it hangs from the bar as one piece with it, like the drop-down
   panels (`session_menu.position`).
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="screenshots/session-menu-top.webp" alt="The session menu at the top centre: a column of round buttons (lock, log out, sleep, restart, shut down) hanging from the bar, joined to it with curved corners" width="100%"/><br/><sub><b>Top centre</b>, hanging from the bar</sub></td>
+<td width="50%" valign="top"><img src="screenshots/session-menu-side.webp" alt="The session menu as a column of round buttons docked to the screen edge opposite the sidebar" width="100%"/><br/><sub><b>Side</b>, the default</sub></td>
+</tr>
+</table>
+
 - **Hooks**: run a command when something happens — started, wallpaper /
   colors / light-dark changed, app themes written, locked / unlocked, idle /
   resumed, screens off / on, before sleep / logout / restart / shutdown,

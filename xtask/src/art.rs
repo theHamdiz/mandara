@@ -138,7 +138,7 @@ const ICON_SVG_BUDGET_BYTES: u64 = 12_000;
 /// matches its source when its mean channel difference stays below this.
 const ICON_MATCH_MEAN_DIFF: f64 = 1.5;
 /// Plugins whose covers float a real panel capture.
-const SCREENSHOT_IDS: &[&str] = &["media", "resources", "weather", "prayer-times", "processes", "audio", "bluetooth", "notifications", "language", "pomodoro", "color-picker", "soundscapes", "world-clock", "net-speed", "authenticator", "drives", "containers", "services", "power", "updates", "dock"];
+const SCREENSHOT_IDS: &[&str] = &["media", "weather", "prayer-times", "audio", "notifications", "language", "pomodoro", "soundscapes", "world-clock", "dock"];
 /// A cover whose channels all vary less than this is empty or flat.
 const COVER_MIN_STDDEV: f64 = 20.0;
 /// Motif previews render at a tenth of the cover size.
