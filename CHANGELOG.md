@@ -6,6 +6,15 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **The installer opens on a setup screen.** `mandara install` now starts
+  with the MANDARA wordmark and an arrow-key menu: pick the compositor to
+  integrate with (one you already have is preselected), switch autostart
+  and Mandara Login on or off, then choose Install. A choice you pass as a
+  flag is left out of the menu, and `--yes`, `--dry-run` or a run without a
+  terminal behave as before, with the one-line title.
+
 ## 0.15.0 — 2026-11-03
 
 Fresh screenshots everywhere. Cleaner main menu tiles.
