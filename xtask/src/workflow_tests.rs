@@ -17,3 +17,20 @@ fn checkout_steps_share_one_immutable_release() {
     assert!(!pins.is_empty());
     assert!(pins.iter().all(|pin| pin == &pins[0]));
 }
+
+#[test]
+fn release_build_commands_do_not_inherit_write_credentials() {
+    let workflow = std::fs::read_to_string(crate::root().join(".github/workflows/release.yml")).unwrap();
+    for checkout in workflow.split("uses: actions/checkout@").skip(1) {
+        let with = checkout.split("\n      - ").next().unwrap();
+        assert!(with.contains("persist-credentials: false"));
+    }
+    let result = workflow.split("      - name: Result\n").nth(1).unwrap().split("\n  build:").next().unwrap();
+    assert!(!result.contains("        env:"));
+    for line in result.lines().filter(|line| line.contains("cargo ")) {
+        assert!(!line.contains("GH_TOKEN"));
+    }
+    for line in workflow.lines().filter(|line| !line.trim_start().starts_with('#') && line.contains(" push ")) {
+        assert!(line.contains("credential.helper=!gh auth git-credential"), "push must use command-scoped credentials: {line}");
+    }
+}

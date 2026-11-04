@@ -3,7 +3,7 @@
 One command, from any shell (bash, zsh or fish):
 
 ```bash
-sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f"'
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
 ```
 
 The small [download script](../install.sh) shows Mandara's phoenix and the

@@ -242,6 +242,9 @@ installer, display reconnection and native KWin support.
 
 ### Under the hood
 
+- Release jobs keep GitHub write credentials out of dependency builds and
+  use them only for publishing and pushing release metadata.
+
 - **Release builds use an immutable checkout action.** CI and packaging
   share the same verified action commit. Setup's availability tests also
   find their fixture programs through PATH, including on NixOS.

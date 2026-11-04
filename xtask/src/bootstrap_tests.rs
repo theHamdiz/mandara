@@ -279,7 +279,7 @@ fn documented_download_command_checks_completion_and_preserves_the_callers_direc
             };
             read_request(&mut client);
             // Even a valid program prefix must not run on a short download.
-            let body = b"printf '%s' \"$PWD\" > \"$BOOTSTRAP_RECORD\"\n";
+            let body = b"printf '%s\\0' \"$PWD\" \"$@\" > \"$BOOTSTRAP_RECORD\"\n";
             let length = body.len() + if complete { 0 } else { 100 };
             write!(client, "HTTP/1.1 200 OK\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n").unwrap();
             client.write_all(body).unwrap();
@@ -289,6 +289,7 @@ fn documented_download_command_checks_completion_and_preserves_the_callers_direc
         assert!(command.contains("--proto =https"), "the initial request and redirects must stay on HTTPS");
         let command = command.replace("https://thehamdiz.github.io/mandara/install.sh", &url).replace("--proto =https", "--proto =http");
         assert!(command.contains(&url));
+        let command = format!("{command} --compositor kwin --prefix 'path with spaces'");
         let record = dir.path().join("executed");
         let downloads = dir.path().join("downloads $(touch trap-ran)");
         std::fs::create_dir(&downloads).unwrap();
@@ -300,7 +301,7 @@ fn documented_download_command_checks_completion_and_preserves_the_callers_direc
         assert_eq!(std::fs::read_dir(downloads).unwrap().count(), 0, "the first-stage script was not removed");
         assert!(!caller.join("trap-ran").exists(), "cleanup interpreted the file name as code");
         if complete {
-            assert_eq!(std::fs::read_to_string(record).unwrap(), caller.display().to_string());
+            assert_eq!(std::fs::read_to_string(record).unwrap().split('\0').collect::<Vec<_>>(), [caller.to_str().unwrap(), "--compositor", "kwin", "--prefix", "path with spaces", ""]);
         } else {
             assert!(!record.exists());
         }
