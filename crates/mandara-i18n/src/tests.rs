@@ -84,10 +84,11 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// Every key the shell, Studio and built-in plugins use.
+/// Every key the shell, Studio, built-in plugins and download command use.
 pub(crate) fn source_keys() -> BTreeSet<String> {
     let mut files = Vec::new();
     rust_files(&workspace().join("crates"), &mut files);
+    files.push(workspace().join("xtask/src/bootstrap.rs"));
     let mut keys = BTreeSet::new();
     for f in files {
         if f.starts_with(workspace().join("crates/mandara-i18n")) {

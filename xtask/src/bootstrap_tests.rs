@@ -1,0 +1,198 @@
+//! The download command talks only to a private fixture server in these tests.
+
+use std::collections::BTreeMap;
+use std::io::{Read as _, Write as _};
+use std::net::TcpListener;
+use std::path::Path;
+use std::process::Command;
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::thread::JoinHandle;
+use std::time::Duration;
+
+use flate2::{Compression, write::GzEncoder};
+use sha2::{Digest as _, Sha256};
+
+const SCRIPT: &str = include_str!("../../install.sh");
+const FIXTURE: &str = r#"
+fn main() {
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    std::fs::write(std::env::var_os("BOOTSTRAP_RECORD").unwrap(), args.join("\0")).unwrap();
+    std::process::exit(std::env::var("BOOTSTRAP_EXIT").unwrap().parse().unwrap());
+}
+"#;
+/// A stalled local client must not keep a fixture thread alive indefinitely.
+const CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
+/// Yield while a fixture has no connection, so shutdown needs no wake socket.
+const ACCEPT_PAUSE: Duration = Duration::from_millis(5);
+
+struct Server {
+    url: String,
+    stop: Arc<AtomicBool>,
+    requests: Arc<Mutex<Vec<String>>>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl Server {
+    fn new(files: BTreeMap<String, Vec<u8>>) -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        listener.set_nonblocking(true).unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let thread = {
+            let stop = stop.clone();
+            let requests = requests.clone();
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Acquire) {
+                    let (mut client, _) = match listener.accept() {
+                        Ok(client) => client,
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => { std::thread::sleep(ACCEPT_PAUSE); continue; }
+                        Err(e) => panic!("fixture server: {e}"),
+                    };
+                    client.set_read_timeout(Some(CLIENT_TIMEOUT)).unwrap();
+                    let mut request = Vec::new();
+                    let mut buffer = [0; 1024];
+                    while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+                        let n = client.read(&mut buffer).unwrap();
+                        if n == 0 { break; }
+                        request.extend_from_slice(&buffer[..n]);
+                    }
+                    let request = String::from_utf8(request).unwrap();
+                    let path = request.split_whitespace().nth(1).unwrap().to_string();
+                    requests.lock().unwrap().push(path.clone());
+                    let (status, body) = match files.get(&path) {
+                        Some(body) => ("200 OK", body.as_slice()),
+                        None => ("404 Not Found", b"missing".as_slice()),
+                    };
+                    write!(client, "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).unwrap();
+                    client.write_all(body).unwrap();
+                }
+            })
+        };
+        Self { url, stop, requests, thread: Some(thread) }
+    }
+}
+
+impl Drop for Server {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        self.thread.take().unwrap().join().unwrap();
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Fault { None, Signature, Archive, MissingMetadata, MissingChecksum }
+
+fn archive(dir: &Path) -> Vec<u8> {
+    let source = dir.join("fixture.rs");
+    let binary = dir.join("fixture");
+    std::fs::write(&source, FIXTURE).unwrap();
+    let compiled = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
+        .arg(&source).arg("-o").arg(&binary).output().unwrap();
+    assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
+    let bytes = std::fs::read(binary).unwrap();
+    let mut tar = tar::Builder::new(GzEncoder::new(Vec::new(), Compression::fast()));
+    let mut header = tar::Header::new_gnu();
+    header.set_size(bytes.len() as u64);
+    header.set_mode(0o755);
+    header.set_cksum();
+    tar.append_data(&mut header, "mandara-0.99.0/bin/mandara", bytes.as_slice()).unwrap();
+    tar.into_inner().unwrap().finish().unwrap()
+}
+
+fn run(fault: Fault, exit: i32) -> (std::process::Output, Option<String>, Vec<String>) {
+    run_in(fault, exit, "C")
+}
+
+fn run_in(fault: Fault, exit: i32, language: &str) -> (std::process::Output, Option<String>, Vec<String>) {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = archive(dir.path());
+    let hash = mandara_delta::hex(&Sha256::digest(&archive));
+    let mut files = BTreeMap::new();
+    let mut sums = String::new();
+    for arch in ["x86_64", "aarch64"] {
+        for libc in ["gnu", "musl"] {
+            let name = format!("mandara-{arch}-linux-{libc}.tar.gz");
+            sums.push_str(&format!("{hash}  {name}\n"));
+            files.insert(format!("/{name}"), if matches!(fault, Fault::Archive) { b"damaged archive".to_vec() } else { archive.clone() });
+        }
+    }
+    if matches!(fault, Fault::MissingChecksum) { sums = format!("{hash}  something-else.tar.gz\n"); }
+    // Test keys are generated in memory and never replace the shipped trust root.
+    let (private, public) = mandara_delta::signing::sign::generate().unwrap();
+    let signature = mandara_delta::signing::sign::sign(&private, sums.as_bytes()).unwrap();
+    if !matches!(fault, Fault::MissingMetadata) { files.insert("/SHA256SUMS".into(), sums.into_bytes()); }
+    files.insert("/SHA256SUMS.sig".into(), if matches!(fault, Fault::Signature) { format!("{}\n", "00".repeat(64)).into_bytes() } else { signature.into_bytes() });
+    let server = Server::new(files);
+    let record = dir.path().join("record");
+    let downloads = dir.path().join("downloads");
+    std::fs::create_dir(&downloads).unwrap();
+    let trusted = mandara_delta::signing::trusted_keys().iter().map(|key| mandara_delta::hex(key)).collect::<Vec<_>>().join(" ");
+    let script = SCRIPT.replace(&format!("release_keys='{trusted}'"), &format!("release_keys='{public}'"));
+    assert_ne!(script, SCRIPT);
+    let script_path = dir.path().join("install.sh");
+    std::fs::write(&script_path, script).unwrap();
+    let output = Command::new("sh").arg(&script_path)
+        .args(["--prefix", "/tmp/a path with 'quotes' and $signs", "--no-deps", "--no-greeter", "--compositor", "kwin"])
+        .env("MANDARA_BOOTSTRAP_BASE_URL", &server.url).env("NO_PROXY", "127.0.0.1")
+        .env("LC_ALL", language)
+        .env("BOOTSTRAP_RECORD", &record).env("BOOTSTRAP_EXIT", exit.to_string()).env("TMPDIR", &downloads)
+        .stdin(std::process::Stdio::null()).output().unwrap();
+    assert_eq!(std::fs::read_dir(downloads).unwrap().count(), 0, "temporary downloads remain");
+    let record = std::fs::read_to_string(record).ok();
+    let requests = server.requests.lock().unwrap().clone();
+    (output, record, requests)
+}
+
+#[test]
+fn a_signed_download_forwards_arguments_and_installer_failures() {
+    for code in [0, 23] {
+        let (output, record, requests) = run(Fault::None, code);
+        assert_eq!(output.status.code(), Some(code), "{}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(record.unwrap().split('\0').collect::<Vec<_>>(), ["install", "--prefix", "/tmp/a path with 'quotes' and $signs", "--no-deps", "--no-greeter", "--compositor", "kwin"]);
+        assert_eq!(requests.len(), 3);
+        assert!(String::from_utf8_lossy(&output.stderr).contains("Verifying the download"));
+    }
+}
+
+#[test]
+fn untrusted_incomplete_or_damaged_downloads_never_execute() {
+    for fault in [Fault::Signature, Fault::Archive, Fault::MissingMetadata, Fault::MissingChecksum] {
+        let (output, record, requests) = run(fault, 0);
+        assert!(!output.status.success());
+        assert!(record.is_none());
+        if !matches!(fault, Fault::Archive) { assert!(!requests.iter().any(|p| p.ends_with(".tar.gz"))); }
+    }
+}
+
+#[test]
+fn the_bootstrap_trusts_the_same_public_keys_as_the_binary() {
+    let trusted = mandara_delta::signing::trusted_keys().iter().map(|key| mandara_delta::hex(key)).collect::<Vec<_>>().join(" ");
+    assert!(!trusted.is_empty());
+    assert!(SCRIPT.contains(&format!("release_keys='{trusted}'")));
+    assert!(!SCRIPT.contains("eval "));
+    assert!(Command::new("sh").arg("-n").arg(crate::root().join("install.sh")).status().unwrap().success());
+}
+
+#[test]
+fn bootstrap_messages_follow_the_terminal_language() {
+    let (output, record, _) = run_in(Fault::None, 0, "ar_EG.UTF-8");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(record.is_some());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("جارٍ التحقق من التنزيل"));
+}
+
+#[test]
+fn nixos_gets_flake_instructions_before_any_download() {
+    let dir = tempfile::tempdir().unwrap();
+    let prefix = SCRIPT.strip_suffix("main \"$@\"\n").unwrap();
+    let script = format!("{prefix}check_nixos \"$1\"\n");
+    let run = || Command::new("sh").args(["-c", &script, "mandara-platform-test"])
+        .arg(dir.path()).env("LC_ALL", "C").output().unwrap();
+    assert!(run().status.success());
+    std::fs::create_dir(dir.path().join("etc")).unwrap();
+    std::fs::write(dir.path().join("etc/NIXOS"), "").unwrap();
+    let output = run();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("install Mandara through your flake"));
+}

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Mandara banner artwork</title>
+<style>
+  html, body { margin: 0; background: transparent; }
+  body { width: 1280px; height: 400px; }
+  .wrap { position: relative; width: 1280px; height: 400px; }
+  /* A soft bloom of the phoenix's own colours: translucent, so it sits on any page. */
+  .bloom {
+    position: absolute; left: 150px; top: 10px; width: 420px; height: 380px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(139,92,246,.30), rgba(34,211,238,.10) 60%, transparent);
+    filter: blur(18px);
+  }
+  .phoenix { position: absolute; left: 170px; top: 20px; width: 360px; height: 360px; }
+  .text { position: absolute; left: 580px; top: 50%; transform: translateY(-50%); }
+  h1 { margin: 0; font: 600 124px/0.92 Alexandria, sans-serif; letter-spacing: -0.035em; }
+  .rule { margin: 26px 0 24px; height: 2px; width: 380px; border-radius: 2px; background: linear-gradient(90deg, #8B5CF6, #22D3EE 70%, rgba(34,211,238,0)); }
+  .tag { font: 400 26px/1.38 "Inter Variable", Inter, sans-serif; }
+  .meta { margin-top: 18px; font: 600 14px/1 "Inter Variable", Inter, sans-serif; letter-spacing: .26em; text-transform: uppercase; }
+  .meta i { font-style: normal; padding: 0 .5em; }
+
+  .dark h1 { color: #F5F3FF; }
+  .dark .tag { color: #C9CDE3; }
+  .dark .tag b { color: #FFFFFF; font-weight: 600; }
+  .dark .meta { color: #67E8F9; }
+  .dark .meta i { color: #A78BFA; }
+
+  .light h1 { color: #0B1026; }
+  .light .tag { color: #3D4466; }
+  .light .tag b { color: #0B1026; font-weight: 600; }
+  .light .meta { color: #0E7490; }
+  .light .meta i { color: #7C3AED; }
+  .light .bloom { background: radial-gradient(closest-side, rgba(139,92,246,.20), rgba(34,211,238,.08) 60%, transparent); }
+  @media (prefers-color-scheme: dark) {
+    .light h1 { color: #F5F3FF; }
+    .light .tag { color: #C9CDE3; }
+    .light .tag b { color: #FFFFFF; }
+    .light .meta { color: #67E8F9; }
+    .light .meta i { color: #A78BFA; }
+    .light .bloom { background: radial-gradient(closest-side, rgba(139,92,246,.30), rgba(34,211,238,.10) 60%, transparent); }
+  }
+</style></head>
+<body>
+<div class="wrap light">
+  <div class="bloom"></div>
+  <img class="phoenix" src="../brand/mandara-1024.png" alt="">
+  <div class="text">
+    <h1>Mandara</h1>
+    <div class="rule"></div>
+    <div class="tag">A beautiful, fast desktop shell for Wayland,<br>in <b>under 100 MiB</b>, tuned for <b>144 Hz</b>.</div>
+    <div class="meta">Rust<i>·</i>GPUI<i>·</i>Seven compositors<i>·</i>15 languages</div>
+  </div>
+</div>
+
+</body></html>

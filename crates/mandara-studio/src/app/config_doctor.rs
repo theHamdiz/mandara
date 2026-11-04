@@ -205,6 +205,7 @@ impl StudioView {
                 CheckerStatus::NotInstalled => (tf("{compositor} isn't installed here, so its config can't be checked.", &[("compositor", &compositor)]), p.on_surface_variant, "note"),
                 CheckerStatus::TimedOut => (tf("{compositor}'s checker didn't finish in time.", &[("compositor", &compositor)]), p.warning_amber, "alert"),
                 CheckerStatus::Failed(e) => (tf("{compositor}'s checker couldn't run: {error}", &[("compositor", &compositor), ("error", &e)]), p.warning_amber, "alert"),
+                CheckerStatus::Ran if target == Target::KWin => (t("KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings.").to_string(), p.on_surface_variant, "note"),
                 CheckerStatus::Ran if problems == 0 => (tf("All good — checked {when} with {compositor}", &[("when", &ago(r.checked_at)), ("compositor", &version)]), p.success_emerald, "check"),
                 CheckerStatus::Ran if problems == 1 => (tf("1 problem — checked {when} with {compositor}", &[("when", &ago(r.checked_at)), ("compositor", &version)]), if r.errors() > 0 { p.urgent_coral } else { p.warning_amber }, "alert"),
                 CheckerStatus::Ran => (tf("{count} problems — checked {when} with {compositor}", &[("count", &problems), ("when", &ago(r.checked_at)), ("compositor", &version)]), if r.errors() > 0 { p.urgent_coral } else { p.warning_amber }, "alert"),

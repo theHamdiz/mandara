@@ -999,6 +999,7 @@ Checking every surah and saving
 Checking for updates…
 Checking the files
 Checking the plugin…
+Checking the release signature…
 Checking which codecs your graphics card encodes…
 Checking who installed it…
 Checking your installation…
@@ -1261,6 +1262,7 @@ Corners: top-left, top-right, bottom-left, bottom-right
 Corniche
 Corniche night
 Corniche waves
+Could not create a temporary download folder.
 Could not create {path}: {error}
 Could not encode the wallpaper: {error}
 Could not keep the screen awake: {error}
@@ -1281,6 +1283,7 @@ Could not start PAM ({code})
 Could not start the lock screen
 Could not start {program}: {error}
 Could not start {terminal}: {error}
+Could not unpack the verified release.
 Could not update PATH: {error}. Add {line} to your shell profile.
 Could not write {path}: {error}
 Couldn't change the microphone: {error}
@@ -1639,6 +1642,7 @@ Download a collection (Arabic and the meaning in your language), all of them, or
 Download a collection on Home first
 Download a model by id, or all of them
 Download every subscription again now
+Download failed. Check your connection and try again.
 Download failed: {error}
 Download full update
 Download it now (27 MB, checksum-verified); picking Model also downloads it. Studio → Maintenance lists and removes it
@@ -1659,6 +1663,7 @@ Downloaded on their own when the plugin is on: bukhari, muslim, abudawud, tirmid
 Downloaded once
 Downloaded {count} times
 Downloaded: sharing stopped
+Downloading Mandara…
 Downloading in the Hadith panel
 Downloading languages for the new version…
 Downloading models {percent}%
@@ -2666,6 +2671,7 @@ Install location
 Install one from the marketplace with a click, or drop a plugin folder into your plugin folders. It shows up here within a second.
 Install pacman-contrib to check for updates without touching the system database
 Install the tailscale package, then start tailscaled
+Install this tool and try again:
 Install {count} apps
 Install, preview and apply cursor themes, live, with size and hiding options
 Installed
@@ -3280,6 +3286,7 @@ MangoWM, Niri, Hyprland, Umbriel, Sway
 MangoWM, Niri, Umbriel, Sway, River
 Manifest: id, name, zone, permissions, settings
 Manual
+Manual downloads:
 Marcus Aurelius
 Margin
 Marie Curie
@@ -4036,6 +4043,7 @@ On
 On Arch-based systems it may also be in the AUR.
 On Benefits, Book II
 On Medicine
+On NixOS, install Mandara through your flake.
 On Oscar Wilde
 On Providence
 On a click
@@ -4493,6 +4501,7 @@ Practice is the best of all instructors.
 Pray on time
 Prayer times
 Prayer times list
+Prebuilt releases require Linux on an x86_64 or aarch64 CPU.
 Precision
 Preferred apps
 Preparing the plan…
@@ -4693,6 +4702,7 @@ Reads your wallpaper and caches its subject mask in Mandara's cache folder
 Ready
 Ready to present
 Ready, with a warning
+Ready. Opening Mandara’s installer…
 Real kindness seeks no return; what return can the world make to rain clouds?
 Receives notifications as the desktop notification server
 Recent
@@ -5988,6 +5998,7 @@ The dock hides while a window covers it. Touch the screen edge to bring it back.
 The dock holds the bottom edge; popups there stay cards
 The dock is on: the launcher floats above it and opens on click only.
 The dock isn't showing
+The download did not match the signed release. Nothing was installed; please try again.
 The download didn't finish
 The download didn't finish; open the panel to try again
 The download didn't get through. Check your connection.
@@ -6089,9 +6100,12 @@ The recording already finished
 The recording did not start in time
 The recording ended by itself
 The recording thread crashed
+The release does not contain exactly one executable installer.
 The release has no download for this system
 The release has no plugin archive
 The release has no {suffix} file
+The release mirror must use HTTPS.
+The release signature could not be verified. Nothing was installed.
 The roots below the earth claim no rewards for making the branches fruitful.
 The roots of education are bitter, but the fruit is sweet.
 The running job (progress, time), the last result and the schedule
@@ -6117,6 +6131,7 @@ The shell's folder watcher waits {ms} ms for writes to settle
 The side bars' switches, pins and plugins
 The sidebar keeps at least one tab
 The sidebar's tabs and their widgets
+The signed release has no unique checksum for this archive.
 The slideshow playlist is empty
 The slideshow's settings, source size, next change and pause
 The soft overcomes the hard; and the weak the strong.
@@ -6204,6 +6219,7 @@ This app is already installed
 This app is gone
 This battery's charge limit can't be changed from here
 This collection is empty
+This command needs OpenSSL 3 or newer.
 This command runs:
 This command runs; you'll be asked to authorize it:
 This compositor can't change screen colours
@@ -6568,6 +6584,7 @@ Unmute
 Unmute all
 Unmute mic
 Unpack {file} ({size}) into {dir}
+Unpacking the installer…
 Unpin a plugin's panel: it stays open until the next outside click
 Unpin a side bar first
 Unpin an app
@@ -6677,6 +6694,7 @@ Validate
 Valley mist
 Values are saved in [plugins.settings.<id>] in config.toml
 Variations
+Verifying the download…
 Verse 5
 Verse 81
 Verse under an arch
@@ -7013,6 +7031,7 @@ Your GitHub user name
 Your River init doesn't start Mandara. Mandara never edits it: add this line to it yourself: {line}
 Your Steam games as covers; a click starts one
 Your UPower is too old to change the charge limit
+Your Wayland desktop. Let’s get it ready.
 Your World clock cities, or a list of its own
 Your account has expired
 Your apps in a Launchpad-style grid, on the right of the dock; drop an app on it to install it

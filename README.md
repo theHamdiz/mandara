@@ -23,7 +23,7 @@
 <p align="center">
   <a href="https://github.com/theHamdiz/mandara/stargazers"><img src="https://img.shields.io/github/stars/theHamdiz/mandara?style=for-the-badge&logo=github&logoColor=E9E5FF&labelColor=0B1026&color=8B5CF6" alt="GitHub stars"/></a>
   <a href="https://github.com/theHamdiz/mandara/releases/latest"><img src="https://img.shields.io/github/v/release/theHamdiz/mandara?style=for-the-badge&logo=rust&logoColor=E9E5FF&labelColor=0B1026&color=22D3EE&label=release" alt="Latest release"/></a>
-  <a href="https://github.com/theHamdiz/mandara/commits/main"><img src="https://img.shields.io/github/last-commit/theHamdiz/mandara?style=for-the-badge&logo=git&logoColor=E9E5FF&labelColor=0B1026&color=8B5CF6&label=commit" alt="Last commit"/></a>
+  <a href="https://github.com/theHamdiz/mandara/commits/main"><img src="https://img.shields.io/github/last-commit/theHamdiz/mandara/main?style=for-the-badge&logo=git&logoColor=E9E5FF&labelColor=0B1026&color=8B5CF6&label=commit" alt="Last commit"/></a>
   <a href="https://discord.gg/kPBaS2reQ3"><img src="https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=E9E5FF&labelColor=0B1026" alt="Join the Mandara Discord"/></a>
   <a href="docs/README.md"><img src="https://img.shields.io/badge/docs-22D3EE?style=for-the-badge&logo=readthedocs&logoColor=0B1026&labelColor=22D3EE" alt="Documentation"/></a>
   <a href="#license"><img src="https://img.shields.io/badge/GPL--3.0-8B5CF6?style=for-the-badge&logo=gnu&logoColor=E9E5FF&labelColor=0B1026" alt="GPL-3.0-or-later"/></a>
@@ -249,10 +249,14 @@ you turn on only the ones you want, and plugins can add their own.
 One command, from any shell:
 
 ```bash
-sh -c 'cd "$(mktemp -d)" && curl -fsSL "https://github.com/theHamdiz/mandara/releases/latest/download/mandara-$(uname -m)-linux-gnu.tar.gz" | tar xz && exec ./mandara-*/bin/mandara install'
+curl -fsSL https://thehamdiz.github.io/mandara/install.sh | sh
 ```
 
-The installer checks its own signature, sets up what your distribution
+The download shows its progress, checks the release signature and archive,
+then opens Mandara's installer. To pass options, use `sh -s --` at the end,
+for example `… | sh -s -- --compositor kwin --no-greeter`.
+
+The installer sets up what your distribution
 needs, and hooks into your compositor without touching your own config
 files (no compositor yet? it offers to install one). It works on Arch,
 Debian and Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus. Updates arrive by small binary patch: Studio → About →

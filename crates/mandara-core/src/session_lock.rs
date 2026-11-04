@@ -946,6 +946,26 @@ mod tests {
     }
 
     #[test]
+    fn deferred_keyboard_loading_preserves_state_and_compose() {
+        let context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
+        let keymap = xkb::Keymap::new_from_names(&context, "", "", "us", "", None, xkb::KEYMAP_COMPILE_NO_FLAGS).unwrap();
+        let mut state = xkb::State::new(&keymap);
+        const EVDEV_A: u32 = 30;
+        let key = xkb::Keycode::new(EVDEV_A + EVDEV_XKB_OFFSET);
+        assert_eq!(state.key_get_utf8(key), "a");
+        let caps = keymap.mod_get_index(xkb::MOD_NAME_CAPS);
+        state.update_mask(0, 0, 1 << caps, 0, 0, 0);
+        assert_eq!(state.key_get_utf8(key), "A");
+
+        let table = xkb::compose::Table::new_from_buffer(&context,
+            "<dead_acute> <e> : \"é\" U00E9\n", "C", xkb::compose::FORMAT_TEXT_V1, xkb::compose::COMPILE_NO_FLAGS).unwrap();
+        let mut compose = xkb::compose::State::new(&table, xkb::compose::STATE_NO_FLAGS);
+        for key in ["dead_acute", "e"] { compose.feed(xkb::keysym_from_name(key, xkb::KEYSYM_NO_FLAGS)); }
+        assert_eq!(compose.status(), xkb::compose::Status::Composed);
+        assert_eq!(compose.utf8().as_deref(), Some("é"));
+    }
+
+    #[test]
     fn normal_lock_then_unlock() {
         let (phase, actions) = run_events(&[E::Locked, E::AuthSucceeded]);
         assert_eq!(phase, P::Unlocked);

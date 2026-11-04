@@ -1,0 +1,46 @@
+:root {
+  color-scheme: light;
+  --page-background: #ffffff;
+  --page-ink: #131b35;
+  --page-muted: #43506a;
+  --page-link: #6330bd;
+  --page-surface: #f0f2f8;
+  --page-border: #cdd4e1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page-background: #0d1117;
+    --page-ink: #edf0ff;
+    --page-muted: #bdc6dc;
+    --page-link: #bda3ff;
+    --page-surface: #1a2232;
+    --page-border: #39445a;
+  }
+}
+
+body,
+.markdown-body {
+  color: var(--page-ink);
+  background-color: var(--page-background);
+}
+
+.markdown-body a { color: var(--page-link); }
+.markdown-body img { background-color: transparent; }
+.markdown-body blockquote { color: var(--page-muted); }
+.markdown-body pre,
+.markdown-body code,
+.markdown-body table tr:nth-child(2n) { background-color: var(--page-surface); }
+.markdown-body .highlight,
+.markdown-body .highlight span { color: var(--page-ink); background-color: var(--page-surface); }
+.markdown-body table tr { background-color: var(--page-background); }
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body blockquote,
+.markdown-body table tr,
+.markdown-body table th,
+.markdown-body table td { border-color: var(--page-border); }
+.markdown-body hr { background-color: var(--page-border); }
+/* Primer marks its footer utility important. */
+.markdown-body .footer { color: var(--page-muted) !important; }

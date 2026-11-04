@@ -1,5 +1,5 @@
 //! Mandara Shell's installer, in Rust: `mandara install` and
-//! `mandara uninstall` (no shell scripts).
+//! `mandara uninstall`. The optional download script hands off here.
 //!
 //! Getting Mandara is download, extract, run: the release tarball's
 //! `bin/mandara install` copies itself to `~/.local/bin` (checking its own

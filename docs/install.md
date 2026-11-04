@@ -1,19 +1,37 @@
 # Install
 
-One command, from any shell (bash, zsh or fish). It downloads the release
-for your CPU, unpacks it in a temporary folder and runs the installer,
-which is the Mandara binary itself:
+One command, from any shell (bash, zsh or fish):
 
 ```bash
-sh -c 'cd "$(mktemp -d)" && curl -fsSL "https://github.com/theHamdiz/mandara/releases/latest/download/mandara-$(uname -m)-linux-gnu.tar.gz" | tar xz && exec ./mandara-*/bin/mandara install'
+curl -fsSL https://thehamdiz.github.io/mandara/install.sh | sh
 ```
 
-Nothing is piped into a shell interpreter: `curl` feeds `tar`, and the only
-program that runs is the release binary, which checks its own SHA-256
-before it installs anything. Add installer options at the end (for example
-`… mandara install --dry-run` to see the plan first).
+The small [download script](../install.sh) shows Mandara's phoenix and the
+download progress, chooses the build for your CPU and GNU or musl system,
+then checks the release's Ed25519 signature and the archive's SHA-256
+**before extracting or running it**. It uses `curl`, `tar`, OpenSSL 3 or
+newer, `sha256sum` and the usual POSIX tools; it tells you when one is
+missing. Downloads retry on temporary connection errors and stop if the
+connection stalls. Temporary files are removed when the command finishes
+or is interrupted.
 
-Or step by step:
+Its messages follow your terminal language, with the same fifteen languages
+as Mandara.
+
+Installation, configuration and administrator prompts stay in the Rust
+`mandara install` command. Pass its options after `sh -s --`:
+
+```bash
+curl -fsSL https://thehamdiz.github.io/mandara/install.sh | sh -s -- --dry-run
+curl -fsSL https://thehamdiz.github.io/mandara/install.sh | sh -s -- --compositor kwin --no-greeter
+```
+
+Options are forwarded unchanged, including paths with spaces. The bootstrap
+does not request administrator access or edit configuration itself. To read
+it before running it, download `install.sh` to a file and run `sh install.sh`
+with the same options.
+
+You can also download a tarball by hand:
 
 ```bash
 curl -LO https://github.com/theHamdiz/mandara/releases/latest/download/mandara-x86_64-linux-gnu.tar.gz

@@ -84,6 +84,11 @@ the pointer on every element, with or without an id
 manifest that no longer turns on every codec of the `image` crate
 ([`MANDARA-PATCHES.md`](../vendor/pure-onnx-ocr/MANDARA-PATCHES.md)).
 
+`vendor/xkbcommon` keeps GPUI’s keyboard API while loading the system
+library only when keyboard input is used. This lets `mandara install`
+start before the runtime packages have been installed
+([`MANDARA-PATCHES.md`](../vendor/xkbcommon/MANDARA-PATCHES.md)).
+
 ## Build fingerprint
 
 The last `cargo xtask build`: source fingerprint, toolchain, binary hashes and

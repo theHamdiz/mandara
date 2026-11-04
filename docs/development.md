@@ -1,5 +1,10 @@
 # Development tools
 
+`cargo xtask bootstrap` refreshes the short download command’s translated
+messages and public release keys. `cargo xtask bootstrap --check` verifies
+the generated section without writing it. The optional POSIX download
+script only verifies and opens a release; installation stays in Rust.
+
 Everything here is Rust, run through `cargo xtask` (the `xtask/` crate). The
 system programs it starts are MangoWM, `dbus-daemon`, `bwrap`, PipeWire
 (`pipewire`, `pipewire-pulse`, `wireplumber`, `pactl`, `paplay`) and `grim`.

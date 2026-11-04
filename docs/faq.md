@@ -71,8 +71,9 @@ your settings. [Install](install.md)
 
 ## How do I install Mandara?
 
-Run the one-line installer from the [README](../README.md#install). It
-checks its own signature, installs what your distribution needs (Arch,
+Run `curl -fsSL https://thehamdiz.github.io/mandara/install.sh | sh`.
+The download command shows progress and verifies the signed release before
+opening Mandara's installer, which installs what your distribution needs (Arch,
 Debian, Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus) and
 hooks Mandara into your compositor. Arch users can also use the AUR
 packages. [Install](install.md)

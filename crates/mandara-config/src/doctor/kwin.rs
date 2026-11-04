@@ -13,6 +13,7 @@ impl CompositorCheck for KWin {
     fn target(&self) -> Target { Target::KWin }
     fn program(&self) -> &'static str { "kwin_wayland" }
     fn args(&self, _: &Path) -> Vec<OsString> { vec!["--version".into()] }
+    fn needs_config(&self) -> bool { false }
     fn parse(&self, out: &Output, _: &ParseContext) -> Vec<Diagnostic> {
         if !out.success { return Vec::new(); }
         let mut info = Diagnostic::new(Severity::Info, mandara_i18n::t("KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings."));
@@ -36,5 +37,18 @@ mod tests {
         assert_eq!(info[0].severity, Severity::Info);
         assert!(info[0].read_only);
         assert!(KWin.parse(&Output { stdout: String::new(), stderr: "failed".into(), success: false }, &ctx).is_empty());
+    }
+
+    #[test]
+    fn availability_check_runs_without_a_kwinrc_or_config_directory() {
+        use super::super::{CheckEnv, CheckerStatus, check_with, explain};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("missing/kwinrc");
+        let env = CheckEnv { argv: Some(vec!["printf".into(), "kwin 6.8.2".into()]), version: Some("6.8.2".into()), ..Default::default() };
+        let report = check_with(Target::KWin, &root, &env);
+        assert_eq!(report.status, CheckerStatus::Ran);
+        assert!(!root.exists());
+        assert_eq!(report.diagnostics.len(), 1);
+        assert_eq!(explain(&report.diagnostics[0], Target::KWin, report.version.as_deref()), report.diagnostics[0].message);
     }
 }

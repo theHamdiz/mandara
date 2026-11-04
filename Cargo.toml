@@ -2,7 +2,7 @@
 resolver = "2"
 # Example plugins build on their own for wasm32-wasip2; the delta-update
 # tool is its own root so plugin authors can `cargo install` it alone.
-exclude = ["plugins", "tools/mandara-delta"]
+exclude = ["plugins", "tools/mandara-delta", "vendor/xkbcommon"]
 members = [
     "crates/mandara-app",
     "crates/mandara-compositor",
@@ -181,6 +181,7 @@ approx = "0.5"
 
 # Patches that upstream GPUI's workspace relies on (git deps don't inherit them).
 [patch.crates-io]
+xkbcommon = { path = "vendor/xkbcommon" }
 async-task = { git = "https://github.com/zed-industries/async-task.git", rev = "015845a19fc31752c02367567d3b8900a406f9da" }
 calloop = { git = "https://github.com/zed-industries/calloop", rev = "3759371fee14c40066d64777e2a36b6ffcc22590" }
 khronos-egl = { git = "https://github.com/zed-industries/khronos-egl", rev = "42214b36347b108fd9630ca6254b96dde59e04fe" }

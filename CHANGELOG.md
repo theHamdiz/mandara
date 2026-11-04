@@ -29,6 +29,15 @@ installer, display reconnection and native KWin support.
 
 ### Improved
 
+- **A shorter, friendlier first install.** The new download command shows
+  the phoenix and real download progress, picks the right Linux build,
+  verifies the signed archive before opening the installer, and passes your
+  configuration options through unchanged.
+
+- **The installer can start before keyboard libraries are installed.**
+  Keyboard support loads when it is first used, so a fresh Linux system
+  can run the installer and let it install the packages it needs.
+
 - **A lighter first test build** (#64). Tests no longer inherit the
   interactive shell’s dependency optimization or keep incremental caches.
   The development guide explains focused checks, timing reports and optional
@@ -40,6 +49,10 @@ installer, display reconnection and native KWin support.
   are gone.
 
 ### Fixed
+
+- **The website header stays readable in both themes.** The page and its
+  transparent banner now follow the same theme, and the browser tab shows
+  Mandara’s phoenix.
 
 - **A slow compositor reply no longer holds up the first frame.** Initial
   workspace and window queries run in the background before the shell

@@ -810,3 +810,14 @@ Every release also carries version-less copies of the tarballs
 (`mandara-<target>.tar.gz`), so
 `https://github.com/theHamdiz/mandara/releases/latest/download/mandara-x86_64-linux-gnu.tar.gz`
 always points at the newest build.
+
+The public download command is
+`curl -fsSL https://thehamdiz.github.io/mandara/install.sh | sh`.
+Pages serves the tracked POSIX bootstrap, which checks `SHA256SUMS.sig`
+against the same public keys as the binary, then checks the archive before
+extraction. Its loopback integration tests cover argument forwarding,
+installer exit codes, cleanup, invalid signatures, damaged archives and
+missing metadata. `cargo xtask bootstrap` refreshes its public keys and
+translated messages from the same sources as the application; `--check`
+and the tests reject a stale script. The actual installer and release tooling
+remain Rust.

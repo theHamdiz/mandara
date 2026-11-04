@@ -43,9 +43,10 @@ pub(super) fn init(outputs: Vec<OutputGeometry>, cx: &mut App) {
         let current = generation.get().wrapping_add(1);
         generation.set(current);
         let generation = generation.clone();
+        let expected = cx.displays().len();
         cx.spawn(async move |cx| {
-            let outputs = cx.background_executor().spawn(async {
-                query_after_change(mandara_core::query_outputs, || std::thread::sleep(OUTPUT_RETRY_DELAY))
+            let outputs = cx.background_executor().spawn(async move {
+                query_after_change(expected, mandara_core::query_outputs, || std::thread::sleep(OUTPUT_RETRY_DELAY))
             }).await;
             cx.update(|cx| {
                 if generation.get() != current {
@@ -62,15 +63,13 @@ pub(super) fn init(outputs: Vec<OutputGeometry>, cx: &mut App) {
     }).detach();
 }
 
-fn query_after_change(mut query: impl FnMut() -> anyhow::Result<Vec<OutputGeometry>>, wait: impl FnOnce()) -> anyhow::Result<Vec<OutputGeometry>> {
-    match query() {
-        Ok(outputs) => Ok(outputs),
-        Err(err) => {
-            tracing::debug!("retrying output geometry after display change: {err:#}");
-            wait();
-            query()
-        }
+fn query_after_change(expected: usize, mut query: impl FnMut() -> anyhow::Result<Vec<OutputGeometry>>, wait: impl FnOnce()) -> anyhow::Result<Vec<OutputGeometry>> {
+    let first = query();
+    if first.as_ref().is_ok_and(|outputs| outputs.len() >= expected) {
+        return first;
     }
+    wait();
+    query().or(first)
 }
 
 /// The software renderer calls this if it cannot start. Future outputs
@@ -184,7 +183,7 @@ mod tests {
     fn a_transient_query_failure_recovers_the_returning_outputs() {
         let mut calls = 0;
         let waited = Cell::new(false);
-        let outputs = query_after_change(|| {
+        let outputs = query_after_change(1, || {
             calls += 1;
             if calls == 1 { anyhow::bail!("display is changing"); }
             assert!(waited.get());
@@ -198,12 +197,29 @@ mod tests {
     #[test]
     fn failed_queries_do_not_become_empty_geometry_and_stop_after_one_retry() {
         let mut calls = 0;
-        assert!(query_after_change(|| {
+        assert!(query_after_change(1, || {
             calls += 1;
             anyhow::bail!("unavailable")
         }, || {}).is_err());
         assert_eq!(calls, 2);
-        assert!(query_after_change(|| Ok(Vec::new()), || panic!("successful query must not wait")).unwrap().is_empty());
+        assert!(query_after_change(0, || Ok(Vec::new()), || panic!("complete query must not wait")).unwrap().is_empty());
+    }
+
+    #[test]
+    fn incomplete_geometry_gets_one_retry_and_survives_a_retry_failure() {
+        for retry_succeeds in [false, true] {
+            let mut calls = 0;
+            let geometry = || OutputGeometry { name: "DP-3".into(), width: 2560, height: 1440, ..Default::default() };
+            let outputs = query_after_change(2, || {
+                calls += 1;
+                if calls == 1 { return Ok(vec![geometry()]); }
+                if !retry_succeeds { anyhow::bail!("unavailable"); }
+                Ok(vec![geometry(), OutputGeometry { name: "HDMI-A-1".into(), ..geometry() }])
+            }, || {}).unwrap();
+            assert_eq!(calls, 2);
+            assert_eq!(outputs.len(), if retry_succeeds { 2 } else { 1 });
+            assert_eq!(outputs[0].name, "DP-3");
+        }
     }
 
     #[test]
