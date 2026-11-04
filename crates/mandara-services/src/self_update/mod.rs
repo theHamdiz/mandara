@@ -28,6 +28,7 @@
 
 pub mod fetch;
 pub mod install;
+pub mod langpacks;
 pub mod plugins;
 
 use std::path::{Path, PathBuf};
@@ -158,6 +159,36 @@ impl UpdateInfo {
     pub fn full_size(&self) -> Option<u64> {
         self.full.as_ref().map(|f| f.size)
     }
+
+    /// How much bigger (positive) or smaller (negative) the new binary is
+    /// than one of `current_size` bytes, when the release says.
+    pub fn size_change(&self, current_size: u64) -> Option<i64> {
+        size_change(current_size, self.binary_size?)
+    }
+}
+
+/// `new - old` in bytes, signed (a release can shrink), `None` when either
+/// doesn't fit an `i64`.
+pub fn size_change(old: u64, new: u64) -> Option<i64> {
+    i64::try_from(new).ok()?.checked_sub(i64::try_from(old).ok()?)
+}
+
+/// The size of the binary at `exe` (the one an update replaces), else of
+/// the running one.
+pub fn binary_size(exe: Option<&Path>) -> Option<u64> {
+    let path = exe.map(Path::to_path_buf).or_else(|| std::env::current_exe().ok())?;
+    std::fs::metadata(path).ok().map(|m| m.len())
+}
+
+/// "The new version is 9.4 MB smaller" / "… 0.3 MB larger" / "… the same
+/// size", for a [`size_change`] in bytes.
+pub fn size_change_text(change: i64) -> String {
+    let size = human_size(change.unsigned_abs());
+    match change.signum() {
+        -1 => tf("The new version is {size} smaller", &[("size", &size)]),
+        1 => tf("The new version is {size} larger", &[("size", &size)]),
+        _ => t("The new version is the same size").to_string(),
+    }
 }
 
 #[derive(Deserialize)]
@@ -172,7 +203,7 @@ pub(crate) struct ReleaseJson {
     pub(crate) assets: Vec<AssetJson>,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub(crate) struct AssetJson {
     pub(crate) name: String,
     pub(crate) browser_download_url: String,
@@ -199,13 +230,25 @@ pub fn trust_keys_for_tests(keys: Vec<PublicKey>) {
 }
 
 fn release_keys() -> Vec<PublicKey> {
-    TEST_KEYS.get().cloned().unwrap_or_else(signing::trusted_keys)
+    #[cfg_attr(not(feature = "mock-release"), expect(unused_mut, reason = "only the mock-release feature adds keys"))]
+    let mut keys = TEST_KEYS.get().cloned().unwrap_or_else(signing::trusted_keys);
+    // Sandbox screenshots of updates and language downloads against a mock
+    // release (`--features mock-release`, never in a shipped build): also
+    // trust the hex keys in `MANDARA_MOCK_RELEASE_KEYS`.
+    #[cfg(feature = "mock-release")]
+    keys.extend(std::env::var(MOCK_KEYS_ENV).map(|v| signing::parse_keys(&v.replace(',', "\n"))).unwrap_or_default());
+    keys
 }
+
+/// Extra trusted keys for a mock release (only with the `mock-release`
+/// feature, for sandbox tests; release builds never read it).
+#[cfg(feature = "mock-release")]
+pub const MOCK_KEYS_ENV: &str = "MANDARA_MOCK_RELEASE_KEYS";
 
 /// `SHA256SUMS` of `version`'s release, accepted only with a valid
 /// signature. Always required here: any release newer than this build
 /// comes after signing began.
-fn signed_sums(assets: &[AssetJson], version: &str) -> Result<String, String> {
+pub(crate) fn signed_sums(assets: &[AssetJson], version: &str) -> Result<String, String> {
     let unsigned = |reason: String| tf("Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed", &[("version", &version), ("reason", &reason)]);
     let get = |name: &str| asset_url(assets, name).map(|(url, _)| fetch::get(&url, MAX_JSON_BYTES, &|_| {}).map_err(String::from)).transpose();
     let missing = |name: &str| unsigned(tf("{file} is missing", &[("file", &name)]));
@@ -272,7 +315,7 @@ pub fn check_with(api: &str, current: &str, target: &str) -> Result<UpdateInfo, 
 
 /// Whether `bytes` (the asset `file`) match their line in the signed
 /// listing.
-fn listed(sums: &str, file: &str, bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn listed(sums: &str, file: &str, bytes: &[u8]) -> Result<(), String> {
     match mandara_delta::sha256sums_lookup(sums, file) {
         Some(want) if want.eq_ignore_ascii_case(&mandara_delta::sha256_hex(bytes)) => Ok(()),
         _ => Err(tf("{file} doesn't match the signed checksums", &[("file", &file)])),
@@ -526,6 +569,25 @@ mod tests {
         assert_eq!(human_size(38_400_000), "38 MB");
         assert_eq!(human_size(48_000), "48 KB");
         assert_eq!(human_size(12), "12 B");
+    }
+
+    #[test]
+    fn size_changes_are_signed_and_read_both_ways() {
+        // A release 9.4 MB smaller than the installed binary: no u64
+        // underflow, a negative change, worded as smaller.
+        assert_eq!(size_change(110_000_000, 100_600_000), Some(-9_400_000));
+        assert_eq!(size_change(100_000_000, 100_300_000), Some(300_000));
+        assert_eq!(size_change(5, 5), Some(0));
+        assert_eq!(size_change(u64::MAX, 1), None);
+        mandara_i18n::with_language(Some(mandara_i18n::Lang::En), || {
+            assert_eq!(size_change_text(-9_400_000), "The new version is 9.4 MB smaller");
+            assert_eq!(size_change_text(300_000), "The new version is 300 KB larger");
+            assert_eq!(size_change_text(0), "The new version is the same size");
+            assert_eq!(size_change_text(i64::MIN), format!("The new version is {} smaller", human_size(i64::MIN.unsigned_abs())));
+        });
+        let info = UpdateInfo { binary_size: Some(90), ..Default::default() };
+        assert_eq!(info.size_change(100), Some(-10));
+        assert_eq!(UpdateInfo::default().size_change(100), None);
     }
 
     fn plan_for<'a>(patch: &'a PatchDownload, sha: &'a str, size: u64) -> Plan<'a> {

@@ -20,6 +20,8 @@ keeps the license stated in its directory, and fonts and models that
 Mandara downloads on demand keep theirs (SIL Open Font License for Google
 Fonts; Apache-2.0 for the PaddleOCR models and for Depth Anything V2 Small,
 the wallpaper depth model, in its `onnx-community/depth-anything-v2-small`
-ONNX export).
+ONNX export). The Kufic words on the main menu's tiles are glyph outlines
+from Reem Kufi (SIL Open Font License 1.1, its text in
+`crates/mandara-ui/assets/calligraphy/OFL.txt`).
 
 The full license text is in [LICENSE.md](LICENSE.md).

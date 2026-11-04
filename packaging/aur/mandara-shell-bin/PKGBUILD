@@ -1,7 +1,7 @@
 # Maintainer: Ahmad Hamdi <ahmad dot hamdi dot emara at gmail dot com>
 
 pkgname=mandara-shell-bin
-pkgver=0.10.2
+pkgver=0.15.0
 pkgrel=1
 pkgdesc="GPU-accelerated, design-first Wayland desktop shell for MangoWM, Niri and Hyprland, written in Rust"
 arch=('x86_64' 'aarch64')
@@ -26,8 +26,8 @@ backup=('etc/pam.d/mandara-lock')
 options=('!strip' '!debug')
 source_x86_64=("$url/releases/download/v$pkgver/mandara-$pkgver-x86_64-linux-gnu.tar.gz")
 source_aarch64=("$url/releases/download/v$pkgver/mandara-$pkgver-aarch64-linux-gnu.tar.gz")
-sha256sums_x86_64=('fd68fb9d269ce42060fcd69f19ae3bb97b5259caa1511cd998690de3cd805415')
-sha256sums_aarch64=('02a98974efd55de9a8f6ed8c6d37d274d8a728006232cc4bc8e2b1dee2ae62c6')
+sha256sums_x86_64=('d581a9d135ef2fa815da0a5d7110f75b88fde0b97b85fd5c5514d5b1564bc77d')
+sha256sums_aarch64=('a510d6846045c16eeddfb6cc7146ecab989a240e4e230f5052b3cce459dee3ca')
 
 package() {
   cd "mandara-$pkgver-$CARCH-linux-gnu"
@@ -35,6 +35,9 @@ package() {
   install -Dm644 share/applications/org.mandara.studio.desktop -t "$pkgdir/usr/share/applications/"
   install -Dm644 share/icons/hicolor/scalable/apps/org.mandara.studio.svg -t "$pkgdir/usr/share/icons/hicolor/scalable/apps/"
   install -Dm644 share/pam.d/mandara-lock "$pkgdir/etc/pam.d/mandara-lock"
+  # Language packs for this version (share/mandara/locales/<version>/).
+  install -d "$pkgdir/usr/share/mandara"
+  cp -r --no-preserve=ownership share/mandara/locales "$pkgdir/usr/share/mandara/"
   install -Dm644 README.md PLUGINS.md -t "$pkgdir/usr/share/doc/$pkgname/"
   install -Dm644 LICENSE.md COPYRIGHT.md -t "$pkgdir/usr/share/licenses/$pkgname/"
 }

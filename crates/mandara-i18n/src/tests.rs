@@ -152,10 +152,17 @@ fn persian_korean_urdu_and_bengali() {
     }
 }
 
+/// `lang`'s source catalog (`locales/<code>.toml`).
+fn source_catalog(lang: Lang) -> Catalog {
+    let path = packs::source_catalog(lang);
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    Catalog::parse(&text).unwrap_or_else(|e| panic!("{}: {e}", lang.code()))
+}
+
 #[test]
 fn catalogs_parse_and_keep_placeholders() {
     for lang in Lang::ALL.into_iter().filter(|l| *l != Lang::En) {
-        let c = Catalog::parse(source(lang)).unwrap_or_else(|e| panic!("{}: {e}", lang.code()));
+        let c = source_catalog(lang);
         for k in c.keys() {
             let v = c.get(k).unwrap();
             assert_eq!(placeholders(k), placeholders(v), "{}: placeholders differ in {k:?} → {v:?}", lang.code());
@@ -172,7 +179,7 @@ fn every_key_is_translated() {
     }
     let mut report = Vec::new();
     for lang in Lang::ALL.into_iter().filter(|l| *l != Lang::En) {
-        let c = catalog(lang);
+        let c = source_catalog(lang);
         let missing: Vec<&String> = keys.iter().filter(|k| c.get(k).is_none()).collect();
         if !missing.is_empty() {
             report.push(format!("{}: {} of {} missing, e.g. {:?}", lang.code(), missing.len(), keys.len(), &missing[..missing.len().min(5)]));
@@ -189,4 +196,29 @@ fn fill_replaces_known_placeholders_in_one_pass() {
     assert_eq!(fill("{x} {a} { {", &[("a", &"ok")]), "{x} ok { {");
     // A value containing braces is not re-expanded.
     assert_eq!(fill("{a}{b}", &[("a", &"{b}"), ("b", &"B")]), "{b}B");
+}
+
+#[test]
+fn every_catalog_compiles_into_a_pack_that_answers_like_it() {
+    for lang in Lang::ALL.into_iter().filter(|l| *l != Lang::En) {
+        let c = source_catalog(lang);
+        let bytes = pack::build(lang, "9.9.9", c.iter()).unwrap_or_else(|e| panic!("{}: {e}", lang.code()));
+        let p = pack::Pack::parse(&bytes, "9.9.9", lang).unwrap();
+        assert_eq!(p.len(), c.len(), "{}", lang.code());
+        for (k, v) in c.iter() {
+            assert_eq!(p.get(k), Some(v), "{}: {k:?}", lang.code());
+        }
+    }
+}
+
+#[test]
+fn lookups_and_untranslate_go_through_the_pack() {
+    // Debug builds compile the source catalog when no pack is installed.
+    assert!(packs::is_available(Lang::Ar));
+    assert_eq!(lookup(Lang::Ar, "Settings"), Some("الإعدادات"));
+    assert_eq!(lookup(Lang::En, "Settings"), None);
+    assert_eq!(tr_in(Lang::Ar, "Not a key at all"), "Not a key at all");
+    // Several keys may share a translation; any of them translates back.
+    with_language(Some(Lang::Ar), || assert_eq!(tr_in(Lang::Ar, &untranslate("الإعدادات")), "الإعدادات"));
+    with_language(Some(Lang::Ar), || assert_eq!(untranslate("unknown"), "unknown"));
 }

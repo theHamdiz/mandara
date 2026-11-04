@@ -413,8 +413,10 @@ fn screens_via_compositor(on: bool, cx: &App) {
         CompositorKind::Hyprland => backend.dispatch_raw("dpms", &[if on { "on" } else { "off" }]),
         // Bare `dpms-on` / `dpms-off` act on every output.
         CompositorKind::Umbriel => backend.dispatch_raw(if on { "dpms-on" } else { "dpms-off" }, &[]),
-        CompositorKind::MangoWM => {
-            tracing::warn!("idle: MangoWM without wlr-output-power-management; screens stay on");
+        // `output * power on|off` (sway-output(5)).
+        CompositorKind::Sway => backend.dispatch_raw("output", &["*", "power", if on { "on" } else { "off" }]),
+        CompositorKind::MangoWM | CompositorKind::River => {
+            tracing::warn!("idle: {:?} without wlr-output-power-management; screens stay on", backend.kind());
             Ok(())
         }
     };

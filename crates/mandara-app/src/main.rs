@@ -99,7 +99,7 @@ enum Cmd {
         /// Also start Mandara with the compositor (from the drop-in).
         #[arg(long)]
         autostart: bool,
-        /// mango, niri, hyprland or umbriel (default: the running one, else every
+        /// mango, niri, hyprland, umbriel, sway or river (default: the running one, else every
         /// compositor that has a config file).
         #[arg(long)]
         compositor: Option<String>,
@@ -435,6 +435,16 @@ fn run_shell() -> Result<()> {
     let store = ConfigStore::open_default().context("opening config")?;
     tracing::info!("config: {} (allocator: {})", store.path().display(), alloc::NAME);
     alloc::start_upkeep();
+    // A new Studio icon reaches installs the updater only swapped the binary of.
+    let _ = std::thread::Builder::new().name("mandara-icon".into()).spawn(|| {
+        let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) else { return };
+        let icon = mandara_install::files::Paths::new(None, &home, |k| std::env::var(k).ok()).icon();
+        match mandara_install::files::refresh_installed_icon(&icon) {
+            Ok(true) => tracing::info!("updated the Studio icon at {}", icon.display()),
+            Ok(false) => {}
+            Err(e) => tracing::debug!("Studio icon at {}: {e}", icon.display()),
+        }
+    });
     let watcher = store.watch(CONFIG_WATCH_DEBOUNCE).context("watching config")?;
     let requests = ipc::serve(&paths::ipc_socket())?;
     let outputs = match outputs.join() {

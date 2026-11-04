@@ -13,12 +13,18 @@ after it starts, and code it hasn't touched lately every 10 minutes):
 
 Opening a panel hits every frame at 144 Hz on that 4K display (release
 build, measured: 0 late frames, a median of 6.06 ms per frame).
+
+**Ready for 1000 Hz displays.** A 1000 Hz display allows 1 ms per frame.
+On the same machine (`mandara msg diagnostics frames`, 240 frames), a
+frame builds in 0.10 ms typically and 0.22 ms at the 95th percentile, so
+95% of frames fit that budget; the slowest 1% take 1.6 ms or more.
+
 Studio → Performance shows the shell's own CPU, memory, video memory and
 frame times live, so you can check these numbers on your machine (Studio
 runs as its own process and is measured separately):
 
 <p align="center">
-  <img src="screenshots/studio-performance.png" alt="Studio Performance: the shell's CPU, memory, video memory and frame times" width="100%"/>
+  <img src="screenshots/studio-performance.webp" alt="Studio Performance: the shell's CPU, memory, video memory and frame times" width="100%"/>
   <br/>
   <sub>Studio → Performance in the demo session the screenshots are taken in.</sub>
 </p>

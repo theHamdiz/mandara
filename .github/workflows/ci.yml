@@ -71,10 +71,9 @@ jobs:
           done
 
       # Warnings are errors ([workspace.lints] in Cargo.toml): any rustc or
-      # clippy warning fails the build.
+      # clippy warning fails the build, so this step gates the PR.
       - name: Clippy
         run: cargo clippy --workspace --locked --all-targets
-        continue-on-error: true
 
       - name: Component versions
         run: cargo xtask status
@@ -97,6 +96,32 @@ jobs:
               ./target/debug/mandara --version
             '
 
+  # NixOS (flake.nix, nix/): the package builds from source as Nix builds it
+  # for users, and the NixOS and Home Manager modules evaluate (the NixOS
+  # check builds a minimal system with the module and Mandara Login on).
+  nix:
+    name: Nix flake (x86_64)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # A release build with fat LTO plus a NixOS system closure needs more
+      # room than the runner leaves free.
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: Build
+        run: |
+          nix build .#mandara --print-build-logs
+          ./result/bin/mandara --version
+
+      - name: Flake check
+        run: nix flake check --print-build-logs
+
   plugins:
     name: Plugins (wasm32-wasip2)
     runs-on: ubuntu-24.04
@@ -115,3 +140,33 @@ jobs:
         with:
           name: plugins
           path: dist/*.mandara.tar.gz
+
+  # Every line Mandara writes into a compositor's config must pass that
+  # compositor's own checker. Sway and River ship in Arch, so their checker
+  # tests run for real here: Sway's drop-ins and include line through
+  # `sway --validate` (headless backend), the Config doctor's parser against
+  # the live checker and sway's own verdict on retired configs; River has no
+  # checker, so every command Mandara sends it goes to a headless River
+  # (river-classic, the line with river-control) through riverctl. Only
+  # those tests run, so the GUI crates aren't built.
+  compositor-checkers:
+    name: Compositor checkers (Sway, River)
+    runs-on: ubuntu-24.04
+    # It only reads the checkout; the token stays out of the container.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Checker tests in Arch
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src archlinux:latest sh -euc '
+            pacman -Syu --noconfirm --needed rust gcc pkgconf libxkbcommon sway river-classic >/dev/null
+            # sway carries a file capability (cap_sys_nice) that a container
+            # cannot grant; a plain copy earlier on PATH runs without it.
+            cp /usr/bin/sway /usr/local/bin/sway
+            sway --version
+            river -version
+            cargo test --locked -p mandara-config -- --nocapture sway river real_checkers every_option_alone
+          '

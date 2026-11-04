@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 const APP_DIR: &str = "mandara";
 
-fn home() -> PathBuf {
+pub(crate) fn home() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from("/tmp"))
 }
 

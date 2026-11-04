@@ -1,7 +1,7 @@
 # Maintainer: Ahmad Hamdi <ahmad dot hamdi dot emara at gmail dot com>
 
 pkgname=mandara-shell
-pkgver=0.10.2
+pkgver=0.15.0
 pkgrel=1
 pkgdesc="GPU-accelerated, design-first Wayland desktop shell for MangoWM, Niri and Hyprland, written in Rust"
 arch=('x86_64' 'aarch64')
@@ -27,7 +27,7 @@ backup=('etc/pam.d/mandara-lock')
 # Cargo does its own (fat) LTO; makepkg's -flto would also reach the C parts.
 options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('909e08d302479437b775c3546f469820195106fd435c46501d876ca9bcdde716')
+sha256sums=('4c18c3ad2f870d4cf9f44e4c222fbfdf7c47d86f25df114f7bd8ffcf1353bc59')
 
 prepare() {
   cd "mandara-$pkgver"
@@ -42,6 +42,9 @@ build() {
   # Keep the build script from reading the AUR clone's git revision.
   export GIT_CEILING_DIRECTORIES="$srcdir"
   cargo build --frozen --release -p mandara-app
+  # Language packs for the built version (mandara reads only its own).
+  v="$(target/release/mandara --version | cut -d' ' -f2)"
+  cargo run --frozen --quiet -p xtask -- langpacks --version "$v" --dir "target/langpacks/$v"
 }
 
 check() {
@@ -58,6 +61,8 @@ package() {
   install -Dm644 packaging/org.mandara.studio.desktop -t "$pkgdir/usr/share/applications/"
   install -Dm644 packaging/org.mandara.studio.svg -t "$pkgdir/usr/share/icons/hicolor/scalable/apps/"
   install -Dm644 packaging/pam/mandara-lock "$pkgdir/etc/pam.d/mandara-lock"
+  install -d "$pkgdir/usr/share/mandara/locales"
+  cp -r --no-preserve=ownership target/langpacks/. "$pkgdir/usr/share/mandara/locales/"
   install -Dm644 README.md PLUGINS.md -t "$pkgdir/usr/share/doc/$pkgname/"
   install -Dm644 LICENSE.md COPYRIGHT.md -t "$pkgdir/usr/share/licenses/$pkgname/"
 }

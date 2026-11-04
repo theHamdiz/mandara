@@ -1,0 +1,55 @@
+# Vendored from crates.io pure-onnx-ocr 0.3.2 (src/ only) with a trimmed
+# manifest; see MANDARA-PATCHES.md. The library target and its dependency
+# versions are upstream's; the smoke binary, examples, tests and
+# dev-dependencies are not vendored.
+[package]
+edition = "2021"
+rust-version = "1.91"
+name = "pure-onnx-ocr"
+version = "0.3.2"
+build = false
+autolib = false
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+description = "Pure Rust OCR pipeline that runs PaddleOCR (PP-OCRv5 / PP-OCRv6) DBNet + CTC ONNX models without C/C++ dependencies."
+license = "Apache-2.0"
+repository = "https://github.com/siska-tech/pure-onnx-ocr"
+publish = false
+
+# Keep this crate out of Mandara's workspace (its own root).
+[workspace]
+
+[features]
+default = ["multithread"]
+multithread = [
+    "tract-linalg/multithread-mm",
+    "dep:rayon",
+]
+
+[lib]
+name = "pure_onnx_ocr"
+path = "src/lib.rs"
+
+[dependencies]
+geo-types = "=0.7.12"
+i_overlay = "4.1.1"
+# Mandara patch 1: no default features. Upstream's `image = "0.25"` and
+# imageproc's default (`image/default`) turned on every codec the image
+# crate has, the AVIF encoder included, in the whole shell. The engine gets
+# its pixels in memory (`run_from_image`); the codecs the shell decodes are
+# chosen by the crates that decode them.
+image = { version = "0.25", default-features = false, features = ["rayon"] }
+imageproc = { version = "0.25.0", default-features = false, features = ["rayon"] }
+log = "0.4"
+ndarray = "0.17"
+rayon = { version = "1", optional = true }
+# Mandara patch 2: upstream's `time = "0.3.44"` is dropped; no source file
+# uses it (the clock is `std::time::Instant`, see src/time.rs).
+tract-linalg = "0.23.9"
+tract-onnx = "0.23.9"
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+getrandom = { version = "0.4", features = ["wasm_js"] }
+web-time = "1"

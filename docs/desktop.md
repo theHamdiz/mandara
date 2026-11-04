@@ -69,7 +69,7 @@ How Mandara looks and feels, and how much of it you can shape.
 </table>
 
 <p align="center">
-  <img src="screenshots/main-menu.png" alt="The main menu: a side rail, the demo user, the track playing, the time and weather, quick toggles and the volume" width="60%"/>
+  <img src="screenshots/main-menu.webp" alt="The main menu: a side rail, the demo user, the track playing, the time and weather, quick toggles and the volume" width="60%"/>
   <br/>
   <sub>Right-click empty bar space for the <b>main menu</b>.</sub>
 </p>
@@ -77,7 +77,11 @@ How Mandara looks and feels, and how much of it you can shape.
 ## Looks
 
 <p align="center">
-  <img src="screenshots/looks.png" alt="The six Looks: Corniche Dusk, Pharos Ink, Montaza Crimson, Qaitbay Forest, Anfushi Wave and Night Frame" width="100%"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="screenshots/looks-dark.webp"/>
+    <source media="(prefers-color-scheme: light)" srcset="screenshots/looks-light.webp"/>
+    <img src="screenshots/looks-light.webp" alt="The six Looks, each on a wallpaper of its own: Corniche Dusk (glass pills and a headline clock over a rose sunset), Pharos Ink (a hairline bar over ink contours), Montaza Crimson (an Arabic clock over a red and amber glow), Qaitbay Forest (a giant stacked clock over green hills), Anfushi Wave (a glowing wave over layered sea) and Night Frame (a side bar framing the northern lights), in dark mode or light mode to match your page" width="100%"/>
+  </picture>
   <br/>
   <sub>The six Looks, one click each in Studio → Themes.</sub>
 </p>
@@ -103,28 +107,28 @@ How Mandara looks and feels, and how much of it you can shape.
   Banana, Nordzy and Rosé Pine — with author, licence and variants. One
   click downloads the pinned GitHub release, verifies its SHA-256 and
   installs it to `~/.local/share/icons`; Apply changes the cursor live on
-  MangoWM, Niri, Hyprland and Umbriel (and X11 apps through `~/.icons/default`);
+  MangoWM, Niri, Hyprland, Umbriel, Sway and River (and X11 apps through `~/.icons/default`);
   Remove only ever deletes what Mandara installed. Nothing is bundled in the
   binary. `mandara msg cursor list|install|apply|remove` scripts it.
 
 <p align="center">
-  <img src="screenshots/studio-cursors.png" alt="Studio → Themes → Cursor: the applied cursor drawn at 32 px, the cursor settings and the theme gallery with previews, licences and variants" width="100%"/>
+  <img src="screenshots/studio-cursors.webp" alt="Studio → Themes → Cursor: the applied cursor drawn at 32 px, the cursor settings and the theme gallery with previews, licences and variants" width="100%"/>
   <br/>
   <sub>Studio → Themes → Cursor: the applied cursor, its settings and the theme gallery.</sub>
 </p>
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/look-corniche-dusk.png" alt="Corniche Dusk: glass pills, a headline clock, a system monitor and a now-playing card" width="100%"/><br/><sub><b>Corniche Dusk</b></sub></td>
-<td width="50%" valign="top"><img src="screenshots/look-pharos-ink.png" alt="Pharos Ink: an edge bar with mini stats, a greeting clock and a calendar card" width="100%"/><br/><sub><b>Pharos Ink</b></sub></td>
+<td width="50%" valign="top"><img src="screenshots/look-corniche-dusk.webp" alt="Corniche Dusk over a rose sunset: glass pills, a headline clock, a system monitor and a now-playing card with lyrics" width="100%"/><br/><sub><b>Corniche Dusk</b></sub></td>
+<td width="50%" valign="top"><img src="screenshots/look-pharos-ink.webp" alt="Pharos Ink over ink contour lines: a hairline bar with mini stats, a greeting clock and a calendar card" width="100%"/><br/><sub><b>Pharos Ink</b></sub></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/look-montaza-crimson.png" alt="Montaza Crimson: an island bar, an Arabic-numeral clock, vertical Arabic type and framed bars" width="100%"/><br/><sub><b>Montaza Crimson</b></sub></td>
-<td width="50%" valign="top"><img src="screenshots/look-qaitbay-forest.png" alt="Qaitbay Forest" width="100%"/><br/><sub><b>Qaitbay Forest</b></sub></td>
+<td width="50%" valign="top"><img src="screenshots/look-montaza-crimson.webp" alt="Montaza Crimson over a red and amber glow: an island bar, an Arabic-numeral clock, vertical Arabic type and framed bars" width="100%"/><br/><sub><b>Montaza Crimson</b></sub></td>
+<td width="50%" valign="top"><img src="screenshots/look-qaitbay-forest.webp" alt="Qaitbay Forest over green hills under the moon: an edge bar, a giant stacked clock and the dock media chip" width="100%"/><br/><sub><b>Qaitbay Forest</b></sub></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/look-anfushi-wave.png" alt="Anfushi Wave" width="100%"/><br/><sub><b>Anfushi Wave</b></sub></td>
-<td width="50%" valign="top"><img src="screenshots/look-night-frame.png" alt="Night Frame: a side bar with a screen frame, a greeting clock and a calendar card" width="100%"/><br/><sub><b>Night Frame</b></sub></td>
+<td width="50%" valign="top"><img src="screenshots/look-anfushi-wave.webp" alt="Anfushi Wave over layered sea: the micro pill, a superscript clock, katakana down the side and a glowing wave visualizer" width="100%"/><br/><sub><b>Anfushi Wave</b></sub></td>
+<td width="50%" valign="top"><img src="screenshots/look-night-frame.webp" alt="Night Frame under the northern lights: a side bar framing the screen, a greeting clock, a calendar card and mirrored bars" width="100%"/><br/><sub><b>Night Frame</b></sub></td>
 </tr>
 </table>
 
@@ -136,11 +140,11 @@ How Mandara looks and feels, and how much of it you can shape.
 <td width="50%" valign="top"><img src="screenshots/widgets-music.webp" alt="A turning record, a pocket player, a cover cut to a flower, a side pill, an LED meter, a dot-matrix clock and the desk cat" width="100%"/><br/><sub><b>Now playing</b>, an LED meter and the desk cat</sub></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/widgets-sky.webp" alt="A slanted HUD clock, an at-a-glance line, the sun's arc, a globe, the moon, a weather disc, an hourly curve and the next prayer" width="100%"/><br/><sub><b>Sky and weather</b>: the sun's arc, the moon, a globe, a disc and an hourly curve</sub></td>
+<td width="50%" valign="top"><img src="screenshots/widgets-sky.webp" alt="The sun's arc over the sea at golden hour, a clock, a weather disc, an hourly temperature curve, the moon and a day-and-night globe" width="100%"/><br/><sub><b>Sky and weather</b>: the sun's arc, the moon, a globe, a disc and an hourly curve</sub></td>
 <td width="50%" valign="top"><img src="screenshots/widgets-you.webp" alt="Digit boxes with a week strip, the year in dots, a profile card on a squircle with a hard shadow, wavy gauges, app shortcuts, quick toggles, a volume slider and the palette" width="100%"/><br/><sub><b>You and your shortcuts</b>: a profile card, toggles, sliders and the palette</sub></td>
 </tr>
 <tr>
-<td colspan="2" align="center"><img src="screenshots/widgets-arabic.webp" alt="A dot-matrix clock in Eastern Arabic digits, an orbit clock, a Hijri month, prayer times, a countdown and a date tile on a scalloped plate, all in Arabic" width="100%"/><br/><sub><b>Numerals, calendars and language</b>: Eastern Arabic digits, the Hijri month and Arabic day names</sub></td>
+<td colspan="2" align="center"><img src="screenshots/widgets-arabic.webp" alt="A dot-matrix clock in Eastern Arabic digits, an orbit clock, a Hijri month, the weather in words, a countdown and a date tile on a scalloped plate, all in Arabic" width="100%"/><br/><sub><b>Numerals, calendars and language</b>: Eastern Arabic digits, the Hijri month and Arabic day names</sub></td>
 </tr>
 </table>
 
@@ -191,7 +195,7 @@ How Mandara looks and feels, and how much of it you can shape.
   like nothing seen before. Studio → Desktop widgets → Shape and frame.
 
 <p align="center">
-  <img src="screenshots/studio-widget-shape.png" alt="Studio → Desktop widgets: a widget's look with plate, shape (rectangle, circle, squircle, cookie, flower, pentagon, chamfer, slanted, torn paper), outline, hard or soft shadow, chrome and header" width="100%"/>
+  <img src="screenshots/studio-widget-shape.webp" alt="Studio → Desktop widgets: a widget's look with plate, shape (rectangle, circle, squircle, cookie, flower, pentagon, chamfer, slanted, torn paper), outline, hard or soft shadow, chrome and header" width="100%"/>
   <br/>
   <sub>Studio → Desktop widgets: the plate, <b>Shape and frame</b>, outline, shadow, chrome and header of one widget.</sub>
 </p>
@@ -227,8 +231,8 @@ How Mandara looks and feels, and how much of it you can shape.
 
 <table>
 <tr>
-<td width="34%" valign="top"><img src="screenshots/desktop-menu.png" alt="The desktop's right-click menu with the Add widget flyout listing widgets from the desktop widget plugins" width="100%"/><br/><sub><b>Right-click the desktop</b></sub></td>
-<td width="66%" valign="top"><img src="screenshots/desktop-edit.png" alt="Desktop edit mode: widget outlines with name chips and a remove button, a resize handle and the floating toolbar" width="100%"/><br/><sub><b>Edit the desktop in place</b></sub></td>
+<td width="34%" valign="top"><img src="screenshots/desktop-menu.webp" alt="The desktop's right-click menu with the Add widget flyout listing widgets from the desktop widget plugins" width="100%"/><br/><sub><b>Right-click the desktop</b></sub></td>
+<td width="66%" valign="top"><img src="screenshots/desktop-edit.webp" alt="Desktop edit mode: widget outlines with name chips and a remove button, a resize handle and the floating toolbar" width="100%"/><br/><sub><b>Edit the desktop in place</b></sub></td>
 </tr>
 </table>
 
@@ -283,7 +287,7 @@ anything that must stay fixed is a named, documented constant.
 ## Keyboard shortcut cards
 
 <p align="center">
-  <img src="screenshots/studio-shortcuts.png" alt="Keyboard shortcut cards: Alt+V and Super+Shift+V open the clipboard, Print, Alt+Print and Ctrl+Print take screenshots, with conflict badges" width="100%"/>
+  <img src="screenshots/studio-shortcuts.webp" alt="Keyboard shortcut cards: Alt+V and Super+Shift+V open the clipboard, Print, Alt+Print and Ctrl+Print take screenshots, with conflict badges" width="100%"/>
   <br/>
   <sub>Studio → Keyboard shortcuts: Alt+V for the clipboard, Print for screenshots, and the <b>Used by your config</b>, <b>Duplicate</b> and <b>Needs Super, Ctrl or Alt</b> badges.</sub>
 </p>
@@ -294,4 +298,5 @@ you type: **Duplicate** when two Mandara binds share a chord, **Needs
 Super, Ctrl or Alt** when a bind would swallow plain typing, and **Used by
 your config** with the exact file and line when your own compositor config
 already has that chord. Mandara never overrides a key you already use; its
-binds go into its own drop-in file for MangoWM, Niri, Hyprland or Umbriel.
+binds go into its own drop-in file for MangoWM, Niri, Hyprland, Umbriel or Sway,
+and on River are sent as `map` commands (keys your `init` maps stay yours).

@@ -315,7 +315,7 @@ mandara msg prayer peek 1              # today, next, peek [days], language [cod
 ```bash
 mandara msg compositor status        # detected compositor, drop-in, include line
 mandara msg compositor sync          # regenerate the drop-in (checked, rolled back if the compositor rejects it) and reload
-mandara msg compositor install-include [mango|niri|hyprland|umbriel]
+mandara msg compositor install-include [mango|niri|hyprland|umbriel|sway]   # river: prints the line to add to init
 mandara msg --json compositor check  # Config doctor: the compositor's own checker on your config; each problem with id, file, line, kind, owner, explanation and fixes
 mandara msg compositor fix 1a2b3c4d comment   # comment | remove (your files) | regenerate (Mandara's drop-in); backed up, re-checked, rolled back if worse
 mandara msg compositor snooze        # no reminders about the current problems until the config or the compositor changes
@@ -337,7 +337,15 @@ mandara setup --restore ~/.local/share/mandara/doctor-backups/<backup>   # undo 
 mandara msg screenshot region
 mandara msg screenshot region --delay 3   # count down first (Esc cancels); --delay alone uses the Countdown setting
 mandara msg screenshot screen --delay=5   # window / screen capture directly after the countdown
-mandara msg record start
+mandara msg record start                  # the default source (Studio → Plugins → Screenshot); the countdown setting applies
+mandara msg record start window           # start screen|region|window; record screen DP-2 picks a display
+mandara msg record toggle                 # stop a recording (or a countdown), else start one: bind it to a key
+mandara msg record pause-toggle           # pause | resume | pause-toggle (GPU Screen Recorder and the built-in encoder)
+mandara msg record mic off                # mute the recorded microphone (on | off | toggle); unmuted again at the end
+mandara msg record stop                   # replies once the file is saved
+mandara msg --json record status          # recording, paused, countdown, elapsed, path, backend, settings in use
+mandara msg --json record backends        # installed recorders and what each supports
+mandara msg --json record recent          # the last recordings: path, length, size
 mandara msg ocr ~/Pictures/shot.png arabic
 mandara msg color-picker pick        # replies with the picked color; show|select <#hex>, history, clear
 ```

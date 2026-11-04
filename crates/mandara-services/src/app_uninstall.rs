@@ -205,11 +205,11 @@ impl Env {
 }
 
 /// Programs whose owning package is never removed (compositors, portal).
-const VITAL_PROGRAMS: &[&str] = &["mandara", "mango", "niri", "Hyprland", "umbriel", "xdg-desktop-portal", "pkexec"];
+const VITAL_PROGRAMS: &[&str] = &["mandara", "mango", "niri", "Hyprland", "umbriel", "sway", "river", "xdg-desktop-portal", "pkexec"];
 
 /// Package names never removed from here, whatever the package manager says.
 const PROTECTED_PACKAGES: &[&str] = &[
-    "mandara", "mandara-shell", "mandara-shell-git", "mangowc", "mangowc-git", "mango", "mangowm", "niri", "niri-git", "hyprland", "hyprland-git", "umbriel", "umbriel-git", "umbriel-nightly", "base", "base-devel", "filesystem", "glibc", "libc6", "musl", "systemd", "systemd-libs",
+    "mandara", "mandara-shell", "mandara-shell-git", "mangowc", "mangowc-git", "mango", "mangowm", "niri", "niri-git", "hyprland", "hyprland-git", "umbriel", "umbriel-git", "umbriel-nightly", "sway", "sway-git", "river", "river-classic", "river-git", "base", "base-devel", "filesystem", "glibc", "libc6", "musl", "systemd", "systemd-libs",
     "openrc", "runit", "bash", "coreutils", "util-linux", "linux", "linux-lts", "linux-zen", "linux-hardened", "linux-cachyos", "kernel", "kernel-core", "linux-image-generic", "sudo", "polkit", "policykit-1", "pacman", "apt", "dpkg", "dnf", "dnf5",
     "yum", "rpm", "zypper", "xbps", "apk-tools", "portage", "eopkg", "nix", "flatpak", "snapd", "dbus", "dbus-broker", "wayland", "mesa", "pipewire", "wireplumber",
 ];

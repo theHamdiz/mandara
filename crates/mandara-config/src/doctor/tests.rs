@@ -2,13 +2,17 @@
 //! (`tests/fixtures/doctor/<compositor>/`, `*.stdout` / `*.stderr`, paths
 //! written as `@FIXTURES@`) parsed into diagnostics. MangoWM's came from
 //! `mango -p` 0.18.4, Niri's from Niri 26.04's own `niri-config` parser,
-//! Umbriel's from `umbriel config validate --json` 0.1.0. Hyprland's
+//! Umbriel's from `umbriel config validate --json` 0.1.0, Sway's from
+//! `sway --validate --verbose` 1.12 (headless, in a throwaway container;
+//! its start-up banner of environment, kernel and os-release lines and
+//! wlroots' backend lines left out). Hyprland's
 //! (`*.synthetic.stdout`) are written from Hyprland's source, as no binary
 //! was available to capture them.
 //!
 //! `real_checkers_match_the_golden_files` runs the installed checkers on the
 //! same fixtures (skipped for those not installed; `MANDARA_TEST_NIRI_CHECK`
-//! and `MANDARA_TEST_UMBRIEL` point at locally built ones).
+//! and `MANDARA_TEST_UMBRIEL` point at locally built ones). CI's
+//! `compositor-checkers` job runs it with sway installed.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -82,13 +86,25 @@ const UMBRIEL: &[(&str, &[Expect])] = &[
     ("dropin/config", &[("umbriel/dropin/mandara/generated/umbriel.toml", 4, UnsupportedByVersion, Mandara, Some("layout.blur_optimized"))]),
 ];
 
+const SWAY: &[(&str, &[Expect])] = &[
+    ("unknown", &[("sway/unknown.conf", 2, UnknownOption, User, Some("frobnicate"))]),
+    ("badvalue", &[("sway/badvalue.conf", 1, InvalidValue, User, Some("gaps"))]),
+    ("syntax", &[("sway/syntax.conf", 1, SyntaxError, User, Some("for_window"))]),
+    // Sway names no line for a bind defined twice: found by its chord.
+    ("dupbind", &[("sway/dupbind.conf", 1, BindConflict, User, Some("Mod4+q"))]),
+    // Sway skips an include that matches no file without a word.
+    ("missing", &[]),
+    ("inc/main", &[("sway/inc/child.conf", 2, UnknownOption, User, Some("border_frobnicate"))]),
+    ("dropin/config", &[("sway/dropin/mandara/generated/sway.conf", 3, UnsupportedByVersion, Mandara, Some("blur"))]),
+];
+
 /// The config file of a fixture case.
 fn root_of(target: Target, case: &str) -> String {
     let ext = match target {
         Target::Mango => "conf",
         Target::Niri => "kdl",
         Target::Umbriel => "toml",
-        Target::Hyprland => "conf",
+        Target::Hyprland | Target::Sway | Target::River => "conf",
     };
     format!("{}/{case}.{ext}", target.name().to_lowercase().replace("mangowm", "mango"))
 }
@@ -98,7 +114,8 @@ fn table(target: Target) -> &'static [(&'static str, &'static [Expect])] {
         Target::Mango => MANGO,
         Target::Niri => NIRI,
         Target::Umbriel => UMBRIEL,
-        Target::Hyprland => &[],
+        Target::Sway => SWAY,
+        Target::Hyprland | Target::River => &[],
     }
 }
 
@@ -114,13 +131,39 @@ fn fix_niri_missing_key(target: Target, mut got: Vec<Diagnostic>) -> Vec<Diagnos
 
 #[test]
 fn golden_outputs_parse_into_diagnostics() {
-    for target in [Target::Mango, Target::Niri, Target::Umbriel] {
+    for target in [Target::Mango, Target::Niri, Target::Umbriel, Target::Sway] {
         let dir = target.name().to_lowercase().replace("mangowm", "mango");
         for (case, want) in table(target) {
             let got = fix_niri_missing_key(target, diagnose(target, &root_of(target, case), &format!("{dir}/{case}")));
             assert_matches(&format!("{dir}/{case}"), &got, want);
         }
     }
+}
+
+/// River has no checker: the doctor reads `river -version` (as River
+/// 0.3.17 and 0.5.0 print it) and the init, and offers no edits.
+#[test]
+fn river_checks_version_and_init() {
+    let dir = tempfile::tempdir().unwrap();
+    let init = dir.path().join("init");
+    std::fs::write(&init, "#!/bin/sh\nriverctl map normal Super Space spawn fuzzel\nriverctl map normal Super Return spawn foot\n").unwrap();
+    let chords = vec!["super+space".to_string()];
+    let classic = river::check("0.3.17\n", &init, &chords, "/usr/bin/mandara");
+    // Not executable, Mandara not started, one shared key.
+    assert_eq!(classic.iter().map(|d| (d.severity, d.kind)).collect::<Vec<_>>(), [(Severity::Error, DiagKind::Other), (Severity::Warning, DiagKind::Other), (Severity::Info, DiagKind::BindConflict)], "{classic:#?}");
+    assert!(classic[1].message.contains("riverctl spawn /usr/bin/mandara"));
+    assert_eq!(classic[2].line, Some(2));
+    assert!(classic.iter().all(|d| d.read_only && fixes_for(d).is_empty()), "init is never edited");
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(&init, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    std::fs::write(&init, "#!/bin/sh\nriverctl spawn /usr/bin/mandara\n").unwrap();
+    assert!(river::check("0.3.17\n", &init, &chords, "/usr/bin/mandara").is_empty());
+    let new = river::check("0.5.0\n", &init, &chords, "/usr/bin/mandara");
+    assert_eq!(new.len(), 1);
+    assert!(new[0].severity == Severity::Error && new[0].message.contains("river-classic"), "{new:#?}");
+    assert_eq!(explain(&new[0], Target::River, Some("0.5.0")), new[0].message, "Mandara's own finding explains itself");
 }
 
 #[test]
@@ -284,6 +327,20 @@ fn a_fix_that_makes_things_worse_is_rolled_back() {
     assert!(fix::apply_in(&before, &id, fix::Fix::Remove, &env, &|| Ok(()), &store).is_err());
 }
 
+/// Sway keeps only its `[ERROR]` lines in a report: when it rejects a
+/// config without one, the end of what it printed explains the rejection.
+#[test]
+fn a_rejection_without_error_lines_keeps_the_checker_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("config");
+    std::fs::write(&root, "bindsym Mod4+q kill\n").unwrap();
+    let argv = ["sh", "-c", "echo 'Unable to create backend' >&2; exit 1"].iter().map(OsString::from).collect();
+    let env = CheckEnv { argv: Some(argv), version: Some("1.12".into()), ..CheckEnv::default() };
+    let report = check_with(Target::Sway, &root, &env);
+    assert_eq!(report.diagnostics.len(), 1, "{report:#?}");
+    assert!(report.diagnostics[0].message.contains("Unable to create backend"), "{report:#?}");
+}
+
 #[test]
 fn a_hung_checker_times_out() {
     let dir = tempfile::tempdir().unwrap();
@@ -355,7 +412,7 @@ fn mango_fixes_resolve_real_problems() {
 fn real_checkers_match_the_golden_files() {
     let home = tempfile::tempdir().unwrap();
     let mut ran = Vec::new();
-    for target in [Target::Mango, Target::Niri, Target::Umbriel] {
+    for target in [Target::Mango, Target::Niri, Target::Umbriel, Target::Sway] {
         let argv: Option<Vec<OsString>> = match target {
             Target::Niri if !on_path("niri") => std::env::var_os("MANDARA_TEST_NIRI_CHECK").map(|p| vec![p, OsString::from(CONFIG_PLACEHOLDER)]),
             Target::Umbriel if !on_path("umbriel") => std::env::var_os("MANDARA_TEST_UMBRIEL").map(|p| ["config", "validate", "-c", CONFIG_PLACEHOLDER, "--json"].iter().map(OsString::from).fold(vec![p], |mut v, a| {

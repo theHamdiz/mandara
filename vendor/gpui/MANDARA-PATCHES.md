@@ -81,6 +81,20 @@ path.
   pointer moves within an element. A cached view (`.cached(..)`) re-renders on
   its own, without its parent's cache key changing.
 
+## 3. Image decoders for GPUI's own formats only (`Cargo.toml`)
+
+Upstream enables nearly every decoder of the `image` crate (Zed's image viewer
+opens all of them). `Image` and `ImageFormat` here name PNG, JPEG, WebP, GIF,
+SVG, BMP, TIFF, ICO and PNM, and Mandara itself only loads PNG, JPEG, WebP,
+GIF, BMP and SVG (wallpapers, avatars, album art, icons, thumbnails), so the
+DDS, EXR, farbfeld, HDR, QOI and TGA decoders are dropped. `img()` still
+decodes every format `ImageFormat` names, so a clipboard or notification image
+in one of them keeps its preview; a file in a dropped format fails to load like
+any other unsupported file. Together with `vendor/pure-onnx-ocr`'s patch 1
+(which stops the OCR engine turning on all of the `image` crate's default
+formats) this takes `exr`, `qoi`, `pulp`, `zune-inflate`, `lebe`, `bit_field`
+and their helpers out of the build.
+
 ## Tests
 
 `elements::div::tests::hover_without_an_id_updates_its_cached_view` (patch 2,

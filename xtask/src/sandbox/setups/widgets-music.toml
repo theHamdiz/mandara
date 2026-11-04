@@ -1,0 +1,114 @@
+# README widgets "What's playing": a turning record, a pocket player, a
+# cover cut to a flower, a side pill, an LED meter, a dot-matrix clock and
+# the desk cat.
+# `cargo xtask sandbox up --config xtask/src/sandbox/setups/widgets-music.toml --size 2880x1620 --scale 2`,
+# then the wallpaper once:
+#   sandbox msg wallgen generate mesh --palette montaza-twilight --seed 0x30 --size 2880x1620 --format png --no-apply
+#   sandbox msg theme wallpaper vibrant
+# then `sandbox audio play`, `sandbox msg notifications clear` and `sandbox shot`.
+
+[appearance]
+icon_theme = "Papirus-Dark"
+
+[bar]
+layout = "floating-pills"
+
+[desktop.widgets]
+migrated = true
+
+[[desktop.widgets.items]]
+id = "music-clock"
+kind = "clock"
+face = "dot-matrix"
+date = true
+seconds = false
+
+[desktop.widgets.items.place]
+anchor = "top-left"
+x = 0.06
+y = 0.08
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "music-record"
+kind = "media"
+layout = "vinyl"
+size = 400.0
+
+[desktop.widgets.items.place]
+anchor = "left"
+x = 0.06
+y = 0.05
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "music-device"
+kind = "media"
+layout = "device"
+size = 330.0
+
+[desktop.widgets.items.place]
+anchor = "center"
+x = 0.06
+y = -0.06
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "music-cover"
+kind = "media"
+layout = "shaped"
+size = 300.0
+shapes = ["flower"]
+
+[desktop.widgets.items.place]
+anchor = "top-right"
+x = -0.12
+y = 0.08
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "music-pill"
+kind = "media"
+layout = "side-pill"
+size = 300.0
+
+[desktop.widgets.items.place]
+anchor = "right"
+x = -0.03
+y = 0.08
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "music-led"
+kind = "visualizer"
+shape = "led"
+bars = 28
+length = 520.0
+height = 120.0
+
+[desktop.widgets.items.place]
+anchor = "bottom-left"
+x = 0.06
+y = -0.1
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "music-cat"
+kind = "pet"
+size = 170.0
+
+[desktop.widgets.items.place]
+anchor = "bottom-right"
+x = -0.17
+y = -0.1
+depth = "front"
+
+[dock]
+pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
+
+[plugins]
+defaults_version = 1
+enabled = ["dock", "desktop-clocks", "desktop-now-playing", "desktop-visualizers", "desktop-fun", "wallpaper-generator"]
+
+[wallpaper]
+path = "/home/demo/Pictures/Wallpapers/Generated/mesh-000030-2880x1620.png"

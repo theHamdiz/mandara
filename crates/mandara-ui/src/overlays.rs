@@ -38,6 +38,7 @@ use nucleo_matcher::{Config as MatcherConfig, Matcher};
 
 use crate::apps::{self, App as DesktopApp};
 use crate::launcher_ext::{self, Hit, HitAction, Lead, UsageSnapshot};
+use crate::first_frame::{self, FirstFrame};
 use crate::fonts::fonts;
 use crate::icons::icon;
 use crate::kit::text;
@@ -90,11 +91,6 @@ const MIN_ROWS: usize = 2;
 /// Bar fills at or above this alpha count as opaque (the drawer then
 /// overlaps the bar a hairline to hide the seam, as panels do).
 const OPAQUE_ALPHA: f32 = 0.999;
-/// Frames to wait for the surface to settle at the focused output's size
-/// before accepting any output's size (the compositor picked another one).
-const SETTLE_FALLBACK_FRAMES: u8 = 6;
-/// Viewport sizes within this many px of an output count as settled.
-const SETTLE_SLACK_PX: f32 = 2.0;
 /// Time for the focused window to take the keyboard back before an
 /// auto-paste.
 const AUTO_PASTE_DELAY: std::time::Duration = std::time::Duration::from_millis(120);
@@ -221,8 +217,11 @@ fn actions() -> Vec<Item> {
         a(t("Change wallpaper"), t("Open the wallpaper picker"), "image", "wallpaper background backdrop desktop picture photo", "wallpaper picker open"),
         a(t("Random wallpaper"), t("Pick a random image from your wallpaper folder"), "refresh", "wallpaper background shuffle desktop picture", "wallpaper random"),
         a(t("Take a screenshot"), t("Select a region to capture"), "crop", SNIP_WORDS, "screenshot region"),
-        a(t("Record the screen"), t("AV1 video of the whole screen"), "circle", "screen recording video capture", "record start"),
+        a(t("Record the screen"), t("Video of the whole screen"), "circle", "screen recording video capture", "record screen"),
         a(t("Record a region"), t("Choose an area to record"), "crop", "screen recording video capture area", "record region"),
+        a(t("Record a window"), t("Video of the focused window"), "window", "screen recording video capture window", "record window"),
+        a(t("Stop recording"), t("Save the screen recording"), "stop", "screen recording video stop save", "record stop"),
+        a(t("Pause or resume recording"), "record pause-toggle", "pause", "screen recording video pause resume", "record pause-toggle"),
         a(t("Clipboard history"), t("Recent copies"), "clipboard", "paste copy history", "panel open clipboard"),
     ]);
     if mandara_services::keepassxc::installed() {
@@ -1138,12 +1137,10 @@ pub struct LauncherView {
     /// Pointer has been inside the drawer (enables leave-to-close).
     entered: bool,
     leave_task: Option<gpui::Task<()>>,
-    /// The focused output's real logical size; nothing is drawn until the
-    /// surface's viewport matches it (GPUI's first frames use an
-    /// integer-scale guess).
-    expected: (f32, f32),
-    /// Frames spent waiting for that size.
-    settle_frames: u8,
+    /// Waits for the real logical size of the output it opened for
+    /// (GPUI's first frames use an integer-scale guess), a few frames at
+    /// most ([`crate::first_frame`]).
+    first: FirstFrame,
     /// The output the launcher opened on (once settled).
     output: Option<String>,
     /// When the surface was created (open latency, logged at debug level).
@@ -1155,14 +1152,9 @@ fn dock_icon_paths(cx: &mut App) -> Vec<std::path::PathBuf> {
     crate::plugins::dock::dock_icon_ids(cx).iter().filter_map(|id| crate::plugins::workspaces::raster_icon_path(id)).map(|p| p.to_path_buf()).collect()
 }
 
-/// Whether a viewport is `size` (within the settle slack).
-fn same_size(vp: gpui::Size<gpui::Pixels>, size: (f32, f32)) -> bool {
-    (f32::from(vp.width) - size.0).abs() < SETTLE_SLACK_PX && (f32::from(vp.height) - size.1).abs() < SETTLE_SLACK_PX
-}
-
-/// Whether a freshly created surface has settled at its real size.
-fn viewport_settled(window: &Window, expected: (f32, f32)) -> bool {
-    same_size(window.viewport_size(), expected)
+/// Whether a viewport is an output's size (within the settle slack).
+fn is_output(vp: (f32, f32), o: &mandara_core::OutputGeometry) -> bool {
+    first_frame::same_size(vp, (o.width as f32, o.height as f32))
 }
 
 /// The output the launcher opens on ([`crate::outputs::overlay_output`]).
@@ -1171,8 +1163,11 @@ fn focused_output(cx: &App) -> Option<mandara_core::OutputGeometry> {
 }
 
 impl LauncherView {
-    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    /// A launcher on a surface opened for an output of logical size
+    /// `expected` ([`crate::outputs::overlay_target`]).
+    fn new(expected: (f32, f32), window: &mut Window, cx: &mut Context<Self>) -> Self {
         let shell = shell(cx);
+        first_frame::guard("launcher", window, cx, |this| this.first.drawn(), |this, cx| this.close(cx));
         cx.observe(&shell, |this: &mut Self, shell, cx| {
             // Reopening while the close animation runs revives the surface.
             this.closing = !shell.read(cx).launcher_open;
@@ -1241,8 +1236,7 @@ impl LauncherView {
             closing: false,
             entered: false,
             leave_task: None,
-            expected: focused_output(cx).map(|o| (o.width as f32, o.height as f32)).unwrap_or_else(|| output_size(cx)),
-            settle_frames: 0,
+            first: FirstFrame::new(expected),
             output: None,
             created: Instant::now(),
         };
@@ -1811,33 +1805,28 @@ impl LauncherView {
 }
 
 impl LauncherView {
-    /// Whether the surface has its real size yet (the focused output's,
-    /// or — after a few frames — any output's, should the compositor have
-    /// opened it elsewhere); remembers the output it settled on.
+    /// Whether the surface has its real size yet (the size it opened for,
+    /// or — after a few frames — whatever size the compositor gave it);
+    /// remembers the output it settled on.
     fn settle(&mut self, window: &Window, cx: &App) -> bool {
         if self.output.is_some() || self.placed {
             return true;
         }
-        let vp = window.viewport_size();
-        let outputs = cx.try_global::<Outputs>().map(|o| o.0.as_slice()).unwrap_or_default();
-        let focused = focused_output(cx);
-        let found = if viewport_settled(window, self.expected) {
-            focused.filter(|o| same_size(vp, (o.width as f32, o.height as f32))).or_else(|| outputs.iter().find(|o| same_size(vp, (o.width as f32, o.height as f32))).cloned())
-        } else if self.settle_frames >= SETTLE_FALLBACK_FRAMES {
-            outputs.iter().find(|o| same_size(vp, (o.width as f32, o.height as f32))).cloned()
-        } else {
-            self.settle_frames += 1;
+        let vp = first_frame::viewport(window);
+        let was_drawn = self.first.drawn();
+        let matched = self.first.matches(vp);
+        if !self.first.ready(vp) {
             return false;
-        };
-        match found {
-            Some(o) => {
-                self.output = Some(o.name);
-                true
-            }
-            // Settled at the expected size but no output list (tests,
-            // early startup): fine, just no per-output details.
-            None => viewport_settled(window, self.expected),
         }
+        if was_drawn {
+            return true;
+        }
+        let outputs = cx.try_global::<Outputs>().map(|o| o.0.as_slice()).unwrap_or_default();
+        let focused = if matched { focused_output(cx).filter(|o| is_output(vp, o)) } else { None };
+        // No output of that size (tests, early startup, an output connected
+        // since): it draws all the same, just without per-output details.
+        self.output = focused.or_else(|| outputs.iter().find(|o| is_output(vp, o)).cloned()).map(|o| o.name);
+        true
     }
 }
 
@@ -2221,13 +2210,13 @@ pub fn init_overlays(cx: &mut App) {
         };
         if launcher && !is_open(&overlays.launcher, cx) {
             overlays.launcher = cx
-                .open_window(overlay_spec(SurfaceRole::Launcher, w, h, display), |window, cx| cx.new(|cx| LauncherView::new(window, cx)))
+                .open_window(overlay_spec(SurfaceRole::Launcher, w, h, display), |window, cx| cx.new(|cx| LauncherView::new((w, h), window, cx)))
                 .map_err(|e| tracing::error!("launcher: {e:#}"))
                 .ok();
         }
         if session && !is_open(&overlays.session, cx) {
             overlays.session = cx
-                .open_window(overlay_spec(SurfaceRole::Lock, w, h, display), |window, cx| cx.new(|cx| SessionView::new(window, cx)))
+                .open_window(overlay_spec(SurfaceRole::Lock, w, h, display), |window, cx| cx.new(|cx| SessionView::new((w, h), window, cx)))
                 .map_err(|e| tracing::error!("session: {e:#}"))
                 .ok();
         }

@@ -16,8 +16,8 @@ handbook) sit beside it.
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/studio-marketplace.png" alt="Plugins → Discover filtered to Desktop widgets: Calendar card, Countdown, Desktop clocks, Desktop decorations, Desktop fun, Desktop info, Desktop productivity and Desktop shortcuts and you, each with its painted cover" width="100%"/><br/><sub><b>Discover</b>: the desktop widget plugins and their painted covers</sub></td>
-<td width="50%" valign="top"><img src="screenshots/studio-plugin-detail.png" alt="The Desktop clocks product page: its icon, info strip, painted cover, more like this and what it does" width="100%"/><br/><sub><b>Product page</b>: art, more like this, permissions and settings</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-marketplace.webp" alt="Plugins → Discover filtered to Desktop widgets: Calendar card, Countdown, Desktop clocks, Desktop decorations, Desktop fun, Desktop info, Desktop productivity and Desktop shortcuts and you, each with its painted cover" width="100%"/><br/><sub><b>Discover</b>: the desktop widget plugins and their painted covers</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-plugin-detail.webp" alt="The Desktop clocks product page: its icon, info strip, painted cover, more like this and what it does" width="100%"/><br/><sub><b>Product page</b>: art, more like this, permissions and settings</sub></td>
 </tr>
 </table>
 
@@ -49,7 +49,7 @@ The 73 first-party plugins (37 of them ship switched off, marked *opt-in*):
 | **Bluetooth** | Bluetooth devices |
 | **Audio** | Volume and microphone |
 | **Quick settings** | Toggles for the sidebar |
-| **Screenshot** | Region, window and screen capture |
+| **Screenshot** | Region, window and screen capture, and screen recording (GPU Screen Recorder, wf-recorder or the built-in AV1 encoder) with pause, sound and recent recordings |
 | **Clipboard** | Clipboard history sorted by kind, with collections |
 | **Main menu** | Right-click empty bar space |
 | **Notifications** | Notification center with history and do-not-disturb |

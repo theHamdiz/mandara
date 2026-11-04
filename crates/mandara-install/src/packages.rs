@@ -139,16 +139,24 @@ pub fn for_family(family: Family) -> Option<&'static PackageSet> {
 }
 
 /// A compositor's screen-sharing / remote-desktop portal: (compositor
-/// program, package, Gentoo atom). MangoWM uses wlr's, Niri GNOME's.
+/// program, package, Gentoo atom). MangoWM, Sway and River use wlr's, Niri GNOME's.
 const PORTALS: &[(&str, &str, &str)] = &[
     ("mango", "xdg-desktop-portal-wlr", "gui-libs/xdg-desktop-portal-wlr"),
+    ("sway", "xdg-desktop-portal-wlr", "gui-libs/xdg-desktop-portal-wlr"),
+    ("river", "xdg-desktop-portal-wlr", "gui-libs/xdg-desktop-portal-wlr"),
     ("Hyprland", "xdg-desktop-portal-hyprland", "gui-libs/xdg-desktop-portal-hyprland"),
     ("niri", "xdg-desktop-portal-gnome", "sys-apps/xdg-desktop-portal-gnome"),
 ];
 
 /// The portal packages of every compositor installed (`has_program`).
 pub fn portal_packages(family: Family, has_program: impl Fn(&str) -> bool) -> Vec<&'static str> {
-    PORTALS.iter().filter(|(prog, _, _)| has_program(prog)).map(|(_, plain, atom)| if family == Family::Gentoo { *atom } else { *plain }).collect()
+    let mut out: Vec<&'static str> = Vec::new();
+    for package in PORTALS.iter().filter(|(prog, _, _)| has_program(prog)).map(|(_, plain, atom)| if family == Family::Gentoo { *atom } else { *plain }) {
+        if !out.contains(&package) {
+            out.push(package);
+        }
+    }
+    out
 }
 
 /// The package providing a login-screen program (`greetd`, `cage`, a kiosk
@@ -164,19 +172,15 @@ pub fn login_package(family: Family, program: &str) -> String {
     name
 }
 
-/// NixOS: what to add to `configuration.nix` (then rerun with `--no-deps`).
+/// NixOS: Mandara's flake and NixOS module (`flake.nix`, `nix/`) set up
+/// what the package tables do elsewhere, and Nix keeps it updated.
 pub const NIXOS_HINT: &[&str] = &[
-    "environment.systemPackages = with pkgs; [ libxkbcommon wayland vulkan-loader fontconfig freetype ];",
-    "fonts.packages = with pkgs; [ noto-fonts noto-fonts-cjk-sans inter jetbrains-mono ];",
-    "xdg.portal.enable = true;",
-    "services.accounts-daemon.enable = true; services.geoclue2.enable = true; services.udisks2.enable = true;",
-    "services.upower.enable = true; services.power-profiles-daemon.enable = true; hardware.i2c.enable = true;",
-    "networking.networkmanager.plugins = with pkgs; [ networkmanager-openvpn ];",
-    "environment.systemPackages = with pkgs; [ sound-theme-freedesktop papirus-icon-theme xdg-utils ];",
-    "fonts.packages = with pkgs; [ noto-fonts-color-emoji ];",
-    "networking.networkmanager.enable = true; hardware.bluetooth.enable = true; security.polkit.enable = true;",
-    "services.pipewire = { enable = true; pulse.enable = true; wireplumber.enable = true; };",
-    "services.gnome.gnome-keyring.enable = true;",
+    "inputs.mandara.url = \"github:theHamdiz/mandara\";      # in your flake.nix",
+    "imports = [ inputs.mandara.nixosModules.default ];      # in configuration.nix",
+    "programs.mandara.enable = true;                          # PAM, polkit, portals, fonts, services",
+    "programs.mandara.greeter.enable = true;                  # optional: Mandara Login on greetd",
+    "then `sudo nixos-rebuild switch`, and `mandara setup` to hook into your compositor",
+    "Home Manager, `nix run` and `nix profile install`: https://github.com/theHamdiz/mandara/blob/main/docs/install.md#nixos",
 ];
 
 /// Unknown systems: what to install by hand (then rerun with `--no-deps`).
@@ -258,5 +262,6 @@ mod tests {
         assert!(portal_packages(Family::Arch, |_| false).is_empty());
         assert_eq!(portal_packages(Family::Arch, |p| p == "mango" || p == "niri"), ["xdg-desktop-portal-wlr", "xdg-desktop-portal-gnome"]);
         assert_eq!(portal_packages(Family::Gentoo, |p| p == "Hyprland"), ["gui-libs/xdg-desktop-portal-hyprland"]);
+        assert_eq!(portal_packages(Family::Arch, |p| p == "mango" || p == "sway"), ["xdg-desktop-portal-wlr"], "one portal for both wlroots compositors");
     }
 }

@@ -497,18 +497,41 @@ pub fn init_app_theme_sync(cx: &mut App) {
 
 /// Keeps the interface language in step with `general.locale` (shell and
 /// Studio). Views re-render on config changes, so text follows at once.
+///
+/// Translations come from language packs: one used without its pack (the
+/// shell's language, a plugin's or a widget's own) downloads in the
+/// background and the windows re-render once it's in; a language just
+/// chosen is also checked against the published pack
+/// (`mandara_services::self_update::langpacks`).
 pub fn init_language(cx: &mut App) {
+    use mandara_services::self_update::langpacks;
+    langpacks::install_hooks();
     let store = config(cx);
     let mut last = store.read(cx).get().general.locale;
+    let mut in_use = langpacks::plugin_languages(store.read(cx).get());
     mandara_i18n::set_language(last.lang());
     // The font fallback chain follows the language (Urdu's Nastaliq, the
     // CJK / Bengali / Devanagari faces).
     crate::fonts::sync_fallbacks(&store.read(cx).get().typography.arabic_font, cx);
+    let packs = langpacks::subscribe();
+    cx.spawn(async move |cx| {
+        while packs.recv().await.is_ok() {
+            cx.update(|cx| cx.refresh_windows());
+        }
+    })
+    .detach();
     cx.observe(&store, move |store, cx| {
         let locale = store.read(cx).get().general.locale;
+        // Cheap (a few plugin tables): config changes arrive per slider step.
+        let now = langpacks::plugin_languages(store.read(cx).get());
+        for lang in now.iter().filter(|l| !in_use.contains(l)) {
+            langpacks::selected(*lang);
+        }
+        in_use = now;
         if locale != last {
             last = locale;
             mandara_i18n::set_language(locale.lang());
+            langpacks::selected(locale.lang());
             crate::fonts::sync_fallbacks(&store.read(cx).get().typography.arabic_font, cx);
             cx.refresh_windows();
         }

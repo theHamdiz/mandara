@@ -1,0 +1,140 @@
+# Docs widgets "You and your shortcuts", in light mode: digit boxes with a
+# week strip, the year in dots, a profile card on a squircle with a hard
+# shadow, wavy gauges, app shortcuts, quick toggles, a volume slider and
+# the palette.
+# `cargo xtask sandbox up --config xtask/src/sandbox/setups/widgets-you.toml --size 2880x1620 --scale 2`,
+# then the wallpaper once:
+#   sandbox msg wallgen generate glass --palette nord --seed 0x38 --size 2880x1620 --format png --no-apply --light
+#   sandbox msg theme wallpaper tonal-spot
+# then `sandbox audio play`, `sandbox msg notifications clear` and `sandbox shot`.
+
+[appearance]
+icon_theme = "Papirus"
+
+[theme]
+mode = "light"
+
+[desktop.widgets]
+migrated = true
+
+[[desktop.widgets.items]]
+id = "you-clock"
+kind = "clock"
+face = "boxes"
+date = false
+seconds = false
+
+[desktop.widgets.items.face_options]
+week_strip = true
+
+[desktop.widgets.items.place]
+anchor = "top-left"
+x = 0.05
+y = 0.07
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "you-year"
+kind = "progress"
+period = "year"
+style = "dots"
+label = true
+
+[desktop.widgets.items.place]
+anchor = "top"
+x = 0.08
+y = 0.34
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "you-profile"
+kind = "profile"
+avatar = "cookie"
+status = "Building a desktop"
+show_status = true
+
+[desktop.widgets.items.look]
+plate = "solid"
+plate_shape = "squircle"
+shadow = "hard"
+
+[desktop.widgets.items.place]
+anchor = "left"
+x = 0.05
+y = 0.0
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "you-gauges"
+kind = "monitor"
+rows = ["cpu", "memory", "disk"]
+style = "gauges"
+wavy = true
+
+[desktop.widgets.items.place]
+anchor = "bottom"
+x = 0.0
+y = -0.17
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "you-apps"
+kind = "shortcuts"
+items = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
+columns = 5
+tile = "squircle"
+colorful = true
+labels = true
+
+[desktop.widgets.items.place]
+anchor = "bottom-left"
+x = 0.05
+y = -0.14
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "you-toggles"
+kind = "toggles"
+toggles = ["wifi", "bluetooth", "dnd", "night-light"]
+columns = 2
+labels = true
+
+[desktop.widgets.items.place]
+anchor = "top-right"
+x = -0.05
+y = 0.08
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "you-volume"
+kind = "sliders"
+levels = ["volume"]
+vertical = true
+
+[desktop.widgets.items.place]
+anchor = "right"
+x = -0.06
+y = 0.03
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "you-palette"
+kind = "palette"
+labels = true
+columns = 4
+
+[desktop.widgets.items.place]
+anchor = "bottom-right"
+x = -0.05
+y = -0.13
+depth = "front"
+
+[dock]
+pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
+
+[plugins]
+defaults_version = 1
+enabled = ["dock", "desktop-clocks", "desktop-identity", "desktop-monitor", "wallpaper-generator"]
+
+[wallpaper]
+path = "/home/demo/Pictures/Wallpapers/Generated/glass-000038-2880x1620.png"

@@ -2,10 +2,14 @@
 //! [`Host`]: running programs, asking questions, downloading and printing.
 //! [`SystemHost`] is the real system; tests use a recording fake.
 
+use std::fs::File;
 use std::io::{IsTerminal as _, Read as _, Write as _};
+use std::os::fd::{AsRawFd as _, RawFd};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
+
+use crate::tui::{self, Key};
 
 /// Folders searched for programs besides `$PATH` (sbin is often not on a
 /// user's `$PATH`).
@@ -16,6 +20,16 @@ const FETCH_TIMEOUT: Duration = Duration::from_secs(600);
 const FETCH_CHUNK: usize = 64 << 10;
 /// Any execute bit.
 const EXEC_BITS: u32 = 0o111;
+/// Unusable answers to a numbered choice before giving up.
+const CHOICE_ATTEMPTS: usize = 3;
+/// The terminal questions go to (also with stdin redirected).
+const TTY: &str = "/dev/tty";
+/// Width assumed when the terminal doesn't report one.
+const DEFAULT_COLUMNS: usize = 80;
+/// How long a lone escape waits for the rest of an arrow key.
+const ESCAPE_TIMEOUT_MS: libc::c_int = 40;
+const HIDE_CURSOR: &[u8] = b"\x1b[?25l";
+const SHOW_CURSOR: &[u8] = b"\x1b[?25h";
 
 /// How a command's output is handled.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -74,6 +88,19 @@ impl Cmd {
     }
 }
 
+/// One row of the arrow-key menu: what it is, and the value it holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Row {
+    pub label: String,
+    pub value: String,
+}
+
+impl Row {
+    pub fn new(label: impl Into<String>, value: impl Into<String>) -> Row {
+        Row { label: label.into(), value: value.into() }
+    }
+}
+
 /// What a finished command returned.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Output {
@@ -124,6 +151,23 @@ pub trait Host {
     fn has_program(&self, name: &str) -> bool;
     /// Asks a yes/no question on the terminal; without one, `default`.
     fn ask(&mut self, question: &str, default: bool) -> bool;
+    /// Asks for a number from 0 to `max` on the terminal (Enter picks
+    /// `default`). `None` without a terminal or after unusable answers: a
+    /// choice that installs something is never made for the user.
+    fn choose(&mut self, question: &str, max: usize, default: usize) -> Option<usize>;
+    /// Whether someone can answer questions (a terminal is attached).
+    fn interactive(&self) -> bool;
+    /// The terminal's width in columns (80 when it can't be read).
+    fn columns(&mut self) -> usize {
+        DEFAULT_COLUMNS
+    }
+    /// Draws `rows` as an arrow-key menu and returns the picked one, with
+    /// the cursor starting on `default`. `None` when the user cancels, and
+    /// `default` when there is no terminal (a piped run never blocks).
+    fn select(&mut self, prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
+        let _ = prompt;
+        Some(default.min(rows.len().saturating_sub(1)))
+    }
     /// Downloads `url`, at most `limit` bytes.
     fn fetch(&mut self, url: &str, limit: u64) -> Result<Vec<u8>, Fetch>;
     /// Prints one line of installer output.
@@ -194,21 +238,38 @@ impl Host for SystemHost {
     }
 
     fn ask(&mut self, question: &str, default: bool) -> bool {
-        // The terminal itself, so it works with stdin redirected too.
-        let Ok(mut tty) = std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty") else { return default };
         let hint = if default { "[Y/n]" } else { "[y/N]" };
-        if write!(tty, "    {question} {hint} ").and_then(|_| tty.flush()).is_err() {
-            return default;
+        match ask_tty(&format!("{question} {hint}")).as_deref() {
+            None | Some("") => default,
+            Some(a) => matches!(a, "y" | "Y" | "yes" | "YES" | "Yes"),
         }
-        let mut answer = Vec::new();
-        let mut byte = [0u8; 1];
-        while tty.read(&mut byte).is_ok_and(|n| n == 1) && byte[0] != b'\n' {
-            answer.push(byte[0]);
+    }
+
+    fn choose(&mut self, question: &str, max: usize, default: usize) -> Option<usize> {
+        for _ in 0..CHOICE_ATTEMPTS {
+            let answer = ask_tty(&format!("{question} [{default}]"))?;
+            if answer.is_empty() {
+                return Some(default);
+            }
+            if let Ok(n) = answer.parse::<usize>()
+                && n <= max
+            {
+                return Some(n);
+            }
         }
-        match String::from_utf8_lossy(&answer).trim() {
-            "" => default,
-            a => matches!(a, "y" | "Y" | "yes" | "YES" | "Yes"),
-        }
+        None
+    }
+
+    fn interactive(&self) -> bool {
+        std::fs::OpenOptions::new().read(true).write(true).open(TTY).is_ok()
+    }
+
+    fn columns(&mut self) -> usize {
+        std::env::var("COLUMNS").ok().and_then(|c| c.trim().parse::<usize>().ok()).filter(|c| *c > 0).or_else(tty_columns).unwrap_or(DEFAULT_COLUMNS)
+    }
+
+    fn select(&mut self, prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
+        select_tty(prompt, rows, default)
     }
 
     fn fetch(&mut self, url: &str, limit: u64) -> Result<Vec<u8>, Fetch> {
@@ -251,6 +312,157 @@ impl Host for SystemHost {
             Level::Warn => eprintln!("    {y}!{n} {text}"),
             Level::Done => println!("\n{g}{b}{text}{n}"),
         }
+    }
+}
+
+/// Prints `prompt` on the terminal itself (so it works with stdin
+/// redirected too) and reads one trimmed line. `None` without a terminal.
+fn ask_tty(prompt: &str) -> Option<String> {
+    let mut tty = std::fs::OpenOptions::new().read(true).write(true).open(TTY).ok()?;
+    write!(tty, "    {prompt} ").and_then(|_| tty.flush()).ok()?;
+    let mut answer = Vec::new();
+    let mut byte = [0u8; 1];
+    loop {
+        match tty.read(&mut byte) {
+            Ok(1) if byte[0] == b'\n' => break,
+            Ok(1) => answer.push(byte[0]),
+            // EOF or a read error before Enter: no answer, not an empty one.
+            _ => return None,
+        }
+    }
+    Some(String::from_utf8_lossy(&answer).trim().to_string())
+}
+
+/// The terminal's width, when it reports one.
+fn tty_columns() -> Option<usize> {
+    let tty = std::fs::OpenOptions::new().read(true).write(true).open(TTY).ok()?;
+    let mut size: libc::winsize = unsafe { std::mem::zeroed() };
+    (unsafe { libc::ioctl(tty.as_raw_fd(), libc::TIOCGWINSZ, &mut size) } == 0 && size.ws_col > 0).then_some(size.ws_col as usize)
+}
+
+/// Draws the menu on the terminal and returns the picked row. `None` when
+/// the user cancels; without a terminal the default is taken, so a piped
+/// run never blocks and behaves exactly as `--yes` would.
+fn select_tty(prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
+    if rows.is_empty() {
+        return Some(default);
+    }
+    let fallback = Some(default.min(rows.len() - 1));
+    let Ok(mut tty) = std::fs::OpenOptions::new().read(true).write(true).open(TTY) else { return fallback };
+    let Ok(_raw) = RawMode::enable(&tty) else { return fallback };
+    let mut cursor = default.min(rows.len() - 1);
+    let mut drawn = 0;
+    let _ = tty.write_all(HIDE_CURSOR);
+    let choice = loop {
+        if !draw(&mut tty, &tui::menu_frame(prompt, rows, cursor), &mut drawn) {
+            break None;
+        }
+        match read_key(&mut tty) {
+            Key::Up => cursor = cursor.checked_sub(1).unwrap_or(rows.len() - 1),
+            Key::Down => cursor = (cursor + 1) % rows.len(),
+            Key::Enter => break Some(cursor),
+            Key::Cancel => break None,
+            Key::Other => {}
+        }
+    };
+    clear(&mut tty, drawn);
+    let _ = tty.write_all(SHOW_CURSOR);
+    let _ = tty.flush();
+    choice
+}
+
+/// Draws `frame` over the previous one, remembering how many lines it took.
+fn draw(tty: &mut File, frame: &str, drawn: &mut usize) -> bool {
+    let mut out = String::new();
+    if *drawn > 0 {
+        out.push_str(&format!("\x1b[{}A", *drawn));
+    }
+    for line in frame.lines() {
+        out.push_str("\r\x1b[K");
+        out.push_str(line);
+        out.push('\n');
+    }
+    *drawn = frame.lines().count();
+    tty.write_all(out.as_bytes()).and_then(|_| tty.flush()).is_ok()
+}
+
+/// Erases the menu, leaving the cursor where the menu started.
+fn clear(tty: &mut File, drawn: usize) {
+    if drawn == 0 {
+        return;
+    }
+    let mut out = format!("\x1b[{drawn}A");
+    for _ in 0..drawn {
+        out.push_str("\r\x1b[K\n");
+    }
+    out.push_str(&format!("\x1b[{drawn}A"));
+    let _ = tty.write_all(out.as_bytes());
+}
+
+/// One key, waiting for the rest of an escape sequence when it needs to.
+fn read_key(tty: &mut File) -> Key {
+    let mut pending = Vec::new();
+    loop {
+        if let Some((key, used)) = tui::decode(&pending) {
+            pending.drain(..used);
+            return key;
+        }
+        // Nothing yet (wait forever), or a lone escape: briefly wait for the
+        // rest of an arrow key before treating it as cancel.
+        let timeout = if pending.is_empty() { -1 } else { ESCAPE_TIMEOUT_MS };
+        let mut buf = [0u8; 8];
+        match read_some(tty, &mut buf, timeout) {
+            Some(0) | None => return Key::Cancel,
+            Some(n) => pending.extend_from_slice(&buf[..n]),
+        }
+    }
+}
+
+/// Reads what is available: `None` at end of input or on error, `Some(0)`
+/// when nothing arrived within `timeout_ms` (`-1` waits forever).
+fn read_some(tty: &mut File, buf: &mut [u8], timeout_ms: libc::c_int) -> Option<usize> {
+    let mut poll = libc::pollfd { fd: tty.as_raw_fd(), events: libc::POLLIN, revents: 0 };
+    match unsafe { libc::poll(&mut poll, 1, timeout_ms) } {
+        ready if ready < 0 => None,
+        0 => Some(0),
+        _ => match tty.read(buf) {
+            Ok(0) | Err(_) => None,
+            Ok(n) => Some(n),
+        },
+    }
+}
+
+/// The terminal without line buffering or echo, restored on drop (also when
+/// the menu returns early or the process unwinds).
+struct RawMode {
+    fd: RawFd,
+    saved: libc::termios,
+}
+
+impl RawMode {
+    fn enable(tty: &File) -> std::io::Result<RawMode> {
+        let fd = tty.as_raw_fd();
+        let mut saved: libc::termios = unsafe { std::mem::zeroed() };
+        if unsafe { libc::tcgetattr(fd, &mut saved) } != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let mut raw = saved;
+        // Ctrl-C/Z arrive as bytes instead of signals: the menu cancels and
+        // the terminal is restored on the way out (a signal would kill the
+        // process before `Drop` can put the terminal back).
+        raw.c_lflag &= !(libc::ICANON | libc::ECHO | libc::ISIG);
+        raw.c_cc[libc::VMIN] = 1;
+        raw.c_cc[libc::VTIME] = 0;
+        if unsafe { libc::tcsetattr(fd, libc::TCSANOW, &raw) } != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(RawMode { fd, saved })
+    }
+}
+
+impl Drop for RawMode {
+    fn drop(&mut self) {
+        unsafe { libc::tcsetattr(self.fd, libc::TCSANOW, &self.saved) };
     }
 }
 

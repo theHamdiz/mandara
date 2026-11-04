@@ -119,7 +119,7 @@ mod tests {
         let mut missing = Vec::new();
         for lang in Lang::ALL.into_iter().filter(|l| *l != Lang::En) {
             for k in &keys {
-                if catalog(lang).get(k).is_none() && mandara_i18n::catalog(lang).get(k).is_none() {
+                if catalog(lang).get(k).is_none() && mandara_i18n::lookup(lang, k).is_none() {
                     missing.push(format!("{}: {k:?}", lang.code()));
                 }
             }

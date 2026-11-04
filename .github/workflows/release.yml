@@ -29,9 +29,14 @@
 #                                                  releases (bsdiff-style,
 #                                                  zstd); the updater's main
 #                                                  method
+#   mandara-<v>-<code>.mlang[.zst]                 language packs (one per
+#                                                  language, tied to <v>; the
+#                                                  .zst is what the shell
+#                                                  downloads on demand)
 #   update.json                                    update manifest: per target
 #                                                  the tarball, bin/mandara and
-#                                                  patches, with SHA-256s/sizes
+#                                                  patches, with SHA-256s/sizes;
+#                                                  `locales`: the packs
 #   SHA256SUMS                                     checksums of everything
 #   SHA256SUMS.sig                                 Ed25519 signature of
 #                                                  SHA256SUMS by the release
@@ -235,9 +240,14 @@ jobs:
         with:
           tool: cargo-deb,cargo-generate-rpm
 
+      # Packages ship every language pack under
+      # /usr/share/mandara/locales/<v>/ (the asset globs in
+      # crates/mandara-app/Cargo.toml read target/langpacks/<v>/).
       - name: .deb and .rpm
         if: matrix.packages
         run: |
+          v="$(./target/${{ matrix.target }}/release/mandara --version | cut -d' ' -f2)"
+          cargo run --locked --quiet -p xtask -- langpacks --version "$v" --dir "target/langpacks/$v"
           cargo deb -p mandara-app --no-build --no-strip --target ${{ matrix.target }} --output dist/
           cargo generate-rpm -p crates/mandara-app --target ${{ matrix.target }} --output dist/
           ls -la dist
@@ -360,11 +370,24 @@ jobs:
               -e "s/@SHA_X86_64@/$(sha x86_64)/" -e "s/@SHA_AARCH64@/$(sha aarch64)/" \
               packaging/arch/PKGBUILD.in > dist/PKGBUILD
 
-      # One update.json from the build jobs' per-target parts.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: xtask
+
+      # Language packs, built once here (they don't depend on the
+      # architecture): mandara-<v>-<code>.mlang, the compressed download
+      # mandara-<v>-<code>.mlang.zst, and the `locales` part of update.json.
+      # The shell downloads a language from its own version's release.
+      - name: Language packs
+        run: cargo xtask langpacks --version "${{ needs.version.outputs.version }}" --out dist
+
+      # One update.json from the build jobs' per-target parts and the
+      # language packs' part.
       - name: Update manifest
         run: |
           jq -s --arg v "${{ needs.version.outputs.version }}" \
-            '{schema: 1, name: "mandara", version: $v, targets: (map(.targets) | add)}' \
+            '{schema: 1, name: "mandara", version: $v, targets: (map(.targets // {}) | add), locales: (map(.locales // {}) | add)}' \
             dist/*.update-part.json > dist/update.json
           rm -f dist/*.update-part.json
           cat dist/update.json
@@ -391,11 +414,6 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: dist/*
-
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: xtask
 
       # SHA256SUMS lists every asset (update.json included), so signing it
       # vouches for the whole release. Fails without the key: Mandara

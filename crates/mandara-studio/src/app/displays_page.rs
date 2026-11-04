@@ -279,11 +279,17 @@ impl StudioView {
 }
 
 fn running_target() -> Option<Target> {
+    // Sway leaves XDG_CURRENT_DESKTOP to the session: its socket says it.
+    if let Some(kind) = mandara_compositor::detect() {
+        return Some(kind.target());
+    }
     match std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_lowercase().as_str() {
         d if d.contains("mango") => Some(Target::Mango),
         d if d.contains("niri") => Some(Target::Niri),
         d if d.contains("hyprland") => Some(Target::Hyprland),
         d if d.contains("umbriel") => Some(Target::Umbriel),
+        d if d.contains("sway") => Some(Target::Sway),
+        d if d.contains("river") => Some(Target::River),
         _ => None,
     }
 }
@@ -796,7 +802,7 @@ impl StudioView {
             chips()
                 .child(chip(SharedString::from(format!("d{i}-vrr-off")), t("Off"), cur == VrrMode::Off, p).on_click(Self::edit(i, |c| c.vrr = Some(VrrMode::Off))))
                 .child(chip(SharedString::from(format!("d{i}-vrr-on")), t("On"), cur == VrrMode::On, p).on_click(Self::edit(i, |c| c.vrr = Some(VrrMode::On))))
-                .child(chip(SharedString::from(format!("d{i}-vrr-fs")), t("Fullscreen only"), cur == VrrMode::Fullscreen, p).tooltip(tip(t("Hyprland, Niri and Umbriel switch it per fullscreen window; MangoWM treats it as on"), p)).on_click(Self::edit(i, |c| c.vrr = Some(VrrMode::Fullscreen))))
+                .child(chip(SharedString::from(format!("d{i}-vrr-fs")), t("Fullscreen only"), cur == VrrMode::Fullscreen, p).tooltip(tip(t("Hyprland, Niri and Umbriel switch it per fullscreen window; MangoWM and Sway treat it as on"), p)).on_click(Self::edit(i, |c| c.vrr = Some(VrrMode::Fullscreen))))
         });
         let name = c.name.clone();
         let is_primary = cfg.displays.primary.as_deref() == Some(c.name.as_str());
@@ -950,13 +956,18 @@ impl StudioView {
         let file = target.map(|t| t.generated_file().file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default()).unwrap_or_default();
         let overlap: Vec<String> = st(cx).user_rules.clone().unwrap_or_default().into_iter().filter(|n| heads.iter().any(|h| &h.name == n)).collect();
         let current: Vec<OutputConfig> = heads.iter().map(outputs::Head::to_config).collect();
-        let keep = if persisted {
-            button("display-unpersist", "close", t("Stop saving"), false, p).on_click(|_, _, cx| update_config(cx, |c| c.compositor.outputs.clear()))
+        // River has no output settings to write (nor does Mandara send any).
+        let keep = if target == Some(Target::River) {
+            div().into_any_element()
+        } else if persisted {
+            button("display-unpersist", "close", t("Stop saving"), false, p).on_click(|_, _, cx| update_config(cx, |c| c.compositor.outputs.clear())).into_any_element()
         } else {
-            button("display-persist", "download", t("Keep after restart"), true, p).on_click(move |_, _, cx| {
-                let list = current.clone();
-                update_config(cx, move |c| c.compositor.outputs = list);
-            })
+            button("display-persist", "download", t("Keep after restart"), true, p)
+                .on_click(move |_, _, cx| {
+                    let list = current.clone();
+                    update_config(cx, move |c| c.compositor.outputs = list);
+                })
+                .into_any_element()
         };
         let keep_card = card(p)
             .child(
@@ -968,7 +979,9 @@ impl StudioView {
                     .child(div().flex_none().size(px(DIM_36_PX)).rounded(px(RADIUS_12_PX)).bg(if persisted { p.success_emerald.with_alpha(ALPHA_16).hsla() } else { p.surface_container_high.hsla() }).row().items_center().justify_center().child(icon("download", ICON_16_PX, if persisted { p.success_emerald } else { p.on_surface_variant })))
                     .child(div().flex_1().min_w(px(DIM_240_PX)).child(heading(
                         t("Keep after restart"),
-                        if !cfg.compositor.manage {
+                        if target == Some(Target::River) {
+                            t("River keeps no display settings of its own: set them in your init with a tool such as wlr-randr or kanshi").into()
+                        } else if !cfg.compositor.manage {
                             // Nothing is written while the drop-in is off.
                             t("Turn on “Manage compositor drop-in” (Compositor page) first: Mandara writes no drop-in while it's off").into()
                         } else if persisted {

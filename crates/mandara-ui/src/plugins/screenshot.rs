@@ -9,10 +9,13 @@ use gpui::{App, FontWeight, IntoElement, ParentElement, Styled, div, px, size};
 use mandara_core::ToGpui;
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, Output, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
 
-use super::fn_view;
-use crate::icons::icon;
-use crate::kit::{reveal, text, toggle_tile, tokens};
+use super::fn_view_observing;
+use crate::bidi::Bidi as _;
+use crate::kit::{metrics, reveal, text, toggle_tile, tokens};
+use crate::recorder::Source;
 use crate::state::{config, shell, update_config};
+
+mod record;
 
 pub const ID: &str = "screenshot";
 
@@ -20,18 +23,13 @@ pub const ID: &str = "screenshot";
 const DELAY_STEPS_S: [u64; 3] = [3, 5, 10];
 /// Longest `--delay` a command may ask for, in seconds.
 const MAX_DELAY_S: u64 = 60;
-/// Lead-in before a screen recording starts from the panel (lets the panel
-/// close first).
-const RECORD_LEAD_IN: std::time::Duration = std::time::Duration::from_millis(250);
 /// After the panel is dropped, the compositor needs a frame or two before
 /// a capture no longer shows it.
 const PANEL_GONE: std::time::Duration = std::time::Duration::from_millis(120);
-/// Bar chip glyph, recording dot and gap.
-const BAR_ICON_PX: f32 = 15.0;
-const REC_DOT_PX: f32 = 9.0;
-const REC_GAP_PX: f32 = 6.0;
 const PANEL_W_PX: f32 = 400.0;
-const PANEL_H_PX: f32 = 272.0;
+/// The screenshot part of the panel: padding, the title line and two rows
+/// of tiles with their gaps (the recording section adds its own height).
+const PANEL_BASE_H_PX: f32 = tokens::LG * 2.0 + record::SECTION_H_PX + (metrics::TILE_H + tokens::MD) * 2.0 + tokens::MD;
 
 /// The next timer step after `delay` (off after the longest).
 fn next_delay(delay: u64) -> u64 {
@@ -201,34 +199,25 @@ fn capture(mode: &str, cx: &mut App) -> Option<async_channel::Receiver<Result<St
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Screenshot"), mandara_i18n::tk("Region, window and screen capture"),Some(Zone::Right)), |window, cx, panel_cx| {
-        let bar = fn_view(
-            None,
-            |palette, _, cx| {
-                let rec = crate::recorder::recorder(cx).map(|r| (r.read(cx).clock(), r.read(cx).busy));
-                match rec {
-                    // Recording: red dot + elapsed time (click to stop).
-                    Some((Some(clock), _)) => div()
-                        .flex()
-                        .items_center()
-                        .gap(px(REC_GAP_PX))
-                        .child(div().size(px(REC_DOT_PX)).rounded_full().bg(palette.urgent_coral.hsla()))
-                        .child(div().font_features(crate::fonts::tabular_nums()).text_color(palette.urgent_coral.hsla()).child(clock))
-                        .into_any_element(),
-                    Some((None, true)) => div().flex().items_center().child(icon("timer", crate::style::bar_icon(BAR_ICON_PX), palette.urgent_coral)).into_any_element(),
-                    _ => div().flex().items_center().child(icon("camera", crate::style::bar_icon(BAR_ICON_PX), palette.on_surface)).into_any_element(),
-                }
-            },
-            window,
-            cx,
-        );
+    r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Screenshot"), mandara_i18n::tk("Region, window and screen capture, and screen recording"),Some(Zone::Right)), |window, cx, panel_cx| {
+        // The recorder's clock wakes only this chip and the panel.
+        let watch_clock = |cx: &mut gpui::Context<super::FnView>| {
+            if let Some(r) = crate::recorder::recorder(cx) {
+                let clock = r.read(cx).clock.clone();
+                cx.observe(&clock, |_, _, cx| cx.notify()).detach();
+            }
+        };
+        let bar = fn_view_observing(None, watch_clock, |palette, _, cx| record::bar_chip(palette, cx), window, cx);
         let p = panel_cx.clone();
-        let panel = fn_view(
+        let size_cell = Rc::new(Cell::new(size(px(PANEL_W_PX), px(PANEL_BASE_H_PX))));
+        let cell = size_cell.clone();
+        let panel = fn_view_observing(
             None,
+            watch_clock,
             move |palette, _, cx| {
                 let o = options(cx);
                 let modes = div()
-                    .flex()
+                    .row()
                     .gap(px(tokens::SM))
                     .child(toggle_tile("shot-region", "crop", mandara_i18n::t("Region"), Some(mandara_i18n::t("Select area").into()), true, palette, |_, cx| {
                         let _ = start("region", cx);
@@ -239,39 +228,8 @@ pub fn register(r: &mut PluginRegistry) {
                     .child(toggle_tile("shot-screen", "monitor", mandara_i18n::t("Screen"), Some(mandara_i18n::t("Whole output").into()), false, palette, |_, cx| {
                         let _ = start("screen", cx);
                     }));
-                let recording = crate::recorder::is_recording(cx);
-                let record = div()
-                    .flex()
-                    .gap(px(tokens::SM))
-                    .child(toggle_tile(
-                        "rec-screen",
-                        if recording { "close" } else { "circle" },
-                        if recording { mandara_i18n::t("Stop recording") } else { mandara_i18n::t("Record screen") },
-                        Some(if recording { crate::recorder::recorder(cx).and_then(|r| r.read(cx).clock()).unwrap_or_default() } else { "AV1 · WebM".into() }),
-                        recording,
-                        palette,
-                        move |_, cx| {
-                            shell(cx).update(cx, |s, cx| s.close_panel_now(cx));
-                            if recording {
-                                let _ = crate::recorder::stop(cx);
-                            } else {
-                                let _ = crate::recorder::start(String::new(), None, RECORD_LEAD_IN, cx);
-                            }
-                        },
-                    ))
-                    .child(toggle_tile("rec-region", "crop", mandara_i18n::t("Record region"), Some(mandara_i18n::t("Select an area").into()), false, palette, |_, cx| {
-                        if shell(cx).update(cx, |s, cx| s.close_panel_now(cx)) {
-                            cx.spawn(async move |cx| {
-                                cx.background_executor().timer(PANEL_GONE).await;
-                                cx.update(crate::snip::open_for_recording);
-                            })
-                            .detach();
-                        } else {
-                            crate::snip::open_for_recording(cx);
-                        }
-                    }));
                 let opts = div()
-                    .flex()
+                    .row()
                     .gap(px(tokens::SM))
                     .child(toggle_tile("shot-copy", "clipboard", mandara_i18n::t("Auto-copy"), Some(if o.copy { mandara_i18n::t("On").into() } else { mandara_i18n::t("Off").into() }), o.copy, palette, move |_, cx| set_option(cx, "copy", toml::Value::Boolean(!o.copy))))
                     .child(toggle_tile("shot-save", "disk", mandara_i18n::t("Save to disk"), Some(if o.save { dir_label(cx).to_string() } else { mandara_i18n::t("Clipboard only").into() }), o.save, palette, move |_, cx| set_option(cx, "save", toml::Value::Boolean(!o.save))))
@@ -284,36 +242,52 @@ pub fn register(r: &mut PluginRegistry) {
                         palette,
                         move |_, cx| set_option(cx, "delay", toml::Value::Integer(i64::try_from(next_delay(o.delay)).unwrap_or(0))),
                     ));
-                div()
+                let mut height = PANEL_BASE_H_PX;
+                let mut col = div()
                     .size_full()
                     .p(px(tokens::LG))
                     .flex()
                     .flex_col()
                     .gap(px(tokens::MD))
-                    .child(reveal(&p, 0, div().flex().justify_between().child(div().font_weight(FontWeight::MEDIUM).child(mandara_i18n::t("Screenshot"))).child(
+                    .child(reveal(&p, 0, div().h(px(record::SECTION_H_PX)).row().items_center().justify_between().child(div().font_weight(FontWeight::MEDIUM).child(mandara_i18n::t("Screenshot"))).child(
                         div().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(dir_label(cx)),
                     )))
                     .child(reveal(&p, 1, modes))
-                    .child(reveal(&p, 2, record))
-                    .child(reveal(&p, 3, opts))
-                    .into_any_element()
+                    .child(reveal(&p, 2, opts));
+                let (blocks, h) = record::section(&p, 3, palette, cx);
+                height += h;
+                col = col.children(blocks);
+                if let Some((recent, h)) = record::recent(&p, 6, palette, cx) {
+                    height += h;
+                    col = col.child(recent);
+                }
+                // Every block counted the gap after it; the last has none.
+                cell.set(size(px(PANEL_W_PX), px(height - tokens::MD)));
+                col.into_any_element()
             },
             window,
             cx,
         );
         PluginInstance {
             bar: Some(bar),
-            panel: Some(PanelSpec { view: panel, size: Rc::new(Cell::new(size(px(PANEL_W_PX), px(PANEL_H_PX)))) }),
-            // While recording, clicking the red dot stops; otherwise open the panel.
+            panel: Some(PanelSpec { view: panel, size: size_cell }),
+            // While recording (or counting down), clicking stops; otherwise
+            // open the panel.
             on_click: Some(Rc::new(|_, cx| {
-                if crate::recorder::is_recording(cx) {
+                if crate::recorder::is_recording(cx) || crate::recorder::recorder(cx).is_some_and(|r| r.read(cx).counting.is_some()) {
                     let _ = crate::recorder::stop(cx);
                 } else {
                     shell(cx).update(cx, |s, cx| s.toggle_panel(ID, cx));
                 }
             })),
+            // Right click: an instant region capture, or the recording's
+            // controls (pause, mute) while one runs.
             on_secondary_click: Some(Rc::new(|_, cx| {
-                let _ = start("region", cx);
+                if crate::recorder::is_recording(cx) {
+                    shell(cx).update(cx, |s, cx| s.toggle_panel(ID, cx));
+                } else {
+                    let _ = start("region", cx);
+                }
             })),
             ..PluginInstance::empty()
         }
@@ -343,32 +317,62 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new_output("record", mandara_i18n::tk("Screen recording: start (screen), region (pick an area), stop, status"), |a, cx| {
-            match a.get(0).unwrap_or("status") {
-                "start" | "screen" => {
-                    crate::recorder::start(String::new(), None, std::time::Duration::ZERO, cx)?;
-                    Ok(Output::Value(serde_json::json!({ "recording": "starting" })))
+        CommandSpec::new_output(
+            "record",
+            mandara_i18n::tk("Screen recording: start [screen|region|window], screen [display], region, window, stop, toggle, pause, resume, pause-toggle, mic [on|off], status, backends, recent"),
+            |a, cx| {
+                let reply = |v: serde_json::Value| Ok(Output::Value(v));
+                let started = |r: Result<(), String>| r.map(|_| Output::Value(serde_json::json!({ "recording": "starting" })));
+                match a.get(0).unwrap_or("status") {
+                    "start" => match a.get(1) {
+                        None => started(crate::recorder::start(Source::Default, std::time::Duration::ZERO, cx)),
+                        Some(src) => started(crate::recorder::start(parse_source(src, a.get(2))?, std::time::Duration::ZERO, cx)),
+                    },
+                    "screen" => started(crate::recorder::start(Source::Screen(a.get(1).map(str::to_string)), std::time::Duration::ZERO, cx)),
+                    "region" => {
+                        crate::recorder::start(Source::Region, std::time::Duration::ZERO, cx)?;
+                        reply(serde_json::json!("select an area to record"))
+                    }
+                    "window" => started(crate::recorder::start(Source::Window, std::time::Duration::ZERO, cx)),
+                    "stop" => Ok(Output::Pending(crate::recorder::stop(cx)?)),
+                    "toggle" => Ok(match crate::recorder::toggle(cx)? {
+                        Some(rx) => Output::Pending(rx),
+                        None => Output::Value(serde_json::json!({ "recording": "starting" })),
+                    }),
+                    "pause" => reply(serde_json::json!({ "paused": crate::recorder::set_paused(Some(true), cx)? })),
+                    "resume" => reply(serde_json::json!({ "paused": crate::recorder::set_paused(Some(false), cx)? })),
+                    "pause-toggle" => reply(serde_json::json!({ "paused": crate::recorder::set_paused(None, cx)? })),
+                    "mic" => {
+                        let want = match a.get(1) {
+                            None | Some("toggle") => None,
+                            Some("off") | Some("mute") => Some(true),
+                            Some("on") | Some("unmute") => Some(false),
+                            Some(other) => return Err(format!("mic: {other:?} (expected on, off or toggle)")),
+                        };
+                        // Replies once the sound server has (un)muted it.
+                        Ok(Output::Pending(crate::recorder::set_mic_muted(want, cx)?))
+                    }
+                    "status" => reply(crate::recorder::status(cx)),
+                    "backends" => {
+                        let installed = mandara_services::recording::backend::Installed::detect();
+                        reply(serde_json::to_value(mandara_services::recording::backend::statuses(&installed)).unwrap_or_default())
+                    }
+                    "recent" => {
+                        let list = mandara_services::recording::history::list(&mandara_services::recording::history::file());
+                        reply(serde_json::to_value(list).unwrap_or_default())
+                    }
+                    other => Err(format!("unknown action {other:?}")),
                 }
-                "region" => {
-                    crate::snip::open_for_recording(cx);
-                    Ok(Output::Value(serde_json::json!("select an area to record")))
-                }
-                "stop" => Ok(Output::Pending(crate::recorder::stop(cx)?)),
-                "status" => {
-                    let r = crate::recorder::recorder(cx);
-                    let (clock, busy, path, frames) = r
-                        .map(|r| {
-                            let r = r.read(cx);
-                            (r.clock(), r.busy, r.active.as_ref().map(|a| a.path.display().to_string()), r.active.as_ref().map(|a| a.frames()))
-                        })
-                        .unwrap_or((None, false, None, None));
-                    Ok(Output::Value(serde_json::json!({ "recording": clock.is_some(), "elapsed": clock, "busy": busy, "path": path, "frames": frames })))
-                }
-                other => Err(format!("unknown action {other:?}")),
-            }
-        })
-        .arg(ArgSpec::optional("action", ArgKind::Enum, mandara_i18n::tk("what to do (default: status)")).choices(&["start", "screen", "region", "stop", "status"]))
+            },
+        )
+        .arg(
+            ArgSpec::optional("action", ArgKind::Enum, mandara_i18n::tk("what to do (default: status)"))
+                .choices(&["start", "screen", "region", "window", "stop", "toggle", "pause", "resume", "pause-toggle", "mic", "status", "backends", "recent"]),
+        )
+        .arg(ArgSpec::optional("source", ArgKind::String, mandara_i18n::tk("start: screen, region or window; screen: a display name; mic: on, off or toggle")))
         .example("record start")
+        .example("record screen DP-2")
+        .example("record pause-toggle")
         .example("record stop"),
     );
     r.command(
@@ -388,9 +392,28 @@ pub fn register(r: &mut PluginRegistry) {
     );
 }
 
+/// `record start <source> [display]`.
+fn parse_source(source: &str, display: Option<&str>) -> Result<Source, String> {
+    Ok(match source {
+        "screen" | "monitor" | "display" => Source::Screen(display.map(str::to_string)),
+        "region" | "area" => Source::Region,
+        "window" => Source::Window,
+        other => return Err(format!("unknown source {other:?} (expected screen, region or window)")),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn record_sources() {
+        assert_eq!(parse_source("screen", None), Ok(Source::Screen(None)));
+        assert_eq!(parse_source("screen", Some("DP-2")), Ok(Source::Screen(Some("DP-2".into()))));
+        assert_eq!(parse_source("region", None), Ok(Source::Region));
+        assert_eq!(parse_source("window", Some("x")), Ok(Source::Window));
+        assert!(parse_source("everything", None).is_err());
+    }
 
     fn words(s: &str) -> Vec<String> {
         s.split_whitespace().map(String::from).collect()

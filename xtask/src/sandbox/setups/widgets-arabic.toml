@@ -1,0 +1,138 @@
+# README widgets "Your language": a dot-matrix clock in Eastern Arabic
+# digits, an orbit clock, a Hijri month, the weather in words, a countdown
+# and a date tile on a scalloped plate, all in Arabic, over desert dunes.
+# `cargo xtask sandbox up --config xtask/src/sandbox/setups/widgets-arabic.toml --size 2880x1620 --scale 2`,
+# then the wallpaper once:
+#   sandbox msg wallgen generate dunes --palette qaitbay-citadel --seed 0x29 --size 2880x1620 --format png --no-apply
+#   sandbox msg theme wallpaper vibrant
+# then `sandbox msg notifications clear` and `sandbox shot`.
+
+[appearance]
+icon_theme = "Papirus-Dark"
+
+[desktop.widgets]
+migrated = true
+version = 1
+
+[[desktop.widgets.items]]
+id = "ar-clock"
+kind = "clock"
+face = "dot-matrix"
+date = true
+seconds = false
+
+[desktop.widgets.items.locale]
+numerals = "eastern-arabic"
+calendar = "both"
+language = "ar"
+hijri_in_arabic = true
+
+[desktop.widgets.items.place]
+anchor = "top-left"
+x = 0.06
+y = 0.08
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "ar-orbit"
+kind = "clock"
+face = "orbit"
+date = false
+seconds = false
+
+[desktop.widgets.items.locale]
+numerals = "eastern-arabic"
+language = "ar"
+
+[desktop.widgets.items.place]
+anchor = "top"
+x = 0.0
+y = 0.07
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "ar-hijri"
+kind = "date"
+layout = "month"
+
+[desktop.widgets.items.look]
+plate = "solid"
+plate_opacity = 0.88
+
+[desktop.widgets.items.locale]
+numerals = "eastern-arabic"
+calendar = "hijri"
+language = "ar"
+hijri_in_arabic = true
+
+[desktop.widgets.items.place]
+anchor = "top-right"
+x = -0.05
+y = 0.07
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "ar-countdown"
+kind = "countdown"
+title = "رأس السنة"
+date = "2027-01-01"
+show_date = true
+
+[desktop.widgets.items.locale]
+numerals = "eastern-arabic"
+calendar = "both"
+language = "ar"
+hijri_in_arabic = true
+
+[desktop.widgets.items.place]
+anchor = "bottom-left"
+x = 0.07
+y = -0.12
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "ar-weather"
+kind = "weather"
+layout = "sentence"
+
+[desktop.widgets.items.locale]
+numerals = "eastern-arabic"
+language = "ar"
+
+[desktop.widgets.items.place]
+anchor = "bottom"
+x = 0.0
+y = -0.2
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "ar-tile"
+kind = "date"
+layout = "tile"
+
+[desktop.widgets.items.look]
+plate = "solid"
+plate_shape = "cookie"
+
+[desktop.widgets.items.locale]
+numerals = "eastern-arabic"
+language = "ar"
+
+[desktop.widgets.items.place]
+anchor = "bottom-right"
+x = -0.07
+y = -0.12
+depth = "front"
+
+[dock]
+pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
+
+[location]
+shared = true
+
+[plugins]
+defaults_version = 1
+enabled = ["dock", "desktop-clocks", "desktop-calendar", "desktop-countdown", "desktop-weather", "wallpaper-generator"]
+
+[wallpaper]
+path = "/home/demo/Pictures/Wallpapers/Generated/dunes-000029-2880x1620.png"

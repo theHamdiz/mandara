@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::*;
-use crate::host::{Fetch, Output};
+use crate::host::{Fetch, Output, Row};
 use crate::release::tests::tarball;
 use mandara_delta::signing::sign;
 
@@ -30,9 +30,23 @@ struct FakeHost {
     fetches: HashMap<String, Vec<u8>>,
     /// Commands (argv joined by spaces) that fail.
     failing: HashSet<String>,
+    /// Commands that fail the first time only.
+    failing_once: HashSet<String>,
     /// Commands that fail with this exit code.
     codes: HashMap<String, i32>,
     answers: Option<bool>,
+    /// What a numbered choice gets (`None`: no terminal).
+    choice: Option<usize>,
+    /// A terminal is attached.
+    tty: bool,
+    /// Commands (argv joined by spaces) whose captured stdout is this.
+    stdout: HashMap<String, String>,
+    /// What `select` returns, in order (the default once empty).
+    menus: Vec<usize>,
+    /// `select` is cancelled instead.
+    cancel: bool,
+    /// The prompt and row labels of every menu shown.
+    shown: Vec<(String, Vec<String>)>,
     ran: Vec<Cmd>,
     out: Vec<(Level, String)>,
 }
@@ -55,15 +69,39 @@ impl Host for FakeHost {
     fn run(&mut self, cmd: &Cmd) -> std::io::Result<Output> {
         self.ran.push(cmd.clone());
         let code = self.codes.get(&cmd.display()).copied();
-        Ok(Output { success: !self.failing.contains(&cmd.display()) && code.is_none(), code, ..Default::default() })
+        let stdout = self.stdout.get(&cmd.display()).cloned().unwrap_or_default();
+        let failed_once = self.failing_once.remove(&cmd.display());
+        Ok(Output { success: !failed_once && !self.failing.contains(&cmd.display()) && code.is_none(), code, stdout, ..Default::default() })
     }
 
     fn has_program(&self, name: &str) -> bool {
         self.programs.contains(name)
     }
 
-    fn ask(&mut self, _question: &str, default: bool) -> bool {
+    fn ask(&mut self, question: &str, default: bool) -> bool {
+        self.out.push((Level::Info, format!("asked: {question}")));
         self.answers.unwrap_or(default)
+    }
+
+    fn choose(&mut self, question: &str, max: usize, _default: usize) -> Option<usize> {
+        self.out.push((Level::Info, format!("asked: {question} (0-{max})")));
+        self.choice
+    }
+
+    fn interactive(&self) -> bool {
+        self.tty
+    }
+
+    fn select(&mut self, prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
+        self.shown.push((prompt.to_string(), rows.iter().map(|r| r.label.clone()).collect()));
+        if self.cancel {
+            return None;
+        }
+        if self.menus.is_empty() {
+            Some(default.min(rows.len().saturating_sub(1)))
+        } else {
+            Some(self.menus.remove(0))
+        }
     }
 
     fn fetch(&mut self, url: &str, _limit: u64) -> Result<Vec<u8>, Fetch> {
@@ -197,9 +235,12 @@ fn dry_run_prints_every_package_per_family_and_changes_nothing() {
         assert!(!text.contains(&pm.install_argv(set.build).join(" ")), "{family}: build tools without --from-source");
         // The compositor's portal (MangoWM → wlr).
         assert!(text.contains("xdg-desktop-portal-wlr"), "{family}: no portal");
-        if let Some(refresh) = pm.refresh_argv() {
-            assert!(text.contains(&format!("would run: sudo {}", refresh.join(" "))));
+        // apt's lists are refreshed every time; the fixture's empty root
+        // has no Gentoo tree, so that one is synced first.
+        if index::sync_before_install(pm) || pm == PackageManager::Emerge {
+            assert!(text.contains(&format!("would run: sudo {}\n", index::sync_argv(pm, false).unwrap().join(" "))), "{family}\n{text}");
         }
+        assert!(!text.contains("pacman -Sy"), "{family}: pacman's databases are fine here\n{text}");
         // Login screen: greetd + cage, then the switch and the keyring offer.
         if set.greeter.is_empty() {
             assert!(text.contains("install greetd and cage with your package manager"), "{family}\n{text}");
@@ -249,8 +290,14 @@ fn nixos_and_unknown_systems_get_hints() {
     let mut host = FakeHost::with(&["sudo"]);
     run(&mut host, &FakeProbe::default(), f.facts(Family::NixOS), dry(InstallArgs { no_greeter: true, ..Default::default() })).unwrap();
     let text = host.text();
-    assert!(text.contains("NixOS: add to your configuration") && text.contains("services.gnome.gnome-keyring.enable = true;"));
+    assert!(text.contains("NixOS: install Mandara with its flake") && text.contains("programs.mandara.enable = true;"), "{text}");
+    assert!(text.contains("docs/install.md#nixos"), "{text}");
     assert!(!text.contains("would run: sudo"));
+    // Mandara Login comes from the NixOS module, not greetd + cage packages.
+    let mut host = FakeHost::with(&["sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::NixOS), dry(InstallArgs::default())).unwrap();
+    let text = host.text();
+    assert!(text.contains("programs.mandara.greeter.enable = true; and rebuild") && !text.contains("install greetd and cage"), "{text}");
     let mut host = FakeHost::with(&["sudo"]);
     run(&mut host, &FakeProbe::default(), f.facts(Family::Unknown), dry(InstallArgs::default())).unwrap();
     assert!(host.text().contains("Unknown distribution"));
@@ -265,6 +312,65 @@ fn no_deps_skips_packages_and_greeter_packages() {
     let text = host.text();
     assert!(!text.contains("pacman"), "{text}");
     assert!(text.contains("missing: greetd cage (--no-deps)"));
+}
+
+#[test]
+fn interactive_setup_chooses_the_compositor_then_the_rest_is_not_asked() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["dnf", "sudo", "systemctl", "niri"]);
+    host.tty = true;
+    // Setup → Compositor row, compositor list → Niri, Setup → Install (last row).
+    host.menus = vec![0, 1, 3];
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs::default()).unwrap();
+    let (prompt, rows) = &host.shown[0];
+    assert_eq!(prompt, "Setup");
+    assert_eq!(rows, &["Compositor", "Start with your compositor", "Login screen", "Install"]);
+    assert_eq!(host.shown[1].0, "Compositor");
+    let labels: Vec<&str> = compositors::SUPPORTED.iter().map(|c| c.label).collect();
+    assert_eq!(host.shown[1].1, labels);
+    let bin = f.home().join(".local/bin/mandara");
+    let setup = format!("{} setup --compositor niri --autostart", bin.display());
+    assert!(host.ran().contains(&setup), "{:?}", host.ran());
+    // The login-screen question was answered on the screen, not asked again.
+    assert!(host.text().contains("Mandara Login is your login screen"), "{}", host.text());
+    // A terminal gets the wordmark.
+    assert!(host.text().contains("███╗   ███╗"), "{}", host.text());
+}
+
+#[test]
+fn choices_given_on_the_command_line_are_not_offered() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo", "systemctl"]);
+    host.tty = true;
+    // Rows left: autostart, login screen, Install.
+    host.menus = vec![2];
+    let args = InstallArgs { compositor: Some("niri".into()), ..Default::default() };
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), args).unwrap();
+    assert_eq!(host.shown[0].1, ["Start with your compositor", "Login screen", "Install"]);
+    assert!(host.ran().iter().any(|c| c.ends_with("setup --compositor niri --autostart")), "{:?}", host.ran());
+}
+
+#[test]
+fn yes_skips_the_setup_screen() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo", "systemctl"]);
+    host.tty = true;
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, ..Default::default() }).unwrap();
+    assert!(host.shown.is_empty(), "{:?}", host.shown);
+    // No terminal interaction, so the plain one-line title.
+    assert!(!host.text().contains("███╗"), "{}", host.text());
+}
+
+#[test]
+fn cancelling_the_setup_screen_changes_nothing() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.tty = true;
+    host.cancel = true;
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs::default()).unwrap();
+    assert!(host.text().contains("cancelled — nothing was changed"), "{}", host.text());
+    assert!(host.ran().is_empty(), "{:?}", host.ran());
+    assert!(f.home_files().is_empty(), "{:?}", f.home_files());
 }
 
 #[test]
@@ -296,6 +402,11 @@ fn real_install_puts_files_in_place_and_runs_setup_and_greeter() {
     let text = host.text();
     assert!(text.contains("Mandara is installed.") && text.contains("Upgrade:         mandara update"));
     assert!(text.contains("is not on your PATH"));
+    // `--yes` takes the default: the folder goes on PATH, once.
+    let profile = std::fs::read_to_string(f.home().join(".profile")).unwrap();
+    assert!(profile.contains(&format!("export PATH=\"{}:$PATH\"", f.home().join(".local/bin").display())));
+    assert!(std::fs::read_to_string(f.home().join(".bashrc")).unwrap().contains("Mandara installer"));
+    assert!(super::add_to_path(&f.home(), &f.home().join(".local/bin")).unwrap().is_empty());
     // No published checksum reachable: installed with a warning.
     assert!(text.contains("couldn't verify this binary"));
 }
@@ -630,4 +741,246 @@ fn config_errors_are_reported_without_retiring() {
     let ran = host.ran();
     assert!(!ran.contains(&format!("{b} setup --fix-conflicts")), "{ran:#?}");
     assert!(host.text().contains("Config doctor"));
+}
+
+// ── Package databases (issue #45) ───────────────────────────────────────
+
+/// CachyOS's `pacman.conf`, its databases never synced.
+fn unsynced_pacman(f: &Fixture) {
+    std::fs::write(f.root().join("etc/pacman.conf"), "[options]\nArchitecture = auto\n\n[cachyos]\nInclude = /etc/pacman.d/cachyos-mirrorlist\n[core]\nInclude = /etc/pacman.d/mirrorlist\n[extra]\nInclude = /etc/pacman.d/mirrorlist\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n").unwrap();
+}
+
+const ARCH_RUN: &str = "pacman -S --needed --noconfirm libxkbcommon wayland vulkan-icd-loader mesa fontconfig freetype2";
+const SYNC_QUESTION: &str = "Your package databases are missing or out of date (cachyos, core, extra, multilib). Update them now? This runs `sudo pacman -Syu`, a full system upgrade.";
+
+#[test]
+fn missing_pacman_databases_are_synced_with_a_full_upgrade_first() {
+    // Dry run: the question and the plan, nothing run as root.
+    let f = Fixture::new();
+    unsynced_pacman(&f);
+    let mut host = FakeHost::with(&["pacman", "sudo", "mango"]);
+    host.tty = true;
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(InstallArgs { no_greeter: true, ..Default::default() })).unwrap();
+    let text = host.text();
+    assert!(text.contains(&format!("would ask: {SYNC_QUESTION} [Y/n] (assuming yes)")), "{text}");
+    let sync = text.find("would run: sudo pacman -Syu\n").expect("sync planned");
+    let install = text.find(&format!("would run: sudo {ARCH_RUN}\n")).expect("install planned");
+    assert!(sync < install);
+    assert!(!text.contains("pacman -Sy ") && !text.contains("pacman -Sy\n"), "never a bare -Sy");
+    assert!(host.ran().iter().all(|c| !c.starts_with("sudo")), "{:?}", host.ran());
+
+    // Asked at a terminal and accepted: pacman shows the upgrade itself.
+    let mut host = FakeHost::with(&["pacman", "sudo", "mango"]);
+    host.tty = true;
+    host.answers = Some(true);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_greeter: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    let sync = ran.iter().position(|c| c == "sudo pacman -Syu").unwrap_or_else(|| panic!("{ran:#?}"));
+    let install = ran.iter().position(|c| c == &format!("sudo {ARCH_RUN}")).unwrap();
+    assert!(sync < install);
+    assert!(host.text().contains(&format!("asked: {SYNC_QUESTION}")));
+    assert!(host.text().contains("package databases up to date"));
+
+    // --yes: the default answer, unattended.
+    let mut host = FakeHost::with(&["pacman", "sudo", "mango"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap();
+    assert!(host.ran().contains(&"sudo pacman -Syu --noconfirm".to_string()), "{:?}", host.ran());
+    assert!(host.text().contains("updating them with `sudo pacman -Syu --noconfirm`, a full system upgrade (--yes: the default answer)"), "{}", host.text());
+}
+
+#[test]
+fn declining_the_upgrade_stops_with_what_to_do() {
+    let f = Fixture::new();
+    unsynced_pacman(&f);
+    let mut host = FakeHost::with(&["pacman", "sudo", "mango"]);
+    host.tty = true;
+    host.answers = Some(false);
+    let err = run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_greeter: true, ..Default::default() }).unwrap_err();
+    assert!(err.contains("run `sudo pacman -Syu`, then `mandara install` again") && err.contains("--no-deps"), "{err}");
+    assert!(host.ran().iter().all(|c| !c.starts_with("sudo")), "{:?}", host.ran());
+    assert!(f.home_files().is_empty());
+    // A failed upgrade stops too, with its command.
+    let mut host = FakeHost::with(&["pacman", "sudo", "mango"]);
+    host.failing.insert("sudo pacman -Syu --noconfirm".into());
+    let err = run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap_err();
+    assert!(err.contains("`sudo pacman -Syu --noconfirm` failed"), "{err}");
+    assert!(!host.ran().contains(&format!("sudo {ARCH_RUN}")));
+}
+
+#[test]
+fn a_failed_install_syncs_once_and_retries() {
+    // pacman: databases present but stale (a 404 from the mirror, say).
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo", "mango"]);
+    host.tty = true;
+    host.failing_once.insert(format!("sudo {ARCH_RUN}"));
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_greeter: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    let installs: Vec<usize> = ran.iter().enumerate().filter(|(_, c)| **c == format!("sudo {ARCH_RUN}")).map(|(i, _)| i).collect();
+    let sync = ran.iter().position(|c| c == "sudo pacman -Syu").unwrap_or_else(|| panic!("{ran:#?}"));
+    assert!(installs.len() == 2 && installs[0] < sync && sync < installs[1], "{ran:#?}");
+    assert!(host.text().contains("asked: Your package databases may be out of date. Update them now and try again? This runs `sudo pacman -Syu`, a full system upgrade."), "{}", host.text());
+    // dnf refreshes its metadata without asking (no upgrade).
+    let mut host = FakeHost::with(&["dnf", "sudo", "niri"]);
+    let required = "sudo dnf install -y libxkbcommon libwayland-client vulkan-loader mesa-vulkan-drivers fontconfig freetype";
+    host.failing_once.insert(required.into());
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    let refresh = ran.iter().position(|c| c == "sudo dnf makecache --refresh").unwrap_or_else(|| panic!("{ran:#?}"));
+    assert_eq!(ran.iter().filter(|c| *c == required).count(), 2);
+    assert!(ran.iter().rposition(|c| c == required).unwrap() > refresh);
+    // Failing again after the sync: the usual error, no loop.
+    let mut host = FakeHost::with(&["dnf", "sudo", "niri"]);
+    host.failing.insert(required.into());
+    let err = run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap_err();
+    assert!(err.contains("could not install required packages"));
+    assert_eq!(host.ran().iter().filter(|c| *c == "sudo dnf makecache --refresh").count(), 1);
+}
+
+#[test]
+fn apt_downloads_missing_package_lists_first() {
+    let f = Fixture::new();
+    std::fs::create_dir_all(f.root().join("var/lib/apt/lists/partial")).unwrap();
+    let required = "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libxkbcommon0 libwayland-client0 libvulkan1 mesa-vulkan-drivers libfontconfig1 libfreetype6 ca-certificates";
+    let mut host = FakeHost::with(&["apt-get", "sudo", "niri"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Debian), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    assert!(ran.iter().position(|c| c == "sudo apt-get update").unwrap() < ran.iter().position(|c| c == required).unwrap(), "{ran:#?}");
+    assert!(host.text().contains("no package lists yet: downloading them (sudo apt-get update)"));
+    // It can't download them: a clear stop, not apt's "Unable to locate package".
+    let mut host = FakeHost::with(&["apt-get", "sudo", "niri"]);
+    host.failing.insert("sudo apt-get update".into());
+    let err = run(&mut host, &FakeProbe::default(), f.facts(Family::Debian), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap_err();
+    assert!(err.contains("without package lists nothing can be installed"), "{err}");
+    assert!(!host.ran().contains(&required.to_string()));
+    // Lists present: a failed refresh is only a stale index; installing goes on.
+    std::fs::write(f.root().join("var/lib/apt/lists/deb.debian.org_debian_dists_sid_main_binary-amd64_Packages"), "x").unwrap();
+    let mut host = FakeHost::with(&["apt-get", "sudo", "niri"]);
+    host.failing.insert("sudo apt-get update".into());
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Debian), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap();
+    assert!(host.ran().contains(&required.to_string()));
+}
+
+// ── Installing a compositor ─────────────────────────────────────────────
+
+#[test]
+fn no_compositor_offers_a_numbered_choice() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.tty = true;
+    host.choice = Some(2);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
+    let text = host.text();
+    assert!(text.contains("  1) MangoWM (recommended) · mangowm\n  2) Niri · niri\n  3) Hyprland · hyprland\n  4) Sway · sway\n  5) River Classic · river-classic\n  0) None: I'll install one myself\n"), "{text}");
+    assert!(text.contains("not in Test arch's repositories: Umbriel"));
+    assert!(text.contains("asked: Install which one? (0-5)"));
+    let ran = host.ran();
+    // Availability asked read-only, in the C locale.
+    assert!(ran.contains(&"pacman -Si mangowm".to_string()));
+    let query = host.ran.iter().find(|c| c.display() == "pacman -Si niri").unwrap();
+    assert!(query.env.contains(&("LC_ALL".into(), "C".into())) && query.io == Io::Capture);
+    let b = f.home().join(".local/bin/mandara").display().to_string();
+    let niri = ran.iter().position(|c| c == "sudo pacman -S --needed --noconfirm niri").unwrap_or_else(|| panic!("{ran:#?}"));
+    assert!(ran.contains(&"sudo pacman -S --needed --noconfirm xdg-desktop-portal-gnome".to_string()));
+    let setup = ran.iter().position(|c| *c == format!("{b} setup --compositor niri")).unwrap_or_else(|| panic!("{ran:#?}"));
+    assert!(niri < setup);
+    assert!(!ran.iter().any(|c| c.ends_with(" mangowm") && c.starts_with("sudo")));
+
+    // 0, or no terminal: nothing installed, setup finds what it finds.
+    for choice in [Some(0), None] {
+        let mut host = FakeHost::with(&["pacman", "sudo"]);
+        host.choice = choice;
+        run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
+        assert!(!host.ran().iter().any(|c| ["mangowm", "niri", "hyprland"].iter().any(|p| *c == format!("sudo pacman -S --needed --noconfirm {p}"))), "{:?}", host.ran());
+        assert!(host.text().contains("none installed; install one yourself"));
+        assert!(host.ran().contains(&format!("{b} setup")));
+    }
+}
+
+#[test]
+fn unattended_installs_only_the_named_compositor() {
+    let f = Fixture::new();
+    // --yes alone never picks one.
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.choice = Some(1);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap();
+    assert!(host.text().contains("not installing one unasked (--yes): rerun with --compositor mango|niri|hyprland"), "{}", host.text());
+    assert!(!host.ran().iter().any(|c| c == "sudo pacman -S --needed --noconfirm mangowm"));
+    // --compositor hypr --yes: installed, then set up.
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_greeter: true, compositor: Some("hypr".into()), ..Default::default() }).unwrap();
+    let ran = host.ran();
+    assert!(ran.contains(&"sudo pacman -S --needed --noconfirm hyprland".to_string()), "{ran:#?}");
+    assert!(ran.contains(&"sudo pacman -S --needed --noconfirm xdg-desktop-portal-hyprland".to_string()));
+    let b = f.home().join(".local/bin/mandara").display().to_string();
+    assert!(ran.contains(&format!("{b} setup --compositor hyprland --autostart")), "{ran:#?}");
+    // Named with --yes: installed without a question.
+    assert!(host.text().contains("Hyprland (hyprland)") && !host.text().contains("asked:"), "{}", host.text());
+    // Already installed: nothing to do.
+    let mut host = FakeHost::with(&["pacman", "sudo", "Hyprland"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_greeter: true, compositor: Some("hyprland".into()), ..Default::default() }).unwrap();
+    assert!(!host.text().contains("Installing a compositor"));
+    // Declined: kept as it is.
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.answers = Some(false);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_greeter: true, compositor: Some("niri".into()), ..Default::default() }).unwrap();
+    assert!(!host.ran().contains(&"sudo pacman -S --needed --noconfirm niri".to_string()));
+    assert!(host.text().contains("asked: Niri isn't installed. Install it now (niri, from your distribution's repositories)?"));
+    assert!(host.text().contains("skipped; install Niri yourself, then run `mandara setup --compositor niri`"));
+}
+
+#[test]
+fn compositors_follow_each_familys_repositories() {
+    let f = Fixture::new();
+    // A Debian without Hyprland or Sway: apt says so, nothing is offered.
+    let mut host = FakeHost::with(&["apt-get", "sudo"]);
+    host.failing.insert("apt-cache show hyprland".into());
+    host.failing.insert("apt-cache show sway".into());
+    host.choice = Some(1);
+    std::fs::create_dir_all(f.root().join("var/lib/apt/lists")).unwrap();
+    std::fs::write(f.root().join("var/lib/apt/lists/deb.debian.org_debian_dists_trixie_main_binary-amd64_Packages"), "x").unwrap();
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Debian), InstallArgs { no_greeter: true, ..Default::default() }).unwrap();
+    assert!(host.text().contains("Test debian's repositories don't carry any of them"), "{}", host.text());
+    assert!(!host.ran().iter().any(|c| c.contains("install") && c.ends_with(" hyprland")));
+    // Fedora: Niri only.
+    let mut host = FakeHost::with(&["dnf", "sudo"]);
+    host.choice = Some(1);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs { no_greeter: true, ..Default::default() }).unwrap();
+    assert!(host.text().contains("  1) Niri (recommended) · niri\n  2) Sway · sway\n  0) None"), "{}", host.text());
+    assert!(host.ran().contains(&"sudo dnf install -y niri".to_string()));
+    // apk lists nothing for a package it lacks.
+    let mut host = FakeHost::with(&["apk", "sudo"]);
+    host.stdout.insert("apk search -x niri".into(), "niri-25.11-r2\n".into());
+    host.choice = Some(1);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Alpine), InstallArgs { no_greeter: true, ..Default::default() }).unwrap();
+    assert!(host.text().contains("  1) Niri (recommended) · niri\n  0) None"), "{}", host.text());
+    // Named but not carried: a hint, no install.
+    let mut host = FakeHost::with(&["emerge", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Gentoo), dry(InstallArgs { no_greeter: true, compositor: Some("niri".into()), ..Default::default() })).unwrap();
+    assert!(host.text().contains("Niri isn't installed, and Test gentoo's repositories don't carry it"), "{}", host.text());
+    // --no-deps: hints only.
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, compositor: Some("niri".into()), ..Default::default() }).unwrap();
+    assert!(host.text().contains("Niri isn't installed (--no-deps)"));
+    assert!(!host.ran().iter().any(|c| c.starts_with("sudo pacman") || c.starts_with("pacman")));
+}
+
+#[test]
+fn dry_run_shows_the_compositor_plan() {
+    let f = Fixture::new();
+    unsynced_pacman(&f);
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.tty = true;
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(InstallArgs { no_greeter: true, ..Default::default() })).unwrap();
+    let text = host.text();
+    assert!(text.contains("would ask: Install which one? [1] (assuming 1)"), "{text}");
+    let sync = text.find("would run: sudo pacman -Syu\n").unwrap();
+    let mango = text.find("would run: sudo pacman -S --needed --noconfirm mangowm\n").unwrap();
+    assert!(sync < mango);
+    assert!(text.contains("would run: sudo pacman -S --needed --noconfirm xdg-desktop-portal-wlr\n"));
+    assert!(text.contains("then run: mandara setup --compositor mango --autostart"));
+    // The databases aren't synced yet in a dry run: the table is trusted
+    // (and says so) and nothing is queried.
+    assert!(host.ran().iter().all(|c| !c.contains("pacman")), "{:?}", host.ran());
+    assert!(text.contains("from Mandara's package table: the package databases aren't downloaded yet"));
 }

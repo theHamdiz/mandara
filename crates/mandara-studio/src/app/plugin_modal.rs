@@ -557,6 +557,8 @@ impl StudioView {
             self.modal.confirm_uninstall = false;
             self.modal.confirm_remove = false;
             self.modal.message = None;
+            // A new visit to the recorder's settings reads its lists afresh.
+            self.recorder_row.new_visit();
         }
         self.modal.open = true;
         self.modal.appear.set_config(APPEAR_SPRING);
@@ -628,7 +630,7 @@ impl StudioView {
         let grow = START_WIDTH + (1.0 - START_WIDTH) * a;
         let body = match view {
             ModalView::Detail => self.plugin_detail_body(&m, full_w, cfg, p, cx),
-            ModalView::Settings => self.plugin_settings_body(&m, cfg, p, cx),
+            ModalView::Settings => self.plugin_settings_body(&m, full_w, cfg, p, cx),
         };
         let rtl = mandara_i18n::language().is_rtl();
         let close = div()
@@ -1107,7 +1109,7 @@ impl StudioView {
             .into_any_element()
     }
 
-    fn plugin_settings_body(&mut self, m: &PluginManifest, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    fn plugin_settings_body(&mut self, m: &PluginManifest, width: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let list = plugin_settings(m);
         let rtl = mandara_i18n::language().is_rtl();
         let fonts = mandara_ui::fonts::fonts(cx);
@@ -1144,7 +1146,7 @@ impl StudioView {
                 .child(div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("This plugin works without settings.")))
                 .into_any_element()
         } else {
-            self.rows_plain(&list, cfg, p, cx)
+            self.rows_plain(&list, width - 2.0 * BODY_PAD, cfg, p, cx)
         };
         div()
             .p(px(BODY_PAD))

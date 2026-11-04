@@ -11,43 +11,64 @@
 //! * Session: lock, the power menu, reload the config.
 //!
 //! The panel is glass (`panels.menu_translucent`, `panels.menu_opacity`)
-//! and the cards on it are solid.
+//! and the cards on it are solid. Every action tile wears its own faint
+//! ornament in its own accent (`panels.menu_patterns`, see [`ornament`]).
 
-use std::cell::Cell;
+pub(crate) mod ornament;
+
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::time::Instant;
 
 use gpui::{App, FontWeight, ImageSource, InteractiveElement, IntoElement, ObjectFit, ParentElement, StatefulInteractiveElement, Styled, StyledImage as _, Window, div, img, prelude::FluentBuilder as _, px, size};
-use mandara_core::ToGpui;
+use mandara_core::{FrameClock, SpringConfig, SpringValue, ToGpui};
 use mandara_i18n::{t, tf, tk, tr};
 use mandara_plugins::{CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry};
 use mandara_services::MediaCommand;
 use mandara_config::power::{SessionEntry, SessionEntryKind};
+use mandara_config::surfaces::MenuRail;
 use mandara_theme::{MandaraPalette, ThemeSource, catalog};
 use serde_json::json;
 
 use super::fn_view;
+use crate::bidi::Bidi as _;
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
 use crate::kit::{card, icon_button, reveal, text, tokens};
 use crate::state::{config, shell, update_config};
+use mandara_config::surfaces::MenuTileSurface;
+use ornament::{Motif, Ornament};
 
 pub const ID: &str = "main-menu";
 
-const WIDTH: f32 = 640.0;
+const WIDTH: f32 = 760.0;
+/// With the compact rail (icons only) the menu is narrower by the width the
+/// labels took, so the cards keep their size either way.
+const WIDTH_COMPACT: f32 = 640.0;
 /// Before the first measurement (the menu is as tall as its page).
 const HEIGHT: f32 = 468.0;
 /// Size changes smaller than this don't resize the panel.
 const SIZE_EPSILON: f32 = 0.5;
 const PAD: f32 = 12.0;
-/// The rail: pages, then shortcuts, then settings.
-const RAIL_W: f32 = 48.0;
+/// The rail: pages, then shortcuts, then settings. Each row shows its name
+/// beside the icon, so the rail is wide enough for the longest label at the
+/// default size (a longer translation truncates rather than clipping the
+/// panel) and the panel grew by the same amount to keep the cards their
+/// width. Compact hides the names and takes the old icon-only width back.
+const RAIL_W: f32 = 168.0;
+const RAIL_COMPACT_W: f32 = 48.0;
 const RAIL_BUTTON: f32 = 32.0;
-const RAIL_ICON: f32 = 16.0;
+const RAIL_ICON: f32 = 17.0;
+/// The compact rail keeps the original icon size and the open page's
+/// light tint.
+const RAIL_COMPACT_ICON: f32 = 16.0;
+const RAIL_ON_TINT: f32 = 0.18;
 const RAIL_GAP: f32 = 3.0;
-/// The hairline between the rail's groups.
-const RAIL_RULE_W: f32 = 20.0;
+/// The hairline between the rail's groups (as wide as the icons).
 const RAIL_RULE_ALPHA: f32 = 0.3;
+const RAIL_COMPACT_RULE_W: f32 = 20.0;
 
 /// Rail shortcuts: a panel of its own each (icon, plugin id, name).
 const SHORTCUTS: [(&str, &str, &str); 7] = [
@@ -88,6 +109,52 @@ const SHADE: (f32, f32) = (0.72, 0.18);
 const LINE_GAP: f32 = 2.0;
 /// Secondary text on the profile card.
 const SOFT_TEXT: f32 = 0.78;
+/// Tile ornaments. Kufic words are drawn at one scale (px per font unit,
+/// so every word's strokes match) in the tile's top-end corner, level
+/// with the icon; a geometric motif is a square of `MOTIF_PX` sitting in
+/// the bottom-end corner, overhanging both edges so the tile crops it.
+const WORD_PX_PER_UNIT: f32 = 0.046;
+const WORD_INSET: f32 = 10.0;
+const MOTIF_PX: f32 = 136.0;
+const MOTIF_INSET: f32 = -24.0;
+/// The Look page's short tiles draw their ornaments this much smaller,
+/// and tuck a motif further into the corner, clear of the label.
+const COMPACT: f32 = 0.7;
+const COMPACT_MOTIF_INSET: f32 = -38.0;
+/// The ornament's ink at rest and under the pointer (an upper bound: the
+/// label's WCAG contrast caps it per theme, [`ornament::ink_alpha`]).
+/// Solid calligraphy needs less than hairline geometry to read the same.
+const WORD_INK: (f32, f32) = (0.09, 0.14);
+const MOTIF_INK: (f32, f32) = (0.22, 0.34);
+/// The lighter lip's ink, and how far it peeks out (toward the
+/// bottom-right, where the rim's light falls).
+const WORD_LIP: (f32, f32) = (0.10, 0.16);
+const MOTIF_LIP: (f32, f32) = (0.22, 0.34);
+const LIP_OFFSET_PX: f32 = 1.0;
+/// The ink that moves away from the text's lightness (the shade on a
+/// dark tile, the lip on a light one, [`ornament::inks`]) can only add to
+/// the text's contrast; it takes this much more ink to read the same.
+const AWAY_GAIN: f32 = 3.0;
+/// How far the tile's surface leans toward its accent at the ornament's
+/// corner (an OKLCH mix): an ambient wash, not a colour block.
+const WASH: f32 = 0.08;
+/// CSS angles of that wash: toward the bottom-end corner.
+const WASH_ANGLE_LTR: f32 = 135.0;
+const WASH_ANGLE_RTL: f32 = 225.0;
+/// Under the pointer the ornament drifts this far into the tile.
+const DRIFT_PX: f32 = 3.0;
+/// Glass tiles (`panels.menu_tile_surface`): how much of the tile's fill
+/// covers the menu's glass behind it.
+const GLASS_FILL: f32 = 0.55;
+/// The tiles' drop shadow at full strength (`panels.menu_tile_shadow`):
+/// kept tight, since compositors blur layer surfaces wherever alpha > 0.
+const SHADOW_ALPHA: f32 = 0.45;
+const SHADOW_OFFSET_PX: f32 = 3.0;
+const SHADOW_BLUR_PX: f32 = 10.0;
+/// OKLCH lightness of the shadow's ink (a near-black).
+const SHADOW_LIGHTNESS: f32 = 0.08;
+/// The hover glow's spring: quick and settled, no overshoot to speak of.
+const GLOW_SPRING: SpringConfig = SpringConfig::new(320.0, 34.0, 1.0);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Page {
@@ -127,6 +194,8 @@ struct Action {
     label: &'static str,
     hint: &'static str,
     run: Run,
+    /// Its tile's ornament and accent hue.
+    ornament: Ornament,
 }
 
 fn close(cx: &mut App) {
@@ -134,62 +203,62 @@ fn close(cx: &mut App) {
 }
 
 const APPS: &[Action] = &[
-    Action { icon: "grid", label: tk("Launcher"), hint: "Super+Space", run: |cx| {
+    Action { icon: "grid", label: tk("Launcher"), ornament: Ornament::word("launcher", Motif::Grid, 0.0), hint: "Super+Space", run: |cx| {
         close(cx);
         shell(cx).update(cx, |s, cx| s.set_launcher(true, cx));
     } },
-    Action { icon: "image", label: tk("Wallpapers"), hint: tk("picker"), run: |cx| {
+    Action { icon: "image", label: tk("Wallpapers"), ornament: Ornament::word("wallpapers", Motif::Chevrons, 24.0), hint: tk("picker"), run: |cx| {
         close(cx);
         shell(cx).update(cx, |s, cx| s.set_wallpaper_picker(true, cx));
     } },
-    Action { icon: "sidebar", label: tk("Sidebar"), hint: tk("toggle"), run: |cx| {
+    Action { icon: "sidebar", label: tk("Sidebar"), ornament: Ornament::word("sidebar", Motif::Columns, 48.0), hint: tk("toggle"), run: |cx| {
         close(cx);
         let s = shell(cx);
         let open = !s.read(cx).sidebar_visible();
         s.update(cx, |s, cx| s.set_sidebar(open, cx));
     } },
-    Action { icon: "monitor", label: tk("Mandara Studio"), hint: tk("settings"), run: |cx| {
+    Action { icon: "monitor", label: tk("Mandara Studio"), ornament: Ornament::word("studio", Motif::Honeycomb, -24.0), hint: tk("settings"), run: |cx| {
         close(cx);
         crate::state::open_studio(cx);
     } },
-    Action { icon: "crop", label: tk("Screenshot"), hint: "Super+Shift+S", run: |cx| {
+    Action { icon: "crop", label: tk("Screenshot"), ornament: Ornament::word("screenshot", Motif::Frames, -48.0), hint: "Super+Shift+S", run: |cx| {
         close(cx);
         crate::snip::open(crate::snip::SnipMode::Region, cx);
     } },
-    Action { icon: "clipboard", label: tk("Clipboard history"), hint: "Super+Shift+V", run: |cx| {
+    Action { icon: "clipboard", label: tk("Clipboard history"), ornament: Ornament::word("clipboard", Motif::Sheets, 72.0), hint: "Super+Shift+V", run: |cx| {
         shell(cx).update(cx, |s, cx| s.set_panel(Some("clipboard".into()), cx));
     } },
-    Action { icon: "pencil", label: tk("Edit desktop"), hint: tk("widgets"), run: |cx| {
+    Action { icon: "pencil", label: tk("Edit desktop"), ornament: Ornament::word("edit", Motif::Lattice, -72.0), hint: tk("widgets"), run: |cx| {
         close(cx);
         crate::desktop_edit::enter(cx);
     } },
 ];
 
 const LOOK: &[Action] = &[
-    Action { icon: "moon", label: tk("Toggle light / dark"), hint: "Super+Shift+T", run: |cx| {
+    Action { icon: "moon", label: tk("Toggle light / dark"), ornament: Ornament::motif(Motif::Shamsa, 0.0), hint: "Super+Shift+T", run: |cx| {
         let mode = config(cx).read(cx).get().theme.mode.toggled();
         update_config(cx, |c| c.theme.mode = mode);
     } },
-    Action { icon: "sun", label: tk("Next theme"), hint: "theme next", run: |cx| {
+    Action { icon: "sun", label: tk("Next theme"), ornament: Ornament::motif(Motif::Zellige, 40.0), hint: "theme next", run: |cx| {
         let next = match &config(cx).read(cx).get().theme.source {
             ThemeSource::Preset { preset } => catalog::next_id(preset),
             _ => catalog::DEFAULT_THEME.to_string(),
         };
         apply_theme(next, cx);
     } },
-    Action { icon: "image", label: tk("Wallpapers"), hint: tk("picker"), run: |cx| {
+    Action { icon: "image", label: tk("Wallpapers"), ornament: Ornament::word("wallpapers", Motif::Chevrons, 24.0), hint: tk("picker"), run: |cx| {
         close(cx);
         shell(cx).update(cx, |s, cx| s.set_wallpaper_picker(true, cx));
     } },
 ];
 
 const SESSION: &[Action] = &[
-    Action { icon: "lock", label: tk("Lock"), hint: "", run: |cx| session(SessionEntryKind::Lock, cx) },
-    Action { icon: "logout", label: tk("Log out"), hint: "", run: |cx| session(SessionEntryKind::Logout, cx) },
-    Action { icon: "moon", label: tk("Sleep"), hint: "", run: |cx| session(SessionEntryKind::Suspend, cx) },
-    Action { icon: "restart", label: tk("Restart"), hint: "", run: |cx| session(SessionEntryKind::Reboot, cx) },
-    Action { icon: "power", label: tk("Shut down"), hint: "", run: |cx| session(SessionEntryKind::Shutdown, cx) },
-    Action { icon: "refresh", label: tk("Reload config"), hint: "", run: |cx| {
+    Action { icon: "lock", label: tk("Lock"), ornament: Ornament::motif(Motif::Mashrabiya, 0.0), hint: "", run: |cx| session(SessionEntryKind::Lock, cx) },
+    Action { icon: "logout", label: tk("Log out"), ornament: Ornament::motif(Motif::Doorway, 30.0), hint: "", run: |cx| session(SessionEntryKind::Logout, cx) },
+    Action { icon: "moon", label: tk("Sleep"), ornament: Ornament::motif(Motif::Waves, -40.0), hint: "", run: |cx| session(SessionEntryKind::Suspend, cx) },
+    Action { icon: "restart", label: tk("Restart"), ornament: Ornament::motif(Motif::Rings, 60.0), hint: "", run: |cx| session(SessionEntryKind::Reboot, cx) },
+    Action { icon: "power", label: tk("Shut down"), ornament: Ornament::motif(Motif::Sunset, -70.0), hint: "", run: |cx| session(SessionEntryKind::Shutdown, cx) },
+    Action { icon: "refresh", label: tk("Reload config"), ornament: Ornament::motif(Motif::Pharos, 90.0), hint: "", run: |cx| {
         close(cx);
         let _ = crate::state::reload_config_from_disk(cx);
     } },
@@ -384,28 +453,222 @@ fn home(palette: &MandaraPalette, p: &PanelCx, cx: &mut App) -> gpui::AnyElement
         .into_any_element()
 }
 
+/// Each tile's hover glow, springing between rest (0) and under the
+/// pointer (1), and each tile's colours. Springs step only while one
+/// moves (idle, nothing runs); colours are worked out once per palette.
+#[derive(Default)]
+struct Glow {
+    springs: HashMap<&'static str, SpringValue<f32>>,
+    clock: FrameClock,
+    /// The palette the colours were worked out for, and the colours per
+    /// tile (by label).
+    palette: Option<PaletteKey>,
+    inks: HashMap<(&'static str, bool), TileInk>,
+}
+
+/// The palette roles a tile's colours depend on, as their OKLCH bits
+/// (cheap to compare on every render).
+type PaletteKey = [[u32; 3]; 5];
+
+fn palette_key(p: &MandaraPalette) -> PaletteKey {
+    [p.primary, p.surface_container, p.surface_container_high, p.on_surface, p.on_surface_variant].map(|c| [c.lightness(), c.chroma(), c.hue()].map(f32::to_bits))
+}
+
+/// A tile's colours: its ornament's inks with their alphas (rest, under
+/// the pointer), its icon, and its surface at rest and hovered.
+#[derive(Clone)]
+struct TileInk {
+    shade: mandara_theme::Color,
+    lip: mandara_theme::Color,
+    shade_alpha: (f32, f32),
+    lip_alpha: (f32, f32),
+    icon: mandara_theme::Color,
+    wash_rest: mandara_theme::Color,
+    wash_high: mandara_theme::Color,
+}
+
+impl TileInk {
+    fn new(o: Ornament, palette: &MandaraPalette) -> Self {
+        let accent = ornament::accent(palette, o.hue);
+        let (rest, high) = (palette.surface_container, palette.surface_container_high);
+        let (wash_rest, wash_high) = (rest.mix(accent, WASH), high.mix(accent, WASH));
+        let texts = [palette.on_surface, palette.on_surface_variant];
+        let inks = ornament::inks(accent, rest, palette.on_surface);
+        let (shade_gain, lip_gain) = if inks.carved { (AWAY_GAIN, 1.0) } else { (1.0, AWAY_GAIN) };
+        let (shade, lip) = if o.is_word() { (WORD_INK, WORD_LIP) } else { (MOTIF_INK, MOTIF_LIP) };
+        // The busiest spot under the text: the washed corner, inked at
+        // most; under the pointer the ink deepens as far as the text allows.
+        let alpha = |colour, (rest_want, hover_want): (f32, f32)| {
+            let at_rest = ornament::ink_alpha(colour, wash_rest, &texts, rest_want).min(ornament::ink_alpha(colour, wash_high, &texts, rest_want));
+            (at_rest, ornament::ink_alpha(colour, wash_high, &texts, hover_want).max(at_rest))
+        };
+        Self {
+            shade: inks.shade,
+            lip: inks.lip,
+            shade_alpha: alpha(inks.shade, (shade.0 * shade_gain, shade.1 * shade_gain)),
+            lip_alpha: alpha(inks.lip, (lip.0 * lip_gain, lip.1 * lip_gain)),
+            icon: ornament::icon_ink(ornament::icon_ink(accent, palette.primary, rest), palette.primary, high),
+            wash_rest,
+            wash_high,
+        }
+    }
+}
+
+impl Glow {
+    fn value(&self, key: &'static str) -> f32 {
+        self.springs.get(key).map_or(0.0, |s| s.value())
+    }
+
+    fn aim(&mut self, key: &'static str, on: bool) {
+        self.springs.entry(key).or_insert_with(|| SpringValue::new(0.0, GLOW_SPRING)).set_target(if on { 1.0 } else { 0.0 });
+    }
+
+    /// Advances every moving spring one frame; whether any still moves.
+    fn step(&mut self) -> bool {
+        if !self.springs.values().any(|s| s.is_animating()) {
+            // The next hover starts from a nominal frame, not the idle gap.
+            self.clock = FrameClock::new();
+            return false;
+        }
+        let dt = self.clock.tick(Instant::now());
+        let profile = mandara_core::spring::motion_profile();
+        let mut moving = false;
+        for s in self.springs.values_mut() {
+            moving |= s.step_in(dt, &profile);
+        }
+        moving
+    }
+
+    /// Forgets the tiles' colours when the palette changed.
+    fn follow(&mut self, palette: &MandaraPalette) {
+        let key = palette_key(palette);
+        if self.palette != Some(key) {
+            self.palette = Some(key);
+            self.inks.clear();
+        }
+    }
+
+    /// `a`'s colours, worked out on first use and kept until the palette
+    /// changes ([`Self::follow`]).
+    fn ink(&mut self, a: &Action, o: Ornament, palette: &MandaraPalette) -> TileInk {
+        self.inks.entry((a.label, o.is_word())).or_insert_with(|| TileInk::new(o, palette)).clone()
+    }
+}
+
+/// What a page of tiles draws with.
+#[derive(Copy, Clone)]
+struct TileCx<'a> {
+    glow: &'a Rc<RefCell<Glow>>,
+    /// `panels.menu_patterns`.
+    patterns: bool,
+    /// `panels.menu_calligraphy`: Kufic words on the app and tool tiles.
+    calligraphy: bool,
+    /// Short tiles (the Look page's one row).
+    compact: bool,
+    /// `panels.menu_tile_surface`.
+    surface: mandara_config::surfaces::MenuTileSurface,
+    /// `panels.menu_tile_shadow`, 0–1.
+    shadow: f32,
+}
+
+/// A tile's ornament (its lip, then its body), its icon colour and its
+/// surface (rest, hover).
+fn ornament_layer(o: Ornament, ink: &TileInk, palette: &MandaraPalette, glow: f32, compact: bool) -> ([gpui::AnyElement; 2], mandara_theme::Color, gpui::Background, gpui::Background) {
+    let rtl = crate::bidi::rtl();
+    let angle = if rtl { WASH_ANGLE_RTL } else { WASH_ANGLE_LTR };
+    let drift = DRIFT_PX * glow;
+    let (k, motif_inset) = if compact { (COMPACT, COMPACT_MOTIF_INSET) } else { (1.0, MOTIF_INSET) };
+    let (w, h) = match o.units() {
+        Some((w, h)) => (w * WORD_PX_PER_UNIT * k, h * WORD_PX_PER_UNIT * k),
+        None => (MOTIF_PX * k, MOTIF_PX * k),
+    };
+    let layer = |colour: mandara_theme::Color, (rest, hover): (f32, f32), dx: f32, dy: f32| {
+        let alpha = rest + (hover - rest) * glow;
+        let el = gpui::svg().path(o.path()).absolute().w(px(w)).h(px(h)).text_color(colour.with_alpha(alpha).hsla());
+        // Words hang from the top-end corner, motifs sit in the bottom-end
+        // one; both drift into the tile under the pointer.
+        let el = if o.is_word() { el.top(px(WORD_INSET + drift + dy)) } else { el.bottom(px(motif_inset + drift - dy)) };
+        let end = if o.is_word() { WORD_INSET } else { motif_inset };
+        (if rtl { el.left(px(end + drift + dx)) } else { el.right(px(end + drift - dx)) }).into_any_element()
+    };
+    let art = [layer(ink.lip, ink.lip_alpha, LIP_OFFSET_PX, LIP_OFFSET_PX), layer(ink.shade, ink.shade_alpha, 0.0, 0.0)];
+    let (rest, high) = (palette.surface_container, palette.surface_container_high);
+    (art, ink.icon, mandara_core::oklab_gradient(angle, rest, ink.wash_rest), mandara_core::oklab_gradient(angle, high, ink.wash_high))
+}
+
 /// A page of action tiles, three to a row (a short last row spreads
 /// across); the rows share the page's height.
-fn tiles(actions: &[Action], palette: &MandaraPalette, p: &PanelCx) -> gpui::AnyElement {
+fn tiles(actions: &[Action], palette: &MandaraPalette, p: &PanelCx, tc: &TileCx, window: &mut Window) -> gpui::AnyElement {
+    if tc.patterns {
+        let mut g = tc.glow.borrow_mut();
+        g.follow(palette);
+        if g.step() {
+            window.request_animation_frame();
+        }
+    }
     let mut grid = div().flex_1().flex().flex_col().gap(px(tokens::SM));
     for (r, chunk) in actions.chunks(TILES_PER_ROW).enumerate() {
         let mut row = div().flex_1().min_h(px(0.0)).flex().gap(px(tokens::SM));
         for (c, a) in chunk.iter().enumerate() {
             let run = a.run;
+            let mut tile = div()
+                .id(("menu-tile", r * TILES_PER_ROW + c))
+                .relative()
+                .flex_1()
+                .min_w(px(0.0))
+                .p(px(tokens::MD))
+                .rounded(px(crate::style::card_radius()))
+                .cursor_pointer()
+                .flex()
+                .flex_col()
+                .justify_between();
+            let (plain_rest, plain_high): (gpui::Background, gpui::Background) = match tc.surface {
+                MenuTileSurface::Glass => (palette.surface_container.with_alpha(GLASS_FILL).hsla().into(), palette.surface_container_high.with_alpha(GLASS_FILL).hsla().into()),
+                _ => (palette.surface_container.hsla().into(), palette.surface_container_high.hsla().into()),
+            };
+            // Raised and glass tiles wear the specular rim; any tile may
+            // cast a shadow.
+            let mut shadows = if tc.surface == MenuTileSurface::Flat { Vec::new() } else { mandara_core::glass_rim(palette.specular_rim_light, palette.specular_rim_shadow) };
+            if tc.shadow > 0.0 {
+                shadows.push(gpui::BoxShadow {
+                    color: mandara_theme::Color::oklcha(SHADOW_LIGHTNESS, 0.0, 0.0, SHADOW_ALPHA * tc.shadow).hsla(),
+                    offset: gpui::point(px(0.0), px(SHADOW_OFFSET_PX * tc.shadow)),
+                    blur_radius: px(SHADOW_BLUR_PX * tc.shadow),
+                    spread_radius: px(0.0),
+                    inset: false,
+                });
+            }
+            tile = tile.shadow(shadows);
+            let glyph = if tc.patterns {
+                let ([lip, body], ink, rest, high) = {
+                    let mut g = tc.glow.borrow_mut();
+                    let o = a.ornament.shown(tc.calligraphy);
+                    let ink = g.ink(a, o, palette);
+                    ornament_layer(o, &ink, palette, g.value(a.label), tc.compact)
+                };
+                // Only raised tiles lean into their accent; flat and glass
+                // keep their plain fill.
+                let (rest, high) = if tc.surface == MenuTileSurface::Raised { (rest, high) } else { (plain_rest, plain_high) };
+                let glow = tc.glow.clone();
+                let key = a.label;
+                tile = crate::style::ClipRounded::clip_rounded(tile)
+                    .bg(rest)
+                    .hover(move |s| s.bg(high))
+                    .on_hover(move |on: &bool, window, _| {
+                        glow.borrow_mut().aim(key, *on);
+                        window.refresh();
+                    })
+                    // A flat tile's ornament has no engraved lip.
+                    .when(tc.surface != MenuTileSurface::Flat, |el| el.child(lip))
+                    .child(body);
+                ink
+            } else {
+                tile = tile.bg(plain_rest).hover(move |s| s.bg(plain_high));
+                palette.primary
+            };
             row = row.child(
-                div()
-                    .id(("menu-tile", r * TILES_PER_ROW + c))
-                    .flex_1()
-                    .min_w(px(0.0))
-                    .p(px(tokens::MD))
-                    .rounded(px(crate::style::card_radius()))
-                    .bg(palette.surface_container.hsla())
-                    .hover(|s| s.bg(palette.surface_container_high.hsla()))
-                    .cursor_pointer()
-                    .flex()
-                    .flex_col()
-                    .justify_between()
-                    .child(icon(a.icon, TILE_ICON, palette.primary))
+                // The icon leads the label: at the start, right in RTL.
+                tile.child(div().flex().when(crate::bidi::rtl(), |el| el.justify_end()).child(icon(a.icon, TILE_ICON, glyph)))
                     .child(
                         div()
                             .flex()
@@ -423,7 +686,7 @@ fn tiles(actions: &[Action], palette: &MandaraPalette, p: &PanelCx) -> gpui::Any
 }
 
 /// The Look page: its actions, then every theme to pick from.
-fn look(palette: &MandaraPalette, p: &PanelCx, cx: &App) -> gpui::AnyElement {
+fn look(palette: &MandaraPalette, p: &PanelCx, tc: &TileCx, window: &mut Window, cx: &App) -> gpui::AnyElement {
     let current = match &config(cx).read(cx).get().theme.source {
         ThemeSource::Preset { preset } => preset.clone(),
         _ => String::new(),
@@ -485,44 +748,80 @@ fn look(palette: &MandaraPalette, p: &PanelCx, cx: &App) -> gpui::AnyElement {
         .flex()
         .flex_col()
         .gap(px(tokens::SM))
-        .child(div().h(px(LOOK_TILES_H)).flex().flex_col().child(tiles(LOOK, palette, p)))
+        .child(div().h(px(LOOK_TILES_H)).flex().flex_col().child(tiles(LOOK, palette, p, &TileCx { compact: true, ..*tc }, window)))
         .child(fill(p, 2, themes_card))
         .into_any_element()
 }
 
-fn render(page: &Rc<Cell<Page>>, fit: &Rc<Cell<gpui::Size<gpui::Pixels>>>, palette: &MandaraPalette, p: &PanelCx, window: &mut Window, cx: &mut App) -> gpui::AnyElement {
+fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, fit: &Rc<Cell<gpui::Size<gpui::Pixels>>>, palette: &MandaraPalette, p: &PanelCx, window: &mut Window, cx: &mut App) -> gpui::AnyElement {
     let now = page.get();
-    let rail_button = |id: (&'static str, usize), glyph: &'static str, on: bool| {
-        div()
+    let compact = config(cx).read(cx).get().panels.menu_rail == MenuRail::Compact;
+    let width = if compact { WIDTH_COMPACT } else { WIDTH };
+    // A rail row: the entry's icon and name (or just the icon in compact).
+    let rail_button = |id: (&'static str, usize), glyph: &'static str, label: &'static str, on: bool| {
+        let row = div()
             .id(id)
-            .size(px(RAIL_BUTTON))
+            .h(px(RAIL_BUTTON))
             .rounded(px(crate::style::radius(tokens::MD)))
-            .flex()
+            .row()
             .items_center()
-            .justify_center()
             .cursor_pointer()
-            .when(on, |el| el.bg(palette.primary.with_alpha(0.18).hsla()))
-            .hover(|s| s.bg(palette.surface_container_high.hsla()))
-            .child(icon(glyph, RAIL_ICON, if on { palette.primary } else { palette.on_surface_variant }))
+            .text_size(px(text::BODY_S))
+            .font_weight(FontWeight::MEDIUM)
+            .when(compact, |el| el.w(px(RAIL_BUTTON)).justify_center())
+            .when(!compact, |el| el.w_full().px(px(tokens::SM)).gap(px(tokens::SM)))
+            // Full fills the open page like the sidebar's tabs; compact keeps
+            // the rail's original light tint.
+            .when(on && !compact, |el| el.bg(palette.primary.hsla()).text_color(palette.on_primary.hsla()).font_weight(FontWeight::SEMIBOLD))
+            .when(on && compact, |el| el.bg(palette.primary.with_alpha(RAIL_ON_TINT).hsla()))
+            .when(!on, |el| el.text_color(palette.on_surface_variant.hsla()))
+            .when(!on || compact, |el| el.hover(|s| s.bg(palette.surface_container_high.hsla())))
+            .child(icon(
+                glyph,
+                if compact { RAIL_COMPACT_ICON } else { RAIL_ICON },
+                match (on, compact) {
+                    (true, false) => palette.on_primary,
+                    (true, true) => palette.primary,
+                    (false, _) => palette.on_surface_variant,
+                },
+            ));
+        if compact { row } else { row.child(div().flex_1().min_w(px(0.0)).truncate().text_start().child(crate::bidi::paragraph(tr(label)))) }
     };
-    let rule = || div().w(px(RAIL_RULE_W)).h(px(1.0)).my(px(RAIL_GAP)).bg(palette.outline.with_alpha(RAIL_RULE_ALPHA).hsla());
+    let rule = || {
+        div()
+            .h(px(1.0))
+            .my(px(RAIL_GAP))
+            .when(compact, |el| el.w(px(RAIL_COMPACT_RULE_W)))
+            .when(!compact, |el| el.mx(px(tokens::SM)))
+            .bg(palette.outline.with_alpha(RAIL_RULE_ALPHA).hsla())
+    };
     // As tall as its buttons, centred in the menu's height.
-    let mut rail = div().w(px(RAIL_W)).flex_none().flex().flex_col().items_center().justify_center().gap(px(RAIL_GAP)).py(px(tokens::SM)).rounded(px(crate::style::card_radius())).bg(palette.surface_container.hsla());
+    let mut rail = div()
+        .w(px(if compact { RAIL_COMPACT_W } else { RAIL_W }))
+        .flex_none()
+        .flex()
+        .flex_col()
+        .justify_center()
+        .gap(px(RAIL_GAP))
+        .p(px(tokens::XS))
+        .rounded(px(crate::style::card_radius()))
+        .bg(palette.surface_container.hsla())
+        .when(compact, |el| el.items_center());
     // The menu's own pages.
     for (i, pg) in Page::ALL.into_iter().enumerate() {
         let page = page.clone();
-        rail = rail.child(rail_button(("menu-page", i), pg.icon(), pg == now).on_click(move |_, window, _| {
+        rail = rail.child(rail_button(("menu-page", i), pg.icon(), pg.title(), pg == now).on_click(move |_, window, _| {
             page.set(pg);
             window.refresh();
         }));
     }
     // Shortcuts: each opens its own panel in the menu's place.
     rail = rail.child(rule());
-    for (i, (glyph, id, _)) in SHORTCUTS.into_iter().enumerate() {
-        rail = rail.child(rail_button(("menu-shortcut", i), glyph, false).on_click(move |_, _, cx| shell(cx).update(cx, |s, cx| s.set_panel(Some(id.into()), cx))));
+    for (i, (glyph, id, name)) in SHORTCUTS.into_iter().enumerate() {
+        rail = rail.child(rail_button(("menu-shortcut", i), glyph, name, false).on_click(move |_, _, cx| shell(cx).update(cx, |s, cx| s.set_panel(Some(id.into()), cx))));
     }
     // Settings.
-    rail = rail.child(rule()).child(rail_button(("menu-settings", 0), "sliders", false).on_click(|_, _, cx| {
+    rail = rail.child(rule()).child(rail_button(("menu-settings", 0), "sliders", tk("Mandara Studio"), false).on_click(|_, _, cx| {
         close(cx);
         crate::state::open_studio(cx);
     }));
@@ -541,13 +840,14 @@ fn render(page: &Rc<Cell<Page>>, fit: &Rc<Cell<gpui::Size<gpui::Pixels>>>, palet
             shell(cx).update(cx, |s, cx| s.set_session(true, cx));
         }))
         .child(icon_button("menu-close", "close", HEADER_BUTTON, palette.on_surface_variant, None, |_, cx| close(cx)));
+    let panels = &config(cx).read(cx).get().panels;
+    let tc = TileCx { glow, patterns: panels.menu_patterns, calligraphy: panels.menu_calligraphy, compact: false, surface: panels.menu_tile_surface, shadow: panels.menu_tile_shadow() };
     let body = match now {
         Page::Home => home(palette, p, cx),
-        Page::Apps => tiles(APPS, palette, p),
-        Page::Look => look(palette, p, cx),
-        Page::Session => tiles(SESSION, palette, p),
+        Page::Apps => tiles(APPS, palette, p, &tc, window),
+        Page::Look => look(palette, p, &tc, window, cx),
+        Page::Session => tiles(SESSION, palette, p, &tc, window),
     };
-    let _ = window;
     // Home sets the menu's height (it's the fullest page); the other pages
     // keep it and spread over it, so switching pages doesn't jump.
     let home_page = now == Page::Home;
@@ -555,9 +855,19 @@ fn render(page: &Rc<Cell<Page>>, fit: &Rc<Cell<gpui::Size<gpui::Pixels>>>, palet
     let inner = f32::from(fit.get().height) - PAD * 2.0;
     let probe = gpui::canvas(
         move |b, _, _| {
+            let cur = fit.get();
             let h = f32::from(b.size.height) + PAD * 2.0;
-            if home_page && (f32::from(fit.get().height) - h).abs() > SIZE_EPSILON {
-                fit.set(size(px(WIDTH), px(h)));
+            // Home sets the height (it's the fullest page); the width follows
+            // the rail mode on whichever page is open.
+            let next = if home_page && (f32::from(cur.height) - h).abs() > SIZE_EPSILON {
+                size(px(width), px(h))
+            } else if (f32::from(cur.width) - width).abs() > SIZE_EPSILON {
+                size(px(width), cur.height)
+            } else {
+                cur
+            };
+            if next != cur {
+                fit.set(next);
             }
         },
         |_, _, _, _| {},
@@ -586,9 +896,10 @@ pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Main menu"), tk("Right-click empty bar space"), None), |window, cx, panel_cx| {
         let p = panel_cx.clone();
         let page = Rc::new(Cell::new(Page::Home));
+        let glow = Rc::new(RefCell::new(Glow::default()));
         let fit = Rc::new(Cell::new(size(px(WIDTH), px(HEIGHT))));
         let measured = fit.clone();
-        let panel = fn_view(None, move |palette, window, cx| render(&page, &measured, palette, &p, window, cx), window, cx);
+        let panel = fn_view(None, move |palette, window, cx| render(&page, &glow, &measured, palette, &p, window, cx), window, cx);
         PluginInstance { panel: Some(PanelSpec { view: panel, size: fit }), ..PluginInstance::empty() }
     });
     r.command(ID, CommandSpec::new("menu", mandara_i18n::tk("Open or close the main menu"), |_, cx| {
@@ -601,6 +912,14 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Each rail mode only takes the width the menu gained: the cards keep
+    /// the width they had when the rail was icon-only (640 − 48).
+    #[test]
+    fn each_rail_keeps_the_cards_their_width() {
+        assert_eq!(WIDTH - RAIL_W, 640.0 - 48.0);
+        assert_eq!(WIDTH_COMPACT - RAIL_COMPACT_W, WIDTH - RAIL_W);
+    }
 
     /// Every entry of the old list is still on a page.
     #[test]

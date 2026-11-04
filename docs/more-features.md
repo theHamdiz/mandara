@@ -11,7 +11,7 @@ The rest of what's built in.
 
 <table>
 <tr>
-<td width="33%" valign="top"><img src="screenshots/clock-agenda.png" alt="Clock panel: the time, a month calendar with week numbers, Hijri dates and event dots, and today's agenda" width="100%"/><br/><sub><b>Clock and calendar</b> with ICS feeds, Hijri dates and an agenda</sub></td>
+<td width="33%" valign="top"><img src="screenshots/clock-agenda.webp" alt="Clock panel: the time with the week and day of the year, a month calendar with event dots, and the upcoming events from tomorrow on" width="100%"/><br/><sub><b>Clock and calendar</b> with ICS feeds, Hijri dates and an agenda</sub></td>
 <td width="33%" valign="top"><img src="screenshots/world-clock.png" alt="World clock with a meeting planner" width="100%"/><br/><sub><b>World clock</b> and meeting planner</sub></td>
 <td width="33%" valign="top"><img src="screenshots/color-picker.png" alt="Color picker with formats, tonal ramp and contrast" width="100%"/><br/><sub><b>Color picker</b> with OKLCH ramps and WCAG contrast</sub></td>
 </tr>
@@ -26,9 +26,10 @@ The rest of what's built in.
   that stretches as it travels. Neighbouring tags viewed together on MangoWM
   (right-click, `toggleview`) melt into one shape with a soft waist (a
   smooth minimum of their distance fields), and one Oklab gradient runs
-  across them all. Next to them, MangoWM shows the tag's layout and Umbriel the
-  active workspace's own layout (click to cycle), plus a badge for a
-  non-default keymode or keybind submap.
+  across them all (River's tags work the same way). Next to them, MangoWM
+  shows the tag's layout, Umbriel the active workspace's own layout, Sway
+  its container layout and River its layout generator (click to cycle),
+  plus a badge for a non-default keymode, keybind submap or binding mode.
 - **Sidebar** with Overview and Notifications tabs, quick settings, weather
   (animated sky), media, Pomodoro, to-do, notes, sound and more. It opens on
   hover or Super+B and sits left or right (the power dock takes the opposite
@@ -70,8 +71,8 @@ The rest of what's built in.
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/clipboard.png" alt="The clipboard panel: filter chips, a pinned note, a link shown by its site, a CSS rule in monospace, an image thumbnail, a PDF from Downloads, an OKLCH colour swatch and rendered Markdown" width="100%"/><br/><sub><b>Clipboard</b>: every kind shown the way it looks best</sub></td>
-<td width="50%" valign="top"><img src="screenshots/clipboard-collection.png" alt="The clipboard filtered to the Palette collection: two colours with their swatches, hex and OKLCH" width="100%"/><br/><sub><b>Collections</b>: a palette kept together, with rename and delete</sub></td>
+<td width="50%" valign="top"><img src="screenshots/clipboard.webp" alt="The clipboard panel: filter chips, a pinned OKLCH colour, a note, a link shown by its site, a CSS rule in monospace, an image thumbnail, rendered Markdown and a hex colour swatch" width="100%"/><br/><sub><b>Clipboard</b>: every kind shown the way it looks best</sub></td>
+<td width="50%" valign="top"><img src="screenshots/clipboard-collection.webp" alt="The clipboard filtered to the Palette collection: two colours with their swatches, hex and OKLCH" width="100%"/><br/><sub><b>Collections</b>: a palette kept together, with rename and delete</sub></td>
 </tr>
 </table>
 
@@ -126,13 +127,32 @@ The rest of what's built in.
   never move under the pointer.
 - **Screenshot studio**: region, window or screen; arrows, boxes and
   circles; copy, save or clipboard-only; **copy text (OCR)**, offline and pure
-  Rust (PP-OCRv5); and **screen recording** to AV1/WebM. **Esc pauses
+  Rust (PP-OCRv5); and **screen recording** (below). **Esc pauses
   snipping without closing the tool**: the frozen frame goes away and a
   compact toolbar stays, so you can open a bar panel first, then pick
   **Capture now** or **Capture in 3 s** (a countdown that is never in the
   frame; Esc cancels it). The toolbar moves between the top and bottom edge
   with one click (or M), and `mandara msg screenshot region --delay 3` does
   the same from a keybind.
+- **Screen recorder**: the screenshot panel records the screen (the display
+  with the focused window, or one you pick), an area or the focused window.
+  It records with **GPU Screen Recorder** (encoded on the graphics card) or
+  **wf-recorder** when one is installed, and otherwise with Mandara's
+  built-in encoder (AV1 in WebM, no sound). Studio → Plugins → Screenshot
+  shows which recorders are installed and what each can do, and sets the
+  resolution (native, 1080p, 1440p, 4K), frame rate (24–120), codec (H.264,
+  HEVC, AV1), quality (low, medium, high or a custom bitrate), format (MP4,
+  MKV, WebM), sound (system, microphone or both, from the devices you
+  choose), a countdown (off, 3, 5 or 10 s; Esc cancels), the folder, the
+  file name pattern and whether the folder opens afterwards. A choice the
+  recorder in use can't do is greyed out with the reason. While recording,
+  the bar shows a red dot and the time (a pause sign while paused): click
+  it to stop, right-click it for pause / resume and muting the microphone
+  (GPU Screen Recorder and the built-in encoder can pause, wf-recorder
+  can't). The panel lists your last recordings with their length and size
+  to play, show in the folder or move to the Trash. Every action is a
+  command (`record toggle`, `record pause-toggle`, `record window`, …) you
+  can bind to keys in Studio → Keyboard shortcuts.
 - **Process hunter**: find any process by name, command line or PID, and end
   or force-kill it. CPU and memory are live, and CPU is a share of all your
   cores (as in Resources), so a busy build reads a percentage of the whole
@@ -183,7 +203,7 @@ The rest of what's built in.
 - **Idle & sleep** (Studio → Power & idle, opt-in): fade → lock → screens off
   → sleep with separate mains and battery timeouts, read from the
   compositor (`ext-idle-notify-v1`, so a fullscreen video's inhibitor
-  counts) and switched with `wlr-output-power-management` (Niri / Hyprland / Umbriel
+  counts) and switched with `wlr-output-power-management` (Niri / Hyprland / Umbriel / Sway
   IPC as fallback). Playing media and *Keep awake* (also for N minutes) hold
   it back; screens go dark sooner on the lock screen; your own commands run
   after N idle seconds with a resume command. Lock before sleeping (a logind

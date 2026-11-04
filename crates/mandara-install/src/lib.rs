@@ -14,18 +14,26 @@
 //! * [`packages`] — what each family installs (data tables);
 //! * [`pkg`] — package managers and privilege helpers, shared with
 //!   `mandara greeter use --install`;
+//! * [`index`] — package databases: missing ones found before installing,
+//!   and how each manager brings them up to date;
+//! * [`compositors`] — the compositors Mandara runs on and their packages,
+//!   offered when none is installed;
 //! * [`installer`] — the flows, against a [`host::Host`] so tests (and
-//!   `--dry-run`) change nothing.
+//!   `--dry-run`) change nothing;
+//! * `tui` — the wordmark and the arrow-key setup screen.
 
 pub mod args;
+pub mod compositors;
 pub mod family;
 pub mod files;
 pub mod host;
+pub mod index;
 pub mod installer;
 pub mod packages;
 pub mod pkg;
 pub mod platform;
 pub mod release;
+mod tui;
 
 pub use args::{InstallArgs, UninstallArgs};
 pub use family::Family;

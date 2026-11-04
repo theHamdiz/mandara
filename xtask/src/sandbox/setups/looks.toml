@@ -1,0 +1,49 @@
+# README "Looks": the six Looks, each in dark and light mode over a
+# wallpaper that suits it.
+# `cargo xtask sandbox up --config xtask/src/sandbox/setups/looks.toml --size 2880x1620 --scale 2`,
+# make the twelve wallpapers once (sandbox msg wallgen generate STYLE
+# --palette PALETTE --seed SEED --size 2880x1620 --format png --no-apply,
+# plus --light for the light ones), then `sandbox audio play` and for each
+# Look: `sandbox msg look apply ID`, `sandbox msg wallpaper set DARK`,
+# `sandbox shot`, `sandbox msg theme mode light`, `sandbox msg wallpaper set
+# LIGHT`, `sandbox shot`, `sandbox msg theme mode dark`.
+#
+#   Look             dark (style palette seed)       light
+#   corniche-dusk    landscape sunset 0x14           landscape sunset 0x23
+#   pharos-ink       contours mono 0x18              contours mono 0x19
+#   montaza-crimson  mesh sunset 0x1a                mesh sunset 0x24
+#   qaitbay-forest   landscape forest 0x44 (*)       landscape forest 0x1c
+#   anfushi-wave     waves ocean 0x16                waves ocean 0x17
+#   night-frame      aurora pharos-night 0x13        aurora montaza-twilight 0x25
+#
+# (*) the sun moved aside first: `sandbox msg wallgen recipe set style=landscape
+# palette=forest sun_x=75 sun_height=55 horizon=52`, then `generate recipe`.
+# The calendar cards read the demo events at ~/Documents/demo.ics (see
+# config.hero.toml).
+#
+# Compose the README image with `cargo xtask mosaic` (see docs/development.md).
+
+[appearance]
+icon_theme = "Papirus-Dark"
+
+[desktop.widgets]
+migrated = true
+version = 1
+
+[dock]
+pinned = ["org.mandara.demo.files", "org.mandara.demo.browser", "org.mandara.demo.terminal", "org.mandara.demo.music", "org.mandara.demo.photos"]
+
+[location]
+shared = true
+
+[plugins]
+defaults_version = 1
+enabled = ["dock", "wallpaper-generator"]
+
+[[calendar.sources]]
+name = "Demo"
+location = "/home/demo/Documents/demo.ics"
+enabled = true
+
+[wallpaper]
+path = "/home/demo/Pictures/Wallpapers/Generated/landscape-000014-2880x1620.png"

@@ -1575,15 +1575,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dirs"
-version = "7.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d57d423b3c82e89b9a24ca3091fee61f456a26edbd28d26c65906f4bc1dcd8f"
-dependencies = [
- "dirs-sys",
-]
-
-[[package]]
 name = "dirs-sys"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3051,7 +3042,6 @@ dependencies = [
  "qoi",
  "ravif",
  "rayon",
- "rgb",
  "tiff",
  "zune-core",
  "zune-jpeg",
@@ -3606,7 +3596,7 @@ checksum = "fc04a4c58212d57930a24bf47d3fa87485264a3a054e9c10e042eb373573ad3c"
 
 [[package]]
 name = "mandara-app"
-version = "0.11.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -3618,6 +3608,7 @@ dependencies = [
  "mandara-config",
  "mandara-core",
  "mandara-greeter",
+ "mandara-i18n",
  "mandara-install",
  "mandara-plugins",
  "mandara-services",
@@ -3635,7 +3626,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-compositor"
-version = "0.9.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -3644,15 +3635,20 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
+ "wayland-protocols-wlr",
+ "wayland-scanner",
 ]
 
 [[package]]
 name = "mandara-config"
-version = "0.10.0"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "async-channel",
- "dirs 7.0.0",
+ "dirs",
  "kdl 6.7.1",
  "mandara-i18n",
  "mandara-theme",
@@ -3668,7 +3664,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-core"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "approx",
@@ -3692,7 +3688,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-delta"
-version = "0.4.3"
+version = "0.5.0"
 dependencies = [
  "bidiff",
  "bipatch",
@@ -3709,13 +3705,13 @@ dependencies = [
 
 [[package]]
 name = "mandara-greeter"
-version = "0.9.0"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "async-channel",
  "chrono",
  "clap",
- "dirs 7.0.0",
+ "dirs",
  "gpui",
  "gpui_platform",
  "image",
@@ -3739,19 +3735,23 @@ dependencies = [
 
 [[package]]
 name = "mandara-i18n"
-version = "0.11.0"
+version = "0.14.0"
 dependencies = [
+ "mandara-version",
+ "memmap2",
+ "tempfile",
  "toml 1.1.8+spec-1.1.0",
 ]
 
 [[package]]
 name = "mandara-install"
-version = "0.5.3"
+version = "0.8.0"
 dependencies = [
  "clap",
  "flate2",
  "libc",
  "mandara-delta",
+ "mandara-i18n",
  "mandara-version",
  "serde_json",
  "tar",
@@ -3761,7 +3761,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-media"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "image",
  "libc",
@@ -3774,7 +3774,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-plugins"
-version = "0.9.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -3794,7 +3794,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-services"
-version = "0.12.0"
+version = "0.15.0"
 dependencies = [
  "ab_glyph",
  "aes",
@@ -3810,7 +3810,7 @@ dependencies = [
  "cbc",
  "chrono",
  "chrono-tz",
- "dirs 7.0.0",
+ "dirs",
  "flate2",
  "fontdb",
  "futures",
@@ -3865,13 +3865,13 @@ dependencies = [
 
 [[package]]
 name = "mandara-studio"
-version = "0.11.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-channel",
  "chrono",
  "chrono-tz",
- "dirs 7.0.0",
+ "dirs",
  "gpui",
  "image",
  "kdl 6.7.1",
@@ -3901,11 +3901,11 @@ dependencies = [
 
 [[package]]
 name = "mandara-theme"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "anyhow",
  "approx",
- "dirs 7.0.0",
+ "dirs",
  "image",
  "mandara-media",
  "material-colors",
@@ -3919,14 +3919,13 @@ dependencies = [
 
 [[package]]
 name = "mandara-ui"
-version = "0.10.0"
+version = "0.13.0"
 dependencies = [
- "ab_glyph",
  "anyhow",
  "async-channel",
  "chrono",
  "cosmic-text",
- "dirs 7.0.0",
+ "dirs",
  "fontdb",
  "gpui",
  "gpui_platform",
@@ -3961,7 +3960,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-version"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "sha2",
  "toml 1.1.8+spec-1.1.0",
@@ -3969,7 +3968,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-wallgen"
-version = "0.9.0"
+version = "0.12.0"
 dependencies = [
  "image",
  "mandara-i18n",
@@ -3984,7 +3983,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-webp"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "image",
 ]
@@ -5401,8 +5400,6 @@ dependencies = [
 [[package]]
 name = "pure-onnx-ocr"
 version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ec2635a365fa300c8e0a9b517fe5a70253f4d13e5b9d8d2f49f728d4a832aa6"
 dependencies = [
  "geo-types",
  "getrandom 0.4.3",
@@ -5412,7 +5409,6 @@ dependencies = [
  "log",
  "ndarray",
  "rayon",
- "time",
  "tract-linalg",
  "tract-onnx",
  "web-time",
@@ -8702,7 +8698,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.6.3"
+version = "0.9.0"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -8710,12 +8706,14 @@ dependencies = [
  "flate2",
  "image",
  "mandara-delta",
+ "mandara-i18n",
  "mandara-version",
  "mandara-webp",
  "png 0.18.1",
  "resvg",
  "roxmltree 0.21.2",
  "rustix",
+ "rustybuzz",
  "serde",
  "serde_json",
  "sha2",
@@ -8895,7 +8893,7 @@ dependencies = [
  "core-foundation",
  "core-graphics",
  "core-text",
- "dirs 6.0.0",
+ "dirs",
  "dwrote",
  "float-ord",
  "freetype-sys",

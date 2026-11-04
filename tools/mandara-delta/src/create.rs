@@ -14,6 +14,12 @@ const MAX_PLUGIN_FILE: u64 = 64 << 20;
 /// Mode of files in a plugin meta archive.
 const MODE_FILE: u32 = 0o644;
 
+/// `data` compressed with zstd at [`ZSTD_LEVEL`] (language packs: compressed
+/// once in CI, downloaded many times; [`crate::decompress`] reads it).
+pub fn compress(data: &[u8]) -> io::Result<Vec<u8>> {
+    zstd::stream::encode_all(Cursor::new(data), ZSTD_LEVEL)
+}
+
 /// A compressed patch turning `old` into `new`.
 pub fn diff(old: &[u8], new: &[u8]) -> io::Result<Vec<u8>> {
     let mut raw = Vec::with_capacity(new.len() / 4);
@@ -171,6 +177,29 @@ mod tests {
         let patch = diff_verified(&old, &new).unwrap();
         assert!(patch.len() < new.len() / 50, "patch of {} bytes for a {} byte file", patch.len(), new.len());
         assert_eq!(crate::apply(&old, &patch, new.len() as u64).unwrap(), new);
+    }
+
+    #[test]
+    fn a_smaller_new_binary_patches_byte_for_byte() {
+        // A release that shrinks (translations moved out of the binary):
+        // the patch still rebuilds the new, smaller file exactly.
+        let old = noise(1 << 20, 21);
+        let mut new = old.clone();
+        new.drain(200_000..600_000);
+        new.splice(10_000..10_000, noise(5000, 22));
+        assert!(new.len() < old.len());
+        let patch = diff_verified(&old, &new).unwrap();
+        assert_eq!(crate::apply(&old, &patch, new.len() as u64).unwrap(), new);
+        assert!(crate::apply_verified(&old, &patch, old.len() as u64, &sha256_hex(&new)).is_err(), "the old size is not accepted for the new file");
+    }
+
+    #[test]
+    fn compressed_data_round_trips_through_the_pure_rust_decoder() {
+        let data = noise(100_000, 5).iter().map(|b| b % 4).collect::<Vec<u8>>();
+        let z = compress(&data).unwrap();
+        assert!(z.len() < data.len());
+        assert_eq!(crate::decompress(&z, data.len() as u64).unwrap(), data);
+        assert!(crate::decompress(&z, data.len() as u64 - 1).is_err(), "more output than allowed is refused");
     }
 
     #[test]

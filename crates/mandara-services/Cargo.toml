@@ -1,10 +1,16 @@
 [package]
 name = "mandara-services"
 description = "zbus service actors for Mandara Shell: MPRIS2 media with album-art mood extraction, notifications, tray, power, network, polkit"
-version = "0.12.0"
+version = "0.15.0"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+
+[features]
+# Sandbox tests only, never in a shipped build: also trust the release keys
+# in MANDARA_MOCK_RELEASE_KEYS, so a mock release can be signed locally
+# (screenshots of updates and language-pack downloads).
+mock-release = []
 
 [dependencies]
 mandara-theme.workspace = true

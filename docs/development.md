@@ -36,6 +36,7 @@ tests. It never touches the real session.
 cargo build --release -p mandara-app              # or pass --bin to `up`
 cargo xtask sandbox up                            # 2560x1440 at 1.5, the demo config
 cargo xtask sandbox up --config hero --size 2880x1620 --scale 1.5 --bin target/debug/mandara
+cargo xtask sandbox up --no-langpacks             # no language packs: the download path
 cargo xtask sandbox shot out.png                  # screenshot of the sandbox output
 cargo xtask sandbox msg panel open media          # any `mandara msg` command
 cargo xtask sandbox pointer click 900 500         # move / click / drag / flyby / scroll, logical px
@@ -56,6 +57,26 @@ eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual c
   each file says how). `--config FILE` copies
   your own config. Both presets are small overlays on the shell's defaults
   (`xtask/src/sandbox/config.*.toml`).
+- **Screenshot setups:** the README's widget shots, the sky dashboard and
+  the Looks come from `xtask/src/sandbox/setups/*.toml` too (`sky`,
+  `widgets-desk`, `widgets-music`, `widgets-you`, `widgets-arabic`,
+  `looks`). Their wallpapers are made once in the sandbox with the
+  wallpaper generator (`sandbox msg wallgen generate STYLE --palette P
+  --seed S --size 2880x1620 --format png --no-apply`); each file names
+  its style, palette and seed, so every shot has a wallpaper of its own.
+- **Languages:** `up` compiles every language pack for the binary's
+  version (`mandara --version`) into the demo user's
+  `data/mandara/locales/<version>/`, as `mandara install` would; a release
+  build reads translations only from packs. `--no-langpacks` leaves them
+  out, to try the download path (with the sandbox offline it stays in
+  English and Studio shows the error with Retry). `cargo xtask langpacks
+  --bin PATH --dir DIR` builds the same packs anywhere.
+- **Updates and downloads against a mock release:** a build with
+  `--features mock-release` (mandara-app; never shipped) also trusts the
+  hex release keys in `MANDARA_MOCK_RELEASE_KEYS`, so a release you sign
+  yourself and serve locally can be installed. `sandbox up` passes that
+  variable and `MANDARA_UPDATE_API` through, so a slow local server shows
+  the language cards and Studio → About filling with real progress.
 - **Matte:** `matte` cuts out the open surfaces as a transparent PNG. It
   shoots once over a black wallpaper and once over a white one, then
   difference-mattes the pair. Give it a region (physical pixels) that leaves
@@ -72,6 +93,21 @@ eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual c
   - `SANDBOX_TZ` sets the time zone (default `Africa/Cairo`).
 - **Debug builds** are fine here. In the real session, run only release
   builds.
+
+## Screenshot grids: `cargo xtask mosaic`
+
+```bash
+cargo xtask mosaic docs/screenshots/looks-dark.png --cols 2 --theme dark \
+    look-corniche-dusk-dark.png="Corniche Dusk" look-pharos-ink-dark.png="Pharos Ink" …
+```
+
+Lays screenshots out as a grid of rounded tiles with a soft shadow and a
+label under each, on a transparent background, so the image sits well on
+GitHub's dark and light pages. `--theme dark|light` sets the label colour
+and the shadow's strength; `--width`, `--gap` and `--radius` size the
+tiles (1280, 56 and 28 px by default). Every tile is scaled to cover the
+first tile's shape. The README's Looks image is two of these (dark and
+light, shown with `<picture>`), converted to WebP.
 
 ## Resource budget: `cargo xtask resource-check`
 

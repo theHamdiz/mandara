@@ -89,7 +89,7 @@ const STUDIO_RESTART_PAUSE: Duration = Duration::from_millis(800);
 const MANGO_REPLY_TIMEOUT: Duration = Duration::from_secs(1);
 /// Variables of the real environment passed through (no session data;
 /// `MANDARA_FRAME_STATS` logs Studio's frame pacing for measurements).
-const PASSTHROUGH: [&str; 10] = ["PATH", "LANG", "LC_ALL", "LC_MESSAGES", "TERM", "RUST_LOG", "RUST_BACKTRACE", "WLR_RENDERER", "WLR_RENDER_DRM_DEVICE", "MANDARA_FRAME_STATS"];
+const PASSTHROUGH: [&str; 12] = ["PATH", "LANG", "LC_ALL", "LC_MESSAGES", "TERM", "RUST_LOG", "RUST_BACKTRACE", "WLR_RENDERER", "WLR_RENDER_DRM_DEVICE", "MANDARA_FRAME_STATS", "MANDARA_UPDATE_API", "MANDARA_MOCK_RELEASE_KEYS"];
 /// `PATH` when the real environment has none.
 const FALLBACK_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
 /// Flags that force dry runs of everything that would change the system.
@@ -103,7 +103,7 @@ const CONFIG_DEMO: &str = include_str!("config.demo.toml");
 const CONFIG_HERO: &str = include_str!("config.hero.toml");
 
 const USAGE: &str = "usage: cargo xtask sandbox <command>
-  up [--bin PATH] [--size WxH] [--scale S] [--second WxH] [--config demo|hero|FILE] [--studio-size WxH]
+  up [--bin PATH] [--no-langpacks] [--size WxH] [--scale S] [--second WxH] [--config demo|hero|FILE] [--studio-size WxH]
   down
   shot OUT.png
   matte OUT.png [--region X0 Y0 X1 Y1] [--margin PX]
@@ -432,6 +432,15 @@ fn up(sb: &Sandbox, args: &[String]) -> Result<()> {
 
     fresh_runtime(sb)?;
     demo::ensure(sb)?;
+    // Language packs for the binary's version, compiled from the sources
+    // into the demo user's data dir (release builds read nothing else);
+    // `--no-langpacks` leaves them out (the download path).
+    let locales = sb.home().join("data").join(mandara_i18n::packs::DIR);
+    let _ = std::fs::remove_dir_all(&locales);
+    if !crate::flag(args, "--no-langpacks") {
+        let version = crate::langpacks::binary_version(&state.bin).ok_or_else(|| format!("{} --version didn't report a version", state.bin.display()))?;
+        crate::langpacks::write_dir(&locales.join(&version), &version)?;
+    }
     let config = sb.home().join("config/mandara/config.toml");
     match opt(args, "--config").as_deref() {
         Some("demo") => write(&config, CONFIG_DEMO)?,
@@ -512,7 +521,15 @@ fn bwrap_args(sb: &Sandbox, bin: &Path) -> Vec<String> {
     for f in ["passwd", "group", "hostname"] {
         a.extend(["--ro-bind".into(), s(etc.join(f)), format!("/etc/{f}")]);
     }
-    a.extend(["--tmpfs", "/var/lib/flatpak", "--tmpfs", "/var/lib/snapd", "--tmpfs", "/home"].map(String::from));
+    // Hide the host's Flatpak and Snap trees, when they exist: a mount
+    // point bwrap can't create (no snapd installed) fails the whole
+    // namespace with "Can't create file", and there is nothing to hide.
+    for dir in ["/var/lib/flatpak", "/var/lib/snapd"] {
+        if Path::new(dir).exists() {
+            a.extend(["--tmpfs".to_string(), dir.to_string()]);
+        }
+    }
+    a.extend(["--tmpfs".to_string(), "/home".to_string()]);
     // The real /home is hidden: keep the sandbox and the binary reachable
     // when they live under it.
     for keep in [sb.root.clone(), bin.to_path_buf()] {
@@ -781,6 +798,24 @@ mod tests {
         let a = i2c_masks(dev.path()).join(" ");
         let d = dev.path().display();
         assert_eq!(a, format!("--ro-bind /dev/null {d}/i2c-0 --ro-bind /dev/null {d}/i2c-7"));
+    }
+
+    #[test]
+    fn screenshot_setups_parse_and_say_how_they_are_shot() {
+        let dir = crate::root().join("xtask/src/sandbox/setups");
+        let mut seen = 0;
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.extension().is_none_or(|e| e != "toml") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            let table: toml::Table = toml::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            assert!(text.starts_with('#') && text.contains("sandbox up --config"), "{}: the header says how it is shot", path.display());
+            assert!(table.get("wallpaper").and_then(|w| w.get("path")).is_some(), "{}: a wallpaper of its own", path.display());
+            seen += 1;
+        }
+        assert!(seen >= 9, "the README's setups and widget shots");
     }
 
     #[test]

@@ -1,0 +1,131 @@
+# README widgets "The sky": one sky dashboard over the sea at golden hour.
+# The sun's arc rises out of the horizon; the weather, the next hours, the
+# moon and the globe sit along the shore.
+# `cargo xtask sandbox up --config xtask/src/sandbox/setups/sky.toml --size 2880x1620 --scale 2`
+# (run it in the afternoon somewhere: `SANDBOX_TZ=America/Lima` with the
+# Lima location below), then make the wallpaper once:
+#   sandbox msg wallgen generate corniche --palette stanley-sunset --seed 0x28 --size 2880x1620 --format png --no-apply
+#   sandbox msg theme wallpaper vibrant   (the warm palette of the sunset)
+# then `sandbox msg notifications clear` and `sandbox shot`.
+
+[appearance]
+icon_theme = "Papirus-Dark"
+
+[bar]
+layout = "contiguous-island"
+
+[theme.source]
+kind = "wallpaper"
+path = "/home/demo/Pictures/Wallpapers/Generated/corniche-000028-2880x1620.png"
+variant = "vibrant"
+
+[location]
+shared = true
+mode = "manual"
+latitude = -12.0464
+longitude = -77.0428
+name = "Lima"
+timezone = "America/Lima"
+
+[desktop.widgets]
+migrated = true
+
+[[desktop.widgets.items]]
+id = "sky-arc"
+kind = "sky"
+layout = "sun-arc"
+size = 980.0
+arc_height = 0.42
+ticks = true
+labels = true
+
+[desktop.widgets.items.look]
+tone = "custom"
+custom_color = "#fff6ea"
+accent = "custom"
+custom_accent = "#ffc861"
+effect = "shadow"
+effect_strength = 2.0
+
+[desktop.widgets.items.place]
+anchor = "top"
+x = 0.0
+y = 0.1
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "sky-clock"
+kind = "clock"
+face = "minimal"
+date = true
+weather = false
+seconds = false
+
+[desktop.widgets.items.place]
+anchor = "top-left"
+x = 0.05
+y = 0.08
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "sky-weather"
+kind = "weather"
+layout = "disc"
+disc = 250.0
+dotted_ring = true
+
+[desktop.widgets.items.place]
+anchor = "bottom-left"
+x = 0.05
+y = -0.07
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "sky-hours"
+kind = "weather"
+layout = "hourly"
+hours = 10
+fill = true
+
+[desktop.widgets.items.look]
+plate = "glass"
+
+[desktop.widgets.items.place]
+anchor = "bottom"
+x = -0.06
+y = -0.07
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "sky-moon"
+kind = "sky"
+layout = "moon"
+size = 200.0
+labels = true
+shaded = true
+
+[desktop.widgets.items.place]
+anchor = "bottom-right"
+x = -0.22
+y = -0.08
+depth = "front"
+
+[[desktop.widgets.items]]
+id = "sky-globe"
+kind = "sky"
+layout = "globe"
+size = 230.0
+moon = true
+
+[desktop.widgets.items.place]
+anchor = "bottom-right"
+x = -0.05
+y = -0.08
+depth = "front"
+
+[plugins]
+defaults_version = 1
+enabled = ["desktop-clocks", "desktop-sky", "desktop-weather", "wallpaper-generator"]
+
+[wallpaper]
+path = "/home/demo/Pictures/Wallpapers/Generated/corniche-000028-2880x1620.png"

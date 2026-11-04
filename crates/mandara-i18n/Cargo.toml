@@ -1,13 +1,22 @@
 [package]
 name = "mandara-i18n"
-description = "Localization for Mandara Shell: fifteen languages, English-keyed catalogs with English fallback"
-version = "0.11.0"
+description = "Localization for Mandara Shell: fifteen languages, English-keyed catalogs shipped as memory-mapped language packs, with English fallback"
+version = "0.14.0"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
 [dependencies]
+# Catalog::parse (plugins' own catalogs, and compiling packs).
 toml.workspace = true
+# Language packs are memory-mapped and read in place (the same memmap2 as
+# mandara-core).
+memmap2 = "0.9"
+# Packs are tied to the running version.
+mandara-version.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

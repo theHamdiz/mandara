@@ -364,11 +364,49 @@ pub struct PanelsConfig {
     pub menu_translucent: bool,
     /// Its glass opacity (0–1) while translucent.
     pub menu_opacity: f32,
+    /// The main menu's rail: names beside the icons, or icons only.
+    pub menu_rail: MenuRail,
+    /// The main menu's shortcut tiles each wear their own faint geometric
+    /// pattern.
+    pub menu_patterns: bool,
+    /// The app and tool tiles wear a Kufic word instead of their pattern.
+    pub menu_calligraphy: bool,
+    /// How those tiles are drawn: flat (the default), raised or glass.
+    pub menu_tile_surface: MenuTileSurface,
+    /// The tiles' drop shadow, 0 (none, the default) to 1.
+    pub menu_tile_shadow: f32,
     /// Panels floating when the shell stopped come back where they were.
     pub remember_floating: bool,
     /// Where each plugin's floating card sat on each output
     /// (`[[panels.floating]]`, see [`crate::floating`]).
     pub floating: Vec<crate::floating::FloatingPanel>,
+}
+
+/// The main menu's side rail: every entry's name beside its icon, or the
+/// compact icon-only column.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MenuRail {
+    /// Icon and name: easier to read, a wider menu.
+    Full,
+    /// Icons only, in a narrower menu (the default: the menu as it always
+    /// was).
+    #[default]
+    Compact,
+}
+
+/// How the main menu's shortcut tiles are drawn.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MenuTileSurface {
+    /// A plain fill: no rim, no wash, ornaments drawn without depth.
+    #[default]
+    Flat,
+    /// Raised glass-rimmed tiles with an accent wash and engraved ornaments.
+    #[serde(rename = "3d")]
+    Raised,
+    /// See-through tiles with the specular rim.
+    Glass,
 }
 
 /// What a right-click on empty bar space (between and around its items)
@@ -400,6 +438,11 @@ impl Default for PanelsConfig {
             toast_ms: defaults::TOAST_MS,
             menu_translucent: true,
             menu_opacity: 0.62,
+            menu_rail: MenuRail::Compact,
+            menu_patterns: true,
+            menu_calligraphy: false,
+            menu_tile_surface: MenuTileSurface::Flat,
+            menu_tile_shadow: 0.0,
             remember_floating: true,
             floating: Vec::new(),
         }
@@ -434,6 +477,11 @@ impl PanelsConfig {
     pub fn toast(&self) -> std::time::Duration {
         millis(ranges::TOAST_MS, self.toast_ms)
     }
+
+    /// The main menu tiles' shadow strength, clamped to 0–1.
+    pub fn menu_tile_shadow(&self) -> f32 {
+        ranges::OPACITY.clamp(self.menu_tile_shadow, 0.0)
+    }
 }
 
 /// `ms` clamped to `span`, as a duration.
@@ -444,6 +492,20 @@ pub fn millis(span: Span, ms: u32) -> std::time::Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn menu_tiles_default_to_raised_without_shadow_and_parse() {
+        let p = PanelsConfig::default();
+        assert_eq!((p.menu_tile_surface, p.menu_tile_shadow(), p.menu_patterns, p.menu_calligraphy), (MenuTileSurface::Flat, 0.0, true, false));
+        let old: PanelsConfig = toml::from_str("menu_patterns = false").unwrap();
+        assert_eq!((old.menu_tile_surface, old.menu_tile_shadow, old.menu_calligraphy), (MenuTileSurface::Flat, 0.0, false));
+        for (text, surface) in [("flat", MenuTileSurface::Flat), ("3d", MenuTileSurface::Raised), ("glass", MenuTileSurface::Glass)] {
+            let p: PanelsConfig = toml::from_str(&format!("menu_tile_surface = \"{text}\"\nmenu_tile_shadow = 1.7")).unwrap();
+            assert_eq!((p.menu_tile_surface, p.menu_tile_shadow()), (surface, 1.0));
+            assert!(toml::to_string(&p).unwrap().contains(&format!("menu_tile_surface = \"{text}\"")));
+        }
+        assert!(toml::from_str::<PanelsConfig>("menu_tile_surface = \"neon\"").is_err());
+    }
 
     #[test]
     fn spans_clamp_and_reject_non_finite_values() {
@@ -561,5 +623,15 @@ mod tests {
         assert_eq!(bar.capsule_strength(), 1.0);
         assert_eq!(bar.font_weight(400), defaults::FONT_WEIGHT_MAX);
         assert_eq!(crate::BarConfig::default().font_weight(450), 450, "0 follows the interface weight");
+    }
+
+    #[test]
+    fn the_main_menu_rail_stays_compact_unless_chosen() {
+        assert_eq!(PanelsConfig::default().menu_rail, MenuRail::Compact);
+        // A config from before the setting existed keeps the compact rail.
+        let old: PanelsConfig = toml::from_str("menu_translucent = true").unwrap();
+        assert_eq!(old.menu_rail, MenuRail::Compact);
+        let full: PanelsConfig = toml::from_str("menu_rail = \"full\"").unwrap();
+        assert_eq!(full.menu_rail, MenuRail::Full);
     }
 }

@@ -21,6 +21,7 @@ pub mod outputs;
 pub mod paths;
 pub mod power;
 pub mod profiles;
+pub mod recorder;
 pub mod schema;
 pub mod side_bars;
 pub mod sidebar;
@@ -32,6 +33,8 @@ pub mod widget_style;
 pub mod wallgen;
 pub mod workflow;
 
+#[cfg(test)]
+mod river_check;
 #[cfg(test)]
 mod validator_tests;
 

@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::compositor::{Target, includes_in, is_generated, resolve_include};
+use crate::compositor::{Target, included_files, is_generated};
 
 /// Default values, in one place.
 pub mod defaults {
@@ -702,6 +702,40 @@ pub fn umbriel_tables(outputs: &[OutputConfig]) -> String {
     s
 }
 
+/// Sway `output NAME …` lines (`sway-output(5)`). Sway has no
+/// fullscreen-only adaptive sync: that choice turns it on, as on MangoWM.
+pub fn sway_lines(outputs: &[OutputConfig]) -> String {
+    let mut s = String::new();
+    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && !o.name.contains(char::is_whitespace) && o.has_settings()) {
+        let name = o.name.trim();
+        if !o.enabled {
+            let _ = writeln!(s, "output {name} disable");
+            continue;
+        }
+        let mut line = format!("output {name}");
+        if let Some(mode) = o.mode_string() {
+            let hz = if mode.contains('@') { "Hz" } else { "" };
+            let _ = write!(line, " mode {mode}{hz}");
+        }
+        if let (Some(x), Some(y)) = (o.x, o.y) {
+            let _ = write!(line, " position {x} {y}");
+        }
+        if let Some(scale) = o.scale_clamped() {
+            let _ = write!(line, " scale {scale:.2}");
+        }
+        if let Some(t) = o.transform {
+            let _ = write!(line, " transform {}", t.name());
+        }
+        if let Some(v) = o.vrr {
+            let _ = write!(line, " adaptive_sync {}", if v == VrrMode::Off { "off" } else { "on" });
+        }
+        if line != format!("output {name}") {
+            let _ = writeln!(s, "{line}");
+        }
+    }
+    s
+}
+
 /// Umbriel's largest output scale (its documented range is 0.25 to 4.0).
 const UMBRIEL_MAX_SCALE: f32 = 4.0;
 
@@ -714,6 +748,10 @@ pub fn emit_outputs(target: Target, outputs: &[OutputConfig], hyprland_lua: bool
         Target::Hyprland if hyprland_lua => ("--", hyprland_lua_lines(outputs)),
         Target::Hyprland => ("#", hyprland_conf_lines(outputs)),
         Target::Umbriel => ("#", umbriel_tables(outputs)),
+        Target::Sway => ("#", sway_lines(outputs)),
+        // River has no output settings (outputs are set with
+        // wlr-output-management tools; Studio → Displays applies them live).
+        Target::River => ("#", String::new()),
     };
     if body.trim().is_empty() {
         return String::new();
@@ -734,9 +772,7 @@ pub fn user_output_rules(target: Target) -> BTreeSet<String> {
         }
         let Ok(text) = std::fs::read_to_string(&file) else { continue };
         out.extend(parse_output_rules(target, &text));
-        for path in includes_in(target, &text) {
-            stack.push(resolve_include(&file, &path));
-        }
+        stack.extend(included_files(target, &file, &text));
     }
     out
 }
@@ -761,6 +797,16 @@ pub fn parse_output_rules(target: Target, text: &str) -> Vec<String> {
             Target::Niri => line.strip_prefix("output ").and_then(|r| r.trim().strip_prefix('"')).and_then(|r| r.split('"').next()).map(str::to_string),
             // Read whole-file above.
             Target::Umbriel => None,
+            Target::River => None,
+            // `output NAME …` / `output "NAME" …` (`*` means every output).
+            Target::Sway => line.strip_prefix("output").filter(|r| r.starts_with(char::is_whitespace)).and_then(|r| {
+                let r = r.trim_start();
+                let name = match r.strip_prefix('"') {
+                    Some(q) => q.split('"').next()?,
+                    None => r.split_whitespace().next()?,
+                };
+                (name != "*").then(|| name.to_string())
+            }),
         };
         if let Some(n) = name.filter(|n| !n.is_empty()) {
             out.push(n);
@@ -921,6 +967,7 @@ mod tests {
         assert_eq!(parse_output_rules(Target::Mango, mango), vec!["HDMI-A-2", "eDP-1"]);
         assert_eq!(parse_output_rules(Target::Hyprland, "monitor = DP-1, preferred, auto, 1\nmonitor=,preferred,auto,1\n"), vec!["DP-1"]);
         assert_eq!(parse_output_rules(Target::Niri, "output \"eDP-1\" {\n    scale 2\n}\n"), vec!["eDP-1"]);
+        assert_eq!(parse_output_rules(Target::Sway, "output * bg x.png fill\noutput eDP-1 scale 2\noutput \"Dell Inc. U2720Q\" disable\n# output DP-9 scale 1\noutputs x\n"), vec!["eDP-1", "Dell Inc. U2720Q"]);
     }
 
     #[test]
