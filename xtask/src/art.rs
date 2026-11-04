@@ -44,9 +44,8 @@ const COVER_JPEG_QUALITY: u8 = 82;
 /// Embedded icon sizes.
 const ICON_1X: u32 = 128;
 const ICON_2X: u32 = 256;
-/// The 73-plugin set uses 7,287,230 bytes. Rounded to 50,000 bytes, this
-/// ceiling leaves about 350 KiB for artwork revisions and small additions.
-const EMBED_BUDGET_BYTES: u64 = 7_650_000;
+/// Shared with the embedded-art runtime tests.
+const EMBED_BUDGET_BYTES: u64 = include!("../../assets/artwork/embedded-budget.rs");
 /// Where the embedded art goes, relative to the repository root.
 const EMBED_DIR: &str = "crates/mandara-ui/assets/plugin-art";
 /// The table `plugin_art.rs` includes.

@@ -849,3 +849,25 @@ folders become topics, and losing the index only loses colours. A note's
 file is named after its title and renamed to follow it when you finish
 editing. Notes kept in `productivity.json` by older versions are written
 out as files on first start and only then removed from the JSON.
+
+## Connected plugin settings
+
+Studio → Plugins → the plugin → Settings writes these keys under
+`[plugins.settings.<id>]`. API keys belong in Studio’s masked keyring
+field and must not be placed in TOML.
+
+| Plugin | Key | Default and bounds |
+| --- | --- | --- |
+| `translator` | `provider` | `deepl-free`; also `deepl-pro` and `libretranslate` |
+| `translator` | `server` | Empty; LibreTranslate only, including any proxy path |
+| `translator` | `use_api_key` | `false` for LibreTranslate; DeepL always needs a key |
+| `translator` | `target` | `EN`, resolved against the provider’s language list |
+| `feeds` | `subscriptions` | Empty; up to 16 space-separated web addresses |
+| `feeds` | `refresh_seconds` | 300; 60–3,600 |
+| `home-assistant` | `server` | Empty; your instance address |
+| `home-assistant` | `entities` | Empty; up to 24 space-separated entity ids |
+| `home-assistant` | `refresh_seconds` | 30; 5–300 |
+| `phone-connect` | `refresh_seconds` | 15; 5–300 |
+| `phone-connect` | `show_unpaired` | `true`; pairing still requires confirmation |
+
+[Connected plugins](integrations.md) explains their behaviour and privacy.

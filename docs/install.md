@@ -663,3 +663,12 @@ content hash. Each push to `main` bumps exactly the components whose build
 changed: Conventional Commits pick patch, minor or major. When the shell's
 version changes, CI builds and publishes a release. `mandara --version` shows
 the exact build. Details are in [docs/releasing.md](releasing.md).
+
+## Optional connected plugins
+
+The bundled Translator, Phone Connect, Feeds and Home Assistant plugins
+start switched off. Their [setup guide](integrations.md) covers providers
+and accounts. Translator and Home Assistant use the Secret Service keyring
+that the installer already supplies. Phone Connect additionally needs your
+distribution’s KDE Connect package and the companion app on your phone;
+it is not a required dependency of the shell.

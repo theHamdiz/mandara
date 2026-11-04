@@ -593,6 +593,8 @@ impl StudioView {
 
     /// Starts the exit animation.
     pub fn close_plugin(&mut self, cx: &mut Context<Self>) {
+        super::plugin_credentials::clear_input(cx);
+        self.credentials.close();
         self.modal.open = false;
         self.modal.confirm_uninstall = false;
         self.modal.confirm_remove = false;
@@ -1134,7 +1136,7 @@ impl StudioView {
                     .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(tf("{n} settings · changes apply live", &[("n", &list.len())]))),
             )
             .child(action("plugin-modal-about", mandara_ui::bidi::dir_icon("chevron-right"), t("About").into(), false, p).on_click(cx.listener(move |this, _: &ClickEvent, window, cx| this.open_plugin(&id, ModalView::Detail, window, cx))));
-        let body = if list.is_empty() {
+        let mut body = if list.is_empty() {
             div()
                 .py(px(SPACE_30_PX))
                 .row()
@@ -1148,6 +1150,15 @@ impl StudioView {
         } else {
             self.rows_plain(&list, width - 2.0 * BODY_PAD, cfg, p, cx)
         };
+        let key = if m.id == mandara_ui::plugins::home_assistant::ID {
+            let settings = mandara_ui::plugins::home_assistant::settings(cfg);
+            mandara_ui::plugins::home_assistant::credential_key(&settings).map(Some)
+        } else if m.id == mandara_ui::plugins::translator::ID {
+            mandara_ui::plugins::translator::credential_key(cfg)
+        } else { Ok(None) };
+        if let Ok(Some(key)) = key {
+            body = div().row().flex_col().gap(px(SPACE_22_PX)).child(body).child(self.plugin_key_editor(key, p, cx)).into_any_element();
+        }
         div()
             .p(px(BODY_PAD))
             .row()

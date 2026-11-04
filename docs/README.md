@@ -50,3 +50,5 @@ For a visual tour, try the [Look previews on the website](https://thehamdiz.gith
 | [Development tools](development.md) | The demo sandbox, resource checks, build artefacts |
 | [Releasing](releasing.md) | Versioning, signed releases, the changelog |
 | [AGENTS.md](../AGENTS.md) | The repository map and the rules, for people and coding agents |
+
+- [Connected plugins](integrations.md): translation, paired phones, feeds and Home Assistant.

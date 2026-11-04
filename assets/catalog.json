@@ -664,5 +664,37 @@
     "motif": "tiles",
     "angle": 5,
     "panel": null
+  },
+  {
+    "id": "translator",
+    "name": "Translator",
+    "palette": "twilight",
+    "motif": "paper",
+    "angle": -5,
+    "panel": null
+  },
+  {
+    "id": "phone-connect",
+    "name": "Phone Connect",
+    "palette": "corniche",
+    "motif": "peers",
+    "angle": 5,
+    "panel": null
+  },
+  {
+    "id": "feeds",
+    "name": "Feeds",
+    "palette": "obsidian",
+    "motif": "signal",
+    "angle": -4,
+    "panel": null
+  },
+  {
+    "id": "home-assistant",
+    "name": "Home Assistant",
+    "palette": "corniche",
+    "motif": "circuit",
+    "angle": 4,
+    "panel": null
   }
 ]

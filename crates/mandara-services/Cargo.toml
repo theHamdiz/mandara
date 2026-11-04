@@ -19,6 +19,7 @@ mandara-theme.workspace = true
 mandara-config.workspace = true
 mandara-i18n.workspace = true
 zbus.workspace = true
+oo7.workspace = true
 async-io.workspace = true
 # One shared executor for every service actor (see runtime.rs).
 async-executor = "1"
@@ -27,6 +28,8 @@ blocking = "1"
 futures.workspace = true
 async-channel.workspace = true
 ureq.workspace = true
+# RSS, Atom and JSON Feed share one parser and link-resolution model.
+feed-rs = "3"
 pure-onnx-ocr.workspace = true
 tract-onnx.workspace = true
 image.workspace = true
@@ -65,6 +68,7 @@ chrono-tz = "0.10"
 hmac = { version = "0.12", default-features = false }
 sha1 = { version = "0.10", default-features = false }
 sha2.workspace = true
+tempfile.workspace = true
 rqrr = { version = "0.11", default-features = false }
 palette.workspace = true
 libc.workspace = true
@@ -108,7 +112,6 @@ bzip2 = "0.6"
 
 [dev-dependencies]
 zbus = { workspace = true, features = ["p2p"] }
-tempfile.workspace = true
 # Tests create real patches (bidiff + zstd) and sign their mock releases,
 # as the release does.
 mandara-delta = { workspace = true, features = ["create", "sign"] }

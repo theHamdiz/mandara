@@ -11,6 +11,8 @@ installer, display reconnection and native KWin support.
 
 ### New
 
+- Four optional first-party plugins: Translator, Phone Connect, Feeds and Home Assistant. Translate when you ask, keep up with your subscriptions, reach your paired phone and control your home from native panels. Mandara now ships 77 first-party plugins, each with its own artwork.
+
 - **The installer opens on a setup screen.** `mandara install` now starts
   with the MANDARA wordmark and an arrow-key menu: pick the compositor to
   integrate with (the list starts on one you already have; left alone, the
@@ -38,6 +40,8 @@ installer, display reconnection and native KWin support.
   opposite the sidebar. (#57)
 
 ### Improved
+
+- Studio’s About header now has playful GitHub and Discord links that move gently on hover and respect reduced motion.
 
 - **The clipboard answers the keyboard and the wheel.** Arrow Up and Down
   move through the list and turn the page when they reach its end, Enter

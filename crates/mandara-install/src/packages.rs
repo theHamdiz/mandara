@@ -13,7 +13,7 @@
 //!   brightness), NetworkManager + its OpenVPN plugin (Network panel,
 //!   `.ovpn` import), PipeWire + WirePlumber (sound), BlueZ (Bluetooth),
 //!   polkit (admin prompts) and GNOME Keyring with its PAM module (secrets
-//!   unlocked at login);
+//!   unlocked at login, also used by Translator and Home Assistant);
 //! * **greeter** — Mandara Login's runtime: greetd and the cage kiosk.
 //!
 //! opt and svc are tried one package at a time, so a name a release doesn't

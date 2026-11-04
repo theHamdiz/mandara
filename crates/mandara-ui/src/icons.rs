@@ -105,6 +105,7 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         // Mirror of chevron-right for right-to-left layouts (`bidi::dir_icon`).
         "chevron-left" => r#"<path d="M15 6l-6 6 6 6"/>"#.into(),
         "refresh" => r#"<path d="M20.5 12a8.5 8.5 0 0 1-14.9 5.6M3.5 12A8.5 8.5 0 0 1 18.4 6.4"/><path d="M18.5 2.5v4h-4M5.5 21.5v-4h4"/>"#.into(),
+        "translate" => r#"<path d="m5 8 6 6m-7 0 6-6 2-3M2 5h12M7 2h1m14 20-5-11-5 11m2-4h6"/>"#.into(),
         "lock-open" => r#"<rect x="4.5" y="10.5" width="15" height="10.5" rx="2.8"/><path d="M8 10.5V7a4 4 0 0 1 7.7-1.5"/>"#.into(),
         "camera" => r#"<path d="M3.5 8.5a2 2 0 0 1 2-2h2.2l1.6-2.5h5.4l1.6 2.5h2.2a2 2 0 0 1 2 2v9.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/>"#.into(),
         "globe" => r#"<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>"#.into(),
@@ -135,6 +136,9 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "battery" => r#"<rect x="2.5" y="7" width="16.5" height="10" rx="2.5"/><path d="M21.5 10.5v3"/>"#.into(),
         "plug" => r#"<path d="M9 3v4.5M15 3v4.5"/><path d="M6.5 7.5h11v3a5.5 5.5 0 0 1-11 0z"/><path d="M12 16v5"/>"#.into(),
         "external" => r#"<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>"#.into(),
+        "github" => r#"<path d="M8 20.5v-3c-3 .8-3-1.5-4.3-2M16 21v-4.2c0-1-.3-1.6-.7-2 2.7-.3 5.5-1.3 5.5-6a4.8 4.8 0 0 0-1.3-3.3c.1-.5.6-2-.2-3.5 0 0-1.1-.3-3.6 1.3a12.3 12.3 0 0 0-6.5 0C6.7 1.7 5.6 2 5.6 2c-.8 1.5-.3 3-.2 3.5a4.8 4.8 0 0 0-1.3 3.3c0 4.7 2.8 5.7 5.5 6-.4.4-.7 1.2-.7 2V21"/>"#.into(),
+        "rss" => r#"<path d="M5 4a15 15 0 0 1 15 15M5 10a9 9 0 0 1 9 9"/><circle cx="6" cy="18" r="2" fill="black" stroke="none"/>"#.into(),
+        "discord" => r#"<path d="M8 5.4a15 15 0 0 0-3.4 1.2C2.8 9.4 2.2 12.2 2.5 15.1a14 14 0 0 0 4.2 2.4l1.2-1.8M16 5.4a15 15 0 0 1 3.4 1.2c1.8 2.8 2.4 5.6 2.1 8.5a14 14 0 0 1-4.2 2.4l-1.2-1.8M6.8 14.7c3.5 1.8 6.9 1.8 10.4 0M8 5.4l.6-1.6M16 5.4l-.6-1.6M8 5.4a21 21 0 0 1 8 0"/><ellipse cx="8.6" cy="11.5" rx="1" ry="1.4" fill="black" stroke="none"/><ellipse cx="15.4" cy="11.5" rx="1" ry="1.4" fill="black" stroke="none"/>"#.into(),
         "folder" => r#"<path d="M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>"#.into(),
         "stop" => r#"<rect x="6" y="6" width="12" height="12" rx="2.5"/>"#.into(),
         "heart" => r#"<path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/>"#.into(),
@@ -155,6 +159,7 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "brush" => r#"<path d="M20 4l-8.2 8.2"/><path d="M15.6 7.1l1.3 1.3"/><path d="M11.8 12.2c-2.1-1.3-4.9-.1-5.3 2.6-.3 1.9-1.2 3-2.7 3.6 2.8 1.6 6.5 1.1 8.1-1.2 1-1.4 1-3.4-.1-5z"/>"#.into(),
         // A house: the main menu's home page.
         "home" => r#"<path d="M3.5 11L12 4l8.5 7"/><path d="M5.5 9.5V20h4.5v-5.5h4V20h4.5V9.5"/>"#.into(),
+        "phone" => r#"<rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10 5.5h4"/><circle cx="12" cy="18.2" r=".8" fill="black" stroke="none"/>"#.into(),
         // An artist's palette: colours and themes.
         "palette" => r#"<path d="M12 21a9 9 0 1 1 9-9c0 2.5-2 3.5-4 3.5h-1.8a1.7 1.7 0 0 0-1.2 2.9 1.6 1.6 0 0 1-1.1 2.6z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="14.5" cy="7" r="1"/><circle cx="17" cy="11" r="1"/>"#.into(),
         // A die: something chosen at random.
@@ -214,13 +219,13 @@ pub const ICON_NAMES: &[&str] = &[
     "volume-high", "volume-low", "volume-mute", "volume-off", "mic", "mic-off", "power", "restart", "logout", "lock", "lock-open",
     "moon", "sun", "hibernate", "play", "pause", "next", "previous", "music", "cpu", "memory", "disk", "crescent",
     "calendar", "grid", "search", "bell", "coffee", "window", "sidebar", "headphones", "check", "chevron-right", "chevron-left",
-    "refresh", "camera", "clipboard", "crop", "monitor", "trash", "timer", "pin", "pin-off", "close", "plus", "note",
+    "refresh", "translate", "camera", "clipboard", "crop", "monitor", "trash", "timer", "pin", "pin-off", "close", "plus", "note",
     "list-check", "circle", "skip", "cloud", "cloud-sun", "cloud-moon", "rain", "snow", "fog", "bolt", "droplet", "wind",
     "sunset", "thermometer", "image", "minus", "maximize", "arrow", "undo", "pointer", "keyboard", "text-scan", "crosshair", "sliders", "globe",
-    "eject", "usb", "box", "package", "gauge", "leaf", "download", "server", "terminal", "battery", "plug", "external", "folder",
+    "eject", "usb", "box", "package", "gauge", "leaf", "download", "server", "terminal", "battery", "plug", "external", "github", "discord", "rss", "folder",
     "stop", "heart", "alert", "zap",
     "eyedropper", "waves", "arrow-down", "arrow-up", "shield", "copy", "clock", "flame",
-    "user", "user-plus", "key", "tiles", "eye", "eye-off", "pencil", "sparkles", "brush", "dice", "release-notes", "home", "palette",
+    "user", "user-plus", "key", "tiles", "eye", "eye-off", "pencil", "sparkles", "brush", "dice", "release-notes", "home", "phone", "palette",
     "git-branch", "workflow", "bug",
     "arch", "book", "info",
     "hadith", "bookmark",
