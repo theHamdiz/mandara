@@ -26,6 +26,8 @@ truly right, put it on that one item with its reason:
 For a focused edit, start with the affected crate and its callers, for
 example `cargo test -p mandara-install --locked`. Before a pull request,
 run the full workspace tests and clippy; CI keeps both checks.
+Its initial workspace build uses `--profile test`, so the following tests
+reuse those dependencies and the installer dry run uses the tested binary.
 
 The test profile uses unoptimized workspace code and basic dependency
 optimization, without debug information or incremental caches. It retains assertions and the AV1 decoder’s required

@@ -49,6 +49,8 @@ installer, display reconnection and native KWin support.
   interactive shell’s dependency optimization or keep incremental caches.
   The development guide explains focused checks, timing reports and optional
   local linkers; the full workspace checks still run in CI.
+  CI's build and test steps now share that profile instead of compiling
+  the dependency tree twice with different optimization settings.
 
 - **Guides that match today's shell.** The docs show the power menu at the
   top centre and at the side, each Look's picture follows your page's light
@@ -133,6 +135,9 @@ installer, display reconnection and native KWin support.
   all 14 languages. (#49)
 
 ### Under the hood
+
+- **Build checks use the current GitHub Actions runtime.** Checkout no
+  longer reports the retired Node runtime during tests and releases.
 
 - **Clearer docs for NixOS, River and Sway.** The README says NixOS users
   update through their flake, the install guide notes that River has no

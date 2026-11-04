@@ -87,7 +87,7 @@ jobs:
       # The branch tip, not the pushed commit: a release queued behind
       # another one starts after that one pushed its AUR recipes, and a
       # bump made on the older commit could never be pushed.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
@@ -126,9 +126,11 @@ jobs:
             released=true; tag="v$version"
             git rev-parse -q --verify "refs/tags/$tag" >/dev/null || { git tag -a "$tag" -m "mandara $version"; git push origin "$tag"; }
           fi
-          echo "released=$released" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          {
+            echo "released=$released"
+            echo "version=$version"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
           echo "### Mandara $version — release: $released" >> "$GITHUB_STEP_SUMMARY"
           cargo xtask status >> "$GITHUB_STEP_SUMMARY"
 
@@ -156,7 +158,7 @@ jobs:
     env:
       RUSTFLAGS: ${{ matrix.rustflags }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.version.outputs.tag }}
 
@@ -183,7 +185,8 @@ jobs:
       # release and covered by SHA256SUMS).
       - name: Build (release, fat LTO, fingerprinted)
         run: |
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
           cargo run --locked --quiet -p xtask -- build --target ${{ matrix.target }} ${{ matrix.variant && format('--variant {0}', matrix.variant) || '' }} --out dist --no-readme
           ./target/${{ matrix.target }}/release/mandara --version
           { echo '```toml'; cat dist/*.build.toml; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
@@ -206,7 +209,8 @@ jobs:
 
       - name: Tarball
         run: |
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
           cargo xtask dist --target ${{ matrix.target }} ${{ matrix.variant && format('--variant {0}', matrix.variant) || '' }} --out dist
 
       # Delta update: each of the last DELTA_FROM_RELEASES published
@@ -272,7 +276,7 @@ jobs:
             runner: ubuntu-22.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.version.outputs.tag }}
 
@@ -286,7 +290,8 @@ jobs:
       # the Wayland libraries are loaded at run time.
       - name: Build in Alpine (release, fat LTO, fingerprinted) and tarball
         run: |
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
           docker run --rm -v "$PWD:/src" -w /src \
             -e SOURCE_DATE_EPOCH -e GITHUB_SHA -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
             -e RUSTFLAGS="-C target-feature=-crt-static" \
@@ -329,7 +334,7 @@ jobs:
     if: needs.version.outputs.released == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.version.outputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
@@ -352,7 +357,7 @@ jobs:
     needs: [version, build, build-musl, plugins]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.version.outputs.tag }}
 
@@ -399,7 +404,7 @@ jobs:
         run: |
           v="${{ needs.version.outputs.version }}"
           for f in dist/mandara-"$v"-*.tar.gz; do
-            cp "$f" "dist/mandara-${f#dist/mandara-$v-}"
+            cp "$f" "dist/mandara-${f#dist/mandara-"$v"-}"
           done
           ls -la dist/mandara-*.tar.gz
 
