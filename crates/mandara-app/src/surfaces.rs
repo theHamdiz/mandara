@@ -43,34 +43,45 @@ pub(super) fn init(outputs: Vec<OutputGeometry>, cx: &mut App) {
         let current = generation.get().wrapping_add(1);
         generation.set(current);
         let generation = generation.clone();
-        let expected = cx.displays().len();
+        let displays: Vec<_> = cx.displays().iter().map(|display| DisplayKey::of(display.as_ref())).collect();
         cx.spawn(async move |cx| {
             let outputs = cx.background_executor().spawn(async move {
-                query_after_change(expected, mandara_core::query_outputs, || std::thread::sleep(OUTPUT_RETRY_DELAY))
+                query_after_change(&displays, mandara_core::query_outputs, || std::thread::sleep(OUTPUT_RETRY_DELAY))
             }).await;
             cx.update(|cx| {
                 if generation.get() != current {
                     return;
                 }
-                match outputs {
-                    Ok(outputs) => reconcile(&outputs, false, cx),
-                    Err(err) => {
-                        tracing::warn!("output geometry after display change: {err:#}");
-                    }
-                }
+                reconcile(&available_geometry(outputs), false, cx);
             });
         }).detach();
     }).detach();
 }
 
-fn query_after_change(expected: usize, mut query: impl FnMut() -> anyhow::Result<Vec<OutputGeometry>>, wait: impl FnOnce()) -> anyhow::Result<Vec<OutputGeometry>> {
+fn available_geometry(outputs: anyhow::Result<Vec<OutputGeometry>>) -> Vec<OutputGeometry> {
+    outputs.unwrap_or_else(|err| {
+        tracing::warn!("output geometry after display change: {err:#}");
+        Vec::new()
+    })
+}
+
+fn geometry_score(displays: &[DisplayKey], outputs: &[OutputGeometry]) -> (usize, usize) {
+    let named = displays.iter().filter_map(|display| display.uuid).filter(|uuid| outputs.iter().any(|output| output.has_size() && !output.name.is_empty() && mandara_core::output_uuid(&output.name) == *uuid)).count();
+    (named, outputs.iter().filter(|output| output.has_size()).count())
+}
+
+fn query_after_change(displays: &[DisplayKey], mut query: impl FnMut() -> anyhow::Result<Vec<OutputGeometry>>, wait: impl FnOnce()) -> anyhow::Result<Vec<OutputGeometry>> {
     let first = query();
-    if first.as_ref().is_ok_and(|outputs| outputs.len() >= expected) {
+    let expected_named = displays.iter().filter(|display| display.uuid.is_some()).count();
+    if first.as_ref().is_ok_and(|outputs| {
+        let (named, sized) = geometry_score(displays, outputs);
+        named == expected_named && sized >= displays.len()
+    }) {
         return first;
     }
     wait();
     match (first, query()) {
-        (Ok(first), Ok(retry)) if first.len() > retry.len() => Ok(first),
+        (Ok(first), Ok(retry)) if geometry_score(displays, &first) > geometry_score(displays, &retry) => Ok(first),
         (_, Ok(retry)) => Ok(retry),
         (first, Err(_)) if first.is_ok() => first,
         (_, Err(err)) => Err(err),
@@ -98,15 +109,17 @@ fn display_spec(id: DisplayId, geo: Option<OutputGeometry>, fallback: (f32, f32)
     }
 }
 
-fn preserve_known_outputs(live: &[DisplayId], queried: &[OutputGeometry], existing: &[Spec], previous: &[OutputGeometry]) -> Vec<OutputGeometry> {
+fn same_display(spec: &Spec, display: &DisplayKey) -> bool {
+    spec.display == Some(display.id) && display.uuid.is_none_or(|uuid| !spec.monitor.is_empty() && mandara_core::output_uuid(&spec.monitor) == uuid)
+}
+
+fn preserve_known_outputs(live: &[DisplayKey], queried: &[OutputGeometry], existing: &[Spec], previous: &[OutputGeometry]) -> Vec<OutputGeometry> {
     let mut outputs = queried.to_vec();
-    if queried.len() < live.len() {
-        for spec in existing.iter().filter(|s| s.display.is_some_and(|id| live.contains(&id))) {
-            if !spec.monitor.is_empty() && !outputs.iter().any(|g| g.name == spec.monitor)
-                && let Some(geo) = previous.iter().find(|g| g.name == spec.monitor && g.has_size())
-            {
-                outputs.push(geo.clone());
-            }
+    for spec in existing.iter().filter(|spec| live.iter().any(|display| same_display(spec, display))) {
+        if !spec.monitor.is_empty() && !outputs.iter().any(|g| g.name == spec.monitor)
+            && let Some(geo) = previous.iter().find(|g| g.name == spec.monitor && g.has_size())
+        {
+            outputs.push(geo.clone());
         }
     }
     outputs
@@ -115,9 +128,10 @@ fn preserve_known_outputs(live: &[DisplayId], queried: &[OutputGeometry], existi
 fn snapshots(outputs: &[OutputGeometry], existing: &[Spec], initial: bool, cx: &App) -> Vec<Spec> {
     let displays = cx.displays();
     let keys: Vec<_> = displays.iter().map(|d| DisplayKey::of(d.as_ref())).collect();
+    let existing: Vec<_> = existing.iter().filter(|spec| keys.iter().any(|key| same_display(spec, key))).cloned().collect();
     let mut specs: Vec<_> = mandara_core::pair_displays(&keys, outputs).into_iter().map(|(id, geo)| {
         let fallback = displays.iter().find(|d| d.id() == id).map(|d| (f32::from(d.bounds().size.width), f32::from(d.bounds().size.height))).unwrap_or(FALLBACK_SIZE);
-        display_spec(id, geo, fallback, existing)
+        display_spec(id, geo, fallback, &existing)
     }).collect();
     if initial && specs.is_empty() {
         let geo = outputs.first();
@@ -129,7 +143,7 @@ fn snapshots(outputs: &[OutputGeometry], existing: &[Spec], initial: bool, cx: &
 
 fn reconcile(outputs: &[OutputGeometry], initial: bool, cx: &mut App) {
     let existing: Vec<_> = cx.global::<Surfaces>().sets.iter().map(|set| set.spec.clone()).collect();
-    let live_displays: Vec<_> = cx.displays().iter().map(|display| display.id()).collect();
+    let live_displays: Vec<_> = cx.displays().iter().map(|display| DisplayKey::of(display.as_ref())).collect();
     let previous = cx.try_global::<mandara_ui::overlays::Outputs>().map(|outputs| outputs.0.as_slice()).unwrap_or_default();
     let outputs = preserve_known_outputs(&live_displays, outputs, &existing, previous);
     let desired = snapshots(&outputs, &existing, initial, cx);
@@ -206,11 +220,33 @@ mod tests {
         Spec { display: Some(DisplayId::new(id)), monitor: monitor.into(), size }
     }
 
+    fn display_keys(count: usize) -> Vec<DisplayKey> {
+        (0..count).map(|id| DisplayKey { id: DisplayId::new(id as u64), uuid: None, origin: (0, 0) }).collect()
+    }
+
+    #[test]
+    fn same_count_with_stale_names_retries_and_prefers_live_names() {
+        let displays = [DisplayKey { id: DisplayId::new(1), uuid: Some(mandara_core::output_uuid("DP-2")), origin: (0, 0) }];
+        let geometry = |name: &str| OutputGeometry { name: name.into(), width: 1920, height: 1080, ..Default::default() };
+        let mut calls = 0;
+        let result = query_after_change(&displays, || {
+            calls += 1;
+            Ok(if calls == 1 { vec![geometry("DP-1"), geometry("DP-3")] } else { vec![geometry("DP-2")] })
+        }, || {}).unwrap();
+        assert_eq!(calls, 2);
+        assert_eq!(result[0].name, "DP-2");
+        let failed = available_geometry(Err(anyhow::anyhow!("both queries failed")));
+        let previous = [geometry("DP-2")];
+        let retained = [spec(1, "DP-2", (1920.0, 1080.0))];
+        assert_eq!(preserve_known_outputs(&[displays[0], DisplayKey { id: DisplayId::new(2), uuid: None, origin: (0, 0) }], &failed, &retained, &previous), previous);
+        assert_eq!(display_spec(DisplayId::new(2), None, (1280.0, 720.0), &retained), spec(2, "", (1280.0, 720.0)));
+    }
+
     #[test]
     fn a_transient_query_failure_recovers_the_returning_outputs() {
         let mut calls = 0;
         let waited = Cell::new(false);
-        let outputs = query_after_change(1, || {
+        let outputs = query_after_change(&display_keys(1), || {
             calls += 1;
             if calls == 1 { anyhow::bail!("display is changing"); }
             assert!(waited.get());
@@ -224,12 +260,12 @@ mod tests {
     #[test]
     fn failed_queries_do_not_become_empty_geometry_and_stop_after_one_retry() {
         let mut calls = 0;
-        assert!(query_after_change(1, || {
+        assert!(query_after_change(&display_keys(1), || {
             calls += 1;
             anyhow::bail!("unavailable")
         }, || {}).is_err());
         assert_eq!(calls, 2);
-        assert!(query_after_change(0, || Ok(Vec::new()), || panic!("complete query must not wait")).unwrap().is_empty());
+        assert!(query_after_change(&[], || Ok(Vec::new()), || panic!("complete query must not wait")).unwrap().is_empty());
     }
 
     #[test]
@@ -237,7 +273,7 @@ mod tests {
         for retry_succeeds in [false, true] {
             let mut calls = 0;
             let geometry = || OutputGeometry { name: "DP-3".into(), width: 2560, height: 1440, ..Default::default() };
-            let outputs = query_after_change(2, || {
+            let outputs = query_after_change(&display_keys(2), || {
                 calls += 1;
                 if calls == 1 { return Ok(vec![geometry()]); }
                 if !retry_succeeds { anyhow::bail!("unavailable"); }
@@ -252,7 +288,7 @@ mod tests {
     #[test]
     fn an_empty_retry_keeps_the_first_usable_geometry() {
         let mut calls = 0;
-        let outputs = query_after_change(2, || {
+        let outputs = query_after_change(&display_keys(2), || {
             calls += 1;
             Ok(if calls == 1 {
                 vec![OutputGeometry { name: "DP-3".into(), width: 2560, height: 1440, ..Default::default() }]
@@ -274,15 +310,20 @@ mod tests {
             OutputGeometry { name: dp.monitor.clone(), x: 1920, width: 2560, height: 1440, ..Default::default() },
         ];
         let existing = [hdmi.clone(), dp.clone()];
-        let live = [hdmi.display.unwrap(), dp.display.unwrap()];
+        let live = [DisplayKey { id: hdmi.display.unwrap(), uuid: Some(mandara_core::output_uuid(&hdmi.monitor)), origin: (0, 0) }, DisplayKey { id: dp.display.unwrap(), uuid: Some(mandara_core::output_uuid(&dp.monitor)), origin: (1920, 0) }];
         assert_eq!(preserve_known_outputs(&live, &previous[..1], &existing, &previous), previous);
         assert_eq!(preserve_known_outputs(&live[..1], &previous[..1], &existing, &previous), previous[..1]);
+        let stale = [OutputGeometry { name: "DP-9".into(), ..previous[1].clone() }, previous[0].clone()];
+        assert!(preserve_known_outputs(&live, &stale, &existing, &previous).contains(&previous[1]));
+        let replaced = DisplayKey { uuid: Some(mandara_core::output_uuid("DP-9")), ..live[1] };
+        assert!(!same_display(&dp, &replaced), "a reused id must not retain another connector's geometry");
+        assert!(preserve_known_outputs(&[replaced], &[], &existing, &previous).is_empty());
         // Fractional-scale GPUI bounds must not replace a known logical size.
-        assert_eq!(display_spec(live[1], None, (1920.0, 1080.0), &existing), dp);
+        assert_eq!(display_spec(live[1].id, None, (1920.0, 1080.0), &existing), dp);
         let new = DisplayId::new(7);
         assert_eq!(display_spec(new, None, (1280.0, 720.0), &existing), spec(7, "", (1280.0, 720.0)));
         let resized = OutputGeometry { width: 1280, height: 720, ..previous[1].clone() };
-        assert_eq!(display_spec(live[1], Some(resized), (1920.0, 1080.0), &existing), spec(1, "DP-3", (1280.0, 720.0)));
+        assert_eq!(display_spec(live[1].id, Some(resized), (1920.0, 1080.0), &existing), spec(1, "DP-3", (1280.0, 720.0)));
     }
 
     #[test]

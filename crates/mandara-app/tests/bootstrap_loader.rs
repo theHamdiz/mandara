@@ -59,3 +59,31 @@ fn setup_reports_a_missing_keyboard_library_without_panicking_or_writing_config(
     assert_eq!(std::fs::read_to_string(mango).unwrap(), original);
     assert!(!config.join("mandara").exists(), "the prerequisite check must precede configuration writes");
 }
+
+#[test]
+fn kwin_setup_check_reports_availability_without_touching_compositor_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config");
+    let programs = dir.path().join("bin");
+    std::fs::create_dir_all(&config).unwrap();
+    std::fs::create_dir_all(&programs).unwrap();
+    let kwinrc = config.join("kwinrc");
+    std::fs::write(&kwinrc, "[Desktops]\nNumber=3\n").unwrap();
+    for installed in [false, true] {
+        if installed { std::os::unix::fs::symlink("/usr/bin/true", programs.join("kwin_wayland")).unwrap(); }
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_mandara"))
+            .args(["setup", "--check", "--compositor", "kwin"])
+            .env("PATH", &programs).env("LC_ALL", "C")
+            .env("HOME", dir.path()).env("XDG_CONFIG_HOME", &config)
+            .env("XDG_DATA_HOME", dir.path().join("data"))
+            .env("XDG_CACHE_HOME", dir.path().join("cache"))
+            .env("XDG_RUNTIME_DIR", dir.path()).env("MANDARA_NO_IPC", "1")
+            .stdin(std::process::Stdio::null()).output().unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(output.status.code(), Some(if installed { 0 } else { 11 }), "{stdout}");
+        assert!(stdout.contains(if installed { "KWin has no standalone configuration checker" } else { "isn't installed" }), "{stdout}");
+        assert_eq!(std::fs::read_to_string(&kwinrc).unwrap(), "[Desktops]\nNumber=3\n");
+        assert!(!config.join("autostart").exists());
+        assert!(!config.join("mandara/generated").exists());
+    }
+}

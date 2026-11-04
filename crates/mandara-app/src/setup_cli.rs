@@ -75,6 +75,9 @@ pub fn setup(o: Options) -> Result<()> {
         if target == Target::KWin {
             if o.check {
                 println!("{}", mandara_i18n::t("Mandara uses native Plasma protocols; KWin’s configuration stays unchanged"));
+                let report = doctor::check(target);
+                print_report(&report);
+                config_errors += usize::from(report.status != CheckerStatus::Ran);
             } else if let Some(path) = mandara_config::kwin::sync_autostart(cfg.compositor.autostart, &mandara_config::paths::self_exe())? {
                 println!("{}", mandara_i18n::tf("KWin: startup entry {path}", &[("path", &path.display())]));
             }

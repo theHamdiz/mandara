@@ -82,6 +82,8 @@ installer, display reconnection and native KWin support.
 
 ### Fixed
 
+- Display changes now recover even when both geometry queries fail, and a stale monitor list cannot give a new display another monitor’s name or dimensions. `setup --check --compositor kwin` also reports whether KWin is available.
+
 - **The process table counts the whole machine.** A busy build used to
   read "405.5%" for `rustc`, because the list measured each process
   against a single core while the Resources panel measured all of them.
