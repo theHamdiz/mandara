@@ -332,9 +332,27 @@ fn interactive_setup_chooses_the_compositor_then_the_rest_is_not_asked() {
     let setup = format!("{} setup --compositor niri --autostart", bin.display());
     assert!(host.ran().contains(&setup), "{:?}", host.ran());
     // The login-screen question was answered on the screen, not asked again.
+    assert!(!host.text().contains("asked: Use Mandara Login"), "{}", host.text());
     assert!(host.text().contains("Mandara Login is your login screen"), "{}", host.text());
     // A terminal gets the wordmark.
     assert!(host.text().contains("███╗   ███╗"), "{}", host.text());
+}
+
+#[test]
+fn an_untouched_compositor_row_leaves_detection_to_setup() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["dnf", "sudo", "systemctl", "niri"]);
+    host.tty = true;
+    // Straight to Install: Compositor, autostart, login screen, Install.
+    host.menus = vec![3];
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs::default()).unwrap();
+    let bin = f.home().join(".local/bin/mandara");
+    let ran = host.ran();
+    // Niri is installed, so the row suggested it, but only `setup` itself
+    // decides: a machine with several compositors must not be pinned to the
+    // wrong one by walking past the row.
+    assert!(ran.contains(&format!("{} setup --autostart", bin.display())), "{ran:?}");
+    assert!(!ran.iter().any(|c| c.contains("setup --compositor")), "{ran:?}");
 }
 
 #[test]
