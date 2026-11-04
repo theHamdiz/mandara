@@ -5791,6 +5791,7 @@ TOP APPS TODAY
 Tab
 Tab name
 Tab shape
+Tab: results · ↑↓: select · Enter: use
 Tabbed
 Tablet
 Tabs

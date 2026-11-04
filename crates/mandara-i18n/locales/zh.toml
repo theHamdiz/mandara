@@ -8295,3 +8295,5 @@
 "Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "最近的视图构建：实心部分显示 CPU 构建时间；完整高度还包括同一表面上距上一次构建的时间间隔。"
 
 "This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "此合成器不提供 wlr-screencopy，且无法使用 KWin 的 ScreenShot2"
+
+"Tab: results · ↑↓: select · Enter: use" = "Tab：结果 · ↑↓：选择 · Enter：使用"

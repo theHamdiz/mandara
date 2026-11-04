@@ -175,6 +175,11 @@ mandara msg clipboard collection add Palette <id> # collection remove <name|id> 
 mandara msg clipboard view color     # the panel's filter: all, pinned, a kind or a collection, plus optional search words
 ```
 
+In the clipboard panel, **Tab** moves from search to the filtered results.
+Use **↑/↓** to select and **Enter** to copy or paste according to the
+panel’s click action. Search editing and collection-name entry keep their
+own keyboard input.
+
 ## Notifications, OSD, sound and media
 
 ```bash

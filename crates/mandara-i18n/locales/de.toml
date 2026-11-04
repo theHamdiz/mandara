@@ -8288,10 +8288,10 @@
 "↑/↓ change · enter select · esc cancel" = "↑/↓ ändern · mit Enter auswählen · mit Esc abbrechen"
 
 "Profile scope" = "Profilumfang"
-"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "Ändert Stil, Position und Höhe der Leiste. Ihre Elemente bleiben erhalten, sofern Sie sie nicht ausdrücklich ersetzen."
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "Ändert Stil, Position und Höhe der Leiste. Deine Elemente bleiben erhalten, sofern du sie nicht ausdrücklich ersetzt."
 "Replace bar items" = "Leistenelemente ersetzen"
 "Leave empty to follow the desktop's icon theme" = "Leer lassen, um das Symbolthema des Desktops zu verwenden"
-"Could not load {module}; check that the installed kernel includes it" = "{module} konnte nicht geladen werden; prüfen Sie, ob der installierte Kernel es enthält"
+"Could not load {module}; check that the installed kernel includes it" = "{module} konnte nicht geladen werden; prüfe, ob der installierte Kernel es enthält"
 
 "Bounce only while music plays" = "Nur während der Musikwiedergabe hüpfen"
 "Hide corners between displays" = "Ecken zwischen Bildschirmen ausblenden"
@@ -8299,3 +8299,5 @@
 "Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Letzte Ansichtsaufbauten: Der gefüllte Balken zeigt die CPU-Aufbauzeit; die volle Höhe umfasst den Abstand zum vorherigen Aufbau derselben Fläche."
 
 "This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "Dieser Compositor bietet kein wlr-screencopy, und ScreenShot2 von KWin konnte nicht verwendet werden"
+
+"Tab: results · ↑↓: select · Enter: use" = "Tab: Ergebnisse · ↑↓: Auswahl · Enter: verwenden"

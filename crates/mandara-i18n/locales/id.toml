@@ -8054,3 +8054,5 @@
 "Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Pembuatan tampilan terbaru: batang padat menunjukkan waktu CPU; tinggi penuh juga mencakup interval sejak pembuatan sebelumnya pada permukaan yang sama."
 
 "This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "Kompositor ini tidak menyediakan wlr-screencopy, dan ScreenShot2 milik KWin tidak dapat digunakan"
+
+"Tab: results · ↑↓: select · Enter: use" = "Tab: hasil · ↑↓: pilih · Enter: gunakan"

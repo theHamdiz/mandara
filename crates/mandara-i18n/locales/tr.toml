@@ -8300,3 +8300,5 @@
 "Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Son görünüm oluşturma süreleri: dolu çubuk CPU süresini gösterir; tam yükseklik aynı yüzeydeki önceki oluşturmadan beri geçen aralığı da içerir."
 
 "This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "Bu birleştirici wlr-screencopy sunmuyor ve KWin ScreenShot2 kullanılamadı"
+
+"Tab: results · ↑↓: select · Enter: use" = "Tab: sonuçlar · ↑↓: seç · Enter: kullan"

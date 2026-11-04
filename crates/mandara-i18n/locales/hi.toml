@@ -8301,3 +8301,5 @@
 "Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "हाल के व्यू निर्माण: भरे हुए बार सीपीयू पर निर्माण का समय दिखाते हैं; पूरी ऊँचाई में उसी सतह के पिछले निर्माण से अंतराल भी शामिल है।"
 
 "This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "इस कंपोज़िटर में wlr-screencopy नहीं है और KWin का ScreenShot2 इस्तेमाल नहीं हो सका"
+
+"Tab: results · ↑↓: select · Enter: use" = "Tab: परिणाम · ↑↓: चुनें · Enter: उपयोग"

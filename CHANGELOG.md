@@ -100,6 +100,10 @@ installer, display reconnection and native KWin support.
 
 ### Fixed
 
+- **Reach clipboard matches after searching.** Tab moves from the search
+  field to the results; arrows select and Enter uses the selected copy.
+  Editing the search or a collection name keeps its own keyboard input.
+
 - **Studio has one set of window buttons.** Its title bar now requests
   client decorations and yields to compositor-provided controls when
   those are required. (#89)
