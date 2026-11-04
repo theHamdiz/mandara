@@ -8042,8 +8042,8 @@
 "↑/↓ change · enter select · esc cancel" = "↑/↓ 변경 · Enter 선택 · Esc 취소"
 
 "Profile scope" = "프로필 범위"
-"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "표시줄의 스타일, 위치, 높이를 변경합니다. 교체를 선택하지 않으면 기존 항목이 유지됩니다."
-"Replace bar items" = "표시줄 항목 교체"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "바의 스타일, 위치, 높이를 변경합니다. 교체를 선택하지 않으면 기존 항목이 유지됩니다."
+"Replace bar items" = "바 항목 교체"
 "Leave empty to follow the desktop's icon theme" = "비워 두면 데스크톱의 아이콘 테마를 따릅니다"
 "Could not load {module}; check that the installed kernel includes it" = "{module}을(를) 불러올 수 없습니다. 설치된 커널에 포함되어 있는지 확인하세요"
 
@@ -8051,3 +8051,5 @@
 "Hide corners between displays" = "디스플레이 사이 모서리 숨기기"
 "Redraw interval p50" = "다시 그리기 간격 p50"
 "Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "최근 뷰 빌드: 채워진 부분은 CPU 빌드 시간을 보여 주며, 전체 높이에는 같은 표면의 이전 빌드 이후 간격도 포함됩니다."
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "이 컴포지터는 wlr-screencopy를 제공하지 않으며 KWin의 ScreenShot2도 사용할 수 없습니다"

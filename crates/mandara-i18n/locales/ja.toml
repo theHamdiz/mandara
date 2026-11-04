@@ -8299,3 +8299,5 @@
 "Hide corners between displays" = "ディスプレイ間の角を非表示にする"
 "Redraw interval p50" = "再描画間隔 p50"
 "Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "最近のビュー構築：塗りつぶし部分は CPU の構築時間を示し、全体の高さは同じサーフェスで前回構築されてからの間隔を含みます。"
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "このコンポジターは wlr-screencopy に対応しておらず、KWin の ScreenShot2 も使用できませんでした"

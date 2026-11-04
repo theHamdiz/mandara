@@ -8298,3 +8298,5 @@
 "Hide corners between displays" = "Скрывать углы между экранами"
 "Redraw interval p50" = "Интервал перерисовки p50"
 "Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Недавние построения представлений: сплошная часть показывает время CPU; полная высота включает интервал с предыдущего построения той же поверхности."
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "Этот композитор не поддерживает wlr-screencopy, а использовать ScreenShot2 из KWin не удалось"

@@ -8217,7 +8217,7 @@
 "The compositor did not respond in time" = "Der Compositor hat nicht rechtzeitig geantwortet"
 "The compositor connection closed" = "Die Verbindung zum Compositor wurde geschlossen"
 "Idle notifications are not available" = "Leerlaufbenachrichtigungen sind nicht verfügbar"
-"No input seat is available" = "Kein Eingabegerätesatz verfügbar"
+"No input seat is available" = "Kein Eingabe-Seat verfügbar"
 "These displays do not support power control" = "Diese Bildschirme unterstützen keine Energiesteuerung"
 "This executable path cannot be used in a desktop entry" = "Dieser Programmpfad kann nicht in einem Desktop-Eintrag verwendet werden"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path} ist ein eigener Autostart-Eintrag; Mandara hat ihn unverändert gelassen"
@@ -8297,3 +8297,5 @@
 "Hide corners between displays" = "Ecken zwischen Bildschirmen ausblenden"
 "Redraw interval p50" = "Neuzeichnungsintervall p50"
 "Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Letzte Ansichtsaufbauten: Der gefüllte Balken zeigt die CPU-Aufbauzeit; die volle Höhe umfasst den Abstand zum vorherigen Aufbau derselben Fläche."
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "Dieser Compositor bietet kein wlr-screencopy, und ScreenShot2 von KWin konnte nicht verwendet werden"

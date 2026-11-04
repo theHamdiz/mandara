@@ -8052,3 +8052,5 @@
 "Hide corners between displays" = "ডিসপ্লের মাঝের কোণ লুকান"
 "Redraw interval p50" = "পুনরায় আঁকার ব্যবধান p50"
 "Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "ভিউয়ের সাম্প্রতিক নির্মাণ: ভরাট বার সিপিইউতে নির্মাণের সময় দেখায়; সম্পূর্ণ উচ্চতায় একই পৃষ্ঠের আগের নির্মাণ থেকে ব্যবধানও থাকে।"
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "এই কম্পোজিটরে wlr-screencopy নেই এবং KWin-এর ScreenShot2 ব্যবহার করা যায়নি"

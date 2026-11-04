@@ -8293,3 +8293,5 @@
 "Hide corners between displays" = "Ocultar esquinas entre pantallas"
 "Redraw interval p50" = "Intervalo de redibujado p50"
 "Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Construcciones recientes de vistas: las barras sólidas muestran el tiempo de CPU; la altura total incluye el intervalo desde la construcción anterior de la misma superficie."
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "Este compositor no ofrece wlr-screencopy y no se pudo usar ScreenShot2 de KWin"

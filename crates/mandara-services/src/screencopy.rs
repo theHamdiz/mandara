@@ -12,6 +12,10 @@ use wayland_client::{Connection, Dispatch, Proxy, QueueHandle, WEnum};
 use wayland_protocols::xdg::xdg_output::zv1::client::{zxdg_output_manager_v1, zxdg_output_v1};
 use wayland_protocols_wlr::screencopy::v1::client::{zwlr_screencopy_frame_v1, zwlr_screencopy_manager_v1};
 
+fn fallback_result(result: Result<Vec<Capture>>) -> Result<Vec<Capture>> {
+    result.context(mandara_i18n::t("This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used"))
+}
+
 mod kwin;
 mod composite;
 pub use composite::composite;
@@ -198,7 +202,7 @@ pub fn capture_all_with(cursor: bool) -> Result<Vec<Capture>> {
     queue.roundtrip(&mut state)?;
 
     let Some(manager) = manager else {
-        return kwin::capture(&state.outputs.iter().map(|(_, info)| info).collect::<Vec<_>>(), cursor);
+        return fallback_result(kwin::capture(&state.outputs.iter().map(|(_, info)| info).collect::<Vec<_>>(), cursor));
     };
 
     let mut captures = Vec::new();
@@ -363,6 +367,15 @@ impl FrameSource {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unavailable_capture_preserves_the_backend_failure() {
+        let error = super::fallback_result(Err(anyhow::anyhow!("fixture has no ScreenShot2 service"))).unwrap_err();
+        let message = format!("{error:#}");
+        assert!(message.contains("wlr-screencopy"));
+        assert!(message.contains("fixture has no ScreenShot2 service"));
+        assert!(super::fallback_result(Ok(Vec::new())).unwrap().is_empty());
+    }
 
     #[test]
     fn converts_xrgb_and_inverts() {

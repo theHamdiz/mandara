@@ -8052,3 +8052,5 @@
 "Hide corners between displays" = "پنهان کردن گوشه‌های بین نمایشگرها"
 "Redraw interval p50" = "فاصلهٔ بازترسیم p50"
 "Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "ساخت‌های اخیر نما: بخش پُر ستون زمان ساخت پردازنده را نشان می‌دهد؛ ارتفاع کامل شامل فاصله از ساخت قبلی همان سطح است."
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "این کامپوزیتور wlr-screencopy ندارد و استفاده از ScreenShot2 در KWin ممکن نشد"

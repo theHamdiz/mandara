@@ -6239,6 +6239,7 @@ This command runs; you'll be asked to authorize it:
 This compositor can't change screen colours
 This compositor doesn't support display configuration (wlr-output-management)
 This compositor has no gamma control (wlr-gamma-control); Niri, GNOME and KDE can't do Mandara's night light
+This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used
 This computer
 This computer installs software with {manager}, which can't install it.
 This computer runs on mains power

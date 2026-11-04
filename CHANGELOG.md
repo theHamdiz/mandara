@@ -238,6 +238,10 @@ installer, display reconnection and native KWin support.
 
 ### Under the hood
 
+- **Release builds use an immutable checkout action.** CI and packaging
+  share the same verified action commit. Setup's availability tests also
+  find their fixture programs through PATH, including on NixOS.
+
 - **Build cleanup releases its locks promptly**, even when another tool
   starts at the same moment, so unused build caches can be removed reliably.
 
