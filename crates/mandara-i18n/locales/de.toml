@@ -8249,6 +8249,6 @@
 "The signed release has no unique checksum for this archive." = "Die signierte Veröffentlichung enthält keine eindeutige Prüfsumme für dieses Archiv."
 "The download did not match the signed release. Nothing was installed; please try again." = "Der Download stimmt nicht mit der signierten Veröffentlichung überein. Es wurde nichts installiert; versuche es erneut."
 "Could not unpack the verified release." = "Die geprüfte Veröffentlichung konnte nicht entpackt werden."
-"The release does not contain exactly one executable installer." = "Die Veröffentlichung muss genau ein ausführbares Installationsprogramm enthalten."
+"The release does not contain exactly one executable installer." = "Die Veröffentlichung enthält nicht genau ein ausführbares Installationsprogramm."
 "Manual downloads:" = "Manuelle Downloads:"
 "On NixOS, install Mandara through your flake." = "Installiere Mandara unter NixOS über deinen Flake."

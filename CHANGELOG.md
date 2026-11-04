@@ -37,7 +37,8 @@ installer, display reconnection and native KWin support.
   the phoenix and real download progress, picks the right Linux build,
   verifies the signed archive before opening the installer, and passes your
   configuration options through unchanged. Interrupted downloads report a
-  failure, and package-manager questions can read your terminal normally.
+  failure, package-manager questions can read your terminal normally, and
+  relative installation paths stay relative to where you ran the command.
 
 - **The installer can start before keyboard libraries are installed.**
   Keyboard support loads when it is first used, so a fresh Linux system
@@ -79,6 +80,8 @@ installer, display reconnection and native KWin support.
   longer leaves that screen without its shell. Other displays keep their
   surfaces, and your display assignments stay as you set them. A temporarily
   unavailable display query is retried without replacing working surfaces.
+  If the compositor still omits a connected output, its last known logical
+  size stays in use until a complete update arrives.
 - **Installing again keeps your shell profiles safe** (#49). A leftover
   installer comment no longer removes the next setting. Profile updates
   preserve symlinks and permissions, and a failed write leaves the original

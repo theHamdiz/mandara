@@ -85,9 +85,9 @@ impl Drop for Server {
 }
 
 #[derive(Clone, Copy)]
-enum Fault { None, Signature, Archive, MissingMetadata, MissingChecksum }
+enum Fault { None, Signature, Archive, MissingMetadata, MissingChecksum, MissingInstaller, ExtraInstaller, NotExecutable }
 
-fn archive(dir: &Path) -> Vec<u8> {
+fn archive(dir: &Path, fault: Fault) -> Vec<u8> {
     let source = dir.join("fixture.rs");
     let binary = dir.join("fixture");
     std::fs::write(&source, FIXTURE).unwrap();
@@ -98,9 +98,13 @@ fn archive(dir: &Path) -> Vec<u8> {
     let mut tar = tar::Builder::new(GzEncoder::new(Vec::new(), Compression::fast()));
     let mut header = tar::Header::new_gnu();
     header.set_size(bytes.len() as u64);
-    header.set_mode(0o755);
+    header.set_mode(if matches!(fault, Fault::NotExecutable) { 0o644 } else { 0o755 });
     header.set_cksum();
-    tar.append_data(&mut header, "mandara-0.99.0/bin/mandara", bytes.as_slice()).unwrap();
+    let name = if matches!(fault, Fault::MissingInstaller) { "mandara-0.99.0/bin/another-program" } else { "mandara-0.99.0/bin/mandara" };
+    tar.append_data(&mut header, name, bytes.as_slice()).unwrap();
+    if matches!(fault, Fault::ExtraInstaller) {
+        tar.append_data(&mut header, "mandara-extra/bin/mandara", bytes.as_slice()).unwrap();
+    }
     tar.into_inner().unwrap().finish().unwrap()
 }
 
@@ -110,7 +114,7 @@ fn run(fault: Fault, exit: i32) -> (std::process::Output, Option<String>, Vec<St
 
 fn run_in(fault: Fault, exit: i32, language: &str) -> (std::process::Output, Option<String>, Vec<String>) {
     let dir = tempfile::tempdir().unwrap();
-    let archive = archive(dir.path());
+    let archive = archive(dir.path(), fault);
     let hash = mandara_delta::hex(&Sha256::digest(&archive));
     let mut files = BTreeMap::new();
     let mut sums = String::new();
@@ -161,11 +165,11 @@ fn a_signed_download_forwards_arguments_and_installer_failures() {
 
 #[test]
 fn untrusted_incomplete_or_damaged_downloads_never_execute() {
-    for fault in [Fault::Signature, Fault::Archive, Fault::MissingMetadata, Fault::MissingChecksum] {
+    for fault in [Fault::Signature, Fault::Archive, Fault::MissingMetadata, Fault::MissingChecksum, Fault::MissingInstaller, Fault::ExtraInstaller, Fault::NotExecutable] {
         let (output, record, requests) = run(fault, 0);
         assert!(!output.status.success());
         assert!(record.is_none());
-        if !matches!(fault, Fault::Archive) { assert!(!requests.iter().any(|p| p.ends_with(".tar.gz"))); }
+        if matches!(fault, Fault::Signature | Fault::MissingMetadata | Fault::MissingChecksum) { assert!(!requests.iter().any(|p| p.ends_with(".tar.gz"))); }
     }
 }
 
@@ -256,36 +260,44 @@ fn installer_input_uses_the_terminal_or_preserves_an_unattended_pipe() {
 }
 
 #[test]
-fn documented_download_command_never_runs_a_partial_script() {
-    let dir = tempfile::tempdir().unwrap();
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let url = format!("http://{}/install.sh", listener.local_addr().unwrap());
-    listener.set_nonblocking(true).unwrap();
-    let server = std::thread::spawn(move || {
-        let deadline = std::time::Instant::now() + CLIENT_TIMEOUT;
-        let mut client = loop {
-            match listener.accept() {
-                Ok((client, _)) => break client,
-                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock && std::time::Instant::now() < deadline => std::thread::sleep(ACCEPT_PAUSE),
-                Err(err) => panic!("download command did not reach the fixture server: {err}"),
-            }
-        };
-        read_request(&mut client);
-        // The received prefix is a valid shell program. Executing it before
-        // curl checks Content-Length would incorrectly create the marker.
-        let body = b"touch \"$BOOTSTRAP_RECORD\"\n";
-        write!(client, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len() + 100).unwrap();
-        client.write_all(body).unwrap();
-    });
-    let guide = std::fs::read_to_string(crate::root().join("docs/install.md")).unwrap();
-    let command = guide.lines().find(|line| line.starts_with("sh -c 'cd ")).unwrap()
-        .replace("https://thehamdiz.github.io/mandara/install.sh", &url);
-    assert!(command.contains(&url));
-    let record = dir.path().join("executed");
-    let output = Command::new("sh").args(["-c", &command]).env("TMPDIR", dir.path())
-        .env("BOOTSTRAP_RECORD", &record).env("NO_PROXY", "127.0.0.1")
-        .stdin(std::process::Stdio::null()).output().unwrap();
-    server.join().unwrap();
-    assert!(!output.status.success());
-    assert!(!record.exists());
+fn documented_download_command_checks_completion_and_preserves_the_callers_directory() {
+    for complete in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let caller = dir.path().join("caller");
+        std::fs::create_dir(&caller).unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/install.sh", listener.local_addr().unwrap());
+        listener.set_nonblocking(true).unwrap();
+        let server = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + CLIENT_TIMEOUT;
+            let mut client = loop {
+                match listener.accept() {
+                    Ok((client, _)) => break client,
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock && std::time::Instant::now() < deadline => std::thread::sleep(ACCEPT_PAUSE),
+                    Err(err) => panic!("download command did not reach the fixture server: {err}"),
+                }
+            };
+            read_request(&mut client);
+            // Even a valid program prefix must not run on a short download.
+            let body = b"printf '%s' \"$PWD\" > \"$BOOTSTRAP_RECORD\"\n";
+            let length = body.len() + if complete { 0 } else { 100 };
+            write!(client, "HTTP/1.1 200 OK\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n").unwrap();
+            client.write_all(body).unwrap();
+        });
+        let guide = std::fs::read_to_string(crate::root().join("docs/install.md")).unwrap();
+        let command = guide.lines().find(|line| line.starts_with("sh -c 'f=")).unwrap()
+            .replace("https://thehamdiz.github.io/mandara/install.sh", &url);
+        assert!(command.contains(&url));
+        let record = dir.path().join("executed");
+        let output = Command::new("sh").args(["-c", &command]).current_dir(&caller).env("TMPDIR", dir.path())
+            .env("BOOTSTRAP_RECORD", &record).env("NO_PROXY", "127.0.0.1")
+            .stdin(std::process::Stdio::null()).output().unwrap();
+        server.join().unwrap();
+        assert_eq!(output.status.success(), complete, "{}", String::from_utf8_lossy(&output.stderr));
+        if complete {
+            assert_eq!(std::fs::read_to_string(record).unwrap(), caller.display().to_string());
+        } else {
+            assert!(!record.exists());
+        }
+    }
 }

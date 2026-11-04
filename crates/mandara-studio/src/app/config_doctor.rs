@@ -87,6 +87,10 @@ fn severity_color(s: Severity, p: &MandaraPalette) -> Color {
     }
 }
 
+fn diagnostic_details(report: &Report) -> bool {
+    report.status == CheckerStatus::Ran && report.target != Target::KWin && !report.diagnostics.is_empty()
+}
+
 impl StudioView {
     /// Loads (`fresh = false`: the stored report, re-checked only when the
     /// config or compositor changed) or re-runs (`fresh`) the check.
@@ -240,7 +244,7 @@ impl StudioView {
             let color = if ok { p.success_emerald } else { p.urgent_coral };
             col = col.child(div().px(px(SPACE_14_PX)).py(px(SPACE_10_PX)).rounded(px(RADIUS_12_PX)).text_size(px(TEXT_12_5_PX)).bg(color.with_alpha(ALPHA_12).hsla()).text_color(color.hsla()).child(mandara_ui::bidi::paragraph(text)));
         }
-        if let Some(r) = report.filter(|r| r.status == CheckerStatus::Ran && !r.diagnostics.is_empty()) {
+        if let Some(r) = report.filter(diagnostic_details) {
             let mono = mandara_ui::fonts::fonts(cx).mono.clone();
             let terminal = cfg.apps.terminal_command();
             for (file, list) in r.by_file() {
@@ -342,5 +346,29 @@ impl StudioView {
             .when_some(related, |el, r| el.child(r))
             .child(actions)
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kwin_availability_stays_a_single_status_note_without_reminders() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = doctor::check_with(Target::KWin, &dir.path().join("kwinrc"), &doctor::CheckEnv {
+            argv: Some(vec!["printf".into(), "kwin 6.8.2".into()]),
+            version: Some("6.8.2".into()),
+            ..Default::default()
+        });
+        assert_eq!(report.diagnostics.len(), 1);
+        assert_eq!(report.problems(), 0);
+        assert!(!diagnostic_details(&report));
+        let mut other = report;
+        other.target = Target::Sway;
+        assert!(diagnostic_details(&other), "other compositor notes must remain visible");
+        other.diagnostics.push(Diagnostic::new(Severity::Warning, "fixture warning"));
+        assert_eq!(other.problems(), 1);
+        assert!(diagnostic_details(&other));
     }
 }
