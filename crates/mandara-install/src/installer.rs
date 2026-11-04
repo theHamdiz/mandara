@@ -1032,7 +1032,12 @@ impl<'a> Installer<'a> {
         if self.args.yes || self.dry() || !self.host.interactive() {
             return Ok(true);
         }
-        let mut compositor = self.args.compositor.clone().or_else(|| installed_compositor(&*self.host));
+        // The installed compositor only puts the picker's cursor where the
+        // user probably wants it; it is not a choice. Leaving `--compositor`
+        // unset keeps `setup` detecting the compositor that is running (a
+        // machine can have several installed).
+        let suggested = self.args.compositor.clone().or_else(|| installed_compositor(&*self.host));
+        let mut compositor: Option<String> = self.args.compositor.clone();
         let mut autostart = !self.args.no_autostart;
         let mut greeter = !self.args.no_greeter;
         loop {
@@ -1058,7 +1063,7 @@ impl<'a> Installer<'a> {
             let Some(picked) = self.host.select("Setup", &rows, install) else { return Ok(false) };
             match choices[picked] {
                 Choice::Compositor => {
-                    let (names, list, default) = compositor_rows(&*self.host, compositor.as_deref());
+                    let (names, list, default) = compositor_rows(&*self.host, compositor.as_deref().or(suggested.as_deref()));
                     if let Some(i) = self.host.select("Compositor", &list, default) {
                         compositor = Some(names[i].to_string());
                     }
@@ -1169,7 +1174,8 @@ impl<'a> Installer<'a> {
             self.keyring_unlock(exe);
             return;
         }
-        if !self.ask("Use Mandara Login as your login screen?", true) {
+        // The setup screen has already asked; only runs without it ask here.
+        if self.setup.is_none() && !self.ask("Use Mandara Login as your login screen?", true) {
             self.say(Level::Info, "kept your login screen; switch any time in Studio → Login screen → Login manager");
             return;
         }
