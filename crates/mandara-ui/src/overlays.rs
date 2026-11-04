@@ -1807,20 +1807,20 @@ impl LauncherView {
 impl LauncherView {
     /// Whether the surface has its real size yet (the size it opened for,
     /// or — after a few frames — whatever size the compositor gave it);
-    /// remembers the output it settled on.
+    /// remembers the output it settled on. Runs on every frame, including
+    /// close-animation frames drawn before that: reopened mid-close, the
+    /// launcher must still reach its first real frame, or the deadline
+    /// guard takes it for a surface that never drew and closes it.
     fn settle(&mut self, window: &Window, cx: &App) -> bool {
-        if self.output.is_some() || self.placed {
-            return true;
-        }
         let vp = first_frame::viewport(window);
-        let was_drawn = self.first.drawn();
-        let matched = self.first.matches(vp);
-        if !self.first.ready(vp) {
-            return false;
-        }
-        if was_drawn {
-            return true;
-        }
+        let matched = match self.first.settle(vp) {
+            first_frame::Settle::Waiting => return false,
+            first_frame::Settle::Drawn => return true,
+            first_frame::Settle::First { matched } => matched,
+        };
+        // A close animation drawn at the guessed size placed it there:
+        // snap again at the real size.
+        self.placed = false;
         let outputs = cx.try_global::<Outputs>().map(|o| o.0.as_slice()).unwrap_or_default();
         let focused = if matched { focused_output(cx).filter(|o| is_output(vp, o)) } else { None };
         // No output of that size (tests, early startup, an output connected

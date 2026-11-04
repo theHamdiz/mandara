@@ -83,6 +83,29 @@ impl FirstFrame {
     pub fn drawn(&self) -> bool {
         self.drawn
     }
+
+    /// [`Self::ready`], saying which frame this is. Call it on *every*
+    /// frame, including frames an overlay draws anyway (its close
+    /// animation): readiness must keep counting, or an overlay reopened
+    /// mid-close never becomes [`Self::drawn`] and [`guard`] closes it.
+    pub fn settle(&mut self, viewport: (f32, f32)) -> Settle {
+        if self.drawn {
+            return Settle::Drawn;
+        }
+        let matched = self.matches(viewport);
+        if self.ready(viewport) { Settle::First { matched } } else { Settle::Waiting }
+    }
+}
+
+/// Where an overlay is in its first frames ([`FirstFrame::settle`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Settle {
+    /// Not at its real size yet: draw nothing (unless closing).
+    Waiting,
+    /// The first real frame; `matched` when at the size it opened for.
+    First { matched: bool },
+    /// A later frame.
+    Drawn,
 }
 
 /// Closes the overlay in `window` when it has not drawn its first real
@@ -128,6 +151,26 @@ mod tests {
         // Once drawn it keeps drawing, whatever the viewport does next.
         assert!(f.ready((800.0, 600.0)));
         assert!(f.drawn());
+    }
+
+    #[test]
+    fn frames_drawn_while_closing_keep_counting() {
+        // The launcher closed before its first real frame and drew its
+        // close animation anyway; reopened, it still reaches its first real
+        // frame exactly once (so the deadline guard sees it drawn).
+        let mut f = FirstFrame::new((2560.0, 1440.0));
+        let scale_guess = (1707.0, 960.0);
+        assert_eq!(f.settle(scale_guess), Settle::Waiting, "closing: drawn anyway");
+        assert_eq!(f.settle(scale_guess), Settle::Waiting, "reopened, still the guess");
+        assert!(!f.drawn());
+        assert_eq!(f.settle((2560.0, 1440.0)), Settle::First { matched: true });
+        assert!(f.drawn());
+        assert_eq!(f.settle((2560.0, 1440.0)), Settle::Drawn);
+        // On another output's size it still draws, unmatched, after the wait.
+        let mut g = FirstFrame::new((2560.0, 1440.0));
+        let settles: Vec<Settle> = (0..=FALLBACK_FRAMES).map(|_| g.settle((1536.0, 864.0))).collect();
+        assert_eq!(settles.last(), Some(&Settle::First { matched: false }));
+        assert_eq!(settles.iter().filter(|s| **s == Settle::Waiting).count(), usize::from(FALLBACK_FRAMES));
     }
 
     #[test]
