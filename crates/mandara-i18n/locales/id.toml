@@ -8011,3 +8011,5 @@
 "Compositor (default: detected)" = "Kompositor (bawaan: terdeteksi)"
 
 "Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Pilih mango, niri, hyprland, umbriel, sway, river atau kwin (bawaan: terdeteksi). Kompositor yang belum ada dapat dipasang setelah meminta persetujuan. KWin memerlukan instalasi Plasma yang sudah ada."
+
+"Install libxkbcommon before checking or changing compositor shortcuts." = "Pasang libxkbcommon sebelum memeriksa atau mengubah pintasan kompositor."

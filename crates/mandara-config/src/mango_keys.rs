@@ -21,6 +21,11 @@ use xkbcommon::xkb;
 
 /// The layout MangoWM falls back to (its `xkb_fallback_rules`).
 const FALLBACK_LAYOUT: &str = "us";
+
+/// Keyboard-name and keycode checks need libxkbcommon even without a GUI.
+pub fn is_available() -> bool {
+    xkb::is_available()
+}
 /// One spelling per keysym, lowercased: every compositor matches binds by
 /// keysym (MangoWM's `binds`, Niri, Hyprland), and xkb names some keysyms
 /// twice (`Prior` and `Page_Up`), so the names must be compared as keysyms.

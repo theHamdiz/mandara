@@ -3619,6 +3619,7 @@ dependencies = [
  "mimalloc",
  "serde",
  "serde_json",
+ "tempfile",
  "tikv-jemallocator",
  "tracing",
  "tracing-subscriber",

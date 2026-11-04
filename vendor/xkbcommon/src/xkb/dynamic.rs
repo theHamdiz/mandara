@@ -2,9 +2,20 @@
 
 use std::sync::LazyLock;
 
+const LIBRARY_NAME: &str = "libxkbcommon.so.0";
+
+/// Probe optional CLI work without forcing a keyboard operation to panic.
+pub(crate) fn is_available() -> bool {
+    static AVAILABLE: LazyLock<bool> = LazyLock::new(|| {
+        // The probe does not retain symbols or change the FFI invariant.
+        unsafe { libloading::Library::new(LIBRARY_NAME) }.is_ok()
+    });
+    *AVAILABLE
+}
+
 static LIBRARY: LazyLock<libloading::Library> = LazyLock::new(|| {
     // The process retains the library for the lifetime of every symbol.
-    unsafe { libloading::Library::new("libxkbcommon.so.0") }
+    unsafe { libloading::Library::new(LIBRARY_NAME) }
         .expect("libxkbcommon.so.0 is required for keyboard input")
 });
 

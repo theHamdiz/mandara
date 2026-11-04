@@ -99,5 +99,8 @@ pam = "*"
 # build.rs reads the glibc version to decide on packed relocations.
 libc.workspace = true
 
+[dev-dependencies]
+tempfile.workspace = true
+
 [lints]
 workspace = true

@@ -87,7 +87,7 @@ one (see [No compositor yet](#no-compositor-yet)).
 | `--version X.Y.Z` | Download and install that release instead of this binary |
 | `--from-source` | Build from source (installs Rust and build tools) |
 | `--prefix DIR` | Install into `DIR/bin` (default `~/.local`) |
-| `--no-deps` | Skip system packages |
+| `--no-deps` | Skip system packages; shortcut checks still need libxkbcommon |
 | `--no-autostart` | Don't start Mandara with the compositor |
 | `--no-greeter` | Keep your login screen |
 | `--compositor mango\|niri\|hyprland\|umbriel\|sway\|river\|kwin` | Pick the compositor to integrate with. Missing compositors can be installed from your distribution's repositories after asking (`--yes` accepts); KWin requires an existing Plasma installation. |

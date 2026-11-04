@@ -2,7 +2,7 @@
 
 #[macro_use]
 #[path = "dynamic.rs"]
-mod dynamic;
+pub(super) mod dynamic;
 
 use libc::FILE;
 use std::os::raw::{c_char, c_int, c_uint, c_void};

@@ -8252,3 +8252,5 @@
 "Compositor (default: detected)" = "合成器（默认：自动检测）"
 
 "Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "选择 mango, niri, hyprland, umbriel, sway, river 或 kwin（默认：自动检测）。缺少的合成器可在询问后安装。KWin 需要已安装的 Plasma 环境。"
+
+"Install libxkbcommon before checking or changing compositor shortcuts." = "检查或更改合成器快捷键之前，请先安装 libxkbcommon。"

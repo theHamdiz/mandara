@@ -8258,3 +8258,5 @@
 "Compositor (default: detected)" = "Compositeur (par défaut : détecté)"
 
 "Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Choisissez mango, niri, hyprland, umbriel, sway, river ou kwin (par défaut : détecté). Les compositeurs manquants peuvent être installés après confirmation. KWin nécessite une installation existante de Plasma."
+
+"Install libxkbcommon before checking or changing compositor shortcuts." = "Installez libxkbcommon avant de vérifier ou modifier les raccourcis du compositeur."

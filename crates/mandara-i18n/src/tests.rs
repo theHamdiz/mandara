@@ -9,6 +9,15 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 
+#[test]
+fn terminal_language_obeys_locale_precedence_including_c_and_posix() {
+    assert_eq!(Lang::from_locale_values([Some("C"), Some("id_ID.UTF-8"), Some("ar_EG.UTF-8")]), Lang::En);
+    assert_eq!(Lang::from_locale_values([Some("POSIX"), None, Some("id")]), Lang::En);
+    assert_eq!(Lang::from_locale_values([Some(""), Some("id_ID.UTF-8"), Some("ar")]), Lang::Id);
+    assert_eq!(Lang::from_locale_values([None, None, Some("ar_EG.UTF-8")]), Lang::Ar);
+    assert_eq!(Lang::from_locale_values([Some("unsupported"), None, Some("id")]), Lang::En);
+}
+
 fn workspace() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }

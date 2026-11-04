@@ -180,6 +180,7 @@ fn main() -> Result<()> {
         libc::signal(libc::SIGXFSZ, libc::SIG_IGN);
     }
 
+    mandara_i18n::set_language(mandara_i18n::Lang::from_env());
     let long = Box::leak(mandara_version::long_version().into_boxed_str()) as &'static str;
     let matches = <Cli as clap::CommandFactory>::command().version(mandara_version::version()).long_version(long).get_matches();
     let cli = <Cli as clap::FromArgMatches>::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());

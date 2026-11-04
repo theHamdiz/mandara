@@ -37,10 +37,13 @@ installer, display reconnection and native KWin support.
   relative installation paths stay relative to where you ran the command.
   Downloads stay on HTTPS, temporary files are removed even after a failure,
   and the verified installer uses your cache when `/tmp` blocks programs.
+  Its translated hints follow your terminal language, including in help.
 
 - **The installer can start before keyboard libraries are installed.**
   Keyboard support loads when it is first used, so a fresh Linux system
   can run the installer and let it install the packages it needs.
+  With `--no-deps`, shortcut checks explain which library is missing and
+  leave configuration alone.
 
 - **A lighter first test build** (#64). Tests no longer inherit the
   interactive shell’s dependency optimization or keep incremental caches.
@@ -53,6 +56,9 @@ installer, display reconnection and native KWin support.
   are gone.
 
 ### Fixed
+
+- **Studio shows KWin startup errors clearly.** A failed availability check
+  keeps its error details instead of showing the normal Plasma settings note.
 
 - **The website header stays readable in both themes.** The page and its
   transparent banner now follow the same theme, and the browser tab shows

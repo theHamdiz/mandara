@@ -18,3 +18,9 @@ the unused X11 feature retains its upstream bindings.
 The application’s loader regression test checks its ELF dependencies, and
 the config and session-lock tests exercise the keyboard wrappers. A clean
 container also checks the installer before the keyboard package exists.
+
+`xkb::is_available()` probes the library without forcing an FFI call.
+`mandara setup` uses it before shortcut normalization, so an installation
+with `--no-deps` reports the missing package and leaves configuration alone.
+The keyboard wrappers still require the library and retain their original
+panic behavior if called without it.

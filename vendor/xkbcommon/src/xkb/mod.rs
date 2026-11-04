@@ -33,6 +33,13 @@ use std::ptr::{null, null_mut};
 use std::slice;
 use std::str;
 
+/// Whether keyboard-dependent work can run before runtime packages exist.
+/// Mandara patch: CLI callers can report a missing library; FFI calls keep
+/// requiring it and still panic when it is unavailable.
+pub fn is_available() -> bool {
+    ffi::dynamic::is_available()
+}
+
 /// A number used to represent a physical key on a keyboard.
 ///
 /// A standard PC-compatible keyboard might have 102 keys. An appropriate

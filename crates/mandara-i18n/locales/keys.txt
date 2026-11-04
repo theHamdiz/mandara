@@ -2669,6 +2669,7 @@ Install gnome-keyring or KeePassXC (Secret Service) · {error}
 Install it from Studio → About.
 Install it into the development folder
 Install its icon
+Install libxkbcommon before checking or changing compositor shortcuts.
 Install location
 Install one from the marketplace with a click, or drop a plugin folder into your plugin folders. It shows up here within a second.
 Install pacman-contrib to check for updates without touching the system database

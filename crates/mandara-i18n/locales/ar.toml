@@ -8261,3 +8261,5 @@
 "Compositor (default: detected)" = "مُركّب النوافذ (الافتراضي: الكشف التلقائي)"
 
 "Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "اختر mango, niri, hyprland, umbriel, sway, river أو kwin (الافتراضي: الكشف التلقائي). يمكن تثبيت مُركّبات النوافذ المفقودة بعد سؤالك. يتطلب KWin وجود Plasma مثبتًا مسبقًا."
+
+"Install libxkbcommon before checking or changing compositor shortcuts." = "ثبّت libxkbcommon قبل فحص اختصارات مُركّب النوافذ أو تغييرها."

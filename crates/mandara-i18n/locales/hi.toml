@@ -8258,3 +8258,5 @@
 "Compositor (default: detected)" = "कंपोज़िटर (डिफ़ॉल्ट: अपने आप पहचाना गया)"
 
 "Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "mango, niri, hyprland, umbriel, sway, river या kwin चुनें (डिफ़ॉल्ट: अपने आप पहचाना गया)। पूछने के बाद अनुपलब्ध कंपोज़िटर इंस्टॉल किए जा सकते हैं। KWin के लिए Plasma पहले से इंस्टॉल होना चाहिए।"
+
+"Install libxkbcommon before checking or changing compositor shortcuts." = "कंपोज़िटर के शॉर्टकट जाँचने या बदलने से पहले libxkbcommon इंस्टॉल करें।"

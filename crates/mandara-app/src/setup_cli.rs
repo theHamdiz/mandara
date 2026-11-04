@@ -58,6 +58,9 @@ pub fn setup(o: Options) -> Result<()> {
         println!("No {} config found — start your compositor once, then run `mandara setup` again.", Target::ALL.map(Target::name).join(", "));
         return Ok(());
     }
+    if targets.iter().any(|target| *target != Target::KWin) && !mandara_config::mango_keys::is_available() {
+        anyhow::bail!(mandara_i18n::t("Install libxkbcommon before checking or changing compositor shortcuts."));
+    }
     let mut store = mandara_config::ConfigStore::open_default()?;
     if o.autostart && !o.check && !store.get().compositor.autostart {
         store.update(|c| c.compositor.autostart = true);
