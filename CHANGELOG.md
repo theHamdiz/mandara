@@ -28,6 +28,12 @@ installer and the launcher.
 
 ### Fixed
 
+- **Bar panels no longer hide behind the sidebar** (#62). With the sidebar
+  open, a panel such as Power or Weather used to open partly underneath it,
+  so the sidebar's cards looked washed out over the panel. The panel now
+  moves aside and opens next to the sidebar. On a screen too narrow for
+  both, it opens on top of the sidebar, fully opaque.
+
 - **Empty panels look right again** (#61). In short panels such as Wi-Fi's
   *No networks found* and Bluetooth's *Bluetooth is off*, the icon sat high
   in its round badge and the badge ran into the title. The badge now shrinks

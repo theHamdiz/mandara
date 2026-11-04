@@ -43,6 +43,8 @@ pub const ZONE_GAP: f32 = 8.0;
 pub const SEPARATOR_MIN_GAP: f32 = 9.0;
 /// Extra margin keeping an attached panel clear of the screen flares.
 const FLARE_CLEARANCE: f32 = 2.0;
+/// Rounding slack when testing whether a panel fits beside the sidebar.
+const FIT_SLACK_PX: f32 = 0.01;
 /// Fade & slide: how far a panel travels from the bar while it fades in.
 pub const PANEL_SLIDE_PX: f32 = 14.0;
 /// Panels anchored to an edge: chips in the outer thirds of the screen
@@ -424,19 +426,7 @@ pub fn start_rect(m: &Metrics, animation: mandara_config::surfaces::PanelAnimati
 /// the pill.
 pub fn dashboard_rect(m: &Metrics, origin_pill: Bounds<Pixels>, dashboard: Size<Pixels>, surface_width: f32, free_h: f32) -> Bounds<Pixels> {
     let attached = m.attached();
-    let margin = if attached {
-        // A notch's panels stay on its straight edge, clear of its corners.
-        let frame_inset = if m.notch() {
-            x_of(&m.frame(surface_width)) + m.frame_radius() - m.flare
-        } else if m.floating_frame {
-            m.side_gap + m.frame_radius()
-        } else {
-            0.0
-        };
-        frame_inset + m.flare * 2.0 + FLARE_CLEARANCE
-    } else {
-        m.side_gap
-    };
+    let margin = panel_margin(m, surface_width);
     let pad = m.panel_pad * 2.0;
     // Along the bar: the panel's width (its height beside a side bar);
     // away from it: its height (its width beside a side bar).
@@ -458,6 +448,66 @@ pub fn dashboard_rect(m: &Metrics, origin_pill: Bounds<Pixels>, dashboard: Size<
     let top = if attached { m.bar_far_edge() } else { y_of(&origin_pill) + h_of(&origin_pill) + m.panel_gap };
     let max_h = if free_h > 0.0 { free_h * m.panel_max_height } else { f32::MAX };
     rect(x, top, w, away.min(max_h))
+}
+
+/// How far a panel stays from the ends of the bar (`surface_width` long):
+/// clear of the screen flares beside an attached bar (and of a notch's or
+/// floating frame's corners), the floating gap otherwise.
+fn panel_margin(m: &Metrics, surface_width: f32) -> f32 {
+    if m.attached() {
+        // A notch's panels stay on its straight edge, clear of its corners.
+        let frame_inset = if m.notch() {
+            x_of(&m.frame(surface_width)) + m.frame_radius() - m.flare
+        } else if m.floating_frame {
+            m.side_gap + m.frame_radius()
+        } else {
+            0.0
+        };
+        frame_inset + m.flare * 2.0 + FLARE_CLEARANCE
+    } else {
+        m.side_gap
+    }
+}
+
+/// The gap a panel keeps from an open sidebar: room for both shapes'
+/// flares beside an attached bar, the floating gap otherwise.
+pub fn sidebar_gap(m: &Metrics) -> f32 {
+    if m.attached() { m.flare * 2.0 + FLARE_CLEARANCE } else { m.side_gap }
+}
+
+/// Where the fully open sidebar sits across a surface `surface_width`
+/// wide: `(x0, x1)`, `width` wide, `inset` from its edge (a floating
+/// sidebar's margin) and beside a side bar `beside_bar` thick on that edge.
+pub fn sidebar_span(surface_width: f32, width: f32, inset: f32, beside_bar: f32, right: bool) -> (f32, f32) {
+    if right {
+        let x1 = surface_width - beside_bar - inset;
+        (x1 - width, x1)
+    } else {
+        let x0 = beside_bar + inset;
+        (x0, x0 + width)
+    }
+}
+
+/// A drop-down panel of a top or bottom bar (top-oriented), kept out from
+/// under an open sidebar spanning `side` (see [`sidebar_span`]). A panel
+/// that would overlap it moves beside it, [`sidebar_gap`] away and inside
+/// the bar's margins, to whichever side moves it least (so it mirrors for
+/// a sidebar on the left). One that already clears it, or that neither
+/// side has room for (a narrow screen), keeps its place and is drawn over
+/// the sidebar.
+pub fn clear_of_sidebar(m: &Metrics, panel: Bounds<Pixels>, side: (f32, f32), surface_width: f32) -> Bounds<Pixels> {
+    let (x, w) = (x_of(&panel), w_of(&panel));
+    let (s0, s1) = side;
+    if x + w <= s0 || x >= s1 || s1 <= s0 {
+        return panel;
+    }
+    let (margin, gap) = (panel_margin(m, surface_width), sidebar_gap(m));
+    let fits = |nx: f32| nx >= margin - FIT_SLACK_PX && nx + w <= surface_width - margin + FIT_SLACK_PX;
+    [s0 - gap - w, s1 + gap]
+        .into_iter()
+        .filter(|&nx| fits(nx))
+        .min_by(|a, b| (a - x).abs().total_cmp(&(b - x).abs()))
+        .map_or(panel, |nx| rect(nx, y_of(&panel), w, h_of(&panel)))
 }
 
 /// Mirrors a rect vertically inside a surface `surface_h` tall
@@ -1024,6 +1074,45 @@ mod tests {
         assert_eq!(morph_progress(slide, slide, wide), 0.0, "a slide's progress follows its travel");
         assert_eq!(morph_progress(wide, slide, wide), 1.0);
         assert_eq!(start_rect(&m, PanelAnimation::None, chip, wide), wide);
+    }
+
+    /// Issue #62: a drop-down never ends up under an open sidebar.
+    #[test]
+    fn panels_move_beside_an_open_sidebar() {
+        let natural = size(px(500.0), px(400.0));
+        for m in [edge(), m(BarLayout::FloatingPills)] {
+            let (margin, gap) = (panel_margin(&m, 1920.0), sidebar_gap(&m));
+            // Sidebar on the right; the battery chip sits above it.
+            let chip = rect(1780.0, 4.0, 60.0, 22.0);
+            let panel = dashboard_rect(&m, chip, natural, 1920.0, 1000.0);
+            let side = sidebar_span(1920.0, 420.0, 0.0, 0.0, true);
+            assert_eq!(side, (1500.0, 1920.0));
+            assert!(x_of(&panel) + w_of(&panel) > side.0, "it would overlap");
+            let moved = clear_of_sidebar(&m, panel, side, 1920.0);
+            assert!((x_of(&moved) + w_of(&moved) - (side.0 - gap)).abs() < 0.01, "beside it, its gap away");
+            assert_eq!((moved.size, y_of(&moved)), (panel.size, y_of(&panel)), "only its x changes");
+            // Mirrored: a sidebar on the left (RTL or by choice).
+            let chip = rect(80.0, 4.0, 60.0, 22.0);
+            let panel = dashboard_rect(&m, chip, natural, 1920.0, 1000.0);
+            let side = sidebar_span(1920.0, 420.0, 12.0, 0.0, false);
+            assert_eq!(side, (12.0, 432.0));
+            let moved = clear_of_sidebar(&m, panel, side, 1920.0);
+            assert!((x_of(&moved) - (side.1 + gap)).abs() < 0.01);
+            // A panel already clear of it stays put.
+            let far = dashboard_rect(&m, rect(1000.0, 4.0, 60.0, 22.0), natural, 1920.0, 1000.0);
+            assert_eq!(clear_of_sidebar(&m, far, side, 1920.0), far);
+            // Narrow screen: no room beside the sidebar, so it stays where
+            // it was (and is drawn over the sidebar instead).
+            let chip = rect(700.0, 4.0, 60.0, 22.0);
+            let panel = dashboard_rect(&m, chip, natural, 800.0, 1000.0);
+            let side = sidebar_span(800.0, 420.0, 0.0, 0.0, true);
+            assert_eq!(clear_of_sidebar(&m, panel, side, 800.0), panel);
+            // Never off the screen: the moved panel keeps the bar's margins.
+            let side = sidebar_span(1100.0, 420.0, 0.0, 0.0, true);
+            let panel = dashboard_rect(&m, rect(1000.0, 4.0, 60.0, 22.0), natural, 1100.0, 1000.0);
+            let moved = clear_of_sidebar(&m, panel, side, 1100.0);
+            assert!(x_of(&moved) >= margin - 0.01 && x_of(&moved) + w_of(&moved) <= side.0 - gap + 0.01);
+        }
     }
 
     fn side(position: BarPosition, frame: bool) -> Metrics {

@@ -842,8 +842,28 @@ impl ShellView {
         // Beside a side bar the screen frame takes the far edge.
         let free_h = away - layout::exclusive_zone(m) - m.screen_frame;
         let expanded = layout::dashboard_rect(m, chip, target, along, free_h);
+        // Never under an open sidebar (#62): beside it, or over it when
+        // there's no room. (A side bar's panels grow across the screen,
+        // toward the sidebar: those are only drawn over it.)
+        let expanded = match self.open_sidebar_span(cfg) {
+            Some(side) if !m.vertical => layout::clear_of_sidebar(m, expanded, side, along),
+            _ => expanded,
+        };
         let collapsed = layout::start_rect(m, cfg.panels.animation, chip, expanded);
         Some((layout::orient(pos, collapsed, surface), layout::orient(pos, expanded, surface)))
+    }
+
+    /// Where the sidebar rests once open, across the surface, while it is
+    /// open (or opening) on this output; `None` while it is closed.
+    fn open_sidebar_span(&self, cfg: &ShellConfig) -> Option<(f32, f32)> {
+        if self.sidebar.target() < 0.5 {
+            return None;
+        }
+        let m = &self.metrics;
+        let width = ranges::SIDEBAR_WIDTH.clamp(cfg.sidebar.width, mandara_config::defaults::SIDEBAR_WIDTH_PX);
+        let right = cfg.sidebar_on_right();
+        let beside_bar = if m.vertical && (m.position == BarPosition::Right) == right { layout::exclusive_zone(m) } else { 0.0 };
+        Some(layout::sidebar_span(self.surface.0, width, cfg.sidebar.look.inset_with(&cfg.bar), beside_bar, right))
     }
 
     /// A right-click on empty bar space at `at` (surface px): the main menu
@@ -1244,6 +1264,10 @@ impl Render for ShellView {
         self.ensure_detached(window, cx);
         self.update_targets(&cfg);
         self.update_sides(&cfg);
+        // (Before the panel: an open sidebar moves the panel.)
+        // A side bar on the sidebar's edge replaces it.
+        let sidebar_up = cfg.sidebar_active() && (cfg.sidebar.pinned() || self.shell.read(cx).sidebar_visible_on(&self.monitor));
+        self.sidebar.set_target(if sidebar_up { 1.0 } else { 0.0 });
         self.update_panel(&cfg, cx);
         // An attached launcher can grow out of its bar button: say where
         // that rests on this output (only while the launcher is open).
@@ -1261,10 +1285,7 @@ impl Render for ShellView {
         let side_frost = if cfg.side_bars.glass && !cfg.side_bars_join() && self.sides.iter().any(|b| b.on) { self.menu_frost(&cfg, window, cx) } else { None };
         let shell_state = self.shell.read(cx);
         let panel_open = shell_state.panel_on(&self.monitor).is_some();
-        // (A side bar on the sidebar's edge replaces it.)
-        let sidebar_target = if cfg.sidebar_active() && (cfg.sidebar.pinned() || shell_state.sidebar_visible_on(&self.monitor)) { 1.0 } else { 0.0 };
-        self.sidebar.set_target(sidebar_target);
-        self.autohide.update(&cfg, &self.monitor, panel_open || sidebar_target > 0.0);
+        self.autohide.update(&cfg, &self.monitor, panel_open || sidebar_up);
         // The corner tab shows on a settled plugin panel while hovered, and
         // always while pinned.
         let tab_wanted = panel_open
@@ -1617,6 +1638,116 @@ impl Render for ShellView {
                 None => root = root.child(div().absolute().top(px(line_y)).left_0().w(px(w)).h(px(ACCENT_LINE_PX)).bg(accent)),
             }
         }
+        // ── Sidebar content ───────────────────────────────────────────────
+        // (Under the drop-down panels: a panel that can't move clear of the
+        // sidebar is drawn over it, never blended under its cards, #62.)
+        if sidebar_p <= HIDDEN_EPSILON {
+            // The next opening picks its tab (the last one, or the first).
+            self.tabs.on_hidden();
+        }
+        if sidebar_p > HIDDEN_EPSILON {
+            let h = side_h;
+            let compact = side_look.header == SidebarHeader::Compact;
+            let (tab_h, icon_btn) = if compact { (SIDEBAR_COMPACT_BUTTON_PX, SIDEBAR_COMPACT_BUTTON_PX) } else { (SIDEBAR_TAB_H_PX, SIDEBAR_ICON_BUTTON_PX) };
+            let card_gap = ranges::CARD_SPACING.clamp(side_look.card_spacing, mandara_config::surfaces::defaults::CARD_SPACING_PX);
+            let sidebar_cx = &self.sidebar_cx;
+            sidebar_cx.set_progress(sidebar_p.min(1.0));
+            let notifications = self.sidebar_notifications.is_some();
+            let sel = self.tabs.resolve(&cfg.sidebar, notifications, cx);
+            let cards: Vec<AnyElement> = match (&sel, &self.sidebar_notifications) {
+                (crate::sidebar_tabs::Sel::Notifications, Some(view)) => vec![view.clone().into_any_element()],
+                _ => self.tabs.cards(&sel).iter().enumerate().map(|(i, card)| reveal(sidebar_cx, i, card.clone())).collect(),
+            };
+            let cards = if cards.is_empty() { vec![crate::sidebar_tabs::empty_tab(&palette)] } else { cards };
+            // The switched-in tab slides from its side and fades in.
+            let (slide, fade) = self.tabs.transition();
+            let cards = div().relative().left(px(slide)).opacity(fade).flex().flex_col().gap(px(card_gap)).children(cards);
+            let scroll_handle = self.tabs.scroll(&sel);
+            let scroll_bar = self.tabs.scrollbar();
+            let unread = if notifications { crate::hub::hub(cx).read(cx).notifications.unread() } else { 0 };
+            // The header row: the strip, then the pin and close buttons.
+            let strip_w = sidebar_w - 2.0 * SIDEBAR_PAD_PX - 2.0 * (icon_btn + tokens::XS);
+            let tabs = self.tabs.strip(&cfg, &sel, notifications, unread, tab_h, strip_w, &palette, |v: &mut ShellView| &mut v.tabs, window, cx);
+            let menu_top = match side_look.tab_position {
+                TabPosition::Top => SIDEBAR_PAD_PX + tab_h + SIDEBAR_TAB_STRIP_PAD_PX * 2.0,
+                TabPosition::Bottom => SIDEBAR_PAD_PX,
+            };
+            let tab_menu = self.tabs.menu_overlay(&cfg, menu_top, &palette, |v: &mut ShellView| &mut v.tabs, cx);
+            self.sidebar_bounds = Some(Bounds::new(point(px(sidebar_x), px(side_top)), size(px(sidebar_w), px(h))));
+            root = root.child(
+                div()
+                    .id("sidebar")
+                    .absolute()
+                    .left(px(sidebar_x))
+                    .top(px(side_top))
+                    .w(px(sidebar_w))
+                    .h(px(h))
+                    .occlude()
+                    // Interacting with a hover-revealed sidebar commits to it:
+                    // from then on only a click outside or the close button
+                    // hides it, never the pointer drifting off or content
+                    // shrinking under it (e.g. clearing notifications).
+                    .capture_any_mouse_down(cx.listener(|this, _: &gpui::MouseDownEvent, _, cx| {
+                        this.cancel_leave();
+                        if !this.shell.read(cx).sidebar_open {
+                            this.shell.update(cx, |s, cx| s.set_sidebar(true, cx));
+                        }
+                    }))
+                    .on_hover(cx.listener(|this, hovered: &bool, window, cx| {
+                        // GPUI re-tests hover on repaint against the last pointer position, stale once the pointer left the surface.
+                        if *hovered && !window.is_window_hovered() {
+                            return;
+                        }
+                        if *hovered {
+                            this.cancel_leave();
+                        } else if !this.shell.read(cx).sidebar_open && !crate::state::config(cx).read(cx).get().sidebar.pinned() {
+                            this.schedule_sidebar_leave(window, cx);
+                        }
+                    }))
+                    .child({
+                        let pinned = cfg.sidebar.pinned();
+                        let header = div()
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .gap(px(tokens::XS))
+                            .child(tabs)
+                            .child(crate::kit::icon_button(
+                                "sidebar-pin",
+                                if pinned { "pin" } else { "pin-off" },
+                                icon_btn,
+                                if pinned { palette.primary } else { palette.on_surface_variant },
+                                pinned.then_some(palette.primary.with_alpha(PIN_TINT_ALPHA)),
+                                move |_, cx| crate::state::update_config(cx, |c| c.sidebar.set_pinned(!pinned)),
+                            ))
+                            .child(crate::kit::icon_button("sidebar-close", "close", icon_btn, palette.on_surface_variant, None, |_, cx| {
+                                crate::state::update_config(cx, |c| c.sidebar.set_pinned(false));
+                                let shell = crate::state::shell(cx);
+                                shell.update(cx, |s, cx| s.set_sidebar(false, cx));
+                            }));
+                        let scroll = div().id("sidebar-scroll").overflow_y_scroll().track_scroll(&scroll_handle).p(px(SIDEBAR_PAD_PX)).flex().flex_col().gap(px(card_gap));
+                        let with_bar = |scroll| crate::scrollbar::with_scrollbar(scroll, &scroll_handle, &scroll_bar, &palette);
+                        match side_look.tab_position {
+                            // The header scrolls with the cards (the shipped layout).
+                            TabPosition::Top => with_bar(scroll.size_full().child(header).child(cards)).size_full().into_any_element(),
+                            // Pinned under the scrolling cards.
+                            TabPosition::Bottom => div()
+                                .size_full()
+                                .flex()
+                                .flex_col()
+                                .child(with_bar(scroll.flex_1().min_h(px(0.0)).child(cards)).flex_1().min_h(px(0.0)).flex().flex_col())
+                                .child(div().px(px(SIDEBAR_PAD_PX)).pb(px(SIDEBAR_PAD_PX)).child(header))
+                                .into_any_element(),
+                        }
+                    })
+                    .children(tab_menu)
+                    .child(self.mask.region()),
+            );
+        }
+        // A panel drawn over the sidebar is solid there, whatever
+        // `panels.opacity`: the sidebar never shows through it.
+        let over_sidebar = self.panel_visible && self.sidebar_bounds.is_some_and(|s| s.intersects(&self.panel.value()));
+        let panel_alpha = if over_sidebar { 1.0 } else { panel_alpha };
         // Fade & slide panels fade in with their travel.
         let panel_fade = if cfg.panels.animation == mandara_config::surfaces::PanelAnimation::Slide { progress } else { 1.0 };
         // The bar the open panel came out of: the main bar or a side bar.
@@ -1926,8 +2057,13 @@ impl Render for ShellView {
                     let (py0, py1) = (f32::from(panel_r.origin.y), f32::from(panel_r.origin.y + panel_r.size.height));
                     let (y0, y1) = if py0 >= cy1 { (cy1, py0) } else { (py1, cy0) };
                     if y1 > y0 {
-                        let x0 = f32::from(chip_r.origin.x) - BRIDGE_OVERHANG_PX;
-                        let bridge = Bounds { origin: point(px(x0), px(y0)), size: size(chip_r.size.width + px(BRIDGE_OVERHANG_PX * 2.0), px(y1 - y0)) };
+                        // Across to the panel too, when it moved aside (an
+                        // open sidebar under its chip, #62).
+                        let (chip_x0, chip_x1) = (f32::from(chip_r.origin.x), f32::from(chip_r.origin.x + chip_r.size.width));
+                        let (panel_x0, panel_x1) = (f32::from(panel_r.origin.x), f32::from(panel_r.origin.x + panel_r.size.width));
+                        let x0 = chip_x0.min(panel_x1) - BRIDGE_OVERHANG_PX;
+                        let x1 = chip_x1.max(panel_x0) + BRIDGE_OVERHANG_PX;
+                        let bridge = Bounds { origin: point(px(x0), px(y0)), size: size(px(x1 - x0), px(y1 - y0)) };
                         let bridge = if p_vertical { layout::transpose(bridge) } else { bridge };
                         root = root.child(
                             place(bridge)
@@ -2129,110 +2265,7 @@ impl Render for ShellView {
             );
         }
 
-        // ── Sidebar content + hover trigger ───────────────────────────────
-        if sidebar_p <= HIDDEN_EPSILON {
-            // The next opening picks its tab (the last one, or the first).
-            self.tabs.on_hidden();
-        }
-        if sidebar_p > HIDDEN_EPSILON {
-            let h = side_h;
-            let compact = side_look.header == SidebarHeader::Compact;
-            let (tab_h, icon_btn) = if compact { (SIDEBAR_COMPACT_BUTTON_PX, SIDEBAR_COMPACT_BUTTON_PX) } else { (SIDEBAR_TAB_H_PX, SIDEBAR_ICON_BUTTON_PX) };
-            let card_gap = ranges::CARD_SPACING.clamp(side_look.card_spacing, mandara_config::surfaces::defaults::CARD_SPACING_PX);
-            let sidebar_cx = &self.sidebar_cx;
-            sidebar_cx.set_progress(sidebar_p.min(1.0));
-            let notifications = self.sidebar_notifications.is_some();
-            let sel = self.tabs.resolve(&cfg.sidebar, notifications, cx);
-            let cards: Vec<AnyElement> = match (&sel, &self.sidebar_notifications) {
-                (crate::sidebar_tabs::Sel::Notifications, Some(view)) => vec![view.clone().into_any_element()],
-                _ => self.tabs.cards(&sel).iter().enumerate().map(|(i, card)| reveal(sidebar_cx, i, card.clone())).collect(),
-            };
-            let cards = if cards.is_empty() { vec![crate::sidebar_tabs::empty_tab(&palette)] } else { cards };
-            // The switched-in tab slides from its side and fades in.
-            let (slide, fade) = self.tabs.transition();
-            let cards = div().relative().left(px(slide)).opacity(fade).flex().flex_col().gap(px(card_gap)).children(cards);
-            let scroll_handle = self.tabs.scroll(&sel);
-            let scroll_bar = self.tabs.scrollbar();
-            let unread = if notifications { crate::hub::hub(cx).read(cx).notifications.unread() } else { 0 };
-            // The header row: the strip, then the pin and close buttons.
-            let strip_w = sidebar_w - 2.0 * SIDEBAR_PAD_PX - 2.0 * (icon_btn + tokens::XS);
-            let tabs = self.tabs.strip(&cfg, &sel, notifications, unread, tab_h, strip_w, &palette, |v: &mut ShellView| &mut v.tabs, window, cx);
-            let menu_top = match side_look.tab_position {
-                TabPosition::Top => SIDEBAR_PAD_PX + tab_h + SIDEBAR_TAB_STRIP_PAD_PX * 2.0,
-                TabPosition::Bottom => SIDEBAR_PAD_PX,
-            };
-            let tab_menu = self.tabs.menu_overlay(&cfg, menu_top, &palette, |v: &mut ShellView| &mut v.tabs, cx);
-            self.sidebar_bounds = Some(Bounds::new(point(px(sidebar_x), px(side_top)), size(px(sidebar_w), px(h))));
-            root = root.child(
-                div()
-                    .id("sidebar")
-                    .absolute()
-                    .left(px(sidebar_x))
-                    .top(px(side_top))
-                    .w(px(sidebar_w))
-                    .h(px(h))
-                    .occlude()
-                    // Interacting with a hover-revealed sidebar commits to it:
-                    // from then on only a click outside or the close button
-                    // hides it, never the pointer drifting off or content
-                    // shrinking under it (e.g. clearing notifications).
-                    .capture_any_mouse_down(cx.listener(|this, _: &gpui::MouseDownEvent, _, cx| {
-                        this.cancel_leave();
-                        if !this.shell.read(cx).sidebar_open {
-                            this.shell.update(cx, |s, cx| s.set_sidebar(true, cx));
-                        }
-                    }))
-                    .on_hover(cx.listener(|this, hovered: &bool, window, cx| {
-                        // GPUI re-tests hover on repaint against the last pointer position, stale once the pointer left the surface.
-                        if *hovered && !window.is_window_hovered() {
-                            return;
-                        }
-                        if *hovered {
-                            this.cancel_leave();
-                        } else if !this.shell.read(cx).sidebar_open && !crate::state::config(cx).read(cx).get().sidebar.pinned() {
-                            this.schedule_sidebar_leave(window, cx);
-                        }
-                    }))
-                    .child({
-                        let pinned = cfg.sidebar.pinned();
-                        let header = div()
-                            .flex()
-                            .flex_none()
-                            .items_center()
-                            .gap(px(tokens::XS))
-                            .child(tabs)
-                            .child(crate::kit::icon_button(
-                                "sidebar-pin",
-                                if pinned { "pin" } else { "pin-off" },
-                                icon_btn,
-                                if pinned { palette.primary } else { palette.on_surface_variant },
-                                pinned.then_some(palette.primary.with_alpha(PIN_TINT_ALPHA)),
-                                move |_, cx| crate::state::update_config(cx, |c| c.sidebar.set_pinned(!pinned)),
-                            ))
-                            .child(crate::kit::icon_button("sidebar-close", "close", icon_btn, palette.on_surface_variant, None, |_, cx| {
-                                crate::state::update_config(cx, |c| c.sidebar.set_pinned(false));
-                                let shell = crate::state::shell(cx);
-                                shell.update(cx, |s, cx| s.set_sidebar(false, cx));
-                            }));
-                        let scroll = div().id("sidebar-scroll").overflow_y_scroll().track_scroll(&scroll_handle).p(px(SIDEBAR_PAD_PX)).flex().flex_col().gap(px(card_gap));
-                        let with_bar = |scroll| crate::scrollbar::with_scrollbar(scroll, &scroll_handle, &scroll_bar, &palette);
-                        match side_look.tab_position {
-                            // The header scrolls with the cards (the shipped layout).
-                            TabPosition::Top => with_bar(scroll.size_full().child(header).child(cards)).size_full().into_any_element(),
-                            // Pinned under the scrolling cards.
-                            TabPosition::Bottom => div()
-                                .size_full()
-                                .flex()
-                                .flex_col()
-                                .child(with_bar(scroll.flex_1().min_h(px(0.0)).child(cards)).flex_1().min_h(px(0.0)).flex().flex_col())
-                                .child(div().px(px(SIDEBAR_PAD_PX)).pb(px(SIDEBAR_PAD_PX)).child(header))
-                                .into_any_element(),
-                        }
-                    })
-                    .children(tab_menu)
-                    .child(self.mask.region()),
-            );
-        }
+        // ── Sidebar edge gap + hover trigger ──────────────────────────────
         // A floating sidebar leaves a gap at the screen edge: the pointer
         // resting there counts as on the sidebar. Else it closed the
         // hover-opened sidebar, the edge trigger reopened it under the
