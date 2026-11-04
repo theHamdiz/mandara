@@ -28,6 +28,11 @@ installer and the launcher.
 
 ### Fixed
 
+- **Empty panels look right again** (#61). In short panels such as Wi-Fi's
+  *No networks found* and Bluetooth's *Bluetooth is off*, the icon sat high
+  in its round badge and the badge ran into the title. The badge now shrinks
+  to fit, with its icon centred.
+
 - **The installer's PATH lines survive unusual folder names.** A home
   folder with spaces, quotes or a `$` in its name now ends up on your PATH
   as it is, in bash, zsh and fish alike, and installing again to another
