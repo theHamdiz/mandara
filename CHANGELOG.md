@@ -6,6 +6,55 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Put the power menu where you want it, plus a round of fixes for Sway, the
+installer and the launcher.
+
+### New
+
+- **Choose where the power menu opens.** Studio → Power & idle → Session
+  menu → *Position* puts the edge dock on the left or right side, or at the
+  top or bottom center. At the top it hangs from the bar as one piece with
+  it, curves and all, just like the drop-down panels; next to a floating
+  bar it opens as a card, and if the bar is on another edge it hangs from
+  the screen edge (the preview tells you which). The default stays the side
+  opposite the sidebar. (#57)
+
+### Fixed
+
+- **The installer's PATH lines survive unusual folder names.** A home
+  folder with spaces, quotes or a `$` in its name now ends up on your PATH
+  as it is, in bash, zsh and fish alike, and installing again to another
+  folder replaces the old line instead of keeping it. (#49)
+- **Pressing Ctrl-D at an installer question means No.** Enter still picks
+  the suggested answer, but a closed or failing terminal no longer says yes
+  for you. (#49)
+- **The launcher no longer vanishes when reopened quickly.** Closing it
+  before it had fully appeared and opening it again right away could make
+  it close itself two seconds later. (#49)
+- **Sway: every workspace is reachable.** A workspace named with quotes now
+  gets the right command, a named workspace such as `web` no longer blocks
+  a numbered one that doesn't exist yet, and its id no longer changes when
+  other workspaces come and go. (#49)
+- **Sway: your config is read the way Sway reads it.** Includes with a
+  wildcard in a folder (`conf.d/*/keys.conf`) or several files on one line
+  are followed, a `set $mod` you change later counts with its new value, and
+  a line that merely mentions `[ERROR]` (say, in a notification) is no
+  longer taken for an error. (#49)
+- **The shortcuts list keeps whole workspace names.** A Sway bind to
+  `workspace "dev ops"` now reads "Go to workspace dev ops", and River binds
+  with `-layout` show the right action. (#49)
+- **The NixOS setup message speaks your language.** When your compositor
+  config comes from Nix, the explanation of what to add is translated into
+  all 14 languages. (#49)
+
+### Under the hood
+
+- **Clearer docs for NixOS, River and Sway.** The README says NixOS users
+  update through their flake, the install guide notes that River has no
+  include line or checker, and the Studio guide's Sway notes are more
+  precise. The flake's Home Manager check now runs as pure Nix assertions,
+  and the screenshot setup notes regenerate their wallpapers reliably. (#49)
+
 ## 0.15.0 — 2026-11-03
 
 Fresh screenshots everywhere. Cleaner main menu tiles.
