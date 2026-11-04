@@ -31,7 +31,9 @@ sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https
 sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --compositor kwin --no-greeter
 ```
 
-Options are forwarded unchanged, including paths with spaces. The bootstrap
+Options are forwarded unchanged, including paths with spaces. Temporary
+downloads stay private; the Rust installer receives your original file-permission
+mask. The bootstrap
 does not request administrator access or edit configuration itself. To read
 it before running it, download `install.sh` to a file and run `sh install.sh`
 with the same options.

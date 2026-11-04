@@ -100,6 +100,10 @@ installer, display reconnection and native KWin support.
 
 ### Fixed
 
+- The download command preserves the installer's normal file permissions.
+  Unnamed displays retain their logical size alongside named monitors, and
+  Hyprland refreshes window state as soon as its event connection opens.
+
 - **Reach clipboard matches after searching.** Tab moves from the search
   field to the results; arrows select and Enter uses the selected copy.
   Editing the search or a collection name keeps its own keyboard input.
