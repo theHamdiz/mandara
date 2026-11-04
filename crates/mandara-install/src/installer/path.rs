@@ -32,6 +32,7 @@ pub(super) fn path_hint(dir: &Path) -> String {
 fn owned_line(line: &str) -> bool {
     let line = line.trim_end();
     (line.starts_with("case \":$PATH:\" in *:") && line.ends_with(":\"$PATH\" ;; esac"))
+        || (line.starts_with("case \":$PATH:\" in *\":") && line.ends_with(":$PATH\" ;; esac"))
         || (line.starts_with("export PATH=") && (line.ends_with(":$PATH\"") || line.ends_with(":\"$PATH\"")))
         || line.starts_with("fish_add_path --path ")
 }
@@ -178,5 +179,22 @@ mod tests {
         assert_eq!(changed, [home.path().join(".profile")]);
         assert_eq!(std::fs::read_to_string(home.path().join(".bashrc")).unwrap(), "export EDITOR=vi\n");
         assert!(reconcile(home.path(), Path::new("/new/bin")).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_prefix_change_replaces_the_legacy_installer_command() {
+        let home = tempfile::tempdir().unwrap();
+        let profile = home.path().join(".profile");
+        let old = "case \":$PATH:\" in *\":/old/bin:\"*) ;; *) export PATH=\"/old/bin:$PATH\" ;; esac";
+        std::fs::write(&profile, format!("{PATH_MARK}\n{old}\nexport EDITOR=vi\n")).unwrap();
+        reconcile(home.path(), Path::new("/new/bin")).unwrap();
+        let updated = std::fs::read_to_string(&profile).unwrap();
+        assert!(!updated.contains("/old/bin"));
+        assert!(updated.ends_with("export EDITOR=vi\n"));
+        let output = std::process::Command::new("sh")
+            .args(["-c", ". \"$1\"; printf '%s' \"$PATH\"", "mandara-profile-test"])
+            .arg(&profile).env("PATH", "/usr/bin").output().unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"/new/bin:/usr/bin");
     }
 }

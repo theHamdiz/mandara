@@ -468,7 +468,9 @@ availability, but KWin has no standalone configuration checker.
 Lock requests use **Plasma’s secure lock screen**, including confirmation
 before sleep, because KWin does not expose the lock-surface protocol used
 by Mandara’s own locker. The Mandara lock preview remains available. Choose
-which Plasma panels and desktop components to keep in Plasma’s own controls;
+lock-screen fonts and the unlock grace period in Plasma System Settings;
+Studio marks Mandara’s own locker controls unavailable on KWin. Plasma’s
+own controls also choose which panels and desktop components to keep;
 Mandara does not remove or disable them automatically.
 
 ## Coming from another setup

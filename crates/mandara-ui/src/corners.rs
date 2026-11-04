@@ -325,11 +325,7 @@ pub fn run(action: CornerAction, command: &str, cx: &mut App) {
             shell.update(cx, |s, cx| s.set_sidebar(open, cx));
         }
         CornerAction::Notifications => shell.update(cx, |s, cx| s.toggle_panel(crate::plugins::notifications::ID, cx)),
-        CornerAction::Lock => {
-            if let Err(err) = crate::lock::lock_now() {
-                tracing::warn!("lock: {err}");
-            }
-        }
+        CornerAction::Lock => request_lock(crate::lock::lock_now),
         CornerAction::Overview => {
             let Some(backend) = crate::hub::hub(cx).read(cx).compositor.clone() else { return };
             let (cmd, args): (&str, &[&str]) = match backend.kind() {
@@ -363,6 +359,14 @@ pub fn run(action: CornerAction, command: &str, cx: &mut App) {
 }
 
 // ── The shell surface's corners ──────────────────────────────────────────
+
+fn request_lock(lock: impl FnOnce() -> Result<bool, String> + Send + 'static) {
+    mandara_services::runtime::spawn("corner-lock", async move {
+        if let Err(err) = mandara_services::runtime::unblock(lock).await {
+            tracing::warn!("lock: {err}");
+        }
+    });
+}
 
 /// The hot corners of one shell surface (one display).
 pub struct HotCorners {
@@ -588,6 +592,17 @@ mod tests {
 
     fn ms(base: Instant, n: u64) -> Instant {
         base + Duration::from_millis(n)
+    }
+
+    #[test]
+    fn a_corner_lock_runs_away_from_its_caller() {
+        let caller = std::thread::current().id();
+        let (tx, rx) = std::sync::mpsc::channel();
+        request_lock(move || {
+            tx.send(std::thread::current().id()).unwrap();
+            Ok(true)
+        });
+        assert_ne!(rx.recv().unwrap(), caller);
     }
 
     #[test]

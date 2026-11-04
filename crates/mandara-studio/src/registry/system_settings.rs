@@ -42,8 +42,18 @@ pub const CURSOR_SIZE_PATH: &str = "/compositor/input/cursor/size";
 pub const CURSOR_SIZE_MIN: f64 = 16.0;
 pub const CURSOR_SIZE_MAX: f64 = 128.0;
 
+/// KWin's own compositor and locker are configured by Plasma.
+pub const KWIN_MANAGED: &str = tk("KWin settings are managed in Plasma System Settings");
+
+pub fn kwin_locked(path: &str, running: Option<mandara_config::compositor::Target>) -> Option<&'static str> {
+    if running != Some(mandara_config::compositor::Target::KWin) { return None; }
+    let compositor = path.starts_with("/compositor/") && path != "/compositor/autostart";
+    let locker = matches!(path, "/general/lock_screen" | "/idle/lock_grace_s" | "/typography/lock_font" | "/typography/lock_clock_font");
+    (compositor || locker || path == "/integrations/compositor_borders").then_some(KWIN_MANAGED)
+}
+
 /// Why a cursor option does nothing under the running compositor
-/// (`running`: MangoWM, Niri, Hyprland, Umbriel, Sway, River), from `INPUT_OPTIONS`.
+/// (`running`: MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin), from `INPUT_OPTIONS`.
 pub fn cursor_locked(path: &str, running: Option<mandara_config::compositor::Target>) -> Option<&'static str> {
     let key = path.strip_prefix("/compositor/input/cursor/").map(|k| format!("cursor.{k}"))?;
     let support = mandara_config::input::INPUT_OPTIONS.iter().find(|(k, _)| *k == key)?.1;
@@ -136,6 +146,19 @@ mod tests {
     use mandara_config::ShellConfig;
     use serde_json::Value;
 
+    #[test]
+    fn plasma_owns_kwin_settings_and_locking_but_shell_controls_stay_available() {
+        use mandara_config::compositor::Target;
+        for path in ["/compositor/look/rounding", "/compositor/input/keyboard/repeat_rate", "/integrations/compositor_borders", "/general/lock_screen", "/idle/lock_grace_s", "/typography/lock_font", "/typography/lock_clock_font"] {
+            assert_eq!(kwin_locked(path, Some(Target::KWin)), Some(KWIN_MANAGED), "{path}");
+            for target in Target::ALL.into_iter().filter(|t| *t != Target::KWin) {
+                assert_eq!(kwin_locked(path, Some(target)), None, "{path}: {target:?}");
+            }
+        }
+        for path in ["/compositor/autostart", "/theme/mode", "/general/locale", "/idle/lock_at_startup"] {
+            assert_eq!(kwin_locked(path, Some(Target::KWin)), None, "{path}");
+        }
+    }
     /// Every W6 path resolves, round-trips, and its optional sliders accept
     /// a value inside their range.
     #[test]

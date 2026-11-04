@@ -502,12 +502,12 @@ pub fn required_plugin(path: &str) -> Option<&'static str> {
 /// place of its control), e.g. the launcher's hover edge while the dock
 /// owns the bottom edge (`ShellConfig::launcher_hover_enabled`).
 pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
+    if let Some(reason) = system_settings::kwin_locked(setting.path, running_compositor()) { return Some(reason); }
     match setting.path {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
         "/session_menu/position" if cfg.session_menu.style == mandara_config::power::SessionMenuStyle::Grid => Some(tk("The grid always opens in the middle")),
         "/compositor/autostart" if running_compositor() == Some(mandara_config::compositor::Target::River) => Some(tk("River's init controls startup; add or remove Mandara there")),
-        path if running_compositor() == Some(mandara_config::compositor::Target::KWin) && ((path.starts_with("/compositor/") && path != "/compositor/autostart") || path == "/integrations/compositor_borders") => Some(tk("KWin settings are managed in Plasma System Settings")),
         path if path.starts_with("/compositor/input/cursor/") => system_settings::cursor_locked(path, running_compositor()),
         path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Mandara can't set this on Sway")),
         path if running_compositor() == Some(mandara_config::compositor::Target::River) && RIVER_LACKS.contains(&path) => Some(tk("River has no such setting")),

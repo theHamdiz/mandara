@@ -73,8 +73,12 @@ impl StudioView {
         let group = |g: &str| -> Vec<&'static Setting> { registry::in_section(Section::Input).filter(|s| s.group == g).collect() };
         let live = running();
         let status = match live {
+            Some(mandara_config::compositor::Target::KWin) => tr(crate::registry::system_settings::KWIN_MANAGED).to_string(),
             Some(t) => tf("Written to Mandara's {compositor} drop-in; “Your config” keeps your own setting.", &[("compositor", &target_name(t))]),
-            None => tf("Saved now; applied the next time Mandara runs under a supported compositor ({compositors}).", &[("compositors", &mandara_config::compositor::Target::ALL.map(mandara_config::compositor::Target::name).join(", "))]),
+            None => {
+                let targets = mandara_config::compositor::Target::ALL.into_iter().filter(|t| mandara_config::input::INPUT_OPTIONS.iter().any(|(_, support)| support[t.index()]));
+                tf("Saved now; applied the next time Mandara runs under a supported compositor ({compositors}).", &[("compositors", &targets.map(mandara_config::compositor::Target::name).collect::<Vec<_>>().join(", "))])
+            }
         };
         let layouts = self.input_layouts(cfg, p, cx);
         let keyboard = self.rows(group(KEYBOARD), cfg, p, cx);
@@ -97,6 +101,9 @@ impl StudioView {
     }
 
     fn input_layouts(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        if running() == Some(mandara_config::compositor::Target::KWin) {
+            return card(p).child(div().text_color(p.on_surface_variant.hsla()).child(tr(crate::registry::system_settings::KWIN_MANAGED))).into_any_element();
+        }
         let kb = cfg.compositor.input.keyboard.clone();
         let catalog = Self::input_catalog(cx);
         let describe = |name: &str, variant: &str| -> String {

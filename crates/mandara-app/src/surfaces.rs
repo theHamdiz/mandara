@@ -2,6 +2,7 @@
 
 use std::cell::Cell;
 use std::rc::Rc;
+use std::time::Duration;
 
 use gpui::{AnyWindowHandle, App, AppContext as _, DisplayId, px, size};
 use mandara_core::{DisplayKey, LayerSurfaceSpec, OutputGeometry};
@@ -9,6 +10,8 @@ use mandara_ui::ShellView;
 
 /// Used only if neither output protocol nor GPUI supplies an initial size.
 const FALLBACK_SIZE: (f32, f32) = (1920.0, 1080.0);
+/// Give a compositor time to publish geometry after replacing an output.
+const OUTPUT_RETRY_DELAY: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Debug, PartialEq)]
 struct Spec {
@@ -41,7 +44,9 @@ pub(super) fn init(outputs: Vec<OutputGeometry>, cx: &mut App) {
         generation.set(current);
         let generation = generation.clone();
         cx.spawn(async move |cx| {
-            let outputs = cx.background_executor().spawn(async { mandara_core::query_outputs() }).await;
+            let outputs = cx.background_executor().spawn(async {
+                query_after_change(mandara_core::query_outputs, || std::thread::sleep(OUTPUT_RETRY_DELAY))
+            }).await;
             cx.update(|cx| {
                 if generation.get() != current {
                     return;
@@ -50,12 +55,22 @@ pub(super) fn init(outputs: Vec<OutputGeometry>, cx: &mut App) {
                     Ok(outputs) => reconcile(&outputs, false, cx),
                     Err(err) => {
                         tracing::warn!("output geometry after display change: {err:#}");
-                        reconcile(&[], false, cx);
                     }
                 }
             });
         }).detach();
     }).detach();
+}
+
+fn query_after_change(mut query: impl FnMut() -> anyhow::Result<Vec<OutputGeometry>>, wait: impl FnOnce()) -> anyhow::Result<Vec<OutputGeometry>> {
+    match query() {
+        Ok(outputs) => Ok(outputs),
+        Err(err) => {
+            tracing::debug!("retrying output geometry after display change: {err:#}");
+            wait();
+            query()
+        }
+    }
 }
 
 /// The software renderer calls this if it cannot start. Future outputs
@@ -163,6 +178,32 @@ mod tests {
 
     fn spec(id: u64, monitor: &str, size: (f32, f32)) -> Spec {
         Spec { display: Some(DisplayId::new(id)), monitor: monitor.into(), size }
+    }
+
+    #[test]
+    fn a_transient_query_failure_recovers_the_returning_outputs() {
+        let mut calls = 0;
+        let waited = Cell::new(false);
+        let outputs = query_after_change(|| {
+            calls += 1;
+            if calls == 1 { anyhow::bail!("display is changing"); }
+            assert!(waited.get());
+            Ok(vec![OutputGeometry { name: "DP-3".into(), width: 2560, height: 1440, ..Default::default() }])
+        }, || waited.set(true)).unwrap();
+        assert_eq!(calls, 2);
+        assert_eq!(outputs[0].name, "DP-3");
+        assert_eq!(outputs[0].width, 2560);
+    }
+
+    #[test]
+    fn failed_queries_do_not_become_empty_geometry_and_stop_after_one_retry() {
+        let mut calls = 0;
+        assert!(query_after_change(|| {
+            calls += 1;
+            anyhow::bail!("unavailable")
+        }, || {}).is_err());
+        assert_eq!(calls, 2);
+        assert!(query_after_change(|| Ok(Vec::new()), || panic!("successful query must not wait")).unwrap().is_empty());
     }
 
     #[test]

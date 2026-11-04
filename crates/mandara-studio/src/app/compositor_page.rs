@@ -470,7 +470,9 @@ impl StudioView {
                 }))
         }));
         let file = target_file(tab);
-        let status = if live == Some(tab) {
+        let status = if tab == Target::KWin {
+            tr(crate::registry::system_settings::KWIN_MANAGED).to_string()
+        } else if live == Some(tab) {
             if included[target_index(tab)] {
                 tf("Writing {file} and reloading {compositor} on every change.", &[("file", &file), ("compositor", &target_name(tab))])
             } else {
@@ -534,11 +536,11 @@ impl StudioView {
                 .child(tf("River's config is your init program, which Mandara never edits: Mandara sends River its colours, rules, input settings and keys when the shell starts and on every change. To start Mandara with River, add this line to your init: {line}", &[("line", &tab.include_line())]))
                 .into_any_element(),
         };
-        let preview = self.dropin_preview(cfg, tab, p, cx);
-        let presets = self.comp_presets(cfg, p, cx);
+        let preview = (tab != Target::KWin).then(|| self.dropin_preview(cfg, tab, p, cx));
+        let presets = (tab != Target::KWin).then(|| self.comp_presets(cfg, p, cx));
         // The compositor's own verdict on the config comes first.
         let doctor = self.config_doctor(cfg, tab, p, cx);
-        div().row().flex_col().gap(px(SPACE_26_PX)).child(header).child(doctor).child(presets).child(specific).child(rules).child(common).child(preview).into_any_element()
+        div().row().flex_col().gap(px(SPACE_26_PX)).child(header).child(doctor).children(presets).child(specific).child(rules).child(common).children(preview).into_any_element()
     }
 
     fn dropin_preview(&mut self, cfg: &ShellConfig, tab: Target, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
@@ -584,6 +586,9 @@ impl StudioView {
     // ── Window rules ────────────────────────────────────────────────────────
 
     fn window_rules(&mut self, cfg: &ShellConfig, tab: Target, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        if tab == Target::KWin {
+            return card(p).child(heading(t("Window rules"), tr(crate::registry::system_settings::KWIN_MANAGED), p)).into_any_element();
+        }
         let rules = cfg.compositor.window_rules.clone();
         let mut list = div().row().flex_col().gap(px(SPACE_10_PX));
         if rules.is_empty() {

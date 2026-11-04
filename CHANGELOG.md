@@ -45,6 +45,9 @@ installer, display reconnection and native KWin support.
   workspace and window queries run in the background before the shell
   follows the live event stream.
 
+- **Locking from a hot corner keeps the shell responsive.** Waiting for
+  the secure lock screen now happens in the background.
+
 - **Tape stays attached to notes.** The notes desktop widget uses the same
   corner strips as the to-do card, anchored to its visible paper. A header
   or extra frame padding no longer leaves the strips floating above it.
@@ -56,7 +59,8 @@ installer, display reconnection and native KWin support.
 - **The bar and dock come back when a display reconnects** (#63). Switching
   a monitor between computers, unplugging it or changing its resolution no
   longer leaves that screen without its shell. Other displays keep their
-  surfaces, and your display assignments stay as you set them.
+  surfaces, and your display assignments stay as you set them. A temporarily
+  unavailable display query is retried without replacing working surfaces.
 - **Installing again keeps your shell profiles safe** (#49). A leftover
   installer comment no longer removes the next setting. Profile updates
   preserve symlinks and permissions, and a failed write leaves the original

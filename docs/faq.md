@@ -128,8 +128,9 @@ the GitHub marketplace. [Writing plugins](../PLUGINS.md)
 
 ## Does Mandara work on GNOME, KDE Plasma or X11?
 
-No. Mandara is a shell for the Wayland compositors listed above. GNOME and
-KDE Plasma bring their own shells, and Mandara does not run on X11.
+Plasma Wayland is supported through the native KWin driver. Plasma keeps
+its own compositor settings and secure lock screen; see [Plasma setup](install.md#plasma--kwin).
+GNOME uses its own shell and is not supported. Mandara does not run on X11.
 
 ## Does Mandara support Arabic and other languages?
 

@@ -45,8 +45,9 @@ fn sync_autostart_at(path: &Path, enabled: bool, executable: &Path) -> Result<Op
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
         Err(e) => return Err(e.into()),
     };
-    if current.is_empty() && !enabled { return Ok(None); }
-    if !current.is_empty() && !current.lines().any(|l| l == MARKER) {
+    let owned = current.lines().any(|l| l == MARKER);
+    if !enabled && !owned { return Ok(None); }
+    if !current.is_empty() && !owned {
         bail!("{}", mandara_i18n::tf("{path} is a custom autostart entry; Mandara left it unchanged", &[("path", &path.display())]));
     }
     let text = format!("[Desktop Entry]\nType=Application\nName=Mandara Shell\nExec={}\nOnlyShowIn=KDE;\nTerminal=false\nHidden={}\n{MARKER}\n", exec_value(executable)?, !enabled);
@@ -70,6 +71,7 @@ mod tests {
         sync_autostart_at(&path, false, Path::new("/bin/mandara")).unwrap();
         assert!(std::fs::read_to_string(&path).unwrap().contains("Hidden=true\n"));
         std::fs::write(&path, "[Desktop Entry]\nExec=my-command\n").unwrap();
+        assert_eq!(sync_autostart_at(&path, false, Path::new("/bin/mandara")).unwrap(), None);
         assert!(sync_autostart_at(&path, true, Path::new("/bin/mandara")).is_err());
         assert_eq!(std::fs::read_to_string(path).unwrap(), "[Desktop Entry]\nExec=my-command\n");
     }
