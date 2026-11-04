@@ -88,7 +88,12 @@ fn the_homepage_uses_existing_artwork_guides_and_section_targets() {
                 let path = path.split('#').next().unwrap().trim_start_matches('/');
                 if path.is_empty() { continue; }
                 let file = crate::root().join(path);
-                assert!(file.is_file() || file.with_extension("md").is_file(), "missing page or asset: {path}");
+                if file.is_dir() {
+                    assert!(file.join("README.md").is_file() || file.join("index.html").is_file(), "missing directory index: {path}");
+                } else {
+                    assert!(file.is_file() || file.with_extension("md").is_file(), "missing page or asset: {path}");
+                    assert!(!path.ends_with("README.html"), "Pages publishes README files as directory indexes: {path}");
+                }
             }
         }
     }
