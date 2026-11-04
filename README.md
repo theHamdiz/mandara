@@ -79,8 +79,8 @@ widget can be moved, resized and restyled right on the desktop.
 <table>
 <tr>
 <td width="33%" valign="top"><img src="docs/screenshots/setup-music.webp" alt="A music desktop: floating glass-pill bar, a turning vinyl record with the album art and controls, a pocket player, a dot-matrix clock and a flowing wave visualizer over glossy ribbons in sunset colours" width="100%"/><br/><sub><b>Music corner</b>: glass pills, a turning record, a pocket player and a live wave visualizer.</sub></td>
-<td width="33%" valign="top"><img src="docs/screenshots/setup-night.webp" alt="A night desktop: the notch bar, an analog clock on a scalloped cookie dial, tonight's moon, the sun's arc with the time to sunset and a dotted weather disc under the northern lights" width="100%"/><br/><sub><b>Night sky</b>: the notch bar, a cookie-dial clock, the moon, the sun's arc and the weather.</sub></td>
-<td width="33%" valign="top"><img src="docs/screenshots/setup-daylight.webp" alt="A light desktop: the island bar, a quote by Epictetus, a to-do list on a soft card, the focus timer and the month calendar over a pastel mesh of rose and lilac, in light mode" width="100%"/><br/><sub><b>Daylight</b>: light mode, the island bar, a quote, your to-dos, the focus timer and the month.</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/setup-night.webp" alt="A night desktop: the notch bar, an analog clock on a scalloped cookie dial, tonight's moon, the sun's arc with the time to sunrise and a dotted weather disc under the northern lights" width="100%"/><br/><sub><b>Night sky</b>: the notch bar, a cookie-dial clock, the moon, the sun's arc and the weather.</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/setup-daylight.webp" alt="A light desktop: the island bar, a quote from Ferdowsi's Shahnameh, a to-do list on a soft card, the focus timer and the month calendar over a pastel mesh of rose and lilac, in light mode" width="100%"/><br/><sub><b>Daylight</b>: light mode, the island bar, a quote, your to-dos, the focus timer and the month.</sub></td>
 </tr>
 </table>
 
