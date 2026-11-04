@@ -41,6 +41,10 @@ installer, display reconnection and native KWin support.
 
 ### Fixed
 
+- **A slow compositor reply no longer holds up the first frame.** Initial
+  workspace and window queries run in the background before the shell
+  follows the live event stream.
+
 - **Tape stays attached to notes.** The notes desktop widget uses the same
   corner strips as the to-do card, anchored to its visible paper. A header
   or extra frame padding no longer leaves the strips floating above it.

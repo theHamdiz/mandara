@@ -210,7 +210,7 @@ impl InputConfig {
 }
 
 /// Input options and the compositors whose drop-in honours them
-/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway, River]`), for Studio's support dots.
+/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin]`), for Studio's support dots.
 pub const INPUT_OPTIONS: &[(&str, [bool; crate::compositor::Target::ALL.len()])] = &[
     ("keyboard.layouts", [true, true, true, true, true, true, false]),
     ("keyboard.repeat", [true, true, true, true, true, true, false]),

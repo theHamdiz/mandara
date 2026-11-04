@@ -355,7 +355,7 @@ pub struct TagRule {
 }
 
 /// Window-rule options and the compositors whose drop-in honours them
-/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway, River]`). Studio greys out the rest.
+/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin]`). Studio greys out the rest.
 /// Umbriel's `global` is its `default_pinned` (above other windows on every
 /// workspace of the output, like Hyprland's `pin`); Sway's is `sticky` (a
 /// floating window shown on every workspace of its output); River's is a
@@ -615,7 +615,7 @@ fn normalize_mod(m: &str) -> Option<&'static str> {
 }
 
 /// The modifiers a Studio-captured chord may carry, as each compositor
-/// spells them: `(normalized, [MangoWM, Niri, Hyprland, Umbriel, Sway, River])`.
+/// spells them: `(normalized, [MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin])`.
 /// Umbriel documents Super, Ctrl, Alt and Shift only (its `Mod` follows
 /// `general.mod_key`, so Mandara spells Super out). Sway takes xkb's
 /// modifier names (`Mod4`, `Ctrl`, `Alt`, `Shift`, `Mod3`, `Mod5`) and

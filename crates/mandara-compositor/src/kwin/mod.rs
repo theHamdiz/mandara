@@ -15,7 +15,13 @@ pub struct KWinDriver;
 
 impl KWinDriver {
     pub fn from_env() -> Option<Self> {
-        Session::open().is_ok().then_some(Self)
+        Self::for_display(std::env::var_os("WAYLAND_DISPLAY").as_deref())
+    }
+
+    fn for_display(display: Option<&std::ffi::OsStr>) -> Option<Self> {
+        // Construction runs on the UI thread. The background queries and
+        // event watcher establish and validate the protocol connection.
+        display.filter(|d| !d.is_empty()).map(|_| Self)
     }
 }
 
@@ -88,5 +94,17 @@ impl CompositorBackend for KWinDriver {
     fn sync_managed_config(&self, config: &mandara_config::compositor::CompositorConfig, borders: Option<mandara_config::compositor::BorderColors>) -> Result<(std::path::PathBuf, mandara_config::compositor::Emitted)> {
         mandara_config::kwin::sync_autostart(config.autostart, &mandara_config::paths::self_exe())?;
         crate::backend::write_dropin(mandara_config::compositor::Target::KWin, config, borders, self.version())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn constructing_a_driver_never_connects_to_the_display() {
+        assert!(KWinDriver::for_display(None).is_none());
+        assert!(KWinDriver::for_display(Some(std::ffi::OsStr::new(""))).is_none());
+        assert!(KWinDriver::for_display(Some(std::ffi::OsStr::new("/nonexistent/wayland-fixture"))).is_some());
     }
 }

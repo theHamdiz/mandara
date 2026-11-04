@@ -2,6 +2,8 @@
 //! service actor plus their command handles. Plugins observe it; the app
 //! pumps actor updates into it on the foreground executor.
 
+mod initial;
+
 use std::collections::HashMap;
 
 use gpui::{App, AppContext as _, AsyncApp, Entity, Global};
@@ -216,28 +218,24 @@ pub fn init_hub(cx: &mut App) -> Entity<Hub> {
 
     if let Some(backend) = compositor {
         tracing::info!("compositor: {:?}", backend.kind());
-        // Seed with one-shot queries, then follow the event streams.
-        let initial = backend.get_navigation_state().unwrap_or_default();
-        let focused = backend.get_active_client().ok().flatten();
-        let clients = backend.get_all_clients().unwrap_or_default();
-        hub.update(cx, |h, _| {
-            h.navigation = initial.into_iter().collect();
-            h.focused = focused;
-            h.clients = clients;
-        });
-        pump_events(
-            hub.clone(),
-            backend.subscribe_events(),
-            |h, event| match event {
-                CompositorEvent::Navigation { monitor, model } => h.navigation.insert(monitor, model.clone()).as_ref() != Some(&model),
-                CompositorEvent::FocusedClient(c) => set(&mut h.focused, c),
-                CompositorEvent::Clients(list) => set(&mut h.clients, list),
-                CompositorEvent::Keymode(k) => set(&mut h.keymode, k),
-                CompositorEvent::KeyboardLayout(k) => set(&mut h.keyboard_layout, k),
-                CompositorEvent::Monitors(_) => false,
-            },
-            cx,
-        );
+        let hub = hub.clone();
+        cx.spawn(async move |cx| {
+            let (snapshot, events) = cx.background_executor().spawn(async move { initial::load(backend.as_ref()) }).await;
+            cx.update(|cx| {
+                hub.update(cx, |hub, cx| {
+                    snapshot.install(hub);
+                    cx.notify();
+                });
+                pump_events(hub, events, |h, event| match event {
+                    CompositorEvent::Navigation { monitor, model } => h.navigation.insert(monitor, model.clone()).as_ref() != Some(&model),
+                    CompositorEvent::FocusedClient(c) => set(&mut h.focused, c),
+                    CompositorEvent::Clients(list) => set(&mut h.clients, list),
+                    CompositorEvent::Keymode(k) => set(&mut h.keymode, k),
+                    CompositorEvent::KeyboardLayout(k) => set(&mut h.keyboard_layout, k),
+                    CompositorEvent::Monitors(_) => false,
+                }, cx);
+            });
+        }).detach();
     }
     crate::osd::init(&hub, cx);
     // Notification popups, privacy monitor, event sounds, auto-DND.

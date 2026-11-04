@@ -208,7 +208,7 @@ mod tests {
             // alone wait for them.
             let river_waits = key == "keyboard.layouts" && input.keyboard.layouts.is_empty();
             let got = [has_settings(&emit_mango(input)), has_settings(&emit_niri(input)), has_settings(&emit_hyprland_conf(input)), has_settings(&emit_umbriel(input)), has_settings(&emit_sway(input)), has_settings(&emit_river(input)) || river_waits, false];
-            assert_eq!(got, support, "{} ({key}): [MangoWM, Niri, Hyprland, Umbriel, Sway, River]", s.path);
+            assert_eq!(got, support, "{} ({key}): [MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin]", s.path);
             // The help text tells the truth about partial support: it names
             // exactly the compositors that carry the option.
             // KWin locks the whole input section with its System Settings
