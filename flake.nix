@@ -131,7 +131,7 @@
           # fail the check with their message, the file only marks success.
           home-manager-module =
             assert lib.assertMsg (cfg.settings.bar.height == 30) "the Home Manager settings lost bar.height";
-            assert lib.assertMsg (configFile == expectedFile) "~/.config/mandara/config.toml isn't the TOML of programs.mandara.settings";
+            assert lib.assertMsg (toString configFile == toString expectedFile) "~/.config/mandara/config.toml isn't the TOML of programs.mandara.settings";
             assert lib.assertMsg (service.Service.ExecStart == lib.getExe cfg.package) "the systemd service doesn't start the module's package";
             assert lib.assertMsg (lib.length hm.config.home.packages == 1) "the module should add exactly one package";
             pkgs.writeText "mandara-home-manager-module" "checked\n";

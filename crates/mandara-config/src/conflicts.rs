@@ -193,6 +193,7 @@ fn programs_in(command: &str) -> Vec<String> {
 fn autostart_command(target: Target, line: &str) -> Option<String> {
     let t = line.trim();
     match target {
+        Target::KWin => None,
         // MangoWM's keyword is `exec_once`; `exec-once` is kept for older configs.
         Target::Mango => ["exec_once=", "exec-once=", "exec="].iter().find_map(|p| t.strip_prefix(p)).map(str::to_string),
         Target::Hyprland => {
@@ -557,6 +558,17 @@ pub fn binds_in(target: Target, file: &Path, text: &str) -> Vec<UserBind> {
 /// [`binds_in`] for a file read after `earlier` (see [`file_binds_after`]).
 fn binds_in_after(target: Target, file: &Path, text: &str, earlier: &str) -> Vec<UserBind> {
     let lines: Vec<&str> = text.lines().collect();
+    if target == Target::Sway {
+        let offset = earlier.lines().count();
+        return crate::compositor::sway_binds(&format!("{earlier}{text}"))
+            .into_iter()
+            .filter(|b| b.line >= offset)
+            .map(|b| {
+                let start = b.line - offset;
+                UserBind { chord: b.chord, file: file.to_path_buf(), line: start + 1, text: lines[start].trim().to_string(), body: b.expanded, replaces: None }
+            })
+            .collect();
+    }
     let vars = hypr_vars(target, &earlier.lines().chain(lines.iter().copied()).collect::<Vec<_>>());
     file_binds_after(target, earlier, text)
         .into_iter()
@@ -568,13 +580,24 @@ fn binds_in_after(target: Target, file: &Path, text: &str, earlier: &str) -> Vec
         .collect()
 }
 
+fn sway_user_binds(files: &[PathBuf]) -> Vec<UserBind> {
+    crate::compositor::sway_config_binds(files).into_iter().map(|(file, bind)| {
+        let text = std::fs::read_to_string(&file).ok().and_then(|text| text.lines().nth(bind.line).map(|line| line.trim().to_string())).unwrap_or_default();
+        UserBind { chord: bind.chord, file, line: bind.line + 1, text, body: bind.expanded, replaces: None }
+    }).collect()
+}
+
 /// Every bind in the user's config tree for `target` (never Mandara's
 /// drop-in), keyed by chord: later files win, like the compositor. Binds
 /// whose tool Mandara replaces carry it in [`UserBind::replaces`].
 pub fn user_binds(target: Target, cfg: &CompositorConfig) -> std::collections::BTreeMap<String, UserBind> {
     let mut map = std::collections::BTreeMap::new();
     let mut earlier = String::new();
-    for file in config_files(target) {
+    let files = config_files(target);
+    if target == Target::Sway {
+        map.extend(sway_user_binds(&files).into_iter().map(|bind| (bind.chord.clone(), bind)));
+    }
+    for file in files.into_iter().filter(|_| target != Target::Sway) {
         let Ok(text) = std::fs::read_to_string(&file) else { continue };
         for b in binds_in_after(target, &file, &text, &earlier) {
             map.insert(b.chord.clone(), b);
@@ -597,6 +620,7 @@ pub fn scan(target: Target, cfg: &CompositorConfig) -> Vec<Conflict> {
 }
 
 pub fn scan_files(target: Target, cfg: &CompositorConfig, files: &[PathBuf]) -> Vec<Conflict> {
+    let sway = if target == Target::Sway { sway_user_binds(files) } else { Vec::new() };
     let ours = mandara_chords(target, cfg);
     let mut out = Vec::new();
     let mut earlier = String::new();
@@ -604,13 +628,12 @@ pub fn scan_files(target: Target, cfg: &CompositorConfig, files: &[PathBuf]) -> 
         let Ok(text) = std::fs::read_to_string(file) else { continue };
         let lines: Vec<&str> = text.lines().collect();
         // Keybinds.
-        let binds = file_binds_after(target, &earlier, &text);
-        // Hyprland `$var = value` / Sway `set $var …` lines, substituted
-        // into bind bodies so `exec, $menu` names the program behind it.
-        let vars = hypr_vars(target, &earlier.lines().chain(lines.iter().copied()).collect::<Vec<_>>());
+        let binds = if target == Target::Sway { sway.iter().filter(|b| b.file == *file).cloned().collect() } else { binds_in_after(target, file, &text, &earlier) };
         earlier.push_str(&sway_sets(target, &text));
-        for (start, end, ch) in binds {
-            let body = vars.iter().fold(lines[start..=end].join("\n"), |b, (n, val)| b.replace(n.as_str(), val));
+        for bind in binds {
+            let start = bind.line - 1;
+            let end = start + bind.body.lines().count().saturating_sub(1);
+            let (ch, body) = (bind.chord, bind.body);
             if body.contains("mandara") {
                 continue;
             }
@@ -828,7 +851,7 @@ pub fn validate_file(target: Target, config: &Path) -> Validation {
         Target::Umbriel => ("umbriel", vec!["config".into(), "validate".into(), "-c".into(), config.display().to_string()]),
         Target::Sway => ("sway", vec!["--validate".into(), "--config".into(), config.display().to_string()]),
         // River has no config checker (its config is a program).
-        Target::River => return Validation::Unchecked,
+        Target::River | Target::KWin => return Validation::Unchecked,
     };
     let (success, report) = if target == Target::Sway {
         // Sway builds its (headless, software) backend before it reads the
@@ -1016,6 +1039,19 @@ mod tests {
         restore(&b).unwrap();
         assert!(std::fs::read_to_string(d.join("config")).unwrap().contains("\nbar {\n    position top"));
         std::fs::remove_dir_all(d).ok();
+    }
+
+    #[test]
+    fn sway_bind_commands_keep_the_variable_value_at_their_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("config");
+        let text = "set $mod Mod4\nset $menu wofi\nbindsym $mod+space exec $menu\nset $menu mandara\nbindsym $mod+x exec $menu\n";
+        std::fs::write(&file, text).unwrap();
+        let binds = binds_in(Target::Sway, &file, text);
+        assert_eq!(binds[0].body, "bindsym Mod4+space exec wofi");
+        assert_eq!(binds[1].body, "bindsym Mod4+x exec mandara");
+        let found = scan_files(Target::Sway, &cfg(), &[file]);
+        assert!(found.iter().any(|c| matches!(&c.kind, Kind::Keybind { chord, replaces: Some(tool), .. } if chord == "super+space" && tool == "wofi")), "{found:?}");
     }
 
     /// River: maps and autostarts in the init script are found, but never

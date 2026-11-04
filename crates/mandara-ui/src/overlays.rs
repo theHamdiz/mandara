@@ -2209,10 +2209,10 @@ pub fn init_overlays(cx: &mut App) {
         // Sized for, and placed on, the focused monitor: sized for the first
         // output while the compositor put it on another, an overlay covered
         // only part of a larger display (issue #8).
-        let (display, (w, h)) = if (launcher && !is_open(&overlays.launcher, cx)) || (session && !is_open(&overlays.session, cx)) || (picker && !is_open(&overlays.picker, cx)) {
-            crate::outputs::overlay_target(cx)
+        let (display, (w, h), output) = if (launcher && !is_open(&overlays.launcher, cx)) || (session && !is_open(&overlays.session, cx)) || (picker && !is_open(&overlays.picker, cx)) {
+            crate::outputs::overlay_target_with_output(cx)
         } else {
-            (None, (1920.0, 1080.0))
+            (None, (1920.0, 1080.0), None)
         };
         if launcher && !is_open(&overlays.launcher, cx) {
             overlays.launcher = cx
@@ -2222,7 +2222,7 @@ pub fn init_overlays(cx: &mut App) {
         }
         if session && !is_open(&overlays.session, cx) {
             overlays.session = cx
-                .open_window(overlay_spec(SurfaceRole::Lock, w, h, display), |window, cx| cx.new(|cx| SessionView::new((w, h), window, cx)))
+                .open_window(overlay_spec(SurfaceRole::Lock, w, h, display), |window, cx| cx.new(|cx| SessionView::new((w, h), output.clone(), window, cx)))
                 .map_err(|e| tracing::error!("session: {e:#}"))
                 .ok();
         }

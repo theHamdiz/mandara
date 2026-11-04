@@ -1,7 +1,7 @@
 //! The system's CPU and C library, and the release builds that fit them.
 
 /// Oldest Rust that builds Mandara (source builds update older toolchains).
-pub const MIN_RUST: &str = "1.88.0";
+pub const MIN_RUST: &str = "1.97.0";
 /// CPU flags of the x86-64-v3 level (AVX2 era) the tuned build needs.
 const X86_64_V3_FLAGS: &[&str] = &["avx2", "bmi1", "bmi2", "fma", "movbe", "f16c", "abm"];
 /// Suffix of the x86-64-v3 tuned release (glibc only).
@@ -80,7 +80,8 @@ mod tests {
 
     #[test]
     fn dotted_versions() {
-        assert!(version_ge("1.88.0", MIN_RUST));
+        assert!(version_ge("1.97.0", MIN_RUST));
+        assert!(!version_ge("1.96.0", MIN_RUST));
         assert!(version_ge("1.90.1", "1.88.0"));
         assert!(version_ge("1.88", "1.88.0"));
         assert!(!version_ge("1.87.9", "1.88.0"));

@@ -97,6 +97,8 @@ type DdcWants = Arc<Mutex<HashMap<String, u32>>>;
 #[derive(Default)]
 struct DisplaysStudio {
     heads: Option<Result<Vec<outputs::Head>, String>>,
+    /// Shell placement also works when the compositor owns mode settings.
+    output_names: Vec<String>,
     heads_at: Option<Instant>,
     /// Edited arrangement (one entry per head, same order).
     draft: Vec<OutputConfig>,
@@ -290,7 +292,15 @@ fn running_target() -> Option<Target> {
         d if d.contains("umbriel") => Some(Target::Umbriel),
         d if d.contains("sway") => Some(Target::Sway),
         d if d.contains("river") => Some(Target::River),
+        d if d.contains("kde") || d.contains("plasma") || d.contains("kwin") => Some(Target::KWin),
         _ => None,
+    }
+}
+
+fn shell_output_names(heads: &Result<Vec<outputs::Head>, String>, fallback: &[mandara_core::OutputGeometry]) -> Vec<String> {
+    match heads {
+        Ok(heads) => heads.iter().filter(|h| h.enabled).map(|h| h.name.clone()).collect(),
+        Err(_) => fallback.iter().map(|o| o.name.clone()).collect(),
     }
 }
 
@@ -299,7 +309,12 @@ impl StudioView {
     fn load_heads(cx: &mut Context<Self>) {
         st(cx).heads_at = Some(Instant::now());
         cx.spawn(async move |this, cx| {
-            let result = cx.background_executor().spawn(async { outputs::heads() }).await;
+            let (result, names) = cx.background_executor().spawn(async {
+                let result = outputs::heads();
+                let fallback = if result.is_err() { mandara_core::query_outputs().unwrap_or_default() } else { Vec::new() };
+                let names = shell_output_names(&result, &fallback);
+                (result, names)
+            }).await;
             let _ = this.update(cx, |_, cx| {
                 let s = st(cx);
                 if s.drag.is_some() || s.busy {
@@ -316,6 +331,7 @@ impl StudioView {
                     s.selected = s.selected.min(heads.len().saturating_sub(1));
                 }
                 s.heads = Some(result);
+                s.output_names = names;
                 cx.notify();
             });
         })
@@ -473,7 +489,10 @@ impl StudioView {
         let head = || section_head(t("Arrangement"), t("Edges snap together. Changes apply only when you press Apply, and come back on their own unless you keep them."), vec![], display.clone(), p);
         let heads = match st(cx).heads.clone() {
             None => return page_section(head(), [card(p).child(div().text_color(p.on_surface_variant.hsla()).child(t("Reading displays…"))).into_any_element()]),
-            Some(Err(e)) => return page_section(head(), [card(p).child(heading(t("Display configuration isn't available"), e, p)).into_any_element()]),
+            Some(Err(e)) => {
+                let detail = if running_target() == Some(Target::KWin) { t("Change resolution, scale and display arrangement in Plasma System Settings. Shell placement below still applies.").to_string() } else { e };
+                return page_section(head(), [card(p).child(heading(t("Display configuration isn't available"), detail, p)).into_any_element()]);
+            }
             Some(Ok(h)) => h,
         };
         let s = st(cx);
@@ -1013,7 +1032,7 @@ impl StudioView {
     // ── Which displays show what ────────────────────────────────────────────
 
     fn surface_screens(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let names: Vec<String> = st(cx).heads.as_ref().and_then(|h| h.as_ref().ok()).map(|h| h.iter().filter(|h| h.enabled).map(|h| h.name.clone()).collect()).unwrap_or_default();
+        let names = st(cx).output_names.clone();
         let stack = self.stack_rows;
         let mut body = card(p).gap_0().py(px(SPACE_6_PX));
         for (k, kind) in SurfaceKind::ALL.into_iter().enumerate() {
@@ -1247,6 +1266,13 @@ impl StudioView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shell_placement_keeps_outputs_without_mode_management() {
+        let outputs = [mandara_core::OutputGeometry { name: "Virtual-0".into(), ..Default::default() }, mandara_core::OutputGeometry { name: "Virtual-1".into(), ..Default::default() }];
+        assert_eq!(shell_output_names(&Err("unsupported".into()), &outputs), ["Virtual-0", "Virtual-1"]);
+        assert!(shell_output_names(&Ok(Vec::new()), &outputs).is_empty());
+    }
 
     fn out(name: &str, x: i32, y: i32, w: u32, h: u32, scale: f32) -> OutputConfig {
         OutputConfig { name: name.into(), x: Some(x), y: Some(y), width: Some(w), height: Some(h), scale: Some(scale), ..Default::default() }

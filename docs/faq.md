@@ -50,7 +50,7 @@ widgets carry over when you move between them.
 ## Which compositors does Mandara support?
 
 Mandara supports **MangoWM**, **Niri**, **Hyprland**, **Umbriel**, **Sway**
-and **River** (0.3), all first-class. On MangoWM and River the bar shows
+**River** (0.3) and **KWin / Plasma Wayland**, all with native drivers. On MangoWM and River the bar shows
 tags as a bitmask (view, toggle-view and move windows between tags), and on
 Niri, Hyprland, Umbriel and Sway it shows workspaces. Mandara detects the compositor's version and writes its own
 config dialect, including Hyprland 0.57's Lua config.
@@ -58,9 +58,10 @@ config dialect, including Hyprland 0.57's Lua config.
 
 ## Does Mandara change my compositor config?
 
-Only by one line (and on River not at all: its `init` is a program Mandara
+Only by one line (and on KWin or River not at all: its `init` is a program Mandara
 never edits, so the settings go over River's own protocol and you add the
-line that starts Mandara). Mandara adds a single include line to your config and
+line that starts Mandara). KWin uses native Plasma protocols, keeps its
+settings in Plasma System Settings and uses an XDG autostart entry. Mandara adds a single include line to your config and
 writes everything else (its keybinds, window rules, layer rules and border
 colours) to its own files in `~/.config/mandara/generated/`. Each change is
 checked with the compositor's own validator (`mango -p`, `niri validate`,

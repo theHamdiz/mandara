@@ -2,12 +2,13 @@
 //! trait: MangoWM (bitmask tags, native socket), Niri (scrollable
 //! workspaces, JSON socket), Hyprland (workspaces, socket/socket2),
 //! Umbriel (per-output workspaces, JSON-lines socket), Sway (per-output
-//! workspaces, i3 IPC) and River (bitmask tags, its own Wayland
-//! protocols).
+//! workspaces, i3 IPC), River (bitmask tags, its own Wayland protocols)
+//! and KWin (Plasma window and virtual-desktop Wayland protocols).
 
 pub mod backend;
 pub mod hyprland;
 pub mod mango;
+pub mod kwin;
 pub mod model;
 pub mod niri;
 pub mod river;
@@ -19,6 +20,7 @@ use std::sync::Arc;
 pub use backend::CompositorBackend;
 pub use hyprland::HyprlandDriver;
 pub use mango::MangoDriver;
+pub use kwin::KWinDriver;
 pub use model::*;
 pub use niri::NiriDriver;
 pub use river::RiverDriver;
@@ -59,6 +61,8 @@ pub fn detect_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<C
         Some(CompositorKind::Umbriel)
     } else if set("SWAYSOCK") {
         Some(CompositorKind::Sway)
+    } else if desktop("KDE") || desktop("plasma") {
+        Some(CompositorKind::KWin)
     } else if desktop("river") {
         Some(CompositorKind::River)
     } else {
@@ -86,6 +90,7 @@ pub fn connect() -> Option<Arc<dyn CompositorBackend>> {
         CompositorKind::Umbriel => UmbrielDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
         CompositorKind::Sway => SwayDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
         CompositorKind::River => RiverDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
+        CompositorKind::KWin => KWinDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
     }
 }
 
@@ -128,5 +133,8 @@ mod tests {
         assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "river"), ("NIRI_SOCKET", "/n")]), Some(CompositorKind::Niri));
         assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "river"), ("SWAYSOCK", "/s")]), Some(CompositorKind::Sway));
         assert_eq!(detect_with(&[("NIRI_SOCKET", "/n")]), Some(CompositorKind::Niri));
+        assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "KDE")]), Some(CompositorKind::KWin));
+        assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "Plasma")]), Some(CompositorKind::KWin));
+        assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "KDE"), ("NIRI_SOCKET", "/n")]), Some(CompositorKind::Niri));
     }
 }

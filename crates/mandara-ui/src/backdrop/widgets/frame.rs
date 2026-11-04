@@ -142,6 +142,13 @@ pub fn frame(mut comp: Composition, look: &Look, k: f32, align: f32, m: &mut dyn
     let (x0, y0) = (-side - gx, -top);
     let (w, h) = (gw, ch + top + bottom);
     let shape = shape_of(kind, look, k);
+    // A note already paints its own paper. Attach the same tape used by
+    // framed cards to that paper, rather than to an invisible padded frame.
+    let paper = (look.chrome == Chrome::Tape && look.plate == Plate::None).then(|| comp.marks.iter().find_map(|mark| match mark.kind {
+        MarkKind::Plate { x, y, w, h, shape, .. } if mark.opacity > 0.0 => Some((x, y, w, h, shape)),
+        _ => None,
+    })).flatten();
+    let (x0, y0, w, h, shape) = paper.unwrap_or((x0, y0, w, h, shape));
     let mut under = Vec::new();
     if look.plate != Plate::None || matches!(look.chrome, Chrome::Window | Chrome::Polaroid) {
         let opacity = match (look.plate, look.chrome) {
@@ -275,6 +282,34 @@ mod tests {
 
     fn content() -> Composition {
         Composition::of(vec![Mark::new(MarkKind::Rect { x: 0.0, y: 0.0, w: 200.0, h: 80.0, radius: 0.0, width: 0.0 }, InkRole::Fg)])
+    }
+
+    #[test]
+    fn notes_and_todo_lists_attach_the_same_tape_to_their_visible_paper() {
+        use mandara_config::desktop_widgets::{NoteSheet, NoteWidget, TodoWidget};
+        use super::super::{lingo::Lingo, productive};
+        for scale in [1.0, 1.5, 2.0] {
+            for header in ["", "Notes"] {
+                let look = Look { chrome: Chrome::Tape, header: header.into(), plate_padding: 40.0, ..Look::default() };
+                let note = NoteWidget { sheet: NoteSheet::Paper, look: look.clone(), ..Default::default() };
+                let todo = TodoWidget { look: Look { plate: Plate::Solid, ..look.clone() }, ..Default::default() };
+                let lingo = Lingo::of(&note.locale, false, None);
+                let compositions = [(productive::note(&note, &[], &lingo, scale, &mut Fixed), &note.look), (productive::todo(&todo, &[], &[], &lingo, scale, &mut Fixed), &todo.look)];
+                for (content, look) in compositions {
+                    let framed = frame(content, look, scale, 0.0, &mut Fixed);
+                    let (x, y, w) = framed.marks.iter().find_map(|mark| match mark.kind {
+                        MarkKind::Plate { x, y, w, .. } => Some((x, y, w)), _ => None,
+                    }).unwrap();
+                    let strips: Vec<_> = framed.marks.iter().filter(|m| m.ink == InkRole::Chrome && matches!(m.kind, MarkKind::Poly { .. })).collect();
+                    assert_eq!(strips.len(), 2);
+                    for (strip, corner_x) in strips.iter().zip([x, x + w]) {
+                        let b = strip.bounds();
+                        assert!(((b.0 + b.2) / 2.0 - corner_x).abs() < 0.01);
+                        assert!(((b.1 + b.3) / 2.0 - y).abs() < 0.01, "tape meets the paper, including a separate header");
+                    }
+                }
+            }
+        }
     }
 
     #[test]

@@ -280,13 +280,17 @@ fn hang_frame(rect: Rect, edge: LauncherEdge, p: f32) -> (Rect, f32) {
     }
 }
 
-/// Whether the bar shows on the output an overlay of viewport `vp` opened
-/// on (`matched`: at the size it was opened for, so the focused output).
-fn bar_shows_here(matched: bool, vp: (f32, f32), cx: &App) -> bool {
+/// Uses the connector selected when the overlay opened before a size fallback.
+fn bar_shows_here(output: Option<&str>, vp: (f32, f32), cx: &App) -> bool {
     let outputs = cx.try_global::<crate::overlays::Outputs>().map(|o| o.0.as_slice()).unwrap_or_default();
-    let focused = if matched { crate::overlays::focused_output(cx).filter(|o| crate::overlays::is_output(vp, o)) } else { None };
-    let output = focused.or_else(|| outputs.iter().find(|o| crate::overlays::is_output(vp, o)).cloned());
-    output.is_none_or(|o| config(cx).read(cx).get().bar_on_output(&o.name))
+    let cfg = config(cx).read(cx).snapshot();
+    bar_on_target(&cfg, outputs, output, vp)
+}
+
+fn bar_on_target(cfg: &mandara_config::ShellConfig, outputs: &[mandara_core::OutputGeometry], output: Option<&str>, vp: (f32, f32)) -> bool {
+    let target = output.and_then(|name| outputs.iter().find(|o| o.name == name))
+        .or_else(|| outputs.iter().find(|o| crate::overlays::is_output(vp, o)));
+    target.is_none_or(|o| cfg.bar_on_output(&o.name))
 }
 
 /// A flush drawer's `(x, width)` that keeps it on its screen edge: past the
@@ -323,6 +327,7 @@ pub struct SessionView {
     /// The bar shows on the output the menu opened on (known from its
     /// first real frame): a top / bottom dock hangs from it there.
     bar_here: bool,
+    output: Option<String>,
     /// Last press on the menu (focus changes right after it are its echo).
     last_press: Option<Instant>,
     deactivate_task: Option<gpui::Task<()>>,
@@ -332,7 +337,7 @@ pub struct SessionView {
 impl SessionView {
     /// A menu on a surface opened for an output of logical size `expected`
     /// ([`crate::outputs::overlay_target`]).
-    pub fn new(expected: (f32, f32), window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(expected: (f32, f32), output: Option<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let shell = shell(cx);
         cx.observe(&shell, |this: &mut Self, shell, cx| {
             this.closing = !shell.read(cx).session_open;
@@ -379,6 +384,7 @@ impl SessionView {
             leave_task: None,
             first: FirstFrame::new(expected),
             bar_here: true,
+            output,
             error: None,
         }
     }
@@ -446,7 +452,7 @@ impl Render for SessionView {
                 window.request_animation_frame();
                 return div().id("session-root").size_full().track_focus(&self.focus).into_any_element();
             }
-            Settle::First { matched } => self.bar_here = bar_shows_here(matched, (sw, sh), cx),
+            Settle::First { .. } => self.bar_here = bar_shows_here(self.output.as_deref(), (sw, sh), cx),
             _ => {}
         }
         let palette = mandara_core::frame_palette(window, cx);
@@ -883,6 +889,17 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn same_size_outputs_keep_the_selected_connectors_bar_assignment() {
+        use mandara_core::OutputGeometry;
+        let outputs: Vec<_> = ["DP-1", "DP-2"].into_iter().map(|name| OutputGeometry { name: name.into(), x: 0, y: 0, width: 1920, height: 1080 }).collect();
+        let mut cfg = mandara_config::ShellConfig::default();
+        cfg.bar.monitors = "DP-2".into();
+        assert!(bar_on_target(&cfg, &outputs, Some("DP-2"), (1920.0, 1080.0)));
+        assert!(!bar_on_target(&cfg, &outputs, Some("DP-1"), (1920.0, 1080.0)));
+        assert!(!bar_on_target(&cfg, &outputs, None, (1920.0, 1080.0)));
+    }
 
     #[test]
     fn the_menu_on_a_second_scaled_display_draws_at_that_display_size() {

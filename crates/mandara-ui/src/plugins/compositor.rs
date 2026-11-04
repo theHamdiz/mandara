@@ -105,7 +105,7 @@ pub fn init(cx: &mut App) {
     cx.spawn(async move |cx| {
         let task = cx.background_executor().spawn(async move {
             let (backend, cfg, borders) = inputs.ok()?;
-            if manage {
+            if sync_enabled(manage, backend.kind()) {
                 initial_sync(backend.as_ref(), &cfg, borders);
             }
             Some(dstate::check_cached(backend.target()).0)
@@ -246,7 +246,7 @@ fn watch(cx: &mut App) {
             return;
         }
         *last_key.borrow_mut() = now_key;
-        if !config(cx).read(cx).get().compositor.manage {
+        if !backend(cx).is_ok_and(|b| sync_enabled(config(cx).read(cx).get().compositor.manage, b.kind())) {
             return;
         }
         let now = snapshot(cx);
@@ -269,6 +269,11 @@ fn watch(cx: &mut App) {
 
 fn backend(cx: &App) -> Result<std::sync::Arc<dyn mandara_compositor::CompositorBackend>, String> {
     hub(cx).read(cx).compositor.clone().ok_or_else(|| "no supported compositor is running".to_string())
+}
+
+fn sync_enabled(manage: bool, kind: mandara_compositor::CompositorKind) -> bool {
+    // KWin writes only Mandara's own startup entry, never compositor settings.
+    manage || kind == mandara_compositor::CompositorKind::KWin
 }
 
 pub fn register(r: &mut PluginRegistry) {
@@ -374,8 +379,18 @@ pub fn register(r: &mut PluginRegistry) {
 
 #[cfg(test)]
 mod tests {
-    use super::sync_key;
+    use super::{sync_key, sync_enabled};
     use mandara_config::ShellConfig;
+
+    #[test]
+    fn native_startup_sync_is_independent_of_drop_in_management() {
+        use mandara_compositor::CompositorKind;
+        assert!(sync_enabled(false, CompositorKind::KWin));
+        for kind in [CompositorKind::MangoWM, CompositorKind::Niri, CompositorKind::Hyprland, CompositorKind::Umbriel, CompositorKind::Sway, CompositorKind::River] {
+            assert!(!sync_enabled(false, kind));
+            assert!(sync_enabled(true, kind));
+        }
+    }
 
     #[test]
     fn bar_labels_never_trigger_a_resync_but_input_does() {

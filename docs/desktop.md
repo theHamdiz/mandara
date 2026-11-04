@@ -300,3 +300,13 @@ your config** with the exact file and line when your own compositor config
 already has that chord. Mandara never overrides a key you already use; its
 binds go into its own drop-in file for MangoWM, Niri, Hyprland, Umbriel or Sway,
 and on River are sent as `map` commands (keys your `init` maps stay yours).
+## Display reconnection
+
+The shell follows displays as they connect, disconnect or change logical
+size. A monitor returning through a display switch gets its bar and dock
+back automatically. Choices in Studio → Displays, including Main display
+and individual connector names, remain saved while a display is away.
+
+Taped notes attach their corner strips to the note’s own sheet, using the
+same frame decoration as the to-do list. A separate header stays above the
+paper without moving the strips away from it.

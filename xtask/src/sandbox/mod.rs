@@ -22,6 +22,7 @@ mod demo;
 mod matte;
 mod paint;
 mod player;
+mod readiness;
 // The virtual-pointer driver shared with `mandara-services` (its
 // `vpointer` example); compiled here directly so xtask does not depend on
 // the whole services crate.
@@ -562,7 +563,8 @@ fn restart_shell(sb: &Sandbox) -> Result<()> {
     sb.verify()?;
     let state = sb.state()?;
     sb.stop("shell");
-    start_shell(sb, &state)
+    start_shell(sb, &state)?;
+    readiness::wait(&sb.runtime)
 }
 
 fn down(sb: &Sandbox) -> Result<()> {

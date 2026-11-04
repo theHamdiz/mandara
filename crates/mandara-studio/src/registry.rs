@@ -506,6 +506,8 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
         "/session_menu/position" if cfg.session_menu.style == mandara_config::power::SessionMenuStyle::Grid => Some(tk("The grid always opens in the middle")),
+        "/compositor/autostart" if running_compositor() == Some(mandara_config::compositor::Target::River) => Some(tk("River's init controls startup; add or remove Mandara there")),
+        path if running_compositor() == Some(mandara_config::compositor::Target::KWin) && ((path.starts_with("/compositor/") && path != "/compositor/autostart") || path == "/integrations/compositor_borders") => Some(tk("KWin settings are managed in Plasma System Settings")),
         path if path.starts_with("/compositor/input/cursor/") => system_settings::cursor_locked(path, running_compositor()),
         path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Mandara can't set this on Sway")),
         path if running_compositor() == Some(mandara_config::compositor::Target::River) && RIVER_LACKS.contains(&path) => Some(tk("River has no such setting")),
@@ -545,10 +547,10 @@ pub fn locked_toggle_click(on: bool) -> Option<bool> {
 /// A choice the running compositor can't carry out, left out of its control
 /// (a value already saved still shows, so it can be changed; the shell
 /// does nothing for it): the Overview corner and bar action where the
-/// compositor has no overview (Sway, River).
+/// compositor exposes no supported overview action.
 pub fn choice_hidden(path: &str, raw: &str) -> bool {
     let corner_action = path == "/bar/middle_click/action" || (path.starts_with("/hot_corners/") && path.ends_with("/action"));
-    raw == "overview" && corner_action && matches!(running_compositor(), Some(mandara_config::compositor::Target::Sway | mandara_config::compositor::Target::River))
+    raw == "overview" && corner_action && matches!(running_compositor(), Some(mandara_config::compositor::Target::Sway | mandara_config::compositor::Target::River | mandara_config::compositor::Target::KWin))
 }
 
 /// The compositor Studio runs under, detected once (it can't change while
@@ -938,6 +940,7 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Presentation mode"), "/plugins/settings/presentation/auto_screen_share", tk("Start when sharing the screen"), tk("Turn on while an app shares your screen, and off again when sharing stops"), Toggle, Value::from(false)),
         // Compositor
         s(Compositor, tk("Integration"), "/compositor/manage", tk("Manage compositor drop-in"), tk("Write rules, binds and colors to ~/.config/mandara/generated"), Toggle),
+        s(Compositor, tk("Integration"), "/compositor/autostart", tk("Start at login"), "", Toggle),
         s(Compositor, tk("Integration"), "/integrations/compositor_borders", tk("Sync border colors"), tk("Window borders follow the theme"), Toggle),
         s(Compositor, tk("Integration"), "/compositor/doctor_notify", tk("Tell me about config problems"), tk("When your compositor config or the compositor changed, the Config doctor checks it once at start-up and sends one notification about new problems"), Toggle),
         s(Compositor, tk("Window look"), "/compositor/look/gaps_inner", tk("Gaps between windows"), tk("Unset keeps your compositor's value"), optional(0.0, 48.0, 1.0, " px", 10.0)),

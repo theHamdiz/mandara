@@ -102,6 +102,7 @@ impl HyprClient {
             focused,
             floating: self.floating,
             fullscreen: self.fullscreen.as_bool().unwrap_or(false) || self.fullscreen.as_i64().unwrap_or(0) > 0,
+            minimized: false,
             geometry: match (self.at, self.size) {
                 (Some([x, y]), Some([w, h])) if w > 0 && h > 0 => Some((x, y, w, h)),
                 _ => None,

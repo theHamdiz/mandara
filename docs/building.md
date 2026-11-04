@@ -27,6 +27,10 @@ that fingerprint embedded (`mandara --version` shows it), hashes the
 binary, counts the lines of code, writes a build manifest next to it and
 refreshes the [build fingerprint](#build-fingerprint) table below.
 
+The source build requires **Rust 1.97 or newer**, matching the WebAssembly
+runtime’s minimum version. The installer updates an older rustup toolchain
+before attempting a source build.
+
 ## Build options: memory allocator
 
 The `mandara` binary picks its global allocator at build time with exactly
@@ -60,7 +64,7 @@ The workspace contains these crates:
 | `mandara-core` | layer-shell surfaces, input masking, springs, OKLCH |
 | `mandara-config` | reactive config store, compositor emitters |
 | `mandara-theme` | HCT + OKLCH engine, presets, app theme templates |
-| `mandara-compositor` | MangoWM, Niri, Hyprland, Umbriel, Sway and River drivers |
+| `mandara-compositor` | MangoWM, Niri, Hyprland, Umbriel, Sway, River and KWin drivers |
 | `mandara-services` | D-Bus services, audio, spectrum, OCR, screenshots, recording, Wallhaven, marketplace |
 | `mandara-plugins` | plugin registry, commands, WebAssembly host |
 | `mandara-i18n` | localization |

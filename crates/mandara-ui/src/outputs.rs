@@ -75,11 +75,17 @@ pub fn transient_display(kind: SurfaceKind, focused: impl FnOnce(&App) -> Option
 /// display is passed explicitly, so the size always matches the output the
 /// compositor puts the surface on.
 pub fn overlay_target(cx: &App) -> (Option<DisplayId>, (f32, f32)) {
+    let (display, size, _) = overlay_target_with_output(cx);
+    (display, size)
+}
+
+/// The overlay target with its connector name retained for surface settings.
+pub fn overlay_target_with_output(cx: &App) -> (Option<DisplayId>, (f32, f32), Option<String>) {
     let outputs = mandara_core::query_outputs().ok().filter(|o| !o.is_empty()).unwrap_or_else(|| geometries(cx));
     let geo = overlay_output(&outputs, cx);
-    let Some(geo) = geo else { return (None, FALLBACK_SIZE) };
+    let Some(geo) = geo else { return (None, FALLBACK_SIZE, None) };
     let display = paired_with(&outputs, cx).into_iter().find(|(_, g)| g.as_ref().is_some_and(|g| g.name == geo.name)).map(|(id, _)| id);
-    (display, logical_size(geo))
+    (display, logical_size(geo), Some(geo.name.clone()))
 }
 
 /// An output's logical size (xdg-output: already divided by its scale), the

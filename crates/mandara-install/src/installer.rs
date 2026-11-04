@@ -8,6 +8,11 @@
 
 use std::path::{Path, PathBuf};
 
+mod path;
+use path::{add_to_path, path_hint};
+#[cfg(test)]
+use path::{PATH_MARK, fish_word, posix_path_line, sh_word};
+
 use mandara_delta::signing::{self, PublicKey, SIG_FILE};
 use mandara_delta::{MANIFEST_FILE, SHELL_BINARY};
 use mandara_i18n::{Lang, packs};
@@ -540,7 +545,7 @@ impl<'a> Installer<'a> {
             return;
         }
         self.say(Level::Step, "Installing a compositor");
-        self.say(Level::Info, "No compositor Mandara runs on is installed (MangoWM, Niri, Hyprland, Sway, River Classic or Umbriel).");
+        self.say(Level::Info, mandara_i18n::tf("No supported compositor is installed ({compositors}).", &[("compositors", &"MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin")]));
         if self.args.no_deps {
             self.say(Level::Info, "install one with your package manager (--no-deps), then run `mandara setup`");
             return;
@@ -548,6 +553,9 @@ impl<'a> Installer<'a> {
         let mut offered: Vec<(&'static Compositor, &'static str)> = Vec::new();
         let mut elsewhere: Vec<&'static str> = Vec::new();
         for c in compositors::SUPPORTED {
+            // Detect existing Plasma sessions, but don't offer an entire
+            // desktop installation as a standalone window manager.
+            if c.id == "kwin" { continue; }
             match self.compositor_package(c) {
                 Some(p) => offered.push((c, p)),
                 None => elsewhere.push(c.label),
@@ -975,22 +983,31 @@ impl<'a> Installer<'a> {
         let _ = std::fs::write(self.paths.icon(), &stage.icon);
         self.say(Level::Ok, "Mandara Studio desktop entry");
         let bin_dir = self.paths.bin_dir.clone();
-        if !std::env::split_paths(&self.facts.path_var).any(|p| p == bin_dir) {
+        if std::env::split_paths(&self.facts.path_var).any(|p| p == bin_dir) {
+            if !self.dry() {
+                self.update_path_profiles(&bin_dir, true);
+            }
+        } else {
             self.say(Level::Warn, format!("{} is not on your PATH", bin_dir.display()));
             if self.ask(&format!("Add {} to your PATH in your shell profiles?", bin_dir.display()), true) && !self.dry() {
-                match add_to_path(&self.facts.home, &bin_dir) {
-                    Ok(files) if files.is_empty() => {}
-                    Ok(files) => {
-                        let names: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
-                        self.say(Level::Ok, format!("on your PATH in new terminals ({})", names.join(", ")));
-                    }
-                    Err(e) => self.say(Level::Warn, format!("couldn't add it to your PATH ({e}) — add {} to your shell profile", path_hint(&bin_dir))),
-                }
+                self.update_path_profiles(&bin_dir, false);
             } else {
                 self.say(Level::Detail, format!("add it yourself: {}", path_hint(&bin_dir)));
             }
         }
         Ok(())
+    }
+
+    fn update_path_profiles(&mut self, bin_dir: &Path, marked_only: bool) {
+        let result = if marked_only { path::reconcile(&self.facts.home, bin_dir) } else { add_to_path(&self.facts.home, bin_dir) };
+        match result {
+            Ok(files) if files.is_empty() => {}
+            Ok(files) => {
+                let names: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
+                self.say(Level::Ok, format!("on your PATH in new terminals ({})", names.join(", ")));
+            }
+            Err(e) => self.say(Level::Warn, mandara_i18n::tf("Could not update PATH: {error}. Add {line} to your shell profile.", &[("error", &e), ("line", &path_hint(bin_dir))])),
+        }
     }
 
     /// `mandara setup` (one include line, generated drop-in, autostart),
@@ -1283,6 +1300,19 @@ impl<'a> Installer<'a> {
         if !self.dry() {
             self.say(Level::Ok, "binary and desktop entry removed");
         }
+        let startup = self.paths.config_dir.join("autostart").join(files::KWIN_AUTOSTART_FILE);
+        match std::fs::read_to_string(&startup) {
+            Ok(text) if text.lines().any(|l| l == files::KWIN_AUTOSTART_MARKER) => {
+                if self.dry() {
+                    self.say(Level::Detail, mandara_i18n::tf("Would remove {path}", &[("path", &startup.display())]));
+                } else {
+                    std::fs::remove_file(&startup).map_err(|e| format!("{}: {e}", startup.display()))?;
+                }
+            }
+            Ok(_) => self.say(Level::Detail, mandara_i18n::tf("Kept custom startup entry {path}", &[("path", &startup.display())])),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => self.say(Level::Warn, mandara_i18n::tf("Could not read {path}: {error}. Left it unchanged.", &[("path", &startup.display()), ("error", &e)])),
+        }
         // The drop-ins would keep starting (and binding keys to) the
         // removed binary.
         let generated = self.paths.generated();
@@ -1347,84 +1377,3 @@ fn user_in_group(user: &str, group: &str, groups: &str, passwd: &str) -> bool {
 
 #[cfg(test)]
 mod tests;
-
-/// Marks the line [`add_to_path`] writes after it, so a second install adds
-/// nothing and an install to another folder replaces the old line.
-const PATH_MARK: &str = "# Added by the Mandara installer";
-
-/// `text` as one POSIX shell word: single-quoted, each `'` written `'\''`,
-/// so `$`, backticks, `"`, `\` and spaces stay literal.
-fn sh_word(text: &str) -> String {
-    format!("'{}'", text.replace('\'', r"'\''"))
-}
-
-/// `text` as one fish argument: single-quoted, with `\` and `'` escaped.
-fn fish_word(text: &str) -> String {
-    format!("'{}'", text.replace('\\', r"\\").replace('\'', r"\'"))
-}
-
-/// The POSIX line that puts `dir` first on `PATH` unless it's already there.
-fn posix_path_line(dir: &str) -> String {
-    let word = sh_word(dir);
-    format!("case \":$PATH:\" in *:{word}:*) ;; *) export PATH={word}:\"$PATH\" ;; esac")
-}
-
-/// The line to suggest when Mandara doesn't edit the profiles itself.
-fn path_hint(dir: &Path) -> String {
-    format!("export PATH={}:\"$PATH\"", sh_word(&dir.to_string_lossy()))
-}
-
-/// `text` with the line after each [`PATH_MARK`] set to `line`, or `None`
-/// when there is no mark (the marked line is always the installer's own).
-fn replace_marked(text: &str, line: &str) -> Option<String> {
-    let mut out = String::with_capacity(text.len() + line.len());
-    let mut lines = text.split_inclusive('\n');
-    let mut found = false;
-    while let Some(l) = lines.next() {
-        out.push_str(l);
-        if l.trim_end() == PATH_MARK {
-            found = true;
-            let _old = lines.next();
-            out.push_str(line);
-            out.push('\n');
-        }
-    }
-    found.then_some(out)
-}
-
-/// Puts `bin_dir` on `PATH` in `~/.profile`, `~/.bashrc`, an existing
-/// `~/.zshrc` and, when fish is set up, a fish `conf.d` snippet. Returns the
-/// files it changed: a file that already puts this folder on `PATH` is left
-/// alone, and an older installer line for another folder is replaced.
-fn add_to_path(home: &Path, bin_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
-    use std::io::Write as _;
-    let dir = bin_dir.to_string_lossy();
-    let posix = posix_path_line(&dir);
-    let mut targets = vec![(home.join(".profile"), posix.clone()), (home.join(".bashrc"), posix.clone())];
-    if home.join(".zshrc").is_file() {
-        targets.push((home.join(".zshrc"), posix));
-    }
-    let fish = home.join(".config/fish");
-    if fish.is_dir() {
-        targets.push((fish.join("conf.d/mandara-path.fish"), format!("fish_add_path --path {}", fish_word(&dir))));
-    }
-    let mut changed = Vec::new();
-    for (file, line) in targets {
-        let current = std::fs::read_to_string(&file).unwrap_or_default();
-        if current.lines().any(|l| l == line) {
-            continue;
-        }
-        if let Some(parent) = file.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        match replace_marked(&current, &line) {
-            Some(updated) => std::fs::write(&file, updated)?,
-            None => {
-                let lead = if current.is_empty() { "" } else { "\n" };
-                std::fs::OpenOptions::new().create(true).append(true).open(&file)?.write_all(format!("{lead}{PATH_MARK}\n{line}\n").as_bytes())?;
-            }
-        }
-        changed.push(file);
-    }
-    Ok(changed)
-}

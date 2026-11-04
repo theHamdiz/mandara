@@ -4,6 +4,7 @@
 # then the demo content of `config.hero.toml` (to-dos, the "Weekend plans"
 # note, ~/Documents/demo.ics), the wallpaper once:
 #   sandbox msg wallgen generate mesh --palette kanagawa --seed 0x22 --size 2880x1620 --format png --no-apply
+# Wait for `sandbox msg wallgen status` to report no running job before restarting.
 #   sandbox shell restart   (the shell loads the wallpaper, which didn't exist yet when it started)
 #   sandbox msg theme wallpaper tonal-spot
 # then `sandbox msg notifications clear` and `sandbox shot`.

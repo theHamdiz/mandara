@@ -1,6 +1,6 @@
 //! Compositor-neutral navigation model.
 //!
-//! MangoWM's and River's bitmask tags and Niri/Hyprland/Umbriel/Sway's linear workspaces are
+//! MangoWM's and River's bitmask tags and Niri/Hyprland/Umbriel/Sway/KWin's workspaces are
 //! modelled natively rather than squeezed into a lowest-common-denominator
 //! struct.
 
@@ -14,10 +14,11 @@ pub enum CompositorKind {
     Umbriel,
     Sway,
     River,
+    KWin,
 }
 
 impl CompositorKind {
-    /// The config dialect this compositor reads.
+    /// The integration target for this compositor.
     pub const fn target(self) -> mandara_config::compositor::Target {
         use mandara_config::compositor::Target;
         match self {
@@ -27,6 +28,7 @@ impl CompositorKind {
             CompositorKind::Umbriel => Target::Umbriel,
             CompositorKind::Sway => Target::Sway,
             CompositorKind::River => Target::River,
+            CompositorKind::KWin => Target::KWin,
         }
     }
 }
@@ -80,17 +82,43 @@ pub enum NavigationModel {
 }
 
 impl NavigationModel {
-    /// Bit `n-1` set for every active tag / workspace `n`.
+    /// IDs of the active tags or workspaces, including named workspaces.
+    pub fn active_ids(&self) -> impl Iterator<Item = u32> + '_ {
+        let (tags, workspaces): (&[TagStatus], &[WorkspaceStatus]) = match self {
+            Self::BitmaskTags { tags, .. } => (tags, &[]),
+            Self::Workspaces { workspaces } => (&[], workspaces),
+        };
+        tags.iter().filter(|t| t.active).map(|t| t.id).chain(workspaces.iter().filter(|w| w.active).map(|w| w.id))
+    }
+
+    /// At least one of these client tags is currently active.
+    pub fn contains_active(&self, ids: &[u32]) -> bool {
+        self.active_ids().any(|id| ids.contains(&id))
+    }
+
+    /// Bit `n-1` for active numeric tags in the range 1..=32.
+    /// Named-workspace membership uses [`Self::contains_active`].
     pub fn active_mask(&self) -> u32 {
-        match self {
-            NavigationModel::BitmaskTags { tags, .. } => {
-                tags.iter().filter(|t| t.active).fold(0, |m, t| m | 1 << (t.id.saturating_sub(1)))
-            }
-            NavigationModel::Workspaces { workspaces } => workspaces
-                .iter()
-                .filter(|w| w.active)
-                .fold(0, |m, w| m | 1u32.checked_shl(w.id.saturating_sub(1)).unwrap_or(0)),
-        }
+        self.active_ids().filter_map(|id| id.checked_sub(1).and_then(|bit| 1u32.checked_shl(bit))).fold(0, |mask, bit| mask | bit)
+    }
+}
+
+#[cfg(test)]
+mod navigation_tests {
+    use super::*;
+
+    #[test]
+    fn active_membership_preserves_named_and_large_numbered_workspaces() {
+        let model = NavigationModel::Workspaces {
+            workspaces: [7, 64, UNNUMBERED_ID_BASE].into_iter().map(|id| WorkspaceStatus {
+                id, name: id.to_string(), active: id != 7, occupied: true, urgent: false, layout: String::new(),
+            }).collect(),
+        };
+        assert!(model.contains_active(&[64]));
+        assert!(model.contains_active(&[UNNUMBERED_ID_BASE]));
+        assert!(!model.contains_active(&[7]));
+        assert_eq!(model.active_ids().collect::<Vec<_>>(), [64, UNNUMBERED_ID_BASE]);
+        assert_eq!(model.active_mask(), 0);
     }
 }
 
@@ -104,6 +132,9 @@ pub struct ClientInfo {
     pub focused: bool,
     pub floating: bool,
     pub fullscreen: bool,
+    /// The compositor reports this window as minimized, not covering its output.
+    #[serde(default)]
+    pub minimized: bool,
     /// Layout-space geometry `(x, y, width, height)` when the compositor
     /// reports it (used for window screenshots).
     pub geometry: Option<(i32, i32, i32, i32)>,

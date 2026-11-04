@@ -611,8 +611,8 @@ pub fn init_theme_sync(cx: &mut App) {
 fn window_on(monitor: &str, cx: &App, covers: impl Fn(&mandara_compositor::ClientInfo) -> bool) -> bool {
     let Some(hub) = cx.try_global::<crate::hub::GlobalHub>().map(|g| g.0.clone()) else { return false };
     let hub = hub.read(cx);
-    let mask = hub.navigation.get(monitor).map(|n| n.active_mask()).unwrap_or(0);
-    hub.clients.iter().any(|c| c.monitor == monitor && covers(c) && c.tags.iter().any(|t| *t >= 1 && *t <= 32 && mask & (1u32 << (t - 1)) != 0))
+    let navigation = hub.navigation.get(monitor);
+    hub.clients.iter().any(|c| c.monitor == monitor && covers(c) && navigation.is_some_and(|n| n.contains_active(&c.tags)))
 }
 
 /// No tiled or fullscreen window covers output `monitor`'s active

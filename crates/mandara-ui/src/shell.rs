@@ -1747,7 +1747,6 @@ impl Render for ShellView {
         // A panel drawn over the sidebar is solid there, whatever
         // `panels.opacity`: the sidebar never shows through it.
         let over_sidebar = self.panel_visible && self.sidebar_bounds.is_some_and(|s| s.intersects(&self.panel.value()));
-        let panel_alpha = if over_sidebar { 1.0 } else { panel_alpha };
         // Fade & slide panels fade in with their travel.
         let panel_fade = if cfg.panels.animation == mandara_config::surfaces::PanelAnimation::Slide { progress } else { 1.0 };
         // The bar the open panel came out of: the main bar or a side bar.
@@ -1763,8 +1762,8 @@ impl Render for ShellView {
         if self.panel_visible {
             let b = self.panel.value();
             let (x, y, w, h) = (f32::from(b.origin.x), f32::from(b.origin.y), f32::from(b.size.width), f32::from(b.size.height));
-            let drawer_fill = panel_bar_fill.with_alpha(panel_bar_fill.alpha() * panel_alpha).hsla();
-            let panel_fill = fill.with_alpha(fill.alpha() * panel_alpha).hsla();
+            let drawer_fill = panel_bar_fill.with_alpha(panel_opacity(panel_bar_fill.alpha(), panel_alpha, over_sidebar)).hsla();
+            let panel_fill = fill.with_alpha(panel_opacity(fill.alpha(), panel_alpha, over_sidebar)).hsla();
             let drawer = if p_attached && p_vertical {
                 // Grows sideways out of the side bar.
                 let edge = if p_right { Edge::Right } else { Edge::Left };
@@ -2193,7 +2192,7 @@ impl Render for ShellView {
             && let Some(id) = self.slot_plugin(slot).map(str::to_string)
         {
             let pinned = self.shell.read(cx).is_pinned(&id);
-            let fill = if p_attached { panel_bar_fill.with_alpha(panel_bar_fill.alpha() * panel_alpha) } else { fill.with_alpha(fill.alpha() * panel_alpha) };
+            let fill = if p_attached { panel_bar_fill.with_alpha(panel_opacity(panel_bar_fill.alpha(), panel_alpha, over_sidebar)) } else { fill.with_alpha(panel_opacity(fill.alpha(), panel_alpha, over_sidebar)) };
             let len = 2.0 * TAB_BUTTON_PX + TAB_GAP_PX + 2.0 * TAB_PAD_PX;
             let depth = TAB_BUTTON_PX + 2.0 * TAB_PAD_PX;
             let t = crate::floating::geom::tab(rect_of(self.panel.value()), pm.position, len, depth, panel_radius + TAB_FLARE_PX, crate::bidi::rtl());
@@ -2429,12 +2428,31 @@ impl Render for ShellView {
 /// windows twice per open / close. Push mode asks for exactly that, so its
 /// strip is created as soon as the mode is chosen (never on the first open:
 /// a new GPUI window mid-slide costs a swapchain and pipelines).
-pub fn open_exclusion_strips(display: Option<gpui::DisplayId>, output: (f32, f32), monitor: String, cx: &mut App) {
+/// Owns an output's strips and their config observer for that output's lifetime.
+pub struct ExclusionStrips {
+    windows: Rc<std::cell::RefCell<Vec<gpui::AnyWindowHandle>>>,
+    subscription: gpui::Subscription,
+}
+
+impl ExclusionStrips {
+    pub fn close(self, cx: &mut App) {
+        drop(self.subscription);
+        for handle in self.windows.borrow_mut().drain(..) {
+            if cx.windows().iter().any(|w| w.window_id() == handle.window_id()) {
+                let _ = handle.update(cx, |_, window, _| window.remove_window());
+            }
+        }
+    }
+}
+
+pub fn open_exclusion_strips(display: Option<gpui::DisplayId>, output: (f32, f32), monitor: String, cx: &mut App) -> ExclusionStrips {
     use gpui::layer_shell::Anchor;
     use mandara_core::LayerSurfaceSpec;
     // [bar top, bar bottom, sidebar left, sidebar right]
     // Slots: bar top, bottom, left, right; sidebar left, right.
     let opened: Rc<Cell<[bool; 6]>> = Rc::default();
+    let windows = Rc::new(std::cell::RefCell::new(Vec::new()));
+    let opened_windows = windows.clone();
     let ensure = move |cx: &mut App| {
         let cfg = config(cx).read(cx).snapshot();
         let sidebar_reserves = sidebar_may_reserve(&cfg);
@@ -2452,8 +2470,9 @@ pub fn open_exclusion_strips(display: Option<gpui::DisplayId>, output: (f32, f32
                 BarPosition::Right => (Anchor::RIGHT | Anchor::TOP | Anchor::BOTTOM, output.1),
             };
             let strip = LayerSurfaceSpec::exclusion_strip(anchor, px(length), px(zone), display);
-            if let Err(err) = cx.open_window(strip.window_options(), { let monitor = monitor.clone(); move |_, cx| cx.new(|cx| ExclusionView::new(position, cx).on_monitor(monitor)) }) {
-                tracing::error!("exclusion strip: {err:#}");
+            match cx.open_window(strip.window_options(), { let monitor = monitor.clone(); move |_, cx| cx.new(|cx| ExclusionView::new(position, cx).on_monitor(monitor)) }) {
+                Ok(handle) => opened_windows.borrow_mut().push(handle.into()),
+                Err(err) => { state[i] = false; tracing::error!("exclusion strip: {err:#}"); }
             }
         }
         for (i, right) in [false, true].into_iter().enumerate() {
@@ -2464,8 +2483,9 @@ pub fn open_exclusion_strips(display: Option<gpui::DisplayId>, output: (f32, f32
             state[slot] = true;
             let edge = if right { Anchor::RIGHT } else { Anchor::LEFT };
             let strip = LayerSurfaceSpec::exclusion_strip(Anchor::TOP | Anchor::BOTTOM | edge, px(output.1), px(0.0), display);
-            if let Err(err) = cx.open_window(strip.window_options(), { let monitor = monitor.clone(); move |_, cx| cx.new(|cx| SidebarExclusionView::new(right, monitor, cx)) }) {
-                tracing::error!("sidebar exclusion strip: {err:#}");
+            match cx.open_window(strip.window_options(), { let monitor = monitor.clone(); move |_, cx| cx.new(|cx| SidebarExclusionView::new(right, monitor, cx)) }) {
+                Ok(handle) => opened_windows.borrow_mut().push(handle.into()),
+                Err(err) => { state[slot] = false; tracing::error!("sidebar exclusion strip: {err:#}"); }
             }
         }
         opened.set(state);
@@ -2473,7 +2493,8 @@ pub fn open_exclusion_strips(display: Option<gpui::DisplayId>, output: (f32, f32
     let ensure = Rc::new(ensure);
     ensure(cx);
     let on_config = ensure.clone();
-    cx.observe(&config(cx), move |_, cx| on_config(cx)).detach();
+    let subscription = cx.observe(&config(cx), move |_, cx| on_config(cx));
+    ExclusionStrips { windows, subscription }
 }
 
 /// Whether the sidebar's mode ever reserves its width (Push or Pinned): its
@@ -2642,9 +2663,20 @@ impl Render for ExclusionView {
     }
 }
 
+/// Overlapping panels fully cover the sidebar, regardless of bar opacity.
+fn panel_opacity(base: f32, opacity: f32, over_sidebar: bool) -> f32 {
+    if over_sidebar { 1.0 } else { base * opacity }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sidebar_overlap_overrides_both_bar_and_panel_opacity() {
+        assert_eq!(panel_opacity(0.4, 0.5, true), 1.0);
+        assert_eq!(panel_opacity(0.4, 0.5, false), 0.2);
+    }
 
     #[test]
     fn bar_shape_sliders_re_target_the_pills() {

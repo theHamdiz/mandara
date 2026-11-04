@@ -498,7 +498,9 @@ fn group_targets(group: &str) -> &'static [mandara_config::compositor::Target] {
         "MangoWM" => &[Target::Mango],
         "Niri" => &[Target::Niri],
         g if g == "Hyprland" || g == crate::registry::system_settings::HYPR_LAYOUT => &[Target::Hyprland],
-        _ => &Target::ALL,
+        // KWin has no Mandara settings fragment; its only managed file is
+        // an XDG autostart entry, tested in mandara_config::kwin.
+        _ => &[Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway, Target::River],
     }
 }
 
@@ -538,6 +540,9 @@ fn every_compositor_setting_reaches_its_drop_ins() {
             }
             if *target == mandara_config::compositor::Target::River && crate::registry::RIVER_LACKS.contains(&s.path) {
                 continue;
+            }
+            if *target == mandara_config::compositor::Target::River && s.path == "/compositor/autostart" {
+                continue; // Its init is a program; Studio explains the manual edit.
             }
             // Niri can't blur before 26.04: the version-gated note counts.
             let changed = before.iter().zip(&after).filter(|((t, _), _)| t == target).any(|((_, a), (_, b))| a != b);

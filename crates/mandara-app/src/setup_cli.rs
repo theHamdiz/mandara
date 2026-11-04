@@ -69,6 +69,14 @@ pub fn setup(o: Options) -> Result<()> {
     // `--fix` ids that matched a problem of some compositor.
     let mut fixed_ids: Vec<String> = Vec::new();
     for target in targets {
+        if target == Target::KWin {
+            if o.check {
+                println!("{}", mandara_i18n::t("Mandara uses native Plasma protocols; KWin’s configuration stays unchanged"));
+            } else if let Some(path) = mandara_config::kwin::sync_autostart(cfg.compositor.autostart, &mandara_config::paths::self_exe())? {
+                println!("{}", mandara_i18n::tf("KWin: startup entry {path}", &[("path", &path.display())]));
+            }
+            continue;
+        }
         // Sway without a config of its own runs the system one: the user's
         // starts as a copy of it (sway's documented first step), so the
         // include line has somewhere to go and sway's defaults stay.

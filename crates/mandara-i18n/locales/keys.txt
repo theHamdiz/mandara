@@ -939,6 +939,7 @@ Change one display property; it reverts after the countdown unless `display conf
 Change one setting live (value is JSON; bare words are strings)
 Change password
 Change profile photo
+Change resolution, scale and display arrangement in Plasma System Settings. Shell placement below still applies.
 Change the current recipe: key=value pairs (style, seed, palette, light or any parameter) or a whole TOML recipe
 Change the wallpaper on a timer
 Change theme
@@ -1268,6 +1269,7 @@ Could not move {path} to the Trash: {error}
 Could not open {uri}: {error}
 Could not reach the engine: {error}
 Could not read the logs
+Could not read {path}: {error}. Left it unchanged.
 Could not remove {path}: {error}
 Could not restart into the firmware setup: {error}
 Could not run journalctl: {error}
@@ -1279,6 +1281,7 @@ Could not start PAM ({code})
 Could not start the lock screen
 Could not start {program}: {error}
 Could not start {terminal}: {error}
+Could not update PATH: {error}. Add {line} to your shell profile.
 Could not write {path}: {error}
 Couldn't change the microphone: {error}
 Couldn't create {path}: {error}
@@ -2578,6 +2581,7 @@ Idle & sleep
 Idle detection ✓
 Idle for {time}
 Idle handling is off
+Idle notifications are not available
 Idle stages are back on
 Idle state: idle time, inhibitors, power source and the stages to come (JSON)
 Idle · hidden from the bar
@@ -2803,6 +2807,9 @@ Juz {n}
 KB
 KDE / Plasma
 KDE Breeze cursors, refined and extended with more shapes
+KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings.
+KWin settings are managed in Plasma System Settings
+KWin: startup entry {path}
 Kahlil Gibran
 Kanagawa
 Karachi
@@ -2851,6 +2858,7 @@ Keeps the bar and its panels above fullscreen apps; applies after a shell restar
 Kept
 Kept awake
 Kept awake for an hour
+Kept custom startup entry {path}
 Kept in the Dock
 Kernel
 Key file…
@@ -3252,6 +3260,7 @@ Mandara shows what it is and what will happen before anything is installed.
 Mandara starts the enabled entries at your next login.
 Mandara starts these at login
 Mandara updates
+Mandara uses native Plasma protocols; KWin’s configuration stays unchanged
 Mandara writes nothing to other apps until you switch them on. Switching one off takes back exactly what Mandara changed, and any file it replaced comes back from its backup.
 Mandara wrote `{key}`, which {compositor} {version} doesn't support. Regenerating stops Mandara from writing it for this version.
 Mandara {version} has no language packs to download
@@ -3716,6 +3725,7 @@ No image command set (Studio → Plugins → Clipboard)
 No images in {directory}
 No images in {folder}
 No input devices
+No input seat is available
 No install job {id}
 No installed app opens these.
 No installed app {id}
@@ -3820,6 +3830,7 @@ No such topic (use its name or id; see `notes topics`)
 No such unit
 No supported compositor detected
 No supported compositor detected ({compositors})
+No supported compositor is installed ({compositors}).
 No surah matches
 No surah or ayah {reference}
 No surah or ayah {reference} (try 2, 2:255, 2:255-260 or al-baqara)
@@ -4918,6 +4929,7 @@ River keeps no display settings of its own: set them in your init with a tool su
 River runs {file} as a program, but it isn't executable, so River starts without it (chmod +x makes it run).
 River {version} runs window management in a separate program and no longer has the river-control and river-status protocols, so Mandara can't show or switch its tags, send its binds or follow its windows. Mandara works with River's classic line (0.3, packaged as river-classic).
 River's config is your init program, which Mandara never edits: Mandara sends River its colours, rules, input settings and keys when the shell starts and on every change. To start Mandara with River, add this line to your init: {line}
+River's init controls startup; add or remove Mandara there
 Room around the icons
 Rose
 Rose Gold
@@ -5951,7 +5963,9 @@ The collections come from the hadith-api dataset, released into the public domai
 The colour its items light up and wash with
 The command is empty
 The compiled WebAssembly component (manifest `entry`)
+The compositor connection closed
 The compositor did not answer
+The compositor did not respond in time
 The compositor rejected this display configuration
 The contract (WIT)
 The cover as a screen of dots
@@ -6031,6 +6045,7 @@ The link stops working after this long
 The link stops working once your phone has downloaded the item
 The list is full — remove a widget to add another
 The list launcher: a drawer rising from the bottom edge, search next to the edge
+The lock screen did not confirm that the session is locked
 The lock screen's text
 The main menu is see-through glass with solid cards on it
 The main menu opens from the bar only
@@ -6132,6 +6147,7 @@ The volume beside the speaker icon
 The wallpaper Mandara is drawing
 The weather on the desktop: the temperature, the sky, the place and the days ahead
 The widths Mod+R cycles through (switch-preset-column-width)
+The window is no longer available
 The window list is not available
 The window switcher is not open
 The window switcher is turned off (Studio → Window switcher)
@@ -6161,6 +6177,7 @@ There is no text to share
 There is nothing either good or bad, but thinking makes it so.
 There isn't enough free space on this disk.
 Thermals
+These displays do not support power control
 These files move to the Trash:
 They can because they think they can.
 They'll be asked to choose a password the first time they sign in.
@@ -6200,6 +6217,7 @@ This database uses a hardware key (YubiKey challenge-response), which Mandara ca
 This device
 This device, the exit node in use and every peer (JSON)
 This driver doesn't report per-process GPU memory.
+This executable path cannot be used in a desktop entry
 This file looks damaged, or isn't an app. Try downloading it again.
 This file {version}
 This folder is empty
@@ -6948,11 +6966,13 @@ Working day starts
 Working…
 Works and Days
 Works in the background
+Workspace not found
 Workspaces
 World clock
 World clock row
 Worship
 Worship Him alone
+Would remove {path}
 Write a reply…
 Write in Markdown…
 Write it on your heart that every day is the best day in the year.
@@ -7790,6 +7810,7 @@ your default
 {path} already exists, so no command is added
 {path} in the archive doesn't match update.json
 {path} in the archive isn't an executable
+{path} is a custom autostart entry; Mandara left it unchanged
 {path} is a development build; rebuild it from source (or pass --force-dev)
 {path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}
 {path} isn't a file (folders are never shared)

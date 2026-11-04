@@ -78,11 +78,11 @@ pub fn mode_with(cfg: &ShellConfig, hidden: bool) -> AutoHideMode {
 /// `(any window covers the workspace, a fullscreen window is shown)` on
 /// `monitor`'s active workspace / tags.
 pub fn coverage(hub: &Hub, monitor: &str) -> (bool, bool) {
-    let mask = hub.navigation.get(monitor).map(|n| n.active_mask()).unwrap_or(0);
+    let navigation = hub.navigation.get(monitor);
     let mut covered = false;
     let mut fullscreen = false;
-    for c in hub.clients.iter().filter(|c| c.monitor == monitor) {
-        let visible = c.tags.iter().any(|t| *t >= 1 && *t <= 32 && mask & (1u32 << (t - 1)) != 0);
+    for c in hub.clients.iter().filter(|c| c.monitor == monitor && !c.minimized) {
+        let visible = navigation.is_some_and(|n| n.contains_active(&c.tags));
         if !visible {
             continue;
         }
@@ -111,7 +111,7 @@ pub struct AutoHide {
     hide_task: Option<Task<()>>,
     /// Hold the bar out until then (workspace switch peek).
     peek_until: Option<Instant>,
-    last_mask: Option<u32>,
+    last_active: Option<Vec<u32>>,
     covered: bool,
     fullscreen: bool,
 }
@@ -123,13 +123,13 @@ impl AutoHide {
         let hub = crate::hub::hub(cx);
         cx.observe(&hub, move |this: &mut V, hub, cx| {
             let (covered, fullscreen) = coverage(hub.read(cx), &monitor);
-            let mask = hub.read(cx).navigation.get(&monitor).map(|n| n.active_mask());
+            let active = hub.read(cx).navigation.get(&monitor).map(|n| n.active_ids().collect::<Vec<_>>());
             let state = get(this);
             let mut changed = (covered, fullscreen) != (state.covered, state.fullscreen);
             state.covered = covered;
             state.fullscreen = fullscreen;
-            if mask != state.last_mask {
-                if state.last_mask.is_some() && crate::state::config(cx).read(cx).get().bar.auto_hide.reveal_on_workspace_switch {
+            if active != state.last_active {
+                if state.last_active.is_some() && crate::state::config(cx).read(cx).get().bar.auto_hide.reveal_on_workspace_switch {
                     state.peek_until = Some(Instant::now() + WORKSPACE_PEEK);
                     // Re-render once the peek is over.
                     cx.spawn(async move |this, cx| {
@@ -139,14 +139,14 @@ impl AutoHide {
                     .detach();
                     changed = true;
                 }
-                state.last_mask = mask;
+                state.last_active = active;
             }
             if changed {
                 cx.notify();
             }
         })
         .detach();
-        Self { shown: SpringValue::new(1.0, REVEAL_SPRING), hovering: false, hide_task: None, peek_until: None, last_mask: None, covered: false, fullscreen: false }
+        Self { shown: SpringValue::new(1.0, REVEAL_SPRING), hovering: false, hide_task: None, peek_until: None, last_active: None, covered: false, fullscreen: false }
     }
 
     /// Sets the spring target for this frame.
@@ -265,6 +265,25 @@ impl AutoHide {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn named_workspaces_count_for_coverage_and_the_switcher() {
+        use mandara_compositor::{ClientInfo, NavigationModel, UNNUMBERED_ID_BASE, WorkspaceStatus};
+        let mut hub = Hub::default();
+        hub.navigation.insert("DP-1".into(), NavigationModel::Workspaces { workspaces: vec![WorkspaceStatus {
+            id: UNNUMBERED_ID_BASE, name: "web".into(), active: true, occupied: true, urgent: false, layout: String::new(),
+        }] });
+        hub.clients.push(ClientInfo { monitor: "DP-1".into(), tags: vec![UNNUMBERED_ID_BASE], fullscreen: true, ..Default::default() });
+        assert_eq!(coverage(&hub, "DP-1"), (true, true));
+        assert!(crate::switcher::client_visible(&hub.clients[0], &hub));
+        hub.clients[0].minimized = true;
+        assert_eq!(coverage(&hub, "DP-1"), (false, false));
+        assert!(crate::switcher::client_visible(&hub.clients[0], &hub), "a minimized window remains reachable");
+        hub.clients[0].minimized = false;
+        hub.clients[0].tags = vec![UNNUMBERED_ID_BASE + 1];
+        assert_eq!(coverage(&hub, "DP-1"), (false, false));
+        assert!(!crate::switcher::client_visible(&hub.clients[0], &hub));
+    }
 
     #[test]
     fn modes_decide_visibility() {

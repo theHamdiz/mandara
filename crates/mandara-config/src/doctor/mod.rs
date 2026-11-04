@@ -37,6 +37,7 @@ mod hyprland;
 mod mango;
 mod niri;
 mod river;
+mod kwin;
 mod sway;
 pub(crate) use sway::has_error as sway_has_error;
 mod umbriel;
@@ -426,6 +427,7 @@ pub fn checker(target: Target) -> &'static dyn CompositorCheck {
         Target::Umbriel => &umbriel::Umbriel,
         Target::Sway => &sway::Sway,
         Target::River => &river::River,
+        Target::KWin => &kwin::KWin,
     }
 }
 

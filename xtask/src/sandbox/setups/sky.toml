@@ -8,6 +8,7 @@
 # The wallpaper below didn't exist when the shell started, so the desktop
 # tried it, failed and won't look again for the same path (setting it
 # again changes nothing): apply it only now that the file exists, with
+# Wait for `sandbox msg wallgen status` to report no running job, then
 # `sandbox shell restart` (the shell reads it at startup), then
 #   sandbox msg theme wallpaper vibrant   (the warm palette of the sunset)
 # then `sandbox msg notifications clear` and `sandbox shot`.

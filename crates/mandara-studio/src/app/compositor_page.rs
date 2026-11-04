@@ -494,6 +494,7 @@ impl StudioView {
         };
         let rules = self.window_rules(cfg, tab, p, cx);
         let specific = match tab {
+            Target::KWin => div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("KWin settings are managed in Plasma System Settings")).into_any_element(),
             Target::Mango => {
                 let head = super::fold::FoldHead { title: t("Tag & layout studio").into(), preview: t("Pick a tag, then its layout, master share and scroller width. Tags without a rule keep MangoWM's default.").to_string(), badge: None, trailing: None, closed: true };
                 let tags = self.fold("Tag & layout studio", head, p, cx, |this, cx| this.tag_studio(cfg, p, cx));

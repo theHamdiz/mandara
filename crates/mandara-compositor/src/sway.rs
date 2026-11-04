@@ -282,6 +282,7 @@ pub fn clients(workspaces: &[SwayWorkspace], tree: &Tree) -> Vec<ClientInfo> {
             focused: n.focused,
             floating: *floating,
             fullscreen: n.fullscreen_mode > 0,
+            minimized: false,
             geometry: (n.rect.width > 0 && n.rect.height > 0).then_some((n.rect.x, n.rect.y, n.rect.width, n.rect.height)),
         })
         .collect()

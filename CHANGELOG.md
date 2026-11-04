@@ -7,9 +7,17 @@ About → What's new shows it too.
 ## Unreleased
 
 Put the power menu where you want it, plus a round of fixes for Sway, the
-installer and the launcher.
+installer, display reconnection and native KWin support.
 
 ### New
+
+- **Mandara now runs on Plasma Wayland with a native KWin driver** (#45,
+  #50). The bar follows virtual desktops and windows, and the dock and
+  switcher control windows through Plasma’s own protocols. Clipboard history
+  also works through the shared data-control protocol. Setup can add
+  Mandara’s startup entry without changing KWin’s settings. Studio explains
+  which settings stay in Plasma System Settings, and lock requests use
+  Plasma’s secure locker.
 
 - **Choose where the power menu opens.** Studio → Power & idle → Session
   menu → *Position* puts the edge dock on the left or right side, or at the
@@ -21,12 +29,38 @@ installer and the launcher.
 
 ### Improved
 
+- **A lighter first test build** (#64). Tests no longer inherit the
+  interactive shell’s dependency optimization or keep incremental caches.
+  The development guide explains focused checks, timing reports and optional
+  local linkers; the full workspace checks still run in CI.
+
 - **Guides that match today's shell.** The docs show the power menu at the
   top centre and at the side, each Look's picture follows your page's light
   or dark theme, and old panel captures that no longer looked like Mandara
   are gone.
 
 ### Fixed
+
+- **Tape stays attached to notes.** The notes desktop widget uses the same
+  corner strips as the to-do card, anchored to its visible paper. A header
+  or extra frame padding no longer leaves the strips floating above it.
+
+- **Source installs check the Rust version the dependencies actually need.**
+  An older toolchain is updated before the build instead of failing partway
+  through compiling the WebAssembly runtime.
+
+- **The bar and dock come back when a display reconnects** (#63). Switching
+  a monitor between computers, unplugging it or changing its resolution no
+  longer leaves that screen without its shell. Other displays keep their
+  surfaces, and your display assignments stay as you set them.
+- **Installing again keeps your shell profiles safe** (#49). A leftover
+  installer comment no longer removes the next setting. Profile updates
+  preserve symlinks and permissions, and a failed write leaves the original
+  intact. Changing the installation folder also refreshes old PATH entries
+  when the new folder is already on PATH.
+- **Named Sway workspaces work with automatic bar hiding and the window
+  switcher** (#49). Includes can mix literal and wildcard characters, and
+  shortcut conflicts use the variable value at the shortcut's own line.
 
 - **Bar panels no longer hide behind the sidebar** (#62). With the sidebar
   open, a panel such as Power or Weather used to open partly underneath it,

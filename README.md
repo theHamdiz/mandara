@@ -34,7 +34,7 @@
   <a href="docs/building.md#build-fingerprint"><img src="https://img.shields.io/badge/100%25-Rust-8B5CF6?logo=rust&logoColor=E9E5FF&labelColor=0B1026" alt="100% Rust"/></a>
   <a href="docs/desktop.md"><img src="https://img.shields.io/badge/Wayland-native-22D3EE?logo=wayland&logoColor=E9E5FF&labelColor=0B1026" alt="Wayland native"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-8B5CF6?labelColor=0B1026" alt="GPU rendered"/></a>
-  <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic"/></a>
+  <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic%20%C2%B7%20KWin-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin"/></a>
   <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-73%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="73 plugins plus WebAssembly"/></a>
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-15%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="15 languages"/></a>
   <br/>
@@ -63,7 +63,7 @@ on [GPUI](https://github.com/zed-industries/zed). It's everything around
 your windows: the bar, a dynamic island, a dock, a launcher, a sidebar,
 notifications, wallpapers, desktop widgets, the lock screen and the login
 screen, plus a settings app that changes all of it live. It runs on
-**MangoWM, Niri, Hyprland, Umbriel, Sway and River Classic**, and it's one small, fast program
+**MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic and KWin**, and it's one small, fast program
 you install with one command.
 
 It's made to feel good to use. Panels pour out of the bar on real spring
@@ -89,7 +89,7 @@ widget can be moved, resized and restyled right on the desktop.
 | | |
 |---|---|
 | **What** | A complete Wayland desktop shell: bar, island, dock, launcher, sidebar, notifications, OSDs, wallpapers, desktop widgets, lock screen, login manager, settings app |
-| **Compositors** | MangoWM, Niri, Hyprland, Umbriel, Sway and River Classic (0.3), all first-class; your own config gets one include line at most, nothing more |
+| **Compositors** | MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic (0.3) and KWin, with native drivers; your own config gets one include line at most, nothing more |
 | **Built with** | 100 % Rust, one binary (`mandara`), GPU-rendered with GPUI and wgpu |
 | **Resources** | Under 100 MiB RAM, under 190 MiB video memory, about 0.1 % CPU idle |
 | **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`) |
@@ -101,17 +101,18 @@ widget can be moved, resized and restyled right on the desktop.
 ## What sets Mandara apart
 
 Mandara is built for one job: being the complete desktop for **MangoWM,
-Niri, Hyprland, Umbriel, Sway and River Classic**. These are the strengths it was designed
+Niri, Hyprland, Umbriel, Sway, River Classic and KWin**. These are the strengths it was designed
 around, each one measured or shipped today:
 
-1. **Six compositors, each first-class.** It speaks every compositor's
+1. **Seven compositors, each first-class.** It speaks every compositor's
    own IPC natively: MangoWM's and River's tag bitmasks (view, toggle-view,
    tag moves), Niri's scrolling columns, Hyprland's, Umbriel's and Sway's
-   workspaces. It reads
+   workspaces, and KWin's native Plasma window and virtual-desktop protocols. It reads
    each compositor's version and writes its exact config dialect, down to
    Hyprland 0.57's Lua config.
 2. **It never breaks your compositor config.** It adds one include line
-   (none at all on River, whose settings it sends over River's protocol);
+   (none on River or KWin); River settings use its native protocol, while
+   KWin settings stay in Plasma System Settings. For the other compositors,
    everything else goes into its own drop-in files. Every change is
    checked by the compositor's own validator (`mango -p`, `niri validate`,
    `Hyprland --verify-config`, `umbriel config validate`, `sway --validate`)
@@ -261,8 +262,9 @@ On **NixOS**, Mandara is a flake: try it with
 `nix run github:theHamdiz/mandara`, or add it to your system with
 `programs.mandara.enable = true;` (a NixOS module and a Home Manager
 module come with it). NixOS users update through their flake, not Studio's
-*Update now*: run `nix flake update`, then `sudo nixos-rebuild switch` (or
-`home-manager switch`).
+*Update now*: in your configuration flake directory, run
+`nix flake update mandara`, then `sudo nixos-rebuild switch --flake .` (or
+`home-manager switch --flake .`). Use your input name if it differs from `mandara`.
 
 → **[Install guide](docs/install.md)**: Arch packages, NixOS, other
 options, coming from another setup.

@@ -67,3 +67,8 @@
   <br/>
   <sub>Studio → Login screen: the designer with a live preview.</sub>
 </p>
+
+On **Plasma Wayland / KWin**, lock requests use Plasma’s secure locker.
+Mandara waits for its confirmation before reporting a successful lock; the
+Mandara lock-screen preview is still available. KWin does not expose the
+lock-surface protocol used by Mandara’s own locker.

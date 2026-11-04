@@ -769,8 +769,8 @@ const EMPTY_RING_ALPHA: [f32; 3] = [0.05, 0.08, 0.14];
 const EMPTY_ICON_PX: f32 = 19.0;
 const EMPTY_GAP_PX: f32 = 4.0;
 const EMPTY_TITLE_GAP_PX: f32 = 8.0;
-/// The title and hint lines' height per unit of their text size.
-const EMPTY_TEXT_LEADING: f32 = 1.3;
+/// GPUI's default golden-ratio line height, shared by both text nodes.
+const EMPTY_TEXT_LEADING: f32 = std::f32::consts::GOLDEN_RATIO;
 /// The rings never shrink below this, nor the glyph below its share of it.
 const EMPTY_RINGS_MIN_PX: f32 = 32.0;
 const EMPTY_ICON_MIN_PX: f32 = 14.0;
@@ -806,8 +806,8 @@ pub fn empty_state(icon_name: &'static str, title: impl Into<SharedString>, hint
         .justify_center()
         .gap(px(EMPTY_GAP_PX))
         .child(rings.child(icon(icon_name, (EMPTY_ICON_PX * k).max(EMPTY_ICON_MIN_PX), accent)))
-        .child(div().flex_none().mt(px(EMPTY_TITLE_GAP_PX)).text_size(px(text::BODY)).font_weight(FontWeight::SEMIBOLD).child(title.into()))
-        .child(div().flex_none().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(hint.into()))
+        .child(div().flex_none().mt(px(EMPTY_TITLE_GAP_PX)).text_size(px(text::BODY)).line_height(gpui::relative(EMPTY_TEXT_LEADING)).font_weight(FontWeight::SEMIBOLD).child(title.into()))
+        .child(div().flex_none().text_size(px(text::BODY_S)).line_height(gpui::relative(EMPTY_TEXT_LEADING)).text_color(palette.on_surface_variant.hsla()).child(hint.into()))
 }
 
 /// A thick slider ([`crate::slider`], the large size): a rounded pill
@@ -926,7 +926,8 @@ mod tests {
     /// full-size rings.
     #[test]
     fn empty_state_rings_fit_short_panels() {
-        let text = EMPTY_GAP_PX * 2.0 + EMPTY_TITLE_GAP_PX + (text::BODY + text::BODY_S) * EMPTY_TEXT_LEADING;
+        let actual_lines: f32 = [text::BODY, text::BODY_S].into_iter().map(|size| f32::from(gpui::phi().to_pixels(px(size).into(), px(size)))).sum();
+        let text = EMPTY_GAP_PX * 2.0 + EMPTY_TITLE_GAP_PX + actual_lines;
         assert_eq!(empty_rings_px(400.0), EMPTY_RINGS_PX);
         for h in [96.0_f32, 110.0, 130.0] {
             let ring = empty_rings_px(h);

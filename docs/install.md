@@ -94,14 +94,14 @@ languages you use.
 
 ## No compositor yet
 
-When none of MangoWM, Niri, Hyprland, Sway, River Classic or Umbriel is
+When none of MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel or KWin is
 installed, the installer
 lists the ones your distribution's own repositories carry and asks which
 to install, with the first one as the recommended default:
 
 ```text
 ==> Installing a compositor
-    No compositor Mandara runs on is installed (MangoWM, Niri, Hyprland, Sway, River Classic or Umbriel).
+    No supported compositor is installed (MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin).
       1) MangoWM (recommended) · mangowm
       2) Niri · niri
       3) Hyprland · hyprland
@@ -351,18 +351,19 @@ nothing in the read-only config; it prints the line to add instead.
 
 ## Compositors
 
-Mandara supports **MangoWM, Niri, Hyprland, Umbriel, Sway and River Classic** (River 0.3, `river-classic`; see below).
+Mandara supports **MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic and KWin** (River 0.3, `river-classic`; see below).
 `mandara setup` (run by the installer) hooks Mandara into your compositor
 with **one include line** in your own config, writes everything else to
 `~/.config/mandara/generated/`, starts Mandara at login with an absolute
 path, and checks the result with the compositor's own validator
 (`mango -p`, `niri validate`, `Hyprland --verify-config`,
 `umbriel config validate`, `sway --validate`), rolling back if it objects
-(see [Config doctor](#config-doctor)). **River is the exception:** its
+(see [Config doctor](#config-doctor)). **River and KWin do not use include lines.** River’s
 `init` is a program, not a config file, so there is no include line and
 no checker. Mandara never edits `init`; it sends River's settings over
 `river-control` while it runs, and you add the one autostart line
-yourself (the table below shows it).
+yourself (the table below shows it). KWin uses the native Plasma protocols
+for workspaces and windows; its settings remain in Plasma System Settings.
 
 | | Include line in your config | Autostart |
 |---|---|---|
@@ -373,6 +374,7 @@ yourself (the table below shows it).
 | **Umbriel** | `"…/mandara/generated/umbriel.toml"` in `[include.optional] files` of `~/.config/umbriel/config.toml` (added to your list if you have one) | `general.autostart` |
 | **Sway** | `include …/mandara/generated/sway.conf` at the end of `~/.config/sway/config` (or whichever file sway reads: `~/.sway/config`, `~/.i3/config`…) | `exec` |
 | **River** 0.3 | none: Mandara never edits `~/.config/river/init` | the one line you add to `init`: `riverctl spawn /path/to/mandara` |
+| **KWin / Plasma (Wayland)** | none: Mandara leaves `kwinrc` unchanged | its own `org.mandara.shell.desktop` XDG autostart entry, only for KDE |
 
 Mandara detects the installed version and speaks its dialect, including
 Hyprland 0.57's Lua dispatches. On Niri the drop-in makes workspace
@@ -437,6 +439,37 @@ locked while it runs. This is River's classic line, 0.3 (`river-classic` in
 Arch): River 0.4 moved window management into separate programs and dropped
 `river-control` and `river-status`, so on 0.4 and later Mandara can't
 drive it, and the Config doctor says so.
+
+### Plasma / KWin
+
+Start Mandara inside a **Plasma Wayland** session. The installer recognizes
+an existing KWin installation; it does not install a complete Plasma desktop
+as a standalone window-manager choice. To enable startup explicitly:
+
+```bash
+mandara setup --compositor kwin --autostart
+```
+
+The native KWin driver follows virtual desktops, focused windows, window
+state and outputs through Plasma’s Wayland protocols. Workspace clicks,
+window moves, the dock and the switcher use those same protocols. Clipboard
+history uses ext-data-control, with the same privacy and size limits as on
+the other compositors. No KWin
+scripts or helper shell are installed. Mandara writes only its own XDG
+autostart entry; a custom entry with the same filename is left alone.
+Disable Mandara’s **Compositor → Integration → Start at login** setting to turn off that entry.
+
+Keep resolution, scaling, arrangement, input, window rules, effects and
+shortcuts in **Plasma System Settings**. Studio explains these limits; its
+**Displays → Shell on each display** controls still select where Mandara’s
+bar, dock and other surfaces appear. The Config doctor can report KWin’s
+availability, but KWin has no standalone configuration checker.
+
+Lock requests use **Plasma’s secure lock screen**, including confirmation
+before sleep, because KWin does not expose the lock-surface protocol used
+by Mandara’s own locker. The Mandara lock preview remains available. Choose
+which Plasma panels and desktop components to keep in Plasma’s own controls;
+Mandara does not remove or disable them automatically.
 
 ## Coming from another setup
 
@@ -577,7 +610,7 @@ From a clone, `cargo xtask build && target/release/mandara install`
 installs that checkout (or `mandara install --from-source` builds it).
 
 **Requirements:** Linux with a Wayland compositor (MangoWM, Niri,
-Hyprland, Sway, River Classic or Umbriel; the installer can install one), a Vulkan-capable
+Hyprland, Sway, River Classic, Umbriel or KWin; the installer can install one), a Vulkan-capable
 GPU, and PipeWire or PulseAudio for sound features.
 
 ## Versioning

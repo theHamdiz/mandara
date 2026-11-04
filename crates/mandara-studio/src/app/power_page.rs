@@ -977,7 +977,9 @@ fn position_note(cfg: &ShellConfig, position: SessionMenuPosition) -> Option<&'s
         SessionMenuPosition::Bottom => BarPosition::Bottom,
         _ => return None,
     };
-    Some(if cfg.bar.position != edge {
+    Some(if edge == BarPosition::Bottom && cfg.dock_bottom_clearance().is_some() {
+        tk("The dock holds the bottom edge; popups there stay cards")
+    } else if cfg.bar.position != edge {
         if edge == BarPosition::Top { tk("The bar isn't at the top, so the dock hangs from the screen edge") } else { tk("The bar isn't at the bottom, so the dock rises from the screen edge") }
     } else if cfg.bar_layout().is_attached() {
         tk("Joined to the bar, as one piece with it")
@@ -1003,6 +1005,10 @@ mod position_tests {
         assert_eq!(position_note(&cfg, SessionMenuPosition::Top), Some("A floating bar has no edge to join, so the dock opens as a card next to it"));
         cfg.bar.position = BarPosition::Left;
         assert_eq!(position_note(&cfg, SessionMenuPosition::Top), Some("The bar isn't at the top, so the dock hangs from the screen edge"));
+        cfg.bar.position = BarPosition::Bottom;
+        cfg.bar.layout = BarLayout::MinimalEdge;
+        cfg.plugins.enabled.push("dock".into());
+        assert_eq!(position_note(&cfg, SessionMenuPosition::Bottom), Some("The dock holds the bottom edge; popups there stay cards"));
         // Every position has a label in the Studio choice.
         for p in SessionMenuPosition::ALL {
             assert!(registry::MENU_POSITIONS.iter().any(|(id, _)| *id == p.id()), "{p:?}");

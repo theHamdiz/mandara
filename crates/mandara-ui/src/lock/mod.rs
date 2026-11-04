@@ -95,6 +95,10 @@ const STACK_WEIGHT: u16 = 600;
 
 /// Runs the locker (the `mandara lock` subcommand).
 pub fn run(options: LockOptions) -> anyhow::Result<()> {
+    if !options.demo && mandara_compositor::detect() == Some(mandara_compositor::CompositorKind::KWin) {
+        if !mandara_services::sleep::dry_run() { mandara_services::plasma_lock::lock().map_err(anyhow::Error::msg)?; }
+        return Ok(());
+    }
     if std::env::var_os("WAYLAND_DISPLAY").is_none() {
         anyhow::bail!("Mandara Lock requires a Wayland session (WAYLAND_DISPLAY is not set)");
     }
@@ -900,6 +904,8 @@ struct Children {
 static CHILDREN: Mutex<Children> = Mutex::new(Children { real: false, demo: None });
 /// `general.lock_screen`: answer logind lock requests.
 static ANSWER_LOGIND: AtomicBool = AtomicBool::new(true);
+/// Confirmed state of Plasma's secure locker when running on KWin.
+static PLASMA_LOCKED: AtomicBool = AtomicBool::new(false);
 
 /// Environment variable passing the grace period (ms) to the locker.
 const GRACE_ENV: &str = "MANDARA_LOCK_GRACE_MS";
@@ -918,7 +924,19 @@ fn grace_from_env() -> Option<Duration> {
 
 /// Whether a real locker started by this shell is running.
 pub fn is_locked() -> bool {
-    CHILDREN.lock().is_ok_and(|c| c.real)
+    PLASMA_LOCKED.load(Ordering::Relaxed) || CHILDREN.lock().is_ok_and(|c| c.real)
+}
+
+fn plasma_lock_changed(locked: bool) {
+    if PLASMA_LOCKED.swap(locked, Ordering::Relaxed) == locked { return; }
+    let marker = locked_marker();
+    if locked {
+        if let Some(parent) = marker.parent() { let _ = std::fs::create_dir_all(parent); }
+        if let Err(e) = std::fs::write(&marker, []) { tracing::warn!("recording confirmed Plasma lock: {e}"); }
+    } else {
+        let _ = std::fs::remove_file(marker);
+    }
+    announce(locked);
 }
 
 /// Listeners told about lock (`true`) / unlock (`false`).
@@ -971,6 +989,12 @@ pub fn lock_now() -> Result<bool, String> {
 /// Like [`lock_now`]; input within `grace` of the lock unlocks without a
 /// password (automatic idle locks, `idle.lock_grace_s`).
 pub fn lock_with_grace(grace: Option<Duration>) -> Result<bool, String> {
+    if mandara_compositor::detect() == Some(mandara_compositor::CompositorKind::KWin) {
+        if mandara_services::sleep::dry_run() { return Ok(false); }
+        let started = mandara_services::plasma_lock::lock()?;
+        plasma_lock_changed(true);
+        return Ok(started);
+    }
     let mut children = CHILDREN.lock().map_err(|e| e.to_string())?;
     if children.real {
         return Ok(false);
@@ -1052,6 +1076,9 @@ fn stop_demo() -> bool {
 /// Shell startup: answer logind lock requests while `general.lock_screen`.
 pub fn init(cx: &mut gpui::App) {
     look::init(cx);
+    if mandara_compositor::detect() == Some(mandara_compositor::CompositorKind::KWin) {
+        mandara_services::plasma_lock::watch(plasma_lock_changed);
+    }
     let store = crate::state::config(cx);
     ANSWER_LOGIND.store(store.read(cx).get().general.lock_screen, Ordering::Relaxed);
     cx.observe(&store, |store, cx| ANSWER_LOGIND.store(store.read(cx).get().general.lock_screen, Ordering::Relaxed)).detach();

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use clap::Args;
 
 /// Compositor names `--compositor` accepts (passed on to `mandara setup`).
-pub const COMPOSITORS: &[&str] = &["mango", "mangowm", "niri", "hyprland", "hypr", "umbriel", "sway", "river"];
+pub const COMPOSITORS: &[&str] = &["mango", "mangowm", "niri", "hyprland", "hypr", "umbriel", "sway", "river", "kwin", "kde", "plasma"];
 
 #[derive(Args, Debug, Clone, Default, PartialEq, Eq)]
 pub struct InstallArgs {

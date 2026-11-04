@@ -306,22 +306,22 @@ fn ask_tty(prompt: &str) -> Answer {
     read_answer(tty, prompt)
 }
 
-/// [`ask_tty`] on any stream: writes the prompt, reads up to Enter.
+/// Reads one canonical terminal record. Ctrl-D releases a partial record
+/// without a newline; another read would wait and could accept it later.
 fn read_answer(mut tty: impl std::io::Read + std::io::Write, prompt: &str) -> Answer {
     if write!(tty, "    {prompt} ").and_then(|_| tty.flush()).is_err() {
         return Answer::Closed;
     }
-    let mut answer = Vec::new();
-    let mut byte = [0u8; 1];
+    /// Linux canonical input holds at most 4096 bytes, including newline.
+    const CANONICAL_LINE_BYTES: usize = 4096;
+    let mut answer = [0u8; CANONICAL_LINE_BYTES];
     loop {
-        match tty.read(&mut byte) {
-            Ok(1) if byte[0] == b'\n' => break,
-            Ok(1) => answer.push(byte[0]),
-            // EOF or a read error before Enter: no answer, not an empty one.
+        match tty.read(&mut answer) {
+            Ok(n) => return answer[..n].iter().position(|b| *b == b'\n').map_or(Answer::Closed, |end| Answer::Line(String::from_utf8_lossy(&answer[..end]).trim().to_string())),
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             _ => return Answer::Closed,
         }
     }
-    Answer::Line(String::from_utf8_lossy(&answer).trim().to_string())
 }
 
 /// A private temporary folder, removed on drop.
@@ -435,5 +435,31 @@ mod tests {
         // No terminal at all: an unattended install takes the default.
         assert!(yes_no(Answer::Unattended, true));
         assert!(!yes_no(Answer::Unattended, false));
+    }
+
+    #[test]
+    fn canonical_terminal_ctrl_d_after_y_does_not_wait_for_enter() {
+        use std::os::fd::FromRawFd as _;
+        let (mut master, mut slave) = (-1, -1);
+        // SAFETY: openpty initializes both descriptors on success; default
+        // attributes give the slave canonical terminal input.
+        assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null(), std::ptr::null()) }, 0);
+        // SAFETY: these are distinct descriptors returned by openpty, each
+        // transferred to one File and closed by it.
+        let (mut master, slave) = unsafe { (std::fs::File::from_raw_fd(master), std::fs::File::from_raw_fd(slave)) };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let reader = std::thread::spawn(move || tx.send(read_answer(slave, "Go?")).unwrap());
+        let mut prompt = [0; 8];
+        master.read_exact(&mut prompt).unwrap();
+        assert_eq!(&prompt, b"    Go? ");
+        master.write_all(b"y\x04").unwrap();
+        let answer = rx.recv_timeout(Duration::from_secs(2));
+        // Unblock a regressed reader before asserting, so the test cannot
+        // leave a waiting thread behind.
+        if answer.is_err() {
+            master.write_all(b"\n").unwrap();
+        }
+        reader.join().unwrap();
+        assert_eq!(answer.unwrap(), Answer::Closed);
     }
 }

@@ -1,4 +1,4 @@
-//! Clipboard history, natively over Wayland: a `zwlr_data_control_v1`
+//! Clipboard history, natively over Wayland: an ext-data-control or wlr-data-control
 //! watcher reads every new selection in-process, entries (text and images)
 //! persist under `~/.cache/mandara/clipboard/`, restores are served with
 //! `wl-clipboard-rs`, and auto-paste types Ctrl+V through a
@@ -19,6 +19,7 @@
 mod color;
 pub mod kind;
 mod lang;
+mod watch;
 
 pub use kind::{ClipClass, Kind};
 
@@ -37,9 +38,8 @@ use mandara_i18n::{t, tf};
 use serde::{Deserialize, Serialize};
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
 use wayland_client::protocol::{wl_registry, wl_seat};
-use wayland_client::{Connection, Dispatch, Proxy, QueueHandle, event_created_child};
+use wayland_client::{Connection, Dispatch, QueueHandle};
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{zwp_virtual_keyboard_manager_v1, zwp_virtual_keyboard_v1};
-use wayland_protocols_wlr::data_control::v1::client::{zwlr_data_control_device_v1, zwlr_data_control_manager_v1, zwlr_data_control_offer_v1};
 
 use crate::actor::{Envelope, ServiceHandle, reply};
 
@@ -627,146 +627,6 @@ fn restore(entry: &ClipEntry, paste: bool) -> Result<String, String> {
     Ok(if paste { "pasted".into() } else { "copied".into() })
 }
 
-/// Selection watcher over `zwlr_data_control_manager_v1`.
-mod watch {
-    use super::*;
-
-    type Offer = zwlr_data_control_offer_v1::ZwlrDataControlOfferV1;
-    type Device = zwlr_data_control_device_v1::ZwlrDataControlDeviceV1;
-    type Manager = zwlr_data_control_manager_v1::ZwlrDataControlManagerV1;
-
-    pub enum Event {
-        Ready(bool),
-        Entry(ClipEntry),
-        /// The selection went away (its owner quit or cleared it).
-        Cleared,
-    }
-
-    struct State {
-        conn: Connection,
-        events: async_channel::Sender<Event>,
-        current: Option<Offer>,
-        shared: Arc<Mutex<Shared>>,
-    }
-
-    impl State {
-        /// Reads the selection as `mime`. `poll(2)` bounds the wait, so a
-        /// source that never closes its end can't stall the watcher (and no
-        /// helper thread is needed).
-        fn read(&self, offer: &Offer, mime: &str) -> Option<Vec<u8>> {
-            use rustix::event::{PollFd, PollFlags, Timespec, poll};
-            let (mut rd, wr) = std::io::pipe().ok()?;
-            offer.receive(mime.to_string(), wr.as_fd());
-            self.conn.flush().ok()?;
-            drop(wr);
-            let deadline = std::time::Instant::now() + READ_TIMEOUT;
-            let mut buf = Vec::new();
-            let mut chunk = vec![0u8; READ_CHUNK];
-            loop {
-                let left = deadline.saturating_duration_since(std::time::Instant::now());
-                if left.is_zero() {
-                    return None;
-                }
-                let timeout = Timespec { tv_sec: left.as_secs() as i64, tv_nsec: i64::from(left.subsec_nanos()) };
-                let mut fds = [PollFd::new(&rd, PollFlags::IN)];
-                match poll(&mut fds, Some(&timeout)) {
-                    Ok(0) => return None,
-                    Ok(_) => {}
-                    Err(rustix::io::Errno::INTR) => continue,
-                    Err(_) => return None,
-                }
-                match rd.read(&mut chunk) {
-                    Ok(0) => return Some(buf),
-                    Ok(n) => {
-                        buf.extend_from_slice(&chunk[..n]);
-                        if buf.len() > READ_CEILING {
-                            return Some(buf);
-                        }
-                    }
-                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
-                    Err(_) => return None,
-                }
-            }
-        }
-    }
-
-    impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
-        fn event(_: &mut Self, _: &wl_registry::WlRegistry, _: wl_registry::Event, _: &GlobalListContents, _: &Connection, _: &QueueHandle<Self>) {}
-    }
-    impl Dispatch<wl_seat::WlSeat, ()> for State {
-        fn event(_: &mut Self, _: &wl_seat::WlSeat, _: wl_seat::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
-    }
-    impl Dispatch<Manager, ()> for State {
-        fn event(_: &mut Self, _: &Manager, _: zwlr_data_control_manager_v1::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
-    }
-    impl Dispatch<Offer, Mutex<Vec<String>>> for State {
-        fn event(_: &mut Self, _: &Offer, event: zwlr_data_control_offer_v1::Event, types: &Mutex<Vec<String>>, _: &Connection, _: &QueueHandle<Self>) {
-            if let zwlr_data_control_offer_v1::Event::Offer { mime_type } = event
-                && let Ok(mut t) = types.lock()
-            {
-                t.push(mime_type);
-            }
-        }
-    }
-    impl Dispatch<Device, ()> for State {
-        fn event(state: &mut Self, _: &Device, event: zwlr_data_control_device_v1::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
-            use zwlr_data_control_device_v1::Event as E;
-            match event {
-                E::Selection { id } => {
-                    if let Some(old) = state.current.take() {
-                        old.destroy();
-                    }
-                    let Some(offer) = id else {
-                        let _ = state.events.send_blocking(Event::Cleared);
-                        return;
-                    };
-                    let types: Vec<String> = offer.data::<Mutex<Vec<String>>>().and_then(|t| t.lock().ok().map(|t| t.clone())).unwrap_or_default();
-                    let refs: Vec<&str> = types.iter().map(String::as_str).collect();
-                    let (policy, app) = state.shared.lock().map(|s| (s.policy.clone(), s.focused_app.clone())).unwrap_or_default();
-                    if let Some(entry) = capture(&refs, &policy, &app, |mime| state.read(&offer, mime)) {
-                        let _ = state.events.send_blocking(Event::Entry(entry));
-                    }
-                    state.current = Some(offer);
-                }
-                E::PrimarySelection { id: Some(offer) } => offer.destroy(),
-                E::Finished => {
-                    let _ = state.events.send_blocking(Event::Ready(false));
-                }
-                _ => {}
-            }
-        }
-        event_created_child!(State, Device, [
-            zwlr_data_control_device_v1::EVT_DATA_OFFER_OPCODE => (Offer, Mutex::new(Vec::new())),
-        ]);
-    }
-
-    /// Runs the watcher until the connection drops; reports availability.
-    pub fn run(events: async_channel::Sender<Event>, shared: Arc<Mutex<Shared>>) -> Result<(), String> {
-        let conn = Connection::connect_to_env().map_err(|e| e.to_string())?;
-        let (globals, mut queue) = registry_queue_init::<State>(&conn).map_err(|e| e.to_string())?;
-        let qh = queue.handle();
-        let seat: wl_seat::WlSeat = globals.bind(&qh, 1..=8, ()).map_err(|e| format!("wl_seat: {e}"))?;
-        let manager: Manager = match globals.bind(&qh, 1..=2, ()) {
-            Ok(m) => m,
-            Err(err) => {
-                let _ = events.send_blocking(Event::Ready(false));
-                return Err(format!("zwlr_data_control_manager_v1: {err}"));
-            }
-        };
-        let _device = manager.get_data_device(&seat, &qh, ());
-        let _ = events.send_blocking(Event::Ready(true));
-        let mut state = State { conn: conn.clone(), events, current: None, shared };
-        loop {
-            queue.blocking_dispatch(&mut state).map_err(|e| e.to_string())?;
-            // The history service ended (the clipboard plugin was turned
-            // off): stop watching at this wake-up.
-            if state.events.is_closed() {
-                return Ok(());
-            }
-        }
-    }
-}
-
 /// Synthetic key presses over `zwp_virtual_keyboard_v1`.
 pub mod keyboard {
     use super::*;
@@ -914,14 +774,9 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
     let start_policy = ClipboardPolicy::from(config);
     let clear_on_start = config.clear_on_start;
     let shared = Arc::new(Mutex::new(Shared { policy: start_policy.clone(), focused_app: String::new() }));
-    // A dedicated thread: the Wayland event queue blocks in dispatch.
-    let watch_shared = shared.clone();
-    let _ = std::thread::Builder::new().name("mandara-clipboard-watch".into()).spawn(move || {
-        if let Err(err) = watch::run(events_tx, watch_shared) {
-            tracing::warn!("clipboard watcher: {err}");
-        }
-    });
+    let stop_watch = watch::start(events_tx, shared.clone());
     crate::runtime::spawn("clipboard", async move {
+        let _stop_watch = stop_watch;
         use futures::FutureExt as _;
         let mut policy = start_policy;
         let mut available = false;

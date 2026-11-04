@@ -16,6 +16,31 @@ truly right, put it on that one item with its reason:
 #[expect(clippy::large_enum_variant, reason = "one per frame; boxing would allocate per frame")]
 ```
 
+## Local checks and cold builds
+
+For a focused edit, start with the affected crate and its callers, for
+example `cargo test -p mandara-install --locked`. Before a pull request,
+run the full workspace tests and clippy; CI keeps both checks.
+
+The test profile uses unoptimized workspace code and basic dependency
+optimization, without debug information or incremental caches. It retains assertions and the AV1 decoder’s required
+optimization. Interactive sandbox binaries use the separate dev profile,
+with optimized dependencies so the UI remains responsive. Release settings
+are unchanged. A first dev build and a first test build therefore produce
+separate artifacts.
+
+To see what a cold build spends time on, use
+`cargo test --workspace --locked --no-run --timings`; Cargo writes an HTML
+report under `target/cargo-timings/`. Compare clean target directories with
+the same toolchain, job count and compiler flags. A compiler cache helps
+repeated builds; it does not remove the cost of a first cache miss.
+
+On Linux, an installed alternative linker can be selected locally without
+requiring it for every contributor, for example
+`RUSTFLAGS="-C link-arg=-fuse-ld=mold" cargo test --workspace --locked`.
+Changing compiler flags creates another set of artifacts. Use the pruning
+tool below to keep the total bounded.
+
 ## The demo sandbox: `cargo xtask sandbox`
 
 A private, headless Mandara desktop for screenshots, demos and end-to-end

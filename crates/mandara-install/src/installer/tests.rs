@@ -962,3 +962,56 @@ fn a_new_prefix_replaces_the_old_path_line() {
     assert_eq!(profile.matches(super::PATH_MARK).count(), 1, "{profile}");
     assert!(profile.contains(&super::posix_path_line(&new.to_string_lossy())) && !profile.contains(&*old.to_string_lossy()), "{profile}");
 }
+
+#[test]
+fn installing_into_an_existing_path_refreshes_only_old_marked_entries() {
+    let f = Fixture::new();
+    super::add_to_path(&f.home(), &f.home().join("old/bin")).unwrap();
+    std::fs::write(f.home().join(".bashrc"), "export EDITOR=vi\n").unwrap();
+    let mut facts = f.facts(Family::Fedora);
+    facts.path_var = format!("{}:/usr/bin", f.home().join(".local/bin").display());
+    let mut host = FakeHost::with(&["dnf", "sudo"]);
+    run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, no_deps: true, ..Default::default() }).unwrap();
+    let profile = std::fs::read_to_string(f.home().join(".profile")).unwrap();
+    assert!(profile.contains(&*f.home().join(".local/bin").to_string_lossy()));
+    assert!(!profile.contains("old/bin"));
+    assert_eq!(std::fs::read_to_string(f.home().join(".bashrc")).unwrap(), "export EDITOR=vi\n");
+}
+
+#[test]
+fn an_unreadable_profile_does_not_abort_an_existing_path_install() {
+    let f = Fixture::new();
+    let original = [0xff, 0xfe];
+    std::fs::write(f.home().join(".profile"), original).unwrap();
+    let mut facts = f.facts(Family::Fedora);
+    facts.path_var = format!("{}:/usr/bin", f.home().join(".local/bin").display());
+    let mut host = FakeHost::with(&["dnf", "sudo"]);
+    run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, no_deps: true, ..Default::default() }).unwrap();
+    assert_eq!(std::fs::read(f.home().join(".profile")).unwrap(), original);
+    assert!(host.text().contains("Could not update PATH"));
+    assert!(f.home().join(".local/bin/mandara").is_file());
+}
+
+#[test]
+fn uninstall_removes_only_mandaras_own_plasma_startup_entry() {
+    for (owned, dry_run) in [(true, false), (false, false), (true, true)] {
+        let f = Fixture::new();
+        let startup = f.home().join(".config/autostart").join(files::KWIN_AUTOSTART_FILE);
+        std::fs::create_dir_all(startup.parent().unwrap()).unwrap();
+        let text = if owned { format!("[Desktop Entry]\nExec=mandara\n{}\n", files::KWIN_AUTOSTART_MARKER) } else { "[Desktop Entry]\nExec=my-command\n".into() };
+        std::fs::write(&startup, &text).unwrap();
+        let mut host = FakeHost::default();
+        run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { uninstall: true, dry_run, ..Default::default() }).unwrap();
+        if owned && !dry_run { assert!(!startup.exists()); }
+        else { assert_eq!(std::fs::read_to_string(startup).unwrap(), text); }
+    }
+}
+
+#[test]
+fn an_existing_plasma_session_needs_no_extra_compositor_installation() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["kwin_wayland", "dnf", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs { compositor: Some("kwin".into()), yes: true, no_deps: true, ..Default::default() }).unwrap();
+    assert!(!host.text().contains("Installing a compositor"));
+    assert!(host.ran().iter().any(|cmd| cmd.contains("setup --compositor kwin")));
+}

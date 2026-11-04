@@ -211,8 +211,9 @@ The rest of what's built in.
   them as the edge dock or a grid, number-key shortcuts and hold-to-confirm
   for everything that ends the session. The dock opens on either screen side
   (by default the one opposite the sidebar) or at the top or bottom center,
-  where it hangs from the bar as one piece with it, like the drop-down
-  panels (`session_menu.position`).
+  where it joins an edge-frame bar, opens as a card beside a floating bar,
+  or hangs from the screen edge when the bar is elsewhere. A bottom dock
+  keeps the menu in a card above it (`session_menu.position`).
 
 <table>
 <tr>
@@ -283,3 +284,7 @@ The rest of what's built in.
   which displays show the bar, dock, OSDs, notifications and wallpaper, and
   warm the screens from sunset to sunrise (`mandara msg nightlight toggle`).
 - **Screen time** (opt-in): charts your days per app, with gentle limits.
+
+Clipboard history uses the shared Wayland data-control watcher on both
+ext-data-control (including KWin) and wlr-data-control compositors. Turning
+the plugin off stops its watcher even when nothing is being copied.
