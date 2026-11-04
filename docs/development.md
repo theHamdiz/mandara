@@ -9,6 +9,20 @@ Everything here is Rust, run through `cargo xtask` (the `xtask/` crate). The
 system programs it starts are MangoWM, `dbus-daemon`, `bwrap`, PipeWire
 (`pipewire`, `pipewire-pulse`, `wireplumber`, `pactl`, `paplay`) and `grim`.
 
+## Website
+
+GitHub Pages serves `index.html` as the homepage and the Markdown guides as
+documentation. The homepage uses `assets/css/landing.css`; the shared
+`_includes/head-custom.html` supplies its phoenix favicon and light/dark
+colours. Keep asset and guide links behind Jekyll's `relative_url` filter
+so they also work under the repository's `/mandara/` path.
+
+The Look selector uses native radio controls and the FAQ uses `details`,
+so both work without JavaScript. Preview both colour schemes and narrow
+screens, including keyboard selection and reduced motion. Run
+`cargo test -p xtask pages_tests` to check the linked files, preview controls,
+contrast, installation command and plugin count against the guides.
+
 ## Warnings are errors
 
 `[workspace.lints]` in `Cargo.toml` denies every compiler warning and

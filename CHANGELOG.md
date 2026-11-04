@@ -29,6 +29,10 @@ installer, display reconnection and native KWin support.
 
 ### Improved
 
+- **A new home for Mandara.** The website has interactive Look previews,
+  a tour of Studio and desktop widgets, and a clearer installation guide.
+  It follows your light or dark theme and respects reduced motion.
+
 - **A shorter, friendlier first install.** The new download command shows
   the phoenix and real download progress, picks the right Linux build,
   verifies the signed archive before opening the installer, and passes your

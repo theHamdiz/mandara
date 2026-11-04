@@ -59,3 +59,76 @@ fn transparent_banners_keep_solid_readable_wordmarks() {
         assert!(solid > 20_000, "{theme}: the wordmark lost its solid interior");
     }
 }
+
+fn homepage() -> String {
+    let source = std::fs::read_to_string(crate::root().join("index.html")).unwrap();
+    assert!(source.starts_with("---\nlayout: null\n---\n"));
+    source.split_once("<!doctype html>").unwrap().1.trim().to_string()
+}
+
+#[test]
+fn the_homepage_uses_existing_artwork_guides_and_section_targets() {
+    let source = homepage();
+    let page = roxmltree::Document::parse(&source).unwrap();
+    let ids: std::collections::BTreeSet<_> = page.descendants().filter_map(|node| node.attribute("id")).collect();
+    assert_eq!(page.descendants().filter(|node| node.has_tag_name("h1")).count(), 1);
+    let mut pictures = 0;
+    for node in page.descendants() {
+        if node.has_tag_name("img") {
+            pictures += 1;
+            assert!(node.attribute("alt").is_some());
+            assert!(node.attribute("width").is_some());
+            assert!(node.attribute("height").is_some());
+        }
+        for attribute in node.attributes().filter(|attr| matches!(attr.name(), "href" | "src" | "srcset" | "content")) {
+            let value = attribute.value();
+            if let Some(id) = value.strip_prefix('#') {
+                assert!(ids.contains(id), "missing section: {id}");
+            } else if let Some(path) = value.strip_prefix("{{ '").and_then(|s| s.split_once("' | ").map(|(path, _)| path)) {
+                let path = path.split('#').next().unwrap().trim_start_matches('/');
+                if path.is_empty() { continue; }
+                let file = crate::root().join(path);
+                assert!(file.is_file() || file.with_extension("md").is_file(), "missing page or asset: {path}");
+            }
+        }
+    }
+    assert!(pictures >= 4);
+    assert!(!source.contains("<script"));
+}
+
+#[test]
+fn every_look_has_a_keyboard_control_and_light_and_dark_preview() {
+    let source = homepage();
+    let page = roxmltree::Document::parse(&source).unwrap();
+    let css = std::fs::read_to_string(crate::root().join("assets/css/landing.css")).unwrap();
+    let inputs: Vec<_> = page.descendants().filter(|node| node.has_tag_name("input") && node.attribute("name") == Some("look")).collect();
+    assert_eq!(inputs.len(), 3);
+    assert_eq!(inputs.iter().filter(|node| node.has_attribute("checked")).count(), 1);
+    for input in inputs {
+        assert_eq!(input.attribute("type"), Some("radio"));
+        let id = input.attribute("id").unwrap();
+        assert!(page.descendants().any(|node| node.has_tag_name("label") && node.attribute("for") == Some(id)));
+        assert!(css.contains(&format!("#{id}:checked ~ .look-stage .{id}")));
+        assert!(css.contains(&format!("#{id}:focus-visible")));
+        let figure = page.descendants().find(|node| node.has_tag_name("figure") && node.attribute("class").is_some_and(|s| s.split_whitespace().any(|class| class == id))).unwrap();
+        assert!(figure.descendants().any(|node| node.has_tag_name("source") && node.attribute("media") == Some("(prefers-color-scheme: light)")));
+        assert!(figure.descendants().any(|node| node.has_tag_name("img") && node.attribute("src").is_some()));
+    }
+    assert!(css.contains("@media (prefers-reduced-motion: no-preference)"));
+    assert!(css.contains("@media (prefers-reduced-motion: reduce)"));
+    assert!(css.contains("@supports (animation-timeline: view())"));
+}
+
+#[test]
+fn the_homepage_install_command_and_plugin_count_match_the_guides() {
+    let source = homepage();
+    let page = roxmltree::Document::parse(&source).unwrap();
+    let guide = std::fs::read_to_string(crate::root().join("docs/install.md")).unwrap();
+    let command = page.descendants().find(|node| node.has_tag_name("div") && node.attribute("class") == Some("install-command")).unwrap()
+        .children().find(|node| node.has_tag_name("code")).unwrap().text().unwrap();
+    assert!(guide.lines().any(|line| line == command));
+    let plugins = std::fs::read_to_string(crate::root().join("docs/plugins.md")).unwrap();
+    let count = page.descendants().filter(|node| node.has_tag_name("p")).filter_map(|node| node.text())
+        .find(|text| text.contains(" built-in plugins")).unwrap().split_whitespace().next().unwrap();
+    assert!(plugins.contains(&format!("The {count} first-party plugins")), "homepage plugin count differs from its guide");
+}

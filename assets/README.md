@@ -15,6 +15,8 @@ Mandara's logo is a **phoenix rising from a Mediterranean wave**, in violet, cya
 The Pages site uses the existing [128 px phoenix](brand/mandara-128.png) as
 its favicon. Its [page colours](css/pages.css) follow the same light or dark
 preference as the transparent banner, including the image background.
+The [homepage styles](css/landing.css) add the product tour and its native
+Look controls; its pictures come from the demo screenshots in `docs/screenshots/`.
 The [banner source](artwork/banner.html) renders at 1280×400 CSS pixels
 with a scale factor of two and a transparent background. Export it in each
 colour scheme after the fonts and logo have loaded; keep the output lossless

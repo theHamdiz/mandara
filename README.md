@@ -49,6 +49,7 @@
 
 <p align="center">
   <a href="docs/install.md"><b>Install</b></a> ·
+  <a href="https://thehamdiz.github.io/mandara/">Website</a> ·
   <a href="docs/README.md"><b>Documentation</b></a> ·
   <a href="docs/studio.md">Studio</a> ·
   <a href="docs/plugins.md">Plugins</a> ·
