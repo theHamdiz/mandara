@@ -7975,7 +7975,7 @@
 "These displays do not support power control" = "이 디스플레이는 전원 제어를 지원하지 않습니다"
 "This executable path cannot be used in a desktop entry" = "이 실행 파일 경로는 데스크톱 항목에 사용할 수 없습니다"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path}은 사용자 지정 자동 시작 항목이므로 Mandara가 변경하지 않았습니다"
-"Mandara uses native Plasma protocols; KWin’s configuration stays unchanged" = "Mandara는 Plasma의 기본 프로토콜을 사용하며 KWin 설정은 변경하지 않습니다"
+"Mandara uses native Plasma protocols; KWin’s configuration stays unchanged" = "Mandara는 Plasma 고유 프로토콜을 사용하며 KWin 설정은 변경하지 않습니다"
 "KWin: startup entry {path}" = "KWin: 시작 항목 {path}"
 "The lock screen did not confirm that the session is locked" = "잠금 화면에서 세션 잠금을 확인하지 못했습니다"
 "Change resolution, scale and display arrangement in Plasma System Settings. Shell placement below still applies." = "해상도, 배율 및 디스플레이 배치는 Plasma 시스템 설정에서 변경하세요. 아래의 셸 배치 설정은 계속 적용됩니다."
