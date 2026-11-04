@@ -20,6 +20,13 @@ pub struct OutputGeometry {
     pub height: i32,
 }
 
+impl OutputGeometry {
+    /// Both logical dimensions must arrive before a surface can use them.
+    pub fn has_size(&self) -> bool {
+        self.width > 0 && self.height > 0
+    }
+}
+
 #[derive(Default)]
 struct State {
     outputs: Vec<(wl_output::WlOutput, OutputGeometry)>,
@@ -146,7 +153,7 @@ pub fn query_outputs() -> anyhow::Result<Vec<OutputGeometry>> {
     }
     queue.roundtrip(&mut state)?;
     queue.roundtrip(&mut state)?;
-    Ok(state.outputs.into_iter().map(|(_, geo)| geo).filter(|g| g.width > 0).collect())
+    Ok(state.outputs.into_iter().map(|(_, geo)| geo).filter(OutputGeometry::has_size).collect())
 }
 
 #[cfg(test)]
@@ -159,6 +166,14 @@ mod tests {
 
     fn display(id: u64, name: Option<&str>, origin: (i32, i32)) -> DisplayKey {
         DisplayKey { id: gpui::DisplayId::new(id), uuid: name.map(output_uuid), origin }
+    }
+
+    #[test]
+    fn logical_geometry_is_ready_only_after_both_dimensions_arrive() {
+        for (width, height) in [(0, 0), (2560, 0), (0, 1440), (-1, 1440), (2560, -1)] {
+            assert!(!geo("DP-3", 0, 0, width, height).has_size());
+        }
+        assert!(geo("DP-3", 0, 0, 2560, 1440).has_size());
     }
 
     /// Issue #8: after `hyprctl reload` GPUI listed HDMI-A-1 first while

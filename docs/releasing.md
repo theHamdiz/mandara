@@ -776,9 +776,9 @@ so they were left.
 
 ## The installer and releases
 
-The installer is the binary itself (`crates/mandara-install`); there is no
-shell script. Users download a release tarball, extract it and run
-`bin/mandara install`:
+The Rust binary performs the installation (`crates/mandara-install`). A
+small POSIX bootstrap downloads and verifies the release before opening
+`bin/mandara install`; users can also extract a tarball and run it directly:
 
 1. It checks its own SHA-256 against the release's `update.json` (the
    binary hash of its target), else against a tarball sitting next to the
@@ -812,7 +812,7 @@ Every release also carries version-less copies of the tarballs
 always points at the newest build.
 
 The public download command is
-`sh -c 'cd "$(mktemp -d)" && curl -fLO https://thehamdiz.github.io/mandara/install.sh && sh install.sh'`.
+`sh -c 'f=$(mktemp) && curl -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f"'`.
 Pages serves the tracked POSIX bootstrap, which checks `SHA256SUMS.sig`
 against the same public keys as the binary, then checks the archive before
 extraction. Its loopback integration tests cover argument forwarding,

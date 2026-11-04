@@ -49,6 +49,7 @@ mod tests {
         assert_eq!(report.status, CheckerStatus::Ran);
         assert!(!root.exists());
         assert_eq!(report.diagnostics.len(), 1);
+        assert_eq!(report.problems(), 0, "an availability note must not trigger config reminders");
         assert_eq!(explain(&report.diagnostics[0], Target::KWin, report.version.as_deref()), report.diagnostics[0].message);
     }
 }

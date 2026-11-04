@@ -3,7 +3,7 @@
 One command, from any shell (bash, zsh or fish):
 
 ```bash
-sh -c 'cd "$(mktemp -d)" && curl -fLO https://thehamdiz.github.io/mandara/install.sh && sh install.sh'
+sh -c 'f=$(mktemp) && curl -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f"'
 ```
 
 The small [download script](../install.sh) shows Mandara's phoenix and the
@@ -13,7 +13,7 @@ then checks the release's Ed25519 signature and the archive's SHA-256
 newer, `sha256sum` and the usual POSIX tools; it tells you when one is
 missing. Downloads retry on temporary connection errors and stop if the
 connection stalls. Release downloads are removed when the command finishes
-or is interrupted. The small download script stays in its temporary folder
+or is interrupted. The small download script stays in a private temporary file
 for inspection. The command runs it only after the download succeeds.
 
 Its messages follow your terminal language, with the same fifteen languages
@@ -23,8 +23,8 @@ Installation, configuration and administrator prompts stay in the Rust
 `mandara install` command. Forward its options with `"$@"`:
 
 ```bash
-sh -c 'cd "$(mktemp -d)" && curl -fLO https://thehamdiz.github.io/mandara/install.sh && sh install.sh "$@"' sh --dry-run
-sh -c 'cd "$(mktemp -d)" && curl -fLO https://thehamdiz.github.io/mandara/install.sh && sh install.sh "$@"' sh --compositor kwin --no-greeter
+sh -c 'f=$(mktemp) && curl -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --dry-run
+sh -c 'f=$(mktemp) && curl -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --compositor kwin --no-greeter
 ```
 
 Options are forwarded unchanged, including paths with spaces. The bootstrap

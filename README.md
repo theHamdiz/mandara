@@ -249,7 +249,7 @@ you turn on only the ones you want, and plugins can add their own.
 One command, from any shell:
 
 ```bash
-sh -c 'cd "$(mktemp -d)" && curl -fLO https://thehamdiz.github.io/mandara/install.sh && sh install.sh'
+sh -c 'f=$(mktemp) && curl -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f"'
 ```
 
 The download shows its progress, checks the release signature and archive,

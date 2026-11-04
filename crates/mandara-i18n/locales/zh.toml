@@ -8245,6 +8245,6 @@
 "The signed release has no unique checksum for this archive." = "已签名的发行版中没有此归档文件的唯一校验和。"
 "The download did not match the signed release. Nothing was installed; please try again." = "下载内容与已签名的发行版不匹配。未安装任何内容；请重试。"
 "Could not unpack the verified release." = "无法解压已验证的发行版。"
-"The release does not contain exactly one executable installer." = "发行版必须包含且仅包含一个可执行安装程序。"
+"The release does not contain exactly one executable installer." = "发行版中的可执行安装程序数量不是一个。"
 "Manual downloads:" = "手动下载："
 "On NixOS, install Mandara through your flake." = "在 NixOS 上，请通过你的 flake 安装 Mandara。"

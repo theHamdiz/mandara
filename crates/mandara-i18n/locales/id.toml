@@ -8004,6 +8004,6 @@
 "The signed release has no unique checksum for this archive." = "Rilis bertanda tangan tidak memiliki satu checksum unik untuk arsip ini."
 "The download did not match the signed release. Nothing was installed; please try again." = "Unduhan tidak cocok dengan rilis bertanda tangan. Tidak ada yang dipasang; silakan coba lagi."
 "Could not unpack the verified release." = "Tidak dapat mengekstrak rilis yang telah diverifikasi."
-"The release does not contain exactly one executable installer." = "Rilis harus berisi tepat satu pemasang yang dapat dijalankan."
+"The release does not contain exactly one executable installer." = "Rilis tidak berisi tepat satu pemasang yang dapat dijalankan."
 "Manual downloads:" = "Unduhan manual:"
 "On NixOS, install Mandara through your flake." = "Di NixOS, pasang Mandara melalui flake Anda."

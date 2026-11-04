@@ -8003,6 +8003,6 @@
 "The signed release has no unique checksum for this archive." = "서명된 릴리스에 이 압축 파일의 고유 체크섬이 없습니다."
 "The download did not match the signed release. Nothing was installed; please try again." = "다운로드가 서명된 릴리스와 일치하지 않습니다. 아무것도 설치되지 않았습니다. 다시 시도하세요."
 "Could not unpack the verified release." = "검증된 릴리스의 압축을 풀 수 없습니다."
-"The release does not contain exactly one executable installer." = "릴리스에는 실행 가능한 설치 프로그램이 정확히 하나 있어야 합니다."
+"The release does not contain exactly one executable installer." = "릴리스의 실행 가능한 설치 프로그램 수가 정확히 하나가 아닙니다."
 "Manual downloads:" = "직접 다운로드:"
 "On NixOS, install Mandara through your flake." = "NixOS에서는 flake를 통해 Mandara를 설치하세요."

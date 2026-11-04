@@ -90,16 +90,34 @@ pub(super) fn enable_gpui_wallpapers(cx: &mut App) {
     cx.set_global(state);
 }
 
-fn snapshots(outputs: &[OutputGeometry], initial: bool, cx: &App) -> Vec<Spec> {
+fn display_spec(id: DisplayId, geo: Option<OutputGeometry>, fallback: (f32, f32), existing: &[Spec]) -> Spec {
+    match geo.filter(OutputGeometry::has_size) {
+        Some(geo) => Spec { display: Some(id), monitor: geo.name, size: (geo.width as f32, geo.height as f32) },
+        None => existing.iter().find(|s| s.display == Some(id)).cloned()
+            .unwrap_or_else(|| Spec { display: Some(id), monitor: String::new(), size: fallback }),
+    }
+}
+
+fn preserve_known_outputs(live: &[DisplayId], queried: &[OutputGeometry], existing: &[Spec], previous: &[OutputGeometry]) -> Vec<OutputGeometry> {
+    let mut outputs = queried.to_vec();
+    if queried.len() < live.len() {
+        for spec in existing.iter().filter(|s| s.display.is_some_and(|id| live.contains(&id))) {
+            if !spec.monitor.is_empty() && !outputs.iter().any(|g| g.name == spec.monitor)
+                && let Some(geo) = previous.iter().find(|g| g.name == spec.monitor && g.has_size())
+            {
+                outputs.push(geo.clone());
+            }
+        }
+    }
+    outputs
+}
+
+fn snapshots(outputs: &[OutputGeometry], existing: &[Spec], initial: bool, cx: &App) -> Vec<Spec> {
     let displays = cx.displays();
     let keys: Vec<_> = displays.iter().map(|d| DisplayKey::of(d.as_ref())).collect();
     let mut specs: Vec<_> = mandara_core::pair_displays(&keys, outputs).into_iter().map(|(id, geo)| {
         let fallback = displays.iter().find(|d| d.id() == id).map(|d| (f32::from(d.bounds().size.width), f32::from(d.bounds().size.height))).unwrap_or(FALLBACK_SIZE);
-        Spec {
-            display: Some(id),
-            monitor: geo.as_ref().map(|g| g.name.clone()).unwrap_or_default(),
-            size: geo.filter(|g| g.width > 0 && g.height > 0).map(|g| (g.width as f32, g.height as f32)).unwrap_or(fallback),
-        }
+        display_spec(id, geo, fallback, existing)
     }).collect();
     if initial && specs.is_empty() {
         let geo = outputs.first();
@@ -110,8 +128,12 @@ fn snapshots(outputs: &[OutputGeometry], initial: bool, cx: &App) -> Vec<Spec> {
 }
 
 fn reconcile(outputs: &[OutputGeometry], initial: bool, cx: &mut App) {
-    let desired = snapshots(outputs, initial, cx);
-    cx.set_global(mandara_ui::overlays::Outputs(outputs.to_vec()));
+    let existing: Vec<_> = cx.global::<Surfaces>().sets.iter().map(|set| set.spec.clone()).collect();
+    let live_displays: Vec<_> = cx.displays().iter().map(|display| display.id()).collect();
+    let previous = cx.try_global::<mandara_ui::overlays::Outputs>().map(|outputs| outputs.0.as_slice()).unwrap_or_default();
+    let outputs = preserve_known_outputs(&live_displays, outputs, &existing, previous);
+    let desired = snapshots(&outputs, &existing, initial, cx);
+    cx.set_global(mandara_ui::overlays::Outputs(outputs));
     let mut state = std::mem::take(cx.global_mut::<Surfaces>());
     let mut kept = Vec::new();
     for set in state.sets.drain(..) {
@@ -241,6 +263,26 @@ mod tests {
         assert_eq!(calls, 2);
         assert_eq!(outputs.len(), 1);
         assert_eq!(outputs[0].name, "DP-3");
+    }
+
+    #[test]
+    fn omitted_live_outputs_keep_their_geometry_but_disconnected_outputs_leave() {
+        let hdmi = spec(0, "HDMI-A-1", (1920.0, 1080.0));
+        let dp = spec(1, "DP-3", (2560.0, 1440.0));
+        let previous = [
+            OutputGeometry { name: hdmi.monitor.clone(), width: 1920, height: 1080, ..Default::default() },
+            OutputGeometry { name: dp.monitor.clone(), x: 1920, width: 2560, height: 1440, ..Default::default() },
+        ];
+        let existing = [hdmi.clone(), dp.clone()];
+        let live = [hdmi.display.unwrap(), dp.display.unwrap()];
+        assert_eq!(preserve_known_outputs(&live, &previous[..1], &existing, &previous), previous);
+        assert_eq!(preserve_known_outputs(&live[..1], &previous[..1], &existing, &previous), previous[..1]);
+        // Fractional-scale GPUI bounds must not replace a known logical size.
+        assert_eq!(display_spec(live[1], None, (1920.0, 1080.0), &existing), dp);
+        let new = DisplayId::new(7);
+        assert_eq!(display_spec(new, None, (1280.0, 720.0), &existing), spec(7, "", (1280.0, 720.0)));
+        let resized = OutputGeometry { width: 1280, height: 720, ..previous[1].clone() };
+        assert_eq!(display_spec(live[1], Some(resized), (1920.0, 1080.0), &existing), spec(1, "DP-3", (1280.0, 720.0)));
     }
 
     #[test]
