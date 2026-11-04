@@ -32,6 +32,7 @@ assets/brand/mandara-login-512.png
 assets/brand/mandara-login.svg
 assets/brand/mandara-symbolic.svg
 assets/catalog.json
+assets/css/landing.css
 assets/css/pages.css
 assets/plugins/active-window/cover.png
 assets/plugins/active-window/icon.png

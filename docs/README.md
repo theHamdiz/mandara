@@ -6,6 +6,8 @@ everything about it, one topic per page. New here? Start with
 [Install](install.md), then [Usage](usage.md). Quick answers are in the
 [FAQ](faq.md).
 
+For a visual tour, try the [Look previews on the website](https://thehamdiz.github.io/mandara/).
+
 ## Getting started
 
 | Page | What's in it |
