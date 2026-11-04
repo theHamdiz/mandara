@@ -1023,6 +1023,7 @@ Choose a profile photo
 Choose a username
 Choose an area to record
 Choose displays
+Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.
 Choose the key file
 Choose what the power menu offers and in which order. Built-in entries can be hidden or renamed; your own commands and boot entries can be removed.
 Choose…
@@ -1156,6 +1157,7 @@ Completed ({count})
 Component missing
 Compose project · {detail}
 Compositor
+Compositor (default: detected)
 Compositor conflicts
 Compositor drop-in
 Compositor include line

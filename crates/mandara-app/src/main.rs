@@ -99,7 +99,7 @@ enum Cmd {
         /// Also start Mandara with the compositor (from the drop-in).
         #[arg(long)]
         autostart: bool,
-        /// mango, niri, hyprland, umbriel, sway or river (default: the running one, else every
+        /// mango, niri, hyprland, umbriel, sway, river or kwin (default: the running one, else every
         /// compositor that has a config file).
         #[arg(long)]
         compositor: Option<String>,
@@ -753,6 +753,17 @@ mod tests {
         assert!(matches!(cli.command, Some(Cmd::Uninstall(a)) if a.dry_run));
         // `mandara --version` stays the top-level version flag.
         assert!(Cli::try_parse_from(["mandara", "install", "--version", "0.2.0"]).is_ok());
+    }
+
+    #[test]
+    fn setup_accepts_kwin_and_includes_it_in_help() {
+        use clap::CommandFactory as _;
+        let cli = Cli::try_parse_from(["mandara", "setup", "--compositor", "kwin", "--check"]).unwrap();
+        assert!(matches!(cli.command, Some(Cmd::Setup { compositor: Some(ref name), check: true, .. }) if name == "kwin"));
+        let cli = Cli::command();
+        let setup = cli.find_subcommand("setup").unwrap();
+        let help = setup.get_arguments().find(|argument| argument.get_id() == "compositor").unwrap().get_help().unwrap().to_string();
+        assert!(help.contains("kwin"));
     }
 
     /// The installer and the updater agree on which release build this is.

@@ -35,9 +35,11 @@ pub struct InstallArgs {
     #[arg(long)]
     pub no_greeter: bool,
     /// mango, niri, hyprland, umbriel, sway, river or kwin (default: detected).
-    /// When it isn't installed, it is installed from your distribution's
-    /// repositories first (after asking; --yes installs it).
-    #[arg(long, value_name = "NAME", value_parser = clap::builder::PossibleValuesParser::new(COMPOSITORS))]
+    /// Missing compositors can be installed after asking. KWin requires an
+    /// existing Plasma installation.
+    #[arg(long, value_name = "NAME", value_parser = clap::builder::PossibleValuesParser::new(COMPOSITORS),
+        help = mandara_i18n::t("Compositor (default: detected)"),
+        long_help = mandara_i18n::t("Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation."))]
     pub compositor: Option<String>,
     /// GitHub repository releases and sources come from (default
     /// theHamdiz/mandara, or $MANDARA_REPO). $MANDARA_RELEASE_BASE=<url>
@@ -146,5 +148,17 @@ mod tests {
     fn clap_definition_is_consistent() {
         use clap::CommandFactory as _;
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn compositor_help_explains_the_plasma_requirement() {
+        use clap::CommandFactory as _;
+        let cli = Cli::command();
+        let command = cli.find_subcommand("install").unwrap();
+        let help = command.get_arguments().find(|argument| argument.get_id() == "compositor").unwrap().get_long_help().unwrap().to_string();
+        assert!(help.contains("KWin requires an existing Plasma installation."));
+        for compositor in ["mango", "niri", "hyprland", "umbriel", "sway", "river", "kwin"] {
+            assert!(help.contains(compositor));
+        }
     }
 }

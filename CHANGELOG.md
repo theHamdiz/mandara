@@ -35,6 +35,8 @@ installer, display reconnection and native KWin support.
   configuration options through unchanged. Interrupted downloads report a
   failure, package-manager questions can read your terminal normally, and
   relative installation paths stay relative to where you ran the command.
+  Downloads stay on HTTPS, temporary files are removed even after a failure,
+  and the verified installer uses your cache when `/tmp` blocks programs.
 
 - **The installer can start before keyboard libraries are installed.**
   Keyboard support loads when it is first used, so a fresh Linux system

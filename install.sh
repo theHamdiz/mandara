@@ -363,6 +363,19 @@ run_installer() {
     fi
 }
 
+download_directory() {
+    if [ -n "${TMPDIR:-}" ]; then
+        work=$(mktemp -d "$TMPDIR/mandara-install.XXXXXXXX") || fail temporary
+        return
+    fi
+    # /tmp can be noexec; prefer the user's cache for the verified binary.
+    base=${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}
+    if mkdir -p -- "$base" 2>/dev/null && work=$(mktemp -d "$base/mandara-install.XXXXXXXX" 2>/dev/null); then
+        return
+    fi
+    work=$(mktemp -d /tmp/mandara-install.XXXXXXXX) || fail temporary
+}
+
 main() {
     banner
     check_nixos /
@@ -388,7 +401,7 @@ main() {
         *) fail https ;;
     esac
     archive="mandara-$arch-linux-$libc.tar.gz"
-    work=$(mktemp -d "${TMPDIR:-/tmp}/mandara-install.XXXXXXXX") || fail temporary
+    download_directory
 
     say "$(message signature)"
     fetch SHA256SUMS "$work/SHA256SUMS" 1048576

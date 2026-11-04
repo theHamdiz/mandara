@@ -8007,3 +8007,7 @@
 "The release does not contain exactly one executable installer." = "Rilis tidak berisi tepat satu pemasang yang dapat dijalankan."
 "Manual downloads:" = "Unduhan manual:"
 "On NixOS, install Mandara through your flake." = "Di NixOS, pasang Mandara melalui flake Anda."
+
+"Compositor (default: detected)" = "Kompositor (bawaan: terdeteksi)"
+
+"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Pilih mango, niri, hyprland, umbriel, sway, river atau kwin (bawaan: terdeteksi). Kompositor yang belum ada dapat dipasang setelah meminta persetujuan. KWin memerlukan instalasi Plasma yang sudah ada."
