@@ -64,7 +64,10 @@ The rest of what's built in.
   - **Settings** (Studio → Plugins → Clipboard): *Filter by kind* (the
     chips), *Preview lines* (lines of code, CSS and Markdown a row shows,
     0 = one line) and *Entries in collections* (how many are kept).
-  - **Alt+V** opens it (as does Super+Shift+V).
+  - **Alt+V** opens it (as does Super+Shift+V). Arrow Up and Down move
+    through the list, turning the page when they reach its end; Enter
+    copies the selected entry (or pastes it, where the panel is set to
+    paste), and the wheel turns pages.
 
 <table>
 <tr>

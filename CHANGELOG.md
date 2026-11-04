@@ -38,6 +38,11 @@ installer, display reconnection and native KWin support.
 
 ### Improved
 
+- **The clipboard answers the keyboard and the wheel.** Arrow Up and Down
+  move through the list and turn the page when they reach its end, Enter
+  copies the entry under them (or pastes it, where the panel is set to
+  paste), and the wheel now turns pages instead of doing nothing.
+
 - **A shorter, friendlier first install.** The new download command shows
   the phoenix and real download progress, picks the right Linux build,
   verifies the signed archive before opening the installer, and passes your

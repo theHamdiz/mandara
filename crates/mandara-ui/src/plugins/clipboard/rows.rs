@@ -53,6 +53,9 @@ const SWATCH_RING_ALPHA: f32 = 0.18;
 /// Row buttons (collection, pin, edit, delete).
 pub const ROW_BUTTON_PX: f32 = 28.0;
 const BUTTON_ALPHA: f32 = 0.8;
+/// Fill of the row the keyboard is on: the theme's tint, so it reads in
+/// light and dark (hover then wins while the pointer rests on the row).
+const SELECTED_ALPHA: (f32, f32) = (0.16, 0.12);
 /// The floating action pill shown on hover: inner padding, gap between its
 /// buttons and its soft shadow.
 const ACTIONS_PAD_PX: f32 = 3.0;
@@ -448,6 +451,8 @@ pub struct RowCx<'a> {
     pub can_edit: bool,
     /// The collection picker is open under this row.
     pub picking: bool,
+    /// The keyboard selection is on this row.
+    pub selected: bool,
 }
 
 /// What clicking a row's parts does (the panel wires them to its state).
@@ -638,6 +643,7 @@ pub fn entry_row(e: &ClipEntry, rcx: &RowCx, palette: &MandaraPalette, actions: 
         .when(!preview, |el| el.items_center())
         .gap(px(ROW_GAP_PX))
         .cursor_pointer()
+        .when(rcx.selected, |el| el.bg(palette.primary.with_alpha(alpha(SELECTED_ALPHA, palette)).hsla()))
         .hover(move |s| s.bg(hover.hsla()))
         .child(lead(e, rcx, palette))
         .child(body.when(e.pinned || in_collection, |el| el.pr(px(MARK_ROOM_PX))))
