@@ -126,7 +126,9 @@ pub trait Host {
     fn run(&mut self, cmd: &Cmd) -> std::io::Result<Output>;
     /// Whether a program is installed.
     fn has_program(&self, name: &str) -> bool;
-    /// Asks a yes/no question on the terminal; without one, `default`.
+    /// Asks a yes/no question on the terminal: Enter, or no terminal at all,
+    /// gives `default`; the terminal ending before Enter (Ctrl-D, a read
+    /// error) gives `false`.
     fn ask(&mut self, question: &str, default: bool) -> bool;
     /// Asks for a number from 0 to `max` on the terminal (Enter picks
     /// `default`). `None` without a terminal or after unusable answers: a
@@ -205,15 +207,14 @@ impl Host for SystemHost {
 
     fn ask(&mut self, question: &str, default: bool) -> bool {
         let hint = if default { "[Y/n]" } else { "[y/N]" };
-        match ask_tty(&format!("{question} {hint}")).as_deref() {
-            None | Some("") => default,
-            Some(a) => matches!(a, "y" | "Y" | "yes" | "YES" | "Yes"),
-        }
+        yes_no(ask_tty(&format!("{question} {hint}")), default)
     }
 
     fn choose(&mut self, question: &str, max: usize, default: usize) -> Option<usize> {
         for _ in 0..CHOICE_ATTEMPTS {
-            let answer = ask_tty(&format!("{question} [{default}]"))?;
+            let Answer::Line(answer) = ask_tty(&format!("{question} [{default}]")) else {
+                return None;
+            };
             if answer.is_empty() {
                 return Some(default);
             }
@@ -273,11 +274,43 @@ impl Host for SystemHost {
     }
 }
 
+/// What came back from a question on the terminal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Answer {
+    /// No terminal to ask on (an unattended install).
+    Unattended,
+    /// The terminal ended (Ctrl-D) or failed before Enter.
+    Closed,
+    /// One trimmed line; empty when only Enter was pressed.
+    Line(String),
+}
+
+/// A yes/no answer: Enter, or no terminal at all, takes `default`; the
+/// terminal ending or failing mid-question is a "No", never a yes nobody
+/// typed.
+fn yes_no(answer: Answer, default: bool) -> bool {
+    match answer {
+        Answer::Unattended => default,
+        Answer::Closed => false,
+        Answer::Line(a) if a.is_empty() => default,
+        Answer::Line(a) => matches!(a.as_str(), "y" | "Y" | "yes" | "YES" | "Yes"),
+    }
+}
+
 /// Prints `prompt` on the terminal itself (so it works with stdin
-/// redirected too) and reads one trimmed line. `None` without a terminal.
-fn ask_tty(prompt: &str) -> Option<String> {
-    let mut tty = std::fs::OpenOptions::new().read(true).write(true).open(TTY).ok()?;
-    write!(tty, "    {prompt} ").and_then(|_| tty.flush()).ok()?;
+/// redirected too) and reads one trimmed line.
+fn ask_tty(prompt: &str) -> Answer {
+    let Ok(tty) = std::fs::OpenOptions::new().read(true).write(true).open(TTY) else {
+        return Answer::Unattended;
+    };
+    read_answer(tty, prompt)
+}
+
+/// [`ask_tty`] on any stream: writes the prompt, reads up to Enter.
+fn read_answer(mut tty: impl std::io::Read + std::io::Write, prompt: &str) -> Answer {
+    if write!(tty, "    {prompt} ").and_then(|_| tty.flush()).is_err() {
+        return Answer::Closed;
+    }
     let mut answer = Vec::new();
     let mut byte = [0u8; 1];
     loop {
@@ -285,10 +318,10 @@ fn ask_tty(prompt: &str) -> Option<String> {
             Ok(1) if byte[0] == b'\n' => break,
             Ok(1) => answer.push(byte[0]),
             // EOF or a read error before Enter: no answer, not an empty one.
-            _ => return None,
+            _ => return Answer::Closed,
         }
     }
-    Some(String::from_utf8_lossy(&answer).trim().to_string())
+    Answer::Line(String::from_utf8_lossy(&answer).trim().to_string())
 }
 
 /// A private temporary folder, removed on drop.
@@ -363,5 +396,44 @@ mod tests {
         assert_eq!(std::fs::metadata(&p).unwrap().permissions().mode() & 0o777, 0o700);
         drop(t);
         assert!(!p.exists());
+    }
+
+    /// A terminal stand-in: reads `input`, swallows what's written.
+    struct Tty(std::io::Cursor<Vec<u8>>);
+
+    impl std::io::Read for Tty {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.0.read(buf)
+        }
+    }
+
+    impl std::io::Write for Tty {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn answer(input: &str) -> Answer {
+        read_answer(Tty(std::io::Cursor::new(input.as_bytes().to_vec())), "Go?")
+    }
+
+    #[test]
+    fn enter_takes_the_default_and_a_closed_terminal_says_no() {
+        assert_eq!(answer("\n"), Answer::Line(String::new()));
+        assert!(yes_no(answer("\n"), true));
+        assert!(!yes_no(answer("\n"), false));
+        assert!(yes_no(answer(" y \n"), false));
+        assert!(!yes_no(answer("nope\n"), true));
+        // Ctrl-D (EOF) before Enter, even after some typing: no answer, so No.
+        assert_eq!(answer(""), Answer::Closed);
+        assert_eq!(answer("y"), Answer::Closed);
+        assert!(!yes_no(answer(""), true));
+        // No terminal at all: an unattended install takes the default.
+        assert!(yes_no(Answer::Unattended, true));
+        assert!(!yes_no(Answer::Unattended, false));
     }
 }

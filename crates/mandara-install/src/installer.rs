@@ -984,10 +984,10 @@ impl<'a> Installer<'a> {
                         let names: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
                         self.say(Level::Ok, format!("on your PATH in new terminals ({})", names.join(", ")));
                     }
-                    Err(e) => self.say(Level::Warn, format!("couldn't add it to your PATH ({e}) — add export PATH=\"{}:$PATH\" to your shell profile", bin_dir.display())),
+                    Err(e) => self.say(Level::Warn, format!("couldn't add it to your PATH ({e}) — add {} to your shell profile", path_hint(&bin_dir))),
                 }
             } else {
-                self.say(Level::Detail, format!("add it yourself: export PATH=\"{}:$PATH\"", bin_dir.display()));
+                self.say(Level::Detail, format!("add it yourself: {}", path_hint(&bin_dir)));
             }
         }
         Ok(())
@@ -1348,33 +1348,82 @@ fn user_in_group(user: &str, group: &str, groups: &str, passwd: &str) -> bool {
 #[cfg(test)]
 mod tests;
 
-/// Marks the lines [`add_to_path`] writes, so a second install adds nothing.
+/// Marks the line [`add_to_path`] writes after it, so a second install adds
+/// nothing and an install to another folder replaces the old line.
 const PATH_MARK: &str = "# Added by the Mandara installer";
+
+/// `text` as one POSIX shell word: single-quoted, each `'` written `'\''`,
+/// so `$`, backticks, `"`, `\` and spaces stay literal.
+fn sh_word(text: &str) -> String {
+    format!("'{}'", text.replace('\'', r"'\''"))
+}
+
+/// `text` as one fish argument: single-quoted, with `\` and `'` escaped.
+fn fish_word(text: &str) -> String {
+    format!("'{}'", text.replace('\\', r"\\").replace('\'', r"\'"))
+}
+
+/// The POSIX line that puts `dir` first on `PATH` unless it's already there.
+fn posix_path_line(dir: &str) -> String {
+    let word = sh_word(dir);
+    format!("case \":$PATH:\" in *:{word}:*) ;; *) export PATH={word}:\"$PATH\" ;; esac")
+}
+
+/// The line to suggest when Mandara doesn't edit the profiles itself.
+fn path_hint(dir: &Path) -> String {
+    format!("export PATH={}:\"$PATH\"", sh_word(&dir.to_string_lossy()))
+}
+
+/// `text` with the line after each [`PATH_MARK`] set to `line`, or `None`
+/// when there is no mark (the marked line is always the installer's own).
+fn replace_marked(text: &str, line: &str) -> Option<String> {
+    let mut out = String::with_capacity(text.len() + line.len());
+    let mut lines = text.split_inclusive('\n');
+    let mut found = false;
+    while let Some(l) = lines.next() {
+        out.push_str(l);
+        if l.trim_end() == PATH_MARK {
+            found = true;
+            let _old = lines.next();
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    found.then_some(out)
+}
 
 /// Puts `bin_dir` on `PATH` in `~/.profile`, `~/.bashrc`, an existing
 /// `~/.zshrc` and, when fish is set up, a fish `conf.d` snippet. Returns the
-/// files it changed; a file that already has the line is left alone.
+/// files it changed: a file that already puts this folder on `PATH` is left
+/// alone, and an older installer line for another folder is replaced.
 fn add_to_path(home: &Path, bin_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
     use std::io::Write as _;
-    let dir = bin_dir.display();
-    let posix = format!("\n{PATH_MARK}\ncase \":$PATH:\" in *\":{dir}:\"*) ;; *) export PATH=\"{dir}:$PATH\" ;; esac\n");
+    let dir = bin_dir.to_string_lossy();
+    let posix = posix_path_line(&dir);
     let mut targets = vec![(home.join(".profile"), posix.clone()), (home.join(".bashrc"), posix.clone())];
     if home.join(".zshrc").is_file() {
         targets.push((home.join(".zshrc"), posix));
     }
     let fish = home.join(".config/fish");
     if fish.is_dir() {
-        targets.push((fish.join("conf.d/mandara-path.fish"), format!("{PATH_MARK}\nfish_add_path --path {dir}\n")));
+        targets.push((fish.join("conf.d/mandara-path.fish"), format!("fish_add_path --path {}", fish_word(&dir))));
     }
     let mut changed = Vec::new();
     for (file, line) in targets {
-        if std::fs::read_to_string(&file).is_ok_and(|s| s.contains(PATH_MARK)) {
+        let current = std::fs::read_to_string(&file).unwrap_or_default();
+        if current.lines().any(|l| l == line) {
             continue;
         }
         if let Some(parent) = file.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::OpenOptions::new().create(true).append(true).open(&file)?.write_all(line.as_bytes())?;
+        match replace_marked(&current, &line) {
+            Some(updated) => std::fs::write(&file, updated)?,
+            None => {
+                let lead = if current.is_empty() { "" } else { "\n" };
+                std::fs::OpenOptions::new().create(true).append(true).open(&file)?.write_all(format!("{lead}{PATH_MARK}\n{line}\n").as_bytes())?;
+            }
+        }
         changed.push(file);
     }
     Ok(changed)

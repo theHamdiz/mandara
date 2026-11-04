@@ -327,7 +327,7 @@ fn real_install_puts_files_in_place_and_runs_setup_and_greeter() {
     assert!(text.contains("is not on your PATH"));
     // `--yes` takes the default: the folder goes on PATH, once.
     let profile = std::fs::read_to_string(f.home().join(".profile")).unwrap();
-    assert!(profile.contains(&format!("export PATH=\"{}:$PATH\"", f.home().join(".local/bin").display())));
+    assert!(profile.contains(&format!("export PATH='{}':\"$PATH\"", f.home().join(".local/bin").display())));
     assert!(std::fs::read_to_string(f.home().join(".bashrc")).unwrap().contains("Mandara installer"));
     assert!(super::add_to_path(&f.home(), &f.home().join(".local/bin")).unwrap().is_empty());
     // No published checksum reachable: installed with a warning.
@@ -906,4 +906,59 @@ fn dry_run_shows_the_compositor_plan() {
     // (and says so) and nothing is queried.
     assert!(host.ran().iter().all(|c| !c.contains("pacman")), "{:?}", host.ran());
     assert!(text.contains("from Mandara's package table: the package databases aren't downloaded yet"));
+}
+
+/// What `sh` (or `fish`) ends up with on `PATH` after reading `profile`,
+/// or `None` when that shell isn't installed.
+fn path_after(shell: &str, profile: &Path) -> Option<String> {
+    crate::host::find_program(shell, std::env::var_os("PATH").as_deref())?;
+    let script = match shell {
+        "fish" => format!("set -gx PATH /usr/bin; source {}; string join : $PATH", super::fish_word(&profile.to_string_lossy())),
+        _ => format!("PATH=/usr/bin; . {}; printf %s \"$PATH\"", super::sh_word(&profile.to_string_lossy())),
+    };
+    let flags: &[&str] = if shell == "fish" { &["--no-config", "-c"] } else { &["-c"] };
+    let out = std::process::Command::new(shell).args(flags).arg(&script).env("HOME", profile.parent()?).output().ok()?;
+    assert!(out.status.success(), "{shell}: {}", String::from_utf8_lossy(&out.stderr));
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+#[test]
+fn the_path_line_keeps_an_awkward_folder_as_one_word() {
+    let f = Fixture::new();
+    std::fs::create_dir_all(f.home().join(".config/fish")).unwrap();
+    let bin = f.home().join("my bin/it's $HOME `x` \"q\" \\b");
+    std::fs::create_dir_all(&bin).unwrap();
+    let changed = super::add_to_path(&f.home(), &bin).unwrap();
+    assert_eq!(changed.len(), 3, "{changed:?}");
+    let want = bin.to_string_lossy();
+    if let Some(path) = path_after("sh", &f.home().join(".profile")) {
+        assert_eq!(path, format!("{want}:/usr/bin"));
+    }
+    if let Some(path) = path_after("fish", &f.home().join(".config/fish/conf.d/mandara-path.fish")) {
+        assert!(path.split(':').any(|p| p == want), "{path}");
+    }
+    // Already on PATH there: reading the profile twice adds it once.
+    let twice = f.home().join("twice");
+    let profile = std::fs::read_to_string(f.home().join(".profile")).unwrap();
+    std::fs::write(&twice, format!("{profile}{profile}")).unwrap();
+    if let Some(path) = path_after("sh", &twice) {
+        assert_eq!(path, format!("{want}:/usr/bin"));
+    }
+    // A second run with the same folder changes nothing.
+    assert!(super::add_to_path(&f.home(), &bin).unwrap().is_empty());
+}
+
+#[test]
+fn a_new_prefix_replaces_the_old_path_line() {
+    let f = Fixture::new();
+    std::fs::write(f.home().join(".profile"), "export EDITOR=vi\n").unwrap();
+    let old = f.home().join(".local/bin");
+    let new = f.home().join("opt/bin");
+    assert_eq!(super::add_to_path(&f.home(), &old).unwrap().len(), 2);
+    // The mark alone isn't enough: the folder on that line is what counts.
+    assert_eq!(super::add_to_path(&f.home(), &new).unwrap().len(), 2);
+    let profile = std::fs::read_to_string(f.home().join(".profile")).unwrap();
+    assert!(profile.starts_with("export EDITOR=vi\n"), "{profile}");
+    assert_eq!(profile.matches(super::PATH_MARK).count(), 1, "{profile}");
+    assert!(profile.contains(&super::posix_path_line(&new.to_string_lossy())) && !profile.contains(&*old.to_string_lossy()), "{profile}");
 }
