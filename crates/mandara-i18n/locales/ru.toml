@@ -8218,7 +8218,7 @@
 "The compositor did not respond in time" = "Композитор не ответил вовремя"
 "The compositor connection closed" = "Соединение с композитором закрыто"
 "Idle notifications are not available" = "Уведомления о бездействии недоступны"
-"No input seat is available" = "Нет доступного места ввода"
+"No input seat is available" = "Нет доступной группы устройств ввода"
 "These displays do not support power control" = "Эти экраны не поддерживают управление питанием"
 "This executable path cannot be used in a desktop entry" = "Этот путь к программе нельзя использовать в записи рабочего стола"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path} — пользовательская запись автозапуска; Mandara её не меняла"
@@ -8268,7 +8268,7 @@
 
 "Cancelled — nothing was changed." = "Отменено — ничего не изменено."
 
-"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Текущий экран входа сохранён; его можно сменить в Студии → Экран входа → Менеджер входа."
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Текущий экран входа сохранён; его можно сменить в Studio → Экран входа → Менеджер входа."
 
 "Setup" = "Настройка"
 

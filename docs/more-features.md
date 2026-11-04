@@ -156,7 +156,8 @@ The rest of what's built in.
 - **Process hunter**: find any process by name, command line or PID, and end
   or force-kill it. CPU and memory are live, and CPU is a share of all your
   cores (as in Resources), so a busy build reads a percentage of the whole
-  machine instead of several hundred percent of one core.
+  machine instead of several hundred percent of one core. The shared CPU
+  capacity follows online CPUs even under a process affinity or quota limit.
 - **Drives**: UDisks2 storage panel with usage rings, filesystem and
   encryption badges, mount / unmount, open in the file manager, LUKS unlock
   from an inline passphrase sheet and one-click *Safely remove* (unmount →

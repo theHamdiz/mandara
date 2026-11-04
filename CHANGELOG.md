@@ -43,12 +43,14 @@ installer, display reconnection and native KWin support.
   move through the list and turn the page when they reach its end, Enter
   copies the entry under them (or pastes it, where the panel is set to
   paste), and the wheel now turns pages instead of doing nothing. Search
-  keeps its own keyboard focus, and hidden entries cannot stay selected.
+  keeps its own keyboard focus, hidden entries cannot stay selected, and
+  a change in scroll direction discards the old wheel distance.
   Thanks to @Hedayatbakhshi. (#70)
 
 - **A new home for Mandara.** The website has interactive Look previews,
   a tour of Studio and desktop widgets, and a clearer installation guide.
-  It follows your light or dark theme and respects reduced motion.
+  It follows your light or dark theme, respects reduced motion, and keeps
+  keyboard focus visible when a question is open.
 
 - **A shorter, friendlier first install.** The new download command shows
   the phoenix and real download progress, picks the right Linux build,
@@ -85,7 +87,8 @@ installer, display reconnection and native KWin support.
   against a single core while the Resources panel measured all of them.
   Both now show a share of your whole machine, so no row goes past 100%,
   and the *hot* colour still starts at the same amount of work as before,
-  including when Mandara runs with a CPU quota or affinity limit.
+  including when Mandara runs with a CPU quota or affinity limit or CPUs
+  are brought online or taken offline.
   Thanks to @Hedayatbakhshi. (#68)
 
 - **First-install instructions account for your current terminal** (#72).

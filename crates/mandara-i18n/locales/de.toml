@@ -8217,7 +8217,7 @@
 "The compositor did not respond in time" = "Der Compositor hat nicht rechtzeitig geantwortet"
 "The compositor connection closed" = "Die Verbindung zum Compositor wurde geschlossen"
 "Idle notifications are not available" = "Leerlaufbenachrichtigungen sind nicht verfügbar"
-"No input seat is available" = "Kein Eingabe-Seat verfügbar"
+"No input seat is available" = "Kein Eingabegerätesatz verfügbar"
 "These displays do not support power control" = "Diese Bildschirme unterstützen keine Energiesteuerung"
 "This executable path cannot be used in a desktop entry" = "Dieser Programmpfad kann nicht in einem Desktop-Eintrag verwendet werden"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path} ist ein eigener Autostart-Eintrag; Mandara hat ihn unverändert gelassen"

@@ -101,7 +101,7 @@ impl Sampler {
         }
         let hz = clock_ticks() as f32;
         let now = Instant::now();
-        let cpus = cpu_capacity() as f32;
+        let cpus = refresh_cpu_capacity() as f32;
         let elapsed = self.at.map(|t| now.duration_since(t).as_secs_f32()).unwrap_or(0.0);
         let mut out = Vec::with_capacity(self.prev.len());
         let Ok(dir) = std::fs::read_dir("/proc") else { return out };
@@ -131,8 +131,25 @@ fn clock_ticks() -> u64 {
 /// Host-wide logical CPUs, matching the aggregate `/proc/stat` gauge even
 /// when this process has an affinity mask or a cgroup CPU quota.
 pub fn cpu_capacity() -> usize {
-    static CPUS: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
-    *CPUS.get_or_init(|| parse_cpu_capacity(&std::fs::read_to_string("/proc/stat").unwrap_or_default()).max(1))
+    let cached = CPU_CAPACITY.0.load(std::sync::atomic::Ordering::Relaxed);
+    if cached == 0 { refresh_cpu_capacity() } else { cached }
+}
+
+struct CpuCapacity(std::sync::atomic::AtomicUsize);
+static CPU_CAPACITY: CpuCapacity = CpuCapacity(std::sync::atomic::AtomicUsize::new(0));
+
+impl CpuCapacity {
+    fn update(&self, stat: Option<&str>) -> usize {
+        let capacity = stat.map(parse_cpu_capacity).unwrap_or_else(|| self.0.load(std::sync::atomic::Ordering::Relaxed)).max(1);
+        self.0.store(capacity, std::sync::atomic::Ordering::Relaxed);
+        capacity
+    }
+}
+
+/// Called by the background sampler, so CPU hotplug updates the cached
+/// capacity without adding procfs reads to each rendered row.
+fn refresh_cpu_capacity() -> usize {
+    CPU_CAPACITY.update(std::fs::read_to_string("/proc/stat").ok().as_deref())
 }
 
 fn parse_cpu_capacity(stat: &str) -> usize {
@@ -308,6 +325,16 @@ mod tests {
         assert_eq!(parse_cpu_capacity("cpu 100 200 300 400\n"), 0);
         assert_eq!(parse_cpu_capacity(""), 0);
         assert!(cpu_capacity() > 0);
+    }
+
+    #[test]
+    fn capacity_follows_online_cpus_and_keeps_the_last_read_on_io_failure() {
+        let capacity = CpuCapacity(std::sync::atomic::AtomicUsize::new(0));
+        assert_eq!(capacity.update(None), 1);
+        assert_eq!(capacity.update(Some("cpu 1 2 3 4\ncpu0 1 2 3 4\ncpu1 1 2 3 4\n")), 2);
+        assert_eq!(capacity.update(Some("cpu 1 2 3 4\ncpu0 1 2 3 4\n")), 1);
+        assert_eq!(capacity.update(Some("cpu 1 2 3 4\ncpu0 1 2 3 4\ncpu7 1 2 3 4\n")), 2);
+        assert_eq!(capacity.update(None), 2);
     }
 
     #[test]

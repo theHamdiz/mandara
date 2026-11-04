@@ -7972,7 +7972,7 @@
 "The compositor did not respond in time" = "کمپوزیٹر نے وقت پر جواب نہیں دیا"
 "The compositor connection closed" = "کمپوزیٹر کا رابطہ بند ہو گیا"
 "Idle notifications are not available" = "غیرفعالیت کی اطلاعات دستیاب نہیں ہیں"
-"No input seat is available" = "کوئی ان پٹ سیٹ دستیاب نہیں ہے"
+"No input seat is available" = "کوئی ان پٹ آلات کا گروپ دستیاب نہیں ہے"
 "These displays do not support power control" = "یہ ڈسپلے بجلی کے کنٹرول کی حمایت نہیں کرتے"
 "This executable path cannot be used in a desktop entry" = "اس قابلِ اجرا فائل کا راستہ ڈیسک ٹاپ اندراج میں استعمال نہیں ہو سکتا"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path} خودکار آغاز کا ذاتی اندراج ہے؛ Mandara نے اسے نہیں بدلا"
@@ -8016,13 +8016,13 @@
 
 "Open Mandara Studio from your application menu." = "اپنے ایپلیکیشن مینو سے Mandara Studio کھولیں۔"
 
-"Updates: Studio → About → Update now" = "اپ ڈیٹس: Studio → تعارف → ابھی اپ ڈیٹ کریں"
+"Updates: Studio → About → Update now" = "اپ ڈیٹس: Studio ← تعارف ← ابھی اپ ڈیٹ کریں"
 
 "If you added Mandara to PATH, open a new terminal before running these commands." = "اگر آپ نے Mandara کو PATH میں شامل کیا ہے تو یہ کمانڈز چلانے سے پہلے نیا ٹرمینل کھولیں۔"
 
 "Cancelled — nothing was changed." = "منسوخ — کچھ بھی تبدیل نہیں ہوا۔"
 
-"Login screen kept; switch any time in Studio → Login screen → Login manager." = "موجودہ لاگ اِن اسکرین برقرار ہے؛ اسٹوڈیو ← لاگ اِن اسکرین ← لاگ اِن مینیجر سے کسی بھی وقت بدلیں۔"
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "موجودہ لاگ اِن اسکرین برقرار ہے؛ Studio ← لاگ اِن اسکرین ← لاگ اِن مینیجر سے کسی بھی وقت بدلیں۔"
 
 "Setup" = "سیٹ اپ"
 

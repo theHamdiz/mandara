@@ -7971,7 +7971,7 @@
 "The compositor did not respond in time" = "컴포지터가 제시간에 응답하지 않았습니다"
 "The compositor connection closed" = "컴포지터 연결이 닫혔습니다"
 "Idle notifications are not available" = "유휴 알림을 사용할 수 없습니다"
-"No input seat is available" = "사용 가능한 입력 시트가 없습니다"
+"No input seat is available" = "사용 가능한 입력 장치 그룹이 없습니다"
 "These displays do not support power control" = "이 디스플레이는 전원 제어를 지원하지 않습니다"
 "This executable path cannot be used in a desktop entry" = "이 실행 파일 경로는 데스크톱 항목에 사용할 수 없습니다"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path}은 사용자 지정 자동 시작 항목이므로 Mandara가 변경하지 않았습니다"

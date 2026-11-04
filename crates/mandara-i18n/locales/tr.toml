@@ -8218,7 +8218,7 @@
 "The compositor did not respond in time" = "Birleştirici zamanında yanıt vermedi"
 "The compositor connection closed" = "Birleştirici bağlantısı kapandı"
 "Idle notifications are not available" = "Boşta kalma bildirimleri kullanılamıyor"
-"No input seat is available" = "Kullanılabilir bir input seat yok"
+"No input seat is available" = "Kullanılabilir bir giriş aygıtı grubu yok"
 "These displays do not support power control" = "Bu ekranlar güç denetimini desteklemiyor"
 "This executable path cannot be used in a desktop entry" = "Bu çalıştırılabilir dosya yolu masaüstü girdisinde kullanılamaz"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path} özel bir otomatik başlatma girdisi; Mandara değiştirmedi"
@@ -8268,7 +8268,7 @@
 
 "Cancelled — nothing was changed." = "İptal edildi — hiçbir şey değiştirilmedi."
 
-"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Giriş ekranınız korundu; Studio → Giriş ekranı → Giriş yöneticisi bölümünden istediğiniz zaman değiştirebilirsiniz."
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Giriş ekranınız korundu; Studio → Giriş ekranı → Oturum açma yöneticisi bölümünden istediğiniz zaman değiştirebilirsiniz."
 
 "Setup" = "Kurulum"
 

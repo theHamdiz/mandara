@@ -304,6 +304,21 @@ struct Ui {
 type Shared = Rc<RefCell<Ui>>;
 
 impl Ui {
+    fn scroll_page(&mut self, notches: f32) {
+        if self.pages < 2 || notches * self.wheel < 0.0 { self.wheel = 0.0; }
+        if self.pages < 2 { return; }
+        self.wheel += notches;
+        if self.wheel.abs() < WHEEL_NOTCHES_PER_PAGE { return; }
+        let newer = self.wheel > 0.0;
+        self.wheel = 0.0;
+        let page = if newer { self.page.saturating_sub(1) } else { (self.page + 1).min(self.pages - 1) };
+        if page != self.page {
+            self.page = page;
+            self.picker = None;
+            self.selected = None;
+        }
+    }
+
     /// Begin on the visible history page, then walk across page boundaries.
     fn next_selection(&self, delta: isize) -> Option<(usize, u64)> {
         if self.selected.is_none() {
@@ -376,6 +391,7 @@ impl Ui {
         self.page = 0;
         self.picker = None;
         self.selected = None;
+        self.wheel = 0.0;
     }
 }
 
@@ -420,21 +436,7 @@ fn select_step(ui: &Shared, delta: isize, cx: &mut App) {
 
 /// Turns pages from wheel distance: up goes to newer rows, down to older.
 fn wheel_step(ui: &Shared, notches: f32, cx: &mut App) {
-    update(ui, cx, |u| {
-        u.wheel += notches;
-        if u.wheel.abs() < WHEEL_NOTCHES_PER_PAGE || u.pages < 2 {
-            return;
-        }
-        let newer = u.wheel > 0.0;
-        u.wheel = 0.0;
-        let last = u.pages - 1;
-        let page = if newer { u.page.saturating_sub(1) } else { (u.page + 1).min(last) };
-        if page != u.page {
-            u.page = page;
-            u.picker = None;
-            u.selected = None;
-        }
-    });
+    update(ui, cx, |u| u.scroll_page(notches));
 }
 
 /// Runs what a left click on the selected row does: copy it (or paste it,
@@ -1533,6 +1535,24 @@ mod tests {
         assert_eq!(ui.next_selection(-1), Some((3, 30)));
         let selected = Ui { selected: Some(30), ..ui };
         assert_eq!(selected.next_selection(1), Some((4, 40)), "selected arrows still cross pages");
+    }
+
+    #[test]
+    fn scrolling_discards_single_page_distance_and_restarts_after_a_reversal() {
+        let mut ui = Ui { pages: 1, ..Default::default() };
+        ui.scroll_page(-10.0);
+        assert_eq!(ui.wheel, 0.0);
+        ui.pages = 3;
+        ui.scroll_page(-WHEEL_NOTCHES_PER_PAGE / 2.0);
+        assert_eq!(ui.page, 0);
+        ui.scroll_page(WHEEL_NOTCHES_PER_PAGE / 2.0);
+        assert_eq!(ui.wheel, WHEEL_NOTCHES_PER_PAGE / 2.0);
+        ui.scroll_page(-WHEEL_NOTCHES_PER_PAGE / 2.0);
+        assert_eq!(ui.page, 0);
+        ui.scroll_page(-WHEEL_NOTCHES_PER_PAGE / 2.0);
+        assert_eq!(ui.page, 1);
+        ui.show(Filter::All);
+        assert_eq!(ui.wheel, 0.0);
     }
 
     #[test]

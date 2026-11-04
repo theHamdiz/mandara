@@ -8213,7 +8213,7 @@
 "The compositor did not respond in time" = "El compositor no respondió a tiempo"
 "The compositor connection closed" = "Se cerró la conexión con el compositor"
 "Idle notifications are not available" = "Las notificaciones de inactividad no están disponibles"
-"No input seat is available" = "No hay ningún puesto de entrada disponible"
+"No input seat is available" = "No hay ningún grupo de dispositivos de entrada disponible"
 "These displays do not support power control" = "Estas pantallas no admiten control de energía"
 "This executable path cannot be used in a desktop entry" = "Esta ruta de ejecutable no se puede usar en una entrada de escritorio"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path} es una entrada de inicio personalizada; Mandara la dejó intacta"

@@ -7972,7 +7972,7 @@
 "The compositor did not respond in time" = "Kompositor tidak merespons tepat waktu"
 "The compositor connection closed" = "Koneksi kompositor ditutup"
 "Idle notifications are not available" = "Pemberitahuan status idle tidak tersedia"
-"No input seat is available" = "Tidak ada seat masukan yang tersedia"
+"No input seat is available" = "Tidak ada kelompok perangkat masukan yang tersedia"
 "These displays do not support power control" = "Layar ini tidak mendukung kontrol daya"
 "This executable path cannot be used in a desktop entry" = "Jalur program ini tidak dapat digunakan dalam entri desktop"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path} adalah entri mulai otomatis khusus; Mandara membiarkannya tetap"
@@ -8022,7 +8022,7 @@
 
 "Cancelled — nothing was changed." = "Dibatalkan — tidak ada yang diubah."
 
-"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Layar masuk Anda dipertahankan; ubah kapan saja melalui Studio → Layar masuk → Pengelola masuk."
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Layar masuk Anda dipertahankan; ubah kapan saja melalui Studio → Layar masuk → Pengelola login."
 
 "Setup" = "Penyiapan"
 

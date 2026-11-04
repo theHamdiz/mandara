@@ -8213,7 +8213,7 @@
 "The compositor did not respond in time" = "合成器未及时响应"
 "The compositor connection closed" = "合成器连接已关闭"
 "Idle notifications are not available" = "空闲通知不可用"
-"No input seat is available" = "没有可用的输入席位"
+"No input seat is available" = "没有可用的输入设备组"
 "These displays do not support power control" = "这些显示器不支持电源控制"
 "This executable path cannot be used in a desktop entry" = "此可执行文件路径无法用于桌面条目"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path} 是自定义自动启动条目；Mandara 未对其进行更改"
@@ -8257,13 +8257,13 @@
 
 "Open Mandara Studio from your application menu." = "从应用程序菜单打开 Mandara Studio。"
 
-"Updates: Studio → About → Update now" = "更新：Studio → 关于 → 立即更新"
+"Updates: Studio → About → Update now" = "更新： Studio → 关于 → 立即更新"
 
 "If you added Mandara to PATH, open a new terminal before running these commands." = "如果已将 Mandara 添加到 PATH，请先打开新终端，再运行这些命令。"
 
 "Cancelled — nothing was changed." = "已取消，未作任何更改。"
 
-"Login screen kept; switch any time in Studio → Login screen → Login manager." = "已保留当前登录屏幕；可随时在 Studio → 登录屏幕 → 登录管理器中切换。"
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "已保留当前登录界面；可随时在 Studio → 登录界面 → 登录管理器中切换。"
 
 "Setup" = "设置"
 

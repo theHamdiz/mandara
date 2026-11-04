@@ -8219,7 +8219,7 @@
 "The compositor did not respond in time" = "コンポジターが時間内に応答しませんでした"
 "The compositor connection closed" = "コンポジターとの接続が閉じられました"
 "Idle notifications are not available" = "アイドル通知は利用できません"
-"No input seat is available" = "入力シートが利用できません"
+"No input seat is available" = "利用可能な入力デバイスのグループがありません"
 "These displays do not support power control" = "これらのディスプレイは電源制御に対応していません"
 "This executable path cannot be used in a desktop entry" = "この実行ファイルのパスはデスクトップエントリーに使用できません"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path} は独自の自動起動エントリーです。Mandara は変更していません"
@@ -8263,7 +8263,7 @@
 
 "Open Mandara Studio from your application menu." = "アプリケーションメニューから Mandara Studio を開いてください。"
 
-"Updates: Studio → About → Update now" = "更新：Studio → このアプリについて → 今すぐ更新"
+"Updates: Studio → About → Update now" = "更新： Studio → 情報 → 今すぐ更新"
 
 "If you added Mandara to PATH, open a new terminal before running these commands." = "Mandara を PATH に追加した場合は、これらのコマンドを実行する前に新しいターミナルを開いてください。"
 

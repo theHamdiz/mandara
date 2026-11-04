@@ -8219,7 +8219,7 @@
 "The compositor did not respond in time" = "कंपोज़िटर ने समय पर जवाब नहीं दिया"
 "The compositor connection closed" = "कंपोज़िटर का कनेक्शन बंद हो गया"
 "Idle notifications are not available" = "निष्क्रियता की सूचनाएँ उपलब्ध नहीं हैं"
-"No input seat is available" = "कोई इनपुट सीट उपलब्ध नहीं है"
+"No input seat is available" = "कोई इनपुट डिवाइस समूह उपलब्ध नहीं है"
 "These displays do not support power control" = "ये डिस्प्ले पावर नियंत्रण का समर्थन नहीं करते"
 "This executable path cannot be used in a desktop entry" = "इस निष्पादन योग्य फ़ाइल का पथ डेस्कटॉप प्रविष्टि में उपयोग नहीं हो सकता"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path} एक कस्टम ऑटोस्टार्ट प्रविष्टि है; Mandara ने इसे नहीं बदला"
@@ -8269,7 +8269,7 @@
 
 "Cancelled — nothing was changed." = "रद्द किया गया — कुछ भी नहीं बदला।"
 
-"Login screen kept; switch any time in Studio → Login screen → Login manager." = "आपकी लॉगिन स्क्रीन रखी गई है; Studio → लॉगिन स्क्रीन → लॉगिन प्रबंधक से इसे कभी भी बदलें।"
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "आपकी लॉगिन स्क्रीन रखी गई है; Studio → लॉगिन स्क्रीन → लॉगिन मैनेजर से इसे कभी भी बदलें।"
 
 "Setup" = "सेटअप"
 

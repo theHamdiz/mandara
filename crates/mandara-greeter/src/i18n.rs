@@ -113,6 +113,24 @@ mod tests {
     }
 
     #[test]
+    fn installer_directions_use_the_labels_studio_actually_displays() {
+        for lang in Lang::ALL.into_iter().filter(|lang| *lang != Lang::En) {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../mandara-i18n/locales").join(format!("{}.toml", lang.code()));
+            let shared = Catalog::parse(&std::fs::read_to_string(path).unwrap()).unwrap();
+            for (instruction, labels) in [
+                ("Updates: Studio → About → Update now", ["Studio", "About", "Update now"]),
+                ("Login screen kept; switch any time in Studio → Login screen → Login manager.", ["Studio", "Login screen", "Login manager"]),
+            ] {
+                let message = shared.get(instruction).unwrap();
+                for label in labels {
+                    let displayed = if label == "Login manager" { catalog(lang).get(label) } else { None }.or_else(|| shared.get(label)).unwrap();
+                    assert!(message.contains(displayed), "{}: {instruction:?} should name {displayed:?}", lang.code());
+                }
+            }
+        }
+    }
+
+    #[test]
     fn every_greeter_string_is_translated() {
         let keys = source_keys();
         assert!(keys.len() >= 15, "scanner found only {} keys", keys.len());
