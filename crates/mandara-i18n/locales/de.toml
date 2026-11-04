@@ -8203,3 +8203,10 @@
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} wird von Nix (Home Manager oder NixOS) erzeugt und ist schreibgeschützt: Füge diese Zeile zu seiner Nix-Konfiguration hinzu, baue neu und führe `mandara setup` erneut aus: {line}"
+"Opposite the sidebar" = "Gegenüber der Seitenleiste"
+"Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't" = "Wo sich das Dock öffnet: an einer Bildschirmseite oder oben bzw. unten in der Mitte, an der Leiste dort hängend (bei den Randrahmen-Stilen aus einem Stück mit ihr), oder am Bildschirmrand, wo keine Leiste ist"
+"The grid always opens in the middle" = "Das Raster öffnet sich immer in der Mitte"
+"The bar isn't at the top, so the dock hangs from the screen edge" = "Die Leiste ist nicht oben, daher hängt das Dock am Bildschirmrand"
+"The bar isn't at the bottom, so the dock rises from the screen edge" = "Die Leiste ist nicht unten, daher steigt das Dock vom Bildschirmrand auf"
+"Joined to the bar, as one piece with it" = "An die Leiste angeschlossen, wie aus einem Stück"
+"A floating bar has no edge to join, so the dock opens as a card next to it" = "Eine schwebende Leiste hat keinen Rand zum Anschließen, daher öffnet sich das Dock als Karte daneben"

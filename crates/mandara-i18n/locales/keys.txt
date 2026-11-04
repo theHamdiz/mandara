@@ -127,6 +127,7 @@ A filesystem this full turns amber
 A filesystem this full turns coral
 A fixed light or dark wallpaper is set under Fit & effects; it shows instead of the slideshow while the theme is in that mode.
 A floating bar has no edge to hang from; popups on its edge stay cards
+A floating bar has no edge to join, so the dock opens as a card next to it
 A floating card under the bar, the panels' gap away from it.
 A folder
 A folder in /usr/share/sounds; empty follows your GTK setting
@@ -2786,6 +2787,7 @@ Joined side bars and the slab only
 Joined side bars draw the bar as the edge frame; your style comes back when they're separate
 Joined side bars hang from the bar as one frame
 Joined side bars share the bar's material, so the frame reads as one piece
+Joined to the bar, as one piece with it
 Joining {name}…
 Joins automatically
 Jorge Luis Borges
@@ -4157,6 +4159,7 @@ Opens links from Mandara; empty uses your default
 Opens on the first entry
 Opens on “{entry}”
 Opens the launcher
+Opposite the sidebar
 Opt-in
 Opt-in: a fresh wallpaper every few hours. Missed runs never pile up; older files are cleaned up.
 Optical drive
@@ -5914,6 +5917,8 @@ The ayah of the day with its meaning
 The bar chip isn't placed
 The bar floats over windows while it auto-hides
 The bar is on the other edge: the launcher opens from the bare screen edge instead of growing out of the bar.
+The bar isn't at the bottom, so the dock rises from the screen edge
+The bar isn't at the top, so the dock hangs from the screen edge
 The bar item goes away while nothing is playing
 The bar item, or none for no bar item.
 The bar item, panel and sidebar card re-render: no restart
@@ -5996,6 +6001,7 @@ The generator's curated palettes
 The generator's styles with their parameters
 The great man is the one who does not lose his child's heart.
 The greatest thing in the world is to know how to belong to oneself.
+The grid always opens in the middle
 The hadith of the day (or the hour), the same as every surface shows
 The hadith of the day couldn't be picked
 The hadith of the day is on its way
@@ -6860,6 +6866,7 @@ Where screenshots are saved (empty: Pictures/Screenshots)
 Where settings come from
 Where the Beacon bar sits, as a share of the screen height from the top
 Where the Ollama server listens
+Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't
 Where the launcher opens: in the middle of the screen or attached to the top / bottom edge at the left, middle or right (no argument: the current one)
 Where the middle group sits
 Where the middle group sits along the edge

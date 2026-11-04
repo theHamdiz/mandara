@@ -452,6 +452,45 @@ pub enum SessionMenuStyle {
     Grid,
 }
 
+/// Where the edge dock style opens (the grid always opens in the middle).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SessionMenuPosition {
+    /// The screen side opposite the sidebar (the default).
+    #[default]
+    Side,
+    /// The left screen edge.
+    Left,
+    /// The right screen edge.
+    Right,
+    /// Top centre: a column hanging from the bar when the bar is at the
+    /// top (one piece with it in the edge-frame styles, a card just under a
+    /// floating bar), otherwise from the top screen edge.
+    Top,
+    /// Bottom centre: the same, rising from the bottom (above a bottom dock).
+    Bottom,
+}
+
+impl SessionMenuPosition {
+    pub const ALL: [SessionMenuPosition; 5] = [Self::Side, Self::Left, Self::Right, Self::Top, Self::Bottom];
+
+    /// The config id (`side`, `left`, `right`, `top`, `bottom`).
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Side => "side",
+            Self::Left => "left",
+            Self::Right => "right",
+            Self::Top => "top",
+            Self::Bottom => "bottom",
+        }
+    }
+
+    /// Top or bottom centre: hangs from that edge (or the bar on it).
+    pub fn is_centred(self) -> bool {
+        matches!(self, Self::Top | Self::Bottom)
+    }
+}
+
 /// The power / session menu.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -463,6 +502,8 @@ pub struct SessionMenuConfig {
     #[serde(deserialize_with = "session_entries")]
     pub entries: Vec<SessionEntry>,
     pub style: SessionMenuStyle,
+    /// Where the edge dock opens.
+    pub position: SessionMenuPosition,
     pub grid_columns: u8,
     /// Destructive entries need a press-and-hold (`hold_ms`).
     pub hold_to_confirm: bool,
@@ -481,6 +522,7 @@ impl Default for SessionMenuConfig {
         Self {
             entries: on.iter().map(|k| SessionEntry::new(*k, true)).chain(off.iter().map(|k| SessionEntry::new(*k, false))).collect(),
             style: SessionMenuStyle::Dock,
+            position: SessionMenuPosition::Side,
             grid_columns: defaults::GRID_COLUMNS,
             hold_to_confirm: false,
             hold_ms: defaults::HOLD_MS,
@@ -717,6 +759,19 @@ mod tests {
         let menu = SessionMenuConfig::default();
         let shown: Vec<_> = menu.visible().map(|e| e.kind).collect();
         assert_eq!(shown, [SessionEntryKind::Lock, SessionEntryKind::Logout, SessionEntryKind::Suspend, SessionEntryKind::Reboot, SessionEntryKind::Shutdown]);
+    }
+
+    #[test]
+    fn session_menu_position_reads_and_defaults_to_the_side() {
+        assert_eq!(SessionMenuConfig::default().position, SessionMenuPosition::Side);
+        let old: SessionMenuConfig = toml::from_str("style = \"dock\"\n").unwrap();
+        assert_eq!(old.position, SessionMenuPosition::Side, "configs from before the setting keep the side dock");
+        for p in SessionMenuPosition::ALL {
+            let menu: SessionMenuConfig = toml::from_str(&format!("position = \"{}\"\n", p.id())).unwrap();
+            assert_eq!(menu.position, p);
+            assert!(toml::to_string(&menu).unwrap().contains(&format!("position = \"{}\"", p.id())));
+        }
+        assert!(SessionMenuPosition::Top.is_centred() && !SessionMenuPosition::Right.is_centred());
     }
 
     #[test]

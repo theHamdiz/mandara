@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 
 use gpui::{AnyElement, Bounds, ClickEvent, Pixels, canvas, point, Context, FontWeight, Global, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px};
 use mandara_config::ShellConfig;
-use mandara_config::power::{HookEvent, HookRule, IdleBehavior, IdleTimeouts, PowerSource, SessionEntry, SessionEntryKind, SessionMenuStyle};
+use mandara_config::power::{HookEvent, HookRule, IdleBehavior, IdleTimeouts, PowerSource, SessionEntry, SessionEntryKind, SessionMenuPosition, SessionMenuStyle};
 use mandara_core::ToGpui;
 use mandara_i18n::{t, tf, tk, tr};
 use mandara_theme::MandaraPalette;
@@ -712,6 +712,13 @@ impl StudioView {
             Some(e) => tf("Opens on “{entry}”", &[("entry", &entry_label(e))]),
             None => t("Opens on the first entry").to_string(),
         };
+        let title = if grid {
+            t("Grid").to_string()
+        } else {
+            let position = registry::MENU_POSITIONS.iter().find(|(id, _)| *id == menu.position.id()).map_or("", |(_, label)| t(label));
+            format!("{} · {position}", t("Edge dock"))
+        };
+        let place = (!grid).then(|| position_note(cfg, menu.position)).flatten();
         div()
             .row()
             .items_center()
@@ -722,8 +729,9 @@ impl StudioView {
                     .row()
                     .flex_col()
                     .gap(px(SPACE_4_PX))
-                    .child(div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).child(if grid { t("Grid") } else { t("Edge dock") }))
+                    .child(div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).child(title))
                     .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(hint))
+                    .when_some(place, |el, note| el.child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t(note))))
                     .when(menu.hold_to_confirm, |el| el.child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(tf("Hold {ms} ms to log out, restart or shut down", &[("ms", &menu.hold_ms)])))),
             )
             .into_any_element()
@@ -956,5 +964,48 @@ mod tests {
     fn timeout_chips_are_sorted_and_start_with_never() {
         assert_eq!(TIMEOUT_CHOICES_S[0], 0);
         assert!(TIMEOUT_CHOICES_S.windows(2).all(|w| w[0] < w[1]));
+    }
+}
+
+/// How a top or bottom dock meets `cfg`'s bar (`tk` text for the preview),
+/// so the choice explains itself when the bar can't take it: joined, a card
+/// under a floating bar, or the bare screen edge when the bar is elsewhere.
+fn position_note(cfg: &ShellConfig, position: SessionMenuPosition) -> Option<&'static str> {
+    use mandara_config::BarPosition;
+    let edge = match position {
+        SessionMenuPosition::Top => BarPosition::Top,
+        SessionMenuPosition::Bottom => BarPosition::Bottom,
+        _ => return None,
+    };
+    Some(if cfg.bar.position != edge {
+        if edge == BarPosition::Top { tk("The bar isn't at the top, so the dock hangs from the screen edge") } else { tk("The bar isn't at the bottom, so the dock rises from the screen edge") }
+    } else if cfg.bar_layout().is_attached() {
+        tk("Joined to the bar, as one piece with it")
+    } else {
+        tk("A floating bar has no edge to join, so the dock opens as a card next to it")
+    })
+}
+
+#[cfg(test)]
+mod position_tests {
+    use super::*;
+    use mandara_config::{BarLayout, BarPosition};
+
+    #[test]
+    fn the_preview_says_how_a_centred_dock_meets_the_bar() {
+        let mut cfg = ShellConfig::default();
+        cfg.bar.position = BarPosition::Top;
+        cfg.bar.layout = BarLayout::MinimalEdge;
+        assert_eq!(position_note(&cfg, SessionMenuPosition::Side), None);
+        assert_eq!(position_note(&cfg, SessionMenuPosition::Top), Some("Joined to the bar, as one piece with it"));
+        assert_eq!(position_note(&cfg, SessionMenuPosition::Bottom), Some("The bar isn't at the bottom, so the dock rises from the screen edge"));
+        cfg.bar.layout = BarLayout::FloatingPills;
+        assert_eq!(position_note(&cfg, SessionMenuPosition::Top), Some("A floating bar has no edge to join, so the dock opens as a card next to it"));
+        cfg.bar.position = BarPosition::Left;
+        assert_eq!(position_note(&cfg, SessionMenuPosition::Top), Some("The bar isn't at the top, so the dock hangs from the screen edge"));
+        // Every position has a label in the Studio choice.
+        for p in SessionMenuPosition::ALL {
+            assert!(registry::MENU_POSITIONS.iter().any(|(id, _)| *id == p.id()), "{p:?}");
+        }
     }
 }

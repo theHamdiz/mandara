@@ -426,6 +426,8 @@ const ALERT_STYLES: &[(&str, &str)] = &[("both", tk("Notification + OSD")), ("no
 const CRITICAL_ACTIONS: &[(&str, &str)] = &[("nothing", tk("Nothing")), ("suspend", tk("Sleep")), ("hibernate", tk("Hibernate")), ("shutdown", tk("Shut down"))];
 const PROFILES: &[(&str, &str)] = &[("null", tk("Leave it")), ("power-saver", tk("Power saver")), ("balanced", tk("Balanced")), ("performance", tk("Performance"))];
 const MENU_STYLES: &[(&str, &str)] = &[("dock", tk("Edge dock")), ("grid", tk("Grid"))];
+/// Where the session menu's dock opens (`SessionMenuPosition` ids).
+pub(crate) const MENU_POSITIONS: &[(&str, &str)] = &[("side", tk("Opposite the sidebar")), ("left", tk("Left")), ("right", tk("Right")), ("top", tk("Top center")), ("bottom", tk("Bottom center"))];
 const POWER_PANEL_STYLES: &[(&str, &str)] = &[("classic", tk("Classic")), ("modern", tk("Modern"))];
 const MENU_DEFAULTS: &[(&str, &str)] = &[("lock", tk("Lock")), ("suspend", tk("Sleep")), ("logout", tk("Log out")), ("reboot", tk("Restart")), ("shutdown", tk("Shut down"))];
 const SCHOOLS: &[(&str, &str)] = &[("shafii", tk("Shafi'i")), ("hanafi", tk("Hanafi"))];
@@ -503,6 +505,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     match setting.path {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
+        "/session_menu/position" if cfg.session_menu.style == mandara_config::power::SessionMenuStyle::Grid => Some(tk("The grid always opens in the middle")),
         path if path.starts_with("/compositor/input/cursor/") => system_settings::cursor_locked(path, running_compositor()),
         path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Mandara can't set this on Sway")),
         path if running_compositor() == Some(mandara_config::compositor::Target::River) && RIVER_LACKS.contains(&path) => Some(tk("River has no such setting")),
@@ -730,6 +733,7 @@ fn build() -> Vec<Setting> {
         s(Power, tk("Power profiles"), "/power/profile_battery", tk("On battery"), tk("Switch to this profile when running on battery"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/saver_at_low", tk("Power saver at low battery"), tk("Switch to power-saver at the low threshold and back when charging"), Toggle),
         s(Power, tk("Session menu"), "/session_menu/style", tk("Style"), tk("A dock on the screen edge or a centered grid"), Choice(MENU_STYLES)),
+        s(Power, tk("Session menu"), "/session_menu/position", tk("Position"), tk("Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't"), Choice(MENU_POSITIONS)),
         s(Power, tk("Session menu"), "/session_menu/grid_columns", tk("Grid columns"), tk("Tiles per row in the grid style"), slider(2.0, 6.0, 1.0, "")),
         s(Power, tk("Session menu"), "/session_menu/hold_to_confirm", tk("Hold to confirm"), tk("Log out, restart and shut down need a press-and-hold (mouse, Enter or a number key)"), Toggle),
         s(Power, tk("Session menu"), "/session_menu/hold_ms", tk("Hold time"), tk("How long to hold"), slider(300.0, 3000.0, 100.0, " ms")),

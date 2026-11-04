@@ -7958,3 +7958,10 @@
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} Nix (Home Manager বা NixOS) দিয়ে তৈরি এবং শুধু-পঠনযোগ্য: এই লাইনটি এর Nix কনফিগারেশনে যোগ করুন, আবার বিল্ড করুন, তারপর আবার `mandara setup` চালান: {line}"
+"Opposite the sidebar" = "সাইডবারের উল্টো দিকে"
+"Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't" = "ডক কোথায় খুলবে: স্ক্রিনের এক পাশে, অথবা উপরে বা নিচে মাঝখানে সেখানকার বার থেকে ঝুলে (প্রান্ত-ফ্রেম স্টাইলে তার সাথে এক টুকরো হয়ে), অথবা যেখানে বার নেই সেখানে স্ক্রিনের কিনারা থেকে"
+"The grid always opens in the middle" = "গ্রিড সবসময় মাঝখানে খোলে"
+"The bar isn't at the top, so the dock hangs from the screen edge" = "বার উপরে নেই, তাই ডক স্ক্রিনের কিনারা থেকে ঝোলে"
+"The bar isn't at the bottom, so the dock rises from the screen edge" = "বার নিচে নেই, তাই ডক স্ক্রিনের কিনারা থেকে ওঠে"
+"Joined to the bar, as one piece with it" = "বারের সাথে জোড়া, তার সাথে এক টুকরো হয়ে"
+"A floating bar has no edge to join, so the dock opens as a card next to it" = "ভাসমান বারের জোড়ার মতো কোনো কিনারা নেই, তাই ডক তার পাশে একটি কার্ড হিসেবে খোলে"

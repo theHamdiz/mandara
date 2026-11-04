@@ -7957,3 +7957,10 @@
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path}은(는) Nix(Home Manager 또는 NixOS)가 만든 읽기 전용 파일입니다. 이 줄을 Nix 설정에 추가하고 다시 빌드한 뒤 `mandara setup`을 다시 실행하세요: {line}"
+"Opposite the sidebar" = "사이드바 반대편"
+"Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't" = "Dock이 열리는 위치: 화면 한쪽 옆, 또는 위나 아래 가운데에서 그쪽 바에 매달려 열립니다(가장자리 프레임 스타일에서는 바와 하나로 이어짐). 바가 없는 쪽에서는 화면 가장자리에서 열립니다"
+"The grid always opens in the middle" = "그리드는 항상 가운데에 열립니다"
+"The bar isn't at the top, so the dock hangs from the screen edge" = "바가 위에 없으므로 Dock이 화면 가장자리에서 내려옵니다"
+"The bar isn't at the bottom, so the dock rises from the screen edge" = "바가 아래에 없으므로 Dock이 화면 가장자리에서 올라옵니다"
+"Joined to the bar, as one piece with it" = "바에 붙어 하나로 이어집니다"
+"A floating bar has no edge to join, so the dock opens as a card next to it" = "떠 있는 바에는 붙을 가장자리가 없으므로 Dock이 그 옆에 카드로 열립니다"

@@ -100,6 +100,24 @@ const AUTO_PASTE_DELAY: std::time::Duration = std::time::Duration::from_millis(1
 pub struct Outputs(pub Vec<mandara_core::OutputGeometry>);
 impl gpui::Global for Outputs {}
 
+/// The fill of a panel-like overlay (the launcher, the session menu's
+/// dock), and the seam to reach into the bar: joined to the bar it takes
+/// the bar's own fill (tint, opacity) so the join is seamless, and reaches
+/// a hairline into an opaque bar to hide the anti-aliased edge; otherwise
+/// the panels' fill and no seam.
+pub(crate) fn panel_fill(cfg: &mandara_config::ShellConfig, palette: &MandaraPalette, joined: bool) -> (gpui::Hsla, f32) {
+    use mandara_config::surfaces::ranges;
+    let frame = frame_color(palette);
+    let panel_alpha = ranges::OPACITY.clamp(cfg.panels.opacity, 1.0);
+    let bar_opacity = ranges::OPACITY.clamp(cfg.bar.opacity, 1.0);
+    if !joined {
+        return (frame.with_alpha(frame.alpha() * panel_alpha).hsla(), 0.0);
+    }
+    let tinted = if cfg.bar.tint > 0.0 { frame.mix(palette.primary, ranges::BAR_TINT.clamp(cfg.bar.tint, 0.0)) } else { frame };
+    let seam = if bar_opacity >= OPAQUE_ALPHA && !cfg.bar.frame_floats() { 1.0 } else { 0.0 };
+    (tinted.with_alpha(frame.alpha() * bar_opacity * panel_alpha).hsla(), seam)
+}
+
 /// Logical size of the output full-screen overlays open on (the focused
 /// monitor's, see [`crate::outputs::overlay_target`]).
 pub fn primary_output_size(cx: &App) -> (f32, f32) {
@@ -1153,12 +1171,12 @@ fn dock_icon_paths(cx: &mut App) -> Vec<std::path::PathBuf> {
 }
 
 /// Whether a viewport is an output's size (within the settle slack).
-fn is_output(vp: (f32, f32), o: &mandara_core::OutputGeometry) -> bool {
+pub(crate) fn is_output(vp: (f32, f32), o: &mandara_core::OutputGeometry) -> bool {
     first_frame::same_size(vp, (o.width as f32, o.height as f32))
 }
 
 /// The output the launcher opens on ([`crate::outputs::overlay_output`]).
-fn focused_output(cx: &App) -> Option<mandara_core::OutputGeometry> {
+pub(crate) fn focused_output(cx: &App) -> Option<mandara_core::OutputGeometry> {
     crate::outputs::overlay_output(&cx.try_global::<Outputs>()?.0, cx).cloned()
 }
 
@@ -1833,7 +1851,7 @@ impl LauncherView {
 impl Render for LauncherView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         use crate::launcher_place::{Join, Rect};
-        use mandara_config::surfaces::{PanelAnimation, ranges};
+        use mandara_config::surfaces::PanelAnimation;
         use mandara_config::workflow::{LauncherEdge, SearchPosition};
         // Counted in `diagnostics frames` while open (its own interval key).
         let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
@@ -2052,20 +2070,8 @@ impl Render for LauncherView {
         } else {
             body.flex_col().justify_end().children(chips_el).child(list).children(hints_el).child(search)
         };
-        // Fills as panels: joined to the bar it takes the bar's own fill
-        // (tint, opacity) so the join is seamless; otherwise the panel fill.
-        let frame = frame_color(&palette);
-        let panel_alpha = ranges::OPACITY.clamp(cfg.panels.opacity, 1.0);
-        let bar_opacity = ranges::OPACITY.clamp(cfg.bar.opacity, 1.0);
         let joined = place.keep_bright.is_some() && place.join == Join::Flares;
-        let fill = if joined {
-            let tinted = if cfg.bar.tint > 0.0 { frame.mix(palette.primary, ranges::BAR_TINT.clamp(cfg.bar.tint, 0.0)) } else { frame };
-            tinted.with_alpha(frame.alpha() * bar_opacity * panel_alpha).hsla()
-        } else {
-            frame.with_alpha(frame.alpha() * panel_alpha).hsla()
-        };
-        // A hairline into an opaque bar hides the anti-aliased seam.
-        let seam = if joined && bar_opacity >= OPAQUE_ALPHA && !cfg.bar.frame_floats() { 1.0 } else { 0.0 };
+        let (fill, seam) = panel_fill(&cfg, &palette, joined);
         let radius = crate::style::panel_radius(&cfg.bar);
         let scale = window.scale_factor();
         let surface = match (place.join, place.edge) {

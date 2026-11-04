@@ -7958,3 +7958,10 @@
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} dibuat oleh Nix (Home Manager atau NixOS) dan hanya-baca: tambahkan baris ini ke konfigurasi Nix-nya, bangun ulang, lalu jalankan `mandara setup` lagi: {line}"
+"Opposite the sidebar" = "Berseberangan dengan bilah samping"
+"Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't" = "Tempat dok terbuka: di salah satu sisi layar, atau di tengah atas atau bawah menggantung dari bilah di sana (menyatu dengannya pada gaya bingkai tepi), atau dari tepi layar jika bilah tidak ada di sana"
+"The grid always opens in the middle" = "Kisi selalu terbuka di tengah"
+"The bar isn't at the top, so the dock hangs from the screen edge" = "Bilah tidak di atas, jadi dok menggantung dari tepi layar"
+"The bar isn't at the bottom, so the dock rises from the screen edge" = "Bilah tidak di bawah, jadi dok muncul dari tepi layar"
+"Joined to the bar, as one piece with it" = "Tergabung dengan bilah, menyatu dengannya"
+"A floating bar has no edge to join, so the dock opens as a card next to it" = "Bilah mengambang tidak punya tepi untuk disambung, jadi dok terbuka sebagai kartu di dekatnya"

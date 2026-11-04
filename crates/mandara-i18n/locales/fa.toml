@@ -7958,3 +7958,10 @@
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} را Nix ‏(Home Manager یا NixOS) می‌سازد و فقط‌خواندنی است: این خط را به پیکربندی Nix آن بیفزایید، دوباره بسازید و `mandara setup` را دوباره اجرا کنید: {line}"
+"Opposite the sidebar" = "روبه‌روی نوار کناری"
+"Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't" = "داک کجا باز شود: در یک کنارهٔ صفحه، یا وسطِ بالا یا پایین، آویخته از نواری که آنجاست (در سبک‌های قاب لبه، یکپارچه با آن)، یا از لبهٔ صفحه جایی که نوار نیست"
+"The grid always opens in the middle" = "شبکه همیشه در وسط باز می‌شود"
+"The bar isn't at the top, so the dock hangs from the screen edge" = "نوار در بالا نیست، پس داک از لبهٔ صفحه آویزان می‌شود"
+"The bar isn't at the bottom, so the dock rises from the screen edge" = "نوار در پایین نیست، پس داک از لبهٔ صفحه بالا می‌آید"
+"Joined to the bar, as one piece with it" = "چسبیده به نوار و یکپارچه با آن"
+"A floating bar has no edge to join, so the dock opens as a card next to it" = "نوار شناور لبه‌ای برای چسبیدن ندارد، پس داک به‌صورت کارتی کنار آن باز می‌شود"

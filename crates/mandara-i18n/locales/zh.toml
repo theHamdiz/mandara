@@ -8199,3 +8199,10 @@
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} 由 Nix（Home Manager 或 NixOS）生成，是只读的：请把这一行加入它的 Nix 配置，重新构建，然后再次运行 `mandara setup`：{line}"
+"Opposite the sidebar" = "侧边栏的对侧"
+"Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't" = "停靠栏在哪里打开：屏幕左右某一侧，或顶部、底部的中间，从那里的状态栏垂下（边框样式下与状态栏连成一体）；没有状态栏的边则从屏幕边缘打开"
+"The grid always opens in the middle" = "网格始终在中间打开"
+"The bar isn't at the top, so the dock hangs from the screen edge" = "状态栏不在顶部，因此停靠栏从屏幕边缘垂下"
+"The bar isn't at the bottom, so the dock rises from the screen edge" = "状态栏不在底部，因此停靠栏从屏幕边缘升起"
+"Joined to the bar, as one piece with it" = "与状态栏相连，连成一体"
+"A floating bar has no edge to join, so the dock opens as a card next to it" = "浮动状态栏没有可相连的边，因此停靠栏以卡片形式在它旁边打开"

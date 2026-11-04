@@ -209,7 +209,10 @@ The rest of what's built in.
   hibernate, restart, shut down, soft restart, firmware setup, any
   boot-loader entry, restart Mandara, your own commands), rename them, show
   them as the edge dock or a grid, number-key shortcuts and hold-to-confirm
-  for everything that ends the session.
+  for everything that ends the session. The dock opens on either screen side
+  (by default the one opposite the sidebar) or at the top or bottom center,
+  where it hangs from the bar as one piece with it, like the drop-down
+  panels (`session_menu.position`).
 - **Hooks**: run a command when something happens — started, wallpaper /
   colors / light-dark changed, app themes written, locked / unlocked, idle /
   resumed, screens off / on, before sleep / logout / restart / shutdown,

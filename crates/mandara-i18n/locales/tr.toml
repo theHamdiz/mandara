@@ -8204,3 +8204,10 @@
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} Nix (Home Manager veya NixOS) tarafından oluşturulur ve salt okunurdur: bu satırı Nix yapılandırmasına ekleyin, yeniden derleyin ve `mandara setup` komutunu tekrar çalıştırın: {line}"
+"Opposite the sidebar" = "Kenar çubuğunun karşısında"
+"Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't" = "Dock'un açıldığı yer: ekranın bir yanında ya da üstte veya altta ortada, oradaki çubuktan sarkarak (kenar çerçevesi stillerinde onunla tek parça), çubuğun olmadığı yerde ise ekran kenarından"
+"The grid always opens in the middle" = "Izgara her zaman ortada açılır"
+"The bar isn't at the top, so the dock hangs from the screen edge" = "Çubuk üstte değil, bu yüzden dock ekran kenarından sarkar"
+"The bar isn't at the bottom, so the dock rises from the screen edge" = "Çubuk altta değil, bu yüzden dock ekran kenarından yükselir"
+"Joined to the bar, as one piece with it" = "Çubuğa bağlı, onunla tek parça"
+"A floating bar has no edge to join, so the dock opens as a card next to it" = "Yüzen çubuğun bağlanacak kenarı yok, bu yüzden dock yanında bir kart olarak açılır"
