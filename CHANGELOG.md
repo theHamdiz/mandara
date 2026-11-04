@@ -68,6 +68,12 @@ installer, display reconnection and native KWin support.
 
 ### Fixed
 
+- **The process table counts the whole machine.** A busy build used to
+  read "405.5%" for `rustc`, because the list measured each process
+  against a single core while the Resources panel measured all of them.
+  Both now show a share of your whole machine, so no row goes past 100%,
+  and the *hot* colour still starts at the same amount of work as before.
+
 - **First-install instructions account for your current terminal** (#72).
   If you added Mandara to PATH, the installer asks you to open a new
   terminal before using its commands. It also points to Studio in your

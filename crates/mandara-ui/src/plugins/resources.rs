@@ -688,7 +688,7 @@ fn threads() -> usize {
     std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1)
 }
 
-fn top_apps(procs: &[Process], threads: usize) -> Vec<TopApp> {
+fn top_apps(procs: &[Process]) -> Vec<TopApp> {
     let mut groups: Vec<TopApp> = Vec::new();
     for p in procs {
         match groups.iter_mut().find(|g| g.name == p.name) {
@@ -700,9 +700,7 @@ fn top_apps(procs: &[Process], threads: usize) -> Vec<TopApp> {
             None => groups.push(TopApp { name: p.name.clone(), count: 1, cpu: p.cpu, rss: p.rss, icon: None }),
         }
     }
-    for g in &mut groups {
-        g.cpu /= threads.max(1) as f32;
-    }
+    // `Process::cpu` is already a share of the whole machine.
     groups.sort_by(|a, b| b.cpu.total_cmp(&a.cpu).then(b.rss.cmp(&a.rss)));
     groups.truncate(TOP_APPS_RANGE.1 as usize);
     for g in &mut groups {
@@ -737,7 +735,7 @@ async fn collect(sampler: Arc<Mutex<Sampler>>, executor: BackgroundExecutor) -> 
         temp_c,
         load: loadavg(),
         threads,
-        top: top_apps(&procs, threads),
+        top: top_apps(&procs),
         temps,
         gpus,
         primed,
