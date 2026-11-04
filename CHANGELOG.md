@@ -6,6 +6,13 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **The clipboard answers the keyboard and the wheel.** Arrow Up and Down
+  move through the list and turn the page when they reach its end, Enter
+  copies the entry under them (or pastes it, where the panel is set to
+  paste), and the wheel now turns pages instead of doing nothing.
+
 ## 0.15.0 — 2026-11-03
 
 Fresh screenshots everywhere. Cleaner main menu tiles.
