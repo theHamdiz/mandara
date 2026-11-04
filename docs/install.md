@@ -358,7 +358,11 @@ with **one include line** in your own config, writes everything else to
 path, and checks the result with the compositor's own validator
 (`mango -p`, `niri validate`, `Hyprland --verify-config`,
 `umbriel config validate`, `sway --validate`), rolling back if it objects
-(see [Config doctor](#config-doctor)).
+(see [Config doctor](#config-doctor)). **River is the exception:** its
+`init` is a program, not a config file, so there is no include line and
+no checker. Mandara never edits `init`; it sends River's settings over
+`river-control` while it runs, and you add the one autostart line
+yourself (the table below shows it).
 
 | | Include line in your config | Autostart |
 |---|---|---|

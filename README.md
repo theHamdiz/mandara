@@ -149,7 +149,8 @@ around, each one measured or shipped today:
     Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus,
     takes over an existing setup without losing it, and updates arrive as
     small, signed binary patches from Studio → About → Update now. NixOS
-    gets a flake with NixOS and Home Manager modules.
+    gets a flake with NixOS and Home Manager modules, updated through the
+    flake.
 12. **Made for everyone.** 15 interface languages, right-to-left Arabic,
     Persian and Urdu included, and fonts chosen for every script it shows.
 
@@ -259,7 +260,9 @@ Debian and Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus. Updates arr
 On **NixOS**, Mandara is a flake: try it with
 `nix run github:theHamdiz/mandara`, or add it to your system with
 `programs.mandara.enable = true;` (a NixOS module and a Home Manager
-module come with it). Nix keeps it updated.
+module come with it). NixOS users update through their flake, not Studio's
+*Update now*: run `nix flake update`, then `sudo nixos-rebuild switch` (or
+`home-manager switch`).
 
 → **[Install guide](docs/install.md)**: Arch packages, NixOS, other
 options, coming from another setup.

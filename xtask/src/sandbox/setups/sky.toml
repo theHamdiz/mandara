@@ -5,6 +5,10 @@
 # (run it in the afternoon somewhere: `SANDBOX_TZ=America/Lima` with the
 # Lima location below), then make the wallpaper once:
 #   sandbox msg wallgen generate corniche --palette stanley-sunset --seed 0x28 --size 2880x1620 --format png --no-apply
+# The wallpaper below didn't exist when the shell started, so the desktop
+# tried it, failed and won't look again for the same path (setting it
+# again changes nothing): apply it only now that the file exists, with
+# `sandbox shell restart` (the shell reads it at startup), then
 #   sandbox msg theme wallpaper vibrant   (the warm palette of the sunset)
 # then `sandbox msg notifications clear` and `sandbox shot`.
 

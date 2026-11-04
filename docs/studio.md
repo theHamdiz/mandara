@@ -307,7 +307,8 @@ narrow ones; everything mirrors for right-to-left languages.
   `Hyprland --version`); each compositor's own checker (`mango -p`,
   `niri validate`, `Hyprland --verify-config`, `umbriel config validate`,
   `sway --validate`) must accept the result or the include is rolled back.
-  Sway has no rounded corners, opacity, blur, shadows or animations: while
+  Sway has no rounded corners, blur, shadows or animations, and no opacity
+  rules that Mandara supports (its `opacity` command isn't a rule): while
   it runs those rows are locked with that reason, and its tab says what
   its drop-in carries (gaps, pixel borders, `client.*` colours, `for_window`
   floating / sticky rules for both Wayland `app_id`s and X11 classes,
@@ -325,7 +326,8 @@ narrow ones; everything mirrors for right-to-left languages.
   translates the common hyprlang dispatchers and passes `hl.…` text through.
 - **Config doctor** (top of the Compositor page): the compositor's own
   checker (`mango -p`, `niri validate`, `Hyprland --verify-config`,
-  `umbriel config validate`, `sway --validate`) run read-only on your
+  `umbriel config validate`, `sway --validate --verbose`, whose verbose
+  output is what reports a key bound twice) run read-only on your
   config and every file it includes, with its verdict in one line ("All good — checked 2 min ago
   with MangoWM 0.18.4"). Problems are grouped by file, your files apart
   from Mandara's drop-in, each with its kind (unknown, removed in this

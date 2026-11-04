@@ -3,6 +3,7 @@
 # `cargo xtask sandbox up --config xtask/src/sandbox/setups/music.toml --size 2880x1620 --scale 2`,
 # the wallpaper once:
 #   sandbox msg wallgen generate liquid --palette sunset --seed 0x2a --size 2880x1620 --format png --no-apply
+#   sandbox shell restart   (the shell loads the wallpaper, which didn't exist yet when it started)
 #   sandbox msg theme wallpaper vibrant
 # then `sandbox audio play` and `sandbox shot`.
 
