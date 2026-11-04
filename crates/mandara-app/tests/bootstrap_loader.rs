@@ -53,7 +53,7 @@ fn setup_reports_a_missing_keyboard_library_without_panicking_or_writing_config(
         .env("XDG_CONFIG_HOME", &config).env("HOME", dir.path()).env("MANDARA_NO_IPC", "1")
         .stdin(std::process::Stdio::null()).output().unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert_eq!(output.status.code(), Some(12), "{stderr}");
     assert!(stderr.contains("Install libxkbcommon"), "{stderr}");
     assert!(!stderr.contains("panicked"), "{stderr}");
     assert_eq!(std::fs::read_to_string(mango).unwrap(), original);

@@ -61,6 +61,10 @@ const DEV_FINGERPRINT: &str = "dev";
 /// `mandara setup --check` exit code for errors the compositor reports in
 /// its config (10 means conflicts).
 pub const SETUP_CONFIG_ERRORS: i32 = 11;
+/// `mandara setup --check` found conflicts that may be retired.
+pub const SETUP_CONFLICTS: i32 = 10;
+/// `mandara setup --check` could not inspect shortcuts without a required library.
+pub const SETUP_PREREQUISITE: i32 = 12;
 /// The quiet log level for the setup commands the installer runs.
 const SETUP_LOG: (&str, &str) = ("RUST_LOG", "warn");
 
@@ -1134,10 +1138,18 @@ impl<'a> Installer<'a> {
         if checked.as_ref().is_none_or(|o| o.success) {
             return;
         }
+        if checked.as_ref().and_then(|o| o.code) == Some(SETUP_PREREQUISITE) {
+            self.say(Level::Warn, t("Install libxkbcommon before checking or changing compositor shortcuts."));
+            return;
+        }
         // No conflicts, but the compositor itself reports errors in the
         // config: the Config doctor explains them and offers fixes.
         if checked.as_ref().and_then(|o| o.code) == Some(SETUP_CONFIG_ERRORS) {
             self.say(Level::Warn, "your compositor reports errors in its config: run `mandara setup --check` to see them, or open Studio → Compositor → Config doctor");
+            return;
+        }
+        if checked.as_ref().and_then(|o| o.code) != Some(SETUP_CONFLICTS) {
+            self.say(Level::Warn, "compositor setup failed; run `mandara setup` later");
             return;
         }
         if self.ask("Retire the conflicts listed above (backed up, reversible with `mandara setup --restore latest`)?", true) {

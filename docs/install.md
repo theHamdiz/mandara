@@ -663,3 +663,8 @@ content hash. Each push to `main` bumps exactly the components whose build
 changed: Conventional Commits pick patch, minor or major. When the shell's
 version changes, CI builds and publishes a release. `mandara --version` shows
 the exact build. Details are in [docs/releasing.md](releasing.md).
+
+`mandara setup --check` leaves compositor files unchanged. Its exit status
+is 10 for shortcut conflicts, 11 for compositor check errors and 12 when
+a required keyboard library is unavailable. The installer offers conflict
+retirement only after status 10; other failures are reported separately.

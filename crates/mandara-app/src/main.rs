@@ -740,6 +740,8 @@ mod tests {
         assert_eq!(mandara_install::installer::ADMIN_EXE, mandara_config::admin::ADMIN_EXE);
         assert_eq!(mandara_greeter::install::INSTALLED_EXE, mandara_config::admin::GREETER_EXE);
         assert_eq!(mandara_install::installer::SETUP_CONFIG_ERRORS, crate::setup_cli::EXIT_CONFIG_ERRORS, "the installer reads `setup --check`'s exit code");
+        assert_eq!(mandara_install::installer::SETUP_CONFLICTS, crate::setup_cli::EXIT_CONFLICTS);
+        assert_eq!(mandara_install::installer::SETUP_PREREQUISITE, crate::setup_cli::EXIT_PREREQUISITE);
     }
 
     use super::{Cli, Cmd};

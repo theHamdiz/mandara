@@ -82,6 +82,8 @@ installer, display reconnection and native KWin support.
 
 ### Fixed
 
+- An installation without libxkbcommon now explains the missing library and leaves shortcut checks alone. It no longer offers to retire conflicts that could not be checked.
+
 - Display changes now recover even when both geometry queries fail, and a stale monitor list cannot give a new display another monitor’s name or dimensions. `setup --check --compositor kwin` also reports whether KWin is available.
 
 - **The process table counts the whole machine.** A busy build used to

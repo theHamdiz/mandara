@@ -292,12 +292,12 @@ mod tests {
         let release = profile(&t.join("release"), 400_000);
         let total = disk_usage(&t);
         // Dropping only debug's incremental cache cannot reach 60 %.
-        // A parallel test can briefly inherit its lock while spawning a
-        // child, so pruning release's incremental cache is also valid.
+        // Removing whole debug profiles or further incremental caches
+        // must reach the low-water budget while keeping release objects.
         let max_gib = (total - 1) as f64 / GIB;
         prune_once(std::slice::from_ref(&t), max_gib, false, false).unwrap();
         assert!(!debug.join(INCREMENTAL).exists(), "debug's incremental cache deleted first");
-        assert!(disk_usage(&t) <= (max_gib * GIB * LOW_WATER) as u64, "the low-water budget is met even when a profile stays locked");
+        assert!(disk_usage(&t) <= (max_gib * GIB * LOW_WATER) as u64, "the low-water budget is met");
         assert!(release.join("deps/lib.rlib").exists(), "release kept");
     }
 

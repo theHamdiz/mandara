@@ -20,6 +20,8 @@ pub const EXIT_CONFLICTS: i32 = 10;
 /// `mandara setup --check` exit code when the compositor reports errors in
 /// the config (and there are no conflicts).
 pub const EXIT_CONFIG_ERRORS: i32 = 11;
+/// A required library is unavailable; no configuration was inspected or changed.
+pub const EXIT_PREREQUISITE: i32 = 12;
 
 pub struct Options {
     pub autostart: bool,
@@ -59,7 +61,8 @@ pub fn setup(o: Options) -> Result<()> {
         return Ok(());
     }
     if targets.iter().any(|target| *target != Target::KWin) && !mandara_config::mango_keys::is_available() {
-        anyhow::bail!(mandara_i18n::t("Install libxkbcommon before checking or changing compositor shortcuts."));
+        eprintln!("{}", mandara_i18n::t("Install libxkbcommon before checking or changing compositor shortcuts."));
+        std::process::exit(EXIT_PREREQUISITE);
     }
     let mut store = mandara_config::ConfigStore::open_default()?;
     if o.autostart && !o.check && !store.get().compositor.autostart {
