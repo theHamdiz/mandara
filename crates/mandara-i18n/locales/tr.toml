@@ -8218,7 +8218,7 @@
 "The compositor did not respond in time" = "Birleştirici zamanında yanıt vermedi"
 "The compositor connection closed" = "Birleştirici bağlantısı kapandı"
 "Idle notifications are not available" = "Boşta kalma bildirimleri kullanılamıyor"
-"No input seat is available" = "Kullanılabilir giriş oturumu yok"
+"No input seat is available" = "Kullanılabilir bir input seat yok"
 "These displays do not support power control" = "Bu ekranlar güç denetimini desteklemiyor"
 "This executable path cannot be used in a desktop entry" = "Bu çalıştırılabilir dosya yolu masaüstü girdisinde kullanılamaz"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path} özel bir otomatik başlatma girdisi; Mandara değiştirmedi"

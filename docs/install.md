@@ -15,8 +15,10 @@ missing. Downloads retry on temporary connection errors and stop if the
 connection stalls. The command runs the script only after the download
 succeeds. It removes temporary files on completion, failure or interruption.
 
-The verified installer runs from your cache so a `noexec` mount on `/tmp`
-does not get in the way. Set `TMPDIR` to use another download folder.
+The verified installer normally runs from your cache, and falls back to
+`/tmp` if the cache is unavailable. Setting `TMPDIR` overrides both: choose
+a writable folder on a filesystem that allows programs to run. A `noexec`
+mount on that folder prevents the extracted installer from starting.
 
 Its messages follow your terminal language, with the same fifteen languages
 as Mandara.
