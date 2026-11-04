@@ -249,12 +249,12 @@ you turn on only the ones you want, and plugins can add their own.
 One command, from any shell:
 
 ```bash
-curl -fsSL https://thehamdiz.github.io/mandara/install.sh | sh
+sh -c 'cd "$(mktemp -d)" && curl -fLO https://thehamdiz.github.io/mandara/install.sh && sh install.sh'
 ```
 
 The download shows its progress, checks the release signature and archive,
-then opens Mandara's installer. To pass options, use `sh -s --` at the end,
-for example `… | sh -s -- --compositor kwin --no-greeter`.
+then opens Mandara's installer. Compositor, login and other options go
+straight to `mandara install`; see the [installation guide](docs/install.md).
 
 The installer sets up what your distribution
 needs, and hooks into your compositor without touching your own config

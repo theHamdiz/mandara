@@ -69,7 +69,12 @@ fn query_after_change(expected: usize, mut query: impl FnMut() -> anyhow::Result
         return first;
     }
     wait();
-    query().or(first)
+    match (first, query()) {
+        (Ok(first), Ok(retry)) if first.len() > retry.len() => Ok(first),
+        (_, Ok(retry)) => Ok(retry),
+        (first, Err(_)) if first.is_ok() => first,
+        (_, Err(err)) => Err(err),
+    }
 }
 
 /// The software renderer calls this if it cannot start. Future outputs
@@ -220,6 +225,22 @@ mod tests {
             assert_eq!(outputs.len(), if retry_succeeds { 2 } else { 1 });
             assert_eq!(outputs[0].name, "DP-3");
         }
+    }
+
+    #[test]
+    fn an_empty_retry_keeps_the_first_usable_geometry() {
+        let mut calls = 0;
+        let outputs = query_after_change(2, || {
+            calls += 1;
+            Ok(if calls == 1 {
+                vec![OutputGeometry { name: "DP-3".into(), width: 2560, height: 1440, ..Default::default() }]
+            } else {
+                Vec::new()
+            })
+        }, || {}).unwrap();
+        assert_eq!(calls, 2);
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].name, "DP-3");
     }
 
     #[test]

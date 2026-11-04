@@ -3,7 +3,7 @@
 One command, from any shell (bash, zsh or fish):
 
 ```bash
-curl -fsSL https://thehamdiz.github.io/mandara/install.sh | sh
+sh -c 'cd "$(mktemp -d)" && curl -fLO https://thehamdiz.github.io/mandara/install.sh && sh install.sh'
 ```
 
 The small [download script](../install.sh) shows Mandara's phoenix and the
@@ -12,18 +12,19 @@ then checks the release's Ed25519 signature and the archive's SHA-256
 **before extracting or running it**. It uses `curl`, `tar`, OpenSSL 3 or
 newer, `sha256sum` and the usual POSIX tools; it tells you when one is
 missing. Downloads retry on temporary connection errors and stop if the
-connection stalls. Temporary files are removed when the command finishes
-or is interrupted.
+connection stalls. Release downloads are removed when the command finishes
+or is interrupted. The small download script stays in its temporary folder
+for inspection. The command runs it only after the download succeeds.
 
 Its messages follow your terminal language, with the same fifteen languages
 as Mandara.
 
 Installation, configuration and administrator prompts stay in the Rust
-`mandara install` command. Pass its options after `sh -s --`:
+`mandara install` command. Forward its options with `"$@"`:
 
 ```bash
-curl -fsSL https://thehamdiz.github.io/mandara/install.sh | sh -s -- --dry-run
-curl -fsSL https://thehamdiz.github.io/mandara/install.sh | sh -s -- --compositor kwin --no-greeter
+sh -c 'cd "$(mktemp -d)" && curl -fLO https://thehamdiz.github.io/mandara/install.sh && sh install.sh "$@"' sh --dry-run
+sh -c 'cd "$(mktemp -d)" && curl -fLO https://thehamdiz.github.io/mandara/install.sh && sh install.sh "$@"' sh --compositor kwin --no-greeter
 ```
 
 Options are forwarded unchanged, including paths with spaces. The bootstrap
@@ -87,7 +88,7 @@ one (see [No compositor yet](#no-compositor-yet)).
 | `--no-deps` | Skip system packages |
 | `--no-autostart` | Don't start Mandara with the compositor |
 | `--no-greeter` | Keep your login screen |
-| `--compositor mango\|niri\|hyprland\|umbriel` | Pick the compositor to integrate with; when it isn't installed, install it from your distribution's repositories first (asked; `--yes` installs it) |
+| `--compositor mango\|niri\|hyprland\|umbriel\|sway\|river\|kwin` | Pick the compositor to integrate with; when it isn't installed, install it from your distribution's repositories first (asked; `--yes` installs it) |
 | `--repo OWNER/NAME` | Releases and sources from another repository |
 | `--dry-run` | Show everything that would happen, change nothing |
 | `--yes` | Don't ask; take every default |

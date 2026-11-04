@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::io::{Read as _, Write as _};
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 use std::process::Command;
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
@@ -24,6 +24,18 @@ fn main() {
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
 /// Yield while a fixture has no connection, so shutdown needs no wake socket.
 const ACCEPT_PAUSE: Duration = Duration::from_millis(5);
+
+fn read_request(client: &mut TcpStream) -> String {
+    client.set_read_timeout(Some(CLIENT_TIMEOUT)).unwrap();
+    let mut request = Vec::new();
+    let mut buffer = [0; 1024];
+    while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+        let n = client.read(&mut buffer).unwrap();
+        assert_ne!(n, 0, "fixture client closed before sending its request");
+        request.extend_from_slice(&buffer[..n]);
+    }
+    String::from_utf8(request).unwrap()
+}
 
 struct Server {
     url: String,
@@ -49,15 +61,7 @@ impl Server {
                         Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => { std::thread::sleep(ACCEPT_PAUSE); continue; }
                         Err(e) => panic!("fixture server: {e}"),
                     };
-                    client.set_read_timeout(Some(CLIENT_TIMEOUT)).unwrap();
-                    let mut request = Vec::new();
-                    let mut buffer = [0; 1024];
-                    while !request.windows(4).any(|w| w == b"\r\n\r\n") {
-                        let n = client.read(&mut buffer).unwrap();
-                        if n == 0 { break; }
-                        request.extend_from_slice(&buffer[..n]);
-                    }
-                    let request = String::from_utf8(request).unwrap();
+                    let request = read_request(&mut client);
                     let path = request.split_whitespace().nth(1).unwrap().to_string();
                     requests.lock().unwrap().push(path.clone());
                     let (status, body) = match files.get(&path) {
@@ -195,4 +199,93 @@ fn nixos_gets_flake_instructions_before_any_download() {
     let output = run();
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("install Mandara through your flake"));
+}
+
+#[test]
+fn installer_input_uses_the_terminal_or_preserves_an_unattended_pipe() {
+    use std::os::fd::{AsRawFd as _, FromRawFd as _};
+    use std::os::unix::process::CommandExt as _;
+    use std::process::Stdio;
+
+    for terminal in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let record = dir.path().join("answer");
+        let (mut master, mut slave) = (-1, -1);
+        // SAFETY: openpty initializes two distinct descriptors; null attributes
+        // retain canonical input, so the fixture reads complete terminal lines.
+        assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null(), std::ptr::null()) }, 0);
+        // SAFETY: each descriptor is transferred once and closed by its File.
+        let (mut master, slave) = unsafe { (std::fs::File::from_raw_fd(master), std::fs::File::from_raw_fd(slave)) };
+        for fd in [master.as_raw_fd(), slave.as_raw_fd()] {
+            // SAFETY: fcntl changes flags on a live descriptor without taking
+            // ownership. Neither PTY end should leak into the fixture command.
+            assert_eq!(unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) }, 0);
+        }
+        let script = format!("{}run_installer sh -c 'IFS= read -r answer; printf %s \"$answer\" > \"$1\"' fixture \"$1\"\n", SCRIPT.strip_suffix("main \"$@\"\n").unwrap());
+        let mut command = Command::new("sh");
+        command.args(["-c", &script, "input-test"]).arg(&record)
+            .stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null());
+        let slave_fd = slave.as_raw_fd();
+        // SAFETY: this closure calls only async-signal-safe session/ioctl
+        // operations after fork. The slave remains open until spawn returns.
+        unsafe {
+            command.pre_exec(move || {
+                if libc::setsid() == -1 { return Err(std::io::Error::last_os_error()); }
+                if terminal && libc::ioctl(slave_fd, libc::TIOCSCTTY, 0) == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        let mut child = command.spawn().unwrap();
+        child.stdin.take().unwrap().write_all(b"pipe answer\n").unwrap();
+        if terminal { master.write_all(b"terminal answer\n").unwrap(); }
+        let deadline = std::time::Instant::now() + CLIENT_TIMEOUT;
+        let status = loop {
+            if let Some(status) = child.try_wait().unwrap() { break status; }
+            if std::time::Instant::now() >= deadline {
+                child.kill().unwrap();
+                child.wait().unwrap();
+                panic!("installer input fixture did not finish");
+            }
+            std::thread::sleep(ACCEPT_PAUSE);
+        };
+        assert!(status.success());
+        assert_eq!(std::fs::read_to_string(record).unwrap(), if terminal { "terminal answer" } else { "pipe answer" });
+    }
+}
+
+#[test]
+fn documented_download_command_never_runs_a_partial_script() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/install.sh", listener.local_addr().unwrap());
+    listener.set_nonblocking(true).unwrap();
+    let server = std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + CLIENT_TIMEOUT;
+        let mut client = loop {
+            match listener.accept() {
+                Ok((client, _)) => break client,
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock && std::time::Instant::now() < deadline => std::thread::sleep(ACCEPT_PAUSE),
+                Err(err) => panic!("download command did not reach the fixture server: {err}"),
+            }
+        };
+        read_request(&mut client);
+        // The received prefix is a valid shell program. Executing it before
+        // curl checks Content-Length would incorrectly create the marker.
+        let body = b"touch \"$BOOTSTRAP_RECORD\"\n";
+        write!(client, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len() + 100).unwrap();
+        client.write_all(body).unwrap();
+    });
+    let guide = std::fs::read_to_string(crate::root().join("docs/install.md")).unwrap();
+    let command = guide.lines().find(|line| line.starts_with("sh -c 'cd ")).unwrap()
+        .replace("https://thehamdiz.github.io/mandara/install.sh", &url);
+    assert!(command.contains(&url));
+    let record = dir.path().join("executed");
+    let output = Command::new("sh").args(["-c", &command]).env("TMPDIR", dir.path())
+        .env("BOOTSTRAP_RECORD", &record).env("NO_PROXY", "127.0.0.1")
+        .stdin(std::process::Stdio::null()).output().unwrap();
+    server.join().unwrap();
+    assert!(!output.status.success());
+    assert!(!record.exists());
 }

@@ -32,7 +32,8 @@ installer, display reconnection and native KWin support.
 - **A shorter, friendlier first install.** The new download command shows
   the phoenix and real download progress, picks the right Linux build,
   verifies the signed archive before opening the installer, and passes your
-  configuration options through unchanged.
+  configuration options through unchanged. Interrupted downloads report a
+  failure, and package-manager questions can read your terminal normally.
 
 - **The installer can start before keyboard libraries are installed.**
   Keyboard support loads when it is first used, so a fresh Linux system

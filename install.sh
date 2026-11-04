@@ -355,6 +355,14 @@ check_nixos() {
     fi
 }
 
+run_installer() {
+    if ( : </dev/tty ) 2>/dev/null; then
+        "$@" </dev/tty
+    else
+        "$@"
+    fi
+}
+
 main() {
     banner
     check_nixos /
@@ -420,7 +428,7 @@ main() {
     [ -n "$installer" ] || fail missing_installer
     say ''
     say "$(message start)"
-    "$installer" install "$@"
+    run_installer "$installer" install "$@"
 }
 
 main "$@"
