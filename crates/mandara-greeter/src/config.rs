@@ -813,6 +813,8 @@ pub fn default_layout() -> Vec<Placement> {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GreeterConfig {
+    /// Public decorations; never loaded from a signed-in user's data.
+    pub widgets: mandara_config::preauth::Widgets,
     /// `auto` (from the environment) or a language code.
     pub language: String,
     /// The family for the login screen's text (empty = the interface font;
@@ -838,6 +840,7 @@ pub struct GreeterConfig {
 impl Default for GreeterConfig {
     fn default() -> Self {
         Self {
+            widgets: mandara_config::preauth::Widgets::default(),
             language: "auto".into(),
             font: String::new(),
             background: BackgroundConfig::default(),
@@ -873,6 +876,7 @@ impl GreeterConfig {
     /// Clamps numbers into sane ranges and makes the layout complete (every
     /// element exactly once).
     pub fn normalize(&mut self) {
+        self.widgets.normalize();
         let b = &mut self.background;
         b.playback_rate = b.playback_rate.clamp(0.1, 4.0);
         for v in [&mut b.dim, &mut b.vignette, &mut b.grain, &mut b.blur, &mut b.tint_strength, &mut b.orb_intensity] {
@@ -1070,6 +1074,20 @@ pub fn apply_config(from: &Path) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_public_widget_guide_parses_without_private_content() {
+        let guide = include_str!("../../../docs/login-manager.md");
+        let text = guide.split("```toml\n# Public login widgets\n").nth(1).unwrap().split("```").next().unwrap();
+        let cfg = GreeterConfig::parse(text).unwrap();
+        assert_eq!(cfg.widgets.items.len(), 1);
+        assert!(cfg.widgets.weather.is_none());
+        assert!(matches!(&cfg.widgets.items[0].kind, mandara_config::desktop_widgets::WidgetKind::Clock(c) if c.face == mandara_config::desktop_widgets::ClockFace::Word));
+        let mut private = cfg;
+        private.widgets.items.push(mandara_config::desktop_widgets::DesktopWidget { kind: mandara_config::desktop_widgets::WidgetKind::Note(Default::default()), ..Default::default() });
+        let parsed = GreeterConfig::parse(&private.to_toml()).unwrap();
+        assert_eq!(parsed.widgets.items.len(), 1);
+    }
 
     #[test]
     fn looks_apply_and_are_recognised() {

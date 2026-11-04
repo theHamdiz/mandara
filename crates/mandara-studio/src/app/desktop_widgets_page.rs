@@ -723,7 +723,7 @@ impl StudioView {
         cx.global_mut::<PageState>().choice_room = Some(((under - ROW_LABEL_W_PX - SPACE_18_PX).max(0.0), under));
         let place = vec![
             choice_row(t("Depth"), &id, "depth", w.place.depth, &[(Depth::Behind, tk("Behind the subject")), (Depth::Front, tk("In front"))], Rc::new(|w, v| w.place.depth = v), p, cx),
-            row(p, t("Anchor"), anchors(&id, w.place.anchor, p, cx)),
+            row(p, t("Anchor"), anchors(&id, w.place.anchor, p)),
             row(p, t("Horizontal offset"), slider(&id, "x", w.place.x, ranges::OFFSET, 0.005, "", Rc::new(|w, v| w.place.x = v), p)),
             row(p, t("Vertical offset"), slider(&id, "y", w.place.y, ranges::OFFSET, 0.005, "", Rc::new(|w, v| w.place.y = v), p)),
             row(p, t("Size"), slider(&id, "scale", w.place.scale, ranges::SCALE, 0.05, "×", Rc::new(|w, v| w.place.scale = v), p)),
@@ -1363,7 +1363,7 @@ impl StudioView {
                 rows.push(row(p, t("Stop after silence"), slider(&id, "silence", v.silence_s as f32, (ranges::VISUALIZER_SILENCE_S.0 as f32, ranges::VISUALIZER_SILENCE_S.1 as f32), 1.0, " s", set(|v, x| v.silence_s = x as u32), p)));
             }
             WidgetKind::Weather(ww) => {
-                rows.push(choice_row(t("Layout"), &id, "wlayout", ww.layout, &[(WeatherLayout::Hero, tk("Large")), (WeatherLayout::Compact, tk("One line")), (WeatherLayout::Sentence, tk("Sentence")), (WeatherLayout::Disc, tk("Disc")), (WeatherLayout::Hourly, tk("Hourly curve"))], Rc::new(|w, v| if let WidgetKind::Weather(x) = &mut w.kind { x.layout = v }), p, cx));
+                rows.push(choice_row(t("Layout"), &id, "wlayout", ww.layout, &[(WeatherLayout::Hero, tk("Large")), (WeatherLayout::Compact, tk("One line")), (WeatherLayout::Sentence, tk("Sentence")), (WeatherLayout::Disc, tk("Disc")), (WeatherLayout::Hourly, tk("Hourly curve")), (WeatherLayout::Ribbon, tk("Weather ribbon")), (WeatherLayout::Thermometer, tk("Thermometer")), (WeatherLayout::HumidityRose, tk("Humidity rose"))], Rc::new(|w, v| if let WidgetKind::Weather(x) = &mut w.kind { x.layout = v }), p, cx));
                 match ww.layout {
                     WeatherLayout::Hero => {
                         rows.push(row(p, t("Place name"), toggle(&id, "wplace", ww.location, weather_set(|x, v| x.location = v), p, cx)));
@@ -1393,12 +1393,16 @@ impl StudioView {
                         rows.push(row(p, t("Hours"), slider(&id, "whours", ww.hours as f32, rng(kr::HOURS), 1.0, "", weather_set(|x, v: f32| x.hours = as_count(v)), p)));
                         rows.push(row(p, t("Fill under the curve"), toggle(&id, "wfill", ww.fill, weather_set(|x, v| x.fill = v), p, cx)));
                     }
-                    WeatherLayout::Compact => {}
+                    WeatherLayout::Ribbon => {
+                        rows.push(row(p, t("Days ahead"), slider(&id, "wdays", ww.days as f32, (ranges::WEATHER_DAYS.0 as f32, ranges::WEATHER_DAYS.1 as f32), 1.0, "", weather_set(|x, v: f32| x.days = as_count(v)), p)));
+                        rows.push(row(p, t("Place name"), toggle(&id, "wplace", ww.location, weather_set(|x, v| x.location = v), p, cx)));
+                    }
+                    WeatherLayout::Compact | WeatherLayout::Thermometer | WeatherLayout::HumidityRose => {}
                 }
             }
             WidgetKind::Date(x) => {
-                rows.push(choice_row(t("Layout"), &id, "dlayout", x.layout, &[(dw::DateLayout::Month, tk("Month")), (dw::DateLayout::Week, tk("Week strip")), (dw::DateLayout::Agenda, tk("Coming up")), (dw::DateLayout::Tile, tk("Date tile"))], date_set(|x, v| x.layout = v), p, cx));
-                if x.layout != dw::DateLayout::Tile {
+                rows.push(choice_row(t("Layout"), &id, "dlayout", x.layout, &[(dw::DateLayout::Month, tk("Month")), (dw::DateLayout::Week, tk("Week strip")), (dw::DateLayout::Agenda, tk("Coming up")), (dw::DateLayout::Tile, tk("Date tile")), (dw::DateLayout::Ticket, tk("Date ticket")), (dw::DateLayout::Perpetual, tk("Perpetual calendar")), (dw::DateLayout::MoonCalendar, tk("Moon calendar"))], date_set(|x, v| x.layout = v), p, cx));
+                if matches!(x.layout, dw::DateLayout::Month | dw::DateLayout::Week | dw::DateLayout::Agenda) {
                     rows.push(choice_row(t("Marker shape"), &id, "dmarker", x.marker, &SHAPES, date_set(|x, v| x.marker = v), p, cx));
                 }
                 match x.layout {
@@ -1408,7 +1412,7 @@ impl StudioView {
                     }
                     dw::DateLayout::Week => rows.push(row(p, t("Event dots"), toggle(&id, "ddots", x.event_dots, date_set(|x, v| x.event_dots = v), p, cx))),
                     dw::DateLayout::Agenda => rows.push(row(p, t("Rows"), slider(&id, "drows", x.rows as f32, rng(kr::AGENDA_ROWS), 1.0, "", date_set(|x, v: f32| x.rows = as_count(v)), p))),
-                    dw::DateLayout::Tile => {}
+                    dw::DateLayout::Tile | dw::DateLayout::Ticket | dw::DateLayout::Perpetual | dw::DateLayout::MoonCalendar => {}
                 }
                 rows.push(hint(t("Events come from Studio → Calendar."), p));
             }
@@ -1813,9 +1817,21 @@ fn choice_row<T: Copy + PartialEq + 'static>(label: &str, id: &str, what: &str, 
     choice_row_of(p, label, items, cx)
 }
 
-fn anchors(id: &str, current: Anchor, p: &MandaraPalette, cx: &mut Context<StudioView>) -> AnyElement {
+fn anchors(id: &str, current: Anchor, p: &MandaraPalette) -> AnyElement {
+    let widget_id = id.to_string();
+    anchor_grid(id, current, p, Rc::new(move |anchor, cx| edit(cx, &widget_id, move |w| {
+        let (fx, fy) = w.place.anchor.fraction();
+        let (nx, ny) = anchor.fraction();
+        w.place.x += fx - nx;
+        w.place.y += fy - ny;
+        w.place.anchor = anchor;
+    })))
+}
+
+pub(super) fn anchor_grid(id: &str, current: Anchor, p: &MandaraPalette, callback: Rc<dyn Fn(Anchor, &mut gpui::App)>) -> AnyElement {
     let cells = Anchor::ALL.into_iter().zip(ANCHOR_GLYPHS).map(|(a, glyph)| {
         let on = a == current;
+        let callback = callback.clone();
         let id = id.to_string();
         div()
             .id(SharedString::from(format!("dw-a-{a:?}-{id}")))
@@ -1829,16 +1845,7 @@ fn anchors(id: &str, current: Anchor, p: &MandaraPalette, cx: &mut Context<Studi
             .when(on, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()))
             .when(!on, |el| el.bg(p.surface_container_high.hsla()).text_color(p.on_surface_variant.hsla()))
             .child(glyph)
-            .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
-                // Keep the widget where it is: recompute the offset for the new anchor.
-                edit(cx, &id, move |w| {
-                    let (fx, fy) = w.place.anchor.fraction();
-                    let (nx, ny) = a.fraction();
-                    w.place.x += fx - nx;
-                    w.place.y += fy - ny;
-                    w.place.anchor = a;
-                });
-            }))
+            .on_click(move |_, _, cx| callback(a, cx))
     });
     div().w(px(DIM_88_PX)).row().flex_wrap().gap(px(SPACE_3_PX)).children(cells).into_any_element()
 }

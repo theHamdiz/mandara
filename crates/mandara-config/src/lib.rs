@@ -22,6 +22,7 @@ pub mod outputs;
 pub mod paths;
 pub mod power;
 pub mod profiles;
+pub mod preauth;
 pub mod recorder;
 pub mod schema;
 pub mod side_bars;

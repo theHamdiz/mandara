@@ -11,6 +11,17 @@ installer, display reconnection and native KWin support.
 
 ### New
 
+- **Ten more ways to dress your desktop.** Add word, split-flap, glass-tube
+  and binary clocks; date tickets, perpetual cards and a moon calendar;
+  weather ribbons, thermometers and a humidity rose. They belong to the
+  existing widget families, so Mandara still ships 77 first-party plugins.
+
+- **Put widgets on your sign-in screens.** Login screen → Layout and
+  Lock appearance have a widget gallery, a copy-from-desktop option and
+  placement controls. Both start empty. Only public, passive kinds are
+  offered; weather needs a separately chosen public location. Plasma keeps
+  its own secure locker, with a clear explanation in Studio.
+
 - Four optional first-party plugins: Translator, Phone Connect, Feeds and Home Assistant. Translate when you ask, keep up with your subscriptions, reach your paired phone and control your home from native panels. Mandara now ships 77 first-party plugins, each with its own artwork.
 
 - **The installer opens on a setup screen.** `mandara install` now starts
@@ -85,6 +96,9 @@ installer, display reconnection and native KWin support.
   are gone.
 
 ### Fixed
+
+- The login designer keeps clocks and public widgets current while its
+  preview is visible, including across midnight.
 
 - **The process table counts the whole machine.** A busy build used to
   read "405.5%" for `rustc`, because the list measured each process

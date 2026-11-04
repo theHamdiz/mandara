@@ -64,6 +64,7 @@ mod launcher_page;
 mod dock_page;
 mod switcher_page;
 mod desktop_widgets_page;
+mod auth_widgets;
 mod looks_page;
 mod app_themes_page;
 mod themes_page;
@@ -1704,6 +1705,15 @@ impl Render for StudioView {
                 Section::Displays => self.displays_page(&cfg, &p, cx),
                 Section::Maintenance => self.maintenance(&p, cx),
                 Section::LoginScreen => greeter_page::element(cx),
+                Section::LockScreen => {
+                    let rows = self.rows(registry::in_section(Section::LockScreen), &cfg, &p, cx);
+                    let widgets = if registry::running_compositor() == Some(mandara_config::compositor::Target::KWin) {
+                        compositor_page::card(&p).p(px(SPACE_16_PX)).child(compositor_page::heading(t("Widgets"), t("Plasma's secure locker controls this screen. Custom lock widgets are available with Mandara's native locker on supported compositors."), &p)).into_any_element()
+                    } else {
+                        auth_widgets::panel("lock", &cfg.lock.widgets, Rc::new(|edit, cx| update_config(cx, |cfg| edit.apply(&mut cfg.lock.widgets))), &p, cx)
+                    };
+                    div().row().flex_col().gap(px(SPACE_26_PX)).child(rows).child(widgets).into_any_element()
+                }
                 Section::Users => users_page::element(cx),
                 Section::Bar => {
                     let designer = self.bar_designer(&cfg, &p, window, cx);

@@ -232,6 +232,7 @@ pub struct GreeterView {
     field: Field,
     auth: Option<AuthWorker>,
     background: Background,
+    widgets: mandara_ui::backdrop::widgets::passive::Canvas,
     /// The configured clips, stills and video switch, restored when the
     /// picked person has no wallpaper of their own.
     bg_base: (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>, bool),
@@ -248,6 +249,8 @@ pub struct GreeterView {
     first_frame_at: Option<Instant>,
     /// Second of the last clock format (the text only changes per second).
     clock_second: i64,
+    /// One visible-preview deadline; dropped when hidden or animating.
+    preview_wake: Option<gpui::Task<()>>,
     /// Formatted date and the (day, pattern, language) it was made for.
     date_text: Option<((chrono::NaiveDate, String, &'static str), SharedString)>,
     /// Keyboard layout label and the (configured, GPUI) ids it came from.
@@ -404,6 +407,26 @@ fn keyboard_layout(cfg: &GreeterConfig, cx: &gpui::App) -> String {
     env.or(x11).or(vconsole).map(|l| l.split(',').next().unwrap_or("").trim().to_uppercase()).filter(|l| !l.is_empty()).unwrap_or_else(|| "US".into())
 }
 
+/// Wall-clock boundaries keep static previews current without busy redraws.
+fn preview_deadline(millis: i64, seconds: bool) -> Duration {
+    const MILLIS_PER_SECOND: i64 = 1_000;
+    const SECONDS_PER_MINUTE: i64 = 60;
+    let period = MILLIS_PER_SECOND * if seconds { 1 } else { SECONDS_PER_MINUTE };
+    Duration::from_millis((period - millis.rem_euclid(period)) as u64)
+}
+
+#[cfg(test)]
+mod preview_clock_tests {
+    use super::*;
+
+    #[test]
+    fn static_previews_wake_on_the_next_displayed_time_change() {
+        assert_eq!(preview_deadline(59_900, false), Duration::from_millis(100));
+        assert_eq!(preview_deadline(60_000, false), Duration::from_secs(60));
+        assert_eq!(preview_deadline(1_250, true), Duration::from_millis(750));
+    }
+}
+
 impl GreeterView {
     /// The real (or demo) login screen.
     pub fn new_live(demo: bool, autoplay: bool, config: GreeterConfig, window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -504,6 +527,7 @@ impl GreeterView {
             auth: None,
             bg_base: owned_sources(&background),
             background,
+            widgets: Default::default(),
             bg_key: BackgroundSources::of(&config),
             bg_rebuild_at: None,
             clock: FrameClock::new(),
@@ -512,6 +536,7 @@ impl GreeterView {
             warm_frames: 0,
             first_frame_at: None,
             clock_second: i64::MIN,
+            preview_wake: None,
             date_text: None,
             kb_layout: None,
             enter,
@@ -1315,7 +1340,7 @@ impl GreeterView {
     fn offscreen(&self, window: &Window) -> bool {
         let top = f32::from(self.origin.get().y);
         let height = f32::from(window.viewport_size().height);
-        top + self.preview_size.1 < 0.0 || top > height
+        !window.is_visible() || top + self.preview_size.1 < 0.0 || top > height
     }
 
     /// Schedules the next frame, always on the display's frame clock (a
@@ -1328,12 +1353,29 @@ impl GreeterView {
     /// The preview holds still between changes: it asks for frames only
     /// while something it shows is moving (a Try-it moment, an edit's
     /// springs, a picture fading in), and the next edit or click wakes it.
-    fn schedule_frame(&mut self, window: &mut Window) {
-        if self.is_preview() && (self.offscreen(window) || !self.preview_moving(Instant::now())) {
+    fn schedule_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_preview() && self.offscreen(window) {
+            self.preview_wake = None;
+            self.clock.idle();
+            return;
+        }
+        if self.is_preview() && !self.preview_moving(Instant::now()) {
+            if self.preview_wake.is_none() {
+                let seconds = self.config.clock.seconds || mandara_ui::backdrop::widgets::passive::ticks_seconds(&self.config.widgets);
+                let wait = preview_deadline(chrono::Local::now().timestamp_millis(), seconds);
+                self.preview_wake = Some(cx.spawn_in(window, async move |this, cx| {
+                    cx.background_executor().timer(wait).await;
+                    let _ = this.update_in(cx, |this, window, cx| {
+                        this.preview_wake = None;
+                        if !this.offscreen(window) { cx.notify(); }
+                    });
+                }));
+            }
             // Restart the clock cleanly after the pause (no catch-up jump).
             self.clock.idle();
             return;
         }
+        self.preview_wake = None;
         window.request_animation_frame();
     }
 
@@ -1350,6 +1392,7 @@ impl GreeterView {
             || self.toast.is_some()
             || self.drag.is_some()
             || self.bg_rebuild_at.is_some()
+            || self.widgets.pending()
             || !self.background.ready()
             || self.background.fading(now)
     }
@@ -2269,7 +2312,7 @@ impl Render for GreeterView {
             // Self-test: clicks pass through to the windows underneath.
             window.set_input_region(Some(&[]));
         }
-        self.schedule_frame(window);
+        self.schedule_frame(window, cx);
 
         if let Phase::Success(at) = self.phase
             && !preview
@@ -2303,6 +2346,19 @@ impl Render for GreeterView {
         }
 
         let layout = self.keyboard_label(cx);
+        let widget_size = ((vw * sf).round() as u32, (vh * sf).round() as u32);
+        let widgets = if !self.config.widgets.items.is_empty() && (!preview || !self.offscreen(window)) {
+            let fonts = mandara_ui::backdrop::paint::FontNames::from(cx.global::<Fonts>());
+            self.widgets.update(&self.config.widgets, widget_size, &fonts, &self.palette, self.config.clock.format_24h, !preview);
+            if self.widgets.pending() { window.request_animation_frame(); }
+            self.widgets.image(widget_size)
+        } else {
+            self.widgets.clear();
+            None
+        };
+        for image in self.widgets.take_trash() {
+            let _ = window.drop_image(image);
+        }
         let cfg = &self.config;
         let p = &self.palette;
         let fonts: &Fonts = cx.global::<Fonts>();
@@ -2414,6 +2470,10 @@ impl Render for GreeterView {
         }
         if bgc.grain > 0.0 {
             root = root.child(div().absolute().top_0().left_0().size_full().opacity(bgc.grain).child(crate::background::grain(vw, vh)));
+        }
+
+        if let Some(widgets) = widgets {
+            root = root.child(img(widgets).absolute().top_0().left_0().w(px(vw)).h(px(vh)).object_fit(ObjectFit::Fill));
         }
 
         // Elements in z order.

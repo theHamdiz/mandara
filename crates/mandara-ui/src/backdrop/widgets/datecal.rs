@@ -73,6 +73,7 @@ pub fn date_widget(w: &DateWidget, events: &[EventItem], now: &DateTime<Local>, 
         DateLayout::Week => week(w, events, today, l, week_start, k, m),
         DateLayout::Agenda => agenda(w, events, now, l, h24, k, m),
         DateLayout::Tile => tile(w, today, l, hijri, k, align, m),
+        DateLayout::Ticket | DateLayout::Perpetual | DateLayout::MoonCalendar => super::date_cards::layout(w, today, l, hijri, week_start, k, m),
     };
     let mut c = Composition::of(marks);
     c.hits.push(Hit { rect: (0.0, 0.0, c.size.0, c.size.1), action: Action::Panel(crate::plugins::clock::ID.into()) });

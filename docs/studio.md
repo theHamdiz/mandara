@@ -688,3 +688,11 @@ the login-screen preview's own pacing on Studio → Login screen.
   / Ctrl+K add bold / italic / a link, Ctrl+Shift+8 toggles a bullet,
   Tab / Shift+Tab nest list items. Arabic paragraphs align right; code
   stays left to right.
+
+
+Login screen → **Layout → Widgets** and **Lock appearance → Widgets**
+share the passive widget editor: a gallery, **Copy from desktop**, anchor,
+offsets, scale, opacity and a separate public-weather location choice.
+Copies stay independent of the desktop; login changes still need **Apply
+to login screen**. KWin shows a reason because Plasma owns its secure
+locker. [Details](lock-and-login.md#widgets-on-login-and-lock-screens).

@@ -672,3 +672,10 @@ and accounts. Translator and Home Assistant use the Secret Service keyring
 that the installer already supplies. Phone Connect additionally needs your
 distribution’s KDE Connect package and the companion app on your phone;
 it is not a required dependency of the shell.
+
+## Optional sign-in widgets
+
+After installation, optional sign-in widgets live in **Studio → Login
+screen → Layout → Widgets** and **Lock appearance → Widgets**. Installation
+leaves both collections empty. Login changes use the existing **Apply to
+login screen** flow; see [login and lock widgets](lock-and-login.md#widgets-on-login-and-lock-screens).

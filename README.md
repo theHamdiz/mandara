@@ -96,6 +96,7 @@ widget can be moved, resized and restyled right on the desktop.
 | **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`) |
 | **Automation** | `mandara msg <command>` with JSON replies; `mandara commands --json` lists them all |
 | **Plugins** | 77 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
+| **Widgets** | Mechanical, word and binary clocks, calendar cards and weather dials; passive widgets can also decorate Mandara Login and the native lock screen |
 | **Languages** | 15, including right-to-left Arabic, Persian and Urdu |
 | **License** | GPL-3.0-or-later |
 

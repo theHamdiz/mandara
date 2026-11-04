@@ -33,6 +33,7 @@ pub mod media_view;
 pub mod monitor_more;
 pub mod productive;
 pub mod progress;
+pub mod passive;
 pub mod sayings;
 pub mod sky;
 pub mod skyview;
@@ -40,6 +41,9 @@ pub mod sysmon;
 pub mod texts;
 pub mod visualizer;
 pub mod weather_more;
+pub mod clock_cards;
+pub mod date_cards;
+pub mod weather_cards;
 
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
@@ -458,6 +462,20 @@ pub struct Forecast {
     pub is_day: bool,
     /// Today's low and high, °C.
     pub today: Option<(f32, f32)>,
+}
+
+impl Forecast {
+    /// Shared projection of the weather actor for desktop and public widgets.
+    pub fn from_weather(w: &mandara_services::weather::Weather, place: &str) -> Self {
+        Self {
+            icon: crate::plugins::weather::condition_icon(w.condition, w.is_day),
+            temp: w.temp, feels_like: w.feels_like, humidity: w.humidity, wind: w.wind,
+            condition: mandara_i18n::untranslate(w.condition.label()), place: place.into(),
+            days: w.days.iter().filter_map(|d| Some((chrono::NaiveDate::parse_from_str(&d.date, "%Y-%m-%d").ok()?, crate::plugins::weather::condition_icon(d.condition, true), d.min, d.max))).collect(),
+            hours: w.hours.iter().map(|h| (h.hour, crate::plugins::weather::condition_icon(h.condition, h.is_day), h.temp)).collect(),
+            kind: w.condition as usize, is_day: w.is_day, today: w.days.first().map(|d| (d.min, d.max)),
+        }
+    }
 }
 
 impl Default for WidgetScene {
@@ -1069,6 +1087,7 @@ pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler
                 }
                 WeatherLayout::Disc => Composition::of(weather_more::disc_layout(ww, &s, scene.forecast.as_ref(), &l, scene.units, k, &mut m)),
                 WeatherLayout::Hourly => Composition::of(weather_more::hourly_layout(ww, scene.forecast.as_ref(), &l, scene.units, scene.h24, k, &mut m)),
+                WeatherLayout::Ribbon | WeatherLayout::Thermometer | WeatherLayout::HumidityRose => Composition::of(weather_cards::layout(ww, &s, scene.forecast.as_ref(), &l, scene.units, k, &mut m)),
                 _ => layout::weather_widget(ww, &s, k, align, &mut m),
             };
             (comp, 0.0)

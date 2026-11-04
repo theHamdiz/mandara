@@ -73,6 +73,9 @@ pub fn label(w: &DesktopWidget) -> (&'static str, &'static str) {
             DateLayout::Week => (tk("Week strip"), "calendar"),
             DateLayout::Agenda => (tk("Coming up"), "calendar"),
             DateLayout::Tile => (tk("Date tile"), "calendar"),
+            DateLayout::Ticket => (tk("Date ticket"), "calendar"),
+            DateLayout::Perpetual => (tk("Perpetual calendar"), "calendar"),
+            DateLayout::MoonCalendar => (tk("Moon calendar"), "calendar"),
         },
         WidgetKind::Media(m) => match m.layout {
             MediaLayout::Vinyl => (tk("Record player"), "music"),
@@ -153,6 +156,10 @@ pub fn face_label(f: ClockFace) -> &'static str {
         ClockFace::Template => tk("Text lines"),
         ClockFace::Numerals => tk("Hands over numerals"),
         ClockFace::Orbit => tk("Orbit"),
+        ClockFace::Word => tk("Word clock"),
+        ClockFace::SplitFlap => tk("Split-flap clock"),
+        ClockFace::Nixie => tk("Glass tube clock"),
+        ClockFace::Binary => tk("Binary clock"),
     }
 }
 
@@ -214,6 +221,10 @@ pub fn register(r: &mut PluginRegistry) {
                 face(ClockFace::Pixel, tk("Pixel")),
                 face(ClockFace::Boxes, tk("Digit boxes")),
                 face(ClockFace::Hud, tk("Slanted HUD")),
+                face(ClockFace::Word, tk("Word clock")),
+                face(ClockFace::SplitFlap, tk("Split-flap clock")),
+                face(ClockFace::Nixie, tk("Glass tube clock")),
+                face(ClockFace::Binary, tk("Binary clock")),
             ],
         )
         .in_menu(),
@@ -313,6 +324,9 @@ pub fn register(r: &mut PluginRegistry) {
         ("week", DateLayout::Week, tk("Week strip"), false),
         ("agenda", DateLayout::Agenda, tk("Coming up"), false),
         ("tile", DateLayout::Tile, tk("Date tile"), true),
+        ("ticket", DateLayout::Ticket, tk("Date ticket"), true),
+        ("perpetual", DateLayout::Perpetual, tk("Perpetual calendar"), false),
+        ("moon-calendar", DateLayout::MoonCalendar, tk("Moon calendar"), false),
     ] {
         r.desktop_widget(DesktopWidgetType::new(ids::CALENDAR, id, name, tk("Painted on the desktop, with your events"), "calendar", move || {
             let look = if plate { Look { plate: Plate::Solid, plate_radius: DATE_RADIUS_PX, ..Look::default() } } else { Look::default() };
@@ -365,7 +379,7 @@ pub fn register(r: &mut PluginRegistry) {
     }
 
     plugin(r, ids::WEATHER, tk("Desktop weather"), tk("The weather on the desktop: the temperature, the sky, the place and the days ahead"));
-    for (id, layout, name) in [("hero", WeatherLayout::Hero, tk("Weather")), ("compact", WeatherLayout::Compact, tk("Weather line")), ("sentence", WeatherLayout::Sentence, tk("Weather sentence")), ("disc", WeatherLayout::Disc, tk("Weather disc")), ("hourly", WeatherLayout::Hourly, tk("Hourly curve"))] {
+    for (id, layout, name) in [("hero", WeatherLayout::Hero, tk("Weather")), ("compact", WeatherLayout::Compact, tk("Weather line")), ("sentence", WeatherLayout::Sentence, tk("Weather sentence")), ("disc", WeatherLayout::Disc, tk("Weather disc")), ("hourly", WeatherLayout::Hourly, tk("Hourly curve")), ("ribbon", WeatherLayout::Ribbon, tk("Weather ribbon")), ("thermometer", WeatherLayout::Thermometer, tk("Thermometer")), ("humidity-rose", WeatherLayout::HumidityRose, tk("Humidity rose"))] {
         let kind = DesktopWidgetType::new(ids::WEATHER, id, name, tk("Needs the Weather plugin's location"), "cloud-sun", move || one(WidgetKind::Weather(WeatherWidget { layout, ..WeatherWidget::default() })));
         r.desktop_widget(if layout == WeatherLayout::Hero { kind.in_menu() } else { kind });
     }

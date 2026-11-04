@@ -134,6 +134,26 @@ How Mandara looks and feels, and how much of it you can shape.
 
 ## Desktop widgets
 
+Ten new designs extend the existing families:
+
+| Family | Designs |
+|---|---|
+| Desktop clocks → Digital | Word clock, Split-flap clock, Glass tube clock, Binary clock |
+| Calendar card | Date ticket, Perpetual calendar, Moon calendar |
+| Desktop weather | Weather ribbon, Thermometer, Humidity rose |
+
+The word clock gives the nearest five-minute phrase with the exact time
+underneath. Binary columns encode the four displayed decimal digits. The
+moon calendar follows the civil month, including leap years, and calculates
+each day's phase. The thermometer uses today's reported range; missing
+weather produces an unavailable state rather than a sample reading.
+
+Add them in **Studio → Desktop widgets → Add a widget**. Clock families
+have a **Style** choice; weather and date widgets have a **Layout** choice.
+Their size, colour, font, plate and placement use the same editor as the
+existing widgets. Eligible kinds can also be added to
+[login and lock screens](lock-and-login.md#widgets-on-login-and-lock-screens).
+
 <table>
 <tr>
 <td width="50%" valign="top"><img src="screenshots/widgets-desk.webp" alt="A cookie analog clock, a quote, a month calendar, a taped to-do list on torn paper, a sticky note, the focus timer and upcoming events" width="100%"/><br/><sub><b>Productivity</b>: a to-do list you tick, a sticky note, the focus timer, calendars</sub></td>

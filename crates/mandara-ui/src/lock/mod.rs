@@ -275,6 +275,7 @@ pub struct LockScreen {
     grace_until: Option<Instant>,
     /// Configurable look (`[lock]`).
     look: look::LockLook,
+    widgets: crate::backdrop::widgets::passive::Canvas,
 }
 
 impl LockScreen {
@@ -303,6 +304,7 @@ impl LockScreen {
             wallpaper: None,
             wallpaper_rx: wallpaper.filter(|p| p.is_file()).map(|p| load_wallpaper(p, look::LockLook::default().blur_sigma())),
             look: look::LockLook::default(),
+            widgets: Default::default(),
             backgrounds: HashMap::new(),
             text: TextPainter::new(),
             auth,
@@ -533,6 +535,7 @@ impl LockApp for LockScreen {
     }
 
     fn update(&mut self, now: Instant) -> AppControl {
+        self.dirty |= self.widgets.poll();
         if let Some(rx) = &self.wallpaper_rx
             && let Ok(img) = rx.try_recv()
         {
@@ -614,6 +617,8 @@ impl LockApp for LockScreen {
             pm.fill(tiny_skia::Color::BLACK);
             return;
         }
+        self.widgets.update(&self.look.cfg.widgets, (w, h), &self.look.widget_fonts, &p, self.clock_24h, true);
+        self.widgets.draw(pm, alpha);
         // One unit = a logical px on a 1080 px tall screen, in physical px.
         let unit = L::scale(logical_h) * s;
         let clock_size = L::CLOCK_SIZE * unit * if self.look.compact() { COMPACT_CLOCK } else { 1.0 };
@@ -1231,6 +1236,22 @@ mod tests {
         s.draw(&info, &mut pm.as_mut(), Instant::now());
         // The backdrop is opaque on a real lock.
         assert!(pm.data().as_chunks::<4>().0.iter().all(|p| p[3] == 255));
+    }
+
+    #[test]
+    fn public_widgets_preserve_blank_outputs_and_password_checks() {
+        let mut s = screen(false);
+        s.look.cfg.widgets.items.push(Default::default());
+        s.look.cfg.blank_other_outputs = true;
+        let mut pm = Pixmap::new(320, 240).unwrap();
+        let info = SurfaceInfo { output: "TEST-2".into(), width: 320, height: 240, scale: 1.0, focused: false };
+        s.draw(&info, &mut pm.as_mut(), Instant::now());
+        assert!(pm.data().as_chunks::<4>().0.iter().all(|p| *p == [0, 0, 0, 255]));
+        assert!(!s.widgets.pending());
+        type_text(&mut s, "wrong fixture password");
+        press(&mut s, keys::RETURN);
+        assert_eq!(settle(&mut s), AppControl::Continue);
+        assert_eq!(s.phase, Phase::Idle);
     }
 
     /// Renders typing / error / Caps Lock states to PNGs for a visual check:

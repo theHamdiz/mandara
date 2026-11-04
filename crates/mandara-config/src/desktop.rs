@@ -357,6 +357,8 @@ pub enum LockBackground {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LockConfig {
+    /// Passive widgets explicitly added to this lock screen.
+    pub widgets: crate::preauth::Widgets,
     /// The look defaults this table was written for (see
     /// [`crate::upgrade`]); missing in older files.
     #[serde(default)]
@@ -394,6 +396,7 @@ impl LockConfig {
 impl Default for LockConfig {
     fn default() -> Self {
         Self {
+            widgets: crate::preauth::Widgets::default(),
             look_version: crate::upgrade::LOCK_LOOK_VERSION,
             clock_style: LockClockStyle::Classic,
             background: LockBackground::Wallpaper,

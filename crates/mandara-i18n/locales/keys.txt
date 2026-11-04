@@ -747,6 +747,7 @@ Between the others
 Between the sides
 Bhagavad Gita
 Bigger images aren't recorded
+Binary clock
 Bind Alt+Tab
 Bitrate
 Bits · Mb/s
@@ -1252,12 +1253,14 @@ Copied {text}
 Copied {value}
 Copies captures
 Copies each window's contents (ext-image-copy-capture); app icons otherwise
+Copies its appearance and position. Later desktop edits do not change this screen.
 Copies marked secret by password managers are never recorded
 Copy
 Copy (right-click pastes)
 Copy a history entry back (by id), optionally pasting it
 Copy a topic's notes (or all) into a folder as .md files
 Copy as
+Copy from desktop
 Copy path
 Copy picked colors
 Copy report
@@ -1436,6 +1439,7 @@ Date language
 Date modified
 Date pill
 Date style
+Date ticket
 Date tile
 Date, time & location
 Dawn
@@ -1802,9 +1806,11 @@ Effect
 Effect strength
 Effects
 Egyptian
+Eight
 Eject
 El-Mandara, Alexandria
 Elevation tint
+Eleven
 Emerald
 Emily Dickinson
 Emma
@@ -2085,6 +2091,9 @@ First {shown} of {n} matches
 Fit
 Fit & effects
 Fits in
+Five
+Five past {hour}
+Five to {hour}
 Fix the errors in the plan first.
 Fixed
 Fixed schedule: end of the night
@@ -2198,6 +2207,7 @@ Formats
 Formats, tonal ramp and WCAG contrast of a color
 Forty Hadith Qudsi
 Found
+Four
 Frame
 Frame rate
 Frame rate limit
@@ -2321,6 +2331,7 @@ Glass opacity
 Glass pills
 Glass pills and island: their corners. Edge frame: the hover chips, and the frame's ends when it floats
 Glass rim
+Glass tube clock
 Global
 Gloss
 Glossy liquid blobs melting together
@@ -2379,6 +2390,7 @@ Hairline
 Hairline and micro pill only
 Hairline style only
 Hairlines between apps, recent apps and the right side
+Half past {hour}
 Halftone
 Halftone cover
 Hamlet I.3
@@ -2587,6 +2599,7 @@ How wide each side bar is
 However hard it is, do not be the one who breaks the bond.
 Hue shift
 Humidity
+Humidity rose
 Humidity {n}%
 Hurry, hurry has no blessings.
 Hybrid
@@ -2661,6 +2674,7 @@ Images and videos in the wallpaper folder (optionally filtered)
 Images here (and one level of sub-folders) appear in the picker
 Images in your wallpaper folder; Enter sets one
 Imagination is more important than knowledge.
+Imperial
 Imperial (°F, mph)
 Import
 Import a WireGuard (.conf) or OpenVPN (.ovpn) file below — it becomes a NetworkManager connection.
@@ -3424,6 +3438,7 @@ Messages
 Metaphysics, Book I
 Meters
 Method
+Metric
 Metric (°C, km/h)
 Mic mute
 Michel de Montaigne
@@ -3503,6 +3518,7 @@ Month
 Month and weekday names: auto follows the interface, or a locale such as en_GB, ar_EG, de_DE
 Month bar
 Moon
+Moon calendar
 Moon phase
 More
 More like this
@@ -3704,6 +3720,7 @@ Night light state, schedule and next change (JSON)
 Night light uses wlr-gamma-control, which MangoWM, Hyprland and Sway offer. Niri doesn't implement it yet; there, use its own settings or a tool built for it.
 Night light: on (warm now and follow the schedule), off, toggle until the next change, or auto (drop the toggle)
 Night temperature
+Nine
 Niri
 Niri, Umbriel
 No API key saved for this server
@@ -4126,6 +4143,7 @@ On, waiting to reach a time server
 On-screen displays
 Once per login, when KeePassXC is running with a locked database, Mandara's dialog asks for its password
 Once per session
+One
 One app's screen time over the last seven days
 One centered island that morphs
 One click sets the bar, desktop widgets, colors, fonts and roundness together. Your own setup is saved first, so you can always go back. Looks never change your wallpaper.
@@ -4405,6 +4423,7 @@ Permission denied on {socket}
 Permission denied: PID {pid} belongs to another user
 Permissions
 Permissions come with the download
+Perpetual calendar
 Petals
 PgDn
 PgUp
@@ -4477,6 +4496,7 @@ Placeholder
 Placeholders: {HH} {mm} {ss} {ampm} {time} {weekday} {wd} {day} {month} {mon} {MM} {year} {greeting} {daypart} {hijri}
 Placement
 Plain
+Plasma's secure locker controls this screen. Custom lock widgets are available with Mandara's native locker on supported compositors.
 Plate
 Plate corners
 Plate opacity
@@ -4643,6 +4663,8 @@ Public IP copied
 Public IP service
 Public IP unavailable
 Public IP…
+Public decorations only. Notes, messages, account data and widget actions stay out of sign-in screens.
+Public weather location
 Publilius Syrus
 Publish to the marketplace
 Pudd'nhead Wilson
@@ -4665,6 +4687,8 @@ Qaitbay Citadel
 Qibla
 Qt 5 / 6 (qt6ct, qt5ct)
 Quality
+Quarter past {hour}
+Quarter to {hour}
 Qudsi
 Queried once when the panel opens; must answer with the address as plain text
 Queued
@@ -5364,6 +5388,7 @@ Settings and data this app may have left in your home folder. Only what you tick
 Settings in Studio
 Settings: {title}
 Setup
+Seven
 Sha'ban
 Shaded
 Shadow
@@ -5545,6 +5570,7 @@ Simone Weil
 Simplify, simplify.
 Simulate
 Since the link came up
+Six
 Size
 Size & placement
 Size badge
@@ -5644,6 +5670,7 @@ Speed test size
 Split horizontally
 Split toward the pointer
 Split vertically
+Split-flap clock
 Spread salam
 Springs
 Square dots
@@ -5938,6 +5965,9 @@ Tell the app it is tiled, even when floating
 Temperature
 Temperatures and wind speed in weather and system panels
 Temperatures shown
+Ten
+Ten past {hour}
+Ten to {hour}
 Terminal
 Terminal colors follow the theme
 Terminals
@@ -6164,6 +6194,7 @@ The link stops working after this long
 The link stops working once your phone has downloaded the item
 The list is full — remove a widget to add another
 The list launcher: a drawer rising from the bottom edge, search next to the edge
+The location you add here is public and allows weather requests on this screen. Studio previews do not contact the weather service.
 The lock screen did not confirm that the session is locked
 The lock screen's text
 The main menu is see-through glass with solid cards on it
@@ -6313,6 +6344,7 @@ There is no text to share
 There is nothing either good or bad, but thinking makes it so.
 There isn't enough free space on this disk.
 Thermals
+Thermometer
 These displays do not support power control
 These files move to the Trash:
 They can because they think they can.
@@ -6400,6 +6432,7 @@ This week {used}
 This week {used} of {budget} ({percent}%)
 This workspace only
 Thread fade
+Three
 Threshold for peripherals (per-device overrides in config.toml under [power.device_thresholds])
 Through do not disturb
 Thu
@@ -6595,8 +6628,14 @@ Turning on and off
 Turning on and off, including automatically
 Turning the launcher on, dimming the screen, the keyboard and how apps start
 Turns while playing
+Twelve
 Twelve looks, each with its own controls. Previews use your palette and seed.
+Twenty past {hour}
+Twenty to {hour}
+Twenty-five past {hour}
+Twenty-five to {hour}
 Twilight angles
+Two
 Two fingers
 Two-factor codes (TOTP / HOTP) stored in your keyring
 Type /trigger and your words in the launcher. Actions: url:<address with {query}> opens the browser, mandara:<command> runs a Mandara command (see `mandara commands`), exec:<shell command> runs a program; {query} is replaced by what you typed.
@@ -6799,6 +6838,7 @@ Use the events' own alarms
 Use the folder button on an entry to add it here
 Use the gh sign-in
 Use the time an app asks for instead of the values above
+Use this location publicly
 Use this variation
 Use today, next, prev, +N / -N days, YYYY-MM or YYYY-MM-DD
 Use your own stiffness and damping instead of the global motion settings
@@ -6962,6 +7002,7 @@ Weather and prayer times always follow this location, even when they have their 
 Weather disc
 Weather line
 Weather request failed: {error}
+Weather ribbon
 Weather sentence
 Weather unavailable
 Weather, prayer times, world clocks and more at a glance
@@ -7076,6 +7117,7 @@ Wi-Fi and wired connectivity
 Wi-Fi is off
 Wi-Fi, Bluetooth, do not disturb and more; shapes that change when on
 Widget kinds come from plugins: switch them on or off in Studio → Plugins (Desktop widgets).
+Widgets
 Widgets font
 Widgets on the desktop (a widget's own font wins)
 Widgets on “{tab}”
@@ -7120,6 +7162,7 @@ With its chain of narrators
 With the anchor
 With your password through Mandara Login (not autologin). Each keyring's password must be your login password.
 Won't join automatically
+Word clock
 Word count
 Words by a Brushwood Gate
 Work is love made visible.
@@ -7889,6 +7932,7 @@ your default
 {hours} h {minutes} min
 {hours} h {minutes} min left
 {hours}h {minutes}m
+{hour} o'clock
 {h} h {m} min
 {h}h {m}m
 {id} · not installed

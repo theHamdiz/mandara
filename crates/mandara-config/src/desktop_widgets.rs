@@ -716,6 +716,12 @@ pub enum WeatherLayout {
     Disc,
     /// The next hours as a temperature curve with icons.
     Hourly,
+    /// A compact forecast printed across a horizontal ticket.
+    Ribbon,
+    /// A thermometer filled from the current temperature and today's range.
+    Thermometer,
+    /// A petal dial showing measured relative humidity.
+    HumidityRose,
 }
 
 impl Default for WeatherWidget {
@@ -1176,10 +1182,18 @@ pub enum ClockFace {
     Numerals,
     /// Hour and minute as bodies orbiting on two rings.
     Orbit,
+    /// Time written in words, with the exact time below.
+    Word,
+    /// Four mechanical split-flap digit cards.
+    SplitFlap,
+    /// Numerals inside outlined glass tubes.
+    Nixie,
+    /// Binary-coded decimal columns with their decimal readout.
+    Binary,
 }
 
 impl ClockFace {
-    pub const ALL: [ClockFace; 20] = [
+    pub const ALL: [ClockFace; 24] = [
         Self::Stacked,
         Self::Classic,
         Self::Arabic,
@@ -1200,6 +1214,10 @@ impl ClockFace {
         Self::Template,
         Self::Numerals,
         Self::Orbit,
+        Self::Word,
+        Self::SplitFlap,
+        Self::Nixie,
+        Self::Binary,
     ];
 
     /// The depth clock's own faces (drawn by its dedicated planes).
@@ -1243,6 +1261,10 @@ impl ClockFace {
             ClockFace::Template => "template",
             ClockFace::Numerals => "numerals",
             ClockFace::Orbit => "orbit",
+            ClockFace::Word => "word",
+            ClockFace::SplitFlap => "split-flap",
+            ClockFace::Nixie => "nixie",
+            ClockFace::Binary => "binary",
         }
     }
 }

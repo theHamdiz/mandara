@@ -661,6 +661,10 @@ impl GreeterPage {
                     .into_any_element(),
             )],
         ));
+        let page = cx.entity().downgrade();
+        out.push(super::auth_widgets::panel("login", &self.draft.widgets, Rc::new(move |edit, cx| {
+            let _ = page.update(cx, |page, cx| page.edit(cx, |cfg| edit.apply(&mut cfg.widgets)));
+        }), p, cx));
         out
     }
 
