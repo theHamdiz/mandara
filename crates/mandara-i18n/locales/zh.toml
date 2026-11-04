@@ -8260,3 +8260,25 @@
 "Updates: Studio → About → Update now" = "更新：Studio → 关于 → 立即更新"
 
 "If you added Mandara to PATH, open a new terminal before running these commands." = "如果已将 Mandara 添加到 PATH，请先打开新终端，再运行这些命令。"
+
+"Cancelled — nothing was changed." = "已取消，未作任何更改。"
+
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "已保留当前登录屏幕；可随时在 Studio → 登录屏幕 → 登录管理器中切换。"
+
+"Setup" = "设置"
+
+"Start with your compositor" = "随合成器启动"
+
+"detect automatically" = "自动检测"
+
+"installed" = "已安装"
+
+"keep yours" = "保留当前设置"
+
+"no" = "否"
+
+"yes" = "是"
+
+"{compositor} (installed)" = "{compositor}（已安装）"
+
+"↑/↓ change · enter select · esc cancel" = "↑/↓ 更改 · Enter 选择 · Esc 取消"

@@ -8018,3 +8018,25 @@
 "Updates: Studio → About → Update now" = "업데이트: Studio → 정보 → 지금 업데이트"
 
 "If you added Mandara to PATH, open a new terminal before running these commands." = "Mandara를 PATH에 추가했다면 이 명령을 실행하기 전에 새 터미널을 여세요."
+
+"Cancelled — nothing was changed." = "취소됨 — 아무것도 변경하지 않았습니다."
+
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "현재 로그인 화면을 유지합니다. Studio → 로그인 화면 → 로그인 관리자에서 언제든지 바꿀 수 있습니다."
+
+"Setup" = "설정"
+
+"Start with your compositor" = "컴포지터와 함께 시작"
+
+"detect automatically" = "자동 감지"
+
+"installed" = "설치됨"
+
+"keep yours" = "현재 화면 유지"
+
+"no" = "아니요"
+
+"yes" = "예"
+
+"{compositor} (installed)" = "{compositor} (설치됨)"
+
+"↑/↓ change · enter select · esc cancel" = "↑/↓ 변경 · Enter 선택 · Esc 취소"

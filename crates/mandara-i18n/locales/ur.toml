@@ -8019,3 +8019,25 @@
 "Updates: Studio → About → Update now" = "اپ ڈیٹس: Studio → تعارف → ابھی اپ ڈیٹ کریں"
 
 "If you added Mandara to PATH, open a new terminal before running these commands." = "اگر آپ نے Mandara کو PATH میں شامل کیا ہے تو یہ کمانڈز چلانے سے پہلے نیا ٹرمینل کھولیں۔"
+
+"Cancelled — nothing was changed." = "منسوخ — کچھ بھی تبدیل نہیں ہوا۔"
+
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "موجودہ لاگ اِن اسکرین برقرار ہے؛ اسٹوڈیو ← لاگ اِن اسکرین ← لاگ اِن مینیجر سے کسی بھی وقت بدلیں۔"
+
+"Setup" = "سیٹ اپ"
+
+"Start with your compositor" = "اپنے کمپوزیٹر کے ساتھ شروع کریں"
+
+"detect automatically" = "خودکار شناخت"
+
+"installed" = "نصب شدہ"
+
+"keep yours" = "اپنی موجودہ اسکرین رکھیں"
+
+"no" = "نہیں"
+
+"yes" = "ہاں"
+
+"{compositor} (installed)" = "{compositor} (نصب شدہ)"
+
+"↑/↓ change · enter select · esc cancel" = "↑/↓ بدلیں · Enter منتخب کریں · Esc منسوخ کریں"

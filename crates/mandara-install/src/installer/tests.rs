@@ -45,6 +45,8 @@ struct FakeHost {
     menus: Vec<usize>,
     /// `select` is cancelled instead.
     cancel: bool,
+    /// Cancel this menu index after earlier selections have succeeded.
+    cancel_at: Option<usize>,
     /// The prompt and row labels of every menu shown.
     shown: Vec<(String, Vec<String>)>,
     ran: Vec<Cmd>,
@@ -94,7 +96,7 @@ impl Host for FakeHost {
 
     fn select(&mut self, prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
         self.shown.push((prompt.to_string(), rows.iter().map(|r| r.label.clone()).collect()));
-        if self.cancel {
+        if self.cancel || self.cancel_at == Some(self.shown.len() - 1) {
             return None;
         }
         if self.menus.is_empty() {
@@ -320,7 +322,7 @@ fn interactive_setup_chooses_the_compositor_then_the_rest_is_not_asked() {
     let mut host = FakeHost::with(&["dnf", "sudo", "systemctl", "niri"]);
     host.tty = true;
     // Setup → Compositor row, compositor list → Niri, Setup → Install (last row).
-    host.menus = vec![0, 1, 3];
+    host.menus = vec![0, compositors::SUPPORTED.iter().position(|compositor| compositor.id == "niri").unwrap(), 3];
     run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs::default()).unwrap();
     let (prompt, rows) = &host.shown[0];
     assert_eq!(prompt, "Setup");
@@ -386,9 +388,23 @@ fn cancelling_the_setup_screen_changes_nothing() {
     host.tty = true;
     host.cancel = true;
     run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs::default()).unwrap();
-    assert!(host.text().contains("cancelled — nothing was changed"), "{}", host.text());
+    assert!(host.text().contains("Cancelled — nothing was changed."), "{}", host.text());
     assert!(host.ran().is_empty(), "{:?}", host.ran());
     assert!(f.home_files().is_empty(), "{:?}", f.home_files());
+}
+
+#[test]
+fn cancelling_the_compositor_picker_changes_nothing() {
+    let fixture = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.tty = true;
+    host.menus = vec![0];
+    host.cancel_at = Some(1);
+    run(&mut host, &FakeProbe::default(), fixture.facts(Family::Arch), InstallArgs::default()).unwrap();
+    assert_eq!(host.shown.len(), 2);
+    assert!(host.text().contains("Cancelled — nothing was changed."));
+    assert!(host.ran().is_empty());
+    assert!(fixture.home_files().is_empty());
 }
 
 #[test]

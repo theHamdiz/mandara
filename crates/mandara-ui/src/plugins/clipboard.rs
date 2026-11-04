@@ -304,6 +304,37 @@ struct Ui {
 type Shared = Rc<RefCell<Ui>>;
 
 impl Ui {
+    /// Begin on the visible history page, then walk across page boundaries.
+    fn next_selection(&self, delta: isize) -> Option<(usize, u64)> {
+        if self.selected.is_none() {
+            let on_page = |(_, page): &(usize, &usize)| **page == self.page;
+            let candidate = if delta > 0 {
+                self.page_of.iter().enumerate().find(on_page)
+            } else {
+                self.page_of.iter().enumerate().rfind(on_page)
+            };
+            if let Some((index, _)) = candidate {
+                let index = index + self.pinned_len;
+                if let Some(id) = self.order.get(index) { return Some((index, *id)); }
+            }
+        }
+        step_selection(&self.order, self.selected, delta)
+    }
+
+    /// Keep keyboard activation restricted to the rows drawn on this page.
+    fn reconcile_selection(&mut self, layout: &Layout<'_>) {
+        self.order.clear();
+        self.order.extend(layout.listing.pinned.iter().map(|entry| entry.id));
+        self.pinned_len = self.order.len();
+        self.order.extend(layout.listing.main.iter().map(|entry| entry.id));
+        self.page_of.clear();
+        for (page, range) in layout.pages.iter().enumerate() {
+            self.page_of.extend(range.clone().map(|_| page));
+        }
+        self.pages = layout.pages.len();
+        self.selected = self.selected.filter(|id| layout.listing.pinned.iter().chain(layout.page_rows()).any(|entry| entry.id == *id));
+    }
+
     fn decoded_bytes(&self) -> usize {
         self.thumbs.values().map(|t| t.bytes).sum()
     }
@@ -375,7 +406,7 @@ fn step_selection(order: &[u64], current: Option<u64>, delta: isize) -> Option<(
 /// that may not be visible any more).
 fn select_step(ui: &Shared, delta: isize, cx: &mut App) {
     update(ui, cx, |u| {
-        let Some((at, id)) = step_selection(&u.order, u.selected, delta) else {
+        let Some((at, id)) = u.next_selection(delta) else {
             u.selected = None;
             return;
         };
@@ -900,21 +931,7 @@ impl View {
         let (listing, pages, page) = (&lay.listing, &lay.pages, lay.page);
         // Snapshot the drawing order for the arrows: pinned rows first, then
         // the whole history, with the page each row sits on.
-        {
-            let mut u = ui.borrow_mut();
-            u.order.clear();
-            u.order.extend(listing.pinned.iter().map(|e| e.id));
-            u.pinned_len = u.order.len();
-            u.order.extend(listing.main.iter().map(|e| e.id));
-            u.page_of.clear();
-            for (i, range) in lay.pages.iter().enumerate() {
-                u.page_of.extend(range.clone().map(|_| i));
-            }
-            u.pages = lay.pages.len();
-            if u.selected.is_some_and(|id| !u.order.contains(&id)) {
-                u.selected = None;
-            }
-        }
+        ui.borrow_mut().reconcile_selection(&lay);
         let filter = ui.borrow().filter;
         let page_rows: Vec<&ClipEntry> = lay.page_rows().to_vec();
         let shown = lay.shown();
@@ -1061,7 +1078,10 @@ impl View {
             .track_focus(&self.focus)
             .on_key_down({
                 let ui = ui.clone();
-                move |e: &KeyDownEvent, _window, cx| match e.keystroke.key.as_str() {
+                let focus = self.focus.clone();
+                move |e: &KeyDownEvent, window, cx| {
+                    if !focus.is_focused(window) { return; }
+                    match e.keystroke.key.as_str() {
                     "up" => {
                         cx.stop_propagation();
                         select_step(&ui, -1, cx);
@@ -1075,6 +1095,7 @@ impl View {
                         activate(&ui, cx);
                     }
                     _ => {}
+                    }
                 }
             })
             // The wheel turns the pages (the chips strip takes its own).
@@ -1503,6 +1524,29 @@ mod tests {
         assert_eq!(step_selection(&order, Some(40), 1), Some((3, 40)));
         // Nothing to walk.
         assert_eq!(step_selection(&[], None, 1), None);
+    }
+
+    #[test]
+    fn the_first_arrow_starts_on_the_visible_page_even_with_pins() {
+        let ui = Ui { order: vec![1, 10, 20, 30, 40], pinned_len: 1, page_of: vec![0, 1, 1, 2], page: 1, ..Default::default() };
+        assert_eq!(ui.next_selection(1), Some((2, 20)));
+        assert_eq!(ui.next_selection(-1), Some((3, 30)));
+        let selected = Ui { selected: Some(30), ..ui };
+        assert_eq!(selected.next_selection(1), Some((4, 40)), "selected arrows still cross pages");
+    }
+
+    #[test]
+    fn a_history_change_cannot_leave_an_invisible_entry_selected() {
+        let entries = [entry(1, "pinned"), entry(10, "first"), entry(20, "second"), entry(30, "third")];
+        let layout = Layout { listing: Listing { pinned: vec![&entries[0]], main: entries[1..].iter().collect() }, pages: vec![0..2, 2..3], page: 0 };
+        let mut ui = Ui { selected: Some(30), ..Default::default() };
+        ui.reconcile_selection(&layout);
+        assert_eq!(ui.selected, None);
+        for id in [1, 10, 20] {
+            ui.selected = Some(id);
+            ui.reconcile_selection(&layout);
+            assert_eq!(ui.selected, Some(id), "visible rows keep their selection");
+        }
     }
 
     #[test]

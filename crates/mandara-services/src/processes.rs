@@ -87,8 +87,6 @@ pub struct Sampler {
     prev: HashMap<u32, u64>,
     at: Option<Instant>,
     users: HashMap<u32, String>,
-    /// Logical CPUs, read on the first sample (0 until then).
-    cpus: f32,
 }
 
 impl Sampler {
@@ -103,7 +101,7 @@ impl Sampler {
         }
         let hz = clock_ticks() as f32;
         let now = Instant::now();
-        let cpus = self.cpus();
+        let cpus = cpu_capacity() as f32;
         let elapsed = self.at.map(|t| now.duration_since(t).as_secs_f32()).unwrap_or(0.0);
         let mut out = Vec::with_capacity(self.prev.len());
         let Ok(dir) = std::fs::read_dir("/proc") else { return out };
@@ -130,14 +128,17 @@ fn clock_ticks() -> u64 {
     rustix::param::clock_ticks_per_second()
 }
 
-impl Sampler {
-    /// Logical CPUs, cached: `available_parallelism` parses cgroup files.
-    fn cpus(&mut self) -> f32 {
-        if self.cpus < 1.0 {
-            self.cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1) as f32;
-        }
-        self.cpus
-    }
+/// Host-wide logical CPUs, matching the aggregate `/proc/stat` gauge even
+/// when this process has an affinity mask or a cgroup CPU quota.
+pub fn cpu_capacity() -> usize {
+    static CPUS: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *CPUS.get_or_init(|| parse_cpu_capacity(&std::fs::read_to_string("/proc/stat").unwrap_or_default()).max(1))
+}
+
+fn parse_cpu_capacity(stat: &str) -> usize {
+    stat.lines().filter_map(|line| line.split_whitespace().next()).filter(|name| {
+        name.strip_prefix("cpu").is_some_and(|index| !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()))
+    }).count()
 }
 
 /// `ticks` of CPU time used over `elapsed_s` seconds, as a share of the whole
@@ -145,7 +146,7 @@ impl Sampler {
 /// multi-threaded process stays at or below 100 (like the Resources panel),
 /// instead of the per-core figure `top` prints.
 fn share_of_machine(ticks: u64, elapsed_s: f32, hz: f32, cpus: f32) -> f32 {
-    (ticks as f32 / hz) / elapsed_s * PERCENT / cpus.max(1.0)
+    ((ticks as f32 / hz) / elapsed_s * PERCENT / cpus.max(1.0)).min(PERCENT)
 }
 
 fn page_size() -> u64 {
@@ -296,6 +297,17 @@ mod tests {
         assert!((share_of_machine(400, 1.0, 100.0, 4.0) - 100.0).abs() < 0.01);
         // A missing core count can't divide by zero.
         assert!((share_of_machine(100, 1.0, 100.0, 0.0) - 100.0).abs() < 0.01);
+        // Sampling timestamps and procfs reads can straddle a scheduling tick.
+        assert_eq!(share_of_machine(401, 1.0, 100.0, 4.0), PERCENT);
+    }
+
+    #[test]
+    fn capacity_counts_host_cpu_rows_instead_of_the_callers_affinity() {
+        let stat = "cpu 100 200 300 400\ncpu0 10 20 30 40\ncpu7 10 20 30 40\nintr 123\ncpufreq 4\n";
+        assert_eq!(parse_cpu_capacity(stat), 2);
+        assert_eq!(parse_cpu_capacity("cpu 100 200 300 400\n"), 0);
+        assert_eq!(parse_cpu_capacity(""), 0);
+        assert!(cpu_capacity() > 0);
     }
 
     #[test]

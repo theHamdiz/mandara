@@ -887,6 +887,7 @@ Can't read {reference}: try `bukhari 1` or `muslim 2699a`
 Cancel
 Cancel an install job (rootless installs roll back)
 Cancelled
+Cancelled — nothing was changed.
 Cancelling…
 Candide
 Capacity
@@ -3124,6 +3125,7 @@ Logged out
 Logging in
 Login
 Login screen
+Login screen kept; switch any time in Studio → Login screen → Login manager.
 Logo
 Long Walk to Freedom
 Long break
@@ -5272,6 +5274,7 @@ Settings
 Settings and data this app may have left in your home folder. Only what you tick moves to the Trash; nothing is deleted, and the app's removal doesn't depend on it.
 Settings in Studio
 Settings: {title}
+Setup
 Sha'ban
 Shaded
 Shadow
@@ -5593,6 +5596,7 @@ Start the next phase automatically
 Start when sharing the screen
 Start where the last region was
 Start with a lowercase letter or an underscore
+Start with your compositor
 Start with “Add to PATH” switched on: a command in ~/.local/bin (never replacing an existing file)
 Started {count} containers
 Started {name}
@@ -7201,6 +7205,7 @@ desktop id or command line
 desktop id, e.g. firefox or org.gimp.GIMP
 desktop id, e.g. firefox or org.gnome.Nautilus
 detached at {commit}
+detect automatically
 device name from `audio devices`
 device name or MAC address
 device name or MAC address (quote names with spaces)
@@ -7277,6 +7282,7 @@ in {span}
 in {time}
 inactive
 index from `audio streams`
+installed
 installed model name, e.g. llama3.2:3b
 internal error (logged)
 internal error while capturing (logged)
@@ -7288,6 +7294,7 @@ item id, title or key
 job id from apps jobs
 journalctl failed
 just now
+keep yours
 key=value pairs, or a TOML recipe
 khatm
 khatm {n}
@@ -7337,6 +7344,7 @@ new label
 new name
 new name (rest of the line)
 new position, 0 = first
+no
 no address
 no commits yet
 no compositor detected
@@ -7585,6 +7593,7 @@ words in Arabic or in your language, or a reference
 words to look for
 words, then optionally --collection <id> and --grade sahih|hasan|daif
 workspace
+yes
 your compositor
 your default
 {account} is already added
@@ -7614,6 +7623,7 @@ your default
 {collection} couldn't be opened
 {collection} isn't downloaded
 {collection} isn't downloaded: run `hadith download {id}`
+{compositor} (installed)
 {compositor} can't read this line: something in its syntax is broken (a missing bracket, quote or `=`), so it may skip everything after it.
 {compositor} doesn't know `{key}`. It may be misspelled, or it was renamed or removed in a newer version.
 {compositor} has no config file here yet.
@@ -7948,4 +7958,5 @@ your default
 …in its own systemd scope (app-mandara-firefox-<pid>.scope).
 …or a command, e.g. syncthing serve --no-browser
 …or an image path, e.g. ~/Pictures/logo.svg
+↑/↓ change · enter select · esc cancel
 ≈ {size}

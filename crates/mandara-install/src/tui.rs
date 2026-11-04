@@ -23,7 +23,7 @@ pub(crate) const ART_WIDTH: usize = 67;
 const PLAIN_TITLE: &str = "MANDARA";
 
 /// The hint under every menu.
-const HINT: &str = "\n  ↑/↓ change · enter select · esc cancel";
+const HINT: &str = mandara_i18n::tk("↑/↓ change · enter select · esc cancel");
 
 /// The title block: the wordmark, a rule, then `label`. On a terminal too
 /// narrow for the art, [`PLAIN_TITLE`] replaces it rather than wrapping.
@@ -55,7 +55,8 @@ pub(crate) fn menu_frame(prompt: &str, rows: &[Row], cursor: usize) -> String {
         out.push_str(line.trim_end());
         out.push('\n');
     }
-    out.push_str(HINT);
+    out.push_str("\n  ");
+    out.push_str(&mandara_i18n::tr(HINT));
     out
 }
 

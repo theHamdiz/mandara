@@ -522,7 +522,8 @@ What made the difference, each measured by switching it off alone:
   +16.2 MiB anonymous 40 s later; now +3.4–6.1 MiB (and +7.5–8.6 instead
   of +24–26 MiB while open). It also removes the 30 MiB huge-page arena seen in two of
   about ten settled runs. Panel frame times unchanged.
-* **RELR relocations** (`mandara-app/build.rs`, `-z pack-relative-relocs`):
+* **RELR relocations** (`mandara-app/build.rs`, `-z pack-relative-relocs`,
+  x86 GNU ld targets only):
   `.rela.dyn` 4.0 MiB → 6 KiB plus a 52 KiB `.relr.dyn`, read at every
   start. Needs glibc ≥ 2.36 at run time (release builds already need 2.39).
 * **No idle blocking-pool threads** (`mandara-services` `runtime.rs`):

@@ -8265,3 +8265,25 @@
 "Updates: Studio → About → Update now" = "Güncellemeler: Studio → Hakkında → Şimdi güncelle"
 
 "If you added Mandara to PATH, open a new terminal before running these commands." = "Mandara’yı PATH’e eklediyseniz bu komutları çalıştırmadan önce yeni bir terminal açın."
+
+"Cancelled — nothing was changed." = "İptal edildi — hiçbir şey değiştirilmedi."
+
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Giriş ekranınız korundu; Studio → Giriş ekranı → Giriş yöneticisi bölümünden istediğiniz zaman değiştirebilirsiniz."
+
+"Setup" = "Kurulum"
+
+"Start with your compositor" = "Birleştiricinizle birlikte başlat"
+
+"detect automatically" = "otomatik algıla"
+
+"installed" = "kurulu"
+
+"keep yours" = "mevcut ekranı koru"
+
+"no" = "hayır"
+
+"yes" = "evet"
+
+"{compositor} (installed)" = "{compositor} (kurulu)"
+
+"↑/↓ change · enter select · esc cancel" = "↑/↓ değiştir · Enter seç · Esc iptal"

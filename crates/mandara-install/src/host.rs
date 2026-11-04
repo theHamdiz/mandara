@@ -374,15 +374,17 @@ fn tty_columns() -> Option<usize> {
 }
 
 /// Draws the menu on the terminal and returns the picked row. `None` when
-/// the user cancels; without a terminal the default is taken, so a piped
-/// run never blocks and behaves exactly as `--yes` would.
+/// the user cancels or the terminal cannot be opened in raw mode.
 fn select_tty(prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
+    select_terminal(std::fs::OpenOptions::new().read(true).write(true).open(TTY), prompt, rows, default)
+}
+
+fn select_terminal(terminal: std::io::Result<File>, prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
     if rows.is_empty() {
-        return Some(default);
+        return None;
     }
-    let fallback = Some(default.min(rows.len() - 1));
-    let Ok(mut tty) = std::fs::OpenOptions::new().read(true).write(true).open(TTY) else { return fallback };
-    let Ok(_raw) = RawMode::enable(&tty) else { return fallback };
+    let mut tty = terminal.ok()?;
+    let _raw = RawMode::enable(&tty).ok()?;
     let mut cursor = default.min(rows.len() - 1);
     let mut drawn = 0;
     let _ = tty.write_all(HIDE_CURSOR);
@@ -436,14 +438,14 @@ fn clear(tty: &mut File, drawn: usize) {
 fn read_key(tty: &mut File) -> Key {
     let mut pending = Vec::new();
     loop {
-        if let Some((key, used)) = tui::decode(&pending) {
-            pending.drain(..used);
+        if let Some((key, _)) = tui::decode(&pending) {
             return key;
         }
         // Nothing yet (wait forever), or a lone escape: briefly wait for the
         // rest of an arrow key before treating it as cancel.
         let timeout = if pending.is_empty() { -1 } else { ESCAPE_TIMEOUT_MS };
-        let mut buf = [0u8; 8];
+        // Leave the following key in the terminal queue for the next read.
+        let mut buf = [0u8; 1];
         match read_some(tty, &mut buf, timeout) {
             Some(0) | None => return Key::Cancel,
             Some(n) => pending.extend_from_slice(&buf[..n]),
@@ -528,6 +530,56 @@ impl Drop for TempDir {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn menu_startup_failures_cancel_instead_of_installing() {
+        let rows = [Row::new("Install", "")];
+        let missing = Err(std::io::Error::from(std::io::ErrorKind::NotFound));
+        assert_eq!(select_terminal(missing, "Setup", &rows, 0), None);
+        let file = tempfile::tempfile().unwrap();
+        assert_eq!(select_terminal(Ok(file), "Setup", &rows, 0), None, "a regular file cannot enter terminal raw mode");
+    }
+
+    #[test]
+    fn reading_an_arrow_keeps_the_queued_enter_and_cancel() {
+        let mut file = tempfile::tempfile().unwrap();
+        file.write_all(b"\x1b[B\rq").unwrap();
+        std::io::Seek::rewind(&mut file).unwrap();
+        assert_eq!(read_key(&mut file), Key::Down);
+        assert_eq!(read_key(&mut file), Key::Enter);
+        assert_eq!(read_key(&mut file), Key::Cancel);
+    }
+
+    #[test]
+    fn terminal_menu_accepts_queued_keys_and_restores_terminal_settings() {
+        use std::os::fd::FromRawFd as _;
+        let (mut master, mut slave) = (-1, -1);
+        // SAFETY: openpty initializes distinct owned descriptors on success.
+        assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null(), std::ptr::null()) }, 0);
+        // SAFETY: each descriptor is transferred to one File.
+        let (mut master, slave) = unsafe { (File::from_raw_fd(master), File::from_raw_fd(slave)) };
+        let inspect = slave.try_clone().unwrap();
+        let settings = |file: &File| {
+            let mut state: libc::termios = unsafe { std::mem::zeroed() };
+            // SAFETY: the live terminal descriptor and output pointer are valid.
+            assert_eq!(unsafe { libc::tcgetattr(file.as_raw_fd(), &mut state) }, 0);
+            (state.c_lflag, state.c_cc)
+        };
+        let before = settings(&inspect);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            sender.send(select_terminal(Ok(slave), "Setup", &[Row::new("First", ""), Row::new("Install", "")], 0)).unwrap();
+        });
+        let mut cursor = [0; HIDE_CURSOR.len()];
+        master.read_exact(&mut cursor).unwrap();
+        assert_eq!(&cursor, HIDE_CURSOR);
+        master.write_all(b"\x1b[B\r").unwrap();
+        let choice = receiver.recv_timeout(Duration::from_secs(2));
+        if choice.is_err() { master.write_all(b"q").unwrap(); }
+        thread.join().unwrap();
+        assert_eq!(choice.unwrap(), Some(1));
+        assert_eq!(settings(&inspect), before);
+    }
 
     #[test]
     fn finds_programs_on_path_only_when_executable() {

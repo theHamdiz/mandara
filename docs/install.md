@@ -104,8 +104,9 @@ one (see [No compositor yet](#no-compositor-yet)).
 
 With a terminal, `mandara install` opens on its own screen: the MANDARA
 wordmark and an arrow-key menu that picks the compositor to integrate with
-(one you already have is preselected) and switches autostart and the login
-screen on or off before anything is installed. Every choice there is also a
+(the cursor suggests one you already have; the row stays on *detect
+automatically* until you choose) and switches autostart and the login screen
+on or off before anything is installed. Every choice there is also a
 flag: one you pass is left out of the menu, and `--yes`, `--dry-run` or a
 run without a terminal skips the screen and prints the one-line plan
 instead. Esc, `q` or Ctrl-C leaves it without changing anything.

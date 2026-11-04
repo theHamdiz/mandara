@@ -685,7 +685,7 @@ fn threads() -> usize {
     if demo::active() {
         return demo::threads();
     }
-    std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1)
+    mandara_services::processes::cpu_capacity()
 }
 
 fn top_apps(procs: &[Process]) -> Vec<TopApp> {

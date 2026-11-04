@@ -8266,3 +8266,25 @@
 "Updates: Studio → About → Update now" = "अपडेट: Studio → परिचय → अभी अपडेट करें"
 
 "If you added Mandara to PATH, open a new terminal before running these commands." = "यदि आपने Mandara को PATH में जोड़ा है, तो ये कमांड चलाने से पहले नया टर्मिनल खोलें।"
+
+"Cancelled — nothing was changed." = "रद्द किया गया — कुछ भी नहीं बदला।"
+
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "आपकी लॉगिन स्क्रीन रखी गई है; Studio → लॉगिन स्क्रीन → लॉगिन प्रबंधक से इसे कभी भी बदलें।"
+
+"Setup" = "सेटअप"
+
+"Start with your compositor" = "अपने कंपोज़िटर के साथ शुरू करें"
+
+"detect automatically" = "अपने-आप पहचानें"
+
+"installed" = "इंस्टॉल है"
+
+"keep yours" = "अपनी मौजूदा स्क्रीन रखें"
+
+"no" = "नहीं"
+
+"yes" = "हाँ"
+
+"{compositor} (installed)" = "{compositor} (इंस्टॉल है)"
+
+"↑/↓ change · enter select · esc cancel" = "↑/↓ बदलें · Enter चुनें · Esc रद्द करें"

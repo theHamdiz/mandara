@@ -28,6 +28,7 @@ use crate::{index, packages};
 use crate::platform::{self, MIN_RUST, RELEASED_ARCHES};
 use crate::release::{self, ARCHIVE_SUFFIX, MAX_ARCHIVE_BYTES, MAX_JSON_BYTES, SUMS_FILE, SelfCheck};
 use crate::tui;
+use mandara_i18n::{t, tf};
 
 /// greetd + its kiosk compositor: what Mandara Login needs installed.
 const LOGIN_PROGRAMS: &[&str] = &["greetd", "cage"];
@@ -376,7 +377,7 @@ impl<'a> Installer<'a> {
             self.say(Level::Warn, msg);
         }
         if !self.preflight()? {
-            self.say(Level::Info, "cancelled — nothing was changed");
+            self.say(Level::Info, t("Cancelled — nothing was changed."));
             return Ok(());
         }
         let deps = !self.args.no_deps;
@@ -1058,30 +1059,29 @@ impl<'a> Installer<'a> {
         loop {
             let (mut rows, mut choices) = (Vec::new(), Vec::new());
             if self.args.compositor.is_none() {
-                rows.push(Row::new("Compositor", compositor_label(&*self.host, compositor.as_deref())));
+                rows.push(Row::new(t("Compositor"), compositor_label(&*self.host, compositor.as_deref())));
                 choices.push(Choice::Compositor);
             }
             if !self.args.no_autostart {
-                rows.push(Row::new("Start with your compositor", yes_no(autostart)));
+                rows.push(Row::new(t("Start with your compositor"), yes_no(autostart)));
                 choices.push(Choice::Autostart);
             }
             if !self.args.no_greeter {
-                rows.push(Row::new("Login screen", if greeter { "Mandara Login" } else { "keep yours" }));
+                rows.push(Row::new(t("Login screen"), if greeter { "Mandara Login" } else { t("keep yours") }));
                 choices.push(Choice::Greeter);
             }
             let install = choices.len();
-            rows.push(Row::new("Install", ""));
+            rows.push(Row::new(t("Install"), ""));
             choices.push(Choice::Install);
             if install == 0 {
                 break;
             }
-            let Some(picked) = self.host.select("Setup", &rows, install) else { return Ok(false) };
+            let Some(picked) = self.host.select(t("Setup"), &rows, install) else { return Ok(false) };
             match choices[picked] {
                 Choice::Compositor => {
                     let (names, list, default) = compositor_rows(&*self.host, compositor.as_deref().or(suggested.as_deref()));
-                    if let Some(i) = self.host.select("Compositor", &list, default) {
-                        compositor = Some(names[i].to_string());
-                    }
+                    let Some(i) = self.host.select(t("Compositor"), &list, default) else { return Ok(false) };
+                    compositor = Some(names[i].to_string());
                 }
                 Choice::Autostart => autostart = !autostart,
                 Choice::Greeter => greeter = !greeter,
@@ -1161,7 +1161,7 @@ impl<'a> Installer<'a> {
     fn greeter(&mut self, exe: &Path) {
         let wanted = self.setup.map_or(!self.args.no_greeter, |s| s.greeter);
         if !wanted {
-            let line = if self.args.no_greeter { "login screen unchanged (--no-greeter); switch any time in Studio → Login screen → Login manager" } else { "login screen kept; switch any time in Studio → Login screen → Login manager" };
+            let line = if self.args.no_greeter { "login screen unchanged (--no-greeter); switch any time in Studio → Login screen → Login manager" } else { t("Login screen kept; switch any time in Studio → Login screen → Login manager.") };
             self.say(Level::Detail, line);
             return;
         }
@@ -1475,9 +1475,9 @@ fn installed_compositor(host: &dyn Host) -> Option<String> {
 
 /// The current compositor as the setup screen shows it.
 fn compositor_label(host: &dyn Host, chosen: Option<&str>) -> String {
-    let Some(c) = chosen.and_then(compositors::by_name) else { return "detect automatically".into() };
+    let Some(c) = chosen.and_then(compositors::by_name) else { return t("detect automatically").into() };
     if c.installed(|p| host.has_program(p)) {
-        format!("{} (installed)", c.label)
+        tf("{compositor} (installed)", &[("compositor", &c.label)])
     } else {
         c.label.to_string()
     }
@@ -1486,7 +1486,7 @@ fn compositor_label(host: &dyn Host, chosen: Option<&str>) -> String {
 /// The compositor picker's rows, the names behind them and where the cursor
 /// starts.
 fn compositor_rows(host: &dyn Host, chosen: Option<&str>) -> (Vec<&'static str>, Vec<Row>, usize) {
-    let rows = compositors::SUPPORTED.iter().map(|c| Row::new(c.label, if c.installed(|p| host.has_program(p)) { "installed" } else { "" })).collect();
+    let rows = compositors::SUPPORTED.iter().map(|c| Row::new(c.label, if c.installed(|p| host.has_program(p)) { t("installed") } else { "" })).collect();
     let names: Vec<&'static str> = compositors::SUPPORTED.iter().map(|c| c.id).collect();
     let default = chosen.and_then(|c| names.iter().position(|id| *id == c)).unwrap_or(0);
     (names, rows, default)
@@ -1494,7 +1494,7 @@ fn compositor_rows(host: &dyn Host, chosen: Option<&str>) -> (Vec<&'static str>,
 
 /// A yes/no setting as the setup screen shows it.
 fn yes_no(value: bool) -> &'static str {
-    if value { "yes" } else { "no" }
+    if value { t("yes") } else { t("no") }
 }
 
 #[cfg(test)]

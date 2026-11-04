@@ -18,7 +18,8 @@ installer, display reconnection and native KWin support.
   switch autostart and Mandara Login on or off, then choose Install. A
   choice you pass as a flag is left out of the menu, and `--yes`,
   `--dry-run` or a run without a terminal behave as before, with the
-  one-line title.
+  one-line title. Canceling either menu leaves the installation untouched.
+  Thanks to @Hedayatbakhshi. (#66)
 
 - **Mandara now runs on Plasma Wayland with a native KWin driver** (#45,
   #50). The bar follows virtual desktops and windows, and the dock and
@@ -41,7 +42,9 @@ installer, display reconnection and native KWin support.
 - **The clipboard answers the keyboard and the wheel.** Arrow Up and Down
   move through the list and turn the page when they reach its end, Enter
   copies the entry under them (or pastes it, where the panel is set to
-  paste), and the wheel now turns pages instead of doing nothing.
+  paste), and the wheel now turns pages instead of doing nothing. Search
+  keeps its own keyboard focus, and hidden entries cannot stay selected.
+  Thanks to @Hedayatbakhshi. (#70)
 
 - **A shorter, friendlier first install.** The new download command shows
   the phoenix and real download progress, picks the right Linux build,
@@ -77,7 +80,9 @@ installer, display reconnection and native KWin support.
   read "405.5%" for `rustc`, because the list measured each process
   against a single core while the Resources panel measured all of them.
   Both now show a share of your whole machine, so no row goes past 100%,
-  and the *hot* colour still starts at the same amount of work as before.
+  and the *hot* colour still starts at the same amount of work as before,
+  including when Mandara runs with a CPU quota or affinity limit.
+  Thanks to @Hedayatbakhshi. (#68)
 
 - **First-install instructions account for your current terminal** (#72).
   If you added Mandara to PATH, the installer asks you to open a new
@@ -162,6 +167,10 @@ installer, display reconnection and native KWin support.
   all 14 languages. (#49)
 
 ### Under the hood
+
+- **ARM builds avoid an unsupported linker option.** Packed relocations
+  are requested only on architectures GNU ld supports, keeping ARM build
+  output clear of the ignored-option warning.
 
 - **Build checks use the current GitHub Actions runtime.** Checkout no
   longer reports the retired Node runtime during tests and releases.

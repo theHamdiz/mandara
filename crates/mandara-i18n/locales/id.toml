@@ -8019,3 +8019,25 @@
 "Updates: Studio → About → Update now" = "Pembaruan: Studio → Tentang → Perbarui sekarang"
 
 "If you added Mandara to PATH, open a new terminal before running these commands." = "Jika Anda menambahkan Mandara ke PATH, buka terminal baru sebelum menjalankan perintah ini."
+
+"Cancelled — nothing was changed." = "Dibatalkan — tidak ada yang diubah."
+
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Layar masuk Anda dipertahankan; ubah kapan saja melalui Studio → Layar masuk → Pengelola masuk."
+
+"Setup" = "Penyiapan"
+
+"Start with your compositor" = "Mulai bersama kompositor Anda"
+
+"detect automatically" = "deteksi otomatis"
+
+"installed" = "terpasang"
+
+"keep yours" = "pertahankan milik Anda"
+
+"no" = "tidak"
+
+"yes" = "ya"
+
+"{compositor} (installed)" = "{compositor} (terpasang)"
+
+"↑/↓ change · enter select · esc cancel" = "↑/↓ ubah · Enter pilih · Esc batal"

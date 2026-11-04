@@ -8260,3 +8260,25 @@
 "Updates: Studio → About → Update now" = "Actualizaciones: Studio → Acerca de → Actualizar ahora"
 
 "If you added Mandara to PATH, open a new terminal before running these commands." = "Si añadiste Mandara a PATH, abre una terminal nueva antes de ejecutar estos comandos."
+
+"Cancelled — nothing was changed." = "Cancelado: no se ha cambiado nada."
+
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Se conserva tu pantalla de inicio de sesión; puedes cambiarla en Studio → Pantalla de inicio de sesión → Gestor de inicio de sesión."
+
+"Setup" = "Configuración"
+
+"Start with your compositor" = "Iniciar con tu compositor"
+
+"detect automatically" = "detectar automáticamente"
+
+"installed" = "instalado"
+
+"keep yours" = "conservar la tuya"
+
+"no" = "no"
+
+"yes" = "sí"
+
+"{compositor} (installed)" = "{compositor} (instalado)"
+
+"↑/↓ change · enter select · esc cancel" = "↑/↓ cambiar · Intro seleccionar · Esc cancelar"
