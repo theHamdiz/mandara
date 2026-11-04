@@ -118,6 +118,11 @@ fn every_look_has_a_keyboard_control_and_light_and_dark_preview() {
         let figure = page.descendants().find(|node| node.has_tag_name("figure") && node.attribute("class").is_some_and(|s| s.split_whitespace().any(|class| class == id))).unwrap();
         assert!(figure.descendants().any(|node| node.has_tag_name("source") && node.attribute("media") == Some("(prefers-color-scheme: light)")));
         assert!(figure.descendants().any(|node| node.has_tag_name("img") && node.attribute("src").is_some()));
+        for (link, image, attribute) in [("preview-dark", "img", "src"), ("preview-light", "source", "srcset")] {
+            let preview = figure.descendants().find(|node| node.has_tag_name(image)).unwrap().attribute(attribute).unwrap();
+            let full = figure.descendants().find(|node| node.has_tag_name("a") && node.attribute("class") == Some(link)).unwrap().attribute("href").unwrap();
+            assert_eq!(full, preview, "full-size {link} differs from its displayed image");
+        }
     }
     assert!(css.contains("@media (prefers-reduced-motion: no-preference)"));
     assert!(css.contains("@media (prefers-reduced-motion: reduce)"));

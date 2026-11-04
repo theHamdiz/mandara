@@ -65,6 +65,12 @@ h3 { font-size: 28px; line-height: 1.2; }
 .look img { aspect-ratio: 16 / 9; object-fit: cover; }
 .look figcaption { display: flex; justify-content: space-between; gap: 20px; }
 .look figcaption a { flex-shrink: 0; }
+.preview-links { flex-shrink: 0; }
+.preview-links .preview-light { display: none; }
+@media (prefers-color-scheme: light) {
+  .preview-links .preview-dark { display: none; }
+  .preview-links .preview-light { display: inline; }
+}
 .studio-section { background: var(--page-surface); padding-block: 72px; }
 .studio-grid { display: grid; grid-template-columns: 4fr 7fr; align-items: center; gap: 64px; }
 .section-copy h2 { margin-bottom: 32px; }
@@ -128,7 +134,7 @@ details[open] summary::after { transform: rotate(0); }
   .look-controls label { padding: 10px; text-align: center; align-content: center; min-height: 64px; }
   .look-controls > span { grid-column: 1 / -1; }
   .look figcaption { display: block; }
-  .look figcaption a { display: block; width: fit-content; margin-top: 10px; }
+  .look .preview-links { display: block; margin-top: 10px; }
   .studio-section { padding-block: 48px; }
   .feature-composition { display: block; }
   .widget-image { margin-top: 0; }
