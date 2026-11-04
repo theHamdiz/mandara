@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::*;
-use crate::host::{Fetch, Output};
+use crate::host::{Fetch, Output, Row};
 use crate::release::tests::tarball;
 use mandara_delta::signing::sign;
 
@@ -41,6 +41,12 @@ struct FakeHost {
     tty: bool,
     /// Commands (argv joined by spaces) whose captured stdout is this.
     stdout: HashMap<String, String>,
+    /// What `select` returns, in order (the default once empty).
+    menus: Vec<usize>,
+    /// `select` is cancelled instead.
+    cancel: bool,
+    /// The prompt and row labels of every menu shown.
+    shown: Vec<(String, Vec<String>)>,
     ran: Vec<Cmd>,
     out: Vec<(Level, String)>,
 }
@@ -84,6 +90,18 @@ impl Host for FakeHost {
 
     fn interactive(&self) -> bool {
         self.tty
+    }
+
+    fn select(&mut self, prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
+        self.shown.push((prompt.to_string(), rows.iter().map(|r| r.label.clone()).collect()));
+        if self.cancel {
+            return None;
+        }
+        if self.menus.is_empty() {
+            Some(default.min(rows.len().saturating_sub(1)))
+        } else {
+            Some(self.menus.remove(0))
+        }
     }
 
     fn fetch(&mut self, url: &str, _limit: u64) -> Result<Vec<u8>, Fetch> {
@@ -294,6 +312,65 @@ fn no_deps_skips_packages_and_greeter_packages() {
     let text = host.text();
     assert!(!text.contains("pacman"), "{text}");
     assert!(text.contains("missing: greetd cage (--no-deps)"));
+}
+
+#[test]
+fn interactive_setup_chooses_the_compositor_then_the_rest_is_not_asked() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["dnf", "sudo", "systemctl", "niri"]);
+    host.tty = true;
+    // Setup → Compositor row, compositor list → Niri, Setup → Install (last row).
+    host.menus = vec![0, 1, 3];
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs::default()).unwrap();
+    let (prompt, rows) = &host.shown[0];
+    assert_eq!(prompt, "Setup");
+    assert_eq!(rows, &["Compositor", "Start with your compositor", "Login screen", "Install"]);
+    assert_eq!(host.shown[1].0, "Compositor");
+    let labels: Vec<&str> = compositors::SUPPORTED.iter().map(|c| c.label).collect();
+    assert_eq!(host.shown[1].1, labels);
+    let bin = f.home().join(".local/bin/mandara");
+    let setup = format!("{} setup --compositor niri --autostart", bin.display());
+    assert!(host.ran().contains(&setup), "{:?}", host.ran());
+    // The login-screen question was answered on the screen, not asked again.
+    assert!(host.text().contains("Mandara Login is your login screen"), "{}", host.text());
+    // A terminal gets the wordmark.
+    assert!(host.text().contains("███╗   ███╗"), "{}", host.text());
+}
+
+#[test]
+fn choices_given_on_the_command_line_are_not_offered() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo", "systemctl"]);
+    host.tty = true;
+    // Rows left: autostart, login screen, Install.
+    host.menus = vec![2];
+    let args = InstallArgs { compositor: Some("niri".into()), ..Default::default() };
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), args).unwrap();
+    assert_eq!(host.shown[0].1, ["Start with your compositor", "Login screen", "Install"]);
+    assert!(host.ran().iter().any(|c| c.ends_with("setup --compositor niri --autostart")), "{:?}", host.ran());
+}
+
+#[test]
+fn yes_skips_the_setup_screen() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo", "systemctl"]);
+    host.tty = true;
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, ..Default::default() }).unwrap();
+    assert!(host.shown.is_empty(), "{:?}", host.shown);
+    // No terminal interaction, so the plain one-line title.
+    assert!(!host.text().contains("███╗"), "{}", host.text());
+}
+
+#[test]
+fn cancelling_the_setup_screen_changes_nothing() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.tty = true;
+    host.cancel = true;
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs::default()).unwrap();
+    assert!(host.text().contains("cancelled — nothing was changed"), "{}", host.text());
+    assert!(host.ran().is_empty(), "{:?}", host.ran());
+    assert!(f.home_files().is_empty(), "{:?}", f.home_files());
 }
 
 #[test]

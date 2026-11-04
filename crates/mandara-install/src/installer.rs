@@ -16,11 +16,12 @@ use crate::args::InstallArgs;
 use crate::compositors::{self, Compositor};
 use crate::family::{Family, OsRelease};
 use crate::files::{self, Paths};
-use crate::host::{Cmd, Fetch, Host, Io, Level, TempDir};
+use crate::host::{Cmd, Fetch, Host, Io, Level, Row, TempDir};
 use crate::pkg::{PackageManager, Privilege};
 use crate::{index, packages};
 use crate::platform::{self, MIN_RUST, RELEASED_ARCHES};
 use crate::release::{self, ARCHIVE_SUFFIX, MAX_ARCHIVE_BYTES, MAX_JSON_BYTES, SUMS_FILE, SelfCheck};
+use crate::tui;
 
 /// greetd + its kiosk compositor: what Mandara Login needs installed.
 const LOGIN_PROGRAMS: &[&str] = &["greetd", "cage"];
@@ -205,6 +206,25 @@ pub struct Installer<'a> {
     /// The package databases were brought up to date in this run (or, in a
     /// dry run, would have been).
     synced: bool,
+    /// What the interactive setup screen chose (`None` when it didn't run).
+    setup: Option<SetupChoices>,
+}
+
+/// The answers taken on the interactive setup screen, so the steps below
+/// don't ask for them again.
+#[derive(Copy, Clone, Debug)]
+struct SetupChoices {
+    autostart: bool,
+    greeter: bool,
+}
+
+/// What a row of the setup screen does.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Choice {
+    Compositor,
+    Autostart,
+    Greeter,
+    Install,
 }
 
 impl<'a> Installer<'a> {
@@ -216,7 +236,7 @@ impl<'a> Installer<'a> {
         };
         let paths = Paths::new(args.prefix.as_deref(), &facts.home, xdg);
         let privilege = Privilege::detect(facts.is_root, |p| host.has_program(p));
-        Installer { host, probe, facts, args, paths, privilege, tmp: None, synced: false }
+        Installer { host, probe, facts, args, paths, privilege, tmp: None, synced: false, setup: None }
     }
 
     pub fn paths(&self) -> &Paths {
@@ -330,7 +350,12 @@ impl<'a> Installer<'a> {
             Source::Build => "from source",
         };
         let banner = format!("Mandara Shell installer · {} ({}) · {} · {label}", self.facts.os.display_name(), self.facts.family, self.facts.arch);
-        self.say(Level::Title, banner);
+        if self.host.interactive() && !self.args.yes {
+            let columns = self.host.columns();
+            self.say(Level::Title, tui::banner(columns, &banner));
+        } else {
+            self.say(Level::Title, banner);
+        }
         if self.dry() {
             self.say(Level::Info, "dry run: nothing will be changed");
         }
@@ -343,6 +368,10 @@ impl<'a> Installer<'a> {
                 return Err(msg);
             }
             self.say(Level::Warn, msg);
+        }
+        if !self.preflight()? {
+            self.say(Level::Info, "cancelled — nothing was changed");
+            return Ok(());
         }
         let deps = !self.args.no_deps;
         if deps {
@@ -993,6 +1022,61 @@ impl<'a> Installer<'a> {
         Ok(())
     }
 
+    // ── Interactive setup ───────────────────────────────────────────────
+
+    /// The arrow-key setup screen: which compositor to integrate with, and
+    /// the autostart and login-screen questions the steps below would
+    /// otherwise ask one by one. A choice already given on the command line
+    /// is not offered. False when the user cancelled, before anything ran.
+    fn preflight(&mut self) -> Result<bool, String> {
+        if self.args.yes || self.dry() || !self.host.interactive() {
+            return Ok(true);
+        }
+        let mut compositor = self.args.compositor.clone().or_else(|| installed_compositor(&*self.host));
+        let mut autostart = !self.args.no_autostart;
+        let mut greeter = !self.args.no_greeter;
+        loop {
+            let (mut rows, mut choices) = (Vec::new(), Vec::new());
+            if self.args.compositor.is_none() {
+                rows.push(Row::new("Compositor", compositor_label(&*self.host, compositor.as_deref())));
+                choices.push(Choice::Compositor);
+            }
+            if !self.args.no_autostart {
+                rows.push(Row::new("Start with your compositor", yes_no(autostart)));
+                choices.push(Choice::Autostart);
+            }
+            if !self.args.no_greeter {
+                rows.push(Row::new("Login screen", if greeter { "Mandara Login" } else { "keep yours" }));
+                choices.push(Choice::Greeter);
+            }
+            let install = choices.len();
+            rows.push(Row::new("Install", ""));
+            choices.push(Choice::Install);
+            if install == 0 {
+                break;
+            }
+            let Some(picked) = self.host.select("Setup", &rows, install) else { return Ok(false) };
+            match choices[picked] {
+                Choice::Compositor => {
+                    let (names, list, default) = compositor_rows(&*self.host, compositor.as_deref());
+                    if let Some(i) = self.host.select("Compositor", &list, default) {
+                        compositor = Some(names[i].to_string());
+                    }
+                }
+                Choice::Autostart => autostart = !autostart,
+                Choice::Greeter => greeter = !greeter,
+                Choice::Install => break,
+            }
+        }
+        // `offer_compositor` installs it when it is missing, and `compositor`
+        // integrates with it.
+        if self.args.compositor.is_none() {
+            self.args.compositor = compositor;
+        }
+        self.setup = Some(SetupChoices { autostart, greeter });
+        Ok(true)
+    }
+
     /// `mandara setup` (one include line, generated drop-in, autostart),
     /// then the conflict check and an offer to retire what it found.
     fn compositor(&mut self) {
@@ -1006,7 +1090,8 @@ impl<'a> Installer<'a> {
         };
         let compositor = self.args.compositor.clone();
         let mut setup = with_compositor(vec![bin.clone(), "setup".into()], &compositor);
-        if !self.args.no_autostart && self.ask("Start Mandara automatically with your compositor?", true) {
+        let autostart = self.setup.map_or_else(|| !self.args.no_autostart && self.ask("Start Mandara automatically with your compositor?", true), |s| s.autostart);
+        if autostart {
             setup.push("--autostart".into());
         }
         match self.run(Cmd::from_argv(setup).env(SETUP_LOG.0, SETUP_LOG.1).io(Io::Capture)) {
@@ -1054,8 +1139,10 @@ impl<'a> Installer<'a> {
     /// timestamped backup. Nothing is started or stopped; it shows at the
     /// next boot. `exe` is the binary the probe and the root commands use.
     fn greeter(&mut self, exe: &Path) {
-        if self.args.no_greeter {
-            self.say(Level::Detail, "login screen unchanged (--no-greeter); switch any time in Studio → Login screen → Login manager");
+        let wanted = self.setup.map_or(!self.args.no_greeter, |s| s.greeter);
+        if !wanted {
+            let line = if self.args.no_greeter { "login screen unchanged (--no-greeter); switch any time in Studio → Login screen → Login manager" } else { "login screen kept; switch any time in Studio → Login screen → Login manager" };
+            self.say(Level::Detail, line);
             return;
         }
         // greetd's config is generated by NixOS: the module sets it up.
@@ -1343,6 +1430,37 @@ fn user_in_group(user: &str, group: &str, groups: &str, passwd: &str) -> bool {
         (f.len() >= 4 && f[0] == user).then(|| f[3].parse::<u32>().ok()).flatten()
     });
     member || (primary.is_some() && primary == group_gid(group, groups))
+}
+
+/// The compositor the setup screen starts on: one already installed (the
+/// first the installer recommends), else nothing — then the choice is left
+/// to `offer_compositor`, which knows what the distribution carries.
+fn installed_compositor(host: &dyn Host) -> Option<String> {
+    compositors::SUPPORTED.iter().find(|c| c.installed(|p| host.has_program(p))).map(|c| c.id.to_string())
+}
+
+/// The current compositor as the setup screen shows it.
+fn compositor_label(host: &dyn Host, chosen: Option<&str>) -> String {
+    let Some(c) = chosen.and_then(compositors::by_name) else { return "detect automatically".into() };
+    if c.installed(|p| host.has_program(p)) {
+        format!("{} (installed)", c.label)
+    } else {
+        c.label.to_string()
+    }
+}
+
+/// The compositor picker's rows, the names behind them and where the cursor
+/// starts.
+fn compositor_rows(host: &dyn Host, chosen: Option<&str>) -> (Vec<&'static str>, Vec<Row>, usize) {
+    let rows = compositors::SUPPORTED.iter().map(|c| Row::new(c.label, if c.installed(|p| host.has_program(p)) { "installed" } else { "" })).collect();
+    let names: Vec<&'static str> = compositors::SUPPORTED.iter().map(|c| c.id).collect();
+    let default = chosen.and_then(|c| names.iter().position(|id| *id == c)).unwrap_or(0);
+    (names, rows, default)
+}
+
+/// A yes/no setting as the setup screen shows it.
+fn yes_no(value: bool) -> &'static str {
+    if value { "yes" } else { "no" }
 }
 
 #[cfg(test)]
