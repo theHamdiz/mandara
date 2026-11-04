@@ -8254,3 +8254,9 @@
 "Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Elige mango, niri, hyprland, umbriel, sway, river o kwin (por defecto: detectado). Los compositores que falten se pueden instalar tras preguntar. KWin requiere una instalación de Plasma existente."
 
 "Install libxkbcommon before checking or changing compositor shortcuts." = "Instala libxkbcommon antes de comprobar o cambiar los atajos del compositor."
+
+"Open Mandara Studio from your application menu." = "Abre Mandara Studio desde el menú de aplicaciones."
+
+"Updates: Studio → About → Update now" = "Actualizaciones: Studio → Acerca de → Actualizar ahora"
+
+"If you added Mandara to PATH, open a new terminal before running these commands." = "Si añadiste Mandara a PATH, abre una terminal nueva antes de ejecutar estos comandos."

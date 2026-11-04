@@ -25,6 +25,7 @@ fn page_text_links_and_muted_ink_pass_contrast_in_both_themes() {
     let css = std::fs::read_to_string(crate::root().join("assets/css/pages.css")).unwrap();
     assert!(css.contains("@media (prefers-color-scheme: dark)"));
     assert!(css.contains(".markdown-body img { background-color: transparent; }"));
+    assert!(!css.contains(".highlight span"), "token spans must retain their syntax colours");
     let themes: Vec<_> = css.split(":root {").skip(1).map(|block| {
         block.split('}').next().unwrap().split(';').filter_map(|decl| decl.trim().split_once(": "))
             .map(|(key, value)| (key.trim(), value.trim())).collect::<BTreeMap<_, _>>()
@@ -32,12 +33,14 @@ fn page_text_links_and_muted_ink_pass_contrast_in_both_themes() {
     assert_eq!(themes.len(), 2);
     for theme in themes {
         for bg in ["--page-background", "--page-surface"] {
-            for ink in ["--page-ink", "--page-muted", "--page-link"] {
+            for ink in ["--page-ink", "--page-muted", "--page-link", "--syntax-string", "--syntax-number", "--syntax-error"] {
                 let (a, b) = (luminance(theme[bg]), luminance(theme[ink]));
                 let contrast = (a.max(b) + 0.05) / (a.min(b) + 0.05);
                 assert!(contrast >= 4.5, "{ink} on {bg}: {contrast:.2}");
             }
         }
+        assert_ne!(theme["--syntax-string"], theme["--page-link"]);
+        assert_ne!(theme["--syntax-number"], theme["--page-ink"]);
     }
 }
 

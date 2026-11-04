@@ -323,7 +323,7 @@ fn real_install_puts_files_in_place_and_runs_setup_and_greeter() {
     // The setup commands run quietly.
     assert!(host.ran[setup].env.contains(&("RUST_LOG".into(), "warn".into())));
     let text = host.text();
-    assert!(text.contains("Mandara is installed.") && text.contains("Upgrade:         mandara update"));
+    assert!(text.contains("Mandara is installed.") && text.contains("Studio → About → Update now"));
     assert!(text.contains("is not on your PATH"));
     // `--yes` takes the default: the folder goes on PATH, once.
     let profile = std::fs::read_to_string(f.home().join(".profile")).unwrap();
@@ -1014,4 +1014,25 @@ fn an_existing_plasma_session_needs_no_extra_compositor_installation() {
     run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs { compositor: Some("kwin".into()), yes: true, no_deps: true, ..Default::default() }).unwrap();
     assert!(!host.text().contains("Installing a compositor"));
     assert!(host.ran().iter().any(|cmd| cmd.contains("setup --compositor kwin")));
+}
+
+#[test]
+fn completion_explains_when_the_calling_terminal_needs_a_new_path() {
+    let fixture = Fixture::new();
+    for on_path in [false, true] {
+        let mut host = FakeHost::default();
+        let probe = FakeProbe::default();
+        let mut facts = fixture.facts(Family::Arch);
+        let bin = fixture.home().join(".local/bin");
+        facts.path_var = if on_path { format!("{}:/usr/bin", bin.display()) } else { "/usr/bin".into() };
+        Installer::new(&mut host, &probe, facts, InstallArgs::default()).completion();
+        let output: Vec<_> = host.out.iter().map(|(_, text)| text.as_str()).collect();
+        let path_note = output.iter().position(|text| text.contains("open a new terminal"));
+        assert_eq!(path_note.is_some(), !on_path);
+        let start = output.iter().position(|text| text.starts_with("Start it:")).unwrap();
+        if let Some(note) = path_note { assert!(note < start); }
+        assert!(output.iter().any(|text| text.contains("application menu")));
+        assert!(output.iter().any(|text| text.contains("Studio → About → Update now")));
+        assert!(host.ran.is_empty(), "completion only prints instructions");
+    }
 }

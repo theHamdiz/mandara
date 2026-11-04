@@ -9,6 +9,7 @@
 use std::path::{Path, PathBuf};
 
 mod path;
+mod completion;
 use path::{add_to_path, path_hint};
 #[cfg(test)]
 use path::{PATH_MARK, fish_word, posix_path_line, sh_word};
@@ -385,10 +386,7 @@ impl<'a> Installer<'a> {
         self.lock_hint();
         self.i2c();
         self.restart();
-        self.say(Level::Done, "Mandara is installed.");
-        for line in ["Start it:        mandara            (or log in again if autostart is on)", "Settings:        mandara studio", "Health & repair: mandara studio maintenance", "Upgrade:         mandara update"] {
-            self.say(Level::Info, line);
-        }
+        self.completion();
         Ok(())
     }
 

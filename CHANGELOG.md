@@ -59,12 +59,19 @@ installer, display reconnection and native KWin support.
 
 ### Fixed
 
+- **First-install instructions account for your current terminal** (#72).
+  If you added Mandara to PATH, the installer asks you to open a new
+  terminal before using its commands. It also points to Studio in your
+  application menu. Plasma Login Manager is recognised when switching to
+  Mandara Login.
+
 - **Studio shows KWin startup errors clearly.** A failed availability check
   keeps its error details instead of showing the normal Plasma settings note.
 
 - **The website header stays readable in both themes.** The page and its
   transparent banner now follow the same theme, and the browser tab shows
-  Mandara’s phoenix.
+  Mandara’s phoenix. Code examples keep their syntax colours with readable
+  contrast in light and dark mode.
 
 - **A slow compositor reply no longer holds up the first frame.** Initial
   workspace and window queries run in the background before the shell

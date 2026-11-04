@@ -176,6 +176,7 @@ pub const MANAGERS: &[LoginManager] = &[
     LoginManager { id: "qtgreet", name: "QtGreet", kind: Kind::GreetdGreeter, binaries: &["qtgreet"], units: &[GREETD_UNIT], command: "cage -s -- qtgreet", packages: Packages { arch: "qtgreet", debian: "qtgreet", fedora: "qtgreet" }, icon: "user" },
     LoginManager { id: "agreety", name: "agreety", kind: Kind::GreetdGreeter, binaries: &["agreety"], units: &[GREETD_UNIT], command: "agreety --cmd /bin/sh", packages: Packages { arch: "greetd-agreety", debian: "greetd", fedora: "greetd" }, icon: "terminal" },
     LoginManager { id: "sddm", name: "SDDM", kind: Kind::DisplayManager, binaries: &["sddm"], units: &["sddm.service"], command: "", packages: Packages::same("sddm"), icon: "monitor" },
+    LoginManager { id: "plasmalogin", name: "Plasma Login Manager", kind: Kind::DisplayManager, binaries: &["plasmalogin"], units: &["plasmalogin.service"], command: "", packages: Packages::same("plasma-login-manager"), icon: "monitor" },
     LoginManager { id: "gdm", name: "GDM", kind: Kind::DisplayManager, binaries: &["gdm", "gdm3"], units: &["gdm.service", "gdm3.service"], command: "", packages: Packages { arch: "gdm", debian: "gdm3", fedora: "gdm" }, icon: "monitor" },
     // LightDM shows nothing without a greeter of its own.
     LoginManager { id: "lightdm", name: "LightDM", kind: Kind::DisplayManager, binaries: &["lightdm"], units: &["lightdm.service"], command: "", packages: Packages { arch: "lightdm lightdm-gtk-greeter", debian: "lightdm lightdm-gtk-greeter", fedora: "lightdm lightdm-gtk" }, icon: "monitor" },

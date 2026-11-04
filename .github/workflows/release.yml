@@ -136,6 +136,8 @@ jobs:
 
   build:
     name: Build ${{ matrix.target }}${{ matrix.variant && format(' ({0})', matrix.variant) || '' }}
+    permissions:
+      contents: read
     needs: version
     if: needs.version.outputs.released == 'true'
     strategy:
@@ -160,6 +162,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
 
       - name: System libraries
@@ -264,6 +267,8 @@ jobs:
 
   build-musl:
     name: Build ${{ matrix.target }}
+    permissions:
+      contents: read
     needs: version
     if: needs.version.outputs.released == 'true'
     strategy:
@@ -278,6 +283,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
 
       # The host toolchain only runs xtask for the delta step below.
@@ -330,12 +336,15 @@ jobs:
 
   plugins:
     name: Plugins
+    permissions:
+      contents: read
     needs: version
     if: needs.version.outputs.released == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -446,7 +455,7 @@ jobs:
           **Install** with one command:
 
           ```sh
-          sh -c 'cd "$(mktemp -d)" && curl -fsSL "https://github.com/${{ github.repository }}/releases/latest/download/mandara-$(uname -m)-linux-gnu.tar.gz" | tar xz && exec ./mandara-*/bin/mandara install'
+          sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f"'
           ```
 
           Or download the tarball for your CPU, `tar xf` it and run `./mandara-*/bin/mandara install`.

@@ -8010,6 +8010,12 @@
 
 "Compositor (default: detected)" = "کامپوزیتور (پیش‌فرض: تشخیص خودکار)"
 
-"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "mango, niri, hyprland, umbriel, sway, river یا kwin را انتخاب کنید (پیش‌فرض: تشخیص خودکار). کامپوزیتورهای نصب‌نشده را می‌توان پس از پرسش نصب کرد. KWin به نصب قبلی Plasma نیاز دارد."
+"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "mango, niri, hyprland, umbriel, sway, river یا kwin را انتخاب کنید (پیش‌فرض: تشخیص خودکار). کامپوزیتورهای نصب‌نشده را می‌توان پس از پرسش نصب کرد. برای استفاده از KWin، Plasma باید از قبل نصب شده باشد."
 
 "Install libxkbcommon before checking or changing compositor shortcuts." = "پیش از بررسی یا تغییر میان‌برهای کامپوزیتور، libxkbcommon را نصب کنید."
+
+"Open Mandara Studio from your application menu." = "Mandara Studio را از منوی برنامه‌ها باز کنید."
+
+"Updates: Studio → About → Update now" = "به‌روزرسانی‌ها: Studio → درباره → اکنون به‌روزرسانی کنید"
+
+"If you added Mandara to PATH, open a new terminal before running these commands." = "اگر Mandara را به PATH اضافه کرده‌اید، پیش از اجرای این فرمان‌ها یک پایانهٔ جدید باز کنید."

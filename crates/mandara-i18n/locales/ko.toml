@@ -8012,3 +8012,9 @@
 "Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "mango, niri, hyprland, umbriel, sway, river 또는 kwin을 선택하세요 (기본값: 자동 감지). 없는 컴포지터는 확인 후 설치할 수 있습니다. KWin을 사용하려면 Plasma가 이미 설치되어 있어야 합니다."
 
 "Install libxkbcommon before checking or changing compositor shortcuts." = "컴포지터 단축키를 확인하거나 변경하기 전에 libxkbcommon을 설치하세요."
+
+"Open Mandara Studio from your application menu." = "애플리케이션 메뉴에서 Mandara Studio를 여세요."
+
+"Updates: Studio → About → Update now" = "업데이트: Studio → 정보 → 지금 업데이트"
+
+"If you added Mandara to PATH, open a new terminal before running these commands." = "Mandara를 PATH에 추가했다면 이 명령을 실행하기 전에 새 터미널을 여세요."

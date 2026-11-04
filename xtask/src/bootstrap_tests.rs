@@ -333,8 +333,10 @@ fn download_directories_prefer_the_home_cache_and_respect_explicit_tmpdir() {
 fn the_public_command_refuses_plain_http_and_removes_its_script() {
     let dir = tempfile::tempdir().unwrap();
     let guide = std::fs::read_to_string(crate::root().join("docs/install.md")).unwrap();
-    let command = guide.lines().find(|line| line.starts_with("sh -c 'f=")).unwrap()
-        .replace("https://thehamdiz.github.io/mandara/install.sh", "http://127.0.0.1:9/install.sh");
+    let published = guide.lines().find(|line| line.starts_with("sh -c 'f=")).unwrap();
+    let workflow = std::fs::read_to_string(crate::root().join(".github/workflows/release.yml")).unwrap();
+    assert!(workflow.lines().any(|line| line.trim() == published), "release notes must use the documented verified installer");
+    let command = published.replace("https://thehamdiz.github.io/mandara/install.sh", "http://127.0.0.1:9/install.sh");
     let output = Command::new("sh").args(["-c", &command]).env("TMPDIR", dir.path()).output().unwrap();
     // curl reports unsupported protocol before it tries the closed local port.
     assert_eq!(output.status.code(), Some(1), "{}", String::from_utf8_lossy(&output.stderr));

@@ -92,7 +92,7 @@ fn exe(f: &Fixture) -> PathBuf {
 
 #[test]
 fn detects_each_display_manager() {
-    for (unit, id) in [("sddm.service", "sddm"), ("gdm.service", "gdm"), ("gdm3.service", "gdm"), ("lightdm.service", "lightdm"), ("ly.service", "ly"), ("lxdm.service", "lxdm")] {
+    for (unit, id) in [("sddm.service", "sddm"), ("plasmalogin.service", "plasmalogin"), ("gdm.service", "gdm"), ("gdm3.service", "gdm"), ("lightdm.service", "lightdm"), ("ly.service", "ly"), ("lxdm.service", "lxdm")] {
         let f = Fixture::new();
         f.units(&[unit]).dm(unit);
         let d = detect(&f.root());
@@ -237,6 +237,24 @@ fn plans_mandara_from_another_display_manager() {
     let text = plan.describe();
     for want in ["Now:    SDDM", "Target: Mandara Login", "- command = \"agreety --cmd /bin/sh\"", "systemctl disable sddm.service", "restore latest", "next boot"] {
         assert!(text.contains(want), "plan lacks {want:?}:\n{text}");
+    }
+}
+
+#[test]
+fn plans_mandara_from_plasma_login_and_restores_its_unit() {
+    let f = arch_with_sddm();
+    f.units(&["plasmalogin.service"]).dm("plasmalogin.service");
+    let plan = SwitchPlan::build(&f.root(), MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    assert!(plan.errors.is_empty(), "{:?}", plan.errors);
+    assert!(!plan.describe().contains("isn't a login manager Mandara knows"));
+    assert_eq!(plan.detection.active_label(), "Plasma Login Manager");
+    assert_eq!(plan.commands, vec![systemctl("disable", "plasmalogin.service"), systemctl("enable", GREETD_UNIT)]);
+    plan.perform(&f.root(), true, &mut Recorder::default()).unwrap();
+    let restore = RestorePlan::build(&f.root(), "latest").unwrap();
+    assert_eq!(restore.commands, vec![systemctl("disable", GREETD_UNIT), systemctl("enable", "plasmalogin.service")]);
+    for family in [Family::Arch, Family::Debian, Family::Fedora] {
+        let missing = missing_for(&Fixture::new().root(), find("plasmalogin").unwrap(), Kiosk::Cage, family);
+        assert_eq!(packages_for(&missing), ["plasma-login-manager"]);
     }
 }
 

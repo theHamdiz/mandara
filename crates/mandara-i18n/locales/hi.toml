@@ -5043,7 +5043,7 @@
 "On the desktop, under your windows" = "डेस्कटॉप पर, आपकी विंडो के नीचे"
 "One click sets the bar, desktop widgets, colors, fonts and roundness together. Your own setup is saved first, so you can always go back. Looks never change your wallpaper." = "एक क्लिक बार, डेस्कटॉप विजेट, रंग, फ़ॉन्ट और गोलाई एक साथ सेट करता है। आपका सेटअप पहले सहेजा जाता है, ताकि आप कभी भी लौट सकें। लुक आपका वॉलपेपर कभी नहीं बदलते।"
 "One tiny pill at the top" = "ऊपर एक छोटी गोली"
-"Put the bar on a screen edge" = "बार को स्क्रीन के बाएँ या दाएँ किनारे पर रखें"
+"Put the bar on a screen edge" = "बार को स्क्रीन के किसी किनारे पर रखें"
 "Restore my look" = "मेरा लुक वापस लाएँ"
 "Return to your setup from before the first look" = "पहले लुक से पहले के सेटअप पर लौटें"
 "Screen edge the dock sits on (a side bar's edge is taken: the dock moves to the bottom there)" = "स्क्रीन का वह किनारा जिस पर डॉक है (साइड बार का किनारा भरा है: वहाँ डॉक नीचे चला जाता है)"
@@ -8248,7 +8248,7 @@
 "Download failed. Check your connection and try again." = "डाउनलोड विफल रहा। अपना कनेक्शन जाँचें और फिर कोशिश करें।"
 "The release signature could not be verified. Nothing was installed." = "रिलीज़ के हस्ताक्षर की पुष्टि नहीं हो सकी। कुछ भी इंस्टॉल नहीं हुआ।"
 "This command needs OpenSSL 3 or newer." = "इस कमांड के लिए OpenSSL 3 या नया संस्करण चाहिए।"
-"The signed release has no unique checksum for this archive." = "हस्ताक्षरित रिलीज़ में इस आर्काइव के लिए एकमात्र चेकसम नहीं है।"
+"The signed release has no unique checksum for this archive." = "हस्ताक्षरित रिलीज़ में इस आर्काइव के लिए ठीक एक चेकसम नहीं मिला।"
 "The download did not match the signed release. Nothing was installed; please try again." = "डाउनलोड हस्ताक्षरित रिलीज़ से मेल नहीं खाता। कुछ भी इंस्टॉल नहीं हुआ; फिर कोशिश करें।"
 "Could not unpack the verified release." = "सत्यापित रिलीज़ की फ़ाइलें नहीं निकाली जा सकीं।"
 "The release does not contain exactly one executable installer." = "रिलीज़ में चलने योग्य इंस्टॉलर की संख्या ठीक एक नहीं है।"
@@ -8260,3 +8260,9 @@
 "Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "mango, niri, hyprland, umbriel, sway, river या kwin चुनें (डिफ़ॉल्ट: अपने आप पहचाना गया)। पूछने के बाद अनुपलब्ध कंपोज़िटर इंस्टॉल किए जा सकते हैं। KWin के लिए Plasma पहले से इंस्टॉल होना चाहिए।"
 
 "Install libxkbcommon before checking or changing compositor shortcuts." = "कंपोज़िटर के शॉर्टकट जाँचने या बदलने से पहले libxkbcommon इंस्टॉल करें।"
+
+"Open Mandara Studio from your application menu." = "अपने ऐप्लिकेशन मेनू से Mandara Studio खोलें।"
+
+"Updates: Studio → About → Update now" = "अपडेट: Studio → परिचय → अभी अपडेट करें"
+
+"If you added Mandara to PATH, open a new terminal before running these commands." = "यदि आपने Mandara को PATH में जोड़ा है, तो ये कमांड चलाने से पहले नया टर्मिनल खोलें।"

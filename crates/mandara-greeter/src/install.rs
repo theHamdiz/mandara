@@ -21,7 +21,7 @@ const EXE_MODE: u32 = 0o755;
 const MEDIA_DIR_MODE: u32 = 0o755;
 /// Permissions of the greeter's state dir (greeter user + group only).
 const STATE_DIR_MODE: u32 = 0o750;
-const KNOWN_DMS: [&str; 9] = ["sddm", "gdm", "gdm3", "lightdm", "ly", "lxdm", "xdm", "greetd", "entrance"];
+const KNOWN_DMS: [&str; 10] = ["sddm", "plasmalogin", "gdm", "gdm3", "lightdm", "ly", "lxdm", "xdm", "greetd", "entrance"];
 
 /// The minimal compositor greetd runs the greeter in.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -535,8 +535,12 @@ mod tests {
     fn detects_display_manager_from_symlink() {
         let dir = tempfile::tempdir().unwrap();
         let link = dir.path().join("display-manager.service");
-        std::os::unix::fs::symlink("/usr/lib/systemd/system/sddm.service", &link).unwrap();
-        assert_eq!(current_display_manager(&link), Some("sddm".into()));
+        for manager in ["sddm", "plasmalogin"] {
+            std::os::unix::fs::symlink(format!("/usr/lib/systemd/system/{manager}.service"), &link).unwrap();
+            assert_eq!(current_display_manager(&link), Some(manager.into()));
+            assert!(KNOWN_DMS.contains(&manager), "a recognised manager must not get the unknown-manager warning");
+            std::fs::remove_file(&link).unwrap();
+        }
         assert_eq!(current_display_manager(&dir.path().join("missing")), None);
     }
 

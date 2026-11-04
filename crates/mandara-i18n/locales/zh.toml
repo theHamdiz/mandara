@@ -8254,3 +8254,9 @@
 "Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "选择 mango, niri, hyprland, umbriel, sway, river 或 kwin（默认：自动检测）。缺少的合成器可在询问后安装。KWin 需要已安装的 Plasma 环境。"
 
 "Install libxkbcommon before checking or changing compositor shortcuts." = "检查或更改合成器快捷键之前，请先安装 libxkbcommon。"
+
+"Open Mandara Studio from your application menu." = "从应用程序菜单打开 Mandara Studio。"
+
+"Updates: Studio → About → Update now" = "更新：Studio → 关于 → 立即更新"
+
+"If you added Mandara to PATH, open a new terminal before running these commands." = "如果已将 Mandara 添加到 PATH，请先打开新终端，再运行这些命令。"

@@ -53,6 +53,10 @@ builds for Alpine, Void musl and Chimera. `SHA256SUMS` sits next to them
 signed by Mandara's release key in `SHA256SUMS.sig`: `mandara install` and
 every update check that signature and refuse a release without it.
 
+Adding Mandara to PATH updates your shell profiles. The terminal that ran
+the installer keeps its old PATH: open a new terminal before running
+`mandara` commands, or open Mandara Studio from your application menu.
+
 `mandara install` copies itself to `~/.local/bin`, after **checking its own
 SHA-256** against the release's published checksums (and offers to put that
 folder on your PATH if it isn't). Then it installs the

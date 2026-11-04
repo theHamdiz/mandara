@@ -2597,6 +2597,7 @@ If a man keeps cherishing his old knowledge, so as continually to be acquiring n
 If it is not right, do not do it: if it is not true, do not say it.
 If people are placed in your hands, serve them sincerely and fairly.
 If thou covetest riches, ask not but for contentment, which is an immense treasure.
+If you added Mandara to PATH, open a new terminal before running these commands.
 If you are irritated by every rub, how will your mirror be polished?
 If you are wholly perplexed and in straits, have patience, for patience is the key to joy.
 If you have a garden and a library, you have everything you need.
@@ -4116,6 +4117,7 @@ Open
 Open About
 Open Config doctor
 Open KeePassXC
+Open Mandara Studio from your application menu.
 Open Mandara Studio, optionally on a section
 Open PLUGINS.md
 Open a copied image in your image editor (`[clipboard] image_command`)
@@ -6628,6 +6630,7 @@ Updated to {version} with a binary patch: {sizes}
 Updated to {version} with the full download: {sizes}
 Updates
 Updates install as small binary patches against the version you have, checked byte for byte. If a patch can't be used, Mandara falls back to the full download automatically. Mandara's own plugins are built in and update with the shell.
+Updates: Studio → About → Update now
 Updating Mandara…
 Updating…
 Upload
