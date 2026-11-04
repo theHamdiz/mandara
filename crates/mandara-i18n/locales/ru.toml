@@ -8287,3 +8287,14 @@
 "{compositor} (installed)" = "{compositor} (установлен)"
 
 "↑/↓ change · enter select · esc cancel" = "↑/↓ изменить · Enter выбрать · Esc отменить"
+
+"Profile scope" = "Область профиля"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "Меняет стиль, положение и высоту панели. Ваши элементы сохраняются, если вы не решите их заменить."
+"Replace bar items" = "Заменить элементы панели"
+"Leave empty to follow the desktop's icon theme" = "Оставьте пустым, чтобы использовать тему значков рабочего стола"
+"Could not load {module}; check that the installed kernel includes it" = "Не удалось загрузить {module}; проверьте, включён ли он в установленное ядро"
+
+"Bounce only while music plays" = "Подпрыгивать только при воспроизведении музыки"
+"Hide corners between displays" = "Скрывать углы между экранами"
+"Redraw interval p50" = "Интервал перерисовки p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Недавние построения представлений: сплошная часть показывает время CPU; полная высота включает интервал с предыдущего построения той же поверхности."

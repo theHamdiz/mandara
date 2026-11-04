@@ -8291,3 +8291,14 @@
 "{compositor} (installed)" = "{compositor} (مثبّت)"
 
 "↑/↓ change · enter select · esc cancel" = "↑/↓ للتغيير · Enter للاختيار · Esc للإلغاء"
+
+"Profile scope" = "نطاق الملف التعريفي"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "يغيّر نمط الشريط وموضعه وارتفاعه. تبقى عناصرك ما لم تختر استبدالها."
+"Replace bar items" = "استبدال عناصر الشريط"
+"Leave empty to follow the desktop's icon theme" = "اتركه فارغًا لاستخدام سمة أيقونات سطح المكتب"
+"Could not load {module}; check that the installed kernel includes it" = "تعذّر تحميل {module}؛ تأكد من أن النواة المثبتة تتضمنه"
+
+"Bounce only while music plays" = "الارتداد أثناء تشغيل الموسيقى فقط"
+"Hide corners between displays" = "إخفاء الزوايا بين الشاشات"
+"Redraw interval p50" = "الفاصل بين مرات إعادة الرسم p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "بناء الواجهات مؤخرًا: تعرض الأعمدة المصمتة وقت البناء على المعالج؛ ويشمل الارتفاع الكامل الفاصل منذ البناء السابق على السطح نفسه."

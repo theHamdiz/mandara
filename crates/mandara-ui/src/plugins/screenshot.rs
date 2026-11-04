@@ -27,9 +27,9 @@ const MAX_DELAY_S: u64 = 60;
 /// a capture no longer shows it.
 const PANEL_GONE: std::time::Duration = std::time::Duration::from_millis(120);
 const PANEL_W_PX: f32 = 400.0;
-/// The screenshot part of the panel: padding, the title line and two rows
+/// The screenshot part of the panel: padding, the title line and three rows
 /// of tiles with their gaps (the recording section adds its own height).
-const PANEL_BASE_H_PX: f32 = tokens::LG * 2.0 + record::SECTION_H_PX + (metrics::TILE_H + tokens::MD) * 2.0 + tokens::MD;
+const PANEL_BASE_H_PX: f32 = tokens::LG * 2.0 + record::SECTION_H_PX + (metrics::TILE_H + tokens::MD) * 2.0 + tokens::MD + metrics::TILE_H + tokens::SM;
 
 /// The next timer step after `delay` (off after the longest).
 fn next_delay(delay: u64) -> u64 {
@@ -115,7 +115,7 @@ pub(crate) fn start_delayed(mode: &str, delay: Option<u64>, cx: &mut App) -> Res
     // The panel (this one, from its Region button) goes at once, not
     // folding back over the screen being captured.
     let panel_was_open = shell(cx).update(cx, |s, cx| s.close_panel_now(cx));
-    if !matches!(mode, "region" | "pick-window" | "window" | "screen") {
+    if !matches!(mode, "region" | "pick-window" | "window" | "screen" | "all") {
         return Err(format!("unknown mode {mode:?}"));
     }
     // The timer waits before capturing (the panel has already closed).
@@ -184,7 +184,8 @@ fn capture(mode: &str, cx: &mut App) -> Option<async_channel::Receiver<Result<St
             None
         }
         _ => {
-            let rx = crate::snip::capture_now(mode == "window", cx);
+            let target = match mode { "all" => crate::snip::CaptureTarget::All, "window" => crate::snip::CaptureTarget::Window, _ => crate::snip::CaptureTarget::Screen };
+            let rx = crate::snip::capture_now(target, cx);
             // Fan the result out to a notification and to the caller.
             let (tx, out) = async_channel::bounded(1);
             cx.spawn(async move |cx| {
@@ -217,17 +218,22 @@ pub fn register(r: &mut PluginRegistry) {
             move |palette, _, cx| {
                 let o = options(cx);
                 let modes = div()
-                    .row()
+                    .flex().flex_col()
                     .gap(px(tokens::SM))
-                    .child(toggle_tile("shot-region", "crop", mandara_i18n::t("Region"), Some(mandara_i18n::t("Select area").into()), true, palette, |_, cx| {
-                        let _ = start("region", cx);
-                    }))
-                    .child(toggle_tile("shot-window", "window", mandara_i18n::t("Window"), Some(mandara_i18n::t("Pick a window").into()), false, palette, |_, cx| {
-                        let _ = start("pick-window", cx);
-                    }))
-                    .child(toggle_tile("shot-screen", "monitor", mandara_i18n::t("Screen"), Some(mandara_i18n::t("Whole output").into()), false, palette, |_, cx| {
-                        let _ = start("screen", cx);
-                    }));
+                    .child(div().row().gap(px(tokens::SM))
+                        .child(toggle_tile("shot-region", "crop", mandara_i18n::t("Region"), Some(mandara_i18n::t("Select area").into()), true, palette, |_, cx| {
+                            let _ = start("region", cx);
+                        }))
+                        .child(toggle_tile("shot-window", "window", mandara_i18n::t("Window"), Some(mandara_i18n::t("Pick a window").into()), false, palette, |_, cx| {
+                            let _ = start("pick-window", cx);
+                        })))
+                    .child(div().row().gap(px(tokens::SM))
+                        .child(toggle_tile("shot-screen", "monitor", mandara_i18n::t("Screen"), Some(mandara_i18n::t("Whole output").into()), false, palette, |_, cx| {
+                            let _ = start("screen", cx);
+                        }))
+                        .child(toggle_tile("shot-all", "monitor", mandara_i18n::t("All displays"), None, false, palette, |_, cx| {
+                            let _ = start("all", cx);
+                        })));
                 let opts = div()
                     .row()
                     .gap(px(tokens::SM))
@@ -385,9 +391,10 @@ pub fn register(r: &mut PluginRegistry) {
                 None => Output::Value(serde_json::json!("snipping tool opened")),
             })
         })
-        .arg(ArgSpec::required("mode", ArgKind::Enum, mandara_i18n::tk("what to capture")).choices(&["region", "pick-window", "window", "screen"]))
+        .arg(ArgSpec::required("mode", ArgKind::Enum, mandara_i18n::tk("what to capture")).choices(&["region", "pick-window", "window", "screen", "all"]))
         .arg(ArgSpec::optional("delay", ArgKind::String, mandara_i18n::tk("--delay [seconds]: count down first (default: the Countdown setting)")))
         .example("screenshot screen")
+        .example("screenshot all")
         .example("screenshot region --delay 3"),
     );
 }

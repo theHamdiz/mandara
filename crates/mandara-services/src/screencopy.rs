@@ -12,6 +12,10 @@ use wayland_client::{Connection, Dispatch, Proxy, QueueHandle, WEnum};
 use wayland_protocols::xdg::xdg_output::zv1::client::{zxdg_output_manager_v1, zxdg_output_v1};
 use wayland_protocols_wlr::screencopy::v1::client::{zwlr_screencopy_frame_v1, zwlr_screencopy_manager_v1};
 
+mod kwin;
+mod composite;
+pub use composite::composite;
+
 /// One captured output.
 #[derive(Clone, Debug)]
 pub struct Capture {
@@ -178,8 +182,7 @@ pub fn capture_all_with(cursor: bool) -> Result<Vec<Capture>> {
     let qh = queue.handle();
     let mut state = State::default();
     let shm: wl_shm::WlShm = globals.bind(&qh, 1..=1, ()).context("wl_shm")?;
-    let manager: zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1 =
-        globals.bind(&qh, 1..=3, ()).map_err(|_| anyhow!("compositor lacks zwlr_screencopy_manager_v1"))?;
+    let manager: Option<zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1> = globals.bind(&qh, 1..=3, ()).ok();
     let xdg: Option<zxdg_output_manager_v1::ZxdgOutputManagerV1> = globals.bind(&qh, 1..=3, ()).ok();
     let output_globals: Vec<_> = globals
         .contents()
@@ -193,6 +196,10 @@ pub fn capture_all_with(cursor: bool) -> Result<Vec<Capture>> {
         state.outputs.push((output, OutputInfo::default()));
     }
     queue.roundtrip(&mut state)?;
+
+    let Some(manager) = manager else {
+        return kwin::capture(&state.outputs.iter().map(|(_, info)| info).collect::<Vec<_>>(), cursor);
+    };
 
     let mut captures = Vec::new();
     for i in 0..state.outputs.len() {

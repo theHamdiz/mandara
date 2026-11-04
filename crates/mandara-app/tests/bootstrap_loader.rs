@@ -69,8 +69,10 @@ fn kwin_setup_check_reports_availability_without_touching_compositor_files() {
     std::fs::create_dir_all(&programs).unwrap();
     let kwinrc = config.join("kwinrc");
     std::fs::write(&kwinrc, "[Desktops]\nNumber=3\n").unwrap();
-    for installed in [false, true] {
-        if installed { std::os::unix::fs::symlink("/usr/bin/true", programs.join("kwin_wayland")).unwrap(); }
+    for (program, expected_status) in [(None, 11), (Some("/usr/bin/true"), 0), (Some("/usr/bin/false"), 11)] {
+        let probe = programs.join("kwin_wayland");
+        if probe.exists() { std::fs::remove_file(&probe).unwrap(); }
+        if let Some(program) = program { std::os::unix::fs::symlink(program, &probe).unwrap(); }
         let output = std::process::Command::new(env!("CARGO_BIN_EXE_mandara"))
             .args(["setup", "--check", "--compositor", "kwin"])
             .env("PATH", &programs).env("LC_ALL", "C")
@@ -80,8 +82,9 @@ fn kwin_setup_check_reports_availability_without_touching_compositor_files() {
             .env("XDG_RUNTIME_DIR", dir.path()).env("MANDARA_NO_IPC", "1")
             .stdin(std::process::Stdio::null()).output().unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
-        assert_eq!(output.status.code(), Some(if installed { 0 } else { 11 }), "{stdout}");
-        assert!(stdout.contains(if installed { "KWin has no standalone configuration checker" } else { "isn't installed" }), "{stdout}");
+        assert_eq!(output.status.code(), Some(expected_status), "{stdout}");
+        if program == Some("/usr/bin/true") { assert!(stdout.contains("KWin has no standalone configuration checker"), "{stdout}"); }
+        if program.is_none() { assert!(stdout.contains("isn't installed"), "{stdout}"); }
         assert_eq!(std::fs::read_to_string(&kwinrc).unwrap(), "[Desktops]\nNumber=3\n");
         assert!(!config.join("autostart").exists());
         assert!(!config.join("mandara/generated").exists());

@@ -481,6 +481,15 @@ Arch): River 0.4 moved window management into separate programs and dropped
 `river-control` and `river-status`, so on 0.4 and later Mandara can't
 drive it, and the Config doctor says so.
 
+### External monitor brightness
+
+The installer offers to enable external-monitor brightness through DDC/CI.
+Accepting loads `i2c-dev` when needed, records it for future boots, and
+adds your user to the device group if necessary. Log in again after a group
+change, and enable DDC/CI in your monitor's own menu. Existing access in the
+current boot does not skip the startup-module check. Studio → Displays →
+External brightness shows module and permission diagnostics.
+
 ### Plasma / KWin
 
 Start Mandara inside a **Plasma Wayland** session. The installer recognizes
@@ -504,7 +513,11 @@ Keep resolution, scaling, arrangement, input, window rules, effects and
 shortcuts in **Plasma System Settings**. Studio explains these limits; its
 **Displays → Shell on each display** controls still select where Mandara’s
 bar, dock and other surfaces appear. The Config doctor can report KWin’s
-availability, but KWin has no standalone configuration checker.
+availability, but KWin has no standalone configuration checker. Screenshots
+use KWin's native ScreenShot2 service; keep its screenshot effect available.
+A failed
+availability probe makes `mandara setup --check --compositor kwin` exit with
+status 11, just as a missing KWin executable does.
 
 Lock requests use **Plasma’s secure lock screen**, including confirmation
 before sleep, because KWin does not expose the lock-surface protocol used

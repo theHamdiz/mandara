@@ -8032,7 +8032,7 @@
 
 "installed" = "نصب‌شده"
 
-"keep yours" = "حفظ صفحهٔ فعلی"
+"keep yours" = "حفظ صفحهٔ ورود فعلی"
 
 "no" = "خیر"
 
@@ -8041,3 +8041,14 @@
 "{compositor} (installed)" = "{compositor} (نصب‌شده)"
 
 "↑/↓ change · enter select · esc cancel" = "↑/↓ تغییر · Enter انتخاب · Esc لغو"
+
+"Profile scope" = "محدودهٔ نمایه"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "سبک، موقعیت و ارتفاع نوار را تغییر می‌دهد. موارد شما حفظ می‌شوند مگر اینکه جایگزینی را انتخاب کنید."
+"Replace bar items" = "جایگزینی موارد نوار"
+"Leave empty to follow the desktop's icon theme" = "برای استفاده از پوستهٔ نمادهای میزکار خالی بگذارید"
+"Could not load {module}; check that the installed kernel includes it" = "بارگیری {module} ممکن نشد؛ بررسی کنید که هستهٔ نصب‌شده آن را داشته باشد"
+
+"Bounce only while music plays" = "جهش فقط هنگام پخش موسیقی"
+"Hide corners between displays" = "پنهان کردن گوشه‌های بین نمایشگرها"
+"Redraw interval p50" = "فاصلهٔ بازترسیم p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "ساخت‌های اخیر نما: بخش پُر ستون زمان ساخت پردازنده را نشان می‌دهد؛ ارتفاع کامل شامل فاصله از ساخت قبلی همان سطح است."

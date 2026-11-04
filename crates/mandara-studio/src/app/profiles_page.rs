@@ -47,6 +47,13 @@ const SECS_PER_MIN: u64 = 60;
 const SECS_PER_HOUR: u64 = 3600;
 /// Page-reset chips.
 const RESET_GRID: CardGrid = CardGrid { min_w: 170.0, max_w: 300.0, gap: SPACE_8_PX };
+/// Lists edited by page-specific designers, outside the scalar registry.
+/// Counts and reset use the same paths so a changed arrangement is resettable.
+const EXTRA_RESET_PATHS: &[(Section, &[&str])] = &[
+    (Section::Bar, &["/bar/left", "/bar/center", "/bar/right", "/side_bars/left/top", "/side_bars/left/middle", "/side_bars/left/bottom", "/side_bars/right/top", "/side_bars/right/middle", "/side_bars/right/bottom"]),
+    (Section::Dock, &["/dock/pinned", "/dock/stacks"]),
+    (Section::Sidebar, &["/sidebar/tabs"]),
+];
 
 /// One recorded change: when, what (setting labels), and the config before.
 struct Change {
@@ -139,6 +146,14 @@ pub(super) fn reset_section(cfg: &ShellConfig, section: Section) -> ShellConfig 
             next = c;
         }
     }
+    if let Some((_, paths)) = EXTRA_RESET_PATHS.iter().find(|(s, _)| *s == section) {
+        let dotted: Vec<String> = paths.iter().map(|path| path.trim_start_matches('/').replace('/', ".")).collect();
+        let paths: Vec<&str> = dotted.iter().map(String::as_str).collect();
+        match profiles::snapshot_paths(&ShellConfig::default(), "", "", &paths, "").and_then(|defaults| profiles::apply(&next, &defaults)) {
+            Ok(reset) => next = reset,
+            Err(error) => tracing::error!("resetting custom page settings: {error:#}"),
+        }
+    }
     next
 }
 
@@ -190,6 +205,10 @@ fn changed_per_section(cfg: &ShellConfig) -> HashMap<Section, usize> {
     let mut out = HashMap::new();
     for s in registry::non_default(cfg) {
         *out.entry(s.section).or_default() += 1;
+    }
+    for (section, paths) in EXTRA_RESET_PATHS {
+        let changed = registry::changed_paths(cfg, paths);
+        if changed > 0 { *out.entry(*section).or_default() += changed; }
     }
     out
 }
@@ -314,14 +333,14 @@ impl StudioView {
                     .flex_wrap()
                     .items_center()
                     .gap(px(SPACE_12_PX))
-                    .child(icon(if prof.scope == ProfileScope::Look { "sun" } else { "package" }, ICON_16_PX, p.primary))
+                    .child(icon(match prof.scope { ProfileScope::Bar => "monitor", ProfileScope::Look => "sun", ProfileScope::Full => "package" }, ICON_16_PX, p.primary))
                     .child(
                         div()
                             .flex_1()
                             .min_w(px(DIM_140_PX))
                             .row()
                             .flex_col()
-                            .child(div().row().items_center().gap(px(SPACE_8_PX)).child(div().font_weight(FontWeight::MEDIUM).child(prof.name.clone())).child(badge(if prof.scope == ProfileScope::Look { t("Look") } else { t("Everything") }, p.tertiary)))
+                            .child(div().row().items_center().gap(px(SPACE_8_PX)).child(div().font_weight(FontWeight::MEDIUM).child(prof.name.clone())).child(badge(match prof.scope { ProfileScope::Bar => t("Bar"), ProfileScope::Look => t("Look"), ProfileScope::Full => t("Everything") }, p.tertiary)))
                             .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(if prof.description.is_empty() { tf("Saved {when}", &[("when", &prof.saved)]) } else { prof.description.clone() })),
                     )
                     .child(button(SharedString::from(format!("profile-apply-{}", prof.name)), "check", t("Apply"), true, p).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
@@ -358,6 +377,7 @@ impl StudioView {
         };
         let look = scope_chip("profile-scope-look", t("Look only"), ProfileScope::Look, cx).tooltip(tip(t("Theme, bar, motion, typography, wallpaper, sidebar and window look"), p));
         let full = scope_chip("profile-scope-full", t("Everything"), ProfileScope::Full, cx);
+        let bar = scope_chip("profile-scope-bar", t("Bar"), ProfileScope::Bar, cx);
         let save = button("profile-save", "plus", t("Save profile"), false, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
             let name = form::value("profile-name", cx);
             if name.is_empty() {
@@ -377,7 +397,7 @@ impl StudioView {
             });
             cx.notify();
         }));
-        col.child(div().p(px(SPACE_10_PX)).row().flex_wrap().items_center().gap(px(SPACE_8_PX)).child(div().flex_1().min_w(px(DIM_200_PX)).child(name)).child(look).child(full).child(save)).into_any_element()
+        col.child(div().p(px(SPACE_10_PX)).row().flex_wrap().items_center().gap(px(SPACE_8_PX)).child(div().flex_1().min_w(px(DIM_200_PX)).child(name)).child(bar).child(look).child(full).child(save)).into_any_element()
     }
 
     fn prof_transfer(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
@@ -576,7 +596,8 @@ mod tests {
         let defaults = ShellConfig::default();
         let counts = changed_per_section(&cfg);
         for section in Section::ALL {
-            let full = registry::in_section(section).filter(|s| registry::get(&cfg, s) != registry::get(&defaults, s)).count();
+            let full = registry::in_section(section).filter(|s| registry::get(&cfg, s) != registry::get(&defaults, s)).count()
+                + EXTRA_RESET_PATHS.iter().find(|(s, _)| *s == section).map(|(_, paths)| registry::changed_paths(&cfg, paths)).unwrap_or(0);
             assert_eq!(counts.get(&section).copied().unwrap_or(0), full, "{section:?}");
         }
         assert!(counts.get(&Section::Input).copied().unwrap_or(0) >= 1);
@@ -592,6 +613,26 @@ mod tests {
         let full: Vec<&str> = registry::settings().iter().filter(|s| registry::get(&a, s) != registry::get(&b, s)).map(|s| s.path).collect();
         let fast: Vec<&str> = registry::differing(&a, &b).into_iter().map(|s| s.path).collect();
         assert_eq!(fast, full);
+    }
+
+    #[test]
+    fn restored_custom_arrangements_count_as_changed_and_reset_with_their_page() {
+        let cfg: ShellConfig = toml::from_str("[bar]\nleft = ['clock']\ncenter = []\nright = ['audio']\n[dock]\npinned = ['fixture-app']").unwrap();
+        let counts = changed_per_section(&cfg);
+        assert!(counts.get(&Section::Bar).copied().unwrap_or(0) >= 3);
+        assert!(counts.get(&Section::Dock).copied().unwrap_or(0) >= 1);
+        let reset = reset_section(&cfg, Section::Bar);
+        let defaults = ShellConfig::default();
+        assert_eq!(reset.bar, defaults.bar);
+        assert_eq!(reset.dock, cfg.dock);
+        assert!(!changed_per_section(&reset).contains_key(&Section::Bar));
+        assert_eq!(reset_section(&cfg, Section::Dock).dock.pinned, defaults.dock.pinned);
+        for (_, paths) in EXTRA_RESET_PATHS {
+            for path in *paths {
+                assert!(registry::by_path(path).is_none(), "{path} is already counted by the registry");
+                assert!(serde_json::to_value(&defaults).unwrap().pointer(path).is_some(), "{path} is not a real config path");
+            }
+        }
     }
 
     /// What the page does per frame and per config change, timed:

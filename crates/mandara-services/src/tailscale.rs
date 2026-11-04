@@ -19,6 +19,13 @@ use serde::{Deserialize, Serialize};
 
 /// The CLI.
 const BIN: &str = "tailscale";
+/// Distribution and standalone-package locations that a graphical session's
+/// reduced PATH may omit. The user's PATH always takes precedence.
+const CLI_PATHS: &[&str] = &["/usr/local/bin/tailscale", "/usr/bin/tailscale", "/usr/sbin/tailscale", "/usr/local/sbin/tailscale", "/run/current-system/sw/bin/tailscale", "/opt/tailscale/tailscale"];
+
+fn executable() -> Option<std::path::PathBuf> {
+    crate::recording::backend::which(BIN).or_else(|| CLI_PATHS.iter().map(std::path::PathBuf::from).find(|p| crate::recording::backend::executable(p)))
+}
 /// `tailscale status --json` normally answers in milliseconds.
 pub const STATUS_TIMEOUT: Duration = Duration::from_secs(8);
 /// `up` / `down` / `set` reconfigure the daemon; `up` may wait for a login.
@@ -336,13 +343,18 @@ fn pipe_lines(pipe: Option<impl Read + Send + 'static>, stderr: bool, tx: &mpsc:
 /// `until_url`, returns as soon as a login link is printed and leaves the
 /// CLI running in the background.
 fn run(args: &[&str], timeout: Duration, until_url: bool) -> Result<Run, Error> {
-    let mut child: Child = Command::new(BIN)
+    let binary = executable().ok_or(Error::NotInstalled)?;
+    run_program(&binary, args, timeout, until_url)
+}
+
+fn run_program(binary: &std::path::Path, args: &[&str], timeout: Duration, until_url: bool) -> Result<Run, Error> {
+    let mut child: Child = Command::new(binary)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { Error::NotInstalled } else { Error::Failed(e.to_string()) })?;
+        .map_err(|e| Error::Failed(format!("{}: {e}", binary.display())))?;
     let (tx, rx) = mpsc::channel();
     pipe_lines(child.stdout.take(), false, &tx);
     pipe_lines(child.stderr.take(), true, &tx);
@@ -466,6 +478,19 @@ pub fn resolve_exit_node<'a>(status: &'a Status, query: &str) -> Result<&'a Node
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_installed_cli_with_a_missing_loader_is_reported_as_broken() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        let binary = dir.path().join("tailscale");
+        std::fs::write(&binary, "#!/mandara-missing-interpreter\n").unwrap();
+        std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(crate::recording::backend::executable(&binary));
+        let error = run_program(&binary, &["status", "--json"], STATUS_TIMEOUT, false).err().unwrap();
+        assert!(matches!(error, Error::Failed(_)));
+        assert!(error.message().contains(binary.to_str().unwrap()));
+    }
 
     const SAMPLE: &str = r#"{
   "Version": "1.90.6-t1234abcd-g5678",

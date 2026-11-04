@@ -8288,3 +8288,14 @@
 "{compositor} (installed)" = "{compositor} (installé)"
 
 "↑/↓ change · enter select · esc cancel" = "↑/↓ modifier · Entrée sélectionner · Échap annuler"
+
+"Profile scope" = "Portée du profil"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "Modifie le style, la position et la hauteur de la barre. Vos éléments sont conservés, sauf si vous choisissez de les remplacer."
+"Replace bar items" = "Remplacer les éléments de la barre"
+"Leave empty to follow the desktop's icon theme" = "Laisser vide pour suivre le thème d’icônes du bureau"
+"Could not load {module}; check that the installed kernel includes it" = "Impossible de charger {module} ; vérifiez que le noyau installé le contient"
+
+"Bounce only while music plays" = "Rebondir seulement pendant la musique"
+"Hide corners between displays" = "Masquer les coins entre les écrans"
+"Redraw interval p50" = "Intervalle de rafraîchissement p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Constructions récentes des vues : les barres pleines montrent le temps CPU ; la hauteur totale inclut l’intervalle depuis la construction précédente sur la même surface."

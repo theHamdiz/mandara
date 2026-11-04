@@ -8041,3 +8041,14 @@
 "{compositor} (installed)" = "{compositor} (terpasang)"
 
 "↑/↓ change · enter select · esc cancel" = "↑/↓ ubah · Enter pilih · Esc batal"
+
+"Profile scope" = "Cakupan profil"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "Mengubah gaya, posisi, dan tinggi bilah. Item Anda tetap ada kecuali Anda memilih untuk menggantinya."
+"Replace bar items" = "Ganti item bilah"
+"Leave empty to follow the desktop's icon theme" = "Biarkan kosong untuk mengikuti tema ikon desktop"
+"Could not load {module}; check that the installed kernel includes it" = "Tidak dapat memuat {module}; periksa apakah kernel yang terpasang menyertakannya"
+
+"Bounce only while music plays" = "Memantul hanya saat musik diputar"
+"Hide corners between displays" = "Sembunyikan sudut di antara layar"
+"Redraw interval p50" = "Interval gambar ulang p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Pembuatan tampilan terbaru: batang padat menunjukkan waktu CPU; tinggi penuh juga mencakup interval sejak pembuatan sebelumnya pada permukaan yang sama."

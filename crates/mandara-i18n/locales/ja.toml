@@ -8288,3 +8288,14 @@
 "{compositor} (installed)" = "{compositor}（インストール済み）"
 
 "↑/↓ change · enter select · esc cancel" = "↑/↓ 変更 · Enter 選択 · Esc キャンセル"
+
+"Profile scope" = "プロファイルの範囲"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "バーのスタイル、位置、高さを変更します。置き換えを選択しない限り、現在の項目は保持されます。"
+"Replace bar items" = "バーの項目を置き換える"
+"Leave empty to follow the desktop's icon theme" = "空欄にするとデスクトップのアイコンテーマに従います"
+"Could not load {module}; check that the installed kernel includes it" = "{module} を読み込めませんでした。インストール済みのカーネルに含まれているか確認してください"
+
+"Bounce only while music plays" = "音楽の再生中のみ跳ねる"
+"Hide corners between displays" = "ディスプレイ間の角を非表示にする"
+"Redraw interval p50" = "再描画間隔 p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "最近のビュー構築：塗りつぶし部分は CPU の構築時間を示し、全体の高さは同じサーフェスで前回構築されてからの間隔を含みます。"

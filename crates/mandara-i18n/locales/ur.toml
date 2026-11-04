@@ -8041,3 +8041,14 @@
 "{compositor} (installed)" = "{compositor} (نصب شدہ)"
 
 "↑/↓ change · enter select · esc cancel" = "↑/↓ بدلیں · Enter منتخب کریں · Esc منسوخ کریں"
+
+"Profile scope" = "پروفائل کا دائرہ"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "بار کا انداز، جگہ اور اونچائی بدلتا ہے۔ آپ کے آئٹمز تب تک رہیں گے جب تک آپ انہیں بدلنے کا انتخاب نہ کریں۔"
+"Replace bar items" = "بار کے آئٹمز بدلیں"
+"Leave empty to follow the desktop's icon theme" = "ڈیسک ٹاپ کی آئیکن تھیم استعمال کرنے کے لیے خالی چھوڑیں"
+"Could not load {module}; check that the installed kernel includes it" = "{module} لوڈ نہیں ہو سکا؛ دیکھیں کہ نصب شدہ کرنل میں یہ موجود ہے"
+
+"Bounce only while music plays" = "صرف موسیقی چلنے پر اچھالیں"
+"Hide corners between displays" = "اسکرینوں کے درمیان کونے چھپائیں"
+"Redraw interval p50" = "دوبارہ ڈرائنگ کا وقفہ p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "ویو کی حالیہ تعمیرات: بھرے بار سی پی یو پر تعمیر کا وقت دکھاتے ہیں؛ پوری اونچائی میں اسی سطح کی پچھلی تعمیر سے وقفہ بھی شامل ہے۔"

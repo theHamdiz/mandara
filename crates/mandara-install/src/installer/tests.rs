@@ -716,12 +716,27 @@ fn external_monitor_brightness_setup() {
     assert!(ran.contains(&"sudo modprobe i2c-dev".to_string()));
     assert!(ran.contains(&"sudo groupadd -r i2c".to_string()));
     assert!(ran.contains(&"sudo usermod -aG i2c u".to_string()));
-    // Already in the group with the devices present: nothing asked.
+    // Access in this boot does not imply that the module loads next boot.
     std::fs::write(root.join("dev/i2c-0"), "").unwrap();
     std::fs::write(root.join("etc/group"), "i2c:x:20:u\n").unwrap();
     let mut host = FakeHost::with(&["pacman", "sudo"]);
-    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
+    host.answers = Some(true);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
     assert!(!host.ran().iter().any(|c| c.contains("usermod")));
+    assert!(host.ran().contains(&"sudo tee /etc/modules-load.d/i2c-dev.conf".to_string()));
+    assert!(!host.ran().iter().any(|c| c.contains("modprobe")));
+    let module_config = root.join("etc/modules-load.d/i2c-dev.conf");
+    std::fs::create_dir_all(module_config.parent().unwrap()).unwrap();
+    std::fs::write(&module_config, "# Kept by the fixture\nother-module").unwrap();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.answers = Some(true);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
+    let tee = host.ran.iter().find(|c| c.argv.contains(&"tee".to_string())).unwrap();
+    assert_eq!(tee.stdin.as_deref(), Some(&b"# Kept by the fixture\nother-module\ni2c-dev\n"[..]));
+    std::fs::write(&module_config, "# Installed\ni2c-dev\n").unwrap();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
+    assert!(!host.ran().iter().any(|c| c.contains("modules-load.d") || c.contains("modprobe") || c.contains("usermod")));
 }
 
 #[test]

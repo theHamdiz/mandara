@@ -241,6 +241,10 @@ pub fn corner_is_bound(corner: ScreenCorner, this: LayoutRect, others: &[LayoutR
     !others.iter().any(|o| contains(o, px_out, py_in) || contains(o, px_in, py_out))
 }
 
+fn rounded_corner_visible(config: &mandara_config::desktop::ScreenCornersConfig, corner: ScreenCorner, this: Option<LayoutRect>, others: &[LayoutRect]) -> bool {
+    config.corner_enabled(corner) && (!config.hide_between_displays || this.is_none_or(|rect| corner_is_bound(corner, rect, others)))
+}
+
 /// The flare whose filled part sits in `corner` (hollow toward the screen).
 fn flare_center(corner: ScreenCorner) -> FlareCenter {
     match corner {
@@ -461,22 +465,23 @@ impl HotCorners {
         cx: &mut Context<V>,
     ) -> Vec<AnyElement> {
         let mut out = Vec::new();
+        let layout: Vec<(String, LayoutRect)> = if cfg.hot_corners.enabled || (cfg.screen_corners.enabled && cfg.screen_corners.hide_between_displays) {
+            cx.try_global::<crate::overlays::Outputs>()
+                .map(|o| o.0.iter().map(|g| (g.name.clone(), (g.x as f32, g.y as f32, g.width as f32, g.height as f32))).collect())
+                .unwrap_or_default()
+        } else { Vec::new() };
+        let this = layout.iter().find(|(n, _)| *n == self.monitor).map(|(_, r)| *r);
+        let others: Vec<LayoutRect> = layout.iter().filter(|(n, _)| *n != self.monitor).map(|(_, r)| *r).collect();
         if cfg.screen_corners.enabled && cfg.screen_corners.radius > 0.0 {
             let r = cfg.screen_corners.radius.min(surface.0.min(surface.1) / 2.0);
             let ink = gpui::black();
-            for corner in ScreenCorner::ALL {
+            for corner in ScreenCorner::ALL.into_iter().filter(|c| rounded_corner_visible(&cfg.screen_corners, *c, this, &others)) {
                 let (x, y) = corner_origin(corner, r, surface);
                 out.push(concave_flare(x, y, r, flare_center(corner), ink));
             }
         }
         if cfg.hot_corners.enabled {
             let size = hot_size(cfg);
-            let layout: Vec<(String, LayoutRect)> = cx
-                .try_global::<crate::overlays::Outputs>()
-                .map(|o| o.0.iter().map(|g| (g.name.clone(), (g.x as f32, g.y as f32, g.width as f32, g.height as f32))).collect())
-                .unwrap_or_default();
-            let this = layout.iter().find(|(n, _)| *n == self.monitor).map(|(_, r)| *r);
-            let others: Vec<LayoutRect> = layout.iter().filter(|(n, _)| *n != self.monitor).map(|(_, r)| *r).collect();
             for corner in ScreenCorner::ALL.into_iter().filter(|c| cfg.hot_corners.corner(*c).is_active()) {
                 if this.is_some_and(|r| !corner_is_bound(corner, r, &others)) {
                     continue;
@@ -613,6 +618,20 @@ mod tests {
         assert_eq!(corner_origin(ScreenCorner::BottomLeft, 3.0, s), (0.0, 1437.0));
         assert_eq!(corner_origin(ScreenCorner::BottomRight, 3.0, s), (2557.0, 1437.0));
         assert_eq!(index(ScreenCorner::BottomRight), 3);
+    }
+
+    #[test]
+    fn rounded_corners_follow_individual_switches_and_adjacent_outputs() {
+        let mut config = mandara_config::desktop::ScreenCornersConfig::default();
+        let this = Some((0.0, 0.0, 1920.0, 1080.0));
+        let others = [(1920.0, 0.0, 1280.0, 720.0)];
+        assert!(rounded_corner_visible(&config, ScreenCorner::TopRight, this, &others));
+        config.hide_between_displays = true;
+        assert!(!rounded_corner_visible(&config, ScreenCorner::TopRight, this, &others));
+        assert!(rounded_corner_visible(&config, ScreenCorner::BottomRight, this, &others));
+        config.bottom_right = false;
+        assert!(!rounded_corner_visible(&config, ScreenCorner::BottomRight, this, &others));
+        assert!(rounded_corner_visible(&config, ScreenCorner::BottomLeft, this, &others));
     }
 
     #[test]

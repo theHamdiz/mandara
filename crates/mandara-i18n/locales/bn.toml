@@ -7972,7 +7972,7 @@
 "The compositor did not respond in time" = "কম্পোজিটর সময়মতো সাড়া দেয়নি"
 "The compositor connection closed" = "কম্পোজিটরের সংযোগ বন্ধ হয়েছে"
 "Idle notifications are not available" = "নিষ্ক্রিয়তার বিজ্ঞপ্তি উপলব্ধ নেই"
-"No input seat is available" = "কোনো ইনপুট ডিভাইসের গুচ্ছ উপলব্ধ নেই"
+"No input seat is available" = "কোনো ইনপুট সিট উপলভ্য নেই"
 "These displays do not support power control" = "এই ডিসপ্লেগুলো বিদ্যুৎ নিয়ন্ত্রণ সমর্থন করে না"
 "This executable path cannot be used in a desktop entry" = "এই নির্বাহযোগ্য ফাইলের পথ ডেস্কটপ এন্ট্রিতে ব্যবহার করা যায় না"
 "{path} is a custom autostart entry; Mandara left it unchanged" = "{path} একটি নিজস্ব স্বয়ংক্রিয় শুরুর এন্ট্রি; Mandara এটি অপরিবর্তিত রেখেছে"
@@ -8041,3 +8041,14 @@
 "{compositor} (installed)" = "{compositor} (ইনস্টল করা)"
 
 "↑/↓ change · enter select · esc cancel" = "↑/↓ বদলান · Enter নির্বাচন · Esc বাতিল"
+
+"Profile scope" = "প্রোফাইলের পরিধি"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "বারের ধরন, অবস্থান ও উচ্চতা বদলায়। প্রতিস্থাপন বেছে না নিলে আপনার আইটেমগুলো থাকে।"
+"Replace bar items" = "বারের আইটেম প্রতিস্থাপন করুন"
+"Leave empty to follow the desktop's icon theme" = "ডেস্কটপের আইকন থিম অনুসরণ করতে খালি রাখুন"
+"Could not load {module}; check that the installed kernel includes it" = "{module} লোড করা যায়নি; ইনস্টল করা কার্নেলে এটি আছে কি না দেখুন"
+
+"Bounce only while music plays" = "শুধু সঙ্গীত চললে লাফাবে"
+"Hide corners between displays" = "ডিসপ্লের মাঝের কোণ লুকান"
+"Redraw interval p50" = "পুনরায় আঁকার ব্যবধান p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "ভিউয়ের সাম্প্রতিক নির্মাণ: ভরাট বার সিপিইউতে নির্মাণের সময় দেখায়; সম্পূর্ণ উচ্চতায় একই পৃষ্ঠের আগের নির্মাণ থেকে ব্যবধানও থাকে।"

@@ -337,6 +337,7 @@ mandara setup --restore ~/.local/share/mandara/doctor-backups/<backup>   # undo 
 mandara msg screenshot region
 mandara msg screenshot region --delay 3   # count down first (Esc cancels); --delay alone uses the Countdown setting
 mandara msg screenshot screen --delay=5   # window / screen capture directly after the countdown
+mandara msg screenshot all                # every display in one image, in monitor-layout order
 mandara msg record start                  # the default source (Studio → Plugins → Screenshot); the countdown setting applies
 mandara msg record start window           # start screen|region|window; record screen DP-2 picks a display
 mandara msg record toggle                 # stop a recording (or a countdown), else start one: bind it to a key
@@ -384,6 +385,7 @@ mandara msg apps jobs cancel 3       # stop a job (rootless installs roll back)
 mandara msg apps owner firefox       # who installed it, the exact removal command, what else goes, leftovers (changes nothing)
 mandara msg apps uninstall org.gimp.GIMP --dry-run  # [--purge-data] leftovers to the Trash, [--confirm-default] for a default app
 mandara msg profile save look Night  # profile list|apply|delete; config export <file> [changes] [redact], import, reset <section>
+mandara msg profile save bar Desk    # only bar and side-bar settings; keep the theme and desktop widgets
 mandara msg cursor list              # the cursor catalog: variants, licence, stars, installed / by Mandara / active, other installed themes
 mandara msg cursor install bibata/ice   # download the pinned GitHub release, verify SHA-256, install to ~/.local/share/icons
 mandara msg cursor apply bibata/ice 32  # theme (catalog id[/variant] or XCursor name) and optional size, live; `none` = your compositor's

@@ -11,6 +11,24 @@ installer, display reconnection and native KWin support.
 
 ### New
 
+- **Choose which screen corners are rounded.** Each corner can be switched
+  off separately, and adjacent displays can keep their shared corners clear.
+  Find these controls in Studio → Sidebars & hover → Screen corners. (#73)
+
+- **Keep dock bounces for music time.** Studio → Dock → Behaviour has an
+  optional **Bounce only while music plays** setting for launch and
+  attention animations. Paused or stopped playback leaves them still. (#82)
+
+- **Save a setup for just your bar.** Profiles & backup now offers a
+  **Bar** scope, and the bar presets include a system-monitor arrangement.
+  Applying a bar preset keeps your own items unless you explicitly choose
+  **Replace bar items**. Desktop widgets stay as you left them. (#73, #81)
+
+- **Capture all your displays at once.** The screenshot panel's
+  **All displays** action saves or copies the whole desktop in one image,
+  respecting monitor positions and different scales. The same action is
+  available as `mandara msg screenshot all`. (#79)
+
 - **The installer opens on a setup screen.** `mandara install` now starts
   with the MANDARA wordmark and an arrow-key menu: pick the compositor to
   integrate with (the list starts on one you already have; left alone, the
@@ -81,6 +99,47 @@ installer, display reconnection and native KWin support.
   are gone.
 
 ### Fixed
+
+- **Studio has one set of window buttons.** Its title bar now requests
+  client decorations and yields to compositor-provided controls when
+  those are required. (#89)
+
+- **Reset-page summaries count custom arrangements too.** Restored bar
+  items, side-bar groups, dock pins and stacks, and sidebar tabs no longer
+  appear as “All defaults” when they differ from the defaults. Resetting
+  their page restores those lists too. (#88)
+
+- **The dock skips pinned apps that are not installed.** Their pins stay
+  saved and return when the app is available; a running window still
+  appears even when it has no launcher entry. (#73)
+
+- **Frame timing stops showing an old interaction as a live frame rate.**
+  Idle redraw history no longer produces a current cadence, and Studio
+  labels the measurements as CPU view builds and redraw intervals. The
+  dock's separate view contributes its own animation samples too. (#84)
+
+- **Tailscale detection handles a shorter desktop PATH.** Mandara also
+  checks common package locations and distinguishes a broken executable
+  from a missing installation. The missing-package panel links to its
+  official Linux download instructions. (#73)
+
+- **Icons follow Plasma's selected theme too.** When no theme is chosen
+  in Studio, Mandara reads Plasma's icon preference as well as GTK's. (#73)
+
+- **Screenshots use KWin's own capture service on Plasma**, including
+  monitor names, cursor choice and full-resolution pixels. (#78)
+
+- **External brightness setup remembers the next boot.** Working I²C
+  access no longer skips the installer's offer to load its module at
+  startup, and a failed module load is reported. (#77)
+
+- **The bar picker only offers things it can draw.** Desktop widget
+  families and background tools stay in their own galleries instead of
+  being added to the bar as invisible items. (#73)
+
+- **Setup reports failed KWin checks correctly.** A failed availability
+  probe now returns an error instead of suggesting that setup is ready.
+  The Bengali input-seat hint and Persian login-screen choice are clearer too.
 
 - An installation without libxkbcommon now explains the missing library and leaves shortcut checks alone. It no longer offers to retire conflicts that could not be checked.
 
@@ -178,6 +237,9 @@ installer, display reconnection and native KWin support.
   all 14 languages. (#49)
 
 ### Under the hood
+
+- **Build cleanup releases its locks promptly**, even when another tool
+  starts at the same moment, so unused build caches can be removed reliably.
 
 - **ARM builds avoid an unsupported linker option.** Packed relocations
   are requested only on architectures GNU ld supports, keeping ARM build

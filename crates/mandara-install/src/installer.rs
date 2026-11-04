@@ -1324,7 +1324,18 @@ impl<'a> Installer<'a> {
         let passwd = std::fs::read_to_string(self.facts.sys("/etc/passwd")).unwrap_or_default();
         let group = device_group(&self.facts.sys("/dev/i2c-0"), &groups).unwrap_or_else(|| I2C_DEFAULT_GROUP.to_string());
         let user = self.facts.user.clone();
-        if devices && user_in_group(&user, &group, &groups, &passwd) {
+        let member = user_in_group(&user, &group, &groups, &passwd);
+        let module_path = self.facts.sys(I2C_MODULES_LOAD);
+        let module_config = match std::fs::read_to_string(&module_path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(error) => {
+                self.say(Level::Warn, format!("{}: {error}", module_path.display()));
+                return;
+            }
+        };
+        let persistent = module_config.lines().any(|line| line.trim() == I2C_MODULE);
+        if devices && member && persistent {
             return;
         }
         if !self.ask(&format!("Allow Mandara to set external monitor brightness (load {I2C_MODULE} at boot, add {user} to the {group} group)?"), false) {
@@ -1332,14 +1343,22 @@ impl<'a> Installer<'a> {
             self.say(Level::Detail, format!("External monitor brightness later: {hint}"));
             return;
         }
-        if !self.as_root(Cmd::new(&["tee", I2C_MODULES_LOAD]).stdin(format!("{I2C_MODULE}\n")).io(Io::Quiet)) {
-            self.say(Level::Warn, format!("could not write {I2C_MODULES_LOAD}"));
+        if !persistent {
+            let mut text = module_config;
+            if !text.is_empty() && !text.ends_with('\n') { text.push('\n'); }
+            text.push_str(&format!("{I2C_MODULE}\n"));
+            if !self.as_root(Cmd::new(&["tee", I2C_MODULES_LOAD]).stdin(text).io(Io::Quiet)) {
+                self.say(Level::Warn, format!("could not write {I2C_MODULES_LOAD}"));
+            }
         }
-        self.as_root(Cmd::new(&["modprobe", I2C_MODULE]).io(Io::Quiet));
+        if !devices && !self.as_root(Cmd::new(&["modprobe", I2C_MODULE]).io(Io::Quiet)) {
+            self.say(Level::Warn, tf("Could not load {module}; check that the installed kernel includes it", &[("module", &I2C_MODULE)]));
+            return;
+        }
         if group_gid(&group, &groups).is_none() {
             self.as_root(Cmd::new(&["groupadd", "-r", group.as_str()]).io(Io::Quiet));
         }
-        if self.as_root(Cmd::new(&["usermod", "-aG", group.as_str(), user.as_str()])) && !self.dry() {
+        if !member && self.as_root(Cmd::new(&["usermod", "-aG", group.as_str(), user.as_str()])) && !self.dry() {
             self.say(Level::Ok, format!("added {user} to {group} (log in again for it to apply)"));
         }
     }

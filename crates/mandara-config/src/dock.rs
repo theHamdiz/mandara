@@ -321,6 +321,8 @@ pub struct DockConfig {
     /// Icons bounce when their app wants attention (an urgent window or a
     /// critical notification).
     pub bounce_on_attention: bool,
+    /// Limit launch and attention bounces to active media playback.
+    pub bounce_only_music: bool,
     /// App names above the icons on hover.
     pub tooltips: bool,
     /// Icons grow under the pointer.
@@ -386,6 +388,7 @@ impl Default for DockConfig {
             hide_speed: defaults::DOCK_HIDE_SPEED,
             bounce_on_launch: true,
             bounce_on_attention: true,
+            bounce_only_music: false,
             tooltips: true,
             magnification: true,
             magnify: defaults::DOCK_MAGNIFY,

@@ -8282,3 +8282,14 @@
 "{compositor} (installed)" = "{compositor}（已安装）"
 
 "↑/↓ change · enter select · esc cancel" = "↑/↓ 更改 · Enter 选择 · Esc 取消"
+
+"Profile scope" = "配置范围"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "更改栏的样式、位置和高度。除非选择替换，否则会保留现有项目。"
+"Replace bar items" = "替换栏项目"
+"Leave empty to follow the desktop's icon theme" = "留空以使用桌面的图标主题"
+"Could not load {module}; check that the installed kernel includes it" = "无法加载 {module}；请检查已安装的内核是否包含该模块"
+
+"Bounce only while music plays" = "仅在播放音乐时弹跳"
+"Hide corners between displays" = "隐藏显示器之间的圆角"
+"Redraw interval p50" = "重绘间隔 p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "最近的视图构建：实心部分显示 CPU 构建时间；完整高度还包括同一表面上距上一次构建的时间间隔。"

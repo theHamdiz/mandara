@@ -8287,3 +8287,14 @@
 "{compositor} (installed)" = "{compositor} (kurulu)"
 
 "↑/↓ change · enter select · esc cancel" = "↑/↓ değiştir · Enter seç · Esc iptal"
+
+"Profile scope" = "Profil kapsamı"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "Çubuğun stilini, konumunu ve yüksekliğini değiştirir. Değiştirmeyi seçmediğiniz sürece öğeleriniz korunur."
+"Replace bar items" = "Çubuk öğelerini değiştir"
+"Leave empty to follow the desktop's icon theme" = "Masaüstünün simge temasını izlemek için boş bırakın"
+"Could not load {module}; check that the installed kernel includes it" = "{module} yüklenemedi; kurulu çekirdeğin bunu içerdiğini denetleyin"
+
+"Bounce only while music plays" = "Yalnızca müzik çalarken zıpla"
+"Hide corners between displays" = "Ekranlar arasındaki köşeleri gizle"
+"Redraw interval p50" = "Yeniden çizim aralığı p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Son görünüm oluşturma süreleri: dolu çubuk CPU süresini gösterir; tam yükseklik aynı yüzeydeki önceki oluşturmadan beri geçen aralığı da içerir."

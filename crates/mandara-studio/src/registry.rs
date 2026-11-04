@@ -618,7 +618,7 @@ fn build() -> Vec<Setting> {
         s(Themes, tk("Tuning"), "/theme/adjustments/rim_intensity", tk("Specular rim"), tk("Strength of glass edge highlights"), slider(0.0, 2.0, 0.05, "×")),
         s(Themes, tk("Tuning"), "/theme/transition_ms", tk("Theme crossfade"), tk("Duration of the OKLCH palette transition"), slider(0.0, 1500.0, 25.0, " ms")),
         s(Themes, tk("Icons"), "/appearance/bar_icons", tk("Bar app icons"), tk("Monochrome symbolic icons tint with the theme"), Choice(ICON_STYLES)),
-        s(Themes, tk("Icons"), "/appearance/icon_theme", tk("Icon theme"), tk("Leave empty to follow GTK's icon theme"), OptionalText { placeholder: "Tela-circle-red-dark" }),
+        s(Themes, tk("Icons"), "/appearance/icon_theme", tk("Icon theme"), tk("Leave empty to follow the desktop's icon theme"), OptionalText { placeholder: "Tela-circle-red-dark" }),
         // No default: with a designed theme no scheme chip is lit, and
         // picking one switches to the wallpaper's colors.
         s(Themes, tk("Wallpaper colors"), "/theme/source/variant", tk("Wallpaper scheme"), tk("Material You variant used for wallpaper themes"), Choice(BOOL_SCHEMES)),
@@ -1004,6 +1004,13 @@ pub fn get(cfg: &ShellConfig, setting: &Setting) -> Value {
 pub fn non_default(cfg: &ShellConfig) -> Vec<&'static Setting> {
     let root = json_of(cfg);
     DEFAULTS.with(|defaults| settings().iter().filter(|s| resolve(&root, s) != resolve(defaults, s)).collect())
+}
+
+/// Custom page editors also own lists that are not individual controls.
+/// Compare those against the same cached trees used by the regular rows.
+pub(crate) fn changed_paths(cfg: &ShellConfig, paths: &[&str]) -> usize {
+    let root = json_of(cfg);
+    DEFAULTS.with(|defaults| paths.iter().filter(|path| root.pointer(path) != defaults.pointer(path)).count())
 }
 
 /// The settings whose values differ between two configs, in registry

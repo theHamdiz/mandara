@@ -294,7 +294,8 @@ pub(crate) fn launch_item(item: &Item, action: Option<&crate::apps::DesktopActio
         return;
     }
     crate::launcher_ext::record_use(&format!("app:{}", app.id), &snapshot);
-    if snapshot.dock.bounce_on_launch && item.windows.is_empty() {
+    let playing = crate::hub::hub(cx).read(cx).media.as_ref().is_some_and(|m| m.status == mandara_services::PlaybackStatus::Playing);
+    if snapshot.dock.bounce_on_launch && bounce_allowed(snapshot.dock.bounce_only_music, playing) && item.windows.is_empty() {
         shared(cx).launching.insert(item.key.clone(), Instant::now());
         refresh_all(cx);
     }
@@ -873,6 +874,7 @@ impl DockView {
 
 impl Render for DockView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
         self.refresh(cx);
         self.sync_reveal(window, cx);
         let palette = mandara_core::frame_palette(window, cx);
@@ -969,18 +971,20 @@ impl Render for DockView {
 
         // Bounces (launch, attention, install landing) and the poof.
         let (launching, landing) = cx.try_global::<Shared>().map(|s| (s.launching.clone(), s.landing.clone())).unwrap_or_default();
+        let playing = crate::hub::hub(cx).read(cx).media.as_ref().is_some_and(|m| m.status == mandara_services::PlaybackStatus::Playing);
+        let allow_bounce = bounce_allowed(cfg.bounce_only_music, playing);
         let mut bouncing = false;
         let hop = |it: &Item| -> f32 {
             if reduce || !it.is_app() {
                 return 0.0;
             }
-            if let Some(t0) = launching.get(&it.key).filter(|_| it.windows.is_empty()) {
+            if let Some(t0) = launching.get(&it.key).filter(|_| allow_bounce && it.windows.is_empty()) {
                 return model::launch_hop(t0.elapsed().as_secs_f32());
             }
             if let Some(t0) = landing.get(&it.pin_key()).filter(|t| t.elapsed().as_secs_f32() < model::LAUNCH_HOP_S) {
                 return model::launch_hop(t0.elapsed().as_secs_f32());
             }
-            let wants = cfg.bounce_on_attention && !it.focused() && (self.urgent.iter().any(|u| it.windows.iter().any(|w| &w.app_id == u)) || self.badges.get(&it.key).is_some_and(|b| b.critical));
+            let wants = allow_bounce && cfg.bounce_on_attention && !it.focused() && (self.urgent.iter().any(|u| it.windows.iter().any(|w| &w.app_id == u)) || self.badges.get(&it.key).is_some_and(|b| b.critical));
             if wants { model::attention_hop(now.duration_since(self.clock_epoch()).as_secs_f32()) } else { 0.0 }
         };
 
@@ -1006,7 +1010,7 @@ impl Render for DockView {
             }
             let size_px = base * s;
             let lift = hop(it) * base * model::HOP_FRAC;
-            if lift > 0.0 || launching.contains_key(&it.key) {
+            if lift > 0.0 || (!reduce && allow_bounce && launching.contains_key(&it.key)) {
                 bouncing = true;
             }
             let failed = match it.kind {
@@ -1948,9 +1952,21 @@ pub fn register(r: &mut PluginRegistry) {
     );
 }
 
+/// A playback restriction uses the existing media snapshot; no audio polling.
+fn bounce_allowed(only_music: bool, playing: bool) -> bool { !only_music || playing }
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn music_only_bounces_stop_when_playback_stops_without_changing_the_default() {
+        assert!(bounce_allowed(false, false));
+        assert!(bounce_allowed(false, true));
+        assert!(bounce_allowed(true, true));
+        assert!(!bounce_allowed(true, false));
+        assert!(!mandara_config::dock::DockConfig::default().bounce_only_music);
+    }
 
     #[test]
     fn a_bottom_dock_stays_out_under_the_launcher() {

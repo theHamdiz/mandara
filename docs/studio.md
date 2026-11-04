@@ -6,6 +6,9 @@ memory never count against the shell, and every change is mirrored to the
 running shell over IPC: drag a slider and the bar follows on the very next frame.
 Settings never live in bar dropdowns.
 
+Studio draws its own title bar. If KWin requires native window
+decorations, Studio uses those controls so there is only one set of buttons.
+
 <p align="center">
   <img src="screenshots/studio-home.webp" alt="Studio Home: a greeting over the wallpaper, live shell status, the theme with one-click switching, quick settings, recent changes and a card per group" width="100%"/>
   <br/><sub><b>Home</b>: a widget dashboard with live shell status, the current theme and its one-click switches, quick settings and recent changes</sub>
@@ -257,7 +260,8 @@ narrow ones; everything mirrors for right-to-left languages.
   reorder it or move it to another zone, × takes it off, and a click opens
   a menu: *Move up*, *Move down*, *Move to …*, *Remove from bar* and
   *Details*. Under the zones, **All plugins** lists every plugin that can
-  sit on the bar in an aligned grid, grouped by category (a category list
+  sit on the bar in an aligned grid. Desktop-only widgets belong in the
+  **Desktop widgets** gallery. The bar items are grouped by category (a category list
   beside the grid on wide windows, chips above it on narrow ones; faith
   plugins have their own *Faith* category), with a search field that
   filters as you type (names and ids that hold what you typed first,
@@ -266,8 +270,11 @@ narrow ones; everything mirrors for right-to-left languages.
   say so. Click one for *Add to Left / Center / Right* (and the side bars
   while they're on) or *Details*, or drag it onto a zone; placing a plugin
   turns it on, and dropping a bar item on the list takes it off the bar.
-  Bar presets (Classic, Notch, Glass pills, Dynamic island, Minimal,
-  Productive, Hairline, Micro pill, Side bar, Dock) apply in one click.
+  Bar presets (System monitor, Classic, Notch, Glass pills, Dynamic island,
+  Minimal, Productive, Hairline, Micro pill, Side bar, Dock) apply the style
+  in one click and keep your items. Turn on **Replace bar items** to use
+  the preset's arrangement too. **Profiles & backup → Bar** saves only
+  the bar and side-bar configuration, leaving the theme and desktop widgets alone.
 - **Radii, per bar style.** *Bar radius* rounds the glass pills and the
   island; on the edge frame it rounds the hover chips (and the frame's ends
   when *Float the edge frame* is on). *Flare radius* is the concave curve
@@ -658,6 +665,15 @@ size and `MANDARA_STUDIO_SCROLL=<px>` opens the page scrolled down.
 `MANDARA_FRAME_STATS=1` logs Studio's frame pacing every few seconds (frame
 interval p50 / p95 / p99 / max, late frames, and the CPU time per frame), plus
 the login-screen preview's own pacing on Studio → Login screen.
+
+Performance's frame-timing card measures shell and dock view builds on the
+CPU and the intervals between redraws on each surface. It keeps recent
+history, but shows no current redraw interval while the shell is idle.
+These samples do not measure GPU presentation or the monitor's refresh rate.
+Dock → Behaviour also offers **Bounce only while music plays**; launch and
+attention bounces then stop during paused or stopped playback. Under
+Sidebars & hover → Screen corners, each rounded corner has its own switch,
+with an option to hide corners between adjacent displays.
 
 ## Sidebar tabs, to-do lists and notes in the shell
 

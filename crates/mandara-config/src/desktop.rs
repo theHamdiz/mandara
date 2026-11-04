@@ -552,11 +552,28 @@ impl HotCornersConfig {
 pub struct ScreenCornersConfig {
     pub enabled: bool,
     pub radius: f32,
+    pub top_left: bool,
+    pub top_right: bool,
+    pub bottom_left: bool,
+    pub bottom_right: bool,
+    /// Leave the shared edges of adjacent displays unobstructed.
+    pub hide_between_displays: bool,
 }
 
 impl Default for ScreenCornersConfig {
     fn default() -> Self {
-        Self { enabled: true, radius: defaults::SCREEN_CORNER_RADIUS_PX }
+        Self { enabled: true, radius: defaults::SCREEN_CORNER_RADIUS_PX, top_left: true, top_right: true, bottom_left: true, bottom_right: true, hide_between_displays: false }
+    }
+}
+
+impl ScreenCornersConfig {
+    pub fn corner_enabled(&self, corner: ScreenCorner) -> bool {
+        self.enabled && match corner {
+            ScreenCorner::TopLeft => self.top_left,
+            ScreenCorner::TopRight => self.top_right,
+            ScreenCorner::BottomLeft => self.bottom_left,
+            ScreenCorner::BottomRight => self.bottom_right,
+        }
     }
 }
 
@@ -1022,6 +1039,13 @@ mod tests {
         assert!(fresh.screen_corners.enabled, "a new config rounds the screen corners");
         let saved: crate::ShellConfig = toml::from_str("[screen_corners]\nenabled = false").unwrap();
         assert!(!saved.screen_corners.enabled, "turning them off is kept");
+        assert!(ScreenCorner::ALL.into_iter().all(|corner| fresh.screen_corners.corner_enabled(corner)));
+        let saved: crate::ShellConfig = toml::from_str("[screen_corners]\ntop_right = false\nbottom_left = false\nhide_between_displays = true").unwrap();
+        assert!(saved.screen_corners.corner_enabled(ScreenCorner::TopLeft));
+        assert!(!saved.screen_corners.corner_enabled(ScreenCorner::TopRight));
+        assert!(!saved.screen_corners.corner_enabled(ScreenCorner::BottomLeft));
+        assert!(saved.screen_corners.corner_enabled(ScreenCorner::BottomRight));
+        assert!(saved.screen_corners.hide_between_displays);
     }
 
     #[test]
