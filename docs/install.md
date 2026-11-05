@@ -77,8 +77,9 @@ one (see [No compositor yet](#no-compositor-yet)).
 
 With a terminal, `mandara install` opens on its own screen: the MANDARA
 wordmark and an arrow-key menu that picks the compositor to integrate with
-(one you already have is preselected) and switches autostart and the login
-screen on or off before anything is installed. Every choice there is also a
+(the cursor starts on one you already have, but the row still says *detect
+automatically* until you pick it) and switches autostart and the login screen
+on or off before anything is installed. Every choice there is also a
 flag: one you pass is left out of the menu, and `--yes`, `--dry-run` or a
 run without a terminal skips the screen and prints the one-line plan
 instead. Esc, `q` or Ctrl-C leaves it without changing anything.
@@ -105,7 +106,8 @@ languages you use.
 The setup screen's *Compositor* row covers this in a terminal: leave it on
 *detect automatically* and, when nothing is installed, the installer falls
 back to this numbered list (it needs no arrow keys, so it also works where
-that screen can't be drawn).
+that screen can't be drawn, though it still needs a terminal to read your
+answer).
 
 When none of MangoWM, Niri, Hyprland, Sway, River Classic or Umbriel is
 installed, the installer
