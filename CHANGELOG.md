@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The installer opens on a setup screen of its own.
+
 ### New
 
 - **The installer opens on a setup screen.** `mandara install` now starts
