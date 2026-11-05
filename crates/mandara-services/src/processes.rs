@@ -3,6 +3,7 @@
 //! signalling (terminate / force kill).
 
 use std::collections::HashMap;
+use std::sync::OnceLock;
 use std::time::Instant;
 
 use mandara_i18n::{t, tf};
@@ -130,11 +131,35 @@ fn clock_ticks() -> u64 {
     rustix::param::clock_ticks_per_second()
 }
 
+/// Logical CPUs of the host, read once: the capacity `/proc/stat` totals add
+/// up to, so a row's share and the aggregate Resources gauge share a basis.
+/// `available_parallelism` answers for this process instead (a cgroup quota
+/// or an affinity mask shrinks it), which would let a process using every CPU
+/// it may run on read past 100 %.
+pub fn host_cpus() -> usize {
+    static HOST_CPUS: OnceLock<usize> = OnceLock::new();
+    *HOST_CPUS.get_or_init(|| {
+        std::fs::read_to_string("/proc/stat")
+            .ok()
+            .and_then(|stat| {
+                let n = stat.lines().filter(|l| is_cpu_line(l)).count();
+                (n > 0).then_some(n)
+            })
+            .or_else(|| std::thread::available_parallelism().ok().map(|n| n.get()))
+            .unwrap_or(1)
+    })
+}
+
+/// `cpu0`, `cpu1`, … in `/proc/stat`, never its aggregate `cpu ` line.
+fn is_cpu_line(line: &str) -> bool {
+    line.strip_prefix("cpu").is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
+}
+
 impl Sampler {
-    /// Logical CPUs, cached: `available_parallelism` parses cgroup files.
+    /// Logical CPUs, cached on the first sample.
     fn cpus(&mut self) -> f32 {
         if self.cpus < 1.0 {
-            self.cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1) as f32;
+            self.cpus = host_cpus() as f32;
         }
         self.cpus
     }
@@ -143,9 +168,11 @@ impl Sampler {
 /// `ticks` of CPU time used over `elapsed_s` seconds, as a share of the whole
 /// machine: percent of all `cpus` logical cores together, so a busy
 /// multi-threaded process stays at or below 100 (like the Resources panel),
-/// instead of the per-core figure `top` prints.
+/// instead of the per-core figure `top` prints. Capped there too: the clock is
+/// read before the processes, so a window can outrun `elapsed` and a busy
+/// process would otherwise read a little over 100.
 fn share_of_machine(ticks: u64, elapsed_s: f32, hz: f32, cpus: f32) -> f32 {
-    (ticks as f32 / hz) / elapsed_s * PERCENT / cpus.max(1.0)
+    ((ticks as f32 / hz) / elapsed_s * PERCENT / cpus.max(1.0)).min(PERCENT)
 }
 
 fn page_size() -> u64 {
@@ -294,8 +321,18 @@ mod tests {
         assert!((share_of_machine(100, 1.0, 100.0, 4.0) - 25.0).abs() < 0.01);
         // All four cores busy at once still reads 100 %, never 400.
         assert!((share_of_machine(400, 1.0, 100.0, 4.0) - 100.0).abs() < 0.01);
+        // A window that outran `elapsed` can't read past the whole machine.
+        assert!((share_of_machine(410, 1.0, 100.0, 4.0) - 100.0).abs() < 0.01);
         // A missing core count can't divide by zero.
         assert!((share_of_machine(100, 1.0, 100.0, 0.0) - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn the_aggregate_line_is_not_a_cpu() {
+        assert!(is_cpu_line("cpu0 1 2 3"));
+        assert!(is_cpu_line("cpu12 1 2 3"));
+        assert!(!is_cpu_line("cpu  100 0 100 800"));
+        assert!(!is_cpu_line("intr 12 3"));
     }
 
     #[test]

@@ -337,13 +337,13 @@ fn meminfo() -> (u64, u64) {
     (total.saturating_sub(field("MemAvailable:")), total)
 }
 
-/// Logical CPUs (read once: `available_parallelism` parses cgroup files).
+/// Logical CPUs, on the same host-wide basis as a row's share of the machine
+/// (read once, like `/proc/stat` and the Resources gauge).
 fn cores() -> usize {
     if demo::active() {
         return demo::threads();
     }
-    static CORES: OnceLock<usize> = OnceLock::new();
-    *CORES.get_or_init(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1))
+    processes::host_cpus()
 }
 
 /// This user's uid (asked once, not per row per frame).
