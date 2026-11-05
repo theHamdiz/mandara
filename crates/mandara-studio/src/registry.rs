@@ -1006,11 +1006,33 @@ pub fn non_default(cfg: &ShellConfig) -> Vec<&'static Setting> {
     DEFAULTS.with(|defaults| settings().iter().filter(|s| resolve(&root, s) != resolve(defaults, s)).collect())
 }
 
-/// Custom page editors also own lists that are not individual controls.
-/// Compare those against the same cached trees used by the regular rows.
+/// A layout reset leaves removed plugins absent until explicitly restored.
+pub(crate) fn layout_defaults(cfg: &ShellConfig) -> ShellConfig {
+    let mut defaults = ShellConfig::default();
+    for id in &cfg.plugins.removed { defaults.take_plugin_places(id); }
+    defaults
+}
+
+fn layout_default_tree(cfg: &ShellConfig) -> Rc<Value> {
+    if cfg.plugins.removed.is_empty() { return DEFAULTS.with(Rc::clone); }
+    thread_local! {
+        static FILTERED: std::cell::RefCell<Option<(Vec<String>, Rc<Value>)>> = const { std::cell::RefCell::new(None) };
+    }
+    FILTERED.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some((removed, tree)) = &*cache && *removed == cfg.plugins.removed { return tree.clone(); }
+        let tree = Rc::new(serde_json::to_value(layout_defaults(cfg)).unwrap_or(Value::Null));
+        *cache = Some((cfg.plugins.removed.clone(), tree.clone()));
+        tree
+    })
+}
+
+/// Custom page editors compare their lists with the same filtered defaults
+/// used by resets. The serialized defaults are cached until removals change.
 pub(crate) fn changed_paths(cfg: &ShellConfig, paths: &[&str]) -> usize {
     let root = json_of(cfg);
-    DEFAULTS.with(|defaults| paths.iter().filter(|path| root.pointer(path) != defaults.pointer(path)).count())
+    let defaults = layout_default_tree(cfg);
+    paths.iter().filter(|path| root.pointer(path) != defaults.pointer(path)).count()
 }
 
 /// The settings whose values differ between two configs, in registry

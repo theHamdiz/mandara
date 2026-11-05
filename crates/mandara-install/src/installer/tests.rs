@@ -71,7 +71,7 @@ impl Host for FakeHost {
     fn run(&mut self, cmd: &Cmd) -> std::io::Result<Output> {
         self.ran.push(cmd.clone());
         let code = self.codes.get(&cmd.display()).copied();
-        let stdout = self.stdout.get(&cmd.display()).cloned().unwrap_or_default();
+        let stdout = if cmd.io == crate::host::Io::Capture { self.stdout.get(&cmd.display()).cloned().unwrap_or_default() } else { String::new() };
         let failed_once = self.failing_once.remove(&cmd.display());
         Ok(Output { success: !failed_once && !self.failing.contains(&cmd.display()) && code.is_none(), code, stdout, ..Default::default() })
     }

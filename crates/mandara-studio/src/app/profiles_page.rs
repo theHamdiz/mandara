@@ -149,7 +149,7 @@ pub(super) fn reset_section(cfg: &ShellConfig, section: Section) -> ShellConfig 
     if let Some((_, paths)) = EXTRA_RESET_PATHS.iter().find(|(s, _)| *s == section) {
         let dotted: Vec<String> = paths.iter().map(|path| path.trim_start_matches('/').replace('/', ".")).collect();
         let paths: Vec<&str> = dotted.iter().map(String::as_str).collect();
-        match profiles::snapshot_paths(&ShellConfig::default(), "", "", &paths, "").and_then(|defaults| profiles::apply(&next, &defaults)) {
+        match profiles::snapshot_paths(&registry::layout_defaults(cfg), "", "", &paths, "").and_then(|defaults| profiles::apply(&next, &defaults)) {
             Ok(reset) => next = reset,
             Err(error) => tracing::error!("resetting custom page settings: {error:#}"),
         }
@@ -652,4 +652,23 @@ mod tests {
         let labels = changed_labels(&a, &b);
         eprintln!("changed_labels: {:?} ({} labels)", started.elapsed(), labels.len());
     }
+    #[test]
+    fn resetting_a_layout_keeps_removals_and_restores_each_plugin_once() {
+        let mut cfg = ShellConfig::default();
+        cfg.take_plugin_places("weather");
+        cfg.bar.left.push("weather".into());
+        mandara_plugins::lifecycle::remove(&mut cfg, "weather", "Weather").unwrap();
+        cfg.bar.left.reverse();
+        let remembered = cfg.plugins.removed_places.clone();
+        let mut reset = reset_section(&cfg, Section::Bar);
+        assert!(reset.plugin_places("weather").is_empty());
+        assert_eq!(reset.plugins.removed_places, remembered);
+        assert!(!changed_per_section(&reset).contains_key(&Section::Bar));
+        mandara_plugins::lifecycle::restore(&mut reset, "weather", Some(mandara_plugins::Zone::Right));
+        assert_eq!(reset.plugin_places("weather").len(), 1);
+        assert!(reset.bar.left.iter().any(|id| id == "weather"));
+        let removed = reset_section(&cfg, Section::Sidebar);
+        assert!(removed.plugin_places("weather").is_empty());
+    }
+
 }

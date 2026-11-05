@@ -69,12 +69,17 @@ fn kwin_setup_check_reports_availability_without_touching_compositor_files() {
     std::fs::create_dir_all(&programs).unwrap();
     let kwinrc = config.join("kwinrc");
     std::fs::write(&kwinrc, "[Desktops]\nNumber=3\n").unwrap();
-    let success = mandara_services::recording::backend::which("true").expect("true on PATH");
-    let failure = mandara_services::recording::backend::which("false").expect("false on PATH");
-    for (program, expected_status) in [(None, 13), (Some(success.as_path()), 0), (Some(failure.as_path()), 13)] {
+    for (code, expected_status) in [(None, 13), (Some(0), 0), (Some(1), 13)] {
         let probe = programs.join("kwin_wayland");
         if probe.exists() { std::fs::remove_file(&probe).unwrap(); }
-        if let Some(program) = program { std::os::unix::fs::symlink(program, &probe).unwrap(); }
+        if let Some(code) = code {
+            use std::os::unix::fs::PermissionsExt as _;
+            let source = dir.path().join("probe.rs");
+            std::fs::write(&source, format!("fn main() {{ println!(\"kwin fixture\"); std::process::exit({code}); }}")).unwrap();
+            let compiled = std::process::Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into())).arg(&source).arg("-o").arg(&probe).output().unwrap();
+            assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
+            std::fs::set_permissions(&probe, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
         let output = std::process::Command::new(env!("CARGO_BIN_EXE_mandara"))
             .args(["setup", "--check", "--compositor", "kwin"])
             .env("PATH", &programs).env("LC_ALL", "C")
@@ -85,8 +90,8 @@ fn kwin_setup_check_reports_availability_without_touching_compositor_files() {
             .stdin(std::process::Stdio::null()).output().unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert_eq!(output.status.code(), Some(expected_status), "{stdout}");
-        if program == Some(success.as_path()) { assert!(stdout.contains("KWin has no standalone configuration checker"), "{stdout}"); }
-        if program.is_none() { assert!(stdout.contains("isn't installed"), "{stdout}"); }
+        if code == Some(0) { assert!(stdout.contains("KWin has no standalone configuration checker"), "{stdout}"); }
+        if code.is_none() { assert!(stdout.contains("isn't installed"), "{stdout}"); }
         assert_eq!(std::fs::read_to_string(&kwinrc).unwrap(), "[Desktops]\nNumber=3\n");
         assert!(!config.join("autostart").exists());
         assert!(!config.join("mandara/generated").exists());

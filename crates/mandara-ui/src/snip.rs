@@ -991,8 +991,13 @@ pub fn close(cx: &mut App) {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CaptureTarget { Window, Screen, All }
 
+/// Captures the focused window (`true`) or its screen (`false`).
+pub fn capture_now(window_only: bool, cx: &mut App) -> async_channel::Receiver<Result<String, String>> {
+    capture_target(if window_only { CaptureTarget::Window } else { CaptureTarget::Screen }, cx)
+}
+
 /// Non-interactive capture for commands and the screenshot panel.
-pub(crate) fn capture_now(target: CaptureTarget, cx: &mut App) -> async_channel::Receiver<Result<String, String>> {
+pub(crate) fn capture_target(target: CaptureTarget, cx: &mut App) -> async_channel::Receiver<Result<String, String>> {
     let hub = crate::hub::hub(cx).read(cx);
     let focused = hub.focused.clone();
     let cfg = crate::state::config(cx).read(cx).snapshot();

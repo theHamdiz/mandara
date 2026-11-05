@@ -1136,7 +1136,7 @@ impl<'a> Installer<'a> {
         // Retiring comments those lines out (marked, every file backed up),
         // validates with the compositor and rolls back if it objects.
         let check = with_compositor(vec![bin.clone(), "setup".into(), "--check".into()], &compositor);
-        let checked = self.run(Cmd::from_argv(check).env(SETUP_LOG.0, SETUP_LOG.1).io(Io::Quiet));
+        let checked = self.run(Cmd::from_argv(check).env(SETUP_LOG.0, SETUP_LOG.1).io(Io::Capture));
         if checked.as_ref().is_none_or(|o| o.success) {
             return;
         }

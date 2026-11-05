@@ -474,6 +474,12 @@ pub struct DockView {
 
 impl DockView {
     fn new(monitor: String, origin: (f32, f32), reveal: bool, cx: &mut Context<Self>) -> Self {
+        let catalog = crate::apps::changes::init(cx);
+        cx.observe(&catalog, |this: &mut Self, catalog, cx| {
+            this.apps = catalog.read(cx).apps.clone();
+            this.dirty = true;
+            cx.notify();
+        }).detach();
         let windows = crate::windows::init(cx);
         let mark = |this: &mut Self, cx: &mut Context<Self>| {
             this.dirty = true;
@@ -519,7 +525,7 @@ impl DockView {
             monitor,
             origin,
             windows,
-            apps: crate::apps::discover().into(),
+            apps: catalog.read(cx).apps.clone(),
             cfg: dock,
             list: Rc::new(Vec::new()),
             badges: HashMap::new(),
