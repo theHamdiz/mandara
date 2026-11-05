@@ -1111,6 +1111,7 @@ impl StudioView {
             .into_any_element()
     }
 
+    /// Keep credentials outside config-backed controls and omit inapplicable settings.
     fn plugin_settings_body(&mut self, m: &PluginManifest, width: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let list = plugin_settings(m);
         let rtl = mandara_i18n::language().is_rtl();

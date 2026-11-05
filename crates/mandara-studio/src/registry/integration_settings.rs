@@ -24,6 +24,7 @@ pub(super) fn entries() -> Vec<Setting> {
     ]
 }
 
+/// Explain controls that do not apply to the selected integration provider.
 pub(super) fn locked(path: &str, cfg: &mandara_config::ShellConfig) -> Option<&'static str> {
     (matches!(path, "/plugins/settings/translator/server" | "/plugins/settings/translator/use_api_key")
         && mandara_ui::plugins::translator::settings(cfg).connection.provider != mandara_services::translator::Provider::LibreTranslate)

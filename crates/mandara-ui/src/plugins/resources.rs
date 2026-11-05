@@ -688,6 +688,7 @@ fn threads() -> usize {
     mandara_services::processes::cpu_capacity()
 }
 
+/// Group processes without letting summed CPU usage exceed the whole machine.
 fn top_apps(procs: &[Process]) -> Vec<TopApp> {
     let mut groups: Vec<TopApp> = Vec::new();
     for p in procs {

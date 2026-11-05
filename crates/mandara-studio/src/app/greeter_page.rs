@@ -521,6 +521,7 @@ impl GreeterPage {
 
     // ── Groups ───────────────────────────────────────────────────────────
 
+    /// Keep sign-in placement and public decorations in the same live layout preview.
     fn layout_group(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let mut out = Vec::new();
         // Element list (z order, top first) with visibility + order.

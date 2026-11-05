@@ -534,6 +534,7 @@ impl LockApp for LockScreen {
         self.dirty = true;
     }
 
+    /// Collect asynchronous work and advance authentication and motion without blocking.
     fn update(&mut self, now: Instant) -> AppControl {
         self.dirty |= self.widgets.poll();
         if let Some(rx) = &self.wallpaper_rx
@@ -582,8 +583,9 @@ impl LockApp for LockScreen {
         self.dirty = false;
     }
 
+    /// Poll pending widget paints promptly; an idle screen follows the clock boundary.
     fn next_wakeup(&self, now: Instant) -> Duration {
-        if self.animating {
+        if self.animating || self.widgets.pending() {
             return ANIMATION_TICK;
         }
         let mut wait = Duration::from_millis(1000 - (chrono::Local::now().timestamp_subsec_millis() % 1000) as u64 + 5);
@@ -593,6 +595,7 @@ impl LockApp for LockScreen {
         wait
     }
 
+    /// Keep authentication above public widgets and preserve blank secondary outputs.
     fn draw(&mut self, info: &SurfaceInfo, pm: &mut PixmapMut<'_>, now: Instant) {
         let s = info.scale;
         let (w, h) = (pm.width(), pm.height());
@@ -1157,6 +1160,22 @@ mod tests {
             std::thread::sleep(Duration::from_micros(200));
         }
         AppControl::Continue
+    }
+
+    #[test]
+    fn pending_widget_work_keeps_the_lock_loop_responsive_after_animation() {
+        let mut screen = screen(true);
+        screen.animating = false;
+        let now = Instant::now();
+        screen.deadline = Some(now);
+        let cfg = mandara_config::preauth::Widgets { items: vec![mandara_config::desktop_widgets::DesktopWidget::default()], ..Default::default() };
+        screen.widgets.update(&cfg, (640, 360), &crate::backdrop::paint::FontNames::default(), &screen.palette, true, false);
+        assert!(screen.widgets.pending());
+        assert_eq!(screen.next_wakeup(now), ANIMATION_TICK);
+        screen.widgets.clear();
+        assert_eq!(screen.next_wakeup(now), Duration::ZERO);
+        screen.animating = true;
+        assert_eq!(screen.next_wakeup(now), ANIMATION_TICK);
     }
 
     #[test]

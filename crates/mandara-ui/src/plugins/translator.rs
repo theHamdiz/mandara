@@ -30,6 +30,7 @@ pub struct Preferences {
     pub target: String,
 }
 
+/// Read provider, server and target choices without opening the keyring.
 pub fn settings(cfg: &ShellConfig) -> Preferences {
     let provider = match cfg.plugins.setting(ID, "provider", String::new()).as_str() {
         "deepl-pro" => Provider::DeepLPro,
@@ -52,6 +53,7 @@ impl Preferences {
 
 pub fn credential_key(cfg: &ShellConfig) -> Result<Option<Key>, String> { settings(cfg).credential_key() }
 
+/// Read a key only when this provider requires one, scoped to its current server.
 fn api_key(preferences: &Preferences) -> Result<Option<Secret>, String> {
     match preferences.credential_key()? {
         Some(key) => Keyring.read(&key, Access::Quiet)?.ok_or_else(|| t("Add your translation API key in Studio").to_string()).map(Some),
@@ -64,6 +66,7 @@ fn translate(preferences: &Preferences, text: &str, source: Option<&str>, target
     service::Http::new().translate(&preferences.connection, &service::Request { text, source, target }, key.as_ref())
 }
 
+/// Register explicit translation commands and a panel that submits only on request.
 pub fn register(registry: &mut PluginRegistry) {
     registry.register(PluginManifest::builtin(ID, tk("Translator"), tk("Translate text with your chosen provider"), Some(Zone::Right)).opt_in(), |window, cx, context| {
         let state = panel::State::new(cx);

@@ -305,6 +305,7 @@ struct Ui {
 type Shared = Rc<RefCell<Ui>>;
 
 impl Ui {
+    /// Consume every full page of wheel distance and retain the fractional remainder.
     fn scroll_page(&mut self, notches: f32) {
         if !notches.is_finite() { return; }
         if self.pages < 2 || notches * self.wheel < 0.0 { self.wheel = 0.0; }

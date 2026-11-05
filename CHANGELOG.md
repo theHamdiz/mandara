@@ -26,7 +26,8 @@ lock screens, with clearer previews and setup checks.
   countdowns leave private desktop titles and dates behind. Embedded and
   full-screen previews stay offline. Forecast requests start only for
   widgets that actually display weather; palette labels follow each widget’s
-  chosen language.
+  chosen language. Lock widgets appear promptly when background painting
+  finishes, even after the entrance animation settles.
 
 - **Four optional connected tools.** Translator, Phone Connect, Feeds and
   Home Assistant are first-party plugins. Translate when you ask, keep up

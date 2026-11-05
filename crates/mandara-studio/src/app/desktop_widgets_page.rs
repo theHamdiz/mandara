@@ -263,6 +263,7 @@ const SIDEWAYS: [(Sideways, &str); 3] = [(Sideways::Auto, tk("Toward the middle"
 type Set<T> = Rc<dyn Fn(&mut DesktopWidget, T)>;
 
 impl StudioView {
+    /// Preview the configured widgets and offer styles from enabled plugins.
     pub(super) fn desktop_widgets_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         if !cx.has_global::<PageState>() {
             cx.set_global(PageState::default());
@@ -1926,6 +1927,7 @@ fn monitor_rows(id: &str, rows: &[MonitorRow], p: &MandaraPalette, cx: &mut Cont
     div().row().flex_wrap().gap(px(SPACE_4_PX)).children(chips).into_any_element()
 }
 
+/// Fit the painter’s visible bounds and render at the display’s pixel density.
 fn tile_pixels(logical: (f32, f32), density: f32) -> (u32, u32) {
     let density = if density.is_finite() { density.clamp(PREVIEW_DENSITY, TILE_MAX_DENSITY) } else { PREVIEW_DENSITY };
     ((logical.0.max(1.0) * density).ceil() as u32, (logical.1.max(1.0) * density).ceil() as u32)

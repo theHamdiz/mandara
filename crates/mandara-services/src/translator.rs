@@ -31,6 +31,7 @@ pub struct Settings {
 }
 
 impl Settings {
+    /// Use the official DeepL endpoint or the user’s validated LibreTranslate base.
     pub fn server(&self) -> Result<String, String> {
         match self.provider {
             Provider::DeepLFree => Ok(FREE_SERVER.into()),
@@ -39,6 +40,7 @@ impl Settings {
         }
     }
 
+    /// Scope a key to the selected provider and its effective server.
     pub fn credential_key(&self) -> Result<credentials::Key, String> {
         Ok(credentials::Key {
             provider: if self.provider == Provider::LibreTranslate { credentials::Provider::LibreTranslate } else { credentials::Provider::DeepL },
@@ -73,6 +75,7 @@ impl Http<Client> {
     pub fn new() -> Self { Self::default() }
 }
 
+/// Accept bounded language subtags without allowing paths or query syntax.
 pub(super) fn language_code(code: &str) -> bool {
     /// ISO language codes and their regional/script subtags fit here.
     const MAX_CODE_BYTES: usize = 16;
@@ -81,6 +84,7 @@ pub(super) fn language_code(code: &str) -> bool {
         && code.bytes().next().is_some_and(|byte| byte.is_ascii_alphabetic())
 }
 
+/// Report a missing credential before preparing a provider request.
 fn required_key(key: Option<&Secret>) -> Result<&Secret, String> {
     key.ok_or_else(|| t("Add your translation API key in Studio").to_string())
 }
@@ -90,6 +94,7 @@ impl<T: Transport> Backend for Http<T> {
         languages::fetch(&self.transport, settings, key)
     }
 
+    /// Validate text and language choices before sending this explicit translation.
     fn translate(&self, settings: &Settings, request: &Request<'_>, key: Option<&Secret>) -> Result<Translation, String> {
         if request.text.trim().is_empty() { return Err(t("Enter some text to translate").into()); }
         if request.text.chars().count() > MAX_TEXT_CHARS { return Err(t("Keep a translation under 5,000 characters").into()); }
@@ -113,6 +118,7 @@ impl<T: Transport> Backend for Http<T> {
     }
 }
 
+/// Accept one nonempty translation and preserve the provider’s detected language.
 fn parse(provider: Provider, target: &str, value: Value) -> Result<Translation, String> {
     let (text, source) = match provider {
         Provider::DeepLFree | Provider::DeepLPro => {

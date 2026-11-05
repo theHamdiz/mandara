@@ -36,6 +36,7 @@ fn month_days(today: NaiveDate) -> impl Iterator<Item = NaiveDate> {
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Build date-card geometry from the supplied date, calendar and language.
 pub fn layout(w: &DateWidget, today: NaiveDate, l: &Lingo, hijri: Option<HijriDate>, week_start: u32, k: f32, m: &mut dyn Measure) -> Vec<Mark> {
     let mut out = Vec::new();
     if w.layout == DateLayout::MoonCalendar {

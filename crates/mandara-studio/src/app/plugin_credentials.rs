@@ -31,6 +31,7 @@ impl Editor {
         self.note = None;
     }
 
+    /// Ignore a closing editor; a newly selected key invalidates earlier jobs.
     fn select(&mut self, key: Key, open: bool) -> Option<bool> {
         if !open { return None; }
         if self.key.as_ref() == Some(&key) { return Some(false); }
@@ -42,6 +43,7 @@ impl Editor {
         Some(true)
     }
 
+    /// Allow one keyring operation and tag it with the current editor generation.
     fn begin(&mut self) -> Option<(u64, Key)> {
         if self.working { return None; }
         let key = self.key.clone()?;
@@ -51,6 +53,7 @@ impl Editor {
         Some((self.generation, key))
     }
 
+    /// Publish a keyring result only if its editor generation is still current.
     fn finish(&mut self, generation: u64, result: Result<bool, String>) {
         if generation != self.generation { return; }
         self.working = false;
@@ -64,11 +67,13 @@ impl Editor {
 pub(super) fn clear_input(cx: &mut gpui::App) { form::clear(INPUT, cx); }
 
 impl StudioView {
+    /// Check for a saved key quietly, without prompting just because settings opened.
     fn check_plugin_key(&mut self, cx: &mut Context<Self>) {
         let Some((generation, key)) = self.credentials.begin() else { return };
         form::job(cx, move || Keyring.read(&key, Access::Quiet).map(|secret| secret.is_some()), move |this, result, _| this.credentials.finish(generation, result));
     }
 
+    /// Clear the input immediately and save its validated secret outside the UI thread.
     fn save_plugin_key(&mut self, cx: &mut Context<Self>) {
         if self.credentials.working { return; }
         let secret = Secret::new(form::value(INPUT, cx));
@@ -82,6 +87,7 @@ impl StudioView {
         cx.notify();
     }
 
+    /// Remove the selected server’s key and clear any pasted input.
     fn remove_plugin_key(&mut self, cx: &mut Context<Self>) {
         let Some((generation, key)) = self.credentials.begin() else { return };
         clear_input(cx);
@@ -89,6 +95,7 @@ impl StudioView {
         cx.notify();
     }
 
+    /// Render only while open; reopening rechecks the selected server’s keyring entry.
     pub(super) fn plugin_key_editor(&mut self, key: Key, open: bool, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
         if self.credentials.select(key, open)? {
             clear_input(cx);

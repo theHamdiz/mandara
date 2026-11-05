@@ -17,6 +17,7 @@ const MAX_REQUEST_BYTES: usize = 64 * 1024;
 /// No integration can hold a foreground action open indefinitely.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
+/// Accept HTTP(S) addresses without embedded user credentials.
 pub fn web_url(value: &str) -> bool {
     value.parse::<ureq::http::Uri>().is_ok_and(|uri| {
         uri.scheme_str().is_some_and(|scheme| scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https"))
@@ -38,6 +39,7 @@ pub fn endpoint(server: &str, path: &str) -> Result<String, String> {
 pub enum Authorization<'a> { Bearer(&'a Secret), DeepL(&'a Secret) }
 
 impl Authorization<'_> {
+    /// Mark the authorization header sensitive so request diagnostics redact its value.
     fn header(&self) -> Result<HeaderValue, String> {
         let (scheme, secret) = match self { Self::Bearer(secret) => ("Bearer", secret), Self::DeepL(secret) => ("DeepL-Auth-Key", secret) };
         let value = zeroize::Zeroizing::new(format!("{scheme} {}", secret.expose()));
@@ -86,6 +88,7 @@ impl Transport for Client {
 }
 
 impl Client {
+    /// Validate the destination and bound the JSON body before any network I/O.
     fn request(method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Request<Vec<u8>>, String> {
         if !web_url(url) { return Err(t("Use an http:// or https:// server address without a password").into()); }
         if (auth.is_some() || body.is_some_and(|value| value.get("api_key").is_some())) && !encrypted_or_local(url) {
@@ -100,6 +103,7 @@ impl Client {
         request.body(body).map_err(|_| t("Could not prepare the request").to_string())
     }
 
+    /// Read bounded JSON while preserving HTTP status separately from translated errors.
     fn send_online(&self, request: Request<Vec<u8>>) -> Result<Value, Error> {
         let mut response = self.agent.run(request).map_err(|error| tf("Request failed: {error}", &[("error", &error)]).to_string())?;
         let status = response.status();

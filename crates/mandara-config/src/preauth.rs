@@ -14,6 +14,7 @@ pub struct PublicWeather {
 }
 
 impl PublicWeather {
+    /// Accept only finite coordinates within the latitude and longitude ranges.
     pub fn valid(&self) -> bool {
         self.latitude.is_finite() && self.longitude.is_finite() && (-90.0..=90.0).contains(&self.latitude) && (-180.0..=180.0).contains(&self.longitude)
     }
@@ -34,6 +35,7 @@ pub fn supported(kind: &WidgetKind) -> bool {
     matches!(kind, WidgetKind::Clock(_) | WidgetKind::Date(_) | WidgetKind::Weather(_) | WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_) | WidgetKind::Sky(_) | WidgetKind::Decoration(_) | WidgetKind::Palette(_))
 }
 
+/// Copy appearance and public text while removing private data and output bindings.
 pub fn copy(widget: &DesktopWidget) -> Option<DesktopWidget> {
     if !supported(&widget.kind) { return None; }
     let mut widget = widget.clone();
@@ -59,6 +61,7 @@ pub fn copy(widget: &DesktopWidget) -> Option<DesktopWidget> {
 }
 
 impl Widgets {
+    /// Apply public-copy rules to saved entries and bound the collection size.
     pub fn normalize(&mut self) {
         self.items = self.items.iter().filter_map(copy).take(MAX_WIDGETS).collect();
         if self.weather.as_ref().is_some_and(|w| !w.valid()) { self.weather = None; }

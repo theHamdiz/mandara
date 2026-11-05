@@ -447,7 +447,8 @@ environment forces dry runs.
 ## Connected plugins
 
 Enable these in Studio → Plugins and configure each plugin’s Settings first.
-Requests return a pending reply while work runs outside the UI thread.
+Requests wait for service work to finish, then return one result or error.
+The UI stays responsive while the request runs.
 
 ```bash
 mandara msg translate languages

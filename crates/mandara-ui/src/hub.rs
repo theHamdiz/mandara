@@ -263,6 +263,7 @@ pub struct PluginServices {
 }
 
 impl PluginServices {
+    /// Start a shared service only when an enabled placement actually uses its data.
     pub fn wanted(registry: &mandara_plugins::PluginRegistry, cfg: &mandara_config::ShellConfig) -> Self {
         let on = |id: &str| registry.is_enabled(id, &cfg.plugins);
         let weather_id = crate::plugins::weather::ID;

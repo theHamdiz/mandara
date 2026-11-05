@@ -41,6 +41,7 @@ fn digits(s: &ClockStrings) -> [u32; 4] {
     [hour / 10, hour % 10, s.minute / 10, s.minute % 10]
 }
 
+/// Lay out clock marks from the resolved time strings without starting a timer.
 pub fn clock(c: &ClockWidget, s: &ClockStrings, k: f32, m: &mut dyn Measure) -> Vec<Mark> {
     let probe = Lingo::of(&c.locale, s.rtl, None);
     let l = Lingo { eastern: c.eastern(probe.arabic()), ..probe };

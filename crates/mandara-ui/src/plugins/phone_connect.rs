@@ -47,6 +47,7 @@ fn refresh(force: bool, cfg: &ShellConfig, cx: &mut App) {
     integration::load(&data(), (), force, refresh_interval(cfg), |_| KdeConnect.devices(), cx);
 }
 
+/// Coalesce explicit device actions and refresh device state on completion.
 fn act(id: String, action: Action, cx: &mut App) -> async_channel::Receiver<Result<String, String>> {
     let actions = ACTIONS.with(Rc::clone);
     let views = data().borrow().views.clone();
@@ -57,6 +58,7 @@ fn act(id: String, action: Action, cx: &mut App) -> async_channel::Receiver<Resu
     }, cx)
 }
 
+/// Map command names to explicit actions; unknown or destructive actions are refused.
 fn command_action(value: &str) -> Option<Action> {
     Some(match value { "ring" => Action::Ring, "ping" => Action::Ping, "pair" => Action::Pair, "accept" => Action::AcceptPair, "reject" => Action::RejectPair, "unpair" => Action::Unpair, _ => return None })
 }
@@ -67,6 +69,7 @@ fn action_button(device: &Device, action: Action, label: &'static str, glyph: &'
         move |_, cx| { drop(act(id.clone(), action.clone(), cx)); }).focusable().tab_index(0).into_any_element()
 }
 
+/// Gate content controls on pairing, reachability and the advertised plugins.
 fn device_card(device: &Device, pending: bool, confirm: &Rc<RefCell<Option<String>>>, p: &MandaraPalette) -> AnyElement {
     let state = if device.connected() { t("Connected") } else if device.paired { t("Paired · offline") } else { t("Available to pair") };
     let mut card = glass_card(p).p(px(tokens::MD)).row().flex_col().gap(px(tokens::SM))
@@ -114,6 +117,7 @@ fn device_card(device: &Device, pending: bool, confirm: &Rc<RefCell<Option<Strin
     card.child(actions).into_any_element()
 }
 
+/// Load daemon state on demand and refresh only while the panel is visible.
 fn panel(context: &PanelCx, confirm: &Rc<RefCell<Option<String>>>, p: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     let cfg = crate::state::config(cx).read(cx).snapshot();
     let data = data();
@@ -147,6 +151,7 @@ fn panel(context: &PanelCx, confirm: &Rc<RefCell<Option<String>>>, p: &MandaraPa
     }).focusable().tab_index(0)).into_any_element()
 }
 
+/// Register lazy phone views and commands without starting the daemon at startup.
 pub fn register(registry: &mut PluginRegistry) {
     registry.register(PluginManifest::builtin(ID, tk("Phone Connect"), tk("Paired devices, phone battery, ringing and text sharing"), Some(Zone::Right)).opt_in(), |window, cx, context| {
         let bar = fn_view(None, |p, _, _| icon("phone", crate::style::bar_icon(BAR_ICON_PX), readable(p.primary, p)).into_any_element(), window, cx);

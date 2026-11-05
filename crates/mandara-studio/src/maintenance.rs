@@ -65,6 +65,7 @@ impl CheckId {
         }
     }
 
+    /// Choose a bundled diagnostic glyph for each check result.
     pub fn icon(self) -> &'static str {
         match self {
             CheckId::Config => "note",

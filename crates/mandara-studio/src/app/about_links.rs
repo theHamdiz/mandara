@@ -34,6 +34,7 @@ impl Default for Links {
 }
 
 impl Links {
+    /// Advance hover springs only while they move, respecting reduced motion.
     fn step(&mut self, dt: f32, profile: &MotionProfile) -> bool {
         let mut moving = false;
         for (value, hovered) in self.values.iter_mut().zip(self.hovered) {
@@ -49,6 +50,7 @@ fn link_element(glyph: &'static str, label: &'static str) -> gpui::Stateful<gpui
 }
 
 impl StudioView {
+    /// Expose labelled, keyboard-accessible project links with shared hover motion.
     pub(super) fn about_header_links(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let motion = &cfg.motion;
         let profile = MotionProfile::new(motion.stiffness, motion.damping, motion.mass, motion.reduce_motion);

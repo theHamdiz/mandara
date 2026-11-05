@@ -117,3 +117,12 @@ fn discovery_is_sorted_deduplicated_and_bounded() {
     assert_eq!(states.iter().filter(|entity| entity.id == "light.z").count(), 1);
     assert_eq!(backend.transport.requests.borrow()[0].1, "https://home.example/api/states");
 }
+
+#[test]
+fn a_successful_response_must_describe_the_requested_favourite() {
+    for value in [Value::Null, json!({"entity_id":"light.other","state":"on"}), json!({"entity_id":"light.studio"})] {
+        let backend = backend([value]);
+        assert!(backend.states("https://home.example", &key(), &["light.studio".into()]).is_err());
+        assert_eq!(backend.transport.requests.borrow().len(), 1);
+    }
+}

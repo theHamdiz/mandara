@@ -24,7 +24,7 @@ removes only that provider’s key for that server. A locked keyring is
 reported without opening an unlock prompt just because a panel opened.
 
 Choose source and target languages from your provider’s current list.
-**Auto-detect** leaves the source to the provider. Type or explicitly
+**Detect automatically** leaves the source to the provider. Type or explicitly
 paste text, then press **Translate**. Typing never submits text, and
 copying a result needs an explicit click. Text and results stay in memory.
 A translation can contain up to 5,000 characters. Your selected provider

@@ -33,6 +33,7 @@ pub(super) enum Edit {
 }
 
 impl Edit {
+    /// Normalize each edit against the public-widget rules before saving it.
     pub(super) fn apply(self, cfg: &mut Widgets) {
         match self {
             Self::Add(widget, keep_place) if cfg.items.len() < preauth::MAX_WIDGETS => {
@@ -68,6 +69,7 @@ impl Edit {
 
 pub(super) type Dispatch = Rc<dyn Fn(Edit, &mut App)>;
 
+/// Toggle a disclosure independently for each screen and widget id.
 fn fold(id: String, cx: &mut App) {
     let state = cx.default_global::<Open>();
     if !state.0.remove(&id) { state.0.insert(id); }
@@ -90,11 +92,13 @@ fn slider(prefix: &str, id: &str, what: &'static str, value: f32, range: (f32, f
     row(tr(what), div().w(px(DIM_240_PX)).child(control), p)
 }
 
+/// Exclude agenda cards before making the same sanitized copy used on save.
 fn gallery(widget: &DesktopWidget) -> Option<DesktopWidget> {
     if matches!(&widget.kind, dw::WidgetKind::Date(d) if d.layout == dw::DateLayout::Agenda) { return None; }
     preauth::copy(widget)
 }
 
+/// Edit this screen’s own widget collection and explicitly chosen public weather.
 pub(super) fn panel(prefix: &'static str, cfg: &Widgets, dispatch: Dispatch, p: &MandaraPalette, cx: &mut App) -> AnyElement {
     let gallery_key = format!("auth-gallery-{prefix}");
     let gallery_open = cx.default_global::<Open>().0.contains(&gallery_key);

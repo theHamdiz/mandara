@@ -31,8 +31,10 @@ pub struct Device {
 }
 
 impl Device {
+    /// Content actions require both an established pairing and a reachable device.
     pub fn connected(&self) -> bool { self.paired && self.reachable }
 
+    /// Match the daemon’s advertised plugin id rather than guessing from device type.
     pub fn supports(&self, plugin: &str) -> bool {
         self.connected() && self.plugins.iter().any(|id| id == plugin)
     }

@@ -23,6 +23,7 @@ pub struct Language {
     pub targets: Vec<String>,
 }
 
+/// Ask the selected provider for its current source and target language catalog.
 pub(super) fn fetch(transport: &impl Transport, settings: &Settings, key: Option<&Secret>) -> Result<Vec<Language>, String> {
     let server = settings.server()?;
     let deepl = settings.provider != Provider::LibreTranslate;
@@ -31,6 +32,7 @@ pub(super) fn fetch(transport: &impl Transport, settings: &Settings, key: Option
     parse(deepl, value)
 }
 
+/// Retain provider language codes, display names and source-to-target restrictions.
 pub(super) fn parse(deepl: bool, value: Value) -> Result<Vec<Language>, String> {
     let values = value.as_array().filter(|values| !values.is_empty() && values.len() <= MAX_LANGUAGES)
         .ok_or_else(|| t("The provider returned no language list").to_string())?;

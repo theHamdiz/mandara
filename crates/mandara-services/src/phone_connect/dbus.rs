@@ -19,6 +19,7 @@ const MAX_ID_BYTES: usize = 256;
 #[derive(Default)]
 pub struct KdeConnect;
 
+/// Build a device object path only from a valid single-segment id.
 fn path(id: &str) -> Result<String, String> {
     if id.is_empty() || id.len() > MAX_ID_BYTES || !id.bytes().all(|ch| ch.is_ascii_alphanumeric() || ch == b'_') {
         return Err(t("Invalid phone identifier").into());
@@ -38,6 +39,7 @@ fn error(error: impl std::fmt::Display) -> String {
     tf("Could not reach KDE Connect: {error}", &[("error", &error)]).to_string()
 }
 
+/// Read one device and the capabilities its daemon actually exposes.
 async fn device(conn: &zbus::Connection, id: &str) -> Result<Device, String> {
     let path = path(id)?;
     let proxy = crate::actor::proxy(conn, DESTINATION, &path, DEVICE).await.map_err(error)?;
@@ -59,6 +61,7 @@ async fn device(conn: &zbus::Connection, id: &str) -> Result<Device, String> {
     Ok(Device { id: id.into(), name, kind, reachable, paired, incoming_pair, battery, plugins })
 }
 
+/// Skip unreadable device objects without hiding the remaining devices.
 pub(super) async fn devices_on(conn: &zbus::Connection) -> Result<Vec<Device>, String> {
     let daemon = crate::actor::proxy(conn, DESTINATION, ROOT, DAEMON).await.map_err(error)?;
     let ids: Vec<String> = daemon.call("devices", &(false, false)).await.map_err(error)?;
@@ -73,6 +76,7 @@ pub(super) async fn devices_on(conn: &zbus::Connection) -> Result<Vec<Device>, S
     Ok(devices)
 }
 
+/// Re-read pairing, reachability and capabilities before sending an explicit action.
 pub(super) async fn act_on(conn: &zbus::Connection, id: &str, action: Action) -> Result<(), String> {
     let device = device(conn, id).await?;
     action.validate(&device)?;

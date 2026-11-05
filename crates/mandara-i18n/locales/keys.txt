@@ -7836,7 +7836,7 @@ your default
 {compositor}'s checker couldn't run: {error}
 {compositor}'s checker didn't finish in time.
 {cores} cores · {running} running
-{count} / {limit}
+{counter}
 {count} answering slowly
 {count} apps
 {count} apps crashed

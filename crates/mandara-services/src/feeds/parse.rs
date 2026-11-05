@@ -10,6 +10,7 @@ const MAX_TITLE_CHARS: usize = 512;
 const MAX_LINK_BYTES: usize = 8192;
 const MAX_ID_BYTES: usize = 2048;
 
+/// Collapse headline whitespace without inventing a title for an empty entry.
 pub(super) fn title(text: &str) -> String {
     let mut chars = text.trim().chars();
     let mut title: String = chars.by_ref().take(MAX_TITLE_CHARS).collect();
@@ -17,6 +18,7 @@ pub(super) fn title(text: &str) -> String {
     title
 }
 
+/// Keep usable web links and bound saved text on character boundaries.
 pub(super) fn bounded_entry(mut entry: Entry) -> Option<Entry> {
     if entry.link.len() > MAX_LINK_BYTES || !web_url(&entry.link) { return None; }
     entry.title = title(&entry.title);

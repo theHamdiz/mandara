@@ -161,6 +161,7 @@ pub struct StudioView {
 }
 
 impl StudioView {
+    /// Initialize Studio’s inputs and page state from the active configuration.
     pub fn new(cx: &mut Context<Self>) -> Self {
         cx.observe(&config(cx), |_, _, cx| cx.notify()).detach();
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
@@ -1468,6 +1469,7 @@ impl StudioView {
         div().row().flex_col().gap(px(SPACE_14_PX)).child(shell).child(studio).child(controls).into_any_element()
     }
 
+    /// Show the installed build, update state and project links in one page.
     fn about(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         // Updates: the patch-first update card (updates_card.rs).
         let updates = self.updates_card(cfg, p, window, cx);
@@ -1650,6 +1652,7 @@ impl StudioView {
 }
 
 impl Render for StudioView {
+    /// Render the selected Studio page and its active dialogs from the current config.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         frame_meter::begin();
         let p = mandara_core::frame_palette(window, cx);

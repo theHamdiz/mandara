@@ -8591,7 +8591,7 @@
 
 "Your translation appears here" = "Здесь появится перевод"
 
-"{count} / {limit}" = "{count} / {limit}"
+"{counter}" = "{counter}"
 
 "{count} unread" = "Не прочитано: {count}"
 

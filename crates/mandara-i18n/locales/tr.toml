@@ -8591,7 +8591,7 @@
 
 "Your translation appears here" = "Çeviriniz burada görünür"
 
-"{count} / {limit}" = "{count} / {limit}"
+"{counter}" = "{counter}"
 
 "{count} unread" = "{count} okunmamış"
 

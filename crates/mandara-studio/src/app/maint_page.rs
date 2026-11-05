@@ -41,6 +41,7 @@ impl Maint {
         self.results.clear();
     }
 
+    /// Discard results from a check that started before the page was invalidated.
     fn finish(&mut self, generation: u64, results: HashMap<CheckId, Health>) -> bool {
         self.checking = false;
         if generation != self.generation { return false; }
@@ -48,6 +49,7 @@ impl Maint {
         true
     }
 
+    /// Offer bulk repair only when a failing check has an automatic repair path.
     fn can_repair(&self, compositor: bool, missing_models: bool) -> bool {
         missing_models || self.results.iter().any(|(id, health)| !health.is_ok() && *id != CheckId::Icons && (!matches!(id, CheckId::CompositorInclude | CheckId::CompositorDropIn | CheckId::CompositorConflicts) || compositor))
     }
@@ -167,6 +169,7 @@ impl StudioView {
         cx.notify();
     }
 
+    /// Run one repair in the background and refresh its diagnostic afterward.
     fn maint_fix(&mut self, id: CheckId, cx: &mut Context<Self>) {
         if id == CheckId::Icons {
             self.show(crate::registry::Section::Themes, cx);
@@ -178,6 +181,7 @@ impl StudioView {
         });
     }
 
+    /// Repair eligible checks; icon-theme choices remain an explicit Themes action.
     fn maint_repair_all(&mut self, cx: &mut Context<Self>) {
         let broken: Vec<CheckId> = CheckId::ALL.iter().copied().filter(|id| self.maint.results.get(id).is_some_and(|h| !h.is_ok())).collect();
         // Pointless without a compositor; skip checks that can't be fixed here.
@@ -224,6 +228,7 @@ impl StudioView {
         });
     }
 
+    /// Refresh diagnostics after relevant settings change and show actions per check.
     pub(super) fn maintenance(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let icons = mandara_ui::state::config(cx).read(cx).get().appearance.icon_theme.clone();
         if self.maint.icons.as_ref() != Some(&icons) {

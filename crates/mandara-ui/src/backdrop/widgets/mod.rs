@@ -1624,6 +1624,7 @@ pub fn compose(canvas: &mut tiny_skia::PixmapMut<'_>, w: &DesktopWidget, o: &Out
     compose_laid(canvas, w, o, scene, &laid, text);
 }
 
+/// Paint a laid-out widget into its fitted preview canvas.
 fn compose_laid(canvas: &mut tiny_skia::PixmapMut<'_>, w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, laid: &Laid, text: &mut TextPainter) {
     let output = o.output_rect();
     let opacity = w.place.opacity();

@@ -8344,7 +8344,7 @@
 
 "Your translation appears here" = "번역이 여기에 표시됩니다"
 
-"{count} / {limit}" = "{count} / {limit}"
+"{counter}" = "{counter}"
 
 "{count} unread" = "읽지 않음 {count}개"
 

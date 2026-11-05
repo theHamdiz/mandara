@@ -27,10 +27,12 @@ const MAX_CACHES: usize = 8;
 /// Painting shares one font system; keep its waiting work bounded too.
 const MAX_PENDING: usize = 2;
 
+/// Wake at second boundaries only when a displayed clock writes seconds.
 pub fn ticks_seconds(cfg: &Widgets) -> bool {
     cfg.items.iter().any(|w| w.enabled && matches!(&w.kind, mandara_config::desktop_widgets::WidgetKind::Clock(c) if super::ticks_seconds(c) || (c.face == mandara_config::desktop_widgets::ClockFace::Template && c.lines.iter().any(|line| line.text.contains("{ss}")))))
 }
 
+/// Use the collection’s fastest displayed clock boundary as its paint key.
 fn stamp(cfg: &Widgets) -> i64 {
     Local::now().timestamp().div_euclid(if ticks_seconds(cfg) { 1 } else { SECONDS_PER_MINUTE })
 }
@@ -81,6 +83,7 @@ pub struct Canvas {
 }
 
 impl Canvas {
+    /// Drop this surface’s caches and weather subscription when no longer used.
     pub fn clear(&mut self) {
         if self.cfg.is_none() { return; }
         self.cfg = None;
@@ -90,6 +93,7 @@ impl Canvas {
         self.painter = Arc::default();
     }
 
+    /// Keep polling until requested pixels have been collected or replaced.
     pub fn pending(&self) -> bool {
         self.caches.values().any(|c| c.pending.is_some() || c.wanted != c.completed)
     }
@@ -132,6 +136,7 @@ impl Canvas {
         changed
     }
 
+    /// Queue bounded background paints only when this surface’s inputs change.
     pub fn update(&mut self, cfg: &Widgets, size: (u32, u32), fonts: &FontNames, palette: &MandaraPalette, h24: bool, allow_network: bool) {
         if !cfg.items.iter().any(|w| w.enabled && mandara_config::preauth::supported(&w.kind)) {
             if self.cfg.is_some() { self.clear(); }
@@ -193,6 +198,7 @@ impl Canvas {
         target.draw_pixmap(0, 0, pixels.as_ref(), &PixmapPaint { opacity: opacity.clamp(0.0, 1.0), ..Default::default() }, transform, None);
     }
 
+    /// Convert collected pixels to a render image only when first needed.
     pub fn image(&mut self, size: (u32, u32)) -> Option<Arc<gpui::RenderImage>> {
         let cache = self.caches.get_mut(&frame(size))?;
         if cache.image.is_none() {
@@ -232,6 +238,7 @@ fn scene(cfg: &Widgets, spec: &PaintSpec) -> WidgetScene {
     scene
 }
 
+/// Paint public widgets into a bounded offscreen canvas without interactive actions.
 fn paint(spec: &PaintSpec, size: (u32, u32), text: &mut TextPainter) -> Option<Pixmap> {
     let mut canvas = Pixmap::new(size.0, size.1)?;
     let mut cfg = spec.cfg.clone();

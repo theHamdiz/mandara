@@ -63,11 +63,13 @@ impl State {
 
 fn notify(model: &Rc<RefCell<Model>>, cx: &mut App) { model.borrow().output.borrow().views.notify(cx); }
 
+/// Respect provider source-to-target pairs and omit source-only languages.
 fn targets<'a>(languages: &'a [Language], source: Option<&str>) -> impl Iterator<Item = &'a Language> {
     let allowed = source.and_then(|code| languages.iter().find(|language| language.code.eq_ignore_ascii_case(code))).map(|language| &language.targets);
     languages.iter().filter(move |language| language.target && allowed.is_none_or(|allowed| allowed.is_empty() || allowed.iter().any(|code| code.eq_ignore_ascii_case(&language.code))))
 }
 
+/// Keep a valid choice; otherwise prefer the default target before the first result.
 fn normalize(model: &mut Model, languages: &[Language]) {
     if model.source.as_ref().is_some_and(|source| !languages.iter().any(|language| language.source && language.code.eq_ignore_ascii_case(source))) { model.source = None; }
     let available: Vec<_> = targets(languages, model.source.as_deref()).collect();
@@ -89,11 +91,13 @@ fn load_languages(model: &Rc<RefCell<Model>>, preferences: Preferences, force: b
     }, cx);
 }
 
+/// Use the provider’s display name, with an explicit automatic-source label.
 fn name(languages: &[Language], code: Option<&str>) -> String {
     code.map(|code| languages.iter().find(|language| language.code.eq_ignore_ascii_case(code)).map(|language| language.name.clone()).unwrap_or_else(|| code.into()))
         .unwrap_or_else(|| t("Detect automatically").into())
 }
 
+/// Keep the visible language list bounded; search still reaches the full catalog.
 fn picker(state: &State, side: Side, languages: &[Language], p: &MandaraPalette) -> AnyElement {
     let accent = readable(p.primary, p);
     let model = state.model.borrow();
@@ -118,6 +122,12 @@ fn picker(state: &State, side: Side, languages: &[Language], p: &MandaraPalette)
         .child(pill_button("translation-picker-close", Some("close"), t("Back"), accent, p, move |_, cx| { close.borrow_mut().picker = None; notify(&close, cx); }).focusable().tab_index(0)).into_any_element()
 }
 
+/// Count Unicode characters against the provider's limit as one counter value.
+fn counter(text: &str) -> String {
+    tf("{counter}", &[("counter", &format!("{} / {}", text.chars().count(), service::MAX_TEXT_CHARS))])
+}
+
+/// Preserve typed input while service work runs and submit only from explicit controls.
 pub(super) fn render(state: &State, context: &PanelCx, p: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     let preferences = settings(&crate::state::config(cx).read(cx).snapshot());
     let (catalog, output) = {
@@ -168,7 +178,7 @@ pub(super) fn render(state: &State, context: &PanelCx, p: &MandaraPalette, windo
         let request = request.clone();
         integration::load(&send, request.clone(), true, Duration::ZERO, move |_| super::translate(&request.preferences, &request.text, request.source.as_deref(), &request.target), cx);
     }).focusable().tab_index(0);
-    column = column.child(div().row().items_center().justify_between().child(paste).child(div().text_size(px(text::LABEL)).child(tf("{count} / {limit}", &[("count", &work.text.chars().count()), ("limit", &service::MAX_TEXT_CHARS)]))).child(translate));
+    column = column.child(div().row().items_center().justify_between().child(paste).child(div().text_size(px(text::LABEL)).child(counter(&work.text))).child(translate));
     let result = output.borrow();
     if let Some(error) = &result.error { column = column.child(div().text_size(px(text::BODY_S)).text_color(readable(p.warning_amber, p).hsla()).child(crate::bidi::paragraph(error.clone()))); }
     let mut translated = glass_card(p).id("translation-result").flex_1().min_h_0().overflow_y_scroll().p(px(tokens::MD)).text_size(px(text::BODY));
@@ -183,6 +193,14 @@ pub(super) fn render(state: &State, context: &PanelCx, p: &MandaraPalette, windo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_counter_counts_characters_and_fills_its_single_placeholder() {
+        let _language = mandara_i18n::scoped(Some(mandara_i18n::Lang::En));
+        assert_eq!(counter("Hi مرحبا"), "8 / 5000");
+        assert_eq!(counter(""), "0 / 5000");
+        assert!(!counter("界").contains('{'));
+    }
 
     #[test]
     fn target_choices_respect_provider_pairs_and_ignore_source_only_variants() {

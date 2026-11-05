@@ -8345,7 +8345,7 @@
 
 "Your translation appears here" = "আপনার অনুবাদ এখানে দেখা যাবে"
 
-"{count} / {limit}" = "{count} / {limit}"
+"{counter}" = "{counter}"
 
 "{count} unread" = "{count}টি অপঠিত"
 

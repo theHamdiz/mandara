@@ -65,6 +65,7 @@ impl Source for HttpSource {
 }
 
 impl HttpSource {
+    /// Read one bounded feed response; redirects never receive another request.
     fn fetch_online(&self, url: &str, previous: Option<&Feed>) -> Result<Option<Feed>, String> {
         if !web_url(url) {
             return Err(t("Use an http:// or https:// feed address without a password").into());

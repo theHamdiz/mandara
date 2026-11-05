@@ -8586,7 +8586,7 @@
 
 "Your translation appears here" = "Tu traducción aparecerá aquí"
 
-"{count} / {limit}" = "{count} / {limit}"
+"{counter}" = "{counter}"
 
 "{count} unread" = "{count} sin leer"
 

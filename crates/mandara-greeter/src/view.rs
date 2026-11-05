@@ -222,6 +222,7 @@ impl Roll {
         self.at.map(|at| pop_at(ROLL_SPRING, now.saturating_duration_since(at).as_secs_f32()).clamp(0.0, ROLL_OVERSHOOT_CAP)).unwrap_or(1.0)
     }
 
+    /// Keep frames scheduled until every rolling digit reaches its destination.
     fn moving(&self, now: Instant) -> bool {
         self.progress(now) < 1.0 && self.prev.chars().count() == self.text.chars().count()
     }
@@ -481,6 +482,7 @@ impl GreeterView {
         this
     }
 
+    /// Initialize one live or preview view with independent session and animation state.
     fn build(mode: Mode, mut config: GreeterConfig, target: (u32, u32), cx: &mut Context<Self>) -> Self {
         config.normalize();
         let demo = !matches!(mode, Mode::Live { demo: false });
@@ -1585,6 +1587,7 @@ impl GreeterView {
         container.child(wrapper).into_any_element()
     }
 
+    /// Use the same roll progress for painting digits and deciding when motion ends.
     fn clock_el(&self, f: &Frame, k: f32) -> AnyElement {
         let c = &self.config.clock;
         let idle = 1.0 - self.wake.value().clamp(0.0, 1.0);
@@ -2305,6 +2308,7 @@ fn orbs(vw: f32, vh: f32, p: &MandaraPalette, t: f32, intensity: f32, shift: (f3
 }
 
 impl Render for GreeterView {
+    /// Place public decorations below the sign-in controls in live and preview views.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let now = Instant::now();
         let dt = self.clock.tick(now);

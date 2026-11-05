@@ -8592,7 +8592,7 @@
 
 "Your translation appears here" = "आपका अनुवाद यहाँ दिखेगा"
 
-"{count} / {limit}" = "{count} / {limit}"
+"{counter}" = "{counter}"
 
 "{count} unread" = "{count} अपठित"
 

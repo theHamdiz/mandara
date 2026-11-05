@@ -16,10 +16,12 @@ const PURPOSE: &str = "plugin-api-key";
 pub enum Provider { DeepL, LibreTranslate, HomeAssistant }
 
 impl Provider {
+    /// The provider name shown beside a saved key.
     pub fn name(self) -> &'static str {
         match self { Self::DeepL => "DeepL", Self::LibreTranslate => "LibreTranslate", Self::HomeAssistant => "Home Assistant" }
     }
 
+    /// A stable keyring attribute; display names may change without moving keys.
     pub fn id(self) -> &'static str {
         match self {
             Self::DeepL => "deepl",
@@ -44,6 +46,7 @@ impl Key {
 pub struct Secret(Zeroizing<String>);
 
 impl Secret {
+    /// Trim a pasted key and reject whitespace, control characters and oversized values.
     pub fn new(value: String) -> Result<Self, String> {
         let value = Zeroizing::new(value);
         let trimmed = value.trim();
@@ -77,6 +80,7 @@ fn failed(error: impl fmt::Display) -> String {
     tf("Could not open the keyring: {error}", &[("error", &error)]).to_string()
 }
 
+/// Open the default collection, prompting to unlock only when explicitly allowed.
 async fn collection(access: Access) -> Result<oo7::dbus::Collection, String> {
     let service = oo7::dbus::Service::new().await.map_err(failed)?;
     // Reading a plugin's settings must never create a new default keyring.
@@ -92,6 +96,7 @@ async fn collection(access: Access) -> Result<oo7::dbus::Collection, String> {
 }
 
 impl Store for Keyring {
+    /// Read exactly one key for this provider and server without creating a collection.
     fn read(&self, key: &Key, access: Access) -> Result<Option<Secret>, String> {
         crate::runtime::block_on(async {
             let collection = collection(access).await?;
@@ -110,6 +115,7 @@ impl Store for Keyring {
         })
     }
 
+    /// Replace the provider/server entry with the supplied secret.
     fn save(&self, key: &Key, secret: &Secret) -> Result<(), String> {
         crate::runtime::block_on(async {
             let collection = collection(Access::Prompt).await?;
@@ -124,6 +130,7 @@ impl Store for Keyring {
         })
     }
 
+    /// Delete only entries matching this provider and server.
     fn remove(&self, key: &Key) -> Result<(), String> {
         crate::runtime::block_on(async {
             let collection = collection(Access::Prompt).await?;

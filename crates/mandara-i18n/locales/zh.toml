@@ -8586,7 +8586,7 @@
 
 "Your translation appears here" = "译文将在此显示"
 
-"{count} / {limit}" = "{count} / {limit}"
+"{counter}" = "{counter}"
 
 "{count} unread" = "{count} 条未读"
 

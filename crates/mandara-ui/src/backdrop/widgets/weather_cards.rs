@@ -26,6 +26,7 @@ const PETALS: usize = 24;
 const PETAL_ANGLE: f32 = 0.32;
 const MUTED: f32 = 0.16;
 
+/// Fit text and align it using the caller’s resolved reading direction.
 fn label(out: &mut Vec<Mark>, value: &str, w: &WeatherWidget, rtl: bool, size: f32, x: f32, y: f32, width: f32, ink: InkRole, m: &mut dyn Measure) -> f32 {
     let font = style(w.look.font, size, face::MEDIUM);
     let value = fit(value, &font, width, m);
@@ -34,12 +35,14 @@ fn label(out: &mut Vec<Mark>, value: &str, w: &WeatherWidget, rtl: bool, size: f
     th
 }
 
+/// Return a finite position in today’s range, never an invented unavailable value.
 fn range_fraction(f: &Forecast, today: Option<(f32, f32)>) -> Option<f32> {
     let (lo, hi) = today.filter(|(lo, hi)| lo.is_finite() && hi.is_finite() && lo <= hi)?;
     if !f.temp.is_finite() { return None; }
     Some(if lo == hi { 0.5 } else { ((f.temp - lo) / (hi - lo)).clamp(0.0, 1.0) })
 }
 
+/// Build weather marks from measured values; missing forecasts draw no dial reading.
 pub fn layout(w: &WeatherWidget, s: &WeatherStrings, forecast: Option<&Forecast>, l: &Lingo, units: mandara_config::Units, k: f32, m: &mut dyn Measure) -> Vec<Mark> {
     let mut out = Vec::new();
     let Some(f) = forecast else {

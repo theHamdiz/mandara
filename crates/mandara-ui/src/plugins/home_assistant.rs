@@ -50,6 +50,7 @@ pub fn credential_key(settings: &Settings) -> Result<Key, String> {
     Ok(Key { provider: Provider::HomeAssistant, server: server.trim_end_matches('/').into() })
 }
 
+/// Read only the token scoped to the currently configured Home Assistant server.
 fn token(settings: &Settings) -> Result<Secret, String> {
     Keyring.read(&credential_key(settings)?, Access::Quiet)?.ok_or_else(|| t("Add your Home Assistant token in Studio").to_string())
 }
@@ -73,6 +74,7 @@ fn refresh(settings: Settings, force: bool, cfg: &ShellConfig, cx: &mut App) {
 type HomeAction = Rc<RefCell<integration::Action<Settings>>>;
 thread_local! { static ACTIONS: HomeAction = Rc::default(); }
 
+/// Run one explicit entity action and refresh state after it completes.
 fn act(settings: Settings, entity: String, action: ha::Action, cx: &mut App) -> async_channel::Receiver<Result<String, String>> {
     let actions = ACTIONS.with(Rc::clone);
     let address = settings.clone();
@@ -89,6 +91,7 @@ fn act(settings: Settings, entity: String, action: ha::Action, cx: &mut App) -> 
     }, cx)
 }
 
+/// Hide activation timestamps while preserving real sensor states and units.
 fn state_label(entity: &Entity) -> String {
     match entity.state.as_str() {
         "unavailable" => t("Unavailable").into(),
@@ -100,6 +103,7 @@ fn state_label(entity: &Entity) -> String {
     }
 }
 
+/// Show the selected server’s state and offer only supported, available actions.
 fn panel(context: &PanelCx, p: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     let cfg = crate::state::config(cx).read(cx).snapshot();
     let settings = settings(&cfg);
@@ -152,6 +156,7 @@ fn panel(context: &PanelCx, p: &MandaraPalette, window: &mut Window, cx: &mut Ap
     }).focusable().tab_index(0)).into_any_element()
 }
 
+/// Register lazy views and explicit commands without contacting a home server.
 pub fn register(registry: &mut PluginRegistry) {
     registry.register(PluginManifest::builtin(ID, tk("Home Assistant"), tk("Your home favourites, sensors and scenes"), Some(Zone::Right)).opt_in(), |window, cx, context| {
         let bar = fn_view(None, |p, _, _| icon("home", crate::style::bar_icon(BAR_ICON_PX), readable(p.primary, p)).into_any_element(), window, cx);

@@ -48,6 +48,7 @@ struct Reader {
 thread_local! { static READER: Rc<RefCell<Reader>> = Rc::default(); }
 fn reader() -> Rc<RefCell<Reader>> { READER.with(Rc::clone) }
 
+/// Keep valid, distinct feed addresses in configured order within the list limit.
 pub fn subscriptions(cfg: &ShellConfig) -> Result<Vec<String>, String> {
     let text = cfg.plugins.setting(ID, "subscriptions", String::new());
     let mut urls = Vec::new();
@@ -74,6 +75,7 @@ fn setup(p: &MandaraPalette) -> AnyElement {
         .focusable().tab_index(0).into_any_element()
 }
 
+/// Mark an article read only after its validated web address opens successfully.
 fn open_article(url: String, link: String, cx: &mut App) {
     let data = reader().borrow().data.clone();
     cx.spawn(async move |cx| {
@@ -98,6 +100,7 @@ fn open_article(url: String, link: String, cx: &mut App) {
     }).detach();
 }
 
+/// Refresh the selected feed while this panel is visible and keep cached headlines.
 fn panel(context: &mandara_plugins::PanelCx, p: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     let cfg = crate::state::config(cx).read(cx).snapshot();
     let subscriptions = subscriptions(&cfg);
@@ -170,6 +173,7 @@ fn panel(context: &mandara_plugins::PanelCx, p: &MandaraPalette, window: &mut Wi
     column.child(content).into_any_element()
 }
 
+/// Register commands and lazy views without reading feeds during startup.
 pub fn register(registry: &mut PluginRegistry) {
     registry.register(PluginManifest::builtin(ID, tk("Feeds"), tk("RSS, Atom and JSON subscriptions with local read history"), Some(Zone::Right)).opt_in(), |window, cx, context| {
         let bar = fn_view(None, |p, _, _| icon("rss", crate::style::bar_icon(BAR_ICON_PX), readable(p.primary, p)).into_any_element(), window, cx);

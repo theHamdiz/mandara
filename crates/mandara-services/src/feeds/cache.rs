@@ -40,6 +40,7 @@ impl Cache {
 
     fn path(&self, url: &str) -> PathBuf { self.root.join(format!("{:x}.json", Sha256::digest(url))) }
 
+    /// Read saved headlines defensively; a corrupt cache behaves like an empty feed.
     pub fn load(&self, url: &str) -> Result<Option<Snapshot>, String> {
         let path = self.path(url);
         let file = match std::fs::File::open(&path) {
@@ -60,6 +61,7 @@ impl Cache {
         Ok(Some(saved))
     }
 
+    /// Merge fresh headlines with read flags, or retain the cached result on HTTP 304.
     pub fn refresh(&self, source: &impl Source, url: &str, previous: Option<&Snapshot>) -> Result<Snapshot, String> {
         let saved = self.load(url);
         let previous = previous.filter(|previous| previous.feed.url == url).cloned().or_else(|| saved.as_ref().ok().cloned().flatten());
@@ -79,6 +81,7 @@ impl Cache {
         Ok(snapshot)
     }
 
+    /// Persist a read flag only for an article in the current feed.
     pub fn mark_read(&self, url: &str, link: &str) -> Result<Snapshot, String> {
         let _guard = WRITES.lock();
         let mut snapshot = self.load(url)?.ok_or_else(|| t("Refresh this feed before marking it read").to_string())?;
@@ -88,6 +91,7 @@ impl Cache {
         Ok(snapshot)
     }
 
+    /// Save the feed and its read history with owner-only permissions.
     fn save(&self, snapshot: &Snapshot) -> Result<(), String> {
         let bytes = serde_json::to_vec(snapshot).map_err(failed)?;
         if bytes.len() > MAX_CACHE_BYTES { return Err(t("The saved feed is too large to write").into()); }

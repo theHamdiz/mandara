@@ -41,6 +41,7 @@ pub fn set_theme_override(theme: Option<String>) {
 /// the frame path while still following a theme switch within seconds).
 const SYSTEM_THEME_TTL: std::time::Duration = std::time::Duration::from_secs(5);
 
+/// Prefer the explicit selection; otherwise use the current desktop theme.
 fn active_theme() -> Option<String> {
     static GTK: Mutex<Option<(std::time::Instant, Option<String>)>> = Mutex::new(None);
     if let Some(theme) = OVERRIDE.lock().ok().and_then(|o| o.clone()) {

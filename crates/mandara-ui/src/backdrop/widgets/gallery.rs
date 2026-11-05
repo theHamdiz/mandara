@@ -23,6 +23,7 @@ const POSITION_MS: i64 = 60_000;
 /// An illustrative slider position, confined to labelled gallery previews.
 const SAMPLE_LEVEL: f32 = 0.65;
 
+/// Use labelled preview data without reading the user’s accounts or media history.
 fn sample_scene(widget: &DesktopWidget, palette: &MandaraPalette, cover_px: u32) -> WidgetScene {
     let now = Local::now();
     let mut scene = WidgetScene::preview(vec![widget.clone()]);
@@ -60,6 +61,7 @@ fn sample_scene(widget: &DesktopWidget, palette: &MandaraPalette, cover_px: u32)
     scene
 }
 
+/// Fit the visible vector bounds while reserving space for paint effects.
 fn scale_for(size: (u32, u32), bounds: (f32, f32)) -> Option<f32> {
     if !bounds.0.is_finite() || !bounds.1.is_finite() || bounds.0 <= 0.0 || bounds.1 <= 0.0 { return None; }
     Some(((size.0 as f32 / bounds.0).min(size.1 as f32 / bounds.1) * CONTENT_FRACTION).clamp(MAX_FIT_SCALE.recip(), MAX_FIT_SCALE))

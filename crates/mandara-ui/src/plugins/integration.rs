@@ -49,6 +49,7 @@ impl<K: PartialEq, V> Data<K, V> {
         self.finished = None;
     }
 
+    /// Start a read only when no request is pending and its cached result is due.
     fn begin(&mut self, key: K, force: bool, age: Duration, now: Instant) -> Option<u64> {
         self.select(key);
         if self.busy() || (!force && self.finished.is_some_and(|at| now.saturating_duration_since(at) < age)) { return None; }
@@ -58,6 +59,7 @@ impl<K: PartialEq, V> Data<K, V> {
         Some(self.generation)
     }
 
+    /// Reject a stale generation and retain the last successful value on refresh errors.
     fn finish(&mut self, generation: u64, result: Result<V, String>, now: Instant) -> bool {
         if self.pending != Some(generation) { return false; }
         self.pending = None;
@@ -100,6 +102,7 @@ impl<K: PartialEq> Action<K> {
     pub fn busy(&self) -> bool { self.pending.is_some() }
     pub fn error_for(&self, key: &K) -> Option<&str> { self.error.as_ref().filter(|(owner, _)| owner == key).map(|(_, error)| error.as_str()) }
 
+    /// Allow one explicit action at a time for this integration.
     fn begin(&mut self, key: K) -> bool {
         if self.busy() { return false; }
         self.pending = Some(key);

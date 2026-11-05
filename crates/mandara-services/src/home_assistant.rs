@@ -30,6 +30,8 @@ impl Http<Client> {
 }
 
 impl<T: Transport> Backend for Http<T> {
+    /// Read favourites individually in their configured order; only a 404 removes one.
+    /// With no favourites, discover a bounded, deduplicated list sorted by name.
     fn states(&self, server: &str, key: &Secret, favourites: &[String]) -> Result<Vec<Entity>, String> {
         if favourites.len() > MAX_FAVOURITES || favourites.iter().any(|id| !entity_id(id)) {
             return Err(t("Choose up to 24 Home Assistant entities").into());
@@ -44,7 +46,9 @@ impl<T: Transport> Backend for Http<T> {
                     Err(error) if error.status == Some(404) => continue,
                     Err(error) => return Err(error.into()),
                 };
-                if let Some(entity) = Entity::parse(&value).filter(|entity| &entity.id == id) { entities.push(entity); }
+                let entity = Entity::parse(&value).filter(|entity| &entity.id == id)
+                    .ok_or_else(|| t("Home Assistant could not find this entity").to_string())?;
+                entities.push(entity);
             }
             return Ok(entities);
         }
@@ -57,6 +61,7 @@ impl<T: Transport> Backend for Http<T> {
         Ok(entities)
     }
 
+    /// Re-read the target before invoking an allowed service; never synthesize states.
     fn act(&self, server: &str, key: &Secret, id: &str, action: Action) -> Result<(), String> {
         if !entity_id(id) { return Err(t("Choose a valid Home Assistant entity").into()); }
         let current = self.transport.json(Method::GET, &endpoint(server, &format!("api/states/{id}"))?, None, Some(Authorization::Bearer(key)))?;

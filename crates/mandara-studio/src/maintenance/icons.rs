@@ -15,6 +15,7 @@ pub(super) fn selected(theme: Option<&str>) -> Health {
     inspect(theme, icon_theme::desktop_icon_theme(), icon_theme::theme_installed)
 }
 
+/// An explicit theme wins; consult the desktop preference only when it is empty.
 fn inspect(selected: Option<&str>, desktop: Option<String>, installed: impl FnOnce(&str) -> bool) -> Health {
     let theme = selected.filter(|name| !name.trim().is_empty()).or(desktop.as_deref());
     match theme {
@@ -30,10 +31,12 @@ mod tests {
 
     #[test]
     fn repair_directions_use_the_navigation_labels_in_every_language() {
-        for lang in mandara_i18n::Lang::ALL {
-            let message = mandara_i18n::t_in(lang, "Icon theme {theme} is missing; install it or choose another in Themes → Icons");
+        for lang in mandara_i18n::Lang::ALL.into_iter().filter(|lang| *lang != mandara_i18n::Lang::En) {
+            let text = std::fs::read_to_string(mandara_i18n::packs::source_catalog(lang)).unwrap();
+            let catalog = mandara_i18n::Catalog::parse(&text).unwrap();
+            let message = catalog.get("Icon theme {theme} is missing; install it or choose another in Themes → Icons").unwrap();
             for label in ["Themes", "Icons"] {
-                assert!(message.contains(mandara_i18n::t_in(lang, label)), "{}: {label}", lang.code());
+                assert!(message.contains(catalog.get(label).unwrap()), "{}: {label}", lang.code());
             }
         }
     }

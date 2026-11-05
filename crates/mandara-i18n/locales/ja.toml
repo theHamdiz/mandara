@@ -8592,7 +8592,7 @@
 
 "Your translation appears here" = "翻訳結果がここに表示されます"
 
-"{count} / {limit}" = "{count} / {limit}"
+"{counter}" = "{counter}"
 
 "{count} unread" = "未読 {count} 件"
 
