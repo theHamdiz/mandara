@@ -1,5 +1,5 @@
 //! Mandara Shell's installer, in Rust: `mandara install` and
-//! `mandara uninstall` (no shell scripts).
+//! `mandara uninstall`. The optional download script hands off here.
 //!
 //! Getting Mandara is download, extract, run: the release tarball's
 //! `bin/mandara install` copies itself to `~/.local/bin` (checking its own
@@ -19,7 +19,8 @@
 //! * [`compositors`] — the compositors Mandara runs on and their packages,
 //!   offered when none is installed;
 //! * [`installer`] — the flows, against a [`host::Host`] so tests (and
-//!   `--dry-run`) change nothing.
+//!   `--dry-run`) change nothing;
+//! * `tui` — the wordmark and the arrow-key setup screen.
 
 pub mod args;
 pub mod compositors;
@@ -32,6 +33,7 @@ pub mod packages;
 pub mod pkg;
 pub mod platform;
 pub mod release;
+mod tui;
 
 pub use args::{InstallArgs, UninstallArgs};
 pub use family::Family;

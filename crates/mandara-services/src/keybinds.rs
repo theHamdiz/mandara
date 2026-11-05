@@ -182,6 +182,7 @@ fn squash(s: &str) -> String {
 pub fn bind_text(target: Target, body: &str) -> BindText {
     let body = body.trim();
     match target {
+        Target::KWin => BindText { action: squash(body), description: None },
         Target::Niri => niri_text(body),
         Target::Umbriel => {
             let value = body.split_once('=').map(|(_, v)| v.trim()).unwrap_or(body);
@@ -197,8 +198,16 @@ pub fn bind_text(target: Target, body: &str) -> BindText {
         Target::River => {
             let words = mandara_config::compositor::shell_words(body);
             let after_map = words.iter().position(|w| w == "map").map_or(&words[..], |at| &words[at + 1..]);
-            let args: Vec<&String> = after_map.iter().filter(|w| !w.starts_with('-')).collect();
-            BindText { action: args.get(3..).unwrap_or_default().iter().map(|w| w.as_str()).collect::<Vec<_>>().join(" "), description: None }
+            // Options come before the mode: `-release`, `-repeat`, and
+            // `-layout <index>`, whose value goes too (as in
+            // `river_binds`). Words after the key are the action's own.
+            let mut rest = after_map.iter().map(String::as_str).peekable();
+            while let Some(flag) = rest.next_if(|w| w.starts_with('-')) {
+                if flag == "-layout" {
+                    rest.next();
+                }
+            }
+            BindText { action: rest.skip(3).collect::<Vec<_>>().join(" "), description: None }
         }
         Target::Hyprland if body.contains("hl.bind(") => lua_text(body),
         Target::Hyprland | Target::Mango => {
@@ -322,6 +331,18 @@ fn mandara_group(words: &str) -> Group {
     }
 }
 
+/// An action's first argument: a quoted one whole (Sway's
+/// `workspace "dev ops"` names "dev ops"), otherwise its first word.
+fn first_arg(rest: &str) -> String {
+    let rest = rest.trim_start();
+    if let Some(q) = rest.chars().next().filter(|c| *c == '"' || *c == '\'')
+        && let Some((name, _)) = rest[1..].split_once(q)
+    {
+        return name.to_string();
+    }
+    rest.split_whitespace().next().unwrap_or_default().trim_matches(|c| c == '"' || c == ',').to_string()
+}
+
 /// A friendly description for common compositor actions across MangoWM,
 /// Niri and Hyprland (`killclient` → "Close window"); `None` when the
 /// action is better shown as written.
@@ -330,8 +351,13 @@ pub fn describe(action: &str) -> Option<String> {
     // Sway: `workspace number 3`, `move container to workspace number 3`.
     let sway_move = (v == "move").then(|| ["container to workspace ", "window to workspace ", "to workspace "].iter().find_map(|p| rest.strip_prefix(p)).map(str::to_string)).flatten();
     let rest = sway_move.clone().unwrap_or(rest);
+    let rest = rest.strip_prefix("--no-auto-back-and-forth ").map_or_else(|| rest.clone(), str::to_string);
     let rest = rest.strip_prefix("number ").map_or_else(|| rest.clone(), str::to_string);
-    let arg = rest.split_whitespace().next().unwrap_or_default().trim_matches(|c| c == '"' || c == ',').to_string();
+    let arg = first_arg(&rest);
+    // Sway takes the rest of a `workspace` command as the name, quoted or
+    // not (`workspace "dev ops"` and `workspace dev ops` both name
+    // "dev ops"; checked in sway 1.12).
+    let ws_name = rest.trim().trim_matches(|c| c == '"' || c == '\'').trim().to_string();
     let dir = || match arg.to_ascii_lowercase().as_str() {
         "l" | "left" => Some(t("left")),
         "r" | "right" => Some(t("right")),
@@ -372,9 +398,10 @@ pub fn describe(action: &str) -> Option<String> {
         "toggleoverview" | "toggle_overview" | "overview" => t("Overview").to_string(),
         "focusdir" | "movefocus" | "focus" if dir().is_some() => tf("Focus {direction}", &[("direction", &dir()?)]),
         "exchange_client" | "swapwindow" | "movewindow" | "move" if sway_move.is_none() && dir().is_some() => tf("Move window {direction}", &[("direction", &dir()?)]),
-        "move" if sway_move.is_some() && !arg.is_empty() => tf("Move window to {place} {n}", &[("place", &t("workspace")), ("n", &arg)]),
+        "move" if sway_move.is_some() && !ws_name.is_empty() => tf("Move window to {place} {n}", &[("place", &t("workspace")), ("n", &ws_name)]),
         "focusstack" | "cyclenext" => t("Focus next window").to_string(),
-        "view" | "workspace" | "focus_workspace" if !arg.is_empty() => tf("Go to {place} {n}", &[("place", &if v == "view" { t("tag") } else { t("workspace") }), ("n", &arg)]),
+        "workspace" if !ws_name.is_empty() => tf("Go to {place} {n}", &[("place", &t("workspace")), ("n", &ws_name)]),
+        "view" | "focus_workspace" if !arg.is_empty() => tf("Go to {place} {n}", &[("place", &if v == "view" { t("tag") } else { t("workspace") }), ("n", &arg)]),
         "tag" | "movetoworkspace" | "movetoworkspacesilent" | "move_column_to_workspace" | "move_window_to_workspace" if !arg.is_empty() => {
             tf("Move window to {place} {n}", &[("place", &if v == "tag" { t("tag") } else { t("workspace") }), ("n", &arg)])
         }
@@ -534,6 +561,9 @@ mod tests {
         assert_eq!(bind_text(Target::Sway, "bindsym --locked --no-warn $mod+Return exec foot -e btop").action, "exec foot -e btop");
         assert_eq!(bind_text(Target::Sway, "Mod4+Shift+q kill").action, "kill", "a line of a `bindsym {{ … }}` block");
         assert_eq!(bind_text(Target::River, "riverctl map -repeat normal Super+Shift Return spawn 'foot -e btop'").action, "spawn foot -e btop");
+        // `-layout` takes a value: both go, the action stays whole.
+        assert_eq!(bind_text(Target::River, "riverctl map -layout 1 normal Super Q close").action, "close");
+        assert_eq!(bind_text(Target::River, "riverctl map -release -layout 0 normal Super H send-layout-cmd rivertile main-ratio -0.05").action, "send-layout-cmd rivertile main-ratio -0.05");
         for (action, want) in [("close", "Close window"), ("toggle-float", "Toggle floating"), ("toggle-fullscreen", "Toggle fullscreen"), ("spawn foot", "Run foot")] {
             assert_eq!(describe(action).as_deref(), Some(want), "river `{action}`");
         }
@@ -542,6 +572,11 @@ mod tests {
             ("kill", "Close window"),
             ("workspace number 3", "Go to workspace 3"),
             ("move container to workspace number 3", "Move window to workspace 3"),
+            // A quoted name keeps every word.
+            ("workspace \"dev ops\"", "Go to workspace dev ops"),
+            ("workspace --no-auto-back-and-forth number \"2 web\"", "Go to workspace 2 web"),
+            ("move container to workspace \"dev ops\"", "Move window to workspace dev ops"),
+            ("workspace dev ops", "Go to workspace dev ops"),
             ("focus left", "Focus left"),
             ("move right", "Move window right"),
             ("floating toggle", "Toggle floating"),

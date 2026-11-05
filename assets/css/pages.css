@@ -1,0 +1,60 @@
+:root {
+  color-scheme: light;
+  --page-background: #ffffff;
+  --page-ink: #131b35;
+  --page-muted: #43506a;
+  --page-link: #6330bd;
+  --page-surface: #f0f2f8;
+  --page-border: #cdd4e1;
+  --syntax-string: #0d654e;
+  --syntax-number: #0550ae;
+  --syntax-error: #a40e26;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page-background: #0d1117;
+    --page-ink: #edf0ff;
+    --page-muted: #bdc6dc;
+    --page-link: #bda3ff;
+    --page-surface: #1a2232;
+    --page-border: #39445a;
+    --syntax-string: #8bd5ca;
+    --syntax-number: #79c0ff;
+    --syntax-error: #ffb5b5;
+  }
+}
+
+body,
+.markdown-body {
+  color: var(--page-ink);
+  background-color: var(--page-background);
+}
+
+.markdown-body a { color: var(--page-link); }
+.markdown-body img { background-color: transparent; }
+.markdown-body blockquote { color: var(--page-muted); }
+.markdown-body pre,
+.markdown-body code,
+.markdown-body table tr:nth-child(2n) { background-color: var(--page-surface); }
+.markdown-body .highlight,
+.markdown-body .highlight pre,
+.markdown-body pre.highlight { color: var(--page-ink); background-color: var(--page-surface); }
+.markdown-body .highlight :is(.n, .nx, .py, .p, .x, .l, .g) { color: var(--page-ink); }
+.markdown-body .highlight :is(.c, .ch, .cd, .cm, .cp, .cpf, .c1, .cs, .gh, .gu, .go, .gp, .gl, .w) { color: var(--page-muted); }
+.markdown-body .highlight :is(.k, .kc, .kd, .kn, .kp, .kr, .kt, .o, .ow, .nt, .nc, .nf, .fm, .nn, .ne, .nd) { color: var(--page-link); }
+.markdown-body .highlight :is(.s, .sa, .sb, .sc, .sd, .s2, .se, .sh, .si, .sx, .sr, .s1, .ss, .dl, .gi, .ld, .ni) { color: var(--syntax-string); }
+.markdown-body .highlight :is(.m, .mb, .mf, .mh, .mi, .il, .mo, .mx, .nb, .bp, .no, .nv, .vc, .vg, .vi, .vm, .na, .nl) { color: var(--syntax-number); }
+.markdown-body .highlight :is(.err, .gd, .gr, .gt) { color: var(--syntax-error); }
+.markdown-body .highlight :is(.gi, .gd, .err) { background-color: transparent; }
+.markdown-body table tr { background-color: var(--page-background); }
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body blockquote,
+.markdown-body table tr,
+.markdown-body table th,
+.markdown-body table td { border-color: var(--page-border); }
+.markdown-body hr { background-color: var(--page-border); }
+/* Primer marks its footer utility important. */
+.markdown-body .footer { color: var(--page-muted) !important; }

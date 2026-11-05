@@ -769,14 +769,32 @@ const EMPTY_RING_ALPHA: [f32; 3] = [0.05, 0.08, 0.14];
 const EMPTY_ICON_PX: f32 = 19.0;
 const EMPTY_GAP_PX: f32 = 4.0;
 const EMPTY_TITLE_GAP_PX: f32 = 8.0;
+/// GPUI's default golden-ratio line height, shared by both text nodes.
+const EMPTY_TEXT_LEADING: f32 = std::f32::consts::GOLDEN_RATIO;
+/// The rings never shrink below this, nor the glyph below its share of it.
+const EMPTY_RINGS_MIN_PX: f32 = 32.0;
+const EMPTY_ICON_MIN_PX: f32 = 14.0;
+
+/// The rings' diameter for an empty state `height` tall: full size when it
+/// fits, otherwise what's left after the title and hint, so the icon stays
+/// centred in its rings and the rings never run into the title.
+fn empty_rings_px(height: f32) -> f32 {
+    let text = EMPTY_GAP_PX * 2.0 + EMPTY_TITLE_GAP_PX + (text::BODY + text::BODY_S) * EMPTY_TEXT_LEADING;
+    (height - text).clamp(EMPTY_RINGS_MIN_PX, EMPTY_RINGS_PX)
+}
 
 /// A designed empty state: concentric tinted rings around an icon, a title
 /// and a hint, centred in `height`.
 pub fn empty_state(icon_name: &'static str, title: impl Into<SharedString>, hint: impl Into<SharedString>, height: f32, palette: &MandaraPalette) -> Div {
     let accent = readable(palette.primary, palette);
-    let rings = div().relative().size(px(EMPTY_RINGS_PX)).flex().items_center().justify_center().children(
+    let ring = empty_rings_px(height);
+    let k = ring / EMPTY_RINGS_PX;
+    // `flex_none`: a short panel must not squash the rings' box, or the
+    // glyph centres in the squashed box while the rings spill onto the title.
+    let rings = div().relative().flex_none().size(px(ring)).flex().items_center().justify_center().children(
         EMPTY_RING_D_PX.into_iter().zip(EMPTY_RING_ALPHA).map(move |(d, a)| {
-            let inset = (EMPTY_RINGS_PX - d) / 2.0;
+            let d = d * k;
+            let inset = (ring - d) / 2.0;
             div().absolute().left(px(inset)).top(px(inset)).size(px(d)).rounded_full().bg(accent.with_alpha(a).hsla())
         }),
     );
@@ -787,9 +805,9 @@ pub fn empty_state(icon_name: &'static str, title: impl Into<SharedString>, hint
         .items_center()
         .justify_center()
         .gap(px(EMPTY_GAP_PX))
-        .child(rings.child(icon(icon_name, EMPTY_ICON_PX, accent)))
-        .child(div().mt(px(EMPTY_TITLE_GAP_PX)).text_size(px(text::BODY)).font_weight(FontWeight::SEMIBOLD).child(title.into()))
-        .child(div().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(hint.into()))
+        .child(rings.child(icon(icon_name, (EMPTY_ICON_PX * k).max(EMPTY_ICON_MIN_PX), accent)))
+        .child(div().flex_none().mt(px(EMPTY_TITLE_GAP_PX)).text_size(px(text::BODY)).line_height(gpui::relative(EMPTY_TEXT_LEADING)).font_weight(FontWeight::SEMIBOLD).child(title.into()))
+        .child(div().flex_none().text_size(px(text::BODY_S)).line_height(gpui::relative(EMPTY_TEXT_LEADING)).text_color(palette.on_surface_variant.hsla()).child(hint.into()))
 }
 
 /// A thick slider ([`crate::slider`], the large size): a rounded pill
@@ -902,6 +920,22 @@ pub fn arabic_digits(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    /// The empty state fits the short spaces panels give it (#61): the
+    /// rings and the text together never overflow, and tall spaces keep the
+    /// full-size rings.
+    #[test]
+    fn empty_state_rings_fit_short_panels() {
+        let actual_lines: f32 = [text::BODY, text::BODY_S].into_iter().map(|size| f32::from(gpui::phi().to_pixels(px(size).into(), px(size)))).sum();
+        let text = EMPTY_GAP_PX * 2.0 + EMPTY_TITLE_GAP_PX + actual_lines;
+        assert_eq!(empty_rings_px(400.0), EMPTY_RINGS_PX);
+        for h in [96.0_f32, 110.0, 130.0] {
+            let ring = empty_rings_px(h);
+            assert!(ring + text <= h + 0.01 && ring <= EMPTY_RINGS_PX, "{h}: {ring}");
+        }
+        assert_eq!(empty_rings_px(10.0), EMPTY_RINGS_MIN_PX);
+    }
+
     use super::*;
 
     #[test]

@@ -8196,3 +8196,112 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "平面填充（默认）、带玻璃边缘的立体 3D 图块，或透明玻璃"
 "Tile shadow" = "磁贴阴影"
 "How strong the shadow under each shortcut tile is (0 for none)" = "每个快捷磁贴下方阴影的强度（0 为无阴影）"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} 由 Nix（Home Manager 或 NixOS）生成，是只读的：请把这一行加入它的 Nix 配置，重新构建，然后再次运行 `mandara setup`：{line}"
+"Opposite the sidebar" = "侧边栏的对侧"
+"Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't" = "电源栏在哪里打开：屏幕左右某一侧，或顶部、底部的中间，从那里的状态栏垂下（边框样式下与状态栏连成一体）；没有状态栏的边则从屏幕边缘打开"
+"The grid always opens in the middle" = "网格始终在中间打开"
+"The bar isn't at the top, so the dock hangs from the screen edge" = "状态栏不在顶部，因此电源栏从屏幕边缘垂下"
+"The bar isn't at the bottom, so the dock rises from the screen edge" = "状态栏不在底部，因此电源栏从屏幕边缘升起"
+"Joined to the bar, as one piece with it" = "与状态栏相连，连成一体"
+"A floating bar has no edge to join, so the dock opens as a card next to it" = "浮动状态栏没有可相连的边，因此电源栏以卡片形式在它旁边打开"
+
+"KWin settings are managed in Plasma System Settings" = "KWin 设置由 Plasma 系统设置管理"
+"Workspace not found" = "未找到工作区"
+"The window is no longer available" = "窗口已不可用"
+"The compositor did not respond in time" = "合成器未及时响应"
+"The compositor connection closed" = "合成器连接已关闭"
+"Idle notifications are not available" = "空闲通知不可用"
+"No input seat is available" = "没有可用的输入设备组"
+"These displays do not support power control" = "这些显示器不支持电源控制"
+"This executable path cannot be used in a desktop entry" = "此可执行文件路径无法用于桌面条目"
+"{path} is a custom autostart entry; Mandara left it unchanged" = "{path} 是自定义自动启动条目；Mandara 未对其进行更改"
+"Mandara uses native Plasma protocols; KWin’s configuration stays unchanged" = "Mandara 使用 Plasma 原生协议；KWin 配置保持不变"
+"KWin: startup entry {path}" = "KWin：启动条目 {path}"
+"The lock screen did not confirm that the session is locked" = "锁屏未确认会话已锁定"
+"Change resolution, scale and display arrangement in Plasma System Settings. Shell placement below still applies." = "请在 Plasma 系统设置中更改分辨率、缩放和显示器排列。下方的外壳放置设置仍然有效。"
+"KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings." = "KWin 没有独立的配置检查器。其设置由 Plasma 系统设置管理。"
+"River's init controls startup; add or remove Mandara there" = "River 的 init 控制自动启动；请在其中添加或移除 Mandara"
+"No supported compositor is installed ({compositors})." = "未安装支持的合成器（{compositors}）。"
+"Could not update PATH: {error}. Add {line} to your shell profile." = "无法更新 PATH：{error}。请将 {line} 添加到 shell 配置文件。"
+"Would remove {path}" = "将移除 {path}"
+"Kept custom startup entry {path}" = "已保留自定义启动条目 {path}"
+"Could not read {path}: {error}. Left it unchanged." = "无法读取 {path}：{error}。已保持原样。"
+
+"Your Wayland desktop. Let’s get it ready." = "你的 Wayland 桌面。让我们准备就绪。"
+"Checking the release signature…" = "正在检查发布版本签名…"
+"Downloading Mandara…" = "正在下载 Mandara…"
+"Verifying the download…" = "正在验证下载…"
+"Unpacking the installer…" = "正在解压安装程序…"
+"Ready. Opening Mandara’s installer…" = "准备就绪。正在打开 Mandara 安装程序…"
+"Install this tool and try again:" = "请安装此工具后重试："
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "预编译版本需要 Linux 系统和 x86_64 或 aarch64 处理器。"
+"The release mirror must use HTTPS." = "发布镜像必须使用 HTTPS。"
+"Could not create a temporary download folder." = "无法创建临时下载文件夹。"
+"Download failed. Check your connection and try again." = "下载失败。请检查网络连接后重试。"
+"The release signature could not be verified. Nothing was installed." = "无法验证发布版本签名。未安装任何内容。"
+"This command needs OpenSSL 3 or newer." = "此命令需要 OpenSSL 3 或更新版本。"
+"The signed release has no unique checksum for this archive." = "已签名的发布版本中没有此归档文件的唯一校验和。"
+"The download did not match the signed release. Nothing was installed; please try again." = "下载内容与已签名的发布版本不匹配。未安装任何内容；请重试。"
+"Could not unpack the verified release." = "无法解压已验证的发布版本。"
+"The release does not contain exactly one executable installer." = "发布版本中的可执行安装程序数量不是一个。"
+"Manual downloads:" = "手动下载："
+"On NixOS, install Mandara through your flake." = "在 NixOS 上，请通过你的 flake 安装 Mandara。"
+
+"Compositor (default: detected)" = "合成器（默认：自动检测）"
+
+"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "选择 mango, niri, hyprland, umbriel, sway, river 或 kwin（默认：自动检测）。缺少的合成器可在询问后安装。KWin 需要已安装的 Plasma 环境。"
+
+"Install libxkbcommon before checking or changing compositor shortcuts." = "检查或更改合成器快捷键之前，请先安装 libxkbcommon。"
+
+"Open Mandara Studio from your application menu." = "从应用程序菜单打开 Mandara Studio。"
+
+"Updates: Studio → About → Update now" = "更新： Studio → 关于 → 立即更新"
+
+"If you added Mandara to PATH, open a new terminal before running these commands." = "如果已将 Mandara 添加到 PATH，请先打开新终端，再运行这些命令。"
+
+"Cancelled — nothing was changed." = "已取消，未作任何更改。"
+
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "已保留当前登录界面；可随时在 Studio → 登录界面 → 登录管理器中切换。"
+
+"Setup" = "设置"
+
+"Start with your compositor" = "随合成器启动"
+
+"detect automatically" = "自动检测"
+
+"installed" = "已安装"
+
+"keep yours" = "保留当前设置"
+
+"no" = "否"
+
+"yes" = "是"
+
+"{compositor} (installed)" = "{compositor}（已安装）"
+
+"↑/↓ change · enter select · esc cancel" = "↑/↓ 更改 · Enter 选择 · Esc 取消"
+
+"Profile scope" = "配置范围"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "更改栏的样式、位置和高度。除非选择替换，否则会保留现有项目。"
+"Replace bar items" = "替换栏项目"
+"Leave empty to follow the desktop's icon theme" = "留空以使用桌面的图标主题"
+"Could not load {module}; check that the installed kernel includes it" = "无法加载 {module}；请检查已安装的内核是否包含该模块"
+
+"Bounce only while music plays" = "仅在播放音乐时弹跳"
+"Hide corners between displays" = "隐藏显示器之间的圆角"
+"Redraw interval p50" = "重绘间隔 p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "最近的视图构建：实心部分显示 CPU 构建时间；完整高度还包括同一表面上距上一次构建的时间间隔。"
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "此合成器不提供 wlr-screencopy，且无法使用 KWin 的 ScreenShot2"
+
+"Tab: results · ↑↓: select · Enter: use" = "Tab：结果 · ↑↓：选择 · Enter：使用"
+
+"Mandara is installed." = "Mandara 已安装。"
+
+"Start it:        mandara            (or log in again if autostart is on)" = "启动：           mandara            （如果已启用自动启动，也可以重新登录）"
+
+"Settings:        mandara studio" = "设置：           mandara studio"
+
+"Health & repair: mandara studio maintenance" = "检查与修复：     mandara studio maintenance"

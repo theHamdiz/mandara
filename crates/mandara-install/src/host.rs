@@ -2,10 +2,14 @@
 //! [`Host`]: running programs, asking questions, downloading and printing.
 //! [`SystemHost`] is the real system; tests use a recording fake.
 
+use std::fs::File;
 use std::io::{IsTerminal as _, Read as _, Write as _};
+use std::os::fd::{AsRawFd as _, RawFd};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
+
+use crate::tui::{self, Key};
 
 /// Folders searched for programs besides `$PATH` (sbin is often not on a
 /// user's `$PATH`).
@@ -20,6 +24,12 @@ const EXEC_BITS: u32 = 0o111;
 const CHOICE_ATTEMPTS: usize = 3;
 /// The terminal questions go to (also with stdin redirected).
 const TTY: &str = "/dev/tty";
+/// Width assumed when the terminal doesn't report one.
+const DEFAULT_COLUMNS: usize = 80;
+/// How long a lone escape waits for the rest of an arrow key.
+const ESCAPE_TIMEOUT_MS: libc::c_int = 40;
+const HIDE_CURSOR: &[u8] = b"\x1b[?25l";
+const SHOW_CURSOR: &[u8] = b"\x1b[?25h";
 
 /// How a command's output is handled.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -78,6 +88,19 @@ impl Cmd {
     }
 }
 
+/// One row of the arrow-key menu: what it is, and the value it holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Row {
+    pub label: String,
+    pub value: String,
+}
+
+impl Row {
+    pub fn new(label: impl Into<String>, value: impl Into<String>) -> Row {
+        Row { label: label.into(), value: value.into() }
+    }
+}
+
 /// What a finished command returned.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Output {
@@ -126,7 +149,9 @@ pub trait Host {
     fn run(&mut self, cmd: &Cmd) -> std::io::Result<Output>;
     /// Whether a program is installed.
     fn has_program(&self, name: &str) -> bool;
-    /// Asks a yes/no question on the terminal; without one, `default`.
+    /// Asks a yes/no question on the terminal: Enter, or no terminal at all,
+    /// gives `default`; the terminal ending before Enter (Ctrl-D, a read
+    /// error) gives `false`.
     fn ask(&mut self, question: &str, default: bool) -> bool;
     /// Asks for a number from 0 to `max` on the terminal (Enter picks
     /// `default`). `None` without a terminal or after unusable answers: a
@@ -134,6 +159,17 @@ pub trait Host {
     fn choose(&mut self, question: &str, max: usize, default: usize) -> Option<usize>;
     /// Whether someone can answer questions (a terminal is attached).
     fn interactive(&self) -> bool;
+    /// The terminal's width in columns (80 when it can't be read).
+    fn columns(&mut self) -> usize {
+        DEFAULT_COLUMNS
+    }
+    /// Draws `rows` as an arrow-key menu and returns the picked one, with
+    /// the cursor starting on `default`. `None` when the user cancels, and
+    /// `default` when there is no terminal (a piped run never blocks).
+    fn select(&mut self, prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
+        let _ = prompt;
+        Some(default.min(rows.len().saturating_sub(1)))
+    }
     /// Downloads `url`, at most `limit` bytes.
     fn fetch(&mut self, url: &str, limit: u64) -> Result<Vec<u8>, Fetch>;
     /// Prints one line of installer output.
@@ -205,15 +241,14 @@ impl Host for SystemHost {
 
     fn ask(&mut self, question: &str, default: bool) -> bool {
         let hint = if default { "[Y/n]" } else { "[y/N]" };
-        match ask_tty(&format!("{question} {hint}")).as_deref() {
-            None | Some("") => default,
-            Some(a) => matches!(a, "y" | "Y" | "yes" | "YES" | "Yes"),
-        }
+        yes_no(ask_tty(&format!("{question} {hint}")), default)
     }
 
     fn choose(&mut self, question: &str, max: usize, default: usize) -> Option<usize> {
         for _ in 0..CHOICE_ATTEMPTS {
-            let answer = ask_tty(&format!("{question} [{default}]"))?;
+            let Answer::Line(answer) = ask_tty(&format!("{question} [{default}]")) else {
+                return None;
+            };
             if answer.is_empty() {
                 return Some(default);
             }
@@ -228,6 +263,14 @@ impl Host for SystemHost {
 
     fn interactive(&self) -> bool {
         std::fs::OpenOptions::new().read(true).write(true).open(TTY).is_ok()
+    }
+
+    fn columns(&mut self) -> usize {
+        std::env::var("COLUMNS").ok().and_then(|c| c.trim().parse::<usize>().ok()).filter(|c| *c > 0).or_else(tty_columns).unwrap_or(DEFAULT_COLUMNS)
+    }
+
+    fn select(&mut self, prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
+        select_tty(prompt, rows, default)
     }
 
     fn fetch(&mut self, url: &str, limit: u64) -> Result<Vec<u8>, Fetch> {
@@ -273,22 +316,189 @@ impl Host for SystemHost {
     }
 }
 
+/// What came back from a question on the terminal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Answer {
+    /// No terminal to ask on (an unattended install).
+    Unattended,
+    /// The terminal ended (Ctrl-D) or failed before Enter.
+    Closed,
+    /// One trimmed line; empty when only Enter was pressed.
+    Line(String),
+}
+
+/// A yes/no answer: Enter, or no terminal at all, takes `default`; the
+/// terminal ending or failing mid-question is a "No", never a yes nobody
+/// typed.
+fn yes_no(answer: Answer, default: bool) -> bool {
+    match answer {
+        Answer::Unattended => default,
+        Answer::Closed => false,
+        Answer::Line(a) if a.is_empty() => default,
+        Answer::Line(a) => matches!(a.as_str(), "y" | "Y" | "yes" | "YES" | "Yes"),
+    }
+}
+
 /// Prints `prompt` on the terminal itself (so it works with stdin
-/// redirected too) and reads one trimmed line. `None` without a terminal.
-fn ask_tty(prompt: &str) -> Option<String> {
-    let mut tty = std::fs::OpenOptions::new().read(true).write(true).open(TTY).ok()?;
-    write!(tty, "    {prompt} ").and_then(|_| tty.flush()).ok()?;
-    let mut answer = Vec::new();
-    let mut byte = [0u8; 1];
+/// redirected too) and reads one trimmed line.
+fn ask_tty(prompt: &str) -> Answer {
+    let Ok(tty) = std::fs::OpenOptions::new().read(true).write(true).open(TTY) else {
+        return Answer::Unattended;
+    };
+    read_answer(tty, prompt)
+}
+
+/// Reads one canonical terminal record. Ctrl-D releases a partial record
+/// without a newline; another read would wait and could accept it later.
+fn read_answer(mut tty: impl std::io::Read + std::io::Write, prompt: &str) -> Answer {
+    if write!(tty, "    {prompt} ").and_then(|_| tty.flush()).is_err() {
+        return Answer::Closed;
+    }
+    /// Linux canonical input holds at most 4096 bytes, including newline.
+    const CANONICAL_LINE_BYTES: usize = 4096;
+    let mut answer = [0u8; CANONICAL_LINE_BYTES];
     loop {
-        match tty.read(&mut byte) {
-            Ok(1) if byte[0] == b'\n' => break,
-            Ok(1) => answer.push(byte[0]),
-            // EOF or a read error before Enter: no answer, not an empty one.
-            _ => return None,
+        match tty.read(&mut answer) {
+            Ok(n) => return answer[..n].iter().position(|b| *b == b'\n').map_or(Answer::Closed, |end| Answer::Line(String::from_utf8_lossy(&answer[..end]).trim().to_string())),
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            _ => return Answer::Closed,
         }
     }
-    Some(String::from_utf8_lossy(&answer).trim().to_string())
+}
+
+/// The terminal's width, when it reports one.
+fn tty_columns() -> Option<usize> {
+    let tty = std::fs::OpenOptions::new().read(true).write(true).open(TTY).ok()?;
+    let mut size: libc::winsize = unsafe { std::mem::zeroed() };
+    (unsafe { libc::ioctl(tty.as_raw_fd(), libc::TIOCGWINSZ, &mut size) } == 0 && size.ws_col > 0).then_some(size.ws_col as usize)
+}
+
+/// Draws the menu on the terminal and returns the picked row. `None` when
+/// the user cancels or the terminal cannot be opened in raw mode.
+fn select_tty(prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
+    select_terminal(std::fs::OpenOptions::new().read(true).write(true).open(TTY), prompt, rows, default)
+}
+
+fn select_terminal(terminal: std::io::Result<File>, prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
+    if rows.is_empty() {
+        return None;
+    }
+    let mut tty = terminal.ok()?;
+    let _raw = RawMode::enable(&tty).ok()?;
+    let mut cursor = default.min(rows.len() - 1);
+    let mut drawn = 0;
+    let _ = tty.write_all(HIDE_CURSOR);
+    let choice = loop {
+        if !draw(&mut tty, &tui::menu_frame(prompt, rows, cursor), &mut drawn) {
+            break None;
+        }
+        match read_key(&mut tty) {
+            Key::Up => cursor = cursor.checked_sub(1).unwrap_or(rows.len() - 1),
+            Key::Down => cursor = (cursor + 1) % rows.len(),
+            Key::Enter => break Some(cursor),
+            Key::Cancel => break None,
+            Key::Other => {}
+        }
+    };
+    clear(&mut tty, drawn);
+    let _ = tty.write_all(SHOW_CURSOR);
+    let _ = tty.flush();
+    choice
+}
+
+/// Draws `frame` over the previous one, remembering how many lines it took.
+fn draw(tty: &mut File, frame: &str, drawn: &mut usize) -> bool {
+    let mut out = String::new();
+    if *drawn > 0 {
+        out.push_str(&format!("\x1b[{}A", *drawn));
+    }
+    for line in frame.lines() {
+        out.push_str("\r\x1b[K");
+        out.push_str(line);
+        out.push('\n');
+    }
+    *drawn = frame.lines().count();
+    tty.write_all(out.as_bytes()).and_then(|_| tty.flush()).is_ok()
+}
+
+/// Erases the menu, leaving the cursor where the menu started.
+fn clear(tty: &mut File, drawn: usize) {
+    if drawn == 0 {
+        return;
+    }
+    let mut out = format!("\x1b[{drawn}A");
+    for _ in 0..drawn {
+        out.push_str("\r\x1b[K\n");
+    }
+    out.push_str(&format!("\x1b[{drawn}A"));
+    let _ = tty.write_all(out.as_bytes());
+}
+
+/// One key, waiting for the rest of an escape sequence when it needs to.
+fn read_key(tty: &mut File) -> Key {
+    let mut pending = Vec::new();
+    loop {
+        if let Some((key, _)) = tui::decode(&pending) {
+            return key;
+        }
+        // Nothing yet (wait forever), or a lone escape: briefly wait for the
+        // rest of an arrow key before treating it as cancel.
+        let timeout = if pending.is_empty() { -1 } else { ESCAPE_TIMEOUT_MS };
+        // Leave the following key in the terminal queue for the next read.
+        let mut buf = [0u8; 1];
+        match read_some(tty, &mut buf, timeout) {
+            Some(0) | None => return Key::Cancel,
+            Some(n) => pending.extend_from_slice(&buf[..n]),
+        }
+    }
+}
+
+/// Reads what is available: `None` at end of input or on error, `Some(0)`
+/// when nothing arrived within `timeout_ms` (`-1` waits forever).
+fn read_some(tty: &mut File, buf: &mut [u8], timeout_ms: libc::c_int) -> Option<usize> {
+    let mut poll = libc::pollfd { fd: tty.as_raw_fd(), events: libc::POLLIN, revents: 0 };
+    match unsafe { libc::poll(&mut poll, 1, timeout_ms) } {
+        ready if ready < 0 => None,
+        0 => Some(0),
+        _ => match tty.read(buf) {
+            Ok(0) | Err(_) => None,
+            Ok(n) => Some(n),
+        },
+    }
+}
+
+/// The terminal without line buffering or echo, restored on drop (also when
+/// the menu returns early or the process unwinds).
+struct RawMode {
+    fd: RawFd,
+    saved: libc::termios,
+}
+
+impl RawMode {
+    fn enable(tty: &File) -> std::io::Result<RawMode> {
+        let fd = tty.as_raw_fd();
+        let mut saved: libc::termios = unsafe { std::mem::zeroed() };
+        if unsafe { libc::tcgetattr(fd, &mut saved) } != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let mut raw = saved;
+        // Ctrl-C/Z arrive as bytes instead of signals: the menu cancels and
+        // the terminal is restored on the way out (a signal would kill the
+        // process before `Drop` can put the terminal back).
+        raw.c_lflag &= !(libc::ICANON | libc::ECHO | libc::ISIG);
+        raw.c_cc[libc::VMIN] = 1;
+        raw.c_cc[libc::VTIME] = 0;
+        if unsafe { libc::tcsetattr(fd, libc::TCSANOW, &raw) } != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(RawMode { fd, saved })
+    }
+}
+
+impl Drop for RawMode {
+    fn drop(&mut self) {
+        unsafe { libc::tcsetattr(self.fd, libc::TCSANOW, &self.saved) };
+    }
 }
 
 /// A private temporary folder, removed on drop.
@@ -320,6 +530,56 @@ impl Drop for TempDir {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn menu_startup_failures_cancel_instead_of_installing() {
+        let rows = [Row::new("Install", "")];
+        let missing = Err(std::io::Error::from(std::io::ErrorKind::NotFound));
+        assert_eq!(select_terminal(missing, "Setup", &rows, 0), None);
+        let file = tempfile::tempfile().unwrap();
+        assert_eq!(select_terminal(Ok(file), "Setup", &rows, 0), None, "a regular file cannot enter terminal raw mode");
+    }
+
+    #[test]
+    fn reading_an_arrow_keeps_the_queued_enter_and_cancel() {
+        let mut file = tempfile::tempfile().unwrap();
+        file.write_all(b"\x1b[B\rq").unwrap();
+        std::io::Seek::rewind(&mut file).unwrap();
+        assert_eq!(read_key(&mut file), Key::Down);
+        assert_eq!(read_key(&mut file), Key::Enter);
+        assert_eq!(read_key(&mut file), Key::Cancel);
+    }
+
+    #[test]
+    fn terminal_menu_accepts_queued_keys_and_restores_terminal_settings() {
+        use std::os::fd::FromRawFd as _;
+        let (mut master, mut slave) = (-1, -1);
+        // SAFETY: openpty initializes distinct owned descriptors on success.
+        assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null(), std::ptr::null()) }, 0);
+        // SAFETY: each descriptor is transferred to one File.
+        let (mut master, slave) = unsafe { (File::from_raw_fd(master), File::from_raw_fd(slave)) };
+        let inspect = slave.try_clone().unwrap();
+        let settings = |file: &File| {
+            let mut state: libc::termios = unsafe { std::mem::zeroed() };
+            // SAFETY: the live terminal descriptor and output pointer are valid.
+            assert_eq!(unsafe { libc::tcgetattr(file.as_raw_fd(), &mut state) }, 0);
+            (state.c_lflag, state.c_cc)
+        };
+        let before = settings(&inspect);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            sender.send(select_terminal(Ok(slave), "Setup", &[Row::new("First", ""), Row::new("Install", "")], 0)).unwrap();
+        });
+        let mut cursor = [0; HIDE_CURSOR.len()];
+        master.read_exact(&mut cursor).unwrap();
+        assert_eq!(&cursor, HIDE_CURSOR);
+        master.write_all(b"\x1b[B\r").unwrap();
+        let choice = receiver.recv_timeout(Duration::from_secs(2));
+        if choice.is_err() { master.write_all(b"q").unwrap(); }
+        thread.join().unwrap();
+        assert_eq!(choice.unwrap(), Some(1));
+        assert_eq!(settings(&inspect), before);
+    }
 
     #[test]
     fn finds_programs_on_path_only_when_executable() {
@@ -363,5 +623,70 @@ mod tests {
         assert_eq!(std::fs::metadata(&p).unwrap().permissions().mode() & 0o777, 0o700);
         drop(t);
         assert!(!p.exists());
+    }
+
+    /// A terminal stand-in: reads `input`, swallows what's written.
+    struct Tty(std::io::Cursor<Vec<u8>>);
+
+    impl std::io::Read for Tty {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.0.read(buf)
+        }
+    }
+
+    impl std::io::Write for Tty {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn answer(input: &str) -> Answer {
+        read_answer(Tty(std::io::Cursor::new(input.as_bytes().to_vec())), "Go?")
+    }
+
+    #[test]
+    fn enter_takes_the_default_and_a_closed_terminal_says_no() {
+        assert_eq!(answer("\n"), Answer::Line(String::new()));
+        assert!(yes_no(answer("\n"), true));
+        assert!(!yes_no(answer("\n"), false));
+        assert!(yes_no(answer(" y \n"), false));
+        assert!(!yes_no(answer("nope\n"), true));
+        // Ctrl-D (EOF) before Enter, even after some typing: no answer, so No.
+        assert_eq!(answer(""), Answer::Closed);
+        assert_eq!(answer("y"), Answer::Closed);
+        assert!(!yes_no(answer(""), true));
+        // No terminal at all: an unattended install takes the default.
+        assert!(yes_no(Answer::Unattended, true));
+        assert!(!yes_no(Answer::Unattended, false));
+    }
+
+    #[test]
+    fn canonical_terminal_ctrl_d_after_y_does_not_wait_for_enter() {
+        use std::os::fd::FromRawFd as _;
+        let (mut master, mut slave) = (-1, -1);
+        // SAFETY: openpty initializes both descriptors on success; default
+        // attributes give the slave canonical terminal input.
+        assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null(), std::ptr::null()) }, 0);
+        // SAFETY: these are distinct descriptors returned by openpty, each
+        // transferred to one File and closed by it.
+        let (mut master, slave) = unsafe { (std::fs::File::from_raw_fd(master), std::fs::File::from_raw_fd(slave)) };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let reader = std::thread::spawn(move || tx.send(read_answer(slave, "Go?")).unwrap());
+        let mut prompt = [0; 8];
+        master.read_exact(&mut prompt).unwrap();
+        assert_eq!(&prompt, b"    Go? ");
+        master.write_all(b"y\x04").unwrap();
+        let answer = rx.recv_timeout(Duration::from_secs(2));
+        // Unblock a regressed reader before asserting, so the test cannot
+        // leave a waiting thread behind.
+        if answer.is_err() {
+            master.write_all(b"\n").unwrap();
+        }
+        reader.join().unwrap();
+        assert_eq!(answer.unwrap(), Answer::Closed);
     }
 }

@@ -171,7 +171,7 @@ pub fn note(w: &NoteWidget, notes: &[NoteItem], l: &Lingo, k: f32, m: &mut dyn M
     let mut marks = Vec::new();
     if let Some(ink_sheet) = sheet {
         let shape = shape_of(if w.look.plate_shape == PlateShape::Rect { PlateShape::Rect } else { w.look.plate_shape }, &w.look, k);
-        marks.push(Mark::new(MarkKind::Shaped { x: 0.0, y: 0.0, w: width, h: height, shape, width: 0.0 }, ink_sheet));
+        marks.push(Mark::new(MarkKind::Plate { x: 0.0, y: 0.0, w: width, h: height, radius: w.look.plate_radius() * k, rim: 0.0, shape }, ink_sheet));
     } else {
         marks.push(Mark::new(MarkKind::Rect { x: 0.0, y: 0.0, w: width, h: height, radius: 0.0, width: 0.0 }, InkRole::Fg).dim(0.0));
     }

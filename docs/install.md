@@ -1,19 +1,44 @@
 # Install
 
-One command, from any shell (bash, zsh or fish). It downloads the release
-for your CPU, unpacks it in a temporary folder and runs the installer,
-which is the Mandara binary itself:
+One command, from any shell (bash, zsh or fish):
 
 ```bash
-sh -c 'cd "$(mktemp -d)" && curl -fsSL "https://github.com/theHamdiz/mandara/releases/latest/download/mandara-$(uname -m)-linux-gnu.tar.gz" | tar xz && exec ./mandara-*/bin/mandara install'
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
 ```
 
-Nothing is piped into a shell interpreter: `curl` feeds `tar`, and the only
-program that runs is the release binary, which checks its own SHA-256
-before it installs anything. Add installer options at the end (for example
-`… mandara install --dry-run` to see the plan first).
+The small [download script](../install.sh) shows Mandara's phoenix and the
+download progress, chooses the build for your CPU and GNU or musl system,
+then checks the release's Ed25519 signature and the archive's SHA-256
+**before extracting or running it**. It uses `curl`, `tar`, OpenSSL 3 or
+newer, `sha256sum` and the usual POSIX tools; it tells you when one is
+missing. Downloads retry on temporary connection errors and stop if the
+connection stalls. The command runs the script only after the download
+succeeds. It removes temporary files on completion, failure or interruption.
 
-Or step by step:
+The verified installer normally runs from your cache, and falls back to
+`/tmp` if the cache is unavailable. Setting `TMPDIR` overrides both: choose
+a writable folder on a filesystem that allows programs to run. A `noexec`
+mount on that folder prevents the extracted installer from starting.
+
+Its messages follow your terminal language, with the same fifteen languages
+as Mandara.
+
+Installation, configuration and administrator prompts stay in the Rust
+`mandara install` command. Forward its options with `"$@"`:
+
+```bash
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --dry-run
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --compositor kwin --no-greeter
+```
+
+Options are forwarded unchanged, including paths with spaces. Temporary
+downloads stay private; the Rust installer receives your original file-permission
+mask. The bootstrap
+does not request administrator access or edit configuration itself. To read
+it before running it, download `install.sh` to a file and run `sh install.sh`
+with the same options.
+
+You can also download a tarball by hand:
 
 ```bash
 curl -LO https://github.com/theHamdiz/mandara/releases/latest/download/mandara-x86_64-linux-gnu.tar.gz
@@ -29,6 +54,10 @@ builds for Alpine, Void musl and Chimera. `SHA256SUMS` sits next to them
 (`sha256sum -c SHA256SUMS --ignore-missing` checks a download by hand),
 signed by Mandara's release key in `SHA256SUMS.sig`: `mandara install` and
 every update check that signature and refuse a release without it.
+
+Adding Mandara to PATH updates your shell profiles. The terminal that ran
+the installer keeps its old PATH: open a new terminal before running
+`mandara` commands, or open Mandara Studio from your application menu.
 
 `mandara install` copies itself to `~/.local/bin`, after **checking its own
 SHA-256** against the release's published checksums (and offers to put that
@@ -66,14 +95,23 @@ one (see [No compositor yet](#no-compositor-yet)).
 | `--version X.Y.Z` | Download and install that release instead of this binary |
 | `--from-source` | Build from source (installs Rust and build tools) |
 | `--prefix DIR` | Install into `DIR/bin` (default `~/.local`) |
-| `--no-deps` | Skip system packages |
+| `--no-deps` | Skip system packages; shortcut checks still need libxkbcommon |
 | `--no-autostart` | Don't start Mandara with the compositor |
 | `--no-greeter` | Keep your login screen |
-| `--compositor mango\|niri\|hyprland\|umbriel` | Pick the compositor to integrate with; when it isn't installed, install it from your distribution's repositories first (asked; `--yes` installs it) |
+| `--compositor mango\|niri\|hyprland\|umbriel\|sway\|river\|kwin` | Pick the compositor to integrate with. Missing compositors can be installed from your distribution's repositories after asking (`--yes` accepts); KWin requires an existing Plasma installation. |
 | `--repo OWNER/NAME` | Releases and sources from another repository |
 | `--dry-run` | Show everything that would happen, change nothing |
 | `--yes` | Don't ask; take every default |
 | `--no-verify` | Install even if this binary doesn't match its published checksum |
+
+With a terminal, `mandara install` opens on its own screen: the MANDARA
+wordmark and an arrow-key menu that picks the compositor to integrate with
+(the cursor suggests one you already have; the row stays on *detect
+automatically* until you choose) and switches autostart and the login screen
+on or off before anything is installed. Every choice there is also a
+flag: one you pass is left out of the menu, and `--yes`, `--dry-run` or a
+run without a terminal skips the screen and prints the one-line plan
+instead. Esc, `q` or Ctrl-C leaves it without changing anything.
 
 `mandara uninstall` removes the binary and desktop entry and empties the
 compositor drop-ins; your settings are kept.
@@ -94,14 +132,19 @@ languages you use.
 
 ## No compositor yet
 
-When none of MangoWM, Niri, Hyprland, Sway, River Classic or Umbriel is
+The setup screen's *Compositor* row covers this in a terminal: leave it on
+*detect automatically* and, when nothing is installed, the installer falls
+back to this numbered list. It still needs an interactive terminal for your
+answer, but it does not need arrow keys or the setup screen.
+
+When none of MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel or KWin is
 installed, the installer
 lists the ones your distribution's own repositories carry and asks which
 to install, with the first one as the recommended default:
 
 ```text
 ==> Installing a compositor
-    No compositor Mandara runs on is installed (MangoWM, Niri, Hyprland, Sway, River Classic or Umbriel).
+    No supported compositor is installed (MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin).
       1) MangoWM (recommended) · mangowm
       2) Niri · niri
       3) Hyprland · hyprland
@@ -351,14 +394,19 @@ nothing in the read-only config; it prints the line to add instead.
 
 ## Compositors
 
-Mandara supports **MangoWM, Niri, Hyprland, Umbriel, Sway and River Classic** (River 0.3, `river-classic`; see below).
+Mandara supports **MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic and KWin** (River 0.3, `river-classic`; see below).
 `mandara setup` (run by the installer) hooks Mandara into your compositor
 with **one include line** in your own config, writes everything else to
 `~/.config/mandara/generated/`, starts Mandara at login with an absolute
 path, and checks the result with the compositor's own validator
 (`mango -p`, `niri validate`, `Hyprland --verify-config`,
 `umbriel config validate`, `sway --validate`), rolling back if it objects
-(see [Config doctor](#config-doctor)).
+(see [Config doctor](#config-doctor)). **River and KWin do not use include lines.** River’s
+`init` is a program, not a config file, so there is no include line and
+no checker. Mandara never edits `init`; it sends River's settings over
+`river-control` while it runs, and you add the one autostart line
+yourself (the table below shows it). KWin uses the native Plasma protocols
+for workspaces and windows; its settings remain in Plasma System Settings.
 
 | | Include line in your config | Autostart |
 |---|---|---|
@@ -369,6 +417,11 @@ path, and checks the result with the compositor's own validator
 | **Umbriel** | `"…/mandara/generated/umbriel.toml"` in `[include.optional] files` of `~/.config/umbriel/config.toml` (added to your list if you have one) | `general.autostart` |
 | **Sway** | `include …/mandara/generated/sway.conf` at the end of `~/.config/sway/config` (or whichever file sway reads: `~/.sway/config`, `~/.i3/config`…) | `exec` |
 | **River** 0.3 | none: Mandara never edits `~/.config/river/init` | the one line you add to `init`: `riverctl spawn /path/to/mandara` |
+| **KWin / Plasma (Wayland)** | none: Mandara leaves `kwinrc` unchanged | its own `org.mandara.shell.desktop` XDG autostart entry, only for KDE |
+
+The setup picker offers KWin only when `kwin_wayland` is installed. A
+failed KWin availability check is reported directly; it does not offer to
+retire shortcuts or label the failure a compositor-configuration error.
 
 Mandara detects the installed version and speaks its dialect, including
 Hyprland 0.57's Lua dispatches. On Niri the drop-in makes workspace
@@ -433,6 +486,52 @@ locked while it runs. This is River's classic line, 0.3 (`river-classic` in
 Arch): River 0.4 moved window management into separate programs and dropped
 `river-control` and `river-status`, so on 0.4 and later Mandara can't
 drive it, and the Config doctor says so.
+
+### External monitor brightness
+
+The installer offers to enable external-monitor brightness through DDC/CI.
+Accepting loads `i2c-dev` when needed, records it for future boots, and
+adds your user to the device group if necessary. Log in again after a group
+change, and enable DDC/CI in your monitor's own menu. Existing access in the
+current boot does not skip the startup-module check. Studio → Displays →
+External brightness shows module and permission diagnostics.
+
+### Plasma / KWin
+
+Start Mandara inside a **Plasma Wayland** session. The installer recognizes
+an existing KWin installation; it does not install a complete Plasma desktop
+as a standalone window-manager choice. To enable startup explicitly:
+
+```bash
+mandara setup --compositor kwin --autostart
+```
+
+The native KWin driver follows virtual desktops, focused windows, window
+state and outputs through Plasma’s Wayland protocols. Workspace clicks,
+window moves, the dock and the switcher use those same protocols. Clipboard
+history uses ext-data-control, with the same privacy and size limits as on
+the other compositors. No KWin
+scripts or helper shell are installed. Mandara writes only its own XDG
+autostart entry; a custom entry with the same filename is left alone.
+Disable Mandara’s **Compositor → Integration → Start at login** setting to turn off that entry.
+
+Keep resolution, scaling, arrangement, input, window rules, effects and
+shortcuts in **Plasma System Settings**. Studio explains these limits; its
+**Displays → Shell on each display** controls still select where Mandara’s
+bar, dock and other surfaces appear. The Config doctor can report KWin’s
+availability, but KWin has no standalone configuration checker. Screenshots
+use KWin's native ScreenShot2 service; keep its screenshot effect available.
+A failed
+availability probe makes `mandara setup --check --compositor kwin` exit with
+status 13, just as a missing KWin executable does.
+
+Lock requests use **Plasma’s secure lock screen**, including confirmation
+before sleep, because KWin does not expose the lock-surface protocol used
+by Mandara’s own locker. The Mandara lock preview remains available. Choose
+lock-screen fonts and the unlock grace period in Plasma System Settings;
+Studio marks Mandara’s own locker controls unavailable on KWin. Plasma’s
+own controls also choose which panels and desktop components to keep;
+Mandara does not remove or disable them automatically.
 
 ## Coming from another setup
 
@@ -518,10 +617,16 @@ Studio → Compositor → Config doctor; turn that off with *Tell me about confi
 problems* on the same page.
 
 ```bash
-mandara setup --check                  # report only (exit 10 conflicts, 11 config errors)
+mandara setup --check                  # report only; exit statuses are listed below
 mandara setup --fix 1a2b3c4d=comment   # fix by id from the report: comment, remove or regenerate
 mandara msg --json compositor check    # the same report from the running shell, for agents
 ```
+
+`mandara setup --check` leaves compositor files unchanged. It exits with 10
+for shortcut conflicts, 11 for compositor configuration errors, 12 when a
+required keyboard library is unavailable, or 13 for failed KWin availability
+checks. The installer offers conflict retirement only after status 10.
+
 
 MangoWM, Niri, Umbriel and Sway output is read as those checkers print it
 (tested against MangoWM 0.18.4, Niri 26.04, Umbriel 0.1.0 and Sway 1.12).
@@ -573,7 +678,7 @@ From a clone, `cargo xtask build && target/release/mandara install`
 installs that checkout (or `mandara install --from-source` builds it).
 
 **Requirements:** Linux with a Wayland compositor (MangoWM, Niri,
-Hyprland, Sway, River Classic or Umbriel; the installer can install one), a Vulkan-capable
+Hyprland, Sway, River Classic, Umbriel or KWin; the installer can install one), a Vulkan-capable
 GPU, and PipeWire or PulseAudio for sound features.
 
 ## Versioning
@@ -583,3 +688,8 @@ content hash. Each push to `main` bumps exactly the components whose build
 changed: Conventional Commits pick patch, minor or major. When the shell's
 version changes, CI builds and publishes a release. `mandara --version` shows
 the exact build. Details are in [docs/releasing.md](releasing.md).
+
+`mandara setup --restore latest` restores the backup without regenerating
+the drop-in or requiring keyboard libraries. If you combine restoration
+with shortcut checks or changes, prerequisites are checked before any file
+is restored.

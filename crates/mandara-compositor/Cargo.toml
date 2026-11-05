@@ -13,6 +13,7 @@ async-channel.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 mandara-config.workspace = true
+mandara-i18n.workspace = true
 # poll(2): one thread multiplexes every Mango watch stream.
 rustix = { workspace = true, features = ["event"] }
 # River: its control and status protocols (generated from protocols/*.xml),
@@ -20,8 +21,9 @@ rustix = { workspace = true, features = ["event"] }
 wayland-client.workspace = true
 wayland-scanner.workspace = true
 wayland-backend.workspace = true
-wayland-protocols.workspace = true
+wayland-protocols = { workspace = true, features = ["staging"] }
 wayland-protocols-wlr.workspace = true
+wayland-protocols-plasma.workspace = true
 
 [lints]
 workspace = true

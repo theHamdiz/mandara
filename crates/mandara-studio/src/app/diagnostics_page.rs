@@ -200,7 +200,7 @@ impl StudioView {
                 let ms = |path: &str| f(v, path).map(|x| format!("{x:.2} ms")).unwrap_or_else(|| "—".into());
                 // 4 across, 2 × 2 when narrower, one column on the narrowest windows.
                 let stats = [
-                    stat(t("Frame rate").into(), f(v, "/fps").map(|x| format!("{x:.0} fps")).unwrap_or_else(|| "—".into()), tf("p95 interval {ms}", &[("ms", &ms("/interval_ms/p95"))])),
+                    stat(t("Redraw interval p50").into(), ms("/interval_ms/p50"), tf("p95 interval {ms}", &[("ms", &ms("/interval_ms/p95"))])),
                     stat(t("Build time p50").into(), ms("/build_ms/p50"), tf("p95 {p95} · p99 {p99}", &[("p95", &ms("/build_ms/p95")), ("p99", &ms("/build_ms/p99"))])),
                     stat(t("Slowest build").into(), ms("/build_ms/max"), tf("of the last {count} frames", &[("count", &list.len())])),
                     stat(t("Late frames").into(), v["janky"].as_u64().unwrap_or(0).to_string(), tf("{total} frames drawn since start", &[("total", &v["total_frames"].as_u64().unwrap_or(0))])),
@@ -214,10 +214,10 @@ impl StudioView {
                             .gap(px(SPACE_10_PX))
                             .child(div().flex_1().min_w(px(0.0)).child(heading(
                                 t("Frame timing"),
-                                t("Each bar is one shell frame: the solid part is the time spent building it, the full height the time until the next frame. Coral bars came late."),
+                                t("Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface."),
                                 p,
                             )))
-                            .child(if animating { badge(t("Animating"), p.success_emerald) } else { badge(t("Idle"), p.on_surface_variant) }),
+                            .child(if animating { badge(t("Active"), p.success_emerald) } else { badge(t("Idle"), p.on_surface_variant) }),
                     )
                     .child(graph)
                     .when(!animating && shown.is_empty(), |el| el.child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("No frames yet — the shell only draws while something changes. Open a panel to see it work.")))))

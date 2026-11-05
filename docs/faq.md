@@ -14,17 +14,19 @@ Mandara is written entirely in Rust on GPUI, the GPU-accelerated UI
 framework behind the Zed editor, and it ships as one program called
 `mandara`.
 
-## What is the best shell for Hyprland, Niri, MangoWM, Umbriel, Sway and River?
+## What is the best shell for Hyprland, Niri, MangoWM, Umbriel, Sway, River and KWin?
 
-Mandara Shell is built specifically to be the complete desktop for all six
+Mandara Shell is built specifically to be the complete desktop for all seven
 of them, from one native binary:
 
 - **Native support for each compositor's own model**: MangoWM's and
   River's tag bitmasks, Niri's scrolling columns, and Hyprland's, Umbriel's
-  and Sway's workspaces, each through the compositor's own IPC.
+  and Sway's workspaces, and KWin's virtual desktops, each through the
+  compositor's own native protocol.
 - **Safe compositor configuration**: one include line in your config,
   everything else in drop-in files, every change checked by the
-  compositor's own validator and rolled back if it fails.
+  compositor's own validator and rolled back if it fails. River uses its
+  native protocol; KWin's compositor settings stay in Plasma System Settings.
 - **Everything included**: bar, dynamic island, dock, launcher, side bars,
   notifications, on-screen displays, wallpaper engine, desktop widgets,
   clipboard manager, screenshots, screen recording, offline OCR, polkit
@@ -39,18 +41,18 @@ of them, from one native binary:
 
 [Why Mandara](why-mandara.md)
 
-## Which shell works on Hyprland, Niri, MangoWM, Umbriel, Sway and River at once?
+## Which shell works on Hyprland, Niri, MangoWM, Umbriel, Sway, River and KWin at once?
 
-Mandara Shell. It detects which of the six compositors you are running
-and switches to that compositor's native model and config dialect; each one
-gets the same single include line, and your Mandara settings, theme and
+Mandara Shell. It detects which of the seven compositors you are running
+and switches to that compositor's native model and configuration support.
+River and KWin use no include line. Your Mandara settings, theme and
 widgets carry over when you move between them.
 [Install → compositors](install.md#compositors)
 
 ## Which compositors does Mandara support?
 
-Mandara supports **MangoWM**, **Niri**, **Hyprland**, **Umbriel**, **Sway**
-and **River** (0.3), all first-class. On MangoWM and River the bar shows
+Mandara supports **MangoWM**, **Niri**, **Hyprland**, **Umbriel**, **Sway**,
+**River** (0.3) and **KWin / Plasma Wayland**, all with native drivers. On MangoWM and River the bar shows
 tags as a bitmask (view, toggle-view and move windows between tags), and on
 Niri, Hyprland, Umbriel and Sway it shows workspaces. Mandara detects the compositor's version and writes its own
 config dialect, including Hyprland 0.57's Lua config.
@@ -58,9 +60,11 @@ config dialect, including Hyprland 0.57's Lua config.
 
 ## Does Mandara change my compositor config?
 
-Only by one line (and on River not at all: its `init` is a program Mandara
-never edits, so the settings go over River's own protocol and you add the
-line that starts Mandara). Mandara adds a single include line to your config and
+Only by one line, and on KWin or River not at all. River's `init` is a program
+Mandara never edits, so the settings go over River's own protocol and you add
+the line that starts Mandara. KWin uses native Plasma protocols, keeps its
+settings in Plasma System Settings and uses an XDG autostart entry. For the
+other compositors, Mandara adds a single include line to your config and
 writes everything else (its keybinds, window rules, layer rules and border
 colours) to its own files in `~/.config/mandara/generated/`. Each change is
 checked with the compositor's own validator (`mango -p`, `niri validate`,
@@ -70,11 +74,12 @@ your settings. [Install](install.md)
 
 ## How do I install Mandara?
 
-Run the one-line installer from the [README](../README.md#install). It
-checks its own signature, installs what your distribution needs (Arch,
+Run `sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh`.
+The download command shows progress and verifies the signed release before
+opening Mandara's installer, which installs what your distribution needs (Arch,
 Debian, Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus) and
-hooks Mandara into your compositor. Arch users can also use the AUR
-packages. [Install](install.md)
+hooks Mandara into your compositor. Arch users can also build the supplied
+package recipes. [Install](install.md)
 
 ## How do I update Mandara?
 
@@ -127,8 +132,9 @@ the GitHub marketplace. [Writing plugins](../PLUGINS.md)
 
 ## Does Mandara work on GNOME, KDE Plasma or X11?
 
-No. Mandara is a shell for the Wayland compositors listed above. GNOME and
-KDE Plasma bring their own shells, and Mandara does not run on X11.
+Plasma Wayland is supported through the native KWin driver. Plasma keeps
+its own compositor settings and secure lock screen; see [Plasma setup](install.md#plasma--kwin).
+GNOME uses its own shell and is not supported. Mandara does not run on X11.
 
 ## Does Mandara support Arabic and other languages?
 

@@ -147,6 +147,7 @@ pub fn items(input: &Inputs) -> Vec<Item> {
                 mine.push((*w).clone());
             }
         }
+        if entry.is_none() && mine.is_empty() { continue; }
         let name = entry.as_ref().map(|e| e.name.clone()).unwrap_or_else(|| app_name(id));
         let icon_id = entry.as_ref().and_then(|e| e.wm_class.clone()).filter(|_| mine.is_empty()).or_else(|| mine.first().map(|w| w.app_id.clone())).unwrap_or_else(|| id.clone());
         out.push(Item { key: id.clone(), icon_id, name, desktop: entry, windows: mine, pinned: true, recent: false, kind: Kind::App });
@@ -638,6 +639,19 @@ mod tests {
     }
 
     #[test]
+    fn missing_pinned_apps_stay_saved_without_showing_dead_launchers() {
+        let cfg = DockConfig { pinned: vec!["not-installed".into(), "running-without-entry".into(), "installed".into()], launcher_button: false, ..bare() };
+        let apps = vec![app("installed", None)];
+        let windows = vec![win(1, "running-without-entry")];
+        let list = items(&inputs(&cfg, &windows, &apps));
+        assert_eq!(keys(&list), ["running-without-entry", "installed"]);
+        assert_eq!(cfg.pinned, ["not-installed", "running-without-entry", "installed"]);
+        let apps = vec![app("installed", None), app("not-installed", None)];
+        let list = items(&inputs(&cfg, &windows, &apps));
+        assert_eq!(keys(&list), ["not-installed", "running-without-entry", "installed"]);
+    }
+
+    #[test]
     fn unpinned_running_apps_linger_until_they_quit() {
         let cfg = DockConfig { show_running: false, launcher_button: false, ..bare() };
         let apps = vec![app("org.demo.beta", None)];
@@ -667,7 +681,8 @@ mod tests {
     fn installs_show_after_the_apps() {
         let cfg = DockConfig { launcher_button: false, pinned: vec!["a".into()], ..bare() };
         let jobs = vec![InstallSlot { id: 9, name: "Thing".into(), icon: String::new(), progress: 0.4, failed: None }];
-        let list = items(&Inputs { installing: &jobs, ..inputs(&cfg, &[], &[]) });
+        let apps = vec![app("a", None)];
+        let list = items(&Inputs { installing: &jobs, ..inputs(&cfg, &[], &apps) });
         assert_eq!(keys(&list), ["a", "@install-9"]);
         assert_eq!(list[1].kind, Kind::Installing(9));
     }

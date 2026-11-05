@@ -522,7 +522,8 @@ What made the difference, each measured by switching it off alone:
   +16.2 MiB anonymous 40 s later; now +3.4–6.1 MiB (and +7.5–8.6 instead
   of +24–26 MiB while open). It also removes the 30 MiB huge-page arena seen in two of
   about ten settled runs. Panel frame times unchanged.
-* **RELR relocations** (`mandara-app/build.rs`, `-z pack-relative-relocs`):
+* **RELR relocations** (`mandara-app/build.rs`, `-z pack-relative-relocs`,
+  x86 GNU ld targets only):
   `.rela.dyn` 4.0 MiB → 6 KiB plus a 52 KiB `.relr.dyn`, read at every
   start. Needs glibc ≥ 2.36 at run time (release builds already need 2.39).
 * **No idle blocking-pool threads** (`mandara-services` `runtime.rs`):
@@ -776,9 +777,9 @@ so they were left.
 
 ## The installer and releases
 
-The installer is the binary itself (`crates/mandara-install`); there is no
-shell script. Users download a release tarball, extract it and run
-`bin/mandara install`:
+The Rust binary performs the installation (`crates/mandara-install`). A
+small POSIX bootstrap downloads and verifies the release before opening
+`bin/mandara install`; users can also extract a tarball and run it directly:
 
 1. It checks its own SHA-256 against the release's `update.json` (the
    binary hash of its target), else against a tarball sitting next to the
@@ -810,3 +811,14 @@ Every release also carries version-less copies of the tarballs
 (`mandara-<target>.tar.gz`), so
 `https://github.com/theHamdiz/mandara/releases/latest/download/mandara-x86_64-linux-gnu.tar.gz`
 always points at the newest build.
+
+The public download command is
+`sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh`.
+Pages serves the tracked POSIX bootstrap, which checks `SHA256SUMS.sig`
+against the same public keys as the binary, then checks the archive before
+extraction. Its loopback integration tests cover argument forwarding,
+installer exit codes, cleanup, invalid signatures, damaged archives and
+missing metadata. `cargo xtask bootstrap` refreshes its public keys and
+translated messages from the same sources as the application; `--check`
+and the tests reject a stale script. The actual installer and release tooling
+remain Rust.

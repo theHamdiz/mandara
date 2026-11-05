@@ -22,6 +22,38 @@ use super::plugin_pool::{Menu, MenuFor, zone_title};
 use super::{StudioView, plugin_icon, plugin_tile};
 use crate::tokens::*;
 
+/// A style-only apply keeps its identity even when several presets share
+/// a layout. Manual item, layout or position edits retire that selection.
+#[derive(Default)]
+pub(super) struct PresetSelection {
+    chosen: Option<ChosenPreset>,
+}
+
+struct ChosenPreset {
+    index: usize,
+    layout: BarLayout,
+    position: BarPosition,
+    items: [Vec<String>; 3],
+}
+
+impl PresetSelection {
+    fn remember(&mut self, index: usize, config: &ShellConfig) {
+        let bar = &config.bar;
+        self.chosen = Some(ChosenPreset { index, layout: bar.layout, position: bar.position, items: [bar.left.clone(), bar.center.clone(), bar.right.clone()] });
+    }
+
+    fn active(&mut self, config: &ShellConfig) -> Option<usize> {
+        let bar = &config.bar;
+        if let Some(chosen) = &self.chosen {
+            if chosen.layout == bar.layout && chosen.position == bar.position && chosen.items.iter().zip([&bar.left, &bar.center, &bar.right]).all(|(saved, current)| saved == current) {
+                return Some(chosen.index);
+            }
+            self.chosen = None;
+        }
+        PRESETS.iter().position(|preset| bar.layout == preset.layout && bar.position == preset.position && bar.center.iter().map(String::as_str).eq(preset.center.iter().copied()))
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Lane {
     Left,
@@ -97,6 +129,9 @@ pub(super) fn place(id: &str, from: Lane, to: Lane, index: Option<usize>, cx: &m
 /// at `index` (None = end), turning the plugin on (and bringing back a
 /// removed one). Dropping on the tray only takes it out.
 pub(crate) fn place_in(c: &mut ShellConfig, id: &str, from: Lane, to: Lane, index: Option<usize>) {
+    if matches!(to, Lane::Left | Lane::Center | Lane::Right | Lane::Side(..)) && !bar_capable(id) {
+        return;
+    }
     // Index in the target before removal (same-lane reorders shift).
     let mut index = index;
     if from == to
@@ -131,7 +166,13 @@ pub(crate) fn place_in(c: &mut ShellConfig, id: &str, from: Lane, to: Lane, inde
 /// Sidebar-capable built-ins (third-party plugins all can).
 pub(super) const SIDEBAR_CAPABLE: &[&str] = mandara_ui::sidebar_tabs::SIDEBAR_WIDGETS;
 /// Built-ins without a bar item.
-pub(super) const NO_BAR: &[&str] = &["main-menu", "compositor"];
+const NO_BAR: &[&str] = &["main-menu", "compositor", "quick-settings", "wallhaven", "cursors", "dock", "app-installer"];
+
+/// Desktop-only families and service plugins have no bar view. A missing
+/// default zone alone does not imply that: optional bar items use it too.
+pub(super) fn bar_capable(id: &str) -> bool {
+    !NO_BAR.contains(&id) && !mandara_config::desktop_widgets::plugin_ids::ALL.contains(&id)
+}
 
 /// Minimum height of a zone (a sidebar tab's list is taller).
 const LANE_MIN_H_PX: f32 = 96.0;
@@ -161,6 +202,16 @@ struct Preset {
 }
 
 const PRESETS: &[Preset] = &[
+    Preset {
+        name: tk("System monitor"),
+        blurb: tk("CPU, memory, GPUs, temperatures, disks and uptime"),
+        layout: BarLayout::MinimalEdge,
+        position: BarPosition::Top,
+        height: 30.0,
+        left: &["launcher", "workspaces"],
+        center: &["mini-stats", "processes"],
+        right: &["resources", "net-speed", "drives", "clock", "audio", "session"],
+    },
     Preset {
         name: tk("Classic"),
         blurb: tk("Edge-to-edge frame, everything at hand"),
@@ -263,23 +314,30 @@ const PRESETS: &[Preset] = &[
     },
 ];
 
-fn apply_preset(p: &'static Preset, cx: &mut App) {
+fn apply_preset(p: &'static Preset, replace_items: bool, cx: &mut App) {
     let known: Vec<String> = cx.global::<PluginRegistry>().manifests().map(|m| m.id.clone()).collect();
+    update_config(cx, |c| apply_preset_in(c, p, replace_items, &known));
+}
+
+fn apply_preset_in(c: &mut ShellConfig, p: &Preset, replace_items: bool, known: &[String]) {
     let pick = |ids: &[&str]| ids.iter().filter(|i| known.iter().any(|k| k == *i)).map(|s| s.to_string()).collect::<Vec<_>>();
     let (left, center, right) = (pick(p.left), pick(p.center), pick(p.right));
-    update_config(cx, |c| {
-        c.bar.layout = p.layout;
-        c.bar.position = p.position;
-        c.bar.height = p.height;
-        c.bar.left = left;
-        c.bar.center = center;
-        c.bar.right = right;
-        // The notch look: grouped capsules and a soft shadow under it.
-        if p.layout == BarLayout::Notch {
-            c.bar.capsules = true;
-            c.bar.shadow = true;
+    c.bar.layout = p.layout;
+    c.bar.position = p.position;
+    c.bar.height = p.height;
+    if replace_items {
+        c.bar.left.clear();
+        c.bar.center.clear();
+        c.bar.right.clear();
+        for (ids, to) in [(left, Lane::Left), (center, Lane::Center), (right, Lane::Right)] {
+            for id in ids { place_in(c, &id, Lane::Tray, to, None); }
         }
-    });
+    }
+    // The notch look: grouped capsules and a soft shadow under it.
+    if p.layout == BarLayout::Notch {
+        c.bar.capsules = true;
+        c.bar.shadow = true;
+    }
 }
 
 impl StudioView {
@@ -421,11 +479,13 @@ impl StudioView {
         let sides = cfg.side_bars.enabled;
         let scale = window.scale_factor();
         let vertical = cfg.bar.position.is_vertical();
+        let replace_items = self.designer.replace_items;
+        let selected = self.designer.preset_selection.active(cfg);
 
         // Presets.
         let mut presets: Vec<AnyElement> = Vec::with_capacity(PRESETS.len());
         for (i, preset) in PRESETS.iter().enumerate() {
-            let active = cfg.bar.layout == preset.layout && cfg.bar.position == preset.position && cfg.bar.center.iter().map(String::as_str).eq(preset.center.iter().copied());
+            let active = selected == Some(i);
             // A tiny drawing of the preset's bar (physical sides: never mirrored).
             let pill = |w: f32| div().w(px(w)).h(px(DIM_8_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla());
             let mock = div()
@@ -464,7 +524,12 @@ impl StudioView {
                     .child(mock)
                     .child(div().font_weight(FontWeight::SEMIBOLD).text_size(px(TEXT_13_PX)).child(mandara_ui::bidi::paragraph(tr(preset.name))))
                     .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(preset.blurb))))
-                    .on_click(move |_, _, cx| apply_preset(preset, cx))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        apply_preset(preset, replace_items, cx);
+                        let config = mandara_ui::state::config(cx).read(cx).snapshot();
+                        this.designer.preset_selection.remember(i, &config);
+                        cx.notify();
+                    }))
                     .into_any_element(),
             );
         }
@@ -531,7 +596,11 @@ impl StudioView {
             .row()
             .flex_col()
             .gap(px(SPACE_12_PX))
-            .child(header(tk("Presets"), tk("One click sets the style, position, height and arrangement")))
+            .child(header(tk("Presets"), tk("Changes the bar's style, position and height. Your items stay unless you choose to replace them.")))
+            .child(super::compositor_page::chip("bar-preset-replace-items", t("Replace bar items"), replace_items, p).on_click(cx.listener(|this, _, _, cx| {
+                this.designer.replace_items = !this.designer.replace_items;
+                cx.notify();
+            })))
             .child(presets)
             .child(header(tk("Layout designer"), tk("Drag items to reorder them or move them between zones; click one for more")))
             .child(bar)
@@ -544,6 +613,45 @@ impl StudioView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn style_only_preset_selection_survives_custom_items_but_not_manual_edits() {
+        let index = PRESETS.iter().position(|p| p.name == "System monitor").unwrap();
+        let mut config = ShellConfig::default();
+        config.bar.center = vec!["media".into()];
+        apply_preset_in(&mut config, &PRESETS[index], false, &[]);
+        let mut selection = PresetSelection::default();
+        selection.remember(index, &config);
+        assert_eq!(selection.active(&config), Some(index));
+        config.bar.height += 1.0;
+        assert_eq!(selection.active(&config), Some(index));
+        for lane in [Lane::Left, Lane::Center, Lane::Right] {
+            let mut edited = config.clone();
+            lane.list(&mut edited).unwrap().push("weather".into());
+            selection.remember(index, &config);
+            selection.active(&edited);
+            assert!(selection.chosen.is_none());
+        }
+        for (layout, position) in [(BarLayout::Hairline, config.bar.position), (config.bar.layout, BarPosition::Bottom)] {
+            let mut edited = config.clone();
+            edited.bar.layout = layout;
+            edited.bar.position = position;
+            selection.remember(index, &config);
+            selection.active(&edited);
+            assert!(selection.chosen.is_none());
+        }
+    }
+
+    #[test]
+    fn an_existing_exact_preset_remains_recognizable_without_a_click() {
+        let mut config = ShellConfig::default();
+        let preset = &PRESETS[0];
+        config.bar.layout = preset.layout;
+        config.bar.position = preset.position;
+        config.bar.center = preset.center.iter().map(|id| (*id).into()).collect();
+        let mut selection = PresetSelection::default();
+        assert_eq!(selection.active(&config), Some(0));
+    }
 
     #[test]
     fn presets_reference_real_plugins_and_layouts() {
@@ -595,5 +703,38 @@ mod tests {
         assert!(!c.plugins.disabled.iter().any(|x| x == "weather"));
         assert!(!c.plugins.is_removed("weather"));
         assert!(c.plugins.enabled.iter().any(|x| x == "weather"));
+    }
+
+    #[test]
+    fn a_style_preset_keeps_existing_items_and_desktop_widgets() {
+        let mut c = bar();
+        c.desktop.widgets.items.push(mandara_config::desktop_widgets::DesktopWidget::default());
+        let before = c.clone();
+        let notch = PRESETS.iter().find(|p| p.layout == BarLayout::Notch).unwrap();
+        let known = ["clock".to_string(), "launcher".to_string()];
+        apply_preset_in(&mut c, notch, false, &known);
+        assert_eq!(c.bar.layout, BarLayout::Notch);
+        assert_eq!((&c.bar.left, &c.bar.center, &c.bar.right), (&before.bar.left, &before.bar.center, &before.bar.right));
+        assert_eq!(c.desktop, before.desktop);
+        assert_eq!(c.plugins, before.plugins);
+        apply_preset_in(&mut c, notch, true, &known);
+        assert_ne!(c.bar.left, before.bar.left);
+        assert_eq!(c.desktop, before.desktop);
+        assert!(c.plugins.enabled.iter().any(|id| id == "launcher"));
+    }
+
+    #[test]
+    fn desktop_only_widgets_cannot_be_added_to_a_bar() {
+        for id in mandara_config::desktop_widgets::plugin_ids::ALL.into_iter().chain(NO_BAR.iter().copied()) {
+            let mut c = bar();
+            let before = c.clone();
+            place_in(&mut c, id, Lane::Tray, Lane::Center, None);
+            assert_eq!(c, before, "{id}");
+            place_in(&mut c, id, Lane::Tray, Lane::Side(false, SideZone::Middle), None);
+            assert_eq!(c, before, "{id}");
+        }
+        assert!(bar_capable("power"));
+        assert!(bar_capable("processes"));
+        assert!(bar_capable("third-party-example"));
     }
 }

@@ -20,6 +20,10 @@ pub const EXIT_CONFLICTS: i32 = 10;
 /// `mandara setup --check` exit code when the compositor reports errors in
 /// the config (and there are no conflicts).
 pub const EXIT_CONFIG_ERRORS: i32 = 11;
+/// A required library is unavailable; no configuration was inspected or changed.
+pub const EXIT_PREREQUISITE: i32 = 12;
+/// The requested compositor could not pass its availability check.
+pub const EXIT_AVAILABILITY: i32 = 13;
 
 pub struct Options {
     pub autostart: bool,
@@ -36,7 +40,29 @@ fn which_sway() -> bool {
     std::env::var_os("PATH").is_some_and(|paths| std::env::split_paths(&paths).any(|d| d.join("sway").is_file()))
 }
 
+fn setup_targets(compositor: Option<&str>) -> Result<Vec<Target>> {
+    let targets = match compositor {
+        Some(name) => vec![Target::parse(name).ok_or_else(|| anyhow::anyhow!("unknown compositor {name:?} ({})", Target::ALL.map(Target::id).join(", ")))?],
+        None => match mandara_compositor::detect() {
+            Some(kind) => vec![kind.target()],
+            // Sway runs its system-wide config until the user has one.
+            None => Target::ALL.into_iter().filter(|t| t.user_config().exists() || (*t == Target::Sway && std::path::Path::new(mandara_config::compositor::SWAY_SYSTEM_CONFIG).exists() && which_sway())).collect(),
+        },
+    };
+    Ok(targets)
+}
+
 pub fn setup(o: Options) -> Result<()> {
+    let restore_only = o.restore.is_some() && !o.autostart && !o.check && !o.fix_conflicts && o.fix.is_empty();
+    let mut targets = setup_targets(o.compositor.as_deref())?;
+    // Without an explicit or running compositor, a restored file can create
+    // another target. Check prerequisites before a combined restore/check.
+    let uncertain_restore = o.restore.is_some() && o.compositor.is_none() && mandara_compositor::detect().is_none();
+    if !restore_only && (uncertain_restore || targets.iter().any(|target| *target != Target::KWin)) && !mandara_config::mango_keys::is_available() {
+        eprintln!("{}", mandara_i18n::t("Install libxkbcommon before checking or changing compositor shortcuts."));
+        std::process::exit(EXIT_PREREQUISITE);
+    }
+
     if let Some(which) = &o.restore {
         let backup = if which == "latest" { conflicts::backups().into_iter().next().ok_or_else(|| anyhow::anyhow!("no retire backups in {}", conflicts::backups_root().display()))? } else { PathBuf::from(which) };
         // Doctor backups and retire backups share the manifest format; a
@@ -46,14 +72,13 @@ pub fn setup(o: Options) -> Result<()> {
             println!("restored {}", f.display());
         }
     }
-    let targets: Vec<Target> = match o.compositor.as_deref() {
-        Some(name) => vec![Target::parse(name).ok_or_else(|| anyhow::anyhow!("unknown compositor {name:?} ({})", Target::ALL.map(Target::id).join(", ")))?],
-        None => match mandara_compositor::detect() {
-            Some(kind) => vec![kind.target()],
-            // Sway runs its system-wide config until the user has one.
-            None => Target::ALL.into_iter().filter(|t| t.user_config().exists() || (*t == Target::Sway && std::path::Path::new(mandara_config::compositor::SWAY_SYSTEM_CONFIG).exists() && which_sway())).collect(),
-        },
-    };
+    if restore_only {
+        if std::env::var_os("MANDARA_NO_IPC").is_none() {
+            let _ = ipc::send(&paths::ipc_socket(), &["compositor".to_string(), "reload".to_string()]);
+        }
+        return Ok(());
+    }
+    if o.restore.is_some() { targets = setup_targets(o.compositor.as_deref())?; }
     if targets.is_empty() {
         println!("No {} config found — start your compositor once, then run `mandara setup` again.", Target::ALL.map(Target::name).join(", "));
         return Ok(());
@@ -66,9 +91,21 @@ pub fn setup(o: Options) -> Result<()> {
     let mut cfg = store.snapshot();
     let mut total_conflicts = 0;
     let mut config_errors = 0;
+    let mut unavailable = false;
     // `--fix` ids that matched a problem of some compositor.
     let mut fixed_ids: Vec<String> = Vec::new();
     for target in targets {
+        if target == Target::KWin {
+            if o.check {
+                println!("{}", mandara_i18n::t("Mandara uses native Plasma protocols; KWin’s configuration stays unchanged"));
+                let report = doctor::check(target);
+                print_report(&report);
+                unavailable |= report.errors() > 0 || report.status != CheckerStatus::Ran;
+            } else if let Some(path) = mandara_config::kwin::sync_autostart(cfg.compositor.autostart, &mandara_config::paths::self_exe())? {
+                println!("{}", mandara_i18n::tf("KWin: startup entry {path}", &[("path", &path.display())]));
+            }
+            continue;
+        }
         // Sway without a config of its own runs the system one: the user's
         // starts as a copy of it (sway's documented first step), so the
         // include line has somewhere to go and sway's defaults stay.
@@ -233,6 +270,7 @@ pub fn setup(o: Options) -> Result<()> {
             println!("no problem {id} in the current check — run `mandara setup --check` for the current ids");
         }
     }
+    if o.check && unavailable { std::process::exit(EXIT_AVAILABILITY); }
     if o.check && total_conflicts > 0 {
         std::process::exit(EXIT_CONFLICTS);
     }

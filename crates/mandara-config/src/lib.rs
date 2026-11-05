@@ -4,6 +4,7 @@
 pub mod admin;
 pub mod alerts;
 pub mod apps;
+pub mod kwin;
 pub mod compositor;
 pub mod connectivity;
 pub mod conflicts;

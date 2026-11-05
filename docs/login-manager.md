@@ -62,8 +62,8 @@ sudo mandara greeter restore latest      # undo the last switch (--apply: units 
 
 Choices: **Mandara Login** (`mandara`, the default and recommended one) and
 the greetd greeters `tuigreet`, `regreet`, `gtkgreet`, `nwg-hello`,
-`qtgreet` and `agreety`, or the display managers `sddm`, `gdm`, `lightdm`,
-`ly` and `lxdm`.
+`qtgreet` and `agreety`, or the display managers `sddm`, `plasmalogin`
+(Plasma Login Manager), `gdm`, `lightdm`, `ly` and `lxdm`.
 
 Detection reads `display-manager.service` under `/etc/systemd/system` (which
 display manager is enabled) and, for greetd, the `[default_session] command`
@@ -149,7 +149,7 @@ never runs on its own):
    user = "greeter"
    ```
 6. detects the enabled display manager (`display-manager.service` → sddm,
-   gdm, lightdm, ly, …) and prints the switch commands; with `--apply` it
+   plasmalogin, gdm, lightdm, ly, …) and prints the switch commands; with `--apply` it
    runs them:
 
    ```sh

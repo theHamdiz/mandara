@@ -63,6 +63,7 @@ impl NiriWindow {
             focused: self.is_focused,
             floating: self.is_floating,
             fullscreen: false,
+            minimized: false,
             geometry: None,
         }
     }

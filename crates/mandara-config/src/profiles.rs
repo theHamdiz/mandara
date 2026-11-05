@@ -23,6 +23,8 @@ use crate::ShellConfig;
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProfileScope {
+    /// The bar and its side bars, without the theme or desktop widgets.
+    Bar,
     /// Appearance only.
     #[default]
     Look,
@@ -36,6 +38,7 @@ pub const LOOK_PATHS: &[&str] = &["theme", "appearance", "bar", "motion", "typog
 impl ProfileScope {
     pub fn paths(self) -> Vec<String> {
         match self {
+            ProfileScope::Bar => ["bar", "side_bars"].map(str::to_string).to_vec(),
             ProfileScope::Look => LOOK_PATHS.iter().map(|p| p.to_string()).collect(),
             ProfileScope::Full => Vec::new(),
         }
@@ -457,6 +460,28 @@ mod tests {
         assert_eq!(list_in(dir.path()).len(), 1);
         delete_in(dir.path(), "night-mode").unwrap();
         assert!(list_in(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn bar_profile_round_trips_without_changing_theme_widgets_or_plugin_choices() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut original = tweaked();
+        original.bar.left = vec!["launcher".into(), "clock".into()];
+        original.side_bars.enabled = true;
+        let profile = snapshot(&original, "Desk bar", "", ProfileScope::Bar, "").unwrap();
+        save_in(dir.path(), &profile).unwrap();
+        let loaded = find_in(dir.path(), "Desk bar").unwrap();
+        assert_eq!(loaded.scope, ProfileScope::Bar);
+        assert_eq!(loaded.paths, ["bar", "side_bars"]);
+        let mut current = ShellConfig::default();
+        current.desktop.widgets.items.push(crate::desktop_widgets::DesktopWidget::default());
+        current.plugins.disabled.push("weather".into());
+        let applied = apply(&current, &loaded).unwrap();
+        assert_eq!(applied.bar, original.bar);
+        assert_eq!(applied.side_bars, original.side_bars);
+        assert_eq!(applied.desktop, current.desktop);
+        assert_eq!(applied.theme, current.theme);
+        assert_eq!(applied.plugins, current.plugins);
     }
 
     #[test]

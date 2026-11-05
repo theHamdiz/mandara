@@ -426,6 +426,8 @@ const ALERT_STYLES: &[(&str, &str)] = &[("both", tk("Notification + OSD")), ("no
 const CRITICAL_ACTIONS: &[(&str, &str)] = &[("nothing", tk("Nothing")), ("suspend", tk("Sleep")), ("hibernate", tk("Hibernate")), ("shutdown", tk("Shut down"))];
 const PROFILES: &[(&str, &str)] = &[("null", tk("Leave it")), ("power-saver", tk("Power saver")), ("balanced", tk("Balanced")), ("performance", tk("Performance"))];
 const MENU_STYLES: &[(&str, &str)] = &[("dock", tk("Edge dock")), ("grid", tk("Grid"))];
+/// Where the session menu's dock opens (`SessionMenuPosition` ids).
+pub(crate) const MENU_POSITIONS: &[(&str, &str)] = &[("side", tk("Opposite the sidebar")), ("left", tk("Left")), ("right", tk("Right")), ("top", tk("Top center")), ("bottom", tk("Bottom center"))];
 const POWER_PANEL_STYLES: &[(&str, &str)] = &[("classic", tk("Classic")), ("modern", tk("Modern"))];
 const MENU_DEFAULTS: &[(&str, &str)] = &[("lock", tk("Lock")), ("suspend", tk("Sleep")), ("logout", tk("Log out")), ("reboot", tk("Restart")), ("shutdown", tk("Shut down"))];
 const SCHOOLS: &[(&str, &str)] = &[("shafii", tk("Shafi'i")), ("hanafi", tk("Hanafi"))];
@@ -500,9 +502,12 @@ pub fn required_plugin(path: &str) -> Option<&'static str> {
 /// place of its control), e.g. the launcher's hover edge while the dock
 /// owns the bottom edge (`ShellConfig::launcher_hover_enabled`).
 pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
+    if let Some(reason) = system_settings::kwin_locked(setting.path, running_compositor()) { return Some(reason); }
     match setting.path {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
+        "/session_menu/position" if cfg.session_menu.style == mandara_config::power::SessionMenuStyle::Grid => Some(tk("The grid always opens in the middle")),
+        "/compositor/autostart" if running_compositor() == Some(mandara_config::compositor::Target::River) => Some(tk("River's init controls startup; add or remove Mandara there")),
         path if path.starts_with("/compositor/input/cursor/") => system_settings::cursor_locked(path, running_compositor()),
         path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Mandara can't set this on Sway")),
         path if running_compositor() == Some(mandara_config::compositor::Target::River) && RIVER_LACKS.contains(&path) => Some(tk("River has no such setting")),
@@ -542,10 +547,10 @@ pub fn locked_toggle_click(on: bool) -> Option<bool> {
 /// A choice the running compositor can't carry out, left out of its control
 /// (a value already saved still shows, so it can be changed; the shell
 /// does nothing for it): the Overview corner and bar action where the
-/// compositor has no overview (Sway, River).
+/// compositor exposes no supported overview action.
 pub fn choice_hidden(path: &str, raw: &str) -> bool {
     let corner_action = path == "/bar/middle_click/action" || (path.starts_with("/hot_corners/") && path.ends_with("/action"));
-    raw == "overview" && corner_action && matches!(running_compositor(), Some(mandara_config::compositor::Target::Sway | mandara_config::compositor::Target::River))
+    raw == "overview" && corner_action && matches!(running_compositor(), Some(mandara_config::compositor::Target::Sway | mandara_config::compositor::Target::River | mandara_config::compositor::Target::KWin))
 }
 
 /// The compositor Studio runs under, detected once (it can't change while
@@ -613,7 +618,7 @@ fn build() -> Vec<Setting> {
         s(Themes, tk("Tuning"), "/theme/adjustments/rim_intensity", tk("Specular rim"), tk("Strength of glass edge highlights"), slider(0.0, 2.0, 0.05, "×")),
         s(Themes, tk("Tuning"), "/theme/transition_ms", tk("Theme crossfade"), tk("Duration of the OKLCH palette transition"), slider(0.0, 1500.0, 25.0, " ms")),
         s(Themes, tk("Icons"), "/appearance/bar_icons", tk("Bar app icons"), tk("Monochrome symbolic icons tint with the theme"), Choice(ICON_STYLES)),
-        s(Themes, tk("Icons"), "/appearance/icon_theme", tk("Icon theme"), tk("Leave empty to follow GTK's icon theme"), OptionalText { placeholder: "Tela-circle-red-dark" }),
+        s(Themes, tk("Icons"), "/appearance/icon_theme", tk("Icon theme"), tk("Leave empty to follow the desktop's icon theme"), OptionalText { placeholder: "Tela-circle-red-dark" }),
         // No default: with a designed theme no scheme chip is lit, and
         // picking one switches to the wallpaper's colors.
         s(Themes, tk("Wallpaper colors"), "/theme/source/variant", tk("Wallpaper scheme"), tk("Material You variant used for wallpaper themes"), Choice(BOOL_SCHEMES)),
@@ -730,6 +735,7 @@ fn build() -> Vec<Setting> {
         s(Power, tk("Power profiles"), "/power/profile_battery", tk("On battery"), tk("Switch to this profile when running on battery"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/saver_at_low", tk("Power saver at low battery"), tk("Switch to power-saver at the low threshold and back when charging"), Toggle),
         s(Power, tk("Session menu"), "/session_menu/style", tk("Style"), tk("A dock on the screen edge or a centered grid"), Choice(MENU_STYLES)),
+        s(Power, tk("Session menu"), "/session_menu/position", tk("Position"), tk("Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't"), Choice(MENU_POSITIONS)),
         s(Power, tk("Session menu"), "/session_menu/grid_columns", tk("Grid columns"), tk("Tiles per row in the grid style"), slider(2.0, 6.0, 1.0, "")),
         s(Power, tk("Session menu"), "/session_menu/hold_to_confirm", tk("Hold to confirm"), tk("Log out, restart and shut down need a press-and-hold (mouse, Enter or a number key)"), Toggle),
         s(Power, tk("Session menu"), "/session_menu/hold_ms", tk("Hold time"), tk("How long to hold"), slider(300.0, 3000.0, 100.0, " ms")),
@@ -934,6 +940,7 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Presentation mode"), "/plugins/settings/presentation/auto_screen_share", tk("Start when sharing the screen"), tk("Turn on while an app shares your screen, and off again when sharing stops"), Toggle, Value::from(false)),
         // Compositor
         s(Compositor, tk("Integration"), "/compositor/manage", tk("Manage compositor drop-in"), tk("Write rules, binds and colors to ~/.config/mandara/generated"), Toggle),
+        s(Compositor, tk("Integration"), "/compositor/autostart", tk("Start at login"), "", Toggle),
         s(Compositor, tk("Integration"), "/integrations/compositor_borders", tk("Sync border colors"), tk("Window borders follow the theme"), Toggle),
         s(Compositor, tk("Integration"), "/compositor/doctor_notify", tk("Tell me about config problems"), tk("When your compositor config or the compositor changed, the Config doctor checks it once at start-up and sends one notification about new problems"), Toggle),
         s(Compositor, tk("Window look"), "/compositor/look/gaps_inner", tk("Gaps between windows"), tk("Unset keeps your compositor's value"), optional(0.0, 48.0, 1.0, " px", 10.0)),
@@ -997,6 +1004,35 @@ pub fn get(cfg: &ShellConfig, setting: &Setting) -> Value {
 pub fn non_default(cfg: &ShellConfig) -> Vec<&'static Setting> {
     let root = json_of(cfg);
     DEFAULTS.with(|defaults| settings().iter().filter(|s| resolve(&root, s) != resolve(defaults, s)).collect())
+}
+
+/// A layout reset leaves removed plugins absent until explicitly restored.
+pub(crate) fn layout_defaults(cfg: &ShellConfig) -> ShellConfig {
+    let mut defaults = ShellConfig::default();
+    for id in &cfg.plugins.removed { defaults.take_plugin_places(id); }
+    defaults
+}
+
+fn layout_default_tree(cfg: &ShellConfig) -> Rc<Value> {
+    if cfg.plugins.removed.is_empty() { return DEFAULTS.with(Rc::clone); }
+    thread_local! {
+        static FILTERED: std::cell::RefCell<Option<(Vec<String>, Rc<Value>)>> = const { std::cell::RefCell::new(None) };
+    }
+    FILTERED.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some((removed, tree)) = &*cache && *removed == cfg.plugins.removed { return tree.clone(); }
+        let tree = Rc::new(serde_json::to_value(layout_defaults(cfg)).unwrap_or(Value::Null));
+        *cache = Some((cfg.plugins.removed.clone(), tree.clone()));
+        tree
+    })
+}
+
+/// Custom page editors compare their lists with the same filtered defaults
+/// used by resets. The serialized defaults are cached until removals change.
+pub(crate) fn changed_paths(cfg: &ShellConfig, paths: &[&str]) -> usize {
+    let root = json_of(cfg);
+    let defaults = layout_default_tree(cfg);
+    paths.iter().filter(|path| root.pointer(path) != defaults.pointer(path)).count()
 }
 
 /// The settings whose values differ between two configs, in registry

@@ -119,16 +119,16 @@ How Mandara looks and feels, and how much of it you can shape.
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/look-corniche-dusk.webp" alt="Corniche Dusk over a rose sunset: glass pills, a headline clock, a system monitor and a now-playing card with lyrics" width="100%"/><br/><sub><b>Corniche Dusk</b></sub></td>
-<td width="50%" valign="top"><img src="screenshots/look-pharos-ink.webp" alt="Pharos Ink over ink contour lines: a hairline bar with mini stats, a greeting clock and a calendar card" width="100%"/><br/><sub><b>Pharos Ink</b></sub></td>
+<td width="50%" valign="top"><picture><source media="(prefers-color-scheme: light)" srcset="screenshots/look-corniche-dusk-light.webp"/><img src="screenshots/look-corniche-dusk.webp" alt="Corniche Dusk over a rose sunset: glass pills, a headline clock, a system monitor and a now-playing card with lyrics" width="100%"/></picture><br/><sub><b>Corniche Dusk</b></sub></td>
+<td width="50%" valign="top"><picture><source media="(prefers-color-scheme: light)" srcset="screenshots/look-pharos-ink-light.webp"/><img src="screenshots/look-pharos-ink.webp" alt="Pharos Ink over ink contour lines: a hairline bar with mini stats, a greeting clock and a calendar card" width="100%"/></picture><br/><sub><b>Pharos Ink</b></sub></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/look-montaza-crimson.webp" alt="Montaza Crimson over a red and amber glow: an island bar, an Arabic-numeral clock, vertical Arabic type and framed bars" width="100%"/><br/><sub><b>Montaza Crimson</b></sub></td>
-<td width="50%" valign="top"><img src="screenshots/look-qaitbay-forest.webp" alt="Qaitbay Forest over green hills under the moon: an edge bar, a giant stacked clock and the dock media chip" width="100%"/><br/><sub><b>Qaitbay Forest</b></sub></td>
+<td width="50%" valign="top"><picture><source media="(prefers-color-scheme: light)" srcset="screenshots/look-montaza-crimson-light.webp"/><img src="screenshots/look-montaza-crimson.webp" alt="Montaza Crimson over a red and amber glow: an island bar, an Arabic-numeral clock, vertical Arabic type and framed bars" width="100%"/></picture><br/><sub><b>Montaza Crimson</b></sub></td>
+<td width="50%" valign="top"><picture><source media="(prefers-color-scheme: light)" srcset="screenshots/look-qaitbay-forest-light.webp"/><img src="screenshots/look-qaitbay-forest.webp" alt="Qaitbay Forest over green hills under the moon: an edge bar, a giant stacked clock and the dock media chip" width="100%"/></picture><br/><sub><b>Qaitbay Forest</b></sub></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/look-anfushi-wave.webp" alt="Anfushi Wave over layered sea: the micro pill, a superscript clock, katakana down the side and a glowing wave visualizer" width="100%"/><br/><sub><b>Anfushi Wave</b></sub></td>
-<td width="50%" valign="top"><img src="screenshots/look-night-frame.webp" alt="Night Frame under the northern lights: a side bar framing the screen, a greeting clock, a calendar card and mirrored bars" width="100%"/><br/><sub><b>Night Frame</b></sub></td>
+<td width="50%" valign="top"><picture><source media="(prefers-color-scheme: light)" srcset="screenshots/look-anfushi-wave-light.webp"/><img src="screenshots/look-anfushi-wave.webp" alt="Anfushi Wave over layered sea: the micro pill, a superscript clock, katakana down the side and a glowing wave visualizer" width="100%"/></picture><br/><sub><b>Anfushi Wave</b></sub></td>
+<td width="50%" valign="top"><picture><source media="(prefers-color-scheme: light)" srcset="screenshots/look-night-frame-light.webp"/><img src="screenshots/look-night-frame.webp" alt="Night Frame under the northern lights: a side bar framing the screen, a greeting clock, a calendar card and mirrored bars" width="100%"/></picture><br/><sub><b>Night Frame</b></sub></td>
 </tr>
 </table>
 
@@ -300,3 +300,13 @@ your config** with the exact file and line when your own compositor config
 already has that chord. Mandara never overrides a key you already use; its
 binds go into its own drop-in file for MangoWM, Niri, Hyprland, Umbriel or Sway,
 and on River are sent as `map` commands (keys your `init` maps stay yours).
+## Display reconnection
+
+The shell follows displays as they connect, disconnect or change logical
+size. A monitor returning through a display switch gets its bar and dock
+back automatically. Choices in Studio → Displays, including Main display
+and individual connector names, remain saved while a display is away.
+
+Taped notes attach their corner strips to the note’s own sheet, using the
+same frame decoration as the to-do list. A separate header stays above the
+paper without moving the strips away from it.

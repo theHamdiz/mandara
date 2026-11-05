@@ -5,6 +5,8 @@
 # `cargo xtask sandbox up --config xtask/src/sandbox/setups/widgets-you.toml --size 2880x1620 --scale 2`,
 # then the wallpaper once:
 #   sandbox msg wallgen generate glass --palette nord --seed 0x38 --size 2880x1620 --format png --no-apply --light
+# Wait for `sandbox msg wallgen status` to report no running job before restarting.
+#   sandbox shell restart   (the shell loads the wallpaper, which didn't exist yet when it started)
 #   sandbox msg theme wallpaper tonal-spot
 # then `sandbox audio play`, `sandbox msg notifications clear` and `sandbox shot`.
 

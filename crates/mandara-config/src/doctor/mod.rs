@@ -37,7 +37,9 @@ mod hyprland;
 mod mango;
 mod niri;
 mod river;
+mod kwin;
 mod sway;
+pub(crate) use sway::has_error as sway_has_error;
 mod umbriel;
 
 #[cfg(test)]
@@ -386,6 +388,10 @@ pub trait CompositorCheck: Sync {
     fn program(&self) -> &'static str;
     /// Arguments that check `config` without starting anything.
     fn args(&self, config: &Path) -> Vec<OsString>;
+    /// Availability probes can run before the compositor creates a config.
+    fn needs_config(&self) -> bool {
+        true
+    }
     /// The flag that prints the version.
     fn version_flag(&self) -> &'static str {
         "--version"
@@ -425,6 +431,7 @@ pub fn checker(target: Target) -> &'static dyn CompositorCheck {
         Target::Umbriel => &umbriel::Umbriel,
         Target::Sway => &sway::Sway,
         Target::River => &river::River,
+        Target::KWin => &kwin::KWin,
     }
 }
 
@@ -496,7 +503,7 @@ pub fn check_with(target: Target, root: &Path, env: &CheckEnv) -> Report {
         duration_ms: 0,
         raw: String::new(),
     };
-    if !root.is_file() {
+    if check.needs_config() && !root.is_file() {
         report.status = CheckerStatus::NoConfig;
         return report;
     }
@@ -505,7 +512,8 @@ pub fn check_with(target: Target, root: &Path, env: &CheckEnv) -> Report {
         Some(argv) => argv.iter().map(|a| if a == CONFIG_PLACEHOLDER { root.as_os_str().to_owned() } else { a.clone() }).collect(),
         None => std::iter::once(OsString::from(check.program())).chain(check.args(root)).collect::<Vec<_>>(),
     };
-    match run(&argv, root.parent().unwrap_or(Path::new("/")), env, check.env()) {
+    let cwd = root.parent().filter(|p| p.is_dir()).unwrap_or(Path::new("/"));
+    match run(&argv, cwd, env, check.env()) {
         Err(RunError::NotFound) => report.status = CheckerStatus::NotInstalled,
         Err(RunError::TimedOut) => report.status = CheckerStatus::TimedOut,
         Err(RunError::Other(e)) => report.status = CheckerStatus::Failed(e),
@@ -784,7 +792,7 @@ pub fn explain(d: &Diagnostic, target: Target, version: Option<&str>) -> String 
         DiagKind::BindConflict => tf("This key combination is bound more than once; {compositor} uses only one of the binds.", &[("compositor", &compositor)]),
         DiagKind::MissingInclude => tf("This line includes a file that isn't there, so {compositor} can't load it.", &[("compositor", &compositor)]),
         // Mandara's own findings (River has no checker) explain themselves.
-        DiagKind::Other if target == Target::River => d.message.clone(),
+        DiagKind::Other if matches!(target, Target::River | Target::KWin) => d.message.clone(),
         DiagKind::Other => tf("{compositor} reported a problem here.", &[("compositor", &compositor)]),
     }
 }

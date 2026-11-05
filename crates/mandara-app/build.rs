@@ -1,10 +1,14 @@
 //! Link flags for the `mandara` binary.
 
+mod build_support;
+
 fn main() {
     let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     let env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
     println!("cargo:rerun-if-changed=build.rs");
-    if os == "linux" && env == "gnu" && build_glibc().is_some_and(|v| v >= RELR_MIN_GLIBC) {
+    println!("cargo:rerun-if-changed=build_support.rs");
+    if build_support::packed_relocations(&os, &env, &arch, build_glibc()) {
         // RELR: the ~176 000 relative relocations of the position-independent
         // binary packed into a bitmap (binutils ≥ 2.38). The 4 MiB
         // `.rela.dyn` table the dynamic loader read (and kept resident) at
@@ -24,9 +28,6 @@ fn main() {
         println!("cargo:rustc-link-arg-bins=-Wl,-z,keep-text-section-prefix");
     }
 }
-
-/// First glibc whose dynamic loader handles RELR (`GLIBC_ABI_DT_RELR`).
-const RELR_MIN_GLIBC: (u32, u32) = (2, 36);
 
 /// (major, minor) of the glibc this build links against: the build host's,
 /// as native builds are the only glibc builds Mandara makes.

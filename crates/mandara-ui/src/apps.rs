@@ -1,6 +1,8 @@
 //! Desktop applications: `.desktop` discovery, icon lookup, launching, and
 //! a tiny calculator for the launcher.
 
+pub mod changes;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -170,10 +172,12 @@ pub fn find_icon(name: &str) -> Option<PathBuf> {
 
 /// Scans every applications directory. Later directories never override an
 /// earlier (user) entry with the same id.
-pub fn discover() -> Vec<App> {
+pub fn discover() -> Vec<App> { discover_in(&data_dirs()) }
+
+fn discover_in(roots: &[PathBuf]) -> Vec<App> {
     let mut seen = std::collections::HashSet::new();
     let mut apps = Vec::new();
-    for dir in data_dirs() {
+    for dir in roots {
         let Ok(entries) = std::fs::read_dir(dir.join("applications")) else { continue };
         let mut files: Vec<_> = entries.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "desktop")).collect();
         files.sort();
@@ -277,10 +281,17 @@ struct EntryIndex {
     names: HashMap<String, String>,
 }
 
-fn entry_index() -> &'static EntryIndex {
-    use std::sync::OnceLock;
-    static INDEX: OnceLock<EntryIndex> = OnceLock::new();
-    INDEX.get_or_init(build_entry_index)
+static ENTRY_INDEX: std::sync::OnceLock<std::sync::RwLock<Option<std::sync::Arc<EntryIndex>>>> = std::sync::OnceLock::new();
+
+fn entry_index() -> std::sync::Arc<EntryIndex> {
+    let cache = ENTRY_INDEX.get_or_init(Default::default);
+    if let Some(index) = cache.read().unwrap_or_else(|e| e.into_inner()).as_ref() { return index.clone(); }
+    let mut cache = cache.write().unwrap_or_else(|e| e.into_inner());
+    cache.get_or_insert_with(|| std::sync::Arc::new(build_entry_index())).clone()
+}
+
+fn refresh_entry_index() {
+    if let Some(cache) = ENTRY_INDEX.get() { *cache.write().unwrap_or_else(|e| e.into_inner()) = None; }
 }
 
 fn build_entry_index() -> EntryIndex {

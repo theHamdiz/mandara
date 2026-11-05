@@ -6,6 +6,9 @@ memory never count against the shell, and every change is mirrored to the
 running shell over IPC: drag a slider and the bar follows on the very next frame.
 Settings never live in bar dropdowns.
 
+Studio draws its own title bar. If KWin requires native window
+decorations, Studio uses those controls so there is only one set of buttons.
+
 <p align="center">
   <img src="screenshots/studio-home.webp" alt="Studio Home: a greeting over the wallpaper, live shell status, the theme with one-click switching, quick settings, recent changes and a card per group" width="100%"/>
   <br/><sub><b>Home</b>: a widget dashboard with live shell status, the current theme and its one-click switches, quick settings and recent changes</sub>
@@ -187,7 +190,7 @@ narrow ones; everything mirrors for right-to-left languages.
 | **Displays** | **Arrangement**: the canvas, a card per display under it with two or more (also one that's off), Apply / Reset with a keep-or-revert countdown, and the selected display's power, resolution, refresh rate, scale, rotation and adaptive sync in aligned rows; **Shell on each display** (bar, dock, OSDs, launcher & pop-ups, notifications, wallpaper); **Profiles** as same-size cards (Apply, Delete, *Connected*), *Save as profile*, keep after restart and the revert / auto-profile settings; **Monitor brightness** (DDC/CI); **Night light**. |
 | **Audio & media** | Per-app mixer and outputs, default devices (rename, hide), volume step and ceiling, ignored players, shell sounds, visualizer and lyrics. |
 | **Network & Bluetooth** | Connection details, VPNs (WireGuard / OpenVPN import), hotspot with QR, saved networks, static IP / DNS; Bluetooth devices, pairing dialog, auto-connect, adapter. |
-| **Power & idle** | Status, idle timeouts (mains / battery), lock behaviour, idle commands, battery alerts (the Power panel's style, Classic or Modern, and the bar battery's pulses: coral while critical, a gentle breath while charging) and profiles, the power menu editor, event hooks. |
+| **Power & idle** | Status, idle timeouts (mains / battery), lock behaviour, idle commands, battery alerts (the Power panel's style, Classic or Modern, and the bar battery's pulses: coral while critical, a gentle breath while charging) and profiles, the power menu editor (entries, style, and the dock's **Position**: opposite the sidebar, left, right, top center or bottom center — at the top or bottom it hangs from the bar there, one piece with it in the edge-frame styles and a card next to a floating bar, or from the screen edge when the bar is elsewhere, which the preview says; the grid always opens in the middle), event hooks. |
 | **Input** | Keyboard layouts and labels, repeat, Num Lock; mouse and touchpad; focus follows mouse. The cursor lives on Themes → Cursor (a card here links there). |
 | **Keyboard shortcuts** | Mandara's compositor binds with chord capture and conflict detection. |
 | **Date, time & location** | The system clock (time zone with search, set time automatically, and a one-click fix when it doesn't match your location's time zone), clock and date formats, the calendar's week numbers, weekend days, Hijri dates and Eastern Arabic numerals, calendar subscriptions and reminders, the shared location (weather and prayer times follow it unless they have their own), weather. |
@@ -207,7 +210,7 @@ narrow ones; everything mirrors for right-to-left languages.
 | Page | What it covers |
 |---|---|
 | **Plugins** | A plugin store: Discover (featured hero, curated shelves, search with filter chips), Installed, Updates, Community (the GitHub marketplace) and Develop (the authoring handbook and validator); per-plugin product pages and settings modals, which hold each plugin's own options (clipboard history, screenshot, weather, prayer times…) — including refresh intervals, how many rows a list shows and alert thresholds (Resources, Process hunter, Containers, Services, Drives, Network speed, Network, Clock, To-do, Bluetooth, Authenticator). To-do adds its default list, show completed, sort order and what the bar counts; Notes its default topic, the notes folder (point it at a synced folder or an Obsidian vault), preview by default and the editor font and size. [Configuration](configuration.md) lists every setting by page. Every Mandara plugin can be switched off (it then stops everything it runs: bar item, sidebar card, launcher entries, background polling) or **removed** from the detail modal: off, out of the bar and sidebar, and parked under *Removed Mandara plugins* (their store cards offer *Add back*) until **Restore** puts it back where it was. Core plugins (launcher, session menu, main menu) show *Always on*. The dock, mini stats, screen time and prayer times ship off. |
-| **Compositor** | The **Config doctor** (your compositor's own checker on your config: problems by file and line, explained, with reversible fixes), then MangoWM / Niri / Hyprland / Umbriel / Sway / River gaps, borders, rounding, blur, rules, tags, layouts; all written to `~/.config/mandara/generated/`. |
+| **Compositor** | The **Config doctor** (your compositor's own checker on your config: problems by file and line, explained, with reversible fixes), then MangoWM / Niri / Hyprland / Umbriel / Sway / River gaps, borders, rounding, blur, rules, tags, layouts; written to `~/.config/mandara/generated/`. KWin uses native Plasma protocols; its compositor settings remain in Plasma System Settings and Studio explains the locked controls. |
 
 ### Mandara
 
@@ -257,7 +260,8 @@ narrow ones; everything mirrors for right-to-left languages.
   reorder it or move it to another zone, × takes it off, and a click opens
   a menu: *Move up*, *Move down*, *Move to …*, *Remove from bar* and
   *Details*. Under the zones, **All plugins** lists every plugin that can
-  sit on the bar in an aligned grid, grouped by category (a category list
+  sit on the bar in an aligned grid. Desktop-only widgets belong in the
+  **Desktop widgets** gallery. The bar items are grouped by category (a category list
   beside the grid on wide windows, chips above it on narrow ones; faith
   plugins have their own *Faith* category), with a search field that
   filters as you type (names and ids that hold what you typed first,
@@ -266,8 +270,13 @@ narrow ones; everything mirrors for right-to-left languages.
   say so. Click one for *Add to Left / Center / Right* (and the side bars
   while they're on) or *Details*, or drag it onto a zone; placing a plugin
   turns it on, and dropping a bar item on the list takes it off the bar.
-  Bar presets (Classic, Notch, Glass pills, Dynamic island, Minimal,
-  Productive, Hairline, Micro pill, Side bar, Dock) apply in one click.
+  The chosen bar preset stays highlighted when you keep your own items.
+  Manual item, layout or position changes clear that selection.
+  Bar presets (System monitor, Classic, Notch, Glass pills, Dynamic island,
+  Minimal, Productive, Hairline, Micro pill, Side bar, Dock) apply the style
+  in one click and keep your items. Turn on **Replace bar items** to use
+  the preset's arrangement too. **Profiles & backup → Bar** saves only
+  the bar and side-bar configuration, leaving the theme and desktop widgets alone.
 - **Radii, per bar style.** *Bar radius* rounds the glass pills and the
   island; on the edge frame it rounds the hover chips (and the frame's ends
   when *Float the edge frame* is on). *Flare radius* is the concave curve
@@ -307,7 +316,8 @@ narrow ones; everything mirrors for right-to-left languages.
   `Hyprland --version`); each compositor's own checker (`mango -p`,
   `niri validate`, `Hyprland --verify-config`, `umbriel config validate`,
   `sway --validate`) must accept the result or the include is rolled back.
-  Sway has no rounded corners, opacity, blur, shadows or animations: while
+  Sway has no rounded corners, blur, shadows or animations, and no opacity
+  rules that Mandara supports (its `opacity` command isn't a rule): while
   it runs those rows are locked with that reason, and its tab says what
   its drop-in carries (gaps, pixel borders, `client.*` colours, `for_window`
   floating / sticky rules for both Wayland `app_id`s and X11 classes,
@@ -325,7 +335,8 @@ narrow ones; everything mirrors for right-to-left languages.
   translates the common hyprlang dispatchers and passes `hl.…` text through.
 - **Config doctor** (top of the Compositor page): the compositor's own
   checker (`mango -p`, `niri validate`, `Hyprland --verify-config`,
-  `umbriel config validate`, `sway --validate`) run read-only on your
+  `umbriel config validate`, `sway --validate --verbose`, whose verbose
+  output is what reports a key bound twice) run read-only on your
   config and every file it includes, with its verdict in one line ("All good — checked 2 min ago
   with MangoWM 0.18.4"). Problems are grouped by file, your files apart
   from Mandara's drop-in, each with its kind (unknown, removed in this
@@ -656,6 +667,15 @@ size and `MANDARA_STUDIO_SCROLL=<px>` opens the page scrolled down.
 `MANDARA_FRAME_STATS=1` logs Studio's frame pacing every few seconds (frame
 interval p50 / p95 / p99 / max, late frames, and the CPU time per frame), plus
 the login-screen preview's own pacing on Studio → Login screen.
+
+Performance's frame-timing card measures shell and dock view builds on the
+CPU and the intervals between redraws on each surface. It keeps recent
+history, but shows no current redraw interval while the shell is idle.
+These samples do not measure GPU presentation or the monitor's refresh rate.
+Dock → Behaviour also offers **Bounce only while music plays**; launch and
+attention bounces then stop during paused or stopped playback. Under
+Sidebars & hover → Screen corners, each rounded corner has its own switch,
+with an option to hide corners between adjacent displays.
 
 ## Sidebar tabs, to-do lists and notes in the shell
 

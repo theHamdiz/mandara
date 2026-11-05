@@ -4,6 +4,8 @@
 # `cargo xtask sandbox up --config xtask/src/sandbox/setups/widgets-music.toml --size 2880x1620 --scale 2`,
 # then the wallpaper once:
 #   sandbox msg wallgen generate mesh --palette montaza-twilight --seed 0x30 --size 2880x1620 --format png --no-apply
+# Wait for `sandbox msg wallgen status` to report no running job before restarting.
+#   sandbox shell restart   (the shell loads the wallpaper, which didn't exist yet when it started)
 #   sandbox msg theme wallpaper vibrant
 # then `sandbox audio play`, `sandbox msg notifications clear` and `sandbox shot`.
 

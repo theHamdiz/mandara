@@ -1853,7 +1853,7 @@ impl Render for StudioView {
             .font_family(fonts.studio.clone())
             .text_size(px(TEXT_13_PX))
             .child(nav)
-            .child(div().flex_1().min_w(px(0.0)).h_full().row().flex_col().child(titlebar).child(content))
+            .child(div().flex_1().min_w(px(0.0)).h_full().row().flex_col().when(crate::client_controls(window.window_decorations(), mandara_compositor::detect_from(|key| std::env::var_os(key))), |body| body.child(titlebar)).child(content))
             .children(modal)
             .children(dock_picker)
             .children(frame_meter::end())

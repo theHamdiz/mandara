@@ -27,6 +27,10 @@ that fingerprint embedded (`mandara --version` shows it), hashes the
 binary, counts the lines of code, writes a build manifest next to it and
 refreshes the [build fingerprint](#build-fingerprint) table below.
 
+The source build requires **Rust 1.97 or newer**, matching the WebAssembly
+runtime’s minimum version. The installer updates an older rustup toolchain
+before attempting a source build.
+
 ## Build options: memory allocator
 
 The `mandara` binary picks its global allocator at build time with exactly
@@ -60,7 +64,7 @@ The workspace contains these crates:
 | `mandara-core` | layer-shell surfaces, input masking, springs, OKLCH |
 | `mandara-config` | reactive config store, compositor emitters |
 | `mandara-theme` | HCT + OKLCH engine, presets, app theme templates |
-| `mandara-compositor` | MangoWM, Niri, Hyprland, Umbriel, Sway and River drivers |
+| `mandara-compositor` | MangoWM, Niri, Hyprland, Umbriel, Sway, River and KWin drivers |
 | `mandara-services` | D-Bus services, audio, spectrum, OCR, screenshots, recording, Wallhaven, marketplace |
 | `mandara-plugins` | plugin registry, commands, WebAssembly host |
 | `mandara-i18n` | localization |
@@ -79,6 +83,11 @@ the pointer on every element, with or without an id
 `vendor/pure-onnx-ocr` is the OCR engine with upstream's sources and a
 manifest that no longer turns on every codec of the `image` crate
 ([`MANDARA-PATCHES.md`](../vendor/pure-onnx-ocr/MANDARA-PATCHES.md)).
+
+`vendor/xkbcommon` keeps GPUI’s keyboard API while loading the system
+library only when keyboard input is used. This lets `mandara install`
+start before the runtime packages have been installed
+([`MANDARA-PATCHES.md`](../vendor/xkbcommon/MANDARA-PATCHES.md)).
 
 ## Build fingerprint
 

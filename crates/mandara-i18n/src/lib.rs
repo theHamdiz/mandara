@@ -173,10 +173,13 @@ impl Lang {
     /// The desktop's language (`LC_ALL`, `LC_MESSAGES`, `LANG`), English
     /// when unset or unsupported.
     pub fn from_env() -> Lang {
-        ["LC_ALL", "LC_MESSAGES", "LANG"]
-            .iter()
-            .find_map(|k| std::env::var(k).ok().filter(|v| !v.is_empty() && v != "C" && v != "POSIX"))
-            .and_then(|v| Lang::from_code(&v))
+        let values = ["LC_ALL", "LC_MESSAGES", "LANG"].map(|key| std::env::var(key).ok());
+        Self::from_locale_values(values.iter().map(|value| value.as_deref()))
+    }
+
+    fn from_locale_values<'a>(values: impl IntoIterator<Item = Option<&'a str>>) -> Lang {
+        values.into_iter().flatten().find(|value| !value.is_empty())
+            .and_then(Lang::from_code)
             .unwrap_or(Lang::En)
     }
 

@@ -20,7 +20,8 @@ pub struct Process {
     pub uid: u32,
     /// Resident memory in bytes.
     pub rss: u64,
-    /// CPU usage since the previous sample, percent of one core.
+    /// CPU usage since the previous sample, as a share of the whole machine
+    /// (all logical cores): one core fully busy on four reads 25 %.
     pub cpu: f32,
     /// `R`unning, `S`leeping, `Z`ombie, …
     pub state: char,
@@ -100,6 +101,7 @@ impl Sampler {
         }
         let hz = clock_ticks() as f32;
         let now = Instant::now();
+        let cpus = refresh_cpu_capacity() as f32;
         let elapsed = self.at.map(|t| now.duration_since(t).as_secs_f32()).unwrap_or(0.0);
         let mut out = Vec::with_capacity(self.prev.len());
         let Ok(dir) = std::fs::read_dir("/proc") else { return out };
@@ -111,7 +113,7 @@ impl Sampler {
             if elapsed > MIN_SAMPLE_GAP_S
                 && let Some(prev) = self.prev.get(&pid)
             {
-                p.cpu = (p.ticks.saturating_sub(*prev) as f32 / hz) / elapsed * PERCENT;
+                p.cpu = share_of_machine(p.ticks.saturating_sub(*prev), elapsed, hz, cpus);
             }
             out.push(p);
         }
@@ -124,6 +126,44 @@ impl Sampler {
 
 fn clock_ticks() -> u64 {
     rustix::param::clock_ticks_per_second()
+}
+
+/// Host-wide logical CPUs, matching the aggregate `/proc/stat` gauge even
+/// when this process has an affinity mask or a cgroup CPU quota.
+pub fn cpu_capacity() -> usize {
+    let cached = CPU_CAPACITY.0.load(std::sync::atomic::Ordering::Relaxed);
+    if cached == 0 { refresh_cpu_capacity() } else { cached }
+}
+
+struct CpuCapacity(std::sync::atomic::AtomicUsize);
+static CPU_CAPACITY: CpuCapacity = CpuCapacity(std::sync::atomic::AtomicUsize::new(0));
+
+impl CpuCapacity {
+    fn update(&self, stat: Option<&str>) -> usize {
+        let capacity = stat.map(parse_cpu_capacity).unwrap_or_else(|| self.0.load(std::sync::atomic::Ordering::Relaxed)).max(1);
+        self.0.store(capacity, std::sync::atomic::Ordering::Relaxed);
+        capacity
+    }
+}
+
+/// Called by the background sampler, so CPU hotplug updates the cached
+/// capacity without adding procfs reads to each rendered row.
+fn refresh_cpu_capacity() -> usize {
+    CPU_CAPACITY.update(std::fs::read_to_string("/proc/stat").ok().as_deref())
+}
+
+fn parse_cpu_capacity(stat: &str) -> usize {
+    stat.lines().filter_map(|line| line.split_whitespace().next()).filter(|name| {
+        name.strip_prefix("cpu").is_some_and(|index| !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()))
+    }).count()
+}
+
+/// `ticks` of CPU time used over `elapsed_s` seconds, as a share of the whole
+/// machine: percent of all `cpus` logical cores together, so a busy
+/// multi-threaded process stays at or below 100 (like the Resources panel),
+/// instead of the per-core figure `top` prints.
+fn share_of_machine(ticks: u64, elapsed_s: f32, hz: f32, cpus: f32) -> f32 {
+    ((ticks as f32 / hz) / elapsed_s * PERCENT / cpus.max(1.0)).min(PERCENT)
 }
 
 fn page_size() -> u64 {
@@ -262,6 +302,39 @@ mod tests {
         assert_eq!(search(&list, "1234", SortBy::Cpu)[0].pid, 1234);
         assert_eq!(search(&list, "12", SortBy::Cpu)[0].pid, 1234);
         assert_eq!(search(&list, "", SortBy::Cpu)[0].pid, 30);
+    }
+
+    #[test]
+    fn cpu_is_a_share_of_the_whole_machine() {
+        // One core fully busy for a second reads 100 % on a single-core
+        // machine and a quarter of it on four.
+        assert!((share_of_machine(100, 1.0, 100.0, 1.0) - 100.0).abs() < 0.01);
+        assert!((share_of_machine(100, 1.0, 100.0, 4.0) - 25.0).abs() < 0.01);
+        // All four cores busy at once still reads 100 %, never 400.
+        assert!((share_of_machine(400, 1.0, 100.0, 4.0) - 100.0).abs() < 0.01);
+        // A missing core count can't divide by zero.
+        assert!((share_of_machine(100, 1.0, 100.0, 0.0) - 100.0).abs() < 0.01);
+        // Sampling timestamps and procfs reads can straddle a scheduling tick.
+        assert_eq!(share_of_machine(401, 1.0, 100.0, 4.0), PERCENT);
+    }
+
+    #[test]
+    fn capacity_counts_host_cpu_rows_instead_of_the_callers_affinity() {
+        let stat = "cpu 100 200 300 400\ncpu0 10 20 30 40\ncpu7 10 20 30 40\nintr 123\ncpufreq 4\n";
+        assert_eq!(parse_cpu_capacity(stat), 2);
+        assert_eq!(parse_cpu_capacity("cpu 100 200 300 400\n"), 0);
+        assert_eq!(parse_cpu_capacity(""), 0);
+        assert!(cpu_capacity() > 0);
+    }
+
+    #[test]
+    fn capacity_follows_online_cpus_and_keeps_the_last_read_on_io_failure() {
+        let capacity = CpuCapacity(std::sync::atomic::AtomicUsize::new(0));
+        assert_eq!(capacity.update(None), 1);
+        assert_eq!(capacity.update(Some("cpu 1 2 3 4\ncpu0 1 2 3 4\ncpu1 1 2 3 4\n")), 2);
+        assert_eq!(capacity.update(Some("cpu 1 2 3 4\ncpu0 1 2 3 4\n")), 1);
+        assert_eq!(capacity.update(Some("cpu 1 2 3 4\ncpu0 1 2 3 4\ncpu7 1 2 3 4\n")), 2);
+        assert_eq!(capacity.update(None), 2);
     }
 
     #[test]

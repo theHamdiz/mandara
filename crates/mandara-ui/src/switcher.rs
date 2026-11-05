@@ -156,8 +156,7 @@ fn on_current_workspace(t: &Toplevel, hub: &crate::hub::Hub) -> bool {
 /// monitor (clients without tags, or on unknown monitors, count as visible).
 pub fn client_visible(client: &mandara_compositor::ClientInfo, hub: &crate::hub::Hub) -> bool {
     let Some(model) = hub.navigation.get(&client.monitor) else { return true };
-    let mask = model.active_mask();
-    client.tags.is_empty() || client.tags.iter().any(|tag| mask & 1u32.checked_shl(tag.saturating_sub(1)).unwrap_or(0) != 0)
+    client.tags.is_empty() || model.contains_active(&client.tags)
 }
 
 /// Initial selection: the previous window going forward, the oldest going back.

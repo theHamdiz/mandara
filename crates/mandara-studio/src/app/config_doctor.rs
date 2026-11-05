@@ -87,6 +87,18 @@ fn severity_color(s: Severity, p: &MandaraPalette) -> Color {
     }
 }
 
+fn diagnostic_details(report: &Report) -> bool {
+    report.status == CheckerStatus::Ran && report.diagnostics.iter().any(|diagnostic| show_diagnostic(report.target, diagnostic))
+}
+
+fn show_diagnostic(target: Target, diagnostic: &Diagnostic) -> bool {
+    target != Target::KWin || diagnostic.severity != Severity::Info
+}
+
+fn kwin_availability_note(report: &Report) -> bool {
+    report.target == Target::KWin && report.status == CheckerStatus::Ran && report.problems() == 0
+}
+
 impl StudioView {
     /// Loads (`fresh = false`: the stored report, re-checked only when the
     /// config or compositor changed) or re-runs (`fresh`) the check.
@@ -205,6 +217,7 @@ impl StudioView {
                 CheckerStatus::NotInstalled => (tf("{compositor} isn't installed here, so its config can't be checked.", &[("compositor", &compositor)]), p.on_surface_variant, "note"),
                 CheckerStatus::TimedOut => (tf("{compositor}'s checker didn't finish in time.", &[("compositor", &compositor)]), p.warning_amber, "alert"),
                 CheckerStatus::Failed(e) => (tf("{compositor}'s checker couldn't run: {error}", &[("compositor", &compositor), ("error", &e)]), p.warning_amber, "alert"),
+                CheckerStatus::Ran if kwin_availability_note(r) => (t("KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings.").to_string(), p.on_surface_variant, "note"),
                 CheckerStatus::Ran if problems == 0 => (tf("All good — checked {when} with {compositor}", &[("when", &ago(r.checked_at)), ("compositor", &version)]), p.success_emerald, "check"),
                 CheckerStatus::Ran if problems == 1 => (tf("1 problem — checked {when} with {compositor}", &[("when", &ago(r.checked_at)), ("compositor", &version)]), if r.errors() > 0 { p.urgent_coral } else { p.warning_amber }, "alert"),
                 CheckerStatus::Ran => (tf("{count} problems — checked {when} with {compositor}", &[("count", &problems), ("when", &ago(r.checked_at)), ("compositor", &version)]), if r.errors() > 0 { p.urgent_coral } else { p.warning_amber }, "alert"),
@@ -239,7 +252,9 @@ impl StudioView {
             let color = if ok { p.success_emerald } else { p.urgent_coral };
             col = col.child(div().px(px(SPACE_14_PX)).py(px(SPACE_10_PX)).rounded(px(RADIUS_12_PX)).text_size(px(TEXT_12_5_PX)).bg(color.with_alpha(ALPHA_12).hsla()).text_color(color.hsla()).child(mandara_ui::bidi::paragraph(text)));
         }
-        if let Some(r) = report.filter(|r| r.status == CheckerStatus::Ran && !r.diagnostics.is_empty()) {
+        if let Some(mut r) = report.filter(diagnostic_details) {
+            let target = r.target;
+            r.diagnostics.retain(|diagnostic| show_diagnostic(target, diagnostic));
             let mono = mandara_ui::fonts::fonts(cx).mono.clone();
             let terminal = cfg.apps.terminal_command();
             for (file, list) in r.by_file() {
@@ -341,5 +356,44 @@ impl StudioView {
             .when_some(related, |el, r| el.child(r))
             .child(actions)
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kwin_availability_stays_a_single_status_note_without_reminders() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = doctor::check_with(Target::KWin, &dir.path().join("kwinrc"), &doctor::CheckEnv {
+            argv: Some(vec!["printf".into(), "kwin 6.8.2".into()]),
+            version: Some("6.8.2".into()),
+            ..Default::default()
+        });
+        assert_eq!(report.diagnostics.len(), 1);
+        assert_eq!(report.problems(), 0);
+        assert!(!diagnostic_details(&report));
+        assert!(kwin_availability_note(&report));
+        let mut other = report;
+        other.target = Target::Sway;
+        assert!(diagnostic_details(&other), "other compositor notes must remain visible");
+        other.diagnostics.push(Diagnostic::new(Severity::Warning, "fixture warning"));
+        assert_eq!(other.problems(), 1);
+        assert!(diagnostic_details(&other));
+    }
+
+    #[test]
+    fn kwin_probe_errors_are_visible_alongside_a_problem_status() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut report = doctor::check_with(Target::KWin, &dir.path().join("kwinrc"), &doctor::CheckEnv {
+            argv: Some(vec!["false".into()]), version: Some("6.8.2".into()), ..Default::default()
+        });
+        assert_eq!(report.status, CheckerStatus::Ran);
+        assert!(report.errors() > 0);
+        assert!(diagnostic_details(&report));
+        assert!(!kwin_availability_note(&report));
+        report.diagnostics.push(Diagnostic::new(Severity::Info, "availability note"));
+        assert_eq!(report.diagnostics.iter().filter(|diagnostic| show_diagnostic(Target::KWin, diagnostic)).count(), report.problems());
     }
 }

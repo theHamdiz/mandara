@@ -13,6 +13,8 @@ authors.workspace = true
 mock-release = []
 
 [dependencies]
+mandara-compositor.workspace = true
+wayland-protocols-plasma.workspace = true
 mandara-theme.workspace = true
 mandara-config.workspace = true
 mandara-i18n.workspace = true
@@ -105,6 +107,7 @@ zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 bzip2 = "0.6"
 
 [dev-dependencies]
+zbus = { workspace = true, features = ["p2p"] }
 tempfile.workspace = true
 # Tests create real patches (bidiff + zstd) and sign their mock releases,
 # as the release does.

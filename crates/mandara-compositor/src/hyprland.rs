@@ -102,6 +102,7 @@ impl HyprClient {
             focused,
             floating: self.floating,
             fullscreen: self.fullscreen.as_bool().unwrap_or(false) || self.fullscreen.as_i64().unwrap_or(0) > 0,
+            minimized: false,
             geometry: match (self.at, self.size) {
                 (Some([x, y]), Some([w, h])) if w > 0 && h > 0 => Some((x, y, w, h)),
                 _ => None,
@@ -253,6 +254,19 @@ impl HyprlandDriver {
         Ok(out)
     }
 
+    /// Query only after socket2 is connected, so intervening changes are queued.
+    fn initial_events(&self) -> Vec<CompositorEvent> {
+        let mut events = self.navigation_events();
+        if let Ok(focused) = self.get_active_client() { events.push(CompositorEvent::FocusedClient(focused)); }
+        if let Ok(monitors) = self.get_monitors() { events.push(CompositorEvent::Monitors(monitors)); }
+        events
+    }
+
+    fn navigation_events(&self) -> Vec<CompositorEvent> {
+        self.get_navigation_state().unwrap_or_default().into_iter().map(|(monitor, model)| CompositorEvent::Navigation { monitor, model })
+            .chain(self.get_all_clients().ok().map(CompositorEvent::Clients)).collect()
+    }
+
     fn json<T: serde::de::DeserializeOwned>(&self, what: &str) -> Result<T> {
         Ok(serde_json::from_str(&self.request(&format!("j/{what}"))?)?)
     }
@@ -299,17 +313,14 @@ impl CompositorBackend for HyprlandDriver {
                     std::thread::sleep(crate::RECONNECT_DELAY);
                     continue;
                 };
+                for event in driver.initial_events() {
+                    if tx.send_blocking(event).is_err() { return; }
+                }
                 for line in BufReader::new(stream).lines().map_while(Result::ok) {
                     let Some((event, _)) = parse_event(&line) else { continue };
                     let events: Vec<CompositorEvent> = match event {
                         "workspace" | "workspacev2" | "createworkspace" | "destroyworkspace" | "focusedmon" | "openwindow"
-                        | "closewindow" | "movewindow" | "urgent" => driver
-                            .get_navigation_state()
-                            .unwrap_or_default()
-                            .into_iter()
-                            .map(|(monitor, model)| CompositorEvent::Navigation { monitor, model })
-                            .chain(driver.get_all_clients().ok().map(CompositorEvent::Clients))
-                            .collect(),
+                        | "closewindow" | "movewindow" | "urgent" => driver.navigation_events(),
                         "activewindow" | "activewindowv2" | "windowtitle" | "windowtitlev2" => {
                             vec![CompositorEvent::FocusedClient(driver.get_active_client().ok().flatten())]
                         }
@@ -514,4 +525,56 @@ mod tests {
         assert_eq!(info.tags, vec![2]);
         assert!(!info.fullscreen);
     }
+    #[test]
+    fn subscription_emits_a_fresh_snapshot_without_waiting_for_an_event() {
+        use std::os::unix::net::UnixListener;
+        use std::time::{Duration, Instant};
+        /// Socket fixtures must finish even when a regression omits a request.
+        const POLL: Duration = Duration::from_millis(10);
+        struct Fixture(PathBuf);
+        impl Drop for Fixture { fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); } }
+        let dir = Fixture(std::env::temp_dir().join(format!("mdr-hypr-snapshot-{}", std::process::id())));
+        std::fs::create_dir_all(&dir.0).unwrap();
+        let events = UnixListener::bind(dir.0.join(".socket2.sock")).unwrap();
+        let requests = UnixListener::bind(dir.0.join(".socket.sock")).unwrap();
+        for listener in [&events, &requests] { listener.set_nonblocking(true).unwrap(); }
+        let accept = |listener: &UnixListener| {
+            let deadline = Instant::now() + crate::REQUEST_TIMEOUT;
+            loop {
+                match listener.accept() {
+                    Ok((stream, _)) => return stream,
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => std::thread::sleep(POLL),
+                    Err(e) => panic!("snapshot socket: {e}"),
+                }
+            }
+        };
+        let server = std::thread::spawn(move || {
+            let _stream = accept(&events);
+            let monitors = r#"[{"name":"DP-1","activeWorkspace":{"id":2},"width":1707,"height":960}]"#;
+            let focused = r#"{"address":"0x7","title":"Fresh window","workspace":{"id":2}}"#;
+            for (command, reply) in [("j/workspaces", r#"[{"id":2,"name":"2","monitor":"DP-1","windows":1}]"#.to_string()), ("j/monitors", monitors.into()), ("j/clients", format!("[{focused}]")), ("j/activewindow", focused.into()), ("j/monitors", monitors.into())] {
+                let mut stream = accept(&requests);
+                stream.set_read_timeout(Some(crate::REQUEST_TIMEOUT)).unwrap();
+                let mut input = vec![0; command.len()];
+                stream.read_exact(&mut input).unwrap();
+                assert_eq!(input, command.as_bytes());
+                stream.write_all(reply.as_bytes()).unwrap();
+            }
+        });
+        let driver = HyprlandDriver { dir: dir.0.clone(), version: Some((0, 57)), lua: true };
+        let rx = driver.subscribe_events();
+        let deadline = Instant::now() + crate::REQUEST_TIMEOUT;
+        let mut initial = Vec::new();
+        while initial.len() < 4 && Instant::now() < deadline {
+            match rx.try_recv() { Ok(event) => initial.push(event), Err(_) => std::thread::sleep(POLL) }
+        }
+        drop(rx);
+        server.join().unwrap();
+        assert_eq!(initial.len(), 4);
+        assert!(matches!(&initial[0], CompositorEvent::Navigation { monitor, model: NavigationModel::Workspaces { workspaces } } if monitor == "DP-1" && workspaces[0].id == 2));
+        assert!(matches!(&initial[1], CompositorEvent::Clients(clients) if clients[0].id == 7));
+        assert!(matches!(&initial[2], CompositorEvent::FocusedClient(Some(client)) if client.title == "Fresh window"));
+        assert!(matches!(&initial[3], CompositorEvent::Monitors(monitors) if monitors[0].width == 1707));
+    }
+
 }

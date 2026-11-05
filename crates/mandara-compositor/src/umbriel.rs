@@ -148,6 +148,7 @@ impl UmbrielWindow {
             focused: focused == Some(self.id.as_str()),
             floating: self.floating,
             fullscreen: self.fullscreen,
+            minimized: false,
             geometry: match (self.x, self.y, self.w, self.h) {
                 (Some(x), Some(y), Some(w), Some(h)) => Some((x, y, w, h)),
                 _ => None,

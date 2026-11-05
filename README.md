@@ -23,7 +23,7 @@
 <p align="center">
   <a href="https://github.com/theHamdiz/mandara/stargazers"><img src="https://img.shields.io/github/stars/theHamdiz/mandara?style=for-the-badge&logo=github&logoColor=E9E5FF&labelColor=0B1026&color=8B5CF6" alt="GitHub stars"/></a>
   <a href="https://github.com/theHamdiz/mandara/releases/latest"><img src="https://img.shields.io/github/v/release/theHamdiz/mandara?style=for-the-badge&logo=rust&logoColor=E9E5FF&labelColor=0B1026&color=22D3EE&label=release" alt="Latest release"/></a>
-  <a href="https://github.com/theHamdiz/mandara/commits/main"><img src="https://img.shields.io/github/last-commit/theHamdiz/mandara?style=for-the-badge&logo=git&logoColor=E9E5FF&labelColor=0B1026&color=8B5CF6&label=commit" alt="Last commit"/></a>
+  <a href="https://github.com/theHamdiz/mandara/commits/main"><img src="https://img.shields.io/github/last-commit/theHamdiz/mandara/main?style=for-the-badge&logo=git&logoColor=E9E5FF&labelColor=0B1026&color=8B5CF6&label=commit" alt="Last commit"/></a>
   <a href="https://discord.gg/kPBaS2reQ3"><img src="https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=E9E5FF&labelColor=0B1026" alt="Join the Mandara Discord"/></a>
   <a href="docs/README.md"><img src="https://img.shields.io/badge/docs-22D3EE?style=for-the-badge&logo=readthedocs&logoColor=0B1026&labelColor=22D3EE" alt="Documentation"/></a>
   <a href="#license"><img src="https://img.shields.io/badge/GPL--3.0-8B5CF6?style=for-the-badge&logo=gnu&logoColor=E9E5FF&labelColor=0B1026" alt="GPL-3.0-or-later"/></a>
@@ -34,7 +34,7 @@
   <a href="docs/building.md#build-fingerprint"><img src="https://img.shields.io/badge/100%25-Rust-8B5CF6?logo=rust&logoColor=E9E5FF&labelColor=0B1026" alt="100% Rust"/></a>
   <a href="docs/desktop.md"><img src="https://img.shields.io/badge/Wayland-native-22D3EE?logo=wayland&logoColor=E9E5FF&labelColor=0B1026" alt="Wayland native"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-8B5CF6?labelColor=0B1026" alt="GPU rendered"/></a>
-  <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic"/></a>
+  <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic%20%C2%B7%20KWin-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin"/></a>
   <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-73%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="73 plugins plus WebAssembly"/></a>
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-15%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="15 languages"/></a>
   <br/>
@@ -49,6 +49,7 @@
 
 <p align="center">
   <a href="docs/install.md"><b>Install</b></a> ·
+  <a href="https://thehamdiz.github.io/mandara/">Website</a> ·
   <a href="docs/README.md"><b>Documentation</b></a> ·
   <a href="docs/studio.md">Studio</a> ·
   <a href="docs/plugins.md">Plugins</a> ·
@@ -63,8 +64,12 @@ on [GPUI](https://github.com/zed-industries/zed). It's everything around
 your windows: the bar, a dynamic island, a dock, a launcher, a sidebar,
 notifications, wallpapers, desktop widgets, the lock screen and the login
 screen, plus a settings app that changes all of it live. It runs on
-**MangoWM, Niri, Hyprland, Umbriel, Sway and River Classic**, and it's one small, fast program
+**MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic and KWin**, and it's one small, fast program
 you install with one command.
+
+Studio keeps bar arrangements in their own saved profiles, and screenshots
+can capture every display at once. Native KWin support uses Plasma's own
+window, clipboard and screenshot interfaces.
 
 It's made to feel good to use. Panels pour out of the bar on real spring
 physics, colours follow your wallpaper and your music, and the whole
@@ -89,7 +94,7 @@ widget can be moved, resized and restyled right on the desktop.
 | | |
 |---|---|
 | **What** | A complete Wayland desktop shell: bar, island, dock, launcher, sidebar, notifications, OSDs, wallpapers, desktop widgets, lock screen, login manager, settings app |
-| **Compositors** | MangoWM, Niri, Hyprland, Umbriel, Sway and River Classic (0.3), all first-class; your own config gets one include line at most, nothing more |
+| **Compositors** | MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic (0.3) and KWin, with native drivers; your own config gets one include line at most, nothing more |
 | **Built with** | 100 % Rust, one binary (`mandara`), GPU-rendered with GPUI and wgpu |
 | **Resources** | Under 100 MiB RAM, under 190 MiB video memory, about 0.1 % CPU idle |
 | **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`) |
@@ -101,17 +106,18 @@ widget can be moved, resized and restyled right on the desktop.
 ## What sets Mandara apart
 
 Mandara is built for one job: being the complete desktop for **MangoWM,
-Niri, Hyprland, Umbriel, Sway and River Classic**. These are the strengths it was designed
+Niri, Hyprland, Umbriel, Sway, River Classic and KWin**. These are the strengths it was designed
 around, each one measured or shipped today:
 
-1. **Six compositors, each first-class.** It speaks every compositor's
+1. **Seven compositors, each first-class.** It speaks every compositor's
    own IPC natively: MangoWM's and River's tag bitmasks (view, toggle-view,
    tag moves), Niri's scrolling columns, Hyprland's, Umbriel's and Sway's
-   workspaces. It reads
+   workspaces, and KWin's native Plasma window and virtual-desktop protocols. It reads
    each compositor's version and writes its exact config dialect, down to
    Hyprland 0.57's Lua config.
 2. **It never breaks your compositor config.** It adds one include line
-   (none at all on River, whose settings it sends over River's protocol);
+   (none on River or KWin); River settings use its native protocol, while
+   KWin settings stay in Plasma System Settings. For the other compositors,
    everything else goes into its own drop-in files. Every change is
    checked by the compositor's own validator (`mango -p`, `niri validate`,
    `Hyprland --verify-config`, `umbriel config validate`, `sway --validate`)
@@ -149,7 +155,8 @@ around, each one measured or shipped today:
     Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus,
     takes over an existing setup without losing it, and updates arrive as
     small, signed binary patches from Studio → About → Update now. NixOS
-    gets a flake with NixOS and Home Manager modules.
+    gets a flake with NixOS and Home Manager modules, updated through the
+    flake.
 12. **Made for everyone.** 15 interface languages, right-to-left Arabic,
     Persian and Urdu included, and fonts chosen for every script it shows.
 
@@ -189,7 +196,7 @@ around, each one measured or shipped today:
 </tr>
 <tr>
 <td width="50%" valign="top"><img src="docs/screenshots/weather.png" alt="Weather" width="100%"/><br/><sub><b>Weather</b>: an animated sky, hourly and five-day forecasts.</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/resources.png" alt="System resources" width="100%"/><br/><sub><b>Resources</b>: CPU, memory, every GPU, temperatures and disks.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/notifications.png" alt="The notification center: notifications grouped by app (Mail with Reply and Archive actions, Corniche Radio, Calendar), do not disturb and clear" width="100%"/><br/><sub><b>Notifications</b>: grouped by app, with do not disturb.</sub></td>
 </tr>
 </table>
 
@@ -247,10 +254,18 @@ you turn on only the ones you want, and plugins can add their own.
 One command, from any shell:
 
 ```bash
-sh -c 'cd "$(mktemp -d)" && curl -fsSL "https://github.com/theHamdiz/mandara/releases/latest/download/mandara-$(uname -m)-linux-gnu.tar.gz" | tar xz && exec ./mandara-*/bin/mandara install'
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
 ```
 
-The installer checks its own signature, sets up what your distribution
+The download shows its progress, checks the release signature and archive,
+then opens Mandara's installer with an arrow-key setup menu. Compositor,
+login and other options go
+straight to `mandara install`. Append them after the final `sh`, for example
+`--compositor kwin --no-greeter`; see the [installation guide](docs/install.md).
+If the installer adds Mandara to PATH, open a new terminal before using its
+commands. Studio is also available from your application menu.
+
+The installer sets up what your distribution
 needs, and hooks into your compositor without touching your own config
 files (no compositor yet? it offers to install one). It works on Arch,
 Debian and Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus. Updates arrive by small binary patch: Studio → About →
@@ -259,7 +274,10 @@ Debian and Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus. Updates arr
 On **NixOS**, Mandara is a flake: try it with
 `nix run github:theHamdiz/mandara`, or add it to your system with
 `programs.mandara.enable = true;` (a NixOS module and a Home Manager
-module come with it). Nix keeps it updated.
+module come with it). NixOS users update through their flake, not Studio's
+*Update now*: in your configuration flake directory, run
+`nix flake update mandara`, then `sudo nixos-rebuild switch --flake .` (or
+`home-manager switch --flake .`). Use your input name if it differs from `mandara`.
 
 → **[Install guide](docs/install.md)**: Arch packages, NixOS, other
 options, coming from another setup.

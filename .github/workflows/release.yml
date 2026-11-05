@@ -87,8 +87,9 @@ jobs:
       # The branch tip, not the pushed commit: a release queued behind
       # another one starts after that one pushed its AUR recipes, and a
       # bump made on the older commit could never be pushed.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
@@ -107,33 +108,38 @@ jobs:
 
       - name: Push release commit and tags
         if: steps.bump.outputs.bumped != '0'
-        run: git push --atomic origin HEAD:${{ github.ref_name }} --follow-tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ github.ref_name }}
+        run: git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push --atomic origin "HEAD:${REF_NAME}" --follow-tags
 
       # Also releases when the current version has no published GitHub
       # release yet (a fresh repository, or a release that was deleted to be
       # rebuilt), so one push publishes without a manual rebuild.
       - name: Result
         id: result
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           released="${{ steps.bump.outputs.released }}"
           version="${{ steps.bump.outputs.version }}"
           tag="${{ steps.bump.outputs.tag }}"
           unpublished=false
-          gh release view "v$version" >/dev/null 2>&1 || unpublished=true
+          GH_TOKEN="${{ github.token }}" gh release view "v$version" >/dev/null 2>&1 || unpublished=true
           if [ "${{ inputs.rebuild }}" = "true" ] || [ "$unpublished" = "true" ]; then
             released=true; tag="v$version"
-            git rev-parse -q --verify "refs/tags/$tag" >/dev/null || { git tag -a "$tag" -m "mandara $version"; git push origin "$tag"; }
+            git rev-parse -q --verify "refs/tags/$tag" >/dev/null || { git tag -a "$tag" -m "mandara $version"; GH_TOKEN="${{ github.token }}" git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin "$tag"; }
           fi
-          echo "released=$released" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          {
+            echo "released=$released"
+            echo "version=$version"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
           echo "### Mandara $version — release: $released" >> "$GITHUB_STEP_SUMMARY"
           cargo xtask status >> "$GITHUB_STEP_SUMMARY"
 
   build:
     name: Build ${{ matrix.target }}${{ matrix.variant && format(' ({0})', matrix.variant) || '' }}
+    permissions:
+      contents: read
     needs: version
     if: needs.version.outputs.released == 'true'
     strategy:
@@ -156,8 +162,9 @@ jobs:
     env:
       RUSTFLAGS: ${{ matrix.rustflags }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
 
       - name: System libraries
@@ -183,7 +190,8 @@ jobs:
       # release and covered by SHA256SUMS).
       - name: Build (release, fat LTO, fingerprinted)
         run: |
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
           cargo run --locked --quiet -p xtask -- build --target ${{ matrix.target }} ${{ matrix.variant && format('--variant {0}', matrix.variant) || '' }} --out dist --no-readme
           ./target/${{ matrix.target }}/release/mandara --version
           { echo '```toml'; cat dist/*.build.toml; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
@@ -206,7 +214,8 @@ jobs:
 
       - name: Tarball
         run: |
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
           cargo xtask dist --target ${{ matrix.target }} ${{ matrix.variant && format('--variant {0}', matrix.variant) || '' }} --out dist
 
       # Delta update: each of the last DELTA_FROM_RELEASES published
@@ -260,6 +269,8 @@ jobs:
 
   build-musl:
     name: Build ${{ matrix.target }}
+    permissions:
+      contents: read
     needs: version
     if: needs.version.outputs.released == 'true'
     strategy:
@@ -272,8 +283,9 @@ jobs:
             runner: ubuntu-22.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
 
       # The host toolchain only runs xtask for the delta step below.
@@ -286,7 +298,8 @@ jobs:
       # the Wayland libraries are loaded at run time.
       - name: Build in Alpine (release, fat LTO, fingerprinted) and tarball
         run: |
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
           docker run --rm -v "$PWD:/src" -w /src \
             -e SOURCE_DATE_EPOCH -e GITHUB_SHA -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
             -e RUSTFLAGS="-C target-feature=-crt-static" \
@@ -325,12 +338,15 @@ jobs:
 
   plugins:
     name: Plugins
+    permissions:
+      contents: read
     needs: version
     if: needs.version.outputs.released == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -352,8 +368,9 @@ jobs:
     needs: [version, build, build-musl, plugins]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
 
       - uses: actions/download-artifact@v4
@@ -399,7 +416,7 @@ jobs:
         run: |
           v="${{ needs.version.outputs.version }}"
           for f in dist/mandara-"$v"-*.tar.gz; do
-            cp "$f" "dist/mandara-${f#dist/mandara-$v-}"
+            cp "$f" "dist/mandara-${f#dist/mandara-"$v"-}"
           done
           ls -la dist/mandara-*.tar.gz
 
@@ -441,7 +458,7 @@ jobs:
           **Install** with one command:
 
           ```sh
-          sh -c 'cd "$(mktemp -d)" && curl -fsSL "https://github.com/${{ github.repository }}/releases/latest/download/mandara-$(uname -m)-linux-gnu.tar.gz" | tar xz && exec ./mandara-*/bin/mandara install'
+          sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
           ```
 
           Or download the tarball for your CPU, `tar xf` it and run `./mandara-*/bin/mandara install`.
@@ -466,8 +483,6 @@ jobs:
       # clone (the README's Arch instructions) works. Committed as
       # "chore(release)", which doesn't start another release.
       - name: AUR recipes
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           v="${{ needs.version.outputs.version }}"
           git config user.name "github-actions[bot]"
@@ -490,5 +505,5 @@ jobs:
           git diff --stat
           if ! git diff --quiet; then
             git commit -am "chore(release): AUR recipes for v$v"
-            git push origin HEAD:main
+            GH_TOKEN="${{ github.token }}" git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin HEAD:main
           fi

@@ -19,6 +19,8 @@ use wayland_protocols_wlr::foreign_toplevel::v1::client::{zwlr_foreign_toplevel_
 
 use crate::actor::{Envelope, ServiceHandle, reply};
 
+mod kwin;
+
 /// Highest protocol versions used.
 const MANAGER_VERSION: u32 = 3;
 const OUTPUT_VERSION: u32 = 4;
@@ -282,6 +284,14 @@ fn run(updates: async_channel::Sender<ToplevelsState>, commands: mpsc::Receiver<
     let _manager: manager::ZwlrForeignToplevelManagerV1 = match globals.bind(&qh, 1..=MANAGER_VERSION, ()) {
         Ok(m) => m,
         Err(err) => {
+            let plasma = globals.contents().with_list(|list| list.iter().any(|g| g.interface == "org_kde_plasma_window_management"));
+            if plasma {
+                drop(seat);
+                drop(globals);
+                drop(queue);
+                drop(conn);
+                return kwin::run(updates, commands, wake);
+            }
             let _ = updates.send_blocking(ToplevelsState::default());
             return Err(format!("zwlr_foreign_toplevel_manager_v1: {err}"));
         }

@@ -6,6 +6,283 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Put the power menu where you want it, plus a round of fixes for Sway, the
+installer, display reconnection and native KWin support.
+
+### New
+
+- **Choose which screen corners are rounded.** Each corner can be switched
+  off separately, and adjacent displays can keep their shared corners clear.
+  Find these controls in Studio → Sidebars & hover → Screen corners. (#73)
+
+- **Keep dock bounces for music time.** Studio → Dock → Behaviour has an
+  optional **Bounce only while music plays** setting for launch and
+  attention animations. Paused or stopped playback leaves them still. (#82)
+
+- **Save a setup for just your bar.** Profiles & backup now offers a
+  **Bar** scope, and the bar presets include a system-monitor arrangement.
+  Applying a bar preset keeps your own items unless you explicitly choose
+  **Replace bar items**. Desktop widgets stay as you left them. (#73, #81)
+
+- **Capture all your displays at once.** The screenshot panel's
+  **All displays** action saves or copies the whole desktop in one image,
+  respecting monitor positions and different scales. The same action is
+  available as `mandara msg screenshot all`. (#79)
+
+- **The installer opens on a setup screen.** `mandara install` now starts
+  with the MANDARA wordmark and an arrow-key menu: pick the compositor to
+  integrate with (the list starts on one you already have; left alone, the
+  row stays on *detect automatically* and `setup` picks what's running),
+  switch autostart and Mandara Login on or off, then choose Install. A
+  choice you pass as a flag is left out of the menu, and `--yes`,
+  `--dry-run` or a run without a terminal behave as before, with the
+  one-line title. Canceling either menu leaves the installation untouched.
+  Thanks to @Hedayatbakhshi. (#66)
+
+- **Mandara now runs on Plasma Wayland with a native KWin driver** (#45,
+  #50). The bar follows virtual desktops and windows, and the dock and
+  switcher control windows through Plasma’s own protocols. Clipboard history
+  also works through the shared data-control protocol. Setup can add
+  Mandara’s startup entry without changing KWin’s settings. Studio explains
+  which settings stay in Plasma System Settings, and lock requests use
+  Plasma’s secure locker.
+
+- **Choose where the power menu opens.** Studio → Power & idle → Session
+  menu → *Position* puts the edge dock on the left or right side, or at the
+  top or bottom center. At the top it hangs from the bar as one piece with
+  it, curves and all, just like the drop-down panels; next to a floating
+  bar it opens as a card, and if the bar is on another edge it hangs from
+  the screen edge (the preview tells you which). The default stays the side
+  opposite the sidebar. (#57)
+
+### Improved
+
+- **The clipboard answers the keyboard and the wheel.** Arrow Up and Down
+  move through the list and turn the page when they reach its end, Enter
+  copies the entry under them (or pastes it, where the panel is set to
+  paste), and the wheel now turns pages instead of doing nothing. Search
+  keeps its own keyboard focus, hidden entries cannot stay selected, and
+  a change in scroll direction discards the old wheel distance.
+  Thanks to @Hedayatbakhshi. (#70)
+
+- **A new home for Mandara.** The website has interactive Look previews,
+  a tour of Studio and desktop widgets, and a clearer installation guide.
+  It follows your light or dark theme, respects reduced motion, and keeps
+  keyboard focus visible when a question is open.
+
+- **A shorter, friendlier first install.** The new download command shows
+  the phoenix and real download progress, picks the right Linux build,
+  verifies the signed archive before opening the installer, and passes your
+  configuration options through unchanged. Interrupted downloads report a
+  failure, package-manager questions can read your terminal normally, and
+  relative installation paths stay relative to where you ran the command.
+  Downloads stay on HTTPS, temporary files are removed even after a failure,
+  and the verified installer uses your cache when `/tmp` blocks programs.
+  Its translated hints follow your terminal language, including in help.
+
+- **The installer can start before keyboard libraries are installed.**
+  Keyboard support loads when it is first used, so a fresh Linux system
+  can run the installer and let it install the packages it needs.
+  With `--no-deps`, shortcut checks explain which library is missing and
+  leave configuration alone.
+
+- **A lighter first test build** (#64). Tests no longer inherit the
+  interactive shell’s dependency optimization or keep incremental caches.
+  The development guide explains focused checks, timing reports and optional
+  local linkers; the full workspace checks still run in CI.
+  CI's build and test steps now share that profile instead of compiling
+  the dependency tree twice with different optimization settings.
+
+- **Guides that match today's shell.** The docs show the power menu at the
+  top centre and at the side, each Look's picture follows your page's light
+  or dark theme, and old panel captures that no longer looked like Mandara
+  are gone.
+
+### Fixed
+
+- A bar preset stays selected after you apply its style while keeping your
+  own items. Manual layout or item changes clear that selection. (#81)
+
+- Installation finishes with translated first steps in every language.
+
+- Installing or removing an application updates its dock pin and icon
+  without a restart; missing saved pins stay hidden.
+
+- Resetting a page keeps removed plugins out of its layout until you
+  restore them.
+
+- **KWin setup explains availability failures.** Only installed KWin
+  appears in the picker. Failed probes keep their actual cause in setup
+  and Studio, without treating them as configuration or shortcut errors.
+
+- The download command preserves the installer's normal file permissions.
+  Unnamed displays retain their logical size alongside named monitors, and
+  Hyprland refreshes window state as soon as its event connection opens.
+
+- **Reach clipboard matches after searching.** Tab moves from the search
+  field to the results; arrows select and Enter uses the selected copy.
+  Editing the search or a collection name keeps its own keyboard input.
+
+- **Studio has one set of window buttons.** Its title bar now requests
+  client decorations and yields to compositor-provided controls when
+  those are required. (#89)
+
+- **Reset-page summaries count custom arrangements too.** Restored bar
+  items, side-bar groups, dock pins and stacks, and sidebar tabs no longer
+  appear as “All defaults” when they differ from the defaults. Resetting
+  their page restores those lists too. (#88)
+
+- **The dock skips pinned apps that are not installed.** Their pins stay
+  saved and return when the app is available; a running window still
+  appears even when it has no launcher entry. (#73)
+
+- **Frame timing stops showing an old interaction as a live frame rate.**
+  Idle redraw history no longer produces a current cadence, and Studio
+  labels the measurements as CPU view builds and redraw intervals. The
+  dock's separate view contributes its own animation samples too. (#84)
+
+- **Tailscale detection handles a shorter desktop PATH.** Mandara also
+  checks common package locations and distinguishes a broken executable
+  from a missing installation. The missing-package panel links to its
+  official Linux download instructions. (#73)
+
+- **Icons follow Plasma's selected theme too.** When no theme is chosen
+  in Studio, Mandara reads Plasma's icon preference as well as GTK's. (#73)
+
+- **Screenshots use KWin's own capture service on Plasma**, including
+  monitor names, cursor choice and full-resolution pixels. (#78)
+
+- **External brightness setup remembers the next boot.** Working I²C
+  access no longer skips the installer's offer to load its module at
+  startup, and a failed module load is reported. (#77)
+
+- **The bar picker only offers things it can draw.** Desktop widget
+  families and background tools stay in their own galleries instead of
+  being added to the bar as invisible items. (#73)
+
+- The Bengali input-seat hint and Persian login-screen choice are clearer.
+
+- **Recover even without keyboard libraries.** Restoring a backup works
+  without libxkbcommon and leaves the restored files in place. Shortcut
+  checks explain a missing library before changing anything, without
+  offering to retire conflicts that could not be checked.
+
+- Display changes recover even when both geometry queries fail. A stale
+  monitor list cannot give a new display another monitor’s name or dimensions.
+
+- **The process table counts the whole machine.** A busy build used to
+  read "405.5%" for `rustc`, because the list measured each process
+  against a single core while the Resources panel measured all of them.
+  Both now show a share of your whole machine, so no row goes past 100%,
+  and the *hot* colour still starts at the same amount of work as before,
+  including when Mandara runs with a CPU quota or affinity limit or CPUs
+  are brought online or taken offline.
+  Thanks to @Hedayatbakhshi. (#68)
+
+- **First-install instructions account for your current terminal** (#72).
+  If you added Mandara to PATH, the installer asks you to open a new
+  terminal before using its commands. It also points to Studio in your
+  application menu. Plasma Login Manager is recognised when switching to
+  Mandara Login.
+
+- **The website header stays readable in both themes.** The page and its
+  transparent banner now follow the same theme, and the browser tab shows
+  Mandara’s phoenix. Code examples keep their syntax colours with readable
+  contrast in light and dark mode.
+
+- **A slow compositor reply no longer holds up the first frame.** Initial
+  workspace and window queries run in the background before the shell
+  follows the live event stream.
+
+- **Locking from a hot corner keeps the shell responsive.** Waiting for
+  the secure lock screen now happens in the background.
+
+- **Tape stays attached to notes.** The notes desktop widget uses the same
+  corner strips as the to-do card, anchored to its visible paper. A header
+  or extra frame padding no longer leaves the strips floating above it.
+
+- **Source installs check the Rust version the dependencies actually need.**
+  An older toolchain is updated before the build instead of failing partway
+  through compiling the WebAssembly runtime.
+
+- **The bar and dock come back when a display reconnects** (#63). Switching
+  a monitor between computers, unplugging it or changing its resolution no
+  longer leaves that screen without its shell. Other displays keep their
+  surfaces, and your display assignments stay as you set them. A temporarily
+  unavailable display query is retried without replacing working surfaces.
+  If the compositor still omits a connected output, its last known logical
+  size stays in use until a complete update arrives.
+- **Installing again keeps your shell profiles safe** (#49). A leftover
+  installer comment no longer removes the next setting. Profile updates
+  preserve symlinks and permissions, and a failed write leaves the original
+  intact. Changing the installation folder also refreshes old PATH entries
+  when the new folder is already on PATH.
+- **Named Sway workspaces work with automatic bar hiding and the window
+  switcher** (#49). Includes can mix literal and wildcard characters, and
+  shortcut conflicts use the variable value at the shortcut's own line.
+
+- **Bar panels no longer hide behind the sidebar** (#62). With the sidebar
+  open, a panel such as Power or Weather used to open partly underneath it,
+  so the sidebar's cards looked washed out over the panel. The panel now
+  moves aside and opens next to the sidebar. On a screen too narrow for
+  both, it opens on top of the sidebar, fully opaque.
+
+- **Empty panels look right again** (#61). In short panels such as Wi-Fi's
+  *No networks found* and Bluetooth's *Bluetooth is off*, the icon sat high
+  in its round badge and the badge ran into the title. The badge now shrinks
+  to fit, with its icon centred.
+
+- **The installer's PATH lines survive unusual folder names.** A home
+  folder with spaces, quotes or a `$` in its name now ends up on your PATH
+  as it is, in bash, zsh and fish alike, and installing again to another
+  folder replaces the old line instead of keeping it. (#49)
+- **Pressing Ctrl-D at an installer question means No.** Enter still picks
+  the suggested answer, but a closed or failing terminal no longer says yes
+  for you. (#49)
+- **The launcher no longer vanishes when reopened quickly.** Closing it
+  before it had fully appeared and opening it again right away could make
+  it close itself two seconds later. (#49)
+- **Sway: every workspace is reachable.** A workspace named with quotes now
+  gets the right command, a named workspace such as `web` no longer blocks
+  a numbered one that doesn't exist yet, and its id no longer changes when
+  other workspaces come and go. (#49)
+- **Sway: your config is read the way Sway reads it.** Includes with a
+  wildcard in a folder (`conf.d/*/keys.conf`) or several files on one line
+  are followed, a `set $mod` you change later counts with its new value, and
+  a line that merely mentions `[ERROR]` (say, in a notification) is no
+  longer taken for an error. (#49)
+- **The shortcuts list keeps whole workspace names.** A Sway bind to
+  `workspace "dev ops"` now reads "Go to workspace dev ops", and River binds
+  with `-layout` show the right action. (#49)
+- **The NixOS setup message speaks your language.** When your compositor
+  config comes from Nix, the explanation of what to add is translated into
+  all 14 languages. (#49)
+
+### Under the hood
+
+- Release jobs keep GitHub write credentials out of dependency builds and
+  use them only for publishing and pushing release metadata.
+
+- **Release builds use an immutable checkout action.** CI and packaging
+  share the same verified action commit. Setup's availability tests also
+  find their fixture programs through PATH, including on NixOS.
+
+- **Build cleanup releases its locks promptly**, even when another tool
+  starts at the same moment, so unused build caches can be removed reliably.
+
+- **ARM builds avoid an unsupported linker option.** Packed relocations
+  are requested only on architectures GNU ld supports, keeping ARM build
+  output clear of the ignored-option warning.
+
+- **Build checks use the current GitHub Actions runtime.** Checkout no
+  longer reports the retired Node runtime during tests and releases.
+
+- **Clearer docs for NixOS, River and Sway.** The README says NixOS users
+  update through their flake, the install guide notes that River has no
+  include line or checker, and the Studio guide's Sway notes are more
+  precise. The flake's Home Manager check now runs as pure Nix assertions,
+  and the screenshot setup notes regenerate their wallpapers reliably. (#49)
+
 ## 0.15.0 — 2026-11-03
 
 Fresh screenshots everywhere. Cleaner main menu tiles.

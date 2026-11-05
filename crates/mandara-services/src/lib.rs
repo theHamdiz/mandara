@@ -39,6 +39,7 @@ pub mod offline;
 pub mod sleep;
 pub mod timedate;
 pub mod logind;
+pub mod plasma_lock;
 pub mod models;
 pub mod depth_model;
 pub mod desktop_notify;

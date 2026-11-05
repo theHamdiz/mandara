@@ -50,6 +50,9 @@ zbus.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+libc.workspace = true
+# Workflow contract tests inspect effective YAML inputs and environment scopes.
+serde_yaml_ng = "0.10"
 
 [lints]
 workspace = true

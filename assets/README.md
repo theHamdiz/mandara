@@ -12,6 +12,16 @@ Mandara's logo is a **phoenix rising from a Mediterranean wave**, in violet, cya
 | <img src="brand/mandara-banner-dark.webp" width="160" alt="Mandara banner"> | [Dark-theme banner](brand/mandara-banner-dark.webp) · [Light-theme banner](brand/mandara-banner-light.webp) (2560×800, transparent) | The README header: the phoenix in a soft bloom beside the Alexandria wordmark; GitHub shows the one matching the reader's theme |
 | <img src="brand/mandara-symbolic.svg" width="48" alt="Symbolic phoenix"> | [Symbolic SVG](brand/mandara-symbolic.svg) | The phoenix in one colour (`currentColor`), transparent: panels and the login screen |
 
+The Pages site uses the existing [128 px phoenix](brand/mandara-128.png) as
+its favicon. Its [page colours](css/pages.css) follow the same light or dark
+preference as the transparent banner, including the image background.
+The [homepage styles](css/landing.css) add the product tour and its native
+Look controls; its pictures come from the demo screenshots in `docs/screenshots/`.
+The [banner source](artwork/banner.html) renders at 1280×400 CSS pixels
+with a scale factor of two and a transparent background. Export it in each
+colour scheme after the fonts and logo have loaded; keep the output lossless
+so small lettering stays clean.
+
 ## Plugins
 
 The 74 plugins below include 73 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.

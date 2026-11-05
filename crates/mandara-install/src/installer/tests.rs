@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::*;
-use crate::host::{Fetch, Output};
+use crate::host::{Fetch, Output, Row};
 use crate::release::tests::tarball;
 use mandara_delta::signing::sign;
 
@@ -41,6 +41,14 @@ struct FakeHost {
     tty: bool,
     /// Commands (argv joined by spaces) whose captured stdout is this.
     stdout: HashMap<String, String>,
+    /// What `select` returns, in order (the default once empty).
+    menus: Vec<usize>,
+    /// `select` is cancelled instead.
+    cancel: bool,
+    /// Cancel this menu index after earlier selections have succeeded.
+    cancel_at: Option<usize>,
+    /// The prompt and row labels of every menu shown.
+    shown: Vec<(String, Vec<String>)>,
     ran: Vec<Cmd>,
     out: Vec<(Level, String)>,
 }
@@ -63,7 +71,7 @@ impl Host for FakeHost {
     fn run(&mut self, cmd: &Cmd) -> std::io::Result<Output> {
         self.ran.push(cmd.clone());
         let code = self.codes.get(&cmd.display()).copied();
-        let stdout = self.stdout.get(&cmd.display()).cloned().unwrap_or_default();
+        let stdout = if cmd.io == crate::host::Io::Capture { self.stdout.get(&cmd.display()).cloned().unwrap_or_default() } else { String::new() };
         let failed_once = self.failing_once.remove(&cmd.display());
         Ok(Output { success: !failed_once && !self.failing.contains(&cmd.display()) && code.is_none(), code, stdout, ..Default::default() })
     }
@@ -84,6 +92,18 @@ impl Host for FakeHost {
 
     fn interactive(&self) -> bool {
         self.tty
+    }
+
+    fn select(&mut self, prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
+        self.shown.push((prompt.to_string(), rows.iter().map(|r| r.label.clone()).collect()));
+        if self.cancel || self.cancel_at == Some(self.shown.len() - 1) {
+            return None;
+        }
+        if self.menus.is_empty() {
+            Some(default.min(rows.len().saturating_sub(1)))
+        } else {
+            Some(self.menus.remove(0))
+        }
     }
 
     fn fetch(&mut self, url: &str, _limit: u64) -> Result<Vec<u8>, Fetch> {
@@ -297,6 +317,97 @@ fn no_deps_skips_packages_and_greeter_packages() {
 }
 
 #[test]
+fn interactive_setup_chooses_the_compositor_then_the_rest_is_not_asked() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["dnf", "sudo", "systemctl", "niri"]);
+    host.tty = true;
+    // Setup → Compositor row, compositor list → Niri, Setup → Install (last row).
+    host.menus = vec![0, compositor_rows(&host, None).0.iter().position(|id| *id == "niri").unwrap(), 3];
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs::default()).unwrap();
+    let (prompt, rows) = &host.shown[0];
+    assert_eq!(prompt, "Setup");
+    assert_eq!(rows, &["Compositor", "Start with your compositor", "Login screen", "Install"]);
+    assert_eq!(host.shown[1].0, "Compositor");
+    let labels: Vec<&str> = compositors::SUPPORTED.iter().filter(|c| c.id != "kwin").map(|c| c.label).collect();
+    assert_eq!(host.shown[1].1, labels);
+    let bin = f.home().join(".local/bin/mandara");
+    let setup = format!("{} setup --compositor niri --autostart", bin.display());
+    assert!(host.ran().contains(&setup), "{:?}", host.ran());
+    // The login-screen question was answered on the screen, not asked again.
+    assert!(!host.text().contains("asked: Use Mandara Login"), "{}", host.text());
+    assert!(host.text().contains("Mandara Login is your login screen"), "{}", host.text());
+    // A terminal gets the wordmark.
+    assert!(host.text().contains("███╗   ███╗"), "{}", host.text());
+}
+
+#[test]
+fn an_untouched_compositor_row_leaves_detection_to_setup() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["dnf", "sudo", "systemctl", "niri"]);
+    host.tty = true;
+    // Straight to Install: Compositor, autostart, login screen, Install.
+    host.menus = vec![3];
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs::default()).unwrap();
+    let bin = f.home().join(".local/bin/mandara");
+    let ran = host.ran();
+    // Niri is installed, so the row suggested it, but only `setup` itself
+    // decides: a machine with several compositors must not be pinned to the
+    // wrong one by walking past the row.
+    assert!(ran.contains(&format!("{} setup --autostart", bin.display())), "{ran:?}");
+    assert!(!ran.iter().any(|c| c.contains("setup --compositor")), "{ran:?}");
+}
+
+#[test]
+fn choices_given_on_the_command_line_are_not_offered() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo", "systemctl"]);
+    host.tty = true;
+    // Rows left: autostart, login screen, Install.
+    host.menus = vec![2];
+    let args = InstallArgs { compositor: Some("niri".into()), ..Default::default() };
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), args).unwrap();
+    assert_eq!(host.shown[0].1, ["Start with your compositor", "Login screen", "Install"]);
+    assert!(host.ran().iter().any(|c| c.ends_with("setup --compositor niri --autostart")), "{:?}", host.ran());
+}
+
+#[test]
+fn yes_skips_the_setup_screen() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo", "systemctl"]);
+    host.tty = true;
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, ..Default::default() }).unwrap();
+    assert!(host.shown.is_empty(), "{:?}", host.shown);
+    // No terminal interaction, so the plain one-line title.
+    assert!(!host.text().contains("███╗"), "{}", host.text());
+}
+
+#[test]
+fn cancelling_the_setup_screen_changes_nothing() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.tty = true;
+    host.cancel = true;
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs::default()).unwrap();
+    assert!(host.text().contains("Cancelled — nothing was changed."), "{}", host.text());
+    assert!(host.ran().is_empty(), "{:?}", host.ran());
+    assert!(f.home_files().is_empty(), "{:?}", f.home_files());
+}
+
+#[test]
+fn cancelling_the_compositor_picker_changes_nothing() {
+    let fixture = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.tty = true;
+    host.menus = vec![0];
+    host.cancel_at = Some(1);
+    run(&mut host, &FakeProbe::default(), fixture.facts(Family::Arch), InstallArgs::default()).unwrap();
+    assert_eq!(host.shown.len(), 2);
+    assert!(host.text().contains("Cancelled — nothing was changed."));
+    assert!(host.ran().is_empty());
+    assert!(fixture.home_files().is_empty());
+}
+
+#[test]
 fn real_install_puts_files_in_place_and_runs_setup_and_greeter() {
     let f = Fixture::new();
     let mut host = FakeHost::with(&["dnf", "sudo", "systemctl"]);
@@ -323,11 +434,11 @@ fn real_install_puts_files_in_place_and_runs_setup_and_greeter() {
     // The setup commands run quietly.
     assert!(host.ran[setup].env.contains(&("RUST_LOG".into(), "warn".into())));
     let text = host.text();
-    assert!(text.contains("Mandara is installed.") && text.contains("Upgrade:         mandara update"));
+    assert!(text.contains("Mandara is installed.") && text.contains("Studio → About → Update now"));
     assert!(text.contains("is not on your PATH"));
     // `--yes` takes the default: the folder goes on PATH, once.
     let profile = std::fs::read_to_string(f.home().join(".profile")).unwrap();
-    assert!(profile.contains(&format!("export PATH=\"{}:$PATH\"", f.home().join(".local/bin").display())));
+    assert!(profile.contains(&format!("export PATH='{}':\"$PATH\"", f.home().join(".local/bin").display())));
     assert!(std::fs::read_to_string(f.home().join(".bashrc")).unwrap().contains("Mandara installer"));
     assert!(super::add_to_path(&f.home(), &f.home().join(".local/bin")).unwrap().is_empty());
     // No published checksum reachable: installed with a warning.
@@ -339,7 +450,7 @@ fn conflicts_are_retired_when_accepted() {
     let f = Fixture::new();
     let mut host = FakeHost::with(&["pacman", "sudo"]);
     let b = f.home().join(".local/bin/mandara").display().to_string();
-    host.failing.insert(format!("{b} setup --check"));
+    host.codes.insert(format!("{b} setup --check"), crate::installer::SETUP_CONFLICTS);
     run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
     let ran = host.ran();
     assert!(ran.contains(&format!("{b} setup")), "{ran:#?}");
@@ -605,12 +716,27 @@ fn external_monitor_brightness_setup() {
     assert!(ran.contains(&"sudo modprobe i2c-dev".to_string()));
     assert!(ran.contains(&"sudo groupadd -r i2c".to_string()));
     assert!(ran.contains(&"sudo usermod -aG i2c u".to_string()));
-    // Already in the group with the devices present: nothing asked.
+    // Access in this boot does not imply that the module loads next boot.
     std::fs::write(root.join("dev/i2c-0"), "").unwrap();
     std::fs::write(root.join("etc/group"), "i2c:x:20:u\n").unwrap();
     let mut host = FakeHost::with(&["pacman", "sudo"]);
-    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
+    host.answers = Some(true);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
     assert!(!host.ran().iter().any(|c| c.contains("usermod")));
+    assert!(host.ran().contains(&"sudo tee /etc/modules-load.d/i2c-dev.conf".to_string()));
+    assert!(!host.ran().iter().any(|c| c.contains("modprobe")));
+    let module_config = root.join("etc/modules-load.d/i2c-dev.conf");
+    std::fs::create_dir_all(module_config.parent().unwrap()).unwrap();
+    std::fs::write(&module_config, "# Kept by the fixture\nother-module").unwrap();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.answers = Some(true);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
+    let tee = host.ran.iter().find(|c| c.argv.contains(&"tee".to_string())).unwrap();
+    assert_eq!(tee.stdin.as_deref(), Some(&b"# Kept by the fixture\nother-module\ni2c-dev\n"[..]));
+    std::fs::write(&module_config, "# Installed\ni2c-dev\n").unwrap();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
+    assert!(!host.ran().iter().any(|c| c.contains("modules-load.d") || c.contains("modprobe") || c.contains("usermod")));
 }
 
 #[test]
@@ -664,6 +790,21 @@ fn config_errors_are_reported_without_retiring() {
     let ran = host.ran();
     assert!(!ran.contains(&format!("{b} setup --fix-conflicts")), "{ran:#?}");
     assert!(host.text().contains("Config doctor"));
+}
+
+#[test]
+fn prerequisite_and_unclassified_setup_failures_never_offer_conflict_retirement() {
+    for code in [crate::installer::SETUP_PREREQUISITE, 1] {
+        let f = Fixture::new();
+        let mut host = FakeHost::with(&["pacman", "sudo"]);
+        let b = f.home().join(".local/bin/mandara").display().to_string();
+        host.codes.insert(format!("{b} setup --check"), code);
+        run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
+        assert!(host.ran().iter().all(|command| !command.contains("--fix-conflicts")));
+        let text = host.text();
+        assert!(!text.contains("Retire the conflicts"), "{text}");
+        assert!(text.contains(if code == crate::installer::SETUP_PREREQUISITE { "Install libxkbcommon" } else { "compositor setup failed" }), "{text}");
+    }
 }
 
 // ── Package databases (issue #45) ───────────────────────────────────────
@@ -906,4 +1047,180 @@ fn dry_run_shows_the_compositor_plan() {
     // (and says so) and nothing is queried.
     assert!(host.ran().iter().all(|c| !c.contains("pacman")), "{:?}", host.ran());
     assert!(text.contains("from Mandara's package table: the package databases aren't downloaded yet"));
+}
+
+/// What `sh` (or `fish`) ends up with on `PATH` after reading `profile`,
+/// or `None` when that shell isn't installed.
+fn path_after(shell: &str, profile: &Path) -> Option<String> {
+    crate::host::find_program(shell, std::env::var_os("PATH").as_deref())?;
+    let script = match shell {
+        "fish" => format!("set -gx PATH /usr/bin; source {}; string join : $PATH", super::fish_word(&profile.to_string_lossy())),
+        _ => format!("PATH=/usr/bin; . {}; printf %s \"$PATH\"", super::sh_word(&profile.to_string_lossy())),
+    };
+    let flags: &[&str] = if shell == "fish" { &["--no-config", "-c"] } else { &["-c"] };
+    let out = std::process::Command::new(shell).args(flags).arg(&script).env("HOME", profile.parent()?).output().ok()?;
+    assert!(out.status.success(), "{shell}: {}", String::from_utf8_lossy(&out.stderr));
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+#[test]
+fn the_path_line_keeps_an_awkward_folder_as_one_word() {
+    let f = Fixture::new();
+    std::fs::create_dir_all(f.home().join(".config/fish")).unwrap();
+    let bin = f.home().join("my bin/it's $HOME `x` \"q\" \\b");
+    std::fs::create_dir_all(&bin).unwrap();
+    let changed = super::add_to_path(&f.home(), &bin).unwrap();
+    assert_eq!(changed.len(), 3, "{changed:?}");
+    let want = bin.to_string_lossy();
+    if let Some(path) = path_after("sh", &f.home().join(".profile")) {
+        assert_eq!(path, format!("{want}:/usr/bin"));
+    }
+    if let Some(path) = path_after("fish", &f.home().join(".config/fish/conf.d/mandara-path.fish")) {
+        assert!(path.split(':').any(|p| p == want), "{path}");
+    }
+    // Already on PATH there: reading the profile twice adds it once.
+    let twice = f.home().join("twice");
+    let profile = std::fs::read_to_string(f.home().join(".profile")).unwrap();
+    std::fs::write(&twice, format!("{profile}{profile}")).unwrap();
+    if let Some(path) = path_after("sh", &twice) {
+        assert_eq!(path, format!("{want}:/usr/bin"));
+    }
+    // A second run with the same folder changes nothing.
+    assert!(super::add_to_path(&f.home(), &bin).unwrap().is_empty());
+}
+
+#[test]
+fn a_new_prefix_replaces_the_old_path_line() {
+    let f = Fixture::new();
+    std::fs::write(f.home().join(".profile"), "export EDITOR=vi\n").unwrap();
+    let old = f.home().join(".local/bin");
+    let new = f.home().join("opt/bin");
+    assert_eq!(super::add_to_path(&f.home(), &old).unwrap().len(), 2);
+    // The mark alone isn't enough: the folder on that line is what counts.
+    assert_eq!(super::add_to_path(&f.home(), &new).unwrap().len(), 2);
+    let profile = std::fs::read_to_string(f.home().join(".profile")).unwrap();
+    assert!(profile.starts_with("export EDITOR=vi\n"), "{profile}");
+    assert_eq!(profile.matches(super::PATH_MARK).count(), 1, "{profile}");
+    assert!(profile.contains(&super::posix_path_line(&new.to_string_lossy())) && !profile.contains(&*old.to_string_lossy()), "{profile}");
+}
+
+#[test]
+fn installing_into_an_existing_path_refreshes_only_old_marked_entries() {
+    let f = Fixture::new();
+    super::add_to_path(&f.home(), &f.home().join("old/bin")).unwrap();
+    std::fs::write(f.home().join(".bashrc"), "export EDITOR=vi\n").unwrap();
+    let mut facts = f.facts(Family::Fedora);
+    facts.path_var = format!("{}:/usr/bin", f.home().join(".local/bin").display());
+    let mut host = FakeHost::with(&["dnf", "sudo"]);
+    run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, no_deps: true, ..Default::default() }).unwrap();
+    let profile = std::fs::read_to_string(f.home().join(".profile")).unwrap();
+    assert!(profile.contains(&*f.home().join(".local/bin").to_string_lossy()));
+    assert!(!profile.contains("old/bin"));
+    assert_eq!(std::fs::read_to_string(f.home().join(".bashrc")).unwrap(), "export EDITOR=vi\n");
+}
+
+#[test]
+fn an_unreadable_profile_does_not_abort_an_existing_path_install() {
+    let f = Fixture::new();
+    let original = [0xff, 0xfe];
+    std::fs::write(f.home().join(".profile"), original).unwrap();
+    let mut facts = f.facts(Family::Fedora);
+    facts.path_var = format!("{}:/usr/bin", f.home().join(".local/bin").display());
+    let mut host = FakeHost::with(&["dnf", "sudo"]);
+    run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, no_deps: true, ..Default::default() }).unwrap();
+    assert_eq!(std::fs::read(f.home().join(".profile")).unwrap(), original);
+    assert!(host.text().contains("Could not update PATH"));
+    assert!(f.home().join(".local/bin/mandara").is_file());
+}
+
+#[test]
+fn uninstall_removes_only_mandaras_own_plasma_startup_entry() {
+    for (owned, dry_run) in [(true, false), (false, false), (true, true)] {
+        let f = Fixture::new();
+        let startup = f.home().join(".config/autostart").join(files::KWIN_AUTOSTART_FILE);
+        std::fs::create_dir_all(startup.parent().unwrap()).unwrap();
+        let text = if owned { format!("[Desktop Entry]\nExec=mandara\n{}\n", files::KWIN_AUTOSTART_MARKER) } else { "[Desktop Entry]\nExec=my-command\n".into() };
+        std::fs::write(&startup, &text).unwrap();
+        let mut host = FakeHost::default();
+        run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { uninstall: true, dry_run, ..Default::default() }).unwrap();
+        if owned && !dry_run { assert!(!startup.exists()); }
+        else { assert_eq!(std::fs::read_to_string(startup).unwrap(), text); }
+    }
+}
+
+#[test]
+fn an_existing_plasma_session_needs_no_extra_compositor_installation() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["kwin_wayland", "dnf", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs { compositor: Some("kwin".into()), yes: true, no_deps: true, ..Default::default() }).unwrap();
+    assert!(!host.text().contains("Installing a compositor"));
+    assert!(host.ran().iter().any(|cmd| cmd.contains("setup --compositor kwin")));
+}
+
+#[test]
+fn completion_explains_when_the_calling_terminal_needs_a_new_path() {
+    let fixture = Fixture::new();
+    for on_path in [false, true] {
+        let mut host = FakeHost::default();
+        let probe = FakeProbe::default();
+        let mut facts = fixture.facts(Family::Arch);
+        let bin = fixture.home().join(".local/bin");
+        facts.path_var = if on_path { format!("{}:/usr/bin", bin.display()) } else { "/usr/bin".into() };
+        Installer::new(&mut host, &probe, facts, InstallArgs::default()).completion();
+        let output: Vec<_> = host.out.iter().map(|(_, text)| text.as_str()).collect();
+        let path_note = output.iter().position(|text| text.contains("open a new terminal"));
+        assert_eq!(path_note.is_some(), !on_path);
+        let start = output.iter().position(|text| text.starts_with("Start it:")).unwrap();
+        if let Some(note) = path_note { assert!(note < start); }
+        assert!(output.iter().any(|text| text.contains("application menu")));
+        assert!(output.iter().any(|text| text.contains("Studio → About → Update now")));
+        assert!(host.ran.is_empty(), "completion only prints instructions");
+    }
+}
+
+#[test]
+fn completion_translates_every_instruction_in_the_callers_language() {
+    let fixture = Fixture::new();
+    for lang in mandara_i18n::Lang::ALL {
+        let _language = mandara_i18n::scoped(Some(lang));
+        let mut host = FakeHost::default();
+        let probe = FakeProbe::default();
+        Installer::new(&mut host, &probe, fixture.facts(Family::Arch), InstallArgs::default()).completion();
+        for key in ["Mandara is installed.", "Start it:        mandara            (or log in again if autostart is on)", "Settings:        mandara studio", "Health & repair: mandara studio maintenance"] {
+            let expected = mandara_i18n::t(key);
+            assert!(host.out.iter().any(|(_, text)| text == expected), "{}: {key}", lang.code());
+            if lang != mandara_i18n::Lang::En { assert_ne!(expected, key, "{}: {key}", lang.code()); }
+        }
+        assert!(host.ran.is_empty());
+    }
+}
+
+#[test]
+fn kwin_is_offered_only_when_installed_and_defaults_use_the_visible_rows() {
+    for installed in [false, true] {
+        let host = FakeHost::with(if installed { &["kwin_wayland", "niri"] } else { &["niri"] });
+        let (names, rows, default) = compositor_rows(&host, Some("niri"));
+        assert_eq!(names.contains(&"kwin"), installed);
+        assert_eq!(names[default], "niri");
+        assert_eq!(rows[default].label, "Niri");
+        let (names, _, default) = compositor_rows(&host, Some("kwin"));
+        assert_eq!(default, 0);
+        assert_eq!(names[default], if installed { "kwin" } else { "mango" });
+    }
+}
+
+#[test]
+fn failed_kwin_availability_is_not_reported_as_a_config_or_keyboard_error() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo", "kwin_wayland"]);
+    let bin = f.home().join(".local/bin/mandara").display().to_string();
+    let check = format!("{bin} setup --check --compositor kwin");
+    host.codes.insert(check.clone(), crate::installer::SETUP_AVAILABILITY);
+    host.stdout.insert(check, "KWin availability: unable to start probe".into());
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, compositor: Some("kwin".into()), ..Default::default() }).unwrap();
+    let text = host.text();
+    assert!(text.contains("KWin availability: unable to start probe"), "{text}");
+    assert!(!text.contains("your compositor reports errors in its config"));
+    assert!(!text.contains("Install libxkbcommon"));
+    assert!(host.ran().iter().all(|command| !command.contains("--fix-conflicts")));
 }

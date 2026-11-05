@@ -83,6 +83,7 @@ impl RawClient {
             focused: c.is_focused,
             floating: c.is_floating,
             fullscreen: c.is_fullscreen,
+            minimized: false,
             geometry: (c.width > 0 && c.height > 0).then_some((c.x, c.y, c.width, c.height)),
         })
     }

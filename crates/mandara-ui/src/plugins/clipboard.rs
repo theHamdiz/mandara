@@ -14,6 +14,7 @@
 //! Everything the panel does is also a `clipboard …` command.
 
 mod rows;
+mod keys;
 mod tint;
 
 use std::cell::{Cell, RefCell};
@@ -26,8 +27,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, App, AppContext as _, Entity, FontWeight, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderImage, SharedString, StatefulInteractiveElement, Styled, Task, Window, div,
-    prelude::FluentBuilder as _, px, size,
+    AnyElement, App, AppContext as _, Entity, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, RenderImage, ScrollDelta, ScrollEvent,
+    SharedString, StatefulInteractiveElement, Styled, Task, Window, div, prelude::FluentBuilder as _, px, size,
 };
 use mandara_config::workflow::ClipboardConfig;
 use mandara_core::ToGpui;
@@ -56,6 +57,9 @@ const PAGE: usize = 8;
 const PAGE_BUDGET_H: f32 = PAGE_BUDGET_ROWS * rows::IMAGE_H;
 /// Image rows that fit [`PAGE_BUDGET_H`].
 const PAGE_BUDGET_ROWS: f32 = 6.0;
+/// Wheel notches that turn one page: a wheel click is one notch, touchpads
+/// send fractions, so a nudge does not skip a page.
+const WHEEL_NOTCHES_PER_PAGE: f32 = 2.0;
 /// "Clear all" and "delete collection" stay armed for a second click this long.
 const CONFIRM_WINDOW: Duration = Duration::from_secs(3);
 /// Longest side of a decoded preview, in physical pixels.
@@ -282,11 +286,71 @@ struct Ui {
     /// The chip strip's scroll, and the filter it last scrolled into view.
     chips: crate::hstrip::HStrip,
     chips_shown: Option<Filter>,
+    /// The entry the keyboard is on, if any.
+    selected: Option<u64>,
+    /// Entry ids in the order the panel draws them: the pinned rows, then
+    /// the whole filtered history, pages included, so the arrows can walk
+    /// past a page's end and take the list with them.
+    order: Vec<u64>,
+    /// How many of `order`'s leading ids are pinned (drawn on every page).
+    pinned_len: usize,
+    /// The page each history row of `order` sits on.
+    page_of: Vec<usize>,
+    /// How many pages the history has.
+    pages: usize,
+    /// Wheel distance collected toward the next page turn.
+    wheel: f32,
 }
 
 type Shared = Rc<RefCell<Ui>>;
 
 impl Ui {
+    fn scroll_page(&mut self, notches: f32) {
+        if self.pages < 2 || notches * self.wheel < 0.0 { self.wheel = 0.0; }
+        if self.pages < 2 { return; }
+        self.wheel += notches;
+        if self.wheel.abs() < WHEEL_NOTCHES_PER_PAGE { return; }
+        let newer = self.wheel > 0.0;
+        self.wheel = 0.0;
+        let page = if newer { self.page.saturating_sub(1) } else { (self.page + 1).min(self.pages - 1) };
+        if page != self.page {
+            self.page = page;
+            self.picker = None;
+            self.selected = None;
+        }
+    }
+
+    /// Begin on the visible history page, then walk across page boundaries.
+    fn next_selection(&self, delta: isize) -> Option<(usize, u64)> {
+        if self.selected.is_none() {
+            let on_page = |(_, page): &(usize, &usize)| **page == self.page;
+            let candidate = if delta > 0 {
+                self.page_of.iter().enumerate().find(on_page)
+            } else {
+                self.page_of.iter().enumerate().rfind(on_page)
+            };
+            if let Some((index, _)) = candidate {
+                let index = index + self.pinned_len;
+                if let Some(id) = self.order.get(index) { return Some((index, *id)); }
+            }
+        }
+        step_selection(&self.order, self.selected, delta)
+    }
+
+    /// Keep keyboard activation restricted to the rows drawn on this page.
+    fn reconcile_selection(&mut self, layout: &Layout<'_>) {
+        self.order.clear();
+        self.order.extend(layout.listing.pinned.iter().map(|entry| entry.id));
+        self.pinned_len = self.order.len();
+        self.order.extend(layout.listing.main.iter().map(|entry| entry.id));
+        self.page_of.clear();
+        for (page, range) in layout.pages.iter().enumerate() {
+            self.page_of.extend(range.clone().map(|_| page));
+        }
+        self.pages = layout.pages.len();
+        self.selected = self.selected.filter(|id| layout.listing.pinned.iter().chain(layout.page_rows()).any(|entry| entry.id == *id));
+    }
+
     fn decoded_bytes(&self) -> usize {
         self.thumbs.values().map(|t| t.bytes).sum()
     }
@@ -314,13 +378,21 @@ impl Ui {
         self.search = None;
         self.page = 0;
         self.picker = None;
+        self.selected = None;
+        self.order.clear();
+        self.page_of.clear();
+        self.pages = 0;
+        self.wheel = 0.0;
     }
 
-    /// Switches the list to `filter` (first page, pickers closed).
+    /// Switches the list to `filter` (first page, pickers and keyboard
+    /// selection closed: the rows under it are different now).
     fn show(&mut self, filter: Filter) {
         self.filter = filter;
         self.page = 0;
         self.picker = None;
+        self.selected = None;
+        self.wheel = 0.0;
     }
 }
 
@@ -331,6 +403,55 @@ fn update(ui: &Shared, cx: &mut App, f: impl FnOnce(&mut Ui)) {
         u.views.clone()
     };
     views.notify(cx);
+}
+
+/// Where the arrows land in `order`: the index and entry id, clamped to the
+/// ends, starting at the top for Down and at the bottom for Up when nothing
+/// is selected yet.
+fn step_selection(order: &[u64], current: Option<u64>, delta: isize) -> Option<(usize, u64)> {
+    let last = order.len().checked_sub(1)?;
+    let next = match current.and_then(|id| order.iter().position(|o| *o == id)) {
+        Some(at) => (at as isize + delta).clamp(0, last as isize) as usize,
+        None if delta > 0 => 0,
+        None => last,
+    };
+    Some((next, order[next]))
+}
+
+/// Moves the keyboard selection by `delta` rows, turning the page when it
+/// steps past the one on screen (the picker closes: it belongs to a row
+/// that may not be visible any more).
+fn select_step(ui: &Shared, delta: isize, cx: &mut App) {
+    update(ui, cx, |u| {
+        let Some((at, id)) = u.next_selection(delta) else {
+            u.selected = None;
+            return;
+        };
+        u.selected = Some(id);
+        if at >= u.pinned_len {
+            u.page = u.page_of.get(at - u.pinned_len).copied().unwrap_or(u.page);
+        }
+        u.picker = None;
+    });
+}
+
+/// Turns pages from wheel distance: up goes to newer rows, down to older.
+fn wheel_step(ui: &Shared, notches: f32, cx: &mut App) {
+    update(ui, cx, |u| u.scroll_page(notches));
+}
+
+/// Runs what a left click on the selected row does: copy it (or paste it,
+/// where the panel is set to paste).
+fn activate(ui: &Shared, cx: &mut App) {
+    let Some(id) = ui.borrow().selected else { return };
+    let action = {
+        let look = Look::of(&crate::state::config(cx).read(cx).get().clipboard);
+        let state = hub(cx).read(cx);
+        state.clipboard.entries.iter().find(|e| e.id == id).map(|e| row_actions(ui, e, &look).restore.clone())
+    };
+    if let Some(action) = action {
+        action(false, cx);
+    }
 }
 
 thread_local! {
@@ -455,6 +576,9 @@ fn pager(ui: &Shared, pages: &[Range<usize>], page: usize, n: usize, palette: &M
                     update(&ui, cx, |u| {
                         u.page = to;
                         u.picker = None;
+                        // The keyboard selection points at a row of the page
+                        // being left, so Enter must not still run it.
+                        u.selected = None;
                     })
                 })
             })
@@ -710,6 +834,11 @@ struct View {
     search: Entity<TextField>,
     name: Entity<TextField>,
     size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>,
+    /// The panel's own focus, taken when it opens so the arrows work
+    /// without a click first.
+    focus: gpui::FocusHandle,
+    /// Whether the panel was open on the last frame (take focus once).
+    opened: Cell<bool>,
 }
 
 /// The list as laid out: what passes the filter and search, its pages and
@@ -783,6 +912,15 @@ impl View {
     fn render(&self, palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
         let ui = &self.ui;
         ui.borrow().views.track(window);
+        // Take the keyboard as the panel opens, so Up / Down and Enter work
+        // without a click; clicking a field takes focus from here.
+        if self.p.progress() > 0.0 {
+            if !self.opened.replace(true) {
+                self.focus.focus(window, cx);
+            }
+        } else {
+            self.opened.set(false);
+        }
         let look = Look::of(&crate::state::config(cx).read(cx).get().clipboard);
         let query = self.search.read(cx).value.clone();
         if self.p.progress() > 0.0 {
@@ -794,6 +932,9 @@ impl View {
         let (entries, collections) = (&state.entries, &state.collections);
         let lay = layout(ui, entries, collections, &look, &query);
         let (listing, pages, page) = (&lay.listing, &lay.pages, lay.page);
+        // Snapshot the drawing order for the arrows: pinned rows first, then
+        // the whole history, with the page each row sits on.
+        ui.borrow_mut().reconcile_selection(&lay);
         let filter = ui.borrow().filter;
         let page_rows: Vec<&ClipEntry> = lay.page_rows().to_vec();
         let shown = lay.shown();
@@ -871,6 +1012,7 @@ impl View {
                 preview_lines: look.preview_lines,
                 can_edit: look.can_edit,
                 picking: picker == Some(e.id),
+                selected: u.selected == Some(e.id),
             };
             let row = entry_row(e, &rcx, palette, row_actions(ui, e, &look));
             if picker != Some(e.id) {
@@ -890,7 +1032,7 @@ impl View {
         } else {
             block_h(&listing.pinned) + block_h(&page_rows) + picker_h + if listing.pinned.is_empty() || page_rows.is_empty() { 0.0 } else { GAP - LIST_GAP }
         };
-        let controls_h = FIELD_H + CONTROL_GAP + CHIPS_H + if naming.is_some() { CONTROL_GAP + FIELD_H } else { 0.0 };
+        let controls_h = FIELD_H + CONTROL_GAP + CHIPS_H + CONTROL_GAP + SECTION_H_PX + if naming.is_some() { CONTROL_GAP + FIELD_H } else { 0.0 };
         self.size_cell.set(size(px(PANEL_W), px(PAD * 2.0 + HEADER_H + GAP + controls_h + GAP + list_h)));
 
         let body = if empty {
@@ -926,15 +1068,47 @@ impl View {
             }
             col.into_any_element()
         };
-        let mut controls = div().flex().flex_col().gap(px(CONTROL_GAP)).child(search).child(chips);
+        let mut controls = div().flex().flex_col().gap(px(CONTROL_GAP)).child(search).child(chips)
+            .child(div().h(px(SECTION_H_PX)).text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(crate::bidi::paragraph(t("Tab: results · ↑↓: select · Enter: use"))));
         if let Some(row) = naming_row {
             controls = controls.child(row);
         }
         div()
+            .id("clipboard-panel")
             .size_full()
             .p(px(PAD))
             .flex()
             .flex_col()
+            .track_focus(&self.focus)
+            .on_key_down({
+                let ui = ui.clone();
+                let focus = self.focus.clone();
+                let search = self.search.clone();
+                move |e: &KeyDownEvent, window, cx| {
+                    match keys::action(&e.keystroke.key, focus.is_focused(window), search.read(cx).is_focused(window), e.keystroke.modifiers == Default::default()) {
+                        keys::Action::Results => {
+                            cx.stop_propagation();
+                            focus.focus(window, cx);
+                            if ui.borrow().selected.is_none() { select_step(&ui, 1, cx); }
+                        }
+                        keys::Action::Move(delta) => { cx.stop_propagation(); select_step(&ui, delta, cx); }
+                        keys::Action::Activate => { cx.stop_propagation(); activate(&ui, cx); }
+                        keys::Action::Ignore => {},
+                    }
+                }
+            })
+            // The wheel turns the pages (the chips strip takes its own).
+            .on_scroll({
+                let ui = ui.clone();
+                move |e: &ScrollEvent, window, cx| {
+                    let line = f32::from(window.line_height());
+                    let notches = match e.delta {
+                        ScrollDelta::Lines(l) => l.y,
+                        ScrollDelta::Pixels(p) => f32::from(p.y) / line,
+                    };
+                    wheel_step(&ui, notches, cx);
+                }
+            })
             // Nothing shrinks when the panel is taller than the screen.
             .child(div().flex_none().child(reveal(&self.p, 0, header("clipboard", accent, t("Clipboard"), subtitle, palette, clear))))
             .child(div().flex_none().h(px(GAP)))
@@ -1051,7 +1225,7 @@ pub fn register(r: &mut PluginRegistry) {
             p.push((Rc::downgrade(&ui), search.clone()));
         });
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(INITIAL_H))));
-        let view = View { p: panel_cx.clone(), ui, search, name, size_cell: size_cell.clone() };
+        let view = View { p: panel_cx.clone(), ui, search, name, size_cell: size_cell.clone(), focus: cx.focus_handle(), opened: Cell::new(false) };
         let panel = fn_view(None, move |palette, window, cx| view.render(palette, window, cx), window, cx);
         PluginInstance { bar: Some(bar), panel: Some(PanelSpec { view: panel, size: size_cell }), ..PluginInstance::empty() }
     });
@@ -1334,6 +1508,62 @@ mod tests {
         let tall = PAGE_BUDGET_H / 2.0 + 1.0;
         assert_eq!(paginate(&[tall, tall, tall]), [0..1, 1..2, 2..3]);
         assert_eq!((paginate(&[PAGE_BUDGET_H * 2.0]).len(), paginate(&[PAGE_BUDGET_H * 2.0]).first().cloned()), (1, Some(0..1)));
+    }
+
+    #[test]
+    fn arrows_walk_the_rows_and_hold_at_the_ends() {
+        let order = [10u64, 20, 30, 40];
+        // Down from nothing starts at the top, Up at the bottom.
+        assert_eq!(step_selection(&order, None, 1), Some((0, 10)));
+        assert_eq!(step_selection(&order, None, -1), Some((3, 40)));
+        assert_eq!(step_selection(&order, Some(30), 1), Some((3, 40)));
+        assert_eq!(step_selection(&order, Some(30), -1), Some((1, 20)));
+        // The ends hold instead of wrapping.
+        assert_eq!(step_selection(&order, Some(10), -1), Some((0, 10)));
+        assert_eq!(step_selection(&order, Some(40), 1), Some((3, 40)));
+        // Nothing to walk.
+        assert_eq!(step_selection(&[], None, 1), None);
+    }
+
+    #[test]
+    fn the_first_arrow_starts_on_the_visible_page_even_with_pins() {
+        let ui = Ui { order: vec![1, 10, 20, 30, 40], pinned_len: 1, page_of: vec![0, 1, 1, 2], page: 1, ..Default::default() };
+        assert_eq!(ui.next_selection(1), Some((2, 20)));
+        assert_eq!(ui.next_selection(-1), Some((3, 30)));
+        let selected = Ui { selected: Some(30), ..ui };
+        assert_eq!(selected.next_selection(1), Some((4, 40)), "selected arrows still cross pages");
+    }
+
+    #[test]
+    fn scrolling_discards_single_page_distance_and_restarts_after_a_reversal() {
+        let mut ui = Ui { pages: 1, ..Default::default() };
+        ui.scroll_page(-10.0);
+        assert_eq!(ui.wheel, 0.0);
+        ui.pages = 3;
+        ui.scroll_page(-WHEEL_NOTCHES_PER_PAGE / 2.0);
+        assert_eq!(ui.page, 0);
+        ui.scroll_page(WHEEL_NOTCHES_PER_PAGE / 2.0);
+        assert_eq!(ui.wheel, WHEEL_NOTCHES_PER_PAGE / 2.0);
+        ui.scroll_page(-WHEEL_NOTCHES_PER_PAGE / 2.0);
+        assert_eq!(ui.page, 0);
+        ui.scroll_page(-WHEEL_NOTCHES_PER_PAGE / 2.0);
+        assert_eq!(ui.page, 1);
+        ui.show(Filter::All);
+        assert_eq!(ui.wheel, 0.0);
+    }
+
+    #[test]
+    fn a_history_change_cannot_leave_an_invisible_entry_selected() {
+        let entries = [entry(1, "pinned"), entry(10, "first"), entry(20, "second"), entry(30, "third")];
+        let layout = Layout { listing: Listing { pinned: vec![&entries[0]], main: entries[1..].iter().collect() }, pages: vec![0..2, 2..3], page: 0 };
+        let mut ui = Ui { selected: Some(30), ..Default::default() };
+        ui.reconcile_selection(&layout);
+        assert_eq!(ui.selected, None);
+        for id in [1, 10, 20] {
+            ui.selected = Some(id);
+            ui.reconcile_selection(&layout);
+            assert_eq!(ui.selected, Some(id), "visible rows keep their selection");
+        }
     }
 
     #[test]

@@ -195,6 +195,11 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Sidebar, tk("Hot corners"), "/hot_corners/over_fullscreen", tk("Over fullscreen apps"), tk("Also fire while a fullscreen app is shown (on MangoWM the bar must show over fullscreen windows too)"), Toggle),
         s(Sidebar, tk("Screen corners"), "/screen_corners/enabled", tk("Rounded screen corners"), tk("Black rounded corners drawn over the desktop"), Toggle),
         s(Sidebar, tk("Screen corners"), "/screen_corners/radius", tk("Radius"), "", slider(4.0, 40.0, 1.0, " px")),
+        s(Sidebar, tk("Screen corners"), "/screen_corners/top_left", tk("Top left"), "", Toggle),
+        s(Sidebar, tk("Screen corners"), "/screen_corners/top_right", tk("Top right"), "", Toggle),
+        s(Sidebar, tk("Screen corners"), "/screen_corners/bottom_left", tk("Bottom left"), "", Toggle),
+        s(Sidebar, tk("Screen corners"), "/screen_corners/bottom_right", tk("Bottom right"), "", Toggle),
+        s(Sidebar, tk("Screen corners"), "/screen_corners/hide_between_displays", tk("Hide corners between displays"), "", Toggle),
         // App themes (cross-app sync)
         s(Themes, tk("App themes"), "/integrations/kitty", "kitty", tk("~/.config/kitty/themes/mandara.conf (pick it with kitten themes or include it)"), Toggle),
         s(Themes, tk("App themes"), "/integrations/foot", "foot", tk("~/.cache/mandara/themes/foot.ini (include= it from foot.ini)"), Toggle),

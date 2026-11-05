@@ -156,6 +156,7 @@ pub fn entries() -> Vec<Setting> {
         s(Dock, DOCK_BEHAVIOUR, "/dock/overlay", tk("Above fullscreen windows"), tk("Put the dock on the overlay layer"), Toggle),
         s(Dock, DOCK_BEHAVIOUR, "/dock/bounce_on_launch", tk("Animate opening applications"), tk("Icons bounce until the app's first window appears"), Toggle),
         s(Dock, DOCK_BEHAVIOUR, "/dock/bounce_on_attention", tk("Bounce for attention"), tk("Apps with an urgent window or a critical notification bounce"), Toggle),
+        s(Dock, DOCK_BEHAVIOUR, "/dock/bounce_only_music", tk("Bounce only while music plays"), "", Toggle),
         s(Dock, DOCK_BEHAVIOUR, "/dock/minimize_to_app", tk("Minimize windows into application icon"), tk("Off: each minimized window gets its own icon on the right side"), Toggle),
         s(Dock, DOCK_BEHAVIOUR, "/dock/tooltips", tk("Show names on hover"), tk("A label above the icon under the pointer"), Toggle),
         s(Dock, DOCK_APPS, "/dock/show_running", tk("Show running apps"), tk("Also show apps that aren't kept in the dock while they run"), Toggle),

@@ -987,8 +987,17 @@ pub fn close(cx: &mut App) {
     session::send(Input::Close, cx);
 }
 
-/// Non-interactive capture for commands: the focused window or the screen.
+/// Direct capture targets; the all-display target keeps monitor positions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CaptureTarget { Window, Screen, All }
+
+/// Captures the focused window (`true`) or its screen (`false`).
 pub fn capture_now(window_only: bool, cx: &mut App) -> async_channel::Receiver<Result<String, String>> {
+    capture_target(if window_only { CaptureTarget::Window } else { CaptureTarget::Screen }, cx)
+}
+
+/// Non-interactive capture for commands and the screenshot panel.
+pub(crate) fn capture_target(target: CaptureTarget, cx: &mut App) -> async_channel::Receiver<Result<String, String>> {
     let hub = crate::hub::hub(cx).read(cx);
     let focused = hub.focused.clone();
     let cfg = crate::state::config(cx).read(cx).snapshot();
@@ -1001,7 +1010,9 @@ pub fn capture_now(window_only: bool, cx: &mut App) -> async_channel::Receiver<R
             let captures = mandara_services::screencopy::capture_all_with(shot.cursor).map_err(|e| format!("{e:#}"))?;
             let monitor = focused.as_ref().map(|c| c.monitor.clone()).unwrap_or_default();
             let cap = captures.iter().find(|c| c.output == monitor).or(captures.first()).ok_or(t("no outputs"))?;
-            let image = if window_only {
+            let image = if target == CaptureTarget::All {
+                mandara_services::screencopy::composite(&captures).map_err(|e| e.to_string())?
+            } else if target == CaptureTarget::Window {
                 let (x, y, w, h) = focused.as_ref().and_then(|c| c.geometry).ok_or(t("the compositor did not report a focused window geometry"))?;
                 cap.crop_logical((x - cap.logical.0) as f32, (y - cap.logical.1) as f32, w as f32, h as f32)
             } else {

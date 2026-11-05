@@ -7955,3 +7955,112 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "سادہ بھرائی (طے شدہ)، شیشے کے کنارے والی ابھری ہوئی 3D ٹائلیں، یا شفاف شیشہ"
 "Tile shadow" = "ٹائلوں کا سایہ"
 "How strong the shadow under each shortcut tile is (0 for none)" = "ہر شارٹ کٹ ٹائل کے نیچے سائے کی شدت (0 یعنی کوئی سایہ نہیں)"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} کو Nix ‏(Home Manager یا NixOS) بناتا ہے اور یہ صرف پڑھنے کے لیے ہے: یہ سطر اس کی Nix کنفیگریشن میں شامل کریں، دوبارہ بلڈ کریں، اور `mandara setup` دوبارہ چلائیں: {line}"
+"Opposite the sidebar" = "سائیڈ بار کی مخالف سمت"
+"Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't" = "ڈاک کہاں کھلے: اسکرین کے کسی ایک کنارے پر، یا اوپر یا نیچے درمیان میں وہاں کے بار سے لٹکتا ہوا (ایج فریم اسٹائلز میں اس کے ساتھ ایک ٹکڑے کی طرح)، یا جہاں بار نہیں وہاں اسکرین کے کنارے سے"
+"The grid always opens in the middle" = "گرڈ ہمیشہ درمیان میں کھلتا ہے"
+"The bar isn't at the top, so the dock hangs from the screen edge" = "بار اوپر نہیں ہے، اس لیے ڈاک اسکرین کے کنارے سے لٹکتا ہے"
+"The bar isn't at the bottom, so the dock rises from the screen edge" = "بار نیچے نہیں ہے، اس لیے ڈاک اسکرین کے کنارے سے اوپر اٹھتا ہے"
+"Joined to the bar, as one piece with it" = "بار سے جڑا ہوا، اس کے ساتھ ایک ٹکڑے کی طرح"
+"A floating bar has no edge to join, so the dock opens as a card next to it" = "تیرتے بار کا جڑنے کے لیے کوئی کنارہ نہیں، اس لیے ڈاک اس کے پاس ایک کارڈ کی طرح کھلتا ہے"
+
+"KWin settings are managed in Plasma System Settings" = "KWin کی ترتیبات Plasma کی سسٹم ترتیبات میں منظم ہوتی ہیں"
+"Workspace not found" = "کام کی جگہ نہیں ملی"
+"The window is no longer available" = "ونڈو اب دستیاب نہیں ہے"
+"The compositor did not respond in time" = "کمپوزیٹر نے وقت پر جواب نہیں دیا"
+"The compositor connection closed" = "کمپوزیٹر کا رابطہ بند ہو گیا"
+"Idle notifications are not available" = "غیرفعالیت کی اطلاعات دستیاب نہیں ہیں"
+"No input seat is available" = "ان پٹ آلات کا کوئی گروپ دستیاب نہیں ہے"
+"These displays do not support power control" = "یہ ڈسپلے بجلی کے کنٹرول کی حمایت نہیں کرتے"
+"This executable path cannot be used in a desktop entry" = "اس قابلِ اجرا فائل کا راستہ ڈیسک ٹاپ اندراج میں استعمال نہیں ہو سکتا"
+"{path} is a custom autostart entry; Mandara left it unchanged" = "{path} خودکار آغاز کا ذاتی اندراج ہے؛ Mandara نے اسے نہیں بدلا"
+"Mandara uses native Plasma protocols; KWin’s configuration stays unchanged" = "Mandara مقامی Plasma پروٹوکول استعمال کرتا ہے؛ KWin کی ترتیب تبدیل نہیں ہوتی"
+"KWin: startup entry {path}" = "KWin: آغاز کا اندراج {path}"
+"The lock screen did not confirm that the session is locked" = "لاک اسکرین نے سیشن کے مقفل ہونے کی تصدیق نہیں کی"
+"Change resolution, scale and display arrangement in Plasma System Settings. Shell placement below still applies." = "ریزولیوشن، اسکیل اور ڈسپلے کی ترتیب Plasma کی سسٹم ترتیبات میں بدلیں۔ نیچے شیل کی جگہ کی ترتیبات بدستور لاگو ہوتی ہیں۔"
+"KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings." = "KWin کا الگ ترتیب جانچنے والا آلہ نہیں ہے۔ اس کی ترتیبات Plasma کی سسٹم ترتیبات میں منظم ہوتی ہیں۔"
+"River's init controls startup; add or remove Mandara there" = "River کی init فائل آغاز کو کنٹرول کرتی ہے؛ وہیں Mandara شامل کریں یا ہٹائیں"
+"No supported compositor is installed ({compositors})." = "کوئی معاون کمپوزیٹر نصب نہیں ہے ({compositors})۔"
+"Could not update PATH: {error}. Add {line} to your shell profile." = "PATH تازہ نہیں ہو سکا: {error}۔ اپنے شیل پروفائل میں {line} شامل کریں۔"
+"Would remove {path}" = "{path} ہٹا دیا جائے گا"
+"Kept custom startup entry {path}" = "آغاز کا ذاتی اندراج {path} برقرار رکھا گیا"
+"Could not read {path}: {error}. Left it unchanged." = "{path} پڑھا نہیں جا سکا: {error}۔ اسے تبدیل نہیں کیا گیا۔"
+
+"Your Wayland desktop. Let’s get it ready." = "آپ کا Wayland ڈیسک ٹاپ۔ آئیے اسے تیار کریں۔"
+"Checking the release signature…" = "ریلیز کے دستخط کی تصدیق ہو رہی ہے…"
+"Downloading Mandara…" = "Mandara ڈاؤن لوڈ ہو رہا ہے…"
+"Verifying the download…" = "ڈاؤن لوڈ کی تصدیق ہو رہی ہے…"
+"Unpacking the installer…" = "انسٹالر کی فائلیں نکالی جا رہی ہیں…"
+"Ready. Opening Mandara’s installer…" = "تیار ہے۔ Mandara انسٹالر کھولا جا رہا ہے…"
+"Install this tool and try again:" = "یہ ٹول نصب کریں اور دوبارہ کوشش کریں:"
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "تیار ریلیز کے لیے Linux اور x86_64 یا aarch64 پروسیسر درکار ہے۔"
+"The release mirror must use HTTPS." = "ریلیز مرر کو HTTPS استعمال کرنا چاہیے۔"
+"Could not create a temporary download folder." = "ڈاؤن لوڈ کے لیے عارضی فولڈر نہیں بنایا جا سکا۔"
+"Download failed. Check your connection and try again." = "ڈاؤن لوڈ ناکام ہوا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔"
+"The release signature could not be verified. Nothing was installed." = "ریلیز کے دستخط کی تصدیق نہیں ہو سکی۔ کچھ بھی نصب نہیں ہوا۔"
+"This command needs OpenSSL 3 or newer." = "اس کمانڈ کے لیے OpenSSL 3 یا جدید تر درکار ہے۔"
+"The signed release has no unique checksum for this archive." = "دستخط شدہ ریلیز میں اس آرکائیو کے لیے منفرد چیک سم موجود نہیں۔"
+"The download did not match the signed release. Nothing was installed; please try again." = "ڈاؤن لوڈ دستخط شدہ ریلیز سے مطابقت نہیں رکھتا۔ کچھ بھی نصب نہیں ہوا؛ دوبارہ کوشش کریں۔"
+"Could not unpack the verified release." = "تصدیق شدہ ریلیز کی فائلیں نہیں نکالی جا سکیں۔"
+"The release does not contain exactly one executable installer." = "ریلیز میں قابلِ اجرا انسٹالرز کی تعداد ایک نہیں ہے۔"
+"Manual downloads:" = "دستی ڈاؤن لوڈ:"
+"On NixOS, install Mandara through your flake." = "NixOS پر Mandara اپنی flake کے ذریعے نصب کریں۔"
+
+"Compositor (default: detected)" = "کمپوزیٹر (طے شدہ: خودکار شناخت)"
+
+"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "mango, niri, hyprland, umbriel, sway, river یا kwin منتخب کریں (طے شدہ: خودکار شناخت)۔ غیر موجود کمپوزیٹر پوچھنے کے بعد نصب کیے جا سکتے ہیں۔ KWin کے لیے Plasma پہلے سے نصب ہونا ضروری ہے۔"
+
+"Install libxkbcommon before checking or changing compositor shortcuts." = "کمپوزیٹر کے شارٹ کٹس جانچنے یا تبدیل کرنے سے پہلے libxkbcommon نصب کریں۔"
+
+"Open Mandara Studio from your application menu." = "اپنے ایپلیکیشن مینو سے Mandara Studio کھولیں۔"
+
+"Updates: Studio → About → Update now" = "اپ ڈیٹس: Studio ← تعارف ← ابھی اپ ڈیٹ کریں"
+
+"If you added Mandara to PATH, open a new terminal before running these commands." = "اگر آپ نے Mandara کو PATH میں شامل کیا ہے تو یہ کمانڈز چلانے سے پہلے نیا ٹرمینل کھولیں۔"
+
+"Cancelled — nothing was changed." = "منسوخ — کچھ بھی تبدیل نہیں ہوا۔"
+
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "موجودہ لاگ اِن اسکرین برقرار ہے؛ Studio ← لاگ اِن اسکرین ← لاگ اِن مینیجر سے کسی بھی وقت بدلیں۔"
+
+"Setup" = "سیٹ اپ"
+
+"Start with your compositor" = "اپنے کمپوزیٹر کے ساتھ شروع کریں"
+
+"detect automatically" = "خودکار شناخت"
+
+"installed" = "نصب شدہ"
+
+"keep yours" = "اپنی موجودہ اسکرین رکھیں"
+
+"no" = "نہیں"
+
+"yes" = "ہاں"
+
+"{compositor} (installed)" = "{compositor} (نصب شدہ)"
+
+"↑/↓ change · enter select · esc cancel" = "↑/↓ بدلیں · Enter منتخب کریں · Esc منسوخ کریں"
+
+"Profile scope" = "پروفائل کا دائرہ"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "بار کا انداز، جگہ اور اونچائی بدلتا ہے۔ آپ کے آئٹمز تب تک رہیں گے جب تک آپ انہیں بدلنے کا انتخاب نہ کریں۔"
+"Replace bar items" = "بار کے آئٹمز بدلیں"
+"Leave empty to follow the desktop's icon theme" = "ڈیسک ٹاپ کی آئیکن تھیم استعمال کرنے کے لیے خالی چھوڑیں"
+"Could not load {module}; check that the installed kernel includes it" = "{module} لوڈ نہیں ہو سکا؛ دیکھیں کہ نصب شدہ کرنل میں یہ موجود ہے"
+
+"Bounce only while music plays" = "صرف موسیقی چلنے پر اچھالیں"
+"Hide corners between displays" = "اسکرینوں کے درمیان کونے چھپائیں"
+"Redraw interval p50" = "دوبارہ ڈرائنگ کا وقفہ p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "ویو کی حالیہ تعمیرات: بھرے بار سی پی یو پر تعمیر کا وقت دکھاتے ہیں؛ پوری اونچائی میں اسی سطح کی پچھلی تعمیر سے وقفہ بھی شامل ہے۔"
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "اس کمپوزیٹر میں wlr-screencopy دستیاب نہیں اور KWin کا ScreenShot2 بھی استعمال نہیں ہو سکا"
+
+"Tab: results · ↑↓: select · Enter: use" = "Tab: نتائج · ↑↓: انتخاب · Enter: استعمال"
+
+"Mandara is installed." = "ماندارا نصب ہو گیا ہے۔"
+
+"Start it:        mandara            (or log in again if autostart is on)" = "چلائیں:          mandara            (یا خودکار آغاز فعال ہو تو دوبارہ لاگ اِن کریں)"
+
+"Settings:        mandara studio" = "ترتیبات:         mandara studio"
+
+"Health & repair: mandara studio maintenance" = "جانچ اور مرمت:   mandara studio maintenance"

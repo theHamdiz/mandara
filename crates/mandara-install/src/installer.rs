@@ -8,6 +8,12 @@
 
 use std::path::{Path, PathBuf};
 
+mod path;
+mod completion;
+use path::{add_to_path, path_hint};
+#[cfg(test)]
+use path::{PATH_MARK, fish_word, posix_path_line, sh_word};
+
 use mandara_delta::signing::{self, PublicKey, SIG_FILE};
 use mandara_delta::{MANIFEST_FILE, SHELL_BINARY};
 use mandara_i18n::{Lang, packs};
@@ -16,11 +22,13 @@ use crate::args::InstallArgs;
 use crate::compositors::{self, Compositor};
 use crate::family::{Family, OsRelease};
 use crate::files::{self, Paths};
-use crate::host::{Cmd, Fetch, Host, Io, Level, TempDir};
+use crate::host::{Cmd, Fetch, Host, Io, Level, Row, TempDir};
 use crate::pkg::{PackageManager, Privilege};
 use crate::{index, packages};
 use crate::platform::{self, MIN_RUST, RELEASED_ARCHES};
 use crate::release::{self, ARCHIVE_SUFFIX, MAX_ARCHIVE_BYTES, MAX_JSON_BYTES, SUMS_FILE, SelfCheck};
+use crate::tui;
+use mandara_i18n::{t, tf};
 
 /// greetd + its kiosk compositor: what Mandara Login needs installed.
 const LOGIN_PROGRAMS: &[&str] = &["greetd", "cage"];
@@ -53,6 +61,12 @@ const DEV_FINGERPRINT: &str = "dev";
 /// `mandara setup --check` exit code for errors the compositor reports in
 /// its config (10 means conflicts).
 pub const SETUP_CONFIG_ERRORS: i32 = 11;
+/// `mandara setup --check` found conflicts that may be retired.
+pub const SETUP_CONFLICTS: i32 = 10;
+/// `mandara setup --check` could not inspect shortcuts without a required library.
+pub const SETUP_PREREQUISITE: i32 = 12;
+/// A compositor availability probe failed; no configuration error is implied.
+pub const SETUP_AVAILABILITY: i32 = 13;
 /// The quiet log level for the setup commands the installer runs.
 const SETUP_LOG: (&str, &str) = ("RUST_LOG", "warn");
 
@@ -205,6 +219,25 @@ pub struct Installer<'a> {
     /// The package databases were brought up to date in this run (or, in a
     /// dry run, would have been).
     synced: bool,
+    /// What the interactive setup screen chose (`None` when it didn't run).
+    setup: Option<SetupChoices>,
+}
+
+/// The answers taken on the interactive setup screen, so the steps below
+/// don't ask for them again.
+#[derive(Copy, Clone, Debug)]
+struct SetupChoices {
+    autostart: bool,
+    greeter: bool,
+}
+
+/// What a row of the setup screen does.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Choice {
+    Compositor,
+    Autostart,
+    Greeter,
+    Install,
 }
 
 impl<'a> Installer<'a> {
@@ -216,7 +249,7 @@ impl<'a> Installer<'a> {
         };
         let paths = Paths::new(args.prefix.as_deref(), &facts.home, xdg);
         let privilege = Privilege::detect(facts.is_root, |p| host.has_program(p));
-        Installer { host, probe, facts, args, paths, privilege, tmp: None, synced: false }
+        Installer { host, probe, facts, args, paths, privilege, tmp: None, synced: false, setup: None }
     }
 
     pub fn paths(&self) -> &Paths {
@@ -330,7 +363,12 @@ impl<'a> Installer<'a> {
             Source::Build => "from source",
         };
         let banner = format!("Mandara Shell installer · {} ({}) · {} · {label}", self.facts.os.display_name(), self.facts.family, self.facts.arch);
-        self.say(Level::Title, banner);
+        if self.host.interactive() && !self.args.yes {
+            let columns = self.host.columns();
+            self.say(Level::Title, tui::banner(columns, &banner));
+        } else {
+            self.say(Level::Title, banner);
+        }
         if self.dry() {
             self.say(Level::Info, "dry run: nothing will be changed");
         }
@@ -343,6 +381,10 @@ impl<'a> Installer<'a> {
                 return Err(msg);
             }
             self.say(Level::Warn, msg);
+        }
+        if !self.preflight()? {
+            self.say(Level::Info, t("Cancelled — nothing was changed."));
+            return Ok(());
         }
         let deps = !self.args.no_deps;
         if deps {
@@ -380,10 +422,7 @@ impl<'a> Installer<'a> {
         self.lock_hint();
         self.i2c();
         self.restart();
-        self.say(Level::Done, "Mandara is installed.");
-        for line in ["Start it:        mandara            (or log in again if autostart is on)", "Settings:        mandara studio", "Health & repair: mandara studio maintenance", "Upgrade:         mandara update"] {
-            self.say(Level::Info, line);
-        }
+        self.completion();
         Ok(())
     }
 
@@ -540,7 +579,7 @@ impl<'a> Installer<'a> {
             return;
         }
         self.say(Level::Step, "Installing a compositor");
-        self.say(Level::Info, "No compositor Mandara runs on is installed (MangoWM, Niri, Hyprland, Sway, River Classic or Umbriel).");
+        self.say(Level::Info, mandara_i18n::tf("No supported compositor is installed ({compositors}).", &[("compositors", &"MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin")]));
         if self.args.no_deps {
             self.say(Level::Info, "install one with your package manager (--no-deps), then run `mandara setup`");
             return;
@@ -548,6 +587,9 @@ impl<'a> Installer<'a> {
         let mut offered: Vec<(&'static Compositor, &'static str)> = Vec::new();
         let mut elsewhere: Vec<&'static str> = Vec::new();
         for c in compositors::SUPPORTED {
+            // Detect existing Plasma sessions, but don't offer an entire
+            // desktop installation as a standalone window manager.
+            if c.id == "kwin" { continue; }
             match self.compositor_package(c) {
                 Some(p) => offered.push((c, p)),
                 None => elsewhere.push(c.label),
@@ -975,22 +1017,90 @@ impl<'a> Installer<'a> {
         let _ = std::fs::write(self.paths.icon(), &stage.icon);
         self.say(Level::Ok, "Mandara Studio desktop entry");
         let bin_dir = self.paths.bin_dir.clone();
-        if !std::env::split_paths(&self.facts.path_var).any(|p| p == bin_dir) {
+        if std::env::split_paths(&self.facts.path_var).any(|p| p == bin_dir) {
+            if !self.dry() {
+                self.update_path_profiles(&bin_dir, true);
+            }
+        } else {
             self.say(Level::Warn, format!("{} is not on your PATH", bin_dir.display()));
             if self.ask(&format!("Add {} to your PATH in your shell profiles?", bin_dir.display()), true) && !self.dry() {
-                match add_to_path(&self.facts.home, &bin_dir) {
-                    Ok(files) if files.is_empty() => {}
-                    Ok(files) => {
-                        let names: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
-                        self.say(Level::Ok, format!("on your PATH in new terminals ({})", names.join(", ")));
-                    }
-                    Err(e) => self.say(Level::Warn, format!("couldn't add it to your PATH ({e}) — add export PATH=\"{}:$PATH\" to your shell profile", bin_dir.display())),
-                }
+                self.update_path_profiles(&bin_dir, false);
             } else {
-                self.say(Level::Detail, format!("add it yourself: export PATH=\"{}:$PATH\"", bin_dir.display()));
+                self.say(Level::Detail, format!("add it yourself: {}", path_hint(&bin_dir)));
             }
         }
         Ok(())
+    }
+
+    fn update_path_profiles(&mut self, bin_dir: &Path, marked_only: bool) {
+        let result = if marked_only { path::reconcile(&self.facts.home, bin_dir) } else { add_to_path(&self.facts.home, bin_dir) };
+        match result {
+            Ok(files) if files.is_empty() => {}
+            Ok(files) => {
+                let names: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
+                self.say(Level::Ok, format!("on your PATH in new terminals ({})", names.join(", ")));
+            }
+            Err(e) => self.say(Level::Warn, mandara_i18n::tf("Could not update PATH: {error}. Add {line} to your shell profile.", &[("error", &e), ("line", &path_hint(bin_dir))])),
+        }
+    }
+
+    // ── Interactive setup ───────────────────────────────────────────────
+
+    /// The arrow-key setup screen: which compositor to integrate with, and
+    /// the autostart and login-screen questions the steps below would
+    /// otherwise ask one by one. A choice already given on the command line
+    /// is not offered. False when the user cancelled, before anything ran.
+    fn preflight(&mut self) -> Result<bool, String> {
+        if self.args.yes || self.dry() || !self.host.interactive() {
+            return Ok(true);
+        }
+        // The installed compositor only puts the picker's cursor where the
+        // user probably wants it; it is not a choice. Leaving `--compositor`
+        // unset keeps `setup` detecting the compositor that is running (a
+        // machine can have several installed).
+        let suggested = self.args.compositor.clone().or_else(|| installed_compositor(&*self.host));
+        let mut compositor: Option<String> = self.args.compositor.clone();
+        let mut autostart = !self.args.no_autostart;
+        let mut greeter = !self.args.no_greeter;
+        loop {
+            let (mut rows, mut choices) = (Vec::new(), Vec::new());
+            if self.args.compositor.is_none() {
+                rows.push(Row::new(t("Compositor"), compositor_label(&*self.host, compositor.as_deref())));
+                choices.push(Choice::Compositor);
+            }
+            if !self.args.no_autostart {
+                rows.push(Row::new(t("Start with your compositor"), yes_no(autostart)));
+                choices.push(Choice::Autostart);
+            }
+            if !self.args.no_greeter {
+                rows.push(Row::new(t("Login screen"), if greeter { "Mandara Login" } else { t("keep yours") }));
+                choices.push(Choice::Greeter);
+            }
+            let install = choices.len();
+            rows.push(Row::new(t("Install"), ""));
+            choices.push(Choice::Install);
+            if install == 0 {
+                break;
+            }
+            let Some(picked) = self.host.select(t("Setup"), &rows, install) else { return Ok(false) };
+            match choices[picked] {
+                Choice::Compositor => {
+                    let (names, list, default) = compositor_rows(&*self.host, compositor.as_deref().or(suggested.as_deref()));
+                    let Some(i) = self.host.select(t("Compositor"), &list, default) else { return Ok(false) };
+                    compositor = Some(names[i].to_string());
+                }
+                Choice::Autostart => autostart = !autostart,
+                Choice::Greeter => greeter = !greeter,
+                Choice::Install => break,
+            }
+        }
+        // `offer_compositor` installs it when it is missing, and `compositor`
+        // integrates with it.
+        if self.args.compositor.is_none() {
+            self.args.compositor = compositor;
+        }
+        self.setup = Some(SetupChoices { autostart, greeter });
+        Ok(true)
     }
 
     /// `mandara setup` (one include line, generated drop-in, autostart),
@@ -1006,7 +1116,8 @@ impl<'a> Installer<'a> {
         };
         let compositor = self.args.compositor.clone();
         let mut setup = with_compositor(vec![bin.clone(), "setup".into()], &compositor);
-        if !self.args.no_autostart && self.ask("Start Mandara automatically with your compositor?", true) {
+        let autostart = self.setup.map_or_else(|| !self.args.no_autostart && self.ask("Start Mandara automatically with your compositor?", true), |s| s.autostart);
+        if autostart {
             setup.push("--autostart".into());
         }
         match self.run(Cmd::from_argv(setup).env(SETUP_LOG.0, SETUP_LOG.1).io(Io::Capture)) {
@@ -1025,14 +1136,27 @@ impl<'a> Installer<'a> {
         // Retiring comments those lines out (marked, every file backed up),
         // validates with the compositor and rolls back if it objects.
         let check = with_compositor(vec![bin.clone(), "setup".into(), "--check".into()], &compositor);
-        let checked = self.run(Cmd::from_argv(check).env(SETUP_LOG.0, SETUP_LOG.1).io(Io::Quiet));
+        let checked = self.run(Cmd::from_argv(check).env(SETUP_LOG.0, SETUP_LOG.1).io(Io::Capture));
         if checked.as_ref().is_none_or(|o| o.success) {
+            return;
+        }
+        if checked.as_ref().and_then(|o| o.code) == Some(SETUP_AVAILABILITY) {
+            let details = checked.as_ref().map_or("", |o| o.stdout.trim());
+            self.say(Level::Warn, if details.is_empty() { t("Check failed") } else { details });
+            return;
+        }
+        if checked.as_ref().and_then(|o| o.code) == Some(SETUP_PREREQUISITE) {
+            self.say(Level::Warn, t("Install libxkbcommon before checking or changing compositor shortcuts."));
             return;
         }
         // No conflicts, but the compositor itself reports errors in the
         // config: the Config doctor explains them and offers fixes.
         if checked.as_ref().and_then(|o| o.code) == Some(SETUP_CONFIG_ERRORS) {
             self.say(Level::Warn, "your compositor reports errors in its config: run `mandara setup --check` to see them, or open Studio → Compositor → Config doctor");
+            return;
+        }
+        if checked.as_ref().and_then(|o| o.code) != Some(SETUP_CONFLICTS) {
+            self.say(Level::Warn, "compositor setup failed; run `mandara setup` later");
             return;
         }
         if self.ask("Retire the conflicts listed above (backed up, reversible with `mandara setup --restore latest`)?", true) {
@@ -1054,8 +1178,10 @@ impl<'a> Installer<'a> {
     /// timestamped backup. Nothing is started or stopped; it shows at the
     /// next boot. `exe` is the binary the probe and the root commands use.
     fn greeter(&mut self, exe: &Path) {
-        if self.args.no_greeter {
-            self.say(Level::Detail, "login screen unchanged (--no-greeter); switch any time in Studio → Login screen → Login manager");
+        let wanted = self.setup.map_or(!self.args.no_greeter, |s| s.greeter);
+        if !wanted {
+            let line = if self.args.no_greeter { "login screen unchanged (--no-greeter); switch any time in Studio → Login screen → Login manager" } else { t("Login screen kept; switch any time in Studio → Login screen → Login manager.") };
+            self.say(Level::Detail, line);
             return;
         }
         // greetd's config is generated by NixOS: the module sets it up.
@@ -1082,7 +1208,8 @@ impl<'a> Installer<'a> {
             self.keyring_unlock(exe);
             return;
         }
-        if !self.ask("Use Mandara Login as your login screen?", true) {
+        // The setup screen has already asked; only runs without it ask here.
+        if self.setup.is_none() && !self.ask("Use Mandara Login as your login screen?", true) {
             self.say(Level::Info, "kept your login screen; switch any time in Studio → Login screen → Login manager");
             return;
         }
@@ -1204,7 +1331,18 @@ impl<'a> Installer<'a> {
         let passwd = std::fs::read_to_string(self.facts.sys("/etc/passwd")).unwrap_or_default();
         let group = device_group(&self.facts.sys("/dev/i2c-0"), &groups).unwrap_or_else(|| I2C_DEFAULT_GROUP.to_string());
         let user = self.facts.user.clone();
-        if devices && user_in_group(&user, &group, &groups, &passwd) {
+        let member = user_in_group(&user, &group, &groups, &passwd);
+        let module_path = self.facts.sys(I2C_MODULES_LOAD);
+        let module_config = match std::fs::read_to_string(&module_path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(error) => {
+                self.say(Level::Warn, format!("{}: {error}", module_path.display()));
+                return;
+            }
+        };
+        let persistent = module_config.lines().any(|line| line.trim() == I2C_MODULE);
+        if devices && member && persistent {
             return;
         }
         if !self.ask(&format!("Allow Mandara to set external monitor brightness (load {I2C_MODULE} at boot, add {user} to the {group} group)?"), false) {
@@ -1212,14 +1350,22 @@ impl<'a> Installer<'a> {
             self.say(Level::Detail, format!("External monitor brightness later: {hint}"));
             return;
         }
-        if !self.as_root(Cmd::new(&["tee", I2C_MODULES_LOAD]).stdin(format!("{I2C_MODULE}\n")).io(Io::Quiet)) {
-            self.say(Level::Warn, format!("could not write {I2C_MODULES_LOAD}"));
+        if !persistent {
+            let mut text = module_config;
+            if !text.is_empty() && !text.ends_with('\n') { text.push('\n'); }
+            text.push_str(&format!("{I2C_MODULE}\n"));
+            if !self.as_root(Cmd::new(&["tee", I2C_MODULES_LOAD]).stdin(text).io(Io::Quiet)) {
+                self.say(Level::Warn, format!("could not write {I2C_MODULES_LOAD}"));
+            }
         }
-        self.as_root(Cmd::new(&["modprobe", I2C_MODULE]).io(Io::Quiet));
+        if !devices && !self.as_root(Cmd::new(&["modprobe", I2C_MODULE]).io(Io::Quiet)) {
+            self.say(Level::Warn, tf("Could not load {module}; check that the installed kernel includes it", &[("module", &I2C_MODULE)]));
+            return;
+        }
         if group_gid(&group, &groups).is_none() {
             self.as_root(Cmd::new(&["groupadd", "-r", group.as_str()]).io(Io::Quiet));
         }
-        if self.as_root(Cmd::new(&["usermod", "-aG", group.as_str(), user.as_str()])) && !self.dry() {
+        if !member && self.as_root(Cmd::new(&["usermod", "-aG", group.as_str(), user.as_str()])) && !self.dry() {
             self.say(Level::Ok, format!("added {user} to {group} (log in again for it to apply)"));
         }
     }
@@ -1283,6 +1429,19 @@ impl<'a> Installer<'a> {
         if !self.dry() {
             self.say(Level::Ok, "binary and desktop entry removed");
         }
+        let startup = self.paths.config_dir.join("autostart").join(files::KWIN_AUTOSTART_FILE);
+        match std::fs::read_to_string(&startup) {
+            Ok(text) if text.lines().any(|l| l == files::KWIN_AUTOSTART_MARKER) => {
+                if self.dry() {
+                    self.say(Level::Detail, mandara_i18n::tf("Would remove {path}", &[("path", &startup.display())]));
+                } else {
+                    std::fs::remove_file(&startup).map_err(|e| format!("{}: {e}", startup.display()))?;
+                }
+            }
+            Ok(_) => self.say(Level::Detail, mandara_i18n::tf("Kept custom startup entry {path}", &[("path", &startup.display())])),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => self.say(Level::Warn, mandara_i18n::tf("Could not read {path}: {error}. Left it unchanged.", &[("path", &startup.display()), ("error", &e)])),
+        }
         // The drop-ins would keep starting (and binding keys to) the
         // removed binary.
         let generated = self.paths.generated();
@@ -1345,37 +1504,37 @@ fn user_in_group(user: &str, group: &str, groups: &str, passwd: &str) -> bool {
     member || (primary.is_some() && primary == group_gid(group, groups))
 }
 
+/// The compositor the setup screen starts on: one already installed (the
+/// first the installer recommends), else nothing — then the choice is left
+/// to `offer_compositor`, which knows what the distribution carries.
+fn installed_compositor(host: &dyn Host) -> Option<String> {
+    compositors::SUPPORTED.iter().find(|c| c.installed(|p| host.has_program(p))).map(|c| c.id.to_string())
+}
+
+/// The current compositor as the setup screen shows it.
+fn compositor_label(host: &dyn Host, chosen: Option<&str>) -> String {
+    let Some(c) = chosen.and_then(compositors::by_name) else { return t("detect automatically").into() };
+    if c.installed(|p| host.has_program(p)) {
+        tf("{compositor} (installed)", &[("compositor", &c.label)])
+    } else {
+        c.label.to_string()
+    }
+}
+
+/// The compositor picker's rows, the names behind them and where the cursor
+/// starts.
+fn compositor_rows(host: &dyn Host, chosen: Option<&str>) -> (Vec<&'static str>, Vec<Row>, usize) {
+    let offered: Vec<_> = compositors::SUPPORTED.iter().filter(|c| c.id != "kwin" || c.installed(|p| host.has_program(p))).collect();
+    let rows = offered.iter().map(|c| Row::new(c.label, if c.installed(|p| host.has_program(p)) { t("installed") } else { "" })).collect();
+    let names: Vec<&'static str> = offered.iter().map(|c| c.id).collect();
+    let default = chosen.and_then(|c| names.iter().position(|id| *id == c)).unwrap_or(0);
+    (names, rows, default)
+}
+
+/// A yes/no setting as the setup screen shows it.
+fn yes_no(value: bool) -> &'static str {
+    if value { t("yes") } else { t("no") }
+}
+
 #[cfg(test)]
 mod tests;
-
-/// Marks the lines [`add_to_path`] writes, so a second install adds nothing.
-const PATH_MARK: &str = "# Added by the Mandara installer";
-
-/// Puts `bin_dir` on `PATH` in `~/.profile`, `~/.bashrc`, an existing
-/// `~/.zshrc` and, when fish is set up, a fish `conf.d` snippet. Returns the
-/// files it changed; a file that already has the line is left alone.
-fn add_to_path(home: &Path, bin_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
-    use std::io::Write as _;
-    let dir = bin_dir.display();
-    let posix = format!("\n{PATH_MARK}\ncase \":$PATH:\" in *\":{dir}:\"*) ;; *) export PATH=\"{dir}:$PATH\" ;; esac\n");
-    let mut targets = vec![(home.join(".profile"), posix.clone()), (home.join(".bashrc"), posix.clone())];
-    if home.join(".zshrc").is_file() {
-        targets.push((home.join(".zshrc"), posix));
-    }
-    let fish = home.join(".config/fish");
-    if fish.is_dir() {
-        targets.push((fish.join("conf.d/mandara-path.fish"), format!("{PATH_MARK}\nfish_add_path --path {dir}\n")));
-    }
-    let mut changed = Vec::new();
-    for (file, line) in targets {
-        if std::fs::read_to_string(&file).is_ok_and(|s| s.contains(PATH_MARK)) {
-            continue;
-        }
-        if let Some(parent) = file.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::OpenOptions::new().create(true).append(true).open(&file)?.write_all(line.as_bytes())?;
-        changed.push(file);
-    }
-    Ok(changed)
-}

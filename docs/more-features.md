@@ -4,7 +4,7 @@ The rest of what's built in.
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/processes.png" alt="Process hunter" width="100%"/><br/><sub><b>Process hunter</b>: live CPU and memory, apps grouped, search by name, command or PID, end or force-kill.</sub></td>
+<td width="50%" valign="top"><img src="screenshots/pomodoro.png" alt="The Pomodoro focus timer: a 25:00 countdown ring with start, reset and skip" width="100%"/><br/><sub><b>Focus timer</b>: Pomodoro sessions with a countdown ring.</sub></td>
 <td width="50%" valign="top"><img src="screenshots/prayer-times.png" alt="Prayer times" width="100%"/><br/><sub><b>Prayer times</b> (opt-in): next-prayer countdown ring, day timeline, Hijri date and Qibla.</sub></td>
 </tr>
 </table>
@@ -13,7 +13,7 @@ The rest of what's built in.
 <tr>
 <td width="33%" valign="top"><img src="screenshots/clock-agenda.webp" alt="Clock panel: the time with the week and day of the year, a month calendar with event dots, and the upcoming events from tomorrow on" width="100%"/><br/><sub><b>Clock and calendar</b> with ICS feeds, Hijri dates and an agenda</sub></td>
 <td width="33%" valign="top"><img src="screenshots/world-clock.png" alt="World clock with a meeting planner" width="100%"/><br/><sub><b>World clock</b> and meeting planner</sub></td>
-<td width="33%" valign="top"><img src="screenshots/color-picker.png" alt="Color picker with formats, tonal ramp and contrast" width="100%"/><br/><sub><b>Color picker</b> with OKLCH ramps and WCAG contrast</sub></td>
+<td width="33%" valign="top"><img src="screenshots/soundscapes.png" alt="Soundscapes: presets such as Corniche night and Rainy study, layers (waves, rain, wind, café murmur, fireplace and noise colours) each with its own volume, and a sleep timer" width="100%"/><br/><sub><b>Soundscapes</b>: mix ambient sounds for focus</sub></td>
 </tr>
 </table>
 
@@ -64,7 +64,10 @@ The rest of what's built in.
   - **Settings** (Studio → Plugins → Clipboard): *Filter by kind* (the
     chips), *Preview lines* (lines of code, CSS and Markdown a row shows,
     0 = one line) and *Entries in collections* (how many are kept).
-  - **Alt+V** opens it (as does Super+Shift+V).
+  - **Alt+V** opens it (as does Super+Shift+V). Arrow Up and Down move
+    through the list, turning the page when they reach its end; Enter
+    copies the selected entry (or pastes it, where the panel is set to
+    paste), and the wheel turns pages.
 
 <table>
 <tr>
@@ -122,7 +125,9 @@ The rest of what's built in.
   album-art colors, Arabic lines right-to-left, cached offline. The panel
   keeps one size while lyrics load, are missing or fail, so its controls
   never move under the pointer.
-- **Screenshot studio**: region, window or screen; arrows, boxes and
+- **Screenshot studio**: region, window, screen, or **All displays** in
+  one image with monitor positions and different scales preserved. KWin
+  uses its native ScreenShot2 service. Capture tools also offer arrows, boxes and
   circles; copy, save or clipboard-only; **copy text (OCR)**, offline and pure
   Rust (PP-OCRv5); and **screen recording** (below). **Esc pauses
   snipping without closing the tool**: the frozen frame goes away and a
@@ -151,7 +156,10 @@ The rest of what's built in.
   command (`record toggle`, `record pause-toggle`, `record window`, …) you
   can bind to keys in Studio → Keyboard shortcuts.
 - **Process hunter**: find any process by name, command line or PID, and end
-  or force-kill it.
+  or force-kill it. CPU and memory are live, and CPU is a share of all your
+  cores (as in Resources), so a busy build reads a percentage of the whole
+  machine instead of several hundred percent of one core. The shared CPU
+  capacity follows online CPUs even under a process affinity or quota limit.
 - **Drives**: UDisks2 storage panel with usage rings, filesystem and
   encryption badges, mount / unmount, open in the file manager, LUKS unlock
   from an inline passphrase sheet and one-click *Safely remove* (unmount →
@@ -209,7 +217,19 @@ The rest of what's built in.
   hibernate, restart, shut down, soft restart, firmware setup, any
   boot-loader entry, restart Mandara, your own commands), rename them, show
   them as the edge dock or a grid, number-key shortcuts and hold-to-confirm
-  for everything that ends the session.
+  for everything that ends the session. The dock opens on either screen side
+  (by default the one opposite the sidebar) or at the top or bottom center,
+  where it joins an edge-frame bar, opens as a card beside a floating bar,
+  or hangs from the screen edge when the bar is elsewhere. A bottom dock
+  keeps the menu in a card above it (`session_menu.position`).
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="screenshots/session-menu-top.webp" alt="The session menu at the top centre: a column of round buttons (lock, log out, sleep, restart, shut down) hanging from the bar, joined to it with curved corners" width="100%"/><br/><sub><b>Top centre</b>, hanging from the bar</sub></td>
+<td width="50%" valign="top"><img src="screenshots/session-menu-side.webp" alt="The session menu as a column of round buttons docked to the screen edge opposite the sidebar" width="100%"/><br/><sub><b>Side</b>, the default</sub></td>
+</tr>
+</table>
+
 - **Hooks**: run a command when something happens — started, wallpaper /
   colors / light-dark changed, app themes written, locked / unlocked, idle /
   resumed, screens off / on, before sleep / logout / restart / shutdown,
@@ -272,3 +292,7 @@ The rest of what's built in.
   which displays show the bar, dock, OSDs, notifications and wallpaper, and
   warm the screens from sunset to sunrise (`mandara msg nightlight toggle`).
 - **Screen time** (opt-in): charts your days per app, with gentle limits.
+
+Clipboard history uses the shared Wayland data-control watcher on both
+ext-data-control (including KWin) and wlr-data-control compositors. Turning
+the plugin off stops its watcher even when nothing is being copied.

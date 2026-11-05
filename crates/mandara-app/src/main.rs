@@ -22,18 +22,18 @@ mod changelog_cli;
 mod ipc;
 mod residency;
 mod setup_cli;
+mod surfaces;
 mod update_cli;
 
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
 use clap::{Parser, Subcommand};
-use gpui::{App, AppContext as _, px, size};
+use gpui::App;
 use mandara_config::{ConfigStore, paths};
-use mandara_core::LayerSurfaceSpec;
 use mandara_plugins::PluginRegistry;
 use mandara_theme::catalog;
-use mandara_ui::{Fonts, MandaraAssets, ShellView};
+use mandara_ui::{Fonts, MandaraAssets};
 
 use crate::ipc::{Request, WireResponse};
 
@@ -99,7 +99,7 @@ enum Cmd {
         /// Also start Mandara with the compositor (from the drop-in).
         #[arg(long)]
         autostart: bool,
-        /// mango, niri, hyprland, umbriel, sway or river (default: the running one, else every
+        /// mango, niri, hyprland, umbriel, sway, river or kwin (default: the running one, else every
         /// compositor that has a config file).
         #[arg(long)]
         compositor: Option<String>,
@@ -180,6 +180,7 @@ fn main() -> Result<()> {
         libc::signal(libc::SIGXFSZ, libc::SIG_IGN);
     }
 
+    mandara_i18n::set_language(mandara_i18n::Lang::from_env());
     let long = Box::leak(mandara_version::long_version().into_boxed_str()) as &'static str;
     let matches = <Cli as clap::CommandFactory>::command().version(mandara_version::version()).long_version(long).get_matches();
     let cli = <Cli as clap::FromArgMatches>::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
@@ -415,8 +416,6 @@ const BACKOFF_FIRST: Duration = Duration::from_millis(250);
 const BACKOFF_MAX: Duration = Duration::from_secs(5);
 /// Debounce of the config file watcher.
 const CONFIG_WATCH_DEBOUNCE: Duration = Duration::from_millis(150);
-/// Output size assumed when neither xdg-output nor GPUI reports one.
-const FALLBACK_OUTPUT: (f32, f32) = (1920.0, 1080.0);
 
 /// Every shipped plugin and command.
 fn build_registry() -> PluginRegistry {
@@ -502,13 +501,12 @@ fn run_shell() -> Result<()> {
         })
         .detach();
 
-        open_surfaces(&outputs, cx);
+        surfaces::init(outputs.clone(), cx);
         // Panels that floated when the shell last stopped come back.
         mandara_ui::floating::init(cx);
         if mandara_ui::backdrop::software_enabled() {
             // Falls back to the GPUI windows if it cannot start.
-            let fallback_outputs = outputs.clone();
-            mandara_ui::backdrop::init(move |cx| open_gpui_wallpapers(&fallback_outputs, cx), cx);
+            mandara_ui::backdrop::init(surfaces::enable_gpui_wallpapers, cx);
         }
 
         // External config edits → live reload.
@@ -707,76 +705,6 @@ fn run_studio(section: Option<String>) -> Result<()> {
     Ok(())
 }
 
-/// The GPUI desktop background window for one output (transparent until a
-/// wallpaper is chosen, so an existing wallpaper daemon shows through).
-fn open_gpui_wallpaper(display: Option<gpui::DisplayId>, (w, h): (f32, f32), monitor: String, cx: &mut App) {
-    let background = LayerSurfaceSpec::background(size(px(w), px(h)), display);
-    if let Err(err) = cx.open_window(background.window_options(), move |_, cx| cx.new(|cx| mandara_ui::wallpaper::WallpaperView::on_monitor(monitor, cx))) {
-        tracing::error!("wallpaper surface: {err:#}");
-    }
-}
-
-/// GPUI desktop backgrounds on every output (the software renderer's fallback).
-fn open_gpui_wallpapers(outputs: &[mandara_core::OutputGeometry], cx: &mut App) {
-    for (display, geo, (w, h)) in surfaces_per_output(outputs, cx) {
-        open_gpui_wallpaper(display, (w, h), geo.map(|g| g.name).unwrap_or_default(), cx);
-    }
-}
-
-/// Every display with its output's geometry and logical size, paired by
-/// output name: GPUI and the xdg-output query list outputs in their own
-/// orders, and pairing by position gave each display the other monitor's
-/// size after a compositor reload (issue #8). One entry with no display
-/// when GPUI reports none.
-fn surfaces_per_output(outputs: &[mandara_core::OutputGeometry], cx: &App) -> Vec<(Option<gpui::DisplayId>, Option<mandara_core::OutputGeometry>, (f32, f32))> {
-    let displays = cx.displays();
-    let keys: Vec<mandara_core::DisplayKey> = displays.iter().map(|d| mandara_core::DisplayKey::of(d.as_ref())).collect();
-    let mut paired: Vec<(Option<gpui::DisplayId>, Option<mandara_core::OutputGeometry>)> = mandara_core::pair_displays(&keys, outputs).into_iter().map(|(id, g)| (Some(id), g)).collect();
-    if paired.is_empty() {
-        paired.push((None, outputs.first().cloned()));
-    }
-    paired
-        .into_iter()
-        .map(|(display, geo)| {
-            let size = geo
-                .as_ref()
-                .map(|g| (g.width as f32, g.height as f32))
-                .or_else(|| displays.iter().find(|d| Some(d.id()) == display).map(|d| (f32::from(d.bounds().size.width), f32::from(d.bounds().size.height))))
-                .unwrap_or(FALLBACK_OUTPUT);
-            (display, geo, size)
-        })
-        .collect()
-}
-
-/// Opens the shell surface + exclusion strip on every output.
-fn open_surfaces(outputs: &[mandara_core::OutputGeometry], cx: &mut App) {
-    for (display, geo, (w, h)) in surfaces_per_output(outputs, cx) {
-        let monitor = geo.map(|g| g.name).unwrap_or_default();
-
-        // Invisible strips reserving the bar's / sidebar's space, created
-        // on demand (only the edges that currently reserve).
-        mandara_ui::shell::open_exclusion_strips(display, (w, h), monitor.clone(), cx);
-
-        // Desktop background: drawn in software on its own wl_shm surfaces
-        // (`mandara_ui::backdrop`, started after this loop) unless
-        // MANDARA_WALLPAPER_RENDERER=gpui asks for the GPUI window.
-        if !mandara_ui::backdrop::software_enabled() {
-            open_gpui_wallpaper(display, (w, h), monitor.clone(), cx);
-        }
-
-        let mut main = LayerSurfaceSpec::shell(size(px(w), px(h)), display);
-        // "Show over fullscreen": the shell surface joins the overlay layer.
-        if mandara_ui::state::config(cx).read(cx).get().bar.over_fullscreen {
-            main.layer = gpui::layer_shell::Layer::Overlay;
-        }
-        let name = monitor.clone();
-        match cx.open_window(main.window_options(), move |window, cx| cx.new(|cx| ShellView::new(name, (w, h), window, cx))) {
-            Ok(_) => tracing::info!("mandara shell surface on {monitor} ({w}×{h} logical)"),
-            Err(err) => tracing::error!("shell surface: {err:#}"),
-        }
-    }
-}
-
 /// This binary's identity for the UI (About, `info`).
 fn build_info() -> mandara_core::BuildInfo {
     mandara_core::BuildInfo {
@@ -812,6 +740,8 @@ mod tests {
         assert_eq!(mandara_install::installer::ADMIN_EXE, mandara_config::admin::ADMIN_EXE);
         assert_eq!(mandara_greeter::install::INSTALLED_EXE, mandara_config::admin::GREETER_EXE);
         assert_eq!(mandara_install::installer::SETUP_CONFIG_ERRORS, crate::setup_cli::EXIT_CONFIG_ERRORS, "the installer reads `setup --check`'s exit code");
+        assert_eq!(mandara_install::installer::SETUP_CONFLICTS, crate::setup_cli::EXIT_CONFLICTS);
+        assert_eq!(mandara_install::installer::SETUP_PREREQUISITE, crate::setup_cli::EXIT_PREREQUISITE);
     }
 
     use super::{Cli, Cmd};
@@ -826,6 +756,17 @@ mod tests {
         assert!(matches!(cli.command, Some(Cmd::Uninstall(a)) if a.dry_run));
         // `mandara --version` stays the top-level version flag.
         assert!(Cli::try_parse_from(["mandara", "install", "--version", "0.2.0"]).is_ok());
+    }
+
+    #[test]
+    fn setup_accepts_kwin_and_includes_it_in_help() {
+        use clap::CommandFactory as _;
+        let cli = Cli::try_parse_from(["mandara", "setup", "--compositor", "kwin", "--check"]).unwrap();
+        assert!(matches!(cli.command, Some(Cmd::Setup { compositor: Some(ref name), check: true, .. }) if name == "kwin"));
+        let cli = Cli::command();
+        let setup = cli.find_subcommand("setup").unwrap();
+        let help = setup.get_arguments().find(|argument| argument.get_id() == "compositor").unwrap().get_help().unwrap().to_string();
+        assert!(help.contains("kwin"));
     }
 
     /// The installer and the updater agree on which release build this is.

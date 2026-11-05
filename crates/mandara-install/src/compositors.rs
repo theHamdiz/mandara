@@ -34,6 +34,9 @@ pub struct Compositor {
 /// Every supported compositor, in the order the installer recommends them
 /// (the first one available is the default choice).
 pub const SUPPORTED: &[Compositor] = &[
+    // Plasma is an existing desktop session, not an extra standalone
+    // compositor package the installer offers to add to another desktop.
+    Compositor { id: "kwin", aliases: &["kde", "plasma"], label: "KWin (Plasma)", programs: &["kwin_wayland"], packages: &[] },
     Compositor { id: "mango", aliases: &["mangowm"], label: "MangoWM", programs: &["mango"], packages: &[(Family::Arch, "mangowm"), (Family::Alpine, "mangowm")] },
     Compositor { id: "niri", aliases: &[], label: "Niri", programs: &["niri"], packages: &[(Family::Arch, "niri"), (Family::Fedora, "niri"), (Family::Suse, "niri"), (Family::Void, "niri"), (Family::Alpine, "niri")] },
     Compositor { id: "hyprland", aliases: &["hypr"], label: "Hyprland", programs: &["Hyprland", "hyprland"], packages: &[(Family::Arch, "hyprland"), (Family::Debian, "hyprland"), (Family::Suse, "hyprland"), (Family::Alpine, "hyprland")] },
@@ -105,6 +108,8 @@ mod tests {
         assert!(!any_installed(|_| false));
         assert!(any_installed(|p| p == "Hyprland"));
         assert!(any_installed(|p| p == "umbriel"));
+        assert!(any_installed(|p| p == "kwin_wayland"));
+        assert_eq!(by_name("plasma").unwrap().id, "kwin");
         assert!(by_name("hyprland").unwrap().installed(|p| p == "hyprland"));
         assert!(!by_name("niri").unwrap().installed(|p| p == "mango"));
     }

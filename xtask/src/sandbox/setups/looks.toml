@@ -3,7 +3,8 @@
 # `cargo xtask sandbox up --config xtask/src/sandbox/setups/looks.toml --size 2880x1620 --scale 2`,
 # make the twelve wallpapers once (sandbox msg wallgen generate STYLE
 # --palette PALETTE --seed SEED --size 2880x1620 --format png --no-apply,
-# plus --light for the light ones), then `sandbox audio play` and for each
+# plus --light for the light ones; qaitbay-forest's dark one the (*) way
+# instead), then `sandbox audio play` and for each
 # Look: `sandbox msg look apply ID`, `sandbox msg wallpaper set DARK`,
 # `sandbox shot`, `sandbox msg theme mode light`, `sandbox msg wallpaper set
 # LIGHT`, `sandbox shot`, `sandbox msg theme mode dark`.
@@ -16,8 +17,12 @@
 #   anfushi-wave     waves ocean 0x16                waves ocean 0x17
 #   night-frame      aurora pharos-night 0x13        aurora montaza-twilight 0x25
 #
-# (*) the sun moved aside first: `sandbox msg wallgen recipe set style=landscape
-# palette=forest sun_x=75 sun_height=55 horizon=52`, then `generate recipe`.
+# (*) not with the line above: the sun moves aside first, so make only this
+# one: `sandbox msg wallgen recipe set style=landscape palette=forest
+# seed=0x44 sun_x=75 sun_height=55 horizon=52`, then `sandbox msg wallgen
+# generate recipe --size 2880x1620 --format png --no-apply`. (Generating
+# the plain seed-0x44 file as well would leave two files for that Look,
+# and the capture could pick the one with the sun in the middle.)
 # The calendar cards read the demo events at ~/Documents/demo.ics (see
 # config.hero.toml).
 #

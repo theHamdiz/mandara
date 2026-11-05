@@ -35,6 +35,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{mango_keys, paths};
 
+mod sway_read;
+pub(crate) use sway_read::binds as sway_config_binds;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Target {
@@ -44,13 +47,15 @@ pub enum Target {
     Umbriel,
     Sway,
     River,
+    #[serde(rename = "kwin")]
+    KWin,
 }
 
 impl Target {
-    pub const ALL: [Target; 6] = [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway, Target::River];
+    pub const ALL: [Target; 7] = [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway, Target::River, Target::KWin];
 
     /// This compositor's column in the `[MangoWM, Niri, Hyprland, Umbriel,
-    /// Sway, River]` support tables ([`RULE_OPTIONS`], `input::INPUT_OPTIONS`).
+    /// Sway, River, KWin]` support tables ([`RULE_OPTIONS`], `input::INPUT_OPTIONS`).
     pub const fn index(self) -> usize {
         match self {
             Target::Mango => 0,
@@ -59,6 +64,7 @@ impl Target {
             Target::Umbriel => 3,
             Target::Sway => 4,
             Target::River => 5,
+            Target::KWin => 6,
         }
     }
 
@@ -72,6 +78,7 @@ impl Target {
             "umbriel" => Some(Target::Umbriel),
             "sway" | "swaywm" => Some(Target::Sway),
             "river" | "river-classic" => Some(Target::River),
+            "kwin" | "kde" | "plasma" => Some(Target::KWin),
             _ => None,
         }
     }
@@ -85,6 +92,7 @@ impl Target {
             Target::Umbriel => "umbriel",
             Target::Sway => "sway",
             Target::River => "river",
+            Target::KWin => "kwin",
         }
     }
 
@@ -97,6 +105,7 @@ impl Target {
             Target::Umbriel => "Umbriel",
             Target::Sway => "Sway",
             Target::River => "River",
+            Target::KWin => "KWin",
         }
     }
 
@@ -118,6 +127,7 @@ impl Target {
             // Not read by River: the commands Mandara sent, for the record
             // (and to take its own binds and rules back on the next sync).
             Target::River => "river.conf",
+            Target::KWin => "kwin.conf",
         })
     }
 
@@ -134,6 +144,7 @@ impl Target {
             Target::Sway => sway_user_config(&config, &paths::home()),
             // River runs `$XDG_CONFIG_HOME/river/init` at start-up.
             Target::River => config.join("river/init"),
+            Target::KWin => config.join("kwinrc"),
         }
     }
 
@@ -150,6 +161,7 @@ impl Target {
             Target::Umbriel => format!("[include.optional]\nfiles = [{}]", toml_str(&self.generated_file().display().to_string())),
             Target::Sway => sway_include_line(&self.generated_file().display().to_string()),
             Target::River => river_spawn_line(&paths::self_exe().display().to_string()),
+            Target::KWin => String::new(),
         }
     }
 }
@@ -293,6 +305,7 @@ pub fn installed_version(target: Target) -> Option<(u32, u32)> {
         Target::Sway => "sway",
         // `river -version`: `0.3.17` (handled below).
         Target::River => "river",
+        Target::KWin => "kwin_wayland",
     };
     let slot = &CACHE[target.index()];
     *slot.get_or_init(|| {
@@ -342,22 +355,22 @@ pub struct TagRule {
 }
 
 /// Window-rule options and the compositors whose drop-in honours them
-/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway, River]`). Studio greys out the rest.
+/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin]`). Studio greys out the rest.
 /// Umbriel's `global` is its `default_pinned` (above other windows on every
 /// workspace of the output, like Hyprland's `pin`); Sway's is `sticky` (a
 /// floating window shown on every workspace of its output); River's is a
 /// `tags` rule putting new windows on every tag. Sway and River have no
 /// per-focus opacity, blur or shadows.
 pub const RULE_OPTIONS: &[(&str, [bool; Target::ALL.len()])] = &[
-    ("floating", [true, true, true, true, true, true]),
-    ("global", [true, false, true, true, true, true]),
-    ("overlay", [true, false, false, false, false, false]),
-    ("focused_opacity", [true, true, true, true, false, false]),
-    ("unfocused_opacity", [true, true, true, true, false, false]),
-    ("no_blur", [true, false, true, true, false, false]),
-    ("no_shadow", [true, true, true, true, false, false]),
-    ("confine_pointer", [true, false, false, true, false, false]),
-    ("force_tiled_state", [true, false, false, false, false, false]),
+    ("floating", [true, true, true, true, true, true, false]),
+    ("global", [true, false, true, true, true, true, false]),
+    ("overlay", [true, false, false, false, false, false, false]),
+    ("focused_opacity", [true, true, true, true, false, false, false]),
+    ("unfocused_opacity", [true, true, true, true, false, false, false]),
+    ("no_blur", [true, false, true, true, false, false, false]),
+    ("no_shadow", [true, true, true, true, false, false, false]),
+    ("confine_pointer", [true, false, false, true, false, false, false]),
+    ("force_tiled_state", [true, false, false, false, false, false, false]),
 ];
 
 /// Whether `target`'s emitter writes window-rule option `option`.
@@ -602,19 +615,19 @@ fn normalize_mod(m: &str) -> Option<&'static str> {
 }
 
 /// The modifiers a Studio-captured chord may carry, as each compositor
-/// spells them: `(normalized, [MangoWM, Niri, Hyprland, Umbriel, Sway, River])`.
+/// spells them: `(normalized, [MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin])`.
 /// Umbriel documents Super, Ctrl, Alt and Shift only (its `Mod` follows
 /// `general.mod_key`, so Mandara spells Super out). Sway takes xkb's
 /// modifier names (`Mod4`, `Ctrl`, `Alt`, `Shift`, `Mod3`, `Mod5`) and
 /// rejects `Hyper`; River takes `Super`, `Control`, `Alt`, `Shift`, `Mod3`
 /// and `Mod5` (`riverctl(1)`).
 const MOD_NAMES: &[(&str, [&str; Target::ALL.len()])] = &[
-    ("super", ["SUPER", "Mod", "SUPER", "Super", "Mod4", "Super"]),
-    ("ctrl", ["CTRL", "Ctrl", "CTRL", "Ctrl", "Ctrl", "Control"]),
-    ("alt", ["ALT", "Alt", "ALT", "Alt", "Alt", "Alt"]),
-    ("shift", ["SHIFT", "Shift", "SHIFT", "Shift", "Shift", "Shift"]),
-    ("hyper", ["HYPER", "Mod3", "MOD3", "", "Mod3", "Mod3"]),
-    ("mod5", ["", "ISO_Level3_Shift", "MOD5", "", "Mod5", "Mod5"]),
+    ("super", ["SUPER", "Mod", "SUPER", "Super", "Mod4", "Super", "Meta"]),
+    ("ctrl", ["CTRL", "Ctrl", "CTRL", "Ctrl", "Ctrl", "Control", "Ctrl"]),
+    ("alt", ["ALT", "Alt", "ALT", "Alt", "Alt", "Alt", "Alt"]),
+    ("shift", ["SHIFT", "Shift", "SHIFT", "Shift", "Shift", "Shift", "Shift"]),
+    ("hyper", ["HYPER", "Mod3", "MOD3", "", "Mod3", "Mod3", "Hyper"]),
+    ("mod5", ["", "ISO_Level3_Shift", "MOD5", "", "Mod5", "Mod5", "Mod5"]),
 ];
 
 /// A key typed as a character (`,`) or a GPUI key name (`pageup`) → its
@@ -883,6 +896,7 @@ impl ManagedConfig<'_> {
 
 /// Whether the user's own compositor config already starts Mandara.
 pub fn user_autostarts(target: Target) -> bool {
+    if target == Target::KWin { return crate::kwin::autostart_installed(); }
     // The main file and every file it sources / includes (never Mandara's
     // own drop-in).
     let texts: Vec<String> = crate::conflicts::config_files(target).iter().filter_map(|f| std::fs::read_to_string(f).ok()).collect();
@@ -2097,6 +2111,7 @@ pub fn emit(target: Target, cfg: &ManagedConfig) -> Emitted {
         Target::Umbriel => emit_umbriel(cfg),
         Target::Sway => emit_sway(cfg),
         Target::River => emit_river(cfg),
+        Target::KWin => Emitted { text: "# KWin settings remain in Plasma System Settings. Mandara reads native Plasma protocols.\n".into(), skipped: Vec::new() },
     }
 }
 
@@ -2121,7 +2136,7 @@ pub(crate) fn include_path(target: Target, line: &str) -> Option<String> {
         // [`includes_in`].
         Target::Mango | Target::Umbriel => None,
         // River's init is a program, not a config with includes.
-        Target::River => None,
+        Target::River | Target::KWin => None,
         // `include <path>`: a shell word (`~`, `$VAR`, globs), expanded by
         // [`included_files`].
         Target::Sway => line.strip_prefix("include").filter(|r| r.starts_with(char::is_whitespace)).map(|r| r.trim().to_string()).filter(|r| !r.is_empty()),
@@ -2214,27 +2229,167 @@ pub(crate) fn included_files(target: Target, file: &Path, text: &str) -> Vec<Pat
         .collect()
 }
 
-/// Sway include word → files: backslash escapes undone, `$VAR` and `~`
-/// expanded, relative to the including file, globbed (`*`, `?`) in the
-/// file name; matches sorted, like `wordexp` returns them.
+/// Sway include line → files, as sway 1.12 reads it: the rest of the line
+/// with an argument's quotes removed, then split into shell words
+/// (`wordexp`): `include a.conf b.conf` and `include "a.conf b.conf"` both
+/// load two files, `my\ dir/x.conf` is one. Each word has `$VAR` and `~`
+/// expanded, is taken relative to the including file and globbed (`*`,
+/// `?`) in every component (`conf.d/*/bindings.conf`); a word's matches are
+/// sorted, like `wordexp` returns them, and a pattern that matches nothing
+/// is skipped.
 fn sway_include_files(base: &Path, raw: &str) -> Vec<PathBuf> {
-    let mut word = String::new();
-    let mut chars = raw.trim().chars();
-    while let Some(c) = chars.next() {
-        match c {
-            '\\' => word.extend(chars.next()),
-            c => word.push(c),
+    sway_include_words(raw)
+        .into_iter()
+        .flat_map(|word| {
+            let path = resolve_include(base, &expand_env(&word));
+            if has_glob(&path.to_string_lossy()) { glob_path(&path) } else { vec![PathBuf::from(unescape_glob(&path.to_string_lossy()))] }
+        })
+        .collect()
+}
+
+/// Shell words with escaped wildcard occurrences retained for glob matching.
+fn sway_include_words(raw: &str) -> Vec<String> {
+    // Sway's own argument handling first: an argument that starts with a
+    // quote loses its (unescaped) quotes, backslashes stay for `wordexp`.
+    let mut line = String::new();
+    for arg in sway_args(raw.trim()) {
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        if arg.starts_with(['"', '\'']) {
+            let mut escaped = false;
+            for c in arg.chars() {
+                match c {
+                    '"' | '\'' if !escaped => {}
+                    '\\' => {
+                        escaped = !escaped;
+                        line.push(c);
+                        continue;
+                    }
+                    c => line.push(c),
+                }
+                escaped = false;
+            }
+        } else {
+            line.push_str(&arg);
         }
     }
-    let path = resolve_include(base, &expand_env(&word));
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    if !name.contains(['*', '?']) {
-        return vec![path];
+    // Then shell words: blanks split, quotes group, `\` escapes.
+    let (mut words, mut word, mut started) = (Vec::new(), String::new(), false);
+    let mut chars = line.chars();
+    let mut quote: Option<char> = None;
+    while let Some(c) = chars.next() {
+        match (quote, c) {
+            (Some(q), c) if c == q => quote = None,
+            (Some('"'), '\\') => match chars.next() {
+                Some(n @ ('"' | '\\' | '$' | '`')) => word.push(n),
+                Some(n) => {
+                    word.push('\\');
+                    word.push(n);
+                }
+                None => word.push('\\'),
+            },
+            (Some(_), c) => {
+                if matches!(c, '*' | '?' | '\\') { word.push('\\'); }
+                word.push(c);
+            }
+            (None, '\'' | '"') => {
+                quote = Some(c);
+                started = true;
+            }
+            (None, '\\') => {
+                if let Some(n) = chars.next() {
+                    if matches!(n, '*' | '?' | '\\') { word.push('\\'); }
+                    word.push(n);
+                    started = true;
+                }
+            }
+            (None, c) if c.is_whitespace() => {
+                if started || !word.is_empty() {
+                    words.push(std::mem::take(&mut word));
+                }
+                started = false;
+            }
+            (None, c) => word.push(c),
+        }
     }
-    let Some(dir) = path.parent() else { return Vec::new() };
-    let mut out: Vec<PathBuf> = std::fs::read_dir(dir).map(|d| d.flatten().map(|e| e.path()).filter(|p| p.file_name().is_some_and(|n| glob_match(&name, &n.to_string_lossy()))).collect()).unwrap_or_default();
-    out.sort();
+    if started || !word.is_empty() {
+        words.push(word);
+    }
+    words
+}
+
+/// Sway's split of a command line into arguments: blanks outside quotes
+/// separate them; quotes and backslashes are kept.
+fn sway_args(line: &str) -> Vec<String> {
+    let (mut args, mut arg, mut quote, mut escaped) = (Vec::new(), String::new(), None, false);
+    for c in line.chars() {
+        if escaped {
+            escaped = false;
+        } else if c == '\\' {
+            escaped = true;
+        } else if let Some(q) = quote {
+            if c == q {
+                quote = None;
+            }
+        } else if c == '"' || c == '\'' {
+            quote = Some(c);
+        } else if c.is_whitespace() {
+            if !arg.is_empty() {
+                args.push(std::mem::take(&mut arg));
+            }
+            continue;
+        }
+        arg.push(c);
+    }
+    if !arg.is_empty() {
+        args.push(arg);
+    }
+    args
+}
+
+/// Whether the pattern contains an unescaped wildcard.
+fn has_glob(pattern: &str) -> bool {
+    let mut chars = pattern.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => { chars.next(); }
+            '*' | '?' => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
+fn unescape_glob(pattern: &str) -> String {
+    let mut chars = pattern.chars();
+    let mut out = String::new();
+    while let Some(c) = chars.next() {
+        out.push(if c == '\\' { chars.next().unwrap_or(c) } else { c });
+    }
     out
+}
+
+/// The existing paths an absolute glob names (`*`, `?` in any component),
+/// sorted.
+fn glob_path(pattern: &Path) -> Vec<PathBuf> {
+    let mut found = vec![PathBuf::new()];
+    for part in pattern.components() {
+        let name = part.as_os_str().to_string_lossy();
+        if !has_glob(&name) {
+            for p in &mut found {
+                p.push(unescape_glob(&name));
+            }
+            continue;
+        }
+        found = found
+            .iter()
+            .flat_map(|dir| std::fs::read_dir(dir).into_iter().flatten().flatten().filter(|e| glob_match(&name, &e.file_name().to_string_lossy())).map(|e| e.path()))
+            .collect();
+    }
+    found.retain(|p| p.exists());
+    found.sort();
+    found
 }
 
 /// Shell glob match of one path component (`*` and `?`; hidden files only
@@ -2246,6 +2401,10 @@ fn glob_match(pattern: &str, name: &str) -> bool {
     fn go(p: &[char], n: &[char]) -> bool {
         match (p.first(), n.first()) {
             (None, None) => true,
+            (Some('\\'), _) => match (p.get(1), n.first()) {
+                (Some(a), Some(b)) if a == b => go(&p[2..], &n[1..]),
+                _ => false,
+            },
             (Some('*'), _) => go(&p[1..], n) || (!n.is_empty() && go(p, &n[1..])),
             (Some('?'), Some(_)) => go(&p[1..], &n[1..]),
             (Some(a), Some(b)) if a == b => go(&p[1..], &n[1..]),
@@ -2286,34 +2445,7 @@ pub fn existing_chords(target: Target) -> BTreeSet<String> {
 /// `include /etc/sway/config.d/*` binds `$mod+…`): the user's binds are
 /// walked in order with the variables known at each point.
 fn sway_existing_chords(root: &Path) -> BTreeSet<String> {
-    fn walk(file: &Path, vars: &mut Vec<(String, String)>, visited: &mut BTreeSet<PathBuf>, out: &mut BTreeSet<String>) {
-        if !visited.insert(file.to_path_buf()) || file == Target::Sway.generated_file() || is_generated(file) {
-            return;
-        }
-        let Ok(text) = std::fs::read_to_string(file) else { return };
-        // Split at include lines so each part sees the variables set before it.
-        let mut chunk = String::new();
-        for line in text.lines() {
-            let included = (!line.trim_start().starts_with('#')).then(|| include_path(Target::Sway, line)).flatten();
-            match included {
-                Some(raw) => {
-                    out.extend(sway_binds_with(&chunk, vars).into_iter().map(|b| b.chord));
-                    chunk.clear();
-                    for child in sway_include_files(file, &raw) {
-                        walk(&child, vars, visited, out);
-                    }
-                }
-                None => {
-                    chunk.push_str(line);
-                    chunk.push('\n');
-                }
-            }
-        }
-        out.extend(sway_binds_with(&chunk, vars).into_iter().map(|b| b.chord));
-    }
-    let mut out = BTreeSet::new();
-    walk(root, &mut Vec::new(), &mut BTreeSet::new(), &mut out);
-    out
+    sway_config_binds(&[root.to_path_buf()]).into_iter().map(|(_, bind)| bind.chord).collect()
 }
 
 /// MangoWM reads `source=` files in place and keeps one key mode across
@@ -2400,6 +2532,7 @@ pub fn chords_by_line(target: Target, text: &str) -> Vec<(usize, String)> {
         Target::Umbriel => umbriel_chords(text),
         Target::Sway => sway_binds(text).into_iter().map(|b| (b.line, b.chord)).collect(),
         Target::River => river_binds(text).into_iter().map(|b| (b.line, b.chord)).collect(),
+        Target::KWin => Vec::new(),
     }
 }
 
@@ -2450,6 +2583,8 @@ pub struct SwayBind {
     pub line: usize,
     pub chord: String,
     pub command: String,
+    /// A complete bindsym directive with the variables at this line expanded.
+    pub expanded: String,
 }
 
 /// Sway `bindsym` binds of the default mode, as sway reads them: `set
@@ -2461,12 +2596,27 @@ pub fn sway_binds(text: &str) -> Vec<SwayBind> {
     sway_binds_with(text, &mut Vec::new())
 }
 
+/// Sets `$name` in `vars`: a second `set $mod …` replaces the first (sway
+/// uses the latest value from there on), and names stay longest first, so
+/// `$mod` never eats `$modShift`.
+pub(crate) fn set_var(vars: &mut Vec<(String, String)>, name: &str, value: &str) {
+    match vars.iter_mut().find(|(n, _)| n == name) {
+        Some((_, v)) => *v = value.to_string(),
+        None => {
+            vars.push((name.to_string(), value.to_string()));
+            vars.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
+        }
+    }
+}
+
 /// [`sway_binds`] with the variables already set before `text` (and
 /// those it sets added).
 fn sway_binds_with(text: &str, vars: &mut Vec<(String, String)>) -> Vec<SwayBind> {
+    sway_binds_in(text, vars, &mut Vec::new())
+}
+
+fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<String>) -> Vec<SwayBind> {
     let mut out = Vec::new();
-    // The command each open `{` block belongs to (`mode`, `bindsym`, …).
-    let mut blocks: Vec<String> = Vec::new();
     for (i, raw) in text.lines().enumerate() {
         let line = raw.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -2481,9 +2631,8 @@ fn sway_binds_with(text: &str, vars: &mut Vec<(String, String)>) -> Vec<SwayBind
             && let Some((name, value)) = rest.trim().split_once(char::is_whitespace)
             && name.starts_with('$')
         {
-            vars.push((name.to_string(), value.trim().to_string()));
-            // Longest first, so `$mod` never eats `$modShift`.
-            vars.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
+            let value = vars.iter().fold(value.trim().to_string(), |value, (name, replacement)| value.replace(name, replacement));
+            set_var(vars, name, &value);
             continue;
         }
         for (name, value) in vars.iter() {
@@ -2508,7 +2657,8 @@ fn sway_binds_with(text: &str, vars: &mut Vec<(String, String)>) -> Vec<SwayBind
         let mut parts: Vec<&str> = combo.split('+').filter(|p| !p.is_empty()).collect();
         let Some(key) = parts.pop() else { continue };
         let command = words.collect::<Vec<_>>().join(" ");
-        out.push(SwayBind { line: i, chord: chord(parts.into_iter(), &keysym_for(key)), command });
+        let expanded = if in_bind_block { format!("bindsym {body}") } else { body.to_string() };
+        out.push(SwayBind { line: i, chord: chord(parts.into_iter(), &keysym_for(key)), command, expanded });
     }
     out
 }
@@ -2748,6 +2898,7 @@ pub fn include_installed(target: Target) -> bool {
 }
 
 fn include_installed_at(target: Target, config: &Path) -> bool {
+    if target == Target::KWin { return true; }
     if target == Target::River {
         // Nothing to include: what counts is that init starts Mandara.
         return std::fs::read_to_string(config).is_ok_and(|t| river_starts_mandara(&t));
@@ -2801,7 +2952,8 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
     if let Ok(real) = std::fs::canonicalize(path)
         && in_nix_store(&real)
     {
-        anyhow::bail!("{} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {}", path.display(), target.include_line());
+        let msg = mandara_i18n::tf("{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}", &[("path", &path.display()), ("line", &target.include_line())]);
+        anyhow::bail!("{msg}");
     }
     if target == Target::Sway && !path.exists() {
         seed_sway_config(path, Path::new(SWAY_SYSTEM_CONFIG))?;
@@ -3232,6 +3384,15 @@ mod look_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn saved_target_ids_match_the_setup_command() {
+        for target in Target::ALL {
+            assert_eq!(serde_json::to_value(target).unwrap(), serde_json::json!(target.id()));
+            assert_eq!(serde_json::from_value::<Target>(serde_json::json!(target.id())).unwrap(), target);
+            assert_eq!(Target::parse(target.id()), Some(target));
+        }
+    }
 
     fn managed<'a>(cfg: &'a CompositorConfig, existing: &[&str]) -> ManagedConfig<'a> {
         ManagedConfig {
@@ -3700,6 +3861,42 @@ mod tests {
         std::fs::write(d.join("config.d/50-menu.conf"), "set $menu wofi\nbindsym $mod+space exec $menu\nbindsym $mod+Shift+s exec grim\n").unwrap();
         let chords = sway_existing_chords(&d.join("config"));
         assert_eq!(chords.into_iter().collect::<Vec<_>>(), ["shift+super+s", "super+return", "super+space"]);
+    }
+
+    /// What sway 1.12 loaded for each line (`sway --validate --verbose`,
+    /// its "Loading config from" lines, in a container).
+    #[test]
+    fn sway_includes_expand_like_sway() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        for f in ["conf.d/a/bindings.conf", "conf.d/b/bindings.conf", "conf.d/b/other.conf", "conf.d/a/file*.conf", "conf.d/b/file1.conf", "one.conf", "two.conf", "my dir/x.conf"] {
+            std::fs::create_dir_all(d.join(f).parent().unwrap()).unwrap();
+            std::fs::write(d.join(f), "").unwrap();
+        }
+        let config = d.join("config");
+        let files = |line: &str| sway_include_files(&config, line);
+        // A wildcard in a directory component.
+        assert_eq!(files("conf.d/*/bindings.conf"), [d.join("conf.d/a/bindings.conf"), d.join("conf.d/b/bindings.conf")]);
+        assert!(files("nothing/*/x.conf").is_empty(), "a pattern that matches nothing is skipped");
+        // Every path of one include, quoted together or not.
+        assert_eq!(files("one.conf two.conf"), [d.join("one.conf"), d.join("two.conf")]);
+        assert_eq!(files(&format!("\"{0}/one.conf {0}/two.conf\"", d.display())), [d.join("one.conf"), d.join("two.conf")]);
+        // An escaped blank keeps one word; quotes alone don't (sway drops
+        // them before `wordexp` splits).
+        assert_eq!(files("my\\ dir/x.conf"), [d.join("my dir/x.conf")]);
+        assert_eq!(files("\"my\\ dir/x.conf\""), [d.join("my dir/x.conf")]);
+        assert_eq!(files("\"my dir/x.conf\""), [d.join("my"), d.join("dir/x.conf")]);
+        // An escaped wildcard is literal.
+        assert_eq!(files("conf.d/\\*/bindings.conf"), [d.join("conf.d/*/bindings.conf")]);
+        assert_eq!(files("conf.d/*/file\\*.conf"), [d.join("conf.d/a/file*.conf")]);
+    }
+
+    /// `set $mod Mod1` then `set $mod Mod4`: sway uses the latest value
+    /// (checked in sway 1.12: "After replacement: bindsym Mod4+x").
+    #[test]
+    fn sway_variables_take_their_latest_value() {
+        let binds = sway_binds("set $mod Mod1\nbindsym $mod+a exec a\nset $mod Mod4\nset $modShift Mod4+Shift\nbindsym $mod+x exec x\nbindsym $modShift+y exec y\n");
+        assert_eq!(binds.iter().map(|b| b.chord.as_str()).collect::<Vec<_>>(), ["alt+a", "super+x", "shift+super+y"]);
     }
 
     #[test]

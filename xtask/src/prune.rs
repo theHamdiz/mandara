@@ -200,10 +200,20 @@ fn find_profiles(target_root: &Path, dir: &Path, depth: usize, out: &mut Vec<Pat
     }
 }
 
+/// Releases the lock even when a concurrent child briefly inherits its file
+/// descriptor before exec. Closing only our descriptor leaves that copy locked.
+struct ProfileLock(File);
+
+impl Drop for ProfileLock {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
+}
+
 /// Takes the profile's build lock if no cargo holds it.
-fn try_lock(profile: &Path) -> Option<File> {
+fn try_lock(profile: &Path) -> Option<ProfileLock> {
     let lock = File::options().read(true).write(true).open(profile.join(CARGO_LOCK)).ok()?;
-    lock.try_lock().ok().map(|()| lock)
+    lock.try_lock().ok().map(|()| ProfileLock(lock))
 }
 
 /// The unpacked registry sources (`$CARGO_HOME/registry/src/<index>`).
@@ -291,11 +301,13 @@ mod tests {
         let debug = profile(&t.join("debug"), 400_000);
         let release = profile(&t.join("release"), 400_000);
         let total = disk_usage(&t);
-        // A limit just under the total: dropping debug's incremental cache
-        // alone isn't enough to reach 60 %, the whole debug profile is.
+        // Dropping only debug's incremental cache cannot reach 60 %.
+        // Removing whole debug profiles or further incremental caches
+        // must reach the low-water budget while keeping release objects.
         let max_gib = (total - 1) as f64 / GIB;
         prune_once(std::slice::from_ref(&t), max_gib, false, false).unwrap();
-        assert!(!debug.exists(), "debug deleted");
+        assert!(!debug.join(INCREMENTAL).exists(), "debug's incremental cache deleted first");
+        assert!(disk_usage(&t) <= (max_gib * GIB * LOW_WATER) as u64, "the low-water budget is met");
         assert!(release.join("deps/lib.rlib").exists(), "release kept");
     }
 
@@ -315,6 +327,21 @@ mod tests {
         prune_once(std::slice::from_ref(&t), 0.0, false, false).unwrap();
         assert!(debug.join(INCREMENTAL).exists(), "a running build's profile survives");
         drop(held);
+        prune_once(std::slice::from_ref(&t), 0.0, false, false).unwrap();
+        assert!(!debug.exists());
+    }
+
+    #[test]
+    fn releasing_a_profile_lock_also_releases_inherited_descriptors() {
+        let t = scratch("inherited-lock").join("target");
+        let debug = profile(&t.join("debug"), 400_000);
+        let held = try_lock(&debug).unwrap();
+        let inherited = held.0.try_clone().unwrap();
+        assert!(try_lock(&debug).is_none());
+        drop(held);
+        let next = try_lock(&debug).expect("the old descriptor must not keep the lock held");
+        drop(next);
+        drop(inherited);
         prune_once(std::slice::from_ref(&t), 0.0, false, false).unwrap();
         assert!(!debug.exists());
     }

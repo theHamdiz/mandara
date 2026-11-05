@@ -44,8 +44,11 @@
 //! - `prune [--max-gib N] [--watch MINUTES] [--dir PATH]… [--cargo-cache]
 //!   [--dry-run]`: keeps the build artefacts under a size limit, debug
 //!   first (see [`prune`]).
+//! - `bootstrap [--check]`: refreshes the download script's translated
+//!   messages and public release keys (see [`bootstrap`]).
 
 mod art;
+mod bootstrap;
 mod buildinfo;
 mod calligraphy;
 mod delta;
@@ -59,6 +62,10 @@ mod prune;
 mod release_key;
 mod resource_check;
 mod sandbox;
+#[cfg(test)]
+mod bootstrap_tests;
+#[cfg(test)]
+mod pages_tests;
 
 use std::collections::BTreeMap;
 use std::io::Write as _;
@@ -530,6 +537,7 @@ fn main() {
         Some("plugins") => plugins(rest),
         Some("checksums") => checksums(rest),
         Some("art") => art::art(rest),
+        Some("bootstrap") => bootstrap::generate(rest),
         Some("build") => buildinfo::build(rest),
         Some("delta") => delta::delta(rest),
         Some("apply-delta") => delta::apply_delta(rest),
@@ -542,7 +550,7 @@ fn main() {
         Some("prune") => prune::prune(rest),
         Some("release-key") => release_key::release_key(rest),
         _ => {
-            eprintln!("usage: cargo xtask <status [--json] | bump [--dry-run] [--commit] [--tag] [--init] | verify | changelog [VERSION] | dist --target <triple> [--bin PATH] [--variant NAME] [--out DIR] | plugins [--out DIR] | checksums [--out DIR] | build [--target <triple>] [--variant NAME] [--profile P] [--features F] [--no-default-features] [--out DIR] [--no-readme] | art [--check | --compose [--only ID] [--out DIR] | --calligraphy] | delta --old BIN --new BIN --out PATCH | apply-delta --old BIN --patch PATCH --out BIN [--sha256 HEX] | update-part --target <triple> [--variant NAME] [--out DIR] [--previous OLD.tar.gz] | plugin-delta --new ARCHIVE [--old ARCHIVE] --out DIR | langpacks [--version V | --bin PATH] [--dir DIR] [--out DIR] | resource-check BIN [config.toml] | sandbox <up | down | shot | matte | msg | pointer | studio | shell | audio | notify | env> … | mosaic OUT.png --cols N [--width PX] [--gap PX] [--radius PX] [--theme dark|light] TILE… | prune [--max-gib N] [--watch MINUTES] [--dir PATH]… [--cargo-cache] [--dry-run] | release-key <new [--repo OWNER/NAME] [--secret NAME] [--backup PATH] [--force] | sign FILE [--env NAME]>>");
+            eprintln!("usage: cargo xtask <status [--json] | bump [--dry-run] [--commit] [--tag] [--init] | verify | changelog [VERSION] | dist --target <triple> [--bin PATH] [--variant NAME] [--out DIR] | plugins [--out DIR] | checksums [--out DIR] | build [--target <triple>] [--variant NAME] [--profile P] [--features F] [--no-default-features] [--out DIR] [--no-readme] | art [--check | --compose [--only ID] [--out DIR] | --calligraphy] | bootstrap [--check] | delta --old BIN --new BIN --out PATCH | apply-delta --old BIN --patch PATCH --out BIN [--sha256 HEX] | update-part --target <triple> [--variant NAME] [--out DIR] [--previous OLD.tar.gz] | plugin-delta --new ARCHIVE [--old ARCHIVE] --out DIR | langpacks [--version V | --bin PATH] [--dir DIR] [--out DIR] | resource-check BIN [config.toml] | sandbox <up | down | shot | matte | msg | pointer | studio | shell | audio | notify | env> … | mosaic OUT.png --cols N [--width PX] [--gap PX] [--radius PX] [--theme dark|light] TILE… | prune [--max-gib N] [--watch MINUTES] [--dir PATH]… [--cargo-cache] [--dry-run] | release-key <new [--repo OWNER/NAME] [--secret NAME] [--backup PATH] [--force] | sign FILE [--env NAME]>>");
             std::process::exit(EXIT_USAGE);
         }
     };
@@ -573,3 +581,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 }
+
+#[cfg(test)]
+mod workflow_tests;

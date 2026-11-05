@@ -7955,3 +7955,112 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "Isian datar (bawaan), ubin 3D timbul dengan tepi kaca, atau kaca tembus pandang"
 "Tile shadow" = "Bayangan ubin"
 "How strong the shadow under each shortcut tile is (0 for none)" = "Seberapa kuat bayangan di bawah setiap ubin pintasan (0 berarti tanpa bayangan)"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} dibuat oleh Nix (Home Manager atau NixOS) dan hanya-baca: tambahkan baris ini ke konfigurasi Nix-nya, bangun ulang, lalu jalankan `mandara setup` lagi: {line}"
+"Opposite the sidebar" = "Berseberangan dengan bilah samping"
+"Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't" = "Tempat dok terbuka: di salah satu sisi layar, atau di tengah atas atau bawah menggantung dari bilah di sana (menyatu dengannya pada gaya bingkai tepi), atau dari tepi layar jika bilah tidak ada di sana"
+"The grid always opens in the middle" = "Kisi selalu terbuka di tengah"
+"The bar isn't at the top, so the dock hangs from the screen edge" = "Bilah tidak di atas, jadi dok menggantung dari tepi layar"
+"The bar isn't at the bottom, so the dock rises from the screen edge" = "Bilah tidak di bawah, jadi dok muncul dari tepi layar"
+"Joined to the bar, as one piece with it" = "Tergabung dengan bilah, menyatu dengannya"
+"A floating bar has no edge to join, so the dock opens as a card next to it" = "Bilah mengambang tidak punya tepi untuk disambung, jadi dok terbuka sebagai kartu di dekatnya"
+
+"KWin settings are managed in Plasma System Settings" = "Pengaturan KWin dikelola di Pengaturan Sistem Plasma"
+"Workspace not found" = "Ruang kerja tidak ditemukan"
+"The window is no longer available" = "Jendela tidak lagi tersedia"
+"The compositor did not respond in time" = "Kompositor tidak merespons tepat waktu"
+"The compositor connection closed" = "Koneksi kompositor ditutup"
+"Idle notifications are not available" = "Pemberitahuan status idle tidak tersedia"
+"No input seat is available" = "Tidak ada kelompok perangkat masukan yang tersedia"
+"These displays do not support power control" = "Layar ini tidak mendukung kontrol daya"
+"This executable path cannot be used in a desktop entry" = "Jalur program ini tidak dapat digunakan dalam entri desktop"
+"{path} is a custom autostart entry; Mandara left it unchanged" = "{path} adalah entri mulai otomatis khusus; Mandara membiarkannya tetap"
+"Mandara uses native Plasma protocols; KWin’s configuration stays unchanged" = "Mandara memakai protokol asli Plasma; konfigurasi KWin tidak berubah"
+"KWin: startup entry {path}" = "KWin: entri mulai otomatis {path}"
+"The lock screen did not confirm that the session is locked" = "Layar kunci tidak mengonfirmasi bahwa sesi terkunci"
+"Change resolution, scale and display arrangement in Plasma System Settings. Shell placement below still applies." = "Ubah resolusi, skala dan susunan layar di Pengaturan Sistem Plasma. Penempatan shell di bawah tetap berlaku."
+"KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings." = "KWin tidak memiliki pemeriksa konfigurasi mandiri. Pengaturannya dikelola di Pengaturan Sistem Plasma."
+"River's init controls startup; add or remove Mandara there" = "Init River mengatur mulai otomatis; tambahkan atau hapus Mandara di sana"
+"No supported compositor is installed ({compositors})." = "Tidak ada kompositor yang didukung terpasang ({compositors})."
+"Could not update PATH: {error}. Add {line} to your shell profile." = "Tidak dapat memperbarui PATH: {error}. Tambahkan {line} ke profil shell Anda."
+"Would remove {path}" = "Akan menghapus {path}"
+"Kept custom startup entry {path}" = "Entri mulai otomatis khusus {path} dipertahankan"
+"Could not read {path}: {error}. Left it unchanged." = "Tidak dapat membaca {path}: {error}. Dibiarkan tetap."
+
+"Your Wayland desktop. Let’s get it ready." = "Desktop Wayland Anda. Mari kita siapkan."
+"Checking the release signature…" = "Memeriksa tanda tangan rilis…"
+"Downloading Mandara…" = "Mengunduh Mandara…"
+"Verifying the download…" = "Memverifikasi unduhan…"
+"Unpacking the installer…" = "Mengekstrak pemasang…"
+"Ready. Opening Mandara’s installer…" = "Siap. Membuka pemasang Mandara…"
+"Install this tool and try again:" = "Pasang alat ini lalu coba lagi:"
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "Rilis siap pakai memerlukan Linux dengan CPU x86_64 atau aarch64."
+"The release mirror must use HTTPS." = "Cermin rilis harus menggunakan HTTPS."
+"Could not create a temporary download folder." = "Tidak dapat membuat folder unduhan sementara."
+"Download failed. Check your connection and try again." = "Unduhan gagal. Periksa koneksi Anda dan coba lagi."
+"The release signature could not be verified. Nothing was installed." = "Tanda tangan rilis tidak dapat diverifikasi. Tidak ada yang dipasang."
+"This command needs OpenSSL 3 or newer." = "Perintah ini memerlukan OpenSSL 3 atau yang lebih baru."
+"The signed release has no unique checksum for this archive." = "Rilis bertanda tangan tidak memiliki satu checksum unik untuk arsip ini."
+"The download did not match the signed release. Nothing was installed; please try again." = "Unduhan tidak cocok dengan rilis bertanda tangan. Tidak ada yang dipasang; silakan coba lagi."
+"Could not unpack the verified release." = "Tidak dapat mengekstrak rilis yang telah diverifikasi."
+"The release does not contain exactly one executable installer." = "Rilis tidak berisi tepat satu pemasang yang dapat dijalankan."
+"Manual downloads:" = "Unduhan manual:"
+"On NixOS, install Mandara through your flake." = "Di NixOS, pasang Mandara melalui flake Anda."
+
+"Compositor (default: detected)" = "Kompositor (bawaan: terdeteksi)"
+
+"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Pilih mango, niri, hyprland, umbriel, sway, river atau kwin (bawaan: terdeteksi). Kompositor yang belum ada dapat dipasang setelah meminta persetujuan. KWin memerlukan instalasi Plasma yang sudah ada."
+
+"Install libxkbcommon before checking or changing compositor shortcuts." = "Pasang libxkbcommon sebelum memeriksa atau mengubah pintasan kompositor."
+
+"Open Mandara Studio from your application menu." = "Buka Mandara Studio dari menu aplikasi Anda."
+
+"Updates: Studio → About → Update now" = "Pembaruan: Studio → Tentang → Perbarui sekarang"
+
+"If you added Mandara to PATH, open a new terminal before running these commands." = "Jika Anda menambahkan Mandara ke PATH, buka terminal baru sebelum menjalankan perintah ini."
+
+"Cancelled — nothing was changed." = "Dibatalkan — tidak ada yang diubah."
+
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Layar masuk Anda dipertahankan; ubah kapan saja melalui Studio → Layar masuk → Pengelola login."
+
+"Setup" = "Penyiapan"
+
+"Start with your compositor" = "Mulai bersama kompositor Anda"
+
+"detect automatically" = "deteksi otomatis"
+
+"installed" = "terpasang"
+
+"keep yours" = "pertahankan milik Anda"
+
+"no" = "tidak"
+
+"yes" = "ya"
+
+"{compositor} (installed)" = "{compositor} (terpasang)"
+
+"↑/↓ change · enter select · esc cancel" = "↑/↓ ubah · Enter pilih · Esc batal"
+
+"Profile scope" = "Cakupan profil"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "Mengubah gaya, posisi, dan tinggi bilah. Item Anda tetap ada kecuali Anda memilih untuk menggantinya."
+"Replace bar items" = "Ganti item bilah"
+"Leave empty to follow the desktop's icon theme" = "Biarkan kosong untuk mengikuti tema ikon desktop"
+"Could not load {module}; check that the installed kernel includes it" = "Tidak dapat memuat {module}; periksa apakah kernel yang terpasang menyertakannya"
+
+"Bounce only while music plays" = "Memantul hanya saat musik diputar"
+"Hide corners between displays" = "Sembunyikan sudut di antara layar"
+"Redraw interval p50" = "Interval gambar ulang p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Pembuatan tampilan terbaru: batang padat menunjukkan waktu CPU; tinggi penuh juga mencakup interval sejak pembuatan sebelumnya pada permukaan yang sama."
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "Kompositor ini tidak menyediakan wlr-screencopy, dan ScreenShot2 milik KWin tidak dapat digunakan"
+
+"Tab: results · ↑↓: select · Enter: use" = "Tab: hasil · ↑↓: pilih · Enter: gunakan"
+
+"Mandara is installed." = "Mandara telah terpasang."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "Jalankan:        mandara            (atau masuk lagi jika mulai otomatis aktif)"
+
+"Settings:        mandara studio" = "Pengaturan:      mandara studio"
+
+"Health & repair: mandara studio maintenance" = "Pemeriksaan & perbaikan: mandara studio maintenance"

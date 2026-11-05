@@ -120,15 +120,21 @@
             ];
           };
           service = hm.config.systemd.user.services.mandara;
+          cfg = hm.config.programs.mandara;
+          # The file the module writes is the TOML of exactly these settings.
+          configFile = hm.config.xdg.configFile."mandara/config.toml".source;
+          expectedFile = (pkgs.formats.toml { }).generate "mandara-config.toml" cfg.settings;
         in
         {
           nixos-module = nixos.config.system.build.toplevel;
-          home-manager-module = pkgs.runCommand "mandara-home-manager-module" { } ''
-            grep -qx 'height = 30' ${hm.config.xdg.configFile."mandara/config.toml".source}
-            test ${lib.escapeShellArg service.Service.ExecStart} = ${lib.getExe hm.config.programs.mandara.package}
-            test ${toString (lib.length hm.config.home.packages)} = 1
-            touch $out
-          '';
+          # Checked while Nix evaluates (no build script): the assertions
+          # fail the check with their message, the file only marks success.
+          home-manager-module =
+            assert lib.assertMsg (cfg.settings.bar.height == 30) "the Home Manager settings lost bar.height";
+            assert lib.assertMsg (toString configFile == toString expectedFile) "~/.config/mandara/config.toml isn't the TOML of programs.mandara.settings";
+            assert lib.assertMsg (service.Service.ExecStart == lib.getExe cfg.package) "the systemd service doesn't start the module's package";
+            assert lib.assertMsg (lib.length hm.config.home.packages == 1) "the module should add exactly one package";
+            pkgs.writeText "mandara-home-manager-module" "checked\n";
         }
       );
 

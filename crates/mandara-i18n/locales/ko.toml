@@ -7954,3 +7954,112 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "평면 채우기(기본값), 유리 테두리가 있는 입체 3D 타일, 또는 투명한 유리"
 "Tile shadow" = "타일 그림자"
 "How strong the shadow under each shortcut tile is (0 for none)" = "각 바로 가기 타일 아래 그림자의 세기 (0이면 없음)"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path}은(는) Nix(Home Manager 또는 NixOS)가 만든 읽기 전용 파일입니다. 이 줄을 Nix 설정에 추가하고 다시 빌드한 뒤 `mandara setup`을 다시 실행하세요: {line}"
+"Opposite the sidebar" = "사이드바 반대편"
+"Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't" = "Dock이 열리는 위치: 화면 한쪽 옆, 또는 위나 아래 가운데에서 그쪽 바에 매달려 열립니다(가장자리 프레임 스타일에서는 바와 하나로 이어짐). 바가 없는 쪽에서는 화면 가장자리에서 열립니다"
+"The grid always opens in the middle" = "그리드는 항상 가운데에 열립니다"
+"The bar isn't at the top, so the dock hangs from the screen edge" = "바가 위에 없으므로 Dock이 화면 가장자리에서 내려옵니다"
+"The bar isn't at the bottom, so the dock rises from the screen edge" = "바가 아래에 없으므로 Dock이 화면 가장자리에서 올라옵니다"
+"Joined to the bar, as one piece with it" = "바에 붙어 하나로 이어집니다"
+"A floating bar has no edge to join, so the dock opens as a card next to it" = "떠 있는 바에는 붙을 가장자리가 없으므로 Dock이 그 옆에 카드로 열립니다"
+
+"KWin settings are managed in Plasma System Settings" = "KWin 설정은 Plasma 시스템 설정에서 관리합니다"
+"Workspace not found" = "작업 공간을 찾을 수 없습니다"
+"The window is no longer available" = "창을 더 이상 사용할 수 없습니다"
+"The compositor did not respond in time" = "컴포지터가 제시간에 응답하지 않았습니다"
+"The compositor connection closed" = "컴포지터 연결이 닫혔습니다"
+"Idle notifications are not available" = "유휴 알림을 사용할 수 없습니다"
+"No input seat is available" = "사용 가능한 입력 장치 그룹이 없습니다"
+"These displays do not support power control" = "이 디스플레이는 전원 제어를 지원하지 않습니다"
+"This executable path cannot be used in a desktop entry" = "이 실행 파일 경로는 데스크톱 항목에 사용할 수 없습니다"
+"{path} is a custom autostart entry; Mandara left it unchanged" = "{path}은 사용자 지정 자동 시작 항목이므로 Mandara가 변경하지 않았습니다"
+"Mandara uses native Plasma protocols; KWin’s configuration stays unchanged" = "Mandara는 Plasma 고유 프로토콜을 사용하며 KWin 설정은 변경하지 않습니다"
+"KWin: startup entry {path}" = "KWin: 시작 항목 {path}"
+"The lock screen did not confirm that the session is locked" = "잠금 화면에서 세션 잠금을 확인하지 못했습니다"
+"Change resolution, scale and display arrangement in Plasma System Settings. Shell placement below still applies." = "해상도, 배율 및 디스플레이 배치는 Plasma 시스템 설정에서 변경하세요. 아래의 셸 배치 설정은 계속 적용됩니다."
+"KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings." = "KWin에는 독립적인 설정 검사기가 없습니다. 설정은 Plasma 시스템 설정에서 관리합니다."
+"River's init controls startup; add or remove Mandara there" = "River의 init에서 시작을 관리합니다. 해당 파일에서 Mandara를 추가하거나 제거하세요"
+"No supported compositor is installed ({compositors})." = "지원되는 컴포지터가 설치되어 있지 않습니다({compositors})."
+"Could not update PATH: {error}. Add {line} to your shell profile." = "PATH를 업데이트할 수 없습니다: {error}. 셸 프로필에 {line}을 추가하세요."
+"Would remove {path}" = "{path}을 제거할 예정입니다"
+"Kept custom startup entry {path}" = "사용자 지정 시작 항목 {path}을 유지했습니다"
+"Could not read {path}: {error}. Left it unchanged." = "{path}을 읽을 수 없습니다: {error}. 변경하지 않았습니다."
+
+"Your Wayland desktop. Let’s get it ready." = "나만의 Wayland 데스크톱. 함께 준비해 봅시다."
+"Checking the release signature…" = "릴리스 서명을 확인하는 중…"
+"Downloading Mandara…" = "Mandara를 다운로드하는 중…"
+"Verifying the download…" = "다운로드를 검증하는 중…"
+"Unpacking the installer…" = "설치 프로그램의 압축을 푸는 중…"
+"Ready. Opening Mandara’s installer…" = "준비됐습니다. Mandara 설치 프로그램을 여는 중…"
+"Install this tool and try again:" = "이 도구를 설치한 뒤 다시 시도하세요:"
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "미리 빌드된 릴리스에는 Linux와 x86_64 또는 aarch64 CPU가 필요합니다."
+"The release mirror must use HTTPS." = "릴리스 미러는 HTTPS를 사용해야 합니다."
+"Could not create a temporary download folder." = "임시 다운로드 폴더를 만들 수 없습니다."
+"Download failed. Check your connection and try again." = "다운로드에 실패했습니다. 연결을 확인한 뒤 다시 시도하세요."
+"The release signature could not be verified. Nothing was installed." = "릴리스 서명을 검증할 수 없습니다. 아무것도 설치되지 않았습니다."
+"This command needs OpenSSL 3 or newer." = "이 명령에는 OpenSSL 3 이상이 필요합니다."
+"The signed release has no unique checksum for this archive." = "서명된 릴리스에 이 압축 파일의 고유 체크섬이 없습니다."
+"The download did not match the signed release. Nothing was installed; please try again." = "다운로드가 서명된 릴리스와 일치하지 않습니다. 아무것도 설치되지 않았습니다. 다시 시도하세요."
+"Could not unpack the verified release." = "검증된 릴리스의 압축을 풀 수 없습니다."
+"The release does not contain exactly one executable installer." = "릴리스의 실행 가능한 설치 프로그램 수가 정확히 하나가 아닙니다."
+"Manual downloads:" = "직접 다운로드:"
+"On NixOS, install Mandara through your flake." = "NixOS에서는 flake를 통해 Mandara를 설치하세요."
+
+"Compositor (default: detected)" = "컴포지터 (기본값: 자동 감지)"
+
+"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "mango, niri, hyprland, umbriel, sway, river 또는 kwin을 선택하세요 (기본값: 자동 감지). 없는 컴포지터는 확인 후 설치할 수 있습니다. KWin을 사용하려면 Plasma가 이미 설치되어 있어야 합니다."
+
+"Install libxkbcommon before checking or changing compositor shortcuts." = "컴포지터 단축키를 확인하거나 변경하기 전에 libxkbcommon을 설치하세요."
+
+"Open Mandara Studio from your application menu." = "애플리케이션 메뉴에서 Mandara Studio를 여세요."
+
+"Updates: Studio → About → Update now" = "업데이트: Studio → 정보 → 지금 업데이트"
+
+"If you added Mandara to PATH, open a new terminal before running these commands." = "Mandara를 PATH에 추가했다면 이 명령을 실행하기 전에 새 터미널을 여세요."
+
+"Cancelled — nothing was changed." = "취소됨 — 아무것도 변경하지 않았습니다."
+
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "현재 로그인 화면을 유지합니다. Studio → 로그인 화면 → 로그인 관리자에서 언제든지 바꿀 수 있습니다."
+
+"Setup" = "설정"
+
+"Start with your compositor" = "컴포지터와 함께 시작"
+
+"detect automatically" = "자동 감지"
+
+"installed" = "설치됨"
+
+"keep yours" = "현재 로그인 화면 유지"
+
+"no" = "아니요"
+
+"yes" = "예"
+
+"{compositor} (installed)" = "{compositor} (설치됨)"
+
+"↑/↓ change · enter select · esc cancel" = "↑/↓ 변경 · Enter 선택 · Esc 취소"
+
+"Profile scope" = "프로필 범위"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "바의 스타일, 위치, 높이를 변경합니다. 교체를 선택하지 않으면 기존 항목이 유지됩니다."
+"Replace bar items" = "바 항목 교체"
+"Leave empty to follow the desktop's icon theme" = "비워 두면 데스크톱의 아이콘 테마를 따릅니다"
+"Could not load {module}; check that the installed kernel includes it" = "{module}을(를) 불러올 수 없습니다. 설치된 커널에 포함되어 있는지 확인하세요"
+
+"Bounce only while music plays" = "음악 재생 중에만 튀기"
+"Hide corners between displays" = "디스플레이 사이 모서리 숨기기"
+"Redraw interval p50" = "다시 그리기 간격 p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "최근 뷰 빌드: 채워진 부분은 CPU 빌드 시간을 보여 주며, 전체 높이에는 같은 표면의 이전 빌드 이후 간격도 포함됩니다."
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "이 컴포지터는 wlr-screencopy를 제공하지 않으며 KWin의 ScreenShot2도 사용할 수 없습니다"
+
+"Tab: results · ↑↓: select · Enter: use" = "Tab: 결과 · ↑↓: 선택 · Enter: 사용"
+
+"Mandara is installed." = "Mandara가 설치되었습니다."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "시작:            mandara            (자동 시작을 켰다면 다시 로그인해도 됩니다)"
+
+"Settings:        mandara studio" = "설정:            mandara studio"
+
+"Health & repair: mandara studio maintenance" = "진단 및 복구:    mandara studio maintenance"

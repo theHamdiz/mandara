@@ -1,8 +1,27 @@
 # Development tools
 
+`cargo xtask bootstrap` refreshes the short download command’s translated
+messages and public release keys. `cargo xtask bootstrap --check` verifies
+the generated section without writing it. The optional POSIX download
+script only verifies and opens a release; installation stays in Rust.
+
 Everything here is Rust, run through `cargo xtask` (the `xtask/` crate). The
 system programs it starts are MangoWM, `dbus-daemon`, `bwrap`, PipeWire
 (`pipewire`, `pipewire-pulse`, `wireplumber`, `pactl`, `paplay`) and `grim`.
+
+## Website
+
+GitHub Pages serves `index.html` as the homepage and the Markdown guides as
+documentation. The homepage uses `assets/css/landing.css`; the shared
+`_includes/head-custom.html` supplies its phoenix favicon and light/dark
+colours. Keep asset and guide links behind Jekyll's `relative_url` filter
+so they also work under the repository's `/mandara/` path.
+
+The Look selector uses native radio controls and the FAQ uses `details`,
+so both work without JavaScript. Preview both colour schemes and narrow
+screens, including keyboard selection and reduced motion. Run
+`cargo test -p xtask pages_tests` to check the linked files, preview controls,
+contrast, installation command and plugin count against the guides.
 
 ## Warnings are errors
 
@@ -15,6 +34,40 @@ truly right, put it on that one item with its reason:
 ```rust
 #[expect(clippy::large_enum_variant, reason = "one per frame; boxing would allocate per frame")]
 ```
+
+## Local checks and cold builds
+
+For a focused edit, start with the affected crate and its callers, for
+example `cargo test -p mandara-install --locked`. Before a pull request,
+run the full workspace tests and clippy; CI keeps both checks.
+Its initial workspace build uses `--profile test`, so the following tests
+reuse those dependencies and the installer dry run uses the tested binary.
+
+The test profile uses unoptimized workspace code and basic dependency
+optimization, without debug information or incremental caches. It retains assertions and the AV1 decoder’s required
+optimization. Interactive sandbox binaries use the separate dev profile,
+with optimized dependencies so the UI remains responsive. Release settings
+are unchanged. A first dev build and a first test build therefore produce
+separate artifacts.
+
+To see what a cold build spends time on, use
+`cargo test --workspace --locked --no-run --timings`; Cargo writes an HTML
+report under `target/cargo-timings/`. Compare clean target directories with
+the same toolchain, job count and compiler flags. A compiler cache helps
+repeated builds; it does not remove the cost of a first cache miss.
+
+A reference run on 5 November 2026, at `eda426a`, took under four minutes
+including tests and used under 8 GiB for the test artifacts. It used Rust
+1.99.1 and eight Cargo workers on a Ryzen 9 9950X, after cleaning the dev
+and test outputs; the package-download cache was already populated. Other
+profiles are excluded from that size. Compare results on the same hardware
+before attributing a timing difference to the profile.
+
+On Linux, an installed alternative linker can be selected locally without
+requiring it for every contributor, for example
+`RUSTFLAGS="-C link-arg=-fuse-ld=mold" cargo test --workspace --locked`.
+Changing compiler flags creates another set of artifacts. Use the pruning
+tool below to keep the total bounded.
 
 ## The demo sandbox: `cargo xtask sandbox`
 

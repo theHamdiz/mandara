@@ -233,6 +233,7 @@ impl RiverState {
                 focused: w.activated,
                 floating: false,
                 fullscreen: w.fullscreen,
+                minimized: false,
                 geometry: None,
             })
             .collect()

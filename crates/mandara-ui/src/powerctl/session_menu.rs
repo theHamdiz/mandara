@@ -2,7 +2,11 @@
 //! (lock, log out, sleep, hibernate, restart, shut down, soft restart,
 //! firmware setup, a boot-loader entry, restart Mandara, or any command),
 //! shown as the edge dock or a centered grid, with optional hold-to-confirm
-//! for everything that ends the session and number-key shortcuts.
+//! for everything that ends the session and number-key shortcuts. The dock
+//! opens on a screen side, or hangs from the top or bottom centre
+//! (`[session_menu] position`): from the bar on that edge, one piece with
+//! it in the edge-frame styles, the way the launcher and the drop-down
+//! panels join it ([`crate::launcher_place`]).
 //!
 //! Choosing an entry runs its before-hooks (`before-logout`,
 //! `before-reboot`, `before-shutdown`) to completion first.
@@ -14,7 +18,8 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px,
 };
 use mandara_config::ShellConfig;
-use mandara_config::power::{HookEvent, SessionEntry, SessionEntryKind, SessionMenuConfig, SessionMenuStyle, SuspendMode};
+use mandara_config::power::{HookEvent, SessionEntry, SessionEntryKind, SessionMenuConfig, SessionMenuPosition, SessionMenuStyle, SuspendMode};
+use mandara_config::workflow::{LauncherEdge, LauncherPosition};
 use mandara_core::{Edge, FrameClock, SpringConfig, SpringValue, ToGpui, edge_drawer_snapped};
 use mandara_i18n::{t, tf, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginRegistry};
@@ -22,7 +27,9 @@ use mandara_services::{SessionAction, hooks, sleep};
 use mandara_theme::Color;
 use serde_json::json;
 
-use crate::first_frame::{self, FirstFrame};
+use crate::bar::layout::Metrics;
+use crate::first_frame::{self, FirstFrame, Settle};
+use crate::launcher_place::{self, Join, Placement, Rect};
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::any_icon;
 use crate::kit::text;
@@ -222,6 +229,70 @@ fn grid_columns(menu: &SessionMenuConfig, count: usize) -> usize {
     usize::from(menu.grid_columns).clamp(1, GRID_COLUMNS_MAX).min(count.max(1))
 }
 
+/// Where the dock style opens.
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum DockPlace {
+    /// Docked to a screen side, as it always was.
+    Side { on_left: bool },
+    /// Top or bottom centre: the launcher's attached placement for a
+    /// column `size` big, so it hangs from the bar like the launcher and
+    /// the drop-down panels (flares in the edge-frame styles, a card a gap
+    /// under a floating bar, the bare screen edge where there is no bar).
+    Hang(Placement),
+}
+
+/// Where the dock `size` big opens on a `screen`-sized output for
+/// `position`, with the bar `bar` (shown on this output when `bar_here`),
+/// the sidebar on the right when `sidebar_right` and a bottom dock keeping
+/// `dock_clearance` free.
+fn dock_place(position: SessionMenuPosition, sidebar_right: bool, bar: Metrics, bar_here: bool, dock_clearance: Option<f32>, screen: (f32, f32), size: (f32, f32)) -> DockPlace {
+    let at = match position {
+        // The edge opposite the sidebar.
+        SessionMenuPosition::Side => return DockPlace::Side { on_left: sidebar_right },
+        SessionMenuPosition::Left => return DockPlace::Side { on_left: true },
+        SessionMenuPosition::Right => return DockPlace::Side { on_left: false },
+        SessionMenuPosition::Top => LauncherPosition::TopCenter,
+        SessionMenuPosition::Bottom => LauncherPosition::BottomCenter,
+    };
+    DockPlace::Hang(launcher_place::place(&launcher_place::Inputs {
+        position: at,
+        screen,
+        size,
+        max_h: size.1,
+        bar,
+        bar_here,
+        dock_clearance,
+        button: None,
+        animation: mandara_config::surfaces::PanelAnimation::Slide,
+    }))
+}
+
+/// A hanging dock part way open (`p`, past 1 while the spring overshoots):
+/// the drawer's visible rect (it grows out of its edge, stretching through
+/// the overshoot rather than leave the edge) and the top of its content,
+/// which slides out from behind the edge.
+fn hang_frame(rect: Rect, edge: LauncherEdge, p: f32) -> (Rect, f32) {
+    let visible = rect.h * p.max(0.0);
+    let content = rect.y + rect.h * (p - 1.0) * if edge == LauncherEdge::Top { 1.0 } else { -1.0 };
+    match edge {
+        LauncherEdge::Top => (Rect::new(rect.x, rect.y, rect.w, visible), content),
+        LauncherEdge::Bottom => (Rect::new(rect.x, rect.bottom() - visible, rect.w, visible), content),
+    }
+}
+
+/// Uses the connector selected when the overlay opened before a size fallback.
+fn bar_shows_here(output: Option<&str>, vp: (f32, f32), cx: &App) -> bool {
+    let outputs = cx.try_global::<crate::overlays::Outputs>().map(|o| o.0.as_slice()).unwrap_or_default();
+    let cfg = config(cx).read(cx).snapshot();
+    bar_on_target(&cfg, outputs, output, vp)
+}
+
+fn bar_on_target(cfg: &mandara_config::ShellConfig, outputs: &[mandara_core::OutputGeometry], output: Option<&str>, vp: (f32, f32)) -> bool {
+    let target = output.and_then(|name| outputs.iter().find(|o| o.name == name))
+        .or_else(|| outputs.iter().find(|o| crate::overlays::is_output(vp, o)));
+    target.is_none_or(|o| cfg.bar_on_output(&o.name))
+}
+
 /// A flush drawer's `(x, width)` that keeps it on its screen edge: past the
 /// slide's end (spring overshoot) it stretches, rather than leave a gap.
 /// At rest it reaches 2 px past the edge (`x = -2` on the left).
@@ -253,6 +324,10 @@ pub struct SessionView {
     /// waited for the first output's, so on any other display it never
     /// drew and held the keyboard and pointer).
     first: FirstFrame,
+    /// The bar shows on the output the menu opened on (known from its
+    /// first real frame): a top / bottom dock hangs from it there.
+    bar_here: bool,
+    output: Option<String>,
     /// Last press on the menu (focus changes right after it are its echo).
     last_press: Option<Instant>,
     deactivate_task: Option<gpui::Task<()>>,
@@ -262,7 +337,7 @@ pub struct SessionView {
 impl SessionView {
     /// A menu on a surface opened for an output of logical size `expected`
     /// ([`crate::outputs::overlay_target`]).
-    pub fn new(expected: (f32, f32), window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(expected: (f32, f32), output: Option<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let shell = shell(cx);
         cx.observe(&shell, |this: &mut Self, shell, cx| {
             this.closing = !shell.read(cx).session_open;
@@ -308,6 +383,8 @@ impl SessionView {
             entered: false,
             leave_task: None,
             first: FirstFrame::new(expected),
+            bar_here: true,
+            output,
             error: None,
         }
     }
@@ -370,9 +447,13 @@ impl SessionView {
 impl Render for SessionView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (sw, sh) = first_frame::viewport(window);
-        if !self.first.ready((sw, sh)) && !self.closing {
-            window.request_animation_frame();
-            return div().id("session-root").size_full().track_focus(&self.focus).into_any_element();
+        match self.first.settle((sw, sh)) {
+            Settle::Waiting if !self.closing => {
+                window.request_animation_frame();
+                return div().id("session-root").size_full().track_focus(&self.focus).into_any_element();
+            }
+            Settle::First { .. } => self.bar_here = bar_shows_here(self.output.as_deref(), (sw, sh), cx),
+            _ => {}
         }
         let palette = mandara_core::frame_palette(window, cx);
         let f = fonts(cx);
@@ -504,6 +585,23 @@ impl Render for SessionView {
             _ => label.clone(),
         };
 
+        // The dock's place (the grid always opens in the middle).
+        let dock_w = BTN_PX + DOCK_PAD_PX * 2.0;
+        let dock_h = n as f32 * (BTN_PX + DOCK_GAP_PX) - DOCK_GAP_PX + DOCK_PAD_PX * 2.0;
+        let place = dock_place(menu.position, cfg.sidebar_on_right(), Metrics::of(&cfg, crate::style::radius_scale()), self.bar_here, cfg.dock_bottom_clearance(), (sw, sh), (dock_w, dock_h));
+        // Hanging from the bar, the scrim leaves the bar's band bright (it
+        // still closes the menu when clicked).
+        let keep_bright = match place {
+            DockPlace::Hang(pl) if !grid => pl.keep_bright,
+            _ => None,
+        };
+        let dim = div().absolute().left_0().right_0().bg(gpui::black().opacity(SCRIM_ALPHA * p.min(1.0)));
+        let dim = match keep_bright {
+            Some((by, bh)) if by <= 0.0 => dim.top(px(bh)).bottom_0(),
+            Some((_, bh)) => dim.top_0().bottom(px(bh)),
+            None => dim.top_0().bottom_0(),
+        };
+
         let root = div()
             .id("session-root")
             .size_full()
@@ -544,7 +642,7 @@ impl Render for SessionView {
                     .top_0()
                     .left_0()
                     .size_full()
-                    .bg(gpui::black().opacity(SCRIM_ALPHA * p.min(1.0)))
+                    .child(dim)
                     .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, cx| this.close(cx)))
                     .on_mouse_down(MouseButton::Right, cx.listener(|this, _, _, cx| this.close(cx))),
             );
@@ -590,28 +688,101 @@ impl Render for SessionView {
                 .into_any_element();
         }
 
-        // Dock: the edge opposite the sidebar (left in RTL).
-        let dock_w = BTN_PX + DOCK_PAD_PX * 2.0;
-        let dock_h = n as f32 * (BTN_PX + DOCK_GAP_PX) - DOCK_GAP_PX + DOCK_PAD_PX * 2.0;
-        let on_left = cfg.sidebar_on_right();
-        // The side-panel look (`[sidebar.look]`): flush with flares, or a
-        // floating rounded slab `inset` clear of the edge.
-        let look = &cfg.sidebar.look;
-        let inset = look.inset_with(&cfg.bar);
-        let travel = dock_w + inset;
-        let x = if on_left { travel * p.min(SLIDE_OVERSHOOT) - dock_w - 2.0 } else { sw - travel * p.min(SLIDE_OVERSHOOT) };
-        let (radius, flare) = (crate::style::side_panel_radius(look), if look.floats_with(&cfg.bar) { 0.0 } else { crate::style::flare_radius(&cfg.bar) });
-        let fill = fill.opacity(mandara_config::surfaces::ranges::OPACITY.clamp(look.opacity, 1.0));
-        let y = (sh - dock_h) / 2.0;
-        let floats = look.floats_with(&cfg.bar);
-        // A flush drawer stretches through the overshoot instead of leaving the edge.
-        let (drawer_x, drawer_w) = if floats { (x, dock_w + 2.0) } else { edge_attached(on_left, x, dock_w + 2.0, sw) };
-        root.on_mouse_move(cx.listener(move |this, e: &gpui::MouseMoveEvent, window, cx| {
-            let vp = window.viewport_size();
-            let y0 = (f32::from(vp.height) - dock_h) / 2.0 - DOCK_REACH_Y_PX;
-            let px_x = f32::from(e.position.x);
-            let near = if on_left { px_x <= dock_w + DOCK_REACH_PX } else { px_x >= f32::from(vp.width) - dock_w - DOCK_REACH_PX };
-            let inside = near && f32::from(e.position.y) >= y0 && f32::from(e.position.y) <= y0 + dock_h + 2.0 * DOCK_REACH_Y_PX;
+        // Dock: on a screen side (by default the one opposite the sidebar),
+        // or hanging from the top / bottom centre.
+        let scale = window.scale_factor();
+        // (drawer, the rect occluding the scrim, the buttons' column
+        // (clipped to the drawer while it pours out), label `(x, y)` and
+        // whether it sits right of the dock, the area the pointer may roam)
+        let (drawer, occluder, column, label_at, label_right, zone) = match place {
+            DockPlace::Side { on_left } => {
+                // The side-panel look (`[sidebar.look]`): flush with flares, or a
+                // floating rounded slab `inset` clear of the edge.
+                let look = &cfg.sidebar.look;
+                let inset = look.inset_with(&cfg.bar);
+                let travel = dock_w + inset;
+                let x = if on_left { travel * p.min(SLIDE_OVERSHOOT) - dock_w - 2.0 } else { sw - travel * p.min(SLIDE_OVERSHOOT) };
+                let floats = look.floats_with(&cfg.bar);
+                let (radius, flare) = (crate::style::side_panel_radius(look), if floats { 0.0 } else { crate::style::flare_radius(&cfg.bar) });
+                let fill = fill.opacity(mandara_config::surfaces::ranges::OPACITY.clamp(look.opacity, 1.0));
+                let y = (sh - dock_h) / 2.0;
+                // A flush drawer stretches through the overshoot instead of leaving the edge.
+                let (drawer_x, drawer_w) = if floats { (x, dock_w + 2.0) } else { edge_attached(on_left, x, dock_w + 2.0, sw) };
+                let drawer = if floats {
+                    div().absolute().left(px(x)).top(px(y)).w(px(dock_w + 2.0)).h(px(dock_h)).rounded(px(radius)).bg(fill).into_any_element()
+                } else {
+                    edge_drawer_snapped(if on_left { Edge::Left } else { Edge::Right }, drawer_x, y, drawer_w, dock_h, radius, flare, fill, scale)
+                };
+                let column = div().absolute().left(px(x + DOCK_PAD_PX)).top(px(y + DOCK_PAD_PX)).flex().flex_col().gap(px(DOCK_GAP_PX)).opacity(ramp(BUTTONS_FADE)).children(buttons).into_any_element();
+                let label_x = if on_left { x + dock_w + LABEL_GAP_PX } else { x - LABEL_W_PX - LABEL_GAP_PX };
+                // From the screen side out to the reach (past the side too).
+                let reach = dock_w + DOCK_REACH_PX;
+                let zone = Rect::new(if on_left { -sw } else { sw - reach }, y - DOCK_REACH_Y_PX, sw + reach, dock_h + 2.0 * DOCK_REACH_Y_PX);
+                (drawer, Rect::new(drawer_x, y - flare, drawer_w, dock_h + 2.0 * flare), column, (label_x, y), on_left, zone)
+            }
+            DockPlace::Hang(pl) => {
+                let rect = pl.rect;
+                let edge = pl.edge.unwrap_or(LauncherEdge::Top);
+                let top = edge == LauncherEdge::Top;
+                let joined = pl.keep_bright.is_some() && pl.join == Join::Flares;
+                let (fill, seam) = crate::overlays::panel_fill(&cfg, &palette, joined);
+                let radius = crate::style::panel_radius(&cfg.bar);
+                let buttons_col = |x: f32, y: f32| div().absolute().left(px(x)).top(px(y)).flex().flex_col().gap(px(DOCK_GAP_PX)).opacity(ramp(BUTTONS_FADE)).children(buttons);
+                let (drawer, occluder, column, content_y) = if pl.join == Join::Card {
+                    // Under a floating bar: a card the panels' gap away
+                    // that slides in and fades, like a drop-down panel.
+                    let open = p.min(1.0);
+                    let y = rect.y + (1.0 - open) * crate::bar::layout::PANEL_SLIDE_PX * if top { -1.0 } else { 1.0 };
+                    let card = div()
+                        .absolute()
+                        .left(px(rect.x))
+                        .top(px(y))
+                        .w(px(rect.w))
+                        .h(px(rect.h))
+                        .rounded(px(radius))
+                        .bg(fill)
+                        .border_1()
+                        .border_color(crate::plugins::panel_fx::surface_edge(&palette, cfg.theme.adjustments.rim_intensity).hsla())
+                        .shadow(crate::plugins::panel_fx::elevation_scaled(&palette, open, cfg.panels.shadow_strength))
+                        .opacity(open)
+                        .into_any_element();
+                    (card, Rect::new(rect.x, y, rect.w, rect.h), buttons_col(rect.x + DOCK_PAD_PX, y + DOCK_PAD_PX).into_any_element(), y)
+                } else {
+                    // Out of the bar (or the bare edge) with its flares:
+                    // the drawer grows from the edge, the buttons slide out
+                    // from behind it.
+                    let (shown, content_y) = hang_frame(rect, edge, p);
+                    let flare = pl.flare;
+                    let drawer = if top {
+                        edge_drawer_snapped(Edge::Top, shown.x, shown.y - seam, shown.w, shown.h + seam, radius, flare, fill, scale)
+                    } else {
+                        edge_drawer_snapped(Edge::Bottom, shown.x, shown.y, shown.w, shown.h + seam, radius, flare, fill, scale)
+                    };
+                    let column = div()
+                        .absolute()
+                        .left(px(shown.x))
+                        .top(px(shown.y))
+                        .w(px(shown.w))
+                        .h(px(shown.h))
+                        .overflow_hidden()
+                        .child(buttons_col(DOCK_PAD_PX, content_y - shown.y + DOCK_PAD_PX))
+                        .into_any_element();
+                    (drawer, Rect::new(shown.x - flare, shown.y, shown.w + 2.0 * flare, shown.h), column, content_y)
+                };
+                // The label beside the column, on the reading side.
+                let right = !crate::bidi::rtl();
+                let label_x = if right { rect.right() + LABEL_GAP_PX } else { rect.x - LABEL_W_PX - LABEL_GAP_PX };
+                // Roaming room: around the column and its label, and the
+                // bar it hangs from.
+                let (y0, y1) = if top { (0.0, rect.bottom() + DOCK_REACH_Y_PX) } else { (rect.y - DOCK_REACH_Y_PX, sh) };
+                let zone = Rect::new(rect.x - DOCK_REACH_PX - LABEL_W_PX, y0, rect.w + 2.0 * (DOCK_REACH_PX + LABEL_W_PX), y1 - y0);
+                (drawer, occluder, column, (label_x, content_y), right, zone)
+            }
+        };
+        let (label_x, dock_y) = label_at;
+        root.on_mouse_move(cx.listener(move |this, e: &gpui::MouseMoveEvent, _, cx| {
+            let (mx, my) = (f32::from(e.position.x), f32::from(e.position.y));
+            let inside = mx >= zone.x && mx <= zone.x + zone.w && my >= zone.y && my <= zone.y + zone.h;
             if inside {
                 this.entered = true;
                 this.leave_task = None;
@@ -624,34 +795,20 @@ impl Render for SessionView {
                 }));
             }
         }))
-        .child(if floats {
-            div().absolute().left(px(x)).top(px(y)).w(px(dock_w + 2.0)).h(px(dock_h)).rounded(px(radius)).bg(fill).into_any_element()
-        } else {
-            edge_drawer_snapped(if on_left { Edge::Left } else { Edge::Right }, drawer_x, y, drawer_w, dock_h, radius, flare, fill, window.scale_factor())
-        })
+        .child(drawer)
         // Occludes the scrim over the drawer and its edge flares.
-        .child(div().id("dock-body").absolute().left(px(drawer_x)).top(px(y - flare)).w(px(drawer_w)).h(px(dock_h + 2.0 * flare)).occlude())
+        .child(div().id("dock-body").absolute().left(px(occluder.x)).top(px(occluder.y)).w(px(occluder.w)).h(px(occluder.h)).occlude())
+        .child(column)
         .child(
             div()
                 .absolute()
-                .left(px(x + DOCK_PAD_PX))
-                .top(px(y + DOCK_PAD_PX))
-                .flex()
-                .flex_col()
-                .gap(px(DOCK_GAP_PX))
-                .opacity(ramp(BUTTONS_FADE))
-                .children(buttons),
-        )
-        .child(
-            div()
-                .absolute()
-                .top(px(y + DOCK_PAD_PX + self.selected as f32 * (BTN_PX + DOCK_GAP_PX) + BTN_PX / 2.0 - LABEL_H_PX / 2.0))
-                .left(px(if on_left { x + dock_w + LABEL_GAP_PX } else { x - LABEL_W_PX - LABEL_GAP_PX }))
+                .top(px(dock_y + DOCK_PAD_PX + self.selected as f32 * (BTN_PX + DOCK_GAP_PX) + BTN_PX / 2.0 - LABEL_H_PX / 2.0))
+                .left(px(label_x))
                 .w(px(LABEL_W_PX))
                 .h(px(LABEL_H_PX))
                 .flex()
-                .when(on_left, |el| el.justify_start())
-                .when(!on_left, |el| el.justify_end())
+                .when(label_right, |el| el.justify_start())
+                .when(!label_right, |el| el.justify_end())
                 .opacity(ramp(LABEL_FADE))
                 .child(
                     div()
@@ -685,7 +842,7 @@ pub fn register(r: &mut PluginRegistry) {
                 .iter()
                 .map(|e| json!({ "kind": e.kind.id(), "enabled": e.enabled, "label": entry_label(e), "icon": entry_icon(e), "destructive": e.kind.is_destructive(), "command": e.command, "boot_entry": e.boot_entry }))
                 .collect();
-            Ok(json!({ "style": cfg.session_menu.style, "hold_to_confirm": cfg.session_menu.hold_to_confirm, "hold_ms": cfg.session_menu.hold_ms, "entries": entries }))
+            Ok(json!({ "style": cfg.session_menu.style, "position": cfg.session_menu.position, "hold_to_confirm": cfg.session_menu.hold_to_confirm, "hold_ms": cfg.session_menu.hold_ms, "entries": entries }))
         })
         .example("session entries"),
     );
@@ -734,6 +891,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn same_size_outputs_keep_the_selected_connectors_bar_assignment() {
+        use mandara_core::OutputGeometry;
+        let outputs: Vec<_> = ["DP-1", "DP-2"].into_iter().map(|name| OutputGeometry { name: name.into(), x: 0, y: 0, width: 1920, height: 1080 }).collect();
+        let mut cfg = mandara_config::ShellConfig::default();
+        cfg.bar.monitors = "DP-2".into();
+        assert!(bar_on_target(&cfg, &outputs, Some("DP-2"), (1920.0, 1080.0)));
+        assert!(!bar_on_target(&cfg, &outputs, Some("DP-1"), (1920.0, 1080.0)));
+        assert!(!bar_on_target(&cfg, &outputs, None, (1920.0, 1080.0)));
+    }
+
+    #[test]
     fn the_menu_on_a_second_scaled_display_draws_at_that_display_size() {
         use crate::first_frame::FALLBACK_FRAMES;
         use crate::outputs::{logical_size, pick_output};
@@ -767,6 +935,73 @@ mod tests {
         let dock_w = BTN_PX + DOCK_PAD_PX * 2.0;
         let (x, w) = edge_attached(false, 1536.0 - dock_w, dock_w, 1536.0);
         assert!(x >= 0.0 && x + w <= 1536.0 + 2.0 + f32::EPSILON, "{x} + {w} stays on the 1536 px display");
+    }
+
+    /// Issue #57: the dock at the top centre, under the bar and joined
+    /// with it; elsewhere it falls back to what that edge offers.
+    #[test]
+    fn the_dock_hangs_from_the_bar_at_the_top_centre() {
+        use mandara_config::{BarLayout, BarPosition, ShellConfig};
+        let (screen, size) = ((1536.0, 864.0), (BTN_PX + DOCK_PAD_PX * 2.0, 5.0 * (BTN_PX + DOCK_GAP_PX) - DOCK_GAP_PX + DOCK_PAD_PX * 2.0));
+        let bar = |layout: BarLayout, position: BarPosition| {
+            let mut cfg = ShellConfig::default();
+            cfg.bar.layout = layout;
+            cfg.bar.position = position;
+            Metrics::of(&cfg, 1.0)
+        };
+        let hang = |position, m: Metrics, bar_here| match dock_place(position, false, m, bar_here, None, screen, size) {
+            DockPlace::Hang(pl) => pl,
+            side => panic!("{side:?}"),
+        };
+        // Edge frame at the top: one piece with the bar, centred, sized to
+        // this display, the bar's band left bright.
+        let m = bar(BarLayout::MinimalEdge, BarPosition::Top);
+        let pl = hang(SessionMenuPosition::Top, m, true);
+        assert_eq!((pl.join, pl.edge), (Join::Flares, Some(LauncherEdge::Top)));
+        assert_eq!(pl.rect.y, m.bar_far_edge(), "it starts where the bar ends");
+        assert_eq!(pl.flare, m.flare);
+        assert!((pl.rect.x + pl.rect.w / 2.0 - screen.0 / 2.0).abs() < 0.5, "centred: {:?}", pl.rect);
+        assert_eq!((pl.rect.w, pl.rect.h), size);
+        assert!(pl.rect.bottom() <= screen.1, "on the display it opened on");
+        assert_eq!(pl.keep_bright, Some((0.0, crate::bar::layout::exclusive_zone(&m))));
+        // Floating glass pills: a card a gap under the bar.
+        let m = bar(BarLayout::FloatingPills, BarPosition::Top);
+        let pl = hang(SessionMenuPosition::Top, m, true);
+        assert_eq!(pl.join, Join::Card);
+        assert_eq!(pl.rect.y, m.bar_far_edge() + m.panel_gap);
+        // The bar elsewhere (or not on this display): from the bare top edge.
+        for (m, here) in [(bar(BarLayout::MinimalEdge, BarPosition::Bottom), true), (bar(BarLayout::MinimalEdge, BarPosition::Top), false)] {
+            let pl = hang(SessionMenuPosition::Top, m, here);
+            assert_eq!((pl.join, pl.rect.y, pl.keep_bright), (Join::Flares, 0.0, None));
+        }
+        // Bottom centre rises from a bottom bar.
+        let m = bar(BarLayout::MinimalEdge, BarPosition::Bottom);
+        let pl = hang(SessionMenuPosition::Bottom, m, true);
+        assert_eq!(pl.edge, Some(LauncherEdge::Bottom));
+        assert!((pl.rect.bottom() - (screen.1 - m.bar_far_edge())).abs() < 0.5, "{:?}", pl.rect);
+        // The sides, as before: by default the one opposite the sidebar.
+        let m = bar(BarLayout::MinimalEdge, BarPosition::Top);
+        assert_eq!(dock_place(SessionMenuPosition::Side, false, m, true, None, screen, size), DockPlace::Side { on_left: false });
+        assert_eq!(dock_place(SessionMenuPosition::Side, true, m, true, None, screen, size), DockPlace::Side { on_left: true });
+        assert_eq!(dock_place(SessionMenuPosition::Left, false, m, true, None, screen, size), DockPlace::Side { on_left: true });
+        assert_eq!(dock_place(SessionMenuPosition::Right, true, m, true, None, screen, size), DockPlace::Side { on_left: false });
+    }
+
+    #[test]
+    fn a_hanging_dock_pours_out_of_its_edge() {
+        let rest = Rect::new(700.0, 30.0, 100.0, 400.0);
+        // Closed: nothing shows, the buttons wait behind the bar.
+        let (shown, content) = hang_frame(rest, LauncherEdge::Top, 0.0);
+        assert_eq!((shown.y, shown.h, content), (30.0, 0.0, 30.0 - 400.0));
+        // Open: the whole column at rest.
+        assert_eq!(hang_frame(rest, LauncherEdge::Top, 1.0), (rest, 30.0));
+        // Overshooting, the drawer stretches and stays on the bar.
+        let (shown, content) = hang_frame(rest, LauncherEdge::Top, 1.1);
+        assert!((shown.y - 30.0).abs() < 1e-3 && shown.h > 400.0 && content > 30.0);
+        // Mirrored at the bottom.
+        let low = Rect::new(700.0, 400.0, 100.0, 400.0);
+        let (shown, content) = hang_frame(low, LauncherEdge::Bottom, 0.5);
+        assert_eq!((shown.bottom(), shown.h, content), (800.0, 200.0, 600.0));
     }
 
     #[test]

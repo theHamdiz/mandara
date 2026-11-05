@@ -44,4 +44,7 @@ dev-dependencies, sets `publish = false` and declares its own empty
 `[workspace]` so it stays outside Mandara's.
 
 To move to a new upstream release, copy its `src/` (minus `src/bin/`), carry
-the dependency versions over into this `Cargo.toml` and keep patch 1.
+the dependency versions over into this `Cargo.toml` and keep both patches:
+patch 1 (no default features of `image` and `imageproc`) and patch 2 (no
+`time`: upstream's manifest still lists it, so leave it out again unless
+the new sources really use it).

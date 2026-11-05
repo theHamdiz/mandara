@@ -8201,3 +8201,112 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "Плоская заливка (по умолчанию), объёмные 3D-плитки со стеклянной кромкой или прозрачное стекло"
 "Tile shadow" = "Тень плиток"
 "How strong the shadow under each shortcut tile is (0 for none)" = "Насколько сильна тень под каждой плиткой-ярлыком (0 — без тени)"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} создан Nix (Home Manager или NixOS) и доступен только для чтения: добавьте эту строку в его конфигурацию Nix, пересоберите систему и снова запустите `mandara setup`: {line}"
+"Opposite the sidebar" = "Напротив боковой панели"
+"Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't" = "Где открывается док: у края экрана сбоку или по центру сверху или снизу, свисая с панели на этом краю (в стилях с рамкой по краю — одним целым с ней), а где панели нет — с края экрана"
+"The grid always opens in the middle" = "Сетка всегда открывается посередине"
+"The bar isn't at the top, so the dock hangs from the screen edge" = "Панель не сверху, поэтому док свисает с края экрана"
+"The bar isn't at the bottom, so the dock rises from the screen edge" = "Панель не снизу, поэтому док поднимается от края экрана"
+"Joined to the bar, as one piece with it" = "Присоединён к панели, одним целым с ней"
+"A floating bar has no edge to join, so the dock opens as a card next to it" = "У плавающей панели нет края для соединения, поэтому док открывается карточкой рядом с ней"
+
+"KWin settings are managed in Plasma System Settings" = "Настройки KWin находятся в параметрах системы Plasma"
+"Workspace not found" = "Рабочий стол не найден"
+"The window is no longer available" = "Окно больше недоступно"
+"The compositor did not respond in time" = "Композитор не ответил вовремя"
+"The compositor connection closed" = "Соединение с композитором закрыто"
+"Idle notifications are not available" = "Уведомления о бездействии недоступны"
+"No input seat is available" = "Нет доступной группы устройств ввода"
+"These displays do not support power control" = "Эти экраны не поддерживают управление питанием"
+"This executable path cannot be used in a desktop entry" = "Этот путь к программе нельзя использовать в записи рабочего стола"
+"{path} is a custom autostart entry; Mandara left it unchanged" = "{path} — пользовательская запись автозапуска; Mandara её не меняла"
+"Mandara uses native Plasma protocols; KWin’s configuration stays unchanged" = "Mandara использует родные протоколы Plasma; конфигурация KWin не меняется"
+"KWin: startup entry {path}" = "KWin: запись автозапуска {path}"
+"The lock screen did not confirm that the session is locked" = "Экран блокировки не подтвердил блокировку сеанса"
+"Change resolution, scale and display arrangement in Plasma System Settings. Shell placement below still applies." = "Разрешение, масштаб и расположение экранов меняются в параметрах системы Plasma. Размещение оболочки ниже по-прежнему применяется."
+"KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings." = "У KWin нет отдельной проверки конфигурации. Его настройки находятся в параметрах системы Plasma."
+"River's init controls startup; add or remove Mandara there" = "Запуском управляет init River; добавьте или удалите Mandara в нём"
+"No supported compositor is installed ({compositors})." = "Поддерживаемый композитор не установлен ({compositors})."
+"Could not update PATH: {error}. Add {line} to your shell profile." = "Не удалось обновить PATH: {error}. Добавьте {line} в профиль оболочки."
+"Would remove {path}" = "Будет удалён {path}"
+"Kept custom startup entry {path}" = "Пользовательская запись автозапуска {path} сохранена"
+"Could not read {path}: {error}. Left it unchanged." = "Не удалось прочитать {path}: {error}. Оставлено без изменений."
+
+"Your Wayland desktop. Let’s get it ready." = "Ваш рабочий стол Wayland. Подготовим его к работе."
+"Checking the release signature…" = "Проверка подписи выпуска…"
+"Downloading Mandara…" = "Загрузка Mandara…"
+"Verifying the download…" = "Проверка загрузки…"
+"Unpacking the installer…" = "Распаковка установщика…"
+"Ready. Opening Mandara’s installer…" = "Всё готово. Запуск установщика Mandara…"
+"Install this tool and try again:" = "Установите этот инструмент и повторите попытку:"
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "Готовые сборки требуют Linux и процессор x86_64 или aarch64."
+"The release mirror must use HTTPS." = "Зеркало выпусков должно использовать HTTPS."
+"Could not create a temporary download folder." = "Не удалось создать временную папку для загрузки."
+"Download failed. Check your connection and try again." = "Загрузка не удалась. Проверьте соединение и повторите попытку."
+"The release signature could not be verified. Nothing was installed." = "Не удалось проверить подпись выпуска. Ничего не установлено."
+"This command needs OpenSSL 3 or newer." = "Для этой команды нужен OpenSSL 3 или новее."
+"The signed release has no unique checksum for this archive." = "В подписанном выпуске нет единственной контрольной суммы для этого архива."
+"The download did not match the signed release. Nothing was installed; please try again." = "Загрузка не соответствует подписанному выпуску. Ничего не установлено; повторите попытку."
+"Could not unpack the verified release." = "Не удалось распаковать проверенный выпуск."
+"The release does not contain exactly one executable installer." = "Количество исполняемых установщиков в выпуске не равно одному."
+"Manual downloads:" = "Загрузка вручную:"
+"On NixOS, install Mandara through your flake." = "В NixOS установите Mandara через свой flake."
+
+"Compositor (default: detected)" = "Композитор (по умолчанию: определяется автоматически)"
+
+"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Выберите mango, niri, hyprland, umbriel, sway, river или kwin (по умолчанию: определяется автоматически). Отсутствующие композиторы можно установить после подтверждения. Для KWin требуется уже установленная Plasma."
+
+"Install libxkbcommon before checking or changing compositor shortcuts." = "Установите libxkbcommon перед проверкой или изменением сочетаний клавиш композитора."
+
+"Open Mandara Studio from your application menu." = "Откройте Mandara Studio из меню приложений."
+
+"Updates: Studio → About → Update now" = "Обновления: Studio → О программе → Обновить сейчас"
+
+"If you added Mandara to PATH, open a new terminal before running these commands." = "Если вы добавили Mandara в PATH, откройте новый терминал перед выполнением этих команд."
+
+"Cancelled — nothing was changed." = "Отменено — ничего не изменено."
+
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Текущий экран входа сохранён; его можно сменить в Studio → Экран входа → Менеджер входа."
+
+"Setup" = "Настройка"
+
+"Start with your compositor" = "Запускать вместе с композитором"
+
+"detect automatically" = "определить автоматически"
+
+"installed" = "установлен"
+
+"keep yours" = "оставить текущий"
+
+"no" = "нет"
+
+"yes" = "да"
+
+"{compositor} (installed)" = "{compositor} (установлен)"
+
+"↑/↓ change · enter select · esc cancel" = "↑/↓ изменить · Enter выбрать · Esc отменить"
+
+"Profile scope" = "Область профиля"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "Меняет стиль, положение и высоту панели. Ваши элементы сохраняются, если вы не решите их заменить."
+"Replace bar items" = "Заменить элементы панели"
+"Leave empty to follow the desktop's icon theme" = "Оставьте пустым, чтобы использовать тему значков рабочего стола"
+"Could not load {module}; check that the installed kernel includes it" = "Не удалось загрузить {module}; проверьте, включён ли он в установленное ядро"
+
+"Bounce only while music plays" = "Подпрыгивать только при воспроизведении музыки"
+"Hide corners between displays" = "Скрывать углы между экранами"
+"Redraw interval p50" = "Интервал перерисовки p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Недавние построения представлений: сплошная часть показывает время CPU; полная высота включает интервал с предыдущего построения той же поверхности."
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "Этот композитор не поддерживает wlr-screencopy, а использовать ScreenShot2 из KWin не удалось"
+
+"Tab: results · ↑↓: select · Enter: use" = "Tab: результаты · ↑↓: выбор · Enter: использовать"
+
+"Mandara is installed." = "Mandara установлена."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "Запуск:          mandara            (или войдите заново, если включён автозапуск)"
+
+"Settings:        mandara studio" = "Настройки:       mandara studio"
+
+"Health & repair: mandara studio maintenance" = "Проверка и исправление: mandara studio maintenance"

@@ -8196,3 +8196,112 @@
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "Relleno plano (predeterminado), mosaicos 3D en relieve con borde de cristal o cristal transparente"
 "Tile shadow" = "Sombra de los mosaicos"
 "How strong the shadow under each shortcut tile is (0 for none)" = "Intensidad de la sombra bajo cada mosaico de acceso directo (0 para ninguna)"
+
+# ── Session menu position, Nix setup (Nov 2026) ──
+"{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} lo genera Nix (Home Manager o NixOS) y es de solo lectura: añade esta línea a su configuración de Nix, vuelve a compilar y ejecuta `mandara setup` de nuevo: {line}"
+"Opposite the sidebar" = "Frente a la barra lateral"
+"Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't" = "Dónde se abre el dock: en un lado de la pantalla, o arriba o abajo en el centro colgando de la barra que haya ahí (de una sola pieza con ella en los estilos de marco de borde), o del borde de la pantalla donde no hay barra"
+"The grid always opens in the middle" = "La cuadrícula siempre se abre en el centro"
+"The bar isn't at the top, so the dock hangs from the screen edge" = "La barra no está arriba, así que el dock cuelga del borde de la pantalla"
+"The bar isn't at the bottom, so the dock rises from the screen edge" = "La barra no está abajo, así que el dock sube desde el borde de la pantalla"
+"Joined to the bar, as one piece with it" = "Unido a la barra, como una sola pieza"
+"A floating bar has no edge to join, so the dock opens as a card next to it" = "Una barra flotante no tiene borde al que unirse, así que el dock se abre como una tarjeta junto a ella"
+
+"KWin settings are managed in Plasma System Settings" = "KWin se configura en Preferencias del sistema de Plasma"
+"Workspace not found" = "No se encontró el escritorio"
+"The window is no longer available" = "La ventana ya no está disponible"
+"The compositor did not respond in time" = "El compositor no respondió a tiempo"
+"The compositor connection closed" = "Se cerró la conexión con el compositor"
+"Idle notifications are not available" = "Las notificaciones de inactividad no están disponibles"
+"No input seat is available" = "No hay ningún grupo de dispositivos de entrada disponible"
+"These displays do not support power control" = "Estas pantallas no admiten control de energía"
+"This executable path cannot be used in a desktop entry" = "Esta ruta de ejecutable no se puede usar en una entrada de escritorio"
+"{path} is a custom autostart entry; Mandara left it unchanged" = "{path} es una entrada de inicio personalizada; Mandara la dejó intacta"
+"Mandara uses native Plasma protocols; KWin’s configuration stays unchanged" = "Mandara usa protocolos nativos de Plasma; la configuración de KWin no cambia"
+"KWin: startup entry {path}" = "KWin: entrada de inicio {path}"
+"The lock screen did not confirm that the session is locked" = "La pantalla de bloqueo no confirmó que la sesión esté bloqueada"
+"Change resolution, scale and display arrangement in Plasma System Settings. Shell placement below still applies." = "Cambia la resolución, la escala y la disposición en Preferencias del sistema de Plasma. La ubicación de la interfaz de abajo sigue aplicándose."
+"KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings." = "KWin no tiene un comprobador de configuración independiente. Se configura en Preferencias del sistema de Plasma."
+"River's init controls startup; add or remove Mandara there" = "El init de River controla el inicio; añade o elimina Mandara allí"
+"No supported compositor is installed ({compositors})." = "No hay ningún compositor compatible instalado ({compositors})."
+"Could not update PATH: {error}. Add {line} to your shell profile." = "No se pudo actualizar PATH: {error}. Añade {line} al perfil de tu shell."
+"Would remove {path}" = "Se eliminaría {path}"
+"Kept custom startup entry {path}" = "Se conservó la entrada de inicio personalizada {path}"
+"Could not read {path}: {error}. Left it unchanged." = "No se pudo leer {path}: {error}. Se dejó intacto."
+
+"Your Wayland desktop. Let’s get it ready." = "Tu escritorio Wayland. Vamos a prepararlo."
+"Checking the release signature…" = "Comprobando la firma de la versión…"
+"Downloading Mandara…" = "Descargando Mandara…"
+"Verifying the download…" = "Verificando la descarga…"
+"Unpacking the installer…" = "Descomprimiendo el instalador…"
+"Ready. Opening Mandara’s installer…" = "Todo listo. Abriendo el instalador de Mandara…"
+"Install this tool and try again:" = "Instala esta herramienta y vuelve a intentarlo:"
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "Las versiones precompiladas requieren Linux con una CPU x86_64 o aarch64."
+"The release mirror must use HTTPS." = "El servidor de versiones alternativo debe usar HTTPS."
+"Could not create a temporary download folder." = "No se pudo crear una carpeta temporal para la descarga."
+"Download failed. Check your connection and try again." = "La descarga falló. Comprueba tu conexión y vuelve a intentarlo."
+"The release signature could not be verified. Nothing was installed." = "No se pudo verificar la firma de la versión. No se instaló nada."
+"This command needs OpenSSL 3 or newer." = "Este comando necesita OpenSSL 3 o posterior."
+"The signed release has no unique checksum for this archive." = "La versión firmada no tiene una suma de verificación única para este archivo."
+"The download did not match the signed release. Nothing was installed; please try again." = "La descarga no coincide con la versión firmada. No se instaló nada; vuelve a intentarlo."
+"Could not unpack the verified release." = "No se pudo descomprimir la versión verificada."
+"The release does not contain exactly one executable installer." = "La versión no contiene exactamente un instalador ejecutable."
+"Manual downloads:" = "Descargas manuales:"
+"On NixOS, install Mandara through your flake." = "En NixOS, instala Mandara mediante tu flake."
+
+"Compositor (default: detected)" = "Compositor (por defecto: detectado)"
+
+"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Elige mango, niri, hyprland, umbriel, sway, river o kwin (por defecto: detectado). Los compositores que falten se pueden instalar tras preguntar. KWin requiere una instalación de Plasma existente."
+
+"Install libxkbcommon before checking or changing compositor shortcuts." = "Instala libxkbcommon antes de comprobar o cambiar los atajos del compositor."
+
+"Open Mandara Studio from your application menu." = "Abre Mandara Studio desde el menú de aplicaciones."
+
+"Updates: Studio → About → Update now" = "Actualizaciones: Studio → Acerca de → Actualizar ahora"
+
+"If you added Mandara to PATH, open a new terminal before running these commands." = "Si añadiste Mandara a PATH, abre una terminal nueva antes de ejecutar estos comandos."
+
+"Cancelled — nothing was changed." = "Cancelado: no se ha cambiado nada."
+
+"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Se conserva tu pantalla de inicio de sesión; puedes cambiarla en Studio → Pantalla de inicio de sesión → Gestor de inicio de sesión."
+
+"Setup" = "Configuración"
+
+"Start with your compositor" = "Iniciar con tu compositor"
+
+"detect automatically" = "detectar automáticamente"
+
+"installed" = "instalado"
+
+"keep yours" = "conservar la tuya"
+
+"no" = "no"
+
+"yes" = "sí"
+
+"{compositor} (installed)" = "{compositor} (instalado)"
+
+"↑/↓ change · enter select · esc cancel" = "↑/↓ cambiar · Intro seleccionar · Esc cancelar"
+
+"Profile scope" = "Alcance del perfil"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "Cambia el estilo, la posición y la altura de la barra. Tus elementos se conservan salvo que decidas sustituirlos."
+"Replace bar items" = "Sustituir elementos de la barra"
+"Leave empty to follow the desktop's icon theme" = "Déjalo vacío para usar el tema de iconos del escritorio"
+"Could not load {module}; check that the installed kernel includes it" = "No se pudo cargar {module}; comprueba que el kernel instalado lo incluya"
+
+"Bounce only while music plays" = "Rebotar solo al reproducir música"
+"Hide corners between displays" = "Ocultar esquinas entre pantallas"
+"Redraw interval p50" = "Intervalo de redibujado p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Construcciones recientes de vistas: las barras sólidas muestran el tiempo de CPU; la altura total incluye el intervalo desde la construcción anterior de la misma superficie."
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "Este compositor no ofrece wlr-screencopy y no se pudo usar ScreenShot2 de KWin"
+
+"Tab: results · ↑↓: select · Enter: use" = "Tab: resultados · ↑↓: elegir · Intro: usar"
+
+"Mandara is installed." = "Mandara está instalado."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "Iniciar:         mandara            (o vuelve a iniciar sesión si el inicio automático está activado)"
+
+"Settings:        mandara studio" = "Ajustes:         mandara studio"
+
+"Health & repair: mandara studio maintenance" = "Diagnóstico y reparación: mandara studio maintenance"
