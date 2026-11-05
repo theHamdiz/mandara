@@ -40,7 +40,8 @@ use serde_json::json;
 
 use self::rows::{PICKER_H, RowActions, RowCx, RowText, THUMB_H_PX, THUMB_W_PX, Thumb, collection_tint, entry_row, kind_icon, kind_label, row_h};
 use super::panel_fx::{HEADER_H, SECTION_H_PX, ViewSet, WASH_SOFT, alpha, empty_state, header, pill_button, readable, wash};
-use super::fn_view;
+use super::domain_view;
+use crate::hub::Domains;
 use crate::hub::hub;
 use crate::icons::icon;
 use crate::kit::{icon_button, reveal, text, tokens};
@@ -1191,7 +1192,7 @@ pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Clipboard"), tk("Clipboard history sorted by kind, with collections"), Some(Zone::Right)), |window, cx, panel_cx| {
         let ui = Shared::default();
         let bar_ui = ui.clone();
-        let bar = fn_view(
+        let bar = domain_view(Domains::CLIPBOARD,
             None,
             move |palette, window, cx| {
                 // Warm the first page's previews when something new is
@@ -1231,7 +1232,7 @@ pub fn register(r: &mut PluginRegistry) {
         });
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(INITIAL_H))));
         let view = View { p: panel_cx.clone(), ui, search, name, size_cell: size_cell.clone(), focus: cx.focus_handle(), opened: Cell::new(false) };
-        let panel = fn_view(None, move |palette, window, cx| view.render(palette, window, cx), window, cx);
+        let panel = domain_view(Domains::CLIPBOARD, None, move |palette, window, cx| view.render(palette, window, cx), window, cx);
         PluginInstance { bar: Some(bar), panel: Some(PanelSpec { view: panel, size: size_cell }), ..PluginInstance::empty() }
     });
     r.command(ID, CommandSpec::new("clipboard list", tk("Clipboard history, newest first, with each entry's kind and collections"), |_, cx| Ok(super::json(&hub(cx).read(cx).clipboard.entries))));

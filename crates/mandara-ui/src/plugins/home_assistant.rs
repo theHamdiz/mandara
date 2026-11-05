@@ -14,7 +14,7 @@ use mandara_services::credentials::{Access, Key, Keyring, Provider, Secret, Stor
 use mandara_services::home_assistant::{self as ha, Backend as _, Entity};
 use mandara_theme::MandaraPalette;
 
-use super::fn_view;
+use super::model_view as fn_view;
 use super::integration::{self, Data};
 use super::panel_fx::{EXPIRY_MARGIN, glass_card, header, pill_button, readable, redraw_in};
 use crate::bidi::Bidi as _;

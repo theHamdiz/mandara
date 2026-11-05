@@ -373,7 +373,7 @@ mod tests {
             cfg.typography.scale = 1.15;
             cfg.plugins.enabled = vec!["notes".into(), "todo".into()];
             cfg.plugins.disabled = vec!["weather".into()];
-            cfg.plugins.settings.insert("notes".into(), [("text".into(), toml::Value::String("Keep this preference".into()))].into());
+            cfg.plugins.settings.insert("notes".into(), [("text".into(), toml::Value::String("Keep this preference".into()))].into_iter().collect());
             cfg.audio.overamplify = false;
             cfg.notifications.compact = true;
             let place = &mut cfg.desktop.widgets.items[0].place;

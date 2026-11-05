@@ -23,7 +23,7 @@ use std::collections::HashMap;
 
 use chrono::Timelike as _;
 use gpui::{
-    AnyElement, AppContext as _, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, SharedString, StatefulInteractiveElement, Styled,
+    AnyElement, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, SharedString, StatefulInteractiveElement, Styled,
     StyledImage as _, Window, div, img, prelude::FluentBuilder as _, px,
 };
 use mandara_config::{ShellConfig, ThemeMode};
@@ -357,13 +357,7 @@ impl StudioView {
     pub(super) fn home_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         // Sample the shell only while Home is on screen and the window can
         // be seen.
-        let this = cx.entity().downgrade();
-        let handle = window.window_handle();
-        crate::perf::poll_while(
-            &self.perf,
-            move |cx| this.read_with(cx, |v, _| v.section == Section::Home && v.query.is_empty()).unwrap_or(false) && cx.update_window(handle, |_, window, _| window.is_visible()).unwrap_or(false),
-            cx,
-        );
+        self.poll_performance(window, cx);
         let fonts = mandara_ui::fonts::fonts(cx);
         let column = self.page.column_w;
         let split = column >= BENTO_SPLIT_MIN_W_PX;

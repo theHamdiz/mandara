@@ -22,6 +22,16 @@ and compositor previews.
 
 ### Improved
 
+- **Plugin updates stay focused.** CI status and connected tools keep their
+  cached views when unrelated services change. Closed panels stop their
+  refresh ticks, and CI's running indicator respects reduced motion.
+
+- **Widget previews show the real layout.** Jannah, Hadith and Qur’an cards
+  use clearly marked examples instead of generic fallback icons.
+
+- **Language packs cover the login screen too.** All twenty interface
+  languages use separate packs, including the greeter’s own wording.
+
 - **Community store moderation stays current.** Account and plugin rules can
   hide listings or block installs and updates without a Mandara release.
   Direct installs follow the same rules; plugins already installed keep
@@ -36,6 +46,20 @@ and compositor previews.
   tools. Active switches keep their on/off highlight.
 
 ### Fixed
+
+- **Restart keeps your latest preferences.** Pending edits are saved before
+  restarting, manual light or dark overrides survive automatic-theme
+  restarts, and invalid configuration files are protected from replacement.
+
+- **Video wallpaper keeps its margins.** Playback retains the chosen fill
+  around contained or centered pictures while overview roots stay transparent.
+
+- **Studio leaves finished pages alone.** Late wallpaper and generator
+  previews cannot restore released images or queue hidden work. Home and
+  Performance sampling follows navigation and window visibility.
+
+- **Community search stays on your query.** Reopening the store keeps the
+  search shown in its field while checking the latest moderation rules.
 
 - **A notification can bring its app forward.** Clicking a notification can
   focus its existing window even without a sender-provided click action.

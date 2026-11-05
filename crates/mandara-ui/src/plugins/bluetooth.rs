@@ -18,7 +18,8 @@ use super::panel_fx::{
     self, ANGLE_DIAGONAL_DEG, HEADER_H, PanelShape, SECTION_H_PX, WASH_SOFT, WASH_TRACK, empty_state, glass_card, header, partner, percent_text, pill_button, readable,
     section, wash,
 };
-use super::{fn_view, json};
+use crate::hub::Domains;
+use super::{domain_view, json};
 use crate::fonts::tabular_nums;
 use crate::hub::hub;
 use crate::icons::{icon, ring};
@@ -319,7 +320,7 @@ fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>) -> impl
 
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Bluetooth"), tk("Bluetooth devices"), Some(Zone::Right)), |window, cx, panel_cx| {
-        let bar = fn_view(
+        let bar = domain_view(Domains::BLUETOOTH,
             None,
             |palette, _, cx| {
                 let s = &hub(cx).read(cx).bluetooth;
@@ -348,7 +349,7 @@ pub fn register(r: &mut PluginRegistry) {
             cx,
         );
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(INITIAL_PANEL_H))));
-        let panel = fn_view(None, panel_view(panel_cx.clone(), size_cell.clone()), window, cx);
+        let panel = domain_view(Domains::BLUETOOTH, None, panel_view(panel_cx.clone(), size_cell.clone()), window, cx);
         PluginInstance {
             bar: Some(bar),
             panel: Some(PanelSpec { view: panel, size: size_cell }),

@@ -34,7 +34,8 @@ use mandara_services::{Condition, WeatherCommand, WeatherQuery, WeatherState};
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
 
-use super::fn_view;
+use super::domain_view;
+use crate::hub::Domains;
 use super::panel_fx::{ANGLE_DIAGONAL_DEG, ANGLE_DOWN_DEG, ANGLE_RIGHT_DEG, CARD_RADIUS_PX, SMALL_ICON_PX};
 use crate::fonts::{fonts, tabular_nums};
 use crate::hub::hub;
@@ -914,7 +915,7 @@ pub fn register(r: &mut PluginRegistry) {
         |window, cx, panel_cx| {
             let cache: SharedLabels = Rc::default();
             let bar_cache = cache.clone();
-            let bar = fn_view(
+            let bar = domain_view(Domains::WEATHER,
                 None,
                 move |palette, _, cx| {
                     let cx: &App = cx;
@@ -944,7 +945,7 @@ pub fn register(r: &mut PluginRegistry) {
             // The panel is as tall as what it shows (measured each frame).
             let panel_size = Rc::new(Cell::new(size(px(PANEL_W_PX), px(PANEL_H_PX))));
             let measured = panel_size.clone();
-            let panel = fn_view(
+            let panel = domain_view(Domains::WEATHER,
                 None,
                 move |palette, _, cx| {
                     let cx: &App = cx;
@@ -984,7 +985,7 @@ pub fn register(r: &mut PluginRegistry) {
                 cx,
             );
             let side_cache = cache;
-            let sidebar = fn_view(
+            let sidebar = domain_view(Domains::WEATHER,
                 None,
                 move |palette, _, cx| {
                     let cx: &App = cx;

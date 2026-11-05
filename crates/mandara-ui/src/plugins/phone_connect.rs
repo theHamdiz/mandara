@@ -13,7 +13,7 @@ use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, Output, PanelCx, PanelSpec,
 use mandara_services::phone_connect::{Action, Backend as _, Device, KdeConnect};
 use mandara_theme::MandaraPalette;
 
-use super::{fn_view, integration};
+use super::{model_view as fn_view, integration};
 use super::panel_fx::{EXPIRY_MARGIN, glass_card, header, pill_button, readable, redraw_in};
 use crate::bidi::Bidi as _;
 use crate::icons::icon;

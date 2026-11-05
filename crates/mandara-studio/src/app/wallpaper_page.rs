@@ -175,6 +175,7 @@ fn available(cfg: &ShellConfig, cx: &App) -> Vec<WallpaperTab> {
 /// What the page keeps between frames (a global, dropped on leaving).
 #[derive(Default)]
 struct Page {
+    visit: super::page_visit::PageVisit,
     tab: WallpaperTab,
     /// The folder's wallpapers, read off the UI thread.
     listing: Option<(PathBuf, Rc<[PathBuf]>)>,
@@ -208,6 +209,16 @@ impl gpui::Global for Page {}
 
 fn st(cx: &mut App) -> &mut Page {
     cx.default_global::<Page>()
+}
+
+/// Preview jobs may continue pumping only while their own tab is shown.
+pub(super) fn generator_visible(cx: &App) -> bool {
+    cx.try_global::<Page>().is_some_and(|page| page.tab == WallpaperTab::Generator)
+}
+
+/// A reply must still belong to the page visit that requested it.
+fn current_visit(cx: &App, visit: &super::page_visit::PageVisit) -> bool {
+    cx.try_global::<Page>().is_some_and(|page| page.visit.accepts(visit))
 }
 
 /// Leaving the page: drops the listing, the decoded pictures and the
@@ -393,8 +404,10 @@ impl StudioView {
             return;
         }
         page.preview_loading = Some(path.to_path_buf());
+        let visit = page.visit.clone();
         let (job, done) = (path.to_path_buf(), path.to_path_buf());
         form::job(cx, move || Ok(mandara_ui::wallpaper::preview(&job)), move |_, res, cx| {
+            if !current_visit(cx, &visit) || st(cx).preview_loading.as_ref() != Some(&done) { return; }
             let page = st(cx);
             if page.preview_loading.as_ref() == Some(&done) {
                 page.preview_loading = None;
@@ -596,8 +609,10 @@ impl StudioView {
             return;
         }
         page.listing_loading = Some(dir.to_path_buf());
+        let visit = page.visit.clone();
         let (job, done) = (dir.to_path_buf(), dir.to_path_buf());
         form::job(cx, move || Ok(mandara_ui::wallpaper::list(&job)), move |_, res, cx| {
+            if !current_visit(cx, &visit) || st(cx).listing_loading.as_ref() != Some(&done) { return; }
             let page = st(cx);
             if page.listing_loading.as_ref() == Some(&done) {
                 page.listing_loading = None;
@@ -913,7 +928,9 @@ impl StudioView {
         }
         page.status_loading = true;
         page.status_for = Some(key);
-        form::shell(vec!["wallpaper".into(), "slideshow".into(), "status".into()], cx, |_, res, cx| {
+        let visit = page.visit.clone();
+        form::shell(vec!["wallpaper".into(), "slideshow".into(), "status".into()], cx, move |_, res, cx| {
+            if !current_visit(cx, &visit) { return; }
             let next = res.as_ref().ok().and_then(|v| v["next_in_seconds"].as_u64());
             // Look again once the next change has happened.
             let wake = next.map(|secs| {
@@ -932,7 +949,9 @@ impl StudioView {
     /// Runs a slideshow command and keeps its status reply.
     fn wp_slideshow_command(&mut self, args: &[&str], cx: &mut Context<Self>) {
         let words = ["wallpaper", "slideshow"].iter().chain(args).map(|s| s.to_string()).collect();
-        form::shell(words, cx, |_, res, cx| {
+        let visit = st(cx).visit.clone();
+        form::shell(words, cx, move |_, res, cx| {
+            if !current_visit(cx, &visit) { return; }
             let page = st(cx);
             match res {
                 Ok(v) => {

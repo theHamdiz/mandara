@@ -103,6 +103,24 @@ pub fn hash(key: &str) -> u64 {
     mum(h, P0)
 }
 
+/// Hash two adjacent key slices without allocating a joined string.
+fn hash_prefixed(prefix: &str, key: &str) -> u64 {
+    let mut h = ((prefix.len() + key.len()) as u64) ^ P0;
+    let mut word = [0u8; 8];
+    let mut used = 0;
+    for byte in prefix.bytes().chain(key.bytes()) {
+        word[used] = byte;
+        used += 1;
+        if used == word.len() {
+            h = mum(h ^ u64::from_le_bytes(word), P1);
+            word = [0; 8];
+            used = 0;
+        }
+    }
+    if used != 0 { h = mum(h ^ u64::from_le_bytes(word), P1); }
+    mum(h, P0)
+}
+
 /// Why a pack was rejected.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PackError {
@@ -351,7 +369,19 @@ impl<'a> Pack<'a> {
     /// The translation of `key`, if the pack has one.
     #[inline]
     pub fn get(&self, key: &str) -> Option<&'a str> {
-        let h = hash(key);
+        self.get_hashed(hash(key), key.len(), |stored| stored == key.as_bytes())
+    }
+
+    /// Look up a component's key without constructing its prefixed form.
+    pub fn get_prefixed(&self, prefix: &str, key: &str) -> Option<&'a str> {
+        self.get_hashed(hash_prefixed(prefix, key), prefix.len() + key.len(), |stored| {
+            stored.strip_prefix(prefix.as_bytes()) == Some(key.as_bytes())
+        })
+    }
+
+    /// Both lookup forms share the validated index and collision check.
+    #[inline]
+    fn get_hashed(&self, h: u64, len: usize, matches: impl FnOnce(&[u8]) -> bool) -> Option<&'a str> {
         let mut e = home_of(h, self.home_slots) * ENTRY_LEN;
         while let Some(slot) = self.index.get(e..e + ENTRY_LEN) {
             let at = u64_at(slot, 0);
@@ -359,14 +389,14 @@ impl<'a> Pack<'a> {
                 // The stored key must be the one asked for: a hash collision
                 // with a key that isn't in the pack finds nothing.
                 let (key_off, key_len) = (u32_at(slot, 8) as usize, u32_at(slot, 12) as usize);
-                if key_len != key.len() {
+                if key_len != len {
                     return None;
                 }
                 // SAFETY: `validate` checked every slot's key and translation
                 // ranges against the blob (and that they're UTF-8); the
                 // bytes never change.
                 let stored = unsafe { self.blob.get_unchecked(key_off..key_off + key_len) };
-                if stored != key.as_bytes() {
+                if !matches(stored) {
                     return None;
                 }
                 let (val_off, val_len) = (u32_at(slot, 16) as usize, u32_at(slot, 20) as usize);
@@ -413,6 +443,21 @@ impl<'a> Pack<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prefixed_hash_and_lookup_match_joined_utf8_keys() {
+        for prefix in ["", "g:", "greeter:", "مجتمع:"] {
+            for key in ["", "a", "1234567", "12345678", "اسم المستخدم", "सत्र सुरू करा"] {
+                let joined = format!("{prefix}{key}");
+                assert_eq!(hash_prefixed(prefix, key), hash(&joined));
+                if joined.is_empty() { continue; }
+                let bytes = build(Lang::Ar, "1", [(joined.as_str(), "translated")]).unwrap();
+                let pack = Pack::parse(&bytes, "1", Lang::Ar).unwrap();
+                assert_eq!(pack.get_prefixed(prefix, key), Some("translated"));
+                assert_eq!(pack.get_prefixed(prefix, "missing"), None);
+            }
+        }
+    }
 
     fn sample() -> Vec<u8> {
         build(Lang::Ar, "1.2.3", [("Settings", "الإعدادات"), ("Hello", "مرحبًا"), ("{n} items", "{n} عناصر")]).unwrap()

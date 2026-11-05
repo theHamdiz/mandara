@@ -26,6 +26,11 @@ use super::StudioView;
 use super::store_page::{self as store, ButtonSize, Tone};
 use crate::tokens::*;
 
+/// Community keeps its visible search on reentry; Discover loads its broad shelves.
+fn priming_query(tab: PluginsTab, query: &str) -> &str {
+    if tab == PluginsTab::Marketplace { query } else { "" }
+}
+
 /// Repaint interval while an install / removal runs (its step text).
 const JOB_REPAINT: Duration = Duration::from_millis(250);
 /// Angle of the hero card's gradient.
@@ -251,7 +256,7 @@ impl StudioView {
     pub(super) fn market_prime(&mut self, cx: &mut Context<Self>) {
         if !self.market.primed {
             self.market.primed = true;
-            self.market_search(String::new(), cx);
+            self.market_search(priming_query(self.plugins_tab, &self.store.query).to_owned(), cx);
         }
     }
 
@@ -485,6 +490,13 @@ pub(super) fn reload_plugins(cx: &mut gpui::App) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn community_reentry_preserves_the_displayed_query_without_filtering_discover() {
+        assert_eq!(priming_query(PluginsTab::Marketplace, "weather"), "weather");
+        assert_eq!(priming_query(PluginsTab::Marketplace, ""), "");
+        assert_eq!(priming_query(PluginsTab::Discover, "weather"), "");
+    }
 
     #[test]
     fn reopening_requires_a_new_policy_check_and_invalidates_inflight_results() {

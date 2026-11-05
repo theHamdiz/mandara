@@ -29,6 +29,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 pub mod pack;
 pub mod packs;
+pub mod bundle;
 
 /// The supported languages.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -378,7 +379,7 @@ pub fn tf(key: &'static str, args: &[(&str, &dyn Display)]) -> String {
 /// The English key of a string translated into the current language (or
 /// the string itself when it isn't a known translation).
 pub fn untranslate(s: &str) -> String {
-    packs::pack(requested_language()).and_then(|p| p.key_of(s)).unwrap_or(s).to_string()
+    packs::pack(requested_language()).and_then(|p| bundle::shared_key(p, s)).unwrap_or(s).to_string()
 }
 
 /// Fills `{name}` placeholders in an already translated string.

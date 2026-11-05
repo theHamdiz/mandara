@@ -15,7 +15,7 @@ use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelSpec, PluginInstance, 
 use mandara_services::feeds::{Cache, HttpSource, Snapshot};
 use mandara_theme::MandaraPalette;
 
-use super::fn_view;
+use super::model_view as fn_view;
 use super::integration::{self, Data};
 use super::panel_fx::{EXPIRY_MARGIN, glass_card, header, pill_button, readable, redraw_in};
 use crate::bidi::Bidi as _;

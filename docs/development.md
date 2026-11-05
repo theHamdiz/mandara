@@ -85,6 +85,13 @@ tests. It never touches the real session.
   apps with Papirus icons, 18 Downloads, 10 procedural wallpapers, album
   covers and a 24 s procedural music track.
 
+The sandbox compiles all 19 non-English language packs from the shell and
+login catalogs. Each `.mlang` holds both catalogs, with login wording kept
+separate under `greeter:` keys. The shell and greeter map only the selected
+language; translation catalogs are not embedded in the binary. A missing
+pack falls back to English. `--no-langpacks` exercises downloads in the shell;
+the login process always uses installed files and never downloads a language.
+
 ```bash
 cargo build --release -p mandara-app              # or pass --bin to `up`
 cargo xtask sandbox up                            # 2560x1440 at 1.5, the demo config

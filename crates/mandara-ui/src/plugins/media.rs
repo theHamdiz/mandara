@@ -32,7 +32,8 @@ use mandara_services::{MediaCommand, MediaState, PlaybackStatus};
 use mandara_theme::{Color, MandaraPalette, MiniPalette, SeedColor};
 use serde_json::json;
 
-use super::fn_view;
+use super::domain_view;
+use crate::hub::Domains;
 pub(crate) mod lyrics_view;
 use lyrics_view::LyricsPane;
 use super::panel_fx::{
@@ -1165,7 +1166,7 @@ fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, drag: R
 
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Media"), tk("MPRIS now playing and controls"), Some(Zone::Center)), |window, cx, panel_cx| {
-        let bar = fn_view(
+        let bar = domain_view(Domains::MEDIA,
             None,
             |palette, _, cx| {
                 let Some(snap) = playing_snapshot(cx) else { return div().into_any_element() };
@@ -1192,12 +1193,12 @@ pub fn register(r: &mut PluginRegistry) {
             cx,
         );
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(PLAYING_H))));
-        let panel = fn_view(None, panel_view(panel_cx.clone(), size_cell.clone(), Rc::default()), window, cx);
+        let panel = domain_view(Domains::MEDIA, None, panel_view(panel_cx.clone(), size_cell.clone(), Rc::default()), window, cx);
         let side_drag: Rc<Cell<Option<f32>>> = Rc::default();
         let side_labels = Rc::new(RefCell::new(ScrubLabels::default()));
         let side_cover = Rc::new(RefCell::new(CoverSlot::default()));
         let side_keeper = Rc::new(IdleRelease::default());
-        let sidebar = fn_view(
+        let sidebar = domain_view(Domains::MEDIA,
             None,
             move |palette, window, cx| {
                 let Some(snap) = playing_snapshot(cx) else { return div().into_any_element() };

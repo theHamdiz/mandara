@@ -43,7 +43,7 @@ fn desired(auto: ThemeAuto, light_at: &str, dark_at: &str, system: Option<Prefer
     }
 }
 
-fn evaluate(state: &RefCell<AutoState>, cx: &mut App) {
+fn evaluate(state: &Rc<RefCell<AutoState>>, cx: &mut App) {
     let cfg = config(cx).read(cx).snapshot();
     let t = &cfg.theme;
     let mut st = state.borrow_mut();

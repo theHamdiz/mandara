@@ -210,7 +210,10 @@ fn configure_privacy(cfg: &ShellConfig, cx: &mut App) {
                     });
                     privacy_changed(&prev, &state, cx);
                     // Plugin views (the bar chip) re-render on hub changes.
-                    hub(cx).update(cx, |_, cx| cx.notify());
+                    hub(cx).update(cx, |hub, cx| {
+                        hub.mark_changed(crate::hub::Domains::PRIVACY);
+                        cx.notify();
+                    });
                     true
                 });
                 if !alive {

@@ -272,9 +272,10 @@ pub fn open_studio_at(section: Option<String>, cx: &mut App) {
 }
 
 /// Forwards every config change to another process (Studio → shell).
-/// Returns `true` when delivered, in which case that process persists it.
+/// Acknowledges actual delivery; a failed or closed reply falls back to a
+/// local save. `None` means the other process is already known to be offline.
 #[derive(Clone)]
-pub struct ConfigMirror(pub std::rc::Rc<dyn Fn(&ShellConfig) -> bool>);
+pub struct ConfigMirror(pub std::rc::Rc<dyn Fn(&ShellConfig) -> Option<async_channel::Receiver<bool>>>);
 impl Global for ConfigMirror {}
 
 #[derive(Clone)]
@@ -317,14 +318,15 @@ pub fn update_config(cx: &mut App, f: impl FnOnce(&mut ShellConfig)) {
         return;
     }
     sync_theme_from_config(cx);
-    if let Some(mirror) = cx.try_global::<ConfigMirror>().cloned()
-        && (mirror.0)(&config.read(cx).snapshot())
-    {
-        return;
-    }
+    let delivery = cx.try_global::<ConfigMirror>().cloned().and_then(|mirror| (mirror.0)(&config.read(cx).snapshot()));
     let shell = shell(cx);
     shell.update(cx, |state, cx| {
         state.flush_task = Some(cx.spawn(async move |_, cx| {
+            if let Some(delivery) = delivery
+                && delivery.recv().await == Ok(true)
+            {
+                return;
+            }
             cx.background_executor().timer(FLUSH_DEBOUNCE).await;
             config.update(cx, |store, _| {
                 if let Err(err) = store.flush() {

@@ -24,7 +24,7 @@ use mandara_services::updates::{self, CheckOptions, CheckResult, NewsItem, Packa
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
 
-use super::fn_view;
+use super::model_view as fn_view;
 use super::panel_fx::{
     ANGLE_DIAGONAL_DEG, ANGLE_DOWN_DEG, ANGLE_RIGHT_DEG, EXPIRY_MARGIN, HEADER_H, PILL_H_PX, PanelShape, SMALL_ICON_PX, TINT_FILL, TINT_HOVER, ViewSet, alpha,
     empty_state, glass_card, glow, header, partner, readable, redraw_in,

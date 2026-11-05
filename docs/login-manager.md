@@ -589,5 +589,10 @@ under the field, follow-up prompts (OTP codes, "new password") reuse it.
   error and convert it as above. Clips in your home folder aren't readable
   by the greeter user: copy them to `/usr/share/mandara/login/videos/`.
 * **Wrong language / layout** — set `language` and `[keyboard] layout` in
-  `/etc/mandara/greeter.toml`.
+  `/etc/mandara/greeter.toml`. Translations use the selected version's external
+  `.mlang` pack in `/usr/local/share/mandara/locales/<version>/` (or the package's
+  system data directory). Installing or applying the login configuration prepares
+  that pack. Login wording shares the shell's pack under separate `greeter:` keys;
+  neither catalog is embedded in the executable. The login process never downloads
+  languages and falls back to English if its pack is missing.
 * **Go back to your old display manager** — `sudo mandara greeter uninstall --apply`.

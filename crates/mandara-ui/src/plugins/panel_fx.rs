@@ -6,9 +6,12 @@
 //! coalesced per-view redraw timer that only runs while a panel is on
 //! screen, and the design tokens every built-in plugin shares.
 
+mod redraw;
+pub use redraw::redraw_in;
+
 use crate::bidi::Bidi as _;
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -87,49 +90,8 @@ pub fn wash(pair: (f32, f32), palette: &MandaraPalette) -> Color {
 
 // ── Redraw scheduling ────────────────────────────────────────────────────
 
-thread_local! {
-    /// View → deadline of its pending redraw timer.
-    static PENDING: RefCell<HashMap<EntityId, Instant>> = RefCell::new(HashMap::new());
-}
-
-/// Redraw requests whose deadlines are closer than this are merged.
-const REDRAW_SLACK: Duration = Duration::from_millis(4);
 /// Added to "redraw when this expires" delays so the deadline has passed.
 pub const EXPIRY_MARGIN: Duration = Duration::from_millis(20);
-
-/// Re-renders the view currently being rendered after `delay` (coalesced
-/// per view: an earlier pending redraw wins). Call it from a panel's render
-/// while the panel is visible so live readouts tick without a timer running
-/// when it is closed. Only the calling view is notified — never a whole
-/// window refresh, which would defeat GPUI's view caching.
-pub fn redraw_in(delay: Duration, window: &mut Window, cx: &mut App) {
-    let view = window.current_view();
-    let due = Instant::now() + delay;
-    let schedule = PENDING.with(|p| {
-        let mut p = p.borrow_mut();
-        match p.get(&view) {
-            Some(existing) if *existing <= due + REDRAW_SLACK => false,
-            _ => {
-                p.insert(view, due);
-                true
-            }
-        }
-    });
-    if !schedule {
-        return;
-    }
-    cx.spawn(async move |cx| {
-        cx.background_executor().timer(delay).await;
-        PENDING.with(|p| {
-            let mut p = p.borrow_mut();
-            if p.get(&view).is_some_and(|d| *d <= Instant::now() + REDRAW_SLACK) {
-                p.remove(&view);
-            }
-        });
-        cx.update(|cx| cx.notify(view));
-    })
-    .detach();
-}
 
 /// The views that display one plugin model. Async results (a finished
 /// scan, a command's reply) notify exactly these views instead of

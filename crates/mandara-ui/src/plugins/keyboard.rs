@@ -7,7 +7,8 @@ use gpui::{IntoElement, ParentElement, SharedString, Styled, div, px};
 use mandara_core::ToGpui;
 use mandara_plugins::{PluginInstance, PluginManifest, PluginRegistry, Zone};
 
-use super::fn_view;
+use super::domain_view;
+use crate::hub::Domains;
 use crate::hub::hub;
 
 pub const ID: &str = "keyboard-layout";
@@ -57,7 +58,7 @@ pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Keyboard layout"), mandara_i18n::tk("The active keyboard layout; click to switch"), Some(Zone::Right)), |window, cx, _| {
         // (layout name, its short code), derived once per layout change.
         let code: RefCell<(String, SharedString)> = RefCell::default();
-        let bar = fn_view(
+        let bar = domain_view(Domains::KEYBOARD,
             None,
             move |palette, _, cx| {
                 let layout = hub(cx).read(cx).keyboard_layout.as_str();

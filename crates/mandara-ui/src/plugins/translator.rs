@@ -13,7 +13,7 @@ use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelSpec, PluginInstance, 
 use mandara_services::credentials::{Access, Key, Keyring, Secret, Store as _};
 use mandara_services::translator::{self as service, Backend as _, Provider};
 
-use super::{fn_view, panel_fx::readable};
+use super::{model_view as fn_view, panel_fx::readable};
 use crate::icons::icon;
 
 pub const ID: &str = "translator";

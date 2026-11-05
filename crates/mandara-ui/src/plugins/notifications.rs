@@ -28,7 +28,8 @@ use super::panel_fx::{
     self, ANGLE_DIAGONAL_DEG, ANGLE_DOWN_DEG, EXPIRY_MARGIN, HEADER_H, LINK_H_PX, LINK_HOVER_ALPHA, PILL_H_PX, PanelShape, empty_state, header, pill_button, readable,
     redraw_in,
 };
-use super::{fn_view, json};
+use crate::hub::Domains;
+use super::{domain_view, json};
 use crate::fonts::tabular_nums;
 use crate::hub::hub;
 use crate::icons::icon;
@@ -859,7 +860,7 @@ fn parse_duration(s: &str) -> Option<i64> {
 
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Notifications"), tk("Notification center with history and do-not-disturb"), Some(Zone::Right)), |window, cx, panel_cx| {
-        let bar = fn_view(
+        let bar = domain_view(Domains::NOTIFICATIONS,
             None,
             |palette, _, cx| {
                 let st = &hub(cx).read(cx).notifications;
@@ -900,7 +901,7 @@ pub fn register(r: &mut PluginRegistry) {
         let page = Rc::new(Cell::new(PAGE_SIZE));
         // The history's overlay scroll bar (per panel instance).
         let (scroll, scroll_bar) = (gpui::ScrollHandle::new(), crate::scrollbar::ScrollbarState::new());
-        let panel = fn_view(
+        let panel = domain_view(Domains::NOTIFICATIONS,
             None,
             move |palette, window, cx| {
                 // Opening the panel marks everything read.
@@ -941,7 +942,7 @@ pub fn register(r: &mut PluginRegistry) {
             window,
             cx,
         );
-        let sidebar = fn_view(
+        let sidebar = domain_view(Domains::NOTIFICATIONS,
             None,
             |palette, window, cx| {
                 let hub = hub(cx);

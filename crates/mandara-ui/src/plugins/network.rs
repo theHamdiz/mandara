@@ -20,7 +20,8 @@ use super::panel_fx::{
     self, ANGLE_DIAGONAL_DEG, Cached, HEADER_H, PanelShape, SECTION_H_PX, WASH_SOFT, empty_state, header, partner, pill_button, readable, redraw_in, section, signal_bars,
     wash,
 };
-use super::{fn_view, json};
+use crate::hub::Domains;
+use super::{domain_view, json};
 use crate::fonts::tabular_nums;
 use crate::hub::hub;
 use crate::icons::icon;
@@ -429,7 +430,7 @@ fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>) -> impl
 
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Network"), tk("Wi-Fi and wired connectivity"), Some(Zone::Right)), |window, cx, panel_cx| {
-        let bar = fn_view(
+        let bar = domain_view(Domains::NETWORK,
             None,
             |palette, _, cx| {
                 let state = &hub(cx).read(cx).network;
@@ -440,7 +441,7 @@ pub fn register(r: &mut PluginRegistry) {
             cx,
         );
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(INITIAL_PANEL_H))));
-        let panel = fn_view(None, panel_view(panel_cx.clone(), size_cell.clone()), window, cx);
+        let panel = domain_view(Domains::NETWORK, None, panel_view(panel_cx.clone(), size_cell.clone()), window, cx);
         PluginInstance {
             bar: Some(bar),
             panel: Some(PanelSpec { view: panel, size: size_cell }),

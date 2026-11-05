@@ -512,6 +512,7 @@ impl StudioView {
                 _ => None,
             };
             let on_desktop = existing.is_some();
+            let example = widgets.iter().any(|widget| matches!(widget.kind, WidgetKind::Jannah(_) | WidgetKind::Hadith(_) | WidgetKind::Quran(_)));
             let glyph = mandara_ui::desktop_menu::icon_named(&t.icon);
             let el = div()
                 .id(SharedString::from(format!("dw-add-{}", t.key())))
@@ -568,11 +569,18 @@ impl StudioView {
                         .h(px(TILE_LABEL_H_PX))
                         .px(px(SPACE_4_PX))
                         .overflow_hidden()
-                        .text_size(px(TEXT_12_PX))
-                        .line_height(px(LEADING_16_PX))
-                        .line_clamp(TILE_LABEL_LINES)
-                        .text_color(if on_desktop { p.primary.hsla() } else { p.on_surface.hsla() })
-                        .child(mandara_ui::bidi::paragraph(if on_desktop { tf("{name} · on the desktop", &[("name", &label)]) } else { label })),
+                        .row()
+                        .cross_start()
+                        .gap(px(SPACE_4_PX))
+                        .child(div().flex_1().min_w_0()
+                            .text_size(px(TEXT_12_PX)).line_height(px(LEADING_16_PX))
+                            .line_clamp(TILE_LABEL_LINES)
+                            .text_color(if on_desktop { p.primary.hsla() } else { p.on_surface.hsla() })
+                            .child(mandara_ui::bidi::paragraph(if on_desktop { tf("{name} · on the desktop", &[("name", &label)]) } else { label })))
+                        .when(example, |el| el.child(div().flex_none()
+                            .px(px(SPACE_4_PX)).rounded_full().bg(p.surface_dim.hsla())
+                            .text_color(p.on_surface.hsla()).text_size(px(TEXT_10_PX))
+                            .line_height(px(LEADING_16_PX)).child(mandara_i18n::t("Preview")))),
                 )
                 .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
                     let id = match &existing {

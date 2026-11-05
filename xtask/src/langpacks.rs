@@ -1,5 +1,5 @@
-//! Language packs (`mandara_i18n::pack`): every `locales/<code>.toml`
-//! compiled into the `.mlang` file Mandara maps at run time.
+//! Language packs (`mandara_i18n::pack`): shell and greeter catalogs
+//! compiled into one `.mlang` file per language, mapped at run time.
 //!
 //! `langpacks [--version V | --bin PATH] [--dir DIR] [--out DIR]`:
 //!
@@ -44,9 +44,7 @@ pub fn compile_all(version: &str) -> Result<Vec<(Lang, Vec<u8>)>> {
         .into_iter()
         .filter(|l| *l != Lang::En)
         .map(|lang| {
-            let path = dir.join(format!("{}.toml", lang.code()));
-            let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-            mandara_i18n::compile(lang, version, &text).map(|b| (lang, b)).map_err(|e| format!("{}: {e}", path.display()))
+            mandara_i18n::bundle::compile_files(lang, version, &dir, &root().join("crates/mandara-greeter/locales")).map(|bytes| (lang, bytes))
         })
         .collect()
 }
@@ -115,6 +113,11 @@ mod tests {
         for (lang, bytes) in &a {
             let pack = mandara_i18n::pack::Pack::parse(bytes, "1.2.3", *lang).unwrap();
             assert!(pack.len() > 1000, "{lang:?} has {} strings", pack.len());
+            let greeter = std::fs::read_to_string(root().join("crates/mandara-greeter/locales").join(format!("{}.toml", lang.code()))).unwrap();
+            let catalog = mandara_i18n::Catalog::parse(&greeter).unwrap();
+            for (key, value) in catalog.iter() {
+                assert_eq!(pack.get_prefixed(mandara_i18n::bundle::GREETER_PREFIX, key), Some(value), "{}: {key}", lang.code());
+            }
         }
     }
 }

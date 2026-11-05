@@ -19,6 +19,7 @@
 
 mod alloc;
 mod changelog_cli;
+mod config_mirror;
 mod ipc;
 mod residency;
 mod setup_cli;
@@ -620,21 +621,7 @@ fn run_studio(section: Option<String>) -> Result<()> {
         })?;
     }
 
-    // Latest-wins mirror: slider drags coalesce into one IPC call per send.
-    let (mirror_tx, mirror_rx) = std::sync::mpsc::channel::<String>();
-    {
-        let alive = shell_alive.clone();
-        let shell_sock = shell_sock.clone();
-        std::thread::Builder::new().name("mandara-studio-mirror".into()).spawn(move || {
-            while let Ok(mut json) = mirror_rx.recv() {
-                while let Ok(newer) = mirror_rx.try_recv() {
-                    json = newer;
-                }
-                let ok = ipc::send(&shell_sock, &["config".into(), "apply".into(), json]).is_ok_and(|r| r.ok);
-                alive.store(ok, Ordering::Relaxed);
-            }
-        })?;
-    }
+    let mirror = config_mirror::Mirror::start(shell_sock.clone(), shell_alive.clone())?;
 
     application().with_assets(MandaraAssets).run(move |cx: &mut App| {
         cx.set_global(build_info());
@@ -656,11 +643,7 @@ fn run_studio(section: Option<String>) -> Result<()> {
         .detach();
 
         // Every edit goes to the shell; when it's down, Studio saves itself.
-        let alive = shell_alive.clone();
-        cx.set_global(mandara_ui::state::ConfigMirror(std::rc::Rc::new(move |cfg| match serde_json::to_string(cfg) {
-            Ok(json) => mirror_tx.send(json).is_ok() && alive.load(Ordering::Relaxed),
-            Err(_) => false,
-        })));
+        cx.set_global(mandara_ui::state::ConfigMirror(std::rc::Rc::new(move |cfg| mirror.queue(cfg))));
         let pid_sock = shell_sock.clone();
         let pid_alive = shell_alive.clone();
         cx.set_global(mandara_studio::ShellLink(Arc::new(move || {

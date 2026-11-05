@@ -29,7 +29,8 @@ use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
 use smallvec::SmallVec;
 
-use super::fn_view;
+use super::domain_view;
+use crate::hub::Domains;
 use super::panel_fx::{SMALL_ICON_PX, TINT_FILL, TINT_HOVER, WASH_TRACK, alpha};
 use crate::fonts::tabular_nums;
 use crate::hub::hub;
@@ -733,7 +734,7 @@ pub fn register(r: &mut PluginRegistry) {
         // MangoWM layout pill: (layout shown, pop spring, clock).
         let layout_anim = Rc::new(RefCell::new((String::new(), SpringValue::new(1.0, FAST), FrameClock::new())));
         let monitor: SharedString = panel_cx.monitor().to_string().into();
-        let bar = fn_view(
+        let bar = domain_view(Domains::NAVIGATION.union(Domains::CLIENTS).union(Domains::KEYBOARD),
             None,
             move |palette, window, cx| {
                 sync_icon_cache(cx);

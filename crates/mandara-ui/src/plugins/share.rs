@@ -32,7 +32,7 @@ use mandara_theme::{Color, MandaraPalette};
 use serde_json::{Value, json};
 
 use super::extras::{Flash, caption, toast};
-use super::fn_view;
+use super::model_view as fn_view;
 use super::panel_fx::{
     ANGLE_DIAGONAL_DEG, EXPIRY_MARGIN, HEADER_H, SMALL_ICON_PX, ViewSet, WASH_FAINT, WASH_SOFT, alpha, dot_ring, empty_state, glass_card, header, icon_chip, partner, pill_button,
     readable, redraw_in, wash,

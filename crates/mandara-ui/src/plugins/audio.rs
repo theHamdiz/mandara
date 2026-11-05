@@ -28,7 +28,8 @@ mod device_picker;
 use apps::{AppsTap, Presence, RowCx};
 
 use super::panel_fx::{HEADER_H, PanelShape, SpectrumTap, TINT_FILL, alpha, big_slider, glass_card, header, icon_chip, partner, pill_button, readable, redraw_in, spectrum_bars};
-use super::{fn_view, fn_view_observing, json};
+use crate::hub::Domains;
+use super::{domain_view, domain_view_observing, json};
 use crate::bidi::Bidi as _;
 use crate::fonts::{fonts, tabular_nums};
 use crate::hub::hub;
@@ -497,7 +498,7 @@ fn sidebar_apps(rows: &[(apps::AppGroup, f32)], rc: &RowCx<'_>) -> AnyElement {
 
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Audio"), tk("Volume and microphone"), Some(Zone::Right)), |window, cx, panel_cx| {
-        let bar = fn_view(
+        let bar = domain_view(Domains::AUDIO.union(Domains::MEDIA),
             None,
             |palette, _, cx| {
                 let s = &hub(cx).read(cx).audio;
@@ -540,7 +541,7 @@ pub fn register(r: &mut PluginRegistry) {
         let apps_tap = AppsTap::shared();
         let picker = Rc::new(RefCell::new(device_picker::State::default()));
         let close_picker = picker.clone();
-        let panel = fn_view_observing(None, move |cx| {
+        let panel = domain_view_observing(Domains::AUDIO.union(Domains::MEDIA), None, move |cx| {
             cx.observe(&crate::state::shell(cx), move |_, shell, cx| {
                 if shell.read(cx).panel.as_deref() != Some(ID) && !crate::floating::is_floating(ID, cx) {
                     close_picker.borrow_mut().close();
@@ -551,7 +552,7 @@ pub fn register(r: &mut PluginRegistry) {
         let side_picker = Rc::new(RefCell::new(device_picker::State::default()));
         let close_side_picker = side_picker.clone();
         let monitor = panel_cx.monitor().to_string();
-        let sidebar = fn_view_observing(
+        let sidebar = domain_view_observing(Domains::AUDIO.union(Domains::MEDIA),
             None,
             move |cx| {
                 cx.observe(&crate::state::shell(cx), move |_, shell, cx| {
