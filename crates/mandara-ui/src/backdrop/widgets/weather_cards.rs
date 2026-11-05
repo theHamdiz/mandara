@@ -26,11 +26,10 @@ const PETALS: usize = 24;
 const PETAL_ANGLE: f32 = 0.32;
 const MUTED: f32 = 0.16;
 
-fn label(out: &mut Vec<Mark>, value: &str, w: &WeatherWidget, size: f32, x: f32, y: f32, width: f32, ink: InkRole, m: &mut dyn Measure) -> f32 {
+fn label(out: &mut Vec<Mark>, value: &str, w: &WeatherWidget, rtl: bool, size: f32, x: f32, y: f32, width: f32, ink: InkRole, m: &mut dyn Measure) -> f32 {
     let font = style(w.look.font, size, face::MEDIUM);
     let value = fit(value, &font, width, m);
     let (tw, th) = m.measure(&value, &font);
-    let rtl = Lingo::of(&w.locale, mandara_i18n::language().is_rtl(), None).rtl;
     out.push(Mark::new(MarkKind::Text { text: value, style: font, x: if rtl { x + width - tw } else { x }, y, w: tw, h: th }, ink));
     th
 }
@@ -44,7 +43,7 @@ fn range_fraction(f: &Forecast) -> Option<f32> {
 pub fn layout(w: &WeatherWidget, s: &WeatherStrings, forecast: Option<&Forecast>, l: &Lingo, units: mandara_config::Units, k: f32, m: &mut dyn Measure) -> Vec<Mark> {
     let mut out = Vec::new();
     let Some(f) = forecast else {
-        label(&mut out, &s.condition, w, TEXT * k, 0.0, 0.0, WIDTH * k, InkRole::Fg, m);
+        label(&mut out, &s.condition, w, l.rtl, TEXT * k, 0.0, 0.0, WIDTH * k, InkRole::Fg, m);
         return out;
     };
     if w.layout == WeatherLayout::HumidityRose {
@@ -64,7 +63,7 @@ pub fn layout(w: &WeatherWidget, s: &WeatherStrings, forecast: Option<&Forecast>
         let title = l.word(tk("Humidity"));
         let font = style(w.look.font, TEXT * k, face::MEDIUM);
         let (tw, _) = m.measure(&title, &font);
-        label(&mut out, &title, w, TEXT * k, center.0 - tw / 2.0, ROSE_R * 2.0 * k + GAP * k, tw, InkRole::Accent, m);
+        label(&mut out, &title, w, l.rtl, TEXT * k, center.0 - tw / 2.0, ROSE_R * 2.0 * k + GAP * k, tw, InkRole::Accent, m);
         return out;
     }
     if w.layout == WeatherLayout::Thermometer {
@@ -80,32 +79,32 @@ pub fn layout(w: &WeatherWidget, s: &WeatherStrings, forecast: Option<&Forecast>
         }
         let x = (BULB * 2.0 + GAP) * k;
         let width = WIDTH * k - x;
-        let h = label(&mut out, &s.temp, w, TEMP * k, x, PAD * k, width, InkRole::Fg, m);
-        label(&mut out, &s.condition, w, TEXT * k, x, PAD * k + h + GAP * k, width, InkRole::Accent, m);
+        let h = label(&mut out, &s.temp, w, l.rtl, TEMP * k, x, PAD * k, width, InkRole::Fg, m);
+        label(&mut out, &s.condition, w, l.rtl, TEXT * k, x, PAD * k + h + GAP * k, width, InkRole::Accent, m);
         if let Some((lo, hi)) = f.today.filter(|(lo, hi)| lo.is_finite() && hi.is_finite() && lo <= hi) {
             let range = l.digits(format!("{} / {}", units.format_degrees(hi), units.format_degrees(lo)));
-            label(&mut out, &range, w, TEXT * k, x, (TUBE_H - TEXT) * k, width, InkRole::Fg, m);
+            label(&mut out, &range, w, l.rtl, TEXT * k, x, (TUBE_H - TEXT) * k, width, InkRole::Fg, m);
         }
         return out;
     }
     out.push(Mark::new(MarkKind::Icon { name: s.icon, x: 0.0, y: 0.0, size: ICON * k }, InkRole::Accent));
     let x = (ICON + GAP) * k;
-    let h = label(&mut out, &s.temp, w, TEMP * k, x, 0.0, (WIDTH - ICON - GAP) * k, InkRole::Fg, m);
-    let info_h = label(&mut out, &s.condition, w, TEXT * k, x, h, (WIDTH - ICON - GAP) * k, InkRole::Accent, m);
+    let h = label(&mut out, &s.temp, w, l.rtl, TEMP * k, x, 0.0, (WIDTH - ICON - GAP) * k, InkRole::Fg, m);
+    let info_h = label(&mut out, &s.condition, w, l.rtl, TEXT * k, x, h, (WIDTH - ICON - GAP) * k, InkRole::Accent, m);
     let mut y = h + info_h + GAP * k;
     if !s.place.is_empty() {
-        y += label(&mut out, &s.place, w, TEXT * k, 0.0, y, WIDTH * k, InkRole::Fg, m) + GAP * k;
+        y += label(&mut out, &s.place, w, l.rtl, TEXT * k, 0.0, y, WIDTH * k, InkRole::Fg, m) + GAP * k;
     }
     out.push(Mark::new(MarkKind::Line { a: (0.0, y), b: (WIDTH * k, y), width: RULE * k }, InkRole::Fg).dim(MUTED));
     let count = s.days.len().min(4);
     if count > 0 {
         let cell = WIDTH * k / count as f32;
         for (i, (day, icon, temperature)) in s.days.iter().take(count).enumerate() {
-            let col = if s.rtl { count - 1 - i } else { i };
+            let col = if l.rtl { count - 1 - i } else { i };
             let x = col as f32 * cell;
-            let th = label(&mut out, day, w, SMALL * k, x, y + GAP * k, cell - GAP * k, InkRole::Fg, m);
+            let th = label(&mut out, day, w, l.rtl, SMALL * k, x, y + GAP * k, cell - GAP * k, InkRole::Fg, m);
             out.push(Mark::new(MarkKind::Icon { name: icon, x, y: y + GAP * k + th, size: ICON * k / 2.0 }, InkRole::Accent));
-            label(&mut out, temperature, w, SMALL * k, x, y + GAP * k + th + ICON * k / 2.0, cell - GAP * k, InkRole::Fg, m);
+            label(&mut out, temperature, w, l.rtl, SMALL * k, x, y + GAP * k + th + ICON * k / 2.0, cell - GAP * k, InkRole::Fg, m);
         }
     }
     out
@@ -125,6 +124,29 @@ mod tests {
             let marks = layout(&w, &s, None, &l, mandara_config::Units::default(), 1.0, &mut Fixed);
             assert_eq!(marks.len(), 1);
             assert!(matches!(&marks[0].kind, MarkKind::Text { text, .. } if text == "Weather unavailable"));
+        }
+    }
+
+    #[test]
+    fn labels_follow_the_resolved_widget_direction_in_another_interface() {
+        let _interface = mandara_i18n::scoped(Some(mandara_i18n::Lang::En));
+        let forecast = super::super::WidgetScene::preview(Vec::new()).forecast.unwrap();
+        for rtl in [false, true] {
+            for layout_id in [WeatherLayout::Ribbon, WeatherLayout::Thermometer] {
+                let widget = WeatherWidget { layout: layout_id, ..Default::default() };
+                let language = Lingo::of(&widget.locale, rtl, None);
+                let strings = WeatherStrings { temp: "23°".into(), condition: "Cloudy".into(), place: "Alexandria".into(), rtl, ..Default::default() };
+                let marks = layout(&widget, &strings, Some(&forecast), &language, mandara_config::Units::default(), 1.0, &mut Fixed);
+                let text: Vec<_> = marks.iter().filter_map(|mark| match &mark.kind {
+                    MarkKind::Text { x, w, .. } => Some((*x, *w)),
+                    _ => None,
+                }).collect();
+                assert!(!text.is_empty());
+                if rtl { assert!(text.iter().all(|(x, w)| (x + w - WIDTH).abs() < f32::EPSILON)); }
+                else { assert!(text[0].0 < WIDTH / 2.0); }
+                let unavailable = layout(&widget, &strings, None, &language, mandara_config::Units::default(), 1.0, &mut Fixed);
+                assert!(matches!(&unavailable[0].kind, MarkKind::Text { x, w, .. } if if rtl { (x + w - WIDTH).abs() < f32::EPSILON } else { *x == 0.0 }));
+            }
         }
     }
 }

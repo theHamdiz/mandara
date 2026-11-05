@@ -408,6 +408,15 @@ pub enum WidgetKind {
 }
 
 impl WidgetKind {
+    /// Whether this kind draws forecast data when it is enabled and visible.
+    pub fn uses_weather(&self) -> bool {
+        match self {
+            Self::Weather(_) => true,
+            Self::Clock(clock) => clock.shows_weather(),
+            _ => false,
+        }
+    }
+
     /// Stable kind id (`clock`, `monitor`, …), as in TOML.
     pub fn id(&self) -> &'static str {
         match self {

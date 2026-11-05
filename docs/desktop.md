@@ -342,3 +342,7 @@ The bar preset thumbnails show each centered layout’s actual proportions.
 Micro pill uses a shorter bar, tighter spacing and no empty side-group gaps;
 Dynamic island keeps a taller shared island with roomier groups. Both remain
 available in **Studio → Bar → Presets**.
+
+With weather enabled, a desktop weather widget keeps its forecast active
+without a weather item in the bar or sidebar. Weather cards follow the
+widget’s chosen language and reading direction.

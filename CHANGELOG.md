@@ -75,6 +75,10 @@ lock screens, with clearer previews and setup checks.
   questions follow the page’s theme with a subtle surface accent, readable
   links and visible keyboard focus.
 
+- **Keep desktop forecasts live.** With weather enabled, a desktop weather
+  widget keeps the forecast service running without a bar or sidebar item.
+  New weather-card labels follow the widget’s reading direction.
+
 ## 0.16.0 — 2026-11-05
 
 Put the power menu where you want it, plus a round of fixes for Sway, the

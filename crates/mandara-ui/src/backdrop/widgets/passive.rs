@@ -204,12 +204,7 @@ impl Canvas {
 
 /// A forecast is useful only when a visible widget actually draws it.
 fn weather_query(cfg: &Widgets, allow_network: bool) -> Option<WeatherQuery> {
-    use mandara_config::desktop_widgets::WidgetKind;
-    let visible = cfg.items.iter().any(|w| w.enabled && match &w.kind {
-        WidgetKind::Weather(_) => true,
-        WidgetKind::Clock(clock) => clock.shows_weather(),
-        _ => false,
-    });
+    let visible = cfg.items.iter().any(|w| w.enabled && w.kind.uses_weather());
     cfg.weather.as_ref().filter(|w| w.valid() && allow_network && visible)
         .map(|w| WeatherQuery { latitude: w.latitude, longitude: w.longitude, refresh_minutes: WEATHER_REFRESH_MINUTES })
 }
