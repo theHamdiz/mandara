@@ -8701,3 +8701,4 @@
 "Previews use sample data." = "プレビューにはサンプルデータを使用しています。"
 "Couldn't verify the community store policy. Try again later." = "コミュニティストアのポリシーを確認できませんでした。しばらくしてから、もう一度お試しください。"
 "The community store has blocked installs and updates for {repository}." = "コミュニティストアは {repository} のインストールと更新をブロックしています。"
+"Repository details are missing IDs required by the store policy." = "リポジトリの詳細に、ストアポリシーで必要な ID がありません。"

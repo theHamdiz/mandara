@@ -8700,3 +8700,4 @@
 "Previews use sample data." = "В предпросмотре используются демонстрационные данные."
 "Couldn't verify the community store policy. Try again later." = "Не удалось проверить правила магазина сообщества. Повторите попытку позже."
 "The community store has blocked installs and updates for {repository}." = "Магазин сообщества заблокировал установку и обновления {repository}."
+"Repository details are missing IDs required by the store policy." = "В сведениях о репозитории отсутствуют идентификаторы, необходимые по правилам магазина."

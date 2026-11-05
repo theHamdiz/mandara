@@ -25,7 +25,10 @@ impl PolicySource for Remote {
         let _lock = CACHE_LOCK.lock();
         let path = mandara_config::paths::cache_dir().join("marketplace-policy.json");
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or_default();
-        cache::load(&path, &transport::Github, now, installing).map_err(|_| t("Couldn't verify the community store policy. Try again later.").to_string())
+        cache::load(&path, &transport::Github, now, installing).map_err(|error| {
+            tracing::warn!("community store policy check failed: {error}");
+            t("Couldn't verify the community store policy. Try again later.").to_string()
+        })
     }
 }
 

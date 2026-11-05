@@ -8454,3 +8454,4 @@
 "Previews use sample data." = "پیش‌نمایش‌ها از داده‌های نمونه استفاده می‌کنند."
 "Couldn't verify the community store policy. Try again later." = "بررسی خط‌مشی فروشگاه جامعه ممکن نشد. بعداً دوباره تلاش کنید."
 "The community store has blocked installs and updates for {repository}." = "فروشگاه جامعه نصب و به‌روزرسانی {repository} را مسدود کرده است."
+"Repository details are missing IDs required by the store policy." = "اطلاعات مخزن فاقد شناسه‌های موردنیاز خط‌مشی فروشگاه است."

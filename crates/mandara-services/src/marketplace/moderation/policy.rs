@@ -87,7 +87,7 @@ impl Policy {
     pub fn validate_identity(&self, repository: &Repository) -> Result<(), String> {
         if (repository.id.is_none() && self.plugins.iter().any(|rule| rule.repository_id.is_some()))
             || (repository.owner.id.is_none() && self.publishers.iter().any(|rule| rule.github_id.is_some())) {
-            return Err("repository metadata is missing IDs required by the store policy".into());
+            return Err(mandara_i18n::t("Repository details are missing IDs required by the store policy.").into());
         }
         Ok(())
     }
@@ -182,7 +182,7 @@ mod tests {
     fn numeric_rules_require_identity_metadata() {
         let policy = Policy::parse("[[publishers]]\ngithub_id = 7\n[[plugins]]\nrepository_id = 42").unwrap();
         assert!(policy.validate_identity(&repo()).is_ok());
-        assert!(policy.validate_identity(&Repository { id: None, ..repo() }).is_err());
+        assert_eq!(policy.validate_identity(&Repository { id: None, ..repo() }).unwrap_err(), mandara_i18n::t("Repository details are missing IDs required by the store policy."));
         assert!(policy.validate_identity(&Repository { owner: Publisher { id: None, login: "alice".into() }, ..repo() }).is_err());
     }
 }

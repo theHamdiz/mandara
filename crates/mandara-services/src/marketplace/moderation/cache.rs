@@ -18,6 +18,10 @@ pub const FRESH_FOR: Duration = Duration::from_secs(60);
 pub const MAX_INSTALL_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 /// JSON escaping can expand every source byte, plus metadata.
 const MAX_CACHE_BYTES: u64 = MAX_POLICY_BYTES * 6 + 4096;
+/// Allow the peer's 60-second request timeout plus scheduling margin.
+const LOCK_WAIT: Duration = Duration::from_secs(75);
+/// A waiting store action checks for a completed peer refresh without spinning.
+const LOCK_RETRY: Duration = Duration::from_millis(50);
 
 #[derive(Serialize, Deserialize)]
 struct Stored {
@@ -55,7 +59,7 @@ fn save(path: &Path, stored: &Stored) {
 pub fn load(path: &Path, transport: &dyn Transport, now: u64, installing: bool) -> Result<Policy, String> {
     // Lock a separate, stable inode: saving replaces the cache file itself.
     // Shell and Studio must both reread the cache after acquiring this lock.
-    let _file_lock = refresh_lock(path).map_err(|e| e.to_string())?;
+    let _file_lock = refresh_lock(path, LOCK_WAIT).map_err(|e| e.to_string())?;
     let cached = read(path).and_then(|stored| Policy::parse(&stored.text).ok().map(|policy| (stored, policy)));
     let age = |stored: &Stored| now.checked_sub(stored.validated_at).unwrap_or(u64::MAX);
     if let Some((stored, policy)) = &cached
@@ -77,14 +81,26 @@ pub fn load(path: &Path, transport: &dyn Transport, now: u64, installing: bool) 
     Err(failure)
 }
 
-/// Waits for exclusive refresh ownership across processes. The returned
+/// Waits at most `wait` for exclusive refresh ownership. The returned
 /// file holds the lock until dropped; its separate inode survives cache
 /// replacement. Failure to open or lock it prevents an uncoordinated refresh.
-fn refresh_lock(path: &Path) -> std::io::Result<std::fs::File> {
+fn refresh_lock(path: &Path, wait: Duration) -> std::io::Result<std::fs::File> {
     if let Some(parent) = path.parent() { std::fs::create_dir_all(parent)?; }
     let file = std::fs::File::options().read(true).write(true).create(true).truncate(false).open(path.with_extension("lock"))?;
-    file.lock()?;
-    Ok(file)
+    let started = std::time::Instant::now();
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Ok(file),
+            Err(std::fs::TryLockError::WouldBlock) => {
+                let remaining = wait.saturating_sub(started.elapsed());
+                if remaining.is_zero() {
+                    return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "timed out waiting for the community store policy lock"));
+                }
+                std::thread::sleep(remaining.min(LOCK_RETRY));
+            }
+            Err(std::fs::TryLockError::Error(error)) => return Err(error),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -137,6 +153,28 @@ mod tests {
         assert_eq!(std::fs::read_to_string(other_stage).unwrap(), "another process is writing");
         assert!(read(&path).is_some());
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 3, "only the cache, lock and unrelated staging file remain");
+    }
+
+    /// A stuck peer must not keep a store request waiting indefinitely.
+    #[test]
+    fn busy_refresh_lock_times_out_without_taking_ownership() {
+        use std::sync::mpsc;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("policy.json");
+        let held = refresh_lock(&path, Duration::ZERO).unwrap();
+        let contender_path = path.clone();
+        let (done_tx, done_rx) = mpsc::channel();
+        let contender = std::thread::spawn(move || {
+            let result = refresh_lock(&contender_path, LOCK_RETRY * 2).map(|_| ());
+            done_tx.send(result).unwrap();
+        });
+        let result = done_rx.recv_timeout(Duration::from_secs(2));
+        // Release and join even if the regression waited too long.
+        drop(held);
+        contender.join().unwrap();
+        assert_eq!(result.unwrap().unwrap_err().kind(), std::io::ErrorKind::TimedOut);
+        refresh_lock(&path, Duration::ZERO).unwrap();
     }
 
     #[test]

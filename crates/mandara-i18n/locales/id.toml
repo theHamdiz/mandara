@@ -8454,3 +8454,4 @@
 "Previews use sample data." = "Pratinjau menggunakan data contoh."
 "Couldn't verify the community store policy. Try again later." = "Kebijakan toko komunitas tidak dapat diverifikasi. Coba lagi nanti."
 "The community store has blocked installs and updates for {repository}." = "Toko komunitas telah memblokir pemasangan dan pembaruan untuk {repository}."
+"Repository details are missing IDs required by the store policy." = "Detail repositori tidak memuat ID yang diwajibkan kebijakan toko."

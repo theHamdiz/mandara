@@ -5,7 +5,7 @@ use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginRegistry};
 use mandara_theme::{SchemeVariant, ThemeSource, catalog};
 use serde_json::json;
 
-use crate::state::{config, reload_config_from_disk, shell, update_config};
+use crate::state::{config, flush_config, reload_config_from_disk, shell, update_config};
 
 /// `mandara msg studio <section>`: every slug of the launcher's Studio
 /// entries (`crate::overlays::STUDIO_SECTIONS`, checked by a test).
@@ -146,10 +146,16 @@ pub fn register(r: &mut PluginRegistry) {
     r.command(
         core,
         CommandSpec::new("restart", mandara_i18n::tk("Restart the shell process (config and plugins reload from scratch)"), |_, cx| {
+            flush_config(cx)?;
             // Let the reply flush, then hand over: under the supervisor exit
             // with its restart code; standalone, re-exec in place.
             cx.spawn(async move |cx| {
                 cx.background_executor().timer(RESTART_FLUSH).await;
+                // Settings can still change while the reply is being sent.
+                if let Err(err) = cx.update(flush_config) {
+                    tracing::error!("restart cancelled: {err}");
+                    return;
+                }
                 if std::env::var_os("MANDARA_SUPERVISED").is_some() {
                     std::process::exit(SUPERVISOR_RESTART_CODE);
                 }

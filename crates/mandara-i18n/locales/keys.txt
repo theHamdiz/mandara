@@ -4977,6 +4977,7 @@ Reply to {app}: {summary}
 Report a problem
 Report written to {file} (personal values redacted) — attach it to your bug report
 Repositories
+Repository details are missing IDs required by the store policy.
 Republic, Book II
 Request failed: {error}
 Required

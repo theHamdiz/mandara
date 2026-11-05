@@ -8700,3 +8700,4 @@
 "Previews use sample data." = "Önizlemelerde örnek veriler kullanılır."
 "Couldn't verify the community store policy. Try again later." = "Topluluk mağazası politikası doğrulanamadı. Daha sonra tekrar deneyin."
 "The community store has blocked installs and updates for {repository}." = "Topluluk mağazası {repository} için yükleme ve güncellemeleri engelledi."
+"Repository details are missing IDs required by the store policy." = "Depo ayrıntılarında mağaza politikasının gerektirdiği kimlikler eksik."

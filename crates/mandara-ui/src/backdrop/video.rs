@@ -65,6 +65,8 @@ pub const LATE_REBASE: Duration = Duration::from_millis(250);
 const PARALLEL_CONVERT_PIXELS: u64 = 2560 * 1440;
 /// Most threads one conversion uses.
 const MAX_CONVERT_THREADS: usize = 4;
+/// A solid child plane keeps letterboxing off the transparent canvas root.
+pub(super) const FILL_PLANE: usize = 8;
 
 // ── Pure decisions (tested) ──────────────────────────────────────────────
 
@@ -160,6 +162,21 @@ pub fn placement(fill: WallpaperFill, clip: (u32, u32), physical: (u32, u32), sc
     Placement { crop, place, buffer }
 }
 
+/// A non-covering frame needs an opaque fill below it. A viewporter stretches
+/// one pixel; older compositors need an output-sized buffer for the same plane.
+pub fn fill_placement(picture: Placement, physical: (u32, u32), viewport: bool) -> Option<Place> {
+    let output = Rect::new(0, 0, physical.0.max(1), physical.1.max(1));
+    let picture = match picture.place {
+        Place::Full => output,
+        Place::Rect(rect) | Place::Scaled { rect, .. } => rect,
+    };
+    (picture != output).then_some(if viewport {
+        Place::Scaled { rect: output, buffer: (1, 1) }
+    } else {
+        Place::Full
+    })
+}
+
 /// The presentation clock of one clip.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Clock {
@@ -236,6 +253,8 @@ pub struct Consumer {
     pub physical: (u32, u32),
     pub scale120: u32,
     pub fill: WallpaperFill,
+    /// Opaque colour used by the poster and by the bands around decoded frames.
+    pub fill_color: [u8; 4],
     /// Shell rules allow playback here ([`may_play`]).
     pub allowed: bool,
 }
@@ -249,6 +268,8 @@ pub struct OutVideo {
     pub serial: u64,
     /// The plane currently keeps spare buffers (playing).
     pub keeping: bool,
+    /// The solid plane is only repainted after its colour or geometry changes.
+    fill: Option<([u8; 4], Place)>,
 }
 
 struct Clip {
@@ -417,6 +438,23 @@ fn pull(clip: &mut Clip) -> bool {
 fn present(host: &mut Host, c: &Consumer, frame: &StreamFrame, path: &Path, serial: u64, states: &mut HashMap<u32, OutVideo>) {
     let pic = &frame.picture;
     let p = placement(c.fill, (pic.width() as u32, pic.height() as u32), c.physical, c.scale120, host.supports_viewport());
+    let fill = fill_placement(p, c.physical, host.supports_viewport()).map(|place| (c.fill_color, place));
+    if let Some((rgba, place)) = fill {
+        let unchanged = states.get(&c.id).is_some_and(|state| state.fill == fill) && host.is_mapped(c.id, FILL_PLANE);
+        if !unchanged {
+            let color = tiny_skia::Color::from_rgba8(rgba[0], rgba[1], rgba[2], u8::MAX);
+            match host.paint(c.id, FILL_PLANE, place, None, false, false, |pixels| pixels.fill(color)) {
+                Ok(true) => {}
+                Ok(false) => return,
+                Err(err) => {
+                    tracing::warn!("video wallpaper fill: {err:#}");
+                    return;
+                }
+            }
+        }
+    } else {
+        host.hide(c.id, FILL_PLANE);
+    }
     let threads = convert_threads(p.buffer.0, p.buffer.1);
     let painted = host.paint_pixels(c.id, c.plane, p.place, true, |data, w, h, bgra| {
         let mut dst = Target { data, width: w, height: h, stride: w as usize * 4, order: if bgra { PixelOrder::Bgra } else { PixelOrder::Rgba } };
@@ -427,7 +465,7 @@ fn present(host: &mut Host, c: &Consumer, frame: &StreamFrame, path: &Path, seri
             if let Err(err) = host.commit(c.id, true) {
                 tracing::warn!("video wallpaper: {err:#}");
             }
-            states.insert(c.id, OutVideo { path: Some(path.to_path_buf()), plane: c.plane, serial, keeping: true });
+            states.insert(c.id, OutVideo { path: Some(path.to_path_buf()), plane: c.plane, serial, keeping: true, fill });
         }
         // Every buffer still with the compositor: this output skips a frame.
         Ok(false) => {}
@@ -539,6 +577,25 @@ mod tests {
         let p = placement(WallpaperFill::Cover, (1920, 1080), (2560, 1440), S120, false);
         assert_eq!((p.buffer, p.place), ((2560, 1440), Place::Full));
         assert_eq!(mandara_media::yuv::sampling(p.crop, p.buffer.0, p.buffer.1), mandara_media::Sampling::Nearest);
+    }
+
+    #[test]
+    fn every_video_fill_covers_the_output_without_an_opaque_root() {
+        let physical = (1920, 1200);
+        for viewport in [false, true] {
+            for mode in [WallpaperFill::Cover, WallpaperFill::Contain, WallpaperFill::Stretch, WallpaperFill::Center, WallpaperFill::Tile] {
+                let picture = placement(mode, (1280, 720), physical, S120, viewport);
+                let fill = fill_placement(picture, physical, viewport);
+                match mode {
+                    WallpaperFill::Cover | WallpaperFill::Stretch => assert_eq!(fill, None),
+                    _ => assert_eq!(fill, Some(if viewport { Place::Scaled { rect: Rect::new(0, 0, physical.0, physical.1), buffer: (1, 1) } } else { Place::Full })),
+                }
+            }
+        }
+        for mode in [WallpaperFill::Cover, WallpaperFill::Contain, WallpaperFill::Stretch, WallpaperFill::Center, WallpaperFill::Tile] {
+            let picture = placement(mode, physical, physical, S120, true);
+            assert_eq!(fill_placement(picture, physical, true), None, "{mode:?}: no redundant fill when the frame covers every pixel");
+        }
     }
 
     fn ms(v: u64) -> Duration {

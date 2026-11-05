@@ -8453,4 +8453,5 @@
 
 "Previews use sample data." = "প্রিভিউতে নমুনা তথ্য ব্যবহার করা হয়।"
 "Couldn't verify the community store policy. Try again later." = "কমিউনিটি স্টোরের নীতি যাচাই করা যায়নি। পরে আবার চেষ্টা করুন।"
-"The community store has blocked installs and updates for {repository}." = "কমিউনিটি স্টোর {repository} ইনস্টল ও আপডেট করা বন্ধ করেছে।"
+"The community store has blocked installs and updates for {repository}." = "কমিউনিটি স্টোরে {repository} থেকে প্লাগইন ইনস্টল বা আপডেট করা যাবে না।"
+"Repository details are missing IDs required by the store policy." = "স্টোরের নীতির জন্য প্রয়োজনীয় আইডিগুলো রিপোজিটরির তথ্যে নেই।"

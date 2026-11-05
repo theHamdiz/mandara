@@ -8695,3 +8695,4 @@
 "Previews use sample data." = "预览使用示例数据。"
 "Couldn't verify the community store policy. Try again later." = "无法验证社区商店政策。请稍后重试。"
 "The community store has blocked installs and updates for {repository}." = "社区商店已禁止安装和更新 {repository}。"
+"Repository details are missing IDs required by the store policy." = "仓库详情缺少商店政策要求的标识符。"

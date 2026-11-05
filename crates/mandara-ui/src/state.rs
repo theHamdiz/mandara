@@ -296,6 +296,11 @@ pub fn config(cx: &App) -> Entity<ConfigStore> {
 /// Debounce for persisting in-memory config edits to disk.
 const FLUSH_DEBOUNCE: Duration = Duration::from_millis(400);
 
+/// Saves pending preferences before handing over to another shell process.
+pub fn flush_config(cx: &mut App) -> Result<(), String> {
+    config(cx).update(cx, |store, _| store.flush().map_err(|err| format!("saving configuration: {err:#}")))
+}
+
 /// Mutates the shared config in memory (instantly visible to every surface)
 /// and schedules a debounced atomic flush to disk. Theme-affecting changes
 /// are forwarded to the theme engine immediately.

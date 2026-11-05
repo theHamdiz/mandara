@@ -8454,3 +8454,4 @@
 "Previews use sample data." = "پیش نظاروں میں نمونہ ڈیٹا استعمال ہوتا ہے۔"
 "Couldn't verify the community store policy. Try again later." = "کمیونٹی اسٹور کی پالیسی کی تصدیق نہیں ہو سکی۔ بعد میں دوبارہ کوشش کریں۔"
 "The community store has blocked installs and updates for {repository}." = "کمیونٹی اسٹور نے {repository} کی تنصیب اور اپ ڈیٹس روک دی ہیں۔"
+"Repository details are missing IDs required by the store policy." = "ریپوزٹری کی تفصیلات میں اسٹور کی پالیسی کے لیے درکار شناختی نمبر موجود نہیں ہیں۔"

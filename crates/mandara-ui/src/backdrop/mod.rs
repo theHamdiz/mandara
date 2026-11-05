@@ -10,6 +10,7 @@
 //! | plane | content | redrawn |
 //! |---|---|---|
 //! | `WALLPAPER_A/B` | the wallpaper pre-scaled to the output with its fill mode | on wallpaper / fill / size change |
+//! | `VIDEO_FILL` | one opaque pixel stretched behind a non-covering video | on fill / size change |
 //! | `RING` | audio ring (its bounding box only) | ≤ 30 fps while music plays and the desktop shows |
 //! | `HALO` | the clock's legibility glow, 1/8 resolution, scaled by the compositor | when the clock moves or the ink changes |
 //! | `DIGITS` | the time | once a minute |
@@ -1210,7 +1211,8 @@ impl Renderer {
             }
             // Mid-transition the plane holds its poster (or last frame).
             let allowed = out.trans.is_none() && scene.video_play.contains(&out.name);
-            let c = video::Consumer { id: out.id, plane: WALLPAPER[out.cur], physical: geom.physical, scale120: geom.scale120, fill: slot.want.fill, allowed };
+            let [r, g, b, _] = crate::wallpaper_fill::fill_color(&slot.want.fill_color).to_rgba8();
+            let c = video::Consumer { id: out.id, plane: WALLPAPER[out.cur], physical: geom.physical, scale120: geom.scale120, fill: slot.want.fill, fill_color: [r, g, b, u8::MAX], allowed };
             match shown.iter_mut().find(|(p, _)| *p == slot.want.path) {
                 Some((_, list)) => list.push(c),
                 None => shown.push((slot.want.path.clone(), vec![c])),
@@ -1242,7 +1244,7 @@ impl Renderer {
             .map(|path| Want { fill: video::effective_fill(&path, w.fill), path, fill_color: w.fill_color.clone(), size: geom.physical });
         let Some(want) = want else {
             // Nothing to show: a transparent canvas (another daemon may draw).
-            for p in WALLPAPER.into_iter().chain(CUT).chain([RING, HALO, DIGITS, PILL]) {
+            for p in WALLPAPER.into_iter().chain(CUT).chain([RING, HALO, DIGITS, PILL, video::FILL_PLANE]) {
                 host.hide(id, p);
             }
             out.widgets.remove_all(host, id);
@@ -1633,6 +1635,7 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
     out.painted.cut[incoming] = None;
     if !animated {
         out.trans = None;
+        host.hide(id, video::FILL_PLANE);
         if incoming != from {
             host.hide(id, WALLPAPER[from]);
             host.hide(id, CUT[from]);
@@ -1647,7 +1650,8 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
         }
         out.trans = Some(Trans { from, kind, start: Instant::now(), dur, rtl: scene.rtl, raw, baked_cut: baked == Some(true) });
     }
-    // The wallpaper plane includes its fill. Keep the root transparent so
+    // Posters include their fill; decoded video keeps it on a child plane.
+    // Keep the root transparent so
     // Umbriel's overview, which mirrors only the root, has no solid tile.
     host.set_base(id, None);
     Ok(())
@@ -1671,6 +1675,7 @@ fn finish_transition(host: &mut Host, out: &mut Out, alpha: bool) -> anyhow::Res
     let Some(t) = out.trans.take() else { return Ok(true) };
     host.set_alpha(id, WALLPAPER[out.cur], 1.0);
     host.set_view(id, WALLPAPER[out.cur], None);
+    host.hide(id, video::FILL_PLANE);
     if t.from != out.cur {
         host.hide(id, WALLPAPER[t.from]);
         host.hide(id, CUT[t.from]);
@@ -1894,6 +1899,7 @@ fn stack_order(from: Option<usize>, cur: usize, pill_on_top: bool, behind: &[usi
         // The incoming plane goes on top instead.
         order.remove(0);
     }
+    order.insert(0, video::FILL_PLANE);
     if !pill_on_top {
         order.push(PILL);
     }
@@ -2050,6 +2056,11 @@ fn hide_decor(host: &mut Host, out: &mut Out) {
         host.hide(out.id, p);
     }
     out.widgets.remove_all(host, out.id);
+    let order = stack_order(out.trans.as_ref().map(|transition| transition.from), out.cur, false, &[], &[]);
+    if out.painted.order != order {
+        host.set_order(out.id, &order);
+        out.painted.order = order;
+    }
     let order = std::mem::take(&mut out.painted.order);
     out.painted = Painted { order, ..Painted::default() };
 }
@@ -2457,12 +2468,13 @@ mod tests {
     fn stacking_puts_the_baked_incoming_plane_on_top() {
         let (behind, front) = ([PLANE_A], [PLANE_B]);
         // At rest: as it always was.
-        assert_eq!(stack_order(None, 1, false, &behind, &front), vec![WALLPAPER[0], WALLPAPER[1], RING, HALO, DIGITS, PILL, PLANE_A, CUT[0], CUT[1], PLANE_B]);
-        assert_eq!(stack_order(None, 0, true, &[], &[]), vec![WALLPAPER[1], WALLPAPER[0], RING, HALO, DIGITS, CUT[1], CUT[0], PILL]);
+        assert_eq!(stack_order(None, 1, false, &behind, &front), vec![video::FILL_PLANE, WALLPAPER[0], WALLPAPER[1], RING, HALO, DIGITS, PILL, PLANE_A, CUT[0], CUT[1], PLANE_B]);
+        assert_eq!(stack_order(None, 0, true, &[], &[]), vec![video::FILL_PLANE, WALLPAPER[1], WALLPAPER[0], RING, HALO, DIGITS, CUT[1], CUT[0], PILL]);
         // Mid-transition from slot 0 to 1: the outgoing desktop, whole, under
         // the incoming wallpaper plane.
         let order = stack_order(Some(0), 1, false, &behind, &front);
-        assert_eq!(order.first(), Some(&WALLPAPER[0]));
+        assert_eq!(order.first(), Some(&video::FILL_PLANE));
+        assert_eq!(order.get(1), Some(&WALLPAPER[0]));
         assert_eq!(order.last(), Some(&WALLPAPER[1]));
         assert!(order.windows(2).any(|w| w == [CUT[1], CUT[0]]), "the outgoing subject is the top one: {order:?}");
     }

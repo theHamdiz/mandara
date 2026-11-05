@@ -68,7 +68,7 @@ use crate::widgets::system::format_bytes;
 
 /// Plane index of widget `i`'s static plane (its live plane is the next).
 /// The depth clock uses the planes below.
-pub const PLANE_BASE: usize = 8;
+pub const PLANE_BASE: usize = super::video::FILL_PLANE + 1;
 /// Slack after a second / minute boundary before redrawing, so the new
 /// value is current.
 const TICK_SLACK: Duration = Duration::from_millis(15);

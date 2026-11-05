@@ -8701,3 +8701,4 @@
 "Previews use sample data." = "Les aperçus utilisent des données d’exemple."
 "Couldn't verify the community store policy. Try again later." = "Impossible de vérifier les règles de la boutique communautaire. Réessayez plus tard."
 "The community store has blocked installs and updates for {repository}." = "La boutique communautaire a bloqué les installations et les mises à jour de {repository}."
+"Repository details are missing IDs required by the store policy." = "Les détails du dépôt ne contiennent pas les identifiants requis par les règles de la boutique."

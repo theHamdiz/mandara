@@ -8453,3 +8453,4 @@
 "Previews use sample data." = "미리보기에는 예시 데이터를 사용합니다."
 "Couldn't verify the community store policy. Try again later." = "커뮤니티 스토어 정책을 확인하지 못했습니다. 나중에 다시 시도하세요."
 "The community store has blocked installs and updates for {repository}." = "커뮤니티 스토어에서 {repository}의 설치와 업데이트를 차단했습니다."
+"Repository details are missing IDs required by the store policy." = "저장소 세부 정보에 스토어 정책에서 요구하는 ID가 없습니다."

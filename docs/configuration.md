@@ -117,7 +117,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 | Page | Settings |
 |---|---|
 | Displays | per-display shell surfaces, night light (`displays.*`, `night_light.*`) |
-| Audio & media | volume step, over-amplification, devices, routes (`audio.*`), players (`media.*`), sounds (`sounds.*`); visualizer and lyrics (Media plugin) |
+| Audio & media | volume step, over-amplification, devices, routes (`audio.*`), players (`media.*`), sounds (`sounds.*`); visualizer and lyrics (Media plugin). Sound and sidebar device pickers share the labels and hidden-device choices configured here: click the current output or microphone name to choose a device |
 | Network & Bluetooth | `network.*`, `bluetooth.*` |
 | Power & idle | idle stages per power source, lock grace, battery alert levels (`power.low_percent`, `power.critical_percent`, `power.peripheral_low_percent` — also the coral mark of the battery OSD and the Bluetooth device rings), power profiles, session menu (its entries, the edge dock or grid style, and where the dock opens: `session_menu.position` = `side`, the default, opposite the sidebar; `left`; `right`; `top`; `bottom`. At the bar, the menu joins an edge-frame bar or opens as a card beside a floating bar; away from the bar, it opens from the screen edge. A bottom dock keeps it in a card above the dock), hooks (`idle.*`, `power.*`, `session_menu.*`, `hooks.*`) |
 | Date, time & location | formats, the clock panel's calendar (week numbers, `weekend` days, `hijri_dates`, `eastern_numerals`), calendars (refresh, reminders, agenda days), location, weather refresh (`datetime.*`, `calendar.*`, `location.*`, `weather.*`) |
@@ -913,7 +913,3 @@ field and must not be placed in TOML.
 | `phone-connect` | `show_unpaired` | `true`; pairing still requires confirmation |
 
 [Connected plugins](integrations.md) explains their behaviour and privacy.
-
-Sound and sidebar device pickers share the labels and hidden-device choices
-from Studio → Audio & media. Click the current output or microphone name to
-choose a device; device configuration stays in Studio.
