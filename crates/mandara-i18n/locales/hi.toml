@@ -8691,3 +8691,11 @@
 "Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "आइकन थीम {theme} नहीं मिली; इसे इंस्टॉल करें या थीम → आइकन में दूसरी चुनें"
 
 "No icon theme is selected; standard fallbacks are in use" = "कोई आइकन थीम नहीं चुनी गई है; मानक वैकल्पिक आइकन उपयोग हो रहे हैं"
+
+"Use an https:// address, or a local IP address, when sending an API key" = "API कुंजी भेजते समय https:// पते या स्थानीय IP पते का उपयोग करें"
+
+"Example track" = "उदाहरण गीत"
+
+"Example artist" = "उदाहरण कलाकार"
+
+"Previews use sample data." = "पूर्वावलोकन में उदाहरण डेटा इस्तेमाल होता है।"

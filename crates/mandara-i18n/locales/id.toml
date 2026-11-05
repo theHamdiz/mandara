@@ -8444,3 +8444,11 @@
 "Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "Tema ikon {theme} tidak ditemukan; pasang tema tersebut atau pilih yang lain di Tema → Ikon"
 
 "No icon theme is selected; standard fallbacks are in use" = "Tidak ada tema ikon yang dipilih; ikon cadangan standar digunakan"
+
+"Use an https:// address, or a local IP address, when sending an API key" = "Gunakan alamat https:// atau alamat IP lokal saat mengirim kunci API"
+
+"Example track" = "Lagu contoh"
+
+"Example artist" = "Artis contoh"
+
+"Previews use sample data." = "Pratinjau menggunakan data contoh."

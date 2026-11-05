@@ -8685,3 +8685,11 @@
 "Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "找不到图标主题 {theme}；请安装它，或在主题 → 图标中选择其他主题"
 
 "No icon theme is selected; standard fallbacks are in use" = "未选择图标主题；正在使用标准备用图标"
+
+"Use an https:// address, or a local IP address, when sending an API key" = "发送 API 密钥时，请使用 https:// 地址或本地 IP 地址"
+
+"Example track" = "示例曲目"
+
+"Example artist" = "示例艺人"
+
+"Previews use sample data." = "预览使用示例数据。"

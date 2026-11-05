@@ -8441,6 +8441,14 @@
 
 "Icon theme {theme} is installed" = "پوستهٔ آیکون {theme} نصب است"
 
-"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "پوستهٔ آیکون {theme} موجود نیست؛ آن را نصب کنید یا در پوسته‌ها ← آیکون‌ها پوستهٔ دیگری انتخاب کنید"
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "پوستهٔ آیکون {theme} موجود نیست؛ آن را نصب کنید یا در تم‌ها ← نمادها پوستهٔ دیگری انتخاب کنید"
 
 "No icon theme is selected; standard fallbacks are in use" = "پوستهٔ آیکونی انتخاب نشده است؛ آیکون‌های جایگزین استاندارد استفاده می‌شوند"
+
+"Use an https:// address, or a local IP address, when sending an API key" = "هنگام ارسال کلید API از نشانی https:// یا یک نشانی IP محلی استفاده کنید"
+
+"Example track" = "قطعهٔ نمونه"
+
+"Example artist" = "هنرمند نمونه"
+
+"Previews use sample data." = "پیش‌نمایش‌ها از داده‌های نمونه استفاده می‌کنند."

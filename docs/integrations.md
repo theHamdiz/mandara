@@ -12,6 +12,10 @@ official API server and needs your own API key. LibreTranslate uses the
 server address you enter; enable **Use an API key** only if that server
 requires one. Addresses can include a reverse proxy path.
 
+API keys require HTTPS for remote servers. For a local HTTP server, use
+`localhost` or its private IP address; Other hostnames require HTTPS. This applies
+to Home Assistant tokens too.
+
 Save the key in the plugin’s masked keyring field. Keys live in your
 desktop’s Secret Service keyring, scoped to the provider and server,
 and stay out of Mandara’s configuration and request URLs. Removing a key

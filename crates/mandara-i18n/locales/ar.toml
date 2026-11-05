@@ -8694,3 +8694,11 @@
 "Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "سمة الأيقونات {theme} غير موجودة؛ ثبّتها أو اختر غيرها في السمات ← الأيقونات"
 
 "No icon theme is selected; standard fallbacks are in use" = "لم تُحدَّد سمة أيقونات؛ تُستخدم الأيقونات البديلة القياسية"
+
+"Use an https:// address, or a local IP address, when sending an API key" = "استخدم عنوان https:// أو عنوان IP محليًا عند إرسال مفتاح API"
+
+"Example track" = "مقطع تجريبي"
+
+"Example artist" = "فنان تجريبي"
+
+"Previews use sample data." = "تستخدم المعاينات بيانات تجريبية."

@@ -8444,3 +8444,11 @@
 "Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "{theme} আইকন থিম নেই; এটি ইনস্টল করুন অথবা থিম → আইকন থেকে অন্যটি বেছে নিন"
 
 "No icon theme is selected; standard fallbacks are in use" = "কোনো আইকন থিম বেছে নেওয়া হয়নি; সাধারণ বিকল্প আইকন ব্যবহার করা হচ্ছে"
+
+"Use an https:// address, or a local IP address, when sending an API key" = "API কী পাঠানোর সময় https:// ঠিকানা অথবা স্থানীয় IP ঠিকানা ব্যবহার করুন"
+
+"Example track" = "নমুনা গান"
+
+"Example artist" = "নমুনা শিল্পী"
+
+"Previews use sample data." = "প্রিভিউতে নমুনা তথ্য ব্যবহার করা হয়।"

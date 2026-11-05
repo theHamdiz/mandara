@@ -44,6 +44,10 @@ impl Links {
     }
 }
 
+fn link_element(glyph: &'static str, label: &'static str) -> gpui::Stateful<gpui::Div> {
+    div().id(glyph).role(gpui::Role::Link).aria_label(label).focusable().tab_index(0).cursor_pointer()
+}
+
 impl StudioView {
     pub(super) fn about_header_links(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let motion = &cfg.motion;
@@ -56,7 +60,7 @@ impl StudioView {
                 // Reduced motion keeps the hover colour, without a tilt or lift.
                 let amount = if profile.reduce { 0.0 } else { self.about_links.values[index].value() };
                 let direction = if index == 0 { -1.0 } else { 1.0 };
-                div().id(glyph).focusable().tab_index(0).cursor_pointer()
+                link_element(glyph, label)
                     .h(px(DIM_44_PX)).px(px(SPACE_14_PX)).rounded(px(RADIUS_14_PX))
                     .border_2().border_color(p.primary.with_alpha(0.0).hsla())
                     .row().items_center().gap(px(SPACE_8_PX))
@@ -82,6 +86,18 @@ impl StudioView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_links_have_an_accessible_role_and_name() {
+        use gpui::Element as _;
+        for (glyph, label) in [("github", "GitHub"), ("discord", "Discord")] {
+            let element = link_element(glyph, label);
+            assert_eq!(element.a11y_role(), Some(gpui::Role::Link));
+            let mut node = gpui::accesskit::Node::new(gpui::Role::Link);
+            element.write_a11y_info(&mut node);
+            assert_eq!(node.label(), Some(label));
+        }
+    }
 
     #[test]
     fn hover_settles_and_leaving_returns_both_links_to_rest() {

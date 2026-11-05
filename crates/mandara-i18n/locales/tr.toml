@@ -8690,3 +8690,11 @@
 "Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "{theme} simge teması bulunamadı; temayı kurun veya Temalar → Simgeler bölümünden başka bir tema seçin"
 
 "No icon theme is selected; standard fallbacks are in use" = "Simge teması seçilmedi; standart yedek simgeler kullanılıyor"
+
+"Use an https:// address, or a local IP address, when sending an API key" = "API anahtarı gönderirken https:// adresi veya yerel IP adresi kullanın"
+
+"Example track" = "Örnek parça"
+
+"Example artist" = "Örnek sanatçı"
+
+"Previews use sample data." = "Önizlemelerde örnek veriler kullanılır."

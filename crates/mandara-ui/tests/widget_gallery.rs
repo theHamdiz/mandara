@@ -49,3 +49,45 @@ fn export_widget_previews() {
     }
     std::fs::write(dir.join("widgets.json"), serde_json::to_vec(&placed).unwrap()).unwrap();
 }
+
+#[test]
+fn calendar_media_sky_and_visualizer_tiles_are_fitted_and_antialiased() {
+    let mut registry = PluginRegistry::default();
+    mandara_ui::desktop_plugins::register(&mut registry);
+    let plugins = [plugin_ids::CALENDAR, plugin_ids::NOW_PLAYING, plugin_ids::SKY, plugin_ids::VISUALIZERS];
+    let mut cases = Vec::new();
+    for family in registry.desktop_widgets().iter().filter(|kind| plugins.contains(&kind.plugin.as_str())) {
+        let widgets = (family.make)();
+        if let [widget] = widgets.as_slice() && widget.kind.on_wallpaper_plane() {
+            cases.push((family.key().replace('/', "-"), widget.clone()));
+        }
+    }
+    assert!(cases.len() >= 14);
+    let fonts = mandara_ui::backdrop::paint::FontNames::new("Inter", "Inter", "Cairo", "JetBrains Mono");
+    let mut text = mandara_ui::lock::paint::TextPainter::new();
+    for dark in [false, true] {
+        let palette = mandara_theme::engine::default_palette(dark);
+        for size in [(360, 270), (540, 405)] {
+            for (name, widget) in &cases {
+                let image = mandara_ui::backdrop::widgets::gallery::thumbnail(widget, size, &fonts, &palette, &mut text).unwrap();
+                assert_eq!(image.dimensions(), size);
+                let (mut left, mut top, mut right, mut bottom) = (size.0, size.1, 0, 0);
+                let mut partial = false;
+                for (x, y, pixel) in image.enumerate_pixels() {
+                    if pixel[3] > 0 { left = left.min(x); top = top.min(y); right = right.max(x + 1); bottom = bottom.max(y + 1); }
+                    partial |= pixel[3] > 0 && pixel[3] < 255;
+                }
+                assert!(right > left && bottom > top, "{name} is blank");
+                let occupied = ((right - left) as f32 / size.0 as f32).max((bottom - top) as f32 / size.1 as f32);
+                assert!(occupied >= 0.45, "{name} is too small: {occupied}");
+                assert!(partial, "{name} has no antialiased edges");
+                if let Some(dir) = std::env::var_os("MANDARA_GALLERY_ARTIFACTS") {
+                    let dir = std::path::PathBuf::from(dir);
+                    std::fs::create_dir_all(&dir).unwrap();
+                    image.save(dir.join(format!("{name}-{}-{}.png", if dark { "dark" } else { "light" }, size.0))).unwrap();
+                }
+                text.release_glyphs();
+            }
+        }
+    }
+}

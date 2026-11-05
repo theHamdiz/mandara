@@ -330,3 +330,8 @@ and individual connector names, remain saved while a display is away.
 Taped notes attach their corner strips to the note’s own sheet, using the
 same frame decoration as the to-do list. A separate header stays above the
 paper without moving the strips away from it.
+
+The widget gallery fits each preview to its card and renders at the display’s
+pixel density, with larger calendar and sky miniatures. Media previews use a
+clearly labelled sample track and cover; they do not need a running player
+or read your listening history. The desktop still shows only real media.

@@ -226,6 +226,7 @@ impl StudioView {
     /// one's offset, which left short pages "stuck" at their bottom).
     pub fn show(&mut self, section: Section, cx: &mut Context<Self>) {
         if section != self.section {
+            if section == Section::Maintenance { self.maint.invalidate(); }
             self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
             self.themes = None;
             self.icon_matches = None;
@@ -1747,7 +1748,7 @@ impl Render for StudioView {
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(clock).child(rows).into_any_element()
                 }
                 Section::DesktopWidgets => {
-                    let widgets = self.desktop_widgets_page(&cfg, &p, cx);
+                    let widgets = self.desktop_widgets_page(&cfg, &p, window, cx);
                     // The interactive cards and GPU visualizers (looks_page.rs).
                     let cards = self.desktop_cards_section(&cfg, &p, fonts.display.clone());
                     div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(widgets).child(cards).into_any_element()

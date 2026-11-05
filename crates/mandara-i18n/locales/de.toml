@@ -8686,6 +8686,14 @@
 
 "Icon theme {theme} is installed" = "Das Symbolthema {theme} ist installiert"
 
-"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "Das Symbolthema {theme} fehlt; installiere es oder wähle unter Designs → Symbole ein anderes"
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "Das Symbolthema {theme} fehlt; installiere es oder wähle unter Themen → Symbole ein anderes"
 
 "No icon theme is selected; standard fallbacks are in use" = "Kein Symbolthema ausgewählt; die Standardsymbole werden verwendet"
+
+"Use an https:// address, or a local IP address, when sending an API key" = "Verwende beim Senden eines API-Schlüssels eine https://-Adresse oder eine lokale IP-Adresse"
+
+"Example track" = "Beispieltitel"
+
+"Example artist" = "Beispielinterpret"
+
+"Previews use sample data." = "Die Vorschauen verwenden Beispieldaten."

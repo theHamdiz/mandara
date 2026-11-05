@@ -70,6 +70,9 @@ impl Transport for Client {
 impl Client {
     fn request(method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Request<Vec<u8>>, String> {
         if !web_url(url) { return Err(t("Use an http:// or https:// server address without a password").into()); }
+        if (auth.is_some() || body.is_some_and(|value| value.get("api_key").is_some())) && !encrypted_or_local(url) {
+            return Err(t("Use an https:// address, or a local IP address, when sending an API key").into());
+        }
         let body = body.map(serde_json::to_vec).transpose().map_err(|_| t("Could not prepare the request").to_string())?.unwrap_or_default();
         if body.len() > MAX_REQUEST_BYTES { return Err(t("This request is too large").into()); }
         let mut request = Request::builder().method(method).uri(url)
@@ -96,6 +99,22 @@ impl Client {
         if bytes.len() > MAX_RESPONSE_BYTES { return Err(t("The server's response was too large").into()); }
         if bytes.is_empty() { return Ok(Value::Null); }
         serde_json::from_slice(&bytes).map_err(|_| t("The server did not return valid JSON").to_string())
+    }
+}
+
+/// Local HTTP uses literal private/loopback addresses. DNS names require
+/// HTTPS so their resolution cannot turn a local exception into a remote one.
+fn encrypted_or_local(url: &str) -> bool {
+    let Ok(uri) = url.parse::<ureq::http::Uri>() else { return false; };
+    if uri.scheme_str().is_some_and(|scheme| scheme.eq_ignore_ascii_case("https")) { return true; }
+    if !uri.scheme_str().is_some_and(|scheme| scheme.eq_ignore_ascii_case("http")) { return false; }
+    let Some(host) = uri.host() else { return false; };
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    if host.eq_ignore_ascii_case("localhost") { return true; }
+    match host.parse::<std::net::IpAddr>().map(|ip| ip.to_canonical()) {
+        Ok(std::net::IpAddr::V4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
+        Ok(std::net::IpAddr::V6(ip)) => ip.is_loopback() || ip.is_unique_local() || ip.is_unicast_link_local(),
+        Err(_) => false,
     }
 }
 
@@ -127,6 +146,21 @@ mod tests {
         assert_eq!(endpoint("https://example.org/proxy/", "api/states").unwrap(), "https://example.org/proxy/api/states");
         for server in ["https://example.org?key=secret", "https://example.org/#fragment", "file:///tmp"] {
             assert!(endpoint(server, "api/states").is_err());
+        }
+    }
+
+    #[test]
+    fn api_keys_require_https_or_a_literal_local_destination() {
+        let secret = Secret::new("fixture-key".into()).unwrap();
+        let body = serde_json::json!({"api_key":"fixture-key"});
+        for url in ["http://example.org/api", "http://8.8.8.8/api", "http://localhost.example.org/api", "http://[::ffff:8.8.8.8]/api", "http://[2001:4860:4860::8888]/api"] {
+            assert!(Client::request(Method::POST, url, None, Some(Authorization::Bearer(&secret))).is_err(), "{url}");
+            assert!(Client::request(Method::POST, url, Some(&body), None).is_err(), "{url}");
+            assert!(Client::request(Method::GET, url, None, None).is_ok(), "an anonymous request: {url}");
+        }
+        for url in ["https://example.org/api", "http://localhost:8123/api", "http://127.0.0.1/api", "http://192.168.1.10/api", "http://10.0.0.2/api", "http://172.16.0.2/api", "http://169.254.1.2/api", "http://[::1]/api", "http://[fd00::1]/api", "http://[fe80::1]/api", "http://[::ffff:192.168.1.10]/api"] {
+            assert!(Client::request(Method::POST, url, None, Some(Authorization::Bearer(&secret))).is_ok(), "{url}");
+            assert!(Client::request(Method::POST, url, Some(&body), None).is_ok(), "{url}");
         }
     }
 

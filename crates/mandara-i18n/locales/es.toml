@@ -8685,3 +8685,11 @@
 "Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "Falta el tema de iconos {theme}; instálalo o elige otro en Temas → Iconos"
 
 "No icon theme is selected; standard fallbacks are in use" = "No se ha elegido un tema de iconos; se usan los iconos alternativos del sistema"
+
+"Use an https:// address, or a local IP address, when sending an API key" = "Usa una dirección https:// o una dirección IP local al enviar una clave de API"
+
+"Example track" = "Pista de ejemplo"
+
+"Example artist" = "Artista de ejemplo"
+
+"Previews use sample data." = "Las vistas previas usan datos de ejemplo."

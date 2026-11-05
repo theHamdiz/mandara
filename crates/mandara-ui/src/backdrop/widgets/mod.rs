@@ -34,6 +34,7 @@ pub mod monitor_more;
 pub mod productive;
 pub mod progress;
 pub mod passive;
+pub mod gallery;
 pub mod sayings;
 pub mod sky;
 pub mod skyview;
@@ -1618,6 +1619,12 @@ pub fn compose(canvas: &mut tiny_skia::PixmapMut<'_>, w: &DesktopWidget, o: &Out
         return;
     }
     let Some(laid) = lay_out(w, o, scene, sampler, now, text) else { return };
+    compose_laid(canvas, w, o, scene, &laid, text);
+}
+
+fn compose_laid(canvas: &mut tiny_skia::PixmapMut<'_>, w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, laid: &Laid, text: &mut TextPainter) {
+    let output = o.output_rect();
+    let opacity = w.place.opacity();
     let (rect, live) = (laid.rect(false, o.scale120, output), laid.rect(true, o.scale120, output));
     let inks = inks_for(w, o, scene, rect.union(&live));
     let style = style_for(w, o.fonts, inks, opacity, laid.k);

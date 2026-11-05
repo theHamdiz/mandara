@@ -16,13 +16,20 @@ installer, display reconnection and native KWin support.
   weather ribbons, thermometers and a humidity rose. They belong to the
   existing widget families, so Mandara still ships 77 first-party plugins.
 
-- **Put widgets on your sign-in screens.** Login screen → Layout and
-  Lock appearance have a widget gallery, a copy-from-desktop option and
+- **Put widgets on your sign-in screens.** Login screen → Layout and   Lock
+  appearance have a widget gallery, a copy-from-desktop option and
   placement controls. Both start empty. Only public, passive kinds are
   offered; weather needs a separately chosen public location. Plasma keeps
-  its own secure locker, with a clear explanation in Studio.
+  its own secure locker, with a clear explanation in Studio.   World clocks
+  have public default cities; copied countdowns leave private   desktop
+  titles and dates behind.
 
-- Four optional first-party plugins: Translator, Phone Connect, Feeds and Home Assistant. Translate when you ask, keep up with your subscriptions, reach your paired phone and control your home from native panels. Mandara now ships 77 first-party plugins, each with its own artwork.
+- **Four optional connected tools.** Translator, Phone Connect, Feeds and
+  Home Assistant are first-party plugins. Translate when you ask, keep up
+  with subscriptions, reach your paired phone and control your home from
+  native panels. Mandara now ships 77 first-party plugins, each with its
+  own artwork. Feeds ask for the final address when a server redirects;
+  remote API keys use HTTPS.
 
 - **Choose which screen corners are rounded.** Each corner can be switched
   off separately, and adjacent displays can keep their shared corners clear.
@@ -70,10 +77,12 @@ installer, display reconnection and native KWin support.
 
 ### Improved
 
-- Maintenance reports missing icon themes and opens Themes so you can
-  choose a replacement without resetting your selection. (#87)
+- **Find missing icon themes.** Maintenance reports missing icon themes and
+  opens Themes so you can   choose a replacement without resetting your
+  selection. (#87)
 
-- Studio’s About header now has playful GitHub and Discord links that move gently on hover and respect reduced motion.
+- **The project, a click away.** Studio’s About header has playful GitHub
+  and Discord links that move gently on hover and respect reduced motion.
 
 - **The clipboard answers the keyboard and the wheel.** Arrow Up and Down
   move through the list and turn the page when they reach its end, Enter
@@ -118,12 +127,13 @@ installer, display reconnection and native KWin support.
 
 ### Fixed
 
-- Public world clocks have default cities, and copied countdowns leave
-  private titles and dates behind. Phone Connect skips stale devices and
-  shows its Ping icon. Feed redirects ask for the final subscription address.
+- **Sharper widget previews.** Calendar, sky and visualizer pictures fill
+  their cards and follow display scaling. Media styles have labelled sample
+  previews instead of empty tiles, in light and dark themes. (#101)
 
-- The login designer keeps clocks and public widgets current while its
-  preview is visible, including across midnight.
+- **Keep the login preview current.** The login designer keeps clocks and
+  public widgets current while its   preview is visible, including across
+  midnight.
 
 - Installation finishes with translated first steps in every language.
 

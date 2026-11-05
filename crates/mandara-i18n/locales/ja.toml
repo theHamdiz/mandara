@@ -8691,3 +8691,11 @@
 "Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "アイコンテーマ {theme} が見つかりません。インストールするか、テーマ → アイコンで別のテーマを選んでください"
 
 "No icon theme is selected; standard fallbacks are in use" = "アイコンテーマが選択されていないため、標準の代替アイコンを使用しています"
+
+"Use an https:// address, or a local IP address, when sending an API key" = "APIキーを送信する場合は、https:// のアドレスかローカルIPアドレスを使用してください"
+
+"Example track" = "サンプル曲"
+
+"Example artist" = "サンプルアーティスト"
+
+"Previews use sample data." = "プレビューにはサンプルデータを使用しています。"

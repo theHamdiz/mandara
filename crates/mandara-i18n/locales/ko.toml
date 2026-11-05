@@ -8443,3 +8443,11 @@
 "Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "아이콘 테마 {theme}을(를) 찾을 수 없습니다. 설치하거나 테마 → 아이콘에서 다른 테마를 선택하세요"
 
 "No icon theme is selected; standard fallbacks are in use" = "선택한 아이콘 테마가 없어 기본 대체 아이콘을 사용합니다"
+
+"Use an https:// address, or a local IP address, when sending an API key" = "API 키를 보낼 때는 https:// 주소 또는 로컬 IP 주소를 사용하세요"
+
+"Example track" = "예시 곡"
+
+"Example artist" = "예시 아티스트"
+
+"Previews use sample data." = "미리보기에는 예시 데이터를 사용합니다."

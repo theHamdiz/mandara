@@ -12,6 +12,9 @@ use mandara_i18n::{t, tf, tk};
 
 mod icons;
 
+/// Check the live selection; Studio may not have flushed it to disk yet.
+pub(crate) fn icon_theme(selected: Option<&str>) -> Health { icons::selected(selected) }
+
 /// Result of one check.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Health {

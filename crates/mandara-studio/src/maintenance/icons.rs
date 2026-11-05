@@ -8,7 +8,11 @@ use super::{Health, Roots};
 
 pub(super) fn check(roots: &Roots) -> Health {
     let config = std::fs::read_to_string(roots.config_file()).ok().and_then(|text| toml::from_str::<ShellConfig>(&text).ok()).unwrap_or_default();
-    inspect(config.appearance.icon_theme.as_deref(), icon_theme::desktop_icon_theme(), icon_theme::theme_installed)
+    selected(config.appearance.icon_theme.as_deref())
+}
+
+pub(super) fn selected(theme: Option<&str>) -> Health {
+    inspect(theme, icon_theme::desktop_icon_theme(), icon_theme::theme_installed)
 }
 
 fn inspect(selected: Option<&str>, desktop: Option<String>, installed: impl FnOnce(&str) -> bool) -> Health {
@@ -23,6 +27,16 @@ fn inspect(selected: Option<&str>, desktop: Option<String>, installed: impl FnOn
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repair_directions_use_the_navigation_labels_in_every_language() {
+        for lang in mandara_i18n::Lang::ALL {
+            let message = mandara_i18n::t_in(lang, "Icon theme {theme} is missing; install it or choose another in Themes → Icons");
+            for label in ["Themes", "Icons"] {
+                assert!(message.contains(mandara_i18n::t_in(lang, label)), "{}: {label}", lang.code());
+            }
+        }
+    }
 
     #[test]
     fn an_explicit_choice_takes_precedence_and_is_not_silently_replaced() {

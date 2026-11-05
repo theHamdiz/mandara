@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 use gpui::{
     AnyElement, AppContext as _, Bounds, ClickEvent, Context, Entity, FontWeight, Global, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, RenderImage,
-    SharedString, StatefulInteractiveElement, Styled, canvas, div, img, prelude::FluentBuilder as _, px,
+    SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, img, prelude::FluentBuilder as _, px,
 };
 use mandara_config::ShellConfig;
 use mandara_config::desktop_cards::{self as dc, PluginCardOptions};
@@ -63,13 +63,13 @@ const PREVIEW_DENSITY: f32 = 2.0;
 /// Gallery tiles: an even grid of identical tiles (the picture's aspect,
 /// two clamped lines of name), and the display they are rendered on (the
 /// widget is shown at a scale that fills the tile).
-const TILE_GRID: CardGrid = CardGrid { min_w: 150.0, max_w: 240.0, gap: SPACE_10_PX };
-const TILE_ASPECT: f32 = 74.0 / 132.0;
+const TILE_GRID: CardGrid = CardGrid { min_w: 180.0, max_w: 240.0, gap: SPACE_10_PX };
+const TILE_ASPECT: f32 = 3.0 / 4.0;
 const TILE_PAD_PX: f32 = SPACE_6_PX;
 const TILE_LABEL_LINES: usize = 2;
 const TILE_LABEL_H_PX: f32 = LEADING_16_PX * TILE_LABEL_LINES as f32;
-const TILE_RENDER: (u32, u32) = (528, 296);
-const TILE_SCALE: f32 = 1.9;
+/// Bound unusual display scales while retaining at least 2× raster density.
+const TILE_MAX_DENSITY: f32 = 4.0;
 /// A style's picture in a widget's Style row (the same rendering, smaller).
 const STYLE_TILE_W_PX: f32 = 104.0;
 const STYLE_TILE_H_PX: f32 = 58.0;
@@ -102,6 +102,7 @@ struct PageState {
     painter: Option<TextPainter>,
     /// Each gallery kind's tile (by kind key) and the key it was painted for.
     tiles: HashMap<String, (u64, Arc<RenderImage>)>,
+    density: f32,
     /// Each painted widget's picture, by widget id.
     layers: HashMap<String, Layer>,
     bounds: Rc<Cell<Bounds<Pixels>>>,
@@ -262,10 +263,11 @@ const SIDEWAYS: [(Sideways, &str); 3] = [(Sideways::Auto, tk("Toward the middle"
 type Set<T> = Rc<dyn Fn(&mut DesktopWidget, T)>;
 
 impl StudioView {
-    pub(super) fn desktop_widgets_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn desktop_widgets_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         if !cx.has_global::<PageState>() {
             cx.set_global(PageState::default());
         }
+        cx.global_mut::<PageState>().density = window.scale_factor();
         let mut cfg = cfg.clone();
         dw::migrate_depth_clock(&mut cfg);
         let items = cfg.desktop.widgets.items.clone();
@@ -448,35 +450,32 @@ impl StudioView {
 
     /// The picture of a gallery tile or of a style (painted kinds) by its
     /// `tile` key, cached.
-    fn tile_image(&mut self, tile: &str, widgets: &[DesktopWidget], cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
+    fn tile_image(&mut self, tile: &str, widgets: &[DesktopWidget], picture: (f32, f32), p: &MandaraPalette, cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
         if widgets.is_empty() || widgets.iter().any(|w| !w.kind.on_wallpaper_plane()) {
             return None;
         }
-        let primary = mandara_core::theme_entity(cx).read(cx).target().primary;
+        let primary = p.primary;
+        let size = tile_pixels(picture, cx.global::<PageState>().density);
         let fonts = fonts(cx);
         // Tiles that tell the time are painted again with the minute.
-        let timed = widgets.iter().any(|w| matches!(w.kind, WidgetKind::Clock(_) | WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_)));
+        let timed = widgets.iter().any(|w| matches!(w.kind, WidgetKind::Clock(_) | WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_) | WidgetKind::Date(_) | WidgetKind::Sky(_)));
         let minute = timed.then(|| chrono::Local::now().timestamp().div_euclid(SECS_PER_MINUTE));
-        let k = key((tile, primary.to_rgba8(), &fonts, mandara_i18n::language(), minute));
+        let k = key((tile, size, primary.to_rgba8(), p.on_primary.to_rgba8(), p.on_surface.to_rgba8(), p.surface_dim.to_rgba8(), p.surface_container.to_rgba8(), &fonts, mandara_i18n::language(), minute));
         if let Some((_, img)) = cx.global::<PageState>().tiles.get(tile).filter(|(old, _)| *old == k) {
             return Some(img.clone());
         }
         let s = cx.global_mut::<PageState>();
         let text = s.painter.get_or_insert_with(TextPainter::new);
-        // Centred and enlarged so it fills the tile.
-        let shown: Vec<DesktopWidget> = widgets
-            .iter()
-            .enumerate()
-            .map(|(i, w)| {
-                let mut w = w.clone();
-                if widgets.len() == 1 {
-                    w.place = Placement { scale: TILE_SCALE, ..Placement::default() };
-                }
-                w.id = format!("{tile}-{i}");
-                w
-            })
-            .collect();
-        let (rgba, _) = mandara_ui::backdrop::widgets::preview(&shown, TILE_RENDER, &fonts, primary, text)?;
+        let rgba = if let [widget] = widgets {
+            mandara_ui::backdrop::widgets::gallery::thumbnail(widget, size, &fonts, p, text)?
+        } else {
+            let shown: Vec<_> = widgets.iter().enumerate().map(|(i, widget)| {
+                let mut widget = widget.clone();
+                widget.id = format!("{tile}-{i}");
+                widget
+            }).collect();
+            mandara_ui::backdrop::widgets::preview(&shown, size, &fonts, primary, text)?.0
+        };
         text.release_glyphs();
         let image = render_image(rgba);
         // The tile it replaces leaves the GPU atlas.
@@ -503,7 +502,7 @@ impl StudioView {
             if has_depth && widgets.iter().any(|w| matches!(&w.kind, WidgetKind::Clock(c) if c.face.depth_style().is_some())) {
                 continue;
             }
-            let tile = self.tile_image(&t.key(), &widgets, cx);
+            let tile = self.tile_image(&t.key(), &widgets, (pic_w, pic_h), p, cx);
             let label = mandara_ui::desktop_menu::widget_type_name(&t, cx);
             // Already on the desktop (one widget, same settings): the tile
             // selects it instead of stacking an identical copy on top.
@@ -602,7 +601,7 @@ impl StudioView {
         page_section(
             section_head(
                 if full { t("The list is full — remove a widget to add another") } else { t("Add a widget") },
-                t("Widget kinds come from plugins: switch them on or off in Studio → Plugins (Desktop widgets)."),
+                format!("{} {}", t("Widget kinds come from plugins: switch them on or off in Studio → Plugins (Desktop widgets)."), t("Previews use sample data.")),
                 vec![],
                 display.clone(),
                 p,
@@ -790,7 +789,7 @@ impl StudioView {
         let from = s.presets.get(s.current)?.clone();
         let mut tiles = Vec::new();
         for (i, (style, to)) in s.family.styles.iter().zip(&s.presets).enumerate() {
-            let image = self.tile_image(&format!("{}#{}", s.family.key(), style.id), &(style.make)(), cx);
+            let image = self.tile_image(&format!("{}#{}", s.family.key(), style.id), &(style.make)(), (STYLE_TILE_W_PX, STYLE_TILE_H_PX), p, cx);
             let active = i == s.current;
             let name = tr(&style.name);
             let label = if active && !s.exact { tf("{name} · changed", &[("name", &name)]) } else { name };
@@ -1925,4 +1924,23 @@ fn monitor_rows(id: &str, rows: &[MonitorRow], p: &MandaraPalette, cx: &mut Cont
             }))
     });
     div().row().flex_wrap().gap(px(SPACE_4_PX)).children(chips).into_any_element()
+}
+
+fn tile_pixels(logical: (f32, f32), density: f32) -> (u32, u32) {
+    let density = if density.is_finite() { density.clamp(PREVIEW_DENSITY, TILE_MAX_DENSITY) } else { PREVIEW_DENSITY };
+    ((logical.0.max(1.0) * density).ceil() as u32, (logical.1.max(1.0) * density).ceil() as u32)
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+
+    #[test]
+    fn thumbnails_follow_display_density_without_upscaling_small_rasters() {
+        assert_eq!(tile_pixels((180.0, 135.0), 1.0), (360, 270));
+        assert_eq!(tile_pixels((180.0, 135.0), 2.0), (360, 270));
+        assert_eq!(tile_pixels((180.0, 135.0), 3.0), (540, 405));
+        assert_eq!(tile_pixels((180.0, 135.0), 8.0), (720, 540));
+        assert_eq!(tile_pixels((180.0, 135.0), f32::NAN), (360, 270));
+    }
 }

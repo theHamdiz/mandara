@@ -8444,3 +8444,11 @@
 "Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "آئیکن تھیم {theme} موجود نہیں؛ اسے نصب کریں یا تھیمز ← آئیکنز میں کوئی اور منتخب کریں"
 
 "No icon theme is selected; standard fallbacks are in use" = "کوئی آئیکن تھیم منتخب نہیں؛ معیاری متبادل آئیکنز استعمال ہو رہے ہیں"
+
+"Use an https:// address, or a local IP address, when sending an API key" = "API کلید بھیجتے وقت https:// پتہ یا مقامی IP پتہ استعمال کریں"
+
+"Example track" = "نمونہ گانا"
+
+"Example artist" = "نمونہ فنکار"
+
+"Previews use sample data." = "پیش نظاروں میں نمونہ ڈیٹا استعمال ہوتا ہے۔"

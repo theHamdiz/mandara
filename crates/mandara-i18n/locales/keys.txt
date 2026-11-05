@@ -1939,7 +1939,9 @@ Everything is up to date
 Everything looks healthy
 Everything started cleanly
 Example
+Example artist
 Example plugin on GitHub
+Example track
 Exceptions
 Exchange rates
 Exists
@@ -4623,6 +4625,7 @@ Preview the lock screen
 Preview the pairing dialog with a fake device (nothing is paired)
 Preview — any password unlocks · Esc closes
 Previews per row
+Previews use sample data.
 Previous
 Previous track
 Previous window
@@ -6841,6 +6844,7 @@ Use an API key
 Use an absolute path: {path}
 Use an http:// or https:// feed address without a password
 Use an http:// or https:// server address without a password
+Use an https:// address, or a local IP address, when sending an API key
 Use another adapter (auto = the first)
 Use another folder while the theme is light or dark (clear to remove)
 Use for my theme
