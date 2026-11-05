@@ -67,7 +67,8 @@ The rest of what's built in.
   - **Alt+V** opens it (as does Super+Shift+V). Arrow Up and Down move
     through the list, turning the page when they reach its end; Enter
     copies the selected entry (or pastes it, where the panel is set to
-    paste), and the wheel turns pages.
+    paste), and the wheel turns pages. Fast wheel movements can turn several
+    pages at once; partial movement carries over to the next event.
 
 <table>
 <tr>
@@ -160,6 +161,8 @@ The rest of what's built in.
   cores (as in Resources), so a busy build reads a percentage of the whole
   machine instead of several hundred percent of one core. The shared CPU
   capacity follows online CPUs even under a process affinity or quota limit.
+  Grouped totals stay within 100%, and hot-process highlighting uses that
+  same host-wide capacity.
 - **Drives**: UDisks2 storage panel with usage rings, filesystem and
   encryption badges, mount / unmount, open in the file manager, LUKS unlock
   from an inline passphrase sheet and one-click *Safely remove* (unmount →

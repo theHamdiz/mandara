@@ -306,13 +306,17 @@ type Shared = Rc<RefCell<Ui>>;
 
 impl Ui {
     fn scroll_page(&mut self, notches: f32) {
+        if !notches.is_finite() { return; }
         if self.pages < 2 || notches * self.wheel < 0.0 { self.wheel = 0.0; }
         if self.pages < 2 { return; }
         self.wheel += notches;
+        if !self.wheel.is_finite() { self.wheel = 0.0; return; }
         if self.wheel.abs() < WHEEL_NOTCHES_PER_PAGE { return; }
         let newer = self.wheel > 0.0;
-        self.wheel = 0.0;
-        let page = if newer { self.page.saturating_sub(1) } else { (self.page + 1).min(self.pages - 1) };
+        let turns = (self.wheel.abs() / WHEEL_NOTCHES_PER_PAGE).floor();
+        self.wheel %= WHEEL_NOTCHES_PER_PAGE;
+        let steps = turns as usize;
+        let page = if newer { self.page.saturating_sub(steps) } else { self.page.saturating_add(steps).min(self.pages - 1) };
         if page != self.page {
             self.page = page;
             self.picker = None;
@@ -1550,6 +1554,26 @@ mod tests {
         assert_eq!(ui.page, 1);
         ui.show(Filter::All);
         assert_eq!(ui.wheel, 0.0);
+    }
+
+    #[test]
+    fn fast_wheel_events_turn_all_pages_and_keep_the_fractional_distance() {
+        let mut ui = Ui { pages: 8, selected: Some(42), ..Default::default() };
+        ui.scroll_page(-3.5 * WHEEL_NOTCHES_PER_PAGE);
+        assert_eq!(ui.page, 3);
+        assert_eq!(ui.wheel, -WHEEL_NOTCHES_PER_PAGE / 2.0);
+        assert_eq!(ui.selected, None);
+        ui.scroll_page(-WHEEL_NOTCHES_PER_PAGE / 2.0);
+        assert_eq!(ui.page, 4);
+        assert_eq!(ui.wheel, 0.0);
+        ui.scroll_page(f32::NEG_INFINITY);
+        ui.scroll_page(f32::NAN);
+        assert_eq!(ui.page, 4);
+        ui.scroll_page(-f32::MAX);
+        assert_eq!(ui.page, 7);
+        ui.scroll_page(f32::MAX);
+        assert_eq!(ui.page, 0);
+        assert!(ui.wheel.is_finite());
     }
 
     #[test]

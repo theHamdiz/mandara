@@ -1679,6 +1679,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn grouped_app_usage_is_capped_without_losing_memory_or_processes() {
+        let mut process = Sampler::new().sample().into_iter().next().expect("at least one process");
+        process.name = "browser".into();
+        process.cpu = 80.0;
+        process.rss = 10;
+        let apps = top_apps(&[process.clone(), process]);
+        assert_eq!(apps[0].cpu, PERCENT_F);
+        assert_eq!(apps[0].count, 2);
+        assert_eq!(apps[0].rss, 20);
+    }
+
+    #[test]
     fn mounts_dedupe_devices_and_skip_virtual() {
         let text = "proc /proc proc rw 0 0\n\
                     /dev/nvme0n1p2 / btrfs rw,subvol=/@ 0 0\n\

@@ -109,9 +109,13 @@ fn sample_every(cx: &App) -> Duration {
 /// machine's cores before the two are compared.
 fn hot_cpu(cx: &App) -> f32 {
     let pct: i64 = crate::state::config(cx).read(cx).snapshot().plugins.setting(ID, "hot_cpu_percent", DEFAULT_HOT_CPU_PERCENT);
-    pct.clamp(HOT_CPU_RANGE.0, HOT_CPU_RANGE.1) as f32 / cores() as f32
+    hot_cpu_value(pct, processes::cpu_capacity())
 }
-/// CPU meters are scaled to at least one full core.
+/// Keep the configured per-core threshold on the sampler's host-wide basis.
+fn hot_cpu_value(pct: i64, host_cpus: usize) -> f32 {
+    pct.clamp(HOT_CPU_RANGE.0, HOT_CPU_RANGE.1) as f32 / host_cpus.max(1) as f32
+}
+/// CPU meters are scaled to at least the whole machine's 100 percent.
 const CPU_SCALE_FLOOR: f32 = 100.0;
 /// PIDs previewed in a group's detail line.
 const PID_PREVIEW: usize = 4;
@@ -305,6 +309,7 @@ fn group(results: &[Process], sort: SortBy, ranked: bool) -> Vec<Group> {
             }
         }
     }
+    for group in &mut out { group.cpu = group.cpu.min(CPU_SCALE_FLOOR); }
     if !ranked {
         match sort {
             SortBy::Cpu => out.sort_by(|a, b| b.cpu.total_cmp(&a.cpu).then(b.rss.cmp(&a.rss))),
@@ -1427,6 +1432,18 @@ mod tests {
         // A query keeps relevance order (first appearance).
         let ranked = group(&ps, SortBy::Cpu, true);
         assert_eq!(ranked.iter().map(|g| g.name.as_str()).collect::<Vec<_>>(), ["b", "a", "c"]);
+    }
+
+    #[test]
+    fn process_groups_cannot_exceed_the_machine_and_keep_all_members() {
+        let ps = vec![proc(1, "browser", 70.0, 10), proc(2, "browser", 80.0, 20)];
+        let groups = group(&ps, SortBy::Cpu, false);
+        assert_eq!(groups[0].cpu, CPU_SCALE_FLOOR);
+        assert_eq!(groups[0].rss, 30);
+        assert_eq!(groups[0].pids(&ps), vec![1, 2]);
+        assert_eq!(hot_cpu_value(50, 4), 12.5);
+        assert_eq!(hot_cpu_value(50, 16), 3.125);
+        assert_eq!(hot_cpu_value(50, 0), 50.0);
     }
 
     #[test]

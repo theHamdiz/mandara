@@ -130,8 +130,18 @@ fn every_look_has_a_keyboard_control_and_light_and_dark_preview() {
     assert!(css.contains("@media (prefers-reduced-motion: no-preference)"));
     assert!(css.contains("@media (prefers-reduced-motion: reduce)"));
     assert!(css.contains("@supports (animation-timeline: view())"));
-    assert!(css.contains(".native-section a:focus-visible { outline-color: var(--page-background); }"), "the inverted native section needs a contrasting keyboard focus ring");
-    assert!(css.contains(".questions details[open] summary:focus-visible,") && css.contains(".questions details[open] a:focus-visible { outline-color: var(--page-background); }"), "open FAQ items and their links need a contrasting keyboard focus ring");
+    assert!(!css.contains("outline-color: var(--page-background)"), "focus rings must contrast with the section's theme surface");
+}
+
+#[test]
+fn homepage_sections_keep_the_theme_surface_instead_of_inverting_it() {
+    let css = std::fs::read_to_string(crate::root().join("assets/css/landing.css")).unwrap();
+    for selector in [".native-section", ".questions details[open]"] {
+        let block = css.split_once(&format!("{selector} {{")).unwrap().1.split('}').next().unwrap();
+        assert!(block.contains("background: var(--page-surface)"), "{selector} must follow the theme surface");
+        assert!(block.contains("color: var(--page-ink)"), "{selector} must keep readable theme ink");
+    }
+    assert!(css.contains("a:focus-visible, summary:focus-visible { outline: 3px solid var(--page-link)"));
 }
 
 #[test]

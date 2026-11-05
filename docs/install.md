@@ -111,7 +111,8 @@ automatically* until you choose) and switches autostart and the login screen
 on or off before anything is installed. Every choice there is also a
 flag: one you pass is left out of the menu, and `--yes`, `--dry-run` or a
 run without a terminal skips the screen and prints the one-line plan
-instead. Esc, `q` or Ctrl-C leaves it without changing anything.
+instead. Dry runs also keep the installer heading on one line. Esc, `q`
+or Ctrl-C leaves it without changing anything.
 
 `mandara uninstall` removes the binary and desktop entry and empties the
 compositor drop-ins; your settings are kept.

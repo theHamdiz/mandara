@@ -363,7 +363,7 @@ impl<'a> Installer<'a> {
             Source::Build => "from source",
         };
         let banner = format!("Mandara Shell installer · {} ({}) · {} · {label}", self.facts.os.display_name(), self.facts.family, self.facts.arch);
-        if self.host.interactive() && !self.args.yes {
+        if self.host.interactive() && !self.args.yes && !self.dry() {
             let columns = self.host.columns();
             self.say(Level::Title, tui::banner(columns, &banner));
         } else {
