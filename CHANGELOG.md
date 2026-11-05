@@ -100,6 +100,9 @@ installer, display reconnection and native KWin support.
 
 ### Fixed
 
+- A bar preset stays selected after you apply its style while keeping your
+  own items. Manual layout or item changes clear that selection. (#81)
+
 - Installation finishes with translated first steps in every language.
 
 - Installing or removing an application updates its dock pin and icon

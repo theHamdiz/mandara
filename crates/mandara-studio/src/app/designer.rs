@@ -22,6 +22,38 @@ use super::plugin_pool::{Menu, MenuFor, zone_title};
 use super::{StudioView, plugin_icon, plugin_tile};
 use crate::tokens::*;
 
+/// A style-only apply keeps its identity even when several presets share
+/// a layout. Manual item, layout or position edits retire that selection.
+#[derive(Default)]
+pub(super) struct PresetSelection {
+    chosen: Option<ChosenPreset>,
+}
+
+struct ChosenPreset {
+    index: usize,
+    layout: BarLayout,
+    position: BarPosition,
+    items: [Vec<String>; 3],
+}
+
+impl PresetSelection {
+    fn remember(&mut self, index: usize, config: &ShellConfig) {
+        let bar = &config.bar;
+        self.chosen = Some(ChosenPreset { index, layout: bar.layout, position: bar.position, items: [bar.left.clone(), bar.center.clone(), bar.right.clone()] });
+    }
+
+    fn active(&mut self, config: &ShellConfig) -> Option<usize> {
+        let bar = &config.bar;
+        if let Some(chosen) = &self.chosen {
+            if chosen.layout == bar.layout && chosen.position == bar.position && chosen.items.iter().zip([&bar.left, &bar.center, &bar.right]).all(|(saved, current)| saved == current) {
+                return Some(chosen.index);
+            }
+            self.chosen = None;
+        }
+        PRESETS.iter().position(|preset| bar.layout == preset.layout && bar.position == preset.position && bar.center.iter().map(String::as_str).eq(preset.center.iter().copied()))
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Lane {
     Left,
@@ -448,11 +480,12 @@ impl StudioView {
         let scale = window.scale_factor();
         let vertical = cfg.bar.position.is_vertical();
         let replace_items = self.designer.replace_items;
+        let selected = self.designer.preset_selection.active(cfg);
 
         // Presets.
         let mut presets: Vec<AnyElement> = Vec::with_capacity(PRESETS.len());
         for (i, preset) in PRESETS.iter().enumerate() {
-            let active = cfg.bar.layout == preset.layout && cfg.bar.position == preset.position && cfg.bar.center.iter().map(String::as_str).eq(preset.center.iter().copied());
+            let active = selected == Some(i);
             // A tiny drawing of the preset's bar (physical sides: never mirrored).
             let pill = |w: f32| div().w(px(w)).h(px(DIM_8_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla());
             let mock = div()
@@ -491,7 +524,12 @@ impl StudioView {
                     .child(mock)
                     .child(div().font_weight(FontWeight::SEMIBOLD).text_size(px(TEXT_13_PX)).child(mandara_ui::bidi::paragraph(tr(preset.name))))
                     .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(preset.blurb))))
-                    .on_click(move |_, _, cx| apply_preset(preset, replace_items, cx))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        apply_preset(preset, replace_items, cx);
+                        let config = mandara_ui::state::config(cx).read(cx).snapshot();
+                        this.designer.preset_selection.remember(i, &config);
+                        cx.notify();
+                    }))
                     .into_any_element(),
             );
         }
@@ -575,6 +613,45 @@ impl StudioView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn style_only_preset_selection_survives_custom_items_but_not_manual_edits() {
+        let index = PRESETS.iter().position(|p| p.name == "System monitor").unwrap();
+        let mut config = ShellConfig::default();
+        config.bar.center = vec!["media".into()];
+        apply_preset_in(&mut config, &PRESETS[index], false, &[]);
+        let mut selection = PresetSelection::default();
+        selection.remember(index, &config);
+        assert_eq!(selection.active(&config), Some(index));
+        config.bar.height += 1.0;
+        assert_eq!(selection.active(&config), Some(index));
+        for lane in [Lane::Left, Lane::Center, Lane::Right] {
+            let mut edited = config.clone();
+            lane.list(&mut edited).unwrap().push("weather".into());
+            selection.remember(index, &config);
+            selection.active(&edited);
+            assert!(selection.chosen.is_none());
+        }
+        for (layout, position) in [(BarLayout::Hairline, config.bar.position), (config.bar.layout, BarPosition::Bottom)] {
+            let mut edited = config.clone();
+            edited.bar.layout = layout;
+            edited.bar.position = position;
+            selection.remember(index, &config);
+            selection.active(&edited);
+            assert!(selection.chosen.is_none());
+        }
+    }
+
+    #[test]
+    fn an_existing_exact_preset_remains_recognizable_without_a_click() {
+        let mut config = ShellConfig::default();
+        let preset = &PRESETS[0];
+        config.bar.layout = preset.layout;
+        config.bar.position = preset.position;
+        config.bar.center = preset.center.iter().map(|id| (*id).into()).collect();
+        let mut selection = PresetSelection::default();
+        assert_eq!(selection.active(&config), Some(0));
+    }
 
     #[test]
     fn presets_reference_real_plugins_and_layouts() {

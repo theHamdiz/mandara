@@ -270,6 +270,8 @@ narrow ones; everything mirrors for right-to-left languages.
   say so. Click one for *Add to Left / Center / Right* (and the side bars
   while they're on) or *Details*, or drag it onto a zone; placing a plugin
   turns it on, and dropping a bar item on the list takes it off the bar.
+  The chosen bar preset stays highlighted when you keep your own items.
+  Manual item, layout or position changes clear that selection.
   Bar presets (System monitor, Classic, Notch, Glass pills, Dynamic island,
   Minimal, Productive, Hairline, Micro pill, Side bar, Dock) apply the style
   in one click and keep your items. Turn on **Replace bar items** to use
