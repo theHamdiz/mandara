@@ -204,6 +204,8 @@ struct Drag {
     moved: bool,
 }
 
+mod preview_clock;
+
 /// The clock's rolling digits.
 #[derive(Default)]
 struct Roll {
@@ -213,6 +215,16 @@ struct Roll {
     /// Second and format the text was made for.
     second: i64,
     format: &'static str,
+}
+
+impl Roll {
+    fn progress(&self, now: Instant) -> f32 {
+        self.at.map(|at| pop_at(ROLL_SPRING, now.saturating_duration_since(at).as_secs_f32()).clamp(0.0, ROLL_OVERSHOOT_CAP)).unwrap_or(1.0)
+    }
+
+    fn moving(&self, now: Instant) -> bool {
+        self.progress(now) < 1.0 && self.prev.chars().count() == self.text.chars().count()
+    }
 }
 
 pub struct GreeterView {
@@ -256,7 +268,7 @@ pub struct GreeterView {
     /// Second of the last clock format (the text only changes per second).
     clock_second: i64,
     /// One visible-preview deadline; dropped when hidden or animating.
-    preview_wake: Option<gpui::Task<()>>,
+    preview_wake: Option<(bool, gpui::Task<()>)>,
     /// Formatted date and the (day, pattern, language) it was made for.
     date_text: Option<((chrono::NaiveDate, String, &'static str), SharedString)>,
     /// Keyboard layout label and the (configured, GPUI) ids it came from.
@@ -413,23 +425,18 @@ fn keyboard_layout(cfg: &GreeterConfig, cx: &gpui::App) -> String {
     env.or(x11).or(vconsole).map(|l| l.split(',').next().unwrap_or("").trim().to_uppercase()).filter(|l| !l.is_empty()).unwrap_or_else(|| "US".into())
 }
 
-/// Wall-clock boundaries keep static previews current without busy redraws.
-fn preview_deadline(millis: i64, seconds: bool) -> Duration {
-    const MILLIS_PER_SECOND: i64 = 1_000;
-    const SECONDS_PER_MINUTE: i64 = 60;
-    let period = MILLIS_PER_SECOND * if seconds { 1 } else { SECONDS_PER_MINUTE };
-    Duration::from_millis((period - millis.rem_euclid(period)) as u64)
-}
-
 #[cfg(test)]
 mod preview_clock_tests {
     use super::*;
 
     #[test]
-    fn static_previews_wake_on_the_next_displayed_time_change() {
-        assert_eq!(preview_deadline(59_900, false), Duration::from_millis(100));
-        assert_eq!(preview_deadline(60_000, false), Duration::from_secs(60));
-        assert_eq!(preview_deadline(1_250, true), Duration::from_millis(750));
+    fn rolling_clock_digits_keep_preview_frames_active() {
+        let start = Instant::now();
+        let roll = Roll { text: "12:10".into(), prev: "12:09".into(), at: Some(start), ..Default::default() };
+        assert!(roll.moving(start));
+        assert!(roll.moving(start + Duration::from_millis(16)));
+        assert!(!roll.moving(start + Duration::from_secs(10)));
+        assert!(!Roll::default().moving(start));
     }
 
     #[test]
@@ -692,6 +699,7 @@ impl GreeterView {
         self.wake.set_config(spring(m.idle_spring, reduced));
         self.palette = palette_for(&config);
         self.config = config;
+        if reduced || !self.config.clock.roll_digits { self.roll.at = None; }
         match change {
             BackgroundChange::Same => self.bg_rebuild_at = None,
             BackgroundChange::Rebuild => self.rebuild_background(),
@@ -1373,16 +1381,15 @@ impl GreeterView {
             return;
         }
         if self.is_preview() && !self.preview_moving(Instant::now()) {
-            if self.preview_wake.is_none() {
-                let seconds = self.config.clock.seconds || mandara_ui::backdrop::widgets::passive::ticks_seconds(&self.config.widgets);
-                let wait = preview_deadline(chrono::Local::now().timestamp_millis(), seconds);
-                self.preview_wake = Some(cx.spawn_in(window, async move |this, cx| {
+            let seconds = self.config.clock.seconds || mandara_ui::backdrop::widgets::passive::ticks_seconds(&self.config.widgets);
+            if let Some(wait) = preview_clock::plan(chrono::Local::now().timestamp_millis(), seconds, self.preview_wake.as_ref().map(|(seconds, _)| *seconds)) {
+                self.preview_wake = Some((seconds, cx.spawn_in(window, async move |this, cx| {
                     cx.background_executor().timer(wait).await;
                     let _ = this.update_in(cx, |this, window, cx| {
                         this.preview_wake = None;
                         if !this.offscreen(window) { cx.notify(); }
                     });
-                }));
+                })));
             }
             // Restart the clock cleanly after the pause (no catch-up jump).
             self.clock.idle();
@@ -1399,6 +1406,7 @@ impl GreeterView {
         let entrance_s = ENTRANCE_LEAD_S + Element::ALL.len() as f32 * m.stagger_ms as f32 / MS_PER_S;
         let entering = self.entrance_at.is_some_and(|at| now.saturating_duration_since(at).as_secs_f32() < entrance_s);
         springs
+            || self.roll.moving(now)
             || entering
             || self.sim_reset.is_some()
             || self.phase != Phase::Idle
@@ -1583,9 +1591,8 @@ impl GreeterView {
         let size = snap_size(c.size * k * (1.0 + CLOCK_IDLE_GROWTH * idle) * (1.0 + CLOCK_SUCCESS_GROWTH * f.success));
         let line = size * 1.08;
         let font = if c.font.trim().is_empty() { f.display_font.clone() } else { SharedString::from(c.font.clone()) };
-        let roll_t = self.roll.at.map(|t| f.now.saturating_duration_since(t).as_secs_f32()).unwrap_or(10.0);
-        let progress = pop_at(ROLL_SPRING, roll_t).clamp(0.0, ROLL_OVERSHOOT_CAP);
-        let rolling = progress < 1.0 && self.roll.prev.chars().count() == self.roll.text.chars().count();
+        let progress = self.roll.progress(f.now);
+        let rolling = self.roll.moving(f.now);
         let mut row = div()
             .flex()
             .font_family(font)

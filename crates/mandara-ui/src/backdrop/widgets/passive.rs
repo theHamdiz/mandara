@@ -143,8 +143,7 @@ impl Canvas {
             self.weather = None;
             self.cfg = Some(cfg.clone());
         }
-        let wants_weather = cfg.items.iter().any(|w| w.enabled && matches!(&w.kind, mandara_config::desktop_widgets::WidgetKind::Weather(_) | mandara_config::desktop_widgets::WidgetKind::Clock(mandara_config::desktop_widgets::ClockWidget { weather: true, .. })));
-        let query = cfg.weather.as_ref().filter(|w| w.valid() && allow_network && wants_weather).map(|w| WeatherQuery { latitude: w.latitude, longitude: w.longitude, refresh_minutes: WEATHER_REFRESH_MINUTES });
+        let query = weather_query(cfg, allow_network);
         if self.weather.as_ref().map(|(q, _)| *q) != query {
             self.weather = query.map(|q| (q, mandara_services::weather::spawn_weather_service(q)));
             self.forecast = None;
@@ -203,6 +202,18 @@ impl Canvas {
     }
 }
 
+/// A forecast is useful only when a visible widget actually draws it.
+fn weather_query(cfg: &Widgets, allow_network: bool) -> Option<WeatherQuery> {
+    use mandara_config::desktop_widgets::WidgetKind;
+    let visible = cfg.items.iter().any(|w| w.enabled && match &w.kind {
+        WidgetKind::Weather(_) => true,
+        WidgetKind::Clock(clock) => clock.shows_weather(),
+        _ => false,
+    });
+    cfg.weather.as_ref().filter(|w| w.valid() && allow_network && visible)
+        .map(|w| WeatherQuery { latitude: w.latitude, longitude: w.longitude, refresh_minutes: WEATHER_REFRESH_MINUTES })
+}
+
 fn tone(palette: &MandaraPalette) -> image::RgbImage {
     let [r, g, b, _] = palette.surface_container.to_rgba8();
     image::RgbImage::from_pixel(1, 1, image::Rgb([r, g, b]))
@@ -222,7 +233,7 @@ fn scene(cfg: &Widgets, spec: &PaintSpec) -> WidgetScene {
         ..Default::default()
     };
     scene.data.place = cfg.weather.as_ref().filter(|w| w.valid()).map(|w| (w.latitude, w.longitude));
-    scene.data.palette = super::palette_colors(&spec.palette);
+    scene.data.palette = super::super::palette_colors(&spec.palette);
     scene
 }
 
@@ -246,6 +257,25 @@ fn paint(spec: &PaintSpec, size: (u32, u32), text: &mut TextPainter) -> Option<P
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn forecasts_require_a_visible_weather_view_and_public_consent() {
+        use mandara_config::desktop_widgets::{ClockFace, ClockWidget, DesktopWidget, WeatherWidget, WidgetKind};
+        let mut cfg = Widgets { weather: Some(mandara_config::preauth::PublicWeather { latitude: 31.2, longitude: 29.9, place: "Demo".into() }), ..Default::default() };
+        for face in ClockFace::ALL {
+            cfg.items = vec![DesktopWidget { kind: WidgetKind::Clock(ClockWidget { face, weather: true, ..Default::default() }), ..Default::default() }];
+            assert_eq!(weather_query(&cfg, true).is_some(), face == ClockFace::DayBlock, "{face:?}");
+            assert!(weather_query(&cfg, false).is_none());
+        }
+        cfg.items = vec![DesktopWidget { kind: WidgetKind::Weather(WeatherWidget::default()), ..Default::default() }];
+        assert!(weather_query(&cfg, true).is_some());
+        cfg.items[0].enabled = false;
+        assert!(weather_query(&cfg, true).is_none());
+        cfg.items[0] = DesktopWidget { kind: WidgetKind::Clock(ClockWidget { face: ClockFace::DayBlock, weather: false, ..Default::default() }), ..Default::default() };
+        assert!(weather_query(&cfg, true).is_none());
+        cfg.weather = None;
+        assert!(weather_query(&cfg, true).is_none());
+    }
 
     #[test]
     fn large_outputs_keep_their_aspect_and_a_bounded_cache() {

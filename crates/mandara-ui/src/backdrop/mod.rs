@@ -804,6 +804,11 @@ fn identity_data(d: &mut widgets::WidgetData, items: &[mandara_config::desktop_w
 /// The theme's colours with their names (catalog keys), as `0xRRGGBB`.
 fn theme_palette(cx: &App) -> Vec<(String, u32)> {
     let p = mandara_core::theme_entity(cx).read(cx).target().clone();
+    palette_colors(&p)
+}
+
+/// Shared palette swatches keep catalog keys until the widget chooses its language.
+fn palette_colors(p: &mandara_theme::MandaraPalette) -> Vec<(String, u32)> {
     let rgb = |c: mandara_theme::Color| {
         let [r, g, b, _] = c.to_rgba8();
         (u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b)

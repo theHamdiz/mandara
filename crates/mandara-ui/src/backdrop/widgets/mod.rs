@@ -592,10 +592,6 @@ pub fn toggle_ids(w: &mandara_config::desktop_widgets::TogglesWidget) -> Vec<Str
     if w.toggles.is_empty() { ["wifi", "bluetooth", "dnd", "night-light"].map(String::from).to_vec() } else { w.toggles.clone() }
 }
 
-fn palette_colors(palette: &mandara_theme::MandaraPalette) -> Vec<(String, u32)> {
-    [(mandara_i18n::t("Primary"), palette.primary), (mandara_i18n::t("Surface"), palette.surface_container), (mandara_i18n::t("Text"), palette.on_surface)]
-        .into_iter().map(|(name, color)| (name.into(), color.to_rgba_u32() >> 8)).collect()
-}
 
 /// What else `w` shows from the scene (the forecast, the cities), hashed.
 fn data_key(w: &DesktopWidget, scene: &WidgetScene) -> u64 {

@@ -268,7 +268,7 @@ impl PluginServices {
         let weather_id = crate::plugins::weather::ID;
         let weather_shown = !cfg.plugin_places(weather_id).is_empty()
             || (cfg.wallpaper.desktop_clock && cfg.wallpaper.show_date && cfg.wallpaper.show_weather)
-            || cfg.desktop.widgets.painted().any(|w| matches!(&w.kind, mandara_config::desktop_widgets::WidgetKind::Clock(c) if c.weather && c.face == mandara_config::desktop_widgets::ClockFace::DayBlock));
+            || cfg.desktop.widgets.painted().any(|w| matches!(&w.kind, mandara_config::desktop_widgets::WidgetKind::Clock(c) if c.shows_weather()));
         Self {
             clipboard: on(crate::plugins::clipboard::ID),
             sampler: SAMPLER_PLUGINS.iter().any(|id| on(id)),

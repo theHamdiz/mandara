@@ -1340,6 +1340,11 @@ impl Default for ClockWidget {
 }
 
 impl ClockWidget {
+    /// Only the day-block face displays the optional weather caption.
+    pub fn shows_weather(&self) -> bool {
+        self.weather && self.face == ClockFace::DayBlock
+    }
+
     /// A new clock with `face`: the depth faces keep their Gregorian ·
     /// Hijri date pill.
     pub fn with_face(face: ClockFace) -> Self {

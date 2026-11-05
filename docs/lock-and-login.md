@@ -25,7 +25,8 @@ private date. World clocks without a city list use the public default cities.
 Weather has its own **Public weather location** choice. The editor shows
 the coordinates before **Use this location publicly**; adding a widget
 does not copy the desktop's location. The public configuration permits
-forecast requests only while that screen uses weather. Studio previews
+forecast requests only for visible weather widgets or a day-block clock
+with its weather caption enabled. Studio previews
 stay offline, including **Preview full screen**, and show the unavailable
 state until a real screen fetches data. Remove the location to stop those
 requests.

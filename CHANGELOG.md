@@ -24,6 +24,8 @@ lock screens, with clearer previews and setup checks.
   secure locker, with a clear explanation in Studio. World clocks have
   public default cities; copied countdowns leave private desktop titles and
   dates behind. Embedded and full-screen previews stay offline.
+  Forecast requests start only for widgets that actually display weather;
+  palette labels follow each widget’s chosen language.
 
 - **Four optional connected tools.** Translator, Phone Connect, Feeds and
   Home Assistant are first-party plugins. Translate when you ask, keep up
@@ -44,10 +46,6 @@ lock screens, with clearer previews and setup checks.
 
 ### Fixed
 
-- **A quieter website in dark mode.** The compositor section and expanded
-  questions follow the page’s theme with a subtle surface accent, readable
-  links and visible keyboard focus.
-
 - **Tell centered bar presets apart.** The Micro pill and Dynamic island
   thumbnails use the bar’s real compact geometry and show their different
   item arrangements. (#103)
@@ -59,7 +57,8 @@ lock screens, with clearer previews and setup checks.
 
 - **Keep the login preview current.** The login designer keeps clocks and
   public widgets current while its preview is visible, including across
-  midnight.
+  midnight. Digit rolls finish smoothly, and enabling seconds takes effect
+  without waiting for the next minute.
 
 - **Dry runs stay compact.** The installer keeps its one-line heading on
   an interactive dry run and leaves the setup menu closed. (#66)
@@ -71,6 +70,10 @@ lock screens, with clearer previews and setup checks.
 - **Fast clipboard paging keeps up.** A quick wheel movement turns all
   requested pages and keeps the leftover distance for the next movement.
   Builds on Hedayatbakhshi’s keyboard navigation. (#70)
+
+- **A quieter website in dark mode.** The compositor section and expanded
+  questions follow the page’s theme with a subtle surface accent, readable
+  links and visible keyboard focus.
 
 ## 0.16.0 — 2026-11-05
 

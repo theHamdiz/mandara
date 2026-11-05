@@ -28,7 +28,7 @@ fn sample_scene(widget: &DesktopWidget, palette: &MandaraPalette, cover_px: u32)
     let mut scene = WidgetScene::preview(vec![widget.clone()]);
     scene.on_surface = palette.on_surface;
     scene.surface = palette.surface_container;
-    scene.data.palette = super::palette_colors(palette);
+    scene.data.palette = super::super::palette_colors(palette);
     if let WidgetKind::Toggles(toggles) = &widget.kind {
         scene.data.toggles = super::toggle_ids(toggles).into_iter().enumerate().map(|(i, id)| (id, i % 2 == 0)).collect();
     }
@@ -164,10 +164,26 @@ mod tests {
         assert_eq!(scene.data.toggles.len(), 4);
         assert!(scene.data.toggles.iter().any(|(_, on)| *on));
         assert!(scene.data.toggles.iter().any(|(_, on)| !on));
-        assert_eq!(scene.data.palette, super::super::palette_colors(&palette));
+        assert_eq!(scene.data.palette, super::super::super::palette_colors(&palette));
         let sliders = DesktopWidget { kind: WidgetKind::Sliders(SlidersWidget { levels: vec!["volume".into()], ..Default::default() }), ..Default::default() };
         assert_eq!(sample_scene(&sliders, &palette, 360).data.levels, vec![("volume".into(), SAMPLE_LEVEL)]);
         let live = WidgetScene::default();
         assert!(live.data.toggles.is_empty() && live.data.levels.is_empty() && live.data.palette.is_empty());
+    }
+
+    #[test]
+    fn palette_examples_keep_all_theme_roles_and_the_widgets_own_language() {
+        use mandara_config::desktop_widgets::{PaletteWidget, TextOptions};
+        use super::super::layout::{MarkKind, tests::Fixed};
+        let palette = mandara_theme::engine::default_palette(true);
+        let options = PaletteWidget { locale: TextOptions { language: "ar".into(), ..Default::default() }, ..Default::default() };
+        let widget = DesktopWidget { kind: WidgetKind::Palette(options.clone()), ..Default::default() };
+        let colors = sample_scene(&widget, &palette, 360).data.palette;
+        assert_eq!(colors.iter().map(|(key, _)| key.as_str()).collect::<Vec<_>>(), ["Primary", "Secondary", "Tertiary", "Surface", "Text", "Urgent", "Success", "Warning"]);
+        assert_eq!(colors[0].1, palette.primary.to_rgba_u32() >> 8);
+        let language = super::super::lingo::Lingo::of(&options.locale, false, None);
+        let layout = super::super::identity::palette(&options, &colors, &language, 1.0, &mut Fixed);
+        let primary = mandara_i18n::tr_in(mandara_i18n::Lang::Ar, "Primary");
+        assert!(layout.marks.iter().any(|mark| matches!(&mark.kind, MarkKind::Text { text, .. } if text == &primary)));
     }
 }
