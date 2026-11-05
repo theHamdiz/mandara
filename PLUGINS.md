@@ -207,7 +207,7 @@ closed panel or a hidden sidebar costs nothing.
 | `now-unix-ms()` | The current time, in milliseconds since the Unix epoch. |
 | `setting(key)` | Your `[plugins.settings.<id>]` value, as JSON (the declared default until the user changes it). |
 | `command(line)` | Queues a Mandara command. Needs the `commands` permission. |
-| `locale()` | The interface language: `en`, `ar`, `es`, `fr`, `de`, `tr`, `ru`, `hi`, `zh` or `ja`. |
+| `locale()` | The interface language: `en`, `ar`, `fa`, `ur`, `es`, `pt`, `fr`, `de`, `tr`, `ru`, `hi`, `mr`, `bn`, `te`, `id`, `sw`, `vi`, `zh`, `ja` or `ko`. |
 | `translate(text)` | Looks `text` up in your `locales/` catalog. |
 
 **The palette** every view call receives is the live theme as `#rrggbb`
@@ -613,14 +613,15 @@ and no review queue.
    gh release create v0.1.0 moon-phase.mandara.tar.gz --title "v0.1.0" --notes "First release"
    ```
 
-4. **That's it.** Your plugin shows up in **Studio → Plugins → Community**
+4. **That's it.** If the store policy permits it, your plugin shows up in **Studio → Plugins → Community**
    (and in Discover's *New & updated* and *Community picks* shelves),
    ranked by stars. Users can install, update or remove it with one click.
    Installing switches it on (it's added to `plugins.enabled`) and it loads
    live, without restarting the shell.
 
-The topic is the only filter: forks and archived repositories are listed
-too (archived ones carry a badge). A repository without a usable release is
+The topic discovers plugins, and the store's moderation policy filters the
+results. Forks and archived repositories are included (archived ones carry
+a badge). A repository without a usable release is
 still listed; installing it says *No release yet* (or *No plugin file yet*
 when releases exist but none has the archive) and offers *Check again*.
 
@@ -650,9 +651,50 @@ To test your release flow without publishing, point Mandara at a mirror
 or mock of the API with `MANDARA_MARKETPLACE_API` (default
 `https://api.github.com`), for example
 `MANDARA_MARKETPLACE_API=http://127.0.0.1:8080 mandara studio plugins --tab community`.
-It needs `/search/repositories`, `/repos/<owner>/<repo>/releases/latest`
-and `/repos/<owner>/<repo>/releases`. `crates/mandara-plugins/tests/marketplace.rs`
-does this end to end.
+It needs `/search/repositories`, `/repos/<owner>/<repo>`,
+`/repos/<owner>/<repo>/releases/latest` and `/repos/<owner>/<repo>/releases`.
+The API override keeps the central moderation policy active. Local test
+fixtures supply an explicit `PolicySource`; the integration tests in
+`crates/mandara-plugins/tests/marketplace.rs` and
+`crates/mandara-services/tests/self_update.rs` do this without reaching GitHub.
+
+### Store moderation
+
+Community listings follow [`policy.toml` in mandara-store-policy](https://github.com/theHamdiz/mandara-store-policy).
+It is runtime data: changing a rule needs no Mandara build or release and
+does not trigger Mandara's CI. An empty file allows every repository.
+
+The optional `version` is `1`. Each `[[publishers]]` entry selects an
+account with a positive `github_id`, a `login`, or both. Each `[[plugins]]`
+entry selects a repository with a positive `repository_id`, an
+`owner/repo` string in `repository`, or both. Names are case-insensitive.
+When supplied, numeric IDs take precedence over readable names, so rules
+follow renames without affecting someone who later takes the old name.
+GitHub metadata must include the IDs needed by numeric rules.
+
+Every entry accepts an optional `reason` and two booleans: `hide` and
+`deny_install`, both defaulting to `true`. `deny_install` covers updates
+as well as first installs. Set `deny_install = false` to hide a listing
+while allowing direct installs, or `hide = false` to leave a blocked
+plugin visible. Matching account and repository restrictions combine.
+Unknown fields, unsupported versions and invalid selectors reject the
+whole policy update.
+
+Mandara checks the policy when community results are requested and before
+an install or update, including direct repository installs and cached
+update plans. It reuses a validated answer for up to a minute, then checks
+with an ETag; there is no background polling. Cached search results are
+filtered again with the checked policy. A failed refresh keeps the last
+valid rules. After 24 hours without successful validation, installs and
+updates pause until verification succeeds; browsing still applies the
+known rules. If no valid policy has ever loaded, community browsing,
+installs and updates pause with a retry message. Offline mode sends no
+requests.
+
+Moderation never disables or removes installed plugins, changes enabled
+settings, or affects built-in plugins and local development folders.
+Unlike a release's compliance warning, a store block cannot be bypassed
+with **Install anyway**.
 
 ### Before you publish: compliance check
 

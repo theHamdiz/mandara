@@ -28,7 +28,7 @@ use mandara_services::containers::{
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::{Value, json};
 
-use super::fn_view;
+use super::model_view as fn_view;
 use super::panel_fx::{
     ANGLE_DIAGONAL_DEG, ANGLE_DOWN_DEG, EXPIRY_MARGIN, HEADER_H, History, PILL_H_PX, PanelShape, SMALL_ICON_PX, ViewSet, alpha, empty_state, glass_card,
     glow, header, meter, partner, readable, redraw_in, sparkline,

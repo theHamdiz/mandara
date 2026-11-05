@@ -8,6 +8,7 @@
 //!
 //! One test function: it sets process-wide environment variables.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -38,6 +39,16 @@ fn pass(_: &Path, _: &str) -> Result<(), Finding> {
 }
 /// Plugin updates with a compliance check that always passes.
 const PASS: Vetting = Vetting { check: &pass, force: false };
+
+/// An explicit local policy; the fixture never contacts the live registry.
+#[derive(Default)]
+struct TestPolicy(RefCell<String>);
+
+impl marketplace::moderation::PolicySource for TestPolicy {
+    fn policy(&self, _: bool) -> Result<marketplace::moderation::policy::Policy, String> {
+        marketplace::moderation::policy::Policy::parse(&self.0.borrow())
+    }
+}
 
 fn serve(stream: TcpStream, routes: &Routes, log: &Log) {
     let mut reader = BufReader::new(stream.try_clone().unwrap());
@@ -127,6 +138,7 @@ fn plugin_archive(version: &str, wasm: &[u8]) -> Vec<u8> {
 
 #[test]
 fn self_update_and_plugin_updates_end_to_end() {
+    let policy = TestPolicy::default();
     let root = tempfile::tempdir().unwrap();
     let routes: Routes = Arc::default();
     let (base, log) = start_mock(routes.clone());
@@ -404,6 +416,7 @@ fn self_update_and_plugin_updates_end_to_end() {
     };
     {
         let mut r = routes.lock().unwrap();
+        r.insert(format!("/repos/{PLUGIN_REPO}"), serde_json::json!({ "id": 42, "full_name": PLUGIN_REPO, "owner": { "id": 7, "login": "mock-author" } }).to_string().into_bytes());
         r.insert(format!("/repos/{PLUGIN_REPO}/releases/latest"), plugin_release_json(true));
         r.insert(format!("/plugin/{MANIFEST_FILE}"), pm.to_json().into_bytes());
         r.insert(format!("/download/{new_archive_name}"), new_archive.clone());
@@ -425,8 +438,33 @@ fn self_update_and_plugin_updates_end_to_end() {
         assert!(std::fs::read_to_string(dir.join("plugin.toml")).unwrap().contains(NEW));
         assert_eq!(std::fs::read_to_string(dir.join(".source")).unwrap(), format!("{PLUGIN_REPO}\nv{NEW}\n"));
     };
+    // A newly banned publisher is checked against fresh repository IDs,
+    // even for a direct install or a cached update plan. Force only
+    // overrides compliance findings, never moderation.
+    *policy.0.borrow_mut() = "[[publishers]]\ngithub_id = 7\nlogin = 'previous-login'\nreason = 'fixture ban'".into();
+    let before = log.lock().unwrap().len();
+    let blocked = marketplace::install_with_policy(PLUGIN_REPO, &Vetting { check: &pass, force: true }, &|_| {}, &policy).unwrap_err();
+    assert!(blocked.to_string().contains("fixture ban"));
+    assert!(plugins::apply_with_policy(u, ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap_err().contains("fixture ban"));
+    assert_eq!(std::fs::read(dir.join("plugin.wasm")).unwrap(), old_wasm);
+    assert!(log.lock().unwrap()[before..].iter().all(|path| path == &format!("/repos/{PLUGIN_REPO}")));
+    // Searches reapply changed rules to their unfiltered response cache.
+    routes.lock().unwrap().insert("/search/repositories".into(), serde_json::json!({ "total_count": 1, "items": [{ "id": 42, "name": "mandara-demo", "full_name": PLUGIN_REPO, "html_url": "https://example.invalid/demo", "owner": { "id": 7, "login": "mock-author" } }] }).to_string().into_bytes());
+    assert!(marketplace::search_with_policy("policy-fixture", &policy).unwrap().items.is_empty());
+    policy.0.borrow_mut().clear();
+    let before = log.lock().unwrap().len();
+    assert_eq!(marketplace::search_with_policy("policy-fixture", &policy).unwrap().items.len(), 1);
+    assert_eq!(log.lock().unwrap().len(), before, "unblocking refilters cached search results");
+    *policy.0.borrow_mut() = "[[plugins]]\nrepository_id = 42\nrepository = 'previous/name'".into();
+    assert!(marketplace::search_with_policy("policy-fixture", &policy).unwrap().items.is_empty());
+    assert!(marketplace::install_with_policy(PLUGIN_REPO, &PASS, &|_| {}, &policy).is_err());
+    *policy.0.borrow_mut() = "[[plugins]]\nrepository = 'mock-author/mandara-demo'\ndeny_install = false".into();
+    marketplace::install_with_policy(PLUGIN_REPO, &PASS, &|_| {}, &policy).unwrap();
+    check_new(&dir);
+    install_plugin();
+    policy.0.borrow_mut().clear();
     // Delta: patch + meta only.
-    let report = plugins::apply(u, ApplyOptions::default(), &PASS, &|_| {}).unwrap();
+    let report = plugins::apply_with_policy(u, ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap();
     assert_eq!((report.method, report.downloaded), (Method::Delta, patch_size + meta_size));
     check_new(&dir);
     assert!(plugins::can_roll_back(PLUGIN_ID));
@@ -441,7 +479,7 @@ fn self_update_and_plugin_updates_end_to_end() {
     corrupt[good.len() / 2] ^= 0xff;
     routes.lock().unwrap().insert(format!("/download/{patch_file}"), corrupt);
     install_plugin();
-    let report = plugins::apply(u, ApplyOptions::default(), &PASS, &|_| {}).unwrap();
+    let report = plugins::apply_with_policy(u, ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap();
     assert_eq!(report.method, Method::Full);
     assert!(report.fallback.is_some());
     check_new(&dir);
@@ -452,7 +490,7 @@ fn self_update_and_plugin_updates_end_to_end() {
     routes.lock().unwrap().insert(format!("/repos/{PLUGIN_REPO}/releases/latest"), plugin_release_json(false));
     let bare = plugins::check_all(true, Duration::from_secs(3600)).unwrap();
     assert!(bare[0].available && bare[0].patch.is_none());
-    let report = plugins::apply(&bare[0], ApplyOptions::default(), &PASS, &|_| {}).unwrap();
+    let report = plugins::apply_with_policy(&bare[0], ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap();
     assert_eq!((report.method, report.downloaded), (Method::Full, new_archive.len() as u64));
     check_new(&dir);
 
@@ -461,15 +499,15 @@ fn self_update_and_plugin_updates_end_to_end() {
     // the flag kept. A passing check clears the flag.
     install_plugin();
     let reject = |_: &Path, _: &str| Err(Finding::new(Class::Placeholder, "it shows nothing"));
-    let err = plugins::apply(&bare[0], ApplyOptions::default(), &Vetting { check: &reject, force: false }, &|_| {}).unwrap_err();
+    let err = plugins::apply_with_policy(&bare[0], ApplyOptions::default(), &Vetting { check: &reject, force: false }, &|_| {}, &policy).unwrap_err();
     assert!(err.contains(&format!("v{NEW}")) && err.contains("it shows nothing"), "{err}");
     assert_eq!(std::fs::read(dir.join("plugin.wasm")).unwrap(), old_wasm, "a rejected update leaves the installed version");
     assert_eq!(marketplace::flag_for(PLUGIN_REPO, &format!("v{NEW}")).map(|f| f.class), Some(Class::Placeholder));
-    plugins::apply(&bare[0], ApplyOptions::default(), &Vetting { check: &reject, force: true }, &|_| {}).unwrap();
+    plugins::apply_with_policy(&bare[0], ApplyOptions::default(), &Vetting { check: &reject, force: true }, &|_| {}, &policy).unwrap();
     check_new(&dir);
     assert!(marketplace::flag_for(PLUGIN_REPO, &format!("v{NEW}")).is_some(), "a forced install keeps its warning");
     install_plugin();
-    plugins::apply(&bare[0], ApplyOptions::default(), &PASS, &|_| {}).unwrap();
+    plugins::apply_with_policy(&bare[0], ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap();
     assert!(marketplace::flags().is_empty());
     assert!(pm.targets.contains_key(PLUGIN_TARGET));
 }

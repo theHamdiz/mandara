@@ -2923,6 +2923,7 @@ mod tests {
     const BLACK: [u8; 4] = [0, 0, 0, 255];
 
     // Mandara patch 13: atlas uploads borrow their input only until wgpu stages it.
+    /// Mandara patch 13: GPU readback must reflect staged bytes, including after the texture slot is reused.
     #[cfg(target_os = "linux")]
     #[test]
     fn atlas_uploads_copy_before_return_and_reused_textures_show_new_pixels() -> anyhow::Result<()> {

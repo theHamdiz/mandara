@@ -16,6 +16,9 @@
 //! `GITHUB_TOKEN`; else anonymous), `notify`. Commands: `ci status`,
 //! `ci refresh`.
 
+mod replies;
+mod ring;
+
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
@@ -33,7 +36,7 @@ use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
 
 use super::extras::caption;
-use super::fn_view;
+use super::model_view as fn_view;
 use super::panel_fx::{ANGLE_DOWN_DEG, HEADER_H, PanelShape, ViewSet, alpha, empty_state, glass_card, glow, header, readable, redraw_in};
 use crate::fonts::tabular_nums;
 use crate::icons::icon;
@@ -84,11 +87,6 @@ const REFRESH_BTN_PX: f32 = 30.0;
 const CHIP_BOX_PX: f32 = 20.0;
 const CHIP_ICON_PX: f32 = 13.0;
 const CHIP_IDLE_ICON_PX: f32 = 15.0;
-const RING_DOTS: usize = 10;
-const RING_DOT_PX: f32 = 2.6;
-/// Dots of the ring's comet tail and how much each one fades.
-const RING_TAIL: usize = 4;
-const RING_TAIL_FADE: f32 = 0.22;
 const RING_TRACK_ALPHA: f32 = 0.16;
 const MARK_PX: f32 = 6.0;
 const MARK_OFFSET_PX: f32 = -1.0;
@@ -105,8 +103,6 @@ const SLOW_EVERY: Duration = Duration::from_secs(300);
 const PANEL_FRESH: Duration = FAST_EVERY;
 /// The poller stops once no view rendered for this long past a cycle.
 const IDLE_GRACE: Duration = Duration::from_secs(5);
-/// The chip's ring steps one dot this often while a run is going.
-const RING_STEP: Duration = Duration::from_millis(110);
 /// Running durations in the open panel tick this often.
 const PANEL_TICK: Duration = Duration::from_secs(1);
 const SECS_PER_MIN: u64 = 60;
@@ -117,12 +113,11 @@ const SECS_PER_MIN: u64 = 60;
 struct Settings {
     raw: String,
     use_gh: bool,
-    notify: bool,
 }
 
 fn settings(cx: &App) -> Settings {
     let cfg = crate::state::config(cx).read(cx).snapshot();
-    Settings { raw: cfg.plugins.setting(ID, "repos", String::new()), use_gh: cfg.plugins.setting(ID, "use_gh_token", true), notify: cfg.plugins.setting(ID, "notify", true) }
+    Settings { raw: cfg.plugins.setting(ID, "repos", String::new()), use_gh: cfg.plugins.setting(ID, "use_gh_token", true) }
 }
 
 // ── Model ────────────────────────────────────────────────────────────────
@@ -304,27 +299,27 @@ fn announce(finished: &[(String, Run)], cx: &mut App) {
 
 /// Polls every repository off the UI thread when due (or `force`d).
 fn poll(m: &Shared, force: bool, cx: &mut App) {
-    let s = settings(cx);
+    let cfg = crate::state::config(cx).read(cx).snapshot();
+    let raw = cfg.plugins.settings.get(ID).and_then(|settings| settings.get("repos")).and_then(toml::Value::as_str).unwrap_or_default();
     let (repos, etags): (Vec<String>, Vec<Option<String>>) = {
         let mut mb = m.borrow_mut();
-        let changed = mb.raw != s.raw || mb.polled_at.is_none();
+        let changed = mb.raw != raw || mb.polled_at.is_none();
         let due = mb.polled_at.is_none_or(|t| t.elapsed() >= mb.cadence());
         if mb.polling || !(force || changed || due) || (!force && !changed && mb.limited().is_some()) {
             return;
         }
         if changed {
-            mb.repos = svc::parse_repos(&s.raw);
-            mb.raw = s.raw.clone();
+            mb.repos = svc::parse_repos(raw);
+            mb.raw.clear();
+            mb.raw.push_str(raw);
         }
         let repos = mb.repos.clone();
         if repos.is_empty() {
             mb.states.clear();
             mb.watching.clear();
             mb.polled_at = Some(Instant::now());
-            let json = mb.status_json().to_string();
-            for w in std::mem::take(&mut mb.waiters) {
-                let _ = w.try_send(Ok(json.clone()));
-            }
+            let waiters = std::mem::take(&mut mb.waiters);
+            replies::send(&waiters, || mb.status_json().to_string());
             return;
         }
         mb.polling = true;
@@ -333,7 +328,8 @@ fn poll(m: &Shared, force: bool, cx: &mut App) {
     };
     let m = m.clone();
     m.borrow().views.notify(cx);
-    let (use_gh, notify) = (s.use_gh, s.notify);
+    let use_gh = cfg.plugins.setting(ID, "use_gh_token", true);
+    let notify = cfg.plugins.setting(ID, "notify", true);
     cx.spawn(async move |cx| {
         let (tx, rx) = async_channel::bounded(1);
         let _ = std::thread::Builder::new().name("mandara-ci".into()).spawn(move || {
@@ -346,15 +342,13 @@ fn poll(m: &Shared, force: bool, cx: &mut App) {
             return;
         };
         cx.update(|cx| {
-            let (finished, views, waiters, json) = {
+            let (finished, views) = {
                 let mut mb = m.borrow_mut();
                 let finished = mb.absorb(source, results);
                 let waiters = std::mem::take(&mut mb.waiters);
-                (finished, mb.views.clone(), waiters, mb.status_json().to_string())
+                replies::send(&waiters, || mb.status_json().to_string());
+                (finished, mb.views.clone())
             };
-            for w in waiters {
-                let _ = w.try_send(Ok(json.clone()));
-            }
             if notify {
                 announce(&finished, cx);
             }
@@ -697,16 +691,11 @@ fn chip(m: &Shared, palette: &MandaraPalette, window: &mut Window, cx: &mut App)
     if running {
         let accent = readable(palette.primary, palette);
         let track = palette.on_surface.with_alpha(RING_TRACK_ALPHA);
-        let head = (mb.epoch.elapsed().as_millis() / RING_STEP.as_millis()) as usize % RING_DOTS;
-        let (half, dot) = (side / 2.0, RING_DOT_PX);
-        let r = half - dot / 2.0;
-        for i in 0..RING_DOTS {
-            let behind = (head + RING_DOTS - i) % RING_DOTS;
-            let c = if behind < RING_TAIL { accent.with_alpha(1.0 - behind as f32 * RING_TAIL_FADE) } else { track };
-            let a = -std::f32::consts::FRAC_PI_2 + std::f32::consts::TAU * i as f32 / RING_DOTS as f32;
-            boxed = boxed.child(div().absolute().left(px(half + r * a.cos() - dot / 2.0)).top(px(half + r * a.sin() - dot / 2.0)).size(px(dot)).rounded_full().bg(c.hsla()));
+        let reduced = cx.reduce_motion() || crate::state::config(cx).read(cx).get().motion.reduce_motion;
+        boxed = boxed.child(ring::draw(side, mb.epoch.elapsed(), reduced, accent, track));
+        if !reduced {
+            redraw_in(ring::STEP, window, cx);
         }
-        redraw_in(RING_STEP, window, cx);
     }
     if let Some(c) = mark {
         boxed = boxed.child(div().absolute().right(px(MARK_OFFSET_PX)).bottom(px(MARK_OFFSET_PX)).size(px(MARK_PX)).rounded_full().bg(c.hsla()).border_1().border_color(crate::shell::frame_color(palette).hsla()));

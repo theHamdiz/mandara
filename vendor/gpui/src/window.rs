@@ -1897,7 +1897,7 @@ impl Window {
 
                 let should_draw = invalidator.is_dirty() || force_render;
                 if should_draw {
-                    measure("frame duration", || {
+                    let removed = measure("frame duration", || {
                         handle
                             .update(&mut cx, |_, window, cx| {
                                 #[cfg(feature = "profiler")]
@@ -1912,9 +1912,16 @@ impl Window {
                                 let arena_clear_needed = window.draw(cx);
                                 window.present();
                                 arena_clear_needed.clear(cx);
+                                window.removed
                             })
-                            .log_err();
-                    })
+                            .log_err()
+                            .unwrap_or(true)
+                    });
+                    // Mandara patch 6: a view may close its window during the
+                    // final fade frame. It no longer has a frame source to arm.
+                    if removed {
+                        return;
+                    }
                 } else if needs_present {
                     handle
                         .update(&mut cx, |_, window, _| window.present())
@@ -8743,6 +8750,44 @@ mod tests {
             test_window.frame_wake_count() > baseline || callback_ran.get(),
             "a frame request with pending next-frame callbacks must either run them or re-arm the frame source"
         );
+    }
+
+    // Mandara patch 6: closing during render must end the platform callback.
+    #[gpui::test]
+    fn closing_during_draw_does_not_wake_the_removed_window(cx: &mut TestAppContext) {
+        struct ClosingView {
+            close: Rc<Cell<bool>>,
+            wakes_at_close: Rc<Cell<usize>>,
+        }
+
+        impl Render for ClosingView {
+            fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                if self.close.get() {
+                    window.on_next_frame(|_, _| panic!("removed window received another frame"));
+                    window.remove_window();
+                    self.wakes_at_close.set(window.platform_window.as_test().unwrap().frame_wake_count());
+                }
+                div()
+            }
+        }
+
+        let wakes_at_close = Rc::new(Cell::new(0));
+        let close = Rc::new(Cell::new(false));
+        let window = cx.add_window({
+            let wakes_at_close = wakes_at_close.clone();
+            let close = close.clone();
+            move |_, _| ClosingView { close, wakes_at_close }
+        });
+        let test_window = cx.test_window(window.into());
+        close.set(true);
+        test_window.simulate_frame_request(RequestFrameOptions {
+            force_render: true,
+            ..Default::default()
+        });
+
+        assert!(cx.windows().is_empty());
+        assert!(wakes_at_close.get() > 0);
+        assert_eq!(test_window.frame_wake_count(), wakes_at_close.get());
     }
 
     #[gpui::test]

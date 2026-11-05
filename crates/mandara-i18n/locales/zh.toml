@@ -8069,7 +8069,7 @@
 "Couldn't download {language}: {error}" = "无法下载{language}：{error}"
 "The update didn't install" = "更新未能安装"
 "Tile patterns" = "磁贴纹样"
-"Each shortcut tile in the main menu wears its own faint geometric pattern" = "主菜单中的每个快捷方式图块都有自己淡淡的几何图案"
+"Home cards and action tiles in the main menu wear faint geometric patterns" = "主菜单中的主页卡片和操作图块带有淡淡的几何图案"
 "Kufic calligraphy" = "库法体书法"
 "The app and tool tiles wear a Kufic word instead of their geometric pattern" = "应用和工具图块显示库法体文字，而不是几何图案"
 
@@ -8195,7 +8195,7 @@
 "Tile surface" = "磁贴表面"
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "平面填充（默认）、带玻璃边缘的立体 3D 图块，或透明玻璃"
 "Tile shadow" = "磁贴阴影"
-"How strong the shadow under each shortcut tile is (0 for none)" = "每个快捷磁贴下方阴影的强度（0 为无阴影）"
+"How strong the shadow under Home cards and action tiles is (0 for none)" = "主页卡片和操作图块下方阴影的强度（0 为无阴影）"
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} 由 Nix（Home Manager 或 NixOS）生成，是只读的：请把这一行加入它的 Nix 配置，重新构建，然后再次运行 `mandara setup`：{line}"
@@ -8693,3 +8693,6 @@
 "Example artist" = "示例艺人"
 
 "Previews use sample data." = "预览使用示例数据。"
+"Couldn't verify the community store policy. Try again later." = "无法验证社区商店政策。请稍后重试。"
+"The community store has blocked installs and updates for {repository}." = "社区商店已禁止安装和更新 {repository}。"
+"Repository details are missing IDs required by the store policy." = "仓库详情缺少商店政策要求的标识符。"

@@ -1342,6 +1342,7 @@ Couldn't start KeePassXC: {error}
 Couldn't uninstall {app}: {error}
 Couldn't uninstall: {error}
 Couldn't unmute the microphone: {error}
+Couldn't verify the community store policy. Try again later.
 Couldn't write {path}: {error}
 Count the days since
 Countdown
@@ -1774,7 +1775,6 @@ Each note is a Markdown file, each topic a folder in here — point it at a sync
 Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence.
 Each repair is safe: your compositor config only ever gets one include line, with a backup.
 Each sets the launcher's style, layout and placement together; change any setting below afterwards.
-Each shortcut tile in the main menu wears its own faint geometric pattern
 Each surface
 Each walk to the mosque, morning or evening, is a welcome being prepared.
 Ease someone's hardship
@@ -2494,6 +2494,7 @@ Home Assistant
 Home Assistant could not find this entity
 Home Assistant entity id
 Home Assistant returned no entity list
+Home cards and action tiles in the main menu wear faint geometric patterns
 Homepage
 Honour your parents
 Hook ran — see recent runs
@@ -2591,7 +2592,7 @@ How often transfer rates are measured
 How panels appear
 How see-through the main menu's glass is
 How slideshow changes look: the desktop's transition or their own, with a length in ms
-How strong the shadow under each shortcut tile is (0 for none)
+How strong the shadow under Home cards and action tiles is (0 for none)
 How strongly the capsules stand out from the bar
 How strongly the pills and islands behind items stand out
 How the critical warning appears
@@ -4976,6 +4977,7 @@ Reply to {app}: {summary}
 Report a problem
 Report written to {file} (personal values redacted) — attach it to your bug report
 Repositories
+Repository details are missing IDs required by the store policy.
 Republic, Book II
 Request failed: {error}
 Required
@@ -6124,6 +6126,7 @@ The clock's time zone, network time, and the shared location's time zone
 The collections come from the hadith-api dataset, released into the public domain (the Unlicense). Each one is downloaded when you ask for it, checked, and kept on this computer in ~/.local/share/mandara/hadith.
 The colour its items light up and wash with
 The command is empty
+The community store has blocked installs and updates for {repository}.
 The compiled WebAssembly component (manifest `entry`)
 The compositor connection closed
 The compositor did not answer

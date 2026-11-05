@@ -26,7 +26,7 @@ use mandara_theme::MandaraPalette;
 use serde_json::{Value, json};
 
 use super::extras::{Flash, caption, toast};
-use super::fn_view;
+use super::model_view as fn_view;
 use super::panel_fx::{
     ANGLE_DIAGONAL_DEG, EXPIRY_MARGIN, HEADER_H, PILL_H_PX, SECTION_H_PX, SMALL_ICON_PX, ViewSet, WASH_FAINT, WASH_TRACK, alpha, dot_ring, duration_short, empty_state, glass_card,
     header, partner, pill_button, readable, redraw_in, section, wash,

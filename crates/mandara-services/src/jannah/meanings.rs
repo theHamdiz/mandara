@@ -31,7 +31,7 @@ pub struct Edition {
 }
 
 /// The edition per interface language (Arabic has none: Arabic only).
-const EDITIONS: [(&str, Edition); 14] = [
+const EDITIONS: [(&str, Edition); 16] = [
     ("en", Edition { id: "en.sahih", translator: "Saheeh International" }),
     ("id", Edition { id: "id.indonesian", translator: "Kementerian Agama Republik Indonesia" }),
     ("tr", Edition { id: "tr.diyanet", translator: "Diyanet İşleri" }),
@@ -46,10 +46,13 @@ const EDITIONS: [(&str, Edition); 14] = [
     ("ur", Edition { id: "ur.jalandhry", translator: "فتح محمد جالندھری" }),
     ("bn", Edition { id: "bn.bengali", translator: "মুহিউদ্দীন খান" }),
     ("ko", Edition { id: "ko.korean", translator: "한국어 번역 (Tanzil)" }),
+    ("pt", Edition { id: "pt.elhayek", translator: "Samir El-Hayek" }),
+    ("sw", Edition { id: "sw.barwani", translator: "Ali Muhsin Al-Barwani" }),
 ];
 
-/// The Qur'an edition for a language code (`None` for Arabic and
-/// languages without one).
+/// The Qur'an edition for a language code (`None` for Arabic, and for
+/// Marathi, Vietnamese and Telugu, which have no text edition on
+/// api.alquran.cloud).
 pub fn edition(lang: &str) -> Option<Edition> {
     EDITIONS.iter().find(|(l, _)| *l == lang).map(|(_, e)| *e)
 }
@@ -279,11 +282,13 @@ mod tests {
     fn every_interface_language_maps_to_an_existing_edition() {
         assert_eq!(edition("en").map(|e| e.id), Some("en.sahih"));
         assert_eq!(edition("ar"), None);
-        for (lang, id) in [("id", "id.indonesian"), ("tr", "tr.diyanet"), ("ru", "ru.kuliev"), ("fr", "fr.hamidullah"), ("de", "de.bubenheim"), ("es", "es.cortes"), ("zh", "zh.jian"), ("ja", "ja.japanese"), ("hi", "hi.hindi"), ("fa", "fa.makarem"), ("ur", "ur.jalandhry"), ("bn", "bn.bengali"), ("ko", "ko.korean")] {
+        for (lang, id) in [("id", "id.indonesian"), ("tr", "tr.diyanet"), ("ru", "ru.kuliev"), ("fr", "fr.hamidullah"), ("de", "de.bubenheim"), ("es", "es.cortes"), ("zh", "zh.jian"), ("ja", "ja.japanese"), ("hi", "hi.hindi"), ("fa", "fa.makarem"), ("ur", "ur.jalandhry"), ("bn", "bn.bengali"), ("ko", "ko.korean"), ("pt", "pt.elhayek"), ("sw", "sw.barwani")] {
             assert_eq!(edition(lang).map(|e| e.id), Some(id));
         }
+        // Marathi, Vietnamese and Telugu have no Tanzil text edition.
+        let no_edition = [mandara_i18n::Lang::Ar, mandara_i18n::Lang::Mr, mandara_i18n::Lang::Vi, mandara_i18n::Lang::Te];
         for lang in mandara_i18n::Lang::ALL {
-            assert_eq!(edition(lang.code()).is_none(), lang == mandara_i18n::Lang::Ar, "{lang:?}");
+            assert_eq!(edition(lang.code()).is_none(), no_edition.contains(&lang), "{lang:?}");
         }
         assert!(cache_path("en.sahih").ends_with("jannah/en.sahih.json"));
     }

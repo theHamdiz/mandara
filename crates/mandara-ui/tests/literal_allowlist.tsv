@@ -13,7 +13,6 @@ mandara-ui/src/desktop.rs	px	1	desktop widget metric (fixed design; wallpaper cl
 mandara-ui/src/icons.rs	px	5	icon glyph metrics (bar icons follow bar.icon_scale)
 mandara-ui/src/overlays.rs	px	9	launcher row geometry (launcher width, layout, columns and compact mode are settings)
 mandara-ui/src/plugins/containers.rs	px	2	container row metrics (fixed design; panels.width_scale applies)
-mandara-ui/src/plugins/mod.rs	px	2	shared plugin chrome metrics (fixed design)
 mandara-ui/src/plugins/screen_time.rs	px	8	screen-time chart geometry (fixed design)
 mandara-ui/src/plugins/updates.rs	px	1	update row metric (fixed design; panels.width_scale applies)
 mandara-ui/src/switcher.rs	px	4	switcher card metrics (thumbnail width and columns are settings)

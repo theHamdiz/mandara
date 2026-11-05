@@ -31,6 +31,8 @@ use crate::shell::frame_color;
 use crate::style::ClipRounded as _;
 use crate::state::{ShellState, config, shell, update_config};
 
+mod cache;
+
 /// An online wallpaper is prefetched once the pointer rests on it this long (network politeness).
 const PREFETCH_DWELL: Duration = Duration::from_millis(450);
 /// Online search waits this long after the last keystroke (API rate politeness).
@@ -148,13 +150,7 @@ pub(crate) fn fit_within(img: &image::DynamicImage, max_w: u32, max_h: u32) -> i
 }
 
 pub(crate) fn save_jpeg(img: &image::DynamicImage, out: &Path, quality: u8) -> Result<(), String> {
-    if let Some(dir) = out.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
-    let tmp = out.with_extension("tmp");
-    let file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
-    image::codecs::jpeg::JpegEncoder::new_with_quality(std::io::BufWriter::new(file), quality).encode_image(&img.to_rgb8()).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, out).map_err(|e| e.to_string())
+    cache::write(out, |writer| image::codecs::jpeg::JpegEncoder::new_with_quality(writer, quality).encode_image(&img.to_rgb8()).map_err(|e| e.to_string()))
 }
 
 /// A picker thumbnail (cached); a video's comes from its first frame.
@@ -262,12 +258,7 @@ pub fn frosted(path: &Path) -> Frost {
         let made = (|| -> Result<(), String> {
             let img = open_still(&src)?.thumbnail(FROSTED_W, FROSTED_W).to_rgb8();
             let blurred = image::imageops::blur(&img, FROSTED_SIGMA);
-            if let Some(dir) = out.parent() {
-                std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-            }
-            let tmp = out.with_extension("tmp");
-            blurred.save_with_format(&tmp, image::ImageFormat::Png).map_err(|e| e.to_string())?;
-            std::fs::rename(&tmp, &out).map_err(|e| e.to_string())
+            cache::write(&out, |writer| image::DynamicImage::ImageRgb8(blurred).write_to(writer, image::ImageFormat::Png).map_err(|e| e.to_string()))
         })();
         if let Err(e) = made {
             tracing::debug!("frosted wallpaper: {e}");
@@ -397,10 +388,7 @@ pub fn slant(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
         }
     }
     let img = image::RgbaImage::from_raw(w + off, h, rgba).ok_or("bad output")?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let tmp = out.with_extension("tmp");
-    img.save_with_format(&tmp, image::ImageFormat::Png).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, &out).map_err(|e| e.to_string())?;
+    cache::write(&out, |writer| image::DynamicImage::ImageRgba8(img).write_to(writer, image::ImageFormat::Png).map_err(|e| e.to_string()))?;
     prune(&dir, 400 * 1024 * 1024);
     Ok(out)
 }

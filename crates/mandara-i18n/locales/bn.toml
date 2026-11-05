@@ -7828,7 +7828,7 @@
 "Couldn't download {language}: {error}" = "{language} ডাউনলোড করা যায়নি: {error}"
 "The update didn't install" = "আপডেট ইনস্টল হয়নি"
 "Tile patterns" = "টাইলের নকশা"
-"Each shortcut tile in the main menu wears its own faint geometric pattern" = "প্রধান মেনুর প্রতিটি শর্টকাট টাইলে তার নিজস্ব হালকা জ্যামিতিক নকশা থাকে"
+"Home cards and action tiles in the main menu wear faint geometric patterns" = "প্রধান মেনুর হোম কার্ড ও অ্যাকশন টাইলে হালকা জ্যামিতিক নকশা থাকে"
 "Kufic calligraphy" = "কুফি ক্যালিগ্রাফি"
 "The app and tool tiles wear a Kufic word instead of their geometric pattern" = "অ্যাপ ও টুল টাইলে জ্যামিতিক নকশার বদলে একটি কুফি শব্দ থাকে"
 
@@ -7954,7 +7954,7 @@
 "Tile surface" = "টাইলের পৃষ্ঠ"
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "সমতল ভরাট (ডিফল্ট), কাচের কিনারাসহ উঁচু 3D টাইল, অথবা স্বচ্ছ কাচ"
 "Tile shadow" = "টাইলের ছায়া"
-"How strong the shadow under each shortcut tile is (0 for none)" = "প্রতিটি শর্টকাট টাইলের নিচের ছায়া কতটা গাঢ় (0 মানে নেই)"
+"How strong the shadow under Home cards and action tiles is (0 for none)" = "হোম কার্ড ও অ্যাকশন টাইলের নিচের ছায়া কতটা গাঢ় (0 মানে নেই)"
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} Nix (Home Manager বা NixOS) দিয়ে তৈরি এবং শুধু-পঠনযোগ্য: এই লাইনটি এর Nix কনফিগারেশনে যোগ করুন, আবার বিল্ড করুন, তারপর আবার `mandara setup` চালান: {line}"
@@ -8452,3 +8452,6 @@
 "Example artist" = "নমুনা শিল্পী"
 
 "Previews use sample data." = "প্রিভিউতে নমুনা তথ্য ব্যবহার করা হয়।"
+"Couldn't verify the community store policy. Try again later." = "কমিউনিটি স্টোরের নীতি যাচাই করা যায়নি। পরে আবার চেষ্টা করুন।"
+"The community store has blocked installs and updates for {repository}." = "কমিউনিটি স্টোরে {repository} থেকে প্লাগইন ইনস্টল বা আপডেট করা যাবে না।"
+"Repository details are missing IDs required by the store policy." = "স্টোরের নীতির জন্য প্রয়োজনীয় আইডিগুলো রিপোজিটরির তথ্যে নেই।"

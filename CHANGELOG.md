@@ -6,6 +6,82 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Easier sound switching, clearer menu cards, and fixes for notification focus
+and compositor previews.
+
+### New
+
+- **Mandara speaks Portuguese, Marathi, Vietnamese, Telugu and Swahili.**
+  Choose yours in Studio → General → Language, or follow the system
+  language. Translations ship as separate language packs.
+
+- **Choose speakers and microphones where you adjust volume.** Click the
+  current device in Sound or the sidebar to pick another one. The lists use
+  your labels and hidden-device choices and follow devices as they connect
+  and disconnect. (#109)
+
+### Improved
+
+- **Plugin updates stay focused.** CI status and connected tools keep their
+  cached views when unrelated services change. Closed panels stop their
+  refresh ticks, and CI's running indicator respects reduced motion.
+
+- **Widget previews show the real layout.** Jannah, Hadith and Qur’an cards
+  use clearly marked examples instead of generic fallback icons.
+
+- **Language packs cover the login screen too.** All twenty interface
+  languages use separate packs, including the greeter’s own wording.
+
+- **Community store moderation stays current.** Account and plugin rules can
+  hide listings or block installs and updates without a Mandara release.
+  Direct installs follow the same rules; plugins already installed keep
+  running.
+
+- **Theme cards show the theme.** Looks → Themes uses compact material
+  previews, clearer names and a selected marker, with visible keyboard focus.
+  User themes load in the background while the menu is open.
+
+- **Home cards follow your menu decoration choices.** Clock, media, volume
+  and quick toggles share the patterns, surfaces and shadows used by Apps &
+  tools. Active switches keep their on/off highlight.
+
+### Fixed
+
+- **Restart keeps your latest preferences.** Pending edits are saved before
+  restarting, manual light or dark overrides survive automatic-theme
+  restarts, and invalid configuration files are protected from replacement.
+
+- **Video wallpaper keeps its margins.** Playback retains the chosen fill
+  around contained or centered pictures while overview roots stay transparent.
+
+- **Studio leaves finished pages alone.** Late wallpaper and generator
+  previews cannot restore released images or queue hidden work. Home and
+  Performance sampling follows navigation and window visibility.
+
+- **Community search stays on your query.** Reopening the store keeps the
+  search shown in its field while checking the latest moderation rules.
+
+- **A notification can bring its app forward.** Clicking a notification can
+  focus its existing window even without a sender-provided click action.
+  Advertised actions still open their own content, and app lookup avoids
+  ambiguous matches and duplicate launches. (#107)
+
+- **Keep Umbriel's overview clear.** The wallpaper layer no longer contributes
+  a redundant solid rectangle to workspace previews. Desktop wallpaper and
+  transitions keep using their existing buffers. (#110)
+
+- **Quieter popup teardown.** Closing windows stop requesting frames, and
+  notification popups use your configured panel font. Hyprland keeps a valid
+  client snapshot if only the optional monitor lookup fails. (#111)
+
+- **Prepare wallpapers safely on several displays.** Concurrent outputs use
+  separate temporary files when preparing the same cached wallpaper.
+
+### Under the hood
+
+- Changed helpers and regression tests document their ownership, validation
+  and teardown boundaries.
+
 ## 0.17.0 — 2026-11-05
 
 Four connected tools, more desktop styles, and public widgets for login and

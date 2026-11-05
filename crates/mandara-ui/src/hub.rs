@@ -3,6 +3,8 @@
 //! pumps actor updates into it on the foreground executor.
 
 mod initial;
+mod domains;
+pub use domains::Domains;
 
 use std::collections::HashMap;
 
@@ -16,6 +18,7 @@ use mandara_services::{
 
 #[derive(Default)]
 pub struct Hub {
+    revisions: domains::Revisions,
     pub media: Option<MediaState>,
     pub network: NetworkState,
     pub bluetooth: BluetoothState,
@@ -50,6 +53,13 @@ pub struct Hub {
     pub weather_service: Option<mandara_services::WeatherService>,
     /// The running compositor's native driver (MangoWM, Niri, Hyprland, Umbriel, Sway or River).
     pub compositor: Option<std::sync::Arc<dyn CompositorBackend>>,
+}
+
+impl Hub {
+    pub fn revision(&self, domains: Domains) -> u64 { self.revisions.get(domains) }
+
+    /// Record the changed sources before notifying hub observers.
+    pub fn mark_changed(&mut self, domains: Domains) { self.revisions.bump(domains); }
 }
 
 #[derive(Clone)]
@@ -87,6 +97,7 @@ pub fn resources_entity(cx: &App) -> Entity<SystemSampler> {
 fn pump<T: 'static>(
     hub: Entity<Hub>,
     rx: async_channel::Receiver<T>,
+    domains: Domains,
     apply: impl Fn(&mut Hub, T) -> bool + 'static,
     cx: &mut App,
 ) {
@@ -97,6 +108,7 @@ fn pump<T: 'static>(
             }
             hub.update(cx, |h, cx| {
                 if apply(h, value) {
+                    h.mark_changed(domains);
                     cx.notify();
                 }
             });
@@ -110,7 +122,7 @@ fn pump<T: 'static>(
 fn pump_events<T: 'static>(
     hub: Entity<Hub>,
     rx: async_channel::Receiver<T>,
-    apply: impl Fn(&mut Hub, T) -> bool + 'static,
+    apply: impl Fn(&mut Hub, T) -> Domains + 'static,
     cx: &mut App,
 ) {
     cx.spawn(async move |cx: &mut AsyncApp| {
@@ -119,9 +131,10 @@ fn pump_events<T: 'static>(
                 let mut changed = apply(h, value);
                 // Drain whatever else is already queued before notifying.
                 while let Ok(more) = rx.try_recv() {
-                    changed |= apply(h, more);
+                    changed = changed.union(apply(h, more));
                 }
-                if changed {
+                if !changed.is_empty() {
+                    h.mark_changed(changed);
                     cx.notify();
                 }
             });
@@ -169,6 +182,25 @@ fn set<T: PartialEq>(slot: &mut T, value: T) -> bool {
     true
 }
 
+fn apply_compositor(hub: &mut Hub, event: CompositorEvent) -> Domains {
+    let (source, changed) = match event {
+        CompositorEvent::Navigation { monitor, model } => {
+            use std::collections::hash_map::Entry;
+            let changed = match hub.navigation.entry(monitor) {
+                Entry::Occupied(mut entry) => set(entry.get_mut(), model),
+                Entry::Vacant(entry) => { entry.insert(model); true }
+            };
+            (Domains::NAVIGATION, changed)
+        }
+        CompositorEvent::FocusedClient(client) => (Domains::FOCUS, set(&mut hub.focused, client)),
+        CompositorEvent::Clients(clients) => (Domains::CLIENTS, set(&mut hub.clients, clients)),
+        CompositorEvent::Keymode(mode) => (Domains::KEYBOARD, set(&mut hub.keymode, mode)),
+        CompositorEvent::KeyboardLayout(layout) => (Domains::KEYBOARD, set(&mut hub.keyboard_layout, layout)),
+        CompositorEvent::Monitors(_) => return Domains::NONE,
+    };
+    if changed { source } else { Domains::NONE }
+}
+
 /// Starts every service actor and installs the hub as a global.
 pub fn init_hub(cx: &mut App) -> Entity<Hub> {
     crate::productivity::init(cx);
@@ -198,11 +230,11 @@ pub fn init_hub(cx: &mut App) -> Entity<Hub> {
     });
     cx.set_global(GlobalHub(hub.clone()));
 
-    pump(hub.clone(), media.updates.clone(), |h, s| set_media(&mut h.media, s), cx);
-    pump(hub.clone(), network.updates.clone(), |h, s| set(&mut h.network, s), cx);
-    pump(hub.clone(), bluetooth.updates.clone(), |h, s| set(&mut h.bluetooth, s), cx);
-    pump(hub.clone(), audio.updates.clone(), |h, s| set(&mut h.audio, s), cx);
-    pump(hub.clone(), notifications.updates.clone(), |h, s| set(&mut h.notifications, s), cx);
+    pump(hub.clone(), media.updates.clone(), Domains::MEDIA, |h, s| set_media(&mut h.media, s), cx);
+    pump(hub.clone(), network.updates.clone(), Domains::NETWORK, |h, s| set(&mut h.network, s), cx);
+    pump(hub.clone(), bluetooth.updates.clone(), Domains::BLUETOOTH, |h, s| set(&mut h.bluetooth, s), cx);
+    pump(hub.clone(), audio.updates.clone(), Domains::AUDIO, |h, s| set(&mut h.audio, s), cx);
+    pump(hub.clone(), notifications.updates.clone(), Domains::NOTIFICATIONS, |h, s| set(&mut h.notifications, s), cx);
     let resources = cx.new(|_| SystemSampler::default());
     cx.set_global(GlobalResources(resources));
 
@@ -224,23 +256,17 @@ pub fn init_hub(cx: &mut App) -> Entity<Hub> {
             cx.update(|cx| {
                 hub.update(cx, |hub, cx| {
                     snapshot.install(hub);
+                    hub.mark_changed(Domains::NAVIGATION.union(Domains::FOCUS).union(Domains::CLIENTS));
                     cx.notify();
                 });
-                pump_events(hub, events, |h, event| match event {
-                    CompositorEvent::Navigation { monitor, model } => h.navigation.insert(monitor, model.clone()).as_ref() != Some(&model),
-                    CompositorEvent::FocusedClient(c) => set(&mut h.focused, c),
-                    CompositorEvent::Clients(list) => set(&mut h.clients, list),
-                    CompositorEvent::Keymode(k) => set(&mut h.keymode, k),
-                    CompositorEvent::KeyboardLayout(k) => set(&mut h.keyboard_layout, k),
-                    CompositorEvent::Monitors(_) => false,
-                }, cx);
+                pump_events(hub, events, apply_compositor, cx);
             });
         }).detach();
     }
     crate::osd::init(&hub, cx);
     // Notification popups, privacy monitor, event sounds, auto-DND.
-    crate::toasts::init(cx);
     crate::alerts::init(cx);
+    crate::toasts::init(cx);
     crate::update_watch::init(cx);
     crate::night_light::init(cx);
     crate::plugins::displays::init(cx);
@@ -296,6 +322,7 @@ fn sync_plugin_services(hub: &Entity<Hub>, cx: &mut App) {
             // follows at its next wake-up.
             h.clipboard_service = None;
             h.clipboard = Default::default();
+            h.mark_changed(Domains::CLIPBOARD);
             cx.notify();
         }),
         _ => {}
@@ -322,11 +349,12 @@ fn start_clipboard(hub: &Entity<Hub>, cx: &mut App) {
         config.clear_on_start = false;
     }
     let service = mandara_services::clipboard::spawn_clipboard_service_with(&config);
-    pump(hub.clone(), service.updates.clone(), |h, s| set(&mut h.clipboard, s), cx);
+    pump(hub.clone(), service.updates.clone(), Domains::CLIPBOARD, |h, s| set(&mut h.clipboard, s), cx);
     // Notify: hooks that configure the service (`plugins::clipboard::init`)
     // follow the hub.
     hub.update(cx, |h, cx| {
         h.clipboard_service = Some(service);
+        h.mark_changed(Domains::CLIPBOARD);
         cx.notify();
     });
 }
@@ -371,6 +399,7 @@ fn ensure_weather(hub: &Entity<Hub>, cx: &mut App) {
             hub.update(cx, |h, cx| {
                 h.weather_service = None;
                 h.weather = Default::default();
+                h.mark_changed(Domains::WEATHER);
                 cx.notify();
             });
             crate::plugins::weather::forget_query(cx);
@@ -383,6 +412,7 @@ fn ensure_weather(hub: &Entity<Hub>, cx: &mut App) {
             hub.update(cx, |h, cx| {
                 h.weather_service = None;
                 h.weather = Default::default();
+                h.mark_changed(Domains::WEATHER);
                 cx.notify();
             });
             crate::plugins::weather::forget_query(cx);
@@ -396,7 +426,7 @@ fn ensure_weather(hub: &Entity<Hub>, cx: &mut App) {
         }
     } else {
         let service = mandara_services::spawn_weather_service(query);
-        pump(hub.clone(), service.updates.clone(), |h, s| set(&mut h.weather, s), cx);
+        pump(hub.clone(), service.updates.clone(), Domains::WEATHER, |h, s| set(&mut h.weather, s), cx);
         hub.update(cx, |h, _| h.weather_service = Some(service));
     }
     crate::plugins::weather::remember_query(query, cx);
@@ -412,6 +442,20 @@ mod tests {
         let mut r = PluginRegistry::default();
         crate::plugins::register_builtin(&mut r);
         r
+    }
+
+    #[test]
+    fn compositor_deltas_invalidate_only_their_own_data() {
+        let mut hub = Hub::default();
+        let navigation = || CompositorEvent::Navigation { monitor: "DP-1".into(), model: NavigationModel::Workspaces { workspaces: Vec::new() } };
+        assert_eq!(apply_compositor(&mut hub, navigation()), Domains::NAVIGATION);
+        assert_eq!(apply_compositor(&mut hub, navigation()), Domains::NONE);
+        let focused = || CompositorEvent::FocusedClient(Some(ClientInfo { id: 1, title: "Editor".into(), ..Default::default() }));
+        assert_eq!(apply_compositor(&mut hub, focused()), Domains::FOCUS);
+        assert_eq!(apply_compositor(&mut hub, focused()), Domains::NONE);
+        assert_eq!(apply_compositor(&mut hub, CompositorEvent::KeyboardLayout("English".into())), Domains::KEYBOARD);
+        assert_eq!(apply_compositor(&mut hub, CompositorEvent::Keymode("resize".into())), Domains::KEYBOARD);
+        assert_eq!(apply_compositor(&mut hub, CompositorEvent::Clients(vec![ClientInfo { id: 1, ..Default::default() }])), Domains::CLIENTS);
     }
 
     #[test]
@@ -443,6 +487,7 @@ mod tests {
         assert!(!PluginServices::wanted(&r, &c).weather, "placed nowhere");
     }
 
+    /// Weather demand follows enabled desktop views as well as the global and plugin switches.
     #[test]
     fn desktop_weather_alone_keeps_the_forecast_service_running() {
         use mandara_config::desktop_widgets::{ClockFace, ClockWidget, DesktopWidget, WeatherWidget, WidgetKind};

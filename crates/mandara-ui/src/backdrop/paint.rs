@@ -735,6 +735,20 @@ pub fn compose(dst: &mut PixmapMut<'_>, plane: &Pixmap, dest: Rect, opacity: f32
 mod tests {
     use super::*;
 
+    /// Every fill already supplies opaque pixels; the canvas root need not
+    /// repeat its colour behind the wallpaper plane.
+    #[test]
+    fn every_wallpaper_fill_covers_the_canvas_without_a_solid_root() {
+        let source = image::RgbaImage::from_fn(3, 2, |x, y| image::Rgba([220, 90, 30, [0, 128, 255][(x + y) as usize % 3]]));
+        for fill in [WallpaperFill::Cover, WallpaperFill::Contain, WallpaperFill::Stretch, WallpaperFill::Center, WallpaperFill::Tile] {
+            for size in [(17, 9), (5, 23)] {
+                let painted = background(DynamicImage::ImageRgba8(source.clone()), fill, size, Color::from_rgba8(40, 70, 110, 255)).unwrap();
+                assert_eq!((painted.pixmap.width(), painted.pixmap.height()), size);
+                assert!(painted.pixmap.data().as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 255), "{fill:?} at {size:?}");
+            }
+        }
+    }
+
     #[test]
     fn fills_place_the_image() {
         let img = DynamicImage::ImageRgba8(RgbaImage::from_pixel(40, 20, image::Rgba([200, 10, 10, 255])));

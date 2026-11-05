@@ -138,7 +138,7 @@ fn scoped_languages_nest_and_end() {
 fn language_codes() {
     assert_eq!(Lang::from_code("ar_EG.UTF-8"), Some(Lang::Ar));
     assert_eq!(Lang::from_code("zh-CN"), Some(Lang::Zh));
-    assert_eq!(Lang::from_code("pt_BR"), None);
+    assert_eq!(Lang::from_code("pt_BR"), Some(Lang::Pt));
     assert!(Lang::Ar.is_rtl() && !Lang::Ja.is_rtl());
     assert_eq!(placeholders("{a} and {b} {c d}"), vec!["a", "b"]);
 }
@@ -152,6 +152,27 @@ fn persian_korean_urdu_and_bengali() {
         assert_eq!(lang.posix(), posix);
     }
     assert_eq!([Lang::Fa, Lang::Ko, Lang::Ur, Lang::Bn].map(Lang::native_name), ["فارسی", "한국어", "اردو", "বাংলা"]);
+}
+
+#[test]
+fn portuguese_marathi_vietnamese_telugu_and_swahili() {
+    // One locale code each. Portuguese is Brazilian (`pt_BR`); European
+    // Portuguese still selects it. Swahili is Kiswahili sanifu (`sw_KE`).
+    for (env, lang, posix) in [
+        ("pt_BR.UTF-8", Lang::Pt, "pt_BR"),
+        ("pt_PT", Lang::Pt, "pt_BR"),
+        ("pt-PT", Lang::Pt, "pt_BR"),
+        ("mr_IN.UTF-8", Lang::Mr, "mr_IN"),
+        ("vi_VN.UTF-8", Lang::Vi, "vi_VN"),
+        ("te_IN", Lang::Te, "te_IN"),
+        ("sw_KE.UTF-8", Lang::Sw, "sw_KE"),
+        ("sw_TZ", Lang::Sw, "sw_KE"),
+    ] {
+        assert_eq!(Lang::from_code(env), Some(lang), "{env}");
+        assert!(!lang.is_rtl(), "{env}");
+        assert_eq!(lang.posix(), posix, "{env}");
+    }
+    assert_eq!([Lang::Pt, Lang::Mr, Lang::Vi, Lang::Te, Lang::Sw].map(Lang::native_name), ["Português", "मराठी", "Tiếng Việt", "తెలుగు", "Kiswahili"]);
     // Every language has its own catalog slot, code and sample.
     let mut codes: Vec<&str> = Lang::ALL.iter().map(|l| l.code()).collect();
     codes.sort_unstable();

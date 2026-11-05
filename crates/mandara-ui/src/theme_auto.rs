@@ -4,12 +4,14 @@
 //! the *desired* mode changes (a boundary passes, the desktop flips, or the
 //! setting itself changes), so a manual toggle in between is respected.
 
+mod decision;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gpui::App;
-use mandara_config::{ThemeAuto, ThemeMode};
+use gpui::{App, Task};
+use mandara_config::ThemeAuto;
 use mandara_services::appearance::{self, Preference, parse_hm, scheduled_dark};
 
 use crate::state::{config, update_config};
@@ -17,14 +19,16 @@ use crate::state::{config, update_config};
 /// The light / dark schedule is checked this often (minute resolution; config changes apply at once).
 const EVALUATE_EVERY: Duration = Duration::from_secs(30);
 
-#[derive(Default)]
 struct AutoState {
     /// The desktop preference last reported by the portal.
     system: Option<Preference>,
-    /// `(auto, light_at, dark_at)` the last decision was made under.
-    key: Option<(ThemeAuto, String, String)>,
-    /// Last desired mode that was applied.
-    applied: Option<bool>,
+    decision: Option<decision::Decision>,
+    persist: async_channel::Sender<decision::Saved>,
+    clock: Option<Task<()>>,
+}
+
+fn follows_clock(auto: ThemeAuto) -> bool {
+    auto == ThemeAuto::Schedule
 }
 
 fn desired(auto: ThemeAuto, light_at: &str, dark_at: &str, system: Option<Preference>) -> Option<bool> {
@@ -39,29 +43,65 @@ fn desired(auto: ThemeAuto, light_at: &str, dark_at: &str, system: Option<Prefer
     }
 }
 
-fn evaluate(state: &RefCell<AutoState>, cx: &mut App) {
+fn evaluate(state: &Rc<RefCell<AutoState>>, cx: &mut App) {
     let cfg = config(cx).read(cx).snapshot();
     let t = &cfg.theme;
-    let key = (t.auto, t.light_at.clone(), t.dark_at.clone());
     let mut st = state.borrow_mut();
-    if st.key.as_ref() != Some(&key) {
-        st.key = Some(key);
-        st.applied = None;
+    match (follows_clock(t.auto), st.clock.is_some()) {
+        (true, false) => {
+            let weak = Rc::downgrade(state);
+            st.clock = Some(cx.spawn(async move |cx| loop {
+                cx.background_executor().timer(EVALUATE_EVERY).await;
+                let Some(state) = weak.upgrade() else { break };
+                cx.update(|cx| evaluate(&state, cx));
+            }));
+        }
+        (false, true) => st.clock = None,
+        _ => {}
     }
-    let Some(dark) = desired(t.auto, &t.light_at, &t.dark_at, st.system) else { return };
-    if st.applied == Some(dark) {
-        return;
+    let target = desired(t.auto, &t.light_at, &t.dark_at, st.system);
+    let Some(decision) = st.decision.as_mut() else { return };
+    let change = decision.evaluate(t, target);
+    if let Some(saved) = change.save
+        && let Err(error) = st.persist.try_send(saved)
+    {
+        tracing::error!("automatic theme state writer stopped: {error}");
     }
-    st.applied = Some(dark);
     drop(st);
-    if t.mode.is_dark() != dark {
-        tracing::info!("theme: switching to {} ({:?})", if dark { "dark" } else { "light" }, t.auto);
-        update_config(cx, |c| c.theme.mode = if dark { ThemeMode::Dark } else { ThemeMode::Light });
+    if let Some(mode) = change.mode {
+        tracing::info!("theme: switching to {} ({:?})", if mode.is_dark() { "dark" } else { "light" }, t.auto);
+        update_config(cx, |c| c.theme.mode = mode);
     }
 }
 
 pub fn init(cx: &mut App) {
-    let state = Rc::new(RefCell::new(AutoState::default()));
+    let initial_theme = config(cx).read(cx).get().theme.clone();
+    let path = mandara_config::paths::state_dir().join("theme-auto.json");
+    let load_path = path.clone();
+    let loaded = cx.background_executor().spawn(async move {
+        decision::Saved::load(&load_path).unwrap_or_else(|error| {
+            tracing::warn!("automatic theme state: {error:#}");
+            None
+        })
+    });
+    let (persist, writes) = async_channel::unbounded::<decision::Saved>();
+    cx.background_executor().spawn(async move {
+        while let Ok(mut saved) = writes.recv().await {
+            while let Ok(newer) = writes.try_recv() {
+                saved = newer;
+            }
+            if let Err(error) = saved.save(&path) {
+                tracing::error!("saving automatic theme state: {error:#}");
+            }
+        }
+    }).detach();
+    let state = Rc::new(RefCell::new(AutoState { system: None, decision: None, persist, clock: None }));
+    let s = state.clone();
+    cx.spawn(async move |cx| {
+        let saved = loaded.await;
+        s.borrow_mut().decision = Some(decision::Decision::new(&initial_theme, saved));
+        cx.update(|cx| evaluate(&s, cx));
+    }).detach();
     let prefs = appearance::watch();
     let s = state.clone();
     cx.spawn(async move |cx| {
@@ -69,14 +109,6 @@ pub fn init(cx: &mut App) {
             s.borrow_mut().system = Some(pref);
             cx.update(|cx| evaluate(&s, cx));
         }
-    })
-    .detach();
-    // Clock + setting changes: re-evaluate twice a minute (cheap) and right
-    // after any config change.
-    let s = state.clone();
-    cx.spawn(async move |cx| loop {
-        cx.update(|cx| evaluate(&s, cx));
-        cx.background_executor().timer(EVALUATE_EVERY).await;
     })
     .detach();
     let s = state;
@@ -94,5 +126,8 @@ mod tests {
         assert_eq!(desired(ThemeAuto::System, "07:00", "19:00", Some(Some(false))), Some(false));
         assert_eq!(desired(ThemeAuto::System, "07:00", "19:00", Some(None)), None);
         assert_eq!(desired(ThemeAuto::Schedule, "bad", "19:00", None), None);
+        assert!(!follows_clock(ThemeAuto::Manual));
+        assert!(!follows_clock(ThemeAuto::System));
+        assert!(follows_clock(ThemeAuto::Schedule));
     }
 }

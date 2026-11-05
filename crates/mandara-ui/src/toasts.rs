@@ -277,6 +277,8 @@ impl SurfaceKey {
 struct Toasts {
     window: Option<WindowHandle<ToastView>>,
     key: Option<SurfaceKey>,
+    /// Last visibility command accepted by the service queue; its state echo can arrive later.
+    list_requested: Option<bool>,
     /// The output the popups show on (joined popups shape themselves after
     /// its bar).
     output: Option<PopupOutput>,
@@ -330,22 +332,33 @@ fn list_on_screen(cx: &App) -> bool {
     s.panel.as_deref() == Some(crate::plugins::notifications::ID) || sidebar_tab
 }
 
+/// Records accepted requests rather than delayed service echoes, so a quick
+/// open followed by a close queues both transitions in order.
+fn queue_list_visibility(last: &mut Option<bool>, open: bool, enqueue: impl FnOnce(bool) -> bool) {
+    if *last != Some(open) && enqueue(open) {
+        *last = Some(open);
+    }
+}
+
 /// Tells the notification service whether its list is on screen, so the
 /// popups hand over to it (and new ones go straight into it) while it is.
 pub fn sync_list(cx: &mut App) {
     let open = list_on_screen(cx);
-    if crate::hub::hub(cx).read(cx).notifications.list_open != open {
-        crate::plugins::notifications::send(cx, NotificationCommand::ListOpen(open));
-    }
+    let Some(host) = cx.try_global::<GlobalToasts>().map(|g| g.0.clone()) else { return };
+    if host.read(cx).list_requested == Some(open) { return; }
+    let Some(service) = crate::hub::hub(cx).read(cx).notification_service.clone() else { return };
+    host.update(cx, |host, _| queue_list_visibility(&mut host.list_requested, open, |open| service.try_send(NotificationCommand::ListOpen(open)).is_ok()));
 }
 
 /// Installs the popup surface; it follows the hub and the config.
 pub fn init(cx: &mut App) {
-    let host = cx.new(|_| Toasts { window: None, key: None, output: None });
+    let host = cx.new(|_| Toasts { window: None, key: None, list_requested: None, output: None });
     cx.set_global(GlobalToasts(host));
     let hub = crate::hub::hub(cx);
     let mut last: Vec<u32> = Vec::new();
     cx.observe(&hub, move |hub, cx| {
+        // A service update also retries a visibility write if its queue was full.
+        sync_list(cx);
         let popups: Vec<u32> = hub.read(cx).notifications.items.iter().filter(|n| n.popup).map(|n| n.id).collect();
         if popups != last {
             last = popups;
@@ -353,13 +366,8 @@ pub fn init(cx: &mut App) {
         }
     })
     .detach();
-    let mut list_was_open = false;
     cx.observe(&crate::state::shell(cx), move |_, cx| {
-        let open = list_on_screen(cx);
-        if open != list_was_open {
-            list_was_open = open;
-            sync_list(cx);
-        }
+        sync_list(cx);
         // Joined popups follow the bar's reserved band (`bar hide`).
         if config(cx).read(cx).get().notifications.joined {
             sync(cx);
@@ -376,6 +384,7 @@ pub fn init(cx: &mut App) {
         }
     })
     .detach();
+    sync_list(cx);
     sync(cx);
 }
 
@@ -520,7 +529,13 @@ impl ToastView {
     }
 }
 
+/// Popups have their own window, so they establish the panel font here.
+fn popup_root(fonts: crate::fonts::Fonts) -> gpui::Div {
+    div().size_full().relative().font_family(fonts.panels)
+}
+
 impl Render for ToastView {
+    /// Reconcile notification lifetimes and animate the visible stack using the configured popup typography.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let cfg = config(cx).read(cx).snapshot();
         let ncfg = &cfg.notifications;
@@ -639,7 +654,7 @@ impl Render for ToastView {
             let (x, y) = toast_drawer::body_origin(&d, column, bottom, (sw, sh), (dw, reach));
             (d, x, y, dw, reach)
         });
-        let mut root = div().size_full().relative();
+        let mut root = popup_root(crate::fonts::fonts(cx));
         let mut toasts: Vec<AnyElement> = Vec::with_capacity(self.items.len());
         let this = cx.entity().downgrade();
         for item in &self.items {
@@ -866,6 +881,56 @@ impl Render for ToastView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn closing_the_list_before_its_open_echo_queues_both_transitions() {
+        let (sender, receiver) = async_channel::bounded(2);
+        let mut requested = Some(false);
+        queue_list_visibility(&mut requested, true, |open| sender.try_send(open).is_ok());
+        // The actor has not consumed the open request or published an echo.
+        queue_list_visibility(&mut requested, false, |open| sender.try_send(open).is_ok());
+        assert!(receiver.try_recv().unwrap());
+        assert!(!receiver.try_recv().unwrap());
+        queue_list_visibility(&mut requested, false, |_| panic!("the queued close must be deduplicated"));
+    }
+
+    #[test]
+    fn a_failed_visibility_write_stays_retryable() {
+        let (sender, receiver) = async_channel::bounded(1);
+        let mut requested = Some(false);
+        queue_list_visibility(&mut requested, true, |open| sender.try_send(open).is_ok());
+        queue_list_visibility(&mut requested, false, |open| sender.try_send(open).is_ok());
+        assert_eq!(requested, Some(true));
+        assert!(receiver.try_recv().unwrap());
+        queue_list_visibility(&mut requested, false, |open| sender.try_send(open).is_ok());
+        assert!(!receiver.try_recv().unwrap());
+        sender.close();
+        queue_list_visibility(&mut requested, true, |open| sender.try_send(open).is_ok());
+        assert_eq!(requested, Some(false));
+    }
+
+    /// Child weights and tabular numerals must preserve the configured popup font family.
+    #[test]
+    fn popup_text_inherits_the_configured_panel_font_at_every_weight() {
+        use gpui::Refineable as _;
+
+        let fonts = crate::fonts::Fonts {
+            ui: "UI font".into(), display: "Display font".into(), arabic: "Arabic font".into(),
+            mono: "Mono font".into(), bar: "Bar font".into(), panels: "Popup font".into(),
+            studio: "Studio font".into(), widgets: "Widget font".into(),
+            scripture: "Scripture font".into(), hadith: "Hadith font".into(), emoji: None,
+        };
+        let mut root = popup_root(fonts);
+        for weight in [gpui::FontWeight::NORMAL, gpui::FontWeight::MEDIUM, gpui::FontWeight::SEMIBOLD] {
+            let child = gpui::StyleRefinement::default().font_weight(weight).font_features(crate::fonts::tabular_nums());
+            let mut inherited = gpui::TextStyle::default();
+            inherited.refine(&root.style().text);
+            inherited.refine(&child.text);
+            assert_eq!(inherited.font_family.as_ref(), "Popup font");
+            assert_eq!(inherited.font_weight, weight);
+            assert_eq!(inherited.font_features, crate::fonts::tabular_nums());
+        }
+    }
 
     fn item(display_ms: u32, shown: Instant) -> Item {
         Item::new(Notification { id: 1, display_ms, ..Default::default() }, shown, true)

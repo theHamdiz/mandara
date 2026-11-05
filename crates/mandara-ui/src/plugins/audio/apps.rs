@@ -57,6 +57,7 @@ const PRESENCE_GONE: f32 = 0.01;
 pub(super) struct Snapshot {
     pub groups: Vec<AppGroup>,
     pub outputs: Vec<Device>,
+    pub inputs: Vec<Device>,
 }
 
 /// One app's streams, folded into a row.
@@ -154,7 +155,7 @@ fn identify(s: &Stream) -> (String, String) {
 /// Reads and groups the mixer (blocking; off the UI thread).
 fn read_snapshot() -> Snapshot {
     match mandara_services::audio::mixer() {
-        Ok(m) => Snapshot { groups: group_streams(&m.streams, identify), outputs: m.outputs },
+        Ok(m) => Snapshot { groups: group_streams(&m.streams, identify), outputs: m.outputs, inputs: m.inputs },
         Err(err) => {
             tracing::debug!("audio apps: {err}");
             Snapshot::default()
@@ -255,7 +256,7 @@ impl AppsTap {
                     }
                     let now = Instant::now();
                     s.held_mute.retain(|_, (_, at)| now.saturating_duration_since(*at) < ECHO_HOLD);
-                    if *s.snapshot.groups != snap.groups || *s.snapshot.outputs != snap.outputs {
+                    if *s.snapshot.groups != snap.groups || *s.snapshot.outputs != snap.outputs || *s.snapshot.inputs != snap.inputs {
                         s.snapshot = Rc::new(snap);
                         Some(s.views.clone())
                     } else {

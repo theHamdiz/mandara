@@ -324,6 +324,7 @@ impl SnipView {
         self.act(Action::Capture, cx);
     }
 
+    /// Dispatch the selected region once, keeping recording, OCR and image delivery on their own paths.
     fn act(&mut self, action: Action, cx: &mut Context<Self>) {
         tracing::debug!(target: "mandara::snip", mode = ?self.mode, ?action, candidate = ?self.candidate(), closing = self.closing, "act");
         if matches!(self.busy, Some((_, Phase::Working | Phase::Done))) {
@@ -518,6 +519,7 @@ fn pos(e: gpui::Point<Pixels>) -> (f32, f32) {
 }
 
 impl Render for SnipView {
+    /// Draw the frozen frame and selection controls until the closing fade removes the overlay.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = mandara_core::frame_palette(window, cx);
         let f = fonts(cx);

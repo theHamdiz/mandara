@@ -34,6 +34,8 @@ pub struct ConfigStore {
     dirty: bool,
     /// Hash of the file bytes we last read or wrote.
     disk_hash: Option<u64>,
+    /// Defaults loaded after a parse error must never replace the user's file.
+    load_error: Option<String>,
 }
 
 fn hash_bytes(bytes: &[u8]) -> u64 {
@@ -58,16 +60,19 @@ impl ConfigStore {
 
     /// Opens a config file, writing defaults if it does not exist yet. A file
     /// that fails to parse is reported and the defaults are used in memory
-    /// (the broken file is left untouched so no user data is lost).
+    /// (saving stays disabled until a valid file is reloaded).
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
         let path = path.into();
-        let mut store = Self { path, current: Arc::new(ShellConfig::default()), dirty: false, disk_hash: None };
+        let mut store = Self { path, current: Arc::new(ShellConfig::default()), dirty: false, disk_hash: None, load_error: None };
         if store.path.exists() {
             let bytes = fs::read(&store.path).with_context(|| format!("reading {}", store.path.display()))?;
             store.disk_hash = Some(hash_bytes(&bytes));
             match parse(&bytes) {
                 Ok(cfg) => store.current = Arc::new(cfg),
-                Err(err) => tracing::error!("{}: {err:#}; using defaults in memory", store.path.display()),
+                Err(err) => {
+                    store.load_error = Some(format!("{err:#}"));
+                    tracing::error!("{}: {err:#}; using defaults in memory without saving", store.path.display());
+                }
             }
         } else {
             let mut fresh = ShellConfig::default();
@@ -120,6 +125,9 @@ impl ConfigStore {
         if !self.dirty {
             return Ok(());
         }
+        if let Some(error) = &self.load_error {
+            anyhow::bail!("refusing to replace invalid config {}: {error}", self.path.display());
+        }
         let body = toml::to_string_pretty(&*self.current).context("serializing config")?;
         let contents = format!("{HEADER}{body}");
         write_atomic(&self.path, contents.as_bytes())?;
@@ -137,6 +145,7 @@ impl ConfigStore {
             return Ok(ReloadOutcome::Unchanged);
         }
         let cfg = parse(&bytes)?;
+        self.load_error = None;
         self.disk_hash = Some(hash);
         if cfg == *self.current {
             return Ok(ReloadOutcome::Unchanged);
@@ -347,6 +356,42 @@ mod tests {
     }
 
     #[test]
+    fn flushing_before_restart_preserves_the_whole_preference_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut store = ConfigStore::open(&path).unwrap();
+        store.update(|cfg| {
+            cfg.theme.mode = crate::ThemeMode::Light;
+            cfg.theme.source = ThemeSource::Preset { preset: "pharos-night".into() };
+            cfg.theme.adjustments.hue_shift = 11.0;
+            cfg.bar.height = 37.0;
+            cfg.bar.left = vec!["workspaces".into(), "launcher".into()];
+            cfg.sidebar.width = 431.0;
+            cfg.sidebar.look.card_padding = 19.0;
+            cfg.side_bars.enabled = true;
+            cfg.typography.studio_font = "JetBrains Mono".into();
+            cfg.typography.scale = 1.15;
+            cfg.plugins.enabled = vec!["notes".into(), "todo".into()];
+            cfg.plugins.disabled = vec!["weather".into()];
+            cfg.plugins.settings.insert("notes".into(), [("text".into(), toml::Value::String("Keep this preference".into()))].into_iter().collect());
+            cfg.audio.overamplify = false;
+            cfg.notifications.compact = true;
+            let place = &mut cfg.desktop.widgets.items[0].place;
+            place.x = -0.13;
+            place.y = -0.23;
+            place.scale = 0.73;
+            place.rotation = 13.0;
+            // The legacy clock mirrors its widget geometry when loaded.
+            crate::desktop_widgets::migrate(cfg);
+        });
+        let expected = store.snapshot();
+        assert_ne!(ConfigStore::open(&path).unwrap().get(), expected.as_ref());
+        store.flush().unwrap();
+        assert_eq!(ConfigStore::open(&path).unwrap().get(), expected.as_ref());
+        assert!(!store.is_dirty());
+    }
+
+    #[test]
     fn self_writes_are_ignored_and_external_edits_apply() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
@@ -377,9 +422,19 @@ mod tests {
         assert!(store.reload_from_disk().is_err());
         assert_eq!(store.get().motion.mass, 2.0);
         // Opening a broken file falls back to defaults without clobbering it.
-        let reopened = ConfigStore::open(&path).unwrap();
+        let mut reopened = ConfigStore::open(&path).unwrap();
         assert_eq!(*reopened.get(), ShellConfig::default());
+        reopened.update(|c| c.theme.mode = crate::ThemeMode::Light);
+        assert!(reopened.flush().is_err(), "an edit must not save defaults over the original preferences");
         assert_eq!(fs::read_to_string(&path).unwrap(), "this is = = not toml");
+        fs::write(&path, "[theme]\nmode = \"light\"\n\n[motion]\nmass = 3.0\n").unwrap();
+        reopened.reload_from_disk().unwrap();
+        reopened.update(|c| c.bar.height = 37.0);
+        reopened.flush().unwrap();
+        let repaired = ConfigStore::open(&path).unwrap();
+        assert_eq!(repaired.get().theme.mode, crate::ThemeMode::Light);
+        assert_eq!(repaired.get().motion.mass, 3.0);
+        assert_eq!(repaired.get().bar.height, 37.0);
     }
 
     #[test]

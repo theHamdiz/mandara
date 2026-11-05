@@ -462,6 +462,7 @@ impl Render for PickView {
     }
 }
 
+/// Capture and convert the focused output on a worker before opening its matching picker surface.
 fn open(purpose: Purpose, demo: bool, cx: &mut App) {
     let focus = crate::capture_output::Focus::snapshot(cx);
     // Capture, pick the output and convert the frame to BGRA off the UI

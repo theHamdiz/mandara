@@ -150,6 +150,7 @@ impl Group {
         }
     }
 
+    /// Use each shortcut group's subject as its icon.
     pub fn icon(self) -> &'static str {
         match self {
             Group::Mandara => "home",

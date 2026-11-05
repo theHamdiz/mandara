@@ -13,7 +13,8 @@ use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelSpec, PluginInstance, 
 use mandara_theme::MandaraPalette;
 use serde_json::json;
 
-use super::fn_view;
+use super::domain_view;
+use crate::hub::Domains;
 use crate::progress_fill as fill;
 use super::panel_fx::ANGLE_DIAGONAL_DEG;
 use crate::fonts::fonts;
@@ -93,6 +94,11 @@ fn badge(lang: Lang) -> &'static str {
         Lang::Ko => "KO",
         Lang::Ur => "UR",
         Lang::Bn => "BN",
+        Lang::Pt => "PT",
+        Lang::Mr => "म",
+        Lang::Vi => "VI",
+        Lang::Te => "తె",
+        Lang::Sw => "SW",
     }
 }
 
@@ -160,7 +166,7 @@ pub fn register(r: &mut PluginRegistry) {
     r.register(
         PluginManifest::builtin(ID, mandara_i18n::tk("Language"), mandara_i18n::tk("Switch the interface language instantly"), Some(Zone::Right)),
         |window, cx, panel_cx| {
-            let bar = fn_view(
+            let bar = domain_view(Domains::KEYBOARD,
                 None,
                 |palette, _, cx| {
                     let lang = config(cx).read(cx).get().general.locale.lang();
@@ -186,7 +192,7 @@ pub fn register(r: &mut PluginRegistry) {
             let size_cell = Rc::new(Cell::new(size(px(PANEL_W_PX), px(INITIAL_H_PX))));
             let sc = size_cell.clone();
             let fills: Rc<RefCell<fill::LanguageFills>> = Rc::default();
-            let panel = fn_view(
+            let panel = domain_view(Domains::KEYBOARD,
                 None,
                 move |palette, window, cx| {
                     let locale = config(cx).read(cx).get().general.locale;

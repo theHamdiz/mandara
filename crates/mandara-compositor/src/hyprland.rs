@@ -94,6 +94,7 @@ impl HyprClient {
         u64::from_str_radix(self.address.trim_start_matches("0x"), 16).unwrap_or(0)
     }
 
+    /// Resolve connector names when available; retain geometry if monitor metadata is missing.
     fn client(&self, focused: bool, monitors: &[HyprMonitor]) -> ClientInfo {
         ClientInfo {
             id: self.id(),
@@ -350,17 +351,21 @@ impl CompositorBackend for HyprlandDriver {
         Ok(navigation(&self.json::<Vec<HyprWorkspace>>("workspaces")?, &self.json::<Vec<HyprMonitor>>("monitors")?))
     }
 
+    /// Read the focused window; an unavailable monitor lookup only leaves its connector unknown.
     fn get_active_client(&self) -> Result<Option<ClientInfo>> {
         let raw = self.request("j/activewindow")?;
         if raw.trim() == "{}" || raw.trim().is_empty() {
             return Ok(None);
         }
-        Ok(Some(serde_json::from_str::<HyprClient>(&raw)?.client(true, &self.json::<Vec<HyprMonitor>>("monitors")?)))
+        let client = serde_json::from_str::<HyprClient>(&raw)?;
+        let monitors = self.json::<Vec<HyprMonitor>>("monitors").unwrap_or_default();
+        Ok(Some(client.client(true, &monitors)))
     }
 
+    /// Keep the client snapshot even when the separate monitor request fails.
     fn get_all_clients(&self) -> Result<Vec<ClientInfo>> {
         let clients = self.json::<Vec<HyprClient>>("clients")?;
-        let monitors = self.json::<Vec<HyprMonitor>>("monitors")?;
+        let monitors = self.json::<Vec<HyprMonitor>>("monitors").unwrap_or_default();
         Ok(clients.iter().map(|c| c.client(false, &monitors)).collect())
     }
 
@@ -553,6 +558,60 @@ mod tests {
         assert_eq!(info.tags, vec![2]);
         assert!(!info.fullscreen);
     }
+
+    /// A monitor lookup failure must not erase valid clients or hide a malformed client reply.
+    #[test]
+    fn client_queries_survive_monitor_errors_but_keep_their_own_errors() {
+        use std::os::unix::net::UnixListener;
+        use std::time::{Duration, Instant};
+        /// Bound fixture waits without spinning while the driver connects.
+        const POLL: Duration = Duration::from_millis(10);
+        struct Fixture(PathBuf);
+        impl Drop for Fixture { fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); } }
+        let dir = Fixture(std::env::temp_dir().join(format!("mdr-hypr-clients-{}", std::process::id())));
+        std::fs::create_dir_all(&dir.0).unwrap();
+        let requests = UnixListener::bind(dir.0.join(".socket.sock")).unwrap();
+        requests.set_nonblocking(true).unwrap();
+        let server = std::thread::spawn(move || {
+            let client = r#"{"address":"0x7","class":"foot","title":"Available window","monitor":3,"workspace":{"id":2}}"#;
+            for (command, reply) in [
+                ("j/activewindow", client.to_string()), ("j/monitors", "monitor lookup unavailable".into()),
+                ("j/clients", format!("[{client}]")), ("j/monitors", String::new()),
+                ("j/activewindow", "invalid client reply".into()), ("j/clients", "invalid clients reply".into()),
+            ] {
+                let deadline = Instant::now() + crate::REQUEST_TIMEOUT;
+                let mut stream = loop {
+                    match requests.accept() {
+                        Ok((stream, _)) => break stream,
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => std::thread::sleep(POLL),
+                        Err(e) => panic!("client fixture socket: {e}"),
+                    }
+                };
+                stream.set_read_timeout(Some(crate::REQUEST_TIMEOUT)).unwrap();
+                let mut input = vec![0; command.len()];
+                stream.read_exact(&mut input).unwrap();
+                assert_eq!(input, command.as_bytes());
+                stream.write_all(reply.as_bytes()).unwrap();
+            }
+        });
+        let driver = HyprlandDriver { dir: dir.0.clone(), version: Some((0, 57)), lua: true };
+        let focused = driver.get_active_client();
+        let clients = driver.get_all_clients();
+        let focused_error = driver.get_active_client();
+        let clients_error = driver.get_all_clients();
+        server.join().unwrap();
+        let focused = focused.unwrap().unwrap();
+        assert_eq!(focused.id, 7);
+        assert_eq!(focused.title, "Available window");
+        assert!(focused.focused && focused.monitor.is_empty());
+        let clients = clients.unwrap();
+        assert_eq!(clients.len(), 1);
+        assert_eq!(clients[0].id, 7);
+        assert!(clients[0].monitor.is_empty());
+        assert!(focused_error.is_err() && clients_error.is_err(), "client-query failures must still propagate");
+    }
+
+    /// Subscribers receive the current desktop before waiting for subsequent socket events.
     #[test]
     fn subscription_emits_a_fresh_snapshot_without_waiting_for_an_event() {
         use std::os::unix::net::UnixListener;

@@ -291,6 +291,7 @@ fn capture(generation: u64, settle: Duration, cx: &mut App) {
     .detach();
 }
 
+/// Bind frozen pixels to their source display and acknowledge the session only after the overlay opens.
 fn open_overlay(capture: mandara_services::screencopy::Capture, frozen: std::sync::Arc<gpui::RenderImage>, cx: &mut App) {
     let (mode, record, preselect) = {
         let s = cx.default_global::<Session>();

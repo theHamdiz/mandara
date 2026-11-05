@@ -31,7 +31,7 @@ use mandara_services::systemd::{self, Health, JournalLine, Scope, Unit, UnitActi
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
 
-use super::fn_view;
+use super::model_view as fn_view;
 use super::panel_fx::{
     ANGLE_DIAGONAL_DEG, ANGLE_DOWN_DEG, EXPIRY_MARGIN, HEADER_CHIP_PX, HEADER_H, PARTNER_HUE_DEG, PanelShape, SMALL_ICON_PX, ViewSet,
     alpha, empty_state, glass_card, glow, header, readable, redraw_in,

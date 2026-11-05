@@ -384,6 +384,7 @@ pub(crate) fn third_party_art(dir: &std::path::Path, file: &str) -> Option<PathB
     exists.then_some(path)
 }
 
+/// Choose a bundled fallback symbol when a store tile has no dedicated artwork.
 pub(crate) fn plugin_icon(id: &str) -> &'static str {
     match id {
         "workspaces" => "grid",
@@ -834,6 +835,7 @@ impl StudioView {
     /// Switches the store to `tab` (navigation clicks): fresh filter, top
     /// of the page, and the marketplace searched for the current query.
     pub(super) fn store_tab(&mut self, tab: PluginsTab, cx: &mut Context<Self>) {
+        if matches!(tab, PluginsTab::Discover | PluginsTab::Marketplace) { self.market_reopen(); }
         self.plugins_tab = tab;
         self.store.filter = Filter::All;
         self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));

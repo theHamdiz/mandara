@@ -1,50 +1,16 @@
-//! Greeter strings: an English-keyed catalog per language (in
-//! `locales/<code>.toml`, the same format as `mandara-i18n`), falling back
-//! to the shell's shared catalogs and then to English. The active language
-//! is `mandara_i18n::language()`, so `set_language` drives both.
+//! Login translations live in the shared external language pack under
+//! their own prefix. A missing login key falls back to the shell wording,
+//! then English. The greeter never registers a language download hook.
 
 use std::fmt::Display;
-use std::sync::OnceLock;
 
-use mandara_i18n::{Catalog, Lang, fill, language, tr};
+use mandara_i18n::{Lang, fill, language, lookup};
 
-fn source(lang: Lang) -> &'static str {
-    match lang {
-        Lang::En => "",
-        Lang::Ar => include_str!("../locales/ar.toml"),
-        Lang::Es => include_str!("../locales/es.toml"),
-        Lang::Fr => include_str!("../locales/fr.toml"),
-        Lang::Zh => include_str!("../locales/zh.toml"),
-        Lang::Tr => include_str!("../locales/tr.toml"),
-        Lang::Ja => include_str!("../locales/ja.toml"),
-        Lang::De => include_str!("../locales/de.toml"),
-        Lang::Ru => include_str!("../locales/ru.toml"),
-        Lang::Hi => include_str!("../locales/hi.toml"),
-        Lang::Id => include_str!("../locales/id.toml"),
-        Lang::Fa => include_str!("../locales/fa.toml"),
-        Lang::Ko => include_str!("../locales/ko.toml"),
-        Lang::Ur => include_str!("../locales/ur.toml"),
-        Lang::Bn => include_str!("../locales/bn.toml"),
-    }
-}
-
-/// The greeter's own catalog for `lang`.
-pub fn catalog(lang: Lang) -> &'static Catalog {
-    static CATALOGS: [OnceLock<Catalog>; Lang::ALL.len()] = [const { OnceLock::new() }; Lang::ALL.len()];
-    CATALOGS[lang as usize].get_or_init(|| match Catalog::parse(source(lang)) {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::error!("mandara-greeter: {} catalog is invalid: {e}", lang.code());
-            Catalog::default()
-        }
-    })
-}
-
-/// Translates an English key into the current language.
+/// Translates a login key from the shared external pack, then the shell catalog.
 pub fn tl(key: &str) -> String {
     match language() {
         Lang::En => key.to_string(),
-        lang => catalog(lang).get(key).map(str::to_string).unwrap_or_else(|| tr(key)),
+        lang => mandara_i18n::bundle::greeter(lang, key).or_else(|| lookup(lang, key)).unwrap_or(key).to_string(),
     }
 }
 
@@ -57,6 +23,26 @@ pub fn tlf(key: &str, args: &[(&str, &dyn Display)]) -> String {
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
+    use std::sync::OnceLock;
+    use mandara_i18n::Catalog;
+
+    fn source(lang: Lang) -> String {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("locales").join(format!("{}.toml", lang.code()));
+        std::fs::read_to_string(path).unwrap()
+    }
+
+    fn catalog(lang: Lang) -> &'static Catalog {
+        static CATALOGS: [OnceLock<Catalog>; Lang::ALL.len()] = [const { OnceLock::new() }; Lang::ALL.len()];
+        CATALOGS[lang as usize].get_or_init(|| Catalog::parse(&source(lang)).unwrap())
+    }
+
+    #[test]
+    fn login_translations_are_not_embedded_in_the_binary() {
+        let source = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/i18n.rs")).unwrap();
+        let production = source.split("#[cfg(test)]").next().unwrap();
+        assert!(!production.contains("include_str!"));
+        assert!(!production.contains("install_hooks"), "the login process must use installed packs offline");
+    }
 
     /// Keys used through `tl` / `tlf` string literals in this crate.
     fn source_keys() -> BTreeSet<String> {
@@ -104,7 +90,7 @@ mod tests {
     #[test]
     fn catalogs_parse_and_keep_placeholders() {
         for lang in Lang::ALL.into_iter().filter(|l| *l != Lang::En) {
-            let c = Catalog::parse(source(lang)).unwrap_or_else(|e| panic!("{}: {e}", lang.code()));
+            let c = Catalog::parse(&source(lang)).unwrap_or_else(|e| panic!("{}: {e}", lang.code()));
             for k in c.keys() {
                 let v = c.get(k).unwrap();
                 assert_eq!(mandara_i18n::placeholders(k), mandara_i18n::placeholders(v), "{}: {k:?} → {v:?}", lang.code());

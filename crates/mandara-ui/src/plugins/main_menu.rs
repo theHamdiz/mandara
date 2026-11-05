@@ -15,6 +15,8 @@
 //! ornament in its own accent (`panels.menu_patterns`, see [`ornament`]).
 
 pub(crate) mod ornament;
+mod theme_card;
+mod card_decoration;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -32,7 +34,7 @@ use mandara_config::surfaces::MenuRail;
 use mandara_theme::{MandaraPalette, ThemeSource, catalog};
 use serde_json::json;
 
-use super::fn_view;
+use super::fn_view_observing;
 use crate::bidi::Bidi as _;
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
@@ -96,11 +98,9 @@ const CLOCK_TEXT: f32 = 40.0;
 /// swatches.
 const TILE_ICON: f32 = 22.0;
 const TILES_PER_ROW: usize = 3;
-const SWATCH: f32 = 22.0;
 /// The Look page: its one row of tiles, then the themes, three to a row.
 const LOOK_TILES_H: f32 = 84.0;
 const THEMES_PER_ROW: usize = 3;
-const THEME_ROW_H: f32 = 38.0;
 /// Theme rows shown without scrolling.
 const THEME_ROWS_FIT: usize = 6;
 /// The profile card's shade over the wallpaper (start → end).
@@ -319,7 +319,7 @@ fn uptime() -> Option<String> {
 
 // ── Pages ───────────────────────────────────────────────────────────────
 
-fn profile(palette: &MandaraPalette, cx: &App) -> gpui::AnyElement {
+fn profile(palette: &MandaraPalette, tc: &TileCx, cx: &App) -> gpui::AnyElement {
     let me = me();
     let cfg = config(cx).read(cx).snapshot();
     let wall = mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, None, cfg.theme.mode.is_dark()).and_then(|p| crate::wallpaper::still(&p).ok());
@@ -348,12 +348,11 @@ fn profile(palette: &MandaraPalette, cx: &App) -> gpui::AnyElement {
         .child(div().text_size(px(text::BODY_S)).text_color(white.opacity(SOFT_TEXT)).truncate().child(format!("{}@{}", me.login, me.host)))
         .when_some(uptime(), |el, up| el.child(div().text_size(px(text::BODY_S)).text_color(white.opacity(SOFT_TEXT)).child(tf("Up {time}", &[("time", &up)]))))
         .child(div().text_size(px(text::LABEL)).text_color(white.opacity(SOFT_TEXT)).child(format!("Mandara {}", mandara_services::self_update::running_version())));
-    div()
+    card_decoration::plain(div().id("menu-home-profile"), palette, tc)
         .relative()
         .h(px(PROFILE_H))
         .rounded(px(crate::style::card_radius()))
         .overflow_hidden()
-        .bg(palette.surface_container.hsla())
         .when_some(wall, |el, w| el.child(img(ImageSource::from(w)).absolute().top_0().left_0().size_full().object_fit(ObjectFit::Cover)))
         .child(div().absolute().top_0().left_0().size_full().bg(mandara_core::oklab_gradient(90.0, mandara_theme::Color::oklcha(0.12, 0.0, 0.0, SHADE.0), mandara_theme::Color::oklcha(0.12, 0.0, 0.0, SHADE.1))))
         .child(div().absolute().top_0().left_0().size_full().px(px(tokens::LG)).flex().items_center().gap(px(tokens::LG)).child(avatar).child(lines))
@@ -361,7 +360,7 @@ fn profile(palette: &MandaraPalette, cx: &App) -> gpui::AnyElement {
 }
 
 /// What's playing, or nothing.
-fn media(palette: &MandaraPalette, cx: &App) -> Option<gpui::AnyElement> {
+fn media(palette: &MandaraPalette, tc: &TileCx, cx: &App) -> Option<gpui::AnyElement> {
     let hub = crate::hub::hub(cx).read(cx);
     let m = hub.media.as_ref().filter(|m| !m.title.is_empty())?;
     let playing = m.status == mandara_services::PlaybackStatus::Playing;
@@ -371,7 +370,7 @@ fn media(palette: &MandaraPalette, cx: &App) -> Option<gpui::AnyElement> {
     };
     let transport = |id: &'static str, glyph: &'static str, command: MediaCommand| icon_button(id, glyph, TRANSPORT, palette.on_surface, None, move |_, cx| super::media::send(cx, command.clone()));
     Some(
-        card(palette)
+        home_card("menu-home-media", Ornament::motif(Motif::Rings, 24.0), palette, tc)
             .flex_1()
             .flex()
             .gap(px(tokens::MD))
@@ -401,13 +400,13 @@ fn media(palette: &MandaraPalette, cx: &App) -> Option<gpui::AnyElement> {
 }
 
 /// The time, the date and the weather.
-fn clock(palette: &MandaraPalette, cx: &App) -> gpui::AnyElement {
+fn clock(palette: &MandaraPalette, tc: &TileCx, cx: &App) -> gpui::AnyElement {
     let cfg = config(cx).read(cx).snapshot();
     let now = chrono::Local::now();
     let time = now.format(if cfg.general.clock_24h { "%H:%M" } else { "%-I:%M" }).to_string();
     let date = crate::widgets::clock::localized(&now, t("%A, %-d %B"));
     let weather = crate::hub::hub(cx).read(cx).weather.weather.as_ref().map(|w| format!("{} · {}", cfg.units().format_temperature(w.temp), tr(w.condition.label())));
-    card(palette)
+    home_card("menu-home-clock", Ornament::motif(Motif::Shamsa, 0.0), palette, tc)
         .flex_1()
         .flex()
         .items_center()
@@ -437,20 +436,45 @@ fn fill_row(p: &PanelCx, index: usize, el: impl IntoElement) -> gpui::AnyElement
     div().relative().top(px(r.offset)).opacity(r.opacity).flex().flex_col().justify_center().child(el).into_any_element()
 }
 
-fn home(palette: &MandaraPalette, p: &PanelCx, cx: &mut App) -> gpui::AnyElement {
+fn home(palette: &MandaraPalette, p: &PanelCx, tc: &TileCx, window: &mut Window, cx: &mut App) -> gpui::AnyElement {
+    if tc.patterns {
+        let mut glow = tc.glow.borrow_mut();
+        glow.follow(palette);
+        if glow.step() { window.request_animation_frame(); }
+    }
     // The cards on the left share the toggles' height.
-    let left = div().flex_1().min_w(px(0.0)).flex().flex_col().gap(px(tokens::SM)).children(media(palette, cx).map(|m| div().flex_1().flex().flex_col().child(m))).child(div().flex_1().flex().flex_col().child(clock(palette, cx)));
-    let toggles = div().w(px(TOGGLES_W)).flex_none().child(super::quick_settings::tiles(palette, cx));
-    let volume = card(palette).child(super::audio::volume_row(palette, cx));
+    let left = div().flex_1().min_w(px(0.0)).flex().flex_col().gap(px(tokens::SM)).children(media(palette, tc, cx).map(|m| div().flex_1().flex().flex_col().child(m))).child(div().flex_1().flex().flex_col().child(clock(palette, tc, cx)));
+    let toggles = div().w(px(TOGGLES_W)).flex_none().child(super::quick_settings::tiles_with(palette, cx, |tile, key, active| {
+        card_decoration::toggle(tile, key, home_toggle_ornament(key), palette, &TileCx { compact: true, ..*tc }, active)
+    }));
+    let volume = home_card("menu-home-volume", Ornament::motif(Motif::Waves, -24.0), palette, &TileCx { compact: true, ..*tc }).child(super::audio::volume_row(palette, cx));
     div()
         .flex_1()
         .flex()
         .flex_col()
         .gap(px(tokens::SM))
-        .child(reveal(p, 1, profile(palette, cx)))
+        .child(reveal(p, 1, profile(palette, tc, cx)))
         .child(fill(p, 2, div().flex_1().flex().gap(px(tokens::SM)).child(left).child(toggles)))
         .child(reveal(p, 3, volume))
         .into_any_element()
+}
+
+/// Home content uses the same configurable frame as the action tiles.
+fn home_card(key: &'static str, art: Ornament, palette: &MandaraPalette, tc: &TileCx) -> gpui::Stateful<gpui::Div> {
+    card_decoration::decorate(card(palette).id(key).relative(), key, art, palette, tc, false).0
+}
+
+/// Give quick controls geometric art without replacing their on/off colors.
+fn home_toggle_ornament(key: &str) -> Ornament {
+    let motif = match key {
+        "qs-wifi" | "qs-bt" => Motif::Rings,
+        "qs-theme" | "qs-night-light" => Motif::Shamsa,
+        "qs-awake" => Motif::Waves,
+        "qs-mute-all" => Motif::Columns,
+        "qs-presentation" => Motif::Frames,
+        _ => Motif::Mashrabiya,
+    };
+    Ornament::motif(motif, 0.0)
 }
 
 /// Each tile's hover glow, springing between rest (0) and under the
@@ -463,7 +487,7 @@ struct Glow {
     /// The palette the colours were worked out for, and the colours per
     /// tile (by label).
     palette: Option<PaletteKey>,
-    inks: HashMap<(&'static str, bool), TileInk>,
+    inks: HashMap<(&'static str, bool, bool), TileInk>,
 }
 
 /// The palette roles a tile's colours depend on, as their OKLCH bits
@@ -550,8 +574,8 @@ impl Glow {
 
     /// `a`'s colours, worked out on first use and kept until the palette
     /// changes ([`Self::follow`]).
-    fn ink(&mut self, a: &Action, o: Ornament, palette: &MandaraPalette) -> TileInk {
-        self.inks.entry((a.label, o.is_word())).or_insert_with(|| TileInk::new(o, palette)).clone()
+    fn ink(&mut self, key: &'static str, o: Ornament, palette: &MandaraPalette, active: bool) -> TileInk {
+        self.inks.entry((key, o.is_word(), active)).or_insert_with(|| TileInk::new(o, palette)).clone()
     }
 }
 
@@ -566,7 +590,7 @@ struct TileCx<'a> {
     /// Short tiles (the Look page's one row).
     compact: bool,
     /// `panels.menu_tile_surface`.
-    surface: mandara_config::surfaces::MenuTileSurface,
+    surface: MenuTileSurface,
     /// `panels.menu_tile_shadow`, 0–1.
     shadow: f32,
 }
@@ -611,7 +635,7 @@ fn tiles(actions: &[Action], palette: &MandaraPalette, p: &PanelCx, tc: &TileCx,
         let mut row = div().flex_1().min_h(px(0.0)).flex().gap(px(tokens::SM));
         for (c, a) in chunk.iter().enumerate() {
             let run = a.run;
-            let mut tile = div()
+            let tile = div()
                 .id(("menu-tile", r * TILES_PER_ROW + c))
                 .relative()
                 .flex_1()
@@ -622,50 +646,7 @@ fn tiles(actions: &[Action], palette: &MandaraPalette, p: &PanelCx, tc: &TileCx,
                 .flex()
                 .flex_col()
                 .justify_between();
-            let (plain_rest, plain_high): (gpui::Background, gpui::Background) = match tc.surface {
-                MenuTileSurface::Glass => (palette.surface_container.with_alpha(GLASS_FILL).hsla().into(), palette.surface_container_high.with_alpha(GLASS_FILL).hsla().into()),
-                _ => (palette.surface_container.hsla().into(), palette.surface_container_high.hsla().into()),
-            };
-            // Raised and glass tiles wear the specular rim; any tile may
-            // cast a shadow.
-            let mut shadows = if tc.surface == MenuTileSurface::Flat { Vec::new() } else { mandara_core::glass_rim(palette.specular_rim_light, palette.specular_rim_shadow) };
-            if tc.shadow > 0.0 {
-                shadows.push(gpui::BoxShadow {
-                    color: mandara_theme::Color::oklcha(SHADOW_LIGHTNESS, 0.0, 0.0, SHADOW_ALPHA * tc.shadow).hsla(),
-                    offset: gpui::point(px(0.0), px(SHADOW_OFFSET_PX * tc.shadow)),
-                    blur_radius: px(SHADOW_BLUR_PX * tc.shadow),
-                    spread_radius: px(0.0),
-                    inset: false,
-                });
-            }
-            tile = tile.shadow(shadows);
-            let glyph = if tc.patterns {
-                let ([lip, body], ink, rest, high) = {
-                    let mut g = tc.glow.borrow_mut();
-                    let o = a.ornament.shown(tc.calligraphy);
-                    let ink = g.ink(a, o, palette);
-                    ornament_layer(o, &ink, palette, g.value(a.label), tc.compact)
-                };
-                // Only raised tiles lean into their accent; flat and glass
-                // keep their plain fill.
-                let (rest, high) = if tc.surface == MenuTileSurface::Raised { (rest, high) } else { (plain_rest, plain_high) };
-                let glow = tc.glow.clone();
-                let key = a.label;
-                tile = crate::style::ClipRounded::clip_rounded(tile)
-                    .bg(rest)
-                    .hover(move |s| s.bg(high))
-                    .on_hover(move |on: &bool, window, _| {
-                        glow.borrow_mut().aim(key, *on);
-                        window.refresh();
-                    })
-                    // A flat tile's ornament has no engraved lip.
-                    .when(tc.surface != MenuTileSurface::Flat, |el| el.child(lip))
-                    .child(body);
-                ink
-            } else {
-                tile = tile.bg(plain_rest).hover(move |s| s.bg(plain_high));
-                palette.primary
-            };
+            let (tile, glyph) = card_decoration::decorate(tile, a.label, a.ornament.shown(tc.calligraphy), palette, tc, false);
             row = row.child(
                 // The icon leads the label: at the start, right in RTL.
                 tile.child(div().flex().when(crate::bidi::rtl(), |el| el.justify_end()).child(icon(a.icon, TILE_ICON, glyph)))
@@ -686,48 +667,21 @@ fn tiles(actions: &[Action], palette: &MandaraPalette, p: &PanelCx, tc: &TileCx,
 }
 
 /// The Look page: its actions, then every theme to pick from.
-fn look(palette: &MandaraPalette, p: &PanelCx, tc: &TileCx, window: &mut Window, cx: &App) -> gpui::AnyElement {
+fn look(palette: &MandaraPalette, p: &PanelCx, tc: &TileCx, cache: &Rc<RefCell<theme_card::Catalog>>, window: &mut Window, cx: &mut App) -> gpui::AnyElement {
     let current = match &config(cx).read(cx).get().theme.source {
         ThemeSource::Preset { preset } => preset.clone(),
         _ => String::new(),
     };
     let dark = config(cx).read(cx).get().theme.mode.is_dark();
-    let themes = catalog::all();
-    let mut grid = div().flex_1().flex().flex_col().gap(px(tokens::XS));
+    let themes = theme_card::Catalog::choices(cache, dark, cx);
+    let mut grid = div().flex_none().flex().flex_col().gap(px(tokens::XS));
     for (r, chunk) in themes.chunks(THEMES_PER_ROW).enumerate() {
-        let mut row = div().flex_1().min_h(px(THEME_ROW_H)).flex().gap(px(tokens::XS));
-        for (c, def) in chunk.iter().enumerate() {
-            let pal = def.palette(dark);
-            let on = def.id == current;
-            let id = def.id.clone();
-            row = row.child(
-                div()
-                    .id(("menu-theme", r * THEMES_PER_ROW + c))
-                    .flex_1()
-                    .min_w(px(0.0))
-                    .px(px(tokens::SM))
-                    .flex()
-                    .items_center()
-                    .gap(px(tokens::SM))
-                    .rounded(px(crate::style::radius(tokens::MD)))
-                    .cursor_pointer()
-                    .when(on, |el| el.bg(palette.primary.with_alpha(0.18).hsla()))
-                    .hover(|s| s.bg(palette.surface_container_high.hsla()))
-                    .on_click(move |_, _, cx| apply_theme(id.clone(), cx))
-                    .child(
-                        div()
-                            .size(px(SWATCH))
-                            .flex_none()
-                            .rounded_full()
-                            .border_2()
-                            .border_color(if on { palette.primary.hsla() } else { palette.outline.with_alpha(RAIL_RULE_ALPHA).hsla() })
-                            .bg(mandara_core::oklab_gradient(135.0, pal.surface_dim, pal.primary)),
-                    )
-                    .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(text::BODY_S)).when(on, |el| el.font_weight(FontWeight::SEMIBOLD)).child(def.name.clone())),
-            );
+        let mut row = div().flex_none().h(px(theme_card::ROW_H)).row().gap(px(tokens::XS));
+        for (c, choice) in chunk.iter().enumerate() {
+            row = row.child(theme_card::card(choice, r * THEMES_PER_ROW + c, &current, palette));
         }
         for _ in chunk.len()..THEMES_PER_ROW {
-            row = row.child(div().flex_1().px(px(tokens::SM)));
+            row = row.child(div().flex_1());
         }
         grid = grid.child(row);
     }
@@ -753,7 +707,7 @@ fn look(palette: &MandaraPalette, p: &PanelCx, tc: &TileCx, window: &mut Window,
         .into_any_element()
 }
 
-fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, fit: &Rc<Cell<gpui::Size<gpui::Pixels>>>, palette: &MandaraPalette, p: &PanelCx, window: &mut Window, cx: &mut App) -> gpui::AnyElement {
+fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, themes: &Rc<RefCell<theme_card::Catalog>>, fit: &Rc<Cell<gpui::Size<gpui::Pixels>>>, palette: &MandaraPalette, p: &PanelCx, window: &mut Window, cx: &mut App) -> gpui::AnyElement {
     let now = page.get();
     let compact = config(cx).read(cx).get().panels.menu_rail == MenuRail::Compact;
     let width = if compact { WIDTH_COMPACT } else { WIDTH };
@@ -843,9 +797,9 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, fit: &Rc<Cell<gpui::S
     let panels = &config(cx).read(cx).get().panels;
     let tc = TileCx { glow, patterns: panels.menu_patterns, calligraphy: panels.menu_calligraphy, compact: false, surface: panels.menu_tile_surface, shadow: panels.menu_tile_shadow() };
     let body = match now {
-        Page::Home => home(palette, p, cx),
+        Page::Home => home(palette, p, &tc, window, cx),
         Page::Apps => tiles(APPS, palette, p, &tc, window),
-        Page::Look => look(palette, p, &tc, window, cx),
+        Page::Look => look(palette, p, &tc, themes, window, cx),
         Page::Session => tiles(SESSION, palette, p, &tc, window),
     };
     // Home sets the menu's height (it's the fullest page); the other pages
@@ -899,7 +853,13 @@ pub fn register(r: &mut PluginRegistry) {
         let glow = Rc::new(RefCell::new(Glow::default()));
         let fit = Rc::new(Cell::new(size(px(WIDTH), px(HEIGHT))));
         let measured = fit.clone();
-        let panel = fn_view(None, move |palette, window, cx| render(&page, &glow, &measured, palette, &p, window, cx), window, cx);
+        let themes = Rc::new(RefCell::new(theme_card::Catalog::default()));
+        let clear = themes.clone();
+        let panel = fn_view_observing(None, move |cx| {
+            cx.observe(&shell(cx), move |_, state, cx| {
+                if state.read(cx).panel.as_deref() != Some(ID) { clear.borrow_mut().clear(); }
+            }).detach();
+        }, move |palette, window, cx| render(&page, &glow, &themes, &measured, palette, &p, window, cx), window, cx);
         PluginInstance { panel: Some(PanelSpec { view: panel, size: fit }), ..PluginInstance::empty() }
     });
     r.command(ID, CommandSpec::new("menu", mandara_i18n::tk("Open or close the main menu"), |_, cx| {

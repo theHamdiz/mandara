@@ -366,14 +366,14 @@ pub struct PanelsConfig {
     pub menu_opacity: f32,
     /// The main menu's rail: names beside the icons, or icons only.
     pub menu_rail: MenuRail,
-    /// The main menu's shortcut tiles each wear their own faint geometric
-    /// pattern.
+    /// Home cards and action tiles in the main menu wear faint geometric
+    /// patterns.
     pub menu_patterns: bool,
     /// The app and tool tiles wear a Kufic word instead of their pattern.
     pub menu_calligraphy: bool,
-    /// How those tiles are drawn: flat (the default), raised or glass.
+    /// How the cards and tiles are drawn: flat (the default), raised or glass.
     pub menu_tile_surface: MenuTileSurface,
-    /// The tiles' drop shadow, 0 (none, the default) to 1.
+    /// The cards' and tiles' drop shadow, 0 (none, the default) to 1.
     pub menu_tile_shadow: f32,
     /// Panels floating when the shell stopped come back where they were.
     pub remember_floating: bool,
@@ -395,7 +395,7 @@ pub enum MenuRail {
     Compact,
 }
 
-/// How the main menu's shortcut tiles are drawn.
+/// How Home cards and action tiles in the main menu are drawn.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MenuTileSurface {

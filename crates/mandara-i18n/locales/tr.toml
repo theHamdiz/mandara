@@ -8074,7 +8074,7 @@
 "Couldn't download {language}: {error}" = "{language} indirilemedi: {error}"
 "The update didn't install" = "Güncelleme yüklenmedi"
 "Tile patterns" = "Kutucuk desenleri"
-"Each shortcut tile in the main menu wears its own faint geometric pattern" = "Ana menüdeki her kısayol kutucuğu kendine özgü soluk bir geometrik desen taşır"
+"Home cards and action tiles in the main menu wear faint geometric patterns" = "Ana menüdeki Ana sayfa kartları ve eylem kutucukları soluk geometrik desenler taşır"
 "Kufic calligraphy" = "Kufi hat"
 "The app and tool tiles wear a Kufic word instead of their geometric pattern" = "Uygulama ve araç kutucukları geometrik desenleri yerine Kufi bir kelime taşır"
 
@@ -8200,7 +8200,7 @@
 "Tile surface" = "Kutucuk yüzeyi"
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "Düz dolgu (varsayılan), cam kenarlı kabartmalı 3B kutucuklar veya saydam cam"
 "Tile shadow" = "Kutucuk gölgesi"
-"How strong the shadow under each shortcut tile is (0 for none)" = "Her kısayol kutucuğunun altındaki gölgenin gücü (0: gölge yok)"
+"How strong the shadow under Home cards and action tiles is (0 for none)" = "Ana sayfa kartları ve eylem kutucuklarının altındaki gölgenin gücü (0: gölge yok)"
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} Nix (Home Manager veya NixOS) tarafından oluşturulur ve salt okunurdur: bu satırı Nix yapılandırmasına ekleyin, yapılandırmayı yeniden uygulayın ve `mandara setup` komutunu tekrar çalıştırın: {line}"
@@ -8698,3 +8698,6 @@
 "Example artist" = "Örnek sanatçı"
 
 "Previews use sample data." = "Önizlemelerde örnek veriler kullanılır."
+"Couldn't verify the community store policy. Try again later." = "Topluluk mağazası politikası doğrulanamadı. Daha sonra tekrar deneyin."
+"The community store has blocked installs and updates for {repository}." = "Topluluk mağazası {repository} için yükleme ve güncellemeleri engelledi."
+"Repository details are missing IDs required by the store policy." = "Depo ayrıntılarında mağaza politikasının gerektirdiği kimlikler eksik."

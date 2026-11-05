@@ -282,6 +282,7 @@ pub struct SwitcherView {
 }
 
 impl SwitcherView {
+    /// Track the hold gesture and defer committed window activation until the exclusive overlay is released.
     fn new(mode: Mode, list: Vec<Toplevel>, selected: usize, window: &mut Window, cx: &mut Context<Self>) -> Self {
         cx.on_release(|this: &mut Self, cx| {
             if let Some(id) = this.committed.take() {

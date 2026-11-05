@@ -903,7 +903,8 @@ impl<'a> Installer<'a> {
         // The packs, compiled from the same sources for the built version.
         let built_version = version.split_whitespace().nth(1).unwrap_or_default().to_string();
         let catalogs = src.join("crates/mandara-i18n/locales");
-        let packs = Lang::ALL.into_iter().filter(|l| *l != Lang::En).filter_map(|l| std::fs::read_to_string(catalogs.join(format!("{}.toml", l.code()))).ok().and_then(|text| mandara_i18n::compile(l, &built_version, &text).ok()).map(|b| (l, b))).collect();
+        let greeter_catalogs = src.join("crates/mandara-greeter/locales");
+        let packs = Lang::ALL.into_iter().filter(|l| *l != Lang::En).map(|l| mandara_i18n::bundle::compile_files(l, &built_version, &catalogs, &greeter_catalogs).map(|bytes| (l, bytes))).collect::<Result<Vec<_>, _>>()?;
         Ok(Some(Stage { exe, desktop, icon, packs: (built_version, packs) }))
     }
 

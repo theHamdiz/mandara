@@ -8075,7 +8075,7 @@
 "Couldn't download {language}: {error}" = "{language} डाउनलोड नहीं हो सकी: {error}"
 "The update didn't install" = "अपडेट इंस्टॉल नहीं हुआ"
 "Tile patterns" = "टाइल पैटर्न"
-"Each shortcut tile in the main menu wears its own faint geometric pattern" = "मुख्य मेनू की हर शॉर्टकट टाइल पर उसका अपना हल्का ज्यामितीय पैटर्न होता है"
+"Home cards and action tiles in the main menu wear faint geometric patterns" = "मुख्य मेनू के होम कार्ड और ऐक्शन टाइल पर हल्के ज्यामितीय पैटर्न दिखते हैं"
 "Kufic calligraphy" = "कूफ़ी सुलेख"
 "The app and tool tiles wear a Kufic word instead of their geometric pattern" = "ऐप और टूल टाइलों पर ज्यामितीय पैटर्न की जगह एक कूफ़ी शब्द होता है"
 
@@ -8201,7 +8201,7 @@
 "Tile surface" = "टाइल की सतह"
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "सपाट भराव (डिफ़ॉल्ट), काँच के किनारे वाली उभरी 3D टाइलें, या पारदर्शी काँच"
 "Tile shadow" = "टाइल की छाया"
-"How strong the shadow under each shortcut tile is (0 for none)" = "हर शॉर्टकट टाइल के नीचे की छाया कितनी गहरी हो (0 यानी कोई नहीं)"
+"How strong the shadow under Home cards and action tiles is (0 for none)" = "होम कार्ड और ऐक्शन टाइल के नीचे की छाया की गहराई (0 यानी कोई छाया नहीं)"
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} Nix (Home Manager या NixOS) से बनी है और केवल-पढ़ने योग्य है: यह पंक्ति इसके Nix कॉन्फ़िगरेशन में जोड़ें, फिर से बिल्ड करें, और `mandara setup` दोबारा चलाएँ: {line}"
@@ -8699,3 +8699,6 @@
 "Example artist" = "उदाहरण कलाकार"
 
 "Previews use sample data." = "पूर्वावलोकन में उदाहरण डेटा इस्तेमाल होता है।"
+"Couldn't verify the community store policy. Try again later." = "कम्युनिटी स्टोर की नीति की पुष्टि नहीं हो सकी। बाद में फिर कोशिश करें।"
+"The community store has blocked installs and updates for {repository}." = "कम्युनिटी स्टोर ने {repository} की स्थापना और अपडेट रोक दिए हैं।"
+"Repository details are missing IDs required by the store policy." = "रिपॉज़िटरी की जानकारी में स्टोर की नीति के लिए ज़रूरी आईडी नहीं हैं।"

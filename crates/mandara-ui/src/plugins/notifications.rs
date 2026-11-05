@@ -28,11 +28,14 @@ use super::panel_fx::{
     self, ANGLE_DIAGONAL_DEG, ANGLE_DOWN_DEG, EXPIRY_MARGIN, HEADER_H, LINK_H_PX, LINK_HOVER_ALPHA, PILL_H_PX, PanelShape, empty_state, header, pill_button, readable,
     redraw_in,
 };
-use super::{fn_view, json};
+use crate::hub::Domains;
+use super::{domain_view, json};
 use crate::fonts::tabular_nums;
 use crate::hub::hub;
 use crate::icons::icon;
 use crate::kit::{card, icon_button, reveal, text, tokens};
+
+mod activation;
 
 pub const ID: &str = "notifications";
 
@@ -356,7 +359,7 @@ pub struct CardStyle {
     pub markup: bool,
     /// Privacy mode: the body stays hidden (toasts).
     pub hide_body: bool,
-    /// Clicking the body runs the default action.
+    /// Clicking the body invokes the sender's default action or opens its app.
     pub click_action: bool,
 }
 
@@ -381,8 +384,8 @@ impl CardStyle {
 }
 
 /// The body with its markup spans as GPUI highlights; links are tinted and
-/// underlined (clicking the body runs the default action, so links open
-/// from the notification center via the app).
+/// underlined. Clicking the body opens the app or its advertised default
+/// target, where the user can follow the link.
 fn body_text(n: &Notification, accent: mandara_theme::Color, markup: bool) -> AnyElement {
     if !markup || n.markup.is_empty() {
         return crate::bidi::paragraph(n.body.clone());
@@ -481,7 +484,8 @@ pub fn notification_card_styled(n: &Notification, palette: &MandaraPalette, styl
         );
     }
     let has_actions = style.show_actions && (reply || n.actions.iter().any(|(k, _)| k != "default"));
-    let has_default = style.click_action && n.actions.iter().any(|(k, _)| k == "default");
+    let can_open = style.click_action && activation::available(n);
+    let target = activation::Source::from(n);
     let base = panel_fx::glass_card(palette).rounded(z(CARD_RADIUS_PX));
     let base = if critical {
         base.bg(oklab_gradient(ANGLE_DOWN_DEG, palette.urgent_coral.with_alpha(CRITICAL_FILL.0), palette.urgent_coral.with_alpha(CRITICAL_FILL.1)))
@@ -494,11 +498,9 @@ pub fn notification_card_styled(n: &Notification, palette: &MandaraPalette, styl
         .p(z(CARD_PAD_PX))
         .flex()
         .gap(z(CARD_GAP_PX))
-        .when(has_default, |el| el.cursor_pointer())
+        .when(can_open, |el| el.cursor_pointer())
         .on_click(move |_, _, cx| {
-            if has_default {
-                send(cx, NotificationCommand::Invoke { id, action: "default".into() });
-            }
+            if can_open { activation::open(target.clone(), cx); }
         })
         .child(notification_icon(n, CARD_ICON_PX * s, palette))
         .child(
@@ -858,7 +860,7 @@ fn parse_duration(s: &str) -> Option<i64> {
 
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Notifications"), tk("Notification center with history and do-not-disturb"), Some(Zone::Right)), |window, cx, panel_cx| {
-        let bar = fn_view(
+        let bar = domain_view(Domains::NOTIFICATIONS,
             None,
             |palette, _, cx| {
                 let st = &hub(cx).read(cx).notifications;
@@ -899,7 +901,7 @@ pub fn register(r: &mut PluginRegistry) {
         let page = Rc::new(Cell::new(PAGE_SIZE));
         // The history's overlay scroll bar (per panel instance).
         let (scroll, scroll_bar) = (gpui::ScrollHandle::new(), crate::scrollbar::ScrollbarState::new());
-        let panel = fn_view(
+        let panel = domain_view(Domains::NOTIFICATIONS,
             None,
             move |palette, window, cx| {
                 // Opening the panel marks everything read.
@@ -940,7 +942,7 @@ pub fn register(r: &mut PluginRegistry) {
             window,
             cx,
         );
-        let sidebar = fn_view(
+        let sidebar = domain_view(Domains::NOTIFICATIONS,
             None,
             |palette, window, cx| {
                 let hub = hub(cx);

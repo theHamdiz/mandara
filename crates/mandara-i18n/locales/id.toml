@@ -7828,7 +7828,7 @@
 "Couldn't download {language}: {error}" = "Tidak bisa mengunduh {language}: {error}"
 "The update didn't install" = "Pembaruan tidak terpasang"
 "Tile patterns" = "Pola ubin"
-"Each shortcut tile in the main menu wears its own faint geometric pattern" = "Setiap ubin pintasan di menu utama memakai pola geometrisnya sendiri yang samar"
+"Home cards and action tiles in the main menu wear faint geometric patterns" = "Kartu Beranda dan ubin tindakan di menu utama memiliki pola geometris samar"
 "Kufic calligraphy" = "Kaligrafi Kufi"
 "The app and tool tiles wear a Kufic word instead of their geometric pattern" = "Ubin aplikasi dan alat memakai kata Kufi alih-alih pola geometrisnya"
 
@@ -7954,7 +7954,7 @@
 "Tile surface" = "Permukaan ubin"
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "Isian datar (bawaan), ubin 3D timbul dengan tepi kaca, atau kaca tembus pandang"
 "Tile shadow" = "Bayangan ubin"
-"How strong the shadow under each shortcut tile is (0 for none)" = "Seberapa kuat bayangan di bawah setiap ubin pintasan (0 berarti tanpa bayangan)"
+"How strong the shadow under Home cards and action tiles is (0 for none)" = "Kekuatan bayangan di bawah kartu Beranda dan ubin tindakan (0 untuk tanpa bayangan)"
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} dibuat oleh Nix (Home Manager atau NixOS) dan hanya-baca: tambahkan baris ini ke konfigurasi Nix-nya, bangun ulang, lalu jalankan `mandara setup` lagi: {line}"
@@ -8452,3 +8452,6 @@
 "Example artist" = "Artis contoh"
 
 "Previews use sample data." = "Pratinjau menggunakan data contoh."
+"Couldn't verify the community store policy. Try again later." = "Kebijakan toko komunitas tidak dapat diverifikasi. Coba lagi nanti."
+"The community store has blocked installs and updates for {repository}." = "Toko komunitas telah memblokir pemasangan dan pembaruan untuk {repository}."
+"Repository details are missing IDs required by the store policy." = "Detail repositori tidak memuat ID yang diwajibkan kebijakan toko."

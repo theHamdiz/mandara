@@ -8073,7 +8073,7 @@
 "Couldn't download {language}: {error}" = "{language} konnte nicht heruntergeladen werden: {error}"
 "The update didn't install" = "Das Update wurde nicht installiert"
 "Tile patterns" = "Kachelmuster"
-"Each shortcut tile in the main menu wears its own faint geometric pattern" = "Jede Verknüpfungskachel im Hauptmenü trägt ihr eigenes zartes geometrisches Muster"
+"Home cards and action tiles in the main menu wear faint geometric patterns" = "Karten der Startseite und Aktionskacheln im Hauptmenü tragen dezente geometrische Muster"
 "Kufic calligraphy" = "Kufische Kalligrafie"
 "The app and tool tiles wear a Kufic word instead of their geometric pattern" = "Die App- und Werkzeugkacheln tragen ein kufisches Wort statt ihres geometrischen Musters"
 
@@ -8199,7 +8199,7 @@
 "Tile surface" = "Kacheloberfläche"
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "Flache Füllung (Standard), erhabene 3D-Kacheln mit Glaskante oder durchscheinendes Glas"
 "Tile shadow" = "Kachelschatten"
-"How strong the shadow under each shortcut tile is (0 for none)" = "Wie stark der Schatten unter jeder Verknüpfungskachel ist (0 für keinen)"
+"How strong the shadow under Home cards and action tiles is (0 for none)" = "Stärke des Schattens unter den Karten der Startseite und den Aktionskacheln (0 für keinen Schatten)"
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} wird von Nix (Home Manager oder NixOS) erzeugt und ist schreibgeschützt: Füge diese Zeile zu seiner Nix-Konfiguration hinzu, baue neu und führe `mandara setup` erneut aus: {line}"
@@ -8697,3 +8697,6 @@
 "Example artist" = "Beispielinterpret"
 
 "Previews use sample data." = "Die Vorschauen verwenden Beispieldaten."
+"Couldn't verify the community store policy. Try again later." = "Die Richtlinie des Community-Stores konnte nicht geprüft werden. Versuche es später erneut."
+"The community store has blocked installs and updates for {repository}." = "Der Community-Store hat Installationen und Updates für {repository} gesperrt."
+"Repository details are missing IDs required by the store policy." = "In den Repository-Details fehlen die für die Store-Richtlinie erforderlichen IDs."

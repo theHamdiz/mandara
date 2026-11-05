@@ -59,6 +59,7 @@ impl Default for HttpSource {
 pub use crate::web_api::web_url;
 
 impl Source for HttpSource {
+    /// Reject offline requests before entering the HTTP refresh path.
     fn fetch(&self, url: &str, previous: Option<&Feed>) -> Result<Option<Feed>, String> {
         crate::offline::check()?;
         self.fetch_online(url, previous)

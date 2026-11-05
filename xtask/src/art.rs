@@ -1298,6 +1298,7 @@ mod tests {
         }
     }
 
+    /// Procedural artwork uses its own subject glyph; only AI artwork keeps sparkle ornament.
     #[test]
     fn sparkle_art_is_reserved_for_ai() {
         let prompts: serde_json::Value = serde_json::from_str(include_str!("../../assets/artwork/prompts.json")).unwrap();

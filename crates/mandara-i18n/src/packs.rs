@@ -40,7 +40,7 @@
 //! fall back to English and the [`on_missing`] hook runs once: the shell
 //! uses it to download the pack, then calls [`reload`], which maps the new
 //! file and tells every [`on_loaded`] listener (the UI re-renders). Debug
-//! builds without a pack compile `locales/<code>.toml` from the source tree
+//! builds without a pack compile the shell and greeter source catalogs
 //! instead, so `cargo test` and `cargo run` stay translated; release
 //! builds never read the sources.
 
@@ -253,8 +253,8 @@ fn from_source(lang: Lang, version: &str) -> Option<&'static Pack<'static>> {
         return None;
     }
     let path = source_catalog(lang);
-    let text = std::fs::read_to_string(&path).ok()?;
-    let bytes = match crate::Catalog::parse(&text).and_then(|c| pack::build(lang, version, c.iter())) {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let bytes = match crate::bundle::compile_files(lang, version, &root.join("locales"), &root.join("../mandara-greeter/locales")) {
         Ok(b) => b,
         Err(e) => {
             eprintln!("mandara-i18n: {}: {e}", path.display());

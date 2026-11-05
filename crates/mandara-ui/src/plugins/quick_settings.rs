@@ -49,10 +49,34 @@ pub fn set_keep_awake(on: bool, cx: &mut App) -> Result<bool, String> {
     Ok(on)
 }
 
+/// Keep toggle behavior shared while a menu supplies only its frame.
+fn decorated_toggle(
+    decorate: &impl Fn(gpui::Stateful<gpui::Div>, &'static str, bool) -> gpui::Stateful<gpui::Div>,
+    id: &'static str,
+    icon: &'static str,
+    label: impl Into<gpui::SharedString>,
+    detail: Option<String>,
+    active: bool,
+    palette: &MandaraPalette,
+    on_click: impl Fn(&mut gpui::Window, &mut App) + 'static,
+) -> gpui::Stateful<gpui::Div> {
+    decorate(toggle_tile(id, icon, label, detail, active, palette, on_click), id, active)
+}
+
 /// The toggle tiles (Wi-Fi, Bluetooth, appearance, keep awake, night
 /// light, mute all, presentation, KeePassXC) and the brightness slider: the sidebar card,
 /// and the main menu's home page.
 pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
+    tiles_with(palette, cx, |tile, _, _| tile)
+}
+
+/// Reuse the same controls with the containing surface's card decoration.
+/// Sidebar callers retain the ordinary quick-toggle appearance.
+pub(super) fn tiles_with(
+    palette: &MandaraPalette,
+    cx: &mut App,
+    decorate: impl Fn(gpui::Stateful<gpui::Div>, &'static str, bool) -> gpui::Stateful<gpui::Div>,
+) -> gpui::AnyElement {
                 let hub = hub(cx).read(cx);
                 let (net, bt) = (&hub.network, &hub.bluetooth);
                 let (wifi_on, bt_on) = (net.wifi_enabled, bt.powered);
@@ -61,7 +85,8 @@ pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
                 let row1 = div()
                     .flex()
                     .gap(px(tokens::SM))
-                    .child(toggle_tile(
+                    .child(decorated_toggle(
+                        &decorate,
                         "qs-wifi",
                         super::network::status_icon(net),
                         mandara_i18n::t("Wi-Fi"),
@@ -74,7 +99,8 @@ pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
                             }
                         },
                     ))
-                    .child(toggle_tile(
+                    .child(decorated_toggle(
+                        &decorate,
                         "qs-bt",
                         if bt.powered { "bluetooth" } else { "bluetooth-off" },
                         mandara_i18n::t("Bluetooth"),
@@ -96,7 +122,8 @@ pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
                 let row2 = div()
                     .flex()
                     .gap(px(tokens::SM))
-                    .child(toggle_tile(
+                    .child(decorated_toggle(
+                        &decorate,
                         "qs-theme",
                         if dark { "moon" } else { "sun" },
                         if dark { mandara_i18n::t("Dark") } else { mandara_i18n::t("Light") },
@@ -108,7 +135,8 @@ pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
                             update_config(cx, |c| c.theme.mode = mode);
                         },
                     ))
-                    .child(toggle_tile(
+                    .child(decorated_toggle(
+                        &decorate,
                         "qs-awake",
                         "coffee",
                         mandara_i18n::t("Keep awake"),
@@ -124,7 +152,8 @@ pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
                 let row3 = div()
                     .flex()
                     .gap(px(tokens::SM))
-                    .child(toggle_tile(
+                    .child(decorated_toggle(
+                        &decorate,
                         "qs-night-light",
                         "sunset",
                         mandara_i18n::t("Night light"),
@@ -137,7 +166,8 @@ pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
                         },
                     ))
                     // Global mute (every output and app; `audio mute-all`).
-                    .child(toggle_tile(
+                    .child(decorated_toggle(
+                        &decorate,
                         "qs-mute-all",
                         if all_muted { "volume-off" } else { "volume-high" },
                         mandara_i18n::t("Mute all"),
@@ -158,7 +188,8 @@ pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
                 }
                 .then(|| {
                     let on = super::presentation::active(cx);
-                    toggle_tile(
+                    decorated_toggle(
+                        &decorate,
                         "qs-presentation",
                         "monitor",
                         mandara_i18n::t("Presenting"),
@@ -170,7 +201,8 @@ pub fn tiles(palette: &MandaraPalette, cx: &mut App) -> gpui::AnyElement {
                 });
                 let keepass = crate::keepassxc_prompt::available(cx).then(|| {
                     let open = crate::keepassxc_prompt::unlocked(cx);
-                    toggle_tile(
+                    decorated_toggle(
+                        &decorate,
                         "qs-keepassxc",
                         if open { "lock-open" } else { "key" },
                         mandara_i18n::t("KeePassXC"),

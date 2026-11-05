@@ -7828,7 +7828,7 @@
 "Couldn't download {language}: {error}" = "دانلود {language} ممکن نشد: {error}"
 "The update didn't install" = "به‌روزرسانی نصب نشد"
 "Tile patterns" = "نقش کاشی‌ها"
-"Each shortcut tile in the main menu wears its own faint geometric pattern" = "هر کاشی میان‌بر در منوی اصلی نقش هندسی کم‌رنگ خودش را دارد"
+"Home cards and action tiles in the main menu wear faint geometric patterns" = "کارت‌های خانه و کاشی‌های عملیات در منوی اصلی نقش‌های هندسی کم‌رنگ دارند"
 "Kufic calligraphy" = "خوشنویسی کوفی"
 "The app and tool tiles wear a Kufic word instead of their geometric pattern" = "کاشی‌های برنامه‌ها و ابزارها به‌جای نقش هندسی، واژه‌ای به خط کوفی دارند"
 
@@ -7954,7 +7954,7 @@
 "Tile surface" = "سطح کاشی‌ها"
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "رنگ‌آمیزی تخت (پیش‌فرض)، کاشی‌های برجستهٔ سه‌بعدی با لبهٔ شیشه‌ای، یا شیشهٔ شفاف"
 "Tile shadow" = "سایهٔ کاشی‌ها"
-"How strong the shadow under each shortcut tile is (0 for none)" = "شدت سایهٔ زیر هر کاشی میان‌بر (0 یعنی بدون سایه)"
+"How strong the shadow under Home cards and action tiles is (0 for none)" = "شدت سایه زیر کارت‌های خانه و کاشی‌های عملیات (0 یعنی بدون سایه)"
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} را Nix ‏(Home Manager یا NixOS) می‌سازد و فقط‌خواندنی است: این خط را به پیکربندی Nix آن بیفزایید، دوباره بسازید و `mandara setup` را دوباره اجرا کنید: {line}"
@@ -8452,3 +8452,6 @@
 "Example artist" = "هنرمند نمونه"
 
 "Previews use sample data." = "پیش‌نمایش‌ها از داده‌های نمونه استفاده می‌کنند."
+"Couldn't verify the community store policy. Try again later." = "بررسی خط‌مشی فروشگاه جامعه ممکن نشد. بعداً دوباره تلاش کنید."
+"The community store has blocked installs and updates for {repository}." = "فروشگاه جامعه نصب و به‌روزرسانی {repository} را مسدود کرده است."
+"Repository details are missing IDs required by the store policy." = "اطلاعات مخزن فاقد شناسه‌های موردنیاز خط‌مشی فروشگاه است."

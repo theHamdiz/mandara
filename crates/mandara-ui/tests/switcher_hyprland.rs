@@ -38,6 +38,7 @@ fn msg(bin: &Path, words: &[&str]) -> Value {
 /// The surface must actually be mapped before the test sends Commit;
 /// committing before the compositor receives the keyboard grab misses the race.
 fn overlay_mapped(runtime: &Path) -> bool {
+    /// Find the switcher namespace inside either version of Hyprland's nested layer reply.
     fn contains_switcher(value: &Value) -> bool {
         match value {
             Value::Array(values) => values.iter().any(contains_switcher),
@@ -64,6 +65,7 @@ fn switcher_fixture_rejects_an_unmarked_directory() {
     assert!(private_runtime(dir.path()));
 }
 
+/// After the exclusive overlay closes, the selected application must own focus.
 #[test]
 #[ignore = "requires an explicitly marked private Hyprland session with two application windows and Mandara running"]
 fn committing_the_exclusive_switcher_focuses_the_selected_window() {
@@ -99,6 +101,7 @@ fn committing_the_exclusive_switcher_focuses_the_selected_window() {
     }
 }
 
+/// A real modifier-release gesture must close the overlay and activate another window.
 #[test]
 #[ignore = "requires the marked private Hyprland session, generated Alt-Tab bindings, two windows and wtype"]
 fn releasing_alt_focuses_the_previous_window() {

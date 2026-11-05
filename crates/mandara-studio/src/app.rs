@@ -54,6 +54,8 @@ pub(crate) mod power_page;
 mod displays_page;
 mod diagnostics_page;
 mod frame_meter;
+mod activity;
+mod page_visit;
 mod form;
 mod network_page;
 mod compositor_presets;
@@ -226,6 +228,7 @@ impl StudioView {
     /// (the content scroller is shared: a page must not inherit the last
     /// one's offset, which left short pages "stuck" at their bottom).
     pub fn show(&mut self, section: Section, cx: &mut Context<Self>) {
+        if section == Section::Plugins { self.market_reopen(); }
         if section != self.section {
             if section == Section::Maintenance { self.maint.invalidate(); }
             self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
@@ -1349,10 +1352,19 @@ impl StudioView {
             .into_any_element()
     }
 
-    fn performance(&self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        // Sample only while this page is on screen.
+    /// One sampler follows both consumers, without stopping during navigation
+    /// between Home and Performance or waking a hidden Studio window.
+    pub(super) fn poll_performance(&self, window: &Window, cx: &mut Context<Self>) {
         let this = cx.entity().downgrade();
-        perf::poll_while(&self.perf, move |cx| this.read_with(cx, |v, _| v.section == Section::Performance && v.query.is_empty()).unwrap_or(false), cx);
+        let handle = window.window_handle();
+        perf::poll_while(&self.perf, move |cx| {
+            let visible = cx.update_window(handle, |_, window, _| window.is_visible()).unwrap_or(false);
+            this.read_with(cx, |view, _| activity::visible_page(view.section, &activity::PROCESS_PAGES, !view.query.is_empty(), visible)).unwrap_or(false)
+        }, cx);
+    }
+
+    fn performance(&self, p: &MandaraPalette, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        self.poll_performance(window, cx);
         let m = self.perf.read(cx);
         let card = || div().rounded(px(RADIUS_18_PX)).bg(p.surface_container.hsla()).p(px(SPACE_20_PX)).row().flex_col().gap(px(SPACE_14_PX));
         let Some(now) = m.latest() else {
@@ -1693,8 +1705,8 @@ impl Render for StudioView {
                 Section::Plugins => self.store_page(&cfg, &p, window, cx),
                 Section::About => self.about(&cfg, &p, window, cx),
                 Section::Performance => {
-                    let base = self.performance(&p, cx);
-                    let diagnostics = self.diagnostics(&p, cx);
+                    let base = self.performance(&p, window, cx);
+                    let diagnostics = self.diagnostics(&p, window, cx);
                     div().row().flex_col().gap(px(SPACE_14_PX)).child(base).child(diagnostics).into_any_element()
                 }
                 Section::Compositor => self.compositor_page(&cfg, &p, cx),

@@ -940,6 +940,7 @@ mod tests {
         entry(ClipContent::Text { text: t.into() }, kind::classify_text(t), "")
     }
 
+    /// Snapshots share large text allocations until an edit creates a private history copy.
     #[test]
     fn history_snapshots_share_payloads_and_mutations_preserve_old_values() {
         let payload = "text".repeat(64 * 1024);

@@ -99,6 +99,7 @@ pub(super) async fn act_on(conn: &zbus::Connection, id: &str, action: Action) ->
 }
 
 impl Backend for KdeConnect {
+    /// List phone state on the shared session bus within the bounded request lifetime.
     fn devices(&self) -> Result<Vec<Device>, String> {
         crate::runtime::block_on(bounded(async {
             let conn = crate::runtime::session().await.map_err(error)?;
@@ -106,6 +107,7 @@ impl Backend for KdeConnect {
         }))
     }
 
+    /// Run a phone action through the session bus with the common request deadline.
     fn act(&self, id: &str, action: Action) -> Result<(), String> {
         crate::runtime::block_on(bounded(async {
             let conn = crate::runtime::session().await.map_err(error)?;
@@ -118,6 +120,7 @@ impl Backend for KdeConnect {
 mod tests {
     use super::*;
 
+    /// Device identifiers cannot select another D-Bus object or add path components.
     #[test]
     fn ids_cannot_escape_the_device_object() {
         assert_eq!(path("phone_01").unwrap(), "/modules/kdeconnect/devices/phone_01");

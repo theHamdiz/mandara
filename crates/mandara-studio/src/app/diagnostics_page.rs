@@ -7,7 +7,7 @@ use mandara_ui::bidi::Bidi as _;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use gpui::{AnyElement, App, Context, FontWeight, Global, IntoElement, ParentElement, Styled, div, prelude::FluentBuilder as _, px};
+use gpui::{AnyElement, App, AppContext as _, AnyWindowHandle, Context, FontWeight, Global, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder as _, px};
 use mandara_core::ToGpui;
 use mandara_i18n::{t, tf};
 use mandara_theme::{Color, MandaraPalette};
@@ -70,14 +70,15 @@ fn mib(kib: f64) -> String {
 }
 
 impl StudioView {
-    fn ensure_diagnostics(cx: &mut Context<Self>) {
+    fn ensure_diagnostics(window: AnyWindowHandle, cx: &mut Context<Self>) {
         if std::mem::replace(&mut state(cx).polling, true) {
             return;
         }
         cx.spawn(async move |this, cx| {
             let mut tick = 0u32;
             loop {
-                let on_page = this.update(cx, |v, _| v.section == Section::Performance && v.query.is_empty()).unwrap_or(false);
+                let visible = cx.update_window(window, |_, window, _| window.is_visible()).unwrap_or(false);
+                let on_page = this.update(cx, |view, _| super::activity::visible_page(view.section, &[Section::Performance], !view.query.is_empty(), visible)).unwrap_or(false);
                 if !on_page {
                     let _ = this.update(cx, |_, cx| state(cx).polling = false);
                     return;
@@ -124,8 +125,8 @@ impl StudioView {
         .detach();
     }
 
-    pub(super) fn diagnostics(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        Self::ensure_diagnostics(cx);
+    pub(super) fn diagnostics(&mut self, p: &MandaraPalette, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        Self::ensure_diagnostics(window.window_handle(), cx);
         let mono = mandara_ui::fonts::fonts(cx).mono.clone();
         let st = state(cx);
         let frames = st.frames.clone();

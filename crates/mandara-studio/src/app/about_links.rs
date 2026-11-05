@@ -89,6 +89,7 @@ impl StudioView {
 mod tests {
     use super::*;
 
+    /// Project icons expose link roles and names independently of their visual glyphs.
     #[test]
     fn project_links_have_an_accessible_role_and_name() {
         use gpui::Element as _;
@@ -101,6 +102,7 @@ mod tests {
         }
     }
 
+    /// Hover motion settles without keeping either link animated after the pointer leaves.
     #[test]
     fn hover_settles_and_leaving_returns_both_links_to_rest() {
         let mut links = Links::default();

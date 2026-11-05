@@ -43,6 +43,7 @@ fn large_headlines_are_bounded_on_character_boundaries() {
     assert!(feed.entries[0].title.ends_with('…'));
 }
 
+/// Feed links permit ordinary web URLs, never embedded credentials or local-file schemes.
 #[test]
 fn only_uncredentialed_web_urls_can_be_opened() {
     for value in ["https://example.org/post", "http://localhost:8080/feed"] {
@@ -53,6 +54,7 @@ fn only_uncredentialed_web_urls_can_be_opened() {
     }
 }
 
+/// An unchanged feed sends its ETag and preserves the previously parsed content.
 #[test]
 fn conditional_requests_keep_the_cached_content() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

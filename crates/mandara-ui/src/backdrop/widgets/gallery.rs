@@ -10,6 +10,8 @@ use super::{EventItem, MediaInfo, OutputCx, WidgetScene};
 use crate::backdrop::paint::FontNames;
 use crate::lock::paint::TextPainter;
 
+mod faith;
+
 /// Keep the plate, antialiasing and shadows clear of the tile's rim.
 const CONTENT_FRACTION: f32 = 0.88;
 /// Tiny labels may need more zoom than a desktop placement permits; cap
@@ -30,6 +32,7 @@ fn sample_scene(widget: &DesktopWidget, palette: &MandaraPalette, cover_px: u32)
     scene.on_surface = palette.on_surface;
     scene.surface = palette.surface_container;
     scene.data.palette = super::super::palette_colors(palette);
+    faith::populate(&mut scene, &widget.kind);
     if let WidgetKind::Toggles(toggles) = &widget.kind {
         scene.data.toggles = super::toggle_ids(toggles).into_iter().enumerate().map(|(i, id)| (id, i % 2 == 0)).collect();
     }

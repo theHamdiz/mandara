@@ -80,6 +80,7 @@ mod tests {
         assert!(matches!(copy.kind, WidgetKind::Decoration(d) if d.text == "Welcome home"));
     }
 
+    /// Public copies reject personal content and strip agenda events without changing the desktop original.
     #[test]
     fn private_and_active_widgets_are_not_public_decorations() {
         for kind in [WidgetKind::Note(NoteWidget::default()), WidgetKind::Todo(TodoWidget::default()), WidgetKind::Media(MediaWidget::default()), WidgetKind::Photo(PhotoWidget::default())] {

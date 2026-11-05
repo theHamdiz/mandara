@@ -32,7 +32,7 @@ use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
 
 use super::extras::{Flash, toast};
-use super::fn_view;
+use super::model_view as fn_view;
 use super::panel_fx::{ANGLE_DOWN_DEG, HEADER_H, PanelShape, ViewSet, alpha, empty_state, glow, header, pill_button, readable, rim};
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;

@@ -154,6 +154,7 @@ impl Store for Keyring {
 mod tests {
     use super::*;
 
+    /// Replacement cleanup must finish before the next writer, including after a failed operation.
     #[test]
     fn mutations_wait_for_replacement_cleanup_and_release_after_errors() {
         crate::runtime::block_on(async {
@@ -182,6 +183,7 @@ mod tests {
         });
     }
 
+    /// Trimming a pasted key must not expose it through Debug or accept embedded whitespace.
     #[test]
     fn secret_validation_preserves_a_pasted_key_and_hides_debug_output() {
         let secret = Secret::new("  fixture-key:fx\n".into()).unwrap();

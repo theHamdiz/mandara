@@ -7,7 +7,8 @@ use mandara_core::ToGpui;
 use mandara_plugins::{CommandSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
 use serde_json::json;
 
-use super::fn_view;
+use super::domain_view;
+use crate::hub::Domains;
 use crate::hub::hub;
 use crate::kit::{ellipsize, tokens};
 
@@ -79,7 +80,7 @@ impl Show {
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Active window"), mandara_i18n::tk("Focused window title"),Some(Zone::Left)), |window, cx, _| {
         let labels = RefCell::new(Labels::default());
-        let bar = fn_view(
+        let bar = domain_view(Domains::FOCUS,
             None,
             move |palette, _, cx| {
                 let Some(client) = hub(cx).read(cx).focused.as_ref() else { return div().into_any_element() };

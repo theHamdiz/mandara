@@ -106,6 +106,7 @@ const RECENT_GRID: CardGrid = CardGrid { min_w: 176.0, max_w: 280.0, gap: SPACE_
 /// What the panel keeps between frames (a global, dropped on leaving).
 #[derive(Default)]
 struct Gen {
+    visit: super::page_visit::PageVisit,
     /// Rendered pictures by [`logic::key`].
     images: HashMap<u64, Arc<RenderImage>>,
     /// The main preview: its queue, the recipe it wants, the picture on
@@ -164,6 +165,11 @@ struct Made {
 
 fn st(cx: &mut App) -> &mut Gen {
     cx.default_global::<Gen>()
+}
+
+/// A released page cannot be recreated by an old preview or thumbnail reply.
+fn current_visit(cx: &App, visit: &super::page_visit::PageVisit) -> bool {
+    cx.try_global::<Gen>().is_some_and(|state| state.visit.accepts(visit))
 }
 
 /// Drops previews and lists when leaving the Wallpaper page.
@@ -392,7 +398,9 @@ impl StudioView {
         g.samples.retain(|(k, _), _| *k == main_key || g.pixels.as_ref().is_some_and(|(pk, _)| pk == k));
         if !g.display_asked {
             g.display_asked = true;
-            form::job(cx, || mandara_core::query_outputs().map_err(|e| e.to_string()), |_, res, cx| {
+            let visit = g.visit.clone();
+            form::job(cx, || mandara_core::query_outputs().map_err(|e| e.to_string()), move |_, res, cx| {
+                if !current_visit(cx, &visit) { return; }
                 st(cx).display = res.ok().and_then(|o| o.first().map(|g| (g.width.max(1) as u32, g.height.max(1) as u32)));
             });
         }
@@ -412,6 +420,7 @@ impl StudioView {
     /// preview (when its debounce allows), its size samples, variations,
     /// then the gallery.
     fn wallgen_pump(&mut self, cx: &mut Context<Self>) {
+        if self.section != crate::registry::Section::Wallpaper || !self.query.is_empty() || !super::wallpaper_page::generator_visible(cx) { return; }
         let now = Instant::now();
         let g = st(cx);
         if g.busy {
@@ -421,7 +430,9 @@ impl StudioView {
             Next::Render(key) => {
                 let Some((_, recipe)) = g.wanted.clone().filter(|(k, _)| *k == key) else { return };
                 g.busy = true;
+                let visit = g.visit.clone();
                 form::job(cx, move || Ok(mandara_wallgen::preview(&recipe, MAIN_W, MAIN_H)), move |view, res: Result<image::RgbImage, String>, cx| {
+                    if !current_visit(cx, &visit) { return; }
                     let g = st(cx);
                     g.busy = false;
                     if let Ok(rgb) = res {
@@ -436,9 +447,11 @@ impl StudioView {
             }
             Next::Wait(after) => {
                 if g.wake.is_none() {
+                    let visit = g.visit.clone();
                     let wake = cx.spawn(async move |this, cx| {
                         cx.background_executor().timer(after).await;
                         let _ = this.update(cx, |view, cx| {
+                            if !current_visit(cx, &visit) { return; }
                             st(cx).wake = None;
                             view.wallgen_pump(cx);
                             cx.notify();
@@ -456,6 +469,7 @@ impl StudioView {
             let missing: Vec<WallgenFormat> = WallgenFormat::ALL.into_iter().filter(|f| *f != WallgenFormat::Lossless && !g.samples.contains_key(&(key, *f))).collect();
             if !missing.is_empty() {
                 g.busy = true;
+                let visit = g.visit.clone();
                 form::job(
                     cx,
                     move || {
@@ -474,6 +488,7 @@ impl StudioView {
                             .collect::<Vec<_>>())
                     },
                     move |view, res, cx| {
+                        if !current_visit(cx, &visit) { return; }
                         let g = st(cx);
                         g.busy = false;
                         for (f, bytes) in res.unwrap_or_default() {
@@ -488,7 +503,9 @@ impl StudioView {
         let next = g.thumbs.iter().find(|(k, _)| !g.images.contains_key(k)).cloned();
         if let Some((key, recipe)) = next {
             g.busy = true;
+            let visit = g.visit.clone();
             form::job(cx, move || Ok(mandara_wallgen::preview(&recipe, THUMB_W, THUMB_H)), move |view, res: Result<image::RgbImage, String>, cx| {
+                if !current_visit(cx, &visit) { return; }
                 let g = st(cx);
                 g.busy = false;
                 if let Ok(rgb) = res {
@@ -500,9 +517,12 @@ impl StudioView {
     }
 
     fn wallgen_load_recent(&mut self, cx: &mut Context<Self>) {
+        if self.section != crate::registry::Section::Wallpaper || !self.query.is_empty() || !super::wallpaper_page::generator_visible(cx) { return; }
         let Some(dir) = st(cx).recent_dir.clone() else { return };
         st(cx).recent_loading = true;
-        form::job(cx, move || Ok(model::library(&dir, RECENT_MAX)), |view, res, cx| {
+        let visit = st(cx).visit.clone();
+        form::job(cx, move || Ok(model::library(&dir, RECENT_MAX)), move |view, res, cx| {
+            if !current_visit(cx, &visit) { return; }
             let g = st(cx);
             g.recent_loading = false;
             g.recent = Some(res.unwrap_or_default());
@@ -512,6 +532,7 @@ impl StudioView {
 
     /// Picker thumbnails of the recent files (cached on disk), one at a time.
     fn wallgen_load_thumbs(&mut self, cx: &mut Context<Self>) {
+        if self.section != crate::registry::Section::Wallpaper || !self.query.is_empty() || !super::wallpaper_page::generator_visible(cx) { return; }
         let g = st(cx);
         if !g.thumbs_loading.is_empty() {
             return;
@@ -519,7 +540,9 @@ impl StudioView {
         let Some(path) = g.recent.as_ref().and_then(|list| list.iter().find(|e| !g.recent_thumbs.contains_key(&e.path)).map(|e| e.path.clone())) else { return };
         g.thumbs_loading.insert(path.clone());
         let p2 = path.clone();
+        let visit = g.visit.clone();
         form::job(cx, move || mandara_ui::wallpaper::thumbnail(&p2), move |view, res, cx| {
+            if !current_visit(cx, &visit) { return; }
             let g = st(cx);
             g.thumbs_loading.remove(&path);
             // A failed thumbnail shows the placeholder (and isn't retried).
