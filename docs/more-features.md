@@ -185,7 +185,8 @@ The rest of what's built in.
   capacity), cycles and capacity (a dash where UPower doesn't report
   them), the temperature when reported, charge-history bars
   from UPower and the charge limit (a switch where UPower can change it,
-  read-only otherwise). **Modern** leads with each battery: a large charge
+  read-only otherwise). **Modern** keeps the charge ring and its end marker smooth at normal and
+  fractional display scales. It leads with each battery: a large charge
   gauge (the percentage and its state inside), the time left, then
   health, capacity against the design capacity and the chemistry when
   UPower reports them, and a charge-history graph (hidden when UPower
@@ -299,3 +300,6 @@ The rest of what's built in.
 Clipboard history uses the shared Wayland data-control watcher on both
 ext-data-control (including KWin) and wlr-data-control compositors. Turning
 the plugin off stops its watcher even when nothing is being copied.
+
+Region, window and screen captures follow the focused output, including
+displays at negative layout coordinates.

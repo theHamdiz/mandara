@@ -38,6 +38,7 @@ pub struct Settings {
     pub favourites: Vec<String>,
 }
 
+/// Read the configured server and favourite order without contacting the server.
 pub fn settings(cfg: &ShellConfig) -> Settings {
     Settings {
         server: cfg.plugins.setting(ID, "server", String::new()).trim().trim_end_matches('/').into(),
@@ -45,6 +46,7 @@ pub fn settings(cfg: &ShellConfig) -> Settings {
     }
 }
 
+/// Validate the server base before using it to identify a saved token.
 pub fn credential_key(settings: &Settings) -> Result<Key, String> {
     let server = mandara_services::web_api::endpoint(&settings.server, "")?;
     Ok(Key { provider: Provider::HomeAssistant, server: server.trim_end_matches('/').into() })
@@ -63,6 +65,7 @@ type HomeData = Rc<RefCell<Data<Settings, Vec<Entity>>>>;
 thread_local! { static DATA: HomeData = Rc::default(); }
 fn data() -> HomeData { DATA.with(Rc::clone) }
 
+/// Refresh the selected server outside the UI thread, coalescing pending reads.
 fn refresh(settings: Settings, force: bool, cfg: &ShellConfig, cx: &mut App) {
     let address = settings.clone();
     integration::load(&data(), settings, force, refresh_interval(cfg), move |_| {
@@ -129,7 +132,7 @@ fn panel(context: &PanelCx, p: &MandaraPalette, window: &mut Window, cx: &mut Ap
     let mut content = div().id("home-entities").flex_1().min_h_0().overflow_y_scroll().row().flex_wrap().items_start().content_start().gap(px(tokens::SM));
     match model.value.as_deref() {
         Some(entities) if !entities.is_empty() => for entity in entities.iter().take(ha::MAX_FAVOURITES) {
-            let glyph = match entity.domain() { "light" => "sun", "sensor" => "gauge", "fan" => "wind", "scene" | "script" => "sparkles", _ => "power" };
+            let glyph = match entity.domain() { "light" => "sun", "sensor" => "gauge", "fan" => "wind", "scene" => "tiles", "script" => "terminal", _ => "power" };
             let state = state_label(entity);
             let tone = if entity.state == "on" { accent } else { p.on_surface_variant };
             let mut card = glass_card(p).min_w(px(TILE_MIN_W)).flex_1().p(px(tokens::MD)).row().flex_col().gap(px(tokens::SM))

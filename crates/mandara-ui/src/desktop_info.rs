@@ -237,7 +237,7 @@ pub fn glance(cfg: &mandara_config::ShellConfig, prayer_on: bool, cx: &App) -> G
         }
     }
     let left = 1.0 - (now.num_seconds_from_midnight() as f32 / SECONDS_PER_DAY);
-    GlanceInfo { icon: "sparkles", text: tf("{percent}% of today left", &[("percent", &((left * PERCENT).round() as i32))]).to_string(), action: None }
+    GlanceInfo { icon: "clock", text: tf("{percent}% of today left", &[("percent", &((left * PERCENT).round() as i32))]).to_string(), action: None }
 }
 
 const SECONDS_PER_DAY: f32 = 86_400.0;

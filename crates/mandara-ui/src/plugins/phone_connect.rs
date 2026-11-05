@@ -43,6 +43,7 @@ fn refresh_interval(cfg: &ShellConfig) -> Duration {
     Duration::from_secs(cfg.plugins.setting(ID, "refresh_seconds", DEFAULT_REFRESH_SECS).clamp(MIN_REFRESH_SECS, MAX_REFRESH_SECS) as u64)
 }
 
+/// Read native daemon state on demand; the panel owns the refresh cadence.
 fn refresh(force: bool, cfg: &ShellConfig, cx: &mut App) {
     integration::load(&data(), (), force, refresh_interval(cfg), |_| KdeConnect.devices(), cx);
 }

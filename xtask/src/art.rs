@@ -101,8 +101,8 @@ const SHELF_MOTIF: &str = r#"<path d="M460 595v55q0 68 68 68h880q68 0 68-68v-55M
 const PACKAGE_MOTIF: &str = r#"<path d="M750 365l260 130 260-130M750 365v280l260 130 260-130V365M1010 495v280M750 365l-145 100 260 130 145-100 145 100 260-130-145-100M750 365l260-130 260 130"/><path d="M1010 115v240m-90-90 90 90 90-90"/>"#;
 /// A tall hourglass differentiates app limits from circular clock motifs.
 const HOURGLASS_MOTIF: &str = r#"<path d="M770 145h480M770 785h480M805 145c0 175 35 205 205 320-170 115-205 145-205 320M1215 145c0 175-35 205-205 320 170 115 205 145 205 320"/><path d="M850 195c0 130 45 170 160 250 115-80 160-120 160-250M850 735c0-130 45-170 160-250 115 80 160 120 160 250M875 685h270"/>"#;
-/// Flowing contours and a single star suggest generated light and terrain.
-const AURORA_MOTIF: &str = r#"<path d="M420 730C730 820 690 160 1030 320S1300 760 1570 270M420 690C710 780 710 130 1050 290S1320 720 1570 230M420 650C690 740 730 100 1070 260S1340 680 1570 190M420 610C670 700 750 70 1090 230S1360 640 1570 150"/><path d="M1370 92q0 62 62 62-62 0-62 62 0-62-62-62 62 0 62-62Z"/>"#;
+/// Flowing contours suggest light and terrain.
+const AURORA_MOTIF: &str = r#"<path d="M420 730C730 820 690 160 1030 320S1300 760 1570 270M420 690C710 780 710 130 1050 290S1320 720 1570 230M420 650C690 740 730 100 1070 260S1340 680 1570 190M420 610C670 700 750 70 1090 230S1360 640 1570 150"/>"#;
 
 // ── Checks ───────────────────────────────────────────────────────────────
 
@@ -1296,6 +1296,18 @@ mod tests {
                 assert!(overlap <= DISTINCT_GLYPH_MAX_OVERLAP, "wallpaper-generator and {sibling}: glyph overlap {overlap:.2} at {side} px");
             }
         }
+    }
+
+    #[test]
+    fn sparkle_art_is_reserved_for_ai() {
+        let prompts: serde_json::Value = serde_json::from_str(include_str!("../../assets/artwork/prompts.json")).unwrap();
+        for (id, note) in prompts["plugin_art"].as_object().unwrap() {
+            let glyph = note["glyph"].as_str().unwrap_or_default();
+            assert!(!glyph.contains("sparkle") || id == "local-ai", "{id}: choose a glyph for the plugin's function");
+        }
+        let generator = include_str!("../../assets/plugins/wallpaper-generator/icon.svg");
+        assert!(generator.contains("M174 126c-12 17"), "the paintbrush is paired with a paint drop");
+        assert!(!AURORA_MOTIF.contains("q0 62"), "flowing contours need no sparkle ornament");
     }
 
     #[test]

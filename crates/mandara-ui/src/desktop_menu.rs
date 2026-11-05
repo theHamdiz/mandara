@@ -105,9 +105,9 @@ impl NewWidget {
     }
 }
 
-/// A bundled icon by name (a plugin's choice), `sparkles` when unknown.
+/// A bundled icon by name (a plugin's choice), `package` when unknown.
 pub fn icon_named(name: &str) -> &'static str {
-    crate::icons::ICON_NAMES.iter().find(|n| **n == name).copied().unwrap_or("sparkles")
+    crate::icons::ICON_NAMES.iter().find(|n| **n == name).copied().unwrap_or("package")
 }
 
 /// A widget kind's name in the interface language (built-ins through the

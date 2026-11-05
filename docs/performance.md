@@ -89,3 +89,15 @@ The wall time is mostly waiting: at `SCHED_IDLE` the helper only gets CPU
 time nothing else wants. The download is 27 MB, once. A cached mask makes
 every later start and wallpaper switch free; changing the clock depth
 re-cuts the cached depth map without running the model.
+
+Clipboard snapshots share immutable history between the service, panels and
+launcher. Editing history creates a private copy; simply opening a panel does
+not duplicate its text. Window previews transfer their pixel buffers to the
+renderer and release closed-window images on the existing window-list events.
+
+Snipping and eyedropper overlays reuse the captured frame instead of retaining
+both RGBA and BGRA copies. Public login widgets similarly keep one painted CPU
+buffer. GPUI uploads borrow those pixels directly until wgpu copies them into
+its own staging storage. Native renderer features select Vulkan and GLES;
+browser shader translation is excluded from Linux builds. These changes keep
+the existing image resolution and rendering quality.

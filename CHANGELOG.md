@@ -36,7 +36,8 @@ lock screens, with clearer previews and setup checks.
   artwork. Feeds ask for the final address when a server redirects; remote
   API keys use HTTPS. Key settings recheck the keyring when reopened and
   stop reading on close. Home Assistant favourites load individually and
-  skip removed entities without hiding connection failures.
+  skip removed entities without hiding connection failures. Replacement keys
+  stay saved when settings are closed and reopened during a write.
 
 ### Improved
 
@@ -48,6 +49,18 @@ lock screens, with clearer previews and setup checks.
   and Discord links that move gently on hover and respect reduced motion.
 
 ### Fixed
+
+- **Switch to the window you picked.** Alt+Tab hands focus back after its
+  overlay closes. Program keybindings also accept `exec`, and Hyprland
+  instructions use its current Lua commands. (#105)
+
+- **Capture the display you are using.** Screenshots and window or region
+  selection follow the focused output, including monitors to the left of the
+  rest of the layout. Frozen frames stay on the display they came from. (#106)
+
+- **Icons that say what they do.** Quotes, wallpaper tools, widget menus and
+  settings use symbols for their purpose. Sparkles are reserved for AI;
+  procedural artwork uses flowing contours and a paint drop.
 
 - **Tell centered bar presets apart.** The Micro pill and Dynamic island
   thumbnails use the bar’s real compact geometry and show their different
@@ -83,6 +96,19 @@ lock screens, with clearer previews and setup checks.
   New weather-card labels follow the widget’s reading direction. Daily
   ranges follow the forecast location’s current date, even when a refresh
   fails overnight.
+
+- **Smoother battery rings.** The Power panel’s charge arc and round marker
+  keep their smooth edges at normal and fractional display scales. (#104)
+
+### Under the hood
+
+- Snipping, eyedropper and login widget images keep one CPU pixel buffer
+  after painting. GPU uploads avoid another image copy, and native builds
+  leave out unused browser shader translation.
+
+- Clipboard history shares its text between the service, panels and launcher.
+  Window previews move their captured pixels directly to the renderer, and
+  closing a window releases its preview without reopening the switcher.
 
 ## 0.16.0 — 2026-11-05
 

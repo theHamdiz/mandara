@@ -138,6 +138,7 @@ pub fn countdown(c: &CountdownWidget, scene: &WidgetScene, now: &DateTime<Local>
 const SAMPLE_FIRST_HOUR: u32 = 9;
 const SAMPLE_HOURS: [(&str, f32); 12] = [("sun", 19.0), ("sun", 21.0), ("sun", 23.0), ("cloud-sun", 24.0), ("cloud-sun", 25.0), ("cloud-sun", 26.0), ("cloud", 25.0), ("cloud", 24.0), ("rain", 22.0), ("rain", 21.0), ("cloud-moon", 20.0), ("cloud-moon", 19.0)];
 
+/// Synthetic weather for labelled previews, anchored to the supplied date.
 pub fn sample_forecast(today: NaiveDate) -> Forecast {
     const SAMPLE_DAYS: [(&str, f32, f32); 4] = [("sun", 19.0, 27.0), ("cloud-sun", 18.0, 25.0), ("rain", 16.0, 21.0), ("sun", 17.0, 24.0)];
     Forecast {

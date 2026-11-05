@@ -67,6 +67,8 @@ use uuid::Uuid;
 
 pub(crate) mod a11y;
 mod prompts;
+// Mandara patch: opt-in fractional bounds for SDF curves.
+mod subpixel;
 
 pub use a11y::A11ySubtreeBuilder;
 
@@ -4821,14 +4823,20 @@ impl Window {
     /// where the circular arcs meet. This will not display well when combined with dashed borders.
     /// Use `Corners::clamp_radii_for_quad_size` if the radii should fit within the bounds.
     pub fn paint_quad(&mut self, quad: PaintQuad) {
+        // Mandara patch: share insertion with the opt-in subpixel painter.
+        let bounds = self.snap_bounds(quad.bounds);
+        self.paint_quad_with_bounds(quad, bounds);
+    }
+
+    /// Mandara patch: retain the same opacity, clip and border handling for both painters.
+    fn paint_quad_with_bounds(&mut self, quad: PaintQuad, bounds: Bounds<ScaledPixels>) {
         self.invalidator.debug_assert_paint();
 
         let opacity = self.element_opacity();
-        let snapped_bounds = self.snap_bounds(quad.bounds);
         let snapped_border_widths = self.snap_border_widths(quad.border_widths);
         let quad = Quad {
             order: 0,
-            bounds: snapped_bounds,
+            bounds,
             content_mask: self.snapped_content_mask(),
             background: quad.background.opacity(opacity),
             border_color: quad.border_color.opacity(opacity),

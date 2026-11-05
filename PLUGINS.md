@@ -268,10 +268,13 @@ numerals, calendar and language.
    id = "moon"                     # lowercase letters, digits and - (unique)
    name = "Moon tonight"           # translated through locales/
    description = "Tonight's phase, large"
-   icon = "moon"                   # a bundled icon (default "sparkles")
+   icon = "moon"                   # a bundled icon (default "package")
    width = 280                     # logical px at scale 1 (default 320 × 180)
    height = 200
    ```
+
+   Choose an icon for what the widget does. `sparkles` is reserved for AI
+   features; procedural generation and ordinary automation use other symbols.
 
    At most 16 widgets per plugin.
 

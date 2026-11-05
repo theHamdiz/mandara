@@ -260,6 +260,31 @@ resident pages 4 s after start 11.0 → 4.8 MiB, and the start-up peak
 Urdu, Korean and Bengali text still renders in its faces at every weight
 (the `mandara-ui` `fonts::tests` regression tests pass unchanged).
 
+## 12. Explicit native backend features (`Cargo.toml`)
+
+The native renderer exposes `vulkan` and `gles` features. Mandara requests
+both with defaults disabled, retaining Vulkan-first selection and the GL
+fallback. Linux no longer enables Metal or the browser WebGPU backend;
+WebGPU otherwise enables Naga's WGSL writer even in a native build. Browser
+targets retain WebGPU and WebGL. This removes unused shader translation
+from native compilation without changing its rendering path. The workspace
+`renderer_features` test checks the native and browser contracts.
+
+## 13. Upload atlas pixels straight to wgpu (`wgpu_atlas.rs`)
+
+The atlas copied every upload into a `PendingUpload` byte vector, then
+copied it again into wgpu's staging memory at the next frame. It now calls
+`Queue::write_texture` at insertion: wgpu copies the slice before returning
+and schedules the transfer before the next submitted draw. Ordinary BGRA
+textures borrow the original slice; devices using RGBA allocate only the
+swizzled bytes. There is no second atlas-owned CPU copy of an image or
+glyph. Texture removal and device recovery still drop their atlas handles;
+wgpu keeps queued transfers alive until submission finishes.
+
+Tests check borrowed BGRA allocation identity, RGBA channel conversion,
+removal before submission, and actual headless GPU pixels after changing
+the source bytes and reusing the released texture id, in both formats.
+
 ## Tests
 
 * New `paths_render_through_bounding_box_textures` (headless renderer): a solid
@@ -271,7 +296,7 @@ Urdu, Korean and Bengali text still renders in its faces at every weight
 * `remove_deallocates_tile_space_for_reuse` sizes its two images relative to
   `INITIAL_ATLAS_EDGE_PX` (upstream hard-coded 64 + 700 px, which assumed the
   1024² first texture).
-* All 50 crate tests pass, including naga validation of every shader variant
+* All 52 crate tests pass, including naga validation of every shader variant
   and the updated WebGL record strides and fixed quad decoder.
   The cosmic-text tests `include_bytes!` Zed's `assets/`, so run them from a
   copy laid out like Zed's tree:

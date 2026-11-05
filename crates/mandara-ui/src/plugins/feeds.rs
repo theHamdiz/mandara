@@ -48,7 +48,7 @@ struct Reader {
 thread_local! { static READER: Rc<RefCell<Reader>> = Rc::default(); }
 fn reader() -> Rc<RefCell<Reader>> { READER.with(Rc::clone) }
 
-/// Keep valid, distinct feed addresses in configured order within the list limit.
+/// Keep distinct feed addresses in configured order within the list limit.
 pub fn subscriptions(cfg: &ShellConfig) -> Result<Vec<String>, String> {
     let text = cfg.plugins.setting(ID, "subscriptions", String::new());
     let mut urls = Vec::new();
@@ -63,6 +63,7 @@ fn refresh_seconds(cfg: &ShellConfig) -> Duration {
     Duration::from_secs(cfg.plugins.setting(ID, "refresh_seconds", DEFAULT_REFRESH_SECS).clamp(MIN_REFRESH_SECS, MAX_REFRESH_SECS) as u64)
 }
 
+/// Refresh through the cache, retaining conditional-request state and read flags.
 fn refresh(url: String, force: bool, cfg: &ShellConfig, cx: &mut App) {
     let data = reader().borrow().data.clone();
     let address = url.clone();

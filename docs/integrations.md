@@ -21,7 +21,8 @@ Save the key in the plugin’s masked keyring field. Keys live in your
 desktop’s Secret Service keyring, scoped to the provider and server,
 and stay out of Mandara’s configuration and request URLs. Removing a key
 removes only that provider’s key for that server. A locked keyring is
-reported without opening an unlock prompt just because a panel opened.
+reported without opening an unlock prompt just because a panel opened. Key
+changes finish one at a time, even if settings are closed and reopened.
 
 Choose source and target languages from your provider’s current list.
 **Detect automatically** leaves the source to the provider. Type or explicitly

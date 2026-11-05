@@ -220,7 +220,7 @@ pub struct ManifestWidget {
 }
 
 fn default_widget_icon() -> String {
-    "sparkles".into()
+    "package".into()
 }
 
 fn default_widget_width() -> f32 {
@@ -669,6 +669,12 @@ pub fn discover_third_party(dir: &std::path::Path) -> Vec<PluginManifest> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unspecified_widget_icon_uses_a_neutral_package() {
+        let widget: ManifestWidget = serde_json::from_value(serde_json::json!({"id": "weather", "name": "Weather"})).unwrap();
+        assert_eq!(widget.icon, "package");
+    }
 
     #[test]
     fn reveal_staggers_blocks() {

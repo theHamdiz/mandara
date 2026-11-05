@@ -89,6 +89,20 @@ fn scoped_keys_on_private_secret_service() {
     assert!(Keyring.read(&first, Access::Quiet).is_err());
     Keyring.save(&first, &Secret::new("fixture-replaced".into()).unwrap()).unwrap();
     assert_eq!(Keyring.read(&first, Access::Quiet).unwrap().unwrap().expose(), "fixture-replaced");
+    let start = std::sync::Barrier::new(4);
+    std::thread::scope(|scope| {
+        for index in 0..4 {
+            let start = &start;
+            let key = &first;
+            scope.spawn(move || {
+                let secret = Secret::new(format!("fixture-concurrent-{index}")).unwrap();
+                start.wait();
+                Keyring.save(key, &secret).unwrap();
+            });
+        }
+    });
+    let saved = Keyring.read(&first, Access::Quiet).unwrap().unwrap();
+    assert!((0..4).any(|index| saved.expose() == format!("fixture-concurrent-{index}")));
     Keyring.remove(&first).unwrap();
     assert!(Keyring.read(&first, Access::Quiet).unwrap().is_none());
     assert_eq!(Keyring.read(&second, Access::Quiet).unwrap().unwrap().expose(), "fixture-two");

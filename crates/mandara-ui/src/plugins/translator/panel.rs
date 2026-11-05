@@ -48,6 +48,7 @@ pub(super) struct State {
 }
 
 impl State {
+    /// Keep editor input and language search independent of network requests.
     pub fn new(cx: &mut App) -> Self {
         let model = Rc::new(RefCell::new(Model { preferences: None, source: None, target: super::DEFAULT_TARGET.into(), picker: None, query: String::new(), catalog: Rc::default(), output: Rc::default() }));
         let change = model.clone();
@@ -82,6 +83,7 @@ fn normalize(model: &mut Model, languages: &[Language]) {
     }
 }
 
+/// Cache the selected provider’s catalog and permit an explicit retry.
 fn load_languages(model: &Rc<RefCell<Model>>, preferences: Preferences, force: bool, cx: &mut App) {
     let catalog = model.borrow().catalog.clone();
     let request = preferences.clone();

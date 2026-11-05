@@ -411,7 +411,7 @@ pub(crate) fn plugin_icon(id: &str) -> &'static str {
         "screenshot" => "camera",
         "wallpaper" => "image",
         "wallpaper-generator" => "brush",
-        "wallpaper-depth" => "sparkles",
+        "wallpaper-depth" => "image",
         "wallhaven" => "cloud",
         "cursors" => "arrow",
         "mini-stats" => "cpu",

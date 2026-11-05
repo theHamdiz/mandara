@@ -9,6 +9,8 @@ pub mod bar;
 pub mod bidi;
 pub mod bt_pairing;
 pub mod calendar;
+mod capture_output;
+mod capture_pixels;
 pub mod cards;
 pub mod corners;
 /// Depth layer 3, now the `wallpaper-depth` plugin (kept under its old

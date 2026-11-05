@@ -59,6 +59,33 @@ selection are undone. `mandara msg config get <pointer>` and
 `mandara msg config set <pointer> <value>` reach the same keys as JSON
 pointers (for example `/plugins/settings/resources/refresh_ms`).
 
+### Custom keyboard shortcuts
+
+Open **Studio → Keyboard shortcuts**, add a starting action under **Add a
+shortcut**, capture the keys, and switch the row to **Program** for a custom
+command. Chords already owned by your compositor are shown as taken and
+are left alone.
+
+In TOML, a program action uses `kind = "spawn"` (`"exec"` is also accepted
+when reading an existing config). For Hyprland 0.57 or newer, custom
+`hyprctl` commands must use its Lua dispatchers. For example:
+
+```toml
+[[compositor.keybinds]]
+mods = ["super"]
+key = "h"
+[compositor.keybinds.action]
+kind = "spawn"
+value = "hyprctl dispatch 'hl.dsp.focus({ direction = \"l\" })'"
+```
+
+For moving a window, use `hl.dsp.window.move({ direction = "l" })`; for a
+workspace, use `hl.dsp.focus({ workspace = 2 })`. Split direction uses
+`hl.dsp.layout("togglesplit")`. Mandara preserves a program command exactly
+as entered, so update old `hyprctl dispatch
+movefocus l` commands to Hyprland's current syntax. See the official
+[Hyprland dispatcher reference](https://wiki.hypr.land/configuring/core/dispatchers/).
+
 ## What's configurable
 
 Grouped by Studio page. Keys are config paths (`table.key`).

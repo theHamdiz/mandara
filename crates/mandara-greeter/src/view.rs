@@ -549,7 +549,7 @@ impl GreeterView {
             auth: None,
             bg_base: owned_sources(&background),
             background,
-            widgets: Default::default(),
+            widgets: mandara_ui::backdrop::widgets::passive::Canvas::for_images(),
             bg_key: BackgroundSources::of(&config),
             bg_rebuild_at: None,
             clock: FrameClock::new(),

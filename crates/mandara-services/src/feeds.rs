@@ -41,6 +41,7 @@ pub use parse::parse;
 /// A reader keeps the last successful feed when its source is unavailable.
 pub trait Source {
     /// `None` means the server confirmed that `previous` is still current.
+    /// Respect offline mode before issuing any feed request.
     fn fetch(&self, url: &str, previous: Option<&Feed>) -> Result<Option<Feed>, String>;
 }
 

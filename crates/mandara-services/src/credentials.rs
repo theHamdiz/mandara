@@ -11,6 +11,14 @@ use zeroize::Zeroizing;
 const MAX_KEY_BYTES: usize = 4096;
 const APPLICATION: &str = "mandara-shell";
 const PURPOSE: &str = "plugin-api-key";
+/// Replacement includes duplicate cleanup; writes must not delete one another.
+static WRITES: async_lock::Mutex<()> = async_lock::Mutex::new(());
+
+/// Hold the write gate through the entire operation, without blocking a worker.
+async fn mutation(operation: impl std::future::Future<Output = Result<(), String>>) -> Result<(), String> {
+    let _guard = WRITES.lock().await;
+    operation.await
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Provider { DeepL, LibreTranslate, HomeAssistant }
@@ -117,7 +125,7 @@ impl Store for Keyring {
 
     /// Replace the provider/server entry with the supplied secret.
     fn save(&self, key: &Key, secret: &Secret) -> Result<(), String> {
-        crate::runtime::block_on(async {
+        crate::runtime::block_on(mutation(async {
             let collection = collection(Access::Prompt).await?;
             let label = format!("Mandara · {} · {}", key.provider.name(), key.server);
             let saved = collection.create_item(&label, &key.attributes(), oo7::Secret::text(secret.expose()), true, None).await.map_err(failed)?;
@@ -127,24 +135,52 @@ impl Store for Keyring {
                 if item.path() != saved.path() { item.delete(None).await.map_err(failed)?; }
             }
             Ok(())
-        })
+        }))
     }
 
     /// Delete only entries matching this provider and server.
     fn remove(&self, key: &Key) -> Result<(), String> {
-        crate::runtime::block_on(async {
+        crate::runtime::block_on(mutation(async {
             let collection = collection(Access::Prompt).await?;
             for item in collection.search_items(&key.attributes()).await.map_err(failed)? {
                 item.delete(None).await.map_err(failed)?;
             }
             Ok(())
-        })
+        }))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mutations_wait_for_replacement_cleanup_and_release_after_errors() {
+        crate::runtime::block_on(async {
+            let events = std::cell::RefCell::new(Vec::new());
+            let (release, wait) = async_channel::bounded(1);
+            let mut first = Box::pin(mutation(async {
+                events.borrow_mut().push("first stored");
+                wait.recv().await.map_err(|e| e.to_string())?;
+                events.borrow_mut().push("first cleaned");
+                Ok(())
+            }));
+            let mut second = Box::pin(mutation(async {
+                events.borrow_mut().push("second stored");
+                events.borrow_mut().push("second cleaned");
+                Ok(())
+            }));
+            assert!(futures::poll!(&mut first).is_pending());
+            assert!(futures::poll!(&mut second).is_pending());
+            assert_eq!(*events.borrow(), ["first stored"]);
+            release.try_send(()).unwrap();
+            first.await.unwrap();
+            second.await.unwrap();
+            assert_eq!(*events.borrow(), ["first stored", "first cleaned", "second stored", "second cleaned"]);
+            assert!(mutation(async { Err("fixture failure".into()) }).await.is_err());
+            mutation(async { Ok(()) }).await.unwrap();
+        });
+    }
 
     #[test]
     fn secret_validation_preserves_a_pasted_key_and_hides_debug_output() {

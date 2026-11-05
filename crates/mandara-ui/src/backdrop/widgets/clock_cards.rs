@@ -34,9 +34,8 @@ fn text(marks: &mut Vec<Mark>, value: &str, role: FontRole, size: f32, center: f
     h
 }
 
+/// Keep BCD independent of localized glyphs while respecting 12/24-hour display.
 fn digits(s: &ClockStrings) -> [u32; 4] {
-    // Respect the selected 12/24-hour display while keeping BCD independent
-    // of the glyphs used for localized numerals.
     let hour = if s.meridiem.is_some() { match s.hour % 12 { 0 => 12, h => h } } else { s.hour % 24 };
     [hour / 10, hour % 10, s.minute / 10, s.minute % 10]
 }

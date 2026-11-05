@@ -72,6 +72,7 @@ impl Drop for Job {
 /// No input handlers, user data loaders or periodic work when empty.
 #[derive(Default)]
 pub struct Canvas {
+    images: bool,
     cfg: Option<Widgets>,
     caches: HashMap<(u32, u32), Cache>,
     painter: Arc<Mutex<Option<TextPainter>>>,
@@ -83,6 +84,12 @@ pub struct Canvas {
 }
 
 impl Canvas {
+    /// Cache GPUI images for a login view instead of software lock-screen pixels.
+    /// Each completed paint keeps one CPU buffer, converted in place on first use.
+    pub fn for_images() -> Self {
+        Self { images: true, ..Self::default() }
+    }
+
     /// Drop this surface’s caches and weather subscription when no longer used.
     pub fn clear(&mut self) {
         if self.cfg.is_none() { return; }
@@ -192,17 +199,21 @@ impl Canvas {
         }
     }
 
+    /// Composite completed pixels only; drawing never starts a worker.
     pub fn draw(&self, target: &mut PixmapMut<'_>, opacity: f32) {
+        debug_assert!(!self.images, "image canvases are drawn through GPUI");
         let Some(pixels) = self.caches.get(&frame((target.width(), target.height()))).and_then(|c| c.pixels.as_ref()) else { return };
         let transform = Transform::from_scale(target.width() as f32 / pixels.width() as f32, target.height() as f32 / pixels.height() as f32);
         target.draw_pixmap(0, 0, pixels.as_ref(), &PixmapPaint { opacity: opacity.clamp(0.0, 1.0), ..Default::default() }, transform, None);
     }
 
-    /// Convert collected pixels to a render image only when first needed.
+    /// Take collected pixels into a render image when first needed.
+    /// Only image canvases expose GPUI images; software canvases retain their pixels.
     pub fn image(&mut self, size: (u32, u32)) -> Option<Arc<gpui::RenderImage>> {
+        if !self.images { return None; }
         let cache = self.caches.get_mut(&frame(size))?;
         if cache.image.is_none() {
-            cache.image = super::straight(cache.pixels.as_ref()?.clone()).map(super::render_image);
+            cache.image = super::straight(cache.pixels.take()?).map(super::render_image);
         }
         cache.image.clone()
     }
@@ -259,6 +270,59 @@ fn paint(spec: &PaintSpec, size: (u32, u32), text: &mut TextPainter) -> Option<P
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn image_cache_moves_the_4k_pixel_buffer_without_a_second_copy() {
+        let mut canvas = Canvas::for_images();
+        let size = (MAX_WIDTH, MAX_HEIGHT);
+        let mut pixels = Pixmap::new(size.0, size.1).unwrap();
+        // Premultiplied RGBA red at half opacity becomes straight BGRA.
+        pixels.data_mut()[..4].copy_from_slice(&[128, 0, 0, 128]);
+        let allocation = pixels.data().as_ptr();
+        let bytes = pixels.data().len();
+        canvas.caches.insert(
+            size,
+            Cache {
+                pixels: Some(pixels),
+                ..Default::default()
+            },
+        );
+
+        let image = canvas.image(size).unwrap();
+        assert_eq!(image.as_bytes(0).unwrap().as_ptr(), allocation);
+        assert_eq!(image.as_bytes(0).unwrap().len(), bytes);
+        assert_eq!(&image.as_bytes(0).unwrap()[..4], &[0, 0, 255, 128]);
+        assert!(canvas.caches[&size].pixels.is_none());
+        assert!(Arc::ptr_eq(&image, &canvas.image(size).unwrap()));
+
+        canvas.cfg = Some(Widgets::default());
+        canvas.clear();
+        assert!(canvas.caches.is_empty());
+        assert_eq!(canvas.take_trash(), [image]);
+        assert!(
+            canvas.images,
+            "clearing keeps the consumer's representation"
+        );
+    }
+
+    #[test]
+    fn software_cache_keeps_premultiplied_pixels_for_the_lock_screen() {
+        let mut canvas = Canvas::default();
+        let mut pixels = Pixmap::new(1, 1).unwrap();
+        pixels.data_mut().copy_from_slice(&[128, 0, 0, 128]);
+        canvas.caches.insert(
+            (1, 1),
+            Cache {
+                pixels: Some(pixels),
+                ..Default::default()
+            },
+        );
+        assert!(canvas.image((1, 1)).is_none());
+        assert!(canvas.caches[&(1, 1)].image.is_none());
+        let mut target = Pixmap::new(1, 1).unwrap();
+        canvas.draw(&mut target.as_mut(), 1.0);
+        assert_eq!(target.data(), &[128, 0, 0, 128]);
+    }
 
     #[test]
     fn forecasts_require_a_visible_weather_view_and_public_consent() {

@@ -51,6 +51,7 @@ impl Preferences {
     }
 }
 
+/// Return no keyring identity for an explicitly anonymous provider.
 pub fn credential_key(cfg: &ShellConfig) -> Result<Option<Key>, String> { settings(cfg).credential_key() }
 
 /// Read a key only when this provider requires one, scoped to its current server.
@@ -61,6 +62,7 @@ fn api_key(preferences: &Preferences) -> Result<Option<Secret>, String> {
     }
 }
 
+/// Read this provider’s key quietly and submit only the supplied text.
 fn translate(preferences: &Preferences, text: &str, source: Option<&str>, target: &str) -> Result<service::Translation, String> {
     let key = api_key(preferences)?;
     service::Http::new().translate(&preferences.connection, &service::Request { text, source, target }, key.as_ref())

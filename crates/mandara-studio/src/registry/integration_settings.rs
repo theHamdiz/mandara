@@ -8,6 +8,7 @@ use serde_json::Value;
 
 use super::{Control, Section, Setting, sd};
 
+/// Declare config-backed choices; credential values belong in the keyring editor.
 pub(super) fn entries() -> Vec<Setting> {
     vec![
         sd(Section::Plugins, tk("Translator"), "/plugins/settings/translator/provider", tk("Provider"), tk("Text is sent only when you press Translate"), Control::Choice(const { &[("deepl-free", tk("DeepL Free")), ("deepl-pro", tk("DeepL Pro")), ("libretranslate", tk("LibreTranslate"))] }), Value::from("deepl-free")),

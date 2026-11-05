@@ -70,7 +70,8 @@ you install with one command.
 Maintenance flags missing icon themes and links to the icon settings.
 Studio keeps bar arrangements in their own saved profiles, and screenshots
 can capture every display at once. Native KWin support uses Plasma's own
-window, clipboard and screenshot interfaces.
+window, clipboard and screenshot interfaces. Icons describe each tool’s
+function; sparkle symbols are reserved for AI features.
 
 It's made to feel good to use. Panels pour out of the bar on real spring
 physics, colours follow your wallpaper and your music, and the whole

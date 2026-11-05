@@ -264,7 +264,7 @@ impl StudioView {
                     .items_center()
                     .gap(px(SPACE_8_PX))
                     .pt(px(SPACE_6_PX))
-                    .child(icon(if ours { "sparkles" } else { "note" }, ICON_14_PX, p.on_surface_variant))
+                    .child(icon(if ours { "settings" } else { "note" }, ICON_14_PX, p.on_surface_variant))
                     .child(div().min_w(px(0.0)).overflow_hidden().text_ellipsis().whitespace_nowrap().font_family(mono.clone()).text_size(px(TEXT_12_PX)).text_color(p.on_surface.hsla()).child(file.as_deref().map(short_path).unwrap_or_else(|| t("Somewhere in your config").to_string())))
                     .child(badge(if ours { t("Mandara's drop-in") } else { t("Your config") }, if ours { p.primary } else { p.on_surface_variant }));
                 col = col.child(head);

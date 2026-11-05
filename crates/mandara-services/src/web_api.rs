@@ -81,6 +81,7 @@ impl Default for Client {
 }
 
 impl Transport for Client {
+    /// Check offline mode and request policy before starting bounded HTTP work.
     fn json(&self, method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Value, Error> {
         crate::offline::check()?;
         self.send_online(Self::request(method, url, body, auth)?)

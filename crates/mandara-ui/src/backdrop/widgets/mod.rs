@@ -1140,7 +1140,7 @@ pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler
         WidgetKind::Quran(qw) => (quran::quran(qw, scene.data.quran.as_ref()?, &Lingo::of_plugin(&qw.locale, scene.rtl, plugin), k, align, &mut m), 0.0),
         WidgetKind::Search(sw) => (info::search(sw, &Lingo::of(&sw.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Glance(g) => {
-            let gi = scene.data.glance.clone().unwrap_or(GlanceInfo { icon: "sparkles", text: String::new(), action: None });
+            let gi = scene.data.glance.clone().unwrap_or(GlanceInfo { icon: "clock", text: String::new(), action: None });
             (info::glance(g, &gi, scene.weather.as_ref(), now, &Lingo::of(&g.locale, scene.rtl, None), k, align, &mut m), 0.0)
         }
         WidgetKind::Github(gw) => (feeds::github(gw, &scene.data.github.get(&w.id).cloned().unwrap_or_default(), &Lingo::of(&gw.locale, scene.rtl, None), k, &mut m), 0.0),

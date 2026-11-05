@@ -23,6 +23,7 @@ pub(super) struct Editor {
 }
 
 impl Editor {
+    /// Invalidate UI replies on dismissal; in-flight keyring writes still finish.
     pub(super) fn close(&mut self) {
         self.key = None;
         self.generation = self.generation.wrapping_add(1);
