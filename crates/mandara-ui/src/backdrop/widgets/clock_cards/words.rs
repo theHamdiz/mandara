@@ -30,6 +30,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn russian_to_phrases_keep_the_upcoming_hour_in_the_nominative() {
+        let l = Lingo::of(&mandara_config::desktop_widgets::TextOptions { language: "ru".into(), ..Default::default() }, false, None);
+        for (minute, expected) in [(35, "Без двадцати пяти Два"), (40, "Без двадцати Два"), (45, "Без четверти Два"), (50, "Без десяти Два"), (55, "Без пяти Два")] {
+            assert_eq!(phrase(1, minute, &l), expected);
+        }
+    }
+
+    #[test]
     fn turkish_hours_use_natural_past_half_and_to_forms() {
         let l = Lingo::of(&mandara_config::desktop_widgets::TextOptions { language: "tr".into(), ..Default::default() }, false, None);
         assert_eq!(phrase(9, 5, &l), "Dokuzu beş geçiyor");

@@ -461,8 +461,8 @@ pub struct Forecast {
     /// drizzle, rain, snow, thunder) and whether the sun is up.
     pub kind: usize,
     pub is_day: bool,
-    /// Today's low and high, °C.
-    pub today: Option<(f32, f32)>,
+    /// The forecast's date boundary; unknown zones follow the local clock.
+    pub timezone: Option<mandara_services::world_clock::Tz>,
 }
 
 impl Forecast {
@@ -474,7 +474,7 @@ impl Forecast {
             condition: mandara_i18n::untranslate(w.condition.label()), place: place.into(),
             days: w.days.iter().filter_map(|d| Some((chrono::NaiveDate::parse_from_str(&d.date, "%Y-%m-%d").ok()?, crate::plugins::weather::condition_icon(d.condition, true), d.min, d.max))).collect(),
             hours: w.hours.iter().map(|h| (h.hour, crate::plugins::weather::condition_icon(h.condition, h.is_day), h.temp)).collect(),
-            kind: w.condition as usize, is_day: w.is_day, today: w.days.first().map(|d| (d.min, d.max)),
+            kind: w.condition as usize, is_day: w.is_day, timezone: w.timezone.parse().ok(),
         }
     }
 }
@@ -1087,7 +1087,7 @@ pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler
                     let text = scene.forecast.as_ref().map(|f| weather_more::sentence(ww, f, &l)).unwrap_or_default();
                     Composition::of(weather_more::sentence_layout(ww, &s, &text, k, align, &mut m))
                 }
-                WeatherLayout::Disc => Composition::of(weather_more::disc_layout(ww, &s, scene.forecast.as_ref(), &l, scene.units, k, &mut m)),
+                WeatherLayout::Disc => Composition::of(weather_more::disc_layout(ww, &s, &l, scene.units, k, &mut m)),
                 WeatherLayout::Hourly => Composition::of(weather_more::hourly_layout(ww, scene.forecast.as_ref(), &l, scene.units, scene.h24, k, &mut m)),
                 WeatherLayout::Ribbon | WeatherLayout::Thermometer | WeatherLayout::HumidityRose => Composition::of(weather_cards::layout(ww, &s, scene.forecast.as_ref(), &l, scene.units, k, &mut m)),
                 _ => layout::weather_widget(ww, &s, k, align, &mut m),
@@ -1308,7 +1308,7 @@ pub fn step_static(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>
             continue;
         }
         let tick = match &w.kind {
-            WidgetKind::Clock(_) | WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_) | WidgetKind::Quote(_) | WidgetKind::Date(_) | WidgetKind::Sky(_) | WidgetKind::Prayer(_) | WidgetKind::Glance(_) => minute,
+            WidgetKind::Clock(_) | WidgetKind::Weather(_) | WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_) | WidgetKind::Quote(_) | WidgetKind::Date(_) | WidgetKind::Sky(_) | WidgetKind::Prayer(_) | WidgetKind::Glance(_) => minute,
             _ => 0,
         };
         let skey = key((
@@ -1573,6 +1573,7 @@ pub fn next_wake(ws: &OutWidgets, o_names: &[&str], scene: &WidgetScene, shared:
                     soon(until(MS_PER_SECOND));
                 }
             }
+            WidgetKind::Weather(_) if w.enabled && visible => soon(until(MS_PER_MINUTE)),
             // Their times and the day count change with the minute.
             WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_) | WidgetKind::Quote(_) | WidgetKind::Date(_) | WidgetKind::Sky(_) | WidgetKind::Prayer(_) | WidgetKind::Glance(_) => soon(until(MS_PER_MINUTE)),
             WidgetKind::Pomodoro(_) if visible && scene.data.pomodoro.as_ref().is_some_and(|p| p.running) => soon(until(MS_PER_SECOND)),
@@ -1968,6 +1969,38 @@ mod tests {
 
     /// Dragging a widget in edit mode slides its planes (no repaint per
     /// pointer event); where it lands it is painted once more, exactly.
+    #[test]
+    fn weather_repaints_at_date_boundaries_without_a_clock_or_refresh() {
+        use mandara_config::desktop_widgets::{WeatherLayout, WeatherWidget};
+        let fonts = FontNames::default();
+        let names = ["DP-1"];
+        let output = OutputCx { id: 1, names: &names, logical: (1920.0, 1080.0), physical: (1920, 1080), scale120: mandara_core::shm_canvas::SCALE_DENOMINATOR, tone: None, primary: Color::oklch(0.6, 0.15, 200.0), fonts: &fonts, depth: false, subject: None, safe: Insets::default() };
+        let widget = DesktopWidget { kind: WidgetKind::Weather(WeatherWidget { layout: WeatherLayout::Thermometer, ..Default::default() }), ..Default::default() };
+        let mut scene = scene(vec![widget]);
+        let before = DateTime::parse_from_rfc3339("2026-11-05T23:59:59Z").unwrap().with_timezone(&Local);
+        let after = before + chrono::Duration::seconds(1);
+        let mut forecast = texts::sample_forecast(before.with_timezone(&chrono::Utc).date_naive());
+        forecast.timezone = Some("UTC".parse().unwrap());
+        scene.forecast = Some(forecast);
+        let mut text = TextPainter::new();
+        let mut host = Recorder::default();
+        let mut widgets = OutWidgets::default();
+        let shared = Shared::default();
+        step_static(&mut host, &mut widgets, &output, &scene, &shared, &mut text, before, 0).unwrap();
+        let painted = host.paints;
+        step_static(&mut host, &mut widgets, &output, &scene, &shared, &mut text, before, 0).unwrap();
+        assert_eq!(host.paints, painted);
+        step_static(&mut host, &mut widgets, &output, &scene, &shared, &mut text, after, 0).unwrap();
+        assert!(host.paints > painted);
+        let at = Instant::now();
+        assert!(next_wake(&widgets, &names, &scene, &shared, before, at).is_some());
+        scene.items[0].enabled = false;
+        assert!(next_wake(&widgets, &names, &scene, &shared, before, at).is_none());
+        scene.items[0].enabled = true;
+        scene.visible.clear();
+        assert!(next_wake(&widgets, &names, &scene, &shared, before, at).is_none());
+    }
+
     #[test]
     fn a_dragged_widget_slides_and_is_painted_once_where_it_lands() {
         use mandara_config::desktop_widgets::{Anchor, DecorShape};

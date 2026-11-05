@@ -6,39 +6,40 @@ use super::*;
 
 #[derive(Default)]
 struct Fixture {
-    replies: RefCell<VecDeque<Value>>,
+    replies: RefCell<VecDeque<Result<Value, crate::web_api::Error>>>,
     requests: RefCell<Vec<(Method, String, Option<Value>)>>,
 }
 
 impl Transport for Fixture {
-    fn json(&self, method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Value, String> {
+    fn json(&self, method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Value, crate::web_api::Error> {
         assert!(matches!(auth, Some(Authorization::Bearer(_))));
         self.requests.borrow_mut().push((method, url.into(), body.cloned()));
-        self.replies.borrow_mut().pop_front().ok_or_else(|| "unexpected request".into())
+        self.replies.borrow_mut().pop_front().expect("unexpected request")
     }
 }
 
 fn backend(replies: impl IntoIterator<Item = Value>) -> Http<Fixture> {
-    Http { transport: Fixture { replies: RefCell::new(replies.into_iter().collect()), ..Default::default() } }
+    Http { transport: Fixture { replies: RefCell::new(replies.into_iter().map(Ok).collect()), ..Default::default() } }
 }
 
 fn key() -> Secret { Secret::new("private-fixture-token".into()).unwrap() }
 
 #[test]
 fn favourites_keep_their_order_units_and_server_names() {
-    let backend = backend([json!([
-        {"entity_id":"light.studio","state":"off","attributes":{"friendly_name":"Studio light"}},
-        {"entity_id":"sensor.temperature","state":"21.8","attributes":{"friendly_name":"Temperature","unit_of_measurement":"°C"}},
-        {"entity_id":"switch.other","state":"on"},
-        {"entity_id":"light.studio","state":"on"}
-    ])]);
-    let favourites = ["sensor.temperature".into(), "light.studio".into()];
-    let states = backend.states("http://home.local:8123/proxy/", &key(), &favourites).unwrap();
+    let backend = backend([
+        json!({"entity_id":"sensor.temperature","state":"21.8","attributes":{"friendly_name":"Temperature","unit_of_measurement":"°C"}}),
+        json!({"entity_id":"light.studio","state":"off","attributes":{"friendly_name":"Studio light"}}),
+    ]);
+    let favourites = ["sensor.temperature".into(), "light.studio".into(), "sensor.temperature".into()];
+    let states = backend.states("https://home.example/proxy/", &key(), &favourites).unwrap();
     assert_eq!(states.iter().map(|entity| entity.id.as_str()).collect::<Vec<_>>(), ["sensor.temperature", "light.studio"]);
     assert_eq!(states[0].unit.as_deref(), Some("°C"));
     assert_eq!(states[1].name, "Studio light");
     assert_eq!(states[1].state, "off");
-    assert_eq!(backend.transport.requests.borrow()[0].1, "http://home.local:8123/proxy/api/states");
+    assert_eq!(backend.transport.requests.borrow().as_slice(), [
+        (Method::GET, "https://home.example/proxy/api/states/sensor.temperature".into(), None),
+        (Method::GET, "https://home.example/proxy/api/states/light.studio".into(), None),
+    ]);
 }
 
 #[test]
@@ -86,4 +87,33 @@ fn invalid_identifiers_and_large_favourite_lists_do_not_make_requests() {
     }
     assert!(backend.states("https://home.example", &key(), &vec!["light.a".into(); MAX_FAVOURITES + 1]).is_err());
     assert!(backend.transport.requests.borrow().is_empty());
+}
+
+#[test]
+fn missing_favourites_are_skipped_but_other_failures_are_reported() {
+    let backend = backend([json!({"entity_id":"light.studio","state":"on"})]);
+    let mut missing = crate::web_api::Error::from("Server replied with HTTP 404".to_owned());
+    missing.status = Some(404);
+    backend.transport.replies.borrow_mut().push_front(Err(missing));
+    let states = backend.states("https://home.example", &key(), &["light.removed".into(), "light.studio".into()]).unwrap();
+    assert_eq!(states.len(), 1);
+    assert_eq!(states[0].id, "light.studio");
+    for status in [None, Some(401), Some(403), Some(429), Some(500)] {
+        let mut error = crate::web_api::Error::from("fixture failure".to_owned());
+        error.status = status;
+        backend.transport.replies.borrow_mut().push_back(Err(error));
+        assert_eq!(backend.states("https://home.example", &key(), &["light.studio".into()]).unwrap_err(), "fixture failure");
+    }
+}
+
+#[test]
+fn discovery_is_sorted_deduplicated_and_bounded() {
+    let mut values = vec![json!({"entity_id":"light.z","state":"off"}); 2];
+    values.extend((0..MAX_ENTITIES + 2).map(|i| json!({"entity_id":format!("sensor.n{i}"),"state":"1"})));
+    let backend = backend([Value::Array(values)]);
+    let states = backend.states("https://home.example", &key(), &[]).unwrap();
+    assert_eq!(states.len(), MAX_ENTITIES);
+    assert!(states.windows(2).all(|pair| pair[0].name <= pair[1].name));
+    assert_eq!(states.iter().filter(|entity| entity.id == "light.z").count(), 1);
+    assert_eq!(backend.transport.requests.borrow()[0].1, "https://home.example/api/states");
 }

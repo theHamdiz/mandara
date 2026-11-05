@@ -229,8 +229,10 @@ Authentication screens have separate, empty collections: `[lock.widgets]`
 in the shell config, and `[widgets]` in `greeter.toml`. Their `items` use
 this same schema, with a maximum of 24 eligible passive widgets. `units`
 is `metric` or `imperial`; optional `weather` contains public `latitude`,
-`longitude` and `place`. Invalid coordinates are discarded. User content,
-account feeds, interactive cards and actions are excluded. See the
+`longitude` and `place`. Invalid coordinates are discarded. Account feeds,
+calendar events, private countdown details, interactive cards and actions
+are excluded. Text decorations keep their custom text when copied: that
+text remains public on the login or lock screen. See the
 [login/lock editor](lock-and-login.md#widgets-on-login-and-lock-screens).
 
 | Key | Meaning |

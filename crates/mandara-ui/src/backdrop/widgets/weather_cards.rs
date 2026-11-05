@@ -34,8 +34,8 @@ fn label(out: &mut Vec<Mark>, value: &str, w: &WeatherWidget, rtl: bool, size: f
     th
 }
 
-fn range_fraction(f: &Forecast) -> Option<f32> {
-    let (lo, hi) = f.today.filter(|(lo, hi)| lo.is_finite() && hi.is_finite() && lo <= hi)?;
+fn range_fraction(f: &Forecast, today: Option<(f32, f32)>) -> Option<f32> {
+    let (lo, hi) = today.filter(|(lo, hi)| lo.is_finite() && hi.is_finite() && lo <= hi)?;
     if !f.temp.is_finite() { return None; }
     Some(if lo == hi { 0.5 } else { ((f.temp - lo) / (hi - lo)).clamp(0.0, 1.0) })
 }
@@ -70,7 +70,7 @@ pub fn layout(w: &WeatherWidget, s: &WeatherStrings, forecast: Option<&Forecast>
         let center = BULB * k;
         let tube_x = center - TUBE_W * k / 2.0;
         out.push(Mark::new(MarkKind::Rect { x: tube_x, y: 0.0, w: TUBE_W * k, h: TUBE_H * k, radius: TUBE_W * k / 2.0, width: RULE * k }, InkRole::Fg).dim(MUTED));
-        if let Some(fraction) = range_fraction(f) {
+        if let Some(fraction) = range_fraction(f, s.today) {
             let height = TUBE_H * k * fraction;
             out.push(Mark::new(MarkKind::Rect { x: tube_x, y: TUBE_H * k - height, w: TUBE_W * k, h: height, radius: TUBE_W * k / 2.0, width: 0.0 }, InkRole::Accent));
             out.push(Mark::new(MarkKind::Disc { c: (center, TUBE_H * k), r: BULB * k }, InkRole::Accent));
@@ -81,7 +81,7 @@ pub fn layout(w: &WeatherWidget, s: &WeatherStrings, forecast: Option<&Forecast>
         let width = WIDTH * k - x;
         let h = label(&mut out, &s.temp, w, l.rtl, TEMP * k, x, PAD * k, width, InkRole::Fg, m);
         label(&mut out, &s.condition, w, l.rtl, TEXT * k, x, PAD * k + h + GAP * k, width, InkRole::Accent, m);
-        if let Some((lo, hi)) = f.today.filter(|(lo, hi)| lo.is_finite() && hi.is_finite() && lo <= hi) {
+        if let Some((lo, hi)) = s.today.filter(|(lo, hi)| lo.is_finite() && hi.is_finite() && lo <= hi) {
             let range = l.digits(format!("{} / {}", units.format_degrees(hi), units.format_degrees(lo)));
             label(&mut out, &range, w, l.rtl, TEXT * k, x, (TUBE_H - TEXT) * k, width, InkRole::Fg, m);
         }

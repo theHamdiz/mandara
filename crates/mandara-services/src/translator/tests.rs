@@ -9,7 +9,7 @@ struct Fixture {
 }
 
 impl Transport for Fixture {
-    fn json(&self, method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Value, String> {
+    fn json(&self, method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Value, crate::web_api::Error> {
         let key = auth.map(|auth| match auth { Authorization::DeepL(key) | Authorization::Bearer(key) => key.expose().to_owned() });
         self.calls.borrow_mut().push((method, url.into(), body.cloned().unwrap_or(Value::Null), key));
         Ok(self.response.clone())

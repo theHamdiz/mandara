@@ -22,10 +22,11 @@ lock screens, with clearer previews and setup checks.
   controls. Both start empty. Only public, passive kinds are offered;
   weather needs a separately chosen public location. Plasma keeps its own
   secure locker, with a clear explanation in Studio. World clocks have
-  public default cities; copied countdowns leave private desktop titles and
-  dates behind. Embedded and full-screen previews stay offline.
-  Forecast requests start only for widgets that actually display weather;
-  palette labels follow each widget’s chosen language.
+  public default cities; copied decoration text remains public; copied
+  countdowns leave private desktop titles and dates behind. Embedded and
+  full-screen previews stay offline. Forecast requests start only for
+  widgets that actually display weather; palette labels follow each widget’s
+  chosen language.
 
 - **Four optional connected tools.** Translator, Phone Connect, Feeds and
   Home Assistant are first-party plugins. Translate when you ask, keep up
@@ -33,7 +34,8 @@ lock screens, with clearer previews and setup checks.
   native panels. Mandara now ships 77 first-party plugins, each with its own
   artwork. Feeds ask for the final address when a server redirects; remote
   API keys use HTTPS. Key settings recheck the keyring when reopened and
-  stop reading on close.
+  stop reading on close. Home Assistant favourites load individually and
+  skip removed entities without hiding connection failures.
 
 ### Improved
 
@@ -60,12 +62,12 @@ lock screens, with clearer previews and setup checks.
   midnight. Digit rolls finish smoothly, and enabling seconds takes effect
   without waiting for the next minute.
 
-- **Dry runs stay compact.** The installer keeps its one-line heading on
-  an interactive dry run and leaves the setup menu closed. (#66)
+- **Dry runs stay compact.** The installer keeps its one-line heading on an
+  interactive dry run and leaves the setup menu closed. (#66)
 
-- **Keep CPU groups within the whole machine.** Process hunter and
-  Resources cap grouped totals at 100%; hot-process highlighting follows
-  the sampler’s host CPU count. Includes Hedayatbakhshi’s follow-ups. (#68)
+- **Keep CPU groups within the whole machine.** Process hunter and Resources
+  cap grouped totals at 100%; hot-process highlighting follows the sampler’s
+  host CPU count. Includes Hedayatbakhshi’s follow-ups. (#68)
 
 - **Fast clipboard paging keeps up.** A quick wheel movement turns all
   requested pages and keeps the leftover distance for the next movement.
@@ -77,7 +79,9 @@ lock screens, with clearer previews and setup checks.
 
 - **Keep desktop forecasts live.** With weather enabled, a desktop weather
   widget keeps the forecast service running without a bar or sidebar item.
-  New weather-card labels follow the widget’s reading direction.
+  New weather-card labels follow the widget’s reading direction. Daily
+  ranges follow the forecast location’s current date, even when a refresh
+  fails overnight.
 
 ## 0.16.0 — 2026-11-05
 

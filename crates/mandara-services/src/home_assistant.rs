@@ -34,14 +34,26 @@ impl<T: Transport> Backend for Http<T> {
         if favourites.len() > MAX_FAVOURITES || favourites.iter().any(|id| !entity_id(id)) {
             return Err(t("Choose up to 24 Home Assistant entities").into());
         }
+        let mut seen = std::collections::HashSet::new();
+        if !favourites.is_empty() {
+            let mut entities = Vec::with_capacity(favourites.len());
+            for id in favourites.iter().filter(|id| seen.insert(id.as_str())) {
+                let url = endpoint(server, &format!("api/states/{id}"))?;
+                let value = match self.transport.json(Method::GET, &url, None, Some(Authorization::Bearer(key))) {
+                    Ok(value) => value,
+                    Err(error) if error.status == Some(404) => continue,
+                    Err(error) => return Err(error.into()),
+                };
+                if let Some(entity) = Entity::parse(&value).filter(|entity| &entity.id == id) { entities.push(entity); }
+            }
+            return Ok(entities);
+        }
         let value = self.transport.json(Method::GET, &endpoint(server, "api/states")?, None, Some(Authorization::Bearer(key)))?;
         let values = value.as_array().ok_or_else(|| t("Home Assistant returned no entity list").to_string())?;
         let mut seen = std::collections::HashSet::new();
         let mut entities: Vec<_> = values.iter().filter_map(Entity::parse)
-            .filter(|entity| (favourites.is_empty() || favourites.contains(&entity.id)) && seen.insert(entity.id.clone()))
-            .take(MAX_ENTITIES).collect();
-        if favourites.is_empty() { entities.sort_by(|a, b| a.name.cmp(&b.name)); }
-        else { entities.sort_by_key(|entity| favourites.iter().position(|id| id == &entity.id)); }
+            .filter(|entity| seen.insert(entity.id.clone())).take(MAX_ENTITIES).collect();
+        entities.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(entities)
     }
 

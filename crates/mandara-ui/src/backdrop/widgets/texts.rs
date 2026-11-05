@@ -32,7 +32,7 @@ pub fn weather(w: &WeatherWidget, scene: &WidgetScene, now: &DateTime<Local>) ->
         ]
         .join(DOT)
     });
-    let today = now.date_naive();
+    let today = f.timezone.map_or_else(|| now.date_naive(), |tz| now.with_timezone(&tz).date_naive());
     let days = f
         .days
         .iter()
@@ -41,6 +41,7 @@ pub fn weather(w: &WeatherWidget, scene: &WidgetScene, now: &DateTime<Local>) ->
         .map(|(d, icon, min, max)| (l.date(d, "%a"), *icon, format!("{} {}", deg(*max), deg(*min))))
         .collect();
     WeatherStrings {
+        today: f.days.iter().find(|(date, ..)| *date == today).map(|(_, _, min, max)| (*min, *max)),
         icon: f.icon,
         temp: deg(f.temp),
         condition: l.word(&f.condition),
@@ -147,11 +148,11 @@ pub fn sample_forecast(today: NaiveDate) -> Forecast {
         wind: 14.0,
         condition: tk("Partly cloudy").to_string(),
         place: mandara_config::desktop::defaults::PLACE.to_string(),
-        days: SAMPLE_DAYS.iter().enumerate().map(|(i, (icon, min, max))| (today + chrono::Days::new(i as u64 + 1), *icon, *min, *max)).collect(),
+        days: std::iter::once((today, "cloud-sun", 19.0, 26.0)).chain(SAMPLE_DAYS.iter().enumerate().map(|(i, (icon, min, max))| (today + chrono::Days::new(i as u64 + 1), *icon, *min, *max))).collect(),
         hours: SAMPLE_HOURS.iter().enumerate().map(|(i, (icon, t))| ((SAMPLE_FIRST_HOUR + i as u32) % 24, *icon, *t)).collect(),
         kind: 1,
         is_day: true,
-        today: Some((19.0, 26.0)),
+        timezone: None,
     }
 }
 
@@ -165,6 +166,22 @@ fn at(y: i32, m: u32, d: u32) -> DateTime<Local> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn daily_ranges_follow_render_time_in_the_forecast_timezone() {
+        let first = NaiveDate::from_ymd_opt(2026, 11, 5).unwrap();
+        let mut forecast = sample_forecast(first);
+        forecast.timezone = Some("America/New_York".parse().unwrap());
+        let mut scene = WidgetScene { forecast: Some(forecast), ..Default::default() };
+        let now = |value: &str| DateTime::parse_from_rfc3339(value).unwrap().with_timezone(&Local);
+        let before = now("2026-11-06T04:59:59Z");
+        let after = now("2026-11-06T05:00:00Z");
+        let widget = WeatherWidget::default();
+        assert_eq!(weather(&widget, &scene, &before).today, Some((19.0, 26.0)));
+        assert_eq!(weather(&widget, &scene, &after).today, Some((19.0, 27.0)));
+        scene.forecast.as_mut().unwrap().days.retain(|(date, ..)| *date == first);
+        assert_eq!(weather(&widget, &scene, &after).today, None, "yesterday's range is never reused offline");
+    }
 
     #[test]
     fn countdowns_count_to_the_date_and_past_it() {

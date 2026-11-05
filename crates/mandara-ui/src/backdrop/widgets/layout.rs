@@ -1124,6 +1124,8 @@ pub fn monitor_gauges(w: &MonitorWidget, lines: &[MonitorLine], k: f32, rtl: boo
 /// Everything the weather widget writes, formatted for its language.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WeatherStrings {
+    /// Low and high for the forecast location’s current date, °C.
+    pub today: Option<(f32, f32)>,
     pub icon: &'static str,
     pub temp: String,
     pub condition: String,

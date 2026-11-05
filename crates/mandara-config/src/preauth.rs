@@ -71,6 +71,13 @@ mod tests {
     use crate::desktop_widgets::*;
 
     #[test]
+    fn copied_decorations_keep_the_text_the_user_chose_to_make_public() {
+        let source = DesktopWidget { kind: WidgetKind::Decoration(crate::desktop_widgets::Decoration { text: "Welcome home".into(), ..Default::default() }), ..Default::default() };
+        let copy = copy(&source).unwrap();
+        assert!(matches!(copy.kind, WidgetKind::Decoration(d) if d.text == "Welcome home"));
+    }
+
+    #[test]
     fn private_and_active_widgets_are_not_public_decorations() {
         for kind in [WidgetKind::Note(NoteWidget::default()), WidgetKind::Todo(TodoWidget::default()), WidgetKind::Media(MediaWidget::default()), WidgetKind::Photo(PhotoWidget::default())] {
             assert!(copy(&DesktopWidget { kind, ..Default::default() }).is_none());

@@ -50,8 +50,26 @@ impl Authorization<'_> {
 #[derive(Clone)]
 pub struct Client { agent: ureq::Agent }
 
+/// Keep HTTP status separate from translated transport errors.
+#[derive(Debug)]
+pub struct Error { pub status: Option<u16>, message: String }
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str(&self.message) }
+}
+
+impl std::error::Error for Error {}
+
+impl From<String> for Error {
+    fn from(message: String) -> Self { Self { status: None, message } }
+}
+
+impl From<Error> for String {
+    fn from(error: Error) -> Self { error.message }
+}
+
 pub trait Transport {
-    fn json(&self, method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Value, String>;
+    fn json(&self, method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Value, Error>;
 }
 
 impl Default for Client {
@@ -61,7 +79,7 @@ impl Default for Client {
 }
 
 impl Transport for Client {
-    fn json(&self, method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Value, String> {
+    fn json(&self, method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Value, Error> {
         crate::offline::check()?;
         self.send_online(Self::request(method, url, body, auth)?)
     }
@@ -82,23 +100,23 @@ impl Client {
         request.body(body).map_err(|_| t("Could not prepare the request").to_string())
     }
 
-    fn send_online(&self, request: Request<Vec<u8>>) -> Result<Value, String> {
+    fn send_online(&self, request: Request<Vec<u8>>) -> Result<Value, Error> {
         let mut response = self.agent.run(request).map_err(|error| tf("Request failed: {error}", &[("error", &error)]).to_string())?;
         let status = response.status();
-        if status.is_redirection() { return Err(t("The server redirected this request; enter its final address in Studio").into()); }
+        if status.is_redirection() { return Err(t("The server redirected this request; enter its final address in Studio").to_string().into()); }
         if !status.is_success() {
-            return Err(match status.as_u16() {
+            return Err(Error { status: Some(status.as_u16()), message: match status.as_u16() {
                 401 | 403 => t("The server rejected the API key").into(),
                 429 => t("The server is receiving too many requests; try again later").into(),
                 status => tf("Server replied with HTTP {status}", &[("status", &status)]).to_string(),
-            });
+            }});
         }
         let mut bytes = Vec::new();
         response.body_mut().as_reader().take((MAX_RESPONSE_BYTES + 1) as u64).read_to_end(&mut bytes)
             .map_err(|error| tf("Request failed: {error}", &[("error", &error)]).to_string())?;
-        if bytes.len() > MAX_RESPONSE_BYTES { return Err(t("The server's response was too large").into()); }
+        if bytes.len() > MAX_RESPONSE_BYTES { return Err(t("The server's response was too large").to_string().into()); }
         if bytes.is_empty() { return Ok(Value::Null); }
-        serde_json::from_slice(&bytes).map_err(|_| t("The server did not return valid JSON").to_string())
+        serde_json::from_slice(&bytes).map_err(|_| t("The server did not return valid JSON").to_string().into())
     }
 }
 
@@ -165,6 +183,30 @@ mod tests {
     }
 
     #[test]
+    fn response_status_survives_translation_without_parsing_its_message() {
+        for status in [404, 401, 503] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let url = format!("http://{}/api", listener.local_addr().unwrap());
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream.set_read_timeout(Some(REQUEST_TIMEOUT)).unwrap();
+                let mut bytes = Vec::new();
+                while !bytes.ends_with(b"\r\n\r\n") {
+                    let mut byte = [0];
+                    assert_eq!(stream.read(&mut byte).unwrap(), 1);
+                    bytes.extend(byte);
+                }
+                write!(stream, "HTTP/1.1 {status} Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
+            });
+            let client = Client { agent: ureq::Agent::config_builder().timeout_global(Some(REQUEST_TIMEOUT)).http_status_as_error(false).proxy(None).build().into() };
+            let error = client.send_online(Client::request(Method::GET, &url, None, None).unwrap()).unwrap_err();
+            assert_eq!(error.status, Some(status));
+            assert!(!String::from(error).is_empty());
+            server.join().unwrap();
+        }
+    }
+
+    #[test]
     fn redirects_never_forward_an_authenticated_request() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let url = format!("http://{}/api", listener.local_addr().unwrap());
@@ -183,7 +225,7 @@ mod tests {
         let secret = Secret::new("fixture-key".into()).unwrap();
         let client = Client { agent: ureq::Agent::config_builder().timeout_global(Some(REQUEST_TIMEOUT)).max_redirects(0).http_status_as_error(false).proxy(None).build().into() };
         let request = Client::request(Method::GET, &url, None, Some(Authorization::Bearer(&secret))).unwrap();
-        assert!(client.send_online(request).unwrap_err().contains("redirected"));
+        assert!(String::from(client.send_online(request).unwrap_err()).contains("redirected"));
         server.join().unwrap();
     }
 }

@@ -13,8 +13,9 @@ server address you enter; enable **Use an API key** only if that server
 requires one. Addresses can include a reverse proxy path.
 
 API keys require HTTPS for remote servers. For a local HTTP server, use
-`localhost` or its private IP address; Other hostnames require HTTPS. This applies
-to Home Assistant tokens too.
+`localhost` or its private IP address; other hostnames require HTTPS. Local
+HTTP does not encrypt API keys or Home Assistant tokens, so use it only
+on a trusted network.
 
 Save the key in the plugin’s masked keyring field. Keys live in your
 desktop’s Secret Service keyring, scoped to the provider and server,
@@ -68,7 +69,10 @@ through the plugin’s keyring field. Create a token in your Home Assistant
 profile. Keep the server address and token for the same instance.
 
 Enter up to 24 favourite entity ids, separated by spaces, to choose their
-order. Leave the field empty to show available entities. Sensors show real
+order. Favourites load individually, so a large installation does not need
+to download every state. Removed entities are skipped; connection and
+authentication errors are reported. Leave the field empty to discover up
+to 512 available entities. Sensors show real
 states and units. Lights, switches, fans and input booleans offer a toggle;
 scenes, scripts and buttons offer activation. An unavailable entity cannot
 be controlled. Scenes and buttons can still run before they have a last-used
