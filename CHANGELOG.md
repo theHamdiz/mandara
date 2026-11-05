@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Process usage is now shown as a share of the whole machine.
+
 ### Fixed
 
 - **The process table counts the whole machine.** A busy build used to
