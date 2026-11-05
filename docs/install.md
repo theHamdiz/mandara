@@ -617,10 +617,16 @@ Studio → Compositor → Config doctor; turn that off with *Tell me about confi
 problems* on the same page.
 
 ```bash
-mandara setup --check                  # report only (exit 10 conflicts, 11 config errors)
+mandara setup --check                  # report only; exit statuses are listed below
 mandara setup --fix 1a2b3c4d=comment   # fix by id from the report: comment, remove or regenerate
 mandara msg --json compositor check    # the same report from the running shell, for agents
 ```
+
+`mandara setup --check` leaves compositor files unchanged. It exits with 10
+for shortcut conflicts, 11 for compositor configuration errors, 12 when a
+required keyboard library is unavailable, or 13 for failed KWin availability
+checks. The installer offers conflict retirement only after status 10.
+
 
 MangoWM, Niri, Umbriel and Sway output is read as those checkers print it
 (tested against MangoWM 0.18.4, Niri 26.04, Umbriel 0.1.0 and Sway 1.12).
@@ -698,8 +704,3 @@ After installation, optional sign-in widgets live in **Studio → Login
 screen → Layout → Widgets** and **Lock appearance → Widgets**. Installation
 leaves both collections empty. Login changes use the existing **Apply to
 login screen** flow; see [login and lock widgets](lock-and-login.md#widgets-on-login-and-lock-screens).
-`mandara setup --check` leaves compositor files unchanged. Its exit status
-is 10 for shortcut conflicts, 11 for compositor check errors and 12 when
-a required keyboard library is unavailable, or 13 when KWin cannot pass its
-availability check. The installer offers conflict
-retirement only after status 10; other failures are reported separately.

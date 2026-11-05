@@ -118,6 +118,12 @@ installer, display reconnection and native KWin support.
 - The login designer keeps clocks and public widgets current while its
   preview is visible, including across midnight.
 
+- Installing or removing an application updates its dock pin and icon
+  without a restart; missing saved pins stay hidden.
+
+- Resetting a page keeps removed plugins out of its layout until you
+  restore them. Installer availability errors retain their explanation.
+
 - Setup offers KWin when it is installed and reports failed availability
   checks directly, without treating them as configuration errors.
 

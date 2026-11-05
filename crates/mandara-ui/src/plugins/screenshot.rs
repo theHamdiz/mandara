@@ -185,7 +185,7 @@ fn capture(mode: &str, cx: &mut App) -> Option<async_channel::Receiver<Result<St
         }
         _ => {
             let target = match mode { "all" => crate::snip::CaptureTarget::All, "window" => crate::snip::CaptureTarget::Window, _ => crate::snip::CaptureTarget::Screen };
-            let rx = crate::snip::capture_now(target, cx);
+            let rx = crate::snip::capture_target(target, cx);
             // Fan the result out to a notification and to the caller.
             let (tx, out) = async_channel::bounded(1);
             cx.spawn(async move |cx| {
