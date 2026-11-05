@@ -8297,3 +8297,11 @@
 "This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "此合成器不提供 wlr-screencopy，且无法使用 KWin 的 ScreenShot2"
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab：结果 · ↑↓：选择 · Enter：使用"
+
+"Mandara is installed." = "Mandara 已安装。"
+
+"Start it:        mandara            (or log in again if autostart is on)" = "启动：           mandara            （如果已启用自动启动，也可以重新登录）"
+
+"Settings:        mandara studio" = "设置：           mandara studio"
+
+"Health & repair: mandara studio maintenance" = "检查与修复：     mandara studio maintenance"

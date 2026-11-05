@@ -8056,3 +8056,11 @@
 "This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "این کامپوزیتور wlr-screencopy ندارد و استفاده از ScreenShot2 در KWin ممکن نشد"
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab: نتایج · ↑↓: انتخاب · Enter: استفاده"
+
+"Mandara is installed." = "ماندارا نصب شد."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "اجرا:            mandara            (یا اگر اجرای خودکار فعال است، دوباره وارد شوید)"
+
+"Settings:        mandara studio" = "تنظیمات:         mandara studio"
+
+"Health & repair: mandara studio maintenance" = "بررسی و تعمیر:   mandara studio maintenance"

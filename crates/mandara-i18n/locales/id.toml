@@ -8056,3 +8056,11 @@
 "This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "Kompositor ini tidak menyediakan wlr-screencopy, dan ScreenShot2 milik KWin tidak dapat digunakan"
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab: hasil · ↑↓: pilih · Enter: gunakan"
+
+"Mandara is installed." = "Mandara telah terpasang."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "Jalankan:        mandara            (atau masuk lagi jika mulai otomatis aktif)"
+
+"Settings:        mandara studio" = "Pengaturan:      mandara studio"
+
+"Health & repair: mandara studio maintenance" = "Pemeriksaan & perbaikan: mandara studio maintenance"

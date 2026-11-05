@@ -8297,3 +8297,11 @@
 "This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "Este compositor no ofrece wlr-screencopy y no se pudo usar ScreenShot2 de KWin"
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab: resultados · ↑↓: elegir · Intro: usar"
+
+"Mandara is installed." = "Mandara está instalado."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "Iniciar:         mandara            (o vuelve a iniciar sesión si el inicio automático está activado)"
+
+"Settings:        mandara studio" = "Ajustes:         mandara studio"
+
+"Health & repair: mandara studio maintenance" = "Diagnóstico y reparación: mandara studio maintenance"

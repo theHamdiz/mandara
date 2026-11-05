@@ -8055,3 +8055,11 @@
 "This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "이 컴포지터는 wlr-screencopy를 제공하지 않으며 KWin의 ScreenShot2도 사용할 수 없습니다"
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab: 결과 · ↑↓: 선택 · Enter: 사용"
+
+"Mandara is installed." = "Mandara가 설치되었습니다."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "시작:            mandara            (자동 시작을 켰다면 다시 로그인해도 됩니다)"
+
+"Settings:        mandara studio" = "설정:            mandara studio"
+
+"Health & repair: mandara studio maintenance" = "진단 및 복구:    mandara studio maintenance"

@@ -8306,3 +8306,11 @@
 "This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "لا يوفّر مركّب النوافذ هذا wlr-screencopy، وتعذّر استخدام ScreenShot2 الخاص بـ KWin"
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab: النتائج · ↑↓: تحديد · Enter: استخدام"
+
+"Mandara is installed." = "تم تثبيت مندرة."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "للتشغيل:         mandara            (أو سجّل الدخول مجددًا إذا كان التشغيل التلقائي مفعّلًا)"
+
+"Settings:        mandara studio" = "الإعدادات:       mandara studio"
+
+"Health & repair: mandara studio maintenance" = "الفحص والإصلاح:  mandara studio maintenance"

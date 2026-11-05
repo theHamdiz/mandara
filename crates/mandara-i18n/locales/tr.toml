@@ -8302,3 +8302,11 @@
 "This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "Bu birleştirici wlr-screencopy sunmuyor ve KWin ScreenShot2 kullanılamadı"
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab: sonuçlar · ↑↓: seç · Enter: kullan"
+
+"Mandara is installed." = "Mandara kuruldu."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "Başlat:          mandara            (veya otomatik başlatma açıksa yeniden oturum açın)"
+
+"Settings:        mandara studio" = "Ayarlar:         mandara studio"
+
+"Health & repair: mandara studio maintenance" = "Denetim ve onarım: mandara studio maintenance"

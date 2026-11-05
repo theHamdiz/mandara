@@ -523,7 +523,7 @@ availability, but KWin has no standalone configuration checker. Screenshots
 use KWin's native ScreenShot2 service; keep its screenshot effect available.
 A failed
 availability probe makes `mandara setup --check --compositor kwin` exit with
-status 11, just as a missing KWin executable does.
+status 13, just as a missing KWin executable does.
 
 Lock requests use **Plasma’s secure lock screen**, including confirmation
 before sleep, because KWin does not expose the lock-surface protocol used

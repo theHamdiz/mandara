@@ -100,6 +100,8 @@ installer, display reconnection and native KWin support.
 
 ### Fixed
 
+- Installation finishes with translated first steps in every language.
+
 - Installing or removing an application updates its dock pin and icon
   without a restart; missing saved pins stay hidden.
 
