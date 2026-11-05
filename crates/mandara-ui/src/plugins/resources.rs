@@ -700,7 +700,11 @@ fn top_apps(procs: &[Process]) -> Vec<TopApp> {
             None => groups.push(TopApp { name: p.name.clone(), count: 1, cpu: p.cpu, rss: p.rss, icon: None }),
         }
     }
-    // `Process::cpu` is already a share of the whole machine.
+    // `Process::cpu` is already a share of the whole machine, and a group is
+    // no more than the machine either.
+    for g in &mut groups {
+        g.cpu = g.cpu.min(PERCENT_F);
+    }
     groups.sort_by(|a, b| b.cpu.total_cmp(&a.cpu).then(b.rss.cmp(&a.rss)));
     groups.truncate(TOP_APPS_RANGE.1 as usize);
     for g in &mut groups {
