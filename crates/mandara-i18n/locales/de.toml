@@ -8675,3 +8675,9 @@
 "Word clock" = "Wortuhr"
 
 "{hour} o'clock" = "Genau {hour}"
+
+"Icon theme {theme} is installed" = "Das Symbolthema {theme} ist installiert"
+
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "Das Symbolthema {theme} fehlt; installiere es oder wähle unter Designs → Symbole ein anderes"
+
+"No icon theme is selected; standard fallbacks are in use" = "Kein Symbolthema ausgewählt; die Standardsymbole werden verwendet"

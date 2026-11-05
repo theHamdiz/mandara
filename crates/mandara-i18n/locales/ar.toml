@@ -8680,3 +8680,9 @@
 "Word clock" = "ساعة بالكلمات"
 
 "{hour} o'clock" = "{hour} تمامًا"
+
+"Icon theme {theme} is installed" = "سمة الأيقونات {theme} مثبّتة"
+
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "سمة الأيقونات {theme} غير موجودة؛ ثبّتها أو اختر غيرها في السمات ← الأيقونات"
+
+"No icon theme is selected; standard fallbacks are in use" = "لم تُحدَّد سمة أيقونات؛ تُستخدم الأيقونات البديلة القياسية"

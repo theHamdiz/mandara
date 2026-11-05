@@ -208,10 +208,7 @@ fn tone(palette: &MandaraPalette) -> image::RgbImage {
     image::RgbImage::from_pixel(1, 1, image::Rgb([r, g, b]))
 }
 
-fn paint(spec: &PaintSpec, size: (u32, u32), text: &mut TextPainter) -> Option<Pixmap> {
-    let mut canvas = Pixmap::new(size.0, size.1)?;
-    let mut cfg = spec.cfg.clone();
-    cfg.normalize();
+fn scene(cfg: &Widgets, spec: &PaintSpec) -> WidgetScene {
     let mut scene = WidgetScene {
         items: cfg.items.clone(),
         on_surface: spec.palette.on_surface,
@@ -220,11 +217,20 @@ fn paint(spec: &PaintSpec, size: (u32, u32), text: &mut TextPainter) -> Option<P
         h24: spec.h24,
         rtl: spec.lang.is_rtl(),
         forecast: spec.forecast.clone(),
+        world_cities: mandara_services::world_clock::DEFAULT_CITIES.iter().map(|city| (*city).into()).collect(),
         weather: spec.forecast.as_ref().map(|f| (f.icon, cfg.units.format_degrees(f.temp))),
         ..Default::default()
     };
     scene.data.place = cfg.weather.as_ref().filter(|w| w.valid()).map(|w| (w.latitude, w.longitude));
     scene.data.palette = [(mandara_i18n::t("Primary"), spec.palette.primary), (mandara_i18n::t("Surface"), spec.palette.surface_container), (mandara_i18n::t("Text"), spec.palette.on_surface)].into_iter().map(|(name, color)| (name.into(), color.to_rgba_u32() >> 8)).collect();
+    scene
+}
+
+fn paint(spec: &PaintSpec, size: (u32, u32), text: &mut TextPainter) -> Option<Pixmap> {
+    let mut canvas = Pixmap::new(size.0, size.1)?;
+    let mut cfg = spec.cfg.clone();
+    cfg.normalize();
+    let mut scene = scene(&cfg, spec);
     let names: [&str; 0] = [];
     let tone = tone(&spec.palette);
     let output = OutputCx { id: 0, names: &names, logical: (size.0 as f32, size.1 as f32), physical: size, scale120: mandara_core::shm_canvas::SCALE_DENOMINATOR, tone: Some(&tone), primary: spec.palette.primary, fonts: &spec.fonts, depth: false, subject: None, safe: Default::default() };
@@ -285,6 +291,22 @@ mod tests {
         cfg.items[0].enabled = false;
         assert!(!ticks_seconds(&cfg));
     }
+    #[test]
+    fn public_world_clocks_show_default_cities_and_preserve_explicit_lists() {
+        use mandara_config::desktop_widgets::{DesktopWidget, WidgetKind, WorldClockWidget};
+        let cfg = Widgets { items: vec![DesktopWidget { kind: WidgetKind::WorldClock(WorldClockWidget::default()), ..Default::default() }], ..Default::default() };
+        let spec = PaintSpec { cfg: cfg.clone(), fonts: Default::default(), palette: mandara_theme::engine::default_palette(true), minute: stamp(&cfg), h24: true, lang: mandara_i18n::Lang::En, forecast: None };
+        let scene = scene(&cfg, &spec);
+        let now = Local::now();
+        let cities = super::super::texts::cities(&WorldClockWidget::default(), &scene, &now);
+        assert_eq!(cities.len(), mandara_services::world_clock::DEFAULT_CITIES.len());
+        let explicit = WorldClockWidget { cities: vec!["Tokyo".into()], ..Default::default() };
+        let cities = super::super::texts::cities(&explicit, &scene, &now);
+        assert_eq!(cities.len(), 1);
+        assert_eq!(cities[0].name, "Tokyo");
+        assert!(scene.data.todos.is_empty() && scene.data.notes.is_empty() && scene.data.events.is_empty());
+    }
+
     #[test]
     fn automatic_ink_follows_the_authentication_theme() {
         for dark in [false, true] {

@@ -8430,3 +8430,9 @@
 "Word clock" = "কথায় লেখা ঘড়ি"
 
 "{hour} o'clock" = "ঠিক {hour}টা"
+
+"Icon theme {theme} is installed" = "{theme} আইকন থিম ইনস্টল করা আছে"
+
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "{theme} আইকন থিম নেই; এটি ইনস্টল করুন অথবা থিম → আইকন থেকে অন্যটি বেছে নিন"
+
+"No icon theme is selected; standard fallbacks are in use" = "কোনো আইকন থিম বেছে নেওয়া হয়নি; সাধারণ বিকল্প আইকন ব্যবহার করা হচ্ছে"

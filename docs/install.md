@@ -704,3 +704,8 @@ After installation, optional sign-in widgets live in **Studio → Login
 screen → Layout → Widgets** and **Lock appearance → Widgets**. Installation
 leaves both collections empty. Login changes use the existing **Apply to
 login screen** flow; see [login and lock widgets](lock-and-login.md#widgets-on-login-and-lock-screens).
+
+If application icons are missing after installation, open **Studio →
+Maintenance** and refresh its health checks. A missing icon theme links to
+**Themes → Icons**; install the named theme or select one already present.
+The check does not reset your choice.

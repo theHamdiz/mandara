@@ -2634,6 +2634,8 @@ Icon name or image path
 Icon size
 Icon spacing
 Icon theme
+Icon theme {theme} is installed
+Icon theme {theme} is missing; install it or choose another in Themes → Icons
 Icons
 Icons bounce until the app's first window appears
 Icons only
@@ -3805,6 +3807,7 @@ No frames yet — the shell only draws while something changes. Open a panel to 
 No hadith {reference} in {collection}
 No headlines yet
 No hotspot has been set up yet
+No icon theme is selected; standard fallbacks are in use
 No icons named like “{query}” in your theme
 No idle detection
 No image command set (Studio → Plugins → Clipboard)

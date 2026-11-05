@@ -8676,3 +8676,9 @@
 "Word clock" = "Часы словами"
 
 "{hour} o'clock" = "Ровно {hour}"
+
+"Icon theme {theme} is installed" = "Тема значков {theme} установлена"
+
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "Тема значков {theme} не найдена; установите её или выберите другую в разделе Темы → Значки"
+
+"No icon theme is selected; standard fallbacks are in use" = "Тема значков не выбрана; используются стандартные запасные значки"

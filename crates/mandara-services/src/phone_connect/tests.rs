@@ -33,7 +33,7 @@ struct Daemon;
 #[zbus::interface(name = "org.kde.kdeconnect.daemon")]
 impl Daemon {
     #[zbus(name = "devices")]
-    fn devices(&self, _reachable: bool, _paired: bool) -> Vec<String> { vec!["phone_01".into()] }
+    fn devices(&self, _reachable: bool, _paired: bool) -> Vec<String> { vec!["invalid/path".into(), "stale_device".into(), "phone_01".into()] }
 }
 
 struct Phone { paired: bool }
@@ -89,6 +89,8 @@ fn native_bus_properties_and_actions_use_kde_connect_names() {
     crate::runtime::block_on(async {
         let (client, _server, rings) = fixture(true).await;
         let devices = super::dbus::devices_on(&client).await.unwrap();
+        assert_eq!(devices.len(), 1, "stale and invalid devices must not hide a readable phone");
+        assert_eq!(devices[0].id, "phone_01");
         assert_eq!(devices[0].battery, Some(Battery { percent: 73, charging: true }));
         super::dbus::act_on(&client, "phone_01", Action::Ring).await.unwrap();
         assert_eq!(rings.load(Ordering::Relaxed), 1);

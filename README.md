@@ -67,6 +67,7 @@ screen, plus a settings app that changes all of it live. It runs on
 **MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic and KWin**, and it's one small, fast program
 you install with one command.
 
+Maintenance flags missing icon themes and links to the icon settings.
 Studio keeps bar arrangements in their own saved profiles, and screenshots
 can capture every display at once. Native KWin support uses Plasma's own
 window, clipboard and screenshot interfaces.

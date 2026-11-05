@@ -8677,3 +8677,9 @@
 "Word clock" = "शब्दों वाली घड़ी"
 
 "{hour} o'clock" = "ठीक {hour} बजे"
+
+"Icon theme {theme} is installed" = "आइकन थीम {theme} इंस्टॉल है"
+
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "आइकन थीम {theme} नहीं मिली; इसे इंस्टॉल करें या थीम → आइकन में दूसरी चुनें"
+
+"No icon theme is selected; standard fallbacks are in use" = "कोई आइकन थीम नहीं चुनी गई है; मानक वैकल्पिक आइकन उपयोग हो रहे हैं"

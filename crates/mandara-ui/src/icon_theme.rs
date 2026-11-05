@@ -50,13 +50,28 @@ fn active_theme() -> Option<String> {
     match cached.as_ref() {
         Some((at, theme)) if at.elapsed() < SYSTEM_THEME_TTL => theme.clone(),
         _ => {
-            let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_ascii_lowercase();
-            let plasma = desktop.split(':').any(|part| matches!(part, "kde" | "plasma" | "kwin"));
-            let theme = dirs::config_dir().and_then(|config| system_theme(&config, plasma));
+            let theme = desktop_icon_theme();
             *cached = Some((std::time::Instant::now(), theme.clone()));
             theme
         }
     }
+}
+
+/// The desktop preference, without Mandara's override or lookup cache.
+pub fn desktop_icon_theme() -> Option<String> {
+    let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_ascii_lowercase();
+    let plasma = desktop.split(':').any(|part| matches!(part, "kde" | "plasma" | "kwin"));
+    dirs::config_dir().and_then(|config| system_theme(&config, plasma))
+}
+
+/// A selected theme needs an index in at least one icon root. An exported
+/// application directory alone does not establish an installed theme.
+pub fn theme_installed(theme: &str) -> bool {
+    theme_installed_in(theme, &icon_roots())
+}
+
+fn theme_installed_in(theme: &str, roots: &[PathBuf]) -> bool {
+    roots.iter().any(|root| root.join(theme).join("index.theme").is_file())
 }
 
 /// The user's GTK icon theme name.
@@ -321,6 +336,19 @@ pub fn all_names() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn installed_themes_can_span_roots_but_need_an_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let roots = [dir.path().join("local"), dir.path().join("system")];
+        std::fs::create_dir_all(roots[0].join("Fixture")).unwrap();
+        assert!(!theme_installed_in("Fixture", &roots));
+        std::fs::create_dir_all(roots[1].join("Fixture")).unwrap();
+        std::fs::write(roots[1].join("Fixture/index.theme"), "[Icon Theme]\nName=Fixture\n").unwrap();
+        assert!(theme_installed_in("Fixture", &roots));
+        std::fs::remove_file(roots[1].join("Fixture/index.theme")).unwrap();
+        assert!(!theme_installed_in("Fixture", &roots));
+    }
 
     #[test]
     fn hicolor_is_always_in_the_chain() {

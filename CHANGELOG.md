@@ -70,6 +70,9 @@ installer, display reconnection and native KWin support.
 
 ### Improved
 
+- Maintenance reports missing icon themes and opens Themes so you can
+  choose a replacement without resetting your selection. (#87)
+
 - Studio’s About header now has playful GitHub and Discord links that move gently on hover and respect reduced motion.
 
 - **The clipboard answers the keyboard and the wheel.** Arrow Up and Down
@@ -114,6 +117,10 @@ installer, display reconnection and native KWin support.
   are gone.
 
 ### Fixed
+
+- Public world clocks have default cities, and copied countdowns leave
+  private titles and dates behind. Phone Connect skips stale devices and
+  shows its Ping icon. Feed redirects ask for the final subscription address.
 
 - The login designer keeps clocks and public widgets current while its
   preview is visible, including across midnight.

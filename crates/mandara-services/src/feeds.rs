@@ -50,7 +50,7 @@ pub struct HttpSource {
 
 impl Default for HttpSource {
     fn default() -> Self {
-        Self { agent: ureq::Agent::config_builder().timeout_global(Some(REQUEST_TIMEOUT)).build().into() }
+        Self { agent: ureq::Agent::config_builder().timeout_global(Some(REQUEST_TIMEOUT)).max_redirects(0).build().into() }
     }
 }
 
@@ -79,6 +79,9 @@ impl HttpSource {
         }
         let failed = |error: &dyn std::fmt::Display| tf("Could not refresh this feed: {error}", &[("error", error)]).to_string();
         let mut response = request.call().map_err(|error| failed(&error))?;
+        if response.status().is_redirection() && response.status() != ureq::http::StatusCode::NOT_MODIFIED {
+            return Err(t("The server redirected this request; enter its final address in Studio").into());
+        }
         if response.status() == ureq::http::StatusCode::NOT_MODIFIED {
             return previous.map(|_| None).ok_or_else(|| t("The feed server returned no content").to_string());
         }

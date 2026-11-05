@@ -49,6 +49,8 @@ The selected feed refreshes while the panel is open; the interval is
 configurable from one minute to one hour. Conditional requests reuse
 ETags and modification dates. Headlines and read flags are cached locally
 so the last successful result remains available offline.
+Redirects are not followed. If a subscription redirects, enter its final
+feed address in the plugin's Settings.
 
 Click a headline to open its web address in your browser. It is marked
 read after the browser opens successfully. A feed keeps its latest 100

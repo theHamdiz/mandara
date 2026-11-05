@@ -25,6 +25,8 @@ const PANEL_W: f32 = 440.0;
 const PANEL_H: f32 = 500.0;
 const BAR_ICON_PX: f32 = 16.0;
 const DEVICE_ICON_PX: f32 = 32.0;
+/// The ping action uses the bundled quick-action glyph.
+const PING_ICON: &str = "bolt";
 pub const DEFAULT_REFRESH_SECS: i64 = 15;
 pub const MIN_REFRESH_SECS: i64 = 5;
 pub const MAX_REFRESH_SECS: i64 = 300;
@@ -85,7 +87,7 @@ fn device_card(device: &Device, pending: bool, confirm: &Rc<RefCell<Option<Strin
         actions = actions.child(action_button(device, Action::Pair, t("Pair"), "plus", p));
     }
     if device.supports("kdeconnect_findmyphone") { actions = actions.child(action_button(device, Action::Ring, t("Ring"), "bell", p)); }
-    if device.supports("kdeconnect_ping") { actions = actions.child(action_button(device, Action::Ping, t("Ping"), "send", p)); }
+    if device.supports("kdeconnect_ping") { actions = actions.child(action_button(device, Action::Ping, t("Ping"), PING_ICON, p)); }
     if device.supports("kdeconnect_share") {
         let id = device.id.clone();
         actions = actions.child(pill_button(SharedString::from(format!("phone-clipboard-{id}")), Some("clipboard"), t("Send clipboard text"), readable(p.primary, p), p, move |_, cx| {
@@ -172,5 +174,10 @@ mod tests {
         assert_eq!(command_action("unpair"), Some(Action::Unpair));
         assert_eq!(command_action("unknown"), None);
         assert_eq!(refresh_interval(&ShellConfig::default()), Duration::from_secs(DEFAULT_REFRESH_SECS as u64));
+    }
+
+    #[test]
+    fn ping_uses_a_bundled_icon() {
+        assert!(crate::icons::svg_source(PING_ICON).is_some());
     }
 }

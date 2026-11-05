@@ -8671,3 +8671,9 @@
 "Word clock" = "文字时钟"
 
 "{hour} o'clock" = "{hour}点整"
+
+"Icon theme {theme} is installed" = "图标主题 {theme} 已安装"
+
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "找不到图标主题 {theme}；请安装它，或在主题 → 图标中选择其他主题"
+
+"No icon theme is selected; standard fallbacks are in use" = "未选择图标主题；正在使用标准备用图标"

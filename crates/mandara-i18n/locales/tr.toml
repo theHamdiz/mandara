@@ -8676,3 +8676,9 @@
 "Word clock" = "Yazılı saat"
 
 "{hour} o'clock" = "Tam {hour}"
+
+"Icon theme {theme} is installed" = "{theme} simge teması kurulu"
+
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "{theme} simge teması bulunamadı; temayı kurun veya Temalar → Simgeler bölümünden başka bir tema seçin"
+
+"No icon theme is selected; standard fallbacks are in use" = "Simge teması seçilmedi; standart yedek simgeler kullanılıyor"

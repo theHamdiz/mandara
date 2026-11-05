@@ -8671,3 +8671,9 @@
 "Word clock" = "Reloj en palabras"
 
 "{hour} o'clock" = "{hour} en punto"
+
+"Icon theme {theme} is installed" = "El tema de iconos {theme} está instalado"
+
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "Falta el tema de iconos {theme}; instálalo o elige otro en Temas → Iconos"
+
+"No icon theme is selected; standard fallbacks are in use" = "No se ha elegido un tema de iconos; se usan los iconos alternativos del sistema"

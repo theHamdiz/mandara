@@ -80,3 +80,27 @@ fn conditional_requests_keep_the_cached_content() {
     assert!(source.fetch_online(&url, Some(&feed)).unwrap().is_none());
     worker.join().unwrap();
 }
+
+#[test]
+fn redirects_do_not_contact_the_destination_or_replace_cached_content() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let destination = TcpListener::bind("127.0.0.1:0").unwrap();
+    destination.set_nonblocking(true).unwrap();
+    let url = format!("http://{}/feed", listener.local_addr().unwrap());
+    let target = format!("http://{}/private", destination.local_addr().unwrap());
+    let worker = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        stream.set_read_timeout(Some(REQUEST_TIMEOUT)).unwrap();
+        let mut request = [0; 8192];
+        assert!(stream.read(&mut request).unwrap() > 0);
+        write!(stream, "HTTP/1.1 302 Found\r\nLocation: {target}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
+    });
+    let source = HttpSource::default();
+    assert_eq!(source.agent.config().max_redirects(), 0);
+    let previous = parse(&url, RSS.as_bytes()).unwrap();
+    let error = source.fetch_online(&url, Some(&previous)).unwrap_err();
+    assert!(error.contains("redirected"), "{error}");
+    worker.join().unwrap();
+    assert!(matches!(destination.accept(), Err(error) if error.kind() == std::io::ErrorKind::WouldBlock));
+    assert_eq!(previous.entries[0].title, "Sea & sky");
+}

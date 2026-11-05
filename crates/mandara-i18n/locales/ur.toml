@@ -8430,3 +8430,9 @@
 "Word clock" = "لفظوں والی گھڑی"
 
 "{hour} o'clock" = "پورے {hour} بجے"
+
+"Icon theme {theme} is installed" = "آئیکن تھیم {theme} نصب ہے"
+
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "آئیکن تھیم {theme} موجود نہیں؛ اسے نصب کریں یا تھیمز ← آئیکنز میں کوئی اور منتخب کریں"
+
+"No icon theme is selected; standard fallbacks are in use" = "کوئی آئیکن تھیم منتخب نہیں؛ معیاری متبادل آئیکنز استعمال ہو رہے ہیں"

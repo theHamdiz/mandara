@@ -64,7 +64,10 @@ pub(super) async fn devices_on(conn: &zbus::Connection) -> Result<Vec<Device>, S
     let ids: Vec<String> = daemon.call("devices", &(false, false)).await.map_err(error)?;
     let mut devices = Vec::new();
     for id in ids.into_iter().take(MAX_DEVICES) {
-        devices.push(device(conn, &id).await?);
+        match device(conn, &id).await {
+            Ok(device) => devices.push(device),
+            Err(error) => tracing::debug!("skipping KDE Connect device: {error}"),
+        }
     }
     devices.sort_by(|a, b| b.connected().cmp(&a.connected()).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())).then_with(|| a.id.cmp(&b.id)));
     Ok(devices)

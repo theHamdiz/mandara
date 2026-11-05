@@ -8430,3 +8430,9 @@
 "Word clock" = "ساعت نوشتاری"
 
 "{hour} o'clock" = "{hour} دقیق"
+
+"Icon theme {theme} is installed" = "پوستهٔ آیکون {theme} نصب است"
+
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "پوستهٔ آیکون {theme} موجود نیست؛ آن را نصب کنید یا در پوسته‌ها ← آیکون‌ها پوستهٔ دیگری انتخاب کنید"
+
+"No icon theme is selected; standard fallbacks are in use" = "پوستهٔ آیکونی انتخاب نشده است؛ آیکون‌های جایگزین استاندارد استفاده می‌شوند"

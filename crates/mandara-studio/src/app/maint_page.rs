@@ -146,6 +146,10 @@ impl StudioView {
     }
 
     fn maint_fix(&mut self, id: CheckId, cx: &mut Context<Self>) {
+        if id == CheckId::Icons {
+            self.show(crate::registry::Section::Themes, cx);
+            return;
+        }
         let fonts = cx.text_system().all_font_names();
         self.maint_job(format!("check:{id:?}"), cx, move |p| {
             m::fix(id, &fonts, &move |done, total| p.store(u32::try_from(done * PERMILLE / total.max(1)).unwrap_or(u32::MAX - 1), Ordering::Relaxed))
@@ -156,6 +160,7 @@ impl StudioView {
         let broken: Vec<CheckId> = CheckId::ALL.iter().copied().filter(|id| self.maint.results.get(id).is_some_and(|h| !h.is_ok())).collect();
         // Pointless without a compositor; skip checks that can't be fixed here.
         for id in broken {
+            if id == CheckId::Icons { continue; }
             if matches!(id, CheckId::CompositorInclude | CheckId::CompositorDropIn) && mandara_compositor::detect().is_none() {
                 continue;
             }

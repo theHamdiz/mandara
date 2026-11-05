@@ -8429,3 +8429,9 @@
 "Word clock" = "글자 시계"
 
 "{hour} o'clock" = "{hour} 시 정각"
+
+"Icon theme {theme} is installed" = "아이콘 테마 {theme}이(가) 설치되어 있습니다"
+
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "아이콘 테마 {theme}을(를) 찾을 수 없습니다. 설치하거나 테마 → 아이콘에서 다른 테마를 선택하세요"
+
+"No icon theme is selected; standard fallbacks are in use" = "선택한 아이콘 테마가 없어 기본 대체 아이콘을 사용합니다"

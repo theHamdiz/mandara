@@ -51,6 +51,10 @@ pub fn copy(widget: &DesktopWidget) -> Option<DesktopWidget> {
             date.layout = crate::widget_kinds::DateLayout::Month;
         }
     }
+    if let WidgetKind::Countdown(countdown) = &mut widget.kind {
+        countdown.title.clear();
+        countdown.date.clear();
+    }
     Some(widget)
 }
 
@@ -84,6 +88,17 @@ mod tests {
         assert!(widgets.weather.is_none());
         let old: Widgets = toml::from_str("").unwrap();
         assert_eq!(old, Widgets::default());
+    }
+
+    #[test]
+    fn public_countdowns_do_not_export_personal_titles_or_dates() {
+        let source = DesktopWidget { kind: WidgetKind::Countdown(CountdownWidget { title: "Private appointment".into(), date: "2027-03-19".into(), show_date: false, ..Default::default() }), ..Default::default() };
+        let copy = copy(&source).unwrap();
+        assert!(matches!(copy.kind, WidgetKind::Countdown(c) if c.title.is_empty() && c.date.is_empty() && !c.show_date));
+        assert!(matches!(&source.kind, WidgetKind::Countdown(c) if c.title == "Private appointment" && c.date == "2027-03-19"));
+        let mut config = Widgets { items: vec![source], ..Default::default() };
+        config.normalize();
+        assert!(matches!(&config.items[0].kind, WidgetKind::Countdown(c) if c.title.is_empty() && c.date.is_empty()));
     }
 
     #[test]

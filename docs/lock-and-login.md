@@ -3,8 +3,9 @@
 ## Widgets on login and lock screens
 
 Open **Studio → Login screen → Layout → Widgets** to add a public
-decoration to Mandara Login. Choose **Add a widget**, or **Copy from
-desktop** to keep a placed widget's appearance and position. Expand a
+decoration to Mandara Login. Choose **Add a widget** to open the gallery.
+Its **Copy from desktop** section appears when an eligible desktop widget
+exists; use it to keep that widget's appearance and position. Expand a
 placed widget to change its anchor, offsets, scale or opacity. Use
 **Apply to login screen** when the draft is ready.
 
@@ -18,6 +19,8 @@ progress, sky, text and shape decorations, and palette swatches are
 eligible. The copies are independent of the desktop. Notes, messages,
 account feeds, personal pictures and widget actions are excluded. Both
 collections start empty, and the authentication controls stay above them.
+Copied countdowns use the next New Year, without their desktop title or
+private date. World clocks without a city list use the public default cities.
 
 Weather has its own **Public weather location** choice. The editor shows
 the coordinates before **Use this location publicly**; adding a widget

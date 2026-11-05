@@ -581,7 +581,9 @@ narrow ones; everything mirrors for right-to-left languages.
   redacted) and import, reset any page to defaults, and a redacted support
   report.
 - **Maintenance**: health checks with one-click repair, model and font
-  downloads, cache cleanup, backups and factory reset.
+  downloads, cache cleanup, backups and factory reset. Its icon-theme check
+  flags a missing selected theme; **Themes** opens **Themes → Icons** so
+  you can choose another. **Repair all** leaves that choice alone.
 - **Performance**: the shell's own CPU, RAM and threads, and a supervisor
   you can turn off.
 

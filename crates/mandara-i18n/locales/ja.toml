@@ -8677,3 +8677,9 @@
 "Word clock" = "文字時計"
 
 "{hour} o'clock" = "{hour}時ちょうど"
+
+"Icon theme {theme} is installed" = "アイコンテーマ {theme} はインストール済みです"
+
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "アイコンテーマ {theme} が見つかりません。インストールするか、テーマ → アイコンで別のテーマを選んでください"
+
+"No icon theme is selected; standard fallbacks are in use" = "アイコンテーマが選択されていないため、標準の代替アイコンを使用しています"
