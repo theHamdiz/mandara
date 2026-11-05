@@ -225,6 +225,7 @@ pub(crate) struct Menu {
 pub struct Designer {
     /// Presets keep the user's existing items unless replacement is explicit.
     pub(super) replace_items: bool,
+    pub(super) preset_selection: super::designer::PresetSelection,
     search: Option<Entity<TextField>>,
     query: String,
     /// The selected category (`None`: every category).

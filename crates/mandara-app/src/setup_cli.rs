@@ -40,7 +40,29 @@ fn which_sway() -> bool {
     std::env::var_os("PATH").is_some_and(|paths| std::env::split_paths(&paths).any(|d| d.join("sway").is_file()))
 }
 
+fn setup_targets(compositor: Option<&str>) -> Result<Vec<Target>> {
+    let targets = match compositor {
+        Some(name) => vec![Target::parse(name).ok_or_else(|| anyhow::anyhow!("unknown compositor {name:?} ({})", Target::ALL.map(Target::id).join(", ")))?],
+        None => match mandara_compositor::detect() {
+            Some(kind) => vec![kind.target()],
+            // Sway runs its system-wide config until the user has one.
+            None => Target::ALL.into_iter().filter(|t| t.user_config().exists() || (*t == Target::Sway && std::path::Path::new(mandara_config::compositor::SWAY_SYSTEM_CONFIG).exists() && which_sway())).collect(),
+        },
+    };
+    Ok(targets)
+}
+
 pub fn setup(o: Options) -> Result<()> {
+    let restore_only = o.restore.is_some() && !o.autostart && !o.check && !o.fix_conflicts && o.fix.is_empty();
+    let mut targets = setup_targets(o.compositor.as_deref())?;
+    // Without an explicit or running compositor, a restored file can create
+    // another target. Check prerequisites before a combined restore/check.
+    let uncertain_restore = o.restore.is_some() && o.compositor.is_none() && mandara_compositor::detect().is_none();
+    if !restore_only && (uncertain_restore || targets.iter().any(|target| *target != Target::KWin)) && !mandara_config::mango_keys::is_available() {
+        eprintln!("{}", mandara_i18n::t("Install libxkbcommon before checking or changing compositor shortcuts."));
+        std::process::exit(EXIT_PREREQUISITE);
+    }
+
     if let Some(which) = &o.restore {
         let backup = if which == "latest" { conflicts::backups().into_iter().next().ok_or_else(|| anyhow::anyhow!("no retire backups in {}", conflicts::backups_root().display()))? } else { PathBuf::from(which) };
         // Doctor backups and retire backups share the manifest format; a
@@ -50,21 +72,16 @@ pub fn setup(o: Options) -> Result<()> {
             println!("restored {}", f.display());
         }
     }
-    let targets: Vec<Target> = match o.compositor.as_deref() {
-        Some(name) => vec![Target::parse(name).ok_or_else(|| anyhow::anyhow!("unknown compositor {name:?} ({})", Target::ALL.map(Target::id).join(", ")))?],
-        None => match mandara_compositor::detect() {
-            Some(kind) => vec![kind.target()],
-            // Sway runs its system-wide config until the user has one.
-            None => Target::ALL.into_iter().filter(|t| t.user_config().exists() || (*t == Target::Sway && std::path::Path::new(mandara_config::compositor::SWAY_SYSTEM_CONFIG).exists() && which_sway())).collect(),
-        },
-    };
+    if restore_only {
+        if std::env::var_os("MANDARA_NO_IPC").is_none() {
+            let _ = ipc::send(&paths::ipc_socket(), &["compositor".to_string(), "reload".to_string()]);
+        }
+        return Ok(());
+    }
+    if o.restore.is_some() { targets = setup_targets(o.compositor.as_deref())?; }
     if targets.is_empty() {
         println!("No {} config found — start your compositor once, then run `mandara setup` again.", Target::ALL.map(Target::name).join(", "));
         return Ok(());
-    }
-    if targets.iter().any(|target| *target != Target::KWin) && !mandara_config::mango_keys::is_available() {
-        eprintln!("{}", mandara_i18n::t("Install libxkbcommon before checking or changing compositor shortcuts."));
-        std::process::exit(EXIT_PREREQUISITE);
     }
     let mut store = mandara_config::ConfigStore::open_default()?;
     if o.autostart && !o.check && !store.get().compositor.autostart {

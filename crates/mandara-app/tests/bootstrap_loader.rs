@@ -97,3 +97,34 @@ fn kwin_setup_check_reports_availability_without_touching_compositor_files() {
         assert!(!config.join("mandara/generated").exists());
     }
 }
+
+#[test]
+fn restoring_a_backup_does_not_need_shortcut_libraries_or_repeat_setup() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = dir.path().join("library");
+    let config = dir.path().join("config");
+    let data = dir.path().join("data");
+    let backup = data.join("mandara/retired/fixture");
+    std::fs::create_dir_all(&backup).unwrap();
+    std::fs::create_dir_all(config.join("mango")).unwrap();
+    std::fs::create_dir(&library).unwrap();
+    std::fs::write(library.join("libxkbcommon.so.0"), "invalid ELF fixture").unwrap();
+    let mango = config.join("mango/config.conf");
+    let original = "bind=SUPER,space,spawn,fuzzel\n";
+    let changed = "# mandara-retired: bind=SUPER,space,spawn,fuzzel\n";
+    std::fs::write(backup.join("original.conf"), original).unwrap();
+    std::fs::write(backup.join("manifest.txt"), format!("original.conf\t{}\n", mango.display())).unwrap();
+    for check in [false, true] {
+        std::fs::write(&mango, changed).unwrap();
+        let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_mandara"));
+        command.args(["setup", "--restore", "latest", "--compositor", "mango"]);
+        if check { command.arg("--check"); }
+        let output = command.env("LD_LIBRARY_PATH", &library).env("LC_ALL", "C")
+            .env("HOME", dir.path()).env("XDG_CONFIG_HOME", &config).env("XDG_DATA_HOME", &data)
+            .env("XDG_CACHE_HOME", dir.path().join("cache")).env("MANDARA_NO_IPC", "1")
+            .stdin(std::process::Stdio::null()).output().unwrap();
+        assert_eq!(output.status.code(), Some(if check { 12 } else { 0 }), "{}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(std::fs::read_to_string(&mango).unwrap(), if check { changed } else { original });
+        assert!(!config.join("mandara").exists(), "restoring must not regenerate a drop-in or write shell settings");
+    }
+}
