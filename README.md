@@ -36,7 +36,7 @@
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-8B5CF6?labelColor=0B1026" alt="GPU rendered"/></a>
   <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic%20%C2%B7%20KWin-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin"/></a>
   <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-77%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="77 plugins plus WebAssembly"/></a>
-  <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-15%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="15 languages"/></a>
+  <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-20%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="20 languages"/></a>
   <br/>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/RAM-under%20100%20MiB-2DD4BF?labelColor=0B1026" alt="RAM under 100 MiB"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/VRAM-under%20190%20MiB-2DD4BF?labelColor=0B1026" alt="VRAM under 190 MiB"/></a>
@@ -103,7 +103,7 @@ widget can be moved, resized and restyled right on the desktop.
 | **Automation** | `mandara msg <command>` with JSON replies; `mandara commands --json` lists them all |
 | **Plugins** | 77 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
 | **Widgets** | Mechanical, word and binary clocks, calendar cards and weather dials; passive widgets can also decorate Mandara Login and the native lock screen |
-| **Languages** | 15, including right-to-left Arabic, Persian and Urdu |
+| **Languages** | 20, including right-to-left Arabic, Persian and Urdu |
 | **License** | GPL-3.0-or-later |
 
 ## What sets Mandara apart
@@ -160,7 +160,7 @@ around, each one measured or shipped today:
     small, signed binary patches from Studio → About → Update now. NixOS
     gets a flake with NixOS and Home Manager modules, updated through the
     flake.
-12. **Made for everyone.** 15 interface languages, right-to-left Arabic,
+12. **Made for everyone.** 20 interface languages, right-to-left Arabic,
     Persian and Urdu included, and fonts chosen for every script it shows.
 
 ## Why you'll like it
@@ -184,7 +184,7 @@ around, each one measured or shipped today:
 - **It welcomes you in.** A matching lock screen and login screen with
   your own wallpaper, and ready-made looks for both.
   [Lock screen and login](docs/lock-and-login.md)
-- **It speaks your language.** Fifteen languages, with Arabic, Persian
+- **It speaks your language.** Twenty languages, with Arabic, Persian
   and Urdu laid out right to left. [Languages](docs/languages.md)
 - **It plays well with scripts and AI agents.** Nearly everything the
   interface does is also a command with JSON replies.

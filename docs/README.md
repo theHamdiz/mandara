@@ -29,7 +29,7 @@ For a visual tour, try the [Look previews on the website](https://thehamdiz.gith
 | [Lock screen and Mandara Login](lock-and-login.md) | The lock screen and the login screen ([full login guide](login-manager.md)) |
 | [Everything else](more-features.md) | Screenshots and recording, OCR, night light, displays, networks and much more |
 | [Color science](color-science.md) | Material You palettes, OKLCH tweening and app theming |
-| [Languages](languages.md) | Fifteen interface languages, right-to-left Arabic, Persian and Urdu |
+| [Languages](languages.md) | Twenty interface languages, right-to-left Arabic, Persian and Urdu |
 
 ## Going further
 

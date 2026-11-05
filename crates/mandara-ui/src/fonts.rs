@@ -98,8 +98,9 @@ pub fn script_families(lang: mandara_i18n::Lang) -> &'static [&'static str] {
         Lang::Ko => &["Noto Sans CJK KR", "Noto Sans KR", "Source Han Sans KR", "Source Han Sans K", "NanumGothic", "UnDotum"],
         Lang::Ja => &["Noto Sans CJK JP", "Noto Sans JP", "Source Han Sans JP", "Source Han Sans", "IPAexGothic", "IPAGothic"],
         Lang::Zh => &["Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", "Source Han Sans CN", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei"],
-        Lang::Hi => &["Noto Sans Devanagari", "Noto Sans Devanagari UI", "Lohit Devanagari"],
+        Lang::Hi | Lang::Mr => &["Noto Sans Devanagari", "Noto Sans Devanagari UI", "Lohit Devanagari"],
         Lang::Bn => &["Noto Sans Bengali", "Noto Sans Bengali UI", "Hind Siliguri", "Lohit Bengali"],
+        Lang::Te => &["Noto Sans Telugu", "Noto Sans Telugu UI", "Lohit Telugu"],
         _ => &[],
     }
 }
@@ -439,7 +440,7 @@ mod tests {
     #[test]
     fn the_chain_follows_the_interface_language() {
         use mandara_i18n::Lang;
-        let installed: Vec<String> = ["Inter", "Cairo", "Noto Sans Arabic", "Noto Nastaliq Urdu", "Noto Sans CJK KR", "Noto Sans CJK JP", "Noto Sans Bengali"].map(String::from).to_vec();
+        let installed: Vec<String> = ["Inter", "Cairo", "Noto Sans Arabic", "Noto Nastaliq Urdu", "Noto Sans CJK KR", "Noto Sans CJK JP", "Noto Sans Bengali", "Noto Sans Devanagari", "Noto Sans Telugu"].map(String::from).to_vec();
         // Persian and Urdu read in the Arabic font, like Arabic.
         assert_eq!(language_chain(Lang::Ur, "Cairo", &installed), ["Cairo", "Noto Sans Arabic"]);
         assert_eq!(language_chain(Lang::Fa, "Cairo", &installed), language_chain(Lang::Ar, "Cairo", &installed));
@@ -448,6 +449,10 @@ mod tests {
         assert_eq!(language_chain(Lang::Ko, "Cairo", &installed), ["Cairo", "Noto Sans Arabic", "Noto Sans CJK KR"]);
         assert_eq!(language_chain(Lang::Ja, "Cairo", &installed).last().map(String::as_str), Some("Noto Sans CJK JP"));
         assert_eq!(language_chain(Lang::Bn, "Cairo", &installed).last().map(String::as_str), Some("Noto Sans Bengali"));
+        // Marathi shares Hindi's Devanagari faces. Telugu has its own.
+        assert_eq!(language_chain(Lang::Mr, "Cairo", &installed).last().map(String::as_str), Some("Noto Sans Devanagari"));
+        assert_eq!(language_chain(Lang::Hi, "Cairo", &installed).last().map(String::as_str), Some("Noto Sans Devanagari"));
+        assert_eq!(language_chain(Lang::Te, "Cairo", &installed).last().map(String::as_str), Some("Noto Sans Telugu"));
         // Nothing installed for a script: the Arabic chain alone.
         let bare: Vec<String> = ["Inter", "Cairo"].map(String::from).to_vec();
         assert_eq!(language_chain(Lang::Ko, "Cairo", &bare), ["Cairo"]);

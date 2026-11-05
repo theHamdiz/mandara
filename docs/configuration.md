@@ -180,9 +180,10 @@ fixed:
 | Prayer times (`prayer-times`, opt-in) | `language`, `adhan` (the call to prayer at each prayer; the recording downloads once when you turn it on) | follow, off |
 
 `language` (Jannah, Qur'an, Hadith, Prayer times) is `follow` (Mandara's
-language) or a language code (`en`, `ar`, `es`, `fr`, `de`, `tr`, `ru`,
-`hi`, `id`, `zh`, `ja`): that plugin's surfaces and the meanings it shows
-switch to it, the rest of the shell keeps its own.
+language) or a language code (`en`, `ar`, `fa`, `ur`, `es`, `pt`, `fr`,
+`de`, `tr`, `ru`, `hi`, `mr`, `bn`, `te`, `id`, `sw`, `vi`, `zh`, `ja`,
+`ko`): that plugin's surfaces and the meanings it shows switch to it, the
+rest of the shell keeps its own.
 
 Older plugin settings (weather, prayer times, pomodoro, screenshot and
 recording, updates, world clock, power history, media lyrics, visualizer,
@@ -225,7 +226,7 @@ setting the shell reads has a control.
 3. A registry entry (`crates/mandara-studio/src/registry*.rs`) on the right
    page; plugin keys go in the plugin's group so they appear in its modal.
 4. Translate the label and help (`MANDARA_I18N_DUMP=1 cargo test -p
-   mandara-i18n`, then the fourteen catalogs in `crates/mandara-i18n/locales`).
+   mandara-i18n`, then the nineteen catalogs in `crates/mandara-i18n/locales`).
 
 ## KWin integration
 

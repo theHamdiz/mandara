@@ -93,6 +93,11 @@ fn badge(lang: Lang) -> &'static str {
         Lang::Ko => "KO",
         Lang::Ur => "UR",
         Lang::Bn => "BN",
+        Lang::Pt => "PT",
+        Lang::Mr => "म",
+        Lang::Vi => "VI",
+        Lang::Te => "తె",
+        Lang::Sw => "SW",
     }
 }
 

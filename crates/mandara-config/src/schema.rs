@@ -667,6 +667,11 @@ pub enum Locale {
     Korean,
     Urdu,
     Bengali,
+    Portuguese,
+    Marathi,
+    Vietnamese,
+    Telugu,
+    Swahili,
 }
 
 impl Locale {
@@ -690,6 +695,11 @@ impl Locale {
             Locale::Korean => Lang::Ko,
             Locale::Urdu => Lang::Ur,
             Locale::Bengali => Lang::Bn,
+            Locale::Portuguese => Lang::Pt,
+            Locale::Marathi => Lang::Mr,
+            Locale::Vietnamese => Lang::Vi,
+            Locale::Telugu => Lang::Te,
+            Locale::Swahili => Lang::Sw,
         }
     }
 
@@ -711,6 +721,11 @@ impl Locale {
             Lang::Ko => Locale::Korean,
             Lang::Ur => Locale::Urdu,
             Lang::Bn => Locale::Bengali,
+            Lang::Pt => Locale::Portuguese,
+            Lang::Mr => Locale::Marathi,
+            Lang::Vi => Locale::Vietnamese,
+            Lang::Te => Locale::Telugu,
+            Lang::Sw => Locale::Swahili,
         }
     }
 

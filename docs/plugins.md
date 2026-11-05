@@ -142,7 +142,7 @@ was, and cursor themes stay on if you had picked a cursor.
 These four opt-in plugins share two things:
 
 - **Their own language.** Each has a *Language* setting in Studio →
-  Plugins (`language`: *Follow Mandara*, or one of Mandara's eleven
+  Plugins (`language`: *Follow Mandara*, or one of Mandara's twenty
   languages; `mandara msg <jannah|quran|hadith|prayer> language ar`). Its
   panel, bar item, sidebar card and desktop widgets, the meanings and
   prayer names it shows, and its reading direction (Arabic reads right to

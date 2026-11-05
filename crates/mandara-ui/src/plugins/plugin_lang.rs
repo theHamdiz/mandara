@@ -30,7 +30,7 @@ use crate::kit::{text, tokens};
 pub const FOLLOW: &str = "follow";
 
 /// The `language` setting's values: [`FOLLOW`] and every language code.
-pub const CHOICES: [&str; 16] = [FOLLOW, "en", "ar", "fa", "ur", "es", "fr", "de", "tr", "ru", "hi", "bn", "id", "zh", "ja", "ko"];
+pub const CHOICES: [&str; 21] = [FOLLOW, "en", "ar", "fa", "ur", "es", "pt", "fr", "de", "tr", "ru", "hi", "mr", "bn", "te", "id", "sw", "vi", "zh", "ja", "ko"];
 
 /// A plugin's own language from its `language` setting (`None`: follow
 /// the shell; unknown codes follow it too).

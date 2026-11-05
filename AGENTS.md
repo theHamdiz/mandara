@@ -62,7 +62,7 @@ Zed's GPU-accelerated UI framework.
 | `crates/mandara-media` | The pure-Rust video pipeline: WebM / IVF demuxing, AV1 decoding (rav1d), YUV conversion straight into caller buffers, the greeter's player, the desktop's frame stream and first / representative frames. No GUI types. |
 | `crates/mandara-wallgen` | The procedural wallpaper engine: twelve resolution-independent styles with generic parameter specs, OKLab palettes, recipes (TOML sidecars), deterministic row-parallel rendering, lossless WebP output through `mandara-webp` and seamless AV1 video loops through the recorder's `VideoSink`. No GUI types. The `wallpaper-generator` plugin (`crates/mandara-ui/src/plugins/wallpaper_generator.rs` and its folder: jobs, schedule, CLI) and Studio's generator (`crates/mandara-studio/src/app/wallgen_page.rs`) build on it. |
 | `crates/mandara-webp` | A pure-Rust lossless WebP (VP8L) encoder with no dependencies: generated wallpapers (searching their dither period for back references) and the plugin icons embedded in the shell. |
-| `crates/mandara-i18n` | Localization: English-keyed catalogs for fifteen languages (`locales/*.toml`), compiled into memory-mapped language packs (`.mlang`, `src/pack.rs`) that ship beside the binary and download on demand (`src/packs.rs`), and the coverage tests. |
+| `crates/mandara-i18n` | Localization: English-keyed catalogs for twenty languages (`locales/*.toml`), compiled into memory-mapped language packs (`.mlang`, `src/pack.rs`) that ship beside the binary and download on demand (`src/packs.rs`), and the coverage tests. |
 | `crates/mandara-install` | `mandara install` / `uninstall`: per-distribution package tables and the package-manager abstraction. |
 | `crates/mandara-version` | Build identity: component versions, content hashes, git revision, source fingerprint. |
 | `vendor/gpui_wgpu` | GPUI's wgpu renderer, vendored with Mandara's patches (GPU memory, fonts, colour emoji, Vulkan first, rounded clipping). Every change is listed in [`MANDARA-PATCHES.md`](vendor/gpui_wgpu/MANDARA-PATCHES.md) and marked `Mandara patch` in the source. |
@@ -200,9 +200,10 @@ by tests.
 2. **Every user-visible string in every language.** Wrap text in
    `mandara_i18n::t` (static), `tf` (with `{placeholders}`) or `tr`
    (runtime keys), or mark it with `tk` for a later `tr`. English is the
-   key; add the translation to all fourteen catalogs in
+   key; add the translation to all nineteen catalogs in
    `crates/mandara-i18n/locales/`: `ar`, `bn`, `de`, `es`, `fa`, `fr`,
-   `hi`, `id`, `ja`, `ko`, `ru`, `tr`, `ur` and `zh`. Keep placeholders intact, and one placeholder per
+   `hi`, `id`, `ja`, `ko`, `mr`, `pt`, `ru`, `sw`, `te`, `tr`, `ur`, `vi`
+   and `zh`. Keep placeholders intact, and one placeholder per
    value.
 3. **No magic numbers.** Anything a user could notice (sizes, spacing,
    radii, opacity, colours, delays, refresh intervals, thresholds) is a
@@ -438,7 +439,7 @@ and examples with `.example(…)`; replies are JSON. It then shows up in
 
 Write the English text in a `t`, `tf`, `tr` or `tk` call, run
 `MANDARA_I18N_DUMP=1 cargo test -p mandara-i18n`, add the translation to
-each of the fourteen catalogs in `crates/mandara-i18n/locales/`, and run
+each of the nineteen catalogs in `crates/mandara-i18n/locales/`, and run
 `cargo test -p mandara-i18n` until it passes. Debug builds read the
 catalogs straight from the source tree; a release build only reads
 language packs, so try a translated release build in the sandbox (`cargo

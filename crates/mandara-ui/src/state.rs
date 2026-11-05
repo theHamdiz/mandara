@@ -516,7 +516,7 @@ pub fn init_language(cx: &mut App) {
     let mut in_use = langpacks::plugin_languages(store.read(cx).get());
     mandara_i18n::set_language(last.lang());
     // The font fallback chain follows the language (Urdu's Nastaliq, the
-    // CJK / Bengali / Devanagari faces).
+    // CJK / Bengali / Devanagari / Telugu faces).
     crate::fonts::sync_fallbacks(&store.read(cx).get().typography.arabic_font, cx);
     let packs = langpacks::subscribe();
     cx.spawn(async move |cx| {

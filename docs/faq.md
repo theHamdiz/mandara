@@ -37,7 +37,7 @@ of them, from one native binary:
   framework behind the Zed editor; no QML, JavaScript or Python layer.
 - **Extensible and scriptable**: 77 built-in plugins, sandboxed
   WebAssembly plugins, and a JSON command for almost every action.
-- **15 languages**, right-to-left included, and signed in-app updates.
+- **20 languages**, right-to-left included, and signed in-app updates.
 
 [Why Mandara](why-mandara.md)
 
@@ -138,9 +138,10 @@ GNOME uses its own shell and is not supported. Mandara does not run on X11.
 
 ## Does Mandara support Arabic and other languages?
 
-Yes. The interface comes in fifteen languages: English, Arabic, Bengali,
-German, Spanish, French, Hindi, Indonesian, Japanese, Korean, Persian,
-Russian, Turkish, Urdu and Chinese. Arabic, Persian and Urdu are laid out
+Yes. The interface comes in twenty languages: English, Arabic, Bengali,
+French, German, Hindi, Indonesian, Japanese, Korean, Marathi, Persian,
+Portuguese, Russian, Spanish, Swahili, Telugu, Turkish, Urdu, Vietnamese
+and Chinese. Arabic, Persian and Urdu are laid out
 right to left, and widgets can show Eastern Arabic digits and the
 Hijri calendar. [Languages](languages.md)
 

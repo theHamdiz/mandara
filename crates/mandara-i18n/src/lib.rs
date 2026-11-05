@@ -50,10 +50,15 @@ pub enum Lang {
     Ko,
     Ur,
     Bn,
+    Pt,
+    Mr,
+    Vi,
+    Te,
+    Sw,
 }
 
 impl Lang {
-    pub const ALL: [Lang; 15] = [Lang::En, Lang::Ar, Lang::Fa, Lang::Ur, Lang::Es, Lang::Fr, Lang::De, Lang::Tr, Lang::Ru, Lang::Hi, Lang::Bn, Lang::Id, Lang::Zh, Lang::Ja, Lang::Ko];
+    pub const ALL: [Lang; 20] = [Lang::En, Lang::Ar, Lang::Fa, Lang::Ur, Lang::Es, Lang::Pt, Lang::Fr, Lang::De, Lang::Tr, Lang::Ru, Lang::Hi, Lang::Mr, Lang::Bn, Lang::Te, Lang::Id, Lang::Sw, Lang::Vi, Lang::Zh, Lang::Ja, Lang::Ko];
 
     /// ISO 639-1 code.
     pub fn code(self) -> &'static str {
@@ -73,6 +78,11 @@ impl Lang {
             Lang::Ko => "ko",
             Lang::Ur => "ur",
             Lang::Bn => "bn",
+            Lang::Pt => "pt",
+            Lang::Mr => "mr",
+            Lang::Vi => "vi",
+            Lang::Te => "te",
+            Lang::Sw => "sw",
         }
     }
 
@@ -94,6 +104,11 @@ impl Lang {
             Lang::Ko => "한국어",
             Lang::Ur => "اردو",
             Lang::Bn => "বাংলা",
+            Lang::Pt => "Português",
+            Lang::Mr => "मराठी",
+            Lang::Vi => "Tiếng Việt",
+            Lang::Te => "తెలుగు",
+            Lang::Sw => "Kiswahili",
         }
     }
 
@@ -114,6 +129,11 @@ impl Lang {
             Lang::Ko => "Korean",
             Lang::Ur => "Urdu",
             Lang::Bn => "Bengali",
+            Lang::Pt => "Portuguese",
+            Lang::Mr => "Marathi",
+            Lang::Vi => "Vietnamese",
+            Lang::Te => "Telugu",
+            Lang::Sw => "Swahili",
         }
     }
 
@@ -135,6 +155,11 @@ impl Lang {
             Lang::Ko => "안녕하세요",
             Lang::Ur => "السلام علیکم",
             Lang::Bn => "হ্যালো",
+            Lang::Pt => "Olá",
+            Lang::Mr => "नमस्कार",
+            Lang::Vi => "Xin chào",
+            Lang::Te => "నమస్కారం",
+            Lang::Sw => "Habari",
         }
     }
 
@@ -161,6 +186,13 @@ impl Lang {
             Lang::Ko => "ko_KR",
             Lang::Ur => "ur_PK",
             Lang::Bn => "bn_BD",
+            // Brazilian Portuguese: the variety this catalog is written in.
+            Lang::Pt => "pt_BR",
+            Lang::Mr => "mr_IN",
+            Lang::Vi => "vi_VN",
+            Lang::Te => "te_IN",
+            // Standard Swahili; Kenya is the POSIX locale this catalog follows.
+            Lang::Sw => "sw_KE",
         }
     }
 

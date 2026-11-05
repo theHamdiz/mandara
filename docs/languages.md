@@ -1,8 +1,8 @@
 # Languages
 
-English · العربية · فارسی · اردو · Español · Français · Deutsch · Türkçe · Русский · हिन्दी · বাংলা · Bahasa Indonesia · 简体中文 · 日本語 · 한국어
+English · العربية · فارسی · اردو · Español · Português · Français · Deutsch · Türkçe · Русский · हिन्दी · मराठी · বাংলা · తెలుగు · Bahasa Indonesia · Kiswahili · Tiếng Việt · 简体中文 · 日本語 · 한국어
 
-Fifteen languages. The whole interface is translated: the shell, Studio and
+Twenty languages. The whole interface is translated: the shell, Studio and
 the login screen. Pick one in Studio → General → Language, or leave it on
 **System** to follow your desktop's language (`LANG`, `LC_MESSAGES`,
 `LC_ALL`).
@@ -55,19 +55,21 @@ default, then Alexandria or Noto Sans Arabic) at every weight, including the
 variable `wght` axis of Alexandria and Inter. These fonts cover the Persian
 and Urdu letters (پ چ ژ گ ک ی, ٹ ڈ ڑ ں ے ھ ۃ) and Persian digits.
 
-Korean, Chinese, Japanese, Hindi and Bengali use your system's fonts:
-Noto Sans CJK (KR, SC or JP, matching the language), Noto Sans Devanagari
-and Noto Sans Bengali, each at its closest weight. `mandara install`
-installs them with the other fonts. To install them yourself:
+Korean, Chinese, Japanese, Hindi, Marathi, Bengali and Telugu use your
+system's fonts: Noto Sans CJK (KR, SC or JP, matching the language), Noto
+Sans Devanagari (Hindi and Marathi), Noto Sans Bengali and Noto Sans
+Telugu, each at its closest weight. Portuguese, Vietnamese and Swahili use
+the same Latin faces as English. `mandara install` installs the extra
+faces with the other fonts. To install them yourself:
 
-| Distribution | Korean, Chinese, Japanese | Bengali |
+| Distribution | Korean, Chinese, Japanese | Devanagari, Bengali, Telugu |
 |---|---|---|
 | Arch | `noto-fonts-cjk` | `noto-fonts` |
 | Debian, Ubuntu | `fonts-noto-cjk` | `fonts-noto-core` |
-| Fedora | `google-noto-sans-cjk-fonts` | `google-noto-sans-bengali-fonts` |
-| openSUSE | `noto-sans-cjk-fonts` | `noto-sans-bengali-fonts` |
+| Fedora | `google-noto-sans-cjk-fonts` | `google-noto-sans-devanagari-fonts`, `google-noto-sans-bengali-fonts`, `google-noto-sans-telugu-fonts` |
+| openSUSE | `noto-sans-cjk-fonts` | `noto-sans-devanagari-fonts`, `noto-sans-bengali-fonts`, `noto-sans-telugu-fonts` |
 | Void | `noto-fonts-cjk` | `noto-fonts-ttf` |
-| Alpine | `font-noto-cjk` | `font-noto-bengali` |
+| Alpine | `font-noto-cjk` | `font-noto-devanagari`, `font-noto-bengali`, `font-noto-telugu` |
 | Gentoo | `media-fonts/noto-cjk` | `media-fonts/noto` |
 | NixOS | `noto-fonts-cjk-sans` | `noto-fonts` |
 

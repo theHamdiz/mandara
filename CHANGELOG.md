@@ -11,6 +11,10 @@ and compositor previews.
 
 ### New
 
+- **Mandara speaks Portuguese, Marathi, Vietnamese, Telugu and Swahili.**
+  Choose yours in Studio → General → Language, or follow the system
+  language. Translations ship as separate language packs.
+
 - **Choose speakers and microphones where you adjust volume.** Click the
   current device in Sound or the sidebar to pick another one. The lists use
   your labels and hidden-device choices and follow devices as they connect
