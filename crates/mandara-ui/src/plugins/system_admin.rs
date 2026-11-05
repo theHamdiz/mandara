@@ -773,6 +773,7 @@ fn register_profiles(r: &mut PluginRegistry) {
         CORE,
         CommandSpec::new("profile save", tk("Save the current settings as a profile (look = appearance only)"), |a, cx| {
             let scope = match a.str(0)? {
+                "bar" => ProfileScope::Bar,
                 "full" => ProfileScope::Full,
                 _ => ProfileScope::Look,
             };
@@ -783,9 +784,10 @@ fn register_profiles(r: &mut PluginRegistry) {
             let path = profiles::save(&profile).map_err(err)?;
             Ok(json!({ "saved": profile.name, "file": path }))
         })
-        .arg(ArgSpec::required("scope", ArgKind::Enum, tk("look or full")).choices(&["look", "full"]))
+        .arg(ArgSpec::required("scope", ArgKind::Enum, tk("Profile scope")).choices(&["bar", "look", "full"]))
         .arg(ArgSpec::required("name", ArgKind::String, tk("profile name")))
-        .example("profile save look Night"),
+        .example("profile save look Night")
+        .example("profile save bar Desk"),
     );
     r.command(
         CORE,

@@ -1,6 +1,7 @@
 #!/bin/sh
 # Downloads a verified release; Mandara's Rust installer handles the rest.
 set -eu
+installer_umask=$(umask)
 umask 077
 
 release_keys='2fde15bd0518f2352436174a3bcc1e41d62e3ac99647a9dfa773d6462970b43d'
@@ -441,6 +442,7 @@ main() {
     [ -n "$installer" ] || fail missing_installer
     say ''
     say "$(message start)"
+    umask "$installer_umask"
     run_installer "$installer" install "$@"
 }
 

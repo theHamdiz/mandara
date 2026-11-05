@@ -14,6 +14,7 @@
 //! Everything the panel does is also a `clipboard …` command.
 
 mod rows;
+mod keys;
 mod tint;
 
 use std::cell::{Cell, RefCell};
@@ -1031,7 +1032,7 @@ impl View {
         } else {
             block_h(&listing.pinned) + block_h(&page_rows) + picker_h + if listing.pinned.is_empty() || page_rows.is_empty() { 0.0 } else { GAP - LIST_GAP }
         };
-        let controls_h = FIELD_H + CONTROL_GAP + CHIPS_H + if naming.is_some() { CONTROL_GAP + FIELD_H } else { 0.0 };
+        let controls_h = FIELD_H + CONTROL_GAP + CHIPS_H + CONTROL_GAP + SECTION_H_PX + if naming.is_some() { CONTROL_GAP + FIELD_H } else { 0.0 };
         self.size_cell.set(size(px(PANEL_W), px(PAD * 2.0 + HEADER_H + GAP + controls_h + GAP + list_h)));
 
         let body = if empty {
@@ -1067,7 +1068,8 @@ impl View {
             }
             col.into_any_element()
         };
-        let mut controls = div().flex().flex_col().gap(px(CONTROL_GAP)).child(search).child(chips);
+        let mut controls = div().flex().flex_col().gap(px(CONTROL_GAP)).child(search).child(chips)
+            .child(div().h(px(SECTION_H_PX)).text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(crate::bidi::paragraph(t("Tab: results · ↑↓: select · Enter: use"))));
         if let Some(row) = naming_row {
             controls = controls.child(row);
         }
@@ -1081,22 +1083,17 @@ impl View {
             .on_key_down({
                 let ui = ui.clone();
                 let focus = self.focus.clone();
+                let search = self.search.clone();
                 move |e: &KeyDownEvent, window, cx| {
-                    if !focus.is_focused(window) { return; }
-                    match e.keystroke.key.as_str() {
-                    "up" => {
-                        cx.stop_propagation();
-                        select_step(&ui, -1, cx);
-                    }
-                    "down" => {
-                        cx.stop_propagation();
-                        select_step(&ui, 1, cx);
-                    }
-                    "enter" => {
-                        cx.stop_propagation();
-                        activate(&ui, cx);
-                    }
-                    _ => {}
+                    match keys::action(&e.keystroke.key, focus.is_focused(window), search.read(cx).is_focused(window), e.keystroke.modifiers == Default::default()) {
+                        keys::Action::Results => {
+                            cx.stop_propagation();
+                            focus.focus(window, cx);
+                            if ui.borrow().selected.is_none() { select_step(&ui, 1, cx); }
+                        }
+                        keys::Action::Move(delta) => { cx.stop_propagation(); select_step(&ui, delta, cx); }
+                        keys::Action::Activate => { cx.stop_propagation(); activate(&ui, cx); }
+                        keys::Action::Ignore => {},
                     }
                 }
             })

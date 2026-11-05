@@ -56,6 +56,13 @@ report under `target/cargo-timings/`. Compare clean target directories with
 the same toolchain, job count and compiler flags. A compiler cache helps
 repeated builds; it does not remove the cost of a first cache miss.
 
+A reference run on 5 November 2026, at `eda426a`, took under four minutes
+including tests and used under 8 GiB for the test artifacts. It used Rust
+1.99.1 and eight Cargo workers on a Ryzen 9 9950X, after cleaning the dev
+and test outputs; the package-download cache was already populated. Other
+profiles are excluded from that size. Compare results on the same hardware
+before attributing a timing difference to the profile.
+
 On Linux, an installed alternative linker can be selected locally without
 requiring it for every contributor, for example
 `RUSTFLAGS="-C link-arg=-fuse-ld=mold" cargo test --workspace --locked`.

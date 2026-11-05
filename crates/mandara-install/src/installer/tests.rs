@@ -322,13 +322,13 @@ fn interactive_setup_chooses_the_compositor_then_the_rest_is_not_asked() {
     let mut host = FakeHost::with(&["dnf", "sudo", "systemctl", "niri"]);
     host.tty = true;
     // Setup → Compositor row, compositor list → Niri, Setup → Install (last row).
-    host.menus = vec![0, compositors::SUPPORTED.iter().position(|compositor| compositor.id == "niri").unwrap(), 3];
+    host.menus = vec![0, compositor_rows(&host, None).0.iter().position(|id| *id == "niri").unwrap(), 3];
     run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs::default()).unwrap();
     let (prompt, rows) = &host.shown[0];
     assert_eq!(prompt, "Setup");
     assert_eq!(rows, &["Compositor", "Start with your compositor", "Login screen", "Install"]);
     assert_eq!(host.shown[1].0, "Compositor");
-    let labels: Vec<&str> = compositors::SUPPORTED.iter().map(|c| c.label).collect();
+    let labels: Vec<&str> = compositors::SUPPORTED.iter().filter(|c| c.id != "kwin").map(|c| c.label).collect();
     assert_eq!(host.shown[1].1, labels);
     let bin = f.home().join(".local/bin/mandara");
     let setup = format!("{} setup --compositor niri --autostart", bin.display());
@@ -450,7 +450,7 @@ fn conflicts_are_retired_when_accepted() {
     let f = Fixture::new();
     let mut host = FakeHost::with(&["pacman", "sudo"]);
     let b = f.home().join(".local/bin/mandara").display().to_string();
-    host.failing.insert(format!("{b} setup --check"));
+    host.codes.insert(format!("{b} setup --check"), crate::installer::SETUP_CONFLICTS);
     run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
     let ran = host.ran();
     assert!(ran.contains(&format!("{b} setup")), "{ran:#?}");
@@ -716,12 +716,27 @@ fn external_monitor_brightness_setup() {
     assert!(ran.contains(&"sudo modprobe i2c-dev".to_string()));
     assert!(ran.contains(&"sudo groupadd -r i2c".to_string()));
     assert!(ran.contains(&"sudo usermod -aG i2c u".to_string()));
-    // Already in the group with the devices present: nothing asked.
+    // Access in this boot does not imply that the module loads next boot.
     std::fs::write(root.join("dev/i2c-0"), "").unwrap();
     std::fs::write(root.join("etc/group"), "i2c:x:20:u\n").unwrap();
     let mut host = FakeHost::with(&["pacman", "sudo"]);
-    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
+    host.answers = Some(true);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
     assert!(!host.ran().iter().any(|c| c.contains("usermod")));
+    assert!(host.ran().contains(&"sudo tee /etc/modules-load.d/i2c-dev.conf".to_string()));
+    assert!(!host.ran().iter().any(|c| c.contains("modprobe")));
+    let module_config = root.join("etc/modules-load.d/i2c-dev.conf");
+    std::fs::create_dir_all(module_config.parent().unwrap()).unwrap();
+    std::fs::write(&module_config, "# Kept by the fixture\nother-module").unwrap();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    host.answers = Some(true);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
+    let tee = host.ran.iter().find(|c| c.argv.contains(&"tee".to_string())).unwrap();
+    assert_eq!(tee.stdin.as_deref(), Some(&b"# Kept by the fixture\nother-module\ni2c-dev\n"[..]));
+    std::fs::write(&module_config, "# Installed\ni2c-dev\n").unwrap();
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
+    assert!(!host.ran().iter().any(|c| c.contains("modules-load.d") || c.contains("modprobe") || c.contains("usermod")));
 }
 
 #[test]
@@ -775,6 +790,21 @@ fn config_errors_are_reported_without_retiring() {
     let ran = host.ran();
     assert!(!ran.contains(&format!("{b} setup --fix-conflicts")), "{ran:#?}");
     assert!(host.text().contains("Config doctor"));
+}
+
+#[test]
+fn prerequisite_and_unclassified_setup_failures_never_offer_conflict_retirement() {
+    for code in [crate::installer::SETUP_PREREQUISITE, 1] {
+        let f = Fixture::new();
+        let mut host = FakeHost::with(&["pacman", "sudo"]);
+        let b = f.home().join(".local/bin/mandara").display().to_string();
+        host.codes.insert(format!("{b} setup --check"), code);
+        run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
+        assert!(host.ran().iter().all(|command| !command.contains("--fix-conflicts")));
+        let text = host.text();
+        assert!(!text.contains("Retire the conflicts"), "{text}");
+        assert!(text.contains(if code == crate::installer::SETUP_PREREQUISITE { "Install libxkbcommon" } else { "compositor setup failed" }), "{text}");
+    }
 }
 
 // ── Package databases (issue #45) ───────────────────────────────────────
@@ -1146,4 +1176,34 @@ fn completion_explains_when_the_calling_terminal_needs_a_new_path() {
         assert!(output.iter().any(|text| text.contains("Studio → About → Update now")));
         assert!(host.ran.is_empty(), "completion only prints instructions");
     }
+}
+
+#[test]
+fn kwin_is_offered_only_when_installed_and_defaults_use_the_visible_rows() {
+    for installed in [false, true] {
+        let host = FakeHost::with(if installed { &["kwin_wayland", "niri"] } else { &["niri"] });
+        let (names, rows, default) = compositor_rows(&host, Some("niri"));
+        assert_eq!(names.contains(&"kwin"), installed);
+        assert_eq!(names[default], "niri");
+        assert_eq!(rows[default].label, "Niri");
+        let (names, _, default) = compositor_rows(&host, Some("kwin"));
+        assert_eq!(default, 0);
+        assert_eq!(names[default], if installed { "kwin" } else { "mango" });
+    }
+}
+
+#[test]
+fn failed_kwin_availability_is_not_reported_as_a_config_or_keyboard_error() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo", "kwin_wayland"]);
+    let bin = f.home().join(".local/bin/mandara").display().to_string();
+    let check = format!("{bin} setup --check --compositor kwin");
+    host.codes.insert(check.clone(), crate::installer::SETUP_AVAILABILITY);
+    host.stdout.insert(check, "KWin availability: unable to start probe".into());
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, compositor: Some("kwin".into()), ..Default::default() }).unwrap();
+    let text = host.text();
+    assert!(text.contains("KWin availability: unable to start probe"), "{text}");
+    assert!(!text.contains("your compositor reports errors in its config"));
+    assert!(!text.contains("Install libxkbcommon"));
+    assert!(host.ran().iter().all(|command| !command.contains("--fix-conflicts")));
 }

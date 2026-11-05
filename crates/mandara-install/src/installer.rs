@@ -61,6 +61,12 @@ const DEV_FINGERPRINT: &str = "dev";
 /// `mandara setup --check` exit code for errors the compositor reports in
 /// its config (10 means conflicts).
 pub const SETUP_CONFIG_ERRORS: i32 = 11;
+/// `mandara setup --check` found conflicts that may be retired.
+pub const SETUP_CONFLICTS: i32 = 10;
+/// `mandara setup --check` could not inspect shortcuts without a required library.
+pub const SETUP_PREREQUISITE: i32 = 12;
+/// A compositor availability probe failed; no configuration error is implied.
+pub const SETUP_AVAILABILITY: i32 = 13;
 /// The quiet log level for the setup commands the installer runs.
 const SETUP_LOG: (&str, &str) = ("RUST_LOG", "warn");
 
@@ -1134,10 +1140,23 @@ impl<'a> Installer<'a> {
         if checked.as_ref().is_none_or(|o| o.success) {
             return;
         }
+        if checked.as_ref().and_then(|o| o.code) == Some(SETUP_AVAILABILITY) {
+            let details = checked.as_ref().map_or("", |o| o.stdout.trim());
+            self.say(Level::Warn, if details.is_empty() { t("Check failed") } else { details });
+            return;
+        }
+        if checked.as_ref().and_then(|o| o.code) == Some(SETUP_PREREQUISITE) {
+            self.say(Level::Warn, t("Install libxkbcommon before checking or changing compositor shortcuts."));
+            return;
+        }
         // No conflicts, but the compositor itself reports errors in the
         // config: the Config doctor explains them and offers fixes.
         if checked.as_ref().and_then(|o| o.code) == Some(SETUP_CONFIG_ERRORS) {
             self.say(Level::Warn, "your compositor reports errors in its config: run `mandara setup --check` to see them, or open Studio → Compositor → Config doctor");
+            return;
+        }
+        if checked.as_ref().and_then(|o| o.code) != Some(SETUP_CONFLICTS) {
+            self.say(Level::Warn, "compositor setup failed; run `mandara setup` later");
             return;
         }
         if self.ask("Retire the conflicts listed above (backed up, reversible with `mandara setup --restore latest`)?", true) {
@@ -1312,7 +1331,18 @@ impl<'a> Installer<'a> {
         let passwd = std::fs::read_to_string(self.facts.sys("/etc/passwd")).unwrap_or_default();
         let group = device_group(&self.facts.sys("/dev/i2c-0"), &groups).unwrap_or_else(|| I2C_DEFAULT_GROUP.to_string());
         let user = self.facts.user.clone();
-        if devices && user_in_group(&user, &group, &groups, &passwd) {
+        let member = user_in_group(&user, &group, &groups, &passwd);
+        let module_path = self.facts.sys(I2C_MODULES_LOAD);
+        let module_config = match std::fs::read_to_string(&module_path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(error) => {
+                self.say(Level::Warn, format!("{}: {error}", module_path.display()));
+                return;
+            }
+        };
+        let persistent = module_config.lines().any(|line| line.trim() == I2C_MODULE);
+        if devices && member && persistent {
             return;
         }
         if !self.ask(&format!("Allow Mandara to set external monitor brightness (load {I2C_MODULE} at boot, add {user} to the {group} group)?"), false) {
@@ -1320,14 +1350,22 @@ impl<'a> Installer<'a> {
             self.say(Level::Detail, format!("External monitor brightness later: {hint}"));
             return;
         }
-        if !self.as_root(Cmd::new(&["tee", I2C_MODULES_LOAD]).stdin(format!("{I2C_MODULE}\n")).io(Io::Quiet)) {
-            self.say(Level::Warn, format!("could not write {I2C_MODULES_LOAD}"));
+        if !persistent {
+            let mut text = module_config;
+            if !text.is_empty() && !text.ends_with('\n') { text.push('\n'); }
+            text.push_str(&format!("{I2C_MODULE}\n"));
+            if !self.as_root(Cmd::new(&["tee", I2C_MODULES_LOAD]).stdin(text).io(Io::Quiet)) {
+                self.say(Level::Warn, format!("could not write {I2C_MODULES_LOAD}"));
+            }
         }
-        self.as_root(Cmd::new(&["modprobe", I2C_MODULE]).io(Io::Quiet));
+        if !devices && !self.as_root(Cmd::new(&["modprobe", I2C_MODULE]).io(Io::Quiet)) {
+            self.say(Level::Warn, tf("Could not load {module}; check that the installed kernel includes it", &[("module", &I2C_MODULE)]));
+            return;
+        }
         if group_gid(&group, &groups).is_none() {
             self.as_root(Cmd::new(&["groupadd", "-r", group.as_str()]).io(Io::Quiet));
         }
-        if self.as_root(Cmd::new(&["usermod", "-aG", group.as_str(), user.as_str()])) && !self.dry() {
+        if !member && self.as_root(Cmd::new(&["usermod", "-aG", group.as_str(), user.as_str()])) && !self.dry() {
             self.say(Level::Ok, format!("added {user} to {group} (log in again for it to apply)"));
         }
     }
@@ -1486,8 +1524,9 @@ fn compositor_label(host: &dyn Host, chosen: Option<&str>) -> String {
 /// The compositor picker's rows, the names behind them and where the cursor
 /// starts.
 fn compositor_rows(host: &dyn Host, chosen: Option<&str>) -> (Vec<&'static str>, Vec<Row>, usize) {
-    let rows = compositors::SUPPORTED.iter().map(|c| Row::new(c.label, if c.installed(|p| host.has_program(p)) { t("installed") } else { "" })).collect();
-    let names: Vec<&'static str> = compositors::SUPPORTED.iter().map(|c| c.id).collect();
+    let offered: Vec<_> = compositors::SUPPORTED.iter().filter(|c| c.id != "kwin" || c.installed(|p| host.has_program(p))).collect();
+    let rows = offered.iter().map(|c| Row::new(c.label, if c.installed(|p| host.has_program(p)) { t("installed") } else { "" })).collect();
+    let names: Vec<&'static str> = offered.iter().map(|c| c.id).collect();
     let default = chosen.and_then(|c| names.iter().position(|id| *id == c)).unwrap_or(0);
     (names, rows, default)
 }

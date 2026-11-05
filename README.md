@@ -67,6 +67,10 @@ screen, plus a settings app that changes all of it live. It runs on
 **MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic and KWin**, and it's one small, fast program
 you install with one command.
 
+Studio keeps bar arrangements in their own saved profiles, and screenshots
+can capture every display at once. Native KWin support uses Plasma's own
+window, clipboard and screenshot interfaces.
+
 It's made to feel good to use. Panels pour out of the bar on real spring
 physics, colours follow your wallpaper and your music, and the whole
 desktop stays light enough to run all day without you noticing it.
@@ -251,13 +255,14 @@ you turn on only the ones you want, and plugins can add their own.
 One command, from any shell:
 
 ```bash
-sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f"'
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
 ```
 
 The download shows its progress, checks the release signature and archive,
 then opens Mandara's installer with an arrow-key setup menu. Compositor,
 login and other options go
-straight to `mandara install`; see the [installation guide](docs/install.md).
+straight to `mandara install`. Append them after the final `sh`, for example
+`--compositor kwin --no-greeter`; see the [installation guide](docs/install.md).
 If the installer adds Mandara to PATH, open a new terminal before using its
 commands. Studio is also available from your application menu.
 

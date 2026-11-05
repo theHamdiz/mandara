@@ -175,8 +175,8 @@ fn initial_size() -> gpui::Size<gpui::Pixels> {
         .unwrap_or(size(px(DEFAULT_W_PX), px(DEFAULT_H_PX)))
 }
 
-fn open_window(cx: &mut App) -> Option<WindowHandle<StudioView>> {
-    let options = WindowOptions {
+fn window_options() -> WindowOptions {
+    WindowOptions {
         titlebar: Some(TitlebarOptions { title: Some(mandara_i18n::t("Mandara Studio").into()), appears_transparent: true, traffic_light_position: None }),
         window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.0), px(0.0)), size: initial_size() })),
         focus: true,
@@ -184,13 +184,23 @@ fn open_window(cx: &mut App) -> Option<WindowHandle<StudioView>> {
         kind: WindowKind::Normal,
         app_id: Some(mandara_core::STUDIO_APP_ID.to_string()),
         window_min_size: Some(size(px(MIN_W_PX), px(MIN_H_PX))),
+        window_decorations: Some(gpui::WindowDecorations::Client),
         // Full frame rate while unfocused too: the live previews (login
         // screen, springs) are often watched beside another window. Studio
         // only redraws while something animates, so idle cost is unchanged.
         inactive_frame_interval: None,
         ..Default::default()
-    };
-    match cx.open_window(options, |_, cx| cx.new(StudioView::new)) {
+    }
+}
+
+pub(crate) fn client_controls(decorations: gpui::Decorations, compositor: Option<mandara_compositor::CompositorKind>) -> bool {
+    // Tiling compositors can negotiate server decorations for borders
+    // alone. KWin's server decoration also supplies window buttons.
+    !matches!((decorations, compositor), (gpui::Decorations::Server, Some(mandara_compositor::CompositorKind::KWin)))
+}
+
+fn open_window(cx: &mut App) -> Option<WindowHandle<StudioView>> {
+    match cx.open_window(window_options(), |_, cx| cx.new(StudioView::new)) {
         Ok(handle) => {
             cx.set_global(StudioWindow(Some(handle)));
             Some(handle)
@@ -232,6 +242,16 @@ pub fn run(section: Option<&str>, cx: &mut App) {
 mod tests {
     use super::*;
     use registry::Section;
+
+    #[test]
+    fn studio_requests_its_own_titlebar_and_honors_server_decorations() {
+        assert_eq!(window_options().window_decorations, Some(gpui::WindowDecorations::Client));
+        use mandara_compositor::CompositorKind::{KWin, MangoWM};
+        assert!(client_controls(gpui::Decorations::Client { tiling: Default::default() }, Some(KWin)));
+        assert!(!client_controls(gpui::Decorations::Server, Some(KWin)));
+        assert!(client_controls(gpui::Decorations::Server, Some(MangoWM)));
+        assert!(client_controls(gpui::Decorations::Server, None));
+    }
 
     /// Every Studio entry of the launcher opens the section it names, and
     /// every section is reachable from the launcher.

@@ -136,7 +136,7 @@ layout: null
         <p>The short command downloads a release, shows its progress and verifies its signature before opening the Rust installer.</p>
       </div>
       <div class="install-command">
-        <code>sh -c 'f=$(mktemp) &amp;&amp; trap "rm -f -- \"\$f\"" 0 &amp;&amp; curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" &amp;&amp; sh "$f"'</code>
+        <code>sh -c 'f=$(mktemp) &amp;&amp; trap "rm -f -- \"\$f\"" 0 &amp;&amp; curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" &amp;&amp; sh "$f" "$@"' sh</code>
       </div>
       <div class="install-details">
         <p>Choose your compositor and login setup in the installer. To pass options directly, see the guide for compositor, login and unattended options.</p>

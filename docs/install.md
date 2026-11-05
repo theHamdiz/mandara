@@ -3,7 +3,7 @@
 One command, from any shell (bash, zsh or fish):
 
 ```bash
-sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f"'
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
 ```
 
 The small [download script](../install.sh) shows Mandara's phoenix and the
@@ -31,7 +31,9 @@ sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https
 sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --compositor kwin --no-greeter
 ```
 
-Options are forwarded unchanged, including paths with spaces. The bootstrap
+Options are forwarded unchanged, including paths with spaces. Temporary
+downloads stay private; the Rust installer receives your original file-permission
+mask. The bootstrap
 does not request administrator access or edit configuration itself. To read
 it before running it, download `install.sh` to a file and run `sh install.sh`
 with the same options.
@@ -417,6 +419,10 @@ for workspaces and windows; its settings remain in Plasma System Settings.
 | **River** 0.3 | none: Mandara never edits `~/.config/river/init` | the one line you add to `init`: `riverctl spawn /path/to/mandara` |
 | **KWin / Plasma (Wayland)** | none: Mandara leaves `kwinrc` unchanged | its own `org.mandara.shell.desktop` XDG autostart entry, only for KDE |
 
+The setup picker offers KWin only when `kwin_wayland` is installed. A
+failed KWin availability check is reported directly; it does not offer to
+retire shortcuts or label the failure a compositor-configuration error.
+
 Mandara detects the installed version and speaks its dialect, including
 Hyprland 0.57's Lua dispatches. On Niri the drop-in makes workspace
 backgrounds transparent so the wallpaper shows outside the Overview; night
@@ -481,6 +487,15 @@ Arch): River 0.4 moved window management into separate programs and dropped
 `river-control` and `river-status`, so on 0.4 and later Mandara can't
 drive it, and the Config doctor says so.
 
+### External monitor brightness
+
+The installer offers to enable external-monitor brightness through DDC/CI.
+Accepting loads `i2c-dev` when needed, records it for future boots, and
+adds your user to the device group if necessary. Log in again after a group
+change, and enable DDC/CI in your monitor's own menu. Existing access in the
+current boot does not skip the startup-module check. Studio → Displays →
+External brightness shows module and permission diagnostics.
+
 ### Plasma / KWin
 
 Start Mandara inside a **Plasma Wayland** session. The installer recognizes
@@ -504,7 +519,11 @@ Keep resolution, scaling, arrangement, input, window rules, effects and
 shortcuts in **Plasma System Settings**. Studio explains these limits; its
 **Displays → Shell on each display** controls still select where Mandara’s
 bar, dock and other surfaces appear. The Config doctor can report KWin’s
-availability, but KWin has no standalone configuration checker.
+availability, but KWin has no standalone configuration checker. Screenshots
+use KWin's native ScreenShot2 service; keep its screenshot effect available.
+A failed
+availability probe makes `mandara setup --check --compositor kwin` exit with
+status 11, just as a missing KWin executable does.
 
 Lock requests use **Plasma’s secure lock screen**, including confirmation
 before sleep, because KWin does not expose the lock-surface protocol used
@@ -679,3 +698,8 @@ After installation, optional sign-in widgets live in **Studio → Login
 screen → Layout → Widgets** and **Lock appearance → Widgets**. Installation
 leaves both collections empty. Login changes use the existing **Apply to
 login screen** flow; see [login and lock widgets](lock-and-login.md#widgets-on-login-and-lock-screens).
+`mandara setup --check` leaves compositor files unchanged. Its exit status
+is 10 for shortcut conflicts, 11 for compositor check errors and 12 when
+a required keyboard library is unavailable, or 13 when KWin cannot pass its
+availability check. The installer offers conflict
+retirement only after status 10; other failures are reported separately.

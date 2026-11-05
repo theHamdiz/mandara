@@ -8289,193 +8289,391 @@
 
 "↑/↓ change · enter select · esc cancel" = "↑/↓ modifier · Entrée sélectionner · Échap annuler"
 
+"Profile scope" = "Portée du profil"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "Modifie le style, la position et la hauteur de la barre. Vos éléments sont conservés, sauf si vous choisissez de les remplacer."
+"Replace bar items" = "Remplacer les éléments de la barre"
+"Leave empty to follow the desktop's icon theme" = "Laisser vide pour suivre le thème d’icônes du bureau"
+"Could not load {module}; check that the installed kernel includes it" = "Impossible de charger {module} ; vérifiez que le noyau installé le contient"
 
-# Connected plugins
+"Bounce only while music plays" = "Rebondir seulement pendant la musique"
+"Hide corners between displays" = "Masquer les coins entre les écrans"
+"Redraw interval p50" = "Intervalle de rafraîchissement p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "Constructions récentes des vues : les barres pleines montrent le temps CPU ; la hauteur totale inclut l’intervalle depuis la construction précédente sur la même surface."
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "Ce compositeur ne propose pas wlr-screencopy et ScreenShot2 de KWin n’a pas pu être utilisé"
+
+"Tab: results · ↑↓: select · Enter: use" = "Tab : résultats · ↑↓ : choisir · Entrée : utiliser"
+
 "A little closer to home" = "Votre maison, un peu plus proche"
+
 "API key" = "Clé API"
+
 "Accept" = "Accepter"
+
 "Add your Home Assistant token in Studio" = "Ajoutez votre jeton Home Assistant dans Studio"
+
 "Add your favourite feeds in Studio" = "Ajoutez vos flux favoris dans Studio"
+
 "Add your translation API key in Studio" = "Ajoutez votre clé de traduction dans Studio"
+
 "An API key is saved for this server" = "Une clé API est enregistrée pour ce serveur"
+
 "An action is still running" = "Une action est encore en cours"
+
 "Available to pair" = "Disponible pour l’association"
+
 "Check KDE Connect while the phone panel is open" = "Consulter KDE Connect quand le panneau du téléphone est ouvert"
+
 "Choose a source and target language" = "Choisissez les langues source et cible"
+
 "Choose a valid Home Assistant entity" = "Choisissez une entité Home Assistant valide"
+
 "Choose up to 24 Home Assistant entities" = "Choisissez jusqu’à 24 entités Home Assistant"
+
 "Connect your home in Studio" = "Connectez votre maison dans Studio"
+
 "Copy translation" = "Copier la traduction"
+
 "Could not open the keyring: {error}" = "Impossible d’ouvrir le trousseau : {error}"
+
 "Could not prepare the request" = "Impossible de préparer la requête"
+
 "Could not reach KDE Connect: {error}" = "Impossible de joindre KDE Connect : {error}"
+
 "Could not read this feed: {error}" = "Impossible de lire ce flux : {error}"
+
 "Could not refresh this feed: {error}" = "Impossible d’actualiser ce flux : {error}"
+
 "Could not save or read feed history: {error}" = "Impossible d’enregistrer ou de lire l’historique du flux : {error}"
+
 "DeepL Free" = "DeepL Free"
+
 "DeepL Pro" = "DeepL Pro"
+
 "DeepL uses its own server and requires an API key" = "DeepL utilise son propre serveur et nécessite une clé API"
+
 "Default target language" = "Langue cible par défaut"
+
 "Device id from phone devices" = "Identifiant fourni par phone devices"
+
 "Discord" = "Discord"
+
 "Enable this when your LibreTranslate server requires a key; save it in the keyring below" = "Activez cette option si votre serveur LibreTranslate exige une clé ; enregistrez-la dans le trousseau ci-dessous"
+
 "Enter some text to translate" = "Saisissez du texte à traduire"
+
 "Favourite entities" = "Entités favorites"
+
 "Feed addresses" = "Adresses des flux"
+
 "Feeds" = "Flux"
+
 "Fetching headlines…" = "Chargement des titres…"
+
 "Forget device" = "Oublier l’appareil"
+
 "Forget this paired device?" = "Oublier cet appareil associé ?"
+
 "Forget…" = "Oublier…"
+
 "Home Assistant" = "Home Assistant"
+
 "Home Assistant could not find this entity" = "Home Assistant n’a pas trouvé cette entité"
+
 "Home Assistant entity id" = "Identifiant d’entité Home Assistant"
+
 "Home Assistant returned no entity list" = "Home Assistant n’a renvoyé aucune liste d’entités"
+
 "Include nearby devices that can be paired; pairing always needs your confirmation" = "Inclure les appareils proches disponibles pour l’association ; celle-ci nécessite toujours votre confirmation"
+
 "Initial target language code; choose from the provider's language list in the panel" = "Code initial de la langue cible ; choisissez dans la liste du fournisseur dans le panneau"
+
 "Install KDE Connect on your computer and phone, then pair them here." = "Installez KDE Connect sur l’ordinateur et le téléphone, puis associez-les ici."
+
 "Invalid phone identifier" = "Identifiant de téléphone invalide"
+
 "KDE Connect did not respond in time" = "KDE Connect n’a pas répondu à temps"
+
 "Keep a translation under 5,000 characters" = "Limitez la traduction à moins de 5 000 caractères"
+
 "Keep up to 16 feed subscriptions" = "Conservez au maximum 16 abonnements aux flux"
+
 "LibreTranslate" = "LibreTranslate"
+
 "List the configured translation provider's languages" = "Lister les langues du fournisseur de traduction configuré"
+
 "Looking for your devices…" = "Recherche de vos appareils…"
+
 "More than one API key matches this server; save the key again" = "Plusieurs clés API correspondent à ce serveur ; enregistrez de nouveau la clé"
+
 "No API key saved for this server" = "Aucune clé API enregistrée pour ce serveur"
+
 "No entities to show" = "Aucune entité à afficher"
+
 "No headlines yet" = "Aucun titre pour le moment"
+
 "Only the selected feed refreshes while its panel is open" = "Seul le flux sélectionné s’actualise quand son panneau est ouvert"
+
 "Opening the keyring…" = "Ouverture du trousseau…"
+
 "Paired and discovered devices reported by KDE Connect" = "Appareils associés et découverts par KDE Connect"
+
 "Paired devices, phone battery, ringing and text sharing" = "Appareils associés, batterie du téléphone, sonnerie et partage de texte"
+
 "Paired · offline" = "Associé · hors ligne"
+
 "Paste" = "Coller"
+
 "Paste an API key" = "Collez une clé API"
+
 "Paste an API key without spaces or line breaks" = "Collez une clé API sans espace ni saut de ligne"
+
 "Phone Connect" = "Connexion au téléphone"
+
 "Ping" = "Envoyer un signal"
+
 "Provider" = "Fournisseur"
+
 "RSS, Atom and JSON subscriptions with local read history" = "Abonnements RSS, Atom et JSON avec historique de lecture local"
+
 "RSS, Atom or JSON feed address" = "Adresse d’un flux RSS, Atom ou JSON"
+
 "Read the configured Home Assistant favourites" = "Lire les favoris Home Assistant configurés"
+
 "Read your home while the panel is open; actions also refresh its state" = "Consulter votre maison quand le panneau est ouvert ; les actions actualisent aussi son état"
+
 "Reading your home…" = "Lecture de votre maison…"
+
 "Refresh a feed and return its headlines and read history" = "Actualiser un flux et renvoyer ses titres et son historique de lecture"
+
 "Refresh interval" = "Intervalle d’actualisation"
+
 "Refresh this feed before marking it read" = "Actualisez ce flux avant de le marquer comme lu"
+
 "Refreshing…" = "Actualisation…"
+
 "Reject" = "Refuser"
+
 "Reload languages" = "Recharger les langues"
+
 "Remove key" = "Supprimer la clé"
+
 "Ring, ping or change pairing for a device" = "Faire sonner, envoyer un signal ou modifier l’association d’un appareil"
+
 "Run" = "Exécuter"
+
 "Save key" = "Enregistrer la clé"
+
 "Saved in your desktop keyring for this server, separate from Mandara's configuration." = "Enregistrée pour ce serveur dans le trousseau du bureau, séparément de la configuration de Mandara."
+
 "Search languages" = "Rechercher des langues"
+
 "Search to find more languages" = "Recherchez pour trouver plus de langues"
+
 "Send clipboard text" = "Envoyer le texte du presse-papiers"
+
 "Send text to a paired, connected device" = "Envoyer du texte à un appareil associé et connecté"
+
 "Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "Séparez les adresses RSS, Atom ou JSON par des espaces ; jusqu’à 16 abonnements"
+
 "Separate up to 24 entity ids with spaces; empty shows the first available entities" = "Séparez jusqu’à 24 identifiants d’entité par des espaces ; vide, affiche les premières entités disponibles"
+
 "Server address" = "Adresse du serveur"
+
 "Server replied with HTTP {status}" = "Le serveur a répondu avec HTTP {status}"
+
 "Show available devices" = "Afficher les appareils disponibles"
+
 "Target language code" = "Code de la langue cible"
+
 "Text is sent only when you press Translate" = "Le texte n’est envoyé qu’en appuyant sur Traduire"
+
 "Text is sent only when you press Translate." = "Le texte n’est envoyé qu’en appuyant sur Traduire."
+
 "Text to send" = "Texte à envoyer"
+
 "Text to translate" = "Texte à traduire"
+
 "Text translation" = "Traduction de texte"
+
 "The API key cannot be used in a request" = "La clé API ne peut pas être utilisée dans une requête"
+
 "The feed belongs to another address" = "Le flux appartient à une autre adresse"
+
 "The feed server returned no content" = "Le serveur du flux n’a renvoyé aucun contenu"
+
 "The provider returned no language list" = "Le fournisseur n’a renvoyé aucune liste de langues"
+
 "The provider returned no translation" = "Le fournisseur n’a renvoyé aucune traduction"
+
 "The saved API key is not text" = "La clé API enregistrée n’est pas du texte"
+
 "The saved feed belongs to another address" = "Le flux enregistré appartient à une autre adresse"
+
 "The saved feed could not be read; refresh it to download a new copy" = "Impossible de lire le flux enregistré ; actualisez-le pour télécharger une nouvelle copie"
+
 "The saved feed is too large to read" = "Le flux enregistré est trop volumineux pour être lu"
+
 "The saved feed is too large to write" = "Le flux enregistré est trop volumineux pour être écrit"
+
 "The server did not return valid JSON" = "Le serveur n’a pas renvoyé de JSON valide"
+
 "The server is receiving too many requests; try again later" = "Le serveur reçoit trop de requêtes ; réessayez plus tard"
+
 "The server redirected this request; enter its final address in Studio" = "Le serveur a redirigé la requête ; saisissez son adresse finale dans Studio"
+
 "The server rejected the API key" = "Le serveur a refusé la clé API"
+
 "The server's response was too large" = "La réponse du serveur était trop volumineuse"
+
 "There is no text to send" = "Aucun texte à envoyer"
+
 "This article has no web address" = "Cet article n’a pas d’adresse web"
+
 "This article is no longer in the feed" = "Cet article ne figure plus dans le flux"
+
 "This device is asking to pair. Check the name on your phone before accepting." = "Cet appareil demande une association. Vérifiez son nom sur votre téléphone avant d’accepter."
+
 "This entity cannot run that action right now" = "Cette entité ne peut pas exécuter cette action pour le moment"
+
 "This feed is too large to read" = "Ce flux est trop volumineux pour être lu"
+
 "This phone does not support that action right now" = "Ce téléphone ne prend pas en charge cette action pour le moment"
+
 "This phone is not connected" = "Ce téléphone n’est pas connecté"
+
 "This request is too large" = "Cette requête est trop volumineuse"
+
 "This text is too large to send to a phone" = "Ce texte est trop volumineux pour être envoyé à un téléphone"
+
 "Toggle a home control or run a scene, script or button" = "Basculer une commande de la maison ou lancer une scène, un script ou un bouton"
+
 "Translate" = "Traduire"
+
 "Translate text into a language with your configured provider" = "Traduire du texte dans une langue avec le fournisseur configuré"
+
 "Translate text with your chosen provider" = "Traduire du texte avec le fournisseur de votre choix"
+
 "Translating…" = "Traduction…"
+
 "Translator" = "Traducteur"
+
 "Turn off" = "Éteindre"
+
 "Unavailable" = "Indisponible"
+
 "Unknown phone action" = "Action de téléphone inconnue"
+
 "Use a server address without a password, query or fragment" = "Utilisez une adresse de serveur sans mot de passe, requête ni fragment"
+
 "Use an API key" = "Utiliser une clé API"
+
 "Use an http:// or https:// feed address without a password" = "Utilisez une adresse de flux http:// ou https:// sans mot de passe"
+
 "Use an http:// or https:// server address without a password" = "Utilisez une adresse de serveur http:// ou https:// sans mot de passe"
+
 "Your Home Assistant address, including a reverse proxy path if needed" = "Votre adresse Home Assistant, avec le chemin du proxy inverse si nécessaire"
+
 "Your LibreTranslate server, including a reverse proxy path if needed" = "Votre serveur LibreTranslate, avec le chemin du proxy inverse si nécessaire"
+
 "Your devices, within reach" = "Vos appareils à portée de main"
+
 "Your home favourites, sensors and scenes" = "Vos favoris de la maison, capteurs et scènes"
+
 "Your subscriptions, together" = "Vos abonnements réunis"
+
 "Your translation appears here" = "Votre traduction apparaîtra ici"
+
 "{count} / {limit}" = "{count} / {limit}"
+
 "{count} unread" = "{count} non lus"
+
 "{percent}% · charging" = "{percent}% · en charge"
 
 "Binary clock" = "Horloge binaire"
+
 "Copies its appearance and position. Later desktop edits do not change this screen." = "Copie son apparence et sa position. Les modifications ultérieures du bureau ne changent pas cet écran."
+
 "Copy from desktop" = "Copier depuis le bureau"
+
 "Date ticket" = "Billet de date"
+
 "Eight" = "Huit heures"
+
 "Eleven" = "Onze heures"
+
 "Five" = "Cinq heures"
+
 "Five past {hour}" = "{hour} cinq"
+
 "Five to {hour}" = "{hour} moins cinq"
+
 "Four" = "Quatre heures"
+
 "Glass tube clock" = "Horloge à tubes de verre"
+
 "Half past {hour}" = "{hour} et demie"
+
 "Humidity rose" = "Rosace d’humidité"
+
 "Imperial" = "Impérial"
+
 "Metric" = "Métrique"
+
 "Moon calendar" = "Calendrier lunaire"
+
 "Nine" = "Neuf heures"
+
 "One" = "Une heure"
+
 "Perpetual calendar" = "Calendrier perpétuel"
+
 "Plasma's secure locker controls this screen. Custom lock widgets are available with Mandara's native locker on supported compositors." = "Le verrouillage sécurisé de Plasma contrôle cet écran. Les widgets de verrouillage personnalisés sont disponibles avec le verrouillage natif de Mandara sur les compositeurs compatibles."
+
 "Public decorations only. Notes, messages, account data and widget actions stay out of sign-in screens." = "Décorations publiques uniquement. Les notes, messages, données de comptes et actions des widgets restent absents des écrans de connexion."
+
 "Public weather location" = "Lieu météo public"
+
 "Quarter past {hour}" = "{hour} et quart"
+
 "Quarter to {hour}" = "{hour} moins le quart"
+
 "Seven" = "Sept heures"
+
 "Six" = "Six heures"
+
 "Split-flap clock" = "Horloge à palettes"
+
 "Ten" = "Dix heures"
+
 "Ten past {hour}" = "{hour} dix"
+
 "Ten to {hour}" = "{hour} moins dix"
+
 "The location you add here is public and allows weather requests on this screen. Studio previews do not contact the weather service." = "Le lieu ajouté ici est public et autorise les requêtes météo sur cet écran. Les aperçus de Studio ne contactent pas le service météo."
+
 "Thermometer" = "Thermomètre"
+
 "Three" = "Trois heures"
+
 "Twelve" = "Douze heures"
+
 "Twenty past {hour}" = "{hour} vingt"
+
 "Twenty to {hour}" = "{hour} moins vingt"
+
 "Twenty-five past {hour}" = "{hour} vingt-cinq"
+
 "Twenty-five to {hour}" = "{hour} moins vingt-cinq"
+
 "Two" = "Deux heures"
+
 "Use this location publicly" = "Utiliser ce lieu publiquement"
+
 "Weather ribbon" = "Ruban météo"
+
 "Widgets" = "Widgets"
+
 "Word clock" = "Horloge en lettres"
+
 "{hour} o'clock" = "{hour} pile"

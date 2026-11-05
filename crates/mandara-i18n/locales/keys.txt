@@ -483,7 +483,6 @@ Angle
 Animate opening applications
 Animated current conditions, hourly and 5-day forecast
 Animated sky
-Animating
 Animation speed
 Animations
 Anne Frank
@@ -804,6 +803,7 @@ Bottom right
 Bottom right command
 Bottom-right corner, or two fingers
 Bounce for attention
+Bounce only while music plays
 Box
 Box shape
 Break every
@@ -966,6 +966,7 @@ Changes apply the next time this network connects.
 Changes are authorized by polkit: you may be asked for an administrator's password.
 Changes are picked up live: add, rebuild or delete a plugin and the shell and this page update within a second.
 Changes start at this time
+Changes the bar's style, position and height. Your items stay unless you choose to replace them.
 Changes volumes and devices (PipeWire / PulseAudio)
 Chapter II
 Character
@@ -1288,6 +1289,7 @@ Could not create {path}: {error}
 Could not encode the wallpaper: {error}
 Could not keep the screen awake: {error}
 Could not load the OCR models: {error}
+Could not load {module}; check that the installed kernel includes it
 Could not move {path} to the Trash: {error}
 Could not open the keyring: {error}
 Could not open {uri}: {error}
@@ -1766,7 +1768,6 @@ E-mail
 EARLIER
 EVIDENCE
 Each app runs in app-mandara-<app>.scope: tracked resources, survives shell restarts
-Each bar is one shell frame: the solid part is the time spent building it, the full height the time until the next frame. Coral bars came late.
 Each group of bar items sits on a soft capsule of its own
 Each new one replaces the current wallpaper
 Each note is a Markdown file, each topic a folder in here — point it at a synced folder or an Obsidian vault (empty: Mandara's data folder)
@@ -2442,6 +2443,7 @@ Hidden docks come back when the pointer touches their screen edge
 Hide
 Hide and show speed
 Hide code
+Hide corners between displays
 Hide delay
 Hide desktop widgets
 Hide empty ones
@@ -3012,7 +3014,7 @@ Leading zero
 Lean on Him rather than charms and omens, and walk on without fear.
 Learning without thought is labour lost; thought without learning is perilous.
 Leave empty for the toplist, e.g. "nature 4k"
-Leave empty to follow GTK's icon theme
+Leave empty to follow the desktop's icon theme
 Leave it
 Leave snipping and keep the toolbar · Esc
 Leave undone whatever you hesitate to do.
@@ -4147,7 +4149,6 @@ One
 One app's screen time over the last seven days
 One centered island that morphs
 One click sets the bar, desktop widgets, colors, fonts and roundness together. Your own setup is saved first, so you can always go back. Looks never change your wallpaper.
-One click sets the style, position, height and arrangement
 One dot
 One entry per app
 One good deed for today, with its check and your week
@@ -4645,6 +4646,7 @@ Profile name, e.g. Night
 Profile photo
 Profile photo updated
 Profile picture
+Profile scope
 Profiles
 Profiles & backup
 Program
@@ -4819,6 +4821,7 @@ Recent log lines shown for a selected unit
 Recent recordings
 Recent runs
 Recent shell frame timings with p50 / p95 / p99 (build time and frame interval)
+Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface.
 Recently used apps listed under the pinned ones before you type
 Recite an ayah, a range or a whole surah (the reader follows along)
 Reciter
@@ -4849,6 +4852,7 @@ Recording video
 Rectangle
 Red
 Redact personal values
+Redraw interval p50
 Reduce motion
 References and links follow sunnah.com. Muwatta Malik is numbered as in the dataset and links to its book.
 Refraction
@@ -4956,6 +4960,7 @@ Repair all
 Repeat delay
 Repeat rate
 Repeat the password
+Replace bar items
 Replace my settings?
 Replace the live configuration with a full JSON document (used by Studio)
 Reply
@@ -5903,6 +5908,7 @@ TOP APPS TODAY
 Tab
 Tab name
 Tab shape
+Tab: results · ↑↓: select · Enter: use
 Tabbed
 Tablet
 Tabs
@@ -6380,6 +6386,7 @@ This command runs; you'll be asked to authorize it:
 This compositor can't change screen colours
 This compositor doesn't support display configuration (wlr-output-management)
 This compositor has no gamma control (wlr-gamma-control); Niri, GNOME and KDE can't do Mandara's night light
+This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used
 This computer
 This computer installs software with {manager}, which can't install it.
 This computer runs on mains power
@@ -7501,7 +7508,6 @@ local time, HH:MM
 logical px from the left
 logical px from the top
 look id (see look list)
-look or full
 lookup failed
 m
 masked

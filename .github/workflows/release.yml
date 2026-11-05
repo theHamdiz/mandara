@@ -87,8 +87,9 @@ jobs:
       # The branch tip, not the pushed commit: a release queued behind
       # another one starts after that one pushed its AUR recipes, and a
       # bump made on the older commit could never be pushed.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
@@ -107,24 +108,24 @@ jobs:
 
       - name: Push release commit and tags
         if: steps.bump.outputs.bumped != '0'
-        run: git push --atomic origin HEAD:${{ github.ref_name }} --follow-tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push --atomic origin HEAD:${{ github.ref_name }} --follow-tags
 
       # Also releases when the current version has no published GitHub
       # release yet (a fresh repository, or a release that was deleted to be
       # rebuilt), so one push publishes without a manual rebuild.
       - name: Result
         id: result
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           released="${{ steps.bump.outputs.released }}"
           version="${{ steps.bump.outputs.version }}"
           tag="${{ steps.bump.outputs.tag }}"
           unpublished=false
-          gh release view "v$version" >/dev/null 2>&1 || unpublished=true
+          GH_TOKEN="${{ github.token }}" gh release view "v$version" >/dev/null 2>&1 || unpublished=true
           if [ "${{ inputs.rebuild }}" = "true" ] || [ "$unpublished" = "true" ]; then
             released=true; tag="v$version"
-            git rev-parse -q --verify "refs/tags/$tag" >/dev/null || { git tag -a "$tag" -m "mandara $version"; git push origin "$tag"; }
+            git rev-parse -q --verify "refs/tags/$tag" >/dev/null || { git tag -a "$tag" -m "mandara $version"; GH_TOKEN="${{ github.token }}" git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin "$tag"; }
           fi
           {
             echo "released=$released"
@@ -160,7 +161,7 @@ jobs:
     env:
       RUSTFLAGS: ${{ matrix.rustflags }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
@@ -281,7 +282,7 @@ jobs:
             runner: ubuntu-22.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
@@ -342,7 +343,7 @@ jobs:
     if: needs.version.outputs.released == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
@@ -366,8 +367,9 @@ jobs:
     needs: [version, build, build-musl, plugins]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
 
       - uses: actions/download-artifact@v4
@@ -455,7 +457,7 @@ jobs:
           **Install** with one command:
 
           ```sh
-          sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f"'
+          sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
           ```
 
           Or download the tarball for your CPU, `tar xf` it and run `./mandara-*/bin/mandara install`.
@@ -480,8 +482,6 @@ jobs:
       # clone (the README's Arch instructions) works. Committed as
       # "chore(release)", which doesn't start another release.
       - name: AUR recipes
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           v="${{ needs.version.outputs.version }}"
           git config user.name "github-actions[bot]"
@@ -504,5 +504,5 @@ jobs:
           git diff --stat
           if ! git diff --quiet; then
             git commit -am "chore(release): AUR recipes for v$v"
-            git push origin HEAD:main
+            GH_TOKEN="${{ github.token }}" git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin HEAD:main
           fi

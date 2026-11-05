@@ -88,6 +88,7 @@ h3 { font-size: 28px; line-height: 1.2; }
 .native-section { background: var(--page-ink); color: var(--page-background); padding-block: 80px; }
 .native-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 56px; }
 .native-section .text-link { color: inherit; }
+.native-section a:focus-visible { outline-color: var(--page-background); }
 .install-command { background: var(--page-surface); padding: 28px; }
 code { font-family: ui-monospace, monospace; font-size: 16px; overflow-wrap: anywhere; }
 .install-command code { display: block; font-size: 18px; }

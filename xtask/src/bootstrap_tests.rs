@@ -113,6 +113,10 @@ fn run(fault: Fault, exit: i32) -> (std::process::Output, Option<String>, Vec<St
 }
 
 fn run_in(fault: Fault, exit: i32, language: &str) -> (std::process::Output, Option<String>, Vec<String>) {
+    run_with_mask(fault, exit, language, "0022")
+}
+
+fn run_with_mask(fault: Fault, exit: i32, language: &str, mask: &str) -> (std::process::Output, Option<String>, Vec<String>) {
     let dir = tempfile::tempdir().unwrap();
     let archive = archive(dir.path(), fault);
     let hash = mandara_delta::hex(&Sha256::digest(&archive));
@@ -140,13 +144,17 @@ fn run_in(fault: Fault, exit: i32, language: &str) -> (std::process::Output, Opt
     assert_ne!(script, SCRIPT);
     let script_path = dir.path().join("install.sh");
     std::fs::write(&script_path, script).unwrap();
-    let output = Command::new("sh").arg(&script_path)
+    let output = Command::new("sh").args(["-c", "umask \"$1\"; shift; exec sh \"$@\"", "fixture", mask]).arg(&script_path)
         .args(["--prefix", "/tmp/a path with 'quotes' and $signs", "--no-deps", "--no-greeter", "--compositor", "kwin"])
         .env("MANDARA_BOOTSTRAP_BASE_URL", &server.url).env("NO_PROXY", "127.0.0.1")
         .env("LC_ALL", language)
         .env("BOOTSTRAP_RECORD", &record).env("BOOTSTRAP_EXIT", exit.to_string()).env("TMPDIR", &downloads)
         .stdin(std::process::Stdio::null()).output().unwrap();
     assert_eq!(std::fs::read_dir(downloads).unwrap().count(), 0, "temporary downloads remain");
+    if record.exists() {
+        use std::os::unix::fs::PermissionsExt as _;
+        assert_eq!(std::fs::metadata(&record).unwrap().permissions().mode() & 0o777, 0o666 & !u32::from_str_radix(mask, 8).unwrap(), "the bootstrap changed the installer's umask");
+    }
     let record = std::fs::read_to_string(record).ok();
     let requests = server.requests.lock().unwrap().clone();
     (output, record, requests)
@@ -279,7 +287,7 @@ fn documented_download_command_checks_completion_and_preserves_the_callers_direc
             };
             read_request(&mut client);
             // Even a valid program prefix must not run on a short download.
-            let body = b"printf '%s' \"$PWD\" > \"$BOOTSTRAP_RECORD\"\n";
+            let body = b"printf '%s\\0' \"$PWD\" \"$@\" > \"$BOOTSTRAP_RECORD\"\n";
             let length = body.len() + if complete { 0 } else { 100 };
             write!(client, "HTTP/1.1 200 OK\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n").unwrap();
             client.write_all(body).unwrap();
@@ -289,6 +297,7 @@ fn documented_download_command_checks_completion_and_preserves_the_callers_direc
         assert!(command.contains("--proto =https"), "the initial request and redirects must stay on HTTPS");
         let command = command.replace("https://thehamdiz.github.io/mandara/install.sh", &url).replace("--proto =https", "--proto =http");
         assert!(command.contains(&url));
+        let command = format!("{command} --compositor kwin --prefix 'path with spaces'");
         let record = dir.path().join("executed");
         let downloads = dir.path().join("downloads $(touch trap-ran)");
         std::fs::create_dir(&downloads).unwrap();
@@ -300,7 +309,7 @@ fn documented_download_command_checks_completion_and_preserves_the_callers_direc
         assert_eq!(std::fs::read_dir(downloads).unwrap().count(), 0, "the first-stage script was not removed");
         assert!(!caller.join("trap-ran").exists(), "cleanup interpreted the file name as code");
         if complete {
-            assert_eq!(std::fs::read_to_string(record).unwrap(), caller.display().to_string());
+            assert_eq!(std::fs::read_to_string(record).unwrap().split('\0').collect::<Vec<_>>(), [caller.to_str().unwrap(), "--compositor", "kwin", "--prefix", "path with spaces", ""]);
         } else {
             assert!(!record.exists());
         }
@@ -362,5 +371,14 @@ fn an_unusable_cache_falls_back_but_an_explicit_tmpdir_does_not() {
             assert!(!work.exists());
         }
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "keep");
+    }
+}
+
+#[test]
+fn verified_installers_receive_the_callers_permissions_mask() {
+    for mask in ["0022", "0027", "0077"] {
+        let (output, record, _) = run_with_mask(Fault::None, 0, "C", mask);
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(record.is_some());
     }
 }

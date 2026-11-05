@@ -8032,7 +8032,7 @@
 
 "installed" = "نصب‌شده"
 
-"keep yours" = "حفظ صفحهٔ فعلی"
+"keep yours" = "حفظ صفحهٔ ورود فعلی"
 
 "no" = "خیر"
 
@@ -8042,193 +8042,391 @@
 
 "↑/↓ change · enter select · esc cancel" = "↑/↓ تغییر · Enter انتخاب · Esc لغو"
 
+"Profile scope" = "محدودهٔ نمایه"
+"Changes the bar's style, position and height. Your items stay unless you choose to replace them." = "سبک، موقعیت و ارتفاع نوار را تغییر می‌دهد. موارد شما حفظ می‌شوند مگر اینکه جایگزینی را انتخاب کنید."
+"Replace bar items" = "جایگزینی موارد نوار"
+"Leave empty to follow the desktop's icon theme" = "برای استفاده از پوستهٔ نمادهای میزکار خالی بگذارید"
+"Could not load {module}; check that the installed kernel includes it" = "بارگیری {module} ممکن نشد؛ بررسی کنید که هستهٔ نصب‌شده آن را داشته باشد"
 
-# Connected plugins
+"Bounce only while music plays" = "جهش فقط هنگام پخش موسیقی"
+"Hide corners between displays" = "پنهان کردن گوشه‌های بین نمایشگرها"
+"Redraw interval p50" = "فاصلهٔ بازترسیم p50"
+"Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface." = "ساخت‌های اخیر نما: بخش پُر ستون مدت‌زمانی را نشان می‌دهد که CPU صرف ساخت نما می‌کند؛ ارتفاع کامل شامل فاصلهٔ زمانی از ساخت قبلی همان سطح است."
+
+"This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used" = "این کامپوزیتور wlr-screencopy ندارد و استفاده از ScreenShot2 در KWin ممکن نشد"
+
+"Tab: results · ↑↓: select · Enter: use" = "Tab: نتایج · ↑↓: انتخاب · Enter: استفاده"
+
 "A little closer to home" = "خانه کمی نزدیک‌تر"
+
 "API key" = "کلید API"
+
 "Accept" = "پذیرفتن"
+
 "Add your Home Assistant token in Studio" = "توکن Home Assistant را در استودیو اضافه کنید"
+
 "Add your favourite feeds in Studio" = "خوراک‌های دلخواهتان را در استودیو اضافه کنید"
+
 "Add your translation API key in Studio" = "کلید سرویس ترجمه را در استودیو اضافه کنید"
+
 "An API key is saved for this server" = "یک کلید API برای این سرور ذخیره شده است"
+
 "An action is still running" = "یک عملیات هنوز در حال اجراست"
+
 "Available to pair" = "آمادهٔ جفت‌سازی"
+
 "Check KDE Connect while the phone panel is open" = "وقتی پنل تلفن باز است KDE Connect را بررسی کن"
+
 "Choose a source and target language" = "زبان مبدأ و مقصد را انتخاب کنید"
+
 "Choose a valid Home Assistant entity" = "یک موجودیت معتبر Home Assistant انتخاب کنید"
+
 "Choose up to 24 Home Assistant entities" = "حداکثر ۲۴ موجودیت Home Assistant انتخاب کنید"
+
 "Connect your home in Studio" = "خانه را در استودیو متصل کنید"
+
 "Copy translation" = "کپی ترجمه"
+
 "Could not open the keyring: {error}" = "باز کردن دسته‌کلید ممکن نشد: {error}"
+
 "Could not prepare the request" = "آماده‌سازی درخواست ممکن نشد"
+
 "Could not reach KDE Connect: {error}" = "اتصال به KDE Connect ممکن نشد: {error}"
+
 "Could not read this feed: {error}" = "خواندن این خوراک ممکن نشد: {error}"
+
 "Could not refresh this feed: {error}" = "تازه‌سازی این خوراک ممکن نشد: {error}"
+
 "Could not save or read feed history: {error}" = "ذخیره یا خواندن تاریخچهٔ خوراک ممکن نشد: {error}"
+
 "DeepL Free" = "DeepL Free"
+
 "DeepL Pro" = "DeepL Pro"
+
 "DeepL uses its own server and requires an API key" = "DeepL از سرور خودش استفاده می‌کند و به کلید API نیاز دارد"
+
 "Default target language" = "زبان مقصد پیش‌فرض"
+
 "Device id from phone devices" = "شناسهٔ دستگاه از phone devices"
+
 "Discord" = "Discord"
+
 "Enable this when your LibreTranslate server requires a key; save it in the keyring below" = "اگر سرور LibreTranslate شما کلید می‌خواهد، این گزینه را روشن و کلید را در دسته‌کلید زیر ذخیره کنید"
+
 "Enter some text to translate" = "متنی برای ترجمه وارد کنید"
+
 "Favourite entities" = "موجودیت‌های دلخواه"
+
 "Feed addresses" = "نشانی خوراک‌ها"
+
 "Feeds" = "خوراک‌ها"
+
 "Fetching headlines…" = "در حال دریافت عنوان‌ها…"
+
 "Forget device" = "حذف جفت‌سازی دستگاه"
+
 "Forget this paired device?" = "جفت‌سازی این دستگاه حذف شود؟"
+
 "Forget…" = "حذف جفت‌سازی…"
+
 "Home Assistant" = "Home Assistant"
+
 "Home Assistant could not find this entity" = "Home Assistant این موجودیت را پیدا نکرد"
+
 "Home Assistant entity id" = "شناسهٔ موجودیت Home Assistant"
+
 "Home Assistant returned no entity list" = "Home Assistant فهرست موجودیت‌ها را برنگرداند"
+
 "Include nearby devices that can be paired; pairing always needs your confirmation" = "دستگاه‌های نزدیک قابل جفت‌سازی را هم نشان بده؛ جفت‌سازی همیشه به تأیید شما نیاز دارد"
+
 "Initial target language code; choose from the provider's language list in the panel" = "کد اولیهٔ زبان مقصد؛ در پنل از فهرست زبان‌های سرویس انتخاب کنید"
+
 "Install KDE Connect on your computer and phone, then pair them here." = "KDE Connect را روی رایانه و تلفن نصب کنید و اینجا جفتشان کنید."
+
 "Invalid phone identifier" = "شناسهٔ تلفن نامعتبر است"
+
 "KDE Connect did not respond in time" = "KDE Connect به‌موقع پاسخ نداد"
+
 "Keep a translation under 5,000 characters" = "متن ترجمه را زیر ۵٬۰۰۰ نویسه نگه دارید"
+
 "Keep up to 16 feed subscriptions" = "حداکثر ۱۶ اشتراک خوراک نگه دارید"
+
 "LibreTranslate" = "LibreTranslate"
+
 "List the configured translation provider's languages" = "زبان‌های سرویس ترجمهٔ تنظیم‌شده را فهرست کن"
+
 "Looking for your devices…" = "در حال یافتن دستگاه‌های شما…"
+
 "More than one API key matches this server; save the key again" = "بیش از یک کلید API برای این سرور وجود دارد؛ کلید را دوباره ذخیره کنید"
+
 "No API key saved for this server" = "کلید API برای این سرور ذخیره نشده است"
+
 "No entities to show" = "موجودیتی برای نمایش نیست"
+
 "No headlines yet" = "هنوز عنوانی نیست"
+
 "Only the selected feed refreshes while its panel is open" = "فقط خوراک انتخاب‌شده هنگام باز بودن پنل تازه می‌شود"
+
 "Opening the keyring…" = "در حال باز کردن دسته‌کلید…"
+
 "Paired and discovered devices reported by KDE Connect" = "دستگاه‌های جفت‌شده و یافت‌شده توسط KDE Connect"
+
 "Paired devices, phone battery, ringing and text sharing" = "دستگاه‌های جفت‌شده، باتری تلفن، زنگ و اشتراک متن"
+
 "Paired · offline" = "جفت‌شده · آفلاین"
+
 "Paste" = "جای‌گذاری"
+
 "Paste an API key" = "کلید API را جای‌گذاری کنید"
+
 "Paste an API key without spaces or line breaks" = "کلید API را بدون فاصله یا شکست خط جای‌گذاری کنید"
+
 "Phone Connect" = "اتصال تلفن"
+
 "Ping" = "ارسال پیام آزمایشی"
+
 "Provider" = "ارائه‌دهنده"
+
 "RSS, Atom and JSON subscriptions with local read history" = "اشتراک‌های RSS، Atom و JSON با تاریخچهٔ خواندن محلی"
+
 "RSS, Atom or JSON feed address" = "نشانی خوراک RSS، Atom یا JSON"
+
 "Read the configured Home Assistant favourites" = "موجودیت‌های دلخواه تنظیم‌شدهٔ Home Assistant را بخوان"
+
 "Read your home while the panel is open; actions also refresh its state" = "خانه را هنگام باز بودن پنل بخوان؛ عملیات نیز وضعیت را تازه می‌کنند"
+
 "Reading your home…" = "در حال خواندن وضعیت خانه…"
+
 "Refresh a feed and return its headlines and read history" = "خوراکی را تازه کن و عنوان‌ها و تاریخچهٔ خواندنش را برگردان"
+
 "Refresh interval" = "فاصلهٔ تازه‌سازی"
+
 "Refresh this feed before marking it read" = "پیش از علامت‌گذاری به‌عنوان خوانده‌شده این خوراک را تازه کنید"
+
 "Refreshing…" = "در حال تازه‌سازی…"
+
 "Reject" = "رد کردن"
+
 "Reload languages" = "بارگیری دوبارهٔ زبان‌ها"
+
 "Remove key" = "حذف کلید"
+
 "Ring, ping or change pairing for a device" = "دستگاه را به صدا درآور، پیام آزمایشی بفرست یا جفت‌سازی را تغییر بده"
+
 "Run" = "اجرا"
+
 "Save key" = "ذخیرهٔ کلید"
+
 "Saved in your desktop keyring for this server, separate from Mandara's configuration." = "برای این سرور در دسته‌کلید دسکتاپ ذخیره می‌شود، جدا از پیکربندی Mandara."
+
 "Search languages" = "جست‌وجوی زبان‌ها"
+
 "Search to find more languages" = "برای یافتن زبان‌های بیشتر جست‌وجو کنید"
+
 "Send clipboard text" = "ارسال متن کلیپ‌بورد"
+
 "Send text to a paired, connected device" = "متن را به دستگاه جفت‌شده و متصل بفرست"
+
 "Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "نشانی خوراک‌های RSS، Atom یا JSON را با فاصله جدا کنید؛ حداکثر ۱۶ اشتراک"
+
 "Separate up to 24 entity ids with spaces; empty shows the first available entities" = "حداکثر ۲۴ شناسهٔ موجودیت را با فاصله جدا کنید؛ خالی باشد اولین موجودیت‌های موجود را نشان می‌دهد"
+
 "Server address" = "نشانی سرور"
+
 "Server replied with HTTP {status}" = "سرور با وضعیت HTTP {status} پاسخ داد"
+
 "Show available devices" = "نمایش دستگاه‌های موجود"
+
 "Target language code" = "کد زبان مقصد"
+
 "Text is sent only when you press Translate" = "متن فقط با فشردن ترجمه ارسال می‌شود"
+
 "Text is sent only when you press Translate." = "متن فقط با فشردن ترجمه ارسال می‌شود."
+
 "Text to send" = "متن ارسالی"
+
 "Text to translate" = "متن برای ترجمه"
+
 "Text translation" = "ترجمهٔ متن"
+
 "The API key cannot be used in a request" = "کلید API در درخواست قابل استفاده نیست"
+
 "The feed belongs to another address" = "خوراک به نشانی دیگری تعلق دارد"
+
 "The feed server returned no content" = "سرور خوراک محتوایی برنگرداند"
+
 "The provider returned no language list" = "ارائه‌دهنده فهرست زبان‌ها را برنگرداند"
+
 "The provider returned no translation" = "ارائه‌دهنده ترجمه‌ای برنگرداند"
+
 "The saved API key is not text" = "کلید API ذخیره‌شده متن نیست"
+
 "The saved feed belongs to another address" = "خوراک ذخیره‌شده به نشانی دیگری تعلق دارد"
+
 "The saved feed could not be read; refresh it to download a new copy" = "خواندن خوراک ذخیره‌شده ممکن نشد؛ برای دریافت نسخهٔ تازه آن را تازه کنید"
+
 "The saved feed is too large to read" = "خوراک ذخیره‌شده برای خواندن بیش از حد بزرگ است"
+
 "The saved feed is too large to write" = "خوراک ذخیره‌شده برای نوشتن بیش از حد بزرگ است"
+
 "The server did not return valid JSON" = "سرور JSON معتبری برنگرداند"
+
 "The server is receiving too many requests; try again later" = "سرور درخواست‌های زیادی دریافت می‌کند؛ بعداً تلاش کنید"
+
 "The server redirected this request; enter its final address in Studio" = "سرور درخواست را تغییر مسیر داد؛ نشانی نهایی را در استودیو وارد کنید"
+
 "The server rejected the API key" = "سرور کلید API را نپذیرفت"
+
 "The server's response was too large" = "پاسخ سرور بیش از حد بزرگ بود"
+
 "There is no text to send" = "متنی برای ارسال نیست"
+
 "This article has no web address" = "این مقاله نشانی وب ندارد"
+
 "This article is no longer in the feed" = "این مقاله دیگر در خوراک نیست"
+
 "This device is asking to pair. Check the name on your phone before accepting." = "این دستگاه درخواست جفت‌سازی دارد. پیش از پذیرش نامش را روی تلفن بررسی کنید."
+
 "This entity cannot run that action right now" = "این موجودیت اکنون نمی‌تواند این عملیات را اجرا کند"
+
 "This feed is too large to read" = "این خوراک برای خواندن بیش از حد بزرگ است"
+
 "This phone does not support that action right now" = "این تلفن اکنون از این عملیات پشتیبانی نمی‌کند"
+
 "This phone is not connected" = "این تلفن متصل نیست"
+
 "This request is too large" = "این درخواست بیش از حد بزرگ است"
+
 "This text is too large to send to a phone" = "این متن برای ارسال به تلفن بیش از حد بزرگ است"
+
 "Toggle a home control or run a scene, script or button" = "یک کنترل خانه را روشن یا خاموش کن یا صحنه، اسکریپت یا دکمه‌ای را اجرا کن"
+
 "Translate" = "ترجمه"
+
 "Translate text into a language with your configured provider" = "متن را با ارائه‌دهندهٔ تنظیم‌شده به زبانی ترجمه کن"
+
 "Translate text with your chosen provider" = "متن را با ارائه‌دهندهٔ انتخابی ترجمه کنید"
+
 "Translating…" = "در حال ترجمه…"
+
 "Translator" = "مترجم"
+
 "Turn off" = "خاموش کردن"
+
 "Unavailable" = "در دسترس نیست"
+
 "Unknown phone action" = "عملیات تلفن ناشناخته است"
+
 "Use a server address without a password, query or fragment" = "نشانی سرور را بدون گذرواژه، پرس‌وجو یا قطعه وارد کنید"
+
 "Use an API key" = "استفاده از کلید API"
+
 "Use an http:// or https:// feed address without a password" = "نشانی خوراک http:// یا https:// بدون گذرواژه وارد کنید"
+
 "Use an http:// or https:// server address without a password" = "نشانی سرور http:// یا https:// بدون گذرواژه وارد کنید"
+
 "Your Home Assistant address, including a reverse proxy path if needed" = "نشانی Home Assistant، همراه با مسیر پراکسی معکوس در صورت نیاز"
+
 "Your LibreTranslate server, including a reverse proxy path if needed" = "سرور LibreTranslate، همراه با مسیر پراکسی معکوس در صورت نیاز"
+
 "Your devices, within reach" = "دستگاه‌های شما در دسترس"
+
 "Your home favourites, sensors and scenes" = "دلخواه‌ها، حسگرها و صحنه‌های خانه"
+
 "Your subscriptions, together" = "اشتراک‌های شما کنار هم"
+
 "Your translation appears here" = "ترجمهٔ شما اینجا نمایش داده می‌شود"
+
 "{count} / {limit}" = "{count} / {limit}"
+
 "{count} unread" = "{count} خوانده‌نشده"
+
 "{percent}% · charging" = "{percent}% · در حال شارژ"
 
 "Binary clock" = "ساعت دودویی"
+
 "Copies its appearance and position. Later desktop edits do not change this screen." = "ظاهر و جایگاه آن را کپی می‌کند. ویرایش‌های بعدی میزکار این صفحه را تغییر نمی‌دهند."
+
 "Copy from desktop" = "کپی از میزکار"
+
 "Date ticket" = "بلیط تاریخ"
+
 "Eight" = "هشت"
+
 "Eleven" = "یازده"
+
 "Five" = "پنج"
+
 "Five past {hour}" = "{hour} و پنج دقیقه"
+
 "Five to {hour}" = "پنج دقیقه به {hour}"
+
 "Four" = "چهار"
+
 "Glass tube clock" = "ساعت لوله شیشه‌ای"
+
 "Half past {hour}" = "{hour} و نیم"
+
 "Humidity rose" = "گل رطوبت"
+
 "Imperial" = "امپریال"
+
 "Metric" = "متریک"
+
 "Moon calendar" = "تقویم ماه"
+
 "Nine" = "نه"
+
 "One" = "یک"
+
 "Perpetual calendar" = "تقویم دائمی"
+
 "Plasma's secure locker controls this screen. Custom lock widgets are available with Mandara's native locker on supported compositors." = "قفل امن پلاسما این صفحه را کنترل می‌کند. ویجت‌های سفارشی قفل با قفل بومی ماندارا روی کامپوزیتورهای پشتیبانی‌شده در دسترس‌اند."
+
 "Public decorations only. Notes, messages, account data and widget actions stay out of sign-in screens." = "فقط تزئینات عمومی. یادداشت‌ها، پیام‌ها، داده‌های حساب و کنش‌های ویجت در صفحه‌های ورود نمایش داده نمی‌شوند."
+
 "Public weather location" = "مکان عمومی آب‌وهوا"
+
 "Quarter past {hour}" = "{hour} و ربع"
+
 "Quarter to {hour}" = "یک ربع به {hour}"
+
 "Seven" = "هفت"
+
 "Six" = "شش"
+
 "Split-flap clock" = "ساعت ورقه‌ای"
+
 "Ten" = "ده"
+
 "Ten past {hour}" = "{hour} و ده دقیقه"
+
 "Ten to {hour}" = "ده دقیقه به {hour}"
+
 "The location you add here is public and allows weather requests on this screen. Studio previews do not contact the weather service." = "مکانی که اینجا اضافه می‌کنید عمومی است و اجازه درخواست آب‌وهوا در این صفحه را می‌دهد. پیش‌نمایش‌های استودیو به سرویس آب‌وهوا متصل نمی‌شوند."
+
 "Thermometer" = "دماسنج"
+
 "Three" = "سه"
+
 "Twelve" = "دوازده"
+
 "Twenty past {hour}" = "{hour} و بیست دقیقه"
+
 "Twenty to {hour}" = "بیست دقیقه به {hour}"
+
 "Twenty-five past {hour}" = "{hour} و بیست‌وپنج دقیقه"
+
 "Twenty-five to {hour}" = "بیست‌وپنج دقیقه به {hour}"
+
 "Two" = "دو"
+
 "Use this location publicly" = "استفاده عمومی از این مکان"
+
 "Weather ribbon" = "نوار آب‌وهوا"
+
 "Widgets" = "ویجت‌ها"
+
 "Word clock" = "ساعت نوشتاری"
+
 "{hour} o'clock" = "{hour} دقیق"

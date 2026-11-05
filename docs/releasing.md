@@ -813,7 +813,7 @@ Every release also carries version-less copies of the tarballs
 always points at the newest build.
 
 The public download command is
-`sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f"'`.
+`sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh`.
 Pages serves the tracked POSIX bootstrap, which checks `SHA256SUMS.sig`
 against the same public keys as the binary, then checks the archive before
 extraction. Its loopback integration tests cover argument forwarding,

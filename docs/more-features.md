@@ -125,7 +125,9 @@ The rest of what's built in.
   album-art colors, Arabic lines right-to-left, cached offline. The panel
   keeps one size while lyrics load, are missing or fail, so its controls
   never move under the pointer.
-- **Screenshot studio**: region, window or screen; arrows, boxes and
+- **Screenshot studio**: region, window, screen, or **All displays** in
+  one image with monitor positions and different scales preserved. KWin
+  uses its native ScreenShot2 service. Capture tools also offer arrows, boxes and
   circles; copy, save or clipboard-only; **copy text (OCR)**, offline and pure
   Rust (PP-OCRv5); and **screen recording** (below). **Esc pauses
   snipping without closing the tool**: the frozen frame goes away and a

@@ -131,11 +131,16 @@ impl Installed {
 
 /// An executable named `program` on `PATH`.
 pub fn which(program: &str) -> Option<PathBuf> {
-    use std::os::unix::fs::PermissionsExt as _;
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path)
         .map(|dir| dir.join(program))
-        .find(|p| std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0))
+        .find(|p| executable(p))
+}
+
+/// Whether a candidate is an executable file (symlinks are followed).
+pub(crate) fn executable(path: &std::path::Path) -> bool {
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 
 /// What GPU Screen Recorder reports about this machine (`--info`).

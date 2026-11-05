@@ -210,6 +210,13 @@ fn stats(values: &[f32]) -> Value {
     }
 }
 
+/// Only current redraws describe a live cadence. Old interactions stay in
+/// the history graph, but must not become an idle desktop's frame rate.
+fn current_intervals(frames: &[Frame]) -> Vec<f32> {
+    frames.iter().filter(|f| f.age_ms <= ANIMATING_WITHIN_MS)
+        .filter_map(|f| f.interval_ms.filter(|ms| ms.is_finite() && *ms > 0.0)).collect()
+}
+
 /// Recent frames (oldest first) and their statistics.
 pub fn frames_report() -> Value {
     let now = Instant::now();
@@ -226,7 +233,7 @@ pub fn frames_report() -> Value {
         (frames, r.total)
     });
     let build: Vec<f32> = frames.iter().map(|f| f.build_ms).collect();
-    let intervals: Vec<f32> = frames.iter().filter_map(|f| f.interval_ms).collect();
+    let intervals = current_intervals(&frames);
     let fps = percentiles(&intervals).map(|(p50, ..)| MS_PER_S / p50.max(MIN_INTERVAL_MS));
     // Over budget: an animation frame later than 1.5× the median interval.
     let janky = percentiles(&intervals).map(|(p50, ..)| intervals.iter().filter(|i| **i > p50 * JANK_FACTOR).count()).unwrap_or(0);
@@ -243,7 +250,7 @@ pub fn frames_report() -> Value {
         "desktop_live_passes": live_total,
         "frames": frames,
         "total_frames": total,
-        "animating": frames.last().is_some_and(|f| f.age_ms < ANIMATING_WITHIN_MS),
+        "animating": !intervals.is_empty(),
         "build_ms": stats(&build),
         "interval_ms": stats(&intervals),
         "fps": fps,
@@ -356,6 +363,16 @@ mod tests {
         let (p50, p95, p99, max) = percentiles(&v).unwrap();
         assert_eq!((p50.round(), p95, p99, max), (51.0, 95.0, 99.0, 100.0));
         assert!(percentiles(&[]).is_none());
+    }
+
+    #[test]
+    fn idle_history_does_not_report_an_old_interaction_as_current_fps() {
+        let old = Frame { age_ms: 146_000.0, build_ms: 0.03, interval_ms: Some(89.6) };
+        let idle = Frame { age_ms: 969.0, build_ms: 0.04, interval_ms: None };
+        assert!(current_intervals(&[old, idle]).is_empty());
+        let fresh = Frame { age_ms: 10.0, build_ms: 0.1, interval_ms: Some(16.7) };
+        assert_eq!(current_intervals(&[old, fresh]), [16.7]);
+        assert!(current_intervals(&[Frame { interval_ms: Some(0.0), ..fresh }]).is_empty());
     }
 
     #[test]

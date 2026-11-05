@@ -34,6 +34,8 @@ use crate::icons::icon;
 use crate::kit::{reveal, text, tokens};
 
 pub const ID: &str = "tailscale";
+/// Official distribution-specific setup instructions, opened only on request.
+const DOWNLOAD_URL: &str = "https://tailscale.com/download/linux";
 
 // ── Layout ───────────────────────────────────────────────────────────────
 
@@ -554,7 +556,20 @@ impl View {
                     Error::Daemon(_) => ("alert", t("Tailscale isn't running").into(), t("Start it with: sudo systemctl enable --now tailscaled").into()),
                     Error::NotOperator(msg) | Error::Failed(msg) => ("alert", t("Couldn't read Tailscale").into(), msg.clone()),
                 };
-                (title.clone(), vec![empty_state(glyph, title, hint, EMPTY_H, palette).into_any_element()])
+                let mut blocks = vec![empty_state(glyph, title.clone(), hint, EMPTY_H, palette).into_any_element()];
+                if matches!(e, Error::NotInstalled) {
+                    h += GAP + super::panel_fx::PILL_H_PX;
+                    blocks.push(pill_button("ts-download", Some("download"), t("Download"), accent, palette, |_, cx| {
+                        cx.spawn(async move |cx| {
+                            let result = mandara_services::runtime::unblock(|| mandara_services::session::open_uri(DOWNLOAD_URL)).await;
+                            if let Err(error) = result {
+                                model().borrow_mut().flash.show(false, error.to_string());
+                                cx.update(notify);
+                            }
+                        }).detach();
+                    }).into_any_element());
+                }
+                (title, blocks)
             }
             Some(Ok(s)) => {
                 let mut blocks = vec![hero(s, busy.as_ref(), palette, cx)];

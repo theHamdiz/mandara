@@ -36,10 +36,10 @@ pub fn set_theme_override(theme: Option<String>) {
     }
 }
 
-/// How long the GTK icon-theme name read from `settings.ini` is trusted
+/// How long the desktop's icon-theme preference is trusted
 /// before re-reading (icons resolve during render; this keeps file I/O off
 /// the frame path while still following a theme switch within seconds).
-const GTK_THEME_TTL: std::time::Duration = std::time::Duration::from_secs(5);
+const SYSTEM_THEME_TTL: std::time::Duration = std::time::Duration::from_secs(5);
 
 fn active_theme() -> Option<String> {
     static GTK: Mutex<Option<(std::time::Instant, Option<String>)>> = Mutex::new(None);
@@ -48,9 +48,11 @@ fn active_theme() -> Option<String> {
     }
     let mut cached = GTK.lock().unwrap_or_else(|e| e.into_inner());
     match cached.as_ref() {
-        Some((at, theme)) if at.elapsed() < GTK_THEME_TTL => theme.clone(),
+        Some((at, theme)) if at.elapsed() < SYSTEM_THEME_TTL => theme.clone(),
         _ => {
-            let theme = gtk_icon_theme();
+            let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_ascii_lowercase();
+            let plasma = desktop.split(':').any(|part| matches!(part, "kde" | "plasma" | "kwin"));
+            let theme = dirs::config_dir().and_then(|config| system_theme(&config, plasma));
             *cached = Some((std::time::Instant::now(), theme.clone()));
             theme
         }
@@ -60,10 +62,32 @@ fn active_theme() -> Option<String> {
 /// The user's GTK icon theme name.
 pub fn gtk_icon_theme() -> Option<String> {
     let config = dirs::config_dir()?;
+    gtk_theme_in(&config)
+}
+
+fn gtk_theme_in(config: &Path) -> Option<String> {
     ["gtk-4.0/settings.ini", "gtk-3.0/settings.ini"].iter().find_map(|f| {
         let text = std::fs::read_to_string(config.join(f)).ok()?;
-        text.lines().find_map(|l| l.trim().strip_prefix("gtk-icon-theme-name").and_then(|r| r.trim().strip_prefix('=')).map(|v| v.trim().trim_matches('"').to_string()))
+        ini_preference(&text, "Settings", "gtk-icon-theme-name")
     })
+}
+
+fn system_theme(config: &Path, plasma: bool) -> Option<String> {
+    let kde = || std::fs::read_to_string(config.join("kdeglobals")).ok().and_then(|text| ini_preference(&text, "Icons", "Theme"));
+    if plasma { kde().or_else(|| gtk_theme_in(config)) } else { gtk_theme_in(config).or_else(kde) }
+}
+
+fn ini_preference(text: &str, section: &str, key: &str) -> Option<String> {
+    let mut active = false;
+    let mut value = None;
+    for line in text.lines().map(str::trim) {
+        if line.starts_with(['#', ';']) { continue; }
+        if let Some(name) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) { active = name == section; continue; }
+        if active && let Some((name, setting)) = line.split_once('=') && name.trim() == key {
+            value = Some(setting.trim().trim_matches('"').to_string()).filter(|s| !s.is_empty());
+        }
+    }
+    value
 }
 
 /// Every directory of theme `name` across the icon roots. A theme spans
@@ -304,5 +328,18 @@ mod tests {
     fn absolute_paths_and_empty_names() {
         assert!(resolve("", None, true).is_none());
         assert!(resolve("/nonexistent/icon.svg", None, false).is_none());
+    }
+
+    #[test]
+    fn desktop_icon_preferences_follow_plasma_and_gtk_with_explicit_fallbacks() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("gtk-4.0")).unwrap();
+        std::fs::write(dir.path().join("gtk-4.0/settings.ini"), "[Other]\ngtk-icon-theme-name=wrong\n[Settings]\ngtk-icon-theme-name=\"GtkTheme\"\n").unwrap();
+        std::fs::write(dir.path().join("kdeglobals"), "[General]\nTheme=wrong\n[Icons]\n# Theme=ignored\nTheme=PlasmaTheme\n").unwrap();
+        assert_eq!(system_theme(dir.path(), true).as_deref(), Some("PlasmaTheme"));
+        assert_eq!(system_theme(dir.path(), false).as_deref(), Some("GtkTheme"));
+        std::fs::remove_file(dir.path().join("kdeglobals")).unwrap();
+        assert_eq!(system_theme(dir.path(), true).as_deref(), Some("GtkTheme"));
+        assert_eq!(ini_preference("[Icons]\nTheme=\n", "Icons", "Theme"), None);
     }
 }

@@ -102,7 +102,7 @@ impl DisplayKey {
 }
 
 /// Pairs every display with its output's geometry: by name, else by
-/// position, else by order. GPUI and the xdg-output query bind outputs on
+/// position, else by order when the name is unavailable. GPUI and the xdg-output query bind outputs on
 /// separate connections, so their lists can come in different orders (a
 /// compositor reload re-announces outputs), and pairing by index gave each
 /// surface the other monitor's size.
@@ -116,11 +116,12 @@ pub fn pair_displays(displays: &[DisplayKey], outputs: &[OutputGeometry]) -> Vec
     // Names first, for every display, so a position or order match can't
     // claim an output that belongs to another display by name.
     let mut paired: Vec<Option<OutputGeometry>> = displays.iter().map(|d| pick(d.uuid.and_then(|u| outputs.iter().position(|o| !o.name.is_empty() && output_uuid(&o.name) == u)), &mut taken)).collect();
+    let unnamed = |d: &DisplayKey| d.uuid.is_none() || outputs.iter().all(|output| output.name.is_empty());
     for (d, slot) in displays.iter().zip(paired.iter_mut()).filter(|(_, s)| s.is_none()) {
-        *slot = pick(outputs.iter().position(|o| (o.x, o.y) == d.origin), &mut taken);
+        *slot = pick(outputs.iter().enumerate().position(|(i, o)| !taken[i] && (o.x, o.y) == d.origin && (d.uuid.is_none() || o.name.is_empty())), &mut taken);
     }
     // Then list order, and finally any output still free.
-    for (i, slot) in paired.iter_mut().enumerate().filter(|(_, s)| s.is_none()) {
+    for (i, slot) in paired.iter_mut().enumerate().filter(|(i, s)| s.is_none() && unnamed(&displays[*i])) {
         *slot = pick((i < outputs.len()).then_some(i), &mut taken);
         if slot.is_none() {
             let free = taken.iter().position(|t| !t);
@@ -202,4 +203,28 @@ mod tests {
         assert!(paired[0].1.is_some() && paired[1].1.is_none() && paired[2].1.is_none());
         assert_eq!(output_uuid("eDP-1"), uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_DNS, b"eDP-1"));
     }
+
+    #[test]
+    fn a_stale_named_output_never_claims_an_unmatched_display() {
+        let outputs = [
+            OutputGeometry { name: "DP-1".into(), width: 2560, height: 1440, ..Default::default() },
+            OutputGeometry { name: "DP-2".into(), x: 2560, width: 1920, height: 1080, ..Default::default() },
+        ];
+        let paired = pair_displays(&[display(1, Some("DP-2"), (2560, 0)), display(2, Some("DP-3"), (0, 0))], &outputs);
+        assert_eq!(paired[0].1.as_ref().unwrap().name, "DP-2");
+        assert!(paired[1].1.is_none());
+        let unnamed = [OutputGeometry { name: String::new(), ..outputs[0].clone() }];
+        assert!(pair_displays(&[display(2, Some("DP-3"), (0, 0))], &unnamed)[0].1.is_some());
+    }
+    #[test]
+    fn mixed_names_keep_unnamed_logical_geometry_without_claiming_stale_outputs() {
+        let outputs = [geo("stale", 0, 0, 640, 480), geo("", 0, 0, 1707, 960), geo("DP-2", 1707, 0, 1920, 1080)];
+        let displays = [display(1, Some("DP-1"), (0, 0)), display(2, Some("DP-2"), (1707, 0))];
+        let paired = pair_displays(&displays, &outputs);
+        assert_eq!(paired[0].1.as_ref().map(|o| (o.width, o.height)), Some((1707, 960)));
+        assert_eq!(paired[1].1.as_ref().map(|o| o.name.as_str()), Some("DP-2"));
+        let elsewhere = pair_displays(&[display(3, Some("DP-3"), (9999, 0))], &outputs);
+        assert!(elsewhere[0].1.is_none());
+    }
+
 }

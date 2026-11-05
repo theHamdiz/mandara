@@ -130,6 +130,7 @@ fn every_look_has_a_keyboard_control_and_light_and_dark_preview() {
     assert!(css.contains("@media (prefers-reduced-motion: no-preference)"));
     assert!(css.contains("@media (prefers-reduced-motion: reduce)"));
     assert!(css.contains("@supports (animation-timeline: view())"));
+    assert!(css.contains(".native-section a:focus-visible { outline-color: var(--page-background); }"), "the inverted native section needs a contrasting keyboard focus ring");
     assert!(css.contains(".questions details[open] summary:focus-visible,") && css.contains(".questions details[open] a:focus-visible { outline-color: var(--page-background); }"), "open FAQ items and their links need a contrasting keyboard focus ring");
 }
 

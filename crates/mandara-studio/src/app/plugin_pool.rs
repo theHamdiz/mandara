@@ -29,7 +29,7 @@ use mandara_ui::icons::icon;
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config as MatcherConfig, Matcher};
 
-use super::designer::{DragChip, Lane, NO_BAR, place};
+use super::designer::{DragChip, Lane, bar_capable, place};
 use super::plugin_modal::ModalView;
 use super::popover::{self, Anchor, Appear};
 use super::{PLUGIN_CATEGORIES, StudioView, grid, plugin_icon, plugin_tile};
@@ -123,7 +123,7 @@ fn stamp(registry: &PluginRegistry) -> u64 {
 
 impl PoolIndex {
     pub(crate) fn build(manifests: impl IntoIterator<Item = PluginManifest>, stamp: u64) -> Self {
-        let mut entries: Vec<PoolEntry> = manifests.into_iter().map(PoolEntry::new).collect();
+        let mut entries: Vec<PoolEntry> = manifests.into_iter().filter(|m| bar_capable(&m.id)).map(PoolEntry::new).collect();
         entries.sort_by(|a, b| a.name_lower.cmp(&b.name_lower).then_with(|| a.manifest.id.cmp(&b.manifest.id)));
         Self { stamp, entries }
     }
@@ -223,6 +223,8 @@ pub(crate) struct Menu {
 /// The layout designer's state, kept on [`StudioView`].
 #[derive(Default)]
 pub struct Designer {
+    /// Presets keep the user's existing items unless replacement is explicit.
+    pub(super) replace_items: bool,
     search: Option<Entity<TextField>>,
     query: String,
     /// The selected category (`None`: every category).
@@ -316,7 +318,7 @@ impl StudioView {
         let registry = cx.global::<PluginRegistry>();
         let current = stamp(registry);
         if self.designer.index.stamp != current || self.designer.index.entries.is_empty() {
-            let manifests: Vec<PluginManifest> = registry.manifests().filter(|m| !NO_BAR.contains(&m.id.as_str())).cloned().collect();
+            let manifests: Vec<PluginManifest> = registry.manifests().cloned().collect();
             self.designer.index = PoolIndex::build(manifests, current);
         }
         let ranked = self.pool_ranked();
@@ -781,6 +783,15 @@ mod tests {
     fn index_is_sorted_by_name() {
         let ix = index();
         assert_eq!(ids(&ix, &(0..ix.entries.len()).collect::<Vec<_>>()), ["audio", "clock", "network", "net-speed", "prayer-times", "weather"]);
+    }
+
+    #[test]
+    fn bar_index_excludes_desktop_families_and_background_tools() {
+        let manifests = mandara_config::desktop_widgets::plugin_ids::ALL.into_iter()
+            .chain(["wallhaven", "dock", "cursors", "quick-settings", "power", "weather"])
+            .map(|id| PluginManifest::builtin(id, id, "", None));
+        let ix = PoolIndex::build(manifests, 1);
+        assert_eq!(ids(&ix, &(0..ix.entries.len()).collect::<Vec<_>>()), ["power", "weather"]);
     }
 
     #[test]
