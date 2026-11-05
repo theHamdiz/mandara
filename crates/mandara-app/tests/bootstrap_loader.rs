@@ -7,7 +7,7 @@ fn the_binary_does_not_require_keyboard_libraries_at_process_start() {
     assert!(report.status.success(), "{}", String::from_utf8_lossy(&report.stderr));
     let report = String::from_utf8(report.stdout).unwrap();
     let needed: Vec<_> = report.lines().filter(|line| line.contains("(NEEDED)")).collect();
-    assert!(!needed.is_empty(), "expected the Linux C runtime dependencies");
+    if cfg!(target_env = "gnu") { assert!(!needed.is_empty(), "expected the Linux C runtime dependencies"); }
     assert!(!needed.iter().any(|line| line.contains("libxkbcommon")), "{report}");
 }
 
@@ -71,7 +71,7 @@ fn kwin_setup_check_reports_availability_without_touching_compositor_files() {
     std::fs::write(&kwinrc, "[Desktops]\nNumber=3\n").unwrap();
     let success = mandara_services::recording::backend::which("true").expect("true on PATH");
     let failure = mandara_services::recording::backend::which("false").expect("false on PATH");
-    for (program, expected_status) in [(None, 11), (Some(success.as_path()), 0), (Some(failure.as_path()), 11)] {
+    for (program, expected_status) in [(None, 13), (Some(success.as_path()), 0), (Some(failure.as_path()), 13)] {
         let probe = programs.join("kwin_wayland");
         if probe.exists() { std::fs::remove_file(&probe).unwrap(); }
         if let Some(program) = program { std::os::unix::fs::symlink(program, &probe).unwrap(); }

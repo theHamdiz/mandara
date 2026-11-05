@@ -100,6 +100,9 @@ installer, display reconnection and native KWin support.
 
 ### Fixed
 
+- Setup offers KWin when it is installed and reports failed availability
+  checks directly, without treating them as configuration errors.
+
 - The download command preserves the installer's normal file permissions.
   Unnamed displays retain their logical size alongside named monitors, and
   Hyprland refreshes window state as soon as its event connection opens.

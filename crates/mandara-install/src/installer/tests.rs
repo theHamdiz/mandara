@@ -322,13 +322,13 @@ fn interactive_setup_chooses_the_compositor_then_the_rest_is_not_asked() {
     let mut host = FakeHost::with(&["dnf", "sudo", "systemctl", "niri"]);
     host.tty = true;
     // Setup → Compositor row, compositor list → Niri, Setup → Install (last row).
-    host.menus = vec![0, compositors::SUPPORTED.iter().position(|compositor| compositor.id == "niri").unwrap(), 3];
+    host.menus = vec![0, compositor_rows(&host, None).0.iter().position(|id| *id == "niri").unwrap(), 3];
     run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs::default()).unwrap();
     let (prompt, rows) = &host.shown[0];
     assert_eq!(prompt, "Setup");
     assert_eq!(rows, &["Compositor", "Start with your compositor", "Login screen", "Install"]);
     assert_eq!(host.shown[1].0, "Compositor");
-    let labels: Vec<&str> = compositors::SUPPORTED.iter().map(|c| c.label).collect();
+    let labels: Vec<&str> = compositors::SUPPORTED.iter().filter(|c| c.id != "kwin").map(|c| c.label).collect();
     assert_eq!(host.shown[1].1, labels);
     let bin = f.home().join(".local/bin/mandara");
     let setup = format!("{} setup --compositor niri --autostart", bin.display());
@@ -1176,4 +1176,34 @@ fn completion_explains_when_the_calling_terminal_needs_a_new_path() {
         assert!(output.iter().any(|text| text.contains("Studio → About → Update now")));
         assert!(host.ran.is_empty(), "completion only prints instructions");
     }
+}
+
+#[test]
+fn kwin_is_offered_only_when_installed_and_defaults_use_the_visible_rows() {
+    for installed in [false, true] {
+        let host = FakeHost::with(if installed { &["kwin_wayland", "niri"] } else { &["niri"] });
+        let (names, rows, default) = compositor_rows(&host, Some("niri"));
+        assert_eq!(names.contains(&"kwin"), installed);
+        assert_eq!(names[default], "niri");
+        assert_eq!(rows[default].label, "Niri");
+        let (names, _, default) = compositor_rows(&host, Some("kwin"));
+        assert_eq!(default, 0);
+        assert_eq!(names[default], if installed { "kwin" } else { "mango" });
+    }
+}
+
+#[test]
+fn failed_kwin_availability_is_not_reported_as_a_config_or_keyboard_error() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pacman", "sudo", "kwin_wayland"]);
+    let bin = f.home().join(".local/bin/mandara").display().to_string();
+    let check = format!("{bin} setup --check --compositor kwin");
+    host.codes.insert(check.clone(), crate::installer::SETUP_AVAILABILITY);
+    host.stdout.insert(check, "KWin availability: unable to start probe".into());
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, compositor: Some("kwin".into()), ..Default::default() }).unwrap();
+    let text = host.text();
+    assert!(text.contains("KWin availability: unable to start probe"), "{text}");
+    assert!(!text.contains("your compositor reports errors in its config"));
+    assert!(!text.contains("Install libxkbcommon"));
+    assert!(host.ran().iter().all(|command| !command.contains("--fix-conflicts")));
 }

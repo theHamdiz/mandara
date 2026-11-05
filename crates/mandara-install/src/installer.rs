@@ -65,6 +65,8 @@ pub const SETUP_CONFIG_ERRORS: i32 = 11;
 pub const SETUP_CONFLICTS: i32 = 10;
 /// `mandara setup --check` could not inspect shortcuts without a required library.
 pub const SETUP_PREREQUISITE: i32 = 12;
+/// A compositor availability probe failed; no configuration error is implied.
+pub const SETUP_AVAILABILITY: i32 = 13;
 /// The quiet log level for the setup commands the installer runs.
 const SETUP_LOG: (&str, &str) = ("RUST_LOG", "warn");
 
@@ -1138,6 +1140,11 @@ impl<'a> Installer<'a> {
         if checked.as_ref().is_none_or(|o| o.success) {
             return;
         }
+        if checked.as_ref().and_then(|o| o.code) == Some(SETUP_AVAILABILITY) {
+            let details = checked.as_ref().map_or("", |o| o.stdout.trim());
+            self.say(Level::Warn, if details.is_empty() { t("Check failed") } else { details });
+            return;
+        }
         if checked.as_ref().and_then(|o| o.code) == Some(SETUP_PREREQUISITE) {
             self.say(Level::Warn, t("Install libxkbcommon before checking or changing compositor shortcuts."));
             return;
@@ -1517,8 +1524,9 @@ fn compositor_label(host: &dyn Host, chosen: Option<&str>) -> String {
 /// The compositor picker's rows, the names behind them and where the cursor
 /// starts.
 fn compositor_rows(host: &dyn Host, chosen: Option<&str>) -> (Vec<&'static str>, Vec<Row>, usize) {
-    let rows = compositors::SUPPORTED.iter().map(|c| Row::new(c.label, if c.installed(|p| host.has_program(p)) { t("installed") } else { "" })).collect();
-    let names: Vec<&'static str> = compositors::SUPPORTED.iter().map(|c| c.id).collect();
+    let offered: Vec<_> = compositors::SUPPORTED.iter().filter(|c| c.id != "kwin" || c.installed(|p| host.has_program(p))).collect();
+    let rows = offered.iter().map(|c| Row::new(c.label, if c.installed(|p| host.has_program(p)) { t("installed") } else { "" })).collect();
+    let names: Vec<&'static str> = offered.iter().map(|c| c.id).collect();
     let default = chosen.and_then(|c| names.iter().position(|id| *id == c)).unwrap_or(0);
     (names, rows, default)
 }

@@ -419,6 +419,10 @@ for workspaces and windows; its settings remain in Plasma System Settings.
 | **River** 0.3 | none: Mandara never edits `~/.config/river/init` | the one line you add to `init`: `riverctl spawn /path/to/mandara` |
 | **KWin / Plasma (Wayland)** | none: Mandara leaves `kwinrc` unchanged | its own `org.mandara.shell.desktop` XDG autostart entry, only for KDE |
 
+The setup picker offers KWin only when `kwin_wayland` is installed. A
+failed KWin availability check is reported directly; it does not offer to
+retire shortcuts or label the failure a compositor-configuration error.
+
 Mandara detects the installed version and speaks its dialect, including
 Hyprland 0.57's Lua dispatches. On Niri the drop-in makes workspace
 backgrounds transparent so the wallpaper shows outside the Overview; night

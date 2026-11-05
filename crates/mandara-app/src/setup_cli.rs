@@ -22,6 +22,8 @@ pub const EXIT_CONFLICTS: i32 = 10;
 pub const EXIT_CONFIG_ERRORS: i32 = 11;
 /// A required library is unavailable; no configuration was inspected or changed.
 pub const EXIT_PREREQUISITE: i32 = 12;
+/// The requested compositor could not pass its availability check.
+pub const EXIT_AVAILABILITY: i32 = 13;
 
 pub struct Options {
     pub autostart: bool,
@@ -72,6 +74,7 @@ pub fn setup(o: Options) -> Result<()> {
     let mut cfg = store.snapshot();
     let mut total_conflicts = 0;
     let mut config_errors = 0;
+    let mut unavailable = false;
     // `--fix` ids that matched a problem of some compositor.
     let mut fixed_ids: Vec<String> = Vec::new();
     for target in targets {
@@ -80,7 +83,7 @@ pub fn setup(o: Options) -> Result<()> {
                 println!("{}", mandara_i18n::t("Mandara uses native Plasma protocols; KWin’s configuration stays unchanged"));
                 let report = doctor::check(target);
                 print_report(&report);
-                config_errors += report.errors() + usize::from(report.status != CheckerStatus::Ran);
+                unavailable |= report.errors() > 0 || report.status != CheckerStatus::Ran;
             } else if let Some(path) = mandara_config::kwin::sync_autostart(cfg.compositor.autostart, &mandara_config::paths::self_exe())? {
                 println!("{}", mandara_i18n::tf("KWin: startup entry {path}", &[("path", &path.display())]));
             }
@@ -250,6 +253,7 @@ pub fn setup(o: Options) -> Result<()> {
             println!("no problem {id} in the current check — run `mandara setup --check` for the current ids");
         }
     }
+    if o.check && unavailable { std::process::exit(EXIT_AVAILABILITY); }
     if o.check && total_conflicts > 0 {
         std::process::exit(EXIT_CONFLICTS);
     }
