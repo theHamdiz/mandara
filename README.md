@@ -195,7 +195,7 @@ around, each one measured or shipped today:
 <table>
 <tr>
 <td width="50%" valign="top"><img src="docs/screenshots/media.png" alt="Media island" width="100%"/><br/><sub><b>Media</b>: colours from the album art, a live spectrum and synced lyrics.</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/audio.png" alt="Sound panel with per-app volume" width="100%"/><br/><sub><b>Sound</b>: every output, your microphone and every app playing.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/audio.png" alt="Sound panel with per-app volume" width="100%"/><br/><sub><b>Sound</b>: choose speakers and microphones, then adjust each app’s volume.</sub></td>
 </tr>
 <tr>
 <td width="50%" valign="top"><img src="docs/screenshots/weather.png" alt="Weather" width="100%"/><br/><sub><b>Weather</b>: an animated sky, hourly and five-day forecasts.</sub></td>
@@ -300,7 +300,9 @@ progress to the bar.
 
 **Can I write my own plugins?** Yes, in Rust, compiled to a sandboxed
 WebAssembly component. They hot-reload while you work and can be shared
-through the GitHub marketplace. [Writing plugins](PLUGINS.md)
+through the GitHub marketplace. Community listings follow maintained
+[store moderation rules](PLUGINS.md#store-moderation), updated independently
+of Mandara releases. [Writing plugins](PLUGINS.md)
 
 More answers in the **[FAQ](docs/faq.md)**.
 

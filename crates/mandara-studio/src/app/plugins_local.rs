@@ -274,6 +274,7 @@ impl StudioView {
     /// Switches the Plugins page to `tab`, optionally scrolling the Local
     /// tab to a section (deep links).
     pub fn show_plugins_tab(&mut self, tab: PluginsTab, scroll: Option<LocalSection>, cx: &mut Context<Self>) {
+        self.market_reopen();
         self.section = crate::registry::Section::Plugins;
         self.query.clear();
         self.search.update(cx, |f, _| f.value.clear());

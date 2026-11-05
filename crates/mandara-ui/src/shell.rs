@@ -34,6 +34,7 @@ use crate::kit::{reveal, tokens};
 use crate::state::{ShellState, config, shell};
 
 mod side_bars;
+mod key_navigation;
 use side_bars::{MAIN_ZONES, ZONES, ZoneLook, content_length, split};
 
 /// Opaque fill of the frame, panels and sidebar: a deep tonal surface that
@@ -1234,6 +1235,7 @@ fn place(b: Bounds<Pixels>) -> gpui::Div {
 }
 
 impl Render for ShellView {
+    /// Compose this output's shell surfaces and keep their animated layout and input regions in sync.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Frame timing for Studio → Performance (`diagnostics frames`).
         let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
@@ -1412,7 +1414,7 @@ impl Render for ShellView {
                 tracing::debug!(target: "mandara::dismiss", "press");
                 this.last_press = Some(Instant::now());
             }))
-            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
                 let sidebar_up = crate::state::config(cx).read(cx).get().sidebar_active() && (this.shell.read(cx).sidebar_visible_on(&this.monitor) || crate::state::config(cx).read(cx).get().sidebar.pinned());
                 if sidebar_up && this.shell.read(cx).panel_on(&this.monitor).is_none() {
                     let cfg = crate::state::config(cx).read(cx).snapshot();
@@ -1422,6 +1424,13 @@ impl Render for ShellView {
                         cx.notify();
                         return;
                     }
+                }
+                let state = this.shell.read(cx);
+                let controls_visible = sidebar_up || state.panel_on(&this.monitor).is_some();
+                let overlay_open = state.launcher_open || state.session_open || state.wallpaper_open;
+                if controls_visible && !overlay_open && key_navigation::traverse(&e.keystroke, window, cx) {
+                    cx.stop_propagation();
+                    return;
                 }
                 if e.keystroke.key == "escape" {
                     this.shell.update(cx, |s, cx| {

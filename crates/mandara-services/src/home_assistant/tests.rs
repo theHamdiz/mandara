@@ -52,6 +52,7 @@ fn a_toggle_rechecks_the_entity_then_calls_its_real_service() {
     ]);
 }
 
+/// Unavailable and unsupported entities stop after reading state, before posting an action.
 #[test]
 fn unavailable_and_read_only_entities_never_send_an_action() {
     for value in [json!({"entity_id":"light.studio","state":"unavailable"}), json!({"entity_id":"sensor.temperature","state":"21"}), json!({"entity_id":"lock.front_door","state":"locked"})] {
@@ -62,6 +63,7 @@ fn unavailable_and_read_only_entities_never_send_an_action() {
     }
 }
 
+/// Activation uses each supported domain service and still rejects unavailable entities.
 #[test]
 fn scene_and_button_actions_use_their_domains() {
     for (domain, service) in [("scene", "turn_on"), ("script", "turn_on"), ("button", "press"), ("input_button", "press")] {
@@ -78,6 +80,7 @@ fn scene_and_button_actions_use_their_domains() {
     }
 }
 
+/// Malformed entity paths and oversized selections are rejected before network access.
 #[test]
 fn invalid_identifiers_and_large_favourite_lists_do_not_make_requests() {
     let backend = backend([]);
@@ -89,6 +92,7 @@ fn invalid_identifiers_and_large_favourite_lists_do_not_make_requests() {
     assert!(backend.transport.requests.borrow().is_empty());
 }
 
+/// Only an explicit 404 skips a favourite; authentication and transport failures remain visible.
 #[test]
 fn missing_favourites_are_skipped_but_other_failures_are_reported() {
     let backend = backend([json!({"entity_id":"light.studio","state":"on"})]);
@@ -118,6 +122,7 @@ fn discovery_is_sorted_deduplicated_and_bounded() {
     assert_eq!(backend.transport.requests.borrow()[0].1, "https://home.example/api/states");
 }
 
+/// A successful HTTP reply still needs the requested entity identity and state.
 #[test]
 fn a_successful_response_must_describe_the_requested_favourite() {
     for value in [Value::Null, json!({"entity_id":"light.other","state":"on"}), json!({"entity_id":"light.studio"})] {

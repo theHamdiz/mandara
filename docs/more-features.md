@@ -303,3 +303,11 @@ the plugin off stops its watcher even when nothing is being copied.
 
 Region, window and screen captures follow the focused output, including
 displays at negative layout coordinates.
+
+Notification bodies use an advertised default action and can bring the
+identified application forward. When there is no action, an exact desktop
+entry or an unambiguous installed-app match can open the application.
+
+Main menu theme cards preview each theme’s surfaces and accents. Home cards
+share the menu’s pattern, surface and shadow choices with action tiles;
+profile cards keep their wallpaper treatment.

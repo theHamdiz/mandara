@@ -8075,7 +8075,7 @@
 "Couldn't download {language}: {error}" = "{language}をダウンロードできませんでした: {error}"
 "The update didn't install" = "アップデートをインストールできませんでした"
 "Tile patterns" = "タイルの模様"
-"Each shortcut tile in the main menu wears its own faint geometric pattern" = "メインメニューの各ショートカットタイルに、それぞれ淡い幾何学模様が入ります"
+"Home cards and action tiles in the main menu wear faint geometric patterns" = "メインメニューのホームカードとアクションタイルに控えめな幾何学模様を表示します"
 "Kufic calligraphy" = "クーフィー体カリグラフィー"
 "The app and tool tiles wear a Kufic word instead of their geometric pattern" = "アプリとツールのタイルに、幾何学模様の代わりにクーフィー体の言葉を表示します"
 
@@ -8201,7 +8201,7 @@
 "Tile surface" = "タイルの表面"
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "フラットな塗り（既定）、ガラスの縁が付いた立体 3D タイル、または透明なガラス"
 "Tile shadow" = "タイルの影"
-"How strong the shadow under each shortcut tile is (0 for none)" = "各ショートカットタイルの下の影の強さ（0で影なし）"
+"How strong the shadow under Home cards and action tiles is (0 for none)" = "ホームカードとアクションタイルの下の影の強さ（0で影なし）"
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} は Nix（Home Manager または NixOS）が生成した読み取り専用のファイルです。この行を Nix の設定に追加し、リビルドしてから、もう一度 `mandara setup` を実行してください: {line}"
@@ -8699,3 +8699,5 @@
 "Example artist" = "サンプルアーティスト"
 
 "Previews use sample data." = "プレビューにはサンプルデータを使用しています。"
+"Couldn't verify the community store policy. Try again later." = "コミュニティストアのポリシーを確認できませんでした。しばらくしてから、もう一度お試しください。"
+"The community store has blocked installs and updates for {repository}." = "コミュニティストアは {repository} のインストールと更新をブロックしています。"

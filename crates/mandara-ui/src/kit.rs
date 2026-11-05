@@ -95,7 +95,7 @@ pub fn toggle_tile(
     active: bool,
     palette: &MandaraPalette,
     on_click: impl Fn(&mut Window, &mut App) + 'static,
-) -> impl IntoElement {
+) -> gpui::Stateful<Div> {
     let (bg, fg) = if active {
         (palette.primary, palette.on_primary)
     } else {

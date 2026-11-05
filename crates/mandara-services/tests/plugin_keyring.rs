@@ -21,6 +21,7 @@ impl Drop for Daemon {
     }
 }
 
+/// Exercise scoped replacement and concurrent writes on a private bus and disposable keyring.
 #[test]
 #[ignore = "Needs dbus-run-session and gnome-keyring-daemon; creates a private Secret Service"]
 fn scoped_keys_on_private_secret_service() {

@@ -133,6 +133,7 @@ impl AtlasBackend for WgpuAtlasTextures {
         Ok(tile)
     }
 
+    /// Mandara patch 13: recycle a texture slot only after its final atlas reference is gone.
     fn remove(&mut self, tile: AtlasTile) {
         let id = tile.texture_id;
         let Some(texture_slot) = self.storage[id.kind].textures.get_mut(id.index as usize) else {
@@ -255,8 +256,8 @@ impl WgpuAtlasTextures {
         }
     }
 
-    // Mandara patch 13: queue writes already copy into wgpu's staging memory.
-    // Borrow normal BGRA uploads rather than keeping another full CPU frame.
+    /// Mandara patch 13: queue writes copy into wgpu's staging memory.
+    /// Native BGRA bytes stay borrowed; no upload-sized buffer is retained here.
     fn upload_texture(&mut self, id: AtlasTextureId, bounds: Bounds<DevicePixels>, bytes: &[u8]) {
         let Some(texture) = self.storage.get(id) else { return };
         let data = swizzle_upload_data(bytes, texture.format);
@@ -359,7 +360,7 @@ impl WgpuAtlasTexture {
     }
 }
 
-// Mandara patch 13: allocate only for devices that require RGBA textures.
+/// Mandara patch 13: borrow native BGRA data; allocate only when the GPU format requires RGBA.
 fn swizzle_upload_data(bytes: &[u8], format: wgpu::TextureFormat) -> Cow<'_, [u8]> {
     match format {
         wgpu::TextureFormat::Rgba8Unorm => {
@@ -416,6 +417,7 @@ mod tests {
         })
     }
 
+    /// Mandara patch 13: a queued upload remains valid after its atlas entry is removed.
     #[test]
     fn removing_uploaded_texture_before_submission_is_safe() -> anyhow::Result<()> {
         let (device, queue) = test_device_and_queue()?;

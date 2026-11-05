@@ -7827,7 +7827,7 @@
 "Couldn't download {language}: {error}" = "{language}을(를) 받지 못했습니다: {error}"
 "The update didn't install" = "업데이트를 설치하지 못했습니다"
 "Tile patterns" = "타일 무늬"
-"Each shortcut tile in the main menu wears its own faint geometric pattern" = "메인 메뉴의 각 바로 가기 타일에 저마다 은은한 기하학 무늬가 들어갑니다"
+"Home cards and action tiles in the main menu wear faint geometric patterns" = "주 메뉴의 홈 카드와 작업 타일에 은은한 기하학 무늬를 표시합니다"
 "Kufic calligraphy" = "쿠픽 서예"
 "The app and tool tiles wear a Kufic word instead of their geometric pattern" = "앱과 도구 타일에 기하학 무늬 대신 쿠픽 서체 단어를 표시합니다"
 
@@ -7953,7 +7953,7 @@
 "Tile surface" = "타일 표면"
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "평면 채우기(기본값), 유리 테두리가 있는 입체 3D 타일, 또는 투명한 유리"
 "Tile shadow" = "타일 그림자"
-"How strong the shadow under each shortcut tile is (0 for none)" = "각 바로 가기 타일 아래 그림자의 세기 (0이면 없음)"
+"How strong the shadow under Home cards and action tiles is (0 for none)" = "홈 카드와 작업 타일 아래 그림자의 강도 (0이면 없음)"
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path}은(는) Nix(Home Manager 또는 NixOS)가 만든 읽기 전용 파일입니다. 이 줄을 Nix 설정에 추가하고 다시 빌드한 뒤 `mandara setup`을 다시 실행하세요: {line}"
@@ -8451,3 +8451,5 @@
 "Example artist" = "예시 아티스트"
 
 "Previews use sample data." = "미리보기에는 예시 데이터를 사용합니다."
+"Couldn't verify the community store policy. Try again later." = "커뮤니티 스토어 정책을 확인하지 못했습니다. 나중에 다시 시도하세요."
+"The community store has blocked installs and updates for {repository}." = "커뮤니티 스토어에서 {repository}의 설치와 업데이트를 차단했습니다."

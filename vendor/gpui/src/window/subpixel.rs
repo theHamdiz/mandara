@@ -55,6 +55,7 @@ mod tests {
         }
     }
 
+    /// Mandara patch 4: fractional SDF bounds preserve the legacy mask, border and opacity at every tested scale.
     #[crate::test]
     fn fractional_sdf_bounds_keep_the_legacy_clip_and_opacity(cx: &mut TestAppContext) {
         for scale in [1., 1.25, 1.5, 2.] {

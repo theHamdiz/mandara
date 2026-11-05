@@ -31,6 +31,15 @@ const ASSET_PATH: &str = "/download/moon-phase.mandara.tar.gz";
 
 type Log = Arc<Mutex<Vec<String>>>;
 
+/// Every network request in this fixture stays on its local GitHub mock.
+struct FixturePolicy;
+
+impl marketplace::moderation::PolicySource for FixturePolicy {
+    fn policy(&self, _: bool) -> Result<marketplace::moderation::policy::Policy, String> {
+        Ok(marketplace::moderation::policy::Policy::default())
+    }
+}
+
 fn example_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/examples/moon-phase")
 }
@@ -97,6 +106,9 @@ fn route(target: &str, base: &str, archive: &[u8]) -> (&'static str, Vec<String>
     }
     let not_found = ("404 Not Found", vec!["Content-Type: application/json".to_string()], br#"{"message":"Not Found"}"#.to_vec());
     match path {
+        p if p == format!("/repos/{PLUGIN_REPO}") => json(repo_json(PLUGIN_REPO, false, false)),
+        p if p == format!("/repos/{NO_RELEASE_REPO}") => json(repo_json(NO_RELEASE_REPO, true, true)),
+        p if p == format!("/repos/{PRERELEASE_REPO}") => json(repo_json(PRERELEASE_REPO, false, false)),
         p if p == format!("/repos/{PLUGIN_REPO}/releases/latest") => json(release_json(base, TAG, archive.len(), false)),
         p if p == format!("/repos/{NO_RELEASE_REPO}/releases") => json(serde_json::json!([])),
         p if p == format!("/repos/{PRERELEASE_REPO}/releases") => {
@@ -191,9 +203,9 @@ fn marketplace_search_install_load_uninstall() {
     assert_eq!(marketplace::api_base(), base);
     mandara_services::offline::set(false);
 
-    // Search: only the topic decides; forks, archived repositories and a
+    // With an unrestricted policy, forks, archived repositories and a
     // repository without a release are all listed.
-    let found = marketplace::search("").unwrap();
+    let found = marketplace::search_with_policy("", &FixturePolicy).unwrap();
     let names: Vec<&str> = found.items.iter().map(|l| l.full_name.as_str()).collect();
     assert_eq!(names, [PLUGIN_REPO, NO_RELEASE_REPO, PRERELEASE_REPO]);
     assert!(found.items[1].archived && found.items[1].fork && !found.truncated());
@@ -201,15 +213,15 @@ fn marketplace_search_install_load_uninstall() {
 
     // Pagination: 150 results over two pages, then the cache answers.
     let before = requests(&log);
-    let many = marketplace::search("many").unwrap();
+    let many = marketplace::search_with_policy("many", &FixturePolicy).unwrap();
     assert_eq!((many.items.len(), many.total), (MANY_TOTAL, MANY_TOTAL as u64));
     assert_eq!(requests(&log) - before, 2, "two search pages");
     let before = requests(&log);
-    assert_eq!(marketplace::search("many").unwrap(), many);
+    assert_eq!(marketplace::search_with_policy("many", &FixturePolicy).unwrap(), many);
     assert_eq!(requests(&log), before, "a repeated search is served from the cache");
 
     // Rate limit: a clear message with the wait, not a raw HTTP error.
-    let err = marketplace::search("ratelimited").unwrap_err();
+    let err = marketplace::search_with_policy("ratelimited", &FixturePolicy).unwrap_err();
     assert!(err.contains("anonymous requests") && err.contains("Try again in"), "{err}");
 
     // The compliance check, as Studio runs it (no built-ins reserved here).
@@ -217,12 +229,12 @@ fn marketplace_search_install_load_uninstall() {
     let (strict, forced) = (Vetting { check: &check, force: false }, Vetting { check: &check, force: true });
 
     // A listed repository without a release: a clear state, no crash.
-    assert_eq!(marketplace::install(NO_RELEASE_REPO, &strict, &|_| {}), Err(InstallError::NoRelease));
+    assert_eq!(marketplace::install_with_policy(NO_RELEASE_REPO, &strict, &|_| {}, &FixturePolicy), Err(InstallError::NoRelease));
 
     // The example republished as it is fails the compliance check: it isn't
     // installed, and that release is flagged.
     let dir = marketplace::install_dir().join(PLUGIN_ID);
-    match marketplace::install(PLUGIN_REPO, &strict, &|_| {}) {
+    match marketplace::install_with_policy(PLUGIN_REPO, &strict, &|_| {}, &FixturePolicy) {
         Err(InstallError::Rejected { tag, class: Class::Placeholder, .. }) => assert_eq!(tag, TAG),
         other => panic!("the unchanged example was not rejected: {other:?}"),
     }
@@ -231,7 +243,7 @@ fn marketplace_search_install_load_uninstall() {
 
     // Install anyway: it installs and the warning stays on that version.
     let steps = Mutex::new(Vec::new());
-    let (id, tag) = marketplace::install(PLUGIN_REPO, &forced, &|s| steps.lock().unwrap().push(s.to_string())).unwrap();
+    let (id, tag) = marketplace::install_with_policy(PLUGIN_REPO, &forced, &|s| steps.lock().unwrap().push(s.to_string()), &FixturePolicy).unwrap();
     assert_eq!((id.as_str(), tag.as_str()), (PLUGIN_ID, TAG));
     assert_eq!(steps.lock().unwrap().len(), 4);
     assert!(marketplace::flag_for(PLUGIN_REPO, TAG).is_some());
@@ -263,14 +275,14 @@ fn marketplace_search_install_load_uninstall() {
 
     // A repository whose only plugin release is a pre-release (and whose
     // newest release is a draft) still installs.
-    assert_eq!(marketplace::install(PRERELEASE_REPO, &forced, &|_| {}).map(|(_, t)| t), Ok(PRERELEASE_TAG.to_string()));
+    assert_eq!(marketplace::install_with_policy(PRERELEASE_REPO, &forced, &|_| {}, &FixturePolicy).map(|(_, t)| t), Ok(PRERELEASE_TAG.to_string()));
     assert_eq!(marketplace::uninstall(PRERELEASE_REPO).as_deref(), Ok(PLUGIN_ID));
 
     // Offline mode: nothing reaches the network, cached or not.
     mandara_services::offline::set(true);
     let before = requests(&log);
-    assert_eq!(marketplace::search(""), Err(mandara_services::offline::blocked()));
-    assert_eq!(marketplace::install(PLUGIN_REPO, &strict, &|_| {}), Err(InstallError::Failed(mandara_services::offline::blocked())));
+    assert_eq!(marketplace::search_with_policy("", &FixturePolicy), Err(mandara_services::offline::blocked()));
+    assert_eq!(marketplace::install_with_policy(PLUGIN_REPO, &strict, &|_| {}, &FixturePolicy), Err(InstallError::Failed(mandara_services::offline::blocked())));
     assert_eq!(requests(&log), before, "offline mode sent a request");
     mandara_services::offline::set(false);
 

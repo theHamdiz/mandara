@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+/// Collect production Rust sources recursively for the icon policy check.
 fn rust_sources(dir: &Path, files: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
@@ -13,6 +14,7 @@ fn rust_sources(dir: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
+/// Only the icon definition and explicit AI features may select the sparkle symbol.
 #[test]
 fn sparkle_icons_only_represent_ai() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

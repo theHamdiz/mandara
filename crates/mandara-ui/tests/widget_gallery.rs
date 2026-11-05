@@ -16,6 +16,7 @@ fn collection() -> Vec<(String, DesktopWidget)> {
         }).collect()
 }
 
+/// Each new style has a distinct configuration and survives the public-screen filter.
 #[test]
 fn new_styles_are_distinct_and_eligible_for_public_screens() {
     let widgets = collection();
@@ -26,6 +27,7 @@ fn new_styles_are_distinct_and_eligible_for_public_screens() {
     }
 }
 
+/// Export the real widget painters and a matching placement fixture for private visual checks.
 #[test]
 #[ignore = "writes preview artifacts for a manual visual check"]
 fn export_widget_previews() {
@@ -50,6 +52,7 @@ fn export_widget_previews() {
     std::fs::write(dir.join("widgets.json"), serde_json::to_vec(&placed).unwrap()).unwrap();
 }
 
+/// Gallery previews must fill useful bounds and retain antialiased edges at each tested density.
 #[test]
 fn calendar_media_sky_and_visualizer_tiles_are_fitted_and_antialiased() {
     let mut registry = PluginRegistry::default();
@@ -92,6 +95,7 @@ fn calendar_media_sky_and_visualizer_tiles_are_fitted_and_antialiased() {
     }
 }
 
+/// Control and palette examples must paint visible content in both appearance modes.
 #[test]
 fn gallery_toggle_slider_and_palette_tiles_have_visible_content() {
     use mandara_config::desktop_widgets::{PaletteWidget, SlidersWidget, TogglesWidget, WidgetKind};

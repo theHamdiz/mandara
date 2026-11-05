@@ -9,6 +9,7 @@ struct Fixture {
 }
 
 impl Transport for Fixture {
+    /// Record the provider request and credentials without making a network connection.
     fn json(&self, method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Value, crate::web_api::Error> {
         let key = auth.map(|auth| match auth { Authorization::DeepL(key) | Authorization::Bearer(key) => key.expose().to_owned() });
         self.calls.borrow_mut().push((method, url.into(), body.cloned().unwrap_or(Value::Null), key));
@@ -38,6 +39,7 @@ fn a_self_hosted_translation_keeps_its_proxy_path_and_needs_no_key() {
     assert_eq!(calls[0], (Method::POST, "http://localhost:5000/translator/translate".into(), json!({"q":"Hello","source":"auto","target":"es","format":"text"}), None));
 }
 
+/// Invalid languages, oversized text and absent credentials must fail before sending text.
 #[test]
 fn invalid_input_and_missing_credentials_never_send_text() {
     let backend = Http { transport: Fixture::default() };
@@ -50,6 +52,7 @@ fn invalid_input_and_missing_credentials_never_send_text() {
     assert!(backend.transport.calls.borrow().is_empty());
 }
 
+/// Malformed, empty and unexpected batch replies cannot become successful translations.
 #[test]
 fn provider_errors_and_empty_translations_do_not_look_like_success() {
     for value in [Value::Null, json!({"error":"bad target"}), json!({"translations":[]}), json!({"translations":[{"text":""}]}), json!({"translations":[{"text":"a"},{"text":"b"}]})] {

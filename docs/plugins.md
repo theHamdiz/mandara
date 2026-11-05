@@ -47,7 +47,7 @@ The 77 first-party plugins (41 of them ship switched off, marked *opt-in*):
 | **Updates** | Pending package updates from pacman, the AUR, APT, DNF, Zypper and Flatpak | *(opt-in)*
 | **Network** | Wi-Fi and wired connectivity |
 | **Bluetooth** | Bluetooth devices |
-| **Audio** | Volume and microphone |
+| **Audio** | Output/input selection, volume and microphone |
 | **Quick settings** | Toggles for the sidebar |
 | **Screenshot** | Region, window and screen capture, and screen recording (GPU Screen Recorder, wf-recorder or the built-in AV1 encoder) with pause, sound and recent recordings |
 | **Clipboard** | Clipboard history sorted by kind, with collections |
@@ -247,7 +247,7 @@ There are two ways to get a plugin to people.
    folder holding `plugin.toml`, `plugin.wasm` and, optionally, `locales/`,
    `icon.png` and `cover.png`.
 
-That's all. Your plugin is listed in **Studio → Plugins → Community**
+If the store policy permits it, your plugin is listed in **Studio → Plugins → Community**
 (and Discover's *Community picks*), ranked by stars, as soon as GitHub's search picks up the topic.
 One click installs it, switches it on and loads it live; updating and
 removing are one click too. Forks and pre-release-only repositories count,
@@ -262,6 +262,23 @@ second): a broken, malicious or placeholder one doesn't install, and Studio
 marks that version with the reason while still letting you install it
 anyway. Run it before you publish with `mandara msg plugins vet <dir>`
 ([PLUGINS.md](../PLUGINS.md#before-you-publish-compliance-check)).
+
+Community listings also follow the maintained
+[store policy](https://github.com/theHamdiz/mandara-store-policy). Rules can
+hide an account's plugins or one repository, and can block new installs
+and updates. These rules update independently of Mandara releases. They
+also apply to direct repository installs and cached update plans;
+**Install anyway** only overrides a release's compliance warning.
+Installed plugins keep running, and built-in plugins and local folders
+are unaffected.
+
+The policy is checked on community browsing and before installs and
+updates, with up to a minute of caching and no background polling. If
+verification fails, Mandara keeps its last valid rules; after 24 hours
+without verification, installs and updates pause. If it has never loaded
+a valid policy, community browsing pauses too. An empty policy is valid
+and allows all repositories. See [Store moderation](../PLUGINS.md#store-moderation)
+for the format and cache behavior.
 
 **2. A local folder.** Copy the plugin folder onto the machine:
 

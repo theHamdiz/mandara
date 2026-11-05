@@ -749,6 +749,7 @@ pub(crate) fn trace_scope() -> TraceGuard {
 
 #[cfg(any(feature = "bench-support", all(test, feature = "profiler")))]
 impl Drop for TraceGuard {
+    /// Mandara patch 5: release this trace scope and clear buffers when the final scope ends.
     fn drop(&mut self) {
         // Mandara patch 5: same atomic operation, without its deprecated alias.
         let previous_state =

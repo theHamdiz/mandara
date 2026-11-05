@@ -5,8 +5,8 @@
 //! results and installs a release into `~/.local/share/mandara/plugins/<id>`.
 //! See PLUGINS.md for the publishing guide.
 //!
-//! Nothing but the topic decides whether a repository is listed: forks and
-//! archived repositories are included, and a repository without a usable
+//! The topic discovers repositories; remote moderation rules filter the
+//! results. Forks and archived repositories are included, and a repository without a usable
 //! release is still listed (installing it reports why it can't be). The
 //! API base can be pointed elsewhere with `MANDARA_MARKETPLACE_API` (tests,
 //! mirrors, GitHub Enterprise).
@@ -19,6 +19,8 @@ use mandara_i18n::{t, tf};
 use parking_lot::Mutex;
 use serde::Deserialize;
 use ureq::http::StatusCode;
+
+pub mod moderation;
 
 pub const TOPIC: &str = "mandara-plugin";
 pub const ASSET_SUFFIX: &str = ".mandara.tar.gz";
@@ -54,6 +56,8 @@ const REPO_AFFIXES: [&str; 2] = ["mandara-", "-mandara"];
 /// A plugin listed in the marketplace.
 #[derive(Clone, Debug, PartialEq, Deserialize, serde::Serialize)]
 pub struct Listing {
+    #[serde(default)]
+    pub id: Option<u64>,
     /// `owner/repo`.
     pub full_name: String,
     pub name: String,
@@ -76,6 +80,8 @@ pub struct Listing {
 
 #[derive(Clone, Debug, PartialEq, Deserialize, serde::Serialize)]
 pub struct Owner {
+    #[serde(default)]
+    pub id: Option<u64>,
     pub login: String,
     #[serde(default)]
     pub avatar_url: String,
@@ -383,10 +389,16 @@ static SEARCH_CACHE: Mutex<Vec<(String, Instant, Results)>> = Mutex::new(Vec::ne
 /// Plugins on the marketplace matching `query` (empty = all), up to
 /// [`SEARCH_MAX_PAGES`] pages. Answers are cached for [`SEARCH_CACHE_TTL`].
 pub fn search(query: &str) -> Result<Results, String> {
+    search_with_policy(query, &moderation::Remote)
+}
+
+/// Searches with a supplied policy provider, including for local fixtures.
+pub fn search_with_policy(query: &str, source: &dyn moderation::PolicySource) -> Result<Results, String> {
     crate::offline::check()?;
+    let policy = source.policy(false)?;
     let key = search_url(query, 1);
     if let Some((_, _, cached)) = SEARCH_CACHE.lock().iter().find(|(k, at, _)| *k == key && at.elapsed() < SEARCH_CACHE_TTL) {
-        return Ok(cached.clone());
+        return moderated(cached.clone(), &policy);
     }
     let mut results = Results::default();
     for page in 1..=SEARCH_MAX_PAGES {
@@ -410,6 +422,22 @@ pub fn search(query: &str) -> Result<Results, String> {
         cache.remove(0);
     }
     cache.push((key, Instant::now(), results.clone()));
+    moderated(results, &policy)
+}
+
+/// Filters an owned answer while leaving the raw search cache reusable after
+/// an unblock. Missing IDs required by the policy reject the whole answer;
+/// the reported total excludes only hidden repositories in these pages.
+fn moderated(mut results: Results, policy: &moderation::policy::Policy) -> Result<Results, String> {
+    let mut hidden = 0;
+    let mut visible = Vec::with_capacity(results.items.len());
+    for listing in results.items {
+        let repository = moderation::policy::Repository { id: listing.id, full_name: listing.full_name.clone(), owner: moderation::policy::Publisher { id: listing.owner.id, login: listing.owner.login.clone() } };
+        policy.validate_identity(&repository).map_err(|e| tf("Unexpected answer from GitHub: {error}", &[("error", &e)]))?;
+        if policy.decision(&repository).hidden { hidden += 1; } else { visible.push(listing); }
+    }
+    results.items = visible;
+    results.total = results.total.saturating_sub(hidden);
     Ok(results)
 }
 
@@ -594,9 +622,12 @@ fn find_any_release(full_name: &str) -> Result<(Release, Asset), InstallError> {
 /// version tag. Enabling it is the caller's job (Studio adds it to
 /// `plugins.enabled`).
 pub fn install(full_name: &str, vetting: &Vetting, progress: &dyn Fn(&str)) -> Result<(String, String), InstallError> {
-    if !full_name.split('/').all(|p| !p.is_empty() && p.chars().all(|c| c.is_alphanumeric() || "-_.".contains(c))) || full_name.matches('/').count() != 1 {
-        return Err(InstallError::Failed(tf("Invalid repository {name}", &[("name", &full_name)])));
-    }
+    install_with_policy(full_name, vetting, progress, &moderation::Remote)
+}
+
+/// Installs with an explicit policy provider. Vetting cannot override bans.
+pub fn install_with_policy(full_name: &str, vetting: &Vetting, progress: &dyn Fn(&str), source: &dyn moderation::PolicySource) -> Result<(String, String), InstallError> {
+    moderation::authorize(full_name, source)?;
     progress(t("Finding the latest release…"));
     let (release, asset) = find_release(full_name)?;
     if asset.size > MAX_BYTES {

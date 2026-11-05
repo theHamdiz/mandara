@@ -55,6 +55,7 @@ mod tests {
     use super::*;
     use mandara_config::BarLayout;
 
+    /// Preset thumbnails preserve their actual item counts, relative size and visible bounds.
     #[test]
     fn micro_preview_keeps_the_real_compact_height_and_its_four_items() {
         let micro = super::super::PRESETS.iter().find(|p| p.layout == BarLayout::Micro).unwrap();

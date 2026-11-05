@@ -8074,7 +8074,7 @@
 "Couldn't download {language}: {error}" = "Не удалось загрузить {language}: {error}"
 "The update didn't install" = "Обновление не установилось"
 "Tile patterns" = "Узоры плиток"
-"Each shortcut tile in the main menu wears its own faint geometric pattern" = "Каждая плитка ярлыка в главном меню несёт свой неяркий геометрический узор"
+"Home cards and action tiles in the main menu wear faint geometric patterns" = "Карточки на главной странице и плитки действий в главном меню украшены неброскими геометрическими узорами"
 "Kufic calligraphy" = "Куфическая каллиграфия"
 "The app and tool tiles wear a Kufic word instead of their geometric pattern" = "Плитки приложений и инструментов показывают куфическое слово вместо геометрического узора"
 
@@ -8200,7 +8200,7 @@
 "Tile surface" = "Поверхность плиток"
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "Плоская заливка (по умолчанию), объёмные 3D-плитки со стеклянной кромкой или прозрачное стекло"
 "Tile shadow" = "Тень плиток"
-"How strong the shadow under each shortcut tile is (0 for none)" = "Насколько сильна тень под каждой плиткой-ярлыком (0 — без тени)"
+"How strong the shadow under Home cards and action tiles is (0 for none)" = "Интенсивность тени под карточками на главной странице и плитками действий (0 — без тени)"
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} создан Nix (Home Manager или NixOS) и доступен только для чтения: добавьте эту строку в его конфигурацию Nix, пересоберите систему и снова запустите `mandara setup`: {line}"
@@ -8698,3 +8698,5 @@
 "Example artist" = "Пример исполнителя"
 
 "Previews use sample data." = "В предпросмотре используются демонстрационные данные."
+"Couldn't verify the community store policy. Try again later." = "Не удалось проверить правила магазина сообщества. Повторите попытку позже."
+"The community store has blocked installs and updates for {repository}." = "Магазин сообщества заблокировал установку и обновления {repository}."

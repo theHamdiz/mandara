@@ -148,6 +148,7 @@ mod tests {
 
     use super::*;
 
+    /// Both credential formats keep the key out of URLs and mark authorization as sensitive.
     #[test]
     fn request_headers_hide_the_key_and_keep_it_out_of_the_url() {
         let secret = Secret::new("fixture-private-key".into()).unwrap();
@@ -159,6 +160,7 @@ mod tests {
         }
     }
 
+    /// URL and payload validation rejects unsafe requests before opening a connection.
     #[test]
     fn invalid_addresses_and_oversized_input_are_rejected_before_io() {
         for url in ["file:///tmp/data", "https://user:password@example.org", "localhost:8123", "https://"] {
@@ -172,6 +174,7 @@ mod tests {
         }
     }
 
+    /// Credentialed HTTP is limited to explicitly local destinations, including mapped IPv6.
     #[test]
     fn api_keys_require_https_or_a_literal_local_destination() {
         let secret = Secret::new("fixture-key".into()).unwrap();
@@ -187,6 +190,7 @@ mod tests {
         }
     }
 
+    /// HTTP status remains typed even when its user-facing error text changes.
     #[test]
     fn response_status_survives_translation_without_parsing_its_message() {
         for status in [404, 401, 503] {
@@ -211,6 +215,7 @@ mod tests {
         }
     }
 
+    /// A redirect must not forward an API key to another endpoint.
     #[test]
     fn redirects_never_forward_an_authenticated_request() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();

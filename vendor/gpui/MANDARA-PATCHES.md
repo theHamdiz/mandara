@@ -117,6 +117,14 @@ name for the deprecated `fetch_update` alias. Ordering and retry behavior
 are unchanged. This keeps standalone renderer and GPUI tests free of
 Rust 1.99 deprecation warnings without suppressing the lint.
 
+## 6. Stop a frame when its window closes (`window.rs`)
+
+A view can remove its window while drawing its final fade frame. The frame
+callback now returns after that draw, before updating or waking the removed
+window again. This avoids a spurious `window not found` error when leaving
+the screenshot overlay. The regression test closes a view during a real
+platform frame callback and checks that no further frame wake is sent.
+
 ## Tests
 
 `elements::div::tests::hover_without_an_id_updates_its_cached_view` (patch 2,
@@ -144,7 +152,7 @@ without the patch.
 checks actual painted scene quads at 1×, 1.25×, 1.5× and 2×: precise bounds,
 unchanged legacy snapping, rounded clipping, opacity, radii and border widths.
 
-The library suite passes 412 tests with two existing ignores. Like `gpui_wgpu`, some tests `include_bytes!` Zed's
+The library suite passes 413 tests with two existing ignores. Like `gpui_wgpu`, some tests `include_bytes!` Zed's
 `assets/`, so run them from a copy laid out like Zed's tree (the vendored
 renderer's `[patch]` points at `../gpui`, so copy both):
 

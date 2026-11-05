@@ -29,6 +29,7 @@ fn inspect(selected: Option<&str>, desktop: Option<String>, installed: impl FnOn
 mod tests {
     use super::*;
 
+    /// Repair instructions reuse the translated navigation labels so users can follow them.
     #[test]
     fn repair_directions_use_the_navigation_labels_in_every_language() {
         for lang in mandara_i18n::Lang::ALL.into_iter().filter(|lang| *lang != mandara_i18n::Lang::En) {

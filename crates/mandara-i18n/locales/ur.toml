@@ -7828,7 +7828,7 @@
 "Couldn't download {language}: {error}" = "{language} ڈاؤن لوڈ نہیں ہو سکی: {error}"
 "The update didn't install" = "اپ ڈیٹ انسٹال نہیں ہوئی"
 "Tile patterns" = "ٹائلوں کے نقش"
-"Each shortcut tile in the main menu wears its own faint geometric pattern" = "مرکزی مینو میں ہر شارٹ کٹ ٹائل کا اپنا ہلکا جیومیٹری نقش ہوتا ہے"
+"Home cards and action tiles in the main menu wear faint geometric patterns" = "مرکزی مینو میں ہوم کارڈز اور ایکشن ٹائلوں پر ہلکے جیومیٹری نقش ہوتے ہیں"
 "Kufic calligraphy" = "کوفی خطاطی"
 "The app and tool tiles wear a Kufic word instead of their geometric pattern" = "ایپ اور ٹول ٹائلوں پر جیومیٹری نقش کے بجائے کوفی لفظ ہوتا ہے"
 
@@ -7954,7 +7954,7 @@
 "Tile surface" = "ٹائلوں کی سطح"
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "سادہ بھرائی (طے شدہ)، شیشے کے کنارے والی ابھری ہوئی 3D ٹائلیں، یا شفاف شیشہ"
 "Tile shadow" = "ٹائلوں کا سایہ"
-"How strong the shadow under each shortcut tile is (0 for none)" = "ہر شارٹ کٹ ٹائل کے نیچے سائے کی شدت (0 یعنی کوئی سایہ نہیں)"
+"How strong the shadow under Home cards and action tiles is (0 for none)" = "ہوم کارڈز اور ایکشن ٹائلوں کے نیچے سائے کی شدت (0 یعنی کوئی سایہ نہیں)"
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} کو Nix ‏(Home Manager یا NixOS) بناتا ہے اور یہ صرف پڑھنے کے لیے ہے: یہ سطر اس کی Nix کنفیگریشن میں شامل کریں، دوبارہ بلڈ کریں، اور `mandara setup` دوبارہ چلائیں: {line}"
@@ -8452,3 +8452,5 @@
 "Example artist" = "نمونہ فنکار"
 
 "Previews use sample data." = "پیش نظاروں میں نمونہ ڈیٹا استعمال ہوتا ہے۔"
+"Couldn't verify the community store policy. Try again later." = "کمیونٹی اسٹور کی پالیسی کی تصدیق نہیں ہو سکی۔ بعد میں دوبارہ کوشش کریں۔"
+"The community store has blocked installs and updates for {repository}." = "کمیونٹی اسٹور نے {repository} کی تنصیب اور اپ ڈیٹس روک دی ہیں۔"

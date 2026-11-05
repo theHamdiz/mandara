@@ -8078,7 +8078,7 @@
 "Couldn't download {language}: {error}" = "تعذّر تنزيل {language}: {error}"
 "The update didn't install" = "لم يُثبَّت التحديث"
 "Tile patterns" = "زخارف المربعات"
-"Each shortcut tile in the main menu wears its own faint geometric pattern" = "يحمل كل مربع اختصار في القائمة الرئيسية نقشه الهندسي الخافت الخاص"
+"Home cards and action tiles in the main menu wear faint geometric patterns" = "بطاقات الصفحة الرئيسية ومربعات الإجراءات في القائمة الرئيسية تحمل زخارف هندسية خافتة"
 "Kufic calligraphy" = "الخط الكوفي"
 "The app and tool tiles wear a Kufic word instead of their geometric pattern" = "تحمل مربعات التطبيقات والأدوات كلمة بالخط الكوفي بدلًا من نقشها الهندسي"
 
@@ -8204,7 +8204,7 @@
 "Tile surface" = "سطح المربعات"
 "Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass" = "تعبئة مسطحة (الافتراضي)، أو مربعات بارزة ثلاثية الأبعاد بحافة زجاجية، أو زجاج شفاف"
 "Tile shadow" = "ظل المربعات"
-"How strong the shadow under each shortcut tile is (0 for none)" = "مدى قوة الظل تحت كل مربع اختصار (0 بلا ظل)"
+"How strong the shadow under Home cards and action tiles is (0 for none)" = "شدة الظل أسفل بطاقات الصفحة الرئيسية ومربعات الإجراءات (0 لإزالته)"
 
 # ── Session menu position, Nix setup (Nov 2026) ──
 "{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}" = "{path} من إنشاء Nix ‏(Home Manager أو NixOS) وهو للقراءة فقط: أضف هذا السطر إلى إعدادات Nix الخاصة به، وأعد البناء، ثم شغّل `mandara setup` مرة أخرى: {line}"
@@ -8702,3 +8702,5 @@
 "Example artist" = "فنان تجريبي"
 
 "Previews use sample data." = "تستخدم المعاينات بيانات تجريبية."
+"Couldn't verify the community store policy. Try again later." = "تعذّر التحقق من سياسة متجر المجتمع. حاول مجددًا لاحقًا."
+"The community store has blocked installs and updates for {repository}." = "حظر متجر المجتمع تثبيت {repository} وتحديثه."

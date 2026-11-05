@@ -963,7 +963,6 @@ struct Out {
     ring: f32,
     ring_at: Instant,
     ring_painted: Option<Instant>,
-    base: Option<[u8; 4]>,
     widgets: widgets::OutWidgets,
 }
 
@@ -984,7 +983,6 @@ impl Out {
             ring: 0.0,
             ring_at: Instant::now(),
             ring_painted: None,
-            base: None,
             widgets: widgets::OutWidgets::default(),
         }
     }
@@ -996,7 +994,6 @@ impl Out {
         self.painted = Painted::default();
         self.ring = 0.0;
         self.ring_painted = None;
-        self.base = None;
         self.widgets.clear();
     }
 
@@ -1043,12 +1040,6 @@ fn key(parts: impl std::fmt::Debug) -> u64 {
 fn smoothstep(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
-}
-
-fn premultiplied(c: Color) -> [u8; 4] {
-    let [r, g, b, a] = c.to_rgba8();
-    let k = |v: u8| ((v as u32 * a as u32 + 127) / 255) as u8;
-    [k(r), k(g), k(b), a]
 }
 
 fn run(layer: CanvasLayer, rx: mpsc::Receiver<Msg>, waker: Arc<Waker>, events: async_channel::Sender<Event>) -> anyhow::Result<()> {
@@ -1656,12 +1647,9 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
         }
         out.trans = Some(Trans { from, kind, start: Instant::now(), dur, rtl: scene.rtl, raw, baked_cut: baked == Some(true) });
     }
-    let fill = crate::wallpaper_fill::fill_color(&want.fill_color);
-    let base = Some(premultiplied(fill.with_alpha(1.0)));
-    if out.base != base {
-        out.base = base;
-        host.set_base(id, base);
-    }
+    // The wallpaper plane includes its fill. Keep the root transparent so
+    // Umbriel's overview, which mirrors only the root, has no solid tile.
+    host.set_base(id, None);
     Ok(())
 }
 
@@ -2482,10 +2470,4 @@ mod tests {
     /// Widget plane indices for the stacking test.
     const PLANE_A: usize = widgets::PLANE_BASE;
     const PLANE_B: usize = widgets::PLANE_BASE + 1;
-
-    #[test]
-    fn premultiplies_the_base_colour() {
-        assert_eq!(premultiplied(Color::from_rgba8(255, 128, 0, 255)), [255, 128, 0, 255]);
-        assert_eq!(premultiplied(Color::from_rgba8(255, 255, 255, 0)), [0, 0, 0, 0]);
-    }
 }

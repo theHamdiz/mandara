@@ -34,7 +34,12 @@ impl<S, C> ServiceHandle<S, C> {
 
     /// Fire-and-forget.
     pub fn send(&self, command: C) {
-        let _ = self.commands.try_send(Envelope { command, reply: None });
+        let _ = self.try_send(command);
+    }
+
+    /// Enqueues a command without waiting, returning it when the queue is full or closed.
+    pub fn try_send(&self, command: C) -> Result<(), async_channel::TrySendError<Envelope<C>>> {
+        self.commands.try_send(Envelope { command, reply: None })
     }
 
     /// Sends a command and returns a receiver for its result.
@@ -117,5 +122,28 @@ pub async fn next_command<C>(commands: &async_channel::Receiver<Envelope<C>>, ti
             Err(_) => None, // all handles dropped
         },
         _ = futures::FutureExt::fuse(async_io::Timer::after(timeout)) => Some(None),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nonblocking_send_reports_full_and_closed_queues_without_losing_the_command() {
+        let (_, updates) = async_channel::bounded::<()>(1);
+        let (commands, incoming) = async_channel::bounded(1);
+        let service = ServiceHandle::new(updates, commands);
+        assert!(service.try_send(7).is_ok());
+        let Err(async_channel::TrySendError::Full(full)) = service.try_send(8) else { panic!("a full queue must return its command") };
+        assert_eq!(full.command, 8);
+        assert!(full.reply.is_none());
+        assert_eq!(incoming.try_recv().unwrap().command, 7);
+        assert!(service.try_send(full.command).is_ok());
+        assert_eq!(incoming.try_recv().unwrap().command, 8);
+        incoming.close();
+        let Err(async_channel::TrySendError::Closed(closed)) = service.try_send(9) else { panic!("a closed queue must return its command") };
+        assert_eq!(closed.command, 9);
+        assert!(closed.reply.is_none());
     }
 }

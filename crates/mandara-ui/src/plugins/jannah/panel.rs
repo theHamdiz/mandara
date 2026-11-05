@@ -826,6 +826,7 @@ fn step_card(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
 
 // ── Paths ────────────────────────────────────────────────────────────────
 
+/// A subject symbol for each practice group.
 fn group_icon(g: &PathGroup) -> &'static str {
     match g {
         PathGroup::Worship => "crescent",

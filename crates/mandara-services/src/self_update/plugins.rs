@@ -223,6 +223,11 @@ fn admit(root: &Path, u: &PluginUpdate, vetting: &Vetting, progress: &dyn Fn(Pro
 /// Updates one plugin: patch + meta first, the full archive on any failure.
 /// The new release goes through `vetting` before it replaces the old one.
 pub fn apply(u: &PluginUpdate, opts: ApplyOptions, vetting: &Vetting, progress: &dyn Fn(Progress)) -> Result<ApplyReport, String> {
+    apply_with_policy(u, opts, vetting, progress, &marketplace::moderation::Remote)
+}
+
+/// Applies a cached update plan after checking the current store policy.
+pub fn apply_with_policy(u: &PluginUpdate, opts: ApplyOptions, vetting: &Vetting, progress: &dyn Fn(Progress), source: &dyn marketplace::moderation::PolicySource) -> Result<ApplyReport, String> {
     if !u.available {
         return Err(tf("{plugin} is up to date", &[("plugin", &u.id)]));
     }
@@ -232,6 +237,7 @@ pub fn apply(u: &PluginUpdate, opts: ApplyOptions, vetting: &Vetting, progress: 
     if opts.dry_run {
         return Ok(ApplyReport { method: if use_patch { Method::Delta } else { Method::Full }, version: u.latest.clone(), downloaded: u.download_size(opts.full_only).unwrap_or_default(), full_size, fallback: None, dry_run: true });
     }
+    marketplace::moderation::authorize(&u.repo, source)?;
     let scratch = scratch(&u.id);
     let mut downloaded = 0;
     let mut fallback = None;

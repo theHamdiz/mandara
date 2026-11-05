@@ -54,6 +54,8 @@ pub struct Market {
     /// every search and after every install / removal — not per row per frame.
     installed: Rc<HashMap<String, (std::path::PathBuf, String)>>,
     loading: bool,
+    /// Only the newest search may publish results after a tab change.
+    generation: u64,
     /// The query of the last search (empty = the whole marketplace).
     searched: String,
     /// Releases that failed the compliance check (repository → flag), read
@@ -71,6 +73,16 @@ pub struct Market {
     search_task: Option<gpui::Task<()>>,
 }
 
+impl Market {
+    fn reopen(&mut self) {
+        self.primed = false;
+        self.results = None;
+        self.loading = false;
+        self.generation = self.generation.wrapping_add(1);
+        self.search_task = None;
+    }
+}
+
 /// The compliance check as Studio runs it: the built-in ids it may not
 /// pose as, and whether to install a failing release anyway.
 pub(super) fn vetting_check(cx: &gpui::App) -> impl Fn(&Path, &str) -> Result<(), Finding> + Send + 'static {
@@ -85,13 +97,25 @@ pub(super) fn flag_note(flag: &Flag, p: &MandaraPalette) -> AnyElement {
 
 
 impl StudioView {
+    /// Reentering the store revalidates policy before showing community cards.
+    pub(super) fn market_reopen(&mut self) {
+        self.market.reopen();
+    }
+
+    /// Clears community cards until the search and policy check complete.
+    /// Only the current generation may publish its answer, so an older
+    /// request cannot restore results after another search or store visit.
     fn market_search(&mut self, query: String, cx: &mut Context<Self>) {
         self.market.loading = true;
+        self.market.generation = self.market.generation.wrapping_add(1);
+        let generation = self.market.generation;
+        self.market.results = None;
         self.market.searched = query.trim().to_string();
         let task = cx.background_executor().spawn(async move { (marketplace::search(&query), marketplace::installed_all(), marketplace::flags()) });
         cx.spawn(async move |this, cx| {
             let (result, installed, flags) = task.await;
             let _ = this.update(cx, |this, cx| {
+                if this.market.generation != generation { return; }
                 this.market.loading = false;
                 this.market.results = Some(result);
                 this.market.installed = Rc::new(installed);
@@ -235,10 +259,8 @@ impl StudioView {
     /// (`debounce`), or now when the shown results are for another query.
     pub(super) fn market_follow_query(&mut self, query: String, debounce: bool, cx: &mut Context<Self>) {
         if !debounce {
-            if !self.market.primed || self.market.searched != query.trim() {
-                self.market.primed = true;
-                self.market_search(query, cx);
-            }
+            self.market.primed = true;
+            self.market_search(query, cx);
             return;
         }
         self.market.search_task = Some(cx.spawn(async move |this, cx| {
@@ -457,5 +479,18 @@ pub(super) fn reload_plugins(cx: &mut gpui::App) {
         std::thread::spawn(move || {
             let _ = (ipc.0)(vec!["plugins".into(), "reload".into()]);
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reopening_requires_a_new_policy_check_and_invalidates_inflight_results() {
+        let mut market = Market { primed: true, results: Some(Ok(Results::default())), loading: true, generation: 7, ..Market::default() };
+        market.reopen();
+        assert!(!market.primed && !market.loading && market.results.is_none());
+        assert_ne!(market.generation, 7);
     }
 }

@@ -64,6 +64,7 @@ mod tests {
         assert_eq!(crop(&capture, frozen.as_bytes(0).unwrap(), (100.0, 50.0, 20.0, 20.0)).get_pixel(0, 0).0, [0; CHANNELS]);
     }
 
+    /// Reject malformed frame lengths without taking ownership of the caller's pixels.
     #[test]
     fn freeze_rejects_incomplete_or_oversized_frames_without_consuming_them() {
         for bytes in [3, 5] {

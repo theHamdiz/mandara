@@ -226,6 +226,7 @@ impl StudioView {
     /// (the content scroller is shared: a page must not inherit the last
     /// one's offset, which left short pages "stuck" at their bottom).
     pub fn show(&mut self, section: Section, cx: &mut Context<Self>) {
+        if section == Section::Plugins { self.market_reopen(); }
         if section != self.section {
             if section == Section::Maintenance { self.maint.invalidate(); }
             self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));

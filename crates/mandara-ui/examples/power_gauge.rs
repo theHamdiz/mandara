@@ -73,6 +73,7 @@ impl Render for Preview {
     }
 }
 
+/// Open the production gauge painter only inside the marked private sandbox, then exit automatically.
 fn main() -> anyhow::Result<()> {
     let runtime = std::env::var_os("XDG_RUNTIME_DIR")
         .ok_or_else(|| anyhow::anyhow!("use cargo xtask sandbox"))?;

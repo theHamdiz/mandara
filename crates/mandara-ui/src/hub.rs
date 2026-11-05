@@ -443,6 +443,7 @@ mod tests {
         assert!(!PluginServices::wanted(&r, &c).weather, "placed nowhere");
     }
 
+    /// Weather demand follows enabled desktop views as well as the global and plugin switches.
     #[test]
     fn desktop_weather_alone_keeps_the_forecast_service_running() {
         use mandara_config::desktop_widgets::{ClockFace, ClockWidget, DesktopWidget, WeatherWidget, WidgetKind};

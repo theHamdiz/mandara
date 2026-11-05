@@ -23,11 +23,12 @@ use mandara_services::audio::{AudioCommand, AudioState, Channel, MAX_VOLUME};
 use mandara_theme::MandaraPalette;
 
 mod apps;
+mod device_picker;
 
 use apps::{AppsTap, Presence, RowCx};
 
 use super::panel_fx::{HEADER_H, PanelShape, SpectrumTap, TINT_FILL, alpha, big_slider, glass_card, header, icon_chip, partner, pill_button, readable, redraw_in, spectrum_bars};
-use super::{fn_view, json};
+use super::{fn_view, fn_view_observing, json};
 use crate::bidi::Bidi as _;
 use crate::fonts::{fonts, tabular_nums};
 use crate::hub::hub;
@@ -223,7 +224,7 @@ fn channel_head(
     id: &'static str,
     kind: &'static str,
     ch: &Channel,
-    name: SharedString,
+    name: AnyElement,
     (on_icon, off_icon): (&'static str, &'static str),
     mute: AudioCommand,
     palette: &MandaraPalette,
@@ -265,7 +266,7 @@ fn channel_head(
 
 /// The output card; `bands` draws the spectrum in it (`None`: an app row
 /// shows it instead).
-fn output_card(s: &AudioState, bands: Option<Option<&[f32]>>, palette: &MandaraPalette, radius: f32, display: gpui::SharedString, (name, lim): (SharedString, f32)) -> impl IntoElement {
+fn output_card(s: &AudioState, bands: Option<Option<&[f32]>>, palette: &MandaraPalette, radius: f32, display: gpui::SharedString, (devices, lim): (device_picker::Controls, f32)) -> impl IntoElement {
     let o = &s.output;
     let volume = shown_volume(OUT_SLIDER, o, lim);
     let from = readable(palette.primary, palette);
@@ -274,13 +275,14 @@ fn output_card(s: &AudioState, bands: Option<Option<&[f32]>>, palette: &MandaraP
         .p(px(CARD_PAD))
         .flex()
         .flex_col()
-        .child(channel_head("audio-out-mute", t("OUTPUT"), o, name, ("volume-high", "volume-mute"), AudioCommand::ToggleMute, palette, (display, volume)))
+        .child(channel_head("audio-out-mute", t("OUTPUT"), o, devices.name, ("volume-high", "volume-mute"), AudioCommand::ToggleMute, palette, (display, volume)))
+        .children(devices.list)
         .child(div().h(px(ROW_GAP)))
         .child(big_slider(OUT_SLIDER, o.volume / lim, volume_icon(volume, o.muted), o.muted, palette, move |v, _, cx| write(cx, AudioCommand::SetVolume(v * lim))))
         .when_some(bands, |el, bands| el.child(div().h(px(ROW_GAP))).child(spectrum_bars(bands.unwrap_or(&[]), from, readable(partner(palette.primary), palette), palette, VIZ_H, VIZ_BAR_GAP_PX)))
 }
 
-fn input_card(s: &AudioState, palette: &MandaraPalette, radius: f32, display: gpui::SharedString, (name, lim): (SharedString, f32)) -> impl IntoElement {
+fn input_card(s: &AudioState, palette: &MandaraPalette, radius: f32, display: gpui::SharedString, (devices, lim): (device_picker::Controls, f32)) -> impl IntoElement {
     let i = &s.input;
     let volume = shown_volume(IN_SLIDER, i, lim);
     glass_card(palette)
@@ -288,7 +290,8 @@ fn input_card(s: &AudioState, palette: &MandaraPalette, radius: f32, display: gp
         .p(px(CARD_PAD))
         .flex()
         .flex_col()
-        .child(channel_head("audio-in-mute", t("MICROPHONE"), i, name, ("mic", "mic-off"), AudioCommand::ToggleMicMute, palette, (display, volume)))
+        .child(channel_head("audio-in-mute", t("MICROPHONE"), i, devices.name, ("mic", "mic-off"), AudioCommand::ToggleMicMute, palette, (display, volume)))
+        .children(devices.list)
         .child(div().h(px(ROW_GAP)))
         .child(big_slider(IN_SLIDER, i.volume / lim, if i.muted { "mic-off" } else { "mic" }, i.muted, palette, move |v, _, cx| write(cx, AudioCommand::SetMicVolume(v * lim))))
 }
@@ -409,11 +412,12 @@ fn apps_card(rows: &[(apps::AppGroup, f32)], rc: &RowCx<'_>, radius: f32, max_li
     (card, APPS_CARD_CHROME_H + list_h)
 }
 
-fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, apps_tap: Rc<RefCell<AppsTap>>) -> impl Fn(&MandaraPalette, &mut gpui::Window, &mut App) -> AnyElement {
+fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, apps_tap: Rc<RefCell<AppsTap>>, picker: Rc<RefCell<device_picker::State>>) -> impl Fn(&MandaraPalette, &mut gpui::Window, &mut App) -> AnyElement {
     let tap = Rc::new(RefCell::new(SpectrumTap::default()));
     let presence = RefCell::new(Presence::default());
     move |palette, window, cx| {
         let visible = p.progress() > 0.0;
+        if !visible { picker.borrow_mut().close(); }
         let muted = hub(cx).read(cx).audio.output.muted;
         // The capture tap lives only while the panel is on screen.
         let bands = SpectrumTap::bands(&tap, visible && !muted, cx);
@@ -432,13 +436,16 @@ fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, apps_ta
         };
         // Apps follow the server only while the panel is on screen.
         let snapshot = if visible { AppsTap::snapshot(&apps_tap, window, cx) } else { Rc::default() };
+        let out_devices = device_picker::controls("audio-out-device", device_picker::Kind::Output, out_name.clone(), &snapshot, &picker, palette, cx);
+        let in_devices = device_picker::controls("audio-in-device", device_picker::Kind::Input, in_name.clone(), &snapshot, &picker, palette, cx);
+        let picker_h = out_devices.height + in_devices.height;
         let rows = presence.borrow_mut().frame(&snapshot.groups, window);
         let outputs = visible_outputs(&snapshot.outputs, cx);
         let player = hub.read(cx).media.as_ref().filter(|m| m.status == mandara_services::PlaybackStatus::Playing).map(|m| m.identity.clone());
         let host = spectrum_host(&snapshot.groups, player.as_deref()).map(|g| g.key.clone());
         let s = &hub.read(cx).audio;
         let all = s.all_muted;
-        let base_h = if all { PANEL_H_MUTED } else { PANEL_H } - if host.is_some() { OUT_VIZ_H } else { 0.0 };
+        let base_h = if all { PANEL_H_MUTED } else { PANEL_H } - if host.is_some() { OUT_VIZ_H } else { 0.0 } + picker_h;
         let default_sink = snapshot.outputs.iter().find(|d| d.is_default).map(|d| d.index);
         let rc = RowCx { tap: &apps_tap, limit: lim, all_muted: all, outputs: &outputs, default_sink, palette, id_prefix: "audio-app" };
         let band_slice = bands.as_ref().map(|b| &b[..]);
@@ -455,9 +462,9 @@ fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, apps_ta
             .child(reveal(&p, 0, header(audio_icon(s), chip_tint, t("Sound"), subtitle, palette, trailing)))
             .child(div().h(px(HEADER_GAP)))
             .when(all, |el| el.child(reveal(&p, 1, muted_banner(palette, r))).child(div().h(px(GAP))))
-            .child(reveal(&p, 2, output_card(s, host.is_none().then_some(band_slice), palette, r, display.clone(), (out_name, lim))))
+            .child(reveal(&p, 2, output_card(s, host.is_none().then_some(band_slice), palette, r, display.clone(), (out_devices, lim))))
             .child(div().h(px(GAP)))
-            .child(reveal(&p, 3, input_card(s, palette, r, display, (in_name, lim))))
+            .child(reveal(&p, 3, input_card(s, palette, r, display, (in_devices, lim))))
             .child(div().h(px(GAP)))
             .child(reveal(&p, 4, apps))
             .into_any_element()
@@ -531,10 +538,28 @@ pub fn register(r: &mut PluginRegistry) {
         );
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(PANEL_H + GAP + APPS_CARD_CHROME_H + APPS_EMPTY_H))));
         let apps_tap = AppsTap::shared();
-        let panel = fn_view(None, panel_view(panel_cx.clone(), size_cell.clone(), apps_tap.clone()), window, cx);
+        let picker = Rc::new(RefCell::new(device_picker::State::default()));
+        let close_picker = picker.clone();
+        let panel = fn_view_observing(None, move |cx| {
+            cx.observe(&crate::state::shell(cx), move |_, shell, cx| {
+                if shell.read(cx).panel.as_deref() != Some(ID) && !crate::floating::is_floating(ID, cx) {
+                    close_picker.borrow_mut().close();
+                }
+            }).detach();
+        }, panel_view(panel_cx.clone(), size_cell.clone(), apps_tap.clone(), picker), window, cx);
         let side_presence = RefCell::new(Presence::default());
-        let sidebar = fn_view(
+        let side_picker = Rc::new(RefCell::new(device_picker::State::default()));
+        let close_side_picker = side_picker.clone();
+        let monitor = panel_cx.monitor().to_string();
+        let sidebar = fn_view_observing(
             None,
+            move |cx| {
+                cx.observe(&crate::state::shell(cx), move |_, shell, cx| {
+                    if !shell.read(cx).sidebar_visible_on(&monitor) && !crate::state::config(cx).read(cx).get().sidebar.pinned() {
+                        close_side_picker.borrow_mut().close();
+                    }
+                }).detach();
+            },
             move |palette, window, cx| {
                 let snapshot = AppsTap::snapshot(&apps_tap, window, cx);
                 super::panel_fx::redraw_in(apps::KEEPALIVE, window, cx);
@@ -546,7 +571,7 @@ pub fn register(r: &mut PluginRegistry) {
                     (device_name(&s.output, t("Output"), cx), device_name(&s.input, t("Microphone"), cx))
                 };
                 let s = &hub(cx).read(cx).audio;
-                let row = |id: &'static str, ch: &Channel, name: SharedString, set: fn(f32) -> AudioCommand, mic: bool| {
+                let row = |id: &'static str, ch: &Channel, devices: device_picker::Controls, set: fn(f32) -> AudioCommand, mic: bool| {
                     let volume = shown_volume(id, ch, lim);
                     let icon_name = match (mic, ch.muted) {
                         (true, true) => "mic-off",
@@ -562,19 +587,22 @@ pub fn register(r: &mut PluginRegistry) {
                                 .flex()
                                 .items_center()
                                 .gap(px(tokens::SM))
-                                .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(text::BODY_S)).child(name))
+                                .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(text::BODY_S)).child(devices.name))
                                 .child(div().font_features(tabular_nums()).text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(volume_text(volume))),
                         )
+                        .children(devices.list)
                         .child(big_slider(id, ch.volume / lim, icon_name, ch.muted, palette, move |v, _, cx| write(cx, set(v * lim))))
                 };
+                let out_devices = device_picker::controls("side-out-device", device_picker::Kind::Output, names.0, &snapshot, &side_picker, palette, cx);
+                let in_devices = device_picker::controls("side-in-device", device_picker::Kind::Input, names.1, &snapshot, &side_picker, palette, cx);
                 let rc = RowCx { tap: &apps_tap, limit: lim, all_muted: s.all_muted, outputs: &[], default_sink: None, palette, id_prefix: "side-app" };
                 let app_list = (!app_rows.is_empty()).then(|| sidebar_apps(&app_rows, &rc));
                 card(palette)
                     .flex()
                     .flex_col()
                     .gap(px(tokens::MD))
-                    .child(row(SIDE_OUT_SLIDER, &s.output, names.0.clone(), AudioCommand::SetVolume, false))
-                    .child(row(SIDE_IN_SLIDER, &s.input, names.1.clone(), AudioCommand::SetMicVolume, true))
+                    .child(row(SIDE_OUT_SLIDER, &s.output, out_devices, AudioCommand::SetVolume, false))
+                    .child(row(SIDE_IN_SLIDER, &s.input, in_devices, AudioCommand::SetMicVolume, true))
                     .when_some(app_list, |el, list| el.child(list))
                     .when(!s.available, |el| el.opacity(UNAVAILABLE_OPACITY))
                     .into_any_element()

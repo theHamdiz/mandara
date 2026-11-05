@@ -189,6 +189,7 @@ fn start_copy(shm: &wl_shm::WlShm, s: &session::ExtImageCopyCaptureSessionV1, jo
     Ok(Copy { file, width, height, format, buffer, pool, frame })
 }
 
+/// Read a completed shm frame, release its Wayland resources and fit the owned pixels to the preview limit.
 fn finish_copy(mut c: Copy, max: (u32, u32)) -> Result<image::RgbaImage> {
     let stride = c.width * BYTES_PER_PX;
     let mut data = vec![0u8; (stride * c.height) as usize];

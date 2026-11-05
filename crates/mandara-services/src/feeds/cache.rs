@@ -104,6 +104,7 @@ fn failed(error: impl std::fmt::Display) -> String {
     tf("Could not save or read feed history: {error}", &[("error", &error)]).to_string()
 }
 
+/// Flush a private temporary file before atomically replacing the cached feed.
 fn save_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let mut file = tempfile::NamedTempFile::new_in(path.parent().expect("feed cache has a parent"))?;
     file.write_all(bytes)?;

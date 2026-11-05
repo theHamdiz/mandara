@@ -104,6 +104,7 @@ fn the_homepage_uses_existing_artwork_guides_and_section_targets() {
     assert!(!source.contains("<script"));
 }
 
+/// Each look keeps a labelled keyboard control and matching full-size previews in both themes.
 #[test]
 fn every_look_has_a_keyboard_control_and_light_and_dark_preview() {
     let source = homepage();
@@ -133,6 +134,7 @@ fn every_look_has_a_keyboard_control_and_light_and_dark_preview() {
     assert!(!css.contains("outline-color: var(--page-background)"), "focus rings must contrast with the section's theme surface");
 }
 
+/// Expanded sections keep theme-relative surfaces, readable ink and visible keyboard focus.
 #[test]
 fn homepage_sections_keep_the_theme_surface_instead_of_inverting_it() {
     let css = std::fs::read_to_string(crate::root().join("assets/css/landing.css")).unwrap();

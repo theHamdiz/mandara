@@ -6,6 +6,7 @@ fn phone() -> Device {
     Device { id: "phone_01".into(), name: "Demo phone".into(), kind: "phone".into(), reachable: true, paired: true, incoming_pair: false, battery: None, plugins: vec!["kdeconnect_findmyphone".into(), "kdeconnect_ping".into(), "kdeconnect_share".into()] }
 }
 
+/// Pairing, reachability and advertised capabilities gate content and ring actions.
 #[test]
 fn offline_or_unpaired_devices_never_receive_content_or_ring_requests() {
     for (paired, reachable) in [(false, true), (true, false), (false, false)] {
