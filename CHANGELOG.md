@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The clipboard now answers the keyboard and the wheel.
+
 ### Improved
 
 - **The clipboard answers the keyboard and the wheel.** Arrow Up and Down
