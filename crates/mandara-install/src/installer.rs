@@ -1064,9 +1064,10 @@ impl<'a> Installer<'a> {
             match choices[picked] {
                 Choice::Compositor => {
                     let (names, list, default) = compositor_rows(&*self.host, compositor.as_deref().or(suggested.as_deref()));
-                    if let Some(i) = self.host.select("Compositor", &list, default) {
-                        compositor = Some(names[i].to_string());
-                    }
+                    // Cancel leaves the whole screen, as it does on the menu
+                    // above (and as the screen's hint says).
+                    let Some(i) = self.host.select("Compositor", &list, default) else { return Ok(false) };
+                    compositor = Some(names[i].to_string());
                 }
                 Choice::Autostart => autostart = !autostart,
                 Choice::Greeter => greeter = !greeter,
