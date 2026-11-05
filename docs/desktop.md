@@ -134,6 +134,26 @@ How Mandara looks and feels, and how much of it you can shape.
 
 ## Desktop widgets
 
+Ten new designs extend the existing families:
+
+| Family | Designs |
+|---|---|
+| Desktop clocks → Digital | Word clock, Split-flap clock, Glass tube clock, Binary clock |
+| Calendar card | Date ticket, Perpetual calendar, Moon calendar |
+| Desktop weather | Weather ribbon, Thermometer, Humidity rose |
+
+The word clock gives the nearest five-minute phrase with the exact time
+underneath. Binary columns encode the four displayed decimal digits. The
+moon calendar follows the civil month, including leap years, and calculates
+each day's phase. The thermometer uses today's reported range; missing
+weather produces an unavailable state rather than a sample reading.
+
+Add them in **Studio → Desktop widgets → Add a widget**. Clock families
+have a **Style** choice; weather and date widgets have a **Layout** choice.
+Their size, colour, font, plate and placement use the same editor as the
+existing widgets. Eligible kinds can also be added to
+[login and lock screens](lock-and-login.md#widgets-on-login-and-lock-screens).
+
 <table>
 <tr>
 <td width="50%" valign="top"><img src="screenshots/widgets-desk.webp" alt="A cookie analog clock, a quote, a month calendar, a taped to-do list on torn paper, a sticky note, the focus timer and upcoming events" width="100%"/><br/><sub><b>Productivity</b>: a to-do list you tick, a sticky note, the focus timer, calendars</sub></td>
@@ -310,3 +330,19 @@ and individual connector names, remain saved while a display is away.
 Taped notes attach their corner strips to the note’s own sheet, using the
 same frame decoration as the to-do list. A separate header stays above the
 paper without moving the strips away from it.
+
+The widget gallery fits each preview to its card and renders at the display’s
+pixel density, with larger calendar and sky miniatures. Media previews use a
+clearly labelled sample track and cover; they do not need a running player
+or read your listening history. Quick toggles and sliders show sample states,
+and the palette tile uses your current theme colours. The desktop still shows
+only real media and control states.
+
+The bar preset thumbnails show each centered layout’s actual proportions.
+Micro pill uses a shorter bar, tighter spacing and no empty side-group gaps;
+Dynamic island keeps a taller shared island with roomier groups. Both remain
+available in **Studio → Bar → Presets**.
+
+With weather enabled, a desktop weather widget keeps its forecast active
+without a weather item in the bar or sidebar. Weather cards follow the
+widget’s chosen language and reading direction.

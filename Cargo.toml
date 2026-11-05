@@ -76,7 +76,7 @@ semver = "1"
 gpui = { git = "https://github.com/zed-industries/zed", rev = "ec86047d67acd6fddd81392f44ed6ebcc6e7f531", default-features = false, features = ["wayland", "font-kit"] }
 gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "ec86047d67acd6fddd81392f44ed6ebcc6e7f531", default-features = false, features = ["wayland", "font-kit"] }
 # The renderer itself (patched below): Mandara sets its font fallback chain.
-gpui_wgpu = { git = "https://github.com/zed-industries/zed", rev = "ec86047d67acd6fddd81392f44ed6ebcc6e7f531", default-features = false }
+gpui_wgpu = { git = "https://github.com/zed-industries/zed", rev = "ec86047d67acd6fddd81392f44ed6ebcc6e7f531", default-features = false, features = ["vulkan", "gles"] }
 wayland-protocols-plasma = { version = "0.3.12", features = ["client"] }
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
@@ -153,6 +153,8 @@ wasmtime-wasi = { version = "50", default-features = false }
 # Async & errors
 # 5: the major GPUI's accesskit, ashpd and oo7 use, so one zbus is linked.
 zbus = { version = "5", default-features = false, features = ["async-io"] }
+# Share GPUI's keyring client and async runtime rather than linking another.
+oo7 = { git = "https://github.com/zed-industries/oo7", rev = "731c1215edb6905876c6137ab300428c7b8d7c13", default-features = false, features = ["async-std", "native_crypto"] }
 async-io = "2"
 pure-onnx-ocr = "0.3.2"
 # The ONNX engine pure-onnx-ocr runs on (same version, nothing new to

@@ -6,6 +6,110 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Four connected tools, more desktop styles, and public widgets for login and
+lock screens, with clearer previews and setup checks.
+
+### New
+
+- **Ten more ways to dress your desktop.** Add word, split-flap, glass-tube
+  and binary clocks; date tickets, perpetual cards and a moon calendar;
+  weather ribbons, thermometers and a humidity rose. They belong to the
+  existing widget families, so Mandara still ships 77 first-party plugins.
+  Word clocks use natural Turkish time phrases.
+
+- **Put widgets on your sign-in screens.** Login screen → Layout and Lock
+  appearance have a widget gallery, a copy-from-desktop option and placement
+  controls. Both start empty. Only public, passive kinds are offered;
+  weather needs a separately chosen public location. Plasma keeps its own
+  secure locker, with a clear explanation in Studio. World clocks have
+  public default cities; copied decoration text remains public; copied
+  countdowns leave private desktop titles and dates behind. Embedded and
+  full-screen previews stay offline. Forecast requests start only for
+  widgets that actually display weather; palette labels follow each widget’s
+  chosen language. Lock widgets appear promptly when background painting
+  finishes, even after the entrance animation settles.
+
+- **Four optional connected tools.** Translator, Phone Connect, Feeds and
+  Home Assistant are first-party plugins. Translate when you ask, keep up
+  with subscriptions, reach your paired phone and control your home from
+  native panels. Mandara now ships 77 first-party plugins, each with its own
+  artwork. Feeds ask for the final address when a server redirects; remote
+  API keys use HTTPS. Key settings recheck the keyring when reopened and
+  stop reading on close. Home Assistant favourites load individually and
+  skip removed entities without hiding connection failures. Replacement keys
+  stay saved when settings are closed and reopened during a write.
+
+### Improved
+
+- **Find missing icon themes.** Maintenance reports missing icon themes and
+  opens Themes so you can choose a replacement without resetting your
+  selection. (#87)
+
+- **The project, a click away.** Studio’s About header has playful GitHub
+  and Discord links that move gently on hover and respect reduced motion.
+
+### Fixed
+
+- **Switch to the window you picked.** Alt+Tab hands focus back after its
+  overlay closes. Program keybindings also accept `exec`, and Hyprland
+  instructions use its current Lua commands. (#105)
+
+- **Capture the display you are using.** Screenshots and window or region
+  selection follow the focused output, including monitors to the left of the
+  rest of the layout. Frozen frames stay on the display they came from. (#106)
+
+- **Icons that say what they do.** Quotes, wallpaper tools, widget menus and
+  settings use symbols for their purpose. Sparkles are reserved for AI;
+  procedural artwork uses flowing contours and a paint drop.
+
+- **Tell centered bar presets apart.** The Micro pill and Dynamic island
+  thumbnails use the bar’s real compact geometry and show their different
+  item arrangements. (#103)
+
+- **Sharper widget previews.** Calendar, sky and visualizer pictures fill
+  their cards and follow display scaling. Media styles have labelled sample
+  previews instead of empty tiles, in light and dark themes. Toggle and
+  slider examples and current palette colours fill their tiles too. (#101)
+
+- **Keep the login preview current.** The login designer keeps clocks and
+  public widgets current while its preview is visible, including across
+  midnight. Digit rolls finish smoothly, and enabling seconds takes effect
+  without waiting for the next minute.
+
+- **Dry runs stay compact.** The installer keeps its one-line heading on an
+  interactive dry run and leaves the setup menu closed. (#66)
+
+- **Keep CPU groups within the whole machine.** Process hunter and Resources
+  cap grouped totals at 100%; hot-process highlighting follows the sampler’s
+  host CPU count. Includes Hedayatbakhshi’s follow-ups. (#68)
+
+- **Fast clipboard paging keeps up.** A quick wheel movement turns all
+  requested pages and keeps the leftover distance for the next movement.
+  Builds on Hedayatbakhshi’s keyboard navigation. (#70)
+
+- **A quieter website in dark mode.** The compositor section and expanded
+  questions follow the page’s theme with a subtle surface accent, readable
+  links and visible keyboard focus.
+
+- **Keep desktop forecasts live.** With weather enabled, a desktop weather
+  widget keeps the forecast service running without a bar or sidebar item.
+  New weather-card labels follow the widget’s reading direction. Daily
+  ranges follow the forecast location’s current date, even when a refresh
+  fails overnight.
+
+- **Smoother battery rings.** The Power panel’s charge arc and round marker
+  keep their smooth edges at normal and fractional display scales. (#104)
+
+### Under the hood
+
+- Snipping, eyedropper and login widget images keep one CPU pixel buffer
+  after painting. GPU uploads avoid another image copy, and native builds
+  leave out unused browser shader translation.
+
+- Clipboard history shares its text between the service, panels and launcher.
+  Window previews move their captured pixels directly to the renderer, and
+  closing a window releases its preview without reopening the switcher.
+
 ## 0.16.0 — 2026-11-05
 
 Put the power menu where you want it, plus a round of fixes for Sway, the

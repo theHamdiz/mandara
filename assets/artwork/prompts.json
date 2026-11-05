@@ -41,7 +41,7 @@
       "store": "Listed under More when uncategorized; included in Discover's first shelf."
     },
     "wallpaper-generator": {
-      "glyph": "Cream paintbrush with a gold ferrule and four-point sparkle; sea-glass teal tile from #40C8BD to #185D54. The diagonal brush silhouette has no wave or picture frame, distinguishing it from Soundscapes, Wallpaper and Media at small sizes.",
+      "glyph": "Cream paintbrush with a gold ferrule and paint drop; sea-glass teal tile from #40C8BD to #185D54. The diagonal brush silhouette has no wave or picture frame, distinguishing it from Soundscapes, Wallpaper and Media at small sizes.",
       "palette": "corniche",
       "motif": "aurora",
       "panel": null,
@@ -137,7 +137,31 @@
       "motif": "tiles",
       "panel": null
     },
-    "excluded": "Compositor is hidden infrastructure and registers commands only; no marketplace art."
+    "excluded": "Compositor is hidden infrastructure and registers commands only; no marketplace art.",
+    "translator": {
+      "glyph": "Overlapping cream and sand language cards on a rose tile.",
+      "palette": "twilight",
+      "motif": "paper",
+      "panel": null
+    },
+    "phone-connect": {
+      "glyph": "A cream phone and desktop joined by sand wireless arcs on a sea-glass tile.",
+      "palette": "corniche",
+      "motif": "peers",
+      "panel": null
+    },
+    "feeds": {
+      "glyph": "A cream news page with sand RSS waves on an emerald tile.",
+      "palette": "obsidian",
+      "motif": "signal",
+      "panel": null
+    },
+    "home-assistant": {
+      "glyph": "A cream house with three sand sensor nodes on a sea-glass tile.",
+      "palette": "corniche",
+      "motif": "circuit",
+      "panel": null
+    }
   },
   "corniche": "Use case: stylized-concept. Asset type: reusable art background for Mandara Shell plugin marketplace covers, horizontal 16:9. Create one original premium abstract Mediterranean chromatic-glass artwork: wide ribbons of translucent turquoise sea glass flow in a slow S-curve through deep midnight Mediterranean blue, a sliver of warm limestone gold refracted light near the lower-right edge. Evoke water at Alexandria's Corniche without buildings. Perspective almost flat, sculptural frosted glass, soft specular edges, gentle luminous caustics, exquisitely restrained, broad simple shapes and generous dark negative space on the left half for future typesetting. Most visual movement in the right half and bottom edge. Palette deep navy #103C63, sea-glass #40C8BD, limestone #FFE4AB. No text, no logos, no icons, no UI, no devices, no objects other than abstract flowing glass. Avoid generic neon cyberpunk, tiny details, grain and noise. Output single landscape background.",
   "twilight": "Use case: stylized-concept. Asset type: reusable art background for Mandara Shell marketplace covers, single horizontal 16:9 image. Original abstract 'Montaza Twilight' composition, a broad crescent-like curl of softly frosted indigo and dusk-violet glass suspended against deep royal indigo, with one quiet coral-amber glow at the far right horizon like distant Pharos lighthouse light. Fine subtle specular rim follows the giant arc; luminous lavender translucency; the sense of evening above the Mediterranean. Broad simple forms, minimal, richly colored but restrained premium editorial art direction. Keep the left half mostly calm dark negative space for later typography. Visual weight on the right half and lower edge, no central object. Palette #211C46 #30265E #7063B5 #EE9182 #FFD58A. No text, no logos, no icons, no UI, no planets, no buildings, no grain, no noise, no tiny decorative objects. Single full-bleed landscape background.",

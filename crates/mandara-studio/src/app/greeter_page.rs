@@ -521,6 +521,7 @@ impl GreeterPage {
 
     // ── Groups ───────────────────────────────────────────────────────────
 
+    /// Keep sign-in placement and public decorations in the same live layout preview.
     fn layout_group(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let mut out = Vec::new();
         // Element list (z order, top first) with visibility + order.
@@ -661,6 +662,10 @@ impl GreeterPage {
                     .into_any_element(),
             )],
         ));
+        let page = cx.entity().downgrade();
+        out.push(super::auth_widgets::panel("login", &self.draft.widgets, Rc::new(move |edit, cx| {
+            let _ = page.update(cx, |page, cx| page.edit(cx, |cfg| edit.apply(&mut cfg.widgets)));
+        }), p, cx));
         out
     }
 

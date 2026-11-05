@@ -688,6 +688,7 @@ fn threads() -> usize {
     mandara_services::processes::cpu_capacity()
 }
 
+/// Group processes without letting summed CPU usage exceed the whole machine.
 fn top_apps(procs: &[Process]) -> Vec<TopApp> {
     let mut groups: Vec<TopApp> = Vec::new();
     for p in procs {
@@ -700,7 +701,11 @@ fn top_apps(procs: &[Process]) -> Vec<TopApp> {
             None => groups.push(TopApp { name: p.name.clone(), count: 1, cpu: p.cpu, rss: p.rss, icon: None }),
         }
     }
-    // `Process::cpu` is already a share of the whole machine.
+    // `Process::cpu` is already a share of the whole machine, and a group is
+    // no more than the machine either.
+    for g in &mut groups {
+        g.cpu = g.cpu.min(PERCENT_F);
+    }
     groups.sort_by(|a, b| b.cpu.total_cmp(&a.cpu).then(b.rss.cmp(&a.rss)));
     groups.truncate(TOP_APPS_RANGE.1 as usize);
     for g in &mut groups {
@@ -1673,6 +1678,18 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn grouped_app_usage_is_capped_without_losing_memory_or_processes() {
+        let mut process = Sampler::new().sample().into_iter().next().expect("at least one process");
+        process.name = "browser".into();
+        process.cpu = 80.0;
+        process.rss = 10;
+        let apps = top_apps(&[process.clone(), process]);
+        assert_eq!(apps[0].cpu, PERCENT_F);
+        assert_eq!(apps[0].count, 2);
+        assert_eq!(apps[0].rss, 20);
+    }
 
     #[test]
     fn mounts_dedupe_devices_and_skip_virtual() {

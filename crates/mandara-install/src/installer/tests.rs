@@ -358,6 +358,17 @@ fn an_untouched_compositor_row_leaves_detection_to_setup() {
 }
 
 #[test]
+fn an_interactive_dry_run_keeps_the_heading_compact() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["dnf", "sudo", "systemctl", "niri"]);
+    host.tty = true;
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), dry(InstallArgs::default())).unwrap();
+    assert!(!host.text().contains("███╗   ███╗"));
+    assert!(host.text().contains("Mandara Shell installer"));
+    assert!(host.shown.is_empty());
+}
+
+#[test]
 fn choices_given_on_the_command_line_are_not_offered() {
     let f = Fixture::new();
     let mut host = FakeHost::with(&["pacman", "sudo", "systemctl"]);

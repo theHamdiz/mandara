@@ -664,14 +664,14 @@ fn dot_bounds(x: f32, y: f32, d: f32) -> Bounds<Pixels> {
 
 /// A round dot (an SDF quad).
 fn paint_dot(window: &mut Window, x: f32, y: f32, d: f32, c: Color) {
-    window.paint_quad(fill(dot_bounds(x, y, d), c.hsla()).corner_radii(px(d / 2.0)));
+    window.paint_subpixel_quad(fill(dot_bounds(x, y, d), c.hsla()).corner_radii(px(d / 2.0)));
 }
 
 /// The charge gauge: a soft track ring (an SDF border) and the charge arc
 /// from 12 o'clock clockwise, painted as overlapping round dots coloured
 /// `from → to` along the arc, with a small marker at its head. `inner` is
 /// centred over an inner disc with an ambient halo of the charge colour.
-fn charge_gauge(frac: f32, (from, to): (Color, Color), palette: &MandaraPalette, inner: AnyElement) -> AnyElement {
+pub fn charge_gauge(frac: f32, (from, to): (Color, Color), palette: &MandaraPalette, inner: AnyElement) -> AnyElement {
     let frac = frac.clamp(0.0, 1.0);
     let track = palette.on_surface.with_alpha(alpha(GAUGE_TRACK, palette));
     let head_ink = palette.surface_container;

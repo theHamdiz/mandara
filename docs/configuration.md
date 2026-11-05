@@ -59,6 +59,33 @@ selection are undone. `mandara msg config get <pointer>` and
 `mandara msg config set <pointer> <value>` reach the same keys as JSON
 pointers (for example `/plugins/settings/resources/refresh_ms`).
 
+### Custom keyboard shortcuts
+
+Open **Studio → Keyboard shortcuts**, add a starting action under **Add a
+shortcut**, capture the keys, and switch the row to **Program** for a custom
+command. Chords already owned by your compositor are shown as taken and
+are left alone.
+
+In TOML, a program action uses `kind = "spawn"` (`"exec"` is also accepted
+when reading an existing config). For Hyprland 0.57 or newer, custom
+`hyprctl` commands must use its Lua dispatchers. For example:
+
+```toml
+[[compositor.keybinds]]
+mods = ["super"]
+key = "h"
+[compositor.keybinds.action]
+kind = "spawn"
+value = "hyprctl dispatch 'hl.dsp.focus({ direction = \"l\" })'"
+```
+
+For moving a window, use `hl.dsp.window.move({ direction = "l" })`; for a
+workspace, use `hl.dsp.focus({ workspace = 2 })`. Split direction uses
+`hl.dsp.layout("togglesplit")`. Mandara preserves a program command exactly
+as entered, so update old `hyprctl dispatch
+movefocus l` commands to Hyprland's current syntax. See the official
+[Hyprland dispatcher reference](https://wiki.hypr.land/configuring/core/dispatchers/).
+
 ## What's configurable
 
 Grouped by Studio page. Keys are config paths (`table.key`).
@@ -69,7 +96,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 |---|---|
 | Themes | **looks** — six one-click looks and *Restore my look* (`looks.*`, see [Looks](#looks)); light / dark / automatic and its schedule (`theme.*`), palette tuning (`theme.adjustments`), theme crossfade (`theme.transition_ms`), icons (`appearance.*`), corner roundness, shadows, borders, backdrop dim, the **slider handle** (`style.slider_handle` = `line`: every slider's upright handle between its fill and its track, with a small gap on each side and a stop dot at the track's end; `none`: the fill's rounded end alone) (`style.*`); the theme; **other apps** — the app theming switches, all off by default (`integrations.*`, see [App theming](#app-theming-integrations)); **cursor** (the opt-in `cursors` plugin) — theme, size, hide while typing / when idle, Hyprland's software cursor and hide on touch (`compositor.input.cursor.theme`, `.size`, `.hide_when_typing`, `.hide_after_secs`, `.no_hardware_cursors`, `.hide_on_touch`; themes Mandara downloaded are listed in `~/.local/share/mandara/cursor-themes.json`) |
 | Wallpaper | folder, picker style / size / focus / names, fill and colour, transitions, crossfade (`wallpaper.crossfade_ms`), light / dark and per-display variants, depth effect (`wallpaper.depth_effect`) and how its subject is found: `wallpaper.depth.mode` (`hand-tuned` or `model`), `auto_split`, `split` (0.05–0.95, model mode) (`wallpaper.*`); video wallpapers: pause behind windows / on battery, frame-rate limit, first frame only (`wallpaper.video.*`, see [Video wallpapers](#video-wallpapers)); the slideshow (`wallpaper.slideshow.*`, see [Wallpaper slideshow](#wallpaper-slideshow)) |
-| Desktop widgets | clocks (incl. the depth clock, an analog dial and nine more faces), system monitor, gauges, meters and thermals, weather, world clock, countdown, progress, to-do, sticky note, focus timer, quote, notebook tabs, calendars, sun / moon / globe, profile, shortcuts, toggles, sliders, palette, desk cat, bubbles, photo frame, sticker, six media layouts, machine card, screen time, prayer times, search, at a glance, GitHub, exchange rates, AI usage, games, decorations, plane visualizer, per-widget plate shape, outline, shadow, header, frame, rotation and mirror, alignment, font, numerals, calendar and language, show / hide them all (`desktop.widgets.*`, see [Desktop widgets](#desktop-widgets)); desktop cards and visualizers (`cards.*`, `visualizers.*`) |
+| Desktop widgets | clocks (24 faces, including depth, analog, word, split-flap, glass-tube and binary), system monitor, gauges, meters and thermals, weather, world clock, countdown, progress, to-do, sticky note, focus timer, quote, notebook tabs, calendars, sun / moon / globe, profile, shortcuts, toggles, sliders, palette, desk cat, bubbles, photo frame, sticker, six media layouts, machine card, screen time, prayer times, search, at a glance, GitHub, exchange rates, AI usage, games, decorations, plane visualizer, per-widget plate shape, outline, shadow, header, frame, rotation and mirror, alignment, font, numerals, calendar and language, show / hide them all (`desktop.widgets.*`, see [Desktop widgets](#desktop-widgets)); desktop cards and visualizers (`cards.*`, `visualizers.*`) |
 | Typography | interface / display / Arabic / monospace fonts, text scale, weight (`typography.*`) |
 | Motion | stiffness, damping, mass, animation speed, reduce motion (`motion.*`) |
 
@@ -219,6 +246,21 @@ no timer, no sampler. Each `[[desktop.widgets.items]]` is one widget; its
 clock and the cards too — without switching any off (the desktop menu's
 *Hide desktop widgets*, `mandara msg desktop widgets hide|show|toggle`);
 desktop edit mode shows them anyway.
+
+The clock `face` values also include `word`, `split-flap`, `nixie` and
+`binary`. Date widgets accept `layout = "ticket"`, `"perpetual"` or
+`"moon-calendar"`; weather accepts `"ribbon"`, `"thermometer"` or
+`"humidity-rose"`. They use the existing appearance and placement fields.
+
+Authentication screens have separate, empty collections: `[lock.widgets]`
+in the shell config, and `[widgets]` in `greeter.toml`. Their `items` use
+this same schema, with a maximum of 24 eligible passive widgets. `units`
+is `metric` or `imperial`; optional `weather` contains public `latitude`,
+`longitude` and `place`. Invalid coordinates are discarded. Account feeds,
+calendar events, private countdown details, interactive cards and actions
+are excluded. Text decorations keep their custom text when copied: that
+text remains public on the login or lock screen. See the
+[login/lock editor](lock-and-login.md#widgets-on-login-and-lock-screens).
 
 | Key | Meaning |
 |---|---|
@@ -849,3 +891,25 @@ folders become topics, and losing the index only loses colours. A note's
 file is named after its title and renamed to follow it when you finish
 editing. Notes kept in `productivity.json` by older versions are written
 out as files on first start and only then removed from the JSON.
+
+## Connected plugin settings
+
+Studio → Plugins → the plugin → Settings writes these keys under
+`[plugins.settings.<id>]`. API keys belong in Studio’s masked keyring
+field and must not be placed in TOML.
+
+| Plugin | Key | Default and bounds |
+| --- | --- | --- |
+| `translator` | `provider` | `deepl-free`; also `deepl-pro` and `libretranslate` |
+| `translator` | `server` | Empty; LibreTranslate only, including any proxy path |
+| `translator` | `use_api_key` | `false` for LibreTranslate; DeepL always needs a key |
+| `translator` | `target` | `EN`, resolved against the provider’s language list |
+| `feeds` | `subscriptions` | Empty; up to 16 space-separated web addresses |
+| `feeds` | `refresh_seconds` | 300; 60–3,600 |
+| `home-assistant` | `server` | Empty; your instance address |
+| `home-assistant` | `entities` | Empty; up to 24 space-separated entity ids |
+| `home-assistant` | `refresh_seconds` | 30; 5–300 |
+| `phone-connect` | `refresh_seconds` | 15; 5–300 |
+| `phone-connect` | `show_unpaired` | `true`; pairing still requires confirmation |
+
+[Connected plugins](integrations.md) explains their behaviour and privacy.

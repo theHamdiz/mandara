@@ -66,13 +66,16 @@ pub fn label(w: &DesktopWidget) -> (&'static str, &'static str) {
         WidgetKind::Todo(_) => (tk("To-do list"), "list-check"),
         WidgetKind::Note(_) => (tk("Sticky note"), "note"),
         WidgetKind::Pomodoro(_) => (tk("Focus timer"), "timer"),
-        WidgetKind::Quote(_) => (tk("Quote"), "sparkles"),
+        WidgetKind::Quote(_) => (tk("Quote"), "quote"),
         WidgetKind::Notebook(_) => (tk("Notebook tabs"), "note"),
         WidgetKind::Date(d) => match d.layout {
             DateLayout::Month => (tk("Month"), "calendar"),
             DateLayout::Week => (tk("Week strip"), "calendar"),
             DateLayout::Agenda => (tk("Coming up"), "calendar"),
             DateLayout::Tile => (tk("Date tile"), "calendar"),
+            DateLayout::Ticket => (tk("Date ticket"), "calendar"),
+            DateLayout::Perpetual => (tk("Perpetual calendar"), "calendar"),
+            DateLayout::MoonCalendar => (tk("Moon calendar"), "calendar"),
         },
         WidgetKind::Media(m) => match m.layout {
             MediaLayout::Vinyl => (tk("Record player"), "music"),
@@ -99,7 +102,7 @@ pub fn label(w: &DesktopWidget) -> (&'static str, &'static str) {
             QuranLayout::Progress => (tk("Khatm progress"), "book"),
         },
         WidgetKind::Search(_) => (tk("Search field"), "search"),
-        WidgetKind::Glance(_) => (tk("At a glance"), "sparkles"),
+        WidgetKind::Glance(_) => (tk("At a glance"), "clock"),
         WidgetKind::Github(_) => (tk("GitHub contributions"), "grid"),
         WidgetKind::Currency(_) => (tk("Exchange rates"), "globe"),
         WidgetKind::AiUsage(_) => (tk("AI usage"), "sparkles"),
@@ -125,7 +128,7 @@ pub fn label(w: &DesktopWidget) -> (&'static str, &'static str) {
             dc::WAVE => (tk("Wave"), "waves"),
             dc::FRAMED_BARS => (tk("Framed bars"), "waves"),
             dc::MIRRORED_BARS => (tk("Mirrored bars"), "waves"),
-            _ => (tk("Plugin widget"), "sparkles"),
+            _ => (tk("Plugin widget"), "package"),
         },
     }
 }
@@ -153,6 +156,10 @@ pub fn face_label(f: ClockFace) -> &'static str {
         ClockFace::Template => tk("Text lines"),
         ClockFace::Numerals => tk("Hands over numerals"),
         ClockFace::Orbit => tk("Orbit"),
+        ClockFace::Word => tk("Word clock"),
+        ClockFace::SplitFlap => tk("Split-flap clock"),
+        ClockFace::Nixie => tk("Glass tube clock"),
+        ClockFace::Binary => tk("Binary clock"),
     }
 }
 
@@ -214,6 +221,10 @@ pub fn register(r: &mut PluginRegistry) {
                 face(ClockFace::Pixel, tk("Pixel")),
                 face(ClockFace::Boxes, tk("Digit boxes")),
                 face(ClockFace::Hud, tk("Slanted HUD")),
+                face(ClockFace::Word, tk("Word clock")),
+                face(ClockFace::SplitFlap, tk("Split-flap clock")),
+                face(ClockFace::Nixie, tk("Glass tube clock")),
+                face(ClockFace::Binary, tk("Binary clock")),
             ],
         )
         .in_menu(),
@@ -294,7 +305,7 @@ pub fn register(r: &mut PluginRegistry) {
         ("prayer", tk("Prayer times"), tk("The next prayer and the time to it (needs the Prayer times plugin)"), "crescent", || WidgetKind::Prayer(PrayerWidget::default()), false),
         ("prayer-list", tk("Prayer times list"), tk("Every prayer time today, the next one lit"), "crescent", || WidgetKind::Prayer(PrayerWidget { layout: PrayerLayout::List, ..PrayerWidget::default() }), false),
         ("search", tk("Search field"), tk("A click opens the launcher"), "search", || WidgetKind::Search(SearchWidget::default()), true),
-        ("glance", tk("At a glance"), tk("The date, the weather and the one thing worth knowing now"), "sparkles", || WidgetKind::Glance(GlanceWidget::default()), true),
+        ("glance", tk("At a glance"), tk("The date, the weather and the one thing worth knowing now"), "clock", || WidgetKind::Glance(GlanceWidget::default()), true),
         ("github", tk("GitHub contributions"), tk("Your contribution calendar (fetched from github.com once you switch it on)"), "grid", || WidgetKind::Github(GithubWidget::default()), false),
         ("currency", tk("Exchange rates"), tk("What one unit of your currency buys (fetched twice a day once you switch it on)"), "globe", || WidgetKind::Currency(CurrencyWidget::default()), false),
         ("ai-usage", tk("AI usage"), tk("Claude Code's tokens today and this week, read from its local logs once you switch it on"), "sparkles", || WidgetKind::AiUsage(AiUsageWidget::default()), false),
@@ -313,6 +324,9 @@ pub fn register(r: &mut PluginRegistry) {
         ("week", DateLayout::Week, tk("Week strip"), false),
         ("agenda", DateLayout::Agenda, tk("Coming up"), false),
         ("tile", DateLayout::Tile, tk("Date tile"), true),
+        ("ticket", DateLayout::Ticket, tk("Date ticket"), true),
+        ("perpetual", DateLayout::Perpetual, tk("Perpetual calendar"), false),
+        ("moon-calendar", DateLayout::MoonCalendar, tk("Moon calendar"), false),
     ] {
         r.desktop_widget(DesktopWidgetType::new(ids::CALENDAR, id, name, tk("Painted on the desktop, with your events"), "calendar", move || {
             let look = if plate { Look { plate: Plate::Solid, plate_radius: DATE_RADIUS_PX, ..Look::default() } } else { Look::default() };
@@ -365,7 +379,7 @@ pub fn register(r: &mut PluginRegistry) {
     }
 
     plugin(r, ids::WEATHER, tk("Desktop weather"), tk("The weather on the desktop: the temperature, the sky, the place and the days ahead"));
-    for (id, layout, name) in [("hero", WeatherLayout::Hero, tk("Weather")), ("compact", WeatherLayout::Compact, tk("Weather line")), ("sentence", WeatherLayout::Sentence, tk("Weather sentence")), ("disc", WeatherLayout::Disc, tk("Weather disc")), ("hourly", WeatherLayout::Hourly, tk("Hourly curve"))] {
+    for (id, layout, name) in [("hero", WeatherLayout::Hero, tk("Weather")), ("compact", WeatherLayout::Compact, tk("Weather line")), ("sentence", WeatherLayout::Sentence, tk("Weather sentence")), ("disc", WeatherLayout::Disc, tk("Weather disc")), ("hourly", WeatherLayout::Hourly, tk("Hourly curve")), ("ribbon", WeatherLayout::Ribbon, tk("Weather ribbon")), ("thermometer", WeatherLayout::Thermometer, tk("Thermometer")), ("humidity-rose", WeatherLayout::HumidityRose, tk("Humidity rose"))] {
         let kind = DesktopWidgetType::new(ids::WEATHER, id, name, tk("Needs the Weather plugin's location"), "cloud-sun", move || one(WidgetKind::Weather(WeatherWidget { layout, ..WeatherWidget::default() })));
         r.desktop_widget(if layout == WeatherLayout::Hero { kind.in_menu() } else { kind });
     }
@@ -387,7 +401,7 @@ pub fn register(r: &mut PluginRegistry) {
             WidgetKind::Note(NoteWidget { sheet: NoteSheet::Paper, look: Look { chrome: Chrome::Tape, shadow: ShadowKind::Soft, ..Look::default() }, ..NoteWidget::default() })
         }, false),
         ("pomodoro", tk("Focus timer"), tk("The Pomodoro timer; click to start or pause"), "timer", || WidgetKind::Pomodoro(PomodoroWidget::default()), true),
-        ("quote", tk("Quote"), tk("A saying that changes every day, or your own"), "sparkles", || WidgetKind::Quote(QuoteWidget::default()), true),
+        ("quote", tk("Quote"), tk("A saying that changes every day, or your own"), "quote", || WidgetKind::Quote(QuoteWidget::default()), true),
         ("notebook", tk("Notebook tabs"), tk("Your recent notes as tabs on the screen's edge"), "note", || WidgetKind::Notebook(NotebookWidget::default()), false),
     ];
     for (id, name, description, icon, make, menu) in productivity {

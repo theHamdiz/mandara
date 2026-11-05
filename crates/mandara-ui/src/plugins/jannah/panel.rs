@@ -829,7 +829,7 @@ fn step_card(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
 fn group_icon(g: &PathGroup) -> &'static str {
     match g {
         PathGroup::Worship => "crescent",
-        PathGroup::Character => "sparkles",
+        PathGroup::Character => "heart",
         PathGroup::Family => "home",
         PathGroup::Others => "user",
         PathGroup::Heart => "heart",

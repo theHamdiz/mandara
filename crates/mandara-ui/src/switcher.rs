@@ -108,6 +108,19 @@ const DEFAULT_SCALE: f32 = 2.0;
 struct Thumbs(HashMap<u64, Arc<RenderImage>>);
 impl Global for Thumbs {}
 
+impl Thumbs {
+    fn retain_live(&mut self, live: &[Toplevel]) {
+        self.0.retain(|id, _| live.iter().any(|window| window.id == *id));
+    }
+}
+
+/// Release closed-window previews on native window-list events, even while hidden.
+pub(crate) fn retain_previews(live: &[Toplevel], cx: &mut App) {
+    if cx.has_global::<Thumbs>() {
+        cx.global_mut::<Thumbs>().retain_live(live);
+    }
+}
+
 #[derive(Default)]
 struct Switcher {
     handle: Option<WindowHandle<SwitcherView>>,
@@ -260,7 +273,8 @@ pub struct SwitcherView {
     pointer_origin: Option<gpui::Point<gpui::Pixels>>,
     pointer_moved: bool,
     closing: bool,
-    committed: bool,
+    /// Focus is handed over only once the exclusive overlay is gone.
+    committed: Option<u64>,
     open: SpringValue<f32>,
     hx: SpringValue<f32>,
     hy: SpringValue<f32>,
@@ -269,6 +283,11 @@ pub struct SwitcherView {
 
 impl SwitcherView {
     fn new(mode: Mode, list: Vec<Toplevel>, selected: usize, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        cx.on_release(|this: &mut Self, cx| {
+            if let Some(id) = this.committed.take() {
+                crate::windows::activate(id, cx);
+            }
+        }).detach();
         let focus = cx.focus_handle();
         if mode != Mode::Demo {
             focus.focus(window, cx);
@@ -302,7 +321,7 @@ impl SwitcherView {
             pointer_origin: None,
             pointer_moved: false,
             closing: false,
-            committed: false,
+            committed: None,
             open: SpringValue::new(0.0, OPEN_SPRING),
             hx: SpringValue::new(0.0, HIGHLIGHT_SPRING),
             hy: SpringValue::new(0.0, HIGHLIGHT_SPRING),
@@ -354,7 +373,8 @@ impl SwitcherView {
         }
     }
 
-    /// Focuses the selected window and closes.
+    /// Closes before handing focus back: the exclusive keyboard grab can
+    /// prevent activation from taking effect during the outro.
     fn commit(&mut self, cx: &mut Context<Self>) {
         if self.closing {
             return;
@@ -362,8 +382,7 @@ impl SwitcherView {
         if self.mode != Mode::Demo
             && let Some(t) = self.list.get(self.selected)
         {
-            crate::windows::activate(t.id, cx);
-            self.committed = true;
+            self.committed = Some(t.id);
         }
         self.closing = true;
         cx.notify();
@@ -440,7 +459,7 @@ fn capture_previews(list: &[Toplevel], scale: f32, cursor: bool, cx: &mut App) {
         .name("mandara-switcher-previews".into())
         .spawn(move || {
             let result = mandara_services::window_capture::capture_windows(&targets, max, cursor, |i, img| {
-                let _ = tx.send_blocking((ids[i], render_image(img.clone())));
+                let _ = tx.send_blocking((ids[i], render_image(img)));
             });
             if let Err(err) = result {
                 tracing::debug!("switcher previews: {err:#}");
@@ -450,6 +469,8 @@ fn capture_previews(list: &[Toplevel], scale: f32, cursor: bool, cx: &mut App) {
     cx.spawn(async move |cx| {
         while let Ok((id, image)) = rx.recv().await {
             cx.update(|cx| {
+                let live = crate::windows::windows(cx).is_some_and(|windows| windows.read(cx).list().iter().any(|window| window.id == id));
+                if !live { return; }
                 cx.default_global::<Thumbs>().0.insert(id, image);
                 if let Some(h) = cx.try_global::<Switcher>().and_then(|s| s.handle) {
                     let _ = h.update(cx, |_, _, cx| cx.notify());
@@ -802,6 +823,30 @@ mod tests {
 
     fn win(id: u64, app: &str, out: &str) -> Toplevel {
         Toplevel { id, app_id: app.into(), title: format!("{app} {id}"), outputs: vec![out.into()], activated: id == 1, ..Default::default() }
+    }
+
+    #[test]
+    fn closed_window_previews_release_their_pixels_without_reopening() {
+        let kept = render_image(image::RgbaImage::new(2, 2));
+        let closed = render_image(image::RgbaImage::new(2, 2));
+        let weak = Arc::downgrade(&closed);
+        let mut thumbs = Thumbs(HashMap::from([(1, kept.clone()), (2, closed)]));
+        thumbs.retain_live(&[win(1, "terminal", "DP-1")]);
+        assert!(weak.upgrade().is_none());
+        assert_eq!(thumbs.0.len(), 1);
+        assert!(Arc::ptr_eq(&thumbs.0[&1], &kept));
+        thumbs.retain_live(&[]);
+        assert!(thumbs.0.is_empty());
+    }
+
+    #[test]
+    fn preview_upload_reuses_the_captured_pixel_buffer() {
+        let rgba = image::RgbaImage::from_pixel(640, 400, image::Rgba([31, 82, 173, 255]));
+        let pointer = rgba.as_ptr();
+        let image = render_image(rgba);
+        let bytes = image.as_bytes(0).unwrap();
+        assert_eq!(bytes.as_ptr(), pointer, "the preview moves its capture allocation into GPUI");
+        assert!(bytes.as_chunks::<4>().0.iter().all(|pixel| *pixel == [173, 82, 31, 255]));
     }
 
     #[test]

@@ -21,7 +21,7 @@ handbook) sit beside it.
 </tr>
 </table>
 
-The 73 first-party plugins (37 of them ship switched off, marked *opt-in*):
+The 77 first-party plugins (41 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -76,6 +76,10 @@ The 73 first-party plugins (37 of them ship switched off, marked *opt-in*):
 | **Task progress** | A bar ring that scripts, long builds and AI agents report progress to (`mandara msg progress set build 40%`) *(opt-in)* |
 | **Eye breaks** | Gentle 20-20-20 reminders that count only active time and wait while a fullscreen app has focus *(opt-in)* |
 | **Presentation mode** | One switch for talks and screen sharing: do not disturb, keep awake and hidden desktop widgets, all put back afterwards *(opt-in)* |
+| **Translator** | Translate text with DeepL or your own LibreTranslate server; text is sent only when you ask *(opt-in)* |
+| **Phone Connect** | Paired KDE Connect devices: battery, ring, ping and explicitly send clipboard text *(opt-in)* |
+| **Feeds** | Read RSS, Atom and JSON feeds with cached headlines and local read history *(opt-in)* |
+| **Home Assistant** | Your real home states and favourites, with controls for lights, switches, fans, scenes, scripts and buttons *(opt-in)* |
 | **Share to phone** | Clipboard text, a screenshot or a file, served once on your network behind a QR code *(opt-in)* |
 | **Tailscale** | Your tailnet: this device, peers, direct or relayed paths, exit nodes, connect and disconnect *(opt-in)* |
 | **Uptime monitor** | Watches your sites and services (HTTP or TCP) and tells you when one goes down *(opt-in)* |
@@ -98,6 +102,8 @@ The 73 first-party plugins (37 of them ship switched off, marked *opt-in*):
 | **Desktop shortcuts and you** | A profile card, launch tiles for apps, folders and links, quick toggles, volume and brightness sliders and your theme's palette |
 | **Desktop fun** | A little cat, soap bubbles, a photo frame and stickers on the desktop |
 | **Desktop info** | A machine card, screen time, the next prayer, a search field, an "at a glance" line, your GitHub year, exchange rates, AI usage and your Steam games (the online ones fetch only once you switch that on) |
+
+See [Connected plugins](integrations.md) for setup, API keys and privacy.
 
 The desktop widget plugins draw nothing until you place one of their
 widgets (Studio → Desktop widgets, or right-click the desktop → Add

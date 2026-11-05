@@ -520,6 +520,7 @@ pub enum BindAction {
     /// A Mandara command, run as `mandara msg <words>`.
     Mandara(String),
     /// Spawn a shell command.
+    #[serde(alias = "exec")]
     Spawn(String),
 }
 
@@ -3384,6 +3385,26 @@ mod look_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exec_keybind_alias_keeps_the_program_and_writes_canonical_spawn() {
+        let bind: Keybind = toml::from_str(
+            r#"mods = ["super"]
+key = "h"
+[action]
+kind = "exec"
+value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            bind.action,
+            BindAction::Spawn("hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'".into())
+        );
+        let saved = toml::to_string(&bind).unwrap();
+        assert!(saved.contains(r#"kind = "spawn""#), "{saved}");
+        assert_eq!(toml::from_str::<Keybind>(&saved).unwrap(), bind);
+    }
 
     #[test]
     fn saved_target_ids_match_the_setup_command() {

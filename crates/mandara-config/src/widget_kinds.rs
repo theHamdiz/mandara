@@ -317,6 +317,12 @@ pub enum DateLayout {
     Agenda,
     /// A big tile: the weekday, the day's numeral, the month.
     Tile,
+    /// A perforated date ticket.
+    Ticket,
+    /// Month, day and weekday on separate mechanical cards.
+    Perpetual,
+    /// Every day of this month with its calculated lunar phase.
+    MoonCalendar,
 }
 
 /// A painted calendar: a month grid, a week strip, what's coming up or a

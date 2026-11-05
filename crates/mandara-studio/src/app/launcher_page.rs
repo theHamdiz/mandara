@@ -629,7 +629,7 @@ impl StudioView {
                     .row()
                     .items_center()
                     .gap(px(SPACE_12_PX))
-                    .child(div().flex_none().size(px(DIM_36_PX)).rounded(px(RADIUS_12_PX)).bg(p.primary.with_alpha(ALPHA_14).hsla()).row().items_center().justify_center().child(icon("sparkles", ICON_16_PX, p.primary)))
+                    .child(div().flex_none().size(px(DIM_36_PX)).rounded(px(RADIUS_12_PX)).bg(p.primary.with_alpha(ALPHA_14).hsla()).row().items_center().justify_center().child(icon("clock", ICON_16_PX, p.primary)))
                     .child(div().flex_1().min_w(px(0.0)).child(heading(t("What the launcher has learnt"), t("Launches count more when recent; the weight halves every few days (Ranking above)."), p)))
                     .child(badge(tf("Top {n} by frecency", &[("n", &USAGE_ROWS)]), p.primary)),
             )

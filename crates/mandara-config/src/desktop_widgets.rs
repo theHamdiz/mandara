@@ -408,6 +408,15 @@ pub enum WidgetKind {
 }
 
 impl WidgetKind {
+    /// Whether this kind draws forecast data when it is enabled and visible.
+    pub fn uses_weather(&self) -> bool {
+        match self {
+            Self::Weather(_) => true,
+            Self::Clock(clock) => clock.shows_weather(),
+            _ => false,
+        }
+    }
+
     /// Stable kind id (`clock`, `monitor`, …), as in TOML.
     pub fn id(&self) -> &'static str {
         match self {
@@ -716,6 +725,12 @@ pub enum WeatherLayout {
     Disc,
     /// The next hours as a temperature curve with icons.
     Hourly,
+    /// A compact forecast printed across a horizontal ticket.
+    Ribbon,
+    /// A thermometer filled from the current temperature and today's range.
+    Thermometer,
+    /// A petal dial showing measured relative humidity.
+    HumidityRose,
 }
 
 impl Default for WeatherWidget {
@@ -1176,10 +1191,18 @@ pub enum ClockFace {
     Numerals,
     /// Hour and minute as bodies orbiting on two rings.
     Orbit,
+    /// Time written in words, with the exact time below.
+    Word,
+    /// Four mechanical split-flap digit cards.
+    SplitFlap,
+    /// Numerals inside outlined glass tubes.
+    Nixie,
+    /// Binary-coded decimal columns with their decimal readout.
+    Binary,
 }
 
 impl ClockFace {
-    pub const ALL: [ClockFace; 20] = [
+    pub const ALL: [ClockFace; 24] = [
         Self::Stacked,
         Self::Classic,
         Self::Arabic,
@@ -1200,6 +1223,10 @@ impl ClockFace {
         Self::Template,
         Self::Numerals,
         Self::Orbit,
+        Self::Word,
+        Self::SplitFlap,
+        Self::Nixie,
+        Self::Binary,
     ];
 
     /// The depth clock's own faces (drawn by its dedicated planes).
@@ -1243,6 +1270,10 @@ impl ClockFace {
             ClockFace::Template => "template",
             ClockFace::Numerals => "numerals",
             ClockFace::Orbit => "orbit",
+            ClockFace::Word => "word",
+            ClockFace::SplitFlap => "split-flap",
+            ClockFace::Nixie => "nixie",
+            ClockFace::Binary => "binary",
         }
     }
 }
@@ -1318,6 +1349,11 @@ impl Default for ClockWidget {
 }
 
 impl ClockWidget {
+    /// Only the day-block face displays the optional weather caption.
+    pub fn shows_weather(&self) -> bool {
+        self.weather && self.face == ClockFace::DayBlock
+    }
+
     /// A new clock with `face`: the depth faces keep their Gregorian ·
     /// Hijri date pill.
     pub fn with_face(face: ClockFace) -> Self {

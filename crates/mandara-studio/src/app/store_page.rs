@@ -61,14 +61,14 @@ pub(crate) const HIDDEN_PLUGINS: &[&str] = &["compositor"];
 /// plugins get their own group).
 pub(crate) const PLUGIN_CATEGORIES: &[(&str, &[&str])] = &[
     (tk("Bar essentials"), &["workspaces", "active-window", "clock", "language", "keyboard-layout", "main-menu", "session", "quick-settings", "dock"]),
-    (tk("System"), &["network", "bluetooth", "tailscale", "audio", "tray", "resources", "mini-stats", "processes", "notifications", "clipboard", "drives", "power", "privacy"]),
+    (tk("System"), &["network", "bluetooth", "tailscale", "phone-connect", "home-assistant", "audio", "tray", "resources", "mini-stats", "processes", "notifications", "clipboard", "drives", "power", "privacy"]),
     (tk("Maintenance"), &["updates", "services", "containers", "app-installer", "uptime", "crashes"]),
     (tk("Developer tools"), &["progress", "ports", "git-repos", "ci", "local-ai"]),
     (tk("Media & capture"), &["media", "screenshot", "color-picker", "soundscapes", "share"]),
     (tk("Look & feel"), &["wallpaper", "wallpaper-depth", "wallpaper-generator", "wallhaven", "cursors"]),
     (tk("Desktop widgets"), &["desktop-clocks", "desktop-monitor", "desktop-decorations", "desktop-visualizers", "desktop-now-playing", "desktop-calendar", "desktop-weather", "desktop-world-clock", "desktop-countdown", "desktop-productivity", "desktop-sky", "desktop-identity", "desktop-fun", "desktop-info"]),
-    (tk("Productivity"), &["todo", "notes", "pomodoro", "authenticator", "screen-time", "keybinds", "breaks", "presentation"]),
-    (tk("Everyday info"), &["weather", "prayer-times", "jannah", "quran", "hadith", "world-clock", "net-speed"]),
+    (tk("Productivity"), &["todo", "notes", "translator", "pomodoro", "authenticator", "screen-time", "keybinds", "breaks", "presentation"]),
+    (tk("Everyday info"), &["weather", "feeds", "prayer-times", "jannah", "quran", "hadith", "world-clock", "net-speed"]),
     (tk("Third-party"), &[]),
 ];
 
@@ -411,7 +411,7 @@ pub(crate) fn plugin_icon(id: &str) -> &'static str {
         "screenshot" => "camera",
         "wallpaper" => "image",
         "wallpaper-generator" => "brush",
-        "wallpaper-depth" => "sparkles",
+        "wallpaper-depth" => "image",
         "wallhaven" => "cloud",
         "cursors" => "arrow",
         "mini-stats" => "cpu",

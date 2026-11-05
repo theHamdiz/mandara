@@ -539,20 +539,7 @@ fn widget_scene(cfg: &mandara_config::ShellConfig, outputs: &[String], cx: &mut 
         ws.weather = crate::hub::hub(cx).read(cx).weather.weather.clone().map(|w| (crate::plugins::weather::condition_icon(w.condition, w.is_day), cfg.units().format_degrees(w.temp)));
     }
     if ws.items.iter().any(|w| matches!(w.kind, WidgetKind::Weather(_))) {
-        ws.forecast = crate::hub::hub(cx).read(cx).weather.weather.as_ref().map(|w| widgets::Forecast {
-            icon: crate::plugins::weather::condition_icon(w.condition, w.is_day),
-            temp: w.temp,
-            feels_like: w.feels_like,
-            humidity: w.humidity,
-            wind: w.wind,
-            condition: mandara_i18n::untranslate(w.condition.label()),
-            place: crate::plugins::weather::location_name(cfg),
-            days: w.days.iter().filter_map(|d| Some((chrono::NaiveDate::parse_from_str(&d.date, "%Y-%m-%d").ok()?, crate::plugins::weather::condition_icon(d.condition, true), d.min, d.max))).collect(),
-            hours: w.hours.iter().map(|h| (h.hour, crate::plugins::weather::condition_icon(h.condition, h.is_day), h.temp)).collect(),
-            kind: w.condition as usize,
-            is_day: w.is_day,
-            today: w.days.first().map(|d| (d.min, d.max)),
-        });
+        ws.forecast = crate::hub::hub(cx).read(cx).weather.weather.as_ref().map(|w| widgets::Forecast::from_weather(w, &crate::plugins::weather::location_name(cfg)));
     }
     // The Hijri date, while a widget may show it (the day turns at Maghrib).
     let hijri = ws.items.iter().any(|w| {
@@ -817,6 +804,11 @@ fn identity_data(d: &mut widgets::WidgetData, items: &[mandara_config::desktop_w
 /// The theme's colours with their names (catalog keys), as `0xRRGGBB`.
 fn theme_palette(cx: &App) -> Vec<(String, u32)> {
     let p = mandara_core::theme_entity(cx).read(cx).target().clone();
+    palette_colors(&p)
+}
+
+/// Shared palette swatches keep catalog keys until the widget chooses its language.
+fn palette_colors(p: &mandara_theme::MandaraPalette) -> Vec<(String, u32)> {
     let rgb = |c: mandara_theme::Color| {
         let [r, g, b, _] = c.to_rgba8();
         (u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b)

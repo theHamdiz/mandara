@@ -173,6 +173,12 @@ enum Mode {
     Preview,
 }
 
+impl Mode {
+    fn permits_weather_requests(self) -> bool {
+        matches!(self, Self::Live { demo: false })
+    }
+}
+
 /// Edits coming out of the Studio preview.
 #[derive(Clone, Debug)]
 #[expect(clippy::large_enum_variant, reason = "a handful per drag; the edited config is a fresh copy either way")]
@@ -198,6 +204,8 @@ struct Drag {
     moved: bool,
 }
 
+mod preview_clock;
+
 /// The clock's rolling digits.
 #[derive(Default)]
 struct Roll {
@@ -207,6 +215,17 @@ struct Roll {
     /// Second and format the text was made for.
     second: i64,
     format: &'static str,
+}
+
+impl Roll {
+    fn progress(&self, now: Instant) -> f32 {
+        self.at.map(|at| pop_at(ROLL_SPRING, now.saturating_duration_since(at).as_secs_f32()).clamp(0.0, ROLL_OVERSHOOT_CAP)).unwrap_or(1.0)
+    }
+
+    /// Keep frames scheduled until every rolling digit reaches its destination.
+    fn moving(&self, now: Instant) -> bool {
+        self.progress(now) < 1.0 && self.prev.chars().count() == self.text.chars().count()
+    }
 }
 
 pub struct GreeterView {
@@ -232,6 +251,7 @@ pub struct GreeterView {
     field: Field,
     auth: Option<AuthWorker>,
     background: Background,
+    widgets: mandara_ui::backdrop::widgets::passive::Canvas,
     /// The configured clips, stills and video switch, restored when the
     /// picked person has no wallpaper of their own.
     bg_base: (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>, bool),
@@ -248,6 +268,8 @@ pub struct GreeterView {
     first_frame_at: Option<Instant>,
     /// Second of the last clock format (the text only changes per second).
     clock_second: i64,
+    /// One visible-preview deadline; dropped when hidden or animating.
+    preview_wake: Option<(bool, gpui::Task<()>)>,
     /// Formatted date and the (day, pattern, language) it was made for.
     date_text: Option<((chrono::NaiveDate, String, &'static str), SharedString)>,
     /// Keyboard layout label and the (configured, GPUI) ids it came from.
@@ -404,6 +426,28 @@ fn keyboard_layout(cfg: &GreeterConfig, cx: &gpui::App) -> String {
     env.or(x11).or(vconsole).map(|l| l.split(',').next().unwrap_or("").trim().to_uppercase()).filter(|l| !l.is_empty()).unwrap_or_else(|| "US".into())
 }
 
+#[cfg(test)]
+mod preview_clock_tests {
+    use super::*;
+
+    #[test]
+    fn rolling_clock_digits_keep_preview_frames_active() {
+        let start = Instant::now();
+        let roll = Roll { text: "12:10".into(), prev: "12:09".into(), at: Some(start), ..Default::default() };
+        assert!(roll.moving(start));
+        assert!(roll.moving(start + Duration::from_millis(16)));
+        assert!(!roll.moving(start + Duration::from_secs(10)));
+        assert!(!Roll::default().moving(start));
+    }
+
+    #[test]
+    fn previews_and_full_screen_demos_do_not_request_weather() {
+        assert!(!Mode::Preview.permits_weather_requests());
+        assert!(!Mode::Live { demo: true }.permits_weather_requests());
+        assert!(Mode::Live { demo: false }.permits_weather_requests());
+    }
+}
+
 impl GreeterView {
     /// The real (or demo) login screen.
     pub fn new_live(demo: bool, autoplay: bool, config: GreeterConfig, window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -438,6 +482,7 @@ impl GreeterView {
         this
     }
 
+    /// Initialize one live or preview view with independent session and animation state.
     fn build(mode: Mode, mut config: GreeterConfig, target: (u32, u32), cx: &mut Context<Self>) -> Self {
         config.normalize();
         let demo = !matches!(mode, Mode::Live { demo: false });
@@ -504,6 +549,7 @@ impl GreeterView {
             auth: None,
             bg_base: owned_sources(&background),
             background,
+            widgets: mandara_ui::backdrop::widgets::passive::Canvas::for_images(),
             bg_key: BackgroundSources::of(&config),
             bg_rebuild_at: None,
             clock: FrameClock::new(),
@@ -512,6 +558,7 @@ impl GreeterView {
             warm_frames: 0,
             first_frame_at: None,
             clock_second: i64::MIN,
+            preview_wake: None,
             date_text: None,
             kb_layout: None,
             enter,
@@ -654,6 +701,7 @@ impl GreeterView {
         self.wake.set_config(spring(m.idle_spring, reduced));
         self.palette = palette_for(&config);
         self.config = config;
+        if reduced || !self.config.clock.roll_digits { self.roll.at = None; }
         match change {
             BackgroundChange::Same => self.bg_rebuild_at = None,
             BackgroundChange::Rebuild => self.rebuild_background(),
@@ -1315,7 +1363,7 @@ impl GreeterView {
     fn offscreen(&self, window: &Window) -> bool {
         let top = f32::from(self.origin.get().y);
         let height = f32::from(window.viewport_size().height);
-        top + self.preview_size.1 < 0.0 || top > height
+        !window.is_visible() || top + self.preview_size.1 < 0.0 || top > height
     }
 
     /// Schedules the next frame, always on the display's frame clock (a
@@ -1328,12 +1376,28 @@ impl GreeterView {
     /// The preview holds still between changes: it asks for frames only
     /// while something it shows is moving (a Try-it moment, an edit's
     /// springs, a picture fading in), and the next edit or click wakes it.
-    fn schedule_frame(&mut self, window: &mut Window) {
-        if self.is_preview() && (self.offscreen(window) || !self.preview_moving(Instant::now())) {
+    fn schedule_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_preview() && self.offscreen(window) {
+            self.preview_wake = None;
+            self.clock.idle();
+            return;
+        }
+        if self.is_preview() && !self.preview_moving(Instant::now()) {
+            let seconds = self.config.clock.seconds || mandara_ui::backdrop::widgets::passive::ticks_seconds(&self.config.widgets);
+            if let Some(wait) = preview_clock::plan(chrono::Local::now().timestamp_millis(), seconds, self.preview_wake.as_ref().map(|(seconds, _)| *seconds)) {
+                self.preview_wake = Some((seconds, cx.spawn_in(window, async move |this, cx| {
+                    cx.background_executor().timer(wait).await;
+                    let _ = this.update_in(cx, |this, window, cx| {
+                        this.preview_wake = None;
+                        if !this.offscreen(window) { cx.notify(); }
+                    });
+                })));
+            }
             // Restart the clock cleanly after the pause (no catch-up jump).
             self.clock.idle();
             return;
         }
+        self.preview_wake = None;
         window.request_animation_frame();
     }
 
@@ -1344,12 +1408,14 @@ impl GreeterView {
         let entrance_s = ENTRANCE_LEAD_S + Element::ALL.len() as f32 * m.stagger_ms as f32 / MS_PER_S;
         let entering = self.entrance_at.is_some_and(|at| now.saturating_duration_since(at).as_secs_f32() < entrance_s);
         springs
+            || self.roll.moving(now)
             || entering
             || self.sim_reset.is_some()
             || self.phase != Phase::Idle
             || self.toast.is_some()
             || self.drag.is_some()
             || self.bg_rebuild_at.is_some()
+            || self.widgets.pending()
             || !self.background.ready()
             || self.background.fading(now)
     }
@@ -1521,15 +1587,15 @@ impl GreeterView {
         container.child(wrapper).into_any_element()
     }
 
+    /// Use the same roll progress for painting digits and deciding when motion ends.
     fn clock_el(&self, f: &Frame, k: f32) -> AnyElement {
         let c = &self.config.clock;
         let idle = 1.0 - self.wake.value().clamp(0.0, 1.0);
         let size = snap_size(c.size * k * (1.0 + CLOCK_IDLE_GROWTH * idle) * (1.0 + CLOCK_SUCCESS_GROWTH * f.success));
         let line = size * 1.08;
         let font = if c.font.trim().is_empty() { f.display_font.clone() } else { SharedString::from(c.font.clone()) };
-        let roll_t = self.roll.at.map(|t| f.now.saturating_duration_since(t).as_secs_f32()).unwrap_or(10.0);
-        let progress = pop_at(ROLL_SPRING, roll_t).clamp(0.0, ROLL_OVERSHOOT_CAP);
-        let rolling = progress < 1.0 && self.roll.prev.chars().count() == self.roll.text.chars().count();
+        let progress = self.roll.progress(f.now);
+        let rolling = self.roll.moving(f.now);
         let mut row = div()
             .flex()
             .font_family(font)
@@ -2242,6 +2308,7 @@ fn orbs(vw: f32, vh: f32, p: &MandaraPalette, t: f32, intensity: f32, shift: (f3
 }
 
 impl Render for GreeterView {
+    /// Place public decorations below the sign-in controls in live and preview views.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let now = Instant::now();
         let dt = self.clock.tick(now);
@@ -2269,7 +2336,7 @@ impl Render for GreeterView {
             // Self-test: clicks pass through to the windows underneath.
             window.set_input_region(Some(&[]));
         }
-        self.schedule_frame(window);
+        self.schedule_frame(window, cx);
 
         if let Phase::Success(at) = self.phase
             && !preview
@@ -2303,6 +2370,19 @@ impl Render for GreeterView {
         }
 
         let layout = self.keyboard_label(cx);
+        let widget_size = ((vw * sf).round() as u32, (vh * sf).round() as u32);
+        let widgets = if !self.config.widgets.items.is_empty() && (!preview || !self.offscreen(window)) {
+            let fonts = mandara_ui::backdrop::paint::FontNames::from(cx.global::<Fonts>());
+            self.widgets.update(&self.config.widgets, widget_size, &fonts, &self.palette, self.config.clock.format_24h, self.mode.permits_weather_requests());
+            if self.widgets.pending() { window.request_animation_frame(); }
+            self.widgets.image(widget_size)
+        } else {
+            self.widgets.clear();
+            None
+        };
+        for image in self.widgets.take_trash() {
+            let _ = window.drop_image(image);
+        }
         let cfg = &self.config;
         let p = &self.palette;
         let fonts: &Fonts = cx.global::<Fonts>();
@@ -2414,6 +2494,10 @@ impl Render for GreeterView {
         }
         if bgc.grain > 0.0 {
             root = root.child(div().absolute().top_0().left_0().size_full().opacity(bgc.grain).child(crate::background::grain(vw, vh)));
+        }
+
+        if let Some(widgets) = widgets {
+            root = root.child(img(widgets).absolute().top_0().left_0().w(px(vw)).h(px(vh)).object_fit(ObjectFit::Fill));
         }
 
         // Elements in z order.

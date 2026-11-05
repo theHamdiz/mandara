@@ -200,14 +200,19 @@ fn finish_copy(mut c: Copy, max: (u32, u32)) -> Result<image::RgbaImage> {
     let rgba = crate::screencopy::to_rgba(c.format, c.width, c.height, stride, &data, false)?;
     drop(data);
     let full = image::RgbaImage::from_raw(c.width, c.height, rgba).context("bad frame size")?;
-    let (w, h) = fit(c.width, c.height, max.0, max.1);
-    Ok(image::imageops::thumbnail(&full, w, h))
+    Ok(fit_image(full, max))
+}
+
+/// Keeps an already-small frame's allocation; larger frames are downscaled.
+fn fit_image(full: image::RgbaImage, max: (u32, u32)) -> image::RgbaImage {
+    let (w, h) = fit(full.width(), full.height(), max.0, max.1);
+    if full.dimensions() == (w, h) { full } else { image::imageops::thumbnail(&full, w, h) }
 }
 
 /// Captures thumbnails (each fitting `max_w × max_h` physical pixels) of
-/// `targets`, in order; `None` for windows that couldn't be copied.
-/// `on_ready` hears about each thumbnail as soon as it is made.
-pub fn capture_windows(targets: &[Target], max: (u32, u32), paint_cursor: bool, mut on_ready: impl FnMut(usize, &image::RgbaImage)) -> Result<Vec<Option<image::RgbaImage>>> {
+/// `targets`, handing each successful frame to `on_ready` as soon as it is made.
+/// Ownership moves to the consumer; the batch retains no completed pixels.
+pub fn capture_windows(targets: &[Target], max: (u32, u32), paint_cursor: bool, mut on_ready: impl FnMut(usize, image::RgbaImage)) -> Result<()> {
     let conn = Connection::connect_to_env().context("connecting to Wayland")?;
     let (globals, mut queue) = registry_queue_init::<State>(&conn)?;
     let qh = queue.handle();
@@ -222,7 +227,6 @@ pub fn capture_windows(targets: &[Target], max: (u32, u32), paint_cursor: bool, 
     let listed: Vec<(String, String)> = state.listed.iter().map(|(_, w)| (w.app_id.clone(), w.title.clone())).collect();
     let matches = match_targets(targets, &listed);
     let options = if paint_cursor { copy_manager::Options::PaintCursors } else { copy_manager::Options::empty() };
-    let mut out: Vec<Option<image::RgbaImage>> = vec![None; targets.len()];
     let deadline = Instant::now() + BATCH_TIMEOUT;
     // Process in small waves so only a few full-size buffers exist at once.
     let wanted: Vec<(usize, usize)> = matches.iter().enumerate().filter_map(|(t, m)| m.map(|i| (t, i))).collect();
@@ -261,10 +265,7 @@ pub fn capture_windows(targets: &[Target], max: (u32, u32), paint_cursor: bool, 
                 && let Some(c) = copy
             {
                 match finish_copy(c, max) {
-                    Ok(img) => {
-                        on_ready(t, &img);
-                        out[t] = Some(img);
-                    }
+                    Ok(img) => on_ready(t, img),
                     Err(err) => tracing::debug!("window capture: {err:#}"),
                 }
             } else if let Some(c) = copy {
@@ -281,10 +282,10 @@ pub fn capture_windows(targets: &[Target], max: (u32, u32), paint_cursor: bool, 
     }
     list.stop();
     let _ = conn.flush();
-    if targets.iter().zip(&out).all(|(_, o)| o.is_none()) && !targets.is_empty() && wanted.is_empty() {
+    if !targets.is_empty() && wanted.is_empty() {
         bail!("no listed window matched");
     }
-    Ok(out)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -299,6 +300,18 @@ mod tests {
     fn targets_match_by_app_and_title_then_app() {
         let listed = vec![("term".to_string(), "a".to_string()), ("term".to_string(), "b".to_string()), ("web".to_string(), "x".to_string())];
         assert_eq!(match_targets(&[target("term", "b"), target("term", "zzz"), target("web", "y"), target("nope", "")], &listed), vec![Some(1), Some(0), Some(2), None]);
+    }
+
+    #[test]
+    fn small_thumbnails_keep_their_pixels_without_a_second_allocation() {
+        let full = image::RgbaImage::from_pixel(200, 100, image::Rgba([31, 82, 173, 255]));
+        let pointer = full.as_ptr();
+        let small = fit_image(full, (640, 400));
+        assert_eq!(small.as_ptr(), pointer);
+        assert_eq!(small.dimensions(), (200, 100));
+        let resized = fit_image(small, (100, 100));
+        assert_eq!(resized.dimensions(), (100, 50));
+        assert!(resized.pixels().all(|pixel| pixel.0 == [31, 82, 173, 255]));
     }
 
     #[test]

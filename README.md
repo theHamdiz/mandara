@@ -35,7 +35,7 @@
   <a href="docs/desktop.md"><img src="https://img.shields.io/badge/Wayland-native-22D3EE?logo=wayland&logoColor=E9E5FF&labelColor=0B1026" alt="Wayland native"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-8B5CF6?labelColor=0B1026" alt="GPU rendered"/></a>
   <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic%20%C2%B7%20KWin-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin"/></a>
-  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-73%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="73 plugins plus WebAssembly"/></a>
+  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-77%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="77 plugins plus WebAssembly"/></a>
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-15%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="15 languages"/></a>
   <br/>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/RAM-under%20100%20MiB-2DD4BF?labelColor=0B1026" alt="RAM under 100 MiB"/></a>
@@ -67,9 +67,11 @@ screen, plus a settings app that changes all of it live. It runs on
 **MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic and KWin**, and it's one small, fast program
 you install with one command.
 
+Maintenance flags missing icon themes and links to the icon settings.
 Studio keeps bar arrangements in their own saved profiles, and screenshots
 can capture every display at once. Native KWin support uses Plasma's own
-window, clipboard and screenshot interfaces.
+window, clipboard and screenshot interfaces. Icons describe each tool’s
+function; sparkle symbols are reserved for AI features.
 
 It's made to feel good to use. Panels pour out of the bar on real spring
 physics, colours follow your wallpaper and your music, and the whole
@@ -99,7 +101,8 @@ widget can be moved, resized and restyled right on the desktop.
 | **Resources** | Under 100 MiB RAM, under 190 MiB video memory, about 0.1 % CPU idle |
 | **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`) |
 | **Automation** | `mandara msg <command>` with JSON replies; `mandara commands --json` lists them all |
-| **Plugins** | 73 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
+| **Plugins** | 77 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
+| **Widgets** | Mechanical, word and binary clocks, calendar cards and weather dials; passive widgets can also decorate Mandara Login and the native lock screen |
 | **Languages** | 15, including right-to-left Arabic, Persian and Urdu |
 | **License** | GPL-3.0-or-later |
 
@@ -145,7 +148,7 @@ around, each one measured or shipped today:
 8. **Your desktop, your look.** Six bar styles on any edge, side bars that
    join the top bar into one frame, one-click Looks, dozens of desktop
    widgets placed per monitor, and three launcher looks.
-9. **Safe, rich extensions.** 73 plugins built in. Third-party plugins are
+9. **Safe, rich extensions.** 77 plugins built in. Third-party plugins are
    Rust compiled to sandboxed WebAssembly: a crashing plugin is switched
    off and the shell keeps running.
 10. **Scriptable end to end.** Almost everything the interface does is a
@@ -176,7 +179,7 @@ around, each one measured or shipped today:
   mixer per app, screenshots and screen recording, copying text from the
   screen, a launcher with three looks (a list, an icon grid or a centred
   Spotlight-style search bar), a clipboard that sorts what you copy, a
-  drag-and-drop app installer, night light, and 73 built-in plugins.
+  drag-and-drop app installer, night light, and 77 built-in plugins.
   [Everything else](docs/more-features.md)
 - **It welcomes you in.** A matching lock screen and login screen with
   your own wallpaper, and ready-made looks for both.

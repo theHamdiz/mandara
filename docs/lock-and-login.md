@@ -1,5 +1,40 @@
 # Lock screen and Mandara Login
 
+## Widgets on login and lock screens
+
+Open **Studio → Login screen → Layout → Widgets** to add a public
+decoration to Mandara Login. Choose **Add a widget** to open the gallery.
+Its **Copy from desktop** section appears when an eligible desktop widget
+exists; use it to keep that widget's appearance and position. Expand a
+placed widget to change its anchor, offsets, scale or opacity. Use
+**Apply to login screen** when the draft is ready.
+
+The same editor is under **Studio → Lock appearance → Widgets** for
+Mandara's native locker. On KWin, Plasma's secure locker owns that screen;
+Studio explains the limitation and leaves the custom lock editor disabled.
+Login widgets remain available through Mandara Login.
+
+Clocks, calendars without events, weather, world clocks, countdowns,
+progress, sky, text and shape decorations, and palette swatches are
+eligible. The copies are independent of the desktop. Notes, messages,
+account feeds, personal pictures and widget actions are excluded. Both
+collections start empty, and the authentication controls stay above them.
+Copied countdowns use the next New Year, without their desktop title or
+private date. World clocks without a city list use the public default cities.
+
+Weather has its own **Public weather location** choice. The editor shows
+the coordinates before **Use this location publicly**; adding a widget
+does not copy the desktop's location. The public configuration permits
+forecast requests only for visible weather widgets or a day-block clock
+with its weather caption enabled. Studio previews
+stay offline, including **Preview full screen**, and show the unavailable
+state until a real screen fetches data. Remove the location to stop those
+requests.
+
+Widgets reuse their desktop painters, with cached rendering away from the
+authentication thread. Their clocks refresh when the displayed time
+changes; an empty collection starts no painter or weather service.
+
 <table>
 <tr>
 <td width="50%" valign="top"><img src="screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons" width="100%"/><br/><sub><b>Mandara Login</b>, the login manager: the <b>Mandara</b> design</sub></td>
@@ -72,3 +107,6 @@ On **Plasma Wayland / KWin**, lock requests use Plasma’s secure locker.
 Mandara waits for its confirmation before reporting a successful lock; the
 Mandara lock-screen preview is still available. KWin does not expose the
 lock-surface protocol used by Mandara’s own locker.
+
+Public Hijri dates change at local midnight. These screens do not read your
+private prayer location or sunset adjustments.

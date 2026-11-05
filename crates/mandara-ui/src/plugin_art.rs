@@ -134,7 +134,7 @@ mod tests {
     use super::*;
 
     /// Same ceiling `cargo xtask art` enforces.
-    const BUDGET_BYTES: usize = 7_650_000;
+    const BUDGET_BYTES: usize = include!("../../../assets/artwork/embedded-budget.rs");
 
     fn dimensions(bytes: &[u8]) -> (u32, u32) {
         image::load_from_memory(bytes).map(|i| (i.width(), i.height())).unwrap()

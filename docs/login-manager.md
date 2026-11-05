@@ -296,6 +296,38 @@ one yet, the first such action installs the helper from your binary (`pkexec
 install -D -o root -g root -m 0755 …`, one more approval), and after that your
 own copy never runs as root.
 
+
+## Public widgets
+
+**Studio → Login screen → Layout → Widgets** adds passive widgets from the
+built-in gallery or copies one from the desktop. Position each copy with
+its anchor, offsets, scale and opacity; later desktop edits do not change
+it. **Apply to login screen** installs this draft through the existing
+administrator flow. Nothing is added during installation.
+
+The same widget schema is used by the desktop, Mandara Login and the
+native lock screen. This minimal `greeter.toml` example adds a word clock:
+
+```toml
+# Public login widgets
+[[widgets.items]]
+id = "welcome-word"
+kind = "clock"
+face = "word"
+
+[widgets.items.place]
+anchor = "top-left"
+x = 0.04
+y = 0.04
+scale = 0.65
+```
+
+The optional `[widgets.weather]` table holds explicitly public `latitude`,
+`longitude` and `place` values. Studio shows the chosen coordinates before
+copying them; the preview does not fetch weather. Personal files, messages,
+calendar events and account data are not available to these widgets.
+[Eligible kinds and lock-screen support](lock-and-login.md#widgets-on-login-and-lock-screens).
+
 ## Configuration reference
 
 `/etc/mandara/greeter.toml` (real greeter) / `~/.config/mandara/greeter.toml`

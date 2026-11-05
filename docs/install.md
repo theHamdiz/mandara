@@ -111,7 +111,8 @@ automatically* until you choose) and switches autostart and the login screen
 on or off before anything is installed. Every choice there is also a
 flag: one you pass is left out of the menu, and `--yes`, `--dry-run` or a
 run without a terminal skips the screen and prints the one-line plan
-instead. Esc, `q` or Ctrl-C leaves it without changing anything.
+instead. Dry runs also keep the installer heading on one line. Esc, `q`
+or Ctrl-C leaves it without changing anything.
 
 `mandara uninstall` removes the binary and desktop entry and empties the
 compositor drop-ins; your settings are kept.
@@ -558,6 +559,11 @@ mandara setup --fix-conflicts    # retire them
 mandara setup --restore latest   # undo
 ```
 
+`mandara setup --restore latest` restores the backup without regenerating
+the drop-in or requiring keyboard libraries. If you combine restoration
+with shortcut checks or changes, prerequisites are checked before any file
+is restored.
+
 What `--fix-conflicts` does:
 
 - Each conflicting line is commented out with a `mandara-retired:` marker,
@@ -689,7 +695,23 @@ changed: Conventional Commits pick patch, minor or major. When the shell's
 version changes, CI builds and publishes a release. `mandara --version` shows
 the exact build. Details are in [docs/releasing.md](releasing.md).
 
-`mandara setup --restore latest` restores the backup without regenerating
-the drop-in or requiring keyboard libraries. If you combine restoration
-with shortcut checks or changes, prerequisites are checked before any file
-is restored.
+## Optional connected plugins
+
+The bundled Translator, Phone Connect, Feeds and Home Assistant plugins
+start switched off. Their [setup guide](integrations.md) covers providers
+and accounts. Translator and Home Assistant use the Secret Service keyring
+that the installer already supplies. Phone Connect additionally needs your
+distribution’s KDE Connect package and the companion app on your phone;
+it is not a required dependency of the shell.
+
+## Optional sign-in widgets
+
+After installation, optional sign-in widgets live in **Studio → Login
+screen → Layout → Widgets** and **Lock appearance → Widgets**. Installation
+leaves both collections empty. Login changes use the existing **Apply to
+login screen** flow; see [login and lock widgets](lock-and-login.md#widgets-on-login-and-lock-screens).
+
+If application icons are missing after installation, open **Studio →
+Maintenance** and refresh its health checks. A missing icon theme links to
+**Themes → Icons**; install the named theme or select one already present.
+The check does not reset your choice.

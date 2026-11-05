@@ -11,15 +11,15 @@
 use std::time::Duration;
 
 use async_channel::Sender;
-use gpui::layer_shell::{Anchor, KeyboardInteractivity, Layer};
-use gpui::{App, AppContext as _, Global, WindowHandle, px, size};
+use gpui::layer_shell::{Anchor, KeyboardInteractivity};
+use gpui::{App, AppContext as _, Global, WindowHandle, px};
 use mandara_config::workflow::{ScreenshotSettings, ToolbarPosition};
 use mandara_core::{LayerSurfaceSpec, SurfaceRole};
 use mandara_i18n::{t, tf};
 
 use super::dock::{CountdownView, DockView};
 use super::flow::{Input, Stage};
-use super::{Preselect, SnipMode, SnipView, frozen_image, report};
+use super::{Preselect, SnipMode, SnipView, report};
 
 /// After the idle toolbar or the countdown unmaps, the compositor needs a
 /// frame or two before a capture no longer shows it.
@@ -239,7 +239,7 @@ fn tick(generation: u64, cx: &mut App) {
 /// Takes a fresh frame once the tool's surfaces are gone, then opens the
 /// overlay on it (or runs the pending job).
 fn capture(generation: u64, settle: Duration, cx: &mut App) {
-    let monitor = crate::hub::hub(cx).read(cx).focused.as_ref().map(|c| c.monitor.clone()).unwrap_or_default();
+    let focus = crate::capture_output::Focus::snapshot(cx);
     let (record, job) = {
         let s = cx.default_global::<Session>();
         let job = s.job.take();
@@ -266,8 +266,11 @@ fn capture(generation: u64, settle: Duration, cx: &mut App) {
             return;
         }
         let task = cx.background_executor().spawn(async move {
-            mandara_plugins::guard("screen capture", || mandara_services::screencopy::capture_all_with(cursor).map_err(|e| format!("{e:#}")))
-                .unwrap_or_else(|| Err(t("internal error while capturing (logged)").into()))
+            let captures = mandara_plugins::guard("screen capture", || mandara_services::screencopy::capture_all_with(cursor).map_err(|e| format!("{e:#}")))
+                .unwrap_or_else(|| Err(t("internal error while capturing (logged)").into()))?;
+            let mut capture = focus.take(captures).ok_or_else(|| t("no outputs to capture").to_string())?;
+            let frozen = crate::capture_pixels::freeze(&mut capture).ok_or_else(|| t("the compositor returned an unexpected frame size").to_string())?;
+            Ok::<_, String>((capture, frozen))
         });
         let captures = task.await;
         cx.update(|cx| {
@@ -278,15 +281,9 @@ fn capture(generation: u64, settle: Duration, cx: &mut App) {
                 report(Err(err), cx);
                 apply(Input::Close, cx);
             };
-            let captures = match captures {
+            let (capture, frozen) = match captures {
                 Ok(c) => c,
                 Err(err) => return fail(tf("could not capture the screen: {error}", &[("error", &err)]), cx),
-            };
-            let Some(capture) = captures.iter().find(|c| c.output == monitor).or(captures.first()).cloned() else {
-                return fail(t("no outputs to capture").into(), cx);
-            };
-            let Some(frozen) = frozen_image(&capture) else {
-                return fail(t("the compositor returned an unexpected frame size").into(), cx);
             };
             open_overlay(capture, frozen, cx);
         });
@@ -299,10 +296,7 @@ fn open_overlay(capture: mandara_services::screencopy::Capture, frozen: std::syn
         let s = cx.default_global::<Session>();
         (s.mode, s.record, std::mem::replace(&mut s.preselect, Preselect::None))
     };
-    let (w, h) = (capture.logical.2.max(1) as f32, capture.logical.3.max(1) as f32);
-    let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Lock, size(px(w), px(h)), None).with_keyboard(KeyboardInteractivity::Exclusive);
-    spec.layer = Layer::Overlay;
-    spec.anchor = Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT;
+    let spec = crate::capture_output::overlay(&capture, cx);
     match cx.open_window(spec.window_options(), move |window, cx| cx.new(|cx| SnipView::new(capture, frozen, mode, record, preselect, window, cx))) {
         Ok(handle) => {
             let reply = {

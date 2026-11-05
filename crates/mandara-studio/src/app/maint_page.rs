@@ -31,6 +31,28 @@ pub struct Maint {
     reset_armed: Option<Instant>,
     cache_bytes: Option<u64>,
     backups: Vec<PathBuf>,
+    generation: u64,
+    icons: Option<Option<String>>,
+}
+
+impl Maint {
+    pub(super) fn invalidate(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.results.clear();
+    }
+
+    /// Discard results from a check that started before the page was invalidated.
+    fn finish(&mut self, generation: u64, results: HashMap<CheckId, Health>) -> bool {
+        self.checking = false;
+        if generation != self.generation { return false; }
+        self.results = results;
+        true
+    }
+
+    /// Offer bulk repair only when a failing check has an automatic repair path.
+    fn can_repair(&self, compositor: bool, missing_models: bool) -> bool {
+        missing_models || self.results.iter().any(|(id, health)| !health.is_ok() && *id != CheckId::Icons && (!matches!(id, CheckId::CompositorInclude | CheckId::CompositorDropIn | CheckId::CompositorConflicts) || compositor))
+    }
 }
 
 fn run_ipc(cx: &App, commands: Vec<Vec<String>>) {
@@ -79,18 +101,20 @@ impl StudioView {
             return;
         }
         self.maint.checking = true;
+        let generation = self.maint.generation;
         let fonts = cx.text_system().all_font_names();
+        let icons = mandara_ui::state::config(cx).read(cx).get().appearance.icon_theme.clone();
         let task = cx.background_executor().spawn(async move {
-            let results: HashMap<CheckId, Health> = CheckId::ALL.iter().map(|id| (*id, m::check(*id, &fonts))).collect();
+            let results: HashMap<CheckId, Health> = CheckId::ALL.iter().map(|id| (*id, if *id == CheckId::Icons { m::icon_theme(icons.as_deref()) } else { m::check(*id, &fonts) })).collect();
             (results, m::cache_size(), m::backups())
         });
         cx.spawn(async move |this, cx| {
             let (results, cache, backups) = task.await;
             let _ = this.update(cx, |this, cx| {
-                this.maint.results = results;
-                this.maint.cache_bytes = Some(cache);
-                this.maint.backups = backups;
-                this.maint.checking = false;
+                if this.maint.finish(generation, results) {
+                    this.maint.cache_bytes = Some(cache);
+                    this.maint.backups = backups;
+                }
                 cx.notify();
             });
         })
@@ -145,18 +169,25 @@ impl StudioView {
         cx.notify();
     }
 
+    /// Run one repair in the background and refresh its diagnostic afterward.
     fn maint_fix(&mut self, id: CheckId, cx: &mut Context<Self>) {
+        if id == CheckId::Icons {
+            self.show(crate::registry::Section::Themes, cx);
+            return;
+        }
         let fonts = cx.text_system().all_font_names();
         self.maint_job(format!("check:{id:?}"), cx, move |p| {
             m::fix(id, &fonts, &move |done, total| p.store(u32::try_from(done * PERMILLE / total.max(1)).unwrap_or(u32::MAX - 1), Ordering::Relaxed))
         });
     }
 
+    /// Repair eligible checks; icon-theme choices remain an explicit Themes action.
     fn maint_repair_all(&mut self, cx: &mut Context<Self>) {
         let broken: Vec<CheckId> = CheckId::ALL.iter().copied().filter(|id| self.maint.results.get(id).is_some_and(|h| !h.is_ok())).collect();
         // Pointless without a compositor; skip checks that can't be fixed here.
         for id in broken {
-            if matches!(id, CheckId::CompositorInclude | CheckId::CompositorDropIn) && mandara_compositor::detect().is_none() {
+            if id == CheckId::Icons { continue; }
+            if matches!(id, CheckId::CompositorInclude | CheckId::CompositorDropIn | CheckId::CompositorConflicts) && mandara_compositor::detect().is_none() {
                 continue;
             }
             self.maint_fix(id, cx);
@@ -197,7 +228,13 @@ impl StudioView {
         });
     }
 
+    /// Refresh diagnostics after relevant settings change and show actions per check.
     pub(super) fn maintenance(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let icons = mandara_ui::state::config(cx).read(cx).get().appearance.icon_theme.clone();
+        if self.maint.icons.as_ref() != Some(&icons) {
+            self.maint.invalidate();
+            self.maint.icons = Some(icons);
+        }
         if self.maint.results.is_empty() && !self.maint.checking {
             self.maint_refresh(cx);
         }
@@ -252,7 +289,9 @@ impl StudioView {
         };
 
         // ── Overview ──────────────────────────────────────────────────────
-        let issues = self.maint.results.values().filter(|h| !h.is_ok()).count() + models::MODELS.iter().filter(|m| !m.on_demand && !m.installed()).count();
+        let missing_models = models::MODELS.iter().filter(|m| !m.on_demand && !m.installed()).count();
+        let issues = self.maint.results.values().filter(|h| !h.is_ok()).count() + missing_models;
+        let can_repair = self.maint.can_repair(mandara_compositor::detect().is_some(), missing_models > 0);
         let all_good = !self.maint.results.is_empty() && issues == 0;
         let hero = card()
             .flex_row()
@@ -290,7 +329,7 @@ impl StudioView {
                     .child(div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("Config, compositor integration, app themes, fonts, plugin folders and downloadable models.")))),
             )
             .child(button("maint-check".into(), if self.maint.checking { t("Checking…").into() } else { t("Run checks").into() }, None, ButtonKind::Tonal).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.maint_refresh(cx))))
-            .when(!all_good && !self.maint.results.is_empty(), |el| el.child(button("maint-repair".into(), t("Repair all").into(), None, ButtonKind::Primary).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.maint_repair_all(cx)))));
+            .when(can_repair && !self.maint.results.is_empty(), |el| el.child(button("maint-repair".into(), t("Repair all").into(), None, ButtonKind::Primary).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.maint_repair_all(cx)))));
 
         let message = self.maint.message.clone().map(|(ok, msg)| {
             div()
@@ -308,7 +347,7 @@ impl StudioView {
         for id in CheckId::ALL {
             let h = self.maint.results.get(&id).cloned();
             let key = format!("check:{id:?}");
-            let fixable = h.as_ref().is_some_and(|h| !h.is_ok()) && !(matches!(id, CheckId::CompositorInclude | CheckId::CompositorDropIn) && mandara_compositor::detect().is_none());
+            let fixable = h.as_ref().is_some_and(|h| !h.is_ok()) && !(matches!(id, CheckId::CompositorInclude | CheckId::CompositorDropIn | CheckId::CompositorConflicts) && mandara_compositor::detect().is_none());
             checks = checks.child(
                 div()
                     .row()
@@ -498,5 +537,35 @@ impl StudioView {
         }
 
         div().row().flex_col().gap(px(SPACE_14_PX)).child(hero).children(message).child(checks).child(downloads).child(storage).child(backups).into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_previous_visit_cannot_restore_a_stale_health_warning() {
+        let mut state = Maint { checking: true, results: HashMap::from([(CheckId::Icons, Health::Warn("old theme".into()))]), ..Default::default() };
+        let old = state.generation;
+        state.invalidate();
+        assert!(state.results.is_empty());
+        assert!(!state.finish(old, HashMap::from([(CheckId::Icons, Health::Warn("old theme".into()))])));
+        assert!(!state.checking && state.results.is_empty());
+        assert!(state.finish(state.generation, HashMap::from([(CheckId::Icons, Health::Ok("new theme".into()))])));
+        assert!(state.results[&CheckId::Icons].is_ok());
+    }
+
+    #[test]
+    fn repair_all_only_appears_when_it_can_do_work() {
+        let mut state = Maint { results: HashMap::from([(CheckId::Icons, Health::Warn("missing".into()))]), ..Default::default() };
+        assert!(!state.can_repair(true, false));
+        assert!(state.can_repair(true, true));
+        state.results.insert(CheckId::Fonts, Health::Warn("missing".into()));
+        assert!(state.can_repair(true, false));
+        state.results.remove(&CheckId::Fonts);
+        state.results.insert(CheckId::CompositorConflicts, Health::Warn("unavailable".into()));
+        assert!(!state.can_repair(false, false));
+        assert!(state.can_repair(true, false));
     }
 }

@@ -21,6 +21,7 @@ pub mod system_settings;
 pub mod side_bar_settings;
 pub mod recorder_settings;
 mod tuning_settings;
+mod integration_settings;
 pub mod workflow_settings;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -472,6 +473,7 @@ pub fn settings() -> &'static [Setting] {
         all.extend(workflow_settings::entries());
         all.extend(recorder_settings::entries());
         all.extend(tuning_settings::entries());
+        all.extend(integration_settings::entries());
         all.extend(side_bar_settings::entries());
         all
     })
@@ -502,6 +504,7 @@ pub fn required_plugin(path: &str) -> Option<&'static str> {
 /// place of its control), e.g. the launcher's hover edge while the dock
 /// owns the bottom edge (`ShellConfig::launcher_hover_enabled`).
 pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
+    if let Some(reason) = integration_settings::locked(setting.path, cfg) { return Some(reason); }
     if let Some(reason) = system_settings::kwin_locked(setting.path, running_compositor()) { return Some(reason); }
     match setting.path {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),

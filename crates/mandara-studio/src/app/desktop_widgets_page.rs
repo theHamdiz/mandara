@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 use gpui::{
     AnyElement, AppContext as _, Bounds, ClickEvent, Context, Entity, FontWeight, Global, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, RenderImage,
-    SharedString, StatefulInteractiveElement, Styled, canvas, div, img, prelude::FluentBuilder as _, px,
+    SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, img, prelude::FluentBuilder as _, px,
 };
 use mandara_config::ShellConfig;
 use mandara_config::desktop_cards::{self as dc, PluginCardOptions};
@@ -63,13 +63,13 @@ const PREVIEW_DENSITY: f32 = 2.0;
 /// Gallery tiles: an even grid of identical tiles (the picture's aspect,
 /// two clamped lines of name), and the display they are rendered on (the
 /// widget is shown at a scale that fills the tile).
-const TILE_GRID: CardGrid = CardGrid { min_w: 150.0, max_w: 240.0, gap: SPACE_10_PX };
-const TILE_ASPECT: f32 = 74.0 / 132.0;
+const TILE_GRID: CardGrid = CardGrid { min_w: 180.0, max_w: 240.0, gap: SPACE_10_PX };
+const TILE_ASPECT: f32 = 3.0 / 4.0;
 const TILE_PAD_PX: f32 = SPACE_6_PX;
 const TILE_LABEL_LINES: usize = 2;
 const TILE_LABEL_H_PX: f32 = LEADING_16_PX * TILE_LABEL_LINES as f32;
-const TILE_RENDER: (u32, u32) = (528, 296);
-const TILE_SCALE: f32 = 1.9;
+/// Bound unusual display scales while retaining at least 2× raster density.
+const TILE_MAX_DENSITY: f32 = 4.0;
 /// A style's picture in a widget's Style row (the same rendering, smaller).
 const STYLE_TILE_W_PX: f32 = 104.0;
 const STYLE_TILE_H_PX: f32 = 58.0;
@@ -102,6 +102,7 @@ struct PageState {
     painter: Option<TextPainter>,
     /// Each gallery kind's tile (by kind key) and the key it was painted for.
     tiles: HashMap<String, (u64, Arc<RenderImage>)>,
+    density: f32,
     /// Each painted widget's picture, by widget id.
     layers: HashMap<String, Layer>,
     bounds: Rc<Cell<Bounds<Pixels>>>,
@@ -262,10 +263,12 @@ const SIDEWAYS: [(Sideways, &str); 3] = [(Sideways::Auto, tk("Toward the middle"
 type Set<T> = Rc<dyn Fn(&mut DesktopWidget, T)>;
 
 impl StudioView {
-    pub(super) fn desktop_widgets_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    /// Preview the configured widgets and offer styles from enabled plugins.
+    pub(super) fn desktop_widgets_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         if !cx.has_global::<PageState>() {
             cx.set_global(PageState::default());
         }
+        cx.global_mut::<PageState>().density = window.scale_factor();
         let mut cfg = cfg.clone();
         dw::migrate_depth_clock(&mut cfg);
         let items = cfg.desktop.widgets.items.clone();
@@ -448,35 +451,32 @@ impl StudioView {
 
     /// The picture of a gallery tile or of a style (painted kinds) by its
     /// `tile` key, cached.
-    fn tile_image(&mut self, tile: &str, widgets: &[DesktopWidget], cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
+    fn tile_image(&mut self, tile: &str, widgets: &[DesktopWidget], picture: (f32, f32), p: &MandaraPalette, cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
         if widgets.is_empty() || widgets.iter().any(|w| !w.kind.on_wallpaper_plane()) {
             return None;
         }
-        let primary = mandara_core::theme_entity(cx).read(cx).target().primary;
+        let primary = p.primary;
+        let size = tile_pixels(picture, cx.global::<PageState>().density);
         let fonts = fonts(cx);
         // Tiles that tell the time are painted again with the minute.
-        let timed = widgets.iter().any(|w| matches!(w.kind, WidgetKind::Clock(_) | WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_)));
+        let timed = widgets.iter().any(|w| matches!(w.kind, WidgetKind::Clock(_) | WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_) | WidgetKind::Date(_) | WidgetKind::Sky(_)));
         let minute = timed.then(|| chrono::Local::now().timestamp().div_euclid(SECS_PER_MINUTE));
-        let k = key((tile, primary.to_rgba8(), &fonts, mandara_i18n::language(), minute));
+        let k = key((tile, size, primary.to_rgba8(), p.on_primary.to_rgba8(), p.on_surface.to_rgba8(), p.surface_dim.to_rgba8(), p.surface_container.to_rgba8(), &fonts, mandara_i18n::language(), minute));
         if let Some((_, img)) = cx.global::<PageState>().tiles.get(tile).filter(|(old, _)| *old == k) {
             return Some(img.clone());
         }
         let s = cx.global_mut::<PageState>();
         let text = s.painter.get_or_insert_with(TextPainter::new);
-        // Centred and enlarged so it fills the tile.
-        let shown: Vec<DesktopWidget> = widgets
-            .iter()
-            .enumerate()
-            .map(|(i, w)| {
-                let mut w = w.clone();
-                if widgets.len() == 1 {
-                    w.place = Placement { scale: TILE_SCALE, ..Placement::default() };
-                }
-                w.id = format!("{tile}-{i}");
-                w
-            })
-            .collect();
-        let (rgba, _) = mandara_ui::backdrop::widgets::preview(&shown, TILE_RENDER, &fonts, primary, text)?;
+        let rgba = if let [widget] = widgets {
+            mandara_ui::backdrop::widgets::gallery::thumbnail(widget, size, &fonts, p, text)?
+        } else {
+            let shown: Vec<_> = widgets.iter().enumerate().map(|(i, widget)| {
+                let mut widget = widget.clone();
+                widget.id = format!("{tile}-{i}");
+                widget
+            }).collect();
+            mandara_ui::backdrop::widgets::preview(&shown, size, &fonts, primary, text)?.0
+        };
         text.release_glyphs();
         let image = render_image(rgba);
         // The tile it replaces leaves the GPU atlas.
@@ -503,7 +503,7 @@ impl StudioView {
             if has_depth && widgets.iter().any(|w| matches!(&w.kind, WidgetKind::Clock(c) if c.face.depth_style().is_some())) {
                 continue;
             }
-            let tile = self.tile_image(&t.key(), &widgets, cx);
+            let tile = self.tile_image(&t.key(), &widgets, (pic_w, pic_h), p, cx);
             let label = mandara_ui::desktop_menu::widget_type_name(&t, cx);
             // Already on the desktop (one widget, same settings): the tile
             // selects it instead of stacking an identical copy on top.
@@ -602,7 +602,7 @@ impl StudioView {
         page_section(
             section_head(
                 if full { t("The list is full — remove a widget to add another") } else { t("Add a widget") },
-                t("Widget kinds come from plugins: switch them on or off in Studio → Plugins (Desktop widgets)."),
+                format!("{} {}", t("Widget kinds come from plugins: switch them on or off in Studio → Plugins (Desktop widgets)."), t("Previews use sample data.")),
                 vec![],
                 display.clone(),
                 p,
@@ -723,7 +723,7 @@ impl StudioView {
         cx.global_mut::<PageState>().choice_room = Some(((under - ROW_LABEL_W_PX - SPACE_18_PX).max(0.0), under));
         let place = vec![
             choice_row(t("Depth"), &id, "depth", w.place.depth, &[(Depth::Behind, tk("Behind the subject")), (Depth::Front, tk("In front"))], Rc::new(|w, v| w.place.depth = v), p, cx),
-            row(p, t("Anchor"), anchors(&id, w.place.anchor, p, cx)),
+            row(p, t("Anchor"), anchors(&id, w.place.anchor, p)),
             row(p, t("Horizontal offset"), slider(&id, "x", w.place.x, ranges::OFFSET, 0.005, "", Rc::new(|w, v| w.place.x = v), p)),
             row(p, t("Vertical offset"), slider(&id, "y", w.place.y, ranges::OFFSET, 0.005, "", Rc::new(|w, v| w.place.y = v), p)),
             row(p, t("Size"), slider(&id, "scale", w.place.scale, ranges::SCALE, 0.05, "×", Rc::new(|w, v| w.place.scale = v), p)),
@@ -790,7 +790,7 @@ impl StudioView {
         let from = s.presets.get(s.current)?.clone();
         let mut tiles = Vec::new();
         for (i, (style, to)) in s.family.styles.iter().zip(&s.presets).enumerate() {
-            let image = self.tile_image(&format!("{}#{}", s.family.key(), style.id), &(style.make)(), cx);
+            let image = self.tile_image(&format!("{}#{}", s.family.key(), style.id), &(style.make)(), (STYLE_TILE_W_PX, STYLE_TILE_H_PX), p, cx);
             let active = i == s.current;
             let name = tr(&style.name);
             let label = if active && !s.exact { tf("{name} · changed", &[("name", &name)]) } else { name };
@@ -1363,7 +1363,7 @@ impl StudioView {
                 rows.push(row(p, t("Stop after silence"), slider(&id, "silence", v.silence_s as f32, (ranges::VISUALIZER_SILENCE_S.0 as f32, ranges::VISUALIZER_SILENCE_S.1 as f32), 1.0, " s", set(|v, x| v.silence_s = x as u32), p)));
             }
             WidgetKind::Weather(ww) => {
-                rows.push(choice_row(t("Layout"), &id, "wlayout", ww.layout, &[(WeatherLayout::Hero, tk("Large")), (WeatherLayout::Compact, tk("One line")), (WeatherLayout::Sentence, tk("Sentence")), (WeatherLayout::Disc, tk("Disc")), (WeatherLayout::Hourly, tk("Hourly curve"))], Rc::new(|w, v| if let WidgetKind::Weather(x) = &mut w.kind { x.layout = v }), p, cx));
+                rows.push(choice_row(t("Layout"), &id, "wlayout", ww.layout, &[(WeatherLayout::Hero, tk("Large")), (WeatherLayout::Compact, tk("One line")), (WeatherLayout::Sentence, tk("Sentence")), (WeatherLayout::Disc, tk("Disc")), (WeatherLayout::Hourly, tk("Hourly curve")), (WeatherLayout::Ribbon, tk("Weather ribbon")), (WeatherLayout::Thermometer, tk("Thermometer")), (WeatherLayout::HumidityRose, tk("Humidity rose"))], Rc::new(|w, v| if let WidgetKind::Weather(x) = &mut w.kind { x.layout = v }), p, cx));
                 match ww.layout {
                     WeatherLayout::Hero => {
                         rows.push(row(p, t("Place name"), toggle(&id, "wplace", ww.location, weather_set(|x, v| x.location = v), p, cx)));
@@ -1393,12 +1393,16 @@ impl StudioView {
                         rows.push(row(p, t("Hours"), slider(&id, "whours", ww.hours as f32, rng(kr::HOURS), 1.0, "", weather_set(|x, v: f32| x.hours = as_count(v)), p)));
                         rows.push(row(p, t("Fill under the curve"), toggle(&id, "wfill", ww.fill, weather_set(|x, v| x.fill = v), p, cx)));
                     }
-                    WeatherLayout::Compact => {}
+                    WeatherLayout::Ribbon => {
+                        rows.push(row(p, t("Days ahead"), slider(&id, "wdays", ww.days as f32, (ranges::WEATHER_DAYS.0 as f32, ranges::WEATHER_DAYS.1 as f32), 1.0, "", weather_set(|x, v: f32| x.days = as_count(v)), p)));
+                        rows.push(row(p, t("Place name"), toggle(&id, "wplace", ww.location, weather_set(|x, v| x.location = v), p, cx)));
+                    }
+                    WeatherLayout::Compact | WeatherLayout::Thermometer | WeatherLayout::HumidityRose => {}
                 }
             }
             WidgetKind::Date(x) => {
-                rows.push(choice_row(t("Layout"), &id, "dlayout", x.layout, &[(dw::DateLayout::Month, tk("Month")), (dw::DateLayout::Week, tk("Week strip")), (dw::DateLayout::Agenda, tk("Coming up")), (dw::DateLayout::Tile, tk("Date tile"))], date_set(|x, v| x.layout = v), p, cx));
-                if x.layout != dw::DateLayout::Tile {
+                rows.push(choice_row(t("Layout"), &id, "dlayout", x.layout, &[(dw::DateLayout::Month, tk("Month")), (dw::DateLayout::Week, tk("Week strip")), (dw::DateLayout::Agenda, tk("Coming up")), (dw::DateLayout::Tile, tk("Date tile")), (dw::DateLayout::Ticket, tk("Date ticket")), (dw::DateLayout::Perpetual, tk("Perpetual calendar")), (dw::DateLayout::MoonCalendar, tk("Moon calendar"))], date_set(|x, v| x.layout = v), p, cx));
+                if matches!(x.layout, dw::DateLayout::Month | dw::DateLayout::Week | dw::DateLayout::Agenda) {
                     rows.push(choice_row(t("Marker shape"), &id, "dmarker", x.marker, &SHAPES, date_set(|x, v| x.marker = v), p, cx));
                 }
                 match x.layout {
@@ -1408,7 +1412,7 @@ impl StudioView {
                     }
                     dw::DateLayout::Week => rows.push(row(p, t("Event dots"), toggle(&id, "ddots", x.event_dots, date_set(|x, v| x.event_dots = v), p, cx))),
                     dw::DateLayout::Agenda => rows.push(row(p, t("Rows"), slider(&id, "drows", x.rows as f32, rng(kr::AGENDA_ROWS), 1.0, "", date_set(|x, v: f32| x.rows = as_count(v)), p))),
-                    dw::DateLayout::Tile => {}
+                    dw::DateLayout::Tile | dw::DateLayout::Ticket | dw::DateLayout::Perpetual | dw::DateLayout::MoonCalendar => {}
                 }
                 rows.push(hint(t("Events come from Studio → Calendar."), p));
             }
@@ -1813,9 +1817,21 @@ fn choice_row<T: Copy + PartialEq + 'static>(label: &str, id: &str, what: &str, 
     choice_row_of(p, label, items, cx)
 }
 
-fn anchors(id: &str, current: Anchor, p: &MandaraPalette, cx: &mut Context<StudioView>) -> AnyElement {
+fn anchors(id: &str, current: Anchor, p: &MandaraPalette) -> AnyElement {
+    let widget_id = id.to_string();
+    anchor_grid(id, current, p, Rc::new(move |anchor, cx| edit(cx, &widget_id, move |w| {
+        let (fx, fy) = w.place.anchor.fraction();
+        let (nx, ny) = anchor.fraction();
+        w.place.x += fx - nx;
+        w.place.y += fy - ny;
+        w.place.anchor = anchor;
+    })))
+}
+
+pub(super) fn anchor_grid(id: &str, current: Anchor, p: &MandaraPalette, callback: Rc<dyn Fn(Anchor, &mut gpui::App)>) -> AnyElement {
     let cells = Anchor::ALL.into_iter().zip(ANCHOR_GLYPHS).map(|(a, glyph)| {
         let on = a == current;
+        let callback = callback.clone();
         let id = id.to_string();
         div()
             .id(SharedString::from(format!("dw-a-{a:?}-{id}")))
@@ -1829,16 +1845,7 @@ fn anchors(id: &str, current: Anchor, p: &MandaraPalette, cx: &mut Context<Studi
             .when(on, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()))
             .when(!on, |el| el.bg(p.surface_container_high.hsla()).text_color(p.on_surface_variant.hsla()))
             .child(glyph)
-            .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
-                // Keep the widget where it is: recompute the offset for the new anchor.
-                edit(cx, &id, move |w| {
-                    let (fx, fy) = w.place.anchor.fraction();
-                    let (nx, ny) = a.fraction();
-                    w.place.x += fx - nx;
-                    w.place.y += fy - ny;
-                    w.place.anchor = a;
-                });
-            }))
+            .on_click(move |_, _, cx| callback(a, cx))
     });
     div().w(px(DIM_88_PX)).row().flex_wrap().gap(px(SPACE_3_PX)).children(cells).into_any_element()
 }
@@ -1918,4 +1925,24 @@ fn monitor_rows(id: &str, rows: &[MonitorRow], p: &MandaraPalette, cx: &mut Cont
             }))
     });
     div().row().flex_wrap().gap(px(SPACE_4_PX)).children(chips).into_any_element()
+}
+
+/// Fit the painter’s visible bounds and render at the display’s pixel density.
+fn tile_pixels(logical: (f32, f32), density: f32) -> (u32, u32) {
+    let density = if density.is_finite() { density.clamp(PREVIEW_DENSITY, TILE_MAX_DENSITY) } else { PREVIEW_DENSITY };
+    ((logical.0.max(1.0) * density).ceil() as u32, (logical.1.max(1.0) * density).ceil() as u32)
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+
+    #[test]
+    fn thumbnails_follow_display_density_without_upscaling_small_rasters() {
+        assert_eq!(tile_pixels((180.0, 135.0), 1.0), (360, 270));
+        assert_eq!(tile_pixels((180.0, 135.0), 2.0), (360, 270));
+        assert_eq!(tile_pixels((180.0, 135.0), 3.0), (540, 405));
+        assert_eq!(tile_pixels((180.0, 135.0), 8.0), (720, 540));
+        assert_eq!(tile_pixels((180.0, 135.0), f32::NAN), (360, 270));
+    }
 }

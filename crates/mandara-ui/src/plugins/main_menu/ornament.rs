@@ -351,24 +351,6 @@ fn star8(c: (f32, f32), r: f32) -> String {
     poly(&pts)
 }
 
-/// A four-point sparkle at `c`, radius `r`.
-fn sparkle(c: (f32, f32), r: f32) -> String {
-    let (x, y, k) = (c.0, c.1, r * SPARKLE_WAIST);
-    format!(
-        "M{x} {t}Q{a} {d} {rr} {y}Q{a} {e} {x} {b}Q{f} {e} {l} {y}Q{f} {d} {x} {t}Z",
-        t = y - r,
-        b = y + r,
-        l = x - r,
-        rr = x + r,
-        a = x + k,
-        f = x - k,
-        d = y - k,
-        e = y + k
-    )
-}
-/// How far a sparkle's sides pull in.
-const SPARKLE_WAIST: f32 = 0.2;
-
 fn shamsa() -> String {
     let c = (VIEW / 2.0, VIEW / 2.0);
     let mut lit = String::new();
@@ -458,7 +440,7 @@ fn waves() -> String {
         let _ = write!(body, r#"<path d="{d}"/>"#);
     }
     for (c, r) in [((30.0, 22.0), 5.0), ((76.0, 14.0), 3.5), ((100.0, 36.0), 4.5), ((52.0, 42.0), 2.5)] {
-        let _ = write!(body, r#"<path d="{}" stroke-opacity="{DIM}"/>"#, sparkle(c, r));
+        let _ = write!(body, r#"<circle cx="{}" cy="{}" r="{r}" stroke-opacity="{DIM}"/>"#, c.0, c.1);
     }
     svg(&body)
 }

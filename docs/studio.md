@@ -192,7 +192,7 @@ narrow ones; everything mirrors for right-to-left languages.
 | **Network & Bluetooth** | Connection details, VPNs (WireGuard / OpenVPN import), hotspot with QR, saved networks, static IP / DNS; Bluetooth devices, pairing dialog, auto-connect, adapter. |
 | **Power & idle** | Status, idle timeouts (mains / battery), lock behaviour, idle commands, battery alerts (the Power panel's style, Classic or Modern, and the bar battery's pulses: coral while critical, a gentle breath while charging) and profiles, the power menu editor (entries, style, and the dock's **Position**: opposite the sidebar, left, right, top center or bottom center — at the top or bottom it hangs from the bar there, one piece with it in the edge-frame styles and a card next to a floating bar, or from the screen edge when the bar is elsewhere, which the preview says; the grid always opens in the middle), event hooks. |
 | **Input** | Keyboard layouts and labels, repeat, Num Lock; mouse and touchpad; focus follows mouse. The cursor lives on Themes → Cursor (a card here links there). |
-| **Keyboard shortcuts** | Mandara's compositor binds with chord capture and conflict detection. |
+| **Keyboard shortcuts** | Mandara's compositor binds with chord capture and conflict detection. Under **Add a shortcut**, choose a starting action, press the chord, then choose **Program** to enter any command. Existing compositor shortcuts are listed below and kept intact. |
 | **Date, time & location** | The system clock (time zone with search, set time automatically, and a one-click fix when it doesn't match your location's time zone), clock and date formats, the calendar's week numbers, weekend days, Hijri dates and Eastern Arabic numerals, calendar subscriptions and reminders, the shared location (weather and prayer times follow it unless they have their own), weather. |
 | **Applications** | Installed apps (search, hide, rename, install from files by picker or drag and drop, uninstall with optional leftover cleanup), default apps, apps at login, how apps are launched. |
 
@@ -583,7 +583,9 @@ narrow ones; everything mirrors for right-to-left languages.
   redacted) and import, reset any page to defaults, and a redacted support
   report.
 - **Maintenance**: health checks with one-click repair, model and font
-  downloads, cache cleanup, backups and factory reset.
+  downloads, cache cleanup, backups and factory reset. Its icon-theme check
+  flags a missing selected theme; **Themes** opens **Themes → Icons** so
+  you can choose another. **Repair all** leaves that choice alone.
 - **Performance**: the shell's own CPU, RAM and threads, and a supervisor
   you can turn off.
 
@@ -706,3 +708,11 @@ with an option to hide corners between adjacent displays.
   / Ctrl+K add bold / italic / a link, Ctrl+Shift+8 toggles a bullet,
   Tab / Shift+Tab nest list items. Arabic paragraphs align right; code
   stays left to right.
+
+
+Login screen → **Layout → Widgets** and **Lock appearance → Widgets**
+share the passive widget editor: a gallery, **Copy from desktop**, anchor,
+offsets, scale, opacity and a separate public-weather location choice.
+Copies stay independent of the desktop; login changes still need **Apply
+to login screen**. KWin shows a reason because Plasma owns its secure
+locker. [Details](lock-and-login.md#widgets-on-login-and-lock-screens).

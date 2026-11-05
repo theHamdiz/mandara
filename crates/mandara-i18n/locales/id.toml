@@ -8064,3 +8064,391 @@
 "Settings:        mandara studio" = "Pengaturan:      mandara studio"
 
 "Health & repair: mandara studio maintenance" = "Pemeriksaan & perbaikan: mandara studio maintenance"
+
+"A little closer to home" = "Rumah terasa lebih dekat"
+
+"API key" = "Kunci API"
+
+"Accept" = "Terima"
+
+"Add your Home Assistant token in Studio" = "Tambahkan token Home Assistant di Studio"
+
+"Add your favourite feeds in Studio" = "Tambahkan feed favorit di Studio"
+
+"Add your translation API key in Studio" = "Tambahkan kunci API terjemahan di Studio"
+
+"An API key is saved for this server" = "Kunci API tersimpan untuk server ini"
+
+"An action is still running" = "Masih ada tindakan yang berjalan"
+
+"Available to pair" = "Tersedia untuk dipasangkan"
+
+"Check KDE Connect while the phone panel is open" = "Periksa KDE Connect selama panel ponsel terbuka"
+
+"Choose a source and target language" = "Pilih bahasa sumber dan tujuan"
+
+"Choose a valid Home Assistant entity" = "Pilih entitas Home Assistant yang valid"
+
+"Choose up to 24 Home Assistant entities" = "Pilih hingga 24 entitas Home Assistant"
+
+"Connect your home in Studio" = "Hubungkan rumah Anda di Studio"
+
+"Copy translation" = "Salin terjemahan"
+
+"Could not open the keyring: {error}" = "Tidak dapat membuka penyimpanan kunci: {error}"
+
+"Could not prepare the request" = "Tidak dapat menyiapkan permintaan"
+
+"Could not reach KDE Connect: {error}" = "Tidak dapat menghubungi KDE Connect: {error}"
+
+"Could not read this feed: {error}" = "Tidak dapat membaca feed ini: {error}"
+
+"Could not refresh this feed: {error}" = "Tidak dapat menyegarkan feed ini: {error}"
+
+"Could not save or read feed history: {error}" = "Tidak dapat menyimpan atau membaca riwayat feed: {error}"
+
+"DeepL Free" = "DeepL Free"
+
+"DeepL Pro" = "DeepL Pro"
+
+"DeepL uses its own server and requires an API key" = "DeepL memakai servernya sendiri dan memerlukan kunci API"
+
+"Default target language" = "Bahasa tujuan bawaan"
+
+"Device id from phone devices" = "ID perangkat dari phone devices"
+
+"Discord" = "Discord"
+
+"Enable this when your LibreTranslate server requires a key; save it in the keyring below" = "Aktifkan jika server LibreTranslate memerlukan kunci; simpan di penyimpanan kunci di bawah"
+
+"Enter some text to translate" = "Masukkan teks untuk diterjemahkan"
+
+"Favourite entities" = "Entitas favorit"
+
+"Feed addresses" = "Alamat feed"
+
+"Feeds" = "Feed"
+
+"Fetching headlines…" = "Mengambil judul…"
+
+"Forget device" = "Lupakan perangkat"
+
+"Forget this paired device?" = "Lupakan perangkat yang dipasangkan ini?"
+
+"Forget…" = "Lupakan…"
+
+"Home Assistant" = "Home Assistant"
+
+"Home Assistant could not find this entity" = "Home Assistant tidak menemukan entitas ini"
+
+"Home Assistant entity id" = "ID entitas Home Assistant"
+
+"Home Assistant returned no entity list" = "Home Assistant tidak mengembalikan daftar entitas"
+
+"Include nearby devices that can be paired; pairing always needs your confirmation" = "Sertakan perangkat terdekat yang bisa dipasangkan; pemasangan selalu memerlukan konfirmasi Anda"
+
+"Initial target language code; choose from the provider's language list in the panel" = "Kode bahasa tujuan awal; pilih dari daftar bahasa penyedia di panel"
+
+"Install KDE Connect on your computer and phone, then pair them here." = "Pasang KDE Connect di komputer dan ponsel, lalu pasangkan di sini."
+
+"Invalid phone identifier" = "ID ponsel tidak valid"
+
+"KDE Connect did not respond in time" = "KDE Connect tidak merespons tepat waktu"
+
+"Keep a translation under 5,000 characters" = "Batasi terjemahan di bawah 5.000 karakter"
+
+"Keep up to 16 feed subscriptions" = "Simpan maksimal 16 langganan feed"
+
+"LibreTranslate" = "LibreTranslate"
+
+"List the configured translation provider's languages" = "Daftarkan bahasa penyedia terjemahan yang diatur"
+
+"Looking for your devices…" = "Mencari perangkat Anda…"
+
+"More than one API key matches this server; save the key again" = "Ada lebih dari satu kunci API untuk server ini; simpan ulang kuncinya"
+
+"No API key saved for this server" = "Tidak ada kunci API tersimpan untuk server ini"
+
+"No entities to show" = "Tidak ada entitas untuk ditampilkan"
+
+"No headlines yet" = "Belum ada judul"
+
+"Only the selected feed refreshes while its panel is open" = "Hanya feed terpilih yang disegarkan selama panelnya terbuka"
+
+"Opening the keyring…" = "Membuka penyimpanan kunci…"
+
+"Paired and discovered devices reported by KDE Connect" = "Perangkat berpasangan dan ditemukan yang dilaporkan KDE Connect"
+
+"Paired devices, phone battery, ringing and text sharing" = "Perangkat berpasangan, baterai ponsel, dering dan berbagi teks"
+
+"Paired · offline" = "Dipasangkan · luring"
+
+"Paste" = "Tempel"
+
+"Paste an API key" = "Tempelkan kunci API"
+
+"Paste an API key without spaces or line breaks" = "Tempelkan kunci API tanpa spasi atau baris baru"
+
+"Phone Connect" = "Sambungan ponsel"
+
+"Ping" = "Kirim sinyal"
+
+"Provider" = "Penyedia"
+
+"RSS, Atom and JSON subscriptions with local read history" = "Langganan RSS, Atom dan JSON dengan riwayat baca lokal"
+
+"RSS, Atom or JSON feed address" = "Alamat feed RSS, Atom atau JSON"
+
+"Read the configured Home Assistant favourites" = "Baca favorit Home Assistant yang diatur"
+
+"Read your home while the panel is open; actions also refresh its state" = "Baca kondisi rumah selama panel terbuka; tindakan juga menyegarkan statusnya"
+
+"Reading your home…" = "Membaca kondisi rumah…"
+
+"Refresh a feed and return its headlines and read history" = "Segarkan feed dan kembalikan judul beserta riwayat bacanya"
+
+"Refresh interval" = "Interval penyegaran"
+
+"Refresh this feed before marking it read" = "Segarkan feed ini sebelum menandainya dibaca"
+
+"Refreshing…" = "Menyegarkan…"
+
+"Reject" = "Tolak"
+
+"Reload languages" = "Muat ulang bahasa"
+
+"Remove key" = "Hapus kunci"
+
+"Ring, ping or change pairing for a device" = "Deringkan, kirim sinyal atau ubah pemasangan perangkat"
+
+"Run" = "Jalankan"
+
+"Save key" = "Simpan kunci"
+
+"Saved in your desktop keyring for this server, separate from Mandara's configuration." = "Disimpan untuk server ini di penyimpanan kunci desktop, terpisah dari konfigurasi Mandara."
+
+"Search languages" = "Cari bahasa"
+
+"Search to find more languages" = "Cari untuk menemukan bahasa lainnya"
+
+"Send clipboard text" = "Kirim teks papan klip"
+
+"Send text to a paired, connected device" = "Kirim teks ke perangkat yang dipasangkan dan tersambung"
+
+"Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "Pisahkan alamat feed RSS, Atom atau JSON dengan spasi; hingga 16 langganan"
+
+"Separate up to 24 entity ids with spaces; empty shows the first available entities" = "Pisahkan hingga 24 ID entitas dengan spasi; kosong menampilkan entitas pertama yang tersedia"
+
+"Server address" = "Alamat server"
+
+"Server replied with HTTP {status}" = "Server membalas dengan HTTP {status}"
+
+"Show available devices" = "Tampilkan perangkat tersedia"
+
+"Target language code" = "Kode bahasa tujuan"
+
+"Text is sent only when you press Translate" = "Teks hanya dikirim saat Anda menekan Terjemahkan"
+
+"Text is sent only when you press Translate." = "Teks hanya dikirim saat Anda menekan Terjemahkan."
+
+"Text to send" = "Teks untuk dikirim"
+
+"Text to translate" = "Teks untuk diterjemahkan"
+
+"Text translation" = "Terjemahan teks"
+
+"The API key cannot be used in a request" = "Kunci API tidak dapat dipakai dalam permintaan"
+
+"The feed belongs to another address" = "Feed berasal dari alamat lain"
+
+"The feed server returned no content" = "Server feed tidak mengembalikan konten"
+
+"The provider returned no language list" = "Penyedia tidak mengembalikan daftar bahasa"
+
+"The provider returned no translation" = "Penyedia tidak mengembalikan terjemahan"
+
+"The saved API key is not text" = "Kunci API tersimpan bukan teks"
+
+"The saved feed belongs to another address" = "Feed tersimpan berasal dari alamat lain"
+
+"The saved feed could not be read; refresh it to download a new copy" = "Feed tersimpan tidak dapat dibaca; segarkan untuk mengunduh salinan baru"
+
+"The saved feed is too large to read" = "Feed tersimpan terlalu besar untuk dibaca"
+
+"The saved feed is too large to write" = "Feed tersimpan terlalu besar untuk ditulis"
+
+"The server did not return valid JSON" = "Server tidak mengembalikan JSON yang valid"
+
+"The server is receiving too many requests; try again later" = "Server menerima terlalu banyak permintaan; coba lagi nanti"
+
+"The server redirected this request; enter its final address in Studio" = "Server mengalihkan permintaan; masukkan alamat akhirnya di Studio"
+
+"The server rejected the API key" = "Server menolak kunci API"
+
+"The server's response was too large" = "Respons server terlalu besar"
+
+"There is no text to send" = "Tidak ada teks untuk dikirim"
+
+"This article has no web address" = "Artikel ini tidak memiliki alamat web"
+
+"This article is no longer in the feed" = "Artikel ini tidak lagi ada di feed"
+
+"This device is asking to pair. Check the name on your phone before accepting." = "Perangkat ini meminta pemasangan. Periksa namanya di ponsel sebelum menerima."
+
+"This entity cannot run that action right now" = "Entitas ini belum dapat menjalankan tindakan itu"
+
+"This feed is too large to read" = "Feed ini terlalu besar untuk dibaca"
+
+"This phone does not support that action right now" = "Ponsel ini belum mendukung tindakan itu"
+
+"This phone is not connected" = "Ponsel ini tidak tersambung"
+
+"This request is too large" = "Permintaan ini terlalu besar"
+
+"This text is too large to send to a phone" = "Teks ini terlalu besar untuk dikirim ke ponsel"
+
+"Toggle a home control or run a scene, script or button" = "Alihkan kontrol rumah atau jalankan adegan, skrip atau tombol"
+
+"Translate" = "Terjemahkan"
+
+"Translate text into a language with your configured provider" = "Terjemahkan teks ke suatu bahasa dengan penyedia yang diatur"
+
+"Translate text with your chosen provider" = "Terjemahkan teks dengan penyedia pilihan Anda"
+
+"Translating…" = "Menerjemahkan…"
+
+"Translator" = "Penerjemah"
+
+"Turn off" = "Matikan"
+
+"Unavailable" = "Tidak tersedia"
+
+"Unknown phone action" = "Tindakan ponsel tidak dikenal"
+
+"Use a server address without a password, query or fragment" = "Gunakan alamat server tanpa kata sandi, kueri atau fragmen"
+
+"Use an API key" = "Gunakan kunci API"
+
+"Use an http:// or https:// feed address without a password" = "Gunakan alamat feed http:// atau https:// tanpa kata sandi"
+
+"Use an http:// or https:// server address without a password" = "Gunakan alamat server http:// atau https:// tanpa kata sandi"
+
+"Your Home Assistant address, including a reverse proxy path if needed" = "Alamat Home Assistant, termasuk jalur proksi balik jika perlu"
+
+"Your LibreTranslate server, including a reverse proxy path if needed" = "Server LibreTranslate, termasuk jalur proksi balik jika perlu"
+
+"Your devices, within reach" = "Perangkat dalam jangkauan"
+
+"Your home favourites, sensors and scenes" = "Favorit rumah, sensor dan adegan"
+
+"Your subscriptions, together" = "Semua langganan Anda"
+
+"Your translation appears here" = "Terjemahan akan muncul di sini"
+
+"{counter}" = "{counter}"
+
+"{count} unread" = "{count} belum dibaca"
+
+"{percent}% · charging" = "{percent}% · mengisi daya"
+
+"Binary clock" = "Jam biner"
+
+"Copies its appearance and position. Later desktop edits do not change this screen." = "Menyalin tampilan dan posisinya. Perubahan desktop setelahnya tidak mengubah layar ini."
+
+"Copy from desktop" = "Salin dari desktop"
+
+"Date ticket" = "Tiket tanggal"
+
+"Eight" = "Delapan"
+
+"Eleven" = "Sebelas"
+
+"Five" = "Lima"
+
+"Five past {hour}" = "{hour} lewat lima"
+
+"Five to {hour}" = "{hour} kurang lima"
+
+"Four" = "Empat"
+
+"Glass tube clock" = "Jam tabung kaca"
+
+"Half past {hour}" = "{hour} lewat tiga puluh"
+
+"Humidity rose" = "Bunga kelembapan"
+
+"Imperial" = "Imperial"
+
+"Metric" = "Metrik"
+
+"Moon calendar" = "Kalender bulan"
+
+"Nine" = "Sembilan"
+
+"One" = "Satu"
+
+"Perpetual calendar" = "Kalender abadi"
+
+"Plasma's secure locker controls this screen. Custom lock widgets are available with Mandara's native locker on supported compositors." = "Pengunci aman Plasma mengendalikan layar ini. Widget kunci khusus tersedia dengan pengunci asli Mandara pada kompositor yang didukung."
+
+"Public decorations only. Notes, messages, account data and widget actions stay out of sign-in screens." = "Hanya hiasan publik. Catatan, pesan, data akun, dan tindakan widget tidak muncul di layar masuk."
+
+"Public weather location" = "Lokasi cuaca publik"
+
+"Quarter past {hour}" = "{hour} lewat seperempat"
+
+"Quarter to {hour}" = "{hour} kurang seperempat"
+
+"Seven" = "Tujuh"
+
+"Six" = "Enam"
+
+"Split-flap clock" = "Jam papan lipat"
+
+"Ten" = "Sepuluh"
+
+"Ten past {hour}" = "{hour} lewat sepuluh"
+
+"Ten to {hour}" = "{hour} kurang sepuluh"
+
+"The location you add here is public and allows weather requests on this screen. Studio previews do not contact the weather service." = "Lokasi yang ditambahkan di sini bersifat publik dan mengizinkan permintaan cuaca pada layar ini. Pratinjau Studio tidak menghubungi layanan cuaca."
+
+"Thermometer" = "Termometer"
+
+"Three" = "Tiga"
+
+"Twelve" = "Dua belas"
+
+"Twenty past {hour}" = "{hour} lewat dua puluh"
+
+"Twenty to {hour}" = "{hour} kurang dua puluh"
+
+"Twenty-five past {hour}" = "{hour} lewat dua puluh lima"
+
+"Twenty-five to {hour}" = "{hour} kurang dua puluh lima"
+
+"Two" = "Dua"
+
+"Use this location publicly" = "Gunakan lokasi ini secara publik"
+
+"Weather ribbon" = "Pita cuaca"
+
+"Widgets" = "Widget"
+
+"Word clock" = "Jam kata"
+
+"{hour} o'clock" = "Tepat {hour}"
+
+"Icon theme {theme} is installed" = "Tema ikon {theme} terpasang"
+
+"Icon theme {theme} is missing; install it or choose another in Themes → Icons" = "Tema ikon {theme} tidak ditemukan; pasang tema tersebut atau pilih yang lain di Tema → Ikon"
+
+"No icon theme is selected; standard fallbacks are in use" = "Tidak ada tema ikon yang dipilih; ikon cadangan standar digunakan"
+
+"Use an https:// address, or a local IP address, when sending an API key" = "Gunakan alamat https:// atau alamat IP lokal saat mengirim kunci API"
+
+"Example track" = "Lagu contoh"
+
+"Example artist" = "Artis contoh"
+
+"Previews use sample data." = "Pratinjau menggunakan data contoh."

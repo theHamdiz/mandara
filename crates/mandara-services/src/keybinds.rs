@@ -152,7 +152,7 @@ impl Group {
 
     pub fn icon(self) -> &'static str {
         match self {
-            Group::Mandara => "sparkles",
+            Group::Mandara => "home",
             Group::Windows => "window",
             Group::Workspaces => "grid",
             Group::Apps => "package",

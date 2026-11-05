@@ -30,6 +30,8 @@ pub struct HyprWorkspace {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct HyprMonitor {
+    #[serde(default)]
+    pub id: Option<i64>,
     pub name: String,
     #[serde(default)]
     pub x: i32,
@@ -92,12 +94,12 @@ impl HyprClient {
         u64::from_str_radix(self.address.trim_start_matches("0x"), 16).unwrap_or(0)
     }
 
-    fn client(&self, focused: bool) -> ClientInfo {
+    fn client(&self, focused: bool, monitors: &[HyprMonitor]) -> ClientInfo {
         ClientInfo {
             id: self.id(),
             title: self.title.clone(),
             app_id: self.class.clone(),
-            monitor: self.monitor.to_string(),
+            monitor: monitors.iter().find(|m| m.id == Some(self.monitor)).map(|m| m.name.clone()).unwrap_or_default(),
             tags: self.workspace.as_ref().and_then(|w| numbered(w.id, &w.kind)).map(|id| vec![id]).unwrap_or_default(),
             focused,
             floating: self.floating,
@@ -190,6 +192,8 @@ pub fn lua_dispatch(cmd: &str, args: &str) -> Result<String> {
     }
     Ok(match cmd {
         "workspace" => format!("hl.dsp.focus({{ workspace = {} }})", lua_selector(args)),
+        "focuswindow" => format!("hl.dsp.focus({{ window = {} }})", lua_str(args)),
+        "movefocus" => format!("hl.dsp.focus({{ direction = {} }})", lua_str(args)),
         "movetoworkspace" | "movetoworkspacesilent" => {
             let (ws, window) = args.split_once(',').map(|(w, c)| (w.trim(), Some(c.trim()))).unwrap_or((args, None));
             let mut fields = vec![format!("workspace = {}", lua_selector(ws))];
@@ -351,11 +355,13 @@ impl CompositorBackend for HyprlandDriver {
         if raw.trim() == "{}" || raw.trim().is_empty() {
             return Ok(None);
         }
-        Ok(Some(serde_json::from_str::<HyprClient>(&raw)?.client(true)))
+        Ok(Some(serde_json::from_str::<HyprClient>(&raw)?.client(true, &self.json::<Vec<HyprMonitor>>("monitors")?)))
     }
 
     fn get_all_clients(&self) -> Result<Vec<ClientInfo>> {
-        Ok(self.json::<Vec<HyprClient>>("clients")?.iter().map(|c| c.client(false)).collect())
+        let clients = self.json::<Vec<HyprClient>>("clients")?;
+        let monitors = self.json::<Vec<HyprMonitor>>("monitors")?;
+        Ok(clients.iter().map(|c| c.client(false, &monitors)).collect())
     }
 
     fn get_monitors(&self) -> Result<Vec<MonitorInfo>> {
@@ -491,7 +497,7 @@ mod tests {
             r#"{"address":"0x55d0c0a1b2c0","mapped":true,"hidden":false,"visible":true,"acceptsInput":true,"at":[10,42],"size":[900,600],"workspace":{"address":"special:magic","type":"special","name":"special:magic"},"floating":true,"monitor":0,"class":"foot","title":"htop","initialClass":"foot","initialTitle":"foot","pid":42,"xwayland":false,"pinned":false,"pinFullscreened":false,"fullscreen":0,"fullscreenClient":0,"fullscreenHandler":"","allowedOverFullscreen":false,"grouped":[],"tags":[],"swallowing":"0x0","focusHistoryID":0,"inhibitingIdle":false,"xdgTag":"","xdgDescription":"","contentType":"none","tearingHint":false,"stableId":"1a"}"#,
         )
         .unwrap();
-        let info = c.client(true);
+        let info = c.client(true, &[]);
         assert!(info.tags.is_empty() && info.floating && info.geometry == Some((10, 42, 900, 600)));
         let v: HyprVersion = serde_json::from_str(r#"{"branch":"","commit":"0aa6745","version":"0.57.0","dirty":false,"commit_message":"","commit_date":"","tag":"v0.57.0","commits":"0"}"#).unwrap();
         assert_eq!(v.parsed(), Some((0, 57)));
@@ -504,6 +510,8 @@ mod tests {
         assert!(speaks_lua(None, true) && !speaks_lua(None, false));
         let lua = |c: &str, a: &str| lua_dispatch(c, a).unwrap();
         assert_eq!(lua("workspace", "3"), "hl.dsp.focus({ workspace = 3 })");
+        assert_eq!(lua("focuswindow", "address:0x55d0c0a1b2c0"), "hl.dsp.focus({ window = \"address:0x55d0c0a1b2c0\" })");
+        assert_eq!(lua("movefocus", "l"), "hl.dsp.focus({ direction = \"l\" })");
         assert_eq!(lua("workspace", "name:web"), "hl.dsp.focus({ workspace = \"name:web\" })");
         assert_eq!(lua("movetoworkspacesilent", "4,address:0x55d0c0a1b2c0"), "hl.dsp.window.move({ workspace = 4, follow = false, window = \"address:0x55d0c0a1b2c0\" })");
         assert_eq!(lua("movetoworkspacesilent", "4"), "hl.dsp.window.move({ workspace = 4, follow = false })");
@@ -516,11 +524,31 @@ mod tests {
     }
 
     #[test]
+    fn client_monitor_ids_resolve_to_connector_names() {
+        let monitors: Vec<HyprMonitor> = serde_json::from_str(
+            r#"[{"id":7,"name":"HDMI-A-1"},{"id":3,"name":"DP-3","x":-2560,"width":2560,"height":1440,"focused":true}]"#,
+        ).unwrap();
+        let client: HyprClient = serde_json::from_str(
+            r#"{"address":"0x7","monitor":3,"workspace":{"id":2},"at":[-2500,40],"size":[900,600]}"#,
+        ).unwrap();
+        let info = client.client(true, &monitors);
+        assert_eq!(
+            info.monitor, "DP-3",
+            "monitor IDs are not positions in the monitor list"
+        );
+        assert_eq!(info.geometry, Some((-2500, 40, 900, 600)));
+        assert!(
+            client.client(false, &[]).monitor.is_empty(),
+            "a disconnected output must not look like a connector name"
+        );
+    }
+
+    #[test]
     fn events_and_clients() {
         assert_eq!(parse_event("activewindow>>kitty,~"), Some(("activewindow", "kitty,~")));
         assert_eq!(parse_event("garbage"), None);
         let c: HyprClient = serde_json::from_str(r#"{"address":"0x55d0c0a1b2c0","class":"kitty","title":"zsh","monitor":0,"workspace":{"id":2,"name":"2"},"floating":false,"fullscreen":0}"#).unwrap();
-        let info = c.client(true);
+        let info = c.client(true, &[]);
         assert_eq!(info.id, 0x55d0c0a1b2c0);
         assert_eq!(info.tags, vec![2]);
         assert!(!info.fullscreen);
@@ -552,7 +580,7 @@ mod tests {
             let _stream = accept(&events);
             let monitors = r#"[{"name":"DP-1","activeWorkspace":{"id":2},"width":1707,"height":960}]"#;
             let focused = r#"{"address":"0x7","title":"Fresh window","workspace":{"id":2}}"#;
-            for (command, reply) in [("j/workspaces", r#"[{"id":2,"name":"2","monitor":"DP-1","windows":1}]"#.to_string()), ("j/monitors", monitors.into()), ("j/clients", format!("[{focused}]")), ("j/activewindow", focused.into()), ("j/monitors", monitors.into())] {
+            for (command, reply) in [("j/workspaces", r#"[{"id":2,"name":"2","monitor":"DP-1","windows":1}]"#.to_string()), ("j/monitors", monitors.into()), ("j/clients", format!("[{focused}]")), ("j/monitors", monitors.into()), ("j/activewindow", focused.into()), ("j/monitors", monitors.into()), ("j/monitors", monitors.into())] {
                 let mut stream = accept(&requests);
                 stream.set_read_timeout(Some(crate::REQUEST_TIMEOUT)).unwrap();
                 let mut input = vec![0; command.len()];

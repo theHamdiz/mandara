@@ -2,6 +2,7 @@ assets/FILES.txt
 assets/README.md
 assets/artwork/banner.html
 assets/artwork/corniche.png
+assets/artwork/embedded-budget.rs
 assets/artwork/obsidian.png
 assets/artwork/prompts.json
 assets/artwork/scenes/desktop-calendar.jpg
@@ -121,12 +122,18 @@ assets/plugins/dock/icon.svg
 assets/plugins/drives/cover.png
 assets/plugins/drives/icon.png
 assets/plugins/drives/icon.svg
+assets/plugins/feeds/cover.png
+assets/plugins/feeds/icon.png
+assets/plugins/feeds/icon.svg
 assets/plugins/git-repos/cover.png
 assets/plugins/git-repos/icon.png
 assets/plugins/git-repos/icon.svg
 assets/plugins/hadith/cover.png
 assets/plugins/hadith/icon.png
 assets/plugins/hadith/icon.svg
+assets/plugins/home-assistant/cover.png
+assets/plugins/home-assistant/icon.png
+assets/plugins/home-assistant/icon.svg
 assets/plugins/jannah/cover.png
 assets/plugins/jannah/icon.png
 assets/plugins/jannah/icon.svg
@@ -169,6 +176,9 @@ assets/plugins/notes/icon.svg
 assets/plugins/notifications/cover.png
 assets/plugins/notifications/icon.png
 assets/plugins/notifications/icon.svg
+assets/plugins/phone-connect/cover.png
+assets/plugins/phone-connect/icon.png
+assets/plugins/phone-connect/icon.svg
 assets/plugins/pomodoro/cover.png
 assets/plugins/pomodoro/icon.png
 assets/plugins/pomodoro/icon.svg
@@ -226,6 +236,9 @@ assets/plugins/tailscale/icon.svg
 assets/plugins/todo/cover.png
 assets/plugins/todo/icon.png
 assets/plugins/todo/icon.svg
+assets/plugins/translator/cover.png
+assets/plugins/translator/icon.png
+assets/plugins/translator/icon.svg
 assets/plugins/tray/cover.png
 assets/plugins/tray/icon.png
 assets/plugins/tray/icon.svg

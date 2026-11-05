@@ -1099,7 +1099,7 @@ impl StudioView {
                     let active = serde_json::to_value(s.order).ok().and_then(|v| v.as_str().map(str::to_string)).as_deref() == Some(value);
                     let glyph = match value {
                         "shuffle" => "dice",
-                        "random" => "sparkles",
+                        "random" => "dice",
                         "newest" => "clock",
                         _ => "list-check",
                     };

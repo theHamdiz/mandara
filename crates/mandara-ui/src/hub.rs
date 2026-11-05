@@ -263,12 +263,13 @@ pub struct PluginServices {
 }
 
 impl PluginServices {
+    /// Start a shared service only when an enabled placement actually uses its data.
     pub fn wanted(registry: &mandara_plugins::PluginRegistry, cfg: &mandara_config::ShellConfig) -> Self {
         let on = |id: &str| registry.is_enabled(id, &cfg.plugins);
         let weather_id = crate::plugins::weather::ID;
         let weather_shown = !cfg.plugin_places(weather_id).is_empty()
             || (cfg.wallpaper.desktop_clock && cfg.wallpaper.show_date && cfg.wallpaper.show_weather)
-            || cfg.desktop.widgets.painted().any(|w| matches!(&w.kind, mandara_config::desktop_widgets::WidgetKind::Clock(c) if c.weather && c.face == mandara_config::desktop_widgets::ClockFace::DayBlock));
+            || cfg.desktop.widgets.painted().any(|w| w.kind.uses_weather());
         Self {
             clipboard: on(crate::plugins::clipboard::ID),
             sampler: SAMPLER_PLUGINS.iter().any(|id| on(id)),
@@ -440,5 +441,30 @@ mod tests {
         c.wallpaper.show_weather = false;
         c.take_plugin_places(crate::plugins::weather::ID);
         assert!(!PluginServices::wanted(&r, &c).weather, "placed nowhere");
+    }
+
+    #[test]
+    fn desktop_weather_alone_keeps_the_forecast_service_running() {
+        use mandara_config::desktop_widgets::{ClockFace, ClockWidget, DesktopWidget, WeatherWidget, WidgetKind};
+        let r = registry();
+        let mut cfg = ShellConfig::default();
+        cfg.wallpaper.desktop_clock = false;
+        cfg.take_plugin_places(crate::plugins::weather::ID);
+        cfg.desktop.widgets.items.clear();
+        assert!(!PluginServices::wanted(&r, &cfg).weather);
+        cfg.desktop.widgets.add(DesktopWidget { kind: WidgetKind::Weather(WeatherWidget::default()), ..Default::default() });
+        assert!(PluginServices::wanted(&r, &cfg).weather);
+        cfg.desktop.widgets.items[0].enabled = false;
+        assert!(!PluginServices::wanted(&r, &cfg).weather);
+        cfg.desktop.widgets.items[0] = DesktopWidget { kind: WidgetKind::Clock(ClockWidget { face: ClockFace::DayBlock, weather: true, ..Default::default() }), ..Default::default() };
+        assert!(PluginServices::wanted(&r, &cfg).weather);
+        if let WidgetKind::Clock(clock) = &mut cfg.desktop.widgets.items[0].kind { clock.face = ClockFace::Word; }
+        assert!(!PluginServices::wanted(&r, &cfg).weather);
+        cfg.desktop.widgets.items[0] = DesktopWidget { kind: WidgetKind::Weather(WeatherWidget::default()), ..Default::default() };
+        cfg.weather.enabled = false;
+        assert!(!PluginServices::wanted(&r, &cfg).weather);
+        cfg.weather.enabled = true;
+        cfg.plugins.disabled.push(crate::plugins::weather::ID.into());
+        assert!(!PluginServices::wanted(&r, &cfg).weather);
     }
 }

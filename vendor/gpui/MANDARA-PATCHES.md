@@ -95,6 +95,28 @@ any other unsupported file. Together with `vendor/pure-onnx-ocr`'s patch 1
 formats) this takes `exr`, `qoi`, `pulp`, `zune-inflate`, `lebe`, `bit_field`
 and their helpers out of the build.
 
+## 4. Fractional bounds for SDF curves (`window.rs`, `window/subpixel.rs`)
+
+`paint_quad` aligns layout rectangles to device pixels. Applying that rule
+separately to every dot in the Power charge arc moves neighbouring centers
+by different amounts and leaves an uneven contour, especially at 1× scale.
+
+`Window::paint_subpixel_quad` keeps those bounds at their fractional device
+coordinates. It shares insertion with `paint_quad`: opacity, content masks,
+stroke widths and border handling use the same code. Ordinary layout quads
+still use their existing pixel alignment. No primitive format or shader
+changes are needed; SDF quads already accept floating-point bounds.
+
+The Power painter uses this method for its round marks. It keeps the same
+geometry, number of quads and colour interpolation.
+
+## 5. Current atomic update API (`profiler.rs`, `profiler/journal.rs`)
+
+The profiler's three atomic updates use `try_update`, the current stable
+name for the deprecated `fetch_update` alias. Ordering and retry behavior
+are unchanged. This keeps standalone renderer and GPUI tests free of
+Rust 1.99 deprecation warnings without suppressing the lint.
+
 ## Tests
 
 `elements::div::tests::hover_without_an_id_updates_its_cached_view` (patch 2,
@@ -118,7 +140,11 @@ without the patch.
   card's own background quad, and without overflow (or with one hidden axis)
   nothing is rounded.
 
-All 411 library tests pass. Like `gpui_wgpu`, some tests `include_bytes!` Zed's
+`window::subpixel::tests::fractional_sdf_bounds_keep_the_legacy_clip_and_opacity`
+checks actual painted scene quads at 1×, 1.25×, 1.5× and 2×: precise bounds,
+unchanged legacy snapping, rounded clipping, opacity, radii and border widths.
+
+The library suite passes 412 tests with two existing ignores. Like `gpui_wgpu`, some tests `include_bytes!` Zed's
 `assets/`, so run them from a copy laid out like Zed's tree (the vendored
 renderer's `[patch]` points at `../gpui`, so copy both):
 

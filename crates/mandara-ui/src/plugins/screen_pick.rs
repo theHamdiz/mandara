@@ -8,13 +8,13 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use gpui::layer_shell::{Anchor, KeyboardInteractivity, Layer};
+use gpui::layer_shell::KeyboardInteractivity;
 use gpui::{
     App, AppContext as _, Bounds, Context, Corners, FocusHandle, FontWeight, Hsla, ImageSource, InteractiveElement, IntoElement, KeyDownEvent, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit, ParentElement, Render, RenderImage, ScrollEvent, Styled, StyledImage as _, Window, canvas, div,
     fill, img, point, px, size,
 };
-use mandara_core::{FrameClock, LayerSurfaceSpec, SpringConfig, SpringValue, SurfaceRole, ToGpui};
+use mandara_core::{FrameClock, SpringConfig, SpringValue, ToGpui};
 use mandara_i18n::t;
 use mandara_services::color_picker as cp;
 use mandara_services::screencopy::Capture;
@@ -75,8 +75,6 @@ const HINT_PAD_X_PX: f32 = 14.0;
 const HINT_H_PX: f32 = 28.0;
 const HINT_FILL_ALPHA: f32 = 0.55;
 const HINT_TEXT_PX: f32 = text::LABEL + 0.5;
-/// Bytes per BGRA / RGBA pixel.
-const BYTES_PER_PIXEL: usize = 4;
 /// Bit offsets of red and green in a packed `0xRRGGBB`.
 const RED_SHIFT: u32 = 16;
 const GREEN_SHIFT: u32 = 8;
@@ -123,18 +121,6 @@ pub struct PickView {
     demo: Option<Instant>,
 }
 
-/// Moves the capture's RGBA pixels into the BGRA layout GPUI's renderer
-/// expects, in place (no copy of a multi-megabyte frame). Runs off the UI
-/// thread; `capture.rgba` is left empty.
-fn frozen_image(capture: &mut Capture) -> Option<Arc<RenderImage>> {
-    let mut bgra = std::mem::take(&mut capture.rgba);
-    for px in bgra.as_chunks_mut::<BYTES_PER_PIXEL>().0 {
-        px.swap(0, 2);
-    }
-    let buffer = image::RgbaImage::from_raw(capture.width, capture.height, bgra)?;
-    Some(Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(buffer)])))
-}
-
 /// A BGR sample (from the frozen BGRA frame) as RGB.
 fn rgb_of([b, g, r]: [u8; 3]) -> [u8; 3] {
     [r, g, b]
@@ -143,19 +129,7 @@ fn rgb_of([b, g, r]: [u8; 3]) -> [u8; 3] {
 /// Crops a logical-space rect out of the frozen BGRA frame as RGBA,
 /// copying only the cropped pixels.
 fn crop_logical(capture: &Capture, bgra: &[u8], r: Rect) -> image::RgbaImage {
-    let s = capture.scale();
-    let to_px = |v: f32, max: u32| ((v * s).round().max(0.0) as u32).min(max);
-    let (x0, y0) = (to_px(r.x, capture.width), to_px(r.y, capture.height));
-    let x1 = to_px(r.x + r.w, capture.width).max(x0 + 1).min(capture.width);
-    let y1 = to_px(r.y + r.h, capture.height).max(y0 + 1).min(capture.height);
-    let (w, h) = (x1.saturating_sub(x0).max(1), y1.saturating_sub(y0).max(1));
-    image::RgbaImage::from_fn(w, h, |x, y| {
-        let i = ((y0 + y) as usize * capture.width as usize + (x0 + x) as usize) * BYTES_PER_PIXEL;
-        match bgra.get(i..i + BYTES_PER_PIXEL) {
-            Some(p) => image::Rgba([p[2], p[1], p[0], p[3]]),
-            None => image::Rgba([0, 0, 0, u8::MAX]),
-        }
-    })
+    crate::capture_pixels::crop(capture, bgra, (r.x, r.y, r.w, r.h))
 }
 
 fn rgb_hsla([r, g, b]: [u8; 3]) -> Hsla {
@@ -489,15 +463,14 @@ impl Render for PickView {
 }
 
 fn open(purpose: Purpose, demo: bool, cx: &mut App) {
-    let monitor = crate::hub::hub(cx).read(cx).focused.as_ref().map(|c| c.monitor.clone()).unwrap_or_default();
+    let focus = crate::capture_output::Focus::snapshot(cx);
     // Capture, pick the output and convert the frame to BGRA off the UI
     // thread (a 4K frame is ~33 MB: copying it on the foreground stutters).
     let task = cx.background_executor().spawn(async move {
         let captures = mandara_plugins::guard("screen capture", || mandara_services::screencopy::capture_all().map_err(|e| format!("{e:#}")))
             .unwrap_or_else(|| Err(t("internal error while capturing (logged)").into()))?;
-        let index = captures.iter().position(|c| c.output == monitor).unwrap_or(0);
-        let mut capture = captures.into_iter().nth(index).ok_or_else(|| "no outputs captured".to_string())?;
-        let frozen = frozen_image(&mut capture).ok_or_else(|| "capture buffer size mismatch".to_string())?;
+        let mut capture = focus.take(captures).ok_or_else(|| "no outputs captured".to_string())?;
+        let frozen = crate::capture_pixels::freeze(&mut capture).ok_or_else(|| "capture buffer size mismatch".to_string())?;
         Ok::<_, String>((capture, frozen))
     });
     cx.spawn(async move |cx| {
@@ -508,12 +481,9 @@ fn open(purpose: Purpose, demo: bool, cx: &mut App) {
                 return;
             }
         };
-        let (w, h) = (capture.logical.2.max(1) as f32, capture.logical.3.max(1) as f32);
         cx.update(|cx| {
             let keyboard = if demo { KeyboardInteractivity::None } else { KeyboardInteractivity::Exclusive };
-            let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Lock, size(px(w), px(h)), None).with_keyboard(keyboard);
-            spec.layer = Layer::Overlay;
-            spec.anchor = Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT;
+            let spec = crate::capture_output::overlay(&capture, cx).with_keyboard(keyboard);
             let _ = cx.open_window(spec.window_options(), move |window, cx| cx.new(|cx| PickView::new(capture, frozen, purpose, demo, window, cx))).map_err(|e| tracing::error!("screen pick overlay: {e:#}"));
         });
     })

@@ -29,6 +29,8 @@ mod store_page;
 pub(crate) use store_page::{HIDDEN_PLUGINS, PLUGIN_CATEGORIES, plugin_art_cache_clear, plugin_icon, plugin_tile};
 mod plugin_updates;
 mod updates_card;
+mod about_links;
+mod plugin_credentials;
 mod whats_new;
 mod designer;
 mod plugin_pool;
@@ -62,6 +64,7 @@ mod launcher_page;
 mod dock_page;
 mod switcher_page;
 mod desktop_widgets_page;
+mod auth_widgets;
 mod looks_page;
 mod app_themes_page;
 mod themes_page;
@@ -133,6 +136,8 @@ pub struct StudioView {
     recorder_row: recorder_row::RecorderRow,
     /// About → Mandara updates, and marketplace plugin updates.
     updates: updates_card::Updates,
+    about_links: about_links::Links,
+    credentials: plugin_credentials::Editor,
     /// Each language card's download fill (Studio → General → Language).
     lang_fills: mandara_ui::progress_fill::LanguageFills,
     /// Plugins page: the plugin detail / settings modal.
@@ -156,6 +161,7 @@ pub struct StudioView {
 }
 
 impl StudioView {
+    /// Initialize Studio’s inputs and page state from the active configuration.
     pub fn new(cx: &mut Context<Self>) -> Self {
         cx.observe(&config(cx), |_, _, cx| cx.notify()).detach();
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
@@ -212,7 +218,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { section: Section::Home, recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default() }
+        Self { section: Section::Home, recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -221,9 +227,13 @@ impl StudioView {
     /// one's offset, which left short pages "stuck" at their bottom).
     pub fn show(&mut self, section: Section, cx: &mut Context<Self>) {
         if section != self.section {
+            if section == Section::Maintenance { self.maint.invalidate(); }
             self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
             self.themes = None;
             self.icon_matches = None;
+            if self.section == Section::About {
+                self.about_links = Default::default();
+            }
             // The recorder's device and display lists are read afresh.
             self.recorder_row.new_visit();
             plugin_art_cache_clear();
@@ -1459,9 +1469,11 @@ impl StudioView {
         div().row().flex_col().gap(px(SPACE_14_PX)).child(shell).child(studio).child(controls).into_any_element()
     }
 
+    /// Show the installed build, update state and project links in one page.
     fn about(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         // Updates: the patch-first update card (updates_card.rs).
         let updates = self.updates_card(cfg, p, window, cx);
+        let header_links = self.about_header_links(cfg, p, window, cx);
         let build = mandara_core::build_info(cx);
         let registry = cx.global::<PluginRegistry>();
         let commands = registry.commands.all().len();
@@ -1524,7 +1536,8 @@ impl StudioView {
                                     .child(about_chip(LICENSE.to_string(), p.secondary, fonts.ui.clone(), p))
                                     .child(about_chip(t("100% Rust").to_string(), p.tertiary, fonts.ui.clone(), p)),
                             ),
-                    ),
+                    )
+                    .child(header_links),
             );
 
         // At a glance.
@@ -1639,6 +1652,7 @@ impl StudioView {
 }
 
 impl Render for StudioView {
+    /// Render the selected Studio page and its active dialogs from the current config.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         frame_meter::begin();
         let p = mandara_core::frame_palette(window, cx);
@@ -1695,6 +1709,15 @@ impl Render for StudioView {
                 Section::Displays => self.displays_page(&cfg, &p, cx),
                 Section::Maintenance => self.maintenance(&p, cx),
                 Section::LoginScreen => greeter_page::element(cx),
+                Section::LockScreen => {
+                    let rows = self.rows(registry::in_section(Section::LockScreen), &cfg, &p, cx);
+                    let widgets = if registry::running_compositor() == Some(mandara_config::compositor::Target::KWin) {
+                        compositor_page::card(&p).p(px(SPACE_16_PX)).child(compositor_page::heading(t("Widgets"), t("Plasma's secure locker controls this screen. Custom lock widgets are available with Mandara's native locker on supported compositors."), &p)).into_any_element()
+                    } else {
+                        auth_widgets::panel("lock", &cfg.lock.widgets, Rc::new(|edit, cx| update_config(cx, |cfg| edit.apply(&mut cfg.lock.widgets))), &p, cx)
+                    };
+                    div().row().flex_col().gap(px(SPACE_26_PX)).child(rows).child(widgets).into_any_element()
+                }
                 Section::Users => users_page::element(cx),
                 Section::Bar => {
                     let designer = self.bar_designer(&cfg, &p, window, cx);
@@ -1728,7 +1751,7 @@ impl Render for StudioView {
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(clock).child(rows).into_any_element()
                 }
                 Section::DesktopWidgets => {
-                    let widgets = self.desktop_widgets_page(&cfg, &p, cx);
+                    let widgets = self.desktop_widgets_page(&cfg, &p, window, cx);
                     // The interactive cards and GPU visualizers (looks_page.rs).
                     let cards = self.desktop_cards_section(&cfg, &p, fonts.display.clone());
                     div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(widgets).child(cards).into_any_element()

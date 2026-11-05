@@ -147,6 +147,20 @@ eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual c
 - **Debug builds** are fine here. In the real session, run only release
   builds.
 
+### Power gauge preview
+
+The `power_gauge` example draws the real charge gauge with labelled sample
+values, so it needs no battery or system bus. It requires the private
+sandbox marker from this checkout and closes itself after twelve seconds.
+Use the default dark palette or pass `--light`:
+
+```sh
+cargo build -p mandara-ui --example power_gauge
+cargo xtask sandbox up
+eval "$(cargo xtask sandbox env)"
+"${CARGO_TARGET_DIR:-target}/debug/examples/power_gauge" --light
+```
+
 ## Screenshot grids: `cargo xtask mosaic`
 
 ```bash
@@ -206,3 +220,6 @@ in this order:
 A profile whose `.cargo-lock` is held by a running build is skipped.
 `target/sandbox` is never deleted. `--watch MINUTES` repeats the check;
 run that from a copy of the binary outside the directories it prunes.
+
+Sparkle icons are reserved for AI features. Use symbols for the function of
+ordinary tools, automation and procedural generation.

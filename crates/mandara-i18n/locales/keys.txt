@@ -152,6 +152,7 @@ A line under the greeting (optional)
 A list needs a name
 A list's name (empty: every list)
 A little cat, soap bubbles, a photo frame and stickers on the desktop
+A little closer to home
 A little player with an LCD and buttons
 A locked account can't sign in until it's unlocked.
 A look ahead: only today's step can be marked done
@@ -240,6 +241,7 @@ A “mandara” color scheme for qt6ct / qt5ct
 AI rendering of the meaning
 AI usage
 AM
+API key
 APP
 APPS
 AUR packages
@@ -258,6 +260,7 @@ Accent colour
 Accent line
 Accent tint
 Accent vividness
+Accept
 Access
 Access denied
 Accessibility
@@ -343,6 +346,9 @@ Add to {zone}
 Add user
 Add widget
 Add widgets
+Add your Home Assistant token in Studio
+Add your favourite feeds in Studio
+Add your translation API key in Studio
 Add yourself to the {group} group (`sudo usermod -aG {group} $USER`), then log out and back in.
 Add {app} to your apps (~/.local/share/applications)
 Added
@@ -452,8 +458,10 @@ Always open on the first tab
 Amber
 Ambient sea, rain, wind, café, fire and noise — synthesized live
 Amplitude
+An API key is saved for this server
 An Essay on Criticism
 An HOTP link needs a counter
+An action is still running
 An app needs administrator rights
 An app starts or stops using the microphone, camera or screen
 An app wants access to the keyring “Login”, but it is locked (preview: nothing is unlocked)
@@ -649,6 +657,7 @@ Automatically hide and show the Dock
 Automatically unlock this keyring whenever I'm logged in
 Available
 Available login screens
+Available to pair
 Awake while media plays
 Away · the clock waits
 Ayah of the day
@@ -737,6 +746,7 @@ Between the others
 Between the sides
 Bhagavad Gita
 Bigger images aren't recorded
+Binary clock
 Bind Alt+Tab
 Bitrate
 Bits · Mb/s
@@ -977,6 +987,7 @@ Charging — critical action cancelled
 Charles Darwin
 Charles Dickens
 Charlotte Brontë
+Check KDE Connect while the phone panel is open
 Check again
 Check box
 Check every
@@ -1022,11 +1033,14 @@ Choose a file…
 Choose a password for the new keyring
 Choose a photo…
 Choose a profile photo
+Choose a source and target language
 Choose a username
+Choose a valid Home Assistant entity
 Choose an area to record
 Choose displays
 Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.
 Choose the key file
+Choose up to 24 Home Assistant entities
 Choose what the power menu offers and in which order. Built-in entries can be hidden or renamed; your own commands and boot entries can be removed.
 Choose…
 Chrome
@@ -1196,6 +1210,7 @@ Connect every trusted device in range
 Connect to a hidden network
 Connect to a network (saved profile, or with a password)
 Connect to the tailnet (answers with a login link when the device must log in)
+Connect your home in Studio
 Connected
 Connected displays with modes, position, scale and rotation (wlr-output-management)
 Connected · Wi-Fi
@@ -1239,12 +1254,14 @@ Copied {text}
 Copied {value}
 Copies captures
 Copies each window's contents (ext-image-copy-capture); app icons otherwise
+Copies its appearance and position. Later desktop edits do not change this screen.
 Copies marked secret by password managers are never recorded
 Copy
 Copy (right-click pastes)
 Copy a history entry back (by id), optionally pasting it
 Copy a topic's notes (or all) into a folder as .md files
 Copy as
+Copy from desktop
 Copy path
 Copy picked colors
 Copy report
@@ -1252,6 +1269,7 @@ Copy text
 Copy text (Ctrl+T) reads this script; Auto reads both
 Copy the first matching account's code (cleared from the clipboard after the timeout)
 Copy to clipboard
+Copy translation
 Copy with meaning
 Copy {file} ({size}) to {dir}
 Copying…
@@ -1273,14 +1291,20 @@ Could not keep the screen awake: {error}
 Could not load the OCR models: {error}
 Could not load {module}; check that the installed kernel includes it
 Could not move {path} to the Trash: {error}
+Could not open the keyring: {error}
 Could not open {uri}: {error}
+Could not prepare the request
+Could not reach KDE Connect: {error}
 Could not reach the engine: {error}
 Could not read the logs
+Could not read this feed: {error}
 Could not read {path}: {error}. Left it unchanged.
+Could not refresh this feed: {error}
 Could not remove {path}: {error}
 Could not restart into the firmware setup: {error}
 Could not run journalctl: {error}
 Could not run {program}: {error}
+Could not save or read feed history: {error}
 Could not set the clipboard: {error}
 Could not signal PID {pid}: {error}
 Could not sleep ({mode}): {error}
@@ -1417,6 +1441,7 @@ Date language
 Date modified
 Date pill
 Date style
+Date ticket
 Date tile
 Date, time & location
 Dawn
@@ -1448,6 +1473,9 @@ Decoration
 Deeds
 Deep focus
 Deep green: a giant stacked clock behind the subject and a dock media chip.
+DeepL Free
+DeepL Pro
+DeepL uses its own server and requires an API key
 Default
 Default ({font})
 Default apps per category (from mimeapps.list)
@@ -1455,6 +1483,7 @@ Default column width
 Default list
 Default search
 Default source
+Default target language
 Default topic
 Default view
 Default: El-Mandara, Alexandria
@@ -1545,6 +1574,7 @@ Developer tools
 Development
 Development folder
 Device
+Device id from phone devices
 Device removed
 Devices
 Devices you add to your tailnet appear here
@@ -1584,6 +1614,7 @@ Disconnect from the tailnet
 Disconnected
 Disconnected {name}
 Disconnecting…
+Discord
 Discourses I.15
 Discourses III.23
 Discover
@@ -1776,9 +1807,11 @@ Effect
 Effect strength
 Effects
 Egyptian
+Eight
 Eject
 El-Mandara, Alexandria
 Elevation tint
+Eleven
 Emerald
 Emily Dickinson
 Emma
@@ -1801,6 +1834,7 @@ Enable a unit at boot / login and reload systemd
 Enable launcher
 Enable sidebar
 Enable the window switcher
+Enable this when your LibreTranslate server requires a key; save it in the keyring below
 Enable wallpaper picker
 Enable “mandara” under Themes
 Enabled
@@ -1830,6 +1864,7 @@ Enter copy
 Enter copy + save
 Enter password
 Enter save
+Enter some text to translate
 Enter the PIN
 Enter the passkey
 Enter the passphrase
@@ -1904,7 +1939,9 @@ Everything is up to date
 Everything looks healthy
 Everything started cleanly
 Example
+Example artist
 Example plugin on GitHub
+Example track
 Exceptions
 Exchange rates
 Exists
@@ -1968,9 +2005,12 @@ Fan
 Fast for His sake
 Faster blur on static backgrounds
 Favorites
+Favourite entities
 Fear is inevitable, I have to accept that, but I cannot allow it to paralyze me.
 Featured
+Feed addresses
 Feed and visit
+Feeds
 Feels
 Feels like {temp}
 Feet, what do I need them for if I have wings to fly.
@@ -1984,6 +2024,7 @@ Fetch rates
 Fetched {repo}
 Fetches forecasts from open-meteo.com
 Fetches synced lyrics from lrclib.net while the panel is open
+Fetching headlines…
 Fetching the weather…
 Fetching {repo} failed
 Fetching…
@@ -2053,6 +2094,9 @@ First {shown} of {n} matches
 Fit
 Fit & effects
 Fits in
+Five
+Five past {hour}
+Five to {hour}
 Fix the errors in the plan first.
 Fixed
 Fixed schedule: end of the night
@@ -2149,13 +2193,16 @@ Forever
 Forget
 Forget a saved network
 Forget after
+Forget device
 Forget every picked color
 Forget every recorded launch (ranking starts over)
 Forget recorded screen time (today, or all)
 Forget the history (pinned and collected entries stay unless `all`)
+Forget this paired device?
 Forget today
 Forget usage
 Forget?
+Forget…
 Forgot {name}
 Format
 Format copied when a color is picked
@@ -2163,6 +2210,7 @@ Formats
 Formats, tonal ramp and WCAG contrast of a color
 Forty Hadith Qudsi
 Found
+Four
 Frame
 Frame rate
 Frame rate limit
@@ -2286,6 +2334,7 @@ Glass opacity
 Glass pills
 Glass pills and island: their corners. Edge frame: the hover chips, and the frame's ends when it floats
 Glass rim
+Glass tube clock
 Global
 Gloss
 Glossy liquid blobs melting together
@@ -2344,6 +2393,7 @@ Hairline
 Hairline and micro pill only
 Hairline style only
 Hairlines between apps, recent apps and the right side
+Half past {hour}
 Halftone
 Halftone cover
 Hamlet I.3
@@ -2440,6 +2490,10 @@ Hold to sincere faith in the One God; it is the root of every good.
 Hold {ms} ms to log out, restart or shut down
 Hollow
 Home
+Home Assistant
+Home Assistant could not find this entity
+Home Assistant entity id
+Home Assistant returned no entity list
 Homepage
 Honour your parents
 Hook ran — see recent runs
@@ -2550,6 +2604,7 @@ How wide each side bar is
 However hard it is, do not be the one who breaks the bond.
 Hue shift
 Humidity
+Humidity rose
 Humidity {n}%
 Hurry, hurry has no blessings.
 Hybrid
@@ -2582,6 +2637,8 @@ Icon name or image path
 Icon size
 Icon spacing
 Icon theme
+Icon theme {theme} is installed
+Icon theme {theme} is missing; install it or choose another in Themes → Icons
 Icons
 Icons bounce until the app's first window appears
 Icons only
@@ -2624,6 +2681,7 @@ Images and videos in the wallpaper folder (optionally filtered)
 Images here (and one level of sub-folders) appear in the picker
 Images in your wallpaper folder; Enter sets one
 Imagination is more important than knowledge.
+Imperial
 Imperial (°F, mph)
 Import
 Import a WireGuard (.conf) or OpenVPN (.ovpn) file below — it becomes a NetworkManager connection.
@@ -2648,12 +2706,14 @@ Inbox
 Include added to {file} (backup kept)
 Include all sub-folders
 Include marketplace plugins
+Include nearby devices that can be paired; pairing always needs your confirmation
 Include the pointer
 Included with Mandara, no download needed
 Index (see calendar sources) or name
 Index lines
 Indicators
 Inferno XXVI
+Initial target language code; choose from the provider's language list in the panel
 Inner padding
 Input
 Input device
@@ -2663,6 +2723,7 @@ Inspecting
 Inspecting…
 Install
 Install & use
+Install KDE Connect on your computer and phone, then pair them here.
 Install all
 Install and enable power-profiles-daemon to switch profiles
 Install anyway
@@ -2729,6 +2790,7 @@ Invalid PID
 Invalid character {char} in the secret
 Invalid declarations are skipped with a warning; see Validate below.
 Invalid manifest
+Invalid phone identifier
 Invalid plugin id {id}
 Invalid plugin.toml: {error}
 Invalid repository {name}
@@ -2821,6 +2883,7 @@ Juz {n}
 KB
 KDE / Plasma
 KDE Breeze cursors, refined and extended with more shapes
+KDE Connect did not respond in time
 KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings.
 KWin settings are managed in Plasma System Settings
 KWin: startup entry {path}
@@ -2834,6 +2897,7 @@ KeePassXC isn't running. Start it, then unlock your database here.
 KeePassXC unlock dialog
 Keep
 Keep a history
+Keep a translation under 5,000 characters
 Keep after restart
 Keep an app in the dock (desktop id or name)
 Keep awake
@@ -2863,6 +2927,7 @@ Keep the wallpaper while running on battery
 Keep these display settings? Reverting in {seconds} s
 Keep ticked tasks
 Keep ties of kinship
+Keep up to 16 feed subscriptions
 Keep windows clear of the dock
 Keep your tongue
 Keeps Mandara running if anything ever takes it down. Turn off to let it stay stopped after a crash or kill
@@ -3000,6 +3065,7 @@ Levels
 Lewis Carroll
 Libraries & fonts (shared files)
 Library
+LibreTranslate
 Life is like riding a bicycle. To keep your balance you must keep moving.
 Life is not in bits and pieces. It is a magnificent, rhythmic, pulsating symphony.
 Life is not what one lived, but what one remembers and how one remembers it in order to recount it.
@@ -3044,6 +3110,7 @@ List mice, keyboards and headsets that report a battery
 List minimized windows too (switching restores them)
 List name
 List plugins with origin and enablement
+List the configured translation provider's languages
 List the one-click looks
 List themes (built-in and ~/.config/mandara/themes)
 List time zones, optionally only those containing a word
@@ -3160,6 +3227,7 @@ Looking for installed apps…
 Looking for lyrics…
 Looking for monitors…
 Looking for repositories…
+Looking for your devices…
 Looking inside {count} files…
 Looking…
 Looks
@@ -3378,6 +3446,7 @@ Messages
 Metaphysics, Book I
 Meters
 Method
+Metric
 Metric (°C, km/h)
 Mic mute
 Michel de Montaigne
@@ -3457,9 +3526,11 @@ Month
 Month and weekday names: auto follows the interface, or a locale such as en_GB, ar_EG, de_DE
 Month bar
 Moon
+Moon calendar
 Moon phase
 More
 More like this
+More than one API key matches this server; save the key again
 More wait their turn; all of them are in the history
 More wallpapers
 More windows wrap onto further rows
@@ -3657,8 +3728,10 @@ Night light state, schedule and next change (JSON)
 Night light uses wlr-gamma-control, which MangoWM, Hyprland and Sway offer. Niri doesn't implement it yet; there, use its own settings or a tool built for it.
 Night light: on (warm now and follow the schedule), off, toggle until the next change, or auto (drop the toggle)
 Night temperature
+Nine
 Niri
 Niri, Umbriel
+No API key saved for this server
 No Bluetooth adapter
 No Docker or Podman socket found
 No Longer at Ease
@@ -3725,6 +3798,7 @@ No download for this system in the release
 No downloads yet
 No drive matching "{query}"
 No earlier wallpaper
+No entities to show
 No environment variables or arguments
 No exit node matches {query}
 No external monitor answers DDC/CI
@@ -3735,7 +3809,9 @@ No folder to write into
 No fonts match
 No frames yet — the shell only draws while something changes. Open a panel to see it work.
 No hadith {reference} in {collection}
+No headlines yet
 No hotspot has been set up yet
+No icon theme is selected; standard fallbacks are in use
 No icons named like “{query}” in your theme
 No idle detection
 No image command set (Studio → Plugins → Clipboard)
@@ -4076,6 +4152,7 @@ On, waiting to reach a time server
 On-screen displays
 Once per login, when KeePassXC is running with a locked database, Mandara's dialog asks for its password
 Once per session
+One
 One app's screen time over the last seven days
 One centered island that morphs
 One click sets the bar, desktop widgets, colors, fonts and roundness together. Your own setup is saved first, so you can always go back. Looks never change your wallpaper.
@@ -4110,6 +4187,7 @@ Only tags and workspaces with windows (plus the one you are on)
 Only the built-in encoder uses this; the others follow Resolution
 Only the first {count} checks run
 Only the main display shows the lock screen; others stay black (OLED friendly)
+Only the selected feed refreshes while its panel is open
 Only this display's windows
 Only used when the system can't report camera use instantly
 Only what I changed
@@ -4178,6 +4256,7 @@ Open-source cursors in the style of macOS, with the spinning wait wheel
 Opened {path}
 Opened {terminal}: {command}
 Opening the Qur'an…
+Opening the keyring…
 Opening your keyring…
 Opening {collection}…
 Opening {url}
@@ -4259,8 +4338,11 @@ Pair
 Pair and trust a discovered device (prompts appear in Mandara's dialog)
 Pair with this device?
 Paired
+Paired and discovered devices reported by KDE Connect
 Paired and trusted
+Paired devices, phone battery, ringing and text sharing
 Paired devices, their battery and trust.
+Paired · offline
 Paired · {level}%
 Pairing dialog
 Pairing…
@@ -4287,8 +4369,11 @@ Password dialog width
 Password prompts float
 Passwords don't match
 Passwords match
+Paste
 Paste (right-click copies)
 Paste after copying
+Paste an API key
+Paste an API key without spaces or line breaks
 Pastel
 Paths
 Patience is man's refuge in times of despair, and his armor against misfortunes.
@@ -4346,12 +4431,14 @@ Permission denied on {socket}
 Permission denied: PID {pid} belongs to another user
 Permissions
 Permissions come with the download
+Perpetual calendar
 Petals
 PgDn
 PgUp
 Pharos
 Pharos Night
 Phone
+Phone Connect
 Phonebook access
 Phones and laptops can join this network; they use this computer's connection.
 Photo frame
@@ -4394,6 +4481,7 @@ Pin the left side bar
 Pin the right side bar
 Pin, hide, rename or re-icon apps in the launcher
 Pin, unpin or toggle-pin the sidebar (pinned pushes windows aside)
+Ping
 Pink noise
 Pinned
 Pinned & hidden apps
@@ -4416,6 +4504,7 @@ Placeholder
 Placeholders: {HH} {mm} {ss} {ampm} {time} {weekday} {wd} {day} {month} {mon} {MM} {year} {greeting} {daypart} {hijri}
 Placement
 Plain
+Plasma's secure locker controls this screen. Custom lock widgets are available with Mandara's native locker on supported compositors.
 Plate
 Plate corners
 Plate opacity
@@ -4536,6 +4625,7 @@ Preview the lock screen
 Preview the pairing dialog with a fake device (nothing is paired)
 Preview — any password unlocks · Esc closes
 Previews per row
+Previews use sample data.
 Previous
 Previous track
 Previous window
@@ -4576,12 +4666,15 @@ Progress reported by an app's notifications, on its icon
 Projects
 Prostration
 Proverbs are the palm-oil with which words are eaten.
+Provider
 Provincial Letters XVI
 PrtSc
 Public IP copied
 Public IP service
 Public IP unavailable
 Public IP…
+Public decorations only. Notes, messages, account data and widget actions stay out of sign-in screens.
+Public weather location
 Publilius Syrus
 Publish to the marketplace
 Pudd'nhead Wilson
@@ -4604,6 +4697,8 @@ Qaitbay Citadel
 Qibla
 Qt 5 / 6 (qt6ct, qt5ct)
 Quality
+Quarter past {hour}
+Quarter to {hour}
 Qudsi
 Queried once when the panel opens; must answer with the address as plain text
 Queued
@@ -4633,6 +4728,8 @@ Qur'an and hadith
 RAM
 RECENT
 RPM
+RSS, Atom and JSON subscriptions with local read history
+RSS, Atom or JSON feed address
 RTL
 Rabi al-Awwal
 Rabi al-Thani
@@ -4667,9 +4764,11 @@ Read
 Read Claude Code's logs
 Read a setting by JSON pointer (whole config when omitted)
 Read more
+Read the configured Home Assistant favourites
 Read the folder again
 Read the text in an image file (PP-OCRv5; auto, latin or arabic)
 Read the whole Qur'an with its meaning, listen to it recited, keep your place and your khatm (opt-in)
+Read your home while the panel is open; actions also refresh its state
 Read-only
 Reading
 Reading Bluetooth…
@@ -4697,6 +4796,7 @@ Reading the journal…
 Reading the process table
 Reading the shell's memory…
 Reading what Mandara installed…
+Reading your home…
 Reading your project folders
 Reading…
 Reads Arabic (and Persian / Urdu) text
@@ -4765,9 +4865,13 @@ Reduce motion
 References and links follow sunnah.com. Muwatta Malik is numbered as in the dataset and links to its book.
 Refraction
 Refresh
+Refresh a feed and return its headlines and read history
 Refresh calendars
 Refresh every
+Refresh interval
 Refresh rate
+Refresh this feed before marking it read
+Refreshing…
 Refusing to move {path} to the Trash
 Refusing to signal init (PID 1)
 Regenerate
@@ -4779,11 +4883,13 @@ Region
 Region, window and screen capture, and screen recording
 Regular
 Reinstall
+Reject
 Release notes
 Releases
 Reliability
 Relief
 Reload config
+Reload languages
 Reload the config
 Remember Allah often
 Remember floating panels
@@ -4825,6 +4931,7 @@ Remove from bar ({zone})
 Remove from sidebar
 Remove from the playlist
 Remove harm from the road
+Remove key
 Remove line
 Remove one entry
 Remove photo
@@ -4948,6 +5055,7 @@ Ring
 Ring shows
 Ring starts at
 Ring width
+Ring, ping or change pairing for a device
 River has no such setting
 River keeps no display settings of its own: set them in your init with a tool such as wlr-randr or kanshi
 River runs {file} as a program, but it isn't executable, so River starts without it (chmod +x makes it run).
@@ -4977,6 +5085,7 @@ Ruled
 Ruled to-do list
 Rules
 Rumi
+Run
 Run a command when something happens. Event details arrive as environment variables (MANDARA_EVENT, MANDARA_WALLPAPER, MANDARA_BATTERY_PERCENT…), never inside the command line. Before-logout, restart, shutdown and sleep hooks finish before the action.
 Run a download speed test against speed.cloudflare.com
 Run a hot corner's action now, as if the pointer rested there
@@ -5039,6 +5148,7 @@ Save
 Save a verse or hadith
 Save as profile
 Save how things look now — say “Work” and “Night” — and switch with one click or `mandara msg profile apply Night`.
+Save key
 Save photo
 Save profile
 Save the current arrangement as a profile (applied automatically when the same monitors connect)
@@ -5054,6 +5164,7 @@ Saved as monitor lines in Mandara's {file} drop-in (your own config isn't touche
 Saved colors: {n}
 Saved display profiles and which one matches the connected monitors
 Saved files; the clipboard always gets PNG
+Saved in your desktop keyring for this server, separate from Mandara's configuration.
 Saved in ~/.cache/mandara/clipboard; off keeps it in memory only
 Saved now; applied the next time Mandara runs under a supported compositor ({compositors}).
 Saved now; {file} is generated the next time Mandara runs under {compositor}.
@@ -5162,6 +5273,7 @@ Search files
 Search fonts, or type any name
 Search for something: words in Arabic or in your language
 Search installed apps
+Search languages
 Search looks at names, ids and descriptions.
 Search places by name (Open-Meteo geocoding)
 Search plugins…
@@ -5175,6 +5287,7 @@ Search the downloaded collections: Arabic without diacritics, the meaning or a r
 Search the library
 Search the verses and hadith (Arabic without diacritics, or the meaning)
 Search the whole Qur'an
+Search to find more languages
 Search units…
 Search wallhaven.cc in the wallpaper picker: type a search and pick a result, it downloads at full size into your folder.
 Search what you copied
@@ -5229,7 +5342,9 @@ Send a floating panel back into the bar (it opens there)
 Send a notification when a check goes down or comes back up
 Send a sample notification
 Send apps to their own output
+Send clipboard text
 Send one app stream to another output
+Send text to a paired, connected device
 Send the clipboard, a screenshot or a file to your phone with a QR code
 Send to
 Seneca
@@ -5240,8 +5355,12 @@ Sent to KeePassXC. It can't confirm the result without its Secret Service integr
 Sentence
 Sentences, 358
 Sentences, 439
+Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions
 Separate side bars: a glass pill per group, one island, or a slab along the whole edge
+Separate up to 24 entity ids with spaces; empty shows the first available entities
 Separators
+Server address
+Server replied with HTTP {status}
 Service accounts belong to your distribution and are shown read-only.
 Services
 Session
@@ -5283,6 +5402,7 @@ Settings in Studio
 Settings:        mandara studio
 Settings: {title}
 Setup
+Seven
 Sha'ban
 Shaded
 Shadow
@@ -5355,6 +5475,7 @@ Show again
 Show all {count} apps
 Show an app under your own name (empty name restores it)
 Show an on-screen display with the current value
+Show available devices
 Show clearly-labelled demo accounts instead of the keyring (on/off)
 Show code
 Show completed
@@ -5463,6 +5584,7 @@ Simone Weil
 Simplify, simplify.
 Simulate
 Since the link came up
+Six
 Size
 Size & placement
 Size badge
@@ -5562,6 +5684,7 @@ Speed test size
 Split horizontally
 Split toward the pointer
 Split vertically
+Split-flap clock
 Spread salam
 Springs
 Square dots
@@ -5840,6 +5963,7 @@ Tap, then slide to drag
 Tape angle
 Tape colour
 Taped note
+Target language code
 Task progress
 Tasks (all lists, or one), open first
 Tasks grouped into lists, for the sidebar and bar
@@ -5857,6 +5981,9 @@ Tell the app it is tiled, even when floating
 Temperature
 Temperatures and wind speed in weather and system panels
 Temperatures shown
+Ten
+Ten past {hour}
+Ten to {hour}
 Terminal
 Terminal colors follow the theme
 Terminals
@@ -5875,12 +6002,17 @@ Text contrast {ratio}:1
 Text copied
 Text detection
 Text field
+Text is sent only when you press Translate
+Text is sent only when you press Translate.
 Text lines
 Text recognition
 Text recognition failed: {error}
 Text scale
 Text size
 Text size of the note editor
+Text to send
+Text to translate
+Text translation
 Text under it
 Text weight
 Text with placeholders
@@ -5899,6 +6031,7 @@ That widget is already on this tab
 That widget is not on this tab
 That's Mandara itself — use Studio → Performance → Quit
 The 114 surahs: names, meaning, Makki or Madani and ayah counts
+The API key cannot be used in a request
 The Analytical Engine weaves algebraical patterns just as the Jacquard-loom weaves flowers and leaves.
 The App Installer plugin is off: turn it on in Studio → Plugins
 The Applications folder is off (Studio → Dock → Applications folder)
@@ -6033,6 +6166,8 @@ The endpoint did not answer with an IP address: {reply}
 The engine refused ({status}): {error}
 The entries of a collection, optionally matching a search
 The entry Enter runs right after opening the menu
+The feed belongs to another address
+The feed server returned no content
 The file chooser failed: {error}
 The file is larger than this location allows.
 The first matching rule decides. Patterns are case-insensitive regular expressions; plain words match anywhere. Also from the command line: `mandara msg notifications rules add silent Spotify`.
@@ -6075,6 +6210,7 @@ The link stops working after this long
 The link stops working once your phone has downloaded the item
 The list is full — remove a widget to add another
 The list launcher: a drawer rising from the bottom edge, search next to the edge
+The location you add here is public and allows weather requests on this screen. Studio previews do not contact the weather service.
 The lock screen did not confirm that the session is locked
 The lock screen's text
 The main menu is see-through glass with solid cards on it
@@ -6111,6 +6247,8 @@ The plugin archive has no plugin.toml
 The plugin archive is too large
 The plugin's own language (a code such as ar or en), or follow to use Mandara's
 The prayer times of another day (days after today, or before it when negative)
+The provider returned no language list
+The provider returned no translation
 The public IP endpoint must be an http(s) URL
 The reader shows the Prophet's words first; the chain opens with a tap
 The ready-made launcher looks (Classic, Grid, Beacon) and which one is applied
@@ -6132,11 +6270,21 @@ The sages were not ashamed to find themselves convinced; for they knew, being wi
 The same as a grid of tiles
 The same message from the same app replaces the earlier one with a ×2 badge
 The sandbox
+The saved API key is not text
+The saved feed belongs to another address
+The saved feed could not be read; refresh it to download a new copy
+The saved feed is too large to read
+The saved feed is too large to write
 The screen fades out this long before it locks or turns off; any input cancels
 The screen frame already joins the bar to the edges
 The screen recorded; Focused display follows the focused window
 The secret is too short
 The sending app's name above the title
+The server did not return valid JSON
+The server is receiving too many requests; try again later
+The server redirected this request; enter its final address in Studio
+The server rejected the API key
+The server's response was too large
 The service did not reply
 The service is not running
 The session menu's entries in order, with labels and icons (JSON)
@@ -6207,10 +6355,12 @@ There is already a collection called {name}
 There is no default keyring; create one in your keyring app
 There is no display named {name}
 There is no rule {n}
+There is no text to send
 There is no text to share
 There is nothing either good or bad, but thinking makes it so.
 There isn't enough free space on this disk.
 Thermals
+Thermometer
 These displays do not support power control
 These files move to the Trash:
 They can because they think they can.
@@ -6236,6 +6386,8 @@ This app doesn't share a menu with the shell
 This app has no command to run
 This app is already installed
 This app is gone
+This article has no web address
+This article is no longer in the feed
 This battery's charge limit can't be changed from here
 This collection is empty
 This command needs OpenSSL 3 or newer.
@@ -6251,9 +6403,12 @@ This computer runs on mains power
 This container hasn't written anything to stdout or stderr
 This database uses a hardware key (YubiKey challenge-response), which Mandara can't pass to KeePassXC. Unlock it in KeePassXC's window.
 This device
+This device is asking to pair. Check the name on your phone before accepting.
 This device, the exit node in use and every peer (JSON)
 This driver doesn't report per-process GPU memory.
+This entity cannot run that action right now
 This executable path cannot be used in a desktop entry
+This feed is too large to read
 This file looks damaged, or isn't an app. Try downloading it again.
 This file {version}
 This folder is empty
@@ -6273,15 +6428,19 @@ This month with today marked, month paging and your next event
 This name is reserved for the system
 This package is made for a different kind of Linux. The same app may be on Flathub.
 This pattern {problem}
+This phone does not support that action right now
+This phone is not connected
 This plugin has no published release yet
 This plugin works without settings.
 This recorder can't write that format here
 This recording has no microphone
+This request is too large
 This restarts the computer; repeat as `session reboot-to {target} confirm`
 This session
 This sign-in method needs more than a password
 This style uses Compact height
 This tab is empty
+This text is too large to send to a phone
 This update wasn't checked against Mandara's signature; check for updates again
 This username is already in use
 This version ({version}) isn't recommended: {class}: {reason}
@@ -6290,6 +6449,7 @@ This week {used}
 This week {used} of {budget} ({percent}%)
 This workspace only
 Thread fade
+Three
 Threshold for peripherals (per-device overrides in config.toml under [power.device_thresholds])
 Through do not disturb
 Thu
@@ -6359,6 +6519,7 @@ Today's total, the last days and your top apps (needs the Screen time plugin)
 Today's verse or hadith and today's step
 Today's verse or hadith in calligraphy under an arch, with its meaning
 Today's verse or hadith in the quote card's style
+Toggle a home control or run a scene, script or button
 Toggle floating
 Toggle fullscreen
 Toggle light / dark
@@ -6405,8 +6566,13 @@ Trace trap
 Track in the bar
 Tracking is paused
 Transition
+Translate
+Translate text into a language with your configured provider
+Translate text with your chosen provider
+Translating…
 Translation
 Translations of your labels
+Translator
 Translucency
 Trash
 Tray items (role, status, icons, menus)
@@ -6444,6 +6610,7 @@ Turn it on below, or toggle it from quick settings
 Turn it on to connect your devices
 Turn it on to fade, lock, turn the screens off and sleep after the times below. Leave it off if hypridle or swayidle handles this.
 Turn it on to see nearby networks
+Turn off
 Turn off for now
 Turn on
 Turn on Custom spring first
@@ -6478,8 +6645,14 @@ Turning on and off
 Turning on and off, including automatically
 Turning the launcher on, dimming the screen, the keyboard and how apps start
 Turns while playing
+Twelve
 Twelve looks, each with its own controls. Previews use your palette and seed.
+Twenty past {hour}
+Twenty to {hour}
+Twenty-five past {hour}
+Twenty-five to {hour}
 Twilight angles
+Two
 Two fingers
 Two-factor codes (TOTP / HOTP) stored in your keyring
 Type /trigger and your words in the launcher. Actions: url:<address with {query}> opens the browser, mandara:<command> runs a Mandara command (see `mandara commands`), exec:<shell command> runs a program; {query} is replaced by what you typed.
@@ -6511,6 +6684,7 @@ Ultrawide
 Ultrawide (3440 × 1440)
 Umbriel reads your config.toml after Mandara's file, so a value you set there wins. Each workspace keeps its own layout; the bar's layout pill switches it.
 Umm al-Qura
+Unavailable
 Uncommitted
 Under each running app
 Under its button
@@ -6562,6 +6736,7 @@ Unknown option
 Unknown option {flag}
 Unknown option {option}; expected {options}
 Unknown palette {palette}: use an id from `wallgen palettes`, theme, or 2–8 hex colors like #101820,#5fe0d4
+Unknown phone action
 Unknown preset
 Unknown profile “{profile}” (available: {names})
 Unknown session action
@@ -6663,8 +6838,13 @@ Use 8 or more characters; a few words make a strong password
 Use Material You colors from the wallpaper (optionally choosing style and seed)
 Use `osd show {kind} …` for this one
 Use `wallgen generate --palette theme` for the live theme colors
+Use a server address without a password, query or fragment
 Use a sweet tongue, courtesy, and gentleness, and thou mayst manage to guide an elephant with a hair.
+Use an API key
 Use an absolute path: {path}
+Use an http:// or https:// feed address without a password
+Use an http:// or https:// server address without a password
+Use an https:// address, or a local IP address, when sending an API key
 Use another adapter (auto = the first)
 Use another folder while the theme is light or dark (clear to remove)
 Use for my theme
@@ -6676,6 +6856,7 @@ Use the events' own alarms
 Use the folder button on an entry to add it here
 Use the gh sign-in
 Use the time an app asks for instead of the values above
+Use this location publicly
 Use this variation
 Use today, next, prev, +N / -N days, YYYY-MM or YYYY-MM-DD
 Use your own stiffness and damping instead of the global motion settings
@@ -6839,6 +7020,7 @@ Weather and prayer times always follow this location, even when they have their 
 Weather disc
 Weather line
 Weather request failed: {error}
+Weather ribbon
 Weather sentence
 Weather unavailable
 Weather, prayer times, world clocks and more at a glance
@@ -6953,6 +7135,7 @@ Wi-Fi and wired connectivity
 Wi-Fi is off
 Wi-Fi, Bluetooth, do not disturb and more; shapes that change when on
 Widget kinds come from plugins: switch them on or off in Studio → Plugins (Desktop widgets).
+Widgets
 Widgets font
 Widgets on the desktop (a widget's own font wins)
 Widgets on “{tab}”
@@ -6997,6 +7180,7 @@ With its chain of narrators
 With the anchor
 With your password through Mandara Login (not autologin). Each keyring's password must be your login password.
 Won't join automatically
+Word clock
 Word count
 Words by a Brushwood Gate
 Work is love made visible.
@@ -7049,6 +7233,8 @@ You're logged out
 You're offline
 You're presenting
 Your GitHub user name
+Your Home Assistant address, including a reverse proxy path if needed
+Your LibreTranslate server, including a reverse proxy path if needed
 Your River init doesn't start Mandara. Mandara never edits it: add this line to it yourself: {line}
 Your Steam games as covers; a click starts one
 Your UPower is too old to change the charge limit
@@ -7069,9 +7255,11 @@ Your config
 Your contribution calendar (fetched from github.com once you switch it on)
 Your cursor
 Your devices
+Your devices, within reach
 Your dock's apps, or any apps and links, as tiles
 Your graphics card can't encode this with GPU Screen Recorder
 Your hadith library
+Your home favourites, sensors and scenes
 Your home folder
 Your home folders; a click opens one
 Your hooks
@@ -7100,12 +7288,14 @@ Your saved verses and hadith, newest first
 Your session starts these (systemd's xdg-autostart).
 Your session's units
 Your status (empty: Online / Do not disturb)
+Your subscriptions, together
 Your system's location service (GeoClue) couldn't find you. Many Linux systems ship it without a lookup service. Choose IP lookup, or type your city and press Find.
 Your tailnet: this device, exit node and peers with their paths
 Your tasks; click one to tick it
 Your text (“ / ” starts a new line or column)
 Your theme's colours; a click copies one
 Your to-dos, a sticky note, the focus timer, a quote and notebook tabs on the desktop; tick tasks and run the timer right there
+Your translation appears here
 Your wallpaper, an image of your choice or a solid color
 Your wallpaper, frosted, behind the side bars; lower the opacity to see it
 Your words in the field (optional)
@@ -7646,6 +7836,7 @@ your default
 {compositor}'s checker couldn't run: {error}
 {compositor}'s checker didn't finish in time.
 {cores} cores · {running} running
+{counter}
 {count} answering slowly
 {count} apps
 {count} apps crashed
@@ -7685,6 +7876,7 @@ your default
 {count} stars
 {count} stopped containers — show All to start one
 {count} themes · add your own in {folder}
+{count} unread
 {count} unread notifications
 {count} untracked
 {count} updates
@@ -7757,6 +7949,7 @@ your default
 {hours} h {minutes} min
 {hours} h {minutes} min left
 {hours}h {minutes}m
+{hour} o'clock
 {h} h {m} min
 {h}h {m}m
 {id} · not installed
@@ -7870,6 +8063,7 @@ your default
 {percent}% left — plug in soon
 {percent}% left — this is a test
 {percent}% of today left
+{percent}% · charging
 {percent}% — you can unplug the charger
 {plugin} failed to start
 {plugin} has no panel

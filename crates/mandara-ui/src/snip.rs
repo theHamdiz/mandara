@@ -211,16 +211,6 @@ pub struct SnipView {
     closing: bool,
 }
 
-/// Converts RGBA to the BGRA layout GPUI's renderer expects.
-fn frozen_image(capture: &Capture) -> Option<Arc<RenderImage>> {
-    let mut bgra = capture.rgba.clone();
-    for px in bgra.as_chunks_mut::<4>().0 {
-        px.swap(0, 2);
-    }
-    let buffer = image::RgbaImage::from_raw(capture.width, capture.height, bgra)?;
-    Some(Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(buffer)])))
-}
-
 /// Tells the user how a capture went (saved path / copied, or the error).
 pub fn report(result: Result<String, String>, cx: &mut App) {
     let (summary, body) = match &result {
@@ -375,6 +365,7 @@ impl SnipView {
             *last = Some((self.capture.output.clone(), r));
         }
         let capture = self.capture.clone();
+        let frozen = self.frozen.clone();
         let shot = self.shot.clone();
         // Annotations move into the cropped image's pixel space.
         let scale = capture.scale();
@@ -395,7 +386,7 @@ impl SnipView {
         let shutter = crate::alerts::deferred_sound(mandara_services::sounds::SoundEvent::Screenshot, cx);
         let task = cx.background_executor().spawn(async move {
             mandara_plugins::guard("screenshot encode", || {
-                let mut image = capture.crop_logical(r.x, r.y, r.w, r.h);
+                let mut image = crate::capture_pixels::crop(&capture, frozen.as_bytes(0).unwrap_or_default(), (r.x, r.y, r.w, r.h));
                 annotate(&mut image, &shapes);
                 let delivered = deliver_with(&image, &shot, save, copy).map(|res| describe(&res));
                 if delivered.is_ok() {
@@ -438,6 +429,7 @@ impl SnipView {
     /// Missing models are downloaded first, with progress on the button.
     fn read_text(&mut self, r: Rect, cx: &mut Context<Self>) {
         let capture = self.capture.clone();
+        let frozen = self.frozen.clone();
         let script = mandara_services::ocr::Script::parse(&crate::state::config(cx).read(cx).snapshot().plugins.setting(crate::plugins::screenshot::ID, "ocr_language", String::from("auto")));
         let fetching = self.fetching.clone();
         let task = cx.background_executor().spawn(async move {
@@ -448,7 +440,7 @@ impl SnipView {
                     model.download(&move |done, total| f.store((done * 1000 / total.max(1)) as u32, Ordering::Relaxed))?;
                 }
                 fetching.store(u32::MAX, Ordering::Relaxed);
-                let image = capture.crop_logical(r.x, r.y, r.w, r.h);
+                let image = crate::capture_pixels::crop(&capture, frozen.as_bytes(0).unwrap_or_default(), (r.x, r.y, r.w, r.h));
                 let text = mandara_services::ocr::recognize(&image, script)?;
                 mandara_services::clipboard::serve(text.clone().into_bytes(), None)?;
                 Ok(text)
@@ -747,7 +739,7 @@ impl Render for SnipView {
             );
         }
 
-        // Toolbar: modes, outputs, actions.
+        // Toolbar: modes and actions.
         let ts = self.shot.toolbar_scale();
         let z = move |v: f32| px(v * ts);
         let corner = move |v: f32| px(crate::style::radius(v) * ts);
@@ -998,8 +990,7 @@ pub fn capture_now(window_only: bool, cx: &mut App) -> async_channel::Receiver<R
 
 /// Non-interactive capture for commands and the screenshot panel.
 pub(crate) fn capture_target(target: CaptureTarget, cx: &mut App) -> async_channel::Receiver<Result<String, String>> {
-    let hub = crate::hub::hub(cx).read(cx);
-    let focused = hub.focused.clone();
+    let focus = crate::capture_output::Focus::snapshot(cx);
     let cfg = crate::state::config(cx).read(cx).snapshot();
     let shot = ScreenshotSettings::from_plugins(&cfg.plugins);
     let (save, copy) = (shot.save, shot.copy);
@@ -1008,15 +999,17 @@ pub(crate) fn capture_target(target: CaptureTarget, cx: &mut App) -> async_chann
     std::thread::spawn(move || {
         let result = mandara_plugins::guard("screenshot", || -> Result<String, String> {
             let captures = mandara_services::screencopy::capture_all_with(shot.cursor).map_err(|e| format!("{e:#}"))?;
-            let monitor = focused.as_ref().map(|c| c.monitor.clone()).unwrap_or_default();
-            let cap = captures.iter().find(|c| c.output == monitor).or(captures.first()).ok_or(t("no outputs"))?;
+            captures.first().ok_or(t("no outputs"))?;
             let image = if target == CaptureTarget::All {
                 mandara_services::screencopy::composite(&captures).map_err(|e| e.to_string())?
-            } else if target == CaptureTarget::Window {
-                let (x, y, w, h) = focused.as_ref().and_then(|c| c.geometry).ok_or(t("the compositor did not report a focused window geometry"))?;
-                cap.crop_logical((x - cap.logical.0) as f32, (y - cap.logical.1) as f32, w as f32, h as f32)
             } else {
-                cap.to_image()
+                let cap = focus.select(&captures).ok_or(t("no outputs"))?;
+                if target == CaptureTarget::Window {
+                    let (x, y, w, h) = focus.window_geometry().ok_or(t("the compositor did not report a focused window geometry"))?;
+                    cap.crop_logical((x - cap.logical.0) as f32, (y - cap.logical.1) as f32, w as f32, h as f32)
+                } else {
+                    cap.to_image()
+                }
             };
             let delivered = deliver_with(&image, &shot, save, copy).map(|r| describe(&r));
             if delivered.is_ok() {

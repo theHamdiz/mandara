@@ -10,6 +10,11 @@ use mandara_config::compositor::{Target, include_installed, install_include};
 use mandara_config::paths;
 use mandara_i18n::{t, tf, tk};
 
+mod icons;
+
+/// Check the live selection; Studio may not have flushed it to disk yet.
+pub(crate) fn icon_theme(selected: Option<&str>) -> Health { icons::selected(selected) }
+
 /// Result of one check.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Health {
@@ -39,11 +44,12 @@ pub enum CheckId {
     CompositorConflicts,
     AppThemes,
     Fonts,
+    Icons,
     PluginDirs,
 }
 
 impl CheckId {
-    pub const ALL: [CheckId; 7] = [CheckId::Config, CheckId::CompositorInclude, CheckId::CompositorDropIn, CheckId::CompositorConflicts, CheckId::AppThemes, CheckId::Fonts, CheckId::PluginDirs];
+    pub const ALL: [CheckId; 8] = [CheckId::Config, CheckId::CompositorInclude, CheckId::CompositorDropIn, CheckId::CompositorConflicts, CheckId::AppThemes, CheckId::Fonts, CheckId::Icons, CheckId::PluginDirs];
 
     /// English; display with `tr()`.
     pub fn title(self) -> &'static str {
@@ -54,16 +60,19 @@ impl CheckId {
             CheckId::CompositorConflicts => tk("Compositor conflicts"),
             CheckId::AppThemes => tk("App theme files"),
             CheckId::Fonts => tk("Mandara fonts"),
+            CheckId::Icons => tk("Icon theme"),
             CheckId::PluginDirs => tk("Plugin folders"),
         }
     }
 
+    /// Choose a bundled diagnostic glyph for each check result.
     pub fn icon(self) -> &'static str {
         match self {
             CheckId::Config => "note",
             CheckId::CompositorInclude | CheckId::CompositorDropIn | CheckId::CompositorConflicts => "monitor",
             CheckId::AppThemes => "sun",
             CheckId::Fonts => "keyboard",
+            CheckId::Icons => "grid",
             CheckId::PluginDirs => "grid",
         }
     }
@@ -77,6 +86,7 @@ impl CheckId {
             CheckId::CompositorConflicts => tk("Retire"),
             CheckId::AppThemes => tk("Re-export"),
             CheckId::Fonts => tk("Download"),
+            CheckId::Icons => tk("Themes"),
             CheckId::PluginDirs => tk("Create"),
         }
     }
@@ -215,6 +225,7 @@ pub fn check_in(roots: &Roots, id: CheckId, installed_fonts: &[String]) -> Healt
                 Health::Warn(tf("{folders} missing", &[("folders", &missing.iter().map(|d| d.display().to_string()).collect::<Vec<_>>().join(", "))]))
             }
         }
+        CheckId::Icons => icons::check(roots),
     }
 }
 
@@ -303,6 +314,7 @@ pub fn fix_in(roots: &Roots, id: CheckId, installed_fonts: &[String], progress: 
             }
             Ok((t("Plugin folders created").into(), Vec::new()))
         }
+        CheckId::Icons => Err(icons::check(roots).detail().into()),
     }
 }
 
@@ -467,13 +479,13 @@ mod tests {
     }
 
     /// A sandbox: nothing here touches the user's own folders.
-    fn sandbox() -> (tempfile::TempDir, Roots) {
+    pub(super) fn sandbox() -> (tempfile::TempDir, Roots) {
         let dir = tempfile::tempdir().unwrap();
         let roots = Roots { config: dir.path().join("config/mandara"), data: dir.path().join("share/mandara"), cache: dir.path().join("cache/mandara") };
         (dir, roots)
     }
 
-    fn write(path: &Path, text: &str) {
+    pub(super) fn write(path: &Path, text: &str) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, text).unwrap();
     }

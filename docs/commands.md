@@ -443,3 +443,24 @@ returns the queued job ids at once (follow them with `apps jobs`). A
 duplicate (same app id) offers Update / Keep both. Relative paths are made
 absolute by `mandara msg`. `MANDARA_INSTALL_DRY_RUN=1` in the shell's
 environment forces dry runs.
+
+## Connected plugins
+
+Enable these in Studio → Plugins and configure each plugin’s Settings first.
+Requests wait for service work to finish, then return one result or error.
+The UI stays responsive while the request runs.
+
+```bash
+mandara msg translate languages
+mandara msg translate text ar Good morning
+mandara msg feeds refresh https://example.org/feed.xml
+mandara msg phone devices
+mandara msg phone action DEVICE_ID ring
+mandara msg phone send DEVICE_ID Hello from my desktop
+mandara msg home states
+mandara msg home action light.desk toggle
+mandara msg home action scene.evening activate
+```
+
+The translation provider and home server keys are saved through Studio in
+your desktop keyring. [Setup and behaviour](integrations.md).

@@ -71,6 +71,11 @@ pub mod progress;
 pub mod breaks;
 pub mod presentation;
 pub mod plugin_lang;
+pub mod feeds;
+pub mod home_assistant;
+pub mod phone_connect;
+pub mod translator;
+mod integration;
 pub mod adhan;
 
 use std::time::Duration;
@@ -209,6 +214,10 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     crate::keyring_prompt::register(registry);
     crate::keepassxc_prompt::register(registry);
     workspaces::register(registry);
+    feeds::register(registry);
+    home_assistant::register(registry);
+    phone_connect::register(registry);
+    translator::register(registry);
     window::register(registry);
     clock::register(registry);
     crate::calendar::register(registry);

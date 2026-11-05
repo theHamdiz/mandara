@@ -95,7 +95,7 @@ pub fn sentence_layout(w: &WeatherWidget, s: &WeatherStrings, text: &str, k: f32
 
 /// A round disc: the icon, a big temperature, today's range and an
 /// optional ring of dots.
-pub fn disc_layout(w: &WeatherWidget, s: &WeatherStrings, f: Option<&Forecast>, l: &Lingo, units: mandara_config::Units, k: f32, m: &mut dyn Measure) -> Vec<Mark> {
+pub fn disc_layout(w: &WeatherWidget, s: &WeatherStrings, l: &Lingo, units: mandara_config::Units, k: f32, m: &mut dyn Measure) -> Vec<Mark> {
     let d = within(w.disc, ranges::DISC_PX, ranges::DISC_DEFAULT_PX) * k;
     let c = (d / 2.0, d / 2.0);
     let mut marks = vec![Mark::new(MarkKind::Disc { c, r: d / 2.0 }, InkRole::Plate).dim(w.look.plate_opacity().max(face::DIM))];
@@ -111,7 +111,7 @@ pub fn disc_layout(w: &WeatherWidget, s: &WeatherStrings, f: Option<&Forecast>, 
     let ts = style(w.look.font, d * DISC_TEMP, face::SEMIBOLD);
     let (tw, th) = m.measure(&s.temp, &ts);
     marks.push(Mark::new(MarkKind::Text { text: s.temp.clone(), style: ts, x: c.0 - tw / 2.0, y: d * 0.42, w: tw, h: th }, InkRole::OnPlate));
-    let small = caps(&match f.and_then(|f| f.today) {
+    let small = caps(&match s.today {
         Some((lo, hi)) => format!("{} · {}/{}", s.condition, l.digits(units.format_degrees(lo)), l.digits(units.format_degrees(hi))),
         None => s.condition.clone(),
     });

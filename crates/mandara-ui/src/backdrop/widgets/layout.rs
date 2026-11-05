@@ -710,6 +710,7 @@ pub fn clock(c: &ClockWidget, s: &ClockStrings, k: f32, align: f32, rtl: bool, m
         ClockFace::Template => marks.extend(super::faces::template_face(c, s, k, align, rtl, m)),
         ClockFace::Numerals => marks.extend(super::faces::numerals_face(c, s, k, m)),
         ClockFace::Orbit => marks.extend(super::faces::orbit_face(c, s, k, m)),
+        ClockFace::Word | ClockFace::SplitFlap | ClockFace::Nixie | ClockFace::Binary => marks.extend(super::clock_cards::clock(c, s, k, m)),
     }
     let mut comp = Composition { marks, ..Composition::default() };
     comp.normalize();
@@ -1123,6 +1124,8 @@ pub fn monitor_gauges(w: &MonitorWidget, lines: &[MonitorLine], k: f32, rtl: boo
 /// Everything the weather widget writes, formatted for its language.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WeatherStrings {
+    /// Low and high for the forecast location’s current date, °C.
+    pub today: Option<(f32, f32)>,
     pub icon: &'static str,
     pub temp: String,
     pub condition: String,
@@ -1183,7 +1186,7 @@ pub fn weather_widget(w: &mandara_config::desktop_widgets::WeatherWidget, s: &We
             }
         }
         // Drawn from the whole forecast by `super::weather_more`.
-        WeatherLayout::Sentence | WeatherLayout::Disc | WeatherLayout::Hourly => {}
+        WeatherLayout::Sentence | WeatherLayout::Disc | WeatherLayout::Hourly | WeatherLayout::Ribbon | WeatherLayout::Thermometer | WeatherLayout::HumidityRose => {}
         WeatherLayout::Hero => {
             let icon = px(ICON);
             let ts = style(role, px(TEMP), face::LIGHT);

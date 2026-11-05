@@ -89,6 +89,7 @@ fn battery_in(root: &Path) -> Option<(u8, bool)> {
 #[derive(Clone, Debug)]
 pub struct LockLook {
     pub cfg: LockConfig,
+    pub widget_fonts: crate::backdrop::paint::FontNames,
     /// Clock / date strftime patterns (validated when drawn).
     pub time_pattern: String,
     pub date_pattern: Option<String>,
@@ -101,8 +102,14 @@ pub struct LockLook {
 
 impl Default for LockLook {
     fn default() -> Self {
-        Self { cfg: LockConfig::default(), time_pattern: "%H:%M".into(), date_pattern: None, clock_24h: true, custom_time: false, snapshot: Snapshot::default() }
+        Self { cfg: LockConfig::default(), widget_fonts: widget_fonts(&mandara_config::TypographyConfig::default()), time_pattern: "%H:%M".into(), date_pattern: None, clock_24h: true, custom_time: false, snapshot: Snapshot::default() }
     }
+}
+
+fn widget_fonts(t: &mandara_config::TypographyConfig) -> crate::backdrop::paint::FontNames {
+    let mut names = crate::backdrop::paint::FontNames::new(&t.ui_font, &t.display_font, &t.arabic_font, &t.mono_font);
+    names.widgets = mandara_config::TypographyConfig::or(&t.widgets_font, &t.display_font).to_string();
+    names
 }
 
 impl LockLook {
@@ -111,7 +118,12 @@ impl LockLook {
         let env = |k: &str| std::env::var(k).ok().filter(|v| !v.trim().is_empty());
         let custom_date = cfg.datetime.lock_date_format.trim();
         Self {
-            cfg: cfg.lock.clone(),
+            cfg: {
+                let mut lock = cfg.lock.clone();
+                lock.widgets.normalize();
+                lock
+            },
+            widget_fonts: widget_fonts(&cfg.typography),
             time_pattern: cfg.datetime.lock_time_pattern(cfg.general.clock_24h),
             date_pattern: (!custom_date.is_empty()).then(|| custom_date.to_string()),
             clock_24h: cfg.general.clock_24h,

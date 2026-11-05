@@ -1030,7 +1030,7 @@ fn video_badge(palette: &mandara_theme::MandaraPalette, label: bool) -> gpui::Di
 }
 
 /// The badge marking a wallpaper the generator made: the video badge's
-/// glass at the bottom corner, the sparkle in the accent color.
+/// glass at the bottom corner, the paintbrush in the accent color.
 fn generated_badge(palette: &mandara_theme::MandaraPalette, label: bool) -> gpui::Div {
     div()
         .absolute()

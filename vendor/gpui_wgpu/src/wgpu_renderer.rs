@@ -2922,6 +2922,40 @@ mod tests {
     #[cfg(target_os = "linux")]
     const BLACK: [u8; 4] = [0, 0, 0, 255];
 
+    // Mandara patch 13: atlas uploads borrow their input only until wgpu stages it.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn atlas_uploads_copy_before_return_and_reused_textures_show_new_pixels() -> anyhow::Result<()> {
+        use gpui::{AtlasKey, ImageId, PlatformAtlas, RenderImageParams};
+        use std::borrow::Cow;
+
+        for format in [wgpu::TextureFormat::Bgra8Unorm, wgpu::TextureFormat::Rgba8Unorm] {
+            let mut renderer = WgpuHeadlessRenderer::new()?;
+            renderer.core.atlas = Arc::new(WgpuAtlas::new(renderer.context.device.clone(), renderer.context.queue.clone(), format));
+            let key = |id| AtlasKey::Image(RenderImageParams { image_id: ImageId(id), frame_index: 0 });
+            let mut bytes = [0, 0, 255, 255].repeat(4);
+            let first = renderer.core.atlas.get_or_insert_with(key(1), &mut || Ok(Some((device_size(2, 2), Cow::Borrowed(&bytes)))))?.unwrap();
+            for pixel in bytes.as_chunks_mut::<4>().0 { *pixel = [255, 0, 0, 255]; }
+            let bounds = solid_quad(0.0, 0.0, 8.0, 8.0, gpui::red()).bounds;
+            let sprite = |tile| PolychromeSprite { order: 0, pad: 0, tile, grayscale: false.into(), opacity: 1.0, bounds, content_mask: ContentMask::rect(bounds), corner_radii: Corners::default() };
+            let mut scene = Scene::default();
+            scene.insert_primitive(sprite(first));
+            scene.finish();
+            let image = renderer.render_scene_to_image(&scene, device_size(8, 8))?;
+            assert_pixel(&image, 4, 4, RED);
+
+            renderer.core.atlas.remove(&key(1));
+            let second = renderer.core.atlas.get_or_insert_with(key(2), &mut || Ok(Some((device_size(2, 2), Cow::Borrowed(&bytes)))))?.unwrap();
+            assert_eq!(first.texture_id, second.texture_id);
+            let mut scene = Scene::default();
+            scene.insert_primitive(sprite(second));
+            scene.finish();
+            let image = renderer.render_scene_to_image(&scene, device_size(8, 8))?;
+            assert_pixel(&image, 4, 4, BLUE);
+        }
+        Ok(())
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn headless_renderer_draws_quads_with_distinct_colors() -> anyhow::Result<()> {

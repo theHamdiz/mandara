@@ -275,6 +275,7 @@ pub struct LockScreen {
     grace_until: Option<Instant>,
     /// Configurable look (`[lock]`).
     look: look::LockLook,
+    widgets: crate::backdrop::widgets::passive::Canvas,
 }
 
 impl LockScreen {
@@ -303,6 +304,7 @@ impl LockScreen {
             wallpaper: None,
             wallpaper_rx: wallpaper.filter(|p| p.is_file()).map(|p| load_wallpaper(p, look::LockLook::default().blur_sigma())),
             look: look::LockLook::default(),
+            widgets: Default::default(),
             backgrounds: HashMap::new(),
             text: TextPainter::new(),
             auth,
@@ -532,7 +534,9 @@ impl LockApp for LockScreen {
         self.dirty = true;
     }
 
+    /// Collect asynchronous work and advance authentication and motion without blocking.
     fn update(&mut self, now: Instant) -> AppControl {
+        self.dirty |= self.widgets.poll();
         if let Some(rx) = &self.wallpaper_rx
             && let Ok(img) = rx.try_recv()
         {
@@ -579,8 +583,9 @@ impl LockApp for LockScreen {
         self.dirty = false;
     }
 
+    /// Poll pending widget paints promptly; an idle screen follows the clock boundary.
     fn next_wakeup(&self, now: Instant) -> Duration {
-        if self.animating {
+        if self.animating || self.widgets.pending() {
             return ANIMATION_TICK;
         }
         let mut wait = Duration::from_millis(1000 - (chrono::Local::now().timestamp_subsec_millis() % 1000) as u64 + 5);
@@ -590,6 +595,7 @@ impl LockApp for LockScreen {
         wait
     }
 
+    /// Keep authentication above public widgets and preserve blank secondary outputs.
     fn draw(&mut self, info: &SurfaceInfo, pm: &mut PixmapMut<'_>, now: Instant) {
         let s = info.scale;
         let (w, h) = (pm.width(), pm.height());
@@ -614,6 +620,8 @@ impl LockApp for LockScreen {
             pm.fill(tiny_skia::Color::BLACK);
             return;
         }
+        self.widgets.update(&self.look.cfg.widgets, (w, h), &self.look.widget_fonts, &p, self.clock_24h, true);
+        self.widgets.draw(pm, alpha);
         // One unit = a logical px on a 1080 px tall screen, in physical px.
         let unit = L::scale(logical_h) * s;
         let clock_size = L::CLOCK_SIZE * unit * if self.look.compact() { COMPACT_CLOCK } else { 1.0 };
@@ -1155,6 +1163,22 @@ mod tests {
     }
 
     #[test]
+    fn pending_widget_work_keeps_the_lock_loop_responsive_after_animation() {
+        let mut screen = screen(true);
+        screen.animating = false;
+        let now = Instant::now();
+        screen.deadline = Some(now);
+        let cfg = mandara_config::preauth::Widgets { items: vec![mandara_config::desktop_widgets::DesktopWidget::default()], ..Default::default() };
+        screen.widgets.update(&cfg, (640, 360), &crate::backdrop::paint::FontNames::default(), &screen.palette, true, false);
+        assert!(screen.widgets.pending());
+        assert_eq!(screen.next_wakeup(now), ANIMATION_TICK);
+        screen.widgets.clear();
+        assert_eq!(screen.next_wakeup(now), Duration::ZERO);
+        screen.animating = true;
+        assert_eq!(screen.next_wakeup(now), ANIMATION_TICK);
+    }
+
+    #[test]
     fn parses_passwd_entries() {
         let passwd = "root:x:0:0:root:/root:/bin/bash\nlayla:x:1000:1000:Layla Nour,,,:/home/layla:/usr/bin/fish\nbare:x:1001:1001::/home/bare:/bin/sh\n";
         assert_eq!(parse_passwd(passwd, 1000).unwrap().display, "Layla Nour");
@@ -1231,6 +1255,22 @@ mod tests {
         s.draw(&info, &mut pm.as_mut(), Instant::now());
         // The backdrop is opaque on a real lock.
         assert!(pm.data().as_chunks::<4>().0.iter().all(|p| p[3] == 255));
+    }
+
+    #[test]
+    fn public_widgets_preserve_blank_outputs_and_password_checks() {
+        let mut s = screen(false);
+        s.look.cfg.widgets.items.push(Default::default());
+        s.look.cfg.blank_other_outputs = true;
+        let mut pm = Pixmap::new(320, 240).unwrap();
+        let info = SurfaceInfo { output: "TEST-2".into(), width: 320, height: 240, scale: 1.0, focused: false };
+        s.draw(&info, &mut pm.as_mut(), Instant::now());
+        assert!(pm.data().as_chunks::<4>().0.iter().all(|p| *p == [0, 0, 0, 255]));
+        assert!(!s.widgets.pending());
+        type_text(&mut s, "wrong fixture password");
+        press(&mut s, keys::RETURN);
+        assert_eq!(settle(&mut s), AppControl::Continue);
+        assert_eq!(s.phase, Phase::Idle);
     }
 
     /// Renders typing / error / Caps Lock states to PNGs for a visual check:

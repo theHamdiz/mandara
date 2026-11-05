@@ -236,8 +236,8 @@ fn contains_ci(hay: &str, needle: &str) -> bool {
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct ClipboardState {
     pub available: bool,
-    /// Newest first.
-    pub entries: Vec<ClipEntry>,
+    /// Newest first, shared by the actor, panels and launcher snapshots.
+    pub entries: Arc<Vec<ClipEntry>>,
     /// In the order they were created.
     pub collections: Vec<ClipCollection>,
 }
@@ -482,9 +482,24 @@ pub fn enforce_limits(entries: &mut Vec<ClipEntry>, policy: &ClipboardPolicy) {
             collected <= policy.max_collected
         } else {
             loose += 1;
-            loose <= policy.max_entries && max_age.is_none_or(|age| now - e.copied_at <= age)
+            loose <= policy.max_entries && !past_age(e, now, max_age)
         }
     });
+}
+
+/// Only loose entries age out; pinned and collected entries remain available.
+fn past_age(entry: &ClipEntry, now: i64, max_age: Option<i64>) -> bool {
+    !entry.kept() && max_age.is_some_and(|age| now.saturating_sub(entry.copied_at) > age)
+}
+
+/// Leave the shared allocation intact when a timer has nothing to expire.
+fn prune_shared(entries: &mut Arc<Vec<ClipEntry>>, policy: &ClipboardPolicy, now: i64) -> bool {
+    let max_age = policy.max_age.map(|d| d.as_secs() as i64);
+    if !entries.iter().any(|entry| past_age(entry, now, max_age)) {
+        return false;
+    }
+    Arc::make_mut(entries).retain(|entry| !past_age(entry, now, max_age));
+    true
 }
 
 /// Trims a collection name to its limit; `None` when nothing is left.
@@ -787,6 +802,7 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
             entries.retain(ClipEntry::kept);
         }
         enforce_limits(&mut entries, &policy);
+        let mut entries = Arc::new(entries);
         {
             let (snapshot, persist) = (entries.clone(), policy.persist);
             crate::runtime::unblock(move || {
@@ -812,19 +828,23 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
                         },
                         ClipboardCommand::Delete(id) => {
                             let before = entries.len();
-                            entries.retain(|e| e.id != id);
+                            if entries.iter().any(|e| e.id == id) {
+                                Arc::make_mut(&mut entries).retain(|e| e.id != id);
+                            }
                             changed = before != entries.len();
                             if changed { Ok("deleted".into()) } else { Err(tf("No clipboard entry {id}", &[("id", &id)])) }
                         }
                         ClipboardCommand::Clear { pinned } => {
-                            entries.retain(|e| e.kept() && !pinned);
+                            if entries.iter().any(|e| !e.kept() || pinned) {
+                                Arc::make_mut(&mut entries).retain(|e| e.kept() && !pinned);
+                            }
                             changed = true;
                             Ok("cleared".into())
                         }
                         command @ (ClipboardCommand::CreateCollection(_) | ClipboardCommand::RenameCollection { .. } | ClipboardCommand::DeleteCollection(_) | ClipboardCommand::Collect { .. }) => {
-                            match edit_collections(&command, &mut collections, &mut entries) {
+                            match edit_collections(&command, &mut collections, Arc::<Vec<ClipEntry>>::make_mut(&mut entries).as_mut_slice()) {
                                 Ok(reply) => {
-                                    enforce_limits(&mut entries, &policy);
+                                    enforce_limits(Arc::make_mut(&mut entries), &policy);
                                     let snapshot = collections.clone();
                                     crate::runtime::unblock(move || save_collections(&store_dir(), &snapshot)).await;
                                     changed = true;
@@ -833,10 +853,10 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
                                 Err(err) => Err(err),
                             }
                         }
-                        ClipboardCommand::Pin { id, pinned } => match entries.iter_mut().find(|e| e.id == id) {
-                            Some(e) => {
-                                e.pinned = pinned;
-                                enforce_limits(&mut entries, &policy);
+                        ClipboardCommand::Pin { id, pinned } => match entries.iter().position(|e| e.id == id) {
+                            Some(index) => {
+                                Arc::make_mut(&mut entries)[index].pinned = pinned;
+                                enforce_limits(Arc::make_mut(&mut entries), &policy);
                                 changed = true;
                                 Ok(if pinned { "pinned".into() } else { "unpinned".into() })
                             }
@@ -849,7 +869,7 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
                                 s.policy = next.clone();
                             }
                             policy = next;
-                            enforce_limits(&mut entries, &policy);
+                            if changed { enforce_limits(Arc::make_mut(&mut entries), &policy); }
                             Ok("configured".into())
                         }
                         ClipboardCommand::FocusedApp(app) => {
@@ -863,7 +883,7 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
                 }
                 ev = events.recv().fuse() => match ev {
                     Ok(watch::Event::Entry(entry)) => {
-                        push(&mut entries, entry, &policy);
+                        push(Arc::make_mut(&mut entries), entry, &policy);
                         changed = true;
                     }
                     Ok(watch::Event::Ready(ok)) => {
@@ -888,9 +908,7 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
                 },
                 _ = prune.as_mut() => {
                     prune.set(crate::runtime::sleep(PRUNE_EVERY).fuse());
-                    let before = entries.len();
-                    enforce_limits(&mut entries, &policy);
-                    changed = before != entries.len();
+                    changed = prune_shared(&mut entries, &policy, chrono::Local::now().timestamp());
                 }
             }
             if changed {
@@ -920,6 +938,49 @@ mod tests {
 
     fn text(t: &str) -> ClipEntry {
         entry(ClipContent::Text { text: t.into() }, kind::classify_text(t), "")
+    }
+
+    #[test]
+    fn history_snapshots_share_payloads_and_mutations_preserve_old_values() {
+        let payload = "text".repeat(64 * 1024);
+        let mut history = Arc::new(vec![text(&payload)]);
+        let state = ClipboardState { available: true, entries: history.clone(), collections: Vec::new() };
+        let launcher = state.clone();
+        assert!(Arc::ptr_eq(&history, &state.entries));
+        assert!(Arc::ptr_eq(&state.entries, &launcher.entries));
+        let ClipContent::Text { text: actor_text } = &history[0].content else { panic!("text entry") };
+        let ClipContent::Text { text: launcher_text } = &launcher.entries[0].content else { panic!("text entry") };
+        assert_eq!(actor_text.as_ptr(), launcher_text.as_ptr());
+        Arc::make_mut(&mut history)[0].pinned = true;
+        assert!(!Arc::ptr_eq(&history, &state.entries));
+        assert!(history[0].pinned);
+        assert!(!state.entries[0].pinned);
+        assert!(!launcher.entries[0].pinned);
+    }
+
+    #[test]
+    fn shared_history_keeps_the_existing_json_shape() {
+        let entries = vec![text("clipboard text")];
+        let state = ClipboardState { available: true, entries: Arc::new(entries.clone()), collections: Vec::new() };
+        assert_eq!(serde_json::to_value(&state).unwrap(), serde_json::json!({
+            "available": true, "entries": entries, "collections": []
+        }));
+        assert_eq!(serde_json::to_value(&state.entries).unwrap(), serde_json::to_value(&*state.entries).unwrap());
+    }
+
+    #[test]
+    fn idle_pruning_does_not_copy_a_shared_history() {
+        let mut history = Arc::new(vec![text("recent")]);
+        let snapshot = history.clone();
+        let now = history[0].copied_at;
+        let mut policy = ClipboardPolicy::default();
+        assert!(!prune_shared(&mut history, &policy, now));
+        policy.max_age = Some(Duration::from_secs(60));
+        assert!(!prune_shared(&mut history, &policy, now));
+        assert!(Arc::ptr_eq(&history, &snapshot));
+        assert!(prune_shared(&mut history, &policy, now + 61));
+        assert!(history.is_empty());
+        assert_eq!(snapshot.len(), 1);
     }
 
     #[test]

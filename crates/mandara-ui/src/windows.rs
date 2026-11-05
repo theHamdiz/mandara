@@ -114,6 +114,7 @@ pub fn init(cx: &mut App) -> Entity<Windows> {
             pump.update(cx, |w, cx| {
                 if w.raw != state {
                     w.raw = state;
+                    crate::switcher::retain_previews(&w.raw.toplevels, cx);
                     if w.merge() {
                         cx.notify();
                     }
