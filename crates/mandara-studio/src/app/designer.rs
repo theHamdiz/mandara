@@ -22,6 +22,8 @@ use super::plugin_pool::{Menu, MenuFor, zone_title};
 use super::{StudioView, plugin_icon, plugin_tile};
 use crate::tokens::*;
 
+mod previews;
+
 /// A style-only apply keeps its identity even when several presets share
 /// a layout. Manual item, layout or position edits retire that selection.
 #[derive(Default)]
@@ -188,7 +190,6 @@ const SIDE_COL_W_PX: f32 = DIM_220_PX;
 const MOCK_PILL_A_PX: f32 = 18.0;
 const MOCK_PILL_B_PX: f32 = 14.0;
 const MOCK_PILL_C_PX: f32 = 22.0;
-const MOCK_PILL_SMALL_PX: f32 = 10.0;
 
 struct Preset {
     name: &'static str,
@@ -501,11 +502,10 @@ impl StudioView {
                     // A side bar: a slim strip down the left edge.
                     _ if preset.position.is_vertical() => div().w(px(DIM_10_PX)).h_full().rounded(px(RADIUS_4_PX)).bg(p.surface_container_high.hsla()).py(px(SPACE_3_PX)).row().flex_col().items_center().justify_between().child(div().size(px(DIM_6_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla())).child(div().size(px(DIM_6_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla())),
                     BarLayout::Hairline => div().h(px(DIM_6_PX)).rounded(px(RADIUS_1_5_PX)).bg(p.surface_container_high.hsla()).border_b_1().border_color(p.primary.hsla()),
-                    BarLayout::Micro => div().h(px(DIM_10_PX)).row().justify_center().child(div().w(px(DIM_40_PX)).h(px(DIM_10_PX)).rounded_full().bg(p.surface_container_high.hsla())),
+                    BarLayout::Micro | BarLayout::ContiguousIsland => div().row().justify_center().child(previews::centered(preset, p)),
                     BarLayout::MinimalEdge => div().h(px(DIM_12_PX)).rounded(px(RADIUS_4_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(MOCK_PILL_A_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_C_PX)),
                     BarLayout::Notch => div().h(px(DIM_12_PX)).mt(px(-SPACE_6_PX)).mx(px(SPACE_10_PX)).rounded_b(px(RADIUS_6_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(MOCK_PILL_A_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_C_PX)),
                     BarLayout::FloatingPills => div().h(px(DIM_12_PX)).ltr_row().items_center().justify_between().child(pill(MOCK_PILL_A_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_C_PX)),
-                    BarLayout::ContiguousIsland => div().h(px(DIM_12_PX)).row().justify_center().child(div().h(px(DIM_12_PX)).px(px(SPACE_4_PX)).rounded_full().bg(p.surface_container_high.hsla()).row().items_center().gap(px(SPACE_4_PX)).child(pill(MOCK_PILL_SMALL_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_SMALL_PX))),
                 });
             presets.push(
                 div()

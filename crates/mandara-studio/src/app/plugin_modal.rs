@@ -1156,8 +1156,8 @@ impl StudioView {
         } else if m.id == mandara_ui::plugins::translator::ID {
             mandara_ui::plugins::translator::credential_key(cfg)
         } else { Ok(None) };
-        if let Ok(Some(key)) = key {
-            body = div().row().flex_col().gap(px(SPACE_22_PX)).child(body).child(self.plugin_key_editor(key, p, cx)).into_any_element();
+        if let Ok(Some(key)) = key && let Some(editor) = self.plugin_key_editor(key, self.modal.open, p, cx) {
+            body = div().row().flex_col().gap(px(SPACE_22_PX)).child(body).child(editor).into_any_element();
         }
         div()
             .p(px(BODY_PAD))

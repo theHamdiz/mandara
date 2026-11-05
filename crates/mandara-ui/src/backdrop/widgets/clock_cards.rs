@@ -1,7 +1,6 @@
 //! Quiet clock faces: word typography, mechanical cards, glass tubes and BCD.
 
 use mandara_config::desktop_widgets::{ClockFace, ClockWidget, FontRole};
-use mandara_i18n::{fill, tk};
 
 use super::layout::{ClockStrings, InkRole, Mark, MarkKind, Measure, face, style, wrap};
 use super::lingo::Lingo;
@@ -25,16 +24,8 @@ const MUTED: f32 = 0.18;
 const SOFT: f32 = 0.6;
 /// Four BCD bits per decimal digit, in the order painted top to bottom.
 const BIT_WEIGHTS: [u32; 4] = [8, 4, 2, 1];
-const HOURS: [&str; 12] = [tk("Twelve"), tk("One"), tk("Two"), tk("Three"), tk("Four"), tk("Five"), tk("Six"), tk("Seven"), tk("Eight"), tk("Nine"), tk("Ten"), tk("Eleven")];
-const PHRASES: [&str; 12] = [tk("{hour} o'clock"), tk("Five past {hour}"), tk("Ten past {hour}"), tk("Quarter past {hour}"), tk("Twenty past {hour}"), tk("Twenty-five past {hour}"), tk("Half past {hour}"), tk("Twenty-five to {hour}"), tk("Twenty to {hour}"), tk("Quarter to {hour}"), tk("Ten to {hour}"), tk("Five to {hour}")];
-
-/// The nearest five-minute phrase; the face also prints the exact time.
-fn phrase(hour: u32, minute: u32, l: &Lingo) -> String {
-    let step = (minute.min(59) + 2) / 5;
-    let next = u32::from(step > 6);
-    let hour = l.word(HOURS[((hour + next) % 12) as usize]);
-    fill(&l.word(PHRASES[(step % 12) as usize]), &[("hour", &hour)])
-}
+mod words;
+use words::phrase;
 
 fn text(marks: &mut Vec<Mark>, value: &str, role: FontRole, size: f32, center: f32, y: f32, ink: InkRole, m: &mut dyn Measure) -> f32 {
     let font = style(role, size, face::MEDIUM);

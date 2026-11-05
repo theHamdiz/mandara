@@ -31,14 +31,15 @@ impl Editor {
         self.note = None;
     }
 
-    fn select(&mut self, key: Key) -> bool {
-        if self.key.as_ref() == Some(&key) { return false; }
+    fn select(&mut self, key: Key, open: bool) -> Option<bool> {
+        if !open { return None; }
+        if self.key.as_ref() == Some(&key) { return Some(false); }
         self.key = Some(key);
         self.generation = self.generation.wrapping_add(1);
         self.working = false;
         self.saved = None;
         self.note = None;
-        true
+        Some(true)
     }
 
     fn begin(&mut self) -> Option<(u64, Key)> {
@@ -88,8 +89,8 @@ impl StudioView {
         cx.notify();
     }
 
-    pub(super) fn plugin_key_editor(&mut self, key: Key, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        if self.credentials.select(key) {
+    pub(super) fn plugin_key_editor(&mut self, key: Key, open: bool, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.credentials.select(key, open)? {
             clear_input(cx);
             self.check_plugin_key(cx);
         }
@@ -109,7 +110,7 @@ impl StudioView {
                 .child(button("plugin-key-remove", "close", t("Remove key"), false, p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.remove_plugin_key(cx)))));
         }
         if let Some((error, note)) = &self.credentials.note { card = card.child(form::note(note, *error, p)); }
-        card.into_any_element()
+        Some(card.into_any_element())
     }
 }
 
@@ -121,10 +122,14 @@ mod tests {
     fn reopening_rechecks_the_key_and_discards_a_closed_editors_reply() {
         let key = Key { provider: mandara_services::credentials::Provider::HomeAssistant, server: "https://home.example".into() };
         let mut editor = Editor::default();
-        assert!(editor.select(key.clone()));
+        assert_eq!(editor.select(key.clone(), true), Some(true));
         let old = editor.begin().unwrap().0;
         editor.close();
-        assert!(editor.select(key));
+        assert_eq!(editor.select(key.clone(), false), None);
+        assert!(editor.begin().is_none());
+        editor.finish(old, Err("closed reply".into()));
+        assert!(editor.note.is_none());
+        assert_eq!(editor.select(key, true), Some(true));
         let current = editor.begin().unwrap().0;
         editor.finish(old, Ok(true));
         assert!(editor.working);
@@ -138,10 +143,10 @@ mod tests {
     fn a_key_result_cannot_cross_servers_or_override_a_later_operation() {
         let mut editor = Editor::default();
         let first = Key { provider: Provider::HomeAssistant, server: "https://first.example".into() };
-        assert!(editor.select(first.clone()));
+        assert_eq!(editor.select(first.clone(), true), Some(true));
         let (old, _) = editor.begin().unwrap();
         assert!(editor.begin().is_none());
-        assert!(editor.select(Key { server: "https://second.example".into(), ..first }));
+        assert_eq!(editor.select(Key { server: "https://second.example".into(), ..first }, true), Some(true));
         let (new, _) = editor.begin().unwrap();
         editor.finish(old, Ok(true));
         assert_eq!(editor.saved, None);

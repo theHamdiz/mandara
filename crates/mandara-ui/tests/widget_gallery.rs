@@ -91,3 +91,19 @@ fn calendar_media_sky_and_visualizer_tiles_are_fitted_and_antialiased() {
         }
     }
 }
+
+#[test]
+fn gallery_toggle_slider_and_palette_tiles_have_visible_content() {
+    use mandara_config::desktop_widgets::{PaletteWidget, SlidersWidget, TogglesWidget, WidgetKind};
+    let fonts = mandara_ui::backdrop::paint::FontNames::new("Inter", "Inter", "Cairo", "JetBrains Mono");
+    let mut text = mandara_ui::lock::paint::TextPainter::new();
+    for dark in [false, true] {
+        let palette = mandara_theme::engine::default_palette(dark);
+        for kind in [WidgetKind::Toggles(TogglesWidget::default()), WidgetKind::Sliders(SlidersWidget::default()), WidgetKind::Palette(PaletteWidget::default())] {
+            let widget = DesktopWidget { kind, ..Default::default() };
+            let image = mandara_ui::backdrop::widgets::gallery::thumbnail(&widget, (360, 270), &fonts, &palette, &mut text).unwrap();
+            assert!(image.pixels().any(|pixel| pixel[3] != 0), "{:?} is blank", widget.kind);
+            text.release_glyphs();
+        }
+    }
+}

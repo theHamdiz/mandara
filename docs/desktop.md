@@ -334,4 +334,11 @@ paper without moving the strips away from it.
 The widget gallery fits each preview to its card and renders at the display’s
 pixel density, with larger calendar and sky miniatures. Media previews use a
 clearly labelled sample track and cover; they do not need a running player
-or read your listening history. The desktop still shows only real media.
+or read your listening history. Quick toggles and sliders show sample states,
+and the palette tile uses your current theme colours. The desktop still shows
+only real media and control states.
+
+The bar preset thumbnails show each centered layout’s actual proportions.
+Micro pill uses a shorter bar, tighter spacing and no empty side-group gaps;
+Dynamic island keeps a taller shared island with roomier groups. Both remain
+available in **Studio → Bar → Presets**.

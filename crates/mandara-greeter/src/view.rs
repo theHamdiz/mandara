@@ -173,6 +173,12 @@ enum Mode {
     Preview,
 }
 
+impl Mode {
+    fn permits_weather_requests(self) -> bool {
+        matches!(self, Self::Live { demo: false })
+    }
+}
+
 /// Edits coming out of the Studio preview.
 #[derive(Clone, Debug)]
 #[expect(clippy::large_enum_variant, reason = "a handful per drag; the edited config is a fresh copy either way")]
@@ -424,6 +430,13 @@ mod preview_clock_tests {
         assert_eq!(preview_deadline(59_900, false), Duration::from_millis(100));
         assert_eq!(preview_deadline(60_000, false), Duration::from_secs(60));
         assert_eq!(preview_deadline(1_250, true), Duration::from_millis(750));
+    }
+
+    #[test]
+    fn previews_and_full_screen_demos_do_not_request_weather() {
+        assert!(!Mode::Preview.permits_weather_requests());
+        assert!(!Mode::Live { demo: true }.permits_weather_requests());
+        assert!(Mode::Live { demo: false }.permits_weather_requests());
     }
 }
 
@@ -2349,7 +2362,7 @@ impl Render for GreeterView {
         let widget_size = ((vw * sf).round() as u32, (vh * sf).round() as u32);
         let widgets = if !self.config.widgets.items.is_empty() && (!preview || !self.offscreen(window)) {
             let fonts = mandara_ui::backdrop::paint::FontNames::from(cx.global::<Fonts>());
-            self.widgets.update(&self.config.widgets, widget_size, &fonts, &self.palette, self.config.clock.format_24h, !preview);
+            self.widgets.update(&self.config.widgets, widget_size, &fonts, &self.palette, self.config.clock.format_24h, self.mode.permits_weather_requests());
             if self.widgets.pending() { window.request_animation_frame(); }
             self.widgets.image(widget_size)
         } else {

@@ -222,7 +222,7 @@ fn scene(cfg: &Widgets, spec: &PaintSpec) -> WidgetScene {
         ..Default::default()
     };
     scene.data.place = cfg.weather.as_ref().filter(|w| w.valid()).map(|w| (w.latitude, w.longitude));
-    scene.data.palette = [(mandara_i18n::t("Primary"), spec.palette.primary), (mandara_i18n::t("Surface"), spec.palette.surface_container), (mandara_i18n::t("Text"), spec.palette.on_surface)].into_iter().map(|(name, color)| (name.into(), color.to_rgba_u32() >> 8)).collect();
+    scene.data.palette = super::palette_colors(&spec.palette);
     scene
 }
 

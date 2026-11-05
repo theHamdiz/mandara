@@ -26,8 +26,9 @@ Weather has its own **Public weather location** choice. The editor shows
 the coordinates before **Use this location publicly**; adding a widget
 does not copy the desktop's location. The public configuration permits
 forecast requests only while that screen uses weather. Studio previews
-stay offline and show the unavailable state until a real screen fetches
-data. Remove the location to stop those requests.
+stay offline, including **Preview full screen**, and show the unavailable
+state until a real screen fetches data. Remove the location to stop those
+requests.
 
 Widgets reuse their desktop painters, with cached rendering away from the
 authentication thread. Their clocks refresh when the displayed time

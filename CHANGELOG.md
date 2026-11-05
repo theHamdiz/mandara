@@ -15,21 +15,23 @@ installer, display reconnection and native KWin support.
   and binary clocks; date tickets, perpetual cards and a moon calendar;
   weather ribbons, thermometers and a humidity rose. They belong to the
   existing widget families, so Mandara still ships 77 first-party plugins.
+  Word clocks use natural Turkish time phrases.
 
-- **Put widgets on your sign-in screens.** Login screen → Layout and   Lock
-  appearance have a widget gallery, a copy-from-desktop option and
-  placement controls. Both start empty. Only public, passive kinds are
-  offered; weather needs a separately chosen public location. Plasma keeps
-  its own secure locker, with a clear explanation in Studio.   World clocks
-  have public default cities; copied countdowns leave private   desktop
-  titles and dates behind.
+- **Put widgets on your sign-in screens.** Login screen → Layout and Lock
+  appearance have a widget gallery, a copy-from-desktop option and placement
+  controls. Both start empty. Only public, passive kinds are offered;
+  weather needs a separately chosen public location. Plasma keeps its own
+  secure locker, with a clear explanation in Studio. World clocks have
+  public default cities; copied countdowns leave private desktop titles and
+  dates behind. Embedded and full-screen previews stay offline.
 
 - **Four optional connected tools.** Translator, Phone Connect, Feeds and
   Home Assistant are first-party plugins. Translate when you ask, keep up
   with subscriptions, reach your paired phone and control your home from
-  native panels. Mandara now ships 77 first-party plugins, each with its
-  own artwork. Feeds ask for the final address when a server redirects;
-  remote API keys use HTTPS.
+  native panels. Mandara now ships 77 first-party plugins, each with its own
+  artwork. Feeds ask for the final address when a server redirects; remote
+  API keys use HTTPS. Key settings recheck the keyring when reopened and
+  stop reading on close.
 
 - **Choose which screen corners are rounded.** Each corner can be switched
   off separately, and adjacent displays can keep their shared corners clear.
@@ -78,7 +80,7 @@ installer, display reconnection and native KWin support.
 ### Improved
 
 - **Find missing icon themes.** Maintenance reports missing icon themes and
-  opens Themes so you can   choose a replacement without resetting your
+  opens Themes so you can choose a replacement without resetting your
   selection. (#87)
 
 - **The project, a click away.** Studio’s About header has playful GitHub
@@ -127,12 +129,17 @@ installer, display reconnection and native KWin support.
 
 ### Fixed
 
+- **Tell centered bar presets apart.** The Micro pill and Dynamic island
+  thumbnails use the bar’s real compact geometry and show their different
+  item arrangements. (#103)
+
 - **Sharper widget previews.** Calendar, sky and visualizer pictures fill
   their cards and follow display scaling. Media styles have labelled sample
-  previews instead of empty tiles, in light and dark themes. (#101)
+  previews instead of empty tiles, in light and dark themes. Toggle and
+  slider examples and current palette colours fill their tiles too. (#101)
 
 - **Keep the login preview current.** The login designer keeps clocks and
-  public widgets current while its   preview is visible, including across
+  public widgets current while its preview is visible, including across
   midnight.
 
 - A bar preset stays selected after you apply its style while keeping your

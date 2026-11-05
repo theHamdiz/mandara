@@ -558,6 +558,11 @@ mandara setup --fix-conflicts    # retire them
 mandara setup --restore latest   # undo
 ```
 
+`mandara setup --restore latest` restores the backup without regenerating
+the drop-in or requiring keyboard libraries. If you combine restoration
+with shortcut checks or changes, prerequisites are checked before any file
+is restored.
+
 What `--fix-conflicts` does:
 
 - Each conflicting line is commented out with a `mandara-retired:` marker,
@@ -709,7 +714,3 @@ If application icons are missing after installation, open **Studio →
 Maintenance** and refresh its health checks. A missing icon theme links to
 **Themes → Icons**; install the named theme or select one already present.
 The check does not reset your choice.
-`mandara setup --restore latest` restores the backup without regenerating
-the drop-in or requiring keyboard libraries. If you combine restoration
-with shortcut checks or changes, prerequisites are checked before any file
-is restored.

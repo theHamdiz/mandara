@@ -8611,15 +8611,15 @@
 
 "Five" = "Beş"
 
-"Five past {hour}" = "{hour} — beş"
+"Five past {hour}" = "{hour} beş geçiyor"
 
-"Five to {hour}" = "Beş dakika sonra {hour}"
+"Five to {hour}" = "{hour} beş var"
 
 "Four" = "Dört"
 
 "Glass tube clock" = "Cam tüplü saat"
 
-"Half past {hour}" = "{hour} — otuz"
+"Half past {hour}" = "{hour} buçuk"
 
 "Humidity rose" = "Nem gülü"
 
@@ -8641,9 +8641,9 @@
 
 "Public weather location" = "Herkese açık hava durumu konumu"
 
-"Quarter past {hour}" = "{hour} — on beş"
+"Quarter past {hour}" = "{hour} çeyrek geçiyor"
 
-"Quarter to {hour}" = "On beş dakika sonra {hour}"
+"Quarter to {hour}" = "{hour} çeyrek var"
 
 "Seven" = "Yedi"
 
@@ -8653,9 +8653,9 @@
 
 "Ten" = "On"
 
-"Ten past {hour}" = "{hour} — on"
+"Ten past {hour}" = "{hour} on geçiyor"
 
-"Ten to {hour}" = "On dakika sonra {hour}"
+"Ten to {hour}" = "{hour} on var"
 
 "The location you add here is public and allows weather requests on this screen. Studio previews do not contact the weather service." = "Buraya eklediğiniz konum herkese açıktır ve bu ekranda hava durumu isteğine izin verir. Studio önizlemeleri hava durumu servisine bağlanmaz."
 
@@ -8665,13 +8665,13 @@
 
 "Twelve" = "On iki"
 
-"Twenty past {hour}" = "{hour} — yirmi"
+"Twenty past {hour}" = "{hour} yirmi geçiyor"
 
-"Twenty to {hour}" = "Yirmi dakika sonra {hour}"
+"Twenty to {hour}" = "{hour} yirmi var"
 
-"Twenty-five past {hour}" = "{hour} — yirmi beş"
+"Twenty-five past {hour}" = "{hour} yirmi beş geçiyor"
 
-"Twenty-five to {hour}" = "Yirmi beş dakika sonra {hour}"
+"Twenty-five to {hour}" = "{hour} yirmi beş var"
 
 "Two" = "İki"
 

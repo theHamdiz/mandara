@@ -20,12 +20,22 @@ const COVER_MAX_PX: u32 = 1024;
 /// The sample player is paused a minute into a three-minute track.
 const TRACK_MS: i64 = 180_000;
 const POSITION_MS: i64 = 60_000;
+/// An illustrative slider position, confined to labelled gallery previews.
+const SAMPLE_LEVEL: f32 = 0.65;
 
 fn sample_scene(widget: &DesktopWidget, palette: &MandaraPalette, cover_px: u32) -> WidgetScene {
     let now = Local::now();
     let mut scene = WidgetScene::preview(vec![widget.clone()]);
     scene.on_surface = palette.on_surface;
     scene.surface = palette.surface_container;
+    scene.data.palette = super::palette_colors(palette);
+    if let WidgetKind::Toggles(toggles) = &widget.kind {
+        scene.data.toggles = super::toggle_ids(toggles).into_iter().enumerate().map(|(i, id)| (id, i % 2 == 0)).collect();
+    }
+    if let WidgetKind::Sliders(sliders) = &widget.kind {
+        let levels = if sliders.levels.is_empty() { vec!["volume".into(), "brightness".into()] } else { sliders.levels.clone() };
+        scene.data.levels = levels.into_iter().map(|id| (id, SAMPLE_LEVEL)).collect();
+    }
     if matches!(widget.kind, WidgetKind::Media(_)) {
         let cover_px = cover_px.clamp(1, COVER_MAX_PX);
         let mut cover = Pixmap::new(cover_px, cover_px).unwrap();
@@ -143,5 +153,21 @@ mod tests {
         let date = DesktopWidget { kind: WidgetKind::Date(DateWidget::default()), ..Default::default() };
         assert_eq!(sample_scene(&date, &palette, 540).data.events.len(), 1);
         assert!(WidgetScene::default().data.events.is_empty());
+    }
+
+    #[test]
+    fn gallery_controls_have_examples_without_populating_live_scenes() {
+        use mandara_config::desktop_widgets::{SlidersWidget, TogglesWidget};
+        let palette = mandara_theme::engine::default_palette(false);
+        let toggles = DesktopWidget { kind: WidgetKind::Toggles(TogglesWidget::default()), ..Default::default() };
+        let scene = sample_scene(&toggles, &palette, 360);
+        assert_eq!(scene.data.toggles.len(), 4);
+        assert!(scene.data.toggles.iter().any(|(_, on)| *on));
+        assert!(scene.data.toggles.iter().any(|(_, on)| !on));
+        assert_eq!(scene.data.palette, super::super::palette_colors(&palette));
+        let sliders = DesktopWidget { kind: WidgetKind::Sliders(SlidersWidget { levels: vec!["volume".into()], ..Default::default() }), ..Default::default() };
+        assert_eq!(sample_scene(&sliders, &palette, 360).data.levels, vec![("volume".into(), SAMPLE_LEVEL)]);
+        let live = WidgetScene::default();
+        assert!(live.data.toggles.is_empty() && live.data.levels.is_empty() && live.data.palette.is_empty());
     }
 }
