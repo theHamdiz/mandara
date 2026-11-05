@@ -269,6 +269,12 @@ impl Host for SystemHost {
     }
 
     fn select(&mut self, prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
+        // No terminal: take the default, so a piped run never blocks and
+        // behaves exactly as `--yes` would. With one, `select_tty` cancels
+        // when it cannot read an answer (it asks rather than assumes).
+        if !self.interactive() {
+            return Some(default.min(rows.len().saturating_sub(1)));
+        }
         select_tty(prompt, rows, default)
     }
 
@@ -341,23 +347,23 @@ fn tty_columns() -> Option<usize> {
 }
 
 /// Draws the menu on the terminal and returns the picked row. `None` when
-/// the user cancels; without a terminal the default is taken, so a piped
-/// run never blocks and behaves exactly as `--yes` would.
+/// the user cancels, and when the terminal cannot be set up: a run that was
+/// asked a question must not install a default answer instead.
 fn select_tty(prompt: &str, rows: &[Row], default: usize) -> Option<usize> {
     if rows.is_empty() {
         return Some(default);
     }
-    let fallback = Some(default.min(rows.len() - 1));
-    let Ok(mut tty) = std::fs::OpenOptions::new().read(true).write(true).open(TTY) else { return fallback };
-    let Ok(_raw) = RawMode::enable(&tty) else { return fallback };
+    let mut tty = std::fs::OpenOptions::new().read(true).write(true).open(TTY).ok()?;
+    let _raw = RawMode::enable(&tty).ok()?;
     let mut cursor = default.min(rows.len() - 1);
     let mut drawn = 0;
+    let mut pending = Vec::new();
     let _ = tty.write_all(HIDE_CURSOR);
     let choice = loop {
         if !draw(&mut tty, &tui::menu_frame(prompt, rows, cursor), &mut drawn) {
             break None;
         }
-        match read_key(&mut tty) {
+        match read_key(&mut tty, &mut pending) {
             Key::Up => cursor = cursor.checked_sub(1).unwrap_or(rows.len() - 1),
             Key::Down => cursor = (cursor + 1) % rows.len(),
             Key::Enter => break Some(cursor),
@@ -400,10 +406,11 @@ fn clear(tty: &mut File, drawn: usize) {
 }
 
 /// One key, waiting for the rest of an escape sequence when it needs to.
-fn read_key(tty: &mut File) -> Key {
-    let mut pending = Vec::new();
+/// Bytes past the key stay in `pending` for the next call, so a read that
+/// brings `\x1b[B\r` gives the arrow and then the Enter.
+fn read_key(tty: &mut File, pending: &mut Vec<u8>) -> Key {
     loop {
-        if let Some((key, used)) = tui::decode(&pending) {
+        if let Some((key, used)) = tui::decode(pending) {
             pending.drain(..used);
             return key;
         }
@@ -528,6 +535,23 @@ mod tests {
         let mut host = SystemHost { color: false };
         assert_eq!(host.fetch(&format!("file://{}/SHA256SUMS", dir.path().display()), 1).unwrap(), b"x");
         assert_eq!(host.fetch(&format!("file://{}/missing", dir.path().display()), 1), Err(Fetch::NotFound));
+    }
+
+    #[test]
+    fn a_key_read_keeps_the_bytes_after_the_first_key() {
+        use std::io::Write as _;
+        use std::os::fd::FromRawFd as _;
+        let mut fds = [0i32; 2];
+        assert_eq!(unsafe { libc::pipe(fds.as_mut_ptr()) }, 0);
+        let (read_end, write_end) = unsafe { (File::from_raw_fd(fds[0]), File::from_raw_fd(fds[1])) };
+        let mut tty = read_end;
+        let mut writer = write_end;
+        // One write, so the pipe hands the whole sequence over at once.
+        writer.write_all(b"\x1b[B\r").unwrap();
+        drop(writer);
+        let mut pending = Vec::new();
+        assert_eq!(read_key(&mut tty, &mut pending), Key::Down);
+        assert_eq!(read_key(&mut tty, &mut pending), Key::Enter);
     }
 
     #[test]
