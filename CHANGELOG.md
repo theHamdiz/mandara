@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.18.0 — 2026-11-05
+
 Easier sound switching, clearer menu cards, and fixes for notification focus
 and compositor previews.
 
