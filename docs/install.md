@@ -688,3 +688,8 @@ content hash. Each push to `main` bumps exactly the components whose build
 changed: Conventional Commits pick patch, minor or major. When the shell's
 version changes, CI builds and publishes a release. `mandara --version` shows
 the exact build. Details are in [docs/releasing.md](releasing.md).
+
+`mandara setup --restore latest` restores the backup without regenerating
+the drop-in or requiring keyboard libraries. If you combine restoration
+with shortcut checks or changes, prerequisites are checked before any file
+is restored.

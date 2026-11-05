@@ -109,10 +109,11 @@ installer, display reconnection and native KWin support.
   without a restart; missing saved pins stay hidden.
 
 - Resetting a page keeps removed plugins out of its layout until you
-  restore them. Installer availability errors retain their explanation.
+  restore them.
 
-- Setup offers KWin when it is installed and reports failed availability
-  checks directly, without treating them as configuration errors.
+- **KWin setup explains availability failures.** Only installed KWin
+  appears in the picker. Failed probes keep their actual cause in setup
+  and Studio, without treating them as configuration or shortcut errors.
 
 - The download command preserves the installer's normal file permissions.
   Unnamed displays retain their logical size alongside named monitors, and
@@ -159,13 +160,15 @@ installer, display reconnection and native KWin support.
   families and background tools stay in their own galleries instead of
   being added to the bar as invisible items. (#73)
 
-- **Setup reports failed KWin checks correctly.** A failed availability
-  probe now returns an error instead of suggesting that setup is ready.
-  The Bengali input-seat hint and Persian login-screen choice are clearer too.
+- The Bengali input-seat hint and Persian login-screen choice are clearer.
 
-- An installation without libxkbcommon now explains the missing library and leaves shortcut checks alone. It no longer offers to retire conflicts that could not be checked.
+- **Recover even without keyboard libraries.** Restoring a backup works
+  without libxkbcommon and leaves the restored files in place. Shortcut
+  checks explain a missing library before changing anything, without
+  offering to retire conflicts that could not be checked.
 
-- Display changes now recover even when both geometry queries fail, and a stale monitor list cannot give a new display another monitor’s name or dimensions. `setup --check --compositor kwin` also reports whether KWin is available.
+- Display changes recover even when both geometry queries fail. A stale
+  monitor list cannot give a new display another monitor’s name or dimensions.
 
 - **The process table counts the whole machine.** A busy build used to
   read "405.5%" for `rustc`, because the list measured each process
@@ -181,9 +184,6 @@ installer, display reconnection and native KWin support.
   terminal before using its commands. It also points to Studio in your
   application menu. Plasma Login Manager is recognised when switching to
   Mandara Login.
-
-- **Studio shows KWin startup errors clearly.** A failed availability check
-  keeps its error details instead of showing the normal Plasma settings note.
 
 - **The website header stays readable in both themes.** The page and its
   transparent banner now follow the same theme, and the browser tab shows
