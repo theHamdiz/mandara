@@ -8304,6 +8304,14 @@
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab: 結果 · ↑↓: 選択 · Enter: 使用"
 
+"Mandara is installed." = "Mandara をインストールしました。"
+
+"Start it:        mandara            (or log in again if autostart is on)" = "起動:            mandara            (自動起動が有効な場合は、再ログインでも起動できます)"
+
+"Settings:        mandara studio" = "設定:            mandara studio"
+
+"Health & repair: mandara studio maintenance" = "診断と修復:      mandara studio maintenance"
+
 "A little closer to home" = "家がもう少し身近に"
 
 "API key" = "API キー"

@@ -125,6 +125,8 @@ installer, display reconnection and native KWin support.
 - The login designer keeps clocks and public widgets current while its
   preview is visible, including across midnight.
 
+- Installation finishes with translated first steps in every language.
+
 - Installing or removing an application updates its dock pin and icon
   without a restart; missing saved pins stay hidden.
 

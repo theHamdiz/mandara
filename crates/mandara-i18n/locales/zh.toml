@@ -8298,6 +8298,14 @@
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab：结果 · ↑↓：选择 · Enter：使用"
 
+"Mandara is installed." = "Mandara 已安装。"
+
+"Start it:        mandara            (or log in again if autostart is on)" = "启动：           mandara            （如果已启用自动启动，也可以重新登录）"
+
+"Settings:        mandara studio" = "设置：           mandara studio"
+
+"Health & repair: mandara studio maintenance" = "检查与修复：     mandara studio maintenance"
+
 "A little closer to home" = "让家更近一点"
 
 "API key" = "API 密钥"

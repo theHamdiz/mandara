@@ -8056,6 +8056,14 @@
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab: 결과 · ↑↓: 선택 · Enter: 사용"
 
+"Mandara is installed." = "Mandara가 설치되었습니다."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "시작:            mandara            (자동 시작을 켰다면 다시 로그인해도 됩니다)"
+
+"Settings:        mandara studio" = "설정:            mandara studio"
+
+"Health & repair: mandara studio maintenance" = "진단 및 복구:    mandara studio maintenance"
+
 "A little closer to home" = "집이 조금 더 가까이"
 
 "API key" = "API 키"

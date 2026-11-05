@@ -8298,6 +8298,14 @@
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab: resultados · ↑↓: elegir · Intro: usar"
 
+"Mandara is installed." = "Mandara está instalado."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "Iniciar:         mandara            (o vuelve a iniciar sesión si el inicio automático está activado)"
+
+"Settings:        mandara studio" = "Ajustes:         mandara studio"
+
+"Health & repair: mandara studio maintenance" = "Diagnóstico y reparación: mandara studio maintenance"
+
 "A little closer to home" = "Tu hogar, un poco más cerca"
 
 "API key" = "Clave de API"

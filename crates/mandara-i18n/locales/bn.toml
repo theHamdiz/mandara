@@ -8057,6 +8057,14 @@
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab: ফলাফল · ↑↓: বাছাই · Enter: ব্যবহার"
 
+"Mandara is installed." = "Mandara ইনস্টল হয়েছে।"
+
+"Start it:        mandara            (or log in again if autostart is on)" = "চালু করুন:       mandara            (অটোস্টার্ট চালু থাকলে আবার লগইন করুন)"
+
+"Settings:        mandara studio" = "সেটিংস:          mandara studio"
+
+"Health & repair: mandara studio maintenance" = "পরীক্ষা ও মেরামত: mandara studio maintenance"
+
 "A little closer to home" = "আপনার ঘর আরও কাছে"
 
 "API key" = "API কী"

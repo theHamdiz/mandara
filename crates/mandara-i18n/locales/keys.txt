@@ -2423,6 +2423,7 @@ Heads up
 Headset
 Healing of Souls
 Health
+Health & repair: mandara studio maintenance
 Health checks
 Heap & buffers
 Heavier springs move more slowly
@@ -3322,6 +3323,7 @@ Mandara handles idle
 Mandara handles notifications
 Mandara host
 Mandara installs native packages only with your system's own package manager: it never converts them or runs them in a container.
+Mandara is installed.
 Mandara isn't drawing the wallpaper (Fit & effects)
 Mandara isn't running, so its dialog can't open.
 Mandara itself updates from About.
@@ -5394,6 +5396,7 @@ Setting up Mandara's admin helper first (one more approval, only this once)…
 Settings
 Settings and data this app may have left in your home folder. Only what you tick moves to the Trash; nothing is deleted, and the app's removal doesn't depend on it.
 Settings in Studio
+Settings:        mandara studio
 Settings: {title}
 Setup
 Seven
@@ -5712,6 +5715,7 @@ Start hotspot
 Start it with `mandara`; its CPU and memory appear here live.
 Start it with ollama serve, or set its address in Studio → Plugins
 Start it with: sudo systemctl enable --now tailscaled
+Start it:        mandara            (or log in again if autostart is on)
 Start or stop discovery
 Start ranking from scratch
 Start recording

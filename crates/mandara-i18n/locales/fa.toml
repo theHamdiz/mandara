@@ -8057,6 +8057,14 @@
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab: نتایج · ↑↓: انتخاب · Enter: استفاده"
 
+"Mandara is installed." = "ماندارا نصب شد."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "اجرا:            mandara            (یا اگر اجرای خودکار فعال است، دوباره وارد شوید)"
+
+"Settings:        mandara studio" = "تنظیمات:         mandara studio"
+
+"Health & repair: mandara studio maintenance" = "بررسی و تعمیر:   mandara studio maintenance"
+
 "A little closer to home" = "خانه کمی نزدیک‌تر"
 
 "API key" = "کلید API"

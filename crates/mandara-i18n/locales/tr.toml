@@ -8303,6 +8303,14 @@
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab: sonuçlar · ↑↓: seç · Enter: kullan"
 
+"Mandara is installed." = "Mandara kuruldu."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "Başlat:          mandara            (veya otomatik başlatma açıksa yeniden oturum açın)"
+
+"Settings:        mandara studio" = "Ayarlar:         mandara studio"
+
+"Health & repair: mandara studio maintenance" = "Denetim ve onarım: mandara studio maintenance"
+
 "A little closer to home" = "Eviniz biraz daha yakın"
 
 "API key" = "API anahtarı"

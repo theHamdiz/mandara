@@ -1179,6 +1179,23 @@ fn completion_explains_when_the_calling_terminal_needs_a_new_path() {
 }
 
 #[test]
+fn completion_translates_every_instruction_in_the_callers_language() {
+    let fixture = Fixture::new();
+    for lang in mandara_i18n::Lang::ALL {
+        let _language = mandara_i18n::scoped(Some(lang));
+        let mut host = FakeHost::default();
+        let probe = FakeProbe::default();
+        Installer::new(&mut host, &probe, fixture.facts(Family::Arch), InstallArgs::default()).completion();
+        for key in ["Mandara is installed.", "Start it:        mandara            (or log in again if autostart is on)", "Settings:        mandara studio", "Health & repair: mandara studio maintenance"] {
+            let expected = mandara_i18n::t(key);
+            assert!(host.out.iter().any(|(_, text)| text == expected), "{}: {key}", lang.code());
+            if lang != mandara_i18n::Lang::En { assert_ne!(expected, key, "{}: {key}", lang.code()); }
+        }
+        assert!(host.ran.is_empty());
+    }
+}
+
+#[test]
 fn kwin_is_offered_only_when_installed_and_defaults_use_the_visible_rows() {
     for installed in [false, true] {
         let host = FakeHost::with(if installed { &["kwin_wayland", "niri"] } else { &["niri"] });

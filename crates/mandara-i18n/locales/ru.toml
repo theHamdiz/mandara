@@ -8303,6 +8303,14 @@
 
 "Tab: results · ↑↓: select · Enter: use" = "Tab: результаты · ↑↓: выбор · Enter: использовать"
 
+"Mandara is installed." = "Mandara установлена."
+
+"Start it:        mandara            (or log in again if autostart is on)" = "Запуск:          mandara            (или войдите заново, если включён автозапуск)"
+
+"Settings:        mandara studio" = "Настройки:       mandara studio"
+
+"Health & repair: mandara studio maintenance" = "Проверка и исправление: mandara studio maintenance"
+
 "A little closer to home" = "Дом стал немного ближе"
 
 "API key" = "Ключ API"
