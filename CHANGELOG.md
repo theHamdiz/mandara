@@ -6,8 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
-Put the power menu where you want it, plus a round of fixes for Sway, the
-installer, display reconnection and native KWin support.
+Four connected tools, more desktop styles, and public widgets for login and
+lock screens, with clearer previews and setup checks.
 
 ### New
 
@@ -32,6 +32,37 @@ installer, display reconnection and native KWin support.
   artwork. Feeds ask for the final address when a server redirects; remote
   API keys use HTTPS. Key settings recheck the keyring when reopened and
   stop reading on close.
+
+### Improved
+
+- **Find missing icon themes.** Maintenance reports missing icon themes and
+  opens Themes so you can choose a replacement without resetting your
+  selection. (#87)
+
+- **The project, a click away.** Studio’s About header has playful GitHub
+  and Discord links that move gently on hover and respect reduced motion.
+
+### Fixed
+
+- **Tell centered bar presets apart.** The Micro pill and Dynamic island
+  thumbnails use the bar’s real compact geometry and show their different
+  item arrangements. (#103)
+
+- **Sharper widget previews.** Calendar, sky and visualizer pictures fill
+  their cards and follow display scaling. Media styles have labelled sample
+  previews instead of empty tiles, in light and dark themes. Toggle and
+  slider examples and current palette colours fill their tiles too. (#101)
+
+- **Keep the login preview current.** The login designer keeps clocks and
+  public widgets current while its preview is visible, including across
+  midnight.
+
+## 0.16.0 — 2026-11-05
+
+Put the power menu where you want it, plus a round of fixes for Sway, the
+installer, display reconnection and native KWin support.
+
+### New
 
 - **Choose which screen corners are rounded.** Each corner can be switched
   off separately, and adjacent displays can keep their shared corners clear.
@@ -79,13 +110,6 @@ installer, display reconnection and native KWin support.
 
 ### Improved
 
-- **Find missing icon themes.** Maintenance reports missing icon themes and
-  opens Themes so you can choose a replacement without resetting your
-  selection. (#87)
-
-- **The project, a click away.** Studio’s About header has playful GitHub
-  and Discord links that move gently on hover and respect reduced motion.
-
 - **The clipboard answers the keyboard and the wheel.** Arrow Up and Down
   move through the list and turn the page when they reach its end, Enter
   copies the entry under them (or pastes it, where the panel is set to
@@ -128,19 +152,6 @@ installer, display reconnection and native KWin support.
   are gone.
 
 ### Fixed
-
-- **Tell centered bar presets apart.** The Micro pill and Dynamic island
-  thumbnails use the bar’s real compact geometry and show their different
-  item arrangements. (#103)
-
-- **Sharper widget previews.** Calendar, sky and visualizer pictures fill
-  their cards and follow display scaling. Media styles have labelled sample
-  previews instead of empty tiles, in light and dark themes. Toggle and
-  slider examples and current palette colours fill their tiles too. (#101)
-
-- **Keep the login preview current.** The login designer keeps clocks and
-  public widgets current while its preview is visible, including across
-  midnight.
 
 - A bar preset stays selected after you apply its style while keeping your
   own items. Manual layout or item changes clear that selection. (#81)
