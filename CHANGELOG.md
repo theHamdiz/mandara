@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.16.0 — 2026-11-05
+
 Put the power menu where you want it, plus a round of fixes for Sway, the
 installer, display reconnection and native KWin support.
 
