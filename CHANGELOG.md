@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.17.0 — 2026-11-05
+
 Four connected tools, more desktop styles, and public widgets for login and
 lock screens, with clearer previews and setup checks.
 
