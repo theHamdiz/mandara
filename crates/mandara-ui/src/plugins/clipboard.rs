@@ -357,15 +357,27 @@ fn update(ui: &Shared, cx: &mut App, f: impl FnOnce(&mut Ui)) {
     views.notify(cx);
 }
 
+/// The first and last index in `order` of the history rows on `page`: the
+/// pinned rows come first and are drawn on every page, so they are skipped.
+fn page_span(page_of: &[usize], page: usize, pinned_len: usize) -> Option<(usize, usize)> {
+    let first = page_of.iter().position(|p| *p == page)?;
+    let last = page_of.iter().rposition(|p| *p == page)?;
+    Some((pinned_len + first, pinned_len + last))
+}
+
 /// Where the arrows land in `order`: the index and entry id, clamped to the
-/// ends, starting at the top for Down and at the bottom for Up when nothing
-/// is selected yet.
-fn step_selection(order: &[u64], current: Option<u64>, delta: isize) -> Option<(usize, u64)> {
+/// ends. With nothing selected yet, Down starts at the first row on screen
+/// and Up at the last (`on_page`, when the page has rows of its own), so a
+/// page turned by the wheel or the pager does not send the next arrow back
+/// to the top or bottom of the whole list.
+fn step_selection(order: &[u64], current: Option<u64>, delta: isize, on_page: Option<(usize, usize)>) -> Option<(usize, u64)> {
     let last = order.len().checked_sub(1)?;
-    let next = match current.and_then(|id| order.iter().position(|o| *o == id)) {
-        Some(at) => (at as isize + delta).clamp(0, last as isize) as usize,
-        None if delta > 0 => 0,
-        None => last,
+    let next = match (current.and_then(|id| order.iter().position(|o| *o == id)), on_page) {
+        (Some(at), _) => (at as isize + delta).clamp(0, last as isize) as usize,
+        (None, Some((first, _))) if delta > 0 => first.min(last),
+        (None, Some((_, end))) => end.min(last),
+        (None, None) if delta > 0 => 0,
+        (None, None) => last,
     };
     Some((next, order[next]))
 }
@@ -375,7 +387,8 @@ fn step_selection(order: &[u64], current: Option<u64>, delta: isize) -> Option<(
 /// that may not be visible any more).
 fn select_step(ui: &Shared, delta: isize, cx: &mut App) {
     update(ui, cx, |u| {
-        let Some((at, id)) = step_selection(&u.order, u.selected, delta) else {
+        let on_page = page_span(&u.page_of, u.page, u.pinned_len);
+        let Some((at, id)) = step_selection(&u.order, u.selected, delta, on_page) else {
             u.selected = None;
             return;
         };
@@ -911,13 +924,17 @@ impl View {
                 u.page_of.extend(range.clone().map(|_| i));
             }
             u.pages = lay.pages.len();
-            if u.selected.is_some_and(|id| !u.order.contains(&id)) {
-                u.selected = None;
-            }
         }
         let filter = ui.borrow().filter;
         let page_rows: Vec<&ClipEntry> = lay.page_rows().to_vec();
         let shown = lay.shown();
+        // The keyboard selection only means something while its row is on
+        // screen: a new entry or a search can push it onto another page, and
+        // Enter must not restore a row the panel is not showing.
+        let selected = ui.borrow().selected;
+        if selected.is_some_and(|id| !shown.iter().any(|e| e.id == id)) {
+            ui.borrow_mut().selected = None;
+        }
         let picker = ui.borrow().picker.filter(|id| shown.iter().any(|e| e.id == *id));
         let naming = ui.borrow().naming;
         let accent = readable(palette.primary, palette);
@@ -1061,20 +1078,31 @@ impl View {
             .track_focus(&self.focus)
             .on_key_down({
                 let ui = ui.clone();
-                move |e: &KeyDownEvent, _window, cx| match e.keystroke.key.as_str() {
-                    "up" => {
-                        cx.stop_propagation();
-                        select_step(&ui, -1, cx);
+                let focus = self.focus.clone();
+                move |e: &KeyDownEvent, window, cx| {
+                    // A field keeps its own keys: there the arrows move the
+                    // caret and Enter commits the search. The panel takes
+                    // them when it holds the focus, or when nothing does
+                    // (the search box blurs on Enter and Escape, and the
+                    // arrows must keep working after that).
+                    if !focus.is_focused(window) && window.focused(cx).is_some() {
+                        return;
                     }
-                    "down" => {
-                        cx.stop_propagation();
-                        select_step(&ui, 1, cx);
+                    match e.keystroke.key.as_str() {
+                        "up" => {
+                            cx.stop_propagation();
+                            select_step(&ui, -1, cx);
+                        }
+                        "down" => {
+                            cx.stop_propagation();
+                            select_step(&ui, 1, cx);
+                        }
+                        "enter" => {
+                            cx.stop_propagation();
+                            activate(&ui, cx);
+                        }
+                        _ => {}
                     }
-                    "enter" => {
-                        cx.stop_propagation();
-                        activate(&ui, cx);
-                    }
-                    _ => {}
                 }
             })
             // The wheel turns the pages (the chips strip takes its own).
@@ -1494,15 +1522,32 @@ mod tests {
     fn arrows_walk_the_rows_and_hold_at_the_ends() {
         let order = [10u64, 20, 30, 40];
         // Down from nothing starts at the top, Up at the bottom.
-        assert_eq!(step_selection(&order, None, 1), Some((0, 10)));
-        assert_eq!(step_selection(&order, None, -1), Some((3, 40)));
-        assert_eq!(step_selection(&order, Some(30), 1), Some((3, 40)));
-        assert_eq!(step_selection(&order, Some(30), -1), Some((1, 20)));
+        assert_eq!(step_selection(&order, None, 1, None), Some((0, 10)));
+        assert_eq!(step_selection(&order, None, -1, None), Some((3, 40)));
+        assert_eq!(step_selection(&order, Some(30), 1, None), Some((3, 40)));
+        assert_eq!(step_selection(&order, Some(30), -1, None), Some((1, 20)));
         // The ends hold instead of wrapping.
-        assert_eq!(step_selection(&order, Some(10), -1), Some((0, 10)));
-        assert_eq!(step_selection(&order, Some(40), 1), Some((3, 40)));
+        assert_eq!(step_selection(&order, Some(10), -1, None), Some((0, 10)));
+        assert_eq!(step_selection(&order, Some(40), 1, None), Some((3, 40)));
+        // After a page turn cleared the selection, the arrows start on the
+        // page on screen instead of jumping back to the ends of the list.
+        assert_eq!(step_selection(&order, None, 1, Some((1, 2))), Some((1, 20)));
+        assert_eq!(step_selection(&order, None, -1, Some((1, 2))), Some((2, 30)));
+        assert_eq!(step_selection(&order, None, 1, Some((3, 3))), Some((3, 40)));
         // Nothing to walk.
-        assert_eq!(step_selection(&[], None, 1), None);
+        assert_eq!(step_selection(&[], None, 1, None), None);
+    }
+
+    #[test]
+    fn a_page_spans_its_own_history_rows() {
+        // Two pinned rows, then three pages of history.
+        let page_of = [0, 0, 1, 1, 2];
+        assert_eq!(page_span(&page_of, 0, 2), Some((2, 3)));
+        assert_eq!(page_span(&page_of, 1, 2), Some((4, 5)));
+        assert_eq!(page_span(&page_of, 2, 2), Some((6, 6)));
+        // A page with no history rows of its own.
+        assert_eq!(page_span(&page_of, 3, 2), None);
+        assert_eq!(page_span(&[], 0, 0), None);
     }
 
     #[test]
