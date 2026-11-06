@@ -122,3 +122,8 @@ buffer. GPUI uploads borrow those pixels directly until wgpu copies them into
 its own staging storage. Native renderer features select Vulkan and GLES;
 browser shader translation is excluded from Linux builds. These changes keep
 the existing image resolution and rendering quality.
+
+Bar corner geometry uses inline storage for its two joins, and capsule bounds
+are computed directly from visible slots. Allocation and release timing checks
+cover these paths; process-wide resource figures above retain their recorded
+build and workload scope.
