@@ -49,6 +49,9 @@ About → What's new shows it too.
   date formatting while a view animates. Keyboard badges compare borrowed
   labels, and Phone Connect filters its existing device list directly.
 
+- **Lean bar geometry.** Joined columns keep their two corner flares inline,
+  and group capsules calculate their bounds without a temporary list.
+
 - **Cleaner portable builds.** Linker tuning checks for support, avoiding
   ignored-option warnings with other linkers.
 

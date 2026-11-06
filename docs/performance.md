@@ -164,3 +164,8 @@ the former temporary expressions with warm state reuse on the test thread.
 It reports allocation calls and requested bytes, not process RSS. Frame and
 interaction speed still need matched release measurements before describing a
 performance improvement.
+
+Bar corner geometry uses inline storage for its two joins, and capsule bounds
+are computed directly from visible slots. Allocation and release timing checks
+cover these paths; process-wide resource figures above retain their recorded
+build and workload scope.

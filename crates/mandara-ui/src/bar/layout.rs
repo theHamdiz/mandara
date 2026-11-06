@@ -6,6 +6,7 @@ use gpui::{Bounds, Pixels, Size, point, px, size};
 use mandara_config::surfaces::{BarCenterAlign, BarSeparator, PanelAnchor, ranges};
 use mandara_config::{BarLayout, BarPosition, ShellConfig};
 use mandara_core::FlareCenter;
+use smallvec::SmallVec;
 
 /// The three widget groups of the bar.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -610,13 +611,16 @@ pub struct SideColumn {
     /// The column, `(x, y, w, h)` in surface px.
     pub column: (f32, f32, f32, f32),
     /// Fillets: the `r × r` square at `(x, y)` and its arc's centre.
-    pub flares: Vec<(f32, f32, f32, FlareCenter)>,
+    pub flares: Flares,
     /// Beside a notch the column reaches its edge; once it reaches the
     /// notch the two join: the notch's span `(x, w)` along the edge and
     /// whether its start / end butts against the column (square, no
     /// shoulder).
     pub notch: Option<(f32, f32, bool, bool)>,
 }
+
+/// A column joins at its two ends; neither join needs a heap buffer.
+pub type Flares = SmallVec<[(f32, f32, f32, FlareCenter); 2]>;
 
 /// How the flush side panel at `x` (its slid position, width `w`, on the
 /// right edge when `right`) joins the bar of `m` on a `surface`: its box
@@ -634,7 +638,7 @@ pub fn side_column(m: &Metrics, surface: (f32, f32), x: f32, w: f32, right: bool
     // (bottom): the filled part hugs the column and that surface.
     let (top_c, bottom_c) = if right { (FlareCenter::BottomLeft, FlareCenter::TopLeft) } else { (FlareCenter::BottomRight, FlareCenter::TopRight) };
     let (mut y0, mut y1) = (span.0, span.0 + span.1);
-    let mut flares = Vec::with_capacity(2);
+    let mut flares = Flares::new();
     let mut notch = None;
     if m.notch() {
         let frame = m.frame(sw);
@@ -669,17 +673,23 @@ pub fn side_column(m: &Metrics, surface: (f32, f32), x: f32, w: f32, right: bool
 
 /// Smallest rect containing all `rects`.
 pub fn union(rects: &[Bounds<Pixels>]) -> Bounds<Pixels> {
-    let mut it = rects.iter();
-    let Some(first) = it.next() else { return Bounds::default() };
-    let (mut x0, mut y0) = (x_of(first), y_of(first));
+    union_iter(rects.iter().copied()).unwrap_or_default()
+}
+
+/// Smallest containing rect without collecting a filtered group into a buffer.
+/// Empty groups have no bounds; callers decide whether to draw them.
+pub fn union_iter(rects: impl IntoIterator<Item = Bounds<Pixels>>) -> Option<Bounds<Pixels>> {
+    let mut it = rects.into_iter();
+    let first = it.next()?;
+    let (mut x0, mut y0) = (x_of(&first), y_of(&first));
     let (mut x1, mut y1) = (x0 + w_of(first), y0 + h_of(first));
     for r in it {
-        x0 = x0.min(x_of(r));
-        y0 = y0.min(y_of(r));
-        x1 = x1.max(x_of(r) + w_of(r));
-        y1 = y1.max(y_of(r) + h_of(r));
+        x0 = x0.min(x_of(&r));
+        y0 = y0.min(y_of(&r));
+        x1 = x1.max(x_of(&r) + w_of(&r));
+        y1 = y1.max(y_of(&r) + h_of(&r));
     }
-    rect(x0, y0, x1 - x0, y1 - y0)
+    Some(rect(x0, y0, x1 - x0, y1 - y0))
 }
 
 /// Morph progress `0..=1` of an island between its collapsed and expanded
