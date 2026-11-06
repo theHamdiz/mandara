@@ -39,6 +39,9 @@ steps and less repeated work behind the desktop.
 
 ### Under the hood
 
+- Still wallpapers reuse their prepared full-screen RGBA buffer for the
+  opaque canvas, with the same fill modes, colors and transparency blending.
+
 - Resource tests also accept temporary folders reached through a symbolic
   link. (#111)
 

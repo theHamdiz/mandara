@@ -101,3 +101,10 @@ buffer. GPUI uploads borrow those pixels directly until wgpu copies them into
 its own staging storage. Native renderer features select Vulkan and GLES;
 browser shader translation is excluded from Linux builds. These changes keep
 the existing image resolution and rendering quality.
+
+Still wallpaper preparation consumes an output-sized RGBA image as its opaque
+canvas. Transparent pixels blend against the configured fill color in place;
+smaller placements and tiles keep their existing composition path. Pixel tests
+compare every fill mode and alpha value with the previous painter. The shared
+memory upload still needs its own display buffer, so this avoids a preparation
+copy without promising a fixed reduction in the shell's peak resident memory.
