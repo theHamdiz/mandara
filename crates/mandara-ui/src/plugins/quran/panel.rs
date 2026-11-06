@@ -486,6 +486,9 @@ impl View {
 fn subtitle(shared: &Shared, book: Option<&Book>) -> String {
     let m = shared.borrow();
     let s = &m.playback;
+    if let Some(p) = s.download {
+        return if p.total == 0 { t("Downloading the recitation…").into() } else { tf("Downloading the recitation · {pct}%", &[("pct", &digits((p.done.saturating_mul(100) / p.total.max(1)).to_string()))]) };
+    }
     if m.pending
         && let (Some(p), Some(_)) = (m.progress, book)
     {
@@ -493,7 +496,7 @@ fn subtitle(shared: &Shared, book: Option<&Book>) -> String {
     }
     if let (Some(g), Some(b)) = (s.current(), book) {
         let who = mandara_services::quran::player::reciter_or_default(&s.reciter);
-        let name = if arabic_ui() { who.arabic } else { who.name };
+        let name = who.localized_name();
         return match s.status {
             Status::Paused => tf("Paused at {reference} · {reciter}", &[("reference", &b.reference(g)), ("reciter", &name)]),
             _ => tf("Reciting {reference} · {reciter}", &[("reference", &b.reference(g)), ("reciter", &name)]),

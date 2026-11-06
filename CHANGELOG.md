@@ -20,6 +20,11 @@ About → What's new shows it too.
   text available, and a failed new-note write leaves no phantom note behind.
 - **A clearer launcher placement map.** Studio shows the selected position
   beside a compact map, with keyboard-accessible choices and a Preview button.
+- **More Qur'an reciters.** Choose Yasser Al-Dossary, Abdulrashid Sufi or
+  Abdul Basit Abdul Samad in Studio. Yasser is the new default; saved
+  Alafasy and Al-Ajamy choices use it without changing your settings.
+  Sufi's chapter downloads show progress and keep their ayah timing for
+  listening offline.
 
 ### Fixed
 

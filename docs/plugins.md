@@ -177,6 +177,24 @@ The same action is available as `quran copy-image 2:255`,
 references export the entry using the plugin’s reading settings; the Qur’an
 command includes its meaning in Study mode. No screenshot or other desktop
 content is copied.
+**Qur'an recitation.** Studio → Plugins → Qur'an → *Reciter* includes
+Yasser Al-Dossary, Abdulrashid Sufi and Abdul Basit Abdul Samad. All three
+recordings use Hafs from Asim, matching the reader's text. Yasser is the
+default; a saved Alafasy or Al-Ajamy choice falls back to Yasser without
+rewriting your settings. The other available choices stay as you selected
+them.
+
+Yasser's and Abdul Basit's ayahs come from
+[EveryAyah](https://everyayah.com/recitations_ayat.html), using its 128 kbit/s
+Yasser and 192 kbit/s Abdul Basit Murattal recordings.
+Sufi uses [MP3Quran's Hafs recording and official ayah timings](https://www.mp3quran.net/eng/timing-api):
+the whole surah downloads before its first ayah plays, with progress in
+the panel. A long surah takes more disk space and time to download than
+one ayah. Pause or stop cancels an unfinished download; completed files
+stay available offline. Chapters decode one packet at a time, and moving
+to the next ayah reuses the open chapter. Offline playback needs both the
+recording and its timing table. *Remove* removes the text, meanings
+and cached recitations as before.
 
 **The adhan.** Prayer times can play the call to prayer at each of the
 five prayers (Studio → Plugins → Prayer times → *Adhan at prayer times*,

@@ -904,21 +904,9 @@ fn build() -> Vec<Setting> {
             tk("Qur'an"),
             "/plugins/settings/quran/reciter",
             tk("Reciter"),
-            tk("Whose recitation plays; each ayah is downloaded once from cdn.islamic.network and kept"),
-            Choice(const {
-                &[
-                    ("ar.alafasy", tk("Mishary Alafasy")),
-                    ("ar.husary", tk("Al-Husary")),
-                    ("ar.husarymujawwad", tk("Al-Husary (Mujawwad)")),
-                    ("ar.minshawi", tk("Al-Minshawi")),
-                    ("ar.hudhaify", tk("Al-Hudhaify")),
-                    ("ar.mahermuaiqly", tk("Maher Al-Muaiqly")),
-                    ("ar.shaatree", tk("Ash-Shatri")),
-                    ("ar.ahmedajamy", tk("Al-Ajamy")),
-                    ("ar.muhammadayyoub", tk("Muhammad Ayyub")),
-                ]
-            }),
-            Value::from("ar.alafasy"),
+            tk("Downloaded recitations stay available offline. Abdulrashid Sufi downloads a complete surah before playing its ayahs."),
+            Choice(&mandara_services::quran::player::RECITER_CHOICES),
+            Value::from(mandara_services::quran::player::DEFAULT_RECITER),
         ),
         sd(
             Plugins,

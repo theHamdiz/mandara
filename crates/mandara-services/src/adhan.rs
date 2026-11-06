@@ -105,7 +105,16 @@ fn file(_voice: &str, _item: u16) -> Result<PathBuf, String> {
 }
 
 /// How the adhan plays: the downloaded file on its own stream.
-pub const SOURCE: Source = Source { fetch: file, client: "Mandara adhan", media: c"Adhan", app_id: c"org.mandara.prayer" };
+struct Downloaded;
+
+impl crate::quran::audio::AudioSource for Downloaded {
+    fn prepare(&self, request: &crate::quran::audio::Request<'_>, _: &mut crate::quran::audio::FetchCache) -> Result<crate::quran::audio::Prepared, String> {
+        request.observer.check()?;
+        file(request.voice, request.global).map(crate::quran::audio::Prepared::file)
+    }
+}
+
+pub const SOURCE: Source = Source { files: &Downloaded, client: "Mandara adhan", media: c"Adhan", app_id: c"org.mandara.prayer" };
 
 /// A player for the adhan (events as the recitation player's).
 pub fn player(on_event: impl Fn(player::Event) + Send + Sync + 'static) -> Player {

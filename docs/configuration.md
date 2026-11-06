@@ -174,7 +174,7 @@ fixed:
 | CI status (`ci`, opt-in) | `repos` (`owner/name`, comma-separated), `use_gh_token` (the `gh` CLI's login for private repos and higher limits; else `GITHUB_TOKEN`), `notify` | empty, on, on |
 | Crash reports (`crashes`, opt-in) | `notify` (a notification for a new crash) | on |
 | Jannah (`jannah`, opt-in) | `rotate` (`daily`, `hourly`), `sources` (`both`, `quran`, `hadith`), `show_translation`, `arabic_size` (`small`, `medium`, `large`), `bar_label` (`glyph`, `step`), `morning_reminder`, `language` | daily, both, on, medium, glyph, off, follow |
-| Qur'an (`quran`, opt-in) | `reciter` (`ar.alafasy`, `ar.husary`, …), `translation` (an edition id; empty: the plugin language's default), `arabic_size`, `language` | Alafasy, default, medium, follow |
+| Qur'an (`quran`, opt-in) | `reciter` (`ar.yasseraldossari`, `mp3quran.258`, `ar.abdulsamad`, `ar.husary`, …), `translation` (an edition id; empty: the plugin language's default), `arabic_size`, `language` | Yasser Al-Dossary, default, medium, follow |
 | Hadith (`hadith`, opt-in) | `collections` (downloaded ones), `show_translation`, `arabic_size`, `hide_chain` (fold the chain of narrators), `rotate` (`daily`, `hourly`), `daily_collections`, `bar_label` (`glyph`, `reference`), `language` | bukhari, muslim; on; medium; on; daily; bukhari, muslim; glyph; follow |
 | Prayer times (`prayer-times`, opt-in) | `language`, `adhan` (the call to prayer at each prayer; the recording downloads once when you turn it on) | follow, off |
 

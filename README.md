@@ -244,6 +244,8 @@ cookie, a flower, torn paper…) and wear a frame like washi tape or a
 polaroid. Pick Western or Eastern Arabic digits, the Gregorian or Hijri
 calendar and the language of the day names. Widgets come from plugins, so
 you turn on only the ones you want, and plugins can add their own.
+The opt-in [Qur'an reader](docs/plugins.md#jannah-quran-hadith-and-prayer-times)
+also offers Yasser Al-Dossary, Abdulrashid Sufi and Abdul Basit Abdul Samad.
 [Desktop widgets](docs/desktop.md#desktop-widgets)
 
 <table>

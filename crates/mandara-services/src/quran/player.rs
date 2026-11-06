@@ -1,7 +1,6 @@
-//! Recitation: per-ayah MP3s from cdn.islamic.network
-//! (`/quran/audio/128/<reciter>/<global ayah>.mp3`), each downloaded once
-//! into `~/.cache/mandara/quran/audio/<reciter>/` (written to `.part`
-//! first and checked to be MP3), decoded in pure Rust (`symphonia`, MP3
+//! Recitation from cached ayah files or timed chapter recordings. Files
+//! stream into `~/.cache/mandara/quran/audio/<reciter>/`, are checked
+//! before replacing cached audio, then decoded in pure Rust (`symphonia`, MP3
 //! only) and played through the shell's sound path: the PulseAudio native
 //! protocol that PipeWire's `pipewire-pulse` speaks, as one playback
 //! stream ("Mandara Qur'an") per recitation, the way Soundscapes plays.
@@ -14,57 +13,19 @@
 //! isn't. Every change is reported through the `on_event` callback
 //! (status, the ayah now heard, errors); nothing polls.
 
-use std::io::{Read as _, Write as _};
-use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::Duration;
 
-use mandara_i18n::tf;
 use pulseaudio::protocol::{self, Command};
 use serde::Serialize;
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::{Decoder, DecoderOptions};
-use symphonia::core::formats::{FormatOptions, FormatReader};
-use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
-
-/// One reciter on the CDN (each one checked to serve the whole Qur'an).
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct Reciter {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub arabic: &'static str,
-}
-
-/// The reciters offered (verified on cdn.islamic.network at 128 kbps).
-pub const RECITERS: [Reciter; 9] = [
-    Reciter { id: "ar.alafasy", name: "Mishary Rashid Alafasy", arabic: "مشاري راشد العفاسي" },
-    Reciter { id: "ar.husary", name: "Mahmoud Khalil Al-Husary", arabic: "محمود خليل الحصري" },
-    Reciter { id: "ar.husarymujawwad", name: "Al-Husary (Mujawwad)", arabic: "محمود خليل الحصري (مجوّد)" },
-    Reciter { id: "ar.minshawi", name: "Mohamed Siddiq Al-Minshawi", arabic: "محمد صديق المنشاوي" },
-    Reciter { id: "ar.hudhaify", name: "Ali Al-Hudhaify", arabic: "علي بن عبد الرحمن الحذيفي" },
-    Reciter { id: "ar.mahermuaiqly", name: "Maher Al-Muaiqly", arabic: "ماهر المعيقلي" },
-    Reciter { id: "ar.shaatree", name: "Abu Bakr Ash-Shatri", arabic: "أبو بكر الشاطري" },
-    Reciter { id: "ar.ahmedajamy", name: "Ahmed Al-Ajamy", arabic: "أحمد بن علي العجمي" },
-    Reciter { id: "ar.muhammadayyoub", name: "Muhammad Ayyub", arabic: "محمد أيوب" },
-];
-pub const DEFAULT_RECITER: &str = "ar.alafasy";
-/// The CDN's per-ayah files.
-const CDN: &str = "https://cdn.islamic.network/quran/audio/128";
-
-/// Network bounds for one file.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
-const BODY_TIMEOUT: Duration = Duration::from_secs(90);
-const MAX_FILE_BYTES: u64 = 24 << 20;
-/// Smaller files aren't an ayah (an error page).
-const MIN_FILE_BYTES: u64 = 1024;
 /// Files fetched ahead of the one playing.
 const PREFETCH: usize = 3;
-/// How long the prefetcher sleeps between checks when it is ahead.
+/// The worker sleeps only while an active queue has enough cached items.
 const PREFETCH_WAIT: Duration = Duration::from_millis(800);
+use super::audio::{self, AudioSource, AyahIndex, FetchCache, Observer, Prepared, Request};
 
+pub use super::reciters::{DEFAULT_RECITER, RECITER_CHOICES, RECITERS, Reciter, reciter, reciter_or_default};
 /// Output: interleaved stereo f32.
 const CHANNELS: usize = 2;
 const BYTES_PER_FRAME: usize = CHANNELS * std::mem::size_of::<f32>();
@@ -79,142 +40,15 @@ const FADE_IN: Duration = Duration::from_millis(25);
 /// After the last ayah: let the buffer play out before closing.
 const TAIL: Duration = Duration::from_millis(250);
 
-pub fn reciter(id: &str) -> Option<&'static Reciter> {
-    RECITERS.iter().find(|r| r.id == id)
-}
-
-/// The reciter `id`, or the default for an unknown one.
-pub fn reciter_or_default(id: &str) -> &'static Reciter {
-    reciter(id).unwrap_or(&RECITERS[0])
-}
-
-pub fn audio_url(reciter: &str, global: u16) -> String {
-    format!("{CDN}/{}/{global}.mp3", super::store::sanitize(reciter))
-}
-
-pub fn audio_path(reciter: &str, global: u16) -> PathBuf {
-    super::store::cache_dir().join("audio").join(super::store::sanitize(reciter)).join(format!("{global}.mp3"))
-}
-
 /// Whether `head` starts like an MP3 file (an ID3 tag or a frame sync).
 pub fn looks_like_mp3(head: &[u8]) -> bool {
     head.starts_with(b"ID3") || (head.len() >= 2 && head[0] == 0xFF && head[1] & 0xE0 == 0xE0)
 }
 
-/// The cached file of ayah `global`, downloaded first when missing
-/// (blocking; refused while offline).
-pub fn fetch_audio(reciter: &str, global: u16) -> Result<PathBuf, String> {
-    let path = audio_path(reciter, global);
-    if std::fs::metadata(&path).is_ok_and(|m| m.len() >= MIN_FILE_BYTES) {
-        return Ok(path);
-    }
-    crate::offline::check()?;
-    let url = audio_url(reciter, global);
-    let failed = |e: &dyn std::fmt::Display| tf("Downloading the recitation of ayah {n}: {error}", &[("n", &global), ("error", e)]);
-    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_connect(Some(CONNECT_TIMEOUT)).timeout_recv_body(Some(BODY_TIMEOUT)).build().into();
-    let mut response = agent.get(&url).header("User-Agent", concat!("mandara-shell/", env!("CARGO_PKG_VERSION"))).call().map_err(|e| failed(&e))?;
-    let mut body = Vec::new();
-    response.body_mut().with_config().limit(MAX_FILE_BYTES).reader().read_to_end(&mut body).map_err(|e| failed(&e))?;
-    if (body.len() as u64) < MIN_FILE_BYTES || !looks_like_mp3(&body) {
-        return Err(failed(&"not an MP3 file"));
-    }
-    let dir = path.parent().ok_or_else(|| failed(&"no folder"))?;
-    std::fs::create_dir_all(dir).map_err(|e| failed(&e))?;
-    let part = path.with_extension(format!("mp3.{}.part", std::process::id()));
-    let written = std::fs::File::create(&part).and_then(|mut f| f.write_all(&body).and_then(|_| f.sync_all())).and_then(|_| std::fs::rename(&part, &path));
-    if let Err(e) = written {
-        let _ = std::fs::remove_file(&part);
-        return Err(failed(&e));
-    }
-    Ok(path)
-}
-
 // ── Decoding ─────────────────────────────────────────────────────────────
 
-/// One ayah's file, decoded packet by packet.
-struct Clip {
-    format: Box<dyn FormatReader>,
-    decoder: Box<dyn Decoder>,
-    track: u32,
-    rate: u32,
-    buf: Option<SampleBuffer<f32>>,
-    /// The last packet's frames as stereo, and how many are used.
-    frames: Vec<[f32; 2]>,
-    used: usize,
-}
-
-impl Clip {
-    fn open(path: &Path) -> Result<Self, String> {
-        let file = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let mss = MediaSourceStream::new(Box::new(file), Default::default());
-        let mut hint = Hint::new();
-        hint.with_extension("mp3");
-        let probed = symphonia::default::get_probe().format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default()).map_err(|e| format!("{}: {e}", path.display()))?;
-        let format = probed.format;
-        let track = format.default_track().ok_or_else(|| format!("{}: no audio", path.display()))?;
-        let decoder = symphonia::default::get_codecs().make(&track.codec_params, &DecoderOptions::default()).map_err(|e| format!("{}: {e}", path.display()))?;
-        let rate = track.codec_params.sample_rate.unwrap_or(44_100);
-        Ok(Self { track: track.id, format, decoder, rate, buf: None, frames: Vec::new(), used: 0 })
-    }
-
-    /// Decodes the next packet into `frames`; `false` at the end.
-    fn refill(&mut self) -> bool {
-        loop {
-            let packet = match self.format.next_packet() {
-                Ok(p) => p,
-                Err(_) => return false,
-            };
-            if packet.track_id() != self.track {
-                continue;
-            }
-            let decoded = match self.decoder.decode(&packet) {
-                Ok(d) => d,
-                // A damaged frame: skip it.
-                Err(symphonia::core::errors::Error::DecodeError(_)) => continue,
-                Err(_) => return false,
-            };
-            let spec = *decoded.spec();
-            let channels = spec.channels.count().max(1);
-            if self.buf.as_ref().is_none_or(|b| b.capacity() < decoded.capacity() * channels) {
-                self.buf = Some(SampleBuffer::new(decoded.capacity() as u64, spec));
-            }
-            let Some(buf) = self.buf.as_mut() else { return false };
-            buf.copy_interleaved_ref(decoded);
-            self.frames.clear();
-            self.frames.extend(buf.samples().chunks(channels).map(|f| match f {
-                [m] => [*m, *m],
-                [l, r, ..] => [*l, *r],
-                [] => [0.0, 0.0],
-            }));
-            self.used = 0;
-            if !self.frames.is_empty() {
-                return true;
-            }
-        }
-    }
-
-    /// The next frame at the clip's own rate.
-    fn next(&mut self) -> Option<[f32; 2]> {
-        if self.used >= self.frames.len() && !self.refill() {
-            return None;
-        }
-        let f = self.frames[self.used];
-        self.used += 1;
-        Some(f)
-    }
-
-    /// Skips `n` frames (resuming mid-ayah).
-    fn skip(&mut self, mut n: u64) {
-        while n > 0 {
-            if self.used >= self.frames.len() && !self.refill() {
-                return;
-            }
-            let take = (self.frames.len() - self.used).min(usize::try_from(n).unwrap_or(usize::MAX));
-            self.used += take;
-            n -= take as u64;
-        }
-    }
-}
+mod clip;
+use clip::Clip;
 
 /// Linear resampling from a clip's rate to the stream's, frame by frame,
 /// carrying its phase across calls (a no-op when the rates match).
@@ -278,7 +112,14 @@ pub enum Event {
     Ayah(u16),
     /// The queue played to its end.
     Finished,
+    Download(DownloadProgress),
     Error(String),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct DownloadProgress {
+    pub done: u64,
+    pub total: u64,
 }
 
 /// What is playing: the queue, where in it, and how.
@@ -289,6 +130,7 @@ pub struct Snapshot {
     pub index: usize,
     pub reciter: String,
     pub error: Option<String>,
+    pub download: Option<DownloadProgress>,
 }
 
 impl Snapshot {
@@ -307,6 +149,8 @@ struct Ctl {
     sent: u64,
     /// The current clip's sample rate (to turn the latency into frames).
     rate: u32,
+    index: Option<Arc<AyahIndex>>,
+    language: mandara_i18n::Lang,
 }
 
 /// Where a player's files come from and how its stream is named: the
@@ -315,15 +159,15 @@ struct Ctl {
 pub struct Source {
     /// The file of queue item `n` for `voice` (fetched when missing, or an
     /// error); called off the UI thread.
-    pub fetch: fn(&str, u16) -> Result<PathBuf, String>,
+    pub files: &'static dyn AudioSource,
     /// The sound server client's name, the stream's and the app's id.
     pub client: &'static str,
     pub media: &'static std::ffi::CStr,
     pub app_id: &'static std::ffi::CStr,
 }
 
-/// The Qur'an recitation: per-ayah files from the CDN.
-pub const RECITATION: Source = Source { fetch: fetch_audio, client: "Mandara Qur'an", media: c"Qur'an recitation", app_id: c"org.mandara.quran" };
+/// The supported verse and timed-chapter recitations.
+pub const RECITATION: Source = Source { files: &audio::Recitations, client: "Mandara Qur'an", media: c"Qur'an recitation", app_id: c"org.mandara.quran" };
 
 struct Inner {
     source: Source,
@@ -353,7 +197,7 @@ impl Player {
 
     /// A player of `source`'s files.
     pub fn with_source(source: Source, on_event: impl Fn(Event) + Send + Sync + 'static) -> Self {
-        let ctl = Ctl { generation: 0, snap: Snapshot::default(), sent: 0, rate: 44_100 };
+        let ctl = Ctl { generation: 0, snap: Snapshot::default(), sent: 0, rate: 44_100, index: None, language: mandara_i18n::requested_language() };
         Self { inner: Arc::new(Inner { source, ctl: Mutex::new(ctl), wake: Condvar::new(), level: AtomicU32::new(0), on_event: Box::new(on_event) }) }
     }
 
@@ -368,6 +212,15 @@ impl Player {
 
     /// Recites `queue` (global numbers) from its start with `reciter`.
     pub fn play(&self, queue: Vec<u16>, reciter: &str) {
+        self.start(queue, reciter, None, mandara_i18n::requested_language());
+    }
+
+    /// Uses the already loaded text's compact index for provider addresses.
+    pub fn recite(&self, queue: Vec<u16>, reciter: &str, index: AyahIndex, language: mandara_i18n::Lang) {
+        self.start(queue, reciter_or_default(reciter).id, Some(Arc::new(index)), language);
+    }
+
+    fn start(&self, queue: Vec<u16>, reciter: &str, index: Option<Arc<AyahIndex>>, language: mandara_i18n::Lang) {
         if queue.is_empty() {
             return;
         }
@@ -375,8 +228,10 @@ impl Player {
         let generation = {
             let mut c = lock(&self.inner.ctl);
             c.generation += 1;
-            c.snap = Snapshot { status: Status::Loading, queue, index: 0, reciter: reciter.to_string(), error: None };
+            c.snap = Snapshot { status: Status::Loading, queue, index: 0, reciter: reciter.to_string(), error: None, download: None };
             c.sent = 0;
+            c.index = index;
+            c.language = language;
             c.generation
         };
         self.inner.wake.notify_all();
@@ -394,6 +249,7 @@ impl Player {
             }
             c.generation += 1;
             c.snap.status = Status::Paused;
+            c.snap.download = None;
         }
         self.inner.wake.notify_all();
         self.inner.level.store(0, Ordering::Relaxed);
@@ -426,6 +282,7 @@ impl Player {
             c.generation += 1;
             let was = c.snap.status;
             c.snap = Snapshot::default();
+            c.index = None;
             was
         };
         self.inner.wake.notify_all();
@@ -436,11 +293,16 @@ impl Player {
     }
 
     fn spawn(&self, generation: u64, skip: u64) {
-        let ready: Arc<Mutex<Vec<Option<Result<PathBuf, String>>>>> = Arc::default();
+        let language = lock(&self.inner.ctl).language;
+        let ready: Arc<Mutex<Vec<Option<Result<Prepared, String>>>>> = Arc::default();
         let (inner, r) = (self.inner.clone(), ready.clone());
-        let fetch = std::thread::Builder::new().name("mandara-quran-fetch".into()).spawn(move || prefetch(&inner, generation, &r));
+        let fetch = std::thread::Builder::new().name("mandara-quran-fetch".into()).spawn(move || {
+            let _scope = mandara_i18n::scoped(Some(language));
+            prefetch(&inner, generation, &r);
+        });
         let inner = self.inner.clone();
         let audio = std::thread::Builder::new().name("mandara-quran-recite".into()).spawn(move || {
+            let _scope = mandara_i18n::scoped(Some(language));
             if let Err(e) = session(&inner, generation, skip, &ready) {
                 inner.fail(generation, e);
             }
@@ -466,6 +328,7 @@ impl Inner {
             c.generation += 1;
             c.snap.status = Status::Stopped;
             c.snap.error = Some(why.clone());
+            c.snap.download = None;
         }
         self.wake.notify_all();
         self.level.store(0, Ordering::Relaxed);
@@ -481,33 +344,69 @@ impl Inner {
                 return;
             }
             c.snap.status = status;
+            if status != Status::Loading {
+                c.snap.download = None;
+            }
         }
         (self.on_event)(Event::Status(status));
     }
 }
 
+struct FetchObserver<'a> {
+    inner: &'a Inner,
+    generation: u64,
+}
+
+impl Observer for FetchObserver<'_> {
+    fn current(&self) -> bool {
+        self.inner.current(self.generation)
+    }
+
+    fn progress(&self, done: u64, total: u64) {
+        {
+            let mut c = lock(&self.inner.ctl);
+            if c.generation != self.generation || c.snap.status != Status::Loading {
+                return;
+            }
+            c.snap.download = Some(DownloadProgress { done, total });
+        }
+        (self.inner.on_event)(Event::Download(DownloadProgress { done, total }));
+    }
+}
+
 /// Fetches the queue's files ahead of the one playing.
-fn prefetch(inner: &Inner, generation: u64, ready: &Mutex<Vec<Option<Result<PathBuf, String>>>>) {
+fn prefetch(inner: &Inner, generation: u64, ready: &Mutex<Vec<Option<Result<Prepared, String>>>>) {
+    let observer = FetchObserver { inner, generation };
+    let (index, reciter) = {
+        let c = lock(&inner.ctl);
+        if c.generation != generation {
+            return;
+        }
+        (c.index.clone(), c.snap.reciter.clone())
+    };
+    let mut cache = FetchCache::default();
     loop {
-        let (queue, index, reciter) = {
+        let have = ready.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len();
+        let (have, item, position) = {
             let c = lock(&inner.ctl);
             if c.generation != generation {
                 return;
             }
-            (c.snap.queue.clone(), c.snap.index, c.snap.reciter.clone())
+            let have = have.max(c.snap.index);
+            (have, c.snap.queue.get(have).copied(), c.snap.index)
         };
-        let have = ready.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len().max(index);
-        if have >= queue.len() {
-            return;
-        }
-        if have > index + PREFETCH {
+        let Some(item) = item else { return };
+        if have > position + PREFETCH {
             let c = lock(&inner.ctl);
             if c.generation == generation {
                 let _ = inner.wake.wait_timeout(c, PREFETCH_WAIT);
             }
             continue;
         }
-        let result = (inner.source.fetch)(&reciter, queue[have]);
+        let result = inner.source.files.prepare(&Request { voice: &reciter, global: item, index: index.as_deref(), observer: &observer }, &mut cache);
+        if !observer.current() {
+            return;
+        }
         {
             let mut r = ready.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             r.resize(have, None);
@@ -519,10 +418,12 @@ fn prefetch(inner: &Inner, generation: u64, ready: &Mutex<Vec<Option<Result<Path
 
 /// The file of queue item `i` once fetched (`None` while it is still
 /// coming; the session ended).
-fn wait_file(inner: &Inner, generation: u64, i: usize, ready: &Mutex<Vec<Option<Result<PathBuf, String>>>>, block: bool) -> Option<Result<PathBuf, String>> {
+fn wait_file(inner: &Inner, generation: u64, i: usize, ready: &Mutex<Vec<Option<Result<Prepared, String>>>>, block: bool) -> Option<Result<Prepared, String>> {
     loop {
-        if let Some(Some(r)) = ready.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(i) {
-            return Some(r.clone());
+        if let Some(slot) = ready.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get_mut(i)
+            && let Some(result) = slot.take()
+        {
+            return Some(result);
         }
         let c = lock(&inner.ctl);
         if c.generation != generation || !block {
@@ -564,11 +465,13 @@ fn is_timeout(e: &protocol::ProtocolError) -> bool {
 
 /// The audio thread: plays the queue from the current item (skipping
 /// `skip` frames of it) until the end, a pause or a stop.
-fn session(inner: &Inner, generation: u64, skip: u64, ready: &Mutex<Vec<Option<Result<PathBuf, String>>>>) -> Result<(), String> {
+fn session(inner: &Inner, generation: u64, skip: u64, ready: &Mutex<Vec<Option<Result<Prepared, String>>>>) -> Result<(), String> {
+    let observer = FetchObserver { inner, generation };
     let mut index = lock(&inner.ctl).snap.index;
-    let Some(first) = wait_file(inner, generation, index, ready, true) else { return Ok(()) };
-    let mut clip = Clip::open(&first?)?;
-    clip.skip(skip);
+    let Some(first) = wait_file(inner, generation, index, ready, true) else {
+        return Ok(());
+    };
+    let clip = Clip::open(&first?, skip, &observer)?;
     let rate = clip.rate;
     let mut sent = skip;
     {
@@ -586,6 +489,7 @@ fn session(inner: &Inner, generation: u64, skip: u64, ready: &Mutex<Vec<Option<R
     inner.set_status(generation, Status::Playing);
     let mut resample = Resample::new(clip.rate, rate);
     let mut clip = Some(clip);
+    let mut previous: Option<Clip> = None;
     let mut fade = 0usize;
     let fade_len = (FADE_IN.as_secs_f32() * rate as f32) as usize;
     let mut frames: Vec<[f32; 2]> = Vec::with_capacity(MAX_WRITE_FRAMES + 4);
@@ -614,8 +518,14 @@ fn session(inner: &Inner, generation: u64, skip: u64, ready: &Mutex<Vec<Option<R
                             break;
                         }
                         Some(Err(e)) => return Err(e),
-                        Some(Ok(path)) => {
-                            let next = Clip::open(&path)?;
+                        Some(Ok(prepared)) => {
+                            let next = match previous.take() {
+                                Some(mut old) if old.same_file(&prepared) => {
+                                    old.select(&prepared, 0, &observer)?;
+                                    old
+                                }
+                                _ => Clip::open(&prepared, 0, &observer)?,
+                            };
                             resample = Resample::new(next.rate, rate);
                             index += 1;
                             sent = 0;
@@ -638,12 +548,12 @@ fn session(inner: &Inner, generation: u64, skip: u64, ready: &Mutex<Vec<Option<R
                         }
                     }
                 };
-                match c.next() {
+                match c.next()? {
                     Some(f) => {
                         sent += 1;
                         resample.push(f, &mut frames);
                     }
-                    None => clip = None,
+                    None => previous = clip.take(),
                 }
             }
             if waiting && frames.is_empty() {
@@ -698,7 +608,9 @@ fn session(inner: &Inner, generation: u64, skip: u64, ready: &Mutex<Vec<Option<R
         }
         match protocol::read_command_message(&mut p.sock, p.version) {
             Ok((_, Command::Request(protocol::Request { length, .. }))) => owed += length as usize,
-            Ok((_, Command::PlaybackStreamKilled(_))) => return Err(mandara_i18n::t("The sound server closed the stream").into()),
+            Ok((_, Command::PlaybackStreamKilled(_))) => {
+                return Err(mandara_i18n::t("The sound server closed the stream").into());
+            }
             Ok((_, Command::Error(e))) => return Err(format!("{e:?}")),
             Ok(_) => {}
             // Nothing asked (or a file still coming): look again.
@@ -715,10 +627,7 @@ mod tests {
     #[test]
     fn reciters_and_files() {
         assert_eq!(reciter_or_default("nope").id, DEFAULT_RECITER);
-        assert!(RECITERS.iter().all(|r| r.id.starts_with("ar.") && !r.name.is_empty() && !r.arabic.is_empty()));
-        assert_eq!(audio_url("ar.alafasy", 262), "https://cdn.islamic.network/quran/audio/128/ar.alafasy/262.mp3");
-        assert!(audio_path("ar.alafasy", 262).ends_with("quran/audio/ar.alafasy/262.mp3"));
-        assert!(audio_path("../x", 1).ends_with("audio/x/1.mp3"));
+        assert!(RECITERS.iter().all(|r| !r.name.is_empty() && !r.arabic.is_empty()));
         assert!(looks_like_mp3(b"ID3\x04\x00") && looks_like_mp3(&[0xFF, 0xFB, 0x90]));
         assert!(!looks_like_mp3(b"<?xml version") && !looks_like_mp3(&[0xFF]));
     }
@@ -759,10 +668,77 @@ mod tests {
         assert!(!player.pause() && !player.resume());
         player.play(Vec::new(), DEFAULT_RECITER);
         assert_eq!(player.snapshot().status, Status::Stopped, "nothing to play");
-        let snap = Snapshot { status: Status::Paused, queue: vec![8, 9], index: 1, reciter: DEFAULT_RECITER.into(), error: None };
+        let snap = Snapshot { status: Status::Paused, queue: vec![8, 9], index: 1, reciter: DEFAULT_RECITER.into(), error: None, download: None };
         assert_eq!(snap.current(), Some(9));
         assert_eq!(Snapshot::default().current(), None);
         player.stop();
         assert!(events.lock().unwrap().is_empty(), "stopping a stopped player says nothing");
+    }
+
+    #[test]
+    fn old_downloads_cannot_publish_progress_after_pause_or_queue_change() {
+        let events: Arc<Mutex<Vec<Event>>> = Arc::default();
+        let collected = events.clone();
+        let player = Player::new(move |event| collected.lock().unwrap().push(event));
+        {
+            let mut c = lock(&player.inner.ctl);
+            c.generation = 7;
+            c.snap.status = Status::Loading;
+        }
+        let observer = FetchObserver { inner: &player.inner, generation: 7 };
+        observer.progress(32, 64);
+        assert_eq!(player.snapshot().download, Some(DownloadProgress { done: 32, total: 64 }));
+        assert!(player.pause());
+        assert!(observer.check().is_err());
+        observer.progress(64, 64);
+        assert_eq!(player.snapshot().download, None);
+        assert_eq!(*events.lock().unwrap(), [Event::Download(DownloadProgress { done: 32, total: 64 }), Event::Status(Status::Paused)]);
+        let ready = Mutex::new(Vec::new());
+        prefetch(&player.inner, 7, &ready);
+        assert!(ready.lock().unwrap().is_empty(), "a stale worker never contacts a provider");
+    }
+
+    #[test]
+    fn recitation_workers_keep_the_plugins_requested_language() {
+        struct LanguageSource;
+        impl AudioSource for LanguageSource {
+            fn prepare(&self, _: &Request<'_>, _: &mut FetchCache) -> Result<Prepared, String> {
+                Err(mandara_i18n::requested_language().code().to_string())
+            }
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let player = Player::with_source(Source { files: &LanguageSource, ..RECITATION }, move |event| {
+            if let Event::Error(error) = event {
+                let _ = tx.send(error);
+            }
+        });
+        player.start(vec![1], "test", None, mandara_i18n::Lang::Ar);
+        assert_eq!(rx.recv_timeout(Duration::from_secs(2)).unwrap(), "ar");
+        assert_eq!(player.snapshot().status, Status::Stopped);
+    }
+
+    #[test]
+    fn resumed_prefetch_starts_at_the_current_ayah() {
+        static REQUESTS: Mutex<Vec<u16>> = Mutex::new(Vec::new());
+        struct RecordingSource;
+        impl AudioSource for RecordingSource {
+            fn prepare(&self, request: &Request<'_>, _: &mut FetchCache) -> Result<Prepared, String> {
+                REQUESTS.lock().unwrap().push(request.global);
+                Ok(Prepared::file("/nonexistent/test-ayah.mp3".into()))
+            }
+        }
+        REQUESTS.lock().unwrap().clear();
+        let player = Player::with_source(Source { files: &RecordingSource, ..RECITATION }, |_| {});
+        {
+            let mut c = lock(&player.inner.ctl);
+            c.generation = 7;
+            c.snap = Snapshot { status: Status::Loading, queue: vec![1, 2, 3, 4, 5, 6], index: 5, reciter: "test".into(), ..Snapshot::default() };
+        }
+        let ready = Mutex::new(Vec::new());
+        prefetch(&player.inner, 7, &ready);
+        assert_eq!(*REQUESTS.lock().unwrap(), [6], "resuming must not download earlier ayahs again");
+        let ready = ready.lock().unwrap();
+        assert!(ready[..5].iter().all(Option::is_none));
+        assert!(ready[5].as_ref().unwrap().is_ok());
     }
 }

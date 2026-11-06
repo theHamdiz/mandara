@@ -603,12 +603,14 @@ pub(crate) fn play(shared: &Shared, sel: Selection, cx: &mut App) -> Result<Vec<
     let book = book(shared).ok_or_else(|| t("The Qur'an isn't downloaded yet").to_string())?;
     let queue: Vec<u16> = book.q.globals(sel).collect();
     let first = *queue.first().ok_or_else(|| t("Nothing to recite").to_string())?;
-    let reciter = settings(cx).reciter;
-    if mandara_services::offline::is_offline() && !player::audio_path(reciter.id, first).exists() {
+    let options = settings(cx);
+    let reciter = options.reciter;
+    let index = mandara_services::quran::audio::AyahIndex::new(&book.q);
+    if mandara_services::offline::is_offline() && !mandara_services::quran::audio::cached(reciter.id, first, &index) {
         return Err(t("Offline mode is on and this recitation isn't downloaded yet").into());
     }
     shared.borrow_mut().play_error = None;
-    shared.borrow().player.play(queue.clone(), reciter.id);
+    shared.borrow().player.recite(queue.clone(), reciter.id, index, options.lang);
     sync_playback(shared);
     Ok(queue)
 }
@@ -642,7 +644,7 @@ fn on_player(shared: &Shared, ev: Event, cx: &mut App) {
             shared.borrow_mut().glow = Some((before, Instant::now()));
             read_at(shared, *g, cx);
         }
-        Event::Status(_) | Event::Finished => {}
+        Event::Status(_) | Event::Finished | Event::Download(_) => {}
     }
     shared.borrow_mut().playback = snap;
     changed(shared, cx);
@@ -967,6 +969,7 @@ fn playback_json(shared: &Shared, book: Option<&Book>) -> Value {
         "current": current.and_then(|g| book.and_then(|b| b.q.at(g))).map(|r| r.to_string()),
         "queue_length": s.queue.len(),
         "position": (!s.queue.is_empty()).then_some(s.index + 1),
+        "download": s.download,
         "error": m.play_error,
     })
 }

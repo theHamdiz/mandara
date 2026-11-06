@@ -248,12 +248,15 @@ APPS
 AUR packages
 AYAH FOR {date}
 AYAH OF THE DAY
+Abdul Basit Abdul Samad
+Abdulrashid Sufi
 Aborted
 About
 About Jannah
 About the library
 Above fullscreen windows
 Above or below the results
+Abu Bakr Ash-Shatri
 Abu Dawud
 Abyssal Mediterranean blue, sea-glass turquoise and sun-warmed limestone.
 Acceleration
@@ -383,11 +386,6 @@ Agenda events
 Agenda length
 Ah, make the most of what we yet may spend, before we too into the Dust descend.
 Airy
-Al-Ajamy
-Al-Hudhaify
-Al-Husary
-Al-Husary (Mujawwad)
-Al-Minshawi
 Al-Mutanabbi
 Albert Einstein
 Album art, a wavy progress line and synced lyrics on the desktop while music plays
@@ -396,6 +394,7 @@ Album art, title, a wavy progress line, controls and synced lyrics; shown while 
 Album ring
 Alexander Pope
 Alexandria line
+Ali Al-Hudhaify
 Alice's Adventures in Wonderland
 Align to the launcher button
 Alignment
@@ -599,7 +598,6 @@ Arrangement
 Arrow of God
 As
 As a solid rock is not shaken by the wind, wise people falter not amidst blame and praise.
-Ash-Shatri
 Ask a window to close
 Ask for KeePassXC at login
 Ask for a new one at next login
@@ -1717,6 +1715,7 @@ Downloaded from speed.cloudflare.com only when you press Run test
 Downloaded on demand
 Downloaded on their own when the plugin is on: bukhari, muslim, abudawud, tirmidhi, nasai, ibnmajah, malik, nawawi, qudsi, dehlawi
 Downloaded once
+Downloaded recitations stay available offline. Abdulrashid Sufi downloads a complete surah before playing its ayahs.
 Downloaded {count} times
 Downloaded:
 Downloaded: sharing stopped
@@ -1729,7 +1728,8 @@ Downloading the adhan: {error}
 Downloading the adhan… {percent}%
 Downloading the full update ({size})…
 Downloading the meaning · {pct}%
-Downloading the recitation of ayah {n}: {error}
+Downloading the recitation · {pct}%
+Downloading the recitation…
 Downloading the smart update ({size})…
 Downloading {collection}
 Downloading {file}: {error}
@@ -3302,6 +3302,8 @@ Magnification
 Magnification spread
 Magnified size
 Maher Al-Muaiqly
+Mahmoud Khalil Al-Husary
+Mahmoud Khalil Al-Husary (Mujawwad)
 Main
 Main display
 Main for nights, Dawn for mornings.
@@ -3510,7 +3512,6 @@ Minutes, or with m, h or d (up to a week)
 Mirror left to right
 Mirror top to bottom
 Mirrored bars
-Mishary Alafasy
 Missing
 Missing argument #{position}
 Missing file
@@ -3537,6 +3538,7 @@ Models for copying text from screenshots and for the wallpaper depth effect's mo
 Models loaded in memory with their VRAM share and unload time (JSON)
 Modern
 Modes
+Mohamed Siddiq Al-Minshawi
 Mon
 Monday
 Monitor
@@ -4863,6 +4865,7 @@ Recent runs
 Recent shell frame timings with p50 / p95 / p99 (build time and frame interval)
 Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface.
 Recently used apps listed under the pinned ones before you type
+Recitation cancelled
 Recite an ayah, a range or a whole surah (the reader follows along)
 Reciter
 Reciting
@@ -6294,9 +6297,14 @@ The provider returned no translation
 The public IP endpoint must be an http(s) URL
 The reader shows the Prophet's words first; the chain opens with a tap
 The ready-made launcher looks (Classic, Grid, Beacon) and which one is applied
+The recitation download is incomplete or is not an MP3 file
+The recitation needs the downloaded Qur'an index
+The recitation timing could not be matched to the recording
+The recitation timing could not be read: {error}
 The recorder saved nothing
 The recording already finished
 The recording did not start in time
+The recording ended before this ayah
 The recording ended by itself
 The recording thread crashed
 The release does not contain exactly one executable installer.
@@ -7178,7 +7186,6 @@ Who installed an app, the exact removal command and its leftovers (changes nothi
 Whoever strives, succeeds.
 Whoever you are responsible for, never deceive or neglect them.
 Whole output
-Whose recitation plays; each ayah is downloaded once from cdn.islamic.network and kept
 Whose sound is recorded as system sound
 Wi-Fi
 Wi-Fi and wired connectivity
@@ -7260,6 +7267,7 @@ Written to Mandara's {compositor} drop-in; “Your config” keeps your own sett
 Wrong passphrase
 Wrong password
 YYYY-MM-DD (empty: next New Year)
+Yasser Al-Dossary
 Ye were not made to live like unto brutes, but for pursuit of virtue and of knowledge.
 Year
 Year in dots
