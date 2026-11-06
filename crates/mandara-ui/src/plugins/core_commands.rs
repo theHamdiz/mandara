@@ -172,6 +172,7 @@ pub fn register(r: &mut PluginRegistry) {
     r.command(
         core,
         CommandSpec::new("shell state", mandara_i18n::tk("What is open: panel, sidebar, launcher, power menu, wallpaper picker; whether the launcher opens on hover"), |_, cx| {
+            let desktop_editor_ready = crate::desktop_text::input_ready(cx);
             let s = shell(cx).read(cx);
             let cfg = config(cx).read(cx).snapshot();
             Ok(json!({
@@ -186,6 +187,7 @@ pub fn register(r: &mut PluginRegistry) {
                 "wallpaper_picker": s.wallpaper_open,
                 "dock": cfg.dock_enabled(),
                 "launcher_on_hover": cfg.launcher_hover_enabled(),
+                "desktop_editor_ready": desktop_editor_ready,
             }))
         })
         .example("shell state"),

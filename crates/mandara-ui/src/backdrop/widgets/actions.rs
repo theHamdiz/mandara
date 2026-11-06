@@ -13,9 +13,11 @@ use std::fmt;
 pub enum Action {
     /// Check or uncheck a to-do.
     Todo(u64),
-    /// Open the to-do panel to add one.
+    /// Edit a task directly on its desktop widget.
+    TodoEdit(u64),
+    /// Add a task directly on its desktop widget.
     TodoAdd,
-    /// Open the notes panel (on a note, by title).
+    /// Edit a desktop note (by title).
     Note(String),
     /// Start or pause the focus timer; skip the phase; reset it.
     Pomodoro,
@@ -51,10 +53,17 @@ pub enum Action {
     QuranContinue,
 }
 
+impl Action {
+    pub fn edits_text(&self) -> bool {
+        matches!(self, Self::TodoEdit(_) | Self::TodoAdd | Self::Note(_))
+    }
+}
+
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Action::Todo(id) => write!(f, "todo:{id}"),
+            Action::TodoEdit(id) => write!(f, "todo-edit:{id}"),
             Action::TodoAdd => f.write_str("todo-add"),
             Action::Note(t) if t.is_empty() => f.write_str("note"),
             Action::Note(t) => write!(f, "note:{t}"),
@@ -87,6 +96,7 @@ impl std::str::FromStr for Action {
         let need = |a: &str| if a.is_empty() { Err(format!("{verb} needs an argument ({verb}:…)")) } else { Ok(a.to_string()) };
         Ok(match verb {
             "todo" => Action::Todo(arg.parse().map_err(|_| format!("not a to-do id: {arg:?}"))?),
+            "todo-edit" => Action::TodoEdit(arg.parse().map_err(|_| format!("not a to-do id: {arg:?}"))?),
             "todo-add" => Action::TodoAdd,
             "note" => Action::Note(arg.to_string()),
             "pomodoro" => Action::Pomodoro,
@@ -124,6 +134,7 @@ mod tests {
     fn actions_round_trip_through_text() {
         let all = [
             Action::Todo(42),
+            Action::TodoEdit(42),
             Action::TodoAdd,
             Action::Note(String::new()),
             Action::Note("Ideas".into()),

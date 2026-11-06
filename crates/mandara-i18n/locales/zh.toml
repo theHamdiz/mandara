@@ -8735,3 +8735,10 @@
 "Cosmic neon green and cyan on deep indigo (light variant derived)." = "深靛蓝底色上的宇宙霓虹绿与青色，浅色版本由此配色衍生。"
 "Warm peach and mint on near-black (light variant derived)." = "近黑底色上的暖桃色与薄荷色，浅色版本由此配色衍生。"
 "Deep midnight navy with pale citrine, soft lavender and mint." = "深邃的午夜海军蓝，搭配淡黄水晶色、柔和的薰衣草色与薄荷色。"
+
+# Desktop text editing
+"A task needs text after its list name." = "请在列表名称后输入任务内容。"
+"Couldn't load: {error}" = "无法加载：{error}"
+"Couldn't save: {error}" = "无法保存：{error}"
+"This item changed elsewhere. Your text is still here." = "此项目已在其他位置更改。您的文本仍保留在这里。"
+"This item was removed. Your text is still here." = "此项目已被移除。您的文本仍保留在这里。"

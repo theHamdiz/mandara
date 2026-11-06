@@ -736,6 +736,9 @@ pub fn enter_on(output: Option<&str>, cx: &mut App) {
             .detach();
         return;
     }
+    if !crate::desktop_text::finish(cx) {
+        return;
+    }
     if active(cx) {
         return;
     }
@@ -1164,6 +1167,8 @@ pub fn register(r: &mut PluginRegistry) {
         .arg(ArgSpec::required("widget", ArgKind::String, tk("widget id (config get /desktop/widgets/items)")))
         .arg(ArgSpec::required("action", ArgKind::String, tk("todo:<id>, toggle:<wifi|bluetooth|dnd|night-light|keep-awake|dark|mute>, media:<play-pause|next|previous>, launch:<app>, open:<path>, level:<volume|brightness>:<0-1>, pomodoro, next, search…")))
         .example("desktop widgets press toggles-1 toggle:dnd")
+        .example("desktop widgets press todo-1 todo-add")
+        .example("desktop widgets press todo-1 todo-edit:3")
         .example("desktop widgets press todo-1 todo:3"),
     );
     r.command(

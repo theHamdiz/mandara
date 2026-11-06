@@ -8398,3 +8398,10 @@
 "Cosmic neon green and cyan on deep indigo (light variant derived)." = "Kijani cha neon na samawati nyangavu kwenye nili iliyokolea; toleo angavu limetokana na rangi hizi."
 "Warm peach and mint on near-black (light variant derived)." = "Rangi ya pichi yenye joto na mnanaa kwenye mandharinyuma karibu nyeusi; toleo angavu limetokana na rangi hizi."
 "Deep midnight navy with pale citrine, soft lavender and mint." = "Buluu ya usiku iliyokolea pamoja na sitrini hafifu, lavenda laini na mnanaa."
+
+# Desktop text editing
+"A task needs text after its list name." = "Andika maelezo ya jukumu baada ya jina la orodha yake."
+"Couldn't load: {error}" = "Imeshindwa kupakia: {error}"
+"Couldn't save: {error}" = "Imeshindikana kuhifadhi: {error}"
+"This item changed elsewhere. Your text is still here." = "Kipengee hiki kimebadilishwa mahali pengine. Maandishi yako bado yako hapa."
+"This item was removed. Your text is still here." = "Kipengee hiki kimeondolewa. Maandishi yako bado yako hapa."

@@ -8493,3 +8493,11 @@
 "Cosmic neon green and cyan on deep indigo (light variant derived)." = "짙은 남색 위의 우주빛 네온 녹색과 시안. 밝은 변형은 이 배색에서 파생됩니다."
 "Warm peach and mint on near-black (light variant derived)." = "검정에 가까운 배경 위의 따뜻한 복숭아색과 민트색. 밝은 변형은 이 배색에서 파생됩니다."
 "Deep midnight navy with pale citrine, soft lavender and mint." = "깊은 한밤의 남색에 옅은 시트린, 부드러운 라벤더와 민트."
+
+# Desktop text editing
+"A task needs text after its list name." = "목록 이름 뒤에 할 일 내용을 입력하세요."
+"Add a task…" = "할 일 추가…"
+"Couldn't load: {error}" = "불러오지 못했습니다: {error}"
+"Couldn't save: {error}" = "저장하지 못했습니다: {error}"
+"This item changed elsewhere. Your text is still here." = "이 항목이 다른 곳에서 변경되었습니다. 입력한 텍스트는 여기에 그대로 남아 있습니다."
+"This item was removed. Your text is still here." = "이 항목이 삭제되었습니다. 입력한 텍스트는 여기에 그대로 남아 있습니다."

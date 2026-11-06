@@ -8740,3 +8740,10 @@
 "Cosmic neon green and cyan on deep indigo (light variant derived)." = "Космические неоновые зелёный и голубой на глубоком индиго. Светлая версия создана на их основе."
 "Warm peach and mint on near-black (light variant derived)." = "Тёплые персиковый и мятный на почти чёрном фоне. Светлая версия создана на их основе."
 "Deep midnight navy with pale citrine, soft lavender and mint." = "Глубокий полуночный синий с бледным цитрином, нежной лавандой и мятой."
+
+# Desktop text editing
+"A task needs text after its list name." = "После названия списка нужен текст задачи."
+"Couldn't load: {error}" = "Не удалось загрузить: {error}"
+"Couldn't save: {error}" = "Не удалось сохранить: {error}"
+"This item changed elsewhere. Your text is still here." = "Этот элемент изменён в другом месте. Ваш текст всё ещё здесь."
+"This item was removed. Your text is still here." = "Этот элемент удалён. Ваш текст всё ещё здесь."

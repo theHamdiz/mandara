@@ -8741,3 +8741,10 @@
 "Cosmic neon green and cyan on deep indigo (light variant derived)." = "深い藍色に宇宙を思わせるネオングリーンとシアン。明色版はこの配色から派生。"
 "Warm peach and mint on near-black (light variant derived)." = "黒に近い背景に温かみのあるピーチとミント。明色版はこの配色から派生。"
 "Deep midnight navy with pale citrine, soft lavender and mint." = "真夜中の深い紺色に、淡いシトリン、柔らかなラベンダー、ミント。"
+
+# Desktop text editing
+"A task needs text after its list name." = "リスト名の後にタスクの内容を入力してください。"
+"Couldn't load: {error}" = "読み込めませんでした: {error}"
+"Couldn't save: {error}" = "保存できませんでした：{error}"
+"This item changed elsewhere. Your text is still here." = "この項目は別の場所で変更されました。入力したテキストはここに残っています。"
+"This item was removed. Your text is still here." = "この項目は削除されました。入力したテキストはここに残っています。"

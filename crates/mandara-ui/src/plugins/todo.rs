@@ -11,7 +11,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px, size,
 };
 use mandara_core::ToGpui;
-use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
+use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Output, Zone};
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
 
@@ -32,10 +32,14 @@ pub const SORT_KEY: &str = "sort";
 pub const BAR_COUNT_KEY: &str = "bar_count";
 pub const DEFAULT_SHOW_COMPLETED: bool = true;
 
+/// A visible keyboard rim distinguishes the retry control from its error text.
+const RETRY_RIM_PX: f32 = 2.0;
+
 /// Element-id namespaces of one list surface (static: no per-row
 /// `format!` on every render).
 struct Ids {
     row: &'static str,
+    retry: &'static str,
     check: &'static str,
     remove: &'static str,
     more: &'static str,
@@ -53,6 +57,7 @@ struct Ids {
 
 const PANEL_IDS: Ids = Ids {
     row: "panel-todo",
+    retry: "panel-todo-save-retry",
     check: "panel-check",
     remove: "panel-rm",
     more: "panel-more",
@@ -69,6 +74,7 @@ const PANEL_IDS: Ids = Ids {
 };
 const CARD_IDS: Ids = Ids {
     row: "card-todo",
+    retry: "card-todo-save-retry",
     check: "card-check",
     remove: "card-rm",
     more: "card-more",
@@ -623,6 +629,12 @@ fn list_rows(book: &TodoBook, list: &TodoList, prefs: Prefs, palette: &MandaraPa
 /// The body shared by the card and the panel.
 #[allow(clippy::too_many_arguments)]
 fn list(p: &Productivity, ui: &Ui, field: &Entity<TextField>, name_field: &Entity<TextField>, palette: &MandaraPalette, prefs: Prefs, ids: &'static Ids, reveal_cx: Option<&PanelCx>, window: &mut Window) -> AnyElement {
+    if !p.ready {
+        return div().text_color(palette.on_surface_variant.hsla()).child(
+            p.load_error.as_ref().map_or_else(|| mandara_i18n::t("Loading…").to_owned(), |error| mandara_i18n::tf("Couldn't load: {error}", &[("error", error)]))
+        ).into_any_element();
+    }
+
     let book = &p.book;
     let filter = p.filter;
     let (open, done) = book.counts(filter);
@@ -729,6 +741,24 @@ fn list(p: &Productivity, ui: &Ui, field: &Entity<TextField>, name_field: &Entit
         })
         .when(hidden > 0, |el| el.child(div().px(px(MORE_PAD_X_PX)).pt(px(MORE_PAD_TOP_PX)).text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(mandara_i18n::tf("+{count} more", &[("count", &hidden)]))));
     let mut blocks: Vec<AnyElement> = vec![head.into_any_element(), switcher.into_any_element()];
+    if let Some(error) = &p.todo_error {
+        let focus_color = palette.primary.hsla();
+        blocks.push(div().flex().flex_col().gap(px(tokens::XS))
+            .child(div().text_color(palette.urgent_coral.hsla()).child(mandara_i18n::tf("Couldn't save: {error}", &[("error", error)])))
+            .child(div().id(ids.retry).tab_index(0).role(gpui::accesskit::Role::Button)
+                .aria_label(mandara_i18n::t("Try again")).cursor_pointer().rounded(px(tokens::SM)).p(px(tokens::XS))
+                .border(px(RETRY_RIM_PX)).border_color(palette.surface_container.hsla())
+                .focus_visible(move |style| style.border_color(focus_color))
+                .text_color(palette.primary.hsla()).child(mandara_i18n::t("Try again"))
+                .on_click(|_, _, cx| productivity(cx).update(cx, |p, cx| p.retry_todos(cx)))
+                .on_key_down(|event, _, cx| {
+                    if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                        cx.stop_propagation();
+                        productivity(cx).update(cx, |p, cx| p.retry_todos(cx));
+                    }
+                }))
+            .into_any_element());
+    }
     blocks.extend(name_row.map(IntoElement::into_any_element));
     blocks.extend(menu_el);
     blocks.push(field.clone().into_any_element());
@@ -826,6 +856,28 @@ fn err(e: crate::todo_lists::ListError) -> String {
     mandara_i18n::t(e.message()).to_string()
 }
 
+/// Mutation replies wait for the coalesced revision's actual atomic write.
+fn mutation_command(
+    path: &'static str,
+    summary: &'static str,
+    handler: impl Fn(&mandara_plugins::Args, &mut App) -> Result<serde_json::Value, String> + 'static,
+) -> CommandSpec {
+    CommandSpec::new_output(path, summary, move |args, cx| {
+        if !productivity(cx).read(cx).ready { return Err(mandara_i18n::t("Loading…").to_owned()); }
+        let value = handler(args, cx)?;
+        let pending = productivity(cx).update(cx, |p, cx| p.persist_todos(cx))?;
+        let (reply, result) = async_channel::bounded(1);
+        mandara_services::runtime::spawn("todo-command", async move {
+            let result = match pending.recv().await {
+                Ok(result) => result.map(|()| value.to_string()),
+                Err(error) => Err(error.to_string()),
+            };
+            let _ = reply.send(result).await;
+        });
+        Ok(Output::Pending(result))
+    })
+}
+
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, mandara_i18n::tk("To-do"), mandara_i18n::tk("Tasks grouped into lists, for the sidebar and bar"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let bar = fn_view(
@@ -875,7 +927,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("todo add", mandara_i18n::tk("Add a task; a leading #List files it there (the list is created if missing)"), |a, cx| {
+        mutation_command("todo add", mandara_i18n::tk("Add a task; a leading #List files it there (the list is created if missing)"), |a, cx| {
             let text = a.rest(0);
             let list = target_list(cx);
             let (id, list) = productivity(cx).update(cx, |p, cx| p.add_todo(&text, list, cx)).ok_or("task text is empty")?;
@@ -890,7 +942,7 @@ pub fn register(r: &mut PluginRegistry) {
     for (name, summary, done) in [("todo done", mandara_i18n::tk("Mark a task complete"), true), ("todo undo", mandara_i18n::tk("Mark a task open again"), false)] {
         r.command(
             ID,
-            CommandSpec::new(name, summary, move |a, cx| {
+            mutation_command(name, summary, move |a, cx| {
                 let id = a.str(0)?.parse::<u64>().map_err(|_| "id must be a number")?;
                 productivity(cx).update(cx, |p, cx| p.set_done(id, done, cx)).then_some(json!({ "id": id, "done": done })).ok_or(format!("no task {id}"))
             })
@@ -899,7 +951,7 @@ pub fn register(r: &mut PluginRegistry) {
     }
     r.command(
         ID,
-        CommandSpec::new("todo move", mandara_i18n::tk("Move a task to another list"), |a, cx| {
+        mutation_command("todo move", mandara_i18n::tk("Move a task to another list"), |a, cx| {
             let id = a.str(0)?.parse::<u64>().map_err(|_| "id must be a number")?;
             let key = a.rest(1);
             let list = list_arg(&productivity(cx).read(cx).book, &key)?;
@@ -912,7 +964,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("todo remove", mandara_i18n::tk("Delete a task"), |a, cx| {
+        mutation_command("todo remove", mandara_i18n::tk("Delete a task"), |a, cx| {
             let id = a.str(0)?.parse::<u64>().map_err(|_| "id must be a number")?;
             productivity(cx).update(cx, |p, cx| p.remove_todo(id, cx)).then_some(json!({ "removed": id })).ok_or(format!("no task {id}"))
         })
@@ -920,7 +972,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("todo clear-done", mandara_i18n::tk("Delete completed tasks (every list, or one)"), |a, cx| {
+        mutation_command("todo clear-done", mandara_i18n::tk("Delete completed tasks (every list, or one)"), |a, cx| {
             let filter = match a.get(0) {
                 Some(_) => Filter::List(list_arg(&productivity(cx).read(cx).book, &a.rest(0))?),
                 None => Filter::All,
@@ -944,7 +996,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("todo lists add", mandara_i18n::tk("Make a list (--color tone|hue:<deg>, --icon name)"), |a, cx| {
+        mutation_command("todo lists add", mandara_i18n::tk("Make a list (--color tone|hue:<deg>, --icon name)"), |a, cx| {
             let (words, color) = crate::sidebar_tabs::take_flag(&a.0, "--color");
             let (words, icon) = crate::sidebar_tabs::take_flag(&words, "--icon");
             let name = words.join(" ");
@@ -957,7 +1009,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("todo lists rename", mandara_i18n::tk("Rename a list (the Inbox too)"), |a, cx| {
+        mutation_command("todo lists rename", mandara_i18n::tk("Rename a list (the Inbox too)"), |a, cx| {
             let list = list_arg(&productivity(cx).read(cx).book, a.str(0)?)?;
             let name = a.rest(1);
             productivity(cx).update(cx, |p, cx| p.edit_lists(cx, |b| b.rename_list(list, &name))).map_err(err)?;
@@ -969,7 +1021,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("todo lists color", mandara_i18n::tk("Recolour a list"), |a, cx| {
+        mutation_command("todo lists color", mandara_i18n::tk("Recolour a list"), |a, cx| {
             let list = list_arg(&productivity(cx).read(cx).book, a.str(0)?)?;
             let color = a.str(1)?.to_string();
             productivity(cx).update(cx, |p, cx| p.edit_lists(cx, |b| b.recolor_list(list, &color))).map_err(err)?;
@@ -981,7 +1033,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("todo lists move", mandara_i18n::tk("Move a list to a 1-based position"), |a, cx| {
+        mutation_command("todo lists move", mandara_i18n::tk("Move a list to a 1-based position"), |a, cx| {
             let list = list_arg(&productivity(cx).read(cx).book, a.str(0)?)?;
             let to = usize::try_from(a.int(1)?.max(1) - 1).unwrap_or(0);
             let at = productivity(cx).update(cx, |p, cx| p.edit_lists(cx, |b| b.move_list(list, to))).map_err(err)?;
@@ -993,7 +1045,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("todo lists remove", mandara_i18n::tk("Delete a list; its tasks move to the Inbox unless `delete` is given"), |a, cx| {
+        mutation_command("todo lists remove", mandara_i18n::tk("Delete a list; its tasks move to the Inbox unless `delete` is given"), |a, cx| {
             let list = list_arg(&productivity(cx).read(cx).book, a.str(0)?)?;
             let how = if a.get(1) == Some("delete") { OnDelete::DeleteTasks } else { OnDelete::MoveToInbox };
             let n = productivity(cx).update(cx, |p, cx| p.edit_lists(cx, |b| b.remove_list(list, how))).map_err(err)?;
@@ -1006,7 +1058,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("todo lists show", mandara_i18n::tk("Show one list (or all) in the card and panel"), |a, cx| {
+        mutation_command("todo lists show", mandara_i18n::tk("Show one list (or all) in the card and panel"), |a, cx| {
             let key = a.rest(0);
             let p = productivity(cx);
             let filter = p.read(cx).book.filter_for(&key).ok_or_else(|| err(crate::todo_lists::ListError::NoSuchList))?;

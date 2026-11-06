@@ -8494,3 +8494,11 @@
 "Evening over Stanley Bridge: coral, apricot and lavender over a plum sea." = "স্ট্যানলি সেতুতে সন্ধ্যা: বরইরঙা সমুদ্রের ওপর প্রবাল, খুবানি আর ল্যাভেন্ডারের ছটা।"
 "Night and Day." = "Night ও Day রূপ।"
 "Warm peach and mint on near-black (light variant derived)." = "প্রায় কালো পটভূমিতে উষ্ণ পিচ আর পুদিনার রং (এ থেকেই হালকা সংস্করণ তৈরি)।"
+
+# Desktop text editing
+"A task needs text after its list name." = "তালিকার নামের পরে কাজের বিবরণ লিখুন।"
+"Add a task…" = "একটি কাজ যোগ করুন…"
+"Couldn't load: {error}" = "লোড করা যায়নি: {error}"
+"Couldn't save: {error}" = "সংরক্ষণ করা যায়নি: {error}"
+"This item changed elsewhere. Your text is still here." = "এই আইটেমটি অন্য কোথাও পরিবর্তন করা হয়েছে। আপনার লেখা এখনও এখানে আছে।"
+"This item was removed. Your text is still here." = "এই আইটেমটি সরিয়ে দেওয়া হয়েছে। আপনার লেখা এখনও এখানে আছে।"

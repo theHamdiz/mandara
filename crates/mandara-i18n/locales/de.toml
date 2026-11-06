@@ -8738,3 +8738,10 @@
 "Evening over Stanley Bridge: coral, apricot and lavender over a plum sea." = "Abend über der Stanley-Brücke: Koralle, Aprikose und Lavendel über einem pflaumenfarbenen Meer."
 "Night and Day." = "Nacht und Tag."
 "Warm peach and mint on near-black (light variant derived)." = "Warme Pfirsichtöne und Mint auf fast schwarzem Grund (helle Variante daraus abgeleitet)."
+
+# Desktop text editing
+"A task needs text after its list name." = "Eine Aufgabe benötigt Text nach dem Listennamen."
+"Couldn't load: {error}" = "Laden fehlgeschlagen: {error}"
+"Couldn't save: {error}" = "Speichern fehlgeschlagen: {error}"
+"This item changed elsewhere. Your text is still here." = "Dieser Eintrag wurde an anderer Stelle geändert. Dein Text ist noch hier."
+"This item was removed. Your text is still here." = "Dieser Eintrag wurde entfernt. Dein Text ist noch hier."

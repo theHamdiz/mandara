@@ -4,16 +4,25 @@
 //! change made anywhere shows up everywhere at once.
 
 use std::time::{Duration, Instant};
+use std::collections::BTreeMap;
+
+mod notes_worker;
+mod note_edit;
+mod note_flush;
+mod notes;
+mod todo_writer;
+pub use notes_worker::NoteReply;
+use notes_worker::NotesWorker;
 
 use gpui::{App, AppContext as _, Context, Entity, Global, Task};
 use mandara_i18n::{t, tf};
 use serde::{Deserialize, Serialize};
 
 use crate::state::config;
-use crate::notes_store::{LegacyNote, NoteStore};
+use crate::notes_store::{LegacyNote, NoteStore, NotesSnapshot};
 use crate::todo_lists::{Filter, ListError, TodoBook, TodoList, parse_quick_add};
 
-/// Notes / to-dos are written this long after the last edit (disk debounce).
+/// Live edits share this debounce; explicit saves and command receipts flush sooner.
 const SAVE_DEBOUNCE: Duration = Duration::from_millis(300);
 /// The countdown ticks on whole seconds.
 const SECOND: Duration = Duration::from_secs(1);
@@ -174,19 +183,33 @@ pub struct Productivity {
     /// The list the to-do card and panel show (remembered).
     pub filter: Filter,
     /// Notes: Markdown files in topic folders (see [`crate::notes_store`]).
-    pub notes: NoteStore,
+    pub notes: NotesSnapshot,
     /// Notes typed but not yet written to their files.
-    notes_dirty: Vec<u64>,
+    notes_dirty: BTreeMap<u64, u64>,
+    notes_generation: u64,
+    notes_submitted: BTreeMap<u64, u64>,
+    notes_tasks: BTreeMap<u64, note_edit::TaskPatches>,
+    notes_flush: note_flush::NoteFlush,
+    notes_sequence: u64,
+    notes_applied: u64,
+    notes_worker: Option<NotesWorker>,
+    notes_changes: async_channel::Sender<()>,
+    notes_switching: bool,
+    pub(crate) ready: bool,
+    pub(crate) load_error: Option<String>,
+    pub(crate) todo_error: Option<String>,
+    pub(crate) notes_error: Option<String>,
     notes_task: Option<Task<()>>,
     /// Legacy notes that could not be written out (kept in the JSON).
     legacy_notes: Vec<LegacyNote>,
     /// Watches the notes folder so external edits show up live.
-    notes_watch: Option<(notify::RecommendedWatcher, Task<()>)>,
+    notes_watch: Option<Task<()>>,
     /// The topic the notes card and panel show (`None` = all).
     pub notes_topic: Option<u64>,
     pub pomodoro: Pomodoro,
     next_id: u64,
     save_task: Option<Task<()>>,
+    todo_writes: todo_writer::TodoWrites,
     tick_task: Option<Task<()>>,
 }
 
@@ -199,45 +222,16 @@ fn now_unix() -> i64 {
 }
 
 impl Productivity {
-    /// Loads everything; the flag asks for a save (notes just moved out of
-    /// the JSON into files).
-    fn load(rules: PomodoroRules, notes_root: std::path::PathBuf) -> (Self, bool) {
-        let saved: Saved = std::fs::read(store_path()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
-        let next_id = saved.todos.iter().map(|t| t.id).max().unwrap_or(0) + 1;
-        let mut notes = NoteStore::open(&notes_root);
-        let had_legacy = !saved.notes.is_empty();
-        let legacy_notes = match notes.migrate(&saved.notes) {
-            Ok(0) => Vec::new(),
-            Ok(n) => {
-                tracing::info!("moved {n} notes into {}", notes.root.display());
-                Vec::new()
-            }
-            Err(err) => {
-                tracing::error!("moving notes into {}: {err:#} (kept in productivity.json)", notes.root.display());
-                saved.notes
-            }
-        };
-        let book = TodoBook::new(saved.lists, saved.todos);
-        let filter = match saved.filter {
-            Filter::List(id) if book.list(id).is_none() => Filter::All,
-            f => f,
-        };
-        let resave = had_legacy && legacy_notes.is_empty();
-        let this = Self {
-            book,
-            filter,
-            notes,
-            notes_dirty: Vec::new(),
-            notes_task: None,
-            legacy_notes,
-            notes_watch: None,
-            notes_topic: None,
+    fn empty(rules: PomodoroRules, root: std::path::PathBuf, changes: async_channel::Sender<()>) -> Self {
+        Self {
+            book: TodoBook::new(Vec::new(), Vec::new()), filter: Filter::All,
+            notes: NotesSnapshot::empty(root), notes_dirty: BTreeMap::new(),
+            notes_generation: 0, notes_submitted: BTreeMap::new(), notes_tasks: BTreeMap::new(), notes_flush: note_flush::NoteFlush::default(), notes_sequence: 0, notes_applied: 0,
+            notes_worker: None, notes_changes: changes, notes_switching: false, ready: false, load_error: None, todo_error: None, notes_error: None,
+            notes_task: None, legacy_notes: Vec::new(), notes_watch: None, notes_topic: None,
             pomodoro: Pomodoro { phase: Phase::Focus, ends_at: None, paused_left: rules.focus, length: rules.focus, completed: 0 },
-            next_id,
-            save_task: None,
-            tick_task: None,
-        };
-        (this, resave)
+            next_id: 1, save_task: None, todo_writes: todo_writer::TodoWrites::default(), tick_task: None,
+        }
     }
 
     fn id(&mut self) -> u64 {
@@ -245,28 +239,12 @@ impl Productivity {
         self.next_id - 1
     }
 
-    /// Persists to disk shortly after the last change (atomic write).
-    fn save(&mut self, cx: &mut Context<Self>) {
-        cx.notify();
-        let json = serde_json::to_vec_pretty(&Saved { lists: self.book.lists.clone(), todos: self.book.todos.clone(), notes: self.legacy_notes.clone(), filter: self.filter });
-        self.save_task = Some(cx.spawn(async move |_, cx| {
-            cx.background_executor().timer(SAVE_DEBOUNCE).await;
-            let Ok(json) = json else { return };
-            let path = store_path();
-            if let Some(dir) = path.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            if let Err(err) = mandara_config::write_atomic(&path, &json) {
-                tracing::error!("saving notes / to-dos: {err:#}");
-            }
-        }));
-    }
-
     // ── To-dos ──────────────────────────────────────────────────────────
 
     /// Adds a task to `list`; a leading `#Topic` in `text` picks (or
     /// makes) that list instead. Returns the task id and its list.
     pub fn add_todo(&mut self, text: &str, list: u64, cx: &mut Context<Self>) -> Option<(u64, u64)> {
+        if !self.ready { return None; }
         let (topic, body) = parse_quick_add(text);
         if body.is_empty() {
             return None;
@@ -282,6 +260,7 @@ impl Productivity {
     }
 
     pub fn set_done(&mut self, id: u64, done: bool, cx: &mut Context<Self>) -> bool {
+        if !self.ready { return false; }
         let Some(t) = self.book.todos.iter_mut().find(|t| t.id == id) else { return false };
         t.done = done;
         self.save(cx);
@@ -289,6 +268,7 @@ impl Productivity {
     }
 
     pub fn remove_todo(&mut self, id: u64, cx: &mut Context<Self>) -> bool {
+        if !self.ready { return false; }
         let before = self.book.todos.len();
         self.book.todos.retain(|t| t.id != id);
         let removed = before != self.book.todos.len();
@@ -300,6 +280,7 @@ impl Productivity {
 
     /// Deletes the completed tasks the filter shows.
     pub fn clear_done(&mut self, filter: Filter, cx: &mut Context<Self>) -> usize {
+        if !self.ready { return 0; }
         let before = self.book.todos.len();
         self.book.todos.retain(|t| !(t.done && filter.shows(t)));
         self.save(cx);
@@ -312,6 +293,7 @@ impl Productivity {
 
     /// Runs a list edit and saves when it succeeds.
     pub fn edit_lists<T>(&mut self, cx: &mut Context<Self>, f: impl FnOnce(&mut TodoBook) -> Result<T, ListError>) -> Result<T, ListError> {
+        if !self.ready { return Err(ListError::NoSuchList); }
         let out = f(&mut self.book)?;
         if let Filter::List(id) = self.filter
             && self.book.list(id).is_none()
@@ -323,6 +305,7 @@ impl Productivity {
     }
 
     pub fn set_filter(&mut self, filter: Filter, cx: &mut Context<Self>) {
+        if !self.ready { return; }
         if self.filter != filter {
             self.filter = filter;
             self.save(cx);
@@ -330,168 +313,6 @@ impl Productivity {
     }
 
     // ── Notes ───────────────────────────────────────────────────────────
-
-    /// Notes changed: redraw, and write typed text shortly after the last
-    /// keystroke.
-    fn notes_changed(&mut self, cx: &mut Context<Self>) {
-        cx.notify();
-        if self.notes_dirty.is_empty() {
-            return;
-        }
-        self.notes_task = Some(cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(SAVE_DEBOUNCE).await;
-            let _ = this.update(cx, |p, _| p.flush_notes());
-        }));
-    }
-
-    /// Writes every typed-but-unsaved note now.
-    pub fn flush_notes(&mut self) {
-        for id in std::mem::take(&mut self.notes_dirty) {
-            let Some(text) = self.notes.note(id).map(|n| n.text.clone()) else { continue };
-            if text.trim().is_empty() && self.notes.note(id).is_some_and(|n| n.path.is_none()) {
-                continue;
-            }
-            if let Err(err) = self.notes.write(id, &text) {
-                tracing::error!("saving note {id}: {err:#}");
-            }
-        }
-    }
-
-    /// Adds a note to `topic`; a leading `#Topic` picks (or makes) that
-    /// topic instead. Returns the note id.
-    pub fn add_note(&mut self, text: &str, topic: u64, cx: &mut Context<Self>) -> anyhow::Result<u64> {
-        let (tag, body) = parse_quick_add(text);
-        let topic = match tag {
-            Some(tag) => self.notes.topic_for(tag),
-            None => topic,
-        };
-        let id = self.notes.create(topic, body)?;
-        cx.notify();
-        Ok(id)
-    }
-
-    /// Replaces a note's text and writes it at once; an emptied note is
-    /// deleted.
-    pub fn set_note(&mut self, id: u64, text: &str, cx: &mut Context<Self>) -> bool {
-        if self.notes.note(id).is_none() {
-            return false;
-        }
-        let ok = if text.trim().is_empty() { self.notes.delete(id).map(|_| ()) } else { self.notes.write(id, text) };
-        if let Err(err) = ok {
-            tracing::error!("saving note {id}: {err:#}");
-        }
-        cx.notify();
-        true
-    }
-
-    /// Live edit from the editor: text in place, written after a pause.
-    pub fn edit_note(&mut self, id: u64, text: &str, cx: &mut Context<Self>) {
-        let Some(n) = self.notes.notes.iter_mut().find(|n| n.id == id) else { return };
-        if n.text != text {
-            n.text = text.to_string();
-            n.updated = now_unix();
-            if !self.notes_dirty.contains(&id) {
-                self.notes_dirty.push(id);
-            }
-            self.notes_changed(cx);
-        }
-    }
-
-    /// Editing of `id` ended: write it, rename its file after its title,
-    /// drop it when empty.
-    pub fn settle_note(&mut self, id: u64, cx: &mut Context<Self>) {
-        self.flush_notes();
-        if let Err(err) = self.notes.settle(id) {
-            tracing::warn!("tidying note {id}: {err:#}");
-        }
-        cx.notify();
-    }
-
-    /// Drops notes left empty (e.g. a new note closed without typing).
-    /// Deletes abandoned empty drafts, sparing `keep` (the note just
-    /// opened: a new one is empty until you type).
-    pub fn prune_empty(&mut self, keep: Option<u64>, cx: &mut Context<Self>) {
-        let empty = self.notes.empty_drafts(keep);
-        for id in &empty {
-            let _ = self.notes.delete(*id);
-        }
-        if !empty.is_empty() {
-            cx.notify();
-        }
-    }
-
-    pub fn remove_note(&mut self, id: u64, cx: &mut Context<Self>) -> bool {
-        self.notes_dirty.retain(|d| *d != id);
-        let removed = self.notes.delete(id).unwrap_or_else(|err| {
-            tracing::error!("deleting note {id}: {err:#}");
-            false
-        });
-        cx.notify();
-        removed
-    }
-
-    /// Runs a store edit (topics, moves) and redraws.
-    pub fn edit_notes<T>(&mut self, cx: &mut Context<Self>, f: impl FnOnce(&mut NoteStore) -> anyhow::Result<T>) -> anyhow::Result<T> {
-        self.flush_notes();
-        let out = f(&mut self.notes);
-        if let Some(t) = self.notes_topic
-            && self.notes.topic(t).is_none()
-        {
-            self.notes_topic = None;
-        }
-        cx.notify();
-        out
-    }
-
-    pub fn set_notes_topic(&mut self, topic: Option<u64>, cx: &mut Context<Self>) {
-        self.notes_topic = topic;
-        cx.notify();
-    }
-
-    /// Re-reads the notes folder (external edits), keeping unsaved text.
-    fn rescan_notes(&mut self, cx: &mut Context<Self>) {
-        let keep = self.notes_dirty.clone();
-        self.notes.rescan(&keep);
-        cx.notify();
-    }
-
-    /// Follows the `storage_folder` setting and (re)starts the watcher.
-    fn ensure_notes_root(&mut self, root: std::path::PathBuf, cx: &mut Context<Self>) {
-        if self.notes.root != root {
-            self.flush_notes();
-            self.notes = NoteStore::open(&root);
-            self.notes_topic = None;
-            self.notes_watch = None;
-            cx.notify();
-        }
-        if self.notes_watch.is_some() {
-            return;
-        }
-        use notify::Watcher as _;
-        let (tx, rx) = async_channel::bounded::<()>(1);
-        let watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-            if res.is_ok_and(|e| !e.kind.is_access()) {
-                let _ = tx.try_send(());
-            }
-        });
-        let mut watcher = match watcher {
-            Ok(w) => w,
-            Err(err) => return tracing::warn!("watching the notes folder: {err:#}"),
-        };
-        if let Err(err) = watcher.watch(&root, notify::RecursiveMode::Recursive) {
-            return tracing::warn!("watching {}: {err:#}", root.display());
-        }
-        let task = cx.spawn(async move |this, cx| {
-            while rx.recv().await.is_ok() {
-                cx.background_executor().timer(NOTES_WATCH_SETTLE).await;
-                while rx.try_recv().is_ok() {}
-                if this.update(cx, |p, cx| p.rescan_notes(cx)).is_err() {
-                    break;
-                }
-            }
-        });
-        self.notes_watch = Some((watcher, task));
-    }
 
     // ── Pomodoro ────────────────────────────────────────────────────────
 
@@ -624,12 +445,48 @@ pub fn notes_root(cfg: &mandara_config::ShellConfig) -> std::path::PathBuf {
 pub fn init(cx: &mut App) -> Entity<Productivity> {
     let rules = PomodoroRules::from_config(cx);
     let root = notes_root(&config(cx).read(cx).snapshot());
-    let entity = cx.new(|cx| {
-        let (mut p, resave) = Productivity::load(rules, root.clone());
-        p.ensure_notes_root(root, cx);
-        if resave {
-            p.save(cx);
-        }
+    let (changes, changed) = async_channel::bounded(1);
+    let entity = cx.new(|cx: &mut Context<Productivity>| {
+        let mut p = Productivity::empty(rules, root.clone(), changes.clone());
+        cx.spawn(async move |this, cx| {
+            let loaded = mandara_services::runtime::unblock(move || {
+                let mut saved = todo_writer::load_saved(&store_path())?;
+                let mut notes = NoteStore::open(&root);
+                let migrated = !saved.notes.is_empty() && notes.migrate(&saved.notes).is_ok();
+                if migrated { saved.notes.clear(); }
+                if let Err(error) = notes.watch_changes(changes) { tracing::warn!("watching notes: {error:#}"); }
+                Ok::<_, anyhow::Error>((saved, notes, migrated))
+            }).await;
+            let _ = this.update(cx, |p, cx| {
+                let (saved, notes, migrated) = match loaded {
+                    Ok(loaded) => loaded,
+                    Err(error) => {
+                        tracing::warn!("loading productivity data: {error:#}");
+                        p.load_error = Some(format!("{error:#}"));
+                        cx.notify();
+                        return;
+                    }
+                };
+                p.next_id = saved.todos.iter().map(|task| task.id).max().unwrap_or(0) + 1;
+                p.book = TodoBook::new(saved.lists, saved.todos);
+                p.filter = match saved.filter { Filter::List(id) if p.book.list(id).is_none() => Filter::All, filter => filter };
+                p.legacy_notes = saved.notes;
+                p.notes_error = notes.index_result().err().map(|error| format!("{error:#}"));
+                p.notes = notes.snapshot();
+                p.notes_worker = Some(NotesWorker::start(notes));
+                p.ready = true;
+                p.ensure_notes_root(notes_root(&config(cx).read(cx).snapshot()), cx);
+                if migrated { p.save(cx); }
+                cx.notify();
+            });
+        }).detach();
+        p.notes_watch = Some(cx.spawn(async move |this, cx| {
+            while changed.recv().await.is_ok() {
+                cx.background_executor().timer(NOTES_WATCH_SETTLE).await;
+                while changed.try_recv().is_ok() {}
+                if this.update(cx, |p, cx| p.rescan_notes(cx)).is_err() { break; }
+            }
+        }));
         cx.observe(&config(cx), |p: &mut Productivity, store, cx| {
             let root = notes_root(&store.read(cx).snapshot());
             p.ensure_notes_root(root, cx);

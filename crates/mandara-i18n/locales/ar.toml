@@ -8744,3 +8744,10 @@
 "Evening over Stanley Bridge: coral, apricot and lavender over a plum sea." = "مساء فوق كوبري ستانلي: مرجاني ومشمشي وخزامى فوق بحر بلون البرقوق."
 "Night and Day." = "نسختا Night وDay."
 "Warm peach and mint on near-black (light variant derived)." = "خوخي دافئ ونعناعي على أسود شبه خالص (مع نسخة فاتحة مشتقة)."
+
+# Desktop text editing
+"A task needs text after its list name." = "تحتاج المهمة إلى نص بعد اسم قائمتها."
+"Couldn't load: {error}" = "تعذّر التحميل: {error}"
+"Couldn't save: {error}" = "تعذر الحفظ: {error}"
+"This item changed elsewhere. Your text is still here." = "عُدّل هذا العنصر في مكان آخر. لا يزال نصك هنا."
+"This item was removed. Your text is still here." = "أُزيل هذا العنصر. لا يزال نصك هنا."

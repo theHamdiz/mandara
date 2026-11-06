@@ -8739,3 +8739,10 @@
 "Evening over Stanley Bridge: coral, apricot and lavender over a plum sea." = "Stanley Köprüsü üzerinde akşam: erik moru bir denizin üzerinde mercan, kayısı ve lavanta tonları."
 "Night and Day." = "Gece ve gündüz."
 "Warm peach and mint on near-black (light variant derived)." = "Siyaha yakın bir zemin üzerinde sıcak şeftali ve nane tonları (açık varyantı bundan türetilmiştir)."
+
+# Desktop text editing
+"A task needs text after its list name." = "Liste adından sonra görev metnini yazın."
+"Couldn't load: {error}" = "Yüklenemedi: {error}"
+"Couldn't save: {error}" = "Kaydedilemedi: {error}"
+"This item changed elsewhere. Your text is still here." = "Bu öğe başka bir yerde değiştirildi. Metniniz hâlâ burada."
+"This item was removed. Your text is still here." = "Bu öğe kaldırıldı. Metniniz hâlâ burada."

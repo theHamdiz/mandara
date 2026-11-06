@@ -8493,3 +8493,11 @@
 "Evening over Stanley Bridge: coral, apricot and lavender over a plum sea." = "Senja di atas Jembatan Stanley: koral, aprikot, dan lavender di atas laut ungu plum."
 "Night and Day." = "Malam dan siang."
 "Warm peach and mint on near-black (light variant derived)." = "Warna persik hangat dan mint di atas latar hampir hitam (varian terang diturunkan dari versi gelap)."
+
+# Desktop text editing
+"A task needs text after its list name." = "Tulis isi tugas setelah nama daftarnya."
+"Add a task…" = "Tambahkan tugas…"
+"Couldn't load: {error}" = "Tidak dapat memuat: {error}"
+"Couldn't save: {error}" = "Tidak dapat menyimpan: {error}"
+"This item changed elsewhere. Your text is still here." = "Item ini diubah di tempat lain. Teks Anda masih ada di sini."
+"This item was removed. Your text is still here." = "Item ini dihapus. Teks Anda masih ada di sini."
