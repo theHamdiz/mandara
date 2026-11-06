@@ -2690,6 +2690,7 @@ impl WgpuHeadlessRenderer {
         readback_buffer.unmap();
 
         if self.core.target_format == wgpu::TextureFormat::Bgra8Unorm {
+            // Mandara patch 13: convert channels in place without a second pixel buffer.
             for pixel in pixels.as_chunks_mut::<4>().0 {
                 pixel.swap(0, 2);
             }

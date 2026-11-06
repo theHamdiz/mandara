@@ -8470,3 +8470,5 @@
 
 "Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "اس بائنری کی تصدیق نہیں ہو سکی: {reason}۔ Mandara نصب نہیں ہوا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔"
 "Install this binary even when its published checksum is unavailable or doesn't match." = "شائع کردہ چیک سم دستیاب نہ ہو یا مطابقت نہ رکھتی ہو تب بھی یہ بائنری نصب کریں۔"
+
+"Spectrum bars" = "طیف کی سلاخیں"

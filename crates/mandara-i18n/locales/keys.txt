@@ -5684,6 +5684,7 @@ Space inside each bar item, around its content
 Spacing
 Speak the truth
 Speakers
+Spectrum bars
 Specular rim
 Speech, 1997
 Speed
