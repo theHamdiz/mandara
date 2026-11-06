@@ -8,6 +8,10 @@ About → What's new shows it too.
 
 ### Improved
 
+- **Copy installation commands.** The website and its guides offer a Copy
+  button beside code examples, with keyboard access and clear feedback when
+  copying succeeds or the browser blocks it.
+
 - **Fresh desktop pictures.** The README keeps its familiar widgets with
   the repaired sticky notes on a new wallpaper. Its banner now says twenty
   languages, matching the available language packs.
