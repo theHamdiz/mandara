@@ -285,3 +285,6 @@ mod tests {
         assert_eq!(packet_frame(1152, TimeBase::new(1, 44_100), 44_100), Some(1152));
     }
 }
+
+#[cfg(test)]
+mod provider_checks;
