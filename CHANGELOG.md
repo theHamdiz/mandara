@@ -21,6 +21,10 @@ steps and less repeated work behind the desktop.
 
 ### Fixed
 
+- **Keyboard navigation in Beacon.** Its search and mode buttons are reachable
+  with Tab and Shift+Tab, with visible focus and Enter or Space to select
+  a mode. (#120)
+
 - **Video wallpapers reach every edge.** They fill the screen at fractional
   display scales, including the solid color around centered and fitted clips.
 
