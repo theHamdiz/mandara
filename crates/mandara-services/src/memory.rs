@@ -32,6 +32,19 @@ impl Requests {
             .compare_exchange(RUNNING, IDLE, Ordering::AcqRel, Ordering::Acquire)
             .is_err()
     }
+
+    /// Complete queued requests even when a registered Rust hook unwinds.
+    fn drain(&self, mut hook: impl FnMut()) {
+        loop {
+            self.begin();
+            if std::panic::catch_unwind(std::panic::AssertUnwindSafe(&mut hook)).is_err() {
+                tracing::error!("allocator trim hook panicked");
+            }
+            if !self.again() {
+                break;
+            }
+        }
+    }
 }
 
 static HOOK: OnceLock<fn()> = OnceLock::new();
@@ -52,15 +65,7 @@ pub fn request_trim() {
         return;
     }
     crate::runtime::spawn("allocator-trim", async move {
-        crate::runtime::unblock(move || {
-            loop {
-                REQUESTS.begin();
-                hook();
-                if !REQUESTS.again() {
-                    break;
-                }
-            }
-        })
+        crate::runtime::unblock(move || REQUESTS.drain(hook))
         .await;
     });
 }
@@ -70,6 +75,26 @@ mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
     use std::sync::{Arc, Barrier};
+
+    #[test]
+    fn a_panicking_hook_preserves_releases_and_allows_later_requests() {
+        let requests = Requests::new();
+        assert!(requests.request());
+        let mut passes = 0;
+        requests.drain(|| {
+            passes += 1;
+            if passes == 1 {
+                assert!(!requests.request());
+                panic!("test hook failed after another cache was released");
+            }
+        });
+        assert_eq!(passes, 2);
+        assert!(requests.request());
+        requests.drain(|| panic!("test hook failed without another request"));
+        assert!(requests.request());
+        requests.drain(|| {});
+        assert_eq!(requests.0.load(Ordering::Acquire), IDLE);
+    }
 
     #[test]
     fn bursts_share_one_worker_and_later_releases_are_not_lost() {

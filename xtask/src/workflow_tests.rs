@@ -99,6 +99,9 @@ fn release_artifact_handoff(workflow: &serde_yaml_ng::Value) -> Result<(), Strin
     }).collect();
     if downloads.len() != 1 { return Err("publish requires one distribution download".into()); }
     let download = downloads[0];
+    if !download["if"].is_null() {
+        return Err("distribution downloads must not be conditional".into());
+    }
     if download["uses"].as_str() != Some("actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333") {
         return Err("distribution downloads must use the reviewed immutable action".into());
     }
@@ -110,7 +113,8 @@ fn release_artifact_handoff(workflow: &serde_yaml_ng::Value) -> Result<(), Strin
     if !input["digest-mismatch"].is_null() && input["digest-mismatch"].as_str() != Some("error") {
         return Err("artifact digest mismatches must fail publication".into());
     }
-    if enabled(&input["skip-decompress"]) || enabled(&download["continue-on-error"]) {
+    let disabled = |value: &serde_yaml_ng::Value| value.is_null() || value.as_bool() == Some(false) || value.as_str() == Some("false");
+    if !disabled(&input["skip-decompress"]) || !disabled(&download["continue-on-error"]) {
         return Err("publication must receive extracted, verified artifacts".into());
     }
     for key in ["name", "artifact-ids", "repository", "run-id", "github-token"] {
@@ -147,4 +151,25 @@ fn release_artifact_downloads_keep_producer_and_integrity_contracts() {
     let mut early = workflow.clone();
     early["jobs"]["publish"]["needs"].as_sequence_mut().unwrap().retain(|job| job.as_str() != Some("build-musl"));
     assert!(release_artifact_handoff(&early).is_err());
+
+    for (scope, key, value) in [
+        ("step", "if", "${{ inputs.rebuild }}"),
+        ("with", "skip-decompress", "${{ true }}"),
+        ("step", "continue-on-error", "${{ true }}"),
+    ] {
+        let mut invalid = workflow.clone();
+        let download = invalid["jobs"]["publish"]["steps"].as_sequence_mut().unwrap().iter_mut().find(|step| {
+            step["uses"].as_str().is_some_and(|name| name.starts_with("actions/download-artifact@"))
+        }).unwrap();
+        if scope == "with" { download["with"][key] = serde_yaml_ng::Value::String(value.into()); }
+        else { download[key] = serde_yaml_ng::Value::String(value.into()); }
+        assert!(release_artifact_handoff(&invalid).is_err(), "{key}={value}");
+    }
+    let mut safe = workflow;
+    let download = safe["jobs"]["publish"]["steps"].as_sequence_mut().unwrap().iter_mut().find(|step| {
+        step["uses"].as_str().is_some_and(|name| name.starts_with("actions/download-artifact@"))
+    }).unwrap();
+    download["with"]["skip-decompress"] = serde_yaml_ng::Value::Bool(false);
+    download["continue-on-error"] = serde_yaml_ng::Value::String("false".into());
+    release_artifact_handoff(&safe).unwrap();
 }

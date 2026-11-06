@@ -12,6 +12,10 @@ pub(super) enum Target {
 }
 
 impl Target {
+    /// A damaged to-do book does not prevent editing the independent Markdown store.
+    pub(super) fn ready(self, model: &Productivity) -> bool {
+        if self.multiline() { model.notes_ready } else { model.ready }
+    }
     /// Notes preserve Markdown newlines; tasks use a single-line field.
     pub(super) fn multiline(self) -> bool { matches!(self, Self::Note { .. }) }
 
@@ -46,17 +50,19 @@ pub(super) fn write(
     retry: bool,
     root: Option<&std::path::Path>,
 ) -> Result<async_channel::Receiver<Completion>, SaveError<String>> {
-    if !model.ready { return Err(SaveError::Store(mandara_i18n::t("Loading…").to_owned())); }
+    if !target.ready(model) { return Err(SaveError::Store(mandara_i18n::t("Loading…").to_owned())); }
     if root.is_some_and(|root| root != model.notes.root) { return Err(SaveError::Changed); }
     let (reply, result) = async_channel::bounded(1);
     match &mut target {
         Target::Task { id, list } => {
-            if let Some(id) = *id {
-                model.edit_lists(cx, |book| book.edit_task(id, &text)).map_err(|error| SaveError::Store(tr(error.message())))?;
+            let reservation = model.reserve_todos().map_err(SaveError::Store)?;
+            let changed = if let Some(id) = *id {
+                model.edit_lists(cx, |book| book.edit_task(id, &text)).map_err(|error| SaveError::Store(tr(error.message())))
             } else {
-                *id = Some(model.add_todo(&text, *list, cx).ok_or_else(|| SaveError::Store(t("A task needs text after its list name.").into()))?.0);
-            }
-            let pending = model.persist_todos(cx).map_err(SaveError::Store)?;
+                model.add_todo(&text, *list, cx).map(|(created, _)| { *id = Some(created); }).ok_or_else(|| SaveError::Store(t("A task needs text after its list name.").into()))
+            };
+            if let Err(error) = changed { model.cancel_todos(reservation); return Err(error); }
+            let pending = model.commit_todos(reservation, cx);
             mandara_services::runtime::spawn("desktop-task-save", async move {
                 let result = match pending.recv().await {
                     Ok(result) => result.map_err(SaveError::Store),

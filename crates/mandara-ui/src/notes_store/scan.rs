@@ -35,26 +35,38 @@ impl NoteStore {
             if !ListColor::valid(&topic.color) { topic.color = crate::todo_lists::DEFAULT_LIST_COLOR.into(); }
         }
         let mut read = Vec::new();
+        let mut failed = Vec::new();
+        let mut warnings = Vec::new();
         for topic in &topics {
             let dir = self.view.root.join(&topic.dir);
             for entry in std::fs::read_dir(&dir).with_context(|| format!("reading {}", dir.display()))? {
                 let entry = entry?;
                 let path = entry.path();
                 if entry.file_name().to_string_lossy().starts_with('.') || path.extension().and_then(|value| value.to_str()) != Some(EXTENSION) || !entry.file_type()?.is_file() { continue; }
+                let relative = rel(path.strip_prefix(&self.view.root).unwrap_or(&path));
                 let text = match std::fs::read_to_string(&path) {
                     Ok(text) => text,
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-                    Err(error) => return Err(error).with_context(|| format!("reading {}", path.display())),
+                    Err(error) => {
+                        let warning = format!("reading {}: {error}", path.display());
+                        tracing::warn!("notes: {warning}");
+                        warnings.push(warning);
+                        failed.push(relative.clone());
+                        if let Some(note) = self.view.notes.iter().find(|note| note.path.as_deref() == Some(relative.as_str())) {
+                            read.push(ScannedNote::Reused(note.clone()));
+                        }
+                        continue;
+                    }
                 };
                 let updated = entry.metadata().and_then(|metadata| metadata.modified()).map(unix).unwrap_or(0);
-                let path = rel(path.strip_prefix(&self.view.root).unwrap_or(&path));
+                let path = relative;
                 match self.view.notes.iter().find(|note| note.path.as_deref() == Some(path.as_str()) && note.topic == topic.id && note.text == text && note.updated == updated) {
                     Some(note) => read.push(ScannedNote::Reused(note.clone())),
                     None => read.push(ScannedNote::Read { path, topic: topic.id, text, updated }),
                 }
             }
         }
-        // All fallible reads completed. No partial scan can erase remembered files.
+        // Directory traversal completed; failed files keep their previous identity.
         let mut notes = Vec::with_capacity(read.len());
         for entry in read {
             let (path, topic, text, updated) = match entry {
@@ -71,10 +83,11 @@ impl NoteStore {
             };
             notes.push(Arc::new(Note { id, topic, path: Some(path), text, updated }));
         }
-        self.ids.retain(|path, _| notes.iter().any(|note| note.path.as_deref() == Some(path.as_str())));
+        self.ids.retain(|path, _| failed.contains(path) || notes.iter().any(|note| note.path.as_deref() == Some(path.as_str())));
         notes.sort_by_key(|note| std::cmp::Reverse((note.updated, note.id)));
         self.view.topics = topics;
         self.view.notes = notes;
+        self.view.read_errors = (!warnings.is_empty()).then(|| Arc::from(warnings));
         self.scan_error = None;
         self.save_index();
         Ok(())
@@ -85,6 +98,33 @@ impl NoteStore {
 mod tests {
     use super::*;
     use crate::notes_store::INDEX_FILE;
+
+    #[test]
+    fn one_invalid_file_preserves_its_snapshot_and_id_while_other_notes_remain_editable() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = NoteStore::open(root.path());
+        let bad = store.create(DEFAULT_TOPIC, "# Damaged\nKeep this snapshot").unwrap();
+        let good = store.create(DEFAULT_TOPIC, "# Good\nOriginal").unwrap();
+        let path = root.path().join(store.note(bad).unwrap().path.as_ref().unwrap());
+        let before = store.snapshot().notes.into_iter().find(|note| note.id == bad).unwrap();
+        std::fs::write(&path, [0xff, 0xfe]).unwrap();
+        store.rescan(&[]);
+        assert!(store.scan_result().is_ok());
+        assert!(store.read_errors.as_ref().is_some_and(|errors| errors.len() == 1));
+        assert!(Arc::ptr_eq(&before, store.notes.iter().find(|note| note.id == bad).unwrap()));
+        store.write(good, "# Good\nChanged").unwrap();
+        let added = store.create(DEFAULT_TOPIC, "Another note").unwrap();
+        assert_eq!(store.note(good).unwrap().text, "# Good\nChanged");
+        assert!(store.note(added).is_some());
+        assert!(store.prepare_leave().is_ok());
+        drop(store);
+        let mut reopened = NoteStore::open(root.path());
+        assert!(reopened.ids.values().any(|id| *id == bad));
+        std::fs::write(path, "# Damaged\nRecovered").unwrap();
+        reopened.rescan(&[]);
+        assert_eq!(reopened.note(bad).unwrap().text, "# Damaged\nRecovered");
+        assert!(reopened.read_errors.is_none());
+    }
 
     #[test]
     fn a_successful_rescan_reuses_unchanged_note_bodies() {

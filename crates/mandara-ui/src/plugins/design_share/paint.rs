@@ -1,6 +1,5 @@
 //! A bounded software strip, using the reading cards' existing ornament geometry.
 
-use mandara_i18n::t;
 use mandara_theme::Color;
 use tiny_skia::{GradientStop, LinearGradient, Paint, PixmapMut, Point, SpreadMode, Transform};
 
@@ -11,48 +10,20 @@ use crate::plugins::jannah::art;
 /// Enough perceptual samples for these subtle two-tone card grounds at 8-bit output.
 const GRADIENT_STEPS: usize = 64;
 
+mod decoration;
+mod ground;
+
+use ground::Ground;
+
 pub(super) struct Decoration {
-    lattice: Option<resvg::usvg::Tree>,
-    head: Option<resvg::usvg::Tree>,
-    ground: Paint<'static>,
+    top: Option<tiny_skia::Pixmap>,
+    ground: Ground,
+    rim: [Option<Raster>; 4],
 }
 
-fn tinted(source: Option<String>, color: Color) -> Result<resvg::usvg::Tree, String> {
-    let [r, g, b, a] = color.to_rgba8();
-    let source = source
-        .ok_or_else(|| t("The image design could not be prepared").to_string())?
-        .replace("black", &format!("#{r:02x}{g:02x}{b:02x}{a:02x}"));
-    resvg::usvg::Tree::from_str(&source, &resvg::usvg::Options::default())
-        .map_err(|error| error.to_string())
-}
-
-impl Decoration {
-    pub fn new(doc: &Document, layout: &Layout) -> Result<Self, String> {
-        let lattice = (doc.lattice_alpha > 0.0)
-            .then(|| {
-                tinted(
-                    art::asset("jannah-lattice"),
-                    doc.accent.with_alpha(doc.lattice_alpha),
-                )
-            })
-            .transpose()?;
-        let head = match doc.ornament {
-            Ornament::Plain => None,
-            Ornament::Crown { alpha, .. } => Some(tinted(
-                art::asset("jannah-crown"),
-                doc.accent.with_alpha(alpha),
-            )?),
-            Ornament::Manuscript { .. } => Some(tinted(
-                crate::plugins::hadith::art::asset("hadith-headpiece"),
-                doc.accent,
-            )?),
-        };
-        Ok(Self {
-            lattice,
-            head,
-            ground: ground(doc, layout, 0),
-        })
-    }
+struct Raster {
+    pixels: tiny_skia::Pixmap,
+    origin: (i32, i32),
 }
 
 /// The same Oklab interpolation as the UI's two-stop gradient.
@@ -69,7 +40,7 @@ fn interpolate(from: Color, to: Color, t: f32) -> Color {
     )
 }
 
-fn ground(doc: &Document, layout: &Layout, top: u32) -> Paint<'static> {
+fn gradient(doc: &Document, layout: &Layout, top: u32) -> Paint<'static> {
     let (w, h) = (layout.width as f32, layout.height as f32);
     let radians = doc.angle.to_radians();
     let direction = (radians.sin(), -radians.cos());
@@ -109,14 +80,22 @@ fn ground(doc: &Document, layout: &Layout, top: u32) -> Paint<'static> {
 
 fn rectangle(canvas: &mut PixmapMut<'_>, rect: (f32, f32, f32, f32), color: Color) {
     if let Some(rect) = tiny_skia::Rect::from_xywh(rect.0, rect.1, rect.2, rect.3) {
-        canvas.fill_rect(rect, &lp::solid(color, 1.0), Transform::identity(), None);
+        // The rectangle fast path rejects a fractional two-column sliver
+        // with no whole interior column. A path keeps the same geometry.
+        canvas.fill_path(
+            &tiny_skia::PathBuilder::from_rect(rect),
+            &lp::solid(color, 1.0),
+            tiny_skia::FillRule::Winding,
+            Transform::identity(),
+            None,
+        );
     }
 }
 
 pub(super) fn strip(
     doc: &Document,
     layout: &Layout,
-    decoration: &Decoration,
+    decoration: &mut Decoration,
     text: &mut TextPainter,
     top: u32,
     canvas: &mut PixmapMut<'_>,
@@ -128,29 +107,9 @@ pub(super) fn strip(
         doc.scale,
         -(top as f32),
     );
-    let shape = lp::rounded_rect(0.0, y, w, h, doc.radius * k);
-    if let Some(path) = lp::rounded_rect(0.0, 0.0, w, h, doc.radius * k) {
-        canvas.fill_path(
-            &path,
-            &decoration.ground,
-            tiny_skia::FillRule::Winding,
-            Transform::from_translate(0.0, y),
-            None,
-        );
-    }
-    if let Some(lattice) = &decoration.lattice {
-        resvg::render(
-            lattice,
-            Transform::from_row(
-                w / art::LATTICE_VIEW,
-                0.0,
-                0.0,
-                w / art::LATTICE_VIEW,
-                0.0,
-                y,
-            ),
-            canvas,
-        );
+    decoration.ground.paint(canvas, top);
+    if let Some(image) = &decoration.top {
+        blit(canvas, image.as_ref(), 0, -(top as i32));
     }
     match doc.ornament {
         Ornament::Plain => {}
@@ -163,21 +122,6 @@ pub(super) fn strip(
             let crown_w = w - inset * 2.0;
             let scale = crown_w / art::CROWN_VIEW.0;
             let crown_h = art::CROWN_VIEW.1 * scale;
-            let dawn = crate::plugins::jannah::panel::DAWN_GLOW;
-            lp::glow(
-                canvas,
-                w / 2.0,
-                y + inset + crown_h * crate::plugins::jannah::panel::DAWN_TOP_SHARE,
-                dawn.1 * k,
-                lp::skia(doc.accent, dawn.0),
-            );
-            if let Some(head) = &decoration.head {
-                resvg::render(
-                    head,
-                    Transform::from_row(scale, 0.0, 0.0, scale, inset, y + inset),
-                    canvas,
-                );
-            }
             let stroke = art::CROWN_STROKE.0 * scale;
             let left = inset + art::CROWN_FOOT * scale - stroke / 2.0;
             let base = h - inset;
@@ -202,29 +146,7 @@ pub(super) fn strip(
                 );
             }
         }
-        Ornament::Manuscript {
-            width_share,
-            top,
-            dawn_top,
-        } => {
-            let dawn = crate::plugins::jannah::panel::DAWN_GLOW;
-            lp::glow(
-                canvas,
-                w / 2.0,
-                y + dawn_top * k,
-                dawn.1 * k,
-                lp::skia(doc.accent, dawn.0),
-            );
-            if let Some(head) = &decoration.head {
-                let width = w * width_share;
-                let scale = width / crate::plugins::hadith::art::HEADPIECE_VIEW.0;
-                resvg::render(
-                    head,
-                    Transform::from_row(scale, 0.0, 0.0, scale, (w - width) / 2.0, y + top * k),
-                    canvas,
-                );
-            }
-        }
+        Ornament::Manuscript { .. } => {}
     }
     for block in &layout.blocks {
         block.paragraph.draw(
@@ -234,18 +156,54 @@ pub(super) fn strip(
             block.color,
         );
     }
-    lp::glass_rim(
-        canvas,
-        &shape,
-        0.0,
-        y,
-        w,
-        h,
-        doc.palette.specular_rim_light,
-        doc.palette.specular_rim_shadow,
-        1.0,
-        k,
+    for rim in decoration.rim.iter().flatten() {
+        blit(
+            canvas,
+            rim.pixels.as_ref(),
+            rim.origin.0,
+            rim.origin.1 - top as i32,
+        );
+    }
+}
+
+/// Integer placement of premultiplied pixels needs no pattern shader or resampling.
+fn blit(canvas: &mut PixmapMut<'_>, source: tiny_skia::PixmapRef<'_>, x: i32, y: i32) {
+    let (sw, sh, dw, dh) = (
+        source.width() as i32,
+        source.height() as i32,
+        canvas.width() as i32,
+        canvas.height() as i32,
     );
+    let (left, first, right, last) = (x.max(0), y.max(0), (x + sw).min(dw), (y + sh).min(dh));
+    if left >= right || first >= last {
+        return;
+    }
+    let bytes = (right - left) as usize * 4;
+    for row in first..last {
+        let source_at = ((row - y) * sw + left - x) as usize * 4;
+        let target_at = (row * dw + left) as usize * 4;
+        let source = &source.data()[source_at..source_at + bytes];
+        let target = &mut canvas.data_mut()[target_at..target_at + bytes];
+        for (d, s) in target
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(source.as_chunks::<4>().0)
+        {
+            match s[3] {
+                0 => {}
+                u8::MAX => d.copy_from_slice(s),
+                alpha => {
+                    let inverse = 255 - u32::from(alpha);
+                    for channel in 0..4 {
+                        d[channel] = (u32::from(s[channel])
+                            + (u32::from(d[channel]) * inverse + 127) / 255)
+                            as u8;
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -258,5 +216,57 @@ mod tests {
         let b = Color::hex("#e1e8dc");
         assert_eq!(interpolate(a, b, 0.0).to_rgba8(), a.to_rgba8());
         assert_eq!(interpolate(a, b, 1.0).to_rgba8(), b.to_rgba8());
+    }
+
+    #[test]
+    fn fractional_crown_strokes_match_across_strip_boundaries() {
+        let (width, height) = (80, 360);
+        let rect = (27.003, 10.25, 1.274, 330.5);
+        let color = Color::hex("#6dafc3");
+        let mut whole = tiny_skia::Pixmap::new(width, height).unwrap();
+        rectangle(&mut whole.as_mut(), rect, color);
+        let mut combined = Vec::new();
+        for top in (0..height).step_by(37) {
+            let mut strip = tiny_skia::Pixmap::new(width, (height - top).min(37)).unwrap();
+            rectangle(
+                &mut strip.as_mut(),
+                (rect.0, rect.1 - top as f32, rect.2, rect.3),
+                color,
+            );
+            combined.extend_from_slice(strip.data());
+        }
+        let mismatch = combined.iter().zip(whole.data()).position(|(a, b)| a != b);
+        assert!(mismatch.is_none(), "first differing channel: {mismatch:?}");
+        assert!(whole.data().iter().any(|byte| *byte != 0));
+    }
+
+    #[test]
+    fn integer_blits_preserve_premultiplied_source_over_at_every_alpha() {
+        let mut source = tiny_skia::Pixmap::new(256, 1).unwrap();
+        for (alpha, pixel) in source
+            .data_mut()
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .enumerate()
+        {
+            let alpha = alpha as u8;
+            *pixel = [alpha, alpha / 2, 0, alpha];
+        }
+        let mut actual = tiny_skia::Pixmap::new(256, 1).unwrap();
+        for pixel in actual.data_mut().as_chunks_mut::<4>().0 {
+            *pixel = [16, 32, 48, 128];
+        }
+        let mut expected = actual.clone();
+        expected.draw_pixmap(
+            0,
+            0,
+            source.as_ref(),
+            &tiny_skia::PixmapPaint::default(),
+            Transform::identity(),
+            None,
+        );
+        blit(&mut actual.as_mut(), source.as_ref(), 0, 0);
+        assert_eq!(actual.data(), expected.data());
     }
 }

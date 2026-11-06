@@ -11,6 +11,7 @@ mod note_edit;
 mod note_flush;
 mod notes;
 mod todo_writer;
+mod load;
 pub use notes_worker::NoteReply;
 use notes_worker::NotesWorker;
 
@@ -19,7 +20,7 @@ use mandara_i18n::{t, tf};
 use serde::{Deserialize, Serialize};
 
 use crate::state::config;
-use crate::notes_store::{LegacyNote, NoteStore, NotesSnapshot};
+use crate::notes_store::{LegacyNote, NotesSnapshot};
 use crate::todo_lists::{Filter, ListError, TodoBook, TodoList, parse_quick_add};
 
 /// Live edits share this debounce; explicit saves and command receipts flush sooner.
@@ -189,6 +190,8 @@ pub struct Productivity {
     notes_generation: u64,
     notes_submitted: BTreeMap<u64, u64>,
     notes_tasks: BTreeMap<u64, note_edit::TaskPatches>,
+    /// Conflicting drafts stay recoverable per folder without becoming write prerequisites.
+    notes_conflicts: BTreeMap<(std::path::PathBuf, u64), (u64, std::sync::Arc<crate::notes_store::Note>)>,
     notes_flush: note_flush::NoteFlush,
     notes_sequence: u64,
     notes_applied: u64,
@@ -196,6 +199,7 @@ pub struct Productivity {
     notes_changes: async_channel::Sender<()>,
     notes_switching: bool,
     pub(crate) ready: bool,
+    pub(crate) notes_ready: bool,
     pub(crate) load_error: Option<String>,
     pub(crate) todo_error: Option<String>,
     pub(crate) notes_error: Option<String>,
@@ -226,8 +230,8 @@ impl Productivity {
         Self {
             book: TodoBook::new(Vec::new(), Vec::new()), filter: Filter::All,
             notes: NotesSnapshot::empty(root), notes_dirty: BTreeMap::new(),
-            notes_generation: 0, notes_submitted: BTreeMap::new(), notes_tasks: BTreeMap::new(), notes_flush: note_flush::NoteFlush::default(), notes_sequence: 0, notes_applied: 0,
-            notes_worker: None, notes_changes: changes, notes_switching: false, ready: false, load_error: None, todo_error: None, notes_error: None,
+            notes_generation: 0, notes_submitted: BTreeMap::new(), notes_tasks: BTreeMap::new(), notes_conflicts: BTreeMap::new(), notes_flush: note_flush::NoteFlush::default(), notes_sequence: 0, notes_applied: 0,
+            notes_worker: None, notes_changes: changes, notes_switching: false, ready: false, notes_ready: false, load_error: None, todo_error: None, notes_error: None,
             notes_task: None, legacy_notes: Vec::new(), notes_watch: None, notes_topic: None,
             pomodoro: Pomodoro { phase: Phase::Focus, ends_at: None, paused_left: rules.focus, length: rules.focus, completed: 0 },
             next_id: 1, save_task: None, todo_writes: todo_writer::TodoWrites::default(), tick_task: None,
@@ -450,31 +454,29 @@ pub fn init(cx: &mut App) -> Entity<Productivity> {
         let mut p = Productivity::empty(rules, root.clone(), changes.clone());
         cx.spawn(async move |this, cx| {
             let loaded = mandara_services::runtime::unblock(move || {
-                let mut saved = todo_writer::load_saved(&store_path())?;
-                let mut notes = NoteStore::open(&root);
-                let migrated = !saved.notes.is_empty() && notes.migrate(&saved.notes).is_ok();
-                if migrated { saved.notes.clear(); }
-                if let Err(error) = notes.watch_changes(changes) { tracing::warn!("watching notes: {error:#}"); }
-                Ok::<_, anyhow::Error>((saved, notes, migrated))
+                let mut loaded = load::books(&store_path(), &root);
+                if let Err(error) = loaded.notes.watch_changes(changes) { tracing::warn!("watching notes: {error:#}"); }
+                loaded
             }).await;
             let _ = this.update(cx, |p, cx| {
-                let (saved, notes, migrated) = match loaded {
-                    Ok(loaded) => loaded,
-                    Err(error) => {
-                        tracing::warn!("loading productivity data: {error:#}");
-                        p.load_error = Some(format!("{error:#}"));
-                        cx.notify();
-                        return;
+                let load::Loaded { todos, notes, migrated } = loaded;
+                match todos {
+                    Ok(saved) => {
+                        p.next_id = saved.todos.iter().map(|task| task.id).max().unwrap_or(0) + 1;
+                        p.book = TodoBook::new(saved.lists, saved.todos);
+                        p.filter = match saved.filter { Filter::List(id) if p.book.list(id).is_none() => Filter::All, filter => filter };
+                        p.legacy_notes = saved.notes;
+                        p.ready = true;
                     }
-                };
-                p.next_id = saved.todos.iter().map(|task| task.id).max().unwrap_or(0) + 1;
-                p.book = TodoBook::new(saved.lists, saved.todos);
-                p.filter = match saved.filter { Filter::List(id) if p.book.list(id).is_none() => Filter::All, filter => filter };
-                p.legacy_notes = saved.notes;
+                    Err(error) => {
+                        tracing::warn!("loading productivity data: {error}");
+                        p.load_error = Some(error);
+                    }
+                }
                 p.notes_error = notes.index_result().err().map(|error| format!("{error:#}"));
                 p.notes = notes.snapshot();
                 p.notes_worker = Some(NotesWorker::start(notes));
-                p.ready = true;
+                p.notes_ready = true;
                 p.ensure_notes_root(notes_root(&config(cx).read(cx).snapshot()), cx);
                 if migrated { p.save(cx); }
                 cx.notify();

@@ -191,8 +191,14 @@ pub fn discover_for(language: mandara_i18n::Lang) -> Vec<App> {
 /// left by an application/theme installation; ordinary discovery keeps its caches.
 pub fn discover_for_theme(language: mandara_i18n::Lang, theme: Option<&str>) -> Vec<App> {
     crate::icon_theme::refresh_files();
-    let theme = theme.map(str::to_owned).or_else(crate::icon_theme::desktop_icon_theme).unwrap_or_else(|| "hicolor".into());
+    let theme = discovery_theme(theme, crate::icon_theme::desktop_icon_theme);
     discover_in_for(&data_dirs(), language, Some(&theme))
+}
+
+/// Empty configuration follows the desktop preference, matching the shell.
+/// An explicit theme does not read fallback settings.
+fn discovery_theme(theme: Option<&str>, desktop: impl FnOnce() -> Option<String>) -> String {
+    theme.filter(|theme| !theme.is_empty()).map(str::to_owned).or_else(desktop).unwrap_or_else(|| "hicolor".into())
 }
 
 #[cfg(test)]
@@ -758,6 +764,18 @@ mod tests {
             assert!(!a.name.is_empty());
             assert!(argv.iter().all(|w| !(w.len() == 2 && w.starts_with('%'))), "{}: {:?}", a.name, argv);
         }
+    }
+
+    /// Empty and absent overrides use the same lazy desktop fallback.
+    #[test]
+    fn empty_discovery_theme_follows_the_desktop_preference() {
+        for configured in [None, Some("")] {
+            let calls = std::cell::Cell::new(0);
+            assert_eq!(discovery_theme(configured, || { calls.set(calls.get() + 1); Some("Desktop Theme".into()) }), "Desktop Theme");
+            assert_eq!(calls.get(), 1);
+            assert_eq!(discovery_theme(configured, || None), "hicolor");
+        }
+        assert_eq!(discovery_theme(Some("Explicit Theme"), || panic!("an explicit theme must not read desktop settings")), "Explicit Theme");
     }
 
     /// One captured language applies to every desktop entry without changing

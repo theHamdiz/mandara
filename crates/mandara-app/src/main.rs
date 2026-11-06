@@ -21,7 +21,6 @@ mod alloc;
 mod changelog_cli;
 mod config_mirror;
 mod ipc;
-mod residency;
 mod setup_cli;
 mod surfaces;
 mod update_cli;
@@ -758,3 +757,6 @@ mod tests {
         assert_eq!(mandara_install::platform::compiled_target(), mandara_services::self_update::running_target());
     }
 }
+
+#[cfg(test)]
+mod residency;

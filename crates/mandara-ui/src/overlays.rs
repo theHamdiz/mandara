@@ -30,7 +30,7 @@ use gpui::{
     InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ObjectFit, ParentElement, Render, ScrollEvent,
     StatefulInteractiveElement, Styled, StyledImage as _, Window, WindowHandle, div, img, prelude::FluentBuilder as _, px,
 };
-use mandara_core::{Edge, FrameClock, LayerSurfaceSpec, SpringConfig, SpringValue, SurfaceRole, ToGpui, edge_drawer_snapped};
+use mandara_core::{Edge, FrameClock, LayerSurfaceSpec, SpringConfig, SpringValue, SurfaceRole, ToGpui};
 use mandara_i18n::{t, tf, tk, tr};
 use mandara_services::SessionAction;
 use mandara_theme::{Color, MandaraPalette, catalog};
@@ -2085,7 +2085,7 @@ impl Render for LauncherView {
                     LauncherEdge::Top => (Edge::Top, y - seam),
                     LauncherEdge::Bottom => (Edge::Bottom, y),
                 };
-                edge_drawer_snapped(edge, x, sy, cur.w, h + seam, radius, flare, fill, scale)
+                place.drawer(cur, radius, scale).element(edge, Rect::new(x, sy, cur.w, h + seam), fill, scale)
             }
             _ => {
                 // Morphing out of a floating pill: the pill's radius first.

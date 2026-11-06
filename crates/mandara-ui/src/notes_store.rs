@@ -168,7 +168,7 @@ impl NoteStore {
     /// Opens (creating) `root` and scans it.
     pub fn open(root: &Path) -> Self {
         let index: Index = std::fs::read_to_string(root.join(INDEX_FILE)).ok().and_then(|s| toml::from_str(&s).ok()).unwrap_or_default();
-        let mut s = Self { view: NotesSnapshot { root: root.to_path_buf(), topics: index.topics, notes: Vec::new() }, ids: index.ids, next_id: index.next_id.max(1), index_error: None, scan_error: None, index_dirty: false, watcher: None };
+        let mut s = Self { view: NotesSnapshot { root: root.to_path_buf(), topics: index.topics, notes: Vec::new(), read_errors: None }, ids: index.ids, next_id: index.next_id.max(1), index_error: None, scan_error: None, index_dirty: false, watcher: None };
         if let Err(err) = std::fs::create_dir_all(root) {
             tracing::warn!("notes folder {}: {err:#}", root.display());
         }

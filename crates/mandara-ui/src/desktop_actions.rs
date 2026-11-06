@@ -36,6 +36,7 @@ pub fn run(widget: &str, action: Action, cx: &mut App) {
 
 /// Runs `action`; the error says why it couldn't.
 pub fn perform(widget: &str, action: &Action, cx: &mut App) -> Result<(), String> {
+    if let Some(panel) = fallback_panel(action, crate::backdrop::running(cx)) { open_panel(panel, cx); return Ok(()); }
     match action {
         Action::Todo(id) => {
             let p = crate::productivity::productivity(cx);
@@ -83,6 +84,13 @@ pub fn perform(widget: &str, action: &Action, cx: &mut App) -> Result<(), String
     }
     Ok(())
 }
+
+/// Commands remain usable through plugin panels when no software canvas exists.
+fn fallback_panel(action: &Action, backdrop: bool) -> Option<&'static str> {
+    if backdrop { return None; }
+    match action { Action::TodoAdd => Some(crate::plugins::todo::ID), Action::Note(_) => Some(crate::plugins::notes::ID), _ => None }
+}
+
 
 fn open_panel(id: &str, cx: &mut App) {
     let id = id.to_string();
@@ -174,3 +182,17 @@ fn set_level(what: &str, v: f32, cx: &mut App) -> Result<(), String> {
     crate::backdrop::refresh(cx);
     Ok(())
 }
+
+#[cfg(test)]
+mod routing_tests {
+    use super::*;
+    #[test]
+    fn only_add_and_note_actions_fall_back_when_the_canvas_is_unavailable() {
+        assert_eq!(fallback_panel(&Action::TodoAdd, false), Some(crate::plugins::todo::ID));
+        assert_eq!(fallback_panel(&Action::Note("Existing".into()), false), Some(crate::plugins::notes::ID));
+        assert_eq!(fallback_panel(&Action::TodoEdit(1), false), None);
+        assert_eq!(fallback_panel(&Action::TodoAdd, true), None);
+        assert_eq!(fallback_panel(&Action::Note(String::new()), true), None);
+    }
+}
+

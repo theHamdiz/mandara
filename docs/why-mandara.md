@@ -13,7 +13,7 @@ process, rendered on the GPU and animated with real spring physics.
 ## At a glance
 
 <table>
-<tr><td><b>Light</b></td><td>under 100 MiB of RAM and under 190 MiB of video memory for the whole shell (<a href="performance.md">measured</a>), ~0.1 % CPU idle</td></tr>
+<tr><td><b>Light</b></td><td>bounded workers, lazy plugin data and explicit cache release; <a href="performance.md">measurements and current resource limits</a></td></tr>
 <tr><td><b>Native</b></td><td>100 % Rust in one binary; the exact line count and hashes of this build are in the <a href="building.md#build-fingerprint">build fingerprint</a></td></tr>
 <tr><td><b>Extensible</b></td><td>77 first-party plugins built in; third-party plugins in sandboxed WebAssembly, from a GitHub marketplace or a folder</td></tr>
 <tr><td><b>Compositors</b></td><td>MangoWM (tags), Niri, Hyprland, Umbriel, Sway, River (tags) and KWin, all first-class, configured non-destructively</td></tr>

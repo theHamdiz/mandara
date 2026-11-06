@@ -24,6 +24,7 @@ use mandara_config::surfaces::PanelAnimation;
 use mandara_config::workflow::{LauncherAlign, LauncherEdge, LauncherPosition};
 use mandara_config::BarPosition;
 mod anchors;
+mod seam;
 pub use anchors::{BarAnchor, anchor_on, publish_anchor};
 
 use crate::bar::layout::{CHIP_INSET, Metrics, PANEL_SLIDE_PX, PILL_INSET, exclusive_zone};
@@ -130,6 +131,8 @@ pub struct Placement {
     pub edge: Option<LauncherEdge>,
     /// Concave flare radius (0 unless [`Join::Flares`]).
     pub flare: f32,
+    /// The joined Notch's far corners, which become part of the launcher.
+    notch: Option<seam::Notch>,
     /// Corner radius to start from (the launcher pill's, when it morphs
     /// out of a floating pill; `None`: the panel radius throughout).
     pub start_radius: Option<f32>,
@@ -141,6 +144,15 @@ pub struct Placement {
     pub hover_close: bool,
     /// It grows out of the bar's launcher button.
     pub from_button: bool,
+}
+
+impl Placement {
+    /// Shapes the animated join without growing a flare beyond a compact bar.
+    pub(crate) fn drawer(&self, current: Rect, radius: f32, scale: f32) -> seam::Drawer {
+        let edge = self.edge.unwrap_or(LauncherEdge::Top);
+        let line = if edge == LauncherEdge::Top { self.rect.y } else { self.rect.bottom() };
+        seam::Drawer::new(current, edge, line, radius, self.flare.min(current.h), self.notch, scale)
+    }
 }
 
 /// The launcher edge a bar shares (`None`: a side bar shares none — the
@@ -202,7 +214,7 @@ fn center(i: &Inputs) -> Placement {
             Rect::new(rect.x + (w - sw0) / 2.0, rect.y + (h - sh0) / 2.0, sw0, sh0)
         }
     };
-    Placement { rect, start, join: Join::Card, edge: None, flare: 0.0, start_radius: None, fades: true, keep_bright: None, hover_close: false, from_button: false }
+    Placement { rect, start, join: Join::Card, edge: None, flare: 0.0, notch: None, start_radius: None, fades: true, keep_bright: None, hover_close: false, from_button: false }
 }
 
 fn attached(i: &Inputs, edge: LauncherEdge) -> Placement {
@@ -293,6 +305,8 @@ fn attached(i: &Inputs, edge: LauncherEdge) -> Placement {
         join,
         edge: Some(edge),
         flare: if join == Join::Flares { m.flare } else { 0.0 },
+        notch: span.filter(|_| join == Join::Flares && at_bar && m.notch())
+            .map(|span| seam::Notch { span, radius: m.frame_radius() }),
         start_radius,
         fades: i.animation == PanelAnimation::Slide,
         keep_bright,

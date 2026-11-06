@@ -519,14 +519,10 @@ What made the difference, each measured by switching it off alone:
 * **Vulkan-first wgpu instance** (`vendor/gpui_wgpu`, patch 7): the GL half
   of the instance initialized EGL and radeonsi on every start. −7 threads,
   −3.2 MiB anonymous, −13.8 MiB VRAM, no libgallium / libLLVM pages from GL.
-* **Startup-only file pages unmapped once settled** (`mandara-app`
-  `residency.rs`, 8 s and 45 s after start, then every 10 min; the 8 s
-  drop is described under [Start-up memory](#start-up-memory)): clean read-only file
-  mappings (start-up code of the binary, libLLVM pages touched by its static
-  initializers when RADV loads it, font files scanned once) are unmapped
-  with `MADV_DONTNEED`; code still in use faults back from the page cache.
-  Mappings with private copies (RELRO) are skipped. −40 to −62 MiB RSS at
-  3 minutes.
+* **Historical file-page cleanup.** The measurements below included process-wide
+  page advice after startup. That cleanup has been removed: a procfs snapshot
+  cannot keep mappings alive while advice runs. The kernel now controls file
+  reclaim, and the existing glibc hook reclaims freed heap pages.
 * **App icons decoded at the size they are drawn** (`icon_raster.rs`):
   `img(path)` rendered SVG app icons at twice their canvas (a 512 px canvas
   is a 4 MiB bitmap). Opening the dock's Applications grid (~100 apps)
@@ -597,7 +593,7 @@ RSS / file-backed / code, MiB:
 Settled code varies 15–23 MiB between runs (which minute boundary, weather
 fetch or D-Bus burst falls before the snapshot); file-backed memory also
 holds libLLVM / RADV / font pages. After activity the code stays until the
-next 10-minute drop. These historical runs reduced the resident code of a
+kernel reclaims it. These historical runs reduced the resident code of a
 freshly written binary without shrinking its working set (see PGO below).
 They do not establish the memory use after removing executable-cache discard.
 Start-up and audio-visualizer CPU of that earlier pair of changes on top
@@ -605,14 +601,11 @@ of the `opt-level` list below, on a quiet machine: 321 ms and 1.73 % (before: 30
 1.98 %); the final binary was only re-timed under an unrelated 27-core
 build, so re-check those two on a quiet machine before quoting them.
 
-* **Clean mapping cleanup** (`residency.rs`): read-only file mappings
-  without private copies or dirty pages are still advised with
-  `MADV_DONTNEED` after 8 s, after 45 s and every 10 minutes afterwards.
-  The shell no longer probes or discards the running executable's file
-  cache. That forced discard caused disk faults and slow frames at the
-  45 s cleanup in release tests. The table above describes the older
-  page-cache-refresh experiment; it is not a memory ceiling for the
-  current behavior. The kernel controls ordinary file-cache reclaim.
+* **File mappings stay under kernel control.** The shell no longer scans and
+  advises arbitrary process mappings or discards the executable's file cache.
+  This avoids a mapping-lifetime race and forced disk faults during cleanup.
+  Earlier settled RSS figures include the removed cleanup and are historical,
+  not a ceiling for current builds. Measure current behavior before quoting it.
 * **Cold functions grouped** (`mandara-app/build.rs`,
   `-z keep-text-section-prefix`): what LLVM marks cold (`#[cold]`, panic and
   error paths) goes to its own 2.2 MB `.text.unlikely` instead of sitting
@@ -647,7 +640,10 @@ Measured and not shipped, speed first:
 
 ### Start-up memory
 
-The idle numbers above are taken once the shell has settled. In the first
+These are historical measurements, including the removed executable-cache
+discard and process-wide mapping advice. Neither the 8-second pass nor later
+mapping drops run in current builds; settled RSS can therefore differ. The
+font and wallpaper changes remain active. In those older builds, the first
 45 seconds it held far more: the start-up code of the binary, the pages
 RADV's libLLVM touches when it loads, and the fonts it scanned stayed
 resident until the first cold-page drop, and loading a wallpaper briefly
@@ -669,11 +665,8 @@ MiB default, 19.8–20.3 MiB demo) and video memory (163.5 MiB default and
 178.5 MiB demo at 4K, 57.7 MiB at 1600 × 1000) are unchanged, also after
 opening and closing the sidebar, the launcher and a panel.
 
-* **An early cold-page drop** (`residency.rs`, `EARLY` = 8 s): the drop
-  described above also runs 8 s after start. The shell is up and has drawn
-  within about a second; what the idle shell still runs maps back with a
-  minor fault. The 45 s and 10-minute clean-mapping drops remain;
-  the executable-cache discard has since been removed. −73 to −83 MiB resident from 8 s to 45 s.
+* **Historical early cold-page drop.** The former 8-second, 45-second and
+  10-minute mapping drops contributed to these results and are now removed.
 * **One face per fallback-chain family** (`vendor/gpui_wgpu` patch 11, and
   `lock::paint::TextPainter` asking a fallback family for its weight only
   when the text reaches it): an English desktop mapped and parsed every
@@ -699,8 +692,7 @@ media panel (demo config at 4K, three runs each), view build p50 0.096–0.123
 
 Guards: `crates/mandara-ui/tests/startup_budget.rs` (registering every
 built-in plugin keeps ≤ 4 MiB, allocates ≤ 16 MiB and starts no thread;
-today 0.2 / 9.2 MiB), `residency` unit tests (classification, private
-copies survive a drop, the folio probe unmaps its mapping),
+today 0.2 / 9.2 MiB), `residency` safety guard (no unowned process-mapping advice),
 `vulkan_is_tried_alone_before_gl`,
 `cut_source_crops_to_the_subject` (released cut keeps geometry), the
 `icon_raster` decode-size tests, and `cargo xtask resource-check` before a

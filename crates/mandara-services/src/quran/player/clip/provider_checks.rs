@@ -119,7 +119,7 @@ fn provider_network_guard_requires_opt_in_and_a_private_cache() {
     let root = tempfile::Builder::new()
         .prefix("mandara-quran-provider-")
         .permissions(std::fs::Permissions::from_mode(0o700))
-        .tempdir()
+        .tempdir_in("/tmp")
         .unwrap();
     let home = root.path().join("home");
     let cache = root.path().join("cache");
@@ -140,6 +140,36 @@ fn provider_network_guard_requires_opt_in_and_a_private_cache() {
     std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
     std::fs::remove_file(root.path().join(".mandara-quran-provider-check")).unwrap();
     assert!(private_cache(true, root.path(), &home, &cache).is_err());
+}
+
+/// Uses the real source adapter and decoder; it never creates AudioOutput or a player.
+/// The normal guard fixture remains valid with an unrelated TMPDIR. A child
+/// process isolates that environment change from parallel Rust tests.
+#[test]
+fn provider_guard_fixture_ignores_nonstandard_tmpdir() {
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+    let custom = tempfile::Builder::new().prefix("mandara-provider-custom-tmp-").tempdir_in("/tmp").unwrap();
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "quran::player::clip::provider_checks::provider_network_guard_requires_opt_in_and_a_private_cache", "--nocapture"])
+        .env("TMPDIR", custom.path()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    /// Bound a child that only runs one local filesystem regression.
+    const GUARD_TIMEOUT: Duration = Duration::from_secs(5);
+    /// Avoid busy waiting while keeping the timeout responsive.
+    const GUARD_POLL: Duration = Duration::from_millis(10);
+    let deadline = Instant::now() + GUARD_TIMEOUT;
+    while child.try_wait().unwrap().is_none() {
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("provider guard subprocess timed out");
+        }
+        std::thread::sleep(GUARD_POLL);
+    }
+    let output = child.wait_with_output().unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(output.status.success(), "{stdout}\n{}", String::from_utf8_lossy(&output.stderr));
+    assert!(stdout.contains("1 passed"), "the child must run the actual guard regression: {stdout}");
 }
 
 /// Uses the real source adapter and decoder; it never creates AudioOutput or a player.

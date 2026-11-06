@@ -2,12 +2,12 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/brand/mandara-banner-dark.webp"/>
     <source media="(prefers-color-scheme: light)" srcset="assets/brand/mandara-banner-light.webp"/>
-    <img src="assets/brand/mandara-banner-light.webp" alt="Mandara: the phoenix rising from a Mediterranean wave beside the wordmark. A beautiful, fast desktop shell for Wayland, with settled memory under 100 MiB in the measured setup, tuned for 144 Hz." width="100%"/>
+    <img src="assets/brand/mandara-banner-light.webp" alt="Mandara: the phoenix rising from a Mediterranean wave beside the wordmark. A beautiful, fast desktop shell for Wayland, tuned for responsive frames." width="100%"/>
   </picture>
 </p>
 
 <p align="center">
-  <b>A beautiful, fast Linux desktop with settled memory under 100 MiB in the measured setup.</b>
+  <b>A beautiful, fast Linux desktop built with care for its resources.</b>
   <br/>
   Design-first, spring-animated and written entirely in Rust.
   <br/>
@@ -38,7 +38,7 @@
   <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-77%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="77 plugins plus WebAssembly"/></a>
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-20%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="20 languages"/></a>
   <br/>
-  <a href="docs/performance.md"><img src="https://img.shields.io/badge/settled%20RAM-under%20100%20MiB-2DD4BF?labelColor=0B1026" alt="Settled RAM under 100 MiB in the measured setup"/></a>
+  <a href="docs/performance.md"><img src="https://img.shields.io/badge/resources-measured-2DD4BF?labelColor=0B1026" alt="Resource measurements and current limits"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/VRAM-under%20210%20MiB-2DD4BF?labelColor=0B1026" alt="VRAM under 210 MiB in the measured setup"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/idle%20CPU-measured-2DD4BF?labelColor=0B1026" alt="Measured idle CPU"/></a>
 </p>
@@ -99,7 +99,7 @@ Write notes and edit tasks directly in their widgets, too.
 | **What** | A complete Wayland desktop shell: bar, island, dock, launcher, sidebar, notifications, OSDs, wallpapers, desktop widgets, lock screen, login manager, settings app |
 | **Compositors** | MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic (0.3) and KWin, with native drivers; your own config gets one include line at most, nothing more |
 | **Built with** | 100 % Rust, one binary (`mandara`), GPU-rendered with GPUI and wgpu |
-| **Resources** | Under 100 MiB settled RAM and under 210 MiB video memory in the [measured setup](docs/performance.md); startup and active workloads can use more |
+| **Resources** | [Resource measurements and current limits](docs/performance.md); the 100 MiB startup and operation target remains open |
 | **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`), with [thirteen colour launcher icons](docs/configuration.md#launcher-button-artwork) |
 | **Automation** | `mandara msg <command>` with JSON replies; `mandara commands --json` lists them all |
 | **Plugins** | 77 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
@@ -132,12 +132,12 @@ around, each one measured or shipped today:
    screenshots, screen recording, offline OCR, polkit agent, lock screen,
    login manager and a settings app: one Rust program, no QML, JavaScript,
    Python or shell glue.
-4. **Fast by measurement, not by claim.** The measured setup settles
-   below 100 MiB of RAM and uses under 210 MiB of video memory.
+4. **Measure the whole desktop.** Resource use depends on your display,
+   driver and active widgets; the 100 MiB startup and operation target remains open.
    Plugin views reuse clipboard layouts, media gesture state and network
    history. Image previews decode in bounded workers and release their caches
-   after closing. Typical frame builds take around 0.1 ms. Startup peaks are higher;
-   these are measurements of one setup, not a ceiling for every workload.
+   after closing. Earlier frame builds measured around 0.1 ms; historical
+   results and their exact setup are recorded alongside current limitations.
    [How it's measured](docs/performance.md)
 5. **Real motion.** Analytical spring physics that can be interrupted
    mid-flight, and OKLCH colour blending, so every morph, slide and theme

@@ -4,7 +4,13 @@ Mandara's resource use depends on the display size, graphics driver, widgets
 and open panels. Settled memory and startup peaks are different measurements.
 The goal of staying below 100 MiB throughout startup is not met yet.
 
-## Current release-profile measurements
+## Historical release-profile measurements
+
+These measurements include the removed process-wide page advice and
+executable-cache discard. They do not establish a ceiling for current builds;
+current RSS can differ. Both cleanup paths are now removed because mappings
+can change during a procfs scan and forced cache discard caused disk faults.
+The tuned glibc allocator and post-eviction trim hook remain active.
 
 Measured on 2026-11-06 with source `4b60bd5e4541` (the code merged for
 v0.19.0), the normal optimized release profile, fat LTO and the tuned system
@@ -74,8 +80,7 @@ resources through these controls:
   Crossfades run inside the compositor (`wp_alpha_modifier_v1`), and once
   the compositor has the pixels, the shell keeps no copy. That removed a GPU
   window per display, about 130 MiB of swapchain at 4K.
-- **A lean start.** The code and driver pages only start-up needs are
-  let go 8 seconds after the shell starts instead of 45, the fallback fonts
+- **A lean start.** Fallback fonts
   for other scripts load one face each until text in that script appears
   (2 font files at start instead of 52 for an English desktop), and a
   wallpaper is placed on screen without full-size copies of itself

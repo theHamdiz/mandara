@@ -303,11 +303,11 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
                     refresh(cx);
                 }
                 Event::Menu(output, x, y, size) => {
-                    if crate::desktop_text::finish(cx) { crate::desktop_menu::open_sized(&output, (x, y), size, cx); }
+                    crate::desktop_text::after_save(cx, move |cx| crate::desktop_menu::open_sized(&output, (x, y), size, cx));
                 }
                 Event::Boxes(boxes) => crate::desktop_edit::on_boxes(boxes, cx),
                 Event::Widget(id, action) => {
-                    if crate::desktop_text::finish(cx) { crate::desktop_actions::run(&id, action, cx); }
+                    crate::desktop_text::after_save(cx, move |cx| crate::desktop_actions::run(&id, action, cx));
                 }
                 Event::Edit(id, action, placement) => crate::desktop_text::open(id, action, placement, cx),
                 Event::FinishText => { crate::desktop_text::finish(cx); }

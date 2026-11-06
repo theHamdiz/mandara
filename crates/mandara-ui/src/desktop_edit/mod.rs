@@ -1132,8 +1132,9 @@ pub fn register(r: &mut PluginRegistry) {
                 "toggle" => !active(cx),
                 _ => true,
             };
+            if on && !crate::desktop_text::finish(cx) { return Err(crate::desktop_text::save_error(cx)); }
             if on { enter(cx) } else { exit(cx) }
-            Ok(json!({ "editing": on }))
+            Ok(json!({ "editing": active(cx) }))
         })
         .arg(ArgSpec::optional("action", ArgKind::Enum, tk("what to do")).choices(&["on", "off", "toggle"]))
         .example("desktop edit")

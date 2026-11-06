@@ -37,9 +37,12 @@ About → What's new shows it too.
   instead of rescanning applications during scrolling. (#125)
 - **Launchers follow compact bars.** Attached left and right positions align
   with the ends of a notch, micro pill or island instead of the screen corners.
-  Button morphs keep that alignment and stay within the display.
+  Button morphs keep that alignment and stay within the display. At a Notch
+  end, the launcher and bar share one continuous outer curve.
 - **Smoother after startup.** The shell leaves its executable in the kernel’s
   file cache instead of forcing it to be read from disk again during cleanup.
+  It also leaves file mappings under kernel control, avoiding a race with
+  temporary font and driver mappings.
 
 ### Under the hood
 

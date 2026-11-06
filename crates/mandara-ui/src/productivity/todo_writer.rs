@@ -6,6 +6,12 @@ use gpui::Context;
 /// Receipts are bounded independently of the latest coalesced save snapshot.
 const MAX_WAITERS: usize = 32;
 
+/// A reserved reply slot is bound to a revision only after its mutation succeeds.
+pub(crate) struct Reservation {
+    reply: async_channel::Sender<Result<(), String>>,
+    result: async_channel::Receiver<Result<(), String>>,
+}
+
 #[derive(Default)]
 pub(super) struct TodoWrites {
     revision: u64,
@@ -22,13 +28,33 @@ impl TodoWrites {
     /// Marks executing IO so an explicit flush cannot cancel its task.
     fn begin(&mut self) -> u64 { self.inflight = true; self.revision }
 
-    /// One bounded waiter covers all changes through the current revision.
-    fn receipt(&mut self) -> Result<async_channel::Receiver<Result<(), String>>, String> {
+    /// Reserve capacity before a command can change the shared book.
+    fn reserve(&mut self) -> Result<Reservation, String> {
         if self.waiters.len() >= MAX_WAITERS { return Err(mandara_i18n::t("Busy").to_owned()); }
         let (reply, result) = async_channel::bounded(1);
-        if self.dirty() { self.waiters.push((self.revision, reply)); }
-        else { let _ = reply.try_send(Ok(())); }
-        Ok(result)
+        self.waiters.push((u64::MAX, reply.clone()));
+        Ok(Reservation { reply, result })
+    }
+
+    /// Bind the already-owned slot to the actual resulting revision.
+    fn bind(&mut self, reservation: Reservation) -> async_channel::Receiver<Result<(), String>> {
+        if let Some(index) = self.waiters.iter().position(|(_, reply)| reply.same_channel(&reservation.reply)) {
+            if self.dirty() { self.waiters[index].0 = self.revision; }
+            else { let (_, reply) = self.waiters.remove(index); let _ = reply.try_send(Ok(())); }
+        }
+        reservation.result
+    }
+
+    /// A rejected mutation frees its slot without scheduling a write.
+    fn cancel(&mut self, reservation: Reservation) {
+        self.waiters.retain(|(_, reply)| !reply.same_channel(&reservation.reply));
+    }
+
+    /// One bounded waiter covers all changes through the current revision.
+    #[cfg(test)]
+    fn receipt(&mut self) -> Result<async_channel::Receiver<Result<(), String>>, String> {
+        let reservation = self.reserve()?;
+        Ok(self.bind(reservation))
     }
 
     /// Failure answers every waiter; success acknowledges only included revisions.
@@ -36,13 +62,28 @@ impl TodoWrites {
         self.inflight = false;
         if result.is_ok() { self.saved = revision; }
         self.waiters.retain(|(wanted, reply)| {
-            if *wanted <= revision || result.is_err() { let _ = reply.try_send(result.clone()); false } else { true }
+            if *wanted != u64::MAX && (*wanted <= revision || result.is_err()) { let _ = reply.try_send(result.clone()); false } else { true }
         });
         result.is_ok() && self.dirty()
     }
 }
 
 impl Productivity {
+    /// Claim a bounded reply slot before applying a command or desktop mutation.
+    pub(crate) fn reserve_todos(&mut self) -> Result<Reservation, String> {
+        if !self.ready { return Err(mandara_i18n::t("Loading…").to_owned()); }
+        self.todo_writes.reserve()
+    }
+
+    /// Failed validation cannot retain a slot or change persistence ordering.
+    pub(crate) fn cancel_todos(&mut self, reservation: Reservation) { self.todo_writes.cancel(reservation); }
+
+    /// Start persistence only after the reserved mutation has produced its revision.
+    pub(crate) fn commit_todos(&mut self, reservation: Reservation, cx: &mut Context<Self>) -> async_channel::Receiver<Result<(), String>> {
+        let result = self.todo_writes.bind(reservation);
+        if self.todo_writes.dirty() { self.start_save(true, cx); }
+        result
+    }
     /// Updates the shared model immediately and schedules one coalesced disk write.
     pub(super) fn save(&mut self, cx: &mut Context<Self>) {
         self.todo_writes.changed();
@@ -85,13 +126,6 @@ impl Productivity {
         if self.todo_writes.dirty() { self.start_save(true, cx); }
     }
 
-    /// Waits for the current revision's actual atomic write; failures are retryable.
-    pub(crate) fn persist_todos(&mut self, cx: &mut Context<Self>) -> Result<async_channel::Receiver<Result<(), String>>, String> {
-        if !self.ready { return Err(mandara_i18n::t("Loading…").to_owned()); }
-        let result = self.todo_writes.receipt()?;
-        if self.todo_writes.dirty() { self.start_save(true, cx); }
-        Ok(result)
-    }
 }
 
 /// Serialization and filesystem calls execute together outside the UI thread.
@@ -119,6 +153,25 @@ fn persist_to(path: &std::path::Path, saved: &Saved) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reservations_reject_overflow_before_mutation_and_bind_only_after_success() {
+        let mut writes = TodoWrites::default();
+        let reserved: Vec<_> = (0..MAX_WAITERS).map(|_| writes.reserve().unwrap()).collect();
+        assert!(writes.reserve().is_err());
+        assert_eq!(writes.revision, 0, "overflow cannot advance a mutation revision");
+        let mut reserved = reserved.into_iter();
+        writes.cancel(reserved.next().unwrap());
+        let replacement = writes.reserve().unwrap();
+        writes.changed();
+        let pending = writes.bind(replacement);
+        assert!(pending.try_recv().is_err());
+        writes.finish(writes.revision, &Ok(()));
+        assert_eq!(pending.try_recv(), Ok(Ok(())));
+        assert_eq!(writes.waiters.len(), MAX_WAITERS - 1, "unbound reservations survive unrelated completions");
+        for reservation in reserved { writes.cancel(reservation); }
+        assert!(writes.waiters.is_empty());
+    }
 
     #[test]
     fn later_revisions_are_coalesced_without_acknowledging_them_before_their_write() {

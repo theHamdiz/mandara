@@ -64,8 +64,11 @@ impl Watch {
         let wanted: BTreeSet<_> = self.roots.applications.iter().map(PathBuf::as_path).chain(self.roots.usage.parent()).chain(self.roots.preferences.iter().filter_map(|path| path.parent())).filter_map(|root| {
             root.ancestors().find(|path| path.is_dir())
         }).flat_map(|root| std::iter::once(root.to_path_buf()).chain(root.parent().map(PathBuf::from))).collect();
-        for path in wanted.difference(&self.watching) { self.watcher.watch(path, notify::RecursiveMode::NonRecursive)?; }
-        for path in self.watching.difference(&wanted) { self.watcher.unwatch(path)?; }
+        // Replacement directories keep their path but have a new native watch.
+        for path in &wanted { self.watcher.watch(path, notify::RecursiveMode::NonRecursive)?; }
+        for path in self.watching.difference(&wanted) {
+            if let Err(error) = self.watcher.unwatch(path) && !matches!(&error.kind, notify::ErrorKind::WatchNotFound) { return Err(error); }
+        }
         self.watching = wanted;
         Ok(())
     }

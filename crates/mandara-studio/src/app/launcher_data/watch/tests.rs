@@ -70,3 +70,37 @@ fn atomic_history_and_theme_preference_replacements_are_reported() {
     std::fs::write(&usage, "invalid {").unwrap();
     assert!(super::super::worker::read_usage(&usage).entries.is_empty());
 }
+
+/// A backend may already have retired a deleted root. Both the missing-root
+/// refresh and a replacement at the same path must install working watches.
+#[test]
+fn removed_and_replaced_application_roots_resume_notifications() {
+    let temp = tempfile::tempdir().unwrap();
+    let apps = temp.path().join("applications");
+    std::fs::create_dir(&apps).unwrap();
+    let revisions = Arc::new(Revisions::default());
+    let (wake, events) = async_channel::bounded(1);
+    let mut watch = Watch::new(Roots { applications: vec![apps.clone()], usage: temp.path().join("usage.toml"), preferences: vec![] }, revisions.clone(), wake).unwrap();
+    // Simulate notify's automatic retirement deterministically on the real backend.
+    watch.watcher.unwatch(&apps).unwrap();
+    std::fs::remove_dir(&apps).unwrap();
+    watch.refresh().unwrap();
+    assert!(!watch.watching.contains(&apps));
+    std::fs::create_dir(&apps).unwrap();
+    watch.refresh().unwrap();
+    assert!(watch.watching.contains(&apps));
+    // Replacement can also finish before the coalesced refresh observes the gap.
+    watch.watcher.unwatch(&apps).unwrap();
+    std::fs::remove_dir(&apps).unwrap();
+    std::fs::create_dir(&apps).unwrap();
+    watch.refresh().unwrap();
+    while events.try_recv().is_ok() {}
+    let before = revisions.get().0;
+    std::fs::write(apps.join("after-replacement.desktop"), "[Desktop Entry]\nName=Demo\nExec=true\n").unwrap();
+    let deadline = Instant::now() + TIMEOUT;
+    while revisions.get().0 == before {
+        assert!(Instant::now() < deadline, "replacement application directory was not watched");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    receive(&events);
+}

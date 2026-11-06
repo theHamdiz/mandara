@@ -31,9 +31,18 @@ pub(super) fn button(
         palette,
         move |cx, window: &Window| {
             let fonts = FontNames::from(&crate::fonts::fonts(cx));
+            let loaded;
+            let meaning = if meaning.is_some() {
+                &meaning
+            } else {
+                let item = super::find(&key)?;
+                let wanted = super::wants_meaning(&super::settings(cx));
+                loaded = prepare_meaning(item, wanted, cx)?;
+                &loaded
+            };
             document(
                 &key,
-                &meaning,
+                meaning,
                 full,
                 arabic_px,
                 radius,
@@ -176,17 +185,54 @@ fn document(
     Ok(doc)
 }
 
+/// A started fetch must not turn an enabled meaning into a silent omission.
+fn export_meaning(
+    item: &catalog::Item,
+    wanted: bool,
+    model: &super::Model,
+) -> Result<Option<meanings::Meaning>, String> {
+    if !wanted || super::arabic_ui() {
+        return Ok(None);
+    }
+    if let Some(meaning) =
+        super::meaning_of(model, item).filter(|meaning| !meaning.text.trim().is_empty())
+    {
+        return Ok(Some(meaning));
+    }
+    Err(match &model.fetch {
+        super::Fetch::Idle | super::Fetch::Loading
+            if item.is_verse() && meanings::edition(mandara_i18n::language().code()).is_some() =>
+        {
+            t("Loading the meaning…").into()
+        }
+        super::Fetch::Offline => mandara_services::offline::blocked(),
+        super::Fetch::Failed(error) => error.clone(),
+        _ => t("The meaning couldn't be loaded").into(),
+    })
+}
+
+fn prepare_meaning(
+    item: &catalog::Item,
+    wanted: bool,
+    cx: &mut gpui::App,
+) -> Result<Option<meanings::Meaning>, String> {
+    if !wanted || super::arabic_ui() {
+        return Ok(None);
+    }
+    let shared = super::model(cx);
+    if item.is_verse() {
+        super::ensure_meanings(&shared, cx);
+    }
+    export_meaning(item, wanted, &shared.borrow())
+}
+
 pub(super) fn command(
     reference: &str,
     cx: &mut gpui::App,
 ) -> Result<mandara_plugins::Output, String> {
     let item = super::find(reference)?;
     let settings = super::settings(cx);
-    let shared = super::model(cx);
-    let meaning = settings
-        .translation
-        .then(|| super::meaning_of(&shared.borrow(), item))
-        .flatten();
+    let meaning = prepare_meaning(item, super::wants_meaning(&settings), cx)?;
     let palette = mandara_core::theme_entity(cx)
         .read(cx)
         .sample(std::time::Instant::now())
@@ -205,9 +251,105 @@ pub(super) fn command(
     design_share::command(doc, cx)
 }
 
+/// Uses the actual adapter and longest bundled narration in renderer regressions.
+#[cfg(test)]
+pub(in crate::plugins) fn longest_export_document(dark: bool, scale: f32) -> Document {
+    let catalog = catalog::catalog();
+    let item = catalog
+        .hadith_ids()
+        .filter_map(|id| catalog.get(id))
+        .max_by_key(|item| item.full_arabic().len())
+        .unwrap();
+    document(
+        &item.key,
+        &None,
+        true,
+        super::ArabicSize::Medium.hero_px(),
+        mandara_config::surfaces::defaults::CARD_RADIUS_PX,
+        &mandara_theme::engine::default_palette(dark),
+        FontNames::new("Inter", "Inter", "Alexandria", "JetBrains Mono"),
+        scale,
+    )
+    .unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn model(fetch: super::super::Fetch) -> super::super::Model {
+        super::super::Model {
+            state: Default::default(),
+            generation: 0,
+            progress: Default::default(),
+            edition: Some("en.sahih"),
+            fetch,
+            views: Default::default(),
+            timer: None,
+            index: None,
+            open_request: None,
+        }
+    }
+
+    #[test]
+    fn a_started_fetch_is_not_a_loaded_export_meaning() {
+        let _language = mandara_i18n::scoped(Some(mandara_i18n::Lang::En));
+        let catalog = catalog::catalog();
+        let item = catalog.get(catalog.find("89:30").unwrap()).unwrap();
+        for fetch in [super::super::Fetch::Idle, super::super::Fetch::Loading] {
+            assert_eq!(
+                export_meaning(item, true, &model(fetch)).unwrap_err(),
+                t("Loading the meaning…")
+            );
+        }
+        let meanings = [((89, 30), "The available meaning.".into())]
+            .into_iter()
+            .collect();
+        let ready = model(super::super::Fetch::Ready(std::sync::Arc::new(meanings)));
+        assert_eq!(
+            export_meaning(item, true, &ready).unwrap().unwrap().text,
+            "The available meaning."
+        );
+        assert!(export_meaning(item, false, &ready).unwrap().is_none());
+        let _arabic = mandara_i18n::scoped(Some(mandara_i18n::Lang::Ar));
+        assert!(export_meaning(item, true, &ready).unwrap().is_none());
+    }
+
+    #[test]
+    fn unavailable_meanings_report_why_without_exporting_arabic_silently() {
+        let _language = mandara_i18n::scoped(Some(mandara_i18n::Lang::En));
+        let catalog = catalog::catalog();
+        let item = catalog.get(catalog.find("89:30").unwrap()).unwrap();
+        assert_eq!(
+            export_meaning(item, true, &model(super::super::Fetch::Offline)).unwrap_err(),
+            mandara_services::offline::blocked()
+        );
+        assert_eq!(
+            export_meaning(
+                item,
+                true,
+                &model(super::super::Fetch::Failed("provider failed".into()))
+            )
+            .unwrap_err(),
+            "provider failed"
+        );
+        let empty = model(super::super::Fetch::Ready(Default::default()));
+        assert_eq!(
+            export_meaning(item, true, &empty).unwrap_err(),
+            t("The meaning couldn't be loaded")
+        );
+        let hadith = catalog.get(catalog.find("bukhari-6094").unwrap()).unwrap();
+        assert!(
+            export_meaning(hadith, true, &model(super::super::Fetch::Loading))
+                .unwrap()
+                .is_some()
+        );
+        let _unsupported = mandara_i18n::scoped(Some(mandara_i18n::Lang::Te));
+        assert_eq!(
+            export_meaning(item, true, &model(super::super::Fetch::Idle)).unwrap_err(),
+            t("The meaning couldn't be loaded")
+        );
+    }
 
     #[test]
     fn reminders_keep_the_full_displayed_meaning_credit_and_citation() {

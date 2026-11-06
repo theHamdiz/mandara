@@ -57,11 +57,19 @@ impl Productivity {
     /// Error status and snapshots share the same completion sequence boundary.
     fn apply_notes_completion(&mut self, update: NotesCompletion) -> bool {
         let NotesCompletion { sequence, mut snapshot, acknowledged, successful, error } = update;
+        if successful && sequence >= self.notes_applied {
+            for &(id, generation) in &acknowledged {
+                self.notes_conflicts.retain(|(root, note), (wanted, _)| root != &self.notes.root || *note != id || *wanted != generation);
+            }
+        }
         acknowledge(&mut self.notes_dirty, &mut self.notes_submitted, acknowledged, successful, |id| { self.notes_tasks.remove(&id); });
         if sequence < self.notes_applied { return false; }
+        self.retain_conflicts(&snapshot);
         self.notes_error = error;
         if snapshot.root == self.notes.root || self.notes_dirty.is_empty() {
-            for draft in self.notes.notes.iter().filter(|draft| self.notes_dirty.contains_key(&draft.id)) {
+            let drafts = self.notes.notes.iter().filter(|draft| self.notes_dirty.contains_key(&draft.id))
+                .chain(self.notes_conflicts.iter().filter(|((root, _), _)| root == &snapshot.root).map(|(_, (_, note))| note));
+            for draft in drafts {
                 if let Some(note) = snapshot.notes.iter_mut().find(|note| note.id == draft.id) {
                     if note.path == draft.path && note.topic == draft.topic { *note = draft.clone(); }
                     else { *note = Arc::new(Note { id: note.id, topic: note.topic, path: note.path.clone(), text: draft.text.clone(), updated: draft.updated }); }
@@ -73,6 +81,29 @@ impl Productivity {
         self.notes_applied = sequence;
         true
     }
+
+    /// A stale checkbox or removed file needs user attention, not repeated prerequisite writes.
+    fn retain_conflicts(&mut self, snapshot: &NotesSnapshot) {
+        if snapshot.root != self.notes.root { return; }
+        let conflicts: Vec<_> = self.notes_dirty.iter().filter_map(|(&id, &generation)| {
+            let draft = self.notes.notes.iter().find(|note| note.id == id)?;
+            let current = snapshot.note(id);
+            let removed = current.is_none() && draft.path.is_some();
+            let changed_markers = self.notes_tasks.get(&id).is_some_and(|patches| {
+                patches.iter().any(|(&start, &(end, _))| !matches!(current.and_then(|note| note.text.get(start..end)), Some("[ ]" | "[x]" | "[X]")))
+            });
+            (removed || changed_markers).then(|| (id, generation, draft.clone()))
+        }).collect();
+        for (id, generation, draft) in conflicts {
+            self.notes_dirty.remove(&id);
+            self.notes_submitted.remove(&id);
+            self.notes_tasks.remove(&id);
+            self.notes_conflicts.insert((self.notes.root.clone(), id), (generation, draft));
+        }
+    }
+
+    /// Conflicts remain visible after unrelated operations or leaving and returning to a folder.
+    pub(crate) fn has_note_conflicts(&self) -> bool { self.notes_conflicts.keys().any(|(root, _)| root == &self.notes.root) }
 
     /// Drain a latest dirty model only after every already-submitted ordering barrier.
     fn follow_notes_completion(&mut self, cx: &mut Context<Self>) {
@@ -166,6 +197,7 @@ impl Productivity {
     pub fn edit_note(&mut self, id: u64, text: &str, cx: &mut Context<Self>) {
         let Some(note) = self.notes.notes.iter_mut().find(|note| note.id == id) else { return };
         if note.text == text { return; }
+        self.notes_conflicts.retain(|(root, note), _| root != &self.notes.root || *note != id);
         *note = Arc::new(Note { id, topic: note.topic, path: note.path.clone(), text: text.to_owned(), updated: now_unix() });
         self.notes_generation += 1;
         self.notes_dirty.insert(id, self.notes_generation);
@@ -174,7 +206,7 @@ impl Productivity {
     }
 
     /// A panel must not close a field that changed after its save request.
-    pub fn note_pending(&self, id: u64) -> bool { self.notes_dirty.contains_key(&id) }
+    pub fn note_pending(&self, id: u64) -> bool { self.notes_dirty.contains_key(&id) || self.notes_conflicts.keys().any(|(root, note)| root == &self.notes.root && *note == id) }
 
     /// Flushes before final filename/delete work and reports the real completion.
     pub fn settle_note(&mut self, id: u64, cx: &mut Context<Self>) -> Result<async_channel::Receiver<NoteReply<bool>>, String> {
@@ -185,7 +217,7 @@ impl Productivity {
     pub fn remove_note(&mut self, id: u64, cx: &mut Context<Self>) -> Result<async_channel::Receiver<NoteReply<bool>>, String> {
         let pending = self.pending_notes(Some(id), false);
         let mut acknowledged: Vec<_> = pending.iter().map(PendingNote::token).collect();
-        let local_draft = self.notes_dirty.get(&id).copied();
+        let local_draft = self.notes_dirty.get(&id).copied().or_else(|| self.notes_conflicts.iter().find(|((root, note), _)| root == &self.notes.root && *note == id).map(|(_, (generation, _))| *generation));
         if let Some(generation) = local_draft { acknowledged.push((id, generation)); }
         self.queue_notes(cx, acknowledged, move |store| {
             write_pending(store, &pending)?;
@@ -218,7 +250,7 @@ impl Productivity {
 
     /// Waits for pending bodies/metadata before opening the configured folder.
     pub(super) fn ensure_notes_root(&mut self, root: std::path::PathBuf, cx: &mut Context<Self>) {
-        if self.notes.root == root || self.notes_switching || !self.ready { return; }
+        if self.notes.root == root || self.notes_switching || !self.notes_ready { return; }
         if !self.notes_dirty.is_empty() {
             if let Err(error) = self.flush_notes(cx) { tracing::warn!("saving notes before changing folder: {error}"); }
             return;
@@ -290,6 +322,41 @@ mod tests {
     fn model(root: std::path::PathBuf) -> Productivity {
         let (changed, _) = async_channel::bounded(1);
         Productivity::empty(PomodoroRules { focus: std::time::Duration::ZERO, short_break: std::time::Duration::ZERO, long_break: std::time::Duration::ZERO, long_every: 4, auto_continue: false }, root, changed)
+    }
+
+    #[test]
+    fn a_conflicting_patch_stays_recoverable_without_blocking_other_notes_or_folders() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = NoteStore::open(root.path());
+        let id = store.create(DEFAULT_TOPIC, "- [ ] Original task").unwrap();
+        let mut model = model(root.path().into());
+        model.notes = store.snapshot();
+        let mut draft = (*model.notes.notes[0]).clone();
+        draft.text = "- [x] Original task".into();
+        model.notes.notes[0] = Arc::new(draft);
+        model.notes_dirty.insert(id, 1);
+        model.notes_tasks.insert(id, BTreeMap::from([(2, (5, true))]));
+        store.write(id, "Rewritten externally").unwrap();
+        assert!(write_pending(&mut store, &model.pending_notes(None, false)).is_err());
+        model.apply_notes_completion(NotesCompletion { sequence: 1, snapshot: store.snapshot(), acknowledged: vec![(id, 1)], successful: false, error: Some("changed marker".into()) });
+        assert!(model.notes_dirty.is_empty());
+        assert!(model.note_pending(id));
+        assert_eq!(model.notes.note(id).unwrap().text, "- [x] Original task");
+        assert!(write_pending(&mut store, &model.pending_notes(None, false)).is_ok());
+        let added = store.create(DEFAULT_TOPIC, "An unrelated note").unwrap();
+        model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None });
+        assert!(model.notes.note(added).is_some());
+        let other = root.path().join("other");
+        model.apply_notes_completion(NotesCompletion { sequence: 3, snapshot: NotesSnapshot::empty(other.clone()), acknowledged: Vec::new(), successful: true, error: None });
+        assert_eq!(model.notes.root, other);
+        assert!(!model.has_note_conflicts());
+        model.apply_notes_completion(NotesCompletion { sequence: 4, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None });
+        assert!(model.has_note_conflicts());
+        assert_eq!(model.notes.note(id).unwrap().text, "- [x] Original task");
+        assert_eq!(store.note(id).unwrap().text, "Rewritten externally");
+        assert!(!model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: vec![(id, 1)], successful: true, error: None }));
+        assert!(model.has_note_conflicts(), "an older successful write cannot clear a newer quarantined conflict");
+        assert_eq!(model.notes.note(id).unwrap().text, "- [x] Original task");
     }
 
     #[test]

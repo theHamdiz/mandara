@@ -329,6 +329,8 @@ fn desktop_tasks_and_notes_are_edited_without_their_plugin_panels() {
         input(&fixture, &["-M", "ctrl", "-k", "Return", "-m", "ctrl", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"]);
         assert!(command(&fixture, &["notes", "show", &note])["text"].as_str().unwrap().ends_with("External edit"));
         assert_eq!(clipboard(&fixture), "Keep this unsaved draft");
+        assert!(fixture.request(&["desktop", "edit"]).is_err(), "a conflicted text save must refuse desktop edit mode");
+        assert_eq!(window_count(&fixture), closed_windows + 1, "a refusal must retain the conflicting editor");
         let shot = fixture.artifact(&format!("desktop-text-{language}-{mode}.png")).unwrap();
         Process(fixture.tool("grim").unwrap().arg(&shot).spawn().unwrap()).finish();
         input(&fixture, &["-k", "Escape"]);

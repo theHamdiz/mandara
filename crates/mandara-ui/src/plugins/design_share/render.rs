@@ -7,6 +7,8 @@ use mandara_i18n::{t, tf};
 
 use super::{document::Document, paint::Decoration, png::Output};
 
+mod clip;
+
 /// At the maximum supported export width, one RGBA strip is two MiB.
 const STRIP_ROWS: u32 = 128;
 
@@ -24,7 +26,8 @@ fn render(
     let mut text = TextPainter::new();
     text.set_arabic_font(&doc.fonts.arabic);
     let layout = doc.layout(&mut text, &mut checkpoint)?;
-    let decoration = Decoration::new(doc, &layout)?;
+    let clip = clip::Clip::new(doc, &layout)?;
+    let mut decoration = Decoration::new(doc, &layout)?;
     let strip_rows = strip_rows.min(layout.height).max(1);
     let mut pixels = tiny_skia::Pixmap::new(layout.width, strip_rows)
         .ok_or_else(|| t("The image design could not be prepared").to_string())?;
@@ -44,23 +47,9 @@ fn render(
             let height = (layout.height - top).min(strip_rows);
             let length = layout.width as usize * height as usize * 4;
             let mut canvas = pixels.as_mut();
-            super::paint::strip(doc, &layout, &decoration, &mut text, top, &mut canvas);
-            mask.clear();
-            if let Some(path) = crate::lock::paint::rounded_rect(
-                0.0,
-                -(top as f32),
-                layout.width as f32,
-                layout.height as f32,
-                doc.radius * doc.scale,
-            ) {
-                mask.fill_path(
-                    &path,
-                    tiny_skia::FillRule::Winding,
-                    true,
-                    tiny_skia::Transform::identity(),
-                );
-                canvas.apply_mask(&mask);
-            }
+            super::paint::strip(doc, &layout, &mut decoration, &mut text, top, &mut canvas);
+            clip.fill(&mut mask, top);
+            canvas.apply_mask(&mask);
             // PNG stores straight alpha. Convert the reusable strip in place.
             for pixel in canvas.data_mut().as_chunks_mut::<4>().0 {
                 let alpha = u32::from(pixel[3]);
@@ -128,5 +117,29 @@ mod tests {
             .is_err()
         );
         assert_eq!(checkpoints, 4);
+    }
+
+    #[test]
+    fn the_longest_real_jannah_card_matches_one_complete_canvas() {
+        for language in [mandara_i18n::Lang::En, mandara_i18n::Lang::Ar] {
+            let _language = mandara_i18n::scoped(Some(language));
+            for dark in [false, true] {
+                for scale in [1.0, 1.5] {
+                    let doc = crate::plugins::jannah::longest_export_document(dark, scale);
+                    let striped = render(&doc, 37, || true).unwrap();
+                    let full = render(&doc, u32::MAX, || true).unwrap();
+                    let a = image::load_from_memory(&striped).unwrap().into_rgba8();
+                    let b = image::load_from_memory(&full).unwrap().into_rgba8();
+                    assert!(a.height() > 640);
+                    assert_eq!(a.dimensions(), b.dimensions());
+                    let mismatch = a.as_raw().iter().zip(b.as_raw()).position(|(a, b)| a != b);
+                    assert!(
+                        mismatch.is_none(),
+                        "{} dark={dark} scale={scale}: first differing channel: {mismatch:?}",
+                        language.code(),
+                    );
+                }
+            }
+        }
     }
 }

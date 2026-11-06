@@ -407,12 +407,12 @@ impl Ui {
 
     /// Evicts least-recently-shown previews (never ones shown this tick) until
     /// the decoded total fits the budget.
-    fn enforce_budget(&mut self) {
+    fn enforce_budget(&mut self, mut drop_image: impl FnMut(Arc<RenderImage>)) {
         while self.decoded_bytes() > THUMB_BUDGET_BYTES {
             let victim = self.thumbs.iter().filter(|(_, t)| t.bytes > 0 && t.used != self.tick).min_by_key(|(_, t)| t.used).map(|(id, _)| *id);
             match victim {
                 Some(id) => {
-                    self.thumbs.remove(&id);
+                    if let Some(ThumbSlot { thumb: Thumb::Ready(image), .. }) = self.thumbs.remove(&id) { drop_image(image); }
                 }
                 None => break,
             }
@@ -538,12 +538,16 @@ fn decode_thumb(path: PathBuf, w: u32, h: u32) -> Option<Arc<RenderImage>> {
 /// Brings the caches in line with the rows on screen: drops texts of other
 /// rows and previews of forgotten entries, derives missing row texts and
 /// returns the images that still need a preview (marked as loading).
-fn sync_cache<'a>(ui: &Shared, entries: &[ClipEntry], shown: impl Iterator<Item = &'a ClipEntry> + Clone, preview_lines: usize) -> Vec<(u64, PathBuf)> {
+fn sync_cache<'a>(ui: &Shared, entries: &[ClipEntry], shown: impl Iterator<Item = &'a ClipEntry> + Clone, preview_lines: usize, mut drop_image: impl FnMut(Arc<RenderImage>)) -> Vec<(u64, PathBuf)> {
     let mut u = ui.borrow_mut();
     u.tick += 1;
     let tick = u.tick;
     u.rows.retain(|id, r| r.preview_lines == preview_lines && shown.clone().any(|e| e.id == *id));
-    u.thumbs.retain(|id, _| entries.iter().any(|e| e.id == *id));
+    u.thumbs.retain(|id, slot| {
+        let keep = entries.iter().any(|entry| entry.id == *id);
+        if !keep && let Thumb::Ready(image) = std::mem::replace(&mut slot.thumb, Thumb::Failed) { drop_image(image); }
+        keep
+    });
     let missing_rows = shown.clone().filter(|e| !u.rows.contains_key(&e.id)).count();
     let missing_thumbs = shown.clone().filter(|e| matches!(e.content, ClipContent::Image { .. }) && !u.thumbs.contains_key(&e.id)).count();
     u.rows.reserve(missing_rows);
@@ -595,7 +599,7 @@ fn decode_thumbs(ui: &Shared, pending: Vec<(u64, PathBuf)>, scale: f32, cx: &mut
                             }
                             None => slot.thumb = Thumb::Failed,
                         }
-                        u.enforce_budget();
+                        u.enforce_budget(|image| { cx.update(|cx| cx.drop_image(image, None)); });
                     }
                     u.views.clone()
                 };
@@ -947,12 +951,13 @@ fn layout<'a>(ui: &Shared, entries: &'a Arc<Vec<ClipEntry>>, collections: &[Clip
 }
 
 /// Derives the rows on screen and starts decoding their thumbnails.
-fn refresh(ui: &Shared, look: &Look, query: &str, window: &Window, cx: &mut App) {
-    let pending = {
+fn refresh(ui: &Shared, look: &Look, query: &str, window: &mut Window, cx: &mut App) {
+    let entries = hub(cx).read(cx).clipboard.entries.clone();
+    let listing = {
         let state = &hub(cx).read(cx).clipboard;
-        let l = layout(ui, &state.entries, &state.collections, look, query);
-        sync_cache(ui, &state.entries, l.shown(), look.preview_lines)
+        layout(ui, &entries, &state.collections, look, query)
     };
+    let pending = sync_cache(ui, &entries, listing.shown(), look.preview_lines, |image| cx.drop_image(image, Some(window)));
     if !pending.is_empty() {
         decode_thumbs(ui, pending, window.scale_factor(), cx);
     }
@@ -979,7 +984,7 @@ impl View {
             layout(ui, &entries, &state.collections, &look, &query)
         };
         if self.p.progress() > 0.0 {
-            let pending = sync_cache(ui, &entries, lay.shown(), look.preview_lines);
+            let pending = sync_cache(ui, &entries, lay.shown(), look.preview_lines, |image| cx.drop_image(image, Some(window)));
             decode_thumbs(ui, pending, window.scale_factor(), cx);
         }
         let cx: &App = cx;
@@ -1578,11 +1583,33 @@ mod tests {
         for (id, used) in [(1, 1), (2, 0), (3, 2)] {
             ui.thumbs.insert(id, ThumbSlot { thumb: Thumb::Failed, bytes: THUMB_BUDGET_BYTES / 2, used });
         }
-        ui.enforce_budget();
+        ui.enforce_budget(|_| {});
         assert!(!ui.thumbs.contains_key(&2));
         assert!(ui.thumbs.contains_key(&1));
         assert!(ui.thumbs.contains_key(&3));
         assert_eq!(ui.decoded_bytes(), THUMB_BUDGET_BYTES);
+    }
+
+    #[test]
+    fn evictions_return_ready_images_for_atlas_cleanup() {
+        let image = || Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(image::RgbaImage::new(1, 1))]));
+        let mut ui = Ui { tick: 2, ..Default::default() };
+        let mut expected = Vec::new();
+        for (id, used) in [(1, 1), (2, 0), (3, 2)] {
+            let rendered = image();
+            expected.push(Arc::downgrade(&rendered));
+            ui.thumbs.insert(id, ThumbSlot { thumb: Thumb::Ready(rendered), bytes: THUMB_BUDGET_BYTES / 2, used });
+        }
+        let mut discarded = 0;
+        ui.enforce_budget(|_| discarded += 1);
+        assert_eq!(discarded, 1);
+        assert!(expected[1].upgrade().is_none());
+        let ui = Rc::new(RefCell::new(ui));
+        let pending = sync_cache(&ui, &[], std::iter::empty(), 1, |_| discarded += 1);
+        assert!(pending.is_empty());
+        assert_eq!(discarded, 3, "forgotten previews must leave the atlases too");
+        assert!(expected.iter().all(|image| image.upgrade().is_none()));
+        assert!(ui.borrow().thumbs.is_empty());
     }
 
     #[test]
@@ -1608,7 +1635,7 @@ mod tests {
         let first = layout(&ui, &entries, &[], &look, "");
         let visible = first.shown().map(|entry| entry.id).collect::<Vec<_>>();
         assert_eq!(visible.len(), PAGE + 1);
-        assert!(sync_cache(&ui, &entries, first.shown(), look.preview_lines).is_empty());
+        assert!(sync_cache(&ui, &entries, first.shown(), look.preview_lines, |_| {}).is_empty());
         ui.borrow_mut().reconcile_selection(&first);
         assert!(visible.iter().all(|id| ui.borrow().rows.contains_key(id)));
         assert!(!ui.borrow().rows.contains_key(&entries.last().unwrap().id));
@@ -1618,7 +1645,7 @@ mod tests {
         let page = next.page_rows();
         assert_eq!(page.len(), 1);
         assert!(std::ptr::eq(page.as_ptr(), next.listing.main[PAGE..].as_ptr()));
-        assert!(sync_cache(&ui, &entries, next.shown(), look.preview_lines).is_empty());
+        assert!(sync_cache(&ui, &entries, next.shown(), look.preview_lines, |_| {}).is_empty());
         ui.borrow_mut().reconcile_selection(&next);
         assert!(ui.borrow().selected.is_none(), "a hidden row cannot be activated");
         assert_eq!(ui.borrow().rows.len(), 2, "only the pin and new page keep their row previews");

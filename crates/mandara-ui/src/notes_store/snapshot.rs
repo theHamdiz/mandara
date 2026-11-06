@@ -10,12 +10,14 @@ pub struct NotesSnapshot {
     pub root: PathBuf,
     pub topics: Vec<Topic>,
     pub notes: Vec<Arc<Note>>,
+    /// Per-file scan errors are visible without disabling unrelated notes.
+    pub read_errors: Option<Arc<[String]>>,
 }
 
 impl NotesSnapshot {
     /// Empty until the initial background scan completes.
     pub fn empty(root: PathBuf) -> Self {
-        Self { root, topics: vec![Topic::default()], notes: Vec::new() }
+        Self { root, topics: vec![Topic::default()], notes: Vec::new(), read_errors: None }
     }
     /// Looks up stable topic metadata from the last completed scan/write.
     pub fn topic(&self, id: u64) -> Option<&Topic> {

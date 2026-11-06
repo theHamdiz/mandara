@@ -28,6 +28,9 @@ pub mod art;
 pub(crate) mod panel;
 mod share;
 
+#[cfg(test)]
+pub(super) use share::longest_export_document;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;

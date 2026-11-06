@@ -103,5 +103,4 @@ pub fn start_upkeep() {
             mandara_services::memory::request_trim();
         }
     });
-    crate::residency::start();
 }

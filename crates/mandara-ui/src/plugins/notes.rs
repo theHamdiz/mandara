@@ -577,9 +577,9 @@ fn rendered(ui: &Ui, id: u64, text_now: &str, palette: &MandaraPalette, ids: &'s
 
 #[allow(clippy::too_many_arguments)]
 fn body(p: &Productivity, ui: &Ui, f: &Fields, palette: &MandaraPalette, limit: usize, ids: &'static Ids, reveal_cx: Option<&PanelCx>, mono: SharedString) -> AnyElement {
-    if !p.ready {
+    if !p.notes_ready {
         return div().text_color(palette.on_surface_variant.hsla()).child(
-            p.load_error.as_ref().map_or_else(|| mandara_i18n::t("Loading…").to_owned(), |error| mandara_i18n::tf("Couldn't load: {error}", &[("error", error)]))
+            p.notes_error.as_ref().map_or_else(|| mandara_i18n::t("Loading…").to_owned(), |error| mandara_i18n::tf("Couldn't load: {error}", &[("error", error)]))
         ).into_any_element();
     }
 
@@ -638,6 +638,12 @@ fn body(p: &Productivity, ui: &Ui, f: &Fields, palette: &MandaraPalette, limit: 
             });
         }));
     let mut blocks: Vec<AnyElement> = vec![head.into_any_element()];
+    if let Some(error) = store.read_errors.as_ref().and_then(|errors| errors.first()) {
+        blocks.push(div().text_color(palette.urgent_coral.hsla()).child(mandara_i18n::tf("Couldn't load: {error}", &[("error", error)])).into_any_element());
+    }
+    if p.has_note_conflicts() {
+        blocks.push(div().text_color(palette.urgent_coral.hsla()).child(mandara_i18n::t("This item changed elsewhere. Your text is still here.")).into_any_element());
+    }
     if let Some(error) = state.error.as_ref().or(p.notes_error.as_ref()) {
         blocks.push(div().text_color(palette.urgent_coral.hsla()).child(mandara_i18n::tf("Couldn't save: {error}", &[("error", error)])).into_any_element());
     }

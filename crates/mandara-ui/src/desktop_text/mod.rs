@@ -1,6 +1,7 @@
 //! On-demand text editing at a desktop widget's painted position.
 
 mod draft;
+mod continuation;
 pub(crate) mod placement;
 mod store;
 
@@ -35,6 +36,23 @@ const CANCEL_ICON: &str = "close";
 struct Open(Option<WindowHandle<Editor>>);
 impl Global for Open {}
 
+/// A deferred desktop action survives failed saves and runs only after success.
+pub(crate) fn after_save(cx: &mut App, action: impl FnOnce(&mut App) + 'static) {
+    let mut action = Some(action);
+    if let Some(handle) = cx.try_global::<Open>().and_then(|open| open.0)
+        && handle.update(cx, |editor, window, cx| {
+            editor.next.defer(Box::new(action.take().unwrap()));
+            editor.finish(window, cx);
+        }).is_ok() { return; }
+    if let Some(action) = action { action(cx); }
+}
+
+/// Command callers see the retained validation/IO error, or the pending save status.
+pub(crate) fn save_error(cx: &App) -> String {
+    cx.try_global::<Open>().and_then(|open| open.0).and_then(|handle| handle.read(cx).ok())
+        .and_then(|editor| editor.error.clone()).unwrap_or_else(|| t("Saving…").to_owned())
+}
+
 /// A window exists before Wayland grants its keyboard focus. `None` means closed.
 pub(crate) fn input_ready(cx: &mut App) -> Option<bool> {
     let handle = cx.try_global::<Open>()?.0?;
@@ -63,16 +81,11 @@ pub(crate) fn finish(cx: &mut App) -> bool {
 /// Open from the renderer's actual hit geometry, including the clicked output.
 pub(crate) fn open(widget: String, action: Action, placement: Placement, cx: &mut App) {
     if crate::lock::is_locked() || crate::desktop_edit::active(cx) { return; }
-    let mut request = Some((widget, action, placement));
-    if let Some(handle) = cx.try_global::<Open>().and_then(|open| open.0) {
-        let finished = handle.update(cx, |editor, window, cx| {
-            let finished = editor.finish(window, cx);
-            if !finished && editor.error.is_none() { editor.next = request.take(); }
-            finished
-        }).unwrap_or(true);
-        if !finished { return; }
-    }
-    let Some((widget, action, placement)) = request else { return };
+    after_save(cx, move |cx| open_new(widget, action, placement, cx));
+}
+
+fn open_new(widget: String, action: Action, placement: Placement, cx: &mut App) {
+    if crate::lock::is_locked() || crate::desktop_edit::active(cx) { return; }
     let cfg = config(cx).read(cx).snapshot();
     let Some(definition) = cfg.desktop.widgets.get(&widget).filter(|definition| definition.enabled && !cfg.desktop.widgets.hidden && crate::desktop_plugins::shows(definition, &cfg, cx)) else {
         return;
@@ -80,8 +93,7 @@ pub(crate) fn open(widget: String, action: Action, placement: Placement, cx: &mu
     let p = productivity(cx);
     let target = {
         let model = p.read(cx);
-        if !model.ready { return; }
-        match (&definition.kind, action) {
+        let target = match (&definition.kind, action) {
             (WidgetKind::Todo(todo), Action::TodoAdd) => Target::Task { id: None, list: model.book.find_list(&todo.list).unwrap_or(crate::todo_lists::INBOX_ID) },
             (WidgetKind::Todo(_), Action::TodoEdit(id)) => {
                 let Some(task) = model.book.todos.iter().find(|task| task.id == id) else {
@@ -94,7 +106,9 @@ pub(crate) fn open(widget: String, action: Action, placement: Placement, cx: &mu
                 Target::Note { id: note.map(|note| note.id), topic: note.map_or(crate::notes_store::DEFAULT_TOPIC, |note| note.topic) }
             }
             _ => return,
-        }
+        };
+        if !target.ready(model) { return; }
+        target
     };
     let Some([x, y, width, height]) = placement.editor_bounds(target.multiline()) else {
         return;
@@ -138,7 +152,7 @@ struct Editor {
     settle: Option<Task<()>>,
     saving: bool,
     notes_root: Option<std::path::PathBuf>,
-    next: Option<(String, Action, Placement)>,
+    next: continuation::Continuation<Box<dyn FnOnce(&mut App)>>,
 }
 
 impl Editor {
@@ -204,7 +218,7 @@ impl Editor {
         })
         .detach();
         let notes_root = target.multiline().then(|| productivity(cx).read(cx).notes.root.clone());
-        Self { widget, target, draft, note_title, field, save_focus: cx.focus_handle(), cancel_focus: cx.focus_handle(), error: None, settle: None, saving: false, notes_root, next: None }
+        Self { widget, target, draft, note_title, field, save_focus: cx.focus_handle(), cancel_focus: cx.focus_handle(), error: None, settle: None, saving: false, notes_root, next: continuation::Continuation::new() }
     }
 
     fn finish(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
@@ -214,7 +228,7 @@ impl Editor {
         let retry = self.draft.retrying();
         let checked = self.draft.prepare(&value, self.target.text(current.read(cx)));
         match checked {
-            Ok(false) => { self.close(window, cx); return true; }
+            Ok(false) => { self.finish_saved(window, cx); return true; }
             Err(error) => { self.show_error(error, cx); return false; }
             Ok(true) => {}
         }
@@ -258,6 +272,7 @@ impl Editor {
     }
 
     fn show_error(&mut self, error: SaveError<String>, cx: &mut Context<Self>) {
+        let _ = self.next.complete(false);
         self.error = Some(match error {
             SaveError::Changed => t("This item changed elsewhere. Your text is still here.").into(),
             SaveError::Removed => t("This item was removed. Your text is still here.").into(),
@@ -279,9 +294,9 @@ impl Editor {
                 });
             }
         }
-        let next = self.next.take();
+        let next = self.next.complete(true);
         self.close(window, cx);
-        if let Some((widget, action, placement)) = next { open(widget, action, placement, cx); }
+        if let Some(action) = next { action(cx); }
     }
 
     fn close(&self, window: &mut Window, cx: &mut App) {

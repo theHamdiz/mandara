@@ -31,8 +31,8 @@ of them, from one native binary:
   notifications, on-screen displays, wallpaper engine, desktop widgets,
   clipboard manager, screenshots, screen recording, offline OCR, polkit
   agent, lock screen, login manager and a live settings app.
-- **Measured performance**: under 100 MiB of RAM, under 190 MiB of video
-  memory, about 0.1 % CPU idle, and 0.1–0.2 ms per frame.
+- **Measured performance**: documented release measurements, test setups and
+  current limits in the [performance guide](performance.md).
 - **One language for everything**: 100 % Rust on GPUI, the GPU-accelerated
   framework behind the Zed editor; no QML, JavaScript or Python layer.
 - **Extensible and scriptable**: 77 built-in plugins, sandboxed
@@ -90,9 +90,10 @@ back. [Apps and updates](apps-and-updates.md)
 
 ## How much memory does Mandara use?
 
-The whole shell uses under 100 MiB of RAM, under 190 MiB of video memory
-and about 0.1 % CPU when idle. Wallpapers cost no video memory, and
-nothing animates or samples while it's off screen.
+Memory depends on display size, driver, widgets and open panels. The
+100 MiB startup and operation target remains open. Earlier measured figures
+include cleanup that has since been removed; they are historical results,
+not current ceilings. Studio is a separate process.
 [Performance](performance.md)
 
 ## Where are the settings?

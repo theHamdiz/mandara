@@ -863,9 +863,13 @@ fn mutation_command(
     handler: impl Fn(&mandara_plugins::Args, &mut App) -> Result<serde_json::Value, String> + 'static,
 ) -> CommandSpec {
     CommandSpec::new_output(path, summary, move |args, cx| {
-        if !productivity(cx).read(cx).ready { return Err(mandara_i18n::t("Loading…").to_owned()); }
-        let value = handler(args, cx)?;
-        let pending = productivity(cx).update(cx, |p, cx| p.persist_todos(cx))?;
+        let model = productivity(cx);
+        let reservation = model.update(cx, |p, _| p.reserve_todos())?;
+        let value = match handler(args, cx) {
+            Ok(value) => value,
+            Err(error) => { model.update(cx, |p, _| p.cancel_todos(reservation)); return Err(error); }
+        };
+        let pending = model.update(cx, |p, cx| p.commit_todos(reservation, cx));
         let (reply, result) = async_channel::bounded(1);
         mandara_services::runtime::spawn("todo-command", async move {
             let result = match pending.recv().await {
