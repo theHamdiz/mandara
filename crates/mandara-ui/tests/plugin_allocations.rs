@@ -19,6 +19,10 @@ mod keyboard_label;
 mod phone_devices;
 #[path = "../src/plugins/lifecycle/switches.rs"]
 mod plugin_switches;
+#[path = "../src/plugins/progress/order.rs"]
+mod progress_order;
+#[path = "../src/plugins/progress/state.rs"]
+mod progress_state;
 #[path = "../src/plugins/media/scrub_state.rs"]
 mod scrub_state;
 #[path = "../src/plugins/settings_cache.rs"]
@@ -370,5 +374,36 @@ fn plugin_lifecycle_does_not_clone_settings_for_unchanged_switches() {
     });
     eprintln!("{UPDATES} plugin config notifications: whole settings clone {before:?}, borrowed switch comparison {after:?}");
     assert!(before.0 >= UPDATES, "the positive control must copy owned plugin settings");
+    assert_eq!(after, (0, 0));
+}
+
+/// Display ordering and live semantic colours borrow the unchanged task snapshot.
+#[test]
+fn progress_rows_do_not_collect_an_intermediate_display_order() {
+    use mandara_services::progress::{Board, Status};
+    let mut board = Board::default();
+    for id in ["first", "second", "third", "last"] { board.start(id, id, 0).unwrap(); }
+    board.done("second", "", 1000).unwrap();
+    let palette = mandara_theme::catalog::builtin()[0].palette(true);
+    let _language = mandara_i18n::scoped(Some(mandara_i18n::Lang::En));
+    for task in &board.tasks { black_box(progress_state::TaskState::from(task).label(1000)); }
+    const FRAMES: usize = 32;
+    let before = allocations(|| {
+        for _ in 0..FRAMES {
+            let mut order: Vec<_> = board.running().collect();
+            order.extend(board.tasks.iter().filter(|task| task.status != Status::Running));
+            black_box(order);
+        }
+    });
+    let after = allocations(|| {
+        for _ in 0..FRAMES {
+            for task in progress_order::ordered_tasks(black_box(&board.tasks)) {
+                let state = progress_state::TaskState::from(task);
+                black_box((state.color(1000, &palette), state.label(1000)));
+            }
+        }
+    });
+    eprintln!("{FRAMES} progress row traversals: ordered Vec {before:?}, borrowed order and live roles {after:?}");
+    assert!(before.0 >= FRAMES, "the old display order must remain a live allocation control");
     assert_eq!(after, (0, 0));
 }
