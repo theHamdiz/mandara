@@ -8518,3 +8518,4 @@
 "Couldn't save: {error}" = "저장하지 못했습니다: {error}"
 "This item changed elsewhere. Your text is still here." = "이 항목이 다른 곳에서 변경되었습니다. 입력한 텍스트는 여기에 그대로 남아 있습니다."
 "This item was removed. Your text is still here." = "이 항목이 삭제되었습니다. 입력한 텍스트는 여기에 그대로 남아 있습니다."
+"Choose where the launcher opens. Attached positions follow the bar on that edge." = "런처가 열릴 위치를 선택하세요. 연결된 위치는 해당 가장자리의 바를 따릅니다."

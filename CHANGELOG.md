@@ -12,12 +12,27 @@ About → What's new shows it too.
   button beside text copy. It copies the whole entry with its current design,
   reference and displayed meaning, including content beyond the panel’s scroll.
 
+### Improved
+
+- **Write on your desktop.** Edit tasks and Markdown notes directly in their
+  widgets, without opening a plugin panel. The checkbox still ticks a task;
+  its words open the editor. Save failures and conflicting edits keep your
+  text available, and a failed new-note write leaves no phantom note behind.
+- **A clearer launcher placement map.** Studio shows the selected position
+  beside a compact map, with keyboard-accessible choices and a Preview button.
+
 ### Fixed
 
 - **Fresh language and theme in plugin cards.** Soundscapes captions and
   progress rows follow language and colour changes without waiting for their
   underlying data to change. World Clock follows language, date-format and
   time-zone changes immediately too.
+- **Less work while scrolling Launcher settings.** Studio prepares app names,
+  icons and ranking data in the background and shares them between rows,
+  instead of rescanning applications during scrolling. (#125)
+- **Launchers follow compact bars.** Attached left and right positions align
+  with the ends of a notch, micro pill or island instead of the screen corners.
+  Button morphs keep that alignment and stay within the display.
 
 ### Under the hood
 
@@ -56,6 +71,11 @@ About → What's new shows it too.
 - **Lighter clock and break updates.** The meeting planner keeps its drag
   geometry between frames, and break reminders follow their own effective
   settings without copying unrelated plugin preferences.
+- **Background saves for notes and tasks.** File writes stay off the UI thread
+  and keep their request order. Rapid task changes share a save, commands
+  report disk failures, and a partly saved note can retry its filename or
+  index without creating another copy. `shell state` also reports when a
+  desktop editor is ready for keyboard input.
 
 ## 0.19.1 — 2026-11-06
 
@@ -63,11 +83,6 @@ Copy installation commands. Fresh desktop pictures. Theme cards fill their
 space. Keyboard navigation in Beacon.
 
 ### Improved
-
-- **Write on your desktop.** Edit tasks and Markdown notes directly in their
-  widgets, without opening a plugin panel. The checkbox still ticks a task;
-  its words open the editor. Save failures and conflicting edits keep your
-  text available, and a failed new-note write leaves no phantom note behind.
 
 - **Copy installation commands.** The website and its guides offer a Copy
   button beside code examples, with keyboard access and clear feedback when
@@ -88,12 +103,6 @@ space. Keyboard navigation in Beacon.
   a mode or app category. (#120)
 
 ### Under the hood
-
-- **Background saves for notes and tasks.** File writes stay off the UI thread
-  and keep their request order. Rapid task changes share a save, commands
-  report disk failures, and a partly saved note can retry its filename or
-  index without creating another copy. `shell state` also reports when a
-  desktop editor is ready for keyboard input.
 
 - **Cleaner portable builds.** Linker tuning checks for support, avoiding
   ignored-option warnings with other linkers.

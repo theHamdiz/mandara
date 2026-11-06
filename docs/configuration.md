@@ -791,9 +791,9 @@ dim = 0.0                    # 0–0.7; a bar the launcher hangs from stays brig
 - **Attached at the bar's edge** it grows out of the bar exactly like a
   drop-down panel: the edge frame pours it out with concave flares (same
   radius, flare and fill as panels); floating pills and the island get a
-  floating card the panels' `gap` away. Left / right sit against the screen
-  sides (clear of the frame's screen flares, or in line with the outer
-  pills). With `align_to_button`, a placement whose third of the screen
+  floating card the panels' `gap` away. Left / right follow the visible bar's
+  ends, including a notch, micro pill or island, while staying inside the
+  display. With `align_to_button`, a placement whose third of the bar
   holds the bar's launcher button centers on the button and morphs out of
   it.
 - **At the other edge** (or on a display without the bar) it opens from the

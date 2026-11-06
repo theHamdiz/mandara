@@ -8519,3 +8519,4 @@
 "Couldn't save: {error}" = "সংরক্ষণ করা যায়নি: {error}"
 "This item changed elsewhere. Your text is still here." = "এই আইটেমটি অন্য কোথাও পরিবর্তন করা হয়েছে। আপনার লেখা এখনও এখানে আছে।"
 "This item was removed. Your text is still here." = "এই আইটেমটি সরিয়ে দেওয়া হয়েছে। আপনার লেখা এখনও এখানে আছে।"
+"Choose where the launcher opens. Attached positions follow the bar on that edge." = "লঞ্চার কোথায় খুলবে তা বেছে নিন। সংযুক্ত অবস্থানগুলো সেই প্রান্তের বার অনুসরণ করে।"

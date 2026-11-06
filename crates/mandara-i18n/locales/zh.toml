@@ -8759,3 +8759,4 @@
 "Couldn't save: {error}" = "无法保存：{error}"
 "This item changed elsewhere. Your text is still here." = "此项目已在其他位置更改。您的文本仍保留在这里。"
 "This item was removed. Your text is still here." = "此项目已被移除。您的文本仍保留在这里。"
+"Choose where the launcher opens. Attached positions follow the bar on that edge." = "选择启动器打开的位置。停靠位置会跟随该边缘的栏。"

@@ -1245,7 +1245,14 @@ impl Render for ShellView {
         if self.shell.read(cx).launcher_open {
             // (A side bar's button is not on the launcher's edge.)
             let chip = self.find_slot(crate::plugins::session::LAUNCHER_ID).filter(|(z, _)| *z < MAIN_ZONES).and_then(|(z, i)| self.slot_rects(z).get(i).copied().flatten()).filter(|_| !m.vertical);
-            crate::launcher_place::publish_button(&self.monitor, chip.map(|b| (f32::from(b.origin.x), f32::from(b.size.width))), cx);
+            let bar = self.backdrop.target();
+            let anchor = (!m.vertical).then(|| crate::launcher_place::BarAnchor {
+                span: (f32::from(bar.origin.x), f32::from(bar.size.width)),
+                button: chip.map(|b| (f32::from(b.origin.x), f32::from(b.size.width))),
+            });
+            crate::launcher_place::publish_anchor(&self.monitor, anchor, cx);
+        } else {
+            crate::launcher_place::publish_anchor(&self.monitor, None, cx);
         }
         // The main menu is glass with solid cards on it (panels.menu_*),
         // over your frosted wallpaper; until that is decoded (or without a

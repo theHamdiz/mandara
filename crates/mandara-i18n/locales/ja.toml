@@ -8765,3 +8765,4 @@
 "Couldn't save: {error}" = "保存できませんでした：{error}"
 "This item changed elsewhere. Your text is still here." = "この項目は別の場所で変更されました。入力したテキストはここに残っています。"
 "This item was removed. Your text is still here." = "この項目は削除されました。入力したテキストはここに残っています。"
+"Choose where the launcher opens. Attached positions follow the bar on that edge." = "ランチャーを開く位置を選びます。接続する位置は、その端にあるバーに合わせられます。"
