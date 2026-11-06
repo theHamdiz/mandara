@@ -242,7 +242,7 @@ pub fn expand(s: &Seeds, dark: bool, name: &str, oled: bool) -> MandaraPalette {
     let status = |l: f32, c: f32, h: f32| harmonized(Color::oklch(if dark { l } else { l - 0.2 }, c, h));
     let glass_alpha = s.glass_alpha.unwrap_or(if dark { 0.66 } else { 0.74 });
     MandaraPalette {
-        name: name.to_string(),
+        name: name.into(),
         is_dark: dark,
         surface_dim,
         surface_base: surface,

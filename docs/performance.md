@@ -116,6 +116,9 @@ launcher. Editing history creates a private copy; simply opening a panel does
 not duplicate its text. Window previews transfer their pixel buffers to the
 renderer and release closed-window images on the existing window-list events.
 
+Palette copies and color transitions share the theme name. The displayed text
+and saved palette format stay the same; custom names remain as written.
+
 Input-region updates reuse their rectangle and pixel-bound buffers between
 frames; unchanged regions do not reach the compositor. Process sampling keeps
 small file buffers between updates and releases unusually large command-line

@@ -597,7 +597,7 @@ impl StudioView {
                     .flex_col()
                     .cross_start()
                     .gap(px(SPACE_3_PX))
-                    .child(div().font_family(fonts.display.clone()).text_size(px(TEXT_17_PX)).font_weight(FontWeight::SEMIBOLD).child(theme.to_string()))
+                    .child(div().font_family(fonts.display.clone()).text_size(px(TEXT_17_PX)).font_weight(FontWeight::SEMIBOLD).child(SharedString::from(theme)))
                     .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(format!("{} · {source}", if dark { t("Dark") } else { t("Light") }))),
             )
             .child(div().row().flex_wrap().items_center().gap(px(SPACE_6_PX)).children(swatches).child(all))

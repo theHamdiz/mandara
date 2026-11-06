@@ -1591,7 +1591,7 @@ impl StudioView {
             .child(stat(compositor, t("Compositor").into(), "window", p.success_emerald));
 
         // Details.
-        let line = |k: SharedString, v: String, mono: bool| {
+        let line = |k: SharedString, v: SharedString, mono: bool| {
             div()
                 .row()
                 .justify_between()
@@ -1608,10 +1608,10 @@ impl StudioView {
             .py(px(SPACE_8_PX))
             .row()
             .flex_col()
-            .child(line(t("Build").into(), build.long.clone(), true))
-            .child(line(t("Theme").into(), mandara_core::theme_entity(cx).read(cx).target().name.clone(), false))
+            .child(line(t("Build").into(), build.long.clone().into(), true))
+            .child(line(t("Theme").into(), SharedString::from(&mandara_core::theme_entity(cx).read(cx).target().name), false))
             .child(line(t("Appearance").into(), if cfg.theme.mode.is_dark() { t("Dark").into() } else { t("Light").into() }, false))
-            .child(line(t("Config").into(), mandara_config::paths::config_file().display().to_string(), true));
+            .child(line(t("Config").into(), mandara_config::paths::config_file().display().to_string().into(), true));
 
         let links = div()
             .row()

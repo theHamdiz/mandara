@@ -24,6 +24,9 @@ About → What's new shows it too.
 
 ### Under the hood
 
+- **Shared theme labels.** Palette copies and color transitions share their
+  name instead of allocating another copy for each frame.
+
 - **Less temporary work.** Input regions reuse their frame buffers, network
   totals avoid temporary lists, and process sampling reuses small file buffers
   while reading CPU tables without a size limit. Plugin text and image

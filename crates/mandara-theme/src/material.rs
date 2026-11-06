@@ -282,7 +282,7 @@ pub fn palette_from_scheme(scheme: &Scheme, is_dark: bool, name: String) -> Mand
         base.harmonize_toward(primary).gamut_mapped()
     };
     MandaraPalette {
-        name,
+        name: name.into(),
         is_dark,
         surface_dim: c(scheme.surface_dim),
         surface_base,
