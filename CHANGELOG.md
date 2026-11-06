@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.19.0 — 2026-11-06
+
 Bars and sidebars share one focused settings page, with clearer installation
 steps and less repeated work behind the desktop.
 
