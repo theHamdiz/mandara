@@ -19,6 +19,9 @@ steps and less repeated work behind the desktop.
 
 ### Fixed
 
+- Beacon's search and mode buttons are reachable with Tab and Shift+Tab,
+  with visible focus and Enter or Space to select a mode. (#120)
+
 - Video wallpapers fill the screen edge at fractional display scales,
   including the solid color around centered and fitted clips.
 

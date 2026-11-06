@@ -17,6 +17,8 @@
 //!   upper part of the screen with round mode buttons at its reading end
 //!   (Apps, Files, Actions, Clipboard: Ctrl+1–4), and the results in their
 //!   own glass card under it once you type. The Apps mode shows the grid.
+//!   Tab / Shift+Tab focuses its search and mode buttons; Enter or Space
+//!   activates a focused mode, while typing returns to the search.
 //!   It pops in with the panels' spring (a slight scale and fade), the mode
 //!   buttons slide out from behind the bar one after another, and the card
 //!   grows to its rows with a stiffer spring.
@@ -422,13 +424,18 @@ fn hint(keys: &[&str], what: &'static str, palette: &MandaraPalette) -> AnyEleme
         .into_any_element()
 }
 
+/// Tab reaches modes in Beacon and categories in the Classic grid.
+fn tab_hint_label(grid: bool, chips: bool, beacon: bool) -> Option<&'static str> {
+    if beacon { Some(tk("Modes")) } else if grid && chips { Some(tk("Category")) } else { None }
+}
+
 /// The keyboard hints strip for this state.
 fn hints(grid: bool, chips: bool, beacon: bool, palette: &MandaraPalette) -> AnyElement {
     let mut row = div().h(px(HINTS_H)).w_full().row().items_center().justify_center().gap(px(HINT_GAP)).text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla());
     row = row.child(if grid { hint(&["←", "↑", "↓", "→"], tk("Move"), palette) } else { hint(&["↑", "↓"], tk("Move"), palette) });
     row = row.child(hint(&["Enter"], tk("Open"), palette));
-    if grid && chips {
-        row = row.child(hint(&["Tab"], tk("Category"), palette));
+    if let Some(label) = tab_hint_label(grid, chips, beacon) {
+        row = row.child(hint(&["Tab"], label, palette));
     }
     if beacon {
         row = row.child(hint(&["Ctrl", "1–4"], tk("Modes"), palette));
@@ -742,7 +749,7 @@ impl LauncherView {
                 .child(icon(m.glyph(), text::BODY, accent))
                 .child(t(m.label()))
         });
-        let field = self.query_field(BAR_TEXT, placeholder, &palette);
+        let field = self.query_field(BAR_TEXT, placeholder, &palette, self.focus.is_focused(window));
         let bar_el = glass(&cfg, &palette, progress, bar.h / 2.0)
             .id("beacon-bar")
             .absolute()
@@ -784,6 +791,11 @@ impl LauncherView {
             let (fill_fg, label) = (if on { accent.best_on(Color::hex("#ffffff"), Color::hex("#101010")) } else { palette.on_surface }, m.label());
             let el = glass(&cfg, &palette, progress, r.h / 2.0)
                 .id(SharedString::from(format!("beacon-mode-{}", label.to_lowercase())))
+                .role(gpui::Role::Button)
+                .aria_label(t(label))
+                .aria_toggled(if on { gpui::Toggled::True } else { gpui::Toggled::False })
+                .focusable()
+                .tab_index(n as isize + 1)
                 .absolute()
                 .left(px(r.x))
                 .top(px(r.y))
@@ -793,6 +805,7 @@ impl LauncherView {
                 .items_center()
                 .justify_center()
                 .cursor_pointer()
+                .focus_visible(|style| style.border_color(accent.hsla()))
                 .when(on, |el| el.bg(accent.hsla()))
                 .when(!on, |el| el.hover(|s| s.bg(palette.surface_container_high.hsla())))
                 .child(icon(m.glyph(), MODE_ICON, fill_fg))
@@ -858,7 +871,7 @@ impl LauncherView {
             .font_weight(crate::style::body_weight())
             .text_color(palette.on_surface.hsla())
             .text_size(px(BASE_TEXT * cfg.typography.scale))
-            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| this.on_key(e, cx)))
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| this.on_key(e, window, cx)))
             .child(
                 div()
                     .id("launcher-outside")
@@ -884,6 +897,17 @@ impl LauncherView {
 mod tests {
     use super::*;
     use crate::launcher_ext::{Hit, HitAction, Lead};
+
+    #[test]
+    fn tab_hint_follows_beacon_focus_and_classic_grid_categories() {
+        for (grid, chips) in [(false, false), (false, true), (true, false), (true, true)] {
+            assert_eq!(tab_hint_label(grid, chips, true), Some("Modes"));
+        }
+        assert_eq!(tab_hint_label(true, true, false), Some("Category"));
+        for (grid, chips) in [(false, false), (false, true), (true, false)] {
+            assert_eq!(tab_hint_label(grid, chips, false), None);
+        }
+    }
 
     fn app(name: &str, categories: &str) -> Item {
         Item::App(crate::apps::App { id: name.to_lowercase(), name: name.into(), categories: categories.into(), ..Default::default() })
