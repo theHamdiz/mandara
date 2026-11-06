@@ -225,7 +225,8 @@ pub fn fonts(cx: &App) -> Fonts {
 
 /// OpenType `tnum`: tabular figures so clocks and counters never jitter.
 pub fn tabular_nums() -> FontFeatures {
-    FontFeatures(Arc::new(vec![("tnum".into(), 1)]))
+    static FEATURES: std::sync::LazyLock<FontFeatures> = std::sync::LazyLock::new(|| FontFeatures(Arc::new(vec![("tnum".into(), 1)])));
+    FEATURES.clone()
 }
 
 #[cfg(test)]

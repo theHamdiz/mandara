@@ -24,6 +24,9 @@ About → What's new shows it too.
 
 ### Under the hood
 
+- **Shared font settings.** Text and clock draws reuse their empty and
+  tabular-number feature lists while custom font changes stay independent.
+
 - **Lean bar geometry.** Joined columns keep their two corner flares inline,
   and group capsules calculate their bounds without a temporary list.
 
