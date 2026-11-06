@@ -139,7 +139,7 @@ fn settings(cfg: &ShellConfig) -> Settings {
             long_every: (long_every > 0).then(|| minutes(long_every)),
             long: minutes(get("long_min", DEFAULT_LONG_MIN).clamp(1, MAX_LONG_MIN)),
         },
-        style: if cfg.plugins.setting(ID, "style", String::from("notification")) == "overlay" { Style::Overlay } else { Style::Notification },
+        style: if cfg.plugins.setting_str(ID, "style").unwrap_or("notification") == "overlay" { Style::Overlay } else { Style::Notification },
         skip_fullscreen: cfg.plugins.setting(ID, "skip_fullscreen", true),
     }
 }
@@ -789,6 +789,17 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Invalid style values continue using notification reminders.
+    #[test]
+    fn style_setting_borrows_text_and_preserves_default() {
+        let mut config = ShellConfig::default();
+        assert_eq!(settings(&config).style, Style::Notification);
+        config.plugins.settings.entry(ID.into()).or_default().insert("style".into(), toml::Value::String("overlay".into()));
+        assert_eq!(settings(&config).style, Style::Overlay);
+        config.plugins.settings.get_mut(ID).unwrap().insert("style".into(), toml::Value::Boolean(true));
+        assert_eq!(settings(&config).style, Style::Notification);
+    }
 
     #[test]
     fn settings_follow_the_config_within_bounds() {

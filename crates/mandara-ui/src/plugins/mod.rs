@@ -9,6 +9,7 @@ pub mod clock;
 pub mod keyboard;
 pub mod language;
 pub mod lifecycle;
+mod settings_cache;
 pub mod compositor;
 pub mod containers;
 pub mod cursors;

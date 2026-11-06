@@ -159,9 +159,11 @@ fn notify(cx: &mut App) {
 
 /// A GPUI thumbnail (BGRA) of an image, at most `side` px.
 fn thumbnail(image: image::DynamicImage, side: u32) -> Arc<RenderImage> {
-    let mut rgba = image.thumbnail(side, side).to_rgba8();
-    for p in rgba.pixels_mut() {
-        p.0.swap(0, 2);
+    let resized = image.thumbnail(side, side);
+    drop(image);
+    let mut rgba = resized.into_rgba8();
+    for pixel in rgba.as_chunks_mut::<4>().0 {
+        pixel.swap(0, 2);
     }
     Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(rgba)]))
 }
@@ -634,6 +636,19 @@ mod tests {
         let item = Item::text("line one\n\n   line two").unwrap();
         assert_eq!(detail(&item).as_ref(), "line one line two");
         assert_eq!(status_json(None), json!({ "sharing": false }));
+    }
+
+    /// Thumbnail ownership changes keep aspect, channel order and alpha exact.
+    #[test]
+    fn thumbnails_match_borrowed_conversion_for_rgb_and_rgba() {
+        let source = image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(12, 8, |x, y| image::Rgba([(x * 17) as u8, (y * 23) as u8, 73, ((x + y) * 11) as u8])));
+        for image in [source.clone(), image::DynamicImage::ImageRgb8(source.to_rgb8())] {
+            let expected = image.thumbnail(6, 6).to_rgba8();
+            let expected = expected.pixels().flat_map(|pixel| [pixel[2], pixel[1], pixel[0], pixel[3]]).collect::<Vec<_>>();
+            let actual = thumbnail(image, 6);
+            assert_eq!(actual.as_bytes(0).unwrap(), expected);
+            assert_eq!((actual.size(0).width.0, actual.size(0).height.0), (6, 4));
+        }
     }
 
     #[test]

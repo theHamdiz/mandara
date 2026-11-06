@@ -32,15 +32,15 @@ pub struct Preferences {
 
 /// Read provider, server and target choices without opening the keyring.
 pub fn settings(cfg: &ShellConfig) -> Preferences {
-    let provider = match cfg.plugins.setting(ID, "provider", String::new()).as_str() {
+    let provider = match cfg.plugins.setting_str(ID, "provider").unwrap_or("") {
         "deepl-pro" => Provider::DeepLPro,
         "libretranslate" => Provider::LibreTranslate,
         _ => Provider::DeepLFree,
     };
     Preferences {
-        connection: service::Settings { provider, server: cfg.plugins.setting(ID, "server", String::new()).trim().trim_end_matches('/').into() },
+        connection: service::Settings { provider, server: cfg.plugins.setting_str(ID, "server").unwrap_or("").trim().trim_end_matches('/').into() },
         use_api_key: provider != Provider::LibreTranslate || cfg.plugins.setting(ID, "use_api_key", false),
-        target: cfg.plugins.setting(ID, "target", DEFAULT_TARGET.to_string()).trim().to_string(),
+        target: cfg.plugins.setting_str(ID, "target").unwrap_or(DEFAULT_TARGET).trim().to_string(),
     }
 }
 
@@ -95,6 +95,18 @@ pub fn register(registry: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Mistyped text settings keep the previous provider, server and target defaults.
+    #[test]
+    fn borrowed_preferences_keep_invalid_value_fallbacks() {
+        let mut config = ShellConfig::default();
+        let values = config.plugins.settings.entry(ID.into()).or_default();
+        for key in ["provider", "server", "target"] { values.insert(key.into(), toml::Value::Boolean(true)); }
+        let preferences = settings(&config);
+        assert_eq!(preferences.connection.provider, Provider::DeepLFree);
+        assert!(preferences.connection.server.is_empty());
+        assert_eq!(preferences.target, DEFAULT_TARGET);
+    }
 
     #[test]
     fn an_anonymous_server_does_not_need_a_keyring_and_keys_follow_the_provider() {

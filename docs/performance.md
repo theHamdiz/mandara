@@ -133,3 +133,34 @@ buffer. GPUI uploads borrow those pixels directly until wgpu copies them into
 its own staging storage. Native renderer features select Vulkan and GLES;
 browser shader translation is excluded from Linux builds. These changes keep
 the existing image resolution and rendering quality.
+
+## Plugin view allocations
+
+Clipboard rendering uses one layout for row previews and keyboard selection. Its search cache compares
+borrowed keys and reuses index storage tied to the immutable history snapshot;
+row event handlers clone their target and shared UI handle.
+Media seek controls retain their geometry with the gesture state, separately for
+panel and sidebar views. Network charts borrow the sampler's history rather
+than copying its samples when labels change. Prayer times keep six time
+labels in an array and resolve settings once per config, language or UTC-offset
+change; selecting the surrounding prayers traverses the existing schedules.
+Album art, sharing thumbnails and dock previews consume resized image buffers;
+their dimensions, filters and pixel output stay the same. Temperature rows
+borrow paired reading and label slices, including the partial last row.
+Workspace labels, active-window titles, network units, world clocks and break
+styles parse borrowed setting text. Feed, home-control and translator settings
+keep owned text only for values that outlive the config read. Feed and faith
+plugin settings share a small config/language cache. Home controls also share
+non-secret settings with queued requests, avoiding copied favourite lists. The weak key lets the old
+config fields drop with their last strong owner, but its inline Arc allocation
+remains until the key is replaced or cleared; cache tests print those type sizes.
+Daily progress snapshots use the saved-state generation, date and week start,
+so hover and animation frames do not reformat the same date keys. Keyboard
+badges compare reported/custom labels before copying, and Phone Connect
+filters borrowed devices without an intermediate row list.
+
+`cargo test -p mandara-ui --test plugin_allocations -- --nocapture` compares
+the former temporary expressions with warm state reuse on the test thread.
+It reports allocation calls and requested bytes, not process RSS. Frame and
+interaction speed still need matched release measurements before describing a
+performance improvement.

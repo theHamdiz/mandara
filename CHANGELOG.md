@@ -35,6 +35,20 @@ About → What's new shows it too.
 - **Safer tray icons.** Invalid icon dimensions are rejected before pixel-size
   arithmetic can overflow.
 
+- **Less repeated work in plugin views.** Clipboard previews and selection share
+  one layout, media seek controls keep their gesture geometry, and network
+  charts read their existing history without keeping a second sample copy.
+  Prayer times reuse resolved settings and keep their fixed daily timeline
+  without a temporary event list. Search results keep reusable indices, and
+  clipboard rows share their action state instead of rebuilding callbacks.
+  Album art and sharing or dock previews consume their resized image buffers,
+  and temperature rows borrow their readings and labels. Several plugin
+  selectors also read text settings without making temporary string copies.
+  Feeds, home controls and the faith plugins resolve their text and list settings once per
+  config or language change. Daily progress snapshots also avoid repeated
+  date formatting while a view animates. Keyboard badges compare borrowed
+  labels, and Phone Connect filters its existing device list directly.
+
 - **Cleaner portable builds.** Linker tuning checks for support, avoiding
   ignored-option warnings with other linkers.
 

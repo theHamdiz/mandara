@@ -3,6 +3,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{AnyElement, App, FontWeight, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled, Window, div, px, size};
@@ -15,6 +16,7 @@ use mandara_services::home_assistant::{self as ha, Backend as _, Entity};
 use mandara_theme::MandaraPalette;
 
 use super::model_view as fn_view;
+use super::settings_cache::{ConfigSettings, SettingsCache};
 use super::integration::{self, Data};
 use super::panel_fx::{EXPIRY_MARGIN, glass_card, header, pill_button, readable, redraw_in};
 use crate::bidi::Bidi as _;
@@ -41,9 +43,28 @@ pub struct Settings {
 /// Read the configured server and favourite order without contacting the server.
 pub fn settings(cfg: &ShellConfig) -> Settings {
     Settings {
-        server: cfg.plugins.setting(ID, "server", String::new()).trim().trim_end_matches('/').into(),
-        favourites: cfg.plugins.setting(ID, "entities", String::new()).split_whitespace().map(str::to_owned).collect(),
+        server: cfg.plugins.setting_str(ID, "server").unwrap_or("").trim().trim_end_matches('/').into(),
+        favourites: cfg.plugins.setting_str(ID, "entities").unwrap_or("").split_whitespace().map(str::to_owned).collect(),
     }
+}
+
+/// Only non-secret configuration is shared with background requests.
+struct SharedSettings(Arc<Settings>);
+
+impl ConfigSettings for SharedSettings {
+    type Scope = ();
+
+    fn resolve(config: &ShellConfig, _: mandara_i18n::Lang, (): ()) -> Self {
+        Self(Arc::new(settings(config)))
+    }
+}
+
+thread_local! {
+    static SETTINGS: RefCell<SettingsCache<SharedSettings>> = const { RefCell::new(SettingsCache::new()) };
+}
+
+fn cached_settings(config: &Arc<ShellConfig>) -> Arc<Settings> {
+    SETTINGS.with(|cache| cache.borrow_mut().get(config, mandara_i18n::language(), ()).0.clone())
 }
 
 /// Validate the server base before using it to identify a saved token.
@@ -61,17 +82,18 @@ fn refresh_interval(cfg: &ShellConfig) -> Duration {
     Duration::from_secs(cfg.plugins.setting(ID, "refresh_seconds", DEFAULT_REFRESH_SECS).clamp(MIN_REFRESH_SECS, MAX_REFRESH_SECS) as u64)
 }
 
-type HomeData = Rc<RefCell<Data<Settings, Vec<Entity>>>>;
+type HomeData = Rc<RefCell<Data<Arc<Settings>, Vec<Entity>>>>;
 thread_local! { static DATA: RefCell<Option<HomeData>> = const { RefCell::new(None) }; }
 fn data() -> HomeData { DATA.with(|slot| slot.borrow_mut().get_or_insert_with(Rc::default).clone()) }
 
 /// Discard a disabled server's data without creating a cold cache.
 pub(super) fn stop() {
+    SETTINGS.with(|cache| cache.borrow_mut().clear());
     if let Some(data) = DATA.with(|slot| slot.borrow_mut().take()) { data.borrow_mut().clear(); }
 }
 
 /// Refresh the selected server outside the UI thread, coalescing pending reads.
-fn refresh(settings: Settings, force: bool, cfg: &ShellConfig, cx: &mut App) {
+fn refresh(settings: Arc<Settings>, force: bool, cfg: &ShellConfig, cx: &mut App) {
     if !super::lifecycle::is_on(ID, cx) { return; }
     let address = settings.clone();
     integration::load(&data(), settings, force, refresh_interval(cfg), move |_| {
@@ -80,11 +102,11 @@ fn refresh(settings: Settings, force: bool, cfg: &ShellConfig, cx: &mut App) {
     }, cx);
 }
 
-type HomeAction = Rc<RefCell<integration::Action<Settings>>>;
+type HomeAction = Rc<RefCell<integration::Action<Arc<Settings>>>>;
 thread_local! { static ACTIONS: HomeAction = Rc::default(); }
 
 /// Run one explicit entity action and refresh state after it completes.
-fn act(settings: Settings, entity: String, action: ha::Action, cx: &mut App) -> async_channel::Receiver<Result<String, String>> {
+fn act(settings: Arc<Settings>, entity: String, action: ha::Action, cx: &mut App) -> async_channel::Receiver<Result<String, String>> {
     let actions = ACTIONS.with(Rc::clone);
     let address = settings.clone();
     let views = data().borrow().views.clone();
@@ -93,7 +115,7 @@ fn act(settings: Settings, entity: String, action: ha::Action, cx: &mut App) -> 
         ha::Http::new().act(&address.server, &key, &entity, action).map(|()| serde_json::json!({"ok":true}))
     }, move |cx| {
         let cfg = crate::state::config(cx).read(cx).snapshot();
-        if super::lifecycle::is_on(ID, cx) && self::settings(&cfg) == settings {
+        if super::lifecycle::is_on(ID, cx) && cached_settings(&cfg) == settings {
             data().borrow_mut().invalidate();
             refresh(settings, true, &cfg, cx);
         }
@@ -115,7 +137,7 @@ fn state_label(entity: &Entity) -> String {
 /// Show the selected server’s state and offer only supported, available actions.
 fn panel(context: &PanelCx, p: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     let cfg = crate::state::config(cx).read(cx).snapshot();
-    let settings = settings(&cfg);
+    let settings = cached_settings(&cfg);
     let data = data();
     data.borrow_mut().select(settings.clone());
     data.borrow().views.track(window);
@@ -174,11 +196,11 @@ pub fn register(registry: &mut PluginRegistry) {
         PluginInstance { bar: Some(bar), panel: Some(PanelSpec { view, size: Rc::new(Cell::new(size(px(PANEL_W), px(PANEL_H)))) }), ..PluginInstance::empty() }
     });
     registry.command(ID, CommandSpec::new_output("home states", tk("Read the configured Home Assistant favourites"), |_, cx| {
-        let settings = settings(&crate::state::config(cx).read(cx).snapshot());
+        let settings = cached_settings(&crate::state::config(cx).read(cx).snapshot());
         Ok(crate::powerctl::pending(move || { let key = token(&settings)?; ha::Http::new().states(&settings.server, &key, &settings.favourites).and_then(|entities| serde_json::to_value(entities).map_err(|error| error.to_string())) }))
     }));
     registry.command(ID, CommandSpec::new_output("home action", tk("Toggle a home control or run a scene, script or button"), |args, cx| {
-        let settings = settings(&crate::state::config(cx).read(cx).snapshot());
+        let settings = cached_settings(&crate::state::config(cx).read(cx).snapshot());
         let action = match args.str(1)? { "toggle" => ha::Action::Toggle, _ => ha::Action::Activate };
         Ok(mandara_plugins::Output::Pending(act(settings, args.str(0)?.into(), action, cx)))
     }).arg(ArgSpec::required("entity", ArgKind::String, tk("Home Assistant entity id"))).arg(ArgSpec::required("action", ArgKind::String, tk("Action")).choices(&["toggle", "activate"])).example("home action light.studio toggle"));
@@ -187,6 +209,35 @@ pub fn register(registry: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Views and worker jobs share immutable non-secret settings until config changes.
+    #[test]
+    fn home_settings_share_lists_and_invalidate_without_sharing_credentials() {
+        fn send_sync<T: Send + Sync>() {}
+        send_sync::<Arc<Settings>>();
+        let mut config = ShellConfig::default();
+        config.plugins.settings.entry(ID.into()).or_default().insert("entities".into(), toml::Value::String("light.demo sensor.demo".into()));
+        let config = Arc::new(config);
+        let first = cached_settings(&config);
+        assert!(Arc::ptr_eq(&first, &cached_settings(&config)));
+        assert_eq!(first.favourites, ["light.demo", "sensor.demo"]);
+        let mut changed = (*config).clone();
+        changed.plugins.settings.get_mut(ID).unwrap().insert("entities".into(), toml::Value::String("light.changed".into()));
+        assert_eq!(cached_settings(&Arc::new(changed)).favourites, ["light.changed"]);
+        stop();
+        assert!(!Arc::ptr_eq(&first, &cached_settings(&config)));
+        stop();
+    }
+
+    /// Invalid text fields still resolve to an empty, unconfigured server.
+    #[test]
+    fn borrowed_settings_keep_mistyped_text_fields_empty() {
+        let mut config = ShellConfig::default();
+        let values = config.plugins.settings.entry(ID.into()).or_default();
+        values.insert("server".into(), toml::Value::Boolean(true));
+        values.insert("entities".into(), toml::Value::Integer(3));
+        assert_eq!(settings(&config), Settings { server: String::new(), favourites: Vec::new() });
+    }
 
     #[test]
     fn disabling_releases_a_snapshot_even_if_a_request_still_holds_the_data_slot() {

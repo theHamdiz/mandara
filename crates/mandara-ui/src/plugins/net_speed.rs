@@ -12,6 +12,7 @@
 //! `public_ip_url`, `speed_test_mb`, `bar_upload`.
 
 use std::cell::{Cell, RefCell};
+use std::collections::VecDeque;
 use std::net::IpAddr;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -41,6 +42,9 @@ use crate::icons::icon;
 use crate::kit::{reveal, text, tokens};
 
 pub const ID: &str = "net-speed";
+
+mod chart_samples;
+use chart_samples::{chart_columns, chart_samples};
 
 // ── Layout ───────────────────────────────────────────────────────────────
 
@@ -174,11 +178,11 @@ const PERCENT: f32 = 100.0;
 // ── Settings ─────────────────────────────────────────────────────────────
 
 fn unit(cfg: &ShellConfig) -> Unit {
-    Unit::parse(&cfg.plugins.setting(ID, "unit", String::from("bytes")))
+    Unit::parse(cfg.plugins.setting_str(ID, "unit").unwrap_or("bytes"))
 }
 
 fn endpoint(cfg: &ShellConfig) -> String {
-    let url = cfg.plugins.setting(ID, "public_ip_url", String::from(ns::DEFAULT_PUBLIC_IP_URL));
+    let url = cfg.plugins.setting_str(ID, "public_ip_url").unwrap_or(ns::DEFAULT_PUBLIC_IP_URL);
     if url.trim().is_empty() { ns::DEFAULT_PUBLIC_IP_URL.into() } else { url.trim().to_string() }
 }
 
@@ -227,7 +231,6 @@ struct Derived {
     peak_tx: SharedString,
     down_series: History,
     up_series: History,
-    samples: Vec<(f64, f64)>,
     capacity: usize,
     gpeak: f64,
     gpeak_text: SharedString,
@@ -587,11 +590,10 @@ fn normalized(values: impl Iterator<Item = f64>, peak: f64, capacity: usize) -> 
 }
 
 /// Mirrored columns: download grows up from the midline, upload down.
-fn mirrored_chart(samples: &[(f64, f64)], capacity: usize, peak: f64, palette: &MandaraPalette) -> AnyElement {
+fn mirrored_chart(samples: &VecDeque<(f64, f64)>, capacity: usize, peak: f64, palette: &MandaraPalette) -> AnyElement {
     let ((down, down2), (up, up2)) = colors(palette);
     let half = (CHART_H - CHART_MIDLINE_PX) / 2.0;
     let idle_tick = palette.on_surface.with_alpha(IDLE_TICK_ALPHA);
-    let empty = capacity.saturating_sub(samples.len());
     let column = |sample: Option<(f64, f64)>, age: f32| {
         let col = div().flex_1().min_w(px(1.0)).h_full().flex().flex_col();
         match sample {
@@ -614,10 +616,7 @@ fn mirrored_chart(samples: &[(f64, f64)], capacity: usize, peak: f64, palette: &
             None => col,
         }
     };
-    let cols = (0..capacity).map(|slot| {
-        let sample = slot.checked_sub(empty).and_then(|i| samples.get(i).copied());
-        column(sample, 1.0 - slot as f32 / capacity.max(1) as f32)
-    });
+    let cols = chart_columns(samples, capacity).enumerate().map(|(slot, sample)| column(sample, 1.0 - slot as f32 / capacity.max(1) as f32));
     div()
         .relative()
         .h(px(CHART_H))
@@ -702,11 +701,7 @@ fn derive(l: &mut Live, unit: Unit) {
     let peak = history.peak_seconds();
     let (peak_rx, peak_tx) = history.seconds.iter().fold((0.0f64, 0.0f64), |(a, b), (r, t)| (a.max(*r), b.max(*t)));
     let peak_label = |bps: f64| SharedString::from(tf("peak {rate}", &[("rate", &rate_text(bps, unit))]));
-    let (samples, capacity, gpeak): (Vec<(f64, f64)>, usize, f64) = if l.long_window {
-        (history.buckets.iter().copied().collect(), ns::LONG_BUCKETS, history.peak_buckets())
-    } else {
-        (history.seconds.iter().copied().collect(), ns::SHORT_WINDOW, peak)
-    };
+    let (capacity, gpeak) = if l.long_window { (ns::LONG_BUCKETS, history.peak_buckets()) } else { (ns::SHORT_WINDOW, peak) };
     let (boot_rx, boot_tx) = l.rates.iter().filter(|r| r.kind.counts_toward_total()).fold((0u64, 0u64), |(a, b), r| (a + r.rx_total, b + r.tx_total));
     l.derived = Some(Derived {
         key,
@@ -717,7 +712,6 @@ fn derive(l: &mut Live, unit: Unit) {
         peak_tx: peak_label(peak_tx),
         down_series: normalized(history.seconds.iter().map(|s| s.0), peak, ns::SHORT_WINDOW),
         up_series: normalized(history.seconds.iter().map(|s| s.1), peak, ns::SHORT_WINDOW),
-        samples,
         capacity,
         gpeak,
         gpeak_text: peak_label(gpeak),
@@ -1005,6 +999,7 @@ impl View {
         let test = speed_card(&mut lb, unit, mb, palette, display.clone(), radius, visible, window);
         let measured = lb.last.is_some();
         let long = lb.long_window;
+        let samples = chart_samples(lb.history.as_ref(), long);
         let public_ip = lb.public_ip.clone();
         let Some(d) = lb.derived.as_ref() else { return div().into_any_element() };
 
@@ -1077,7 +1072,9 @@ impl View {
                     .child(caption(d.gpeak_text.clone(), palette).font_features(tabular_nums()))
                     .child(div().w(px(WINDOW_TOGGLE_W_PX)).child(window_toggle)),
             )
-            .child(if d.samples.is_empty() {
+            .child(if let Some(samples) = samples.filter(|samples| !samples.is_empty()) {
+                mirrored_chart(samples, d.capacity, d.gpeak, palette)
+            } else {
                 div()
                     .h(px(CHART_H))
                     .flex()
@@ -1087,8 +1084,6 @@ impl View {
                     .text_color(palette.on_surface_variant.hsla())
                     .child(if long { t("Collecting 10-second averages…") } else { t("Measuring…") })
                     .into_any_element()
-            } else {
-                mirrored_chart(&d.samples, d.capacity, d.gpeak, palette)
             });
 
         // ── Interfaces, totals ───────────────────────────────────────────
@@ -1217,6 +1212,24 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Borrowed settings retain unit parsing and trimmed endpoint fallback behavior.
+    #[test]
+    fn borrowed_string_settings_preserve_unit_and_endpoint_policy() {
+        let mut config = ShellConfig::default();
+        assert_eq!(unit(&config), Unit::Bytes);
+        assert_eq!(endpoint(&config), ns::DEFAULT_PUBLIC_IP_URL);
+        let settings = config.plugins.settings.entry(ID.into()).or_default();
+        settings.insert("unit".into(), toml::Value::String("BiTs".into()));
+        settings.insert("public_ip_url".into(), toml::Value::String("  https://example.org/ip  ".into()));
+        assert_eq!(unit(&config), Unit::Bits);
+        assert_eq!(endpoint(&config), "https://example.org/ip");
+        let settings = config.plugins.settings.get_mut(ID).unwrap();
+        settings.insert("unit".into(), toml::Value::Boolean(true));
+        settings.insert("public_ip_url".into(), toml::Value::String("  ".into()));
+        assert_eq!(unit(&config), Unit::Bytes);
+        assert_eq!(endpoint(&config), ns::DEFAULT_PUBLIC_IP_URL);
+    }
 
     #[test]
     fn gauge_is_logarithmic_and_bounded() {

@@ -317,9 +317,9 @@ pub fn decode_thumb(path: &Path, side: u32) -> Option<Arc<RenderImage>> {
         return None;
     }
     let img = image::open(path).ok()?.thumbnail(side, side);
-    let mut rgba = img.to_rgba8();
-    for px in rgba.pixels_mut() {
-        px.0.swap(0, 2);
+    let mut rgba = img.into_rgba8();
+    for pixel in rgba.as_chunks_mut::<4>().0 {
+        pixel.swap(0, 2);
     }
     Some(Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(rgba)])))
 }
@@ -360,10 +360,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("mandara-dock-thumb-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let p = dir.join("big.png");
-        image::RgbaImage::from_pixel(640, 320, image::Rgba([10, 20, 30, 255])).save(&p).unwrap();
+        image::RgbaImage::from_pixel(640, 320, image::Rgba([10, 20, 30, 79])).save(&p).unwrap();
         let t = decode_thumb(&p, 64).expect("decoded");
         let s = t.size(0);
         assert_eq!((s.width.0, s.height.0), (64, 32), "fits the side, keeps the aspect");
+        assert_eq!(&t.as_bytes(0).unwrap()[..4], &[30, 20, 10, 79], "thumbnail keeps alpha and swaps red/blue");
         assert!(decode_thumb(&dir.join("missing.png"), 64).is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -35,6 +35,8 @@ use serde_json::json;
 use super::domain_view;
 use crate::hub::Domains;
 pub(crate) mod lyrics_view;
+mod scrub_state;
+use scrub_state::ScrubState;
 use lyrics_view::LyricsPane;
 use super::panel_fx::{
     ANGLE_DIAGONAL_DEG, ANGLE_DOWN_DEG, ANGLE_RIGHT_DEG, Cached, PanelShape, SpectrumTap, alpha, glow, readable, redraw_in, wash,
@@ -403,8 +405,8 @@ impl ArtTheme {
 
 fn to_render_image(mut rgba: image::RgbaImage) -> Arc<RenderImage> {
     // GPUI expects BGRA.
-    for px in rgba.pixels_mut() {
-        px.0.swap(0, 2);
+    for px in rgba.as_chunks_mut::<4>().0 {
+        px.swap(0, 2);
     }
     Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(rgba)]))
 }
@@ -421,11 +423,11 @@ struct ArtImages {
 /// (centre-cropped like `ObjectFit::Cover`) and, when `blur`, the backdrop.
 fn decode_art(path: &Path, cover_px: u32, blur: bool) -> ArtImages {
     let Ok(decoded) = mandara_theme::material::open_image(path) else { return ArtImages::default() };
-    let cover = (cover_px > 0).then(|| to_render_image(decoded.resize_to_fill(cover_px, cover_px, FilterType::Triangle).to_rgba8()));
-    let backdrop = blur.then(|| {
-        let small = decoded.thumbnail(BACKDROP_PX, BACKDROP_PX).to_rgba8();
-        to_render_image(image::imageops::blur(&small, BACKDROP_BLUR_SIGMA))
-    });
+    let cover = (cover_px > 0).then(|| decoded.resize_to_fill(cover_px, cover_px, FilterType::Triangle).into_rgba8());
+    let small = blur.then(|| decoded.thumbnail(BACKDROP_PX, BACKDROP_PX).into_rgba8());
+    drop(decoded);
+    let cover = cover.map(to_render_image);
+    let backdrop = small.map(|small| to_render_image(image::imageops::blur(&small, BACKDROP_BLUR_SIGMA)));
     ArtImages { cover, backdrop }
 }
 
@@ -774,25 +776,22 @@ fn scrubber(
     state: &MediaState,
     m: &ArtTheme,
     palette: &MandaraPalette,
-    drag: Rc<Cell<Option<f32>>>,
+    drag: Rc<ScrubState>,
     labels: &RefCell<ScrubLabels>,
     compact: bool,
 ) -> impl IntoElement {
     let now = Instant::now();
     let length = state.length;
     let seekable = state.can_seek && length.is_some();
-    let frac = drag.get().filter(|_| seekable).unwrap_or_else(|| state.progress(now));
-    let shown_pos = match (drag.get(), length) {
+    let frac = drag.drag.get().filter(|_| seekable).unwrap_or_else(|| state.progress(now));
+    let shown_pos = match (drag.drag.get(), length) {
         (Some(t), Some(len)) if seekable => len.mul_f32(t),
         _ => state.position_now(now),
     };
-    let bounds: Rc<Cell<gpui::Bounds<gpui::Pixels>>> = Rc::default();
+    let bounds = drag.clone();
     let pick = {
-        let bounds = bounds.clone();
-        move |x: gpui::Pixels| -> f32 {
-            let b = bounds.get();
-            ((f32::from(x) - f32::from(b.origin.x)) / f32::from(b.size.width).max(1.0)).clamp(0.0, 1.0)
-        }
+        let drag = drag.clone();
+        move |x: gpui::Pixels| drag.fraction(x)
     };
     let (pick_down, pick_move, pick_up, pick_out) = (pick.clone(), pick.clone(), pick.clone(), pick);
     let (d_down, d_move, d_up, d_out) = (drag.clone(), drag.clone(), drag.clone(), drag);
@@ -849,26 +848,26 @@ fn scrubber(
                             ]),
                     )
                 })
-                .child(canvas(move |b, _, _| bounds.set(b), |_, _, _, _| {}).absolute().top_0().left_0().size_full())
+                .child(canvas(move |b, _, _| bounds.bounds.set(b), |_, _, _, _| {}).absolute().top_0().left_0().size_full())
                 .on_mouse_down(MouseButton::Left, move |e: &MouseDownEvent, window, _| {
                     if seekable {
-                        d_down.set(Some(pick_down(e.position.x)));
+                        d_down.drag.set(Some(pick_down(e.position.x)));
                         window.refresh();
                     }
                 })
                 .on_mouse_move(move |e: &MouseMoveEvent, window, _| {
-                    if d_move.get().is_some() && e.pressed_button == Some(MouseButton::Left) {
-                        d_move.set(Some(pick_move(e.position.x)));
+                    if d_move.drag.get().is_some() && e.pressed_button == Some(MouseButton::Left) {
+                        d_move.drag.set(Some(pick_move(e.position.x)));
                         window.refresh();
                     }
                 })
                 .on_mouse_up(MouseButton::Left, move |e: &MouseUpEvent, _, cx| {
-                    if d_up.take().is_some() {
+                    if d_up.drag.take().is_some() {
                         commit(pick_up(e.position.x), cx);
                     }
                 })
                 .on_mouse_up_out(MouseButton::Left, move |e: &MouseUpEvent, _, cx| {
-                    if d_out.take().is_some() {
+                    if d_out.drag.take().is_some() {
                         commit(pick_out(e.position.x), cx);
                     }
                 }),
@@ -1048,7 +1047,7 @@ fn set_size(cell: &Cell<gpui::Size<gpui::Pixels>>, height: f32) {
     }
 }
 
-fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, drag: Rc<Cell<Option<f32>>>) -> impl Fn(&MandaraPalette, &mut Window, &mut App) -> AnyElement {
+fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, drag: Rc<ScrubState>) -> impl Fn(&MandaraPalette, &mut Window, &mut App) -> AnyElement {
     let fx = Rc::new(RefCell::new(Fx::new()));
     let tap = Rc::new(RefCell::new(SpectrumTap::default()));
     let lyrics = LyricsPane::new();
@@ -1108,7 +1107,7 @@ fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, drag: R
         let art = backdrop(&fx, state.art_path.as_deref(), window, cx);
         let bands = SpectrumTap::bands(&tap, visible && playing, cx);
         if visible {
-            let frame = if bands.is_some() || theme_moving || art.fading || lyrics_moving || drag.get().is_some() {
+            let frame = if bands.is_some() || theme_moving || art.fading || lyrics_moving || drag.drag.get().is_some() {
                 LIVE_FRAME
             } else if playing {
                 // Waiting for sound (or no capture): poll gently, tick time.
@@ -1194,7 +1193,7 @@ pub fn register(r: &mut PluginRegistry) {
         );
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(PLAYING_H))));
         let panel = domain_view(Domains::MEDIA, None, panel_view(panel_cx.clone(), size_cell.clone(), Rc::default()), window, cx);
-        let side_drag: Rc<Cell<Option<f32>>> = Rc::default();
+        let side_drag: Rc<ScrubState> = Rc::default();
         let side_labels = Rc::new(RefCell::new(ScrubLabels::default()));
         let side_cover = Rc::new(RefCell::new(CoverSlot::default()));
         let side_keeper = Rc::new(IdleRelease::default());
@@ -1313,6 +1312,37 @@ mod tests {
         let missing = decode_art(&dir.join("missing.png"), 64, true);
         assert!(missing.cover.is_none() && missing.backdrop.is_none());
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Moving decode buffers preserves channels, transparency and filtering for PNG variants.
+    #[test]
+    fn consumed_album_art_matches_the_previous_cover_and_blur_pixels() {
+        let directory = tempfile::tempdir().unwrap();
+        let rgba = image::RgbaImage::from_fn(9, 5, |x, y| image::Rgba([(x * 23) as u8, (y * 47) as u8, 71, ((x + y) * 17) as u8]));
+        let source = image::DynamicImage::ImageRgba8(rgba);
+        let variants = [source.clone(), image::DynamicImage::ImageRgb8(source.to_rgb8()), image::DynamicImage::ImageLuma8(source.to_luma8()), image::DynamicImage::ImageLumaA8(source.to_luma_alpha8())];
+        let bgra = |image: &image::RgbaImage| image.pixels().flat_map(|pixel| [pixel[2], pixel[1], pixel[0], pixel[3]]).collect::<Vec<_>>();
+        for (index, variant) in variants.iter().enumerate() {
+            let path = directory.path().join(format!("art-{index}.png"));
+            variant.save(&path).unwrap();
+            let decoded = mandara_theme::material::open_image(&path).unwrap();
+            for (side, blur) in [(0, false), (4, false), (0, true), (4, true)] {
+                let actual = decode_art(&path, side, blur);
+                if side > 0 {
+                    let expected = decoded.resize_to_fill(side, side, FilterType::Triangle).to_rgba8();
+                    assert_eq!(actual.cover.unwrap().as_bytes(0).unwrap(), bgra(&expected));
+                } else { assert!(actual.cover.is_none()); }
+                if blur {
+                    let small = decoded.thumbnail(BACKDROP_PX, BACKDROP_PX).to_rgba8();
+                    let expected = image::imageops::blur(&small, BACKDROP_BLUR_SIGMA);
+                    assert_eq!(actual.backdrop.unwrap().as_bytes(0).unwrap(), bgra(&expected));
+                } else { assert!(actual.backdrop.is_none()); }
+            }
+        }
+        let rgba = source.into_rgba8();
+        let pointer = rgba.as_ptr();
+        let rendered = to_render_image(rgba);
+        assert_eq!(rendered.as_bytes(0).unwrap().as_ptr(), pointer, "BGRA conversion keeps the owned allocation");
     }
 
     #[test]
