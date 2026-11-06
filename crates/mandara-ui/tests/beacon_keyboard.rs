@@ -28,9 +28,12 @@ const KEYBOARD_LIFETIME: Duration = Duration::from_secs(60);
 struct Keyboard(Child);
 
 impl Drop for Keyboard {
+    /// Reaps only this test's recorded virtual keyboard, including on panic.
     fn drop(&mut self) { let _ = self.0.kill(); let _ = self.0.wait(); }
 }
 
+/// Requires a canonical temporary runtime, resource-fixture prefix and marker
+/// naming this checkout before the test can send input or change configuration.
 fn private_runtime(runtime: &Path, root: &Path) -> bool {
     let Ok(temporary) = std::env::temp_dir().canonicalize() else { return false; };
     runtime.canonicalize().is_ok_and(|runtime| runtime.starts_with(temporary)
@@ -38,6 +41,8 @@ fn private_runtime(runtime: &Path, root: &Path) -> bool {
         && root.canonicalize().is_ok_and(|root| std::fs::read_to_string(runtime.join(".mandara-beacon-keyboard-test")).is_ok_and(|marker| marker == root.to_string_lossy())))
 }
 
+/// Calls the already validated private shell with bounded socket waits.
+/// Failed replies are test failures rather than usable fixture state.
 fn command(runtime: &Path, args: &[&str]) -> Value {
     let mut socket = UnixStream::connect(runtime.join("mandara.sock")).unwrap();
     socket.set_read_timeout(Some(REQUEST_TIMEOUT)).unwrap();
@@ -50,6 +55,8 @@ fn command(runtime: &Path, args: &[&str]) -> Value {
     reply["data"].clone()
 }
 
+/// Sends real Wayland key events to the validated display. Pace complete key
+/// presses and allow the resulting frame to settle before examining pixels.
 fn input(runtime: &Path, display: &str, args: &[&str]) {
     let mut paced = Vec::new();
     let mut key = false;
@@ -63,6 +70,8 @@ fn input(runtime: &Path, display: &str, args: &[&str]) {
     std::thread::sleep(SETTLE);
 }
 
+/// Captures the native output, checking its expected 4K geometry so button
+/// samples cannot silently read the wrong display or scale.
 fn capture(runtime: &Path, display: &str) -> RgbaImage {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("beacon.png");
@@ -73,6 +82,8 @@ fn capture(runtime: &Path, display: &str) -> RgbaImage {
     image
 }
 
+/// Samples one button in device pixels: its interior tests selection without
+/// focus-rim noise, while the whole button tests visible keyboard focus.
 fn sample(image: &RgbaImage, placement: BeaconPlacement, index: usize, rim: bool) -> RgbaImage {
     let edge = if rim { BEACON_BAR_H } else { SAMPLE_EDGE };
     let rect = Rect::new(placement.first_mode.x + placement.mode_step * index as f32, placement.first_mode.y, BEACON_BAR_H, BEACON_BAR_H);
@@ -80,6 +91,7 @@ fn sample(image: &RgbaImage, placement: BeaconPlacement, index: usize, rim: bool
     image::imageops::crop_imm(image, ((rect.x + inset) * SCALE).round() as u32, ((rect.y + inset) * SCALE).round() as u32, (edge * SCALE).round() as u32, (edge * SCALE).round() as u32).to_image()
 }
 
+/// Missing or foreign markers reject input; a matching private fixture passes.
 #[test]
 fn beacon_keyboard_fixture_rejects_missing_and_mismatched_markers() {
     let root = tempfile::tempdir().unwrap();
@@ -91,6 +103,9 @@ fn beacon_keyboard_fixture_rejects_missing_and_mismatched_markers() {
     assert!(private_runtime(runtime.path(), root.path()));
 }
 
+/// Exercises native focus and activation in English and Arabic, including
+/// hidden providers. Escape from a button first clears its active mode, then
+/// closes Beacon when no mode remains; mode activation itself keeps it open.
 #[test]
 #[ignore = "requires the marked 4K/1.5 resource desktop, Beacon, grim and wtype"]
 fn tab_shift_tab_enter_and_space_reach_beacon_modes() {
@@ -136,6 +151,16 @@ fn tab_shift_tab_enter_and_space_reach_beacon_modes() {
         input(&runtime, &display, &["-M", "shift", "-k", "Tab", "-k", "Tab", "-m", "shift", "-k", "space"]);
         assert_ne!(sample(&capture(&runtime, &display), placement, 3, false), sample(&initial, placement, 3, false), "reverse traversal wraps through search to Clipboard ({language})");
         assert_eq!(command(&runtime, &["shell", "state"])["launcher"], true, "mode activation must not launch a result or dismiss Beacon");
+        input(&runtime, &display, &["-k", "Escape"]);
+        assert_eq!(command(&runtime, &["shell", "state"])["launcher"], true, "Escape from the selected Clipboard button must clear its mode and keep Beacon open ({language})");
+        let cleared = capture(&runtime, &display);
+        assert_eq!(sample(&cleared, placement, 3, false), sample(&initial, placement, 3, false), "Escape must remove the active mode's selection ({language})");
+        input(&runtime, &display, &["-k", "Tab"]);
+        let neutral_focus = capture(&runtime, &display);
+        assert_eq!(sample(&neutral_focus, placement, 0, false), sample(&initial, placement, 0, false), "Tab must focus Apps without selecting a mode after Escape ({language})");
+        assert_ne!(sample(&neutral_focus, placement, 0, true), sample(&cleared, placement, 0, true), "the second Escape must start from a visibly focused button ({language})");
+        input(&runtime, &display, &["-k", "Escape"]);
+        assert_eq!(command(&runtime, &["shell", "state"])["launcher"], false, "Escape from a focused button with no active mode must close Beacon ({language})");
     }
     command(&runtime, &["launcher", "close"]);
     std::thread::sleep(SETTLE);

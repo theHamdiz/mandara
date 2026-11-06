@@ -81,10 +81,14 @@ pub struct Background {
 
 /// Places `img` on a `w × h` canvas for `fill` (bands in `fill_color`).
 ///
-/// An output-sized RGBA placement becomes the canvas in place. Other
-/// placements are composited after resampling has dropped the original
-/// picture. The resampler keeps one filtered row, and RGB/RGBA pictures
-/// are read directly without converting another full-size copy.
+/// Memory: the picture is resampled first and the canvas allocated after,
+/// with the source already dropped when it was resampled, so the source and
+/// the canvas are never alive together; the resampler keeps one filtered
+/// row, not a full-size float copy ([`crate::resample::triangle`]); and the
+/// picture is copied onto the canvas straight from its own pixels (no RGBA
+/// copy of it). At 4K that is one to two full-frame buffers (33 MB each)
+/// less at the moment a wallpaper loads, plus the float copy (63 MB for a
+/// 1080p picture) when it is smaller than the output.
 pub fn background(img: DynamicImage, fill: WallpaperFill, (w, h): (u32, u32), fill_color: Color) -> Result<Background, String> {
     let (iw, ih) = (img.width().max(1), img.height().max(1));
     let centered = |cw: u32, ch: u32| ((w as i32 - cw as i32) / 2, (h as i32 - ch as i32) / 2);
@@ -114,53 +118,22 @@ pub fn background(img: DynamicImage, fill: WallpaperFill, (w, h): (u32, u32), fi
             (tile, (0, 0), Some((cols, rows, tw, th)))
         }
     };
+    let mut pm = Pixmap::new(w, h).ok_or("bad canvas size")?;
     let [r, g, b, _] = fill_color.to_rgba8();
-    let pm = match placed {
-        DynamicImage::ImageRgba8(rgba) if grid.is_none() && at == (0, 0) && rgba.dimensions() == (w, h) => {
-            opaque_rgba_canvas(rgba, [r, g, b])?
-        }
-        placed => {
-            let mut pm = Pixmap::new(w, h).ok_or("bad canvas size")?;
-            pm.fill(tiny_skia::Color::from_rgba8(r, g, b, u8::MAX));
-            match grid {
-                Some((cols, rows, tw, th)) => {
-                    for row in 0..rows {
-                        for col in 0..cols {
-                            over(&mut pm, &placed, (col * tw) as i32, (row * th) as i32);
-                        }
-                    }
+    pm.fill(tiny_skia::Color::from_rgba8(r, g, b, u8::MAX));
+    match grid {
+        Some((cols, rows, tw, th)) => {
+            for row in 0..rows {
+                for col in 0..cols {
+                    over(&mut pm, &placed, (col * tw) as i32, (row * th) as i32);
                 }
-                None => over(&mut pm, &placed, at.0, at.1),
             }
-            pm
         }
-    };
+        None => over(&mut pm, &placed, at.0, at.1),
+    }
+    drop(placed);
     let tone = tone_map(&pm);
     Ok(Background { pixmap: pm, tone })
-}
-
-/// Reuses an output-sized RGBA placement as the opaque canvas. The blend
-/// matches `over_pixels`, including its rounding; no second frame is allocated.
-fn opaque_rgba_canvas(rgba: RgbaImage, fill: [u8; 3]) -> Result<Pixmap, String> {
-    let size = tiny_skia::IntSize::from_wh(rgba.width(), rgba.height()).ok_or("bad canvas size")?;
-    let length = rgba.sample_layout().min_length().ok_or("bad canvas size")?;
-    let mut bytes = rgba.into_raw();
-    // ImageBuffer permits trailing storage beyond its pixel dimensions.
-    bytes.truncate(length);
-    for pixel in bytes.as_chunks_mut::<4>().0 {
-        match pixel[3] {
-            u8::MAX => {}
-            0 => pixel.copy_from_slice(&[fill[0], fill[1], fill[2], u8::MAX]),
-            alpha => {
-                let (alpha, inverse) = (u32::from(alpha), 255 - u32::from(alpha));
-                for (channel, base) in pixel[..3].iter_mut().zip(fill) {
-                    *channel = ((u32::from(*channel) * alpha + u32::from(base) * inverse + 127) / 255) as u8;
-                }
-                pixel[3] = u8::MAX;
-            }
-        }
-    }
-    Pixmap::from_vec(bytes, size).ok_or_else(|| "bad canvas size".into())
 }
 
 /// `img` resampled by `f`, the source dropped before the canvas exists.
@@ -761,128 +734,6 @@ pub fn compose(dst: &mut PixmapMut<'_>, plane: &Pixmap, dest: Rect, opacity: f32
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // Frozen pre-optimization painter for byte-for-byte compatibility checks.
-    fn reference_background(img: DynamicImage, fill: WallpaperFill, (w, h): (u32, u32), fill_color: Color) -> Result<Background, String> {
-        let (iw, ih) = (img.width().max(1), img.height().max(1));
-        let centered = |cw: u32, ch: u32| ((w as i32 - cw as i32) / 2, (h as i32 - ch as i32) / 2);
-        // What goes on the canvas and where: one placement, or a grid of tiles.
-        let (placed, at, grid) = match fill {
-            // The cached display copy usually has the output's size already.
-            WallpaperFill::Cover | WallpaperFill::Stretch if (iw, ih) == (w, h) => (img, (0, 0), None),
-            WallpaperFill::Cover => (resampled(img, |img| crate::wallpaper::cover(img, w, h)), (0, 0), None),
-            WallpaperFill::Stretch => (resampled(img, |img| crate::resample::triangle(img, (0, 0, iw, ih), w, h)), (0, 0), None),
-            WallpaperFill::Contain => {
-                let s = (w as f32 / iw as f32).min(h as f32 / ih as f32);
-                let (fw, fh) = (((iw as f32 * s).round() as u32).max(1), ((ih as f32 * s).round() as u32).max(1));
-                let fit = if (fw, fh) == (iw, ih) { img } else { resampled(img, |img| crate::resample::triangle(img, (0, 0, iw, ih), fw, fh)) };
-                (fit, centered(fw, fh), None)
-            }
-            WallpaperFill::Center => (img, centered(iw, ih), None),
-            WallpaperFill::Tile => {
-                let (cols, rows, k) = crate::wallpaper_fill::tile_grid(w as f32, h as f32, iw as f32, ih as f32);
-                let (tw, th) = (((iw as f32 * k).round() as u32).max(1), ((ih as f32 * k).round() as u32).max(1));
-                let tile = if (tw, th) == (iw, ih) { img } else { resampled(img, |img| crate::resample::triangle(img, (0, 0, iw, ih), tw, th)) };
-                // Copied up to 256 times: a layout `over` can't read in place
-                // (gray, 16-bit) is converted once here, not once per tile.
-                let tile = match tile {
-                    DynamicImage::ImageRgb8(_) | DynamicImage::ImageRgba8(_) => tile,
-                    other => DynamicImage::ImageRgba8(other.to_rgba8()),
-                };
-                (tile, (0, 0), Some((cols, rows, tw, th)))
-            }
-        };
-        let mut pm = Pixmap::new(w, h).ok_or("bad canvas size")?;
-        let [r, g, b, _] = fill_color.to_rgba8();
-        pm.fill(tiny_skia::Color::from_rgba8(r, g, b, u8::MAX));
-        match grid {
-            Some((cols, rows, tw, th)) => {
-                for row in 0..rows {
-                    for col in 0..cols {
-                        over(&mut pm, &placed, (col * tw) as i32, (row * th) as i32);
-                    }
-                }
-            }
-            None => over(&mut pm, &placed, at.0, at.1),
-        }
-        drop(placed);
-        let tone = tone_map(&pm);
-        Ok(Background { pixmap: pm, tone })
-    }
-
-
-    #[test]
-    fn full_size_rgba_reuses_its_allocation_and_preserves_every_alpha() {
-        let source = RgbaImage::from_fn(256, 2, |x, y| image::Rgba([x as u8, (255 - x) as u8, (y * 99) as u8, x as u8]));
-        let fill = Color::from_rgba8(40, 70, 110, 65);
-        let expected = reference_background(DynamicImage::ImageRgba8(source.clone()), WallpaperFill::Cover, (256, 2), fill).unwrap();
-        let buffer = source.as_raw().as_ptr();
-        let actual = background(DynamicImage::ImageRgba8(source), WallpaperFill::Cover, (256, 2), fill).unwrap();
-        assert_eq!(actual.pixmap.data().as_ptr(), buffer, "the prepared placement must become the canvas");
-        assert_eq!(actual.pixmap.data(), expected.pixmap.data());
-        assert_eq!(actual.tone, expected.tone);
-    }
-
-    #[test]
-    fn full_size_rgba_ignores_trailing_storage_without_reallocating() {
-        let source = RgbaImage::from_raw(2, 1, vec![90, 40, 10, 255, 20, 80, 120, 128, 9, 8, 7]).unwrap();
-        let fill = Color::from_rgba8(40, 70, 110, 255);
-        let expected = reference_background(DynamicImage::ImageRgba8(source.clone()), WallpaperFill::Stretch, (2, 1), fill).unwrap();
-        let buffer = source.as_raw().as_ptr();
-        let actual = background(DynamicImage::ImageRgba8(source), WallpaperFill::Stretch, (2, 1), fill).unwrap();
-        assert_eq!(actual.pixmap.data().as_ptr(), buffer);
-        assert_eq!(actual.pixmap.data(), expected.pixmap.data());
-        assert_eq!(actual.tone, expected.tone);
-    }
-
-    #[test]
-    fn reused_and_fallback_paths_match_the_existing_painter_for_every_fill() {
-        let rgba = RgbaImage::from_fn(17, 9, |x, y| image::Rgba([(x * 13) as u8, (y * 23) as u8, ((x + y) * 7) as u8, [0, 1, 64, 128, 254, 255][(x + y) as usize % 6]]));
-        let rgb = image::RgbImage::from_fn(17, 9, |x, y| image::Rgb([(x * 13) as u8, (y * 23) as u8, 100]));
-        let gray = image::GrayImage::from_fn(17, 9, |x, y| image::Luma([((x + y) * 7) as u8]));
-        let wide = image::ImageBuffer::from_fn(17, 9, |x, y| image::LumaA([((x + y) * 2000) as u16, (x * 3000) as u16]));
-        for source in [DynamicImage::ImageRgba8(rgba), DynamicImage::ImageRgb8(rgb), DynamicImage::ImageLuma8(gray), DynamicImage::ImageLumaA16(wide)] {
-            for fill in [WallpaperFill::Cover, WallpaperFill::Contain, WallpaperFill::Stretch, WallpaperFill::Center, WallpaperFill::Tile] {
-                for size in [(17, 9), (31, 17), (5, 23), (1, 1)] {
-                    for color in [Color::from_rgba8(0, 0, 0, 255), Color::from_rgba8(40, 70, 110, 0), Color::from_rgba8(240, 170, 80, 128)] {
-                        let expected = reference_background(source.clone(), fill, size, color).unwrap();
-                        let actual = background(source.clone(), fill, size, color).unwrap();
-                        assert_eq!(actual.pixmap.data(), expected.pixmap.data(), "{fill:?} {size:?} {:?}", source.color());
-                        assert_eq!(actual.tone, expected.tone);
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    #[ignore = "release timing probe; compare before accepting the optimization"]
-    fn time_consumed_rgba_against_the_existing_background_painter() {
-        use std::{hint::black_box, time::Instant};
-        for (width, height) in [(1920, 1080), (3840, 2160)] {
-            for alpha in [0u8, 128, 255] {
-                let source = RgbaImage::from_pixel(width, height, image::Rgba([180, 90, 30, alpha]));
-                let fill = Color::from_rgba8(40, 70, 110, 255);
-                let mut old = Vec::new();
-                let mut reused = Vec::new();
-                for iteration in 0..12 {
-                    for fast in [iteration % 2 == 0, iteration % 2 != 0] {
-                        let input = DynamicImage::ImageRgba8(source.clone());
-                        let start = Instant::now();
-                        let result = if fast { background(input, WallpaperFill::Cover, (width, height), fill) }
-                            else { reference_background(input, WallpaperFill::Cover, (width, height), fill) }.unwrap();
-                        let elapsed = start.elapsed().as_secs_f64() * 1000.0;
-                        black_box(result.pixmap.data());
-                        if iteration > 0 { if fast { reused.push(elapsed); } else { old.push(elapsed); } }
-                    }
-                }
-                old.sort_by(f64::total_cmp);
-                reused.sort_by(f64::total_cmp);
-                eprintln!("{width}x{height} alpha={alpha}: reference_median_ms={:.3}, reused_median_ms={:.3}", old[old.len() / 2], reused[reused.len() / 2]);
-            }
-        }
-    }
-
 
     /// Every fill already supplies opaque pixels; the canvas root need not
     /// repeat its colour behind the wallpaper plane.

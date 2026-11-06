@@ -898,6 +898,7 @@ mod tests {
     use super::*;
     use crate::launcher_ext::{Hit, HitAction, Lead};
 
+    /// The displayed Tab hint follows the active launcher's focus behavior.
     #[test]
     fn tab_hint_follows_beacon_focus_and_classic_grid_categories() {
         for (grid, chips) in [(false, false), (false, true), (true, false), (true, true)] {

@@ -16,10 +16,8 @@ About → What's new shows it too.
 
 - **Clearer helper contracts.** Internal documentation explains policy cache
   limits, view lifetimes, Studio routing and native output sizing. (#111)
-
-- **Reuse wallpaper storage.** Still wallpapers reuse their prepared full-screen
-  RGBA buffer for the opaque canvas, preserving fill modes, colors and
-  transparency blending.
+  Performance figures now distinguish settled memory from startup peaks
+  and describe the measured release setup.
 
 ## 0.19.0 — 2026-11-06
 

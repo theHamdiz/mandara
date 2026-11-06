@@ -454,8 +454,8 @@ impl CosmicTextSystemState {
         Ok(())
     }
 
-    /// Loads faces eligible for primary text measurements, rechecking the
-    /// primary acceptance rules even when a face is cached as a script fallback.
+    /// Mandara patch: loads faces eligible for primary text measurements.
+    /// Rechecks primary acceptance even for a cached script fallback.
     #[profiling::function]
     fn load_family(
         &mut self,

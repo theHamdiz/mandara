@@ -11,6 +11,8 @@ enum Destination {
     Search,
 }
 
+/// Beacon reserves Tab for focus and leaves activation with a focused button;
+/// other keys return to search. Other launcher styles keep their own routing.
 fn destination(style: LauncherStyle, button_focused: bool, key: &Keystroke) -> Option<Destination> {
     if style != LauncherStyle::Beacon { return None; }
     let modifiers = key.modifiers;
@@ -46,10 +48,12 @@ pub(super) fn handle(style: LauncherStyle, search: &FocusHandle, key: &Keystroke
 mod tests {
     use super::*;
 
+    /// Parse the same key spelling used by GPUI's native event routing.
     fn route(key: &'static str, button: bool) -> Destination {
         destination(LauncherStyle::Beacon, button, &Keystroke::parse(key).unwrap()).unwrap()
     }
 
+    /// Traversal direction stays the same whether search or a mode has focus.
     #[test]
     fn tab_and_shift_tab_traverse_from_search_and_buttons() {
         for button in [false, true] {
@@ -58,6 +62,8 @@ mod tests {
         }
     }
 
+    /// Only unmodified activation keys stay with a button; query edits and
+    /// existing launcher shortcuts continue through the search handler.
     #[test]
     fn focused_buttons_keep_native_activation_and_other_keys_edit_the_query() {
         for key in ["enter", "space"] {
@@ -69,6 +75,7 @@ mod tests {
         }
     }
 
+    /// Beacon's focus routing must leave Classic and grid navigation alone.
     #[test]
     fn classic_results_and_grid_categories_keep_their_keys() {
         for search in [false, true] {
