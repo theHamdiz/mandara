@@ -13,6 +13,10 @@ mod chart_samples;
 mod day_events;
 #[path = "../src/plugins/jannah/progress.rs"]
 mod jannah_progress;
+#[path = "../src/plugins/keyboard/label.rs"]
+mod keyboard_label;
+#[path = "../src/plugins/phone_connect/devices.rs"]
+mod phone_devices;
 #[path = "../src/plugins/media/scrub_state.rs"]
 mod scrub_state;
 #[path = "../src/plugins/settings_cache.rs"]
@@ -278,6 +282,71 @@ fn warm_progress_views_do_not_reformat_date_keys() {
         }
     });
     eprintln!("{FRAMES} progress frames: date lookups {before:?}, snapshot {after:?}");
+    assert!(before.0 >= FRAMES);
+    assert_eq!(after, (0, 0));
+}
+
+/// A warm keyboard badge compares borrowed layout/custom text before copying it.
+#[test]
+fn keyboard_badge_does_not_rebuild_its_cache_key_per_frame() {
+    const FRAMES: usize = 32;
+    let mut labels = keyboard_label::LayoutLabel::default();
+    labels.label("English (US)", Some("EN"));
+    let before = allocations(|| {
+        for _ in 0..FRAMES {
+            let custom = black_box(Some("EN")).map(str::to_string);
+            black_box(format!(
+                "{}\u{1f}{}",
+                black_box("English (US)"),
+                custom.as_deref().unwrap_or_default()
+            ));
+        }
+    });
+    let after = allocations(|| {
+        for _ in 0..FRAMES {
+            black_box(labels.label("English (US)", Some("EN")));
+        }
+    });
+    eprintln!("{FRAMES} keyboard frames: owned key {before:?}, borrowed comparison {after:?}");
+    assert!(before.0 >= FRAMES * 2);
+    assert_eq!(after, (0, 0));
+}
+
+/// Device-list empty-state detection and traversal require no temporary pointer list.
+#[test]
+fn phone_device_filter_does_not_collect_rows() {
+    use mandara_services::phone_connect::Device;
+    let devices = [false, true, true].map(|paired| Device {
+        id: "demo".into(),
+        name: "Demo".into(),
+        kind: "phone".into(),
+        reachable: true,
+        paired,
+        incoming_pair: false,
+        battery: None,
+        plugins: Vec::new(),
+    });
+    const FRAMES: usize = 32;
+    let before = allocations(|| {
+        for _ in 0..FRAMES {
+            black_box(
+                devices
+                    .iter()
+                    .filter(|device| device.paired)
+                    .collect::<Vec<_>>(),
+            );
+        }
+    });
+    let after = allocations(|| {
+        for _ in 0..FRAMES {
+            let mut visible = phone_devices::visible_devices(black_box(&devices), false).peekable();
+            black_box(visible.peek());
+            for device in visible {
+                black_box(device);
+            }
+        }
+    });
+    eprintln!("{FRAMES} phone frames: row Vec {before:?}, iterator {after:?}");
     assert!(before.0 >= FRAMES);
     assert_eq!(after, (0, 0));
 }

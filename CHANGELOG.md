@@ -35,7 +35,8 @@ About → What's new shows it too.
   selectors also read text settings without making temporary string copies.
   Feeds, home controls and the faith plugins resolve their text and list settings once per
   config or language change. Daily progress snapshots also avoid repeated
-  date formatting while a view animates.
+  date formatting while a view animates. Keyboard badges compare borrowed
+  labels, and Phone Connect filters its existing device list directly.
 
 - **Cleaner portable builds.** Linker tuning checks for support, avoiding
   ignored-option warnings with other linkers.

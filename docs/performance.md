@@ -144,7 +144,9 @@ non-secret settings with queued requests, avoiding copied favourite lists. The w
 config fields drop with their last strong owner, but its inline Arc allocation
 remains until the key is replaced or cleared; cache tests print those type sizes.
 Daily progress snapshots use the saved-state generation, date and week start,
-so hover and animation frames do not reformat the same date keys.
+so hover and animation frames do not reformat the same date keys. Keyboard
+badges compare reported/custom labels before copying, and Phone Connect
+filters borrowed devices without an intermediate row list.
 
 `cargo test -p mandara-ui --test plugin_allocations -- --nocapture` compares
 the former temporary expressions with warm state reuse on the test thread.
