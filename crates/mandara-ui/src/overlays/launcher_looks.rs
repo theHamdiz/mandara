@@ -17,6 +17,8 @@
 //!   upper part of the screen with round mode buttons at its reading end
 //!   (Apps, Files, Actions, Clipboard: Ctrl+1–4), and the results in their
 //!   own glass card under it once you type. The Apps mode shows the grid.
+//!   Tab / Shift+Tab focuses its search, modes and visible app categories;
+//!   Enter or Space activates a focused button, while typing returns to search.
 //!   It pops in with the panels' spring (a slight scale and fade), the mode
 //!   buttons slide out from behind the bar one after another, and the card
 //!   grows to its rows with a stiffer spring.
@@ -422,13 +424,18 @@ fn hint(keys: &[&str], what: &'static str, palette: &MandaraPalette) -> AnyEleme
         .into_any_element()
 }
 
+/// Tab moves Beacon focus and cycles categories in the Classic grid.
+fn tab_hint_label(grid: bool, chips: bool, beacon: bool) -> Option<&'static str> {
+    if beacon { Some(tk("Focus")) } else if grid && chips { Some(tk("Category")) } else { None }
+}
+
 /// The keyboard hints strip for this state.
 fn hints(grid: bool, chips: bool, beacon: bool, palette: &MandaraPalette) -> AnyElement {
     let mut row = div().h(px(HINTS_H)).w_full().row().items_center().justify_center().gap(px(HINT_GAP)).text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla());
     row = row.child(if grid { hint(&["←", "↑", "↓", "→"], tk("Move"), palette) } else { hint(&["↑", "↓"], tk("Move"), palette) });
     row = row.child(hint(&["Enter"], tk("Open"), palette));
-    if grid && chips {
-        row = row.child(hint(&["Tab"], tk("Category"), palette));
+    if let Some(label) = tab_hint_label(grid, chips, beacon) {
+        row = row.child(hint(&["Tab"], label, palette));
     }
     if beacon {
         row = row.child(hint(&["Ctrl", "1–4"], tk("Modes"), palette));
@@ -530,10 +537,11 @@ impl LauncherView {
     }
 
     /// The category chips above the grid.
-    pub(super) fn chips_element(&self, palette: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn chips_element(&self, palette: &MandaraPalette, modes: Option<usize>, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let accent = readable(palette.primary, palette);
         let on_accent = accent.best_on(Color::hex("#ffffff"), Color::hex("#101010"));
-        let chip = |id: SharedString, label: SharedString, on: bool| {
+        let focus = modes.map(|modes| super::beacon_keyboard::categories(self.categories.len() + 1, modes, window, cx));
+        let chip = |id: SharedString, label: SharedString, on: bool, index: usize| {
             div()
                 .id(id)
                 .h(px(CHIPS_H))
@@ -544,14 +552,32 @@ impl LauncherView {
                 .flex_none()
                 .cursor_pointer()
                 .text_size(px(text::BODY_S))
+                .when_some(focus.as_ref(), |el, (_, handles)| el
+                    .role(gpui::Role::RadioButton)
+                    .aria_label(label.clone())
+                    .aria_toggled(if on { gpui::Toggled::True } else { gpui::Toggled::False })
+                    .track_focus(&handles[index])
+                    .border_1()
+                    .border_color(gpui::transparent_black())
+                    .focus_visible(move |style| style.border_color(if on { on_accent } else { accent }.hsla())))
                 .when(on, |el| el.bg(accent.hsla()).text_color(on_accent.hsla()).font_weight(FontWeight::SEMIBOLD))
                 .when(!on, |el| el.bg(crate::plugins::panel_fx::wash(crate::plugins::panel_fx::WASH_SOFT, palette).hsla()).hover(|s| s.bg(palette.on_surface.with_alpha(HOVER_ALPHA).hsla())))
                 .child(label)
         };
-        let mut row = div().id("launcher-chips").h(px(CHIPS_H)).flex_none().row().gap(px(CHIP_GAP)).overflow_x_scroll();
-        row = row.child(chip("launcher-chip-all".into(), t("All").into(), self.category.is_none()).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.set_category(None, cx))));
-        for (n, f) in self.categories.iter().copied().enumerate() {
-            row = row.child(chip(SharedString::from(format!("launcher-chip-{n}")), f.label(), self.category == Some(f)).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+        let mut row = div().id("launcher-chips").h(px(CHIPS_H)).flex_none().row().gap(px(CHIP_GAP)).overflow_x_scroll()
+            .when(modes.is_some(), |el| el.flex_row())
+            .when_some(focus.as_ref(), |el, (scroll, _)| el.track_scroll(scroll));
+        let count = self.categories.len() + 1;
+        let rtl = modes.is_some() && crate::bidi::rtl();
+        for child in 0..count {
+            let index = super::beacon_keyboard::category_child(child, count, rtl);
+            if index == 0 {
+                row = row.child(chip("launcher-chip-all".into(), t("All").into(), self.category.is_none(), 0).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.set_category(None, cx))));
+                continue;
+            }
+            let n = index - 1;
+            let f = self.categories[n];
+            row = row.child(chip(SharedString::from(format!("launcher-chip-{n}")), f.label(), self.category == Some(f), n + 1).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 let next = if this.category == Some(f) { None } else { Some(f) };
                 this.set_category(next, cx);
             })));
@@ -742,7 +768,7 @@ impl LauncherView {
                 .child(icon(m.glyph(), text::BODY, accent))
                 .child(t(m.label()))
         });
-        let field = self.query_field(BAR_TEXT, placeholder, &palette);
+        let field = self.query_field(BAR_TEXT, placeholder, &palette, self.focus.is_focused(window));
         let bar_el = glass(&cfg, &palette, progress, bar.h / 2.0)
             .id("beacon-bar")
             .absolute()
@@ -784,6 +810,11 @@ impl LauncherView {
             let (fill_fg, label) = (if on { accent.best_on(Color::hex("#ffffff"), Color::hex("#101010")) } else { palette.on_surface }, m.label());
             let el = glass(&cfg, &palette, progress, r.h / 2.0)
                 .id(SharedString::from(format!("beacon-mode-{}", label.to_lowercase())))
+                .role(gpui::Role::Button)
+                .aria_label(t(label))
+                .aria_toggled(if on { gpui::Toggled::True } else { gpui::Toggled::False })
+                .focusable()
+                .tab_index(n as isize + 1)
                 .absolute()
                 .left(px(r.x))
                 .top(px(r.y))
@@ -793,6 +824,7 @@ impl LauncherView {
                 .items_center()
                 .justify_center()
                 .cursor_pointer()
+                .focus_visible(|style| style.border_color(accent.hsla()))
                 .when(on, |el| el.bg(accent.hsla()))
                 .when(!on, |el| el.hover(|s| s.bg(palette.surface_container_high.hsla())))
                 .child(icon(m.glyph(), MODE_ICON, fill_fg))
@@ -807,7 +839,7 @@ impl LauncherView {
             let reveal = if card_target > 0.0 { (card_h / card_target).clamp(0.0, 1.0) } else { (card_h / (CARD_PAD * 2.0 + row_h)).clamp(0.0, 1.0) };
             let body = if grid {
                 let grid_el = self.grid_element(g, list_h, &palette, cx);
-                div().flex().flex_col().gap(px(CARD_PAD)).when(chips, |el| el.child(self.chips_element(&palette, cx))).child(grid_el).into_any_element()
+                div().flex().flex_col().gap(px(CARD_PAD)).when(chips, |el| el.child(self.chips_element(&palette, Some(modes.len()), window, cx))).child(grid_el).into_any_element()
             } else {
                 self.grouped_element(&lay, list_h, row_h, lead_px, true, &palette, cx)
             };
@@ -858,7 +890,7 @@ impl LauncherView {
             .font_weight(crate::style::body_weight())
             .text_color(palette.on_surface.hsla())
             .text_size(px(BASE_TEXT * cfg.typography.scale))
-            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| this.on_key(e, cx)))
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| this.on_key(e, window, cx)))
             .child(
                 div()
                     .id("launcher-outside")
@@ -884,6 +916,18 @@ impl LauncherView {
 mod tests {
     use super::*;
     use crate::launcher_ext::{Hit, HitAction, Lead};
+
+    /// The displayed Tab hint follows the active launcher's focus behavior.
+    #[test]
+    fn tab_hint_follows_beacon_focus_and_classic_grid_categories() {
+        for (grid, chips) in [(false, false), (false, true), (true, false), (true, true)] {
+            assert_eq!(tab_hint_label(grid, chips, true), Some("Focus"));
+        }
+        assert_eq!(tab_hint_label(true, true, false), Some("Category"));
+        for (grid, chips) in [(false, false), (false, true), (true, false)] {
+            assert_eq!(tab_hint_label(grid, chips, false), None);
+        }
+    }
 
     fn app(name: &str, categories: &str) -> Item {
         Item::App(crate::apps::App { id: name.to_lowercase(), name: name.into(), categories: categories.into(), ..Default::default() })

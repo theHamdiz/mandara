@@ -1,23 +1,45 @@
 # Performance
 
-A desktop shell runs all day, so Mandara treats memory and power like a
-feature. Measured on the optimized release build, on a 4K display at scale
-1.5 under MangoWM, with the bar, sidebar, notifications, wallpaper and depth
-clock running, once the shell has settled (it hands freed memory back to the
-system every 30 seconds, the program code it only needed to start 8 seconds
-after it starts, and code it hasn't touched lately every 10 minutes):
+Mandara's resource use depends on the display size, graphics driver, widgets
+and open panels. Settled memory and startup peaks are different measurements.
+The goal of staying below 100 MiB throughout startup is not met yet.
 
-| Resident memory (RSS) | Video memory | Idle CPU | Threads |
-|---|---|---|---|
-| **72–78 MiB** (about 26 MiB of it the shell's own memory; the rest is program code and shared libraries) | **170–185 MiB** | ~0.1 % of one core | 31 |
+## Current release-profile measurements
 
-Opening a panel hits every frame at 144 Hz on that 4K display (release
-build, measured: 0 late frames, a median of 6.06 ms per frame).
+Measured on 2026-11-06 with source `4b60bd5e4541` (the code merged for
+v0.19.0), the normal optimized release profile, fat LTO and the tuned system
+allocator. Each run used a fresh private home and the same warm shader cache.
+The headless output was 3840 × 2160 at scale 1.5, with 23 active plugins out
+of 77 registered. The fixture exercised the bar, sidebar, selected panels,
+twenty notification-history entries and theme edits. The private session ran
+offline with its system bus disabled, so real network, power and Bluetooth
+services were not exercised. Integrations had no configured accounts or feeds;
+this does not measure every plugin or an active video wallpaper.
 
-**Ready for 1000 Hz displays.** A 1000 Hz display allows 1 ms per frame.
-On the same machine (`mandara msg diagnostics frames`, 240 frames), a
-frame builds in 0.10 ms typically and 0.22 ms at the 95th percentile, so
-95% of frames fit that budget; the slowest 1% take 1.6 ms or more.
+| Measurement | Result |
+|---|---|
+| Startup peak RSS, three runs | Under 175 MiB |
+| Settled bar RSS | Under 50 MiB |
+| RSS after the panel and theme workload | Under 100 MiB |
+| Video memory after that workload | Under 210 MiB |
+| Threads after that workload | 27 |
+| Typical sampled frame-build time | About 0.1 ms |
+
+These figures include program code and shared libraries resident in the shell
+process. Studio runs separately. The headless output was configured for
+144 Hz; this is not verification on a physical 144 Hz display. Frame-build
+timing measures CPU work and does not establish a display refresh-rate limit.
+The stricter resource-check limits for RSS and anonymous memory still fail
+after this workload; thread and idle-CPU checks pass.
+
+## Earlier desktop measurement
+
+The 2026-10-29 optimized build measured under 80 MiB RSS and under 190 MiB
+video memory, about 0.1% idle CPU and 31 threads on a 4K MangoWM desktop at scale
+1.5 with wallpaper, depth clock, bar, sidebar and notifications. Its sampled
+frame builds were typically 0.10 ms and 0.22 ms at the 95th percentile.
+That is a historical result from a different build and setup, not evidence
+of an improvement or a current upper bound.
 
 Studio → Performance shows the shell's own CPU, memory, video memory and
 frame times live, so you can check these numbers on your machine (Studio
@@ -29,9 +51,8 @@ runs as its own process and is measured separately):
   <sub>Studio → Performance in the demo session the screenshots are taken in.</sub>
 </p>
 
-That's a whole GPU-rendered, spring-animated desktop (bar, dock, launcher,
-sidebar, notifications, wallpaper and widgets) in less memory than a single
-browser tab, without trading away speed. It took deliberate work at every layer:
+The bar, dock, launcher, sidebar, notifications, wallpaper and widgets share
+resources through these controls:
 
 - **Hand-tuned glibc malloc.** We benchmarked mimalloc v2 and v3, jemalloc
   and glibc on the real shell. Tuned glibc won: at most 2 malloc arenas
@@ -62,7 +83,7 @@ browser tab, without trading away speed. It took deliberate work at every layer:
   smaller than the screen is scaled up one row at a time, not through a
   full-size float copy: a wallpaper switch on a 4K display peaks 80 MiB
   lower ([numbers](releasing.md#settled-memory-video-memory-and-residue)).
-- **Few threads.** All D-Bus, network and audio services share one tokio
+- **Few threads.** D-Bus, network and audio services share one service
   runtime with two workers, and GPUI's worker pool is capped at four.
 - **Nothing ticks off screen.** Spectrum, graphs, timers and network
   sampling run only while you can see them.

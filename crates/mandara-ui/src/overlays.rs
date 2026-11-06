@@ -17,6 +17,7 @@
 //!   rounded buttons whose corner radius morphs on focus / press.
 
 mod launcher_looks;
+mod beacon_keyboard;
 
 use crate::bidi::Bidi as _;
 use crate::launcher_icons::IconLedger;
@@ -1210,7 +1211,7 @@ impl LauncherView {
         // Removed without its last frame (a crash of the close animation,
         // an output unplugged): still free the icons it decoded.
         cx.on_release(|this: &mut Self, cx| this.forget_decoded(cx)).detach();
-        let focus = cx.focus_handle();
+        let focus = cx.focus_handle().tab_stop(true);
         focus.focus(window, cx);
         let mut this = Self {
             shell,
@@ -1464,11 +1465,14 @@ impl LauncherView {
         self.query.char_indices().nth(self.caret).map(|(i, _)| i).unwrap_or(self.query.len())
     }
 
-    fn on_key(&mut self, e: &KeyDownEvent, cx: &mut Context<Self>) {
+    fn on_key(&mut self, e: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let k = &e.keystroke;
         let count = self.count();
         self.blink_from = Instant::now();
         let beacon = self.look.style == mandara_config::workflow::LauncherStyle::Beacon;
+        if beacon_keyboard::handle(self.look.style, &self.focus, k, window, cx) {
+            return;
+        }
         // Beacon: Ctrl+1–4 pick a mode; Backspace on an empty field or
         // Escape leaves it.
         if beacon && k.modifiers.control
@@ -1726,8 +1730,8 @@ impl LauncherView {
     /// The query text with its blinking caret (solid for half a second
     /// after each edit), the selection, or `placeholder` while empty;
     /// `size` px type. Records where the text lies (click-to-place-caret).
-    fn query_field(&self, size: f32, placeholder: String, palette: &MandaraPalette) -> gpui::Div {
-        let caret_on = (self.blink_from.elapsed().as_millis() / CARET_BLINK.as_millis()).is_multiple_of(2);
+    fn query_field(&self, size: f32, placeholder: String, palette: &MandaraPalette, focused: bool) -> gpui::Div {
+        let caret_on = focused && (self.blink_from.elapsed().as_millis() / CARET_BLINK.as_millis()).is_multiple_of(2);
         let caret = div().w(px(2.0)).h(px(size + 5.0)).rounded(px(crate::style::radius(1.0))).flex_none().bg(palette.primary.hsla()).when(!caret_on, |el| el.opacity(0.0));
         let bounds = self.text_bounds.clone();
         let field = div()
@@ -1999,7 +2003,7 @@ impl Render for LauncherView {
             })
             .child(div().flex().flex_col().children(rows_el))
         };
-        let chips_el = chips.then(|| self.chips_element(&palette, cx));
+        let chips_el = chips.then(|| self.chips_element(&palette, None, window, cx));
         let hints_el = look.hints.then(|| self.classic_hints(grid, chips, &palette));
         self.field_px = text::BODY + 1.0;
         let hint = {
@@ -2026,7 +2030,7 @@ impl Render for LauncherView {
             .border_2()
             .border_color(palette.primary.with_alpha(0.55).hsla())
             .child(icon("search", 18.0, palette.on_surface_variant))
-            .child(self.query_field(text::BODY + 1.0, hint, &palette))
+            .child(self.query_field(text::BODY + 1.0, hint, &palette, true))
             // Clicking the field focuses it and puts the caret where you clicked.
             .on_mouse_down(MouseButton::Left, cx.listener(|this, e: &gpui::MouseDownEvent, window, cx| {
                 this.focus.focus(window, cx);
@@ -2117,7 +2121,7 @@ impl Render for LauncherView {
             .font_weight(crate::style::body_weight())
             .text_color(palette.on_surface.hsla())
             .text_size(px(13.0 * cfg.typography.scale))
-            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| this.on_key(e, cx)))
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| this.on_key(e, window, cx)))
             .on_mouse_move(cx.listener(move |this, e: &gpui::MouseMoveEvent, _, cx| {
                 if inside(this, e.position, LEAVE_SLACK_PX) {
                     this.entered = true;

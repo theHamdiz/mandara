@@ -136,7 +136,9 @@ fn undo_to(i: usize, cx: &mut App) {
     update_config(cx, move |c| *c = (*before).clone());
 }
 
-/// `cfg` with every registry setting of `section` at its default.
+/// Returns a page reset without writing configuration. Registry values and
+/// bespoke layout lists reset together, including every Bars tab. Layout
+/// defaults respect removed plugins; unrelated pages keep their current values.
 pub(super) fn reset_section(cfg: &ShellConfig, section: Section) -> ShellConfig {
     let mut next = cfg.clone();
     for s in registry::in_section(section) {

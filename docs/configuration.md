@@ -844,6 +844,10 @@ beacon_top = 0.24            # the Beacon bar's top, a share of the screen heigh
   mode buttons at its reading end — Apps, Files, Actions, Clipboard, also
   Ctrl+1–4 (a mode's button hides while its provider is off) — and the
   results in their own glass card under it once you type or pick a mode.
+  Tab / Shift+Tab moves between search and the available mode buttons;
+  Enter or Space selects the focused mode. Typing or pressing a result
+  navigation key returns focus to search. This follows reading order in
+  right-to-left languages too.
   Apps shows the grid. Backspace on an empty field or Esc leaves a mode.
   It uses the panels' fill, opacity, rim and shadow, so it follows your
   theme in light and dark.

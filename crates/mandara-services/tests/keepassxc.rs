@@ -13,6 +13,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use futures::StreamExt as _;
 use mandara_services::keepassxc::{self, BUS_NAME, COLLECTION_IFACE, LockState, NOT_RUNNING, OBJECT_PATH, SECRETS_NAME, SECRETS_PATH, SERVICE_IFACE, UnlockOutcome};
@@ -25,6 +26,8 @@ const KEY_FILE: &str = "/keys/work.keyx";
 /// Unix socket paths must fit in 108 bytes.
 const MAX_SOCKET_DIR: usize = 80;
 const PROPERTIES_IFACE: &str = "org.freedesktop.DBus.Properties";
+/// A missed mock reply must fail the fixture instead of stalling the CI job.
+const METHOD_TIMEOUT: Duration = Duration::from_secs(5);
 
 struct Kill(Vec<Child>);
 
@@ -108,9 +111,10 @@ impl Mock {
     }
 }
 
-/// Serves the mock on `conn` until the connection closes.
-async fn serve(conn: zbus::Connection, mock: Arc<Mutex<Mock>>) {
-    let mut stream = zbus::MessageStream::from(&conn);
+/// Drains the stream activated during setup, including requests queued before
+/// this worker was scheduled, until the private connection closes.
+async fn serve(mut stream: zbus::MessageStream, mock: Arc<Mutex<Mock>>) {
+    let conn = zbus::Connection::from(&stream);
     while let Some(Ok(msg)) = stream.next().await {
         if msg.message_type() != zbus::message::Type::MethodCall {
             continue;
@@ -189,11 +193,18 @@ struct Setup {
     ini: PathBuf,
     passwords_db: PathBuf,
     work_db: PathBuf,
+    server: zbus::Connection,
 }
 
 /// The bus, the mock (owning both names unless `secret_service` is off) and
 /// a keepassxc.ini listing two databases.
 fn setup(secret_service: bool) -> Option<Setup> {
+    setup_with_start(secret_service, None)
+}
+
+/// An optional gate holds the worker while its already active stream receives
+/// requests. Ordinary fixtures start serving immediately.
+fn setup_with_start(secret_service: bool, start: Option<std::sync::mpsc::Receiver<()>>) -> Option<Setup> {
     if which("dbus-daemon").is_none() {
         eprintln!("dbus-daemon isn't installed; skipping");
         return None;
@@ -215,19 +226,62 @@ fn setup(secret_service: bool) -> Option<Setup> {
         ..Mock::default()
     }));
     let server = runtime::block_on(async {
-        let mut b = zbus::connection::Builder::address(bus.as_str()).unwrap().name(BUS_NAME).unwrap();
+        let mut b = zbus::connection::Builder::address(bus.as_str()).unwrap().method_timeout(METHOD_TIMEOUT).name(BUS_NAME).unwrap();
         if secret_service {
             b = b.name(SECRETS_NAME).unwrap();
         }
         b.build().await.unwrap()
     });
+    // Activate before a caller can send to either published name. Creating the
+    // stream inside the worker loses calls when its first scheduling is late.
+    let stream = zbus::MessageStream::from(&server);
     let m = mock.clone();
-    std::thread::spawn(move || runtime::block_on(serve(server, m)));
-    Some(Setup { _kids: kids, _dir: dir, bus, mock, ini, passwords_db, work_db })
+    std::thread::spawn(move || {
+        if start.is_some_and(|start| start.recv().is_err()) { return; }
+        runtime::block_on(serve(stream, m));
+    });
+    Some(Setup { _kids: kids, _dir: dir, bus, mock, ini, passwords_db, work_db, server })
 }
 
 fn client(bus: &str) -> zbus::Connection {
-    runtime::block_on(async { zbus::connection::Builder::address(bus).unwrap().build().await.unwrap() })
+    runtime::block_on(async { zbus::connection::Builder::address(bus).unwrap().method_timeout(METHOD_TIMEOUT).build().await.unwrap() })
+}
+
+/// Force the bus and mock socket reader to handle an early call before the
+/// worker starts; its reply must survive that scheduling order.
+#[test]
+fn requests_queued_before_the_mock_worker_starts_are_answered() {
+    let (resume, paused) = std::sync::mpsc::channel();
+    let Some(s) = setup_with_start(true, Some(paused)) else { return };
+    let conn = client(&s.bus);
+    runtime::block_on(async {
+        let mut replies = zbus::MessageStream::from(&conn);
+        let call = zbus::Message::method_call(OBJECT_PATH, "isHardwareKeySupported").unwrap()
+            .destination(BUS_NAME).unwrap().interface(keepassxc::INTERFACE).unwrap().build(&()).unwrap();
+        let serial = call.primary_header().serial_num();
+        conn.send(&call).await.unwrap();
+
+        // The client round trip orders forwarding of the call before the
+        // server round trip. Reading that reply requires the server's socket
+        // reader to have already broadcast the earlier call to its stream.
+        zbus::fdo::DBusProxy::new(&conn).await.unwrap().get_id().await.unwrap();
+        zbus::fdo::DBusProxy::new(&s.server).await.unwrap().get_id().await.unwrap();
+        resume.send(()).unwrap();
+
+        let response = async {
+            while let Some(reply) = replies.next().await {
+                let reply = reply.unwrap();
+                if reply.header().reply_serial() == Some(serial) { return reply; }
+            }
+            panic!("the private reply stream closed");
+        };
+        futures::pin_mut!(response);
+        let reply = match futures::future::select(response, async_io::Timer::after(METHOD_TIMEOUT)).await {
+            futures::future::Either::Left((reply, _)) => reply,
+            futures::future::Either::Right(_) => panic!("the mock lost a request sent before its worker started"),
+        };
+        assert!(reply.body().deserialize::<bool>().unwrap());
+    });
 }
 
 #[test]

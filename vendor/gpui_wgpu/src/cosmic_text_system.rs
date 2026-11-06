@@ -454,6 +454,8 @@ impl CosmicTextSystemState {
         Ok(())
     }
 
+    /// Mandara patch: loads faces eligible for primary text measurements.
+    /// Rechecks primary acceptance even for a cached script fallback.
     #[profiling::function]
     fn load_family(
         &mut self,
@@ -599,6 +601,9 @@ impl CosmicTextSystemState {
     /// text in the chain's script asks cosmic-text for the face it needs at
     /// its weight anyway: for an English interface, five Arabic families'
     /// 53 files for a script that may never appear.
+    /// Shares the loaded-face cache with primary fonts, which must recheck
+    /// their own eligibility before reuse. The selected fallback does not
+    /// attach another user fallback chain.
     fn load_chain_face(&mut self, family: &str) -> Option<FontId> {
         let name = gpui::font_name_with_fallbacks(family, &self.system_font_fallback);
         // Upright first, then nearest to regular; ties keep database order.

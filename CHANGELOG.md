@@ -6,6 +6,41 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **Copy installation commands.** The website and its guides offer a Copy
+  button beside code examples, with keyboard access and clear feedback when
+  copying succeeds or the browser blocks it.
+
+- **Fresh desktop pictures.** The README keeps its familiar widgets with
+  the repaired sticky notes on a new wallpaper. Its banner now says twenty
+  languages, matching the available language packs.
+
+### Fixed
+
+- **Theme cards fill their space.** Main menu → Look → Themes uses the
+  available grid height, and built-in names follow your language in the
+  menu and Studio. Custom theme names stay as you wrote them.
+
+- **Keyboard navigation in Beacon.** Its search and mode buttons are reachable
+  with Tab and Shift+Tab, with visible focus and Enter or Space to select
+  a mode or app category. (#120)
+
+### Under the hood
+
+- **Cleaner portable builds.** Linker tuning checks for support, avoiding
+  ignored-option warnings with other linkers.
+  CI and release uploads use the current artifact action to avoid its older
+  runtime deprecations.
+
+- **Reliable integration tests.** The private KeePassXC server listens before
+  client requests arrive, and its waits have a deadline, preventing a CI hang.
+
+- **Clearer helper contracts.** Internal documentation explains policy cache
+  limits, view lifetimes, Studio routing and native output sizing. (#111)
+  Performance figures now distinguish settled memory from startup peaks
+  and describe the measured release setup.
+
 ## 0.19.0 — 2026-11-06
 
 Bars and sidebars share one focused settings page, with clearer installation

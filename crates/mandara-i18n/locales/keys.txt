@@ -254,6 +254,7 @@ About the library
 Above fullscreen windows
 Above or below the results
 Abu Dawud
+Abyssal Mediterranean blue, sea-glass turquoise and sun-warmed limestone.
 Acceleration
 Accent
 Accent colour
@@ -931,6 +932,7 @@ Carousel: how much bigger the middle wallpaper is
 Categories
 Category
 Category chips
+Catppuccin
 Catppuccin Mocha
 Caustics
 Cell shape
@@ -1285,6 +1287,7 @@ Corners: top-left, top-right, bottom-left, bottom-right
 Corniche
 Corniche night
 Corniche waves
+Cosmic neon green and cyan on deep indigo (light variant derived).
 Could not create a temporary download folder.
 Could not create {path}: {error}
 Could not download the signed release. Nothing was installed. Check your connection and try again.
@@ -1477,6 +1480,7 @@ Decoration
 Deeds
 Deep focus
 Deep green: a giant stacked clock behind the subject and a dock media chip.
+Deep midnight navy with pale citrine, soft lavender and mint.
 DeepL Free
 DeepL Pro
 DeepL uses its own server and requires an API key
@@ -1815,6 +1819,7 @@ Egyptian
 Eight
 Eject
 El-Mandara, Alexandria
+Eldritch
 Elevation tint
 Eleven
 Emerald
@@ -1893,6 +1898,7 @@ Even monkeys fall from trees.
 Even when closing the lid doesn't suspend (docked, external monitor)
 Evening
 Evening greeting
+Evening over Stanley Bridge: coral, apricot and lavender over a plum sea.
 Event dots
 Event hooks: every event with its rules (JSON)
 Event reminders
@@ -3286,6 +3292,7 @@ Magnified size
 Maher Al-Muaiqly
 Main
 Main display
+Main for nights, Dawn for mornings.
 Main menu
 Mains
 Mains power
@@ -3509,6 +3516,7 @@ Mocha Dark
 Mocha Lavender
 Mocha Light
 Mocha Mauve
+Mocha after dark, Latte by day.
 Mode
 Model
 Model mode only: downloads the depth model once from Hugging Face
@@ -3725,6 +3733,8 @@ Next window (Alt+Tab)
 Next: {name}
 Nicomachean Ethics, Book II
 Night
+Night Citrine
+Night and Day.
 Night bay
 Night dimming
 Night greeting
@@ -4558,6 +4568,7 @@ Pocket player
 Pointer
 Pointer rest on the edge before a hidden dock shows
 Pointer speed
+Polar Night and Snow Storm.
 Polar night
 Polaroid
 Polkit agent status; demo previews the authentication dialog; close cancels it
@@ -5036,6 +5047,7 @@ Resumed {name}
 Resuming…
 Retire
 Retired {n} line(s) — backup in {dir} (undo: mandara setup --restore latest)
+Retro groove, dark and light.
 Retry
 Return to your setup from before the first look
 Reveal delay
@@ -5087,6 +5099,7 @@ Roundness of the pills, island, slab and items
 Route traffic through a peer, or stop with none
 Rows
 Rows shown before the list scrolls
+Royal indigo dusk over the palace gardens, coral sky and an amber lighthouse.
 Rubaiyat
 Ruggedness
 Rule
@@ -5149,6 +5162,7 @@ Sand dunes lit by a low sun
 Sandbox data
 Sandboxed
 Sandboxed WebAssembly plugins from the marketplace, your plugin folders or your distribution.
+Sandstone ramparts at golden hour, harbour water and terracotta.
 Sans
 Sat
 Saturation
@@ -6088,6 +6102,7 @@ The adhan isn't downloaded
 The adhan isn't downloaded: turn it on in Studio, or run `prayer adhan download`
 The adhan: whether it is on, downloaded or playing, and where it comes from
 The admin helper couldn't be installed, so nothing was changed.
+The ancient lighthouse: a luminous beam across deep night navy and harbour lights.
 The app and tool tiles wear a Kufic word instead of their geometric pattern
 The app each kind of file or link opens in, for every app that asks the system (mimeapps.list).
 The app's name, the window's title, or both
@@ -6589,6 +6604,7 @@ Translucency
 Trash
 Tray items (role, status, icons, menus)
 Trigger size
+True OLED onyx with precious warm gold and emerald speculars.
 Trust a device (it may connect by itself and is auto-connected)
 Trust in your Lord
 Trusted
@@ -6928,6 +6944,7 @@ Vertical scroller
 Vertical tile
 Very little indeed is necessary for living a happy life.
 Vesktop / Vencord
+Vesper
 Vibrant
 Video
 Video bitrate of the Custom quality
@@ -7003,6 +7020,7 @@ Warm
 Warm from
 Warm now
 Warm now · {kelvin} K
+Warm peach and mint on near-black (light variant derived).
 Warm the screens in the evening (wlr-gamma-control: MangoWM, Hyprland, Sway; Niri can't)
 Warmer colours in the evening, on a schedule
 Warms at {time}
@@ -7015,6 +7033,7 @@ Wash with care, then pray two rak'ahs with your whole heart.
 Washi tape
 Watches your sites and services and tells you when one goes down
 Wave
+Wave at night, Lotus in daylight.
 Wave detail
 Waves
 Waviness

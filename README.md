@@ -2,16 +2,16 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/brand/mandara-banner-dark.webp"/>
     <source media="(prefers-color-scheme: light)" srcset="assets/brand/mandara-banner-light.webp"/>
-    <img src="assets/brand/mandara-banner-light.webp" alt="Mandara: the phoenix rising from a Mediterranean wave beside the wordmark. A beautiful, fast desktop shell for Wayland, in under 100 MiB, tuned for 144 Hz." width="100%"/>
+    <img src="assets/brand/mandara-banner-light.webp" alt="Mandara: the phoenix rising from a Mediterranean wave beside the wordmark. A beautiful, fast desktop shell for Wayland, with settled memory under 100 MiB in the measured setup, tuned for 144 Hz." width="100%"/>
   </picture>
 </p>
 
 <p align="center">
-  <b>A beautiful, fast Linux desktop that fits in under 100 MiB of RAM.</b>
+  <b>A beautiful, fast Linux desktop with settled memory under 100 MiB in the measured setup.</b>
   <br/>
   Design-first, spring-animated and written entirely in Rust.
   <br/>
-  <i>Frames built in about 0.1 ms, ready for 1000 Hz displays: a shell that feels like an instrument, not a toolkit.</i>
+  <i>Frames built in about 0.1 ms, with spring motion throughout the desktop.</i>
 </p>
 
 <p align="center">
@@ -38,13 +38,13 @@
   <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-77%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="77 plugins plus WebAssembly"/></a>
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-20%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="20 languages"/></a>
   <br/>
-  <a href="docs/performance.md"><img src="https://img.shields.io/badge/RAM-under%20100%20MiB-2DD4BF?labelColor=0B1026" alt="RAM under 100 MiB"/></a>
-  <a href="docs/performance.md"><img src="https://img.shields.io/badge/VRAM-under%20190%20MiB-2DD4BF?labelColor=0B1026" alt="VRAM under 190 MiB"/></a>
-  <a href="docs/performance.md"><img src="https://img.shields.io/badge/idle%20CPU-0.1%25-2DD4BF?labelColor=0B1026" alt="Idle CPU 0.1%"/></a>
+  <a href="docs/performance.md"><img src="https://img.shields.io/badge/settled%20RAM-under%20100%20MiB-2DD4BF?labelColor=0B1026" alt="Settled RAM under 100 MiB in the measured setup"/></a>
+  <a href="docs/performance.md"><img src="https://img.shields.io/badge/VRAM-under%20210%20MiB-2DD4BF?labelColor=0B1026" alt="VRAM under 210 MiB in the measured setup"/></a>
+  <a href="docs/performance.md"><img src="https://img.shields.io/badge/idle%20CPU-measured-2DD4BF?labelColor=0B1026" alt="Measured idle CPU"/></a>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/hero.webp" alt="Mandara Shell desktop over the Corniche at sunset: the edge-frame bar with rounded screen corners and the song playing, a headline clock, a to-do list taped on torn paper, two sticky notes (Weekend plans and Ideas), a month calendar, the agenda of upcoming events and the dock" width="100%"/>
+  <img src="docs/screenshots/hero.webp" alt="Mandara Shell desktop over sculpted glass ribbons: the edge-frame bar with rounded screen corners and the song playing, a headline clock, a to-do list taped on torn paper, two sticky notes (Weekend plans and Ideas), a month calendar, the agenda of upcoming events and the dock" width="100%"/>
 </p>
 
 <p align="center">
@@ -98,7 +98,7 @@ widget can be moved, resized and restyled right on the desktop.
 | **What** | A complete Wayland desktop shell: bar, island, dock, launcher, sidebar, notifications, OSDs, wallpapers, desktop widgets, lock screen, login manager, settings app |
 | **Compositors** | MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic (0.3) and KWin, with native drivers; your own config gets one include line at most, nothing more |
 | **Built with** | 100 % Rust, one binary (`mandara`), GPU-rendered with GPUI and wgpu |
-| **Resources** | Under 100 MiB RAM, under 190 MiB video memory, about 0.1 % CPU idle |
+| **Resources** | Under 100 MiB settled RAM and under 210 MiB video memory in the [measured setup](docs/performance.md); startup and active workloads can use more |
 | **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`), with [thirteen colour launcher icons](docs/configuration.md#launcher-button-artwork) |
 | **Automation** | `mandara msg <command>` with JSON replies; `mandara commands --json` lists them all |
 | **Plugins** | 77 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
@@ -131,10 +131,10 @@ around, each one measured or shipped today:
    screenshots, screen recording, offline OCR, polkit agent, lock screen,
    login manager and a settings app: one Rust program, no QML, JavaScript,
    Python or shell glue.
-4. **Fast by measurement, not by claim.** Under 100 MiB of RAM, under
-   190 MiB of video memory, about 0.1 % CPU idle, and frames built in
-   0.1–0.2 ms: 95% of frames finish inside the 1 ms a 1000 Hz display
-   allows.
+4. **Fast by measurement, not by claim.** The measured setup settles
+   below 100 MiB of RAM and uses under 210 MiB of video memory.
+   Typical frame builds take around 0.1 ms. Startup peaks are higher;
+   these are measurements of one setup, not a ceiling for every workload.
    [How it's measured](docs/performance.md)
 5. **Real motion.** Analytical spring physics that can be interrupted
    mid-flight, and OKLCH colour blending, so every morph, slide and theme
@@ -165,8 +165,8 @@ around, each one measured or shipped today:
 
 ## Why you'll like it
 
-- **It's light.** The whole desktop needs less memory than a browser tab
-  and sits at about 0.1 % CPU when idle. [How](docs/performance.md)
+- **It's light.** Plugins load data when needed, and hidden panels stop
+  their refresh work. [Measurements and setup](docs/performance.md)
 - **It looks the way you want.** Six bar styles (now including a notch that
   hangs from the top edge), side bars of icons and pills that join the top
   bar into one frame, one-click Looks, desktop widgets, a hundred dials for

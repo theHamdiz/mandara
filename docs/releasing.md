@@ -600,7 +600,9 @@ build, so re-check those two on a quiet machine before quoting them.
 * **Cold functions grouped** (`mandara-app/build.rs`,
   `-z keep-text-section-prefix`): what LLVM marks cold (`#[cold]`, panic and
   error paths) goes to its own 2.2 MB `.text.unlikely` instead of sitting
-  between live functions.
+  between live functions. Builds probe the configured toolchain before
+  enabling this flag; linkers that do not support it keep their normal
+  section layout.
 
 Measured and not shipped, speed first:
 

@@ -423,6 +423,8 @@ impl Default for LegacyOutputSize {
 
 impl LegacyOutputSize {
     /// Version two batches mode and scale together; version one has no Done.
+    /// Returns true when consumers may act on the accumulated geometry.
+    /// Until then, no intermediate mode/scale pair may size a legacy canvas.
     fn event(&mut self, event: &wl_output::Event, version: u32) -> bool {
         match event {
             wl_output::Event::Mode { flags: WEnum::Value(flags), width, height, .. } if flags.contains(wl_output::Mode::Current) => {
@@ -440,6 +442,8 @@ impl LegacyOutputSize {
         self.complete
     }
 
+    /// Logical fallback only after a complete advertisement. Existing canvases
+    /// keep painting their configured dimensions while the next batch is pending.
     fn logical_size(&self) -> Option<(u32, u32)> {
         if !self.complete { return None; }
         self.mode.map(|(width, height)| ((width / self.scale.max(1) as u32).max(1), (height / self.scale.max(1) as u32).max(1)))
@@ -452,6 +456,9 @@ fn changed_logical_size(current: Option<(u32, u32)>, width: i32, height: i32) ->
     (size.0 > 0 && size.1 > 0 && current != Some(size)).then_some(size)
 }
 
+/// Records a positive, changed request before sending it. Compare requests,
+/// not configure replies: a newer target may equal the old painted size
+/// while an intermediate request is still waiting for acknowledgement.
 fn request_logical_size(requested: &mut (u32, u32), size: (u32, u32)) -> bool {
     if size.0 == 0 || size.1 == 0 || *requested == size { return false; }
     *requested = size;
@@ -635,6 +642,9 @@ impl Host {
     }
 
     /// Creates the canvas (layer surface) for output `id` if it has none.
+    /// Waits for native logical dimensions, or a complete legacy batch, before
+    /// requesting any surface size. Paint dimensions come from configure replies,
+    /// never from treating the request itself as an acknowledgement.
     pub fn ensure_canvas(&mut self, id: u32) {
         let s = &mut self.state;
         let Some(i) = s.outputs.iter().position(|o| o.global == id) else { return };
