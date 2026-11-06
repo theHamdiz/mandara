@@ -13,13 +13,14 @@ use std::rc::Rc;
 use gpui::{AnyElement, AppContext as _, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px};
 use mandara_config::ShellConfig;
 use mandara_core::ToGpui;
-use mandara_config::workflow::{LAUNCHER_LOOKS, LauncherEdge, LauncherLookPreset, LauncherPosition};
+use mandara_config::workflow::{LAUNCHER_LOOKS, LauncherLookPreset};
 use mandara_i18n::{t, tf, tr};
 use mandara_theme::MandaraPalette;
 use mandara_ui::icons::icon;
 use mandara_ui::state::update_config;
 
 use super::StudioView;
+use super::launcher_data::USAGE_ROWS;
 use super::compositor_page::{badge, button, card, heading, tip};
 use super::themes_page::section_head;
 use crate::registry::{self, Section};
@@ -27,8 +28,6 @@ use crate::registry::workflow_settings::{APPS, BEACON, GENERAL, GRID, LAUNCHING,
 use crate::text_field::TextField;
 use crate::tokens::*;
 
-/// Most-used results shown.
-const USAGE_ROWS: usize = 8;
 /// Usage bar height.
 const USAGE_BAR_PX: f32 = 6.0;
 
@@ -45,24 +44,6 @@ const BUTTON: &str = mandara_i18n::tk("Button");
 /// Config path of the placement (drawn as the screen diagram instead of a
 /// choice row).
 pub(super) const LAUNCHER_POSITION_PATH: &str = "/launcher/look/position";
-
-/// The placement diagram: a little screen with the bar along its edge and
-/// a tile per placement (physical sides, also in right-to-left languages).
-const SCREEN_W_PX: f32 = 300.0;
-const SCREEN_H_PX: f32 = 180.0;
-const SCREEN_RADIUS_PX: f32 = 14.0;
-const BAR_STRIP_PX: f32 = 12.0;
-/// Inset of the tiles from the diagram's sides and edges.
-const TILE_INSET_PX: f32 = 10.0;
-/// Gap between the bar strip and the tiles hanging from it.
-const TILE_BAR_GAP_PX: f32 = 4.0;
-const EDGE_TILE_W_PX: f32 = 78.0;
-const EDGE_TILE_H_PX: f32 = 40.0;
-const CENTER_TILE_W_PX: f32 = 112.0;
-const CENTER_TILE_H_PX: f32 = 58.0;
-const TILE_RADIUS_PX: f32 = 9.0;
-/// The launcher glyph inside each tile.
-const TILE_ICON_PX: f32 = 14.0;
 
 /// Launcher looks: the card grid. `max_w ≥ 1.5 × min_w + gap`, so a row of
 /// two or more cards always fills the column exactly.
@@ -188,7 +169,7 @@ fn look_mini(preset: &LauncherLookPreset, w: f32, p: &MandaraPalette) -> gpui::D
 }
 
 /// Asks the running shell to do something (Studio is its own process).
-fn shell_ipc(cx: &gpui::App, args: &[&str]) {
+pub(super) fn shell_ipc(cx: &gpui::App, args: &[&str]) {
     if let Some(ipc) = cx.try_global::<crate::perf::ShellIpc>().cloned() {
         let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
         std::thread::spawn(move || {
@@ -199,54 +180,10 @@ fn shell_ipc(cx: &gpui::App, args: &[&str]) {
     }
 }
 
-/// A placement's tile in the diagram `(x, y, w, h)`, for a bar on the top
-/// (`Some(true)`) or bottom edge, or a side bar (`None`: shares no edge).
-fn tile_rect(pos: LauncherPosition, bar_top: Option<bool>) -> (f32, f32, f32, f32) {
-    use mandara_config::workflow::LauncherAlign;
-    let Some(edge) = pos.edge() else {
-        return ((SCREEN_W_PX - CENTER_TILE_W_PX) / 2.0, (SCREEN_H_PX - CENTER_TILE_H_PX) / 2.0, CENTER_TILE_W_PX, CENTER_TILE_H_PX);
-    };
-    let x = match pos.align() {
-        LauncherAlign::Left => TILE_INSET_PX,
-        LauncherAlign::Center => (SCREEN_W_PX - EDGE_TILE_W_PX) / 2.0,
-        LauncherAlign::Right => SCREEN_W_PX - TILE_INSET_PX - EDGE_TILE_W_PX,
-    };
-    // Tiles on the bar's edge hang from the bar; the others from the edge.
-    let at_bar = bar_top.is_some_and(|top| (edge == LauncherEdge::Top) == top);
-    let line = if at_bar { BAR_STRIP_PX + TILE_BAR_GAP_PX } else { 0.0 };
-    let y = match edge {
-        LauncherEdge::Top => line,
-        LauncherEdge::Bottom => SCREEN_H_PX - line - EDGE_TILE_H_PX,
-    };
-    (x, y, EDGE_TILE_W_PX, EDGE_TILE_H_PX)
-}
-
-/// The label of a placement (Studio's choice list).
-fn placement_label(pos: LauncherPosition) -> String {
-    crate::registry::workflow_settings::POSITIONS.iter().find(|(id, _)| *id == pos.id()).map(|(_, l)| tr(l).to_string()).unwrap_or_else(|| pos.id().to_string())
-}
-
 /// The label of a results layout (List, Grid).
 fn layout_label(layout: mandara_config::workflow::LauncherLayout) -> String {
     let id = serde_json::to_value(layout).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default();
     crate::registry::workflow_settings::LAYOUTS.iter().find(|(k, _)| *k == id).map(|(_, l)| tr(l).to_string()).unwrap_or(id)
-}
-
-/// The installed app a typed id or name refers to.
-fn resolve_app(name: &str) -> Option<mandara_ui::apps::App> {
-    let n = name.trim();
-    let apps = mandara_ui::apps::discover();
-    apps.iter().find(|a| a.id.eq_ignore_ascii_case(n)).or_else(|| apps.iter().find(|a| a.name.eq_ignore_ascii_case(n))).cloned()
-}
-
-/// `app:org.gnome.Nautilus` → its name; other keys as they are.
-fn usage_label(key: &str) -> String {
-    match key.split_once(':') {
-        Some(("app", id)) => resolve_app(id).map(|a| a.name).unwrap_or_else(|| id.to_string()),
-        Some(("cmd", line)) => format!("› {line}"),
-        Some((_, rest)) => rest.to_string(),
-        None => key.to_string(),
-    }
 }
 
 /// A page section: its heading, then its cards and folds.
@@ -264,7 +201,7 @@ impl StudioView {
         let placement_card = self.launcher_placement(cfg, p, cx);
         let placement_rows = self.rows(in_groups(PLACEMENT_GROUPS), cfg, p, cx);
         let placement = page_section(
-            section_head(t("Placement"), t("Click a spot. Spots on the bar's edge grow out of the bar like its panels; the middle one floats over everything. Left and right are the screen's own sides."), vec![], display.clone(), p),
+            section_head(t("Placement"), t("Choose where the launcher opens. Attached positions follow the bar on that edge."), vec![], display.clone(), p),
             [placement_card, placement_rows],
         );
 
@@ -358,7 +295,7 @@ impl StudioView {
                             .child(div().min_w(px(0.0)).truncate().font_family(fonts.display.clone()).text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).text_color(if on { p.primary.hsla() } else { p.on_surface.hsla() }).child(tr(preset.name))),
                     )
                     .child(div().h(px(LOOK_BLURB_H_PX)).overflow_hidden().text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(p.on_surface_variant.hsla()).line_clamp(LOOK_BLURB_LINES).child(mandara_ui::bidi::paragraph(tr(preset.blurb))))
-                    .child(div().h(px(LOOK_TAG_H_PX)).row().items_center().gap(px(SPACE_6_PX)).overflow_hidden().child(tag(layout_label(preset.layout))).child(tag(placement_label(preset.position))));
+                    .child(div().h(px(LOOK_TAG_H_PX)).row().items_center().gap(px(SPACE_6_PX)).overflow_hidden().child(tag(layout_label(preset.layout))).child(tag(super::launcher_placement::label(preset.position).to_string())));
                 div()
                     .id(SharedString::from(format!("launcher-look-{}", preset.id)))
                     .flex_none()
@@ -403,93 +340,6 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// Studio → Launcher → Placement: the screen diagram, what the chosen
-    /// spot looks like with this bar, and a live preview.
-    fn launcher_placement(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let current = cfg.launcher.look.position;
-        let bar_top = cfg.bar.position == mandara_config::BarPosition::Top;
-        let side = cfg.bar.position.is_vertical();
-        let right_bar = cfg.bar.position == mandara_config::BarPosition::Right;
-        let mut screen = div()
-            .relative()
-            .flex_none()
-            .w(px(SCREEN_W_PX))
-            .h(px(SCREEN_H_PX))
-            .rounded(px(SCREEN_RADIUS_PX))
-            .overflow_hidden()
-            .bg(p.surface_container_high.hsla())
-            .border_1()
-            .border_color(p.outline.with_alpha(ALPHA_12).hsla())
-            .when(!side, |el| el.child(div().absolute().left_0().w(px(SCREEN_W_PX)).h(px(BAR_STRIP_PX)).when(bar_top, |el| el.top_0()).when(!bar_top, |el| el.bottom_0()).bg(p.primary.with_alpha(ALPHA_30).hsla())))
-            .when(side, |el| el.child(div().absolute().top_0().h(px(SCREEN_H_PX)).w(px(BAR_STRIP_PX)).when(!right_bar, |el| el.left_0()).when(right_bar, |el| el.right_0()).bg(p.primary.with_alpha(ALPHA_30).hsla())));
-        for pos in LauncherPosition::ALL {
-            let (x, y, w, h) = tile_rect(pos, (!side).then_some(bar_top));
-            let on = pos == current;
-            let (bg, fg) = if on { (p.primary, p.on_primary) } else { (p.surface_container, p.on_surface_variant) };
-            screen = screen.child(
-                div()
-                    .id(SharedString::from(format!("launcher-place-{}", pos.id())))
-                    .absolute()
-                    .left(px(x))
-                    .top(px(y))
-                    .w(px(w))
-                    .h(px(h))
-                    .rounded(px(TILE_RADIUS_PX))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .bg(bg.hsla())
-                    .when(!on, |el| el.hover(|s| s.bg(p.primary.with_alpha(ALPHA_25).hsla())))
-                    .child(icon("search", TILE_ICON_PX, fg))
-                    .tooltip(tip(placement_label(pos), p))
-                    .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| update_config(cx, move |c| c.launcher.look.position = pos))),
-            );
-        }
-        // What the chosen spot does with this bar and dock.
-        let edge = current.edge();
-        let at_bar = !side && edge.is_some_and(|e| (e == LauncherEdge::Top) == bar_top);
-        let how = match edge {
-            None => t("Floats in the middle of the screen and scales in."),
-            Some(_) if side => t("A side bar shares no edge with the launcher: it opens from the bare screen edge, beside the bar."),
-            Some(_) if !at_bar => t("The bar is on the other edge: the launcher opens from the bare screen edge instead of growing out of the bar."),
-            Some(_) if cfg.bar.layout.is_attached() => t("Pours out of the bar with curved flares, like its panels."),
-            Some(_) => t("A floating card under the bar, the panels' gap away from it."),
-        };
-        let dock_note = (cfg.dock_bottom_clearance().is_some() && edge != Some(LauncherEdge::Top)).then(|| t("The dock is on: the launcher floats above it and opens on click only."));
-        let button_note = (at_bar && cfg.launcher.look.align_to_button).then(|| t("In the zone holding the bar's launcher button, it grows out of the button."));
-        let note = |glyph: &'static str, text: SharedString| {
-            div()
-                .row()
-                .items_start()
-                .gap(px(SPACE_8_PX))
-                .child(div().flex_none().h(px(LEADING_17_PX)).row().items_center().child(icon(glyph, ICON_13_PX, p.primary)))
-                .child(div().flex_1().min_w(px(0.0)).text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(text)))
-        };
-        let stack = self.stack_rows;
-        let info = div()
-            .flex_1()
-            .min_w(px(DIM_180_PX))
-            .when(!stack, |el| el.min_h(px(SCREEN_H_PX)))
-            .row()
-            .flex_col()
-            .gap(px(SPACE_10_PX))
-            .child(
-                div()
-                    .row()
-                    .items_center()
-                    .gap(px(SPACE_10_PX))
-                    .child(div().flex_none().size(px(DIM_36_PX)).rounded(px(RADIUS_12_PX)).bg(p.primary.with_alpha(ALPHA_14).hsla()).row().items_center().justify_center().child(icon("search", ICON_16_PX, p.primary)))
-                    .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).child(placement_label(current))),
-            )
-            .child(note("info", how.into()))
-            .children(dock_note.map(|n| note("box", n.into())))
-            .children(button_note.map(|n| note("pointer", n.into())))
-            .child(div().flex_1())
-            .child(div().row().child(button("launcher-place-preview", "eye", t("Preview"), false, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| shell_ipc(cx, &["launcher", "open"])))));
-        card(p).child(div().row().when(stack, |el| el.flex_col()).gap(px(SPACE_22_PX)).child(screen).child(info)).into_any_element()
-    }
-
     /// A text field that runs `on_enter` with its text and then clears.
     pub(super) fn add_field(&mut self, key: &str, placeholder: &'static str, on_enter: Rc<dyn Fn(String, &mut gpui::App)>, cx: &mut Context<Self>) -> gpui::Entity<TextField> {
         if let Some(f) = self.list_fields.get(key) {
@@ -515,15 +365,17 @@ impl StudioView {
 
     /// Your names and icons for apps (`[launcher.overrides]`).
     fn launcher_names(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let Some(data) = self.launcher_data.snapshot().cloned() else {
+            return card(p).child(heading(t("Your names & icons"), t("Applies in the launcher (and the dock). Empty fields keep the app's own name or icon."), p)).child(t("Loading…")).into_any_element();
+        };
         let mut rows = div().row().flex_col().gap(px(SPACE_8_PX));
-        let overrides: Vec<(String, mandara_config::workflow::AppOverride)> = cfg.launcher.overrides.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-        for (id, o) in overrides {
+        for (id, o) in &cfg.launcher.overrides {
             let (id_name, id_icon, id_del) = (id.clone(), id.clone(), id.clone());
             let name = self.list_field(format!("ovr-{id}-name"), &o.name, t("Name"), Rc::new(move |c, v| if let Some(o) = c.launcher.overrides.get_mut(&id_name) { o.name = v.trim().to_string() }), cx);
             let icon_field = self.list_field(format!("ovr-{id}-icon"), &o.icon, t("Icon name or image path"), Rc::new(move |c, v| if let Some(o) = c.launcher.overrides.get_mut(&id_icon) { o.icon = v.trim().to_string() }), cx);
-            let app = resolve_app(&id);
-            let shown_icon = if o.icon.trim().is_empty() { app.as_ref().and_then(|a| a.icon.as_ref()).map(|i| i.to_string_lossy().to_string()).unwrap_or_default() } else { o.icon.trim().to_string() };
-            let original = app.map(|a| a.name).unwrap_or_else(|| t("not installed").to_string());
+            let app = data.resolve(id);
+            let shown_icon = if o.icon.trim().is_empty() { app.and_then(|app| app.icon.as_deref()).unwrap_or_default() } else { o.icon.trim() };
+            let original = app.map(|app| app.name.clone()).unwrap_or_else(|| t("not installed").into());
             rows = rows.child(
                 div()
                     .p(px(SPACE_10_PX))
@@ -540,7 +392,7 @@ impl StudioView {
                             .row()
                             .items_center()
                             .gap(px(SPACE_10_PX))
-                            .child(div().flex_none().size(px(DIM_36_PX)).rounded(px(RADIUS_12_PX)).bg(p.surface_container_high.hsla()).row().items_center().justify_center().child(mandara_ui::icons::any_icon(if shown_icon.is_empty() { "grid" } else { &shown_icon }, ICON_22_PX, p.on_surface_variant)))
+                            .child(div().flex_none().size(px(DIM_36_PX)).rounded(px(RADIUS_12_PX)).bg(p.surface_container_high.hsla()).row().items_center().justify_center().child(mandara_ui::icons::any_icon(if shown_icon.is_empty() { "grid" } else { shown_icon }, ICON_22_PX, p.on_surface_variant)))
                             .child(
                                 div()
                                     .flex_1()
@@ -577,16 +429,18 @@ impl StudioView {
                     ),
             );
         }
+        let weak = cx.weak_entity();
         let add = self.add_field(
             "ovr-add",
             t("Add an app: desktop id or name, then Enter"),
-            Rc::new(|value, cx| {
-                let Some(app) = resolve_app(&value) else {
+            Rc::new(move |value, cx| {
+                let app = weak.update(cx, |this, _| this.launcher_data.snapshot().and_then(|data| data.resolve(&value)).map(|app| (app.id.clone(), app.name.to_string()))).ok().flatten();
+                let Some((id, name)) = app else {
                     tracing::warn!("launcher override: no installed app {value:?}");
                     return;
                 };
                 update_config(cx, move |c| {
-                    c.launcher.overrides.entry(app.id.clone()).or_insert_with(|| mandara_config::workflow::AppOverride { name: app.name.clone(), icon: String::new() });
+                    c.launcher.overrides.entry(id).or_insert_with(|| mandara_config::workflow::AppOverride { name, icon: String::new() });
                 });
             }),
             cx,
@@ -597,17 +451,18 @@ impl StudioView {
 
     /// What the ranking has learnt: the most-used results by frecency.
     fn launcher_learnt(&mut self, cfg: &ShellConfig, p: &MandaraPalette) -> AnyElement {
-        let usage = mandara_ui::launcher_ext::usage_list_from_disk(cfg, USAGE_ROWS);
-        let max = usage.first().map(|(_, s)| *s).unwrap_or(1.0).max(f64::EPSILON);
+        let data = self.launcher_data.snapshot();
+        let usage = data.map(|data| data.rows.as_ref()).unwrap_or_default();
+        let max = usage.first().map(|row| row.score).unwrap_or(1.0).max(f64::EPSILON);
         let accent = p.primary;
-        let usage_rows = usage.iter().enumerate().map(|(n, (key, score))| {
-            let frac = (*score / max) as f32;
+        let usage_rows = usage.iter().enumerate().map(|(n, row)| {
+            let frac = (row.score / max) as f32;
             div()
                 .row()
                 .items_center()
                 .gap(px(SPACE_10_PX))
                 .child(div().w(px(DIM_20_PX)).flex_none().text_size(px(TEXT_11_PX)).font_features(mandara_ui::fonts::tabular_nums()).text_color(p.on_surface_variant.with_alpha(ALPHA_70).hsla()).child(format!("{}", n + 1)))
-                .child(div().w(px(DIM_200_PX)).flex_none().truncate().text_size(px(TEXT_12_5_PX)).child(usage_label(key)))
+                .child(div().w(px(DIM_200_PX)).flex_none().truncate().text_size(px(TEXT_12_5_PX)).child(row.label.clone()))
                 .child(
                     div()
                         .flex_1()
@@ -616,9 +471,11 @@ impl StudioView {
                         .bg(p.on_surface.with_alpha(ALPHA_8).hsla())
                         .child(div().h_full().w(gpui::relative(frac)).rounded_full().bg(mandara_core::oklab_gradient(mandara_ui::plugins::panel_fx::ANGLE_RIGHT_DEG, accent, mandara_ui::plugins::panel_fx::partner(accent)))),
                 )
-                .child(div().w(px(DIM_44_PX)).flex_none().text_end().text_size(px(TEXT_11_PX)).font_features(mandara_ui::fonts::tabular_nums()).text_color(p.on_surface_variant.hsla()).child(format!("{score:.1}")))
+                .child(div().w(px(DIM_44_PX)).flex_none().text_end().text_size(px(TEXT_11_PX)).font_features(mandara_ui::fonts::tabular_nums()).text_color(p.on_surface_variant.hsla()).child(row.display.clone()))
         });
-        let learnt = if usage.is_empty() {
+        let learnt = if data.is_none() {
+            div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("Loading…")).into_any_element()
+        } else if usage.is_empty() {
             div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(if cfg.launcher.usage.track { t("Nothing learnt yet: open a few apps from the launcher") } else { t("Usage tracking is off") }).into_any_element()
         } else {
             div().row().flex_col().gap(px(SPACE_8_PX)).children(usage_rows).into_any_element()

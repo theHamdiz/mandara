@@ -6,6 +6,20 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **A clearer launcher placement map.** Studio shows the selected position
+  beside a compact map, with keyboard-accessible choices and a Preview button.
+
+### Fixed
+
+- **Less work while scrolling Launcher settings.** Studio prepares app names,
+  icons and ranking data in the background and shares them between rows,
+  instead of rescanning applications during scrolling. (#125)
+- **Launchers follow compact bars.** Attached left and right positions align
+  with the ends of a notch, micro pill or island instead of the screen corners.
+  Button morphs keep that alignment and stay within the display.
+
 ## 0.19.1 — 2026-11-06
 
 Copy installation commands. Fresh desktop pictures. Theme cards fill their

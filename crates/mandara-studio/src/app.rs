@@ -65,6 +65,8 @@ mod input_page;
 pub mod apps_page;
 mod profiles_page;
 mod launcher_page;
+mod launcher_data;
+mod launcher_placement;
 mod dock_page;
 mod switcher_page;
 mod desktop_widgets_page;
@@ -122,6 +124,8 @@ pub struct StudioView {
     themes: Option<themes_page::ThemeGallery>,
     /// Icon picker: the query and the theme icons matching it.
     icon_matches: Option<(String, Rc<[String]>)>,
+    /// File-backed Launcher labels and ranking, owned only by its visible visit.
+    launcher_data: launcher_data::LauncherData,
     /// Studio → Bars → Sidebar editor state.
     sidebar_tabs: sidebar_tabs_page::TabsEditor,
     /// Studio → Bars → Bar: the plugin pool's search and menu.
@@ -187,6 +191,7 @@ impl StudioView {
                 Rc::new(move |value, _, cx| {
                     let _ = this.update(cx, |studio, cx| {
                         studio.query = value;
+                        if !studio.query.is_empty() { studio.launcher_data.release(); }
                         cx.notify();
                     });
                 }),
@@ -223,7 +228,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default() }
+        Self { section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -234,6 +239,7 @@ impl StudioView {
         if section == Section::Bars { self.bars_tab = Default::default(); }
         if section == Section::Plugins { self.market_reopen(); }
         if section != self.section {
+            self.launcher_data.release();
             if section == Section::Maintenance { self.maint.invalidate(); }
             self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
             self.themes = None;
@@ -264,6 +270,7 @@ impl StudioView {
     /// Opens the search results for `query` (`mandara studio search/<text>`,
     /// e.g. a widget's settings button showing every weather setting).
     pub fn show_search(&mut self, query: &str, cx: &mut Context<Self>) {
+        self.launcher_data.release();
         self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
         self.query = query.to_string();
         self.search.update(cx, |f, _| f.set(query));
@@ -1684,6 +1691,7 @@ impl Render for StudioView {
         let p = mandara_core::frame_palette(window, cx);
         let cfg = config(cx).read(cx).snapshot();
         registry::prime(&cfg);
+        self.launcher_follow(&cfg, window, cx);
         let fonts = mandara_ui::fonts::fonts(cx);
         // Choices measure their labels in Studio's font this frame.
         choice::begin_frame(window, fonts.studio.clone());

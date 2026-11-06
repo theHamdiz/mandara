@@ -128,6 +128,12 @@ fn data_dirs() -> Vec<PathBuf> {
     dirs
 }
 
+/// Application directories in discovery order, including roots that do not
+/// exist yet so a page-owned watcher can notice a later installation.
+pub fn application_dirs() -> Vec<PathBuf> {
+    data_dirs().into_iter().map(|root| root.join("applications")).collect()
+}
+
 /// Parses the `[Desktop Entry]` group of a `.desktop` file.
 pub fn parse_desktop_entry(text: &str) -> Option<HashMap<String, String>> {
     let mut in_entry = false;
@@ -172,9 +178,29 @@ pub fn find_icon(name: &str) -> Option<PathBuf> {
 
 /// Scans every applications directory. Later directories never override an
 /// earlier (user) entry with the same id.
-pub fn discover() -> Vec<App> { discover_in(&data_dirs()) }
+pub fn discover() -> Vec<App> { discover_for(mandara_i18n::language()) }
 
+/// Scan with one captured language. Background readers must not mix entry
+/// languages when the interface switches locale during discovery.
+pub fn discover_for(language: mandara_i18n::Lang) -> Vec<App> {
+    discover_in_for(&data_dirs(), language, None)
+}
+
+/// Prepare a fresh catalog on a blocking worker, using one explicit theme
+/// (or the current desktop preference). This also invalidates icon misses
+/// left by an application/theme installation; ordinary discovery keeps its caches.
+pub fn discover_for_theme(language: mandara_i18n::Lang, theme: Option<&str>) -> Vec<App> {
+    crate::icon_theme::refresh_files();
+    let theme = theme.map(str::to_owned).or_else(crate::icon_theme::desktop_icon_theme).unwrap_or_else(|| "hicolor".into());
+    discover_in_for(&data_dirs(), language, Some(&theme))
+}
+
+#[cfg(test)]
 fn discover_in(roots: &[PathBuf]) -> Vec<App> {
+    discover_in_for(roots, mandara_i18n::language(), None)
+}
+
+fn discover_in_for(roots: &[PathBuf], language: mandara_i18n::Lang, theme: Option<&str>) -> Vec<App> {
     let mut seen = std::collections::HashSet::new();
     let mut apps = Vec::new();
     for dir in roots {
@@ -192,7 +218,7 @@ fn discover_in(roots: &[PathBuf]) -> Vec<App> {
             if map.get("Type").is_some_and(|t| t != "Application") || flag("NoDisplay") || flag("Hidden") {
                 continue;
             }
-            let lang = mandara_i18n::language().code();
+            let lang = language.code();
             let (Some(name), Some(exec)) = (localized(&map, "Name", lang), map.get("Exec")) else { continue };
             // English keywords stay searchable next to the translated ones.
             let keywords = [map.get("Keywords"), map.get(&format!("Keywords[{lang}]"))].into_iter().flatten().cloned().collect::<Vec<_>>().join(";");
@@ -201,7 +227,7 @@ fn discover_in(roots: &[PathBuf]) -> Vec<App> {
                 name: name.clone(),
                 comment: localized(&map, "Comment", lang).or_else(|| localized(&map, "GenericName", lang)).cloned().unwrap_or_default(),
                 exec: exec.clone(),
-                icon: map.get("Icon").and_then(|i| find_icon(i)),
+                icon: map.get("Icon").and_then(|icon| crate::icon_theme::resolve(icon, theme, false).map(|icon| icon.path)),
                 keywords: keywords.replace(';', " "),
                 terminal: flag("Terminal"),
                 wm_class: map.get("StartupWMClass").filter(|c| !c.is_empty()).cloned(),
@@ -731,6 +757,32 @@ mod tests {
             let argv = parse_exec(&a.exec);
             assert!(!a.name.is_empty());
             assert!(argv.iter().all(|w| !(w.len() == 2 && w.starts_with('%'))), "{}: {:?}", a.name, argv);
+        }
+    }
+
+    /// One captured language applies to every desktop entry without changing
+    /// process-global localization or the discovery precedence rules.
+    #[test]
+    fn explicit_discovery_locales_do_not_mix_entry_metadata() {
+        let temp = tempfile::tempdir().unwrap();
+        let applications = temp.path().join("applications");
+        std::fs::create_dir(&applications).unwrap();
+        for index in 0..2 {
+            std::fs::write(applications.join(format!("demo-{index}.desktop")), format!("[Desktop Entry]\nType=Application\nName=Demo {index}\nName[ar]=مثال {index}\nComment=English comment\nComment[ar]=شرح عربي\nKeywords=demo;\nKeywords[ar]=مثال;\nExec=true\n")).unwrap();
+        }
+        let roots = [temp.path().to_path_buf()];
+        let english = discover_in_for(&roots, mandara_i18n::Lang::En, None);
+        let arabic = discover_in_for(&roots, mandara_i18n::Lang::Ar, None);
+        let fallback = discover_in_for(&roots, mandara_i18n::Lang::De, None);
+        assert_eq!(english.len(), 2);
+        assert_eq!(arabic.len(), 2);
+        for index in 0..2 {
+            assert_eq!(english[index].id, arabic[index].id);
+            assert_eq!(english[index].name, format!("Demo {index}"));
+            assert_eq!(arabic[index].name, format!("مثال {index}"));
+            assert_eq!(arabic[index].comment, "شرح عربي");
+            assert!(arabic[index].keywords.contains("demo") && arabic[index].keywords.contains("مثال"));
+            assert_eq!(fallback[index].name, english[index].name);
         }
     }
 }

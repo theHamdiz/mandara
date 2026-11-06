@@ -1890,10 +1890,12 @@ impl Render for LauncherView {
         let n = self.count();
         let output = self.output.as_deref();
         let bar_here = output.is_none_or(|o| cfg.bar_on_output(o));
-        let button = crate::launcher_place::button_on(output, cx);
+        let anchor = crate::launcher_place::anchor_on(output, cx);
+        let button = anchor.and_then(|anchor| anchor.button);
+        let bar_span = anchor.map(|anchor| anchor.span);
         // The grid's columns follow the width this placement gives.
         let g = grid.then(|| {
-            let width = crate::launcher_place::for_config(&cfg, (sw, sh), look.size().1, bar_here, button).rect.w;
+            let width = crate::launcher_place::for_config_with_bar(&cfg, (sw, sh), look.size().1, bar_here, bar_span, button).rect.w;
             launcher_looks::grid_geom(width - PAD * 2.0, look.grid_icon(), look.grid_columns)
         });
         let lay = if grouped { launcher_looks::list_layout(n, &self.sections, row_h, launcher_looks::HEADER_H) } else { Default::default() };
@@ -1912,7 +1914,7 @@ impl Render for LauncherView {
         };
         let full_h = chrome + list_h;
         // Where it rests for this placement, bar style, dock and output.
-        let place = crate::launcher_place::for_config(&cfg, (sw, sh), full_h, bar_here, button);
+        let place = crate::launcher_place::for_config_with_bar(&cfg, (sw, sh), full_h, bar_here, bar_span, button);
         let full_h = place.rect.h;
         // Springs: the panels' spring (or the user's own), the panels'
         // animation style; reduced motion snaps (inside the step).
