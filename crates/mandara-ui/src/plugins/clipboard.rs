@@ -14,6 +14,8 @@
 //! Everything the panel does is also a `clipboard …` command.
 
 mod rows;
+mod actions;
+use actions::Actions;
 mod keys;
 mod tint;
 
@@ -38,7 +40,7 @@ use mandara_services::clipboard::{ClipCollection, ClipContent, ClipEntry, Clipbo
 use mandara_theme::MandaraPalette;
 use serde_json::json;
 
-use self::rows::{PICKER_H, RowActions, RowCx, RowText, THUMB_H_PX, THUMB_W_PX, Thumb, collection_tint, entry_row, kind_icon, kind_label, row_h};
+use self::rows::{PICKER_H, RowAction, RowActions, RowCx, RowText, THUMB_H_PX, THUMB_W_PX, Thumb, collection_tint, entry_row, kind_icon, kind_label, row_h};
 use super::panel_fx::{HEADER_H, SECTION_H_PX, ViewSet, WASH_SOFT, alpha, empty_state, header, pill_button, readable, wash};
 use super::domain_view;
 use crate::hub::Domains;
@@ -247,10 +249,48 @@ enum Naming {
 }
 
 /// A search's results, kept while nothing they depend on changes.
+#[derive(Default)]
 struct SearchCache {
-    key: (String, Filter, u64),
-    pinned: Vec<u64>,
-    main: Vec<u64>,
+    query: String,
+    filter: Filter,
+    signature: u64,
+    pinned_shown: usize,
+    /// Index results belong to this exact immutable history snapshot.
+    entries: std::sync::Weak<Vec<ClipEntry>>,
+    pinned: Vec<usize>,
+    main: Vec<usize>,
+}
+
+impl SearchCache {
+    /// Borrowed comparisons do not copy the query or result vectors on a hit.
+    fn current(&self, entries: &Arc<Vec<ClipEntry>>, query: &str, filter: Filter, signature: u64, pinned_shown: usize) -> bool {
+        self.entries.as_ptr() == Arc::as_ptr(entries) && self.query == query && self.filter == filter && self.signature == signature && self.pinned_shown == pinned_shown
+    }
+
+    /// Reuses result capacity when search inputs change; indices never outlive their snapshot key.
+    fn resolve(&mut self, entries: &Arc<Vec<ClipEntry>>, collections: &[ClipCollection], filter: Filter, query: &str, pinned_shown: usize) {
+        let signature = signature(entries, collections);
+        if self.current(entries, query, filter, signature, pinned_shown) { return; }
+        self.query.clear();
+        self.query.push_str(query);
+        self.filter = filter;
+        self.signature = signature;
+        self.pinned_shown = pinned_shown;
+        self.entries = Arc::downgrade(entries);
+        self.pinned.clear();
+        self.main.clear();
+        for (index, entry) in entries.iter().enumerate().filter(|(_, entry)| filter.admits(entry) && entry.matches(query, collections)) {
+            if filter == Filter::All && entry.pinned {
+                if self.pinned.len() < pinned_shown { self.pinned.push(index); }
+            } else {
+                self.main.push(index);
+            }
+        }
+    }
+
+    fn listing<'a>(&self, entries: &'a [ClipEntry]) -> Listing<'a> {
+        Listing { pinned: self.pinned.iter().filter_map(|index| entries.get(*index)).collect(), main: self.main.iter().filter_map(|index| entries.get(*index)).collect() }
+    }
 }
 
 /// The panel's state: row texts and thumbnails keyed by entry id, the
@@ -453,10 +493,10 @@ fn activate(ui: &Shared, cx: &mut App) {
     let action = {
         let look = Look::of(&crate::state::config(cx).read(cx).get().clipboard);
         let state = hub(cx).read(cx);
-        state.clipboard.entries.iter().find(|e| e.id == id).map(|e| row_actions(ui, e, &look).restore.clone())
+        state.clipboard.entries.iter().find(|e| e.id == id).map(|e| Actions::new(ui, e, look.click_pastes))
     };
     if let Some(action) = action {
-        action(false, cx);
+        action.run(RowAction::Restore(false), cx);
     }
 }
 
@@ -811,27 +851,6 @@ impl Look {
     }
 }
 
-/// Wires a row's buttons to the service and the panel.
-fn row_actions(ui: &Shared, e: &ClipEntry, look: &Look) -> RowActions {
-    let (id, pinned, click_pastes) = (e.id, e.pinned, look.click_pastes);
-    let ui_pick = ui.clone();
-    RowActions {
-        restore: Rc::new(move |alt, cx| {
-            shell(cx).update(cx, |s, cx| s.set_panel(None, cx));
-            send(cx, ClipboardCommand::Restore { id, paste: click_pastes != alt });
-        }),
-        pin: Rc::new(move |cx| send(cx, ClipboardCommand::Pin { id, pinned: !pinned })),
-        delete: Rc::new(move |cx| send(cx, ClipboardCommand::Delete(id))),
-        edit: Rc::new(move |cx| {
-            shell(cx).update(cx, |s, cx| s.set_panel(None, cx));
-            if let Err(err) = edit_image(id, cx) {
-                tracing::warn!("clipboard edit: {err}");
-            }
-        }),
-        pick: Rc::new(move |cx| update(&ui_pick, cx, |u| u.picker = if u.picker == Some(id) { None } else { Some(id) })),
-    }
-}
-
 // ── The panel ────────────────────────────────────────────────────────────
 
 struct View {
@@ -867,7 +886,7 @@ impl<'a> Layout<'a> {
 
 /// Lays the list out for the panel's filter and `query` (search results
 /// are cached until the query, filter or history change).
-fn layout<'a>(ui: &Shared, entries: &'a [ClipEntry], collections: &[ClipCollection], look: &Look, query: &str) -> Layout<'a> {
+fn layout<'a>(ui: &Shared, entries: &'a Arc<Vec<ClipEntry>>, collections: &[ClipCollection], look: &Look, query: &str) -> Layout<'a> {
     // A filter on a collection that was deleted falls back to all.
     let filter = {
         let mut u = ui.borrow_mut();
@@ -881,16 +900,10 @@ fn layout<'a>(ui: &Shared, entries: &'a [ClipEntry], collections: &[ClipCollecti
     let listing = if query.trim().is_empty() {
         listing(entries, collections, filter, "", look.pinned_shown)
     } else {
-        let key = (query.to_string(), filter, signature(entries, collections));
-        let cached = ui.borrow().search.as_ref().filter(|s| s.key == key).map(|s| (s.pinned.clone(), s.main.clone()));
-        let (pinned, main) = cached.unwrap_or_else(|| {
-            let l = listing(entries, collections, filter, query, look.pinned_shown);
-            let ids = (l.pinned.iter().map(|e| e.id).collect::<Vec<_>>(), l.main.iter().map(|e| e.id).collect::<Vec<_>>());
-            ui.borrow_mut().search = Some(SearchCache { key, pinned: ids.0.clone(), main: ids.1.clone() });
-            ids
-        });
-        let by_id: HashMap<u64, &ClipEntry> = entries.iter().map(|e| (e.id, e)).collect();
-        Listing { pinned: pinned.iter().filter_map(|id| by_id.get(id).copied()).collect(), main: main.iter().filter_map(|id| by_id.get(id).copied()).collect() }
+        let mut ui = ui.borrow_mut();
+        let cache = ui.search.get_or_insert_with(SearchCache::default);
+        cache.resolve(entries, collections, filter, query, look.pinned_shown);
+        cache.listing(entries)
     };
     let heights: Vec<f32> = listing.main.iter().map(|e| row_h(e, look.preview_lines)).collect();
     let pages = paginate(&heights);
@@ -1023,7 +1036,7 @@ impl View {
                 picking: picker == Some(e.id),
                 selected: u.selected == Some(e.id),
             };
-            let row = entry_row(e, &rcx, palette, row_actions(ui, e, &look));
+            let row = entry_row(e, &rcx, palette, Actions::new(ui, e, look.click_pastes));
             if picker != Some(e.id) {
                 return row;
             }
@@ -1525,6 +1538,7 @@ mod tests {
         let mut entries = vec![entry(1, "pinned")];
         entries[0].pinned = true;
         entries.extend((0..PAGE + 1).map(|i| entry(i as u64 + 2, "plain text")));
+        let entries = Arc::new(entries);
         let ui = Shared::default();
         let look = Look::of(&ClipboardConfig::default());
         let first = layout(&ui, &entries, &[], &look, "");
@@ -1622,6 +1636,42 @@ mod tests {
             ui.reconcile_selection(&layout);
             assert_eq!(ui.selected, Some(id), "visible rows keep their selection");
         }
+    }
+
+    /// Snapshot replacement, collection labels and pin limits invalidate cached indices.
+    #[test]
+    fn search_cache_reuses_hits_and_rebuilds_indices_for_changed_snapshots() {
+        let mut history = vec![entry(1, "match pinned"), entry(2, "match main"), entry(3, "different")];
+        history[0].pinned = true;
+        history[1].collections.push(4);
+        let entries = Arc::new(history);
+        let mut collections = vec![ClipCollection { id: 4, name: "Demo collection".into(), created: 0 }];
+        let mut cache = SearchCache::default();
+        cache.resolve(&entries, &collections, Filter::All, "match", 1);
+        assert_eq!((&cache.pinned[..], &cache.main[..]), (&[0][..], &[1][..]));
+        let (query, pinned, main) = (cache.query.as_ptr(), cache.pinned.as_ptr(), cache.main.as_ptr());
+        cache.resolve(&entries, &collections, Filter::All, "match", 1);
+        assert_eq!((cache.query.as_ptr(), cache.pinned.as_ptr(), cache.main.as_ptr()), (query, pinned, main));
+        cache.resolve(&entries, &collections, Filter::All, "match", 0);
+        assert!(cache.pinned.is_empty(), "the current pin limit is part of the key");
+        let mut changed = (*entries).clone();
+        changed.reverse();
+        changed[1] = entry(2, "no longer relevant");
+        let changed = Arc::new(changed);
+        cache.resolve(&changed, &collections, Filter::All, "match", 1);
+        let listing = cache.listing(&changed);
+        assert_eq!(listing.pinned[0].id, 1);
+        assert!(listing.main.is_empty(), "same IDs with new content cannot reuse old results");
+        cache.resolve(&entries, &collections, Filter::All, "demo", 1);
+        assert_eq!(cache.main, [1]);
+        collections[0].name = "Renamed".into();
+        cache.resolve(&entries, &collections, Filter::All, "demo", 1);
+        assert!(cache.main.is_empty(), "collection-name search tracks renames");
+        cache.resolve(&entries, &collections, Filter::Pinned, "match", 1);
+        assert!(cache.pinned.is_empty());
+        assert_eq!(cache.main, [0]);
+        assert_eq!(Arc::strong_count(&entries), 1, "the search key does not retain history");
+        eprintln!("clipboard: SearchCache={} B, row Actions={} B", size_of::<SearchCache>(), size_of::<Actions>());
     }
 
     #[test]

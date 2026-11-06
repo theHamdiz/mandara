@@ -455,13 +455,19 @@ pub struct RowCx<'a> {
     pub selected: bool,
 }
 
-/// What clicking a row's parts does (the panel wires them to its state).
-pub struct RowActions {
-    pub restore: Rc<dyn Fn(bool, &mut gpui::App)>,
-    pub pin: Rc<dyn Fn(&mut gpui::App)>,
-    pub delete: Rc<dyn Fn(&mut gpui::App)>,
-    pub edit: Rc<dyn Fn(&mut gpui::App)>,
-    pub pick: Rc<dyn Fn(&mut gpui::App)>,
+/// An event from a row or its action buttons.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RowAction {
+    Restore(bool),
+    Pin,
+    Delete,
+    Edit,
+    Pick,
+}
+
+/// A row clones its small target state into native event handlers.
+pub trait RowActions: Clone + 'static {
+    fn run(&self, action: RowAction, cx: &mut gpui::App);
 }
 
 fn tok_color(tok: Tok, palette: &MandaraPalette) -> Color {
@@ -545,7 +551,7 @@ fn lead(e: &ClipEntry, rcx: &RowCx, palette: &MandaraPalette) -> AnyElement {
     }
 }
 
-pub fn entry_row(e: &ClipEntry, rcx: &RowCx, palette: &MandaraPalette, actions: RowActions) -> AnyElement {
+pub fn entry_row(e: &ClipEntry, rcx: &RowCx, palette: &MandaraPalette, actions: impl RowActions) -> AnyElement {
     let i = rcx.index;
     let hover = wash(WASH_SOFT, palette);
     let is_image = matches!(e.content, ClipContent::Image { .. });
@@ -570,8 +576,8 @@ pub fn entry_row(e: &ClipEntry, rcx: &RowCx, palette: &MandaraPalette, actions: 
     };
     let quiet = palette.on_surface_variant.with_alpha(BUTTON_ALPHA);
     let in_collection = !e.collections.is_empty();
-    let RowActions { restore, pin, delete, edit, pick } = actions;
-    let restore_right = restore.clone();
+    let (restore, restore_right, pin, edit, pick) = (actions.clone(), actions.clone(), actions.clone(), actions.clone(), actions.clone());
+    let delete = actions;
     // The actions float over the row's end while it is hovered (or its
     // collection picker is open), so the content gets the full width; a
     // pinned or collected entry keeps a quiet mark at the end instead.
@@ -598,7 +604,7 @@ pub fn entry_row(e: &ClipEntry, rcx: &RowCx, palette: &MandaraPalette, actions: 
         .when(is_image && rcx.can_edit, |el| {
             el.child(icon_button(("clip-edit", i), "crop", ROW_BUTTON_PX, quiet, None, move |_, cx| {
                 cx.stop_propagation();
-                edit(cx);
+                edit.run(RowAction::Edit, cx);
             }))
         })
         .child(icon_button(
@@ -609,17 +615,17 @@ pub fn entry_row(e: &ClipEntry, rcx: &RowCx, palette: &MandaraPalette, actions: 
             rcx.picking.then(|| palette.primary.with_alpha(alpha(BADGE_ALPHA, palette))),
             move |_, cx| {
                 cx.stop_propagation();
-                pick(cx);
+                pick.run(RowAction::Pick, cx);
             },
         ))
         .child(icon_button(("clip-pin", i), if e.pinned { "pin-off" } else { "pin" }, ROW_BUTTON_PX, if e.pinned { readable(palette.primary, palette) } else { quiet }, None, move |_, cx| {
             cx.stop_propagation();
-            pin(cx);
+            pin.run(RowAction::Pin, cx);
         }))
         .child(icon_button(("clip-del", i), "trash", ROW_BUTTON_PX, quiet, None, move |_, cx| {
             // Don't let the row's click (copy) fire too.
             cx.stop_propagation();
-            delete(cx);
+            delete.run(RowAction::Delete, cx);
         }));
     let overlay = div()
         .absolute()
@@ -649,8 +655,8 @@ pub fn entry_row(e: &ClipEntry, rcx: &RowCx, palette: &MandaraPalette, actions: 
         .child(body.when(e.pinned || in_collection, |el| el.pr(px(MARK_ROOM_PX))))
         .when(!rcx.picking, |el| el.child(marks.group_hover(group.clone(), |s| s.invisible())))
         .child(overlay)
-        .on_click(move |_, _, cx| restore(false, cx))
-        .on_mouse_down(MouseButton::Right, move |_, _, cx| restore_right(true, cx))
+        .on_click(move |_, _, cx| restore.run(RowAction::Restore(false), cx))
+        .on_mouse_down(MouseButton::Right, move |_, _, cx| restore_right.run(RowAction::Restore(true), cx))
         .into_any_element()
 }
 

@@ -125,7 +125,9 @@ the existing image resolution and rendering quality.
 
 ## Plugin view allocations
 
-Clipboard rendering uses one layout for row previews and keyboard selection.
+Clipboard rendering uses one layout for row previews and keyboard selection. Its search cache compares
+borrowed keys and reuses index storage tied to the immutable history snapshot;
+row event handlers clone their target and shared UI handle.
 Media seek controls retain their geometry with the gesture state, separately for
 panel and sidebar views. Network charts borrow the sampler's history rather
 than copying its samples when labels change. Prayer times keep six time
