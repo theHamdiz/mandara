@@ -24,6 +24,14 @@ About → What's new shows it too.
 
 ### Under the hood
 
+- **Less temporary work.** Input regions reuse their frame buffers, network
+  totals avoid temporary lists, and process sampling reuses small file buffers
+  while reading CPU tables without a size limit. Plugin text and image
+  conversions keep their existing storage when possible.
+
+- **Safer tray icons.** Invalid icon dimensions are rejected before pixel-size
+  arithmetic can overflow.
+
 - **Cleaner portable builds.** Linker tuning checks for support, avoiding
   ignored-option warnings with other linkers.
 

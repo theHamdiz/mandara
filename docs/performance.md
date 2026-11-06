@@ -116,6 +116,14 @@ launcher. Editing history creates a private copy; simply opening a panel does
 not duplicate its text. Window previews transfer their pixel buffers to the
 renderer and release closed-window images on the existing window-list events.
 
+Input-region updates reuse their rectangle and pixel-bound buffers between
+frames; unchanged regions do not reach the compositor. Process sampling keeps
+small file buffers between updates and releases unusually large command-line
+buffers after each sample. CPU tables are read through a fixed-size window
+until EOF, so the number of CPUs is not limited by that window. These changes
+do not establish a new memory ceiling; the release measurements above remain
+the reference until the complete workload is measured again.
+
 Snipping and eyedropper overlays reuse the captured frame instead of retaining
 both RGBA and BGRA copies. Public login widgets similarly keep one painted CPU
 buffer. GPUI uploads borrow those pixels directly until wgpu copies them into
