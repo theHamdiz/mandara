@@ -1,6 +1,7 @@
 //! The `MandaraPalette` semantic token set and its derivation rules.
 
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 use crate::color::{Color, lerp};
 
@@ -11,7 +12,8 @@ use crate::color::{Color, lerp};
 /// `primary` so the whole shell reads as one family.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MandaraPalette {
-    pub name: String,
+    /// Shared across sampled palettes and transition frames.
+    pub name: Arc<str>,
     pub is_dark: bool,
 
     // Surface hierarchy
@@ -49,7 +51,7 @@ pub struct MandaraPalette {
 /// template exporters and interpolation in lock-step with the struct.
 macro_rules! palette_tokens {
     ($mac:ident) => {
-        $mac!(
+        $mac! {
             surface_dim,
             surface_base,
             surface_container_low,
@@ -72,7 +74,7 @@ macro_rules! palette_tokens {
             urgent_coral,
             success_emerald,
             warning_amber
-        )
+        }
     };
 }
 
@@ -305,6 +307,9 @@ impl MandaraPalette {
 pub fn mix_lightness(a: f32, b: f32, t: f32) -> f32 {
     lerp(a, b, t)
 }
+
+#[cfg(test)]
+mod ownership_tests;
 
 #[cfg(test)]
 mod tests {

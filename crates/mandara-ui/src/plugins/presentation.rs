@@ -117,6 +117,11 @@ fn auto_setting(cfg: &ShellConfig) -> bool {
     cfg.plugins.setting(ID, "auto_screen_share", false)
 }
 
+/// Only enablement and automatic sharing affect the config observer's decision.
+fn watch_key(cfg: &ShellConfig, registry: Option<&PluginRegistry>) -> (bool, bool) {
+    (registry.is_some_and(|registry| registry.is_enabled(ID, &cfg.plugins)), auto_setting(cfg))
+}
+
 /// Screen sharing should be watched for presentation mode (the privacy
 /// monitor runs for it even when the privacy plugin is off).
 pub fn watches_screen_share(cfg: &ShellConfig, cx: &App) -> bool {
@@ -257,11 +262,11 @@ pub fn init(cx: &mut App) {
     if let Some(privacy) = crate::alerts::privacy_entity(cx) {
         cx.observe(&privacy, |_, cx| sync(cx)).detach();
     }
-    let mut last = config(cx).read(cx).snapshot().plugins.clone();
+    let mut last = watch_key(&config(cx).read(cx).snapshot(), cx.try_global::<PluginRegistry>());
     cx.observe(&config(cx), move |c, cx| {
-        let plugins = c.read(cx).snapshot().plugins.clone();
-        if plugins != last {
-            last = plugins;
+        let key = watch_key(c.read(cx).get(), cx.try_global::<PluginRegistry>());
+        if key != last {
+            last = key;
             sync(cx);
         }
     })
@@ -462,6 +467,25 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Unrelated settings do not refollow sharing; enablement and auto edits do.
+    #[test]
+    fn config_watch_ignores_settings_outside_its_presentation_flags() {
+        let mut registry = PluginRegistry::default();
+        register(&mut registry);
+        let mut config = ShellConfig::default();
+        let initial = watch_key(&config, Some(&registry));
+        assert_eq!(initial, (false, false));
+        config.plugins.settings.entry("feeds".into()).or_default().insert("subscriptions".into(), toml::Value::String("https://example.org/feed".into()));
+        assert_eq!(watch_key(&config, Some(&registry)), initial);
+        config.plugins.enabled.push(ID.into());
+        assert_eq!(watch_key(&config, Some(&registry)), (true, false));
+        config.plugins.settings.entry(ID.into()).or_default().insert("auto_screen_share".into(), toml::Value::Boolean(true));
+        assert_eq!(watch_key(&config, Some(&registry)), (true, true));
+        config.plugins.disabled.push(ID.into());
+        assert_eq!(watch_key(&config, Some(&registry)), (false, true));
+        assert_eq!(watch_key(&config, None), (false, true));
+    }
 
     #[test]
     fn elapsed_reads_hours_and_minutes() {

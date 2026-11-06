@@ -20,6 +20,9 @@ use crate::icons::icon;
 use crate::kit::{text, tokens};
 
 pub const ID: &str = "phone-connect";
+
+mod devices;
+use devices::visible_devices;
 /// Room for paired device controls and the pairing prompt above the list.
 const PANEL_W: f32 = 440.0;
 const PANEL_H: f32 = 500.0;
@@ -145,15 +148,16 @@ fn panel(context: &PanelCx, confirm: &Rc<RefCell<Option<String>>>, p: &MandaraPa
         column = column.child(glass_card(p).p(px(tokens::SM)).text_size(px(text::BODY_S)).text_color(readable(p.warning_amber, p).hsla()).child(crate::bidi::paragraph(error.to_owned())));
     }
     let available = cfg.plugins.setting(ID, "show_unpaired", true);
-    let devices: Vec<_> = model.value.as_deref().into_iter().flatten().filter(|device| device.paired || available).collect();
-    let content = if devices.is_empty() {
+    let devices = model.value.as_deref().map_or(&[][..], Vec::as_slice);
+    let mut devices = visible_devices(devices, available).peekable();
+    let content = if devices.peek().is_none() {
         div().flex_1().row().flex_col().items_center().justify_center().gap(px(tokens::MD))
             .child(icon("phone", DEVICE_ICON_PX, p.on_surface_variant))
             .child(if model.busy() { t("Looking for your devices…") } else { t("No devices yet") })
             .child(div().text_size(px(text::BODY_S)).text_color(p.on_surface_variant.hsla()).child(crate::bidi::paragraph(t("Install KDE Connect on your computer and phone, then pair them here.")))).into_any_element()
     } else {
         div().id("phone-devices").flex_1().min_h_0().overflow_y_scroll().row().flex_col().gap(px(tokens::SM))
-            .children(devices.iter().map(|device| device_card(device, actions.busy(), confirm, p))).into_any_element()
+            .children(devices.map(|device| device_card(device, actions.busy(), confirm, p))).into_any_element()
     };
     column.child(content).child(pill_button("phone-refresh", Some("refresh"), t("Refresh"), readable(p.primary, p), p, |_, cx| {
         let cfg = crate::state::config(cx).read(cx).snapshot(); refresh(true, &cfg, cx);

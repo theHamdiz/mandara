@@ -9,7 +9,7 @@ use gpui::{Bounds, Pixels, Size, point, px, size};
 use mandara_config::{BarPosition, ShellConfig};
 use mandara_core::FlareCenter;
 
-use super::layout::{self, Metrics, PILL_INSET};
+use super::layout::{self, Flares, Metrics, PILL_INSET};
 
 /// Extra travel past the edge while a side bar hides, so its shadow and
 /// rim leave the screen too, px.
@@ -142,7 +142,7 @@ pub struct Column {
     /// The visible column, `(x, y, w, h)` in surface px.
     pub rect: (f32, f32, f32, f32),
     /// Fillets: the `r × r` square at `(x, y)` and its arc's centre.
-    pub flares: Vec<(f32, f32, f32, FlareCenter)>,
+    pub flares: Flares,
 }
 
 /// The column of a side bar joined to the main bar, `width` wide and
@@ -162,7 +162,7 @@ pub fn joined_column(right: bool, surface_w: f32, width: f32, shown: f32, (y0, y
     // bottom), hugging the column.
     let (top_c, bottom_c) = if right { (FlareCenter::BottomLeft, FlareCenter::TopLeft) } else { (FlareCenter::BottomRight, FlareCenter::TopRight) };
     let (r_top, r_bottom) = if bar_on_top { (r, r * p) } else { (r * p, r) };
-    let mut flares = vec![(if right { inner - r_top } else { fx }, y0, r_top, top_c), (if right { inner - r_bottom } else { fx }, y1 - r_bottom, r_bottom, bottom_c)];
+    let mut flares = Flares::from_buf([(if right { inner - r_top } else { fx }, y0, r_top, top_c), (if right { inner - r_bottom } else { fx }, y1 - r_bottom, r_bottom, bottom_c)]);
     flares.retain(|f| f.2 > 0.0);
     Column { rect: (x, y0, w, (y1 - y0).max(0.0)), flares }
 }
@@ -311,7 +311,7 @@ mod tests {
     fn the_joined_column_meets_the_top_bar_with_a_fillet() {
         let c = joined_column(false, 1920.0, 40.0, 1.0, (30.0, 1080.0), 18.0, true);
         assert_eq!(c.rect, (0.0, 30.0, 40.0, 1050.0));
-        assert_eq!(c.flares, vec![(40.0, 30.0, 18.0, FlareCenter::BottomRight), (40.0, 1062.0, 18.0, FlareCenter::TopRight)]);
+        assert_eq!(c.flares.as_slice(), &[(40.0, 30.0, 18.0, FlareCenter::BottomRight), (40.0, 1062.0, 18.0, FlareCenter::TopRight)]);
         let r = joined_column(true, 1920.0, 40.0, 1.0, (30.0, 1080.0), 18.0, true);
         assert_eq!(r.rect.0, 1880.0);
         assert_eq!(r.flares[0], (1862.0, 30.0, 18.0, FlareCenter::BottomLeft));
@@ -319,9 +319,9 @@ mod tests {
         // own screen flare then).
         let hidden = joined_column(false, 1920.0, 40.0, 0.0, (30.0, 1080.0), 18.0, true);
         assert_eq!(hidden.rect.2, 0.0);
-        assert_eq!(hidden.flares, vec![(0.0, 30.0, 18.0, FlareCenter::BottomRight)]);
+        assert_eq!(hidden.flares.as_slice(), &[(0.0, 30.0, 18.0, FlareCenter::BottomRight)]);
         // Beside a bottom bar the fillet into the bar is at the bottom.
         let b = joined_column(false, 1920.0, 40.0, 0.0, (0.0, 1050.0), 18.0, false);
-        assert_eq!(b.flares, vec![(0.0, 1032.0, 18.0, FlareCenter::TopRight)]);
+        assert_eq!(b.flares.as_slice(), &[(0.0, 1032.0, 18.0, FlareCenter::TopRight)]);
     }
 }

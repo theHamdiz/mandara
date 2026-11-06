@@ -132,14 +132,14 @@ impl ThemeGallery {
     /// theme is loading, keep the current target's name until its source, name
     /// and appearance agree. Tuning keeps the preset; `ThemeName` preserves
     /// user-authored titles.
-    fn preview_text(&self, configured: &ThemeSource, applied: &ThemeSource, target: &MandaraPalette) -> (String, String) {
+    fn preview_text(&self, configured: &ThemeSource, applied: &ThemeSource, target: &MandaraPalette) -> (SharedString, String) {
         let preset = match configured {
             ThemeSource::Preset { preset } if configured == applied => self.themes_iter().find(|(def, palette)| {
-                def.id == *preset && def.name == target.name && palette.name == target.name && palette.is_dark == target.is_dark
+                def.id == *preset && def.name == target.name.as_ref() && palette.name == target.name && palette.is_dark == target.is_dark
             }).map(|(def, _)| def),
             _ => None,
         };
-        preset.map_or_else(|| (target.name.clone(), String::new()), |def| (def.localized_name(), localized_description(def)))
+        preset.map_or_else(|| (SharedString::from(&target.name), String::new()), |def| (def.localized_name().into(), localized_description(def)))
     }
 }
 
@@ -362,8 +362,8 @@ impl StudioView {
         let current = engine.read(cx);
         let (theme, detail) = match &cfg.theme.source {
             ThemeSource::Preset { .. } => self.theme_gallery(cfg.theme.mode.is_dark()).preview_text(&cfg.theme.source, current.source(), current.target()),
-            ThemeSource::Wallpaper { variant, .. } => (current.target().name.clone(), tf("Generated from your wallpaper · {style}", &[("style", &tr(variant.display_name()))])),
-            _ => (current.target().name.clone(), String::new()),
+            ThemeSource::Wallpaper { variant, .. } => (SharedString::from(&current.target().name), tf("Generated from your wallpaper · {style}", &[("style", &tr(variant.display_name()))])),
+            _ => (SharedString::from(&current.target().name), String::new()),
         };
         let thumb = cfg.wallpaper.path.clone().and_then(|path| self.wallpaper_assets(&path, cx).0);
         let contrast = p.on_surface.contrast_ratio(p.surface_base);
@@ -687,7 +687,7 @@ mod preview_tests {
             let source = source(&def.id);
             let retained = Rc::strong_count(&gallery.themes);
             with_language(Some(Lang::Ar), || {
-                assert_eq!(gallery.preview_text(&source, &source, target), (def.localized_name(), localized_description(def)));
+                assert_eq!(gallery.preview_text(&source, &source, target), (SharedString::from(def.localized_name()), localized_description(def)));
                 assert_ne!(gallery.preview_text(&source, &source, target).0, def.name);
             });
             with_language(Some(Lang::En), || assert_eq!(gallery.preview_text(&source, &source, target).0, def.name));
@@ -729,7 +729,7 @@ mod preview_tests {
             ThemeSource::Wallpaper { path: "wallpaper.png".into(), variant: SchemeVariant::TonalSpot, seed: 0 },
             ThemeSource::Seed { color: target.primary, variant: SchemeVariant::TonalSpot },
         ] {
-            with_language(Some(Lang::Ar), || assert_eq!(gallery.preview_text(&source, &source, target), (target.name.clone(), String::new())));
+            with_language(Some(Lang::Ar), || assert_eq!(gallery.preview_text(&source, &source, target), (SharedString::from(&target.name), String::new())));
         }
     }
 
@@ -751,7 +751,7 @@ mod preview_tests {
                 (&configured, &configured, &other_mode),
                 (&pending, &pending, palette),
             ] {
-                assert_eq!(gallery.preview_text(configured, applied, target), (target.name.clone(), String::new()));
+                assert_eq!(gallery.preview_text(configured, applied, target), (SharedString::from(&target.name), String::new()));
             }
         });
     }

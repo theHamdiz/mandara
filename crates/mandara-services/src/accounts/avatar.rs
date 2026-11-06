@@ -56,7 +56,7 @@ pub fn crop_rect(width: u32, height: u32, crop: Crop) -> (u32, u32, u32) {
 /// Crops and resizes to an `AVATAR_SIZE` square.
 pub fn render_crop(src: &DynamicImage, crop: Crop) -> RgbaImage {
     let (x, y, side) = crop_rect(src.width(), src.height(), crop);
-    src.crop_imm(x, y, side, side).resize_exact(AVATAR_SIZE, AVATAR_SIZE, FilterType::Lanczos3).to_rgba8()
+    src.crop_imm(x, y, side, side).resize_exact(AVATAR_SIZE, AVATAR_SIZE, FilterType::Lanczos3).into_rgba8()
 }
 
 /// `~/.cache/mandara/avatars/`, created on demand.
@@ -92,7 +92,8 @@ pub fn prepare_source(path: &Path) -> Result<Prepared, String> {
     let img = open_any(path)?;
     let img = if img.width().max(img.height()) > MAX_SOURCE_SIDE { img.resize(MAX_SOURCE_SIDE, MAX_SOURCE_SIDE, FilterType::Triangle) } else { img };
     let out = cache_dir().join(format!("source-{}.png", stamp()));
-    img.to_rgba8().save_with_format(&out, ImageFormat::Png).map_err(|e| e.to_string())?;
+    let img = img.into_rgba8();
+    img.save_with_format(&out, ImageFormat::Png).map_err(|e| e.to_string())?;
     Ok(Prepared { path: out, width: img.width(), height: img.height() })
 }
 
@@ -374,6 +375,19 @@ mod tests {
         assert_eq!(out.dimensions(), (AVATAR_SIZE, AVATAR_SIZE));
         // The crop sits in the red half.
         assert!(out.get_pixel(AVATAR_SIZE / 2, AVATAR_SIZE / 2).0[0] > 200);
+    }
+
+    #[test]
+    fn owned_crop_conversion_keeps_rgb_and_transparent_pixels() {
+        for src in [
+            DynamicImage::ImageRgb8(image::RgbImage::from_fn(37, 21, |x, y| image::Rgb([x as u8 * 5, y as u8 * 7, 90]))),
+            DynamicImage::ImageRgba8(RgbaImage::from_fn(37, 21, |x, y| image::Rgba([x as u8 * 5, y as u8 * 7, 90, (x + y) as u8 * 3]))),
+        ] {
+            let crop = Crop { zoom: 1.5, center_x: 0.3, center_y: 0.7 };
+            let (x, y, side) = crop_rect(src.width(), src.height(), crop);
+            let expected = src.crop_imm(x, y, side, side).resize_exact(AVATAR_SIZE, AVATAR_SIZE, FilterType::Lanczos3).to_rgba8();
+            assert_eq!(render_crop(&src, crop), expected);
+        }
     }
 
     #[test]

@@ -3,7 +3,7 @@
 
 use std::cell::RefCell;
 
-use gpui::{IntoElement, ParentElement, SharedString, Styled, div, px};
+use gpui::{IntoElement, ParentElement, Styled, div, px};
 use mandara_core::ToGpui;
 use mandara_plugins::{PluginInstance, PluginManifest, PluginRegistry, Zone};
 
@@ -19,45 +19,14 @@ const BADGE_H_PX: f32 = 18.0;
 const BADGE_RADIUS_PX: f32 = 6.0;
 const BADGE_ALPHA: f32 = 0.08;
 const BADGE_TEXT_PX: f32 = 10.5;
-/// Letters kept from an unknown layout's name.
-const CODE_LEN: usize = 2;
-
-/// "English (US)" → "EN", "Arabic" → "AR"; else the first two letters.
-pub fn short_code(layout: &str) -> String {
-    const NAMES: &[(&str, &str)] = &[
-        ("english", "EN"),
-        ("arabic", "AR"),
-        ("french", "FR"),
-        ("german", "DE"),
-        ("spanish", "ES"),
-        ("russian", "RU"),
-        ("turkish", "TR"),
-        ("japanese", "JA"),
-        ("chinese", "ZH"),
-        ("hindi", "HI"),
-        ("persian", "FA"),
-        ("hebrew", "HE"),
-        ("italian", "IT"),
-        ("portuguese", "PT"),
-        ("dutch", "NL"),
-        ("polish", "PL"),
-        ("korean", "KO"),
-        ("urdu", "UR"),
-        ("greek", "EL"),
-        ("ukrainian", "UK"),
-    ];
-    let lower = layout.to_lowercase();
-    NAMES
-        .iter()
-        .find(|(name, _)| lower.starts_with(name))
-        .map(|(_, code)| code.to_string())
-        .unwrap_or_else(|| layout.chars().filter(|c| c.is_alphabetic()).take(CODE_LEN).collect::<String>().to_uppercase())
-}
+mod label;
+pub use label::short_code;
+use label::LayoutLabel;
 
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Keyboard layout"), mandara_i18n::tk("The active keyboard layout; click to switch"), Some(Zone::Right)), |window, cx, _| {
         // (layout name, its short code), derived once per layout change.
-        let code: RefCell<(String, SharedString)> = RefCell::default();
+        let code: RefCell<LayoutLabel> = RefCell::default();
         let bar = domain_view(Domains::KEYBOARD,
             None,
             move |palette, _, cx| {
@@ -67,12 +36,10 @@ pub fn register(r: &mut PluginRegistry) {
                 }
                 let mut code = code.borrow_mut();
                 // A label set in Studio → Input (EN, ع…) wins over the derived code.
-                let custom = crate::state::config(cx).read(cx).get().compositor.input.keyboard.label_for_reported(layout).map(str::to_string);
-                let key = format!("{layout}\u{1f}{}", custom.as_deref().unwrap_or_default());
-                if code.0 != key {
-                    code.1 = custom.unwrap_or_else(|| short_code(layout)).into();
-                    code.0 = key;
-                }
+                let config = crate::state::config(cx);
+                let config = config.read(cx);
+                let custom = config.get().compositor.input.keyboard.label_for_reported(layout);
+                let shown = code.label(layout, custom);
                 div()
                     .px(px(BADGE_PAD_X_PX))
                     .h(px(BADGE_H_PX))
@@ -82,7 +49,7 @@ pub fn register(r: &mut PluginRegistry) {
                     .bg(palette.on_surface.with_alpha(BADGE_ALPHA).hsla())
                     .text_size(px(BADGE_TEXT_PX))
                     .font_weight(gpui::FontWeight::BOLD)
-                    .child(code.1.clone())
+                    .child(shown)
                     .into_any_element()
             },
             window,

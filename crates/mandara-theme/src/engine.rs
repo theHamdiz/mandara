@@ -68,7 +68,7 @@ impl ThemeSource {
                     "{} · {}",
                     path.file_stem().and_then(|s| s.to_str()).unwrap_or("Wallpaper"),
                     variant.display_name()
-                );
+                ).into();
                 ResolvedTheme { palette, seeds }
             }
         })
@@ -349,6 +349,6 @@ mod tests {
         };
         assert!(source.resolve(true).is_err());
         let engine = ThemeEngine::new(source, true, PaletteAdjustments::default());
-        assert_eq!(engine.target().name, "Mandara Corniche");
+        assert_eq!(engine.target().name.as_ref(), "Mandara Corniche");
     }
 }

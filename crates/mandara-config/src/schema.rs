@@ -1011,11 +1011,23 @@ impl PluginsConfig {
 
     /// Reads a typed setting for `plugin`, falling back to `default`.
     pub fn setting<T: serde::de::DeserializeOwned>(&self, plugin: &str, key: &str, default: T) -> T {
+        self.setting_or_else(plugin, key, || default)
+    }
+
+    /// Reads a typed setting, constructing its fallback only when the key is
+    /// absent or its value cannot be deserialized as `T`.
+    pub fn setting_or_else<T: serde::de::DeserializeOwned>(&self, plugin: &str, key: &str, default: impl FnOnce() -> T) -> T {
         self.settings
             .get(plugin)
             .and_then(|t| t.get(key))
             .and_then(|v| v.clone().try_into().ok())
-            .unwrap_or(default)
+            .unwrap_or_else(default)
+    }
+
+    /// Borrows a string setting from this config snapshot. Missing keys and
+    /// non-string values return `None`; no fallback or owned String is created.
+    pub fn setting_str(&self, plugin: &str, key: &str) -> Option<&str> {
+        self.settings.get(plugin)?.get(key)?.as_str()
     }
 }
 

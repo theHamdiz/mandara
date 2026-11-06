@@ -1,4 +1,4 @@
-//! Frame-accurate Wayland input-region masking ("the Caelestia law").
+//! Frame-accurate Wayland input-region masking.
 //!
 //! Layer surfaces are allocated large and transparent so islands can morph
 //! without resizing the surface. Every frame, interactive containers register
@@ -21,10 +21,28 @@ type IRect = (i32, i32, i32, i32);
 #[derive(Default)]
 struct Inner {
     /// Rects registered during the frame being built.
-    pending: SmallVec<[Bounds<Pixels>; 8]>,
+    pending: SmallVec<[IRect; 8]>,
     /// Normalized region last sent to the compositor.
     committed: Option<Vec<IRect>>,
+    /// Pixel bounds reused when applying a changed region to GPUI.
+    bounds: Vec<Bounds<Pixels>>,
     commits: u64,
+}
+
+impl Inner {
+    fn commit_pending(&mut self) -> bool {
+        normalize(&mut self.pending);
+        if self.committed.as_deref() == Some(self.pending.as_slice()) {
+            self.pending.clear();
+            return false;
+        }
+        let committed = self.committed.get_or_insert_default();
+        committed.clear();
+        committed.extend_from_slice(&self.pending);
+        self.pending.clear();
+        self.commits += 1;
+        true
+    }
 }
 
 /// Per-window registry of interactive bounds. Cheap to clone (shared handle).
@@ -41,7 +59,14 @@ impl InputMaskRegistry {
     /// Registers interactive bounds for the current frame.
     pub fn register(&self, bounds: Bounds<Pixels>) {
         if f32::from(bounds.size.width) > 0.0 && f32::from(bounds.size.height) > 0.0 {
-            self.inner.borrow_mut().pending.push(bounds);
+            let x0 = f32::from(bounds.origin.x).floor() as i32;
+            let y0 = f32::from(bounds.origin.y).floor() as i32;
+            let x1 = (f32::from(bounds.origin.x) + f32::from(bounds.size.width)).ceil() as i32;
+            let y1 = (f32::from(bounds.origin.y) + f32::from(bounds.size.height)).ceil() as i32;
+            let rect = (x0, y0, x1.saturating_sub(x0), y1.saturating_sub(y0));
+            if rect.2 > 0 && rect.3 > 0 {
+                self.inner.borrow_mut().pending.push(rect);
+            }
         }
     }
 
@@ -89,15 +114,19 @@ impl InputMaskRegistry {
     /// Diffs the pending rects against the last commit and updates the
     /// surface's input region if needed.
     pub fn flush(&self, window: &mut Window) {
-        if let Some(rects) = self.take_changed_region() {
-            let bounds: Vec<Bounds<Pixels>> = rects
-                .iter()
-                .map(|&(x, y, w, h)| Bounds {
-                    origin: point(px(x as f32), px(y as f32)),
-                    size: size(px(w as f32), px(h as f32)),
-                })
-                .collect();
-            window.set_input_region(Some(&bounds));
+        self.flush_with(|bounds| window.set_input_region(Some(bounds)));
+    }
+
+    fn flush_with(&self, apply: impl FnOnce(&[Bounds<Pixels>])) {
+        let mut inner = self.inner.borrow_mut();
+        if inner.commit_pending() {
+            let Inner { committed, bounds, .. } = &mut *inner;
+            bounds.clear();
+            bounds.extend(committed.iter().flatten().map(|&(x, y, w, h)| Bounds {
+                origin: point(px(x as f32), px(y as f32)),
+                size: size(px(w as f32), px(h as f32)),
+            }));
+            apply(bounds);
         }
     }
 
@@ -105,14 +134,7 @@ impl InputMaskRegistry {
     /// differs from the last committed one. Clears pending state.
     pub fn take_changed_region(&self) -> Option<Vec<IRect>> {
         let mut inner = self.inner.borrow_mut();
-        let pending = std::mem::take(&mut inner.pending);
-        let region = normalize(&pending);
-        if inner.committed.as_ref() == Some(&region) {
-            return None;
-        }
-        inner.committed = Some(region.clone());
-        inner.commits += 1;
-        Some(region)
+        inner.commit_pending().then(|| inner.committed.clone().unwrap_or_default())
     }
 
     /// Number of times the compositor region was updated (diagnostics).
@@ -126,68 +148,26 @@ impl InputMaskRegistry {
     }
 }
 
-/// Snaps rects outward to whole pixels, drops rects fully contained in
-/// another, and sorts for stable diffing.
-fn normalize(rects: &[Bounds<Pixels>]) -> Vec<IRect> {
-    let mut out: Vec<IRect> = rects
-        .iter()
-        .map(|b| {
-            let x0 = f32::from(b.origin.x).floor() as i32;
-            let y0 = f32::from(b.origin.y).floor() as i32;
-            let x1 = (f32::from(b.origin.x) + f32::from(b.size.width)).ceil() as i32;
-            let y1 = (f32::from(b.origin.y) + f32::from(b.size.height)).ceil() as i32;
-            (x0, y0, (x1 - x0).max(0), (y1 - y0).max(0))
-        })
-        .filter(|r| r.2 > 0 && r.3 > 0)
-        .collect();
-    out.sort_unstable();
-    out.dedup();
+/// Drops contained rects and sorts for stable diffing without a second copy.
+fn normalize(rects: &mut SmallVec<[IRect; 8]>) {
+    rects.sort_unstable();
+    rects.dedup();
     let contains = |outer: &IRect, inner: &IRect| {
         outer.0 <= inner.0
             && outer.1 <= inner.1
-            && outer.0 + outer.2 >= inner.0 + inner.2
-            && outer.1 + outer.3 >= inner.1 + inner.3
+            && i64::from(outer.0) + i64::from(outer.2) >= i64::from(inner.0) + i64::from(inner.2)
+            && i64::from(outer.1) + i64::from(outer.3) >= i64::from(inner.1) + i64::from(inner.3)
     };
-    let snapshot = out.clone();
-    out.retain(|r| !snapshot.iter().any(|o| o != r && contains(o, r)));
-    out
+    for index in 0..rects.len() {
+        let rect = rects[index];
+        if rects.iter().any(|outer| outer != &rect && contains(outer, &rect)) {
+            // A removed container is covered by another surviving container,
+            // so it is safe to stop using it for later containment checks.
+            rects[index].2 = 0;
+        }
+    }
+    rects.retain(|rect| rect.2 > 0);
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn b(x: f32, y: f32, w: f32, h: f32) -> Bounds<Pixels> {
-        Bounds { origin: point(px(x), px(y)), size: size(px(w), px(h)) }
-    }
-
-    #[test]
-    fn snaps_outward_and_drops_contained() {
-        let r = normalize(&[b(10.4, 5.6, 100.2, 30.0), b(20.0, 10.0, 5.0, 5.0), b(300.0, 0.0, 50.0, 40.0)]);
-        assert_eq!(r, vec![(10, 5, 101, 31), (300, 0, 50, 40)]);
-    }
-
-    #[test]
-    fn only_commits_on_change() {
-        let reg = InputMaskRegistry::new();
-        reg.register(b(0.0, 0.0, 100.0, 40.0));
-        assert!(reg.take_changed_region().is_some());
-        reg.register(b(0.0, 0.0, 100.0, 40.0));
-        assert!(reg.take_changed_region().is_none(), "identical frame must not re-commit");
-        reg.register(b(0.0, 0.0, 120.0, 40.0));
-        assert_eq!(reg.take_changed_region(), Some(vec![(0, 0, 120, 40)]));
-        assert_eq!(reg.commit_count(), 2);
-    }
-
-    #[test]
-    fn empty_frame_yields_empty_region() {
-        let reg = InputMaskRegistry::new();
-        reg.register(b(0.0, 0.0, 10.0, 10.0));
-        reg.take_changed_region();
-        // Nothing registered → empty region (all clicks pass through).
-        assert_eq!(reg.take_changed_region(), Some(vec![]));
-        // Zero-size rects are ignored.
-        reg.register(b(5.0, 5.0, 0.0, 10.0));
-        assert_eq!(reg.take_changed_region(), None);
-    }
-}
+mod tests;
