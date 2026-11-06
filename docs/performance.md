@@ -62,7 +62,7 @@ browser tab, without trading away speed. It took deliberate work at every layer:
   smaller than the screen is scaled up one row at a time, not through a
   full-size float copy: a wallpaper switch on a 4K display peaks 80 MiB
   lower ([numbers](releasing.md#settled-memory-video-memory-and-residue)).
-- **Few threads.** All D-Bus, network and audio services share one tokio
+- **Few threads.** D-Bus, network and audio services share one service
   runtime with two workers, and GPUI's worker pool is capped at four.
 - **Nothing ticks off screen.** Spectrum, graphs, timers and network
   sampling run only while you can see them.

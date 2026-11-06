@@ -6,6 +6,21 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **Keyboard navigation in Beacon.** Its search and mode buttons are reachable
+  with Tab and Shift+Tab, with visible focus and Enter or Space to select
+  a mode. (#120)
+
+### Under the hood
+
+- **Clearer helper contracts.** Internal documentation explains policy cache
+  limits, view lifetimes, Studio routing and native output sizing. (#111)
+
+- **Reuse wallpaper storage.** Still wallpapers reuse their prepared full-screen
+  RGBA buffer for the opaque canvas, preserving fill modes, colors and
+  transparency blending.
+
 ## 0.19.0 — 2026-11-06
 
 Bars and sidebars share one focused settings page, with clearer installation
@@ -22,10 +37,6 @@ steps and less repeated work behind the desktop.
   Studio shortcuts keep working, and translated directions use the tab labels.
 
 ### Fixed
-
-- **Keyboard navigation in Beacon.** Its search and mode buttons are reachable
-  with Tab and Shift+Tab, with visible focus and Enter or Space to select
-  a mode. (#120)
 
 - **Video wallpapers reach every edge.** They fill the screen at fractional
   display scales, including the solid color around centered and fitted clips.
@@ -48,13 +59,6 @@ steps and less repeated work behind the desktop.
   and attached launcher dim the wallpaper around the bar’s actual shape. (#114)
 
 ### Under the hood
-
-- **Clearer helper contracts.** Internal documentation explains policy cache
-  limits, view lifetimes, Studio routing and native output sizing. (#111)
-
-- **Reuse wallpaper storage.** Still wallpapers reuse their prepared full-screen
-  RGBA buffer for the opaque canvas, preserving fill modes, colors and
-  transparency blending.
 
 - **Temporary folders can use symbolic links.** Resource tests accept
   folders reached through a symbolic link. (#111)
