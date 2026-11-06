@@ -584,3 +584,5 @@ mod tests {
 
 #[cfg(test)]
 mod workflow_tests;
+#[cfg(test)]
+mod package_inputs_tests;

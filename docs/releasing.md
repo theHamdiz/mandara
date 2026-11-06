@@ -182,6 +182,12 @@ On every push to `main` (not on its own `chore(release)` commits):
    artifacts, and a signed **build provenance attestation** (verify with
    `gh attestation verify <file> --repo <owner>/<repo>`).
 
+   Build uploads use artifact v7 and the publish job downloads them with
+   the pinned v8 action. It merges `dist-*` from this run into `dist/` and
+   keeps the default error on a digest mismatch, before signing any files.
+   The Node 24 action needs Actions Runner 2.327.1 or newer; the workflow
+   uses GitHub-hosted Ubuntu runners.
+
 Mandara is a Wayland desktop shell, so Linux is the only operating system it
 runs on. macOS and Windows have no Wayland compositors to host it.
 
@@ -402,9 +408,12 @@ client's pure-Rust decoder) and the `locales` part of `update.json`
 of the `.mlang`). The packs are architecture-independent and reproducible,
 so they are built once. `cargo xtask dist` puts every pack in each tarball
 (`share/mandara/locales/<v>/`), and the package jobs stage them in
-`target/langpacks/<v>/` for the `.deb` and `.rpm` (installed in
+`dist/.package-inputs/langpacks/<v>/` for the `.deb` and `.rpm` (installed in
 `/usr/share/mandara/locales/<v>/`); the Arch recipes copy them from the
 tarball or build them with `cargo xtask langpacks`.
+These are generated package inputs rather than Cargo build products.
+The artifact upload excludes the hidden staging tree; only finished
+packages and release files leave the job.
 
 **Downloading** (`mandara_services::self_update::langpacks`): a language
 used without its pack (the shell's, a plugin's own, a desktop widget's) or

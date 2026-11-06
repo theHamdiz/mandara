@@ -38,6 +38,8 @@ About → What's new shows it too.
 - **Launchers follow compact bars.** Attached left and right positions align
   with the ends of a notch, micro pill or island instead of the screen corners.
   Button morphs keep that alignment and stay within the display.
+- **Smoother after startup.** The shell leaves its executable in the kernel’s
+  file cache instead of forcing it to be read from disk again during cleanup.
 
 ### Under the hood
 
@@ -81,6 +83,11 @@ About → What's new shows it too.
   report disk failures, and a partly saved note can retry its filename or
   index without creating another copy. `shell state` also reports when a
   desktop editor is ready for keyboard input.
+- **Quieter distribution packages.** Language packs are staged separately
+  from compiled binaries, avoiding a misleading packaging warning while
+  keeping every language in the finished packages.
+- **Safer release downloads.** The release job uses the current artifact
+  download action and rejects corrupted build artifacts before signing.
 
 ## 0.19.1 — 2026-11-06
 
@@ -98,9 +105,6 @@ space. Keyboard navigation in Beacon.
   languages, matching the available language packs.
 
 ### Fixed
-
-- **Smoother after startup.** The shell leaves its executable in the kernel’s
-  file cache instead of forcing it to be read from disk again during cleanup.
 
 - **Theme cards fill their space.** Main menu → Look → Themes uses the
   available grid height, and built-in names follow your language in the
