@@ -13,6 +13,8 @@ mod chart_samples;
 mod day_events;
 #[path = "../src/plugins/media/scrub_state.rs"]
 mod scrub_state;
+#[path = "../src/plugins/resources/temperature_rows.rs"]
+mod temperature_rows;
 
 #[path = "support/allocations.rs"]
 mod allocations;
@@ -153,5 +155,36 @@ fn owned_rgba_conversion_does_not_clone_pixel_storage() {
         (1, 128 * 64 * 4),
         "the positive control must observe the pixel copy"
     );
+    assert_eq!(after, (0, 0));
+}
+
+/// Rendering two-column temperature rows borrows readings instead of collecting pairs.
+#[test]
+fn temperature_rows_do_not_allocate_an_intermediate_list() {
+    const FRAMES: usize = 32;
+    let temperatures = [10, 20, 30, 40, 50];
+    let labels = ["a", "b", "c", "d", "e"];
+    let before = allocations(|| {
+        for _ in 0..FRAMES {
+            let pairs = black_box(&temperatures)
+                .iter()
+                .zip(black_box(&labels))
+                .collect::<Vec<_>>();
+            for row in pairs.chunks(2) {
+                black_box(row);
+            }
+        }
+    });
+    let after = allocations(|| {
+        for _ in 0..FRAMES {
+            for row in
+                temperature_rows::temperature_rows(black_box(&temperatures), black_box(&labels), 5)
+            {
+                black_box(row);
+            }
+        }
+    });
+    eprintln!("{FRAMES} temperature frames: pair Vec {before:?}, borrowed rows {after:?}");
+    assert_eq!(before.0, FRAMES);
     assert_eq!(after, (0, 0));
 }

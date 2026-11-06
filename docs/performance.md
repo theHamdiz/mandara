@@ -134,7 +134,8 @@ than copying its samples when labels change. Prayer times keep six time
 labels in an array and resolve settings once per config, language or UTC-offset
 change; selecting the surrounding prayers traverses the existing schedules.
 Album art, sharing thumbnails and dock previews consume resized image buffers;
-their dimensions, filters and pixel output stay the same.
+their dimensions, filters and pixel output stay the same. Temperature rows
+borrow paired reading and label slices, including the partial last row.
 
 `cargo test -p mandara-ui --test plugin_allocations -- --nocapture` compares
 the former temporary expressions with warm state reuse on the test thread.
