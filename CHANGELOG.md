@@ -99,6 +99,9 @@ space. Keyboard navigation in Beacon.
 
 ### Fixed
 
+- **Smoother after startup.** The shell leaves its executable in the kernel’s
+  file cache instead of forcing it to be read from disk again during cleanup.
+
 - **Theme cards fill their space.** Main menu → Look → Themes uses the
   available grid height, and built-in names follow your language in the
   menu and Studio. Custom theme names stay as you wrote them.

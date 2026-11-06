@@ -10,15 +10,9 @@
 //! live working set. Mappings holding private copies (RELRO, relocated
 //! data) are never touched: dropping those would lose writes.
 //!
-//! How much comes back depends on the page cache's folio size: a fault maps
-//! the whole folio it lands in (64 KiB of small ones around it, the
-//! kernel's fault-around window). Writing the binary (an install, an
-//! update, `cp`) leaves it cached in 256 KiB and larger folios, so every
-//! function the idle shell runs keeps a quarter megabyte of code around it
-//! resident: about twice the resident code of a binary read from disk.
-//! [`refresh_executable_page_cache`] notices that at the first drop and
-//! evicts the binary's page cache, so it is read back in small folios.
-
+//! The kernel keeps ownership of the file cache. This cleanup never writes
+//! back or evicts the running executable: forcing it to be read from disk
+//! again can interrupt a frame long after startup.
 
 use std::time::Duration;
 
@@ -29,8 +23,7 @@ use std::time::Duration;
 /// with a minor fault.
 pub const EARLY: Duration = Duration::from_secs(8);
 /// How long after start the first full cold-page drop waits (startup, the
-/// first frames and lazy loads done); it also rebuilds a large-folio page
-/// cache of the executable.
+/// first frames and lazy loads done).
 pub const SETTLE: Duration = Duration::from_secs(45);
 /// How often the cold-page drop repeats afterwards (code paged in by a
 /// one-off action is shed again).
@@ -54,7 +47,17 @@ fn parse_mapping(line: &str) -> Option<Mapping<'_>> {
     let inode = fields.next()?;
     let path = fields.next().map(str::trim).unwrap_or("");
     let (start, end) = range.split_once('-')?;
-    Some(Mapping { start: usize::from_str_radix(start, 16).ok()?, end: usize::from_str_radix(end, 16).ok()?, perms, inode, path })
+    let (start, end) = (
+        usize::from_str_radix(start, 16).ok()?,
+        usize::from_str_radix(end, 16).ok()?,
+    );
+    (start < end).then_some(Mapping {
+        start,
+        end,
+        perms,
+        inode,
+        path,
+    })
 }
 
 /// A read-only mapping of a regular file whose pages can be dropped and
@@ -72,30 +75,50 @@ fn is_droppable_file(m: &Mapping<'_>) -> bool {
 /// KiB that were resident. A mapping with any anonymous (copied-on-write)
 /// page is skipped whole: those pages differ from the file.
 pub fn drop_clean_file_pages() -> usize {
-    let Ok(smaps) = std::fs::read_to_string("/proc/self/smaps") else { return 0 };
+    let Ok(smaps) = std::fs::read_to_string("/proc/self/smaps") else {
+        return 0;
+    };
+    drop_clean_mappings(&smaps, |start, len| {
+        // SAFETY: a whole read-only, unmodified file mapping of this process.
+        // The parser excludes private copies and dirty pages before calling us.
+        unsafe { libc::madvise(start as *mut libc::c_void, len, libc::MADV_DONTNEED) == 0 }
+    })
+}
+
+fn drop_clean_mappings(smaps: &str, mut discard: impl FnMut(usize, usize) -> bool) -> usize {
     let mut dropped_kib = 0;
     let mut current: Option<(usize, usize, bool)> = None;
     let mut rss = 0usize;
     let mut flush = |current: &mut Option<(usize, usize, bool)>, rss: usize| {
         if let Some((start, end, true)) = current.take()
             && rss > 0
-            // SAFETY: a whole read-only, unmodified file mapping of this
-            // process: dropping its pages loses nothing, the next access
-            // maps the same file page again.
-            && unsafe { libc::madvise(start as *mut libc::c_void, end - start, libc::MADV_DONTNEED) } == 0
+            && discard(start, end - start)
         {
             dropped_kib += rss;
         }
     };
     for line in smaps.lines() {
-        if let Some(m) = parse_mapping(line).filter(|m| m.perms.len() == 4 && line.as_bytes().first().is_some_and(u8::is_ascii_hexdigit) && line.contains('-')) {
+        if let Some(m) = parse_mapping(line).filter(|m| {
+            m.perms.len() == 4
+                && line.as_bytes().first().is_some_and(u8::is_ascii_hexdigit)
+                && line.contains('-')
+        }) {
             flush(&mut current, rss);
             rss = 0;
             current = Some((m.start, m.end, is_droppable_file(&m)));
             continue;
         }
-        let Some((key, value)) = line.split_once(':') else { continue };
-        let kib = || value.trim().trim_end_matches(" kB").trim().parse::<usize>().unwrap_or(0);
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        let kib = || {
+            value
+                .trim()
+                .trim_end_matches(" kB")
+                .trim()
+                .parse::<usize>()
+                .unwrap_or(0)
+        };
         match key {
             "Rss" => rss = kib(),
             "Anonymous" | "Private_Dirty" | "Shared_Dirty" if kib() > 0 => {
@@ -110,98 +133,6 @@ pub fn drop_clean_file_pages() -> usize {
     dropped_kib
 }
 
-/// Pages one fault maps around its address in a small-folio page cache (the
-/// kernel's default `fault_around_bytes`, 64 KiB).
-const FAULT_AROUND_PAGES: usize = 16;
-/// Pages probed around each sample (2 MiB, the largest folio a file holds).
-const PROBE_WINDOW_PAGES: usize = 512;
-/// Samples spread over the executable's code.
-const PROBES: usize = 32;
-
-/// Whether the page cache holds `file` in folios larger than the
-/// fault-around window: maps it again privately, reads one already-cached
-/// page at a few places (never one that would need disk I/O) and counts
-/// what each of those faults mapped.
-fn has_large_folios(file: &std::fs::File, code: std::ops::Range<usize>) -> bool {
-    use std::os::fd::AsRawFd as _;
-    const PAGE: usize = 4096;
-    let Ok(len) = file.metadata().map(|m| m.len() as usize / PAGE * PAGE) else { return false };
-    if len == 0 || code.end > len {
-        return false;
-    }
-    // SAFETY: a fresh read-only private mapping of a file we opened; unmapped below.
-    let base = unsafe { libc::mmap(std::ptr::null_mut(), len, libc::PROT_READ, libc::MAP_PRIVATE, file.as_raw_fd(), 0) };
-    if base == libc::MAP_FAILED {
-        return false;
-    }
-    let Ok(pagemap) = std::fs::File::open("/proc/self/pagemap") else {
-        // SAFETY: unmapping what we mapped.
-        unsafe { libc::munmap(base, len) };
-        return false;
-    };
-    let step = ((code.end - code.start) / PROBES).max(PROBE_WINDOW_PAGES * PAGE);
-    let mut large = false;
-    let mut offset = code.start / PAGE * PAGE;
-    while offset < code.end && !large {
-        // SAFETY: `offset` is a page inside the mapping.
-        let page = unsafe { base.cast::<u8>().add(offset) };
-        let mut cached = 0u8;
-        // SAFETY: one page of our mapping, one result byte.
-        let cached_ok = unsafe { libc::mincore(page.cast(), PAGE, &mut cached) } == 0 && cached & 1 == 1;
-        if cached_ok {
-            // SAFETY: a readable page of the mapping; the fault maps cached pages only.
-            unsafe { std::ptr::read_volatile(page) };
-            let window = offset / (PROBE_WINDOW_PAGES * PAGE) * (PROBE_WINDOW_PAGES * PAGE);
-            let pages = PROBE_WINDOW_PAGES.min((len - window) / PAGE);
-            let mut entries = vec![0u8; pages * 8];
-            let at = (base as usize + window) / PAGE * 8;
-            use std::os::unix::fs::FileExt as _;
-            if pagemap.read_exact_at(&mut entries, at as u64).is_ok() {
-                let present = entries.as_chunks::<8>().0.iter().filter(|e| u64::from_le_bytes(**e) >> 63 == 1).count();
-                large = present > FAULT_AROUND_PAGES;
-            }
-        }
-        offset += step;
-    }
-    // SAFETY: unmapping what we mapped.
-    unsafe { libc::munmap(base, len) };
-    large
-}
-
-/// The executable's code mapping (`r-xp`) as a file-offset range.
-fn executable_code_range() -> Option<std::ops::Range<usize>> {
-    let exe = std::fs::read_link("/proc/self/exe").ok()?;
-    let exe = exe.to_str()?;
-    let maps = std::fs::read_to_string("/proc/self/maps").ok()?;
-    maps.lines().find_map(|line| {
-        let m = parse_mapping(line)?;
-        let offset = line.split(' ').nth(2).and_then(|o| usize::from_str_radix(o, 16).ok())?;
-        (m.perms == "r-xp" && m.path == exe).then(|| offset..offset + (m.end - m.start))
-    })
-}
-
-/// Rebuilds the executable's page cache in small folios when it was cached
-/// in large ones (written by an install or update): the cached pages no
-/// process maps are evicted, so the code in use is read back from disk once,
-/// as after a reboot. Run right after a drop (little of ours is mapped);
-/// returns whether it evicted.
-pub fn refresh_executable_page_cache() -> bool {
-    let Some(code) = executable_code_range() else { return false };
-    let Ok(file) = std::fs::File::open("/proc/self/exe") else { return false };
-    if !has_large_folios(&file, code) {
-        return false;
-    }
-    use std::os::fd::AsRawFd as _;
-    // Dirty pages cannot be evicted: write back what an install left (by
-    // the first drop the kernel has normally done it; then this returns at
-    // once).
-    let _ = file.sync_data();
-    // SAFETY: advice on a file descriptor we own; mapped pages stay.
-    let ok = unsafe { libc::posix_fadvise(file.as_raw_fd(), 0, 0, libc::POSIX_FADV_DONTNEED) } == 0;
-    tracing::info!("residency: the executable was cached in large folios (written by an install); evicted it so code maps back in 64 KiB pieces");
-    ok
-}
-
 /// Starts the periodic cold-page drop on the service runtime.
 pub fn start() {
     mandara_services::runtime::spawn("cold-pages", async {
@@ -209,16 +140,9 @@ pub fn start() {
         let kib = drop_clean_file_pages();
         tracing::debug!("residency: unmapped {kib} KiB of clean file pages after start-up");
         mandara_services::runtime::sleep(SETTLE.saturating_sub(EARLY)).await;
-        let mut first = true;
         loop {
             let kib = drop_clean_file_pages();
             tracing::debug!("residency: unmapped {kib} KiB of clean file pages");
-            if std::mem::take(&mut first) {
-                // Now that nothing of ours maps it (and an install's
-                // write-back has had time to finish), a large-folio page
-                // cache can be rebuilt; the code in use reads back from disk.
-                refresh_executable_page_cache();
-            }
             mandara_services::runtime::sleep(DROP_EVERY).await;
         }
     });
@@ -230,7 +154,10 @@ mod tests {
 
     #[test]
     fn classifies_mappings() {
-        let heap = parse_mapping("55c0e5757000-55c0e71d9000 rw-p 00000000 00:00 0                          [heap]").unwrap();
+        let heap = parse_mapping(
+            "55c0e5757000-55c0e71d9000 rw-p 00000000 00:00 0                          [heap]",
+        )
+        .unwrap();
         assert!(!is_droppable_file(&heap));
         let text = parse_mapping("55c0e71d9000-55c0ecf1e000 r-xp 01a81000 00:39 134162                     /usr/bin/mandara").unwrap();
         assert!(is_droppable_file(&text));
@@ -245,47 +172,201 @@ mod tests {
             let m = parse_mapping(line).unwrap();
             assert!(!is_droppable_file(&m), "{line}");
         }
-        let font = parse_mapping("7f00-7f10 r--s 00000000 00:23 5     /usr/share/fonts/inter/Inter.ttc").unwrap();
+        let font =
+            parse_mapping("7f00-7f10 r--s 00000000 00:23 5     /usr/share/fonts/inter/Inter.ttc")
+                .unwrap();
         assert!(is_droppable_file(&font));
     }
 
     #[test]
-    fn drops_only_clean_pages_and_keeps_working() {
-        // A private copy of a file page must survive; code keeps running.
-        let path = std::env::temp_dir().join(format!("mandara-residency-{}", std::process::id()));
-        std::fs::write(&path, vec![7u8; 4096 * 4]).unwrap();
-        let file = std::fs::File::open(&path).unwrap();
-        use std::os::fd::AsRawFd as _;
-        // SAFETY: a fresh private read-write mapping of our own file.
-        let p = unsafe { libc::mmap(std::ptr::null_mut(), 4096 * 4, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_PRIVATE, file.as_raw_fd(), 0) } as *mut u8;
-        assert!(!p.is_null());
-        // SAFETY: inside the mapping.
-        unsafe {
-            *p = 42;
-            libc::mprotect(p.cast(), 4096 * 4, libc::PROT_READ);
+    fn rejects_invalid_ranges_and_non_readonly_file_mappings() {
+        for line in [
+            "",
+            "Rss: 4 kB",
+            "1000-1000 r--p 0 00:00 1 /tmp/art",
+            "2000-1000 r--p 0 00:00 1 /tmp/art",
+            "no-hex r--p 0 00:00 1 /tmp/art",
+        ] {
+            assert!(parse_mapping(line).is_none(), "{line}");
         }
-        assert!(drop_clean_file_pages() > 0);
-        // SAFETY: inside the mapping.
-        assert_eq!(unsafe { *p }, 42, "a copied-on-write page was dropped");
-        // SAFETY: unmapping what we mapped.
-        unsafe { libc::munmap(p.cast(), 4096 * 4) };
-        let _ = std::fs::remove_file(path);
+        for perms in ["rw-p", "rw-s", "r-xs", "---p", "--xp"] {
+            let line = format!("1000-2000 {perms} 0 00:00 1 /tmp/art");
+            assert!(
+                !is_droppable_file(&parse_mapping(&line).unwrap()),
+                "{perms}"
+            );
+        }
+        for path in [
+            "",
+            "[heap]",
+            "/dev/zero",
+            "/memfd:art",
+            "/tmp/art (deleted)",
+        ] {
+            let line = format!("1000-2000 r--p 0 00:00 1 {path}");
+            assert!(!is_droppable_file(&parse_mapping(&line).unwrap()), "{path}");
+        }
+        let path = "/tmp/a file with spaces.png";
+        let line = format!("1000-2000 r--p 0 00:00 1                  {path}");
+        assert_eq!(parse_mapping(&line).unwrap().path, path);
     }
 
     #[test]
-    fn probes_the_executable_without_leaking_a_mapping() {
-        let code = executable_code_range().expect("the test binary has a code mapping");
-        assert!(code.end > code.start);
-        let exe = std::fs::read_link("/proc/self/exe").unwrap();
-        let exe = exe.to_str().unwrap().to_owned();
-        let maps = || std::fs::read_to_string("/proc/self/maps").unwrap().lines().filter(|l| l.ends_with(exe.as_str())).count();
-        let before = maps();
-        let file = std::fs::File::open("/proc/self/exe").unwrap();
-        // Either answer is valid (it depends on how the binary was cached);
-        // the probe must not leave its mapping behind.
-        let _ = has_large_folios(&file, code.clone());
-        assert_eq!(maps(), before, "probe mapping left behind");
-        // A range past the end of the file is refused, not probed.
-        assert!(!has_large_folios(&file, usize::MAX - 4096..usize::MAX));
+    fn skips_dirty_private_and_nonresident_pages_and_counts_only_successful_drops() {
+        let smaps = concat!(
+            "1000-2000 r--p 00000000 00:39 1 /tmp/clean\nRss: 4 kB\nAnonymous: 0 kB\nPrivate_Dirty: 0 kB\nShared_Dirty: 0 kB\n",
+            "2000-3000 r--p 00000000 00:39 2 /tmp/cow\nRss: 4 kB\nAnonymous: 4 kB\n",
+            "3000-4000 r--p 00000000 00:39 3 /tmp/private-dirty\nRss: 4 kB\nPrivate_Dirty: 4 kB\n",
+            "4000-5000 r--s 00000000 00:39 4 /tmp/shared-dirty\nRss: 4 kB\nShared_Dirty: 4 kB\n",
+            "5000-6000 rw-p 00000000 00:39 5 /tmp/writable\nRss: 4 kB\n",
+            "6000-7000 r--p 00000000 00:39 6 /tmp/absent\nRss: 0 kB\n",
+            "7000-8000 r--p 00000000 00:39 7 /tmp/refused\nRss: 4 kB\n",
+        );
+        let mut calls = Vec::new();
+        let dropped = drop_clean_mappings(smaps, |start, len| {
+            calls.push((start, len));
+            start != 0x7000
+        });
+        assert_eq!(calls, [(0x1000, 0x1000), (0x7000, 0x1000)]);
+        assert_eq!(dropped, 4);
+    }
+
+    /// An isolated file mapping; no other mapping in the test process is advised.
+    struct TestMapping {
+        pointer: *mut u8,
+        length: usize,
+        _file: tempfile::NamedTempFile,
+    }
+
+    /// tmpfs files remain dirty even after sync_all, so they cannot prove clean-page dropping.
+    fn disk_backed_fixture() -> std::io::Result<tempfile::NamedTempFile> {
+        use std::os::fd::AsRawFd as _;
+        /// Linux UAPI's RAMFS_MAGIC is not exported by libc.
+        const RAMFS_MAGIC: u32 = 0x8584_58f6;
+        let candidates = [
+            std::env::var_os("CARGO_TARGET_TMPDIR").map(std::path::PathBuf::from),
+            std::env::var_os("TMPDIR").map(std::path::PathBuf::from),
+            Some(std::path::PathBuf::from("/var/tmp")),
+        ];
+        for directory in candidates.into_iter().flatten() {
+            let Ok(file) = tempfile::Builder::new()
+                .prefix("mandara-residency-")
+                .tempfile_in(directory)
+            else {
+                continue;
+            };
+            let mut filesystem = std::mem::MaybeUninit::<libc::statfs>::uninit();
+            // SAFETY: this owns the live file descriptor and the output storage.
+            if unsafe { libc::fstatfs(file.as_file().as_raw_fd(), filesystem.as_mut_ptr()) } != 0 {
+                continue;
+            }
+            // SAFETY: a successful fstatfs initialized the complete output structure.
+            let filesystem = unsafe { filesystem.assume_init() };
+            if ![
+                libc::TMPFS_MAGIC as u32,
+                RAMFS_MAGIC,
+                libc::HUGETLBFS_MAGIC as u32,
+            ]
+            .contains(&(filesystem.f_type as u32))
+            {
+                return Ok(file);
+            }
+        }
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "no writable disk-backed scratch directory; set CARGO_TARGET_TMPDIR to a private non-tmpfs directory",
+        ))
+    }
+
+    impl TestMapping {
+        fn new() -> Self {
+            use std::os::fd::AsRawFd as _;
+            // SAFETY: sysconf has no pointer arguments or side effects.
+            let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+            assert!(page > 0);
+            let length = usize::try_from(page).unwrap() * 4;
+            let mut file = disk_backed_fixture()
+                .expect("a clean-file residency test requires disk-backed scratch storage");
+            use std::io::Write as _;
+            file.write_all(&vec![7; length]).unwrap();
+            file.as_file().sync_all().unwrap();
+            // SAFETY: a private read-write mapping of the fixture file, retained below.
+            let pointer = unsafe {
+                libc::mmap(
+                    std::ptr::null_mut(),
+                    length,
+                    libc::PROT_READ | libc::PROT_WRITE,
+                    libc::MAP_PRIVATE,
+                    file.as_file().as_raw_fd(),
+                    0,
+                )
+            };
+            assert_ne!(
+                pointer,
+                libc::MAP_FAILED,
+                "{}",
+                std::io::Error::last_os_error()
+            );
+            Self {
+                pointer: pointer.cast(),
+                length,
+                _file: file,
+            }
+        }
+
+        fn make_readonly(&self) {
+            // SAFETY: the complete live mapping owned by this fixture.
+            let result =
+                unsafe { libc::mprotect(self.pointer.cast(), self.length, libc::PROT_READ) };
+            assert_eq!(result, 0, "{}", std::io::Error::last_os_error());
+        }
+
+        fn drop_clean_pages(&self) -> usize {
+            let smaps = std::fs::read_to_string("/proc/self/smaps").unwrap();
+            drop_clean_mappings(&smaps, |start, length| {
+                if start != self.pointer as usize {
+                    return false;
+                }
+                assert_eq!(length, self.length);
+                // SAFETY: only this fixture's clean, read-only mapping reaches this branch.
+                unsafe { libc::madvise(self.pointer.cast(), self.length, libc::MADV_DONTNEED) == 0 }
+            })
+        }
+    }
+
+    impl Drop for TestMapping {
+        fn drop(&mut self) {
+            // SAFETY: unmapping the exact live region owned by this fixture.
+            let result = unsafe { libc::munmap(self.pointer.cast(), self.length) };
+            assert_eq!(result, 0, "{}", std::io::Error::last_os_error());
+        }
+    }
+
+    #[test]
+    fn a_clean_file_mapping_refaults_with_the_same_bytes() {
+        let mapping = TestMapping::new();
+        // SAFETY: first byte of our live readable mapping.
+        assert_eq!(unsafe { mapping.pointer.read_volatile() }, 7);
+        mapping.make_readonly();
+        assert!(mapping.drop_clean_pages() > 0);
+        // SAFETY: the mapping remains readable after dropping its resident pages.
+        assert_eq!(unsafe { mapping.pointer.read_volatile() }, 7);
+    }
+
+    #[test]
+    fn copied_on_write_data_survives_after_becoming_readonly() {
+        let mapping = TestMapping::new();
+        // SAFETY: first byte of our live writable private mapping.
+        unsafe {
+            mapping.pointer.write_volatile(42);
+        }
+        mapping.make_readonly();
+        assert_eq!(
+            mapping.drop_clean_pages(),
+            0,
+            "a private copy must not be advised away"
+        );
+        // SAFETY: the mapping remains readable.
+        assert_eq!(unsafe { mapping.pointer.read_volatile() }, 42);
     }
 }

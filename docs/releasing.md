@@ -575,7 +575,9 @@ of the real config, a demo MPRIS player and private PipeWire, the shell in
 a scope that cannot swap; *settled* is 80 s after start (35 s after the
 first drop), *activity* is 5 minutes of opening media and quick settings,
 the launcher, a notification and a track change every 25 s with audio
-playing. RSS / file-backed / code, MiB:
+playing. This historical comparison includes the executable-cache discard
+that has since been removed; it does not describe the current memory limit.
+RSS / file-backed / code, MiB:
 
 | Build | Page cache | Settled | After activity | Panel frames p50 / build p95 | Launcher IPC | Audio CPU | Start → IPC |
 |---|---|---|---|---|---|---|---|
@@ -586,27 +588,22 @@ playing. RSS / file-backed / code, MiB:
 Settled code varies 15–23 MiB between runs (which minute boundary, weather
 fetch or D-Bus burst falls before the snapshot); file-backed memory also
 holds libLLVM / RADV / font pages. After activity the code stays until the
-next 10-minute drop: these two changes fix the 2× penalty of a freshly
-written binary, not the working set itself (see PGO below). Start-up and
-audio-visualizer CPU of the same two changes on top of the `opt-level`
-list below, on a quiet machine: 321 ms and 1.73 % (before: 300 ms,
+next 10-minute drop. These historical runs reduced the resident code of a
+freshly written binary without shrinking its working set (see PGO below).
+They do not establish the memory use after removing executable-cache discard.
+Start-up and audio-visualizer CPU of that earlier pair of changes on top
+of the `opt-level` list below, on a quiet machine: 321 ms and 1.73 % (before: 300 ms,
 1.98 %); the final binary was only re-timed under an unrelated 27-core
 build, so re-check those two on a quiet machine before quoting them.
 
-* **Page-cache refresh** (`residency.rs`,
-  `refresh_executable_page_cache`): writing the binary (`mandara install`'s copy,
-  the self-updater, a package manager, the linker) leaves it in the page
-  cache as 256 KiB and larger folios, and every function run then keeps the
-  whole folio around it resident — twice the code — until the file is
-  evicted, which on a machine with free memory means until reboot. Right
-  after the 45 s drop the shell probes its own mapping (one
-  already-cached page touched at 32 places of a throw-away private mapping,
-  `/proc/self/pagemap` read around each) and, when a fault mapped more than
-  the 64 KiB window, writes back and evicts the binary's page cache
-  (`POSIX_FADV_DONTNEED`; pages other processes map stay). The code in use
-  is read back from disk once, in small folios: once per install, like the
-  first start after a reboot. Doing it at start instead cost 2.9 s of
-  start-up while the install's write-back was pending.
+* **Clean mapping cleanup** (`residency.rs`): read-only file mappings
+  without private copies or dirty pages are still advised with
+  `MADV_DONTNEED` after 8 s, after 45 s and every 10 minutes afterwards.
+  The shell no longer probes or discards the running executable's file
+  cache. That forced discard caused disk faults and slow frames at the
+  45 s cleanup in release tests. The table above describes the older
+  page-cache-refresh experiment; it is not a memory ceiling for the
+  current behavior. The kernel controls ordinary file-cache reclaim.
 * **Cold functions grouped** (`mandara-app/build.rs`,
   `-z keep-text-section-prefix`): what LLVM marks cold (`#[cold]`, panic and
   error paths) goes to its own 2.2 MB `.text.unlikely` instead of sitting
@@ -666,8 +663,8 @@ opening and closing the sidebar, the launcher and a panel.
 * **An early cold-page drop** (`residency.rs`, `EARLY` = 8 s): the drop
   described above also runs 8 s after start. The shell is up and has drawn
   within about a second; what the idle shell still runs maps back with a
-  minor fault. The 45 s drop (with the page-cache refresh) and the
-  10-minute ones are unchanged. −73 to −83 MiB resident from 8 s to 45 s.
+  minor fault. The 45 s and 10-minute clean-mapping drops remain;
+  the executable-cache discard has since been removed. −73 to −83 MiB resident from 8 s to 45 s.
 * **One face per fallback-chain family** (`vendor/gpui_wgpu` patch 11, and
   `lock::paint::TextPainter` asking a fallback family for its weight only
   when the text reaches it): an English desktop mapped and parsed every
