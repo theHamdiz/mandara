@@ -677,6 +677,7 @@ fn sheet(c: &Ctx, g: u16) -> AnyElement {
             flash(&ui4, true, copied_meaning.into());
         })
     });
+    let copy_image = super::share::button("quran-sheet-image", c, g, INNER_W, super::share::Style::Reader { meaning: c.shared.borrow().state.study && has_meaning });
     let web = pill_button("quran-sheet-web", Some("external"), "quran.com", palette.on_surface_variant, palette, move |_, _| open_link(link(r)));
     div()
         .absolute()
@@ -694,10 +695,13 @@ fn sheet(c: &Ctx, g: u16) -> AnyElement {
                 .flex_col()
                 .gap(px(tokens::SM))
                 .child(div().row().items_center().gap(px(tokens::SM)).child(kicker(c.book.reference(g), palette).font_features(tabular_nums())).child(div().flex_1()).child(close))
-                .child(div().row().flex_wrap().items_center().gap(px(tokens::XS + 2.0)).child(play_btn).child(pin).child(copy).when_some(with_meaning, |el, b| el.child(b)).child(web)),
+                .child(div().row().flex_wrap().items_center().gap(px(tokens::XS + 2.0)).child(play_btn).child(pin).child(copy).when_some(with_meaning, |el, b| el.child(b)).child(copy_image).child(web)),
         )
         .into_any_element()
 }
+
+/// The selected-ayah export keeps the study row’s existing padding.
+pub(super) const SHARE_PAD: f32 = STUDY_PAD;
 
 #[cfg(test)]
 mod tests {

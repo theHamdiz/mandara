@@ -34,7 +34,7 @@ use gpui::{
     prelude::FluentBuilder as _, px, relative, size,
 };
 use mandara_core::{ToGpui, oklab_gradient};
-use mandara_i18n::{t, tf, tk};
+use mandara_i18n::{Lang, t, tf, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
 use mandara_services::NotificationCommand;
 use mandara_services::progress::{self as pg, Amount, Board, Status, Task};
@@ -49,6 +49,11 @@ use crate::icons::{icon, ring, stroke_arc};
 use crate::kit::{icon_button, reveal, text};
 
 pub const ID: &str = "progress";
+
+mod order;
+mod state;
+use order::ordered_tasks;
+use state::TaskState;
 
 // ── Layout ───────────────────────────────────────────────────────────────
 
@@ -154,21 +159,7 @@ fn task_json(task: &Task, now: i64) -> serde_json::Value {
 
 /// A task's state colour (not yet made readable).
 fn tint(task: &Task, now: i64, palette: &MandaraPalette) -> Color {
-    match task.status {
-        Status::Done => palette.success_emerald,
-        Status::Failed => palette.urgent_coral,
-        Status::Running if task.stalled(now) => palette.warning_amber,
-        Status::Running => palette.primary,
-    }
-}
-
-fn status_label(task: &Task, now: i64) -> &'static str {
-    match task.status {
-        Status::Done => t("Done"),
-        Status::Failed => t("Failed"),
-        Status::Running if task.stalled(now) => t("Stalled"),
-        Status::Running => t("Running"),
-    }
+    TaskState::from(task).color(now, palette)
 }
 
 /// Seconds since the process started, for animation phases.
@@ -214,15 +205,14 @@ fn progress_bar(fraction: Option<f64>, color: Color, palette: &MandaraPalette) -
 struct RowText {
     id: SharedString,
     label: SharedString,
-    status: &'static str,
     amount: Option<SharedString>,
     detail: SharedString,
     fraction: Option<f64>,
-    tint: Color,
+    state: TaskState,
     finished: bool,
 }
 
-fn row_text(task: &Task, now: i64, palette: &MandaraPalette) -> RowText {
+fn row_text(task: &Task, now: i64) -> RowText {
     let mut detail = vec![duration_short(task.elapsed_ms(now) / MS_PER_S)];
     if let Some(eta) = task.eta_ms() {
         detail.push(tf("about {time} left", &[("time", &duration_short(eta.max(MS_PER_S) / MS_PER_S))]));
@@ -237,18 +227,18 @@ fn row_text(task: &Task, now: i64, palette: &MandaraPalette) -> RowText {
     RowText {
         id: task.id.clone().into(),
         label: task.label.clone().into(),
-        status: status_label(task, now),
         amount,
         detail: detail.join(" · ").into(),
         // Only a running task without a value shimmers; a finished one sits still.
         fraction: task.fraction().or((task.status != Status::Running).then_some(0.0)),
-        tint: tint(task, now, palette),
+        state: TaskState::from(task),
         finished: task.status != Status::Running,
     }
 }
 
-fn row(i: usize, r: &RowText, palette: &MandaraPalette, mono: &SharedString) -> AnyElement {
-    let tint = readable(r.tint, palette);
+fn row(i: usize, r: &RowText, now: i64, palette: &MandaraPalette, mono: &SharedString) -> AnyElement {
+    let base = r.state.color(now, palette);
+    let tint = readable(base, palette);
     let id = r.id.to_string();
     let pill = div()
         .h(px(PILL_H_PX))
@@ -261,7 +251,7 @@ fn row(i: usize, r: &RowText, palette: &MandaraPalette, mono: &SharedString) -> 
         .text_size(px(text::LABEL))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(tint.hsla())
-        .child(r.status);
+        .child(r.state.label(now));
     glass_card(palette)
         .h(px(ROW_H))
         .px(px(ROW_PAD_X_PX))
@@ -283,7 +273,7 @@ fn row(i: usize, r: &RowText, palette: &MandaraPalette, mono: &SharedString) -> 
                     }))
                 }),
         )
-        .child(progress_bar(r.fraction, r.tint, palette))
+        .child(progress_bar(r.fraction, base, palette))
         .child(
             div()
                 .flex()
@@ -300,11 +290,29 @@ fn panel_height(rows: usize, more: bool) -> f32 {
     PAD * 2.0 + HEADER_H + GAP + body
 }
 
+/// Formatted task text depends on the board, elapsed second and resolved locale.
+#[derive(Default)]
+struct RowCache {
+    entry: Option<((u64, i64, Lang), Rc<[RowText]>)>,
+}
+
+impl RowCache {
+    /// Retain only visible formatted rows, rebuilding after a data, second or locale change.
+    fn get(&mut self, board: &Board, revision: u64, now: i64) -> Rc<[RowText]> {
+        let key = (revision, now / MS_PER_S, mandara_i18n::language());
+        if let Some((previous, rows)) = &self.entry && *previous == key {
+            return rows.clone();
+        }
+        let rows: Rc<[RowText]> = ordered_tasks(&board.tasks).take(MAX_ROWS).map(|task| row_text(task, now)).collect();
+        self.entry = Some((key, rows.clone()));
+        rows
+    }
+}
+
 struct PanelView {
     p: PanelCx,
     size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>,
-    /// Rows formatted for `(revision, second)`.
-    cache: RefCell<Option<((u64, i64), Rc<[RowText]>)>>,
+    cache: RefCell<RowCache>,
 }
 
 impl PanelView {
@@ -314,23 +322,10 @@ impl PanelView {
         let (rows, more, running, finished, any_unknown, next) = {
             let pr = m.read(cx);
             let b = &pr.board;
-            // Running first (newest first), then finished.
-            let mut order: Vec<&Task> = b.running().collect();
-            order.extend(b.tasks.iter().filter(|t| t.status != Status::Running));
-            let more = order.len().saturating_sub(MAX_ROWS);
-            order.truncate(MAX_ROWS);
-            let key = (pr.rev, now / MS_PER_S);
-            let mut cache = self.cache.borrow_mut();
-            let rows = match cache.as_ref() {
-                Some((k, rows)) if *k == key => rows.clone(),
-                _ => {
-                    let rows: Rc<[RowText]> = order.iter().map(|t| row_text(t, now, palette)).collect();
-                    *cache = Some((key, rows.clone()));
-                    rows
-                }
-            };
+            let more = b.tasks.len().saturating_sub(MAX_ROWS);
+            let rows = self.cache.borrow_mut().get(b, pr.rev, now);
             let running = b.running().count();
-            (rows, more, running, b.tasks.len() - running, order.iter().any(|t| t.status == Status::Running && t.amount.is_none()), b.next_change(now))
+            (rows, more, running, b.tasks.len() - running, ordered_tasks(&b.tasks).take(MAX_ROWS).any(|task| task.status == Status::Running && task.amount.is_none()), b.next_change(now))
         };
         if self.p.progress() > 0.0 {
             if any_unknown {
@@ -364,7 +359,7 @@ impl PanelView {
                 .flex()
                 .flex_col()
                 .gap(px(ROW_GAP))
-                .children(rows.iter().enumerate().map(|(i, r)| reveal(&self.p, i + 1, row(i, r, palette, &mono))))
+                .children(rows.iter().enumerate().map(|(i, r)| reveal(&self.p, i + 1, row(i, r, now, palette, &mono))))
                 .when(more > 0, |el| el.child(caption(tf("+{n} more (mandara msg progress list)", &[("n", &more)]), palette).h(px(MORE_H)).flex().items_center().justify_center()))
                 .into_any_element()
         };
@@ -528,6 +523,37 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A locale change rebuilds text; a theme frame reuses it with live semantic colours.
+    #[test]
+    fn row_cache_tracks_locale_without_freezing_theme_colours() {
+        let mut board = Board::default();
+        board.start("build", "Build", 1).unwrap();
+        let mut cache = RowCache::default();
+        let english = {
+            let _language = mandara_i18n::scoped(Some(Lang::En));
+            let rows = cache.get(&board, 1, 1000);
+            assert!(Rc::ptr_eq(&rows, &cache.get(&board, 1, 1000)));
+            assert_eq!(rows[0].state.label(1000), "Running");
+            rows
+        };
+        let _language = mandara_i18n::scoped(Some(Lang::Ar));
+        let arabic = cache.get(&board, 1, 1000);
+        assert!(!Rc::ptr_eq(&english, &arabic));
+        assert_eq!(arabic[0].state.label(1000), mandara_i18n::t_in(Lang::Ar, "Running"));
+        let theme = &mandara_theme::catalog::builtin()[0];
+        let light = theme.palette(false);
+        let dark = theme.palette(true);
+        assert_ne!(light.primary, dark.primary, "fixture palettes must have distinct primary tokens");
+        assert_eq!(arabic[0].state.color(1000, &light), light.primary);
+        assert_eq!(arabic[0].state.color(1000, &dark), dark.primary);
+        assert!(Rc::ptr_eq(&arabic, &cache.get(&board, 1, 1000)), "theme sampling must not reformat unchanged text");
+        let later = cache.get(&board, 1, 2000);
+        assert!(!Rc::ptr_eq(&arabic, &later));
+        let changed = cache.get(&board, 2, 2000);
+        assert!(!Rc::ptr_eq(&later, &changed));
+        eprintln!("progress rows: cached RowText={} B, semantic TaskState={} B, RowCache={} B", size_of::<RowText>(), size_of::<TaskState>(), size_of::<RowCache>());
+    }
 
     #[test]
     fn panel_height_fits_rows() {

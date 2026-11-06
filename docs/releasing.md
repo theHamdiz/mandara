@@ -426,13 +426,23 @@ another version and an unsigned release.
 Release and CI builds use `mandara-app`'s default feature,
 `alloc-system-tuned`: glibc malloc limited to 2 arenas (`mallopt(M_ARENA_MAX)`
 at startup) with a fixed 512 KiB mmap threshold (see [Resource
-budget](#resource-budget)), plus `malloc_trim(0)` every 30 s on the service
-runtime. There's
-no C allocator, so the shell stays pure Rust. The other allocators remain
+budget](#resource-budget)). Clipboard and media views request `malloc_trim(0)`
+after releasing their cached images; a 30 s fallback also catches other freed
+storage. Requests coalesce and run on a short-lived blocking worker, outside
+the UI and shared service executor threads. No second allocator is loaded.
+The other allocators remain
 selectable (`--no-default-features --features alloc-jemalloc |
 alloc-mimalloc | alloc-mimalloc-v2 | alloc-system`), and CI checks that each
 one builds. mimalloc and jemalloc compile C code with the runner's
 `build-essential` (native x86_64 and aarch64 runners, no cross-compiling).
+
+Thumbnail batches decode sequentially and deliver each result through a bounded
+channel. Page changes wait for the current worker; closing invalidates its
+generation so old results cannot refill an evicted cache. Cache capacity and
+retained image headers are allocated before transient decode buffers. Bulk
+eviction releases the images and spare cache capacity before requesting a trim.
+glibc can then return whole free pages from all arenas, though live allocations
+and fragmentation can still keep pages resident.
 
 Measured on 2026-10-27 on the development machine: dev profile (dependencies
 at opt-level 3), MangoWM at 2560×1440 logical, the real shell restarted once

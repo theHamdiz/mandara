@@ -139,6 +139,7 @@ pub struct LyricsPane {
     rows: u32,
     query: Option<TrackQuery>,
     state: State,
+    generation: u64,
     scroll: SpringValue<f32>,
     clock: FrameClock,
 }
@@ -177,7 +178,7 @@ fn same_track(q: &TrackQuery, state: &MediaState) -> bool {
 
 impl LyricsPane {
     pub fn new() -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self { rows: DEFAULT_ROWS, query: None, state: State::Idle, scroll: SpringValue::new(0.0, SCROLL), clock: FrameClock::new() }))
+        Rc::new(RefCell::new(Self { rows: DEFAULT_ROWS, query: None, state: State::Idle, generation: 0, scroll: SpringValue::new(0.0, SCROLL), clock: FrameClock::new() }))
     }
 
     /// Follows the playing track; fetches only when `fetch` (panel open).
@@ -186,6 +187,7 @@ impl LyricsPane {
         let mut me = this.borrow_mut();
         if !me.query.as_ref().is_some_and(|q| same_track(q, state)) {
             me.query = Some(query_for(state));
+            me.generation = me.generation.wrapping_add(1);
             me.state = State::Idle;
             me.scroll = SpringValue::new(0.0, SCROLL);
         }
@@ -194,38 +196,58 @@ impl LyricsPane {
             return;
         }
         let Some(q) = me.query.clone() else { return };
-        me.state = State::Loading;
+        let generation = me.begin_lookup();
         drop(me);
         let task = cx.background_executor().spawn({
             let q = q.clone();
             async move { lyrics::fetch(&q).map(Sheet::prepare) }
         });
         let view = window.current_view();
-        let this = this.clone();
+        let this = Rc::downgrade(this);
         cx.spawn(async move |cx| {
             let result = task.await;
+            let Some(this) = this.upgrade() else {
+                drop(result);
+                mandara_services::memory::request_trim();
+                return;
+            };
             {
                 let mut me = this.borrow_mut();
-                if me.query.as_ref() != Some(&q) {
+                if !me.finish_lookup(generation, &q, result) {
+                    mandara_services::memory::request_trim();
                     return;
                 }
-                me.state = match result {
-                    Ok(outcome) => State::Ready(outcome),
-                    Err(err) => {
-                        tracing::debug!("lyrics: {err}");
-                        State::Failed(Instant::now())
-                    }
-                };
             }
             cx.update(|cx| cx.notify(view));
         })
         .detach();
     }
 
+    fn begin_lookup(&mut self) -> u64 {
+        self.generation = self.generation.wrapping_add(1);
+        self.state = State::Loading;
+        self.generation
+    }
+
+    fn finish_lookup(&mut self, generation: u64, query: &TrackQuery, result: Result<Outcome, String>) -> bool {
+        if self.generation != generation || self.query.as_ref() != Some(query) || !matches!(self.state, State::Loading) {
+            return false;
+        }
+        self.state = match result {
+            Ok(outcome) => State::Ready(outcome),
+            Err(error) => {
+                tracing::debug!("lyrics: {error}");
+                State::Failed(Instant::now())
+            }
+        };
+        true
+    }
+
     /// Frees fetched lyric text (the panel closed). Small outcomes (not
     /// found, instrumental, a failure) are kept so the pane reopens saying
     /// the same; lyrics are re-read from the disk cache on reopen.
     pub fn release(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
         if matches!(self.state, State::Ready(Outcome::Sheet(_)) | State::Loading) {
             self.state = State::Idle;
         }
@@ -413,6 +435,44 @@ mod tests {
         pane.borrow_mut().release();
         assert!(matches!(pane.borrow().state, State::Idle), "text is freed on close");
         assert_eq!(pane_height(4), pane_height(5), "the setting is normalised like set_rows");
+    }
+
+    #[test]
+    fn released_lyrics_cannot_be_restored_by_a_late_lookup() {
+        let pane = LyricsPane::new();
+        let query = make_query("A", "Track", "Album", None);
+        let mut pane = pane.borrow_mut();
+        pane.query = Some(query.clone());
+        let old = pane.begin_lookup();
+        pane.release();
+        assert!(!pane.finish_lookup(old, &query, Ok(Sheet::prepare(Lyrics::Plain(vec!["old".into()])))));
+        assert!(matches!(pane.state, State::Idle));
+        let reopened = pane.begin_lookup();
+        assert!(!pane.finish_lookup(old, &query, Ok(Outcome::NotFound)));
+        assert!(matches!(pane.state, State::Loading));
+        assert!(pane.finish_lookup(reopened, &query, Ok(Sheet::prepare(Lyrics::Plain(vec!["new".into()])))));
+        let State::Ready(Outcome::Sheet(sheet)) = &pane.state else { panic!("current lyrics were discarded") };
+        assert_eq!(sheet.rows[0].text.as_ref(), "new");
+    }
+
+    #[test]
+    fn returning_to_a_previous_track_rejects_its_old_lookup() {
+        let pane = LyricsPane::new();
+        let a = make_query("A", "Track A", "Album", None);
+        let b = make_query("A", "Track B", "Album", None);
+        let mut pane = pane.borrow_mut();
+        pane.query = Some(a.clone());
+        let first = pane.begin_lookup();
+        pane.query = Some(b.clone());
+        let second = pane.begin_lookup();
+        pane.query = Some(a.clone());
+        let third = pane.begin_lookup();
+        assert!(!pane.finish_lookup(first, &a, Ok(Outcome::Instrumental)));
+        assert!(!pane.finish_lookup(second, &b, Ok(Outcome::NotFound)));
+        assert!(pane.finish_lookup(third, &a, Err("offline".into())));
+        assert!(matches!(pane.state, State::Failed(_)));
+        pane.release();
+        assert!(matches!(pane.state, State::Failed(_)), "small cached outcomes survive closing");
     }
 
     #[test]

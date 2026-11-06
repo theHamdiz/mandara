@@ -78,6 +78,7 @@ const SLIDE_REST_PX: f32 = 0.3;
 
 /// What a card shows.
 pub(super) struct Shown<'a> {
+    pub source: super::share::Source,
     pub collection: Collection,
     pub reference: &'a str,
     pub key: &'a str,
@@ -307,6 +308,7 @@ fn actions(c: &Ctx, s: &Shown, mode: &Mode) -> AnyElement {
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(cite.clone()));
             f1.show(true, cited);
         });
+    let copy_image = super::share::button(c, s, matches!(mode, Mode::Hero));
     let shared = c.shared.clone();
     let mut row = div()
         .w_full()
@@ -319,6 +321,7 @@ fn actions(c: &Ctx, s: &Shown, mode: &Mode) -> AnyElement {
         .child(icon_button("hadith-bookmark", "bookmark", ACTION_BTN, if bookmarked { g } else { ink }, bookmarked.then(|| g.with_alpha(alpha(CHIP_FILL, palette))), move |_, cx| {
             super::toggle_bookmark(&shared, &key, cx);
         }))
+        .child(copy_image)
         .child(icon_button("hadith-copy", "copy", ACTION_BTN, ink, None, move |_, cx| {
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(plain.clone()));
             f2.show(true, copied);
@@ -335,3 +338,18 @@ fn actions(c: &Ctx, s: &Shown, mode: &Mode) -> AnyElement {
     }
     row.into_any_element()
 }
+
+/// The image export follows the same manuscript layout and colours.
+pub(super) const SHARE_PAD_X: f32 = PAD_X;
+pub(super) const SHARE_PAD_TOP: f32 = PAD_TOP;
+pub(super) const SHARE_PAD_BOTTOM: f32 = PAD_BOTTOM;
+pub(super) const SHARE_GAP: f32 = BLOCK_GAP;
+pub(super) const SHARE_HEADPIECE_SHARE: f32 = HEADPIECE_SHARE;
+pub(super) const SHARE_LABEL_PX: f32 = LABEL_PX;
+pub(super) const SHARE_LABEL_LINE: f32 = BADGE_H;
+pub(super) const SHARE_CHAIN_PX: f32 = CHAIN_PX;
+pub(super) const SHARE_CENTRED_MAX: usize = CENTRED_MEANING_MAX;
+pub(super) fn share_ground(palette: &MandaraPalette) -> (Color, Color) { ground(palette) }
+
+/// The manuscript glow keeps the same origin in both renderers.
+pub(super) const SHARE_DAWN_TOP: f32 = DAWN_TOP;

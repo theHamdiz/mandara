@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use gpui::{AnyElement, App, FontWeight, SharedString, InteractiveElement, IntoElement, ParentElement, Pixels, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px, size};
 use mandara_core::{ToGpui, oklab_gradient};
-use mandara_i18n::{t, tf, tk, tr};
+use mandara_i18n::{Lang, t, tf, tk, tr};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
 use mandara_services::soundscapes::{self as ss, LAYERS, Layer, PRESETS, Soundscapes};
 use mandara_theme::{Color, MandaraPalette};
@@ -377,7 +377,12 @@ thread_local! {
     static SLEEP_LABELS: Vec<SharedString> = SLEEP_CHOICES.iter().map(|m| SharedString::from(format!("{m} m"))).collect();
 }
 
-fn timer(flash: &Flash, countdown: &mut Cached<u64>, palette: &MandaraPalette) -> AnyElement {
+/// The same remaining second must still translate after a language change.
+fn stops_in(countdown: &mut Cached<(Lang, u64)>, seconds: u64) -> SharedString {
+    countdown.get((mandara_i18n::language(), seconds), |(_, seconds)| tf("Stops in {time}", &[("time", &mmss(Duration::from_secs(*seconds)))]))
+}
+
+fn timer(flash: &Flash, countdown: &mut Cached<(Lang, u64)>, palette: &MandaraPalette) -> AnyElement {
     let m = mixer();
     let remaining = m.params().sleep_remaining();
     let selected = remaining.map(|(_, total)| total.as_secs() / SECS_PER_MIN);
@@ -412,7 +417,7 @@ fn timer(flash: &Flash, countdown: &mut Cached<u64>, palette: &MandaraPalette) -
     let info: AnyElement = match remaining {
         Some((left, total)) => {
             let accent = readable(palette.primary, palette);
-            let stops = countdown.get(left.as_secs(), |s| tf("Stops in {time}", &[("time", &mmss(Duration::from_secs(*s)))]));
+            let stops = stops_in(countdown, left.as_secs());
             div()
                 .h(px(TIMER_INFO_H))
                 .flex()
@@ -452,14 +457,36 @@ fn panel_height(error: bool) -> f32 {
         + if error { GAP + TIMER_INFO_H } else { 0.0 }
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum Playback {
+    Playing,
+    Fading,
+    #[default]
+    Paused,
+}
+
+type SubtitleKey = (Lang, Option<&'static str>, Playback);
+
+/// A locale switch reformats the subtitle without changing or restarting audio.
+fn subtitle(cache: &mut Cached<SubtitleKey>, preset: Option<&'static str>, playback: Playback) -> SharedString {
+    cache.get((mandara_i18n::language(), preset, playback), |(_, label, playback)| {
+        let mix_name = label.map(tr).unwrap_or_else(|| t("Custom mix").to_string());
+        let status = match playback {
+            Playback::Playing => t("Playing"),
+            Playback::Fading => t("Fading out…"),
+            Playback::Paused => t("Paused"),
+        };
+        format!("{mix_name} · {status}")
+    })
+}
+
 struct View {
     p: PanelCx,
     size_cell: Rc<Cell<gpui::Size<Pixels>>>,
     flash: Flash,
-    /// Header subtitle keyed by `(preset, status)`.
-    subtitle: RefCell<Cached<(Option<&'static str>, u8)>>,
-    /// "Stops in …" keyed by whole seconds left.
-    countdown: RefCell<Cached<u64>>,
+    subtitle: RefCell<Cached<SubtitleKey>>,
+    /// "Stops in …" keyed by locale and whole seconds left.
+    countdown: RefCell<Cached<(Lang, u64)>>,
 }
 
 impl View {
@@ -481,20 +508,8 @@ impl View {
         let radius = PanelShape::of(cx).inner(PAD);
         let accent = readable(palette.primary, palette);
         let preset = m.current_preset();
-        /// Status keys for the cached subtitle.
-        const PLAYING: u8 = 0;
-        const FADING: u8 = 1;
-        const PAUSED: u8 = 2;
-        let status = if playing { PLAYING } else if params.is_running() { FADING } else { PAUSED };
-        let subtitle = self.subtitle.borrow_mut().get((preset.map(|p| p.label), status), |(label, status)| {
-            let mix_name = label.map(tr).unwrap_or_else(|| t("Custom mix").to_string());
-            let status = match *status {
-                PLAYING => t("Playing"),
-                FADING => t("Fading out…"),
-                _ => t("Paused"),
-            };
-            format!("{mix_name} · {status}")
-        });
+        let status = if playing { Playback::Playing } else if params.is_running() { Playback::Fading } else { Playback::Paused };
+        let subtitle = subtitle(&mut self.subtitle.borrow_mut(), preset.map(|preset| preset.label), status);
         let head = header("waves", accent, t("Soundscapes"), subtitle, palette, Some(play_button(playing, params.output_level(), &self.flash, palette)));
         let master = big_slider("ss-master", params.master(), "volume-high", false, palette, |v, window, _| {
             mixer().set_master(v);
@@ -629,6 +644,24 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Unchanged audio state and seconds still pick up a live language change.
+    #[test]
+    fn cached_labels_follow_locale_without_changing_playback() {
+        let mut subtitle_cache = Cached::default();
+        let mut countdown = Cached::default();
+        let (english, english_countdown) = {
+            let _language = mandara_i18n::scoped(Some(Lang::En));
+            let english = subtitle(&mut subtitle_cache, None, Playback::Playing);
+            assert_eq!(english.as_ref(), "Custom mix · Playing");
+            assert_eq!(subtitle_cache.get((Lang::En, None, Playback::Playing), |_| panic!("warm subtitle reformatted")), english);
+            (english, stops_in(&mut countdown, 61))
+        };
+        let _language = mandara_i18n::scoped(Some(Lang::Ar));
+        assert_ne!(subtitle(&mut subtitle_cache, None, Playback::Playing), english);
+        assert_ne!(stops_in(&mut countdown, 61), english_countdown);
+        assert_eq!(subtitle_cache.get((Lang::Ar, None, Playback::Playing), |_| panic!("warm Arabic subtitle reformatted")), subtitle(&mut subtitle_cache, None, Playback::Playing));
+    }
 
     #[test]
     fn countdown_text() {

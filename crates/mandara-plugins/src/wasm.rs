@@ -20,6 +20,9 @@ use wasmtime::component::{Component, HasSelf, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
+mod catalogs;
+pub use catalogs::PluginCatalogs;
+
 wasmtime::component::bindgen!({ world: "plugin", path: "wit" });
 
 /// The `desktop-plugin` world: `plugin` plus desktop widgets. Its shared
@@ -211,46 +214,6 @@ pub struct HostState {
     i18n: PluginCatalogs,
 }
 
-/// A plugin's own translations (`<plugin dir>/locales/<code>.toml`),
-/// loaded on first use per language.
-pub struct PluginCatalogs {
-    dir: PathBuf,
-    loaded: std::collections::HashMap<mandara_i18n::Lang, Option<mandara_i18n::Catalog>>,
-}
-
-impl PluginCatalogs {
-    pub fn new(plugin_dir: &Path) -> Self {
-        Self { dir: plugin_dir.join("locales"), loaded: Default::default() }
-    }
-
-    /// `text` in the current language, or unchanged.
-    pub fn translate(&mut self, text: &str) -> String {
-        let lang = mandara_i18n::language();
-        if lang == mandara_i18n::Lang::En || text.is_empty() {
-            return text.to_string();
-        }
-        let dir = &self.dir;
-        let catalog = self.loaded.entry(lang).or_insert_with(|| {
-            let path = dir.join(format!("{}.toml", lang.code()));
-            let text = std::fs::read_to_string(&path).ok()?;
-            mandara_i18n::Catalog::parse(&text).map_err(|e| tracing::warn!("{}: {e}", path.display())).ok()
-        });
-        catalog.as_ref().and_then(|c| c.get(text)).unwrap_or(text).to_string()
-    }
-
-    /// Translates the labels of a view in place.
-    fn translate_view(&mut self, view: &mut View) {
-        if mandara_i18n::language() == mandara_i18n::Lang::En {
-            return;
-        }
-        for n in &mut view.nodes {
-            if matches!(n.kind, Kind::Text | Kind::Button) {
-                n.text = self.translate(&n.text);
-            }
-        }
-    }
-}
-
 impl WasiView for HostState {
     fn ctx(&mut self) -> WasiCtxView<'_> {
         WasiCtxView { ctx: &mut self.wasi, table: &mut self.table }
@@ -289,7 +252,7 @@ impl mandara::plugin::host::Host for HostState {
     }
 
     fn translate(&mut self, text: String) -> String {
-        self.i18n.translate(&text)
+        self.i18n.translate_owned(text)
     }
 }
 

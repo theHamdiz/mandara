@@ -116,9 +116,72 @@ launcher. Editing history creates a private copy; simply opening a panel does
 not duplicate its text. Window previews transfer their pixel buffers to the
 renderer and release closed-window images on the existing window-list events.
 
+Palette copies and color transitions share the theme name. The displayed text
+and saved palette format stay the same; custom names remain as written.
+
+Input-region updates reuse their rectangle and pixel-bound buffers between
+frames; unchanged regions do not reach the compositor. Process sampling keeps
+small file buffers between updates and releases unusually large command-line
+buffers after each sample. CPU tables are read through a fixed-size window
+until EOF, so the number of CPUs is not limited by that window. These changes
+do not establish a new memory ceiling; the release measurements above remain
+the reference until the complete workload is measured again.
+
 Snipping and eyedropper overlays reuse the captured frame instead of retaining
 both RGBA and BGRA copies. Public login widgets similarly keep one painted CPU
 buffer. GPUI uploads borrow those pixels directly until wgpu copies them into
 its own staging storage. Native renderer features select Vulkan and GLES;
 browser shader translation is excluded from Linux builds. These changes keep
 the existing image resolution and rendering quality.
+
+## Plugin view allocations
+
+Clipboard rendering uses one layout for row previews and keyboard selection. Its search cache compares
+borrowed keys and reuses index storage tied to the immutable history snapshot;
+row event handlers clone their target and shared UI handle.
+Media seek controls retain their geometry with the gesture state, separately for
+panel and sidebar views. Network charts borrow the sampler's history rather
+than copying its samples when labels change. Prayer times keep six time
+labels in an array and resolve settings once per config, language or UTC-offset
+change; selecting the surrounding prayers traverses the existing schedules.
+Album art, sharing thumbnails and dock previews consume resized image buffers;
+their dimensions, filters and pixel output stay the same. Temperature rows
+borrow paired reading and label slices, including the partial last row.
+Workspace labels, active-window titles, network units, world clocks and break
+styles parse borrowed setting text. Feed, home-control and translator settings
+keep owned text only for values that outlive the config read. Feed and faith
+plugin settings share a small config/language cache. Home controls also share
+non-secret settings with queued requests, avoiding copied favourite lists. The weak key lets the old
+config fields drop with their last strong owner, but its inline Arc allocation
+remains until the key is replaced or cleared; cache tests print those type sizes.
+Daily progress snapshots use the saved-state generation, date and week start,
+so hover and animation frames do not reformat the same date keys. Keyboard
+badges compare reported/custom labels before copying, and Phone Connect
+filters borrowed devices without an intermediate row list.
+
+`cargo test -p mandara-ui --test plugin_allocations -- --nocapture` compares
+the former temporary expressions with warm state reuse on the test thread.
+It reports allocation calls and requested bytes, not process RSS. Frame and
+interaction speed still need matched release measurements before describing a
+performance improvement.
+
+Bar corner geometry uses inline storage for its two joins, and capsule bounds
+are computed directly from visible slots. Allocation and release timing checks
+cover these paths; process-wide resource figures above retain their recorded
+build and workload scope.
+
+Font defaults share an immutable empty OpenType feature list. Clocks and
+counters share their tabular-number features as well; custom edits use copy
+on write. Their allocation tests keep the former allocating expressions as
+positive controls and check wire values and independent edits. These controls
+measure specific operations, with release frame and resource acceptance kept
+separate from the allocation counts.
+
+Plugin lifecycle watches retain only their enabled, disabled and removed
+lists. Other preferences compare borrowed lists and leave plugin lifetimes
+alone, without copying or retaining the full settings table.
+
+Presentation mode watches only its enabled and automatic-sharing choices.
+Soundscapes and progress text caches include their resolved language, while
+progress colours resolve from the live palette. Progress grouping traverses
+borrowed tasks without allocating an ordering list.

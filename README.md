@@ -133,7 +133,9 @@ around, each one measured or shipped today:
    Python or shell glue.
 4. **Fast by measurement, not by claim.** The measured setup settles
    below 100 MiB of RAM and uses under 210 MiB of video memory.
-   Typical frame builds take around 0.1 ms. Startup peaks are higher;
+   Plugin views reuse clipboard layouts, media gesture state and network
+   history. Image previews decode in bounded workers and release their caches
+   after closing. Typical frame builds take around 0.1 ms. Startup peaks are higher;
    these are measurements of one setup, not a ceiling for every workload.
    [How it's measured](docs/performance.md)
 5. **Real motion.** Analytical spring physics that can be interrupted
@@ -150,7 +152,8 @@ around, each one measured or shipped today:
    widgets placed per monitor, and three launcher looks.
 9. **Safe, rich extensions.** 77 plugins built in. Third-party plugins are
    Rust compiled to sandboxed WebAssembly: a crashing plugin is switched
-   off and the shell keeps running.
+   off and the shell keeps running. Qur’an, Hadith and Jannah can also
+   [copy complete reading cards as images](docs/plugins.md#jannah-quran-hadith-and-prayer-times).
 10. **Scriptable end to end.** Almost everything the interface does is a
     `mandara msg` command with JSON replies, so scripts and AI agents can
     drive and inspect the whole desktop. [How](docs/agent-ready.md)

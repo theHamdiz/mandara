@@ -26,6 +26,7 @@
 
 pub mod art;
 pub(crate) mod panel;
+mod share;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -53,6 +54,10 @@ use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
 use crate::kit::{card, text, tokens};
 use crate::state::config;
+
+use super::settings_cache::{ConfigSettings, SettingsCache};
+mod progress;
+use progress::{DayProgress, Progress, ProgressCache};
 
 pub const ID: &str = "jannah";
 
@@ -119,27 +124,46 @@ pub(crate) struct Settings {
     pub lang: Lang,
 }
 
-pub(crate) fn settings(cx: &App) -> Settings {
-    let cfg = config(cx).read(cx).snapshot();
-    let s = &cfg.plugins;
-    Settings {
-        rotate: Rotate::parse(&s.setting(ID, "rotate", String::from("daily"))),
-        sources: Sources::parse(&s.setting(ID, "sources", String::from("both"))),
-        translation: s.setting(ID, "show_translation", true),
-        arabic_size: match s.setting(ID, "arabic_size", String::from("medium")).as_str() {
-            "small" => ArabicSize::Small,
-            "large" => ArabicSize::Large,
-            _ => ArabicSize::Medium,
-        },
-        bar_step: s.setting(ID, "bar_label", String::from("glyph")) == "step",
-        morning: s.setting(ID, "morning_reminder", false),
-        lang: plugin_lang::resolved(own_lang(cx)),
+thread_local! {
+    static SETTINGS: RefCell<SettingsCache<Settings>> = const { RefCell::new(SettingsCache::new()) };
+}
+
+/// Release only resolved configuration when the plugin is switched off.
+pub(super) fn clear_settings() {
+    SETTINGS.with(|cache| cache.borrow_mut().clear());
+}
+
+pub(crate) fn settings(cx: &App) -> Rc<Settings> {
+    let config = config(cx).read(cx).snapshot();
+    let language = plugin_lang::resolved(plugin_lang::own_language(config.plugins.setting_str(ID, "language").unwrap_or(plugin_lang::FOLLOW)));
+    SETTINGS.with(|cache| cache.borrow_mut().get(&config, language, ()))
+}
+
+impl ConfigSettings for Settings {
+    type Scope = ();
+
+    fn resolve(cfg: &mandara_config::ShellConfig, language: Lang, (): ()) -> Self {
+        let s = &cfg.plugins;
+        Settings {
+            rotate: Rotate::parse(s.setting_str(ID, "rotate").unwrap_or("daily")),
+            sources: Sources::parse(s.setting_str(ID, "sources").unwrap_or("both")),
+            translation: s.setting(ID, "show_translation", true),
+            arabic_size: match s.setting_str(ID, "arabic_size").unwrap_or("medium") {
+                "small" => ArabicSize::Small,
+                "large" => ArabicSize::Large,
+                _ => ArabicSize::Medium,
+            },
+            bar_step: s.setting_str(ID, "bar_label").unwrap_or("glyph") == "step",
+            morning: s.setting(ID, "morning_reminder", false),
+            lang: language,
+        }
     }
 }
 
 /// Jannah's own language (`None`: Mandara's), from its `language` setting.
 pub(crate) fn own_lang(cx: &App) -> Option<Lang> {
-    plugin_lang::own_language(&config(cx).read(cx).snapshot().plugins.setting(ID, "language", String::from(plugin_lang::FOLLOW)))
+    let config = config(cx).read(cx).snapshot();
+    plugin_lang::own_language(config.plugins.setting_str(ID, "language").unwrap_or(plugin_lang::FOLLOW))
 }
 
 /// Whether the interface is Arabic (scripture only, no translation).
@@ -169,6 +193,7 @@ pub(crate) struct Model {
     pub state: State,
     /// Bumped per change; the newest write wins.
     generation: u64,
+    progress: RefCell<ProgressCache>,
     pub edition: Option<&'static str>,
     pub fetch: Fetch,
     /// Every view showing Jannah (bar chips, sidebar cards, panels).
@@ -179,6 +204,16 @@ pub(crate) struct Model {
     pub index: Option<((Lang, bool), Arc<Vec<Entry>>)>,
     /// An item a command asked the panel to open in the reader.
     pub open_request: Option<ItemId>,
+}
+
+impl Model {
+    fn day_progress(&self, date: NaiveDate) -> DayProgress {
+        self.progress.borrow_mut().day(&self.state, self.generation, date)
+    }
+
+    fn progress(&self, date: NaiveDate, week_start: u32) -> Progress {
+        self.progress.borrow_mut().get(&self.state, self.generation, date, week_start)
+    }
 }
 
 pub(crate) type Shared = Rc<RefCell<Model>>;
@@ -195,6 +230,7 @@ pub(crate) fn model(cx: &mut App) -> Shared {
     let shared: Shared = Rc::new(RefCell::new(Model {
         state: State::load(&state::path()),
         generation: 0,
+        progress: RefCell::default(),
         edition: None,
         fetch: Fetch::Idle,
         views: ViewSet::default(),
@@ -472,7 +508,7 @@ fn next_due(m: &Model, s: &Settings, now: NaiveDateTime) -> NaiveDateTime {
     let morning = |d: NaiveDate| d.and_hms_opt(MORNING_HOUR, 0, 0).unwrap_or(now);
     let next_morning = if now.hour() < MORNING_HOUR { morning(today) } else { morning(today + chrono::Duration::days(1)) };
     // Already inside the morning window and not reminded: now (soon).
-    if (MORNING_HOUR..NOON).contains(&now.hour()) && !m.state.reminded_on(today) {
+    if (MORNING_HOUR..NOON).contains(&now.hour()) && !m.day_progress(today).reminded {
         return now;
     }
     boundary.min(next_morning)
@@ -512,7 +548,7 @@ fn remind(shared: &Shared, cx: &mut App) {
     let s = settings(cx);
     let _lang = mandara_i18n::scoped(Some(s.lang));
     let now = Local::now().naive_local();
-    if !s.morning || !(MORNING_HOUR..NOON).contains(&now.hour()) || shared.borrow().state.reminded_on(now.date()) {
+    if !s.morning || !(MORNING_HOUR..NOON).contains(&now.hour()) || shared.borrow().day_progress(now.date()).reminded {
         return;
     }
     let Some(item) = today(shared, &s, None).and_then(|id| catalog().get(id)) else { return };
@@ -545,7 +581,8 @@ pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::JannahInfo>
     let m = shared.borrow();
     let meaning = meaning_of(&m, item).filter(|_| wants_meaning(&s));
     let date = Local::now().date_naive();
-    let week = m.state.week(date, crate::plugins::clock::week_start_days(cx));
+    let progress = m.progress(date, crate::plugins::clock::week_start_days(cx));
+    let week = progress.week;
     let step = today_step();
     Some(crate::backdrop::widgets::JannahInfo {
         arabic: item.arabic.to_string(),
@@ -556,7 +593,7 @@ pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::JannahInfo>
         reference_ar: catalog::reference(item, true),
         step_title: step.map(|p| p.title.to_string()).unwrap_or_default(),
         step_line: step.map(|p| p.line.to_string()).unwrap_or_default(),
-        step_done: m.state.done_on(date),
+        step_done: progress.done,
         week: week.map(|(_, done)| done),
         today: week.iter().position(|(d, _)| *d == date).unwrap_or_default(),
         lang: own,
@@ -615,7 +652,7 @@ fn bar_view(glint: Rc<RefCell<Glint>>) -> impl Fn(&MandaraPalette, &mut Window, 
             );
         }
         let step = s.bar_step.then(today_step).flatten();
-        let done = shared.borrow().state.done_on(Local::now().date_naive());
+        let done = shared.borrow().day_progress(Local::now().date_naive()).done;
         div()
             .flex()
             .items_center()
@@ -656,7 +693,7 @@ fn sidebar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> 
     let date = Local::now().date_naive();
     let (meaning, done) = {
         let m = shared.borrow();
-        (item.and_then(|i| meaning_of(&m, i)).filter(|_| wants_meaning(&s)), m.state.done_on(date))
+        (item.and_then(|i| meaning_of(&m, i)).filter(|_| wants_meaning(&s)), m.day_progress(date).done)
     };
     let head = div()
         .flex()
@@ -775,10 +812,11 @@ fn step_json(cx: &mut App) -> Value {
     let shared = model(cx);
     let date = Local::now().date_naive();
     let m = shared.borrow();
-    let week = m.state.week(date, crate::plugins::clock::week_start_days(cx));
+    let progress = m.progress(date, crate::plugins::clock::week_start_days(cx));
+    let week = progress.week;
     json!({
         "step": today_step().map(path_json),
-        "done_today": m.state.done_on(date),
+        "done_today": progress.done,
         "week": week.iter().map(|(d, done)| json!({ "date": d.format("%Y-%m-%d").to_string(), "done": done })).collect::<Vec<_>>(),
     })
 }
@@ -787,6 +825,9 @@ fn register_commands(r: &mut PluginRegistry) {
     // Every command answers in Jannah's own language.
     let mut add = |spec: CommandSpec| r.command(ID, plugin_lang::speaking(spec, own_lang));
     add(plugin_lang::language_command(ID, "jannah language", "jannah language ar"));
+    add(CommandSpec::new_output("jannah copy-image", tk("Copy a reminder and its design as a complete PNG image"), |a, cx| share::command(&a.rest(0), cx))
+        .arg(ArgSpec::required("ref", ArgKind::String, tk("a verse or hadith reference")))
+        .example("jannah copy-image 89:30"));
     add(
         CommandSpec::new("jannah peek", tk("Look at the reminder a few items after today's (before it when negative) without moving today's"), |a, cx| {
             let by = if a.get(0).is_some() { a.int(0)? } else { 1 };
@@ -1004,12 +1045,33 @@ pub(crate) fn open_link(url: String) {
 mod tests {
     use super::*;
 
+    /// Warm views reuse resolved settings; language and config edits still take effect.
+    #[test]
+    fn settings_cache_tracks_config_and_plugin_language_without_loading_data() {
+        let mut config = mandara_config::ShellConfig::default();
+        let mut cache = SettingsCache::<Settings>::new();
+        let snapshot = Arc::new(config.clone());
+        let first = cache.get(&snapshot, Lang::En, ());
+        assert!(Rc::ptr_eq(&first, &cache.get(&snapshot, Lang::En, ())));
+        assert_eq!(first.rotate, Rotate::Daily);
+        config.plugins.settings.entry(ID.into()).or_default().insert("rotate".into(), toml::Value::String("hourly".into()));
+        let changed = cache.get(&Arc::new(config), Lang::Ar, ());
+        assert!(!Rc::ptr_eq(&first, &changed));
+        assert_eq!(changed.lang, Lang::Ar);
+        let held = SETTINGS.with(|cache| cache.borrow_mut().get(&snapshot, Lang::En, ()));
+        clear_settings();
+        assert!(!Rc::ptr_eq(&held, &SETTINGS.with(|cache| cache.borrow_mut().get(&snapshot, Lang::En, ()))));
+        clear_settings();
+        assert_eq!(changed.rotate, Rotate::Hourly);
+    }
+
+
     fn s() -> Settings {
         Settings { rotate: Rotate::Daily, sources: Sources::Both, translation: true, arabic_size: ArabicSize::Medium, bar_step: false, morning: true, lang: Lang::En }
     }
 
     fn m() -> Model {
-        Model { state: State::default(), generation: 0, edition: None, fetch: Fetch::Idle, views: ViewSet::default(), timer: None, index: None, open_request: None }
+        Model { state: State::default(), generation: 0, progress: RefCell::default(), edition: None, fetch: Fetch::Idle, views: ViewSet::default(), timer: None, index: None, open_request: None }
     }
 
     #[test]
@@ -1022,6 +1084,7 @@ mod tests {
         let nine = d.and_hms_opt(9, 0, 0).unwrap();
         assert_eq!(next_due(&model, &s(), nine), nine);
         model.state.set_reminded(d);
+        model.generation += 1; // Saving a state change advances the model's revision.
         assert_eq!(next_due(&model, &s(), nine), (d + chrono::Duration::days(1)).and_hms_opt(0, 0, 0).unwrap());
         // Hourly, no reminder: the next hour.
         let hourly = Settings { rotate: Rotate::Hourly, morning: false, ..s() };

@@ -320,6 +320,9 @@ mandara msg share clipboard          # text <text>, file <path>, screenshot, sto
 mandara msg jannah today             # next, prev, peek [n], show <ref>, search <query>, paths, step [done|peek [days]], saved, language [code|follow]
 mandara msg quran read 2:255           # surahs, today, peek [days], search <q>, play <ref|surah>, pause, resume, stop, bookmark add|remove <ref>, download, status, remove, language [code|follow]
 mandara msg hadith show bukhari 1      # collections, download|remove <collection|all>, today, peek [n], search <q> [--collection c] [--grade g], bookmarks, language [code|follow]
+mandara msg quran copy-image 2:255     # full ayah design; meaning follows Study mode
+mandara msg hadith copy-image bukhari 1 # full hadith design; shown chain/meaning follow settings
+mandara msg jannah copy-image 89:30    # full reminder design with reference
 mandara msg prayer peek 1              # today, next, peek [days], language [code|follow], adhan [stop|play|download|remove]
 ```
 

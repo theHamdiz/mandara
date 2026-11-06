@@ -5,6 +5,8 @@
 
 use std::collections::HashMap;
 
+pub mod paragraph;
+
 use cosmic_text::{Attrs, Buffer, Family, FeatureTag, FontFeatures, FontSystem, Metrics, Shaping, SwashCache, Weight};
 use mandara_theme::Color;
 use tiny_skia::{
@@ -364,6 +366,12 @@ impl TextPainter {
         if self.shaped.contains_key(&key) {
             return key;
         }
+        let buffer = self.shape_buffer(text, font, None, (font.size * 1.25).ceil(), None);
+        self.shaped.insert(key.clone(), buffer);
+        key
+    }
+
+    fn shape_buffer(&mut self, text: &str, font: &Font<'_>, width: Option<f32>, line_height: f32, alignment: Option<cosmic_text::Align>) -> Buffer {
         let primary = self.face(font.family, font.weight);
         let runs = self.script_runs(text, primary);
         // Only the fallback families this text reaches: asking a family for
@@ -380,8 +388,9 @@ impl TextPainter {
             })
             .collect();
         let fonts = &mut self.fonts;
-        let mut buffer = Buffer::new(fonts, Metrics::new(font.size, (font.size * 1.25).ceil()));
-        buffer.set_size(None, None);
+        let mut buffer = Buffer::new(fonts, Metrics::new(font.size, line_height));
+        buffer.set_size(width, None);
+        if width.is_some() { buffer.set_wrap(cosmic_text::Wrap::WordOrGlyph); }
         let mut features = FontFeatures::new();
         if font.tabular {
             features.enable(FeatureTag::new(b"tnum"));
@@ -401,10 +410,9 @@ impl TextPainter {
             let span = if joins(&text[range.clone()]) { span.letter_spacing(0.0) } else { span };
             (&text[range], span)
         });
-        buffer.set_rich_text(spans, &attrs, Shaping::Advanced, None);
+        buffer.set_rich_text(spans, &attrs, Shaping::Advanced, alignment);
         buffer.shape_until_scroll(fonts, false);
-        self.shaped.insert(key.clone(), buffer);
-        key
+        buffer
     }
 
     /// `(width, line height)` in physical pixels.
@@ -436,30 +444,7 @@ impl TextPainter {
         let Some(buffer) = shaped.get_mut(&key) else { return };
         let data = pm.data_mut();
         buffer.draw(fonts, glyphs, base, |gx, gy, w, h, c| {
-            let alpha = c.a() as f32 / 255.0 * opacity;
-            if alpha <= 0.0 {
-                return;
-            }
-            let (sr, sg, sb) = (c.r() as f32 * alpha, c.g() as f32 * alpha, c.b() as f32 * alpha);
-            let inv = 1.0 - alpha;
-            for yy in 0..h as i32 {
-                let py = oy + gy + yy;
-                if py < 0 || py >= ph {
-                    continue;
-                }
-                for xx in 0..w as i32 {
-                    let px = ox + gx + xx;
-                    if px < 0 || px >= pw {
-                        continue;
-                    }
-                    let i = ((py * pw + px) * 4) as usize;
-                    let d = &mut data[i..i + 4];
-                    d[0] = (sr + d[0] as f32 * inv).min(255.0) as u8;
-                    d[1] = (sg + d[1] as f32 * inv).min(255.0) as u8;
-                    d[2] = (sb + d[2] as f32 * inv).min(255.0) as u8;
-                    d[3] = (alpha * 255.0 + d[3] as f32 * inv).min(255.0) as u8;
-                }
-            }
+            composite_glyph(data, (pw, ph), (ox + gx, oy + gy, w, h), c, opacity);
         });
     }
 
@@ -468,6 +453,35 @@ impl TextPainter {
         let (w, h) = self.measure(text, font);
         self.draw(pm, text, font, cx - w / 2.0, y, color, opacity);
         (w, h)
+    }
+}
+
+/// Composites cosmic-text coverage into the shared premultiplied canvas.
+#[inline]
+fn composite_glyph(data: &mut [u8], (pw, ph): (i32, i32), (x, y, w, h): (i32, i32, u32, u32), c: cosmic_text::Color, opacity: f32) {
+    let alpha = c.a() as f32 / 255.0 * opacity;
+    if alpha <= 0.0 {
+        return;
+    }
+    let (sr, sg, sb) = (c.r() as f32 * alpha, c.g() as f32 * alpha, c.b() as f32 * alpha);
+    let inv = 1.0 - alpha;
+    for yy in 0..h as i32 {
+        let py = y + yy;
+        if py < 0 || py >= ph {
+            continue;
+        }
+        for xx in 0..w as i32 {
+            let px = x + xx;
+            if px < 0 || px >= pw {
+                continue;
+            }
+            let i = ((py * pw + px) * 4) as usize;
+            let d = &mut data[i..i + 4];
+            d[0] = (sr + d[0] as f32 * inv).min(255.0) as u8;
+            d[1] = (sg + d[1] as f32 * inv).min(255.0) as u8;
+            d[2] = (sb + d[2] as f32 * inv).min(255.0) as u8;
+            d[3] = (alpha * 255.0 + d[3] as f32 * inv).min(255.0) as u8;
+        }
     }
 }
 

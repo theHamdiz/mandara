@@ -16,6 +16,7 @@ use mandara_services::feeds::{Cache, HttpSource, Snapshot};
 use mandara_theme::MandaraPalette;
 
 use super::model_view as fn_view;
+use super::settings_cache::{ConfigSettings, SettingsCache};
 use super::integration::{self, Data};
 use super::panel_fx::{EXPIRY_MARGIN, glass_card, header, pill_button, readable, redraw_in};
 use crate::bidi::Bidi as _;
@@ -52,6 +53,7 @@ fn reader() -> Rc<RefCell<Reader>> {
 
 /// Clear only an existing reader; never allocate one just to disable it.
 pub(super) fn stop() {
+    SETTINGS.with(|cache| cache.borrow_mut().clear());
     if let Some(reader) = READER.with(|slot| slot.borrow_mut().take()) {
         reader.borrow().data.borrow_mut().clear();
     }
@@ -59,13 +61,34 @@ pub(super) fn stop() {
 
 /// Keep distinct feed addresses in configured order within the list limit.
 pub fn subscriptions(cfg: &ShellConfig) -> Result<Vec<String>, String> {
-    let text = cfg.plugins.setting(ID, "subscriptions", String::new());
+    let text = cfg.plugins.setting_str(ID, "subscriptions").unwrap_or("");
     let mut urls = Vec::new();
     for url in text.split_whitespace() {
         if !urls.iter().any(|seen| seen == url) { urls.push(url.to_owned()); }
         if urls.len() > MAX_SUBSCRIPTIONS { return Err(t("Keep up to 16 feed subscriptions").into()); }
     }
     Ok(urls)
+}
+
+struct FeedSettings {
+    subscriptions: Result<Vec<String>, String>,
+    refresh: Duration,
+}
+
+impl ConfigSettings for FeedSettings {
+    type Scope = ();
+
+    fn resolve(config: &ShellConfig, language: mandara_i18n::Lang, (): ()) -> Self {
+        Self { subscriptions: mandara_i18n::with_language(Some(language), || subscriptions(config)), refresh: refresh_seconds(config) }
+    }
+}
+
+thread_local! {
+    static SETTINGS: RefCell<SettingsCache<FeedSettings>> = const { RefCell::new(SettingsCache::new()) };
+}
+
+fn cached_settings(config: &Arc<ShellConfig>) -> Rc<FeedSettings> {
+    SETTINGS.with(|cache| cache.borrow_mut().get(config, mandara_i18n::language(), ()))
 }
 
 fn refresh_seconds(cfg: &ShellConfig) -> Duration {
@@ -114,7 +137,8 @@ fn open_article(url: String, link: String, cx: &mut App) {
 /// Refresh the selected feed while this panel is visible and keep cached headlines.
 fn panel(context: &mandara_plugins::PanelCx, p: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     let cfg = crate::state::config(cx).read(cx).snapshot();
-    let subscriptions = subscriptions(&cfg);
+    let settings = cached_settings(&cfg);
+    let subscriptions = &settings.subscriptions;
     let r = reader();
     let (selected, data) = { let reader = r.borrow(); (reader.selected, reader.data.clone()) };
     data.borrow().views.track(window);
@@ -124,7 +148,7 @@ fn panel(context: &mandara_plugins::PanelCx, p: &MandaraPalette, window: &mut Wi
     data.borrow_mut().select(url.clone().unwrap_or_default());
     if context.progress() > 0.0 && let Some(url) = &url {
         refresh(url.clone(), false, &cfg, cx);
-        redraw_in(refresh_seconds(&cfg) + EXPIRY_MARGIN, window, cx);
+        redraw_in(settings.refresh + EXPIRY_MARGIN, window, cx);
     }
     let model = data.borrow();
     let snapshot = model.value.as_deref().filter(|snapshot| Some(&snapshot.feed.url) == url.as_ref());
@@ -201,6 +225,31 @@ pub fn register(registry: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Parsing repeats only after configuration changes, without retaining feed content.
+    #[test]
+    fn subscription_cache_reuses_lists_and_tracks_config_changes() {
+        let mut config = ShellConfig::default();
+        config.plugins.settings.entry(ID.into()).or_default().insert("subscriptions".into(), toml::Value::String("https://example.org/feed".into()));
+        let config = Arc::new(config);
+        let first = cached_settings(&config);
+        assert!(Rc::ptr_eq(&first, &cached_settings(&config)));
+        assert_eq!(first.subscriptions.as_deref().unwrap(), ["https://example.org/feed"]);
+        let mut changed = (*config).clone();
+        changed.plugins.settings.get_mut(ID).unwrap().insert("subscriptions".into(), toml::Value::String(String::new()));
+        assert!(cached_settings(&Arc::new(changed)).subscriptions.as_ref().unwrap().is_empty());
+        stop();
+        assert!(!Rc::ptr_eq(&first, &cached_settings(&config)), "disabling clears resolved settings too");
+        stop();
+    }
+
+    /// Non-string subscription settings continue to mean an empty list.
+    #[test]
+    fn borrowed_subscription_setting_preserves_invalid_type_fallback() {
+        let mut config = ShellConfig::default();
+        config.plugins.settings.entry(ID.into()).or_default().insert("subscriptions".into(), toml::Value::Integer(3));
+        assert_eq!(subscriptions(&config).unwrap(), Vec::<String>::new());
+    }
 
     #[test]
     fn disabling_a_reader_drops_read_flags_without_constructing_a_replacement() {

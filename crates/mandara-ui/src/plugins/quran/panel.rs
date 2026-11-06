@@ -130,6 +130,7 @@ pub(super) struct Ui {
     searched: Option<(String, Option<Rc<Hits>>)>,
     search_gen: u64,
     pub flash: Flash,
+    pub share: super::super::design_share::View,
     /// Peeking (a look only, never saved, your place never moves): the
     /// ayah of the day this many days from today's, and the ayah this many
     /// after your place.
@@ -166,7 +167,7 @@ pub(super) fn build(p: PanelCx, window: &mut Window, cx: &mut App) -> PanelSpec 
     let surah_field = field(tk("Find a surah by name or number…"), cx);
     let search_field = field(tk("Search Arabic or meaning…"), cx);
     let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(CHROME_H + BODY_GUESS))));
-    let ui = Rc::new(RefCell::new(Ui { tab: Tab::Home, reader: Reader::new(&shared), revelation: None, searched: None, search_gen: 0, flash: Flash::default(), day_peek: 0, next_peek: 0 }));
+    let ui = Rc::new(RefCell::new(Ui { tab: Tab::Home, reader: Reader::new(&shared), revelation: None, searched: None, search_gen: 0, flash: Flash::default(), share: super::super::design_share::View::new(p.clone()), day_peek: 0, next_peek: 0 }));
     let view = View { p, surah_field, search_field, ui, size: size_cell.clone() };
     PanelSpec { view: fn_view(None, super::plugin_lang::in_language(super::own_lang, move |palette, window, cx| view.render(palette, window, cx)), window, cx), size: size_cell }
 }
@@ -179,9 +180,8 @@ pub(super) fn refresh(shared: &Shared, cx: &mut App) {
 
 /// The hero backdrop: Jannah's emerald → teal, tinted by the theme.
 pub(super) fn hero_bg(palette: &MandaraPalette) -> gpui::Background {
-    let tones = if palette.is_dark { HERO_DARK } else { HERO_LIGHT };
-    let emerald = palette.success_emerald.mix(palette.primary, HERO_PRIMARY_SHARE);
-    oklab_gradient(HERO_ANGLE_DEG, tone(emerald, tones[0]), tone(palette.tertiary.mix(emerald, HERO_PRIMARY_SHARE), tones[1]))
+    let (a, b) = share_ground(palette);
+    oklab_gradient(HERO_ANGLE_DEG, a, b)
 }
 
 /// The faint star lattice laid over a hero, `width` wide.
@@ -834,6 +834,8 @@ fn today_card(c: &Ctx) -> Option<AnyElement> {
     let ink = palette.on_surface_variant;
     let (s1, s2, s3, ui1, ui2, ui3) = (c.shared.clone(), c.shared.clone(), c.shared.clone(), c.ui.clone(), c.ui.clone(), c.ui.clone());
     let copied = copy_text(&c.book, g, true);
+    let heading = if day_peek == 0 { t("AYAH OF THE DAY").to_string() } else { tf("AYAH FOR {date}", &[("date", &super::plugin_lang::date(chrono::Local::now().date_naive() + chrono::Duration::days(day_peek), tk("%a %-d %b")).to_uppercase())]) };
+    let copy_image = super::share::button("quran-today-image", c, g, INNER_W, super::share::Style::Today(heading.clone()));
     let actions = div()
         .w_full()
         .row()
@@ -857,6 +859,7 @@ fn today_card(c: &Ctx) -> Option<AnyElement> {
                 ui2.borrow().flash.show(true, copied_msg);
             }
         }))
+        .child(copy_image)
         .child(icon_button("quran-today-read", "book", ACTION_BTN, ink, None, move |_, cx| open_reader(&s3, &ui3, g, cx)));
     let content = div()
         .relative()
@@ -867,14 +870,7 @@ fn today_card(c: &Ctx) -> Option<AnyElement> {
         .flex_col()
         .items_center()
         .gap(px(BLOCK_GAP))
-        .child(kicker(
-            if day_peek == 0 {
-                t("AYAH OF THE DAY").to_string()
-            } else {
-                tf("AYAH FOR {date}", &[("date", &super::plugin_lang::date(chrono::Local::now().date_naive() + chrono::Duration::days(day_peek), tk("%a %-d %b")).to_uppercase())])
-            },
-            palette,
-        ))
+        .child(kicker(heading, palette))
         .child(
             div()
                 .w_full()
@@ -1079,6 +1075,18 @@ fn saved(c: &Ctx) -> AnyElement {
             ayah_row(("quran-saved", i), g, &c.book, palette, &c.scripture, Some(remove), move |cx| open_reader(&shared, &ui, g, cx))
         }))
         .into_any_element()
+}
+
+/// Reading-card values shared with its full-content image export.
+pub(super) const SHARE_SIDE: f32 = CONTENT_SIDE;
+pub(super) const SHARE_TOP: f32 = CONTENT_TOP_SHARE;
+pub(super) const SHARE_BOTTOM: f32 = CONTENT_BOTTOM;
+pub(super) const SHARE_GAP: f32 = BLOCK_GAP;
+pub(super) const SHARE_ARABIC_PX: f32 = TODAY_ARABIC_PX;
+pub(super) fn share_ground(palette: &MandaraPalette) -> (mandara_theme::Color, mandara_theme::Color) {
+    let tones = if palette.is_dark { HERO_DARK } else { HERO_LIGHT };
+    let emerald = palette.success_emerald.mix(palette.primary, HERO_PRIMARY_SHARE);
+    (tone(emerald, tones[0]), tone(palette.tertiary.mix(emerald, HERO_PRIMARY_SHARE), tones[1]))
 }
 
 #[cfg(test)]
