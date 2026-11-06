@@ -8,9 +8,33 @@ fn the_favicon_and_stylesheet_resolve_under_a_project_base_url() {
     assert!(head.contains("head-custom-google-analytics.html"));
     assert!(head.contains("rel=\"icon\" type=\"image/png\" sizes=\"128x128\""));
     let paths: Vec<_> = head.split("{{ '").skip(1).map(|s| s.split("' | relative_url }}").next().unwrap()).collect();
-    assert_eq!(paths.len(), 2);
+    assert_eq!(paths.len(), 3);
     for path in paths {
         assert!(crate::root().join(path.trim_start_matches('/')).is_file(), "{path}");
+    }
+}
+
+/// One deferred handler serves the landing command and fenced guide examples.
+#[test]
+fn copy_controls_are_shared_and_leave_commands_readable_without_scripts() {
+    let head = std::fs::read_to_string(crate::root().join("_includes/head-custom.html")).unwrap();
+    let source = format!("<head>{head}</head>");
+    let page = roxmltree::Document::parse(&source).unwrap();
+    let scripts: Vec<_> = page.descendants().filter(|node| node.has_tag_name("script")).collect();
+    assert_eq!(scripts.len(), 1);
+    assert_eq!(scripts[0].attribute("src"), Some("{{ '/assets/js/copy-code.js' | relative_url }}"));
+    assert!(scripts[0].has_attribute("defer"));
+
+    let source = homepage();
+    let page = roxmltree::Document::parse(&source).unwrap();
+    let commands: Vec<_> = page.descendants().filter(|node| node.has_tag_name("div") && node.attribute("class") == Some("install-command")).collect();
+    assert!(!commands.is_empty());
+    for command in commands {
+        let code = command.children().find(|node| node.has_tag_name("code")).unwrap();
+        assert!(code.text().is_some_and(|text| !text.trim().is_empty()));
+        assert!(!command.has_attribute("hidden"));
+        assert!(!code.has_attribute("hidden"));
+        assert!(!command.descendants().any(|node| node.has_tag_name("button")), "copy controls are added only when the handler runs");
     }
 }
 

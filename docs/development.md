@@ -23,6 +23,14 @@ screens, including keyboard selection and reduced motion. Run
 `cargo test -p xtask pages_tests` to check the linked files, preview controls,
 contrast, installation command and plugin count against the guides.
 
+The shared `assets/js/copy-code.js` adds Copy buttons to the homepage's
+installation command and fenced examples in the guides. It copies the code's
+text, including quotes and options, without syntax markup or a trailing newline.
+If the browser blocks copying, it selects the code for manual copying and
+explains what happened. Commands remain readable and selectable without scripts.
+When changing this control, verify actual clipboard contents, Enter and Space,
+blocked permissions, both colour schemes and narrow screens in a private browser.
+
 ## Warnings are errors
 
 `[workspace.lints]` in `Cargo.toml` denies every compiler warning and
