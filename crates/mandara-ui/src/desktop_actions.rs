@@ -195,4 +195,3 @@ mod routing_tests {
         assert_eq!(fallback_panel(&Action::Note(String::new()), true), None);
     }
 }
-
