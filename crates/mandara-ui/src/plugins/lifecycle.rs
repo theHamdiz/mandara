@@ -18,11 +18,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::App;
-use mandara_config::PluginsConfig;
 use mandara_i18n::{t, tf};
 use mandara_plugins::{CommandGate, PluginOrigin, PluginRegistry};
 
 use crate::state::{config, update_config};
+
+mod switches;
+use switches::Switches;
 
 /// What to do with a plugin.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -98,18 +100,20 @@ pub fn init(cx: &mut App) {
 
 thread_local! {
     /// The plugin switches [`sync`] last acted on.
-    static LAST: RefCell<Option<PluginsConfig>> = const { RefCell::new(None) };
+    static LAST: RefCell<Switches> = const { RefCell::new(Switches::new()) };
 }
 
 /// Stops what an off plugin owns outside its views. Runs on every config
 /// change; returns at once unless the plugin switches moved.
 fn sync(cx: &mut App) {
-    let plugins = config(cx).read(cx).get().plugins.clone();
-    let unchanged = LAST.with(|l| l.borrow().as_ref().is_some_and(|p| p.enabled == plugins.enabled && p.disabled == plugins.disabled && p.removed == plugins.removed));
-    if unchanged {
+    let changed = {
+        let store = config(cx);
+        let current = store.read(cx);
+        LAST.with(|last| last.borrow_mut().changed(&current.get().plugins))
+    };
+    if !changed {
         return;
     }
-    LAST.with(|l| *l.borrow_mut() = Some(plugins));
     for (id, stop) in [
         (super::feeds::ID, super::feeds::stop as fn()),
         (super::prayer::ID, super::prayer::clear_settings as fn()),

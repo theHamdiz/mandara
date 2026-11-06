@@ -17,6 +17,8 @@ mod jannah_progress;
 mod keyboard_label;
 #[path = "../src/plugins/phone_connect/devices.rs"]
 mod phone_devices;
+#[path = "../src/plugins/lifecycle/switches.rs"]
+mod plugin_switches;
 #[path = "../src/plugins/media/scrub_state.rs"]
 mod scrub_state;
 #[path = "../src/plugins/settings_cache.rs"]
@@ -348,5 +350,25 @@ fn phone_device_filter_does_not_collect_rows() {
     });
     eprintln!("{FRAMES} phone frames: row Vec {before:?}, iterator {after:?}");
     assert!(before.0 >= FRAMES);
+    assert_eq!(after, (0, 0));
+}
+
+/// Unchanged switch lists do not copy unrelated plugin tables on config notifications.
+#[test]
+fn plugin_lifecycle_does_not_clone_settings_for_unchanged_switches() {
+    let mut config = mandara_config::ShellConfig::default().plugins;
+    config.enabled.extend(["feeds".into(), "notes".into()]);
+    config.settings.insert("feeds".into(), toml::toml! { subscriptions = "https://example.org/feed" });
+    let mut switches = plugin_switches::Switches::new();
+    assert!(switches.changed(&config));
+    const UPDATES: usize = 32;
+    let before = allocations(|| {
+        for _ in 0..UPDATES { black_box(config.clone()); }
+    });
+    let after = allocations(|| {
+        for _ in 0..UPDATES { assert!(!switches.changed(black_box(&config))); }
+    });
+    eprintln!("{UPDATES} plugin config notifications: whole settings clone {before:?}, borrowed switch comparison {after:?}");
+    assert!(before.0 >= UPDATES, "the positive control must copy owned plugin settings");
     assert_eq!(after, (0, 0));
 }
