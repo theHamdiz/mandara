@@ -15,10 +15,12 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, NaiveTime, Offset as _, TimeDelta, Timelike};
 use gpui::{AnyElement, App, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::FluentBuilder as _, px, size};
+use mandara_config::ShellConfig;
 use mandara_core::{ToGpui, oklab_gradient};
 use mandara_i18n::{Lang, t, tf, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
@@ -38,6 +40,9 @@ use crate::kit::{card, reveal, text, tokens};
 use crate::state::config;
 
 pub const ID: &str = "prayer-times";
+
+mod day_events;
+use day_events::surrounding_prayers;
 
 // ── Layout ───────────────────────────────────────────────────────────────
 
@@ -183,54 +188,79 @@ struct Settings {
     loc: Location,
     method: Method,
     school: AsrSchool,
-    place: String,
+    place: SharedString,
     hijri_offset: i64,
     h24: bool,
     /// Hours east of UTC the times are given in (the system's local time).
     utc_offset: f64,
 }
 
-fn settings(cx: &App) -> Settings {
+/// Resolved settings follow config, plugin language and the current UTC offset.
+struct SettingsCache {
+    config: Weak<ShellConfig>,
+    lang: Lang,
+    utc_offset: u64,
+    value: Rc<Settings>,
+}
+
+thread_local! {
+    static SETTINGS: RefCell<Option<SettingsCache>> = const { RefCell::new(None) };
+}
+
+fn settings(cx: &App) -> Rc<Settings> {
     let cfg = config(cx).read(cx).snapshot();
+    SETTINGS.with(|cache| cached_settings(&mut cache.borrow_mut(), &cfg, mandara_i18n::language(), utc_offset_hours()))
+}
+
+/// The weak key cannot keep an obsolete config snapshot alive.
+fn cached_settings(cache: &mut Option<SettingsCache>, cfg: &Arc<ShellConfig>, lang: Lang, utc_offset: f64) -> Rc<Settings> {
+    if let Some(cached) = cache.as_ref()
+        && cached.config.as_ptr() == Arc::as_ptr(cfg)
+        && cached.lang == lang
+        && cached.utc_offset == utc_offset.to_bits()
+    {
+        return cached.value.clone();
+    }
+    let value = Rc::new(resolve_settings(cfg, lang, utc_offset));
+    *cache = Some(SettingsCache { config: Arc::downgrade(cfg), lang, utc_offset: utc_offset.to_bits(), value: value.clone() });
+    value
+}
+
+/// Resolves location fallbacks only when no nonempty own name applies.
+fn resolve_settings(cfg: &ShellConfig, lang: Lang, utc_offset: f64) -> Settings {
     let s = &cfg.plugins;
-    // Its own place when it has one (and sharing isn't forced), else the
-    // shared location.
-    let own = super::weather::own_location(&cfg, ID);
+    let own = super::weather::own_location(cfg, ID);
     let (latitude, longitude) = own.unwrap_or((cfg.location.latitude, cfg.location.longitude));
     let loc = Location { latitude, longitude };
-    let default_place = if own.is_none() && !cfg.location.name.is_empty() {
-        cfg.location.name.clone()
-    } else if loc == Location::EL_MANDARA {
-        t("El-Mandara, Alexandria").to_string()
-    } else {
-        s.setting(
-            "weather",
-            "location_name",
-            format!(
+    let default_place = || -> SharedString {
+        if own.is_none() && !cfg.location.name.is_empty() {
+            cfg.location.name.clone().into()
+        } else if loc == Location::EL_MANDARA {
+            mandara_i18n::t_in(lang, "El-Mandara, Alexandria").into()
+        } else {
+            s.setting_or_else("weather", "location_name", || format!(
                 "{:.2}°{}, {:.2}°{}",
-                loc.latitude.abs(),
-                if loc.latitude >= 0.0 { "N" } else { "S" },
-                loc.longitude.abs(),
-                if loc.longitude >= 0.0 { "E" } else { "W" }
-            ),
-        )
+                loc.latitude.abs(), if loc.latitude >= 0.0 { "N" } else { "S" },
+                loc.longitude.abs(), if loc.longitude >= 0.0 { "E" } else { "W" }
+            )).into()
+        }
     };
+    let place = own.and_then(|_| s.setting_str(ID, "location_name")).filter(|name| !name.trim().is_empty()).map(|name| SharedString::from(name.to_owned())).unwrap_or_else(default_place);
     Settings {
         loc,
         method: s.setting(ID, "method", Method::Egyptian),
         school: s.setting(ID, "asr", AsrSchool::Shafii),
-        // An empty name (a cleared Studio field) falls back like a missing one.
-        place: if own.is_none() { default_place } else { Some(s.setting(ID, "location_name", String::new())).filter(|n| !n.trim().is_empty()).unwrap_or(default_place) },
+        place,
         hijri_offset: s.setting(ID, "hijri_offset", 0_i64),
         h24: cfg.general.clock_24h,
-        utc_offset: utc_offset_hours(),
+        utc_offset,
     }
 }
 
-/// The plugin's own language (`None`: Mandara's), from its `language`
-/// setting.
+/// The plugin's own language (`None`: Mandara's), from its `language` setting.
 pub(crate) fn own_lang(cx: &App) -> Option<Lang> {
-    plugin_lang::own_language(&config(cx).read(cx).snapshot().plugins.setting(ID, "language", String::from(plugin_lang::FOLLOW)))
+    let cfg = config(cx).read(cx).snapshot();
+    plugin_lang::own_language(cfg.plugins.setting_str(ID, "language").unwrap_or(plugin_lang::FOLLOW))
 }
 
 fn utc_offset_hours() -> f64 {
@@ -412,18 +442,7 @@ impl Day {
 
     /// The day as seen from `now`, with its three days' schedules.
     fn with_days(now: NaiveDateTime, days: Schedule) -> Day {
-        let date = now.date();
-        let [yesterday, today, tomorrow] = &*days;
-        let mut events: Vec<(Prayer, NaiveDateTime)> = Vec::with_capacity(TIMELINE_ROWS + 2);
-        if let Some(d) = date.pred_opt() {
-            events.push((Prayer::Isha, d.and_time(yesterday.get(Prayer::Isha))));
-        }
-        events.extend(today.times.iter().map(|(p, t)| (*p, date.and_time(*t))));
-        if let Some(d) = date.succ_opt() {
-            events.push((Prayer::Fajr, d.and_time(tomorrow.get(Prayer::Fajr))));
-        }
-        let next = events.iter().copied().find(|(p, t)| p.is_prayer() && *t > now).unwrap_or((Prayer::Fajr, now));
-        let prev = events.iter().copied().rev().find(|(p, t)| p.is_prayer() && *t <= now).unwrap_or((Prayer::Isha, now));
+        let (prev, next) = surrounding_prayers(now, &days);
         Day { now, days, prev, next }
     }
 
@@ -487,7 +506,7 @@ struct TextKey {
     prev: (Prayer, NaiveDateTime),
     h24: bool,
     hijri: (i64, usize, i64),
-    place: String,
+    place: SharedString,
     method: Method,
     loc: Location,
     lang: Lang,
@@ -499,7 +518,7 @@ struct Texts {
     hijri_ar: (SharedString, &'static str, SharedString),
     hijri_line: SharedString,
     at_line: SharedString,
-    times: Vec<SharedString>,
+    times: [SharedString; TIMELINE_ROWS],
     in_span: SharedString,
     bar_soon: bool,
     bar: SharedString,
@@ -543,7 +562,7 @@ fn build_texts(day: &Day, s: &Settings, key: TextKey) -> Texts {
         hijri_ar: (arabic_digits(&y.to_string()).into(), arabic_month, arabic_digits(&d.to_string()).into()),
         hijri_line: format!("{d} {} · {}", t(latin_month), day.now.format(t("%a %-d %b"))).into(),
         at_line: tf("at {time} · after {prayer} {since}", &[("time", &fmt_time(at.time(), s.h24)), ("prayer", &pname(day.prev.0)), ("since", &fmt_time(day.prev.1.time(), s.h24))]).into(),
-        times: day.today().times.iter().map(|(_, t)| SharedString::from(fmt_time(*t, s.h24))).collect(),
+        times: day.today().times.map(|(_, time)| SharedString::from(fmt_time(time, s.h24))),
         in_span: tf("in {span}", &[("span", &span)]).into(),
         bar_soon: soon,
         bar: if soon { in_prayer.clone().into() } else { format!("{} {}", pname(next), fmt_time(at.time(), s.h24)).into() },
@@ -1042,7 +1061,7 @@ mod tests {
     const ALEXANDRIA_UTC_OFFSET: f64 = 3.0;
 
     fn s() -> Settings {
-        Settings { loc: Location::EL_MANDARA, method: Method::Egyptian, school: AsrSchool::Shafii, place: String::new(), hijri_offset: 0, h24: true, utc_offset: ALEXANDRIA_UTC_OFFSET }
+        Settings { loc: Location::EL_MANDARA, method: Method::Egyptian, school: AsrSchool::Shafii, place: SharedString::default(), hijri_offset: 0, h24: true, utc_offset: ALEXANDRIA_UTC_OFFSET }
     }
 
     #[test]
@@ -1112,6 +1131,53 @@ mod tests {
         let texts = texts(&day, &s);
         assert_eq!(texts.times.len(), TIMELINE_ROWS);
         assert!(Rc::ptr_eq(&texts, &super::texts(&Day::at(date.and_hms_opt(10, 0, 50).unwrap(), &s), &s)), "same minute reuses labels");
+    }
+
+    /// Config, local offset and plugin language each invalidate resolved settings.
+    #[test]
+    fn settings_cache_tracks_live_inputs_without_retaining_config_snapshots() {
+        let mut config = ShellConfig::default();
+        config.location.name.clear();
+        let config = Arc::new(config);
+        let mut cache = None;
+        let first = cached_settings(&mut cache, &config, Lang::En, 2.0);
+        assert!(Rc::ptr_eq(&first, &cached_settings(&mut cache, &config, Lang::En, 2.0)));
+        assert_eq!(Arc::strong_count(&config), 1);
+        let arabic = cached_settings(&mut cache, &config, Lang::Ar, 2.0);
+        assert!(!Rc::ptr_eq(&first, &arabic));
+        assert_eq!(arabic.place.as_ref(), mandara_i18n::t_in(Lang::Ar, "El-Mandara, Alexandria"));
+        let summer = cached_settings(&mut cache, &config, Lang::Ar, 3.0);
+        assert_eq!(summer.utc_offset, 3.0);
+        assert!(!Rc::ptr_eq(&arabic, &summer));
+        let mut moved = (*config).clone();
+        moved.location.name = "Demo coast".into();
+        moved.location.latitude = 10.0;
+        let moved = Arc::new(moved);
+        let settings = cached_settings(&mut cache, &moved, Lang::Ar, 3.0);
+        assert_eq!(settings.loc.latitude, 10.0);
+        assert_eq!(settings.place.as_ref(), "Demo coast");
+        let weak = Arc::downgrade(&moved);
+        drop(moved);
+        assert!(weak.upgrade().is_none(), "cached settings cannot retain an old config");
+    }
+
+    /// Copied names keep their spacing; a cleared override follows the old fallback.
+    #[test]
+    fn own_place_names_and_empty_fallbacks_preserve_location_policy() {
+        let mut config = ShellConfig::default();
+        config.location.shared = false;
+        let settings = config.plugins.settings.entry(ID.into()).or_default();
+        settings.insert("latitude".into(), toml::Value::Float(12.0));
+        settings.insert("longitude".into(), toml::Value::Float(34.0));
+        settings.insert("location_name".into(), toml::Value::String("  Demo own place  ".into()));
+        assert_eq!(resolve_settings(&config, Lang::En, 0.0).place.as_ref(), "  Demo own place  ");
+        config.plugins.settings.get_mut(ID).unwrap().insert("location_name".into(), toml::Value::String("  ".into()));
+        assert_eq!(resolve_settings(&config, Lang::En, 0.0).place.as_ref(), "12.00°N, 34.00°E");
+        config.plugins.settings.entry("weather".into()).or_default().insert("location_name".into(), toml::Value::String("Weather fallback".into()));
+        assert_eq!(resolve_settings(&config, Lang::En, 0.0).place.as_ref(), "Weather fallback");
+        config.location.shared = true;
+        config.location.name = "Shared place".into();
+        assert_eq!(resolve_settings(&config, Lang::En, 0.0).place.as_ref(), "Shared place");
     }
 
     #[test]

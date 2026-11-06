@@ -128,7 +128,9 @@ the existing image resolution and rendering quality.
 Clipboard rendering uses one layout for row previews and keyboard selection.
 Media seek controls retain their geometry with the gesture state, separately for
 panel and sidebar views. Network charts borrow the sampler's history rather
-than copying its samples when labels change.
+than copying its samples when labels change. Prayer times keep six time
+labels in an array and resolve settings once per config, language or UTC-offset
+change; selecting the surrounding prayers traverses the existing schedules.
 
 `cargo test -p mandara-ui --test plugin_allocations -- --nocapture` compares
 the former temporary expressions with warm state reuse on the test thread.

@@ -10,6 +10,8 @@ use mandara_services::net_speed::RateHistory;
 
 #[path = "../src/plugins/net_speed/chart_samples.rs"]
 mod chart_samples;
+#[path = "../src/plugins/prayer/day_events.rs"]
+mod day_events;
 #[path = "../src/plugins/media/scrub_state.rs"]
 mod scrub_state;
 
@@ -107,4 +109,72 @@ fn scrubber_and_chart_updates_reuse_existing_storage() {
         (0, 0),
         "warm gesture and history access must not allocate"
     );
+}
+
+/// Boundary selection no longer allocates a temporary list each visible tick.
+#[test]
+fn prayer_boundary_ticks_do_not_allocate() {
+    use chrono::{NaiveDate, NaiveTime};
+    use mandara_services::prayer::{Prayer, PrayerTimes};
+
+    const TICKS: usize = 32;
+    let date = NaiveDate::from_ymd_opt(2026, 10, 27).unwrap();
+    let day = |date| PrayerTimes {
+        date,
+        times: std::array::from_fn(|index| {
+            (
+                [
+                    Prayer::Fajr,
+                    Prayer::Sunrise,
+                    Prayer::Dhuhr,
+                    Prayer::Asr,
+                    Prayer::Maghrib,
+                    Prayer::Isha,
+                ][index],
+                NaiveTime::from_hms_opt([5, 6, 12, 15, 18, 20][index], 0, 0).unwrap(),
+            )
+        }),
+    };
+    let days = [
+        day(date.pred_opt().unwrap()),
+        day(date),
+        day(date.succ_opt().unwrap()),
+    ];
+    let now = date.and_hms_opt(6, 0, 0).unwrap();
+    let before = allocations(|| {
+        for _ in 0..TICKS {
+            let mut events = Vec::with_capacity(8);
+            events.push((
+                Prayer::Isha,
+                days[0].date.and_time(days[0].get(Prayer::Isha)),
+            ));
+            events.extend(
+                days[1]
+                    .times
+                    .map(|(prayer, time)| (prayer, date.and_time(time))),
+            );
+            events.push((
+                Prayer::Fajr,
+                days[2].date.and_time(days[2].get(Prayer::Fajr)),
+            ));
+            black_box(
+                events
+                    .iter()
+                    .rev()
+                    .find(|(prayer, time)| prayer.is_prayer() && *time <= now),
+            );
+            black_box(events);
+        }
+    });
+    let after = allocations(|| {
+        for _ in 0..TICKS {
+            black_box(day_events::surrounding_prayers(now, &days));
+        }
+    });
+    eprintln!("{TICKS} prayer ticks: event Vec {before:?}, iterator {after:?}");
+    assert_eq!(
+        before.0, TICKS,
+        "the positive control must observe every temporary list"
+    );
+    assert_eq!(after, (0, 0));
 }

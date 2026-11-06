@@ -27,6 +27,8 @@ About → What's new shows it too.
 - **Less repeated work in plugin views.** Clipboard previews and selection share
   one layout, media seek controls keep their gesture geometry, and network
   charts read their existing history without keeping a second sample copy.
+  Prayer times reuse resolved settings and keep their fixed daily timeline
+  without a temporary event list.
 
 - **Cleaner portable builds.** Linker tuning checks for support, avoiding
   ignored-option warnings with other linkers.
