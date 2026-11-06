@@ -40,15 +40,25 @@ struct TabState {
     scroll: ScrollHandle,
     focus: Vec<FocusHandle>,
     last_focus: Option<usize>,
+    last_selection: Option<&'static str>,
+}
+
+impl TabState {
+    fn selected_target<T: PageTab>(&mut self, tabs: &[T], current: T) -> Option<usize> {
+        if self.last_selection == Some(current.slug()) { return None; }
+        self.last_selection = Some(current.slug());
+        tabs.iter().position(|tab| *tab == current)
+    }
 }
 
 /// Renders focusable tabs with arrow selection and scrolling to the focused tab.
 /// Keep `id` stable and distinct from other tab bars in the window so their
 /// focus and scroll state remain separate. `select` owns the page transition.
 pub(super) fn bar<V: 'static, T: PageTab>(id: &'static str, tabs: &[T], current: T, p: &MandaraPalette, select: fn(&mut V, T, &mut Window, &mut Context<V>), window: &mut Window, cx: &mut Context<V>) -> AnyElement {
-    let state = window.use_keyed_state(SharedString::from(format!("{id}-state")), cx, |_, _| TabState { scroll: ScrollHandle::new(), focus: Vec::new(), last_focus: None });
+    let state = window.use_keyed_state(SharedString::from(format!("{id}-state")), cx, |_, _| TabState { scroll: ScrollHandle::new(), focus: Vec::new(), last_focus: None, last_selection: None });
     let (scroll, focus) = state.update(cx, |state, cx| {
-        state.focus.resize_with(tabs.len(), || cx.focus_handle());
+        state.focus.resize_with(tabs.len(), || cx.focus_handle().tab_index(0).tab_stop(true));
+        if let Some(index) = state.selected_target(tabs, current) { state.scroll.scroll_to_item(index); }
         let focused = state.focus.iter().position(|handle| handle.is_focused(window));
         if focused != state.last_focus {
             if let Some(index) = focused { state.scroll.scroll_to_item(index); }
@@ -89,6 +99,17 @@ pub(super) fn bar<V: 'static, T: PageTab>(id: &'static str, tabs: &[T], current:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn initial_and_changed_selection_are_revealed_without_resetting_manual_scroll() {
+        use crate::registry::bars::BarsTab;
+        let tabs = [BarsTab::Bar, BarsTab::SideBars, BarsTab::Sidebar, BarsTab::Panels, BarsTab::Edges];
+        let mut state = TabState { scroll: ScrollHandle::new(), focus: Vec::new(), last_focus: None, last_selection: None };
+        assert_eq!(state.selected_target(&tabs, BarsTab::Edges), Some(4));
+        assert_eq!(state.selected_target(&tabs, BarsTab::Edges), None);
+        assert_eq!(state.selected_target(&tabs, BarsTab::Bar), Some(0));
+        assert_eq!(state.selected_target(&tabs, BarsTab::Bar), None);
+    }
 
     #[test]
     fn arrow_navigation_wraps_in_reading_order_without_handling_activation() {
