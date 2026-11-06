@@ -405,8 +405,8 @@ impl ArtTheme {
 
 fn to_render_image(mut rgba: image::RgbaImage) -> Arc<RenderImage> {
     // GPUI expects BGRA.
-    for px in rgba.pixels_mut() {
-        px.0.swap(0, 2);
+    for px in rgba.as_chunks_mut::<4>().0 {
+        px.swap(0, 2);
     }
     Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(rgba)]))
 }
@@ -423,11 +423,11 @@ struct ArtImages {
 /// (centre-cropped like `ObjectFit::Cover`) and, when `blur`, the backdrop.
 fn decode_art(path: &Path, cover_px: u32, blur: bool) -> ArtImages {
     let Ok(decoded) = mandara_theme::material::open_image(path) else { return ArtImages::default() };
-    let cover = (cover_px > 0).then(|| to_render_image(decoded.resize_to_fill(cover_px, cover_px, FilterType::Triangle).to_rgba8()));
-    let backdrop = blur.then(|| {
-        let small = decoded.thumbnail(BACKDROP_PX, BACKDROP_PX).to_rgba8();
-        to_render_image(image::imageops::blur(&small, BACKDROP_BLUR_SIGMA))
-    });
+    let cover = (cover_px > 0).then(|| decoded.resize_to_fill(cover_px, cover_px, FilterType::Triangle).into_rgba8());
+    let small = blur.then(|| decoded.thumbnail(BACKDROP_PX, BACKDROP_PX).into_rgba8());
+    drop(decoded);
+    let cover = cover.map(to_render_image);
+    let backdrop = small.map(|small| to_render_image(image::imageops::blur(&small, BACKDROP_BLUR_SIGMA)));
     ArtImages { cover, backdrop }
 }
 
@@ -1312,6 +1312,37 @@ mod tests {
         let missing = decode_art(&dir.join("missing.png"), 64, true);
         assert!(missing.cover.is_none() && missing.backdrop.is_none());
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Moving decode buffers preserves channels, transparency and filtering for PNG variants.
+    #[test]
+    fn consumed_album_art_matches_the_previous_cover_and_blur_pixels() {
+        let directory = tempfile::tempdir().unwrap();
+        let rgba = image::RgbaImage::from_fn(9, 5, |x, y| image::Rgba([(x * 23) as u8, (y * 47) as u8, 71, ((x + y) * 17) as u8]));
+        let source = image::DynamicImage::ImageRgba8(rgba);
+        let variants = [source.clone(), image::DynamicImage::ImageRgb8(source.to_rgb8()), image::DynamicImage::ImageLuma8(source.to_luma8()), image::DynamicImage::ImageLumaA8(source.to_luma_alpha8())];
+        let bgra = |image: &image::RgbaImage| image.pixels().flat_map(|pixel| [pixel[2], pixel[1], pixel[0], pixel[3]]).collect::<Vec<_>>();
+        for (index, variant) in variants.iter().enumerate() {
+            let path = directory.path().join(format!("art-{index}.png"));
+            variant.save(&path).unwrap();
+            let decoded = mandara_theme::material::open_image(&path).unwrap();
+            for (side, blur) in [(0, false), (4, false), (0, true), (4, true)] {
+                let actual = decode_art(&path, side, blur);
+                if side > 0 {
+                    let expected = decoded.resize_to_fill(side, side, FilterType::Triangle).to_rgba8();
+                    assert_eq!(actual.cover.unwrap().as_bytes(0).unwrap(), bgra(&expected));
+                } else { assert!(actual.cover.is_none()); }
+                if blur {
+                    let small = decoded.thumbnail(BACKDROP_PX, BACKDROP_PX).to_rgba8();
+                    let expected = image::imageops::blur(&small, BACKDROP_BLUR_SIGMA);
+                    assert_eq!(actual.backdrop.unwrap().as_bytes(0).unwrap(), bgra(&expected));
+                } else { assert!(actual.backdrop.is_none()); }
+            }
+        }
+        let rgba = source.into_rgba8();
+        let pointer = rgba.as_ptr();
+        let rendered = to_render_image(rgba);
+        assert_eq!(rendered.as_bytes(0).unwrap().as_ptr(), pointer, "BGRA conversion keeps the owned allocation");
     }
 
     #[test]

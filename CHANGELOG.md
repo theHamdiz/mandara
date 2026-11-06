@@ -30,6 +30,7 @@ About → What's new shows it too.
   Prayer times reuse resolved settings and keep their fixed daily timeline
   without a temporary event list. Search results keep reusable indices, and
   clipboard rows share their action state instead of rebuilding callbacks.
+  Album art and sharing or dock previews consume their resized image buffers.
 
 - **Cleaner portable builds.** Linker tuning checks for support, avoiding
   ignored-option warnings with other linkers.

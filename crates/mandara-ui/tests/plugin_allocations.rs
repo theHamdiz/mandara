@@ -1,6 +1,5 @@
 //! Counts only the calling test thread, outside cold view-state construction.
 
-use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 use std::hint::black_box;
 use std::rc::Rc;
@@ -15,55 +14,9 @@ mod day_events;
 #[path = "../src/plugins/media/scrub_state.rs"]
 mod scrub_state;
 
-struct Counting;
-
-thread_local! {
-    static TRACKING: Cell<bool> = const { Cell::new(false) };
-    static ALLOCATIONS: Cell<(usize, usize)> = const { Cell::new((0, 0)) };
-}
-
-/// Leaves allocations on other test and runtime threads out of the measurement.
-fn record(bytes: usize) {
-    if TRACKING.try_with(Cell::get).unwrap_or(false) {
-        let _ = ALLOCATIONS.try_with(|count| {
-            let (calls, total) = count.get();
-            count.set((calls + 1, total + bytes));
-        });
-    }
-}
-
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        record(layout.size());
-        unsafe { System.alloc(layout) }
-    }
-
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        record(layout.size());
-        unsafe { System.alloc_zeroed(layout) }
-    }
-
-    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
-        unsafe { System.dealloc(pointer, layout) }
-    }
-
-    unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        record(new_size);
-        unsafe { System.realloc(pointer, layout, new_size) }
-    }
-}
-
-#[global_allocator]
-static GLOBAL: Counting = Counting;
-
-/// Measures allocation calls and requested bytes after all fixtures are prepared.
-fn allocations(work: impl FnOnce()) -> (usize, usize) {
-    ALLOCATIONS.with(|count| count.set((0, 0)));
-    TRACKING.with(|tracking| tracking.set(true));
-    work();
-    TRACKING.with(|tracking| tracking.set(false));
-    ALLOCATIONS.with(Cell::get)
-}
+#[path = "support/allocations.rs"]
+mod allocations;
+use allocations::allocations;
 
 /// Warm redraws share gesture geometry and borrow either history window.
 #[test]
@@ -175,6 +128,30 @@ fn prayer_boundary_ticks_do_not_allocate() {
     assert_eq!(
         before.0, TICKS,
         "the positive control must observe every temporary list"
+    );
+    assert_eq!(after, (0, 0));
+}
+
+/// Consuming an already-RGBA resize result preserves its allocation.
+#[test]
+fn owned_rgba_conversion_does_not_clone_pixel_storage() {
+    let old = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        128,
+        64,
+        image::Rgba([10, 20, 30, 79]),
+    ));
+    let owned = old.clone();
+    let before = allocations(|| {
+        black_box(old.to_rgba8());
+    });
+    let after = allocations(|| {
+        black_box(owned.into_rgba8());
+    });
+    eprintln!("RGBA conversion: borrowed copy {before:?}, owned buffer {after:?}");
+    assert_eq!(
+        before,
+        (1, 128 * 64 * 4),
+        "the positive control must observe the pixel copy"
     );
     assert_eq!(after, (0, 0));
 }
