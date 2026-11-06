@@ -242,16 +242,13 @@ used unless that text appeared. For an English interface the chain is the
 Arabic one: Cairo, Noto Sans Arabic (UI), Noto Naskh / Kufi Arabic, 53
 files mapped and parsed at the first frame.
 
-`load_chain_face` picks that same face without loading the others: the
-family's faces are ranked as before (upright, then nearest to 400, ties in
-database order) and the first one `load_family` would accept as a primary
-font (a Latin `m`, a known colour emoji font, or one of upstream's icon
-fonts let through without an `m`; one `can_be_primary` test serves both)
-is loaded alone, the `m` read straight from the file. Families without such a face still drop out
-of the chain, as before. Faces loaded later by name (a family chosen as
-the UI font, a fallback run's weight) load as they did.
+`load_chain_face` ranks faces upright first, then nearest to 400, keeping
+font-database order for ties, and loads only the selected face. Fallback-only
+faces can lack Latin glyphs; primary fonts still require the measurement glyph
+`m`, with the existing emoji and icon-font exceptions. The same guard also
+applies when a previously loaded fallback is requested as a primary font.
 
-Measured in Mandara's demo sandbox (Vulkan / RADV, 3840 × 2160 at 1.5,
+The original patch was measured in Mandara's demo sandbox (Vulkan / RADV, 3840 × 2160 at 1.5,
 default config, release builds, three runs each; the shell's
 `lock::paint::TextPainter` got the same treatment, see
 `docs/releasing.md` § Start-up memory): font files mapped 52 → 2, their
@@ -284,6 +281,21 @@ wgpu keeps queued transfers alive until submission finishes.
 Tests check borrowed BGRA allocation identity, RGBA channel conversion,
 removal before submission, and actual headless GPU pixels after changing
 the source bytes and reusing the released texture id, in both formats.
+
+## 14. Accept script-only fallback faces (`cosmic_text_system.rs`)
+
+Devanagari and Telugu faces often lack Latin `m`. Applying the primary-font
+measurement guard to the default fallback chain rejected these faces and left
+cosmic-text to search unrelated families. Fallback faces now join the chain
+without that guard. Requesting such a face as a primary font still fails,
+including when it was already cached as a fallback. Face selection uses one borrowed pass without a candidate vector or sorting;
+the selected face supplies its emoji classification directly from the database.
+
+Regression tests use a small SIL Open Font License Devanagari fixture, loaded
+only in tests. They cover fallback acceptance, cached primary rejection and
+actual Hindi/Marathi shaping with a Latin primary and no extra loaded faces.
+The font and its license live under `test_data/`; neither enters the release
+binary. Release measurements are required before claiming a memory saving.
 
 ## Tests
 

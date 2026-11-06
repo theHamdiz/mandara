@@ -1210,7 +1210,7 @@
 "Automatic login" = "Automatische Anmeldung"
 "Backlight devices and levels" = "Hintergrundbeleuchtung: Geräte und Stufen"
 "Balanced" = "Ausgewogen"
-"Bars" = "Balken"
+"Bars" = "Leisten"
 "Batteries" = "Akkus"
 "Battery details need the upower service" = "Akkudetails benötigen den upower-Dienst"
 "Battery health, cycles, rate and time estimates (JSON)" = "Akkuzustand, Ladezyklen, Rate und Zeitschätzungen (JSON)"
@@ -8700,3 +8700,18 @@
 "Couldn't verify the community store policy. Try again later." = "Die Richtlinie des Community-Stores konnte nicht geprüft werden. Versuche es später erneut."
 "The community store has blocked installs and updates for {repository}." = "Der Community-Store hat Installationen und Updates für {repository} gesperrt."
 "Repository details are missing IDs required by the store policy." = "In den Repository-Details fehlen die für die Store-Richtlinie erforderlichen IDs."
+
+# Studio bars
+"Edges & corners" = "Ränder und Ecken"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "ein Abschnitt (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] oder plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "Füge das Plugin „{name}“ zur Leiste hinzu (Studio → Leisten → Leiste), um die Anzeige dort zu sehen; Bildschirmanzeigen funktionieren in jedem Fall."
+"Add any widget to it in Studio → Bars → Sidebar." = "Füge unter Studio → Leisten → Seitenleiste beliebige Widgets hinzu."
+"Number of bars" = "Anzahl der Balken"
+
+"Release signature verified." = "Signatur der Veröffentlichung bestätigt."
+"Downloaded:" = "Heruntergeladen:"
+"Archive checksum verified." = "Prüfsumme des Archivs bestätigt."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "Die signierte Veröffentlichung konnte nicht heruntergeladen werden. Es wurde nichts installiert. Prüfe deine Verbindung und versuche es erneut."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "Diese Binärdatei konnte nicht überprüft werden: {reason}. Mandara wurde nicht installiert. Prüfe deine Verbindung und versuche es erneut."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "Diese Binärdatei auch installieren, wenn ihre veröffentlichte Prüfsumme nicht verfügbar ist oder nicht übereinstimmt."

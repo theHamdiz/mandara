@@ -2690,7 +2690,7 @@ impl WgpuHeadlessRenderer {
         readback_buffer.unmap();
 
         if self.core.target_format == wgpu::TextureFormat::Bgra8Unorm {
-            for pixel in pixels.chunks_exact_mut(4) {
+            for pixel in pixels.as_chunks_mut::<4>().0 {
                 pixel.swap(0, 2);
             }
         }
@@ -2735,12 +2735,10 @@ fn paths_bounding_box(scene: &Scene, size: Size<DevicePixels>) -> Option<((u32, 
     let top = clamp(union.origin.y.0.floor(), size.height.0);
     let right = clamp((union.origin.x.0 + union.size.width.0).ceil(), size.width.0);
     let bottom = clamp((union.origin.y.0 + union.size.height.0).ceil(), size.height.0);
-    (right > left && bottom > top).then(|| {
-        (
-            (left as u32, top as u32),
-            ((right - left) as u32, (bottom - top) as u32),
-        )
-    })
+    (right > left && bottom > top).then_some((
+        (left as u32, top as u32),
+        ((right - left) as u32, (bottom - top) as u32),
+    ))
 }
 
 fn instance_range(range: Range<usize>) -> Range<u32> {

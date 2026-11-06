@@ -9,7 +9,7 @@ use crate::state::{config, flush_config, reload_config_from_disk, shell, update_
 
 /// `mandara msg studio <section>`: every slug of the launcher's Studio
 /// entries (`crate::overlays::STUDIO_SECTIONS`, checked by a test).
-pub const STUDIO_SECTION_ARG: &str = mandara_i18n::tk("a section (home, themes, wallpaper, desktop-widgets, typography, motion, bar, sidebar, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>");
+pub const STUDIO_SECTION_ARG: &str = mandara_i18n::tk("a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>");
 
 /// Lets the `restart` reply reach the client before the process exits.
 const RESTART_FLUSH: std::time::Duration = std::time::Duration::from_millis(150);

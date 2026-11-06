@@ -15,6 +15,8 @@ publish = false
 # mandara-services (the updater, apply side only) use it as a path
 # dependency.
 
+[workspace]
+
 [[bin]]
 name = "mandara-delta"
 required-features = ["create"]
@@ -48,7 +50,7 @@ flate2 = { version = "1.1", optional = true }
 bidiff = { version = "1", optional = true }
 # Encoding only: no legacy-format decoding, dictionary builder or array API.
 zstd = { version = "0.14", optional = true, default-features = false }
-toml = { version = "1.1", optional = true, default-features = false, features = ["std", "parse", "serde"] }
+toml = { version = "1.2", optional = true, default-features = false, features = ["std", "parse", "serde"] }
 ring = { version = "0.17", optional = true }
 
 # The same rule as the main workspace (this crate is its own root).

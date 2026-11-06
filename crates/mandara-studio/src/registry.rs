@@ -19,6 +19,7 @@ mod look_tests;
 pub mod surface_settings;
 pub mod system_settings;
 pub mod side_bar_settings;
+pub mod bars;
 pub mod recorder_settings;
 mod tuning_settings;
 mod integration_settings;
@@ -32,8 +33,7 @@ pub enum Section {
     /// Looks, designed and wallpaper themes, light / dark, palette tuning,
     /// style, icons and app themes: every color-and-shape choice on one page.
     Themes,
-    Bar,
-    Sidebar,
+    Bars,
     Launcher,
     /// The app dock (W4).
     Dock,
@@ -80,11 +80,10 @@ pub enum Section {
 }
 
 impl Section {
-    pub const ALL: [Section; 32] = [
+    pub const ALL: [Section; 31] = [
         Section::Home,
         Section::Themes,
-        Section::Bar,
-        Section::Sidebar,
+        Section::Bars,
         Section::Launcher,
         Section::Dock,
         Section::WindowSwitcher,
@@ -121,8 +120,7 @@ impl Section {
         match self {
             Section::Home => tk("Home"),
             Section::Themes => tk("Themes"),
-            Section::Bar => tk("Bar"),
-            Section::Sidebar => tk("Sidebars & hover"),
+            Section::Bars => tk("Bars"),
             Section::Launcher => tk("Launcher"),
             Section::Dock => tk("Dock"),
             Section::WindowSwitcher => tk("Window switcher"),
@@ -169,8 +167,7 @@ impl Section {
             Section::DesktopWidgets => "clock",
             Section::Typography => "text-scan",
             Section::Motion => "waves",
-            Section::Bar => "window",
-            Section::Sidebar => "sidebar",
+            Section::Bars => "window",
             Section::Dock => "box",
             Section::Launcher => "search",
             Section::WindowSwitcher => "copy",
@@ -278,7 +275,7 @@ impl NavGroup {
         use Section::*;
         match self {
             NavGroup::LookAndFeel => &[Themes, Wallpaper, DesktopWidgets, Typography, Motion],
-            NavGroup::Desktop => &[Bar, Sidebar, Dock, Launcher, WindowSwitcher, Notifications, Osd],
+            NavGroup::Desktop => &[Bars, Dock, Launcher, WindowSwitcher, Notifications, Osd],
             NavGroup::System => &[Displays, Audio, Network, Power, Input, Shortcuts, DateTime, Applications],
             NavGroup::Security => &[Users, LoginScreen, LockScreen, Privacy],
             NavGroup::Extend => &[Plugins, Compositor],
@@ -359,7 +356,8 @@ impl Setting {
     /// Matches the English text and its translation.
     pub fn matches(&self, query: &str) -> bool {
         let q = query.to_lowercase();
-        let english = [self.label, self.help, self.group, self.section.title()];
+        let tab = (self.section == Section::Bars).then(|| bars::BarsTab::for_path(self.path)).flatten();
+        let english = [self.label, self.help, self.group, self.section.title(), tab.map_or("", bars::BarsTab::title)];
         english.iter().chain(std::iter::once(&self.path)).any(|s| s.to_lowercase().contains(&q))
             || (mandara_i18n::language() != mandara_i18n::Lang::En && english.iter().any(|s| !s.is_empty() && tr(s).to_lowercase().contains(&q)))
     }
@@ -636,28 +634,28 @@ fn build() -> Vec<Setting> {
         // picking one switches to the wallpaper's colors.
         s(Themes, tk("Wallpaper colors"), "/theme/source/variant", tk("Wallpaper scheme"), tk("Material You variant used for wallpaper themes"), Choice(BOOL_SCHEMES)),
         // Bar
-        s(Bar, tk("Layout"), "/bar/layout", tk("Style"), tk("Edge frame, floating glass pills, one island, a thin hairline, a tiny micro pill or a notch hanging from the edge"), Choice(LAYOUTS)),
-        s(Bar, tk("Layout"), "/bar/position", tk("Position"), tk("Any screen edge; panels open toward the middle (sideways from a side bar)"), Choice(const { &[("top", tk("Top")), ("bottom", tk("Bottom")), ("left", tk("Left")), ("right", tk("Right"))] })),
-        s(Bar, tk("Layout"), "/bar/height", tk("Height"), tk("Bar thickness"), span(ranges::BAR_HEIGHT, " px")),
-        s(Bar, tk("Spacing"), "/bar/edge_gap", tk("Edge gap"), tk("Distance from the screen edge (floating styles and the floating frame)"), span(ranges::BAR_EDGE_GAP, " px")),
-        s(Bar, tk("Spacing"), "/bar/side_gap", tk("Side inset"), tk("Horizontal inset of the outer groups"), span(ranges::BAR_SIDE_GAP, " px")),
-        s(Bar, tk("Shape"), "/bar/corner_radius", tk("Bar radius"), tk("Glass pills and island: their corners. Edge frame: the hover chips, and the frame's ends when it floats"), span(ranges::BAR_PILL_RADIUS, " px")),
-        s(Bar, tk("Shape"), "/bar/flare_radius", tk("Flare radius"), tk("Concave curve where the edge frame or the notch meets the screen, panels and the sidebar"), span(ranges::BAR_FLARE_RADIUS, " px")),
-        s(Bar, surface_settings::APPEARANCE, "/bar/opacity", tk("Background opacity"), tk("Lower it to let your wallpaper and windows show through the bar"), span(ranges::OPACITY, "")),
-        s(Bar, surface_settings::PANELS, "/bar/panel_radius", tk("Panel radius"), tk("Corner radius of dropdown panels"), span(ranges::PANEL_RADIUS, " px")),
-        s(Bar, tk("Clock"), "/bar/show_seconds", tk("Show seconds"), tk("Seconds in the bar clock"), Toggle),
+        s(Bars, tk("Layout"), "/bar/layout", tk("Style"), tk("Edge frame, floating glass pills, one island, a thin hairline, a tiny micro pill or a notch hanging from the edge"), Choice(LAYOUTS)),
+        s(Bars, tk("Layout"), "/bar/position", tk("Position"), tk("Any screen edge; panels open toward the middle (sideways from a side bar)"), Choice(const { &[("top", tk("Top")), ("bottom", tk("Bottom")), ("left", tk("Left")), ("right", tk("Right"))] })),
+        s(Bars, tk("Layout"), "/bar/height", tk("Height"), tk("Bar thickness"), span(ranges::BAR_HEIGHT, " px")),
+        s(Bars, tk("Spacing"), "/bar/edge_gap", tk("Edge gap"), tk("Distance from the screen edge (floating styles and the floating frame)"), span(ranges::BAR_EDGE_GAP, " px")),
+        s(Bars, tk("Spacing"), "/bar/side_gap", tk("Side inset"), tk("Horizontal inset of the outer groups"), span(ranges::BAR_SIDE_GAP, " px")),
+        s(Bars, tk("Shape"), "/bar/corner_radius", tk("Bar radius"), tk("Glass pills and island: their corners. Edge frame: the hover chips, and the frame's ends when it floats"), span(ranges::BAR_PILL_RADIUS, " px")),
+        s(Bars, tk("Shape"), "/bar/flare_radius", tk("Flare radius"), tk("Concave curve where the edge frame or the notch meets the screen, panels and the sidebar"), span(ranges::BAR_FLARE_RADIUS, " px")),
+        s(Bars, surface_settings::APPEARANCE, "/bar/opacity", tk("Background opacity"), tk("Lower it to let your wallpaper and windows show through the bar"), span(ranges::OPACITY, "")),
+        s(Bars, surface_settings::PANELS, "/bar/panel_radius", tk("Panel radius"), tk("Corner radius of dropdown panels"), span(ranges::PANEL_RADIUS, " px")),
+        s(Bars, tk("Clock"), "/bar/show_seconds", tk("Show seconds"), tk("Seconds in the bar clock"), Toggle),
         // Sidebar
-        s(Sidebar, tk("Behaviour"), "/sidebar/enabled", tk("Enable sidebar"), tk("The edge drawer with quick settings and cards"), Toggle),
-        s(Sidebar, tk("Behaviour"), "/sidebar/side", tk("Side"), tk("Which edge it lives on; the power dock takes the other. Auto follows the locale (right for Arabic)"), Choice(const { &[("auto", tk("Auto")), ("left", tk("Left")), ("right", tk("Right"))] })),
-        s(Sidebar, tk("Behaviour"), "/sidebar/notifications_tab", tk("Notifications tab"), tk("Notifications in their own tab after yours, instead of a card"), Toggle),
-        s(Sidebar, tk("Tabs"), "/sidebar/always_first_tab", tk("Always open on the first tab"), tk("Every opening shows the first tab instead of the one you used last"), Toggle),
-        s(Sidebar, tk("Tabs"), "/sidebar/add_tab_button", tk("New-tab button"), tk("A + at the end of the tab strip makes a tab in place"), Toggle),
-        s(Sidebar, tk("Open on hover"), "/sidebar/hover_reveal", tk("Sidebar"), tk("Open when the pointer touches the sidebar's edge"), Toggle),
-        s(Sidebar, tk("Open on hover"), "/edges/session_right", tk("Power dock"), tk("The edge opposite the sidebar · MangoWM and Hyprland"), Toggle),
-        s(Sidebar, tk("Open on hover"), "/edges/launcher_bottom", tk("Launcher"), tk("Rest the pointer on the bottom edge"), Toggle),
-        s(Sidebar, tk("Open on hover"), "/edges/dwell_ms", tk("Dwell time"), tk("How long the pointer must rest on an edge first"), slider(0.0, 800.0, 10.0, " ms")),
-        s(Sidebar, tk("Behaviour"), "/sidebar/mode", tk("Windows"), tk("Float over windows (smoothest), push them aside while the sidebar is open, or keep it pinned open with its space reserved"), Choice(const { &[("float", tk("Float")), ("push", tk("Push")), ("pinned", tk("Pinned"))] })),
-        s(Sidebar, tk("Layout"), "/sidebar/width", tk("Width"), tk("Sidebar width"), span(ranges::SIDEBAR_WIDTH, " px")),
+        s(Bars, tk("Behaviour"), "/sidebar/enabled", tk("Enable sidebar"), tk("The edge drawer with quick settings and cards"), Toggle),
+        s(Bars, tk("Behaviour"), "/sidebar/side", tk("Side"), tk("Which edge it lives on; the power dock takes the other. Auto follows the locale (right for Arabic)"), Choice(const { &[("auto", tk("Auto")), ("left", tk("Left")), ("right", tk("Right"))] })),
+        s(Bars, tk("Behaviour"), "/sidebar/notifications_tab", tk("Notifications tab"), tk("Notifications in their own tab after yours, instead of a card"), Toggle),
+        s(Bars, tk("Tabs"), "/sidebar/always_first_tab", tk("Always open on the first tab"), tk("Every opening shows the first tab instead of the one you used last"), Toggle),
+        s(Bars, tk("Tabs"), "/sidebar/add_tab_button", tk("New-tab button"), tk("A + at the end of the tab strip makes a tab in place"), Toggle),
+        s(Bars, tk("Open on hover"), "/sidebar/hover_reveal", tk("Sidebar"), tk("Open when the pointer touches the sidebar's edge"), Toggle),
+        s(Bars, tk("Open on hover"), "/edges/session_right", tk("Power dock"), tk("The edge opposite the sidebar · MangoWM and Hyprland"), Toggle),
+        s(Bars, tk("Open on hover"), "/edges/launcher_bottom", tk("Launcher"), tk("Rest the pointer on the bottom edge"), Toggle),
+        s(Bars, tk("Open on hover"), "/edges/dwell_ms", tk("Dwell time"), tk("How long the pointer must rest on an edge first"), slider(0.0, 800.0, 10.0, " ms")),
+        s(Bars, tk("Behaviour"), "/sidebar/mode", tk("Windows"), tk("Float over windows (smoothest), push them aside while the sidebar is open, or keep it pinned open with its space reserved"), Choice(const { &[("float", tk("Float")), ("push", tk("Push")), ("pinned", tk("Pinned"))] })),
+        s(Bars, tk("Layout"), "/sidebar/width", tk("Width"), tk("Sidebar width"), span(ranges::SIDEBAR_WIDTH, " px")),
         // Launcher
         s(Launcher, tk("Button"), "/appearance/launcher_icon", tk("Button icon"), tk("Bundled, your distro's logo, any icon from your theme, or your own image"), Icon),
         s(Launcher, workflow_settings::GENERAL, "/launcher/enabled", tk("Enable launcher"), tk("Apps, settings, commands, “/” slash commands and skills, “=” calculator; off disables the keybind, edge and menu entry"), Toggle),
@@ -983,7 +981,7 @@ fn build() -> Vec<Setting> {
         s(Compositor, tk("Hyprland"), "/compositor/hyprland/dim_strength", tk("Dim strength"), "decoration:dim_strength", optional(0.0, 1.0, 0.05, "", 0.1)),
         // Audio & media
         sd(Audio, tk("Visualizer"), "/plugins/settings/media/visualizer_style", tk("Visualizer style"), tk("How the media panel draws the live audio spectrum"), Choice(const { &[("bars", tk("Mirrored bars")), ("wave", tk("Liquid wave")), ("ring", tk("Album ring"))] }), Value::from("bars")),
-        sd(Audio, tk("Visualizer"), "/plugins/settings/media/visualizer_bars", tk("Bars"), tk("How many bars or dots the spectrum uses"), slider(8.0, 64.0, 2.0, ""), Value::from(32)),
+        sd(Audio, tk("Visualizer"), "/plugins/settings/media/visualizer_bars", tk("Number of bars"), tk("How many bars or dots the spectrum uses"), slider(8.0, 64.0, 2.0, ""), Value::from(32)),
         sd(Audio, tk("Visualizer"), "/plugins/settings/media/visualizer_smoothing", tk("Smoothing"), tk("Higher values fall back more slowly for a calmer motion"), slider(0.0, 0.95, 0.05, ""), Value::from(0.35)),
         // App themes (cross-app sync)
         s(Themes, tk("App themes"), "/integrations/ghostty", "Ghostty", tk("Terminal colors follow the theme"), Toggle),

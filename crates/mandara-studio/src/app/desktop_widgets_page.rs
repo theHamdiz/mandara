@@ -1362,7 +1362,7 @@ impl StudioView {
                 let shapes: Vec<(VisualizerShape, &'static str)> = [VisualizerShape::Bars, VisualizerShape::Mirrored, VisualizerShape::Wave, VisualizerShape::Radial, VisualizerShape::Led].iter().map(|s| (*s, vis_label(*s))).collect();
                 rows.push(choice_row(t("Shape"), &id, "vshape", v.shape, &shapes, Rc::new(|w, x| if let WidgetKind::Visualizer(v) = &mut w.kind { v.shape = x }), p, cx));
                 let set = |f: fn(&mut PlaneVisualizer, f32)| -> Set<f32> { Rc::new(move |w, x| if let WidgetKind::Visualizer(v) = &mut w.kind { f(v, x) }) };
-                rows.push(row(p, t("Bars"), slider(&id, "bars", v.bars as f32, (ranges::VISUALIZER_BARS.0 as f32, ranges::VISUALIZER_BARS.1 as f32), 1.0, "", set(|v, x| v.bars = x as u32), p)));
+                rows.push(row(p, t("Number of bars"), slider(&id, "bars", v.bars as f32, (ranges::VISUALIZER_BARS.0 as f32, ranges::VISUALIZER_BARS.1 as f32), 1.0, "", set(|v, x| v.bars = x as u32), p)));
                 rows.push(row(p, if v.shape == VisualizerShape::Radial { t("Diameter") } else { t("Length") }, slider(&id, "len", v.length, ranges::VISUALIZER_LENGTH_PX, 2.0, " px", set(|v, x| v.length = x), p)));
                 rows.push(row(p, t("Height"), slider(&id, "vh", v.height, ranges::VISUALIZER_HEIGHT_PX, 1.0, " px", set(|v, x| v.height = x), p)));
                 rows.push(row(p, t("Angle"), slider(&id, "angle", v.angle, ranges::ANGLE_DEG, 1.0, "°", set(|v, x| v.angle = x), p)));

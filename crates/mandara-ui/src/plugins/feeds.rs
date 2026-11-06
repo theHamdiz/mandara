@@ -45,8 +45,17 @@ struct Reader {
     read: HashMap<String, Arc<BTreeSet<String>>>,
 }
 
-thread_local! { static READER: Rc<RefCell<Reader>> = Rc::default(); }
-fn reader() -> Rc<RefCell<Reader>> { READER.with(Rc::clone) }
+thread_local! { static READER: RefCell<Option<Rc<RefCell<Reader>>>> = const { RefCell::new(None) }; }
+fn reader() -> Rc<RefCell<Reader>> {
+    READER.with(|slot| slot.borrow_mut().get_or_insert_with(Rc::default).clone())
+}
+
+/// Clear only an existing reader; never allocate one just to disable it.
+pub(super) fn stop() {
+    if let Some(reader) = READER.with(|slot| slot.borrow_mut().take()) {
+        reader.borrow().data.borrow_mut().clear();
+    }
+}
 
 /// Keep distinct feed addresses in configured order within the list limit.
 pub fn subscriptions(cfg: &ShellConfig) -> Result<Vec<String>, String> {
@@ -65,6 +74,7 @@ fn refresh_seconds(cfg: &ShellConfig) -> Duration {
 
 /// Refresh through the cache, retaining conditional-request state and read flags.
 fn refresh(url: String, force: bool, cfg: &ShellConfig, cx: &mut App) {
+    if !super::lifecycle::is_on(ID, cx) { return; }
     let data = reader().borrow().data.clone();
     let address = url.clone();
     integration::load(&data, url, force, refresh_seconds(cfg), move |previous| Cache::default().refresh(&HttpSource::default(), &address, previous.as_deref()), cx);
@@ -191,6 +201,20 @@ pub fn register(registry: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn disabling_a_reader_drops_read_flags_without_constructing_a_replacement() {
+        stop();
+        assert!(READER.with(|slot| slot.borrow().is_none()));
+        let reader = reader();
+        let flags = Arc::new(BTreeSet::from(["https://example.org/article".into()]));
+        let weak = Arc::downgrade(&flags);
+        reader.borrow_mut().read.insert("https://example.org/feed".into(), flags);
+        drop(reader);
+        stop();
+        assert!(weak.upgrade().is_none());
+        assert!(READER.with(|slot| slot.borrow().is_none()));
+    }
 
     #[test]
     fn subscription_settings_keep_order_remove_duplicates_and_bound_the_list() {

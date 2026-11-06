@@ -33,6 +33,8 @@ mod about_links;
 mod plugin_credentials;
 mod whats_new;
 mod designer;
+mod bars_page;
+mod page_tabs;
 mod plugin_pool;
 mod sidebar_tabs_page;
 mod greeter_page;
@@ -98,6 +100,7 @@ fn begin_move(window: &mut Window) {
 
 pub struct StudioView {
     section: Section,
+    bars_tab: registry::bars::BarsTab,
     search: Entity<TextField>,
     query: String,
     fields: HashMap<&'static str, Entity<TextField>>,
@@ -119,9 +122,9 @@ pub struct StudioView {
     themes: Option<themes_page::ThemeGallery>,
     /// Icon picker: the query and the theme icons matching it.
     icon_matches: Option<(String, Rc<[String]>)>,
-    /// Studio → Sidebars & hover → Tabs editor state.
+    /// Studio → Bars → Sidebar editor state.
     sidebar_tabs: sidebar_tabs_page::TabsEditor,
-    /// Studio → Bar → Layout designer: the plugin pool's search and menu.
+    /// Studio → Bars → Bar: the plugin pool's search and menu.
     designer: plugin_pool::Designer,
     /// Responsive breakpoints, recomputed from the window width each frame.
     rail: bool,
@@ -220,7 +223,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { section: Section::Home, recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default() }
+        Self { section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -228,6 +231,7 @@ impl StudioView {
     /// (the content scroller is shared: a page must not inherit the last
     /// one's offset, which left short pages "stuck" at their bottom).
     pub fn show(&mut self, section: Section, cx: &mut Context<Self>) {
+        if section == Section::Bars { self.bars_tab = Default::default(); }
         if section == Section::Plugins { self.market_reopen(); }
         if section != self.section {
             if section == Section::Maintenance { self.maint.invalidate(); }
@@ -714,9 +718,18 @@ impl StudioView {
             let badge = Some(if changed > 0 { tf("{changed} of {count} changed", &[("changed", &changed), ("count", &list.len())]) } else { list.len().to_string() });
             // The Reset button lives in the header, so it works while closed.
             let reset = self.group_reset(title, &list, cfg, p, cx);
-            let head = fold::FoldHead { title: tr(title).into(), preview, badge, trailing: reset, closed: false };
+            let first = list[0];
+            let tab = (first.section == Section::Bars).then(|| registry::bars::BarsTab::for_path(first.path)).flatten();
+            let key = match tab {
+                Some(tab) => format!("Bars/{}/{title}", tab.slug()),
+                None => format!("{:?}/{title}", first.section),
+            };
+            let heading = if self.query.is_empty() { tr(title) }
+                else if let Some(tab) = tab { format!("{} · {} · {}", first.section.label(), tr(tab.title()), tr(title)) }
+                else { format!("{} · {}", first.section.label(), tr(title)) };
+            let head = fold::FoldHead { title: heading.into(), preview, badge, trailing: reset, closed: false };
             let list: Vec<Setting> = list.into_iter().cloned().collect();
-            let fold = self.fold(title, head, p, cx, move |this, cx| {
+            let fold = self.fold_at(key, head, p, cx, move |this, cx| {
                 let refs: Vec<&Setting> = list.iter().collect();
                 let cfg = config(cx).read(cx).snapshot();
                 this.group_card(&refs, card_w, &cfg, p, cx).into_any_element()
@@ -1217,7 +1230,8 @@ impl StudioView {
                 }))
         };
         let section_title = |t: &'static str, p: &MandaraPalette| div().pt(px(SPACE_6_PX)).text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface_variant.hsla()).child(t);
-        let bundled: Vec<_> = BUNDLED.iter().map(|n| tile(n.to_string(), None, p, cx)).collect();
+        let mut bundled: Vec<_> = BUNDLED.iter().map(|n| tile(n.to_string(), None, p, cx)).collect();
+        bundled.extend(mandara_ui::launcher_art::ICONS.iter().map(|icon| tile(icon.spec.to_string(), Some(icon.name.replace('-', " ")), p, cx)));
         let themed: Vec<_> = theme_names.iter().map(|n| tile(n.clone(), Some(if n == "distro" { t("Distro logo").into() } else { n.trim_end_matches("-symbolic").to_string() }), p, cx)).collect();
         let empty = themed.is_empty();
         // Inside the settings card (its padding + the picker row's) and the picker's own padding.
@@ -1731,18 +1745,7 @@ impl Render for StudioView {
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(rows).child(widgets).into_any_element()
                 }
                 Section::Users => users_page::element(cx),
-                Section::Bar => {
-                    let designer = self.bar_designer(&cfg, &p, window, cx);
-                    let rows = self.rows(registry::in_section(Section::Bar), &cfg, &p, cx);
-                    let displays = self.displays_link(mandara_config::outputs::SurfaceKind::Bar, &cfg, &p, cx);
-                    div().row().flex_col().gap(px(SPACE_26_PX)).child(designer).child(rows).child(displays).into_any_element()
-                }
-                Section::Sidebar => {
-                    // The tab editor first (as the Bar page's designer), then the settings.
-                    let designer = self.sidebar_tabs_editor(&cfg, &p, window, cx);
-                    let rows = self.rows(registry::in_section(Section::Sidebar), &cfg, &p, cx);
-                    div().row().flex_col().gap(px(SPACE_26_PX)).child(designer).child(rows).into_any_element()
-                }
+                Section::Bars => self.bars_page(&cfg, &p, window, cx),
                 Section::General => {
                     let picker = self.language_picker(&cfg, &p, window, cx);
                     let rows = self.rows(registry::in_section(Section::General).filter(|s| s.path != LOCALE_PATH), &cfg, &p, cx);
@@ -1980,7 +1983,7 @@ fn group_order(section: Section) -> Option<&'static [&'static str]> {
     use registry::side_bar_settings::{SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL, SIDE_BAR_SHAPE, SIDE_BARS};
     use registry::surface_settings::{APPEARANCE, PANEL_MOTION, PANELS};
     Some(match section {
-        Section::Bar => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", SIDE_BARS, SIDE_BAR_SHAPE, SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL, PANELS, PANEL_MOTION],
+        Section::Bars => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", SIDE_BARS, SIDE_BAR_SHAPE, SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL, PANELS, PANEL_MOTION],
         Section::Launcher => &["Size & placement", "Button", "Results", "Grid", "Beacon search bar", "Search providers", "Ranking", "General", "Starting apps", "Pinned & hidden apps"],
         Section::Themes => &["Mode", "Style", "Tuning", "Accessibility", "Wallpaper colors", "Icons", "Cursor", "App themes"],
         Section::Wallpaper => &["Desktop", "Light & dark", "Video", "Depth clock", "Picker", "Slideshow", "Source", "When to change", "Slideshow transition", "Displays", "Wallhaven"],
@@ -1991,7 +1994,7 @@ fn group_order(section: Section) -> Option<&'static [&'static str]> {
 pub(crate) fn group_rows<'a>(settings: impl IntoIterator<Item = &'a Setting>) -> Vec<(&'static str, Vec<&'a Setting>)> {
     let mut groups: Vec<(&'static str, Vec<&'a Setting>)> = Vec::new();
     for s in settings {
-        match groups.iter_mut().find(|(g, list)| *g == s.group && list.first().is_some_and(|f| f.section == s.section)) {
+        match groups.iter_mut().find(|(g, list)| *g == s.group && list.first().is_some_and(|f| f.section == s.section && (s.section != Section::Bars || registry::bars::BarsTab::for_path(f.path) == registry::bars::BarsTab::for_path(s.path)))) {
             Some((_, list)) => list.push(s),
             None => groups.push((s.group, vec![s])),
         }
@@ -2074,12 +2077,23 @@ fn about_chip(text: String, tone: mandara_theme::Color, family: SharedString, p:
 mod group_order_tests {
     use super::*;
 
+    #[test]
+    fn bars_search_groups_never_mix_two_tabs_with_the_same_title() {
+        let groups = group_rows(registry::in_section(Section::Bars));
+        let layouts: Vec<_> = groups.iter().filter(|(title, _)| *title == "Layout").collect();
+        assert_eq!(layouts.len(), 2);
+        for (_, settings) in groups {
+            let tab = registry::bars::BarsTab::for_path(settings[0].path);
+            assert!(settings.iter().all(|s| registry::bars::BarsTab::for_path(s.path) == tab));
+        }
+    }
+
     /// A misspelt name in a page's order table would silently sink that
     /// group to the end; every listed group must exist on its page, and
     /// every page section keeps all its groups.
     #[test]
     fn ordered_groups_exist_and_none_are_lost() {
-        for section in [Section::Bar, Section::Launcher, Section::Themes, Section::Wallpaper] {
+        for section in [Section::Bars, Section::Launcher, Section::Themes, Section::Wallpaper] {
             let order = group_order(section).unwrap();
             let groups: Vec<&str> = group_rows(registry::in_section(section)).into_iter().map(|(g, _)| g).collect();
             for g in order {
@@ -2087,7 +2101,7 @@ mod group_order_tests {
             }
         }
         // Bar: spacing and the frame split out of a 15-setting Layout.
-        let bar = group_rows(registry::in_section(Section::Bar));
+        let bar = group_rows(registry::in_section(Section::Bars));
         let size = |name: &str| bar.iter().find(|(g, _)| *g == name).map_or(0, |(_, l)| l.len());
         assert!(size("Layout") <= 7 && size("Spacing") >= 4 && size("Screen frame") == 3, "{:?}", bar.iter().map(|(g, l)| (*g, l.len())).collect::<Vec<_>>());
     }

@@ -1,4 +1,4 @@
-//! Studio → Bar / Sidebars: the drag-and-drop layout designer and bar
+//! Studio → Bars: the drag-and-drop layout designer and bar
 //! presets. The bar's left / center / right zones (and the side bars'
 //! groups while they're on) are columns of items stacked in order: drag
 //! them to reorder or move them, × takes one off, a click opens a menu
@@ -184,8 +184,6 @@ const ZONE_ITEM_H_PX: f32 = DIM_34_PX;
 const ZONE_TILE_PX: f32 = DIM_20_PX;
 /// The bar's three zones sit side by side while each gets this much.
 const ZONE_MIN_W_PX: f32 = DIM_200_PX;
-/// A side bar's column of groups beside the screen.
-const SIDE_COL_W_PX: f32 = DIM_220_PX;
 /// Widths of the widget pills in a preset's tiny bar drawing.
 const MOCK_PILL_A_PX: f32 = 18.0;
 const MOCK_PILL_B_PX: f32 = 14.0;
@@ -475,9 +473,27 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// The bar designer with presets (Studio → Bar).
+    /// The main bar designer with presets (Studio → Bars → Bar).
+    pub(super) fn side_bars_designer(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        if !cfg.side_bars.enabled { return div().into_any_element(); }
+        let scale = window.scale_factor();
+        let mut side = |right: bool, title: &'static str| {
+            let settings = cfg.side_bars.side(right);
+            div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_6_PX))
+                .when(!settings.enabled, |el| el.opacity(ALPHA_60))
+                .child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(tr(title)))
+                .child(self.lane(Lane::Side(right, SideZone::Top), tk("Top"), &settings.top, false, scale, p, cx))
+                .child(self.lane(Lane::Side(right, SideZone::Middle), tk("Middle"), &settings.middle, false, scale, p, cx))
+                .child(self.lane(Lane::Side(right, SideZone::Bottom), tk("Bottom"), &settings.bottom, false, scale, p, cx))
+        };
+        let (left, right) = (side(false, tk("Left side bar")), side(true, tk("Right side bar")));
+        let lanes = div().ltr_row().when(self.stack_rows, |el| el.flex_col()).gap(px(SPACE_12_PX)).child(left).child(right);
+        let pool = self.plugin_pool(cfg, p, window, cx);
+        let menu = self.plugin_menu(cfg, p, window, cx);
+        div().row().flex_col().gap(px(SPACE_12_PX)).child(lanes).child(pool).children(menu).into_any_element()
+    }
+
     pub(super) fn bar_designer(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        let sides = cfg.side_bars.enabled;
         let scale = window.scale_factor();
         let vertical = cfg.bar.position.is_vertical();
         let replace_items = self.designer.replace_items;
@@ -550,37 +566,7 @@ impl StudioView {
             .child(self.lane(Lane::Left, zone_title(Lane::Left, vertical), &cfg.bar.left, false, scale, p, cx))
             .child(self.lane(Lane::Center, zone_title(Lane::Center, vertical), &cfg.bar.center, false, scale, p, cx))
             .child(self.lane(Lane::Right, zone_title(Lane::Right, vertical), &cfg.bar.right, false, scale, p, cx));
-        // With side bars on, their groups flank the screen under the bar,
-        // like the frame they make on the desktop.
-        let bar = if sides {
-            let mut side_col = |right: bool, title: &'static str| {
-                let s = cfg.side_bars.side(right);
-                div()
-                    .when(!self.stack_rows, |el| el.w(px(SIDE_COL_W_PX)).flex_none())
-                    .row()
-                    .flex_col()
-                    .gap(px(SPACE_6_PX))
-                    .when(!s.enabled, |el| el.opacity(ALPHA_60))
-                    .child(div().px(px(SPACE_6_PX)).text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(title))))
-                    // (Each lane in its own box: a lane grows to fit its
-                    // chips instead of sharing the column's height.)
-                    .child(div().child(self.lane(Lane::Side(right, SideZone::Top), tk("Top"), &s.top, false, scale, p, cx)))
-                    .child(div().child(self.lane(Lane::Side(right, SideZone::Middle), tk("Middle"), &s.middle, false, scale, p, cx)))
-                    .child(div().child(self.lane(Lane::Side(right, SideZone::Bottom), tk("Bottom"), &s.bottom, false, scale, p, cx)))
-            };
-            let (left, right) = (side_col(false, tk("Left side bar")), side_col(true, tk("Right side bar")));
-            let frame = div()
-                .ltr_row()
-                .when(self.stack_rows, |el| el.flex_col())
-                .gap(px(SPACE_8_PX))
-                .child(left)
-                // The screen between them.
-                .child(div().flex_1().min_h(px(DIM_120_PX)).rounded(px(RADIUS_16_PX)).bg(p.on_surface.with_alpha(ALPHA_3).hsla()))
-                .child(right);
-            div().row().flex_col().gap(px(SPACE_8_PX)).child(bar).child(div().rounded(px(RADIUS_20_PX)).p(px(SPACE_10_PX)).bg(p.surface_container.hsla()).child(frame)).into_any_element()
-        } else {
-            bar.into_any_element()
-        };
+        let bar = bar.into_any_element();
         let pool = self.plugin_pool(cfg, p, window, cx);
         let menu = self.plugin_menu(cfg, p, window, cx);
         let header = |title: &'static str, sub: &'static str| {

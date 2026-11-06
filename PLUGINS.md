@@ -70,7 +70,7 @@ cp target/wasm32-wasip2/release/my_plugin.wasm ~/.local/share/mandara/plugins-de
 The plugin appears in **Studio → Plugins** within a second: on Installed,
 under *Third-party*, with a *Development* badge. Plugins in the development
 folder are enabled automatically. Add it to the bar from its product page
-or the bar designer (Studio → Bar), or open its panel with
+or the bar designer (Studio → Bars → Bar), or open its panel with
 `mandara msg panel open my-plugin`.
 
 To iterate, rebuild and copy the `.wasm` again. Mandara notices the change
@@ -687,7 +687,10 @@ with an ETag; there is no background polling. Cached search results are
 filtered again with the checked policy. A failed refresh keeps the last
 valid rules. After 24 hours without successful validation, installs and
 updates pause until verification succeeds; browsing still applies the
-known rules. If no valid policy has ever loaded, community browsing,
+known rules. If another Mandara process keeps the refresh lock past its
+timeout, the same cache limits apply: reading the last valid rules does not
+renew their age or start a competing refresh. If no valid policy has ever
+loaded, community browsing,
 installs and updates pause with a retry message. Offline mode sends no
 requests.
 

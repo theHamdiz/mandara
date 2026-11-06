@@ -39,6 +39,19 @@ fn read(path: &Path) -> Option<Stored> {
     serde_json::from_slice(&bytes).ok()
 }
 
+fn read_validated(path: &Path) -> Option<(Stored, Policy)> {
+    read(path).and_then(|stored| Policy::parse(&stored.text).ok().map(|policy| (stored, policy)))
+}
+
+fn age(stored: &Stored, now: u64) -> u64 {
+    now.checked_sub(stored.validated_at).unwrap_or(u64::MAX)
+}
+
+/// A failed refresh never renews validation or discards known deny rules.
+fn retained(cached: Option<(Stored, Policy)>, now: u64, installing: bool) -> Option<Policy> {
+    cached.filter(|(stored, _)| !installing || age(stored, now) <= MAX_INSTALL_AGE.as_secs()).map(|(_, policy)| policy)
+}
+
 /// Atomically replaces the cache with a validated document. A write failure
 /// is logged and leaves the previous cache intact; this request can still
 /// use the freshly validated policy even when it cannot persist it.
@@ -57,28 +70,41 @@ fn save(path: &Path, stored: &Stored) {
 
 /// Clock and transport are supplied by the caller for deterministic tests.
 pub fn load(path: &Path, transport: &dyn Transport, now: u64, installing: bool) -> Result<Policy, String> {
+    load_with_lock_wait(path, transport, now, installing, LOCK_WAIT)
+}
+
+fn load_with_lock_wait(path: &Path, transport: &dyn Transport, now: u64, installing: bool, wait: Duration) -> Result<Policy, String> {
+    let started = std::time::Instant::now();
+    // Waiting for a peer or the network must count toward the cache's age.
+    let clock = || now.saturating_add(started.elapsed().as_secs());
     // Lock a separate, stable inode: saving replaces the cache file itself.
     // Shell and Studio must both reread the cache after acquiring this lock.
-    let _file_lock = refresh_lock(path, LOCK_WAIT).map_err(|e| e.to_string())?;
-    let cached = read(path).and_then(|stored| Policy::parse(&stored.text).ok().map(|policy| (stored, policy)));
-    let age = |stored: &Stored| now.checked_sub(stored.validated_at).unwrap_or(u64::MAX);
+    let _file_lock = match refresh_lock(path, wait) {
+        Ok(lock) => lock,
+        Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {
+            // Saving replaces the cache atomically. Reading a complete snapshot
+            // is safe without ownership; refreshing or writing it is not.
+            return retained(read_validated(path), clock(), installing).ok_or_else(|| error.to_string());
+        }
+        Err(error) => return Err(error.to_string()),
+    };
+    let cached = read_validated(path);
+    let checked_at = clock();
     if let Some((stored, policy)) = &cached
-        && age(stored) < FRESH_FOR.as_secs() { return Ok(policy.clone()); }
+        && age(stored, checked_at) < FRESH_FOR.as_secs() { return Ok(policy.clone()); }
     let fetched = transport.fetch(cached.as_ref().and_then(|(stored, _)| stored.etag.as_deref()));
     let failure = match fetched {
         Ok(Response::Modified { text, etag }) => match Policy::parse(&text) {
-            Ok(policy) => { save(path, &Stored { text, etag, validated_at: now }); return Ok(policy); }
+            Ok(policy) => { save(path, &Stored { text, etag, validated_at: checked_at }); return Ok(policy); }
             Err(error) => error,
         },
         Ok(Response::NotModified) => match cached {
-            Some((mut stored, policy)) => { stored.validated_at = now; save(path, &stored); return Ok(policy); }
+            Some((mut stored, policy)) => { stored.validated_at = checked_at; save(path, &stored); return Ok(policy); }
             None => "store policy returned 304 without a cached policy".into(),
         },
         Err(error) => error,
     };
-    if let Some((stored, policy)) = cached
-        && (!installing || age(&stored) <= MAX_INSTALL_AGE.as_secs()) { return Ok(policy); }
-    Err(failure)
+    retained(cached, clock(), installing).ok_or(failure)
 }
 
 /// Waits at most `wait` for exclusive refresh ownership. The returned
@@ -175,6 +201,73 @@ mod tests {
         contender.join().unwrap();
         assert_eq!(result.unwrap().unwrap_err().kind(), std::io::ErrorKind::TimedOut);
         refresh_lock(&path, Duration::ZERO).unwrap();
+    }
+
+    #[test]
+    fn lock_timeouts_retain_eligible_policy_without_refreshing_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("policy.json");
+        load(&path, &mock(modified("[[publishers]]\nlogin = 'alice'")), 100, true).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        let held = refresh_lock(&path, Duration::ZERO).unwrap();
+        let transport = mock(modified(""));
+        let repository = super::super::policy::Repository { id: None, full_name: "alice/weather".into(), owner: super::super::policy::Publisher { id: None, login: "alice".into() } };
+        let limit = 100 + MAX_INSTALL_AGE.as_secs();
+        for (now, installing) in [(101, true), (limit, true), (limit + 1, false)] {
+            let policy = load_with_lock_wait(&path, &transport, now, installing, Duration::ZERO).unwrap();
+            assert!(policy.decision(&repository).denied, "timeout fallback must preserve known bans");
+        }
+        assert!(load_with_lock_wait(&path, &transport, limit + 1, true, Duration::ZERO).is_err());
+        assert!(load_with_lock_wait(&path, &transport, 99, true, Duration::ZERO).is_err(), "a future validation timestamp must not authorize installation");
+        assert!(transport.etags.borrow().is_empty(), "a contender must not fetch without the refresh lock");
+        assert_eq!(std::fs::read(&path).unwrap(), before, "timeout fallback must not renew validation or change the cache");
+        let independent = std::fs::File::open(path.with_extension("lock")).unwrap();
+        assert!(matches!(independent.try_lock(), Err(std::fs::TryLockError::WouldBlock)));
+        drop(held);
+    }
+
+    #[test]
+    fn time_waiting_for_the_lock_counts_against_install_freshness() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("policy.json");
+        load(&path, &mock(modified("")), 100, true).unwrap();
+        let _held = refresh_lock(&path, Duration::ZERO).unwrap();
+        let limit = 100 + MAX_INSTALL_AGE.as_secs();
+        let transport = mock(modified(""));
+        assert!(load_with_lock_wait(&path, &transport, limit, true, LOCK_RETRY * 20).is_err());
+        assert_eq!(read(&path).unwrap().validated_at, 100);
+        assert!(transport.etags.borrow().is_empty());
+    }
+
+    #[test]
+    fn lock_timeouts_require_a_valid_cache_for_browsing_and_installing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("policy.json");
+        let _held = refresh_lock(&path, Duration::ZERO).unwrap();
+        let transport = mock(modified(""));
+        for installing in [false, true] {
+            assert!(load_with_lock_wait(&path, &transport, 100, installing, Duration::ZERO).is_err());
+            for bytes in [b"{".to_vec(), serde_json::to_vec(&Stored { text: "version = 99".into(), etag: None, validated_at: 100 }).unwrap()] {
+                std::fs::write(&path, bytes).unwrap();
+                assert!(load_with_lock_wait(&path, &transport, 100, installing, Duration::ZERO).is_err());
+            }
+            std::fs::remove_file(&path).unwrap();
+        }
+        assert!(transport.etags.borrow().is_empty());
+    }
+
+    #[test]
+    fn other_lock_errors_do_not_enable_cache_fallback() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("policy.json");
+        load(&path, &mock(modified("")), 100, true).unwrap();
+        std::fs::remove_file(path.with_extension("lock")).unwrap();
+        std::fs::create_dir(path.with_extension("lock")).unwrap();
+        let transport = mock(modified(""));
+        for installing in [false, true] {
+            assert!(load_with_lock_wait(&path, &transport, 101, installing, Duration::ZERO).is_err());
+        }
+        assert!(transport.etags.borrow().is_empty());
     }
 
     #[test]

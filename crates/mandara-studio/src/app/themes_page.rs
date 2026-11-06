@@ -129,19 +129,20 @@ impl ThemeGallery {
 }
 
 thread_local! {
-    /// Wallpaper scheme strips, by lead seed and mode: one palette per
+    /// Wallpaper scheme strips, by lead seed and mode: one strip per
     /// [`SchemeVariant::ALL`] entry.
     static STYLE_PALETTES: RefCell<StylePalettes> = RefCell::new(HashMap::new());
 }
 
-/// Scheme palettes by (lead seed as RGBA, dark).
-type StylePalettes = HashMap<([u8; 4], bool), Rc<[MandaraPalette]>>;
+/// Keep only the five colors the preview draws, with the same warm keys.
+type StylePalettes = HashMap<([u8; 4], bool), Rc<[[Color; 5]]>>;
 
-fn style_palettes(seed: Color, dark: bool) -> Rc<[MandaraPalette]> {
+fn style_palettes(seed: Color, dark: bool) -> Rc<[[Color; 5]]> {
     STYLE_PALETTES.with(|cache| {
-        cache.borrow_mut().entry((seed.to_rgba8(), dark)).or_insert_with(|| SchemeVariant::ALL.iter().map(|v| mandara_theme::material::palette_from_seed(seed, *v, dark)).collect()).clone()
+        cache.borrow_mut().entry((seed.to_rgba8(), dark)).or_insert_with(|| SchemeVariant::ALL.iter().map(|v| strip_colors(&mandara_theme::material::palette_from_seed(seed, *v, dark))).collect()).clone()
     })
 }
+
 
 /// Makes `id` the theme (the wallpaper sync would switch straight back,
 /// so it turns off).
@@ -563,7 +564,7 @@ impl StudioView {
         let strips = lead.map(|c| style_palettes(c, dark));
         let styles = SchemeVariant::ALL.into_iter().enumerate().map(|(n, v)| {
             let active = on && v == variant;
-            let colors = strips.as_ref().map(|s| strip_colors(&s[n]));
+            let colors = strips.as_ref().map(|s| s[n]);
             div()
                 .id(SharedString::from(format!("style-{v:?}")))
                 .flex_1()
@@ -639,5 +640,42 @@ impl StudioView {
                     .child(div().w_full().child(style_fit.render(styles))),
             );
         div().row().flex_col().gap(px(SPACE_14_PX)).child(head).child(body).into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod style_cache_tests {
+    use super::*;
+
+    #[test]
+    fn compact_cache_keeps_the_exact_scheme_strip_colors() {
+        for seed in [Color::from_rgba8(20, 140, 180, 255), Color::from_rgba8(180, 60, 40, 255), Color::from_rgba8(100, 80, 160, 255)] {
+            for dark in [false, true] {
+                let strips = style_palettes(seed, dark);
+                assert_eq!(strips.len(), SchemeVariant::ALL.len());
+                for (strip, variant) in strips.iter().zip(SchemeVariant::ALL) {
+                    let palette = mandara_theme::material::palette_from_seed(seed, variant, dark);
+                    assert_eq!(*strip, strip_colors(&palette));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn revisiting_a_seed_or_mode_reuses_its_existing_strips() {
+        let seed = Color::from_rgba8(30, 150, 180, 255);
+        let other = Color::from_rgba8(180, 50, 70, 255);
+        let light = style_palettes(seed, false);
+        let dark = style_palettes(seed, true);
+        let _ = style_palettes(other, false);
+        assert!(Rc::ptr_eq(&light, &style_palettes(seed, false)));
+        assert!(Rc::ptr_eq(&dark, &style_palettes(seed, true)));
+        assert!(!Rc::ptr_eq(&light, &dark));
+    }
+
+    #[test]
+    fn each_cached_style_keeps_only_its_five_displayed_colors() {
+        assert_eq!(std::mem::size_of::<[Color; 5]>(), 5 * std::mem::size_of::<Color>());
+        assert!(std::mem::size_of::<[Color; 5]>() < std::mem::size_of::<MandaraPalette>());
     }
 }

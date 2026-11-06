@@ -22,8 +22,8 @@ zbus.workspace = true
 oo7.workspace = true
 async-io.workspace = true
 # One shared executor for every service actor (see runtime.rs).
-async-executor = "1"
-async-lock = "3"
+async-executor = "1.14.1"
+async-lock = "3.5"
 blocking = "1"
 futures.workspace = true
 async-channel.workspace = true
@@ -105,7 +105,7 @@ qrcodegen.workspace = true
 backhand = { version = "0.25", default-features = false, features = ["gzip", "lz4"] }
 lzma-rs = "0.3"
 ruzstd = "0.9"
-zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9.4", default-features = false, features = ["deflate-flate2"] }
 # Cursor themes (cursors/): Phinger ships its release as .tar.bz2; bzip2
 # 0.6 decodes with the pure-Rust libbz2-rs-sys by default.
 bzip2 = "0.6"

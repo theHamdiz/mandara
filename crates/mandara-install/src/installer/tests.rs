@@ -28,6 +28,7 @@ fn signed_sums(host: &mut FakeHost, base: &str, files: &[(&str, &[u8])]) -> Stri
 struct FakeHost {
     programs: HashSet<String>,
     fetches: HashMap<String, Vec<u8>>,
+    fetch_errors: HashMap<String, Fetch>,
     /// Commands (argv joined by spaces) that fail.
     failing: HashSet<String>,
     /// Commands that fail the first time only.
@@ -107,6 +108,7 @@ impl Host for FakeHost {
     }
 
     fn fetch(&mut self, url: &str, _limit: u64) -> Result<Vec<u8>, Fetch> {
+        if let Some(error) = self.fetch_errors.get(url) { return Err(error.clone()); }
         self.fetches.get(url).cloned().ok_or(Fetch::NotFound)
     }
 
@@ -176,7 +178,7 @@ impl Fixture {
             x86_64_v3: false,
             exe: self.exe(),
             debug_build: false,
-            fingerprinted: true,
+            fingerprinted: false,
             exe_checkout: None,
             cwd: self.dir.path().to_path_buf(),
             home: self.home(),
@@ -190,6 +192,11 @@ impl Fixture {
             xdg_config: None,
             release_keys: vec![sign::public_key(test_key()).unwrap()],
         }
+    }
+
+    /// Verification tests represent a fingerprinted, published binary.
+    fn release_facts(&self, family: Family) -> Facts {
+        Facts { fingerprinted: true, ..self.facts(family) }
     }
 
     /// Every file below the home folder.
@@ -452,8 +459,7 @@ fn real_install_puts_files_in_place_and_runs_setup_and_greeter() {
     assert!(profile.contains(&format!("export PATH='{}':\"$PATH\"", f.home().join(".local/bin").display())));
     assert!(std::fs::read_to_string(f.home().join(".bashrc")).unwrap().contains("Mandara installer"));
     assert!(super::add_to_path(&f.home(), &f.home().join(".local/bin")).unwrap().is_empty());
-    // No published checksum reachable: installed with a warning.
-    assert!(text.contains("couldn't verify this binary"));
+    assert!(text.contains("local build, e.g. `cargo install`"));
 }
 
 #[test]
@@ -537,16 +543,16 @@ fn self_check_uses_update_json() {
     // Matches.
     let mut host = FakeHost::default();
     release(&mut host, &mandara_delta::sha256_hex(b"\x7fELF mandara"));
-    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(args.clone())).unwrap();
+    run(&mut host, &FakeProbe::default(), f.release_facts(Family::Arch), dry(args.clone())).unwrap();
     assert!(host.text().contains("SHA-256 verified against"), "{}", host.text());
     // Differs: refused, unless --no-verify.
     let mut host = FakeHost::default();
     release(&mut host, &"0".repeat(64));
-    let err = run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(args.clone())).unwrap_err();
+    let err = run(&mut host, &FakeProbe::default(), f.release_facts(Family::Arch), dry(args.clone())).unwrap_err();
     assert!(err.contains("doesn't match its release"), "{err}");
     let mut host = FakeHost::default();
     release(&mut host, &"0".repeat(64));
-    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(InstallArgs { no_verify: true, ..args.clone() })).unwrap();
+    run(&mut host, &FakeProbe::default(), f.release_facts(Family::Arch), dry(InstallArgs { no_verify: true, ..args.clone() })).unwrap();
     assert!(host.text().contains("installing anyway (--no-verify)"));
     // A signed release's update.json counts only when the signed
     // SHA256SUMS lists it: a swapped one is a mismatch.
@@ -554,7 +560,7 @@ fn self_check_uses_update_json() {
         let mut host = FakeHost::default();
         release(&mut host, &"0".repeat(64));
         host.fetches.insert(url.clone(), manifest(&mandara_delta::sha256_hex(b"\x7fELF mandara")).into_bytes());
-        let err = run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), dry(args)).unwrap_err();
+        let err = run(&mut host, &FakeProbe::default(), f.release_facts(Family::Arch), dry(args)).unwrap_err();
         assert!(err.contains("checksum mismatch for update.json"), "{err}");
     }
 }
@@ -574,17 +580,49 @@ fn self_check_falls_back_to_a_local_tarball_and_sha256sums() {
     let sums = format!("{}  {name}\n", mandara_delta::sha256_hex(&archive));
     std::fs::write(f.dir.path().join("dl/SHA256SUMS"), &sums).unwrap();
     std::fs::write(f.dir.path().join("dl/SHA256SUMS.sig"), sign::sign(test_key(), sums.as_bytes()).unwrap()).unwrap();
-    let mut facts = f.facts(Family::Arch);
+    let mut facts = f.release_facts(Family::Arch);
     facts.exe = exe;
     let mut host = FakeHost::default();
+    let base = release::release_base(&facts.repo, version, facts.mirror.as_deref());
+    host.fetch_errors.insert(format!("{base}/SHA256SUMS"), Fetch::Failed("HTTP 504".into()));
     run(&mut host, &FakeProbe::default(), facts, dry(InstallArgs { no_deps: true, no_greeter: true, ..Default::default() })).unwrap();
     assert!(host.text().contains(&format!("SHA-256 verified against {name} and SHA256SUMS")), "{}", host.text());
 }
 
 #[test]
+fn unavailable_release_metadata_never_installs_a_published_binary() {
+    for failed in [None, Some("SHA256SUMS"), Some("SHA256SUMS.sig")] {
+        let fixture = Fixture::new();
+        let facts = fixture.release_facts(Family::Arch);
+        let mut host = FakeHost::default();
+        if let Some(file) = failed {
+            let base = release::release_base(&facts.repo, mandara_version::version(), None);
+            signed_sums(&mut host, &base, &[("update.json", b"{}")]);
+            host.fetch_errors.insert(format!("{base}/{file}"), Fetch::Failed("HTTP 504".into()));
+        }
+        let error = run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, no_deps: true, no_greeter: true, ..Default::default() }).unwrap_err();
+        assert!(error.contains("Could not verify this binary"), "{error}");
+        assert!(error.contains("Mandara was not installed"), "{error}");
+        if failed.is_some() { assert!(error.contains("HTTP 504"), "{error}"); }
+        assert!(fixture.home_files().is_empty());
+        assert!(host.ran.is_empty());
+    }
+}
+
+#[test]
+fn unavailable_metadata_requires_an_explicit_verification_override() {
+    let fixture = Fixture::new();
+    let mut host = FakeHost::default();
+    let args = InstallArgs { yes: true, no_deps: true, no_greeter: true, no_verify: true, ..Default::default() };
+    run(&mut host, &FakeProbe::default(), fixture.release_facts(Family::Arch), args).unwrap();
+    assert!(host.text().contains("installing anyway (--no-verify)"));
+    assert_eq!(std::fs::read(fixture.home().join(".local/bin/mandara")).unwrap(), b"\x7fELF mandara");
+}
+
+#[test]
 fn local_builds_are_not_checked() {
     let f = Fixture::new();
-    let mut facts = f.facts(Family::Arch);
+    let mut facts = f.release_facts(Family::Arch);
     facts.exe_checkout = Some(f.dir.path().to_path_buf());
     let mut host = FakeHost::default();
     run(&mut host, &FakeProbe::default(), facts, dry(InstallArgs { no_deps: true, no_greeter: true, ..Default::default() })).unwrap();

@@ -3,6 +3,7 @@
 pub mod layout;
 pub mod autohide;
 pub mod side;
+pub(crate) mod scrim;
 
 use std::cell::Cell;
 

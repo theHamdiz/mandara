@@ -107,6 +107,28 @@ The 78 plugins below include 77 built-ins and the Moon phase example. Each SVG h
 | <img src="plugins/feeds/icon.png" width="40" alt="Feeds icon"> <img src="plugins/feeds/cover.png" width="128" alt="Feeds cover"> | **Feeds** · [SVG](plugins/feeds/icon.svg) · [256 PNG](plugins/feeds/icon.png) · [Cover](plugins/feeds/cover.png) | Obsidian · illustration |
 | <img src="plugins/home-assistant/icon.png" width="40" alt="Home Assistant icon"> <img src="plugins/home-assistant/cover.png" width="128" alt="Home Assistant cover"> | **Home Assistant** · [SVG](plugins/home-assistant/icon.svg) · [256 PNG](plugins/home-assistant/icon.png) · [Cover](plugins/home-assistant/cover.png) | Corniche · illustration |
 
+## Launcher alternatives
+
+Studio → Launcher → Button icon includes thirteen colour SVG alternatives.
+They keep their original gradients, render at the display scale and decode only
+when drawn. The PIK image and duplicate files are excluded.
+
+| Icon | Source |
+| --- | --- |
+| Amethyst medallion | [SVG](launcher-icons/amethyst-medallion.svg) |
+| Blue whorl | [SVG](launcher-icons/blue-whorl.svg) |
+| Coral knot | [SVG](launcher-icons/coral-knot.svg) |
+| Golden rosette | [SVG](launcher-icons/golden-rosette.svg) |
+| Golden sunwheel | [SVG](launcher-icons/golden-sunwheel.svg) |
+| Leaf pinwheel | [SVG](launcher-icons/leaf-pinwheel.svg) |
+| Lilac lattice | [SVG](launcher-icons/lilac-lattice.svg) |
+| Pink rosette | [SVG](launcher-icons/pink-rosette.svg) |
+| Scarlet quatrefoil | [SVG](launcher-icons/scarlet-quatrefoil.svg) |
+| Teal hourglass | [SVG](launcher-icons/teal-hourglass.svg) |
+| Turquoise weave | [SVG](launcher-icons/turquoise-weave.svg) |
+| Violet clover | [SVG](launcher-icons/violet-clover.svg) |
+| Violet woven diamond | [SVG](launcher-icons/violet-woven-diamond.svg) |
+
 ## Palette and grid
 
 | Palette | sRGB anchors | Equivalent OKLCH anchors (L C h) |

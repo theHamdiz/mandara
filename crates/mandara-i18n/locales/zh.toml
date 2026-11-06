@@ -1234,7 +1234,7 @@
 "Automatic login" = "自动登录"
 "Backlight devices and levels" = "背光设备及亮度级别"
 "Balanced" = "平衡"
-"Bars" = "柱数"
+"Bars" = "栏"
 "Batteries" = "电池"
 "Battery details need the upower service" = "电池详情需要 upower 服务"
 "Battery health, cycles, rate and time estimates (JSON)" = "电池健康度、循环次数、功率和时间估计（JSON）"
@@ -8696,3 +8696,18 @@
 "Couldn't verify the community store policy. Try again later." = "无法验证社区商店政策。请稍后重试。"
 "The community store has blocked installs and updates for {repository}." = "社区商店已禁止安装和更新 {repository}。"
 "Repository details are missing IDs required by the store policy." = "仓库详情缺少商店政策要求的标识符。"
+
+# Studio bars
+"Edges & corners" = "边缘与角落"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "分区 (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] 或 plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "将“{name}”插件添加到状态栏（Studio → 栏 → 状态栏）即可在那里看到指示器；屏幕提示在两种情况下都可使用。"
+"Add any widget to it in Studio → Bars → Sidebar." = "在 Studio → 栏 → 侧栏中添加任意小组件。"
+"Number of bars" = "柱数"
+
+"Release signature verified." = "已验证发行版签名。"
+"Downloaded:" = "已下载："
+"Archive checksum verified." = "已验证归档文件校验和。"
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "无法下载已签名的发行版。未安装任何内容。请检查连接并重试。"
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "无法验证此二进制文件：{reason}。未安装 Mandara。请检查连接并重试。"
+"Install this binary even when its published checksum is unavailable or doesn't match." = "即使已发布的校验和不可用或不匹配，也安装此二进制文件。"

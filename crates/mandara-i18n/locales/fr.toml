@@ -8702,3 +8702,18 @@
 "Couldn't verify the community store policy. Try again later." = "Impossible de vérifier les règles de la boutique communautaire. Réessayez plus tard."
 "The community store has blocked installs and updates for {repository}." = "La boutique communautaire a bloqué les installations et les mises à jour de {repository}."
 "Repository details are missing IDs required by the store policy." = "Les détails du dépôt ne contiennent pas les identifiants requis par les règles de la boutique."
+
+# Studio bars
+"Edges & corners" = "Bords et coins"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "une section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] ou plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "Ajoutez l'extension « {name} » à la barre (Studio → Barres → Barre) pour y voir l'indicateur ; les indicateurs à l'écran fonctionnent dans les deux cas."
+"Add any widget to it in Studio → Bars → Sidebar." = "Ajoutez des widgets dans Studio → Barres → Barre latérale."
+"Number of bars" = "Nombre de barres"
+
+"Release signature verified." = "Signature de la version vérifiée."
+"Downloaded:" = "Téléchargé :"
+"Archive checksum verified." = "Somme de contrôle de l’archive vérifiée."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "Impossible de télécharger la version signée. Rien n’a été installé. Vérifiez votre connexion et réessayez."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "Impossible de vérifier ce binaire : {reason}. Mandara n’a pas été installé. Vérifiez votre connexion et réessayez."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "Installer ce binaire même si sa somme de contrôle publiée est indisponible ou ne correspond pas."

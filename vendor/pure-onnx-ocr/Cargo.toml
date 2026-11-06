@@ -41,14 +41,14 @@ i_overlay = "4.1.1"
 # its pixels in memory (`run_from_image`); the codecs the shell decodes are
 # chosen by the crates that decode them.
 image = { version = "0.25", default-features = false, features = ["rayon"] }
-imageproc = { version = "0.25.0", default-features = false, features = ["rayon"] }
+imageproc = { version = "0.27", default-features = false, features = ["rayon"] }
 log = "0.4"
 ndarray = "0.17"
 rayon = { version = "1", optional = true }
 # Mandara patch 2: upstream's `time = "0.3.44"` is dropped; no source file
 # uses it (the clock is `std::time::Instant`, see src/time.rs).
-tract-linalg = "0.23.9"
-tract-onnx = "0.23.9"
+tract-linalg = "0.23.10"
+tract-onnx = "0.23.10"
 
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
 getrandom = { version = "0.4", features = ["wasm_js"] }

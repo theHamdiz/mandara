@@ -66,6 +66,24 @@ fn wallpaper_tab_target(target: &str) -> Option<app::wallpaper_page::WallpaperTa
     app::wallpaper_page::WallpaperTab::parse(tab.split('/').next()?)
 }
 
+/// Former page names select their corresponding tab in Bars.
+fn former_bars_tab(name: &str) -> Option<registry::bars::BarsTab> {
+    use registry::bars::BarsTab;
+    let name = name.to_lowercase().replace('-', " ");
+    let name = name.trim();
+    if name.is_empty() { return None; }
+    if "bar".starts_with(name) || name == mandara_i18n::t("Bar").to_lowercase().replace('-', " ") { Some(BarsTab::Bar) }
+    else if "sidebars & hover".starts_with(name) || matches!(name, "sidebar" | "sidebars") || name == mandara_i18n::t("Sidebars & hover").to_lowercase().replace('-', " ") { Some(BarsTab::Sidebar) }
+    else { None }
+}
+
+fn bars_tab_target(target: &str) -> Option<registry::bars::BarsTab> {
+    let mut parts = target.split('/');
+    let section = parts.next()?;
+    (resolve_section(section) == Some(registry::Section::Bars)).then_some(())?;
+    parts.next().and_then(registry::bars::BarsTab::parse).or_else(|| former_bars_tab(section)).or(Some(Default::default()))
+}
+
 /// Names of pages merged into another one, still accepted on the command
 /// line (`mandara studio appearance` opens Themes).
 const FORMER_SECTIONS: &[(&str, registry::Section)] = &[("appearance", registry::Section::Themes), ("looks", registry::Section::Themes), ("cursor", registry::Section::Themes), ("cursors", registry::Section::Themes)];
@@ -89,6 +107,7 @@ pub fn resolve_section(target: &str) -> Option<registry::Section> {
     if let Some((_, section)) = FORMER_SECTIONS.iter().find(|(former, _)| *former == name) {
         return Some(*section);
     }
+    if former_bars_tab(&name).is_some() { return Some(registry::Section::Bars); }
     let all = registry::Section::ALL;
     all.into_iter()
         .find(|s| s.title().to_lowercase() == name || s.title().to_lowercase().replace(' ', "-") == name || s.label().to_lowercase() == name)
@@ -103,6 +122,7 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
     let tab = section.and_then(tab_target);
     let apps_tab = section.and_then(apps_tab_target);
     let wallpaper_tab = section.and_then(wallpaper_tab_target);
+    let bars_tab = section.and_then(bars_tab_target);
     // `power/<part>` scrolls the Power & idle page to that part.
     let power_part = section.and_then(|t| t.strip_prefix("power/")).map(str::to_string);
     let cursor = section.is_some_and(cursor_target);
@@ -125,6 +145,9 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
         }
         if let Some(tab) = wallpaper_tab {
             view.show_wallpaper_tab(tab, cx);
+        }
+        if let Some(tab) = bars_tab {
+            view.show_bars_tab(tab, cx);
         }
         if let Some((id, which)) = &plugin {
             view.open_plugin(id, *which, window, cx);
@@ -242,6 +265,28 @@ pub fn run(section: Option<&str>, cx: &mut App) {
 mod tests {
     use super::*;
     use registry::Section;
+
+    #[test]
+    fn bars_routes_preserve_former_pages_and_explicit_tabs() {
+        use registry::bars::BarsTab;
+        for target in ["bar", "Bar", "sidebar", "sidebars", "sidebars & hover", "sidebars-&-hover"] {
+            assert_eq!(resolve_section(target), Some(Section::Bars), "{target}");
+        }
+        assert_eq!(bars_tab_target("bars"), Some(BarsTab::Bar));
+        assert_eq!(bars_tab_target("bar"), Some(BarsTab::Bar));
+        assert_eq!(bars_tab_target("sidebar"), Some(BarsTab::Sidebar));
+        assert_eq!(bars_tab_target("Sidebar/hover"), Some(BarsTab::Edges));
+        assert_eq!(bars_tab_target("bar/side-bars"), Some(BarsTab::SideBars));
+        for tab in BarsTab::ALL { assert_eq!(bars_tab_target(&format!("bars/{}", tab.slug())), Some(tab)); }
+        assert_eq!(bars_tab_target("wallpaper/edges"), None);
+        for lang in mandara_i18n::Lang::ALL {
+            mandara_i18n::with_language(Some(lang), || {
+                let name = mandara_i18n::t("Sidebars & hover");
+                assert_eq!(resolve_section(name), Some(Section::Bars), "{lang:?}: {name}");
+                assert_eq!(bars_tab_target(name), Some(BarsTab::Sidebar));
+            });
+        }
+    }
 
     #[test]
     fn studio_requests_its_own_titlebar_and_honors_server_decorations() {

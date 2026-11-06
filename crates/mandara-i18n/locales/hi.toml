@@ -8702,3 +8702,18 @@
 "Couldn't verify the community store policy. Try again later." = "कम्युनिटी स्टोर की नीति की पुष्टि नहीं हो सकी। बाद में फिर कोशिश करें।"
 "The community store has blocked installs and updates for {repository}." = "कम्युनिटी स्टोर ने {repository} की स्थापना और अपडेट रोक दिए हैं।"
 "Repository details are missing IDs required by the store policy." = "रिपॉज़िटरी की जानकारी में स्टोर की नीति के लिए ज़रूरी आईडी नहीं हैं।"
+
+# Studio bars
+"Edges & corners" = "किनारे और कोने"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "एक अनुभाग (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] या plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "वहां संकेतक देखने के लिए “{name}” प्लगइन को बार में जोड़ें (Studio → बार → बार); ऑन-स्क्रीन डिस्प्ले दोनों तरह काम करते हैं।"
+"Add any widget to it in Studio → Bars → Sidebar." = "Studio → बार → साइडबार से इसमें कोई भी विजेट जोड़ें।"
+"Number of bars" = "बार की संख्या"
+
+"Release signature verified." = "रिलीज़ का हस्ताक्षर सत्यापित है।"
+"Downloaded:" = "डाउनलोड किया गया:"
+"Archive checksum verified." = "आर्काइव का चेकसम सत्यापित है।"
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "हस्ताक्षरित रिलीज़ डाउनलोड नहीं हो सकी। कुछ भी इंस्टॉल नहीं हुआ। अपना कनेक्शन जाँचें और फिर कोशिश करें।"
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "इस बाइनरी को सत्यापित नहीं कर सके: {reason}। Mandara इंस्टॉल नहीं हुआ। अपना कनेक्शन जाँचें और फिर कोशिश करें।"
+"Install this binary even when its published checksum is unavailable or doesn't match." = "प्रकाशित चेकसम उपलब्ध न होने या मेल न खाने पर भी यह बाइनरी इंस्टॉल करें।"

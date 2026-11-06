@@ -151,6 +151,13 @@ pub struct Tracker {
 }
 
 impl Tracker {
+    /// Today's readout borrows recorded history and adds the current interval.
+    fn total_today(&self, day: NaiveDate, at: Instant) -> u64 {
+        let active = self.current.as_ref().filter(|(app, since)| !self.idle && !app.is_empty() && at.saturating_duration_since(*since) <= MAX_STEP)
+            .map(|(_, since)| at.saturating_duration_since(*since).as_secs()).unwrap_or(0);
+        self.store.total(day) + active
+    }
+
     /// Books the running interval to the current app.
     fn flush(&mut self, cfg: &ScreenTimeConfig) {
         if let Some((app, since)) = self.current.as_mut() {
@@ -470,7 +477,8 @@ pub fn register(r: &mut PluginRegistry) {
         let bar = fn_view(
             Some(Duration::from_secs(SECS_PER_MIN)),
             |palette, _, cx| {
-                let total = snapshot(cx).total(Local::now().date_naive());
+                let day = Local::now().date_naive();
+                let total = tracker(cx).map(|tracker| tracker.read(cx).total_today(day, Instant::now())).unwrap_or_else(|| load().total(day));
                 div()
                     .flex()
                     .items_center()
@@ -606,6 +614,25 @@ mod tests {
         tr.current.as_mut().unwrap().1 -= Duration::from_secs(30);
         tr.flush(&cfg);
         assert_eq!(tr.store.total(Local::now().date_naive()), 5);
+    }
+
+    #[test]
+    fn today_readout_borrows_history_and_excludes_idle_or_suspend_gaps() {
+        let day = d("2026-10-27");
+        let at = Instant::now();
+        let mut store = Store::default();
+        store.add(day, "editor", 120);
+        store.add(d("2026-10-26"), "browser", 900);
+        let mut tracker = Tracker { store, current: Some(("editor".into(), at)), idle: false, dirty: false, saved_at: at, notified: BTreeSet::new() };
+        assert_eq!(tracker.total_today(day, at + Duration::from_secs(5)), 125);
+        assert_eq!(tracker.store.total(day), 120, "a readout must not book time");
+        assert_eq!(tracker.store.total(d("2026-10-26")), 900);
+        tracker.idle = true;
+        assert_eq!(tracker.total_today(day, at + Duration::from_secs(5)), 120);
+        tracker.idle = false;
+        assert_eq!(tracker.total_today(day, at + MAX_STEP + Duration::from_secs(1)), 120);
+        tracker.current = None;
+        assert_eq!(tracker.total_today(day, at + Duration::from_secs(5)), 120);
     }
 
     #[test]

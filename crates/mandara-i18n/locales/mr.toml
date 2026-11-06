@@ -1204,7 +1204,7 @@
 "Automatic login" = "आपोआप लॉगिन"
 "Backlight devices and levels" = "बॅकलाइट उपकरणे आणि पातळ्या"
 "Balanced" = "संतुलित"
-"Bars" = "पट्ट्या"
+"Bars" = "बार"
 "Batteries" = "बॅटरी"
 "Battery details need the upower service" = "बॅटरी तपशीलांसाठी upower सेवा हवी"
 "Battery health, cycles, rate and time estimates (JSON)" = "बॅटरी आरोग्य, चक्रे, दर आणि वेळ अंदाज (JSON)"
@@ -8359,3 +8359,18 @@
 "{percent}% · charging" = "{percent}% · चार्ज होत आहे"
 "↑/↓ change · enter select · esc cancel" = "↑/↓ बदला · enter निवडा · esc रद्द करा"
 "a section (appearance, themes, bar, sidebar, launcher, wallpaper, audio, login-screen, users, keyboard-shortcuts, motion, general, typography, plugins, compositor, performance, maintenance, about) or plugins/<id>[/settings]" = "एक विभाग (appearance, themes, bar, sidebar, launcher, wallpaper, audio, login-screen, users, keyboard-shortcuts, motion, general, typography, plugins, compositor, performance, maintenance, about) किंवा plugins/<id>[/settings]"
+
+# Studio bars
+"Edges & corners" = "कडा आणि कोपरे"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "विभाग (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] किंवा plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "निर्देशक पाहण्यासाठी “{name}” प्लगइन पट्टीत जोडा (Studio → बार → पट्टी); स्क्रीन दाखवे दोन्ही प्रकारे चालतात."
+"Add any widget to it in Studio → Bars → Sidebar." = "Studio → बार → साइडबार येथे कोणतेही विजेट जोडा."
+"Number of bars" = "पट्ट्यांची संख्या"
+
+"Release signature verified." = "प्रकाशनाची स्वाक्षरी पडताळली."
+"Downloaded:" = "डाउनलोड केले:"
+"Archive checksum verified." = "संग्रहाची चेकसम पडताळली."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "स्वाक्षरी केलेले प्रकाशन डाउनलोड करता आले नाही. काहीही स्थापित केलेले नाही. तुमची जोडणी तपासा आणि पुन्हा प्रयत्न करा."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "ही बायनरी पडताळता आली नाही: {reason}. Mandara स्थापित झालेले नाही. तुमची जोडणी तपासा आणि पुन्हा प्रयत्न करा."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "प्रकाशित चेकसम उपलब्ध नसली किंवा जुळत नसली तरी ही बायनरी स्थापित करा."

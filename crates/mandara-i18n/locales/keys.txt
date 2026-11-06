@@ -317,7 +317,7 @@ Add an app: desktop id or name, then Enter
 Add an app: search by name
 Add an entry to a collection
 Add an idle command
-Add any widget to it in Studio → Sidebars & hover.
+Add any widget to it in Studio → Bars → Sidebar.
 Add app
 Add apps or commands below.
 Add apps to the Dock
@@ -336,7 +336,7 @@ Add slash command
 Add the WebAssembly target
 Add the command {name} to {dir}
 Add the sunnah prayers
-Add the “{name}” plugin to the bar (Studio → Bar) to see the indicator there; on-screen displays work either way.
+Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way.
 Add to PATH as {name}
 Add to PATH by default
 Add to bar
@@ -582,6 +582,7 @@ Arch news
 Arch news request failed: {error}
 Arch only
 Architecture
+Archive checksum verified.
 Archive: a portable app unpacked into your home folder. No password needed.
 Archived
 Argument #{position} is not a boolean: {value}
@@ -1286,6 +1287,7 @@ Corniche night
 Corniche waves
 Could not create a temporary download folder.
 Could not create {path}: {error}
+Could not download the signed release. Nothing was installed. Check your connection and try again.
 Could not encode the wallpaper: {error}
 Could not keep the screen awake: {error}
 Could not load the OCR models: {error}
@@ -1314,6 +1316,7 @@ Could not start {program}: {error}
 Could not start {terminal}: {error}
 Could not unpack the verified release.
 Could not update PATH: {error}. Add {line} to your shell profile.
+Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again.
 Could not write {path}: {error}
 Couldn't change the microphone: {error}
 Couldn't create {path}: {error}
@@ -1699,6 +1702,7 @@ Downloaded on demand
 Downloaded on their own when the plugin is on: bukhari, muslim, abudawud, tirmidhi, nasai, ibnmajah, malik, nawawi, qudsi, dehlawi
 Downloaded once
 Downloaded {count} times
+Downloaded:
 Downloaded: sharing stopped
 Downloading Mandara…
 Downloading in the Hadith panel
@@ -1791,6 +1795,7 @@ Edge lines
 Edge to edge
 Edge-frame panels hang from the bar
 Edge-to-edge frame, everything at hand
+Edges & corners
 Edges snap together. Changes apply only when you press Apply, and come back on their own unless you keep them.
 Edit button on images; {path} is the image, e.g. swappy -f {path}
 Edit desktop
@@ -2741,6 +2746,7 @@ Install location
 Install one from the marketplace with a click, or drop a plugin folder into your plugin folders. It shows up here within a second.
 Install pacman-contrib to check for updates without touching the system database
 Install the tailscale package, then start tailscaled
+Install this binary even when its published checksum is unavailable or doesn't match.
 Install this tool and try again:
 Install {count} apps
 Install, preview and apply cursor themes, live, with size and hiding options
@@ -4075,6 +4081,7 @@ Nudge the current recipe into a variation (amount 0–1, default from the settin
 Num Lock
 Num Lock on at login
 Number
+Number of bars
 Number, or a short name
 Number-key hints
 Numbers
@@ -4886,6 +4893,7 @@ Regular
 Reinstall
 Reject
 Release notes
+Release signature verified.
 Releases
 Reliability
 Relief
@@ -7324,7 +7332,7 @@ a generated wallpaper
 a path key from `jannah paths`
 a reference: bukhari 1, muslim 2699a
 a reference: bukhari 1, muslim 2699a, abudawud 4031
-a section (home, themes, wallpaper, desktop-widgets, typography, motion, bar, sidebar, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
+a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
 a style id from `wallgen styles`
 a surah (2, al-baqara) or an ayah (2:255), or a range (2:255-257)
 a wallpaper (with add / remove)

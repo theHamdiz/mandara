@@ -589,18 +589,13 @@ impl Render for SessionView {
         let dock_w = BTN_PX + DOCK_PAD_PX * 2.0;
         let dock_h = n as f32 * (BTN_PX + DOCK_GAP_PX) - DOCK_GAP_PX + DOCK_PAD_PX * 2.0;
         let place = dock_place(menu.position, cfg.sidebar_on_right(), Metrics::of(&cfg, crate::style::radius_scale()), self.bar_here, cfg.dock_bottom_clearance(), (sw, sh), (dock_w, dock_h));
-        // Hanging from the bar, the scrim leaves the bar's band bright (it
+        // Hanging from the bar, the scrim leaves the bar bright (it
         // still closes the menu when clicked).
         let keep_bright = match place {
             DockPlace::Hang(pl) if !grid => pl.keep_bright,
             _ => None,
         };
-        let dim = div().absolute().left_0().right_0().bg(gpui::black().opacity(SCRIM_ALPHA * p.min(1.0)));
-        let dim = match keep_bright {
-            Some((by, bh)) if by <= 0.0 => dim.top(px(bh)).bottom_0(),
-            Some((_, bh)) => dim.top_0().bottom(px(bh)),
-            None => dim.top_0().bottom_0(),
-        };
+        let dim = crate::bar::scrim::element((sw, sh), &Metrics::of(&cfg, crate::style::radius_scale()), keep_bright, gpui::black().opacity(SCRIM_ALPHA * p.min(1.0)), window.scale_factor());
 
         let root = div()
             .id("session-root")

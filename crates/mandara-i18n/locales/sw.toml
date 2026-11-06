@@ -1204,7 +1204,7 @@
 "Automatic login" = "Kuingia kiotomatiki"
 "Backlight devices and levels" = "Vifaa vya mwanga wa nyuma na viwango"
 "Balanced" = "Usawa"
-"Bars" = "Vibaa"
+"Bars" = "Pau"
 "Batteries" = "Betri"
 "Battery details need the upower service" = "Maelezo ya betri yanahitaji huduma ya upower"
 "Battery health, cycles, rate and time estimates (JSON)" = "Afya ya betri, mizunguko, kasi na makadirio ya muda (JSON)"
@@ -8359,3 +8359,18 @@
 "{percent}% · charging" = "{percent}% · inachaji"
 "↑/↓ change · enter select · esc cancel" = "↑/↓ badilisha · enter chagua · esc ghairi"
 "a section (appearance, themes, bar, sidebar, launcher, wallpaper, audio, login-screen, users, keyboard-shortcuts, motion, general, typography, plugins, compositor, performance, maintenance, about) or plugins/<id>[/settings]" = "sehemu (appearance, themes, bar, sidebar, launcher, wallpaper, audio, login-screen, users, keyboard-shortcuts, motion, general, typography, plugins, compositor, performance, maintenance, about) au plugins/<id>[/settings]"
+
+# Studio bars
+"Edges & corners" = "Kingo na pembe"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "sehemu (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] au plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "Ongeza programu-jalizi ya “{name}” kwenye upau (Studio → Pau → Upau) ili kuona kiashiria huko; maonyesho ya skrini hufanya kazi vyovyote."
+"Add any widget to it in Studio → Bars → Sidebar." = "Ongeza wijeti yoyote katika Studio → Pau → Upau wa pembeni."
+"Number of bars" = "Idadi ya nguzo"
+
+"Release signature verified." = "Sahihi ya toleo imethibitishwa."
+"Downloaded:" = "Imepakuliwa:"
+"Archive checksum verified." = "Jumla ya ukaguzi ya jalada imethibitishwa."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "Imeshindikana kupakua toleo lililosainiwa. Hakuna kilichosakinishwa. Angalia muunganisho wako na ujaribu tena."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "Imeshindikana kuthibitisha faili hii inayotekelezeka: {reason}. Mandara haijasakinishwa. Angalia muunganisho wako na ujaribu tena."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "Sakinisha faili hii inayotekelezeka hata kama jumla yake ya ukaguzi iliyochapishwa haipatikani au hailingani."

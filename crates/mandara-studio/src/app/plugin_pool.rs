@@ -1,4 +1,4 @@
-//! Studio → Bar → Layout designer: the plugin pool under the bar's zones.
+//! Studio → Bars → Bar → Layout designer: the plugin pool under the bar's zones.
 //!
 //! Every plugin that can sit on the bar, in equal cells on an aligned grid,
 //! grouped by category (a category rail on wide windows, chips on narrow
@@ -314,7 +314,7 @@ impl StudioView {
         cx.notify();
     }
 
-    /// The plugin pool (Studio → Bar → Layout designer).
+    /// The plugin pool (Studio → Bars → Bar → Layout designer).
     pub(super) fn plugin_pool(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let registry = cx.global::<PluginRegistry>();
         let current = stamp(registry);

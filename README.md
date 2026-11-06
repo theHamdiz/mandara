@@ -99,7 +99,7 @@ widget can be moved, resized and restyled right on the desktop.
 | **Compositors** | MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic (0.3) and KWin, with native drivers; your own config gets one include line at most, nothing more |
 | **Built with** | 100 % Rust, one binary (`mandara`), GPU-rendered with GPUI and wgpu |
 | **Resources** | Under 100 MiB RAM, under 190 MiB video memory, about 0.1 % CPU idle |
-| **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`) |
+| **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`), with [thirteen colour launcher icons](docs/configuration.md#launcher-button-artwork) |
 | **Automation** | `mandara msg <command>` with JSON replies; `mandara commands --json` lists them all |
 | **Plugins** | 77 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
 | **Widgets** | Mechanical, word and binary clocks, calendar cards and weather dials; passive widgets can also decorate Mandara Login and the native lock screen |
@@ -139,7 +139,7 @@ around, each one measured or shipped today:
 5. **Real motion.** Analytical spring physics that can be interrupted
    mid-flight, and OKLCH colour blending, so every morph, slide and theme
    change stays smooth.
-6. **Every setting live, in a real app.** Mandara Studio has 31 pages; drag
+6. **Every setting live, in a real app.** Mandara Studio has 30 pages; drag
    a slider and the bar follows as you drag. Nothing needs a config file
    unless you want one.
 7. **A colour engine, not a colour picker.** Material You (HCT) palettes
@@ -172,7 +172,7 @@ around, each one measured or shipped today:
   bar into one frame, one-click Looks, desktop widgets, a hundred dials for
   corners, glass and motion, and themes made from your wallpaper.
   [Your desktop](docs/desktop.md)
-- **Everything is a click away in Studio.** 31 pages of settings, all
+- **Everything is a click away in Studio.** 30 pages of settings, all
   live: drag a slider and the bar follows as you drag.
   [Mandara Studio](docs/studio.md)
 - **It does a lot out of the box.** A media island with lyrics, a sound
@@ -260,8 +260,9 @@ One command, from any shell:
 sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
 ```
 
-The download shows its progress, checks the release signature and archive,
-then opens Mandara's installer with an arrow-key setup menu. Compositor,
+The download shows its size and progress, confirms the release signature
+and archive checksum, then opens Mandara's installer with an arrow-key
+setup menu. Compositor,
 login and other options go
 straight to `mandara install`. Append them after the final `sh`, for example
 `--compositor kwin --no-greeter`; see the [installation guide](docs/install.md).
@@ -313,7 +314,7 @@ More answers in the **[FAQ](docs/faq.md)**.
 - **[Using Mandara](docs/usage.md)**: commands and default shortcuts
 - **[Plugins](docs/plugins.md)** and **[writing your own](PLUGINS.md)**
 - **[Why Mandara](docs/why-mandara.md)**: how it compares with other shells
-- **[Building from source](docs/building.md)** and
+- **[Building from source](docs/building.md)**, with locked dependencies, and
   **[contributing](AGENTS.md)**
 
 ## Star history

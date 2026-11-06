@@ -152,8 +152,8 @@ pub fn placement(fill: WallpaperFill, clip: (u32, u32), physical: (u32, u32), sc
         (crop.w, crop.h)
     };
     let crop = if viewport && buffer.0 * 2 <= crop.w && buffer.1 * 2 <= crop.h { Crop { w: buffer.0 * 2, h: buffer.1 * 2, ..crop } } else { crop };
-    let place = if dest == full && buffer == (ow, oh) {
-        Place::Full
+    let place = if dest == full {
+        if buffer == (ow, oh) { Place::Full } else { Place::FullScaled { buffer } }
     } else if buffer == (dest.w, dest.h) {
         Place::Rect(dest)
     } else {
@@ -167,11 +167,11 @@ pub fn placement(fill: WallpaperFill, clip: (u32, u32), physical: (u32, u32), sc
 pub fn fill_placement(picture: Placement, physical: (u32, u32), viewport: bool) -> Option<Place> {
     let output = Rect::new(0, 0, physical.0.max(1), physical.1.max(1));
     let picture = match picture.place {
-        Place::Full => output,
+        Place::Full | Place::FullScaled { .. } => output,
         Place::Rect(rect) | Place::Scaled { rect, .. } => rect,
     };
     (picture != output).then_some(if viewport {
-        Place::Scaled { rect: output, buffer: (1, 1) }
+        Place::FullScaled { buffer: (1, 1) }
     } else {
         Place::Full
     })
@@ -517,7 +517,7 @@ mod tests {
         let p = placement(WallpaperFill::Cover, (1920, 1080), (2560, 1440), S120, true);
         assert_eq!(p.crop, Crop { x: 0, y: 0, w: 1920, h: 1080 });
         assert_eq!(p.buffer, (1920, 1080));
-        assert_eq!(p.place, Place::Scaled { rect: Rect::new(0, 0, 2560, 1440), buffer: (1920, 1080) });
+        assert_eq!(p.place, Place::FullScaled { buffer: (1920, 1080) });
         // Same size: drawn 1:1 over the whole output.
         let p = placement(WallpaperFill::Cover, (2560, 1440), (2560, 1440), S120, true);
         assert_eq!((p.place, p.buffer), (Place::Full, (2560, 1440)));
@@ -528,7 +528,7 @@ mod tests {
         // 16:9 clip on a 16:10 output: the sides are cropped.
         let p = placement(WallpaperFill::Cover, (1920, 1080), (1920, 1200), S120, true);
         assert_eq!(p.crop, Crop { x: 96, y: 0, w: 1728, h: 1080 });
-        assert_eq!(p.place, Place::Scaled { rect: Rect::new(0, 0, 1920, 1200), buffer: (1728, 1080) });
+        assert_eq!(p.place, Place::FullScaled { buffer: (1728, 1080) });
         // Odd offsets round down to even (4:2:0 chroma pairs).
         let p = placement(WallpaperFill::Cover, (1921, 1080), (1920, 1200), S120, true);
         assert_eq!(p.crop.x % 2, 0);
@@ -569,7 +569,7 @@ mod tests {
         let p = placement(WallpaperFill::Center, (3840, 2160), (1920, 1080), S120, true);
         assert_eq!((p.crop, p.place), (Crop { x: 960, y: 540, w: 1920, h: 1080 }, Place::Full));
         let p = placement(WallpaperFill::Stretch, (1280, 1024), (1920, 1080), S120, true);
-        assert_eq!(p.place, Place::Scaled { rect: Rect::new(0, 0, 1920, 1080), buffer: (1280, 1024) });
+        assert_eq!(p.place, Place::FullScaled { buffer: (1280, 1024) });
     }
 
     #[test]
@@ -588,13 +588,29 @@ mod tests {
                 let fill = fill_placement(picture, physical, viewport);
                 match mode {
                     WallpaperFill::Cover | WallpaperFill::Stretch => assert_eq!(fill, None),
-                    _ => assert_eq!(fill, Some(if viewport { Place::Scaled { rect: Rect::new(0, 0, physical.0, physical.1), buffer: (1, 1) } } else { Place::Full })),
+                    _ => assert_eq!(fill, Some(if viewport { Place::FullScaled { buffer: (1, 1) } } else { Place::Full })),
                 }
             }
         }
         for mode in [WallpaperFill::Cover, WallpaperFill::Contain, WallpaperFill::Stretch, WallpaperFill::Center, WallpaperFill::Tile] {
             let picture = placement(mode, physical, physical, S120, true);
             assert_eq!(fill_placement(picture, physical, true), None, "{mode:?}: no redundant fill when the frame covers every pixel");
+        }
+    }
+
+    #[test]
+    fn fractional_full_output_frames_and_fill_use_exact_canvas_bounds() {
+        for (physical, scale120) in [((1706, 961), 150), ((1844, 1038), 144)] {
+            for mode in [WallpaperFill::Cover, WallpaperFill::Contain, WallpaperFill::Stretch, WallpaperFill::Center, WallpaperFill::Tile] {
+                let picture = placement(mode, (192, 144), physical, scale120, true);
+                match mode {
+                    WallpaperFill::Cover | WallpaperFill::Stretch => {
+                        assert!(matches!(picture.place, Place::FullScaled { .. }));
+                        assert_eq!(fill_placement(picture, physical, true), None);
+                    }
+                    _ => assert_eq!(fill_placement(picture, physical, true), Some(Place::FullScaled { buffer: (1, 1) })),
+                }
+            }
         }
     }
 

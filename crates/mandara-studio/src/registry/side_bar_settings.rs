@@ -1,6 +1,6 @@
-//! Registry entries for the side bars (`[side_bars]`) on the Bar page:
+//! Registry entries for the side bars (`[side_bars]`) on Bars → Side bars:
 //! the switches, shape, items, material and motion. Which plugins each side
-//! bar holds is arranged in the Bar page's layout designer. Slider bounds
+//! bar holds is arranged in the Side bars tab's layout designer. Slider bounds
 //! come from `mandara_config::side_bars::ranges`, the spans the shell
 //! clamps to.
 
@@ -10,7 +10,7 @@ use mandara_i18n::tk;
 
 use super::{Control, Section, Setting, s, span};
 
-/// Group names (in the Bar page's order).
+/// Group names (in the Side bars tab's order).
 pub const SIDE_BARS: &str = tk("Side bars");
 pub const SIDE_BAR_SHAPE: &str = tk("Side bar shape");
 pub const SIDE_BAR_ITEMS: &str = tk("Side bar items");
@@ -40,36 +40,36 @@ pub fn entries() -> Vec<Setting> {
     let ms = |r: mandara_config::surfaces::Span| span(r, " ms");
     vec![
         // Bar → Side bars
-        s(Bar, SIDE_BARS, "/side_bars/enabled", tk("Side bars"), tk("A slim bar of plugin icons and pills on the left and right edges; panels pour out sideways. They replace the widget sidebar on their edges"), Toggle),
-        s(Bar, SIDE_BARS, "/side_bars/joined", tk("Join with the bar"), tk("The top bar and the side bars become one frame with curved corners. The bar is drawn as the edge frame while they're joined; its own style comes back when they're separate"), Toggle),
-        s(Bar, SIDE_BARS, "/side_bars/left/enabled", tk("Left side bar"), tk("Show the bar on the left edge"), Toggle),
-        s(Bar, SIDE_BARS, "/side_bars/left/pinned", tk("Pin the left side bar"), tk("Pinned, it stays and windows tile beside it; unpinned, it slides away and comes back when the pointer touches the edge"), Toggle),
-        s(Bar, SIDE_BARS, "/side_bars/left/accent", tk("Left accent"), tk("The colour its items light up and wash with"), Choice(ACCENTS)),
-        s(Bar, SIDE_BARS, "/side_bars/right/enabled", tk("Right side bar"), tk("Show the bar on the right edge"), Toggle),
-        s(Bar, SIDE_BARS, "/side_bars/right/pinned", tk("Pin the right side bar"), tk("Pinned, it stays and windows tile beside it; unpinned, it slides away and comes back when the pointer touches the edge"), Toggle),
-        s(Bar, SIDE_BARS, "/side_bars/right/accent", tk("Right accent"), tk("The colour its items light up and wash with"), Choice(ACCENTS)),
-        s(Bar, SIDE_BARS, "/side_bars/reveal_delay_ms", tk("Reveal delay"), tk("How long the pointer rests on the edge before an unpinned side bar slides out"), ms(ranges::REVEAL_DELAY_MS)),
-        s(Bar, SIDE_BARS, "/side_bars/hide_delay_ms", tk("Hide delay"), tk("How long an unpinned side bar waits after the pointer leaves before it slides away"), ms(ranges::HIDE_DELAY_MS)),
+        s(Bars, SIDE_BARS, "/side_bars/enabled", tk("Side bars"), tk("A slim bar of plugin icons and pills on the left and right edges; panels pour out sideways. They replace the widget sidebar on their edges"), Toggle),
+        s(Bars, SIDE_BARS, "/side_bars/joined", tk("Join with the bar"), tk("The top bar and the side bars become one frame with curved corners. The bar is drawn as the edge frame while they're joined; its own style comes back when they're separate"), Toggle),
+        s(Bars, SIDE_BARS, "/side_bars/left/enabled", tk("Left side bar"), tk("Show the bar on the left edge"), Toggle),
+        s(Bars, SIDE_BARS, "/side_bars/left/pinned", tk("Pin the left side bar"), tk("Pinned, it stays and windows tile beside it; unpinned, it slides away and comes back when the pointer touches the edge"), Toggle),
+        s(Bars, SIDE_BARS, "/side_bars/left/accent", tk("Left accent"), tk("The colour its items light up and wash with"), Choice(ACCENTS)),
+        s(Bars, SIDE_BARS, "/side_bars/right/enabled", tk("Right side bar"), tk("Show the bar on the right edge"), Toggle),
+        s(Bars, SIDE_BARS, "/side_bars/right/pinned", tk("Pin the right side bar"), tk("Pinned, it stays and windows tile beside it; unpinned, it slides away and comes back when the pointer touches the edge"), Toggle),
+        s(Bars, SIDE_BARS, "/side_bars/right/accent", tk("Right accent"), tk("The colour its items light up and wash with"), Choice(ACCENTS)),
+        s(Bars, SIDE_BARS, "/side_bars/reveal_delay_ms", tk("Reveal delay"), tk("How long the pointer rests on the edge before an unpinned side bar slides out"), ms(ranges::REVEAL_DELAY_MS)),
+        s(Bars, SIDE_BARS, "/side_bars/hide_delay_ms", tk("Hide delay"), tk("How long an unpinned side bar waits after the pointer leaves before it slides away"), ms(ranges::HIDE_DELAY_MS)),
         // Bar → Side bar shape
-        s(Bar, SIDE_BAR_SHAPE, "/side_bars/width", tk("Width"), tk("How wide each side bar is"), span(ranges::WIDTH, " px")),
-        s(Bar, SIDE_BAR_SHAPE, "/side_bars/shape", tk("Shape"), tk("Separate side bars: a glass pill per group, one island, or a slab along the whole edge"), Choice(SHAPES)),
-        s(Bar, SIDE_BAR_SHAPE, "/side_bars/edge_gap", tk("Edge gap"), tk("Space between a separate side bar and the screen edge, and around the groups at its ends"), span(ranges::EDGE_GAP, " px")),
-        s(Bar, SIDE_BAR_SHAPE, "/side_bars/corner_radius", tk("Corner radius"), tk("Roundness of the pills, island, slab and items"), span(ranges::CORNER_RADIUS, " px")),
-        s(Bar, SIDE_BAR_SHAPE, "/side_bars/flare_radius", tk("Corner curves"), tk("The curves where a side bar meets the bar and the screen edge, and where its panels pour out"), span(ranges::FLARE_RADIUS, " px")),
-        s(Bar, SIDE_BAR_SHAPE, "/side_bars/align", tk("Middle group"), tk("Where the middle group sits along the edge"), Choice(ALIGN)),
+        s(Bars, SIDE_BAR_SHAPE, "/side_bars/width", tk("Width"), tk("How wide each side bar is"), span(ranges::WIDTH, " px")),
+        s(Bars, SIDE_BAR_SHAPE, "/side_bars/shape", tk("Shape"), tk("Separate side bars: a glass pill per group, one island, or a slab along the whole edge"), Choice(SHAPES)),
+        s(Bars, SIDE_BAR_SHAPE, "/side_bars/edge_gap", tk("Edge gap"), tk("Space between a separate side bar and the screen edge, and around the groups at its ends"), span(ranges::EDGE_GAP, " px")),
+        s(Bars, SIDE_BAR_SHAPE, "/side_bars/corner_radius", tk("Corner radius"), tk("Roundness of the pills, island, slab and items"), span(ranges::CORNER_RADIUS, " px")),
+        s(Bars, SIDE_BAR_SHAPE, "/side_bars/flare_radius", tk("Corner curves"), tk("The curves where a side bar meets the bar and the screen edge, and where its panels pour out"), span(ranges::FLARE_RADIUS, " px")),
+        s(Bars, SIDE_BAR_SHAPE, "/side_bars/align", tk("Middle group"), tk("Where the middle group sits along the edge"), Choice(ALIGN)),
         // Bar → Side bar items
-        s(Bar, SIDE_BAR_ITEMS, "/side_bars/chips", tk("Item style"), tk("Bare icons, every item on its own pill, or each group on one island"), Choice(CHIPS)),
-        s(Bar, SIDE_BAR_ITEMS, "/side_bars/chip_size", tk("Item size"), tk("How wide each item is across the side bar"), span(ranges::CHIP_SIZE, " px")),
-        s(Bar, SIDE_BAR_ITEMS, "/side_bars/chip_padding", tk("Item padding"), tk("Space above and below each item's content"), span(ranges::CHIP_PADDING, " px")),
-        s(Bar, SIDE_BAR_ITEMS, "/side_bars/chip_spacing", tk("Item spacing"), tk("Gap between neighbouring items"), span(ranges::CHIP_SPACING, " px")),
-        s(Bar, SIDE_BAR_ITEMS, "/side_bars/chip_fill", tk("Wash strength"), tk("How strongly the pills and islands behind items stand out"), span(ranges::CHIP_FILL, "×")),
+        s(Bars, SIDE_BAR_ITEMS, "/side_bars/chips", tk("Item style"), tk("Bare icons, every item on its own pill, or each group on one island"), Choice(CHIPS)),
+        s(Bars, SIDE_BAR_ITEMS, "/side_bars/chip_size", tk("Item size"), tk("How wide each item is across the side bar"), span(ranges::CHIP_SIZE, " px")),
+        s(Bars, SIDE_BAR_ITEMS, "/side_bars/chip_padding", tk("Item padding"), tk("Space above and below each item's content"), span(ranges::CHIP_PADDING, " px")),
+        s(Bars, SIDE_BAR_ITEMS, "/side_bars/chip_spacing", tk("Item spacing"), tk("Gap between neighbouring items"), span(ranges::CHIP_SPACING, " px")),
+        s(Bars, SIDE_BAR_ITEMS, "/side_bars/chip_fill", tk("Wash strength"), tk("How strongly the pills and islands behind items stand out"), span(ranges::CHIP_FILL, "×")),
         // Bar → Side bar material
-        s(Bar, SIDE_BAR_MATERIAL, "/side_bars/opacity", tk("Background opacity"), tk("Lower it to let the desktop (or the frosted glass) show through"), span(mandara_config::surfaces::ranges::OPACITY, "")),
-        s(Bar, SIDE_BAR_MATERIAL, "/side_bars/tint", tk("Accent tint"), tk("Mixes each side bar's accent into its background"), span(ranges::TINT, "")),
-        s(Bar, SIDE_BAR_MATERIAL, "/side_bars/glass", tk("Frosted glass"), tk("Your wallpaper, frosted, behind the side bars; lower the opacity to see it"), Toggle),
-        s(Bar, SIDE_BAR_MATERIAL, "/side_bars/rim", tk("Rim light"), tk("A thin specular highlight around the glass"), Toggle),
-        s(Bar, SIDE_BAR_MATERIAL, "/side_bars/rim_intensity", tk("Rim intensity"), tk("Strength of the highlight and shade"), span(mandara_config::surfaces::ranges::INTENSITY, "×")),
-        s(Bar, SIDE_BAR_MATERIAL, "/side_bars/shadow", tk("Shadow"), tk("A soft shadow under separate side bars"), Toggle),
+        s(Bars, SIDE_BAR_MATERIAL, "/side_bars/opacity", tk("Background opacity"), tk("Lower it to let the desktop (or the frosted glass) show through"), span(mandara_config::surfaces::ranges::OPACITY, "")),
+        s(Bars, SIDE_BAR_MATERIAL, "/side_bars/tint", tk("Accent tint"), tk("Mixes each side bar's accent into its background"), span(ranges::TINT, "")),
+        s(Bars, SIDE_BAR_MATERIAL, "/side_bars/glass", tk("Frosted glass"), tk("Your wallpaper, frosted, behind the side bars; lower the opacity to see it"), Toggle),
+        s(Bars, SIDE_BAR_MATERIAL, "/side_bars/rim", tk("Rim light"), tk("A thin specular highlight around the glass"), Toggle),
+        s(Bars, SIDE_BAR_MATERIAL, "/side_bars/rim_intensity", tk("Rim intensity"), tk("Strength of the highlight and shade"), span(mandara_config::surfaces::ranges::INTENSITY, "×")),
+        s(Bars, SIDE_BAR_MATERIAL, "/side_bars/shadow", tk("Shadow"), tk("A soft shadow under separate side bars"), Toggle),
     ]
 }
 

@@ -327,8 +327,9 @@ pub fn any_icon(spec: &str, size: f32, tint: Color) -> gpui::AnyElement {
 pub fn any_icon_at(spec: &str, size: f32, decode_size: f32, tint: Color) -> gpui::AnyElement {
     use gpui::{IntoElement as _, ObjectFit, StyledImage as _, img};
     let spec = spec.trim();
-    if spec == BRAND_SPEC {
-        return div().size(px(size)).flex_none().child(img(gpui::ImageSource::from(crate::plugin_art::brand_icon())).size_full().object_fit(ObjectFit::Contain)).into_any_element();
+    let bundled = if spec == BRAND_SPEC { Some(crate::launcher_art::PHOENIX_PATH) } else { crate::launcher_art::find(spec).map(|icon| icon.path) };
+    if let Some(path) = bundled {
+        return div().size(px(size)).flex_none().child(img(crate::icon_raster::source(std::path::Path::new(path), decode_size.max(size))).size_full().object_fit(ObjectFit::Contain)).into_any_element();
     }
     if let Some(name) = ICON_NAMES.iter().find(|n| **n == spec) {
         return icon(name, size, tint).into_any_element();

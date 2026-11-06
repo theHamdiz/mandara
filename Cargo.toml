@@ -101,9 +101,9 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Read + serde everywhere; crates that also write TOML add `display`.
-toml = { version = "1.1", default-features = false, features = ["std", "parse", "serde"] }
+toml = { version = "1.2", default-features = false, features = ["std", "parse", "serde"] }
 # Format-preserving edits of a user's TOML config (Umbriel's include line).
-toml_edit = "0.25"
+toml_edit = "0.25.18"
 # The RustCrypto 0.10 generation (digest 0.10) that GPUI's oo7 keyring client
 # and cranelift / wasmtime-environ link: sha2 0.11 would add a second
 # digest / block-buffer / sha2 stack.
@@ -125,7 +125,7 @@ qrcodegen = "1.8"
 # Search
 nucleo-matcher = "0.3"
 # Notes: CommonMark + GFM (tables, task lists) with source offsets; pure Rust.
-pulldown-cmark = { version = "0.13", default-features = false }
+pulldown-cmark = { version = "0.13.6", default-features = false }
 pulseaudio = "0.3"
 # Pure-Rust MP3 decoding only: the Qur'an plugin's per-ayah recitation.
 symphonia = { version = "0.5.5", default-features = false, features = ["mp3"] }
@@ -159,13 +159,14 @@ async-io = "2"
 pure-onnx-ocr = "0.3.2"
 # The ONNX engine pure-onnx-ocr runs on (same version, nothing new to
 # build): the wallpaper depth model (mandara-services depth_model.rs).
-tract-onnx = "0.23.9"
-ureq = { version = "3", default-features = false, features = ["rustls"] }
+tract-onnx = "0.23.10"
+ureq = { version = "3.5.1", default-features = false, features = ["rustls"] }
 async-channel = "2.5"
 futures = "0.3"
 anyhow = "1"
 thiserror = "2"
-# 0.12: the version GPUI uses, so only one parking_lot / lock_api is linked.
+# Share GPUI's lock implementation for service state; tract uses its own
+# newer generation internally.
 parking_lot = "0.12"
 
 # Time

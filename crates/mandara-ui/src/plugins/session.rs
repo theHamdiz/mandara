@@ -18,6 +18,8 @@ pub const LAUNCHER_ID: &str = "launcher";
 /// Bar glyph sizes of the power and launcher buttons.
 const POWER_ICON_PX: f32 = 15.0;
 const LAUNCHER_ICON_PX: f32 = 16.0;
+/// Colour artwork needs a larger canvas than a stroke glyph to stay legible.
+const LAUNCHER_ART_PX: f32 = 24.0;
 
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Session"), mandara_i18n::tk("Power and session menu"),Some(Zone::Right)), |window, cx, _| {
@@ -39,8 +41,10 @@ pub fn register(r: &mut PluginRegistry) {
         let bar = fn_view(
             None,
             |palette, _, cx| {
-                let spec = &crate::state::config(cx).read(cx).get().appearance.launcher_icon;
-                div().flex().items_center().child(crate::icons::any_icon(spec, crate::style::bar_icon(LAUNCHER_ICON_PX), palette.primary)).into_any_element()
+                let store = crate::state::config(cx).read(cx);
+                let cfg = store.get();
+                let spec = &cfg.appearance.launcher_icon;
+                div().flex().items_center().child(crate::icons::any_icon(spec, launcher_icon_size(cfg, crate::style::bar_icon(1.0)), palette.primary)).into_any_element()
             },
             window,
             cx,
@@ -181,6 +185,16 @@ pub fn register(r: &mut PluginRegistry) {
     );
 }
 
+/// Fits coloured launcher art inside the active bar, including compact and
+/// vertical layouts, while preserving the user's icon scale.
+fn launcher_icon_size(cfg: &mandara_config::ShellConfig, scale: f32) -> f32 {
+    let coloured = cfg.appearance.launcher_icon.trim() == crate::icons::BRAND_SPEC || crate::launcher_art::find(cfg.appearance.launcher_icon.trim()).is_some();
+    let base = if coloured { LAUNCHER_ART_PX } else { LAUNCHER_ICON_PX };
+    let metrics = crate::bar::layout::Metrics::of(cfg, 1.0);
+    let available = (metrics.height - 2.0 * metrics.chip_inset()).max(1.0);
+    (base * scale).min(available)
+}
+
 /// Ids of the launcher looks, in order.
 const LOOK_IDS: [&str; LAUNCHER_LOOKS.len()] = {
     let mut ids = [""; LAUNCHER_LOOKS.len()];
@@ -219,6 +233,24 @@ fn looks_json(look: &mandara_config::workflow::LauncherLook) -> serde_json::Valu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launcher_art_fills_the_button_without_overflowing_short_bars() {
+        let mut cfg = mandara_config::ShellConfig::default();
+        let phoenix = launcher_icon_size(&cfg, 1.0);
+        cfg.appearance.launcher_icon = "grid".into();
+        assert!(phoenix > launcher_icon_size(&cfg, 1.0));
+        cfg.appearance.launcher_icon = crate::launcher_art::ICONS[0].spec.into();
+        assert_eq!(launcher_icon_size(&cfg, 1.0), phoenix);
+        for height in [20.0, 24.0, 30.0, 48.0] {
+            cfg.bar.height = height;
+            let metrics = crate::bar::layout::Metrics::of(&cfg, 1.0);
+            assert!(launcher_icon_size(&cfg, 2.0) <= metrics.height - 2.0 * metrics.chip_inset());
+        }
+        cfg.bar.position = mandara_config::BarPosition::Left;
+        let metrics = crate::bar::layout::Metrics::of(&cfg, 1.0);
+        assert!(launcher_icon_size(&cfg, 2.0) <= metrics.height - 2.0 * metrics.chip_inset());
+    }
 
     #[test]
     fn launcher_looks_list_marks_the_applied_one() {

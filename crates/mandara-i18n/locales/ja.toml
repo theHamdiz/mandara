@@ -1234,7 +1234,7 @@
 "Automatic login" = "自動ログイン"
 "Backlight devices and levels" = "バックライトデバイスとレベル"
 "Balanced" = "バランス"
-"Bars" = "バー数"
+"Bars" = "バー"
 "Batteries" = "バッテリー"
 "Battery details need the upower service" = "バッテリーの詳細には upower サービスが必要です"
 "Battery health, cycles, rate and time estimates (JSON)" = "バッテリーの状態、サイクル数、レート、時間の推定（JSON）"
@@ -8702,3 +8702,18 @@
 "Couldn't verify the community store policy. Try again later." = "コミュニティストアのポリシーを確認できませんでした。しばらくしてから、もう一度お試しください。"
 "The community store has blocked installs and updates for {repository}." = "コミュニティストアは {repository} のインストールと更新をブロックしています。"
 "Repository details are missing IDs required by the store policy." = "リポジトリの詳細に、ストアポリシーで必要な ID がありません。"
+
+# Studio bars
+"Edges & corners" = "画面端とコーナー"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "セクション (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] または plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "インジケーターをバーに表示するには「{name}」プラグインをバーに追加してください（Studio → バー → バー）。オンスクリーン表示はどちらでも機能します。"
+"Add any widget to it in Studio → Bars → Sidebar." = "Studio → バー → サイドバーでウィジェットを追加できます。"
+"Number of bars" = "バーの数"
+
+"Release signature verified." = "リリースの署名を確認しました。"
+"Downloaded:" = "ダウンロード済み:"
+"Archive checksum verified." = "アーカイブのチェックサムを確認しました。"
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "署名付きリリースをダウンロードできませんでした。何もインストールしていません。接続を確認して、もう一度お試しください。"
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "このバイナリを検証できませんでした: {reason}。Mandara はインストールされていません。接続を確認して、もう一度お試しください。"
+"Install this binary even when its published checksum is unavailable or doesn't match." = "公開されたチェックサムが取得できない、または一致しない場合でも、このバイナリをインストールします。"

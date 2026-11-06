@@ -8701,3 +8701,18 @@
 "Couldn't verify the community store policy. Try again later." = "Topluluk mağazası politikası doğrulanamadı. Daha sonra tekrar deneyin."
 "The community store has blocked installs and updates for {repository}." = "Topluluk mağazası {repository} için yükleme ve güncellemeleri engelledi."
 "Repository details are missing IDs required by the store policy." = "Depo ayrıntılarında mağaza politikasının gerektirdiği kimlikler eksik."
+
+# Studio bars
+"Edges & corners" = "Kenarlar ve köşeler"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "bir bölüm (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] veya plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "Göstergeyi orada görmek için “{name}” eklentisini çubuğa ekleyin (Studio → Çubuklar → Çubuk); ekran göstergeleri her iki durumda da çalışır."
+"Add any widget to it in Studio → Bars → Sidebar." = "Studio → Çubuklar → Kenar çubuğundan herhangi bir araç ekleyin."
+"Number of bars" = "Çubuk sayısı"
+
+"Release signature verified." = "Sürüm imzası doğrulandı."
+"Downloaded:" = "İndirildi:"
+"Archive checksum verified." = "Arşiv sağlama toplamı doğrulandı."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "İmzalı sürüm indirilemedi. Hiçbir şey kurulmadı. Bağlantınızı kontrol edip yeniden deneyin."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "Bu ikili dosya doğrulanamadı: {reason}. Mandara kurulmadı. Bağlantınızı kontrol edip yeniden deneyin."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "Yayımlanmış sağlama toplamı kullanılamasa veya eşleşmese bile bu ikili dosyayı kur."

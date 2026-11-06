@@ -685,8 +685,8 @@ impl<'a> Installer<'a> {
 
     // ── Getting the binary ──────────────────────────────────────────────
 
-    /// The running binary, checked against its release's published SHA-256
-    /// when one can be reached.
+    /// A published binary needs its release's checksum, unless the caller
+    /// explicitly opts out. Local source builds have no release to check.
     fn verify_self(&mut self) -> Result<Stage, String> {
         self.say(Level::Step, "Checking this binary");
         let exe = self.facts.exe.clone();
@@ -702,9 +702,9 @@ impl<'a> Installer<'a> {
         let bytes = std::fs::read(&exe).map_err(|e| format!("{}: {e}", exe.display()))?;
         match self.self_check(&bytes, version, &platform::compiled_target()) {
             SelfCheck::Verified(what) => self.say(Level::Ok, format!("{version} · SHA-256 verified against {what}")),
-            SelfCheck::Mismatch(why) if self.args.no_verify => self.say(Level::Warn, format!("{why}; installing anyway (--no-verify)")),
+            SelfCheck::Mismatch(why) | SelfCheck::Unavailable(why) if self.args.no_verify => self.say(Level::Warn, format!("{why}; installing anyway (--no-verify)")),
             SelfCheck::Mismatch(why) => return Err(format!("this binary doesn't match its release: {why}. Download the release again, or pass --no-verify to install it anyway")),
-            SelfCheck::Unavailable(why) => self.say(Level::Warn, format!("couldn't verify this binary ({why}); installing it unverified")),
+            SelfCheck::Unavailable(why) => return Err(tf("Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again.", &[("reason", &why)])),
         }
         Ok(Stage::embedded(exe))
     }

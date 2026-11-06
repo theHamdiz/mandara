@@ -28,6 +28,15 @@ pub struct UiState {
 }
 
 impl UiState {
+    /// New tab keys fall back to the expansion saved for their former page.
+    pub(crate) fn fold_state(&self, key: &str) -> Option<bool> {
+        self.sections.get(key).copied().or_else(|| {
+            let (tab, group) = key.strip_prefix("Bars/")?.split_once('/')?;
+            let tab = crate::registry::bars::BarsTab::parse(tab)?;
+            self.sections.get(&format!("{}/{group}", tab.former_page())).copied()
+        })
+    }
+
     pub fn is_collapsed(&self, group: NavGroup) -> bool {
         self.collapsed.contains(group.id())
     }
@@ -84,6 +93,19 @@ pub fn save(state: &UiState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bars_folds_keep_former_pages_distinct_and_new_keys_take_precedence() {
+        let mut state = UiState::default();
+        state.sections.insert("Bar/Layout".into(), false);
+        state.sections.insert("Sidebar/Layout".into(), true);
+        assert_eq!(state.fold_state("Bars/bar/Layout"), Some(false));
+        assert_eq!(state.fold_state("Bars/sidebar/Layout"), Some(true));
+        state.sections.insert("Bars/sidebar/Layout".into(), false);
+        assert_eq!(state.fold_state("Bars/sidebar/Layout"), Some(false));
+        assert_eq!(state.fold_state("Bars/edges/Hot corners"), None);
+        assert_eq!(state.fold_state("Themes/Mode"), None);
+    }
 
     #[test]
     fn collapsed_groups_round_trip_and_unknown_ids_drop() {
