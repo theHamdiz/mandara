@@ -2,6 +2,8 @@
 
 One command, from any shell (bash, zsh or fish):
 
+On the website, use **Copy** beside a command example to copy its text.
+
 ```bash
 sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
 ```
@@ -37,6 +39,11 @@ Installation, configuration and administrator prompts stay in the Rust
 
 ```bash
 sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --dry-run
+```
+
+For an existing Plasma Wayland session:
+
+```bash
 sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh --compositor kwin --no-greeter
 ```
 
