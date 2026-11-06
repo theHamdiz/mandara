@@ -65,6 +65,10 @@ impl Show {
         }
     }
 
+    fn of(config: &mandara_config::ShellConfig) -> Self {
+        Self::parse(config.plugins.setting_str(ID, "show").unwrap_or("app-and-title"))
+    }
+
     /// `(app name, title)` to draw; a title-only item falls back to the
     /// app's name for windows without a title of their own.
     fn parts(self, app: &SharedString, title: &SharedString) -> (Option<SharedString>, Option<SharedString>) {
@@ -93,7 +97,7 @@ pub fn register(r: &mut PluginRegistry) {
                     l.title.clone_from(&client.title);
                 }
                 let cfg = crate::state::config(cx).read(cx).snapshot();
-                let show = Show::parse(&cfg.plugins.setting(ID, "show", String::from("app-and-title")));
+                let show = Show::of(&cfg);
                 let max_w = cfg.plugins.setting(ID, "max_width", f64::from(MAX_W_PX)).clamp(MAX_W_RANGE.0, MAX_W_RANGE.1) as f32;
                 let (app, title) = show.parts(&l.app, &l.shown_title);
                 div()
@@ -130,6 +134,17 @@ mod tests {
         assert_eq!(Show::parse("title").parts(&app, &title), (None, Some(title.clone())));
         assert_eq!(Show::Title.parts(&app, &SharedString::default()), (Some(app.clone()), None), "an untitled window still shows something");
         assert_eq!(Show::parse("nonsense"), Show::AppAndTitle);
+    }
+
+    /// Missing and invalid values keep the original title mode; valid text is borrowed.
+    #[test]
+    fn title_mode_reads_borrowed_config_without_changing_fallbacks() {
+        let mut config = mandara_config::ShellConfig::default();
+        assert_eq!(Show::of(&config), Show::AppAndTitle);
+        config.plugins.settings.entry(ID.into()).or_default().insert("show".into(), toml::Value::String("title".into()));
+        assert_eq!(Show::of(&config), Show::Title);
+        config.plugins.settings.get_mut(ID).unwrap().insert("show".into(), toml::Value::Boolean(true));
+        assert_eq!(Show::of(&config), Show::AppAndTitle);
     }
 
     #[test]

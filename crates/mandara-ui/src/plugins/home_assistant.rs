@@ -41,8 +41,8 @@ pub struct Settings {
 /// Read the configured server and favourite order without contacting the server.
 pub fn settings(cfg: &ShellConfig) -> Settings {
     Settings {
-        server: cfg.plugins.setting(ID, "server", String::new()).trim().trim_end_matches('/').into(),
-        favourites: cfg.plugins.setting(ID, "entities", String::new()).split_whitespace().map(str::to_owned).collect(),
+        server: cfg.plugins.setting_str(ID, "server").unwrap_or("").trim().trim_end_matches('/').into(),
+        favourites: cfg.plugins.setting_str(ID, "entities").unwrap_or("").split_whitespace().map(str::to_owned).collect(),
     }
 }
 
@@ -187,6 +187,16 @@ pub fn register(registry: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Invalid text fields still resolve to an empty, unconfigured server.
+    #[test]
+    fn borrowed_settings_keep_mistyped_text_fields_empty() {
+        let mut config = ShellConfig::default();
+        let values = config.plugins.settings.entry(ID.into()).or_default();
+        values.insert("server".into(), toml::Value::Boolean(true));
+        values.insert("entities".into(), toml::Value::Integer(3));
+        assert_eq!(settings(&config), Settings { server: String::new(), favourites: Vec::new() });
+    }
 
     #[test]
     fn disabling_releases_a_snapshot_even_if_a_request_still_holds_the_data_slot() {

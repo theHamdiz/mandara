@@ -252,7 +252,7 @@ pub fn remove_city(key: &str, cx: &mut App) -> Result<(), String> {
 }
 
 fn h24(cfg: &ShellConfig) -> bool {
-    match cfg.plugins.setting(ID, "clock", String::from("shell")).as_str() {
+    match cfg.plugins.setting_str(ID, "clock").unwrap_or("shell") {
         "12" => false,
         "24" => true,
         _ => cfg.general.clock_24h,
@@ -1107,6 +1107,23 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Clock overrides still follow the shell for missing, unknown or mistyped values.
+    #[test]
+    fn clock_override_borrows_text_and_keeps_shell_fallback() {
+        let mut config = ShellConfig::default();
+        for shell in [false, true] {
+            config.general.clock_24h = shell;
+            config.plugins.settings.remove(ID);
+            assert_eq!(h24(&config), shell);
+            for (value, expected) in [("12", false), ("24", true), ("unknown", shell)] {
+                config.plugins.settings.entry(ID.into()).or_default().insert("clock".into(), toml::Value::String(value.into()));
+                assert_eq!(h24(&config), expected);
+            }
+            config.plugins.settings.get_mut(ID).unwrap().insert("clock".into(), toml::Value::Integer(24));
+            assert_eq!(h24(&config), shell);
+        }
+    }
 
     #[test]
     fn planner_snaps_to_quarter_hours() {

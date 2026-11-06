@@ -178,11 +178,11 @@ const PERCENT: f32 = 100.0;
 // ── Settings ─────────────────────────────────────────────────────────────
 
 fn unit(cfg: &ShellConfig) -> Unit {
-    Unit::parse(&cfg.plugins.setting(ID, "unit", String::from("bytes")))
+    Unit::parse(cfg.plugins.setting_str(ID, "unit").unwrap_or("bytes"))
 }
 
 fn endpoint(cfg: &ShellConfig) -> String {
-    let url = cfg.plugins.setting(ID, "public_ip_url", String::from(ns::DEFAULT_PUBLIC_IP_URL));
+    let url = cfg.plugins.setting_str(ID, "public_ip_url").unwrap_or(ns::DEFAULT_PUBLIC_IP_URL);
     if url.trim().is_empty() { ns::DEFAULT_PUBLIC_IP_URL.into() } else { url.trim().to_string() }
 }
 
@@ -1212,6 +1212,24 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Borrowed settings retain unit parsing and trimmed endpoint fallback behavior.
+    #[test]
+    fn borrowed_string_settings_preserve_unit_and_endpoint_policy() {
+        let mut config = ShellConfig::default();
+        assert_eq!(unit(&config), Unit::Bytes);
+        assert_eq!(endpoint(&config), ns::DEFAULT_PUBLIC_IP_URL);
+        let settings = config.plugins.settings.entry(ID.into()).or_default();
+        settings.insert("unit".into(), toml::Value::String("BiTs".into()));
+        settings.insert("public_ip_url".into(), toml::Value::String("  https://example.org/ip  ".into()));
+        assert_eq!(unit(&config), Unit::Bits);
+        assert_eq!(endpoint(&config), "https://example.org/ip");
+        let settings = config.plugins.settings.get_mut(ID).unwrap();
+        settings.insert("unit".into(), toml::Value::Boolean(true));
+        settings.insert("public_ip_url".into(), toml::Value::String("  ".into()));
+        assert_eq!(unit(&config), Unit::Bytes);
+        assert_eq!(endpoint(&config), ns::DEFAULT_PUBLIC_IP_URL);
+    }
 
     #[test]
     fn gauge_is_logarithmic_and_bounded() {

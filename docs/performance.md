@@ -136,6 +136,9 @@ change; selecting the surrounding prayers traverses the existing schedules.
 Album art, sharing thumbnails and dock previews consume resized image buffers;
 their dimensions, filters and pixel output stay the same. Temperature rows
 borrow paired reading and label slices, including the partial last row.
+Workspace labels, active-window titles, network units, world clocks and break
+styles parse borrowed setting text. Feed, home-control and translator settings
+keep owned text only for values that outlive the config read.
 
 `cargo test -p mandara-ui --test plugin_allocations -- --nocapture` compares
 the former temporary expressions with warm state reuse on the test thread.

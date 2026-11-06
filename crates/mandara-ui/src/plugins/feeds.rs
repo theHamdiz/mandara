@@ -59,7 +59,7 @@ pub(super) fn stop() {
 
 /// Keep distinct feed addresses in configured order within the list limit.
 pub fn subscriptions(cfg: &ShellConfig) -> Result<Vec<String>, String> {
-    let text = cfg.plugins.setting(ID, "subscriptions", String::new());
+    let text = cfg.plugins.setting_str(ID, "subscriptions").unwrap_or("");
     let mut urls = Vec::new();
     for url in text.split_whitespace() {
         if !urls.iter().any(|seen| seen == url) { urls.push(url.to_owned()); }
@@ -201,6 +201,14 @@ pub fn register(registry: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Non-string subscription settings continue to mean an empty list.
+    #[test]
+    fn borrowed_subscription_setting_preserves_invalid_type_fallback() {
+        let mut config = ShellConfig::default();
+        config.plugins.settings.entry(ID.into()).or_default().insert("subscriptions".into(), toml::Value::Integer(3));
+        assert_eq!(subscriptions(&config).unwrap(), Vec::<String>::new());
+    }
 
     #[test]
     fn disabling_a_reader_drops_read_flags_without_constructing_a_replacement() {
