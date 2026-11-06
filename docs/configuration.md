@@ -227,6 +227,13 @@ setting the shell reads has a control.
 4. Translate the label and help (`MANDARA_I18N_DUMP=1 cargo test -p
    mandara-i18n`, then the nineteen catalogs in `crates/mandara-i18n/locales`).
 
+Built-in code can borrow text with `PluginsConfig::setting_str`, or use
+`setting_or_else` when constructing a typed fallback is expensive. The latter
+only runs its closure for a missing or invalid value; `setting` keeps its
+existing eager-default behavior. Resolve a view's settings once per immutable
+`ConfigStore::snapshot()` where possible, and refresh them when that snapshot
+changes rather than cloning TOML values during every frame.
+
 ## KWin integration
 
 On Plasma Wayland, Mandara’s native KWin driver reads workspaces, windows

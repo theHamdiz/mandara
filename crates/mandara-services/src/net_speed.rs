@@ -55,9 +55,11 @@ pub fn parse_proc_net_dev(text: &str) -> Vec<Counters> {
             if name == "lo" || name.is_empty() {
                 return None;
             }
-            let fields: Vec<u64> = rest.split_whitespace().filter_map(|f| f.parse().ok()).collect();
+            let mut fields = rest.split_whitespace().filter_map(|field| field.parse::<u64>().ok());
             // rx: bytes packets errs drop fifo frame compressed multicast; tx: bytes …
-            (fields.len() >= 9).then(|| Counters { name: name.to_string(), rx_bytes: fields[0], tx_bytes: fields[8] })
+            let rx_bytes = fields.next()?;
+            let tx_bytes = fields.nth(7)?;
+            Some(Counters { name: name.to_string(), rx_bytes, tx_bytes })
         })
         .collect()
 }
@@ -169,9 +171,20 @@ pub fn rates(old: &Sample, new: &Sample, kind: impl Fn(&str) -> LinkKind) -> Vec
 /// Sums the interfaces that make up the machine's traffic: physical links,
 /// or every interface when there are none (e.g. a VM with only tunnels).
 pub fn total(rates: &[IfaceRate]) -> (f64, f64) {
-    let physical: Vec<&IfaceRate> = rates.iter().filter(|r| r.kind.counts_toward_total()).collect();
-    let pick: Vec<&IfaceRate> = if physical.is_empty() { rates.iter().filter(|r| r.kind != LinkKind::Virtual).collect() } else { physical };
-    pick.iter().fold((0.0, 0.0), |(rx, tx), r| (rx + r.rx, tx + r.tx))
+    let (mut physical, mut fallback) = ((0.0, 0.0), (0.0, 0.0));
+    let mut has_physical = false;
+    for rate in rates {
+        if rate.kind.counts_toward_total() {
+            has_physical = true;
+            physical.0 += rate.rx;
+            physical.1 += rate.tx;
+        }
+        if rate.kind != LinkKind::Virtual {
+            fallback.0 += rate.rx;
+            fallback.1 += rate.tx;
+        }
+    }
+    if has_physical { physical } else { fallback }
 }
 
 /// Display unit family.
@@ -469,6 +482,20 @@ docker0: 99999     10    0    0    0     0          0         0    99999      10
     }
 
     #[test]
+    fn counters_keep_large_tables_and_existing_malformed_field_behavior() {
+        use std::fmt::Write as _;
+        let mut table = "header\nheader\n".to_string();
+        for index in 0..256 {
+            writeln!(table, "eth{index}: {index} 1 2 3 4 5 6 7 {} 9", u64::MAX).unwrap();
+        }
+        table.push_str("short: 1 2 3\ninvalid: 1 bad 2 3 4 5 6 7 8 9\n");
+        let counters = parse_proc_net_dev(&table);
+        assert_eq!(counters.len(), 257);
+        assert_eq!(counters[255], Counters { name: "eth255".into(), rx_bytes: 255, tx_bytes: u64::MAX });
+        assert_eq!(counters[256], Counters { name: "invalid".into(), rx_bytes: 1, tx_bytes: 9 });
+    }
+
+    #[test]
     fn rates_handle_resets_and_new_interfaces() {
         let t0 = Instant::now();
         let old = Sample { at: t0, counters: vec![Counters { name: "eth0".into(), rx_bytes: 1000, tx_bytes: 500 }] };
@@ -491,6 +518,16 @@ docker0: 99999     10    0    0    0     0          0         0    99999      10
         assert_eq!(total(&[r("tun0", 40.0), r("veth1", 7.0)]).0, 40.0);
         assert_eq!(LinkKind::from_name("enp5s0"), LinkKind::Ethernet);
         assert_eq!(LinkKind::from_name("br-1234"), LinkKind::Virtual);
+    }
+
+    #[test]
+    fn totals_keep_fractional_rates_and_physical_precedence() {
+        let rate = |kind, rx, tx| IfaceRate { name: String::new(), kind, rx, tx, rx_total: 0, tx_total: 0 };
+        assert_eq!(total(&[]), (0.0, 0.0));
+        assert_eq!(total(&[rate(LinkKind::Virtual, 100.0, 200.0)]), (0.0, 0.0));
+        assert_eq!(total(&[rate(LinkKind::Tunnel, 0.125, 0.25), rate(LinkKind::Other, 0.375, 0.5)]), (0.5, 0.75));
+        assert_eq!(total(&[rate(LinkKind::Tunnel, 90.0, 80.0), rate(LinkKind::Wifi, 0.25, 0.5), rate(LinkKind::Ethernet, 0.5, 0.25)]), (0.75, 0.75));
+        assert_eq!(total(&[rate(LinkKind::Tunnel, 90.0, 80.0), rate(LinkKind::Ethernet, 0.0, 0.0)]), (0.0, 0.0));
     }
 
     #[test]

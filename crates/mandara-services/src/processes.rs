@@ -8,6 +8,8 @@ use std::time::Instant;
 use mandara_i18n::{t, tf};
 use serde::Serialize;
 
+mod cpu_capacity;
+
 #[derive(Clone, Debug, Serialize)]
 pub struct Process {
     pub pid: u32,
@@ -41,6 +43,9 @@ const STAT_PPID: usize = 1;
 const STAT_UTIME: usize = 11;
 const STAT_STIME: usize = 12;
 const STAT_RSS: usize = 21;
+/// Keep ordinary procfs files between samples without retaining an unusually
+/// large command line after its process exits.
+const PROC_REUSE_BYTES: usize = 4 * 1024;
 
 impl Process {
     pub fn is_kernel_thread(&self) -> bool {
@@ -48,7 +53,7 @@ impl Process {
     }
 }
 
-/// Buffers reused for every process of a sample (no per-file allocation).
+/// File buffers reused across processes and samples.
 #[derive(Default)]
 struct ProcReader {
     path: String,
@@ -79,6 +84,17 @@ impl ProcReader {
         std::fs::File::open(&self.path).ok()?.read_to_end(&mut self.bytes).ok()?;
         Some(&self.bytes)
     }
+
+    fn finish_sample(&mut self) {
+        self.text.clear();
+        self.bytes.clear();
+        if self.text.capacity() > PROC_REUSE_BYTES {
+            self.text = String::new();
+        }
+        if self.bytes.capacity() > PROC_REUSE_BYTES {
+            self.bytes = Vec::new();
+        }
+    }
 }
 
 /// Keeps the previous snapshot's CPU ticks so usage can be computed.
@@ -87,6 +103,7 @@ pub struct Sampler {
     prev: HashMap<u32, u64>,
     at: Option<Instant>,
     users: HashMap<u32, String>,
+    reader: ProcReader,
 }
 
 impl Sampler {
@@ -101,15 +118,14 @@ impl Sampler {
         }
         let hz = clock_ticks() as f32;
         let now = Instant::now();
-        let cpus = refresh_cpu_capacity() as f32;
+        let cpus = cpu_capacity::refresh() as f32;
         let elapsed = self.at.map(|t| now.duration_since(t).as_secs_f32()).unwrap_or(0.0);
         let mut out = Vec::with_capacity(self.prev.len());
         let Ok(dir) = std::fs::read_dir("/proc") else { return out };
-        let mut reader = ProcReader::default();
         let page = page_size();
         for entry in dir.flatten() {
             let Some(pid) = entry.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else { continue };
-            let Some(mut p) = read_process(pid, &self.users, &mut reader, page) else { continue };
+            let Some(mut p) = read_process(pid, &self.users, &mut self.reader, page) else { continue };
             if elapsed > MIN_SAMPLE_GAP_S
                 && let Some(prev) = self.prev.get(&pid)
             {
@@ -120,6 +136,7 @@ impl Sampler {
         self.prev.clear();
         self.prev.extend(out.iter().map(|p| (p.pid, p.ticks)));
         self.at = Some(now);
+        self.reader.finish_sample();
         out
     }
 }
@@ -131,31 +148,7 @@ fn clock_ticks() -> u64 {
 /// Host-wide logical CPUs, matching the aggregate `/proc/stat` gauge even
 /// when this process has an affinity mask or a cgroup CPU quota.
 pub fn cpu_capacity() -> usize {
-    let cached = CPU_CAPACITY.0.load(std::sync::atomic::Ordering::Relaxed);
-    if cached == 0 { refresh_cpu_capacity() } else { cached }
-}
-
-struct CpuCapacity(std::sync::atomic::AtomicUsize);
-static CPU_CAPACITY: CpuCapacity = CpuCapacity(std::sync::atomic::AtomicUsize::new(0));
-
-impl CpuCapacity {
-    fn update(&self, stat: Option<&str>) -> usize {
-        let capacity = stat.map(parse_cpu_capacity).unwrap_or_else(|| self.0.load(std::sync::atomic::Ordering::Relaxed)).max(1);
-        self.0.store(capacity, std::sync::atomic::Ordering::Relaxed);
-        capacity
-    }
-}
-
-/// Called by the background sampler, so CPU hotplug updates the cached
-/// capacity without adding procfs reads to each rendered row.
-fn refresh_cpu_capacity() -> usize {
-    CPU_CAPACITY.update(std::fs::read_to_string("/proc/stat").ok().as_deref())
-}
-
-fn parse_cpu_capacity(stat: &str) -> usize {
-    stat.lines().filter_map(|line| line.split_whitespace().next()).filter(|name| {
-        name.strip_prefix("cpu").is_some_and(|index| !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()))
-    }).count()
+    cpu_capacity::get()
 }
 
 /// `ticks` of CPU time used over `elapsed_s` seconds, as a share of the whole
@@ -204,11 +197,24 @@ fn read_process(pid: u32, users: &HashMap<u32, String>, reader: &mut ProcReader,
     }
     let cmdline = reader
         .read_bytes(pid, "cmdline")
-        .map(|b| String::from_utf8_lossy(b).split('\0').filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" "))
+        .map(command_line)
         .unwrap_or_default();
     // The owner of `/proc/<pid>` is the process's uid (one stat, no parsing).
     let uid = std::fs::metadata(reader.path(pid, "")).map(|m| m.uid()).unwrap_or(0);
     Some(Process { pid, ppid, name, cmdline, user: users.get(&uid).cloned().unwrap_or_else(|| uid.to_string()), uid, rss, cpu: 0.0, state, ticks: utime + stime })
+}
+
+fn command_line(bytes: &[u8]) -> String {
+    let decoded = String::from_utf8_lossy(bytes);
+    let mut args = decoded.split('\0').filter(|arg| !arg.is_empty());
+    let Some(first) = args.next() else { return String::new() };
+    let mut joined = String::with_capacity(decoded.len());
+    joined.push_str(first);
+    for arg in args {
+        joined.push(' ');
+        joined.push_str(arg);
+    }
+    joined
 }
 
 /// How the list is ordered when the query doesn't decide.
@@ -319,22 +325,32 @@ mod tests {
     }
 
     #[test]
-    fn capacity_counts_host_cpu_rows_instead_of_the_callers_affinity() {
-        let stat = "cpu 100 200 300 400\ncpu0 10 20 30 40\ncpu7 10 20 30 40\nintr 123\ncpufreq 4\n";
-        assert_eq!(parse_cpu_capacity(stat), 2);
-        assert_eq!(parse_cpu_capacity("cpu 100 200 300 400\n"), 0);
-        assert_eq!(parse_cpu_capacity(""), 0);
+    fn cached_host_capacity_is_available_to_rendered_rows() {
         assert!(cpu_capacity() > 0);
     }
 
     #[test]
-    fn capacity_follows_online_cpus_and_keeps_the_last_read_on_io_failure() {
-        let capacity = CpuCapacity(std::sync::atomic::AtomicUsize::new(0));
-        assert_eq!(capacity.update(None), 1);
-        assert_eq!(capacity.update(Some("cpu 1 2 3 4\ncpu0 1 2 3 4\ncpu1 1 2 3 4\n")), 2);
-        assert_eq!(capacity.update(Some("cpu 1 2 3 4\ncpu0 1 2 3 4\n")), 1);
-        assert_eq!(capacity.update(Some("cpu 1 2 3 4\ncpu0 1 2 3 4\ncpu7 1 2 3 4\n")), 2);
-        assert_eq!(capacity.update(None), 2);
+    fn command_lines_keep_lossy_utf8_and_empty_argument_behavior() {
+        for bytes in [b"".as_slice(), b"\0\0", b"one\0two\0", b"\0one\0\0two\0", b"one two\0three", b"bad\xff\0utf8\0"] {
+            let expected = String::from_utf8_lossy(bytes).split('\0').filter(|arg| !arg.is_empty()).collect::<Vec<_>>().join(" ");
+            assert_eq!(command_line(bytes), expected);
+        }
+        let large = "argument".repeat(PROC_REUSE_BYTES);
+        assert_eq!(command_line(large.as_bytes()), large);
+    }
+
+    #[test]
+    fn proc_reader_keeps_small_buffers_and_releases_unusual_command_lines() {
+        let mut reader = ProcReader { path: String::with_capacity(32), text: String::from("a process stat"), bytes: Vec::from(b"command\0line".as_slice()) };
+        let pointers = (reader.path.as_ptr(), reader.text.as_ptr(), reader.bytes.as_ptr());
+        reader.finish_sample();
+        assert!(reader.text.is_empty() && reader.bytes.is_empty());
+        assert_eq!((reader.path.as_ptr(), reader.text.as_ptr(), reader.bytes.as_ptr()), pointers);
+        reader.text.reserve(PROC_REUSE_BYTES + 1);
+        reader.bytes.resize(PROC_REUSE_BYTES + 1, b'x');
+        reader.finish_sample();
+        assert_eq!((reader.text.capacity(), reader.bytes.capacity()), (0, 0));
+        assert_eq!(reader.path.as_ptr(), pointers.0);
     }
 
     #[test]

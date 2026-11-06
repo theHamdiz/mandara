@@ -12,7 +12,7 @@ material-colors.workspace = true
 image.workspace = true
 # Representative frames of video wallpapers for colour extraction.
 mandara-media.workspace = true
-serde.workspace = true
+serde = { workspace = true, features = ["rc"] }
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
