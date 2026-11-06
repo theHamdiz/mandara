@@ -20,9 +20,12 @@ About → What's new shows it too.
 
 - **Keyboard navigation in Beacon.** Its search and mode buttons are reachable
   with Tab and Shift+Tab, with visible focus and Enter or Space to select
-  a mode. (#120)
+  a mode or app category. (#120)
 
 ### Under the hood
+
+- **Cleaner portable builds.** Linker tuning checks for support, avoiding
+  ignored-option warnings with other linkers.
 
 - **Reliable integration tests.** The private KeePassXC server listens before
   client requests arrive, and its waits have a deadline, preventing a CI hang.

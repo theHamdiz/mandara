@@ -28,7 +28,7 @@ use mandara_theme::{Color, MandaraPalette, SchemeVariant, ThemeSource, catalog};
 use mandara_ui::bidi::Bidi as _;
 use mandara_ui::icons::icon;
 use mandara_ui::state::update_config;
-use mandara_ui::theme_names::ThemeName as _;
+use mandara_ui::theme_names::{ThemeName as _, localized_description};
 
 use super::{StudioView, apps_page, grid, swatch_list};
 use crate::registry;
@@ -126,6 +126,20 @@ impl ThemeGallery {
     /// Each theme with its palette in the current mode.
     pub(super) fn themes_iter(&self) -> impl Iterator<Item = (&catalog::ThemeDef, &MandaraPalette)> {
         self.themes.iter().map(|(def, now, _)| (def, now))
+    }
+
+    /// Uses this visit's catalog to label the resolved preset. While a requested
+    /// theme is loading, keep the current target's name until its source, name
+    /// and appearance agree. Tuning keeps the preset; `ThemeName` preserves
+    /// user-authored titles.
+    fn preview_text(&self, configured: &ThemeSource, applied: &ThemeSource, target: &MandaraPalette) -> (String, String) {
+        let preset = match configured {
+            ThemeSource::Preset { preset } if configured == applied => self.themes_iter().find(|(def, palette)| {
+                def.id == *preset && def.name == target.name && palette.name == target.name && palette.is_dark == target.is_dark
+            }).map(|(def, _)| def),
+            _ => None,
+        };
+        preset.map_or_else(|| (target.name.clone(), String::new()), |def| (def.localized_name(), localized_description(def)))
     }
 }
 
@@ -344,13 +358,14 @@ impl StudioView {
     /// wallpaper, with the theme's name, palette, contrast and light / dark.
     pub(super) fn theme_preview(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let fonts = mandara_ui::fonts::fonts(cx);
-        let theme = mandara_core::theme_entity(cx).read(cx).target().name.clone();
-        let thumb = cfg.wallpaper.path.clone().and_then(|path| self.wallpaper_assets(&path, cx).0);
-        let detail: String = match &cfg.theme.source {
-            ThemeSource::Preset { preset } => catalog::all().into_iter().find(|t| t.id == *preset).map(|t| tr(&t.description)).unwrap_or_default(),
-            ThemeSource::Wallpaper { variant, .. } => tf("Generated from your wallpaper · {style}", &[("style", &tr(variant.display_name()))]),
-            _ => String::new(),
+        let engine = mandara_core::theme_entity(cx);
+        let current = engine.read(cx);
+        let (theme, detail) = match &cfg.theme.source {
+            ThemeSource::Preset { .. } => self.theme_gallery(cfg.theme.mode.is_dark()).preview_text(&cfg.theme.source, current.source(), current.target()),
+            ThemeSource::Wallpaper { variant, .. } => (current.target().name.clone(), tf("Generated from your wallpaper · {style}", &[("style", &tr(variant.display_name()))])),
+            _ => (current.target().name.clone(), String::new()),
         };
+        let thumb = cfg.wallpaper.path.clone().and_then(|path| self.wallpaper_assets(&path, cx).0);
         let contrast = p.on_surface.contrast_ratio(p.surface_base);
         let split = self.page.column_w >= HERO_SPLIT_MIN_W_PX;
         let inner_w = self.page.column_w - 2.0 * SPACE_16_PX;
@@ -370,7 +385,7 @@ impl StudioView {
             .gap(px(SPACE_12_PX))
             .p(px(SPACE_6_PX))
             .child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(t("Current theme")))
-            .child(div().font_family(fonts.display.clone()).text_size(px(TEXT_26_PX)).font_weight(FontWeight::SEMIBOLD).child(theme.to_string()))
+            .child(div().font_family(fonts.display.clone()).text_size(px(TEXT_26_PX)).font_weight(FontWeight::SEMIBOLD).child(theme))
             .when(!detail.is_empty(), |el| el.child(div().text_size(px(TEXT_12_5_PX)).line_height(px(LEADING_19_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(detail))))
             .child(palette_strip(&strip_colors(p), STRIP_H_PX, RADIUS_10_PX))
             .child(
@@ -432,7 +447,7 @@ impl StudioView {
                 .map(|(def, tp, _)| {
                     let id = def.id.clone();
                     let tip_palette = tp.clone();
-                    swatch_list::row(SharedString::from(format!("theme-row-{}", def.id)), tp, def.localized_name().into(), Some(fonts.display.clone()), tr(&def.description), active.as_deref() == Some(def.id.as_str()), p)
+                    swatch_list::row(SharedString::from(format!("theme-row-{}", def.id)), tp, def.localized_name().into(), Some(fonts.display.clone()), localized_description(def), active.as_deref() == Some(def.id.as_str()), p)
                         .tooltip(swatch_list::preview_tip(p, move || shell_mock(&tip_palette, None, swatch_list::TIP_MOCK_W_PX, swatch_list::TIP_MOCK_H_PX, RADIUS_12_PX, false).into_any_element()))
                         .on_click(move |_: &ClickEvent, _, cx| apply_theme(id.clone(), cx))
                         .into_any_element()
@@ -504,7 +519,7 @@ impl StudioView {
                         .gap(px(SPACE_8_PX))
                         .child(div().truncate().text_start().font_family(fonts.display.clone()).text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).text_color(tp.on_surface.hsla()).child(def.localized_name()))
                         .child(palette_strip(&strip_colors(tp), CARD_STRIP_H_PX, RADIUS_4_PX))
-                        .child(div().h(px(DIM_32_PX)).text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(tp.on_surface_variant.hsla()).line_clamp(2).child(mandara_ui::bidi::paragraph(tr(&def.description)))),
+                        .child(div().h(px(DIM_32_PX)).text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(tp.on_surface_variant.hsla()).line_clamp(2).child(mandara_ui::bidi::paragraph(localized_description(def)))),
                 )
                 .on_click(move |_: &ClickEvent, _, cx| apply_theme(id.clone(), cx))
         });
@@ -641,6 +656,104 @@ impl StudioView {
                     .child(div().w_full().child(style_fit.render(styles))),
             );
         div().row().flex_col().gap(px(SPACE_14_PX)).child(head).child(body).into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+    use mandara_i18n::{Lang, with_language};
+    use mandara_theme::{PaletteAdjustments, catalog::ThemeOrigin};
+
+    /// Build a retained gallery without reading any user theme files.
+    fn gallery(theme: catalog::ThemeDef, dark: bool) -> ThemeGallery {
+        let now = theme.palette(dark);
+        let other = theme.palette(!dark);
+        ThemeGallery { dark, themes: vec![(theme, now, other)].into() }
+    }
+
+    fn corniche() -> catalog::ThemeDef {
+        catalog::builtin().iter().find(|theme| theme.id == catalog::DEFAULT_THEME).unwrap().clone()
+    }
+
+    fn source(id: &str) -> ThemeSource { ThemeSource::Preset { preset: id.into() } }
+
+    /// The cached definition follows the current locale in both appearances.
+    #[test]
+    fn hero_localizes_the_applied_builtin_without_reloading_the_catalog() {
+        for dark in [false, true] {
+            let gallery = gallery(corniche(), dark);
+            let (def, target) = gallery.themes_iter().next().unwrap();
+            let source = source(&def.id);
+            let retained = Rc::strong_count(&gallery.themes);
+            with_language(Some(Lang::Ar), || {
+                assert_eq!(gallery.preview_text(&source, &source, target), (def.localized_name(), localized_description(def)));
+                assert_ne!(gallery.preview_text(&source, &source, target).0, def.name);
+            });
+            with_language(Some(Lang::En), || assert_eq!(gallery.preview_text(&source, &source, target).0, def.name));
+            assert_eq!(Rc::strong_count(&gallery.themes), retained);
+        }
+    }
+
+    /// Tuning changes tokens without changing which preset the engine resolved.
+    #[test]
+    fn tuned_builtin_palettes_keep_their_localized_names() {
+        let gallery = gallery(corniche(), true);
+        let (def, palette) = gallery.themes_iter().next().unwrap();
+        let target = palette.adjusted(&PaletteAdjustments { hue_shift: 35.0, lightness_shift: 0.02, ..Default::default() });
+        let source = source(&def.id);
+        assert_ne!(&target, palette);
+        with_language(Some(Lang::Ar), || assert_eq!(gallery.preview_text(&source, &source, &target).0, def.localized_name()));
+    }
+
+    /// A user file may override a built-in id or reuse any translation key.
+    #[test]
+    fn authored_override_titles_are_never_translated_in_the_hero() {
+        let mut theme = corniche();
+        theme.origin = ThemeOrigin::User { path: "custom-theme.toml".into() };
+        for name in [theme.name.clone(), "Dark".into(), "ألواني".into()] {
+            theme.name = name.clone();
+            let gallery = gallery(theme.clone(), true);
+            let (def, target) = gallery.themes_iter().next().unwrap();
+            let source = source(&def.id);
+            with_language(Some(Lang::Ar), || assert_eq!(gallery.preview_text(&source, &source, target).0, name));
+        }
+    }
+
+    /// Generated palettes can share a catalog label without becoming presets.
+    #[test]
+    fn wallpaper_and_seed_names_remain_literal() {
+        let gallery = gallery(corniche(), true);
+        let (_, target) = gallery.themes_iter().next().unwrap();
+        for source in [
+            ThemeSource::Wallpaper { path: "wallpaper.png".into(), variant: SchemeVariant::TonalSpot, seed: 0 },
+            ThemeSource::Seed { color: target.primary, variant: SchemeVariant::TonalSpot },
+        ] {
+            with_language(Some(Lang::Ar), || assert_eq!(gallery.preview_text(&source, &source, target), (target.name.clone(), String::new())));
+        }
+    }
+
+    /// A new id, name or mode must not relabel an older target while loading.
+    #[test]
+    fn pending_or_unknown_presets_keep_the_existing_target_text() {
+        let gallery = gallery(corniche(), true);
+        let (def, palette) = gallery.themes_iter().next().unwrap();
+        let configured = source(&def.id);
+        let pending = source("pending-same-name");
+        let mut renamed = palette.clone();
+        renamed.name = "Previous target".into();
+        let mut other_mode = palette.clone();
+        other_mode.is_dark = !other_mode.is_dark;
+        with_language(Some(Lang::Ar), || {
+            for (configured, applied, target) in [
+                (&configured, &pending, palette),
+                (&configured, &configured, &renamed),
+                (&configured, &configured, &other_mode),
+                (&pending, &pending, palette),
+            ] {
+                assert_eq!(gallery.preview_text(configured, applied, target), (target.name.clone(), String::new()));
+            }
+        });
     }
 }
 

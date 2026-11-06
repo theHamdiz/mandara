@@ -93,9 +93,22 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// Theme names come from TOML rather than a Rust translation call.
-fn theme_name_key(source: &str) -> Option<String> {
-    source.parse::<toml::Table>().ok()?.get("name")?.as_str().filter(|name| !name.is_empty()).map(str::to_owned)
+/// Built-in names and descriptions are runtime keys supplied by theme TOML.
+fn theme_metadata_keys(source: &str) -> Option<[String; 2]> {
+    let table = source.parse::<toml::Table>().ok()?;
+    let field = |key| table.get(key)?.as_str().filter(|value| !value.trim().is_empty()).map(str::to_owned);
+    Some([field("name")?, field("description")?])
+}
+
+/// Reads shipped metadata only; user-authored theme text is outside the catalogs.
+fn builtin_theme_metadata() -> Vec<[String; 2]> {
+    std::fs::read_dir(workspace().join("crates/mandara-theme/themes")).expect("built-in theme directory")
+        .map(|entry| entry.expect("built-in theme entry").path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "toml"))
+        .map(|path| {
+            let source = std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+            theme_metadata_keys(&source).unwrap_or_else(|| panic!("{}: invalid theme metadata", path.display()))
+        }).collect()
 }
 
 /// Every key the shell, Studio, built-in plugins and download command use.
@@ -112,24 +125,32 @@ pub(crate) fn source_keys() -> BTreeSet<String> {
             keys.extend(keys_in(&text));
         }
     }
-    let themes = workspace().join("crates/mandara-theme/themes");
-    for entry in std::fs::read_dir(&themes).expect("built-in theme directory") {
-        let path = entry.expect("built-in theme entry").path();
-        if path.extension().is_some_and(|extension| extension == "toml") {
-            let source = std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
-            keys.insert(theme_name_key(&source).unwrap_or_else(|| panic!("{}: invalid theme name", path.display())));
-        }
-    }
+    keys.extend(builtin_theme_metadata().into_iter().flatten());
     keys
 }
 
-/// Escapes and non-Latin names retain their exact catalog spelling.
+/// Both metadata fields keep escaped/non-Latin text and reject missing values.
 #[test]
-fn theme_metadata_keys_require_a_nonempty_string_name() {
-    assert_eq!(theme_name_key("name = \"Night Citrine\""), Some("Night Citrine".into()));
-    assert_eq!(theme_name_key("name = \"ألوان \\\"البحر\\\"\""), Some("ألوان \"البحر\"".into()));
-    for source in ["name = 3", "name = \"\"", "id = \"custom\"", "name = ["] {
-        assert_eq!(theme_name_key(source), None);
+fn theme_metadata_keys_require_nonempty_string_names_and_descriptions() {
+    assert_eq!(theme_metadata_keys("name = \"Night Citrine\"\ndescription = \"Mint and lavender.\""), Some(["Night Citrine".into(), "Mint and lavender.".into()]));
+    assert_eq!(theme_metadata_keys("name = \"ألوان \\\"البحر\\\"\"\ndescription = \"أزرق هادئ.\""), Some(["ألوان \"البحر\"".into(), "أزرق هادئ.".into()]));
+    for source in ["name = 3\ndescription = \"Blue.\"", "name = \"\"\ndescription = \"Blue.\"", "name = \"Custom\"", "name = \"Custom\"\ndescription = 3", "name = \"Custom\"\ndescription = \" \"", "name = ["] {
+        assert_eq!(theme_metadata_keys(source), None);
+    }
+}
+
+/// Metadata lookup must return translated descriptions, not the English fallback.
+#[test]
+fn builtin_theme_metadata_is_translated_in_every_catalog() {
+    let metadata = builtin_theme_metadata();
+    for lang in Lang::ALL.into_iter().filter(|lang| *lang != Lang::En) {
+        let catalog = source_catalog(lang);
+        for [name, description] in &metadata {
+            assert!(catalog.get(name).is_some(), "{}: missing theme name {name:?}", lang.code());
+            let translated = catalog.get(description).unwrap_or_else(|| panic!("{}: missing theme description {description:?}", lang.code()));
+            assert!(!translated.trim().is_empty());
+            assert_ne!(translated, description.as_str(), "{}: untranslated theme description {description:?}", lang.code());
+        }
     }
 }
 

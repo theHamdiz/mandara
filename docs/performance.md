@@ -18,7 +18,7 @@ this does not measure every plugin or an active video wallpaper.
 
 | Measurement | Result |
 |---|---|
-| Startup peak RSS, three runs | Under 175 MiB; median 173 MiB |
+| Startup peak RSS, three runs | Under 175 MiB |
 | Settled bar RSS | Under 50 MiB |
 | RSS after the panel and theme workload | Under 100 MiB |
 | Video memory after that workload | Under 210 MiB |
@@ -34,8 +34,8 @@ after this workload; thread and idle-CPU checks pass.
 
 ## Earlier desktop measurement
 
-The 2026-10-29 optimized build measured 72–78 MiB RSS, 170–185 MiB video
-memory, about 0.1% idle CPU and 31 threads on a 4K MangoWM desktop at scale
+The 2026-10-29 optimized build measured under 80 MiB RSS and under 190 MiB
+video memory, about 0.1% idle CPU and 31 threads on a 4K MangoWM desktop at scale
 1.5 with wallpaper, depth clock, bar, sidebar and notifications. Its sampled
 frame builds were typically 0.10 ms and 0.22 ms at the 95th percentile.
 That is a historical result from a different build and setup, not evidence
@@ -51,9 +51,8 @@ runs as its own process and is measured separately):
   <sub>Studio → Performance in the demo session the screenshots are taken in.</sub>
 </p>
 
-That's a whole GPU-rendered, spring-animated desktop (bar, dock, launcher,
-sidebar, notifications, wallpaper and widgets) in less memory than a single
-browser tab, without trading away speed. It took deliberate work at every layer:
+The bar, dock, launcher, sidebar, notifications, wallpaper and widgets share
+resources through these controls:
 
 - **Hand-tuned glibc malloc.** We benchmarked mimalloc v2 and v3, jemalloc
   and glibc on the real shell. Tuned glibc won: at most 2 malloc arenas

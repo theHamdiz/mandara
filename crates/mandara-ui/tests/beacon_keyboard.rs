@@ -26,6 +26,12 @@ const KEY_SETTLE_MS: &str = "100";
 const SAMPLE_EDGE: f32 = 32.0;
 /// Keep a seat keyboard present between short wtype calls in headless Mango.
 const KEYBOARD_LIFETIME: Duration = Duration::from_secs(60);
+/// Beacon's fixed card padding, category strip and first app-row sample.
+const CATEGORY_PAD: f32 = 8.0;
+const CATEGORY_H: f32 = 30.0;
+const GRID_SAMPLE_H: f32 = 80.0;
+/// Allow antialiased rim pixels while distinguishing them from the chip fill.
+const RIM_TOLERANCE: u8 = 96;
 
 struct Process(Child);
 
@@ -121,6 +127,50 @@ fn sample(image: &RgbaImage, placement: BeaconPlacement, index: usize, rim: bool
     image::imageops::crop_imm(image, ((rect.x + inset) * SCALE).round() as u32, ((rect.y + inset) * SCALE).round() as u32, (edge * SCALE).round() as u32, (edge * SCALE).round() as u32).to_image()
 }
 
+/// Separates category focus/selection from actual app-grid filtering pixels.
+fn category_sample(image: &RgbaImage, placement: BeaconPlacement, grid: bool) -> RgbaImage {
+    let rect = placement.card;
+    let y = rect.y + CATEGORY_PAD + if grid { CATEGORY_H + CATEGORY_PAD } else { 0.0 };
+    let height = if grid { GRID_SAMPLE_H } else { CATEGORY_H };
+    image::imageops::crop_imm(image, ((rect.x + CATEGORY_PAD) * SCALE).round() as u32, (y * SCALE).round() as u32,
+        ((rect.w - CATEGORY_PAD * 2.0) * SCALE).round() as u32, (height * SCALE).round() as u32).to_image()
+}
+
+/// Both rounded end rims must appear within the viewport. A clipped sliver
+/// changes pixels too, but contains only one end of the focused category.
+fn complete_category_focus(strip: &RgbaImage, accent: image::Rgba<u8>, rtl: bool) -> bool {
+    let range = if rtl { 0..strip.width() / 2 } else { strip.width() / 2..strip.width() };
+    let mut edges = 0;
+    let mut first = None;
+    let mut last = 0;
+    let mut inside = false;
+    // Above the label, the rounded corners inset both rims from the crop edge.
+    let y = strip.height() / 4;
+    for x in range {
+        let pixel = strip.get_pixel(x, y);
+        let matches = (0..3).all(|channel| pixel[channel].abs_diff(accent[channel]) <= RIM_TOLERANCE);
+        if matches {
+            if !inside { edges += 1; first.get_or_insert(x); }
+            last = x;
+        }
+        inside = matches;
+    }
+    edges >= 2 && first.is_some_and(|first| last - first >= (CATEGORY_H * SCALE) as u32)
+}
+
+/// Pixel changes alone cannot accept a focused chip clipped at either edge.
+#[test]
+fn category_focus_probe_rejects_a_clipped_end() {
+    let accent = image::Rgba([60, 140, 180, 255]);
+    for (rtl, ends) in [(true, [3, 80]), (false, [219, 296])] {
+        let mut strip = RgbaImage::new(300, 45);
+        for x in ends { strip.put_pixel(x, 11, accent); }
+        assert!(complete_category_focus(&strip, accent, rtl));
+        strip.put_pixel(ends[0], 11, image::Rgba([0, 0, 0, 0]));
+        assert!(!complete_category_focus(&strip, accent, rtl));
+    }
+}
+
 /// Missing or foreign markers reject input; a matching private fixture passes.
 #[test]
 fn beacon_keyboard_fixture_rejects_missing_and_mismatched_markers() {
@@ -185,7 +235,8 @@ fn tab_shift_tab_enter_and_space_reach_beacon_modes() {
         assert_ne!(files, sample(&initial, placement, 1, false), "Space must select Files ({language})");
         input(&runtime, &display, &["-M", "shift", "-k", "Tab", "-m", "shift", "-k", "Return"]);
         assert_eq!(apps, sample(&capture(&runtime, &display), placement, 0, false), "Shift+Tab must return from Files to Apps ({language})");
-        input(&runtime, &display, &["-M", "shift", "-k", "Tab", "-k", "Tab", "-m", "shift", "-k", "space"]);
+        // Leaving Apps hides its category stops before checking mode-only wrap.
+        input(&runtime, &display, &["-M", "ctrl", "-k", "2", "-m", "ctrl", "-M", "shift", "-k", "Tab", "-m", "shift", "-k", "space"]);
         assert_ne!(sample(&capture(&runtime, &display), placement, 3, false), sample(&initial, placement, 3, false), "reverse traversal wraps through search to Clipboard ({language})");
         assert_eq!(command(&runtime, &["shell", "state"])["launcher"], true, "mode activation must not launch a result or dismiss Beacon");
         input(&runtime, &display, &["-k", "Escape"]);
@@ -211,4 +262,66 @@ fn tab_shift_tab_enter_and_space_reach_beacon_modes() {
     assert_ne!(sample(&capture(&runtime, &display), placement, 2, false), sample(&initial, placement, 2, false), "hidden Clipboard must be skipped so reverse traversal reaches Actions");
     command(&runtime, &["launcher", "close"]);
     command(&runtime, &["config", "set", "/launcher/providers/clipboard/enabled", "true"]);
+}
+
+/// A narrow Apps grid includes overflowing categories. Reverse traversal must
+/// reveal its final chip; Enter/Space filter real app tiles, and forward focus
+/// returns to All/Pinned after the visible modes without launching an app.
+#[test]
+#[ignore = "requires the marked Beacon fixture, harmless demo apps in every category, one pinned demo, grim, wtype and wl-paste"]
+fn apps_categories_join_native_focus_and_reveal_overflow() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let runtime = PathBuf::from(std::env::var_os("MANDARA_BEACON_TEST_RUNTIME").expect("private resource runtime"));
+    assert!(private_runtime(&runtime, &root), "refusing input outside the marked desktop");
+    let display = std::env::var("MANDARA_BEACON_TEST_DISPLAY").unwrap_or_else(|_| "wayland-0".into());
+    assert!(!Path::new(&display).is_absolute() && Path::new(&display).components().count() == 1);
+    assert_eq!(command(&runtime, &["config", "get", "/general/offline"]), true);
+    let pinned = command(&runtime, &["config", "get", "/launcher/pinned"]);
+    assert!(pinned.as_array().unwrap().iter().any(|id| id == "mandara-beacon-demo-0"), "pin the harmless fixture app before opening Beacon");
+    let width = command(&runtime, &["config", "get", "/launcher/look/beacon_width"]);
+    command(&runtime, &["config", "set", "/launcher/look/beacon_width", "240"]);
+    command(&runtime, &["config", "set", "/launcher/look/grid_categories", "true"]);
+    command(&runtime, &["config", "set", "/motion/reduce_motion", "true"]);
+    let _keyboard = Process(Command::new("wtype").env_clear().env("XDG_RUNTIME_DIR", &runtime).env("WAYLAND_DISPLAY", &display)
+        .args(["-s", &KEYBOARD_LIFETIME.as_millis().to_string()]).spawn().unwrap());
+    for (locale, rtl) in [(Locale::English, false), (Locale::Arabic, true)] {
+        command(&runtime, &["launcher", "close"]);
+        command(&runtime, &["config", "set", "/general/locale", &serde_json::to_string(&locale).unwrap()]);
+        command(&runtime, &["launcher", "open"]);
+        std::thread::sleep(SETTLE);
+        input(&runtime, &display, &["q", "-M", "ctrl", "-k", "a", "-k", "x", "-m", "ctrl"]);
+        assert_eq!(clipboard(&runtime, &display).as_slice(), b"q");
+        input(&runtime, &display, &["-M", "ctrl", "-k", "1", "-m", "ctrl"]);
+        let cfg: ShellConfig = serde_json::from_value(command(&runtime, &["config", "get"])).unwrap();
+        let place = beacon(&cfg, SCREEN, true, 4, rtl);
+        let all = capture(&runtime, &display);
+        input(&runtime, &display, &["-M", "shift", "-k", "Tab", "-m", "shift"]);
+        let last = capture(&runtime, &display);
+        assert!(category_sample(&all, place, false) != category_sample(&last, place, false), "reverse focus must visibly reveal the off-edge final category ({locale:?})");
+        category_sample(&last, place, false).save(runtime.join(format!("beacon-categories-{locale:?}-last-focus.png"))).unwrap();
+        let accent = *all.get_pixel(((place.first_mode.x + BEACON_BAR_H / 2.0) * SCALE).round() as u32,
+            ((place.first_mode.y + BEACON_BAR_H * 0.2) * SCALE).round() as u32);
+        assert!(complete_category_focus(&category_sample(&last, place, false), accent, rtl), "focused category must show both ends inside the viewport ({locale:?})");
+        input(&runtime, &display, &["-k", "Return"]);
+        let filtered = capture(&runtime, &display);
+        assert!(category_sample(&all, place, true) != category_sample(&filtered, place, true), "Enter must filter actual app tiles ({locale:?})");
+        assert_eq!(command(&runtime, &["shell", "state"])["launcher"], true);
+        input(&runtime, &display, &["-k", "space"]);
+        assert!(category_sample(&filtered, place, true) != category_sample(&capture(&runtime, &display), place, true), "Space must restore All from the selected category ({locale:?})");
+        input(&runtime, &display, &["-M", "ctrl", "-k", "1", "-k", "1", "-m", "ctrl"]);
+        input(&runtime, &display, &["-k", "Tab", "-k", "Tab", "-k", "Tab", "-k", "Tab", "-k", "Tab"]);
+        let all_focus = capture(&runtime, &display);
+        assert!(category_sample(&all, place, false) != category_sample(&all_focus, place, false), "All needs visible native focus after the four mode stops ({locale:?})");
+        input(&runtime, &display, &["-k", "Tab", "-k", "Return"]);
+        let pinned_only = capture(&runtime, &display);
+        assert!(category_sample(&all, place, true) != category_sample(&pinned_only, place, true), "Pinned must filter actual app tiles ({locale:?})");
+        category_sample(&pinned_only, place, false).save(runtime.join(format!("beacon-categories-{locale:?}-pinned.png"))).unwrap();
+        input(&runtime, &display, &["-k", "space", "-M", "shift", "-k", "Tab", "-m", "shift", "-k", "Return"]);
+        assert_eq!(command(&runtime, &["shell", "state"])["launcher"], true, "category activation must not launch an app");
+        input(&runtime, &display, &["z", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"]);
+        assert_eq!(clipboard(&runtime, &display).as_slice(), b"z", "typing from a focused category must preserve its first character");
+        input(&runtime, &display, &["-M", "ctrl", "-k", "a", "-m", "ctrl", "-k", "BackSpace", "-k", "Escape", "-k", "Escape"]);
+        assert_eq!(command(&runtime, &["shell", "state"])["launcher"], false);
+    }
+    command(&runtime, &["config", "set", "/launcher/look/beacon_width", &width.to_string()]);
 }

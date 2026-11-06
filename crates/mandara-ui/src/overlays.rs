@@ -2003,7 +2003,7 @@ impl Render for LauncherView {
             })
             .child(div().flex().flex_col().children(rows_el))
         };
-        let chips_el = chips.then(|| self.chips_element(&palette, cx));
+        let chips_el = chips.then(|| self.chips_element(&palette, None, window, cx));
         let hints_el = look.hints.then(|| self.classic_hints(grid, chips, &palette));
         self.field_px = text::BODY + 1.0;
         let hint = {
