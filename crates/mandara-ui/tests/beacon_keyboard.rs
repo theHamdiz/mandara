@@ -1,15 +1,18 @@
 //! Native Beacon keyboard navigation in the marked private resource desktop.
 
-use std::io::{BufRead as _, BufReader, Read as _, Write as _};
-use std::os::unix::net::UnixStream;
-use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::io::{Read as _, Write as _};
+use std::path::Path;
+use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
 use image::RgbaImage;
 use mandara_config::{Locale, ShellConfig};
 use mandara_ui::launcher_place::{BEACON_BAR_H, BeaconPlacement, Rect, beacon};
 use serde_json::{Value, json};
+
+#[path = "support/private_desktop.rs"]
+mod private_desktop;
+use private_desktop::PrivateDesktop;
 
 /// The fixed resource desktop is 4K at scale 1.5.
 const SCREEN: (f32, f32) = (2560.0, 1440.0);
@@ -35,37 +38,64 @@ const RIM_TOLERANCE: u8 = 96;
 
 struct Process(Child);
 
+impl Process {
+    /// Bounds every short-lived input/capture tool and reaps it through Drop on failure.
+    fn finish(&mut self) {
+        let deadline = Instant::now() + REQUEST_TIMEOUT;
+        loop {
+            if let Some(status) = self.0.try_wait().unwrap() { assert!(status.success(), "native tool failed: {status}"); return; }
+            assert!(Instant::now() < deadline, "native tool timed out");
+            std::thread::sleep(SETTLE.min(deadline.saturating_duration_since(Instant::now())));
+        }
+    }
+}
+
 impl Drop for Process {
     /// Reaps only this test's recorded child, including on panic or timeout.
     fn drop(&mut self) { let _ = self.0.kill(); let _ = self.0.wait(); }
 }
 
-/// Requires a canonical temporary runtime, resource-fixture prefix and marker
-/// naming this checkout before the test can send input or change configuration.
-fn private_runtime(runtime: &Path, root: &Path) -> bool {
-    let Ok(temporary) = std::env::temp_dir().canonicalize() else { return false; };
-    runtime.canonicalize().is_ok_and(|runtime| runtime.starts_with(temporary)
-        && runtime.file_name().is_some_and(|name| name.to_string_lossy().starts_with("mrc."))
-        && root.canonicalize().is_ok_and(|root| std::fs::read_to_string(runtime.join(".mandara-beacon-keyboard-test")).is_ok_and(|marker| marker == root.to_string_lossy())))
+/// Calls the bound private shell; the guard checks this exact peer before writing.
+fn command(fixture: &PrivateDesktop, args: &[&str]) -> Value {
+    fixture.request(args).expect("verified private shell request")
 }
 
-/// Calls the already validated private shell with bounded socket waits.
-/// Failed replies are test failures rather than usable fixture state.
-fn command(runtime: &Path, args: &[&str]) -> Value {
-    let mut socket = UnixStream::connect(runtime.join("mandara.sock")).unwrap();
-    socket.set_read_timeout(Some(REQUEST_TIMEOUT)).unwrap();
-    socket.set_write_timeout(Some(REQUEST_TIMEOUT)).unwrap();
-    writeln!(socket, "{}", json!({"args": args})).unwrap();
-    let mut line = String::new();
-    BufReader::new(socket).read_line(&mut line).unwrap();
-    let reply: Value = serde_json::from_str(&line).unwrap();
-    assert_eq!(reply["ok"], true, "{reply}");
-    reply["data"].clone()
+/// Config fields changed by either native test, restored even after an assertion fails.
+const CHANGED_CONFIG: [&str; 5] = ["/general/locale", "/motion/reduce_motion", "/launcher/look/beacon_width", "/launcher/look/grid_categories", "/launcher/providers/clipboard/enabled"];
+
+struct RestoreConfig<'a> {
+    fixture: &'a PrivateDesktop,
+    fields: Vec<(&'static str, Value)>,
+}
+
+impl<'a> RestoreConfig<'a> {
+    /// Snapshot exact original values before the test changes its private configuration.
+    fn new(fixture: &'a PrivateDesktop) -> Self {
+        let config = command(fixture, &["config", "get"]);
+        let fields = CHANGED_CONFIG.into_iter().map(|path| (path, config.pointer(path).expect("fixture config field").clone())).collect();
+        Self { fixture, fields }
+    }
+}
+
+/// Stop immediately if a guarded request fails, including a changed fixture identity.
+fn restore_config(fields: &[(&str, Value)], mut request: impl FnMut(&[&str]) -> std::io::Result<Value>) -> std::io::Result<()> {
+    request(&["launcher", "close"])?;
+    for (path, value) in fields { request(&["config", "set", path, &value.to_string()])?; }
+    Ok(())
+}
+
+impl Drop for RestoreConfig<'_> {
+    /// Restoration is best effort and never unwraps or panics during unwinding.
+    fn drop(&mut self) {
+        if let Err(error) = restore_config(&self.fields, |args| self.fixture.request(args)) {
+            let _ = writeln!(std::io::stderr(), "private Beacon config restoration stopped: {error}");
+        }
+    }
 }
 
 /// Sends real Wayland key events to the validated display. Pace complete key
 /// presses and allow the resulting frame to settle before examining pixels.
-fn input(runtime: &Path, display: &str, args: &[&str]) {
+fn input(fixture: &PrivateDesktop, args: &[&str]) {
     let mut paced = Vec::new();
     let mut key = false;
     for arg in args {
@@ -73,21 +103,15 @@ fn input(runtime: &Path, display: &str, args: &[&str]) {
         if key { paced.extend(["-s", KEY_SETTLE_MS]); }
         key = *arg == "-k";
     }
-    let status = Command::new("wtype").env_clear().env("XDG_RUNTIME_DIR", runtime).env("WAYLAND_DISPLAY", display).args(paced).status().unwrap();
-    assert!(status.success());
+    Process(fixture.tool("wtype").unwrap().args(paced).spawn().unwrap()).finish();
     std::thread::sleep(SETTLE);
 }
 
 /// Rechecks isolation before reading the native clipboard. The child inherits
 /// only the private Wayland endpoint; both its lifetime and captured bytes are
 /// bounded, including when selection transfer never completes.
-fn clipboard(runtime: &Path, display: &str) -> Vec<u8> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    assert!(private_runtime(runtime, &root), "refusing to read an unmarked clipboard");
-    let wayland = Path::new(display);
-    assert!(!wayland.is_absolute() && wayland.components().count() == 1, "use a socket in the marked runtime");
-    let mut process = Process(Command::new("wl-paste").env_clear().env("XDG_RUNTIME_DIR", runtime).env("WAYLAND_DISPLAY", display)
-        .arg("--no-newline").stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap());
+fn clipboard(fixture: &PrivateDesktop) -> Vec<u8> {
+    let mut process = Process(fixture.tool("wl-paste").unwrap().arg("--no-newline").stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap());
     let output = process.0.stdout.take().unwrap();
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -108,11 +132,11 @@ fn clipboard(runtime: &Path, display: &str) -> Vec<u8> {
 
 /// Captures the native output, checking its expected 4K geometry so button
 /// samples cannot silently read the wrong display or scale.
-fn capture(runtime: &Path, display: &str) -> RgbaImage {
-    let directory = tempfile::tempdir().unwrap();
+fn capture(fixture: &PrivateDesktop) -> RgbaImage {
+    fixture.check().unwrap();
+    let directory = tempfile::tempdir_in(&fixture.runtime).unwrap();
     let path = directory.path().join("beacon.png");
-    let status = Command::new("grim").env_clear().env("XDG_RUNTIME_DIR", runtime).env("WAYLAND_DISPLAY", display).arg(&path).status().unwrap();
-    assert!(status.success());
+    Process(fixture.tool("grim").unwrap().arg(&path).spawn().unwrap()).finish();
     let image = image::open(path).unwrap().to_rgba8();
     assert_eq!(image.dimensions(), ((SCREEN.0 * SCALE) as u32, (SCREEN.1 * SCALE) as u32));
     image
@@ -171,18 +195,6 @@ fn category_focus_probe_rejects_a_clipped_end() {
     }
 }
 
-/// Missing or foreign markers reject input; a matching private fixture passes.
-#[test]
-fn beacon_keyboard_fixture_rejects_missing_and_mismatched_markers() {
-    let root = tempfile::tempdir().unwrap();
-    let runtime = tempfile::Builder::new().prefix("mrc.").tempdir().unwrap();
-    assert!(!private_runtime(runtime.path(), root.path()));
-    std::fs::write(runtime.path().join(".mandara-beacon-keyboard-test"), "another checkout").unwrap();
-    assert!(!private_runtime(runtime.path(), root.path()));
-    std::fs::write(runtime.path().join(".mandara-beacon-keyboard-test"), root.path().canonicalize().unwrap().to_string_lossy().as_bytes()).unwrap();
-    assert!(private_runtime(runtime.path(), root.path()));
-}
-
 /// Exercises native focus and activation in English and Arabic, including
 /// hidden providers and the first character typed from a button. Escape first
 /// clears its active mode, then closes Beacon when no mode remains.
@@ -190,78 +202,73 @@ fn beacon_keyboard_fixture_rejects_missing_and_mismatched_markers() {
 #[ignore = "requires the marked 4K/1.5 resource desktop, Beacon, grim, wtype and wl-paste"]
 fn tab_shift_tab_enter_and_space_reach_beacon_modes() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let runtime = PathBuf::from(std::env::var_os("MANDARA_BEACON_TEST_RUNTIME").expect("private resource runtime"));
-    assert!(private_runtime(&runtime, &root), "refusing synthetic input outside the marked desktop");
-    let display = std::env::var("MANDARA_BEACON_TEST_DISPLAY").unwrap_or_else(|_| "wayland-0".into());
-    let wayland = Path::new(&display);
-    assert!(!wayland.is_absolute() && wayland.components().count() == 1, "use a socket in the marked runtime");
-    let _keyboard = Process(Command::new("wtype").env_clear().env("XDG_RUNTIME_DIR", &runtime).env("WAYLAND_DISPLAY", &display)
-        .args(["-s", &KEYBOARD_LIFETIME.as_millis().to_string()]).spawn().unwrap());
+    let fixture = PrivateDesktop::from_env("MANDARA_BEACON_TEST", &root, ".mandara-beacon-keyboard-test").expect("verified private desktop");
+    let _restore = RestoreConfig::new(&fixture);
+    let _keyboard = Process(fixture.tool("wtype").unwrap().args(["-s", &KEYBOARD_LIFETIME.as_millis().to_string()]).spawn().unwrap());
     std::thread::sleep(SETTLE);
-    assert_eq!(command(&runtime, &["config", "get", "/launcher/look/style"]), "beacon");
-    assert_eq!(command(&runtime, &["config", "get", "/general/offline"]), true);
-    command(&runtime, &["config", "set", "/motion/reduce_motion", "true"]);
+    assert_eq!(command(&fixture, &["config", "get", "/launcher/look/style"]), "beacon");
+    assert_eq!(command(&fixture, &["config", "get", "/general/offline"]), true);
+    command(&fixture, &["config", "set", "/motion/reduce_motion", "true"]);
 
     for (locale, rtl) in [(Locale::English, false), (Locale::Arabic, true)] {
         let language = serde_json::to_string(&locale).unwrap();
-        command(&runtime, &["launcher", "close"]);
+        command(&fixture, &["launcher", "close"]);
         std::thread::sleep(SETTLE);
-        command(&runtime, &["config", "set", "/general/locale", &language]);
-        command(&runtime, &["launcher", "open"]);
+        command(&fixture, &["config", "set", "/general/locale", &language]);
+        command(&fixture, &["launcher", "open"]);
         std::thread::sleep(SETTLE);
-        let cfg: ShellConfig = serde_json::from_value(command(&runtime, &["config", "get"])).unwrap();
+        let cfg: ShellConfig = serde_json::from_value(command(&fixture, &["config", "get"])).unwrap();
         let placement = beacon(&cfg, SCREEN, true, 4, rtl);
-        let initial = capture(&runtime, &display);
-        input(&runtime, &display, &["q"]);
-        input(&runtime, &display, &["-M", "ctrl", "-k", "a", "-k", "x", "-m", "ctrl"]);
-        assert_eq!(clipboard(&runtime, &display).as_slice(), b"q", "seed a different selection so an empty query cannot pass using stale clipboard text ({language})");
-        input(&runtime, &display, &["-k", "Tab"]);
-        let focused = capture(&runtime, &display);
+        let initial = capture(&fixture);
+        input(&fixture, &["q"]);
+        input(&fixture, &["-M", "ctrl", "-k", "a", "-k", "x", "-m", "ctrl"]);
+        assert_eq!(clipboard(&fixture).as_slice(), b"q", "seed a different selection so an empty query cannot pass using stale clipboard text ({language})");
+        input(&fixture, &["-k", "Tab"]);
+        let focused = capture(&fixture);
         assert_eq!(sample(&initial, placement, 0, false), sample(&focused, placement, 0, false), "Tab focuses Apps without selecting it");
         assert_ne!(sample(&initial, placement, 0, true), sample(&focused, placement, 0, true), "keyboard focus needs a visible rim ({language})");
-        input(&runtime, &display, &["z"]);
-        input(&runtime, &display, &["-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"]);
-        assert_eq!(clipboard(&runtime, &display).as_slice(), b"z", "the first character typed from a focused mode button must reach the actual query ({language})");
-        input(&runtime, &display, &["-M", "ctrl", "-k", "a", "-m", "ctrl", "-k", "BackSpace", "-k", "Tab"]);
-        input(&runtime, &display, &["-k", "Return"]);
-        let apps = sample(&capture(&runtime, &display), placement, 0, false);
+        input(&fixture, &["z"]);
+        input(&fixture, &["-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"]);
+        assert_eq!(clipboard(&fixture).as_slice(), b"z", "the first character typed from a focused mode button must reach the actual query ({language})");
+        input(&fixture, &["-M", "ctrl", "-k", "a", "-m", "ctrl", "-k", "BackSpace", "-k", "Tab"]);
+        input(&fixture, &["-k", "Return"]);
+        let apps = sample(&capture(&fixture), placement, 0, false);
         assert_ne!(apps, sample(&initial, placement, 0, false), "Enter must select Apps ({language})");
-        input(&runtime, &display, &["-M", "ctrl", "-k", "1", "-m", "ctrl"]);
-        input(&runtime, &display, &["-M", "ctrl", "-k", "1", "-m", "ctrl"]);
-        assert_eq!(apps, sample(&capture(&runtime, &display), placement, 0, false), "Ctrl+1 keeps its selection behavior");
+        input(&fixture, &["-M", "ctrl", "-k", "1", "-m", "ctrl"]);
+        input(&fixture, &["-M", "ctrl", "-k", "1", "-m", "ctrl"]);
+        assert_eq!(apps, sample(&capture(&fixture), placement, 0, false), "Ctrl+1 keeps its selection behavior");
         // Ctrl+1 returned focus to the search: traverse Apps, then Files.
-        input(&runtime, &display, &["-k", "Tab", "-k", "Tab", "-k", "space"]);
-        let files = sample(&capture(&runtime, &display), placement, 1, false);
+        input(&fixture, &["-k", "Tab", "-k", "Tab", "-k", "space"]);
+        let files = sample(&capture(&fixture), placement, 1, false);
         assert_ne!(files, sample(&initial, placement, 1, false), "Space must select Files ({language})");
-        input(&runtime, &display, &["-M", "shift", "-k", "Tab", "-m", "shift", "-k", "Return"]);
-        assert_eq!(apps, sample(&capture(&runtime, &display), placement, 0, false), "Shift+Tab must return from Files to Apps ({language})");
+        input(&fixture, &["-M", "shift", "-k", "Tab", "-m", "shift", "-k", "Return"]);
+        assert_eq!(apps, sample(&capture(&fixture), placement, 0, false), "Shift+Tab must return from Files to Apps ({language})");
         // Leaving Apps hides its category stops before checking mode-only wrap.
-        input(&runtime, &display, &["-M", "ctrl", "-k", "2", "-m", "ctrl", "-M", "shift", "-k", "Tab", "-m", "shift", "-k", "space"]);
-        assert_ne!(sample(&capture(&runtime, &display), placement, 3, false), sample(&initial, placement, 3, false), "reverse traversal wraps through search to Clipboard ({language})");
-        assert_eq!(command(&runtime, &["shell", "state"])["launcher"], true, "mode activation must not launch a result or dismiss Beacon");
-        input(&runtime, &display, &["-k", "Escape"]);
-        assert_eq!(command(&runtime, &["shell", "state"])["launcher"], true, "Escape from the selected Clipboard button must clear its mode and keep Beacon open ({language})");
-        let cleared = capture(&runtime, &display);
+        input(&fixture, &["-M", "ctrl", "-k", "2", "-m", "ctrl", "-M", "shift", "-k", "Tab", "-m", "shift", "-k", "space"]);
+        assert_ne!(sample(&capture(&fixture), placement, 3, false), sample(&initial, placement, 3, false), "reverse traversal wraps through search to Clipboard ({language})");
+        assert_eq!(command(&fixture, &["shell", "state"])["launcher"], true, "mode activation must not launch a result or dismiss Beacon");
+        input(&fixture, &["-k", "Escape"]);
+        assert_eq!(command(&fixture, &["shell", "state"])["launcher"], true, "Escape from the selected Clipboard button must clear its mode and keep Beacon open ({language})");
+        let cleared = capture(&fixture);
         assert_eq!(sample(&cleared, placement, 3, false), sample(&initial, placement, 3, false), "Escape must remove the active mode's selection ({language})");
-        input(&runtime, &display, &["-k", "Tab"]);
-        let neutral_focus = capture(&runtime, &display);
+        input(&fixture, &["-k", "Tab"]);
+        let neutral_focus = capture(&fixture);
         assert_eq!(sample(&neutral_focus, placement, 0, false), sample(&initial, placement, 0, false), "Tab must focus Apps without selecting a mode after Escape ({language})");
         assert_ne!(sample(&neutral_focus, placement, 0, true), sample(&cleared, placement, 0, true), "the second Escape must start from a visibly focused button ({language})");
-        input(&runtime, &display, &["-k", "Escape"]);
-        assert_eq!(command(&runtime, &["shell", "state"])["launcher"], false, "Escape from a focused button with no active mode must close Beacon ({language})");
+        input(&fixture, &["-k", "Escape"]);
+        assert_eq!(command(&fixture, &["shell", "state"])["launcher"], false, "Escape from a focused button with no active mode must close Beacon ({language})");
     }
-    command(&runtime, &["launcher", "close"]);
+    command(&fixture, &["launcher", "close"]);
     std::thread::sleep(SETTLE);
-    command(&runtime, &["config", "set", "/launcher/providers/clipboard/enabled", "false"]);
-    command(&runtime, &["launcher", "open"]);
+    command(&fixture, &["config", "set", "/launcher/providers/clipboard/enabled", "false"]);
+    command(&fixture, &["launcher", "open"]);
     std::thread::sleep(SETTLE);
-    let cfg: ShellConfig = serde_json::from_value(command(&runtime, &["config", "get"])).unwrap();
+    let cfg: ShellConfig = serde_json::from_value(command(&fixture, &["config", "get"])).unwrap();
     let placement = beacon(&cfg, SCREEN, true, 3, true);
-    let initial = capture(&runtime, &display);
-    input(&runtime, &display, &["-M", "shift", "-k", "Tab", "-m", "shift", "-k", "Return"]);
-    assert_ne!(sample(&capture(&runtime, &display), placement, 2, false), sample(&initial, placement, 2, false), "hidden Clipboard must be skipped so reverse traversal reaches Actions");
-    command(&runtime, &["launcher", "close"]);
-    command(&runtime, &["config", "set", "/launcher/providers/clipboard/enabled", "true"]);
+    let initial = capture(&fixture);
+    input(&fixture, &["-M", "shift", "-k", "Tab", "-m", "shift", "-k", "Return"]);
+    assert_ne!(sample(&capture(&fixture), placement, 2, false), sample(&initial, placement, 2, false), "hidden Clipboard must be skipped so reverse traversal reaches Actions");
+    command(&fixture, &["launcher", "close"]);
 }
 
 /// A narrow Apps grid includes overflowing categories. Reverse traversal must
@@ -271,57 +278,71 @@ fn tab_shift_tab_enter_and_space_reach_beacon_modes() {
 #[ignore = "requires the marked Beacon fixture, harmless demo apps in every category, one pinned demo, grim, wtype and wl-paste"]
 fn apps_categories_join_native_focus_and_reveal_overflow() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let runtime = PathBuf::from(std::env::var_os("MANDARA_BEACON_TEST_RUNTIME").expect("private resource runtime"));
-    assert!(private_runtime(&runtime, &root), "refusing input outside the marked desktop");
-    let display = std::env::var("MANDARA_BEACON_TEST_DISPLAY").unwrap_or_else(|_| "wayland-0".into());
-    assert!(!Path::new(&display).is_absolute() && Path::new(&display).components().count() == 1);
-    assert_eq!(command(&runtime, &["config", "get", "/general/offline"]), true);
-    let pinned = command(&runtime, &["config", "get", "/launcher/pinned"]);
+    let fixture = PrivateDesktop::from_env("MANDARA_BEACON_TEST", &root, ".mandara-beacon-keyboard-test").expect("verified private desktop");
+    let _restore = RestoreConfig::new(&fixture);
+    assert_eq!(command(&fixture, &["config", "get", "/general/offline"]), true);
+    let pinned = command(&fixture, &["config", "get", "/launcher/pinned"]);
     assert!(pinned.as_array().unwrap().iter().any(|id| id == "mandara-beacon-demo-0"), "pin the harmless fixture app before opening Beacon");
-    let width = command(&runtime, &["config", "get", "/launcher/look/beacon_width"]);
-    command(&runtime, &["config", "set", "/launcher/look/beacon_width", "240"]);
-    command(&runtime, &["config", "set", "/launcher/look/grid_categories", "true"]);
-    command(&runtime, &["config", "set", "/motion/reduce_motion", "true"]);
-    let _keyboard = Process(Command::new("wtype").env_clear().env("XDG_RUNTIME_DIR", &runtime).env("WAYLAND_DISPLAY", &display)
-        .args(["-s", &KEYBOARD_LIFETIME.as_millis().to_string()]).spawn().unwrap());
+    command(&fixture, &["config", "set", "/launcher/look/beacon_width", "240"]);
+    command(&fixture, &["config", "set", "/launcher/look/grid_categories", "true"]);
+    command(&fixture, &["config", "set", "/motion/reduce_motion", "true"]);
+    let _keyboard = Process(fixture.tool("wtype").unwrap().args(["-s", &KEYBOARD_LIFETIME.as_millis().to_string()]).spawn().unwrap());
     for (locale, rtl) in [(Locale::English, false), (Locale::Arabic, true)] {
-        command(&runtime, &["launcher", "close"]);
-        command(&runtime, &["config", "set", "/general/locale", &serde_json::to_string(&locale).unwrap()]);
-        command(&runtime, &["launcher", "open"]);
+        command(&fixture, &["launcher", "close"]);
+        command(&fixture, &["config", "set", "/general/locale", &serde_json::to_string(&locale).unwrap()]);
+        command(&fixture, &["launcher", "open"]);
         std::thread::sleep(SETTLE);
-        input(&runtime, &display, &["q", "-M", "ctrl", "-k", "a", "-k", "x", "-m", "ctrl"]);
-        assert_eq!(clipboard(&runtime, &display).as_slice(), b"q");
-        input(&runtime, &display, &["-M", "ctrl", "-k", "1", "-m", "ctrl"]);
-        let cfg: ShellConfig = serde_json::from_value(command(&runtime, &["config", "get"])).unwrap();
+        input(&fixture, &["q", "-M", "ctrl", "-k", "a", "-k", "x", "-m", "ctrl"]);
+        assert_eq!(clipboard(&fixture).as_slice(), b"q");
+        input(&fixture, &["-M", "ctrl", "-k", "1", "-m", "ctrl"]);
+        let cfg: ShellConfig = serde_json::from_value(command(&fixture, &["config", "get"])).unwrap();
         let place = beacon(&cfg, SCREEN, true, 4, rtl);
-        let all = capture(&runtime, &display);
-        input(&runtime, &display, &["-M", "shift", "-k", "Tab", "-m", "shift"]);
-        let last = capture(&runtime, &display);
+        let all = capture(&fixture);
+        input(&fixture, &["-M", "shift", "-k", "Tab", "-m", "shift"]);
+        let last = capture(&fixture);
         assert!(category_sample(&all, place, false) != category_sample(&last, place, false), "reverse focus must visibly reveal the off-edge final category ({locale:?})");
-        category_sample(&last, place, false).save(runtime.join(format!("beacon-categories-{locale:?}-last-focus.png"))).unwrap();
+        category_sample(&last, place, false).save(fixture.artifact(&format!("beacon-categories-{locale:?}-last-focus.png")).unwrap()).unwrap();
         let accent = *all.get_pixel(((place.first_mode.x + BEACON_BAR_H / 2.0) * SCALE).round() as u32,
             ((place.first_mode.y + BEACON_BAR_H * 0.2) * SCALE).round() as u32);
         assert!(complete_category_focus(&category_sample(&last, place, false), accent, rtl), "focused category must show both ends inside the viewport ({locale:?})");
-        input(&runtime, &display, &["-k", "Return"]);
-        let filtered = capture(&runtime, &display);
+        input(&fixture, &["-k", "Return"]);
+        let filtered = capture(&fixture);
         assert!(category_sample(&all, place, true) != category_sample(&filtered, place, true), "Enter must filter actual app tiles ({locale:?})");
-        assert_eq!(command(&runtime, &["shell", "state"])["launcher"], true);
-        input(&runtime, &display, &["-k", "space"]);
-        assert!(category_sample(&filtered, place, true) != category_sample(&capture(&runtime, &display), place, true), "Space must restore All from the selected category ({locale:?})");
-        input(&runtime, &display, &["-M", "ctrl", "-k", "1", "-k", "1", "-m", "ctrl"]);
-        input(&runtime, &display, &["-k", "Tab", "-k", "Tab", "-k", "Tab", "-k", "Tab", "-k", "Tab"]);
-        let all_focus = capture(&runtime, &display);
+        assert_eq!(command(&fixture, &["shell", "state"])["launcher"], true);
+        input(&fixture, &["-k", "space"]);
+        assert!(category_sample(&filtered, place, true) != category_sample(&capture(&fixture), place, true), "Space must restore All from the selected category ({locale:?})");
+        input(&fixture, &["-M", "ctrl", "-k", "1", "-k", "1", "-m", "ctrl"]);
+        input(&fixture, &["-k", "Tab", "-k", "Tab", "-k", "Tab", "-k", "Tab", "-k", "Tab"]);
+        let all_focus = capture(&fixture);
         assert!(category_sample(&all, place, false) != category_sample(&all_focus, place, false), "All needs visible native focus after the four mode stops ({locale:?})");
-        input(&runtime, &display, &["-k", "Tab", "-k", "Return"]);
-        let pinned_only = capture(&runtime, &display);
+        input(&fixture, &["-k", "Tab", "-k", "Return"]);
+        let pinned_only = capture(&fixture);
         assert!(category_sample(&all, place, true) != category_sample(&pinned_only, place, true), "Pinned must filter actual app tiles ({locale:?})");
-        category_sample(&pinned_only, place, false).save(runtime.join(format!("beacon-categories-{locale:?}-pinned.png"))).unwrap();
-        input(&runtime, &display, &["-k", "space", "-M", "shift", "-k", "Tab", "-m", "shift", "-k", "Return"]);
-        assert_eq!(command(&runtime, &["shell", "state"])["launcher"], true, "category activation must not launch an app");
-        input(&runtime, &display, &["z", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"]);
-        assert_eq!(clipboard(&runtime, &display).as_slice(), b"z", "typing from a focused category must preserve its first character");
-        input(&runtime, &display, &["-M", "ctrl", "-k", "a", "-m", "ctrl", "-k", "BackSpace", "-k", "Escape", "-k", "Escape"]);
-        assert_eq!(command(&runtime, &["shell", "state"])["launcher"], false);
+        category_sample(&pinned_only, place, false).save(fixture.artifact(&format!("beacon-categories-{locale:?}-pinned.png")).unwrap()).unwrap();
+        input(&fixture, &["-k", "space", "-M", "shift", "-k", "Tab", "-m", "shift", "-k", "Return"]);
+        assert_eq!(command(&fixture, &["shell", "state"])["launcher"], true, "category activation must not launch an app");
+        input(&fixture, &["z", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"]);
+        assert_eq!(clipboard(&fixture).as_slice(), b"z", "typing from a focused category must preserve its first character");
+        input(&fixture, &["-M", "ctrl", "-k", "a", "-m", "ctrl", "-k", "BackSpace", "-k", "Escape", "-k", "Escape"]);
+        assert_eq!(command(&fixture, &["shell", "state"])["launcher"], false);
     }
-    command(&runtime, &["config", "set", "/launcher/look/beacon_width", &width.to_string()]);
+}
+
+/// All original values are restored, including a provider originally disabled.
+#[test]
+fn config_restoration_preserves_values_and_stops_after_a_rejected_request() {
+    let fields = [("/general/locale", json!("arabic")), ("/motion/reduce_motion", json!(false)), ("/launcher/look/beacon_width", json!(420)), ("/launcher/look/grid_categories", json!(false)), ("/launcher/providers/clipboard/enabled", json!(false))];
+    let mut sent = Vec::new();
+    restore_config(&fields, |args| { sent.push(args.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>()); Ok(Value::Null) }).unwrap();
+    assert_eq!(sent[0], ["launcher", "close"]);
+    for (request, (path, value)) in sent[1..].iter().zip(&fields) {
+        assert_eq!(&request[..3], ["config", "set", path]);
+        assert_eq!(serde_json::from_str::<Value>(&request[3]).unwrap(), *value);
+    }
+    let mut attempts = 0;
+    assert!(restore_config(&fields, |_| { attempts += 1; Err(std::io::Error::other("fixture identity changed")) }).is_err());
+    assert_eq!(attempts, 1, "no config writes follow a rejected guard");
+    let mut attempts = 0;
+    assert!(restore_config(&fields, |_| { attempts += 1; if attempts == 3 { Err(std::io::Error::other("fixture identity changed")) } else { Ok(Value::Null) } }).is_err());
+    assert_eq!(attempts, 3, "restoration stops as soon as identity is lost");
 }
