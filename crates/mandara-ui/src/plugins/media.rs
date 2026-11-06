@@ -1,5 +1,5 @@
-//! Media plugin (MPRIS2): now-playing in the bar; a Caelestia-style media
-//! island panel themed entirely by the current artwork (surface tint, glow,
+//! Media plugin (MPRIS2): now-playing in the bar and an artwork-themed
+//! island panel (surface tint, glow,
 //! accents, scrubber and play button derived from the album-art palette in
 //! OKLCH, crossfading between tracks), a blurred art backdrop, a live audio
 //! spectrum visualizer fed by `mandara_services::spectrum`, a draggable seek
