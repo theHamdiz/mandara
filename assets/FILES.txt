@@ -35,6 +35,7 @@ assets/brand/mandara-symbolic.svg
 assets/catalog.json
 assets/css/landing.css
 assets/css/pages.css
+assets/js/copy-code.js
 assets/launcher-icons/amethyst-medallion.svg
 assets/launcher-icons/blue-whorl.svg
 assets/launcher-icons/coral-knot.svg
