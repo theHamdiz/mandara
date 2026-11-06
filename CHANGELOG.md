@@ -26,6 +26,8 @@ About → What's new shows it too.
 
 - **Cleaner portable builds.** Linker tuning checks for support, avoiding
   ignored-option warnings with other linkers.
+  CI and release uploads use the current artifact action to avoid its older
+  runtime deprecations.
 
 - **Reliable integration tests.** The private KeePassXC server listens before
   client requests arrive, and its waits have a deadline, preventing a CI hang.
