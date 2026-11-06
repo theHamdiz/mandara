@@ -152,7 +152,8 @@ around, each one measured or shipped today:
    widgets placed per monitor, and three launcher looks.
 9. **Safe, rich extensions.** 77 plugins built in. Third-party plugins are
    Rust compiled to sandboxed WebAssembly: a crashing plugin is switched
-   off and the shell keeps running.
+   off and the shell keeps running. Qur’an, Hadith and Jannah can also
+   [copy complete reading cards as images](docs/plugins.md#jannah-quran-hadith-and-prayer-times).
 10. **Scriptable end to end.** Almost everything the interface does is a
     `mandara msg` command with JSON replies, so scripts and AI agents can
     drive and inspect the whole desktop. [How](docs/agent-ready.md)

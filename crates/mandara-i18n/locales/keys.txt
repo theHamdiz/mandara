@@ -467,6 +467,7 @@ An app needs administrator rights
 An app starts or stops using the microphone, camera or screen
 An app wants access to the keyring “Login”, but it is locked (preview: nothing is unlocked)
 An app wants to create a new keyring called “Mandara”. Choose the password you want to use for it (preview: nothing is created)
+An image is already being prepared
 An interactive card — its own settings are with the cards.
 An island per group
 An-Nawawi's Forty
@@ -1042,6 +1043,7 @@ Choose a valid Home Assistant entity
 Choose an area to record
 Choose displays
 Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.
+Choose one ayah to copy as an image
 Choose the key file
 Choose up to 24 Home Assistant entities
 Choose what the power menu offers and in which order. Built-in entries can be hidden or renamed; your own commands and boot entries can be removed.
@@ -1172,6 +1174,7 @@ Compact
 Compact height
 Compact rows
 Compiled once to native code, cached in {path}
+Complete image copied
 Completed ({count})
 Component missing
 Compose project · {detail}
@@ -1261,9 +1264,13 @@ Copies its appearance and position. Later desktop edits do not change this scree
 Copies marked secret by password managers are never recorded
 Copy
 Copy (right-click pastes)
+Copy a hadith and its design as a complete PNG image
 Copy a history entry back (by id), optionally pasting it
+Copy a reminder and its design as a complete PNG image
 Copy a topic's notes (or all) into a folder as .md files
+Copy an ayah and its design as a complete PNG image
 Copy as
+Copy as image
 Copy from desktop
 Copy path
 Copy picked colors
@@ -1288,6 +1295,7 @@ Corniche
 Corniche night
 Corniche waves
 Cosmic neon green and cyan on deep indigo (light variant derived).
+Could not copy the image: {error}
 Could not create a temporary download folder.
 Could not create {path}: {error}
 Could not download the signed release. Nothing was installed. Check your connection and try again.
@@ -1818,7 +1826,6 @@ Effects
 Egyptian
 Eight
 Eject
-El-Mandara, Alexandria
 Eldritch
 Elevation tint
 Eleven
@@ -2686,6 +2693,7 @@ Illegal instruction
 Illness, loss and long nights are not wasted when met with patience.
 Image
 Image ({mime})
+Image copying cancelled
 Image editor
 Image or video path, or clear
 Images
@@ -4622,6 +4630,7 @@ Prayer times list
 Prebuilt releases require Linux on an x86_64 or aarch64 CPU.
 Precision
 Preferred apps
+Preparing the complete image…
 Preparing the plan…
 Preparing the share…
 Preparing…
@@ -6219,6 +6228,8 @@ The i2c-dev kernel module isn't loaded
 The icon on the bar's launcher button
 The icons of the apps on each tag or workspace
 The idle manager is not running
+The image design could not be prepared
+The image is larger than the clipboard limit
 The input recorded as the microphone
 The interface between your plugin and Mandara, read from the plugin.wit this build was compiled with.
 The interface language as an ISO 639-1 code; right-to-left for ar.
@@ -6434,6 +6445,8 @@ This device is asking to pair. Check the name on your phone before accepting.
 This device, the exit node in use and every peer (JSON)
 This driver doesn't report per-process GPU memory.
 This entity cannot run that action right now
+This entry is no longer available
+This entry is too large to copy as one image
 This executable path cannot be used in a desktop entry
 This feed is too large to read
 This file looks damaged, or isn't an app. Try downloading it again.
@@ -7355,6 +7368,7 @@ a reference: bukhari 1, muslim 2699a, abudawud 4031
 a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
 a style id from `wallgen styles`
 a surah (2, al-baqara) or an ayah (2:255), or a range (2:255-257)
+a verse or hadith reference
 a wallpaper (with add / remove)
 about {time} left
 absolute file paths, then --yes (skip the confirmation), --no-path-shim, --dry-run
@@ -7369,6 +7383,7 @@ all sahih
 all, pinned, a kind (code, color, …) or a collection id or name
 already recording
 also paste with Ctrl+V
+an ayah, such as 2:255
 an ayah: 2:255 or al-baqara:255
 an excluded app is focused
 an exported settings file

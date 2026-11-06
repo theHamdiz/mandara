@@ -31,6 +31,8 @@ mandara-media.workspace = true
 # The wallpaper generator plugin's engine.
 mandara-wallgen.workspace = true
 tiny-skia.workspace = true
+# Already used by image: stream full reading cards without a full-height RGBA buffer.
+png = { version = "0.18.1", default-features = false }
 nucleo-matcher.workspace = true
 pulldown-cmark.workspace = true
 dirs.workspace = true

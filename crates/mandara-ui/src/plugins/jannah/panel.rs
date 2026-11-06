@@ -169,6 +169,7 @@ struct Ui {
     peek: i64,
     step_peek: i64,
     flash: Flash,
+    share: super::super::design_share::View,
     /// The Qur'an and Hadith filter chips (wheel and drag scroll them).
     chips_q: crate::hstrip::HStrip,
     chips_h: crate::hstrip::HStrip,
@@ -197,7 +198,7 @@ pub(super) fn build(p: PanelCx, window: &mut Window, cx: &mut App) -> PanelSpec 
     let views = shared.borrow().views.clone();
     let field = cx.new(|cx| TextField::new(String::new(), t("Search Arabic or meaning…"), true, Rc::new(move |_, _, cx| views.notify(cx)), cx));
     let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(CHROME_H + BODY_GUESS))));
-    let ui = Rc::new(RefCell::new(Ui { tab: Tab::Today, stack: Vec::new(), theme: None, collection: None, searched: None, search_gen: 0, slide: None, glow: None, peek: 0, step_peek: 0, flash: Flash::default(), chips_q: Default::default(), chips_h: Default::default() }));
+    let ui = Rc::new(RefCell::new(Ui { tab: Tab::Today, stack: Vec::new(), theme: None, collection: None, searched: None, search_gen: 0, slide: None, glow: None, peek: 0, step_peek: 0, flash: Flash::default(), share: super::super::design_share::View::new(p.clone()), chips_q: Default::default(), chips_h: Default::default() }));
     let view = View { p, field, ui, size: size_cell.clone() };
     PanelSpec { view: fn_view(None, super::plugin_lang::in_language(super::own_lang, move |palette, window, cx| view.render(palette, window, cx)), window, cx), size: size_cell }
 }
@@ -461,7 +462,7 @@ fn peek_bar(c: &Ctx, id: &'static str, offset: i64, here: &'static str, field: f
 }
 
 /// The verse's or hadith's words with a verse's ornate number.
-fn words(item: &Item) -> String {
+pub(super) fn words(item: &Item) -> String {
     match item.verse_ref() {
         Some((_, a)) => format!("{} {}", item.arabic, catalog::ayah_mark(a)),
         None => item.arabic.to_string(),
@@ -530,7 +531,7 @@ fn hero(c: &Ctx, item: &Item, full: bool, nav: Option<(Rc<dyn Fn(&mut App)>, Rc<
             .child(caption(t("With its chain of narrators"), palette))
             .child(div().font_family(c.scripture.clone()).text_size(px(CHAIN_PX)).line_height(gpui::relative(ARABIC_LINE_EM)).text_right().text_color(palette.on_surface_variant.hsla()).child(crate::bidi::paragraph(item.full_arabic())))
     });
-    let actions = reference_row(c, item, meaning.as_ref().map(|m| m.text.clone()), saved);
+    let actions = reference_row(c, item, meaning, saved, full);
     let content = div()
         .relative()
         .left(px(offset))
@@ -640,12 +641,12 @@ fn meaning_status(c: &Ctx, fetch: &Fetch, palette: &MandaraPalette) -> AnyElemen
 }
 
 /// The reference chip (copies a citation), the link, save and copy.
-fn reference_row(c: &Ctx, item: &Item, meaning: Option<String>, saved: bool) -> AnyElement {
+fn reference_row(c: &Ctx, item: &Item, meaning: Option<meanings::Meaning>, saved: bool, full: bool) -> AnyElement {
     let palette = c.palette;
     let g = gold(palette);
     let arabic = arabic_ui();
     let citation = catalog::citation(item, arabic);
-    let copied = catalog::copy_text(item, meaning.as_deref(), arabic);
+    let copied = catalog::copy_text(item, meaning.as_ref().map(|meaning| meaning.text.as_str()), arabic);
     let link = catalog::link(item);
     let key = item.key.clone();
     let (ui1, ui2, shared) = (c.ui.clone(), c.ui.clone(), c.shared.clone());
@@ -669,6 +670,7 @@ fn reference_row(c: &Ctx, item: &Item, meaning: Option<String>, saved: bool) -> 
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(citation.clone()));
             ui1.borrow_mut().flash.show(true, cited);
         });
+    let copy_image = { let ui = c.ui.borrow(); super::share::button(&ui.share, ui.flash.clone(), palette, &item.key, meaning, full, c.arabic_px, c.radius) };
     let ink = palette.on_surface_variant;
     div()
         .w_full()
@@ -681,6 +683,7 @@ fn reference_row(c: &Ctx, item: &Item, meaning: Option<String>, saved: bool) -> 
         .child(icon_button("jannah-save", "heart", ACTION_BTN, if saved { g } else { ink }, saved.then(|| g.with_alpha(alpha(CHIP_FILL, palette))), move |_, cx| {
             toggle_saved(&shared, &key, cx);
         }))
+        .child(copy_image)
         .child(icon_button("jannah-copy", "copy", ACTION_BTN, ink, None, move |_, cx| {
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(copied.clone()));
             ui2.borrow_mut().flash.show(true, copied_msg);
@@ -1230,6 +1233,14 @@ fn about(c: &Ctx) -> AnyElement {
         )
         .into_any_element()
 }
+
+/// Layout values reused by the full-content image export.
+pub(super) const SHARE_WIDTH: f32 = INNER_W;
+pub(super) const SHARE_SIDE: f32 = CONTENT_SIDE;
+pub(super) const SHARE_TOP: f32 = CONTENT_TOP_SHARE;
+pub(super) const SHARE_BOTTOM: f32 = CONTENT_BOTTOM;
+pub(super) const SHARE_GAP: f32 = BLOCK_GAP;
+pub(super) const SHARE_CHAIN_PX: f32 = CHAIN_PX;
 
 #[cfg(test)]
 mod tests {

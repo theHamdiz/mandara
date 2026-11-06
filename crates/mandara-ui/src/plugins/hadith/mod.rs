@@ -32,6 +32,7 @@
 pub mod art;
 mod panel;
 mod reader;
+mod share;
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -1028,6 +1029,9 @@ fn register_commands(r: &mut PluginRegistry) {
     // Every command answers in Hadith's own language.
     let mut add = |spec: CommandSpec| r.command(ID, plugin_lang::speaking(spec, own_lang));
     add(plugin_lang::language_command(ID, "hadith language", "hadith language en"));
+    add(CommandSpec::new_output("hadith copy-image", tk("Copy a hadith and its design as a complete PNG image"), |a, cx| share::command(&a.rest(0), cx))
+        .arg(ArgSpec::required("ref", ArgKind::String, tk("a reference: bukhari 1, muslim 2699a, abudawud 4031")))
+        .example("hadith copy-image bukhari 1"));
     add(
         CommandSpec::new_output("hadith peek", tk("Look at the hadith a few days (or hours) after today's, or before it when negative, without marking anything read"), |a, cx| {
             let by = if a.get(0).is_some() { a.int(0)? } else { 1 };

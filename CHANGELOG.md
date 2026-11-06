@@ -6,6 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Share a complete reading card.** Qur’an, Hadith and Jannah have an Image
+  button beside text copy. It copies the whole entry with its current design,
+  reference and displayed meaning, including content beyond the panel’s scroll.
+
 ### Fixed
 
 - **Fresh language and theme in plugin cards.** Soundscapes captions and

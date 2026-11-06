@@ -3988,6 +3988,7 @@ dependencies = [
  "mandara-wallgen",
  "notify",
  "nucleo-matcher",
+ "png 0.18.1",
  "pulldown-cmark",
  "rav1e",
  "resvg",

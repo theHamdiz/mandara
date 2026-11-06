@@ -164,6 +164,20 @@ These four opt-in plugins share two things:
   From the command line: `jannah peek`, `jannah step peek`, `quran peek`,
   `hadith peek`, `prayer peek`.
 
+**Copy a complete card.** In Qur’an, Hadith and Jannah, the **Image** button
+beside text copy puts the current entry on the clipboard as a PNG, using its
+colours, ornaments and configured fonts. It includes every word, the reference,
+and any meaning or chain currently shown, even when you have to scroll to read
+it in the panel. Text copy remains a separate action. The success message
+appears only after the clipboard accepts the image; oversized entries report an
+error instead of being cropped. Closing the panel cancels unfinished preparation.
+
+The same action is available as `quran copy-image 2:255`,
+`hadith copy-image bukhari 1` and `jannah copy-image 89:30`. These explicit
+references export the entry using the plugin’s reading settings; the Qur’an
+command includes its meaning in Study mode. No screenshot or other desktop
+content is copied.
+
 **The adhan.** Prayer times can play the call to prayer at each of the
 five prayers (Studio → Plugins → Prayer times → *Adhan at prayer times*,
 off by default). Nothing ships with Mandara: turning it on downloads the

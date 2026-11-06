@@ -26,6 +26,7 @@
 
 pub mod art;
 pub(crate) mod panel;
+mod share;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -824,6 +825,9 @@ fn register_commands(r: &mut PluginRegistry) {
     // Every command answers in Jannah's own language.
     let mut add = |spec: CommandSpec| r.command(ID, plugin_lang::speaking(spec, own_lang));
     add(plugin_lang::language_command(ID, "jannah language", "jannah language ar"));
+    add(CommandSpec::new_output("jannah copy-image", tk("Copy a reminder and its design as a complete PNG image"), |a, cx| share::command(&a.rest(0), cx))
+        .arg(ArgSpec::required("ref", ArgKind::String, tk("a verse or hadith reference")))
+        .example("jannah copy-image 89:30"));
     add(
         CommandSpec::new("jannah peek", tk("Look at the reminder a few items after today's (before it when negative) without moving today's"), |a, cx| {
             let by = if a.get(0).is_some() { a.int(0)? } else { 1 };

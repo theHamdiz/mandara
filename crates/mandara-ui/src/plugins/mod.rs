@@ -77,6 +77,7 @@ pub mod feeds;
 pub mod home_assistant;
 pub mod phone_connect;
 pub mod translator;
+mod design_share;
 mod integration;
 pub mod adhan;
 
