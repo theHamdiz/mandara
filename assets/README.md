@@ -111,7 +111,7 @@ The 78 plugins below include 77 built-ins and the Moon phase example. Each SVG h
 
 Studio → Launcher → Button icon includes thirteen colour SVG alternatives.
 They keep their original gradients, render at the display scale and decode only
-when drawn. The PIK image and duplicate files are excluded.
+when drawn.
 
 | Icon | Source |
 | --- | --- |
