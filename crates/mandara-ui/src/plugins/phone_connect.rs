@@ -34,10 +34,15 @@ pub const MAX_REFRESH_SECS: i64 = 300;
 type PhoneData = Rc<RefCell<integration::Data<(), Vec<Device>>>>;
 type PhoneAction = Rc<RefCell<integration::Action<()>>>;
 thread_local! {
-    static DATA: PhoneData = Rc::default();
+    static DATA: RefCell<Option<PhoneData>> = const { RefCell::new(None) };
     static ACTIONS: PhoneAction = Rc::default();
 }
-fn data() -> PhoneData { DATA.with(Rc::clone) }
+fn data() -> PhoneData { DATA.with(|slot| slot.borrow_mut().get_or_insert_with(Rc::default).clone()) }
+
+/// Discard a disabled device snapshot without constructing a new cache.
+pub(super) fn stop() {
+    if let Some(data) = DATA.with(|slot| slot.borrow_mut().take()) { data.borrow_mut().clear(); }
+}
 
 fn refresh_interval(cfg: &ShellConfig) -> Duration {
     Duration::from_secs(cfg.plugins.setting(ID, "refresh_seconds", DEFAULT_REFRESH_SECS).clamp(MIN_REFRESH_SECS, MAX_REFRESH_SECS) as u64)
@@ -45,6 +50,7 @@ fn refresh_interval(cfg: &ShellConfig) -> Duration {
 
 /// Read native daemon state on demand; the panel owns the refresh cadence.
 fn refresh(force: bool, cfg: &ShellConfig, cx: &mut App) {
+    if !super::lifecycle::is_on(ID, cx) { return; }
     integration::load(&data(), (), force, refresh_interval(cfg), |_| KdeConnect.devices(), cx);
 }
 
@@ -54,8 +60,10 @@ fn act(id: String, action: Action, cx: &mut App) -> async_channel::Receiver<Resu
     let views = data().borrow().views.clone();
     integration::act(&actions, (), views, move || KdeConnect.act(&id, action).map(|()| serde_json::json!({"ok":true})), |cx| {
         let cfg = crate::state::config(cx).read(cx).snapshot();
-        data().borrow_mut().invalidate();
-        refresh(true, &cfg, cx);
+        if super::lifecycle::is_on(ID, cx) {
+            data().borrow_mut().invalidate();
+            refresh(true, &cfg, cx);
+        }
     }, cx)
 }
 
@@ -173,6 +181,20 @@ pub fn register(registry: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn disabling_releases_a_snapshot_even_if_a_request_still_holds_the_data_slot() {
+        stop();
+        assert!(DATA.with(|slot| slot.borrow().is_none()));
+        let held = data();
+        let snapshot = std::sync::Arc::new(Vec::<Device>::with_capacity(64));
+        let weak = std::sync::Arc::downgrade(&snapshot);
+        held.borrow_mut().value = Some(snapshot);
+        stop();
+        assert!(weak.upgrade().is_none());
+        assert!(held.borrow().value.is_none());
+        assert!(DATA.with(|slot| slot.borrow().is_none()));
+    }
 
     #[test]
     fn destructive_and_unknown_commands_are_never_implicit() {

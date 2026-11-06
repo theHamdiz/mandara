@@ -99,7 +99,15 @@ mandara msg config set /integrations/gtk4 true   # theme an app (all off by defa
 mandara msg plugins vet ./my-plugin          # the marketplace's compliance check: {"ok":true} or {"ok":false,"class":"broken|malicious|placeholder","reason":…}
 mandara msg config get /bar/height         # config set /bar/height 30, show, reload, export, import, reset
 mandara msg studio displays                 # open Studio on a page (docs/studio.md)
+mandara msg studio bars/sidebar             # Bars → Sidebar tab and widget editor
+mandara msg studio bars/side-bars           # Bars → Side bars layout and settings
 ```
+
+The Bars page also accepts `bars/bar`, `bars/panels` and `bars/edges`.
+`mandara studio bars --tab sidebar` opens the same tab from the CLI.
+The former `bar` and `sidebar` Studio targets remain aliases. Config
+commands still use their original paths, such as `/bar/height` and
+`/sidebar/width`; `config reset bar` continues to reset only `[bar]`.
 
 ## Sidebar tabs
 

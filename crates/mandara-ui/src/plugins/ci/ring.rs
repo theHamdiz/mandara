@@ -42,7 +42,7 @@ pub(super) fn draw(side: f32, elapsed: Duration, reduce_motion: bool, accent: Co
             let rect = Bounds::new(bounds.origin + point(px(x), px(y)), size(px(DOT_PX), px(DOT_PX)));
             window.paint_subpixel_quad(fill(rect, ink.hsla()).corner_radii(px(DOT_PX / 2.0)));
         }
-    }).absolute().size_full().into_any_element()
+    }).absolute().top_0().left_0().size_full().into_any_element()
 }
 
 #[cfg(test)]

@@ -50,9 +50,8 @@ const RESET_GRID: CardGrid = CardGrid { min_w: 170.0, max_w: 300.0, gap: SPACE_8
 /// Lists edited by page-specific designers, outside the scalar registry.
 /// Counts and reset use the same paths so a changed arrangement is resettable.
 const EXTRA_RESET_PATHS: &[(Section, &[&str])] = &[
-    (Section::Bar, &["/bar/left", "/bar/center", "/bar/right", "/side_bars/left/top", "/side_bars/left/middle", "/side_bars/left/bottom", "/side_bars/right/top", "/side_bars/right/middle", "/side_bars/right/bottom"]),
+    (Section::Bars, &["/bar/left", "/bar/center", "/bar/right", "/side_bars/left/top", "/side_bars/left/middle", "/side_bars/left/bottom", "/side_bars/right/top", "/side_bars/right/middle", "/side_bars/right/bottom", "/sidebar/tabs"]),
     (Section::Dock, &["/dock/pinned", "/dock/stacks"]),
-    (Section::Sidebar, &["/sidebar/tabs"]),
 ];
 
 /// One recorded change: when, what (setting labels), and the config before.
@@ -619,13 +618,13 @@ mod tests {
     fn restored_custom_arrangements_count_as_changed_and_reset_with_their_page() {
         let cfg: ShellConfig = toml::from_str("[bar]\nleft = ['clock']\ncenter = []\nright = ['audio']\n[dock]\npinned = ['fixture-app']").unwrap();
         let counts = changed_per_section(&cfg);
-        assert!(counts.get(&Section::Bar).copied().unwrap_or(0) >= 3);
+        assert!(counts.get(&Section::Bars).copied().unwrap_or(0) >= 3);
         assert!(counts.get(&Section::Dock).copied().unwrap_or(0) >= 1);
-        let reset = reset_section(&cfg, Section::Bar);
+        let reset = reset_section(&cfg, Section::Bars);
         let defaults = ShellConfig::default();
         assert_eq!(reset.bar, defaults.bar);
         assert_eq!(reset.dock, cfg.dock);
-        assert!(!changed_per_section(&reset).contains_key(&Section::Bar));
+        assert!(!changed_per_section(&reset).contains_key(&Section::Bars));
         assert_eq!(reset_section(&cfg, Section::Dock).dock.pinned, defaults.dock.pinned);
         for (_, paths) in EXTRA_RESET_PATHS {
             for path in *paths {
@@ -633,6 +632,21 @@ mod tests {
                 assert!(serde_json::to_value(&defaults).unwrap().pointer(path).is_some(), "{path} is not a real config path");
             }
         }
+    }
+
+    #[test]
+    fn bars_reset_includes_all_tabs_and_preserves_unrelated_settings() {
+        let cfg: ShellConfig = toml::from_str("[bar]\nheight = 26\nleft = ['clock']\n[side_bars]\nenabled = true\n[side_bars.left]\ntop = ['audio']\n[sidebar]\nwidth = 450\n[[sidebar.tabs]]\nname = 'Fixture'\ncards = ['media']\n[panels]\nmax_height = 0.7\n[edges]\ndwell_ms = 20\n[dock]\npinned = ['fixture-app']\n[plugins.settings.fixture]\nvalue = 'preserved'").unwrap();
+        let reset = reset_section(&cfg, Section::Bars);
+        let defaults = ShellConfig::default();
+        assert_eq!(reset.bar, defaults.bar);
+        assert_eq!(reset.side_bars, defaults.side_bars);
+        assert_eq!(reset.sidebar, defaults.sidebar);
+        assert_eq!(reset.panels, defaults.panels);
+        assert_eq!(reset.edges, defaults.edges);
+        assert_eq!(reset.dock, cfg.dock);
+        assert_eq!(reset.plugins.settings, cfg.plugins.settings);
+        assert!(!changed_per_section(&reset).contains_key(&Section::Bars));
     }
 
     /// What the page does per frame and per config change, timed:
@@ -660,14 +674,14 @@ mod tests {
         mandara_plugins::lifecycle::remove(&mut cfg, "weather", "Weather").unwrap();
         cfg.bar.left.reverse();
         let remembered = cfg.plugins.removed_places.clone();
-        let mut reset = reset_section(&cfg, Section::Bar);
+        let mut reset = reset_section(&cfg, Section::Bars);
         assert!(reset.plugin_places("weather").is_empty());
         assert_eq!(reset.plugins.removed_places, remembered);
-        assert!(!changed_per_section(&reset).contains_key(&Section::Bar));
+        assert!(!changed_per_section(&reset).contains_key(&Section::Bars));
         mandara_plugins::lifecycle::restore(&mut reset, "weather", Some(mandara_plugins::Zone::Right));
         assert_eq!(reset.plugin_places("weather").len(), 1);
         assert!(reset.bar.left.iter().any(|id| id == "weather"));
-        let removed = reset_section(&cfg, Section::Sidebar);
+        let removed = reset_section(&cfg, Section::Bars);
         assert!(removed.plugin_places("weather").is_empty());
     }
 

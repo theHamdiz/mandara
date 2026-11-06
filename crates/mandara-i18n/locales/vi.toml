@@ -8359,3 +8359,20 @@
 "{percent}% · charging" = "{percent}% · đang sạc"
 "↑/↓ change · enter select · esc cancel" = "↑/↓ đổi · enter chọn · esc hủy"
 "a section (appearance, themes, bar, sidebar, launcher, wallpaper, audio, login-screen, users, keyboard-shortcuts, motion, general, typography, plugins, compositor, performance, maintenance, about) or plugins/<id>[/settings]" = "một mục (appearance, themes, bar, sidebar, launcher, wallpaper, audio, login-screen, users, keyboard-shortcuts, motion, general, typography, plugins, compositor, performance, maintenance, about) hoặc plugins/<id>[/settings]"
+
+# Studio bars
+"Edges & corners" = "Cạnh và góc"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "một mục (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] hoặc plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "Thêm plugin “{name}” vào thanh (Studio → Các thanh → Thanh) để thấy chỉ báo ở đó; thông báo trên màn hình vẫn chạy dù không thêm."
+"Add any widget to it in Studio → Bars → Sidebar." = "Thêm tiện ích bất kỳ trong Studio → Các thanh → Thanh bên."
+"Number of bars" = "Số cột"
+
+"Release signature verified." = "Đã xác minh chữ ký bản phát hành."
+"Downloaded:" = "Đã tải xuống:"
+"Archive checksum verified." = "Đã xác minh tổng kiểm tra của tệp nén."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "Không thể tải xuống bản phát hành có chữ ký. Chưa cài đặt gì. Hãy kiểm tra kết nối rồi thử lại."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "Không thể xác minh tệp nhị phân này: {reason}. Mandara chưa được cài đặt. Hãy kiểm tra kết nối rồi thử lại."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "Cài đặt tệp nhị phân này ngay cả khi tổng kiểm tra đã công bố không khả dụng hoặc không khớp."
+
+"Spectrum bars" = "Cột phổ âm"

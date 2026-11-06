@@ -8455,3 +8455,20 @@
 "Couldn't verify the community store policy. Try again later." = "بررسی خط‌مشی فروشگاه جامعه ممکن نشد. بعداً دوباره تلاش کنید."
 "The community store has blocked installs and updates for {repository}." = "فروشگاه جامعه نصب و به‌روزرسانی {repository} را مسدود کرده است."
 "Repository details are missing IDs required by the store policy." = "اطلاعات مخزن فاقد شناسه‌های موردنیاز خط‌مشی فروشگاه است."
+
+# Studio bars
+"Edges & corners" = "لبه‌ها و گوشه‌ها"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "بخش (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] یا plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "افزونهٔ «{name}» را به نوار اضافه کنید (استودیو ← نوارها ← نوار) تا نشانگر را آنجا ببینید؛ نمایش‌های روی صفحه در هر حال کار می‌کنند."
+"Add any widget to it in Studio → Bars → Sidebar." = "هر ویجتی را از استودیو ← نوارها ← نوار کناری به آن اضافه کنید."
+"Number of bars" = "تعداد میله‌ها"
+
+"Release signature verified." = "امضای انتشار تأیید شد."
+"Downloaded:" = "بارگیری شد:"
+"Archive checksum verified." = "جمع کنترلی بایگانی تأیید شد."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "بارگیری انتشار امضاشده ممکن نشد. چیزی نصب نشد. اتصال خود را بررسی کنید و دوباره تلاش کنید."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "تأیید این فایل اجرایی ممکن نشد: {reason}. Mandara نصب نشد. اتصال خود را بررسی کنید و دوباره تلاش کنید."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "این فایل اجرایی را حتی اگر جمع کنترلی منتشرشده در دسترس نیست یا مطابقت ندارد نصب کنید."
+
+"Spectrum bars" = "میله‌های طیف"

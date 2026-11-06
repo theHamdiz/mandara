@@ -1218,7 +1218,7 @@
 "Automatic login" = "تسجيل الدخول التلقائي"
 "Backlight devices and levels" = "أجهزة الإضاءة الخلفية ومستوياتها"
 "Balanced" = "متوازن"
-"Bars" = "الأعمدة"
+"Bars" = "الأشرطة"
 "Batteries" = "البطاريات"
 "Battery details need the upower service" = "تتطلب تفاصيل البطارية خدمة upower"
 "Battery health, cycles, rate and time estimates (JSON)" = "صحة البطارية والدورات والمعدّل وتقديرات الوقت (JSON)"
@@ -8705,3 +8705,20 @@
 "Couldn't verify the community store policy. Try again later." = "تعذّر التحقق من سياسة متجر المجتمع. حاول مجددًا لاحقًا."
 "The community store has blocked installs and updates for {repository}." = "حظر متجر المجتمع تثبيت {repository} وتحديثه."
 "Repository details are missing IDs required by the store policy." = "تفاصيل المستودع تفتقد المعرّفات التي تتطلبها سياسة المتجر."
+
+# Studio bars
+"Edges & corners" = "الحواف والزوايا"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "قسم (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] أو plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "أضف إضافة «{name}» إلى الشريط (الستوديو ← الأشرطة ← الشريط) لترى المؤشر هناك؛ المؤشرات على الشاشة تعمل في الحالتين."
+"Add any widget to it in Studio → Bars → Sidebar." = "أضف إليه أي أداة من الاستوديو ← الأشرطة ← الشريط الجانبي."
+"Number of bars" = "عدد الأعمدة"
+
+"Release signature verified." = "تم التحقق من توقيع الإصدار."
+"Downloaded:" = "تم التنزيل:"
+"Archive checksum verified." = "تم التحقق من المجموع الاختباري للأرشيف."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "تعذر تنزيل الإصدار الموقّع. لم يُثبّت أي شيء. تحقق من اتصالك وأعد المحاولة."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "تعذر التحقق من هذا الملف التنفيذي: {reason}. لم يُثبّت Mandara. تحقق من اتصالك وأعد المحاولة."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "ثبّت هذا الملف التنفيذي حتى إن تعذر الحصول على مجموعه الاختباري المنشور أو لم يتطابق."
+
+"Spectrum bars" = "أعمدة الطيف"

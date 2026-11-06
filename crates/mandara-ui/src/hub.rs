@@ -152,16 +152,20 @@ const MEDIA_POSITION_TOLERANCE: std::time::Duration = std::time::Duration::from_
 /// previous state are stored silently: views extrapolate the position
 /// themselves, so they need no notification for a clock that ticks as
 /// predicted.
-fn set_media(slot: &mut Option<MediaState>, value: Option<MediaState>) -> bool {
-    let predicted = match (slot.as_ref(), value.as_ref()) {
+fn set_media(slot: &mut Option<MediaState>, mut value: Option<MediaState>) -> bool {
+    let predicted = match (slot.as_ref(), value.as_mut()) {
         (Some(old), Some(new)) => {
             let expected = old.position_now(new.position_at);
             let drift = expected.abs_diff(new.position);
             drift <= MEDIA_POSITION_TOLERANCE && {
-                let mut aligned = new.clone();
-                aligned.position = old.position;
-                aligned.position_at = old.position_at;
-                aligned == *old
+                let position = new.position;
+                let at = new.position_at;
+                new.position = old.position;
+                new.position_at = old.position_at;
+                let unchanged = *new == *old;
+                new.position = position;
+                new.position_at = at;
+                unchanged
             }
         }
         _ => false,
@@ -456,6 +460,42 @@ mod tests {
         assert_eq!(apply_compositor(&mut hub, CompositorEvent::KeyboardLayout("English".into())), Domains::KEYBOARD);
         assert_eq!(apply_compositor(&mut hub, CompositorEvent::Keymode("resize".into())), Domains::KEYBOARD);
         assert_eq!(apply_compositor(&mut hub, CompositorEvent::Clients(vec![ClientInfo { id: 1, ..Default::default() }])), Domains::CLIENTS);
+    }
+
+    #[test]
+    fn predicted_media_positions_keep_the_new_timestamp_without_invalidating_metadata() {
+        let now = std::time::Instant::now();
+        let mut old = MediaState::default();
+        old.status = mandara_services::PlaybackStatus::Playing;
+        old.title = "Track".into();
+        old.position = std::time::Duration::from_secs(10);
+        old.position_at = now;
+        let mut next = old.clone();
+        next.position = std::time::Duration::from_secs(12);
+        next.position_at = now + std::time::Duration::from_secs(2);
+        let next_at = next.position_at;
+        let mut slot = Some(old);
+        assert!(!set_media(&mut slot, Some(next)));
+        let state = slot.as_ref().unwrap();
+        assert_eq!(state.title, "Track");
+        assert_eq!(state.position, std::time::Duration::from_secs(12));
+        assert_eq!(state.position_at, next_at);
+    }
+
+    #[test]
+    fn real_media_seeks_and_metadata_changes_still_invalidate_views() {
+        let mut old = MediaState::default();
+        old.status = mandara_services::PlaybackStatus::Playing;
+        old.title = "First".into();
+        let mut seek = old.clone();
+        seek.position = MEDIA_POSITION_TOLERANCE * 2;
+        let mut slot = Some(old.clone());
+        assert!(set_media(&mut slot, Some(seek)));
+        let mut changed = old.clone();
+        changed.title = "Second".into();
+        let mut slot = Some(old);
+        assert!(set_media(&mut slot, Some(changed)));
+        assert_eq!(slot.unwrap().title, "Second");
     }
 
     #[test]

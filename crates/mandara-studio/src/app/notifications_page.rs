@@ -278,7 +278,7 @@ impl StudioView {
             .child(rows)
             .when(!placed && cfg.privacy.indicators, |el| {
                 el.child(
-                    card(p).child(heading(t("The bar chip isn't placed"), tf("Add the “{name}” plugin to the bar (Studio → Bar) to see the indicator there; on-screen displays work either way.", &[("name", &t("Privacy"))]), p)),
+                    card(p).child(heading(t("The bar chip isn't placed"), tf("Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way.", &[("name", &t("Privacy"))]), p)),
                 )
             })
             .child(div().row().flex_col().gap(px(SPACE_10_PX)).child(group_title(t("Ignore"), p)).child(ignore))

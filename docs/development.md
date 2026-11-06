@@ -200,6 +200,12 @@ and environment overrides (`RSS_MAX_KIB`, `ANON_MAX_KIB`, `THREADS_MAX`,
 `WLR_RENDER_DRM_DEVICE`) are in
 [releasing.md](releasing.md#resource-budget).
 
+Bar and sidebar plugin slots follow their placement lists, plugin switches,
+factory generation and orientation. Theme and geometry edits repaint those
+instances; bar geometry has its own change key. Studio’s wallpaper scheme
+previews cache only their displayed color strips under the original seed and
+mode keys, so revisiting a selection reuses its cached result.
+
 ## Build artefacts: `cargo xtask prune`
 
 ```bash

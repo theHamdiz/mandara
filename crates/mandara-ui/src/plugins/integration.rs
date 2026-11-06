@@ -42,6 +42,17 @@ impl<K: PartialEq, V> Data<K, V> {
         }
     }
 
+    /// Disabling the integration releases snapshots and rejects pending reads.
+    /// Keep the generation monotonic if this allocation is reused later.
+    pub fn clear(&mut self) {
+        self.key = None;
+        self.pending = None;
+        self.finished = None;
+        self.value = None;
+        self.error = None;
+        self.views = ViewSet::default();
+    }
+
     /// An explicit action changed the source. A read that began before it
     /// must not overwrite the subsequent refresh.
     pub fn invalidate(&mut self) {
@@ -186,6 +197,26 @@ mod tests {
         data.select("");
         assert!(data.value.is_none());
         assert!(!data.busy());
+    }
+
+    #[test]
+    fn disabling_releases_cached_data_and_rejects_late_responses_after_reenable() {
+        let now = Instant::now();
+        let mut data: Data<&str, String> = Data::default();
+        let first = data.begin("server", false, AGE, now).unwrap();
+        data.finish(first, Ok("cached headlines".into()), now);
+        let cached = Arc::downgrade(data.value.as_ref().unwrap());
+        assert!(data.begin("server", false, AGE, now).is_none(), "enabled caches stay warm");
+        let stale = data.begin("server", true, AGE, now).unwrap();
+        data.clear();
+        assert!(cached.upgrade().is_none(), "disabled snapshots are released");
+        assert!(!data.busy());
+        assert!(!data.finish(stale, Ok("late disabled response".into()), now));
+        let fresh = data.begin("server", false, AGE, now).unwrap();
+        assert_ne!(fresh, stale);
+        assert!(!data.finish(stale, Ok("late response after reenable".into()), now));
+        assert!(data.finish(fresh, Ok("fresh response".into()), now));
+        assert_eq!(data.value.as_deref().map(String::as_str), Some("fresh response"));
     }
 
     #[test]

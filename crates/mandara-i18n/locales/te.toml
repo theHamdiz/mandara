@@ -8359,3 +8359,20 @@
 "{percent}% · charging" = "{percent}% · ఛార్జింగ్"
 "↑/↓ change · enter select · esc cancel" = "↑/↓ మార్చండి · enter ఎంచుకోండి · esc రద్దు చేయండి"
 "a section (appearance, themes, bar, sidebar, launcher, wallpaper, audio, login-screen, users, keyboard-shortcuts, motion, general, typography, plugins, compositor, performance, maintenance, about) or plugins/<id>[/settings]" = "ఒక విభాగం (appearance, themes, bar, sidebar, launcher, wallpaper, audio, login-screen, users, keyboard-shortcuts, motion, general, typography, plugins, compositor, performance, maintenance, about) లేదా plugins/<id>[/settings]"
+
+# Studio bars
+"Edges & corners" = "అంచులు మరియు మూలలు"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "ఒక విభాగం (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] లేదా plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "సూచిక అక్కడ చూడటానికి “{name}” ప్లగిన్‌ను పట్టీకి జోడించండి (Studio → పట్టీలు → పట్టీ); తెరపై ప్రదర్శనలు ఏ విధంగానైనా పనిచేస్తాయి."
+"Add any widget to it in Studio → Bars → Sidebar." = "Studio → పట్టీలు → పక్కపట్టీలో ఏ విడ్జెట్‌నైనా జోడించండి."
+"Number of bars" = "బార్‌ల సంఖ్య"
+
+"Release signature verified." = "విడుదల సంతకం ధృవీకరించబడింది."
+"Downloaded:" = "డౌన్‌లోడ్ అయింది:"
+"Archive checksum verified." = "ఆర్కైవ్ చెక్‌సమ్ ధృవీకరించబడింది."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "సంతకం చేసిన విడుదలను డౌన్‌లోడ్ చేయలేకపోయాము. ఏదీ ఇన్‌స్టాల్ కాలేదు. మీ కనెక్షన్‌ను తనిఖీ చేసి మళ్లీ ప్రయత్నించండి."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "ఈ బైనరీని ధృవీకరించలేకపోయాము: {reason}. Mandara ఇన్‌స్టాల్ కాలేదు. మీ కనెక్షన్‌ను తనిఖీ చేసి మళ్లీ ప్రయత్నించండి."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "ప్రచురించిన చెక్‌సమ్ అందుబాటులో లేకపోయినా లేదా సరిపోలకపోయినా ఈ బైనరీని ఇన్‌స్టాల్ చేయండి."
+
+"Spectrum bars" = "స్పెక్ట్రం పట్టీలు"

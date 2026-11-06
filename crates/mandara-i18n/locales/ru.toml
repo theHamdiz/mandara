@@ -1210,7 +1210,7 @@
 "Automatic login" = "Автоматический вход"
 "Backlight devices and levels" = "Устройства подсветки и уровни"
 "Balanced" = "Сбалансированный"
-"Bars" = "Столбцы"
+"Bars" = "Панели"
 "Batteries" = "Батареи"
 "Battery details need the upower service" = "Для сведений о батарее нужна служба upower"
 "Battery health, cycles, rate and time estimates (JSON)" = "Состояние батареи, циклы, скорость и оценки времени (JSON)"
@@ -8701,3 +8701,20 @@
 "Couldn't verify the community store policy. Try again later." = "Не удалось проверить правила магазина сообщества. Повторите попытку позже."
 "The community store has blocked installs and updates for {repository}." = "Магазин сообщества заблокировал установку и обновления {repository}."
 "Repository details are missing IDs required by the store policy." = "В сведениях о репозитории отсутствуют идентификаторы, необходимые по правилам магазина."
+
+# Studio bars
+"Edges & corners" = "Края и углы"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "раздел (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] или plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "Добавьте плагин «{name}» на панель (Studio → Панели → Панель), чтобы видеть индикатор там; экранные индикаторы работают в любом случае."
+"Add any widget to it in Studio → Bars → Sidebar." = "Добавьте любые виджеты в Studio → Панели → Боковая панель."
+"Number of bars" = "Количество столбцов"
+
+"Release signature verified." = "Подпись выпуска проверена."
+"Downloaded:" = "Загружено:"
+"Archive checksum verified." = "Контрольная сумма архива проверена."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "Не удалось загрузить подписанный выпуск. Ничего не установлено. Проверьте соединение и попробуйте снова."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "Не удалось проверить этот двоичный файл: {reason}. Mandara не установлен. Проверьте соединение и попробуйте снова."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "Установить этот двоичный файл, даже если опубликованная контрольная сумма недоступна или не совпадает."
+
+"Spectrum bars" = "Столбцы спектра"

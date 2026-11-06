@@ -599,7 +599,7 @@
 "Bar thickness" = "বারের পুরুত্ব"
 "Bar time format" = "বারের সময়ের ফরম্যাট"
 "Bar, dock, launcher and popups" = "বার, ডক, লঞ্চার ও পপআপ"
-"Bars" = "বার"
+"Bars" = "বারসমূহ"
 "Base currency" = "মূল মুদ্রা"
 "Batt." = "ব্যাট."
 "Batteries" = "ব্যাটারি"
@@ -8455,3 +8455,20 @@
 "Couldn't verify the community store policy. Try again later." = "কমিউনিটি স্টোরের নীতি যাচাই করা যায়নি। পরে আবার চেষ্টা করুন।"
 "The community store has blocked installs and updates for {repository}." = "কমিউনিটি স্টোরে {repository} থেকে প্লাগইন ইনস্টল বা আপডেট করা যাবে না।"
 "Repository details are missing IDs required by the store policy." = "স্টোরের নীতির জন্য প্রয়োজনীয় আইডিগুলো রিপোজিটরির তথ্যে নেই।"
+
+# Studio bars
+"Edges & corners" = "প্রান্ত ও কোণ"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "একটি বিভাগ (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] অথবা plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "সেখানে নির্দেশক দেখতে বারে “{name}” প্লাগইনটি যোগ করুন (স্টুডিও → বারসমূহ → বার); অন-স্ক্রিন ডিসপ্লে উভয় ক্ষেত্রেই কাজ করে।"
+"Add any widget to it in Studio → Bars → Sidebar." = "স্টুডিও → বারসমূহ → সাইডবার থেকে এতে যেকোনো উইজেট যোগ করুন।"
+"Number of bars" = "বারের সংখ্যা"
+
+"Release signature verified." = "রিলিজের স্বাক্ষর যাচাই করা হয়েছে।"
+"Downloaded:" = "ডাউনলোড হয়েছে:"
+"Archive checksum verified." = "আর্কাইভের চেকসাম যাচাই করা হয়েছে।"
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "স্বাক্ষরিত রিলিজ ডাউনলোড করা যায়নি। কিছুই ইনস্টল করা হয়নি। সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।"
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "এই বাইনারি যাচাই করা যায়নি: {reason}। Mandara ইনস্টল করা হয়নি। সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।"
+"Install this binary even when its published checksum is unavailable or doesn't match." = "প্রকাশিত চেকসাম না পাওয়া গেলে বা না মিললেও এই বাইনারি ইনস্টল করুন।"
+
+"Spectrum bars" = "বর্ণালির দণ্ড"

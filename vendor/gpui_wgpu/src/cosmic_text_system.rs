@@ -521,6 +521,11 @@ impl CosmicTextSystemState {
                 font: loaded_font_key.clone(),
             };
             if let Some(&font_id) = self.loaded_font_ids_by_key.get(&key) {
+                // A script-only face may already be cached as a fallback.
+                let has_m = self.loaded_fonts[font_id.0].font.as_swash().charmap().map('m') != 0;
+                if !can_be_primary(has_m, &postscript_name) {
+                    continue;
+                }
                 self.loaded_fonts[font_id.0].user_fallback_chain = Arc::clone(&user_fallback_chain);
                 loaded_font_ids.push(font_id);
                 continue;
@@ -588,8 +593,8 @@ impl CosmicTextSystemState {
 
     /// Mandara patch 11: the face of `family` that stands for it in the
     /// default chain (its charmap decides coverage): the upright face
-    /// closest to regular among those [`Self::load_family`] would accept as
-    /// a primary font, loaded alone. Loading the whole family (every weight,
+    /// closest to regular, loaded alone. A fallback can lack Latin glyphs.
+    /// Loading the whole family (every weight,
     /// width and slant) mapped all of their files and shaper data although
     /// text in the chain's script asks cosmic-text for the face it needs at
     /// its weight anyway: for an English interface, five Arabic families'
@@ -597,53 +602,37 @@ impl CosmicTextSystemState {
     fn load_chain_face(&mut self, family: &str) -> Option<FontId> {
         let name = gpui::font_name_with_fallbacks(family, &self.system_font_fallback);
         // Upright first, then nearest to regular; ties keep database order.
-        let mut faces: SmallVec<[(cosmic_text::fontdb::ID, String, u32); 16]> = self
-            .font_system
-            .db()
-            .faces()
+        let database_id = self.font_system.db().faces()
             .filter(|face| face.families.iter().any(|(face_family, _)| *name == *face_family))
-            .map(|face| {
+            .min_by_key(|face| {
                 let slanted = !matches!(face.style, Style::Normal);
-                let rank = u32::from(slanted) * u32::from(u16::MAX)
-                    + u32::from(face.weight.0.abs_diff(CSS_NORMAL_WEIGHT));
-                (face.id, face.post_script_name.clone(), rank)
-            })
-            .collect();
-        faces.sort_by_key(|(_, _, rank)| *rank);
-        let font_key = FontKey::new(SharedString::from(family.to_owned()), FontFeatures::default(), None);
-        for (database_id, postscript_name, _) in faces {
-            let key = LoadedFontKey { database_id, font: font_key.clone() };
-            if let Some(&font_id) = self.loaded_font_ids_by_key.get(&key) {
-                self.loaded_fonts[font_id.0].user_fallback_chain = Arc::from(Vec::new());
-                return Some(font_id);
-            }
-            // The same test as `load_family`, read from the file without
-            // loading the face.
-            let has_m = self
-                .font_system
-                .db()
-                .with_face_data(database_id, |data, index| {
-                    swash::FontRef::from_index(data, index as usize).map(|font| font.charmap().map('m') != 0)
-                })
-                .flatten()
-                .unwrap_or(false);
-            if !can_be_primary(has_m, &postscript_name) {
-                continue;
-            }
-            let font = self.font_system.get_font(database_id, cosmic_text::Weight::NORMAL)?;
-            let font_id = FontId(self.loaded_fonts.len());
-            self.loaded_fonts.push(LoadedFont {
-                font,
-                features: CosmicFontFeatures::new(),
-                is_known_emoji_font: check_is_known_emoji_font(&postscript_name),
-                user_fallback_chain: Arc::from(Vec::new()),
-                instance_weight: None,
-                coords: SmallVec::new(),
-            });
-            self.loaded_font_ids_by_key.insert(key, font_id);
+                u32::from(slanted) * u32::from(u16::MAX)
+                    + u32::from(face.weight.0.abs_diff(CSS_NORMAL_WEIGHT))
+            })?.id;
+        let key = LoadedFontKey {
+            database_id,
+            font: FontKey::new(SharedString::from(family.to_owned()), FontFeatures::default(), None),
+        };
+        if let Some(&font_id) = self.loaded_font_ids_by_key.get(&key) {
+            self.loaded_fonts[font_id.0].user_fallback_chain = Arc::from(Vec::new());
             return Some(font_id);
         }
-        None
+        // Fallback coverage needs no Latin measurement glyph. Indic
+        // faces commonly lack 'm' and must still serve their script.
+        let is_known_emoji_font = self.font_system.db().face(database_id)
+            .is_some_and(|face| check_is_known_emoji_font(&face.post_script_name));
+        let font = self.font_system.get_font(database_id, cosmic_text::Weight::NORMAL)?;
+        let font_id = FontId(self.loaded_fonts.len());
+        self.loaded_fonts.push(LoadedFont {
+            font,
+            features: CosmicFontFeatures::new(),
+            is_known_emoji_font,
+            user_fallback_chain: Arc::from(Vec::new()),
+            instance_weight: None,
+            coords: SmallVec::new(),
+        });
+        self.loaded_font_ids_by_key.insert(key, font_id);
+        Some(font_id)
     }
 
     /// Mandara patch 6: the `wght` axis range of a face, if it has one.
@@ -804,7 +793,7 @@ impl CosmicTextSystemState {
         match image.content {
             swash::scale::image::Content::Color | swash::scale::image::Content::SubpixelMask => {
                 // Convert from RGBA to BGRA.
-                for pixel in image.data.chunks_exact_mut(4) {
+                for pixel in image.data.as_chunks_mut::<4>().0 {
                     pixel.swap(0, 2);
                 }
                 Ok((bitmap_size, image.data))
@@ -1619,11 +1608,10 @@ fn face_info_into_properties(
     }
 }
 
-// Mandara patch 11: one acceptance check for the default chain and load_family.
+// Mandara patch 11: primary fonts need a Latin measurement glyph.
 /// Whether a face may be a primary font (see [`CosmicTextSystemState::load_family`]):
 /// it has an 'm' to measure with, or it is a known emoji font or one of
-/// the icon fonts let through without one. Shared with the default chain
-/// ([`CosmicTextSystemState::load_chain_face`]) so both accept the same faces.
+/// the icon fonts let through without one. Fallback-only faces do not need it.
 fn can_be_primary(has_m: bool, postscript_name: &str) -> bool {
     // HACK: To let the storybook run and render Windows caption icons. We should actually do better font fallback.
     const ALLOWED_BAD_FONT_NAMES: [&str; 2] = [
@@ -1652,11 +1640,55 @@ mod tests {
 
     // Mandara patch 11.
     #[test]
-    fn the_default_chain_accepts_the_faces_load_family_accepts() {
+    fn primary_fonts_need_a_latin_measurement_glyph() {
         assert!(can_be_primary(true, "Cairo-Regular"));
         assert!(!can_be_primary(false, "NotoSansArabicUI-Regular"));
         assert!(can_be_primary(false, "NotoColorEmoji"));
         assert!(can_be_primary(false, "Segoe Fluent Icons") && can_be_primary(false, "SegoeFluentIcons"));
+    }
+
+    const NOTO_DEVANAGARI: &[u8] = include_bytes!("../test_data/NotoSansDevanagari-Regular.ttf");
+
+    #[test]
+    fn script_only_face_can_join_the_default_chain() -> Result<()> {
+        let system = CosmicTextSystem::new_without_system_fonts("IBM Plex Sans");
+        system.add_fonts(vec![Cow::Borrowed(NOTO_DEVANAGARI)])?;
+        let mut state = system.0.write();
+        let id = state.load_chain_face("Noto Sans Devanagari").expect("an installed script fallback");
+        let charmap = state.loaded_fonts[id.0].font.as_swash().charmap();
+        assert_eq!(charmap.map('m'), 0);
+        assert_ne!(charmap.map('अ'), 0);
+        assert_eq!(state.loaded_fonts.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn script_only_chain_shapes_devanagari_with_a_latin_primary() -> Result<()> {
+        let system = CosmicTextSystem::new_without_system_fonts("IBM Plex Sans");
+        system.add_fonts(vec![Cow::Borrowed(IBM_PLEX), Cow::Borrowed(NOTO_DEVANAGARI)])?;
+        let primary = system.font_id(&gpui::font("IBM Plex Sans"))?;
+        let mut state = system.0.write();
+        let fallback = state.load_chain_face("Noto Sans Devanagari").expect("script fallback");
+        state.default_chain = Arc::from([(fallback, SharedString::from("Noto Sans Devanagari"))]);
+        for text in ["नमस्ते", "मराठी", "क्षेत्र"] {
+            let layout = state.layout_line_no_separators(text, gpui::px(14.0), &[FontRun { len: text.len(), font_id: primary }]);
+            assert!(layout.width > Pixels::ZERO);
+            assert!(!layout.runs.is_empty());
+            assert!(layout.runs.iter().all(|run| run.font_id == fallback));
+            assert!(layout.runs.iter().flat_map(|run| &run.glyphs).all(|glyph| glyph.id.0 != 0));
+        }
+        assert_eq!(state.loaded_fonts.len(), 2, "only the primary and selected fallback are needed");
+        Ok(())
+    }
+
+    #[test]
+    fn primary_font_cannot_reuse_a_script_only_fallback() -> Result<()> {
+        let system = CosmicTextSystem::new_without_system_fonts("IBM Plex Sans");
+        system.add_fonts(vec![Cow::Borrowed(IBM_PLEX), Cow::Borrowed(NOTO_DEVANAGARI)])?;
+        assert!(system.0.write().load_chain_face("Noto Sans Devanagari").is_some());
+        assert!(system.font_id(&gpui::font("Noto Sans Devanagari")).is_err());
+        assert!(system.font_id(&gpui::font("IBM Plex Sans")).is_ok());
+        Ok(())
     }
 
     #[test]

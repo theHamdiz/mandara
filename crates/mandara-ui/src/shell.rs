@@ -35,6 +35,8 @@ use crate::state::{ShellState, config, shell};
 
 mod side_bars;
 mod key_navigation;
+mod placement;
+use placement::Placement;
 use side_bars::{MAIN_ZONES, ZONES, ZoneLook, content_length, split};
 
 /// Opaque fill of the frame, panels and sidebar: a deep tonal surface that
@@ -77,11 +79,6 @@ struct Slot {
     hovered: bool,
 }
 
-/// Which plugins are placed, for change detection.
-/// (bar zones, sidebar tabs' cards, disabled, notifications tab, enabled
-/// opt-ins, registry generation, side bar groups: empty while a side is off).
-type Placement = ([Vec<String>; 3], Vec<(String, Vec<String>)>, Vec<String>, bool, Vec<String>, u64, [Vec<String>; 6]);
-
 pub struct ShellView {
     config: Entity<ConfigStore>,
     shell: Entity<ShellState>,
@@ -106,8 +103,6 @@ pub struct ShellView {
     /// The detached panel's plugin id and instance (see [`DETACHED_SLOT`]).
     detached: Option<(String, PanelSpec, PanelCx)>,
     placement: Option<Placement>,
-    /// The slots were built for a side bar.
-    vertical_slots: bool,
 
     /// This frame's resolved bar / panel geometry settings.
     metrics: Metrics,
@@ -372,11 +367,7 @@ impl ShellView {
     pub fn new(monitor: String, surface: (f32, f32), window: &mut Window, cx: &mut Context<Self>) -> Self {
         let config = config(cx);
         let shell = shell(cx);
-        cx.observe(&config, |this: &mut Self, _, cx| {
-            this.placement = None; // re-check plugin placement
-            cx.notify();
-        })
-        .detach();
+        cx.observe(&config, |_: &mut Self, _, cx| cx.notify()).detach();
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
         cx.observe_in(&shell, window, |this: &mut Self, shell, window, cx| {
             // Only the output showing them takes the keyboard (two bars
@@ -457,7 +448,6 @@ impl ShellView {
             menu: None,
             detached: None,
             placement: None,
-            vertical_slots: false,
             metrics: Metrics::default_for(BarLayout::default(), BarPosition::default()),
             panel_custom: false,
             sidebar_custom: false,
@@ -499,32 +489,12 @@ impl ShellView {
         // Fast path (every frame): compare in place, without cloning the
         // placement lists.
         let vertical = cfg.bar.position.is_vertical();
-        // A side bar that is off instantiates nothing.
-        let side_on = [cfg.side_bar_on(false), cfg.side_bar_on(true)];
-        let side_list = |k: usize| -> &[String] { if side_on[k / 3] { cfg.side_bars.side(k / 3 == 1).zones()[k % 3] } else { &[] } };
-        if let Some((zones, cards, disabled, notif, enabled, g, sides)) = &self.placement
-            && *g == generation
-            && self.vertical_slots == vertical
-            && *notif == cfg.sidebar.notifications_tab
-            && zones[0] == cfg.bar.left
-            && zones[1] == cfg.bar.center
-            && zones[2] == cfg.bar.right
-            && sides.iter().enumerate().all(|(k, list)| list.as_slice() == side_list(k))
-            && self.tabs.matches(&cfg.sidebar.tabs, cards)
-            && *disabled == cfg.plugins.disabled
-            && *enabled == cfg.plugins.enabled
+        if let Some(placement) = &self.placement
+            && placement.matches(cfg, generation, &self.tabs)
         {
             return;
         }
-        let placement: Placement = (
-            [cfg.bar.left.clone(), cfg.bar.center.clone(), cfg.bar.right.clone()],
-            crate::sidebar_tabs::SidebarTabs::key(&cfg.sidebar.tabs),
-            cfg.plugins.disabled.clone(),
-            cfg.sidebar.notifications_tab,
-            cfg.plugins.enabled.clone(),
-            generation,
-            std::array::from_fn(|k| side_list(k).to_vec()),
-        );
+        let placement = Placement::new(cfg, generation);
         let registry_ids: Vec<(String, bool)> = {
             let registry = cx.global::<PluginRegistry>();
             registry.manifests().map(|m| (m.id.clone(), registry.is_enabled(&m.id, &cfg.plugins))).collect()
@@ -536,15 +506,15 @@ impl ShellView {
         for bar in &mut self.sides {
             pool.extend(bar.zones.iter_mut().flat_map(std::mem::take));
         }
-        for (zi, ids) in placement.0.iter().enumerate() {
+        for (zi, ids) in placement.zones.iter().enumerate() {
             self.zones[zi] = ids.iter().filter(|id| enabled(id)).filter_map(|id| Self::slot_for(id, vertical, &mut pool, &base_cx, window, cx)).collect();
         }
         // Side bar items always take their column form.
-        for (k, ids) in placement.6.iter().enumerate() {
+        for (k, ids) in placement.sides.iter().enumerate() {
             self.sides[k / 3].zones[k % 3] = ids.iter().filter(|id| enabled(id)).filter_map(|id| Self::slot_for(id, true, &mut pool, &base_cx, window, cx)).collect();
         }
         let notif_id = crate::plugins::notifications::ID;
-        let notif_tab = placement.3 && enabled(notif_id);
+        let notif_tab = placement.notifications_tab && enabled(notif_id);
         self.sidebar_notifications = notif_tab
             .then(|| {
                 let build = cx.global::<PluginRegistry>().get(notif_id).map(|f| f.build.clone())?;
@@ -566,7 +536,6 @@ impl ShellView {
         // Slot addresses may have changed.
         self.origin = None;
         self.placement = Some(placement);
-        self.vertical_slots = vertical;
         self.applied = None;
     }
 

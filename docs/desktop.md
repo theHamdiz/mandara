@@ -35,7 +35,7 @@ How Mandara looks and feels, and how much of it you can shape.
   window title ends in an ellipsis there, and on a very narrow bar the
   items nearest the middle make way first.
 - **Side bars of icons and pills:** turn on a slim bar on the left and
-  right edges (Studio → Bar → Side bars) and fill its top, middle and
+  right edges (Studio → Bars → Side bars) and fill its top, middle and
   bottom groups with any plugins; their panels pour out sideways. By
   default the top bar and both side bars join into one frame with curved
   corners; or let them float apart as glass pills, an island or a slab with
@@ -341,7 +341,7 @@ only real media and control states.
 The bar preset thumbnails show each centered layout’s actual proportions.
 Micro pill uses a shorter bar, tighter spacing and no empty side-group gaps;
 Dynamic island keeps a taller shared island with roomier groups. Both remain
-available in **Studio → Bar → Presets**.
+available in **Studio → Bars → Bar → Presets**.
 
 With weather enabled, a desktop weather widget keeps its forecast active
 without a weather item in the bar or sidebar. Weather cards follow the

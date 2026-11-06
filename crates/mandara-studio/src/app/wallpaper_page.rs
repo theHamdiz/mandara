@@ -88,8 +88,6 @@ const PAGE_ROWS: usize = 4;
 const PLAYLIST_GRID: CardGrid = CardGrid { min_w: DIM_120_PX, max_w: DIM_180_PX, gap: SPACE_10_PX };
 /// Round buttons on tiles.
 const TILE_BUTTON_PX: f32 = DIM_26_PX;
-/// The selected tab's underline.
-const TAB_UNDERLINE_PX: f32 = 2.0;
 /// The name filter's width.
 const SEARCH_W_PX: f32 = DIM_220_PX;
 /// The custom interval field's width.
@@ -158,6 +156,12 @@ impl WallpaperTab {
             WallpaperTab::Online => "globe",
         }
     }
+}
+
+impl super::page_tabs::PageTab for WallpaperTab {
+    fn slug(self) -> &'static str { WallpaperTab::slug(self) }
+    fn label(self) -> String { WallpaperTab::label(self).to_string() }
+    fn icon(self) -> &'static str { WallpaperTab::icon(self) }
 }
 
 /// The tabs shown under `cfg` (Generator and Online need their plugins).
@@ -336,7 +340,7 @@ impl StudioView {
     pub(super) fn wallpaper_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let tabs = available(cfg, cx);
         let tab = Some(st(cx).tab).filter(|t| tabs.contains(t)).unwrap_or_default();
-        let bar = self.wallpaper_tab_bar(&tabs, tab, p, cx);
+        let bar = self.wallpaper_tab_bar(&tabs, tab, p, window, cx);
         let note = st(cx).note.clone().map(|(text, error)| form::note(&text, error, p));
         let body = match tab {
             WallpaperTab::Wallpaper => self.wp_current_tab(cfg, p, window, cx),
@@ -349,32 +353,8 @@ impl StudioView {
     }
 
     /// One slim row of underlined tabs (it scrolls sideways when narrow).
-    fn wallpaper_tab_bar(&mut self, tabs: &[WallpaperTab], current: WallpaperTab, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let mut bar = div().id("wallpaper-tabs").row().overflow_x_scroll().border_b_1().border_color(p.outline.with_alpha(ALPHA_35).hsla());
-        for &tab in tabs {
-            let on = tab == current;
-            bar = bar.child(
-                div()
-                    .id(SharedString::from(format!("wallpaper-tab-{}", tab.slug())))
-                    .relative()
-                    .flex_none()
-                    .h(px(DIM_36_PX))
-                    .px(px(SPACE_10_PX))
-                    .row()
-                    .items_center()
-                    .gap(px(SPACE_6_PX))
-                    .cursor_pointer()
-                    .tab_index(0)
-                    .text_size(px(TEXT_13_PX))
-                    .when(on, |el| el.text_color(p.on_surface.hsla()).font_weight(FontWeight::SEMIBOLD))
-                    .when(!on, |el| el.text_color(p.on_surface_variant.hsla()).hover(|s| s.text_color(p.on_surface.hsla())))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set_wallpaper_tab(tab, cx)))
-                    .child(icon(tab.icon(), ICON_14_PX, if on { p.primary } else { p.on_surface_variant }))
-                    .child(tab.label())
-                    .when(on, |el| el.child(div().absolute().bottom_0().left(px(SPACE_8_PX)).right(px(SPACE_8_PX)).h(px(TAB_UNDERLINE_PX)).rounded_full().bg(p.primary.hsla()))),
-            );
-        }
-        bar.into_any_element()
+    fn wallpaper_tab_bar(&mut self, tabs: &[WallpaperTab], current: WallpaperTab, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        super::page_tabs::bar("wallpaper-tabs", tabs, current, p, |view, tab, _, cx| view.set_wallpaper_tab(tab, cx), window, cx)
     }
 
     // ── Wallpaper tab ────────────────────────────────────────────────────

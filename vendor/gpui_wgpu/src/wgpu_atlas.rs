@@ -365,7 +365,7 @@ fn swizzle_upload_data(bytes: &[u8], format: wgpu::TextureFormat) -> Cow<'_, [u8
     match format {
         wgpu::TextureFormat::Rgba8Unorm => {
             let mut data = bytes.to_vec();
-            for pixel in data.chunks_exact_mut(4) {
+            for pixel in data.as_chunks_mut::<4>().0 {
                 pixel.swap(0, 2);
             }
             Cow::Owned(data)

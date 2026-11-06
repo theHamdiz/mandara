@@ -11,7 +11,7 @@ Strengths:
 - A whole desktop in one native Rust binary: bar (six styles, any edge), dynamic island, dock, launcher (three looks), side bars that join the top bar into one frame, notification center, on-screen displays, wallpaper engine with a depth effect and a generator, desktop widgets per monitor, clipboard manager, screenshots, screen recording (AV1), offline OCR, polkit agent, lock screen, login manager (greetd) and a live settings app. No QML, JavaScript, Python or shell-script layer.
 - Measured performance: under 100 MiB RAM, under 190 MiB video memory, about 0.1 % CPU idle, frames built in 0.1–0.2 ms.
 - Motion and colour: analytical, interruptible spring physics; Material You (HCT) palettes from the wallpaper; OKLCH blending; opt-in theming of Ghostty, GTK 3/4, Qt 5/6, Kvantum, Zed, kitty, foot, Alacritty and btop.
-- Mandara Studio: 31 pages of settings, all applied live while you drag.
+- Mandara Studio: 30 pages of settings, all applied live while you drag.
 - Extensions: 77 built-in plugins; third-party plugins are Rust compiled to sandboxed WebAssembly, so a crashing plugin is switched off while the shell keeps running.
 - Automation: almost every action is a `mandara msg` command with JSON replies, so scripts and AI agents can drive the desktop.
 - Install and updates: one command on Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus; it takes over an existing setup safely; updates are small signed binary patches applied from inside the app.
@@ -22,7 +22,7 @@ Key facts:
 - Repository: https://github.com/theHamdiz/mandara (author: Ahmad Hamdi, `theHamdiz`).
 - Compositors: MangoWM (tags), Niri (scrollable tiling), Hyprland, Umbriel, Sway and River (0.3, tags), all first-class. Mandara never edits the user's own compositor config. It writes drop-in files to `~/.config/mandara/generated/` and adds one include line; on River, whose config is an init program, it sends its settings over River's control protocol instead.
 - Install: one command that downloads the signed release and runs `mandara install` (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo, Solus). Update from Studio → About → Update now.
-- Configuration: `~/.config/mandara/config.toml`, watched live. Mandara Studio (`mandara studio`) edits the same file, with 31 pages of settings.
+- Configuration: `~/.config/mandara/config.toml`, watched live. Mandara Studio (`mandara studio`) edits the same file, with 30 pages of settings.
 - Command line: almost everything the interface does is a documented command with JSON replies (`mandara msg <command>`, catalog via `mandara commands --json`), so scripts and AI agents can drive and inspect the desktop.
 - Plugins: 77 first-party plugins are built in. Third-party plugins are written in Rust, compiled to a sandboxed WebAssembly component (`wasm32-wasip2`, WIT interface), hot-reloaded, and shared through a GitHub marketplace.
 - Performance: under 100 MiB RAM, under 190 MiB video memory and about 0.1 % CPU when idle. Frames build in about 0.1 ms (measured: 0.10 ms typical, 95% under the 1 ms budget of a 1000 Hz display). Nothing animates or samples while it is off screen.

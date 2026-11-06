@@ -110,6 +110,13 @@ fn sync(cx: &mut App) {
         return;
     }
     LAST.with(|l| *l.borrow_mut() = Some(plugins));
+    for (id, stop) in [
+        (super::feeds::ID, super::feeds::stop as fn()),
+        (super::home_assistant::ID, super::home_assistant::stop as fn()),
+        (super::phone_connect::ID, super::phone_connect::stop as fn()),
+    ] {
+        if !is_on(id, cx) { stop(); }
+    }
     if !is_on(super::tray::ID, cx) {
         super::tray::stop(cx);
     }

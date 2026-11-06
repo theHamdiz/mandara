@@ -599,7 +599,7 @@
 "Bar thickness" = "바 두께"
 "Bar time format" = "바 시간 형식"
 "Bar, dock, launcher and popups" = "바, Dock, 런처, 팝업"
-"Bars" = "막대"
+"Bars" = "바"
 "Base currency" = "기준 통화"
 "Batt." = "배터리"
 "Batteries" = "배터리"
@@ -8454,3 +8454,20 @@
 "Couldn't verify the community store policy. Try again later." = "커뮤니티 스토어 정책을 확인하지 못했습니다. 나중에 다시 시도하세요."
 "The community store has blocked installs and updates for {repository}." = "커뮤니티 스토어에서 {repository}의 설치와 업데이트를 차단했습니다."
 "Repository details are missing IDs required by the store policy." = "저장소 세부 정보에 스토어 정책에서 요구하는 ID가 없습니다."
+
+# Studio bars
+"Edges & corners" = "화면 가장자리 및 모서리"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "섹션 (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] 또는 plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "바에서 표시기를 보려면 “{name}” 플러그인을 바에 추가하세요 (Studio → 바 → 바). 화면 표시(OSD)는 어느 쪽이든 동작합니다."
+"Add any widget to it in Studio → Bars → Sidebar." = "Studio → 바 → 사이드바에서 위젯을 추가하세요."
+"Number of bars" = "막대 수"
+
+"Release signature verified." = "릴리스 서명이 확인되었습니다."
+"Downloaded:" = "다운로드 완료:"
+"Archive checksum verified." = "압축 파일의 체크섬이 확인되었습니다."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "서명된 릴리스를 다운로드하지 못했습니다. 아무것도 설치되지 않았습니다. 연결을 확인하고 다시 시도하세요."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "이 바이너리를 검증하지 못했습니다: {reason}. Mandara는 설치되지 않았습니다. 연결을 확인하고 다시 시도하세요."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "공개된 체크섬을 사용할 수 없거나 일치하지 않아도 이 바이너리를 설치합니다."
+
+"Spectrum bars" = "스펙트럼 막대"

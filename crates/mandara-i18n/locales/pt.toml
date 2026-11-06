@@ -8359,3 +8359,20 @@
 "{percent}% · charging" = "{percent}% · carregando"
 "↑/↓ change · enter select · esc cancel" = "↑/↓ alterar · enter selecionar · esc cancelar"
 "a section (appearance, themes, bar, sidebar, launcher, wallpaper, audio, login-screen, users, keyboard-shortcuts, motion, general, typography, plugins, compositor, performance, maintenance, about) or plugins/<id>[/settings]" = "uma seção (appearance, themes, bar, sidebar, launcher, wallpaper, audio, login-screen, users, keyboard-shortcuts, motion, general, typography, plugins, compositor, performance, maintenance, about) ou plugins/<id>[/settings]"
+
+# Studio bars
+"Edges & corners" = "Bordas e cantos"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "uma seção (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] ou plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "Adicione o plugin “{name}” à barra (Studio → Barras → Barra) para ver o indicador lá; os avisos na tela funcionam dos dois jeitos."
+"Add any widget to it in Studio → Bars → Sidebar." = "Adicione qualquer widget em Studio → Barras → Barra lateral."
+"Number of bars" = "Número de barras"
+
+"Release signature verified." = "Assinatura da versão verificada."
+"Downloaded:" = "Baixado:"
+"Archive checksum verified." = "Soma de verificação do arquivo confirmada."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "Não foi possível baixar a versão assinada. Nada foi instalado. Verifique sua conexão e tente novamente."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "Não foi possível verificar este binário: {reason}. O Mandara não foi instalado. Verifique sua conexão e tente novamente."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "Instalar este binário mesmo que a soma de verificação publicada esteja indisponível ou não corresponda."
+
+"Spectrum bars" = "Barras do espectro"

@@ -46,7 +46,7 @@ rests, so windows move once instead of on every step. Studio
 opens on **Home**, a widget dashboard (a greeting over your wallpaper, live
 shell CPU / memory / VRAM, the theme with one-click switching, quick toggles,
 recent changes with Undo, and a card per group), and
-its sidebar groups 31 pages into **Look & feel**, **Desktop**, **System**,
+its sidebar groups 30 pages into **Look & feel**, **Desktop**, **System**,
 **Security & accounts**, **Extend** and **Mandara**: collapsible, searchable
 across every setting, keyboard-driven (Ctrl+F, Alt+↑/↓) and mirrored for
 Arabic, Persian and Urdu. Every page is responsive, from an icon rail and one column to
@@ -78,6 +78,13 @@ ultra-wide.
 
 Open any page directly: `mandara studio displays`,
 `mandara studio plugins --plugin weather --settings`.
+
+**Bars** combines the former Bar and Sidebars & hover pages. Its tabs are
+Bar, Side bars, Sidebar, Drop-down panels, and Edges & corners. Open one
+directly with `mandara studio bars --tab sidebar` or
+`mandara msg studio bars/side-bars`. The older `mandara studio bar` and
+`mandara studio sidebar` shortcuts still open the corresponding tab.
+The configuration keys and saved bar profiles keep their existing format.
 
 Studio uses the window it gets. On wide windows pages grow (up to about
 1840 px), card grids gain columns, a page's settings groups sit in two
@@ -175,8 +182,7 @@ narrow ones; everything mirrors for right-to-left languages.
 
 | Page | What it covers |
 |---|---|
-| **Bar** | Layout designer (the zones as columns of stacked items — drag to reorder or move, × to take off, click for a menu —, the side bars' top / middle / bottom groups while they're on, and every plugin in a searchable grid by category: click to add to a zone or drag it there), presets (incl. Notch, Hairline, Micro pill and Side bar); **Layout** (style — edge frame, glass pills, island, hairline, micro pill, notch —, notch width, position on any edge, height, compact height and accent line for the hairline / micro pill, side bar width and screen frame with its thickness, gaps, floating edge frame, center-group alignment, item padding / spacing, separators); **Shape** (bar radius, flare radius); **Appearance** (opacity, accent tint, group capsules, glass rim width / intensity, shadow, text and icon size); **Main menu** (what right-clicking empty bar space opens — the bar's main menu or the desktop's menu —, glass menu and its opacity, the rail's names / icons-only style, tile patterns, Kufic calligraphy on the app and tool tiles, tile surface — flat (the default), 3D, glass — and tile shadow); **Drop-down panels** (radius, width, maximum height, inner padding, gap to the bar, horizontal position, opacity, shadow, open animation, custom spring, close delay after the pointer leaves, how long action messages stay); **Side bars** (on / off, joined with the bar or separate, each side on / off, pinned or sliding away with its reveal and hide delays, an accent per side); **Side bar shape** (width, separate shape — pills, island, slab —, edge gap, corner radius, curves, middle group); **Side bar items** (icons, pills or islands, item size, padding, spacing, wash strength); **Side bar material** (opacity, accent tint, frosted glass, rim light and intensity, shadow); auto-hide, click-through, over fullscreen. Which displays show it is set under Displays. |
-| **Sidebars & hover** | Sidebar side, mode (Float over windows, Push them aside while open, or Pinned with its space reserved); **Tabs** (always open on the first tab, the "+" new-tab button) and the **tab editor**: your tabs on the left (click to edit, rename in place, drag to reorder, delete asks once) and, for the selected tab, its icon (Mandara's icon set), its widgets top to bottom (drag to reorder, drop on another tab to move, × to take off) and a searchable picker of every widget with its plugin art and description — any plugin with a sidebar card, first- or third-party; off or removed ones are greyed with *Turn on*; a widget may sit on several tabs; **Layout** (width, flush or floating with a margin — beside a floating bar such as glass pills, the island, the micro pill or the notch the side panels always float, since there is no edge frame to join; it opens at the top of its tab every time — header position and size) and **Appearance** (corner radius, opacity, card radius / padding / spacing) shared by the sidebar and the power dock, and its slide spring; edge hover triggers (the launcher's bottom edge is click-only while the dock is on); hot corners (action or command per corner, delay, trigger size, over fullscreen apps); rounded screen corners (on by default) and their radius. |
+| **Bars** | Five tabs keep related controls together: **Bar** (presets, plugin layout, position, spacing, shape and appearance), **Side bars** (left/right plugin groups, pinning, shape and material), **Sidebar** (widget tabs and cards, layout, appearance and motion), **Drop-down panels** (main menu, panel geometry, material and animation), and **Edges & corners** (hover triggers, hot corners and rounded screen corners). |
 | **Dock** | A macOS-style dock. On / off (a hint and *Show it now* when auto-hide keeps it out of sight), live preview, then six groups with their own Reset: **Layout** (position, alignment, size, magnification and its size / spread, only this display's windows), **Behaviour** (automatically hide and show — off / on / when a window overlaps — reveal and hide delays, slide speed, keep windows clear, above fullscreen, animate opening applications, bounce for attention, minimize windows into application icon, names on hover), **Apps** (the apps kept in the dock with icons: drag to reorder, × to remove, **Add app…** opens a searchable picker of installed apps with pinned ones checked; running apps, open-app indicators, recent apps and how many, notification badges, progress bars, window count, most apps, launcher button, the **now-playing chip** — album art, title and play / pause at the dock's end while music plays), **Applications folder** (on / off — a folder on the right of the dock that opens a Launchpad-style grid of your apps, with search, category chips and a right-click menu, and installs apps dropped on it — view as Grid / List, order A–Z / Most used / Categories, icon size), **Stacks & Trash** (each folder with View as Automatic / Fan / Grid / List, Sort by date added / modified / name / kind, Display as Stack / Folder, add a folder; Trash, files per stack, files in a fan — Automatic always fans the newest that many files, however big the folder — and show file names) and **Appearance** (glass opacity and accent tint, corner radius, padding, icon spacing, distance from the edge, shadow, specular rim, separators, not-running opacity). Which displays show it is set under Displays. On the dock itself: right-click an icon for its windows, New Window and the app's actions, **Options ▸ Keep in Dock ✓ / Open at Login ✓ / Show in Files** (and Uninstall… for apps Mandara installed), Show All Windows, Hide and Quit (Force Quit once a quit didn't take, or with Alt held); right-click empty dock space for Add app…, auto-hide and magnification; drag icons to reorder, a running app into the pinned ones to keep it, or away from the dock to remove it; drop files on an app to open them with it, on the Trash to trash them, and installable apps on the dock or the Applications folder to install them. Click a stack for its fan (the newest files on an arc that pops up out of the icon as one piece, names in pills, *Open Downloads · N more* (the folder in your file manager) at the top) or its grid (arrow keys, Enter, type to filter, right-click for Open / Show in Files / Move to Trash); the dock stays out while a stack, the Applications grid or a menu is open. |
 | **Launcher** | Sections in setup order. **Launcher looks**: Classic, Grid and Beacon as three cards of exactly the same size (a miniature, the name, a two-to-three-line description and tags for the layout and placement), a click applies one; **Preview** opens the launcher. **Placement**: a small screen diagram with the bar along its edge and seven clickable spots — top left / middle / right, the center of the screen, bottom left / middle / right (the screen's own sides, also in right-to-left languages) — the chosen one highlighted, a line on how it looks with your bar (grows out of the bar like its panels, a floating card under floating pills, or "the bar is on the other edge" when it opens from the bare screen edge; a note when the dock makes it float above the dock, click only), and **Preview** to open it, with **Size & placement** under it (align to the launcher button, search field, width / height when attached and in the center). **Launcher button**: its icon picker. **Search & results**: style, layout, visible results, app icons, the grid and the Beacon bar, providers and prefixes, ranking, and what the ranking has learnt. **Behaviour**: on / off, dim, keyboard only, remembering the last search, launch prefix and systemd scopes. **Apps**: pinned and hidden apps and your own names and icons. Then slash commands and skills. |
 | **Window switcher** | Alt+Tab style and scope, previews, screen time. |
@@ -281,7 +287,7 @@ narrow ones; everything mirrors for right-to-left languages.
   island; on the edge frame it rounds the hover chips (and the frame's ends
   when *Float the edge frame* is on). *Flare radius* is the concave curve
   where the edge frame meets the screen sides, panels and the sidebar.
-  *Panel radius* rounds drop-down panels; *Corner radius* (Sidebars) rounds
+  *Panel radius* rounds drop-down panels; *Corner radius* (Bars → Sidebar) rounds
   floating or non-edge-frame side panels and the power dock. Themes →
   *Corner roundness* multiplies every one of them and every card, chip,
   button and row radius in the shell (0 = square, 2 = extra round); nested
@@ -644,11 +650,15 @@ a title prefix (`sidebar`). The launcher has an entry for every page.
 |---|---|
 | — | `home` |
 | Look & feel | `appearance` `themes` `wallpaper` `typography` `motion` |
-| Desktop | `bar` `sidebar` `dock` `launcher` `window-switcher` `notifications` `on-screen-displays` |
+| Desktop | `bars` `dock` `launcher` `window-switcher` `notifications` `on-screen-displays` |
 | System | `displays` `audio` `network` `power` `input` `keyboard-shortcuts` `date` `applications` |
 | Security & accounts | `users` `login-screen` `lock-appearance` `privacy` |
 | Extend | `plugins` `compositor` |
 | Mandara | `general` `profiles` `performance` `maintenance` `about` |
+
+`bar` and `sidebar` remain aliases for the corresponding tabs in Bars.
+Use `bars/bar`, `bars/side-bars`, `bars/sidebar`, `bars/panels` or `bars/edges`
+to select a tab directly.
 
 Deeper links:
 
@@ -676,7 +686,7 @@ history, but shows no current redraw interval while the shell is idle.
 These samples do not measure GPU presentation or the monitor's refresh rate.
 Dock → Behaviour also offers **Bounce only while music plays**; launch and
 attention bounces then stop during paused or stopped playback. Under
-Sidebars & hover → Screen corners, each rounded corner has its own switch,
+Bars → Edges & corners → Screen corners, each rounded corner has its own switch,
 with an option to hide corners between adjacent displays.
 
 ## Sidebar tabs, to-do lists and notes in the shell

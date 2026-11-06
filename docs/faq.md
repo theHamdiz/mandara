@@ -99,7 +99,7 @@ nothing animates or samples while it's off screen.
 
 All settings live in `~/.config/mandara/config.toml`, which Mandara
 watches live. Mandara Studio (`mandara studio`) edits the same file, with
-31 pages and every change applied instantly. You can also read or change a
+30 pages and every change applied instantly. You can also read or change a
 single setting from the command line, for example
 `mandara msg config set /bar/height 30`. [Configuration](configuration.md)
 

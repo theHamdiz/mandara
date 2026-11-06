@@ -14,6 +14,11 @@ may access, its settings and where it fits. **Installed**, **Updates**,
 **Community** (the GitHub marketplace) and **Develop** (the authoring
 handbook) sit beside it.
 
+Feeds, Home Assistant and Phone Connect keep their data cached while enabled.
+Switching one off clears its snapshots, and a late refresh cannot restore them.
+Article read history stays on disk. An explicit home or device action already
+running can finish; disabling the plugin prevents a follow-up refresh.
+
 <table>
 <tr>
 <td width="50%" valign="top"><img src="screenshots/studio-marketplace.webp" alt="Plugins → Discover filtered to Desktop widgets: Calendar card, Countdown, Desktop clocks, Desktop decorations, Desktop fun, Desktop info, Desktop productivity and Desktop shortcuts and you, each with its painted cover" width="100%"/><br/><sub><b>Discover</b>: the desktop widget plugins and their painted covers</sub></td>
@@ -275,7 +280,9 @@ are unaffected.
 The policy is checked on community browsing and before installs and
 updates, with up to a minute of caching and no background polling. If
 verification fails, Mandara keeps its last valid rules; after 24 hours
-without verification, installs and updates pause. If it has never loaded
+without verification, installs and updates pause. The same limits apply when
+another process holds the refresh lock too long; using the cache does not
+renew its verification time. If it has never loaded
 a valid policy, community browsing pauses too. An empty policy is valid
 and allows all repositories. See [Store moderation](../PLUGINS.md#store-moderation)
 for the format and cache behavior.

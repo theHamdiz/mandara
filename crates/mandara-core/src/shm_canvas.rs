@@ -53,6 +53,7 @@ use wayland_protocols::wp::alpha_modifier::v1::client::{wp_alpha_modifier_surfac
 use wayland_protocols::wp::cursor_shape::v1::client::{wp_cursor_shape_device_v1, wp_cursor_shape_manager_v1};
 use wayland_protocols::wp::fractional_scale::v1::client::{wp_fractional_scale_manager_v1, wp_fractional_scale_v1};
 use wayland_protocols::wp::viewporter::client::{wp_viewport, wp_viewporter};
+use wayland_protocols::xdg::xdg_output::zv1::client::{zxdg_output_manager_v1, zxdg_output_v1};
 use wayland_protocols_wlr::layer_shell::v1::client::{zwlr_layer_shell_v1, zwlr_layer_surface_v1};
 
 /// `wp_fractional_scale_v1` reports scales as multiples of 1/120.
@@ -165,11 +166,26 @@ pub fn snap(r: Rect, scale120: u32) -> Rect {
 pub enum Place {
     /// The whole output, buffer at physical size.
     Full,
+    /// The whole output at its exact logical size, scaled from this buffer.
+    /// Needs `wp_viewporter`; avoids rounding the output through physical pixels.
+    FullScaled { buffer: (u32, u32) },
     /// A [`snap`]ped rectangle, buffer at its physical size.
     Rect(Rect),
     /// A [`snap`]ped rectangle covered by a smaller buffer the compositor
     /// scales up (soft content such as glows). Needs `wp_viewporter`.
     Scaled { rect: Rect, buffer: (u32, u32) },
+}
+
+impl Place {
+    /// Destination in logical surface coordinates. Full placements use the
+    /// advertised logical output directly, avoiding a fractional-scale round trip.
+    fn logical_rect(self, output: (u32, u32), scale120: u32) -> Rect {
+        let to_logical = |v: i32| (v as i64 * SCALE_DENOMINATOR as i64 / scale120.max(1) as i64) as i32;
+        match self {
+            Self::Full | Self::FullScaled { .. } => Rect::new(0, 0, output.0.max(1), output.1.max(1)),
+            Self::Rect(rect) | Self::Scaled { rect, .. } => Rect::new(to_logical(rect.x), to_logical(rect.y), to_logical(rect.w as i32).max(1) as u32, to_logical(rect.h as i32).max(1) as u32),
+        }
+    }
 }
 
 /// A viewport override for reveal animations: show the buffer region
@@ -335,6 +351,8 @@ struct Canvas {
     fractional: Option<wp_fractional_scale_v1::WpFractionalScaleV1>,
     width: u32,
     height: u32,
+    /// Last requested logical size, independent of outstanding configure replies.
+    requested: (u32, u32),
     configured: bool,
     scale120: u32,
     buffer_scale: i32,
@@ -357,6 +375,8 @@ impl Canvas {
         if self.viewport.is_some() && self.scale120 > 0 { self.scale120 } else { self.buffer_scale.max(1) as u32 * SCALE_DENOMINATOR }
     }
 
+    /// Buffer dimensions rounded from logical size at the effective scale,
+    /// with at least one pixel per axis.
     fn physical(&self) -> (u32, u32) {
         let s = self.scale120();
         let round = |v: u32| ((v * s + SCALE_DENOMINATOR / 2) / SCALE_DENOMINATOR).max(1);
@@ -385,8 +405,79 @@ struct Output {
     name: String,
     description: String,
     identity: String,
-    scale: i32,
+    legacy: LegacyOutputSize,
+    xdg_output: Option<zxdg_output_v1::ZxdgOutputV1>,
+    logical: Option<(u32, u32)>,
     canvas: Option<Canvas>,
+}
+
+struct LegacyOutputSize {
+    mode: Option<(u32, u32)>,
+    scale: i32,
+    complete: bool,
+}
+
+impl Default for LegacyOutputSize {
+    fn default() -> Self { Self { mode: None, scale: 1, complete: false } }
+}
+
+impl LegacyOutputSize {
+    /// Version two batches mode and scale together; version one has no Done.
+    fn event(&mut self, event: &wl_output::Event, version: u32) -> bool {
+        match event {
+            wl_output::Event::Mode { flags: WEnum::Value(flags), width, height, .. } if flags.contains(wl_output::Mode::Current) => {
+                let Some(size) = changed_logical_size(None, *width, *height) else { return false; };
+                self.mode = Some(size);
+                self.complete = version < 2;
+            }
+            wl_output::Event::Scale { factor } => {
+                self.scale = (*factor).max(1);
+                self.complete = version < 2;
+            }
+            wl_output::Event::Done => self.complete = true,
+            _ => return false,
+        }
+        self.complete
+    }
+
+    fn logical_size(&self) -> Option<(u32, u32)> {
+        if !self.complete { return None; }
+        self.mode.map(|(width, height)| ((width / self.scale.max(1) as u32).max(1), (height / self.scale.max(1) as u32).max(1)))
+    }
+}
+
+/// Invalid or repeated advertisements never request a zero-sized surface.
+fn changed_logical_size(current: Option<(u32, u32)>, width: i32, height: i32) -> Option<(u32, u32)> {
+    let size = (u32::try_from(width).ok()?, u32::try_from(height).ok()?);
+    (size.0 > 0 && size.1 > 0 && current != Some(size)).then_some(size)
+}
+
+fn request_logical_size(requested: &mut (u32, u32), size: (u32, u32)) -> bool {
+    if size.0 == 0 || size.1 == 0 || *requested == size { return false; }
+    *requested = size;
+    true
+}
+
+impl Output {
+    /// Prefers the compositor's logical dimensions and waits for them when
+    /// xdg-output is available. Mode divided by integer scale is a fallback
+    /// only for compositors without that protocol.
+    fn logical_size(&self) -> Option<(u32, u32)> {
+        if self.xdg_output.is_some() { return self.logical; }
+        self.legacy.logical_size()
+    }
+
+    /// Requests changed logical dimensions without treating the request as a
+    /// configure acknowledgement; buffer sizing follows the compositor's reply.
+    fn resize_canvas(&mut self) {
+        if let Some((width, height)) = self.logical_size()
+            && let Some(canvas) = &mut self.canvas
+            && request_logical_size(&mut canvas.requested, (width, height))
+        {
+            canvas.layer.set_size(width, height);
+            canvas.surface.commit();
+        }
+    }
 }
 
 struct State {
@@ -399,6 +490,7 @@ struct State {
     viewporter: Option<wp_viewporter::WpViewporter>,
     fractional: Option<wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1>,
     alpha: Option<wp_alpha_modifier_v1::WpAlphaModifierV1>,
+    xdg_output: Option<zxdg_output_manager_v1::ZxdgOutputManagerV1>,
     outputs: Vec<Output>,
     layer: CanvasLayer,
     namespace: String,
@@ -418,6 +510,11 @@ struct State {
 }
 
 impl State {
+    fn add_output(&mut self, output: wl_output::WlOutput, global: u32) {
+        let xdg_output = self.xdg_output.as_ref().map(|manager| manager.get_xdg_output(&output, &self.qh, global));
+        self.outputs.push(Output { global, output, name: String::new(), description: String::new(), identity: String::new(), legacy: LegacyOutputSize::default(), xdg_output, logical: None, canvas: None });
+    }
+
     fn canvas_mut(&mut self, global: u32) -> Option<&mut Canvas> {
         self.outputs.iter_mut().find(|o| o.global == global).and_then(|o| o.canvas.as_mut())
     }
@@ -449,6 +546,7 @@ impl Host {
         let viewporter = globals.bind::<wp_viewporter::WpViewporter, _, _>(&qh, 1..=1, ()).ok();
         let fractional = globals.bind::<wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1, _, _>(&qh, 1..=1, ()).ok();
         let alpha = globals.bind::<wp_alpha_modifier_v1::WpAlphaModifierV1, _, _>(&qh, 1..=1, ()).ok();
+        let xdg_output = globals.bind::<zxdg_output_manager_v1::ZxdgOutputManagerV1, _, _>(&qh, 1..=3, ()).ok();
         // The desktop takes pointer input (its menu); an overlay preview
         // never swallows clicks.
         let input = layer == CanvasLayer::Background;
@@ -463,6 +561,7 @@ impl Host {
             viewporter,
             fractional,
             alpha,
+            xdg_output,
             outputs: Vec::new(),
             layer,
             namespace: namespace.to_string(),
@@ -478,7 +577,7 @@ impl Host {
         globals.contents().with_list(|list| {
             for g in list.iter().filter(|g| g.interface == "wl_output") {
                 let output = globals.registry().bind::<wl_output::WlOutput, _, _>(g.name, g.version.min(4), &qh, g.name);
-                state.outputs.push(Output { global: g.name, output, name: String::new(), description: String::new(), identity: String::new(), scale: 1, canvas: None });
+                state.add_output(output, g.name);
             }
             if input {
                 for g in list.iter().filter(|g| g.interface == "wl_seat") {
@@ -511,6 +610,8 @@ impl Host {
         std::mem::take(&mut self.state.changed)
     }
 
+    /// Snapshots known outputs. Geometry stays `None` until the canvas is
+    /// configured and its preferred fractional scale, if requested, has arrived.
     pub fn outputs(&self) -> Vec<OutputInfo> {
         self.state
             .outputs
@@ -540,6 +641,7 @@ impl Host {
         if s.outputs[i].canvas.is_some() {
             return;
         }
+        let Some((width, height)) = s.outputs[i].logical_size() else { return };
         let qh = s.qh.clone();
         let surface = s.compositor.create_surface(&qh, id);
         let layer = match s.layer {
@@ -547,6 +649,7 @@ impl Host {
             CanvasLayer::Overlay => zwlr_layer_shell_v1::Layer::Overlay,
         };
         let ls = s.layer_shell.get_layer_surface(&surface, Some(&s.outputs[i].output), layer, s.namespace.clone(), &qh, id);
+        ls.set_size(width, height);
         use zwlr_layer_surface_v1::Anchor;
         ls.set_anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right);
         ls.set_exclusive_zone(-1);
@@ -564,7 +667,7 @@ impl Host {
             _ => (None, None),
         };
         surface.commit();
-        let buffer_scale = s.outputs[i].scale.max(1);
+        let buffer_scale = s.outputs[i].legacy.scale.max(1);
         s.outputs[i].canvas = Some(Canvas {
             surface,
             layer: ls,
@@ -572,6 +675,7 @@ impl Host {
             fractional,
             width: 0,
             height: 0,
+            requested: (width, height),
             configured: false,
             scale120: 0,
             buffer_scale,
@@ -698,7 +802,7 @@ impl Host {
         let (bw, bh) = match place {
             Place::Full => c.physical(),
             Place::Rect(r) => (r.w.max(1), r.h.max(1)),
-            Place::Scaled { buffer, .. } => (buffer.0.max(1), buffer.1.max(1)),
+            Place::Scaled { buffer, .. } | Place::FullScaled { buffer } => (buffer.0.max(1), buffer.1.max(1)),
         };
         self.realize(id, index);
         let Some(p) = self.plane(id, index) else { return Ok(false) };
@@ -736,16 +840,13 @@ impl Host {
     fn apply_geometry(&mut self, id: u32, index: usize) {
         let Some(c) = self.state.canvas_mut(id) else { return };
         let fractional = c.viewport.is_some() && c.scale120 > 0;
-        let (lw, lh) = (c.width as i32, c.height as i32);
         let bs = c.buffer_scale.max(1);
-        let s120 = c.scale120() as i64;
-        let to_logical = |v: i32| (v as i64 * SCALE_DENOMINATOR as i64 / s120) as i32;
+        let scale120 = c.scale120();
+        let logical = (c.width, c.height);
         let Some(p) = c.planes.get_mut(index) else { return };
         let (Some(place), Some(sub), Some(surface)) = (p.place, p.sub.as_ref(), p.surface.as_ref()) else { return };
-        let (x, y, w, h) = match place {
-            Place::Full => (0, 0, lw.max(1), lh.max(1)),
-            Place::Rect(r) | Place::Scaled { rect: r, .. } => (to_logical(r.x), to_logical(r.y), to_logical(r.w as i32).max(1), to_logical(r.h as i32).max(1)),
-        };
+        let rect = place.logical_rect(logical, scale120);
+        let (x, y, w, h) = (rect.x, rect.y, rect.w as i32, rect.h as i32);
         let (x, y, w, h) = match p.view {
             Some(v) => (v.dest.0, v.dest.1, v.dest.2.max(1), v.dest.3.max(1)),
             None => (x, y, w, h),
@@ -1079,7 +1180,7 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
         match event {
             wl_registry::Event::Global { name, interface, version } if interface == "wl_output" => {
                 let output = registry.bind::<wl_output::WlOutput, _, _>(name, version.min(4), qh, name);
-                state.outputs.push(Output { global: name, output, name: String::new(), description: String::new(), identity: String::new(), scale: 1, canvas: None });
+                state.add_output(output, name);
                 state.changed = true;
             }
             wl_registry::Event::Global { name, interface, version } if interface == "wl_seat" && state.input => {
@@ -1099,6 +1200,7 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
                     if let Some(c) = out.canvas.take() {
                         c.destroy();
                     }
+                    if let Some(xdg_output) = out.xdg_output.take() { xdg_output.destroy(); }
                     if out.output.version() >= 3 {
                         out.output.release();
                     }
@@ -1113,20 +1215,33 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
 impl Dispatch<wl_output::WlOutput, u32> for State {
     fn event(state: &mut Self, _: &wl_output::WlOutput, event: wl_output::Event, global: &u32, _: &Connection, _: &QueueHandle<Self>) {
         let Some(out) = state.outputs.iter_mut().find(|o| o.global == *global) else { return };
+        if out.legacy.event(&event, out.output.version()) {
+            if out.xdg_output.is_none() { out.resize_canvas(); }
+            if let Some(canvas) = out.canvas.as_mut()
+                && canvas.fractional.is_none()
+            {
+                canvas.buffer_scale = out.legacy.scale.max(1);
+            }
+            state.changed = true;
+        }
         match event {
             wl_output::Event::Name { name } => out.name = name,
             wl_output::Event::Description { description } => out.description = description,
             wl_output::Event::Geometry { make, model, .. } => out.identity = format!("{make} {model}").trim().to_string(),
-            wl_output::Event::Scale { factor } => {
-                out.scale = factor;
-                if let Some(c) = out.canvas.as_mut()
-                    && c.fractional.is_none()
-                {
-                    c.buffer_scale = factor;
-                }
-            }
-            wl_output::Event::Done => state.changed = true,
             _ => {}
+        }
+    }
+}
+
+impl Dispatch<zxdg_output_v1::ZxdgOutputV1, u32> for State {
+    fn event(state: &mut Self, _: &zxdg_output_v1::ZxdgOutputV1, event: zxdg_output_v1::Event, global: &u32, _: &Connection, _: &QueueHandle<Self>) {
+        let Some(output) = state.outputs.iter_mut().find(|output| output.global == *global) else { return };
+        if let zxdg_output_v1::Event::LogicalSize { width, height } = event
+            && let Some(size) = changed_logical_size(output.logical, width, height)
+        {
+            output.logical = Some(size);
+            output.resize_canvas();
+            state.changed = true;
         }
     }
 }
@@ -1281,6 +1396,7 @@ macro_rules! ignore_events {
 }
 
 ignore_events!(
+    zxdg_output_manager_v1::ZxdgOutputManagerV1,
     wl_compositor::WlCompositor,
     wl_subcompositor::WlSubcompositor,
     wl_subsurface::WlSubsurface,
@@ -1300,6 +1416,113 @@ ignore_events!(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn current_mode(width: i32, height: i32) -> wl_output::Event {
+        wl_output::Event::Mode { flags: WEnum::Value(wl_output::Mode::Current), width, height, refresh: 60_000 }
+    }
+
+    #[test]
+    fn initial_legacy_size_waits_for_mode_scale_and_done() {
+        let mut size = LegacyOutputSize::default();
+        assert!(!size.event(&current_mode(3840, 2160), 2));
+        assert_eq!(size.logical_size(), None);
+        assert!(!size.event(&wl_output::Event::Scale { factor: 2 }, 2));
+        assert_eq!(size.logical_size(), None);
+        assert!(size.event(&wl_output::Event::Done, 2));
+        assert_eq!(size.logical_size(), Some((1920, 1080)));
+    }
+
+    #[test]
+    fn legacy_mode_and_scale_never_request_an_intermediate_size() {
+        for events in [
+            [current_mode(3840, 2160), wl_output::Event::Scale { factor: 2 }, wl_output::Event::Done],
+            [wl_output::Event::Scale { factor: 2 }, current_mode(3840, 2160), wl_output::Event::Done],
+        ] {
+            let mut size = LegacyOutputSize { mode: Some((1920, 1080)), scale: 1, complete: true };
+            let configured = (1920, 1080);
+            let mut requests = Vec::new();
+            for event in events {
+                if size.event(&event, 4)
+                    && let Some(target) = size.logical_size()
+                    && target != configured
+                {
+                    requests.push(target);
+                }
+            }
+            assert!(requests.is_empty(), "the final logical size matches the existing configure; an intermediate request would leave the canvas at the wrong size");
+            assert_eq!(size.logical_size(), Some(configured));
+        }
+    }
+
+    #[test]
+    fn legacy_mode_only_and_scale_only_changes_complete_at_done() {
+        let mut size = LegacyOutputSize { mode: Some((1920, 1080)), scale: 1, complete: true };
+        assert!(!size.event(&current_mode(2560, 1440), 2));
+        assert_eq!(size.logical_size(), None);
+        assert!(size.event(&wl_output::Event::Done, 2));
+        assert_eq!(size.logical_size(), Some((2560, 1440)));
+        assert!(!size.event(&wl_output::Event::Scale { factor: 2 }, 2));
+        assert_eq!(size.logical_size(), None);
+        assert!(size.event(&wl_output::Event::Done, 2));
+        assert_eq!(size.logical_size(), Some((1280, 720)));
+    }
+
+    #[test]
+    fn completed_batches_can_return_to_the_old_size_before_a_configure_reply() {
+        let configured = (1920, 1080);
+        let mut requested = configured;
+        let mut size = LegacyOutputSize { mode: Some(configured), scale: 1, complete: true };
+        let mut requests = Vec::new();
+        for event in [current_mode(3840, 2160), wl_output::Event::Done, wl_output::Event::Scale { factor: 2 }, wl_output::Event::Done] {
+            if size.event(&event, 4)
+                && let Some(target) = size.logical_size()
+                && request_logical_size(&mut requested, target)
+            {
+                requests.push(target);
+            }
+        }
+        assert_eq!(requests, [(3840, 2160), configured]);
+        assert_eq!(requested, configured);
+        assert!(!request_logical_size(&mut requested, configured));
+        assert!(!request_logical_size(&mut requested, (0, 1080)));
+        assert_eq!(requested, configured);
+    }
+
+    #[test]
+    fn version_one_outputs_apply_modes_without_waiting_for_done() {
+        let mut size = LegacyOutputSize::default();
+        assert!(size.event(&current_mode(1920, 1080), 1));
+        assert_eq!(size.logical_size(), Some((1920, 1080)));
+        assert!(size.event(&current_mode(1280, 720), 1));
+        assert_eq!(size.logical_size(), Some((1280, 720)));
+        assert!(!size.event(&current_mode(0, 0), 1));
+        assert_eq!(size.logical_size(), Some((1280, 720)));
+    }
+
+    #[test]
+    fn native_logical_size_drives_initial_and_rescaled_requests() {
+        let initial = changed_logical_size(None, 1365, 769);
+        assert_eq!(initial, Some((1365, 769)));
+        assert_eq!(changed_logical_size(initial, 1365, 769), None);
+        let rescaled = changed_logical_size(initial, 1537, 865);
+        assert_eq!(rescaled, Some((1537, 865)));
+        for (width, height) in [(0, 769), (1365, 0), (-1, 769), (1365, -1)] {
+            assert_eq!(changed_logical_size(rescaled, width, height), None);
+        }
+    }
+
+    #[test]
+    fn full_scaled_planes_keep_exact_logical_output_at_fractional_scales() {
+        for (logical, scale120) in [((1365, 769), 150), ((1537, 865), 144)] {
+            let physical = ((logical.0 * scale120 + SCALE_DENOMINATOR / 2) / SCALE_DENOMINATOR, (logical.1 * scale120 + SCALE_DENOMINATOR / 2) / SCALE_DENOMINATOR);
+            let rounded = Place::Scaled { rect: Rect::new(0, 0, physical.0, physical.1), buffer: (1, 1) }.logical_rect(logical, scale120);
+            assert!(rounded.w < logical.0 || rounded.h < logical.1, "fixture must expose the old rounding seam");
+            for buffer in [(1, 1), (192, 144), physical] {
+                assert_eq!(Place::FullScaled { buffer }.logical_rect(logical, scale120), Rect::new(0, 0, logical.0, logical.1));
+            }
+        }
+        assert_eq!(Place::Scaled { rect: Rect::new(5, 10, 20, 30), buffer: (4, 6) }.logical_rect((1365, 769), 150), Rect::new(4, 8, 16, 24));
+    }
 
     #[test]
     fn grid_steps_make_logical_coordinates_whole() {

@@ -45,21 +45,26 @@ pub(super) fn preview_of<'a>(labels: impl IntoIterator<Item = &'a str>) -> Strin
 }
 
 impl StudioView {
-    /// The page-unique key of a fold (`Bar/Layout`).
+    /// Stable page and tab identity for a fold.
     pub(super) fn fold_key(&self, name: &str) -> String {
-        format!("{:?}/{name}", self.section)
+        if self.section == crate::registry::Section::Bars { format!("Bars/{}/{name}", self.bars_tab.slug()) }
+        else { format!("{:?}/{name}", self.section) }
     }
 
     /// Whether the fold `key` on this page is open: your choice, else its
     /// default (the page's first settings group opens).
     pub(super) fn fold_open(&self, key: &str) -> bool {
         let default = self.fold_keys.iter().find(|(k, _)| k == key).is_some_and(|(_, open)| *open);
-        !self.query.is_empty() || self.ui.sections.get(key).copied().unwrap_or(default)
+        !self.query.is_empty() || self.ui.fold_state(key).unwrap_or(default)
     }
 
     /// A collapsible section; `body` is only built while it's open.
     pub(super) fn fold(&mut self, name: &str, head: FoldHead, p: &MandaraPalette, cx: &mut Context<Self>, body: impl FnOnce(&mut Self, &mut Context<Self>) -> AnyElement) -> AnyElement {
         let key = self.fold_key(name);
+        self.fold_at(key, head, p, cx, body)
+    }
+
+    pub(super) fn fold_at(&mut self, key: String, head: FoldHead, p: &MandaraPalette, cx: &mut Context<Self>, body: impl FnOnce(&mut Self, &mut Context<Self>) -> AnyElement) -> AnyElement {
         let first_group = !head.closed && !self.fold_keys.iter().any(|(_, open)| *open);
         self.fold_keys.push((key.clone(), first_group));
         let open = self.fold_open(&key);

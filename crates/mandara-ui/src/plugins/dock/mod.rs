@@ -30,6 +30,7 @@ pub mod model;
 pub mod picker;
 pub mod sheet;
 pub mod stacks;
+mod smart_watch;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -151,6 +152,12 @@ const POOF_PUFF_PX: f32 = 16.0;
 /// A smart-hiding dock re-checks window geometry this often (windows move
 /// without events).
 const SMART_POLL: Duration = Duration::from_millis(400);
+/// Only these hub sources affect the dock's slots, badges or visibility.
+const HUB_SOURCES: crate::hub::Domains = crate::hub::Domains::MEDIA
+    .union(crate::hub::Domains::NOTIFICATIONS)
+    .union(crate::hub::Domains::CLIENTS)
+    .union(crate::hub::Domains::NAVIGATION)
+    .union(crate::hub::Domains::FOCUS);
 /// A launch bounce stops after this long without a window.
 const LAUNCH_TIMEOUT: Duration = Duration::from_secs(12);
 /// A just-opened dock (switched on, moved) is out this long whatever the
@@ -456,6 +463,8 @@ pub struct DockView {
     reveal: model::Reveal,
     reveal_task: Option<gpui::Task<()>>,
     hide_task: Option<gpui::Task<()>>,
+    /// Window-geometry checks exist only while smart hiding needs them.
+    smart_task: Option<gpui::Task<()>>,
     drag: Option<Drag>,
     poof: Option<Poof>,
     /// A dragged file is an installable app (the "Drop to install" glow).
@@ -499,25 +508,18 @@ impl DockView {
             cx.notify();
         })
         .detach();
-        cx.observe(&crate::hub::hub(cx), move |this, _, cx| mark(this, cx)).detach();
+        let hub = crate::hub::hub(cx);
+        let mut revision = hub.read(cx).revision(HUB_SOURCES);
+        cx.observe(&hub, move |this, hub, cx| {
+            let next = hub.read(cx).revision(HUB_SOURCES);
+            if revision != next {
+                revision = next;
+                mark(this, cx);
+            }
+        }).detach();
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
         // The launcher floats above the dock: keep the dock out meanwhile.
         cx.observe(&shell(cx), |_, _, cx| cx.notify()).detach();
-        // Smart hide follows window geometry, which moves without events.
-        cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor().timer(SMART_POLL).await;
-                let alive = this.update(cx, |this, cx| {
-                    if this.cfg.auto_hide == DockAutoHide::Smart {
-                        cx.notify();
-                    }
-                });
-                if alive.is_err() {
-                    break;
-                }
-            }
-        })
-        .detach();
         let cfg = config(cx).read(cx).get();
         let overrides = cfg.launcher.overrides.len();
         let dock = cfg.dock_sanitized();
@@ -541,6 +543,7 @@ impl DockView {
             reveal: model::Reveal::default(),
             reveal_task: None,
             hide_task: None,
+            smart_task: None,
             drag: None,
             poof: None,
             install_hover: false,
@@ -550,6 +553,22 @@ impl DockView {
             glass: (0.0, 0.0, 0.0, 0.0),
             surface: (0.0, 0.0),
             media_cover: Rc::default(),
+        }
+    }
+
+    /// Smart hiding follows geometry that some compositors do not send as events.
+    fn sync_smart_watch(&mut self, cx: &mut Context<Self>) {
+        match smart_watch::plan(self.cfg.auto_hide, self.smart_task.is_some()) {
+            smart_watch::Action::Keep => {}
+            smart_watch::Action::Stop => self.smart_task = None,
+            smart_watch::Action::Start => {
+                self.smart_task = Some(cx.spawn(async move |this, cx| {
+                    loop {
+                        cx.background_executor().timer(SMART_POLL).await;
+                        if this.update(cx, |_, cx| cx.notify()).is_err() { break; }
+                    }
+                }));
+            }
         }
     }
 
@@ -882,6 +901,7 @@ impl Render for DockView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
         self.refresh(cx);
+        self.sync_smart_watch(cx);
         self.sync_reveal(window, cx);
         let palette = mandara_core::frame_palette(window, cx);
         let f = fonts(cx);
@@ -1964,6 +1984,21 @@ fn bounce_allowed(only_music: bool, playing: bool) -> bool { !only_music || play
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dock_updates_follow_slots_and_badges_without_following_unrelated_services() {
+        use crate::hub::{Domains, Hub};
+        let mut hub = Hub::default();
+        let before = hub.revision(HUB_SOURCES);
+        hub.mark_changed(Domains::NETWORK.union(Domains::BLUETOOTH).union(Domains::AUDIO)
+            .union(Domains::CLIPBOARD).union(Domains::WEATHER).union(Domains::KEYBOARD).union(Domains::PRIVACY));
+        assert_eq!(hub.revision(HUB_SOURCES), before);
+        for source in [Domains::MEDIA, Domains::NOTIFICATIONS, Domains::CLIENTS, Domains::NAVIGATION, Domains::FOCUS] {
+            let before = hub.revision(HUB_SOURCES);
+            hub.mark_changed(source);
+            assert_ne!(hub.revision(HUB_SOURCES), before);
+        }
+    }
 
     #[test]
     fn music_only_bounces_stop_when_playback_stops_without_changing_the_default() {

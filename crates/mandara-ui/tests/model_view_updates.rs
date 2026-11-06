@@ -18,8 +18,13 @@ const MODEL_IDS: [&str; 5] = ["ci", "feeds", "home-assistant", "phone-connect", 
 
 /// Only the resource fixture's private runtime accepts synthetic notifications.
 fn private_runtime(runtime: &Path, root: &Path) -> bool {
+    private_runtime_under(runtime, root, &std::env::temp_dir())
+}
+
+fn private_runtime_under(runtime: &Path, root: &Path, temporary: &Path) -> bool {
+    let Ok(temporary) = temporary.canonicalize() else { return false; };
     runtime.canonicalize().is_ok_and(|path| {
-        path.starts_with(std::env::temp_dir())
+        path.starts_with(&temporary)
             && path.file_name().is_some_and(|name| name.to_string_lossy().starts_with("mrc."))
             && root.canonicalize().is_ok_and(|root| {
                 std::fs::read_to_string(path.join(".mandara-plugin-resource-test"))
@@ -58,6 +63,24 @@ fn plugin_resource_fixture_rejects_an_unmarked_runtime() {
 }
 
 #[test]
+fn plugin_resource_fixture_accepts_a_symlinked_temporary_root() {
+    let fixture = tempfile::tempdir().unwrap();
+    let temporary = fixture.path().join("temporary");
+    let outside = fixture.path().join("outside");
+    std::fs::create_dir(&temporary).unwrap();
+    std::fs::create_dir(&outside).unwrap();
+    let alias = fixture.path().join("temporary-link");
+    std::os::unix::fs::symlink(&temporary, &alias).unwrap();
+    let runtime = tempfile::Builder::new().prefix("mrc.").tempdir_in(&alias).unwrap();
+    let physical = runtime.path().canonicalize().unwrap();
+    std::fs::write(physical.join(".mandara-plugin-resource-test"), fixture.path().canonicalize().unwrap().to_string_lossy().as_bytes()).unwrap();
+    assert!(private_runtime_under(&physical, fixture.path(), &alias));
+    assert!(!private_runtime_under(&physical, fixture.path(), &outside));
+    assert!(!private_runtime_under(&physical, &outside, &alias));
+    assert!(!private_runtime_under(&physical, fixture.path(), &alias.join("missing")));
+}
+
+#[test]
 #[ignore = "requires the marked private resource fixture with the five model-only bar chips"]
 fn unrelated_notifications_leave_model_views_cached() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -67,6 +90,8 @@ fn unrelated_notifications_leave_model_views_cached() {
     assert_eq!(layout, json!(MODEL_IDS), "use the dedicated model-view fixture");
     assert_eq!(command(&runtime, &["config", "get", "/general/offline"]), true);
     assert_eq!(command(&runtime, &["config", "get", "/notifications/min_urgency"]), "normal", "history-only events keep popup-window creation out of the comparison");
+    let settings = command(&runtime, &["config", "get", "/plugins/settings"]);
+    assert!(settings.pointer("/ci/repos").is_none_or(|repos| repos.as_str().is_some_and(|repos| repos.trim().is_empty())), "the fixture must not watch remote CI repositories");
     std::thread::sleep(SETTLE);
     let initial = command(&runtime, &["diagnostics", "views", "reset"]);
     for file in MODEL_FILES { assert!(renders(&initial, file) > 0, "{file} must have rendered before the comparison"); }
@@ -78,11 +103,9 @@ fn unrelated_notifications_leave_model_views_cached() {
     let after = command(&runtime, &["diagnostics", "views", "reset"]);
     for file in MODEL_FILES { assert_eq!(renders(&after, file), 0, "unrelated notifications rebuilt {file}"); }
 
-    // The CI model still owns its notifications: an explicit refresh updates
-    // its views without invalidating the four independent integration chips.
+    // Refreshing an empty repository list changes no visible model state.
     command(&runtime, &["ci", "refresh"]);
     std::thread::sleep(SETTLE);
-    let own = command(&runtime, &["diagnostics", "views"]);
-    assert!(renders(&own, "ci.rs:") > 0, "an own-model refresh must remain visible");
-    for file in &MODEL_FILES[1..] { assert_eq!(renders(&own, file), 0, "a CI refresh rebuilt {file}"); }
+    let unchanged = command(&runtime, &["diagnostics", "views"]);
+    for file in MODEL_FILES { assert_eq!(renders(&unchanged, file), 0, "an empty CI refresh rebuilt {file}"); }
 }

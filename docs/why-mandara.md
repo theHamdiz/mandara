@@ -20,7 +20,7 @@ process, rendered on the GPU and animated with real spring physics.
 <tr><td><b>Complete</b></td><td>bar, dock, launcher, notifications, sound mixer, lock screen, login manager, wallpaper engine, drag-and-drop app installer and uninstaller, and more</td></tr>
 <tr><td><b>Generative</b></td><td>a built-in <a href="wallpapers.md#wallpaper-generator">wallpaper generator</a>: twelve styles, up to 8K, the smallest lossless files and seamless video loops, all in pure Rust</td></tr>
 <tr><td><b>Global</b></td><td>20 interface languages, including right-to-left Arabic, Persian and Urdu</td></tr>
-<tr><td><b>Live</b></td><td>Mandara Studio: 31 pages of settings, every change applied instantly</td></tr>
+<tr><td><b>Live</b></td><td>Mandara Studio: 30 pages of settings, every change applied instantly</td></tr>
 <tr><td><b>Agent-ready</b></td><td>almost everything the UI does is a documented CLI command with JSON replies, so scripts and AI agents can drive and inspect the desktop (<a href="agent-ready.md">how</a>)</td></tr>
 </table>
 
@@ -55,7 +55,7 @@ WebAssembly.
 | Screen recording | **Built in (native screencopy → AV1/WebM, pure Rust)** | External tools | External tools | External tools |
 | OCR (copy text from screen) | **Built in, offline: English, العربية, Español, Français…** | — | — | — |
 | Interface languages | **20, with RTL Arabic, Persian and Urdu** | Several | Several | English |
-| Settings app | **Mandara Studio: 31 pages in six groups, live preview, drag-and-drop layout designer, maintenance and repair** | Settings panel | Settings app | Config files |
+| Settings app | **Mandara Studio: 30 pages in six groups, live preview, drag-and-drop layout designer, maintenance and repair** | Settings panel | Settings app | Config files |
 
 Desktop and system features:
 

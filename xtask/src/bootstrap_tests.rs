@@ -45,7 +45,7 @@ struct Server {
 }
 
 impl Server {
-    fn new(files: BTreeMap<String, Vec<u8>>) -> Self {
+    fn new(files: BTreeMap<String, Vec<u8>>, mut transient: Option<(&'static str, usize)>) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let url = format!("http://{}", listener.local_addr().unwrap());
         listener.set_nonblocking(true).unwrap();
@@ -64,9 +64,15 @@ impl Server {
                     let request = read_request(&mut client);
                     let path = request.split_whitespace().nth(1).unwrap().to_string();
                     requests.lock().unwrap().push(path.clone());
-                    let (status, body) = match files.get(&path) {
-                        Some(body) => ("200 OK", body.as_slice()),
-                        None => ("404 Not Found", b"missing".as_slice()),
+                    let unavailable = transient.as_mut().is_some_and(|(failed_path, remaining)| {
+                        if path != *failed_path || *remaining == 0 { return false; }
+                        *remaining -= 1;
+                        true
+                    });
+                    let (status, body) = match (unavailable, files.get(&path)) {
+                        (true, _) => ("504 Gateway Timeout", b"temporary fixture failure".as_slice()),
+                        (false, Some(body)) => ("200 OK", body.as_slice()),
+                        (false, None) => ("404 Not Found", b"missing".as_slice()),
                     };
                     write!(client, "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).unwrap();
                     client.write_all(body).unwrap();
@@ -117,6 +123,10 @@ fn run_in(fault: Fault, exit: i32, language: &str) -> (std::process::Output, Opt
 }
 
 fn run_with_mask(fault: Fault, exit: i32, language: &str, mask: &str) -> (std::process::Output, Option<String>, Vec<String>) {
+    run_with_network(fault, exit, language, mask, None)
+}
+
+fn run_with_network(fault: Fault, exit: i32, language: &str, mask: &str, transient: Option<(&'static str, usize)>) -> (std::process::Output, Option<String>, Vec<String>) {
     let dir = tempfile::tempdir().unwrap();
     let archive = archive(dir.path(), fault);
     let hash = mandara_delta::hex(&Sha256::digest(&archive));
@@ -135,7 +145,7 @@ fn run_with_mask(fault: Fault, exit: i32, language: &str, mask: &str) -> (std::p
     let signature = mandara_delta::signing::sign::sign(&private, sums.as_bytes()).unwrap();
     if !matches!(fault, Fault::MissingMetadata) { files.insert("/SHA256SUMS".into(), sums.into_bytes()); }
     files.insert("/SHA256SUMS.sig".into(), if matches!(fault, Fault::Signature) { format!("{}\n", "00".repeat(64)).into_bytes() } else { signature.into_bytes() });
-    let server = Server::new(files);
+    let server = Server::new(files, transient);
     let record = dir.path().join("record");
     let downloads = dir.path().join("downloads");
     std::fs::create_dir(&downloads).unwrap();
@@ -167,7 +177,14 @@ fn a_signed_download_forwards_arguments_and_installer_failures() {
         assert_eq!(output.status.code(), Some(code), "{}", String::from_utf8_lossy(&output.stderr));
         assert_eq!(record.unwrap().split('\0').collect::<Vec<_>>(), ["install", "--prefix", "/tmp/a path with 'quotes' and $signs", "--no-deps", "--no-greeter", "--compositor", "kwin"]);
         assert_eq!(requests.len(), 3);
-        assert!(String::from_utf8_lossy(&output.stderr).contains("Verifying the download"));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("Verifying the download"));
+        let completed: Vec<_> = stderr.lines().filter_map(|line| line.strip_prefix("  ✓ Downloaded: ")).collect();
+        assert_eq!(completed.len(), 3, "{stderr}");
+        for line in completed {
+            let (_, bytes) = line.rsplit_once(" (").unwrap();
+            assert!(bytes.strip_suffix(" B)").unwrap().parse::<u64>().unwrap() > 0, "{line}");
+        }
     }
 }
 
@@ -179,6 +196,79 @@ fn untrusted_incomplete_or_damaged_downloads_never_execute() {
         assert!(record.is_none());
         if matches!(fault, Fault::Signature | Fault::MissingMetadata | Fault::MissingChecksum) { assert!(!requests.iter().any(|p| p.ends_with(".tar.gz"))); }
     }
+}
+
+#[test]
+fn recovered_signature_downloads_report_verified_before_fetching_the_archive() {
+    for path in ["/SHA256SUMS", "/SHA256SUMS.sig"] {
+        let (output, record, requests) = run_with_network(Fault::None, 0, "C", "0022", Some((path, 3)));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{stderr}");
+        assert!(record.is_some());
+        assert_eq!(requests.iter().filter(|request| *request == path).count(), 4);
+        let signature = stderr.find("✓ Release signature verified.").expect("successful verification must be visible");
+        let archive = stderr.find("[2/5] Downloading Mandara").unwrap();
+        assert!(signature < archive, "{stderr}");
+        assert!(stderr.to_ascii_lowercase().contains("retry"), "captured logs must retain retry notices: {stderr}");
+        assert!(stderr.contains("✓ Archive checksum verified."), "{stderr}");
+        assert!(stderr.contains("[5/5] Ready."), "{stderr}");
+    }
+}
+
+#[test]
+fn exhausted_signature_downloads_stop_before_requesting_an_archive() {
+    for path in ["/SHA256SUMS", "/SHA256SUMS.sig"] {
+        let (output, record, requests) = run_with_network(Fault::None, 0, "C", "0022", Some((path, 4)));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success());
+        assert!(record.is_none());
+        assert_eq!(requests.iter().filter(|request| *request == path).count(), 4);
+        assert!(!requests.iter().any(|path| path.ends_with(".tar.gz")));
+        assert!(stderr.contains("Nothing was installed. Check your connection and try again."), "{stderr}");
+        assert!(!stderr.contains("✓ Release signature verified."), "{stderr}");
+    }
+}
+
+#[test]
+fn retry_recovery_still_rejects_an_invalid_signature() {
+    let (output, record, requests) = run_with_network(Fault::Signature, 0, "C", "0022", Some(("/SHA256SUMS.sig", 1)));
+    assert!(!output.status.success());
+    assert!(record.is_none());
+    assert_eq!(requests.iter().filter(|path| *path == "/SHA256SUMS.sig").count(), 2);
+    assert!(!requests.iter().any(|path| path.ends_with(".tar.gz")));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("could not be verified. Nothing was installed."));
+}
+
+#[test]
+fn terminal_progress_shows_transfer_totals_and_the_completed_byte_count() {
+    use std::os::fd::FromRawFd as _;
+    use std::process::Stdio;
+
+    let dir = tempfile::tempdir().unwrap();
+    let body = b"fixture";
+    let server = Server::new(BTreeMap::from([("/archive".to_string(), body.to_vec())]), None);
+    let (mut master, mut slave) = (-1, -1);
+    // SAFETY: openpty writes two distinct descriptors; default terminal
+    // attributes are enough for curl's isatty-based progress meter.
+    assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null(), std::ptr::null()) }, 0);
+    // SAFETY: ownership transfers once; each File closes its descriptor.
+    let (mut master, slave) = unsafe { (std::fs::File::from_raw_fd(master), std::fs::File::from_raw_fd(slave)) };
+    let functions = SCRIPT.strip_suffix("main \"$@\"\n").unwrap();
+    let script = format!("{functions}\nrelease_base=$1\nprotocols=http\nfetch archive \"$2\" 1024 60\n");
+    let destination = dir.path().join("download");
+    let output = Command::new("sh").args(["-c", &script, "progress-fixture"]).arg(&server.url).arg(&destination)
+        .env("LC_ALL", "C").env("NO_PROXY", "127.0.0.1")
+        .stdin(Stdio::null()).stderr(slave).output().unwrap();
+    let mut terminal = Vec::new();
+    if let Err(error) = master.read_to_end(&mut terminal) {
+        assert_eq!(error.raw_os_error(), Some(libc::EIO), "terminal read failed: {error}");
+    }
+    let terminal = String::from_utf8_lossy(&terminal);
+    assert!(output.status.success(), "{terminal}");
+    assert!(terminal.contains("% Total"), "the detailed meter must retain totals: {terminal}");
+    assert!(terminal.contains("Received"), "{terminal}");
+    assert!(terminal.contains("Downloaded: archive (7 B)"), "{terminal}");
+    assert_eq!(std::fs::read(destination).unwrap(), body);
 }
 
 #[test]

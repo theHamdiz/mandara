@@ -94,8 +94,8 @@ pub fn entries() -> Vec<Setting> {
         plugin(BLUETOOTH, "/plugins/settings/bluetooth/battery_warn_percent", tk("Battery warning at"), tk("A device battery this low turns amber; Power → peripheral alerts sets when it turns coral"), ints(bluetooth::BATTERY_WARN_RANGE, PERCENT_STEP, " %"), bluetooth::DEFAULT_BATTERY_WARN_PERCENT),
         plugin(AUTHENTICATOR, "/plugins/settings/authenticator/visible_rows", tk("Visible accounts"), tk("Rows shown before the list scrolls"), ints(authenticator::VISIBLE_ROWS_RANGE, COUNT_STEP, ""), authenticator::DEFAULT_VISIBLE_ROWS),
         // Bar → Drop-down panels
-        s(Bar, PANELS, "/panels/leave_delay_ms", tk("Close delay"), tk("How long hover-opened panels, the launcher and the session menu wait after the pointer leaves"), span(ranges::LEAVE_DELAY_MS, " ms")),
-        s(Bar, PANELS, "/panels/toast_ms", tk("Action messages"), tk("How long a panel's result message (stopped, copied, failed…) stays up"), span(ranges::TOAST_MS, " ms")),
+        s(Bars, PANELS, "/panels/leave_delay_ms", tk("Close delay"), tk("How long hover-opened panels, the launcher and the session menu wait after the pointer leaves"), span(ranges::LEAVE_DELAY_MS, " ms")),
+        s(Bars, PANELS, "/panels/toast_ms", tk("Action messages"), tk("How long a panel's result message (stopped, copied, failed…) stays up"), span(ranges::TOAST_MS, " ms")),
         // Lock appearance
         s(LockScreen, tk("Show"), "/lock/low_battery_percent", tk("Low battery at"), tk("The battery reading turns coral at or below this charge"), ints((i64::from(desktop::LOCK_LOW_BATTERY_RANGE.0), i64::from(desktop::LOCK_LOW_BATTERY_RANGE.1)), PERCENT_STEP, " %")),
     ]

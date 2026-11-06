@@ -599,7 +599,7 @@
 "Bar thickness" = "Ketebalan bilah"
 "Bar time format" = "Format waktu bilah"
 "Bar, dock, launcher and popups" = "Bilah, dok, peluncur, dan pop-up"
-"Bars" = "Batang"
+"Bars" = "Bilah"
 "Base currency" = "Mata uang dasar"
 "Batt." = "Bat."
 "Batteries" = "Baterai"
@@ -8455,3 +8455,20 @@
 "Couldn't verify the community store policy. Try again later." = "Kebijakan toko komunitas tidak dapat diverifikasi. Coba lagi nanti."
 "The community store has blocked installs and updates for {repository}." = "Toko komunitas telah memblokir pemasangan dan pembaruan untuk {repository}."
 "Repository details are missing IDs required by the store policy." = "Detail repositori tidak memuat ID yang diwajibkan kebijakan toko."
+
+# Studio bars
+"Edges & corners" = "Tepi dan sudut"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "bagian (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] atau plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "Tambahkan plugin “{name}” ke bilah (Studio → Bilah → Bilah) untuk melihat indikatornya di sana; tampilan di layar tetap berfungsi."
+"Add any widget to it in Studio → Bars → Sidebar." = "Tambahkan widget apa pun melalui Studio → Bilah → Bilah samping."
+"Number of bars" = "Jumlah batang"
+
+"Release signature verified." = "Tanda tangan rilis terverifikasi."
+"Downloaded:" = "Diunduh:"
+"Archive checksum verified." = "Checksum arsip terverifikasi."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "Rilis bertanda tangan tidak dapat diunduh. Tidak ada yang dipasang. Periksa koneksi Anda dan coba lagi."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "Biner ini tidak dapat diverifikasi: {reason}. Mandara tidak dipasang. Periksa koneksi Anda dan coba lagi."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "Pasang biner ini meskipun checksum yang dipublikasikan tidak tersedia atau tidak cocok."
+
+"Spectrum bars" = "Batang spektrum"

@@ -104,7 +104,10 @@ pub fn forget_cached(path: &Path, size: f32, scale: f32, cx: &mut App) {
 }
 
 fn decode(path: &Path, edge: u32) -> Result<Arc<RenderImage>, ImageCacheError> {
-    let bytes = std::fs::read(path)?;
+    let bytes = match crate::launcher_art::asset(path) {
+        Some(bytes) => std::borrow::Cow::Borrowed(bytes),
+        None => std::borrow::Cow::Owned(std::fs::read(path)?),
+    };
     let is_svg = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("svg") || e.eq_ignore_ascii_case("svgz"));
     let rgba = if is_svg { render_svg(&bytes, edge)? } else { scale_raster(&bytes, edge)? };
     Ok(Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(to_bgra(rgba))])))
@@ -199,6 +202,19 @@ mod tests {
         assert_eq!(edge_for(44.0, 1.0), 48);
         assert_eq!(edge_for(0.0, 1.0), SIZE_STEP_PX);
         assert_eq!(edge_for(4000.0, 2.0), MAX_EDGE_PX);
+    }
+
+    #[test]
+    fn bundled_launcher_art_is_coloured_and_sized_without_a_file() {
+        for path in crate::launcher_art::ICONS.iter().map(|icon| icon.path).chain([crate::launcher_art::PHOENIX_PATH]) {
+            for edge in [24, 40, 64] {
+                let image = decode(Path::new(path), edge).unwrap();
+                assert!(image.size(0).width.0 <= edge as i32 && image.size(0).height.0 <= edge as i32, "{path}");
+                let bytes = image.as_bytes(0).unwrap();
+                assert!(bytes.as_chunks::<4>().0.iter().any(|pixel| pixel[3] > 0), "{path} is blank");
+                assert!(bytes.as_chunks::<4>().0.iter().any(|pixel| pixel[3] > 0 && pixel[0] != pixel[2]), "{path} lost its colours");
+            }
+        }
     }
 
     #[test]

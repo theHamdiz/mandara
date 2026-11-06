@@ -31,6 +31,15 @@ The source build requires **Rust 1.97 or newer**, matching the WebAssembly
 runtime’s minimum version. The installer updates an older rustup toolchain
 before attempting a source build.
 
+## Dependency updates
+
+The committed lockfiles cover the shell and the standalone delta tool.
+Use `--locked` for reproducible builds. When updating the OCR geometry
+dependency, run `cargo test -p mandara-services --test ocr_geometry`: it
+checks pixel padding, text orientation and detected region bounds without
+downloading inference models. Keep the geometry adapter's constant-black
+border and its parallel row processing.
+
 ## Build options: memory allocator
 
 The `mandara` binary picks its global allocator at build time with exactly
@@ -137,3 +146,8 @@ mandara             84b3fb54688e02045176ef3e74f124394af3252ea77d7168e21aa660dcec
 
 </details>
 <!-- build-info:end -->
+
+Script-only fallback fonts do not need Latin glyphs. The vendored renderer
+loads their selected face directly; its Devanagari regression font is test-only
+and licensed under the SIL Open Font License. Primary font validation remains
+separate from fallback selection.

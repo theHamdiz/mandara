@@ -341,8 +341,7 @@ pub const STUDIO_SECTIONS: &[(&str, &str, &str, &str)] = &[
     ("typography", tk("Typography"), "text-scan", "fonts text size"),
     ("motion", tk("Motion"), "waves", "animation springs speed"),
     // Desktop
-    ("bar", tk("Bar"), "window", "top bar panel height layout"),
-    ("sidebar", tk("Sidebars & hover"), "sidebar", "drawer cards pin notifications tab hover edges power dock open on hover"),
+    ("bars", tk("Bars"), "window", "bar top bottom side bars sidebar drawer cards pin notifications tabs panels height layout hover edges corners power dock open on hover"),
     ("dock", tk("Dock"), "box", "dock taskbar pinned apps magnification auto hide"),
     ("launcher", tk("Launcher"), "search", "slash commands skills icon emoji providers pinned hidden apps frecency usage"),
     ("window-switcher", tk("Window switcher"), "copy", "alt tab switcher windows screen time wellbeing limits"),
@@ -2102,14 +2101,9 @@ impl Render for LauncherView {
         // The center card (and a slide) fade in whole.
         let surface = if place.fades && progress < 1.0 { div().absolute().size_full().opacity(progress).child(surface).into_any_element() } else { surface };
         let dim = look.dim.clamp(0.0, DIM_MAX) * progress;
-        // Joined to the bar, the dim leaves the bar's band bright.
+        // Joined to the bar, the dim follows its shape.
         let dim_el = (dim > 0.0).then(|| {
-            let el = div().absolute().left_0().right_0().bg(gpui::black().opacity(dim));
-            match place.keep_bright {
-                Some((by, bh)) if by <= 0.0 => el.top(px(bh)).bottom_0(),
-                Some((_, bh)) => el.top_0().bottom(px(bh)),
-                None => el.top_0().bottom_0(),
-            }
+            crate::bar::scrim::element((sw, sh), &crate::bar::layout::Metrics::of(&cfg, crate::style::radius_scale()), place.keep_bright, gpui::black().opacity(dim), scale)
         });
         let hover_close = place.hover_close;
 

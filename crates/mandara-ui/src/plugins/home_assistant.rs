@@ -62,11 +62,17 @@ fn refresh_interval(cfg: &ShellConfig) -> Duration {
 }
 
 type HomeData = Rc<RefCell<Data<Settings, Vec<Entity>>>>;
-thread_local! { static DATA: HomeData = Rc::default(); }
-fn data() -> HomeData { DATA.with(Rc::clone) }
+thread_local! { static DATA: RefCell<Option<HomeData>> = const { RefCell::new(None) }; }
+fn data() -> HomeData { DATA.with(|slot| slot.borrow_mut().get_or_insert_with(Rc::default).clone()) }
+
+/// Discard a disabled server's data without creating a cold cache.
+pub(super) fn stop() {
+    if let Some(data) = DATA.with(|slot| slot.borrow_mut().take()) { data.borrow_mut().clear(); }
+}
 
 /// Refresh the selected server outside the UI thread, coalescing pending reads.
 fn refresh(settings: Settings, force: bool, cfg: &ShellConfig, cx: &mut App) {
+    if !super::lifecycle::is_on(ID, cx) { return; }
     let address = settings.clone();
     integration::load(&data(), settings, force, refresh_interval(cfg), move |_| {
         let key = token(&address)?;
@@ -87,7 +93,7 @@ fn act(settings: Settings, entity: String, action: ha::Action, cx: &mut App) -> 
         ha::Http::new().act(&address.server, &key, &entity, action).map(|()| serde_json::json!({"ok":true}))
     }, move |cx| {
         let cfg = crate::state::config(cx).read(cx).snapshot();
-        if self::settings(&cfg) == settings {
+        if super::lifecycle::is_on(ID, cx) && self::settings(&cfg) == settings {
             data().borrow_mut().invalidate();
             refresh(settings, true, &cfg, cx);
         }
@@ -181,6 +187,20 @@ pub fn register(registry: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn disabling_releases_a_snapshot_even_if_a_request_still_holds_the_data_slot() {
+        stop();
+        assert!(DATA.with(|slot| slot.borrow().is_none()));
+        let held = data();
+        let snapshot = std::sync::Arc::new(Vec::<Entity>::with_capacity(64));
+        let weak = std::sync::Arc::downgrade(&snapshot);
+        held.borrow_mut().value = Some(snapshot);
+        stop();
+        assert!(weak.upgrade().is_none());
+        assert!(held.borrow().value.is_none());
+        assert!(DATA.with(|slot| slot.borrow().is_none()));
+    }
 
     #[test]
     fn stateless_actions_do_not_expose_timestamps_as_their_current_state() {

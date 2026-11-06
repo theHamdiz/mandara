@@ -8455,3 +8455,20 @@
 "Couldn't verify the community store policy. Try again later." = "کمیونٹی اسٹور کی پالیسی کی تصدیق نہیں ہو سکی۔ بعد میں دوبارہ کوشش کریں۔"
 "The community store has blocked installs and updates for {repository}." = "کمیونٹی اسٹور نے {repository} کی تنصیب اور اپ ڈیٹس روک دی ہیں۔"
 "Repository details are missing IDs required by the store policy." = "ریپوزٹری کی تفصیلات میں اسٹور کی پالیسی کے لیے درکار شناختی نمبر موجود نہیں ہیں۔"
+
+# Studio bars
+"Edges & corners" = "کنارے اور کونے"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "حصہ (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] یا plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "وہاں انڈیکیٹر دیکھنے کے لیے “{name}” پلگ اِن کو بار میں شامل کریں (Studio ← بارز ← بار)؛ آن اسکرین ڈسپلے دونوں صورتوں میں کام کرتے ہیں۔"
+"Add any widget to it in Studio → Bars → Sidebar." = "Studio ← بارز ← سائیڈ بار میں کوئی بھی ویجٹ شامل کریں۔"
+"Number of bars" = "بارز کی تعداد"
+
+"Release signature verified." = "ریلیز کے دستخط کی تصدیق ہو گئی۔"
+"Downloaded:" = "ڈاؤن لوڈ ہو گیا:"
+"Archive checksum verified." = "آرکائیو کے چیک سم کی تصدیق ہو گئی۔"
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "دستخط شدہ ریلیز ڈاؤن لوڈ نہیں ہو سکی۔ کچھ بھی نصب نہیں ہوا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔"
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "اس بائنری کی تصدیق نہیں ہو سکی: {reason}۔ Mandara نصب نہیں ہوا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔"
+"Install this binary even when its published checksum is unavailable or doesn't match." = "شائع کردہ چیک سم دستیاب نہ ہو یا مطابقت نہ رکھتی ہو تب بھی یہ بائنری نصب کریں۔"
+
+"Spectrum bars" = "طیف کی سلاخیں"

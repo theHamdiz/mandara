@@ -9,7 +9,7 @@
 
 use geo_types::Polygon;
 use image::{imageops, Rgb, RgbImage};
-use imageproc::geometric_transformations::{warp_into, Interpolation, Projection};
+use imageproc::geometric_transformations::{warp_into, Border, Interpolation, Projection};
 
 /// A quadrilateral given as `[top-left, top-right, bottom-right, bottom-left]`.
 pub type Quad = [(f64, f64); 4];
@@ -78,12 +78,13 @@ pub fn crop_quad(image: &RgbImage, quad: &Quad) -> Option<RgbImage> {
     let projection = Projection::from_control_points(from, to)?;
 
     let mut out = RgbImage::new(width, height);
+    // Mandara patch 3: imageproc 0.27 keeps the original constant-black border.
     warp_into(
         image,
-        &projection,
+        projection,
         // cv2.warpPerspective(..., flags=cv2.INTER_CUBIC) in PaddleOCR.
         Interpolation::Bicubic,
-        Rgb([0, 0, 0]),
+        Border::Constant(Rgb([0, 0, 0])),
         &mut out,
     );
 

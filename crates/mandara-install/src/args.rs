@@ -52,9 +52,9 @@ pub struct InstallArgs {
     /// Don't ask: take every default answer.
     #[arg(short = 'y', long)]
     pub yes: bool,
-    /// Install this binary even when it doesn't match the release's
-    /// published SHA-256.
-    #[arg(long)]
+    /// Opt out when the release's published checksum is unavailable or
+    /// doesn't match this binary.
+    #[arg(long, help = mandara_i18n::t("Install this binary even when its published checksum is unavailable or doesn't match."))]
     pub no_verify: bool,
     /// Remove Mandara instead (same as `mandara uninstall`).
     #[arg(long)]

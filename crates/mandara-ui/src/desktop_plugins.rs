@@ -166,7 +166,7 @@ pub fn face_label(f: ClockFace) -> &'static str {
 /// The name of a visualizer shape.
 pub fn vis_label(s: VisualizerShape) -> &'static str {
     match s {
-        VisualizerShape::Bars => tk("Bars"),
+        VisualizerShape::Bars => tk("Spectrum bars"),
         VisualizerShape::Mirrored => tk("Mirrored bars"),
         VisualizerShape::Wave => tk("Wave"),
         VisualizerShape::Radial => tk("Radial"),
@@ -249,7 +249,7 @@ pub fn register(r: &mut PluginRegistry) {
         monitor("column", tk("Column"), style(MonitorStyle::Column)),
         monitor("gauges", tk("Gauges"), style(MonitorStyle::Gauges)),
         monitor("meters", tk("Meters"), style(MonitorStyle::Meters)),
-        monitor("bars", tk("Bars"), style(MonitorStyle::Bars)),
+        monitor("bars", tk("System bars"), style(MonitorStyle::Bars)),
         monitor("wavy", tk("Wavy gauges"), MonitorWidget { style: MonitorStyle::Gauges, wavy: true, ring_width: WAVY_RING_PX, rows: vec![MonitorRow::Cpu, MonitorRow::Memory, MonitorRow::Disk], ..MonitorWidget::default() }),
     ];
     r.desktop_widget(DesktopWidgetType::family(ids::MONITOR, "column", tk("System monitor"), tk("Live CPU, GPU, memory, temperatures, disk and network on the desktop, as a column or ring gauges"), "gauge", monitors).in_menu());
@@ -607,6 +607,21 @@ fn vis_id(s: VisualizerShape) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn visualizer_bars_keep_their_own_translation_and_saved_id() {
+        assert_eq!(vis_id(VisualizerShape::Bars), "bars");
+        let mut registry = PluginRegistry::default();
+        register(&mut registry);
+        let monitor = registry.desktop_widgets().iter().filter(|kind| kind.plugin == ids::MONITOR)
+            .flat_map(|kind| kind.styles.iter()).find(|style| style.id == "bars").unwrap();
+        mandara_i18n::with_language(Some(mandara_i18n::Lang::Ru), || {
+            let label = mandara_i18n::tr(vis_label(VisualizerShape::Bars));
+            assert_eq!(label, "Столбцы спектра");
+            assert_ne!(label, mandara_i18n::tr("Bars"));
+            assert_eq!(mandara_i18n::tr(&monitor.name), "Системные столбцы");
+        });
+    }
 
     #[test]
     fn every_widget_kind_comes_from_a_registered_plugin() {

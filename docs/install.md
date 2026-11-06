@@ -15,12 +15,21 @@ missing. Downloads retry on temporary connection errors and stop if the
 connection stalls. The command runs the script only after the download
 succeeds. It removes temporary files on completion, failure or interruption.
 
+Five numbered stages cover the release signature, archive download, checksum,
+extraction and starting the installer. Each finished download reports its byte
+count. In a terminal, curl also shows the transferred and total sizes, speed
+and percentage when the server provides a total. Retry warnings stay visible
+in logs. A recovered request is followed by **Release signature verified.**
+before the archive download starts; failed signature downloads stop with
+**Nothing was installed.** Check your connection and run the same command
+again. No download fallback skips verification.
+
 The verified installer normally runs from your cache, and falls back to
 `/tmp` if the cache is unavailable. Setting `TMPDIR` overrides both: choose
 a writable folder on a filesystem that allows programs to run. A `noexec`
 mount on that folder prevents the extracted installer from starting.
 
-Its messages follow your terminal language, with the same fifteen languages
+Its messages follow your terminal language, with the same twenty languages
 as Mandara.
 
 Installation, configuration and administrator prompts stay in the Rust
@@ -54,6 +63,13 @@ builds for Alpine, Void musl and Chimera. `SHA256SUMS` sits next to them
 (`sha256sum -c SHA256SUMS --ignore-missing` checks a download by hand),
 signed by Mandara's release key in `SHA256SUMS.sig`: `mandara install` and
 every update check that signature and refuse a release without it.
+Installing a published binary also stops if its checksums cannot be reached
+and no signed archive is available beside it. Keep `SHA256SUMS`,
+`SHA256SUMS.sig` and the tarball together for an offline install; the download
+script already does this. Builds from your own source checkout do not need a
+published checksum. The existing `--no-verify` option is an explicit override
+for installing a binary yourself; the download script and release downloads
+still require valid signatures.
 
 Adding Mandara to PATH updates your shell profiles. The terminal that ran
 the installer keeps its old PATH: open a new terminal before running
@@ -102,7 +118,7 @@ one (see [No compositor yet](#no-compositor-yet)).
 | `--repo OWNER/NAME` | Releases and sources from another repository |
 | `--dry-run` | Show everything that would happen, change nothing |
 | `--yes` | Don't ask; take every default |
-| `--no-verify` | Install even if this binary doesn't match its published checksum |
+| `--no-verify` | Install this binary even if its published checksum is unavailable or doesn't match |
 
 With a terminal, `mandara install` opens on its own screen: the MANDARA
 wordmark and an arrow-key menu that picks the compositor to integrate with

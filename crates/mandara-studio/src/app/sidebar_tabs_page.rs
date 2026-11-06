@@ -1,4 +1,4 @@
-//! Studio → Sidebars & hover → Tabs: the sidebar's tabs and the widgets on
+//! Studio → Bars → Sidebar: the sidebar's tabs and the widgets on
 //! each. Tabs: select, rename in place, pick an icon, drag to reorder,
 //! delete (asks once). Widgets of the selected tab: drag to reorder, drop
 //! on another tab to move them there, × to take them off, and a searchable
@@ -265,7 +265,7 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// Studio → Sidebars & hover → Tabs.
+    /// Studio → Bars → Sidebar.
     pub(super) fn sidebar_tabs_editor(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let tabs = &cfg.sidebar.tabs;
         self.sidebar_tabs.selected = self.sidebar_tabs.selected.min(tabs.len().saturating_sub(1));

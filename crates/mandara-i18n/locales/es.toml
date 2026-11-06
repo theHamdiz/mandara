@@ -8696,3 +8696,20 @@
 "Couldn't verify the community store policy. Try again later." = "No se pudo verificar la política de la tienda de la comunidad. Vuelve a intentarlo más tarde."
 "The community store has blocked installs and updates for {repository}." = "La tienda de la comunidad ha bloqueado las instalaciones y actualizaciones de {repository}."
 "Repository details are missing IDs required by the store policy." = "En los datos del repositorio faltan los identificadores que exige la política de la tienda."
+
+# Studio bars
+"Edges & corners" = "Bordes y esquinas"
+"a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "una sección (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] o plugins/<installed|marketplace|local>"
+"Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "Añade el complemento “{name}” a la barra (Studio → Barras → Barra) para ver allí el indicador; los indicadores en pantalla funcionan en cualquier caso."
+"Add any widget to it in Studio → Bars → Sidebar." = "Añade cualquier widget en Studio → Barras → Barra lateral."
+"Number of bars" = "Número de barras"
+
+"Release signature verified." = "Firma de la versión verificada."
+"Downloaded:" = "Descargado:"
+"Archive checksum verified." = "Suma de comprobación del archivo verificada."
+"Could not download the signed release. Nothing was installed. Check your connection and try again." = "No se pudo descargar la versión firmada. No se instaló nada. Comprueba tu conexión y vuelve a intentarlo."
+
+"Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "No se pudo verificar este binario: {reason}. Mandara no se instaló. Comprueba tu conexión y vuelve a intentarlo."
+"Install this binary even when its published checksum is unavailable or doesn't match." = "Instalar este binario aunque su suma de comprobación publicada no esté disponible o no coincida."
+
+"Spectrum bars" = "Barras del espectro"

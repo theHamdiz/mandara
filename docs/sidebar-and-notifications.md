@@ -4,7 +4,7 @@
 
 - **Your own sidebar tabs:** create tabs, name them, pick an icon and put any
   widget (Mandara's or a third-party plugin's) on any of them, the same
-  widget on several if you like. Edit them in Studio → Sidebars & hover →
+  widget on several if you like. Edit them in Studio → Bars → Sidebar →
   **Tabs**, right-click a tab in the shell, or use
   `mandara msg sidebar tab …`. The sidebar reopens on the tab you used last,
   and Ctrl+Tab / Ctrl+1–9 switch tabs. The **+** button stays pinned while

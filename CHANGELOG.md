@@ -6,6 +6,63 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Bars and sidebars share one focused settings page, with clearer installation
+steps and less repeated work behind the desktop.
+
+### Improved
+
+- **A clearer launcher icon.** The phoenix fills more of its button, and
+  its icon chooser includes thirteen distinct colour SVG alternatives.
+  Icons decode at their drawn size.
+
+- **Bars in Studio.** Bar layouts, side bars, sidebar cards, panels and
+  edge actions have their own tabs on one page. Existing settings and
+  Studio shortcuts keep working, and translated directions use the tab labels.
+
+### Fixed
+
+- **Video wallpapers reach every edge.** They fill the screen at fractional
+  display scales, including the solid color around centered and fitted clips.
+
+- **Store checks can recover from a busy refresh.** A lock timeout reuses
+  the last valid policy within its existing age limits, preserving blocked
+  entries without starting another refresh. (#111)
+
+- **Script fonts stay readable.** Hindi and Marathi text can use their
+  selected script font directly, while primary font validation still
+  protects text measurements.
+
+- **Installer retries are clearer.** Numbered stages confirm the release
+  signature and archive checksum, completed downloads show their sizes,
+  and exhausted signature-download retries stop before fetching the archive.
+  Manually downloaded binaries also stop when verification is unavailable,
+  unless you explicitly choose `--no-verify`. (#115)
+
+- **No bright wallpaper corners beside the Notch bar.** The power menu
+  and attached launcher dim the wallpaper around the bar’s actual shape. (#114)
+
+### Under the hood
+
+- **Temporary folders can use symbolic links.** Resource tests accept
+  folders reached through a symbolic link. (#111)
+
+- **Reuse plugin views.** Theme and geometry edits keep the bar and sidebar’s
+  live plugin slots.
+  Wallpaper scheme previews cache their five displayed colors and reuse
+  them when you return to a seed or mode.
+
+- **Less background work in the dock.** It checks window geometry only for
+  Smart hiding and keeps its slots cached across unrelated service updates.
+  Media position updates and screen-time readouts avoid copying retained
+  track data and history.
+  Switching Feeds, Home Assistant or Phone Connect off releases their
+  cached snapshots, including while an older request finishes.
+
+- **Shared OCR dependencies.** Text recognition shares newer geometry,
+  random-number and iterator libraries with the rest of the shell.
+  Compatible dependency updates also cover configuration parsing, downloads,
+  archives and background tasks.
+
 ## 0.18.0 — 2026-11-05
 
 Easier sound switching, clearer menu cards, and fixes for notification focus
