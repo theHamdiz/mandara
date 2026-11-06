@@ -14,8 +14,9 @@ use crate::bidi::Bidi as _;
 use crate::icons::icon;
 use crate::kit::{text, tokens};
 use crate::style::ClipRounded as _;
+use crate::theme_names::ThemeName;
 
-/// Five compact rows retain the built-in catalog at the menu's existing height.
+/// Scrolling rows keep this compact height; fitting rows may share extra space.
 pub(super) const ROW_H: f32 = 48.0;
 /// A small desktop-shaped material sample leaves names most of the card width.
 const PREVIEW_W: f32 = 38.0;
@@ -57,7 +58,17 @@ impl Preview {
 pub(super) struct Choice {
     id: String,
     name: String,
+    builtin: bool,
     preview: Preview,
+}
+
+impl ThemeName for Choice {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn is_builtin(&self) -> bool {
+        self.builtin
+    }
 }
 
 impl Choice {
@@ -66,9 +77,49 @@ impl Choice {
         Self {
             id: def.id.clone(),
             name: def.name.clone(),
+            builtin: matches!(def.origin, catalog::ThemeOrigin::Builtin),
             preview: Preview::from_palette(&def.palette(dark)),
         }
     }
+}
+
+/// Fitting catalogs share the viewport height; longer catalogs retain content
+/// height so their parent can scroll without compressing cards.
+pub(super) fn grid(fits: bool) -> gpui::Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(tokens::XS))
+        .when(fits, |el| el.flex_1().min_h_0())
+        .when(!fits, |el| el.flex_none())
+}
+
+/// Rows receive the grid's remaining height, keeping compact cards readable.
+pub(super) fn row(fits: bool) -> gpui::Div {
+    div()
+        .row()
+        .gap(px(tokens::XS))
+        .when(fits, |el| el.flex_1().min_h(px(ROW_H)))
+        .when(!fits, |el| el.flex_none().h(px(ROW_H)))
+}
+
+/// The wrapper must constrain its flex child so extra rows scroll inside it.
+pub(super) fn scroll_viewport(
+    list: impl IntoElement,
+    scroll: &gpui::ScrollHandle,
+    bar: &Rc<crate::scrollbar::ScrollbarState>,
+    palette: &MandaraPalette,
+) -> gpui::Div {
+    crate::scrollbar::with_scrollbar(list, scroll, bar, palette)
+        .flex()
+        .flex_col()
+        .flex_1()
+        .min_h_0()
+}
+
+/// Width belongs to the row; height follows its allocated grid track.
+fn card_layout() -> gpui::Div {
+    div().flex_1().min_w_0().h_full()
 }
 
 #[derive(Default)]
@@ -190,13 +241,14 @@ pub(super) fn card(
     p: &MandaraPalette,
 ) -> impl IntoElement {
     let selected = choice.id == current;
+    let name = choice.localized_name();
     let fill = surface(p, selected);
     let hover = p.surface_base.mix(p.primary, HOVER_TINT).hsla();
     let id = choice.id.clone();
-    div()
+    card_layout()
         .id(("menu-theme", index))
         .role(gpui::Role::RadioButton)
-        .aria_label(choice.name.clone())
+        .aria_label(name.clone())
         .aria_toggled(if selected {
             gpui::Toggled::True
         } else {
@@ -204,9 +256,6 @@ pub(super) fn card(
         })
         .focusable()
         .tab_index(index as isize)
-        .flex_1()
-        .min_w_0()
-        .h(px(ROW_H))
         .px(px(tokens::SM))
         .row()
         .items_center()
@@ -242,7 +291,7 @@ pub(super) fn card(
                     FontWeight::MEDIUM
                 })
                 .text_color(p.on_surface.hsla())
-                .child(crate::bidi::paragraph(choice.name.clone())),
+                .child(crate::bidi::paragraph(name)),
         )
         .child(
             div()
@@ -255,6 +304,91 @@ pub(super) fn card(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every flex boundary must pass spare height down to the actual card.
+    #[test]
+    fn fitting_catalogs_stretch_the_grid_rows_and_cards() {
+        let mut grid = grid(true);
+        let mut row = row(true);
+        let mut card = card_layout();
+        assert_eq!(grid.style().flex_grow, Some(1.0));
+        assert_eq!(row.style().flex_grow, Some(1.0));
+        assert_eq!(grid.style().size.height, None);
+        assert_eq!(row.style().size.height, None);
+        assert_eq!(row.style().min_size.height, Some(px(ROW_H).into()));
+        assert_eq!(card.style().size.height, Some(gpui::relative(1.0).into()));
+    }
+
+    /// Extra user themes scroll at the existing row height instead of shrinking.
+    #[test]
+    fn overflowing_catalogs_keep_compact_rows_for_scrolling() {
+        let mut grid = grid(false);
+        let mut row = row(false);
+        assert_eq!(grid.style().flex_grow, Some(0.0));
+        assert_eq!(row.style().flex_grow, Some(0.0));
+        assert_eq!(row.style().flex_shrink, Some(0.0));
+        assert_eq!(row.style().size.height, Some(px(ROW_H).into()));
+    }
+
+    /// A block wrapper lets the list expand beyond the menu instead of scrolling.
+    #[test]
+    fn overflow_wrapper_passes_its_bounded_height_to_the_list() {
+        let palette = catalog::builtin()[0].palette(true);
+        let mut viewport = scroll_viewport(
+            div().flex_1().min_h_0(),
+            &gpui::ScrollHandle::new(),
+            &crate::scrollbar::ScrollbarState::new(),
+            &palette,
+        );
+        assert_eq!(viewport.style().display, Some(gpui::Display::Flex));
+        assert_eq!(
+            viewport.style().flex_direction,
+            Some(gpui::FlexDirection::Column)
+        );
+        assert_eq!(viewport.style().flex_grow, Some(1.0));
+        assert_eq!(viewport.style().min_size.height, Some(px(0.0).into()));
+    }
+
+    /// A cached preview follows locale changes without reloading its palette.
+    #[test]
+    fn builtin_labels_translate_when_the_card_is_rendered() {
+        let def = catalog::builtin()
+            .iter()
+            .find(|def| def.id == catalog::DEFAULT_THEME)
+            .unwrap();
+        let choice = Choice::from_def(def, true);
+        let arabic =
+            mandara_i18n::with_language(Some(mandara_i18n::Lang::Ar), || choice.localized_name());
+        assert_ne!(arabic, def.name);
+        assert_eq!(
+            arabic,
+            mandara_i18n::with_language(Some(mandara_i18n::Lang::Ar), || mandara_i18n::tr(
+                &def.name
+            ))
+        );
+        assert_eq!(
+            mandara_i18n::with_language(Some(mandara_i18n::Lang::En), || choice.localized_name()),
+            def.name
+        );
+    }
+
+    /// User labels stay literal even when their id or text matches a built-in key.
+    #[test]
+    fn user_overrides_and_named_themes_keep_their_authored_labels() {
+        let mut def = catalog::builtin()[0].clone();
+        def.origin = catalog::ThemeOrigin::User {
+            path: "/tmp/authored-theme.toml".into(),
+        };
+        for name in [def.name.clone(), "Dark".into()] {
+            def.name = name.clone();
+            let choice = Choice::from_def(&def, true);
+            assert_eq!(
+                mandara_i18n::with_language(Some(mandara_i18n::Lang::Ar), || choice
+                    .localized_name()),
+                name
+            );
+        }
+    }
 
     /// All catalog appearances keep the card label readable in both states.
     #[test]

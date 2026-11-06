@@ -93,6 +93,11 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// Theme names come from TOML rather than a Rust translation call.
+fn theme_name_key(source: &str) -> Option<String> {
+    source.parse::<toml::Table>().ok()?.get("name")?.as_str().filter(|name| !name.is_empty()).map(str::to_owned)
+}
+
 /// Every key the shell, Studio, built-in plugins and download command use.
 pub(crate) fn source_keys() -> BTreeSet<String> {
     let mut files = Vec::new();
@@ -107,7 +112,25 @@ pub(crate) fn source_keys() -> BTreeSet<String> {
             keys.extend(keys_in(&text));
         }
     }
+    let themes = workspace().join("crates/mandara-theme/themes");
+    for entry in std::fs::read_dir(&themes).expect("built-in theme directory") {
+        let path = entry.expect("built-in theme entry").path();
+        if path.extension().is_some_and(|extension| extension == "toml") {
+            let source = std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+            keys.insert(theme_name_key(&source).unwrap_or_else(|| panic!("{}: invalid theme name", path.display())));
+        }
+    }
     keys
+}
+
+/// Escapes and non-Latin names retain their exact catalog spelling.
+#[test]
+fn theme_metadata_keys_require_a_nonempty_string_name() {
+    assert_eq!(theme_name_key("name = \"Night Citrine\""), Some("Night Citrine".into()));
+    assert_eq!(theme_name_key("name = \"ألوان \\\"البحر\\\"\""), Some("ألوان \"البحر\"".into()));
+    for source in ["name = 3", "name = \"\"", "id = \"custom\"", "name = ["] {
+        assert_eq!(theme_name_key(source), None);
+    }
 }
 
 #[test]

@@ -74,6 +74,11 @@ How Mandara looks and feels, and how much of it you can shape.
   <sub>Right-click empty bar space for the <b>main menu</b>.</sub>
 </p>
 
+Open **Look** in the main menu to pick a theme. The cards fill the
+available height; longer catalogs use compact scrolling rows. Built-in
+names follow your language in the menu and Studio, while custom theme
+names stay as you wrote them.
+
 ## Looks
 
 <p align="center">

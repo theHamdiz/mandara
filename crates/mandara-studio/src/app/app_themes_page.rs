@@ -1,5 +1,5 @@
 //! Studio → Themes → Other apps: the apps Mandara can theme, as a compact
-//! grid of tiles (glyph, name, switch) grouped by kind, Noctalia style.
+//! grid of tiles (glyph, name, switch) grouped by kind.
 //!
 //! Every app is off until switched on: nothing is written to another app's
 //! files before that, and switching one off takes back what Mandara changed

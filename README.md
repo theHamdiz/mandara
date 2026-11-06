@@ -44,7 +44,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/hero.webp" alt="Mandara Shell desktop over the Corniche at sunset: the edge-frame bar with rounded screen corners and the song playing, a headline clock, a to-do list taped on torn paper, two sticky notes (Weekend plans and Ideas), a month calendar, the agenda of upcoming events and the dock" width="100%"/>
+  <img src="docs/screenshots/hero.webp" alt="Mandara Shell desktop over sculpted glass ribbons: the edge-frame bar with rounded screen corners and the song playing, a headline clock, a to-do list taped on torn paper, two sticky notes (Weekend plans and Ideas), a month calendar, the agenda of upcoming events and the dock" width="100%"/>
 </p>
 
 <p align="center">

@@ -931,6 +931,7 @@ Carousel: how much bigger the middle wallpaper is
 Categories
 Category
 Category chips
+Catppuccin
 Catppuccin Mocha
 Caustics
 Cell shape
@@ -1815,6 +1816,7 @@ Egyptian
 Eight
 Eject
 El-Mandara, Alexandria
+Eldritch
 Elevation tint
 Eleven
 Emerald
@@ -3725,6 +3727,7 @@ Next window (Alt+Tab)
 Next: {name}
 Nicomachean Ethics, Book II
 Night
+Night Citrine
 Night bay
 Night dimming
 Night greeting
@@ -6928,6 +6931,7 @@ Vertical scroller
 Vertical tile
 Very little indeed is necessary for living a happy life.
 Vesktop / Vencord
+Vesper
 Vibrant
 Video
 Video bitrate of the Custom quality

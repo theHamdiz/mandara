@@ -6,13 +6,26 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **Fresh desktop pictures.** The README keeps its familiar widgets with
+  the repaired sticky notes on a new wallpaper. Its banner now says twenty
+  languages, matching the available language packs.
+
 ### Fixed
+
+- **Theme cards fill their space.** Main menu → Look → Themes uses the
+  available grid height, and built-in names follow your language in the
+  menu and Studio. Custom theme names stay as you wrote them.
 
 - **Keyboard navigation in Beacon.** Its search and mode buttons are reachable
   with Tab and Shift+Tab, with visible focus and Enter or Space to select
   a mode. (#120)
 
 ### Under the hood
+
+- **Reliable integration tests.** The private KeePassXC server listens before
+  client requests arrive, and its waits have a deadline, preventing a CI hang.
 
 - **Clearer helper contracts.** Internal documentation explains policy cache
   limits, view lifetimes, Studio routing and native output sizing. (#111)

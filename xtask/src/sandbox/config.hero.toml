@@ -1,13 +1,13 @@
 # `cargo xtask sandbox up --config hero --size 2880x1620 --scale 1.5`: the
 # README hero shot — the edge-frame bar with rounded screen corners, a
 # headline clock, a taped to-do list on torn paper, two sticky notes, the
-# month and the agenda, over the Corniche at sunset (the dunes at dawn in
-# light mode). Everything else keeps the shell's defaults.
+# month and the agenda, over sculpted glass ribbons in dark and light
+# mode. Everything else keeps the shell's defaults.
 #
 # The shot needs its two wallpapers once (the generator is on in this
 # config):
-#   sandbox msg wallgen generate corniche --palette mandara-corniche --seed 0x11 --size 2880x1620 --format png --no-apply
-#   sandbox msg wallgen generate dunes --palette desert --seed 0x12 --size 2880x1620 --format png --no-apply --light
+#   sandbox msg wallgen generate glass --palette catppuccin-mocha --seed 0x20 --size 2880x1620 --format png --no-apply
+#   sandbox msg wallgen generate glass --palette catppuccin-mocha --seed 0x21 --size 2880x1620 --format png --no-apply --light
 # and some demo content:
 #   sandbox msg todo add "Water the basil"   (then four more; `todo done 1`)
 #   sandbox msg notes add "Weekend plans⏎…"  and  notes add "Ideas⏎…"
@@ -140,7 +140,7 @@ defaults_version = 1
 enabled = ["dock", "todo", "notes", "desktop-productivity", "desktop-calendar", "desktop-clocks", "wallpaper-generator"]
 
 [wallpaper]
-path = "/home/demo/Pictures/Wallpapers/Generated/corniche-000011-2880x1620.png"
+path = "/home/demo/Pictures/Wallpapers/Generated/glass-000020-2880x1620.png"
 
 [[calendar.sources]]
 name = "Demo"
@@ -148,5 +148,5 @@ location = "/home/demo/Documents/demo.ics"
 enabled = true
 
 [wallpaper.variants]
-light = "/home/demo/Pictures/Wallpapers/Generated/dunes-000012-2880x1620.png"
-dark = "/home/demo/Pictures/Wallpapers/Generated/corniche-000011-2880x1620.png"
+light = "/home/demo/Pictures/Wallpapers/Generated/glass-000021-2880x1620.png"
+dark = "/home/demo/Pictures/Wallpapers/Generated/glass-000020-2880x1620.png"

@@ -674,9 +674,10 @@ fn look(palette: &MandaraPalette, p: &PanelCx, tc: &TileCx, cache: &Rc<RefCell<t
     };
     let dark = config(cx).read(cx).get().theme.mode.is_dark();
     let themes = theme_card::Catalog::choices(cache, dark, cx);
-    let mut grid = div().flex_none().flex().flex_col().gap(px(tokens::XS));
+    let fits = themes.len().div_ceil(THEMES_PER_ROW) <= THEME_ROWS_FIT;
+    let mut grid = theme_card::grid(fits);
     for (r, chunk) in themes.chunks(THEMES_PER_ROW).enumerate() {
-        let mut row = div().flex_none().h(px(theme_card::ROW_H)).row().gap(px(tokens::XS));
+        let mut row = theme_card::row(fits);
         for (c, choice) in chunk.iter().enumerate() {
             row = row.child(theme_card::card(choice, r * THEMES_PER_ROW + c, &current, palette));
         }
@@ -687,7 +688,6 @@ fn look(palette: &MandaraPalette, p: &PanelCx, tc: &TileCx, cache: &Rc<RefCell<t
     }
     // The rows share the card while they fit; more (your own themes) scroll.
     let (scroll, bar) = crate::scrollbar::keyed("menu-themes");
-    let fits = themes.len().div_ceil(THEMES_PER_ROW) <= THEME_ROWS_FIT;
     let list = div().id("menu-themes").flex_1().min_h(px(0.0)).flex().flex_col().when(!fits, |el| el.overflow_y_scroll().track_scroll(&scroll)).child(grid);
     let themes_card = card(palette)
         .flex_1()
@@ -696,9 +696,10 @@ fn look(palette: &MandaraPalette, p: &PanelCx, tc: &TileCx, cache: &Rc<RefCell<t
         .flex_col()
         .gap(px(tokens::SM))
         .child(div().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(t("Themes")))
-        .child(if fits { list.into_any_element() } else { crate::scrollbar::with_scrollbar(list, &scroll, &bar, palette).flex_1().min_h(px(0.0)).into_any_element() });
+        .child(if fits { list.into_any_element() } else { theme_card::scroll_viewport(list, &scroll, &bar, palette).into_any_element() });
     div()
         .flex_1()
+        .min_h_0()
         .flex()
         .flex_col()
         .gap(px(tokens::SM))

@@ -28,6 +28,7 @@ use mandara_theme::{Color, MandaraPalette, SchemeVariant, ThemeSource, catalog};
 use mandara_ui::bidi::Bidi as _;
 use mandara_ui::icons::icon;
 use mandara_ui::state::update_config;
+use mandara_ui::theme_names::ThemeName as _;
 
 use super::{StudioView, apps_page, grid, swatch_list};
 use crate::registry;
@@ -431,7 +432,7 @@ impl StudioView {
                 .map(|(def, tp, _)| {
                     let id = def.id.clone();
                     let tip_palette = tp.clone();
-                    swatch_list::row(SharedString::from(format!("theme-row-{}", def.id)), tp, def.name.clone().into(), Some(fonts.display.clone()), tr(&def.description), active.as_deref() == Some(def.id.as_str()), p)
+                    swatch_list::row(SharedString::from(format!("theme-row-{}", def.id)), tp, def.localized_name().into(), Some(fonts.display.clone()), tr(&def.description), active.as_deref() == Some(def.id.as_str()), p)
                         .tooltip(swatch_list::preview_tip(p, move || shell_mock(&tip_palette, None, swatch_list::TIP_MOCK_W_PX, swatch_list::TIP_MOCK_H_PX, RADIUS_12_PX, false).into_any_element()))
                         .on_click(move |_: &ClickEvent, _, cx| apply_theme(id.clone(), cx))
                         .into_any_element()
@@ -501,7 +502,7 @@ impl StudioView {
                         .row()
                         .flex_col()
                         .gap(px(SPACE_8_PX))
-                        .child(div().truncate().text_start().font_family(fonts.display.clone()).text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).text_color(tp.on_surface.hsla()).child(def.name.clone()))
+                        .child(div().truncate().text_start().font_family(fonts.display.clone()).text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).text_color(tp.on_surface.hsla()).child(def.localized_name()))
                         .child(palette_strip(&strip_colors(tp), CARD_STRIP_H_PX, RADIUS_4_PX))
                         .child(div().h(px(DIM_32_PX)).text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(tp.on_surface_variant.hsla()).line_clamp(2).child(mandara_ui::bidi::paragraph(tr(&def.description)))),
                 )
