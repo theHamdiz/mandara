@@ -3634,7 +3634,7 @@ checksum = "fc04a4c58212d57930a24bf47d3fa87485264a3a054e9c10e042eb373573ad3c"
 
 [[package]]
 name = "mandara-app"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -3665,7 +3665,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-compositor"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -3685,7 +3685,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-config"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -3746,7 +3746,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-greeter"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -3776,7 +3776,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-i18n"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "mandara-version",
  "memmap2",
@@ -3786,7 +3786,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-install"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "clap",
  "flate2",
@@ -3815,7 +3815,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-plugins"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -3835,7 +3835,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-services"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "ab_glyph",
  "aes",
@@ -3910,7 +3910,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-studio"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -3964,7 +3964,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-ui"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4013,7 +4013,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-wallgen"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "image",
  "mandara-i18n",
@@ -8768,7 +8768,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "ab_glyph",
  "anyhow",
