@@ -1,10 +1,10 @@
 //! Native Beacon keyboard navigation in the marked private resource desktop.
 
-use std::io::{BufRead as _, BufReader, Write as _};
+use std::io::{BufRead as _, BufReader, Read as _, Write as _};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
-use std::time::Duration;
+use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
 
 use image::RgbaImage;
 use mandara_config::{Locale, ShellConfig};
@@ -16,8 +16,10 @@ const SCREEN: (f32, f32) = (2560.0, 1440.0);
 const SCALE: f32 = 1.5;
 /// Allow input and the software renderer to finish before capturing pixels.
 const SETTLE: Duration = Duration::from_millis(350);
-/// A dead private shell cannot leave the test blocked on its reply.
+/// Private shell requests and clipboard reads must not leave the test blocked.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+/// One expected character plus one byte to detect unexpected clipboard text.
+const CLIPBOARD_READ_LIMIT: u64 = 2;
 /// Render native focus before the next synthetic key, as a person would.
 const KEY_SETTLE_MS: &str = "100";
 /// The inner button sample excludes its focus rim and surrounding shadow.
@@ -25,10 +27,10 @@ const SAMPLE_EDGE: f32 = 32.0;
 /// Keep a seat keyboard present between short wtype calls in headless Mango.
 const KEYBOARD_LIFETIME: Duration = Duration::from_secs(60);
 
-struct Keyboard(Child);
+struct Process(Child);
 
-impl Drop for Keyboard {
-    /// Reaps only this test's recorded virtual keyboard, including on panic.
+impl Drop for Process {
+    /// Reaps only this test's recorded child, including on panic or timeout.
     fn drop(&mut self) { let _ = self.0.kill(); let _ = self.0.wait(); }
 }
 
@@ -70,6 +72,34 @@ fn input(runtime: &Path, display: &str, args: &[&str]) {
     std::thread::sleep(SETTLE);
 }
 
+/// Rechecks isolation before reading the native clipboard. The child inherits
+/// only the private Wayland endpoint; both its lifetime and captured bytes are
+/// bounded, including when selection transfer never completes.
+fn clipboard(runtime: &Path, display: &str) -> Vec<u8> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    assert!(private_runtime(runtime, &root), "refusing to read an unmarked clipboard");
+    let wayland = Path::new(display);
+    assert!(!wayland.is_absolute() && wayland.components().count() == 1, "use a socket in the marked runtime");
+    let mut process = Process(Command::new("wl-paste").env_clear().env("XDG_RUNTIME_DIR", runtime).env("WAYLAND_DISPLAY", display)
+        .arg("--no-newline").stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap());
+    let output = process.0.stdout.take().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let result = output.take(CLIPBOARD_READ_LIMIT).read_to_end(&mut bytes).map(|_| bytes);
+        let _ = tx.send(result);
+    });
+    let deadline = Instant::now() + REQUEST_TIMEOUT;
+    let status = loop {
+        if let Some(status) = process.0.try_wait().unwrap() { break status; }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        assert!(!remaining.is_zero(), "private clipboard reader timed out");
+        std::thread::sleep(SETTLE.min(remaining));
+    };
+    assert!(status.success(), "private clipboard reader failed: {status}");
+    rx.recv_timeout(deadline.saturating_duration_since(Instant::now())).expect("private clipboard read timed out").expect("private clipboard read failed")
+}
+
 /// Captures the native output, checking its expected 4K geometry so button
 /// samples cannot silently read the wrong display or scale.
 fn capture(runtime: &Path, display: &str) -> RgbaImage {
@@ -104,10 +134,10 @@ fn beacon_keyboard_fixture_rejects_missing_and_mismatched_markers() {
 }
 
 /// Exercises native focus and activation in English and Arabic, including
-/// hidden providers. Escape from a button first clears its active mode, then
-/// closes Beacon when no mode remains; mode activation itself keeps it open.
+/// hidden providers and the first character typed from a button. Escape first
+/// clears its active mode, then closes Beacon when no mode remains.
 #[test]
-#[ignore = "requires the marked 4K/1.5 resource desktop, Beacon, grim and wtype"]
+#[ignore = "requires the marked 4K/1.5 resource desktop, Beacon, grim, wtype and wl-paste"]
 fn tab_shift_tab_enter_and_space_reach_beacon_modes() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let runtime = PathBuf::from(std::env::var_os("MANDARA_BEACON_TEST_RUNTIME").expect("private resource runtime"));
@@ -115,7 +145,7 @@ fn tab_shift_tab_enter_and_space_reach_beacon_modes() {
     let display = std::env::var("MANDARA_BEACON_TEST_DISPLAY").unwrap_or_else(|_| "wayland-0".into());
     let wayland = Path::new(&display);
     assert!(!wayland.is_absolute() && wayland.components().count() == 1, "use a socket in the marked runtime");
-    let _keyboard = Keyboard(Command::new("wtype").env_clear().env("XDG_RUNTIME_DIR", &runtime).env("WAYLAND_DISPLAY", &display)
+    let _keyboard = Process(Command::new("wtype").env_clear().env("XDG_RUNTIME_DIR", &runtime).env("WAYLAND_DISPLAY", &display)
         .args(["-s", &KEYBOARD_LIFETIME.as_millis().to_string()]).spawn().unwrap());
     std::thread::sleep(SETTLE);
     assert_eq!(command(&runtime, &["config", "get", "/launcher/look/style"]), "beacon");
@@ -132,10 +162,17 @@ fn tab_shift_tab_enter_and_space_reach_beacon_modes() {
         let cfg: ShellConfig = serde_json::from_value(command(&runtime, &["config", "get"])).unwrap();
         let placement = beacon(&cfg, SCREEN, true, 4, rtl);
         let initial = capture(&runtime, &display);
+        input(&runtime, &display, &["q"]);
+        input(&runtime, &display, &["-M", "ctrl", "-k", "a", "-k", "x", "-m", "ctrl"]);
+        assert_eq!(clipboard(&runtime, &display).as_slice(), b"q", "seed a different selection so an empty query cannot pass using stale clipboard text ({language})");
         input(&runtime, &display, &["-k", "Tab"]);
         let focused = capture(&runtime, &display);
         assert_eq!(sample(&initial, placement, 0, false), sample(&focused, placement, 0, false), "Tab focuses Apps without selecting it");
         assert_ne!(sample(&initial, placement, 0, true), sample(&focused, placement, 0, true), "keyboard focus needs a visible rim ({language})");
+        input(&runtime, &display, &["z"]);
+        input(&runtime, &display, &["-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"]);
+        assert_eq!(clipboard(&runtime, &display).as_slice(), b"z", "the first character typed from a focused mode button must reach the actual query ({language})");
+        input(&runtime, &display, &["-M", "ctrl", "-k", "a", "-m", "ctrl", "-k", "BackSpace", "-k", "Tab"]);
         input(&runtime, &display, &["-k", "Return"]);
         let apps = sample(&capture(&runtime, &display), placement, 0, false);
         assert_ne!(apps, sample(&initial, placement, 0, false), "Enter must select Apps ({language})");

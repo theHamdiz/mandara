@@ -11,9 +11,10 @@ v0.19.0), the normal optimized release profile, fat LTO and the tuned system
 allocator. Each run used a fresh private home and the same warm shader cache.
 The headless output was 3840 × 2160 at scale 1.5, with 23 active plugins out
 of 77 registered. The fixture exercised the bar, sidebar, selected panels,
-twenty notification-history entries and theme edits. Network integrations
-had no configured accounts or feeds; this does not measure every plugin or
-an active video wallpaper.
+twenty notification-history entries and theme edits. The private session ran
+offline with its system bus disabled, so real network, power and Bluetooth
+services were not exercised. Integrations had no configured accounts or feeds;
+this does not measure every plugin or an active video wallpaper.
 
 | Measurement | Result |
 |---|---|
