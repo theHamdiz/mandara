@@ -1,18 +1,15 @@
 //! The process-wide memory allocator, picked at build time by exactly one
 //! `alloc-*` cargo feature of `mandara-app`:
 //!
-//! * `alloc-system-tuned` (default) — see below; the leanest in the
-//!   measurements in docs/releasing.md, and no C allocator.
+//! * `alloc-system-tuned` (default) — glibc malloc with at most [`ARENA_MAX`]
+//!   arenas and a fixed [`MMAP_THRESHOLD`]. Released caches request a trim;
+//!   [`TRIM_EVERY`] provides a fallback for other freed storage.
 //! * `alloc-mimalloc` — mimalloc v3 (C, vendored by the `mimalloc` crate);
 //!   frees return to the OS through its own page purging.
 //! * `alloc-mimalloc-v2` — the same, on the older v2 line.
 //! * `alloc-jemalloc` — jemalloc (C, `tikv-jemallocator`) with a background
 //!   purge thread, few arenas and short dirty / muzzy decay.
 //! * `alloc-system` — glibc malloc, untouched.
-//! * `alloc-system-tuned` — glibc malloc with at most [`ARENA_MAX`] arenas,
-//!   a fixed [`MMAP_THRESHOLD`] and a periodic `malloc_trim(0)`
-//!   ([`TRIM_EVERY`]) on the service runtime, so freed heap returns to the
-//!   OS.
 //!
 //! Rust allocations only: C libraries (Mesa, fontconfig, FreeType, Wayland)
 //! keep using glibc malloc in every variant.

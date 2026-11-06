@@ -134,7 +134,8 @@ around, each one measured or shipped today:
 4. **Fast by measurement, not by claim.** The measured setup settles
    below 100 MiB of RAM and uses under 210 MiB of video memory.
    Plugin views reuse clipboard layouts, media gesture state and network
-   history. Typical frame builds take around 0.1 ms. Startup peaks are higher;
+   history. Image previews decode in bounded workers and release their caches
+   after closing. Typical frame builds take around 0.1 ms. Startup peaks are higher;
    these are measurements of one setup, not a ceiling for every workload.
    [How it's measured](docs/performance.md)
 5. **Real motion.** Analytical spring physics that can be interrupted
