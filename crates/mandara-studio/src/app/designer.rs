@@ -473,7 +473,7 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// The main bar designer with presets (Studio → Bars → Bar).
+    /// The side bars' layout designer (Studio → Bars → Side bars).
     pub(super) fn side_bars_designer(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         if !cfg.side_bars.enabled { return div().into_any_element(); }
         let scale = window.scale_factor();

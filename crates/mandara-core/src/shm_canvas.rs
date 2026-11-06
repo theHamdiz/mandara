@@ -351,6 +351,8 @@ struct Canvas {
     fractional: Option<wp_fractional_scale_v1::WpFractionalScaleV1>,
     width: u32,
     height: u32,
+    /// Last requested logical size, independent of outstanding configure replies.
+    requested: (u32, u32),
     configured: bool,
     scale120: u32,
     buffer_scale: i32,
@@ -403,11 +405,45 @@ struct Output {
     name: String,
     description: String,
     identity: String,
-    scale: i32,
+    legacy: LegacyOutputSize,
     xdg_output: Option<zxdg_output_v1::ZxdgOutputV1>,
     logical: Option<(u32, u32)>,
-    mode: Option<(u32, u32)>,
     canvas: Option<Canvas>,
+}
+
+struct LegacyOutputSize {
+    mode: Option<(u32, u32)>,
+    scale: i32,
+    complete: bool,
+}
+
+impl Default for LegacyOutputSize {
+    fn default() -> Self { Self { mode: None, scale: 1, complete: false } }
+}
+
+impl LegacyOutputSize {
+    /// Version two batches mode and scale together; version one has no Done.
+    fn event(&mut self, event: &wl_output::Event, version: u32) -> bool {
+        match event {
+            wl_output::Event::Mode { flags: WEnum::Value(flags), width, height, .. } if flags.contains(wl_output::Mode::Current) => {
+                let Some(size) = changed_logical_size(None, *width, *height) else { return false; };
+                self.mode = Some(size);
+                self.complete = version < 2;
+            }
+            wl_output::Event::Scale { factor } => {
+                self.scale = (*factor).max(1);
+                self.complete = version < 2;
+            }
+            wl_output::Event::Done => self.complete = true,
+            _ => return false,
+        }
+        self.complete
+    }
+
+    fn logical_size(&self) -> Option<(u32, u32)> {
+        if !self.complete { return None; }
+        self.mode.map(|(width, height)| ((width / self.scale.max(1) as u32).max(1), (height / self.scale.max(1) as u32).max(1)))
+    }
 }
 
 /// Invalid or repeated advertisements never request a zero-sized surface.
@@ -416,21 +452,27 @@ fn changed_logical_size(current: Option<(u32, u32)>, width: i32, height: i32) ->
     (size.0 > 0 && size.1 > 0 && current != Some(size)).then_some(size)
 }
 
+fn request_logical_size(requested: &mut (u32, u32), size: (u32, u32)) -> bool {
+    if size.0 == 0 || size.1 == 0 || *requested == size { return false; }
+    *requested = size;
+    true
+}
+
 impl Output {
     /// Prefers the compositor's logical dimensions and waits for them when
     /// xdg-output is available. Mode divided by integer scale is a fallback
     /// only for compositors without that protocol.
     fn logical_size(&self) -> Option<(u32, u32)> {
         if self.xdg_output.is_some() { return self.logical; }
-        self.mode.map(|(width, height)| ((width / self.scale.max(1) as u32).max(1), (height / self.scale.max(1) as u32).max(1)))
+        self.legacy.logical_size()
     }
 
     /// Requests changed logical dimensions without treating the request as a
     /// configure acknowledgement; buffer sizing follows the compositor's reply.
     fn resize_canvas(&mut self) {
         if let Some((width, height)) = self.logical_size()
-            && let Some(canvas) = &self.canvas
-            && (canvas.width, canvas.height) != (width, height)
+            && let Some(canvas) = &mut self.canvas
+            && request_logical_size(&mut canvas.requested, (width, height))
         {
             canvas.layer.set_size(width, height);
             canvas.surface.commit();
@@ -470,7 +512,7 @@ struct State {
 impl State {
     fn add_output(&mut self, output: wl_output::WlOutput, global: u32) {
         let xdg_output = self.xdg_output.as_ref().map(|manager| manager.get_xdg_output(&output, &self.qh, global));
-        self.outputs.push(Output { global, output, name: String::new(), description: String::new(), identity: String::new(), scale: 1, xdg_output, logical: None, mode: None, canvas: None });
+        self.outputs.push(Output { global, output, name: String::new(), description: String::new(), identity: String::new(), legacy: LegacyOutputSize::default(), xdg_output, logical: None, canvas: None });
     }
 
     fn canvas_mut(&mut self, global: u32) -> Option<&mut Canvas> {
@@ -625,7 +667,7 @@ impl Host {
             _ => (None, None),
         };
         surface.commit();
-        let buffer_scale = s.outputs[i].scale.max(1);
+        let buffer_scale = s.outputs[i].legacy.scale.max(1);
         s.outputs[i].canvas = Some(Canvas {
             surface,
             layer: ls,
@@ -633,6 +675,7 @@ impl Host {
             fractional,
             width: 0,
             height: 0,
+            requested: (width, height),
             configured: false,
             scale120: 0,
             buffer_scale,
@@ -1172,23 +1215,19 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
 impl Dispatch<wl_output::WlOutput, u32> for State {
     fn event(state: &mut Self, _: &wl_output::WlOutput, event: wl_output::Event, global: &u32, _: &Connection, _: &QueueHandle<Self>) {
         let Some(out) = state.outputs.iter_mut().find(|o| o.global == *global) else { return };
+        if out.legacy.event(&event, out.output.version()) {
+            if out.xdg_output.is_none() { out.resize_canvas(); }
+            if let Some(canvas) = out.canvas.as_mut()
+                && canvas.fractional.is_none()
+            {
+                canvas.buffer_scale = out.legacy.scale.max(1);
+            }
+            state.changed = true;
+        }
         match event {
             wl_output::Event::Name { name } => out.name = name,
             wl_output::Event::Description { description } => out.description = description,
             wl_output::Event::Geometry { make, model, .. } => out.identity = format!("{make} {model}").trim().to_string(),
-            wl_output::Event::Mode { flags: WEnum::Value(flags), width, height, .. } if flags.contains(wl_output::Mode::Current) => {
-                if let Some(size) = changed_logical_size(out.mode, width, height) { out.mode = Some(size); out.resize_canvas(); }
-            }
-            wl_output::Event::Scale { factor } => {
-                out.scale = factor;
-                out.resize_canvas();
-                if let Some(c) = out.canvas.as_mut()
-                    && c.fractional.is_none()
-                {
-                    c.buffer_scale = factor;
-                }
-            }
-            wl_output::Event::Done => state.changed = true,
             _ => {}
         }
     }
@@ -1377,6 +1416,88 @@ ignore_events!(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn current_mode(width: i32, height: i32) -> wl_output::Event {
+        wl_output::Event::Mode { flags: WEnum::Value(wl_output::Mode::Current), width, height, refresh: 60_000 }
+    }
+
+    #[test]
+    fn initial_legacy_size_waits_for_mode_scale_and_done() {
+        let mut size = LegacyOutputSize::default();
+        assert!(!size.event(&current_mode(3840, 2160), 2));
+        assert_eq!(size.logical_size(), None);
+        assert!(!size.event(&wl_output::Event::Scale { factor: 2 }, 2));
+        assert_eq!(size.logical_size(), None);
+        assert!(size.event(&wl_output::Event::Done, 2));
+        assert_eq!(size.logical_size(), Some((1920, 1080)));
+    }
+
+    #[test]
+    fn legacy_mode_and_scale_never_request_an_intermediate_size() {
+        for events in [
+            [current_mode(3840, 2160), wl_output::Event::Scale { factor: 2 }, wl_output::Event::Done],
+            [wl_output::Event::Scale { factor: 2 }, current_mode(3840, 2160), wl_output::Event::Done],
+        ] {
+            let mut size = LegacyOutputSize { mode: Some((1920, 1080)), scale: 1, complete: true };
+            let configured = (1920, 1080);
+            let mut requests = Vec::new();
+            for event in events {
+                if size.event(&event, 4)
+                    && let Some(target) = size.logical_size()
+                    && target != configured
+                {
+                    requests.push(target);
+                }
+            }
+            assert!(requests.is_empty(), "the final logical size matches the existing configure; an intermediate request would leave the canvas at the wrong size");
+            assert_eq!(size.logical_size(), Some(configured));
+        }
+    }
+
+    #[test]
+    fn legacy_mode_only_and_scale_only_changes_complete_at_done() {
+        let mut size = LegacyOutputSize { mode: Some((1920, 1080)), scale: 1, complete: true };
+        assert!(!size.event(&current_mode(2560, 1440), 2));
+        assert_eq!(size.logical_size(), None);
+        assert!(size.event(&wl_output::Event::Done, 2));
+        assert_eq!(size.logical_size(), Some((2560, 1440)));
+        assert!(!size.event(&wl_output::Event::Scale { factor: 2 }, 2));
+        assert_eq!(size.logical_size(), None);
+        assert!(size.event(&wl_output::Event::Done, 2));
+        assert_eq!(size.logical_size(), Some((1280, 720)));
+    }
+
+    #[test]
+    fn completed_batches_can_return_to_the_old_size_before_a_configure_reply() {
+        let configured = (1920, 1080);
+        let mut requested = configured;
+        let mut size = LegacyOutputSize { mode: Some(configured), scale: 1, complete: true };
+        let mut requests = Vec::new();
+        for event in [current_mode(3840, 2160), wl_output::Event::Done, wl_output::Event::Scale { factor: 2 }, wl_output::Event::Done] {
+            if size.event(&event, 4)
+                && let Some(target) = size.logical_size()
+                && request_logical_size(&mut requested, target)
+            {
+                requests.push(target);
+            }
+        }
+        assert_eq!(requests, [(3840, 2160), configured]);
+        assert_eq!(requested, configured);
+        assert!(!request_logical_size(&mut requested, configured));
+        assert!(!request_logical_size(&mut requested, (0, 1080)));
+        assert_eq!(requested, configured);
+    }
+
+    #[test]
+    fn version_one_outputs_apply_modes_without_waiting_for_done() {
+        let mut size = LegacyOutputSize::default();
+        assert!(size.event(&current_mode(1920, 1080), 1));
+        assert_eq!(size.logical_size(), Some((1920, 1080)));
+        assert!(size.event(&current_mode(1280, 720), 1));
+        assert_eq!(size.logical_size(), Some((1280, 720)));
+        assert!(!size.event(&current_mode(0, 0), 1));
+        assert_eq!(size.logical_size(), Some((1280, 720)));
+    }
 
     #[test]
     fn native_logical_size_drives_initial_and_rescaled_requests() {

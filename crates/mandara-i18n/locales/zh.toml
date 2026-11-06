@@ -8711,3 +8711,5 @@
 
 "Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "无法验证此二进制文件：{reason}。未安装 Mandara。请检查连接并重试。"
 "Install this binary even when its published checksum is unavailable or doesn't match." = "即使已发布的校验和不可用或不匹配，也安装此二进制文件。"
+
+"Spectrum bars" = "频谱柱"

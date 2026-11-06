@@ -650,11 +650,15 @@ a title prefix (`sidebar`). The launcher has an entry for every page.
 |---|---|
 | — | `home` |
 | Look & feel | `appearance` `themes` `wallpaper` `typography` `motion` |
-| Desktop | `bar` `sidebar` `dock` `launcher` `window-switcher` `notifications` `on-screen-displays` |
+| Desktop | `bars` `dock` `launcher` `window-switcher` `notifications` `on-screen-displays` |
 | System | `displays` `audio` `network` `power` `input` `keyboard-shortcuts` `date` `applications` |
 | Security & accounts | `users` `login-screen` `lock-appearance` `privacy` |
 | Extend | `plugins` `compositor` |
 | Mandara | `general` `profiles` `performance` `maintenance` `about` |
+
+`bar` and `sidebar` remain aliases for the corresponding tabs in Bars.
+Use `bars/bar`, `bars/side-bars`, `bars/sidebar`, `bars/panels` or `bars/edges`
+to select a tab directly.
 
 Deeper links:
 

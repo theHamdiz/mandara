@@ -8720,3 +8720,5 @@
 
 "Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "تعذر التحقق من هذا الملف التنفيذي: {reason}. لم يُثبّت Mandara. تحقق من اتصالك وأعد المحاولة."
 "Install this binary even when its published checksum is unavailable or doesn't match." = "ثبّت هذا الملف التنفيذي حتى إن تعذر الحصول على مجموعه الاختباري المنشور أو لم يتطابق."
+
+"Spectrum bars" = "أعمدة الطيف"

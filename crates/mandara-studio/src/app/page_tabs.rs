@@ -56,16 +56,32 @@ impl TabState {
 /// focus and scroll state remain separate. `select` owns the page transition.
 pub(super) fn bar<V: 'static, T: PageTab>(id: &'static str, tabs: &[T], current: T, p: &MandaraPalette, select: fn(&mut V, T, &mut Window, &mut Context<V>), window: &mut Window, cx: &mut Context<V>) -> AnyElement {
     let state = window.use_keyed_state(SharedString::from(format!("{id}-state")), cx, |_, _| TabState { scroll: ScrollHandle::new(), focus: Vec::new(), last_focus: None, last_selection: None });
-    let (scroll, focus) = state.update(cx, |state, cx| {
+    let (scroll, focus, reveal, focused) = state.update(cx, |state, cx| {
         state.focus.resize_with(tabs.len(), || cx.focus_handle().tab_index(0).tab_stop(true));
-        if let Some(index) = state.selected_target(tabs, current) { state.scroll.scroll_to_item(index); }
+        let mut reveal = state.selected_target(tabs, current);
         let focused = state.focus.iter().position(|handle| handle.is_focused(window));
         if focused != state.last_focus {
-            if let Some(index) = focused { state.scroll.scroll_to_item(index); }
+            if focused.is_some() { reveal = focused; }
             state.last_focus = focused;
         }
-        (state.scroll.clone(), state.focus.clone())
+        if let Some(index) = reveal { state.scroll.scroll_to_item(index); }
+        (state.scroll.clone(), state.focus.clone(), reveal, focused)
     });
+    if let Some(index) = reveal {
+        let state = state.downgrade();
+        let view = cx.entity().downgrade();
+        // The first prepaint initializes the scroll viewport. Retry once after
+        // that layout, provided navigation has not moved to another tab.
+        window.on_next_frame(move |_, cx| {
+            let Some(state) = state.upgrade() else { return; };
+            {
+                let state = state.read(cx);
+                if state.last_selection != Some(current.slug()) || state.last_focus != focused { return; }
+                state.scroll.scroll_to_item(index);
+            }
+            let _ = view.update(cx, |_, cx| cx.notify());
+        });
+    }
     let mut row = div().id(id).row().overflow_x_scroll().track_scroll(&scroll).border_b_1().border_color(p.outline.with_alpha(ALPHA_35).hsla());
     let choices: Rc<[T]> = Rc::from(tabs);
     for (at, &tab) in tabs.iter().enumerate() {

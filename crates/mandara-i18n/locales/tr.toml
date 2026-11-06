@@ -8716,3 +8716,5 @@
 
 "Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "Bu ikili dosya doğrulanamadı: {reason}. Mandara kurulmadı. Bağlantınızı kontrol edip yeniden deneyin."
 "Install this binary even when its published checksum is unavailable or doesn't match." = "Yayımlanmış sağlama toplamı kullanılamasa veya eşleşmese bile bu ikili dosyayı kur."
+
+"Spectrum bars" = "Spektrum çubukları"

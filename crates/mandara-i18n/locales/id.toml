@@ -8470,3 +8470,5 @@
 
 "Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "Biner ini tidak dapat diverifikasi: {reason}. Mandara tidak dipasang. Periksa koneksi Anda dan coba lagi."
 "Install this binary even when its published checksum is unavailable or doesn't match." = "Pasang biner ini meskipun checksum yang dipublikasikan tidak tersedia atau tidak cocok."
+
+"Spectrum bars" = "Batang spektrum"

@@ -8470,3 +8470,5 @@
 
 "Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "تأیید این فایل اجرایی ممکن نشد: {reason}. Mandara نصب نشد. اتصال خود را بررسی کنید و دوباره تلاش کنید."
 "Install this binary even when its published checksum is unavailable or doesn't match." = "این فایل اجرایی را حتی اگر جمع کنترلی منتشرشده در دسترس نیست یا مطابقت ندارد نصب کنید."
+
+"Spectrum bars" = "میله‌های طیف"

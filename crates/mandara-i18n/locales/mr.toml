@@ -8374,3 +8374,5 @@
 
 "Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "ही बायनरी पडताळता आली नाही: {reason}. Mandara स्थापित झालेले नाही. तुमची जोडणी तपासा आणि पुन्हा प्रयत्न करा."
 "Install this binary even when its published checksum is unavailable or doesn't match." = "प्रकाशित चेकसम उपलब्ध नसली किंवा जुळत नसली तरी ही बायनरी स्थापित करा."
+
+"Spectrum bars" = "स्पेक्ट्रम पट्ट्या"

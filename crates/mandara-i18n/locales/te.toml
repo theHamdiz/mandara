@@ -8364,7 +8364,7 @@
 "Edges & corners" = "అంచులు మరియు మూలలు"
 "a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>" = "ఒక విభాగం (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] లేదా plugins/<installed|marketplace|local>"
 "Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way." = "సూచిక అక్కడ చూడటానికి “{name}” ప్లగిన్‌ను పట్టీకి జోడించండి (Studio → పట్టీలు → పట్టీ); తెరపై ప్రదర్శనలు ఏ విధంగానైనా పనిచేస్తాయి."
-"Add any widget to it in Studio → Bars → Sidebar." = "Studio → పట్టీలు → పక్క పట్టీలో ఏ విడ్జెట్‌నైనా జోడించండి."
+"Add any widget to it in Studio → Bars → Sidebar." = "Studio → పట్టీలు → పక్కపట్టీలో ఏ విడ్జెట్‌నైనా జోడించండి."
 "Number of bars" = "బార్‌ల సంఖ్య"
 
 "Release signature verified." = "విడుదల సంతకం ధృవీకరించబడింది."
@@ -8374,3 +8374,5 @@
 
 "Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "ఈ బైనరీని ధృవీకరించలేకపోయాము: {reason}. Mandara ఇన్‌స్టాల్ కాలేదు. మీ కనెక్షన్‌ను తనిఖీ చేసి మళ్లీ ప్రయత్నించండి."
 "Install this binary even when its published checksum is unavailable or doesn't match." = "ప్రచురించిన చెక్‌సమ్ అందుబాటులో లేకపోయినా లేదా సరిపోలకపోయినా ఈ బైనరీని ఇన్‌స్టాల్ చేయండి."
+
+"Spectrum bars" = "స్పెక్ట్రం పట్టీలు"

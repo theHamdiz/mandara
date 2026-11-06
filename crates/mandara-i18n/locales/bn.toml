@@ -8470,3 +8470,5 @@
 
 "Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "এই বাইনারি যাচাই করা যায়নি: {reason}। Mandara ইনস্টল করা হয়নি। সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।"
 "Install this binary even when its published checksum is unavailable or doesn't match." = "প্রকাশিত চেকসাম না পাওয়া গেলে বা না মিললেও এই বাইনারি ইনস্টল করুন।"
+
+"Spectrum bars" = "বর্ণালির দণ্ড"

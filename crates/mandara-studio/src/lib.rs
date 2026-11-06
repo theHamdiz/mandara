@@ -66,7 +66,8 @@ fn wallpaper_tab_target(target: &str) -> Option<app::wallpaper_page::WallpaperTa
     app::wallpaper_page::WallpaperTab::parse(tab.split('/').next()?)
 }
 
-/// Former page names select their corresponding tab in Bars.
+/// Former page names and their existing title prefixes select the same
+/// destination within Bars, preserving command-line shortcuts.
 fn former_bars_tab(name: &str) -> Option<registry::bars::BarsTab> {
     use registry::bars::BarsTab;
     let name = name.to_lowercase().replace('-', " ");
@@ -286,6 +287,24 @@ mod tests {
                 assert_eq!(bars_tab_target(name), Some(BarsTab::Sidebar));
             });
         }
+    }
+
+    #[test]
+    fn former_page_prefixes_keep_their_original_bars_destination() {
+        use registry::bars::BarsTab;
+        mandara_i18n::with_language(Some(mandara_i18n::Lang::En), || {
+            for prefix in ["b", "ba", "bar"] {
+                assert_eq!(resolve_section(prefix), Some(Section::Bars));
+                assert_eq!(bars_tab_target(prefix), Some(BarsTab::Bar));
+            }
+            for prefix in ["s", "si", "side", "sidebar", "sidebars & h"] {
+                assert_eq!(resolve_section(prefix), Some(Section::Bars));
+                assert_eq!(bars_tab_target(prefix), Some(BarsTab::Sidebar));
+            }
+            assert_eq!(resolve_section("bluetooth"), None);
+            assert_eq!(resolve_section("network"), Some(Section::Network));
+            assert_eq!(resolve_section("keyboard"), Some(Section::Shortcuts));
+        });
     }
 
     #[test]

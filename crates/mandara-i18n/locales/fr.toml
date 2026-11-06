@@ -8717,3 +8717,5 @@
 
 "Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again." = "Impossible de vérifier ce binaire : {reason}. Mandara n’a pas été installé. Vérifiez votre connexion et réessayez."
 "Install this binary even when its published checksum is unavailable or doesn't match." = "Installer ce binaire même si sa somme de contrôle publiée est indisponible ou ne correspond pas."
+
+"Spectrum bars" = "Barres du spectre"

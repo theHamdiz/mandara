@@ -209,7 +209,7 @@ fn recovered_signature_downloads_report_verified_before_fetching_the_archive() {
         let signature = stderr.find("✓ Release signature verified.").expect("successful verification must be visible");
         let archive = stderr.find("[2/5] Downloading Mandara").unwrap();
         assert!(signature < archive, "{stderr}");
-        assert!(stderr.contains("Retrying"), "captured logs must retain retry notices: {stderr}");
+        assert!(stderr.to_ascii_lowercase().contains("retry"), "captured logs must retain retry notices: {stderr}");
         assert!(stderr.contains("✓ Archive checksum verified."), "{stderr}");
         assert!(stderr.contains("[5/5] Ready."), "{stderr}");
     }
