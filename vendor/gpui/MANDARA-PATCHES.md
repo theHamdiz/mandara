@@ -163,6 +163,21 @@ CARGO_TARGET_DIR=/tmp/zt/target cargo test --manifest-path /tmp/zt/crates/gpui/C
 CARGO_TARGET_DIR=/tmp/zt/target cargo test --manifest-path /tmp/zt/crates/gpui_wgpu/Cargo.toml --features test-support
 ```
 
+## 7. Shared empty font features (`text_system/font_features.rs`)
+
+`font()` and `TextStyle::default()` previously allocated a new `Arc<Vec<_>>`
+for every empty feature list. Their defaults now share one immutable list;
+deserializing an empty list uses it too. The stored type, hashing, equality
+and serialized values stay the same. In-tree readers never depend on unique
+Arc ownership. Code editing a returned list must use `Arc::make_mut`, which
+preserves the defaults and other fonts. Mandara also shares its immutable
+tabular-number feature list instead of rebuilding its vector and tag string.
+
+Mandara's `framework_allocations` tests exercise default construction with a
+live allocating control, empty and configured wire values, hash equality,
+and independent edits. Release frame and memory measurements remain a separate
+acceptance step; operation allocation counts are not whole-frame counts.
+
 ## Packaging changes
 
 `Cargo.toml` spells out the workspace-inherited fields and dependencies with

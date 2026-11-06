@@ -169,3 +169,10 @@ Bar corner geometry uses inline storage for its two joins, and capsule bounds
 are computed directly from visible slots. Allocation and release timing checks
 cover these paths; process-wide resource figures above retain their recorded
 build and workload scope.
+
+Font defaults share an immutable empty OpenType feature list. Clocks and
+counters share their tabular-number features as well; custom edits use copy
+on write. Their allocation tests keep the former allocating expressions as
+positive controls and check wire values and independent edits. These controls
+measure specific operations, with release frame and resource acceptance kept
+separate from the allocation counts.
