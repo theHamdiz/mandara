@@ -314,6 +314,18 @@ impl TodoBook {
         Ok(())
     }
 
+    /// Editing a task's words preserves its completion, list and creation time.
+    /// An empty editor is dismissed without deleting the task.
+    pub fn edit_task(&mut self, id: u64, text: &str) -> Result<(), ListError> {
+        let task = self.todos.iter_mut().find(|task| task.id == id).ok_or(ListError::NoSuchTask)?;
+        let text = text.trim();
+        if !text.is_empty() && task.text != text {
+            task.text.clear();
+            task.text.push_str(text);
+        }
+        Ok(())
+    }
+
     /// Adds a task (open, newest at the top of its list).
     pub fn add(&mut self, id: u64, text: &str, list: u64, created: i64) -> Option<u64> {
         let text = text.trim();
@@ -364,6 +376,19 @@ impl Filter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn editing_task_text_preserves_its_identity_and_status() {
+        let mut book = TodoBook::default();
+        let list = book.add_list("Work", None, None).unwrap();
+        book.add(42, "Original", list, 123).unwrap();
+        book.todos[0].done = true;
+        book.edit_task(42, "  مهمة جديدة  ").unwrap();
+        assert_eq!(book.todos[0], Todo { id: 42, text: "مهمة جديدة".into(), done: true, list, created: 123 });
+        book.edit_task(42, "  ").unwrap();
+        assert_eq!(book.todos[0].text, "مهمة جديدة");
+        assert_eq!(book.edit_task(99, "Absent"), Err(ListError::NoSuchTask));
+    }
 
     fn book() -> TodoBook {
         TodoBook::new(Vec::new(), Vec::new())

@@ -8759,3 +8759,9 @@
 "This entry is too large to copy as one image" = "यह सामग्री एक चित्र में कॉपी करने के लिए बहुत बड़ी है"
 "a verse or hadith reference" = "किसी आयत या हदीस का संदर्भ"
 "an ayah, such as 2:255" = "एक आयत, जैसे 2:255"
+# Desktop text editing
+"A task needs text after its list name." = "सूची के नाम के बाद कार्य का विवरण लिखें।"
+"Couldn't load: {error}" = "लोड नहीं हो सका: {error}"
+"Couldn't save: {error}" = "सहेजा नहीं जा सका: {error}"
+"This item changed elsewhere. Your text is still here." = "यह आइटम कहीं और बदल दिया गया है। आपका पाठ अभी भी यहाँ है।"
+"This item was removed. Your text is still here." = "यह आइटम हटा दिया गया है। आपका पाठ अभी भी यहाँ है।"

@@ -53,6 +53,8 @@ pub struct TextField {
     font: Option<gpui::SharedString>,
     font_px: Option<f32>,
     dirty: bool,
+    /// Some editors own outside-click save/cancel at the parent surface.
+    commit_on_click_out: bool,
 }
 
 impl TextField {
@@ -76,6 +78,7 @@ impl TextField {
             font: None,
             font_px: None,
             dirty: false,
+            commit_on_click_out: true,
         }
     }
 
@@ -97,6 +100,12 @@ impl TextField {
 
     pub fn multiline(mut self) -> Self {
         self.multiline = true;
+        self
+    }
+
+    /// Leave outside-click save/cancel decisions to the parent surface.
+    pub fn parent_commits(mut self) -> Self {
+        self.commit_on_click_out = false;
         self
     }
 
@@ -650,7 +659,7 @@ impl Render for TextField {
             }))
             .on_mouse_down_out(cx.listener(|this, _, window, cx| {
                 this.dragging = false;
-                if this.dirty {
+                if this.dirty && this.commit_on_click_out {
                     this.commit(window, cx);
                 }
             }))

@@ -42,8 +42,7 @@ pub fn perform(widget: &str, action: &Action, cx: &mut App) -> Result<(), String
             let done = p.read(cx).book.todos.iter().find(|t| t.id == *id).map(|t| t.done).ok_or_else(|| tf("No task {id}", &[("id", id)]))?;
             p.update(cx, |p, cx| p.set_done(*id, !done, cx));
         }
-        Action::TodoAdd => open_panel(crate::plugins::todo::ID, cx),
-        Action::Note(_) => open_panel(crate::plugins::notes::ID, cx),
+        Action::TodoEdit(_) | Action::TodoAdd | Action::Note(_) => crate::backdrop::edit_widget(widget, action.clone(), cx)?,
         Action::Pomodoro => crate::productivity::productivity(cx).update(cx, |p, cx| p.toggle(cx)),
         Action::PomodoroSkip => crate::productivity::productivity(cx).update(cx, |p, cx| p.skip(cx)),
         Action::PomodoroReset => crate::productivity::productivity(cx).update(cx, |p, cx| p.reset(cx)),

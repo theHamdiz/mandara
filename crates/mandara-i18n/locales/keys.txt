@@ -218,6 +218,7 @@ A strip of key hints under the results
 A tab needs a name
 A talent is formed in stillness, a character in the world's torrent.
 A tall pill with the track down its side
+A task needs text after its list name.
 A thin border round the whole display, joined to the side bar; it reserves no space of its own
 A thin line along a popup's edge shows the time left
 A thin specular highlight around the glass
@@ -308,6 +309,7 @@ Add a shortcut
 Add a sidebar tab (--icon name)
 Add a task
 Add a task; a leading #List files it there (the list is created if missing)
+Add a task…
 Add a task… (#list to file it)
 Add a user
 Add a widget
@@ -1338,6 +1340,7 @@ Couldn't install {app}
 Couldn't install {app}: {error}
 Couldn't list windows: {error}
 Couldn't load it
+Couldn't load: {error}
 Couldn't open a port: {error}
 Couldn't open the file picker: {error}
 Couldn't open the photo: {error}
@@ -1352,6 +1355,7 @@ Couldn't read the clock: {error}
 Couldn't read the crash log
 Couldn't read the keyring
 Couldn't read which codecs your graphics card encodes, so all of them are offered
+Couldn't save: {error}
 Couldn't start KeePassXC: {error}
 Couldn't uninstall {app}: {error}
 Couldn't uninstall: {error}
@@ -6456,7 +6460,9 @@ This is a {family} package ({extension}).
 This is an old (type 1) AppImage, which Mandara can't read safely. Download a newer build of the app.
 This is an older version ({new}) than the one installed ({old}).
 This is how the screen fades before locking
+This item changed elsewhere. Your text is still here.
 This item has no menu
+This item was removed. Your text is still here.
 This key combination is bound more than once; {compositor} uses only one of the binds.
 This keyboard has no backlight
 This line includes a file that isn't there, so {compositor} can't load it.

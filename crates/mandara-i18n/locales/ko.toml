@@ -8511,3 +8511,10 @@
 "This entry is too large to copy as one image" = "내용이 너무 커서 이미지 하나로 복사할 수 없습니다"
 "a verse or hadith reference" = "아야 또는 하디스 출처"
 "an ayah, such as 2:255" = "아야(예: 2:255)"
+# Desktop text editing
+"A task needs text after its list name." = "목록 이름 뒤에 할 일 내용을 입력하세요."
+"Add a task…" = "할 일 추가…"
+"Couldn't load: {error}" = "불러오지 못했습니다: {error}"
+"Couldn't save: {error}" = "저장하지 못했습니다: {error}"
+"This item changed elsewhere. Your text is still here." = "이 항목이 다른 곳에서 변경되었습니다. 입력한 텍스트는 여기에 그대로 남아 있습니다."
+"This item was removed. Your text is still here." = "이 항목이 삭제되었습니다. 입력한 텍스트는 여기에 그대로 남아 있습니다."

@@ -8416,3 +8416,9 @@
 "This entry is too large to copy as one image" = "Maudhui haya ni makubwa mno kunakiliwa kwenye picha moja"
 "a verse or hadith reference" = "rejea ya aya au hadithi"
 "an ayah, such as 2:255" = "aya, kama 2:255"
+# Desktop text editing
+"A task needs text after its list name." = "Andika maelezo ya jukumu baada ya jina la orodha yake."
+"Couldn't load: {error}" = "Imeshindwa kupakia: {error}"
+"Couldn't save: {error}" = "Imeshindikana kuhifadhi: {error}"
+"This item changed elsewhere. Your text is still here." = "Kipengee hiki kimebadilishwa mahali pengine. Maandishi yako bado yako hapa."
+"This item was removed. Your text is still here." = "Kipengee hiki kimeondolewa. Maandishi yako bado yako hapa."

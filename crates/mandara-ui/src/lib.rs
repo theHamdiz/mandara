@@ -23,6 +23,7 @@ pub mod desktop_edit;
 pub mod desktop_feeds;
 pub mod desktop_info;
 pub mod desktop_menu;
+pub mod desktop_text;
 pub mod desktop_plugins;
 pub mod dismiss;
 pub mod first_frame;

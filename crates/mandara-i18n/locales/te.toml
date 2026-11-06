@@ -8416,3 +8416,9 @@
 "This entry is too large to copy as one image" = "ఒక చిత్రంగా కాపీ చేయడానికి ఈ విషయం చాలా పెద్దది"
 "a verse or hadith reference" = "ఆయత్ లేదా హదీస్ సూచన"
 "an ayah, such as 2:255" = "ఒక ఆయత్, ఉదాహరణకు 2:255"
+# Desktop text editing
+"A task needs text after its list name." = "జాబితా పేరు తర్వాత పని వివరాలను రాయండి."
+"Couldn't load: {error}" = "లోడ్ చేయలేకపోయాం: {error}"
+"Couldn't save: {error}" = "సేవ్ చేయలేకపోయాం: {error}"
+"This item changed elsewhere. Your text is still here." = "ఈ అంశం వేరే చోట మార్చబడింది. మీ వచనం ఇంకా ఇక్కడే ఉంది."
+"This item was removed. Your text is still here." = "ఈ అంశం తీసివేయబడింది. మీ వచనం ఇంకా ఇక్కడే ఉంది."

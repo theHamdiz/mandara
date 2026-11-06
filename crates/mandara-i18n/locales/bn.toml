@@ -8512,3 +8512,10 @@
 "This entry is too large to copy as one image" = "এই লেখাটি একটি ছবিতে কপি করার জন্য অত্যন্ত বড়"
 "a verse or hadith reference" = "একটি আয়াত বা হাদিসের সূত্র"
 "an ayah, such as 2:255" = "একটি আয়াত, যেমন 2:255"
+# Desktop text editing
+"A task needs text after its list name." = "তালিকার নামের পরে কাজের বিবরণ লিখুন।"
+"Add a task…" = "একটি কাজ যোগ করুন…"
+"Couldn't load: {error}" = "লোড করা যায়নি: {error}"
+"Couldn't save: {error}" = "সংরক্ষণ করা যায়নি: {error}"
+"This item changed elsewhere. Your text is still here." = "এই আইটেমটি অন্য কোথাও পরিবর্তন করা হয়েছে। আপনার লেখা এখনও এখানে আছে।"
+"This item was removed. Your text is still here." = "এই আইটেমটি সরিয়ে দেওয়া হয়েছে। আপনার লেখা এখনও এখানে আছে।"

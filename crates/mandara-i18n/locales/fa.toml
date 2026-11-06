@@ -8512,3 +8512,10 @@
 "This entry is too large to copy as one image" = "این مطلب برای کپی در یک تصویر بیش از حد بزرگ است"
 "a verse or hadith reference" = "نشانی یک آیه یا حدیث"
 "an ayah, such as 2:255" = "یک آیه، مانند 2:255"
+# Desktop text editing
+"A task needs text after its list name." = "پس از نام فهرست، متن کار را بنویسید."
+"Add a task…" = "افزودن کار…"
+"Couldn't load: {error}" = "بارگیری نشد: {error}"
+"Couldn't save: {error}" = "ذخیره نشد: {error}"
+"This item changed elsewhere. Your text is still here." = "این مورد در جای دیگری تغییر کرده است. متن شما هنوز اینجاست."
+"This item was removed. Your text is still here." = "این مورد حذف شده است. متن شما هنوز اینجاست."

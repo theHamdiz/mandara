@@ -131,7 +131,10 @@ pub fn todo(w: &TodoWidget, items: &[TodoItem], lists: &[(u64, String)], l: &Lin
             let ry = y + h + px(ROW_GAP) / 2.0;
             marks.push(Mark::new(MarkKind::Line { a: (0.0, ry), b: (width, ry), width: 1.0 }, InkRole::Fg).dim(RULE_ALPHA));
         }
-        hits.push(Hit { rect: rect(0.0, y - px(ROW_GAP) / 2.0, width, h + px(ROW_GAP)), action: Action::Todo(t.id) });
+        let hit_y = y - px(ROW_GAP) / 2.0;
+        let hit_h = h + px(ROW_GAP);
+        hits.push(Hit { rect: rect(box_x, hit_y, bx, hit_h), action: Action::Todo(t.id) });
+        hits.push(Hit { rect: rect(if l.rtl { 0.0 } else { text_x }, hit_y, text_w, hit_h), action: Action::TodoEdit(t.id) });
         y += h + px(ROW_GAP);
     }
     if w.add_row {
@@ -435,6 +438,20 @@ mod tests {
         assert!(c.size.0 <= ranges::TODO_WIDTH_DEFAULT_PX + 0.5, "{:?}", c.size);
         let hit = c.hits.iter().find(|h| h.action == Action::Todo(2)).unwrap();
         assert_eq!(c.hit((hit.rect.0 + 1.0, hit.rect.1 + 1.0)), Some(&Action::Todo(2)));
+    }
+
+    #[test]
+    fn checkbox_and_task_text_have_distinct_actions_in_both_reading_directions() {
+        for language in ["en", "ar"] {
+            let composition = todo(&TodoWidget::default(), &items(), &[], &lingo_in(language), 1.5, &mut Fixed);
+            for id in [1, 2] {
+                for action in [Action::Todo(id), Action::TodoEdit(id)] {
+                    let hit = composition.hits.iter().find(|hit| hit.action == action).unwrap();
+                    let (x, y, width, height) = hit.rect;
+                    assert_eq!(composition.hit((x + width / 2.0, y + height / 2.0)), Some(&action));
+                }
+            }
+        }
     }
 
     #[test]

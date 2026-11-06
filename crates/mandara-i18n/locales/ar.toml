@@ -8762,3 +8762,9 @@
 "This entry is too large to copy as one image" = "هذا المحتوى أكبر من أن يُنسخ في صورة واحدة"
 "a verse or hadith reference" = "مرجع آية أو حديث"
 "an ayah, such as 2:255" = "آية، مثل 2:255"
+# Desktop text editing
+"A task needs text after its list name." = "تحتاج المهمة إلى نص بعد اسم قائمتها."
+"Couldn't load: {error}" = "تعذّر التحميل: {error}"
+"Couldn't save: {error}" = "تعذر الحفظ: {error}"
+"This item changed elsewhere. Your text is still here." = "عُدّل هذا العنصر في مكان آخر. لا يزال نصك هنا."
+"This item was removed. Your text is still here." = "أُزيل هذا العنصر. لا يزال نصك هنا."

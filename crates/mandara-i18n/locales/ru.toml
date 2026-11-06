@@ -8758,3 +8758,9 @@
 "This entry is too large to copy as one image" = "Эта запись слишком велика для одного изображения"
 "a verse or hadith reference" = "ссылка на аят или хадис"
 "an ayah, such as 2:255" = "аят, например 2:255"
+# Desktop text editing
+"A task needs text after its list name." = "После названия списка нужен текст задачи."
+"Couldn't load: {error}" = "Не удалось загрузить: {error}"
+"Couldn't save: {error}" = "Не удалось сохранить: {error}"
+"This item changed elsewhere. Your text is still here." = "Этот элемент изменён в другом месте. Ваш текст всё ещё здесь."
+"This item was removed. Your text is still here." = "Этот элемент удалён. Ваш текст всё ещё здесь."

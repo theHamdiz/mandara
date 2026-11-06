@@ -82,6 +82,7 @@ desktop stays light enough to run all day without you noticing it.
 Pick a bar style, a wallpaper and a few desktop widgets, and Mandara turns
 into a different desktop. Each of these takes a minute in Studio, and every
 widget can be moved, resized and restyled right on the desktop.
+Write notes and edit tasks directly in their widgets, too.
 
 <table>
 <tr>

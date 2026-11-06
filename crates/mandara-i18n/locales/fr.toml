@@ -8758,3 +8758,9 @@
 "This entry is too large to copy as one image" = "Ce contenu est trop volumineux pour une seule image"
 "a verse or hadith reference" = "une référence de verset ou de hadith"
 "an ayah, such as 2:255" = "un verset, par exemple 2:255"
+# Desktop text editing
+"A task needs text after its list name." = "Ajoutez le texte de la tâche après le nom de la liste."
+"Couldn't load: {error}" = "Chargement impossible : {error}"
+"Couldn't save: {error}" = "Enregistrement impossible : {error}"
+"This item changed elsewhere. Your text is still here." = "Cet élément a été modifié ailleurs. Votre texte est toujours ici."
+"This item was removed. Your text is still here." = "Cet élément a été supprimé. Votre texte est toujours ici."

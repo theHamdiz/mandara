@@ -8511,3 +8511,10 @@
 "This entry is too large to copy as one image" = "Konten ini terlalu besar untuk disalin dalam satu gambar"
 "a verse or hadith reference" = "rujukan ayat atau hadis"
 "an ayah, such as 2:255" = "ayat, misalnya 2:255"
+# Desktop text editing
+"A task needs text after its list name." = "Tulis isi tugas setelah nama daftarnya."
+"Add a task…" = "Tambahkan tugas…"
+"Couldn't load: {error}" = "Tidak dapat memuat: {error}"
+"Couldn't save: {error}" = "Tidak dapat menyimpan: {error}"
+"This item changed elsewhere. Your text is still here." = "Item ini diubah di tempat lain. Teks Anda masih ada di sini."
+"This item was removed. Your text is still here." = "Item ini dihapus. Teks Anda masih ada di sini."

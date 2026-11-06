@@ -64,6 +64,11 @@ space. Keyboard navigation in Beacon.
 
 ### Improved
 
+- **Write on your desktop.** Edit tasks and Markdown notes directly in their
+  widgets, without opening a plugin panel. The checkbox still ticks a task;
+  its words open the editor. Save failures and conflicting edits keep your
+  text available, and a failed new-note write leaves no phantom note behind.
+
 - **Copy installation commands.** The website and its guides offer a Copy
   button beside code examples, with keyboard access and clear feedback when
   copying succeeds or the browser blocks it.
@@ -83,6 +88,12 @@ space. Keyboard navigation in Beacon.
   a mode or app category. (#120)
 
 ### Under the hood
+
+- **Background saves for notes and tasks.** File writes stay off the UI thread
+  and keep their request order. Rapid task changes share a save, commands
+  report disk failures, and a partly saved note can retry its filename or
+  index without creating another copy. `shell state` also reports when a
+  desktop editor is ready for keyboard input.
 
 - **Cleaner portable builds.** Linker tuning checks for support, avoiding
   ignored-option warnings with other linkers.

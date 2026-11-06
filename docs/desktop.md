@@ -336,6 +336,23 @@ Taped notes attach their corner strips to the note’s own sheet, using the
 same frame decoration as the to-do list. A separate header stays above the
 paper without moving the strips away from it.
 
+Write directly on the desktop: click a to-do's words to edit them, its
+checkbox to change completion, or **Add a task** to create one. Click a
+sticky note or notebook tab to edit the full Markdown note at that widget.
+**Done** saves; Enter saves a task, and Ctrl+Enter saves a multiline note.
+Escape or the close button cancels. Clicking elsewhere saves before leaving.
+The editor uses the same lists and Markdown files as the plugins, so changes
+appear in every surface. Conflicting edits and failed saves keep your draft
+visible rather than overwrite newer text.
+
+The editor stays open while the save finishes. File writes, note renames and
+task JSON writes run in the background; a disk error leaves the draft ready
+to retry. A note whose text saved before its filename or index failed keeps
+the same id on retry. A list tag alone, such as `#Work`, needs task text after it.
+Changing the notes folder waits for pending drafts to save. If another editor
+changes the same Markdown file, Mandara checks its text before writing; it
+does not lock that other editor's file.
+
 The widget gallery fits each preview to its card and renders at the display’s
 pixel density, with larger calendar and sky miniatures. Media previews use a
 clearly labelled sample track and cover; they do not need a running player
