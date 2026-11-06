@@ -33,6 +33,8 @@ About → What's new shows it too.
   Album art and sharing or dock previews consume their resized image buffers,
   and temperature rows borrow their readings and labels. Several plugin
   selectors also read text settings without making temporary string copies.
+  Feeds and the faith plugins resolve their text and list settings once per
+  config or language change.
 
 - **Cleaner portable builds.** Linker tuning checks for support, avoiding
   ignored-option warnings with other linkers.

@@ -15,7 +15,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, NaiveTime, Offset as _, TimeDelta, Timelike};
@@ -29,6 +29,7 @@ use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
 
 use super::{adhan, fn_view, plugin_lang};
+use super::settings_cache::{ConfigSettings, SettingsCache};
 use crate::bidi::Bidi as _;
 use super::panel_fx::{
     Cached, HEADER_CHIP_PX, HEADER_H, PanelShape, SMALL_ICON_PX, arabic_digits, dot_ring, glass_card, glow, icon_chip, partner,
@@ -195,35 +196,26 @@ struct Settings {
     utc_offset: f64,
 }
 
-/// Resolved settings follow config, plugin language and the current UTC offset.
-struct SettingsCache {
-    config: Weak<ShellConfig>,
-    lang: Lang,
-    utc_offset: u64,
-    value: Rc<Settings>,
+impl ConfigSettings for Settings {
+    type Scope = u64;
+
+    fn resolve(config: &ShellConfig, language: Lang, offset: u64) -> Self {
+        resolve_settings(config, language, f64::from_bits(offset))
+    }
 }
 
 thread_local! {
-    static SETTINGS: RefCell<Option<SettingsCache>> = const { RefCell::new(None) };
+    static SETTINGS: RefCell<SettingsCache<Settings>> = const { RefCell::new(SettingsCache::new()) };
+}
+
+/// Disabling the plugin also releases the weak configuration key.
+pub(super) fn clear_settings() {
+    SETTINGS.with(|cache| cache.borrow_mut().clear());
 }
 
 fn settings(cx: &App) -> Rc<Settings> {
     let cfg = config(cx).read(cx).snapshot();
-    SETTINGS.with(|cache| cached_settings(&mut cache.borrow_mut(), &cfg, mandara_i18n::language(), utc_offset_hours()))
-}
-
-/// The weak key cannot keep an obsolete config snapshot alive.
-fn cached_settings(cache: &mut Option<SettingsCache>, cfg: &Arc<ShellConfig>, lang: Lang, utc_offset: f64) -> Rc<Settings> {
-    if let Some(cached) = cache.as_ref()
-        && cached.config.as_ptr() == Arc::as_ptr(cfg)
-        && cached.lang == lang
-        && cached.utc_offset == utc_offset.to_bits()
-    {
-        return cached.value.clone();
-    }
-    let value = Rc::new(resolve_settings(cfg, lang, utc_offset));
-    *cache = Some(SettingsCache { config: Arc::downgrade(cfg), lang, utc_offset: utc_offset.to_bits(), value: value.clone() });
-    value
+    SETTINGS.with(|cache| cache.borrow_mut().get(&cfg, mandara_i18n::language(), utc_offset_hours().to_bits()))
 }
 
 /// Resolves location fallbacks only when no nonempty own name applies.
@@ -1135,30 +1127,30 @@ mod tests {
 
     /// Config, local offset and plugin language each invalidate resolved settings.
     #[test]
-    fn settings_cache_tracks_live_inputs_without_retaining_config_snapshots() {
+    fn settings_cache_tracks_live_inputs_without_strong_config_ownership() {
         let mut config = ShellConfig::default();
         config.location.name.clear();
         let config = Arc::new(config);
-        let mut cache = None;
-        let first = cached_settings(&mut cache, &config, Lang::En, 2.0);
-        assert!(Rc::ptr_eq(&first, &cached_settings(&mut cache, &config, Lang::En, 2.0)));
+        let mut cache = SettingsCache::<Settings>::new();
+        let first = cache.get(&config, Lang::En, 2.0_f64.to_bits());
+        assert!(Rc::ptr_eq(&first, &cache.get(&config, Lang::En, 2.0_f64.to_bits())));
         assert_eq!(Arc::strong_count(&config), 1);
-        let arabic = cached_settings(&mut cache, &config, Lang::Ar, 2.0);
+        let arabic = cache.get(&config, Lang::Ar, 2.0_f64.to_bits());
         assert!(!Rc::ptr_eq(&first, &arabic));
         assert_eq!(arabic.place.as_ref(), mandara_i18n::t_in(Lang::Ar, "El-Mandara, Alexandria"));
-        let summer = cached_settings(&mut cache, &config, Lang::Ar, 3.0);
+        let summer = cache.get(&config, Lang::Ar, 3.0_f64.to_bits());
         assert_eq!(summer.utc_offset, 3.0);
         assert!(!Rc::ptr_eq(&arabic, &summer));
         let mut moved = (*config).clone();
         moved.location.name = "Demo coast".into();
         moved.location.latitude = 10.0;
         let moved = Arc::new(moved);
-        let settings = cached_settings(&mut cache, &moved, Lang::Ar, 3.0);
+        let settings = cache.get(&moved, Lang::Ar, 3.0_f64.to_bits());
         assert_eq!(settings.loc.latitude, 10.0);
         assert_eq!(settings.place.as_ref(), "Demo coast");
         let weak = Arc::downgrade(&moved);
         drop(moved);
-        assert!(weak.upgrade().is_none(), "cached settings cannot retain an old config");
+        assert!(weak.upgrade().is_none(), "cached settings cannot keep old config fields alive");
     }
 
     /// Copied names keep their spacing; a cleared override follows the old fallback.

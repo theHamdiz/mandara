@@ -53,6 +53,8 @@ use crate::icons::icon;
 use crate::kit::{card, text, tokens};
 use crate::state::config;
 
+use super::settings_cache::{ConfigSettings, SettingsCache};
+
 pub const ID: &str = "quran";
 
 // ── Sizes & timing ───────────────────────────────────────────────────────
@@ -127,25 +129,44 @@ pub(crate) struct Settings {
     pub lang: Lang,
 }
 
-pub(crate) fn settings(cx: &App) -> Settings {
-    let cfg = config(cx).read(cx).snapshot();
-    let s = &cfg.plugins;
-    Settings {
-        reciter: player::reciter_or_default(&s.setting(ID, "reciter", String::from(player::DEFAULT_RECITER))),
-        translation: s.setting(ID, "translation", String::new()),
-        arabic_size: match s.setting(ID, "arabic_size", String::from("medium")).as_str() {
-            "small" => ArabicSize::Small,
-            "large" => ArabicSize::Large,
-            _ => ArabicSize::Medium,
-        },
-        lang: plugin_lang::resolved(own_lang(cx)),
+thread_local! {
+    static SETTINGS: RefCell<SettingsCache<Settings>> = const { RefCell::new(SettingsCache::new()) };
+}
+
+/// Release only resolved configuration when the plugin is switched off.
+pub(super) fn clear_settings() {
+    SETTINGS.with(|cache| cache.borrow_mut().clear());
+}
+
+pub(crate) fn settings(cx: &App) -> Rc<Settings> {
+    let config = config(cx).read(cx).snapshot();
+    let language = plugin_lang::resolved(plugin_lang::own_language(config.plugins.setting_str(ID, "language").unwrap_or(plugin_lang::FOLLOW)));
+    SETTINGS.with(|cache| cache.borrow_mut().get(&config, language, ()))
+}
+
+impl ConfigSettings for Settings {
+    type Scope = ();
+
+    fn resolve(cfg: &mandara_config::ShellConfig, language: Lang, (): ()) -> Self {
+        let s = &cfg.plugins;
+        Settings {
+            reciter: player::reciter_or_default(s.setting_str(ID, "reciter").unwrap_or(player::DEFAULT_RECITER)),
+            translation: s.setting(ID, "translation", String::new()),
+            arabic_size: match s.setting_str(ID, "arabic_size").unwrap_or("medium") {
+                "small" => ArabicSize::Small,
+                "large" => ArabicSize::Large,
+                _ => ArabicSize::Medium,
+            },
+            lang: language,
+        }
     }
 }
 
 /// The Qur'an plugin's own language (`None`: Mandara's), from its
 /// `language` setting.
 pub(crate) fn own_lang(cx: &App) -> Option<Lang> {
-    plugin_lang::own_language(&config(cx).read(cx).snapshot().plugins.setting(ID, "language", String::from(plugin_lang::FOLLOW)))
+    let config = config(cx).read(cx).snapshot();
+    plugin_lang::own_language(config.plugins.setting_str(ID, "language").unwrap_or(plugin_lang::FOLLOW))
 }
 
 /// Whether the interface is Arabic (the text only, no translation).
@@ -1219,6 +1240,27 @@ pub(crate) fn surah_title(book: &Book, n: u16) -> SharedString {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Warm views reuse resolved settings; language and config edits still take effect.
+    #[test]
+    fn settings_cache_tracks_config_and_plugin_language_without_loading_data() {
+        let mut config = mandara_config::ShellConfig::default();
+        let mut cache = SettingsCache::<Settings>::new();
+        let snapshot = Arc::new(config.clone());
+        let first = cache.get(&snapshot, Lang::En, ());
+        assert!(Rc::ptr_eq(&first, &cache.get(&snapshot, Lang::En, ())));
+        assert!(first.translation.is_empty());
+        config.plugins.settings.entry(ID.into()).or_default().insert("translation".into(), toml::Value::String("demo-edition".into()));
+        let changed = cache.get(&Arc::new(config), Lang::Ar, ());
+        assert!(!Rc::ptr_eq(&first, &changed));
+        assert_eq!(changed.lang, Lang::Ar);
+        let held = SETTINGS.with(|cache| cache.borrow_mut().get(&snapshot, Lang::En, ()));
+        clear_settings();
+        assert!(!Rc::ptr_eq(&held, &SETTINGS.with(|cache| cache.borrow_mut().get(&snapshot, Lang::En, ()))));
+        clear_settings();
+        assert_eq!(changed.translation, "demo-edition");
+    }
+
 
     #[test]
     fn sizes_grow() {

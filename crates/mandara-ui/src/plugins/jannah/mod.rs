@@ -54,6 +54,8 @@ use crate::icons::icon;
 use crate::kit::{card, text, tokens};
 use crate::state::config;
 
+use super::settings_cache::{ConfigSettings, SettingsCache};
+
 pub const ID: &str = "jannah";
 
 // ── Sizes & timing ───────────────────────────────────────────────────────
@@ -119,27 +121,46 @@ pub(crate) struct Settings {
     pub lang: Lang,
 }
 
-pub(crate) fn settings(cx: &App) -> Settings {
-    let cfg = config(cx).read(cx).snapshot();
-    let s = &cfg.plugins;
-    Settings {
-        rotate: Rotate::parse(&s.setting(ID, "rotate", String::from("daily"))),
-        sources: Sources::parse(&s.setting(ID, "sources", String::from("both"))),
-        translation: s.setting(ID, "show_translation", true),
-        arabic_size: match s.setting(ID, "arabic_size", String::from("medium")).as_str() {
-            "small" => ArabicSize::Small,
-            "large" => ArabicSize::Large,
-            _ => ArabicSize::Medium,
-        },
-        bar_step: s.setting(ID, "bar_label", String::from("glyph")) == "step",
-        morning: s.setting(ID, "morning_reminder", false),
-        lang: plugin_lang::resolved(own_lang(cx)),
+thread_local! {
+    static SETTINGS: RefCell<SettingsCache<Settings>> = const { RefCell::new(SettingsCache::new()) };
+}
+
+/// Release only resolved configuration when the plugin is switched off.
+pub(super) fn clear_settings() {
+    SETTINGS.with(|cache| cache.borrow_mut().clear());
+}
+
+pub(crate) fn settings(cx: &App) -> Rc<Settings> {
+    let config = config(cx).read(cx).snapshot();
+    let language = plugin_lang::resolved(plugin_lang::own_language(config.plugins.setting_str(ID, "language").unwrap_or(plugin_lang::FOLLOW)));
+    SETTINGS.with(|cache| cache.borrow_mut().get(&config, language, ()))
+}
+
+impl ConfigSettings for Settings {
+    type Scope = ();
+
+    fn resolve(cfg: &mandara_config::ShellConfig, language: Lang, (): ()) -> Self {
+        let s = &cfg.plugins;
+        Settings {
+            rotate: Rotate::parse(s.setting_str(ID, "rotate").unwrap_or("daily")),
+            sources: Sources::parse(s.setting_str(ID, "sources").unwrap_or("both")),
+            translation: s.setting(ID, "show_translation", true),
+            arabic_size: match s.setting_str(ID, "arabic_size").unwrap_or("medium") {
+                "small" => ArabicSize::Small,
+                "large" => ArabicSize::Large,
+                _ => ArabicSize::Medium,
+            },
+            bar_step: s.setting_str(ID, "bar_label").unwrap_or("glyph") == "step",
+            morning: s.setting(ID, "morning_reminder", false),
+            lang: language,
+        }
     }
 }
 
 /// Jannah's own language (`None`: Mandara's), from its `language` setting.
 pub(crate) fn own_lang(cx: &App) -> Option<Lang> {
-    plugin_lang::own_language(&config(cx).read(cx).snapshot().plugins.setting(ID, "language", String::from(plugin_lang::FOLLOW)))
+    let config = config(cx).read(cx).snapshot();
+    plugin_lang::own_language(config.plugins.setting_str(ID, "language").unwrap_or(plugin_lang::FOLLOW))
 }
 
 /// Whether the interface is Arabic (scripture only, no translation).
@@ -1003,6 +1024,27 @@ pub(crate) fn open_link(url: String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Warm views reuse resolved settings; language and config edits still take effect.
+    #[test]
+    fn settings_cache_tracks_config_and_plugin_language_without_loading_data() {
+        let mut config = mandara_config::ShellConfig::default();
+        let mut cache = SettingsCache::<Settings>::new();
+        let snapshot = Arc::new(config.clone());
+        let first = cache.get(&snapshot, Lang::En, ());
+        assert!(Rc::ptr_eq(&first, &cache.get(&snapshot, Lang::En, ())));
+        assert_eq!(first.rotate, Rotate::Daily);
+        config.plugins.settings.entry(ID.into()).or_default().insert("rotate".into(), toml::Value::String("hourly".into()));
+        let changed = cache.get(&Arc::new(config), Lang::Ar, ());
+        assert!(!Rc::ptr_eq(&first, &changed));
+        assert_eq!(changed.lang, Lang::Ar);
+        let held = SETTINGS.with(|cache| cache.borrow_mut().get(&snapshot, Lang::En, ()));
+        clear_settings();
+        assert!(!Rc::ptr_eq(&held, &SETTINGS.with(|cache| cache.borrow_mut().get(&snapshot, Lang::En, ()))));
+        clear_settings();
+        assert_eq!(changed.rotate, Rotate::Hourly);
+    }
+
 
     fn s() -> Settings {
         Settings { rotate: Rotate::Daily, sources: Sources::Both, translation: true, arabic_size: ArabicSize::Medium, bar_step: false, morning: true, lang: Lang::En }

@@ -112,6 +112,10 @@ fn sync(cx: &mut App) {
     LAST.with(|l| *l.borrow_mut() = Some(plugins));
     for (id, stop) in [
         (super::feeds::ID, super::feeds::stop as fn()),
+        (super::prayer::ID, super::prayer::clear_settings as fn()),
+        (super::jannah::ID, super::jannah::clear_settings as fn()),
+        (super::hadith::ID, super::hadith::clear_settings as fn()),
+        (super::quran::ID, super::quran::clear_settings as fn()),
         (super::home_assistant::ID, super::home_assistant::stop as fn()),
         (super::phone_connect::ID, super::phone_connect::stop as fn()),
     ] {

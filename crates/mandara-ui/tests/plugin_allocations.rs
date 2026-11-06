@@ -13,6 +13,8 @@ mod chart_samples;
 mod day_events;
 #[path = "../src/plugins/media/scrub_state.rs"]
 mod scrub_state;
+#[path = "../src/plugins/settings_cache.rs"]
+mod settings_cache;
 #[path = "../src/plugins/resources/temperature_rows.rs"]
 mod temperature_rows;
 
@@ -186,5 +188,63 @@ fn temperature_rows_do_not_allocate_an_intermediate_list() {
     });
     eprintln!("{FRAMES} temperature frames: pair Vec {before:?}, borrowed rows {after:?}");
     assert_eq!(before.0, FRAMES);
+    assert_eq!(after, (0, 0));
+}
+
+/// Resolving unchanged text settings reuses the cached value without copying TOML.
+#[test]
+fn warm_plugin_settings_do_not_allocate() {
+    use mandara_config::ShellConfig;
+    use mandara_i18n::Lang;
+    use settings_cache::{ConfigSettings, SettingsCache};
+    use std::sync::Arc;
+
+    struct TextSettings(String);
+    impl ConfigSettings for TextSettings {
+        type Scope = ();
+        fn resolve(config: &ShellConfig, _: Lang, (): ()) -> Self {
+            Self(
+                config
+                    .plugins
+                    .setting_str("demo", "label")
+                    .unwrap_or("follow")
+                    .to_owned(),
+            )
+        }
+    }
+    const READS: usize = 32;
+    let mut config = ShellConfig::default();
+    config
+        .plugins
+        .settings
+        .entry("demo".into())
+        .or_default()
+        .insert(
+            "label".into(),
+            toml::Value::String("Demo cached label".into()),
+        );
+    let config = Arc::new(config);
+    let mut cache = SettingsCache::<TextSettings>::new();
+    let warm = cache.get(&config, Lang::En, ());
+    assert_eq!(warm.0, "Demo cached label");
+    let before = allocations(|| {
+        for _ in 0..READS {
+            black_box(
+                config
+                    .plugins
+                    .setting("demo", "label", String::from("follow")),
+            );
+        }
+    });
+    let after = allocations(|| {
+        for _ in 0..READS {
+            black_box(cache.get(&config, Lang::En, ()));
+        }
+    });
+    eprintln!("{READS} settings reads: eager strings {before:?}, warm cache {after:?}");
+    assert!(
+        before.0 >= READS,
+        "the positive control must copy owned labels"
+    );
     assert_eq!(after, (0, 0));
 }
