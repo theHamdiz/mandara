@@ -28,6 +28,9 @@ About → What's new shows it too.
 
 ### Under the hood
 
+- **Lighter plugin switches.** Enabling and disabling plugins no longer copies
+  or retains unrelated plugin settings when other preferences change.
+
 - **Shared theme labels.** Palette copies and color transitions share their
   name instead of allocating another copy for each frame.
 

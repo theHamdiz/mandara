@@ -176,3 +176,7 @@ on write. Their allocation tests keep the former allocating expressions as
 positive controls and check wire values and independent edits. These controls
 measure specific operations, with release frame and resource acceptance kept
 separate from the allocation counts.
+
+Plugin lifecycle watches retain only their enabled, disabled and removed
+lists. Other preferences compare borrowed lists and leave plugin lifetimes
+alone, without copying or retaining the full settings table.
