@@ -6,6 +6,15 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Under the hood
+
+- **Quieter distribution packages.** Language packs are staged separately
+  from compiled binaries, avoiding a misleading packaging warning while
+  keeping every language in the finished packages.
+
+- **Safer release downloads.** The release job uses the current artifact
+  download action and rejects corrupted build artifacts before signing.
+
 ## 0.19.1 — 2026-11-06
 
 Copy installation commands. Fresh desktop pictures. Theme cards fill their

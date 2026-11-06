@@ -80,3 +80,71 @@ jobs:
         assert!(credentials_are_scoped(&parse(&source)).is_err());
     }
 }
+
+/// Build artifacts must come from completed producer jobs and pass the
+/// downloader's digest check before the publish job signs their contents.
+fn release_artifact_handoff(workflow: &serde_yaml_ng::Value) -> Result<(), String> {
+    let jobs = workflow["jobs"].as_mapping().ok_or("workflow has no jobs")?;
+    let publish = &workflow["jobs"]["publish"];
+    let needs = publish["needs"].as_sequence().ok_or("publish has no producer dependencies")?;
+    for (id, job) in jobs {
+        let produces = job["steps"].as_sequence().ok_or("job has no steps")?.iter().any(|step| {
+            step["uses"].as_str().is_some_and(|name| name.starts_with("actions/upload-artifact@"))
+                && step["with"]["name"].as_str().is_some_and(|name| name.starts_with("dist-"))
+        });
+        if produces && !needs.contains(id) { return Err("publish does not wait for an artifact producer".into()); }
+    }
+    let downloads: Vec<_> = publish["steps"].as_sequence().ok_or("publish has no steps")?.iter().filter(|step| {
+        step["uses"].as_str().is_some_and(|name| name.starts_with("actions/download-artifact@"))
+    }).collect();
+    if downloads.len() != 1 { return Err("publish requires one distribution download".into()); }
+    let download = downloads[0];
+    if download["uses"].as_str() != Some("actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333") {
+        return Err("distribution downloads must use the reviewed immutable action".into());
+    }
+    let input = &download["with"];
+    let enabled = |value: &serde_yaml_ng::Value| value.as_bool() == Some(true) || value.as_str() == Some("true");
+    if input["pattern"].as_str() != Some("dist-*") || input["path"].as_str() != Some("dist") || !enabled(&input["merge-multiple"]) {
+        return Err("publish must merge every distribution artifact into dist".into());
+    }
+    if !input["digest-mismatch"].is_null() && input["digest-mismatch"].as_str() != Some("error") {
+        return Err("artifact digest mismatches must fail publication".into());
+    }
+    if enabled(&input["skip-decompress"]) || enabled(&download["continue-on-error"]) {
+        return Err("publication must receive extracted, verified artifacts".into());
+    }
+    for key in ["name", "artifact-ids", "repository", "run-id", "github-token"] {
+        if !input[key].is_null() { return Err("distribution artifacts must come from this workflow run".into()); }
+    }
+    Ok(())
+}
+
+/// The production handoff stays pinned, waits for all architectures and fails
+/// closed when its input selection or integrity policy is weakened.
+#[test]
+fn release_artifact_downloads_keep_producer_and_integrity_contracts() {
+    let source = std::fs::read_to_string(crate::root().join(".github/workflows/release.yml")).unwrap();
+    let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&source).unwrap();
+    release_artifact_handoff(&workflow).unwrap();
+    for (key, value) in [
+        ("pattern", "other-*"), ("path", "elsewhere"), ("merge-multiple", "false"),
+        ("digest-mismatch", "warn"), ("digest-mismatch", "ignore"),
+        ("skip-decompress", "true"), ("name", "dist-one-target"), ("run-id", "123"),
+    ] {
+        let mut invalid = workflow.clone();
+        let step = invalid["jobs"]["publish"]["steps"].as_sequence_mut().unwrap().iter_mut().find(|step| {
+            step["uses"].as_str().is_some_and(|name| name.starts_with("actions/download-artifact@"))
+        }).unwrap();
+        step["with"][key] = serde_yaml_ng::Value::String(value.into());
+        assert!(release_artifact_handoff(&invalid).is_err(), "{key}={value}");
+    }
+    let mut old = workflow.clone();
+    let step = old["jobs"]["publish"]["steps"].as_sequence_mut().unwrap().iter_mut().find(|step| {
+        step["uses"].as_str().is_some_and(|name| name.starts_with("actions/download-artifact@"))
+    }).unwrap();
+    step["uses"] = serde_yaml_ng::Value::String("actions/download-artifact@v4".into());
+    assert!(release_artifact_handoff(&old).is_err());
+    let mut early = workflow.clone();
+    early["jobs"]["publish"]["needs"].as_sequence_mut().unwrap().retain(|job| job.as_str() != Some("build-musl"));
+    assert!(release_artifact_handoff(&early).is_err());
+}
