@@ -122,3 +122,16 @@ buffer. GPUI uploads borrow those pixels directly until wgpu copies them into
 its own staging storage. Native renderer features select Vulkan and GLES;
 browser shader translation is excluded from Linux builds. These changes keep
 the existing image resolution and rendering quality.
+
+## Plugin view allocations
+
+Clipboard rendering uses one layout for row previews and keyboard selection.
+Media seek controls retain their geometry with the gesture state, separately for
+panel and sidebar views. Network charts borrow the sampler's history rather
+than copying its samples when labels change.
+
+`cargo test -p mandara-ui --test plugin_allocations -- --nocapture` compares
+the former temporary expressions with warm state reuse on the test thread.
+It reports allocation calls and requested bytes, not process RSS. Frame and
+interaction speed still need matched release measurements before describing a
+performance improvement.

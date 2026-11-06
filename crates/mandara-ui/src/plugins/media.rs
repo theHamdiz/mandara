@@ -35,6 +35,8 @@ use serde_json::json;
 use super::domain_view;
 use crate::hub::Domains;
 pub(crate) mod lyrics_view;
+mod scrub_state;
+use scrub_state::ScrubState;
 use lyrics_view::LyricsPane;
 use super::panel_fx::{
     ANGLE_DIAGONAL_DEG, ANGLE_DOWN_DEG, ANGLE_RIGHT_DEG, Cached, PanelShape, SpectrumTap, alpha, glow, readable, redraw_in, wash,
@@ -774,25 +776,22 @@ fn scrubber(
     state: &MediaState,
     m: &ArtTheme,
     palette: &MandaraPalette,
-    drag: Rc<Cell<Option<f32>>>,
+    drag: Rc<ScrubState>,
     labels: &RefCell<ScrubLabels>,
     compact: bool,
 ) -> impl IntoElement {
     let now = Instant::now();
     let length = state.length;
     let seekable = state.can_seek && length.is_some();
-    let frac = drag.get().filter(|_| seekable).unwrap_or_else(|| state.progress(now));
-    let shown_pos = match (drag.get(), length) {
+    let frac = drag.drag.get().filter(|_| seekable).unwrap_or_else(|| state.progress(now));
+    let shown_pos = match (drag.drag.get(), length) {
         (Some(t), Some(len)) if seekable => len.mul_f32(t),
         _ => state.position_now(now),
     };
-    let bounds: Rc<Cell<gpui::Bounds<gpui::Pixels>>> = Rc::default();
+    let bounds = drag.clone();
     let pick = {
-        let bounds = bounds.clone();
-        move |x: gpui::Pixels| -> f32 {
-            let b = bounds.get();
-            ((f32::from(x) - f32::from(b.origin.x)) / f32::from(b.size.width).max(1.0)).clamp(0.0, 1.0)
-        }
+        let drag = drag.clone();
+        move |x: gpui::Pixels| drag.fraction(x)
     };
     let (pick_down, pick_move, pick_up, pick_out) = (pick.clone(), pick.clone(), pick.clone(), pick);
     let (d_down, d_move, d_up, d_out) = (drag.clone(), drag.clone(), drag.clone(), drag);
@@ -849,26 +848,26 @@ fn scrubber(
                             ]),
                     )
                 })
-                .child(canvas(move |b, _, _| bounds.set(b), |_, _, _, _| {}).absolute().top_0().left_0().size_full())
+                .child(canvas(move |b, _, _| bounds.bounds.set(b), |_, _, _, _| {}).absolute().top_0().left_0().size_full())
                 .on_mouse_down(MouseButton::Left, move |e: &MouseDownEvent, window, _| {
                     if seekable {
-                        d_down.set(Some(pick_down(e.position.x)));
+                        d_down.drag.set(Some(pick_down(e.position.x)));
                         window.refresh();
                     }
                 })
                 .on_mouse_move(move |e: &MouseMoveEvent, window, _| {
-                    if d_move.get().is_some() && e.pressed_button == Some(MouseButton::Left) {
-                        d_move.set(Some(pick_move(e.position.x)));
+                    if d_move.drag.get().is_some() && e.pressed_button == Some(MouseButton::Left) {
+                        d_move.drag.set(Some(pick_move(e.position.x)));
                         window.refresh();
                     }
                 })
                 .on_mouse_up(MouseButton::Left, move |e: &MouseUpEvent, _, cx| {
-                    if d_up.take().is_some() {
+                    if d_up.drag.take().is_some() {
                         commit(pick_up(e.position.x), cx);
                     }
                 })
                 .on_mouse_up_out(MouseButton::Left, move |e: &MouseUpEvent, _, cx| {
-                    if d_out.take().is_some() {
+                    if d_out.drag.take().is_some() {
                         commit(pick_out(e.position.x), cx);
                     }
                 }),
@@ -1048,7 +1047,7 @@ fn set_size(cell: &Cell<gpui::Size<gpui::Pixels>>, height: f32) {
     }
 }
 
-fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, drag: Rc<Cell<Option<f32>>>) -> impl Fn(&MandaraPalette, &mut Window, &mut App) -> AnyElement {
+fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, drag: Rc<ScrubState>) -> impl Fn(&MandaraPalette, &mut Window, &mut App) -> AnyElement {
     let fx = Rc::new(RefCell::new(Fx::new()));
     let tap = Rc::new(RefCell::new(SpectrumTap::default()));
     let lyrics = LyricsPane::new();
@@ -1108,7 +1107,7 @@ fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, drag: R
         let art = backdrop(&fx, state.art_path.as_deref(), window, cx);
         let bands = SpectrumTap::bands(&tap, visible && playing, cx);
         if visible {
-            let frame = if bands.is_some() || theme_moving || art.fading || lyrics_moving || drag.get().is_some() {
+            let frame = if bands.is_some() || theme_moving || art.fading || lyrics_moving || drag.drag.get().is_some() {
                 LIVE_FRAME
             } else if playing {
                 // Waiting for sound (or no capture): poll gently, tick time.
@@ -1194,7 +1193,7 @@ pub fn register(r: &mut PluginRegistry) {
         );
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(PLAYING_H))));
         let panel = domain_view(Domains::MEDIA, None, panel_view(panel_cx.clone(), size_cell.clone(), Rc::default()), window, cx);
-        let side_drag: Rc<Cell<Option<f32>>> = Rc::default();
+        let side_drag: Rc<ScrubState> = Rc::default();
         let side_labels = Rc::new(RefCell::new(ScrubLabels::default()));
         let side_cover = Rc::new(RefCell::new(CoverSlot::default()));
         let side_keeper = Rc::new(IdleRelease::default());

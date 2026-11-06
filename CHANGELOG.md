@@ -24,6 +24,10 @@ About → What's new shows it too.
 
 ### Under the hood
 
+- **Less repeated work in plugin views.** Clipboard previews and selection share
+  one layout, media seek controls keep their gesture geometry, and network
+  charts read their existing history without keeping a second sample copy.
+
 - **Cleaner portable builds.** Linker tuning checks for support, avoiding
   ignored-option warnings with other linkers.
 

@@ -489,11 +489,11 @@ fn decode_thumb(path: PathBuf, w: u32, h: u32) -> Option<Arc<RenderImage>> {
 /// Brings the caches in line with the rows on screen: drops texts of other
 /// rows and previews of forgotten entries, derives missing row texts and
 /// returns the images that still need a preview (marked as loading).
-fn sync_cache(ui: &Shared, entries: &[ClipEntry], shown: &[&ClipEntry], preview_lines: usize) -> Vec<(u64, PathBuf)> {
+fn sync_cache<'a>(ui: &Shared, entries: &[ClipEntry], shown: impl Iterator<Item = &'a ClipEntry> + Clone, preview_lines: usize) -> Vec<(u64, PathBuf)> {
     let mut u = ui.borrow_mut();
     u.tick += 1;
     let tick = u.tick;
-    u.rows.retain(|id, r| r.preview_lines == preview_lines && shown.iter().any(|e| e.id == *id));
+    u.rows.retain(|id, r| r.preview_lines == preview_lines && shown.clone().any(|e| e.id == *id));
     u.thumbs.retain(|id, _| entries.iter().any(|e| e.id == *id));
     let mut pending = Vec::new();
     for e in shown {
@@ -860,8 +860,8 @@ impl<'a> Layout<'a> {
         &self.listing.main[self.pages[self.page].clone()]
     }
 
-    fn shown(&self) -> Vec<&'a ClipEntry> {
-        self.listing.pinned.iter().chain(self.page_rows()).copied().collect()
+    fn shown(&self) -> impl Iterator<Item = &'a ClipEntry> + Clone {
+        self.listing.pinned.iter().chain(self.page_rows()).copied()
     }
 }
 
@@ -907,7 +907,7 @@ fn refresh(ui: &Shared, look: &Look, query: &str, window: &Window, cx: &mut App)
     let pending = {
         let state = &hub(cx).read(cx).clipboard;
         let l = layout(ui, &state.entries, &state.collections, look, query);
-        sync_cache(ui, &state.entries, &l.shown(), look.preview_lines)
+        sync_cache(ui, &state.entries, l.shown(), look.preview_lines)
     };
     if !pending.is_empty() {
         decode_thumbs(ui, pending, window.scale_factor(), cx);
@@ -929,22 +929,25 @@ impl View {
         }
         let look = Look::of(&crate::state::config(cx).read(cx).get().clipboard);
         let query = self.search.read(cx).value.clone();
+        let entries = hub(cx).read(cx).clipboard.entries.clone();
+        let lay = {
+            let state = &hub(cx).read(cx).clipboard;
+            layout(ui, &entries, &state.collections, &look, &query)
+        };
         if self.p.progress() > 0.0 {
-            refresh(ui, &look, &query, window, cx);
+            let pending = sync_cache(ui, &entries, lay.shown(), look.preview_lines);
+            decode_thumbs(ui, pending, window.scale_factor(), cx);
         }
         let cx: &App = cx;
         let mono = crate::fonts::fonts(cx).mono;
-        let state = &hub(cx).read(cx).clipboard;
-        let (entries, collections) = (&state.entries, &state.collections);
-        let lay = layout(ui, entries, collections, &look, &query);
+        let collections = &hub(cx).read(cx).clipboard.collections;
         let (listing, pages, page) = (&lay.listing, &lay.pages, lay.page);
         // Snapshot the drawing order for the arrows: pinned rows first, then
         // the whole history, with the page each row sits on.
         ui.borrow_mut().reconcile_selection(&lay);
         let filter = ui.borrow().filter;
-        let page_rows: Vec<&ClipEntry> = lay.page_rows().to_vec();
-        let shown = lay.shown();
-        let picker = ui.borrow().picker.filter(|id| shown.iter().any(|e| e.id == *id));
+        let page_rows = lay.page_rows();
+        let picker = ui.borrow().picker.filter(|id| lay.shown().any(|e| e.id == *id));
         let naming = ui.borrow().naming;
         let accent = readable(palette.primary, palette);
         let n = entries.len();
@@ -991,7 +994,7 @@ impl View {
             });
             field_row("search", &self.search, clear.into_iter().collect(), palette)
         };
-        let chips = chips_strip(ui, &self.name, entries, collections, look.kind_chips, palette);
+        let chips = chips_strip(ui, &self.name, &entries, collections, look.kind_chips, palette);
         let naming_row = naming.map(|nm| {
             let (ui_save, field) = (ui.clone(), self.name.clone());
             let mut trailing = vec![
@@ -1036,7 +1039,7 @@ impl View {
         let list_h = if empty {
             EMPTY_H
         } else {
-            block_h(&listing.pinned) + block_h(&page_rows) + picker_h + if listing.pinned.is_empty() || page_rows.is_empty() { 0.0 } else { GAP - LIST_GAP }
+            block_h(&listing.pinned) + block_h(page_rows) + picker_h + if listing.pinned.is_empty() || page_rows.is_empty() { 0.0 } else { GAP - LIST_GAP }
         };
         let controls_h = FIELD_H + CONTROL_GAP + CHIPS_H + CONTROL_GAP + SECTION_H_PX + if naming.is_some() { CONTROL_GAP + FIELD_H } else { 0.0 };
         self.size_cell.set(size(px(PANEL_W), px(PAD * 2.0 + HEADER_H + GAP + controls_h + GAP + list_h)));
@@ -1514,6 +1517,35 @@ mod tests {
         let tall = PAGE_BUDGET_H / 2.0 + 1.0;
         assert_eq!(paginate(&[tall, tall, tall]), [0..1, 1..2, 2..3]);
         assert_eq!((paginate(&[PAGE_BUDGET_H * 2.0]).len(), paginate(&[PAGE_BUDGET_H * 2.0]).first().cloned()), (1, Some(0..1)));
+    }
+
+    /// One layout drives preview retention and keyboard selection as pages change.
+    #[test]
+    fn visible_rows_reuse_the_layout_for_previews_and_selection() {
+        let mut entries = vec![entry(1, "pinned")];
+        entries[0].pinned = true;
+        entries.extend((0..PAGE + 1).map(|i| entry(i as u64 + 2, "plain text")));
+        let ui = Shared::default();
+        let look = Look::of(&ClipboardConfig::default());
+        let first = layout(&ui, &entries, &[], &look, "");
+        let visible = first.shown().map(|entry| entry.id).collect::<Vec<_>>();
+        assert_eq!(visible.len(), PAGE + 1);
+        assert!(sync_cache(&ui, &entries, first.shown(), look.preview_lines).is_empty());
+        ui.borrow_mut().reconcile_selection(&first);
+        assert!(visible.iter().all(|id| ui.borrow().rows.contains_key(id)));
+        assert!(!ui.borrow().rows.contains_key(&entries.last().unwrap().id));
+        ui.borrow_mut().page = 1;
+        ui.borrow_mut().selected = Some(entries[1].id);
+        let next = layout(&ui, &entries, &[], &look, "");
+        let page = next.page_rows();
+        assert_eq!(page.len(), 1);
+        assert!(std::ptr::eq(page.as_ptr(), next.listing.main[PAGE..].as_ptr()));
+        assert!(sync_cache(&ui, &entries, next.shown(), look.preview_lines).is_empty());
+        ui.borrow_mut().reconcile_selection(&next);
+        assert!(ui.borrow().selected.is_none(), "a hidden row cannot be activated");
+        assert_eq!(ui.borrow().rows.len(), 2, "only the pin and new page keep their row previews");
+        assert!(ui.borrow().rows.contains_key(&1));
+        assert!(ui.borrow().rows.contains_key(&entries.last().unwrap().id));
     }
 
     #[test]
