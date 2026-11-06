@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.19.1 — 2026-11-06
+
+Copy installation commands. Fresh desktop pictures. Theme cards fill their
+space. Keyboard navigation in Beacon.
+
 ### Improved
 
 - **Copy installation commands.** The website and its guides offer a Copy
