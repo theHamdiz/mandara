@@ -6,6 +6,47 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **Fresh language and theme in plugin cards.** Soundscapes captions and
+  progress rows follow language and colour changes without waiting for their
+  underlying data to change.
+
+### Under the hood
+
+- **Lighter plugin switches.** Enabling and disabling plugins no longer copies
+  or retains unrelated plugin settings when other preferences change.
+- **Shared theme labels.** Palette copies and color transitions share their
+  name instead of allocating another copy for each frame.
+- **Less temporary work.** Input regions reuse their frame buffers, network
+  totals avoid temporary lists, and process sampling reuses small file buffers
+  while reading CPU tables without a size limit. Plugin text and image
+  conversions keep their existing storage when possible.
+- **Safer tray icons.** Invalid icon dimensions are rejected before pixel-size
+  arithmetic can overflow.
+- **Less repeated work in plugin views.** Clipboard previews and selection share
+  one layout, media seek controls keep their gesture geometry, and network
+  charts read their existing history without keeping a second sample copy.
+  Prayer times reuse resolved settings and keep their fixed daily timeline
+  without a temporary event list. Search results keep reusable indices, and
+  clipboard rows share their action state instead of rebuilding callbacks.
+  Album art and sharing or dock previews consume their resized image buffers,
+  and temperature rows borrow their readings and labels. Several plugin
+  selectors also read text settings without making temporary string copies.
+  Feeds, home controls and the faith plugins resolve their text and list settings once per
+  config or language change. Daily progress snapshots also avoid repeated
+  date formatting while a view animates. Keyboard badges compare borrowed
+  labels, and Phone Connect filters its existing device list directly.
+- **Shared font settings.** Text and clock draws reuse their empty and
+  tabular-number feature lists while custom font changes stay independent.
+- **Lean bar geometry.** Joined columns keep their two corner flares inline,
+  and group capsules calculate their bounds without a temporary list.
+
+## 0.19.1 — 2026-11-06
+
+Copy installation commands. Fresh desktop pictures. Theme cards fill their
+space. Keyboard navigation in Beacon.
+
 ### Improved
 
 - **Copy installation commands.** The website and its guides offer a Copy
@@ -27,40 +68,6 @@ About → What's new shows it too.
   a mode or app category. (#120)
 
 ### Under the hood
-
-- **Lighter plugin switches.** Enabling and disabling plugins no longer copies
-  or retains unrelated plugin settings when other preferences change.
-
-- **Shared theme labels.** Palette copies and color transitions share their
-  name instead of allocating another copy for each frame.
-
-- **Less temporary work.** Input regions reuse their frame buffers, network
-  totals avoid temporary lists, and process sampling reuses small file buffers
-  while reading CPU tables without a size limit. Plugin text and image
-  conversions keep their existing storage when possible.
-
-- **Safer tray icons.** Invalid icon dimensions are rejected before pixel-size
-  arithmetic can overflow.
-
-- **Less repeated work in plugin views.** Clipboard previews and selection share
-  one layout, media seek controls keep their gesture geometry, and network
-  charts read their existing history without keeping a second sample copy.
-  Prayer times reuse resolved settings and keep their fixed daily timeline
-  without a temporary event list. Search results keep reusable indices, and
-  clipboard rows share their action state instead of rebuilding callbacks.
-  Album art and sharing or dock previews consume their resized image buffers,
-  and temperature rows borrow their readings and labels. Several plugin
-  selectors also read text settings without making temporary string copies.
-  Feeds, home controls and the faith plugins resolve their text and list settings once per
-  config or language change. Daily progress snapshots also avoid repeated
-  date formatting while a view animates. Keyboard badges compare borrowed
-  labels, and Phone Connect filters its existing device list directly.
-
-- **Shared font settings.** Text and clock draws reuse their empty and
-  tabular-number feature lists while custom font changes stay independent.
-
-- **Lean bar geometry.** Joined columns keep their two corner flares inline,
-  and group capsules calculate their bounds without a temporary list.
 
 - **Cleaner portable builds.** Linker tuning checks for support, avoiding
   ignored-option warnings with other linkers.

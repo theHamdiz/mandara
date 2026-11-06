@@ -1,7 +1,7 @@
 [package]
 name = "mandara-i18n"
 description = "Localization for Mandara Shell: twenty languages, English-keyed catalogs shipped as memory-mapped language packs, with English fallback"
-version = "0.18.0"
+version = "0.18.1"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

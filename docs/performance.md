@@ -180,3 +180,8 @@ separate from the allocation counts.
 Plugin lifecycle watches retain only their enabled, disabled and removed
 lists. Other preferences compare borrowed lists and leave plugin lifetimes
 alone, without copying or retaining the full settings table.
+
+Presentation mode watches only its enabled and automatic-sharing choices.
+Soundscapes and progress text caches include their resolved language, while
+progress colours resolve from the live palette. Progress grouping traverses
+borrowed tasks without allocating an ordering list.
