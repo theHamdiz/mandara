@@ -53,8 +53,8 @@ pub const ARENA_MAX: libc::c_int = 2;
 /// OS on free (`alloc-system-tuned`). Setting it also turns off glibc's
 /// dynamic threshold, which rose to 32 MiB after the first large free and
 /// doubled the trim threshold with it: from then on decoded wallpapers,
-/// icon grids and cut-outs landed in a malloc arena whose free top
-/// `malloc_trim` never returns (it only trims the main arena's top), so
+/// icon grids and cut-outs landed in a malloc arena where longer-lived
+/// allocations could keep freed chunks from being returned, so
 /// opening the dock's Applications grid left ~16 MiB behind for good.
 #[cfg(all(feature = "alloc-system-tuned", target_env = "gnu"))]
 pub const MMAP_THRESHOLD: libc::c_int = 512 * 1024;
@@ -87,6 +87,14 @@ pub fn init() {
         libc::mallopt(libc::M_ARENA_MAX, ARENA_MAX);
         libc::mallopt(libc::M_MMAP_THRESHOLD, MMAP_THRESHOLD);
     }
+    #[cfg(all(feature = "alloc-system-tuned", target_env = "gnu"))]
+    mandara_services::memory::install_trim_hook(trim);
+}
+
+#[cfg(all(feature = "alloc-system-tuned", target_env = "gnu"))]
+fn trim() {
+    // SAFETY: malloc_trim is thread-safe and has no caller preconditions.
+    unsafe { libc::malloc_trim(0); }
 }
 
 /// Starts background upkeep (the tuned glibc variant's periodic trim).
@@ -95,10 +103,7 @@ pub fn start_upkeep() {
     mandara_services::runtime::spawn("malloc-trim", async {
         loop {
             mandara_services::runtime::sleep(TRIM_EVERY).await;
-            // SAFETY: malloc_trim has no preconditions.
-            unsafe {
-                libc::malloc_trim(0);
-            }
+            mandara_services::memory::request_trim();
         }
     });
     crate::residency::start();

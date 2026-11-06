@@ -22,6 +22,7 @@ pub mod updates;
 pub mod external;
 pub mod main_menu;
 pub mod media;
+mod render_image;
 pub mod mini_stats;
 pub mod network;
 pub mod notes;

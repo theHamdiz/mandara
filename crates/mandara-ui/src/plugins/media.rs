@@ -33,7 +33,9 @@ use mandara_theme::{Color, MandaraPalette, MiniPalette, SeedColor};
 use serde_json::json;
 
 use super::domain_view;
+use super::render_image::PreparedImage;
 use crate::hub::Domains;
+mod jobs;
 pub(crate) mod lyrics_view;
 mod scrub_state;
 use scrub_state::ScrubState;
@@ -403,14 +405,6 @@ impl ArtTheme {
 
 // ── Art decoding & lifetime ──────────────────────────────────────────────
 
-fn to_render_image(mut rgba: image::RgbaImage) -> Arc<RenderImage> {
-    // GPUI expects BGRA.
-    for px in rgba.as_chunks_mut::<4>().0 {
-        px.swap(0, 2);
-    }
-    Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(rgba)]))
-}
-
 /// Album art decoded once: a square cover at the size it is drawn and,
 /// optionally, the blurred backdrop colour field.
 #[derive(Default)]
@@ -422,12 +416,14 @@ struct ArtImages {
 /// Decodes `path` once (off the UI thread) into a `cover_px`² cover
 /// (centre-cropped like `ObjectFit::Cover`) and, when `blur`, the backdrop.
 fn decode_art(path: &Path, cover_px: u32, blur: bool) -> ArtImages {
+    let cover_header = (cover_px > 0).then(PreparedImage::new);
+    let backdrop_header = blur.then(PreparedImage::new);
     let Ok(decoded) = mandara_theme::material::open_image(path) else { return ArtImages::default() };
     let cover = (cover_px > 0).then(|| decoded.resize_to_fill(cover_px, cover_px, FilterType::Triangle).into_rgba8());
     let small = blur.then(|| decoded.thumbnail(BACKDROP_PX, BACKDROP_PX).into_rgba8());
     drop(decoded);
-    let cover = cover.map(to_render_image);
-    let backdrop = small.map(|small| to_render_image(image::imageops::blur(&small, BACKDROP_BLUR_SIGMA)));
+    let cover = cover_header.zip(cover).map(|(header, pixels)| header.finish(pixels));
+    let backdrop = backdrop_header.zip(small).map(|(header, small)| header.finish(image::imageops::blur(&small, BACKDROP_BLUR_SIGMA)));
     ArtImages { cover, backdrop }
 }
 
@@ -471,7 +467,10 @@ impl IdleRelease {
             }
             this.armed.set(false);
             if let Some(handle) = this.window.take() {
-                let _ = handle.update(cx, |_, window, _| release(window));
+                let _ = handle.update(cx, |_, window, _| {
+                    release(window);
+                    mandara_services::memory::request_trim();
+                });
             }
         })
         .detach();
@@ -484,7 +483,7 @@ struct Fx {
     from: Option<ArtTheme>,
     to: Option<ArtTheme>,
     since: Instant,
-    art_path: Option<PathBuf>,
+    jobs: jobs::Latest<ArtRequest>,
     cover: Option<Arc<RenderImage>>,
     backdrop: Option<Arc<RenderImage>>,
     previous: Option<Arc<RenderImage>>,
@@ -494,7 +493,7 @@ struct Fx {
 impl Fx {
     fn new() -> Self {
         let now = Instant::now();
-        Self { from: None, to: None, since: now, art_path: None, cover: None, backdrop: None, previous: None, backdrop_since: now }
+        Self { from: None, to: None, since: now, jobs: jobs::Latest::default(), cover: None, backdrop: None, previous: None, backdrop_since: now }
     }
 
     /// The displayed theme, easing toward `target`; `true` while animating.
@@ -516,7 +515,7 @@ impl Fx {
     /// Frees every decoded image (panel closed); the next open re-decodes.
     fn release(&mut self, window: &mut Window) {
         drop_images(window, [self.cover.take(), self.backdrop.take(), self.previous.take()].into_iter().flatten());
-        self.art_path = None;
+        self.jobs.clear();
         self.from = None;
         self.to = None;
     }
@@ -536,47 +535,16 @@ struct Backdrop {
 /// decoded once in the background (the old cover stays until it lands)
 /// and the backdrop crossfades.
 fn backdrop(fx: &Rc<RefCell<Fx>>, path: Option<&Path>, window: &mut Window, cx: &mut App) -> Backdrop {
-    let changed = fx.borrow().art_path.as_deref() != path;
-    if changed {
-        {
-            let mut f = fx.borrow_mut();
-            f.art_path = path.map(Path::to_path_buf);
-            if path.is_none() {
-                let gone = [f.previous.take(), f.cover.take()];
-                drop_images(window, gone.into_iter().flatten());
-                f.previous = f.backdrop.take();
-                f.backdrop_since = Instant::now();
-            }
-        }
-        if let Some(path) = path.map(Path::to_path_buf) {
-            let cover_px = device_px(ART, window);
-            let task = cx.background_executor().spawn({
-                let path = path.clone();
-                async move { decode_art(&path, cover_px, true) }
-            });
-            let handle = window.window_handle();
-            let view = window.current_view();
-            let fx = fx.clone();
-            cx.spawn(async move |cx| {
-                let images = task.await;
-                let _ = handle.update(cx, |_, window, cx| {
-                    let mut f = fx.borrow_mut();
-                    if f.art_path.as_deref() != Some(path.as_path()) {
-                        // Superseded by another track (or released).
-                        drop_images(window, [images.cover, images.backdrop].into_iter().flatten());
-                        return;
-                    }
-                    let gone = [f.previous.take(), std::mem::replace(&mut f.cover, images.cover)];
-                    drop_images(window, gone.into_iter().flatten());
-                    f.previous = f.backdrop.take();
-                    f.backdrop = images.backdrop;
-                    f.backdrop_since = Instant::now();
-                    cx.notify(view);
-                });
-            })
-            .detach();
+    {
+        let mut f = fx.borrow_mut();
+        if request_art(&mut f.jobs, path, device_px(ART, window), true) && path.is_none() {
+            let gone = [f.previous.take(), f.cover.take()];
+            drop_images(window, gone.into_iter().flatten());
+            f.previous = f.backdrop.take();
+            f.backdrop_since = Instant::now();
         }
     }
+    start_art(fx, window.current_view(), window, cx);
     let mut f = fx.borrow_mut();
     let t = ease(f.backdrop_since.elapsed().as_secs_f32() / FADE.as_secs_f32());
     if t >= 1.0
@@ -587,54 +555,106 @@ fn backdrop(fx: &Rc<RefCell<Fx>>, path: Option<&Path>, window: &mut Window, cx: 
     Backdrop { cover: f.cover.clone(), current: f.backdrop.clone(), current_t: t, previous: f.previous.clone(), previous_t: 1.0 - t, fading: t < 1.0 }
 }
 
+/// The physical draw size belongs to the request, so a scale change reloads the cover.
+#[derive(Clone, PartialEq)]
+struct ArtRequest {
+    path: PathBuf,
+    cover_px: u32,
+    blur: bool,
+}
+
+fn request_art(jobs: &mut jobs::Latest<ArtRequest>, path: Option<&Path>, cover_px: u32, blur: bool) -> bool {
+    let unchanged = match (jobs.wanted(), path) {
+        (Some(old), Some(path)) => old.path == path && old.cover_px == cover_px && old.blur == blur,
+        (None, None) => true,
+        _ => false,
+    };
+    if unchanged { return false; }
+    jobs.request(path.map(|path| ArtRequest { path: path.to_path_buf(), cover_px, blur }));
+    true
+}
+
+trait ArtTarget {
+    fn jobs(&mut self) -> &mut jobs::Latest<ArtRequest>;
+    fn receive(&mut self, images: ArtImages, window: &mut Window);
+}
+
+impl ArtTarget for Fx {
+    fn jobs(&mut self) -> &mut jobs::Latest<ArtRequest> { &mut self.jobs }
+
+    fn receive(&mut self, images: ArtImages, window: &mut Window) {
+        let gone = [self.previous.take(), std::mem::replace(&mut self.cover, images.cover)];
+        drop_images(window, gone.into_iter().flatten());
+        self.previous = self.backdrop.take();
+        self.backdrop = images.backdrop;
+        self.backdrop_since = Instant::now();
+    }
+}
+
+/// A completed worker starts only the most recent request, without keeping its view alive.
+fn start_art<T: ArtTarget + 'static>(target: &Rc<RefCell<T>>, view: gpui::EntityId, window: &mut Window, cx: &mut App) {
+    let Some(job) = target.borrow_mut().jobs().start() else { return };
+    let task = cx.background_executor().spawn(async move {
+        let images = job.run(|request| decode_art(&request.path, request.cover_px, request.blur));
+        if images.is_none() { mandara_services::memory::request_trim(); }
+        (job, images)
+    });
+    let handle = window.window_handle();
+    let weak = Rc::downgrade(target);
+    cx.spawn(async move |cx| {
+        let (job, mut images) = task.await;
+        let Some(target) = weak.upgrade() else {
+            drop(images);
+            mandara_services::memory::request_trim();
+            return;
+        };
+        if !target.borrow_mut().jobs().finish(&job) {
+            drop(images.take());
+            mandara_services::memory::request_trim();
+        }
+        if handle.update(cx, |_, window, cx| {
+            if let Some(images) = images {
+                target.borrow_mut().receive(images, window);
+                cx.notify(view);
+            }
+            start_art(&target, view, window, cx);
+        }).is_err() {
+            target.borrow_mut().jobs().clear();
+            mandara_services::memory::request_trim();
+        }
+    }).detach();
+}
+
 /// A small decoded cover for the sidebar card (its own size and lifetime).
 #[derive(Default)]
 pub(crate) struct CoverSlot {
-    path: Option<PathBuf>,
+    jobs: jobs::Latest<ArtRequest>,
     image: Option<Arc<RenderImage>>,
+}
+
+impl ArtTarget for CoverSlot {
+    fn jobs(&mut self) -> &mut jobs::Latest<ArtRequest> { &mut self.jobs }
+
+    fn receive(&mut self, images: ArtImages, window: &mut Window) {
+        drop_images(window, std::mem::replace(&mut self.image, images.cover));
+    }
 }
 
 impl CoverSlot {
     pub(crate) fn get(this: &Rc<RefCell<Self>>, path: Option<&Path>, side: f32, window: &mut Window, cx: &mut App) -> Option<Arc<RenderImage>> {
-        if this.borrow().path.as_deref() != path {
-            {
-                let mut s = this.borrow_mut();
-                s.path = path.map(Path::to_path_buf);
-                if path.is_none() {
-                    drop_images(window, s.image.take());
-                }
-            }
-            if let Some(path) = path.map(Path::to_path_buf) {
-                let px_side = device_px(side, window);
-                let task = cx.background_executor().spawn({
-                    let path = path.clone();
-                    async move { decode_art(&path, px_side, false).cover }
-                });
-                let handle = window.window_handle();
-                let view = window.current_view();
-                let this = this.clone();
-                cx.spawn(async move |cx| {
-                    let image = task.await;
-                    let _ = handle.update(cx, |_, window, cx| {
-                        let mut s = this.borrow_mut();
-                        if s.path.as_deref() != Some(path.as_path()) {
-                            drop_images(window, image);
-                            return;
-                        }
-                        let old = std::mem::replace(&mut s.image, image);
-                        drop_images(window, old);
-                        cx.notify(view);
-                    });
-                })
-                .detach();
+        {
+            let mut slot = this.borrow_mut();
+            if request_art(&mut slot.jobs, path, device_px(side, window), false) && path.is_none() {
+                drop_images(window, slot.image.take());
             }
         }
+        start_art(this, window.current_view(), window, cx);
         this.borrow().image.clone()
     }
 
     pub(crate) fn release(&mut self, window: &mut Window) {
         drop_images(window, self.image.take());
-        self.path = None;
+        self.jobs.clear();
     }
 }
 
@@ -1341,8 +1361,25 @@ mod tests {
         }
         let rgba = source.into_rgba8();
         let pointer = rgba.as_ptr();
-        let rendered = to_render_image(rgba);
+        let rendered = PreparedImage::new().finish(rgba);
         assert_eq!(rendered.as_bytes(0).unwrap().as_ptr(), pointer, "BGRA conversion keeps the owned allocation");
+    }
+
+    #[test]
+    fn art_requests_include_physical_size_and_backdrop_mode() {
+        let mut jobs = jobs::Latest::default();
+        let path = Path::new("art.png");
+        assert!(request_art(&mut jobs, Some(path), 52, false));
+        let first = jobs.start().unwrap();
+        assert!(!request_art(&mut jobs, Some(path), 52, false));
+        assert!(request_art(&mut jobs, Some(path), 104, false));
+        assert!(!jobs.finish(&first));
+        let scaled = jobs.start().unwrap();
+        assert_eq!(scaled.run(|request| request.cover_px), Some(104));
+        assert!(request_art(&mut jobs, Some(path), 104, true));
+        assert!(!jobs.finish(&scaled));
+        assert!(request_art(&mut jobs, None, 104, true));
+        assert!(jobs.start().is_none());
     }
 
     #[test]
