@@ -29,6 +29,8 @@ pub struct UiState {
 
 impl UiState {
     /// New tab keys fall back to the expansion saved for their former page.
+    /// An explicit new key wins. Reading a legacy key does not rewrite it,
+    /// and missing entries keep the caller's default expansion behavior.
     pub(crate) fn fold_state(&self, key: &str) -> Option<bool> {
         self.sections.get(key).copied().or_else(|| {
             let (tab, group) = key.strip_prefix("Bars/")?.split_once('/')?;

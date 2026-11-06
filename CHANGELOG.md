@@ -43,6 +43,9 @@ steps and less repeated work behind the desktop.
 
 ### Under the hood
 
+- **Clearer helper contracts.** Internal documentation explains policy cache
+  limits, view lifetimes, Studio routing and native output sizing. (#111)
+
 - **Temporary folders can use symbolic links.** Resource tests accept
   folders reached through a symbolic link. (#111)
 

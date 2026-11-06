@@ -78,6 +78,9 @@ fn former_bars_tab(name: &str) -> Option<registry::bars::BarsTab> {
     else { None }
 }
 
+/// An explicit `bars/<tab>` wins over a former page's default destination.
+/// Missing or unknown tabs fall back to that legacy destination, then Bar;
+/// resolving the page here never renames a configuration section.
 fn bars_tab_target(target: &str) -> Option<registry::bars::BarsTab> {
     let mut parts = target.split('/');
     let section = parts.next()?;

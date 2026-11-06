@@ -45,7 +45,8 @@ pub(super) fn preview_of<'a>(labels: impl IntoIterator<Item = &'a str>) -> Strin
 }
 
 impl StudioView {
-    /// Stable page and tab identity for a fold.
+    /// Stable, untranslated page and tab identity for a fold. Matching group
+    /// titles on different Bars tabs must not share saved expansion state.
     pub(super) fn fold_key(&self, name: &str) -> String {
         if self.section == crate::registry::Section::Bars { format!("Bars/{}/{name}", self.bars_tab.slug()) }
         else { format!("{:?}/{name}", self.section) }
@@ -64,6 +65,9 @@ impl StudioView {
         self.fold_at(key, head, p, cx, body)
     }
 
+    /// Registers an explicit fold identity and builds its body only when open.
+    /// Clear `fold_keys` once per render, then call in display order: registration
+    /// decides the first-open default and the expand/collapse toolbar targets.
     pub(super) fn fold_at(&mut self, key: String, head: FoldHead, p: &MandaraPalette, cx: &mut Context<Self>, body: impl FnOnce(&mut Self, &mut Context<Self>) -> AnyElement) -> AnyElement {
         let first_group = !head.closed && !self.fold_keys.iter().any(|(_, open)| *open);
         self.fold_keys.push((key.clone(), first_group));
