@@ -1080,6 +1080,7 @@ mod tests {
         let nine = d.and_hms_opt(9, 0, 0).unwrap();
         assert_eq!(next_due(&model, &s(), nine), nine);
         model.state.set_reminded(d);
+        model.generation += 1; // Saving a state change advances the model's revision.
         assert_eq!(next_due(&model, &s(), nine), (d + chrono::Duration::days(1)).and_hms_opt(0, 0, 0).unwrap());
         // Hourly, no reminder: the next hour.
         let hourly = Settings { rotate: Rotate::Hourly, morning: false, ..s() };

@@ -12,7 +12,7 @@ mod allocations;
 // macro ensures new palette roles are included in both representations.
 macro_rules! legacy_palette {
     ($($field:ident),*) => {
-        #[derive(Clone, Serialize, Deserialize)]
+        #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
         struct LegacyPalette {
             name: String,
             is_dark: bool,
@@ -40,10 +40,17 @@ fn shared_names_keep_the_existing_json_and_toml_wire_format() {
         let previous = LegacyPalette::from(&palette);
         let json = serde_json::to_string(&previous).unwrap();
         assert_eq!(serde_json::to_string(&palette).unwrap(), json);
-        assert_eq!(serde_json::from_str::<MandaraPalette>(&json).unwrap(), palette);
+        // Color writes 8-bit hex, so both decoders must agree after that quantization.
+        let shared_json = serde_json::from_str::<MandaraPalette>(&json).unwrap();
+        let previous_json = serde_json::from_str::<LegacyPalette>(&json).unwrap();
+        assert_eq!(shared_json.name.as_ref(), name);
+        assert_eq!(LegacyPalette::from(&shared_json), previous_json);
         let toml = toml::to_string(&previous).unwrap();
         assert_eq!(toml::to_string(&palette).unwrap(), toml);
-        assert_eq!(toml::from_str::<MandaraPalette>(&toml).unwrap(), palette);
+        let shared_toml = toml::from_str::<MandaraPalette>(&toml).unwrap();
+        let previous_toml = toml::from_str::<LegacyPalette>(&toml).unwrap();
+        assert_eq!(shared_toml.name.as_ref(), name);
+        assert_eq!(LegacyPalette::from(&shared_toml), previous_toml);
     }
 }
 

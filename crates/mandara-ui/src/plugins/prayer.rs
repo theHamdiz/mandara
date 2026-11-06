@@ -15,7 +15,6 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, NaiveTime, Offset as _, TimeDelta, Timelike};
@@ -1046,6 +1045,7 @@ pub fn register(r: &mut PluginRegistry) {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use super::*;
 
     /// Alexandria's offset on the test dates (EEST), so results don't

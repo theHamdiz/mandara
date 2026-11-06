@@ -682,7 +682,7 @@ pub fn union_iter(rects: impl IntoIterator<Item = Bounds<Pixels>>) -> Option<Bou
     let mut it = rects.into_iter();
     let first = it.next()?;
     let (mut x0, mut y0) = (x_of(&first), y_of(&first));
-    let (mut x1, mut y1) = (x0 + w_of(first), y0 + h_of(first));
+    let (mut x1, mut y1) = (x0 + w_of(&first), y0 + h_of(&first));
     for r in it {
         x0 = x0.min(x_of(&r));
         y0 = y0.min(y_of(&r));
@@ -1227,11 +1227,11 @@ mod tests {
         let m = edge();
         let c = side_column(&m, (1600.0, 900.0), 0.0, 380.0, false, (30.0, 870.0), 12.0);
         assert_eq!(c.column, (0.0, 30.0, 380.0, 870.0));
-        assert_eq!(c.flares, [(380.0, 30.0, 12.0, FlareCenter::BottomRight), (380.0, 888.0, 12.0, FlareCenter::TopRight)]);
+        assert_eq!(c.flares.as_slice(), &[(380.0, 30.0, 12.0, FlareCenter::BottomRight), (380.0, 888.0, 12.0, FlareCenter::TopRight)]);
         assert_eq!(c.notch, None);
         // On the right edge the fillets sit left of its inner edge.
         let c = side_column(&m, (1600.0, 900.0), 1220.0, 380.0, true, (30.0, 870.0), 12.0);
-        assert_eq!(c.flares, [(1208.0, 30.0, 12.0, FlareCenter::BottomLeft), (1208.0, 888.0, 12.0, FlareCenter::TopLeft)]);
+        assert_eq!(c.flares.as_slice(), &[(1208.0, 30.0, 12.0, FlareCenter::BottomLeft), (1208.0, 888.0, 12.0, FlareCenter::TopLeft)]);
         // A hairline (no flares) meets the column square.
         assert!(side_column(&m, (1600.0, 900.0), 0.0, 380.0, false, (24.0, 876.0), 0.0).flares.is_empty());
     }

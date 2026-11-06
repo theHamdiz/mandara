@@ -51,7 +51,7 @@ pub struct MandaraPalette {
 /// template exporters and interpolation in lock-step with the struct.
 macro_rules! palette_tokens {
     ($mac:ident) => {
-        $mac!(
+        $mac! {
             surface_dim,
             surface_base,
             surface_container_low,
@@ -74,12 +74,9 @@ macro_rules! palette_tokens {
             urgent_coral,
             success_emerald,
             warning_amber
-        )
+        }
     };
 }
-
-#[cfg(test)]
-mod ownership_tests;
 
 /// User-facing tuning applied on top of any palette source (Studio sliders).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -310,6 +307,9 @@ impl MandaraPalette {
 pub fn mix_lightness(a: f32, b: f32, t: f32) -> f32 {
     lerp(a, b, t)
 }
+
+#[cfg(test)]
+mod ownership_tests;
 
 #[cfg(test)]
 mod tests {

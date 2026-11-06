@@ -76,11 +76,13 @@ mod tests {
     fn label_cache_tracks_layout_override_and_removal() {
         let mut labels = LayoutLabel::default();
         assert_eq!(labels.label("English (US)", None).as_ref(), "EN");
-        let custom = labels.label("English (US)", Some("ع"));
-        assert_eq!(custom.as_ref(), "ع");
+        assert_eq!(labels.label("English (US)", Some("ع")).as_ref(), "ع");
+        let authored = "تخطيط لوحة المفاتيح العربية المخصص";
+        let custom = labels.label("English (US)", Some(authored));
+        assert_eq!(custom.as_ref(), authored);
         assert_eq!(
             custom.as_ref().as_ptr(),
-            labels.label("English (US)", Some("ع")).as_ref().as_ptr()
+            labels.label("English (US)", Some(authored)).as_ref().as_ptr()
         );
         assert_eq!(labels.label("English (US)", Some("ENG")).as_ref(), "ENG");
         assert_eq!(labels.label("English (US)", None).as_ref(), "EN");

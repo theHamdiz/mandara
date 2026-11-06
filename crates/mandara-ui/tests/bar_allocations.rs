@@ -23,16 +23,18 @@ fn column_redraws_keep_both_flares_without_heap_storage() {
         }
     });
     assert_eq!(old.0, REDRAWS, "the former expression must remain a live control");
+    let fixtures = [BarPosition::Top, BarPosition::Bottom].map(|position| {
+        (position, [BarLayout::Notch, BarLayout::MinimalEdge].map(|kind| layout::Metrics::default_for(kind, position)))
+    });
     let current = allocations(|| {
-        for position in [BarPosition::Top, BarPosition::Bottom] {
-            for kind in [BarLayout::Notch, BarLayout::MinimalEdge] {
-                let metrics = layout::Metrics::default_for(kind, position);
+        for (position, layouts) in &fixtures {
+            for metrics in layouts {
                 for right in [false, true] {
                     for shown in [0.0, 0.5, 1.0] {
-                        let column = side::joined_column(right, 1600.0, 40.0, shown, (30.0, 900.0), 12.0, position == BarPosition::Top);
+                        let column = side::joined_column(right, 1600.0, 40.0, shown, (30.0, 900.0), 12.0, *position == BarPosition::Top);
                         assert!(!column.flares.spilled());
                         black_box(column);
-                        let panel = layout::side_column(&metrics, (1600.0, 900.0), 0.0, 380.0, right, (30.0, 870.0), 12.0);
+                        let panel = layout::side_column(metrics, (1600.0, 900.0), 0.0, 380.0, right, (30.0, 870.0), 12.0);
                         assert!(!panel.flares.spilled());
                         black_box(panel);
                     }

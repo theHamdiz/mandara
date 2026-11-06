@@ -311,7 +311,7 @@ mod tests {
     fn the_joined_column_meets_the_top_bar_with_a_fillet() {
         let c = joined_column(false, 1920.0, 40.0, 1.0, (30.0, 1080.0), 18.0, true);
         assert_eq!(c.rect, (0.0, 30.0, 40.0, 1050.0));
-        assert_eq!(c.flares, vec![(40.0, 30.0, 18.0, FlareCenter::BottomRight), (40.0, 1062.0, 18.0, FlareCenter::TopRight)]);
+        assert_eq!(c.flares.as_slice(), &[(40.0, 30.0, 18.0, FlareCenter::BottomRight), (40.0, 1062.0, 18.0, FlareCenter::TopRight)]);
         let r = joined_column(true, 1920.0, 40.0, 1.0, (30.0, 1080.0), 18.0, true);
         assert_eq!(r.rect.0, 1880.0);
         assert_eq!(r.flares[0], (1862.0, 30.0, 18.0, FlareCenter::BottomLeft));
@@ -319,9 +319,9 @@ mod tests {
         // own screen flare then).
         let hidden = joined_column(false, 1920.0, 40.0, 0.0, (30.0, 1080.0), 18.0, true);
         assert_eq!(hidden.rect.2, 0.0);
-        assert_eq!(hidden.flares, vec![(0.0, 30.0, 18.0, FlareCenter::BottomRight)]);
+        assert_eq!(hidden.flares.as_slice(), &[(0.0, 30.0, 18.0, FlareCenter::BottomRight)]);
         // Beside a bottom bar the fillet into the bar is at the bottom.
         let b = joined_column(false, 1920.0, 40.0, 0.0, (0.0, 1050.0), 18.0, false);
-        assert_eq!(b.flares, vec![(0.0, 1032.0, 18.0, FlareCenter::TopRight)]);
+        assert_eq!(b.flares.as_slice(), &[(0.0, 1032.0, 18.0, FlareCenter::TopRight)]);
     }
 }

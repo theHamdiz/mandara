@@ -36,10 +36,13 @@ mod tests {
     #[test]
     fn chart_window_borrows_wrapped_history_and_preserves_fractional_rates() {
         let mut history = RateHistory::default();
-        history
-            .seconds
-            .extend([(1.5, 2.25), (3.75, 4.5), (5.25, 6.75)]);
-        history.seconds.pop_front();
+        // Fill the sampler's reserved window before crossing its ring boundary.
+        history.seconds.resize(history.seconds.capacity(), (0.0, 0.0));
+        while history.seconds.len() > 2 {
+            history.seconds.pop_front();
+        }
+        history.seconds[0] = (3.75, 4.5);
+        history.seconds[1] = (5.25, 6.75);
         history.seconds.push_back((7.5, 8.25));
         history.buckets.push_back((0.125, 0.0625));
         assert!(

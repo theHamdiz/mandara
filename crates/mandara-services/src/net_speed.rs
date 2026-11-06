@@ -525,7 +525,8 @@ docker0: 99999     10    0    0    0     0          0         0    99999      10
         let rate = |kind, rx, tx| IfaceRate { name: String::new(), kind, rx, tx, rx_total: 0, tx_total: 0 };
         assert_eq!(total(&[]), (0.0, 0.0));
         assert_eq!(total(&[rate(LinkKind::Virtual, 100.0, 200.0)]), (0.0, 0.0));
-        assert_eq!(total(&[rate(LinkKind::Tunnel, 0.125, 0.25), rate(LinkKind::Other, 0.375, 0.5)]), (0.5, 0.75));
+        assert_eq!(total(&[rate(LinkKind::Tunnel, 0.125, 0.25), rate(LinkKind::Other, 0.375, 0.5)]), (0.375, 0.5), "an unknown physical link excludes tunnel traffic");
+        assert_eq!(total(&[rate(LinkKind::Tunnel, 0.125, 0.25), rate(LinkKind::Tunnel, 0.375, 0.5)]), (0.5, 0.75), "tunnel-only fallback preserves fractional rates");
         assert_eq!(total(&[rate(LinkKind::Tunnel, 90.0, 80.0), rate(LinkKind::Wifi, 0.25, 0.5), rate(LinkKind::Ethernet, 0.5, 0.25)]), (0.75, 0.75));
         assert_eq!(total(&[rate(LinkKind::Tunnel, 90.0, 80.0), rate(LinkKind::Ethernet, 0.0, 0.0)]), (0.0, 0.0));
     }

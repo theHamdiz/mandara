@@ -126,13 +126,13 @@ fn resolve_id(arg: &str, file: &Source) -> Option<String> {
     resolve_id(expr, file)
 }
 
-/// The first two arguments of every `.setting(` call: `(id, key literal)`.
-fn setting_reads() -> BTreeSet<(String, String)> {
+/// Reads literal plugin keys from eager, borrowed and lazy accessors in one source.
+fn setting_reads_in(file: &Source) -> BTreeSet<(String, String)> {
     let mut out = BTreeSet::new();
-    for file in sources() {
+    for call in [".setting(", ".setting_str(", ".setting_or_else("] {
         let mut text = file.text.as_str();
-        while let Some(at) = text.find(".setting(") {
-            text = &text[at + ".setting(".len()..];
+        while let Some(at) = text.find(call) {
+            text = &text[at + call.len()..];
             let Some(comma) = text.find(',') else { break };
             let id_arg = &text[..comma];
             let after = text[comma + 1..].trim_start();
@@ -141,21 +141,50 @@ fn setting_reads() -> BTreeSet<(String, String)> {
                 out.insert((id, key.to_string()));
             }
         }
-        // `settings.get(ID).and_then(|t| t.get("cities"))`.
-        let mut text = file.text.as_str();
-        while let Some(at) = text.find("settings.get(") {
-            text = &text[at + "settings.get(".len()..];
-            let Some(close) = text.find(')') else { break };
-            let id_arg = &text[..close];
-            let line_end = text.find('\n').unwrap_or(text.len());
-            let line = &text[..line_end];
-            if let (Some(id), Some(key_at)) = (resolve_id(id_arg, file), line.find(".get(\"")) {
-                let key = line[key_at + ".get(\"".len()..].split('"').next().unwrap_or_default();
-                out.insert((id, key.to_string()));
-            }
+    }
+    // `settings.get(ID).and_then(|t| t.get("cities"))`.
+    let mut text = file.text.as_str();
+    while let Some(at) = text.find("settings.get(") {
+        text = &text[at + "settings.get(".len()..];
+        let Some(close) = text.find(')') else { break };
+        let id_arg = &text[..close];
+        let line_end = text.find('\n').unwrap_or(text.len());
+        let line = &text[..line_end];
+        if let (Some(id), Some(key_at)) = (resolve_id(id_arg, file), line.find(".get(\"")) {
+            let key = line[key_at + ".get(\"".len()..].split('"').next().unwrap_or_default();
+            out.insert((id, key.to_string()));
         }
     }
     out
+}
+
+/// The first two arguments of each supported plugin settings accessor.
+fn setting_reads() -> BTreeSet<(String, String)> {
+    sources().iter().flat_map(setting_reads_in).collect()
+}
+
+/// Borrowed and lazy reads keep the same coverage as eager reads, excluding test code.
+#[test]
+fn scanner_tracks_each_settings_accessor_without_counting_test_only_keys() {
+    let text = r#"
+const ID: &str = "demo";
+fn render() {
+    config.plugins.setting(ID, "legacy", String::new());
+    config.plugins.setting_str(ID, "borrowed");
+    config.plugins.setting_or_else("literal", "lazy", || format!("fallback, with comma"));
+    config.plugins.settings.get(ID).and_then(|settings| settings.get("manual"));
+    config.plugins.setting_strange(ID, "unrelated");
+    config.plugins.setting_str(ID, dynamic_key);
+}
+#[cfg(test)]
+mod tests {
+    fn fixture() { config.plugins.setting_str(ID, "test_only"); }
+}
+"#;
+    let source = Source { path: PathBuf::from("demo.rs"), text: without_test_module(text).into() };
+    let expected = [("demo", "legacy"), ("demo", "borrowed"), ("literal", "lazy"), ("demo", "manual")]
+        .map(|(id, key)| (id.to_string(), key.to_string()));
+    assert_eq!(setting_reads_in(&source), BTreeSet::from(expected));
 }
 
 /// Files that belong to plugin `id`: they name it, define it, or use the
