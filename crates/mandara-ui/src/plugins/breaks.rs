@@ -144,6 +144,11 @@ fn settings(cfg: &ShellConfig) -> Settings {
     }
 }
 
+/// Only effective enablement and these resolved rules affect scheduling.
+fn watch_key(cfg: &ShellConfig, registry: Option<&PluginRegistry>) -> (bool, Settings) {
+    (registry.is_some_and(|registry| registry.is_enabled(ID, &cfg.plugins)), settings(cfg))
+}
+
 fn miss_after(style: Style) -> Option<Duration> {
     (style == Style::Notification).then_some(MISS_AFTER)
 }
@@ -338,12 +343,12 @@ fn pause(mins: u64, cx: &mut App) -> Result<(), String> {
 pub fn init(cx: &mut App) {
     let m = model(cx);
     m.update(cx, |b, cx| b.sync_enabled(cx));
-    let mut last = config(cx).read(cx).snapshot().plugins.clone();
+    let mut last = watch_key(config(cx).read(cx).get(), cx.try_global::<PluginRegistry>());
     let e = m.clone();
     cx.observe(&config(cx), move |c, cx| {
-        let plugins = c.read(cx).snapshot().plugins.clone();
-        if plugins != last {
-            last = plugins;
+        let key = watch_key(c.read(cx).get(), cx.try_global::<PluginRegistry>());
+        if key != last {
+            last = key;
             e.update(cx, |b, cx| b.sync_enabled(cx));
         }
     })
@@ -789,6 +794,42 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Unrelated preferences leave the armed timer alone; effective rules still reschedule.
+    #[test]
+    fn config_watch_tracks_only_enablement_and_effective_break_settings() {
+        let mut registry = PluginRegistry::default();
+        register(&mut registry);
+        let mut config = ShellConfig::default();
+        let initial = watch_key(&config, Some(&registry));
+        assert!(!initial.0);
+        config.plugins.settings.entry("feeds".into()).or_default().insert("subscriptions".into(), toml::Value::String("https://example.org/feed".into()));
+        assert_eq!(watch_key(&config, Some(&registry)), initial);
+        config.plugins.enabled.push(ID.into());
+        let mut previous = watch_key(&config, Some(&registry));
+        assert!(previous.0);
+        assert_eq!(previous.1, initial.1);
+        for (key, value) in [("every_min", 45), ("short_s", 30), ("long_every_min", 90), ("long_min", 10)] {
+            config.plugins.settings.entry(ID.into()).or_default().insert(key.into(), toml::Value::Integer(value));
+            let next = watch_key(&config, Some(&registry));
+            assert_ne!(next, previous, "{key} must reschedule");
+            previous = next;
+        }
+        for (key, value) in [("style", toml::Value::String("overlay".into())), ("skip_fullscreen", toml::Value::Boolean(false))] {
+            config.plugins.settings.entry(ID.into()).or_default().insert(key.into(), value);
+            let next = watch_key(&config, Some(&registry));
+            assert_ne!(next, previous, "{key} must update the reminder policy");
+            previous = next;
+        }
+        config.plugins.settings.entry(ID.into()).or_default().insert("every_min".into(), toml::Value::Integer(0));
+        let clamped = watch_key(&config, Some(&registry));
+        config.plugins.settings.get_mut(ID).unwrap().insert("every_min".into(), toml::Value::Integer(1));
+        assert_eq!(watch_key(&config, Some(&registry)), clamped, "equivalent bounded rules do not replace the timer");
+        config.plugins.disabled.push(ID.into());
+        assert!(!watch_key(&config, Some(&registry)).0);
+        assert!(!watch_key(&config, None).0);
+        eprintln!("breaks watch key: previous PluginsConfig={} B plus settings, Copy flags/settings={} B", size_of::<mandara_config::PluginsConfig>(), size_of::<(bool, Settings)>());
+    }
 
     /// Invalid style values continue using notification reminders.
     #[test]

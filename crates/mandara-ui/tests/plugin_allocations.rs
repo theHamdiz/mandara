@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use gpui::{Bounds, Pixels, point, px, size};
 use mandara_services::net_speed::RateHistory;
+use mandara_ui::slider_model;
 
 #[path = "../src/plugins/net_speed/chart_samples.rs"]
 mod chart_samples;
@@ -29,10 +30,31 @@ mod scrub_state;
 mod settings_cache;
 #[path = "../src/plugins/resources/temperature_rows.rs"]
 mod temperature_rows;
+#[path = "../src/plugins/world_clock/planner.rs"]
+mod world_clock_planner;
 
 #[path = "support/allocations.rs"]
 mod allocations;
 use allocations::allocations;
+
+/// Planner redraws share the track cell while handlers keep seeing its latest layout.
+#[test]
+fn world_clock_planner_reuses_its_track_bounds() {
+    const FRAMES: usize = 32;
+    let bounds = Rc::new(Cell::new(Bounds::new(point(px(10.0), px(0.0)), size(px(100.0), px(10.0)))));
+    let before = allocations(|| {
+        for _ in 0..FRAMES { black_box(Rc::new(Cell::new(Bounds::<Pixels>::default()))); }
+    });
+    let after = allocations(|| {
+        for _ in 0..FRAMES {
+            let handler = black_box(bounds.clone());
+            assert_eq!(world_clock_planner::fraction(&handler, px(35.0)), 0.25);
+        }
+    });
+    assert_eq!(before.0, FRAMES, "the old per-render bounds cell remains an allocating positive control");
+    assert_eq!(after, (0, 0));
+    eprintln!("{FRAMES} World Clock planner frames: fresh bounds {before:?}, retained bounds {after:?}");
+}
 
 /// Warm redraws share gesture geometry and borrow either history window.
 #[test]
