@@ -55,6 +55,8 @@ use crate::kit::{card, text, tokens};
 use crate::state::config;
 
 use super::settings_cache::{ConfigSettings, SettingsCache};
+mod progress;
+use progress::{DayProgress, Progress, ProgressCache};
 
 pub const ID: &str = "jannah";
 
@@ -190,6 +192,7 @@ pub(crate) struct Model {
     pub state: State,
     /// Bumped per change; the newest write wins.
     generation: u64,
+    progress: RefCell<ProgressCache>,
     pub edition: Option<&'static str>,
     pub fetch: Fetch,
     /// Every view showing Jannah (bar chips, sidebar cards, panels).
@@ -200,6 +203,16 @@ pub(crate) struct Model {
     pub index: Option<((Lang, bool), Arc<Vec<Entry>>)>,
     /// An item a command asked the panel to open in the reader.
     pub open_request: Option<ItemId>,
+}
+
+impl Model {
+    fn day_progress(&self, date: NaiveDate) -> DayProgress {
+        self.progress.borrow_mut().day(&self.state, self.generation, date)
+    }
+
+    fn progress(&self, date: NaiveDate, week_start: u32) -> Progress {
+        self.progress.borrow_mut().get(&self.state, self.generation, date, week_start)
+    }
 }
 
 pub(crate) type Shared = Rc<RefCell<Model>>;
@@ -216,6 +229,7 @@ pub(crate) fn model(cx: &mut App) -> Shared {
     let shared: Shared = Rc::new(RefCell::new(Model {
         state: State::load(&state::path()),
         generation: 0,
+        progress: RefCell::default(),
         edition: None,
         fetch: Fetch::Idle,
         views: ViewSet::default(),
@@ -493,7 +507,7 @@ fn next_due(m: &Model, s: &Settings, now: NaiveDateTime) -> NaiveDateTime {
     let morning = |d: NaiveDate| d.and_hms_opt(MORNING_HOUR, 0, 0).unwrap_or(now);
     let next_morning = if now.hour() < MORNING_HOUR { morning(today) } else { morning(today + chrono::Duration::days(1)) };
     // Already inside the morning window and not reminded: now (soon).
-    if (MORNING_HOUR..NOON).contains(&now.hour()) && !m.state.reminded_on(today) {
+    if (MORNING_HOUR..NOON).contains(&now.hour()) && !m.day_progress(today).reminded {
         return now;
     }
     boundary.min(next_morning)
@@ -533,7 +547,7 @@ fn remind(shared: &Shared, cx: &mut App) {
     let s = settings(cx);
     let _lang = mandara_i18n::scoped(Some(s.lang));
     let now = Local::now().naive_local();
-    if !s.morning || !(MORNING_HOUR..NOON).contains(&now.hour()) || shared.borrow().state.reminded_on(now.date()) {
+    if !s.morning || !(MORNING_HOUR..NOON).contains(&now.hour()) || shared.borrow().day_progress(now.date()).reminded {
         return;
     }
     let Some(item) = today(shared, &s, None).and_then(|id| catalog().get(id)) else { return };
@@ -566,7 +580,8 @@ pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::JannahInfo>
     let m = shared.borrow();
     let meaning = meaning_of(&m, item).filter(|_| wants_meaning(&s));
     let date = Local::now().date_naive();
-    let week = m.state.week(date, crate::plugins::clock::week_start_days(cx));
+    let progress = m.progress(date, crate::plugins::clock::week_start_days(cx));
+    let week = progress.week;
     let step = today_step();
     Some(crate::backdrop::widgets::JannahInfo {
         arabic: item.arabic.to_string(),
@@ -577,7 +592,7 @@ pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::JannahInfo>
         reference_ar: catalog::reference(item, true),
         step_title: step.map(|p| p.title.to_string()).unwrap_or_default(),
         step_line: step.map(|p| p.line.to_string()).unwrap_or_default(),
-        step_done: m.state.done_on(date),
+        step_done: progress.done,
         week: week.map(|(_, done)| done),
         today: week.iter().position(|(d, _)| *d == date).unwrap_or_default(),
         lang: own,
@@ -636,7 +651,7 @@ fn bar_view(glint: Rc<RefCell<Glint>>) -> impl Fn(&MandaraPalette, &mut Window, 
             );
         }
         let step = s.bar_step.then(today_step).flatten();
-        let done = shared.borrow().state.done_on(Local::now().date_naive());
+        let done = shared.borrow().day_progress(Local::now().date_naive()).done;
         div()
             .flex()
             .items_center()
@@ -677,7 +692,7 @@ fn sidebar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> 
     let date = Local::now().date_naive();
     let (meaning, done) = {
         let m = shared.borrow();
-        (item.and_then(|i| meaning_of(&m, i)).filter(|_| wants_meaning(&s)), m.state.done_on(date))
+        (item.and_then(|i| meaning_of(&m, i)).filter(|_| wants_meaning(&s)), m.day_progress(date).done)
     };
     let head = div()
         .flex()
@@ -796,10 +811,11 @@ fn step_json(cx: &mut App) -> Value {
     let shared = model(cx);
     let date = Local::now().date_naive();
     let m = shared.borrow();
-    let week = m.state.week(date, crate::plugins::clock::week_start_days(cx));
+    let progress = m.progress(date, crate::plugins::clock::week_start_days(cx));
+    let week = progress.week;
     json!({
         "step": today_step().map(path_json),
-        "done_today": m.state.done_on(date),
+        "done_today": progress.done,
         "week": week.iter().map(|(d, done)| json!({ "date": d.format("%Y-%m-%d").to_string(), "done": done })).collect::<Vec<_>>(),
     })
 }
@@ -1051,7 +1067,7 @@ mod tests {
     }
 
     fn m() -> Model {
-        Model { state: State::default(), generation: 0, edition: None, fetch: Fetch::Idle, views: ViewSet::default(), timer: None, index: None, open_request: None }
+        Model { state: State::default(), generation: 0, progress: RefCell::default(), edition: None, fetch: Fetch::Idle, views: ViewSet::default(), timer: None, index: None, open_request: None }
     }
 
     #[test]

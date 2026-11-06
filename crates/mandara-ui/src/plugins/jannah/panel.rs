@@ -732,7 +732,10 @@ fn step_card(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
     let peeked = date + chrono::Duration::days(peek);
     let (done, week) = {
         let m = c.shared.borrow();
-        (m.state.done_on(date), m.state.week(date, crate::plugins::clock::week_start_days(cx)))
+        {
+            let progress = m.progress(date, crate::plugins::clock::week_start_days(cx));
+            (progress.done, progress.week)
+        }
     };
     let (_, group) = catalog::group_label(&p.group);
     let excerpt = evidence_excerpt(c, p);

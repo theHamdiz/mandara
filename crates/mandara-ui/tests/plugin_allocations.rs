@@ -11,6 +11,8 @@ use mandara_services::net_speed::RateHistory;
 mod chart_samples;
 #[path = "../src/plugins/prayer/day_events.rs"]
 mod day_events;
+#[path = "../src/plugins/jannah/progress.rs"]
+mod jannah_progress;
 #[path = "../src/plugins/media/scrub_state.rs"]
 mod scrub_state;
 #[path = "../src/plugins/settings_cache.rs"]
@@ -246,5 +248,36 @@ fn warm_plugin_settings_do_not_allocate() {
         before.0 >= READS,
         "the positive control must copy owned labels"
     );
+    assert_eq!(after, (0, 0));
+}
+
+/// Weekly progress formatting runs once per saved-state/calendar change.
+#[test]
+fn warm_progress_views_do_not_reformat_date_keys() {
+    use chrono::NaiveDate;
+    use mandara_services::jannah::state::State;
+
+    const FRAMES: usize = 32;
+    let date = NaiveDate::from_ymd_opt(2026, 11, 2).unwrap();
+    let mut state = State::default();
+    state.mark_done(date);
+    let mut cache = jannah_progress::ProgressCache::default();
+    assert!(cache.get(&state, 1, date, 0).done);
+    let before = allocations(|| {
+        for _ in 0..FRAMES {
+            black_box((
+                state.done_on(date),
+                state.week(date, 0),
+                state.reminded_on(date),
+            ));
+        }
+    });
+    let after = allocations(|| {
+        for _ in 0..FRAMES {
+            black_box(cache.get(&state, 1, date, 0));
+        }
+    });
+    eprintln!("{FRAMES} progress frames: date lookups {before:?}, snapshot {after:?}");
+    assert!(before.0 >= FRAMES);
     assert_eq!(after, (0, 0));
 }

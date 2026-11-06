@@ -139,9 +139,12 @@ borrow paired reading and label slices, including the partial last row.
 Workspace labels, active-window titles, network units, world clocks and break
 styles parse borrowed setting text. Feed, home-control and translator settings
 keep owned text only for values that outlive the config read. Feed and faith
-plugin settings share a small config/language cache. The weak key lets the old
+plugin settings share a small config/language cache. Home controls also share
+non-secret settings with queued requests, avoiding copied favourite lists. The weak key lets the old
 config fields drop with their last strong owner, but its inline Arc allocation
 remains until the key is replaced or cleared; cache tests print those type sizes.
+Daily progress snapshots use the saved-state generation, date and week start,
+so hover and animation frames do not reformat the same date keys.
 
 `cargo test -p mandara-ui --test plugin_allocations -- --nocapture` compares
 the former temporary expressions with warm state reuse on the test thread.
