@@ -39,15 +39,19 @@ fn read(path: &Path) -> Option<Stored> {
     serde_json::from_slice(&bytes).ok()
 }
 
+/// Treats invalid policy text as a cache miss even when its JSON metadata parses.
 fn read_validated(path: &Path) -> Option<(Stored, Policy)> {
     read(path).and_then(|stored| Policy::parse(&stored.text).ok().map(|policy| (stored, policy)))
 }
 
+/// Seconds since validation; a future timestamp is expired, not fresh.
 fn age(stored: &Stored, now: u64) -> u64 {
     now.checked_sub(stored.validated_at).unwrap_or(u64::MAX)
 }
 
 /// A failed refresh never renews validation or discards known deny rules.
+/// Browsing may retain an older policy; installation requires its existing
+/// validation age to remain within the inclusive installation limit.
 fn retained(cached: Option<(Stored, Policy)>, now: u64, installing: bool) -> Option<Policy> {
     cached.filter(|(stored, _)| !installing || age(stored, now) <= MAX_INSTALL_AGE.as_secs()).map(|(_, policy)| policy)
 }
@@ -68,11 +72,17 @@ fn save(path: &Path, stored: &Stored) {
     if let Err(error) = result { tracing::warn!("could not cache store policy: {error}"); }
 }
 
-/// Clock and transport are supplied by the caller for deterministic tests.
+/// Loads a validated policy, refreshing it under the shared file lock when due.
+/// `now` is Unix time in seconds; lock and network waits count against its age.
+/// This may block, so callers must run it away from the UI thread. A timed-out
+/// contender may read an eligible cache but never fetch or renew it.
 pub fn load(path: &Path, transport: &dyn Transport, now: u64, installing: bool) -> Result<Policy, String> {
     load_with_lock_wait(path, transport, now, installing, LOCK_WAIT)
 }
 
+/// Rereads after taking refresh ownership, so a peer's completed validation
+/// can satisfy this request. Among lock errors, only contention timeouts permit
+/// fallback; other failures return without starting an uncoordinated fetch.
 fn load_with_lock_wait(path: &Path, transport: &dyn Transport, now: u64, installing: bool, wait: Duration) -> Result<Policy, String> {
     let started = std::time::Instant::now();
     // Waiting for a peer or the network must count toward the cache's age.

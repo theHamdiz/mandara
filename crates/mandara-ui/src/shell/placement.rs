@@ -53,6 +53,8 @@ impl Placement {
 
     /// Whether existing slots can be reused for this configuration and registry.
     /// Compares membership and sidebar cards in place; matching frames clone nothing.
+    /// A match preserves view ownership, not geometry: callers still lay out
+    /// the retained slots using the current dimensions and appearance.
     pub fn matches(&self, cfg: &ShellConfig, generation: u64, tabs: &SidebarTabs) -> bool {
         self.generation == generation
             && self.vertical == cfg.bar.position.is_vertical()

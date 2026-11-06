@@ -42,8 +42,9 @@ impl<K: PartialEq, V> Data<K, V> {
         }
     }
 
-    /// Disabling the integration releases snapshots and rejects pending reads.
-    /// Keep the generation monotonic if this allocation is reused later.
+    /// Drops this cache's snapshot and subscribers when the integration stops.
+    /// In-flight work may still finish, but its result is rejected. Preserve
+    /// the generation across reuse so it cannot match a newly started read.
     pub fn clear(&mut self) {
         self.key = None;
         self.pending = None;
@@ -61,6 +62,8 @@ impl<K: PartialEq, V> Data<K, V> {
     }
 
     /// Start a read only when no request is pending and its cached result is due.
+    /// `force` bypasses the age check, never an existing request. The returned
+    /// generation must accompany completion even if the same key is selected again.
     fn begin(&mut self, key: K, force: bool, age: Duration, now: Instant) -> Option<u64> {
         self.select(key);
         if self.busy() || (!force && self.finished.is_some_and(|at| now.saturating_duration_since(at) < age)) { return None; }
@@ -71,6 +74,7 @@ impl<K: PartialEq, V> Data<K, V> {
     }
 
     /// Reject a stale generation and retain the last successful value on refresh errors.
+    /// Errors also record completion time, preventing retries on every render.
     fn finish(&mut self, generation: u64, result: Result<V, String>, now: Instant) -> bool {
         if self.pending != Some(generation) { return false; }
         self.pending = None;
@@ -85,6 +89,8 @@ impl<K: PartialEq, V> Data<K, V> {
 
 /// Call only from a visible panel or an explicit command. The job receives
 /// the previous successful value for conditional requests and read history.
+/// Its work runs off the UI thread and may outlive `clear`; only a current
+/// generation may publish a result or notify the captured subscribers.
 pub(super) fn load<K: PartialEq + 'static, V: Send + Sync + 'static>(
     data: &Rc<RefCell<Data<K, V>>>, key: K, force: bool, age: Duration,
     job: impl FnOnce(Option<Arc<V>>) -> Result<V, String> + Send + 'static, cx: &mut App,

@@ -56,6 +56,8 @@ pub struct Hub {
 }
 
 impl Hub {
+    /// Equality token for the selected sources, without cloning their data.
+    /// Compare with the previous token; wrapping revisions are not timestamps.
     pub fn revision(&self, domains: Domains) -> u64 { self.revisions.get(domains) }
 
     /// Record the changed sources before notifying hub observers.
@@ -88,9 +90,9 @@ pub fn resources_entity(cx: &App) -> Entity<SystemSampler> {
 }
 
 /// Forwards updates from `rx` into the hub, notifying observers only when
-/// `apply` reports a change. Every plugin view observes the hub, so an
-/// unconditional notify re-renders the whole bar for nothing (services and
-/// compositors re-send identical state often).
+/// `apply` reports a change. `domains` must include every source it changes,
+/// so scoped views invalidate correctly. Identical snapshots leave revisions
+/// alone even when a service sends them repeatedly.
 ///
 /// Updates that queued up while the foreground was busy are coalesced: only
 /// the newest value of a burst is applied, and observers hear about it once.
@@ -186,6 +188,9 @@ fn set<T: PartialEq>(slot: &mut T, value: T) -> bool {
     true
 }
 
+/// Applies one native delta and identifies only the data it changed.
+/// The caller combines these domains before notifying; events themselves
+/// must remain ordered rather than being replaced by the newest message.
 fn apply_compositor(hub: &mut Hub, event: CompositorEvent) -> Domains {
     let (source, changed) = match event {
         CompositorEvent::Navigation { monitor, model } => {

@@ -44,6 +44,8 @@ struct TabState {
 }
 
 impl TabState {
+    /// Returns a reveal target only when selection changes. Repeated renders
+    /// leave manual scrolling alone, even if selection is outside the viewport.
     fn selected_target<T: PageTab>(&mut self, tabs: &[T], current: T) -> Option<usize> {
         if self.last_selection == Some(current.slug()) { return None; }
         self.last_selection = Some(current.slug());
@@ -54,6 +56,9 @@ impl TabState {
 /// Renders focusable tabs with arrow selection and scrolling to the focused tab.
 /// Keep `id` stable and distinct from other tab bars in the window so their
 /// focus and scroll state remain separate. `select` owns the page transition.
+/// Native activation handles Enter/Space; arrows move focus in reading order.
+/// A guarded frame callback retries scrolling after the initial layout,
+/// without retaining the view or scheduling frames after state settles.
 pub(super) fn bar<V: 'static, T: PageTab>(id: &'static str, tabs: &[T], current: T, p: &MandaraPalette, select: fn(&mut V, T, &mut Window, &mut Context<V>), window: &mut Window, cx: &mut Context<V>) -> AnyElement {
     let state = window.use_keyed_state(SharedString::from(format!("{id}-state")), cx, |_, _| TabState { scroll: ScrollHandle::new(), focus: Vec::new(), last_focus: None, last_selection: None });
     let (scroll, focus, reveal, focused) = state.update(cx, |state, cx| {

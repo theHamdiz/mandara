@@ -47,6 +47,9 @@ steps and less repeated work behind the desktop.
 
 ### Under the hood
 
+- **Clearer helper contracts.** Internal documentation explains policy cache
+  limits, view lifetimes, Studio routing and native output sizing. (#111)
+
 - **Reuse wallpaper storage.** Still wallpapers reuse their prepared full-screen
   RGBA buffer for the opaque canvas, preserving fill modes, colors and
   transparency blending.

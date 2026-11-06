@@ -35,6 +35,8 @@ impl Asset for SizedIcon {
     type Source = IconKey;
     type Output = Result<Arc<RenderImage>, ImageCacheError>;
 
+    /// Moves file reads and SVG rasterization to a background task that owns
+    /// the decode key independently of the element that requested it.
     fn load(source: Self::Source, cx: &mut App) -> impl std::future::Future<Output = Self::Output> + Send + 'static {
         cx.background_executor().spawn(async move { decode(&source.path, source.edge) })
     }
@@ -54,6 +56,8 @@ thread_local! {
 }
 
 /// An image source that draws `path` decoded for `size` logical px.
+/// Its previous device-size bitmap may be shown while a replacement loads;
+/// callers that own a temporary icon set must evict its cached edges separately.
 pub fn source(path: &Path, size: f32) -> ImageSource {
     let path: Arc<Path> = Arc::from(path);
     ImageSource::Custom(Arc::new(move |window: &mut Window, cx: &mut App| {
@@ -103,6 +107,9 @@ pub fn forget_cached(path: &Path, size: f32, scale: f32, cx: &mut App) {
     cx.remove_asset::<SizedIcon>(&IconKey { path: Arc::from(path), edge: edge_for(size, scale) });
 }
 
+/// Borrows embedded artwork or owns file bytes for this decode, then returns
+/// one owned BGRA frame. Raster sources still decode before shrinking; only
+/// the returned bitmap is bounded by `edge`, not peak decoder memory.
 fn decode(path: &Path, edge: u32) -> Result<Arc<RenderImage>, ImageCacheError> {
     let bytes = match crate::launcher_art::asset(path) {
         Some(bytes) => std::borrow::Cow::Borrowed(bytes),
