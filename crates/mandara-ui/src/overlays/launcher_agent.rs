@@ -28,6 +28,17 @@ fn row(label: impl Into<String>, detail: impl Into<String>, key: &str) -> Item {
     })
 }
 
+/// Keep the translated candidate title beside the exact executable command.
+fn preview_label(command: &str, matches: &[Item]) -> String {
+    matches
+        .iter()
+        .find_map(|item| match item {
+            Item::Hit(hit) if hit.provider == "agent" && hit.detail == command => Some(hit.label.clone()),
+            _ => None,
+        })
+        .unwrap_or_else(|| command.to_owned())
+}
+
 /// Turn a command removed since compilation into an actionable error row.
 fn resolution_error(words: &[Vec<String>], registry: &mandara_plugins::CommandRegistry) -> Option<Item> {
     words.iter().find_map(|w| registry.resolve(w).err()).map(|error| row(t("The local agent could not compile this command"), error, "setup"))
@@ -132,12 +143,13 @@ impl LauncherView {
                             Event::Matches { matches, .. } => {
                                 this.results = matches.into_iter().map(|m| row(tr(&m.command.summary), m.command.path, "hint")).collect();
                             }
-                            Event::Ready { words, inference_ms, .. } => {
-                                this.results =
+                            Event::Ready { actions, words, inference_ms } => {
+                                let mut results =
                                     vec![row(t("Run these shell actions"), tf("Compiled in {time} ms", &[("time", &format!("{inference_ms:.0}"))]), "run")];
-                                for action in &words {
-                                    this.results.push(row(action.join(" "), agent::catalog::cli(action), "hint"));
+                                for (action, words) in actions.iter().zip(&words) {
+                                    results.push(row(preview_label(&action.command, &this.results), agent::catalog::cli(words), "hint"));
                                 }
+                                this.results = results;
                                 if let Some(state) = this.agent.as_mut() {
                                     state.words = Some(words);
                                 }
@@ -201,6 +213,13 @@ impl LauncherView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// Compiled rows reuse the human title rather than repeating the CLI path.
+    #[test]
+    fn action_previews_keep_the_candidate_label() {
+        let matches = vec![row("Window gaps", "config set /compositor/look/gaps_inner", "hint")];
+        assert_eq!(preview_label("config set /compositor/look/gaps_inner", &matches), "Window gaps");
+        assert_eq!(preview_label("new command", &matches), "new command");
+    }
     #[test]
     /// Replace the live catalog after compilation and require an error action for the old preview.
     fn a_removed_command_produces_feedback_instead_of_a_dead_run_button() {

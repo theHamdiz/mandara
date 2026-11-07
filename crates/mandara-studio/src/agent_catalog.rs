@@ -12,7 +12,7 @@ pub fn settings_catalog() -> Vec<mandara_services::command_agent::catalog::Comma
                 name: "value".into(),
                 kind: "string".into(),
                 required: true,
-                description: setting.help.into(),
+                description: format!("{} / {} / {}: {}", setting.section.title(), setting.group, setting.label, setting.help),
                 choices: Vec::new(),
                 values: Vec::new(),
                 minimum: None,
@@ -60,6 +60,8 @@ mod agent_catalog_tests {
         // Keep the display summary as a translation key, not an English sentence
         // assembled from several keys. The argument retains the retrieval help.
         assert_eq!(gaps.summary, "Gaps between windows");
+        assert!(gaps.args[0].description.contains("Compositor"));
+        assert!(gaps.args[0].description.contains(&gaps.summary));
         assert_eq!(gaps.args[0].kind, "integer");
         assert!(gaps.args[0].maximum.is_some());
         let action = |command: &str, value: serde_json::Value| Action {

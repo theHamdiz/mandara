@@ -214,4 +214,6 @@ fn launcher_examples_on_the_homepage_start_with_bang() {
     let examples:Vec<_>=page.descendants().filter(|n|n.has_tag_name("code")).filter_map(|n|n.text()).filter(|text|text.contains("switch to dark mode")).collect();
     assert!(examples.len()>=2);
     assert!(examples.iter().all(|text|text.starts_with('!')));
+    let studio=page.descendants().find(|n|n.attribute("class")==Some("studio-section section-space")).unwrap();
+    assert!(studio.descendants().filter_map(|n|n.text()).any(|text|text.contains("download its required models")));
 }

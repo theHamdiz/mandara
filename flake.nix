@@ -2,9 +2,17 @@
   description = "Mandara Shell: a design-first Wayland desktop shell for MangoWM, Niri, Hyprland, Sway, River Classic and Umbriel";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.rust-overlay = {
+    url = "github:oxalica/rust-overlay";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
 
   outputs =
-    { self, nixpkgs }:
+    {
+      self,
+      nixpkgs,
+      rust-overlay,
+    }:
     let
       inherit (nixpkgs) lib;
       systems = [
@@ -30,10 +38,17 @@
           ]
         );
       };
+      # Keep Rust's stdarch and LLVM from the same distributed toolchain;
+      # mismatched AVX-512 VNNI signatures break the CPU inference kernels.
+      rustFor = pkgs: (pkgs.extend rust-overlay.overlays.default).rust-bin.stable.latest.minimal;
       mandaraFor =
         pkgs:
         pkgs.callPackage ./nix/package.nix {
           inherit src version rev;
+          rustPlatform = pkgs.makeRustPlatform {
+            cargo = rustFor pkgs;
+            rustc = rustFor pkgs;
+          };
           inherit (self) lastModified;
         };
     in
@@ -127,13 +142,27 @@
         in
         {
           nixos-module = nixos.config.system.build.toplevel;
+          rust-intrinsics =
+            pkgs.runCommand "mandara-rust-intrinsics"
+              {
+                nativeBuildInputs = [ (rustFor pkgs) ];
+              }
+              ''
+                rustc --edition=2024 --crate-type=lib -D warnings --emit=obj ${./nix/tests/avx512.rs} -o $out
+              '';
           # Checked while Nix evaluates (no build script): the assertions
           # fail the check with their message, the file only marks success.
           home-manager-module =
             assert lib.assertMsg (cfg.settings.bar.height == 30) "the Home Manager settings lost bar.height";
-            assert lib.assertMsg (toString configFile == toString expectedFile) "~/.config/mandara/config.toml isn't the TOML of programs.mandara.settings";
-            assert lib.assertMsg (service.Service.ExecStart == lib.getExe cfg.package) "the systemd service doesn't start the module's package";
-            assert lib.assertMsg (lib.length hm.config.home.packages == 1) "the module should add exactly one package";
+            assert lib.assertMsg (
+              toString configFile == toString expectedFile
+            ) "~/.config/mandara/config.toml isn't the TOML of programs.mandara.settings";
+            assert lib.assertMsg (
+              service.Service.ExecStart == lib.getExe cfg.package
+            ) "the systemd service doesn't start the module's package";
+            assert lib.assertMsg (
+              lib.length hm.config.home.packages == 1
+            ) "the module should add exactly one package";
             pkgs.writeText "mandara-home-manager-module" "checked\n";
         }
       );
@@ -142,10 +171,12 @@
         default = pkgs.mkShell {
           inputsFrom = [ self.packages.${pkgs.stdenv.hostPlatform.system}.mandara ];
           packages = with pkgs; [
-            cargo
-            rustc
-            clippy
-            rustfmt
+            ((rustFor pkgs).override {
+              extensions = [
+                "clippy"
+                "rustfmt"
+              ];
+            })
             rust-analyzer
           ];
           # `cargo run` builds load Vulkan, Wayland and libpam with dlopen;

@@ -27,15 +27,20 @@ space. `mandara msg models list`, `models download <id>` and
 `models remove <id>` expose the same model inventory.
 
 FunctionGemma compiles one action. Qwen permits up to four actions and supports
-multilingual requests. Qwen translates non-English queries into English for
-Arctic retrieval, then compiles the original request against the retrieved
-commands, reusing its weights and clearing the translation KV cache. The test bench
-shows the candidates, generated JSON and measured retrieval/compilation time
-without executing anything. It also has an immediate purge button.
+multilingual requests. It translates non-English requests, then splits them
+into concise English search clauses for Arctic retrieval. Their candidate
+lists share the same ten-tool budget, so one action cannot crowd out the
+others. The router selects the highest-ranked candidate whose argument types
+fit each clause; a numeric setting cannot become a related toggle. The
+compiler fills that selected action, reusing its weights and clearing KV
+state between calls. The combined preview is validated before execution.
+
+The test bench shows the candidates, generated JSON and measured retrieval
+and compilation time without executing anything. It also has a purge button.
 
 Each request runs in a short-lived child invocation of the same Rust binary.
-Loading, tokenization, retrieval and sampling stay off the UI thread. Only ten
-retrieved schemas enter the compiler context. A grammar masks invalid tokens;
+Loading, tokenization, retrieval and sampling stay off the UI thread. Only retrieved tools enter
+the compiler context, one selected schema per intent. A grammar masks invalid tokens;
 the output is checked again against those schemas and the live dispatcher.
 Closing the launcher, removing `!`, changing the query or disabling the agent
 cancels its worker. A request also ends after 15 seconds without a new query.

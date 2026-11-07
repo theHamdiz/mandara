@@ -19,7 +19,7 @@ const DIM: usize = 384;
 /// Bound tokenization and quadratic attention for one command description.
 const MAX_TOKENS: usize = 128;
 /// Cache format and embedding recipe version.
-const MAGIC: &[u8; 8] = b"MDRAG002";
+const MAGIC: &[u8; 8] = b"MDRAG003";
 
 pub struct Embedder {
     tokenizer: Tokenizer,
@@ -114,7 +114,7 @@ pub fn index(embedder: &mut Embedder, commands: &[Command]) -> Result<Vec<Vec<f3
     for command in commands {
         let mut text = format!("{}: {}", command.path, command.summary);
         for arg in &command.args {
-            text.push_str(&format!(" {} {} {}", arg.name, arg.description, arg.choices.join(" ")));
+            text.push_str(&format!(" {} {} {} {}", arg.name, arg.kind, arg.description, arg.choices.join(" ")));
             for value in &arg.values {
                 text.push(' ');
                 text.push_str(&value.to_string());
@@ -142,8 +142,8 @@ pub fn index(embedder: &mut Embedder, commands: &[Command]) -> Result<Vec<Vec<f3
     Ok(vectors)
 }
 
-/// Keep the ten highest cosine scores without sorting the entire catalog.
-pub fn retrieve(query: &[f32], commands: &[Command], vectors: &[Vec<f32>]) -> Vec<Match> {
+/// Keep the ten highest cosine scores without copying command metadata.
+pub(super) fn ranking(query: &[f32], vectors: &[Vec<f32>]) -> Vec<(usize, f32)> {
     let mut best: Vec<(usize, f32)> = Vec::with_capacity(TOP_K + 1);
     for (i, row) in vectors.iter().enumerate() {
         let score = query.iter().zip(row).map(|(a, b)| a * b).sum::<f32>();
@@ -153,12 +153,55 @@ pub fn retrieve(query: &[f32], commands: &[Command], vectors: &[Vec<f32>]) -> Ve
             best.truncate(TOP_K);
         }
     }
-    best.into_iter().map(|(i, score)| Match { command: commands[i].clone(), score }).collect()
+    best
+}
+
+/// Copy only the command descriptions that will cross the worker boundary.
+pub fn retrieve(query: &[f32], commands: &[Command], vectors: &[Vec<f32>]) -> Vec<Match> {
+    ranking(query, vectors).into_iter().map(|(i, score)| Match { command: commands[i].clone(), score }).collect()
+}
+
+/// Interleave clause rankings so every requested action gets candidate slots.
+/// Deduplication and the shared top-K limit keep the compiler context bounded.
+pub fn retrieve_clauses(queries: &[Vec<f32>], commands: &[Command], vectors: &[Vec<f32>]) -> Vec<Match> {
+    if let [query] = queries {
+        return retrieve(query, commands, vectors);
+    }
+    let groups = queries.iter().take(super::catalog::MAX_ACTIONS).map(|query| ranking(query, vectors)).collect::<Vec<_>>();
+    let mut merged: Vec<Match> = Vec::with_capacity(TOP_K);
+    for rank in 0..TOP_K {
+        for group in &groups {
+            if let Some(&(index, score)) = group.get(rank)
+                && !merged.iter().any(|m| m.command.path == commands[index].path)
+            {
+                merged.push(Match { command: commands[index].clone(), score });
+                if merged.len() == TOP_K {
+                    return merged;
+                }
+            }
+        }
+    }
+    merged
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// A strong first intent must not displace every candidate for the second intent.
+    #[test]
+    fn compound_retrieval_keeps_both_intents_within_the_same_tool_budget() {
+        let commands: Vec<Command> = (0..20).map(|i| Command { path: i.to_string(), summary: String::new(), args: vec![], examples: vec![] }).collect();
+        let vectors: Vec<Vec<f32>> = (0..20).map(|i| if i < 10 { vec![1.0, 0.0] } else { vec![0.0, 1.0] }).collect();
+        let queries = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        let merged = retrieve_clauses(&queries, &commands, &vectors);
+        assert_eq!(merged.len(), TOP_K);
+        assert!(merged.iter().any(|m| m.command.path == "0"));
+        assert!(merged.iter().any(|m| m.command.path == "10"));
+        let repeated = retrieve_clauses(&[queries[0].clone(), queries[0].clone()], &commands, &vectors);
+        assert_eq!(repeated.len(), TOP_K);
+        assert_eq!(repeated.iter().map(|m| &m.command.path).collect::<std::collections::BTreeSet<_>>().len(), TOP_K);
+    }
+
     #[test]
     /// Exercise cache recovery without loading an inference runtime.
     fn vector_cache_rejects_stale_corrupt_and_truncated_data() {

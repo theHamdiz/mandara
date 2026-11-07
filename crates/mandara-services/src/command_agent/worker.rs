@@ -94,19 +94,29 @@ pub fn worker_main(settings: impl FnOnce() -> Vec<super::catalog::Command>) -> R
         if request.prepare_index {
             return emit(&Event::Ready { actions: vec![], words: vec![], inference_ms: 0.0 });
         }
-        let mut compiler = if request.engine == super::Engine::Qwen && !request.query.is_ascii() {
+        let mut compiler = if request.engine == super::Engine::Qwen {
             models::check(models::compiler(request.engine), false, &cancel)?;
             Some(compiler::Compiler::load(request.engine)?)
         } else {
             None
         };
-        let retrieval_query = if let Some(compiler) = &mut compiler { compiler.translate(&request.query)? } else { request.query.clone() };
         let start = Instant::now();
-        let query = embedder.embed(&retrieval_query, true)?;
-        let matches = embeddings::retrieve(&query, &request.catalog, &vectors);
-        let commands = matches.iter().map(|m| m.command.clone()).collect::<Vec<_>>();
+        let queries = if let Some(compiler) = &mut compiler { compiler.retrieval_queries(&request.query)? } else { vec![request.query.clone()] };
+        let query_vectors = queries.iter().map(|q| embedder.embed(q, true)).collect::<Result<Vec<_>>>()?;
+        let matches = embeddings::retrieve_clauses(&query_vectors, &request.catalog, &vectors);
+        let selected = queries
+            .iter()
+            .zip(&query_vectors)
+            .map(|(query, vector)| {
+                let ranked = embeddings::ranking(vector, &vectors);
+                super::selection::choose(
+                    query,
+                    ranked.iter().map(|(index, _)| &request.catalog[*index]).filter(|command| matches.iter().any(|m| m.command.path == command.path)),
+                )
+            })
+            .collect::<Result<Vec<_>>>()?;
         emit(&Event::Matches { matches, retrieval_ms: start.elapsed().as_secs_f64() * 1000.0 })?;
-        drop((embedder, vectors));
+        drop((embedder, vectors, query_vectors));
         let mut compiler = match compiler {
             Some(compiler) => compiler,
             None => {
@@ -114,7 +124,8 @@ pub fn worker_main(settings: impl FnOnce() -> Vec<super::catalog::Command>) -> R
                 compiler::Compiler::load(request.engine)?
             }
         };
-        emit(&compiler.compile(&request.query, &commands)?)
+        let result = compiler.compile_bound(&queries, &selected)?;
+        emit(&result)
     })();
     if let Err(error) = result {
         emit(&Event::Error { message: format!("{error:#}") })?;

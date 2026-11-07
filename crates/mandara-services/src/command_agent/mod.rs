@@ -9,6 +9,7 @@ mod compiler;
 mod embeddings;
 mod gemma;
 pub mod models;
+mod selection;
 mod worker;
 pub use worker::{Job, active_requests, purge, run, worker_main};
 
