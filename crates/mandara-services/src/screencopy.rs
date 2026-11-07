@@ -194,6 +194,7 @@ pub fn capture_region(output: &str, rect: (i32, i32, i32, i32)) -> Result<Captur
     capture.context("capture output is no longer connected")
 }
 
+/// Deliver owned frames sequentially, restricting panel requests to their output.
 fn capture_with(cursor: bool, target: Option<(&str, (i32, i32, i32, i32))>, mut receive: impl FnMut(Capture)) -> Result<()> {
     let conn = Connection::connect_to_env().context("connecting to Wayland")?;
     let (globals, mut queue) = registry_queue_init::<State>(&conn)?;

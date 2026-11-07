@@ -41,6 +41,7 @@ fn decode(v: &OwnedValue) -> Preference {
     }
 }
 
+/// Accept both portal reply formats; unknown values leave motion unchanged.
 fn reduced_motion(v: &OwnedValue) -> bool {
     // The portal defines 0 = no preference, 1 = reduce; future values mean 0.
     let n = u32::try_from(v).ok().or_else(|| {
@@ -50,6 +51,7 @@ fn reduced_motion(v: &OwnedValue) -> bool {
     n == Some(1)
 }
 
+/// Prefer ReadOne while supporting portals that still expose only Read.
 async fn read(settings: &zbus::Proxy<'_>, key: &str) -> Option<OwnedValue> {
     match settings.call("ReadOne", &(NAMESPACE, key)).await {
         Ok(value) => Some(value),

@@ -21,6 +21,7 @@ const TIMEOUT: Duration = Duration::from_secs(15);
 const CANCEL_INTERVAL: Duration = Duration::from_millis(10);
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 
+/// The small wire request sent to the disposable capture worker.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Request {
     pub output: String,
@@ -99,10 +100,23 @@ pub fn run(request: Request, current: impl Fn() -> bool) -> Result<Vec<u8>> {
             ensure!(status.success(), "panel capture worker failed");
             return response(bytes);
         }
-        std::thread::sleep(CANCEL_INTERVAL);
+        wait_ready(&output, eof)?;
     }
 }
 
+/// Wake as soon as bytes arrive, while bounding cancellation latency.
+fn wait_ready(output: &impl std::os::fd::AsFd, eof: bool) -> Result<()> {
+    use rustix::event::{PollFd, PollFlags, Timespec, poll};
+    let timeout = Timespec::try_from(CANCEL_INTERVAL)?;
+    let mut fds = [PollFd::new(output, PollFlags::IN)];
+    let watched = if eof { &mut fds[..0] } else { &mut fds[..] };
+    match poll(watched, Some(&timeout)) {
+        Ok(_) | Err(rustix::io::Errno::INTR) => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Reject oversized output before extending the retained PNG buffer.
 fn append(bytes: &mut Vec<u8>, part: &[u8]) -> Result<()> {
     ensure!(bytes.len().checked_add(part.len()).is_some_and(|length| length <= MAX_PNG_BYTES), "panel image exceeds the clipboard limit");
     bytes.try_reserve(part.len())?;
@@ -110,6 +124,7 @@ fn append(bytes: &mut Vec<u8>, part: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Move PNG output to the caller or report the worker's structured failure.
 fn response(bytes: Vec<u8>) -> Result<Vec<u8>> {
     if bytes.starts_with(PNG_SIGNATURE) { return Ok(bytes); }
     let failure: Failure = serde_json::from_slice(&bytes).context("invalid capture worker response")?;
@@ -119,6 +134,20 @@ fn response(bytes: Vec<u8>) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn readiness_handles_idle_data_and_closed_pipes() {
+        let (mut reader, mut writer) = std::os::unix::net::UnixStream::pair().unwrap();
+        reader.set_nonblocking(true).unwrap();
+        wait_ready(&reader, false).unwrap();
+        writer.write_all(&[7, 8, 9]).unwrap();
+        wait_ready(&reader, false).unwrap();
+        let mut bytes = [0; 3]; reader.read_exact(&mut bytes).unwrap();
+        assert_eq!(bytes, [7, 8, 9]);
+        drop(writer);
+        wait_ready(&reader, false).unwrap();
+        assert_eq!(reader.read(&mut bytes).unwrap(), 0);
+        wait_ready(&reader, true).unwrap();
+    }
     #[test]
     fn encoded_pixels_move_without_a_second_buffer_and_failures_are_reported() {
         let bytes = PNG_SIGNATURE.to_vec(); let pointer = bytes.as_ptr();

@@ -133,6 +133,7 @@ impl Compiler {
         )
     }
 
+    /// Sample only grammar-allowed tokens and clear model state between requests.
     fn generate_with_grammar(
         &mut self,
         prompt: String,

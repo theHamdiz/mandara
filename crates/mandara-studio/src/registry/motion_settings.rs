@@ -2,6 +2,7 @@
 use super::{Control::*, Section::Motion, Setting, s};
 use mandara_i18n::tk;
 
+/// Declare bounded global and per-surface controls for the shared settings engine.
 pub(super) fn entries() -> Vec<Setting> {
     let range = mandara_config::motion::SURFACE_SPEED_RANGE;
     let intensity = mandara_config::motion::INTENSITY_RANGE;

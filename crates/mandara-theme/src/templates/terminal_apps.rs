@@ -2,6 +2,7 @@
 
 use crate::MandaraPalette;
 
+/// Export a Cava gradient using palette roles accepted by its INI parser.
 pub fn cava(p: &MandaraPalette) -> String {
     format!(
         "[color]\nbackground = '{}'\nforeground = '{}'\ngradient = 1\ngradient_color_1 = '{}'\ngradient_color_2 = '{}'\ngradient_color_3 = '{}'\n",
@@ -13,6 +14,7 @@ pub fn cava(p: &MandaraPalette) -> String {
     )
 }
 
+/// Export sourceable tmux styles without changing the user's session or config.
 pub fn tmux(p: &MandaraPalette) -> String {
     let fg = p.on_surface.to_hex();
     let bg = p.surface_container.to_hex();
@@ -24,6 +26,7 @@ pub fn tmux(p: &MandaraPalette) -> String {
     )
 }
 
+/// Export Zellij's KDL roles, preserving distinct success and error colours.
 pub fn zellij(p: &MandaraPalette) -> String {
     use std::fmt::Write;
     let rgb = |color: crate::Color| {
@@ -60,6 +63,7 @@ pub fn zellij(p: &MandaraPalette) -> String {
     out
 }
 
+/// Export the supported colour keys for Spicetify's Mandara scheme.
 pub fn spicetify(p: &MandaraPalette) -> String {
     use std::fmt::Write;
     let mut out = String::from("[Mandara]\n");

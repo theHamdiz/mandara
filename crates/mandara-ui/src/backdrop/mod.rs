@@ -457,6 +457,7 @@ fn video_outputs(cfg: &mandara_config::ShellConfig, outputs: &[String], dark: bo
         .collect()
 }
 
+/// Resolve one desktop scene, including any widget position currently being dragged.
 fn build_scene(outputs: &[String], cx: &mut App) -> Scene {
     let mut cfg = crate::state::config(cx).read(cx).snapshot();
     let editing = crate::desktop_edit::active(cx);

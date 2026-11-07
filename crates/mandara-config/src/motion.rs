@@ -108,6 +108,7 @@ impl Preset {
 }
 
 impl MotionConfig {
+    /// Bound the visual intensity, using the default for invalid config values.
     pub fn intensity(&self) -> f32 {
         if self.intensity.is_finite() {
             self.intensity.clamp(INTENSITY_RANGE.0, INTENSITY_RANGE.1)
@@ -116,6 +117,7 @@ impl MotionConfig {
         }
     }
 
+    /// Combine the user's accessibility choices with the desktop preference.
     pub fn reduced(&self, system: bool) -> bool {
         self.reduce_motion || self.intensity() == 0.0 || (self.follow_system && system)
     }

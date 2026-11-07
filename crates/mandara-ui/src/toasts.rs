@@ -217,6 +217,7 @@ fn cards_that_fit(max_visible: usize, card_h: f32, cap: f32) -> usize {
 }
 
 impl SurfaceKey {
+    /// Size the visible stack against its own output, including joined-bar geometry.
     fn of(shell: &ShellConfig, output: Option<&PopupOutput>, cx: &App) -> Self {
         let cfg = &shell.notifications;
         let scale = cfg.scale.clamp(crate::plugins::notifications::TOAST_SCALE.0, crate::plugins::notifications::TOAST_SCALE.1);

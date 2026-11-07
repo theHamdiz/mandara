@@ -8,6 +8,7 @@ const CALL_START: &str = "<start_function_call>";
 const CALL_END: &str = "<end_function_call>";
 const ESCAPE: &str = "<escape>";
 
+/// Disambiguate tool names even when punctuation normalizes to the same spelling.
 fn name(command: &Command, index: usize) -> String {
     let mut name: String = command
         .path
@@ -25,6 +26,7 @@ fn text(value: &str) -> String {
     )
 }
 
+/// Encode nested declaration values using the model's native string delimiters.
 fn native(value: &Value) -> String {
     match value {
         Value::String(s) => text(s),
@@ -99,6 +101,7 @@ fn literal(value: &str) -> String {
     serde_json::to_string(value).expect("string literal")
 }
 
+/// Keep strings delimited while numeric and boolean choices remain typed.
 fn choice(value: &Value) -> String {
     match value.as_str() {
         Some(s) => format!("<escape> {} <escape>", literal(s)),
@@ -106,6 +109,7 @@ fn choice(value: &Value) -> String {
     }
 }
 
+/// Constrain each argument to its catalog type, bounds and allowed values.
 fn value_rule(arg: &Argument) -> String {
     if !arg.values.is_empty() {
         return arg

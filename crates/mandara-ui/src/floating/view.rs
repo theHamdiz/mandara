@@ -520,6 +520,7 @@ impl FloatingView {
         animating
     }
 
+    /// Build the card chrome and controls around its cached plugin content.
     fn card_element(&self, card: &Card, cfg: &ShellConfig, palette: &mandara_theme::MandaraPalette, panels_font: SharedString, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let b = card.bounds.value();
         let a = card.appear.value().clamp(0.0, 1.0);
@@ -663,6 +664,7 @@ impl FloatingView {
 }
 
 impl Render for FloatingView {
+    /// Step moving cards at the panel speed and publish their current input bounds.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Frame timing for Studio → Performance (`diagnostics frames`).
         let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());

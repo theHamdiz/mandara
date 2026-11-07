@@ -33,6 +33,7 @@ pub(super) struct Preview {
 }
 
 impl Preview {
+    /// Replay live edits while this page owns the preview entity.
     fn new(motion: MotionConfig, cx: &mut Context<Self>) -> Self {
         cx.observe(&config(cx), |this: &mut Self, cfg, cx| {
             let motion = cfg.read(cx).get().motion;
@@ -51,6 +52,7 @@ impl Preview {
         }
     }
 
+    /// Restart the demonstration without changing any user setting.
     fn replay(&mut self) {
         self.spring.snap_to(0.0);
         self.spring.set_target(1.0);
@@ -59,6 +61,7 @@ impl Preview {
 }
 
 impl Render for Preview {
+    /// Animate only while visible and unsettled, using the current motion profile.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.visibility.is_none() {
             let weak = cx.weak_entity();
@@ -116,6 +119,7 @@ impl Render for Preview {
 }
 
 impl StudioView {
+    /// Keep preset selection, live preview and registry controls on the Motion page.
     pub(super) fn motion_page(&mut self, cfg: &mandara_config::ShellConfig, p: &mandara_theme::MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let preview: Entity<Preview> = self.motion_preview.get_or_insert_with(|| cx.new(|cx| Preview::new(cfg.motion, cx))).clone();
         let current = cfg.motion.preset();

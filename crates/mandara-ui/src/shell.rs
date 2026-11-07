@@ -1030,6 +1030,7 @@ impl ShellView {
         }
     }
 
+    /// Compare the animated bounds with this slot's collapsed and expanded geometry.
     fn panel_progress(&self, cfg: &ShellConfig) -> f32 {
         match (self.panel_visible, self.panel_slot) {
             (true, Some(slot)) => self
@@ -1059,13 +1060,13 @@ impl ShellView {
         {
             let _scope = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(motion.sidebar));
             animating |= step_spring(&mut self.sidebar, self.sidebar_custom, dt);
+            animating |= self.tabs.step(dt);
         }
-        animating |= self.tab.step(dt);
-        animating |= self.tabs.step(dt);
         animating |= self.autohide.step(dt);
         animating |= self.step_sides(dt);
+        let _panel_motion = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(motion.panels));
+        animating |= self.tab.step(dt);
         if self.panel_visible {
-            let _scope = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(motion.panels));
             let moving = step_spring(&mut self.panel, self.panel_custom, dt);
             animating |= moving;
             if !moving && !panel_open {
@@ -2257,7 +2258,7 @@ impl Render for ShellView {
                         }
                         cx.notify();
                     }))
-                    .when(slot != MENU_SLOT, |row| row.child(crate::kit::icon_button(
+                    .when(slot != MENU_SLOT, |row| { row.child(crate::kit::icon_button(
                         "panel-pin",
                         if pinned { "pin" } else { "pin-off" },
                         TAB_BUTTON_PX,
@@ -2281,7 +2282,7 @@ impl Render for ShellView {
                                 tracing::warn!("floating `{id}`: {err}");
                             }
                         });
-                    })))
+                    })) })
                     .child(crate::panel_capture::button(&capture, self.panel.value(), self.surface, TAB_BUTTON_PX, ink, &palette, window, cx))
                     .child(self.mask.region()),
             );

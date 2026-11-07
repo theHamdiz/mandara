@@ -13,6 +13,7 @@ pub(crate) struct Owner {
 }
 
 impl Owner {
+    /// Tie repaint observation to the panel rather than the shell's lifetime.
     pub fn new<T: 'static>(output: String, cx: &mut Context<T>) -> Self {
         let state = cx.new(|_| Capture::new(output));
         let observed = cx.observe(&state, |_, _, cx| cx.notify());
@@ -93,6 +94,7 @@ fn rectangle(bounds: Bounds<Pixels>, surface: (f32, f32)) -> Option<(i32, i32, i
     (x1 > x0 && y1 > y0).then_some((x0 as i32, y0 as i32, (x1 - x0) as i32, (y1 - y0) as i32))
 }
 
+/// Snapshot the visible bounds before dispatching a command-triggered capture.
 pub(crate) fn start(state: &Entity<Capture>, bounds: Bounds<Pixels>, surface: (f32, f32), cx: &mut App) -> Result<async_channel::Receiver<Result<String, String>>, String> {
     state.update(cx, |state, cx| { state.rect = rectangle(bounds, surface); state.start(cx) })
 }

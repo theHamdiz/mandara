@@ -123,6 +123,7 @@ fn day_json(day: NaiveDate, cx: &gpui::App) -> serde_json::Value {
     })
 }
 
+/// Register clock views and calendar actions without loading a calendar source.
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Clock"), mandara_i18n::tk("Time, date and calendar"), Some(Zone::Center)), |window, cx, panel_cx| {
         let bar_text = RefCell::new(BarText::default());

@@ -93,6 +93,7 @@ impl LauncherView {
         self.agent_refilter_selected(None, cx)
     }
 
+    /// Recompile a chosen alternative against the original query and current catalog.
     fn agent_refilter_selected(
         &mut self,
         preferred_command: Option<String>,

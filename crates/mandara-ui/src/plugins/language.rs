@@ -162,6 +162,7 @@ fn option(id: impl Into<gpui::ElementId>, lang: Lang, label_native: String, labe
         .into_any_element()
 }
 
+/// Register the language switcher with lazy views and shared pack-download feedback.
 pub fn register(r: &mut PluginRegistry) {
     r.register(
         PluginManifest::builtin(ID, mandara_i18n::tk("Language"), mandara_i18n::tk("Switch the interface language instantly"), Some(Zone::Right)),

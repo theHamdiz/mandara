@@ -711,6 +711,7 @@ fn labels<'a>(cache: &'a mut Option<Labels>, w: &Weather, cfg: &Arc<ShellConfig>
     cache.get_or_insert_with(|| build_labels(key, w, cfg))
 }
 
+/// Format one bounded forecast for the current units, language and weather snapshot.
 fn build_labels(key: (i64, *const ShellConfig, Lang), w: &Weather, cfg: &Arc<ShellConfig>) -> Labels {
     let units = cfg.units();
     let hours = w

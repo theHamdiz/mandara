@@ -859,6 +859,7 @@ impl WallpaperView {
 }
 
 impl Render for WallpaperView {
+    /// Paint the active wallpaper and release stale images before advancing transitions.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.input_cleared {
             // The desktop background never takes pointer input.

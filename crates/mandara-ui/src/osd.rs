@@ -722,6 +722,7 @@ fn settled(window: &Window, g: Geometry) -> bool {
 }
 
 impl Render for OsdView {
+    /// Paint an active OSD using its own motion speed while leaving input transparent.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Clicks always pass through: the input region stays empty.
         let commit = self.mask.commit();

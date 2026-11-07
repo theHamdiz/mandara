@@ -3,6 +3,7 @@
 use super::catalog::Command;
 use anyhow::{Result, anyhow};
 
+/// Resolve explicit appearance modes, including the opposite mode when disabled.
 fn requested_mode(query: &str) -> Option<&'static str> {
     let words: Vec<_> = query
         .split(|c: char| !c.is_alphanumeric())
@@ -20,12 +21,14 @@ fn requested_mode(query: &str) -> Option<&'static str> {
     Some(if light != disabled { "light" } else { "dark" })
 }
 
+/// Identify appearance enums without relying on a particular command path.
 fn mode_argument(arg: &super::catalog::Argument) -> bool {
     (arg.choices.iter().any(|c| c == "light") && arg.choices.iter().any(|c| c == "dark"))
         || (arg.values.contains(&serde_json::Value::from("light"))
             && arg.values.contains(&serde_json::Value::from("dark")))
 }
 
+/// Read a requested switch state from whole words, preserving explicit negatives.
 fn switch_value(query: &str) -> Option<bool> {
     let lower = query.to_ascii_lowercase();
     let has = |word| lower.split_whitespace().any(|part| part.trim_matches(|c: char| c.is_ascii_punctuation()) == word);

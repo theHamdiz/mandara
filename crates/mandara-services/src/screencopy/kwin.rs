@@ -52,6 +52,7 @@ impl Frame {
         Ok(Self { width, height, stride, format, bytes })
     }
 
+    /// Compact padding and unpremultiply channels in the transferred allocation.
     fn rgba(&self, mut data: Vec<u8>) -> Result<Vec<u8>> {
         if data.len() != self.bytes { bail!("incomplete KWin frame"); }
         let row = self.width as usize * RGBA_BYTES;
@@ -88,13 +89,16 @@ pub(super) fn capture_area(output: &OutputInfo, (x, y, w, h): (i32, i32, i32, i3
     capture_area_on(&conn, output, (x, y, w, h))
 }
 
+/// Translate output-local coordinates without overflowing a signed desktop origin.
 fn capture_area_on(conn: &zbus::Connection, output: &OutputInfo, (x, y, w, h): (i32, i32, i32, i32)) -> Result<Capture> {
+    anyhow::ensure!(w > 0 && h > 0, "invalid panel capture target");
     let area = (output.logical.0.checked_add(x).context("capture origin overflow")?, output.logical.1.checked_add(y).context("capture origin overflow")?, w, h);
     let (frame, data) = transfer(conn, "", false, Some(area))?;
     anyhow::ensure!(frame.bytes <= super::panel::MAX_RAW_BYTES, "panel image exceeds the capture limit");
     Ok(Capture { output: output.name.clone(), logical: area, width: frame.width, height: frame.height, rgba: frame.rgba(data)? })
 }
 
+/// Capture outputs sequentially using their compositor-reported geometry.
 fn capture_on(conn: &zbus::Connection, outputs: &[&OutputInfo], cursor: bool) -> Result<Vec<Capture>> {
     let mut captures = Vec::with_capacity(outputs.len());
     for info in outputs {
@@ -105,6 +109,7 @@ fn capture_on(conn: &zbus::Connection, outputs: &[&OutputInfo], cursor: bool) ->
     Ok(captures)
 }
 
+/// Transfer one native frame over a private descriptor, bounding metadata and reads.
 fn transfer(conn: &zbus::Connection, name: &str, cursor: bool, area: Option<(i32, i32, i32, i32)>) -> Result<(Frame, Vec<u8>)> {
         let (mut reader, writer) = UnixStream::pair()?;
         let metadata: Metadata = crate::runtime::block_on(async {
@@ -118,7 +123,7 @@ fn transfer(conn: &zbus::Connection, name: &str, cursor: bool, area: Option<(i32
             ]);
             let call = async {
                 match area {
-                    Some((x, y, w, h)) => proxy.call("CaptureArea", &(x, y, w, h, options, Fd::from(writer.as_fd()))).await,
+                    Some((x, y, w, h)) => proxy.call("CaptureArea", &(x, y, w as u32, h as u32, options, Fd::from(writer.as_fd()))).await,
                     None => proxy.call("CaptureScreen", &(name, options, Fd::from(writer.as_fd()))).await,
                 }
             };
@@ -185,7 +190,7 @@ mod tests {
 
     #[zbus::interface(name = "org.kde.KWin.ScreenShot2")]
     impl Screenshot {
-        fn capture_area(&self, x: i32, y: i32, w: i32, h: i32, options: Metadata, pipe: zbus::zvariant::OwnedFd) -> Metadata {
+        fn capture_area(&self, x: i32, y: i32, w: u32, h: u32, options: Metadata, pipe: zbus::zvariant::OwnedFd) -> Metadata {
             use std::io::Write as _;
             assert_eq!((x, y, w, h), (-98, 44, 10, 8));
             assert_eq!(options.get("include-cursor").and_then(|v| bool::try_from(v).ok()), Some(false));
@@ -223,6 +228,9 @@ mod tests {
         let area = capture_area_on(&client, &OutputInfo { name: "fixture".into(), logical: (-100, 40, 200, 100) }, (2, 4, 10, 8)).unwrap();
         assert_eq!(area.logical, (-98, 44, 10, 8));
         assert_eq!(area.rgba, captures[0].rgba);
+        for rect in [(0, 0, 0, 8), (0, 0, 10, -1)] {
+            assert!(capture_area_on(&client, &output, rect).unwrap_err().to_string().contains("invalid panel capture target"));
+        }
     }
 
     #[test]

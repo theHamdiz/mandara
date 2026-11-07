@@ -21,6 +21,7 @@ pub(super) struct Controller {
 }
 
 impl Controller {
+    /// Own one gesture per list and cancel it when its surface or setting changes.
     pub(super) fn new(cx: &mut App) -> Entity<Self> {
         cx.new(|cx| {
             cx.observe(&crate::state::shell(cx), |this: &mut Self, _, cx| {
@@ -88,6 +89,7 @@ impl Controller {
         })
     }
 
+    /// Start or regrab the selected card without retaining the history snapshot.
     fn press(&mut self, id: u32, event: &MouseDownEvent, cx: &mut Context<Self>) {
         if event.button != MouseButton::Left || !crate::state::config(cx).read(cx).get().notifications.history_swipe {
             return;
@@ -111,6 +113,7 @@ pub(super) struct Frame {
 }
 
 impl Frame {
+    /// Offset only the active card and leave disabled lists without gesture handlers.
     pub(super) fn card(&self, id: u32, body: AnyElement) -> AnyElement {
         if !self.enabled {
             return body;

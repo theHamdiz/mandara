@@ -8,6 +8,7 @@ pub const MAX_BYTES: usize = 32 << 20;
 /// Reserve the retained byte storage before temporary text and painting allocations.
 const INITIAL_BYTES: usize = 64 << 10;
 
+/// A streaming PNG destination that refuses writes beyond the clipboard limit.
 pub struct Output {
     bytes: Vec<u8>,
     limit: usize,
@@ -18,12 +19,14 @@ impl Default for Output {
 }
 
 impl Output {
+    /// Reserve persistent output storage before allocating temporary image pixels.
     pub fn new() -> Self {
         Self {
             bytes: Vec::with_capacity(INITIAL_BYTES),
             limit: MAX_BYTES,
         }
     }
+    /// Hand off the encoded allocation without copying its bytes.
     pub fn finish(self) -> Vec<u8> {
         self.bytes
     }
