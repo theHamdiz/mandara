@@ -1862,6 +1862,7 @@ impl LauncherView {
 }
 
 impl Render for LauncherView {
+    /// Draw the selected look and follow its animated bounds with the input mask.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         use crate::launcher_place::{Join, Rect};
         use mandara_config::surfaces::PanelAnimation;

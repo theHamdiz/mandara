@@ -221,6 +221,7 @@ pub fn run(request: Request, cancel: Arc<AtomicBool>, events: async_channel::Sen
 mod tests {
     use super::*;
     #[test]
+    /// Verify that purge signals every owned job and frees spare tracking capacity.
     fn purge_cancels_active_requests_and_releases_tracking_storage() {
         let first = Arc::new(AtomicBool::new(false));
         let second = Arc::new(AtomicBool::new(false));

@@ -53,6 +53,7 @@ mod agent_catalog_tests {
     use super::*;
     use mandara_services::command_agent::catalog::{Action, validate};
     #[test]
+    /// Check config pointers, numeric bounds and JSON quoting against Studio’s actual registry.
     fn settings_tools_use_real_paths_ranges_and_json_choice_types() {
         let commands = settings_catalog();
         let gaps = commands.iter().find(|c| c.path.ends_with("/compositor/look/gaps_inner")).unwrap();

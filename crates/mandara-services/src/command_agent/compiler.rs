@@ -209,6 +209,7 @@ mod tests {
         assert!(sample(&[100.0, f32::NAN, 100.0, 999.0], &mask).is_err());
     }
     #[test]
+    /// Keep unrelated catalog entries outside both model prompts.
     fn prompts_include_only_the_retrieved_schemas_and_correct_chat_boundaries() {
         let commands = vec![Command { path: "theme mode".into(), summary: "Set mode".into(), args: vec![], examples: vec![] }];
         for engine in [Engine::FunctionGemma, Engine::Qwen] {
@@ -253,6 +254,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires the pinned model files in a private XDG data directory"]
+    /// Check actual FunctionGemma weights in a private model-fixture directory.
     fn pinned_functiongemma_compiles_a_real_volume_request() {
         let commands: Vec<Command> = serde_json::from_value(serde_json::json!([
             {"path":"audio volume set","summary":"Set output volume","args":[{"name":"percent","kind":"number","required":true,"description":"volume percent","minimum":0,"maximum":150}]},
@@ -266,6 +268,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires the pinned Qwen files in a private XDG data directory"]
+    /// Check that translation preserves both actions before Qwen compiles the Arabic request.
     fn pinned_qwen_compiles_a_real_arabic_request() {
         let commands: Vec<Command> = serde_json::from_value(serde_json::json!([
             {"path":"audio volume set","summary":"Set output volume","args":[{"name":"percent","kind":"number","required":true,"description":"volume percent","minimum":0,"maximum":150}]},

@@ -214,6 +214,7 @@ fn download_into(model: &Model, dir: &std::path::Path, cancel: &AtomicBool, prog
 mod tests {
     use super::*;
     #[test]
+    /// Reject mutable artifact URLs and model-card totals that omit tokenizer downloads.
     fn artifacts_are_pinned_and_sizes_include_tokenizers() {
         for model in ALL {
             assert!(model.on_demand);
@@ -223,6 +224,7 @@ mod tests {
         assert_eq!(compiler(Engine::Qwen).id, QWEN.id);
     }
     #[test]
+    /// Cover a hash read across buffer boundaries and cancellation before another read.
     fn verification_reads_all_bytes_and_honors_cancellation() {
         let mut file = tempfile::tempfile().unwrap();
         let bytes = vec![7; TRANSFER_BYTES * 2 + 1];
@@ -243,6 +245,7 @@ mod transfer_tests {
     use super::*;
     use std::net::TcpListener;
     #[test]
+    /// Exercise real HTTP range responses, ignored ranges and failed hash verification.
     fn resumed_downloads_validate_the_range_and_replace_corrupt_installs() {
         for (status, valid_hash) in [(206, true), (200, true), (206, false)] {
             let dir = tempfile::tempdir().unwrap();
@@ -289,6 +292,7 @@ mod transfer_tests {
         }
     }
     #[test]
+    /// A healthy slow stream must outlive the transport stall deadline.
     fn a_continuous_transfer_can_take_longer_than_the_stall_timeout() {
         let dir = tempfile::tempdir().unwrap();
         let content = b"slows";
@@ -324,6 +328,7 @@ mod transfer_tests {
     }
 
     #[test]
+    /// Separate inexpensive query checks from the explicit corruption check.
     fn interactive_checks_skip_hashing_but_setup_detects_same_size_damage() {
         let dir = tempfile::tempdir().unwrap();
         let files = Box::leak(Box::new([ModelFile {

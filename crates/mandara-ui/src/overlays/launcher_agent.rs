@@ -202,6 +202,7 @@ impl LauncherView {
 mod tests {
     use super::*;
     #[test]
+    /// Replace the live catalog after compilation and require an error action for the old preview.
     fn a_removed_command_produces_feedback_instead_of_a_dead_run_button() {
         let mut registry = mandara_plugins::CommandRegistry::default();
         registry.register("core", mandara_plugins::CommandSpec::new("fixture", tk("AI Shell Agent"), |_, _| Ok(serde_json::Value::Null)));

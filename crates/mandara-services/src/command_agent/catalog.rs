@@ -150,6 +150,7 @@ mod tests {
         serde_json::from_value(value).unwrap()
     }
     #[test]
+    /// Guard the compiler-to-dispatch boundary against mismatched types and extra arguments.
     fn binds_types_ranges_and_choices_to_their_command() {
         let c = commands();
         for invalid in [

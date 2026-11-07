@@ -160,6 +160,7 @@ pub fn retrieve(query: &[f32], commands: &[Command], vectors: &[Vec<f32>]) -> Ve
 mod tests {
     use super::*;
     #[test]
+    /// Exercise cache recovery without loading an inference runtime.
     fn vector_cache_rejects_stale_corrupt_and_truncated_data() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("index");
@@ -175,6 +176,7 @@ mod tests {
         assert!(normalize(&mut [f32::NAN]).is_err());
     }
     #[test]
+    /// Score more entries than fit in the result set and retain the best ten.
     fn cosine_search_is_bounded_and_orders_best_first() {
         let commands: Vec<Command> = (0..20).map(|i| Command { path: i.to_string(), summary: String::new(), args: vec![], examples: vec![] }).collect();
         let vectors: Vec<_> = (0..20).map(|i| vec![i as f32]).collect();
@@ -185,6 +187,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires the pinned router files in a private XDG data directory"]
+    /// Check Arctic tokenization and semantic ordering with the pinned local fixtures.
     fn pinned_router_embeds_and_retrieves_real_command_descriptions() {
         let mut embedder = Embedder::load().unwrap();
         let commands = vec![
