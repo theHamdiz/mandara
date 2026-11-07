@@ -87,7 +87,7 @@ pub fn schema(commands: &[Command], compound: bool) -> Value {
             }})
         })
         .collect();
-    json!({"type":"array","minItems":1,"maxItems":if compound {MAX_ACTIONS} else {1},"items":{"anyOf":choices}})
+    json!({"x-guidance":{"whitespace_flexible":false},"type":"array","minItems":1,"maxItems":if compound {MAX_ACTIONS} else {1},"items":{"anyOf":choices}})
 }
 
 /// Revalidate compiler output before it reaches the live dispatcher. Optional

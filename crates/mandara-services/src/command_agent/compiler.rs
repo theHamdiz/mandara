@@ -226,9 +226,12 @@ mod tests {
             parser.check_stop().unwrap()
         };
         assert!(accepts(r#"[{"command":"theme mode","args":{"mode":"dark"}}]"#));
-        for invalid in
-            [r#"[{"command":"exec","args":{}}]"#, r#"[{"command":"theme mode","args":{"mode":"blue"}}]"#, r#"[{"command":"theme mode","args":{"mode":true}}]"#]
-        {
+        assert!(!accepts("[\n\n"));
+        for invalid in [
+            r#"[{"command":"exec","args":{}}]"#,
+            r#"[{"command":"theme mode","args":{"mode":"blue"}}]"#,
+            r#"[{"command":"theme mode","args":{"mode":true}}]"#,
+        ] {
             assert!(!accepts(invalid), "{invalid}");
         }
     }
