@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.21.0 — 2026-11-07
+
+Your desktop, in your own words.
+
 ### New
 
 - **Your desktop, in your own words.** Enable the AI Shell Agent in
