@@ -18,6 +18,7 @@ pub mod input;
 pub mod login_layout;
 pub mod looks;
 pub mod mango_keys;
+pub mod motion;
 pub mod outputs;
 pub mod paths;
 pub mod power;
@@ -41,5 +42,6 @@ mod river_check;
 mod validator_tests;
 
 pub use schema::*;
+pub use motion::MotionConfig;
 pub use store::{ConfigStore, ConfigWatcher, ReloadOutcome, write_atomic};
 pub mod agent;

@@ -13,8 +13,10 @@
   **daily schedule**.
 - **Cross-app theming** (opt-in, per app): Ghostty, GTK 3/4, Qt5/Qt6
   (qt5ct/qt6ct), Kvantum, Zed, Fuzzel, btop, kitty, foot, Alacritty,
-  WezTerm, Helix, Neovim, Vesktop / Vencord and KDE colour schemes can
-  follow Mandara live. **Every app is off until you switch it on** in
+  WezTerm, Helix, Neovim, Vesktop / Vencord, KDE, Cava, tmux, Zellij and
+  Spicetify colour schemes receive Mandara's current palette. Apps that watch
+  their theme files follow it live; Cava, tmux and Spicetify need the reload
+  steps in the [App themes guide](app-themes.md). **Every app is off until you switch it on** in
   Studio → Themes → Other apps (or `mandara msg config set
   /integrations/gtk4 true`): until then Mandara writes nothing outside
   `~/.config/mandara` and `~/.cache/mandara`. Switching an app off takes
@@ -37,6 +39,7 @@
   is pywal-format (point Pywalfox at it, e.g. symlink it to
   `~/.cache/wal/colors.json` if you don't use pywal) and `userChrome.css`
   there can be `@import`ed from your profile's `chrome/userChrome.css`.
+  See [App themes](app-themes.md) for the additional apps' activation steps.
 - **Accessibility & style**: high-contrast mode (WCAG AAA text on every
   surface), corner roundness, shadows, panel edges, backdrop dim, text
   weight and a global animation-speed multiplier.

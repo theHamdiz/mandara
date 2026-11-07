@@ -8829,3 +8829,37 @@
 "Build the semantic index for the current command catalog" = "بناء الفهرس الدلالي لدليل الأوامر الحالي"
 "Compile a local shell command without executing it" = "تحويل طلب محلي إلى أمر دون تنفيذه"
 "Argument <{name}> must be between {minimum} and {maximum}" = "يجب أن تكون قيمة <{name}> بين {minimum} و{maximum}"
+
+# Motion controls and notification gestures
+"A slide and fade using your current spring. Replay after adjusting the controls." = "انزلاق وتلاشي بالنابض الحالي. أعد التشغيل بعد ضبط عناصر التحكم."
+"Animation presets" = "إعدادات الحركة المسبقة"
+"Bouncy" = "مرن"
+"Choose a feel, then adjust the spring below" = "اختر نمطًا ثم اضبط النابض أدناه"
+"Drag a history card left or right to remove it" = "اسحب بطاقة من السجل يمينًا أو يسارًا لإزالتها"
+"Follow system preference" = "اتباع تفضيل النظام"
+"How far a history card travels before it is dismissed" = "مسافة سحب بطاقة السجل قبل إزالتها"
+"Live preview" = "معاينة مباشرة"
+"Lower values soften bounce; zero makes transitions instant" = "القيم الأقل تخفف الارتداد؛ الصفر يجعل الانتقالات فورية"
+"Motion intensity" = "شدة الحركة"
+"Panels" = "اللوحات"
+"Playback speed for this surface; zero applies transitions instantly" = "سرعة التشغيل لهذا السطح؛ الصفر يطبق الانتقالات فورًا"
+"Replay" = "إعادة التشغيل"
+"Reset preview" = "إعادة ضبط المعاينة"
+"Respect the desktop's reduced-motion preference" = "احترام تفضيل سطح المكتب لتقليل الحركة"
+"Smooth" = "سلس"
+"Snappy" = "سريع"
+"Subtle" = "هادئ"
+"Surface transitions" = "انتقالات الأسطح"
+"Swipe distance" = "مسافة السحب"
+"Swipe to dismiss" = "السحب للإزالة"
+"Theme files and activation steps: docs/app-themes.md" = "ملفات السمات وخطوات التفعيل: docs/app-themes.md"
+
+"Open the Qur'an panel" = "فتح لوحة القرآن"
+
+"Open the Jannah panel" = "فتح لوحة الجنة"
+
+# Panel captures
+"Copy panel image" = "نسخ صورة اللوحة"
+"Panel image copied" = "تم نسخ صورة اللوحة"
+"Panel capture failed: {error}" = "فشل التقاط اللوحة: {error}"
+"The panel is not visible" = "اللوحة غير ظاهرة"

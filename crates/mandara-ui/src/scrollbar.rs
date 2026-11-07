@@ -333,7 +333,7 @@ impl Scrollbar {
             return 1.0;
         }
         let Some(at) = state.active_at.get() else { return 0.0 };
-        let reduce = cx.reduce_motion() || cx.try_global::<crate::state::GlobalConfig>().is_some_and(|g| g.0.read(cx).get().motion.reduce_motion);
+        let reduce = cx.reduce_motion() || cx.try_global::<crate::state::GlobalConfig>().is_some_and(|g| g.0.read(cx).get().motion.reduced(mandara_core::spring::system_reduced_motion()));
         let fade = if reduce { Duration::ZERO } else { FADE };
         let elapsed = at.elapsed();
         let opacity = opacity_after(elapsed, HOLD, fade);

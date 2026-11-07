@@ -711,6 +711,7 @@ fn labels<'a>(cache: &'a mut Option<Labels>, w: &Weather, cfg: &Arc<ShellConfig>
     cache.get_or_insert_with(|| build_labels(key, w, cfg))
 }
 
+/// Format one bounded forecast for the current units, language and weather snapshot.
 fn build_labels(key: (i64, *const ShellConfig, Lang), w: &Weather, cfg: &Arc<ShellConfig>) -> Labels {
     let units = cfg.units();
     let hours = w
@@ -733,7 +734,7 @@ fn build_labels(key: (i64, *const ShellConfig, Lang), w: &Weather, cfg: &Arc<She
     Labels {
         key,
         _config: cfg.clone(),
-        animate: !cfg.motion.reduce_motion && cfg.plugins.setting(ID, "animate", true),
+        animate: !cfg.motion.reduced(mandara_core::spring::system_reduced_motion()) && cfg.plugins.setting(ID, "animate", true),
         place: location_name(cfg).into(),
         temp: deg(units, w.temp),
         hi_lo: w.days.first().map(|d| mandara_i18n::tf("H {high}  L {low}", &[("high", &deg(units, d.max)), ("low", &deg(units, d.min))]).into()),

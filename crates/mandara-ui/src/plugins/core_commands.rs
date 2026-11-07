@@ -237,6 +237,9 @@ pub fn register(r: &mut PluginRegistry) {
         .example("panel close")
         .example("panel close weather"),
     );
+    r.command(core, CommandSpec::new_output("panel capture", mandara_i18n::tk("Copy panel image"), |args, cx| {
+        Ok(crate::floating::capture(args.str(0)?, cx)?.into())
+    }).arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network"))).example("panel capture clock"));
     r.command(
         core,
         CommandSpec::new(

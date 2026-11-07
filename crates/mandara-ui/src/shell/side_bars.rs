@@ -232,7 +232,7 @@ impl ShellView {
             }
             let out = cfg.side_bars.side(right).pinned || bar.hovering || from_panel;
             bar.shown.set_target(if out { 1.0 } else { 0.0 });
-            if cfg.motion.reduce_motion {
+            if cfg.motion.reduced(mandara_core::spring::system_reduced_motion()) {
                 bar.shown.snap_to_target();
             }
         }

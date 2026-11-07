@@ -9,6 +9,7 @@ mod compiler;
 mod embeddings;
 mod gemma;
 pub mod models;
+mod native_call;
 mod selection;
 mod worker;
 pub use worker::{Job, active_requests, purge, run, worker_main};
@@ -43,6 +44,8 @@ pub struct Request {
     pub engine: Engine,
     #[serde(default)]
     pub prepare_index: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preferred_command: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

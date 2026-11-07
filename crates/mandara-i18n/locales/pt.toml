@@ -8482,3 +8482,37 @@
 "Build the semantic index for the current command catalog" = "Criar o índice semântico do catálogo de comandos atual"
 "Compile a local shell command without executing it" = "Compilar um comando local sem executá-lo"
 "Argument <{name}> must be between {minimum} and {maximum}" = "O argumento <{name}> deve estar entre {minimum} e {maximum}"
+
+# Motion controls and notification gestures
+"A slide and fade using your current spring. Replay after adjusting the controls." = "Deslize e esmaeça com a mola atual. Repita após ajustar os controles."
+"Animation presets" = "Predefinições de animação"
+"Bouncy" = "Elástico"
+"Choose a feel, then adjust the spring below" = "Escolha um estilo e ajuste a mola abaixo"
+"Drag a history card left or right to remove it" = "Arraste um cartão do histórico para a esquerda ou direita para removê-lo"
+"Follow system preference" = "Seguir preferência do sistema"
+"How far a history card travels before it is dismissed" = "Distância que um cartão percorre antes de ser dispensado"
+"Live preview" = "Prévia ao vivo"
+"Lower values soften bounce; zero makes transitions instant" = "Valores menores suavizam o salto; zero torna as transições instantâneas"
+"Motion intensity" = "Intensidade do movimento"
+"Panels" = "Painéis"
+"Playback speed for this surface; zero applies transitions instantly" = "Velocidade desta superfície; zero aplica as transições instantaneamente"
+"Replay" = "Repetir"
+"Reset preview" = "Redefinir prévia"
+"Respect the desktop's reduced-motion preference" = "Respeitar a preferência de movimento reduzido do desktop"
+"Smooth" = "Suave"
+"Snappy" = "Ágil"
+"Subtle" = "Sutil"
+"Surface transitions" = "Transições das superfícies"
+"Swipe distance" = "Distância do gesto"
+"Swipe to dismiss" = "Deslizar para dispensar"
+"Theme files and activation steps: docs/app-themes.md" = "Arquivos de tema e etapas de ativação: docs/app-themes.md"
+
+"Open the Qur'an panel" = "Abrir o painel do Alcorão"
+
+"Open the Jannah panel" = "Abrir o painel Jannah"
+
+# Panel captures
+"Copy panel image" = "Copiar imagem do painel"
+"Panel image copied" = "Imagem do painel copiada"
+"Panel capture failed: {error}" = "Falha ao capturar o painel: {error}"
+"The panel is not visible" = "O painel não está visível"

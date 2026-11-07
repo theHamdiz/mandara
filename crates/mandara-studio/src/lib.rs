@@ -248,6 +248,7 @@ pub fn run(section: Option<&str>, cx: &mut App) {
     // Studio's own cards, corners and springs follow the Look & feel
     // settings live, like the shell's.
     mandara_ui::style::init(cx);
+    mandara_ui::style::follow_system_motion(cx);
     // Links Studio opens (plugin pages, docs) use the browser picked in
     // Applications, like the shell's.
     mandara_ui::plugins::system_admin::init_openers(cx);

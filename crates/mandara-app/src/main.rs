@@ -49,6 +49,9 @@ enum Cmd {
     /// Private inference worker; never starts the shell or connects to IPC.
     #[command(hide = true)]
     AgentWorker,
+    /// Private panel capture worker; never creates a UI or connects to shell IPC.
+    #[command(hide = true)]
+    PanelCaptureWorker,
     /// Start the shell directly, without the restart supervisor.
     Run,
     /// Run a shell command, e.g. `mandara msg audio volume set 40`.
@@ -190,6 +193,7 @@ fn main() -> Result<()> {
     let cli = <Cli as clap::FromArgMatches>::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     match cli.command {
         Some(Cmd::AgentWorker) => mandara_services::command_agent::worker_main(mandara_studio::agent_settings_catalog),
+        Some(Cmd::PanelCaptureWorker) => mandara_services::screencopy::panel::worker_main(),
         Some(Cmd::Setup { autostart, compositor, check, fix_conflicts, restore, fix }) => setup_cli::setup(setup_cli::Options { autostart, compositor, check, fix_conflicts, restore, fix }),
         Some(Cmd::Msg { json, args }) => {
             use std::io::Write as _;

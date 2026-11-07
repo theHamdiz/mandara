@@ -40,6 +40,13 @@ pub fn focus_loss_dismisses(last_press: Option<Instant>, now: Instant) -> bool {
     last_press.is_none_or(|t| now.saturating_duration_since(t) >= PRESS_GRACE)
 }
 
+/// A layer surface can lose activation during a theme change without a
+/// client taking focus. Keep the panel under the pointer in that case;
+/// an actual client focus or a pointer outside still uses the normal grace.
+pub fn deactivation_dismisses(last_press: Option<Instant>, now: Instant, pointer_inside: bool, client_focused: bool) -> bool {
+    (!pointer_inside || client_focused) && focus_loss_dismisses(last_press, now)
+}
+
 /// Where the command being executed came from.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum Origin {
@@ -218,6 +225,17 @@ mod tests {
         assert!(focus_loss_dismisses(None, t0));
         assert!(!focus_loss_dismisses(Some(t0), t0 + PRESS_GRACE / 2), "a click inside just happened");
         assert!(focus_loss_dismisses(Some(t0), t0 + PRESS_GRACE));
+    }
+
+    #[test]
+    fn theme_activation_blips_do_not_close_the_panel_under_the_pointer() {
+        let press = Instant::now();
+        let later = press + PRESS_GRACE + DEACTIVATE_SETTLE;
+        assert!(focus_loss_dismisses(Some(press), later), "the ordinary press grace has expired");
+        assert!(!deactivation_dismisses(Some(press), later, true, false));
+        assert!(deactivation_dismisses(Some(press), later, true, true), "another client really took focus");
+        assert!(deactivation_dismisses(Some(press), later, false, false), "the pointer really left");
+        assert!(!deactivation_dismisses(Some(press), press + DEACTIVATE_SETTLE, false, true), "a recent click still gets its normal grace");
     }
 
     #[test]

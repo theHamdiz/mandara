@@ -39,7 +39,18 @@ pub(crate) fn register(registry: &mut PluginRegistry) {
                     let result = mandara_services::runtime::unblock(move || {
                         let job = Job::default();
                         let (events, replies) = async_channel::bounded(2);
-                        agent::run(Request { query, catalog, engine, prepare_index: prepare }, job.cancellation(), events).map_err(|e| e.to_string())?;
+                        agent::run(
+                            Request {
+                                query,
+                                catalog,
+                                engine,
+                                prepare_index: prepare,
+                                preferred_command: None,
+                            },
+                            job.cancellation(),
+                            events,
+                        )
+                        .map_err(|e| e.to_string())?;
                         let mut received = Vec::new();
                         while let Ok(event) = replies.try_recv() {
                             if let Event::Error { message } = event {
@@ -65,6 +76,16 @@ pub(crate) fn register(registry: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn opening_builtin_readers_needs_no_content_reference() {
+        let mut registry = PluginRegistry::default();
+        crate::plugins::register_builtin(&mut registry);
+        for name in ["quran", "jannah", "calendar"] {
+            let words = vec![name.into(), "open".into()];
+            let resolved = registry.commands.resolve(&words).unwrap();
+            assert!(resolved.spec.args.is_empty());
+        }
+    }
     #[test]
     fn preview_is_documented_and_requires_a_query() {
         let mut registry = PluginRegistry::default();

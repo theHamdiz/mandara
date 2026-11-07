@@ -208,6 +208,7 @@ A side bar shares no edge with the launcher: it opens from the bare screen edge,
 A side bar uses Side bar width
 A single TOML file you can keep, share or import on another machine. Existing files are never overwritten.
 A single column sits in the middle instead of at the left edge
+A slide and fade using your current spring. Replay after adjusting the controls.
 A slim bar of plugin icons and pills on the left and right edges; panels pour out sideways. They replace the widget sidebar on their edges
 A slim bar on the left edge; panels open sideways
 A smoothed spectrum along the screen edge, with a soft glow; only while music plays
@@ -488,6 +489,7 @@ Angle
 Animate opening applications
 Animated current conditions, hourly and 5-day forecast
 Animated sky
+Animation presets
 Animation speed
 Animations
 Anne Frank
@@ -810,6 +812,7 @@ Bottom right command
 Bottom-right corner, or two fingers
 Bounce for attention
 Bounce only while music plays
+Bouncy
 Box
 Box shape
 Break every
@@ -1037,6 +1040,7 @@ Chips for text, links, Markdown, code, CSS, colors, images and files above the l
 Choose Qur'an, hadith or both in Studio
 Choose a .conf or .ovpn file first
 Choose a boot entry for this item in Studio → Power & idle
+Choose a feel, then adjust the spring below
 Choose a file to import
 Choose a file…
 Choose a password for the new keyring
@@ -1281,6 +1285,7 @@ Copy an ayah and its design as a complete PNG image
 Copy as
 Copy as image
 Copy from desktop
+Copy panel image
 Copy path
 Copy picked colors
 Copy report
@@ -1754,6 +1759,7 @@ Downloads
 Downloads the cursor themes you pick from their GitHub releases
 Downloads {size} from speed.cloudflare.com
 Dracula
+Drag a history card left or right to remove it
 Drag around the QR code · Enter scans the whole screen · Esc cancels
 Drag displays to arrange them
 Drag inside the selection to annotate · Ctrl+Z undo · {enter}
@@ -2199,6 +2205,7 @@ Follow Mandara
 Follow Mandara, or a language of its own: its panel, bar item, sidebar card, widgets and the meanings it shows; the rest of Mandara keeps its language
 Follow Quick start above: your plugin shows up here, and in Installed, as soon as you copy it in.
 Follow system
+Follow system preference
 Follow the desktop's light/dark preference, or switch at set times every day
 Follow the player that starts playing
 Follow the pointer
@@ -2579,6 +2586,7 @@ How a slideshow change replaces the wallpaper
 How app icons are drawn
 How big the hot spot in each corner is
 How dark the bar's shadow is
+How far a history card travels before it is dismissed
 How far back the clock sits in the picture: low lets everything but the far background pass in front, high only the nearest things
 How far you have read through a hadith collection
 How fast the dock slides in and out
@@ -3170,6 +3178,7 @@ Little feet of children, two tiny suffering jewels, how can people pass and not 
 Live
 Live CPU and memory of running containers (JSON)
 Live CPU, GPU, memory, temperatures, disk and network on the desktop, as a column or ring gauges
+Live preview
 Live previews
 Live state from the running shell
 Live upload and download rates, public IP and a speed test
@@ -3299,6 +3308,7 @@ Lower it to let your wallpaper and windows show through the bar
 Lower lets windows show through
 Lower lets windows show through popups
 Lower the screen brightness (percent step, default 5)
+Lower values soften bounce; zero makes transitions instant
 Lower volume
 Lowest
 Lyrics
@@ -3597,6 +3607,7 @@ Most used
 Most viewed
 Motherboard
 Motion
+Motion intensity
 Mount
 Mount a volume (polkit may ask for a password)
 Mountain ridges fading into haze under a glowing sun
@@ -4278,6 +4289,8 @@ Open settings
 Open something on your phone, no cable or app needed
 Open tasks the bar item counts: every list, or one list's name
 Open terminal
+Open the Jannah panel
+Open the Qur'an panel
 Open the annotation editor instead of saving at once
 Open the app picker over the dock to add apps by searching
 Open the app you want to exclude, then come back here
@@ -4403,8 +4416,11 @@ Pairing…
 Pairs and connects devices through BlueZ
 Palette
 Panel animation
+Panel capture failed: {error}
 Panel edges
+Panel image copied
 Panel radius
+Panels
 Panels & plugins
 Panels wider or narrower than their natural width
 Panels you popped out of the bar come back where they were after a restart
@@ -4576,6 +4592,7 @@ Play from here
 Play music or video in any MPRIS player
 Play or pause
 Play the adhan now (to hear it; it must be downloaded)
+Playback speed for this surface; zero applies transitions instantly
 Playback state, levels, preset and sleep timer
 Playful, bright cursors in bold colors
 Playing
@@ -5033,6 +5050,7 @@ Repeat the password
 Replace bar items
 Replace my settings?
 Replace the live configuration with a full JSON document (used by Studio)
+Replay
 Reply
 Reply to {app}: {summary}
 Report a problem
@@ -5047,6 +5065,7 @@ Rescan or move closer to an access point
 Rescan the repositories now and update the bar chip
 Reset
 Reset a page
+Reset preview
 Reset today
 Resident {rss} · proportional share {pss} (shared libraries split between the processes using them)
 Resize by dragging borders
@@ -5055,6 +5074,7 @@ Resize horizontally
 Resize vertically
 Resolution
 Resources
+Respect the desktop's reduced-motion preference
 Rest the pointer in a screen corner to run an action; replaces your compositor's own hot corner
 Rest the pointer on the bottom edge
 Restart
@@ -5698,8 +5718,10 @@ Smallest
 Smallest exact file
 Smart update unavailable ({reason}); using the full download
 Smart update: {patch} instead of {full}
+Smooth
 Smoothing
 Snap packages install from the Snap Store with snap, not from files.
+Snappy
 Snooze {n} min
 Snow
 Snow is falling. Wrap up warm.
@@ -5891,6 +5913,7 @@ Study
 Style
 Styles
 Subscribe to an ICS calendar (https / webcal URL, .ics file or folder)
+Subtle
 Success
 Sun
 Sun Tzu
@@ -5920,6 +5943,7 @@ Surah {n} is out of order
 Surah {n} · {count} ayahs
 Surahs
 Surface
+Surface transitions
 Surprise me
 Suspend
 Suspend, then hibernate
@@ -5927,6 +5951,8 @@ Swahili proverb
 Swap the left and right buttons
 Swatch shape
 Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts.
+Swipe distance
+Swipe to dismiss
 Swirl
 Switch
 Switch automatically
@@ -6308,6 +6334,7 @@ The next prayer and the time to it (needs the Prayer times plugin)
 The next prayer and time remaining
 The old pond: a frog jumps in — the sound of the water.
 The oldest go first
+The panel is not visible
 The panel that drops from the bar item, or none.
 The password is empty
 The password needs 8–63 characters
@@ -6424,6 +6451,7 @@ Their old age is an open door; serve them with love while you can.
 Theme
 Theme accent
 Theme crossfade
+Theme files and activation steps: docs/app-themes.md
 Theme follows these colors
 Theme's own
 Theme, bar, motion, typography, wallpaper, sidebar and window look

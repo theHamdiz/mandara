@@ -1340,7 +1340,7 @@ fn critical_pulse(window: &mut Window, cx: &mut App) -> Option<f32> {
 /// stops taking charge (full, held at its limit).
 fn charging_pulse(m: &Shared, window: &mut Window, cx: &mut App) -> Option<f32> {
     let cfg = crate::state::config(cx).read(cx).get();
-    if !cfg.power.charging_pulse || cfg.motion.reduce_motion || crate::bar::autohide::hidden_by_command() {
+    if !cfg.power.charging_pulse || cfg.motion.reduced(mandara_core::spring::system_reduced_motion()) || crate::bar::autohide::hidden_by_command() {
         return None;
     }
     if !m.borrow().state.batteries().next().is_some_and(|b| b.state == ChargeState::Charging) {

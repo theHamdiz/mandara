@@ -52,25 +52,29 @@ impl Frame {
         Ok(Self { width, height, stride, format, bytes })
     }
 
-    fn rgba(&self, data: &[u8]) -> Result<Vec<u8>> {
+    /// Compact padding and unpremultiply channels in the transferred allocation.
+    fn rgba(&self, mut data: Vec<u8>) -> Result<Vec<u8>> {
         if data.len() != self.bytes { bail!("incomplete KWin frame"); }
         let row = self.width as usize * RGBA_BYTES;
-        let mut rgba = Vec::with_capacity(row * self.height as usize);
-        for source in data.chunks_exact(self.stride) {
-            for pixel in source[..row].as_chunks::<RGBA_BYTES>().0 {
+        for y in 0..self.height as usize {
+            for x in 0..self.width as usize {
+                let offset = y * self.stride + x * RGBA_BYTES;
+                let pixel: [u8; RGBA_BYTES] = data[offset..offset + RGBA_BYTES].try_into().expect("validated pixel stride");
                 let mut p = if matches!(self.format, RGB32 | ARGB32 | ARGB32_PREMULTIPLIED) {
-                    let value = u32::from_ne_bytes(*pixel);
+                    let value = u32::from_ne_bytes(pixel);
                     [(value >> 16) as u8, (value >> 8) as u8, value as u8, (value >> 24) as u8]
-                } else { *pixel };
+                } else { pixel };
                 if matches!(self.format, RGB32 | RGBX8888) { p[3] = u8::MAX; }
                 if matches!(self.format, ARGB32_PREMULTIPLIED | RGBA8888_PREMULTIPLIED) && p[3] != u8::MAX {
                     let alpha = u32::from(p[3]);
                     for channel in &mut p[..3] { *channel = (u32::from(*channel) * 255 + alpha / 2).checked_div(alpha).unwrap_or(0).min(255) as u8; }
                 }
-                rgba.extend_from_slice(&p);
+                let dest = y * row + x * RGBA_BYTES;
+                data[dest..dest + RGBA_BYTES].copy_from_slice(&p);
             }
         }
-        Ok(rgba)
+        data.truncate(row * self.height as usize);
+        Ok(data)
     }
 }
 
@@ -79,10 +83,34 @@ pub(super) fn capture(outputs: &[&OutputInfo], cursor: bool) -> Result<Vec<Captu
     capture_on(&conn, outputs, cursor)
 }
 
+/// KWin captures the requested area directly, including on mixed-scale layouts.
+pub(super) fn capture_area(output: &OutputInfo, (x, y, w, h): (i32, i32, i32, i32)) -> Result<Capture> {
+    let conn = crate::runtime::block_on(crate::runtime::session())?;
+    capture_area_on(&conn, output, (x, y, w, h))
+}
+
+/// Translate output-local coordinates without overflowing a signed desktop origin.
+fn capture_area_on(conn: &zbus::Connection, output: &OutputInfo, (x, y, w, h): (i32, i32, i32, i32)) -> Result<Capture> {
+    anyhow::ensure!(w > 0 && h > 0, "invalid panel capture target");
+    let area = (output.logical.0.checked_add(x).context("capture origin overflow")?, output.logical.1.checked_add(y).context("capture origin overflow")?, w, h);
+    let (frame, data) = transfer(conn, "", false, Some(area))?;
+    anyhow::ensure!(frame.bytes <= super::panel::MAX_RAW_BYTES, "panel image exceeds the capture limit");
+    Ok(Capture { output: output.name.clone(), logical: area, width: frame.width, height: frame.height, rgba: frame.rgba(data)? })
+}
+
+/// Capture outputs sequentially using their compositor-reported geometry.
 fn capture_on(conn: &zbus::Connection, outputs: &[&OutputInfo], cursor: bool) -> Result<Vec<Capture>> {
     let mut captures = Vec::with_capacity(outputs.len());
     for info in outputs {
         if info.name.is_empty() || info.logical.2 <= 0 || info.logical.3 <= 0 { bail!("KWin output geometry is incomplete"); }
+        let (frame, data) = transfer(conn, &info.name, cursor, None)?;
+        captures.push(Capture { output: info.name.clone(), logical: info.logical, width: frame.width, height: frame.height, rgba: frame.rgba(data)? });
+    }
+    Ok(captures)
+}
+
+/// Transfer one native frame over a private descriptor, bounding metadata and reads.
+fn transfer(conn: &zbus::Connection, name: &str, cursor: bool, area: Option<(i32, i32, i32, i32)>) -> Result<(Frame, Vec<u8>)> {
         let (mut reader, writer) = UnixStream::pair()?;
         let metadata: Metadata = crate::runtime::block_on(async {
             let proxy = crate::actor::proxy(conn, INTERFACE, OBJECT, INTERFACE).await?;
@@ -93,14 +121,20 @@ fn capture_on(conn: &zbus::Connection, outputs: &[&OutputInfo], cursor: bool) ->
                 // and desktop visible in screenshots, as on other backends.
                 ("hide-caller-windows", Value::from(false)),
             ]);
-            let body = (info.name.as_str(), options, Fd::from(writer.as_fd()));
-            match select(Box::pin(proxy.call("CaptureScreen", &body)), Box::pin(async_io::Timer::after(TIMEOUT))).await {
+            let call = async {
+                match area {
+                    Some((x, y, w, h)) => proxy.call("CaptureArea", &(x, y, w as u32, h as u32, options, Fd::from(writer.as_fd()))).await,
+                    None => proxy.call("CaptureScreen", &(name, options, Fd::from(writer.as_fd()))).await,
+                }
+            };
+            match select(Box::pin(call), Box::pin(async_io::Timer::after(TIMEOUT))).await {
                 Either::Left((result, _)) => result,
                 Either::Right(_) => Err(zbus::Error::Failure("KWin screenshot timed out".into())),
             }
         }).context("KWin ScreenShot2")?;
         drop(writer);
         let frame = Frame::parse(&metadata)?;
+        if area.is_some() { anyhow::ensure!(frame.bytes <= super::panel::MAX_RAW_BYTES, "panel image exceeds the capture limit"); }
         let mut data = vec![0; frame.bytes];
         let deadline = Instant::now() + TIMEOUT;
         let mut offset = 0;
@@ -111,9 +145,7 @@ fn capture_on(conn: &zbus::Connection, outputs: &[&OutputInfo], cursor: bool) ->
             if read == 0 { bail!("incomplete KWin screenshot transfer"); }
             offset += read;
         }
-        captures.push(Capture { output: info.name.clone(), logical: info.logical, width: frame.width, height: frame.height, rgba: frame.rgba(&data)? });
-    }
-    Ok(captures)
+        Ok((frame, data))
 }
 
 #[cfg(test)]
@@ -134,11 +166,14 @@ mod tests {
         bytes.extend_from_slice(&0xff112233u32.to_ne_bytes());
         bytes.extend_from_slice(&0x80402010u32.to_ne_bytes());
         bytes.extend_from_slice(&[9; 4]);
-        assert_eq!(Frame::parse(&metadata(ARGB32)).unwrap().rgba(&bytes).unwrap(), [17, 34, 51, 255, 64, 32, 16, 128]);
-        assert_eq!(Frame::parse(&metadata(ARGB32_PREMULTIPLIED)).unwrap().rgba(&bytes).unwrap(), [17, 34, 51, 255, 128, 64, 32, 128]);
+        assert_eq!(Frame::parse(&metadata(ARGB32)).unwrap().rgba(bytes.clone()).unwrap(), [17, 34, 51, 255, 64, 32, 16, 128]);
+        let pointer = bytes.as_ptr();
+        let converted = Frame::parse(&metadata(ARGB32_PREMULTIPLIED)).unwrap().rgba(bytes).unwrap();
+        assert_eq!(converted.as_ptr(), pointer);
+        assert_eq!(converted, [17, 34, 51, 255, 128, 64, 32, 128]);
         let rgba = [1, 2, 3, 0, 4, 5, 6, 255, 9, 9, 9, 9];
-        assert_eq!(Frame::parse(&metadata(RGBX8888)).unwrap().rgba(&rgba).unwrap(), [1, 2, 3, 255, 4, 5, 6, 255]);
-        assert_eq!(Frame::parse(&metadata(RGBA8888_PREMULTIPLIED)).unwrap().rgba(&rgba).unwrap(), [0, 0, 0, 0, 4, 5, 6, 255]);
+        assert_eq!(Frame::parse(&metadata(RGBX8888)).unwrap().rgba(rgba.to_vec()).unwrap(), [1, 2, 3, 255, 4, 5, 6, 255]);
+        assert_eq!(Frame::parse(&metadata(RGBA8888_PREMULTIPLIED)).unwrap().rgba(rgba.to_vec()).unwrap(), [0, 0, 0, 0, 4, 5, 6, 255]);
     }
 
     #[test]
@@ -148,13 +183,22 @@ mod tests {
             meta.insert(key.into(), value.into());
             assert!(Frame::parse(&meta).is_err(), "{key}");
         }
-        assert!(Frame::parse(&metadata(RGB32)).unwrap().rgba(&[0; 8]).is_err());
+        assert!(Frame::parse(&metadata(RGB32)).unwrap().rgba(vec![0; 8]).is_err());
     }
 
     struct Screenshot;
 
     #[zbus::interface(name = "org.kde.KWin.ScreenShot2")]
     impl Screenshot {
+        fn capture_area(&self, x: i32, y: i32, w: u32, h: u32, options: Metadata, pipe: zbus::zvariant::OwnedFd) -> Metadata {
+            use std::io::Write as _;
+            assert_eq!((x, y, w, h), (-98, 44, 10, 8));
+            assert_eq!(options.get("include-cursor").and_then(|v| bool::try_from(v).ok()), Some(false));
+            assert_eq!(options.get("native-resolution").and_then(|v| bool::try_from(v).ok()), Some(true));
+            let fd: std::os::fd::OwnedFd = pipe.into();
+            std::fs::File::from(fd).write_all(&[1, 2, 3, 255, 4, 5, 6, 255, 0, 0, 0, 0]).unwrap();
+            metadata(RGBA8888)
+        }
         fn capture_screen(&self, name: &str, options: Metadata, pipe: zbus::zvariant::OwnedFd) -> Metadata {
             use std::io::Write as _;
             assert_eq!(name, "fixture");
@@ -181,6 +225,12 @@ mod tests {
         let captures = capture_on(&client, &[&output], true).unwrap();
         assert_eq!(captures[0].logical, output.logical);
         assert_eq!(captures[0].rgba, [1, 2, 3, 255, 4, 5, 6, 255]);
+        let area = capture_area_on(&client, &OutputInfo { name: "fixture".into(), logical: (-100, 40, 200, 100) }, (2, 4, 10, 8)).unwrap();
+        assert_eq!(area.logical, (-98, 44, 10, 8));
+        assert_eq!(area.rgba, captures[0].rgba);
+        for rect in [(0, 0, 0, 8), (0, 0, 10, -1)] {
+            assert!(capture_area_on(&client, &output, rect).unwrap_err().to_string().contains("invalid panel capture target"));
+        }
     }
 
     #[test]

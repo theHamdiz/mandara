@@ -170,7 +170,7 @@ fn upgrade_plugins(cfg: &mut ShellConfig) -> bool {
 
 /// The 0.1 `[integrations]` defaults.
 fn integrations_v0() -> crate::IntegrationsConfig {
-    crate::IntegrationsConfig { version: 0, kvantum_apply: false, firefox: false, ..crate::IntegrationsConfig::all(true) }
+    crate::IntegrationsConfig { version: 0, kvantum_apply: false, firefox: false, cava: false, tmux: false, zellij: false, spicetify: false, ..crate::IntegrationsConfig::all(true) }
 }
 
 /// Records apps that were only themed because 0.1 did so by default as off.

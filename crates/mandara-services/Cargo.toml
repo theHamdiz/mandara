@@ -17,7 +17,7 @@ mock-release = []
 candle-nn = { version = "0.11.1", default-features = false }
 candle-core = { version = "0.11.1", default-features = false }
 candle-transformers = { version = "0.11.1", default-features = false }
-llguidance = { version = "1.9.1", default-features = false }
+llguidance = { version = "1.9.1", default-features = false, features = ["lark"] }
 toktrie_hf_tokenizers = "1.9.1"
 # Match the grammar adapter's tokenizer; no native regex or HTTP backend.
 tokenizers = { version = "0.21.2", default-features = false, features = ["fancy-regex"] }

@@ -89,6 +89,22 @@ fn shell_view(monitor: &str, cx: &App) -> Option<Entity<ShellView>> {
     shell_views(cx).into_iter().find(|(m, _)| m == monitor).map(|(_, v)| v)
 }
 
+/// Copy the visible panel through the same bounded path as its camera button.
+pub fn capture(id: &str, cx: &mut App) -> Result<async_channel::Receiver<Result<String, String>>, String> {
+    if let Some(output) = floating_on(id, cx) {
+        let window = cx.try_global::<Floating>().and_then(|f| f.windows.iter().find(|(o, _)| *o == output).map(|(_, window)| *window));
+        if let Some(window) = window {
+            return window.update(cx, |view, _, cx| view.capture_panel(id, cx)).map_err(|error| error.to_string())?;
+        }
+    }
+    for (_, view) in shell_views(cx) {
+        if view.read(cx).shown_rect(id).is_some() {
+            return view.update(cx, |view, cx| view.capture_panel(id, cx));
+        }
+    }
+    Err(t("The panel is not visible").into())
+}
+
 /// The output `id` floats on, if it does.
 pub fn floating_on(id: &str, cx: &App) -> Option<String> {
     cx.try_global::<Floating>()?.live.iter().find(|(p, _)| p == id).map(|(_, o)| o.clone())

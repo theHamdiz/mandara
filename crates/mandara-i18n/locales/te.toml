@@ -8483,3 +8483,37 @@
 "Build the semantic index for the current command catalog" = "ప్రస్తుత ఆదేశాల జాబితాకు అర్థాధారిత సూచికను రూపొందించండి"
 "Compile a local shell command without executing it" = "స్థానిక షెల్ ఆదేశాన్ని అమలు చేయకుండా కంపైల్ చేయండి"
 "Argument <{name}> must be between {minimum} and {maximum}" = "<{name}> ఆర్గ్యుమెంట్ {minimum} మరియు {maximum} మధ్య ఉండాలి"
+
+# Motion controls and notification gestures
+"A slide and fade using your current spring. Replay after adjusting the controls." = "ప్రస్తుత స్ప్రింగ్‌తో జారడం, మసకబారడం. నియంత్రణలు మార్చాక మళ్లీ ఆడించండి."
+"Animation presets" = "యానిమేషన్ ప్రీసెట్లు"
+"Bouncy" = "ఎగిరేలా"
+"Choose a feel, then adjust the spring below" = "ఒక శైలిని ఎంచుకుని కింద స్ప్రింగ్‌ను సర్దండి"
+"Drag a history card left or right to remove it" = "తొలగించడానికి చరిత్ర కార్డును ఎడమకు లేదా కుడికి లాగండి"
+"Follow system preference" = "సిస్టమ్ ప్రాధాన్యతను అనుసరించు"
+"How far a history card travels before it is dismissed" = "తొలగించే ముందు చరిత్ర కార్డును లాగే దూరం"
+"Live preview" = "ప్రత్యక్ష ముందస్తు వీక్షణ"
+"Lower values soften bounce; zero makes transitions instant" = "తక్కువ విలువలు ఎగరడాన్ని తగ్గిస్తాయి; సున్నా వద్ద మార్పులు తక్షణం"
+"Motion intensity" = "కదలిక తీవ్రత"
+"Panels" = "ప్యానెల్లు"
+"Playback speed for this surface; zero applies transitions instantly" = "ఈ ఉపరితలం వేగం; సున్నా వద్ద మార్పులు తక్షణం"
+"Replay" = "మళ్లీ ఆడించు"
+"Reset preview" = "ముందస్తు వీక్షణ రీసెట్"
+"Respect the desktop's reduced-motion preference" = "డెస్క్‌టాప్ కదలిక తగ్గింపు ప్రాధాన్యతను గౌరవించు"
+"Smooth" = "సాఫీగా"
+"Snappy" = "వేగంగా"
+"Subtle" = "సున్నితంగా"
+"Surface transitions" = "ఉపరితల మార్పులు"
+"Swipe distance" = "స్వైప్ దూరం"
+"Swipe to dismiss" = "తొలగించడానికి స్వైప్"
+"Theme files and activation steps: docs/app-themes.md" = "థీమ్ ఫైళ్లు, ప్రారంభించే దశలు: docs/app-themes.md"
+
+"Open the Qur'an panel" = "ఖురాన్ ప్యానెల్ తెరువు"
+
+"Open the Jannah panel" = "జన్నా ప్యానెల్ తెరువు"
+
+# Panel captures
+"Copy panel image" = "ప్యానెల్ చిత్రాన్ని కాపీ చేయండి"
+"Panel image copied" = "ప్యానెల్ చిత్రం కాపీ అయింది"
+"Panel capture failed: {error}" = "ప్యానెల్ క్యాప్చర్ విఫలమైంది: {error}"
+"The panel is not visible" = "ప్యానెల్ కనిపించడం లేదు"

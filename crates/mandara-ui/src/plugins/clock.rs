@@ -123,6 +123,7 @@ fn day_json(day: NaiveDate, cx: &gpui::App) -> serde_json::Value {
     })
 }
 
+/// Register clock views and calendar actions without loading a calendar source.
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Clock"), mandara_i18n::tk("Time, date and calendar"), Some(Zone::Center)), |window, cx, panel_cx| {
         let bar_text = RefCell::new(BarText::default());
@@ -193,6 +194,10 @@ pub fn register(r: &mut PluginRegistry) {
         let now = Local::now();
         Ok(json!({ "iso": now.to_rfc3339(), "time": fmt::hh_mm(&now), "date": fmt::long_date(&now), "weekday": now.format("%A").to_string() }))
     }));
+    r.command(ID, CommandSpec::new("calendar open", mandara_i18n::tk("Open the calendar"), |_, cx| {
+        crate::state::shell(cx).update(cx, |s, cx| s.set_panel(Some(ID.into()), cx));
+        Ok(json!({"panel": ID}))
+    }).example("calendar open"));
     r.command(
         ID,
         CommandSpec::new("calendar goto", mandara_i18n::tk("Open the clock panel's calendar on a day or month"), |a, cx| {

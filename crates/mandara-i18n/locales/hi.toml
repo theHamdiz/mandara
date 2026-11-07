@@ -8826,3 +8826,37 @@
 "Build the semantic index for the current command catalog" = "वर्तमान कमांड सूची का अर्थ-आधारित सूचकांक बनाएँ"
 "Compile a local shell command without executing it" = "स्थानीय शेल कमांड चलाए बिना कंपाइल करें"
 "Argument <{name}> must be between {minimum} and {maximum}" = "आर्गुमेंट <{name}> का मान {minimum} और {maximum} के बीच होना चाहिए"
+
+# Motion controls and notification gestures
+"A slide and fade using your current spring. Replay after adjusting the controls." = "मौजूदा स्प्रिंग के साथ खिसकना और धुंधला होना। नियंत्रण बदलकर फिर चलाएँ।"
+"Animation presets" = "ऐनिमेशन प्रीसेट"
+"Bouncy" = "उछालदार"
+"Choose a feel, then adjust the spring below" = "एक शैली चुनें, फिर नीचे स्प्रिंग बदलें"
+"Drag a history card left or right to remove it" = "हटाने के लिए इतिहास का कार्ड बाएँ या दाएँ खींचें"
+"Follow system preference" = "सिस्टम की पसंद अपनाएँ"
+"How far a history card travels before it is dismissed" = "हटाने से पहले इतिहास का कार्ड कितनी दूर खींचना है"
+"Live preview" = "लाइव पूर्वावलोकन"
+"Lower values soften bounce; zero makes transitions instant" = "कम मान उछाल घटाते हैं; शून्य पर बदलाव तुरंत होते हैं"
+"Motion intensity" = "गति की तीव्रता"
+"Panels" = "पैनल"
+"Playback speed for this surface; zero applies transitions instantly" = "इस सतह की गति; शून्य पर बदलाव तुरंत लागू होते हैं"
+"Replay" = "फिर चलाएँ"
+"Reset preview" = "पूर्वावलोकन रीसेट करें"
+"Respect the desktop's reduced-motion preference" = "डेस्कटॉप की कम गति की पसंद मानें"
+"Smooth" = "सहज"
+"Snappy" = "तेज़"
+"Subtle" = "हल्का"
+"Surface transitions" = "सतहों के बदलाव"
+"Swipe distance" = "स्वाइप की दूरी"
+"Swipe to dismiss" = "हटाने के लिए स्वाइप करें"
+"Theme files and activation steps: docs/app-themes.md" = "थीम फ़ाइलें और चालू करने के चरण: docs/app-themes.md"
+
+"Open the Qur'an panel" = "क़ुरआन पैनल खोलें"
+
+"Open the Jannah panel" = "जन्नाह पैनल खोलें"
+
+# Panel captures
+"Copy panel image" = "पैनल की छवि कॉपी करें"
+"Panel image copied" = "पैनल की छवि कॉपी की गई"
+"Panel capture failed: {error}" = "पैनल कैप्चर विफल: {error}"
+"The panel is not visible" = "पैनल दिखाई नहीं दे रहा"

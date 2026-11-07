@@ -11,6 +11,7 @@ pub mod bt_pairing;
 pub mod calendar;
 mod capture_output;
 mod capture_pixels;
+mod panel_capture;
 pub mod cards;
 pub mod corners;
 /// Depth layer 3, now the `wallpaper-depth` plugin (kept under its old
@@ -77,6 +78,7 @@ pub mod progress_fill;
 pub mod sidebar_tabs;
 pub mod slider;
 pub mod slider_model;
+mod swipe;
 pub mod todo_lists;
 pub mod recorder;
 pub(crate) mod resample;

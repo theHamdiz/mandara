@@ -8579,3 +8579,37 @@
 "Build the semantic index for the current command catalog" = "현재 명령 목록의 의미 검색 색인 만들기"
 "Compile a local shell command without executing it" = "로컬 셸 명령을 실행하지 않고 컴파일"
 "Argument <{name}> must be between {minimum} and {maximum}" = "인수 <{name}>은(는) {minimum}에서 {maximum} 사이여야 합니다"
+
+# Motion controls and notification gestures
+"A slide and fade using your current spring. Replay after adjusting the controls." = "현재 스프링으로 슬라이드와 페이드를 표시합니다. 조절 후 다시 재생하세요."
+"Animation presets" = "애니메이션 프리셋"
+"Bouncy" = "통통 튀게"
+"Choose a feel, then adjust the spring below" = "스타일을 고른 뒤 아래에서 스프링을 조절하세요"
+"Drag a history card left or right to remove it" = "기록 카드를 왼쪽이나 오른쪽으로 끌어 삭제합니다"
+"Follow system preference" = "시스템 설정 따르기"
+"How far a history card travels before it is dismissed" = "기록 카드를 삭제하기 전까지 끄는 거리"
+"Live preview" = "실시간 미리 보기"
+"Lower values soften bounce; zero makes transitions instant" = "낮은 값은 반동을 줄이고 0은 즉시 전환합니다"
+"Motion intensity" = "동작 강도"
+"Panels" = "패널"
+"Playback speed for this surface; zero applies transitions instantly" = "이 화면의 재생 속도. 0이면 즉시 전환합니다"
+"Replay" = "다시 재생"
+"Reset preview" = "미리 보기 초기화"
+"Respect the desktop's reduced-motion preference" = "데스크톱의 동작 줄이기 설정을 따릅니다"
+"Smooth" = "부드럽게"
+"Snappy" = "빠르게"
+"Subtle" = "은은하게"
+"Surface transitions" = "화면 전환"
+"Swipe distance" = "스와이프 거리"
+"Swipe to dismiss" = "밀어서 삭제"
+"Theme files and activation steps: docs/app-themes.md" = "테마 파일과 활성화 단계: docs/app-themes.md"
+
+"Open the Qur'an panel" = "꾸란 패널 열기"
+
+"Open the Jannah panel" = "잔나 패널 열기"
+
+# Panel captures
+"Copy panel image" = "패널 이미지 복사"
+"Panel image copied" = "패널 이미지가 복사됨"
+"Panel capture failed: {error}" = "패널 캡처 실패: {error}"
+"The panel is not visible" = "패널이 표시되지 않습니다"

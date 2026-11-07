@@ -722,6 +722,7 @@ fn settled(window: &Window, g: Geometry) -> bool {
 }
 
 impl Render for OsdView {
+    /// Paint an active OSD using its own motion speed while leaving input transparent.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Clicks always pass through: the input region stays empty.
         let commit = self.mask.commit();
@@ -737,8 +738,9 @@ impl Render for OsdView {
         }
         let Some(event) = event else { return div().size_full().child(commit).into_any_element() };
         let cfg = config(cx).read(cx).snapshot();
+        let _motion = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(cfg.motion.surfaces.osd));
         let visible = shown_at.is_some_and(|t| t.elapsed() < hold(&cfg)) && cfg.general.osd;
-        let reduce = cfg.motion.reduce_motion;
+        let reduce = mandara_core::spring::motion_profile().reduce;
         self.presence.set_instant(reduce);
         self.level.set_instant(reduce);
         self.presence.set_target(if visible { 1.0 } else { 0.0 });

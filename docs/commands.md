@@ -59,6 +59,7 @@ mandara msg launcher toggle
 mandara msg shell state                     # what is open (panel, sidebar, launcher, menus) and whether the launcher opens on hover
 mandara msg hotcorners status               # each corner's action and state per display, recent fires; hotcorners trigger top-left
 mandara msg panel open media
+mandara msg panel capture media             # copy a visible docked or floating panel as PNG
 mandara msg theme set mandara-corniche      # theme list, current, next, mode toggle, wallpaper, seeds, export
 mandara msg theme mode toggle
 mandara msg look apply corniche-dusk        # look list; look restore brings back your own setup
@@ -329,6 +330,8 @@ mandara msg breaks status            # now [short|long], skip, snooze [minutes],
 mandara msg presentation toggle      # on, off, status
 mandara msg share clipboard          # text <text>, file <path>, screenshot, stop, status
 mandara msg jannah today             # next, prev, peek [n], show <ref>, search <query>, paths, step [done|peek [days]], saved, language [code|follow]
+mandara msg quran open                 # open the panel without a verse reference
+mandara msg jannah open                # open the panel without a hadith reference
 mandara msg quran read 2:255           # surahs, today, peek [days], search <q>, play <ref|surah>, pause, resume, stop, bookmark add|remove <ref>, download, status, remove, language [code|follow]
 mandara msg hadith show bukhari 1      # collections, download|remove <collection|all>, today, peek [n], search <q> [--collection c] [--grade g], bookmarks, language [code|follow]
 mandara msg quran copy-image 2:255     # full ayah design; meaning follows Study mode
@@ -418,6 +421,7 @@ mandara msg cursor install bibata/ice   # download the pinned GitHub release, ve
 mandara msg cursor apply bibata/ice 32  # theme (catalog id[/variant] or XCursor name) and optional size, live; `none` = your compositor's
 mandara msg cursor remove bibata     # every variant Mandara installed (or one: bibata/ice); never a package's or your own
 mandara msg calendar add webcal://example.com/holidays.ics Holidays  # calendar [days], sources, remove <n>, refresh
+mandara msg calendar open            # open the shell calendar without a calendar source
 mandara msg calendar goto 2026-12     # open the clock panel's calendar there: today, next, prev, +N / -N days, YYYY-MM, YYYY-MM-DD
 mandara msg calendar day 2026-12-25   # one day as JSON: its events, ISO week, day of the year and Hijri date
 mandara msg location locate          # geoclue|ip; location search <city>, geocode, set <lat> <lon> [name]

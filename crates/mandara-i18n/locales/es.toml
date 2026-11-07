@@ -8819,3 +8819,37 @@
 "Build the semantic index for the current command catalog" = "Construir el índice semántico del catálogo de órdenes actual"
 "Compile a local shell command without executing it" = "Compilar una orden local sin ejecutarla"
 "Argument <{name}> must be between {minimum} and {maximum}" = "El argumento <{name}> debe estar entre {minimum} y {maximum}"
+
+# Motion controls and notification gestures
+"A slide and fade using your current spring. Replay after adjusting the controls." = "Deslizamiento y fundido con el resorte actual. Repite tras ajustar los controles."
+"Animation presets" = "Preajustes de animación"
+"Bouncy" = "Con rebote"
+"Choose a feel, then adjust the spring below" = "Elige un estilo y ajusta el resorte abajo"
+"Drag a history card left or right to remove it" = "Arrastra una tarjeta del historial a izquierda o derecha para quitarla"
+"Follow system preference" = "Seguir la preferencia del sistema"
+"How far a history card travels before it is dismissed" = "Distancia que debe recorrer una tarjeta antes de descartarla"
+"Live preview" = "Vista previa en directo"
+"Lower values soften bounce; zero makes transitions instant" = "Los valores bajos suavizan el rebote; cero hace las transiciones instantáneas"
+"Motion intensity" = "Intensidad del movimiento"
+"Panels" = "Paneles"
+"Playback speed for this surface; zero applies transitions instantly" = "Velocidad de esta superficie; cero aplica las transiciones al instante"
+"Replay" = "Repetir"
+"Reset preview" = "Restablecer vista previa"
+"Respect the desktop's reduced-motion preference" = "Respetar la preferencia del escritorio de reducir el movimiento"
+"Smooth" = "Suave"
+"Snappy" = "Ágil"
+"Subtle" = "Sutil"
+"Surface transitions" = "Transiciones de superficies"
+"Swipe distance" = "Distancia del deslizamiento"
+"Swipe to dismiss" = "Deslizar para descartar"
+"Theme files and activation steps: docs/app-themes.md" = "Archivos de tema y pasos de activación: docs/app-themes.md"
+
+"Open the Qur'an panel" = "Abrir el panel del Corán"
+
+"Open the Jannah panel" = "Abrir el panel de Jannah"
+
+# Panel captures
+"Copy panel image" = "Copiar imagen del panel"
+"Panel image copied" = "Imagen del panel copiada"
+"Panel capture failed: {error}" = "Error al capturar el panel: {error}"
+"The panel is not visible" = "El panel no está visible"

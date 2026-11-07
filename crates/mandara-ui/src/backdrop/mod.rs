@@ -457,6 +457,7 @@ fn video_outputs(cfg: &mandara_config::ShellConfig, outputs: &[String], dark: bo
         .collect()
 }
 
+/// Resolve one desktop scene, including any widget position currently being dragged.
 fn build_scene(outputs: &[String], cx: &mut App) -> Scene {
     let mut cfg = crate::state::config(cx).read(cx).snapshot();
     let editing = crate::desktop_edit::active(cx);
@@ -539,7 +540,7 @@ fn build_scene(outputs: &[String], cx: &mut App) -> Scene {
         masks,
         mask_generation: entity.read(cx).generation,
         ring,
-        reduce_motion: cfg.motion.reduce_motion,
+        reduce_motion: cfg.motion.reduced(mandara_core::spring::system_reduced_motion()),
         depth_clock_displays: cfg.desktop.widgets.depth_clock().map(|(w, _)| w.place.displays.clone()).unwrap_or_default(),
         widgets,
         safe_bar: widgets::safe_insets(&cfg, true),

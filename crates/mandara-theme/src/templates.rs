@@ -10,6 +10,8 @@ use crate::color::Color;
 use crate::palette::MandaraPalette;
 
 mod apps;
+mod terminal_apps;
+pub use terminal_apps::{cava, tmux, zellij, spicetify, spicetify_css};
 mod ledger;
 pub use ledger::{BACKUP_SUFFIX, Ledger, MARKER, backup_path, fnv1a};
 pub use apps::{alacritty, firefox_userchrome, foot, helix, kde, kitty, neovim, pywal_json, vesktop, wezterm};
@@ -33,6 +35,10 @@ pub struct Targets {
 /// Which of the additional apps to theme (see [`sync_apps`]).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct AppTargets {
+    pub cava: bool,
+    pub tmux: bool,
+    pub zellij: bool,
+    pub spicetify: bool,
     pub kitty: bool,
     pub foot: bool,
     pub alacritty: bool,
@@ -679,7 +685,12 @@ pub fn sync_apps(p: &MandaraPalette, targets: AppTargets, cache_dir: &Path, conf
         put(cache_dir.join("firefox/colors.json"), pywal_json(p, ""));
         put(cache_dir.join("firefox/userChrome.css"), firefox_userchrome(p));
     }
-    let owned: [OwnedTheme; 6] = [
+    let owned: [OwnedTheme; 11] = [
+        (targets.cava, "cava", config_dir.join("cava/themes/mandara"), cava),
+        (targets.tmux, "tmux", config_dir.join("tmux/mandara.conf"), tmux),
+        (targets.zellij, "zellij", config_dir.join("zellij/themes/mandara.kdl"), zellij),
+        (targets.spicetify, "spicetify", config_dir.join("spicetify/Themes/Mandara/color.ini"), spicetify),
+        (targets.spicetify, "spicetify", config_dir.join("spicetify/Themes/Mandara/user.css"), spicetify_css),
         (targets.kitty, "kitty", config_dir.join("kitty/themes/mandara.conf"), kitty),
         (targets.wezterm, "wezterm", config_dir.join("wezterm/colors/mandara.toml"), wezterm),
         (targets.helix, "helix", config_dir.join("helix/themes/mandara.toml"), helix),
@@ -851,10 +862,11 @@ mod tests {
         // A user's own kitty.conf stays byte-identical.
         std::fs::create_dir_all(config.join("kitty")).unwrap();
         std::fs::write(config.join("kitty/kitty.conf"), "font_size 11\n").unwrap();
-        let all = AppTargets { kitty: true, foot: true, alacritty: true, wezterm: true, helix: true, neovim: true, firefox: true, vesktop: true, kde: true };
+        let all = AppTargets { cava: true, tmux: true, zellij: true, spicetify: true, kitty: true, foot: true, alacritty: true, wezterm: true, helix: true, neovim: true, firefox: true, vesktop: true, kde: true };
         let mut ledger = Ledger::default();
         let files = sync_apps(&palette(), all, &cache, &config, &data, &mut ledger);
-        assert_eq!(files.len(), 11);
+        assert_eq!(files.len(), 16);
+        assert!(config.join("spicetify/Themes/Mandara/user.css").is_file());
         assert!(files.iter().all(|f| f.starts_with(&dir) && f.is_file()));
         assert_eq!(std::fs::read_to_string(config.join("kitty/kitty.conf")).unwrap(), "font_size 11\n");
         assert!(data.join("color-schemes/Mandara.colors").is_file());
@@ -929,6 +941,10 @@ mod tests {
 
     /// The main config files of every themed app, as a user might have them.
     const USER_FILES: &[(&str, &str)] = &[
+        ("cava/config", "[color]\ntheme = 'mandara'\n"),
+        ("tmux/tmux.conf", "set -g mouse on\n"),
+        ("zellij/config.kdl", "theme \"mandara\"\n"),
+        ("spicetify/config-xpui.ini", "[Setting]\ncurrent_theme = Mine\n"),
         ("ghostty/config", "theme = mandara\nfont-size = 12\n"),
         ("kitty/kitty.conf", "include themes/mandara.conf\n"),
         ("foot/foot.ini", "[main]\nfont=JetBrains Mono:size=11\n"),
@@ -951,7 +967,7 @@ mod tests {
 
     const ALL_TARGETS: Targets = Targets { ghostty: true, gtk: true, qt6: true, zed: true, fuzzel: true, btop: true, kvantum: true, kvantum_apply: false };
     const NO_TARGETS: Targets = Targets { ghostty: false, gtk: false, qt6: false, zed: false, fuzzel: false, btop: false, kvantum: false, kvantum_apply: false };
-    const ALL_APPS: AppTargets = AppTargets { kitty: true, foot: true, alacritty: true, wezterm: true, helix: true, neovim: true, firefox: true, vesktop: true, kde: true };
+    const ALL_APPS: AppTargets = AppTargets { cava: true, tmux: true, zellij: true, spicetify: true, kitty: true, foot: true, alacritty: true, wezterm: true, helix: true, neovim: true, firefox: true, vesktop: true, kde: true };
 
     #[test]
     fn user_configs_are_never_overwritten() {

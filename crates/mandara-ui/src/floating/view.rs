@@ -38,6 +38,7 @@ use super::{bounds_of, rect_of};
 use crate::fonts::fonts;
 use crate::plugins::panel_fx::{elevation_scaled, surface_edge};
 use crate::state::config;
+use mandara_i18n::t;
 
 /// Height of the grab strip along a card's top.
 const STRIP_PX: f32 = 28.0;
@@ -97,6 +98,7 @@ enum Leaving {
 
 struct Card {
     id: String,
+    capture: Option<crate::panel_capture::Owner>,
     /// The plugin factory generation it was built from (a hot reload or
     /// switching the plugin off closes it).
     generation: u64,
@@ -183,6 +185,12 @@ impl FloatingView {
         self.cards.is_empty()
     }
 
+    pub(crate) fn capture_panel(&mut self, id: &str, cx: &mut Context<Self>) -> Result<async_channel::Receiver<Result<String, String>>, String> {
+        let card = self.cards.iter().find(|card| card.id == id && card.leaving.is_none()).ok_or_else(|| t("The panel is not visible").to_string())?;
+        let state = card.capture.as_ref().ok_or_else(|| t("The panel is not visible").to_string())?.state.clone();
+        crate::panel_capture::start(&state, card.bounds.value(), self.surface, cx)
+    }
+
     /// Where cards may go: the output less the bar's band.
     fn area(&self, cfg: &ShellConfig) -> crate::dismiss::Rect {
         let zone = crate::shell::ExclusionView::zone_for(cfg.bar.position, cfg, &self.output);
@@ -223,8 +231,10 @@ impl FloatingView {
         let mut appear = SpringValue::new(if shown { 1.0 } else { 0.0 }, APPEAR_SPRING);
         appear.set_target(1.0);
         panel_cx.set_progress(appear.value());
+        let capture = crate::panel_capture::Owner::new(self.output.clone(), cx);
         self.cards.push(Card {
             id: id.to_string(),
+            capture: Some(capture),
             generation,
             spec,
             panel_cx,
@@ -290,6 +300,7 @@ impl FloatingView {
         let typing_here = self.typing_in(id, window, cx);
         let Some(card) = self.card_mut(id) else { return };
         card.leaving = Some(Leaving::Dock { pinned, snap: target.is_some() });
+        card.capture = None;
         match target {
             Some(t) => {
                 card.bounds.set_target(t);
@@ -312,6 +323,7 @@ impl FloatingView {
         let typing_here = self.typing_in(id, window, cx);
         let Some(card) = self.card_mut(id) else { return };
         card.leaving = Some(Leaving::Close);
+        card.capture = None;
         let shrunk = shrink(card.bounds.target(), APPEAR_SHRINK);
         card.bounds.set_target(shrunk);
         card.appear.set_target(0.0);
@@ -508,7 +520,8 @@ impl FloatingView {
         animating
     }
 
-    fn card_element(&self, card: &Card, cfg: &ShellConfig, palette: &mandara_theme::MandaraPalette, panels_font: SharedString, cx: &mut Context<Self>) -> AnyElement {
+    /// Build the card chrome and controls around its cached plugin content.
+    fn card_element(&self, card: &Card, cfg: &ShellConfig, palette: &mandara_theme::MandaraPalette, panels_font: SharedString, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let b = card.bounds.value();
         let a = card.appear.value().clamp(0.0, 1.0);
         let reveal = card.hover.value().clamp(0.0, 1.0);
@@ -540,6 +553,7 @@ impl FloatingView {
             .opacity(reveal)
             // The buttons never start a drag.
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .when_some(card.capture.as_ref(), |row, capture| row.child(crate::panel_capture::button(&capture.state, b, self.surface, CONTROL_PX, fg, palette, window, cx)))
             .child(crate::kit::icon_button(SharedString::from(format!("float-dock-{id}")), dock_icon, CONTROL_PX, fg, None, move |_, cx| {
                 let id = dock_id.clone();
                 cx.defer(move |cx| {
@@ -650,11 +664,13 @@ impl FloatingView {
 }
 
 impl Render for FloatingView {
+    /// Step moving cards at the panel speed and publish their current input bounds.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Frame timing for Studio → Performance (`diagnostics frames`).
         let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
         let now = Instant::now();
         let cfg = config(cx).read(cx).snapshot();
+        let _motion = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(cfg.motion.surfaces.panels));
         let palette = mandara_core::frame_palette(window, cx);
         let f = fonts(cx);
         let viewport = window.viewport_size();
@@ -727,7 +743,7 @@ impl Render for FloatingView {
                     .on_mouse_down(MouseButton::Middle, release(MouseButton::Middle)),
             );
         }
-        let cards: Vec<AnyElement> = self.cards.iter().map(|c| self.card_element(c, &cfg, &palette, f.panels.clone(), cx)).collect();
+        let cards: Vec<AnyElement> = self.cards.iter().map(|c| self.card_element(c, &cfg, &palette, f.panels.clone(), window, cx)).collect();
         // The input region: the cards as drawn this frame, or everything.
         let rects: Vec<crate::dismiss::Rect> = self.cards.iter().map(|c| rect_of(c.bounds.value())).collect();
         let all = everything.then(|| crate::dismiss::Rect::new(0.0, 0.0, self.surface.0, self.surface.1));

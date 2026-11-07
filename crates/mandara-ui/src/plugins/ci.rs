@@ -691,7 +691,7 @@ fn chip(m: &Shared, palette: &MandaraPalette, window: &mut Window, cx: &mut App)
     if running {
         let accent = readable(palette.primary, palette);
         let track = palette.on_surface.with_alpha(RING_TRACK_ALPHA);
-        let reduced = cx.reduce_motion() || crate::state::config(cx).read(cx).get().motion.reduce_motion;
+        let reduced = cx.reduce_motion() || crate::state::config(cx).read(cx).get().motion.reduced(mandara_core::spring::system_reduced_motion());
         boxed = boxed.child(ring::draw(side, mb.epoch.elapsed(), reduced, accent, track));
         if !reduced {
             redraw_in(ring::STEP, window, cx);

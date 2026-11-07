@@ -1878,12 +1878,13 @@ impl Render for LauncherView {
         for (path, edge) in self.icons.begin_frame() {
             crate::icon_raster::forget_edge(&path, edge, window, cx);
         }
-        if self.look.style == mandara_config::workflow::LauncherStyle::Beacon {
-            return self.render_beacon(window, cx);
-        }
         let palette = mandara_core::frame_palette(window, cx);
         let f = fonts(cx);
         let cfg = config(cx).read(cx).snapshot();
+        let _motion = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(cfg.motion.surfaces.launcher));
+        if self.look.style == mandara_config::workflow::LauncherStyle::Beacon {
+            return self.render_beacon(window, cx);
+        }
         let look = self.look.clone();
         let viewport = window.viewport_size();
         let (sw, sh) = (f32::from(viewport.width), f32::from(viewport.height));

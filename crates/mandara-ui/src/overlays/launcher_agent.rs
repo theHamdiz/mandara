@@ -9,6 +9,7 @@ pub(super) struct Agent {
     job: Option<Job>,
     task: Option<gpui::Task<()>>,
     words: Option<Vec<Vec<String>>>,
+    candidates: Vec<agent::Match>,
 }
 
 /// Examples are queries, not precompiled commands; clicking still shows a preview.
@@ -26,6 +27,48 @@ fn row(label: impl Into<String>, detail: impl Into<String>, key: &str) -> Item {
         keywords: String::new(),
         action: HitAction::Command(vec![]),
     })
+}
+
+/// Candidates stay selectable after compilation; choosing one compiles it afresh.
+fn candidate_rows(matches: &[agent::Match]) -> Vec<Item> {
+    matches
+        .iter()
+        .map(|m| {
+            row(
+                tr(&m.command.summary),
+                &m.command.path,
+                &format!("candidate:{}", m.command.path),
+            )
+        })
+        .collect()
+}
+
+/// Keep the complete alternatives beneath the executable preview.
+fn compiled_rows(
+    actions: &[agent::catalog::Action],
+    words: &[Vec<String>],
+    candidates: &[agent::Match],
+    inference_ms: f64,
+) -> Vec<Item> {
+    let alternatives = candidate_rows(candidates);
+    let mut results = Vec::with_capacity(1 + actions.len() + alternatives.len());
+    results.push(row(
+        t("Run these shell actions"),
+        tf(
+            "Compiled in {time} ms",
+            &[("time", &format!("{inference_ms:.0}"))],
+        ),
+        "run",
+    ));
+    for (index, (action, words)) in actions.iter().zip(words).enumerate() {
+        results.push(row(
+            preview_label(&action.command, &alternatives),
+            agent::catalog::cli(words),
+            &format!("action:{index}"),
+        ));
+    }
+    results.extend(alternatives);
+    results
 }
 
 /// Keep the translated candidate title beside the exact executable command.
@@ -47,6 +90,15 @@ fn resolution_error(words: &[Vec<String>], registry: &mandara_plugins::CommandRe
 impl LauncherView {
     /// Returns before standard search, so agent queries cannot become web searches.
     pub(super) fn agent_refilter(&mut self, cx: &mut Context<Self>) -> bool {
+        self.agent_refilter_selected(None, cx)
+    }
+
+    /// Recompile a chosen alternative against the original query and current catalog.
+    fn agent_refilter_selected(
+        &mut self,
+        preferred_command: Option<String>,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if agent::query(&self.query).is_none() {
             self.agent = None;
             return false;
@@ -107,6 +159,7 @@ impl LauncherView {
                 query,
                 catalog,
                 prepare_index: false,
+                preferred_command,
                 engine: match cfg.engine {
                     mandara_config::agent::AgentEngine::FunctionGemma => agent::Engine::FunctionGemma,
                     mandara_config::agent::AgentEngine::Qwen => agent::Engine::Qwen,
@@ -141,15 +194,22 @@ impl LauncherView {
                         }
                         match event {
                             Event::Matches { matches, .. } => {
-                                this.results = matches.into_iter().map(|m| row(tr(&m.command.summary), m.command.path, "hint")).collect();
-                            }
-                            Event::Ready { actions, words, inference_ms } => {
-                                let mut results =
-                                    vec![row(t("Run these shell actions"), tf("Compiled in {time} ms", &[("time", &format!("{inference_ms:.0}"))]), "run")];
-                                for (action, words) in actions.iter().zip(&words) {
-                                    results.push(row(preview_label(&action.command, &this.results), agent::catalog::cli(words), "hint"));
+                                this.results = candidate_rows(&matches);
+                                if let Some(state) = this.agent.as_mut() {
+                                    state.candidates = matches;
                                 }
-                                this.results = results;
+                            }
+                            Event::Ready {
+                                actions,
+                                words,
+                                inference_ms,
+                            } => {
+                                let candidates = this
+                                    .agent
+                                    .as_ref()
+                                    .map_or(&[][..], |state| state.candidates.as_slice());
+                                this.results =
+                                    compiled_rows(&actions, &words, candidates, inference_ms);
                                 if let Some(state) = this.agent.as_mut() {
                                     state.words = Some(words);
                                 }
@@ -159,7 +219,14 @@ impl LauncherView {
                                     vec![row(t("Local AI Agent models are not installed"), t("Open Studio to download the required models"), "setup")];
                             }
                             Event::Error { message } => {
-                                this.results = vec![row(t("The local agent could not compile this command"), message, "setup")];
+                                this.results = vec![row(
+                                    t("The local agent could not compile this command"),
+                                    message,
+                                    "setup",
+                                )];
+                                if let Some(state) = this.agent.as_ref() {
+                                    this.results.extend(candidate_rows(&state.candidates));
+                                }
                             }
                         }
                         this.selected = 0;
@@ -182,19 +249,31 @@ impl LauncherView {
     /// Open setup, select an example or validate and execute the compiled preview.
     pub(super) fn activate_agent(&mut self, index: usize, cx: &mut Context<Self>) {
         let key = match self.results.get(index) {
-            Some(Item::Hit(hit)) => hit.key.as_str(),
+            Some(Item::Hit(hit)) => hit.key.clone(),
             _ => return,
         };
-        if key == "setup" {
+        if let Some(command) = key.strip_prefix("candidate:") {
+            self.agent_refilter_selected(Some(command.to_owned()), cx);
+        } else if key == "setup" {
             self.close(cx);
             execute(Effect::Commands(vec![vec!["studio".into(), "ai-shell-agent".into()]]), cx);
         } else if let Ok(i) = key.parse::<usize>() {
             if let Some(example) = EXAMPLES.get(i) {
                 self.set_query(format!("!{example}"), cx);
             }
-        } else if matches!(key, "run" | "hint")
-            && let Some(words) = self.agent.as_mut().and_then(|state| state.words.take())
+        } else if (key == "run" || key.starts_with("action:"))
+            && let Some(mut words) = self.agent.as_mut().and_then(|state| state.words.take())
         {
+            if let Some(index) = key
+                .strip_prefix("action:")
+                .and_then(|s| s.parse::<usize>().ok())
+            {
+                if index >= words.len() {
+                    return;
+                }
+                words.swap(0, index);
+                words.truncate(1);
+            }
             // All steps are validated before the first one runs. The ordinary
             // dispatcher still checks live plugin and compositor availability.
             let registry = &cx.global::<mandara_plugins::PluginRegistry>().commands;
@@ -236,5 +315,28 @@ mod tests {
         let item = row("hint", "detail", "hint");
         assert!(matches!(item, Item::Hit(Hit { action:HitAction::Command(ref words), .. }) if words.is_empty()));
         assert_eq!(EXAMPLES.len(), 3);
+    }
+
+    #[test]
+    fn alternatives_keep_their_own_selection_instead_of_running_the_preview() {
+        let matches: Vec<agent::Match> = serde_json::from_value(serde_json::json!([
+            {"command":{"path":"quran open","summary":"Open the Qur'an panel"},"score":0.9},
+            {"command":{"path":"quran read","summary":"Open the reader"},"score":0.8}
+        ]))
+        .unwrap();
+        let rows = candidate_rows(&matches);
+        assert_eq!(rows.len(), 2);
+        assert!(
+            matches!(&rows[1], Item::Hit(hit) if hit.key == "candidate:quran read" && matches!(&hit.action, HitAction::Command(words) if words.is_empty()))
+        );
+        let actions = vec![agent::catalog::Action {
+            command: "quran open".into(),
+            args: Default::default(),
+        }];
+        let words = vec![vec!["quran".into(), "open".into()]];
+        let compiled = compiled_rows(&actions, &words, &matches, 10.0);
+        assert_eq!(compiled.len(), 4);
+        assert!(matches!(&compiled[1], Item::Hit(hit) if hit.key == "action:0"));
+        assert!(matches!(&compiled[3], Item::Hit(hit) if hit.key == "candidate:quran read"));
     }
 }

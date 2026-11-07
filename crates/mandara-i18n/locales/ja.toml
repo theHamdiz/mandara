@@ -8826,3 +8826,37 @@
 "Build the semantic index for the current command catalog" = "現在のコマンド一覧の意味検索インデックスを作成"
 "Compile a local shell command without executing it" = "ローカルシェルコマンドを実行せずにコンパイル"
 "Argument <{name}> must be between {minimum} and {maximum}" = "引数 <{name}> は {minimum} から {maximum} の範囲で指定してください"
+
+# Motion controls and notification gestures
+"A slide and fade using your current spring. Replay after adjusting the controls." = "現在のばねでスライドとフェードを表示します。設定後に再生してください。"
+"Animation presets" = "アニメーションのプリセット"
+"Bouncy" = "弾む"
+"Choose a feel, then adjust the spring below" = "動きを選び、下でばねを調整します"
+"Drag a history card left or right to remove it" = "履歴カードを左右にドラッグして削除します"
+"Follow system preference" = "システム設定に従う"
+"How far a history card travels before it is dismissed" = "履歴カードを削除するまでのドラッグ距離"
+"Live preview" = "ライブプレビュー"
+"Lower values soften bounce; zero makes transitions instant" = "値を下げると跳ね返りが弱まり、ゼロでは即座に切り替わります"
+"Motion intensity" = "動きの強さ"
+"Panels" = "パネル"
+"Playback speed for this surface; zero applies transitions instantly" = "この画面の再生速度。ゼロでは即座に切り替わります"
+"Replay" = "再生"
+"Reset preview" = "プレビューをリセット"
+"Respect the desktop's reduced-motion preference" = "デスクトップの動きを減らす設定に従います"
+"Smooth" = "滑らか"
+"Snappy" = "きびきび"
+"Subtle" = "控えめ"
+"Surface transitions" = "画面の切り替え"
+"Swipe distance" = "スワイプ距離"
+"Swipe to dismiss" = "スワイプして削除"
+"Theme files and activation steps: docs/app-themes.md" = "テーマファイルと有効化手順: docs/app-themes.md"
+
+"Open the Qur'an panel" = "クルアーンのパネルを開く"
+
+"Open the Jannah panel" = "ジャンナのパネルを開く"
+
+# Panel captures
+"Copy panel image" = "パネル画像をコピー"
+"Panel image copied" = "パネル画像をコピーしました"
+"Panel capture failed: {error}" = "パネルのキャプチャに失敗しました: {error}"
+"The panel is not visible" = "パネルは表示されていません"

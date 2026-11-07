@@ -22,6 +22,7 @@ use serde_json::Value;
 
 mod maint_page;
 mod agent_page;
+mod motion_page;
 mod depth_model_row;
 mod recorder_row;
 mod nav;
@@ -103,6 +104,7 @@ fn begin_move(window: &mut Window) {
 
 pub struct StudioView {
     agent_page: Option<Entity<agent_page::AgentPage>>,
+    motion_preview: Option<Entity<motion_page::Preview>>,
     section: Section,
     bars_tab: registry::bars::BarsTab,
     search: Entity<TextField>,
@@ -230,7 +232,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { agent_page: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default() }
+        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -243,6 +245,7 @@ impl StudioView {
         if section != self.section {
             self.launcher_data.release();
             self.agent_page = None;
+            self.motion_preview = None;
             if section == Section::Maintenance { self.maint.invalidate(); }
             self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
             self.themes = None;
@@ -274,7 +277,8 @@ impl StudioView {
     /// e.g. a widget's settings button showing every weather setting).
     pub fn show_search(&mut self, query: &str, cx: &mut Context<Self>) {
         self.launcher_data.release();
-            self.agent_page = None;
+        self.agent_page = None;
+        self.motion_preview = None;
         self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
         self.query = query.to_string();
         self.search.update(cx, |f, _| f.set(query));
@@ -1280,7 +1284,7 @@ impl StudioView {
         // Each card's background follows its language pack's download.
         let ui_rtl = mandara_ui::bidi::rtl();
         let mut wakes = Vec::new();
-        let visuals = self.lang_fills.frame(cfg.motion.reduce_motion, window, |after| wakes.push(after));
+        let visuals = self.lang_fills.frame(cfg.motion.reduced(mandara_core::spring::system_reduced_motion()), window, |after| wakes.push(after));
         for after in wakes {
             cx.spawn(async move |this, cx| {
                 cx.background_executor().timer(after).await;
@@ -1696,7 +1700,10 @@ impl Render for StudioView {
         let cfg = config(cx).read(cx).snapshot();
         registry::prime(&cfg);
         self.launcher_follow(&cfg, window, cx);
-        if !self.query.is_empty() || !window.is_visible() { self.agent_page = None; }
+        if !self.query.is_empty() || !window.is_visible() {
+            self.agent_page = None;
+            self.motion_preview = None;
+        }
         let fonts = mandara_ui::fonts::fonts(cx);
         // Choices measure their labels in Studio's font this frame.
         choice::begin_frame(window, fonts.studio.clone());
@@ -1728,6 +1735,7 @@ impl Render for StudioView {
         } else {
             let body = match self.section {
                 Section::AiShellAgent => self.agent_page(&cfg, &p, cx),
+                Section::Motion => self.motion_page(&cfg, &p, cx),
                 Section::Home => self.home_page(&cfg, &p, window, cx),
                 Section::Themes => self.themes_page(&cfg, &p, cx),
                 Section::Plugins => self.store_page(&cfg, &p, window, cx),

@@ -74,6 +74,7 @@ fn evaluate(state: &Rc<RefCell<AutoState>>, cx: &mut App) {
     }
 }
 
+/// Restore automatic theme state off-thread and follow shared appearance preferences.
 pub fn init(cx: &mut App) {
     let initial_theme = config(cx).read(cx).get().theme.clone();
     let path = mandara_config::paths::state_dir().join("theme-auto.json");
@@ -106,8 +107,11 @@ pub fn init(cx: &mut App) {
     let s = state.clone();
     cx.spawn(async move |cx| {
         while let Ok(pref) = prefs.recv().await {
-            s.borrow_mut().system = Some(pref);
-            cx.update(|cx| evaluate(&s, cx));
+            s.borrow_mut().system = Some(pref.dark);
+            cx.update(|cx| {
+                crate::style::system_motion_changed(pref.reduced_motion, cx);
+                evaluate(&s, cx);
+            });
         }
     })
     .detach();

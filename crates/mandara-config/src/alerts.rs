@@ -29,6 +29,8 @@ pub mod defaults {
     pub const HISTORY_MAX: usize = 200;
     /// History entries older than this are dropped, hours (0 = never).
     pub const HISTORY_MAX_AGE_HOURS: u32 = 0;
+    /// Sideways travel that dismisses a history card, logical px.
+    pub const HISTORY_SWIPE_PX: f32 = 120.0;
     /// Quiet hours (do not disturb on a daily schedule), local `HH:MM`.
     pub const QUIET_FROM: &str = "22:00";
     pub const QUIET_TO: &str = "07:00";
@@ -41,6 +43,9 @@ pub mod defaults {
     /// Camera check interval when the device can't notify, seconds.
     pub const CAMERA_POLL_S: u64 = 3;
 }
+
+/// Bounds offered by Studio and enforced by the notification center.
+pub const HISTORY_SWIPE_RANGE: (f32, f32) = (40.0, 240.0);
 
 // ── Notifications ────────────────────────────────────────────────────────
 
@@ -136,6 +141,9 @@ pub struct NotificationsConfig {
     pub history_max_age_hours: u32,
     /// Low-urgency notifications are kept in the history.
     pub history_low: bool,
+    /// Drag history cards sideways to dismiss them.
+    pub history_swipe: bool,
+    pub history_swipe_px: f32,
     /// Closing a popup only hides it; it stays in the history.
     pub keep_dismissed: bool,
     /// Critical notifications still pop up while do not disturb is on.
@@ -181,6 +189,8 @@ impl Default for NotificationsConfig {
             history_max: defaults::HISTORY_MAX,
             history_max_age_hours: defaults::HISTORY_MAX_AGE_HOURS,
             history_low: true,
+            history_swipe: true,
+            history_swipe_px: defaults::HISTORY_SWIPE_PX,
             keep_dismissed: false,
             dnd_allow_critical: true,
             dnd_screen_share: true,
@@ -194,6 +204,11 @@ impl Default for NotificationsConfig {
 }
 
 impl NotificationsConfig {
+    /// A malformed preference cannot make every click dismiss a card.
+    pub fn history_swipe_distance(&self) -> f32 {
+        let value = if self.history_swipe_px.is_finite() { self.history_swipe_px } else { defaults::HISTORY_SWIPE_PX };
+        value.clamp(HISTORY_SWIPE_RANGE.0, HISTORY_SWIPE_RANGE.1)
+    }
     /// The configured popup time for `urgency`, seconds (0 = sticky).
     pub fn timeout_for(&self, urgency: UrgencyLevel) -> f32 {
         match urgency {
@@ -526,5 +541,19 @@ mod tests {
         a.overamplify = false;
         assert_eq!(a.volume_limit(), 1.0);
         assert!(ToastPosition::BottomCenter.is_bottom() && ToastPosition::TopLeft.column() == -1);
+    }
+
+    #[test]
+    fn history_swipe_defaults_preserve_existing_settings_and_bound_travel() {
+        let mut cfg: NotificationsConfig = serde_json::from_value(serde_json::json!({"history_max":42})).unwrap();
+        assert_eq!(cfg.history_max, 42);
+        assert!(cfg.history_swipe);
+        assert_eq!(cfg.history_swipe_distance(), defaults::HISTORY_SWIPE_PX);
+        cfg.history_swipe_px = f32::NAN;
+        assert_eq!(cfg.history_swipe_distance(), defaults::HISTORY_SWIPE_PX);
+        cfg.history_swipe_px = -1.0;
+        assert_eq!(cfg.history_swipe_distance(), HISTORY_SWIPE_RANGE.0);
+        cfg.history_swipe_px = f32::MAX;
+        assert_eq!(cfg.history_swipe_distance(), HISTORY_SWIPE_RANGE.1);
     }
 }

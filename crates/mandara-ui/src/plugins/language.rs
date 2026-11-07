@@ -162,6 +162,7 @@ fn option(id: impl Into<gpui::ElementId>, lang: Lang, label_native: String, labe
         .into_any_element()
 }
 
+/// Register the language switcher with lazy views and shared pack-download feedback.
 pub fn register(r: &mut PluginRegistry) {
     r.register(
         PluginManifest::builtin(ID, mandara_i18n::tk("Language"), mandara_i18n::tk("Switch the interface language instantly"), Some(Zone::Right)),
@@ -244,7 +245,7 @@ pub fn register(r: &mut PluginRegistry) {
 
                     // Every language, two columns; System first. Each option
                     // shows its pack's download.
-                    let reduce = config(cx).read(cx).get().motion.reduce_motion;
+                    let reduce = config(cx).read(cx).get().motion.reduced(mandara_core::spring::system_reduced_motion());
                     let mut wakes = Vec::new();
                     let status = fills.borrow_mut().frame(reduce, window, |after| wakes.push(after));
                     for after in wakes {

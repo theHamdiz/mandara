@@ -8483,3 +8483,37 @@
 "Build the semantic index for the current command catalog" = "Jenga faharasa ya kisemantiki ya orodha ya sasa ya amri"
 "Compile a local shell command without executing it" = "Kusanya amri ya shell ya ndani bila kuitekeleza"
 "Argument <{name}> must be between {minimum} and {maximum}" = "Hoja <{name}> lazima iwe kati ya {minimum} na {maximum}"
+
+# Motion controls and notification gestures
+"A slide and fade using your current spring. Replay after adjusting the controls." = "Kuteleza na kufifia kwa springi ya sasa. Cheza tena baada ya kurekebisha vidhibiti."
+"Animation presets" = "Mipangilio tayari ya uhuishaji"
+"Bouncy" = "Kurukaruka"
+"Choose a feel, then adjust the spring below" = "Chagua mtindo, kisha rekebisha springi hapa chini"
+"Drag a history card left or right to remove it" = "Buruta kadi ya historia kushoto au kulia ili kuiondoa"
+"Follow system preference" = "Fuata mapendeleo ya mfumo"
+"How far a history card travels before it is dismissed" = "Umbali wa kuburuta kadi ya historia kabla ya kuiondoa"
+"Live preview" = "Onyesho la moja kwa moja"
+"Lower values soften bounce; zero makes transitions instant" = "Thamani ndogo hupunguza mruko; sifuri hubadilisha papo hapo"
+"Motion intensity" = "Kiwango cha mwendo"
+"Panels" = "Paneli"
+"Playback speed for this surface; zero applies transitions instantly" = "Kasi ya sehemu hii; sifuri hutekeleza mabadiliko papo hapo"
+"Replay" = "Cheza tena"
+"Reset preview" = "Weka upya onyesho"
+"Respect the desktop's reduced-motion preference" = "Heshimu mapendeleo ya eneo-kazi ya kupunguza mwendo"
+"Smooth" = "Laini"
+"Snappy" = "Haraka"
+"Subtle" = "Taratibu"
+"Surface transitions" = "Mabadiliko ya sehemu"
+"Swipe distance" = "Umbali wa kutelezesha"
+"Swipe to dismiss" = "Telezesha ili kuondoa"
+"Theme files and activation steps: docs/app-themes.md" = "Faili za mandhari na hatua za kuwasha: docs/app-themes.md"
+
+"Open the Qur'an panel" = "Fungua paneli ya Qurani"
+
+"Open the Jannah panel" = "Fungua paneli ya Jannah"
+
+# Panel captures
+"Copy panel image" = "Nakili picha ya paneli"
+"Panel image copied" = "Picha ya paneli imenakiliwa"
+"Panel capture failed: {error}" = "Imeshindwa kunasa paneli: {error}"
+"The panel is not visible" = "Paneli haionekani"

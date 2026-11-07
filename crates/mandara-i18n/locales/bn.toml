@@ -8580,3 +8580,37 @@
 "Build the semantic index for the current command catalog" = "বর্তমান কমান্ড তালিকার অর্থভিত্তিক সূচি তৈরি করুন"
 "Compile a local shell command without executing it" = "স্থানীয় শেল কমান্ড না চালিয়ে কম্পাইল করুন"
 "Argument <{name}> must be between {minimum} and {maximum}" = "<{name}> আর্গুমেন্টটি {minimum} থেকে {maximum}-এর মধ্যে হতে হবে"
+
+# Motion controls and notification gestures
+"A slide and fade using your current spring. Replay after adjusting the controls." = "বর্তমান স্প্রিং দিয়ে সরে যাওয়া ও মিলিয়ে যাওয়া। নিয়ন্ত্রণ বদলে আবার চালান।"
+"Animation presets" = "অ্যানিমেশন প্রিসেট"
+"Bouncy" = "বাউন্সি"
+"Choose a feel, then adjust the spring below" = "একটি ধরন বেছে নিচে স্প্রিং ঠিক করুন"
+"Drag a history card left or right to remove it" = "সরাতে ইতিহাসের কার্ড বাঁ বা ডানে টানুন"
+"Follow system preference" = "সিস্টেমের পছন্দ অনুসরণ"
+"How far a history card travels before it is dismissed" = "সরানোর আগে ইতিহাসের কার্ড কত দূর টানতে হবে"
+"Live preview" = "সরাসরি প্রিভিউ"
+"Lower values soften bounce; zero makes transitions instant" = "কম মানে কম বাউন্স; শূন্যে তাৎক্ষণিক পরিবর্তন"
+"Motion intensity" = "গতির তীব্রতা"
+"Panels" = "প্যানেল"
+"Playback speed for this surface; zero applies transitions instantly" = "এই পৃষ্ঠের গতি; শূন্যে তাৎক্ষণিক পরিবর্তন"
+"Replay" = "আবার চালান"
+"Reset preview" = "প্রিভিউ রিসেট"
+"Respect the desktop's reduced-motion preference" = "ডেস্কটপের কম গতির পছন্দ মানুন"
+"Smooth" = "মসৃণ"
+"Snappy" = "দ্রুত"
+"Subtle" = "মৃদু"
+"Surface transitions" = "পৃষ্ঠের পরিবর্তন"
+"Swipe distance" = "সোয়াইপের দূরত্ব"
+"Swipe to dismiss" = "সরাতে সোয়াইপ"
+"Theme files and activation steps: docs/app-themes.md" = "থিমের ফাইল ও চালুর ধাপ: docs/app-themes.md"
+
+"Open the Qur'an panel" = "কুরআন প্যানেল খুলুন"
+
+"Open the Jannah panel" = "জান্নাহ প্যানেল খুলুন"
+
+# Panel captures
+"Copy panel image" = "প্যানেলের ছবি কপি করুন"
+"Panel image copied" = "প্যানেলের ছবি কপি হয়েছে"
+"Panel capture failed: {error}" = "প্যানেল ক্যাপচার ব্যর্থ: {error}"
+"The panel is not visible" = "প্যানেলটি দেখা যাচ্ছে না"

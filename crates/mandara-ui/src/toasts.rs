@@ -30,13 +30,14 @@ use mandara_config::outputs::SurfaceKind;
 use mandara_config::surfaces::ranges;
 use mandara_config::{BarPosition, ShellConfig};
 use mandara_core::{Edge, FrameClock, InputMaskRegistry, LayerSurfaceSpec, SpringConfig, SpringValue, SurfaceRole, ToGpui, edge_drawer_snapped, oklab_gradient};
-use smallvec::SmallVec;
 use mandara_services::{Notification, NotificationCommand};
+use smallvec::SmallVec;
 
 use crate::plugins::notifications::{CardStyle, notification_card_styled};
 use crate::plugins::panel_fx::{partner, readable};
 use crate::state::config;
 use crate::style::ClipRounded as _;
+use crate::swipe::Swipe;
 use crate::toast_drawer::{self, Drawer};
 
 /// Distance between the toasts and the screen edges, logical px.
@@ -78,11 +79,9 @@ const SLOT_SPRING: SpringConfig = SpringConfig::new(300.0, 28.0, 1.0);
 /// Swiping a toast away: the pointer travels this far before the toast
 /// follows it, and past this share of its width the toast flies off (hidden,
 /// still in the notification list); a shorter swipe springs back.
-const SWIPE_SLOP_PX: f32 = 6.0;
 const SWIPE_DISMISS_SHARE: f32 = 0.35;
 /// How much a toast fades over a swipe as long as its width.
 const SWIPE_FADE: f32 = 0.7;
-const SWIPE_SPRING: SpringConfig = SpringConfig::new(420.0, 34.0, 1.0);
 /// Joined: room between the drawer's edges and the popups in it (and its
 /// corners' extra radius, so popup and drawer corners stay concentric),
 /// before scaling.
@@ -218,6 +217,7 @@ fn cards_that_fit(max_visible: usize, card_h: f32, cap: f32) -> usize {
 }
 
 impl SurfaceKey {
+    /// Size the visible stack against its own output, including joined-bar geometry.
     fn of(shell: &ShellConfig, output: Option<&PopupOutput>, cx: &App) -> Self {
         let cfg = &shell.notifications;
         let scale = cfg.scale.clamp(crate::plugins::notifications::TOAST_SCALE.0, crate::plugins::notifications::TOAST_SCALE.1);
@@ -230,9 +230,8 @@ impl SurfaceKey {
         let card_h = TOAST_MAX_H_PX * scale + STACK_GAP_PX;
         let cards = cards_that_fit(cfg.max_visible, card_h, output_h * MAX_SURFACE_SHARE);
         let stack_h = cards as f32 * card_h + EDGE_GAP_PX * 2.0;
-        let display = surface_display(joined.is_some(), || output.and_then(|o| crate::outputs::display_for(&o.name, cx)), || {
-            crate::outputs::transient_display(SurfaceKind::Notifications, focused_window_monitor, cx)
-        });
+        let display = surface_display(joined.is_some(), || output.and_then(|o| crate::outputs::display_for(&o.name, cx)), || crate::outputs::transient_display(SurfaceKind::Notifications, focused_window_monitor, cx),
+        );
         let (w, h, pull) = match joined {
             Some(d) => {
                 // From the screen edge: over the bar's band (or the screen
@@ -399,20 +398,9 @@ struct Item {
     /// Offset from the stack's anchored edge.
     slot: SpringValue<f32>,
     /// Sideways offset while (or after) it is swiped.
-    swipe: SpringValue<f32>,
-    /// The left button is down on it (a click or the start of a swipe).
-    drag: Option<Drag>,
+    swipe: Swipe,
     leaving: bool,
     expired: bool,
-}
-
-/// A press on a toast that may become a swipe.
-#[derive(Clone, Copy)]
-struct Drag {
-    /// Pointer x at the press, surface px.
-    from: f32,
-    /// It moved past the slop: a swipe, not a click.
-    moved: bool,
 }
 
 impl Item {
@@ -422,9 +410,9 @@ impl Item {
         presence.set_target(1.0);
         let mut slot = SpringValue::new(0.0, SLOT_SPRING);
         slot.set_instant(reduce);
-        let mut swipe = SpringValue::new(0.0, SWIPE_SPRING);
-        swipe.set_instant(reduce);
-        Item { n, first_shown: now, paused: Duration::ZERO, hovered_since: None, presence, slot, swipe, drag: None, leaving: false, expired: false }
+        let mut swipe = Swipe::default();
+        swipe.motion.set_instant(reduce);
+        Item { n, first_shown: now, paused: Duration::ZERO, hovered_since: None, presence, slot, swipe, leaving: false, expired: false }
     }
 
     /// The pointer left: the countdown runs again.
@@ -436,29 +424,15 @@ impl Item {
 
     /// The pointer moved to `x` with the button down: past the slop the toast
     /// follows it 1:1. Returns whether anything changed.
-    fn drag_to(&mut self, x: f32) -> bool {
-        let Some(drag) = self.drag.as_mut() else { return false };
-        let dx = x - drag.from;
-        if !drag.moved && dx.abs() < SWIPE_SLOP_PX {
-            return false;
-        }
-        drag.moved = true;
-        self.swipe.snap_to(dx);
-        true
+    fn drag_to(&mut self, x: f32, y: f32) -> bool {
+        self.swipe.drag_to(x, y)
     }
 
     /// The button came up. A swipe past `width × SWIPE_DISMISS_SHARE` flies
     /// off (returns `Some(true)`: hide it), a shorter one springs back
     /// (`Some(false)`); a plain click returns `None` and stays a click.
     fn release(&mut self, width: f32) -> Option<bool> {
-        let drag = self.drag.take()?;
-        if !drag.moved {
-            return None;
-        }
-        let dx = self.swipe.value();
-        let away = dx.abs() > width * SWIPE_DISMISS_SHARE;
-        self.swipe.set_target(if away { dx.signum() * (width + SHADOW_ROOM_PX * 2.0) } else { 0.0 });
-        Some(away)
+        self.swipe.release(width * SWIPE_DISMISS_SHARE, width + SHADOW_ROOM_PX * 2.0)
     }
     /// Countdown progress `0..=1` at `now` (`None` for sticky toasts).
     fn elapsed_fraction(&self, now: Instant) -> Option<f32> {
@@ -538,8 +512,9 @@ impl Render for ToastView {
     /// Reconcile notification lifetimes and animate the visible stack using the configured popup typography.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let cfg = config(cx).read(cx).snapshot();
+        let _motion = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(cfg.motion.surfaces.notifications));
         let ncfg = &cfg.notifications;
-        let reduce = cfg.motion.reduce_motion;
+        let reduce = mandara_core::spring::motion_profile().reduce;
         let now = Instant::now();
         // As many as the surface was sized for (fewer on a short display).
         let shown = cx.try_global::<GlobalToasts>().and_then(|g| g.0.read(cx).key.as_ref().map(|k| k.cards)).unwrap_or(ncfg.max_visible.max(1));
@@ -549,7 +524,7 @@ impl Render for ToastView {
         // The pointer is gone without a hover-out (clicking a toast raises
         // its app's window): the countdown runs again (#24).
         if !window.is_window_hovered() {
-            for item in self.items.iter_mut().filter(|i| i.drag.is_none()) {
+            for item in self.items.iter_mut().filter(|i| !i.swipe.pressed()) {
                 item.resume(now);
             }
         }
@@ -593,6 +568,7 @@ impl Render for ToastView {
         for item in &mut self.items {
             item.slot.set_instant(reduce);
             item.presence.set_instant(reduce);
+            item.swipe.motion.set_instant(reduce);
             if !item.leaving {
                 if item.slot.value() == 0.0 && item.presence.value() == 0.0 {
                     item.slot.snap_to(offset);
@@ -607,7 +583,7 @@ impl Render for ToastView {
         for item in &mut self.items {
             animating |= item.presence.step(dt);
             animating |= item.slot.step(dt);
-            animating |= item.swipe.step(dt);
+            animating |= item.swipe.motion.step(dt);
         }
         self.items.retain(|i| !(i.leaving && i.presence.value() <= GONE && !i.presence.is_animating()));
         let any_timed = ncfg.progress_bar && self.items.iter().any(|i| !i.leaving && i.n.display_ms > 0);
@@ -682,7 +658,7 @@ impl Render for ToastView {
             let hover_view = this.clone();
             let press_view = this.clone();
             let move_view = this.clone();
-            let swipe = item.swipe.value();
+            let swipe = item.swipe.motion.value();
             let swipe_fade = 1.0 - (swipe.abs() / w).min(1.0) * SWIPE_FADE;
             toasts.push(
                 div()
@@ -697,7 +673,7 @@ impl Render for ToastView {
                         let x = f32::from(e.position.x);
                         let _ = press_view.update(cx, |v, cx| {
                             if let Some(item) = v.items.iter_mut().find(|i| i.n.id == id && !i.leaving) {
-                                item.drag = Some(Drag { from: x - item.swipe.value(), moved: false });
+                                item.swipe.press(x, f32::from(e.position.y));
                                 cx.notify();
                             }
                         });
@@ -808,7 +784,7 @@ impl Render for ToastView {
         };
         // The button is down on a toast: follow the pointer wherever it goes
         // (the surface keeps it until release) and settle the swipe then.
-        if let Some(id) = self.items.iter().find(|i| i.drag.is_some()).map(|i| i.n.id) {
+        if let Some(id) = self.items.iter().find(|i| i.swipe.pressed()).map(|i| i.n.id) {
             let (follow, settle) = (this.clone(), this.clone());
             root = root.child(
                 canvas(
@@ -820,7 +796,7 @@ impl Render for ToastView {
                             }
                             let x = f32::from(e.position.x);
                             let _ = follow.update(cx, |v, cx| {
-                                if v.items.iter_mut().find(|i| i.n.id == id).is_some_and(|i| i.drag_to(x)) {
+                                if v.items.iter_mut().find(|i| i.n.id == id).is_some_and(|i| i.drag_to(x, f32::from(e.position.y))) {
                                     cx.notify();
                                 }
                             });
@@ -954,20 +930,21 @@ mod tests {
         let width = 360.0;
         let mut i = item(4000, Instant::now());
         // A click stays a click.
-        i.drag = Some(Drag { from: 100.0, moved: false });
-        assert!(!i.drag_to(100.0 + SWIPE_SLOP_PX / 2.0));
+        i.swipe.press(100.0, 0.0);
+        assert!(!i.drag_to(100.0 + crate::swipe::SLOP_PX / 2.0, 0.0));
         assert_eq!(i.release(width), None);
         // A short swipe springs back.
-        i.drag = Some(Drag { from: 100.0, moved: false });
-        assert!(i.drag_to(160.0));
-        assert_eq!(i.swipe.value(), 60.0, "follows the pointer 1:1");
+        i.swipe.press(100.0, 0.0);
+        assert!(i.drag_to(160.0, 0.0));
+        assert_eq!(i.swipe.motion.value(), 60.0, "follows the pointer 1:1");
         assert_eq!(i.release(width), Some(false));
-        assert_eq!(i.swipe.target(), 0.0);
+        assert_eq!(i.swipe.motion.target(), 0.0);
         // Past the threshold, either way, it flies off that way.
-        i.drag = Some(Drag { from: 100.0, moved: false });
-        assert!(i.drag_to(100.0 - width * 0.5));
+        i.swipe.motion.snap_to(0.0);
+        i.swipe.press(100.0, 0.0);
+        assert!(i.drag_to(100.0 - width * 0.5, 0.0));
         assert_eq!(i.release(width), Some(true));
-        assert!(i.swipe.target() < -width);
+        assert!(i.swipe.motion.target() < -width);
     }
 
     #[test]

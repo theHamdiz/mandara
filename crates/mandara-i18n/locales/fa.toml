@@ -8580,3 +8580,37 @@
 "Build the semantic index for the current command catalog" = "ساخت نمایهٔ معنایی فهرست فرمان‌های فعلی"
 "Compile a local shell command without executing it" = "ترجمهٔ یک فرمان محلی پوسته بدون اجرای آن"
 "Argument <{name}> must be between {minimum} and {maximum}" = "آرگومان <{name}> باید بین {minimum} و {maximum} باشد"
+
+# Motion controls and notification gestures
+"A slide and fade using your current spring. Replay after adjusting the controls." = "لغزش و محوشدن با فنر فعلی. پس از تنظیم کنترل‌ها دوباره پخش کنید."
+"Animation presets" = "پیش‌تنظیم‌های پویانمایی"
+"Bouncy" = "جهنده"
+"Choose a feel, then adjust the spring below" = "یک حالت انتخاب کنید و فنر را در پایین تنظیم کنید"
+"Drag a history card left or right to remove it" = "برای حذف، کارت تاریخچه را به چپ یا راست بکشید"
+"Follow system preference" = "پیروی از ترجیح سیستم"
+"How far a history card travels before it is dismissed" = "مسافت کشیدن کارت تاریخچه پیش از حذف"
+"Live preview" = "پیش‌نمایش زنده"
+"Lower values soften bounce; zero makes transitions instant" = "مقادیر کمتر جهش را ملایم می‌کنند؛ صفر گذارها را آنی می‌کند"
+"Motion intensity" = "شدت حرکت"
+"Panels" = "پنل‌ها"
+"Playback speed for this surface; zero applies transitions instantly" = "سرعت این سطح؛ صفر گذارها را آنی اعمال می‌کند"
+"Replay" = "پخش دوباره"
+"Reset preview" = "بازنشانی پیش‌نمایش"
+"Respect the desktop's reduced-motion preference" = "رعایت ترجیح کاهش حرکت میزکار"
+"Smooth" = "روان"
+"Snappy" = "سریع"
+"Subtle" = "ملایم"
+"Surface transitions" = "گذارهای سطوح"
+"Swipe distance" = "مسافت کشیدن"
+"Swipe to dismiss" = "کشیدن برای حذف"
+"Theme files and activation steps: docs/app-themes.md" = "پرونده‌های پوسته و مراحل فعال‌سازی: docs/app-themes.md"
+
+"Open the Qur'an panel" = "باز کردن پنل قرآن"
+
+"Open the Jannah panel" = "باز کردن پنل جنت"
+
+# Panel captures
+"Copy panel image" = "کپی تصویر پنل"
+"Panel image copied" = "تصویر پنل کپی شد"
+"Panel capture failed: {error}" = "گرفتن تصویر پنل ناموفق بود: {error}"
+"The panel is not visible" = "پنل قابل مشاهده نیست"

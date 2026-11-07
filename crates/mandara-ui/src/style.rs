@@ -145,7 +145,29 @@ pub fn apply(cfg: &ShellConfig) {
 /// The spring tuning and reduced motion of `cfg` (`[motion]`).
 pub fn motion_profile(cfg: &ShellConfig) -> mandara_core::spring::MotionProfile {
     let m = &cfg.motion;
-    mandara_core::spring::MotionProfile::new(m.stiffness, m.damping, m.mass, m.reduce_motion)
+    let mut profile = mandara_core::spring::MotionProfile::new(m.stiffness, m.damping, m.mass, m.reduced(mandara_core::spring::system_reduced_motion()));
+    let critical = 2.0 * (profile.feel.stiffness * profile.feel.mass).sqrt();
+    profile.feel.damping += (critical - profile.feel.damping).max(0.0) * (1.0 - m.intensity());
+    profile
+}
+
+/// Apply a portal preference to runtime state, including cached and open views.
+pub fn system_motion_changed(reduced: bool, cx: &mut gpui::App) {
+    mandara_core::spring::set_system_reduced_motion(reduced);
+    apply(crate::state::config(cx).read(cx).get());
+    crate::state::config(cx).update(cx, |_, cx| cx.notify());
+    crate::state::sync_theme_from_config(cx);
+    cx.refresh_windows();
+}
+
+/// Studio is a separate process: follow accessibility without starting shell services.
+pub fn follow_system_motion(cx: &mut gpui::App) {
+    let preferences = mandara_services::appearance::watch();
+    cx.spawn(async move |cx| {
+        while let Ok(preference) = preferences.recv().await {
+            cx.update(|cx| system_motion_changed(preference.reduced_motion, cx));
+        }
+    }).detach();
 }
 
 /// Everything that changes how surfaces look without a plugin noticing:
@@ -245,6 +267,11 @@ mod tests {
         let p = motion_profile(&cfg);
         assert_eq!((p.feel.stiffness, p.feel.damping, p.feel.mass), (cfg.motion.stiffness, cfg.motion.damping, cfg.motion.mass));
         assert!(p.reduce);
+        cfg.motion.reduce_motion = false;
+        cfg.motion.intensity = 0.25;
+        assert!(motion_profile(&cfg).feel.damping > p.feel.damping);
+        cfg.motion.intensity = 0.0;
+        assert!(motion_profile(&cfg).reduce);
         // A shell spring is retuned by it.
         let tuned = p.tune(mandara_core::SpringConfig::SNAPPY);
         assert!(tuned.stiffness > mandara_core::SpringConfig::SNAPPY.stiffness);

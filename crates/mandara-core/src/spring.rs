@@ -12,6 +12,33 @@ use mandara_theme::color::shortest_hue_delta;
 use palette::Oklch;
 use serde::{Deserialize, Serialize};
 
+thread_local! {
+    static SURFACE_SPEED: std::cell::Cell<f32> = const { std::cell::Cell::new(1.0) };
+}
+
+/// Playback override for a surface's spring updates. Nested scopes restore their
+/// parent; the guard cannot move to another thread. Zero makes transitions instant.
+pub struct MotionScope(f32, std::marker::PhantomData<std::rc::Rc<()>>);
+
+impl MotionScope {
+    pub fn new(speed: f32) -> Self {
+        let speed = if speed.is_finite() { speed.clamp(0.0, MAX_TIME_SCALE) } else { 1.0 };
+        Self(SURFACE_SPEED.with(|s| s.replace(speed)), std::marker::PhantomData)
+    }
+}
+
+impl Drop for MotionScope {
+    fn drop(&mut self) { SURFACE_SPEED.with(|s| s.set(self.0)); }
+}
+
+static SYSTEM_REDUCED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Last reduced-motion preference reported by the desktop portal.
+pub fn system_reduced_motion() -> bool { SYSTEM_REDUCED.load(std::sync::atomic::Ordering::Relaxed) }
+
+/// Update the runtime preference without changing the user's saved configuration.
+pub fn set_system_reduced_motion(reduced: bool) { SYSTEM_REDUCED.store(reduced, std::sync::atomic::Ordering::Relaxed); }
+
 /// Physical parameters of a spring.
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SpringConfig {
@@ -455,7 +482,8 @@ impl<T: Springable> SpringValue<T> {
 
     /// [`SpringValue::step`] under an explicit motion profile.
     pub fn step_in(&mut self, dt: f32, profile: &MotionProfile) -> bool {
-        if profile.reduce {
+        let surface_speed = SURFACE_SPEED.with(std::cell::Cell::get);
+        if profile.reduce || surface_speed == 0.0 {
             if self.position != self.target || self.velocity != [0.0; 4] {
                 self.snap_to_target();
             }
@@ -468,7 +496,7 @@ impl<T: Springable> SpringValue<T> {
             }
             return false;
         }
-        let dt = (dt * time_scale()).clamp(0.0, MAX_STEP_S);
+        let dt = (dt * time_scale() * surface_speed).clamp(0.0, MAX_STEP_S);
         let config = profile.tune(self.config);
         for i in 0..T::CHANNELS {
             let x0 = self.position[i] - self.target[i];
@@ -488,6 +516,27 @@ impl<T: Springable> SpringValue<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn surface_playback_is_nested_and_zero_settles() {
+        let p = MotionProfile::default();
+        let mut normal = SpringValue::new(0.0_f32, SpringConfig::default());
+        normal.set_target(1.0);
+        let mut fast = normal.clone();
+        normal.step_in(0.01, &p);
+        {
+            let _scope = MotionScope::new(2.0);
+            fast.step_in(0.01, &p);
+            assert!(fast.value() > normal.value());
+            {
+                let _instant = MotionScope::new(0.0);
+                assert!(!fast.step_in(0.01, &p));
+                assert_eq!(fast.value(), 1.0);
+            }
+            assert_eq!(SURFACE_SPEED.with(std::cell::Cell::get), 2.0);
+        }
+        assert_eq!(SURFACE_SPEED.with(std::cell::Cell::get), 1.0);
+    }
     use approx::assert_abs_diff_eq;
 
     fn run<T: Springable>(s: &mut SpringValue<T>, hz: f32, seconds: f32) -> usize {

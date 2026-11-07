@@ -8483,3 +8483,37 @@
 "Build the semantic index for the current command catalog" = "सध्याच्या आदेश यादीचा अर्थाधारित निर्देशांक तयार करा"
 "Compile a local shell command without executing it" = "स्थानिक शेल आदेश न चालवता संकलित करा"
 "Argument <{name}> must be between {minimum} and {maximum}" = "<{name}> या घटकाचे मूल्य {minimum} आणि {maximum} यांच्या दरम्यान असावे"
+
+# Motion controls and notification gestures
+"A slide and fade using your current spring. Replay after adjusting the controls." = "सध्याच्या स्प्रिंगसह सरकणे व फिकट होणे. नियंत्रणे बदलल्यावर पुन्हा चालवा."
+"Animation presets" = "अ‍ॅनिमेशन पूर्वनियोजने"
+"Bouncy" = "उसळते"
+"Choose a feel, then adjust the spring below" = "एक शैली निवडा, मग खाली स्प्रिंग बदला"
+"Drag a history card left or right to remove it" = "काढण्यासाठी इतिहासातील कार्ड डावीकडे किंवा उजवीकडे ओढा"
+"Follow system preference" = "प्रणालीची पसंती पाळा"
+"How far a history card travels before it is dismissed" = "काढण्यापूर्वी इतिहासातील कार्ड किती दूर ओढायचे"
+"Live preview" = "थेट पूर्वावलोकन"
+"Lower values soften bounce; zero makes transitions instant" = "कमी मूल्ये उसळी कमी करतात; शून्यावर बदल त्वरित होतात"
+"Motion intensity" = "हालचालीची तीव्रता"
+"Panels" = "पॅनेल"
+"Playback speed for this surface; zero applies transitions instantly" = "या पृष्ठभागाचा वेग; शून्यावर बदल त्वरित लागू होतात"
+"Replay" = "पुन्हा चालवा"
+"Reset preview" = "पूर्वावलोकन रीसेट करा"
+"Respect the desktop's reduced-motion preference" = "डेस्कटॉपची हालचाल कमी करण्याची पसंती पाळा"
+"Smooth" = "सुरळीत"
+"Snappy" = "चपळ"
+"Subtle" = "सौम्य"
+"Surface transitions" = "पृष्ठभागांतील बदल"
+"Swipe distance" = "स्वाइपचे अंतर"
+"Swipe to dismiss" = "काढण्यासाठी स्वाइप करा"
+"Theme files and activation steps: docs/app-themes.md" = "थीम फाइल आणि सुरू करण्याच्या पायऱ्या: docs/app-themes.md"
+
+"Open the Qur'an panel" = "कुरआन पॅनेल उघडा"
+
+"Open the Jannah panel" = "जन्नाह पॅनेल उघडा"
+
+# Panel captures
+"Copy panel image" = "पॅनेलची प्रतिमा कॉपी करा"
+"Panel image copied" = "पॅनेलची प्रतिमा कॉपी केली"
+"Panel capture failed: {error}" = "पॅनेल कॅप्चर अयशस्वी: {error}"
+"The panel is not visible" = "पॅनेल दिसत नाही"

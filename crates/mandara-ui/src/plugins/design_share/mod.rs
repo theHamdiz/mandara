@@ -1,7 +1,7 @@
 //! Copy complete themed reading cards as PNGs, with one lazy bounded export job.
 
 mod document;
-mod jobs;
+pub(crate) mod jobs;
 mod paint;
 mod png;
 mod render;
@@ -23,6 +23,11 @@ use super::{extras::Flash, panel_fx::pill_button};
 #[derive(Default)]
 struct Exports(jobs::Gate);
 impl Global for Exports {}
+
+/// Panel screenshots and complete reading cards share one image-producing slot.
+pub(crate) fn acquire(cx: &mut App) -> Option<jobs::Lease> {
+    cx.default_global::<Exports>().0.acquire()
+}
 
 /// Only the panel's visibility token is retained; images and layout live in a job.
 #[derive(Clone)]
@@ -59,8 +64,7 @@ pub(super) fn button(
         palette,
         move |window, cx| {
             let _language = mandara_i18n::scoped(Some(language));
-            let gate = cx.default_global::<Exports>().0.clone();
-            let Some(lease) = gate.acquire() else {
+            let Some(lease) = acquire(cx) else {
                 flash.show(false, t("An image is already being prepared"));
                 cx.notify(notified);
                 return;

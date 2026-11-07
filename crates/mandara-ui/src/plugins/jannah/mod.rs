@@ -828,6 +828,10 @@ fn register_commands(r: &mut PluginRegistry) {
     // Every command answers in Jannah's own language.
     let mut add = |spec: CommandSpec| r.command(ID, plugin_lang::speaking(spec, own_lang));
     add(plugin_lang::language_command(ID, "jannah language", "jannah language ar"));
+    add(CommandSpec::new("jannah open", tk("Open the Jannah panel"), |_, cx| {
+        open_panel(cx);
+        Ok(json!({"panel": ID}))
+    }).example("jannah open"));
     add(CommandSpec::new_output("jannah copy-image", tk("Copy a reminder and its design as a complete PNG image"), |a, cx| share::command(&a.rest(0), cx))
         .arg(ArgSpec::required("ref", ArgKind::String, tk("a verse or hadith reference")))
         .example("jannah copy-image 89:30"));
