@@ -349,14 +349,16 @@ The editor stays open while the save finishes. File writes, note renames and
 task JSON writes run in the background; a disk error leaves the draft ready
 to retry. A note whose text saved before its filename or index failed keeps
 the same id on retry. A list tag alone, such as `#Work`, needs task text after it.
-Unreadable files stay read-only while their drafts remain available. They do
-not block edits to other notes. Recovery scans wait for save capacity and check
-the original contents before retrying a retained draft. If the recovered file
-has changed, Mandara keeps the conflict instead of overwriting it.
+Unreadable files stay read-only while their drafts remain available; other
+notes stay usable. Recovery scans wait for save capacity and check Notes
+plugin drafts against the recovered file. An unchanged file lets the plugin
+draft retry; a change found by that scan stays a conflict. For a draft in the
+desktop editor, make the file readable and press **Done** again.
 
-Changing the notes folder waits for pending drafts to save. If another editor
-changes the same Markdown file, Mandara checks its text before writing; it
-does not lock that other editor's file.
+Changing the notes folder waits for pending saves; retained conflicts are
+available when you return. Mandara checks text before saving but does not lock
+files against other editors. An edit made after the check can still be replaced
+by the queued save.
 
 The widget gallery fits each preview to its card and renders at the display’s
 pixel density, with larger calendar and sky miniatures. Media previews use a
