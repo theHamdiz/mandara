@@ -85,5 +85,6 @@ arguments before running it. The first row runs the whole preview; clicking
 a compiled action runs just that step. For example, `!open quran`,
 `!open jannah` and `!open calendar` open shell panels without inventing a
 verse, hadith or calendar source. `!enable light mode` changes appearance;
+`!read quran 2:255` opens a specific ayah and keeps the reference you supplied.
 `!disable on-screen displays` turns that feature off. Include values directly,
 such as `!set volume to 47`.

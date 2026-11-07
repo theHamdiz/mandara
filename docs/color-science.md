@@ -14,8 +14,9 @@
 - **Cross-app theming** (opt-in, per app): Ghostty, GTK 3/4, Qt5/Qt6
   (qt5ct/qt6ct), Kvantum, Zed, Fuzzel, btop, kitty, foot, Alacritty,
   WezTerm, Helix, Neovim, Vesktop / Vencord, KDE, Cava, tmux, Zellij and
-  Spicetify colour schemes can
-  follow Mandara live. **Every app is off until you switch it on** in
+  Spicetify colour schemes receive Mandara's current palette. Apps that watch
+  their theme files follow it live; Cava, tmux and Spicetify need the reload
+  steps in the [App themes guide](app-themes.md). **Every app is off until you switch it on** in
   Studio → Themes → Other apps (or `mandara msg config set
   /integrations/gtk4 true`): until then Mandara writes nothing outside
   `~/.config/mandara` and `~/.cache/mandara`. Switching an app off takes

@@ -59,6 +59,7 @@ mandara msg launcher toggle
 mandara msg shell state                     # what is open (panel, sidebar, launcher, menus) and whether the launcher opens on hover
 mandara msg hotcorners status               # each corner's action and state per display, recent fires; hotcorners trigger top-left
 mandara msg panel open media
+mandara msg panel capture media             # copy a visible docked or floating panel as PNG
 mandara msg theme set mandara-corniche      # theme list, current, next, mode toggle, wallpaper, seeds, export
 mandara msg theme mode toggle
 mandara msg look apply corniche-dusk        # look list; look restore brings back your own setup

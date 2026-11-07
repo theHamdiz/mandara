@@ -6,14 +6,14 @@ use std::sync::{
 };
 
 #[derive(Clone, Default)]
-pub(super) struct Gate(Arc<AtomicBool>);
+pub(crate) struct Gate(Arc<AtomicBool>);
 
-pub(super) struct Lease {
+pub(crate) struct Lease {
     gate: Arc<AtomicBool>,
     token: Token,
 }
 #[derive(Clone)]
-pub(super) struct Token(Arc<AtomicBool>);
+pub(crate) struct Token(Arc<AtomicBool>);
 
 impl Gate {
     pub fn acquire(&self) -> Option<Lease> {

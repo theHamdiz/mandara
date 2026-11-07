@@ -47,7 +47,12 @@ pub fn zellij(p: &MandaraPalette) -> String {
         ("exit_code_success", false),
         ("exit_code_error", false),
     ] {
-        let fg = if selected { p.on_primary } else { p.on_surface };
+        let fg = match name {
+            "exit_code_success" => p.success_emerald,
+            "exit_code_error" => p.urgent_coral,
+            _ if selected => p.on_primary,
+            _ => p.on_surface,
+        };
         let bg = if selected { p.primary } else { p.surface_base };
         writeln!(out, "        {name} {{\n            base {}\n            background {}\n            emphasis_0 {}\n            emphasis_1 {}\n            emphasis_2 {}\n            emphasis_3 {}\n        }}", rgb(fg), rgb(bg), rgb(p.secondary), rgb(p.tertiary), rgb(p.success_emerald), rgb(p.warning_amber)).expect("writing a String");
     }
@@ -83,6 +88,11 @@ pub fn spicetify(p: &MandaraPalette) -> String {
     out
 }
 
+/// Spicetify expects a CSS file even when the theme only replaces colours.
+pub fn spicetify_css(_: &MandaraPalette) -> String {
+    "/* Colours are provided by color.ini. */\n".to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -96,6 +106,10 @@ mod tests {
             let z = zellij(&p);
             assert_eq!(z.matches("emphasis_3 ").count(), 14);
             assert_eq!(z.matches('{').count(), z.matches('}').count());
+            for (name, color) in [("exit_code_success", p.success_emerald), ("exit_code_error", p.urgent_coral)] {
+                let [r, g, b, _] = color.to_rgba8();
+                assert!(z.contains(&format!("{name} {{\n            base {r} {g} {b}\n")));
+            }
             let s = spicetify(&p);
             assert!(s.starts_with("[Mandara]\n"));
             assert_eq!(s.lines().filter(|line| line.contains(" = ")).count(), 18);

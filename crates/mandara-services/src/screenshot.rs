@@ -8,6 +8,8 @@ use std::path::PathBuf;
 use mandara_i18n::tf;
 use serde::Serialize;
 
+pub mod png;
+
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct CaptureResult {
     pub path: Option<PathBuf>,

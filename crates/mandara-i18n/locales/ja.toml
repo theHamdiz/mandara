@@ -8854,3 +8854,9 @@
 "Open the Qur'an panel" = "クルアーンのパネルを開く"
 
 "Open the Jannah panel" = "ジャンナのパネルを開く"
+
+# Panel captures
+"Copy panel image" = "パネル画像をコピー"
+"Panel image copied" = "パネル画像をコピーしました"
+"Panel capture failed: {error}" = "パネルのキャプチャに失敗しました: {error}"
+"The panel is not visible" = "パネルは表示されていません"

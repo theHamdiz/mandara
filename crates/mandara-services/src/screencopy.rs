@@ -2,7 +2,6 @@
 //! external tools). Frames are copied into a memfd-backed `wl_shm` buffer
 //! and read back through the file descriptor.
 
-use std::io::{Read, Seek, SeekFrom};
 use std::os::fd::AsFd;
 
 use anyhow::{Context as _, Result, anyhow, bail};
@@ -18,6 +17,7 @@ fn fallback_result(result: Result<Vec<Capture>>) -> Result<Vec<Capture>> {
 
 mod kwin;
 mod composite;
+pub mod panel;
 pub use composite::composite;
 
 /// One captured output.
@@ -181,6 +181,20 @@ pub fn capture_all() -> Result<Vec<Capture>> {
 
 /// Captures every output, with the pointer painted in when `cursor`.
 pub fn capture_all_with(cursor: bool) -> Result<Vec<Capture>> {
+    let mut captures = Vec::new();
+    capture_with(cursor, None, |capture| captures.push(capture))?;
+    Ok(captures)
+}
+
+/// Capture only the panel's output-local rectangle, without allocating other outputs.
+pub fn capture_region(output: &str, rect: (i32, i32, i32, i32)) -> Result<Capture> {
+    anyhow::ensure!(!output.is_empty() && rect.2 > 0 && rect.3 > 0, "invalid panel capture target");
+    let mut capture = None;
+    capture_with(false, Some((output, rect)), |image| capture = Some(image))?;
+    capture.context("capture output is no longer connected")
+}
+
+fn capture_with(cursor: bool, target: Option<(&str, (i32, i32, i32, i32))>, mut receive: impl FnMut(Capture)) -> Result<()> {
     let conn = Connection::connect_to_env().context("connecting to Wayland")?;
     let (globals, mut queue) = registry_queue_init::<State>(&conn)?;
     let qh = queue.handle();
@@ -202,14 +216,23 @@ pub fn capture_all_with(cursor: bool) -> Result<Vec<Capture>> {
     queue.roundtrip(&mut state)?;
 
     let Some(manager) = manager else {
-        return fallback_result(kwin::capture(&state.outputs.iter().map(|(_, info)| info).collect::<Vec<_>>(), cursor));
+        if let Some((name, rect)) = target {
+            let info = state.outputs.iter().find(|(_, info)| info.name == name).map(|(_, info)| info).context("capture output is no longer connected")?;
+            receive(kwin::capture_area(info, rect)?);
+        } else {
+            for capture in fallback_result(kwin::capture(&state.outputs.iter().map(|(_, info)| info).collect::<Vec<_>>(), cursor))? { receive(capture); }
+        }
+        return Ok(());
     };
 
-    let mut captures = Vec::new();
     for i in 0..state.outputs.len() {
+        if target.is_some_and(|(name, _)| state.outputs[i].1.name != name) { continue; }
         state.frame = FrameState::default();
         let output = state.outputs[i].0.clone();
-        let frame = manager.capture_output(i32::from(cursor), &output, &qh, ());
+        let frame = match target {
+            Some((_, (x, y, w, h))) => manager.capture_output_region(0, &output, x, y, w, h, &qh, ()),
+            None => manager.capture_output(i32::from(cursor), &output, &qh, ()),
+        };
         let v3 = manager.version() >= 3;
         while state.frame.format.is_none() || (v3 && !state.frame.buffer_done) {
             if state.frame.failed {
@@ -218,7 +241,9 @@ pub fn capture_all_with(cursor: bool) -> Result<Vec<Capture>> {
             queue.blocking_dispatch(&mut state)?;
         }
         let (format, width, height, stride) = state.frame.format.expect("checked above");
-        let size = (stride * height) as usize;
+        let size = (stride as usize).checked_mul(height as usize).context("capture size overflow")?;
+        anyhow::ensure!(width > 0 && height > 0 && u64::from(stride) >= u64::from(width) * RGBA_BYTES as u64 && size <= i32::MAX as usize, "invalid capture dimensions");
+        if target.is_some() { anyhow::ensure!(size <= panel::MAX_RAW_BYTES, "panel image exceeds the capture limit"); }
         let fd = rustix::fs::memfd_create("mandara-screencopy", rustix::fs::MemfdFlags::CLOEXEC)?;
         rustix::fs::ftruncate(&fd, size as u64)?;
         let pool = shm.create_pool(fd.as_fd(), size as i32, &qh, ());
@@ -230,18 +255,45 @@ pub fn capture_all_with(cursor: bool) -> Result<Vec<Capture>> {
             }
             queue.blocking_dispatch(&mut state)?;
         }
-        let mut file = std::fs::File::from(fd);
-        file.seek(SeekFrom::Start(0))?;
-        let mut data = Vec::with_capacity(size);
-        file.read_to_end(&mut data)?;
-        let rgba = to_rgba(format, width, height, stride, &data, state.frame.y_invert)?;
+        let file = std::fs::File::from(fd);
+        let mut data = vec![0; size];
+        std::os::unix::fs::FileExt::read_exact_at(&file, &mut data, 0)?;
+        let rgba = to_rgba_owned(format, width, height, stride, data, state.frame.y_invert)?;
         let info = &state.outputs[i].1;
-        captures.push(Capture { output: info.name.clone(), logical: info.logical, width, height, rgba });
+        let logical = match target {
+            Some((_, (x, y, w, h))) => (info.logical.0.checked_add(x).context("capture origin overflow")?, info.logical.1.checked_add(y).context("capture origin overflow")?, w, h),
+            None => info.logical,
+        };
+        receive(Capture { output: info.name.clone(), logical, width, height, rgba });
         buffer.destroy();
         pool.destroy();
         frame.destroy();
     }
-    Ok(captures)
+    Ok(())
+}
+
+/// Compact row padding and convert channels in the owned capture allocation.
+fn to_rgba_owned(format: wl_shm::Format, width: u32, height: u32, stride: u32, mut data: Vec<u8>, y_invert: bool) -> Result<Vec<u8>> {
+    let (height, stride) = (height as usize, stride as usize);
+    let row = (width as usize).checked_mul(RGBA_BYTES).context("capture row overflow")?;
+    let length = stride.checked_mul(height).context("capture size overflow")?;
+    anyhow::ensure!(row > 0 && height > 0 && stride >= row && data.len() == length, "invalid capture buffer");
+    anyhow::ensure!(matches!(format, wl_shm::Format::Argb8888 | wl_shm::Format::Xrgb8888 | wl_shm::Format::Abgr8888 | wl_shm::Format::Xbgr8888), "unsupported capture format");
+    if y_invert {
+        for y in 0..height / 2 {
+            let (top, bottom) = data.split_at_mut((height - 1 - y) * stride);
+            top[y * stride..(y + 1) * stride].swap_with_slice(&mut bottom[..stride]);
+        }
+    }
+    for y in 0..height { data.copy_within(y * stride..y * stride + row, y * row); }
+    data.truncate(row * height);
+    let bgr = matches!(format, wl_shm::Format::Argb8888 | wl_shm::Format::Xrgb8888);
+    let opaque = matches!(format, wl_shm::Format::Xrgb8888 | wl_shm::Format::Xbgr8888);
+    for pixel in data.as_chunks_mut::<RGBA_BYTES>().0 {
+        if bgr { pixel.swap(0, 2); }
+        if opaque { pixel[3] = u8::MAX; }
+    }
+    Ok(data)
 }
 
 /// One frame borrowed from a [`FrameSource`].
@@ -369,6 +421,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn owned_capture_conversion_matches_the_oracle_without_reallocating() {
+        for format in [wl_shm::Format::Argb8888, wl_shm::Format::Xrgb8888, wl_shm::Format::Abgr8888, wl_shm::Format::Xbgr8888] {
+            for invert in [false, true] {
+                let data: Vec<_> = (0..36).map(|i| (i * 7) as u8).collect();
+                let expected = to_rgba(format, 2, 3, 12, &data, invert).unwrap();
+                let pointer = data.as_ptr();
+                let result = to_rgba_owned(format, 2, 3, 12, data, invert).unwrap();
+                assert_eq!(result.as_ptr(), pointer);
+                assert_eq!(result, expected);
+            }
+        }
+        assert!(to_rgba_owned(wl_shm::Format::Argb8888, 2, 3, 7, vec![0; 21], false).is_err());
+        assert!(to_rgba_owned(wl_shm::Format::Argb8888, 2, 3, 12, vec![0; 35], false).is_err());
+    }
+
+    #[test]
     fn unavailable_capture_preserves_the_backend_failure() {
         let error = super::fallback_result(Err(anyhow::anyhow!("fixture has no ScreenShot2 service"))).unwrap_err();
         let message = format!("{error:#}");
@@ -397,11 +465,20 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires a marked private Wayland sandbox"]
     fn live_capture_if_available() {
-        if std::env::var_os("WAYLAND_DISPLAY").is_some()
-            && let Ok(caps) = capture_all()
-        {
-            assert!(caps.iter().all(|c| c.rgba.len() == (c.width * c.height * 4) as usize));
-        }
+        use std::os::unix::fs::{FileTypeExt as _, MetadataExt as _};
+        let runtime = std::path::PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR").unwrap()).canonicalize().unwrap();
+        assert!(runtime.starts_with("/tmp") || runtime.starts_with("/var/tmp"));
+        assert_eq!(std::fs::metadata(&runtime).unwrap().mode() & 0o777, 0o700);
+        assert!(runtime.join(".mandara-sandbox").is_file());
+        assert_eq!(std::env::var("DBUS_SYSTEM_BUS_ADDRESS").as_deref(), Ok("unix:path=/nonexistent"));
+        assert_eq!(std::env::var("DBUS_SESSION_BUS_ADDRESS").unwrap(), format!("unix:path={}/bus", runtime.display()));
+        let display = std::env::var("WAYLAND_DISPLAY").unwrap();
+        assert!(matches!(std::path::Path::new(&display).components().collect::<Vec<_>>().as_slice(), [std::path::Component::Normal(_)]));
+        assert!(std::fs::symlink_metadata(runtime.join(display)).unwrap().file_type().is_socket());
+        let caps = capture_all().unwrap();
+        assert!(!caps.is_empty());
+        assert!(caps.iter().all(|c| c.rgba.len() == c.width as usize * c.height as usize * RGBA_BYTES));
     }
 }

@@ -567,6 +567,7 @@ impl Render for ToastView {
         for item in &mut self.items {
             item.slot.set_instant(reduce);
             item.presence.set_instant(reduce);
+            item.swipe.motion.set_instant(reduce);
             if !item.leaving {
                 if item.slot.value() == 0.0 && item.presence.value() == 0.0 {
                     item.slot.snap_to(offset);

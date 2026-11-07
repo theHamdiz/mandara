@@ -14,8 +14,10 @@ system programs it starts are MangoWM, `dbus-daemon`, `bwrap`, PipeWire
 GitHub Pages serves `index.html` as the homepage and the Markdown guides as
 documentation. The homepage uses `assets/css/landing.css`; the shared
 `_includes/head-custom.html` supplies its phoenix favicon and light/dark
-colours. Keep asset and guide links behind Jekyll's `relative_url` filter
-so they also work under the repository's `/mandara/` path.
+colours. On the homepage, keep root-relative asset and guide links behind
+Jekyll's `relative_url` filter so they work under the repository's `/mandara/`
+path. Markdown guides use file-relative links, which preserve that base path
+and also work when reading the files on GitHub.
 
 The Look selector uses native radio controls and the FAQ uses `details`,
 so both work without JavaScript. Preview both colour schemes and narrow

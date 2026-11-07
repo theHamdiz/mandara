@@ -8511,3 +8511,9 @@
 "Open the Qur'an panel" = "Mở bảng Kinh Qur’an"
 
 "Open the Jannah panel" = "Mở bảng Jannah"
+
+# Panel captures
+"Copy panel image" = "Sao chép ảnh bảng"
+"Panel image copied" = "Đã sao chép ảnh bảng"
+"Panel capture failed: {error}" = "Không chụp được bảng: {error}"
+"The panel is not visible" = "Bảng không hiển thị"

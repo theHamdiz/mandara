@@ -8607,3 +8607,9 @@
 "Open the Qur'an panel" = "Buka panel Al-Quran"
 
 "Open the Jannah panel" = "Buka panel Jannah"
+
+# Panel captures
+"Copy panel image" = "Salin gambar panel"
+"Panel image copied" = "Gambar panel disalin"
+"Panel capture failed: {error}" = "Gagal mengambil gambar panel: {error}"
+"The panel is not visible" = "Panel tidak terlihat"

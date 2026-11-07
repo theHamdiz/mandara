@@ -8607,3 +8607,9 @@
 "Open the Qur'an panel" = "꾸란 패널 열기"
 
 "Open the Jannah panel" = "잔나 패널 열기"
+
+# Panel captures
+"Copy panel image" = "패널 이미지 복사"
+"Panel image copied" = "패널 이미지가 복사됨"
+"Panel capture failed: {error}" = "패널 캡처 실패: {error}"
+"The panel is not visible" = "패널이 표시되지 않습니다"

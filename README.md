@@ -83,6 +83,9 @@ Enter. Your words stay on your computer; inference runs off the UI thread
 and its model worker exits when finished or closed.
 [Meet the AI Shell Agent](docs/command-agent.md).
 
+Every plugin panel also has a camera button: copy what you see to the clipboard
+with a click, including floating and third-party panels. [Panel images](docs/panel-images.md).
+
 ## One shell, many desktops
 
 Pick a bar style, a wallpaper and a few desktop widgets, and Mandara turns

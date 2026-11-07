@@ -25,6 +25,7 @@ For a visual tour, try the [Look previews on the website](https://thehamdiz.gith
 | [Dock and launcher](dock-and-launcher.md) | The macOS-style dock, stacks, and the fuzzy launcher |
 | [Sidebar, notes and notifications](sidebar-and-notifications.md) | Sidebar tabs, to-do lists, Markdown notes, the notification center |
 | [Motion](motion.md) | Spring presets, live preview, accessibility and per-surface playback |
+| [Panel images](panel-images.md) | Copy a visible plugin panel to the clipboard |
 | [App themes](app-themes.md) | Opt-in palette exports, activation steps and restoring app files |
 | [Wallpapers](wallpapers.md) | The wallpaper picker and engine, and the wallpaper generator |
 | [Apps and updates](apps-and-updates.md) | Drag-and-drop app installer, the uninstaller, binary-patch updates |

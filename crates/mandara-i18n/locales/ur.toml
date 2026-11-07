@@ -8586,9 +8586,9 @@
 "Animation presets" = "حرکت کے پیش سیٹ"
 "Bouncy" = "اچھلتا"
 "Choose a feel, then adjust the spring below" = "ایک انداز چنیں، پھر نیچے اسپرنگ بدلیں"
-"Drag a history card left or right to remove it" = "ہٹانے کے لیے تاریخ کا کارڈ بائیں یا دائیں گھسیٹیں"
+"Drag a history card left or right to remove it" = "ہٹانے کے لیے اطلاعات کی ہسٹری کا کارڈ بائیں یا دائیں گھسیٹیں"
 "Follow system preference" = "سسٹم کی ترجیح اپنائیں"
-"How far a history card travels before it is dismissed" = "ہٹانے سے پہلے تاریخ کے کارڈ کو گھسیٹنے کا فاصلہ"
+"How far a history card travels before it is dismissed" = "ہٹانے سے پہلے اطلاعات کی ہسٹری کے کارڈ کو گھسیٹنے کا فاصلہ"
 "Live preview" = "براہ راست پیش منظر"
 "Lower values soften bounce; zero makes transitions instant" = "کم قدریں اچھال گھٹاتی ہیں؛ صفر پر تبدیلیاں فوراً ہوتی ہیں"
 "Motion intensity" = "حرکت کی شدت"
@@ -8608,3 +8608,9 @@
 "Open the Qur'an panel" = "قرآن کا پینل کھولیں"
 
 "Open the Jannah panel" = "جنت کا پینل کھولیں"
+
+# Panel captures
+"Copy panel image" = "پینل کی تصویر کاپی کریں"
+"Panel image copied" = "پینل کی تصویر کاپی ہو گئی"
+"Panel capture failed: {error}" = "پینل کی تصویر لینے میں ناکامی: {error}"
+"The panel is not visible" = "پینل نظر نہیں آ رہا"

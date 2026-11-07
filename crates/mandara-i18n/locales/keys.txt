@@ -1285,6 +1285,7 @@ Copy an ayah and its design as a complete PNG image
 Copy as
 Copy as image
 Copy from desktop
+Copy panel image
 Copy path
 Copy picked colors
 Copy report
@@ -4415,7 +4416,9 @@ Pairing…
 Pairs and connects devices through BlueZ
 Palette
 Panel animation
+Panel capture failed: {error}
 Panel edges
+Panel image copied
 Panel radius
 Panels
 Panels & plugins
@@ -6331,6 +6334,7 @@ The next prayer and the time to it (needs the Prayer times plugin)
 The next prayer and time remaining
 The old pond: a frog jumps in — the sound of the water.
 The oldest go first
+The panel is not visible
 The panel that drops from the bar item, or none.
 The password is empty
 The password needs 8–63 characters

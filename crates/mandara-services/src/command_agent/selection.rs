@@ -28,21 +28,34 @@ fn mode_argument(arg: &super::catalog::Argument) -> bool {
 
 fn switch_value(query: &str) -> Option<bool> {
     let lower = query.to_ascii_lowercase();
-    if lower
-        .split_whitespace()
-        .any(|word| matches!(word, "disable" | "deactivate"))
-        || lower.contains("turn off")
-    {
+    let has = |word| lower.split_whitespace().any(|part| part.trim_matches(|c: char| c.is_ascii_punctuation()) == word);
+    if has("disable") || has("deactivate") || (has("turn") && has("off")) {
         Some(false)
-    } else if lower
-        .split_whitespace()
-        .any(|word| matches!(word, "enable" | "activate"))
-        || lower.contains("turn on")
-    {
+    } else if has("enable") || has("activate") || (has("turn") && has("on")) {
         Some(true)
     } else {
         None
     }
+}
+
+/// A named command followed by one text value already supplies its argument.
+fn explicit_string<'a>(query: &'a str, command: &Command) -> Option<&'a str> {
+    let [arg] = command.args.as_slice() else { return None; };
+    if arg.kind != "string" { return None; }
+    let mut expected: Vec<_> = command.path.split_whitespace().map(str::to_ascii_lowercase).collect();
+    let mut actual = Vec::with_capacity(expected.len());
+    let mut rest = query.trim();
+    for _ in &expected {
+        let end = rest.find(char::is_whitespace)?;
+        let (word, tail) = rest.split_at(end);
+        actual.push(word.to_ascii_lowercase());
+        rest = tail.trim_start();
+    }
+    expected.sort_unstable();
+    actual.sort_unstable();
+    if actual != expected || rest.is_empty() { return None; }
+    Some(rest.strip_prefix('"').and_then(|s| s.strip_suffix('"'))
+        .or_else(|| rest.strip_prefix('\'').and_then(|s| s.strip_suffix('\''))).unwrap_or(rest))
 }
 
 /// Read explicit scalar values without interpreting identifiers such as h264 or 2:255.
@@ -184,6 +197,10 @@ pub(super) fn grounded(query: &str, commands: &[Command]) -> Vec<Command> {
         .into_iter()
         .map(|command| {
             let mut command = command.clone();
+            if let Some(value) = explicit_string(query, &command) {
+                command.args[0].kind = "value-enum".into();
+                command.args[0].values = vec![serde_json::Value::from(value)];
+            }
             if let [number] = numbers.as_slice()
                 && command
                     .args
@@ -235,6 +252,21 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn explicit_text_arguments_keep_references_and_spaces() {
+        let commands: Vec<Command> = serde_json::from_value(json!([
+            {"path":"quran read","summary":"Read an ayah","args":[{"name":"ref","kind":"string","required":true,"description":"surah or ayah"}]},
+            {"path":"bluetooth connect","summary":"Connect a device","args":[{"name":"device","kind":"string","required":true,"description":"device name"}]}
+        ])).unwrap();
+        for (query, index, value) in [("read quran 2:255", 0, "2:255"), ("quran read al-kahf", 0, "al-kahf"), ("connect Bluetooth \"Living room speaker\"", 1, "Living room speaker")] {
+            assert_eq!(explicit_string(query, &commands[index]), Some(value));
+            let selected = grounded(query, &commands[index..=index]);
+            assert_eq!(selected[0].args[0].values, [serde_json::Value::from(value)]);
+        }
+        assert_eq!(explicit_string("open quran", &commands[0]), None);
+        assert_eq!(explicit_string("read quran", &commands[0]), None);
+    }
+
+    #[test]
     fn appearance_modes_and_named_switches_keep_their_own_target() {
         let commands: Vec<Command> = serde_json::from_value(json!([
             {"path":"config set /theme/light_at","summary":"Light from","args":[{"name":"value","kind":"string","required":true,"description":"Scheduled light appearance"}]},
@@ -247,6 +279,8 @@ mod tests {
             ("enable light mode", "light"),
             ("disable light mode", "dark"),
             ("turn off dark mode", "light"),
+            ("turn light mode off", "dark"),
+            ("turn dark mode off.", "light"),
         ] {
             let selected = grounded(query, &commands);
             assert_eq!(selected.len(), 1);

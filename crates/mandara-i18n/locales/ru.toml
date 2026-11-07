@@ -8853,3 +8853,9 @@
 "Open the Qur'an panel" = "Открыть панель Корана"
 
 "Open the Jannah panel" = "Открыть панель «Джанна»"
+
+# Panel captures
+"Copy panel image" = "Копировать изображение панели"
+"Panel image copied" = "Изображение панели скопировано"
+"Panel capture failed: {error}" = "Не удалось сделать снимок панели: {error}"
+"The panel is not visible" = "Панель не видна"

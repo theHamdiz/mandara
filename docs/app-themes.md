@@ -12,10 +12,10 @@ Qt, Kvantum, KDE, terminal and editor integrations are described in
 
 | App | Generated file, relative to `$XDG_CONFIG_HOME` (normally `~/.config`) | Activate it |
 |---|---|---|
-| Cava | `cava/themes/mandara` | Set `theme = 'mandara'` in your config's `[color]` section; press `c` to reload colours. |
+| Cava | `cava/themes/mandara` | Set `theme = 'mandara'` in your config's `[color]` section; press `r` to reload that selection, then `c` for later palette changes. |
 | tmux | `tmux/mandara.conf` | Add `source-file ~/.config/tmux/mandara.conf` to your tmux config, adapting the path if you use another config directory. Reload that file in tmux after a palette change. |
 | Zellij | `zellij/themes/mandara.kdl` | Set `theme "mandara"` in `zellij/config.kdl`. Theme files are reloaded live. |
-| Spicetify | `spicetify/Themes/Mandara/color.ini` | After installing and setting up Spicetify, select `current_theme Mandara` and `color_scheme Mandara` with its `config` command, then run `spicetify apply`. Use `spicetify update` after palette changes. |
+| Spicetify | `spicetify/Themes/Mandara/color.ini` and `user.css` | After installing and setting up Spicetify, select `current_theme Mandara` and `color_scheme Mandara` with its `config` command, then run `spicetify apply`. Use `spicetify refresh` after palette changes. |
 
 Mandara writes only the generated files. It does not edit those apps' main
 configs, run Spicetify or signal other processes. Switching an integration

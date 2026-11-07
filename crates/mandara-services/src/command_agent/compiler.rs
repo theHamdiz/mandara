@@ -194,11 +194,7 @@ impl Compiler {
         } else {
             self.english_query(query)?
         };
-        if !english
-            .split_whitespace()
-            .any(|word| matches!(word.to_ascii_lowercase().as_str(), "and" | "then"))
-            && !english.contains(';')
-        {
+        if !compound(&english) {
             return Ok(vec![english]);
         }
         let prompt = chat(
@@ -286,6 +282,11 @@ impl Compiler {
     }
 }
 
+/// Keep ordinary requests on the single-action path while recognizing common joiners.
+fn compound(query: &str) -> bool {
+    query.contains([';', ',']) || query.split_whitespace().any(|word| matches!(word.to_ascii_lowercase().as_str(), "and" | "then" | "also" | "plus" | "&"))
+}
+
 #[cfg(test)]
 /// Exercise a compiler directly when pinned model fixtures are installed.
 fn compile(query: &str, commands: &[Command], engine: Engine) -> Result<Event> {
@@ -308,6 +309,12 @@ fn sample(logits: &[f32], mask: &llguidance::toktrie::SimpleVob) -> Result<u32> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compound_markers_reach_the_planner_without_expanding_single_actions() {
+        for query in ["mute the microphone, open the calendar", "dark mode; mute audio", "dark mode plus mute audio", "mute audio also open calendar", "mute audio & open calendar"] { assert!(compound(query), "{query}"); }
+        for query in ["open calendar", "read quran 2:255", "set volume to 40"] { assert!(!compound(query), "{query}"); }
+    }
 
     #[test]
     fn padded_model_vocabulary_cannot_escape_the_grammar_mask() {

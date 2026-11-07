@@ -8510,3 +8510,9 @@
 "Open the Qur'an panel" = "Abrir o painel do Alcorão"
 
 "Open the Jannah panel" = "Abrir o painel Jannah"
+
+# Panel captures
+"Copy panel image" = "Copiar imagem do painel"
+"Panel image copied" = "Imagem do painel copiada"
+"Panel capture failed: {error}" = "Falha ao capturar o painel: {error}"
+"The panel is not visible" = "O painel não está visível"

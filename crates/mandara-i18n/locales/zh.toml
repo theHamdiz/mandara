@@ -8848,3 +8848,9 @@
 "Open the Qur'an panel" = "打开《古兰经》面板"
 
 "Open the Jannah panel" = "打开 Jannah 面板"
+
+# Panel captures
+"Copy panel image" = "复制面板图像"
+"Panel image copied" = "面板图像已复制"
+"Panel capture failed: {error}" = "面板截图失败：{error}"
+"The panel is not visible" = "面板不可见"

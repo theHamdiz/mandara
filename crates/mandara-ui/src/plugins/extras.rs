@@ -150,6 +150,9 @@ pub fn search_box(id: &'static str, field: &Entity<TextField>, query: &str, pale
 pub struct Flash(Rc<RefCell<Option<(bool, SharedString, Instant)>>>);
 
 impl Flash {
+    /// Remove feedback when its owner hides or starts another action.
+    pub fn clear(&self) { self.0.borrow_mut().take(); }
+
     pub fn show(&self, ok: bool, msg: impl Into<SharedString>) {
         *self.0.borrow_mut() = Some((ok, msg.into(), Instant::now()));
     }
@@ -157,8 +160,9 @@ impl Flash {
     /// The live message (a cheap shared clone), scheduling the redraw that
     /// hides it.
     pub fn current(&self, window: &mut Window, cx: &mut App) -> Option<(bool, SharedString)> {
-        let toast = crate::state::config(cx).read(cx).snapshot().panels.toast().mul_f64(QUICK_TOAST_SHARE);
         let mut slot = self.0.borrow_mut();
+        slot.as_ref()?;
+        let toast = crate::state::config(cx).read(cx).snapshot().panels.toast().mul_f64(QUICK_TOAST_SHARE);
         if slot.as_ref().is_some_and(|(_, _, at)| at.elapsed() >= toast) {
             *slot = None;
         }

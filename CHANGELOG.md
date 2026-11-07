@@ -8,6 +8,7 @@ About → What's new shows it too.
 
 ### New
 
+- **Copy any panel as an image.** A camera beside the pin and float controls copies the visible panel straight to your clipboard and confirms with a green check. Floating panels have it too, including third-party plugins. Captures stay off the UI thread and release their working pixels when finished or cancelled.
 - **Motion that suits you.** Choose a spring preset, replay a live preview, follow the desktop's reduced-motion preference, soften bounce and set transition speed separately for each shell surface. Existing tuning stays yours. (#102)
 - **Swipe notification history away.** Drag a card left or right in the notification panel or sidebar to dismiss it. Vertical scrolling and small drags keep the card; Studio has an off switch and distance control. (#119)
 - **More apps in your colours.** Cava, tmux, Zellij and Spicetify now have opt-in palette exports in Studio → Themes → Other apps, with generated files that preserve your own configs. (#123)

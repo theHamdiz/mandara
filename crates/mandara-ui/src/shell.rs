@@ -102,6 +102,8 @@ pub struct ShellView {
     menu: Option<(PanelSpec, PanelCx)>,
     /// The detached panel's plugin id and instance (see [`DETACHED_SLOT`]).
     detached: Option<(String, PanelSpec, PanelCx)>,
+    /// Only the currently shown panel owns capture work and transient feedback.
+    panel_capture: Option<(String, crate::panel_capture::Owner)>,
     placement: Option<Placement>,
 
     /// This frame's resolved bar / panel geometry settings.
@@ -373,6 +375,9 @@ impl ShellView {
             // Only the output showing them takes the keyboard (two bars
             // focusing at once would steal it from each other).
             let s = shell.read(cx);
+            if this.panel_capture.as_ref().is_some_and(|(id, _)| s.panel_on(&this.monitor) != Some(id.as_str())) {
+                this.panel_capture = None;
+            }
             if s.panel_on(&this.monitor).is_some() || (s.sidebar_open && s.sidebar_visible_on(&this.monitor)) {
                 this.focus.focus(window, cx);
             }
@@ -454,6 +459,7 @@ impl ShellView {
             tabs: crate::sidebar_tabs::SidebarTabs::new(),
             menu: None,
             detached: None,
+            panel_capture: None,
             placement: None,
             metrics: Metrics::default_for(BarLayout::default(), BarPosition::default()),
             panel_custom: false,
@@ -765,6 +771,20 @@ impl ShellView {
     pub(crate) fn shown_rect(&self, id: &str) -> Option<Bounds<Pixels>> {
         let slot = self.panel_slot.filter(|_| self.panel_visible)?;
         (self.slot_plugin(slot)? == id).then(|| self.panel.value())
+    }
+
+    fn capture_for(&mut self, id: &str, cx: &mut Context<Self>) -> Entity<crate::panel_capture::Capture> {
+        if self.panel_capture.as_ref().is_none_or(|(current, _)| current != id) {
+            let state = crate::panel_capture::Owner::new(self.monitor.clone(), cx);
+            self.panel_capture = Some((id.to_string(), state));
+        }
+        self.panel_capture.as_ref().expect("capture owner was created").1.state.clone()
+    }
+
+    pub(crate) fn capture_panel(&mut self, id: &str, cx: &mut Context<Self>) -> Result<async_channel::Receiver<Result<String, String>>, String> {
+        let bounds = self.shown_rect(id).ok_or_else(|| mandara_i18n::t("The panel is not visible").to_string())?;
+        let state = self.capture_for(id, cx);
+        crate::panel_capture::start(&state, bounds, self.surface, cx)
     }
 
     /// `id`'s chip in the bar, when it is placed and visible.
@@ -1222,6 +1242,9 @@ impl Render for ShellView {
         let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
         let now = Instant::now();
         let cfg = self.config.read(cx).snapshot();
+        if self.panel_capture.as_ref().is_some_and(|(id, _)| self.shell.read(cx).panel_on(&self.monitor) != Some(id.as_str())) {
+            self.panel_capture = None;
+        }
         let palette = mandara_core::frame_palette(window, cx);
         let f = fonts(cx);
         let viewport = window.viewport_size();
@@ -1280,7 +1303,7 @@ impl Render for ShellView {
         // always while pinned.
         let tab_wanted = panel_open
             && self.panel_visible
-            && self.panel_slot.is_some_and(|s| s != MENU_SLOT)
+            && self.panel_slot.is_some()
             && self.panel_progress(&cfg) > PANEL_SETTLED_PROGRESS
             && (self.panel_hovered || self.tab_hovered || shell_state.panel_pinned);
         self.tab.set_target(if tab_wanted { 1.0 } else { 0.0 });
@@ -2179,16 +2202,20 @@ impl Render for ShellView {
             );
         }
 
-        // ── The panel's corner tab: pin and pop out ───────────────────────
+        // ── The panel's corner tab: pin, pop out and copy image ────────────
+        if !self.panel_visible { self.panel_capture = None; }
         let tab_p = self.tab.value().clamp(0.0, 1.0);
         if tab_p > HIDDEN_EPSILON
             && self.panel_visible
-            && let Some(slot) = self.panel_slot.filter(|s| *s != MENU_SLOT)
+            && self.shell.read(cx).panel_on(&self.monitor).is_some()
+            && let Some(slot) = self.panel_slot
             && let Some(id) = self.slot_plugin(slot).map(str::to_string)
         {
             let pinned = self.shell.read(cx).is_pinned(&id);
+            let capture = self.capture_for(&id, cx);
             let fill = if p_attached { panel_bar_fill.with_alpha(panel_opacity(panel_bar_fill.alpha(), panel_alpha, over_sidebar)) } else { fill.with_alpha(panel_opacity(fill.alpha(), panel_alpha, over_sidebar)) };
-            let len = 2.0 * TAB_BUTTON_PX + TAB_GAP_PX + 2.0 * TAB_PAD_PX;
+            let controls = if slot == MENU_SLOT { 1.0 } else { 3.0 };
+            let len = controls * TAB_BUTTON_PX + (controls - 1.0) * TAB_GAP_PX + 2.0 * TAB_PAD_PX;
             let depth = TAB_BUTTON_PX + 2.0 * TAB_PAD_PX;
             let t = crate::floating::geom::tab(rect_of(self.panel.value()), pm.position, len, depth, panel_radius + TAB_FLARE_PX, crate::bidi::rtl());
             let d = depth * tab_p;
@@ -2230,7 +2257,7 @@ impl Render for ShellView {
                         }
                         cx.notify();
                     }))
-                    .child(crate::kit::icon_button(
+                    .when(slot != MENU_SLOT, |row| row.child(crate::kit::icon_button(
                         "panel-pin",
                         if pinned { "pin" } else { "pin-off" },
                         TAB_BUTTON_PX,
@@ -2254,7 +2281,8 @@ impl Render for ShellView {
                                 tracing::warn!("floating `{id}`: {err}");
                             }
                         });
-                    }))
+                    })))
+                    .child(crate::panel_capture::button(&capture, self.panel.value(), self.surface, TAB_BUTTON_PX, ink, &palette, window, cx))
                     .child(self.mask.region()),
             );
         }

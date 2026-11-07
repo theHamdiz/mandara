@@ -1284,7 +1284,7 @@ impl StudioView {
         // Each card's background follows its language pack's download.
         let ui_rtl = mandara_ui::bidi::rtl();
         let mut wakes = Vec::new();
-        let visuals = self.lang_fills.frame(cfg.motion.reduce_motion, window, |after| wakes.push(after));
+        let visuals = self.lang_fills.frame(cfg.motion.reduced(mandara_core::spring::system_reduced_motion()), window, |after| wakes.push(after));
         for after in wakes {
             cx.spawn(async move |this, cx| {
                 cx.background_executor().timer(after).await;

@@ -11,7 +11,7 @@ use crate::palette::MandaraPalette;
 
 mod apps;
 mod terminal_apps;
-pub use terminal_apps::{cava, tmux, zellij, spicetify};
+pub use terminal_apps::{cava, tmux, zellij, spicetify, spicetify_css};
 mod ledger;
 pub use ledger::{BACKUP_SUFFIX, Ledger, MARKER, backup_path, fnv1a};
 pub use apps::{alacritty, firefox_userchrome, foot, helix, kde, kitty, neovim, pywal_json, vesktop, wezterm};
@@ -685,11 +685,12 @@ pub fn sync_apps(p: &MandaraPalette, targets: AppTargets, cache_dir: &Path, conf
         put(cache_dir.join("firefox/colors.json"), pywal_json(p, ""));
         put(cache_dir.join("firefox/userChrome.css"), firefox_userchrome(p));
     }
-    let owned: [OwnedTheme; 10] = [
+    let owned: [OwnedTheme; 11] = [
         (targets.cava, "cava", config_dir.join("cava/themes/mandara"), cava),
         (targets.tmux, "tmux", config_dir.join("tmux/mandara.conf"), tmux),
         (targets.zellij, "zellij", config_dir.join("zellij/themes/mandara.kdl"), zellij),
         (targets.spicetify, "spicetify", config_dir.join("spicetify/Themes/Mandara/color.ini"), spicetify),
+        (targets.spicetify, "spicetify", config_dir.join("spicetify/Themes/Mandara/user.css"), spicetify_css),
         (targets.kitty, "kitty", config_dir.join("kitty/themes/mandara.conf"), kitty),
         (targets.wezterm, "wezterm", config_dir.join("wezterm/colors/mandara.toml"), wezterm),
         (targets.helix, "helix", config_dir.join("helix/themes/mandara.toml"), helix),
@@ -864,7 +865,8 @@ mod tests {
         let all = AppTargets { cava: true, tmux: true, zellij: true, spicetify: true, kitty: true, foot: true, alacritty: true, wezterm: true, helix: true, neovim: true, firefox: true, vesktop: true, kde: true };
         let mut ledger = Ledger::default();
         let files = sync_apps(&palette(), all, &cache, &config, &data, &mut ledger);
-        assert_eq!(files.len(), 15);
+        assert_eq!(files.len(), 16);
+        assert!(config.join("spicetify/Themes/Mandara/user.css").is_file());
         assert!(files.iter().all(|f| f.starts_with(&dir) && f.is_file()));
         assert_eq!(std::fs::read_to_string(config.join("kitty/kitty.conf")).unwrap(), "font_size 11\n");
         assert!(data.join("color-schemes/Mandara.colors").is_file());

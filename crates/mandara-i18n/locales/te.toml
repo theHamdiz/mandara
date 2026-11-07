@@ -8511,3 +8511,9 @@
 "Open the Qur'an panel" = "ఖురాన్ ప్యానెల్ తెరువు"
 
 "Open the Jannah panel" = "జన్నా ప్యానెల్ తెరువు"
+
+# Panel captures
+"Copy panel image" = "ప్యానెల్ చిత్రాన్ని కాపీ చేయండి"
+"Panel image copied" = "ప్యానెల్ చిత్రం కాపీ అయింది"
+"Panel capture failed: {error}" = "ప్యానెల్ క్యాప్చర్ విఫలమైంది: {error}"
+"The panel is not visible" = "ప్యానెల్ కనిపించడం లేదు"
