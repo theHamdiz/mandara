@@ -15,7 +15,7 @@ pub mod shm_canvas;
 pub mod spring;
 pub mod theme;
 
-pub use frame::{DrawerEnd, Edge, FlareCenter, FrameShape, PanelShape, concave_flare, edge_drawer, edge_drawer_ends, edge_drawer_snapped, snap, snap_rect};
+pub use frame::{DrawerEnd, Edge, FlareCenter, FrameShape, PanelShape, concave_flare, concave_flare_overlapping, edge_drawer, edge_drawer_ends, edge_drawer_snapped, snap, snap_rect};
 pub use input_mask::InputMaskRegistry;
 pub use layer::{EXCLUSION_STRIP_THICKNESS_PX, LayerSurfaceSpec, SHELL_APP_ID, STUDIO_APP_ID, SurfaceRole};
 pub use material::{ToGpui, glass_fill, glass_rim, glass_rim_width, grain_overlay, oklab_gradient};

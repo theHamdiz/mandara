@@ -25,7 +25,7 @@ use gpui::{
 };
 use mandara_config::ShellConfig;
 use mandara_core::{ToGpui, oklab_gradient};
-use mandara_i18n::{t, tf, tk};
+use mandara_i18n::{Lang, t, tf, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
 use mandara_services::world_clock::{self as wc, Daylight, Place, Sky};
 use mandara_theme::{Color, MandaraPalette};
@@ -44,6 +44,8 @@ use crate::state::update_config;
 use crate::text_field::TextField;
 
 pub const ID: &str = "world-clock";
+
+mod planner;
 
 // ── Layout ───────────────────────────────────────────────────────────────
 
@@ -252,7 +254,7 @@ pub fn remove_city(key: &str, cx: &mut App) -> Result<(), String> {
 }
 
 fn h24(cfg: &ShellConfig) -> bool {
-    match cfg.plugins.setting(ID, "clock", String::from("shell")).as_str() {
+    match cfg.plugins.setting_str(ID, "clock").unwrap_or("shell") {
         "12" => false,
         "24" => true,
         _ => cfg.general.clock_24h,
@@ -346,14 +348,28 @@ struct Row {
 }
 
 /// What the rows were computed from: the displayed minute, the clock
-/// style, working hours and the UI script (plus the city list, compared by
-/// identity next to it).
+/// style, working hours, UI script and resolved language (plus the city
+/// list, compared by identity next to it).
 #[derive(Clone, PartialEq)]
 struct RowsKey {
     minute: i64,
     h24: bool,
     work: (u32, u32),
     arabic_ui: bool,
+    language: Lang,
+    local_offset: i32,
+}
+
+/// Both current and shifted local offsets can change across a planner's DST boundary.
+#[derive(PartialEq)]
+struct HeaderKey {
+    minute: i64,
+    shift: i64,
+    h24: bool,
+    language: Lang,
+    time_locale: chrono::Locale,
+    local_offset: i32,
+    shifted_offset: i32,
 }
 
 fn sun_text(place: &Place, at: DateTime<Utc>, h24: bool) -> Option<String> {
@@ -380,12 +396,14 @@ fn sky_at(place: &Place, at: DateTime<Utc>) -> Option<Sky> {
     place.coords.map(|(lat, lon)| wc::sky(wc::solar_altitude(lat, lon, at)))
 }
 
-fn build_row(place: &Place, at: DateTime<Utc>, h24: bool, work: (u32, u32), arabic_ui: bool) -> Row {
-    let local = at.with_timezone(&Local);
+fn build_row<Tz: chrono::TimeZone>(place: &Place, at: DateTime<Tz>, h24: bool, work: (u32, u32), arabic_ui: bool) -> Row {
+    let local_date = at.date_naive();
+    let local_offset = at.offset().fix().local_minus_utc();
+    let at = at.with_timezone(&Utc);
     let lt = place.time(at);
     let clock = wc::format_time(lt.hour(), lt.minute(), h24);
-    let delta = wc::day_delta(lt.date_naive(), local.date_naive());
-    let offset = place.utc_offset(at) - local_offset(at);
+    let delta = wc::day_delta(lt.date_naive(), local_date);
+    let offset = place.utc_offset(at) - local_offset;
     let mut detail = vec![day_label(delta), offset_label(offset)];
     if let Some(sun) = sun_text(place, at, h24) {
         detail.push(sun);
@@ -573,16 +591,13 @@ fn city_row(row: &Row, c: &Ctx<'_>) -> AnyElement {
 
 /// The meeting planner: a track with hour ticks and a knob that shifts all
 /// clocks by up to ±12 h in 15-minute steps.
-fn planner(shift: &Rc<Cell<i64>>, when: SharedString, views: &ViewSet, palette: &MandaraPalette, radius: f32) -> AnyElement {
+fn planner(shift: &Rc<Cell<i64>>, bounds: &Rc<Cell<Bounds<Pixels>>>, when: SharedString, views: &ViewSet, palette: &MandaraPalette, radius: f32) -> AnyElement {
     let accent = readable(palette.primary, palette);
     let v = fraction_for(shift.get());
-    let bounds: Rc<Cell<Bounds<Pixels>>> = Rc::default();
+    let bounds = bounds.clone();
     let pick = {
         let bounds = bounds.clone();
-        move |x: Pixels| {
-            let b = bounds.get();
-            ((f32::from(x) - f32::from(b.origin.x)) / f32::from(b.size.width).max(1.0)).clamp(0.0, 1.0)
-        }
+        move |x: Pixels| planner::fraction(&bounds, x)
     };
     let (pick_down, pick_move) = (pick.clone(), pick);
     let (s_down, s_move) = (shift.clone(), shift.clone());
@@ -749,14 +764,54 @@ fn panel_height(cities: usize, query: bool, results: usize) -> f32 {
 struct Caches {
     rows: Option<(RowsKey, Rc<[Place]>, Rc<[Row]>)>,
     search: Option<(String, i64, Rc<[Hit]>)>,
-    /// `(minute, h24)` → header subtitle and planner label.
-    header: Option<((i64, i64, bool), SharedString, SharedString, SharedString)>,
+    header: Option<(HeaderKey, SharedString, SharedString, SharedString)>,
+}
+
+impl Caches {
+    /// Reuse city text only while its displayed time, settings and language agree.
+    fn rows<Tz: chrono::TimeZone>(&mut self, places: &Rc<[Place]>, at: DateTime<Tz>, h24: bool, work: (u32, u32), arabic_ui: bool) -> Rc<[Row]> {
+        let key = RowsKey {
+            minute: at.timestamp().div_euclid(SECS_PER_MIN), h24, work, arabic_ui, language: mandara_i18n::language(), local_offset: at.offset().fix().local_minus_utc(),
+        };
+        if let Some((previous, cached_places, rows)) = &self.rows
+            && *previous == key && Rc::ptr_eq(cached_places, places)
+        {
+            return rows.clone();
+        }
+        let rows: Rc<[Row]> = places.iter().map(|place| build_row(place, at.clone(), h24, work, arabic_ui)).collect();
+        self.rows = Some((key, places.clone(), rows.clone()));
+        rows
+    }
+
+    /// Resolved date locale and local offsets key the same values used for formatting.
+    fn header<Tz: chrono::TimeZone>(&mut self, now: DateTime<Tz>, shift: i64, h24: bool, time_locale: chrono::Locale) -> (SharedString, SharedString, SharedString) {
+        let shifted = now.clone() + chrono::Duration::minutes(shift);
+        let key = HeaderKey {
+            minute: now.timestamp().div_euclid(SECS_PER_MIN), shift, h24, language: mandara_i18n::language(), time_locale,
+            local_offset: now.offset().fix().local_minus_utc(), shifted_offset: shifted.offset().fix().local_minus_utc(),
+        };
+        if let Some((previous, subtitle, when, utc)) = &self.header
+            && *previous == key
+        {
+            return (subtitle.clone(), when.clone(), utc.clone());
+        }
+        let lc = wc::format_time(now.hour(), now.minute(), h24);
+        let zone_name = iana_local().map(|z| wc::zone_display_name(&z)).unwrap_or_else(|| t("Local time").to_string());
+        let subtitle: SharedString = format!("{zone_name} · {}", clock_with_meridiem(&lc)).into();
+        let sc = wc::format_time(shifted.hour(), shifted.minute(), h24);
+        let when: SharedString = format!("{} · {} {}", shift_label(shift), shifted.date_naive().format_localized("%a", time_locale), clock_with_meridiem(&sc)).into();
+        let utc: SharedString = utc_label(key.local_offset).into();
+        self.header = Some((key, subtitle.clone(), when.clone(), utc.clone()));
+        (subtitle, when, utc)
+    }
 }
 
 struct View {
     p: PanelCx,
     field: Entity<TextField>,
     shift: Rc<Cell<i64>>,
+    /// Current and prior drag handlers read the same latest track layout.
+    planner_bounds: Rc<Cell<Bounds<Pixels>>>,
     last_render: Rc<Cell<Option<Instant>>>,
     size_cell: Rc<Cell<gpui::Size<Pixels>>>,
     views: ViewSet,
@@ -801,7 +856,6 @@ impl View {
         }
         let shift = self.shift.get();
         let at = now + chrono::Duration::minutes(shift);
-        let minute = at.timestamp().div_euclid(SECS_PER_MIN);
         let now_minute = now.timestamp().div_euclid(SECS_PER_MIN);
         let list = cached_places(&cfg);
         let query = self.field.read(cx).value.clone();
@@ -809,15 +863,7 @@ impl View {
         let (clock24, work, arabic_ui) = (h24(&cfg), work_hours(&cfg), cfg.general.locale.is_arabic());
         let mut caches = self.caches.borrow_mut();
 
-        let rows_key = RowsKey { minute, h24: clock24, work, arabic_ui };
-        let rows = match &caches.rows {
-            Some((k, places, rows)) if *k == rows_key && Rc::ptr_eq(places, &list) => rows.clone(),
-            _ => {
-                let rows: Rc<[Row]> = list.iter().map(|pl| build_row(pl, at, clock24, work, arabic_ui)).collect();
-                caches.rows = Some((rows_key, list.clone(), rows.clone()));
-                rows
-            }
-        };
+        let rows = caches.rows(&list, at.with_timezone(&Local), clock24, work, arabic_ui);
         let hits: Rc<[Hit]> = if query_trimmed.is_empty() {
             Rc::from([])
         } else {
@@ -837,18 +883,7 @@ impl View {
                 }
             }
         };
-        let header_key = (now_minute, shift, clock24);
-        if caches.header.as_ref().is_none_or(|(k, ..)| *k != header_key) {
-            let local = now.with_timezone(&Local);
-            let lc = wc::format_time(local.hour(), local.minute(), clock24);
-            let zone_name = iana_local().map(|z| wc::zone_display_name(&z)).unwrap_or_else(|| t("Local time").to_string());
-            let subtitle = format!("{zone_name} · {}", clock_with_meridiem(&lc));
-            let shifted = at.with_timezone(&Local);
-            let sc = wc::format_time(shifted.hour(), shifted.minute(), clock24);
-            let when = format!("{} · {} {}", shift_label(shift), crate::widgets::clock::localized(&shifted, "%a"), clock_with_meridiem(&sc));
-            caches.header = Some((header_key, subtitle.into(), when.into(), utc_label(local_offset(now)).into()));
-        }
-        let Some((_, subtitle, when, utc)) = caches.header.clone() else { return div().into_any_element() };
+        let (subtitle, when, utc) = caches.header(now.with_timezone(&Local), shift, clock24, crate::widgets::clock::locale());
         drop(caches);
 
         let f = fonts(cx);
@@ -911,7 +946,7 @@ impl View {
             .flex_col()
             .child(reveal(p, 0, head))
             .child(div().h(px(GAP)))
-            .child(reveal(p, 1, planner(&self.shift, when, &self.views, palette, radius)))
+            .child(reveal(p, 1, planner(&self.shift, &self.planner_bounds, when, &self.views, palette, radius)))
             .child(div().h(px(GAP)))
             .child(reveal(
                 p,
@@ -1021,6 +1056,7 @@ pub fn register(r: &mut PluginRegistry) {
                 p: panel_cx.clone(),
                 field,
                 shift: Rc::new(Cell::new(0)),
+                planner_bounds: Rc::default(),
                 last_render: Rc::default(),
                 size_cell: size_cell.clone(),
                 views,
@@ -1108,6 +1144,102 @@ pub fn register(r: &mut PluginRegistry) {
 mod tests {
     use super::*;
 
+    /// Unchanged minutes and city names still refresh translated row/header text.
+    #[test]
+    fn text_caches_follow_same_minute_language_switches() {
+        let at = Utc.with_ymd_and_hms(2026, 11, 6, 12, 0, 0).unwrap();
+        let places: Rc<[Place]> = vec![wc::resolve("Cairo").unwrap()].into();
+        let mut cache = Caches::default();
+        let (english, english_header) = {
+            let _language = mandara_i18n::scoped(Some(Lang::En));
+            (cache.rows(&places, at, true, (9, 17), false), cache.header(at, 0, true, chrono::Locale::en_US))
+        };
+        for language in [Lang::De, Lang::Ar] {
+            let _language = mandara_i18n::scoped(Some(language));
+            // Keep even the script flag unchanged: resolved language is its own key.
+            let rows = cache.rows(&places, at, true, (9, 17), false);
+            assert!(!Rc::ptr_eq(&english, &rows));
+            assert_eq!(rows[0].detail, build_row(&places[0], at, true, (9, 17), false).detail);
+            assert_ne!(rows[0].detail, english[0].detail);
+            assert!(Rc::ptr_eq(&rows, &cache.rows(&places, at, true, (9, 17), false)));
+            let header = cache.header(at, 0, true, chrono::Locale::en_US);
+            assert!(header.1.starts_with(mandara_i18n::t_in(language, "Now")));
+            assert_ne!(header.1, english_header.1);
+            assert_eq!(header, cache.header(at, 0, true, chrono::Locale::en_US));
+        }
+    }
+
+    /// Language keys retain the existing time, clock, work, script and city identity.
+    #[test]
+    fn text_cache_invalidation_keeps_planner_and_city_inputs() {
+        let _language = mandara_i18n::scoped(Some(Lang::En));
+        let at = Utc.with_ymd_and_hms(2026, 11, 6, 12, 0, 0).unwrap();
+        let places: Rc<[Place]> = vec![wc::resolve("Cairo").unwrap()].into();
+        let mut cache = Caches::default();
+        let base = cache.rows(&places, at, true, (9, 17), false);
+        let shifted = cache.rows(&places, at + chrono::Duration::minutes(15), true, (9, 17), false);
+        assert!(!Rc::ptr_eq(&base, &shifted));
+        let clock = cache.rows(&places, at, false, (9, 17), false);
+        assert_ne!(clock[0].meridiem, base[0].meridiem);
+        let work = cache.rows(&places, at, false, (0, 0), false);
+        assert!(!Rc::ptr_eq(&clock, &work));
+        let arabic = cache.rows(&places, at, false, (0, 0), true);
+        assert_ne!(arabic[0].primary, work[0].primary);
+        let new_places: Rc<[Place]> = vec![wc::resolve("Tokyo").unwrap()].into();
+        let changed = cache.rows(&new_places, at, false, (0, 0), true);
+        assert_ne!(changed[0].key, arabic[0].key);
+        let header = cache.header(at, 0, true, chrono::Locale::en_US);
+        assert_ne!(header.1, cache.header(at, 15, true, chrono::Locale::en_US).1);
+        assert_ne!(header.1, cache.header(at + chrono::Duration::minutes(1), 0, true, chrono::Locale::en_US).1);
+        assert_ne!(header.1, cache.header(at, 0, false, chrono::Locale::en_US).1);
+    }
+
+    /// Date-name overrides and time zones are explicit inputs, without global mutation.
+    #[test]
+    fn cached_text_tracks_date_locale_offsets_and_shifted_dst() {
+        let _language = mandara_i18n::scoped(Some(Lang::En));
+        let at = Utc.with_ymd_and_hms(2026, 11, 6, 12, 0, 0).unwrap();
+        let mut cache = Caches::default();
+        let english = cache.header(at, 0, true, chrono::Locale::en_US);
+        for locale in [chrono::Locale::de_DE, chrono::Locale::ar_EG] {
+            let header = cache.header(at, 0, true, locale);
+            assert_ne!(header.1, english.1);
+            assert!(header.1.contains(&at.date_naive().format_localized("%a", locale).to_string()));
+        }
+        let zone = chrono::FixedOffset::east_opt(2 * 3600).unwrap();
+        let local = at.with_timezone(&zone);
+        let header = cache.header(local, 0, true, chrono::Locale::en_US);
+        assert_ne!(header.1, english.1);
+        assert_eq!(header.2, "UTC+2");
+        let places: Rc<[Place]> = vec![wc::resolve("Cairo").unwrap()].into();
+        let utc_rows = cache.rows(&places, at, true, (9, 17), false);
+        let local_rows = cache.rows(&places, local, true, (9, 17), false);
+        assert!(!Rc::ptr_eq(&utc_rows, &local_rows));
+        assert_ne!(utc_rows[0].detail, local_rows[0].detail);
+        let berlin: wc::Tz = "Europe/Berlin".parse().unwrap();
+        let before_dst = Utc.with_ymd_and_hms(2026, 10, 25, 0, 30, 0).unwrap().with_timezone(&berlin);
+        let shifted = cache.header(before_dst, 120, true, chrono::Locale::en_US);
+        assert!(shifted.1.ends_with("03:30"), "the planner follows the zone across the DST boundary");
+        eprintln!("World Clock text keys: rows={} B, header={} B; retained planner bounds={} B", size_of::<RowsKey>(), size_of::<HeaderKey>(), size_of::<Bounds<Pixels>>());
+    }
+
+    /// Clock overrides still follow the shell for missing, unknown or mistyped values.
+    #[test]
+    fn clock_override_borrows_text_and_keeps_shell_fallback() {
+        let mut config = ShellConfig::default();
+        for shell in [false, true] {
+            config.general.clock_24h = shell;
+            config.plugins.settings.remove(ID);
+            assert_eq!(h24(&config), shell);
+            for (value, expected) in [("12", false), ("24", true), ("unknown", shell)] {
+                config.plugins.settings.entry(ID.into()).or_default().insert("clock".into(), toml::Value::String(value.into()));
+                assert_eq!(h24(&config), expected);
+            }
+            config.plugins.settings.get_mut(ID).unwrap().insert("clock".into(), toml::Value::Integer(24));
+            assert_eq!(h24(&config), shell);
+        }
+    }
+
     #[test]
     fn planner_snaps_to_quarter_hours() {
         assert_eq!(shift_for(0.5), 0);
@@ -1164,7 +1296,7 @@ mod tests {
     #[test]
     fn rows_cover_the_day_strip() {
         let place = wc::resolve("Cairo").expect("Cairo resolves");
-        let row = build_row(&place, Utc::now(), true, (9, 17), false);
+        let row = build_row(&place, Local::now(), true, (9, 17), false);
         assert_eq!(row.strip.len(), STRIP_SEGMENTS);
         assert!(row.secondary.as_ref().is_some_and(|(_, arabic)| *arabic));
     }

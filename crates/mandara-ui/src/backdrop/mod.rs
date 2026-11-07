@@ -208,6 +208,8 @@ impl Scene {
 
 enum Msg {
     Scene(Box<Scene>),
+    Edit(String, widgets::actions::Action),
+    TextEditing(bool),
 }
 
 enum Event {
@@ -221,6 +223,8 @@ enum Event {
     Boxes(Vec<OutputBoxes>),
     /// A click (or a scroll step) on a widget's clickable area.
     Widget(String, widgets::actions::Action),
+    Edit(String, widgets::actions::Action, crate::desktop_text::placement::Placement),
+    FinishText,
     /// The renderer could not start; the shell falls back to GPUI.
     Failed(String),
 }
@@ -298,9 +302,15 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
                     }
                     refresh(cx);
                 }
-                Event::Menu(output, x, y, size) => crate::desktop_menu::open_sized(&output, (x, y), size, cx),
+                Event::Menu(output, x, y, size) => {
+                    crate::desktop_text::after_save(cx, move |cx| crate::desktop_menu::open_sized(&output, (x, y), size, cx));
+                }
                 Event::Boxes(boxes) => crate::desktop_edit::on_boxes(boxes, cx),
-                Event::Widget(id, action) => crate::desktop_actions::run(&id, action, cx),
+                Event::Widget(id, action) => {
+                    crate::desktop_text::after_save(cx, move |cx| crate::desktop_actions::run(&id, action, cx));
+                }
+                Event::Edit(id, action, placement) => crate::desktop_text::open(id, action, placement, cx),
+                Event::FinishText => { crate::desktop_text::finish(cx); }
                 Event::Failed(why) => {
                     tracing::warn!("wallpaper: software renderer unavailable ({why}); using GPUI windows");
                     cx.remove_global::<GlobalBackdrop>();
@@ -380,6 +390,23 @@ pub(crate) fn refresh(cx: &mut App) {
     d.last = Some(scene.clone());
     if d.tx.send(Msg::Scene(Box::new(scene))).is_ok() {
         d.waker.wake();
+    }
+}
+
+/// Locate a widget only when its text is requested; idle rendering keeps
+/// no additional geometry table or editor window.
+pub(crate) fn edit_widget(widget: &str, action: widgets::actions::Action, cx: &App) -> Result<(), String> {
+    let missing = || mandara_i18n::tf("No desktop widget {id}", &[("id", &widget)]);
+    let driver = cx.try_global::<GlobalBackdrop>().ok_or_else(missing)?.0.borrow();
+    driver.tx.send(Msg::Edit(widget.to_owned(), action)).map_err(|_| missing())?;
+    driver.waker.wake();
+    Ok(())
+}
+
+pub(crate) fn text_editing(active: bool, cx: &App) {
+    if let Some(driver) = cx.try_global::<GlobalBackdrop>() {
+        let driver = driver.0.borrow();
+        if driver.tx.send(Msg::TextEditing(active)).is_ok() { driver.waker.wake(); }
     }
 }
 
@@ -1011,6 +1038,7 @@ impl Out {
 }
 
 struct Renderer {
+    text_editing: bool,
     scene: Option<Scene>,
     outs: Vec<Out>,
     text: Option<TextPainter>,
@@ -1048,6 +1076,7 @@ fn run(layer: CanvasLayer, rx: mpsc::Receiver<Msg>, waker: Arc<Waker>, events: a
     tracing::info!("wallpaper: software renderer (alpha modifier: {}, viewporter: {})", host.supports_alpha(), host.supports_viewport());
     let (jobs_tx, jobs_rx) = mpsc::channel();
     let mut r = Renderer {
+        text_editing: false,
         scene: None,
         outs: Vec::new(),
         text: None,
@@ -1072,6 +1101,12 @@ fn run(layer: CanvasLayer, rx: mpsc::Receiver<Msg>, waker: Arc<Waker>, events: a
                     r.scene = Some(*s);
                     new_scene = true;
                 }
+                Ok(Msg::Edit(widget, action)) => {
+                    if !r.report_edit(&widget, &action, None, &events) {
+                        tracing::warn!(widget, "desktop widget is not painted on a connected output");
+                    }
+                }
+                Ok(Msg::TextEditing(active)) => r.text_editing = active,
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
             }
@@ -1100,6 +1135,17 @@ fn run(layer: CanvasLayer, rx: mpsc::Receiver<Msg>, waker: Arc<Waker>, events: a
 }
 
 impl Renderer {
+    fn report_edit(&self, widget: &str, action: &widgets::actions::Action, output: Option<&str>, events: &async_channel::Sender<Event>) -> bool {
+        let Some((out, bounds, geom)) = self.outs.iter().filter(|out| output.is_none_or(|name| out.name == name)).find_map(|out| Some((out, out.widgets.bounds(widget)?, out.geom?))) else { return false };
+        let k = mandara_core::shm_canvas::SCALE_DENOMINATOR as f32 / geom.scale120.max(1) as f32;
+        let placement = crate::desktop_text::placement::Placement {
+            output: out.name.clone(),
+            bounds: [bounds.x as f32 * k, bounds.y as f32 * k, bounds.w as f32 * k, bounds.h as f32 * k],
+            output_size: (geom.logical.0 as f32, geom.logical.1 as f32),
+        };
+        events.send_blocking(Event::Edit(widget.to_owned(), action.clone(), placement)).is_ok()
+    }
+
     /// Right-clicks on the desktop go to the shell; left clicks and scroll
     /// steps on a widget's clickable area run its action (scrolling over a
     /// level nudges it); other buttons do nothing.
@@ -1116,13 +1162,20 @@ impl Renderer {
                 BTN_LEFT | SCROLL_UP | SCROLL_DOWN => {
                     let Some(geom) = out.geom else { continue };
                     let k = geom.scale120 as f32 / SCALE_DENOMINATOR as f32;
-                    let Some((id, action)) = out.widgets.hit((p.x as f32 * k, p.y as f32 * k)) else { continue };
+                    let Some((id, action)) = out.widgets.hit((p.x as f32 * k, p.y as f32 * k)) else {
+                        if p.button == BTN_LEFT && self.text_editing { let _ = events.send_blocking(Event::FinishText); }
+                        continue;
+                    };
                     let action = match (p.button, action) {
                         (BTN_LEFT, a) => a,
                         (b, Action::Level(what, _) | Action::Step(what, _)) => Action::Step(what, if b == SCROLL_UP { 1 } else { -1 }),
                         _ => continue,
                     };
-                    let _ = events.send_blocking(Event::Widget(id, action));
+                    if action.edits_text() {
+                        self.report_edit(&id, &action, Some(&out.name), events);
+                    } else {
+                        let _ = events.send_blocking(Event::Widget(id, action));
+                    }
                 }
                 _ => {}
             }

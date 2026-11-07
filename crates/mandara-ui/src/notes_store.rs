@@ -22,6 +22,12 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+mod snapshot;
+mod scan;
+mod watch;
+pub use snapshot::{NotesSnapshot, ReadError};
 use std::time::SystemTime;
 
 use anyhow::{Context as _, Result};
@@ -79,6 +85,13 @@ struct Index {
     next_id: u64,
 }
 
+#[derive(Serialize)]
+struct IndexRef<'a> {
+    topics: &'a [Topic],
+    ids: &'a BTreeMap<String, u64>,
+    next_id: u64,
+}
+
 /// One note.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Note {
@@ -133,36 +146,123 @@ fn rel(path: &Path) -> String {
 
 /// Every note and topic under one root folder.
 pub struct NoteStore {
-    pub root: PathBuf,
-    pub topics: Vec<Topic>,
-    /// Most recently edited first.
-    pub notes: Vec<Note>,
+    view: NotesSnapshot,
     ids: BTreeMap<String, u64>,
     next_id: u64,
+    index_error: Option<String>,
+    scan_error: Option<String>,
+    index_dirty: bool,
+    watcher: Option<notify::RecommendedWatcher>,
+}
+
+impl std::ops::Deref for NoteStore {
+    type Target = NotesSnapshot;
+    fn deref(&self) -> &Self::Target { &self.view }
+}
+
+impl std::ops::DerefMut for NoteStore {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.view }
 }
 
 impl NoteStore {
+    /// A stale retained body must never replace bytes that the scan could not read.
+    pub(crate) fn ensure_writable(&self, id: u64) -> Result<()> {
+        if let Some(error) = self.note(id).and_then(|note| note.path.as_deref()).and_then(|path| self.read_error(path)) {
+            anyhow::bail!("{}", error.message);
+        }
+        Ok(())
+    }
+
+    /// Folder mutations cannot bypass a failed child file's protection.
+    fn ensure_topic_writable(&self, id: u64) -> Result<()> {
+        let topic = self.topic(id).context("no such topic")?;
+        if let Some(error) = self.read_errors.as_ref().and_then(|errors| errors.iter().find(|error| Path::new(&error.path).parent() == Some(Path::new(&topic.dir)))) {
+            anyhow::bail!("{}", error.message);
+        }
+        Ok(())
+    }
     /// Opens (creating) `root` and scans it.
     pub fn open(root: &Path) -> Self {
         let index: Index = std::fs::read_to_string(root.join(INDEX_FILE)).ok().and_then(|s| toml::from_str(&s).ok()).unwrap_or_default();
-        let mut s = Self { root: root.to_path_buf(), topics: index.topics, notes: Vec::new(), ids: index.ids, next_id: index.next_id.max(1) };
+        let mut s = Self { view: NotesSnapshot { root: root.to_path_buf(), topics: index.topics, notes: Vec::new(), read_errors: None }, ids: index.ids, next_id: index.next_id.max(1), index_error: None, scan_error: None, index_dirty: false, watcher: None };
         if let Err(err) = std::fs::create_dir_all(root) {
             tracing::warn!("notes folder {}: {err:#}", root.display());
         }
-        s.scan();
+        s.rescan(&[]);
         s
     }
 
-    fn save_index(&self) {
-        let index = Index { topics: self.topics.clone(), ids: self.ids.clone(), next_id: self.next_id };
-        let Ok(text) = toml::to_string(&index) else { return };
-        if let Err(err) = mandara_config::write_atomic(&self.root.join(INDEX_FILE), text.as_bytes()) {
-            tracing::warn!("saving the notes index: {err:#}");
+    fn save_index(&mut self) {
+        self.index_dirty = true;
+        let _ = self.persist_index();
+    }
+
+    /// Retries metadata after a content or rename operation partially succeeded.
+    pub fn persist_index(&mut self) -> Result<()> {
+        let result = self.scan_result().and_then(|()| self.write_index());
+        self.index_error = result.as_ref().err().map(|error| format!("{error:#}"));
+        if result.is_ok() { self.index_dirty = false; }
+        result
+    }
+
+    fn write_index(&self) -> Result<()> {
+        let index = IndexRef { topics: &self.view.topics, ids: &self.ids, next_id: self.next_id };
+        let text = toml::to_string(&index)?;
+        let path = self.view.root.join(INDEX_FILE);
+        if std::fs::read(&path).is_ok_and(|current| current == text.as_bytes()) {
+            return Ok(());
+        }
+        mandara_config::write_atomic(&path, text.as_bytes())?;
+        Ok(())
+    }
+
+    /// Shares note entries without copying their bodies or touching the filesystem.
+    pub fn snapshot(&self) -> NotesSnapshot { self.view.clone() }
+
+    /// Refreshes only the note being committed before comparing an editor's draft.
+    /// This detects intervening file edits; it does not lock external editors out.
+    pub fn refresh_note(&mut self, id: u64) -> Result<bool> {
+        let pos = self.view.notes.iter().position(|note| note.id == id).context("no such note")?;
+        let note = &self.view.notes[pos];
+        let Some(path) = &note.path else { return Ok(true) };
+        match std::fs::read_to_string(self.view.root.join(path)) {
+            Ok(text) => {
+                if note.text != text {
+                    self.view.notes[pos] = Arc::new(Note { id, topic: note.topic, path: note.path.clone(), text, updated: unix(SystemTime::now()) });
+                }
+                Ok(true)
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                self.ids.remove(path);
+                self.view.notes.remove(pos);
+                Ok(false)
+            }
+            Err(error) => Err(error.into()),
         }
     }
 
+    /// An operation may have written Markdown before its index failed.
+    pub fn index_result(&self) -> Result<()> {
+        self.scan_result()?;
+        match &self.index_error {
+            Some(error) => anyhow::bail!("{error}"),
+            None => Ok(()),
+        }
+    }
+
+    /// A failed scan leaves the previous snapshot and index unchanged.
+    pub fn scan_result(&self) -> Result<()> {
+        match &self.scan_error { Some(error) => anyhow::bail!("{error}"), None => Ok(()) }
+    }
+
+    /// Changing folders may leave an unreadable, unchanged folder, never unsaved metadata.
+    pub fn prepare_leave(&mut self) -> Result<()> {
+        if self.index_dirty { self.persist_index()?; }
+        Ok(())
+    }
+
     fn fresh_id(&mut self) -> u64 {
-        let id = self.next_id.max(self.ids.values().max().map_or(1, |m| m + 1)).max(self.notes.iter().map(|n| n.id + 1).max().unwrap_or(1));
+        let id = self.next_id.max(self.ids.values().max().map_or(1, |m| m + 1)).max(self.view.notes.iter().map(|n| n.id + 1).max().unwrap_or(1));
         self.next_id = id + 1;
         id
     }
@@ -170,101 +270,18 @@ impl NoteStore {
     /// Re-reads the folder: topics for every folder, notes for every `.md`
     /// file. Notes in `keep` (unsaved edits) keep their in-memory text.
     pub fn rescan(&mut self, keep: &[u64]) {
-        let kept: Vec<Note> = self.notes.iter().filter(|n| keep.contains(&n.id) || n.path.is_none()).cloned().collect();
-        self.scan();
+        let kept: Vec<Arc<Note>> = self.view.notes.iter().filter(|n| keep.contains(&n.id) || n.path.is_none()).cloned().collect();
+        if let Err(error) = self.scan() {
+            self.scan_error = Some(format!("{error:#}"));
+            return;
+        }
         for k in kept {
-            match self.notes.iter_mut().find(|n| n.id == k.id) {
-                Some(n) => n.text = k.text,
-                None if k.path.is_none() => self.notes.insert(0, k),
+            match self.view.notes.iter_mut().find(|n| n.id == k.id) {
+                Some(n) => *n = k,
+                None if k.path.is_none() => self.view.notes.insert(0, k),
                 None => {}
             }
         }
-    }
-
-    fn scan(&mut self) {
-        if !self.topics.iter().any(|t| t.id == DEFAULT_TOPIC) {
-            self.topics.insert(0, Topic::default());
-        }
-        if let Some(t) = self.topics.iter_mut().find(|t| t.id == DEFAULT_TOPIC) {
-            t.dir.clear();
-        }
-        // Folders: topics (new ones join with the next swatch).
-        let mut dirs: Vec<String> = std::fs::read_dir(&self.root)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
-            .filter_map(|e| e.file_name().into_string().ok())
-            .filter(|n| !n.starts_with('.'))
-            .collect();
-        dirs.sort();
-        self.topics.retain(|t| t.id == DEFAULT_TOPIC || dirs.contains(&t.dir));
-        for d in dirs {
-            if !self.topics.iter().any(|t| t.dir == d) {
-                let id = self.topics.iter().map(|t| t.id).max().unwrap_or(DEFAULT_TOPIC) + 1;
-                let color = format!("hue:{}", SWATCH_HUES[self.topics.len() % SWATCH_HUES.len()]);
-                self.topics.push(Topic { id, name: d.clone(), dir: d, color, icon: None });
-            }
-        }
-        for t in &mut self.topics {
-            if !ListColor::valid(&t.color) {
-                t.color = crate::todo_lists::DEFAULT_LIST_COLOR.into();
-            }
-        }
-        // Notes.
-        let mut notes = Vec::new();
-        for t in &self.topics {
-            let dir = self.root.join(&t.dir);
-            for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
-                let path = e.path();
-                let name = e.file_name().to_string_lossy().to_string();
-                if name.starts_with('.') || path.extension().and_then(|x| x.to_str()) != Some(EXTENSION) || !e.file_type().is_ok_and(|t| t.is_file()) {
-                    continue;
-                }
-                let Ok(text) = std::fs::read_to_string(&path) else { continue };
-                let updated = e.metadata().and_then(|m| m.modified()).map(unix).unwrap_or(0);
-                let rel_path = rel(path.strip_prefix(&self.root).unwrap_or(&path));
-                notes.push((rel_path, t.id, text, updated));
-            }
-        }
-        let mut out = Vec::with_capacity(notes.len());
-        for (path, topic, text, updated) in notes {
-            let id = match self.ids.get(&path) {
-                Some(id) => *id,
-                None => {
-                    let id = self.fresh_id();
-                    self.ids.insert(path.clone(), id);
-                    id
-                }
-            };
-            out.push(Note { id, topic, path: Some(path), text, updated });
-        }
-        self.ids.retain(|p, _| out.iter().any(|n| n.path.as_deref() == Some(p.as_str())));
-        out.sort_by_key(|n| std::cmp::Reverse((n.updated, n.id)));
-        self.notes = out;
-        self.save_index();
-    }
-
-    pub fn topic(&self, id: u64) -> Option<&Topic> {
-        self.topics.iter().find(|t| t.id == id)
-    }
-
-    pub fn note(&self, id: u64) -> Option<&Note> {
-        self.notes.iter().find(|n| n.id == id)
-    }
-
-    /// The topic `key` names: id or name (case-insensitive, spaces and
-    /// dashes ignored as for `#topic`).
-    pub fn find_topic(&self, key: &str) -> Option<u64> {
-        let key = key.trim().trim_start_matches('#');
-        if let Ok(id) = key.parse::<u64>()
-            && self.topic(id).is_some()
-        {
-            return Some(id);
-        }
-        let squash = |s: &str| s.chars().filter(|c| !c.is_whitespace() && *c != '-' && *c != '_').flat_map(char::to_lowercase).collect::<String>();
-        let k = squash(key);
-        (!k.is_empty()).then(|| self.topics.iter().find(|t| squash(&t.name) == k).map(|t| t.id)).flatten()
     }
 
     /// A file path for `stem` in `topic`'s folder that no file uses.
@@ -272,7 +289,7 @@ impl NoteStore {
         let dir = self.topic(topic).map(|t| t.dir.clone()).unwrap_or_default();
         let stem = { let s = safe_name(stem); if s.is_empty() { UNTITLED.to_string() } else { s } };
         let join = |name: &str| if dir.is_empty() { name.to_string() } else { format!("{dir}/{name}") };
-        let taken = |p: &str| Some(p) != except && (self.root.join(p).exists() || self.notes.iter().any(|n| n.path.as_deref() == Some(p)));
+        let taken = |p: &str| Some(p) != except && (self.view.root.join(p).exists() || self.view.notes.iter().any(|n| n.path.as_deref() == Some(p)));
         let first = join(&format!("{stem}.{EXTENSION}"));
         if !taken(&first) {
             return first;
@@ -280,46 +297,53 @@ impl NoteStore {
         (2..).map(|n| join(&format!("{stem} {n}.{EXTENSION}"))).find(|p| !taken(p)).unwrap_or(first)
     }
 
-    /// A new note (written once it has text). Returns its id.
-    /// Notes never written to a file and still empty (abandoned drafts),
-    /// except `keep`: the one just opened to type into.
-    pub fn empty_drafts(&self, keep: Option<u64>) -> Vec<u64> {
-        self.notes.iter().filter(|n| n.text.trim().is_empty() && n.path.is_none() && Some(n.id) != keep).map(|n| n.id).collect()
-    }
-
     pub fn create(&mut self, topic: u64, text: &str) -> Result<u64> {
         let topic = if self.topic(topic).is_some() { topic } else { DEFAULT_TOPIC };
+        let previous_next = self.next_id;
+        let previous_dirty = self.index_dirty;
         let id = self.fresh_id();
-        self.notes.insert(0, Note { id, topic, path: None, text: String::new(), updated: unix(SystemTime::now()) });
-        if !text.trim().is_empty() {
-            self.write(id, text)?;
+        self.view.notes.insert(0, Arc::new(Note { id, topic, path: None, text: String::new(), updated: unix(SystemTime::now()) }));
+        if !text.trim().is_empty()
+            && let Err(error) = self.write(id, text)
+        {
+            self.view.notes.retain(|note| note.id != id);
+            return Err(error);
         }
         self.save_index();
+        if text.trim().is_empty()
+            && let Err(error) = self.index_result()
+        {
+            self.view.notes.retain(|note| note.id != id);
+            self.next_id = previous_next;
+            self.index_dirty = previous_dirty;
+            return Err(error);
+        }
         Ok(id)
     }
 
     /// Writes a note's text to its file (named after its title the first
     /// time).
     pub fn write(&mut self, id: u64, text: &str) -> Result<()> {
-        let pos = self.notes.iter().position(|n| n.id == id).context("no such note")?;
-        let path = match self.notes[pos].path.clone() {
+        self.ensure_writable(id)?;
+        let pos = self.view.notes.iter().position(|n| n.id == id).context("no such note")?;
+        let path = match self.view.notes[pos].path.clone() {
             Some(p) => p,
             None => {
                 let stem = crate::markdown::title_line(text).unwrap_or_else(|| UNTITLED.into());
-                let p = self.free_path(self.notes[pos].topic, &stem, None);
-                self.ids.insert(p.clone(), id);
-                self.notes[pos].path = Some(p.clone());
-                p
+                self.free_path(self.view.notes[pos].topic, &stem, None)
             }
         };
-        let full = self.root.join(&path);
+        let full = self.view.root.join(&path);
         if let Some(dir) = full.parent() {
             std::fs::create_dir_all(dir)?;
         }
         mandara_config::write_atomic(&full, text.as_bytes())?;
-        let n = &mut self.notes[pos];
-        n.text = text.to_string();
-        n.updated = unix(SystemTime::now());
+        if self.view.notes[pos].path.is_none() {
+            self.ids.insert(path.clone(), id);
+        }
+        let topic = self.view.notes[pos].topic;
+        // Replace the changed entry directly: make_mut would copy its old body.
+        self.view.notes[pos] = Arc::new(Note { id, topic, path: Some(path), text: text.to_owned(), updated: unix(SystemTime::now()) });
         self.save_index();
         Ok(())
     }
@@ -327,7 +351,8 @@ impl NoteStore {
     /// Editing ended: an emptied note is deleted, and the file is renamed
     /// to follow the title. Returns whether the note still exists.
     pub fn settle(&mut self, id: u64) -> Result<bool> {
-        let Some(n) = self.note(id).cloned() else { return Ok(false) };
+        self.ensure_writable(id)?;
+        let Some(n) = self.view.notes.iter().find(|note| note.id == id).cloned() else { return Ok(false) };
         if n.text.trim().is_empty() {
             self.delete(id)?;
             return Ok(false);
@@ -345,39 +370,43 @@ impl NoteStore {
     }
 
     fn rename_file(&mut self, id: u64, old: &str, new: &str) -> Result<()> {
-        let to = self.root.join(new);
+        self.ensure_writable(id)?;
+        let to = self.view.root.join(new);
         if let Some(dir) = to.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        std::fs::rename(self.root.join(old), &to)?;
+        std::fs::rename(self.view.root.join(old), &to)?;
         self.ids.remove(old);
         self.ids.insert(new.to_string(), id);
-        if let Some(n) = self.notes.iter_mut().find(|n| n.id == id) {
-            n.path = Some(new.to_string());
+        if let Some(n) = self.view.notes.iter_mut().find(|n| n.id == id) {
+            Arc::make_mut(n).path = Some(new.to_string());
         }
         self.save_index();
         Ok(())
     }
 
     pub fn delete(&mut self, id: u64) -> Result<bool> {
-        let Some(pos) = self.notes.iter().position(|n| n.id == id) else { return Ok(false) };
-        let n = self.notes.remove(pos);
+        self.ensure_writable(id)?;
+        let Some(pos) = self.view.notes.iter().position(|n| n.id == id) else { return Ok(false) };
+        let n = &self.view.notes[pos];
         if let Some(p) = &n.path {
-            match std::fs::remove_file(self.root.join(p)) {
+            match std::fs::remove_file(self.view.root.join(p)) {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                 Err(e) => return Err(e.into()),
             }
             self.ids.remove(p);
         }
+        self.view.notes.remove(pos);
         self.save_index();
         Ok(true)
     }
 
     /// Moves a note (its file) to another topic.
     pub fn move_note(&mut self, id: u64, topic: u64) -> Result<()> {
+        self.ensure_writable(id)?;
         self.topic(topic).context("no such topic")?;
-        let n = self.note(id).cloned().context("no such note")?;
+        let n = self.view.notes.iter().find(|note| note.id == id).cloned().context("no such note")?;
         if n.topic == topic {
             return Ok(());
         }
@@ -386,8 +415,8 @@ impl NoteStore {
             let new = self.free_path(topic, &name, None);
             self.rename_file(id, old, &new)?;
         }
-        if let Some(n) = self.notes.iter_mut().find(|n| n.id == id) {
-            n.topic = topic;
+        if let Some(n) = self.view.notes.iter_mut().find(|n| n.id == id) {
+            Arc::make_mut(n).topic = topic;
         }
         Ok(())
     }
@@ -396,13 +425,13 @@ impl NoteStore {
         let dir = safe_name(name);
         anyhow::ensure!(!dir.is_empty(), "a topic needs a name");
         anyhow::ensure!(color.is_none_or(ListColor::valid), "colour must be a tone or hue:<0-359>");
-        if let Some(t) = self.topics.iter().find(|t| t.dir == dir) {
+        if let Some(t) = self.view.topics.iter().find(|t| t.dir == dir) {
             return Ok(t.id);
         }
-        std::fs::create_dir_all(self.root.join(&dir))?;
-        let id = self.topics.iter().map(|t| t.id).max().unwrap_or(DEFAULT_TOPIC) + 1;
-        let color = color.map_or_else(|| format!("hue:{}", SWATCH_HUES[self.topics.len() % SWATCH_HUES.len()]), str::to_string);
-        self.topics.push(Topic { id, name: name.split_whitespace().collect::<Vec<_>>().join(" "), dir, color, icon: icon.filter(|i| !i.trim().is_empty()).map(str::to_string) });
+        std::fs::create_dir_all(self.view.root.join(&dir))?;
+        let id = self.view.topics.iter().map(|t| t.id).max().unwrap_or(DEFAULT_TOPIC) + 1;
+        let color = color.map_or_else(|| format!("hue:{}", SWATCH_HUES[self.view.topics.len() % SWATCH_HUES.len()]), str::to_string);
+        self.view.topics.push(Topic { id, name: name.split_whitespace().collect::<Vec<_>>().join(" "), dir, color, icon: icon.filter(|i| !i.trim().is_empty()).map(str::to_string) });
         self.save_index();
         Ok(id)
     }
@@ -417,30 +446,31 @@ impl NoteStore {
 
     /// Renames a topic (and its folder; the default topic keeps the root).
     pub fn rename_topic(&mut self, id: u64, name: &str) -> Result<()> {
+        if id != DEFAULT_TOPIC { self.ensure_topic_writable(id)?; }
         let clean = name.split_whitespace().collect::<Vec<_>>().join(" ");
         anyhow::ensure!(!safe_name(&clean).is_empty(), "a topic needs a name");
         let t = self.topic(id).cloned().context("no such topic")?;
         if id != DEFAULT_TOPIC {
             let dir = safe_name(&clean);
             if dir != t.dir {
-                anyhow::ensure!(!self.root.join(&dir).exists(), "a folder called {dir} already exists");
-                std::fs::rename(self.root.join(&t.dir), self.root.join(&dir))?;
+                anyhow::ensure!(!self.view.root.join(&dir).exists(), "a folder called {dir} already exists");
+                std::fs::rename(self.view.root.join(&t.dir), self.view.root.join(&dir))?;
                 let prefix = format!("{}/", t.dir);
                 let moved: Vec<(String, u64)> = self.ids.iter().filter(|(p, _)| p.starts_with(&prefix)).map(|(p, i)| (p.clone(), *i)).collect();
                 for (p, i) in moved {
                     let np = format!("{dir}/{}", &p[prefix.len()..]);
                     self.ids.remove(&p);
                     self.ids.insert(np.clone(), i);
-                    if let Some(n) = self.notes.iter_mut().find(|n| n.id == i) {
-                        n.path = Some(np);
+                    if let Some(n) = self.view.notes.iter_mut().find(|n| n.id == i) {
+                        Arc::make_mut(n).path = Some(np);
                     }
                 }
-                if let Some(t) = self.topics.iter_mut().find(|t| t.id == id) {
+                if let Some(t) = self.view.topics.iter_mut().find(|t| t.id == id) {
                     t.dir = dir;
                 }
             }
         }
-        if let Some(t) = self.topics.iter_mut().find(|t| t.id == id) {
+        if let Some(t) = self.view.topics.iter_mut().find(|t| t.id == id) {
             t.name = clean;
         }
         self.save_index();
@@ -449,16 +479,16 @@ impl NoteStore {
 
     pub fn recolor_topic(&mut self, id: u64, color: &str) -> Result<()> {
         anyhow::ensure!(ListColor::valid(color), "colour must be a tone or hue:<0-359>");
-        self.topics.iter_mut().find(|t| t.id == id).context("no such topic")?.color = color.to_string();
+        self.view.topics.iter_mut().find(|t| t.id == id).context("no such topic")?.color = color.to_string();
         self.save_index();
         Ok(())
     }
 
     pub fn move_topic(&mut self, id: u64, to: usize) -> Result<usize> {
-        let from = self.topics.iter().position(|t| t.id == id).context("no such topic")?;
-        let t = self.topics.remove(from);
-        let to = to.min(self.topics.len());
-        self.topics.insert(to, t);
+        let from = self.view.topics.iter().position(|t| t.id == id).context("no such topic")?;
+        let t = self.view.topics.remove(from);
+        let to = to.min(self.view.topics.len());
+        self.view.topics.insert(to, t);
         self.save_index();
         Ok(to)
     }
@@ -466,9 +496,10 @@ impl NoteStore {
     /// Deletes a topic; its notes move to the default topic or are deleted.
     /// The folder goes only once empty (other files in it are kept).
     pub fn remove_topic(&mut self, id: u64, notes: OnDelete) -> Result<usize> {
+        self.ensure_topic_writable(id)?;
         anyhow::ensure!(id != DEFAULT_TOPIC, "the default topic can be renamed but not deleted");
         let t = self.topic(id).cloned().context("no such topic")?;
-        let ids: Vec<u64> = self.notes.iter().filter(|n| n.topic == id).map(|n| n.id).collect();
+        let ids: Vec<u64> = self.view.notes.iter().filter(|n| n.topic == id).map(|n| n.id).collect();
         for n in &ids {
             match notes {
                 OnDelete::MoveToInbox => self.move_note(*n, DEFAULT_TOPIC)?,
@@ -477,8 +508,8 @@ impl NoteStore {
                 }
             }
         }
-        let _ = std::fs::remove_dir(self.root.join(&t.dir));
-        self.topics.retain(|t| t.id != id);
+        let _ = std::fs::remove_dir(self.view.root.join(&t.dir));
+        self.view.topics.retain(|t| t.id != id);
         self.save_index();
         Ok(ids.len())
     }
@@ -492,16 +523,16 @@ impl NoteStore {
             let id = self.create(DEFAULT_TOPIC, &old.text)?;
             if let Some(p) = self.note(id).and_then(|n| n.path.clone()) {
                 let when = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(old.updated.max(0) as u64);
-                if let Ok(f) = std::fs::File::options().write(true).open(self.root.join(&p)) {
+                if let Ok(f) = std::fs::File::options().write(true).open(self.view.root.join(&p)) {
                     let _ = f.set_modified(when);
                 }
-                if let Some(n) = self.notes.iter_mut().find(|n| n.id == id) {
-                    n.updated = old.updated;
+                if let Some(n) = self.view.notes.iter_mut().find(|n| n.id == id) {
+                    Arc::make_mut(n).updated = old.updated;
                 }
             }
             written += 1;
         }
-        self.notes.sort_by_key(|n| std::cmp::Reverse((n.updated, n.id)));
+        self.view.notes.sort_by_key(|n| std::cmp::Reverse((n.updated, n.id)));
         Ok(written)
     }
 
@@ -510,7 +541,7 @@ impl NoteStore {
         std::fs::create_dir_all(dir)?;
         let mut n = 0;
         let mut used: Vec<String> = Vec::new();
-        for note in self.notes.iter().filter(|x| topic.is_none_or(|t| x.topic == t) && !x.text.trim().is_empty()) {
+        for note in self.view.notes.iter().filter(|x| topic.is_none_or(|t| x.topic == t) && !x.text.trim().is_empty()) {
             let stem = safe_name(&note.title());
             let mut name = format!("{stem}.{EXTENSION}");
             let mut k = 2;
@@ -525,29 +556,7 @@ impl NoteStore {
         Ok(n)
     }
 
-    /// `(topic, count)` for the topic switcher.
-    pub fn count(&self, topic: Option<u64>) -> usize {
-        self.notes.iter().filter(|n| topic.is_none_or(|t| n.topic == t) && !n.text.trim().is_empty()).count()
-    }
 
-    /// Notes matching `query` (fuzzy over title and body), best first.
-    pub fn search(&self, query: &str) -> Vec<u64> {
-        use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
-        use nucleo_matcher::{Config, Matcher, Utf32Str};
-        let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
-        let mut matcher = Matcher::new(Config::DEFAULT);
-        let mut buf = Vec::new();
-        let mut hits: Vec<(u32, u64)> = self
-            .notes
-            .iter()
-            .filter_map(|n| {
-                let hay = format!("{} {}", n.title(), n.text);
-                pattern.score(Utf32Str::new(&hay, &mut buf), &mut matcher).map(|s| (s, n.id))
-            })
-            .collect();
-        hits.sort_by_key(|(s, id)| (std::cmp::Reverse(*s), *id));
-        hits.into_iter().map(|(_, id)| id).collect()
-    }
 }
 
 #[cfg(test)]
@@ -558,6 +567,67 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let s = NoteStore::open(&dir.path().join("notes"));
         (dir, s)
+    }
+
+    #[test]
+    fn borrowed_index_keeps_the_existing_toml_shape() {
+        let (_dir, mut store) = store();
+        store.create(DEFAULT_TOPIC, "One note").unwrap();
+        let owned = Index { topics: store.topics.clone(), ids: store.ids.clone(), next_id: store.next_id };
+        let borrowed = IndexRef { topics: &store.topics, ids: &store.ids, next_id: store.next_id };
+        assert_eq!(toml::to_string(&borrowed).unwrap(), toml::to_string(&owned).unwrap());
+    }
+
+    #[test]
+    fn a_failed_empty_draft_index_does_not_accumulate_invisible_notes() {
+        let (_dir, mut store) = store();
+        std::fs::remove_file(store.root.join(INDEX_FILE)).unwrap();
+        std::fs::create_dir(store.root.join(INDEX_FILE)).unwrap();
+        let next = store.next_id;
+        for _ in 0..4 { assert!(store.create(DEFAULT_TOPIC, "").is_err()); }
+        assert!(store.notes.is_empty());
+        assert_eq!(store.next_id, next);
+        assert!(store.prepare_leave().is_ok());
+        std::fs::remove_dir(store.root.join(INDEX_FILE)).unwrap();
+        let id = store.create(DEFAULT_TOPIC, "").unwrap();
+        assert!(store.note(id).is_some());
+    }
+
+    #[test]
+    fn failed_note_writes_leave_no_phantom_note_or_path() {
+        let (_dir, mut store) = store();
+        let kept = store.create(DEFAULT_TOPIC, "Keep this note").unwrap();
+        let empty = store.create(DEFAULT_TOPIC, "").unwrap();
+        store.topics.iter_mut().find(|topic| topic.id == DEFAULT_TOPIC).unwrap().dir = "blocked".into();
+        std::fs::write(store.root.join("blocked"), b"not a directory").unwrap();
+        let ids = store.ids.clone();
+        assert!(store.write(empty, "Cannot save yet").is_err());
+        assert!(store.note(empty).unwrap().path.is_none());
+        assert_eq!(store.note(empty).unwrap().text, "");
+        assert!(store.create(DEFAULT_TOPIC, "Cannot create yet").is_err());
+        assert_eq!(store.notes.len(), 2);
+        assert_eq!(store.note(kept).unwrap().text, "Keep this note");
+        assert_eq!(store.ids, ids);
+        std::fs::remove_file(store.root.join("blocked")).unwrap();
+        store.write(empty, "Saved on retry").unwrap();
+        assert_eq!(store.note(empty).unwrap().text, "Saved on retry");
+    }
+
+    #[test]
+    fn failed_note_deletion_preserves_the_note_and_index_for_retry() {
+        let (_dir, mut store) = store();
+        let id = store.create(DEFAULT_TOPIC, "Keep until deleted").unwrap();
+        let path = store.root.join(store.note(id).unwrap().path.as_ref().unwrap());
+        let ids = store.ids.clone();
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert!(store.delete(id).is_err());
+        assert_eq!(store.note(id).unwrap().text, "Keep until deleted");
+        assert_eq!(store.ids, ids);
+        std::fs::remove_dir(&path).unwrap();
+        assert!(store.delete(id).unwrap());
+        assert!(store.note(id).is_none());
+        assert!(!store.ids.values().any(|saved| *saved == id));
     }
 
     /// Issue #6: "+" creates an empty note and opens it; pruning abandoned

@@ -133,6 +133,7 @@ pub(super) struct Ui {
     /// Previous / next slide: when, and from which side.
     pub slide: Option<(Instant, f32)>,
     pub flash: Flash,
+    pub share: super::super::design_share::View,
     /// The reader's chain, shown or folded (`None`: the setting decides).
     show_chain: Option<bool>,
     /// A collection whose Remove was pressed once.
@@ -152,6 +153,7 @@ struct View {
 
 /// One render's context.
 pub(super) struct Ctx<'a> {
+    pub notified: gpui::EntityId,
     pub palette: &'a MandaraPalette,
     pub shared: &'a Shared,
     pub ui: &'a Rc<RefCell<Ui>>,
@@ -176,7 +178,7 @@ pub(super) fn build(p: PanelCx, window: &mut Window, cx: &mut App) -> PanelSpec 
         filter_collection: None,
         filter_grade: None,
         slide: None,
-        flash: Flash::default(),
+        flash: Flash::default(), share: super::super::design_share::View::new(p.clone()),
         show_chain: None,
         armed: None,
         peek: 0,
@@ -218,6 +220,7 @@ impl View {
         self.take_open_request(&shared, cx);
         let f = fonts(cx);
         let c = Ctx {
+            notified: window.current_view(),
             palette,
             shared: &shared,
             ui: &self.ui,
@@ -452,6 +455,7 @@ fn home(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
             // The lead grade's own words and grader (none for the two Sahih).
             let grades: Vec<Grade> = card.grade.iter().filter(|g| !g.grade.is_empty()).map(|g| Grade::new(&g.grader, &g.grade)).collect();
             let shown = Shown {
+                source: super::share::Source::Daily { model: Rc::downgrade(c.shared), key: card.key.clone() },
                 collection: card.collection,
                 reference: &card.reference,
                 key: &card.key,
@@ -1003,6 +1007,7 @@ fn reader_page(c: &Ctx, col: Collection, list: Rc<[u32]>, at: usize, window: &mu
     let label = in_book.to_uppercase();
     let meaning = lib.meaning.as_ref();
     let shown = Shown {
+        source: super::share::Source::Library { library: Arc::downgrade(&loaded.library), index },
         collection: col,
         reference: &h.reference,
         key: &key,
@@ -1162,6 +1167,9 @@ fn about(c: &Ctx) -> AnyElement {
         )
         .into_any_element()
 }
+
+/// The export uses the reading card’s existing body width.
+pub(super) const SHARE_WIDTH: f32 = INNER_W;
 
 #[cfg(test)]
 mod tests {

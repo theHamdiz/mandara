@@ -475,7 +475,7 @@ const DOT_LABEL: &str = "•";
 
 impl Look {
     fn of(cfg: &mandara_config::ShellConfig) -> Self {
-        let labels = match cfg.plugins.setting(ID, "labels", String::from("auto")).as_str() {
+        let labels = match cfg.plugins.setting_str(ID, "labels").unwrap_or("auto") {
             "number" => Labels::Number,
             "dots" => Labels::Dots,
             _ => Labels::Auto,
@@ -934,6 +934,20 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Label-mode parsing keeps the same fallback when TOML is not a string.
+    #[test]
+    fn label_modes_read_borrowed_settings() {
+        let mut config = mandara_config::ShellConfig::default();
+        assert_eq!(Look::of(&config).labels, Labels::Auto);
+        for (value, expected) in [("dots", Labels::Dots), ("number", Labels::Number), ("unknown", Labels::Auto)] {
+            config.plugins.settings.entry(ID.into()).or_default().insert("labels".into(), toml::Value::String(value.into()));
+            assert_eq!(Look::of(&config).labels, expected);
+        }
+        config.plugins.settings.get_mut(ID).unwrap().insert("labels".into(), toml::Value::Integer(2));
+        assert_eq!(Look::of(&config).labels, Labels::Auto);
+    }
+
     use mandara_compositor::TagStatus;
 
     /// Umbriel's workspace layouts get their own names on the layout pill;

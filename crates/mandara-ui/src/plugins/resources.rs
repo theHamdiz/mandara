@@ -16,6 +16,8 @@
 //! fictional values in [`demo`] (docs screenshots).
 
 pub(crate) mod demo;
+mod temperature_rows;
+use temperature_rows::{TEMP_COLUMNS, temperature_rows};
 
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
@@ -76,7 +78,6 @@ const MIN_DISK_BYTES: u64 = 1_000_000_000;
 const TEMP_CELL_H_PX: f32 = 44.0;
 const TEMP_ROW_GAP_PX: f32 = 8.0;
 const TEMP_COL_GAP_PX: f32 = 16.0;
-const TEMP_COLUMNS: usize = 2;
 /// Temperature cells before "show more" (`temps_shown`).
 pub const DEFAULT_TEMPS_SHOWN: i64 = 8;
 pub const TEMPS_SHOWN_RANGE: (i64, i64) = (2, 24);
@@ -1130,14 +1131,12 @@ fn temp_cell(c: &ComponentTemp, l: &TempLabels, palette: &MandaraPalette) -> imp
 }
 
 fn temperatures(temps: &[ComponentTemp], labels: &[TempLabels], shown: usize, palette: &MandaraPalette) -> impl IntoElement {
-    let n = shown.min(temps.len()).min(labels.len());
-    let cells = temps[..n].iter().zip(&labels[..n]).collect::<Vec<_>>();
-    div().flex().flex_col().gap(px(TEMP_ROW_GAP_PX)).children(cells.chunks(TEMP_COLUMNS).map(|pair| {
+    div().flex().flex_col().gap(px(TEMP_ROW_GAP_PX)).children(temperature_rows(temps, labels, shown).map(|(temps, labels)| {
         div()
             .flex()
             .gap(px(TEMP_COL_GAP_PX))
-            .children(pair.iter().map(|(c, l)| temp_cell(c, l, palette)))
-            .when(pair.len() == 1, |el| el.child(div().flex_1()))
+            .children(temps.iter().zip(labels).map(|(component, label)| temp_cell(component, label, palette)))
+            .when(temps.len() == 1, |el| el.child(div().flex_1()))
     }))
 }
 

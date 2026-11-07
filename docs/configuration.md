@@ -174,7 +174,7 @@ fixed:
 | CI status (`ci`, opt-in) | `repos` (`owner/name`, comma-separated), `use_gh_token` (the `gh` CLI's login for private repos and higher limits; else `GITHUB_TOKEN`), `notify` | empty, on, on |
 | Crash reports (`crashes`, opt-in) | `notify` (a notification for a new crash) | on |
 | Jannah (`jannah`, opt-in) | `rotate` (`daily`, `hourly`), `sources` (`both`, `quran`, `hadith`), `show_translation`, `arabic_size` (`small`, `medium`, `large`), `bar_label` (`glyph`, `step`), `morning_reminder`, `language` | daily, both, on, medium, glyph, off, follow |
-| Qur'an (`quran`, opt-in) | `reciter` (`ar.alafasy`, `ar.husary`, …), `translation` (an edition id; empty: the plugin language's default), `arabic_size`, `language` | Alafasy, default, medium, follow |
+| Qur'an (`quran`, opt-in) | `reciter` (`ar.yasseraldossari`, `mp3quran.258`, `ar.abdulsamad`, `ar.husary`, …), `translation` (an edition id; empty: the plugin language's default), `arabic_size`, `language` | Yasser Al-Dossary, default, medium, follow |
 | Hadith (`hadith`, opt-in) | `collections` (downloaded ones), `show_translation`, `arabic_size`, `hide_chain` (fold the chain of narrators), `rotate` (`daily`, `hourly`), `daily_collections`, `bar_label` (`glyph`, `reference`), `language` | bukhari, muslim; on; medium; on; daily; bukhari, muslim; glyph; follow |
 | Prayer times (`prayer-times`, opt-in) | `language`, `adhan` (the call to prayer at each prayer; the recording downloads once when you turn it on) | follow, off |
 
@@ -226,6 +226,13 @@ setting the shell reads has a control.
    page; plugin keys go in the plugin's group so they appear in its modal.
 4. Translate the label and help (`MANDARA_I18N_DUMP=1 cargo test -p
    mandara-i18n`, then the nineteen catalogs in `crates/mandara-i18n/locales`).
+
+Built-in code can borrow text with `PluginsConfig::setting_str`, or use
+`setting_or_else` when constructing a typed fallback is expensive. The latter
+only runs its closure for a missing or invalid value; `setting` keeps its
+existing eager-default behavior. Resolve a view's settings once per immutable
+`ConfigStore::snapshot()` where possible, and refresh them when that snapshot
+changes rather than cloning TOML values during every frame.
 
 ## KWin integration
 
@@ -784,9 +791,9 @@ dim = 0.0                    # 0–0.7; a bar the launcher hangs from stays brig
 - **Attached at the bar's edge** it grows out of the bar exactly like a
   drop-down panel: the edge frame pours it out with concave flares (same
   radius, flare and fill as panels); floating pills and the island get a
-  floating card the panels' `gap` away. Left / right sit against the screen
-  sides (clear of the frame's screen flares, or in line with the outer
-  pills). With `align_to_button`, a placement whose third of the screen
+  floating card the panels' `gap` away. Left / right follow the visible bar's
+  ends, including a notch, micro pill or island, while staying inside the
+  display. With `align_to_button`, a placement whose third of the bar
   holds the bar's launcher button centers on the button and morphs out of
   it.
 - **At the other edge** (or on a display without the bar) it opens from the

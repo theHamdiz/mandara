@@ -67,7 +67,7 @@ impl PartialEq for Pixmap {
 
 impl Pixmap {
     pub fn from_rgba(width: u32, height: u32, rgba: Vec<u8>) -> Option<Self> {
-        if width == 0 || height == 0 || rgba.len() != (width * height * 4) as usize {
+        if rgba.len() != Self::byte_len(width, height)? {
             return None;
         }
         let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -78,7 +78,7 @@ impl Pixmap {
 
     /// Network-byte-order ARGB32 (the SNI wire format) to RGBA.
     pub fn from_argb(width: u32, height: u32, argb: &[u8]) -> Option<Self> {
-        if argb.len() != (width as usize) * (height as usize) * 4 {
+        if argb.len() != Self::byte_len(width, height)? {
             return None;
         }
         let rgba = argb.as_chunks::<4>().0.iter().flat_map(|p| [p[1], p[2], p[3], p[0]]).collect();
@@ -87,9 +87,16 @@ impl Pixmap {
 
     /// Decodes an encoded image (dbusmenu `icon-data` is PNG).
     pub fn decode(bytes: &[u8]) -> Option<Self> {
-        let img = image::load_from_memory(bytes).ok()?.to_rgba8();
+        let img = image::load_from_memory(bytes).ok()?.into_rgba8();
         let (w, h) = img.dimensions();
         Self::from_rgba(w, h, img.into_raw())
+    }
+
+    fn byte_len(width: u32, height: u32) -> Option<usize> {
+        if width == 0 || height == 0 {
+            return None;
+        }
+        usize::try_from(width).ok()?.checked_mul(usize::try_from(height).ok()?)?.checked_mul(std::mem::size_of::<[u8; 4]>())
     }
 }
 
@@ -1075,6 +1082,31 @@ mod tests {
         let p = Pixmap::from_argb(1, 1, &[0x80, 0x10, 0x20, 0x30]).unwrap();
         assert_eq!(&*p.rgba, &[0x10, 0x20, 0x30, 0x80]);
         assert!(Pixmap::from_argb(2, 2, &[0; 4]).is_none());
+    }
+
+    #[test]
+    fn malformed_pixmap_dimensions_do_not_overflow_or_allocate() {
+        for (width, height) in [(0, 1), (1, 0), (u32::MAX, u32::MAX), (u32::MAX, 1)] {
+            assert!(Pixmap::from_rgba(width, height, Vec::new()).is_none());
+            assert!(Pixmap::from_argb(width, height, &[]).is_none());
+        }
+    }
+
+    #[test]
+    fn decoded_pixmaps_keep_rgb_gray_and_transparent_pixels() {
+        for image in [
+            image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(3, 2, image::Rgb([10, 40, 90]))),
+            image::DynamicImage::ImageLuma8(image::GrayImage::from_pixel(3, 2, image::Luma([120]))),
+            image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(3, 2, image::Rgba([10, 40, 90, 100]))),
+        ] {
+            let expected = image.to_rgba8();
+            let mut bytes = std::io::Cursor::new(Vec::new());
+            image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+            let pixmap = Pixmap::decode(bytes.get_ref()).unwrap();
+            assert_eq!((pixmap.width, pixmap.height), expected.dimensions());
+            assert_eq!(&*pixmap.rgba, expected.as_raw());
+        }
+        assert!(Pixmap::decode(b"invalid image").is_none());
     }
 
     #[test]

@@ -8,6 +8,8 @@
 
 pub mod daily;
 pub mod player;
+pub mod reciters;
+pub mod audio;
 pub mod search;
 pub mod state;
 pub mod store;

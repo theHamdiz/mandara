@@ -16,7 +16,7 @@ pub const CROWN_FOOT: f32 = 6.0;
 /// Inner (second) arch inset, canvas units.
 pub const CROWN_INNER: f32 = 12.0;
 /// Stroke widths of the outer and inner arch, canvas units.
-const CROWN_STROKE: (f32, f32) = (2.4, 1.3);
+pub(crate) const CROWN_STROKE: (f32, f32) = (2.4, 1.3);
 /// Coverage of the inner arch (the mask's alpha).
 const CROWN_INNER_ALPHA: f32 = 0.5;
 /// Bézier handles of one half of the arch, as fractions of its width and

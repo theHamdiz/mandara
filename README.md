@@ -2,12 +2,12 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/brand/mandara-banner-dark.webp"/>
     <source media="(prefers-color-scheme: light)" srcset="assets/brand/mandara-banner-light.webp"/>
-    <img src="assets/brand/mandara-banner-light.webp" alt="Mandara: the phoenix rising from a Mediterranean wave beside the wordmark. A beautiful, fast desktop shell for Wayland, with settled memory under 100 MiB in the measured setup, tuned for 144 Hz." width="100%"/>
+    <img src="assets/brand/mandara-banner-light.webp" alt="Mandara: the phoenix rising from a Mediterranean wave beside the wordmark. A beautiful, fast desktop shell for Wayland, tuned for responsive frames." width="100%"/>
   </picture>
 </p>
 
 <p align="center">
-  <b>A beautiful, fast Linux desktop with settled memory under 100 MiB in the measured setup.</b>
+  <b>A beautiful, fast Linux desktop built with care for its resources.</b>
   <br/>
   Design-first, spring-animated and written entirely in Rust.
   <br/>
@@ -38,8 +38,8 @@
   <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-77%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="77 plugins plus WebAssembly"/></a>
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-20%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="20 languages"/></a>
   <br/>
-  <a href="docs/performance.md"><img src="https://img.shields.io/badge/settled%20RAM-under%20100%20MiB-2DD4BF?labelColor=0B1026" alt="Settled RAM under 100 MiB in the measured setup"/></a>
-  <a href="docs/performance.md"><img src="https://img.shields.io/badge/VRAM-under%20210%20MiB-2DD4BF?labelColor=0B1026" alt="VRAM under 210 MiB in the measured setup"/></a>
+  <a href="docs/performance.md"><img src="https://img.shields.io/badge/resources-measured-2DD4BF?labelColor=0B1026" alt="Resource measurements and current limits"/></a>
+  <a href="docs/performance.md"><img src="https://img.shields.io/badge/historical%20VRAM-under%20210%20MiB-2DD4BF?labelColor=0B1026" alt="Historical VRAM measurement under 210 MiB; current use may differ"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/idle%20CPU-measured-2DD4BF?labelColor=0B1026" alt="Measured idle CPU"/></a>
 </p>
 
@@ -82,6 +82,7 @@ desktop stays light enough to run all day without you noticing it.
 Pick a bar style, a wallpaper and a few desktop widgets, and Mandara turns
 into a different desktop. Each of these takes a minute in Studio, and every
 widget can be moved, resized and restyled right on the desktop.
+Write notes and edit tasks directly in their widgets, too.
 
 <table>
 <tr>
@@ -98,7 +99,7 @@ widget can be moved, resized and restyled right on the desktop.
 | **What** | A complete Wayland desktop shell: bar, island, dock, launcher, sidebar, notifications, OSDs, wallpapers, desktop widgets, lock screen, login manager, settings app |
 | **Compositors** | MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic (0.3) and KWin, with native drivers; your own config gets one include line at most, nothing more |
 | **Built with** | 100 % Rust, one binary (`mandara`), GPU-rendered with GPUI and wgpu |
-| **Resources** | Under 100 MiB settled RAM and under 210 MiB video memory in the [measured setup](docs/performance.md); startup and active workloads can use more |
+| **Resources** | [Resource measurements and current limits](docs/performance.md); the 100 MiB startup and operation target remains open |
 | **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`), with [thirteen colour launcher icons](docs/configuration.md#launcher-button-artwork) |
 | **Automation** | `mandara msg <command>` with JSON replies; `mandara commands --json` lists them all |
 | **Plugins** | 77 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
@@ -131,10 +132,12 @@ around, each one measured or shipped today:
    screenshots, screen recording, offline OCR, polkit agent, lock screen,
    login manager and a settings app: one Rust program, no QML, JavaScript,
    Python or shell glue.
-4. **Fast by measurement, not by claim.** The measured setup settles
-   below 100 MiB of RAM and uses under 210 MiB of video memory.
-   Typical frame builds take around 0.1 ms. Startup peaks are higher;
-   these are measurements of one setup, not a ceiling for every workload.
+4. **Measure the whole desktop.** Resource use depends on your display,
+   driver and active widgets; the 100 MiB startup and operation target remains open.
+   Plugin views reuse clipboard layouts, media gesture state and network
+   history. Image previews decode in bounded workers and release their caches
+   after closing. Earlier frame builds measured around 0.1 ms; historical
+   results and their exact setup are recorded alongside current limitations.
    [How it's measured](docs/performance.md)
 5. **Real motion.** Analytical spring physics that can be interrupted
    mid-flight, and OKLCH colour blending, so every morph, slide and theme
@@ -147,10 +150,12 @@ around, each one measured or shipped today:
    GTK 3/4, Qt 5/6, Kvantum, Zed, kitty, foot, Alacritty, btop and more.
 8. **Your desktop, your look.** Six bar styles on any edge, side bars that
    join the top bar into one frame, one-click Looks, dozens of desktop
-   widgets placed per monitor, and three launcher looks.
+   widgets placed per monitor, and three launcher looks. Attached launchers follow
+   compact bars, with a placement map in Studio.
 9. **Safe, rich extensions.** 77 plugins built in. Third-party plugins are
    Rust compiled to sandboxed WebAssembly: a crashing plugin is switched
-   off and the shell keeps running.
+   off and the shell keeps running. Qur’an, Hadith and Jannah can also
+   [copy complete reading cards as images](docs/plugins.md#jannah-quran-hadith-and-prayer-times).
 10. **Scriptable end to end.** Almost everything the interface does is a
     `mandara msg` command with JSON replies, so scripts and AI agents can
     drive and inspect the whole desktop. [How](docs/agent-ready.md)
@@ -239,6 +244,8 @@ cookie, a flower, torn paper…) and wear a frame like washi tape or a
 polaroid. Pick Western or Eastern Arabic digits, the Gregorian or Hijri
 calendar and the language of the day names. Widgets come from plugins, so
 you turn on only the ones you want, and plugins can add their own.
+The opt-in [Qur'an reader](docs/plugins.md#jannah-quran-hadith-and-prayer-times)
+also offers Yasser Al-Dossary, Abdulrashid Sufi and Abdul Basit Abdul Samad.
 [Desktop widgets](docs/desktop.md#desktop-widgets)
 
 <table>

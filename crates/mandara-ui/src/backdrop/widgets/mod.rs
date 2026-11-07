@@ -693,6 +693,11 @@ impl OutWidgets {
         self.states.clear();
     }
 
+    /// The current painted bounds, without building an edit-mode inventory.
+    pub fn bounds(&self, id: &str) -> Option<Rect> {
+        self.states.iter().find(|state| state.id == id).map(|state| state.rect.union(&state.live_rect)).filter(|rect| !rect.is_empty())
+    }
+
     /// Each shown widget's id, painted bounds and placed box (physical
     /// px), for edit mode.
     pub fn geometry(&self) -> Vec<(String, Rect, (f32, f32, f32, f32))> {

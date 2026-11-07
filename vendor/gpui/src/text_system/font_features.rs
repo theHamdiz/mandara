@@ -1,11 +1,20 @@
 use std::borrow::Cow;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use schemars::{JsonSchema, json_schema};
 
 /// The OpenType features that can be configured for a given font.
-#[derive(Default, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct FontFeatures(pub Arc<Vec<(String, u32)>>);
+
+// Mandara patch: font and text-style defaults share their immutable empty list.
+// Callers that edit a feature list keep their own copy through Arc::make_mut.
+impl Default for FontFeatures {
+    fn default() -> Self {
+        static EMPTY: LazyLock<Arc<Vec<(String, u32)>>> = LazyLock::new(|| Arc::new(Vec::new()));
+        Self(EMPTY.clone())
+    }
+}
 
 impl FontFeatures {
     /// Disables `calt`.
@@ -103,7 +112,8 @@ impl<'de> serde::Deserialize<'de> for FontFeatures {
                     }
                 }
 
-                Ok(FontFeatures(Arc::new(feature_list)))
+                // Mandara patch: an empty configuration uses the same default.
+                Ok(if feature_list.is_empty() { FontFeatures::default() } else { FontFeatures(Arc::new(feature_list)) })
             }
         }
 

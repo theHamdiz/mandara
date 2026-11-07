@@ -127,7 +127,7 @@ pub struct TodoWidget {
     pub ruled: bool,
     /// The list's name and the open count above it.
     pub title: bool,
-    /// A last row that opens the To-do panel to add a task.
+    /// A last row that adds a task directly on the desktop.
     pub add_row: bool,
     pub width: f32,
     pub text_size: f32,

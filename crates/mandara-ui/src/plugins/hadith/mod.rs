@@ -32,6 +32,7 @@
 pub mod art;
 mod panel;
 mod reader;
+mod share;
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -62,6 +63,8 @@ use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
 use crate::kit::{card, text, tokens};
 use crate::state::config;
+
+use super::settings_cache::{ConfigSettings, SettingsCache};
 
 pub const ID: &str = "hadith";
 
@@ -108,30 +111,49 @@ fn ids(list: &[Collection]) -> Vec<String> {
     list.iter().map(|c| c.id().to_string()).collect()
 }
 
-pub(crate) fn settings(cx: &App) -> Settings {
-    let cfg = config(cx).read(cx).snapshot();
-    let s = &cfg.plugins;
-    let list = |key: &str| collections::parse_list(&s.setting(ID, key, ids(&collections::defaults())));
-    let daily = list("daily_collections");
-    Settings {
-        collections: list("collections"),
-        translation: s.setting(ID, "show_translation", true),
-        arabic_size: match s.setting(ID, "arabic_size", String::from("medium")).as_str() {
-            "small" => ArabicSize::Small,
-            "large" => ArabicSize::Large,
-            _ => ArabicSize::Medium,
-        },
-        hide_chain: s.setting(ID, "hide_chain", true),
-        rotate: Rotate::parse(&s.setting(ID, "rotate", String::from("daily"))),
-        daily: if daily.is_empty() { collections::defaults() } else { daily },
-        bar_reference: s.setting(ID, "bar_label", String::from("glyph")) == "reference",
-        lang: plugin_lang::resolved(own_lang(cx)),
+thread_local! {
+    static SETTINGS: RefCell<SettingsCache<Settings>> = const { RefCell::new(SettingsCache::new()) };
+}
+
+/// Release only resolved configuration when the plugin is switched off.
+pub(super) fn clear_settings() {
+    SETTINGS.with(|cache| cache.borrow_mut().clear());
+}
+
+pub(crate) fn settings(cx: &App) -> Rc<Settings> {
+    let config = config(cx).read(cx).snapshot();
+    let language = plugin_lang::resolved(plugin_lang::own_language(config.plugins.setting_str(ID, "language").unwrap_or(plugin_lang::FOLLOW)));
+    SETTINGS.with(|cache| cache.borrow_mut().get(&config, language, ()))
+}
+
+impl ConfigSettings for Settings {
+    type Scope = ();
+
+    fn resolve(cfg: &mandara_config::ShellConfig, language: Lang, (): ()) -> Self {
+        let s = &cfg.plugins;
+        let list = |key: &str| collections::parse_list(&s.setting_or_else(ID, key, || ids(&collections::defaults())));
+        let daily = list("daily_collections");
+        Settings {
+            collections: list("collections"),
+            translation: s.setting(ID, "show_translation", true),
+            arabic_size: match s.setting_str(ID, "arabic_size").unwrap_or("medium") {
+                "small" => ArabicSize::Small,
+                "large" => ArabicSize::Large,
+                _ => ArabicSize::Medium,
+            },
+            hide_chain: s.setting(ID, "hide_chain", true),
+            rotate: Rotate::parse(s.setting_str(ID, "rotate").unwrap_or("daily")),
+            daily: if daily.is_empty() { collections::defaults() } else { daily },
+            bar_reference: s.setting_str(ID, "bar_label").unwrap_or("glyph") == "reference",
+            lang: language,
+        }
     }
 }
 
 /// Hadith's own language (`None`: Mandara's), from its `language` setting.
 pub(crate) fn own_lang(cx: &App) -> Option<Lang> {
-    plugin_lang::own_language(&config(cx).read(cx).snapshot().plugins.setting(ID, "language", String::from(plugin_lang::FOLLOW)))
+    let config = config(cx).read(cx).snapshot();
+    plugin_lang::own_language(config.plugins.setting_str(ID, "language").unwrap_or(plugin_lang::FOLLOW))
 }
 
 /// The code of the language Hadith speaks (`en`, `ar`).
@@ -971,7 +993,7 @@ fn which(arg: Option<&str>, cx: &App) -> Result<Vec<Collection>, String> {
     match arg.map(str::trim) {
         None | Some("") => {
             let s = settings(cx);
-            Ok(if s.collections.is_empty() { collections::defaults() } else { s.collections })
+            Ok(if s.collections.is_empty() { collections::defaults() } else { s.collections.clone() })
         }
         Some("all") => Ok(Collection::ALL.to_vec()),
         Some(name) => collections::alias(name).map(|c| vec![c]).ok_or_else(|| tf("No collection {name}; see `hadith collections`", &[("name", &name)])),
@@ -1007,6 +1029,9 @@ fn register_commands(r: &mut PluginRegistry) {
     // Every command answers in Hadith's own language.
     let mut add = |spec: CommandSpec| r.command(ID, plugin_lang::speaking(spec, own_lang));
     add(plugin_lang::language_command(ID, "hadith language", "hadith language en"));
+    add(CommandSpec::new_output("hadith copy-image", tk("Copy a hadith and its design as a complete PNG image"), |a, cx| share::command(&a.rest(0), cx))
+        .arg(ArgSpec::required("ref", ArgKind::String, tk("a reference: bukhari 1, muslim 2699a, abudawud 4031")))
+        .example("hadith copy-image bukhari 1"));
     add(
         CommandSpec::new_output("hadith peek", tk("Look at the hadith a few days (or hours) after today's, or before it when negative, without marking anything read"), |a, cx| {
             let by = if a.get(0).is_some() { a.int(0)? } else { 1 };
@@ -1280,6 +1305,27 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Warm views reuse resolved settings; language and config edits still take effect.
+    #[test]
+    fn settings_cache_tracks_config_and_plugin_language_without_loading_data() {
+        let mut config = mandara_config::ShellConfig::default();
+        let mut cache = SettingsCache::<Settings>::new();
+        let snapshot = Arc::new(config.clone());
+        let first = cache.get(&snapshot, Lang::En, ());
+        assert!(Rc::ptr_eq(&first, &cache.get(&snapshot, Lang::En, ())));
+        assert_eq!(first.daily, collections::defaults());
+        config.plugins.settings.entry(ID.into()).or_default().insert("collections".into(), toml::Value::Array(Vec::new()));
+        let changed = cache.get(&Arc::new(config), Lang::Ar, ());
+        assert!(!Rc::ptr_eq(&first, &changed));
+        assert_eq!(changed.lang, Lang::Ar);
+        let held = SETTINGS.with(|cache| cache.borrow_mut().get(&snapshot, Lang::En, ()));
+        clear_settings();
+        assert!(!Rc::ptr_eq(&held, &SETTINGS.with(|cache| cache.borrow_mut().get(&snapshot, Lang::En, ()))));
+        clear_settings();
+        assert!(changed.collections.is_empty());
+    }
+
 
     #[test]
     fn copies_carry_the_citation() {

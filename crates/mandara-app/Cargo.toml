@@ -67,9 +67,9 @@ assets = [
     ["../../PLUGINS.md", "usr/share/doc/mandara/PLUGINS.md", "644"],
     ["../../COPYRIGHT.md", "usr/share/doc/mandara/COPYRIGHT.md", "644"],
     ["../../packaging/pam/mandara-lock", "etc/pam.d/mandara-lock", "644"],
-    # Language packs (`cargo xtask langpacks --dir target/langpacks/<v>` first):
+    # Generated package inputs, staged separately from Cargo build products:
     # usr/share/mandara/locales/<v>/<code>.mlang.
-    ["../../target/langpacks/*/*.mlang", "usr/share/mandara/locales/", "644"],
+    ["../../dist/.package-inputs/langpacks/*/*.mlang", "usr/share/mandara/locales/", "644"],
 ]
 
 [package.metadata.generate-rpm]
@@ -84,7 +84,7 @@ assets = [
     { source = "../../LICENSE.md", dest = "/usr/share/licenses/mandara/LICENSE.md", mode = "644", doc = true },
     { source = "../../COPYRIGHT.md", dest = "/usr/share/licenses/mandara/COPYRIGHT.md", mode = "644", doc = true },
     { source = "../../packaging/pam/mandara-lock", dest = "/etc/pam.d/mandara-lock", mode = "644", config = true },
-    { source = "../../target/langpacks/*/*.mlang", dest = "/usr/share/mandara/locales/", mode = "644" },
+    { source = "../../dist/.package-inputs/langpacks/*/*.mlang", dest = "/usr/share/mandara/locales/", mode = "644" },
 ]
 
 [package.metadata.generate-rpm.requires]

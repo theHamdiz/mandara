@@ -6,12 +6,12 @@
 //! * **Attached at the bar's edge** — the edge frame pours the launcher out
 //!   of the bar with concave flares, exactly like a drop-down panel;
 //!   floating pills / the island get a floating card the panels' gap away.
-//!   Left / right sit against the screen sides (clear of the frame's screen
-//!   flares, or in line with the outer pills); in the zone holding the
+//!   Left / right follow the visible bar's ends (clear of screen edges);
+//!   in the zone holding the
 //!   bar's launcher button it can grow out of the button instead.
 //! * **Attached at the other edge** (no bar there) — a drawer from the bare
 //!   screen edge: with flares for the edge-frame style (the shipped
-//!   Caelestia-style bottom drawer), flush with rounded inner corners for
+//!   bottom drawer), flush with rounded inner corners for
 //!   the floating styles.
 //! * **Bottom with the dock on** — a card floating above the dock (never
 //!   covered by it).
@@ -23,7 +23,9 @@
 use mandara_config::surfaces::PanelAnimation;
 use mandara_config::workflow::{LauncherAlign, LauncherEdge, LauncherPosition};
 use mandara_config::BarPosition;
-use smallvec::SmallVec;
+mod anchors;
+mod seam;
+pub use anchors::{BarAnchor, anchor_on, publish_anchor};
 
 use crate::bar::layout::{CHIP_INSET, Metrics, PANEL_SLIDE_PX, PILL_INSET, exclusive_zone};
 
@@ -107,6 +109,8 @@ pub struct Inputs {
     /// The bar's geometry, and whether the bar shows on this output.
     pub bar: Metrics,
     pub bar_here: bool,
+    /// Actual bar extent; compact bars are narrower than the screen.
+    pub bar_span: Option<(f32, f32)>,
     /// Room a bottom dock keeps free (band + gap), when it's on.
     pub dock_clearance: Option<f32>,
     /// The bar's launcher button on this output `(x, width)`, when the
@@ -127,6 +131,8 @@ pub struct Placement {
     pub edge: Option<LauncherEdge>,
     /// Concave flare radius (0 unless [`Join::Flares`]).
     pub flare: f32,
+    /// The joined Notch's far corners, which become part of the launcher.
+    notch: Option<seam::Notch>,
     /// Corner radius to start from (the launcher pill's, when it morphs
     /// out of a floating pill; `None`: the panel radius throughout).
     pub start_radius: Option<f32>,
@@ -138,6 +144,15 @@ pub struct Placement {
     pub hover_close: bool,
     /// It grows out of the bar's launcher button.
     pub from_button: bool,
+}
+
+impl Placement {
+    /// Shapes the animated join without growing a flare beyond a compact bar.
+    pub(crate) fn drawer(&self, current: Rect, radius: f32, scale: f32) -> seam::Drawer {
+        let edge = self.edge.unwrap_or(LauncherEdge::Top);
+        let line = if edge == LauncherEdge::Top { self.rect.y } else { self.rect.bottom() };
+        seam::Drawer::new(current, edge, line, radius, self.flare.min(current.h), self.notch, scale)
+    }
 }
 
 /// The launcher edge a bar shares (`None`: a side bar shares none — the
@@ -199,7 +214,7 @@ fn center(i: &Inputs) -> Placement {
             Rect::new(rect.x + (w - sw0) / 2.0, rect.y + (h - sh0) / 2.0, sw0, sh0)
         }
     };
-    Placement { rect, start, join: Join::Card, edge: None, flare: 0.0, start_radius: None, fades: true, keep_bright: None, hover_close: false, from_button: false }
+    Placement { rect, start, join: Join::Card, edge: None, flare: 0.0, notch: None, start_radius: None, fades: true, keep_bright: None, hover_close: false, from_button: false }
 }
 
 fn attached(i: &Inputs, edge: LauncherEdge) -> Placement {
@@ -234,14 +249,32 @@ fn attached(i: &Inputs, edge: LauncherEdge) -> Placement {
     let align = i.position.align();
     let lo = margin + side_l;
     let hi = (sw - margin - side_r - w).max(lo);
+    let span = at_bar.then(|| {
+        i.bar_span.or_else(|| m.notch().then(|| {
+            let frame = m.frame(sw);
+            (f32::from(frame.origin.x), f32::from(frame.size.width))
+        }))
+    }).flatten().filter(|(x, width)| x.is_finite() && width.is_finite() && *width > 0.0 && *x >= 0.0 && *x + *width <= sw);
     // The bar's launcher button, when it sits in this placement's zone of
     // the bar's own edge.
-    let button = i.button.filter(|(bx, bw)| at_bar && dock.is_none() && in_zone(align, bx + bw / 2.0, sw));
+    let button = i.button.filter(|(bx, bw)| {
+        let (origin, width) = span.unwrap_or((0.0, sw));
+        at_bar && dock.is_none() && in_zone(align, bx + bw / 2.0 - origin, width)
+    });
+    let (start, end) = span.map(|(x, width)| (x, x + width)).unwrap_or((lo, hi + w));
+    let aligned = match align {
+        LauncherAlign::Left => start,
+        LauncherAlign::Right => end - w,
+        LauncherAlign::Center => (start + end - w) / 2.0,
+    }.clamp(lo, hi);
     let x = match (button, align) {
-        (Some((bx, bw)), _) => (bx + bw / 2.0 - w / 2.0).clamp(lo, hi),
-        (None, LauncherAlign::Left) => lo,
-        (None, LauncherAlign::Right) => hi,
-        (None, LauncherAlign::Center) => ((sw - w) / 2.0).clamp(lo, hi),
+        (Some(_), _) if span.is_some_and(|(_, width)| width < w) => aligned,
+        (Some((bx, bw)), _) => {
+            let anchored_lo = start.clamp(lo, hi);
+            let anchored_hi = (end - w).clamp(anchored_lo, hi);
+            (bx + bw / 2.0 - w / 2.0).clamp(anchored_lo, anchored_hi)
+        }
+        (None, _) => aligned,
     };
     // Solved top-oriented, then mirrored onto the bottom edge.
     let rect = Rect::new(x, line, w, h);
@@ -272,6 +305,8 @@ fn attached(i: &Inputs, edge: LauncherEdge) -> Placement {
         join,
         edge: Some(edge),
         flare: if join == Join::Flares { m.flare } else { 0.0 },
+        notch: span.filter(|_| join == Join::Flares && at_bar && m.notch())
+            .map(|span| seam::Notch { span, radius: m.frame_radius() }),
         start_radius,
         fades: i.animation == PanelAnimation::Slide,
         keep_bright,
@@ -284,6 +319,11 @@ fn attached(i: &Inputs, edge: LauncherEdge) -> Placement {
 /// `content_h` tall (`bar_here`: the bar shows on this output; `button`:
 /// its launcher button there).
 pub fn for_config(cfg: &mandara_config::ShellConfig, screen: (f32, f32), content_h: f32, bar_here: bool, button: Option<(f32, f32)>) -> Placement {
+    for_config_with_bar(cfg, screen, content_h, bar_here, None, button)
+}
+
+/// Resolves a placement using the bar geometry published for this output.
+pub fn for_config_with_bar(cfg: &mandara_config::ShellConfig, screen: (f32, f32), content_h: f32, bar_here: bool, bar_span: Option<(f32, f32)>, button: Option<(f32, f32)>) -> Placement {
     let look = &cfg.launcher.look;
     let (w, max_h) = look.size();
     place(&Inputs {
@@ -293,6 +333,7 @@ pub fn for_config(cfg: &mandara_config::ShellConfig, screen: (f32, f32), content
         max_h,
         bar: Metrics::of(cfg, crate::style::radius_scale()),
         bar_here,
+        bar_span,
         dock_clearance: cfg.dock_bottom_clearance(),
         button: button.filter(|_| look.align_to_button),
         animation: cfg.panels.animation,
@@ -338,7 +379,7 @@ pub fn beacon(cfg: &mandara_config::ShellConfig, screen: (f32, f32), bar_here: b
 
 /// [`beacon`] from its parts (unit-tested).
 pub fn beacon_with(m: &Metrics, bar_here: bool, dock: Option<f32>, (sw, sh): (f32, f32), width: f32, top: f32, max_card_h: f32, modes: usize, rtl: bool) -> BeaconPlacement {
-    let i = Inputs { position: LauncherPosition::Center, screen: (sw, sh), size: (width, 0.0), max_h: 0.0, bar: *m, bar_here, dock_clearance: dock, button: None, animation: PanelAnimation::Morph };
+    let i = Inputs { position: LauncherPosition::Center, screen: (sw, sh), size: (width, 0.0), max_h: 0.0, bar: *m, bar_here, bar_span: None, dock_clearance: dock, button: None, animation: PanelAnimation::Morph };
     let (side_l, side_r) = side_clearance(&i);
     let band = if bar_here { exclusive_zone(m) } else { 0.0 };
     let top_free = if bar_here && m.position == BarPosition::Top { band } else { 0.0 } + SCREEN_MARGIN;
@@ -369,40 +410,6 @@ pub fn chip_y(m: &Metrics) -> (f32, f32) {
     if m.attached() { (f32::from(m.frame(0.0).origin.y) + CHIP_INSET, m.height - CHIP_INSET * 2.0) } else { (m.edge_gap + PILL_INSET, m.height - PILL_INSET * 2.0) }
 }
 
-// ── The bar's launcher button, per output ───────────────────────────────
-
-/// Where the bar's launcher button rests on each output: `(output, x,
-/// width)` in output coordinates. The bar publishes it only while the
-/// launcher is open (nothing is kept or computed otherwise).
-#[derive(Default)]
-pub struct LauncherButtons(SmallVec<[(String, f32, f32); 2]>);
-impl gpui::Global for LauncherButtons {}
-
-/// Records `output`'s launcher button (`None`: not in its bar).
-pub fn publish_button(output: &str, chip: Option<(f32, f32)>, cx: &mut gpui::App) {
-    let current = cx.try_global::<LauncherButtons>().and_then(|b| b.0.iter().find(|(o, _, _)| o == output).map(|(_, x, w)| (*x, *w)));
-    if current == chip && (chip.is_some() || !cx.has_global::<LauncherButtons>()) {
-        return;
-    }
-    let buttons = cx.default_global::<LauncherButtons>();
-    buttons.0.retain(|(o, _, _)| o != output);
-    if let Some((x, w)) = chip {
-        buttons.0.push((output.to_string(), x, w));
-    }
-}
-
-/// The launcher button on `output` (or the only one known, when the
-/// output's name isn't).
-pub fn button_on(output: Option<&str>, cx: &gpui::App) -> Option<(f32, f32)> {
-    let b = &cx.try_global::<LauncherButtons>()?.0;
-    match output {
-        Some(name) => b.iter().find(|(o, _, _)| o == name),
-        None if b.len() == 1 => b.first(),
-        None => None,
-    }
-    .map(|(_, x, w)| (*x, *w))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,6 +426,7 @@ mod tests {
             max_h: 560.0,
             bar: Metrics::default_for(layout, bar),
             bar_here: true,
+            bar_span: None,
             dock_clearance: None,
             button: None,
             animation: PanelAnimation::Morph,
@@ -427,6 +435,73 @@ mod tests {
 
     fn near(a: f32, b: f32) -> bool {
         (a - b).abs() < 0.01
+    }
+
+    #[test]
+    fn compact_bar_placements_follow_the_visible_ends_on_either_edge() {
+        for layout in [BarLayout::Notch, BarLayout::Micro, BarLayout::ContiguousIsland, BarLayout::FloatingPills] {
+            for (bar, left, center, right) in [
+                (BarPosition::Top, LauncherPosition::TopLeft, LauncherPosition::TopCenter, LauncherPosition::TopRight),
+                (BarPosition::Bottom, LauncherPosition::BottomLeft, LauncherPosition::BottomCenter, LauncherPosition::BottomRight),
+            ] {
+                let mut i = inputs(left, layout, bar);
+                i.bar_span = Some((880.0, 800.0));
+                assert!(near(place(&i).rect.x, 880.0), "{layout:?}/{bar:?}: left follows bar start");
+                i.position = right;
+                assert!(near(place(&i).rect.right(), 1680.0), "{layout:?}/{bar:?}: right follows bar end");
+                i.position = center;
+                assert!(near(place(&i).rect.x + SIZE.0 / 2.0, 1280.0));
+            }
+        }
+    }
+
+    #[test]
+    fn notch_fallback_uses_its_configured_frame_before_an_anchor_arrives() {
+        let i = inputs(LauncherPosition::TopLeft, BarLayout::Notch, BarPosition::Top);
+        let frame = i.bar.frame(SCREEN.0);
+        assert!(near(place(&i).rect.x, f32::from(frame.origin.x)));
+    }
+
+    #[test]
+    fn compact_button_zones_are_relative_to_the_bar_in_ltr_and_rtl() {
+        let mut i = inputs(LauncherPosition::TopLeft, BarLayout::Micro, BarPosition::Top);
+        i.bar_span = Some((900.0, 760.0));
+        i.button = Some((920.0, 30.0));
+        assert!(place(&i).from_button, "the left end of a centered bar is still its left zone");
+        assert!(near(place(&i).start.x, 920.0));
+        assert!(near(place(&i).rect.x, 900.0), "resting content starts at the bar even when it morphs from the button");
+        i.position = LauncherPosition::TopRight;
+        assert!(!place(&i).from_button);
+        i.button = Some((1610.0, 30.0));
+        assert!(place(&i).from_button);
+        assert!(near(place(&i).rect.right(), 1660.0));
+        i.position = LauncherPosition::TopLeft;
+        assert!(!place(&i).from_button);
+    }
+
+    #[test]
+    fn bar_geometry_cannot_move_an_opposite_edge_or_barless_launcher() {
+        let mut i = inputs(LauncherPosition::BottomLeft, BarLayout::Micro, BarPosition::Top);
+        let original = place(&i);
+        i.bar_span = Some((900.0, 760.0));
+        assert_eq!(place(&i), original);
+        i.position = LauncherPosition::TopLeft;
+        i.bar_here = false;
+        let with_span = place(&i);
+        i.bar_span = None;
+        assert_eq!(place(&i), with_span);
+    }
+
+    #[test]
+    fn wide_launchers_and_invalid_spans_stay_inside_the_output() {
+        let mut i = inputs(LauncherPosition::TopLeft, BarLayout::Micro, BarPosition::Top);
+        i.size.0 = SCREEN.0;
+        for span in [(2100.0, 400.0), (f32::NAN, 400.0), (-20.0, 700.0), (800.0, f32::INFINITY)] {
+            i.bar_span = Some(span);
+            let p = place(&i);
+            assert!(p.rect.x.is_finite());
+            assert!(p.rect.x >= 0.0 && p.rect.right() <= SCREEN.0);
+        }
     }
 
     #[test]

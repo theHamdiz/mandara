@@ -14,7 +14,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px, size,
 };
 use mandara_core::ToGpui;
-use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
+use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Output, Zone};
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
 
@@ -24,7 +24,7 @@ use crate::bidi::Bidi as _;
 use crate::icons::{any_icon, icon};
 use crate::kit::{card, icon_button, reveal, text, tokens};
 use crate::markdown::{self, Doc, RenderCx};
-use crate::notes_store::{DEFAULT_TOPIC, NoteStore, Topic};
+use crate::notes_store::{DEFAULT_TOPIC, NoteStore, NotesSnapshot, Topic};
 use crate::productivity::{Productivity, productivity};
 use crate::text_field::TextField;
 use crate::todo_lists::{OnDelete, SWATCH_HUES, TONES};
@@ -178,6 +178,11 @@ enum Naming {
 #[derive(Default)]
 struct NotesUi {
     selected: Option<u64>,
+    root: Option<PathBuf>,
+    error: Option<String>,
+    naming_pending: bool,
+    creating: bool,
+    transitioning: bool,
     /// The selected note shows its editor (else the rendered Markdown).
     editing: bool,
     searching: bool,
@@ -217,8 +222,11 @@ fn fields(ui: &Ui, cx: &mut App) -> Fields {
             mandara_i18n::t("Write in Markdown…"),
             true,
             Rc::new(move |value, _, cx| {
-                if let Some(id) = sel.borrow().selected {
-                    productivity(cx).update(cx, |p, cx| p.edit_note(id, &value, cx));
+                let selected = sel.borrow().selected;
+                if let Some(id) = selected {
+                    productivity(cx).update(cx, |p, cx| {
+                        if sel.borrow().root.as_ref() == Some(&p.notes.root) { p.edit_note(id, &value, cx); }
+                    });
                 }
             }),
             cx,
@@ -233,28 +241,33 @@ fn fields(ui: &Ui, cx: &mut App) -> Fields {
             mandara_i18n::t("Topic name"),
             false,
             Rc::new(move |value, _, cx| {
-                let naming = nm.borrow_mut().naming.take();
-                let value = value.trim().to_string();
-                if !value.is_empty() {
-                    productivity(cx).update(cx, |p, cx| match naming {
-                        Some(Naming::New) => {
-                            if let Ok(id) = p.edit_notes(cx, |s| s.add_topic(&value, None, None)) {
-                                p.set_notes_topic(Some(id), cx);
-                            }
+                if nm.borrow().naming_pending { return; }
+                let naming = nm.borrow().naming;
+                let value = value.trim().to_owned();
+                if value.is_empty() { return; }
+                let pending = productivity(cx).update(cx, |p, cx| match naming {
+                    Some(Naming::New) => p.edit_notes(cx, move |store| store.add_topic(&value, None, None).map(Some)),
+                    Some(Naming::Rename(id)) => p.edit_notes(cx, move |store| store.rename_topic(id, &value).map(|_| None)),
+                    None => Err("no topic is being edited".to_owned()),
+                });
+                nm.borrow_mut().naming_pending = true;
+                let nm = nm.clone();
+                complete(pending, cx, move |result, cx| {
+                    nm.borrow_mut().naming_pending = false;
+                    match result {
+                        Ok(id) => {
+                            nm.borrow_mut().naming = None;
+                            nm.borrow_mut().error = None;
+                            if let Some(id) = id { productivity(cx).update(cx, |p, cx| p.set_notes_topic(Some(id), cx)); }
                         }
-                        Some(Naming::Rename(id)) => {
-                            if let Err(err) = p.edit_notes(cx, |s| s.rename_topic(id, &value)) {
-                                tracing::warn!("renaming topic: {err:#}");
-                            }
-                        }
-                        None => {}
-                    });
-                }
+                        Err(error) => nm.borrow_mut().error = Some(error),
+                    }
+                    refresh(cx);
+                });
                 refresh(cx);
             }),
             cx,
         )
-        .clear_on_commit()
     });
     let q = ui.clone();
     let search = cx.new(|cx| {
@@ -271,11 +284,31 @@ fn fields(ui: &Ui, cx: &mut App) -> Fields {
 
 /// Opens a note in this surface (preview or editor per the setting).
 fn open(ui: &Ui, f: &Fields, id: u64, edit: bool, window: &mut Window, cx: &mut App) {
+    if ui.borrow().transitioning { return; }
     let previous = ui.borrow().selected;
-    if let Some(prev) = previous.filter(|p| *p != id) {
-        productivity(cx).update(cx, |p, cx| p.settle_note(prev, cx));
+    if let Some(previous) = previous.filter(|previous| *previous != id) {
+        // The live field already updates the model; preview fields may be stale.
+        let pending = productivity(cx).update(cx, |p, cx| p.settle_note(previous, cx));
+        ui.borrow_mut().transitioning = true;
+        let (ui, fields, handle) = (ui.clone(), f.clone(), window.window_handle());
+        complete(pending, cx, move |result, cx| {
+            ui.borrow_mut().transitioning = false;
+            match result {
+                Ok(_) if productivity(cx).read(cx).note_pending(previous) => refresh(cx),
+                Ok(_) => { let _ = handle.update(cx, |_, window, cx| show_note(&ui, &fields, id, edit, window, cx)); }
+                Err(error) => set_ui(&ui, cx, |ui| ui.error = Some(error)),
+            }
+        });
+        return;
     }
-    let text = productivity(cx).read(cx).notes.note(id).map(|n| n.text.clone()).unwrap_or_default();
+    show_note(ui, f, id, edit, window, cx);
+}
+
+fn show_note(ui: &Ui, f: &Fields, id: u64, edit: bool, window: &mut Window, cx: &mut App) {
+    let Some(text) = productivity(cx).read(cx).notes.note(id).map(|note| note.text.clone()) else {
+        set_ui(ui, cx, |ui| ui.error = Some(mandara_i18n::t("This item was removed. Your text is still here.").into()));
+        return;
+    };
     let (font, size) = editor_font(cx);
     f.editor.update(cx, |e, _| {
         e.set(&text);
@@ -289,19 +322,22 @@ fn open(ui: &Ui, f: &Fields, id: u64, edit: bool, window: &mut Window, cx: &mut 
         u.editing = edit;
         u.menu = None;
     });
-    // Other abandoned drafts go; this one stays, even empty (a new note).
-    productivity(cx).update(cx, |p, cx| p.prune_empty(Some(id), cx));
 }
 
 fn close(ui: &Ui, cx: &mut App) {
-    let id = ui.borrow_mut().selected.take();
-    if let Some(id) = id {
-        productivity(cx).update(cx, |p, cx| {
-            p.settle_note(id, cx);
-            p.prune_empty(None, cx);
-        });
-    }
-    refresh(cx);
+    if ui.borrow().transitioning { return; }
+    let Some(id) = ui.borrow().selected else { return };
+    let pending = productivity(cx).update(cx, |p, cx| p.settle_note(id, cx));
+    ui.borrow_mut().transitioning = true;
+    let ui = ui.clone();
+    complete(pending, cx, move |result, cx| {
+        ui.borrow_mut().transitioning = false;
+        match result {
+            Ok(_) if productivity(cx).read(cx).note_pending(id) => refresh(cx),
+            Ok(_) => set_ui(&ui, cx, |ui| { ui.selected = None; ui.error = None; }),
+            Err(error) => set_ui(&ui, cx, |ui| ui.error = Some(error)),
+        }
+    });
 }
 
 fn ago(ts: i64) -> String {
@@ -368,11 +404,8 @@ fn chip(topic: Option<&Topic>, count: usize, active: bool, palette: &MandaraPale
             })
             .drag_over::<DragNote>(move |s, _, _, _| s.bg(tint.with_alpha(CHIP_DROP_ALPHA).hsla()))
             .on_drop(move |d: &DragNote, _, cx| {
-                productivity(cx).update(cx, |p, cx| {
-                    if let Err(err) = p.edit_notes(cx, |s| s.move_note(d.id, id)) {
-                        tracing::warn!("moving note: {err:#}");
-                    }
-                })
+                let note = d.id;
+                store_edit(cx, move |store| store.move_note(note, id));
             })
         })
         .into_any_element()
@@ -408,15 +441,14 @@ mod btn {
     pub const CLOSE: u64 = 9;
 }
 
-fn store_edit(cx: &mut App, f: impl FnOnce(&mut NoteStore) -> anyhow::Result<()>) {
-    productivity(cx).update(cx, |p, cx| {
-        if let Err(err) = p.edit_notes(cx, f) {
-            tracing::warn!("notes: {err:#}");
-        }
+fn store_edit(cx: &mut App, f: impl FnOnce(&mut NoteStore) -> anyhow::Result<()> + Send + 'static) {
+    let result = productivity(cx).update(cx, |p, cx| p.edit_notes(cx, f));
+    complete(result, cx, |result, _| {
+        if let Err(error) = result { tracing::warn!("notes: {error}"); }
     });
 }
 
-fn menu(m: Menu, store: &NoteStore, palette: &MandaraPalette, ids: &'static Ids, ui: &Ui, name_field: &Entity<TextField>) -> Option<AnyElement> {
+fn menu(m: Menu, store: &NotesSnapshot, palette: &MandaraPalette, ids: &'static Ids, ui: &Ui, name_field: &Entity<TextField>) -> Option<AnyElement> {
     let shell = div().id(ids.menu).p(px(MENU_PAD_PX)).rounded(px(crate::style::radius(MENU_RADIUS_PX))).bg(palette.on_surface.with_alpha(MENU_BG_ALPHA).hsla()).flex().flex_col().gap(px(tokens::SM));
     let close = {
         let ui = ui.clone();
@@ -434,7 +466,7 @@ fn menu(m: Menu, store: &NoteStore, palette: &MandaraPalette, ids: &'static Ids,
                 let del = |how: OnDelete| {
                     let ui = ui.clone();
                     move |cx: &mut App| {
-                        store_edit(cx, |s| s.remove_topic(id, how).map(drop));
+                        store_edit(cx, move |s| s.remove_topic(id, how).map(drop));
                         set_ui(&ui, cx, |u| u.menu = None);
                     }
                 };
@@ -461,13 +493,16 @@ fn menu(m: Menu, store: &NoteStore, palette: &MandaraPalette, ids: &'static Ids,
                     });
                 }
             };
-            let shift = |to: usize| move |cx: &mut App| store_edit(cx, |s| s.move_topic(id, to).map(drop));
+            let shift = |delta: isize| move |cx: &mut App| store_edit(cx, move |store| {
+                let from = store.topics.iter().position(|topic| topic.id == id).ok_or_else(|| anyhow::anyhow!("no such topic"))?;
+                store.move_topic(id, from.saturating_add_signed(delta)).map(drop)
+            });
             let mut buttons = div().row().flex_wrap().gap(px(CHIP_GAP_PX)).child(menu_button((ids.menu, btn::RENAME), mandara_i18n::tk("Rename"), palette.on_surface, palette, rename));
             if pos > 0 {
-                buttons = buttons.child(menu_button((ids.menu, btn::LEFT), mandara_i18n::tk("Move left"), palette.on_surface, palette, shift(pos - 1)));
+                buttons = buttons.child(menu_button((ids.menu, btn::LEFT), mandara_i18n::tk("Move left"), palette.on_surface, palette, shift(-1)));
             }
             if pos + 1 < store.topics.len() {
-                buttons = buttons.child(menu_button((ids.menu, btn::RIGHT), mandara_i18n::tk("Move right"), palette.on_surface, palette, shift(pos + 1)));
+                buttons = buttons.child(menu_button((ids.menu, btn::RIGHT), mandara_i18n::tk("Move right"), palette.on_surface, palette, shift(1)));
             }
             if id != DEFAULT_TOPIC {
                 let ui = ui.clone();
@@ -511,7 +546,7 @@ fn menu(m: Menu, store: &NoteStore, palette: &MandaraPalette, ids: &'static Ids,
                     .child(div().size(px(CHIP_DOT_PX)).rounded_full().bg(tint.hsla()))
                     .child(topic_name(t))
                     .on_click(move |_, _, cx| {
-                        store_edit(cx, |s| s.move_note(note, tid));
+                        store_edit(cx, move |s| s.move_note(note, tid));
                         set_ui(&ui, cx, |u| u.menu = None);
                     })
             });
@@ -534,12 +569,7 @@ fn rendered(ui: &Ui, id: u64, text_now: &str, palette: &MandaraPalette, ids: &'s
         }
     };
     let toggle: markdown::OnToggle = Rc::new(move |range, _, cx| {
-        let text = productivity(cx).read(cx).notes.note(id).map(|n| n.text.clone());
-        if let Some(next) = text.and_then(|t| markdown::toggle_task(&t, range)) {
-            productivity(cx).update(cx, |p, cx| {
-                p.set_note(id, &next, cx);
-            });
-        }
+        productivity(cx).update(cx, |p, cx| p.toggle_note_task(id, range, cx));
     });
     let rcx = RenderCx { id: SharedString::from(format!("{}-{id}", ids.view)), on_toggle: Some(toggle), mono };
     markdown::render(&doc, palette, &rcx)
@@ -547,6 +577,22 @@ fn rendered(ui: &Ui, id: u64, text_now: &str, palette: &MandaraPalette, ids: &'s
 
 #[allow(clippy::too_many_arguments)]
 fn body(p: &Productivity, ui: &Ui, f: &Fields, palette: &MandaraPalette, limit: usize, ids: &'static Ids, reveal_cx: Option<&PanelCx>, mono: SharedString) -> AnyElement {
+    if !p.notes_ready {
+        return div().text_color(palette.on_surface_variant.hsla()).child(
+            p.notes_error.as_ref().map_or_else(|| mandara_i18n::t("Loading…").to_owned(), |error| mandara_i18n::tf("Couldn't load: {error}", &[("error", error)]))
+        ).into_any_element();
+    }
+
+    {
+        let mut state = ui.borrow_mut();
+        if state.root.as_ref().is_some_and(|root| root != &p.notes.root) {
+            state.selected = None;
+            state.editing = false;
+            state.menu = None;
+            state.docs.clear();
+        }
+        state.root = Some(p.notes.root.clone());
+    }
     let store = &p.notes;
     let state = ui.borrow();
     let selected = state.selected.filter(|id| store.note(*id).is_some());
@@ -577,12 +623,30 @@ fn body(p: &Productivity, ui: &Ui, f: &Fields, palette: &MandaraPalette, limit: 
             }
         }))
         .child(icon_button(ids.new, "plus", BUTTON_PX, palette.primary, Some(palette.primary.with_alpha(NEW_FILL_ALPHA)), move |window, cx| {
+            if ui_new.borrow().creating || ui_new.borrow().transitioning { return; }
+            ui_new.borrow_mut().creating = true;
             let topic = target_topic(cx);
-            if let Ok(id) = productivity(cx).update(cx, |p, cx| p.add_note("", topic, cx)) {
-                open(&ui_new, &f_new, id, true, window, cx);
-            }
+            let pending = productivity(cx).update(cx, |p, cx| p.add_note("", topic, cx));
+            let handle = window.window_handle();
+            let (ui, fields) = (ui_new.clone(), f_new.clone());
+            complete(pending, cx, move |result, cx| {
+                ui.borrow_mut().creating = false;
+                match result {
+                    Ok(id) => { let _ = handle.update(cx, |_, window, cx| open(&ui, &fields, id, true, window, cx)); }
+                    Err(error) => set_ui(&ui, cx, |ui| ui.error = Some(error)),
+                }
+            });
         }));
     let mut blocks: Vec<AnyElement> = vec![head.into_any_element()];
+    if let Some(error) = store.read_errors.as_ref().and_then(|errors| errors.first()).map(|error| &error.message) {
+        blocks.push(div().text_color(palette.urgent_coral.hsla()).child(mandara_i18n::tf("Couldn't load: {error}", &[("error", error)])).into_any_element());
+    }
+    if p.has_note_conflicts() {
+        blocks.push(div().text_color(palette.urgent_coral.hsla()).child(mandara_i18n::t("This item changed elsewhere. Your text is still here.")).into_any_element());
+    }
+    if let Some(error) = state.error.as_ref().or(p.notes_error.as_ref()) {
+        blocks.push(div().text_color(palette.urgent_coral.hsla()).child(mandara_i18n::tf("Couldn't save: {error}", &[("error", error)])).into_any_element());
+    }
     if searching {
         blocks.push(div().child(f.search.clone()).into_any_element());
     }
@@ -670,17 +734,21 @@ fn body(p: &Productivity, ui: &Ui, f: &Fields, palette: &MandaraPalette, limit: 
                         .child(icon_button(ids.mode, if editing { "eye" } else { "pencil" }, BUTTON_PX, palette.on_surface_variant, None, move |window, cx| {
                             let now_editing = ui_mode.borrow().editing;
                             if now_editing {
-                                productivity(cx).update(cx, |p, _| p.flush_notes());
+                                productivity(cx).update(cx, |p, cx| {
+                                    if let Err(error) = p.flush_notes(cx) { tracing::warn!("saving notes: {error}"); }
+                                });
                                 set_ui(&ui_mode, cx, |u| u.editing = false);
                             } else {
                                 open(&ui_mode, &f_mode, id, true, window, cx);
                             }
                         }))
                         .child(icon_button(ids.delete, "trash", BUTTON_PX, palette.on_surface_variant, None, move |_, cx| {
-                            productivity(cx).update(cx, |p, cx| {
-                                p.remove_note(id, cx);
+                            let pending = productivity(cx).update(cx, |p, cx| p.remove_note(id, cx));
+                            let ui = ui_del.clone();
+                            complete(pending, cx, move |result, cx| match result {
+                                Ok(_) => set_ui(&ui, cx, |ui| ui.selected = None),
+                                Err(error) => set_ui(&ui, cx, |ui| ui.error = Some(error)),
                             });
-                            set_ui(&ui_del, cx, |u| u.selected = None);
                         }))
                         .child(
                             div()
@@ -792,11 +860,11 @@ fn note_id(a: &mandara_plugins::Args, i: usize) -> Result<u64, String> {
     a.str(i)?.parse::<u64>().map_err(|_| "id must be a number".to_string())
 }
 
-fn topic_arg(store: &NoteStore, key: &str) -> Result<u64, String> {
+fn topic_arg(store: &NotesSnapshot, key: &str) -> Result<u64, String> {
     store.find_topic(key).ok_or_else(|| mandara_i18n::t("No such topic (use its name or id; see `notes topics`)").to_string())
 }
 
-fn note_json(store: &NoteStore, id: u64, full: bool) -> serde_json::Value {
+fn note_json(store: &NotesSnapshot, id: u64, full: bool) -> serde_json::Value {
     let Some(n) = store.note(id) else { return serde_json::Value::Null };
     let topic = store.topic(n.topic);
     let mut v = json!({
@@ -809,12 +877,42 @@ fn note_json(store: &NoteStore, id: u64, full: bool) -> serde_json::Value {
     v
 }
 
-fn topic_json(store: &NoteStore, t: &Topic) -> serde_json::Value {
+fn topic_json(store: &NotesSnapshot, t: &Topic) -> serde_json::Value {
     json!({ "id": t.id, "name": t.name, "color": t.color, "icon": t.icon, "folder": store.root.join(&t.dir), "notes": store.count(Some(t.id)) })
 }
 
-fn edit(cx: &mut App, f: impl FnOnce(&mut NoteStore) -> anyhow::Result<serde_json::Value>) -> Result<serde_json::Value, String> {
-    productivity(cx).update(cx, |p, cx| p.edit_notes(cx, f)).map_err(|e| format!("{e:#}"))
+fn edit(cx: &mut App, f: impl FnOnce(&mut NoteStore) -> anyhow::Result<serde_json::Value> + Send + 'static) -> Result<Output, String> {
+    let pending = productivity(cx).update(cx, |p, cx| p.edit_notes(cx, f))?;
+    Ok(command_reply(pending, Ok))
+}
+
+fn command_reply<T: Send + 'static>(
+    pending: async_channel::Receiver<crate::productivity::NoteReply<T>>,
+    value: impl FnOnce(T) -> Result<serde_json::Value, String> + Send + 'static,
+) -> Output {
+    let (reply, result) = async_channel::bounded(1);
+    mandara_services::runtime::spawn("notes-command", async move {
+        let result = match pending.recv().await {
+            Ok(done) => done.result().and_then(value).map(|value| value.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        let _ = reply.send(result).await;
+    });
+    Output::Pending(result)
+}
+
+fn complete<T: Send + 'static>(
+    pending: Result<async_channel::Receiver<crate::productivity::NoteReply<T>>, String>,
+    cx: &mut App,
+    done: impl FnOnce(Result<T, String>, &mut App) + 'static,
+) {
+    match pending {
+        Err(error) => done(Err(error), cx),
+        Ok(pending) => cx.spawn(async move |cx| {
+            let result = match pending.recv().await { Ok(reply) => reply.result(), Err(error) => Err(error.to_string()) };
+            cx.update(|cx| done(result, cx));
+        }).detach(),
+    }
 }
 
 pub fn register(r: &mut PluginRegistry) {
@@ -843,14 +941,18 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("notes add", mandara_i18n::tk("Create a note (Markdown); a leading #Topic files it there (made if missing)"), |a, cx| {
+        CommandSpec::new_output("notes add", mandara_i18n::tk("Create a note (Markdown); a leading #Topic files it there (made if missing)"), |a, cx| {
             let text = a.rest(0);
             if crate::todo_lists::parse_quick_add(&text).1.is_empty() {
                 return Err("note text is empty".into());
             }
             let topic = target_topic(cx);
-            let id = productivity(cx).update(cx, |p, cx| p.add_note(&text, topic, cx)).map_err(|e| format!("{e:#}"))?;
-            Ok(note_json(&productivity(cx).read(cx).notes, id, false))
+            edit(cx, move |store| {
+                let (tag, body) = crate::todo_lists::parse_quick_add(&text);
+                let topic = match tag { Some(tag) => match store.find_topic(tag) { Some(id) => id, None => store.add_topic(tag, None, None)? }, None => topic };
+                let id = store.create(topic, body)?;
+                Ok(note_json(store, id, false))
+            })
         })
         .arg(ArgSpec::required("text", ArgKind::String, mandara_i18n::tk("note text (rest of the line), optionally starting with #Topic")))
         .example("notes add Buy saffron for Friday")
@@ -877,23 +979,25 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("notes append", mandara_i18n::tk("Append a line to a note"), |a, cx| {
+        CommandSpec::new_output("notes append", mandara_i18n::tk("Append a line to a note"), |a, cx| {
             let id = note_id(a, 0)?;
             let line = a.rest(1);
-            let current = productivity(cx).read(cx).notes.note(id).map(|n| n.text.clone()).ok_or(format!("no note {id}"))?;
-            let text = if current.is_empty() { line } else { format!("{current}\n{line}") };
-            productivity(cx).update(cx, |p, cx| p.set_note(id, &text, cx));
-            Ok(json!({ "id": id }))
+            edit(cx, move |store| {
+                let current = &store.note(id).ok_or_else(|| anyhow::anyhow!("no note {id}"))?.text;
+                let text = if current.is_empty() { line } else { format!("{current}\n{line}") };
+                store.write(id, &text)?;
+                Ok(json!({ "id": id }))
+            })
         })
         .arg(ArgSpec::required("id", ArgKind::Integer, mandara_i18n::tk("note id")))
         .arg(ArgSpec::required("text", ArgKind::String, mandara_i18n::tk("line to append"))),
     );
     r.command(
         ID,
-        CommandSpec::new("notes move", mandara_i18n::tk("Move a note (its file) to another topic"), |a, cx| {
+        CommandSpec::new_output("notes move", mandara_i18n::tk("Move a note (its file) to another topic"), |a, cx| {
             let id = note_id(a, 0)?;
             let topic = topic_arg(&productivity(cx).read(cx).notes, &a.rest(1))?;
-            edit(cx, |s| s.move_note(id, topic).map(|_| json!({ "id": id, "topic": topic })))
+            edit(cx, move |s| s.move_note(id, topic).map(|_| json!({ "id": id, "topic": topic })))
         })
         .arg(ArgSpec::required("id", ArgKind::Integer, mandara_i18n::tk("note id")))
         .arg(ArgSpec::required("topic", ArgKind::String, mandara_i18n::tk("topic name or id")))
@@ -901,21 +1005,26 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("notes delete", mandara_i18n::tk("Delete a note (and its file)"), |a, cx| {
+        CommandSpec::new_output("notes delete", mandara_i18n::tk("Delete a note (and its file)"), |a, cx| {
             let id = note_id(a, 0)?;
-            productivity(cx).update(cx, |p, cx| p.remove_note(id, cx)).then_some(json!({ "deleted": id })).ok_or(format!("no note {id}"))
+            let pending = productivity(cx).update(cx, |p, cx| p.remove_note(id, cx))?;
+            Ok(command_reply(pending, move |removed| {
+                removed.then_some(json!({ "deleted": id })).ok_or_else(|| format!("no note {id}"))
+            }))
         })
         .arg(ArgSpec::required("id", ArgKind::Integer, mandara_i18n::tk("note id"))),
     );
     r.command(
         ID,
-        CommandSpec::new("notes export", mandara_i18n::tk("Copy a topic's notes (or all) into a folder as .md files"), |a, cx| {
+        CommandSpec::new_output("notes export", mandara_i18n::tk("Copy a topic's notes (or all) into a folder as .md files"), |a, cx| {
             let p = productivity(cx).read(cx);
             let key = a.str(0)?;
             let topic = if key.eq_ignore_ascii_case("all") { None } else { Some(topic_arg(&p.notes, key)?) };
             let dir: PathBuf = mandara_config::paths::expand_tilde(&a.rest(1));
-            let n = p.notes.export(topic, &dir).map_err(|e| format!("{e:#}"))?;
-            Ok(json!({ "exported": n, "folder": dir }))
+            edit(cx, move |store| {
+                let count = store.export(topic, &dir)?;
+                Ok(json!({ "exported": count, "folder": dir }))
+            })
         })
         .arg(ArgSpec::required("topic", ArgKind::String, mandara_i18n::tk("topic name or id, or all")))
         .arg(ArgSpec::required("dir", ArgKind::String, mandara_i18n::tk("folder to write into (made if missing)")))
@@ -930,11 +1039,11 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("notes topics add", mandara_i18n::tk("Make a topic (a folder; --color tone|hue:<deg>, --icon name)"), |a, cx| {
+        CommandSpec::new_output("notes topics add", mandara_i18n::tk("Make a topic (a folder; --color tone|hue:<deg>, --icon name)"), |a, cx| {
             let (words, color) = crate::sidebar_tabs::take_flag(&a.0, "--color");
             let (words, icon) = crate::sidebar_tabs::take_flag(&words, "--icon");
             let name = words.join(" ");
-            edit(cx, |s| {
+            edit(cx, move |s| {
                 let id = s.add_topic(&name, color.as_deref(), icon.as_deref())?;
                 Ok(topic_json(s, s.topic(id).expect("added")))
             })
@@ -944,40 +1053,40 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("notes topics rename", mandara_i18n::tk("Rename a topic (and its folder)"), |a, cx| {
+        CommandSpec::new_output("notes topics rename", mandara_i18n::tk("Rename a topic (and its folder)"), |a, cx| {
             let t = topic_arg(&productivity(cx).read(cx).notes, a.str(0)?)?;
             let name = a.rest(1);
-            edit(cx, |s| s.rename_topic(t, &name).map(|_| json!({ "id": t, "name": name.trim() })))
+            edit(cx, move |s| s.rename_topic(t, &name).map(|_| json!({ "id": t, "name": name.trim() })))
         })
         .arg(ArgSpec::required("topic", ArgKind::String, mandara_i18n::tk("topic name (one word) or id")))
         .arg(ArgSpec::required("name", ArgKind::String, mandara_i18n::tk("new name (rest of the line)"))),
     );
     r.command(
         ID,
-        CommandSpec::new("notes topics color", mandara_i18n::tk("Recolour a topic"), |a, cx| {
+        CommandSpec::new_output("notes topics color", mandara_i18n::tk("Recolour a topic"), |a, cx| {
             let t = topic_arg(&productivity(cx).read(cx).notes, a.str(0)?)?;
             let color = a.str(1)?.to_string();
-            edit(cx, |s| s.recolor_topic(t, &color).map(|_| json!({ "id": t, "color": color })))
+            edit(cx, move |s| s.recolor_topic(t, &color).map(|_| json!({ "id": t, "color": color })))
         })
         .arg(ArgSpec::required("topic", ArgKind::String, mandara_i18n::tk("topic name (one word) or id")))
         .arg(ArgSpec::required("color", ArgKind::String, mandara_i18n::tk("primary, secondary, tertiary, success, warning, urgent or hue:<0-359>"))),
     );
     r.command(
         ID,
-        CommandSpec::new("notes topics move", mandara_i18n::tk("Move a topic to a 1-based position"), |a, cx| {
+        CommandSpec::new_output("notes topics move", mandara_i18n::tk("Move a topic to a 1-based position"), |a, cx| {
             let t = topic_arg(&productivity(cx).read(cx).notes, a.str(0)?)?;
             let to = usize::try_from(a.int(1)?.max(1) - 1).unwrap_or(0);
-            edit(cx, |s| s.move_topic(t, to).map(|at| json!({ "id": t, "position": at + 1 })))
+            edit(cx, move |s| s.move_topic(t, to).map(|at| json!({ "id": t, "position": at + 1 })))
         })
         .arg(ArgSpec::required("topic", ArgKind::String, mandara_i18n::tk("topic name (one word) or id")))
         .arg(ArgSpec::required("position", ArgKind::Integer, mandara_i18n::tk("1 = first"))),
     );
     r.command(
         ID,
-        CommandSpec::new("notes topics remove", mandara_i18n::tk("Delete a topic; its notes move to the default topic unless `delete` is given"), |a, cx| {
+        CommandSpec::new_output("notes topics remove", mandara_i18n::tk("Delete a topic; its notes move to the default topic unless `delete` is given"), |a, cx| {
             let t = topic_arg(&productivity(cx).read(cx).notes, a.str(0)?)?;
             let how = if a.get(1) == Some("delete") { OnDelete::DeleteTasks } else { OnDelete::MoveToInbox };
-            edit(cx, |s| s.remove_topic(t, how).map(|n| json!({ "removed": t, "notes": n, "notes_deleted": how == OnDelete::DeleteTasks })))
+            edit(cx, move |s| s.remove_topic(t, how).map(|n| json!({ "removed": t, "notes": n, "notes_deleted": how == OnDelete::DeleteTasks })))
         })
         .arg(ArgSpec::required("topic", ArgKind::String, mandara_i18n::tk("topic name (one word) or id")))
         .arg(ArgSpec::optional("notes", ArgKind::Enum, mandara_i18n::tk("what happens to its notes")).choices(&["move", "delete"])),

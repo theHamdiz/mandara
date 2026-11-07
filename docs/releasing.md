@@ -182,6 +182,12 @@ On every push to `main` (not on its own `chore(release)` commits):
    artifacts, and a signed **build provenance attestation** (verify with
    `gh attestation verify <file> --repo <owner>/<repo>`).
 
+   Build uploads use artifact v7 and the publish job downloads them with
+   the pinned v8 action. It merges `dist-*` from this run into `dist/` and
+   keeps the default error on a digest mismatch, before signing any files.
+   The Node 24 action needs Actions Runner 2.327.1 or newer; the workflow
+   uses GitHub-hosted Ubuntu runners.
+
 Mandara is a Wayland desktop shell, so Linux is the only operating system it
 runs on. macOS and Windows have no Wayland compositors to host it.
 
@@ -402,9 +408,12 @@ client's pure-Rust decoder) and the `locales` part of `update.json`
 of the `.mlang`). The packs are architecture-independent and reproducible,
 so they are built once. `cargo xtask dist` puts every pack in each tarball
 (`share/mandara/locales/<v>/`), and the package jobs stage them in
-`target/langpacks/<v>/` for the `.deb` and `.rpm` (installed in
+`dist/.package-inputs/langpacks/<v>/` for the `.deb` and `.rpm` (installed in
 `/usr/share/mandara/locales/<v>/`); the Arch recipes copy them from the
 tarball or build them with `cargo xtask langpacks`.
+These are generated package inputs rather than Cargo build products.
+The artifact upload excludes the hidden staging tree; only finished
+packages and release files leave the job.
 
 **Downloading** (`mandara_services::self_update::langpacks`): a language
 used without its pack (the shell's, a plugin's own, a desktop widget's) or
@@ -426,13 +435,23 @@ another version and an unsigned release.
 Release and CI builds use `mandara-app`'s default feature,
 `alloc-system-tuned`: glibc malloc limited to 2 arenas (`mallopt(M_ARENA_MAX)`
 at startup) with a fixed 512 KiB mmap threshold (see [Resource
-budget](#resource-budget)), plus `malloc_trim(0)` every 30 s on the service
-runtime. There's
-no C allocator, so the shell stays pure Rust. The other allocators remain
+budget](#resource-budget)). Clipboard and media views request `malloc_trim(0)`
+after releasing their cached images; a 30 s fallback also catches other freed
+storage. Requests coalesce and run on a short-lived blocking worker, outside
+the UI and shared service executor threads. No second allocator is loaded.
+The other allocators remain
 selectable (`--no-default-features --features alloc-jemalloc |
 alloc-mimalloc | alloc-mimalloc-v2 | alloc-system`), and CI checks that each
 one builds. mimalloc and jemalloc compile C code with the runner's
 `build-essential` (native x86_64 and aarch64 runners, no cross-compiling).
+
+Thumbnail batches decode sequentially and deliver each result through a bounded
+channel. Page changes wait for the current worker; closing invalidates its
+generation so old results cannot refill an evicted cache. Cache capacity and
+retained image headers are allocated before transient decode buffers. Bulk
+eviction releases the images and spare cache capacity before requesting a trim.
+glibc can then return whole free pages from all arenas, though live allocations
+and fragmentation can still keep pages resident.
 
 Measured on 2026-10-27 on the development machine: dev profile (dependencies
 at opt-level 3), MangoWM at 2560×1440 logical, the real shell restarted once
@@ -500,14 +519,10 @@ What made the difference, each measured by switching it off alone:
 * **Vulkan-first wgpu instance** (`vendor/gpui_wgpu`, patch 7): the GL half
   of the instance initialized EGL and radeonsi on every start. −7 threads,
   −3.2 MiB anonymous, −13.8 MiB VRAM, no libgallium / libLLVM pages from GL.
-* **Startup-only file pages unmapped once settled** (`mandara-app`
-  `residency.rs`, 8 s and 45 s after start, then every 10 min; the 8 s
-  drop is described under [Start-up memory](#start-up-memory)): clean read-only file
-  mappings (start-up code of the binary, libLLVM pages touched by its static
-  initializers when RADV loads it, font files scanned once) are unmapped
-  with `MADV_DONTNEED`; code still in use faults back from the page cache.
-  Mappings with private copies (RELRO) are skipped. −40 to −62 MiB RSS at
-  3 minutes.
+* **Historical file-page cleanup.** The measurements below included process-wide
+  page advice after startup. That cleanup has been removed: a procfs snapshot
+  cannot keep mappings alive while advice runs. The kernel now controls file
+  reclaim, and the existing glibc hook reclaims freed heap pages.
 * **App icons decoded at the size they are drawn** (`icon_raster.rs`):
   `img(path)` rendered SVG app icons at twice their canvas (a 512 px canvas
   is a 4 MiB bitmap). Opening the dock's Applications grid (~100 apps)
@@ -565,7 +580,9 @@ of the real config, a demo MPRIS player and private PipeWire, the shell in
 a scope that cannot swap; *settled* is 80 s after start (35 s after the
 first drop), *activity* is 5 minutes of opening media and quick settings,
 the launcher, a notification and a track change every 25 s with audio
-playing. RSS / file-backed / code, MiB:
+playing. This historical comparison includes the executable-cache discard
+that has since been removed; it does not describe the current memory limit.
+RSS / file-backed / code, MiB:
 
 | Build | Page cache | Settled | After activity | Panel frames p50 / build p95 | Launcher IPC | Audio CPU | Start → IPC |
 |---|---|---|---|---|---|---|---|
@@ -576,27 +593,19 @@ playing. RSS / file-backed / code, MiB:
 Settled code varies 15–23 MiB between runs (which minute boundary, weather
 fetch or D-Bus burst falls before the snapshot); file-backed memory also
 holds libLLVM / RADV / font pages. After activity the code stays until the
-next 10-minute drop: these two changes fix the 2× penalty of a freshly
-written binary, not the working set itself (see PGO below). Start-up and
-audio-visualizer CPU of the same two changes on top of the `opt-level`
-list below, on a quiet machine: 321 ms and 1.73 % (before: 300 ms,
+kernel reclaims it. These historical runs reduced the resident code of a
+freshly written binary without shrinking its working set (see PGO below).
+They do not establish the memory use after removing executable-cache discard.
+Start-up and audio-visualizer CPU of that earlier pair of changes on top
+of the `opt-level` list below, on a quiet machine: 321 ms and 1.73 % (before: 300 ms,
 1.98 %); the final binary was only re-timed under an unrelated 27-core
 build, so re-check those two on a quiet machine before quoting them.
 
-* **Page-cache refresh** (`residency.rs`,
-  `refresh_executable_page_cache`): writing the binary (`mandara install`'s copy,
-  the self-updater, a package manager, the linker) leaves it in the page
-  cache as 256 KiB and larger folios, and every function run then keeps the
-  whole folio around it resident — twice the code — until the file is
-  evicted, which on a machine with free memory means until reboot. Right
-  after the 45 s drop the shell probes its own mapping (one
-  already-cached page touched at 32 places of a throw-away private mapping,
-  `/proc/self/pagemap` read around each) and, when a fault mapped more than
-  the 64 KiB window, writes back and evicts the binary's page cache
-  (`POSIX_FADV_DONTNEED`; pages other processes map stay). The code in use
-  is read back from disk once, in small folios: once per install, like the
-  first start after a reboot. Doing it at start instead cost 2.9 s of
-  start-up while the install's write-back was pending.
+* **File mappings stay under kernel control.** The shell no longer scans and
+  advises arbitrary process mappings or discards the executable's file cache.
+  This avoids a mapping-lifetime race and forced disk faults during cleanup.
+  Earlier settled RSS figures include the removed cleanup and are historical,
+  not a ceiling for current builds. Measure current behavior before quoting it.
 * **Cold functions grouped** (`mandara-app/build.rs`,
   `-z keep-text-section-prefix`): what LLVM marks cold (`#[cold]`, panic and
   error paths) goes to its own 2.2 MB `.text.unlikely` instead of sitting
@@ -631,7 +640,10 @@ Measured and not shipped, speed first:
 
 ### Start-up memory
 
-The idle numbers above are taken once the shell has settled. In the first
+These are historical measurements, including the removed executable-cache
+discard and process-wide mapping advice. Neither the 8-second pass nor later
+mapping drops run in current builds; settled RSS can therefore differ. The
+font and wallpaper changes remain active. In those older builds, the first
 45 seconds it held far more: the start-up code of the binary, the pages
 RADV's libLLVM touches when it loads, and the fonts it scanned stayed
 resident until the first cold-page drop, and loading a wallpaper briefly
@@ -653,11 +665,8 @@ MiB default, 19.8–20.3 MiB demo) and video memory (163.5 MiB default and
 178.5 MiB demo at 4K, 57.7 MiB at 1600 × 1000) are unchanged, also after
 opening and closing the sidebar, the launcher and a panel.
 
-* **An early cold-page drop** (`residency.rs`, `EARLY` = 8 s): the drop
-  described above also runs 8 s after start. The shell is up and has drawn
-  within about a second; what the idle shell still runs maps back with a
-  minor fault. The 45 s drop (with the page-cache refresh) and the
-  10-minute ones are unchanged. −73 to −83 MiB resident from 8 s to 45 s.
+* **Historical early cold-page drop.** The former 8-second, 45-second and
+  10-minute mapping drops contributed to these results and are now removed.
 * **One face per fallback-chain family** (`vendor/gpui_wgpu` patch 11, and
   `lock::paint::TextPainter` asking a fallback family for its weight only
   when the text reaches it): an English desktop mapped and parsed every
@@ -683,8 +692,7 @@ media panel (demo config at 4K, three runs each), view build p50 0.096–0.123
 
 Guards: `crates/mandara-ui/tests/startup_budget.rs` (registering every
 built-in plugin keeps ≤ 4 MiB, allocates ≤ 16 MiB and starts no thread;
-today 0.2 / 9.2 MiB), `residency` unit tests (classification, private
-copies survive a drop, the folio probe unmaps its mapping),
+today 0.2 / 9.2 MiB), `mandara-app/tests/page_advice.rs` (listed raw advice calls in app sources),
 `vulkan_is_tried_alone_before_gl`,
 `cut_source_crops_to_the_subject` (released cut keeps geometry), the
 `icon_raster` decode-size tests, and `cargo xtask resource-check` before a

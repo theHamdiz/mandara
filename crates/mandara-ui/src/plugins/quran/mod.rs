@@ -26,6 +26,7 @@
 pub mod art;
 mod panel;
 mod reader;
+mod share;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -52,6 +53,8 @@ use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
 use crate::kit::{card, text, tokens};
 use crate::state::config;
+
+use super::settings_cache::{ConfigSettings, SettingsCache};
 
 pub const ID: &str = "quran";
 
@@ -127,25 +130,44 @@ pub(crate) struct Settings {
     pub lang: Lang,
 }
 
-pub(crate) fn settings(cx: &App) -> Settings {
-    let cfg = config(cx).read(cx).snapshot();
-    let s = &cfg.plugins;
-    Settings {
-        reciter: player::reciter_or_default(&s.setting(ID, "reciter", String::from(player::DEFAULT_RECITER))),
-        translation: s.setting(ID, "translation", String::new()),
-        arabic_size: match s.setting(ID, "arabic_size", String::from("medium")).as_str() {
-            "small" => ArabicSize::Small,
-            "large" => ArabicSize::Large,
-            _ => ArabicSize::Medium,
-        },
-        lang: plugin_lang::resolved(own_lang(cx)),
+thread_local! {
+    static SETTINGS: RefCell<SettingsCache<Settings>> = const { RefCell::new(SettingsCache::new()) };
+}
+
+/// Release only resolved configuration when the plugin is switched off.
+pub(super) fn clear_settings() {
+    SETTINGS.with(|cache| cache.borrow_mut().clear());
+}
+
+pub(crate) fn settings(cx: &App) -> Rc<Settings> {
+    let config = config(cx).read(cx).snapshot();
+    let language = plugin_lang::resolved(plugin_lang::own_language(config.plugins.setting_str(ID, "language").unwrap_or(plugin_lang::FOLLOW)));
+    SETTINGS.with(|cache| cache.borrow_mut().get(&config, language, ()))
+}
+
+impl ConfigSettings for Settings {
+    type Scope = ();
+
+    fn resolve(cfg: &mandara_config::ShellConfig, language: Lang, (): ()) -> Self {
+        let s = &cfg.plugins;
+        Settings {
+            reciter: player::reciter_or_default(s.setting_str(ID, "reciter").unwrap_or(player::DEFAULT_RECITER)),
+            translation: s.setting(ID, "translation", String::new()),
+            arabic_size: match s.setting_str(ID, "arabic_size").unwrap_or("medium") {
+                "small" => ArabicSize::Small,
+                "large" => ArabicSize::Large,
+                _ => ArabicSize::Medium,
+            },
+            lang: language,
+        }
     }
 }
 
 /// The Qur'an plugin's own language (`None`: Mandara's), from its
 /// `language` setting.
 pub(crate) fn own_lang(cx: &App) -> Option<Lang> {
-    plugin_lang::own_language(&config(cx).read(cx).snapshot().plugins.setting(ID, "language", String::from(plugin_lang::FOLLOW)))
+    let config = config(cx).read(cx).snapshot();
+    plugin_lang::own_language(config.plugins.setting_str(ID, "language").unwrap_or(plugin_lang::FOLLOW))
 }
 
 /// Whether the interface is Arabic (the text only, no translation).
@@ -581,12 +603,14 @@ pub(crate) fn play(shared: &Shared, sel: Selection, cx: &mut App) -> Result<Vec<
     let book = book(shared).ok_or_else(|| t("The Qur'an isn't downloaded yet").to_string())?;
     let queue: Vec<u16> = book.q.globals(sel).collect();
     let first = *queue.first().ok_or_else(|| t("Nothing to recite").to_string())?;
-    let reciter = settings(cx).reciter;
-    if mandara_services::offline::is_offline() && !player::audio_path(reciter.id, first).exists() {
+    let options = settings(cx);
+    let reciter = options.reciter;
+    let index = mandara_services::quran::audio::AyahIndex::new(&book.q);
+    if mandara_services::offline::is_offline() && !mandara_services::quran::audio::cached(reciter.id, first, &index) {
         return Err(t("Offline mode is on and this recitation isn't downloaded yet").into());
     }
     shared.borrow_mut().play_error = None;
-    shared.borrow().player.play(queue.clone(), reciter.id);
+    shared.borrow().player.recite(queue.clone(), reciter.id, index, options.lang);
     sync_playback(shared);
     Ok(queue)
 }
@@ -620,7 +644,7 @@ fn on_player(shared: &Shared, ev: Event, cx: &mut App) {
             shared.borrow_mut().glow = Some((before, Instant::now()));
             read_at(shared, *g, cx);
         }
-        Event::Status(_) | Event::Finished => {}
+        Event::Status(_) | Event::Finished | Event::Download(_) => {}
     }
     shared.borrow_mut().playback = snap;
     changed(shared, cx);
@@ -945,6 +969,7 @@ fn playback_json(shared: &Shared, book: Option<&Book>) -> Value {
         "current": current.and_then(|g| book.and_then(|b| b.q.at(g))).map(|r| r.to_string()),
         "queue_length": s.queue.len(),
         "position": (!s.queue.is_empty()).then_some(s.index + 1),
+        "download": s.download,
         "error": m.play_error,
     })
 }
@@ -998,6 +1023,9 @@ fn register_commands(r: &mut PluginRegistry) {
     // Every command answers in the plugin's own language.
     let mut cmd = |spec: CommandSpec| r.command(ID, plugin_lang::speaking(spec, own_lang));
     cmd(plugin_lang::language_command(ID, "quran language", "quran language fr"));
+    cmd(CommandSpec::new_output("quran copy-image", tk("Copy an ayah and its design as a complete PNG image"), |a, cx| share::command(&a.rest(0), cx))
+        .arg(ArgSpec::required("ref", ArgKind::String, tk("an ayah, such as 2:255")))
+        .example("quran copy-image 2:255"));
     cmd(
         CommandSpec::new("quran peek", tk("Look at the ayah of another day (days after today, or before it when negative) without moving your place"), |a, cx| {
             let days = if a.get(0).is_some() { a.int(0)? } else { 1 };
@@ -1219,6 +1247,27 @@ pub(crate) fn surah_title(book: &Book, n: u16) -> SharedString {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Warm views reuse resolved settings; language and config edits still take effect.
+    #[test]
+    fn settings_cache_tracks_config_and_plugin_language_without_loading_data() {
+        let mut config = mandara_config::ShellConfig::default();
+        let mut cache = SettingsCache::<Settings>::new();
+        let snapshot = Arc::new(config.clone());
+        let first = cache.get(&snapshot, Lang::En, ());
+        assert!(Rc::ptr_eq(&first, &cache.get(&snapshot, Lang::En, ())));
+        assert!(first.translation.is_empty());
+        config.plugins.settings.entry(ID.into()).or_default().insert("translation".into(), toml::Value::String("demo-edition".into()));
+        let changed = cache.get(&Arc::new(config), Lang::Ar, ());
+        assert!(!Rc::ptr_eq(&first, &changed));
+        assert_eq!(changed.lang, Lang::Ar);
+        let held = SETTINGS.with(|cache| cache.borrow_mut().get(&snapshot, Lang::En, ()));
+        clear_settings();
+        assert!(!Rc::ptr_eq(&held, &SETTINGS.with(|cache| cache.borrow_mut().get(&snapshot, Lang::En, ()))));
+        clear_settings();
+        assert_eq!(changed.translation, "demo-edition");
+    }
+
 
     #[test]
     fn sizes_grow() {

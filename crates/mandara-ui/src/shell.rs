@@ -1245,7 +1245,14 @@ impl Render for ShellView {
         if self.shell.read(cx).launcher_open {
             // (A side bar's button is not on the launcher's edge.)
             let chip = self.find_slot(crate::plugins::session::LAUNCHER_ID).filter(|(z, _)| *z < MAIN_ZONES).and_then(|(z, i)| self.slot_rects(z).get(i).copied().flatten()).filter(|_| !m.vertical);
-            crate::launcher_place::publish_button(&self.monitor, chip.map(|b| (f32::from(b.origin.x), f32::from(b.size.width))), cx);
+            let bar = self.backdrop.target();
+            let anchor = (!m.vertical).then(|| crate::launcher_place::BarAnchor {
+                span: (f32::from(bar.origin.x), f32::from(bar.size.width)),
+                button: chip.map(|b| (f32::from(b.origin.x), f32::from(b.size.width))),
+            });
+            crate::launcher_place::publish_anchor(&self.monitor, anchor, cx);
+        } else {
+            crate::launcher_place::publish_anchor(&self.monitor, None, cx);
         }
         // The main menu is glass with solid cards on it (panels.menu_*),
         // over your frosted wallpaper; until that is decoded (or without a
@@ -1849,25 +1856,23 @@ impl Render for ShellView {
                 .unwrap_or(FALLBACK_CHIP_RADIUS_PX);
             // `bar.capsules` / an island side bar: the zone's chips sit on
             // one soft capsule.
-            if look.group_capsule {
-                let visible: Vec<Bounds<Pixels>> = rects.iter().flatten().copied().collect();
-                if !visible.is_empty() {
-                    let u = layout::union(&visible);
-                    let (pad_x, pad_y) = if zone_vertical { (0.0, CAPSULE_PAD_PX) } else { (CAPSULE_PAD_PX, 0.0) };
-                    let (x, y) = (f32::from(u.origin.x) - pad_x, f32::from(u.origin.y) - pad_y);
-                    let (w, h) = (f32::from(u.size.width) + pad_x * 2.0, f32::from(u.size.height) + pad_y * 2.0);
-                    root = root.child(
-                        div()
-                            .absolute()
-                            .left(px(px_snap(x)))
-                            .top(px(px_snap(y)))
-                            .w(px(px_snap(w)))
-                            .h(px(px_snap(h)))
-                            .rounded(px(chip_radius + CAPSULE_PAD_PX * 0.5))
-                            .bg(look.fill.hsla())
-                            .when_some(look.edge, |el, edge| el.border_1().border_color(edge.hsla())),
-                    );
-                }
+            if look.group_capsule
+                && let Some(u) = layout::union_iter(rects.iter().flatten().copied())
+            {
+                let (pad_x, pad_y) = if zone_vertical { (0.0, CAPSULE_PAD_PX) } else { (CAPSULE_PAD_PX, 0.0) };
+                let (x, y) = (f32::from(u.origin.x) - pad_x, f32::from(u.origin.y) - pad_y);
+                let (w, h) = (f32::from(u.size.width) + pad_x * 2.0, f32::from(u.size.height) + pad_y * 2.0);
+                root = root.child(
+                    div()
+                        .absolute()
+                        .left(px(px_snap(x)))
+                        .top(px(px_snap(y)))
+                        .w(px(px_snap(w)))
+                        .h(px(px_snap(h)))
+                        .rounded(px(chip_radius + CAPSULE_PAD_PX * 0.5))
+                        .bg(look.fill.hsla())
+                        .when_some(look.edge, |el, edge| el.border_1().border_color(edge.hsla())),
+                );
             }
             // `bar.item_capsules` / a pills side bar: every item on a
             // capsule of its own.

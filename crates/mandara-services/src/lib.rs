@@ -51,6 +51,7 @@ pub mod desktop_notify;
 pub mod editor;
 pub mod polkit;
 pub mod marketplace;
+pub mod memory;
 pub mod mpris;
 pub mod network;
 pub mod notifications;

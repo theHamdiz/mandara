@@ -72,6 +72,8 @@ mandara msg side-bar show left off          # show or hide one side: on|off|togg
 mandara msg desktop edit                    # move, resize, add and remove desktop widgets on the desktop (off|toggle)
 mandara msg desktop widgets hide            # show|hide|toggle every desktop widget at once
 mandara msg desktop widgets press todo-1 todo:3   # what a click on a widget does: todo:<id>, toggle:<wifi|dnd|…>, pomodoro, media:<play-pause|next|previous>, level:volume:0.4, step:brightness:1, copy:<text>, open:<path|url>, launch:<app>, next, refresh, panel:<id>, search
+mandara msg desktop widgets press todo-1 todo-edit:3  # edit task 3 at this visible widget; todo-add starts a new task
+mandara msg desktop widgets press note-1 note    # edit the note directly on its visible desktop widget
 mandara msg diagnostics frames              # frame build times, plus what the desktop widgets cost (desktop_ms, desktop_live_ms)
 mandara msg desktop menu DP-1 800 500       # the desktop's right-click menu at a point (logical px)
 mandara msg wallpaper picker toggle         # wallpaper set|next|random|list|current
@@ -108,6 +110,10 @@ The Bars page also accepts `bars/bar`, `bars/panels` and `bars/edges`.
 The former `bar` and `sidebar` Studio targets remain aliases. Config
 commands still use their original paths, such as `/bar/height` and
 `/sidebar/width`; `config reset bar` continues to reset only `[bar]`.
+
+`shell state` reports `desktop_editor_ready`: `null` when no desktop text
+editor is open, `false` while it awaits keyboard focus, and `true` when it can
+receive keys. Automation should wait for `true` before typing into an editor.
 
 ## Sidebar tabs
 
@@ -156,6 +162,11 @@ mandara msg notes topics add Recipes --color warning   # rename (renames the fol
 mandara msg notes topics remove Old [delete] # notes move to the default topic unless `delete`
 mandara msg notes export Recipes ~/Documents/recipes   # or `all`; writes .md files
 ```
+
+Task and notes commands wait for their disk writes before reporting success.
+Notes operations run in order, so an append sees earlier pending changes and
+a failed save is reported to the caller. Rapid task changes share the latest
+JSON save; a failed write can be retried without dropping the in-memory edits.
 
 ## Launcher, dock, windows
 
@@ -320,6 +331,9 @@ mandara msg share clipboard          # text <text>, file <path>, screenshot, sto
 mandara msg jannah today             # next, prev, peek [n], show <ref>, search <query>, paths, step [done|peek [days]], saved, language [code|follow]
 mandara msg quran read 2:255           # surahs, today, peek [days], search <q>, play <ref|surah>, pause, resume, stop, bookmark add|remove <ref>, download, status, remove, language [code|follow]
 mandara msg hadith show bukhari 1      # collections, download|remove <collection|all>, today, peek [n], search <q> [--collection c] [--grade g], bookmarks, language [code|follow]
+mandara msg quran copy-image 2:255     # full ayah design; meaning follows Study mode
+mandara msg hadith copy-image bukhari 1 # full hadith design; shown chain/meaning follow settings
+mandara msg jannah copy-image 89:30    # full reminder design with reference
 mandara msg prayer peek 1              # today, next, peek [days], language [code|follow], adhan [stop|play|download|remove]
 ```
 

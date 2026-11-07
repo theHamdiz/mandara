@@ -218,6 +218,7 @@ A strip of key hints under the results
 A tab needs a name
 A talent is formed in stillness, a character in the world's torrent.
 A tall pill with the track down its side
+A task needs text after its list name.
 A thin border round the whole display, joined to the side bar; it reserves no space of its own
 A thin line along a popup's edge shows the time left
 A thin specular highlight around the glass
@@ -247,12 +248,15 @@ APPS
 AUR packages
 AYAH FOR {date}
 AYAH OF THE DAY
+Abdul Basit Abdul Samad
+Abdulrashid Sufi
 Aborted
 About
 About Jannah
 About the library
 Above fullscreen windows
 Above or below the results
+Abu Bakr Ash-Shatri
 Abu Dawud
 Abyssal Mediterranean blue, sea-glass turquoise and sun-warmed limestone.
 Acceleration
@@ -308,6 +312,7 @@ Add a shortcut
 Add a sidebar tab (--icon name)
 Add a task
 Add a task; a leading #List files it there (the list is created if missing)
+Add a task…
 Add a task… (#list to file it)
 Add a user
 Add a widget
@@ -381,11 +386,6 @@ Agenda events
 Agenda length
 Ah, make the most of what we yet may spend, before we too into the Dust descend.
 Airy
-Al-Ajamy
-Al-Hudhaify
-Al-Husary
-Al-Husary (Mujawwad)
-Al-Minshawi
 Al-Mutanabbi
 Albert Einstein
 Album art, a wavy progress line and synced lyrics on the desktop while music plays
@@ -394,6 +394,7 @@ Album art, title, a wavy progress line, controls and synced lyrics; shown while 
 Album ring
 Alexander Pope
 Alexandria line
+Ali Al-Hudhaify
 Alice's Adventures in Wonderland
 Align to the launcher button
 Alignment
@@ -467,6 +468,7 @@ An app needs administrator rights
 An app starts or stops using the microphone, camera or screen
 An app wants access to the keyring “Login”, but it is locked (preview: nothing is unlocked)
 An app wants to create a new keyring called “Mandara”. Choose the password you want to use for it (preview: nothing is created)
+An image is already being prepared
 An interactive card — its own settings are with the cards.
 An island per group
 An-Nawawi's Forty
@@ -596,7 +598,6 @@ Arrangement
 Arrow of God
 As
 As a solid rock is not shaken by the wind, wise people falter not amidst blame and praise.
-Ash-Shatri
 Ask a window to close
 Ask for KeePassXC at login
 Ask for a new one at next login
@@ -1042,9 +1043,11 @@ Choose a valid Home Assistant entity
 Choose an area to record
 Choose displays
 Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.
+Choose one ayah to copy as an image
 Choose the key file
 Choose up to 24 Home Assistant entities
 Choose what the power menu offers and in which order. Built-in entries can be hidden or renamed; your own commands and boot entries can be removed.
+Choose where the launcher opens. Attached positions follow the bar on that edge.
 Choose…
 Chrome
 Cicero
@@ -1080,7 +1083,6 @@ Click
 Click a code to copy it
 Click a code to copy it · the clipboard clears after {n} s
 Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar.
-Click a spot. Spots on the bar's edge grow out of the bar like its panels; the middle one floats over everything. Left and right are the screen's own sides.
 Click a window to match its app; “App + title” matches that exact title too.
 Click a window to pick it, again to capture · {enter}
 Click again to delete the file
@@ -1172,6 +1174,7 @@ Compact
 Compact height
 Compact rows
 Compiled once to native code, cached in {path}
+Complete image copied
 Completed ({count})
 Component missing
 Compose project · {detail}
@@ -1261,9 +1264,13 @@ Copies its appearance and position. Later desktop edits do not change this scree
 Copies marked secret by password managers are never recorded
 Copy
 Copy (right-click pastes)
+Copy a hadith and its design as a complete PNG image
 Copy a history entry back (by id), optionally pasting it
+Copy a reminder and its design as a complete PNG image
 Copy a topic's notes (or all) into a folder as .md files
+Copy an ayah and its design as a complete PNG image
 Copy as
+Copy as image
 Copy from desktop
 Copy path
 Copy picked colors
@@ -1288,6 +1295,7 @@ Corniche
 Corniche night
 Corniche waves
 Cosmic neon green and cyan on deep indigo (light variant derived).
+Could not copy the image: {error}
 Could not create a temporary download folder.
 Could not create {path}: {error}
 Could not download the signed release. Nothing was installed. Check your connection and try again.
@@ -1330,6 +1338,7 @@ Couldn't install {app}
 Couldn't install {app}: {error}
 Couldn't list windows: {error}
 Couldn't load it
+Couldn't load: {error}
 Couldn't open a port: {error}
 Couldn't open the file picker: {error}
 Couldn't open the photo: {error}
@@ -1344,6 +1353,7 @@ Couldn't read the clock: {error}
 Couldn't read the crash log
 Couldn't read the keyring
 Couldn't read which codecs your graphics card encodes, so all of them are offered
+Couldn't save: {error}
 Couldn't start KeePassXC: {error}
 Couldn't uninstall {app}: {error}
 Couldn't uninstall: {error}
@@ -1705,6 +1715,7 @@ Downloaded from speed.cloudflare.com only when you press Run test
 Downloaded on demand
 Downloaded on their own when the plugin is on: bukhari, muslim, abudawud, tirmidhi, nasai, ibnmajah, malik, nawawi, qudsi, dehlawi
 Downloaded once
+Downloaded recitations stay available offline. Abdulrashid Sufi downloads a complete surah before playing its ayahs.
 Downloaded {count} times
 Downloaded:
 Downloaded: sharing stopped
@@ -1717,7 +1728,8 @@ Downloading the adhan: {error}
 Downloading the adhan… {percent}%
 Downloading the full update ({size})…
 Downloading the meaning · {pct}%
-Downloading the recitation of ayah {n}: {error}
+Downloading the recitation · {pct}%
+Downloading the recitation…
 Downloading the smart update ({size})…
 Downloading {collection}
 Downloading {file}: {error}
@@ -1818,7 +1830,6 @@ Effects
 Egyptian
 Eight
 Eject
-El-Mandara, Alexandria
 Eldritch
 Elevation tint
 Eleven
@@ -2686,6 +2697,7 @@ Illegal instruction
 Illness, loss and long nights are not wasted when met with patience.
 Image
 Image ({mime})
+Image copying cancelled
 Image editor
 Image or video path, or clear
 Images
@@ -2708,7 +2720,6 @@ In logical pixels; apps and the compositor scale it on HiDPI screens
 In the bar
 In the slideshow playlist: click to remove
 In the store
-In the zone holding the bar's launcher button, it grows out of the button.
 In this folder
 In use
 In your language, the hadith meanings are AI renderings of the meaning, not published translations.
@@ -3290,6 +3301,8 @@ Magnification
 Magnification spread
 Magnified size
 Maher Al-Muaiqly
+Mahmoud Khalil Al-Husary
+Mahmoud Khalil Al-Husary (Mujawwad)
 Main
 Main display
 Main for nights, Dawn for mornings.
@@ -3498,7 +3511,6 @@ Minutes, or with m, h or d (up to a week)
 Mirror left to right
 Mirror top to bottom
 Mirrored bars
-Mishary Alafasy
 Missing
 Missing argument #{position}
 Missing file
@@ -3525,6 +3537,7 @@ Models for copying text from screenshots and for the wallpaper depth effect's mo
 Models loaded in memory with their VRAM share and unload time (JSON)
 Modern
 Modes
+Mohamed Siddiq Al-Minshawi
 Mon
 Monday
 Monitor
@@ -4622,6 +4635,7 @@ Prayer times list
 Prebuilt releases require Linux on an x86_64 or aarch64 CPU.
 Precision
 Preferred apps
+Preparing the complete image…
 Preparing the plan…
 Preparing the share…
 Preparing…
@@ -4850,6 +4864,7 @@ Recent runs
 Recent shell frame timings with p50 / p95 / p99 (build time and frame interval)
 Recent view builds: solid bars show CPU build time; full bars include the interval since the previous build on that surface.
 Recently used apps listed under the pinned ones before you type
+Recitation cancelled
 Recite an ayah, a range or a whole surah (the reader follows along)
 Reciter
 Reciting
@@ -6175,7 +6190,6 @@ The displays changed meanwhile; try again
 The dock hides until you touch the screen edge.
 The dock hides while a window covers it. Touch the screen edge to bring it back.
 The dock holds the bottom edge; popups there stay cards
-The dock is on: the launcher floats above it and opens on click only.
 The dock isn't showing
 The download did not match the signed release. Nothing was installed; please try again.
 The download didn't finish
@@ -6219,6 +6233,8 @@ The i2c-dev kernel module isn't loaded
 The icon on the bar's launcher button
 The icons of the apps on each tag or workspace
 The idle manager is not running
+The image design could not be prepared
+The image is larger than the clipboard limit
 The input recorded as the microphone
 The interface between your plugin and Mandara, read from the plugin.wit this build was compiled with.
 The interface language as an ISO 639-1 code; right-to-left for ar.
@@ -6279,9 +6295,14 @@ The provider returned no translation
 The public IP endpoint must be an http(s) URL
 The reader shows the Prophet's words first; the chain opens with a tap
 The ready-made launcher looks (Classic, Grid, Beacon) and which one is applied
+The recitation download is incomplete or is not an MP3 file
+The recitation needs the downloaded Qur'an index
+The recitation timing could not be matched to the recording
+The recitation timing could not be read: {error}
 The recorder saved nothing
 The recording already finished
 The recording did not start in time
+The recording ended before this ayah
 The recording ended by itself
 The recording thread crashed
 The release does not contain exactly one executable installer.
@@ -6434,6 +6455,8 @@ This device is asking to pair. Check the name on your phone before accepting.
 This device, the exit node in use and every peer (JSON)
 This driver doesn't report per-process GPU memory.
 This entity cannot run that action right now
+This entry is no longer available
+This entry is too large to copy as one image
 This executable path cannot be used in a desktop entry
 This feed is too large to read
 This file looks damaged, or isn't an app. Try downloading it again.
@@ -6443,7 +6466,9 @@ This is a {family} package ({extension}).
 This is an old (type 1) AppImage, which Mandara can't read safely. Download a newer build of the app.
 This is an older version ({new}) than the one installed ({old}).
 This is how the screen fades before locking
+This item changed elsewhere. Your text is still here.
 This item has no menu
+This item was removed. Your text is still here.
 This key combination is bound more than once; {compositor} uses only one of the binds.
 This keyboard has no backlight
 This line includes a file that isn't there, so {compositor} can't load it.
@@ -7159,7 +7184,6 @@ Who installed an app, the exact removal command and its leftovers (changes nothi
 Whoever strives, succeeds.
 Whoever you are responsible for, never deceive or neglect them.
 Whole output
-Whose recitation plays; each ayah is downloaded once from cdn.islamic.network and kept
 Whose sound is recorded as system sound
 Wi-Fi
 Wi-Fi and wired connectivity
@@ -7241,6 +7265,7 @@ Written to Mandara's {compositor} drop-in; “Your config” keeps your own sett
 Wrong passphrase
 Wrong password
 YYYY-MM-DD (empty: next New Year)
+Yasser Al-Dossary
 Ye were not made to live like unto brutes, but for pursuit of virtue and of knowledge.
 Year
 Year in dots
@@ -7355,6 +7380,7 @@ a reference: bukhari 1, muslim 2699a, abudawud 4031
 a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
 a style id from `wallgen styles`
 a surah (2, al-baqara) or an ayah (2:255), or a range (2:255-257)
+a verse or hadith reference
 a wallpaper (with add / remove)
 about {time} left
 absolute file paths, then --yes (skip the confirmation), --no-path-shim, --dry-run
@@ -7369,6 +7395,7 @@ all sahih
 all, pinned, a kind (code, color, …) or a collection id or name
 already recording
 also paste with Ctrl+V
+an ayah, such as 2:255
 an ayah: 2:255 or al-baqara:255
 an excluded app is focused
 an exported settings file

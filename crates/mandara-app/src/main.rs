@@ -21,7 +21,6 @@ mod alloc;
 mod changelog_cli;
 mod config_mirror;
 mod ipc;
-mod residency;
 mod setup_cli;
 mod surfaces;
 mod update_cli;

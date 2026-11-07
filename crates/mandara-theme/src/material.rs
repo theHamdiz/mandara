@@ -109,7 +109,7 @@ fn from_rgb(rgb: Rgb) -> Color {
 /// Extracts up to `count` seed colors ranked by Material's chroma/proportion
 /// score from already-decoded pixels.
 pub fn extract_seeds_from_image(img: &image::DynamicImage, count: usize) -> Result<Vec<SeedColor>, ExtractError> {
-    seeds_from_thumbnail(&img.thumbnail(SAMPLE_EDGE, SAMPLE_EDGE).to_rgba8(), count)
+    seeds_from_thumbnail(&img.thumbnail(SAMPLE_EDGE, SAMPLE_EDGE).into_rgba8(), count)
 }
 
 /// Quantizes an already downscaled image.
@@ -223,10 +223,10 @@ pub fn open_shared(path: &Path) -> image::ImageResult<Arc<image::DynamicImage>> 
 pub fn extract_seeds(path: &Path, count: usize) -> Result<Vec<SeedColor>, ExtractError> {
     let thumb = if mandara_media::is_video(path) {
         let frame = mandara_media::representative_frame(path).map_err(|reason| ExtractError::Video { path: path.display().to_string(), reason })?;
-        image::DynamicImage::ImageRgba8(frame).thumbnail(SAMPLE_EDGE, SAMPLE_EDGE).to_rgba8()
+        image::DynamicImage::ImageRgba8(frame).thumbnail(SAMPLE_EDGE, SAMPLE_EDGE).into_rgba8()
     } else {
         let img = open_shared(path).map_err(|source| ExtractError::Decode { path: path.display().to_string(), source })?;
-        img.thumbnail(SAMPLE_EDGE, SAMPLE_EDGE).to_rgba8()
+        img.thumbnail(SAMPLE_EDGE, SAMPLE_EDGE).into_rgba8()
     };
     seeds_from_thumbnail(&thumb, count)
 }
@@ -282,7 +282,7 @@ pub fn palette_from_scheme(scheme: &Scheme, is_dark: bool, name: String) -> Mand
         base.harmonize_toward(primary).gamut_mapped()
     };
     MandaraPalette {
-        name,
+        name: name.into(),
         is_dark,
         surface_dim: c(scheme.surface_dim),
         surface_base,
@@ -431,6 +431,18 @@ mod tests {
     fn transparent_image_is_rejected() {
         let img = DynamicImage::ImageRgba8(RgbaImage::from_pixel(8, 8, Rgba([0, 0, 0, 0])));
         assert!(matches!(extract_seeds_from_image(&img, 4), Err(ExtractError::Empty)));
+    }
+
+    #[test]
+    fn consumed_thumbnails_keep_seed_colors_across_pixel_formats() {
+        for image in [
+            DynamicImage::ImageRgba8(RgbaImage::from_pixel(257, 129, Rgba([20, 120, 200, 255]))),
+            DynamicImage::ImageRgb8(image::RgbImage::from_pixel(257, 129, image::Rgb([20, 120, 200]))),
+            DynamicImage::ImageLuma8(image::GrayImage::from_pixel(257, 129, image::Luma([120]))),
+        ] {
+            let expected = seeds_from_thumbnail(&image.thumbnail(SAMPLE_EDGE, SAMPLE_EDGE).to_rgba8(), 4).unwrap();
+            assert_eq!(extract_seeds_from_image(&image, 4).unwrap(), expected);
+        }
     }
 
     #[test]
