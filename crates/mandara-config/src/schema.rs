@@ -1683,6 +1683,7 @@ pub enum PickerStyle {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LauncherConfig {
+    pub agent: crate::agent::AgentConfig,
     pub enabled: bool,
     /// Result rows shown at once.
     pub max_results: usize,
@@ -1741,6 +1742,7 @@ impl Default for LauncherConfig {
                 },
             ],
             providers: Default::default(),
+            agent: Default::default(),
             usage: Default::default(),
             pinned: Vec::new(),
             hidden: Vec::new(),

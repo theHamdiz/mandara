@@ -661,7 +661,7 @@ pub fn register(r: &mut PluginRegistry) {
             Ok(serde_json::json!({ "stream": index, "volume": a.number(1)? }))
         })
         .arg(ArgSpec::required("stream", ArgKind::Number, tk("index from `audio streams`")))
-        .arg(ArgSpec::required("percent", ArgKind::Number, "0-150"))
+        .arg(ArgSpec::required("percent", ArgKind::Number, "0-150").range(0.0, f64::from(MAX_VOLUME * PERCENT)))
         .example("audio stream volume 42 60"),
     );
     r.command(
@@ -697,7 +697,7 @@ pub fn register(r: &mut PluginRegistry) {
     r.command(
         ID,
         CommandSpec::new_output("audio volume set", tk("Set output volume in percent (0-150)"), |a, cx| request(cx, AudioCommand::SetVolume(a.number(0)? as f32 / PERCENT)))
-            .arg(ArgSpec::required("percent", ArgKind::Number, "0-150"))
+            .arg(ArgSpec::required("percent", ArgKind::Number, "0-150").range(0.0, f64::from(MAX_VOLUME * PERCENT)))
             .example("audio volume set 40"),
     );
     for (path, summary, sign) in [("audio volume up", tk("Raise volume"), 1.0), ("audio volume down", tk("Lower volume"), -1.0)] {
@@ -734,7 +734,7 @@ pub fn register(r: &mut PluginRegistry) {
     r.command(
         ID,
         CommandSpec::new_output("audio mic volume set", tk("Set microphone volume in percent"), |a, cx| request(cx, AudioCommand::SetMicVolume(a.number(0)? as f32 / PERCENT)))
-            .arg(ArgSpec::required("percent", ArgKind::Number, "0-150")),
+            .arg(ArgSpec::required("percent", ArgKind::Number, "0-150").range(0.0, f64::from(MAX_VOLUME * PERCENT))),
     );
 }
 

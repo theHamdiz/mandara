@@ -133,7 +133,7 @@ pub(super) fn grid_geom(avail_w: f32, icon: f32, max_cols: u32) -> GridGeom {
 /// A plain search (no provider prefix, `/` or `=`): the grid stays.
 pub(super) fn is_plain(query: &str, providers: &LauncherProviders) -> bool {
     let q = query.trim();
-    !q.starts_with('/') && !q.starts_with('=') && crate::launcher_ext::route(q, providers).is_none()
+    !q.starts_with('/') && !q.starts_with('=') && !q.starts_with('!') && crate::launcher_ext::route(q, providers).is_none()
 }
 
 /// The selection step an arrow key makes in a grid of `cols` (left and
@@ -587,7 +587,7 @@ impl LauncherView {
 
     pub(super) fn set_category(&mut self, category: Option<GridFilter>, cx: &mut Context<Self>) {
         self.category = category;
-        self.refilter();
+        self.refilter(cx);
         cx.notify();
     }
 
@@ -657,7 +657,7 @@ impl LauncherView {
             return;
         }
         self.mode = if self.mode == Some(mode) { None } else { Some(mode) };
-        self.refilter();
+        self.refilter(cx);
         cx.notify();
     }
 
@@ -983,6 +983,7 @@ mod tests {
     fn plain_searches_keep_the_grid() {
         let p = LauncherProviders::default();
         assert!(is_plain("", &p) && is_plain("fire", &p));
+        assert!(!is_plain("!set gaps 8", &p) && !is_plain("! set gaps 8", &p));
         assert!(!is_plain("=2+2", &p) && !is_plain("/g rust", &p) && !is_plain(":smile", &p) && !is_plain("~notes", &p));
     }
 

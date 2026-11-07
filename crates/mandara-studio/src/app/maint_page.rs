@@ -371,7 +371,7 @@ impl StudioView {
 
         // ── Downloads ─────────────────────────────────────────────────────
         let mut downloads = card().child(title(t("Downloads"), t("Models for copying text from screenshots and for the wallpaper depth effect's model mode. From Hugging Face, all Apache-2.0; the depth model downloads only when you pick that mode.")));
-        for model in models::MODELS {
+        for model in models::MODELS.iter().filter(|model| !mandara_services::command_agent::models::ALL.iter().any(|agent| agent.id == model.id)) {
             let installed = model.installed();
             let key = format!("model:{}", model.id);
             let id = model.id;

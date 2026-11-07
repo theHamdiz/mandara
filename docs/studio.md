@@ -213,6 +213,10 @@ narrow ones; everything mirrors for right-to-left languages.
 
 ### Extend
 
+**AI Shell Agent** configures offline natural language commands, downloads
+and verifies models, and provides a dry-run test bench. See
+[Local shell commands](command-agent.md).
+
 | Page | What it covers |
 |---|---|
 | **Plugins** | A plugin store: Discover (featured hero, curated shelves, search with filter chips), Installed, Updates, Community (the GitHub marketplace) and Develop (the authoring handbook and validator); per-plugin product pages and settings modals, which hold each plugin's own options (clipboard history, screenshot, weather, prayer times…) — including refresh intervals, how many rows a list shows and alert thresholds (Resources, Process hunter, Containers, Services, Drives, Network speed, Network, Clock, To-do, Bluetooth, Authenticator). To-do adds its default list, show completed, sort order and what the bar counts; Notes its default topic, the notes folder (point it at a synced folder or an Obsidian vault), preview by default and the editor font and size. [Configuration](configuration.md) lists every setting by page. Every Mandara plugin can be switched off (it then stops everything it runs: bar item, sidebar card, launcher entries, background polling) or **removed** from the detail modal: off, out of the bar and sidebar, and parked under *Removed Mandara plugins* (their store cards offer *Add back*) until **Restore** puts it back where it was. Core plugins (launcher, session menu, main menu) show *Always on*. The dock, mini stats, screen time and prayer times ship off. |

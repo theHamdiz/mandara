@@ -25,3 +25,17 @@ from Reem Kufi (SIL Open Font License 1.1, its text in
 `crates/mandara-ui/assets/calligraphy/OFL.txt`).
 
 The full license text is in [LICENSE.md](LICENSE.md).
+
+## Optional command models
+
+The command agent downloads no models until requested. Arctic Embed XS and
+Qwen3 0.6B retain their Apache-2.0 licenses. FunctionGemma retains Google's
+[Gemma terms](https://ai.google.dev/gemma/terms). Quantized artifacts come from
+their linked Hugging Face repositories; model weights are not included in
+Mandara's binary or source distribution.
+
+The bounded Gemma GGUF adapter in
+`crates/mandara-services/src/command_agent/gemma.rs` derives from Hugging Face
+Candle 0.11.1 under Apache-2.0; the adjacent `gemma.LICENSE` preserves its license.
+It shares quantized embeddings and rotary tables, bounds context, and corrects
+chunked attention masks and the activation used by Gemma 3.

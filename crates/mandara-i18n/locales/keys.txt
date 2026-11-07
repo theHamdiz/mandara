@@ -239,6 +239,7 @@ A “Mandara” color scheme in ~/.local/share/color-schemes
 A “Mandara” editor theme
 A “mandara” btop theme
 A “mandara” color scheme for qt6ct / qt5ct
+AI Shell Agent
 AI rendering of the meaning
 AI usage
 AM
@@ -384,6 +385,7 @@ Afternoon
 Afternoon greeting
 Agenda events
 Agenda length
+Agent worker activity and installed model files
 Ah, make the most of what we yet may spend, before we too into the Dust descend.
 Airy
 Al-Mutanabbi
@@ -591,6 +593,7 @@ Archived
 Argument #{position} is not a boolean: {value}
 Argument #{position} is not a number
 Argument #{position} is not an integer
+Argument <{name}> must be between {minimum} and {maximum}
 Argument <{name}> must be one of: {choices}
 Aristotle
 Arithmetic error
@@ -832,6 +835,7 @@ Bubble
 Bubbles
 Build
 Build the component
+Build the semantic index for the current command catalog
 Build time p50
 Build your own
 Build your own plugins
@@ -899,6 +903,7 @@ Can't read {path}: {error}
 Can't read {reference}: try `bukhari 1` or `muslim 2699a`
 Cancel
 Cancel an install job (rootless installs roll back)
+Cancel download
 Cancelled
 Cancelled — nothing was changed.
 Cancelling…
@@ -1162,6 +1167,7 @@ Comma-separated folders; ones that don't exist are skipped
 Comma-separated https:// or http:// addresses, or host:port for a TCP check; name one with Name=target
 Comma-separated, e.g. ctrl:nocaps,compose:ralt
 Command
+Command compiler
 Commands
 Commands attached to shell events (below) run; off pauses them all
 Comment out
@@ -1173,7 +1179,10 @@ Community plugins
 Compact
 Compact height
 Compact rows
+Compile a local shell command without executing it
+Compiled in {time} ms
 Compiled once to native code, cached in {path}
+Compiling locally…
 Complete image copied
 Completed ({count})
 Component missing
@@ -1514,6 +1523,7 @@ Dehlawi
 Del
 Delay
 Delete
+Delete / reclaim disk space
 Delete a VPN profile
 Delete a collection (its entries stay in the history)
 Delete a collection's files (or all of them); it isn't downloaded again on its own
@@ -1695,6 +1705,7 @@ Download a catalog cursor theme from its GitHub release, verify its SHA-256 and 
 Download a collection (Arabic and the meaning in your language), all of them, or (with none) your chosen ones; returns at once, see `hadith status`
 Download a collection on Home first
 Download a model by id, or all of them
+Download all required models
 Download every subscription again now
 Download failed. Check your connection and try again.
 Download failed: {error}
@@ -1853,6 +1864,8 @@ Emptying the Trash deletes {n} items for good; run `mandara msg dock trash empty
 Enable
 Enable a unit at boot / login and reload systemd
 Enable launcher
+Enable local shell commands in Studio
+Enable natural language shell control
 Enable sidebar
 Enable the window switcher
 Enable this when your LibreTranslate server requires a key; save it in the keyring below
@@ -1881,6 +1894,7 @@ Enjoying Mandara?
 Enter
 Enter / Capture copies the image
 Enter a password, or let the user choose one at first login
+Enter a prompt to inspect retrieval and the exact payload. Tests never execute commands.
 Enter copy
 Enter copy + save
 Enter password
@@ -1899,6 +1913,7 @@ Entries of one kind, optionally matching a search
 Epictetus
 Epistles I.2
 Esc
+Esc cancels and releases the agent
 Essays I.39
 Essays in Idleness 98
 Essentials
@@ -1959,6 +1974,7 @@ Everything
 Everything comes in time to him who knows how to wait.
 Everything is up to date
 Everything looks healthy
+Everything runs locally on your CPU
 Everything started cleanly
 Example
 Example artist
@@ -2282,6 +2298,7 @@ Full update: {size} (no patch from your version)
 Fullscreen only
 Fully charged
 Fully sandboxed
+FunctionGemma for a single action; Qwen for multilingual and compound requests
 Fuzzy search over every note's title and text
 GB
 GNOME Keyring prompts
@@ -2676,6 +2693,7 @@ Idle notifications are not available
 Idle stages are back on
 Idle state: idle time, inhibitors, power source and the stages to come (JSON)
 Idle · hidden from the bar
+Idle — no inference worker
 If I have seen further it is by standing on the shoulders of Giants.
 If a man keeps cherishing his old knowledge, so as continually to be acquiring new, he may be a teacher of others.
 If it is not right, do not do it: if it is not true, do not say it.
@@ -3180,8 +3198,10 @@ Loads an exported file; your current settings are backed up first (Maintenance �
 Lobes
 Local
 Local AI
+Local AI Agent models are not installed
 Local Git repositories with branch, ahead / behind, changes and last commit (most recent first)
 Local IP addresses by interface
+Local commands, on demand
 Local time
 Localhost only
 Locate me
@@ -3535,6 +3555,7 @@ Model mode only: downloads the depth model once from Hugging Face
 Model mode only: runs the model once per wallpaper in a low-priority helper
 Models for copying text from screenshots and for the wallpaper depth effect's model mode. From Hugging Face, all Apache-2.0; the depth model downloads only when you pick that mode.
 Models loaded in memory with their VRAM share and unload time (JSON)
+Models run offline on your CPU. Closing the launcher, removing !, or 15 seconds without a new query releases the inference worker.
 Modern
 Modes
 Mohamed Siddiq Al-Minshawi
@@ -4234,6 +4255,7 @@ Open KeePassXC
 Open Mandara Studio from your application menu.
 Open Mandara Studio, optionally on a section
 Open PLUGINS.md
+Open Studio to download the required models
 Open a copied image in your image editor (`[clipboard] image_command`)
 Open a hadith in the panel's reader and return it
 Open a terminal running the update command (all sources with updates, or one)
@@ -4259,6 +4281,7 @@ Open terminal
 Open the annotation editor instead of saving at once
 Open the app picker over the dock to add apps by searching
 Open the app you want to exclude, then come back here
+Open the calendar
 Open the clock panel's calendar on a day or month
 Open the desktop's right-click menu at a point of a display (logical px)
 Open the development folder
@@ -4413,6 +4436,8 @@ Patience when a child dies
 Pause
 Pause 1 h
 Pause behind windows
+Pause downloads
+Pause downloads before deleting models
 Pause during fullscreen
 Pause for fullscreen windows
 Pause for these apps
@@ -4635,6 +4660,7 @@ Prayer times list
 Prebuilt releases require Linux on an x86_64 or aarch64 CPU.
 Precision
 Preferred apps
+Preparing local commands…
 Preparing the complete image…
 Preparing the plan…
 Preparing the share…
@@ -4714,6 +4740,7 @@ Pudd'nhead Wilson
 Pull one with: ollama pull llama3.2
 Pulse the battery when critical
 Pulse the battery while charging
+Purge agent from RAM now
 Push
 Pushes text and surfaces apart to WCAG AAA (7:1)
 Put a device in pairing mode, then search
@@ -5062,6 +5089,7 @@ Resumed {name}
 Resuming…
 Retire
 Retired {n} line(s) — backup in {dir} (undo: mandara setup --restore latest)
+Retrieved in {time} ms
 Retro groove, dark and light.
 Retry
 Return to your setup from before the first look
@@ -5137,6 +5165,7 @@ Run git fetch in one repository (by folder name or path) and return its new stat
 Run it from a terminal by that name
 Run test
 Run the marketplace's compliance check on a plugin folder: ok, or broken / malicious / placeholder with the reason
+Run these shell actions
 Run with sh -c when the action is Command
 Run {command}
 Run {program}
@@ -5432,6 +5461,7 @@ Set the time between wallpapers (minutes, or 30m, 2h, 1d)
 Set the wallpaper from an image or video path
 Set time automatically
 Set up
+Set volume to 40
 Sets the cursor in Mandara's compositor drop-in and live
 Setting types
 Setting up Mandara's admin helper first (one more approval, only this once)…
@@ -5911,6 +5941,7 @@ Switch the interface language instantly
 Switch the login screen to {name}?
 Switch to a saved profile
 Switch to a theme preset (OKLCH crossfade)
+Switch to dark mode
 Switch to power-saver at the low threshold and back when charging
 Switch to the next input device (skips hidden ones)
 Switch to the next output device (skips hidden ones)
@@ -6030,6 +6061,7 @@ Terminals
 Terrain scale
 Tertiary
 Test
+Test bench
 Test load
 Testing…
 Testing… {percent}%
@@ -6253,6 +6285,7 @@ The link stops working after this long
 The link stops working once your phone has downloaded the item
 The list is full — remove a widget to add another
 The list launcher: a drawer rising from the bottom edge, search next to the edge
+The local agent could not compile this command
 The location you add here is public and allows weather requests on this screen. Studio previews do not contact the weather service.
 The lock screen did not confirm that the session is locked
 The lock screen's text
@@ -6438,6 +6471,7 @@ This article has no web address
 This article is no longer in the feed
 This battery's charge limit can't be changed from here
 This collection is empty
+This command is too long
 This command needs OpenSSL 3 or newer.
 This command runs:
 This command runs; you'll be asked to authorize it:
@@ -6639,6 +6673,7 @@ Try a name, image, compose project or ID
 Try a name, part of a command line or a PID
 Try a number, a name or its meaning
 Try a port number or a process name
+Try a shell command…
 Try again
 Try another name or repository
 Try another source, or show hidden and helper entries.
@@ -6708,8 +6743,10 @@ Twilight angles
 Two
 Two fingers
 Two-factor codes (TOTP / HOTP) stored in your keyring
+Type ! in the launcher to preview local shell commands
 Type /trigger and your words in the launcher. Actions: url:<address with {query}> opens the browser, mandara:<command> runs a Mandara command (see `mandara commands`), exec:<shell command> runs a program; {query} is replaced by what you typed.
 Type a database password in Mandara's dialog
+Type a natural language shell command…
 Type a word in Arabic or in your language
 Type the PIN for {device} (often 0000 or 1234, or shown on its screen).
 Type the six-digit code shown on {device}.
@@ -6723,6 +6760,7 @@ Typed first to search only open windows
 Typed first to search only the clipboard history
 Typed first to search only wallpapers
 Typeface of the note editor
+Typing delay
 Typography
 UDP
 UDisks2 is not available
@@ -6949,6 +6987,7 @@ Validate
 Valley mist
 Values are saved in [plugins.settings.<id>] in config.toml
 Variations
+Verify / resume
 Verifying the download…
 Verse 5
 Verse 81
@@ -7010,6 +7049,7 @@ WHAT IT CHANGES
 WIDTHxHEIGHT in pixels (default 2560x1440)
 WPA passphrase
 WPA passphrase for new networks
+Wait briefly after typing before starting local inference
 Wait during fullscreen
 Waiting
 Waiting for admin approval
@@ -7377,7 +7417,7 @@ a generated wallpaper
 a path key from `jannah paths`
 a reference: bukhari 1, muslim 2699a
 a reference: bukhari 1, muslim 2699a, abudawud 4031
-a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
+a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, ai-shell-agent, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
 a style id from `wallgen styles`
 a surah (2, al-baqara) or an ayah (2:255), or a range (2:255-257)
 a verse or hadith reference
@@ -7899,6 +7939,7 @@ your default
 {count} apps
 {count} apps crashed
 {count} areas
+{count} available commands
 {count} changed
 {count} checks · every {span}
 {count} checks · {uptime}% uptime · every {span}

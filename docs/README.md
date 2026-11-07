@@ -52,3 +52,5 @@ For a visual tour, try the [Look previews on the website](https://thehamdiz.gith
 | [AGENTS.md](../AGENTS.md) | The repository map and the rules, for people and coding agents |
 
 - [Connected plugins](integrations.md): translation, paired phones, feeds and Home Assistant.
+
+- [Local shell commands](command-agent.md): offline natural language control, model downloads and the Studio test bench.

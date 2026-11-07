@@ -94,6 +94,7 @@ pub mod crashes;
 pub mod tailscale;
 pub mod uptime;
 pub mod local_ai;
+pub mod command_agent;
 pub mod share;
 pub mod keybinds;
 pub mod progress;

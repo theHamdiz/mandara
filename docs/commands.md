@@ -486,3 +486,11 @@ mandara msg home action scene.evening activate
 
 The translation provider and home server keys are saved through Studio in
 your desktop keyring. [Setup and behaviour](integrations.md).
+
+## Local command agent
+
+`agent status` reports active inference requests and installed model artifacts.
+After installing the models, `agent prepare` builds the semantic command index.
+`agent preview <request>` returns retrieved candidates and a compiled JSON
+preview without running its actions. `agent purge` cancels the shell's active
+requests. See [Local shell commands](command-agent.md).

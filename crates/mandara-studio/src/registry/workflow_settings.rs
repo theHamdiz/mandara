@@ -10,6 +10,8 @@ use serde_json::Value;
 use mandara_config::dock::ranges as dock_ranges;
 use mandara_config::workflow::defaults as launcher;
 
+/// Debounce slider resolution, in milliseconds.
+const AGENT_DEBOUNCE_STEP_MS: f64 = 10.0;
 /// Step of the launcher size sliders, px.
 const LAUNCHER_SIZE_STEP_PX: f64 = 10.0;
 /// Step of the grid icon size slider, px.
@@ -80,6 +82,9 @@ pub fn entries() -> Vec<Setting> {
     let px_range = |(min, max): (f32, f32)| slider(f64::from(min), f64::from(max), LAUNCHER_SIZE_STEP_PX, " px");
     let shot = |path: &'static str, label: &'static str, help: &'static str, control: Control, default: Value| sd(Plugins, SCREENSHOT, path, label, help, control, default);
     vec![
+        s(AiShellAgent, GENERAL, "/launcher/agent/enabled", tk("Enable natural language shell control"), tk("Type ! in the launcher to preview local shell commands"), Toggle),
+        s(AiShellAgent, GENERAL, "/launcher/agent/engine", tk("Command compiler"), tk("FunctionGemma for a single action; Qwen for multilingual and compound requests"), Choice(&[("function-gemma", "FunctionGemma 270M"), ("qwen", "Qwen3 0.6B")])),
+        s(AiShellAgent, GENERAL, "/launcher/agent/debounce_ms", tk("Typing delay"), tk("Wait briefly after typing before starting local inference"), slider(mandara_config::agent::DEBOUNCE_RANGE_MS.0 as f64, mandara_config::agent::DEBOUNCE_RANGE_MS.1 as f64, AGENT_DEBOUNCE_STEP_MS, " ms")),
         // Launcher: providers.
         s(Launcher, PROVIDERS, "/launcher/providers/emoji/enabled", tk("Emoji"), tk("Find emoji by English or Arabic name; Enter copies"), Toggle),
         s(Launcher, PROVIDERS, "/launcher/providers/emoji/prefix", tk("Emoji prefix"), tk("Typed first to search only emoji"), Text { placeholder: ":" }),

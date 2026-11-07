@@ -347,6 +347,13 @@ credits and developer time that go into it:
 It's entirely optional. Using Mandara, telling a friend, writing a plugin
 or reporting a bug helps just as much. Thank you!
 
+## Local shell commands
+
+Enable **Studio → AI Shell Agent**, download the required models, then type
+`!dark mode` in any launcher look. Review the exact command and press Enter.
+Inference runs offline on your CPU and unloads after use or cancellation.
+See [the guide](docs/command-agent.md) for setup and model sizes.
+
 ## License
 
 Mandara Shell is free software under the **GNU General Public License,
@@ -354,4 +361,4 @@ version 3 or later** ([LICENSE.md](LICENSE.md), notice in
 [COPYRIGHT.md](COPYRIGHT.md)). Vendored code keeps the license in its
 folder, and fonts and models downloaded on demand keep their own: OFL for
 Google Fonts, Apache-2.0 for the PaddleOCR models and the Depth Anything V2
-Small depth model.
+Small depth model. Optional FunctionGemma weights use the [Gemma terms](https://ai.google.dev/gemma/terms).

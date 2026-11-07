@@ -42,3 +42,4 @@ mod validator_tests;
 
 pub use schema::*;
 pub use store::{ConfigStore, ConfigWatcher, ReloadOutcome, write_atomic};
+pub mod agent;

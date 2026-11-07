@@ -88,3 +88,4 @@ pub use fonts::Fonts;
 pub use icons::MandaraAssets;
 pub use shell::{ExclusionView, ShellView, SidebarExclusionView};
 pub use state::{GlobalConfig, GlobalShell, ShellState, init_state, reload_config_from_disk, update_config};
+mod agent_commands;

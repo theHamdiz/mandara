@@ -936,3 +936,10 @@ artwork use a larger canvas that fits the current bar height; Bar icon scale
 still controls their size. Only drawn icons are decoded, at the display scale.
 For example, `mandara msg config set /appearance/launcher_icon mandara:teal-hourglass`
 selects the bundled hourglass without relying on an installed icon theme.
+
+## Local command agent
+
+`[launcher.agent]` is opt-in: `enabled = false`, `engine = "function-gemma"`
+(or `"qwen"`) and `debounce_ms = 180` (100–1000 ms). Studio → AI Shell Agent
+shows these controls and manages the separately downloaded model files.
+See [Local shell commands](command-agent.md).

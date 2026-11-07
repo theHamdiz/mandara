@@ -9,7 +9,7 @@ use crate::state::{config, flush_config, reload_config_from_disk, shell, update_
 
 /// `mandara msg studio <section>`: every slug of the launcher's Studio
 /// entries (`crate::overlays::STUDIO_SECTIONS`, checked by a test).
-pub const STUDIO_SECTION_ARG: &str = mandara_i18n::tk("a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>");
+pub const STUDIO_SECTION_ARG: &str = mandara_i18n::tk("a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, ai-shell-agent, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>");
 
 /// Lets the `restart` reply reach the client before the process exits.
 const RESTART_FLUSH: std::time::Duration = std::time::Duration::from_millis(150);
@@ -19,6 +19,16 @@ const SUPERVISOR_RESTART_CODE: i32 = 75;
 const SEED_COUNT: usize = 4;
 /// Seed proportions are reported to three decimals.
 const PROPORTION_SCALE: f32 = 1000.0;
+
+/// Model files and downloads share the existing blocking-work executor.
+fn model_job(work: impl FnOnce()->Result<serde_json::Value,String>+Send+'static)->mandara_plugins::Output {
+    let (tx,rx)=async_channel::bounded(1);
+    mandara_services::runtime::spawn("model-files",async move {
+        let result=mandara_services::runtime::unblock(work).await.map(|value|value.to_string());
+        let _=tx.send(result).await;
+    });
+    rx.into()
+}
 
 fn open_close_toggle() -> ArgSpec {
     ArgSpec::required("action", ArgKind::Enum, mandara_i18n::tk("what to do")).choices(&["open", "close", "toggle"])
@@ -137,6 +147,7 @@ fn side_bar_commands(r: &mut PluginRegistry) {
 }
 
 pub fn register(r: &mut PluginRegistry) {
+    crate::agent_commands::register(r);
     let core = "core";
     // Debug builds only: proves a panicking plugin command is isolated.
     #[cfg(debug_assertions)]
@@ -623,7 +634,7 @@ pub fn register(r: &mut PluginRegistry) {
         })
         .arg(ArgSpec::required("json", ArgKind::String, mandara_i18n::tk("the whole config as JSON"))),
     );
-    r.command(core, CommandSpec::new("models list", mandara_i18n::tk("Downloadable models (OCR, wallpaper depth) and whether they're installed"), |_, _| Ok(json!(mandara_services::models::status()))));
+    r.command(core, CommandSpec::new_output("models list", mandara_i18n::tk("Downloadable models (OCR, wallpaper depth) and whether they're installed"), |_, _| Ok(model_job(||Ok(json!(mandara_services::models::status()))))));
     r.command(
         core,
         CommandSpec::new_output("models download", mandara_i18n::tk("Download a model by id, or all of them"), |a, _| {
@@ -634,26 +645,20 @@ pub fn register(r: &mut PluginRegistry) {
                 "all" => mandara_services::models::MODELS.iter().filter(|m| !m.on_demand).collect(),
                 id => vec![mandara_services::models::find(id).ok_or_else(|| format!("unknown model {id:?}"))?],
             };
-            let (tx, rx) = async_channel::bounded(1);
-            std::thread::spawn(move || {
-                let result = models
-                    .iter()
-                    .try_for_each(|m| m.download(&|_, _| {}))
-                    .map(|()| format!("installed: {}", models.iter().map(|m| m.id).collect::<Vec<_>>().join(", ")));
-                let _ = tx.send_blocking(result);
-            });
-            Ok(mandara_plugins::Output::Pending(rx))
+            Ok(model_job(move || {
+                models.iter().try_for_each(|m|m.download(&|_,_|{}))?;
+                Ok(json!(format!("installed: {}",models.iter().map(|m|m.id).collect::<Vec<_>>().join(", "))))
+            }))
         })
         .arg(ArgSpec::optional("id", ArgKind::String, mandara_i18n::tk("model id from `models list` (default: all)")))
         .example("models download ocr-arabic"),
     );
     r.command(
         core,
-        CommandSpec::new("models remove", mandara_i18n::tk("Delete a downloaded model"), |a, _| {
+        CommandSpec::new_output("models remove", mandara_i18n::tk("Delete a downloaded model"), |a, _| {
             let id = a.get(0).ok_or("expected a model id")?;
             let m = mandara_services::models::find(id).ok_or_else(|| format!("unknown model {id:?}"))?;
-            m.remove()?;
-            Ok(json!({ "removed": id }))
+            Ok(model_job(move || {m.remove()?;Ok(json!({"removed":m.id}))}))
         })
         .arg(ArgSpec::required("id", ArgKind::String, mandara_i18n::tk("model id"))),
     );
@@ -763,4 +768,17 @@ pub fn register(r: &mut PluginRegistry) {
         cx.quit();
         Ok(json!("bye"))
     }));
+}
+
+#[cfg(test)]
+mod model_job_tests {
+    use super::*;
+    #[test]
+    fn file_jobs_run_off_the_calling_thread_and_propagate_errors() {
+        let caller=std::thread::current().id();
+        let mandara_plugins::Output::Pending(reply)=model_job(move || {assert_ne!(caller,std::thread::current().id());Ok(json!({"installed":true}))}) else {panic!("file work must be pending")};
+        assert_eq!(reply.recv_blocking().unwrap().unwrap(),r#"{"installed":true}"#);
+        let mandara_plugins::Output::Pending(reply)=model_job(||Err("disk failure".into())) else {panic!("file work must be pending")};
+        assert_eq!(reply.recv_blocking().unwrap(),Err("disk failure".into()));
+    }
 }
