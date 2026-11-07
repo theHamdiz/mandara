@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.22.0 — 2026-11-07
+
+Copy any panel as an image. Motion that suits you. Swipe notification
+history away. More apps in your colours.
+
 ### New
 
 - **Copy any panel as an image.** A camera beside the pin and float controls copies the visible panel straight to your clipboard and confirms with a green check. Floating panels have it too, including third-party plugins. Captures stay off the UI thread and release their working pixels when finished or cancelled.
