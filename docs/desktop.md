@@ -356,9 +356,11 @@ draft retry; a change found by that scan stays a conflict. For a draft in the
 desktop editor, make the file readable and press **Done** again.
 
 Changing the notes folder waits for pending saves; retained conflicts are
-available when you return. Mandara checks text before saving but does not lock
-files against other editors. An edit made after the check can still be replaced
-by the queued save.
+available when you return. Desktop note saves compare the file with the text
+the editor opened. Ordinary Notes plugin body saves do not make that comparison
+and may replace external edits; recovery scans check retained baselines separately.
+None of these operations locks out another editor. Even a desktop save can
+replace an edit made after its comparison.
 
 The widget gallery fits each preview to its card and renders at the display’s
 pixel density, with larger calendar and sky miniatures. Media previews use a
