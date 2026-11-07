@@ -79,8 +79,13 @@ fn prompt(query: &str, commands: &[Command], engine: Engine) -> Result<String> {
         }
         writeln!(functions, ") — {}", command.summary)?;
     }
+    let action_policy = if engine == Engine::Qwen {
+        &format!("Include every requested action in the original order, up to {} actions.", catalog::MAX_ACTIONS)
+    } else {
+        "Return exactly one action."
+    };
     let instruction = format!(
-        "You are a model that can do function calling with the following functions. Convert the user's request to a JSON array: [{{\"command\":\"exact command name\",\"args\":{{\"argument\":value}}}}]. Use only the listed commands and argument names. Functions:\n{functions}"
+        "You are a model that can do function calling with the following functions. Convert the user's request to a JSON array: [{{\"command\":\"exact command name\",\"args\":{{\"argument\":value}}}}]. Use only the listed commands and argument names. {action_policy} Functions:\n{functions}"
     );
     Ok(chat(&instruction, query, engine))
 }
@@ -226,12 +231,11 @@ mod tests {
             parser.check_stop().unwrap()
         };
         assert!(accepts(r#"[{"command":"theme mode","args":{"mode":"dark"}}]"#));
-        assert!(!accepts("[\n\n"));
-        for invalid in [
-            r#"[{"command":"exec","args":{}}]"#,
-            r#"[{"command":"theme mode","args":{"mode":"blue"}}]"#,
-            r#"[{"command":"theme mode","args":{"mode":true}}]"#,
-        ] {
+        assert!(accepts("[\n{\"command\":\"theme mode\",\"args\":{\"mode\":\"dark\"}}]"));
+        assert!(!accepts("[\n\n\n{\"command\":\"theme mode\",\"args\":{\"mode\":\"dark\"}}]"));
+        for invalid in
+            [r#"[{"command":"exec","args":{}}]"#, r#"[{"command":"theme mode","args":{"mode":"blue"}}]"#, r#"[{"command":"theme mode","args":{"mode":true}}]"#]
+        {
             assert!(!accepts(invalid), "{invalid}");
         }
     }

@@ -74,6 +74,8 @@ impl Argument {
 }
 
 /// Every alternative binds its own command name to its own argument object.
+/// Limit separator padding to two characters so whitespace cannot consume
+/// the generation budget without making progress through the action schema.
 pub fn schema(commands: &[Command], compound: bool) -> Value {
     let choices: Vec<Value> = commands
         .iter()
@@ -87,7 +89,7 @@ pub fn schema(commands: &[Command], compound: bool) -> Value {
             }})
         })
         .collect();
-    json!({"x-guidance":{"whitespace_flexible":false},"type":"array","minItems":1,"maxItems":if compound {MAX_ACTIONS} else {1},"items":{"anyOf":choices}})
+    json!({"x-guidance":{"whitespace_pattern":r"[\x20\x0A\x0D\x09]{1,2}"},"type":"array","minItems":1,"maxItems":if compound {MAX_ACTIONS} else {1},"items":{"anyOf":choices}})
 }
 
 /// Revalidate compiler output before it reaches the live dispatcher. Optional

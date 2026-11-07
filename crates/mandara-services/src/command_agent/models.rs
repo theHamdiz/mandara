@@ -132,7 +132,9 @@ fn download_into(model: &Model, dir: &std::path::Path, cancel: &AtomicBool, prog
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_resolve(Some(NETWORK_TIMEOUT))
         .timeout_connect(Some(NETWORK_TIMEOUT))
-        .timeout_recv_body(Some(NETWORK_TIMEOUT))
+        .timeout_recv_response(Some(NETWORK_TIMEOUT))
+        .timeout_per_read(Some(NETWORK_TIMEOUT))
+        .timeout_per_write(Some(NETWORK_TIMEOUT))
         .build()
         .into();
     let mut done = 0;
@@ -273,6 +275,41 @@ mod transfer_tests {
             }
         }
     }
+    #[test]
+    fn a_continuous_transfer_can_take_longer_than_the_stall_timeout() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = b"slows";
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = Box::leak(format!("http://{}/model", listener.local_addr().unwrap()).into_boxed_str());
+        let hash = Box::leak(crate::models::hex(&Sha256::digest(content)).into_boxed_str());
+        let files = Box::leak(Box::new([ModelFile { name: "model", url, size: content.len() as u64, sha256: hash }]));
+        let model =
+            Model { id: "fixture", title: "fixture", purpose: "fixture", license: "fixture", source: "fixture", icon: "search", on_demand: true, files };
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream.set_read_timeout(Some(NETWORK_TIMEOUT)).unwrap();
+            let mut request = Vec::new();
+            let mut byte = [0];
+            while !request.ends_with(b"\r\n\r\n") {
+                stream.read_exact(&mut byte).unwrap();
+                request.push(byte[0]);
+                assert!(request.len() < 4096);
+            }
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", content.len()).unwrap();
+            for (i, &byte) in content.iter().enumerate() {
+                if i > 0 {
+                    std::thread::sleep(NETWORK_TIMEOUT / 3);
+                }
+                stream.write_all(&[byte]).unwrap();
+                stream.flush().unwrap();
+            }
+        });
+        let result = download_into(&model, dir.path(), &AtomicBool::new(false), |_, _| {});
+        server.join().unwrap();
+        result.unwrap();
+        assert_eq!(std::fs::read(dir.path().join("model")).unwrap(), content);
+    }
+
     #[test]
     fn a_paused_transfer_keeps_its_existing_partial_file() {
         let dir = tempfile::tempdir().unwrap();
