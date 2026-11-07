@@ -655,6 +655,7 @@ impl Render for FloatingView {
         let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
         let now = Instant::now();
         let cfg = config(cx).read(cx).snapshot();
+        let _motion = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(cfg.motion.surfaces.panels));
         let palette = mandara_core::frame_palette(window, cx);
         let f = fonts(cx);
         let viewport = window.viewport_size();

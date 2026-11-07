@@ -29,13 +29,14 @@ use super::panel_fx::{
     redraw_in,
 };
 use crate::hub::Domains;
-use super::{domain_view, json};
+use super::{domain_view, domain_view_observing, json};
 use crate::fonts::tabular_nums;
 use crate::hub::hub;
 use crate::icons::icon;
 use crate::kit::{card, icon_button, reveal, text, tokens};
 
 mod activation;
+mod swipe;
 
 pub const ID: &str = "notifications";
 
@@ -618,7 +619,7 @@ fn group_header(gi: usize, app: &str, list: &[&Notification], palette: &MandaraP
 /// The grouped list used by the panel and the sidebar card, showing at
 /// most `limit` cards. Returns the element, its estimated height and
 /// whether more cards exist past the limit.
-fn center(state: &NotificationsState, palette: &MandaraPalette, p: Option<&PanelCx>, radius: f32, limit: usize) -> (AnyElement, f32, bool) {
+fn center(state: &NotificationsState, palette: &MandaraPalette, p: Option<&PanelCx>, radius: f32, limit: usize, swipe: Option<&swipe::Frame>) -> (AnyElement, f32, bool) {
     let dnd = state.dnd;
     let quiet = state.quiet();
     let accent = readable(palette.primary, palette);
@@ -696,7 +697,11 @@ fn center(state: &NotificationsState, palette: &MandaraPalette, p: Option<&Panel
         h += tokens::MD + GROUP_HEAD_H + shown.iter().map(|n| card_height(n) + GROUP_GAP_PX).sum::<f32>();
         let mut group = div().flex().flex_col().gap(px(GROUP_GAP_PX)).child(group_header(gi, app, &list, palette));
         for n in shown {
-            group = group.child(notification_card(n, palette, true));
+            let card = notification_card(n, palette, true);
+            group = group.child(match swipe {
+                Some(swipe) => swipe.card(n.id, card),
+                None => card,
+            });
         }
         col = col.child(match p {
             Some(p) => reveal(p, gi + 1, group),
@@ -901,8 +906,11 @@ pub fn register(r: &mut PluginRegistry) {
         let page = Rc::new(Cell::new(PAGE_SIZE));
         // The history's overlay scroll bar (per panel instance).
         let (scroll, scroll_bar) = (gpui::ScrollHandle::new(), crate::scrollbar::ScrollbarState::new());
-        let panel = domain_view(Domains::NOTIFICATIONS,
+        let swipe = swipe::Controller::new(cx);
+        let observed = swipe.clone();
+        let panel = domain_view_observing(Domains::NOTIFICATIONS,
             None,
+            move |cx| { cx.observe(&observed, |_, _, cx| cx.notify()).detach(); },
             move |palette, window, cx| {
                 // Opening the panel marks everything read.
                 let unread = hub(cx).read(cx).notifications.unread();
@@ -922,10 +930,13 @@ pub fn register(r: &mut PluginRegistry) {
                 let r = PanelShape::of(cx).inner(PAD);
                 if p.progress() < CLOSED_PROGRESS {
                     end_reply();
+                    swipe.update(cx, |s, _| { s.clear(); });
                 }
                 let composer = reply_composer(&hub.read(cx).notifications.clone(), palette, window, cx);
+                let alive = swipe.read(cx).id().is_none_or(|id| hub.read(cx).notifications.items.iter().any(|n| n.id == id));
+                let frame = swipe::Controller::frame(&swipe, alive, window, cx);
                 // Borrow this frame's history instead of cloning it.
-                let (body, h, more) = center(&hub.read(cx).notifications, palette, Some(&p), r, page.get());
+                let (body, h, more) = center(&hub.read(cx).notifications, palette, Some(&p), r, page.get(), Some(&frame));
                 let h = if more { h + MORE_H } else { h } + if composer.is_some() { REPLY_H + tokens::MD } else { 0.0 };
                 sc.set(size(px(PANEL_W), px((PAD * 2.0 + h).min(MAX_PANEL_H))));
                 let list = div()
@@ -937,20 +948,27 @@ pub fn register(r: &mut PluginRegistry) {
                     .when_some(composer, |el, c| el.child(div().pb(px(tokens::MD)).child(c)))
                     .child(body)
                     .when(more, |el| el.child(show_more(page.clone(), palette)));
-                crate::scrollbar::with_scrollbar(list, &scroll, &scroll_bar, palette).size_full().into_any_element()
+                crate::scrollbar::with_scrollbar(list, &scroll, &scroll_bar, palette).size_full().children(frame.listeners()).into_any_element()
             },
             window,
             cx,
         );
-        let sidebar = domain_view(Domains::NOTIFICATIONS,
+        let swipe = swipe::Controller::new(cx);
+        let observed = swipe.clone();
+        let sidebar = domain_view_observing(Domains::NOTIFICATIONS,
             None,
-            |palette, window, cx| {
+            move |cx| { cx.observe(&observed, |_, _, cx| cx.notify()).detach(); },
+            move |palette, window, cx| {
                 let hub = hub(cx);
                 // Only rendered while the sidebar shows: tick then, not on a timer.
                 if let Some(delay) = relabel_delay(&hub.read(cx).notifications.items) {
                     redraw_in(delay, window, cx);
                 }
-                card(palette).child(center(&hub.read(cx).notifications, palette, None, SIDEBAR_RADIUS_PX, SIDEBAR_LIMIT).0).into_any_element()
+                let alive = swipe.read(cx).id().is_none_or(|id| hub.read(cx).notifications.items.iter().any(|n| n.id == id));
+                let frame = swipe::Controller::frame(&swipe, alive, window, cx);
+                card(palette).relative()
+                    .child(center(&hub.read(cx).notifications, palette, None, SIDEBAR_RADIUS_PX, SIDEBAR_LIMIT, Some(&frame)).0)
+                    .children(frame.listeners()).into_any_element()
             },
             window,
             cx,

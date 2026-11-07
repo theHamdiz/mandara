@@ -364,7 +364,7 @@ pub fn reload_config_from_disk(cx: &mut App) -> Result<bool, String> {
 /// How long a palette change crossfades: `theme.transition_ms`, or
 /// instantly with reduced motion.
 pub fn theme_transition(cfg: &ShellConfig) -> Duration {
-    if cfg.motion.reduce_motion { Duration::ZERO } else { Duration::from_millis(cfg.theme.transition_ms) }
+    if cfg.motion.reduced(mandara_core::spring::system_reduced_motion()) { Duration::ZERO } else { Duration::from_millis(cfg.theme.transition_ms) }
 }
 
 /// Pushes the config's theme section into the theme engine, crossfading in
@@ -430,6 +430,7 @@ pub fn init_state(config_store: ConfigStore, cx: &mut App) -> (Entity<ConfigStor
 pub fn app_theme_targets(i: &mandara_config::IntegrationsConfig) -> (mandara_theme::templates::Targets, mandara_theme::templates::AppTargets) {
     let targets = mandara_theme::templates::Targets { ghostty: i.ghostty, gtk: i.gtk4, qt6: i.qt6, zed: i.zed, fuzzel: i.fuzzel, btop: i.btop, kvantum: i.kvantum, kvantum_apply: i.kvantum_apply };
     let apps = mandara_theme::templates::AppTargets {
+        cava: i.cava, tmux: i.tmux, zellij: i.zellij, spicetify: i.spicetify,
         kitty: i.kitty,
         foot: i.foot,
         alacritty: i.alacritty,
@@ -565,6 +566,7 @@ mod tests {
     #[test]
     fn every_integration_maps_to_its_target() {
         let all_off = mandara_config::IntegrationsConfig {
+            cava: false, tmux: false, zellij: false, spicetify: false,
             version: mandara_config::upgrade::INTEGRATIONS_VERSION,
             ghostty: false,
             gtk4: false,

@@ -70,3 +70,9 @@
   through **do not disturb**, which can switch itself on while you share your
   screen, for fullscreen apps, on a schedule (**quiet hours**) or for a while
   (`notifications dnd on 1h`).
+
+In the notification center or sidebar, drag a history card left or right to
+dismiss it. Small drags spring back, and vertical gestures keep the card.
+**Studio → Notifications → History** has **Swipe to dismiss** and **Swipe
+distance** controls. Popup swipes keep their existing behaviour: they hide
+the popup while leaving its entry in history.

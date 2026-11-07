@@ -395,7 +395,14 @@ impl ShellView {
                 let _ = this.update_in(cx, |this, window, cx| {
                     this.deactivate_task = None;
                     if !window.is_window_active() {
-                        this.dismiss("focus moved to another window", cx);
+                        let pointer = window.mouse_position();
+                        let inside = (this.panel_visible
+                            && (this.panel.value().contains(&pointer) || this.panel_shadow.holds(f32::from(pointer.x), f32::from(pointer.y))))
+                            || this.sidebar_bounds.is_some_and(|bounds| bounds.contains(&pointer));
+                        let focused = crate::hub::hub(cx).read(cx).focused.is_some();
+                        if crate::dismiss::deactivation_dismisses(this.last_press, Instant::now(), inside, focused) {
+                            this.dismiss("focus moved to another window", cx);
+                        }
                     }
                 });
             }));
@@ -1014,7 +1021,8 @@ impl ShellView {
     }
 
     /// Advances every spring; returns whether another frame is needed.
-    fn step(&mut self, dt: f32, panel_open: bool) -> bool {
+    fn step(&mut self, dt: f32, panel_open: bool, motion: &mandara_config::motion::SurfaceMotion) -> bool {
+        let _bar_motion = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(motion.bar));
         let mut animating = false;
         for s in &mut self.groups {
             animating |= s.step(dt);
@@ -1028,12 +1036,16 @@ impl ShellView {
         animating |= self.backdrop.step(dt);
         animating |= self.pill_radius.step(dt);
         animating |= self.pill_alpha.step(dt);
-        animating |= step_spring(&mut self.sidebar, self.sidebar_custom, dt);
+        {
+            let _scope = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(motion.sidebar));
+            animating |= step_spring(&mut self.sidebar, self.sidebar_custom, dt);
+        }
         animating |= self.tab.step(dt);
         animating |= self.tabs.step(dt);
         animating |= self.autohide.step(dt);
         animating |= self.step_sides(dt);
         if self.panel_visible {
+            let _scope = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(motion.panels));
             let moving = step_spring(&mut self.panel, self.panel_custom, dt);
             animating |= moving;
             if !moving && !panel_open {
@@ -1273,7 +1285,7 @@ impl Render for ShellView {
             && (self.panel_hovered || self.tab_hovered || shell_state.panel_pinned);
         self.tab.set_target(if tab_wanted { 1.0 } else { 0.0 });
         let dt = self.clock.tick_vsync(now, window.refresh_interval(cx));
-        if self.step(dt, panel_open) {
+        if self.step(dt, panel_open, &cfg.motion.surfaces) {
             window.request_animation_frame();
         } else {
             self.clock.idle();

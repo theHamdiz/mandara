@@ -896,7 +896,7 @@ impl Render for WallpaperView {
                 }
             }
         }
-        let instant = cfg.motion.reduce_motion || cfg.wallpaper.transition == mandara_config::desktop::WallpaperTransition::None;
+        let instant = cfg.motion.reduced(mandara_core::spring::system_reduced_motion()) || cfg.wallpaper.transition == mandara_config::desktop::WallpaperTransition::None;
         let fade = Duration::from_millis(if instant { 1 } else { cfg.wallpaper.crossfade_ms.max(1) });
         let t = (self.since.elapsed().as_secs_f32() / fade.as_secs_f32()).clamp(0.0, 1.0);
         if t < 1.0 {

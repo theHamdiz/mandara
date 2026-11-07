@@ -106,8 +106,11 @@ pub fn init(cx: &mut App) {
     let s = state.clone();
     cx.spawn(async move |cx| {
         while let Ok(pref) = prefs.recv().await {
-            s.borrow_mut().system = Some(pref);
-            cx.update(|cx| evaluate(&s, cx));
+            s.borrow_mut().system = Some(pref.dark);
+            cx.update(|cx| {
+                crate::style::system_motion_changed(pref.reduced_motion, cx);
+                evaluate(&s, cx);
+            });
         }
     })
     .detach();

@@ -77,6 +77,7 @@ pub mod progress_fill;
 pub mod sidebar_tabs;
 pub mod slider;
 pub mod slider_model;
+mod swipe;
 pub mod todo_lists;
 pub mod recorder;
 pub(crate) mod resample;

@@ -153,7 +153,10 @@ around, each one measured or shipped today:
    unless you want one.
 7. **A colour engine, not a colour picker.** Material You (HCT) palettes
    from your wallpaper, hand-tuned themes, and opt-in theming of Ghostty,
-   GTK 3/4, Qt 5/6, Kvantum, Zed, kitty, foot, Alacritty, btop and more.
+   GTK 3/4, Qt 5/6, Kvantum, Zed, kitty, foot, Alacritty, btop, Cava,
+   tmux, Zellij and Spicetify. [App setup](docs/app-themes.md).
+   [Motion controls](docs/motion.md) include spring presets, a live preview
+   and per-surface speeds, with optional system accessibility preferences.
 8. **Your desktop, your look.** Six bar styles on any edge, side bars that
    join the top bar into one frame, one-click Looks, dozens of desktop
    widgets placed per monitor, and three launcher looks. Attached launchers follow

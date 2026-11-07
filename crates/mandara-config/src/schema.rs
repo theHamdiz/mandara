@@ -8,6 +8,7 @@ use mandara_theme::{PaletteAdjustments, ThemeSource};
 use serde::{Deserialize, Serialize};
 
 use crate::surfaces;
+pub use crate::motion::MotionConfig;
 
 
 /// °F per °C and °F at 0 °C.
@@ -1421,26 +1422,6 @@ fn ids(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| s.to_string()).collect()
 }
 
-/// Damped-harmonic-oscillator parameters shared by every spring.
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct MotionConfig {
-    pub stiffness: f32,
-    pub damping: f32,
-    pub mass: f32,
-    /// Disables springs entirely (accessibility: reduced motion).
-    pub reduce_motion: bool,
-    /// Animation speed multiplier for every spring (1 = normal, 2 = twice
-    /// as fast).
-    pub speed: f32,
-}
-
-impl Default for MotionConfig {
-    fn default() -> Self {
-        Self { stiffness: defaults::SPRING_STIFFNESS, damping: defaults::SPRING_DAMPING, mass: defaults::SPRING_MASS, reduce_motion: false, speed: 1.0 }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TypographyConfig {
@@ -1791,6 +1772,10 @@ pub struct IntegrationsConfig {
     /// version.
     #[serde(default)]
     pub version: u32,
+    pub cava: bool,
+    pub tmux: bool,
+    pub zellij: bool,
+    pub spicetify: bool,
     pub ghostty: bool,
     pub gtk4: bool,
     pub qt6: bool,
@@ -1831,6 +1816,7 @@ impl IntegrationsConfig {
     pub fn all(on: bool) -> Self {
         Self {
             version: crate::upgrade::INTEGRATIONS_VERSION,
+            cava: on, tmux: on, zellij: on, spicetify: on,
             ghostty: on,
             gtk4: on,
             qt6: on,
@@ -1855,8 +1841,8 @@ impl IntegrationsConfig {
     /// Whether any app outside Mandara is themed (compositor borders live in
     /// Mandara's own drop-in, so they don't count).
     pub fn any_app(&self) -> bool {
-        let &Self { version: _, compositor_borders: _, ghostty, gtk4, qt6, zed, fuzzel, btop, kvantum, kvantum_apply, kitty, foot, alacritty, wezterm, helix, neovim, firefox, vesktop, kde } = self;
-        [ghostty, gtk4, qt6, zed, fuzzel, btop, kvantum, kvantum_apply, kitty, foot, alacritty, wezterm, helix, neovim, firefox, vesktop, kde].into_iter().any(|on| on)
+        let &Self { version: _, compositor_borders: _, cava, tmux, zellij, spicetify, ghostty, gtk4, qt6, zed, fuzzel, btop, kvantum, kvantum_apply, kitty, foot, alacritty, wezterm, helix, neovim, firefox, vesktop, kde } = self;
+        [cava, tmux, zellij, spicetify, ghostty, gtk4, qt6, zed, fuzzel, btop, kvantum, kvantum_apply, kitty, foot, alacritty, wezterm, helix, neovim, firefox, vesktop, kde].into_iter().any(|on| on)
     }
 }
 

@@ -9,6 +9,13 @@ use zbus::zvariant::OwnedValue;
 /// preference / portal unavailable.
 pub type Preference = Option<bool>;
 
+/// Both accessibility and colour preferences share one portal subscription.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Preferences {
+    pub dark: Preference,
+    pub reduced_motion: bool,
+}
+
 /// `color-scheme` values.
 const SCHEME_DARK: u32 = 1;
 const SCHEME_LIGHT: u32 = 2;
@@ -17,6 +24,7 @@ const PORTAL_PATH: &str = "/org/freedesktop/portal/desktop";
 const SETTINGS_IFACE: &str = "org.freedesktop.portal.Settings";
 const NAMESPACE: &str = "org.freedesktop.appearance";
 const KEY: &str = "color-scheme";
+const MOTION_KEY: &str = "reduced-motion";
 /// Preference changes buffered for the UI (only the latest matters).
 const UPDATE_QUEUE: usize = 4;
 
@@ -33,29 +41,50 @@ fn decode(v: &OwnedValue) -> Preference {
     }
 }
 
+fn reduced_motion(v: &OwnedValue) -> bool {
+    // The portal defines 0 = no preference, 1 = reduce; future values mean 0.
+    let n = u32::try_from(v).ok().or_else(|| {
+        let inner: zbus::zvariant::Value = v.downcast_ref::<zbus::zvariant::Value>().ok()?;
+        u32::try_from(&inner).ok()
+    });
+    n == Some(1)
+}
+
+async fn read(settings: &zbus::Proxy<'_>, key: &str) -> Option<OwnedValue> {
+    match settings.call("ReadOne", &(NAMESPACE, key)).await {
+        Ok(value) => Some(value),
+        Err(_) => settings.call("Read", &(NAMESPACE, key)).await.ok(),
+    }
+}
+
 /// Spawns a watcher; the receiver gets the current preference first, then
 /// every change.
-pub fn watch() -> async_channel::Receiver<Preference> {
+pub fn watch() -> async_channel::Receiver<Preferences> {
     let (tx, rx) = async_channel::bounded(UPDATE_QUEUE);
     crate::runtime::spawn("appearance", async move {
         let result: zbus::Result<()> = async move {
             let conn = crate::runtime::session().await?;
             let settings = crate::actor::proxy(&conn, PORTAL, PORTAL_PATH, SETTINGS_IFACE).await?;
             let mut changes = settings.receive_signal("SettingChanged").await?;
-            let initial: zbus::Result<OwnedValue> = settings.call("ReadOne", &(NAMESPACE, KEY)).await;
-            let initial = match initial {
-                Ok(v) => decode(&v),
-                Err(_) => settings.call::<_, _, OwnedValue>("Read", &(NAMESPACE, KEY)).await.ok().and_then(|v| decode(&v)),
+            let mut current = Preferences {
+                dark: read(&settings, KEY).await.as_ref().and_then(decode),
+                reduced_motion: read(&settings, MOTION_KEY).await.as_ref().is_some_and(reduced_motion),
             };
-            if tx.send(initial).await.is_err() {
+            if tx.send(current).await.is_err() {
                 return Ok(());
             }
             while let Some(msg) = changes.next().await {
                 // Borrowed strings: no allocation for other namespaces' changes.
                 let body = msg.body();
                 let Ok((ns, key, value)) = body.deserialize::<(&str, &str, OwnedValue)>() else { continue };
-                if ns == NAMESPACE && key == KEY && tx.send(decode(&value)).await.is_err() {
-                    break;
+                if ns == NAMESPACE {
+                    match key {
+                        KEY => current.dark = decode(&value),
+                        MOTION_KEY => current.reduced_motion = reduced_motion(&value),
+                        _ => continue,
+                    }
+                    if tx.send(current).await.is_err() {
+                    break; }
                 }
             }
             Ok(())
@@ -88,6 +117,15 @@ pub fn parse_hm(s: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn portal_motion_values_and_legacy_variant() {
+        for n in [0_u32, 1, 2, u32::MAX] {
+            assert_eq!(reduced_motion(&OwnedValue::from(n)), n == 1);
+            let wrapped = OwnedValue::try_from(zbus::zvariant::Value::new(n)).unwrap();
+            assert_eq!(reduced_motion(&wrapped), n == 1);
+        }
+    }
 
     #[test]
     fn schedule_spans() {

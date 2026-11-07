@@ -14,6 +14,7 @@ use serde_json::Value;
 
 pub mod alert_settings;
 mod desktop_settings;
+mod motion_settings;
 #[cfg(test)]
 mod look_tests;
 pub mod surface_settings;
@@ -480,6 +481,7 @@ pub fn settings() -> &'static [Setting] {
         let mut all = build();
         all.extend(surface_settings::entries());
         all.extend(desktop_settings::entries());
+        all.extend(motion_settings::entries());
         all.extend(alert_settings::entries());
         all.extend(system_settings::entries());
         all.extend(workflow_settings::entries());

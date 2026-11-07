@@ -158,7 +158,7 @@ impl AutoHide {
             keep_out || self.hovering || peeking || !wants_hidden(mode(cfg), self.covered, self.fullscreen)
         };
         self.shown.set_target(if shown { 1.0 } else { 0.0 });
-        if cfg.motion.reduce_motion {
+        if cfg.motion.reduced(mandara_core::spring::system_reduced_motion()) {
             self.shown.snap_to_target();
         }
     }

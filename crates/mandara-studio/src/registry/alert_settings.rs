@@ -68,6 +68,8 @@ pub fn entries() -> Vec<Setting> {
         s(Notifications, DND, "/notifications/quiet_from", tk("From"), tk("Quiet hours start"), Time),
         s(Notifications, DND, "/notifications/quiet_to", tk("Until"), tk("Quiet hours end"), Time),
         s(Notifications, HISTORY, "/notifications/history", tk("Keep a history"), tk("Closed popups stay in the notification center"), Toggle),
+        s(Notifications, HISTORY, "/notifications/history_swipe", tk("Swipe to dismiss"), tk("Drag a history card left or right to remove it"), Toggle),
+        s(Notifications, HISTORY, "/notifications/history_swipe_px", tk("Swipe distance"), tk("How far a history card travels before it is dismissed"), slider(f64::from(mandara_config::alerts::HISTORY_SWIPE_RANGE.0), f64::from(mandara_config::alerts::HISTORY_SWIPE_RANGE.1), 4.0, " px")),
         s(Notifications, HISTORY, "/notifications/history_max", tk("Entries kept"), tk("The oldest go first"), slider(10.0, 1000.0, 10.0, "")),
         s(Notifications, HISTORY, "/notifications/history_max_age_hours", tk("Forget after"), tk("Hours; 0 keeps them until you clear them"), slider(0.0, 720.0, 1.0, " h")),
         s(Notifications, HISTORY, "/notifications/history_low", tk("Keep low-urgency ones"), tk("Off: low-urgency notifications vanish when their popup closes"), Toggle),

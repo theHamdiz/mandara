@@ -905,6 +905,7 @@ impl Render for DockView {
         self.sync_reveal(window, cx);
         let palette = mandara_core::frame_palette(window, cx);
         let f = fonts(cx);
+        let _motion = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(config(cx).read(cx).get().motion.surfaces.dock));
         let cfg = &self.cfg;
         let reduce = mandara_core::spring::motion_profile().reduce;
         let vp = window.viewport_size();

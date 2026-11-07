@@ -104,6 +104,7 @@ impl Sheet {
     /// slightly). `hold` keeps a closing popover alive while its own
     /// choreography (the fan) still runs. Removes the window once closed.
     pub fn step(&mut self, hold: bool, window: &mut Window, cx: &mut App) -> f32 {
+        let _motion = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(crate::state::config(cx).read(cx).get().motion.surfaces.dock));
         let reduce = mandara_core::spring::motion_profile().reduce;
         self.open.set_instant(reduce);
         self.open.set_target(if self.closing { 0.0 } else { 1.0 });

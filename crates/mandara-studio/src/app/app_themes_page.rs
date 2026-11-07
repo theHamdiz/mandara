@@ -60,6 +60,8 @@ const GROUPS: &[(&str, &[AppTile])] = &[
             AppTile { path: "/integrations/foot", name: "foot", icon: "terminal" },
             AppTile { path: "/integrations/alacritty", name: "Alacritty", icon: "terminal" },
             AppTile { path: "/integrations/wezterm", name: "WezTerm", icon: "terminal" },
+            AppTile { path: "/integrations/tmux", name: "tmux", icon: "terminal" },
+            AppTile { path: "/integrations/zellij", name: "Zellij", icon: "terminal" },
         ],
     ),
     (tk("Editors"), &[AppTile { path: "/integrations/zed", name: "Zed", icon: "pencil" }, AppTile { path: "/integrations/helix", name: "Helix", icon: "pencil" }, AppTile { path: "/integrations/neovim", name: "Neovim", icon: "pencil" }]),
@@ -70,6 +72,8 @@ const GROUPS: &[(&str, &[AppTile])] = &[
             AppTile { path: "/integrations/btop", name: "btop", icon: "gauge" },
             AppTile { path: "/integrations/firefox", name: "Firefox", icon: "globe" },
             AppTile { path: "/integrations/vesktop", name: "Vesktop", icon: "user" },
+            AppTile { path: "/integrations/cava", name: "Cava", icon: "music" },
+            AppTile { path: "/integrations/spicetify", name: "Spicetify", icon: "music" },
         ],
     ),
 ];

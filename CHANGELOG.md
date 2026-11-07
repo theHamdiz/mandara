@@ -6,6 +6,16 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Motion that suits you.** Choose a spring preset, replay a live preview, follow the desktop's reduced-motion preference, soften bounce and set transition speed separately for each shell surface. Existing tuning stays yours. (#102)
+- **Swipe notification history away.** Drag a card left or right in the notification panel or sidebar to dismiss it. Vertical scrolling and small drags keep the card; Studio has an off switch and distance control. (#119)
+- **More apps in your colours.** Cava, tmux, Zellij and Spicetify now have opt-in palette exports in Studio → Themes → Other apps, with generated files that preserve your own configs. (#123)
+
+### Fixed
+
+- **Keep the main menu open while choosing a theme.** A temporary loss of layer-surface activation without another app taking focus no longer dismisses the panel under your pointer. Outside clicks, Escape and switching apps still close it. (#113)
+
 ## 0.21.0 — 2026-11-07
 
 Your desktop, in your own words.

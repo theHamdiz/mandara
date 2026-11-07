@@ -733,7 +733,7 @@ fn build_labels(key: (i64, *const ShellConfig, Lang), w: &Weather, cfg: &Arc<She
     Labels {
         key,
         _config: cfg.clone(),
-        animate: !cfg.motion.reduce_motion && cfg.plugins.setting(ID, "animate", true),
+        animate: !cfg.motion.reduced(mandara_core::spring::system_reduced_motion()) && cfg.plugins.setting(ID, "animate", true),
         place: location_name(cfg).into(),
         temp: deg(units, w.temp),
         hi_lo: w.days.first().map(|d| mandara_i18n::tf("H {high}  L {low}", &[("high", &deg(units, d.max)), ("low", &deg(units, d.min))]).into()),

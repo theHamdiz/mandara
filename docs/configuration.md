@@ -943,3 +943,15 @@ selects the bundled hourglass without relying on an installed icon theme.
 (or `"qwen"`) and `debounce_ms = 180` (100–1000 ms). Studio → AI Shell Agent
 shows these controls and manages the separately downloaded model files.
 See [Local shell commands](command-agent.md).
+
+### Motion and notification gestures
+
+[Motion](motion.md) covers presets, accessibility and the `[motion.surfaces]`
+playback speeds. Notification history supports horizontal swipe dismissal in
+both its panel and sidebar card. Under `[notifications]`, `history_swipe`
+defaults to `true` and `history_swipe_px` defaults to `120.0` logical pixels
+(bounded to 40–240). Configure both under **Studio → Notifications → History**.
+A swipe sends the same dismiss action as the card's close button.
+
+[App themes](app-themes.md) documents the opt-in `cava`, `tmux`, `zellij` and
+`spicetify` switches under `[integrations]`; all default to `false`.
