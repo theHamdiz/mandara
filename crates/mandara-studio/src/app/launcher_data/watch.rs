@@ -14,7 +14,7 @@ pub(super) struct Revisions {
     catalog: AtomicU64,
     usage: AtomicU64,
     #[cfg(test)]
-    observed_paths: std::sync::Mutex<BTreeSet<PathBuf>>,
+    catalog_events: std::sync::Mutex<std::collections::BTreeMap<PathBuf, u64>>,
 }
 
 impl Revisions {
@@ -40,20 +40,23 @@ impl Watch {
         let shutdown = wake.clone();
         let watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
             if wake.is_closed() { return; }
+            #[cfg(test)]
+            let observed_paths = event.as_ref().ok().map(|event| event.paths.clone());
             let (catalog, usage) = match event {
                 Ok(event) if event.kind.is_access() => return,
-                Ok(event) => {
-                    #[cfg(test)]
-                    revisions.observed_paths.lock().unwrap().extend(event.paths.iter().cloned());
-                    (
-                        event.paths.iter().any(|path| filter.applications.iter().any(|root| root.starts_with(path) || path.starts_with(root)) || filter.preferences.iter().any(|file| file == path || file.starts_with(path))),
-                        event.paths.iter().any(|path| path == &filter.usage || filter.usage.starts_with(path)),
-                    )
-                },
+                Ok(event) => (
+                    event.paths.iter().any(|path| filter.applications.iter().any(|root| root.starts_with(path) || path.starts_with(root)) || filter.preferences.iter().any(|file| file == path || file.starts_with(path))),
+                    event.paths.iter().any(|path| path == &filter.usage || filter.usage.starts_with(path)),
+                ),
                 Err(error) => { tracing::warn!("launcher files: {error}"); (true, true) }
             };
             if catalog || usage {
                 revisions.changed(catalog, usage);
+                #[cfg(test)]
+                if catalog && let Some(paths) = observed_paths {
+                    let revision = revisions.get().0;
+                    revisions.catalog_events.lock().unwrap().extend(paths.into_iter().map(|path| (path, revision)));
+                }
                 let _ = wake.try_send(());
             }
         })?;

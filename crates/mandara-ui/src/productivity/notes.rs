@@ -38,6 +38,16 @@ impl Productivity {
     ) -> Result<async_channel::Receiver<NoteReply<T>>, String> {
         let worker = self.notes_worker.as_ref().ok_or_else(|| mandara_i18n::t("Loading…").to_owned())?;
         let incoming = worker.submit(self.notes.root.clone(), self.notes_changes.clone(), edit)?;
+        Ok(self.observe_notes(cx, acknowledged, incoming))
+    }
+
+    /// All accepted intents use the same snapshot, ordering and reply boundary.
+    fn observe_notes<T: Send + 'static>(
+        &mut self,
+        cx: &mut Context<Self>,
+        acknowledged: Vec<(u64, u64)>,
+        incoming: async_channel::Receiver<notes_worker::Completion<T>>,
+    ) -> async_channel::Receiver<NoteReply<T>> {
         self.notes_sequence += 1;
         let sequence = self.notes_sequence;
         let (reply, result) = async_channel::bounded(1);
@@ -52,7 +62,7 @@ impl Productivity {
             });
             let _ = reply.try_send(NoteReply { value: value.map_err(|error| format!("{error:#}")), index_error });
         }).detach();
-        Ok(result)
+        result
     }
 
     /// Error status and snapshots share the same completion sequence boundary.
@@ -124,6 +134,7 @@ impl Productivity {
 
     /// Drain a latest dirty model only after every already-submitted ordering barrier.
     fn follow_notes_completion(&mut self, cx: &mut Context<Self>) {
+        self.retry_notes_rescan(cx);
         let barrier = self.notes_applied != self.notes_sequence;
         if self.notes_flush.should_flush(self.notes_error.is_none(), barrier, !self.notes_dirty.is_empty()) {
             if let Err(error) = self.flush_notes(cx) { tracing::warn!("saving notes: {error}"); }
@@ -144,6 +155,7 @@ impl Productivity {
     /// Enqueues the latest dirty bodies before the next ordered operation.
     /// Dirty generations stay retained until their own disk write succeeds.
     pub fn flush_notes(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
+        self.retry_notes_rescan(cx);
         if self.notes_flush.running() { return Ok(()); }
         let pending = self.pending_notes(None, true);
         if pending.is_empty() { return Ok(()); }
@@ -261,7 +273,19 @@ impl Productivity {
 
     /// Rescans remain available when a failed file has a retained local draft.
     pub(super) fn rescan_notes(&mut self, cx: &mut Context<Self>) {
-        let result = self.queue_notes(cx, Vec::new(), |store| { store.rescan(&[]); Ok(()) });
+        self.notes_rescan.request();
+        self.retry_notes_rescan(cx);
+    }
+
+    /// Reuse worker completions rather than timers to retry a full queue.
+    fn retry_notes_rescan(&mut self, cx: &mut Context<Self>) {
+        if self.notes_switching { return; }
+        let Some(worker) = self.notes_worker.as_ref() else { return };
+        let result = match self.notes_rescan.try_submit(worker, &self.notes.root, &self.notes_changes) {
+            Ok(Some(incoming)) => Ok(self.observe_notes(cx, Vec::new(), incoming)),
+            Ok(None) => return,
+            Err(error) => Err(error),
+        };
         self.log_notes(result, cx);
     }
 
@@ -300,6 +324,7 @@ impl Productivity {
                                 Ok(()) => {}
                             }
                         }
+                        p.retry_notes_rescan(cx);
                     });
                 }).detach();
             }
@@ -399,6 +424,63 @@ mod tests {
         assert_eq!(std::fs::read_to_string(path).unwrap(), external);
         assert_eq!(store.note(id).unwrap().text, external);
         store.create(DEFAULT_TOPIC, "Another independent note").unwrap();
+    }
+
+    #[test]
+    fn a_full_worker_queue_retains_one_recovery_scan_and_rechecks_the_original_body() {
+        /// A held worker must not strand a failed test or the shared blocking pool.
+        const WORKER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+        fn finish<T: Send + 'static>(pending: async_channel::Receiver<notes_worker::Completion<T>>) -> notes_worker::Completion<T> {
+            let (reply, result) = std::sync::mpsc::channel();
+            mandara_services::runtime::spawn("notes-rescan-test", async move {
+                let _ = reply.send(pending.recv().await.unwrap());
+            });
+            result.recv_timeout(WORKER_TIMEOUT).expect("bounded worker completion")
+        }
+
+        for changed_externally in [false, true] {
+            let (root, store, mut model, id, path, desired) = unreadable_draft(false);
+            let worker = notes_worker::NotesWorker::start(store);
+            let (changed, _) = async_channel::bounded(1);
+            let (entered, waiting) = std::sync::mpsc::channel();
+            let (release, held) = std::sync::mpsc::channel();
+            let first = worker.submit(root.path().into(), changed.clone(), move |_| {
+                entered.send(()).unwrap();
+                held.recv_timeout(WORKER_TIMEOUT).unwrap();
+                Ok(())
+            }).unwrap();
+            waiting.recv_timeout(WORKER_TIMEOUT).unwrap();
+            let queued: Vec<_> = (0..notes_worker::QUEUED_EDITS)
+                .map(|_| worker.submit(root.path().into(), changed.clone(), |_| Ok(())).unwrap()).collect();
+            for _ in 0..4 {
+                model.notes_rescan.request();
+                assert!(model.notes_rescan.try_submit(&worker, root.path(), &changed).is_err());
+            }
+            let recovered = if changed_externally { "Changed while unreadable" } else { "- [ ] Original task" };
+            std::fs::write(&path, recovered).unwrap();
+            assert!(model.has_note_conflicts(), "readability alone must not clear the retained draft");
+            assert!(model.pending_notes(None, false).is_empty());
+            release.send(()).unwrap();
+            assert!(finish(first).value.is_ok());
+            for pending in queued { assert!(finish(pending).value.is_ok()); }
+
+            let retry = model.notes_rescan.try_submit(&worker, root.path(), &changed).unwrap().expect("the missed event remains requested");
+            assert!(model.notes_rescan.try_submit(&worker, root.path(), &changed).unwrap().is_none(), "events coalesce into one accepted scan");
+            let scanned = finish(retry);
+            assert!(scanned.value.is_ok());
+            assert!(scanned.index_error.is_none());
+            assert!(scanned.snapshot.read_errors.is_none());
+            assert_eq!(scanned.snapshot.note(id).unwrap().text, recovered);
+            model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: scanned.snapshot, acknowledged: Vec::new(), successful: true, error: None });
+            assert_eq!(model.notes.note(id).unwrap().text, desired);
+            assert_eq!(model.has_note_conflicts(), changed_externally);
+            let pending = model.pending_notes(None, false);
+            assert_eq!(pending.len(), usize::from(!changed_externally));
+            let saved = finish(worker.submit(root.path().into(), changed, move |store| write_pending(store, &pending)).unwrap());
+            assert!(saved.value.is_ok());
+            assert_eq!(std::fs::read_to_string(path).unwrap(), if changed_externally { recovered } else { &desired });
+        }
     }
 
     #[test]

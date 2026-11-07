@@ -99,10 +99,10 @@ fn removed_and_replaced_application_roots_resume_notifications() {
     let written = apps.join("after-replacement.desktop");
     std::fs::write(&written, "[Desktop Entry]\nName=Demo\nExec=true\n").unwrap();
     let deadline = Instant::now() + TIMEOUT;
-    while revisions.get().0 == before || !revisions.observed_paths.lock().unwrap().contains(&written) {
+    while !revisions.catalog_events.lock().unwrap().get(&written).is_some_and(|revision| *revision > before) {
         assert!(Instant::now() < deadline, "replacement watch did not report {}", written.display());
         std::thread::sleep(Duration::from_millis(10));
     }
     receive(&events);
-    assert!(revisions.get().0 > before);
+    assert!(revisions.catalog_events.lock().unwrap()[&written] > before);
 }

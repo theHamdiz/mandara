@@ -4,7 +4,7 @@ use async_channel::{Receiver, Sender};
 use crate::notes_store::{NoteStore, NotesSnapshot};
 
 /// Bounded intents keep a stalled disk from retaining an unbounded edit queue.
-const QUEUED_EDITS: usize = 32;
+pub(super) const QUEUED_EDITS: usize = 32;
 
 pub(super) struct Completion<T> {
     pub snapshot: NotesSnapshot,

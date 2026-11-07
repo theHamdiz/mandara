@@ -86,6 +86,8 @@ About → What's new shows it too.
   report disk failures, and a partly saved note can retry its filename or
   index without creating another copy. `shell state` also reports when a
   desktop editor is ready for keyboard input.
+  Unreadable notes keep their original contents while other notes stay usable;
+  pending drafts recover safely once the file can be read again.
 - **Quieter distribution packages.** Language packs are staged separately
   from compiled binaries, avoiding a misleading packaging warning while
   keeping every language in the finished packages.

@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use std::collections::BTreeMap;
 
 mod notes_worker;
+mod note_rescan;
 mod note_edit;
 mod note_conflict;
 mod note_flush;
@@ -194,6 +195,7 @@ pub struct Productivity {
     /// Conflicting drafts stay recoverable per folder without becoming write prerequisites.
     notes_conflicts: BTreeMap<(std::path::PathBuf, u64), note_conflict::RetainedDraft>,
     notes_flush: note_flush::NoteFlush,
+    notes_rescan: note_rescan::NoteRescan,
     notes_sequence: u64,
     notes_applied: u64,
     notes_worker: Option<NotesWorker>,
@@ -231,7 +233,7 @@ impl Productivity {
         Self {
             book: TodoBook::new(Vec::new(), Vec::new()), filter: Filter::All,
             notes: NotesSnapshot::empty(root), notes_dirty: BTreeMap::new(),
-            notes_generation: 0, notes_submitted: BTreeMap::new(), notes_tasks: BTreeMap::new(), notes_conflicts: BTreeMap::new(), notes_flush: note_flush::NoteFlush::default(), notes_sequence: 0, notes_applied: 0,
+            notes_generation: 0, notes_submitted: BTreeMap::new(), notes_tasks: BTreeMap::new(), notes_conflicts: BTreeMap::new(), notes_flush: note_flush::NoteFlush::default(), notes_rescan: note_rescan::NoteRescan::default(), notes_sequence: 0, notes_applied: 0,
             notes_worker: None, notes_changes: changes, notes_switching: false, ready: false, notes_ready: false, load_error: None, todo_error: None, notes_error: None,
             notes_task: None, legacy_notes: Vec::new(), notes_watch: None, notes_topic: None,
             pomodoro: Pomodoro { phase: Phase::Focus, ends_at: None, paused_left: rules.focus, length: rules.focus, completed: 0 },
