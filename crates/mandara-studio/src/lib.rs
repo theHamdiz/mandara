@@ -4,6 +4,7 @@
 //! instantly on the real shell, and Studio's own CPU / memory never count
 //! against the shell's.
 
+mod agent_catalog;
 pub mod app;
 pub mod maintenance;
 pub mod perf;
@@ -14,6 +15,7 @@ pub mod ui_state;
 
 use gpui::{App, AppContext as _, Bounds, TitlebarOptions, WindowBounds, WindowHandle, WindowKind, WindowOptions, point, px, size};
 
+pub use agent_catalog::settings_catalog as agent_settings_catalog;
 pub use app::StudioView;
 pub use perf::{ShellIpc, ShellLink, ShellQuery};
 

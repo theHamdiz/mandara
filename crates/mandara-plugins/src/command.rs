@@ -33,15 +33,19 @@ pub struct ArgSpec {
     pub description: &'static str,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub choices: Vec<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub minimum: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maximum: Option<f64>,
 }
 
 impl ArgSpec {
     pub fn required(name: &'static str, kind: ArgKind, description: &'static str) -> Self {
-        Self { name, kind, required: true, description, choices: Vec::new() }
+        Self { name, kind, required: true, description, choices: Vec::new(), minimum: None, maximum: None }
     }
 
     pub fn optional(name: &'static str, kind: ArgKind, description: &'static str) -> Self {
-        Self { name, kind, required: false, description, choices: Vec::new() }
+        Self { name, kind, required: false, description, choices: Vec::new(), minimum: None, maximum: None }
     }
 
     pub fn choices(mut self, choices: &[&'static str]) -> Self {
@@ -50,15 +54,26 @@ impl ArgSpec {
         self
     }
 
+    /// Inclusive numeric bounds shared by CLI validation and local inference.
+    pub fn range(mut self, minimum: f64, maximum: f64) -> Self {
+        self.minimum = Some(minimum);
+        self.maximum = Some(maximum);
+        self
+    }
+
     /// Validates a raw string argument against this spec.
     fn validate(&self, raw: &str) -> Result<(), String> {
         let ok = match self.kind {
             ArgKind::String => true,
             ArgKind::Integer => raw.parse::<i64>().is_ok(),
-            ArgKind::Number => raw.parse::<f64>().is_ok(),
+            ArgKind::Number => raw.parse::<f64>().is_ok_and(f64::is_finite),
             ArgKind::Bool => matches!(raw, "true" | "false" | "on" | "off" | "1" | "0"),
             ArgKind::Enum => self.choices.contains(&raw),
         };
+        let in_range = raw.parse::<f64>().is_ok_and(|n| n.is_finite() && self.minimum.is_none_or(|lo| n >= lo) && self.maximum.is_none_or(|hi| n <= hi));
+        if ok && !in_range && (self.minimum.is_some() || self.maximum.is_some()) {
+            return Err(tf("Argument <{name}> must be between {minimum} and {maximum}", &[("name", &self.name), ("minimum", &self.minimum.map_or_else(|| "−∞".into(), |n| n.to_string())), ("maximum", &self.maximum.map_or_else(|| "∞".into(), |n| n.to_string()))]));
+        }
         if ok {
             Ok(())
         } else if self.kind == ArgKind::Enum {
@@ -379,5 +394,14 @@ mod tests {
         assert_eq!(set["owner"], "audio");
         assert_eq!(set["args"][0]["name"], "percent");
         assert_eq!(set["args"][0]["kind"], "integer");
+    }
+
+    #[test]
+    fn numeric_bounds_are_shared_with_the_catalog() {
+        let arg = ArgSpec::required("percent", ArgKind::Integer, "volume").range(0.0, 150.0);
+        assert!(arg.validate("0").is_ok());
+        assert!(arg.validate("150").is_ok());
+        for bad in ["-1", "151", "NaN", "inf"] { assert!(arg.validate(bad).is_err()); }
+        assert_eq!(serde_json::to_value(arg).unwrap()["maximum"], 150.0);
     }
 }

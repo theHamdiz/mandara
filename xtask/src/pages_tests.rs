@@ -183,3 +183,37 @@ fn the_homepage_install_command_and_plugin_count_match_the_guides() {
         .find(|text| text.contains(" built-in plugins")).unwrap().split_whitespace().next().unwrap();
     assert!(plugins.contains(&format!("The {count} first-party plugins")), "homepage plugin count differs from its guide");
 }
+
+/// Public descriptions keep local control discoverable without a false RAM ceiling.
+#[test]
+fn public_agent_descriptions_explain_local_control_and_qualify_performance() {
+    for path in ["README.md", "index.html", "llms.txt", "CITATION.cff"] {
+        let text = std::fs::read_to_string(crate::root().join(path)).unwrap();
+        let lower = text.to_lowercase();
+        assert!(lower.contains("natural language"), "{path}: missing natural language control");
+        assert!(lower.contains("offline") || lower.contains("your words stay on your computer"), "{path}: missing local inference");
+        assert!(lower.contains("historical") && lower.contains("frame"), "{path}: qualify frame measurements");
+        assert!(!text.contains("uses under 100 MiB") && !text.contains("Performance: under 100 MiB"), "{path}: unsupported memory ceiling");
+        if path != "CITATION.cff" {
+            assert!(text.contains("docs/command-agent."), "{path}: missing agent guide");
+        }
+    }
+    let page = homepage();
+    roxmltree::Document::parse(&page).unwrap();
+    let citation = std::fs::read_to_string(crate::root().join("CITATION.cff")).unwrap();
+    let metadata: serde_yaml_ng::Value = serde_yaml_ng::from_str(&citation).unwrap();
+    assert_eq!(metadata["cff-version"].as_str(), Some("1.2.0"));
+    assert_eq!(metadata["type"].as_str(), Some("software"));
+}
+
+/// Every natural-language launcher example includes the opt-in trigger.
+#[test]
+fn launcher_examples_on_the_homepage_start_with_bang() {
+    let source=homepage();
+    let page=roxmltree::Document::parse(&source).unwrap();
+    let examples:Vec<_>=page.descendants().filter(|n|n.has_tag_name("code")).filter_map(|n|n.text()).filter(|text|text.contains("switch to dark mode")).collect();
+    assert!(examples.len()>=2);
+    assert!(examples.iter().all(|text|text.starts_with('!')));
+    let studio=page.descendants().find(|n|n.attribute("class")==Some("studio-section section-space")).unwrap();
+    assert!(studio.descendants().filter_map(|n|n.text()).any(|text|text.contains("download its required models")));
+}

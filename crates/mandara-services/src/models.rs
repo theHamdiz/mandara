@@ -4,7 +4,7 @@
 //! first, then checked against their size and, where known, their SHA-256,
 //! so an interrupted or tampered download never leaves a bad model in place.
 //!
-//! Every model keeps its own licence (all Apache-2.0 today; see
+//! Every model keeps its own licence (Apache-2.0 or Gemma; see
 //! COPYRIGHT.md). None ships inside the binary.
 
 use std::io::{Read, Write};
@@ -55,6 +55,9 @@ macro_rules! hf {
 
 /// Every model Mandara can download.
 pub const MODELS: &[Model] = &[
+    crate::command_agent::models::ROUTER,
+    crate::command_agent::models::FUNCTION_GEMMA,
+    crate::command_agent::models::QWEN,
     Model {
         id: "ocr-det",
         title: tk("Text detection"),
@@ -149,6 +152,9 @@ impl Model {
     /// Downloads missing / damaged files. `progress(done, total)` is called
     /// as bytes arrive (total is the model's known size).
     pub fn download(&self, progress: &dyn Fn(u64, u64)) -> Result<(), String> {
+        if crate::command_agent::models::ALL.iter().any(|m| m.id == self.id) {
+            return crate::command_agent::models::download(self, &std::sync::atomic::AtomicBool::new(false), progress).map_err(|e| e.to_string());
+        }
         crate::offline::check()?;
         let dir = self.dir();
         std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;

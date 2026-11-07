@@ -24,6 +24,17 @@ use serde_json::Value;
 const CLIENT_READ_TIMEOUT: Duration = Duration::from_secs(5);
 /// How long a client waits for the shell's answer.
 const REPLY_TIMEOUT: Duration = Duration::from_secs(15);
+/// Model transfers may be large; body-stall limits remain in the downloader.
+const MODEL_REPLY_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+
+fn reply_timeout(args: &[String]) -> Duration {
+    match (args.first().map(String::as_str), args.get(1).map(String::as_str)) {
+        (Some("models"), Some("download")) => MODEL_REPLY_TIMEOUT,
+        (Some("agent"), Some("prepare")) => mandara_services::command_agent::INDEX_SETUP_TIMEOUT + CLIENT_READ_TIMEOUT,
+        (Some("agent"), Some("preview")) => mandara_services::command_agent::IDLE_TIMEOUT + CLIENT_READ_TIMEOUT,
+        _ => REPLY_TIMEOUT,
+    }
+}
 /// Stack of a per-connection server thread: it only parses one line and
 /// waits for the reply, so the default 2 MiB stack is waste.
 const CLIENT_THREAD_STACK: usize = 128 * 1024;
@@ -131,7 +142,7 @@ fn handle_client(stream: UnixStream, tx: &async_channel::Sender<Request>) -> Res
 pub fn send(path: &Path, args: &[String]) -> Result<WireResponse> {
     let mut stream =
         UnixStream::connect(path).with_context(|| format!("is Mandara running? could not connect to {}", path.display()))?;
-    stream.set_read_timeout(Some(REPLY_TIMEOUT))?;
+    stream.set_read_timeout(Some(reply_timeout(args)))?;
     let mut request = serde_json::to_vec(&WireRequestRef { args })?;
     request.push(b'\n');
     stream.write_all(&request)?;
@@ -144,6 +155,16 @@ pub fn send(path: &Path, args: &[String]) -> Result<WireResponse> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn explicit_model_work_can_outlive_the_interactive_reply_budget() {
+        let words=|s:&str|s.split_whitespace().map(String::from).collect::<Vec<_>>();
+        assert_eq!(reply_timeout(&words("ping")),REPLY_TIMEOUT);
+        assert_eq!(reply_timeout(&words("agent status")),REPLY_TIMEOUT);
+        assert_eq!(reply_timeout(&words("agent preview dark mode")),mandara_services::command_agent::IDLE_TIMEOUT+CLIENT_READ_TIMEOUT);
+        assert_eq!(reply_timeout(&words("agent prepare")),mandara_services::command_agent::INDEX_SETUP_TIMEOUT+CLIENT_READ_TIMEOUT);
+        assert_eq!(reply_timeout(&words("models download agent-qwen")),MODEL_REPLY_TIMEOUT);
+    }
 
     #[test]
     fn parses_json_and_plain_requests() {

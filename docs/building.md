@@ -27,6 +27,11 @@ that fingerprint embedded (`mandara --version` shows it), hashes the
 binary, counts the lines of code, writes a build manifest next to it and
 refreshes the [build fingerprint](#build-fingerprint) table below.
 
+The Nix flake uses the official stable Rust binary toolchain, pinned through
+`rust-overlay` in `flake.lock`. This keeps Rust's CPU intrinsics and LLVM
+matched. `nix build .#checks.x86_64-linux.rust-intrinsics` checks the AVX-512
+VNNI compiler path without requiring that instruction set on the builder.
+
 The source build requires **Rust 1.97 or newer**, matching the WebAssembly
 runtime’s minimum version. The installer updates an older rustup toolchain
 before attempting a source build.

@@ -16,6 +16,10 @@
 //!   unlocked at login, also used by Translator and Home Assistant);
 //! * **greeter** — Mandara Login's runtime: greetd and the cage kiosk.
 //!
+//! The optional command agent uses the binary's CPU inference engines and
+//! separately downloaded models. It needs no system inference server or GPU
+//! package; installing Mandara never downloads or enables those models.
+//!
 //! opt and svc are tried one package at a time, so a name a release doesn't
 //! carry never blocks the rest. Gentoo names are full atoms
 //! (`category/name`).

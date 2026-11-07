@@ -46,6 +46,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Private inference worker; never starts the shell or connects to IPC.
+    #[command(hide = true)]
+    AgentWorker,
     /// Start the shell directly, without the restart supervisor.
     Run,
     /// Run a shell command, e.g. `mandara msg audio volume set 40`.
@@ -163,6 +166,7 @@ enum Cmd {
     },
 }
 
+/// Initialize process services and dispatch the shell, Studio or a dedicated CLI worker.
 fn main() -> Result<()> {
     alloc::init();
     tracing_subscriber::fmt()
@@ -185,6 +189,7 @@ fn main() -> Result<()> {
     let matches = <Cli as clap::CommandFactory>::command().version(mandara_version::version()).long_version(long).get_matches();
     let cli = <Cli as clap::FromArgMatches>::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     match cli.command {
+        Some(Cmd::AgentWorker) => mandara_services::command_agent::worker_main(mandara_studio::agent_settings_catalog),
         Some(Cmd::Setup { autostart, compositor, check, fix_conflicts, restore, fix }) => setup_cli::setup(setup_cli::Options { autostart, compositor, check, fix_conflicts, restore, fix }),
         Some(Cmd::Msg { json, args }) => {
             use std::io::Write as _;

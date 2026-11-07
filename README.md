@@ -11,7 +11,9 @@
   <br/>
   Design-first, spring-animated and written entirely in Rust.
   <br/>
-  <i>Frames built in about 0.1 ms, with spring motion throughout the desktop.</i>
+  Your desktop, in your own words: optional local AI control through natural language.
+  <br/>
+  <i>Historical release samples built frames in about 0.1 ms; see the performance guide for the setup and current limits.</i>
 </p>
 
 <p align="center">
@@ -75,7 +77,11 @@ function; sparkle symbols are reserved for AI features.
 
 It's made to feel good to use. Panels pour out of the bar on real spring
 physics, colours follow your wallpaper and your music, and the whole
-desktop stays light enough to run all day without you noticing it.
+desktop stays responsive throughout your day. With optional local AI control,
+type `!switch to dark mode` in the launcher, review the action and press
+Enter. Your words stay on your computer; inference runs off the UI thread
+and its model worker exits when finished or closed.
+[Meet the AI Shell Agent](docs/command-agent.md).
 
 ## One shell, many desktops
 
@@ -347,6 +353,13 @@ credits and developer time that go into it:
 It's entirely optional. Using Mandara, telling a friend, writing a plugin
 or reporting a bug helps just as much. Thank you!
 
+## Local shell commands
+
+Enable **Studio → AI Shell Agent**, download the required models, then type
+`!dark mode` in any launcher look. Review the exact command and press Enter.
+Inference runs offline on your CPU and unloads after use or cancellation.
+See [the guide](docs/command-agent.md) for setup and model sizes.
+
 ## License
 
 Mandara Shell is free software under the **GNU General Public License,
@@ -354,4 +367,4 @@ version 3 or later** ([LICENSE.md](LICENSE.md), notice in
 [COPYRIGHT.md](COPYRIGHT.md)). Vendored code keeps the license in its
 folder, and fonts and models downloaded on demand keep their own: OFL for
 Google Fonts, Apache-2.0 for the PaddleOCR models and the Depth Anything V2
-Small depth model.
+Small depth model. Optional FunctionGemma weights use the [Gemma terms](https://ai.google.dev/gemma/terms).

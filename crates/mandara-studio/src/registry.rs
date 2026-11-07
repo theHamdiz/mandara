@@ -27,6 +27,7 @@ pub mod workflow_settings;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Section {
+    AiShellAgent,
     /// The overview Studio opens on: live shell status, quick settings and
     /// a card per navigation group.
     Home,
@@ -80,7 +81,8 @@ pub enum Section {
 }
 
 impl Section {
-    pub const ALL: [Section; 31] = [
+    pub const ALL: [Section; 32] = [
+        Section::AiShellAgent,
         Section::Home,
         Section::Themes,
         Section::Bars,
@@ -118,6 +120,7 @@ impl Section {
     /// ids. Display [`Section::label`] instead.
     pub fn title(self) -> &'static str {
         match self {
+            Section::AiShellAgent => tk("AI Shell Agent"),
             Section::Home => tk("Home"),
             Section::Themes => tk("Themes"),
             Section::Bars => tk("Bars"),
@@ -161,6 +164,7 @@ impl Section {
     /// (`mandara_ui::overlays::STUDIO_SECTIONS`, checked by a test).
     pub fn icon(self) -> &'static str {
         match self {
+            Section::AiShellAgent => "zap",
             Section::Home => "grid",
             Section::Themes => "droplet",
             Section::Wallpaper => "image",
@@ -278,7 +282,7 @@ impl NavGroup {
             NavGroup::Desktop => &[Bars, Dock, Launcher, WindowSwitcher, Notifications, Osd],
             NavGroup::System => &[Displays, Audio, Network, Power, Input, Shortcuts, DateTime, Applications],
             NavGroup::Security => &[Users, LoginScreen, LockScreen, Privacy],
-            NavGroup::Extend => &[Plugins, Compositor],
+            NavGroup::Extend => &[Plugins, Compositor, AiShellAgent],
             NavGroup::Mandara => &[General, Profiles, Performance, Maintenance, About],
         }
     }

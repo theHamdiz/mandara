@@ -18,6 +18,7 @@
 
 mod launcher_looks;
 mod beacon_keyboard;
+mod launcher_agent;
 
 use crate::bidi::Bidi as _;
 use crate::launcher_icons::IconLedger;
@@ -365,6 +366,7 @@ pub const STUDIO_SECTIONS: &[(&str, &str, &str, &str)] = &[
     // Extend
     ("plugins", tk("Plugins"), "zap", "extensions add-ons"),
     ("compositor", tk("Compositor"), "tiles", "mango niri hyprland borders gaps keybinds rules"),
+    ("ai-shell-agent", tk("AI Shell Agent"), "zap", "local natural language offline commands artificial intelligence !"),
     // Mandara
     ("general", tk("General"), "globe", "language clock week restart"),
     ("profiles", tk("Profiles & backup"), "download", "profile export import backup restore reset undo recent changes support report"),
@@ -1086,6 +1088,7 @@ pub fn run_json(args: &[String], cx: &mut App) -> Result<serde_json::Value, Stri
 }
 
 pub struct LauncherView {
+    agent: Option<launcher_agent::Agent>,
     shell: Entity<ShellState>,
     focus: FocusHandle,
     query: String,
@@ -1189,6 +1192,7 @@ impl LauncherView {
         cx.observe(&shell, |this: &mut Self, shell, cx| {
             // Reopening while the close animation runs revives the surface.
             this.closing = !shell.read(cx).launcher_open;
+            if this.closing { this.agent = None; }
             if !this.closing {
                 this.entered = false;
                 this.leave_task = None;
@@ -1201,9 +1205,10 @@ impl LauncherView {
         // and restyle it while open.
         cx.observe(&config(cx), |this: &mut Self, config, cx| {
             let look = config.read(cx).get().launcher.look.clone();
-            if look != this.look {
+            let agent_changed = this.agent.as_ref().is_some_and(|agent| agent.settings != config.read(cx).get().launcher.agent);
+            if look != this.look || agent_changed {
                 this.look = look;
-                this.refilter();
+                this.refilter(cx);
             }
             cx.notify();
         })
@@ -1214,6 +1219,7 @@ impl LauncherView {
         let focus = cx.focus_handle().tab_stop(true);
         focus.focus(window, cx);
         let mut this = Self {
+            agent: None,
             shell,
             focus,
             query: String::new(),
@@ -1267,7 +1273,7 @@ impl LauncherView {
             this.query = q;
             this.select_all = !this.query.is_empty();
         }
-        this.refilter();
+        this.refilter(cx);
         // Opening is the drawer's animation; tiles don't also reflow in.
         this.reflow.snap_to(1.0);
         // Caret blink: re-render twice a second while open.
@@ -1303,7 +1309,9 @@ impl LauncherView {
         }
     }
 
-    fn refilter(&mut self) {
+    /// Refresh the active provider, keeping bang queries outside ordinary search.
+    fn refilter(&mut self, cx: &mut Context<Self>) {
+        if self.agent_refilter(cx) { return; }
         // Where the tiles were (the grid reflows from there).
         let was_grid = self.grid_active();
         let before: std::collections::HashMap<String, usize> = if was_grid { self.results.iter().enumerate().map(|(i, it)| (usage_key(it), i)).collect() } else { Default::default() };
@@ -1351,7 +1359,7 @@ impl LauncherView {
         use mandara_config::workflow::{LauncherLayout, LauncherStyle};
         match self.look.style {
             LauncherStyle::Classic => self.look.layout == LauncherLayout::Grid && launcher_looks::is_plain(&self.query, &self.ctx.providers),
-            LauncherStyle::Beacon => self.mode == Some(BeaconMode::Apps),
+            LauncherStyle::Beacon => self.agent.is_none() && self.mode == Some(BeaconMode::Apps),
         }
     }
 
@@ -1428,6 +1436,7 @@ impl LauncherView {
     }
 
     fn close(&mut self, cx: &mut Context<Self>) {
+        self.agent = None;
         launcher_ext::remember_query(&self.query);
         self.closing = true;
         self.shell.update(cx, |s, cx| s.set_launcher(false, cx));
@@ -1436,6 +1445,7 @@ impl LauncherView {
     /// Enter / click: prompts for missing arguments (the launcher stays
     /// open), otherwise closes the launcher and runs the result.
     fn activate(&mut self, index: usize, cx: &mut Context<Self>) {
+        if self.agent.is_some() { self.activate_agent(index, cx); return; }
         // The Beacon bar alone (nothing typed) has no results to open.
         if self.look.style == mandara_config::workflow::LauncherStyle::Beacon && !self.beacon_open_results() {
             return;
@@ -1443,7 +1453,7 @@ impl LauncherView {
         let Some(item) = self.results.get(index) else { return };
         match plan(item, &self.query) {
             Effect::Prompt(query) => {
-                self.set_query(query);
+                self.set_query(query, cx);
                 cx.notify();
             }
             effect => {
@@ -1454,10 +1464,10 @@ impl LauncherView {
         }
     }
 
-    fn set_query(&mut self, q: String) {
+    fn set_query(&mut self, q: String, cx: &mut Context<Self>) {
         self.caret = q.chars().count();
         self.query = q;
-        self.refilter();
+        self.refilter(cx);
     }
 
     /// Byte offset of the caret.
@@ -1483,7 +1493,7 @@ impl LauncherView {
         }
         if beacon && self.mode.is_some() && (k.key == "escape" || (k.key == "backspace" && self.query.is_empty())) {
             self.mode = None;
-            self.refilter();
+            self.refilter(cx);
             cx.notify();
             return;
         }
@@ -1515,7 +1525,7 @@ impl LauncherView {
             });
             self.ctx.pinned = config(cx).read(cx).get().launcher.pinned.clone();
             let keep = self.selected;
-            self.refilter();
+            self.refilter(cx);
             self.selected = keep.min(self.results.len().saturating_sub(1));
             cx.notify();
             return;
@@ -1535,7 +1545,7 @@ impl LauncherView {
                         self.query.clear();
                         self.caret = 0;
                         self.select_all = false;
-                        self.refilter();
+                        self.refilter(cx);
                     }
                     cx.notify();
                     return;
@@ -1547,7 +1557,7 @@ impl LauncherView {
                         let at = self.caret_byte();
                         self.query.insert_str(at, &text);
                         self.caret += text.chars().count();
-                        self.refilter();
+                        self.refilter(cx);
                     }
                     cx.notify();
                     return;
@@ -1563,7 +1573,7 @@ impl LauncherView {
         }
         if matches!(k.key.as_str(), "backspace" | "delete") && self.select_all {
             self.take_selection();
-            self.refilter();
+            self.refilter(cx);
             cx.notify();
             return;
         }
@@ -1590,13 +1600,13 @@ impl LauncherView {
                     self.query.remove(at);
                     self.caret -= 1;
                 }
-                self.refilter();
+                self.refilter(cx);
             }
             "delete" => {
                 if self.caret < self.query.chars().count() {
                     let at = self.caret_byte();
                     self.query.remove(at);
-                    self.refilter();
+                    self.refilter(cx);
                 }
             }
             _ => {
@@ -1605,7 +1615,7 @@ impl LauncherView {
                     let at = self.caret_byte();
                     self.query.insert_str(at, ch);
                     self.caret += ch.chars().count();
-                    self.refilter();
+                    self.refilter(cx);
                 }
             }
         }
@@ -1719,7 +1729,7 @@ impl LauncherView {
                     .flex()
                     .flex_col()
                     .child(div().truncate().text_size(px(text::BODY)).when(on_accent, |el| el.text_color(title_c.hsla())).child(title))
-                    .when(!look.compact && !sub.is_empty(), |el| el.child(div().truncate().text_size(px(text::LABEL)).text_color(sub_c.hsla()).child(sub))),
+                    .when((!look.compact || matches!(item, Item::Hit(hit) if hit.provider == "agent")) && !sub.is_empty(), |el| el.child(div().truncate().text_size(px(text::LABEL)).text_color(sub_c.hsla()).child(sub))),
             )
             .when_some(badge, |el, b| el.child(div().flex_none().px(px(8.0)).h(px(20.0)).rounded_full().flex().items_center().bg(badge_bg.hsla()).text_size(px(10.5)).text_color(badge_fg.hsla()).child(b)))
             .on_hover(hover)
@@ -1852,6 +1862,7 @@ impl LauncherView {
 }
 
 impl Render for LauncherView {
+    /// Draw the selected look and follow its animated bounds with the input mask.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         use crate::launcher_place::{Join, Rect};
         use mandara_config::surfaces::PanelAnimation;
