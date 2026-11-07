@@ -74,6 +74,7 @@ const STYLES: &[(&str, &str)] = &[("carousel", tk("Live previews")), ("compact",
 const CLICKS: &[(&str, &str)] = &[("copy", tk("Copy (right-click pastes)")), ("paste", tk("Paste (right-click copies)"))];
 const FORMATS: &[(&str, &str)] = &[("png", "PNG"), ("jpeg", "JPEG"), ("webp", tk("WebP (lossless)"))];
 
+/// Declare workflow controls and their bounded configuration paths for Studio.
 pub fn entries() -> Vec<Setting> {
     use Control::*;
     use Section::*;

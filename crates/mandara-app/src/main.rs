@@ -166,6 +166,7 @@ enum Cmd {
     },
 }
 
+/// Initialize process services and dispatch the shell, Studio or a dedicated CLI worker.
 fn main() -> Result<()> {
     alloc::init();
     tracing_subscriber::fmt()

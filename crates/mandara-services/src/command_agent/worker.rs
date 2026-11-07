@@ -23,6 +23,7 @@ static INFERENCE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 struct Active(std::sync::Weak<AtomicBool>);
 impl Active {
+    /// Track a weak cancellation handle while its request is active or queued.
     fn new(cancel: &Arc<AtomicBool>) -> Self {
         let weak = Arc::downgrade(cancel);
         ACTIVE.lock().unwrap_or_else(|e| e.into_inner()).push(weak.clone());
@@ -46,6 +47,7 @@ pub fn purge() {
     }
 }
 
+/// Count queued and running requests without retaining their model state.
 pub fn active_requests() -> usize {
     ACTIVE.lock().unwrap_or_else(|e| e.into_inner()).len()
 }
@@ -54,6 +56,7 @@ pub fn active_requests() -> usize {
 #[derive(Default)]
 pub struct Job(Arc<AtomicBool>);
 impl Job {
+    /// Share the cancellation flag with work owned by this view.
     pub fn cancellation(&self) -> Arc<AtomicBool> {
         self.0.clone()
     }
@@ -64,6 +67,7 @@ impl Drop for Job {
     }
 }
 
+/// Flush one bounded-protocol event so retrieval can appear before compilation.
 fn emit(event: &Event) -> Result<()> {
     let mut out = std::io::stdout().lock();
     serde_json::to_writer(&mut out, event)?;
@@ -84,14 +88,14 @@ pub fn worker_main(settings: impl FnOnce() -> Vec<super::catalog::Command>) -> R
         ensure!((request.prepare_index || !request.query.trim().is_empty()) && request.query.len() <= MAX_QUERY_BYTES, "invalid agent query");
         ensure!(!request.catalog.is_empty(), "empty command catalog");
         let cancel = AtomicBool::new(false);
-        models::verified(&models::ROUTER, &cancel)?;
+        models::check(&models::ROUTER, request.prepare_index, &cancel)?;
         let mut embedder = embeddings::Embedder::load()?;
         let vectors = embeddings::index(&mut embedder, &request.catalog)?;
         if request.prepare_index {
             return emit(&Event::Ready { actions: vec![], words: vec![], inference_ms: 0.0 });
         }
         let mut compiler = if request.engine == super::Engine::Qwen && !request.query.is_ascii() {
-            models::verified(models::compiler(request.engine), &cancel)?;
+            models::check(models::compiler(request.engine), false, &cancel)?;
             Some(compiler::Compiler::load(request.engine)?)
         } else {
             None
@@ -106,7 +110,7 @@ pub fn worker_main(settings: impl FnOnce() -> Vec<super::catalog::Command>) -> R
         let mut compiler = match compiler {
             Some(compiler) => compiler,
             None => {
-                models::verified(models::compiler(request.engine), &cancel)?;
+                models::check(models::compiler(request.engine), false, &cancel)?;
                 compiler::Compiler::load(request.engine)?
             }
         };
@@ -116,6 +120,18 @@ pub fn worker_main(settings: impl FnOnce() -> Vec<super::catalog::Command>) -> R
         emit(&Event::Error { message: format!("{error:#}") })?;
     }
     Ok(())
+}
+
+/// Linux procfs keeps the running inode executable after an atomic update.
+fn worker_executable() -> Result<std::path::PathBuf> {
+    #[cfg(target_os = "linux")]
+    {
+        Ok("/proc/self/exe".into())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        Ok(std::env::current_exe()?)
+    }
 }
 
 struct Child(std::process::Child);
@@ -156,7 +172,7 @@ pub fn run(request: Request, cancel: Arc<AtomicBool>, events: async_channel::Sen
     };
     let threads = std::thread::available_parallelism().map_or(1, usize::from).min(MAX_INFERENCE_THREADS).to_string();
     let mut child = Child(
-        Command::new(std::env::current_exe()?)
+        Command::new(worker_executable()?)
             .arg("agent-worker")
             .env("RAYON_NUM_THREADS", &threads)
             .env("CANDLE_NUM_THREADS", &threads)
@@ -227,6 +243,41 @@ mod tests {
         drop(job);
         assert!(cancel.load(Ordering::Acquire));
     }
+    /// A private copy of the test executable models a shell replaced by an update.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn replaced_executables_can_still_start_a_worker() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("worker");
+        std::fs::copy(std::env::current_exe().unwrap(), &exe).unwrap();
+        std::fs::write(dir.path().join(".agent-worker-fixture"), b"owned test copy").unwrap();
+        let output = Command::new(&exe)
+            .args(["--exact", "command_agent::worker::tests::deleted_executable_child", "--ignored", "--test-threads=1"])
+            .env("MANDARA_AGENT_TEST_EXE", &exe)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stdout));
+        assert!(!exe.exists());
+    }
+
+    /// Runs only inside the owned fixture created by the parent regression test.
+    #[test]
+    #[ignore = "subprocess fixture for replaced_executables_can_still_start_a_worker"]
+    #[cfg(target_os = "linux")]
+    fn deleted_executable_child() {
+        let Some(expected) = std::env::var_os("MANDARA_AGENT_TEST_EXE") else {
+            return;
+        };
+        let expected = std::path::PathBuf::from(expected);
+        assert!(expected.starts_with(std::env::temp_dir()));
+        assert_eq!(expected.file_name().unwrap(), "worker");
+        assert_eq!(std::fs::read(expected.parent().unwrap().join(".agent-worker-fixture")).unwrap(), b"owned test copy");
+        assert_eq!(std::env::current_exe().unwrap(), expected);
+        std::fs::remove_file(expected).unwrap();
+        let status = Command::new(worker_executable().unwrap()).arg("--list").env_remove("MANDARA_AGENT_TEST_EXE").output().unwrap().status;
+        assert!(status.success());
+    }
+
     #[test]
     fn cancelled_jobs_never_spawn_a_child() {
         let (tx, rx) = async_channel::bounded(2);

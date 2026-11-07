@@ -4,6 +4,7 @@ use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginRegistry};
 use mandara_services::command_agent::{self as agent, Event, Job, Request};
 use serde_json::json;
 
+/// Expose worker status, index preparation, non-executing previews and cancellation.
 pub(crate) fn register(registry: &mut PluginRegistry) {
     registry.command(
         "core",

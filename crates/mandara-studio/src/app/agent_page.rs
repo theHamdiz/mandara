@@ -67,6 +67,7 @@ pub(super) struct AgentPage {
 }
 
 impl AgentPage {
+    /// Create the bench input and query model metadata away from the UI thread.
     fn new(cx: &mut Context<Self>) -> Self {
         let weak = cx.weak_entity();
         let input = cx.new(|cx| {
@@ -107,6 +108,7 @@ impl AgentPage {
         this
     }
 
+    /// Cancel this bench request and release its displayed matches and payload.
     fn purge(&mut self, cx: &mut Context<Self>) {
         self.job = None;
         self.task = None;
@@ -117,6 +119,7 @@ impl AgentPage {
         cx.notify();
     }
 
+    /// Compile a bench prompt without dispatching any of its resulting actions.
     fn test(&mut self, input: String, cx: &mut Context<Self>) {
         self.purge(cx);
         self.error = None;
@@ -186,6 +189,7 @@ impl AgentPage {
         cx.notify();
     }
 
+    /// Process one owned model queue and coalesce byte updates into bounded events.
     fn download(&mut self, queue: Vec<usize>, cx: &mut Context<Self>) {
         if self.download_task.is_some() {
             return;
@@ -286,6 +290,7 @@ impl AgentPage {
         cx.notify();
     }
 
+    /// Route page controls through the owned download and inference jobs.
     fn perform(&mut self, action: Action, cx: &mut Context<Self>) {
         match action {
             Action::Required => {
@@ -321,6 +326,7 @@ impl AgentPage {
         }
     }
 
+    /// Give mouse and keyboard activation the same page action and focus styling.
     fn action_button(
         id: impl Into<SharedString>,
         glyph: &'static str,
@@ -344,6 +350,7 @@ impl AgentPage {
             .into_any_element()
     }
 
+    /// Remove an installed model off the UI thread after bench work is cancelled.
     fn delete(&mut self, i: usize, cx: &mut Context<Self>) {
         if self.download_task.is_some() {
             self.error = Some(t("Pause downloads before deleting models").into());
@@ -369,6 +376,7 @@ impl AgentPage {
 }
 
 impl Render for AgentPage {
+    /// Draw model cards with the shared progress fill and cancel work when hidden.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.visibility.is_none() {
             let weak = cx.weak_entity();
@@ -495,6 +503,7 @@ impl Render for AgentPage {
 }
 
 impl StudioView {
+    /// Create the page lazily and prepend its declarative settings controls.
     pub(super) fn agent_page(&mut self, cfg: &mandara_config::ShellConfig, p: &mandara_theme::MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let rows = self.rows(registry::in_section(Section::AiShellAgent), cfg, p, cx);
         let page = self.agent_page.get_or_insert_with(|| cx.new(AgentPage::new)).clone();

@@ -1309,6 +1309,7 @@ impl LauncherView {
         }
     }
 
+    /// Refresh the active provider, keeping bang queries outside ordinary search.
     fn refilter(&mut self, cx: &mut Context<Self>) {
         if self.agent_refilter(cx) { return; }
         // Where the tiles were (the grid reflows from there).

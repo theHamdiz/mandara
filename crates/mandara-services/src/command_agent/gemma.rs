@@ -12,10 +12,15 @@ use candle_nn::Module;
 use candle_transformers::quantized_nn::RmsNorm;
 use std::sync::Arc;
 
+/// Rotary tables need only the bounded compiler context, not the training context.
 const MAX_SEQ_LEN: usize = super::compiler::MAX_CONTEXT_TOKENS;
+/// Gemma 3 alternates local attention with one global layer in each group of six.
 const DEFAULT_SLIDING_WINDOW_TYPE: usize = 6;
+/// Published Gemma 3 global-attention rotary base when GGUF metadata omits it.
 const DEFAULT_ROPE_FREQUENCY: f32 = 1_000_000.;
+/// Published rotary base for Gemma 3 local-attention layers.
 const DEFAULT_ROPE_FREQUENCY_SLIDING: f32 = 10_000.;
+/// An absent rotary scaling factor leaves model frequencies unchanged.
 const DEFAULT_ROPE_FREQUENCY_SCALE_FACTOR: f32 = 1.;
 
 #[derive(Debug, Clone)]
@@ -25,12 +30,14 @@ struct QMatMul {
 }
 
 impl QMatMul {
+    /// Keep a quantized matrix and its tracing span together.
     fn from_qtensor(qtensor: QTensor) -> Result<Self> {
         let inner = candle::quantized::QMatMul::from_qtensor(qtensor)?;
         let span = tracing::span!(tracing::Level::TRACE, "qmatmul");
         Ok(Self { inner, span })
     }
 
+    /// Multiply without dequantizing the complete weight matrix.
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         let _enter = self.span.enter();
         self.inner.forward(xs)
@@ -45,6 +52,7 @@ struct Mlp {
 }
 
 impl Module for Mlp {
+    /// Apply Gemma 3’s GELU gate before the quantized down projection.
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         let gate = self.feed_forward_gate.forward(xs)?;
         let up = self.feed_forward_up.forward(xs)?;
@@ -61,6 +69,7 @@ struct RotaryEmbedding {
 }
 
 impl RotaryEmbedding {
+    /// Build context-bounded rotary tables shared by attention layers.
     fn new(head_dim: usize, rope_frequency: f32, device: &Device) -> Result<Self> {
         let theta: Vec<_> = (0..head_dim).step_by(2).map(|i| 1f32 / rope_frequency.powf(i as f32 / head_dim as f32)).collect();
         let theta = Tensor::new(theta.as_slice(), device)?;
@@ -71,6 +80,7 @@ impl RotaryEmbedding {
         Ok(Self { sin, cos })
     }
 
+    /// Rotate query and key chunks at their absolute cache positions.
     fn apply_rotary_emb_qkv(&self, q: &Tensor, k: &Tensor, index_pos: usize) -> Result<(Tensor, Tensor)> {
         let (_b_sz, _h, seq_len, _n_embd) = q.dims4()?;
         let cos = self.cos.narrow(0, index_pos, seq_len)?;
@@ -122,12 +132,14 @@ struct LayerWeights {
 }
 
 impl LayerWeights {
+    /// Mask future and expired local keys using absolute token positions.
     fn mask(&self, b_sz: usize, seq_len: usize, index_pos: usize, dtype: DType, device: &Device) -> Result<Tensor> {
         let _ = dtype;
         let mask = attention_mask(seq_len, index_pos, self.sliding_window_size);
         Tensor::from_slice(&mask, (seq_len, seq_len + index_pos), device)?.expand((b_sz, 1, seq_len, seq_len + index_pos))
     }
 
+    /// Append keys and values, then apply the layer’s local or global attention.
     fn forward_attn(&mut self, x: &Tensor, mask: Option<&Tensor>, index_pos: usize) -> Result<Tensor> {
         let _enter = self.span_attn.enter();
         let (b_sz, seq_len, _) = x.dims3()?;
@@ -194,6 +206,7 @@ pub struct ModelWeights {
 }
 
 impl ModelWeights {
+    /// Load quantized weights while sharing tied embeddings and rotary tables.
     pub fn from_gguf<R: std::io::Seek + std::io::Read>(ct: gguf_file::Content, reader: &mut R, device: &Device) -> Result<Self> {
         // Detect architecture prefix by probing which keys exist in metadata.
         // This supports gemma3, gemma2, gemma, gemma-embedding, and future variants.
@@ -325,12 +338,14 @@ impl ModelWeights {
         })
     }
 
+    /// Release every layer’s attention cache before a new request.
     pub fn clear_kv_cache(&mut self) {
         for layer in &mut self.layers {
             layer.kv_cache = None;
         }
     }
 
+    /// Look up only input-token embedding rows and advance all transformer layers.
     pub fn forward(&mut self, x: &Tensor, index_pos: usize) -> Result<Tensor> {
         let (b_sz, seq_len) = x.dims2()?;
         let _enter = self.span.enter();

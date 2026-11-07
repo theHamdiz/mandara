@@ -118,6 +118,7 @@ impl Section {
 
     /// English title: matches command-line section names and keys element
     /// ids. Display [`Section::label`] instead.
+    /// Return the translated navigation title for this settings section.
     pub fn title(self) -> &'static str {
         match self {
             Section::AiShellAgent => tk("AI Shell Agent"),

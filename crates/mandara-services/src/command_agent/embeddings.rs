@@ -28,6 +28,7 @@ pub struct Embedder {
 }
 
 impl Embedder {
+    /// Load Arctic once and reuse its execution state while building the index.
     pub fn load() -> Result<Self> {
         let mut tokenizer = Tokenizer::from_file(models::ROUTER.file("tokenizer.json")).map_err(anyhow::Error::msg)?;
         tokenizer.with_truncation(Some(tokenizers::TruncationParams { max_length: MAX_TOKENS, ..Default::default() })).map_err(anyhow::Error::msg)?;
@@ -37,6 +38,7 @@ impl Embedder {
         Ok(Self { tokenizer, state: plan.spawn()?, inputs })
     }
 
+    /// Return a normalized CLS vector, with Arctic’s search prefix for queries.
     pub fn embed(&mut self, text: &str, query: bool) -> Result<Vec<f32>> {
         let input = if query { format!("Represent this sentence for searching relevant passages: {text}") } else { text.to_owned() };
         let encoded = self.tokenizer.encode(input, true).map_err(anyhow::Error::msg)?;
@@ -54,6 +56,7 @@ impl Embedder {
     }
 }
 
+/// Reject empty or non-finite vectors before cosine scoring.
 fn normalize(vector: &mut [f32]) -> Result<()> {
     let norm = vector.iter().map(|v| v * v).sum::<f32>().sqrt();
     ensure!(norm.is_finite() && norm > 0.0, "invalid embedding");
@@ -63,6 +66,7 @@ fn normalize(vector: &mut [f32]) -> Result<()> {
     Ok(())
 }
 
+/// Key vectors by the embedding recipe, pinned weights and complete command metadata.
 fn identity(commands: &[Command]) -> Result<[u8; 32]> {
     let mut hash = Sha256::new();
     hash.update(MAGIC);
@@ -71,6 +75,7 @@ fn identity(commands: &[Command]) -> Result<[u8; 32]> {
     Ok(hash.finalize().into())
 }
 
+/// Accept only the expected cache identity, shape and finite vector values.
 fn read_cache(path: &Path, key: &[u8; 32], count: usize) -> Result<Vec<Vec<f32>>> {
     let mut file = std::fs::File::open(path)?;
     let expected = MAGIC.len() + key.len() + count * DIM * size_of::<f32>();
@@ -91,6 +96,7 @@ fn read_cache(path: &Path, key: &[u8; 32], count: usize) -> Result<Vec<Vec<f32>>
     Ok(vectors)
 }
 
+/// Reuse a matching index or build and atomically replace it under a file lock.
 pub fn index(embedder: &mut Embedder, commands: &[Command]) -> Result<Vec<Vec<f32>>> {
     let key = identity(commands)?;
     let dir = mandara_config::paths::cache_dir().join("agent");
@@ -136,6 +142,7 @@ pub fn index(embedder: &mut Embedder, commands: &[Command]) -> Result<Vec<Vec<f3
     Ok(vectors)
 }
 
+/// Keep the ten highest cosine scores without sorting the entire catalog.
 pub fn retrieve(query: &[f32], commands: &[Command], vectors: &[Vec<f32>]) -> Vec<Match> {
     let mut best: Vec<(usize, f32)> = Vec::with_capacity(TOP_K + 1);
     for (i, row) in vectors.iter().enumerate() {

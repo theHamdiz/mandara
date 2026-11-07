@@ -41,6 +41,7 @@ pub struct Action {
 }
 
 impl Argument {
+    /// Describe one argument without weakening its enum or numeric bounds.
     fn schema(&self) -> Value {
         let mut schema = match self.kind.as_str() {
             "integer" => json!({"type":"integer"}),
@@ -60,6 +61,7 @@ impl Argument {
         schema
     }
 
+    /// Check JSON types before converting arguments into dispatcher words.
     fn accepts(&self, value: &Value) -> bool {
         let typed = match self.kind.as_str() {
             "integer" => value.as_i64().is_some(),

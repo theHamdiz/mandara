@@ -39,6 +39,8 @@ retrieved schemas enter the compiler context. A grammar masks invalid tokens;
 the output is checked again against those schemas and the live dispatcher.
 Closing the launcher, removing `!`, changing the query or disabling the agent
 cancels its worker. A request also ends after 15 seconds without a new query.
+Downloads and explicit verification check SHA-256; interactive requests check
+installed file sizes to keep disk work out of the query path.
 After successful compilation the worker exits before execution, releasing all
 model state and dependency thread pools. Cold loading and inference speed
 depend on the CPU and storage; no fixed sub-millisecond latency is promised.

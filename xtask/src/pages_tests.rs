@@ -205,3 +205,13 @@ fn public_agent_descriptions_explain_local_control_and_qualify_performance() {
     assert_eq!(metadata["cff-version"].as_str(), Some("1.2.0"));
     assert_eq!(metadata["type"].as_str(), Some("software"));
 }
+
+/// Every natural-language launcher example includes the opt-in trigger.
+#[test]
+fn launcher_examples_on_the_homepage_start_with_bang() {
+    let source=homepage();
+    let page=roxmltree::Document::parse(&source).unwrap();
+    let examples:Vec<_>=page.descendants().filter(|n|n.has_tag_name("code")).filter_map(|n|n.text()).filter(|text|text.contains("switch to dark mode")).collect();
+    assert!(examples.len()>=2);
+    assert!(examples.iter().all(|text|text.starts_with('!')));
+}

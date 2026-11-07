@@ -43,12 +43,7 @@ pub fn settings_catalog() -> Vec<mandara_services::command_agent::catalog::Comma
                 | Control::Display => {}
                 Control::Command { .. } | Control::DepthModel | Control::List { .. } | Control::RecorderBackends => return None,
             }
-            Some(Command {
-                path: format!("config set {}", setting.path),
-                summary: format!("{}: {} — {}", setting.label, setting.help, setting.section.title()),
-                args: vec![arg],
-                examples: Vec::new(),
-            })
+            Some(Command { path: format!("config set {}", setting.path), summary: setting.label.into(), args: vec![arg], examples: Vec::new() })
         })
         .collect()
 }
@@ -61,6 +56,9 @@ mod agent_catalog_tests {
     fn settings_tools_use_real_paths_ranges_and_json_choice_types() {
         let commands = settings_catalog();
         let gaps = commands.iter().find(|c| c.path.ends_with("/compositor/look/gaps_inner")).unwrap();
+        // Keep the display summary as a translation key, not an English sentence
+        // assembled from several keys. The argument retains the retrieval help.
+        assert_eq!(gaps.summary, "Gaps between windows");
         assert_eq!(gaps.args[0].kind, "integer");
         assert!(gaps.args[0].maximum.is_some());
         let action = |command: &str, value: serde_json::Value| Action {

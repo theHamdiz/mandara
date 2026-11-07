@@ -146,6 +146,7 @@ fn side_bar_commands(r: &mut PluginRegistry) {
     );
 }
 
+/// Register shell controls and delegate long model operations to background work.
 pub fn register(r: &mut PluginRegistry) {
     crate::agent_commands::register(r);
     let core = "core";

@@ -86,6 +86,7 @@ pub const QWEN: Model = Model {
 };
 pub const ALL: [&Model; 3] = [&ROUTER, &FUNCTION_GEMMA, &QWEN];
 
+/// Select the pinned compiler artifacts without opening files.
 pub fn compiler(engine: Engine) -> &'static Model {
     match engine {
         Engine::FunctionGemma => &FUNCTION_GEMMA,
@@ -93,6 +94,7 @@ pub fn compiler(engine: Engine) -> &'static Model {
     }
 }
 
+/// Stream SHA-256 in fixed storage and check cancellation between reads.
 fn hash_file(file: &mut File, cancel: &AtomicBool) -> Result<(u64, Sha256)> {
     let mut hash = Sha256::new();
     let mut bytes = 0;
@@ -109,11 +111,21 @@ fn hash_file(file: &mut File, cancel: &AtomicBool) -> Result<(u64, Sha256)> {
     Ok((bytes, hash))
 }
 
-/// Verify cached files before inference too; size alone cannot detect damage.
-pub fn verified(model: &Model, cancel: &AtomicBool) -> Result<()> {
+/// Check installed sizes during inference; hash every byte only for explicit verification.
+pub fn check(model: &Model, verify_hash: bool, cancel: &AtomicBool) -> Result<()> {
+    check_files(model, &model.dir(), verify_hash, cancel)
+}
+
+/// Keep metadata-only checks independent of file reads on the interactive path.
+fn check_files(model: &Model, dir: &std::path::Path, verify_hash: bool, cancel: &AtomicBool) -> Result<()> {
     for expected in model.files {
-        let (bytes, hash) = hash_file(&mut File::open(model.file(expected.name))?, cancel)?;
-        ensure!(bytes == expected.size && crate::models::hex(&hash.finalize()) == expected.sha256, "{} failed verification", expected.name);
+        ensure!(!cancel.load(Ordering::Acquire), "model check cancelled");
+        let path = dir.join(expected.name);
+        ensure!(std::fs::metadata(&path)?.len() == expected.size, "{} has the wrong size", expected.name);
+        if verify_hash {
+            let (bytes, hash) = hash_file(&mut File::open(path)?, cancel)?;
+            ensure!(bytes == expected.size && crate::models::hex(&hash.finalize()) == expected.sha256, "{} failed verification", expected.name);
+        }
     }
     Ok(())
 }
@@ -125,6 +137,7 @@ pub fn download(model: &Model, cancel: &AtomicBool, progress: impl Fn(u64, u64))
     download_into(model, &model.dir(), cancel, progress)
 }
 
+/// Serialize writes to a model directory and install only a verified complete file.
 fn download_into(model: &Model, dir: &std::path::Path, cancel: &AtomicBool, progress: impl Fn(u64, u64)) -> Result<()> {
     std::fs::create_dir_all(dir)?;
     let lock = OpenOptions::new().create(true).truncate(false).read(true).write(true).open(dir.join("download.lock"))?;
@@ -308,6 +321,27 @@ mod transfer_tests {
         server.join().unwrap();
         result.unwrap();
         assert_eq!(std::fs::read(dir.path().join("model")).unwrap(), content);
+    }
+
+    #[test]
+    fn interactive_checks_skip_hashing_but_setup_detects_same_size_damage() {
+        let dir = tempfile::tempdir().unwrap();
+        let files = Box::leak(Box::new([ModelFile {
+            name: "model",
+            url: "fixture",
+            size: 3,
+            sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+        }]));
+        let model =
+            Model { id: "fixture", title: "fixture", purpose: "fixture", license: "fixture", source: "fixture", icon: "search", on_demand: true, files };
+        let cancel = AtomicBool::new(false);
+        std::fs::write(dir.path().join("model"), b"bad").unwrap();
+        check_files(&model, dir.path(), false, &cancel).unwrap();
+        assert!(check_files(&model, dir.path(), true, &cancel).is_err());
+        std::fs::write(dir.path().join("model"), b"short").unwrap();
+        assert!(check_files(&model, dir.path(), false, &cancel).is_err());
+        cancel.store(true, Ordering::Release);
+        assert!(check_files(&model, dir.path(), false, &cancel).is_err());
     }
 
     #[test]

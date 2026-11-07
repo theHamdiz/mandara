@@ -14,6 +14,7 @@ pub(super) struct Agent {
 /// Examples are queries, not precompiled commands; clicking still shows a preview.
 const EXAMPLES: [&str; 3] = [tk("Switch to dark mode"), tk("Set volume to 40"), tk("Open the calendar")];
 
+/// Build an inert launcher result; agent activation owns all dispatch decisions.
 fn row(label: impl Into<String>, detail: impl Into<String>, key: &str) -> Item {
     Item::Hit(Hit {
         provider: "agent",
@@ -25,6 +26,11 @@ fn row(label: impl Into<String>, detail: impl Into<String>, key: &str) -> Item {
         keywords: String::new(),
         action: HitAction::Command(vec![]),
     })
+}
+
+/// Turn a command removed since compilation into an actionable error row.
+fn resolution_error(words: &[Vec<String>], registry: &mandara_plugins::CommandRegistry) -> Option<Item> {
+    words.iter().find_map(|w| registry.resolve(w).err()).map(|error| row(t("The local agent could not compile this command"), error, "setup"))
 }
 
 impl LauncherView {
@@ -161,6 +167,7 @@ impl LauncherView {
         true
     }
 
+    /// Open setup, select an example or validate and execute the compiled preview.
     pub(super) fn activate_agent(&mut self, index: usize, cx: &mut Context<Self>) {
         let key = match self.results.get(index) {
             Some(Item::Hit(hit)) => hit.key.as_str(),
@@ -179,7 +186,10 @@ impl LauncherView {
             // All steps are validated before the first one runs. The ordinary
             // dispatcher still checks live plugin and compositor availability.
             let registry = &cx.global::<mandara_plugins::PluginRegistry>().commands;
-            if words.iter().all(|w| registry.resolve(w).is_ok()) {
+            if let Some(error) = resolution_error(&words, registry) {
+                self.results = vec![error];
+                self.selected = 0;
+            } else {
                 self.close(cx);
                 execute(Effect::Commands(words), cx);
             }
@@ -191,6 +201,16 @@ impl LauncherView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_removed_command_produces_feedback_instead_of_a_dead_run_button() {
+        let mut registry = mandara_plugins::CommandRegistry::default();
+        registry.register("core", mandara_plugins::CommandSpec::new("fixture", tk("AI Shell Agent"), |_, _| Ok(serde_json::Value::Null)));
+        let words = vec![vec!["fixture".into()]];
+        assert!(resolution_error(&words, &registry).is_none());
+        let missing = resolution_error(&words, &mandara_plugins::CommandRegistry::default()).unwrap();
+        assert!(matches!(missing,Item::Hit(Hit {key,detail,..}) if key=="setup" && !detail.is_empty()));
+    }
+
     #[test]
     fn every_hint_is_an_inert_provider_result() {
         let item = row("hint", "detail", "hint");
