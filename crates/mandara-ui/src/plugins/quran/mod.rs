@@ -1023,6 +1023,10 @@ fn register_commands(r: &mut PluginRegistry) {
     // Every command answers in the plugin's own language.
     let mut cmd = |spec: CommandSpec| r.command(ID, plugin_lang::speaking(spec, own_lang));
     cmd(plugin_lang::language_command(ID, "quran language", "quran language fr"));
+    cmd(CommandSpec::new("quran open", tk("Open the Qur'an panel"), |_, cx| {
+        open_panel(cx);
+        Ok(json!({"panel": ID}))
+    }).example("quran open"));
     cmd(CommandSpec::new_output("quran copy-image", tk("Copy an ayah and its design as a complete PNG image"), |a, cx| share::command(&a.rest(0), cx))
         .arg(ArgSpec::required("ref", ArgKind::String, tk("an ayah, such as 2:255")))
         .example("quran copy-image 2:255"));

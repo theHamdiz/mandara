@@ -149,7 +149,7 @@ impl AgentPage {
         self.task = Some(cx.spawn(async move |this, cx| {
             let (tx, rx) = async_channel::bounded(2);
             let work = cx.background_executor().spawn(async move {
-                if let Err(error) = agent::run(Request { query, catalog, engine, prepare_index: false }, cancel, tx.clone()) {
+                if let Err(error) = agent::run(Request { query, catalog, engine, prepare_index: false, preferred_command: None }, cancel, tx.clone()) {
                     let _ = tx.try_send(Event::Error { message: error.to_string() });
                 }
             });
@@ -228,7 +228,7 @@ impl AgentPage {
                 if completed && models::ROUTER.installed() {
                     let (events, replies) = async_channel::bounded(2);
                     let result =
-                        agent::run(Request { query: String::new(), catalog, engine: agent::Engine::FunctionGemma, prepare_index: true }, cancel, events);
+                        agent::run(Request { query: String::new(), catalog, engine: agent::Engine::FunctionGemma, prepare_index: true, preferred_command: None }, cancel, events);
                     if let Err(e) = result {
                         let _ = tx.send_blocking(Download::Failed(0, e.to_string()));
                     }

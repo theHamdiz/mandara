@@ -42,7 +42,7 @@ pub struct Action {
 
 impl Argument {
     /// Describe one argument without weakening its enum or numeric bounds.
-    fn schema(&self) -> Value {
+    pub(super) fn schema(&self) -> Value {
         let mut schema = match self.kind.as_str() {
             "integer" => json!({"type":"integer"}),
             "number" => json!({"type":"number"}),

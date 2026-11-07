@@ -495,6 +495,7 @@ Animations
 Anne Frank
 Announce new drives
 Anonymous: public repositories, 60 requests an hour
+Another notification daemon (e.g. mako) is running. Mandara takes over app notifications as soon as it exits.
 Another translation in your language, by its identifier (`mandara msg quran editions` lists them); empty uses the default. Arabic shows no translation
 Answer a notification that offers an inline reply
 Answered in {ms} ms
@@ -4287,6 +4288,8 @@ Open settings
 Open something on your phone, no cable or app needed
 Open tasks the bar item counts: every list, or one list's name
 Open terminal
+Open the Jannah panel
+Open the Qur'an panel
 Open the annotation editor instead of saving at once
 Open the app picker over the dock to add apps by searching
 Open the app you want to exclude, then come back here

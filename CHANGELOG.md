@@ -14,6 +14,8 @@ About → What's new shows it too.
 
 ### Fixed
 
+- **More reliable local commands.** Opening the Qur’an, Jannah or calendar opens its panel. The agent keeps alternative commands available after compilation, respects light/dark mode and explicit values, and uses FunctionGemma’s native tool-call format for arguments. Selecting an alternative compiles a fresh preview; selecting one step runs only that step.
+
 - **Keep the main menu open while choosing a theme.** A temporary loss of layer-surface activation without another app taking focus no longer dismisses the panel under your pointer. Outside clicks, Escape and switching apps still close it. (#113)
 
 ## 0.21.0 — 2026-11-07

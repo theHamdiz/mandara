@@ -101,21 +101,42 @@ pub fn worker_main(settings: impl FnOnce() -> Vec<super::catalog::Command>) -> R
             None
         };
         let start = Instant::now();
-        let queries = if let Some(compiler) = &mut compiler { compiler.retrieval_queries(&request.query)? } else { vec![request.query.clone()] };
-        let query_vectors = queries.iter().map(|q| embedder.embed(q, true)).collect::<Result<Vec<_>>>()?;
+        let queries = if request.preferred_command.is_none()
+            && let Some(compiler) = &mut compiler
+        {
+            compiler.retrieval_queries(&request.query)?
+        } else {
+            vec![request.query.clone()]
+        };
+        let query_vectors = queries
+            .iter()
+            .map(|q| embedder.embed(q, true))
+            .collect::<Result<Vec<_>>>()?;
         let matches = embeddings::retrieve_clauses(&query_vectors, &request.catalog, &vectors);
         let selected = queries
             .iter()
             .zip(&query_vectors)
             .map(|(query, vector)| {
+                if let Some(path) = &request.preferred_command {
+                    return request
+                        .catalog
+                        .iter()
+                        .find(|command| command.path == *path)
+                        .map(|command| vec![command])
+                        .ok_or_else(|| anyhow::anyhow!("selected command is no longer available"));
+                }
                 let ranked = embeddings::ranking(vector, &vectors);
-                super::selection::choose(
+                super::selection::candidates(
                     query,
                     ranked.iter().map(|(index, _)| &request.catalog[*index]).filter(|command| matches.iter().any(|m| m.command.path == command.path)),
                 )
             })
-            .collect::<Result<Vec<_>>>()?;
-        emit(&Event::Matches { matches, retrieval_ms: start.elapsed().as_secs_f64() * 1000.0 })?;
+            .collect::<Result<Vec<_>>>();
+        emit(&Event::Matches {
+            matches,
+            retrieval_ms: start.elapsed().as_secs_f64() * 1000.0,
+        })?;
+        let selected = selected?;
         drop((embedder, vectors, query_vectors));
         let mut compiler = match compiler {
             Some(compiler) => compiler,
@@ -124,7 +145,7 @@ pub fn worker_main(settings: impl FnOnce() -> Vec<super::catalog::Command>) -> R
                 compiler::Compiler::load(request.engine)?
             }
         };
-        let result = compiler.compile_bound(&queries, &selected)?;
+        let result = compiler.compile_candidates(&queries, &selected)?;
         emit(&result)
     })();
     if let Err(error) = result {
@@ -293,7 +314,13 @@ mod tests {
     #[test]
     fn cancelled_jobs_never_spawn_a_child() {
         let (tx, rx) = async_channel::bounded(2);
-        let request = Request { query: "x".into(), catalog: vec![], engine: super::super::Engine::FunctionGemma, prepare_index: false };
+        let request = Request {
+            query: "x".into(),
+            catalog: vec![],
+            engine: super::super::Engine::FunctionGemma,
+            prepare_index: false,
+            preferred_command: None,
+        };
         assert!(run(request, Arc::new(AtomicBool::new(true)), tx).is_ok());
         assert!(rx.try_recv().is_err());
     }

@@ -193,6 +193,10 @@ pub fn register(r: &mut PluginRegistry) {
         let now = Local::now();
         Ok(json!({ "iso": now.to_rfc3339(), "time": fmt::hh_mm(&now), "date": fmt::long_date(&now), "weekday": now.format("%A").to_string() }))
     }));
+    r.command(ID, CommandSpec::new("calendar open", mandara_i18n::tk("Open the calendar"), |_, cx| {
+        crate::state::shell(cx).update(cx, |s, cx| s.set_panel(Some(ID.into()), cx));
+        Ok(json!({"panel": ID}))
+    }).example("calendar open"));
     r.command(
         ID,
         CommandSpec::new("calendar goto", mandara_i18n::tk("Open the clock panel's calendar on a day or month"), |a, cx| {

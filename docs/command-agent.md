@@ -30,17 +30,18 @@ FunctionGemma compiles one action. Qwen permits up to four actions and supports
 multilingual requests. It translates non-English requests, then splits them
 into concise English search clauses for Arctic retrieval. Their candidate
 lists share the same ten-tool budget, so one action cannot crowd out the
-others. The router selects the highest-ranked candidate whose argument types
-fit each clause; a numeric setting cannot become a related toggle. The
-compiler fills that selected action, reusing its weights and clearing KV
-state between calls. The combined preview is validated before execution.
+others. The compiler chooses among the compatible candidates for each clause; a
+numeric setting cannot become a related toggle or lose its explicit value.
+Single English requests stay single actions. FunctionGemma uses its native
+function declarations and call delimiters, preserving typed values and string
+arguments. Compiler weights are reused with KV state cleared between calls. The combined preview is validated before execution.
 
 The test bench shows the candidates, generated JSON and measured retrieval
 and compilation time without executing anything. It also has a purge button.
 
 Each request runs in a short-lived child invocation of the same Rust binary.
 Loading, tokenization, retrieval and sampling stay off the UI thread. Only retrieved tools enter
-the compiler context, one selected schema per intent. A grammar masks invalid tokens;
+the compiler context, with the compatible alternatives for each intent. A grammar masks invalid tokens;
 the output is checked again against those schemas and the live dispatcher.
 Closing the launcher, removing `!`, changing the query or disabling the agent
 cancels its worker. A request also ends after 15 seconds without a new query.
@@ -72,5 +73,17 @@ mandara msg agent purge
 ```
 
 `agent prepare` rebuilds the current command index after models are installed.
+After an update or plugin change, refresh it in **Studio → AI Shell Agent →
+Download all required models**. Installed model files are verified and reused;
+this setup step has more time to build the index than an ordinary query.
 `agent preview` never executes its output. `agent purge` cancels the shell's
 active inference requests; Studio's purge button cancels both processes.
+
+Candidates remain visible beneath a compiled launcher preview. Choose an
+alternative to compile it with your original request, then review the new
+arguments before running it. The first row runs the whole preview; clicking
+a compiled action runs just that step. For example, `!open quran`,
+`!open jannah` and `!open calendar` open shell panels without inventing a
+verse, hadith or calendar source. `!enable light mode` changes appearance;
+`!disable on-screen displays` turns that feature off. Include values directly,
+such as `!set volume to 47`.
