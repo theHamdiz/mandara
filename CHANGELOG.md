@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.20.0 — 2026-11-07
+
+Share a complete reading card. Write on your desktop. A clearer launcher
+placement map. More Qur'an reciters.
+
 ### New
 
 - **Share a complete reading card.** Qur’an, Hadith and Jannah have an Image
