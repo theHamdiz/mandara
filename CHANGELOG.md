@@ -8,10 +8,11 @@ About → What's new shows it too.
 
 ### New
 
-- **Local shell commands in your own words.** Enable the AI Shell Agent in
+- **Your desktop, in your own words.** Enable the AI Shell Agent in
   Studio, download its models, then type `!` in any launcher look. Review the
   exact shell actions before pressing Enter. Inference runs offline on your
-  CPU and releases its worker when finished, cancelled or closed. Studio has
+  CPU, keeping inference off the UI thread so the desktop stays responsive.
+  Its worker exits when finished, cancelled or closed. Studio has
   verified, resumable model downloads and a test bench that never runs commands.
 
 ## 0.20.0 — 2026-11-07

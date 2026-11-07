@@ -11,7 +11,9 @@
   <br/>
   Design-first, spring-animated and written entirely in Rust.
   <br/>
-  <i>Frames built in about 0.1 ms, with spring motion throughout the desktop.</i>
+  Your desktop, in your own words: optional local AI control through natural language.
+  <br/>
+  <i>Historical release samples built frames in about 0.1 ms; see the performance guide for the setup and current limits.</i>
 </p>
 
 <p align="center">
@@ -75,7 +77,11 @@ function; sparkle symbols are reserved for AI features.
 
 It's made to feel good to use. Panels pour out of the bar on real spring
 physics, colours follow your wallpaper and your music, and the whole
-desktop stays light enough to run all day without you noticing it.
+desktop stays responsive throughout your day. With optional local AI control,
+type `!switch to dark mode` in the launcher, review the action and press
+Enter. Your words stay on your computer; inference runs off the UI thread
+and its model worker exits when finished or closed.
+[Meet the AI Shell Agent](docs/command-agent.md).
 
 ## One shell, many desktops
 
