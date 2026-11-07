@@ -17,6 +17,7 @@ pub(super) fn button(
     view: &design_share::View,
     flash: crate::plugins::extras::Flash,
     palette: &MandaraPalette,
+    notified: gpui::EntityId,
     key: &str,
     meaning: Option<meanings::Meaning>,
     full: bool,
@@ -29,6 +30,7 @@ pub(super) fn button(
         view,
         flash,
         palette,
+        notified,
         move |cx, window: &Window| {
             let fonts = FontNames::from(&crate::fonts::fonts(cx));
             let loaded;

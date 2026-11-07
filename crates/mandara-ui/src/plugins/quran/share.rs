@@ -41,6 +41,7 @@ pub(super) fn button(
         &view,
         flash,
         c.palette,
+        c.notified,
         move |cx: &mut App, window: &Window| {
             let mut fonts = FontNames::from(&crate::fonts::fonts(cx));
             fonts.scripture = scripture.to_string();

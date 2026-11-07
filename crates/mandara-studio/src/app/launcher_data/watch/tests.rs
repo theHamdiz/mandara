@@ -96,11 +96,13 @@ fn removed_and_replaced_application_roots_resume_notifications() {
     watch.refresh().unwrap();
     while events.try_recv().is_ok() {}
     let before = revisions.get().0;
-    std::fs::write(apps.join("after-replacement.desktop"), "[Desktop Entry]\nName=Demo\nExec=true\n").unwrap();
+    let written = apps.join("after-replacement.desktop");
+    std::fs::write(&written, "[Desktop Entry]\nName=Demo\nExec=true\n").unwrap();
     let deadline = Instant::now() + TIMEOUT;
-    while revisions.get().0 == before {
-        assert!(Instant::now() < deadline, "replacement application directory was not watched");
+    while revisions.get().0 == before || !revisions.observed_paths.lock().unwrap().contains(&written) {
+        assert!(Instant::now() < deadline, "replacement watch did not report {}", written.display());
         std::thread::sleep(Duration::from_millis(10));
     }
     receive(&events);
+    assert!(revisions.get().0 > before);
 }

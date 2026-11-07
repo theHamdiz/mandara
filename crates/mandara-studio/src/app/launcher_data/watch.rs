@@ -13,6 +13,8 @@ use super::model::Roots;
 pub(super) struct Revisions {
     catalog: AtomicU64,
     usage: AtomicU64,
+    #[cfg(test)]
+    observed_paths: std::sync::Mutex<BTreeSet<PathBuf>>,
 }
 
 impl Revisions {
@@ -40,10 +42,14 @@ impl Watch {
             if wake.is_closed() { return; }
             let (catalog, usage) = match event {
                 Ok(event) if event.kind.is_access() => return,
-                Ok(event) => (
-                    event.paths.iter().any(|path| filter.applications.iter().any(|root| root.starts_with(path) || path.starts_with(root)) || filter.preferences.iter().any(|file| file == path || file.starts_with(path))),
-                    event.paths.iter().any(|path| path == &filter.usage || filter.usage.starts_with(path)),
-                ),
+                Ok(event) => {
+                    #[cfg(test)]
+                    revisions.observed_paths.lock().unwrap().extend(event.paths.iter().cloned());
+                    (
+                        event.paths.iter().any(|path| filter.applications.iter().any(|root| root.starts_with(path) || path.starts_with(root)) || filter.preferences.iter().any(|file| file == path || file.starts_with(path))),
+                        event.paths.iter().any(|path| path == &filter.usage || filter.usage.starts_with(path)),
+                    )
+                },
                 Err(error) => { tracing::warn!("launcher files: {error}"); (true, true) }
             };
             if catalog || usage {

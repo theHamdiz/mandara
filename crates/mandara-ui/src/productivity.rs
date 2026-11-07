@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 
 mod notes_worker;
 mod note_edit;
+mod note_conflict;
 mod note_flush;
 mod notes;
 mod todo_writer;
@@ -191,7 +192,7 @@ pub struct Productivity {
     notes_submitted: BTreeMap<u64, u64>,
     notes_tasks: BTreeMap<u64, note_edit::TaskPatches>,
     /// Conflicting drafts stay recoverable per folder without becoming write prerequisites.
-    notes_conflicts: BTreeMap<(std::path::PathBuf, u64), (u64, std::sync::Arc<crate::notes_store::Note>)>,
+    notes_conflicts: BTreeMap<(std::path::PathBuf, u64), note_conflict::RetainedDraft>,
     notes_flush: note_flush::NoteFlush,
     notes_sequence: u64,
     notes_applied: u64,

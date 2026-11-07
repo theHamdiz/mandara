@@ -638,7 +638,7 @@ fn body(p: &Productivity, ui: &Ui, f: &Fields, palette: &MandaraPalette, limit: 
             });
         }));
     let mut blocks: Vec<AnyElement> = vec![head.into_any_element()];
-    if let Some(error) = store.read_errors.as_ref().and_then(|errors| errors.first()) {
+    if let Some(error) = store.read_errors.as_ref().and_then(|errors| errors.first()).map(|error| &error.message) {
         blocks.push(div().text_color(palette.urgent_coral.hsla()).child(mandara_i18n::tf("Couldn't load: {error}", &[("error", error)])).into_any_element());
     }
     if p.has_note_conflicts() {

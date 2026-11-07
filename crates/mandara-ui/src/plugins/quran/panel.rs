@@ -148,6 +148,7 @@ struct View {
 
 /// Every surface's context for one render.
 pub(super) struct Ctx<'a> {
+    pub notified: gpui::EntityId,
     pub palette: &'a MandaraPalette,
     pub shared: &'a Shared,
     pub ui: &'a Rc<RefCell<Ui>>,
@@ -267,7 +268,7 @@ impl View {
             return div().relative().size_full().text_start().p(px(PAD)).flex().flex_col().child(reveal(&self.p, 0, head)).child(div().h(px(GAP))).child(reveal(&self.p, 1, body)).into_any_element();
         };
         let f = fonts(cx);
-        let c = Ctx { palette, shared: &shared, ui: &self.ui, book, scripture: f.scripture.clone(), radius: PanelShape::of(cx).inner(PAD), arabic_px: s.arabic_size.reader_px() };
+        let c = Ctx { notified: window.current_view(), palette, shared: &shared, ui: &self.ui, book, scripture: f.scripture.clone(), radius: PanelShape::of(cx).inner(PAD), arabic_px: s.arabic_size.reader_px() };
         let tab = self.ui.borrow().tab;
         let tabs = {
             let seg = |label: &'static str, glyph: &'static str, which: Tab| {

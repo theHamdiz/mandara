@@ -255,7 +255,11 @@ impl Editor {
                         editor.target = done.target;
                         if let Err(error) = done.result { editor.show_error(error, cx); return; }
                         editor.draft.committed(&stored);
-                        if editor.field.read(cx).value != value { cx.notify(); return; }
+                        match editor.next.after_write(editor.field.read(cx).value != value) {
+                            continuation::AfterWrite::KeepEditing => { cx.notify(); return; }
+                            continuation::AfterWrite::SaveAgain => { editor.finish(window, cx); return; }
+                            continuation::AfterWrite::Finish => {}
+                        }
                         // A later writer may have changed the same task while disk IO ran.
                         let model = productivity(cx);
                         if !stored.trim().is_empty() && editor.target.text(model.read(cx)) != Some(stored.as_str()) {

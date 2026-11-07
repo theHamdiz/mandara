@@ -86,6 +86,9 @@ jobs:
 fn release_artifact_handoff(workflow: &serde_yaml_ng::Value) -> Result<(), String> {
     let jobs = workflow["jobs"].as_mapping().ok_or("workflow has no jobs")?;
     let publish = &workflow["jobs"]["publish"];
+    if !publish["if"].is_null() && !matches!(publish["if"].as_str(), Some("success()" | "${{ success() }}")) {
+        return Err("publication must require successful artifact producers".into());
+    }
     let needs = publish["needs"].as_sequence().ok_or("publish has no producer dependencies")?;
     for (id, job) in jobs {
         let produces = job["steps"].as_sequence().ok_or("job has no steps")?.iter().any(|step| {
@@ -164,6 +167,16 @@ fn release_artifact_downloads_keep_producer_and_integrity_contracts() {
         if scope == "with" { download["with"][key] = serde_yaml_ng::Value::String(value.into()); }
         else { download[key] = serde_yaml_ng::Value::String(value.into()); }
         assert!(release_artifact_handoff(&invalid).is_err(), "{key}={value}");
+    }
+    for condition in ["always()", "${{ always() }}", "failure()", "${{ !cancelled() }}", "needs.build.result == 'success' || needs.build-musl.result == 'skipped'"] {
+        let mut invalid = workflow.clone();
+        invalid["jobs"]["publish"]["if"] = serde_yaml_ng::Value::String(condition.into());
+        assert!(release_artifact_handoff(&invalid).is_err(), "{condition}");
+    }
+    for condition in ["success()", "${{ success() }}"] {
+        let mut safe = workflow.clone();
+        safe["jobs"]["publish"]["if"] = serde_yaml_ng::Value::String(condition.into());
+        release_artifact_handoff(&safe).unwrap();
     }
     let mut safe = workflow;
     let download = safe["jobs"]["publish"]["steps"].as_sequence_mut().unwrap().iter_mut().find(|step| {

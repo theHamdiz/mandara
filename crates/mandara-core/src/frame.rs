@@ -151,13 +151,19 @@ pub fn edge_drawer_ends(edge: Edge, x: f32, y: f32, w: f32, h: f32, start: Drawe
 /// chosen bottom corner. Built as an SDF border ring clipped by the square,
 /// so the arc is as smooth as any rounded rect.
 pub fn concave_flare(x: f32, y: f32, r: f32, center: FlareCenter, color: Hsla) -> AnyElement {
+    concave_flare_overlapping(x, y, r, center, color, 0.0)
+}
+
+/// A flare with a smaller circular hole, but the same bounds and arc centre.
+/// Internal joins can overlap their neighbour's antialiasing without painting
+/// the whole corner square over its content. `overlap` is in logical pixels.
+pub fn concave_flare_overlapping(x: f32, y: f32, r: f32, center: FlareCenter, color: Hsla, overlap: f32) -> AnyElement {
     if r <= 0.0 {
         return div().into_any_element();
     }
     // The ring must cover from radius r out to the square's far corner
     // (r·√2), plus a pixel of slack for anti-aliasing.
-    let ring = r * (std::f32::consts::SQRT_2 - 1.0) + FLARE_AA_SLACK_PX;
-    let outer = r + ring;
+    let (outer, ring) = flare_ring(r, overlap);
     let (cx, cy) = match center {
         FlareCenter::TopLeft => (0.0, 0.0),
         FlareCenter::TopRight => (r, 0.0),
@@ -185,6 +191,12 @@ pub fn concave_flare(x: f32, y: f32, r: f32, center: FlareCenter, color: Hsla) -
         .overflow_hidden()
         .child(circle)
         .into_any_element()
+}
+
+/// Widen inward only: changing the outer circle would change the flare's box.
+fn flare_ring(radius: f32, overlap: f32) -> (f32, f32) {
+    let ring = radius * (std::f32::consts::SQRT_2 - 1.0) + FLARE_AA_SLACK_PX;
+    (radius + ring, ring + overlap.clamp(0.0, radius))
 }
 
 impl FrameShape {
@@ -247,6 +259,29 @@ impl FrameShape {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Complementary half-covered pixels otherwise composite to only 75%.
+    /// One device pixel of internal overlap makes the join opaque while the
+    /// circle centre (and content there) remains outside the painted ring.
+    #[test]
+    fn internal_flare_overlap_closes_antialiasing_without_filling_the_hole() {
+        let alpha = |distance: f32| (0.5 - distance).clamp(0.0, 1.0);
+        assert_eq!(alpha(0.0) + alpha(0.0) * (1.0 - alpha(0.0)), 0.75);
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let radius = snap(18.0, scale);
+            let (outer, ring) = flare_ring(radius, 1.0 / scale);
+            assert_eq!(outer, flare_ring(radius, 0.0).0);
+            let inner = outer - ring;
+            assert!((inner - (radius - 1.0 / scale)).abs() < 1e-4);
+            assert_eq!(alpha(inner * scale), 0.0, "content at the arc centre must stay uncovered");
+            for distance in [-0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75] {
+                let bar = alpha(distance);
+                let complement = alpha(-distance - (radius - inner) * scale);
+                let joined = complement + bar * (1.0 - complement);
+                assert!((joined - 1.0).abs() < 1e-5, "{scale}x: a translucent seam remains at {distance}");
+            }
+        }
+    }
 
     #[test]
     fn snapping_aligns_shared_edges() {

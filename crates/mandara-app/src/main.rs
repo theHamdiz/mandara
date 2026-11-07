@@ -757,6 +757,3 @@ mod tests {
         assert_eq!(mandara_install::platform::compiled_target(), mandara_services::self_update::running_target());
     }
 }
-
-#[cfg(test)]
-mod residency;

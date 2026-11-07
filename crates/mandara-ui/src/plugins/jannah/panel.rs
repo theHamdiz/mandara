@@ -184,6 +184,7 @@ struct View {
 
 /// Every surface's context for one render.
 struct Ctx<'a> {
+    notified: gpui::EntityId,
     palette: &'a MandaraPalette,
     shared: &'a Shared,
     ui: &'a Rc<RefCell<Ui>>,
@@ -229,7 +230,7 @@ impl View {
             ui.stack = vec![Sheet::Reader { list: Rc::from([id]), at: 0 }];
         }
         let f = fonts(cx);
-        let c = Ctx { palette, shared: &shared, ui: &self.ui, scripture: f.scripture.clone(), radius: PanelShape::of(cx).inner(PAD), arabic_px: s.arabic_size.hero_px(), show_meaning };
+        let c = Ctx { notified: window.current_view(), palette, shared: &shared, ui: &self.ui, scripture: f.scripture.clone(), radius: PanelShape::of(cx).inner(PAD), arabic_px: s.arabic_size.hero_px(), show_meaning };
         let accent = gold(palette);
         let about = {
             let (ui, shared) = (self.ui.clone(), shared.clone());
@@ -670,7 +671,7 @@ fn reference_row(c: &Ctx, item: &Item, meaning: Option<meanings::Meaning>, saved
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(citation.clone()));
             ui1.borrow_mut().flash.show(true, cited);
         });
-    let copy_image = { let ui = c.ui.borrow(); super::share::button(&ui.share, ui.flash.clone(), palette, &item.key, meaning, full, c.arabic_px, c.radius) };
+    let copy_image = { let ui = c.ui.borrow(); super::share::button(&ui.share, ui.flash.clone(), palette, c.notified, &item.key, meaning, full, c.arabic_px, c.radius) };
     let ink = palette.on_surface_variant;
     div()
         .w_full()

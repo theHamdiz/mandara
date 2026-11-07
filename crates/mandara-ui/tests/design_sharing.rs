@@ -217,3 +217,104 @@ fn complete_designs_reach_the_clipboard_in_both_languages_and_modes() {
         }
     }
 }
+
+/// The Image action runs outside GPUI's render phase, including its redraws.
+#[test]
+#[ignore = "requires the marked private desktop and its recorded pointer tool"]
+fn image_button_publishes_the_current_entry() {
+    use std::os::unix::fs::MetadataExt as _;
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let fixture = PrivateDesktop::from_env(
+        "MANDARA_DESIGN_SHARE_TEST",
+        &root,
+        ".mandara-design-share-test",
+    )
+    .expect("verified private desktop");
+    let pointer = std::env::var("MANDARA_DESIGN_SHARE_POINTER")
+        .expect("the runner must supply its private pointer tool");
+    let pointer = Path::new(&pointer).canonicalize().unwrap();
+    let metadata = pointer.metadata().unwrap();
+    assert!(metadata.is_file());
+    assert_eq!(metadata.uid(), rustix::process::getuid().as_raw());
+    assert_ne!(metadata.mode() & 0o111, 0);
+    let _keyboard = Process(
+        fixture
+            .tool("wtype")
+            .unwrap()
+            .args(["-s", &KEYBOARD_LIFETIME.as_millis().to_string()])
+            .spawn()
+            .unwrap(),
+    );
+    let _restore = Restore {
+        fixture: &fixture,
+        fields: ["/general/locale", "/theme/mode", "/plugins"]
+            .into_iter()
+            .map(|path| (path, fixture.request(&["config", "get", path]).unwrap()))
+            .collect(),
+    };
+    fixture
+        .request(&["config", "set", "/general/locale", "\"english\""])
+        .unwrap();
+    fixture
+        .request(&["config", "set", "/theme/mode", "\"light\""])
+        .unwrap();
+    fixture.request(&["jannah", "language", "follow"]).unwrap();
+    fixture
+        .request(&["jannah", "show", "bukhari-5982"])
+        .unwrap();
+    std::thread::sleep(SETTLE);
+    let mut seed = Process(
+        fixture
+            .tool("wl-copy")
+            .unwrap()
+            .args(["--type", "text/plain"])
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    seed.0
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"private image-button control")
+        .unwrap();
+    seed.finish();
+    // This short bundled card's painted Image pill in resource-check's 4K/1.5 layout.
+    let status = fixture
+        .tool(pointer.to_str().unwrap())
+        .unwrap()
+        .env("MANDARA_LAYOUT", "2560x1440")
+        .args(["click", "1369", "568"])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    fixture
+        .check()
+        .expect("the actual Image click must not panic");
+    let deadline = Instant::now() + TRANSFER_TIMEOUT;
+    let png = loop {
+        let bytes = clipboard(&fixture, &["--no-newline"], PNG_LIMIT);
+        if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+            break bytes;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Image click never published its PNG"
+        );
+        assert_eq!(bytes, b"private image-button control");
+        std::thread::sleep(CHILD_WAIT);
+    };
+    let image = image::load_from_memory(&png).unwrap().into_rgba8();
+    assert_eq!(image.width(), 618);
+    assert!(image.height() > 500);
+    assert_eq!(image.get_pixel(0, 0)[3], 0);
+    std::fs::write(
+        fixture.artifact("design-share-actual-button.png").unwrap(),
+        png,
+    )
+    .unwrap();
+    fixture.request(&["panel", "close"]).unwrap();
+    assert!(fixture.request(&["shell", "state"]).unwrap()["panel"].is_null());
+    fixture.check().unwrap();
+}

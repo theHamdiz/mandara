@@ -27,7 +27,7 @@ use std::sync::Arc;
 mod snapshot;
 mod scan;
 mod watch;
-pub use snapshot::NotesSnapshot;
+pub use snapshot::{NotesSnapshot, ReadError};
 use std::time::SystemTime;
 
 use anyhow::{Context as _, Result};
@@ -165,6 +165,22 @@ impl std::ops::DerefMut for NoteStore {
 }
 
 impl NoteStore {
+    /// A stale retained body must never replace bytes that the scan could not read.
+    pub(crate) fn ensure_writable(&self, id: u64) -> Result<()> {
+        if let Some(error) = self.note(id).and_then(|note| note.path.as_deref()).and_then(|path| self.read_error(path)) {
+            anyhow::bail!("{}", error.message);
+        }
+        Ok(())
+    }
+
+    /// Folder mutations cannot bypass a failed child file's protection.
+    fn ensure_topic_writable(&self, id: u64) -> Result<()> {
+        let topic = self.topic(id).context("no such topic")?;
+        if let Some(error) = self.read_errors.as_ref().and_then(|errors| errors.iter().find(|error| Path::new(&error.path).parent() == Some(Path::new(&topic.dir)))) {
+            anyhow::bail!("{}", error.message);
+        }
+        Ok(())
+    }
     /// Opens (creating) `root` and scans it.
     pub fn open(root: &Path) -> Self {
         let index: Index = std::fs::read_to_string(root.join(INDEX_FILE)).ok().and_then(|s| toml::from_str(&s).ok()).unwrap_or_default();
@@ -308,6 +324,7 @@ impl NoteStore {
     /// Writes a note's text to its file (named after its title the first
     /// time).
     pub fn write(&mut self, id: u64, text: &str) -> Result<()> {
+        self.ensure_writable(id)?;
         let pos = self.view.notes.iter().position(|n| n.id == id).context("no such note")?;
         let path = match self.view.notes[pos].path.clone() {
             Some(p) => p,
@@ -334,6 +351,7 @@ impl NoteStore {
     /// Editing ended: an emptied note is deleted, and the file is renamed
     /// to follow the title. Returns whether the note still exists.
     pub fn settle(&mut self, id: u64) -> Result<bool> {
+        self.ensure_writable(id)?;
         let Some(n) = self.view.notes.iter().find(|note| note.id == id).cloned() else { return Ok(false) };
         if n.text.trim().is_empty() {
             self.delete(id)?;
@@ -352,6 +370,7 @@ impl NoteStore {
     }
 
     fn rename_file(&mut self, id: u64, old: &str, new: &str) -> Result<()> {
+        self.ensure_writable(id)?;
         let to = self.view.root.join(new);
         if let Some(dir) = to.parent() {
             std::fs::create_dir_all(dir)?;
@@ -367,6 +386,7 @@ impl NoteStore {
     }
 
     pub fn delete(&mut self, id: u64) -> Result<bool> {
+        self.ensure_writable(id)?;
         let Some(pos) = self.view.notes.iter().position(|n| n.id == id) else { return Ok(false) };
         let n = &self.view.notes[pos];
         if let Some(p) = &n.path {
@@ -384,6 +404,7 @@ impl NoteStore {
 
     /// Moves a note (its file) to another topic.
     pub fn move_note(&mut self, id: u64, topic: u64) -> Result<()> {
+        self.ensure_writable(id)?;
         self.topic(topic).context("no such topic")?;
         let n = self.view.notes.iter().find(|note| note.id == id).cloned().context("no such note")?;
         if n.topic == topic {
@@ -425,6 +446,7 @@ impl NoteStore {
 
     /// Renames a topic (and its folder; the default topic keeps the root).
     pub fn rename_topic(&mut self, id: u64, name: &str) -> Result<()> {
+        if id != DEFAULT_TOPIC { self.ensure_topic_writable(id)?; }
         let clean = name.split_whitespace().collect::<Vec<_>>().join(" ");
         anyhow::ensure!(!safe_name(&clean).is_empty(), "a topic needs a name");
         let t = self.topic(id).cloned().context("no such topic")?;
@@ -474,6 +496,7 @@ impl NoteStore {
     /// Deletes a topic; its notes move to the default topic or are deleted.
     /// The folder goes only once empty (other files in it are kept).
     pub fn remove_topic(&mut self, id: u64, notes: OnDelete) -> Result<usize> {
+        self.ensure_topic_writable(id)?;
         anyhow::ensure!(id != DEFAULT_TOPIC, "the default topic can be renamed but not deleted");
         let t = self.topic(id).cloned().context("no such topic")?;
         let ids: Vec<u64> = self.view.notes.iter().filter(|n| n.topic == id).map(|n| n.id).collect();

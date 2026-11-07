@@ -123,6 +123,7 @@ pub(super) fn button(
         &view,
         flash,
         c.palette,
+        c.notified,
         move |cx, window: &Window| {
             let mut fonts = FontNames::from(&crate::fonts::fonts(cx));
             fonts.hadith = family.to_string();

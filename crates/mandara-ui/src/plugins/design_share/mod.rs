@@ -45,6 +45,7 @@ pub(super) fn button(
     view: &View,
     flash: Flash,
     palette: &MandaraPalette,
+    notified: gpui::EntityId,
     make: impl Fn(&mut App, &Window) -> Result<Document, String> + 'static,
 ) -> AnyElement {
     let view = view.clone();
@@ -61,14 +62,14 @@ pub(super) fn button(
             let gate = cx.default_global::<Exports>().0.clone();
             let Some(lease) = gate.acquire() else {
                 flash.show(false, t("An image is already being prepared"));
-                cx.notify(window.current_view());
+                cx.notify(notified);
                 return;
             };
             let doc = match make(cx, window) {
                 Ok(doc) => doc,
                 Err(error) => {
                     flash.show(false, error);
-                    cx.notify(window.current_view());
+                    cx.notify(notified);
                     return;
                 }
             };
@@ -92,7 +93,7 @@ pub(super) fn button(
                 view.panel.clone(),
                 Rc::downgrade(&view.life),
                 flash.clone(),
-                window.current_view(),
+                notified,
             );
             cx.notify(notified);
             cx.spawn(async move |cx| {

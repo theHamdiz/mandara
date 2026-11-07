@@ -3,17 +3,18 @@
 //! A procfs snapshot cannot keep a temporary font or driver mapping alive.
 //! Reusing one of those addresses before MADV_DONTNEED could erase unrelated
 //! anonymous data. File-backed reclaim belongs to the kernel; freed heap pages
-//! use the registered allocator trim hook instead.
+//! use the registered allocator trim hook instead. This source guard detects
+//! the listed literal call spellings in mandara-app/src; it is not an alias or
+//! dependency analysis. The guard itself lives outside the scanned sources.
 
 #[test]
-fn startup_never_advises_unowned_process_mappings() {
+fn app_sources_do_not_use_the_listed_raw_page_advice_calls() {
     fn inspect(directory: &std::path::Path) {
         for entry in std::fs::read_dir(directory).unwrap() {
             let path = entry.unwrap().path();
             if path.is_dir() {
                 inspect(&path);
             } else if path.extension().is_some_and(|extension| extension == "rs")
-                && path.file_name().is_some_and(|name| name != "residency.rs")
             {
                 let source = std::fs::read_to_string(&path).unwrap();
                 for forbidden in ["libc::madvise", "libc::posix_fadvise", "libc::msync"] {

@@ -7,6 +7,7 @@ use crate::todo_lists::parse_quick_add;
 use crate::state::config;
 use super::{Productivity, NoteReply, SAVE_DEBOUNCE, notes_worker, notes_root, now_unix};
 use super::note_edit::{PendingNote, TaskPatches};
+use super::note_conflict::{Recovery, RetainedDraft};
 
 struct NotesCompletion {
     sequence: u64,
@@ -59,7 +60,7 @@ impl Productivity {
         let NotesCompletion { sequence, mut snapshot, acknowledged, successful, error } = update;
         if successful && sequence >= self.notes_applied {
             for &(id, generation) in &acknowledged {
-                self.notes_conflicts.retain(|(root, note), (wanted, _)| root != &self.notes.root || *note != id || *wanted != generation);
+                self.notes_conflicts.retain(|(root, note), draft| root != &self.notes.root || *note != id || draft.generation != generation);
             }
         }
         acknowledge(&mut self.notes_dirty, &mut self.notes_submitted, acknowledged, successful, |id| { self.notes_tasks.remove(&id); });
@@ -67,8 +68,10 @@ impl Productivity {
         self.retain_conflicts(&snapshot);
         self.notes_error = error;
         if snapshot.root == self.notes.root || self.notes_dirty.is_empty() {
+            let recovered: Vec<_> = self.notes_conflicts.iter().filter(|((root, _), draft)| root == &snapshot.root && draft.original.is_some())
+                .filter_map(|((_, id), draft)| { let recovery = draft.recovery(&snapshot); (recovery != Recovery::Waiting).then_some((*id, recovery)) }).collect();
             let drafts = self.notes.notes.iter().filter(|draft| self.notes_dirty.contains_key(&draft.id))
-                .chain(self.notes_conflicts.iter().filter(|((root, _), _)| root == &snapshot.root).map(|(_, (_, note))| note));
+                .chain(self.notes_conflicts.iter().filter(|((root, _), _)| root == &snapshot.root).map(|(_, draft)| &draft.note));
             for draft in drafts {
                 if let Some(note) = snapshot.notes.iter_mut().find(|note| note.id == draft.id) {
                     if note.path == draft.path && note.topic == draft.topic { *note = draft.clone(); }
@@ -76,6 +79,19 @@ impl Productivity {
                 } else { snapshot.notes.push(draft.clone()); }
             }
             self.notes = snapshot;
+            for (id, recovery) in recovered {
+                let key = (self.notes.root.clone(), id);
+                match recovery {
+                    Recovery::Retry => {
+                        if let Some(draft) = self.notes_conflicts.remove(&key) {
+                            self.notes_dirty.insert(id, draft.generation);
+                            if let Some(tasks) = draft.tasks { self.notes_tasks.insert(id, tasks); }
+                        }
+                    }
+                    Recovery::Conflict => { if let Some(draft) = self.notes_conflicts.get_mut(&key) { draft.original = None; } }
+                    Recovery::Waiting => {}
+                }
+            }
             if self.notes_topic.is_some_and(|topic| self.notes.topic(topic).is_none()) { self.notes_topic = None; }
         }
         self.notes_applied = sequence;
@@ -92,13 +108,14 @@ impl Productivity {
             let changed_markers = self.notes_tasks.get(&id).is_some_and(|patches| {
                 patches.iter().any(|(&start, &(end, _))| !matches!(current.and_then(|note| note.text.get(start..end)), Some("[ ]" | "[x]" | "[X]")))
             });
-            (removed || changed_markers).then(|| (id, generation, draft.clone()))
+            let unreadable = draft.path.as_deref().and_then(|path| snapshot.read_error(path));
+            (removed || changed_markers || unreadable.is_some()).then(|| (id, generation, draft.clone(), unreadable.and_then(|error| error.retained.clone())))
         }).collect();
-        for (id, generation, draft) in conflicts {
+        for (id, generation, note, original) in conflicts {
             self.notes_dirty.remove(&id);
             self.notes_submitted.remove(&id);
-            self.notes_tasks.remove(&id);
-            self.notes_conflicts.insert((self.notes.root.clone(), id), (generation, draft));
+            let tasks = self.notes_tasks.remove(&id);
+            self.notes_conflicts.insert((self.notes.root.clone(), id), RetainedDraft { generation, note, tasks, original });
         }
     }
 
@@ -217,7 +234,7 @@ impl Productivity {
     pub fn remove_note(&mut self, id: u64, cx: &mut Context<Self>) -> Result<async_channel::Receiver<NoteReply<bool>>, String> {
         let pending = self.pending_notes(Some(id), false);
         let mut acknowledged: Vec<_> = pending.iter().map(PendingNote::token).collect();
-        let local_draft = self.notes_dirty.get(&id).copied().or_else(|| self.notes_conflicts.iter().find(|((root, note), _)| root == &self.notes.root && *note == id).map(|(_, (generation, _))| *generation));
+        let local_draft = self.notes_dirty.get(&id).copied().or_else(|| self.notes_conflicts.iter().find(|((root, note), _)| root == &self.notes.root && *note == id).map(|(_, draft)| draft.generation));
         if let Some(generation) = local_draft { acknowledged.push((id, generation)); }
         self.queue_notes(cx, acknowledged, move |store| {
             write_pending(store, &pending)?;
@@ -242,9 +259,9 @@ impl Productivity {
         cx.notify();
     }
 
-    /// Reconciles external files only after accepted local drafts have reached disk.
+    /// Rescans remain available when a failed file has a retained local draft.
     pub(super) fn rescan_notes(&mut self, cx: &mut Context<Self>) {
-        let result = self.edit_notes(cx, |store| { store.rescan(&[]); Ok(()) });
+        let result = self.queue_notes(cx, Vec::new(), |store| { store.rescan(&[]); Ok(()) });
         self.log_notes(result, cx);
     }
 
@@ -322,6 +339,66 @@ mod tests {
     fn model(root: std::path::PathBuf) -> Productivity {
         let (changed, _) = async_channel::bounded(1);
         Productivity::empty(PomodoroRules { focus: std::time::Duration::ZERO, short_break: std::time::Duration::ZERO, long_break: std::time::Duration::ZERO, long_every: 4, auto_continue: false }, root, changed)
+    }
+
+    fn unreadable_draft(checkbox: bool) -> (tempfile::TempDir, NoteStore, Productivity, u64, std::path::PathBuf, String) {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = NoteStore::open(root.path());
+        let id = store.create(DEFAULT_TOPIC, "- [ ] Original task").unwrap();
+        let path = root.path().join(store.note(id).unwrap().path.as_ref().unwrap());
+        let mut model = model(root.path().into());
+        model.notes = store.snapshot();
+        let mut draft = (*model.notes.notes[0]).clone();
+        let desired = if checkbox { "- [x] Original task" } else { "My unsaved Markdown\nKeep every line" }.to_owned();
+        draft.text = desired.clone();
+        model.notes.notes[0] = Arc::new(draft);
+        model.notes_dirty.insert(id, 3);
+        if checkbox { model.notes_tasks.insert(id, BTreeMap::from([(2, (5, true))])); }
+        std::fs::write(&path, [0xff, 0, 0xfe]).unwrap();
+        store.rescan(&[]);
+        assert!(write_pending(&mut store, &model.pending_notes(None, false)).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), [0xff, 0, 0xfe]);
+        model.apply_notes_completion(NotesCompletion { sequence: 1, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None });
+        assert!(model.notes_dirty.is_empty());
+        assert!(model.note_pending(id));
+        assert!(write_pending(&mut store, &model.pending_notes(None, false)).is_ok());
+        store.create(DEFAULT_TOPIC, "An unrelated note remains writable").unwrap();
+        (root, store, model, id, path, desired)
+    }
+
+    #[test]
+    fn unchanged_file_recovery_reconciles_and_retries_bodies_and_checkbox_intents() {
+        for checkbox in [false, true] {
+            let (_root, mut store, mut model, id, path, desired) = unreadable_draft(checkbox);
+            std::fs::write(&path, "- [ ] Original task").unwrap();
+            store.rescan(&[]);
+            model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None });
+            assert!(!model.has_note_conflicts());
+            assert_eq!(model.notes_dirty.get(&id), Some(&3));
+            let pending = model.pending_notes(None, false);
+            assert_eq!(pending.len(), 1);
+            assert_eq!(pending[0].tasks.is_some(), checkbox);
+            write_pending(&mut store, &pending).unwrap();
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), desired);
+            model.apply_notes_completion(NotesCompletion { sequence: 3, snapshot: store.snapshot(), acknowledged: vec![(id, 3)], successful: true, error: None });
+            assert!(!model.note_pending(id));
+        }
+    }
+
+    #[test]
+    fn changed_file_recovery_keeps_both_external_content_and_the_unsaved_draft() {
+        let (_root, mut store, mut model, id, path, desired) = unreadable_draft(false);
+        let external = "# Recovered externally\nDo not replace this";
+        std::fs::write(&path, external).unwrap();
+        store.rescan(&[]);
+        model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None });
+        assert!(model.has_note_conflicts());
+        assert!(model.notes_dirty.is_empty());
+        assert_eq!(model.notes.note(id).unwrap().text, desired);
+        write_pending(&mut store, &model.pending_notes(None, false)).unwrap();
+        assert_eq!(std::fs::read_to_string(path).unwrap(), external);
+        assert_eq!(store.note(id).unwrap().text, external);
+        store.create(DEFAULT_TOPIC, "Another independent note").unwrap();
     }
 
     #[test]

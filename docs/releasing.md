@@ -692,7 +692,7 @@ media panel (demo config at 4K, three runs each), view build p50 0.096–0.123
 
 Guards: `crates/mandara-ui/tests/startup_budget.rs` (registering every
 built-in plugin keeps ≤ 4 MiB, allocates ≤ 16 MiB and starts no thread;
-today 0.2 / 9.2 MiB), `residency` safety guard (no unowned process-mapping advice),
+today 0.2 / 9.2 MiB), `mandara-app/tests/page_advice.rs` (listed raw advice calls in app sources),
 `vulkan_is_tried_alone_before_gl`,
 `cut_source_crops_to_the_subject` (released cut keeps geometry), the
 `icon_raster` decode-size tests, and `cargo xtask resource-check` before a

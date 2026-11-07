@@ -4,6 +4,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use super::{Note, Topic};
 
+/// A failed read makes this path read-only; its last valid body anchors recovery.
+pub struct ReadError {
+    pub path: String,
+    pub message: String,
+    pub retained: Option<Arc<Note>>,
+}
+
 /// Cloning a snapshot shares note bodies; only the small topic table is copied.
 #[derive(Clone)]
 pub struct NotesSnapshot {
@@ -11,10 +18,14 @@ pub struct NotesSnapshot {
     pub topics: Vec<Topic>,
     pub notes: Vec<Arc<Note>>,
     /// Per-file scan errors are visible without disabling unrelated notes.
-    pub read_errors: Option<Arc<[String]>>,
+    pub read_errors: Option<Arc<[ReadError]>>,
 }
 
 impl NotesSnapshot {
+    /// Error lookup uses relative paths, independently of note ordering or IDs.
+    pub fn read_error(&self, path: &str) -> Option<&ReadError> {
+        self.read_errors.as_ref()?.iter().find(|error| error.path == path)
+    }
     /// Empty until the initial background scan completes.
     pub fn empty(root: PathBuf) -> Self {
         Self { root, topics: vec![Topic::default()], notes: Vec::new(), read_errors: None }

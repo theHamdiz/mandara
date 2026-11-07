@@ -153,6 +153,7 @@ struct View {
 
 /// One render's context.
 pub(super) struct Ctx<'a> {
+    pub notified: gpui::EntityId,
     pub palette: &'a MandaraPalette,
     pub shared: &'a Shared,
     pub ui: &'a Rc<RefCell<Ui>>,
@@ -219,6 +220,7 @@ impl View {
         self.take_open_request(&shared, cx);
         let f = fonts(cx);
         let c = Ctx {
+            notified: window.current_view(),
             palette,
             shared: &shared,
             ui: &self.ui,

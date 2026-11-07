@@ -39,7 +39,7 @@
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-20%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="20 languages"/></a>
   <br/>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/resources-measured-2DD4BF?labelColor=0B1026" alt="Resource measurements and current limits"/></a>
-  <a href="docs/performance.md"><img src="https://img.shields.io/badge/VRAM-under%20210%20MiB-2DD4BF?labelColor=0B1026" alt="VRAM under 210 MiB in the measured setup"/></a>
+  <a href="docs/performance.md"><img src="https://img.shields.io/badge/historical%20VRAM-under%20210%20MiB-2DD4BF?labelColor=0B1026" alt="Historical VRAM measurement under 210 MiB; current use may differ"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/idle%20CPU-measured-2DD4BF?labelColor=0B1026" alt="Measured idle CPU"/></a>
 </p>
 

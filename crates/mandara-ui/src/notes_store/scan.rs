@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use anyhow::{Context as _, Result};
-use super::{DEFAULT_TOPIC, EXTENSION, Note, NoteStore, Topic, rel, unix};
+use super::{DEFAULT_TOPIC, EXTENSION, Note, NoteStore, ReadError, Topic, rel, unix};
 use crate::todo_lists::{ListColor, SWATCH_HUES};
 
 enum ScannedNote {
@@ -50,10 +50,11 @@ impl NoteStore {
                     Err(error) => {
                         let warning = format!("reading {}: {error}", path.display());
                         tracing::warn!("notes: {warning}");
-                        warnings.push(warning);
+                        let retained = self.view.notes.iter().find(|note| note.path.as_deref() == Some(relative.as_str())).cloned();
+                        warnings.push(ReadError { path: relative.clone(), message: warning, retained: retained.clone() });
                         failed.push(relative.clone());
-                        if let Some(note) = self.view.notes.iter().find(|note| note.path.as_deref() == Some(relative.as_str())) {
-                            read.push(ScannedNote::Reused(note.clone()));
+                        if let Some(note) = retained {
+                            read.push(ScannedNote::Reused(note));
                         }
                         continue;
                     }
@@ -112,6 +113,12 @@ mod tests {
         assert!(store.scan_result().is_ok());
         assert!(store.read_errors.as_ref().is_some_and(|errors| errors.len() == 1));
         assert!(Arc::ptr_eq(&before, store.notes.iter().find(|note| note.id == bad).unwrap()));
+        assert!(store.write(bad, "Stale snapshot").is_err());
+        assert!(store.settle(bad).is_err());
+        assert!(store.delete(bad).is_err());
+        let topic = store.add_topic("Other", None, None).unwrap();
+        assert!(store.move_note(bad, topic).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), [0xff, 0xfe], "failed reads must leave the original bytes untouched");
         store.write(good, "# Good\nChanged").unwrap();
         let added = store.create(DEFAULT_TOPIC, "Another note").unwrap();
         assert_eq!(store.note(good).unwrap().text, "# Good\nChanged");

@@ -19,6 +19,7 @@ impl PendingNote {
 
     /// Marker edits preserve unrelated text appended before the intent executes.
     pub fn apply(&self, store: &mut NoteStore) -> anyhow::Result<()> {
+        store.ensure_writable(self.note.id)?;
         if let Some(tasks) = &self.tasks {
             let current = store.note(self.note.id).ok_or_else(|| anyhow::anyhow!("no such note"))?;
             let mut text = current.text.clone();
