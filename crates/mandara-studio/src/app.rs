@@ -1749,7 +1749,8 @@ impl Render for StudioView {
         self.fold_keys.clear();
         let (title, body) = if !self.query.is_empty() {
             let q = self.query.clone();
-            let matches: Vec<&Setting> = registry::settings().iter().filter(|s| s.matches(&q)).collect();
+            let all = registry::settings();
+            let matches: Vec<&Setting> = registry::search(&q).iter().map(|&i| &all[usize::from(i)]).collect();
             // Pages whose name or topics match (VPN, autostart, cursor…),
             // including pages built from bespoke editors.
             let pages = form::page_matches(&q, &p, cx);

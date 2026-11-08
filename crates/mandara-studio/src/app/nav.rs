@@ -99,8 +99,9 @@ pub(super) const QUICK_SETTINGS: &[&str] = &["/theme/mode", "/bar/layout", "/nig
 /// Matching settings and pages per section for a search query.
 fn search_hits(query: &str) -> HashMap<Section, usize> {
     let mut hits: HashMap<Section, usize> = HashMap::new();
-    for s in registry::settings().iter().filter(|s| s.matches(query)) {
-        *hits.entry(s.section).or_default() += 1;
+    let all = registry::settings();
+    for &i in registry::search(query).iter() {
+        *hits.entry(all[usize::from(i)].section).or_default() += 1;
     }
     for (_, section) in super::form::matching_pages(&query.trim().to_lowercase()) {
         hits.entry(section).or_insert(1);
