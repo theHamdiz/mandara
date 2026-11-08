@@ -787,11 +787,11 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, themes: &Rc<RefCell<t
             .when(!compact, |el| el.mx(px(tokens::SM)))
             .bg(palette.outline.with_alpha(RAIL_RULE_ALPHA).hsla())
     };
-    // As tall as its buttons, centred in the menu's height.
-    // It spans the menu's height, whatever number of entries it holds.
+    // As tall as its buttons (it shrinks with fewer entries), centred in the
+    // menu's height.
     let mut rail = div()
         .w(px(if compact { RAIL_COMPACT_W } else { RAIL_W }))
-        .flex_1()
+        .flex_none()
         .flex()
         .flex_col()
         .justify_center()
