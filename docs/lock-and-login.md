@@ -96,6 +96,17 @@ changes; an empty collection starts no painter or weather service.
   notification count and battery, with classic, stacked or compact layouts
   and black secondary displays for OLED care. Anything that runs
   `loginctl lock-session` locks it; preview it with `mandara lock --demo`.
+- **Password symbols**: on both screens each typed character appears as
+  one of ten small soft shapes after Material 3's expressive shape set
+  (circle, rounded square, triangle, diamond, pentagon, arch, semicircle,
+  oval, scalloped cookie and four-leaf clover). A shape depends only on the
+  character's position and a random seed renewed with each attempt, never
+  on the character, and neighbours never match. Symbols start at the
+  field's start edge (the right edge in right-to-left languages) and keep
+  their places while you type or delete; a full field scrolls by one so
+  the newest stays visible. Choose plain dots in Studio → Lock appearance →
+  **Password symbols** (`lock.password_symbols = "dots"`) or Studio → Login
+  screen → **Hide typing as**. Reduced motion skips the pop and fade.
 
 <p align="center">
   <img src="screenshots/studio-login.webp" alt="Studio: the login screen designer with a live preview" width="100%"/>

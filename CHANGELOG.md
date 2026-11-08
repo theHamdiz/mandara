@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **A different shape for every character.** The password field on the lock screen and on Mandara Login now shows each typed character as one of ten small, soft shapes (circles, rounded squares, triangles, diamonds, clovers and more) that pop in gently and shrink away when you delete them. Shapes never repeat side by side and never depend on what you typed, and each new attempt shuffles them. Prefer the classic look? Choose **Password symbols → Dots** in Studio → Lock appearance, or **Hide typing as → Dots** in Studio → Login screen. Reduced motion turns the animation off.
+
 ### Improved
 
 - **Notes keep edits made in other apps.** If another editor changes or removes a note's file while you are typing the same note in the Notes panel, Mandara no longer overwrites it. The panel keeps your text and says the note changed elsewhere, your other notes still save, and your next edit replaces the outside version on purpose. (#111)
@@ -14,6 +18,7 @@ About → What's new shows it too.
 
 ### Fixed
 
+- **The password field holds still while you type.** On the lock screen every new character re-centred the whole row, so all the dots slid sideways with each key press; on Mandara Login the same happened in right-to-left languages, and long passwords hid their newest characters. Symbols now start from a fixed edge and keep their places as you type or delete, and a full field scrolls by one so the newest one stays in view, in every language and at fractional scales.
 - **Touchscreen taps now work in the shell and Studio.** Tapping a bar item, a panel control or anything in Studio, including its close button, works like a click. Swiping scrolls lists and pages, and a finger on a slider drags it. Your mouse keeps working exactly as before. (#130)
 - **The launcher follows search settings while it's open.** Turning a search provider on or off, or changing its prefix, in Studio or the config file now applies to an open launcher straight away. A Beacon mode whose provider you switch off closes back to plain search instead of staying stuck. (#111)
 - **Your theme's name is translated even when typed by hand.** Studio's current-theme heading now shows the translated name when the config names a built-in theme in another spelling, such as `Rosé Pine` or `tokyo_night`. Your own themes keep the titles you gave them. (#111)
