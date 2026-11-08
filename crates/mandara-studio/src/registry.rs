@@ -13,7 +13,7 @@ use mandara_i18n::{t, tf, tk, tr};
 use serde_json::Value;
 
 pub mod alert_settings;
-mod desktop_settings;
+pub mod desktop_settings;
 mod motion_settings;
 #[cfg(test)]
 mod look_tests;
@@ -600,6 +600,16 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/wallpaper/depth/regenerate" | "/wallpaper/depth/place_clock" if !cfg.wallpaper.depth_effect => Some(tk("Turn on the depth effect first")),
         path if path.starts_with("/plugins/settings/screenshot/record_") => recorder_settings::locked(path, cfg),
         path => side_bar_settings::locked(path, cfg).or_else(|| surface_settings::locked(path, cfg)),
+    }
+}
+
+/// A line shown in place of `setting`'s help while only part of it applies
+/// under `cfg` (`tk` text): the slider handle while the thick sliders' design
+/// draws no handle (it still shapes the thin sliders, so it stays editable).
+pub fn note(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
+    match setting.path {
+        "/style/slider_handle" if !cfg.style.slider_design.uses_handle() => Some(tk("Only the thin sliders use it now: the Pill and Segmented designs mark the value without a handle")),
+        _ => None,
     }
 }
 
