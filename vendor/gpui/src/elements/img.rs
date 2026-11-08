@@ -584,6 +584,25 @@ impl ImageSource {
         }
     }
 
+    /// Mandara patch 8: releases this source's decoded image on the CPU and
+    /// the GPU: the texture leaves every window's sprite atlas that is not
+    /// being updated right now, and the decode leaves the asset cache. Call it
+    /// outside window updates (e.g. from `App::defer`) to reach every window.
+    /// Never starts a decode; a pending load is only forgotten, so its late
+    /// result is never uploaded. A later draw decodes the source again.
+    pub fn evict(&self, cx: &mut App) {
+        let loaded = match self {
+            ImageSource::Resource(resource) => cx.loaded_asset::<ImgResourceLoader>(resource),
+            ImageSource::Image(data) => cx.loaded_asset::<AssetLogger<ImageDecoder>>(data),
+            ImageSource::Render(image) => Some(Ok(image.clone())),
+            ImageSource::Custom(_) => None,
+        };
+        if let Some(Ok(image)) = loaded {
+            cx.drop_image(image, None);
+        }
+        self.remove_asset(cx);
+    }
+
     /// Check whether this image source is present in the asset system (loading
     /// or loaded), without fetching it.
     #[cfg(any(test, feature = "test-support"))]
@@ -959,6 +978,33 @@ mod tests {
             )
         });
         assert_eq!(corner_radius, Some(expected_corner_radius));
+    }
+
+    /// Mandara patch 8: eviction forgets a loaded decode and never starts one.
+    #[gpui::test]
+    fn evict_releases_a_loaded_image_without_starting_a_load(cx: &mut TestAppContext) {
+        let mut png = Vec::new();
+        ImageBuffer::from_pixel(2, 2, Rgba([1u8, 2, 3, 255]))
+            .write_to(&mut Cursor::new(&mut png), ImageFormat::Png)
+            .unwrap();
+        let image = Arc::new(Image::from_bytes(crate::ImageFormat::Png, png));
+        let source = ImageSource::Image(image.clone());
+        cx.update(|cx| {
+            source.evict(cx);
+            assert!(!source.is_asset_cached(cx), "evicting an uncached image starts no decode");
+            assert!(cx.loaded_asset::<AssetLogger<ImageDecoder>>(&image).is_none());
+            assert!(cx.fetch_asset::<AssetLogger<ImageDecoder>>(&image).is_none());
+            assert!(cx.loaded_asset::<AssetLogger<ImageDecoder>>(&image).is_none(), "still loading");
+        });
+        cx.run_until_parked();
+        cx.update(|cx| {
+            let decoded = cx.loaded_asset::<AssetLogger<ImageDecoder>>(&image).unwrap().unwrap();
+            assert_eq!(decoded.frame_count(), 1, "one moved frame, no clone");
+            assert_eq!(decoded.as_bytes(0).unwrap(), &[3, 2, 1, 255].repeat(4)[..]);
+            source.evict(cx);
+            assert!(!source.is_asset_cached(cx));
+            assert!(cx.loaded_asset::<AssetLogger<ImageDecoder>>(&image).is_none());
+        });
     }
 
     #[gpui::test]

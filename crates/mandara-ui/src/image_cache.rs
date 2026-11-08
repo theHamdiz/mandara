@@ -28,8 +28,10 @@ pub fn evict_path(path: &Path, window: &mut Window, cx: &mut App) {
     cx.remove_asset::<ImgResourceLoader>(&resource);
 }
 
-/// Like [`evict_path`] for code without a window (the atlas textures go
-/// with their windows; only the decoded copies are released here).
+/// Like [`evict_path`] for code without a window: the decoded copy and its
+/// texture in every window that is not being updated right now (call it
+/// from `cx.defer` inside a window update to reach that window too). Never
+/// starts a decode.
 pub fn forget_path(path: &Path, cx: &mut App) {
-    cx.remove_asset::<ImgResourceLoader>(&resource(path));
+    gpui::ImageSource::Resource(resource(path)).evict(cx);
 }
