@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **A clearer main menu.** Your name, login, uptime and version now sit on a soft dark scrim that keeps them readable on any wallpaper, light theme included. The rail no longer repeats the Studio and power buttons from the header: it holds the menu's pages, then, under a divider (and a "Panels" caption in the full rail), the panels it opens; Reload config moved to Apps & tools. Thick volume and brightness sliders draw as one continuous track with a grip inside the fill, instead of a second grey segment with a dot. Quick-toggle tiles give their detail line more room, so longer network and device names fit before they're cut off.
+
 ### Fixed
 
 - **Drop-down panels stay open while you use them.** A click inside a bar panel or the main menu now always counts as using it, so a short focus change right after it (switching light and dark, a keyboard or mouse coming or going, the compositor rearranging its layers) no longer closes the panel under your pointer. Pressing a key while you rest on a panel no longer reads as leaving it either. Moving away, clicking outside, Escape and switching to another app still close it.

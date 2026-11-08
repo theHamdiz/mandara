@@ -15,7 +15,10 @@
 //! - while pressed the handle springs narrower (with a little overshoot)
 //!   and, on sliders that show a value, a **value bubble** rises above it;
 //! - the thick size carries an icon inside the start of the track and a
-//!   gradient fill.
+//!   gradient fill, and is **one continuous track**: the fill runs over it
+//!   and the handle is a short grip inside the fill's end, so the part past
+//!   the value never reads as a second, separate control (no gaps, no stop
+//!   dot).
 //!
 //! Themes → Style → **Slider handle** (`style.slider_handle`) set to *None*
 //! draws no handle, gaps or stop dot: the fill's rounded end alone marks
@@ -91,6 +94,12 @@ const PRESS_SPRING: SpringConfig = SpringConfig::new(700.0, 22.0, 1.0);
 const PRESS_VISIBLE: f32 = 0.01;
 /// The stop dot hides once the handle comes this close to the end.
 const STOP_DOT_HIDE: f32 = 0.97;
+/// The thick slider's grip: its height as a share of the track, how far it
+/// sits back from the fill's end (its centre, from the handle's centre),
+/// and its ink's alpha over the fill.
+const GRIP_H: f32 = 0.5;
+const GRIP_BACK_PX: f32 = 8.0;
+const GRIP_ALPHA: f32 = 0.85;
 /// The value bubble: gap above the slider, how far it rises as it appears,
 /// the slot it is centred in, its height, padding and text size.
 const BUBBLE_GAP_PX: f32 = 6.0;
@@ -176,8 +185,11 @@ pub fn slider<R: IntoWrite>(id: ElementId, value: f32, size: Size, look: Look, p
     // Margins on the reading-start / -end side.
     let margin_start = move |el: Div, m: f32| if rtl { el.mr(px(m)) } else { el.ml(px(m)) };
     let margin_end = move |el: Div, m: f32| if rtl { el.ml(px(m)) } else { el.mr(px(m)) };
-    // Clearance from the handle's centre to each track: none without one.
-    let side = if handle { d.handle_w / 2.0 + d.gap } else { 0.0 };
+    // The thick slider is one continuous track: no gaps around its handle
+    // (a grip inside the fill instead) and no stop dot.
+    let gapped = handle && !large;
+    // Clearance from the handle's centre to each track: none without gaps.
+    let side = if gapped { d.handle_w / 2.0 + d.gap } else { 0.0 };
     let track_y = (d.h - d.track_h) / 2.0;
     let track = || div().absolute().top(px(track_y)).h(px(d.track_h)).min_w(px(0.0)).rounded_full();
 
@@ -186,21 +198,28 @@ pub fn slider<R: IntoWrite>(id: ElementId, value: f32, size: Size, look: Look, p
     let travel = || div().absolute().top_0().bottom_0().inset_start(px(d.start_inset)).inset_end(px(d.end_inset));
     // The inactive track: from past the handle to the end (under the whole
     // slider without a handle, the fill drawn over it).
-    let rest = if handle {
+    let rest = if gapped {
         (v < 1.0).then(|| margin_start(track().inset_start(gpui::relative(v)).inset_end(px(-d.end_inset)), side).bg(inactive.hsla()))
     } else {
         Some(track().inset_start(px(-d.start_inset)).inset_end(px(-d.end_inset)).bg(inactive.hsla()))
     };
-    // The active track: from the start to short of the handle, or with no
-    // handle on to the slider's end at value 1.
-    let active_end = if handle { side } else { -d.end_inset * v };
+    // The active track: from the start to short of the handle, or without
+    // gaps on to the slider's end at value 1.
+    let active_end = if gapped { side } else { -d.end_inset * v };
     let active = margin_end(fill(track().inset_start(px(-d.start_inset)).inset_end(gpui::relative(1.0 - v))), active_end);
     let knob = handle.then(|| {
         let w = handle_width(&d, press);
-        margin_start(div().absolute().top(px((d.h - d.handle_h) / 2.0)).h(px(d.handle_h)).w(px(w)).inset_start(gpui::relative(v)), -w / 2.0).rounded_full().bg(to.hsla())
+        if large {
+            // A grip inside the fill's end, in the fill's own ink.
+            let grip_h = d.track_h * GRIP_H;
+            let ink = if look.muted { palette.on_surface } else { palette.on_primary };
+            margin_start(div().absolute().top(px((d.h - grip_h) / 2.0)).h(px(grip_h)).w(px(w)).inset_start(gpui::relative(v)), -w / 2.0 - GRIP_BACK_PX).rounded_full().bg(ink.with_alpha(GRIP_ALPHA).hsla())
+        } else {
+            margin_start(div().absolute().top(px((d.h - d.handle_h) / 2.0)).h(px(d.handle_h)).w(px(w)).inset_start(gpui::relative(v)), -w / 2.0).rounded_full().bg(to.hsla())
+        }
     });
     // The stop dot at the inactive track's end.
-    let stop = (handle && v < STOP_DOT_HIDE).then(|| {
+    let stop = (gapped && v < STOP_DOT_HIDE).then(|| {
         div().absolute().top(px((d.h - d.stop_dot) / 2.0)).inset_end(px((d.track_h - d.stop_dot) / 2.0)).size(px(d.stop_dot)).rounded_full().bg(to.hsla())
     });
     let icon = look.icon.map(|name| {
@@ -267,6 +286,21 @@ mod tests {
         // The thick slider's fill always holds its icon.
         let large = Size::Large.dims();
         assert!(large.start_inset - large.handle_w / 2.0 - large.gap >= ICON_INSET_PX + ICON_PX);
+    }
+
+    /// The thick slider is one track: its grip sits inside the fill's end,
+    /// clear of the icon even at zero, and never past the slider's end.
+    #[test]
+    fn the_thick_grip_stays_inside_the_fill_and_clear_of_the_icon() {
+        let d = Size::Large.dims();
+        // At value 0 the fill ends at the handle's centre (`start_inset`).
+        let (grip_start, grip_end) = (d.start_inset - GRIP_BACK_PX - d.handle_w / 2.0, d.start_inset - GRIP_BACK_PX + d.handle_w / 2.0);
+        assert!(grip_start > ICON_INSET_PX + ICON_PX, "clear of the icon");
+        assert!(grip_end < d.start_inset, "inside the fill");
+        // At value 1 the handle's centre is `end_inset` from the end and the
+        // fill reaches the end, past the grip.
+        assert!(d.handle_w / 2.0 - GRIP_BACK_PX < d.end_inset, "inside the fill's end");
+        const { assert!(GRIP_H > 0.0 && GRIP_H < 1.0, "shorter than the track") };
     }
 
     #[test]
