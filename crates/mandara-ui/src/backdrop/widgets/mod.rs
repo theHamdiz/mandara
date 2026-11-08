@@ -18,6 +18,7 @@
 pub mod actions;
 pub mod datecal;
 pub mod draw;
+pub mod empty;
 pub mod faces;
 pub mod feeds;
 pub mod frame;
@@ -540,10 +541,11 @@ const IDLE_LONG_EVERY: u32 = 4;
 
 impl WidgetScene {
     /// A scene for previews and Studio's gallery: `items` with example
-    /// weather, today's Hijri date and the default world cities.
+    /// weather, today's Hijri date, the default world cities and the
+    /// information widgets' examples ([`gallery::info`]; nothing is read).
     pub fn preview(items: Vec<DesktopWidget>) -> Self {
         let today = Local::now().date_naive();
-        Self {
+        let mut scene = Self {
             items,
             weather: Some(("sun", "23°".into())),
             hijri: Some(lingo::hijri_of(today)),
@@ -551,7 +553,13 @@ impl WidgetScene {
             world_cities: mandara_services::world_clock::DEFAULT_CITIES.iter().map(|c| c.to_string()).collect(),
             rtl: mandara_i18n::language().is_rtl(),
             ..Self::default()
+        };
+        let items = std::mem::take(&mut scene.items);
+        for w in &items {
+            gallery::info::populate(&mut scene, w, None, 0);
         }
+        scene.items = items;
+        scene
     }
 
     /// Any widget below the depth subject (the depth mask is needed).
@@ -1137,9 +1145,18 @@ pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler
         WidgetKind::Photo(p) => (fun::photo(p, scene.data.pictures.get(&w.id), if p.folder.trim().is_empty() { "~/Pictures" } else { p.folder.trim() }, &Lingo::of(&Default::default(), scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Sticker(st) => (fun::sticker(st, scene.data.pictures.get(&w.id), &Lingo::of(&Default::default(), scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Media(mw) => (media_view::media(mw, scene.data.media.as_ref(), now, &Lingo::of(&mw.locale, scene.rtl, None), k, &mut m), 0.0),
-        WidgetKind::Fetch(f) => (info::fetch(f, &scene.data.fetch.clone().unwrap_or_default(), &scene.data.palette, &Lingo::of(&f.locale, scene.rtl, None), k, &mut m), 0.0),
-        WidgetKind::ScreenTime(st) => (info::screen_time(st, &scene.data.screen.clone().unwrap_or_default(), &Lingo::of(&st.locale, scene.rtl, None), k, &mut m), 0.0),
-        WidgetKind::Prayer(p) => (info::prayer(p, scene.data.prayer.as_ref()?, now, &Lingo::of_plugin(&p.locale, scene.rtl, plugin), scene.h24, k, &mut m), 0.0),
+        // The machine is read once in the background: nothing until then
+        // (an empty `@` and zero uptime would read as broken).
+        WidgetKind::Fetch(f) => (info::fetch(f, scene.data.fetch.as_ref()?, &scene.data.palette, &Lingo::of(&f.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::ScreenTime(st) => (info::screen_time(st, scene.data.screen.as_ref(), &Lingo::of(&st.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Prayer(p) => {
+            let l = Lingo::of_plugin(&p.locale, scene.rtl, plugin);
+            match scene.data.prayer.as_ref() {
+                Some(times) => (info::prayer(p, times, now, &l, scene.h24, k, &mut m), 0.0),
+                // The Prayer times plugin is off: say so, with the way to turn it on.
+                None => (empty::layout(&info::prayer_off(), p.look.font, &l, k, &mut m), 0.0),
+            }
+        }
         WidgetKind::Jannah(jw) => (jannah::jannah(jw, scene.data.jannah.as_ref()?, &Lingo::of_plugin(&jw.locale, scene.rtl, plugin), k, align, &mut m), 0.0),
         WidgetKind::Hadith(hw) => (hadith::hadith(hw, scene.data.hadith.as_ref()?, &Lingo::of_plugin(&hw.locale, scene.rtl, plugin), k, align, &mut m)?, 0.0),
         WidgetKind::Quran(qw) => (quran::quran(qw, scene.data.quran.as_ref()?, &Lingo::of_plugin(&qw.locale, scene.rtl, plugin), k, align, &mut m), 0.0),
@@ -1148,9 +1165,9 @@ pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler
             let gi = scene.data.glance.clone().unwrap_or(GlanceInfo { icon: "clock", text: String::new(), action: None });
             (info::glance(g, &gi, scene.weather.as_ref(), now, &Lingo::of(&g.locale, scene.rtl, None), k, align, &mut m), 0.0)
         }
-        WidgetKind::Github(gw) => (feeds::github(gw, &scene.data.github.get(&w.id).cloned().unwrap_or_default(), &Lingo::of(&gw.locale, scene.rtl, None), k, &mut m), 0.0),
-        WidgetKind::Currency(cw) => (feeds::currency(cw, &scene.data.rates.get(&w.id).cloned().unwrap_or_default(), &Lingo::of(&cw.locale, scene.rtl, None), k, &mut m), 0.0),
-        WidgetKind::AiUsage(aw) => (feeds::ai_usage(aw, &scene.data.ai_usage.get(&w.id).cloned().unwrap_or_default(), &Lingo::of(&aw.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Github(gw) => (feeds::github(gw, &w.id, scene.data.github.get(&w.id).unwrap_or(&Feed::default()), &Lingo::of(&gw.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::Currency(cw) => (feeds::currency(cw, &w.id, scene.data.rates.get(&w.id).unwrap_or(&Feed::default()), &Lingo::of(&cw.locale, scene.rtl, None), k, &mut m), 0.0),
+        WidgetKind::AiUsage(aw) => (feeds::ai_usage(aw, &w.id, scene.data.ai_usage.get(&w.id).unwrap_or(&Feed::default()), &Lingo::of(&aw.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Games(gw) => (feeds::games(gw, &scene.data.games, &Lingo::of(&gw.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Notebook(n) => (productive::notebook(n, &scene.data.notes, &Lingo::of(&n.locale, scene.rtl, None), mandara_config::desktop_widgets::Sideways::Auto.clockwise(&w.place), k, &mut m), 0.0),
         WidgetKind::Visualizer(_) | WidgetKind::Card(_) => return None,

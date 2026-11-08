@@ -81,6 +81,7 @@ pub fn perform(widget: &str, action: &Action, cx: &mut App) -> Result<(), String
             crate::plugins::jannah::mark_step_done(cx);
         }
         Action::QuranContinue => crate::plugins::quran::continue_reading(cx),
+        Action::Studio(target) => crate::state::open_studio_at(Some(target.clone()), cx),
     }
     Ok(())
 }

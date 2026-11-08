@@ -13,6 +13,7 @@ use super::actions::Action;
 use super::frame::shape_of;
 use super::layout::{Composition, Hit, InkRole, Mark, MarkKind, Measure, caps, face, fit, style, tracked};
 use super::lingo::Lingo;
+use super::empty::{self, Empty};
 use super::{FetchInfo, GlanceInfo, PrayerInfo, ScreenInfo};
 
 /// Reference sizes.
@@ -23,14 +24,27 @@ const GAP: f32 = 12.0;
 const LINE_GAP: f32 = 5.0;
 const LOGO: f32 = 110.0;
 const ICON: f32 = 20.0;
-const SWATCH: f32 = 22.0;
+const SWATCH: f32 = 16.0;
+const SWATCH_GAP: f32 = 6.0;
+/// The hairline under `user@host`: its gaps, thickness and strength.
+const RULE_GAP: f32 = 6.0;
+const RULE_H: f32 = 1.5;
+const RULE_ALPHA: f32 = 0.35;
+/// The tile behind the screen glyph when there's no distribution logo:
+/// corner radius and glyph as shares of its side, and its strength.
+const LOGO_TILE_RADIUS: f32 = 0.28;
+const LOGO_GLYPH: f32 = 0.56;
+const LOGO_TILE_ALPHA: f32 = 0.16;
+/// Screen time's total: smaller than the other big numbers, so the days
+/// and apps under it carry the widget.
+const SCREEN_BIG: f32 = 34.0;
 const TILE_W: f32 = 150.0;
 /// Widest a machine card's value runs before it is cut with an ellipsis
 /// (a long processor name), reference px.
 const VALUE_W: f32 = 300.0;
 const TILE_H: f32 = 74.0;
 const BAR_W: f32 = 24.0;
-const BAR_H: f32 = 90.0;
+const BAR_H: f32 = 72.0;
 const BAR_GAP: f32 = 10.0;
 const RING_R: f32 = 92.0;
 const RING_W: f32 = 8.0;
@@ -55,25 +69,43 @@ fn span(minutes: i64, l: &Lingo) -> String {
     l.digits(text.replace("{minutes}", &m.to_string()))
 }
 
-/// The machine card.
-pub fn fetch(w: &FetchWidget, f: &FetchInfo, palette: &[(String, u32)], l: &Lingo, k: f32, m: &mut dyn Measure) -> Composition {
-    let px = |v: f32| v * k;
+/// `user@host`, or whichever of the two is known (nothing when neither is).
+pub(super) fn fetch_head(f: &FetchInfo) -> Option<String> {
+    match (f.user.trim(), f.host.trim()) {
+        ("", "") => None,
+        (user, "") => Some(user.to_string()),
+        ("", host) => Some(host.to_string()),
+        (user, host) => Some(format!("{user}@{host}")),
+    }
+}
+
+/// The machine card's rows `(icon, key, value)`: only what is known. An
+/// uptime under a minute (not read yet) and an unknown memory size are
+/// left out rather than shown as zero.
+pub(super) fn fetch_rows(f: &FetchInfo, l: &Lingo) -> Vec<(&'static str, &'static str, String)> {
     let up_min = (f.uptime_s / SECS_PER_MINUTE.unsigned_abs()) as i64;
+    let uptime = if up_min > 0 { span(up_min, l) } else { String::new() };
     let mem = if f.memory.1 > 0 { format!("{} / {}", crate::widgets::system::format_bytes(f.memory.0), crate::widgets::system::format_bytes(f.memory.1)) } else { String::new() };
-    let rows: Vec<(&'static str, &'static str, String)> = [
+    [
         ("monitor", tk("OS"), f.os.clone()),
         ("terminal", tk("Kernel"), f.kernel.clone()),
         ("window", tk("Compositor"), f.desktop.clone()),
         ("cpu", tk("CPU"), f.cpu.clone()),
         ("gauge", tk("GPU"), f.gpu.clone()),
         ("memory", tk("Memory"), mem),
-        ("timer", tk("Uptime"), span(up_min, l)),
+        ("timer", tk("Uptime"), uptime),
         ("terminal", tk("Shell"), f.shell.clone()),
         ("maximize", tk("Screen"), f.screen.clone()),
     ]
     .into_iter()
     .filter(|(_, _, v)| !v.trim().is_empty())
-    .collect();
+    .collect()
+}
+
+/// The machine card.
+pub fn fetch(w: &FetchWidget, f: &FetchInfo, palette: &[(String, u32)], l: &Lingo, k: f32, m: &mut dyn Measure) -> Composition {
+    let px = |v: f32| v * k;
+    let rows = fetch_rows(f, l);
     let mut marks = Vec::new();
     let mono = w.layout == FetchLayout::Terminal;
     let font = if mono { mandara_config::desktop_widgets::FontRole::Mono } else { w.look.font };
@@ -82,16 +114,19 @@ pub fn fetch(w: &FetchWidget, f: &FetchInfo, palette: &[(String, u32)], l: &Ling
     let logo = px(LOGO);
     let text_x = if w.logo { logo + px(GAP) * 2.0 } else { 0.0 };
     let mut y = 0.0;
+    // The text column's width, for the rule and the colour row.
+    let mut text_w: f32 = 0.0;
     match w.layout {
         FetchLayout::Terminal => {
-            let head = format!("{}@{}", f.user, f.host);
-            let (hw, hh) = m.measure(&head, &ks);
-            marks.push(Mark::new(MarkKind::Text { text: head.clone(), style: ks.clone(), x: text_x, y, w: hw, h: hh }, InkRole::Accent));
-            y += hh;
-            let rule = "─".repeat(head.chars().count());
-            let (rw, rh) = m.measure(&rule, &ts);
-            marks.push(Mark::new(MarkKind::Text { text: rule, style: ts.clone(), x: text_x, y, w: rw, h: rh }, InkRole::Fg).dim(face::DIM));
-            y += rh;
+            if let Some(head) = fetch_head(f) {
+                let (hw, hh) = m.measure(&head, &ks);
+                marks.push(Mark::new(MarkKind::Text { text: head, style: ks.clone(), x: text_x, y, w: hw, h: hh }, InkRole::Accent));
+                y += hh + px(RULE_GAP);
+                // A hairline under `user@host`, as wide as it, with smooth ends.
+                marks.push(Mark::new(MarkKind::Rect { x: text_x, y, w: hw, h: px(RULE_H), radius: px(RULE_H) / 2.0, width: 0.0 }, InkRole::Fg).dim(RULE_ALPHA));
+                y += px(RULE_H) + px(RULE_GAP);
+                text_w = hw;
+            }
             // In right-to-left text the key leads from the right and the
             // value follows to its left.
             let sizes: Vec<((String, f32, f32), (String, f32, f32))> = rows
@@ -104,7 +139,8 @@ pub fn fetch(w: &FetchWidget, f: &FetchInfo, palette: &[(String, u32)], l: &Ling
                     ((key, kw, kh), (value, vw, vh))
                 })
                 .collect();
-            let right = text_x + sizes.iter().map(|((_, kw, _), (_, vw, _))| kw + vw).fold(hw, f32::max);
+            let right = text_x + sizes.iter().map(|((_, kw, _), (_, vw, _))| kw + vw).fold(text_w, f32::max);
+            text_w = right - text_x;
             for ((key, kw, kh), (value, vw, vh)) in sizes {
                 let (kx, vx) = if l.rtl { (right - kw, right - kw - vw) } else { (text_x, text_x + kw) };
                 marks.push(Mark::new(MarkKind::Text { text: key, style: ks.clone(), x: kx, y, w: kw, h: kh }, InkRole::Accent));
@@ -146,15 +182,31 @@ pub fn fetch(w: &FetchWidget, f: &FetchInfo, palette: &[(String, u32)], l: &Ling
         }
     }
     if w.colors && !palette.is_empty() {
-        y += px(GAP);
+        // The theme's colours as a row of round dots under the text, led
+        // from the side the text reads from.
+        y += px(GAP) + px(LINE_GAP);
+        let n = palette.len().min(SWATCHES);
+        let step = px(SWATCH) + px(SWATCH_GAP);
+        let row_w = n as f32 * step - px(SWATCH_GAP);
+        let x0 = if l.rtl && mono { text_x + text_w.max(row_w) - row_w } else { text_x };
         for (i, (_, rgb)) in palette.iter().take(SWATCHES).enumerate() {
-            marks.push(Mark::new(MarkKind::Rect { x: text_x + i as f32 * px(SWATCH), y, w: px(SWATCH), h: px(SWATCH) * 0.7, radius: 0.0, width: 0.0 }, InkRole::Rgb(*rgb)));
+            marks.push(Mark::new(MarkKind::Rect { x: x0 + i as f32 * step, y, w: px(SWATCH), h: px(SWATCH), radius: px(SWATCH) / 2.0, width: 0.0 }, InkRole::Rgb(*rgb)));
         }
+        y += px(SWATCH);
     }
     if w.logo {
+        // Centred on the text column; never taller than it.
+        let size = logo.min(y.max(logo / 2.0));
+        let top = ((y - size) / 2.0).max(0.0);
         match &f.logo {
-            Some(p) => marks.push(Mark::new(MarkKind::Image { x: 0.0, y: 0.0, w: logo, h: logo, pic: p.clone(), shape: Shape::SQUARE, turn: 0.0 }, InkRole::Fg)),
-            None => marks.push(Mark::new(MarkKind::Icon { name: "monitor", x: 0.0, y: 0.0, size: logo }, InkRole::Accent)),
+            Some(p) => marks.push(Mark::new(MarkKind::Image { x: logo - size, y: top, w: size, h: size, pic: p.clone(), shape: Shape::SQUARE, turn: 0.0 }, InkRole::Fg)),
+            None => {
+                // No distribution logo: the screen glyph on a soft tile.
+                let x = logo - size;
+                marks.push(Mark::new(MarkKind::Rect { x, y: top, w: size, h: size, radius: size * LOGO_TILE_RADIUS, width: 0.0 }, InkRole::Accent).dim(LOGO_TILE_ALPHA));
+                let glyph = size * LOGO_GLYPH;
+                marks.push(Mark::new(MarkKind::Icon { name: "monitor", x: x + (size - glyph) / 2.0, y: top + (size - glyph) / 2.0, size: glyph }, InkRole::Accent));
+            }
         }
     }
     if l.rtl && w.layout != FetchLayout::Terminal {
@@ -167,16 +219,40 @@ pub fn fetch(w: &FetchWidget, f: &FetchInfo, palette: &[(String, u32)], l: &Ling
     Composition::of(marks)
 }
 
+/// What screen time shows instead of numbers: the plugin is off (`None`),
+/// or nothing was recorded on any of the days shown.
+pub(super) fn screen_empty(s: Option<&ScreenInfo>) -> Option<Empty> {
+    match s {
+        None => Some(Empty::new("timer", tk("Screen time"), tk("Switch on the Screen time plugin to record your day")).setup(format!("plugins/{}", crate::plugins::screen_time::ID))),
+        Some(s) if s.days.iter().all(|d| d.1 == 0) && s.top.is_empty() => Some(Empty::new("timer", tk("Nothing recorded yet"), tk("Your time in each app shows up here as you use them"))),
+        Some(_) => None,
+    }
+}
+
+/// The prayer widget while the Prayer times plugin is off.
+pub(super) fn prayer_off() -> Empty {
+    Empty::new("crescent", tk("Prayer times"), tk("Switch on the Prayer times plugin to see today's times")).setup(format!("plugins/{}", crate::plugins::prayer::ID))
+}
+
 /// Screen time: today's total, a bar per day and the top apps.
-pub fn screen_time(w: &ScreenTimeWidget, s: &ScreenInfo, l: &Lingo, k: f32, m: &mut dyn Measure) -> Composition {
+pub fn screen_time(w: &ScreenTimeWidget, s: Option<&ScreenInfo>, l: &Lingo, k: f32, m: &mut dyn Measure) -> Composition {
     let px = |v: f32| v * k;
+    if let Some(e) = screen_empty(s) {
+        let mut c = empty::layout(&e, w.look.font, l, k, m);
+        // Recording but nothing yet: a click still opens the panel.
+        if s.is_some() {
+            c.hits.push(Hit { rect: (0.0, 0.0, c.size.0, c.size.1), action: Action::Panel(crate::plugins::screen_time::ID.into()) });
+        }
+        return c;
+    }
+    let Some(s) = s else { return Composition::default() };
     let hm = |secs: u64| span((secs / SECS_PER_MINUTE.unsigned_abs()) as i64, l);
     let mut marks = Vec::new();
     let today = s.days.last().map_or(0, |d| d.1);
     let ls = tracked(style(w.look.font, px(SMALL), face::BOLD), TRACKING);
     let label = caps(&l.word(tk("Screen time today")));
     let (lw, lh) = m.measure(&label, &ls);
-    let bs = style(w.look.font, px(BIG), face::SEMIBOLD);
+    let bs = style(w.look.font, px(SCREEN_BIG), face::SEMIBOLD);
     let total = hm(today);
     let (tw, th) = m.measure(&total, &bs);
     let days: Vec<&(String, u64, bool)> = s.days.iter().rev().take(count(w.days, ranges::SCREEN_DAYS) as usize).collect::<Vec<_>>().into_iter().rev().collect();
@@ -409,7 +485,7 @@ mod tests {
             assert!(c.size.0 > 100.0, "{layout:?}");
         }
         let s = ScreenInfo { days: vec![("Mon".into(), 3600, false), ("Tue".into(), 7200, true)], top: vec![("Browser".into(), 3000)] };
-        assert!(screen_time(&ScreenTimeWidget::default(), &s, &l(), 1.0, &mut Fixed).hits.len() == 1);
+        assert!(screen_time(&ScreenTimeWidget::default(), Some(&s), &l(), 1.0, &mut Fixed).hits.len() == 1);
         let t = |h, m| NaiveTime::from_hms_opt(h, m, 0).unwrap();
         let p = PrayerInfo { times: vec![(tk("Fajr"), "الفجر", t(4, 50)), (tk("Sunrise"), "الشروق", t(6, 10)), (tk("Dhuhr"), "الظهر", t(11, 50)), (tk("Asr"), "العصر", t(15, 10)), (tk("Maghrib"), "المغرب", t(17, 40)), (tk("Isha"), "العشاء", t(19, 0))], tomorrow_fajr: t(4, 49), hijri: None, lang: None };
         for layout in [PrayerLayout::Ring, PrayerLayout::List] {
@@ -439,5 +515,53 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn texts(c: &Composition) -> Vec<String> {
+        c.marks.iter().filter_map(|m| if let MarkKind::Text { text, .. } = &m.kind { Some(text.clone()) } else { None }).collect()
+    }
+
+    #[test]
+    fn the_machine_card_never_shows_an_empty_login_or_a_zero_uptime() {
+        let mut f = FetchInfo { user: "demo".into(), host: "mandara-demo".into(), os: "Arch Linux".into(), uptime_s: 59, ..Default::default() };
+        assert_eq!(fetch_head(&f).as_deref(), Some("demo@mandara-demo"));
+        assert!(fetch_rows(&f, &l()).iter().all(|(_, key, _)| *key != tk("Uptime")), "under a minute is not shown as 0 min");
+        f.uptime_s = 3 * 3600 + 25 * 60;
+        assert!(fetch_rows(&f, &l()).iter().any(|(_, key, value)| *key == tk("Uptime") && value == "3 h 25 min"));
+        assert!(fetch_rows(&f, &l()).iter().all(|(_, key, _)| *key != tk("Memory")), "an unknown memory size is left out");
+        f.host.clear();
+        assert_eq!(fetch_head(&f).as_deref(), Some("demo"));
+        f.user.clear();
+        assert_eq!(fetch_head(&f), None);
+        let c = fetch(&FetchWidget::default(), &f, &[], &l(), 1.0, &mut Fixed);
+        let shown = texts(&c);
+        assert!(shown.iter().all(|t| t != "@" && !t.contains("0 min") && !t.starts_with('─')), "{shown:?}");
+    }
+
+    #[test]
+    fn the_machine_card_centres_its_logo_and_rounds_its_colours() {
+        let f = FetchInfo { user: "demo".into(), host: "mandara-demo".into(), os: "Arch Linux".into(), kernel: "6.12.4".into(), cpu: "Ryzen".into(), uptime_s: 7200, ..Default::default() };
+        let palette: Vec<(String, u32)> = (0..10).map(|i| (format!("c{i}"), 0x102030 * i)).collect();
+        let c = fetch(&FetchWidget::default(), &f, &palette, &l(), 1.0, &mut Fixed);
+        let dots: Vec<&Mark> = c.marks.iter().filter(|m| matches!(m.ink, InkRole::Rgb(_))).collect();
+        assert_eq!(dots.len(), SWATCHES);
+        assert!(dots.iter().all(|d| matches!(d.kind, MarkKind::Rect { w, h, radius, .. } if (w - h).abs() < 0.01 && (radius - w / 2.0).abs() < 0.01)));
+        let glyph = c.marks.iter().find(|m| matches!(m.kind, MarkKind::Icon { name: "monitor", .. })).expect("a logo glyph");
+        let (_, y0, _, y1) = glyph.bounds();
+        assert!(((y0 + y1) / 2.0 - c.size.1 / 2.0).abs() < 1.0, "the logo sits in the middle of the card's height");
+    }
+
+    #[test]
+    fn screen_time_and_prayer_explain_why_they_are_empty() {
+        let off = screen_empty(None).expect("off");
+        assert_eq!(off.setup.as_deref(), Some("plugins/screen-time"));
+        let quiet = ScreenInfo { days: vec![("Mon".into(), 0, false), ("Tue".into(), 0, true)], top: Vec::new() };
+        let e = screen_empty(Some(&quiet)).expect("nothing recorded");
+        assert!(e.setup.is_none() && e.title == tk("Nothing recorded yet"));
+        let busy = ScreenInfo { days: vec![("Mon".into(), 0, false), ("Tue".into(), 60, true)], top: vec![("Browser".into(), 60)] };
+        assert!(screen_empty(Some(&busy)).is_none());
+        let c = screen_time(&ScreenTimeWidget::default(), Some(&quiet), &l(), 1.0, &mut Fixed);
+        assert!(!texts(&c).iter().any(|t| t.contains("0 min")), "no zero total on an empty day");
+        assert_eq!(prayer_off().setup.as_deref(), Some("plugins/prayer-times"));
     }
 }

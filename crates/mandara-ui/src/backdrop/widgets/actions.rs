@@ -51,6 +51,9 @@ pub enum Action {
     JannahStep,
     /// Open the Qur'an reader where you left off.
     QuranContinue,
+    /// Open Studio on a page (`desktop-widgets/<id>`, `plugins/<id>`): an
+    /// empty widget's "Set up in Studio" button.
+    Studio(String),
 }
 
 impl Action {
@@ -83,6 +86,7 @@ impl fmt::Display for Action {
             Action::Refresh => f.write_str("refresh"),
             Action::JannahStep => f.write_str("jannah-step"),
             Action::QuranContinue => f.write_str("quran-continue"),
+            Action::Studio(target) => write!(f, "studio:{target}"),
         }
     }
 }
@@ -121,6 +125,7 @@ impl std::str::FromStr for Action {
             "refresh" => Action::Refresh,
             "jannah-step" => Action::JannahStep,
             "quran-continue" => Action::QuranContinue,
+            "studio" => Action::Studio(need(arg)?),
             other => return Err(format!("unknown action {other:?}")),
         })
     }
@@ -154,6 +159,7 @@ mod tests {
             Action::Refresh,
             Action::JannahStep,
             Action::QuranContinue,
+            Action::Studio("desktop-widgets/github-1".into()),
         ];
         for a in all {
             assert_eq!(a.to_string().parse::<Action>(), Ok(a.clone()), "{a}");

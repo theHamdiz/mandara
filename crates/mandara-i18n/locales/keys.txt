@@ -354,6 +354,7 @@ Add to {zone}
 Add user
 Add widget
 Add widgets
+Add your GitHub user name to see your year
 Add your Home Assistant token in Studio
 Add your favourite feeds in Studio
 Add your translation API key in Studio
@@ -428,7 +429,10 @@ All {count}
 All, Pinned and app categories above the grid (Tab switches)
 Allow
 Allow above 100 %
+Allow fetching from GitHub to see your year
+Allow fetching rates to see today's prices
 Allow native packages
+Allow reading Claude Code's local logs to see your tokens
 Allow this connection?
 Allow this device?
 Allow your user once:
@@ -2320,6 +2324,7 @@ Gabriel García Márquez
 Gabriela Mistral
 Games
 Games and videos keep their true colours
+Games you install in Steam show up here
 Gamma
 Gap
 Gap between a floating side panel and the screen edges and bar
@@ -4089,6 +4094,7 @@ Nothing matches “{query}”
 Nothing new
 Nothing on your list. Type a task and press Enter.
 Nothing playing
+Nothing recorded yet
 Nothing running
 Nothing running · {checked}
 Nothing saved yet
@@ -5456,7 +5462,6 @@ Session menu
 Sessions before a long break
 Set
 Set DHCP or a static address; DNS servers comma-separated (applies on reconnect)
-Set a GitHub user in Studio
 Set a layer's volume or the master volume (0–100)
 Set a password now
 Set a task's progress: a percent (40 or 40%) or a count (3/10), optionally a new label
@@ -5481,6 +5486,7 @@ Set the time between wallpapers (minutes, or 30m, 2h, 1d)
 Set the wallpaper from an image or video path
 Set time automatically
 Set up
+Set up in Studio
 Set volume to 40
 Sets the cursor in Mandara's compositor drop-in and live
 Setting types
@@ -5959,10 +5965,9 @@ Switch automatically
 Switch between light and dark appearance
 Switch layout
 Switch layouts with
-Switch on fetching from GitHub in Studio
-Switch on fetching rates in Studio
-Switch on reading Claude Code's logs in Studio
 Switch on release
+Switch on the Prayer times plugin to see today's times
+Switch on the Screen time plugin to record your day
 Switch the interface language instantly
 Switch the login screen to {name}?
 Switch to a saved profile
@@ -7418,6 +7423,7 @@ Your tailnet: this device, exit node and peers with their paths
 Your tasks; click one to tick it
 Your text (“ / ” starts a new line or column)
 Your theme's colours; a click copies one
+Your time in each app shows up here as you use them
 Your to-dos, a sticky note, the focus timer, a quote and notebook tabs on the desktop; tick tasks and run the timer right there
 Your translation appears here
 Your wallpaper, an image of your choice or a solid color

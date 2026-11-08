@@ -217,7 +217,11 @@ existing widgets. Eligible kinds can also be added to
   cat, the bubbles, a playing record and a seconds hand animate, and only
   while the desktop is in sight. GitHub and exchange rates go online only
   once you switch that on, and the AI usage widget reads its logs only
-  once you allow it.
+  once you allow it. A widget that needs setting up (no GitHub user,
+  fetching off, its plugin off) or has nothing yet shows its icon, a short
+  line saying why and, where a setting fixes it, a **Set up in Studio**
+  button that opens exactly that setting. Studio's gallery shows each
+  widget with sample data, marked *Preview*.
 - **Any shape, any frame:** every painted widget can sit on a circle, a
   squircle, a scalloped cookie, a flower, a pentagon, chamfered corners, a
   slanted card or torn paper, with an outline, a soft or hard directional
