@@ -4,6 +4,8 @@ mod cursor;
 mod display;
 mod popup;
 mod serial;
+// Mandara patch: touchscreen input (MANDARA-PATCHES.md, patch 1).
+mod touch;
 mod window;
 
 /// Contains Types for configuring layer_shell surfaces.

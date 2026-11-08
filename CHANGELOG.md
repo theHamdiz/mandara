@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **Touchscreen taps now work in the shell and Studio.** Tapping a bar item, a panel control or anything in Studio, including its close button, works like a click. Swiping scrolls lists and pages, and a finger on a slider drags it. Your mouse keeps working exactly as before. (#130)
+
 ## 0.22.0 — 2026-11-07
 
 Copy any panel as an image. Motion that suits you. Swipe notification

@@ -41,6 +41,8 @@ use wayland_client::{
         wl_shm_pool, wl_surface,
     },
 };
+// Mandara patch: touchscreen input.
+use wayland_client::protocol::wl_touch;
 use wayland_protocols::wp::pointer_gestures::zv1::client::{
     zwp_pointer_gesture_pinch_v1, zwp_pointer_gestures_v1,
 };
@@ -94,6 +96,8 @@ use crate::linux::{
         cursor::Cursor,
         serial::{Serial, SerialKind, SerialTracker},
         to_shape,
+        // Mandara patch: touchscreen input.
+        touch::{TouchDispatches, TouchPoints, touch_position},
         window::WaylandWindow,
     },
     xdg_desktop_portal::{Event as XDPEvent, XDPEventSource},
@@ -357,7 +361,14 @@ pub(crate) struct WaylandClientState {
     pub gpu_context: GpuContext,
     pub compositor_gpu: Option<CompositorGpuHint>,
     wl_seat: wl_seat::WlSeat, // TODO: Multi seat support
+    // Mandara patch: the seat's registry name, for `global_remove`.
+    wl_seat_name: u32,
     wl_pointer: Option<wl_pointer::WlPointer>,
+    // Mandara patch: touchscreen input. The seat's touch device while it
+    // advertises the capability, and the fingers currently down. Separate
+    // from every pointer field: touch never moves or presses the pointer.
+    wl_touch: Option<wl_touch::WlTouch>,
+    touch: TouchPoints<WaylandWindowStatePtr>,
     pinch_gesture: Option<zwp_pointer_gesture_pinch_v1::ZwpPointerGesturePinchV1>,
     pinch_scale: f32,
     wl_keyboard: Option<wl_keyboard::WlKeyboard>,
@@ -813,10 +824,26 @@ impl WaylandClientStatePtr {
         {
             state.cursor_hidden_window = Some(window);
         }
+        // Mandara patch: fingers still down on a closing window keep nothing
+        // of it alive and send it nothing more.
+        state
+            .touch
+            .forget_window(|window| window.ptr_eq(&closed_window));
     }
 }
 
 impl WaylandClientState {
+    /// Mandara patch: touch input went away (the seat lost the capability,
+    /// was replaced or removed): release the device and end every finger
+    /// still down without a tap. The caller dispatches `out` once the state
+    /// is released.
+    fn release_touch(&mut self, out: &mut TouchDispatches<WaylandWindowStatePtr>) {
+        if let Some(wl_touch) = self.wl_touch.take() {
+            wl_touch.release();
+        }
+        self.touch.cancel(out);
+    }
+
     fn hide_cursor_until_mouse_moves(&mut self) {
         if self.cursor_hidden_window.is_some() {
             return;
@@ -893,6 +920,10 @@ impl Drop for WaylandConnection {
 
         if let Some(wl_pointer) = &state.wl_pointer {
             wl_pointer.release();
+        }
+        // Mandara patch: touchscreen input.
+        if let Some(wl_touch) = state.wl_touch.take() {
+            wl_touch.release();
         }
         if let Some(cursor_shape_device) = &state.cursor_shape_device {
             cursor_shape_device.destroy();
@@ -991,7 +1022,7 @@ impl WaylandConnection {
             .context("failed to initialize Wayland registry")?;
         let qh = event_queue.handle();
 
-        let mut seat: Option<wl_seat::WlSeat> = None;
+        let mut seat: Option<(u32, wl_seat::WlSeat)> = None;
         #[allow(clippy::mutable_key_type)]
         let mut in_progress_outputs = HashMap::default();
         #[allow(clippy::mutable_key_type)]
@@ -1002,11 +1033,15 @@ impl WaylandConnection {
             for global in list {
                 match &global.interface[..] {
                     "wl_seat" => {
-                        seat = Some(globals.registry().bind::<wl_seat::WlSeat, _, _>(
+                        // Mandara patch: remember the seat's registry name.
+                        seat = Some((
                             global.name,
-                            wl_seat_version(global.version)?,
-                            &qh,
-                            (),
+                            globals.registry().bind::<wl_seat::WlSeat, _, _>(
+                                global.name,
+                                wl_seat_version(global.version)?,
+                                &qh,
+                                (),
+                            ),
                         ));
                     }
                     "wl_output" => {
@@ -1031,7 +1066,7 @@ impl WaylandConnection {
 
         let (frame_ping, frame_ping_source) =
             calloop::ping::make_ping().context("failed to create Wayland frame ping")?;
-        let seat = seat.context("Wayland compositor does not provide wl_seat")?;
+        let (seat_name, seat) = seat.context("Wayland compositor does not provide wl_seat")?;
         let foreground_executor = common.borrow().foreground_executor.clone();
         let background_executor = common.borrow().background_executor.clone();
         let globals = Globals::new(
@@ -1061,7 +1096,10 @@ impl WaylandConnection {
             gpu_context,
             compositor_gpu,
             wl_seat: seat,
+            wl_seat_name: seat_name,
             wl_pointer: None,
+            wl_touch: None,
+            touch: TouchPoints::new(),
             wl_keyboard: None,
             pinch_gesture: None,
             pinch_scale: 1.0,
@@ -1614,8 +1652,15 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for WaylandClientStat
                     if let Some(wl_keyboard) = state.wl_keyboard.take() {
                         wl_keyboard.release();
                     }
+                    // Mandara patch: the old seat's touch device goes with it;
+                    // the new seat's capabilities bring a fresh one.
+                    let mut touches = TouchDispatches::new();
+                    state.release_touch(&mut touches);
                     state.wl_seat.release();
                     state.wl_seat = registry.bind::<wl_seat::WlSeat, _, _>(name, version, qh, ());
+                    state.wl_seat_name = name;
+                    drop(state);
+                    dispatch_touch(touches);
                 }
                 "wl_output" => {
                     let Ok(version) = wl_output_version(version) else {
@@ -1633,6 +1678,15 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for WaylandClientStat
                 _ => {}
             },
             wl_registry::Event::GlobalRemove { name } => {
+                // Mandara patch: the seat went away; its touch device sends
+                // nothing more, so end the fingers that were down.
+                if name == state.wl_seat_name {
+                    let mut touches = TouchDispatches::new();
+                    state.release_touch(&mut touches);
+                    drop(state);
+                    dispatch_touch(touches);
+                    return;
+                }
                 let Some(id) = state.output_globals.remove(&name) else {
                     return;
                 };
@@ -1736,6 +1790,66 @@ pub(crate) fn get_window(
     surface_id: &ObjectId,
 ) -> Option<WaylandWindowStatePtr> {
     state.windows.get(surface_id).cloned()
+}
+
+/// Mandara patch: hands touch events to their windows. Call with the client
+/// state released: GPUI's handlers may call back into the client.
+fn dispatch_touch(touches: TouchDispatches<WaylandWindowStatePtr>) {
+    for (window, event) in touches {
+        window.handle_input(PlatformInput::Touch(event));
+    }
+}
+
+/// Mandara patch: touchscreen input (theHamdiz/mandara#130). Upstream never
+/// asked the seat for `wl_touch`, so fingers reached no GPUI window. Each
+/// contact becomes a raw `PlatformInput::Touch` for the window it went down
+/// on; GPUI's portable recognizer turns it into a tap (left press + release,
+/// so click handlers fire), a scroll, a long press or a claimed touch drag.
+impl Dispatch<wl_touch::WlTouch, ()> for WaylandClientStatePtr {
+    fn event(
+        this: &mut Self,
+        _: &wl_touch::WlTouch,
+        event: wl_touch::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        let client = this.get_client();
+        let mut state = client.borrow_mut();
+        let mut touches = TouchDispatches::new();
+        match event {
+            wl_touch::Event::Down {
+                serial,
+                surface,
+                id,
+                x,
+                y,
+                ..
+            } => {
+                // A touch-down is the user's latest press: activation tokens
+                // and clipboard ownership take it, like a button press, and
+                // a window move requested from a tap carries it instead of
+                // an older pointer press.
+                state.serial_tracker.update(SerialKind::MousePress, serial);
+                let Some(window) = get_window(&mut state, &surface.id()) else {
+                    return;
+                };
+                state
+                    .touch
+                    .down(id, window, touch_position(x, y), &mut touches);
+            }
+            wl_touch::Event::Motion { id, x, y, .. } => {
+                state.touch.motion(id, touch_position(x, y));
+            }
+            wl_touch::Event::Up { id, .. } => state.touch.up(id, &mut touches),
+            wl_touch::Event::Frame => state.touch.frame(&mut touches),
+            wl_touch::Event::Cancel => state.touch.cancel(&mut touches),
+            // Contact shape and orientation (v6) are not used.
+            _ => {}
+        }
+        drop(state);
+        dispatch_touch(touches);
+    }
 }
 
 impl Dispatch<wl_surface::WlSurface, ()> for WaylandClientStatePtr {
@@ -2004,6 +2118,22 @@ impl Dispatch<wl_seat::WlSeat, ()> for WaylandClientStatePtr {
                 }
 
                 state.wl_keyboard = Some(keyboard);
+            }
+            // Mandara patch: touchscreen input. Kept across repeated
+            // capability events (a hotplugged mouse resends them) so fingers
+            // already down are not lost; released when touch goes away.
+            let mut touches = TouchDispatches::new();
+            if capabilities.contains(wl_seat::Capability::Touch) {
+                if state.wl_touch.is_none() {
+                    state.wl_touch = Some(seat.get_touch(qh, ()));
+                }
+            } else {
+                state.release_touch(&mut touches);
+            }
+            if !touches.is_empty() {
+                drop(state);
+                dispatch_touch(touches);
+                state = client.borrow_mut();
             }
             if capabilities.contains(wl_seat::Capability::Pointer) {
                 let pointer = seat.get_pointer(qh, ());

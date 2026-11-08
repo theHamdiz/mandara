@@ -96,7 +96,13 @@ use crate::tokens::*;
 
 /// Drags the window: the compositor's own grab where the standard
 /// `xdg_toplevel.move` is ignored (MangoWM), the standard request otherwise.
+/// Not for a touchscreen tap: GPUI delivers its press only once the finger
+/// has lifted, so a move started then would follow the mouse pointer (the
+/// compositor's grab ends with a button that is no longer held) instead.
 fn begin_move(window: &mut Window) {
+    if window.last_input_was_touch() {
+        return;
+    }
     if !mandara_compositor::begin_interactive_move() {
         window.start_window_move();
     }

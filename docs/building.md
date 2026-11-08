@@ -98,6 +98,12 @@ the pointer on every element, with or without an id
 manifest that no longer turns on every codec of the `image` crate
 ([`MANDARA-PATCHES.md`](../vendor/pure-onnx-ocr/MANDARA-PATCHES.md)).
 
+`vendor/gpui_linux` is GPUI's Linux platform with touchscreen input: its
+Wayland client takes the seat's touch device, so a tap on the bar, a panel
+or Studio clicks like the left mouse button, a swipe scrolls, and a finger
+on a slider drags it
+([`MANDARA-PATCHES.md`](../vendor/gpui_linux/MANDARA-PATCHES.md)).
+
 `vendor/xkbcommon` keeps GPUI’s keyboard API while loading the system
 library only when keyboard input is used. This lets `mandara install`
 start before the runtime packages have been installed
