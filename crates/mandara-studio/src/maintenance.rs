@@ -93,7 +93,7 @@ impl CheckId {
 }
 
 fn target() -> Option<Target> {
-    mandara_compositor::detect().map(mandara_compositor::CompositorKind::target)
+    mandara_compositor::detected().map(mandara_compositor::CompositorKind::target)
 }
 
 /// A font Mandara's design uses, downloadable from Google Fonts (OFL).

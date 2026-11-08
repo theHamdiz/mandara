@@ -815,7 +815,7 @@ impl StudioView {
     /// conflict detection, actions and quick-add suggestions.
     fn shortcuts(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         use mandara_config::compositor::{BindAction, Keybind, Target, existing_chords};
-        let target: Option<Target> = mandara_compositor::detect().map(mandara_compositor::CompositorKind::target);
+        let target: Option<Target> = mandara_compositor::detected().map(mandara_compositor::CompositorKind::target);
         let _ = existing_chords;
         let taken = keybind_conflicts::user_binds(target, &cfg.compositor, cx);
         let binds = &cfg.compositor.keybinds;
@@ -1547,7 +1547,7 @@ impl StudioView {
         let registry = cx.global::<PluginRegistry>();
         let commands = registry.commands.all().len();
         let first_party = registry.manifests().filter(|m| m.origin == PluginOrigin::Builtin && !HIDDEN_PLUGINS.contains(&m.id.as_str())).count();
-        let compositor = mandara_compositor::detect().map(|k| format!("{k:?}")).unwrap_or_else(|| t("none").into());
+        let compositor = mandara_compositor::detected().map(|k| format!("{k:?}")).unwrap_or_else(|| t("none").into());
         let fonts = mandara_ui::fonts::fonts(cx);
         let link = |id: &'static str, glyph: &'static str, label: SharedString, url: &'static str| {
             div()

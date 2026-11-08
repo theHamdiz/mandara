@@ -641,7 +641,7 @@ pub fn running_compositor() -> Option<mandara_config::compositor::Target> {
     use mandara_compositor::CompositorKind;
     use mandara_config::compositor::Target;
     static RUNNING: OnceLock<Option<Target>> = OnceLock::new();
-    *RUNNING.get_or_init(|| mandara_compositor::detect().map(CompositorKind::target))
+    *RUNNING.get_or_init(|| mandara_compositor::detected().map(CompositorKind::target))
 }
 
 thread_local! {

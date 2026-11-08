@@ -282,7 +282,7 @@ impl StudioView {
 
 fn running_target() -> Option<Target> {
     // Sway leaves XDG_CURRENT_DESKTOP to the session: its socket says it.
-    if let Some(kind) = mandara_compositor::detect() {
+    if let Some(kind) = mandara_compositor::detected() {
         return Some(kind.target());
     }
     match std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_lowercase().as_str() {

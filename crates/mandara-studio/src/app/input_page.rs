@@ -56,7 +56,7 @@ fn st(cx: &mut gpui::App) -> &mut InputStudio {
 }
 
 fn running() -> Option<Target> {
-    mandara_compositor::detect().map(mandara_compositor::CompositorKind::target)
+    mandara_compositor::detected().map(mandara_compositor::CompositorKind::target)
 }
 
 impl StudioView {

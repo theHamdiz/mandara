@@ -216,7 +216,7 @@ impl StudioView {
         let rtl = mandara_i18n::language().is_rtl();
         let count = hits.map(|h| h.get(&section).copied().unwrap_or(0));
         div()
-            .id(SharedString::from(format!("nav-{}", section.title())))
+            .id(("nav", section as usize))
             .relative()
             .h(px(NAV_ITEM_H_PX))
             .flex_none()
@@ -270,7 +270,7 @@ impl StudioView {
         let rtl = mandara_i18n::language().is_rtl();
         let turn = if open { CHEVRON_OPEN_RAD } else if rtl { CHEVRON_RTL_RAD } else { 0.0 };
         div()
-            .id(SharedString::from(format!("nav-group-{}", group.id())))
+            .id(("nav-group", group as usize))
             .mt(px(NAV_GROUP_GAP_PX))
             .h(px(NAV_HEADER_H_PX))
             .flex_none()
@@ -395,7 +395,7 @@ impl StudioView {
         };
         let theme = mandara_core::theme_entity(cx).read(cx).target().name.clone();
         let mode = if cfg.theme.mode.is_dark() { t("Dark") } else { t("Light") };
-        let compositor = mandara_compositor::detect().map(|k| format!("{k:?}")).unwrap_or_else(|| t("no compositor detected").into());
+        let compositor = mandara_compositor::detected().map(|k| format!("{k:?}")).unwrap_or_else(|| t("no compositor detected").into());
         // Legible text on the reading-start side, the wallpaper showing
         // through towards the end.
         let wash = mandara_core::oklab_gradient(if rtl { HERO_WASH_RTL_DEG } else { HERO_WASH_DEG }, p.surface_base.with_alpha(ALPHA_88), p.primary.with_alpha(ALPHA_15));
@@ -456,7 +456,7 @@ impl StudioView {
             let history: Vec<f32> = monitor.shell.iter().skip(monitor.shell.len().saturating_sub(SPARK_BARS)).map(|u| u.cpu).collect();
             (monitor.latest(), history)
         };
-        let compositor = mandara_compositor::detect().map(|k| format!("{k:?}")).unwrap_or_else(|| t("no compositor detected").into());
+        let compositor = mandara_compositor::detected().map(|k| format!("{k:?}")).unwrap_or_else(|| t("no compositor detected").into());
         let (on, total) = cx.try_global::<PluginRegistry>().map(|r| (r.manifests().filter(|m| r.is_enabled(&m.id, &cfg.plugins)).count(), r.manifests().count())).unwrap_or_default();
         let state = match usage {
             Some(_) => badge(t("Running"), p.success_emerald),
@@ -561,11 +561,11 @@ impl StudioView {
         let mock_w = inner_w.max(0.0);
         let mock = shell_mock(p, thumb, mock_w, (mock_w * LOOK_MOCK_ASPECT).floor(), RADIUS_14_PX, true);
         let gallery = self.theme_gallery(dark);
-        let swatches = gallery.themes_iter().take(HOME_THEME_SWATCHES).map(|(def, tp)| {
+        let swatches = gallery.themes_iter().take(HOME_THEME_SWATCHES).enumerate().map(|(i, (def, tp))| {
             let on = active.as_deref() == Some(def.id.as_str());
             let id = def.id.clone();
             div()
-                .id(SharedString::from(format!("home-theme-{}", def.id)))
+                .id(("home-theme", i))
                 .size(px(DIM_28_PX))
                 .flex_none()
                 .rounded_full()
@@ -644,7 +644,7 @@ impl StudioView {
             None => t("Off").into(),
         };
         div()
-            .id(SharedString::from(format!("quick{}", s.path)))
+            .id(s.path)
             .flex_1()
             .min_h(px(QUICK_TILE_MIN_H_PX))
             .p(px(SPACE_12_PX))
@@ -740,7 +740,7 @@ impl StudioView {
         let first = group.sections().first().copied().unwrap_or(Section::Home);
         let links = group.sections().iter().copied().map(|section| {
             div()
-                .id(SharedString::from(format!("home-{}", section.title())))
+                .id(("home-section", section as usize))
                 .h(px(HOME_LINK_H_PX))
                 .px(px(SPACE_10_PX))
                 .rounded_full()
@@ -760,7 +760,7 @@ impl StudioView {
             .gap(px(SPACE_14_PX))
             .child(
                 div()
-                    .id(SharedString::from(format!("home-group-{}", group.id())))
+                    .id(("home-group", group as usize))
                     .cursor_pointer()
                     .row()
                     .items_center()
