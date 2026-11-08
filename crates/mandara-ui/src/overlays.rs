@@ -456,7 +456,9 @@ fn usage_key(item: &Item) -> String {
     }
 }
 
-/// Live data the providers search, gathered when the launcher opens.
+/// Live data the providers search, gathered when the launcher opens. The
+/// provider settings follow config edits while it is open
+/// ([`SearchCtx::follow_providers`]).
 #[derive(Clone, Default)]
 struct SearchCtx {
     providers: mandara_config::workflow::LauncherProviders,
@@ -471,26 +473,82 @@ struct SearchCtx {
     app_actions: Vec<Hit>,
 }
 
+/// Providers whose live data [`SearchCtx`] gathers; the others search
+/// bundled or indexed data and need nothing gathered.
+const GATHERED_PROVIDERS: [&str; 4] = ["windows", "clipboard", "wallpapers", "files"];
+
+/// Whether provider `id` is switched on in `providers`.
+fn provider_on(providers: &mandara_config::workflow::LauncherProviders, id: &str) -> bool {
+    launcher_ext::provider(providers, id).is_some_and(|p| p.enabled)
+}
+
 impl SearchCtx {
     fn gather(apps: &[DesktopApp], cx: &App) -> Self {
         let cfg = config(cx).read(cx).snapshot();
         let l = &cfg.launcher;
-        let providers = l.providers.clone();
-        let wants = |id: &str| launcher_ext::provider(&providers, id).is_some_and(|p| p.enabled);
-        if wants("files") {
-            launcher_ext::warm_file_index();
-        }
-        Self {
+        let mut ctx = Self {
             usage: launcher_ext::usage_snapshot(&cfg),
             pinned: l.pinned.clone(),
             recent_count: l.usage.recent_count as usize,
-            windows: if wants("windows") { crate::windows::windows(cx).map(|w| w.read(cx).list().to_vec()).unwrap_or_default() } else { Vec::new() },
-            clipboard: if wants("clipboard") { crate::hub::hub(cx).read(cx).clipboard.clone() } else { Default::default() },
-            wallpapers: if wants("wallpapers") { crate::wallpaper::list(&crate::wallpaper::directory(cx)) } else { Vec::new() },
-            recent_files: if wants("files") { launcher_ext::recent_files() } else { Vec::new() },
             app_actions: if l.look.app_actions { launcher_ext::action_hits(apps) } else { Vec::new() },
-            providers,
+            providers: l.providers.clone(),
+            ..Self::default()
+        };
+        for id in GATHERED_PROVIDERS {
+            if provider_on(&ctx.providers, id) {
+                ctx.load(id, cx);
+            }
         }
+        ctx
+    }
+
+    /// Gathers the live data provider `id` searches, as when the launcher
+    /// opens (the file index warms in the background).
+    fn load(&mut self, id: &str, cx: &App) {
+        match id {
+            "windows" => self.windows = crate::windows::windows(cx).map(|w| w.read(cx).list().to_vec()).unwrap_or_default(),
+            "clipboard" => self.clipboard = crate::hub::hub(cx).read(cx).clipboard.clone(),
+            "wallpapers" => self.wallpapers = crate::wallpaper::list(&crate::wallpaper::directory(cx)),
+            "files" => {
+                launcher_ext::warm_file_index();
+                self.recent_files = launcher_ext::recent_files();
+            }
+            _ => {}
+        }
+    }
+
+    /// Drops the data provider `id` searched, with its capacity, once it is
+    /// switched off while the launcher is open.
+    fn unload(&mut self, id: &str) {
+        match id {
+            "windows" => self.windows = Vec::new(),
+            "clipboard" => self.clipboard = Default::default(),
+            "wallpapers" => self.wallpapers = Vec::new(),
+            "files" => self.recent_files = Vec::new(),
+            _ => {}
+        }
+    }
+
+    /// Follows provider settings edited while the launcher is open (Studio,
+    /// `config set`, a hand edit). Routing, Beacon modes and plain-search
+    /// mixing read the new settings; a provider switched on gathers its data
+    /// through `load`, and one switched off drops its data. Returns whether
+    /// anything changed. It runs from the config observer, never per
+    /// keystroke, and compares the borrowed settings first, so unrelated
+    /// config edits cost no allocation.
+    fn follow_providers(&mut self, providers: &mandara_config::workflow::LauncherProviders, mut load: impl FnMut(&mut Self, &'static str)) -> bool {
+        if *providers == self.providers {
+            return false;
+        }
+        for id in GATHERED_PROVIDERS {
+            match (provider_on(&self.providers, id), provider_on(providers, id)) {
+                (false, true) => load(self, id),
+                (true, false) => self.unload(id),
+                _ => {}
+            }
+        }
+        self.providers.clone_from(providers);
+        true
     }
 
     /// Results of provider `id` for `q`.
@@ -1203,11 +1261,19 @@ impl LauncherView {
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
         // Studio / `launcher placement` / `launcher look` edits re-place
         // and restyle it while open.
+        // Provider edits re-route it and re-offer the Beacon modes (#111).
         cx.observe(&config(cx), |this: &mut Self, config, cx| {
-            let look = config.read(cx).get().launcher.look.clone();
-            let agent_changed = this.agent.as_ref().is_some_and(|agent| agent.settings != config.read(cx).get().launcher.agent);
-            if look != this.look || agent_changed {
-                this.look = look;
+            let launcher = &config.read(cx).get().launcher;
+            let look_changed = launcher.look != this.look;
+            let agent_changed = this.agent.as_ref().is_some_and(|agent| agent.settings != launcher.agent);
+            let providers_changed = this.ctx.follow_providers(&launcher.providers, |ctx, id| ctx.load(id, cx));
+            if look_changed {
+                this.look = config.read(cx).get().launcher.look.clone();
+            }
+            if providers_changed {
+                this.mode = launcher_looks::settle_mode(this.mode, &this.ctx.providers);
+            }
+            if look_changed || agent_changed || providers_changed {
                 this.refilter(cx);
             }
             cx.notify();
@@ -2550,6 +2616,57 @@ mod tests {
         let browse = start.elapsed().as_secs_f64() * 1000.0 / runs as f64;
         eprintln!("launcher keystroke (600 apps, debug build): search + group + reflow map {per_key:.2} ms, browse order {browse:.2} ms");
         assert!(per_key < 40.0 && browse < 40.0, "{per_key:.2} / {browse:.2} ms");
+    }
+
+    /// Provider settings edited while the launcher is open take effect
+    /// without reopening it: switching off the active Beacon provider drops
+    /// its mode, its routing and its data, and switching one on gathers its
+    /// data once (#111).
+    #[test]
+    fn provider_settings_follow_edits_while_the_launcher_is_open() {
+        use mandara_services::clipboard::{ClipContent, ClipEntry, kind::classify_text};
+        let (_registry, _cfg, index) = fixture();
+        let text = "hello from the clipboard";
+        let entry = ClipEntry { id: 1, content: ClipContent::Text { text: text.into() }, copied_at: 0, pinned: false, app_id: String::new(), class: classify_text(text), collections: Vec::new() };
+        let mut ctx = SearchCtx::default();
+        ctx.clipboard.entries = std::sync::Arc::new(vec![entry]);
+        let query = format!("{}hello", ctx.providers.clipboard.prefix);
+        let clip_hits = |ctx: &SearchCtx| search_with(&query, &[], &index, ctx).iter().filter(|i| matches!(i, Item::Hit(h) if h.provider == "clipboard")).count();
+        assert_eq!(clip_hits(&ctx), 1, "routed to the clipboard while it is on");
+        let mode = Some(BeaconMode::Clipboard);
+        assert_eq!(launcher_looks::settle_mode(mode, &ctx.providers), mode);
+
+        // An unrelated config edit: nothing is gathered or changed.
+        let same = ctx.providers.clone();
+        assert!(!ctx.follow_providers(&same, |_, id| panic!("gathered {id} for an unchanged setting")));
+
+        // The active provider is switched off while open.
+        let mut edited = ctx.providers.clone();
+        edited.clipboard.enabled = false;
+        assert!(ctx.follow_providers(&edited, |_, id| panic!("gathered {id} for a provider switched off")));
+        assert_eq!(launcher_looks::settle_mode(mode, &ctx.providers), None, "its Beacon mode is no longer offered");
+        assert!(!BeaconMode::Clipboard.available(&ctx.providers));
+        assert!(ctx.clipboard.entries.is_empty() && ctx.clipboard.entries.capacity() == 0, "its data is dropped");
+        assert_eq!(clip_hits(&ctx), 0, "the prefix no longer routes to it");
+
+        // Switched back on: its data is gathered once, routing returns.
+        edited.clipboard.enabled = true;
+        let mut gathered = Vec::new();
+        assert!(ctx.follow_providers(&edited, |ctx, id| {
+            gathered.push(id);
+            ctx.clipboard.entries = std::sync::Arc::new(vec![ClipEntry { id: 2, content: ClipContent::Text { text: text.into() }, copied_at: 0, pinned: false, app_id: String::new(), class: classify_text(text), collections: Vec::new() }]);
+        }));
+        assert_eq!(gathered, ["clipboard"]);
+        assert_eq!(clip_hits(&ctx), 1);
+        assert_eq!(launcher_looks::settle_mode(mode, &ctx.providers), mode);
+
+        // A new prefix routes at once; an emptied one ends the mode.
+        edited.clipboard.prefix = "cb:".into();
+        assert!(ctx.follow_providers(&edited, |_, id| panic!("gathered {id} for a prefix edit")));
+        assert_eq!(search_with("cb:hello", &[], &index, &ctx).iter().filter(|i| matches!(i, Item::Hit(h) if h.provider == "clipboard")).count(), 1);
+        edited.clipboard.prefix.clear();
+        assert!(ctx.follow_providers(&edited, |_, _| {}));
+        assert_eq!(launcher_looks::settle_mode(mode, &ctx.providers), None);
     }
 
     #[test]

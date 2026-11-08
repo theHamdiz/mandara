@@ -360,31 +360,37 @@ impl BeaconMode {
 
     /// The provider prefix it searches with (`None` for Apps, which
     /// filters plain results).
-    pub(super) fn prefix(self, providers: &LauncherProviders) -> Option<String> {
-        let p = match self {
-            BeaconMode::Apps => return None,
-            BeaconMode::Files => &providers.files,
-            BeaconMode::Actions => &providers.actions,
-            BeaconMode::Clipboard => &providers.clipboard,
-        };
-        Some(p.prefix.clone())
+    pub(super) fn prefix(self, providers: &LauncherProviders) -> Option<&str> {
+        self.provider(providers).map(|p| p.prefix.as_str())
     }
 
-    /// Offered: Apps always, the others while their provider is on.
+    /// The provider it searches (`None` for Apps).
+    fn provider(self, providers: &LauncherProviders) -> Option<&mandara_config::workflow::ProviderConfig> {
+        match self {
+            BeaconMode::Apps => None,
+            BeaconMode::Files => Some(&providers.files),
+            BeaconMode::Actions => Some(&providers.actions),
+            BeaconMode::Clipboard => Some(&providers.clipboard),
+        }
+    }
+
+    /// Offered: Apps always, the others while their provider is on and has
+    /// a prefix to search with.
     pub(super) fn available(self, providers: &LauncherProviders) -> bool {
-        self.prefix(providers).is_none_or(|p| !p.is_empty())
-            && match self {
-                BeaconMode::Apps => true,
-                BeaconMode::Files => providers.files.enabled,
-                BeaconMode::Actions => providers.actions.enabled,
-                BeaconMode::Clipboard => providers.clipboard.enabled,
-            }
+        self.provider(providers).is_none_or(|p| p.enabled && !p.prefix.is_empty())
     }
 
     /// The mode Ctrl+`digit` picks.
     pub(super) fn from_digit(digit: &str) -> Option<Self> {
         digit.parse::<usize>().ok().and_then(|d| d.checked_sub(1)).and_then(|i| Self::ALL.get(i).copied())
     }
+}
+
+/// The mode Beacon keeps after a provider setting changed while it is open:
+/// the same one while it is still offered, otherwise plain search (its
+/// provider was switched off, or its prefix cleared).
+pub(super) fn settle_mode(mode: Option<BeaconMode>, providers: &LauncherProviders) -> Option<BeaconMode> {
+    mode.filter(|m| m.available(providers))
 }
 
 // ── Shared pieces ───────────────────────────────────────────────────────
@@ -1039,7 +1045,7 @@ mod tests {
     fn beacon_modes_follow_their_providers_and_ctrl_digits() {
         let mut p = LauncherProviders::default();
         assert!(BeaconMode::ALL.iter().all(|m| m.available(&p)));
-        assert_eq!(BeaconMode::Files.prefix(&p).as_deref(), Some("~"));
+        assert_eq!(BeaconMode::Files.prefix(&p), Some("~"));
         assert_eq!(BeaconMode::Apps.prefix(&p), None);
         p.clipboard.enabled = false;
         p.files.prefix.clear();
