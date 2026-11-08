@@ -792,7 +792,7 @@ impl GreeterPage {
         let password = vec![
             self.choice(p, "pw-style", tl("Style"), pw.style, vec![(tl("Glass"), FieldStyle::Glass), (tl("Solid"), FieldStyle::Solid), (tl("Inset"), FieldStyle::Inset), (tl("Outline"), FieldStyle::Outline), (tl("Underline"), FieldStyle::Underline)], |c, v| c.password.style = v, cx),
             self.choice(p, "pw-submit", tl("Sign-in button"), pw.submit, vec![(tl("In the field"), SubmitButton::Inside), (tl("Beside it"), SubmitButton::Beside), (tl("None (Enter)"), SubmitButton::Hidden)], |c, v| c.password.submit = v, cx),
-            self.choice(p, "pw-mask", tl("Hide typing as"), pw.mask, vec![(tl("Dots"), PasswordMask::Dots), (tl("Shapes"), PasswordMask::Shapes)], |c, v| c.password.mask = v, cx),
+            self.choice(p, "pw-mask", tl("Hide typing as"), pw.mask, vec![(tl("Shapes"), PasswordMask::Shapes), (tl("Dots"), PasswordMask::Dots)], |c, v| c.password.mask = v, cx),
             self.toggle(p, "pw-accent", tl("Accent border while focused"), pw.accent_border, |c, v| c.password.accent_border = v, cx),
             self.slider(p, "pw-w", tl("Width"), pw.width, 180.0, 560.0, 1.0, " px", |c, v| c.password.width = v, cx),
             self.slider(p, "pw-h", tl("Height"), pw.height, 30.0, 72.0, 1.0, " px", |c, v| c.password.height = v, cx),
