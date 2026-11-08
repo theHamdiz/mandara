@@ -317,7 +317,10 @@ anything that must stay fixed is a named, documented constant.
   you had muted yourself.
 - **Per-app volume**: every app playing sound gets a row with its icon,
   what it's playing, a volume slider (to 150 %), mute and a button that moves
-  it to another output. Several streams of one app fold into one row.
+  it to another output. Several streams of one app fold into one row. The
+  row of the player the media panel controls sets that player's own volume
+  (0–100 %, like its own slider) when the player allows it, because such a
+  player puts its level back on its sound whenever you play or pause.
 - **Shell sounds** from your freedesktop sound theme, decoded in pure Rust,
   quiet while media plays.
 
