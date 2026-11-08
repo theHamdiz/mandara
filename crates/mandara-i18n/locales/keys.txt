@@ -343,6 +343,7 @@ Add skill
 Add slash command
 Add the WebAssembly target
 Add the command {name} to {dir}
+Add the launcher
 Add the sunnah prayers
 Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way.
 Add to PATH as {name}
@@ -2969,6 +2970,7 @@ Keep the display change being tested
 Keep the file
 Keep the focused column in the middle of the screen
 Keep the home folder
+Keep the launcher in the Dock
 Keep the newest
 Keep the pointer inside the window (games)
 Keep the screen awake
@@ -3055,7 +3057,6 @@ Launch prefix
 Launcher
 Launcher & pop-ups
 Launcher button
-Launcher button at the end
 Launcher colors
 Launcher looks
 Launcher width at a screen edge
@@ -4158,7 +4159,6 @@ Off pauses recording; the history stays
 Off shows AM / PM
 Off while a mouse is plugged in
 Off. Nothing runs in the background until you turn it on.
-Off: at the start
 Off: each minimized window gets its own icon on the right side
 Off: low-urgency notifications vanish when their popup closes
 Off: only windows on the focused display
@@ -5347,7 +5347,6 @@ Search actions and settings
 Search and download wallpapers from wallhaven.cc right in the wallpaper picker
 Search apps
 Search apps by name or id
-Search apps, files and actions
 Search apps, files and more
 Search bar width
 Search below to add a city or time zone
@@ -8277,7 +8276,12 @@ your default
 “{code}” isn't a currency code
 “{id}” is a built-in plugin id, and built-ins can't be overridden: rename it
 “{name}” is not a valid container name
+“{prefix}” actions
+“{prefix}” ask the AI agent
+“{prefix}” clipboard
 “{prefix}” emoji
+“{prefix}” files
+“{prefix}” wallpapers
 “{prefix}” windows
 “{repo}” isn't an owner/name repository
 “{theme}” isn't a valid theme name

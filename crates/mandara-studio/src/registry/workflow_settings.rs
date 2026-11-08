@@ -173,8 +173,6 @@ pub fn entries() -> Vec<Setting> {
         s(Dock, DOCK_APPS, "/dock/progress_badges", tk("Progress bars"), tk("Progress reported by an app's notifications, on its icon"), Toggle),
         s(Dock, DOCK_APPS, "/dock/badges", tk("Window count"), tk("A badge on apps with two or more windows (when no notifications are unread)"), Toggle),
         s(Dock, DOCK_APPS, "/dock/max_apps", tk("Most apps"), tk("0 shows every app"), span(dock_ranges::MAX_APPS, "")),
-        s(Dock, DOCK_APPS, "/dock/launcher_button", tk("Launcher button"), tk("Opens the launcher"), Toggle),
-        s(Dock, DOCK_APPS, "/dock/launcher_at_end", tk("Launcher button at the end"), tk("Off: at the start"), Toggle),
         s(Dock, DOCK_APPLICATIONS, "/dock/applications/enabled", tk("Applications folder"), tk("Your apps in a Launchpad-style grid, on the right of the dock; drop an app on it to install it"), Toggle),
         s(Dock, DOCK_APPLICATIONS, "/dock/applications/view", tk("View as"), tk("Large icons, or rows with each app's description"), Choice(APPS_VIEWS)),
         s(Dock, DOCK_APPLICATIONS, "/dock/applications/order", tk("Order"), tk("A–Z, most used first, or grouped by category"), Choice(APPS_ORDERS)),

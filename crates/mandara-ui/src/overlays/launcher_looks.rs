@@ -757,7 +757,12 @@ impl LauncherView {
 
         // ── The search bar ──
         self.field_px = BAR_TEXT;
-        let placeholder = t(self.mode.map_or(tk("Search apps, files and actions"), BeaconMode::placeholder)).to_string();
+        // A mode names what it searches; otherwise the prefix help every
+        // look shares.
+        let placeholder = match self.mode {
+            Some(mode) => SharedString::new_static(t(mode.placeholder())),
+            None => self.prefix_help(BAR_TEXT),
+        };
         let token = self.mode.map(|m| {
             div()
                 .h(px(TOKEN_H))

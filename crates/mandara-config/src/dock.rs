@@ -17,6 +17,11 @@ use crate::surfaces::Span;
 /// `plugins.enabled`).
 pub const DOCK_PLUGIN_ID: &str = "dock";
 
+/// The launcher button's entry in [`DockConfig::pinned`]: it is kept, moved
+/// and removed like a pinned app, at any position. No desktop id starts
+/// with `@`.
+pub const LAUNCHER_PIN: &str = "@launcher";
+
 /// Default values of the dock settings.
 pub mod defaults {
     pub const DOCK_ICON_PX: f32 = 48.0;
@@ -269,7 +274,8 @@ pub struct DockConfig {
     pub isolate_displays: bool,
 
     // ── Apps ──
-    /// Pinned apps (desktop ids without `.desktop`), in order.
+    /// Pinned apps (desktop ids without `.desktop`), in order;
+    /// [`LAUNCHER_PIN`] is the launcher button.
     pub pinned: Vec<String>,
     pub show_running: bool,
     /// Recently used apps that aren't pinned or running, after the running
@@ -288,9 +294,18 @@ pub struct DockConfig {
     pub indicator: DockIndicator,
     /// Most apps shown (0 = no limit).
     pub max_apps: u32,
-    /// A launcher button at the dock's start (or end).
-    pub launcher_button: bool,
-    pub launcher_at_end: bool,
+    /// The pin defaults `pinned` was written for (see [`crate::upgrade`]):
+    /// missing in older files, whose launcher button then moves into
+    /// `pinned` ([`DockConfig::upgrade_launcher_button`]).
+    #[serde(default)]
+    pub pins_version: u32,
+    /// Before 0.23: a launcher button fixed at the dock's start (or end).
+    /// [`DockConfig::upgrade_launcher_button`] moves it into `pinned` as
+    /// [`LAUNCHER_PIN`] and drops these keys.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub launcher_button: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub launcher_at_end: Option<bool>,
     /// The Applications folder on the right side (a Launchpad-style grid
     /// of your apps; drop apps on it to install them). Replaces the
     /// `applications_slot` switch of 0.1, which every config saved as off
@@ -364,7 +379,7 @@ impl Default for DockConfig {
             displays: DockDisplays::All,
             monitors: Vec::new(),
             isolate_displays: false,
-            pinned: ["org.gnome.Nautilus", "firefox", "com.mitchellh.ghostty", "dev.zed.Zed"].iter().map(|s| s.to_string()).collect(),
+            pinned: [LAUNCHER_PIN, "org.gnome.Nautilus", "firefox", "com.mitchellh.ghostty", "dev.zed.Zed"].iter().map(|s| s.to_string()).collect(),
             show_running: true,
             show_recent: true,
             recent_count: defaults::DOCK_RECENT_COUNT,
@@ -374,8 +389,9 @@ impl Default for DockConfig {
             progress_badges: true,
             indicator: DockIndicator::Dots,
             max_apps: 0,
-            launcher_button: true,
-            launcher_at_end: false,
+            pins_version: crate::upgrade::DOCK_PINS_VERSION,
+            launcher_button: None,
+            launcher_at_end: None,
             applications: DockApplications::default(),
             trash: true,
             minimize_to_app: true,
@@ -530,6 +546,30 @@ impl DockConfig {
         true
     }
 
+    /// Whether the launcher button is in the dock.
+    pub fn launcher_pinned(&self) -> bool {
+        self.is_pinned(LAUNCHER_PIN)
+    }
+
+    /// Moves the launcher button of a dock written before
+    /// [`crate::upgrade::DOCK_PINS_VERSION`] into the pinned list where it
+    /// showed: first, or after the pinned apps with `launcher_at_end`. It
+    /// was on unless `launcher_button = false`, also in hand-written
+    /// tables that only list `pinned`. The old keys are dropped and the
+    /// version recorded, so it runs once and a button you remove later
+    /// stays removed. Returns whether anything changed.
+    pub fn upgrade_launcher_button(&mut self) -> bool {
+        let (button, at_end) = (self.launcher_button.take(), self.launcher_at_end.take());
+        if self.pins_version >= crate::upgrade::DOCK_PINS_VERSION {
+            return button.is_some() || at_end.is_some();
+        }
+        self.pins_version = crate::upgrade::DOCK_PINS_VERSION;
+        if button.unwrap_or(true) && !self.launcher_pinned() {
+            self.pin_at(LAUNCHER_PIN, if at_end.unwrap_or(false) { usize::MAX } else { 0 });
+        }
+        true
+    }
+
     /// Cleans pins written by older builds: trims them, drops `.desktop`
     /// suffixes, empty entries and duplicates (first wins, any case), and
     /// drops stacks without a folder. Returns whether anything changed.
@@ -624,6 +664,71 @@ mod tests {
         assert!(!m.normalize_pins(), "idempotent");
         let text = toml::to_string(&m).unwrap();
         assert_eq!(toml::from_str::<DockConfig>(&text).unwrap(), m);
+    }
+
+    /// The launcher button of older builds lands in the pinned list where
+    /// it showed, once; the old keys are not written back.
+    #[test]
+    fn the_old_launcher_button_moves_into_the_pinned_list() {
+        let old = |text: &str| -> DockConfig { toml::from_str(text).unwrap() };
+        // At the start: every config saved both keys explicitly.
+        let mut start = old("pinned = [\"firefox\", \"dev.zed.Zed\"]\nlauncher_button = true\nlauncher_at_end = false\n");
+        assert!(start.upgrade_launcher_button());
+        assert_eq!(start.pinned, [LAUNCHER_PIN, "firefox", "dev.zed.Zed"]);
+        assert!(!start.upgrade_launcher_button(), "runs once");
+        let text = toml::to_string(&start).unwrap();
+        assert!(!text.contains("launcher_button") && !text.contains("launcher_at_end"), "{text}");
+        let mut reloaded: DockConfig = toml::from_str(&text).unwrap();
+        assert!(!reloaded.upgrade_launcher_button());
+        assert_eq!(reloaded, start);
+        // At the end: after the pinned apps.
+        let mut end = old("pinned = [\"firefox\"]\nlauncher_button = true\nlauncher_at_end = true\n");
+        assert!(end.upgrade_launcher_button());
+        assert_eq!(end.pinned, ["firefox", LAUNCHER_PIN]);
+        // Switched off: not pinned.
+        let mut off = old("pinned = [\"firefox\"]\nlauncher_button = false\nlauncher_at_end = true\n");
+        assert!(off.upgrade_launcher_button());
+        assert_eq!(off.pinned, ["firefox"]);
+        // Only the position saved: the button was on (its old default).
+        let mut only_end = old("pinned = [\"firefox\"]\nlauncher_at_end = true\n");
+        assert!(only_end.upgrade_launcher_button());
+        assert_eq!(only_end.pinned, ["firefox", LAUNCHER_PIN]);
+        // Already pinned (moved by you): it stays where it is.
+        let mut kept = old("pinned = [\"firefox\", \"@launcher\", \"dev.zed.Zed\"]\nlauncher_button = true\n");
+        assert!(kept.upgrade_launcher_button());
+        assert_eq!(kept.pinned, ["firefox", LAUNCHER_PIN, "dev.zed.Zed"]);
+        // A hand-written table that lists only the apps: the button was on.
+        let mut listed = old("pinned = [\"firefox\"]\n");
+        assert!(listed.upgrade_launcher_button());
+        assert_eq!(listed.pinned, [LAUNCHER_PIN, "firefox"]);
+        // Written by this version: nothing moves, stray old keys go.
+        let mut current = old("pins_version = 1\npinned = [\"firefox\"]\n");
+        assert!(!current.upgrade_launcher_button());
+        let mut stray = old("pins_version = 1\npinned = [\"firefox\"]\nlauncher_button = true\n");
+        assert!(stray.upgrade_launcher_button());
+        assert_eq!((stray.pinned.as_slice(), stray.launcher_button), (["firefox".to_string()].as_slice(), None));
+        // A new dock has it first; removing it sticks across a save.
+        let mut fresh = DockConfig::default();
+        assert_eq!(fresh.pinned.first().map(String::as_str), Some(LAUNCHER_PIN));
+        assert!(fresh.unpin(LAUNCHER_PIN));
+        let mut saved: DockConfig = toml::from_str(&toml::to_string(&fresh).unwrap()).unwrap();
+        assert!(!saved.upgrade_launcher_button() && !saved.launcher_pinned());
+    }
+
+    /// The launcher button moves, pins and unpins at any index like an app.
+    #[test]
+    fn the_launcher_button_takes_any_position() {
+        let mut d = DockConfig { pinned: vec!["a".into(), "b".into(), "c".into()], ..DockConfig::default() };
+        assert!(d.pin_at(LAUNCHER_PIN, 0));
+        assert_eq!(d.pinned, [LAUNCHER_PIN, "a", "b", "c"]);
+        assert!(d.pin_at(LAUNCHER_PIN, 2), "moved to the middle");
+        assert_eq!(d.pinned, ["a", "b", LAUNCHER_PIN, "c"]);
+        assert!(d.move_pin(2, 99), "and to the end");
+        assert_eq!(d.pinned, ["a", "b", "c", LAUNCHER_PIN]);
+        assert!(!d.toggle_pin(LAUNCHER_PIN) && !d.launcher_pinned(), "toggled off");
+        assert!(d.toggle_pin(LAUNCHER_PIN) && d.pinned.last().map(String::as_str) == Some(LAUNCHER_PIN), "and back on at the end");
+        assert!(!d.pin(LAUNCHER_PIN), "never twice");
+        assert!(!d.normalize_pins(), "a valid pin");
     }
 
     #[test]

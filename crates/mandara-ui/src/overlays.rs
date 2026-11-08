@@ -19,6 +19,7 @@
 mod launcher_looks;
 mod beacon_keyboard;
 mod launcher_agent;
+mod launcher_hint;
 
 use crate::bidi::Bidi as _;
 use crate::launcher_icons::IconLedger;
@@ -1147,6 +1148,12 @@ pub fn run_json(args: &[String], cx: &mut App) -> Result<serde_json::Value, Stri
 
 pub struct LauncherView {
     agent: Option<launcher_agent::Agent>,
+    /// The AI Shell Agent is switched on (`!` goes to it), as of the last
+    /// config change.
+    agent_enabled: bool,
+    /// The search field's prefix help, shared by every look
+    /// ([`launcher_hint`]).
+    hint: launcher_hint::PrefixHelp,
     shell: Entity<ShellState>,
     focus: FocusHandle,
     query: String,
@@ -1241,6 +1248,26 @@ pub(crate) fn focused_output(cx: &App) -> Option<mandara_core::OutputGeometry> {
     crate::outputs::overlay_output(&cx.try_global::<Outputs>()?.0, cx).cloned()
 }
 
+/// Follows the prefix settings edited while the launcher is open: the
+/// providers ([`SearchCtx::follow_providers`], data gathered through
+/// `load`) and the AI Shell Agent's switch. The prefix help every look
+/// shows is composed again on its next frame when either changed. Returns
+/// whether the providers changed (routing and Beacon modes follow them).
+fn follow_prefix_settings(
+    ctx: &mut SearchCtx,
+    hint: &mut launcher_hint::PrefixHelp,
+    agent_enabled: &mut bool,
+    launcher: &mandara_config::LauncherConfig,
+    load: impl FnMut(&mut SearchCtx, &'static str),
+) -> bool {
+    let providers_changed = ctx.follow_providers(&launcher.providers, load);
+    if providers_changed || launcher.agent.enabled != *agent_enabled {
+        *agent_enabled = launcher.agent.enabled;
+        hint.invalidate();
+    }
+    providers_changed
+}
+
 impl LauncherView {
     /// A launcher on a surface opened for an output of logical size
     /// `expected` ([`crate::outputs::overlay_target`]).
@@ -1266,7 +1293,7 @@ impl LauncherView {
             let launcher = &config.read(cx).get().launcher;
             let look_changed = launcher.look != this.look;
             let agent_changed = this.agent.as_ref().is_some_and(|agent| agent.settings != launcher.agent);
-            let providers_changed = this.ctx.follow_providers(&launcher.providers, |ctx, id| ctx.load(id, cx));
+            let providers_changed = follow_prefix_settings(&mut this.ctx, &mut this.hint, &mut this.agent_enabled, launcher, |ctx, id| ctx.load(id, cx));
             if look_changed {
                 this.look = config.read(cx).get().launcher.look.clone();
             }
@@ -1286,6 +1313,8 @@ impl LauncherView {
         focus.focus(window, cx);
         let mut this = Self {
             agent: None,
+            agent_enabled: config(cx).read(cx).get().launcher.agent.enabled,
+            hint: Default::default(),
             shell,
             focus,
             query: String::new(),
@@ -1803,10 +1832,18 @@ impl LauncherView {
             .into_any_element()
     }
 
+    /// The prefix help every look's search field shows while empty, for
+    /// the field's width last frame at `font_px` ([`launcher_hint`],
+    /// composed only when its settings or the language change).
+    fn prefix_help(&mut self, font_px: f32) -> gpui::SharedString {
+        let width = self.text_bounds.get().map(|b| f32::from(b.size.width));
+        self.hint.get(&self.ctx.providers, self.agent_enabled, width, font_px)
+    }
+
     /// The query text with its blinking caret (solid for half a second
     /// after each edit), the selection, or `placeholder` while empty;
     /// `size` px type. Records where the text lies (click-to-place-caret).
-    fn query_field(&self, size: f32, placeholder: String, palette: &MandaraPalette, focused: bool) -> gpui::Div {
+    fn query_field(&self, size: f32, placeholder: gpui::SharedString, palette: &MandaraPalette, focused: bool) -> gpui::Div {
         let caret_on = focused && (self.blink_from.elapsed().as_millis() / CARET_BLINK.as_millis()).is_multiple_of(2);
         let caret = div().w(px(2.0)).h(px(size + 5.0)).rounded(px(crate::style::radius(1.0))).flex_none().bg(palette.primary.hsla()).when(!caret_on, |el| el.opacity(0.0));
         let bounds = self.text_bounds.clone();
@@ -2086,17 +2123,7 @@ impl Render for LauncherView {
         let chips_el = chips.then(|| self.chips_element(&palette, None, window, cx));
         let hints_el = look.hints.then(|| self.classic_hints(grid, chips, &palette));
         self.field_px = text::BODY + 1.0;
-        let hint = {
-            let p = &cfg.launcher.providers;
-            let mut parts = vec![t("Apps, settings, commands").to_string(), t("“/” slash commands").to_string(), t("“=” calculate").to_string()];
-            if p.emoji.enabled && !p.emoji.prefix.is_empty() {
-                parts.push(tf("“{prefix}” emoji", &[("prefix", &p.emoji.prefix)]));
-            }
-            if p.windows.enabled && !p.windows.prefix.is_empty() {
-                parts.push(tf("“{prefix}” windows", &[("prefix", &p.windows.prefix)]));
-            }
-            parts.join(" · ")
-        };
+        let hint = self.prefix_help(text::BODY + 1.0);
         let search = div()
             .h(px(SEARCH_H))
             .px(px(16.0))
@@ -2667,6 +2694,44 @@ mod tests {
         edited.clipboard.prefix.clear();
         assert!(ctx.follow_providers(&edited, |_, _| {}));
         assert_eq!(launcher_looks::settle_mode(mode, &ctx.providers), None);
+    }
+
+    /// Switching the agent or a provider while the launcher is open
+    /// updates the prefix help every look shows, without reopening it; an
+    /// unrelated edit composes nothing.
+    #[test]
+    fn the_prefix_help_follows_settings_while_the_launcher_is_open() {
+        let mut launcher = mandara_config::LauncherConfig::default();
+        let mut ctx = SearchCtx { providers: launcher.providers.clone(), ..SearchCtx::default() };
+        let (mut hint, mut agent) = (launcher_hint::PrefixHelp::default(), launcher.agent.enabled);
+        // A narrow and a roomy field.
+        let shown = |hint: &mut launcher_hint::PrefixHelp, ctx: &SearchCtx, agent: bool| [Some(400.0), Some(4000.0)].map(|w| hint.get(&ctx.providers, agent, w, 14.0).to_string());
+        let before = shown(&mut hint, &ctx, agent);
+        assert!(before.iter().all(|h| !h.contains("“!”")), "the agent is off by default: {before:?}");
+
+        // An unrelated edit: the cached text stays.
+        launcher.max_results += 1;
+        assert!(!follow_prefix_settings(&mut ctx, &mut hint, &mut agent, &launcher, |_, id| panic!("gathered {id}")));
+        let cached = hint.get(&ctx.providers, agent, Some(400.0), 14.0);
+        assert!(std::ptr::eq(cached.as_ref(), hint.get(&ctx.providers, agent, Some(400.0), 14.0).as_ref()));
+
+        // The agent switched on: every form gains its `!`.
+        launcher.agent.enabled = true;
+        assert!(!follow_prefix_settings(&mut ctx, &mut hint, &mut agent, &launcher, |_, id| panic!("gathered {id}")), "not a provider change");
+        assert!(shown(&mut hint, &ctx, agent).iter().all(|h| h.contains("“!”")));
+
+        // A provider switched off and another's prefix changed.
+        launcher.providers.emoji.enabled = false;
+        launcher.providers.windows.prefix = "w:".into();
+        assert!(follow_prefix_settings(&mut ctx, &mut hint, &mut agent, &launcher, |_, _| {}));
+        for h in shown(&mut hint, &ctx, agent) {
+            assert!(!h.contains("“:”") && h.contains("“w:”") && h.contains("“!”"), "{h:?}");
+        }
+
+        // And the agent off again.
+        launcher.agent.enabled = false;
+        follow_prefix_settings(&mut ctx, &mut hint, &mut agent, &launcher, |_, _| {});
+        assert!(shown(&mut hint, &ctx, agent).iter().all(|h| !h.contains("“!”")));
     }
 
     #[test]

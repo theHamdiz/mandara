@@ -8,7 +8,8 @@ files for resume; Cancel removes partial files. Models have their own licenses,
 shown on their cards, and are never bundled or downloaded by the installer.
 
 Type `!dark mode` or `! set volume to 40` in the launcher. A bare `!` shows
-examples. Ordinary launcher searches do not start inference. The same rows
+examples. While the agent is on, the launcher's empty search field lists
+`!` beside its other prefixes in every look. Ordinary launcher searches do not start inference. The same rows
 show retrieval candidates and the final action preview in Classic, Grid and
 Beacon. Enter runs the previewed actions through Mandara's command dispatcher;
 Esc cancels. The preview is a proposal, so check its command and target values.
