@@ -12,10 +12,16 @@ mod clip;
 /// At the maximum supported export width, one RGBA strip is two MiB.
 const STRIP_ROWS: u32 = 128;
 
+/// Renders `doc` to a PNG, `STRIP_ROWS` rows at a time. `checkpoint`
+/// runs between layout steps and before every strip; `false` cancels.
 pub(super) fn png(doc: &Document, checkpoint: impl FnMut() -> bool) -> Result<Vec<u8>, String> {
     render(doc, STRIP_ROWS, checkpoint)
 }
 
+/// [`png`] with a chosen strip height (tests use tiny strips). One pixmap
+/// and mask of `strip_rows` rows are reused for the whole image, and each
+/// strip is un-premultiplied in place and streamed into the encoder, so
+/// only the compressed output grows with the image's height.
 fn render(
     doc: &Document,
     strip_rows: u32,
@@ -71,6 +77,7 @@ fn render(
     Ok(output.finish())
 }
 
+/// The user-facing message for an encoder failure.
 fn error(error: impl std::fmt::Display) -> String {
     tf("Could not copy the image: {error}", &[("error", &error)])
 }

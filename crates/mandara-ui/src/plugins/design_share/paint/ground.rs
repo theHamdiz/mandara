@@ -8,6 +8,8 @@ use super::super::document::{Document, Layout};
 /// A fixed grid keeps floating-point gradient evaluation identical for every caller.
 const ROWS: u32 = 128;
 
+/// The card's rounded gradient background, rendered one `ROWS`-row tile
+/// at a time and kept until a strip needs the next tile.
 pub(super) struct Ground {
     pixels: Pixmap,
     paint: Paint<'static>,
@@ -17,6 +19,7 @@ pub(super) struct Ground {
 }
 
 impl Ground {
+    /// Allocates the tile (at most `ROWS` rows) and the card's outline.
     pub(super) fn new(doc: &Document, layout: &Layout) -> Result<Self, String> {
         let error = || t("The image design could not be prepared").to_string();
         Ok(Self {
@@ -35,6 +38,8 @@ impl Ground {
         })
     }
 
+    /// Copies the background for image rows `top..` into `canvas`, rendering
+    /// a tile only when the rows move into a new one.
     pub(super) fn paint(&mut self, canvas: &mut PixmapMut<'_>, top: u32) {
         let stride = self.pixels.width() as usize * 4;
         let mut row = 0;

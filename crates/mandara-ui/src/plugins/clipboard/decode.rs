@@ -3,6 +3,9 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// Thumbnails a clipboard view still needs, decoded by one sequential
+/// worker at a time. The generation, shared with the running batch,
+/// changes on every clear or drop so that batch stops early.
 pub(super) struct Queue<T> {
     pending: Vec<T>,
     generation: Arc<AtomicU64>,
@@ -20,10 +23,13 @@ impl<T> Default for Queue<T> {
 }
 
 impl<T> Queue<T> {
+    /// Queues more thumbnails; they join the next batch, never the running one.
     pub(super) fn extend(&mut self, jobs: impl IntoIterator<Item = T>) {
         self.pending.extend(jobs);
     }
 
+    /// Takes everything queued as one batch unless a worker is already
+    /// running (or nothing is queued).
     pub(super) fn start(&mut self) -> Option<Batch<T>> {
         if self.running || self.pending.is_empty() {
             return None;
@@ -42,10 +48,13 @@ impl<T> Queue<T> {
         self.start()
     }
 
+    /// Whether a result from the batch of generation `expected` still applies.
     pub(super) fn current(&self, expected: u64) -> bool {
         self.generation.load(Ordering::Acquire) == expected
     }
 
+    /// Forgets the queue and its capacity (a page change or close) and makes
+    /// the running batch stale. That batch keeps the slot until it finishes.
     pub(super) fn clear(&mut self) {
         self.generation.fetch_add(1, Ordering::AcqRel);
         self.pending.clear();
@@ -54,6 +63,7 @@ impl<T> Queue<T> {
 }
 
 impl<T> Drop for Queue<T> {
+    /// A closed view makes its running batch stale, so it decodes nothing more.
     fn drop(&mut self) {
         self.generation.fetch_add(1, Ordering::AcqRel);
     }
@@ -66,6 +76,7 @@ pub(super) struct Batch<T> {
 }
 
 impl<T> Batch<T> {
+    /// The generation this batch was started under.
     pub(super) fn generation(&self) -> u64 {
         self.expected
     }

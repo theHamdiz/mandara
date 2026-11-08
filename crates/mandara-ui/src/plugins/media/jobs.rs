@@ -3,6 +3,9 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// The latest key a view wants decoded, with at most one job running for
+/// it. A generation counter, shared with the running job, marks every
+/// change of request so a superseded job's result is dropped.
 pub(super) struct Latest<K> {
     wanted: Option<K>,
     generation: Arc<AtomicU64>,
@@ -22,10 +25,14 @@ impl<K> Default for Latest<K> {
 }
 
 impl<K: Clone + PartialEq> Latest<K> {
+    /// The key the view currently wants (`None` once it no longer shows one).
     pub(super) fn wanted(&self) -> Option<&K> {
         self.wanted.as_ref()
     }
 
+    /// Replaces the wanted key. The same key again is a no-op; a new one
+    /// bumps the generation, so the running job's result goes stale, and
+    /// needs a fresh job.
     pub(super) fn request(&mut self, wanted: Option<K>) {
         if self.wanted == wanted {
             return;
@@ -35,6 +42,9 @@ impl<K: Clone + PartialEq> Latest<K> {
         self.completed = None;
     }
 
+    /// The job to run for the wanted key, unless one is already running or
+    /// this generation already completed. The caller runs it off the UI
+    /// thread and hands it back to [`Latest::finish`].
     pub(super) fn start(&mut self) -> Option<Job<K>> {
         if self.running.is_some() {
             return None;
@@ -74,11 +84,15 @@ impl<K: Clone + PartialEq> Latest<K> {
 }
 
 impl<K> Drop for Latest<K> {
+    /// A dropped view (hidden, plugin replaced) makes its running job
+    /// stale, so the decoder skips or discards the work.
     fn drop(&mut self) {
         self.generation.fetch_add(1, Ordering::AcqRel);
     }
 }
 
+/// One decode of `key`, valid while the shared generation still equals
+/// `expected`.
 pub(super) struct Job<K> {
     key: K,
     generation: Arc<AtomicU64>,
@@ -86,6 +100,7 @@ pub(super) struct Job<K> {
 }
 
 impl<K> Job<K> {
+    /// Whether no newer request, clear or drop happened since it started.
     fn current(&self) -> bool {
         self.generation.load(Ordering::Acquire) == self.expected
     }

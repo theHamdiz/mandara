@@ -16,6 +16,8 @@ use model::{Key, Snapshot};
 
 pub(super) use model::USAGE_ROWS;
 
+/// The Launcher page's prepared data while the page is shown: the settings
+/// it was asked for, the latest accepted snapshot and the worker lease.
 #[derive(Default)]
 pub(super) struct LauncherData {
     key: Option<Key>,
@@ -43,6 +45,7 @@ impl LauncherData {
         self.visibility = None;
     }
 
+    /// The snapshot to draw, only when it matches the current settings.
     pub fn snapshot(&self) -> Option<&Arc<Snapshot>> {
         self.snapshot.as_ref().filter(|snapshot| self.key.as_ref() == Some(&snapshot.key))
     }

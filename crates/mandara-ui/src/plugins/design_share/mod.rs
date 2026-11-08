@@ -36,6 +36,8 @@ pub(super) struct View {
     life: Rc<()>,
 }
 impl View {
+    /// A view for `panel`. Its life token is the only thing an export keeps
+    /// of it: once the view is dropped, a running export cancels.
     pub fn new(panel: PanelCx) -> Self {
         Self {
             panel,
@@ -158,6 +160,10 @@ pub(super) fn command(doc: Document, cx: &mut App) -> Result<mandara_plugins::Ou
     command_job(move || Ok(doc), cx)
 }
 
+/// Builds the document with `make` and renders it on the background
+/// executor under the shared export slot, then copies the PNG. Cancels
+/// when the caller stops waiting, frees the slot and requests a memory
+/// trim before replying.
 pub(super) fn command_job(
     make: impl FnOnce() -> Result<Document, String> + Send + 'static,
     cx: &mut App,

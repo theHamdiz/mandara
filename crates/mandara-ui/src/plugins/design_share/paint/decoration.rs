@@ -12,6 +12,7 @@ use crate::plugins::jannah::art;
 /// Include every antialiased edge outside the vector's stroke bounds.
 const EDGE_ROOM: f32 = 2.0;
 
+/// Parses a bundled ornament SVG with its black ink replaced by `color`.
 fn tinted(source: Option<String>, color: Color) -> Result<resvg::usvg::Tree, String> {
     let [r, g, b, a] = color.to_rgba8();
     let source = source
@@ -22,6 +23,8 @@ fn tinted(source: Option<String>, color: Color) -> Result<resvg::usvg::Tree, Str
 }
 
 impl Decoration {
+    /// Renders the export's fixed ornaments once, at their final scale, so
+    /// strips only blit them.
     pub(in crate::plugins::design_share) fn new(
         doc: &Document,
         layout: &Layout,

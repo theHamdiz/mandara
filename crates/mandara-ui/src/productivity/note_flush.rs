@@ -6,6 +6,7 @@ pub(super) struct NoteFlush {
 }
 
 impl NoteFlush {
+    /// Whether a submitted flush hasn't reported back yet.
     pub fn running(&self) -> bool { self.running }
 
     /// Only a submitted flush takes ownership; a failed enqueue remains retryable.

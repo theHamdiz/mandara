@@ -70,17 +70,22 @@ pub(super) struct LaidBlock {
     pub color: Color,
 }
 
+/// A measured document: its pixel size and each shaped block's position.
 pub(super) struct Layout {
     pub width: u32,
     pub height: u32,
     pub blocks: Vec<LaidBlock>,
 }
 
+/// The message for any document that can't become one bounded image.
 fn oversized() -> String {
     t("This entry is too large to copy as one image").into()
 }
 
 impl Document {
+    /// Rejects non-finite or negative geometry, widths outside
+    /// `1..=MAX_WIDTH` pixels, empty documents and text over `MAX_TEXT_BYTES`
+    /// before anything is allocated. Returns the pixel width.
     pub(super) fn validate(&self) -> Result<u32, String> {
         if !self.scale.is_finite()
             || self.scale <= 0.0
@@ -109,6 +114,9 @@ impl Document {
         Ok(width as u32)
     }
 
+    /// Shapes every block once at the export scale and stacks them, checking
+    /// `checkpoint` between blocks and the running height against
+    /// `MAX_HEIGHT`.
     pub(super) fn layout(
         &self,
         painter: &mut TextPainter,

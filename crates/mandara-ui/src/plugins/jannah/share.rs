@@ -13,6 +13,8 @@ use crate::backdrop::paint::FontNames;
 use crate::plugins::design_share::{self, Block, Document, Family, Ornament};
 use crate::plugins::panel_fx::alpha;
 
+/// The panel's "Copy as image" button for reminder `key`. Its meaning is
+/// taken from the panel when shown, otherwise prepared when pressed.
 pub(super) fn button(
     view: &design_share::View,
     flash: crate::plugins::extras::Flash,
@@ -56,6 +58,8 @@ pub(super) fn button(
     )
 }
 
+/// The reminder's reading card as an export document, at the display's
+/// scale.
 fn document(
     key: &str,
     meaning: &Option<meanings::Meaning>,
@@ -213,6 +217,9 @@ fn export_meaning(
     })
 }
 
+/// The meaning to include, when wanted and the interface isn't Arabic.
+/// For a verse it starts loading the meanings; one not ready yet
+/// (loading, offline, failed) is an error, never silently left out.
 fn prepare_meaning(
     item: &catalog::Item,
     wanted: bool,
@@ -228,6 +235,8 @@ fn prepare_meaning(
     export_meaning(item, wanted, &shared.borrow())
 }
 
+/// `jannah copy-image <reference>`: copies the reminder's full card, as
+/// the button does.
 pub(super) fn command(
     reference: &str,
     cx: &mut gpui::App,

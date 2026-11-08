@@ -8,14 +8,19 @@ use super::super::document::{Document, Layout};
 /// Include antialiasing immediately beyond the rounded corner.
 const EDGE_ROOM: f32 = 2.0;
 
+/// The card's rounded-corner coverage for the rows `top..top + mask.height()`.
 struct Band {
     mask: Mask,
     top: u32,
 }
 
+/// The card's outline as two pre-rasterized bands (top and bottom
+/// corners); every row between them is fully covered.
 pub(super) struct Clip([Option<Band>; 2]);
 
 impl Clip {
+    /// Rasterizes the corner bands once per export, with the corner radius
+    /// clamped to half the card.
     pub(super) fn new(doc: &Document, layout: &Layout) -> Result<Self, String> {
         let (width, height) = (layout.width, layout.height);
         let radius = (doc.radius * doc.scale)
@@ -44,6 +49,9 @@ impl Clip {
         Ok(Self(bands))
     }
 
+    /// Fills the reusable strip `mask` (starting at image row `top`): opaque,
+    /// with the overlapping band rows copied in. No path is rasterized per
+    /// strip.
     pub(super) fn fill(&self, mask: &mut Mask, top: u32) {
         mask.data_mut().fill(u8::MAX);
         let stride = mask.width() as usize;

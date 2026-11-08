@@ -13,11 +13,15 @@ use crate::plugins::panel_fx::alpha;
 use gpui::{AnyElement, App, Window};
 use mandara_i18n::t;
 
+/// Which card an ayah is exported as: the Today card (with its label) or
+/// the reader's, with or without the meaning.
 pub(super) enum Style {
     Today(String),
     Reader { meaning: bool },
 }
 
+/// The "Copy as image" button for ayah `global`. It holds the loaded text
+/// weakly; the card is built only when pressed.
 pub(super) fn button(
     id: &'static str,
     c: &Ctx<'_>,
@@ -63,6 +67,7 @@ pub(super) fn button(
     )
 }
 
+/// Ayah `global`'s card as an export document, at the display's scale.
 fn document(
     book: &super::Book,
     global: u16,
@@ -204,6 +209,7 @@ fn document(
     Ok(doc)
 }
 
+/// `quran copy-image <reference>`: copies one ayah's reader card.
 pub(super) fn command(reference: &str, cx: &mut App) -> Result<mandara_plugins::Output, String> {
     let (shared, book) = super::need_book(cx)?;
     let selection = super::select(&book, reference)?;
