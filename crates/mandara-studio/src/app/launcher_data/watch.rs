@@ -9,6 +9,8 @@ use notify::Watcher as _;
 
 use super::model::Roots;
 
+/// Change counters the watcher bumps and the loop compares: one for the
+/// app catalog (desktop files, icon-theme settings), one for usage.
 #[derive(Default)]
 pub(super) struct Revisions {
     catalog: AtomicU64,
@@ -18,13 +20,16 @@ pub(super) struct Revisions {
 }
 
 impl Revisions {
+    /// The current `(catalog, usage)` revisions.
     pub fn get(&self) -> (u64, u64) { (self.catalog.load(Ordering::Acquire), self.usage.load(Ordering::Acquire)) }
+    /// Bumps the counters an event touched.
     fn changed(&self, catalog: bool, usage: bool) {
         if catalog { self.catalog.fetch_add(1, Ordering::AcqRel); }
         if usage { self.usage.fetch_add(1, Ordering::AcqRel); }
     }
 }
 
+/// The visit's native watcher and the directories it currently watches.
 pub(super) struct Watch {
     watcher: notify::RecommendedWatcher,
     roots: Roots,
@@ -84,6 +89,7 @@ impl Watch {
 }
 
 impl Drop for Watch {
+    /// Closes the wake queue before the watcher goes (see below).
     fn drop(&mut self) {
         // notify's native drop only requests event-loop shutdown. Close our
         // queue now, while its callback may still own a sender on that thread.

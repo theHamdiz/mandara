@@ -15,10 +15,15 @@ pub struct PluginCatalogs {
 }
 
 impl PluginCatalogs {
+    /// Catalogs under `<plugin_dir>/locales`; nothing is read until a
+    /// language is first needed.
     pub fn new(plugin_dir: &Path) -> Self {
         Self { dir: plugin_dir.join("locales"), loaded: HashMap::new() }
     }
 
+    /// `text`'s translation in `lang`, loading that language's catalog once
+    /// (a missing or invalid file is remembered as absent). English and empty
+    /// text are never looked up.
     fn translation(&mut self, lang: Lang, text: &str) -> Option<&str> {
         if lang == Lang::En || text.is_empty() {
             return None;
@@ -36,6 +41,7 @@ impl PluginCatalogs {
         self.translation(mandara_i18n::language(), text).unwrap_or(text).to_string()
     }
 
+    /// Replaces `text` with its translation, reusing its buffer.
     fn translate_in_place(&mut self, lang: Lang, text: &mut String) {
         if let Some(translated) = self.translation(lang, text) && translated != text.as_str() {
             text.clear();
@@ -43,6 +49,8 @@ impl PluginCatalogs {
         }
     }
 
+    /// An owned string a component returned, translated into the current
+    /// language without a second allocation when it fits.
     pub(super) fn translate_owned(&mut self, mut text: String) -> String {
         self.translate_in_place(mandara_i18n::language(), &mut text);
         text

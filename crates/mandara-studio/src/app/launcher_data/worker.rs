@@ -14,11 +14,15 @@ use super::watch::{Revisions, Watch};
 /// renames an atomic temporary file. One short settling period absorbs them.
 const FILE_SETTLE: Duration = Duration::from_millis(100);
 
+/// The real launcher data: installed desktop files, the usage history
+/// and the toolkit settings that pick the icon theme.
 pub(super) struct NativeSource {
     roots: Roots,
 }
 
 impl NativeSource {
+    /// Resolves the watched paths (XDG application dirs, the usage file under
+    /// the state dir, GTK/KDE settings). Runs on the blocking worker.
     pub fn new() -> Self {
         let state = dirs::state_dir().unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join(".local/state"));
         let preferences = dirs::config_dir().map(|root| ["gtk-4.0/settings.ini", "gtk-3.0/settings.ini", "kdeglobals"].map(|path| root.join(path)).into()).unwrap_or_default();
@@ -27,8 +31,11 @@ impl NativeSource {
 }
 
 impl Source for NativeSource {
+    /// The paths the watcher follows.
     fn roots(&self) -> &Roots { &self.roots }
+    /// Scans the desktop files in the key's language and icon theme.
     fn catalog(&self, key: &Key) -> Vec<mandara_ui::apps::App> { mandara_ui::apps::discover_for_theme(key.language, key.icon_theme.as_deref()) }
+    /// Reads the launch history (empty when missing or invalid).
     fn usage(&self) -> Usage { read_usage(&self.roots.usage) }
 }
 
@@ -38,6 +45,8 @@ pub(super) fn read_usage(path: &std::path::Path) -> Usage {
     std::fs::read_to_string(path).ok().and_then(|text| toml::from_str(&text).ok()).unwrap_or_default()
 }
 
+/// Studio's side of the preparation loop: the settings it wants and the
+/// wake channel. Dropping it (leaving the page) stops the loop.
 pub(super) struct Lease {
     request: Arc<Mutex<Key>>,
     wake: async_channel::Sender<()>,
@@ -54,12 +63,15 @@ impl Lease {
         }
     }
 
+    /// Whether `snapshot` was made for the current settings and file
+    /// revisions; anything older is dropped instead of shown.
     pub fn accepts(&self, snapshot: &Snapshot) -> bool {
         snapshot.key == *self.request.lock().unwrap_or_else(|error| error.into_inner()) && snapshot.revisions == self.revisions.get()
     }
 }
 
 impl Drop for Lease {
+    /// Closes the wake channel, so the loop ends at its next wait.
     fn drop(&mut self) { self.wake.close(); }
 }
 

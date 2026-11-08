@@ -30,6 +30,9 @@ struct Inner {
 }
 
 impl Inner {
+    /// Normalizes this frame's rects and makes them the committed region when
+    /// they differ from the last one. Both buffers keep their capacity, so a
+    /// steady frame allocates nothing. Returns whether the region changed.
     fn commit_pending(&mut self) -> bool {
         normalize(&mut self.pending);
         if self.committed.as_deref() == Some(self.pending.as_slice()) {
@@ -52,6 +55,7 @@ pub struct InputMaskRegistry {
 }
 
 impl InputMaskRegistry {
+    /// An empty registry; the first commit always sends a region.
     pub fn new() -> Self {
         Self::default()
     }
@@ -117,6 +121,8 @@ impl InputMaskRegistry {
         self.flush_with(|bounds| window.set_input_region(Some(bounds)));
     }
 
+    /// [`Self::flush`] with the surface call injected (tests); `apply` runs
+    /// only when the region changed, with the reused bounds buffer.
     fn flush_with(&self, apply: impl FnOnce(&[Bounds<Pixels>])) {
         let mut inner = self.inner.borrow_mut();
         if inner.commit_pending() {

@@ -6,7 +6,9 @@ use crate::notes_store::{NoteStore, NotesSnapshot};
 /// Bounded intents keep a stalled disk from retaining an unbounded edit queue.
 pub(super) const QUEUED_EDITS: usize = 32;
 
+/// What one queued edit produced, sent back once it ran on the worker.
 pub(super) struct Completion<T> {
+    /// The store's view right after this edit (shared bodies, no copies).
     pub snapshot: NotesSnapshot,
     pub value: anyhow::Result<T>,
     /// Separate metadata failure lets an editor retain a newly committed id.
@@ -29,10 +31,14 @@ impl<T> NoteReply<T> {
     }
 }
 
+/// A type-erased queued edit, so one bounded queue carries every reply type.
 trait Edit: Send {
+    /// Runs on the worker's blocking thread with exclusive use of the store.
     fn run(self: Box<Self>, store: &mut NoteStore);
 }
 
+/// An edit for the notes folder `root`, with the channel its completion
+/// goes to and the change signal a newly opened folder's watcher uses.
 struct EditWithReply<F, T> {
     edit: F,
     reply: Sender<Completion<T>>,
@@ -45,6 +51,10 @@ where
     F: FnOnce(&mut NoteStore) -> anyhow::Result<T> + Send,
     T: Send,
 {
+    /// Opens `root` first when the store holds another folder (flushing the
+    /// old index; a failure replies without running the edit), then runs
+    /// the edit and retries the index. The reply never blocks: its channel
+    /// holds exactly one completion.
     fn run(self: Box<Self>, store: &mut NoteStore) {
         let Self { edit, reply, root, changed } = *self;
         if store.root != root {
@@ -70,6 +80,8 @@ where
     }
 }
 
+/// The handle the panel model keeps: dropping it closes the queue, and the
+/// worker task ends after the edits already queued.
 pub(super) struct NotesWorker {
     edits: Sender<Box<dyn Edit>>,
 }

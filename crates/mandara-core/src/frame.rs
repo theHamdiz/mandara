@@ -109,6 +109,7 @@ pub struct DrawerEnd {
 }
 
 impl DrawerEnd {
+    /// An end with a free corner of `radius` and a `flare` into the edge.
     pub const fn flared(radius: f32, flare: f32) -> Self {
         Self { radius, flare }
     }

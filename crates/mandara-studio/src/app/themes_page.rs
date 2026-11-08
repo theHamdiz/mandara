@@ -130,12 +130,13 @@ impl ThemeGallery {
 
     /// Uses this visit's catalog to label the resolved preset. While a requested
     /// theme is loading, keep the current target's name until its source, name
-    /// and appearance agree. Tuning keeps the preset; `ThemeName` preserves
-    /// user-authored titles.
+    /// and appearance agree. A preset typed by hand as an alias (`Rosé Pine`,
+    /// `tokyo_night`) resolves through the catalog as the engine loaded it.
+    /// Tuning keeps the preset; `ThemeName` preserves user-authored titles.
     fn preview_text(&self, configured: &ThemeSource, applied: &ThemeSource, target: &MandaraPalette) -> (SharedString, String) {
         let preset = match configured {
             ThemeSource::Preset { preset } if configured == applied => self.themes_iter().find(|(def, palette)| {
-                def.id == *preset && def.name == target.name.as_ref() && palette.name == target.name && palette.is_dark == target.is_dark
+                def.answers_to(preset) && def.name == target.name.as_ref() && palette.name == target.name && palette.is_dark == target.is_dark
             }).map(|(def, _)| def),
             _ => None,
         };
@@ -693,6 +694,36 @@ mod preview_tests {
             with_language(Some(Lang::En), || assert_eq!(gallery.preview_text(&source, &source, target).0, def.name));
             assert_eq!(Rc::strong_count(&gallery.themes), retained);
         }
+    }
+
+    /// A preset typed into the config by name or alias localizes like its
+    /// canonical id, while a user theme's title stays as authored (#111).
+    #[test]
+    fn hand_typed_preset_aliases_localize_like_their_canonical_id() {
+        let rose = catalog::builtin().iter().find(|theme| theme.id == "rose-pine").unwrap().clone();
+        let tokyo = catalog::builtin().iter().find(|theme| theme.id == "tokyo-night").unwrap().clone();
+        for (theme, aliases) in [(rose, ["Rosé Pine", "rose_pine", "  ROSE PINE "]), (tokyo, ["Tokyo Night", "tokyo_night", "TOKYO-NIGHT"])] {
+            let gallery = gallery(theme.clone(), true);
+            let (def, target) = gallery.themes_iter().next().unwrap();
+            let canonical = with_language(Some(Lang::Ar), || gallery.preview_text(&source(&def.id), &source(&def.id), target));
+            assert_ne!(canonical.0, def.name, "{} has an Arabic name to compare against", def.id);
+            for alias in aliases {
+                let alias = source(alias);
+                with_language(Some(Lang::Ar), || assert_eq!(gallery.preview_text(&alias, &alias, target), canonical, "{alias:?}"));
+            }
+            // The same alias on a user's own theme keeps its authored title.
+            let mut custom = theme;
+            custom.origin = ThemeOrigin::User { path: "custom-theme.toml".into() };
+            let gallery = self::gallery(custom, true);
+            let (def, target) = gallery.themes_iter().next().unwrap();
+            let alias = source(aliases[1]);
+            with_language(Some(Lang::Ar), || assert_eq!(gallery.preview_text(&alias, &alias, target).0, def.name));
+        }
+        // An unknown name stays literal.
+        let gallery = gallery(corniche(), true);
+        let (_, target) = gallery.themes_iter().next().unwrap();
+        let unknown = source("not a theme");
+        with_language(Some(Lang::Ar), || assert_eq!(gallery.preview_text(&unknown, &unknown, target), (SharedString::from(&target.name), String::new())));
     }
 
     /// Tuning changes tokens without changing which preset the engine resolved.

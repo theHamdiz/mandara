@@ -16,6 +16,9 @@ struct Row {
     interval: Interval,
 }
 
+/// Parses a surah's timing table: exactly `count` rows, ayahs 1..=count
+/// in order, each interval non-empty and starting no earlier than the
+/// previous one ends. Only the intervals are kept.
 pub fn parse(bytes: &[u8], count: u16) -> Result<Box<[Interval]>, String> {
     let rows: Vec<Row> = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
     if count == 0 || rows.len() != usize::from(count) {

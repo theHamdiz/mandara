@@ -22,13 +22,18 @@ pub const MAX_CHAPTER: u64 = 256 << 20;
 pub const MAX_TIMING: u64 = 2 << 20;
 static NEXT_PART: AtomicU64 = AtomicU64::new(0);
 
+/// How recitation files are fetched (HTTPS, or a fixture in tests).
 pub trait Transport {
+    /// Downloads at most `limit` bytes of MP3 audio from `url` into `path`.
     fn audio(&self, url: &str, path: &Path, limit: u64, observer: &dyn Observer) -> Result<(), String>;
+    /// Fetches a small JSON document (at most `MAX_TIMING` bytes).
     fn metadata(&self, url: &str, observer: &dyn Observer) -> Result<Vec<u8>, String>;
 }
 
+/// The real transport: blocking HTTPS through `ureq`, refused offline.
 pub struct Http;
 
+/// A GET with the connect and body timeouts, unless offline mode is on.
 fn request(url: &str) -> Result<ureq::http::Response<ureq::Body>, String> {
     crate::offline::check()?;
     let agent: ureq::Agent = ureq::Agent::config_builder().timeout_connect(Some(CONNECT_TIMEOUT)).timeout_recv_body(Some(BODY_TIMEOUT)).build().into();
@@ -55,6 +60,8 @@ impl Transport for Http {
     }
 }
 
+/// Reads the whole body in `CHUNK`-sized reads, refusing more than
+/// `MAX_TIMING` bytes and stopping when the observer cancels.
 fn read_metadata(reader: &mut dyn Read, observer: &dyn Observer) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
     let mut buf = [0; CHUNK];
@@ -73,6 +80,8 @@ fn read_metadata(reader: &mut dyn Read, observer: &dyn Observer) -> Result<Vec<u
     Ok(bytes)
 }
 
+/// Whether `path` holds a cached recitation: `MIN_AUDIO..=limit` bytes
+/// that start like an MP3.
 pub fn cached_audio(path: &Path, limit: u64) -> bool {
     std::fs::File::open(path).is_ok_and(|mut f| {
         let mut head = [0; 3];
@@ -80,6 +89,10 @@ pub fn cached_audio(path: &Path, limit: u64) -> bool {
     })
 }
 
+/// Streams the body to a unique `.part` file next to `path`, one `CHUNK`
+/// at a time, then syncs and renames it into place only when it is a
+/// complete MP3 within `limit`. Any failure or cancellation removes the
+/// part file, so the cache never holds a partial download.
 fn save_audio(reader: &mut dyn Read, path: &Path, limit: u64, total: u64, observer: &dyn Observer) -> Result<(), String> {
     let parent = path.parent().ok_or_else(|| "no cache folder".to_string())?;
     std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;

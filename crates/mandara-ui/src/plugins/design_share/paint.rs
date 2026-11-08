@@ -15,12 +15,15 @@ mod ground;
 
 use ground::Ground;
 
+/// What every strip reuses for one export: the pre-rendered top ornament,
+/// the background tile and up to four rim ornaments, each painted once.
 pub(super) struct Decoration {
     top: Option<tiny_skia::Pixmap>,
     ground: Ground,
     rim: [Option<Raster>; 4],
 }
 
+/// A pre-rendered ornament and where its top-left sits in the whole image.
 struct Raster {
     pixels: tiny_skia::Pixmap,
     origin: (i32, i32),
@@ -40,6 +43,9 @@ fn interpolate(from: Color, to: Color, t: f32) -> Color {
     )
 }
 
+/// The card's background gradient for a canvas whose first row is image
+/// row `top`, sampled in Oklab like the panel (a solid fill if the
+/// gradient degenerates).
 fn gradient(doc: &Document, layout: &Layout, top: u32) -> Paint<'static> {
     let (w, h) = (layout.width as f32, layout.height as f32);
     let radians = doc.angle.to_radians();
@@ -78,6 +84,7 @@ fn gradient(doc: &Document, layout: &Layout, top: u32) -> Paint<'static> {
     }
 }
 
+/// Fills `rect` (x, y, width, height in strip coordinates) with `color`.
 fn rectangle(canvas: &mut PixmapMut<'_>, rect: (f32, f32, f32, f32), color: Color) {
     if let Some(rect) = tiny_skia::Rect::from_xywh(rect.0, rect.1, rect.2, rect.3) {
         // The rectangle fast path rejects a fractional two-column sliver
@@ -92,6 +99,9 @@ fn rectangle(canvas: &mut PixmapMut<'_>, rect: (f32, f32, f32, f32), color: Colo
     }
 }
 
+/// Paints image rows `top..top + canvas.height()` into the cleared strip:
+/// background, ornaments, text blocks, then the rim, all offset by `top`
+/// so the strips join seamlessly.
 pub(super) fn strip(
     doc: &Document,
     layout: &Layout,

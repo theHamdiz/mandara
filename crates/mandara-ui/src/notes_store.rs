@@ -45,6 +45,17 @@ const MAX_NAME_CHARS: usize = 60;
 /// Stem of a note with no title yet.
 const UNTITLED: &str = "Untitled";
 
+/// A note body's fingerprint for conflict checks: the panel remembers
+/// which disk body a draft replaces, and the store which body it last wrote,
+/// as this instead of a second copy of the Markdown. It is only compared
+/// within one process.
+pub(crate) fn body_hash(text: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut hasher);
+    hasher.finish()
+}
+
 /// The default notes folder.
 pub fn default_root() -> PathBuf {
     mandara_config::paths::data_dir().join("notes")
@@ -71,6 +82,7 @@ impl Default for Topic {
 }
 
 impl Topic {
+    /// The default topic still under its shipped English name (shown translated).
     pub fn has_default_name(&self) -> bool {
         self.id == DEFAULT_TOPIC && self.name == DEFAULT_TOPIC_NAME
     }
@@ -136,10 +148,12 @@ pub fn safe_name(name: &str) -> String {
     trimmed.chars().take(MAX_NAME_CHARS).collect::<String>().trim().to_string()
 }
 
+/// Seconds since the epoch (0 for times before it).
 fn unix(t: SystemTime) -> i64 {
     t.duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
 }
 
+/// A root-relative path with `/` separators, as the index stores it.
 fn rel(path: &Path) -> String {
     path.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/")
 }
@@ -153,6 +167,10 @@ pub struct NoteStore {
     scan_error: Option<String>,
     index_dirty: bool,
     watcher: Option<notify::RecommendedWatcher>,
+    /// [`body_hash`] of the body this store last wrote, per note, so a
+    /// queued draft can tell its own earlier write from an external edit.
+    /// Entries leave with their note; a folder change replaces the store.
+    written: BTreeMap<u64, u64>,
 }
 
 impl std::ops::Deref for NoteStore {
@@ -184,7 +202,7 @@ impl NoteStore {
     /// Opens (creating) `root` and scans it.
     pub fn open(root: &Path) -> Self {
         let index: Index = std::fs::read_to_string(root.join(INDEX_FILE)).ok().and_then(|s| toml::from_str(&s).ok()).unwrap_or_default();
-        let mut s = Self { view: NotesSnapshot { root: root.to_path_buf(), topics: index.topics, notes: Vec::new(), read_errors: None }, ids: index.ids, next_id: index.next_id.max(1), index_error: None, scan_error: None, index_dirty: false, watcher: None };
+        let mut s = Self { view: NotesSnapshot { root: root.to_path_buf(), topics: index.topics, notes: Vec::new(), read_errors: None }, ids: index.ids, next_id: index.next_id.max(1), index_error: None, scan_error: None, index_dirty: false, watcher: None, written: BTreeMap::new() };
         if let Err(err) = std::fs::create_dir_all(root) {
             tracing::warn!("notes folder {}: {err:#}", root.display());
         }
@@ -192,6 +210,8 @@ impl NoteStore {
         s
     }
 
+    /// Marks the index changed and writes it now; a failure stays recorded
+    /// (`index_dirty`, `index_error`) for the next [`NoteStore::persist_index`].
     fn save_index(&mut self) {
         self.index_dirty = true;
         let _ = self.persist_index();
@@ -205,6 +225,8 @@ impl NoteStore {
         result
     }
 
+    /// Writes `.mandara-notes.toml` atomically, skipping the write when the
+    /// file already holds the same bytes.
     fn write_index(&self) -> Result<()> {
         let index = IndexRef { topics: &self.view.topics, ids: &self.ids, next_id: self.next_id };
         let text = toml::to_string(&index)?;
@@ -235,6 +257,7 @@ impl NoteStore {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 self.ids.remove(path);
                 self.view.notes.remove(pos);
+                self.written.remove(&id);
                 Ok(false)
             }
             Err(error) => Err(error.into()),
@@ -261,6 +284,7 @@ impl NoteStore {
         Ok(())
     }
 
+    /// A note id above every id in use or in the index.
     fn fresh_id(&mut self) -> u64 {
         let id = self.next_id.max(self.ids.values().max().map_or(1, |m| m + 1)).max(self.view.notes.iter().map(|n| n.id + 1).max().unwrap_or(1));
         self.next_id = id + 1;
@@ -282,6 +306,8 @@ impl NoteStore {
                 None => {}
             }
         }
+        let notes = &self.view.notes;
+        self.written.retain(|id, _| notes.iter().any(|note| note.id == *id));
     }
 
     /// A file path for `stem` in `topic`'s folder that no file uses.
@@ -297,6 +323,11 @@ impl NoteStore {
         (2..).map(|n| join(&format!("{stem} {n}.{EXTENSION}"))).find(|p| !taken(p)).unwrap_or(first)
     }
 
+    /// Adds a note to `topic` (the default topic if it doesn't exist) and
+    /// writes its file unless `text` is blank. A failed file write leaves no
+    /// note behind, nor does a blank note whose index can't be saved; a
+    /// written note keeps its id when only the index failed
+    /// ([`NoteStore::index_result`] reports it).
     pub fn create(&mut self, topic: u64, text: &str) -> Result<u64> {
         let topic = if self.topic(topic).is_some() { topic } else { DEFAULT_TOPIC };
         let previous_next = self.next_id;
@@ -344,8 +375,15 @@ impl NoteStore {
         let topic = self.view.notes[pos].topic;
         // Replace the changed entry directly: make_mut would copy its old body.
         self.view.notes[pos] = Arc::new(Note { id, topic, path: Some(path), text: text.to_owned(), updated: unix(SystemTime::now()) });
+        self.written.insert(id, body_hash(text));
         self.save_index();
         Ok(())
+    }
+
+    /// Whether `text` is the body this store last wrote for note `id` (so
+    /// finding it on disk means no other program changed the file since).
+    pub(crate) fn wrote(&self, id: u64, text: &str) -> bool {
+        self.written.get(&id).is_some_and(|&hash| hash == body_hash(text))
     }
 
     /// Editing ended: an emptied note is deleted, and the file is renamed
@@ -369,6 +407,8 @@ impl NoteStore {
         Ok(true)
     }
 
+    /// Renames note `id`'s file from `old` to `new` (root-relative) and
+    /// moves its id in the index with it.
     fn rename_file(&mut self, id: u64, old: &str, new: &str) -> Result<()> {
         self.ensure_writable(id)?;
         let to = self.view.root.join(new);
@@ -385,6 +425,8 @@ impl NoteStore {
         Ok(())
     }
 
+    /// Deletes a note and its file (already gone counts as deleted). Returns
+    /// whether the note existed.
     pub fn delete(&mut self, id: u64) -> Result<bool> {
         self.ensure_writable(id)?;
         let Some(pos) = self.view.notes.iter().position(|n| n.id == id) else { return Ok(false) };
@@ -398,6 +440,7 @@ impl NoteStore {
             self.ids.remove(p);
         }
         self.view.notes.remove(pos);
+        self.written.remove(&id);
         self.save_index();
         Ok(true)
     }
@@ -421,6 +464,8 @@ impl NoteStore {
         Ok(())
     }
 
+    /// Adds a topic and its folder, or returns the existing topic with that
+    /// folder name. Without a colour, the next swatch hue is used.
     pub fn add_topic(&mut self, name: &str, color: Option<&str>, icon: Option<&str>) -> Result<u64> {
         let dir = safe_name(name);
         anyhow::ensure!(!dir.is_empty(), "a topic needs a name");
@@ -477,6 +522,7 @@ impl NoteStore {
         Ok(())
     }
 
+    /// Sets a topic's colour (a tone or `hue:<0-359>`).
     pub fn recolor_topic(&mut self, id: u64, color: &str) -> Result<()> {
         anyhow::ensure!(ListColor::valid(color), "colour must be a tone or hue:<0-359>");
         self.view.topics.iter_mut().find(|t| t.id == id).context("no such topic")?.color = color.to_string();
@@ -484,6 +530,8 @@ impl NoteStore {
         Ok(())
     }
 
+    /// Moves a topic to position `to` (clamped) in the topic order; returns
+    /// where it landed.
     pub fn move_topic(&mut self, id: u64, to: usize) -> Result<usize> {
         let from = self.view.topics.iter().position(|t| t.id == id).context("no such topic")?;
         let t = self.view.topics.remove(from);

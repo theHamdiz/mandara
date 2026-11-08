@@ -7,10 +7,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// the number of CPUs or the length of other rows in `/proc/stat`.
 const READ_BYTES: usize = 1024;
 
+/// The last known online CPU count (0 until first read).
 struct Capacity(AtomicUsize);
 static CAPACITY: Capacity = Capacity(AtomicUsize::new(0));
 
 impl Capacity {
+    /// Stores a fresh count, or keeps the previous one when `/proc/stat`
+    /// couldn't be read; never less than one.
     fn update(&self, count: io::Result<usize>) -> usize {
         let capacity = count.unwrap_or_else(|_| self.0.load(Ordering::Relaxed)).max(1);
         self.0.store(capacity, Ordering::Relaxed);
@@ -18,6 +21,7 @@ impl Capacity {
     }
 }
 
+/// The cached CPU count, read from `/proc/stat` only the first time.
 pub(super) fn get() -> usize {
     let cached = CAPACITY.0.load(Ordering::Relaxed);
     if cached == 0 { refresh() } else { cached }
@@ -28,6 +32,8 @@ pub(super) fn refresh() -> usize {
     CAPACITY.update(std::fs::File::open("/proc/stat").and_then(count))
 }
 
+/// Streaming state for one `/proc/stat` line: does it start with
+/// `cpu<digits>` followed by whitespace?
 #[derive(Default)]
 struct CpuRow {
     prefix: u8,
@@ -37,6 +43,7 @@ struct CpuRow {
 }
 
 impl CpuRow {
+    /// Feeds the line's next byte; only its first word matters.
     fn push(&mut self, byte: u8) {
         if self.ended {
             return;
@@ -52,11 +59,14 @@ impl CpuRow {
         }
     }
 
+    /// Whether the line was a per-CPU row (not the `cpu` total).
     fn matches(&self) -> bool {
         self.prefix == 3 && self.digit && !self.invalid
     }
 }
 
+/// Counts per-CPU rows through EOF with one fixed `READ_BYTES` buffer,
+/// retrying interrupted reads.
 fn count(mut reader: impl Read) -> io::Result<usize> {
     let mut buffer = [0; READ_BYTES];
     let mut row = CpuRow::default();

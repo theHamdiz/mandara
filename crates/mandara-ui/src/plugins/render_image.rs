@@ -4,11 +4,14 @@ use std::sync::Arc;
 
 use gpui::RenderImage;
 
+/// A render-image handle allocated before a decode's temporary buffers,
+/// so the retained allocation doesn't land above them on the heap.
 pub(super) struct PreparedImage {
     image: Arc<RenderImage>,
 }
 
 impl PreparedImage {
+    /// Allocates the empty handle; call it on the worker before decoding.
     pub(super) fn new() -> Self {
         Self {
             image: Arc::new(RenderImage::new(
