@@ -277,6 +277,8 @@ pub struct HadithCard {
     /// The lead grade: its family, its words (empty for the two Sahih
     /// collections) and its colour (`0xRRGGBB`).
     pub grade: Option<(mandara_services::hadith::GradeClass, String, u32)>,
+    /// Its key (`bukhari:1`): a click opens it in the reader.
+    pub open: String,
 }
 
 /// Reading progress through one collection.
@@ -308,6 +310,9 @@ pub struct JannahInfo {
     /// The reference (`Al-Baqara 2:25`) and in Arabic (`البقرة ٢:٢٥`).
     pub reference: String,
     pub reference_ar: String,
+    /// The item's key (`quran-2:25`): a click opens it in the reader
+    /// (empty: the panel).
+    pub open: String,
     /// Today's step: its title and line (catalog keys) and its check.
     pub step_title: String,
     pub step_line: String,
@@ -330,6 +335,8 @@ pub struct QuranInfo {
     /// Its reference (`Al-Baqara 2:255`) and in Arabic (`البقرة ٢:٢٥٥`).
     pub reference: String,
     pub reference_ar: String,
+    /// `2:255`: a click on the ayah opens it in the reader.
+    pub open: String,
     /// This khatm's progress (0–1) and the khatms completed.
     pub progress: f32,
     pub khatms: u32,

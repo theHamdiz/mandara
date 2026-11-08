@@ -8613,3 +8613,6 @@
 "Panel image copied" = "패널 이미지가 복사됨"
 "Panel capture failed: {error}" = "패널 캡처 실패: {error}"
 "The panel is not visible" = "패널이 표시되지 않습니다"
+
+# Reading folds
+"Open in the reader" = "리더에서 열기"

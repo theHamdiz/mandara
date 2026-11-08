@@ -471,7 +471,7 @@ fn home(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
                 grades: &grades,
                 label,
             };
-            col = col.child(reader::card(c, &shown, Mode::Hero, window));
+            col = col.child(reader::card(c, &shown, Mode::Hero, window, cx));
         }
         // A peek still being picked.
         None if peek != 0 => col = col.child(div().h(px(BODY_MIN)).flex().items_center().justify_center().child(caption(t("Looking…"), c.palette))),
@@ -1023,27 +1023,36 @@ fn reader_page(c: &Ctx, col: Collection, list: Rc<[u32]>, at: usize, window: &mu
         grades: &h.grades,
         label,
     };
-    let page = reader::card(c, &shown, Mode::Reader { chain_shown, toggle, has_chain }, window);
+    let page = reader::card(c, &shown, Mode::Reader { chain_shown, toggle, has_chain }, window, cx);
     let nav = (n > 1).then(|| {
-        let go = |step: isize| {
+        use super::super::jannah::panel::step_within;
+        let g = gold(c.palette);
+        // Paging stops at either end of the list: Next never wraps round
+        // to the first hadith (the end shows a quiet "n of n" instead).
+        let button = |id: &'static str, glyph: &'static str, label: &'static str, step: isize| -> AnyElement {
+            if step_within(at, step, n).is_none() {
+                return div().into_any_element();
+            }
             let (ui, shared) = (c.ui.clone(), c.shared.clone());
-            move |_: &mut Window, cx: &mut App| {
-                if let Some(Page::Reader { list, at, .. }) = ui.borrow_mut().stack.last_mut() {
-                    *at = (*at as isize + step).rem_euclid(list.len() as isize) as usize;
+            pill_button(id, Some(crate::bidi::dir_icon(glyph)), t(label), g, c.palette, move |_: &mut Window, cx: &mut App| {
+                if let Some(Page::Reader { list, at, .. }) = ui.borrow_mut().stack.last_mut()
+                    && let Some(to) = step_within(*at, step, list.len())
+                {
+                    *at = to;
                 }
                 ui.borrow_mut().slide = Some((Instant::now(), step as f32));
                 refresh(&shared, cx);
-            }
+            })
+            .into_any_element()
         };
-        let g = gold(c.palette);
         div()
             .w_full()
             .row()
             .items_center()
             .justify_between()
             .gap(px(NAV_ROW_GAP))
-            .child(pill_button("hadith-prev", Some(crate::bidi::dir_icon("chevron-left")), t("Previous"), g, c.palette, go(-1)))
-            .child(pill_button("hadith-next", Some(crate::bidi::dir_icon("chevron-right")), t("Next"), g, c.palette, go(1)))
+            .child(button("hadith-prev", "chevron-left", tk("Previous"), -1))
+            .child(button("hadith-next", "chevron-right", tk("Next"), 1))
     });
     div().flex().flex_col().gap(px(GAP)).child(head).child(page).when_some(nav, |el, n| el.child(n)).into_any_element()
 }

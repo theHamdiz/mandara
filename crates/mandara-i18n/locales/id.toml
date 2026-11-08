@@ -8613,3 +8613,6 @@
 "Panel image copied" = "Gambar panel disalin"
 "Panel capture failed: {error}" = "Gagal mengambil gambar panel: {error}"
 "The panel is not visible" = "Panel tidak terlihat"
+
+# Reading folds
+"Open in the reader" = "Buka di pembaca"

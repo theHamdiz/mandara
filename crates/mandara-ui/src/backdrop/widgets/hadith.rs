@@ -3,13 +3,13 @@
 //! * `hadith`: the hadith of the day in the Quote widget's design family
 //!   (Jannah's quote layout): a small caps label with the grade in its
 //!   colour, the guillemet, the words in Amiri right to left (long hadith
-//!   end gracefully with an ellipsis and "Read more"), the meaning, the
+//!   end after a whole word with an ellipsis and "Read more"), the meaning, the
 //!   narrator and the reference as the attribution;
 //! * `collection`: a tile with your reading progress through a chosen
 //!   collection (its names, the share read as a bar, where you were).
 //!
-//! A click opens the Hadith panel. Redrawn only when the card or the
-//! progress changes.
+//! A click on today's hadith opens it in the Hadith reader (the tile opens the
+//! panel). Redrawn only when the card or the progress changes.
 
 use mandara_config::desktop_widgets::{FontRole, HadithLayout, HadithWidget};
 use mandara_config::widget_kinds::{ranges, within};
@@ -17,7 +17,7 @@ use mandara_i18n::{fill, tk};
 
 use super::HadithInfo;
 use super::actions::Action;
-use super::jannah::{arabic_align, arabic_block, text_block};
+use super::jannah::{arabic_align, arabic_block, open_action, read_more, text_block, text_block_cut};
 use super::layout::{Composition, Hit, InkRole, Mark, MarkKind, Measure, caps, face, style, tracked};
 use super::lingo::Lingo;
 use super::productive::{AUTHOR_TRACKING, QUOTE_AUTHOR, QUOTE_GAP, QUOTE_MARK};
@@ -34,8 +34,6 @@ const MEANING_LINES: usize = 5;
 const MARK_SCALE: f32 = 0.6;
 const MARK_DROP: f32 = 1.0;
 const LABEL_TRACKING: f32 = 0.14;
-/// The ellipsis the wrapper ends a cut line with.
-const ELLIPSIS: char = '…';
 /// Progress tile: width, sizes, the bar and gaps.
 const TILE_W: f32 = 320.0;
 const TILE_TITLE: f32 = 24.0;
@@ -83,9 +81,7 @@ fn today(w: &HadithWidget, info: &HadithInfo, l: &Lingo, k: f32, align: f32, m: 
     marks.push(Mark::new(MarkKind::Text { text: "«".into(), style: ms, x: (width - gw) * ar_align, y, w: gw, h: gh }, InkRole::Accent));
     y += gh * MARK_DROP;
     let ast = style(FontRole::Hadith, size * ARABIC_SCALE, face::REGULAR);
-    let first = marks.len();
-    y = arabic_block(&card.words, &ast, width, ar_align, y, &mut marks, m);
-    let cut = marks[first..].iter().any(|mk| matches!(&mk.kind, MarkKind::Text { text, .. } if text.ends_with(ELLIPSIS)));
+    let (mut y, mut cut) = arabic_block(&card.words, &ast, width, ar_align, y, &mut marks, m);
     if let Some(meaning) = card.meaning.as_deref().filter(|t| !t.trim().is_empty()) {
         y += px(QUOTE_GAP);
         let ms = style(w.look.font, size * MEANING_SCALE, face::REGULAR);
@@ -93,7 +89,9 @@ fn today(w: &HadithWidget, info: &HadithInfo, l: &Lingo, k: f32, align: f32, m: 
             let ns = style(w.look.font, size * MEANING_SCALE * 0.8, face::SEMIBOLD);
             y = text_block(&fill(&l.word(tk("Narrated by {narrator}")), &[("narrator", n)]), &ns, width, align, 1, InkRole::Accent, face::DIM, y, &mut marks, m);
         }
-        y = text_block(meaning, &ms, width, align, MEANING_LINES, InkRole::Fg, face::DIM, y, &mut marks, m);
+        let meaning_cut;
+        (y, meaning_cut) = text_block_cut(meaning, &ms, width, align, MEANING_LINES, InkRole::Fg, face::DIM, y, &mut marks, m);
+        cut |= meaning_cut;
         if card.english {
             let es = style(w.look.font, size * MEANING_SCALE * 0.75, face::MEDIUM);
             y = text_block(&l.word(tk("Meaning in English")), &es, width, align, 1, InkRole::Accent, face::DIM, y, &mut marks, m);
@@ -106,13 +104,9 @@ fn today(w: &HadithWidget, info: &HadithInfo, l: &Lingo, k: f32, align: f32, m: 
     marks.push(Mark::new(MarkKind::Text { text: a, style: st.clone(), x: (width - aw) * align, y, w: aw, h: ah }, InkRole::Accent).dim(face::DIM));
     y += ah;
     if cut {
-        let more = format!("{} ›", l.word(tk("Read more")));
-        let (mw, mh) = m.measure(&more, &st);
-        y += mh * 0.4;
-        marks.push(Mark::new(MarkKind::Text { text: more, style: st, x: (width - mw) * align, y, w: mw, h: mh }, InkRole::Accent));
-        y += mh;
+        y = read_more(&st, width, align, y, l, &mut marks, m);
     }
-    Some(Composition::with_hits(marks, vec![Hit { rect: (0.0, 0.0, width, y), action: Action::Panel(crate::plugins::hadith::ID.into()) }]))
+    Some(Composition::with_hits(marks, vec![Hit { rect: (0.0, 0.0, width, y), action: open_action(crate::plugins::hadith::ID, &card.open) }]))
 }
 
 /// Reading progress through one collection.
@@ -175,6 +169,7 @@ mod tests {
                 reference: "Sahih al-Bukhari 1".into(),
                 reference_ar: "صحيح البخاري ١".into(),
                 grade: Some((GradeClass::Sahih, String::new(), 0x2f_b5_7e)),
+                open: "bukhari:1".into(),
             }),
             progress: vec![HadithProgress { collection: HadithCollection::Muslim, title: "Sahih Muslim".into(), arabic: "صحيح مسلم".into(), read: 368, total: 7360, downloaded: true, last: Some("Muslim 8a".into()) }],
             lang: None,
@@ -196,7 +191,8 @@ mod tests {
                 let w = HadithWidget { layout, collection: HadithCollection::Muslim, ..Default::default() };
                 let c = hadith(&w, &info("كَلِمَاتٌ طَيِّبَةٌ".into()), &lingo(rtl), 1.0, 0.0, &mut Fixed).unwrap();
                 assert!(c.size.0 > 100.0 && c.size.1 > 50.0, "{layout:?} {:?}", c.size);
-                assert_eq!(c.hits.first().map(|h| h.action.clone()), Some(Action::Panel("hadith".into())));
+                let want = if layout == HadithLayout::Hadith { Action::Read("hadith".into(), "bukhari:1".into()) } else { Action::Panel("hadith".into()) };
+                assert_eq!(c.hits.first().map(|h| h.action.clone()), Some(want), "today's hadith opens in the reader");
             }
         }
         // No hadith picked yet: nothing drawn.

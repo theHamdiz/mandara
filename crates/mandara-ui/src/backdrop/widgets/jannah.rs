@@ -22,7 +22,7 @@ use mandara_i18n::tk;
 
 use super::JannahInfo;
 use super::actions::Action;
-use super::layout::{Composition, Hit, InkRole, Mark, MarkKind, Measure, TextStyle, caps, face, style, tracked, wrap};
+use super::layout::{Composition, Hit, InkRole, Mark, MarkKind, Measure, TextStyle, caps, face, style, tracked, wrap_cut};
 use super::lingo::Lingo;
 use super::productive::{AUTHOR_TRACKING, QUOTE_AUTHOR, QUOTE_GAP, QUOTE_MARK};
 
@@ -83,6 +83,8 @@ const RING_OFF_ALPHA: f32 = 0.5;
 const TICK: [(f32, f32); 3] = [(-0.45, 0.02), (-0.1, 0.38), (0.5, -0.36)];
 /// Caption under an AI rendering, relative to the meaning's size.
 const AI_CAPTION: f32 = 0.78;
+/// "Read more" sits this much of its line height below the reference.
+const READ_MORE_GAP: f32 = 0.4;
 
 /// Lays out the Jannah widget `w`.
 pub fn jannah(w: &JannahWidget, info: &JannahInfo, l: &Lingo, k: f32, align: f32, m: &mut dyn Measure) -> Composition {
@@ -110,26 +112,53 @@ fn arabic_text(info: &JannahInfo) -> String {
 }
 
 /// Arabic lines placed in `width` (right to left, each aligned by `align`
-/// where 1 is the right edge), from `y`; returns the bottom.
-pub(crate) fn arabic_block(text: &str, st: &TextStyle, width: f32, align: f32, mut y: f32, marks: &mut Vec<Mark>, m: &mut dyn Measure) -> f32 {
-    for line in wrap(text, st, width, ARABIC_LINES, m) {
+/// where 1 is the right edge), from `y`; returns the bottom and whether
+/// words were left out (the last line then ends after a whole word with
+/// `…`; the widget offers "Read more").
+pub(crate) fn arabic_block(text: &str, st: &TextStyle, width: f32, align: f32, mut y: f32, marks: &mut Vec<Mark>, m: &mut dyn Measure) -> (f32, bool) {
+    let (lines, cut) = wrap_cut(text, st, width, ARABIC_LINES, m);
+    for line in lines {
         let (lw, lh) = m.measure(&line, st);
         let lead = lh * (ARABIC_LEADING - 1.0);
         marks.push(Mark::new(MarkKind::Text { text: line, style: st.clone(), x: (width - lw) * align, y: y + lead / 2.0, w: lw, h: lh }, InkRole::Fg));
         y += lh + lead;
     }
-    y
+    (y, cut)
 }
 
 /// Plain lines (the meaning) in `width`, aligned by `align`; returns the
 /// bottom.
-pub(crate) fn text_block(text: &str, st: &TextStyle, width: f32, align: f32, max: usize, ink: InkRole, alpha: f32, mut y: f32, marks: &mut Vec<Mark>, m: &mut dyn Measure) -> f32 {
-    for line in wrap(text, st, width, max, m) {
+pub(crate) fn text_block(text: &str, st: &TextStyle, width: f32, align: f32, max: usize, ink: InkRole, alpha: f32, y: f32, marks: &mut Vec<Mark>, m: &mut dyn Measure) -> f32 {
+    text_block_cut(text, st, width, align, max, ink, alpha, y, marks, m).0
+}
+
+/// [`text_block`], and whether words were left out.
+pub(crate) fn text_block_cut(text: &str, st: &TextStyle, width: f32, align: f32, max: usize, ink: InkRole, alpha: f32, mut y: f32, marks: &mut Vec<Mark>, m: &mut dyn Measure) -> (f32, bool) {
+    let (lines, cut) = wrap_cut(text, st, width, max, m);
+    for line in lines {
         let (lw, lh) = m.measure(&line, st);
         marks.push(Mark::new(MarkKind::Text { text: line, style: st.clone(), x: (width - lw) * align, y, w: lw, h: lh }, ink).dim(alpha));
         y += lh;
     }
-    y
+    (y, cut)
+}
+
+/// "Read more ›" under a card whose words were left out (a click opens
+/// the plugin's reader on this very item); returns the bottom.
+pub(crate) fn read_more(st: &TextStyle, width: f32, align: f32, mut y: f32, l: &Lingo, marks: &mut Vec<Mark>, m: &mut dyn Measure) -> f32 {
+    // The painter draws glyphs as they are: the chevron points onward,
+    // to the left in a right-to-left language.
+    let more = format!("{} {}", l.word(tk("Read more")), if l.rtl { '‹' } else { '›' });
+    let (mw, mh) = m.measure(&more, st);
+    y += mh * READ_MORE_GAP;
+    marks.push(Mark::new(MarkKind::Text { text: more, style: st.clone(), x: (width - mw) * align, y, w: mw, h: mh }, InkRole::Accent));
+    y + mh
+}
+
+/// What a click on a card of today's item does: open that item in its
+/// plugin's reader (every word), else the panel.
+pub(crate) fn open_action(plugin: &str, reference: &str) -> Action {
+    if reference.is_empty() { Action::Panel(plugin.into()) } else { Action::Read(plugin.into(), reference.into()) }
 }
 
 /// The Arabic block's alignment: it starts at the right edge, as right-to-
@@ -141,10 +170,10 @@ pub(crate) fn arabic_align(align: f32) -> f32 {
 
 /// The meaning (when there is one) with the AI caption; returns the
 /// bottom.
-fn meaning(info: &JannahInfo, w: &JannahWidget, size: f32, width: f32, align: f32, l: &Lingo, mut y: f32, marks: &mut Vec<Mark>, m: &mut dyn Measure) -> f32 {
-    let Some(text) = info.meaning.as_deref().filter(|t| !t.trim().is_empty()) else { return y };
+fn meaning(info: &JannahInfo, w: &JannahWidget, size: f32, width: f32, align: f32, l: &Lingo, y: f32, marks: &mut Vec<Mark>, m: &mut dyn Measure) -> (f32, bool) {
+    let Some(text) = info.meaning.as_deref().filter(|t| !t.trim().is_empty()) else { return (y, false) };
     let st = style(w.look.font, size, face::REGULAR);
-    y = text_block(text, &st, width, align, MEANING_LINES, InkRole::Fg, face::DIM, y, marks, m);
+    let (mut y, cut) = text_block_cut(text, &st, width, align, MEANING_LINES, InkRole::Fg, face::DIM, y, marks, m);
     if info.ai {
         let cs = style(w.look.font, size * AI_CAPTION, face::MEDIUM);
         let caption = l.word(tk("AI rendering of the meaning"));
@@ -152,7 +181,7 @@ fn meaning(info: &JannahInfo, w: &JannahWidget, size: f32, width: f32, align: f3
         marks.push(Mark::new(MarkKind::Text { text: caption, style: cs, x: (width - cw) * align, y: y + ch * 0.3, w: cw, h: ch }, InkRole::Accent).dim(face::DIM));
         y += ch * 1.3;
     }
-    y
+    (y, cut)
 }
 
 /// Today's item in the Quote widget's design.
@@ -175,18 +204,22 @@ fn quote(w: &JannahWidget, info: &JannahInfo, l: &Lingo, k: f32, align: f32, m: 
         y += gh * ARABIC_MARK_DROP;
     }
     let ast = style(FontRole::Scripture, size * ARABIC_SCALE, face::REGULAR);
-    y = arabic_block(&arabic_text(info), &ast, width, ar_align, y, &mut marks, m);
+    let (mut y, mut cut) = arabic_block(&arabic_text(info), &ast, width, ar_align, y, &mut marks, m);
     if info.meaning.is_some() {
         y += px(QUOTE_GAP);
-        y = meaning(info, w, size * MEANING_SCALE, width, align, l, y, &mut marks, m);
+        let (bottom, meaning_cut) = meaning(info, w, size * MEANING_SCALE, width, align, l, y, &mut marks, m);
+        (y, cut) = (bottom, cut || meaning_cut);
     }
     y += px(QUOTE_GAP);
     let a = format!("— {}", reference(info, l));
     let st = tracked(style(w.look.font, size * QUOTE_AUTHOR, face::SEMIBOLD), AUTHOR_TRACKING);
     let (aw, ah) = m.measure(&a, &st);
-    marks.push(Mark::new(MarkKind::Text { text: a, style: st, x: (width - aw) * align, y, w: aw, h: ah }, InkRole::Accent).dim(face::DIM));
+    marks.push(Mark::new(MarkKind::Text { text: a, style: st.clone(), x: (width - aw) * align, y, w: aw, h: ah }, InkRole::Accent).dim(face::DIM));
     y += ah;
-    Composition::with_hits(marks, vec![Hit { rect: (0.0, 0.0, width, y), action: Action::Panel(crate::plugins::jannah::ID.into()) }])
+    if cut {
+        y = read_more(&st, width, align, y, l, &mut marks, m);
+    }
+    Composition::with_hits(marks, vec![Hit { rect: (0.0, 0.0, width, y), action: open_action(crate::plugins::jannah::ID, &info.open) }])
 }
 
 /// The calligraphic card under a pointed arch.
@@ -200,19 +233,22 @@ fn verse(w: &JannahWidget, info: &JannahInfo, l: &Lingo, k: f32, m: &mut dyn Mea
     let mut content = Vec::new();
     // Centred content, laid out in its own box, then moved in.
     let ast = style(FontRole::Scripture, size * ARABIC_SCALE, face::REGULAR);
-    let mut y = arabic_block(&arabic_text(info), &ast, inner_w, 0.5, 0.0, &mut content, m);
+    let (mut y, mut cut) = arabic_block(&arabic_text(info), &ast, inner_w, 0.5, 0.0, &mut content, m);
     y += px(BLOCK_GAP);
     content.push(Mark::new(MarkKind::Poly { pts: art::star((inner_w / 2.0, y), px(DIVIDER_R)) }, InkRole::Accent).dim(FINIAL_ALPHA));
     y += px(DIVIDER_R) + px(BLOCK_GAP);
     if info.meaning.is_some() {
-        y = meaning(info, w, size * MEANING_SCALE, inner_w, 0.5, l, y, &mut content, m);
-        y += px(BLOCK_GAP);
+        let (bottom, meaning_cut) = meaning(info, w, size * MEANING_SCALE, inner_w, 0.5, l, y, &mut content, m);
+        (y, cut) = (bottom + px(BLOCK_GAP), cut || meaning_cut);
     }
     let rs = tracked(style(w.look.font, size * QUOTE_AUTHOR, face::SEMIBOLD), LABEL_TRACKING);
     let r = caps(&reference(info, l));
     let (rw, rh) = m.measure(&r, &rs);
-    content.push(Mark::new(MarkKind::Text { text: r, style: rs, x: (inner_w - rw) / 2.0, y, w: rw, h: rh }, InkRole::Accent));
+    content.push(Mark::new(MarkKind::Text { text: r, style: rs.clone(), x: (inner_w - rw) / 2.0, y, w: rw, h: rh }, InkRole::Accent));
     y += rh;
+    if cut {
+        y = read_more(&rs, inner_w, 0.5, y, l, &mut content, m);
+    }
     let top = crown_h * CONTENT_START;
     let height = top + y + px(BOTTOM_PAD);
 
@@ -250,7 +286,7 @@ fn verse(w: &JannahWidget, info: &JannahInfo, l: &Lingo, k: f32, m: &mut dyn Mea
         mk.shift(px(SIDE_PAD), top);
         marks.push(mk);
     }
-    Composition::with_hits(marks, vec![Hit { rect: (0.0, 0.0, width, height), action: Action::Panel(crate::plugins::jannah::ID.into()) }])
+    Composition::with_hits(marks, vec![Hit { rect: (0.0, 0.0, width, height), action: open_action(crate::plugins::jannah::ID, &info.open) }])
 }
 
 /// Whether `c` lies under the crown of an arch `width` wide and `h` tall
@@ -329,6 +365,7 @@ mod tests {
             ai: true,
             reference: "Al-Baqara 2:25".into(),
             reference_ar: "البقرة ٢:٢٥".into(),
+            open: "quran-2:25".into(),
             step_title: "Keep your tongue".into(),
             step_line: "Guard what you say.".into(),
             step_done: false,

@@ -8614,3 +8614,6 @@
 "Panel image copied" = "تصویر پنل کپی شد"
 "Panel capture failed: {error}" = "گرفتن تصویر پنل ناموفق بود: {error}"
 "The panel is not visible" = "پنل قابل مشاهده نیست"
+
+# Reading folds
+"Open in the reader" = "باز کردن در خواننده"

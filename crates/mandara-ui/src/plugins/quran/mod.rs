@@ -93,8 +93,6 @@ const SAVE_DELAY: Duration = Duration::from_millis(1500);
 /// Results a search returns at most.
 pub(crate) const SEARCH_MAX: usize = 200;
 const COMMAND_SEARCH_MAX: usize = 50;
-/// Ayahs of the day and widget text are cut to this many characters.
-const WIDGET_LIMIT: usize = daily::MAX_CHARS;
 /// The reader's glow fades from one ayah to the next over this long.
 pub(crate) const GLOW_MOVE: Duration = Duration::from_millis(450);
 
@@ -663,6 +661,15 @@ pub(crate) fn open_at(shared: &Shared, g: u16, cx: &mut App) {
     changed(shared, cx);
 }
 
+/// Opens the reader at the ayah `reference` names (`2:255`), e.g. from a
+/// desktop widget.
+pub fn open_reference(reference: &str, cx: &mut App) -> Result<(), String> {
+    let (shared, book) = need_book(cx)?;
+    let g = global_of(&book, reference)?;
+    open_at(&shared, g, cx);
+    Ok(())
+}
+
 /// Where "continue" goes: the last-read ayah (or the beginning).
 pub(crate) fn continue_at(shared: &Shared) -> u16 {
     shared.borrow().state.last.filter(|g| *g < mandara_services::quran::text::AYAHS).unwrap_or(1)
@@ -716,7 +723,9 @@ pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::QuranInfo> 
     let last = m.state.last.and_then(|g| book.q.at(g)).unwrap_or(Ref::new(1, 1));
     let surah = book.q.surah(last.surah)?;
     let playing = m.playback.current().filter(|_| matches!(m.playback.status, Status::Playing | Status::Loading));
-    let text: String = book.q.ayah_at(today)?.text.chars().take(WIDGET_LIMIT).collect();
+    // Verbatim: the ayah of the day is picked to fit a card; the painter
+    // folds a long one at a whole word and offers "Read more".
+    let text = book.q.ayah_at(today)?.text.clone();
     Some(crate::backdrop::widgets::QuranInfo {
         arabic: text,
         ayah_mark: ayah_mark(r.ayah),
@@ -729,6 +738,7 @@ pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::QuranInfo> 
             let s = book.q.surah(r.surah)?;
             format!("{} {}", s.short_name(), arabic_digits(&r.to_string()))
         },
+        open: r.to_string(),
         progress: m.state.progress(),
         khatms: m.state.khatms,
         surah_ar: surah.short_name().to_string(),
@@ -871,28 +881,33 @@ fn sidebar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> 
             .on_click(move |_, _, cx| open_at(&shared, last, cx))
     };
     let today = book.today().map(|g| {
-        let shared = shared.clone();
+        use super::reading::{Block, fold, link};
         let a = book.q.ayah_at(g).map(|a| a.text.clone()).unwrap_or_default();
         let mark = book.q.at(g).map(|r| ayah_mark(r.ayah)).unwrap_or_default();
+        let tint = super::panel_fx::readable(palette.primary, palette);
+        // Folded to a couple of lines with its meaning; Read more unfolds
+        // the card in place, the reader is one link away.
+        let arabic = Block::new(div().font_family(f.scripture.clone()).text_size(px(SIDEBAR_ARABIC_PX)).line_height(gpui::relative(ARABIC_LINE_EM)).text_right(), format!("{a}\u{00A0}{mark}"), SIDEBAR_LINES);
+        let meaning = book.meaning_of(g).filter(|_| !arabic_ui()).map(|m| Block::new(div().text_size(px(text::BODY_S)).text_color(muted.hsla()), m.to_string(), SIDEBAR_LINES));
+        let open = {
+            let shared = shared.clone();
+            link("quran-sidebar-open", t("Open in the reader"), tint, move |cx| open_at(&shared, g, cx))
+        };
+        let key = book.reference(g);
         div()
-            .id("quran-sidebar-today")
             .pt(px(tokens::SM))
             .flex()
             .flex_col()
             .gap(px(tokens::XS))
-            .cursor_pointer()
-            .child(div().text_size(px(text::LABEL)).font_weight(FontWeight::SEMIBOLD).text_color(accent.hsla()).child(t("Ayah of the day")))
             .child(
                 div()
-                    .font_family(f.scripture.clone())
-                    .text_size(px(SIDEBAR_ARABIC_PX))
-                    .line_height(gpui::relative(ARABIC_LINE_EM))
-                    .text_right()
-                    .line_clamp(SIDEBAR_LINES)
-                    .child(crate::bidi::paragraph(format!("{a}\u{00A0}{mark}"))),
+                    .row()
+                    .items_center()
+                    .gap(px(tokens::SM))
+                    .child(div().flex_1().text_size(px(text::LABEL)).font_weight(FontWeight::SEMIBOLD).text_color(accent.hsla()).child(t("Ayah of the day")))
+                    .child(div().text_size(px(text::LABEL)).text_color(muted.hsla()).font_features(tabular_nums()).child(key.clone())),
             )
-            .child(div().text_size(px(text::LABEL)).text_color(muted.hsla()).font_features(tabular_nums()).child(book.reference(g)))
-            .on_click(move |_, _, cx| open_at(&shared, g, cx))
+            .child(fold("quran-sidebar-fold", &key, std::iter::once(arabic).chain(meaning), tokens::XS, tint, Some(open), window, cx))
     });
     card(palette).text_start().flex().flex_col().gap(px(tokens::SM)).child(head(Some(ring))).child(resume).when_some(today, |el, x| el.child(x)).into_any_element()
 }

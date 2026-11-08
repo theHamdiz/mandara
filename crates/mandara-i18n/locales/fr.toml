@@ -8859,3 +8859,6 @@
 "Panel image copied" = "Image du panneau copiée"
 "Panel capture failed: {error}" = "Échec de la capture du panneau : {error}"
 "The panel is not visible" = "Le panneau n’est pas visible"
+
+# Reading folds
+"Open in the reader" = "Ouvrir dans le lecteur"

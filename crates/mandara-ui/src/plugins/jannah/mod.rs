@@ -66,9 +66,8 @@ pub const ID: &str = "jannah";
 
 // ── Sizes & timing ───────────────────────────────────────────────────────
 
-/// Longest Arabic (characters) each small surface shows; longer items
-/// give their turn to the next one that fits.
-const SIDEBAR_LIMIT: usize = 420;
+/// Longest Arabic (characters) a desktop widget shows: it walks its own
+/// sequence of the items that fit (the sidebar folds today's instead).
 const WIDGET_LIMIT: usize = 320;
 /// Bar chip: glyph size, gap, and the step title's widest run.
 const BAR_ICON_PX: f32 = 14.0;
@@ -276,27 +275,29 @@ fn changed(shared: &Shared, cx: &mut App) {
 // ── Today ────────────────────────────────────────────────────────────────
 
 thread_local! {
-    /// Recent picks: `(slot, sources, limit)` → item.
-    static PICKS: RefCell<Vec<((i64, Sources, Option<usize>), Option<ItemId>)>> = const { RefCell::new(Vec::new()) };
+    /// Recent picks: `(slot, sources, limit)` → item and its place in its
+    /// round.
+    static PICKS: RefCell<Vec<((i64, Sources, Option<usize>), Option<(ItemId, (usize, usize))>)>> = const { RefCell::new(Vec::new()) };
 }
 /// Picks remembered (a few surfaces × a few slots).
 const PICK_CACHE: usize = 12;
 
-/// The item for `slot` on a surface showing at most `limit` characters.
-pub(crate) fn pick(slot: i64, sources: Sources, limit: Option<usize>) -> Option<ItemId> {
+/// The item for `slot` on a surface showing at most `limit` characters,
+/// and where it stands in its kind's round (`(12, 230)`).
+pub(crate) fn pick_placed(slot: i64, sources: Sources, limit: Option<usize>) -> Option<(ItemId, (usize, usize))> {
     let key = (slot, sources, limit);
     if let Some(hit) = PICKS.with(|p| p.borrow().iter().find(|(k, _)| *k == key).map(|(_, v)| *v)) {
         return hit;
     }
-    let id = rotation::pick(catalog(), sources, slot, limit);
+    let placed = rotation::pick_placed(catalog(), sources, slot, limit);
     PICKS.with(|p| {
         let mut p = p.borrow_mut();
         if p.len() >= PICK_CACHE {
             p.remove(0);
         }
-        p.push((key, id));
+        p.push((key, placed));
     });
-    id
+    placed
 }
 
 /// The current slot: the period plus the user's nudges.
@@ -312,8 +313,13 @@ pub(crate) fn today(shared: &Shared, s: &Settings, limit: Option<usize>) -> Opti
 /// The item `by` places after today's (before it when negative): a look
 /// only, "today" stays where it is.
 pub(crate) fn peek(shared: &Shared, s: &Settings, limit: Option<usize>, by: i64) -> Option<ItemId> {
+    peek_placed(shared, s, limit, by).map(|(id, _)| id)
+}
+
+/// [`peek`] with where the item stands in its round.
+pub(crate) fn peek_placed(shared: &Shared, s: &Settings, limit: Option<usize>, by: i64) -> Option<(ItemId, (usize, usize))> {
     let now = Local::now().naive_local();
-    pick(slot(&shared.borrow(), s, now) + by, s.sources, limit)
+    pick_placed(slot(&shared.borrow(), s, now) + by, s.sources, limit)
 }
 
 /// Today's step.
@@ -594,6 +600,7 @@ pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::JannahInfo>
         meaning: meaning.map(|m| m.text),
         reference: catalog::reference(item, false),
         reference_ar: catalog::reference(item, true),
+        open: item.key.to_string(),
         step_title: step.map(|p| p.title.to_string()).unwrap_or_default(),
         step_line: step.map(|p| p.line.to_string()).unwrap_or_default(),
         step_done: progress.done,
@@ -681,6 +688,22 @@ fn open_panel(cx: &mut App) {
     crate::state::shell(cx).update(cx, |s, cx| s.set_panel(Some(ID.into()), cx));
 }
 
+/// Opens the panel's reader on `id` (every word, a hadith's chain too).
+pub(crate) fn open_item(id: ItemId, cx: &mut App) {
+    let shared = model(cx);
+    ensure_meanings(&shared, cx);
+    shared.borrow_mut().open_request = Some(id);
+    open_panel(cx);
+    changed(&shared, cx);
+}
+
+/// Opens the reader on the item `reference` names (`2:25`,
+/// `bukhari-3245`), e.g. from a desktop widget.
+pub fn open_reference(reference: &str, cx: &mut App) -> Result<(), String> {
+    open_item(find(reference)?.id, cx);
+    Ok(())
+}
+
 fn sidebar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     let shared = model(cx);
     shared.borrow().views.track(window);
@@ -692,7 +715,9 @@ fn sidebar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> 
     let f = fonts(cx);
     let accent = gold(palette);
     let arabic = arabic_ui();
-    let item = today(&shared, &s, Some(SIDEBAR_LIMIT)).and_then(|id| catalog().get(id));
+    // Today's own reminder, the panel's: folded here, never swapped for a
+    // shorter one.
+    let item = today(&shared, &s, None).and_then(|id| catalog().get(id));
     let date = Local::now().date_naive();
     let (meaning, done) = {
         let m = shared.borrow();
@@ -705,38 +730,16 @@ fn sidebar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> 
         .child(icon("arch", SIDEBAR_ICON_PX, accent))
         .child(div().flex_1().text_size(px(text::BODY_S)).font_weight(FontWeight::MEDIUM).text_color(palette.on_surface_variant.hsla()).child(t("Jannah")))
         .when_some(item, |el, i| el.child(div().text_size(px(text::LABEL)).font_weight(FontWeight::SEMIBOLD).text_color(accent.hsla()).child(catalog::reference(i, arabic))));
+    // Folded to a few lines; Read more unfolds the card in place, and the
+    // panel's reader (with a hadith's chain) is one link away.
     let body = item.map(|i| {
-        let words = match i.verse_ref() {
-            Some((_, a)) => format!("{} {}", i.arabic, catalog::ayah_mark(a)),
-            None => i.arabic.to_string(),
-        };
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(tokens::XS))
-            .child(
-                div()
-                    .font_family(f.scripture.clone())
-                    .text_size(px(SIDEBAR_ARABIC_PX))
-                    .line_height(gpui::relative(ARABIC_LINE_EM))
-                    .text_right()
-                    .line_clamp(SIDEBAR_LINES)
-                    .child(crate::bidi::paragraph(words)),
-            )
-            .when_some(meaning.clone(), |el, m| {
-                el.child(div().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).line_clamp(SIDEBAR_LINES).child(crate::bidi::paragraph(m.text)))
-            })
-            .child(
-                div()
-                    .id("jannah-sidebar-more")
-                    .flex()
-                    .cursor_pointer()
-                    .text_size(px(text::LABEL))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(readable(palette.primary, palette).hsla())
-                    .child(t("Read more"))
-                    .on_click(|_, _, cx| open_panel(cx)),
-            )
+        use super::reading::{Block, fold, link};
+        let tint = readable(palette.primary, palette);
+        let arabic = Block::new(div().font_family(f.scripture.clone()).text_size(px(SIDEBAR_ARABIC_PX)).line_height(gpui::relative(ARABIC_LINE_EM)).text_right(), panel::words(i), SIDEBAR_LINES);
+        let meaning = meaning.map(|m| Block::new(div().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()), m.text, SIDEBAR_LINES));
+        let id = i.id;
+        let open = link("jannah-sidebar-open", t("Open in the reader"), tint, move |cx| open_item(id, cx));
+        fold("jannah-sidebar-fold", &i.key, std::iter::once(arabic).chain(meaning), tokens::XS, tint, Some(open), window, cx)
     });
     let step = today_step().map(|p| {
         div()
@@ -876,12 +879,8 @@ fn register_commands(r: &mut PluginRegistry) {
     add(
         CommandSpec::new("jannah show", tk("Open a verse or hadith in the Jannah panel and return it"), |a, cx| {
             let item = find(&a.rest(0))?;
-            let shared = model(cx);
-            ensure_meanings(&shared, cx);
-            shared.borrow_mut().open_request = Some(item.id);
-            open_panel(cx);
-            changed(&shared, cx);
-            Ok(item_json(&shared, item))
+            open_item(item.id, cx);
+            Ok(item_json(&model(cx), item))
         })
         .arg(ArgSpec::required("ref", ArgKind::String, tk("2:25, quran-2:25 or bukhari-3245")))
         .example("jannah show 2:25")
@@ -1100,6 +1099,7 @@ mod tests {
 
     #[test]
     fn picks_are_cached_and_stable() {
+        let pick = |slot, sources, limit| pick_placed(slot, sources, limit).map(|(id, _)| id);
         let a = pick(739_000, Sources::Both, None);
         assert!(a.is_some());
         assert_eq!(a, pick(739_000, Sources::Both, None));

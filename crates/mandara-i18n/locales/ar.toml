@@ -8863,3 +8863,6 @@
 "Panel image copied" = "تم نسخ صورة اللوحة"
 "Panel capture failed: {error}" = "فشل التقاط اللوحة: {error}"
 "The panel is not visible" = "اللوحة غير ظاهرة"
+
+# Reading folds
+"Open in the reader" = "افتح في القارئ"

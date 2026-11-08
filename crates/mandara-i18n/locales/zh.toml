@@ -8854,3 +8854,6 @@
 "Panel image copied" = "面板图像已复制"
 "Panel capture failed: {error}" = "面板截图失败：{error}"
 "The panel is not visible" = "面板不可见"
+
+# Reading folds
+"Open in the reader" = "在阅读器中打开"

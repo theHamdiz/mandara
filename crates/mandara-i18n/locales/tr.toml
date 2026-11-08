@@ -8858,3 +8858,6 @@
 "Panel image copied" = "Panel görüntüsü kopyalandı"
 "Panel capture failed: {error}" = "Panel yakalanamadı: {error}"
 "The panel is not visible" = "Panel görünür değil"
+
+# Reading folds
+"Open in the reader" = "Okuyucuda aç"

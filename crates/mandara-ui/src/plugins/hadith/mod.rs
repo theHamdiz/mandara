@@ -740,6 +740,17 @@ pub(crate) fn open_key(shared: &Shared, key: &str, cx: &mut App) {
     }
 }
 
+/// Opens the reader on the hadith `key` names (`bukhari:1`), e.g. from a
+/// desktop widget.
+pub fn open_reference(key: &str, cx: &mut App) -> Result<(), String> {
+    if refs::parse(key).is_none() {
+        return Err(t("Not found").to_string());
+    }
+    let shared = model(cx);
+    open_key(&shared, key, cx);
+    Ok(())
+}
+
 /// The text to paste: the words and the citation, with the meaning when
 /// asked.
 pub(crate) fn copy_text(c: Collection, reference: &str, url: &str, words: &str, meaning: Option<&str>) -> String {
@@ -775,6 +786,7 @@ pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::HadithInfo>
         reference: refs::citation(t(info(c.collection).title), &c.reference),
         reference_ar: format!("{} {}", info(c.collection).arabic, super::panel_fx::arabic_digits(&c.reference)),
         grade: c.grade.as_ref().map(|g| (g.class, g.grade.clone(), rgb(g.class))),
+        open: c.key.clone(),
     });
     let progress = Collection::ALL
         .into_iter()
@@ -836,29 +848,17 @@ fn sidebar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> 
         .child(icon("hadith", SIDEBAR_ICON_PX, accent))
         .child(div().flex_1().text_size(px(text::BODY_S)).font_weight(FontWeight::MEDIUM).text_color(palette.on_surface_variant.hsla()).child(t("Hadith of the day")))
         .when_some(today_card.as_ref(), |el, c| el.child(div().text_size(px(text::LABEL)).font_weight(FontWeight::SEMIBOLD).font_features(tabular_nums()).text_color(accent.hsla()).child(short_ref(c.collection, &c.reference))));
+    // Folded to a few lines; Read more unfolds the card in place, and the
+    // reader (chain, grades) is one link away.
     let body = today_card.map(|c| {
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(tokens::XS))
-            .child(div().font_family(f.hadith.clone()).text_size(px(SIDEBAR_ARABIC_PX)).line_height(gpui::relative(ARABIC_LINE_EM)).text_right().line_clamp(SIDEBAR_LINES).child(crate::bidi::paragraph(c.words.clone())))
-            .when_some(c.meaning.clone().filter(|_| wants_meaning(&s)), |el, m| {
-                el.child(div().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).line_clamp(SIDEBAR_LINES).child(crate::bidi::paragraph(m)))
-            })
-            .child(
-                div()
-                    .id("hadith-sidebar-more")
-                    .flex()
-                    .cursor_pointer()
-                    .text_size(px(text::LABEL))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(link.hsla())
-                    .child(t("Read more"))
-                    .on_click({
-                        let (shared, key) = (shared.clone(), c.key.clone());
-                        move |_, _, cx| open_key(&shared, &key, cx)
-                    }),
-            )
+        use super::reading::{Block, fold, link as reading_link};
+        let arabic = Block::new(div().font_family(f.hadith.clone()).text_size(px(SIDEBAR_ARABIC_PX)).line_height(gpui::relative(ARABIC_LINE_EM)).text_right(), c.words.clone(), SIDEBAR_LINES);
+        let meaning = c.meaning.clone().filter(|_| wants_meaning(&s)).map(|m| Block::new(div().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()), m, SIDEBAR_LINES));
+        let open = {
+            let (shared, key) = (shared.clone(), c.key.clone());
+            reading_link("hadith-sidebar-open", t("Open in the reader"), link, move |cx| open_key(&shared, &key, cx))
+        };
+        fold("hadith-sidebar-fold", &c.key, std::iter::once(arabic).chain(meaning), tokens::XS, link, Some(open), window, cx)
     });
     let hint = (nothing && body.is_none()).then(|| {
         div()

@@ -8614,3 +8614,6 @@
 "Panel image copied" = "প্যানেলের ছবি কপি হয়েছে"
 "Panel capture failed: {error}" = "প্যানেল ক্যাপচার ব্যর্থ: {error}"
 "The panel is not visible" = "প্যানেলটি দেখা যাচ্ছে না"
+
+# Reading folds
+"Open in the reader" = "পাঠকে খুলুন"
