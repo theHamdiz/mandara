@@ -138,6 +138,7 @@ A full-length slab
 A full-width strip of bars mirrored round its middle
 A gentle daily reminder of Paradise: a verse or hadith, its meaning and one good step for today (opt-in)
 A gentle notification once an app has had this much of your day.
+A gentle wave along the fill that flows while you drag
 A good head and a good heart are always a formidable combination.
 A grain of poetry suffices to season a century.
 A hairline around floating panels
@@ -196,6 +197,7 @@ A progress bar, value from 0 to 1
 A public GitHub repository tagged mandara-plugin with a release is all it takes.
 A public repository with this topic (About → Topics).
 A random style
+A round knob on the end of the fill that stretches into a pill while you hold it
 A rounded surface around its children
 A saying that changes every day, or your own
 A second, stronger warning
@@ -1195,6 +1197,7 @@ Compiling locally…
 Complete image copied
 Completed ({count})
 Component missing
+Components
 Compose project · {detail}
 Compositor
 Compositor (default: detected)
@@ -1257,6 +1260,7 @@ Continue
 Continue at {reference}
 Continue reading
 Continue where you left off
+Continuous
 Contour lines
 Contours
 Contrast
@@ -2651,6 +2655,8 @@ How strongly the capsules stand out from the bar
 How strongly the pills and islands behind items stand out
 How the critical warning appears
 How the media panel draws the live audio spectrum
+How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it
+How the volume, brightness and mixer sliders look; thin sliders keep the classic look
 How the warning appears
 How to publish a plugin
 How well said the aged farmer to his son, O light of my eyes, thou wilt not reap save that which thou hast sown.
@@ -4226,6 +4232,7 @@ One
 One app's screen time over the last seven days
 One centered island that morphs
 One click sets the bar, desktop widgets, colors, fonts and roundness together. Your own setup is saved first, so you can always go back. Looks never change your wallpaper.
+One continuous track with a short grip inside the end of the fill
 One dot
 One entry per app
 One good deed for today, with its check and your week
@@ -4258,6 +4265,7 @@ Only the built-in encoder uses this; the others follow Resolution
 Only the first {count} checks run
 Only the main display shows the lock screen; others stay black (OLED friendly)
 Only the selected feed refreshes while its panel is open
+Only the thin sliders use it now: the Pill and Segmented designs mark the value without a handle
 Only this display's windows
 Only used when the system can't report camera use instantly
 Only what I changed
@@ -4553,6 +4561,7 @@ Picture
 Picture shape
 Picture-in-picture floats on every workspace
 Pictures from a folder, a new one every so often
+Pill
 Pill labels
 Pin a plugin's panel open in the bar: outside clicks, focus changes and the launcher leave it open (its chip, Esc or panel close still close it). A floating panel docks back pinned
 Pin a side bar (it stays and windows tile beside it) or let it slide away until the pointer touches its edge
@@ -5425,6 +5434,7 @@ Seek knowledge
 Seek not the paths of the ancients; seek that which the ancients sought.
 Seek to a position in seconds
 Segmentation fault
+Segmented
 Segments
 Select a region to capture
 Select a screen region with a QR code and add the account it holds
@@ -5713,8 +5723,10 @@ Sleep timer in the bar
 Slices
 Slices: slanted strips around a big preview (Omarchy-style). Carousel: floating cards
 Slide the bar away; touch its edge to bring it back
+Slider design
 Slider handle
 Slider with min and max, otherwise a number field
+Sliders
 Slideshow
 Slideshow transition
 Slow
@@ -6087,6 +6099,7 @@ Temperatures and wind speed in weather and system panels
 Temperatures shown
 Ten
 Ten past {hour}
+Ten rounded steps that fill one after another
 Ten to {hour}
 Terminal
 Terminal colors follow the theme
@@ -6276,6 +6289,7 @@ The feed belongs to another address
 The feed server returned no content
 The file chooser failed: {error}
 The file is larger than this location allows.
+The fill, a small gap, an upright handle, then the rest of the track ending in a dot
 The first matching rule decides. Patterns are case-insensitive regular expressions; plain words match anywhere. Also from the command line: `mandara msg notifications rules add silent Spotify`.
 The first principle is that you must not fool yourself, and you are the easiest person to fool.
 The floating panels with their output, position and size, and every remembered position
@@ -6441,6 +6455,7 @@ The update didn't install
 The upright line between a slider's fill and its track; None shows the fill alone
 The uptime monitor stopped
 The volume beside the speaker icon
+The volume, brightness and mixer sliders in the main menu, panels and the sidebar
 The wallpaper Mandara is drawing
 The weather on the desktop: the temperature, the sky, the place and the days ahead
 The widths Mod+R cycles through (switch-preset-column-width)
@@ -7137,6 +7152,7 @@ Wave at night, Lotus in daylight.
 Wave detail
 Waves
 Waviness
+Wavy
 Wavy gauges
 Wavy ring
 Wavy week

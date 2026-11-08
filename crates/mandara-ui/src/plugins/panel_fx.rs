@@ -774,8 +774,8 @@ pub fn empty_state(icon_name: &'static str, title: impl Into<SharedString>, hint
 
 /// A thick slider ([`crate::slider`], the large size): a rounded pill
 /// whose gradient fill grows with `value` (`0..=1`), the icon riding inside
-/// at the start, and a handle past the fill (Themes → Style → Slider
-/// handle). A press jumps to the value under the pointer and drags until
+/// at the start, drawn in the design picked under Themes → Components
+/// (`style.slider_design`, with its handle line). A press jumps to the value under the pointer and drags until
 /// release, even outside the pill; while held it draws your value, not the
 /// owner's echoes ([`crate::slider_model`]). `on_change` writes a value and
 /// returns the write's completion (`None` for a local value set at once, or
@@ -788,7 +788,7 @@ pub fn big_slider<R: crate::slider_model::IntoWrite>(
     palette: &MandaraPalette,
     on_change: impl Fn(f32, &mut Window, &mut App) -> R + 'static,
 ) -> gpui::Stateful<Div> {
-    let look = crate::slider::Look { icon: Some(icon_name), muted, label: None };
+    let look = crate::slider::Look { icon: Some(icon_name), muted, ..Default::default() };
     crate::slider::slider(id.into(), value, crate::slider::Size::Large, look, palette, on_change)
 }
 

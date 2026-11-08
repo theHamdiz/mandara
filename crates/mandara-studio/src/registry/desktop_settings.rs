@@ -15,8 +15,14 @@ const MENU_RAIL: &[(&str, &str)] = &[("compact", tk("Compact")), ("full", tk("Fu
 /// `bar.scroll`.
 const BAR_SCROLL: &[(&str, &str)] = &[("none", tk("Nothing")), ("workspaces", tk("Switch workspace")), ("volume", tk("Change volume"))];
 const AUTO_HIDE: &[(&str, &str)] = &[("never", tk("Never")), ("always", tk("Always")), ("overlap", tk("When a window covers it")), ("fullscreen", tk("Fullscreen only"))];
-/// `style.slider_handle`: what marks the end of a thick slider's fill.
+/// `style.slider_handle`: the upright line between a slider's fill and its
+/// track.
 const SLIDER_HANDLE: &[(&str, &str)] = &[("line", tk("Line")), ("none", tk("None"))];
+/// `style.slider_design`, in `SliderDesign::ALL`'s order (Themes →
+/// Components draws each as a live preview).
+pub(crate) const SLIDER_DESIGN: &[(&str, &str)] = &[("classic", tk("Classic")), ("continuous", tk("Continuous")), ("pill", tk("Pill")), ("wavy", tk("Wavy")), ("segmented", tk("Segmented"))];
+/// Themes' group of component designs (its own section on the page).
+pub(crate) const COMPONENTS: &str = tk("Components");
 const FILL: &[(&str, &str)] = &[("cover", tk("Fill")), ("contain", tk("Fit")), ("stretch", tk("Stretch")), ("center", tk("Center")), ("tile", tk("Tile"))];
 const TRANSITION: &[(&str, &str)] = &[("fade", tk("Fade")), ("wipe", tk("Wipe")), ("grow", tk("Grow")), ("none", tk("None"))];
 const ORDER: &[(&str, &str)] = &[("shuffle", tk("Shuffle")), ("random", tk("Random")), ("alphabetical", tk("By name")), ("newest", tk("Newest first"))];
@@ -126,7 +132,8 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Themes, tk("Style"), "/style/shadows", tk("Shadows"), tk("Soft elevation under panels and popups"), Toggle),
         s(Themes, tk("Style"), "/style/borders", tk("Panel edges"), tk("A hairline around floating panels"), Toggle),
         s(Themes, tk("Style"), "/style/backdrop_dim", tk("Dim behind panels"), tk("Darkens the desktop while a panel or the sidebar is open"), slider(0.0, 0.6, 0.02, "")),
-        s(Themes, tk("Style"), "/style/slider_handle", tk("Slider handle"), tk("The upright line between a slider's fill and its track; None shows the fill alone"), Choice(SLIDER_HANDLE)),
+        s(Themes, COMPONENTS, "/style/slider_design", tk("Slider design"), tk("How the volume, brightness and mixer sliders look; thin sliders keep the classic look"), Choice(SLIDER_DESIGN)),
+        s(Themes, COMPONENTS, "/style/slider_handle", tk("Slider handle"), tk("The upright line between a slider's fill and its track; None shows the fill alone"), Choice(SLIDER_HANDLE)),
         s(Themes, tk("Accessibility"), "/theme/adjustments/high_contrast", tk("High contrast"), tk("Pushes text and surfaces apart to WCAG AAA (7:1)"), Toggle),
         s(Typography, tk("Size"), "/typography/weight", tk("Text weight"), tk("Weight of body text across the shell"), Choice(WEIGHTS)),
         s(Motion, tk("Springs"), "/motion/speed", tk("Animation speed"), tk("Plays every animation faster or slower with the same feel"), slider(0.25, 3.0, 0.05, "×")),

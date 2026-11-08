@@ -37,6 +37,7 @@ use mandara_ui::state::update_config;
 use super::{StudioView, swatch_list};
 use super::compositor_page::{badge, card, chip, heading};
 use super::themes_page::section_head;
+use crate::registry::desktop_settings::COMPONENTS;
 use crate::registry::system_settings::CURSOR;
 use crate::registry::{self, Section};
 use crate::tokens::*;
@@ -288,11 +289,13 @@ impl StudioView {
         let wallpaper = self.wallpaper_schemes(cfg, p, cx);
         let apps = self.app_themes_section(cfg, p, cx);
         let cursor = self.cursor_section(cfg, p, cx);
+        let components = self.components_section(cfg, p, cx);
         let tune_head = section_head(t("Fine-tune"), t("Schedule, tuning, style and icons"), Vec::new(), display, p);
-        // Cursor rows sit in the Cursor section, app themes in their grid.
-        let rows = self.rows(registry::in_section(Section::Themes).filter(|s| !SHOWN_ABOVE.contains(&s.path) && s.group != CURSOR && s.group != APP_THEMES_GROUP), cfg, p, cx);
+        // Cursor rows sit in the Cursor section, component designs in
+        // theirs, app themes in their grid.
+        let rows = self.rows(registry::in_section(Section::Themes).filter(|s| !SHOWN_ABOVE.contains(&s.path) && s.group != CURSOR && s.group != APP_THEMES_GROUP && s.group != COMPONENTS), cfg, p, cx);
         let tune = div().row().flex_col().gap(px(SPACE_14_PX)).child(tune_head).child(rows);
-        div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(preview).child(looks).child(themes).child(wallpaper).child(apps).child(cursor).child(tune).into_any_element()
+        div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(preview).child(looks).child(themes).child(wallpaper).child(apps).child(cursor).child(components).child(tune).into_any_element()
     }
 
     /// Looks as a compact list (swatch, name in the look's face, its line,
