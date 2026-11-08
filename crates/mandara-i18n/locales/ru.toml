@@ -8859,3 +8859,5 @@
 "Panel image copied" = "Изображение панели скопировано"
 "Panel capture failed: {error}" = "Не удалось сделать снимок панели: {error}"
 "The panel is not visible" = "Панель не видна"
+"Password symbols" = "Символы пароля"
+"Each character you type appears as a different small shape, or as a plain dot" = "Каждый введённый символ отображается другой маленькой фигурой или простой точкой"

@@ -98,11 +98,13 @@ pub struct LockLook {
     /// small beside the digits instead).
     pub custom_time: bool,
     pub snapshot: Snapshot,
+    /// Motion is reduced (the shell's motion settings): no pops or fades.
+    pub reduced_motion: bool,
 }
 
 impl Default for LockLook {
     fn default() -> Self {
-        Self { cfg: LockConfig::default(), widget_fonts: widget_fonts(&mandara_config::TypographyConfig::default()), time_pattern: "%H:%M".into(), date_pattern: None, clock_24h: true, custom_time: false, snapshot: Snapshot::default() }
+        Self { cfg: LockConfig::default(), widget_fonts: widget_fonts(&mandara_config::TypographyConfig::default()), time_pattern: "%H:%M".into(), date_pattern: None, clock_24h: true, custom_time: false, snapshot: Snapshot::default(), reduced_motion: false }
     }
 }
 
@@ -133,6 +135,7 @@ impl LockLook {
                 notifications: env(NOTIFICATIONS_ENV).and_then(|n| n.parse().ok()).filter(|_| cfg.lock.show_notifications).unwrap_or(0),
                 weather: env(WEATHER_ENV).filter(|_| cfg.lock.show_weather),
             },
+            reduced_motion: cfg.motion.reduced(mandara_core::spring::system_reduced_motion()),
         }
     }
 

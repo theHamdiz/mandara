@@ -353,6 +353,18 @@ pub enum LockBackground {
     Color,
 }
 
+/// How typed password characters are hidden on the lock screen.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PasswordSymbols {
+    /// A different small soft shape per character (never derived from the
+    /// character itself).
+    #[default]
+    Shapes,
+    /// Identical dots.
+    Dots,
+}
+
 /// The lock screen's look (`[lock]`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -384,6 +396,8 @@ pub struct LockConfig {
     pub blank_other_outputs: bool,
     /// The battery reading turns coral at or below this charge, percent.
     pub low_battery_percent: u8,
+    /// How typed password characters are hidden.
+    pub password_symbols: PasswordSymbols,
 }
 
 impl LockConfig {
@@ -411,6 +425,7 @@ impl Default for LockConfig {
             show_battery: true,
             blank_other_outputs: false,
             low_battery_percent: defaults::LOCK_LOW_BATTERY_PERCENT,
+            password_symbols: PasswordSymbols::Shapes,
         }
     }
 }

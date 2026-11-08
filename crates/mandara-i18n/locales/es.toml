@@ -8853,3 +8853,5 @@
 "Panel image copied" = "Imagen del panel copiada"
 "Panel capture failed: {error}" = "Error al capturar el panel: {error}"
 "The panel is not visible" = "El panel no está visible"
+"Password symbols" = "Símbolos de la contraseña"
+"Each character you type appears as a different small shape, or as a plain dot" = "Cada carácter que escribes aparece como una pequeña forma distinta o como un simple punto"

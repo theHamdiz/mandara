@@ -8863,3 +8863,5 @@
 "Panel image copied" = "تم نسخ صورة اللوحة"
 "Panel capture failed: {error}" = "فشل التقاط اللوحة: {error}"
 "The panel is not visible" = "اللوحة غير ظاهرة"
+"Password symbols" = "رموز كلمة المرور"
+"Each character you type appears as a different small shape, or as a plain dot" = "يظهر كل حرف تكتبه بشكل صغير مختلف، أو كنقطة بسيطة"

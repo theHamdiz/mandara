@@ -8613,3 +8613,5 @@
 "Panel image copied" = "패널 이미지가 복사됨"
 "Panel capture failed: {error}" = "패널 캡처 실패: {error}"
 "The panel is not visible" = "패널이 표시되지 않습니다"
+"Password symbols" = "비밀번호 기호"
+"Each character you type appears as a different small shape, or as a plain dot" = "입력한 각 문자가 서로 다른 작은 도형이나 단순한 점으로 표시됩니다"

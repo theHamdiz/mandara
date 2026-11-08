@@ -1806,6 +1806,7 @@ E-mail
 EARLIER
 EVIDENCE
 Each app runs in app-mandara-<app>.scope: tracked resources, survives shell restarts
+Each character you type appears as a different small shape, or as a plain dot
 Each group of bar items sits on a soft capsule of its own
 Each new one replaces the current wallpaper
 Each note is a Markdown file, each topic a folder in here — point it at a synced folder or an Obsidian vault (empty: Mandara's data folder)
@@ -4437,6 +4438,7 @@ Password (empty for open networks)
 Password changed
 Password dialog width
 Password prompts float
+Password symbols
 Passwords don't match
 Passwords match
 Paste

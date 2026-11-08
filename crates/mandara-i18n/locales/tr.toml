@@ -8858,3 +8858,5 @@
 "Panel image copied" = "Panel görüntüsü kopyalandı"
 "Panel capture failed: {error}" = "Panel yakalanamadı: {error}"
 "The panel is not visible" = "Panel görünür değil"
+"Password symbols" = "Parola simgeleri"
+"Each character you type appears as a different small shape, or as a plain dot" = "Yazdığın her karakter farklı küçük bir şekil ya da basit bir nokta olarak görünür"
