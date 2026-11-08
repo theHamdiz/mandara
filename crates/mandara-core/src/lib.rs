@@ -9,6 +9,7 @@ pub mod liquid;
 pub mod material;
 pub mod motion;
 pub mod outputs;
+pub mod password_symbols;
 pub mod shape;
 pub mod session_lock;
 pub mod shm_canvas;
