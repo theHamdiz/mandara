@@ -8614,3 +8614,8 @@
 "Panel image copied" = "پینل کی تصویر کاپی ہو گئی"
 "Panel capture failed: {error}" = "پینل کی تصویر لینے میں ناکامی: {error}"
 "The panel is not visible" = "پینل نظر نہیں آ رہا"
+"“{prefix}” ask the AI agent" = "“{prefix}” ذہین معاون سے پوچھیں"
+"“{prefix}” clipboard" = "“{prefix}” کلپ بورڈ"
+"“{prefix}” wallpapers" = "“{prefix}” وال پیپرز"
+"“{prefix}” files" = "“{prefix}” فائلیں"
+"“{prefix}” actions" = "“{prefix}” ایکشنز"

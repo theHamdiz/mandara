@@ -8853,3 +8853,8 @@
 "Panel image copied" = "Imagen del panel copiada"
 "Panel capture failed: {error}" = "Error al capturar el panel: {error}"
 "The panel is not visible" = "El panel no está visible"
+"“{prefix}” ask the AI agent" = "“{prefix}” preguntar al agente de IA"
+"“{prefix}” clipboard" = "“{prefix}” portapapeles"
+"“{prefix}” wallpapers" = "“{prefix}” fondos de pantalla"
+"“{prefix}” files" = "“{prefix}” archivos"
+"“{prefix}” actions" = "“{prefix}” acciones"

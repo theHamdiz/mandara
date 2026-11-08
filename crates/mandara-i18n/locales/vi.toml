@@ -8517,3 +8517,8 @@
 "Panel image copied" = "Đã sao chép ảnh bảng"
 "Panel capture failed: {error}" = "Không chụp được bảng: {error}"
 "The panel is not visible" = "Bảng không hiển thị"
+"“{prefix}” ask the AI agent" = "“{prefix}” hỏi trợ lý AI"
+"“{prefix}” clipboard" = "bảng tạm “{prefix}”"
+"“{prefix}” wallpapers" = "hình nền “{prefix}”"
+"“{prefix}” files" = "tệp “{prefix}”"
+"“{prefix}” actions" = "hành động “{prefix}”"

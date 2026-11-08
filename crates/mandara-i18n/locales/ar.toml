@@ -8863,3 +8863,8 @@
 "Panel image copied" = "تم نسخ صورة اللوحة"
 "Panel capture failed: {error}" = "فشل التقاط اللوحة: {error}"
 "The panel is not visible" = "اللوحة غير ظاهرة"
+"“{prefix}” ask the AI agent" = "«{prefix}» اسأل الوكيل الذكي"
+"“{prefix}” clipboard" = "«{prefix}» الحافظة"
+"“{prefix}” wallpapers" = "«{prefix}» الخلفيات"
+"“{prefix}” files" = "«{prefix}» الملفات"
+"“{prefix}” actions" = "«{prefix}» الإجراءات"

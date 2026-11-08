@@ -8854,3 +8854,8 @@
 "Panel image copied" = "面板图像已复制"
 "Panel capture failed: {error}" = "面板截图失败：{error}"
 "The panel is not visible" = "面板不可见"
+"“{prefix}” ask the AI agent" = "“{prefix}” 询问 AI 助手"
+"“{prefix}” clipboard" = "“{prefix}” 剪贴板"
+"“{prefix}” wallpapers" = "“{prefix}” 壁纸"
+"“{prefix}” files" = "“{prefix}” 文件"
+"“{prefix}” actions" = "“{prefix}” 操作"

@@ -5347,7 +5347,6 @@ Search actions and settings
 Search and download wallpapers from wallhaven.cc right in the wallpaper picker
 Search apps
 Search apps by name or id
-Search apps, files and actions
 Search apps, files and more
 Search bar width
 Search below to add a city or time zone
@@ -8277,7 +8276,12 @@ your default
 “{code}” isn't a currency code
 “{id}” is a built-in plugin id, and built-ins can't be overridden: rename it
 “{name}” is not a valid container name
+“{prefix}” actions
+“{prefix}” ask the AI agent
+“{prefix}” clipboard
 “{prefix}” emoji
+“{prefix}” files
+“{prefix}” wallpapers
 “{prefix}” windows
 “{repo}” isn't an owner/name repository
 “{theme}” isn't a valid theme name

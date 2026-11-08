@@ -8858,3 +8858,8 @@
 "Panel image copied" = "Panel görüntüsü kopyalandı"
 "Panel capture failed: {error}" = "Panel yakalanamadı: {error}"
 "The panel is not visible" = "Panel görünür değil"
+"“{prefix}” ask the AI agent" = "“{prefix}” yapay zekâ aracısına sor"
+"“{prefix}” clipboard" = "“{prefix}” pano"
+"“{prefix}” wallpapers" = "“{prefix}” duvar kağıtları"
+"“{prefix}” files" = "“{prefix}” dosyalar"
+"“{prefix}” actions" = "“{prefix}” eylemler"

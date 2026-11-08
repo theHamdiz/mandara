@@ -8860,3 +8860,8 @@
 "Panel image copied" = "パネル画像をコピーしました"
 "Panel capture failed: {error}" = "パネルのキャプチャに失敗しました: {error}"
 "The panel is not visible" = "パネルは表示されていません"
+"“{prefix}” ask the AI agent" = "「{prefix}」AI エージェントに頼む"
+"“{prefix}” clipboard" = "「{prefix}」クリップボード"
+"“{prefix}” wallpapers" = "「{prefix}」壁紙"
+"“{prefix}” files" = "「{prefix}」ファイル"
+"“{prefix}” actions" = "「{prefix}」アクション"

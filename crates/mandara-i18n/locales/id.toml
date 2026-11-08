@@ -8613,3 +8613,8 @@
 "Panel image copied" = "Gambar panel disalin"
 "Panel capture failed: {error}" = "Gagal mengambil gambar panel: {error}"
 "The panel is not visible" = "Panel tidak terlihat"
+"“{prefix}” ask the AI agent" = "“{prefix}” tanya agen AI"
+"“{prefix}” clipboard" = "Papan klip “{prefix}”"
+"“{prefix}” wallpapers" = "Wallpaper “{prefix}”"
+"“{prefix}” files" = "File “{prefix}”"
+"“{prefix}” actions" = "Tindakan “{prefix}”"

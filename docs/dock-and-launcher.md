@@ -47,6 +47,10 @@
   `/gh`, `/todo`, `/note` and your own) and **skills** (named routines).
   **Providers** with their own prefixes: `:` emoji (English or Arabic
   names), `@` open windows, `#` clipboard history, `*` wallpapers, `~` files.
+  The empty search field lists what a query can start with, the same in
+  every look: `/`, `=`, the AI Shell Agent's `!` while it is switched on
+  ([Local shell commands](command-agent.md)), then each provider that is on
+  with the prefix you gave it. It follows Studio while the launcher is open.
   It learns what you open (frecency, kept on this computer), shows pinned
   and recent apps first, and lists desktop actions (*New Private Window*).
   **Put it anywhere:** float it in the middle of the screen or attach it to
