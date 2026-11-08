@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **Drop-down panels stay open while you use them.** A click inside a bar panel or the main menu now always counts as using it, so a short focus change right after it (switching light and dark, a keyboard or mouse coming or going, the compositor rearranging its layers) no longer closes the panel under your pointer. Pressing a key while you rest on a panel no longer reads as leaving it either. Moving away, clicking outside, Escape and switching to another app still close it.
+
 ## 0.22.0 — 2026-11-07
 
 Copy any panel as an image. Motion that suits you. Swipe notification
