@@ -62,6 +62,8 @@ pub fn styled_paragraph(text: impl Into<SharedString>, highlights: Vec<(Range<us
 pub struct Clip(Rc<Cell<Option<bool>>>);
 
 impl Clip {
+    /// Whether the paragraph's last layout cut text off (`None` before it
+    /// has been laid out).
     pub fn clipped(&self) -> Option<bool> {
         self.0.get()
     }

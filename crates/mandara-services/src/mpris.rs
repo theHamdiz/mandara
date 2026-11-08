@@ -72,10 +72,13 @@ trait Player {
     fn can_go_previous(&self) -> zbus::Result<bool>;
     #[zbus(property)]
     fn can_seek(&self) -> zbus::Result<bool>;
+    /// Whether the player accepts control at all (MPRIS `CanControl`).
     #[zbus(property)]
     fn can_control(&self) -> zbus::Result<bool>;
+    /// The player's own volume, 0.0–1.0 (MPRIS `Volume`).
     #[zbus(property)]
     fn volume(&self) -> zbus::Result<f64>;
+    /// Sets the player's own volume (MPRIS `Volume`), not its audio stream.
     #[zbus(property)]
     fn set_volume(&self, volume: f64) -> zbus::Result<()>;
 }
@@ -287,6 +290,9 @@ impl ArtMap {
 
 type ArtCache = Arc<Mutex<ArtMap>>;
 
+/// The MPRIS actor: follows players on its own session connection, sends
+/// each new state of the followed player on `updates` and runs `commands`
+/// against it until either channel closes.
 async fn run(updates: async_channel::Sender<Option<MediaState>>, commands: async_channel::Receiver<Envelope>) -> Result<()> {
     // Private connection: its signal streams must never stall other actors.
     let conn = crate::runtime::connect(zbus::connection::Builder::session()?).await?;
@@ -490,6 +496,9 @@ async fn identity_of(conn: &Connection, bus: &str) -> String {
     }
 }
 
+/// Reads `bus`'s current media state. Album art is loaded through `art`
+/// and announced on `art_ready`; the player's own volume is included only
+/// when `volume_writable` (checked once per player).
 async fn read_state(conn: &Connection, bus: &str, art: &ArtCache, art_ready: &async_channel::Sender<()>, volume_writable: bool) -> Result<MediaState> {
     let p = player(conn, bus).await?;
     let identity = match MediaPlayer2Proxy::builder(conn)

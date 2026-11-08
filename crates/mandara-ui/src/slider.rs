@@ -409,6 +409,8 @@ struct Inks {
     angle: f32,
 }
 
+/// Paints one piece of a thick slider (the rest of the track, a stretch of
+/// fill, or the knob) inside `bounds`, mirrored in right-to-left languages.
 fn paint_piece(window: &mut Window, piece: &Piece, bounds: Bounds<Pixels>, rtl: bool, inks: Inks) {
     let width = f32::from(bounds.size.width);
     let (b, corners) = (piece.bounds(bounds.origin, width, rtl), piece.corners(rtl));

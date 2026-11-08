@@ -142,10 +142,12 @@ fn screen(days: usize) -> ScreenInfo {
     ScreenInfo { days, top }
 }
 
+/// A sample clock time (midnight if out of range).
 fn at((h, m): (u32, u32)) -> NaiveTime {
     NaiveTime::from_hms_opt(h, m, 0).unwrap_or_default()
 }
 
+/// Sample prayer times for the gallery picture, with today's Hijri date.
 fn prayer() -> PrayerInfo {
     PrayerInfo {
         times: Prayer::ALL.into_iter().zip(PRAYER_TIMES).map(|(p, time)| (p.name(), p.name_ar(), at(time))).collect(),
@@ -165,6 +167,8 @@ fn contributions() -> Vec<ContributionDay> {
     }).collect()
 }
 
+/// Sample exchange rates from `base` (USD when empty) into each of
+/// `pairs`, from fixed per-USD rates; no network.
 fn rates(base: &str, pairs: &[String]) -> Rates {
     let per_usd = |code: &str| RATES.iter().find(|(c, _)| c.eq_ignore_ascii_case(code)).map(|(_, r)| *r);
     let base = if base.trim().is_empty() { "USD".to_string() } else { base.trim().to_ascii_uppercase() };
@@ -177,6 +181,7 @@ fn rates(base: &str, pairs: &[String]) -> Rates {
     Rates { base, rates, updated: Local::now().timestamp() }
 }
 
+/// A sample week of AI token use ending today, split into input and output.
 fn tokens() -> std::collections::BTreeMap<chrono::NaiveDate, DayTokens> {
     let today = Local::now().date_naive();
     TOKENS_M.iter().rev().enumerate().map(|(back, m)| {

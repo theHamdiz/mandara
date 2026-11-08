@@ -91,6 +91,7 @@ impl Symbol {
         Symbol::Clover4,
     ];
 
+    /// This shape's position in the shared outline tables.
     fn index(self) -> usize {
         self as usize
     }
@@ -349,6 +350,8 @@ fn rect(w: f32, h: f32, r: [f32; 4]) -> Vec<Corner> {
     vec![(x, y, r[0]), (-x, y, r[1]), (-x, -y, r[2]), (x, -y, r[3])]
 }
 
+/// `corners` turned by `degrees` about the shape's centre, keeping each
+/// corner's rounding radius.
 fn rotated(corners: &[Corner], degrees: f32) -> Vec<Corner> {
     corners
         .iter()
@@ -480,6 +483,8 @@ fn normalized(mut pts: Vec<(f32, f32)>) -> Vec<(f32, f32)> {
     pts
 }
 
+/// The outline `pts` (unit square) as a filled black SVG path in the
+/// `SVG_BOX` viewbox, the asset GPUI rasterizes once per size.
 fn svg_text(pts: &[(f32, f32)]) -> String {
     use std::fmt::Write as _;
     let mut d = String::with_capacity(pts.len() * 14 + 120);
