@@ -270,10 +270,15 @@ mod tests {
         Lingo::of(&Default::default(), false, None)
     }
 
+    /// Every line a composition writes, joined (a wrapped hint reads whole).
+    fn shown(c: &Composition) -> String {
+        c.marks.iter().filter_map(|m| if let MarkKind::Text { text, .. } = &m.kind { Some(text.as_str()) } else { None }).collect::<Vec<_>>().join(" ")
+    }
+
     #[test]
     fn feeds_say_why_they_are_empty_and_lay_out_when_full() {
         let off = github(&GithubWidget::default(), "github-1", &Feed::default(), &l(), 1.0, &mut Fixed);
-        assert!(off.marks.iter().any(|m| matches!(&m.kind, MarkKind::Text { text, .. } if text.contains("GitHub user name"))));
+        assert!(shown(&off).contains("GitHub user name"));
         let today = Local::now().date_naive();
         let days: Vec<ContributionDay> = (0..60).map(|i| ContributionDay { date: today - chrono::Duration::days(i), level: (i % 5) as u8, count: (i % 5) as u32 }).collect();
         let w = GithubWidget { user: "octocat".into(), online: true, ..Default::default() };
@@ -294,7 +299,7 @@ mod tests {
     #[test]
     fn empty_feeds_pick_the_state_that_fits() {
         let studio = |c: &Composition| c.hits.iter().find_map(|h| if let Action::Studio(t) = &h.action { Some(t.clone()) } else { None });
-        let says = |c: &Composition, words: &str| c.marks.iter().any(|m| matches!(&m.kind, MarkKind::Text { text, .. } if text.contains(words)));
+        let says = |c: &Composition, words: &str| shown(c).contains(words);
         // Switched off: a button to the exact widget's settings.
         let c = github(&GithubWidget { user: "octocat".into(), ..Default::default() }, "github-2", &Feed::default(), &l(), 1.0, &mut Fixed);
         assert_eq!(studio(&c).as_deref(), Some("desktop-widgets/github-2"));
