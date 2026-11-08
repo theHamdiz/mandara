@@ -368,15 +368,36 @@ fn apps_content_h(rows: &[(apps::AppGroup, f32)], row_h: f32, gap: f32, host: Op
 /// processors such as EasyEffects carry everyone's sound, so they never
 /// count.
 fn spectrum_host<'a>(groups: &'a [apps::AppGroup], player: Option<&str>) -> Option<&'a apps::AppGroup> {
-    let effect = |g: &apps::AppGroup| {
-        let (key, name) = (g.key.to_lowercase(), g.name.to_lowercase().replace(' ', ""));
-        EFFECT_APPS.iter().any(|e| key.contains(e) || name.contains(e))
-    };
-    let playing: Vec<&apps::AppGroup> = groups.iter().filter(|g| !g.corked && !effect(g)).collect();
+    let playing: Vec<&apps::AppGroup> = groups.iter().filter(|g| !g.corked && !is_effect(g)).collect();
     let player = player.map(|p| p.to_lowercase()).filter(|p| !p.is_empty());
-    player
-        .and_then(|p| playing.iter().copied().find(|g| g.key.contains(&p) || g.name.to_lowercase().contains(&p) || p.contains(&g.name.to_lowercase())))
-        .or_else(|| playing.first().copied())
+    player.and_then(|p| playing.iter().copied().find(|g| plays_for(g, &p))).or_else(|| playing.first().copied())
+}
+
+/// An effects processor such as EasyEffects (it carries everyone's sound).
+fn is_effect(g: &apps::AppGroup) -> bool {
+    let (key, name) = (g.key.to_lowercase(), g.name.to_lowercase().replace(' ', ""));
+    EFFECT_APPS.iter().any(|e| key.contains(e) || name.contains(e))
+}
+
+/// Whether `g` is the app of the media player named `player` (lowercase).
+fn plays_for(g: &apps::AppGroup, player: &str) -> bool {
+    let name = g.name.to_lowercase();
+    g.key.contains(player) || name.contains(player) || player.contains(&name)
+}
+
+/// The app row whose level is the media player's own volume, with that
+/// volume: the followed player's app, playing or paused, when the player
+/// lets you change its volume. Such a player puts its own level back on
+/// its stream whenever it plays or pauses, so its row sets that level
+/// instead of the stream's ([`apps::RowCx::player`]).
+fn player_level<'a>(groups: &'a [apps::AppGroup], media: Option<&mandara_services::MediaState>) -> Option<(&'a str, f32)> {
+    let m = media?;
+    let volume = m.volume? as f32;
+    let player = m.identity.to_lowercase();
+    if player.is_empty() {
+        return None;
+    }
+    groups.iter().find(|g| !is_effect(g) && plays_for(g, &player)).map(|g| (g.key.as_str(), volume))
 }
 
 /// The Apps card: one row per app playing sound, or a muted empty line;
@@ -448,7 +469,8 @@ fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>, apps_ta
         let all = s.all_muted;
         let base_h = if all { PANEL_H_MUTED } else { PANEL_H } - if host.is_some() { OUT_VIZ_H } else { 0.0 } + picker_h;
         let default_sink = snapshot.outputs.iter().find(|d| d.is_default).map(|d| d.index);
-        let rc = RowCx { tap: &apps_tap, limit: lim, all_muted: all, outputs: &outputs, default_sink, palette, id_prefix: "audio-app" };
+        let player = player_level(&snapshot.groups, hub.read(cx).media.as_ref());
+        let rc = RowCx { tap: &apps_tap, limit: lim, all_muted: all, outputs: &outputs, default_sink, palette, id_prefix: "audio-app", player };
         let band_slice = bands.as_ref().map(|b| &b[..]);
         let (apps, apps_h) = apps_card(&rows, &rc, r, MAX_PANEL_H - base_h - GAP - APPS_CARD_CHROME_H, (host.as_deref(), band_slice), cx);
         size_cell.set(size(px(PANEL_W), px(base_h + GAP + apps_h)));
@@ -596,7 +618,8 @@ pub fn register(r: &mut PluginRegistry) {
                 };
                 let out_devices = device_picker::controls("side-out-device", device_picker::Kind::Output, names.0, &snapshot, &side_picker, palette, cx);
                 let in_devices = device_picker::controls("side-in-device", device_picker::Kind::Input, names.1, &snapshot, &side_picker, palette, cx);
-                let rc = RowCx { tap: &apps_tap, limit: lim, all_muted: s.all_muted, outputs: &[], default_sink: None, palette, id_prefix: "side-app" };
+                let player = player_level(&snapshot.groups, hub(cx).read(cx).media.as_ref());
+                let rc = RowCx { tap: &apps_tap, limit: lim, all_muted: s.all_muted, outputs: &[], default_sink: None, palette, id_prefix: "side-app", player };
                 let app_list = (!app_rows.is_empty()).then(|| sidebar_apps(&app_rows, &rc));
                 card(palette)
                     .flex()
@@ -752,6 +775,34 @@ mod tests {
         assert_eq!(spectrum_host(&groups, Some("mpv")).map(|g| g.key.as_str()), Some("mpv"));
         assert_eq!(spectrum_host(&groups, None).map(|g| g.key.as_str()), Some("spotify"), "the first one playing");
         assert_eq!(spectrum_host(&groups[..2], None), None, "EasyEffects alone, or a paused app, hosts nothing");
+    }
+
+    /// A player that keeps its own volume (Rufin) put it back on its
+    /// stream at every play or pause, undoing what the app's slider had
+    /// set on the stream: its row now sets the player's own level, paused
+    /// or playing, and every other row still sets its streams.
+    #[test]
+    fn the_media_players_row_sets_the_players_own_volume() {
+        use mandara_services::{MediaState, PlaybackStatus};
+        let g = |key: &str, name: &str, corked: bool| apps::AppGroup { key: key.into(), name: name.to_string().into(), corked, volume: 0.51, ..Default::default() };
+        let groups = [g("com.github.wwmm.easyeffects", "Easy Effects", false), g("firefox", "Firefox", false), g("rufin", "Rufin", true)];
+        let player = |identity: &str, status: PlaybackStatus, volume: Option<f64>| {
+            let mut m = MediaState::default();
+            (m.identity, m.status, m.volume) = (identity.into(), status, volume);
+            m
+        };
+        let mut rufin = player("Rufin", PlaybackStatus::Paused, Some(0.25));
+        let level = player_level(&groups, Some(&rufin));
+        assert_eq!(level, Some(("rufin", 0.25)), "paused too: pausing is exactly when the level used to jump back");
+        assert_eq!(apps::player_volume(&groups[2], level), Some(0.25), "the row shows the player's level, not the stream's 51 %");
+        assert_eq!(apps::player_volume(&groups[1], level), None, "other apps keep their stream volume");
+        rufin.status = PlaybackStatus::Playing;
+        assert_eq!(player_level(&groups, Some(&rufin)), Some(("rufin", 0.25)));
+        rufin.volume = None;
+        assert_eq!(player_level(&groups, Some(&rufin)), None, "a player whose volume you can't change keeps the stream slider");
+        assert_eq!(player_level(&groups, None), None);
+        let effects = player("Easy Effects", PlaybackStatus::Playing, Some(1.0));
+        assert_eq!(player_level(&groups, Some(&effects)), None, "never an effects processor's row");
     }
 
     #[test]

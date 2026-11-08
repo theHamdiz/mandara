@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 use gpui::{AnyElement, App, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::FluentBuilder as _, px};
 use mandara_core::{SpringConfig, ToGpui};
 use mandara_i18n::{t, tf};
+use mandara_services::MediaCommand;
 use mandara_services::audio::{AudioCommand, Device, Stream};
 use mandara_theme::MandaraPalette;
 
@@ -367,6 +368,18 @@ pub(super) struct RowCx<'a> {
     pub default_sink: Option<u32>,
     pub palette: &'a MandaraPalette,
     pub id_prefix: &'static str,
+    /// The followed media player's app (group key) and its own volume
+    /// (`0..=1`), when it lets you change that: its row shows and sets the
+    /// player's level, which the player keeps across play and pause. Its
+    /// stream's volume would not last: the player puts its own level back
+    /// on the stream whenever playback starts or stops.
+    pub player: Option<(&'a str, f32)>,
+}
+
+/// The player's own volume when `g` is the media player's app
+/// ([`RowCx::player`]).
+pub(super) fn player_volume(g: &AppGroup, player: Option<(&str, f32)>) -> Option<f32> {
+    player.filter(|(key, _)| *key == g.key).map(|(_, v)| v)
 }
 
 /// An app's name with its stream count when it has several.
@@ -384,20 +397,36 @@ fn name_line(g: &AppGroup, palette: &MandaraPalette) -> impl IntoElement {
 
 /// The element id (and drag-state key) of `g`'s slider.
 fn slider_id(g: &AppGroup, rc: &RowCx<'_>) -> gpui::ElementId {
-    SharedString::from(format!("{}-vol-{}", rc.id_prefix, g.key)).into()
+    // A player's level and a stream's are different scales: their drags
+    // never share a held value.
+    let kind = if player_volume(g, rc.player).is_some() { "pvol" } else { "vol" };
+    SharedString::from(format!("{}-{kind}-{}", rc.id_prefix, g.key)).into()
 }
 
 /// The volume to draw for `g`: the one you are dragging on its slider, else
-/// the server's.
+/// the player's own ([`RowCx::player`]) or the server's.
 pub(super) fn shown_volume(g: &AppGroup, rc: &RowCx<'_>) -> f32 {
-    crate::slider_model::held(&slider_id(g, rc)).map_or(g.volume, |frac| slider_volume(frac, rc.limit))
+    let held = crate::slider_model::held(&slider_id(g, rc));
+    match player_volume(g, rc.player) {
+        Some(level) => held.map_or(level, |frac| slider_volume(frac, PLAYER_LIMIT)),
+        None => held.map_or(g.volume, |frac| slider_volume(frac, rc.limit)),
+    }
 }
 
-/// The slider for `g`: sets every stream of the app, one write at a time,
-/// and shows your value while you drag ([`crate::slider_model`]).
+/// The top of a player's own volume (MPRIS: `1.0` is its full level).
+const PLAYER_LIMIT: f32 = 1.0;
+
+/// The slider for `g`, one write at a time, showing your value while you
+/// drag ([`crate::slider_model`]): the media player's own volume for its
+/// app, else every stream of the app.
 pub(super) fn app_slider(g: &AppGroup, rc: &RowCx<'_>) -> gpui::Stateful<gpui::Div> {
     let volume = shown_volume(g, rc);
     let muted = rc.tap.borrow().muted(g) || rc.all_muted;
+    if let Some(level) = player_volume(g, rc.player) {
+        return big_slider(slider_id(g, rc), slider_frac(level, PLAYER_LIMIT), volume_icon(volume, muted), muted, rc.palette, move |frac, _, cx| {
+            hub(cx).read(cx).media_service.clone().map(|s| s.request(MediaCommand::SetVolume(f64::from(slider_volume(frac, PLAYER_LIMIT)))))
+        });
+    }
     let (indices, limit) = (g.indices.clone(), rc.limit);
     big_slider(slider_id(g, rc), slider_frac(g.volume, limit), volume_icon(volume, muted), muted, rc.palette, move |frac, _, cx| {
         hub(cx).read(cx).audio_service.clone().map(|s| s.request(AudioCommand::SetStreamVolume(indices.clone(), slider_volume(frac, limit))))

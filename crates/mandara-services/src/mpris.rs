@@ -72,6 +72,12 @@ trait Player {
     fn can_go_previous(&self) -> zbus::Result<bool>;
     #[zbus(property)]
     fn can_seek(&self) -> zbus::Result<bool>;
+    #[zbus(property)]
+    fn can_control(&self) -> zbus::Result<bool>;
+    #[zbus(property)]
+    fn volume(&self) -> zbus::Result<f64>;
+    #[zbus(property)]
+    fn set_volume(&self, volume: f64) -> zbus::Result<()>;
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -113,6 +119,12 @@ pub struct MediaState {
     pub can_go_next: bool,
     pub can_go_previous: bool,
     pub can_seek: bool,
+    /// The player's own volume (`0..=1`, its `Volume`) when you can change
+    /// it: the player accepts control and declares `Volume` writable. A
+    /// player that keeps its own level puts it back on its sound stream
+    /// whenever it plays or pauses, so this, not the stream's volume, is
+    /// the level that lasts ([`MediaCommand::SetVolume`]).
+    pub volume: Option<f64>,
     track_id: Option<String>,
 }
 
@@ -136,6 +148,7 @@ impl Default for MediaState {
             can_go_next: false,
             can_go_previous: false,
             can_seek: false,
+            volume: None,
             track_id: None,
         }
     }
@@ -172,6 +185,7 @@ impl MediaState {
             && self.art_path == other.art_path
             && self.art_seeds.len() == other.art_seeds.len()
             && self.length == other.length
+            && self.volume == other.volume
     }
 }
 
@@ -183,6 +197,9 @@ pub enum MediaCommand {
     Previous,
     /// Seek to an absolute position.
     SeekTo(Duration),
+    /// Sets the player's own volume (`0..=1`; only a player whose
+    /// [`MediaState::volume`] is known is sent one).
+    SetVolume(f64),
     /// Re-pick the followed player (after [`configure`]).
     Refresh,
 }
@@ -199,18 +216,31 @@ pub fn configure(media: &mandara_config::alerts::MediaConfig) {
     *prefs().lock() = media.clone();
 }
 
+/// A command and, for [`MediaService::request`], where its result goes.
+type Envelope = (MediaCommand, Option<async_channel::Sender<Result<String, String>>>);
+
 /// Handle to the running media actor.
 #[derive(Clone)]
 pub struct MediaService {
     pub updates: async_channel::Receiver<Option<MediaState>>,
-    commands: async_channel::Sender<MediaCommand>,
+    commands: async_channel::Sender<Envelope>,
 }
 
 impl MediaService {
     pub fn send(&self, command: MediaCommand) {
-        if self.commands.try_send(command).is_err() {
+        if self.commands.try_send((command, None)).is_err() {
             tracing::warn!("media actor is not running");
         }
+    }
+
+    /// Sends `command` and yields once the player has been told: a
+    /// slider's write, so it keeps one write in flight at a time.
+    pub fn request(&self, command: MediaCommand) -> async_channel::Receiver<Result<String, String>> {
+        let (tx, rx) = async_channel::bounded(1);
+        if self.commands.try_send((command, Some(tx))).is_err() {
+            tracing::warn!("media actor is not running");
+        }
+        rx
     }
 }
 
@@ -257,7 +287,7 @@ impl ArtMap {
 
 type ArtCache = Arc<Mutex<ArtMap>>;
 
-async fn run(updates: async_channel::Sender<Option<MediaState>>, commands: async_channel::Receiver<MediaCommand>) -> Result<()> {
+async fn run(updates: async_channel::Sender<Option<MediaState>>, commands: async_channel::Receiver<Envelope>) -> Result<()> {
     // Private connection: its signal streams must never stall other actors.
     let conn = crate::runtime::connect(zbus::connection::Builder::session()?).await?;
     let dbus = zbus::fdo::DBusProxy::new(&conn).await?;
@@ -285,10 +315,13 @@ async fn run(updates: async_channel::Sender<Option<MediaState>>, commands: async
     let (art_ready_tx, art_ready) = async_channel::bounded::<()>(1);
     let mut followed: Option<String> = None;
     let mut last: Option<MediaState> = None;
+    // Whether the followed player declares `Volume` writable (introspected
+    // once per player it follows).
+    let mut writable: Option<(String, bool)> = None;
 
     // Every wake-up (signal, art ready, tick or command) re-reads the state.
     loop {
-        let state = snapshot(&conn, &dbus, &mut followed, &art, &art_ready_tx).await;
+        let state = snapshot(&conn, &dbus, &mut followed, &art, &art_ready_tx, &mut writable).await;
         let changed = match (&last, &state) {
             (Some(a), Some(b)) => !a.same_track_state(b) || b.status == PlaybackStatus::Playing,
             (None, None) => false,
@@ -309,14 +342,18 @@ async fn run(updates: async_channel::Sender<Option<MediaState>>, commands: async
             _ = art_ready.recv().fuse() => {}
             _ = futures::FutureExt::fuse(tick) => {}
             command = commands.recv().fuse() => {
-                let Ok(command) = command else { return Ok(()) };
-                if command == MediaCommand::Refresh {
-                    continue;
-                }
-                if let (Some(bus), Some(state)) = (followed.clone(), last.clone())
-                    && let Err(err) = execute(&conn, &bus, &state, command).await {
+                let Ok((command, reply)) = command else { return Ok(()) };
+                let result = match (command, followed.as_deref(), last.as_ref()) {
+                    (MediaCommand::Refresh, _, _) => Ok(()),
+                    (command, Some(bus), Some(state)) => execute(&conn, bus, state, command).await.map_err(|err| {
                         tracing::warn!("MPRIS command failed: {err:#}");
-                    }
+                        err.to_string()
+                    }),
+                    _ => Err("no media player".to_string()),
+                };
+                if let Some(reply) = reply {
+                    let _ = reply.try_send(result.map(|()| String::new()));
+                }
             }
         }
     }
@@ -337,6 +374,8 @@ async fn execute(conn: &Connection, bus: &str, state: &MediaState, command: Medi
         MediaCommand::Next => p.next().await,
         MediaCommand::Previous => p.previous().await,
         MediaCommand::Refresh => Ok(()),
+        MediaCommand::SetVolume(v) if state.volume.is_some() => p.set_volume(v.clamp(0.0, 1.0)).await,
+        MediaCommand::SetVolume(_) => Ok(()),
         MediaCommand::SeekTo(pos) => {
             let Some(track) = &state.track_id else { return Ok(()) };
             let path = ObjectPath::try_from(track.as_str())?;
@@ -352,6 +391,7 @@ async fn snapshot(
     followed: &mut Option<String>,
     art: &ArtCache,
     art_ready: &async_channel::Sender<()>,
+    writable: &mut Option<(String, bool)>,
 ) -> Option<MediaState> {
     let names: Vec<String> = dbus
         .list_names()
@@ -405,7 +445,38 @@ async fn snapshot(
         }
     }
     let bus = followed.clone()?;
-    read_state(conn, &bus, art, art_ready).await.ok()
+    if writable.as_ref().is_none_or(|(b, _)| *b != bus) {
+        let xml = match zbus::fdo::IntrospectableProxy::builder(conn).destination(bus.clone()).and_then(|b| b.path(MPRIS_PATH)) {
+            Ok(b) => match b.cache_properties(zbus::proxy::CacheProperties::No).build().await {
+                Ok(proxy) => proxy.introspect().await.unwrap_or_default(),
+                Err(_) => String::new(),
+            },
+            Err(_) => String::new(),
+        };
+        *writable = Some((bus.clone(), volume_writable(&xml)));
+    }
+    let volume_writable = writable.as_ref().is_some_and(|(_, w)| *w);
+    read_state(conn, &bus, art, art_ready, volume_writable).await.ok()
+}
+
+/// Whether introspection `xml` declares the player interface's `Volume`
+/// writable (some players report a read-only constant instead).
+pub fn volume_writable(xml: &str) -> bool {
+    // An element's attribute (either quote style) within its opening tag.
+    fn attr<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
+        let tag = &tag[..tag.find('>').unwrap_or(tag.len())];
+        tag.split_whitespace().find_map(|a| a.strip_prefix(name)?.strip_prefix('=')).and_then(|v| v.get(1..)).and_then(|v| v.split(['"', '\'']).next())
+    }
+    xml.split("<interface").skip(1).filter(|i| attr(i, "name") == Some(PLAYER_IFACE)).any(|iface| {
+        let iface = &iface[..iface.find("</interface>").unwrap_or(iface.len())];
+        iface.split("<property").skip(1).any(|p| attr(p, "name") == Some("Volume") && attr(p, "access") == Some("readwrite"))
+    })
+}
+
+/// The volume of a player whose `Volume` is writable, when you can change
+/// it: the player accepts control and reports a level.
+pub fn player_volume(can_control: bool, volume: Option<f64>) -> Option<f64> {
+    volume.filter(|v| can_control && v.is_finite()).map(|v| v.max(0.0))
 }
 
 /// A player's `Identity` (empty when it doesn't answer).
@@ -419,7 +490,7 @@ async fn identity_of(conn: &Connection, bus: &str) -> String {
     }
 }
 
-async fn read_state(conn: &Connection, bus: &str, art: &ArtCache, art_ready: &async_channel::Sender<()>) -> Result<MediaState> {
+async fn read_state(conn: &Connection, bus: &str, art: &ArtCache, art_ready: &async_channel::Sender<()>, volume_writable: bool) -> Result<MediaState> {
     let p = player(conn, bus).await?;
     let identity = match MediaPlayer2Proxy::builder(conn)
         .destination(bus.to_owned())?
@@ -457,6 +528,8 @@ async fn read_state(conn: &Connection, bus: &str, art: &ArtCache, art_ready: &as
         can_go_next: p.can_go_next().await.unwrap_or(false),
         can_go_previous: p.can_go_previous().await.unwrap_or(false),
         can_seek: p.can_seek().await.unwrap_or(false),
+        // A read-only `Volume` isn't worth the two calls.
+        volume: if volume_writable { player_volume(p.can_control().await.unwrap_or(false), p.volume().await.ok()) } else { None },
         track_id: meta.track_id,
     })
 }
@@ -623,6 +696,31 @@ mod tests {
         v.try_to_owned().unwrap()
     }
 
+    /// Introspection as a player answers it (trimmed): `Volume` writable.
+    const RW_VOLUME: &str = r#"<node><interface name="org.mpris.MediaPlayer2"><property name="Identity" type="s" access="read"/></interface>
+<interface name="org.mpris.MediaPlayer2.Player"><method name="PlayPause"/><property name="PlaybackStatus" type="s" access="read"/>
+<property type="d" name="Volume" access="readwrite"><annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/></property>
+<property name="CanControl" type="b" access="read"/></interface></node>"#;
+
+    #[test]
+    fn a_player_volume_counts_only_when_declared_writable() {
+        assert!(volume_writable(RW_VOLUME));
+        assert!(!volume_writable(&RW_VOLUME.replace(r#"access="readwrite""#, r#"access="read""#)), "a read-only constant");
+        assert!(!volume_writable(&RW_VOLUME.replace(r#"name="Volume""#, r#"name="Rate""#)), "no Volume at all");
+        assert!(!volume_writable(&RW_VOLUME.replace("org.mpris.MediaPlayer2.Player", "org.example.Other")), "only the player interface's");
+        assert!(!volume_writable(""), "no answer");
+        assert!(volume_writable("<interface name='org.mpris.MediaPlayer2.Player'><property access='readwrite' name='Volume' type='d'/></interface>"), "single quotes");
+    }
+
+    #[test]
+    fn a_player_volume_needs_control_and_a_finite_level() {
+        assert_eq!(player_volume(true, Some(0.653)), Some(0.653));
+        assert_eq!(player_volume(false, Some(0.653)), None, "CanControl false: hands off");
+        assert_eq!(player_volume(true, None), None);
+        assert_eq!(player_volume(true, Some(f64::NAN)), None);
+        assert_eq!(player_volume(true, Some(-0.2)), Some(0.0));
+    }
+
     #[test]
     fn parses_metadata() {
         let mut map = HashMap::new();
@@ -676,6 +774,7 @@ mod tests {
             can_go_next: true,
             can_go_previous: true,
             can_seek: true,
+            volume: None,
             track_id: None,
         };
         assert_eq!(state.position_now(t0 + Duration::from_secs(5)), Duration::from_secs(15));
