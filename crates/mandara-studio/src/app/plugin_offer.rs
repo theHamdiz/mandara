@@ -22,8 +22,8 @@ const OFFER_TILE_PX: f32 = DIM_30_PX;
 impl StudioView {
     /// The offer card for opt-in plugin `id` (nothing if it isn't registered).
     pub(super) fn plugin_offer(&mut self, id: &'static str, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let Some(manifest) = cx.global::<PluginRegistry>().manifests().find(|m| m.id == id).cloned() else { return div().into_any_element() };
-        let name = manifest.display_name();
+        // Borrowed: only the tile and the name are needed.
+        let Some((tile, name)) = cx.global::<PluginRegistry>().manifest(id).map(|m| (super::plugin_tile(m, OFFER_TILE_PX, true, 1.0, p), m.display_name())) else { return div().into_any_element() };
         div()
             .id(SharedString::from(format!("offer-{id}")))
             .rounded(px(RADIUS_16_PX))
@@ -33,7 +33,7 @@ impl StudioView {
             .row()
             .items_center()
             .gap(px(SPACE_12_PX))
-            .child(super::plugin_tile(&manifest, OFFER_TILE_PX, true, 1.0, p))
+            .child(tile)
             .child(
                 div()
                     .id(SharedString::from(format!("offer-{id}-details")))

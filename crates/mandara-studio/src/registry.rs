@@ -353,8 +353,10 @@ pub struct Setting {
     pub label: &'static str,
     pub help: &'static str,
     pub control: Control,
-    /// Value used when the key is absent (plugin settings tables).
-    pub default: Option<Value>,
+    /// Value used when the key is absent (plugin settings tables). Boxed:
+    /// few settings have one, and an inline JSON value would add 64 bytes
+    /// to every one of the ~860 entries.
+    pub default: Option<Box<Value>>,
 }
 
 impl Setting {
@@ -436,7 +438,7 @@ fn s(section: Section, group: &'static str, path: &'static str, label: &'static 
 }
 
 fn sd(section: Section, group: &'static str, path: &'static str, label: &'static str, help: &'static str, control: Control, default: Value) -> Setting {
-    Setting { section, group, path, label, help, control, default: Some(default) }
+    Setting { section, group, path, label, help, control, default: Some(Box::new(default)) }
 }
 
 /// Choice labels are `tk()`-marked English; display them with `tr()`.
@@ -1058,7 +1060,7 @@ static NULL: Value = Value::Null;
 /// `setting`'s value in the JSON tree `root`, borrowed: what [`get`]
 /// returns, without cloning it.
 fn resolve<'a>(root: &'a Value, setting: &'a Setting) -> &'a Value {
-    root.pointer(setting.path).filter(|v| !v.is_null() || setting.default.is_none()).or(setting.default.as_ref()).unwrap_or(&NULL)
+    root.pointer(setting.path).filter(|v| !v.is_null() || setting.default.is_none()).or(setting.default.as_deref()).unwrap_or(&NULL)
 }
 
 /// Reads a setting's current value.
@@ -1316,5 +1318,17 @@ mod tests {
             assert_eq!(&*search(q), naive.as_slice(), "{q}");
         }
         assert!(Rc::ptr_eq(&search("vivid"), &search("vivid")));
+    }
+}
+
+#[cfg(test)]
+mod layout {
+    /// Every one of the ~860 settings carries these bytes for the whole
+    /// session: the rare JSON default stays boxed (an inline `Value` would
+    /// add 64 bytes to each).
+    #[test]
+    fn a_setting_stays_compact() {
+        assert!(std::mem::size_of::<super::Setting>() <= 136, "{}", std::mem::size_of::<super::Setting>());
+        assert_eq!(std::mem::size_of::<super::Section>(), 1);
     }
 }

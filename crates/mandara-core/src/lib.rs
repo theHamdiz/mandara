@@ -37,9 +37,22 @@ pub struct BuildInfo {
     pub components: Vec<(String, String)>,
 }
 
-impl gpui::Global for BuildInfo {}
+/// The process's [`BuildInfo`], shared: readers take a reference count
+/// instead of copying its strings and component list on every frame.
+struct BuildInfoGlobal(std::sync::Arc<BuildInfo>);
+
+impl gpui::Global for BuildInfoGlobal {}
+
+/// Records the build identity once at startup ([`build_info`] reads it).
+pub fn set_build_info(cx: &mut gpui::App, info: BuildInfo) {
+    cx.set_global(BuildInfoGlobal(std::sync::Arc::new(info)));
+}
 
 /// The build identity (`CARGO_PKG_VERSION` until the binary sets it).
-pub fn build_info(cx: &gpui::App) -> BuildInfo {
-    cx.try_global::<BuildInfo>().cloned().unwrap_or_else(|| BuildInfo { version: env!("CARGO_PKG_VERSION").into(), long: env!("CARGO_PKG_VERSION").into(), components: Vec::new() })
+/// Shared, so calling it from a render path copies nothing.
+pub fn build_info(cx: &gpui::App) -> std::sync::Arc<BuildInfo> {
+    static FALLBACK: std::sync::OnceLock<std::sync::Arc<BuildInfo>> = std::sync::OnceLock::new();
+    cx.try_global::<BuildInfoGlobal>().map(|g| g.0.clone()).unwrap_or_else(|| {
+        FALLBACK.get_or_init(|| std::sync::Arc::new(BuildInfo { version: env!("CARGO_PKG_VERSION").into(), long: env!("CARGO_PKG_VERSION").into(), components: Vec::new() })).clone()
+    })
 }

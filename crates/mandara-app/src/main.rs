@@ -468,7 +468,7 @@ fn run_shell() -> Result<()> {
     };
 
     application().with_assets(MandaraAssets).run(move |cx: &mut App| {
-        cx.set_global(build_info());
+        mandara_core::set_build_info(cx, build_info());
         let cfg = store.snapshot();
         cx.set_global(Fonts::resolve(&cfg.typography, cx));
         cx.set_global(build_registry());
@@ -632,7 +632,7 @@ fn run_studio(section: Option<String>) -> Result<()> {
     let mirror = config_mirror::Mirror::start(shell_sock.clone(), shell_alive.clone())?;
 
     application().with_assets(MandaraAssets).run(move |cx: &mut App| {
-        cx.set_global(build_info());
+        mandara_core::set_build_info(cx, build_info());
         let cfg = store.snapshot();
         cx.set_global(Fonts::resolve(&cfg.typography, cx));
         cx.set_global(build_registry());

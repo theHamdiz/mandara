@@ -671,7 +671,7 @@ pub fn register(r: &mut PluginRegistry) {
         CommandSpec::new("info", mandara_i18n::tk("Shell process facts: pid, version, compositor"), |_, cx| {
             let compositor = crate::hub::hub(cx).read(cx).compositor.as_ref().map(|c| format!("{:?}", c.kind()));
             let build = mandara_core::build_info(cx);
-            Ok(json!({ "pid": std::process::id(), "version": build.version, "build": build.long, "components": build.components.into_iter().collect::<std::collections::BTreeMap<_, _>>(), "compositor": compositor }))
+            Ok(json!({ "pid": std::process::id(), "version": build.version, "build": build.long, "components": build.components.iter().cloned().collect::<std::collections::BTreeMap<_, _>>(), "compositor": compositor }))
         })
         .example("info"),
     );

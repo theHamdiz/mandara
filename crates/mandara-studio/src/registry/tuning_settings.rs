@@ -110,7 +110,7 @@ mod tests {
     fn defaults_fit_their_sliders() {
         for e in entries() {
             let Control::Slider { min, max, step, .. } = e.control else { continue };
-            let Some(v) = e.default.as_ref().and_then(Value::as_f64) else { continue };
+            let Some(v) = e.default.as_deref().and_then(Value::as_f64) else { continue };
             assert!((min..=max).contains(&v), "{}: {v} outside {min}..{max}", e.path);
             assert!(((v - min) / step).fract().abs() < 1e-9, "{}: {v} off the {step} grid from {min}", e.path);
         }
