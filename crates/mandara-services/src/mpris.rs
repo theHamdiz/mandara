@@ -462,12 +462,14 @@ async fn snapshot(
 /// Whether introspection `xml` declares the player interface's `Volume`
 /// writable (some players report a read-only constant instead).
 pub fn volume_writable(xml: &str) -> bool {
-    let Some(start) = xml.find(&format!("\"{PLAYER_IFACE}\"")) else { return false };
-    let iface = &xml[start..];
-    let iface = &iface[..iface.find("</interface>").unwrap_or(iface.len())];
-    iface.split("<property").skip(1).map(|p| &p[..p.find('>').unwrap_or(p.len())]).any(|p| {
-        let attr = |name: &str| p.split(&format!("{name}=")).nth(1).and_then(|v| v.get(1..)).and_then(|v| v.split(['"', '\'']).next());
-        attr("name") == Some("Volume") && attr("access") == Some("readwrite")
+    // An element's attribute (either quote style) within its opening tag.
+    fn attr<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
+        let tag = &tag[..tag.find('>').unwrap_or(tag.len())];
+        tag.split_whitespace().find_map(|a| a.strip_prefix(name)?.strip_prefix('=')).and_then(|v| v.get(1..)).and_then(|v| v.split(['"', '\'']).next())
+    }
+    xml.split("<interface").skip(1).filter(|i| attr(i, "name") == Some(PLAYER_IFACE)).any(|iface| {
+        let iface = &iface[..iface.find("</interface>").unwrap_or(iface.len())];
+        iface.split("<property").skip(1).any(|p| attr(p, "name") == Some("Volume") && attr(p, "access") == Some("readwrite"))
     })
 }
 
@@ -772,6 +774,7 @@ mod tests {
             can_go_next: true,
             can_go_previous: true,
             can_seek: true,
+            volume: None,
             track_id: None,
         };
         assert_eq!(state.position_now(t0 + Duration::from_secs(5)), Duration::from_secs(15));
