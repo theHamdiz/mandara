@@ -56,13 +56,15 @@ impl Productivity {
         let (reply, result) = async_channel::bounded(1);
         cx.spawn(async move |this, cx| {
             let Ok(done) = incoming.recv().await else { return };
-            let notes_worker::Completion { snapshot, value, index_error } = done;
+            let notes_worker::Completion { snapshot, value, conflicts: deferred, index_error } = done;
             // Body conflicts leave the batch's other writes done; they are
             // shown as retained conflicts, not as a failed save.
-            let conflicts = value.as_ref().err().and_then(|error| error.downcast_ref::<BodyConflicts>()).map(|c| c.0.clone()).unwrap_or_default();
-            let successful = (value.is_ok() || !conflicts.is_empty()) && index_error.is_none();
+            let failed_on_conflict = value.as_ref().err().and_then(|error| error.downcast_ref::<BodyConflicts>());
+            let mut conflicts = failed_on_conflict.map(|c| c.0.clone()).unwrap_or_default();
+            conflicts.extend(deferred);
+            let successful = (value.is_ok() || failed_on_conflict.is_some()) && index_error.is_none();
             let _ = this.update(cx, |p, cx| {
-                let error = value.as_ref().err().filter(|_| conflicts.is_empty()).map(|error| format!("{error:#}")).or_else(|| index_error.clone());
+                let error = value.as_ref().err().filter(|error| !error.is::<BodyConflicts>()).map(|error| format!("{error:#}")).or_else(|| index_error.clone());
                 if p.apply_notes_completion(NotesCompletion { sequence, snapshot, acknowledged, successful, error, conflicts }) { cx.notify(); }
                 p.follow_notes_completion(cx);
             });
@@ -221,10 +223,7 @@ impl Productivity {
     ) -> Result<async_channel::Receiver<NoteReply<T>>, String> {
         let pending = self.pending_notes(None, false);
         let acknowledged = pending.iter().map(PendingNote::token).collect();
-        self.queue_notes(cx, acknowledged, move |store| {
-            write_pending(store, &pending)?;
-            edit(store)
-        })
+        self.queue_notes(cx, acknowledged, move |store| pending_then(store, &pending, edit))
     }
 
     /// Resolves quick-add topics on the worker, returning the committed note id.
@@ -388,6 +387,19 @@ fn write_pending(store: &mut NoteStore, pending: &[PendingNote]) -> anyhow::Resu
     }
     store.persist_index()?;
     if conflicts.is_empty() { Ok(()) } else { Err(BodyConflicts(conflicts).into()) }
+}
+
+/// Writes the pending drafts, then runs `edit`. A draft whose file changed
+/// elsewhere is kept back for its own note (handed to the completion through
+/// the store) and never cancels this different edit; other write failures do.
+fn pending_then<T>(store: &mut NoteStore, pending: &[PendingNote], edit: impl FnOnce(&mut NoteStore) -> anyhow::Result<T>) -> anyhow::Result<T> {
+    if let Err(error) = write_pending(store, pending) {
+        match error.downcast::<BodyConflicts>() {
+            Ok(BodyConflicts(ids)) => store.deferred_conflicts.extend(ids),
+            Err(error) => return Err(error),
+        }
+    }
+    edit(store)
 }
 
 /// Only the matching successful generation clears a draft or its marker intentions.
@@ -681,6 +693,26 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "# Plan\nMy draft, after reading the warning");
         assert!(!model.has_note_conflicts() && !model.note_pending(id));
         assert!(model.notes_base.is_empty(), "acknowledged drafts forget their base");
+    }
+
+    /// A draft that conflicts with an outside edit is kept back for its own
+    /// note, and the different edit queued behind it still runs (#132 review).
+    #[test]
+    fn a_body_conflict_does_not_cancel_the_edit_queued_behind_it() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = NoteStore::open(root.path());
+        let id = store.create(DEFAULT_TOPIC, "# Log\nOne").unwrap();
+        let path = root.path().join(store.note(id).unwrap().path.as_ref().unwrap());
+        let mut model = model(root.path().into());
+        model.notes = store.snapshot();
+        let draft = PendingNote { note: Arc::new(Note { text: "# Log\nMine".into(), ..(*model.notes.notes[0]).clone() }), generation: 1, tasks: None, base: Some(body_hash("# Log\nOne")) };
+        std::fs::write(&path, "# Log\nChanged outside").unwrap();
+        let added = pending_then(&mut store, &[draft], |store| store.create(DEFAULT_TOPIC, "# Other\nNew")).expect("the queued edit runs");
+        assert!(store.note(added).is_some(), "the other note was created");
+        assert_eq!(std::mem::take(&mut store.deferred_conflicts), [id], "the conflicting draft is kept back for its own note");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "# Log\nChanged outside", "the outside edit is untouched");
+        // With nothing pending, the edit just runs.
+        assert!(pending_then(&mut store, &[], |_| anyhow::Ok(())).is_ok());
     }
 
     /// Coalesced drafts queued behind the note's own earlier write, or

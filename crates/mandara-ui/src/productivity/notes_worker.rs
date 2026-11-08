@@ -11,6 +11,9 @@ pub(super) struct Completion<T> {
     /// The store's view right after this edit (shared bodies, no copies).
     pub snapshot: NotesSnapshot,
     pub value: anyhow::Result<T>,
+    /// Drafts kept back as body conflicts by the pending writes that ran
+    /// ahead of this edit (the edit itself still ran).
+    pub conflicts: Vec<u64>,
     /// Separate metadata failure lets an editor retain a newly committed id.
     pub index_error: Option<String>,
 }
@@ -68,15 +71,16 @@ where
             match replacement {
                 Ok(replacement) => *store = replacement,
                 Err(error) => {
-                    let _ = reply.try_send(Completion { snapshot: store.snapshot(), value: Err(error), index_error: None });
+                    let _ = reply.try_send(Completion { snapshot: store.snapshot(), value: Err(error), conflicts: Vec::new(), index_error: None });
                     return;
                 }
             }
         }
         let value = edit(store);
+        let conflicts = std::mem::take(&mut store.deferred_conflicts);
         // A retry also repairs metadata after a previous partial body/rename write.
         let index_error = store.persist_index().err().map(|error| format!("{error:#}"));
-        let _ = reply.try_send(Completion { snapshot: store.snapshot(), value, index_error });
+        let _ = reply.try_send(Completion { snapshot: store.snapshot(), value, conflicts, index_error });
     }
 }
 

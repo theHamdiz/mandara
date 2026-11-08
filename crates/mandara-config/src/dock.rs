@@ -564,7 +564,11 @@ impl DockConfig {
             return button.is_some() || at_end.is_some();
         }
         self.pins_version = crate::upgrade::DOCK_PINS_VERSION;
-        if button.unwrap_or(true) && !self.launcher_pinned() {
+        if button == Some(false) {
+            // Switched off: a table without `pinned` loads the default list,
+            // which already holds the launcher.
+            self.pinned.retain(|p| p != LAUNCHER_PIN);
+        } else if !self.launcher_pinned() {
             self.pin_at(LAUNCHER_PIN, if at_end.unwrap_or(false) { usize::MAX } else { 0 });
         }
         true
@@ -689,6 +693,11 @@ mod tests {
         let mut off = old("pinned = [\"firefox\"]\nlauncher_button = false\nlauncher_at_end = true\n");
         assert!(off.upgrade_launcher_button());
         assert_eq!(off.pinned, ["firefox"]);
+        // Switched off in a table without `pinned`: the default list (which
+        // holds the launcher) loads, and the button is still removed.
+        let mut off_default = old("launcher_button = false\n");
+        assert!(off_default.upgrade_launcher_button());
+        assert!(!off_default.launcher_pinned(), "{:?}", off_default.pinned);
         // Only the position saved: the button was on (its old default).
         let mut only_end = old("pinned = [\"firefox\"]\nlauncher_at_end = true\n");
         assert!(only_end.upgrade_launcher_button());

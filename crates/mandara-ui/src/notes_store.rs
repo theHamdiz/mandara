@@ -166,6 +166,10 @@ pub struct NoteStore {
     index_error: Option<String>,
     scan_error: Option<String>,
     index_dirty: bool,
+    /// Drafts the last edit's pending writes kept back because their file
+    /// changed elsewhere; the worker hands them to its completion, so a
+    /// conflict never fails the different edit queued behind it.
+    pub(crate) deferred_conflicts: Vec<u64>,
     watcher: Option<notify::RecommendedWatcher>,
     /// [`body_hash`] of the body this store last wrote, per note, so a
     /// queued draft can tell its own earlier write from an external edit.
@@ -202,7 +206,7 @@ impl NoteStore {
     /// Opens (creating) `root` and scans it.
     pub fn open(root: &Path) -> Self {
         let index: Index = std::fs::read_to_string(root.join(INDEX_FILE)).ok().and_then(|s| toml::from_str(&s).ok()).unwrap_or_default();
-        let mut s = Self { view: NotesSnapshot { root: root.to_path_buf(), topics: index.topics, notes: Vec::new(), read_errors: None }, ids: index.ids, next_id: index.next_id.max(1), index_error: None, scan_error: None, index_dirty: false, watcher: None, written: BTreeMap::new() };
+        let mut s = Self { view: NotesSnapshot { root: root.to_path_buf(), topics: index.topics, notes: Vec::new(), read_errors: None }, ids: index.ids, next_id: index.next_id.max(1), index_error: None, scan_error: None, index_dirty: false, deferred_conflicts: Vec::new(), watcher: None, written: BTreeMap::new() };
         if let Err(err) = std::fs::create_dir_all(root) {
             tracing::warn!("notes folder {}: {err:#}", root.display());
         }
