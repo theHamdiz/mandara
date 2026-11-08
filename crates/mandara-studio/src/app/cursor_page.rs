@@ -141,6 +141,22 @@ struct CursorStudio {
 }
 impl Global for CursorStudio {}
 
+impl CursorStudio {
+    /// Stores the previews decoded for `key` and hands back the sets they
+    /// replace, for the atlas. `None` (and nothing stored) when leaving the
+    /// page cancelled the request: a late result never refills the cache.
+    fn landed(&mut self, key: (String, u32), images: Vec<Option<CursorImage>>) -> Option<Vec<Previews>> {
+        if !self.loading.remove(&key) {
+            return None;
+        }
+        // One live size per theme besides the strip's: dragging the size
+        // slider doesn't pile up every step.
+        let replaced = self.previews.extract_if(|(t, size), _| *t == key.0 && *size != STRIP_CURSOR_PX).map(|(_, set)| set).collect();
+        self.previews.insert(key, Rc::from(images));
+        Some(replaced)
+    }
+}
+
 fn st(cx: &mut gpui::App) -> &mut CursorStudio {
     cx.default_global::<CursorStudio>()
 }
@@ -254,16 +270,7 @@ impl StudioView {
         cx.spawn(async move |this, cx| {
             let images = task.await;
             let _ = this.update(cx, |_, cx| {
-                let s = st(cx);
-                // Leaving the page cancelled the request: its late result
-                // must not refill the released cache.
-                if !s.loading.remove(&key) {
-                    return;
-                }
-                // One live size per theme besides the strip's: dragging the
-                // size slider doesn't pile up every step.
-                let dropped: Vec<Previews> = s.previews.extract_if(|(t, size), _| *t == key.0 && *size != STRIP_CURSOR_PX).map(|(_, set)| set).collect();
-                s.previews.insert(key, Rc::from(images));
+                let Some(dropped) = st(cx).landed(key, images) else { return };
                 for set in dropped {
                     for preview in set.iter().flatten() {
                         cx.drop_image(preview.image.clone(), None);
@@ -801,6 +808,33 @@ mod tests {
         assert!(SIZE_PRESETS.iter().all(|s| (CURSOR_SIZE_MIN..=CURSOR_SIZE_MAX).contains(&f64::from(*s))));
         assert!(SIZE_PRESETS.contains(&DEFAULT_SIZE));
         assert!(Role::STRIP.iter().all(|r| Role::ALL.contains(r)));
+    }
+
+    fn preview_set() -> Vec<Option<CursorImage>> {
+        let frame = image::Frame::new(image::RgbaImage::new(2, 2));
+        vec![Some(CursorImage { image: Arc::new(RenderImage::new(smallvec::smallvec![frame])), w: 2.0, h: 2.0 }), None]
+    }
+
+    /// Leaving Themes cancels pending decodes; their late results stay out,
+    /// and a newer size of a theme replaces the older one (for the atlas).
+    #[test]
+    fn late_previews_never_refill_a_released_cache() {
+        let mut s = CursorStudio::default();
+        let key = ("Bibata".to_string(), 32);
+        s.loading.insert(key.clone());
+        s.loading.clear(); // the page was left
+        assert!(s.landed(key.clone(), preview_set()).is_none());
+        assert!(s.previews.is_empty());
+
+        let strip = ("Bibata".to_string(), STRIP_CURSOR_PX);
+        s.loading.insert(strip.clone());
+        assert_eq!(s.landed(strip.clone(), preview_set()).map(|r| r.len()), Some(0));
+        s.loading.insert(key.clone());
+        assert_eq!(s.landed(key, preview_set()).map(|r| r.len()), Some(0));
+        let bigger = ("Bibata".to_string(), 48);
+        s.loading.insert(bigger.clone());
+        assert_eq!(s.landed(bigger.clone(), preview_set()).map(|r| r.len()), Some(1), "the 32 px set is handed back");
+        assert!(s.previews.contains_key(&bigger) && s.previews.contains_key(&strip) && s.previews.len() == 2);
     }
 
     #[test]

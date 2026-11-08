@@ -91,10 +91,14 @@ const BGRA_CHANNELS: usize = 4;
 /// The next draw decodes again. Studio calls it, from `App::defer`, when it
 /// leaves the pages that show plugin art.
 pub fn release(cx: &mut gpui::App) {
-    let images = CACHE.with(|c| std::mem::take(&mut *c.borrow_mut()));
-    for image in images.into_values() {
+    for image in take_handed_out() {
         gpui::ImageSource::Image(image).evict(cx);
     }
+}
+
+/// Empties the cache of handed-out art (capacity included).
+fn take_handed_out() -> impl Iterator<Item = Arc<Image>> {
+    CACHE.with(|c| std::mem::take(&mut *c.borrow_mut())).into_values()
 }
 
 /// Releases the brand icon's decode and texture (its 256 px source stays).
@@ -177,6 +181,20 @@ mod tests {
         assert!(Arc::ptr_eq(&a, &b));
         assert!(!Arc::ptr_eq(&icon("weather", 1.0).unwrap(), &icon("weather", 2.0).unwrap()));
         assert!(icon("no-such-plugin", 1.0).is_none());
+    }
+
+    /// Releasing hands every cached image over (for eviction) and frees the
+    /// table; the next use wraps the bytes afresh, with the same GPUI id.
+    #[test]
+    fn released_art_is_handed_over_and_rebuilt_on_use() {
+        let before = icon("weather", 1.0).unwrap();
+        let _ = cover("weather").unwrap();
+        let taken: Vec<_> = take_handed_out().collect();
+        assert!(taken.len() >= 2 && taken.iter().any(|i| Arc::ptr_eq(i, &before)));
+        assert!(CACHE.with(|c| c.borrow().is_empty() && c.borrow().capacity() == 0));
+        let after = icon("weather", 1.0).unwrap();
+        assert!(!Arc::ptr_eq(&before, &after));
+        assert_eq!(before.id(), after.id(), "same bytes, same decode key");
     }
 
     #[test]

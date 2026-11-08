@@ -859,4 +859,48 @@ mod tests {
         assert!(matches!(bg.showing(), Showing::Still(_)), "{:?}", bg.showing());
         assert!(bg.last_error.is_some());
     }
+
+    /// Stills come out at the output's size (shape kept), BGRA, and soften
+    /// from a quarter-size copy; a picture smaller than the output is kept.
+    #[test]
+    fn stills_shrink_to_the_output_and_soften_small() {
+        let dir = tempfile::tempdir().unwrap();
+        let still = dir.path().join("s.png");
+        image::RgbaImage::from_pixel(1920, 1080, image::Rgba([10, 20, 200, 255])).save(&still).unwrap();
+        let near = |(w, h): (u32, u32), (ew, eh): (u32, u32)| w.abs_diff(ew) <= 1 && h.abs_diff(eh) <= 1;
+        let (image, size) = load_still(&still, (800, 450), 0.0).unwrap();
+        assert!(near(size, (1000, 562)), "{size:?}: 1.25× the output");
+        assert_eq!(image.size(0).width.0 as u32, size.0);
+        assert_eq!(&image.as_bytes(0).unwrap()[..4], &[200, 20, 10, 255], "BGRA");
+        let (_, soft) = load_still(&still, (800, 450), 0.5).unwrap();
+        assert!(near(soft, (250, 140)), "{soft:?}: a quarter of that");
+        let (_, kept) = load_still(&still, (3840, 2160), 0.0).unwrap();
+        assert_eq!(kept, (1920, 1080));
+    }
+
+    /// A closing preview hands over its still for the atlas; the backdrop
+    /// falls back to the aurora.
+    #[test]
+    fn take_images_empties_the_backdrop() {
+        let dir = tempfile::tempdir().unwrap();
+        let still = dir.path().join("s.png");
+        image::RgbaImage::from_pixel(64, 36, image::Rgba([10, 20, 200, 255])).save(&still).unwrap();
+        let mut bg = Background::new(BackgroundOptions { stills: vec![still], target: (640, 360), ..Default::default() }, false);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline && !matches!(bg.showing(), Showing::Still(_)) {
+            bg.tick(Instant::now());
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(matches!(bg.showing(), Showing::Still(_)));
+        assert_eq!(bg.take_images().len(), 1);
+        assert_eq!(bg.showing(), Showing::Aurora);
+        assert!(bg.take_images().is_empty());
+    }
+
+    #[test]
+    fn grain_can_be_handed_over() {
+        let _ = grain(32.0, 18.0);
+        assert!(take_grain().is_some());
+        assert!(take_grain().is_none());
+    }
 }
