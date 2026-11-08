@@ -42,6 +42,13 @@
 //!   `depth_effect = false` (the effect stays off); `auto` and `custom`
 //!   keep the effect on in hand-tuned mode. The old key is then dropped.
 //!
+//! * **`[dock] pins_version`** — before version 1 the dock's launcher
+//!   button sat fixed at its start (or, with `launcher_at_end`, its end),
+//!   on unless `launcher_button = false`. It is now an entry of `pinned`
+//!   ([`crate::dock::LAUNCHER_PIN`]) that moves like a pinned app. An older
+//!   table gets the button pinned first, or after the pinned apps when it
+//!   was at the end, and loses the old keys.
+//!
 //! The upgrade is idempotent and runs in memory; the next write persists it.
 
 use crate::ShellConfig;
@@ -55,6 +62,9 @@ pub const INTEGRATIONS_VERSION: u32 = 1;
 pub const KEYBIND_DEFAULTS_VERSION: u32 = 2;
 /// The lock screen look defaults this build ships.
 pub const LOCK_LOOK_VERSION: u32 = 1;
+/// The dock pin defaults this build ships: 1 keeps the launcher button in
+/// `pinned`.
+pub const DOCK_PINS_VERSION: u32 = 1;
 
 /// Built-ins that were on by default before version 1 and ship switched off
 /// since, each with the reason.
@@ -96,6 +106,7 @@ pub fn upgrade(cfg: &mut ShellConfig) -> bool {
     changed |= upgrade_lock_look(cfg);
     changed |= crate::desktop_widgets::upgrade(&mut cfg.desktop.widgets);
     changed |= upgrade_depth_mask(cfg);
+    changed |= cfg.dock.upgrade_launcher_button();
     changed
 }
 
@@ -226,6 +237,21 @@ disabled = ["notes"]
         let mut cfg: ShellConfig = toml::from_str(text).unwrap();
         upgrade(&mut cfg);
         cfg
+    }
+
+    #[test]
+    fn an_old_dock_launcher_button_is_pinned_where_it_was() {
+        use crate::dock::LAUNCHER_PIN;
+        let mut c: ShellConfig = toml::from_str("[dock]\npinned = [\"firefox\"]\nlauncher_button = true\nlauncher_at_end = true\n").unwrap();
+        assert!(upgrade(&mut c));
+        assert_eq!(c.dock.pinned, ["firefox", LAUNCHER_PIN]);
+        assert!(!toml::to_string(&c).unwrap().contains("launcher_button"));
+        // A dock table without a pinned list keeps the default one, which
+        // already has the button first.
+        let mut d: ShellConfig = toml::from_str("[dock]\nlauncher_button = true\nlauncher_at_end = false\n").unwrap();
+        upgrade(&mut d);
+        assert_eq!(d.dock.pinned, ShellConfig::default().dock.pinned);
+        assert_eq!(d.dock.pinned.iter().filter(|p| *p == LAUNCHER_PIN).count(), 1);
     }
 
     #[test]

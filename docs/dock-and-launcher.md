@@ -25,6 +25,14 @@
   - **Add app…** (Studio → Dock, or right-click the dock) searches your
     installed apps. Drag icons to reorder, drag a running app in to keep
     it, or drag one away from the dock to remove it with a poof.
+  - **The launcher button** is kept like a pinned app: first by default,
+    drag it anywhere among your pinned apps (or `mandara msg dock move
+    launcher 2`), remove it from its right-click menu or by dragging it
+    away, and bring it back with **Keep the launcher in the Dock** in the
+    dock's own right-click menu or **Add the launcher** in Studio → Dock.
+    It opens the launcher and wears the bar's launcher icon. Docks from
+    before 0.23 keep their button where it was (first, or after the pinned
+    apps when it sat at the end).
   - **Applications folder:** a dock folder beside Downloads opens a
     Launchpad-style grid of every app (search, category chips, A–Z / Most
     used / Categories, right-click Keep in Dock / Open at Login /

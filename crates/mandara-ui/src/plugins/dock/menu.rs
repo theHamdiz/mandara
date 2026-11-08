@@ -10,8 +10,9 @@
 //!
 //! Submenus open in place (with a back row) so the menu never leaves the
 //! screen on any dock edge. Right-click on empty dock space opens the dock
-//! menu instead: Add app…, the hiding / magnification switches and Dock
-//! settings.
+//! menu instead: Add app…, the launcher button, the hiding / magnification
+//! switches and Dock settings. The launcher button's own menu opens the
+//! launcher, adds apps or removes the button.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -76,6 +77,8 @@ pub enum MenuAction {
     EmptyTrash,
     Restore(u64),
     AddApp,
+    /// Keep the launcher button in the dock (pinned first) or remove it.
+    ToggleLauncher,
     ToggleAutoHide,
     ToggleMagnification,
     DockSettings,
@@ -151,6 +154,9 @@ pub fn rows(item: &Item, options: bool, facts: &Facts) -> Vec<Row> {
         Kind::Launcher | Kind::Applications => {
             out.push(row(t("Open"), "grid", MenuAction::Open));
             out.push(row(t("Add app…"), "plus", MenuAction::AddApp));
+            if item.kind == Kind::Launcher {
+                out.push(row(t("Remove from Dock"), "pin-off", MenuAction::RemoveFromDock).sep());
+            }
             return out;
         }
         Kind::Separator | Kind::Installing(_) | Kind::Media => return dock_rows(&mandara_config::workflow::DockConfig::default()),
@@ -215,6 +221,7 @@ fn is_new_window(a: &crate::apps::DesktopAction) -> bool {
 pub fn dock_rows(cfg: &mandara_config::workflow::DockConfig) -> Vec<Row> {
     vec![
         row(t("Add app…"), "plus", MenuAction::AddApp),
+        row(t("Keep the launcher in the Dock"), "search", MenuAction::ToggleLauncher).check(cfg.launcher_pinned()),
         row(t("Automatically hide and show the Dock"), "eye-off", MenuAction::ToggleAutoHide).check(cfg.auto_hide != DockAutoHide::Never).sep(),
         row(t("Magnification"), "maximize", MenuAction::ToggleMagnification).check(cfg.magnification),
         row(t("Dock settings…"), "sliders", MenuAction::DockSettings).sep(),
@@ -452,6 +459,11 @@ impl DockMenu {
                 crate::windows::activate(id, cx);
             }
             MenuAction::AddApp => super::picker::open(&self.monitor, cx),
+            MenuAction::ToggleLauncher => update_config(cx, |c| {
+                if !c.dock.unpin(mandara_config::dock::LAUNCHER_PIN) {
+                    c.dock.pin_at(mandara_config::dock::LAUNCHER_PIN, 0);
+                }
+            }),
             MenuAction::ToggleAutoHide => update_config(cx, |c| c.dock.auto_hide = if c.dock.auto_hide == DockAutoHide::Never { DockAutoHide::Always } else { DockAutoHide::Never }),
             MenuAction::ToggleMagnification => update_config(cx, |c| c.dock.magnification = !c.dock.magnification),
             MenuAction::DockSettings => crate::state::open_studio_at(Some("dock".into()), cx),
@@ -684,6 +696,22 @@ mod tests {
         assert_eq!(a[0], MenuAction::Open);
         assert_eq!(a.last(), Some(&MenuAction::RemoveFromDock));
         assert!(!a.contains(&MenuAction::Quit));
+    }
+
+    /// The launcher button's menu removes it; the dock's own menu pins it
+    /// back (a checkmark that follows the pinned list).
+    #[test]
+    fn the_launcher_button_is_pinned_and_removed_from_the_menus() {
+        use mandara_config::dock::LAUNCHER_PIN;
+        let button = Item { key: LAUNCHER_PIN.into(), icon_id: String::new(), name: String::new(), desktop: None, windows: Vec::new(), pinned: true, recent: false, kind: Kind::Launcher };
+        assert_eq!(actions(&rows(&button, false, &Facts::default())), [MenuAction::Open, MenuAction::AddApp, MenuAction::RemoveFromDock]);
+        let folder = Item { kind: Kind::Applications, ..button };
+        assert!(!actions(&rows(&folder, false, &Facts::default())).contains(&MenuAction::RemoveFromDock), "the Applications folder has its own switch");
+        let mut dock = mandara_config::workflow::DockConfig::default();
+        let toggle = |d: &mandara_config::workflow::DockConfig| dock_rows(d).into_iter().find(|r| r.action == MenuAction::ToggleLauncher).and_then(|r| r.check);
+        assert_eq!(toggle(&dock), Some(true));
+        dock.unpin(LAUNCHER_PIN);
+        assert_eq!(toggle(&dock), Some(false));
     }
 
     #[test]

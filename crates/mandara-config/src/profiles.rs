@@ -360,7 +360,7 @@ pub fn export_text(cfg: &ShellConfig, opts: ExportOptions) -> Result<(String, Ve
 
 /// Sections that carry the version of the defaults they were written for
 /// (see [`crate::upgrade`]), with that key.
-const VERSIONED: &[(&str, &str)] = &[("plugins", "defaults_version"), ("integrations", "version"), ("compositor", "keybinds_version"), ("lock", "look_version"), ("desktop.widgets", "version")];
+const VERSIONED: &[(&str, &str)] = &[("plugins", "defaults_version"), ("integrations", "version"), ("compositor", "keybinds_version"), ("lock", "look_version"), ("desktop.widgets", "version"), ("dock", "pins_version")];
 
 /// Parses an exported (or hand-written) config. Missing values take their
 /// defaults, so a changes-only export imports as "defaults + changes"; an
