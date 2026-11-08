@@ -10,12 +10,14 @@ About → What's new shows it too.
 
 - **Notes keep edits made in other apps.** If another editor changes or removes a note's file while you are typing the same note in the Notes panel, Mandara no longer overwrites it. The panel keeps your text and says the note changed elsewhere, your other notes still save, and your next edit replaces the outside version on purpose. (#111)
 - **Clearer Copy feedback on the website.** Screen readers now announce "Copied" again each time you press Copy, the message clears after a few seconds, and the instructions shown when copying is blocked stay until you try again. (#111)
+- **A clearer main menu.** Your name, login, uptime and version now sit on a soft dark scrim that keeps them readable on any wallpaper, light theme included. The rail no longer repeats the Studio and power buttons from the header: it holds the menu's pages, then, under a divider (and a "Panels" caption in the full rail), the panels it opens; Reload config moved to Apps & tools. Thick volume and brightness sliders draw as one continuous track with a grip inside the fill, instead of a second grey segment with a dot. Quick-toggle tiles give their detail line more room, so longer network and device names fit before they're cut off.
 
 ### Fixed
 
 - **Touchscreen taps now work in the shell and Studio.** Tapping a bar item, a panel control or anything in Studio, including its close button, works like a click. Swiping scrolls lists and pages, and a finger on a slider drags it. Your mouse keeps working exactly as before. (#130)
 - **The launcher follows search settings while it's open.** Turning a search provider on or off, or changing its prefix, in Studio or the config file now applies to an open launcher straight away. A Beacon mode whose provider you switch off closes back to plain search instead of staying stuck. (#111)
 - **Your theme's name is translated even when typed by hand.** Studio's current-theme heading now shows the translated name when the config names a built-in theme in another spelling, such as `Rosé Pine` or `tokyo_night`. Your own themes keep the titles you gave them. (#111)
+- **Drop-down panels stay open while you use them.** A click inside a bar panel or the main menu now always counts as using it, so a short focus change right after it (switching light and dark, a keyboard or mouse coming or going, the compositor rearranging its layers) no longer closes the panel under your pointer. Pressing a key while you rest on a panel no longer reads as leaving it either. Moving away, clicking outside, Escape and switching to another app still close it.
 
 ### Under the hood
 

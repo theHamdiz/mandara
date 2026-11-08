@@ -74,6 +74,14 @@ How Mandara looks and feels, and how much of it you can shape.
   <sub>Right-click empty bar space for the <b>main menu</b>.</sub>
 </p>
 
+The rail on its side switches the menu's own pages (**Home**, **Apps &
+tools** and **Look**). Below a divider, under **Panels** in the full rail,
+come shortcuts that open Sound, Network, Bluetooth, the system monitor,
+weather, the calendar or notifications in the menu's place. Studio and the
+power menu are the buttons at the top, so the rail doesn't repeat them;
+**Reload config** is on Apps & tools. **Rail** (Studio → Bars → Drop-down
+panels, under Main menu) shows each entry's name or icons only.
+
 Open **Look** in the main menu to pick a theme. The cards fill the
 available height; longer catalogs use compact scrolling rows. Built-in
 names follow your language in the menu and Studio, while custom theme

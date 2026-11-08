@@ -138,6 +138,10 @@ pub struct ShellView {
     leave_task: Option<Task<()>>,
     /// Where the sidebar was drawn this frame, if it was.
     sidebar_bounds: Option<Bounds<Pixels>>,
+    /// Where the open panel's corner tab and the bridge from its chip were
+    /// drawn this frame, if they were: part of the panel for leaving it.
+    panel_tab_rect: Option<crate::dismiss::Rect>,
+    panel_bridge_rect: Option<crate::dismiss::Rect>,
     edge_task: Option<Task<()>>,
     menu_anchor: f32,
     /// Last mouse press anywhere on this surface. Focus/activation changes
@@ -400,12 +404,15 @@ impl ShellView {
                 let _ = this.update_in(cx, |this, window, cx| {
                     this.deactivate_task = None;
                     if !window.is_window_active() {
+                        // The compositor keeps reporting the last window as
+                        // focused while this surface has the keyboard, so a
+                        // focused client is no sign that one took it: only the
+                        // pointer tells (another window really taking focus is
+                        // the hub's "another window focused" below).
                         let pointer = window.mouse_position();
-                        let inside = (this.panel_visible
-                            && (this.panel.value().contains(&pointer) || this.panel_shadow.holds(f32::from(pointer.x), f32::from(pointer.y))))
-                            || this.sidebar_bounds.is_some_and(|bounds| bounds.contains(&pointer));
-                        let focused = crate::hub::hub(cx).read(cx).focused.is_some();
-                        if crate::dismiss::deactivation_dismisses(this.last_press, Instant::now(), inside, focused) {
+                        let in_shadow = window.is_window_hovered() && this.panel_shadow.holds(f32::from(pointer.x), f32::from(pointer.y));
+                        let inside = this.pointer_on_panel(window) || in_shadow || this.pointer_on_sidebar(window);
+                        if crate::dismiss::deactivation_dismisses(this.last_press, Instant::now(), inside) {
                             this.dismiss("focus moved to another window", cx);
                         }
                     }
@@ -482,6 +489,8 @@ impl ShellView {
             sidebar: SpringValue::new(0.0, SIDEBAR_SPRING),
             leave_task: None,
             sidebar_bounds: None,
+            panel_tab_rect: None,
+            panel_bridge_rect: None,
             edge_task: None,
             last_press: None,
             deactivate_task: None,
@@ -1078,13 +1087,23 @@ impl ShellView {
     }
 
     /// Closes the panel shortly after the pointer leaves, unless it comes
-    /// back.
-    fn schedule_panel_leave(&mut self, cx: &mut Context<Self>) {
+    /// back. Losing the hover is not proof of leaving: GPUI drops it after
+    /// any key press until the pointer moves again, under a child that
+    /// occludes, and on a stale exit, all with the pointer still on the
+    /// panel. So the close waits until the pointer is really off it.
+    fn schedule_panel_leave(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // How long the pointer may be away before a hover-opened panel or
         // sidebar closes (`panels.leave_delay_ms`).
         let delay = crate::state::config(cx).read(cx).snapshot().panels.leave_delay();
-        self.leave_task = Some(cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(delay).await;
+        self.leave_task = Some(cx.spawn_in(window, async move |this, cx| {
+            loop {
+                cx.background_executor().timer(delay).await;
+                match this.update_in(cx, |this, window, _| this.pointer_on_panel(window)) {
+                    Ok(true) => continue,
+                    Ok(false) => break,
+                    Err(_) => return,
+                }
+            }
             let _ = this.update(cx, |this, cx| {
                 tracing::info!(target: "mandara::dismiss", "pointer left panel");
                 this.shell.update(cx, |s, cx| {
@@ -1123,6 +1142,16 @@ impl ShellView {
 
     fn pointer_on_sidebar(&self, window: &Window) -> bool {
         window.is_window_hovered() && self.sidebar_bounds.is_some_and(|b| b.contains(&window.mouse_position()))
+    }
+
+    /// Whether the pointer is on the open panel, its corner tab or the
+    /// bridge from its chip (where it was last drawn).
+    fn pointer_on_panel(&self, window: &Window) -> bool {
+        if !self.panel_visible {
+            return false;
+        }
+        let at = window.is_window_hovered().then(|| window.mouse_position()).map(|p| (f32::from(p.x), f32::from(p.y)));
+        crate::dismiss::pointer_over(at, &[Some(rect_of(self.panel.value())), self.panel_tab_rect, self.panel_bridge_rect])
     }
 
     /// Fires an edge action after the configured dwell, unless the pointer
@@ -1409,6 +1438,7 @@ impl Render for ShellView {
         });
 
         self.sidebar_bounds = None;
+        self.panel_tab_rect = None;
         let mut root = div()
             .id("mandara-shell")
             .size_full()
@@ -1420,12 +1450,28 @@ impl Render for ShellView {
             .text_size(px(BASE_TEXT_PX * cfg.typography.scale))
             .font_weight(crate::style::body_weight())
             .text_color(palette.on_surface.hsla())
-            // Capture phase: sees every press on Mandara's UI, even over
-            // occluding panels.
-            .capture_any_mouse_down(cx.listener(|this, _: &gpui::MouseDownEvent, _, _| {
-                tracing::debug!(target: "mandara::dismiss", "press");
-                this.last_press = Some(Instant::now());
-            }))
+            // Every press on this surface, whatever is on top of the root: an
+            // element's own capture handler runs only while its hitbox is
+            // hovered, and the occluding panels, chips and sidebar hide the
+            // root's, so presses inside a panel never started the press grace
+            // and a focus blip right after one closed it.
+            .child({
+                let this = cx.entity().downgrade();
+                canvas(
+                    |_, _, _| {},
+                    move |_, _, window, _| {
+                        let this = this.clone();
+                        window.on_mouse_event(move |_: &gpui::MouseDownEvent, phase, _, cx| {
+                            if phase == gpui::DispatchPhase::Capture {
+                                tracing::debug!(target: "mandara::dismiss", "press");
+                                let _ = this.update(cx, |this, _| this.last_press = Some(Instant::now()));
+                            }
+                        });
+                    },
+                )
+                .absolute()
+                .size_0()
+            })
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
                 let sidebar_up = crate::state::config(cx).read(cx).get().sidebar_active() && (this.shell.read(cx).sidebar_visible_on(&this.monitor) || crate::state::config(cx).read(cx).get().sidebar.pinned());
                 if sidebar_up && this.shell.read(cx).panel_on(&this.monitor).is_none() {
@@ -1482,10 +1528,10 @@ impl Render for ShellView {
                     .on_mouse_down(gpui::MouseButton::Middle, cx.listener(|this, e: &gpui::MouseDownEvent, _, cx| this.press_outside(e, cx)))
                     // A pointer the panel shrank away from: its leave counts
                     // once it really moves out of where the panel was.
-                    .on_mouse_move(cx.listener(|this, e: &gpui::MouseMoveEvent, _, cx| {
+                    .on_mouse_move(cx.listener(|this, e: &gpui::MouseMoveEvent, window, cx| {
                         let (x, y) = (f32::from(e.position.x), f32::from(e.position.y));
                         if this.panel_shadow.pointer_moved(x, y) && !this.panel_committed && this.leave_task.is_none() {
-                            this.schedule_panel_leave(cx);
+                            this.schedule_panel_leave(window, cx);
                         }
                     }))
                     .child(self.mask.region()),
@@ -2056,6 +2102,7 @@ impl Render for ShellView {
         }
 
         // ── Panel content ─────────────────────────────────────────────────
+        let mut bridge_rect = None;
         if let (true, Some(slot)) = (self.panel_visible, self.panel_slot)
             && let Some(spec) = self.panel_spec(slot)
         {
@@ -2083,6 +2130,7 @@ impl Render for ShellView {
                         let x1 = chip_x1.max(panel_x0) + BRIDGE_OVERHANG_PX;
                         let bridge = Bounds { origin: point(px(x0), px(y0)), size: size(px(x1 - x0), px(y1 - y0)) };
                         let bridge = if p_vertical { layout::transpose(bridge) } else { bridge };
+                        bridge_rect = Some(rect_of(bridge));
                         root = root.child(
                             place(bridge)
                                 .id("panel-bridge")
@@ -2143,7 +2191,7 @@ impl Render for ShellView {
                         } else if this.panel_entered && !this.panel_committed && !this.tab_hovered {
                             let pointer = window.mouse_position();
                             if this.panel_shadow.leave_counts(f32::from(pointer.x), f32::from(pointer.y)) {
-                                this.schedule_panel_leave(cx);
+                                this.schedule_panel_leave(window, cx);
                             } else {
                                 tracing::debug!(target: "mandara::dismiss", "leave deferred: the panel resized under the pointer");
                             }
@@ -2203,6 +2251,8 @@ impl Render for ShellView {
             );
         }
 
+        self.panel_bridge_rect = bridge_rect;
+
         // ── The panel's corner tab: pin, pop out and copy image ────────────
         if !self.panel_visible { self.panel_capture = None; }
         let tab_p = self.tab.value().clamp(0.0, 1.0);
@@ -2219,6 +2269,7 @@ impl Render for ShellView {
             let len = controls * TAB_BUTTON_PX + (controls - 1.0) * TAB_GAP_PX + 2.0 * TAB_PAD_PX;
             let depth = TAB_BUTTON_PX + 2.0 * TAB_PAD_PX;
             let t = crate::floating::geom::tab(rect_of(self.panel.value()), pm.position, len, depth, panel_radius + TAB_FLARE_PX, crate::bidi::rtl());
+            self.panel_tab_rect = Some(t.rect);
             let d = depth * tab_p;
             // The part slid out so far, overlapping the panel by the seam.
             let (dx, dy, dw, dh) = match t.edge {
@@ -2254,7 +2305,7 @@ impl Render for ShellView {
                         if *hovered {
                             this.cancel_leave();
                         } else if this.panel_entered && !this.panel_committed && !this.panel_hovered {
-                            this.schedule_panel_leave(cx);
+                            this.schedule_panel_leave(window, cx);
                         }
                         cx.notify();
                     }))

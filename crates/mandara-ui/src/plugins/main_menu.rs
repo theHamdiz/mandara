@@ -1,14 +1,17 @@
 //! The main menu (right-click empty bar space, or `mandara msg menu`): a
-//! small control center. A rail of pages on the start side (Home, Apps,
-//! Look, Session) and a header with Studio, the power menu and close.
+//! small control center. A rail on the start side holds the menu's own
+//! pages (Home, Apps, Look) and, under a rule (and a "Panels" caption in
+//! the full rail), shortcuts that open another panel in the menu's place.
+//! The header holds Studio, the power menu and close; the rail repeats
+//! none of them.
 //!
 //! * Home: you (picture, name, user@host, uptime, version) over your
-//!   wallpaper; what's playing with its controls, or the time and weather;
-//!   and the quick toggles (the sidebar's quick settings).
+//!   wallpaper, on a scrim that keeps them readable on any picture; what's
+//!   playing with its controls, or the time and weather; the quick toggles
+//!   (the sidebar's quick settings) and the output volume.
 //! * Apps: launcher, wallpapers, sidebar, Studio, screenshot, clipboard
-//!   history, desktop edit mode.
+//!   history, desktop edit mode, reload the config.
 //! * Look: light / dark, next theme, the themes themselves, wallpapers.
-//! * Session: lock, the power menu, reload the config.
 //!
 //! The panel is glass (`panels.menu_translucent`, `panels.menu_opacity`)
 //! and the cards on it are solid. Every action tile wears its own faint
@@ -29,7 +32,6 @@ use mandara_core::{FrameClock, SpringConfig, SpringValue, ToGpui};
 use mandara_i18n::{t, tf, tk, tr};
 use mandara_plugins::{CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry};
 use mandara_services::MediaCommand;
-use mandara_config::power::{SessionEntry, SessionEntryKind};
 use mandara_config::surfaces::MenuRail;
 use mandara_theme::{MandaraPalette, ThemeSource, catalog};
 use serde_json::json;
@@ -71,6 +73,9 @@ const RAIL_GAP: f32 = 3.0;
 /// The hairline between the rail's groups (as wide as the icons).
 const RAIL_RULE_ALPHA: f32 = 0.3;
 const RAIL_COMPACT_RULE_W: f32 = 20.0;
+/// The full rail's "Panels" caption over the shortcuts: its inset matches
+/// the rows' text.
+const RAIL_CAPTION_PAD: f32 = 2.0;
 
 /// Rail shortcuts: a panel of its own each (icon, plugin id, name).
 const SHORTCUTS: [(&str, &str, &str); 7] = [
@@ -105,6 +110,21 @@ const THEMES_PER_ROW: usize = 3;
 const THEME_ROWS_FIT: usize = 6;
 /// The profile card's shade over the wallpaper (start → end).
 const SHADE: (f32, f32) = (0.72, 0.18);
+/// The scrim behind the profile text: a near-black in the theme's hue
+/// (white text needs a dark ground in light themes too), opaque enough that
+/// the softest line keeps WCAG AA (4.5:1) even over a white picture
+/// (`the_profile_text_reads_on_any_picture`). It is a soft shadow of the
+/// avatar and text, in from the card's start edge: full strength until this
+/// far past the text's end, then fading out over a Gaussian of this
+/// deviation (GPUI's blur radius), with no edge to see.
+const SCRIM_LIGHTNESS: f32 = 0.16;
+const SCRIM_CHROMA: f32 = 0.02;
+const SCRIM_ALPHA: f32 = 0.9;
+const SCRIM_REACH: f32 = 50.0;
+const SCRIM_SOFTNESS: f32 = 20.0;
+/// WCAG AA for body text.
+#[cfg(test)]
+const AA: f32 = 4.5;
 /// Between stacked lines of text (a name over its details).
 const LINE_GAP: f32 = 2.0;
 /// Secondary text on the profile card.
@@ -161,18 +181,17 @@ enum Page {
     Home,
     Apps,
     Look,
-    Session,
 }
 
 impl Page {
-    const ALL: [Page; 4] = [Page::Home, Page::Apps, Page::Look, Page::Session];
+    /// The power menu is the header's power button; the rail doesn't repeat it.
+    const ALL: [Page; 3] = [Page::Home, Page::Apps, Page::Look];
 
     fn title(self) -> &'static str {
         match self {
             Page::Home => tk("Home"),
             Page::Apps => tk("Apps & tools"),
             Page::Look => tk("Look"),
-            Page::Session => tk("Session"),
         }
     }
 
@@ -181,14 +200,13 @@ impl Page {
             Page::Home => "home",
             Page::Apps => "grid",
             Page::Look => "palette",
-            Page::Session => "power",
         }
     }
 }
 
 type Run = fn(&mut App);
 
-/// One action on the Apps / Look / Session pages.
+/// One action on the Apps / Look pages.
 struct Action {
     icon: &'static str,
     label: &'static str,
@@ -232,6 +250,10 @@ const APPS: &[Action] = &[
         close(cx);
         crate::desktop_edit::enter(cx);
     } },
+    Action { icon: "refresh", label: tk("Reload config"), ornament: Ornament::motif(Motif::Pharos, 90.0), hint: "", run: |cx| {
+        close(cx);
+        let _ = crate::state::reload_config_from_disk(cx);
+    } },
 ];
 
 const LOOK: &[Action] = &[
@@ -251,28 +273,6 @@ const LOOK: &[Action] = &[
         shell(cx).update(cx, |s, cx| s.set_wallpaper_picker(true, cx));
     } },
 ];
-
-const SESSION: &[Action] = &[
-    Action { icon: "lock", label: tk("Lock"), ornament: Ornament::motif(Motif::Mashrabiya, 0.0), hint: "", run: |cx| session(SessionEntryKind::Lock, cx) },
-    Action { icon: "logout", label: tk("Log out"), ornament: Ornament::motif(Motif::Doorway, 30.0), hint: "", run: |cx| session(SessionEntryKind::Logout, cx) },
-    Action { icon: "moon", label: tk("Sleep"), ornament: Ornament::motif(Motif::Waves, -40.0), hint: "", run: |cx| session(SessionEntryKind::Suspend, cx) },
-    Action { icon: "restart", label: tk("Restart"), ornament: Ornament::motif(Motif::Rings, 60.0), hint: "", run: |cx| session(SessionEntryKind::Reboot, cx) },
-    Action { icon: "power", label: tk("Shut down"), ornament: Ornament::motif(Motif::Sunset, -70.0), hint: "", run: |cx| session(SessionEntryKind::Shutdown, cx) },
-    Action { icon: "refresh", label: tk("Reload config"), ornament: Ornament::motif(Motif::Pharos, 90.0), hint: "", run: |cx| {
-        close(cx);
-        let _ = crate::state::reload_config_from_disk(cx);
-    } },
-];
-
-/// Runs a session action the way the power menu does (its failures show
-/// as a notification).
-fn session(kind: SessionEntryKind, cx: &mut App) {
-    close(cx);
-    let cfg = config(cx).read(cx).snapshot();
-    if let Err(e) = crate::powerctl::session_menu::run(&SessionEntry::new(kind, true), &cfg, cx) {
-        tracing::warn!("main menu: {e}");
-    }
-}
 
 fn apply_theme(id: String, cx: &mut App) {
     update_config(cx, |c| {
@@ -319,6 +319,11 @@ fn uptime() -> Option<String> {
 
 // ── Pages ───────────────────────────────────────────────────────────────
 
+/// The scrim behind the profile card's text, in `palette`'s hue.
+fn profile_scrim(palette: &MandaraPalette) -> mandara_theme::Color {
+    mandara_theme::Color::oklcha(SCRIM_LIGHTNESS, SCRIM_CHROMA, palette.primary.hue(), SCRIM_ALPHA)
+}
+
 fn profile(palette: &MandaraPalette, tc: &TileCx, cx: &App) -> gpui::AnyElement {
     let me = me();
     let cfg = config(cx).read(cx).snapshot();
@@ -339,6 +344,7 @@ fn profile(palette: &MandaraPalette, tc: &TileCx, cx: &App) -> gpui::AnyElement 
             .into_any_element(),
     };
     let white = gpui::white();
+    let scrim = profile_scrim(palette);
     let lines = div()
         .flex()
         .flex_col()
@@ -355,7 +361,38 @@ fn profile(palette: &MandaraPalette, tc: &TileCx, cx: &App) -> gpui::AnyElement 
         .overflow_hidden()
         .when_some(wall, |el, w| el.child(img(ImageSource::from(w)).absolute().top_0().left_0().size_full().object_fit(ObjectFit::Cover)))
         .child(div().absolute().top_0().left_0().size_full().bg(mandara_core::oklab_gradient(90.0, mandara_theme::Color::oklcha(0.12, 0.0, 0.0, SHADE.0), mandara_theme::Color::oklcha(0.12, 0.0, 0.0, SHADE.1))))
-        .child(div().absolute().top_0().left_0().size_full().px(px(tokens::LG)).flex().items_center().gap(px(tokens::LG)).child(avatar).child(lines))
+        .child(
+            div().absolute().top_0().left_0().size_full().px(px(tokens::LG)).flex().items_center().child(
+                // You, on the scrim: a soft dark shadow of you and your text,
+                // running in from the card's start edge (and off its top and
+                // bottom, which clip it) and fading out just past the text,
+                // so the lines read on a busy or bright picture with no box
+                // around them.
+                div()
+                    .relative()
+                    .min_w(px(0.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(tokens::LG))
+                    .child(
+                        div()
+                            .absolute()
+                            .top(px(-PROFILE_H))
+                            .bottom(px(-PROFILE_H))
+                            .left(px(-PROFILE_H))
+                            .right_0()
+                            .shadow(vec![gpui::BoxShadow {
+                                color: scrim.hsla(),
+                                offset: gpui::point(px(0.0), px(0.0)),
+                                blur_radius: px(SCRIM_SOFTNESS),
+                                spread_radius: px(SCRIM_REACH),
+                                inset: false,
+                            }]),
+                    )
+                    .child(avatar)
+                    .child(lines),
+            ),
+        )
         .into_any_element()
 }
 
@@ -751,9 +788,10 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, themes: &Rc<RefCell<t
             .bg(palette.outline.with_alpha(RAIL_RULE_ALPHA).hsla())
     };
     // As tall as its buttons, centred in the menu's height.
+    // It spans the menu's height, whatever number of entries it holds.
     let mut rail = div()
         .w(px(if compact { RAIL_COMPACT_W } else { RAIL_W }))
-        .flex_none()
+        .flex_1()
         .flex()
         .flex_col()
         .justify_center()
@@ -770,16 +808,24 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, themes: &Rc<RefCell<t
             window.refresh();
         }));
     }
-    // Shortcuts: each opens its own panel in the menu's place.
-    rail = rail.child(rule());
+    // Shortcuts: each opens its own panel in the menu's place. A rule (and
+    // in the full rail a caption) sets them apart from the pages above.
+    // Studio and the power menu are the header's buttons, never repeated here.
+    rail = rail.child(rule()).when(!compact, |el| {
+        el.child(
+            div()
+                .px(px(tokens::SM + RAIL_CAPTION_PAD))
+                .text_size(px(text::LABEL))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(palette.on_surface_variant.with_alpha(crate::kit::alpha::SECONDARY_TEXT).hsla())
+                .truncate()
+                .text_start()
+                .child(crate::bidi::paragraph(t("Panels"))),
+        )
+    });
     for (i, (glyph, id, name)) in SHORTCUTS.into_iter().enumerate() {
         rail = rail.child(rail_button(("menu-shortcut", i), glyph, name, false).on_click(move |_, _, cx| shell(cx).update(cx, |s, cx| s.set_panel(Some(id.into()), cx))));
     }
-    // Settings.
-    rail = rail.child(rule()).child(rail_button(("menu-settings", 0), "sliders", tk("Mandara Studio"), false).on_click(|_, _, cx| {
-        close(cx);
-        crate::state::open_studio(cx);
-    }));
     let header = div()
         .h(px(HEADER_H))
         .flex()
@@ -801,7 +847,6 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, themes: &Rc<RefCell<t
         Page::Home => home(palette, p, &tc, window, cx),
         Page::Apps => tiles(APPS, palette, p, &tc, window),
         Page::Look => look(palette, p, &tc, themes, window, cx),
-        Page::Session => tiles(SESSION, palette, p, &tc, window),
     };
     // Home sets the menu's height (it's the fullest page); the other pages
     // keep it and spread over it, so switching pages doesn't jump.
@@ -882,13 +927,83 @@ mod tests {
         assert_eq!(WIDTH_COMPACT - RAIL_COMPACT_W, WIDTH - RAIL_W);
     }
 
-    /// Every entry of the old list is still on a page.
+    /// Every entry of the old list is still on a page. Lock, log out,
+    /// sleep, restart and shut down are the header's power menu.
     #[test]
     fn every_old_entry_is_still_here() {
-        let labels: Vec<&str> = APPS.iter().chain(LOOK).chain(SESSION).map(|a| a.label).collect();
-        // "Power…" is the header's power button.
-        for old in ["Launcher", "Wallpapers", "Sidebar", "Mandara Studio", "Screenshot", "Clipboard history", "Toggle light / dark", "Next theme", "Lock", "Reload config"] {
+        let labels: Vec<&str> = APPS.iter().chain(LOOK).map(|a| a.label).collect();
+        for old in ["Launcher", "Wallpapers", "Sidebar", "Mandara Studio", "Screenshot", "Clipboard history", "Toggle light / dark", "Next theme", "Reload config"] {
             assert!(labels.contains(&old), "{old} is missing");
         }
+    }
+
+    /// The rail holds pages and panel shortcuts only: nothing it shows
+    /// repeats a header button (Studio's sliders, the power menu).
+    #[test]
+    fn the_rail_repeats_no_header_button() {
+        const HEADER: [&str; 3] = ["sliders", "power", "close"];
+        for page in Page::ALL {
+            assert!(!HEADER.contains(&page.icon()), "{:?} repeats a header button", page);
+        }
+        for (glyph, _, name) in SHORTCUTS {
+            assert!(!HEADER.contains(&glyph), "{name} repeats a header button");
+        }
+    }
+
+    /// Φ(x), the standard normal CDF, by Simpson's rule over [-8, x].
+    fn gaussian_cdf(x: f32) -> f32 {
+        let (a, n) = (-8.0_f64, 2000);
+        let h = (f64::from(x) - a) / f64::from(n);
+        let f = |t: f64| (-t * t / 2.0).exp() / (2.0 * std::f64::consts::PI).sqrt();
+        let sum: f64 = (0..=n).map(|i| {
+            let w = if i == 0 || i == n { 1.0 } else if i % 2 == 1 { 4.0 } else { 2.0 };
+            w * f(a + h * f64::from(i))
+        }).sum();
+        (sum * h / 3.0) as f32
+    }
+
+    /// The profile's softest line (white at `SOFT_TEXT`) keeps WCAG AA on
+    /// the scrim over any picture, in every shipped theme, dark and light,
+    /// whether the compositor blends in linear light or in sRGB.
+    #[test]
+    fn the_profile_text_reads_on_any_picture() {
+        use mandara_theme::Color;
+        let white = Color::oklch(1.0, 0.0, 0.0);
+        // Gamma-space compositing, the other way a renderer may blend.
+        let over_srgb = |top: Color, under: Color| {
+            let (t, u) = (top.to_srgba(), under.to_srgba());
+            let a = t.alpha;
+            let ch = |x: f32, y: f32| ((x * a + y * (1.0 - a)) * 255.0).round().clamp(0.0, 255.0) as u8;
+            Color::from_rgba8(ch(t.red, u.red), ch(t.green, u.green), ch(t.blue, u.blue), 255)
+        };
+        // White is the hardest picture for white text; the others guard
+        // against a hue the scrim's tint might lift.
+        let pictures = [white, Color::oklch(0.5, 0.0, 0.0), Color::oklch(0.9, 0.18, 95.0), Color::oklch(0.7, 0.2, 145.0), Color::oklch(0.65, 0.25, 25.0), Color::oklch(0.0, 0.0, 0.0)];
+        let mut checked = 0;
+        for theme in mandara_theme::catalog::builtin() {
+            for dark in [true, false] {
+                let palette = theme.palette(dark);
+                let id = &theme.id;
+                // The text's end is `SCRIM_REACH` inside the blurred
+                // shadow's end edge; its other edges lie off the card.
+                let core = gaussian_cdf(SCRIM_REACH / SCRIM_SOFTNESS);
+                let scrim = profile_scrim(&palette);
+                let scrim = scrim.with_alpha(scrim.alpha() * core);
+                for picture in pictures {
+                    let linear = |t: Color, u: Color| t.over(u);
+                    let blends: [&dyn Fn(Color, Color) -> Color; 2] = [&linear, &over_srgb];
+                    for over in blends {
+                        let ground = over(scrim, picture);
+                        for (alpha, line) in [(1.0, "name"), (SOFT_TEXT, "details")] {
+                            let ink = over(white.with_alpha(alpha), ground);
+                            let ratio = ink.contrast_ratio(ground);
+                            assert!(ratio >= AA, "{id} (dark {dark}): {line} at {ratio:.2}:1 over {picture:?}");
+                        }
+                    }
+                }
+                checked += 1;
+            }
+        }
+        assert!(checked > 0, "no themes checked");
     }
 }
