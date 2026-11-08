@@ -54,6 +54,13 @@ use super::font_picker::FontSelect;
 use super::choice::{ChoiceItem, WIDGET_CHOICE, placed};
 use crate::tokens::*;
 
+/// Deep links to a widget: frames to wait for its settings' place, the
+/// re-check delay, when to stop waiting and the space kept above them.
+const EDITOR_ANCHOR_FRAMES: u8 = 2;
+const EDITOR_ANCHOR_GIVE_UP: u8 = 60;
+const EDITOR_ANCHOR_SETTLE: std::time::Duration = std::time::Duration::from_millis(32);
+const EDITOR_SCROLL_MARGIN_PX: f32 = SPACE_12_PX;
+
 /// The preview is 16:9 like a screen, at most this wide…
 const PREVIEW_W_PX: f32 = 640.0;
 const PREVIEW_ASPECT: f32 = 9.0 / 16.0;
@@ -116,6 +123,10 @@ struct PageState {
     /// The room the editor's choices get beside their labels and under
     /// them (`None`: unbounded, a line).
     choice_room: Option<(f32, f32)>,
+    /// A deep link to a widget (`desktop-widgets/<id>`) scrolls to its
+    /// settings once laid out: frames waited so far, and where they are.
+    scroll_to_editor: Option<u8>,
+    editor_anchor: Rc<Cell<Option<Bounds<Pixels>>>>,
 }
 
 impl Global for PageState {}
@@ -263,6 +274,49 @@ const SIDEWAYS: [(Sideways, &str); 3] = [(Sideways::Auto, tk("Toward the middle"
 type Set<T> = Rc<dyn Fn(&mut DesktopWidget, T)>;
 
 impl StudioView {
+    /// Opens Desktop widgets with the widget `id` selected, its settings
+    /// open (`mandara studio desktop-widgets/<id>`: an empty widget's
+    /// "Set up in Studio" button).
+    pub fn show_desktop_widget(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.show(crate::registry::Section::DesktopWidgets, cx);
+        if !cx.has_global::<PageState>() {
+            cx.set_global(PageState::default());
+        }
+        let s = cx.global_mut::<PageState>();
+        s.selected = Some(id.to_string());
+        s.scroll_to_editor = Some(0);
+        s.editor_anchor.set(None);
+        cx.notify();
+    }
+
+    /// Scrolls a deep-linked widget's settings into view once they have
+    /// been laid out (a few frames after the page opens).
+    fn editor_scroll(&mut self, cx: &mut Context<Self>) {
+        let Some(frames) = cx.global::<PageState>().scroll_to_editor else { return };
+        let anchor = cx.global::<PageState>().editor_anchor.get();
+        let viewport = self.content_scroll.bounds();
+        match anchor {
+            Some(b) if frames >= EDITOR_ANCHOR_FRAMES && viewport.size.height > px(0.0) => {
+                let offset = self.content_scroll.offset();
+                let max = self.content_scroll.max_offset();
+                let y = (offset.y - (b.top() - viewport.top()) + px(EDITOR_SCROLL_MARGIN_PX)).min(px(0.0)).max(-max.y);
+                self.content_scroll.set_offset(gpui::point(offset.x, y));
+                cx.global_mut::<PageState>().scroll_to_editor = None;
+                cx.notify();
+            }
+            // Give up if the widget never shows (removed meanwhile).
+            _ if frames >= EDITOR_ANCHOR_GIVE_UP => cx.global_mut::<PageState>().scroll_to_editor = None,
+            _ => {
+                cx.global_mut::<PageState>().scroll_to_editor = Some(frames.saturating_add(1));
+                cx.spawn(async move |this, cx| {
+                    cx.background_executor().timer(EDITOR_ANCHOR_SETTLE).await;
+                    let _ = this.update(cx, |_, cx| cx.notify());
+                })
+                .detach();
+            }
+        }
+    }
+
     /// Preview the configured widgets and offer styles from enabled plugins.
     pub(super) fn desktop_widgets_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         if !cx.has_global::<PageState>() {
@@ -277,7 +331,12 @@ impl StudioView {
         let preview = self.widgets_preview(&cfg, p, cx);
         let gallery = self.widgets_gallery(&cfg, p, &display, cx);
         let list = self.widgets_list(&items, selected.as_deref(), p, cx);
-        let editor = selected.as_ref().and_then(|id| items.iter().find(|w| w.id == *id)).map(|w| self.widget_editor(w, &cfg, p, &display, cx));
+        let anchor = cx.global::<PageState>().editor_anchor.clone();
+        let editor = selected.as_ref().and_then(|id| items.iter().find(|w| w.id == *id)).map(|w| {
+            let editor = self.widget_editor(w, &cfg, p, &display, cx);
+            div().relative().child(canvas(move |bounds, _, _| anchor.set(Some(bounds)), |_, _, _, _| {}).absolute().top_0().left_0().size_full()).child(editor)
+        });
+        self.editor_scroll(cx);
         // Arrange them on the desktop itself (also: right-click the desktop → Edit desktop).
         let edit_here = button("widgets-edit-on-desktop", "pencil", t("Edit on desktop"), true, p).on_click(|_, _, cx| mandara_ui::desktop_edit::enter(cx)).tooltip(tip(t("Or right-click the desktop and choose Edit desktop"), p));
         let hero = page_section(
@@ -512,7 +571,8 @@ impl StudioView {
                 _ => None,
             };
             let on_desktop = existing.is_some();
-            let example = widgets.iter().any(|widget| matches!(widget.kind, WidgetKind::Jannah(_) | WidgetKind::Hadith(_) | WidgetKind::Quran(_)));
+            // Pictures painted from sample data say so.
+            let example = widgets.iter().any(|widget| matches!(widget.kind, WidgetKind::Jannah(_) | WidgetKind::Hadith(_) | WidgetKind::Quran(_)) || mandara_ui::backdrop::widgets::gallery::info::has_sample(&widget.kind));
             let glyph = mandara_ui::desktop_menu::icon_named(&t.icon);
             let el = div()
                 .id(SharedString::from(format!("dw-add-{}", t.key())))

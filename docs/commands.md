@@ -72,7 +72,7 @@ mandara msg side-bar pin right off          # pinned (reserves space) or sliding
 mandara msg side-bar show left off          # show or hide one side: on|off|toggle
 mandara msg desktop edit                    # move, resize, add and remove desktop widgets on the desktop (off|toggle)
 mandara msg desktop widgets hide            # show|hide|toggle every desktop widget at once
-mandara msg desktop widgets press todo-1 todo:3   # what a click on a widget does: todo:<id>, toggle:<wifi|dnd|…>, pomodoro, media:<play-pause|next|previous>, level:volume:0.4, step:brightness:1, copy:<text>, open:<path|url>, launch:<app>, next, refresh, panel:<id>, search
+mandara msg desktop widgets press todo-1 todo:3   # what a click on a widget does: todo:<id>, toggle:<wifi|dnd|…>, pomodoro, media:<play-pause|next|previous>, level:volume:0.4, step:brightness:1, copy:<text>, open:<path|url>, launch:<app>, next, refresh, panel:<id>, search, studio:<page>
 mandara msg desktop widgets press todo-1 todo-edit:3  # edit task 3 at this visible widget; todo-add starts a new task
 mandara msg desktop widgets press note-1 note    # edit the note directly on its visible desktop widget
 mandara msg diagnostics frames              # frame build times, plus what the desktop widgets cost (desktop_ms, desktop_live_ms)

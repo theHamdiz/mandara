@@ -1,8 +1,8 @@
 //! Fictional, calm readings for screenshots and demos.
 //!
 //! Off unless `MANDARA_RESOURCES_DEMO=1` is set in the shell's
-//! environment. When on, the Resources panel, its bar chip and the
-//! `system resources` command report these values instead of the
+//! environment. When on, the Resources panel, its bar chip, the desktop
+//! machine card and the `system resources` command report these values instead of the
 //! machine's real CPU, memory, core count, kernel, GPUs, sensors, disks
 //! and uptime (the Process hunter's totals too), so docs shots never show
 //! real hardware. Process lists and the hostname stay real (in a sandbox
@@ -45,6 +45,13 @@ const LOAD_AVG: [f32; 3] = [1.12, 0.96, 0.88];
 const THREADS: usize = 16;
 /// Kernel release shown next to the (sandbox's own) hostname.
 pub const KERNEL: &str = "6.12.4";
+/// The processor the desktop machine card names.
+pub const CPU_NAME: &str = "Demo Processor";
+
+/// The graphics card the desktop machine card names (the discrete one).
+pub fn gpu_name() -> &'static str {
+    DISCRETE_GPU.name
+}
 
 // ── Memory ───────────────────────────────────────────────────────────────
 const MEM_USED: u64 = 11_400 * MB;

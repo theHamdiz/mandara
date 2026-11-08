@@ -153,7 +153,7 @@ pub fn fetch(cx: &mut App) -> Option<FetchInfo> {
     let desktop = crate::hub::try_hub(cx).and_then(|h| h.read(cx).compositor.as_ref().map(|c| format!("{:?}", c.kind()))).unwrap_or_default();
     let screen = cx.try_global::<crate::overlays::Outputs>().map(|o| o.0.iter().map(|g| format!("{}×{}", g.width, g.height)).collect::<Vec<_>>().join(", ")).unwrap_or_default();
     let logo = machine.logo_path.as_deref().and_then(|p| crate::desktop_media::picture(p, LOGO_PX, cx));
-    Some(FetchInfo {
+    let mut info = FetchInfo {
         user: me.login,
         host: me.host,
         os: machine.os,
@@ -166,7 +166,19 @@ pub fn fetch(cx: &mut App) -> Option<FetchInfo> {
         shell: machine.shell,
         screen,
         logo,
-    })
+    };
+    // Screenshots and demos name the same calm, fictional parts as the
+    // Resources panel, never the real hardware.
+    if crate::plugins::resources::demo::active() {
+        use crate::plugins::resources::demo;
+        let (used, total, _, _) = demo::meminfo();
+        info.kernel = demo::KERNEL.into();
+        info.cpu = demo::CPU_NAME.into();
+        info.gpu = demo::gpu_name().into();
+        info.memory = (used, total);
+        info.uptime_s = demo::uptime_secs();
+    }
+    Some(info)
 }
 
 /// Screen time of the last days (short day names, today flagged) and

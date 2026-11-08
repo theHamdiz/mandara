@@ -11,6 +11,7 @@ use crate::backdrop::paint::FontNames;
 use crate::lock::paint::TextPainter;
 
 mod faith;
+pub mod info;
 
 /// Keep the plate, antialiasing and shadows clear of the tile's rim.
 const CONTENT_FRACTION: f32 = 0.88;
@@ -33,6 +34,7 @@ fn sample_scene(widget: &DesktopWidget, palette: &MandaraPalette, cover_px: u32)
     scene.surface = palette.surface_container;
     scene.data.palette = super::super::palette_colors(palette);
     faith::populate(&mut scene, &widget.kind);
+    info::populate(&mut scene, widget, Some(palette), cover_px);
     if let WidgetKind::Toggles(toggles) = &widget.kind {
         scene.data.toggles = super::toggle_ids(toggles).into_iter().enumerate().map(|(i, id)| (id, i % 2 == 0)).collect();
     }
@@ -90,6 +92,7 @@ pub fn thumbnail(widget: &DesktopWidget, size: (u32, u32), fonts: &FontNames, pa
     widget.place.y = 0.0;
     widget.place.scale = 1.0;
     widget.place.displays.clear();
+    info::prepare(&mut widget);
     let scene = sample_scene(&widget, palette, size.0.max(size.1));
     let [r, g, b, _] = palette.surface_dim.to_rgba8();
     let tone = image::RgbImage::from_pixel(1, 1, image::Rgb([r, g, b]));

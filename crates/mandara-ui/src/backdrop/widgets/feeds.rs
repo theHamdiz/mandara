@@ -13,6 +13,7 @@ use super::actions::Action;
 use super::frame::shape_of;
 use super::layout::{Composition, Hit, InkRole, Mark, MarkKind, Measure, Picture, caps, face, fit, style, tracked};
 use super::lingo::Lingo;
+use super::empty::{self, Empty, Hint};
 use super::{Feed, GameItem};
 
 /// Reference sizes.
@@ -41,33 +42,37 @@ const MILLION: f64 = 1_000_000.0;
 const THOUSAND: f64 = 1_000.0;
 const PERCENT: f32 = 100.0;
 
-/// A grey line saying why there's nothing to show.
-fn note(text: String, k: f32, font: mandara_config::desktop_widgets::FontRole, m: &mut dyn Measure) -> Mark {
-    let st = style(font, TEXT * k, face::MEDIUM);
-    let (w, h) = m.measure(&text, &st);
-    Mark::new(MarkKind::Text { text, style: st, x: 0.0, y: 0.0, w, h }, InkRole::Fg).dim(face::DIM)
+/// What a feed widget shows instead of its data: switched off (with the
+/// setting that fixes it, `off` its hint), on its way, or why it failed
+/// (a click asks again).
+fn status<T>(feed: &Feed<T>, off: Option<&'static str>, icon: &'static str, title: &'static str, id: &str) -> Option<Empty> {
+    if let Some(hint) = off {
+        return Some(Empty::new(icon, title, hint).setup(empty::widget_settings(id)));
+    }
+    match (&feed.value, &feed.error) {
+        (Some(_), _) => None,
+        (None, Some(e)) => Some(Empty { hint: Hint::Text(e.clone()), click: Some(Action::Refresh), ..Empty::new(icon, tk("Couldn't load it"), tk("Loading…")) }),
+        (None, None) => Some(Empty::new(icon, title, tk("Loading…"))),
+    }
 }
 
-/// The words for a feed that has nothing: switched off, loading, failed.
-fn status<T>(feed: &Feed<T>, off: bool, off_text: &'static str, l: &Lingo) -> Option<String> {
-    if off {
-        return Some(l.word(off_text));
-    }
-    match (&feed.value, &feed.error, feed.loading) {
-        (Some(_), ..) => None,
-        (None, Some(e), _) => Some(format!("{} ({e})", l.word(tk("Couldn't load it")))),
-        (None, None, _) => Some(l.word(tk("Loading…"))),
+/// Why a GitHub widget can't ask yet: no user, or fetching is off.
+pub(super) fn github_off(w: &GithubWidget) -> Option<&'static str> {
+    if w.user.trim().is_empty() {
+        Some(tk("Add your GitHub user name to see your year"))
+    } else if !w.online {
+        Some(tk("Allow fetching from GitHub to see your year"))
+    } else {
+        None
     }
 }
 
 /// GitHub's contribution calendar: weeks as columns, a cell per day in
 /// the accent by level, the total and the current streak under it.
-pub fn github(w: &GithubWidget, feed: &Feed<Vec<ContributionDay>>, l: &Lingo, k: f32, m: &mut dyn Measure) -> Composition {
+pub fn github(w: &GithubWidget, id: &str, feed: &Feed<Vec<ContributionDay>>, l: &Lingo, k: f32, m: &mut dyn Measure) -> Composition {
     let px = |v: f32| v * k;
-    let off = w.user.trim().is_empty() || !w.online;
-    let off_text = if w.user.trim().is_empty() { tk("Set a GitHub user in Studio") } else { tk("Switch on fetching from GitHub in Studio") };
-    if let Some(text) = status(feed, off, off_text, l) {
-        return Composition::of(vec![note(text, k, w.look.font, m)]);
+    if let Some(e) = status(feed, github_off(w), "github", tk("GitHub contributions"), id) {
+        return empty::layout(&e, w.look.font, l, k, m);
     }
     let days = feed.value.as_deref().unwrap_or_default();
     let weeks = count(w.weeks, ranges::WEEKS) as usize;
@@ -106,12 +111,11 @@ pub fn github(w: &GithubWidget, feed: &Feed<Vec<ContributionDay>>, l: &Lingo, k:
 }
 
 /// Exchange rates: what one unit of the base buys, one currency a row.
-pub fn currency(w: &CurrencyWidget, feed: &Feed<Rates>, l: &Lingo, k: f32, m: &mut dyn Measure) -> Composition {
+pub fn currency(w: &CurrencyWidget, id: &str, feed: &Feed<Rates>, l: &Lingo, k: f32, m: &mut dyn Measure) -> Composition {
     let px = |v: f32| v * k;
-    if let Some(text) = status(feed, !w.online, tk("Switch on fetching rates in Studio"), l) {
-        let mut c = Composition::of(vec![note(text, k, w.look.font, m)]);
-        c.hits.push(Hit { rect: (0.0, 0.0, c.size.0, c.size.1), action: Action::Refresh });
-        return c;
+    let off = (!w.online).then_some(tk("Allow fetching rates to see today's prices"));
+    if let Some(e) = status(feed, off, "globe", tk("Exchange rates"), id) {
+        return empty::layout(&e, w.look.font, l, k, m);
     }
     let Some(r) = feed.value.as_ref() else { return Composition::default() };
     let width = px(RATES_W);
@@ -160,10 +164,11 @@ pub fn tokens(n: u64, l: &Lingo) -> String {
 
 /// Claude Code's tokens: today big, the last days as bars, the week
 /// against a budget when there is one.
-pub fn ai_usage(w: &AiUsageWidget, feed: &Feed<std::collections::BTreeMap<NaiveDate, DayTokens>>, l: &Lingo, k: f32, m: &mut dyn Measure) -> Composition {
+pub fn ai_usage(w: &AiUsageWidget, id: &str, feed: &Feed<std::collections::BTreeMap<NaiveDate, DayTokens>>, l: &Lingo, k: f32, m: &mut dyn Measure) -> Composition {
     let px = |v: f32| v * k;
-    if let Some(text) = status(feed, !w.read_logs, tk("Switch on reading Claude Code's logs in Studio"), l) {
-        return Composition::of(vec![note(text, k, w.look.font, m)]);
+    let off = (!w.read_logs).then_some(tk("Allow reading Claude Code's local logs to see your tokens"));
+    if let Some(e) = status(feed, off, "sparkles", tk("AI usage"), id) {
+        return empty::layout(&e, w.look.font, l, k, m);
     }
     let per_day = feed.value.clone().unwrap_or_default();
     let today = Local::now().date_naive();
@@ -214,8 +219,8 @@ pub fn games(w: &GamesWidget, feed: &Feed<Vec<GameItem>>, l: &Lingo, k: f32, m: 
     let px = |v: f32| v * k;
     let list = feed.value.as_deref().unwrap_or_default();
     if list.is_empty() {
-        let text = if feed.loading { l.word(tk("Loading…")) } else { l.word(tk("No Steam games found")) };
-        return Composition::of(vec![note(text, k, w.look.font, m)]);
+        let e = if feed.loading { Empty::new("dice", tk("Games"), tk("Loading…")) } else { Empty::new("dice", tk("No Steam games found"), tk("Games you install in Steam show up here")) };
+        return empty::layout(&e, w.look.font, l, k, m);
     }
     let (cw, ch) = (px(COVER_W), px(COVER_W) * COVER_RATIO);
     let shape = match shape_of(w.cover, &w.look, k) {
@@ -265,24 +270,51 @@ mod tests {
         Lingo::of(&Default::default(), false, None)
     }
 
+    /// Every line a composition writes, joined (a wrapped hint reads whole).
+    fn shown(c: &Composition) -> String {
+        c.marks.iter().filter_map(|m| if let MarkKind::Text { text, .. } = &m.kind { Some(text.as_str()) } else { None }).collect::<Vec<_>>().join(" ")
+    }
+
     #[test]
     fn feeds_say_why_they_are_empty_and_lay_out_when_full() {
-        let off = github(&GithubWidget::default(), &Feed::default(), &l(), 1.0, &mut Fixed);
-        assert!(matches!(&off.marks[0].kind, MarkKind::Text { text, .. } if text.contains("GitHub user")));
+        let off = github(&GithubWidget::default(), "github-1", &Feed::default(), &l(), 1.0, &mut Fixed);
+        assert!(shown(&off).contains("GitHub user name"));
         let today = Local::now().date_naive();
         let days: Vec<ContributionDay> = (0..60).map(|i| ContributionDay { date: today - chrono::Duration::days(i), level: (i % 5) as u8, count: (i % 5) as u32 }).collect();
         let w = GithubWidget { user: "octocat".into(), online: true, ..Default::default() };
-        let c = github(&w, &Feed { value: Some(days), error: None, loading: false }, &l(), 1.0, &mut Fixed);
+        let c = github(&w, "github-1", &Feed { value: Some(days), error: None, loading: false }, &l(), 1.0, &mut Fixed);
         assert!(c.size.0 > 100.0 && c.hits.len() == 1);
         let rates = Rates { base: "USD".into(), rates: [("EGP".to_string(), 48.7), ("EUR".to_string(), 0.92)].into_iter().collect(), updated: 1_700_000_000 };
-        let c = currency(&CurrencyWidget { online: true, ..Default::default() }, &Feed { value: Some(rates), error: None, loading: false }, &l(), 1.0, &mut Fixed);
+        let c = currency(&CurrencyWidget { online: true, ..Default::default() }, "currency-1", &Feed { value: Some(rates), error: None, loading: false }, &l(), 1.0, &mut Fixed);
         assert!(c.marks.iter().any(|m| matches!(&m.kind, MarkKind::Text { text, .. } if text == "48.70")));
         assert_eq!(tokens(1_250_000, &l()), "1.2 M");
         let usage: std::collections::BTreeMap<NaiveDate, DayTokens> = [(today, DayTokens { input: 10, output: 20, cache: 1_000_000 })].into_iter().collect();
-        let c = ai_usage(&AiUsageWidget { read_logs: true, budget_millions: 10.0, ..Default::default() }, &Feed { value: Some(usage), error: None, loading: false }, &l(), 1.0, &mut Fixed);
+        let c = ai_usage(&AiUsageWidget { read_logs: true, budget_millions: 10.0, ..Default::default() }, "ai-1", &Feed { value: Some(usage), error: None, loading: false }, &l(), 1.0, &mut Fixed);
         assert!(c.size.1 > 100.0);
         let g = vec![GameItem { appid: 570, name: "Dota 2".into(), cover: None }];
         let c = games(&GamesWidget::default(), &Feed { value: Some(g), error: None, loading: false }, &l(), 1.0, &mut Fixed);
         assert_eq!(c.hits[0].action, Action::Open("steam://rungameid/570".into()));
+    }
+
+    #[test]
+    fn empty_feeds_pick_the_state_that_fits() {
+        let studio = |c: &Composition| c.hits.iter().find_map(|h| if let Action::Studio(t) = &h.action { Some(t.clone()) } else { None });
+        let says = |c: &Composition, words: &str| shown(c).contains(words);
+        // Switched off: a button to the exact widget's settings.
+        let c = github(&GithubWidget { user: "octocat".into(), ..Default::default() }, "github-2", &Feed::default(), &l(), 1.0, &mut Fixed);
+        assert_eq!(studio(&c).as_deref(), Some("desktop-widgets/github-2"));
+        assert!(says(&c, "Allow fetching from GitHub"));
+        assert_eq!(studio(&currency(&CurrencyWidget::default(), "currency-1", &Feed::default(), &l(), 1.0, &mut Fixed)).as_deref(), Some("desktop-widgets/currency-1"));
+        assert_eq!(studio(&ai_usage(&AiUsageWidget::default(), "ai-1", &Feed::default(), &l(), 1.0, &mut Fixed)).as_deref(), Some("desktop-widgets/ai-1"));
+        // On and waiting: no button; failed: the reason, and a click asks again.
+        let on = CurrencyWidget { online: true, ..Default::default() };
+        let loading = currency(&on, "c", &Feed { value: None, error: None, loading: true }, &l(), 1.0, &mut Fixed);
+        assert!(studio(&loading).is_none() && says(&loading, "Loading…"));
+        let failed = currency(&on, "c", &Feed { value: None, error: Some("timed out".into()), loading: false }, &l(), 1.0, &mut Fixed);
+        assert!(says(&failed, "timed out") && says(&failed, "Couldn't load it"));
+        assert_eq!(failed.hits.last().map(|h| &h.action), Some(&Action::Refresh));
+        // No games: an explanation, nothing to set up.
+        let none = games(&GamesWidget::default(), &Feed::default(), &l(), 1.0, &mut Fixed);
+        assert!(none.hits.is_empty() && says(&none, "No Steam games found"));
     }
 }
