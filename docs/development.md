@@ -30,8 +30,15 @@ installation command and fenced examples in the guides. It copies the code's
 text, including quotes and options, without syntax markup or a trailing newline.
 If the browser blocks copying, it selects the code for manual copying and
 explains what happened. Commands remain readable and selectable without scripts.
+Each block's feedback is a polite status region (`role="status"`), present
+before the first message. A press clears it and writes the message 100 ms
+later, so pressing Copy again announces the same words again. "Copied to
+clipboard." clears after 4 seconds, so it never describes an older press.
+The blocked-copy instructions stay until the next press. Only the latest
+press writes a message.
 When changing this control, verify actual clipboard contents, Enter and Space,
-blocked permissions, both colour schemes and narrow screens in a private browser.
+blocked permissions, both colour schemes and narrow screens in a private browser,
+and repeated presses with a real screen reader (Orca, NVDA or VoiceOver).
 
 ## Warnings are errors
 
@@ -215,6 +222,44 @@ factory generation and orientation. Theme and geometry edits repaint those
 instances; bar geometry has its own change key. Studio’s wallpaper scheme
 previews cache only their displayed color strips under the original seed and
 mode keys, so revisiting a selection reuses its cached result.
+
+## Native desktop tests (`#[ignore]`)
+
+Tests marked `#[ignore = "requires the marked …"]` (in
+`crates/mandara-ui/tests/`) drive a real shell with real input and
+screenshots. They run only against a private desktop that an external
+runner starts for them; `cargo test` alone skips them. The resource-desktop
+tests (`beacon_keyboard`, `desktop_text`, `design_sharing`) share
+`tests/support/private_desktop.rs`, which checks before every request, tool
+and screenshot that:
+
+- the runtime directory is `/tmp/mrc.*` (yours, mode 0700) with the test's
+  marker file naming this checkout, and HOME is the paired throw-away
+  `mandara-rc.*/home`;
+- the session bus is private and the system bus is dead;
+- the compositor is headless with one output;
+- the shell and compositor are still the processes the runner recorded
+  (`<PREFIX>_PID`, `_START`, `_BINARY` and `_COMPOSITOR_*`): same PID start
+  time, same executable and the same socket peer.
+
+A runner for any marked test must follow three rules:
+
+- **One run owns the desktop.** Each runner invocation creates its own
+  desktop, runs its tests against it and tears it down. Never share a
+  desktop between concurrent runs, and never hand one to a later run: the
+  tests change its configuration and send it input.
+- **Tear down on forced interruption too.** On Ctrl+C, SIGTERM, a timeout
+  or a runner error, stop the processes it started and delete the runtime
+  and HOME directories, as on a normal exit. A test that is killed doesn't
+  restore anything, so its desktop is thrown away, never reused.
+- **Restoration stops when the desktop changes.** The resource-desktop
+  tests snapshot the settings they change and put them back (and remove
+  the notes and tasks they created) when they end, even after a failed
+  assertion. Each restoring request goes through the
+  same identity checks.
+  If the desktop was torn down or replaced in the meantime, restoration
+  stops at the first refused request and writes nothing to the other
+  desktop.
 
 ## Build artefacts: `cargo xtask prune`
 
