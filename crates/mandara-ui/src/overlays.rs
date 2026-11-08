@@ -1832,11 +1832,12 @@ impl LauncherView {
             .into_any_element()
     }
 
-    /// The prefix help every look's search field shows while empty
-    /// ([`launcher_hint`], composed only when its settings or the language
-    /// change).
-    fn prefix_help(&mut self, form: launcher_hint::Form) -> gpui::SharedString {
-        self.hint.get(&self.ctx.providers, self.agent_enabled, form)
+    /// The prefix help every look's search field shows while empty, for
+    /// the field's width last frame at `font_px` ([`launcher_hint`],
+    /// composed only when its settings or the language change).
+    fn prefix_help(&mut self, font_px: f32) -> gpui::SharedString {
+        let width = self.text_bounds.get().map(|b| f32::from(b.size.width));
+        self.hint.get(&self.ctx.providers, self.agent_enabled, width, font_px)
     }
 
     /// The query text with its blinking caret (solid for half a second
@@ -2122,7 +2123,7 @@ impl Render for LauncherView {
         let chips_el = chips.then(|| self.chips_element(&palette, None, window, cx));
         let hints_el = look.hints.then(|| self.classic_hints(grid, chips, &palette));
         self.field_px = text::BODY + 1.0;
-        let hint = self.prefix_help(launcher_hint::Form::of(look.style));
+        let hint = self.prefix_help(text::BODY + 1.0);
         let search = div()
             .h(px(SEARCH_H))
             .px(px(16.0))
@@ -2700,19 +2701,19 @@ mod tests {
     /// unrelated edit composes nothing.
     #[test]
     fn the_prefix_help_follows_settings_while_the_launcher_is_open() {
-        use launcher_hint::Form;
         let mut launcher = mandara_config::LauncherConfig::default();
         let mut ctx = SearchCtx { providers: launcher.providers.clone(), ..SearchCtx::default() };
         let (mut hint, mut agent) = (launcher_hint::PrefixHelp::default(), launcher.agent.enabled);
-        let shown = |hint: &mut launcher_hint::PrefixHelp, ctx: &SearchCtx, agent: bool| [Form::Full, Form::Compact].map(|f| hint.get(&ctx.providers, agent, f).to_string());
+        // A narrow and a roomy field.
+        let shown = |hint: &mut launcher_hint::PrefixHelp, ctx: &SearchCtx, agent: bool| [Some(400.0), Some(4000.0)].map(|w| hint.get(&ctx.providers, agent, w, 14.0).to_string());
         let before = shown(&mut hint, &ctx, agent);
         assert!(before.iter().all(|h| !h.contains("“!”")), "the agent is off by default: {before:?}");
 
         // An unrelated edit: the cached text stays.
         launcher.max_results += 1;
         assert!(!follow_prefix_settings(&mut ctx, &mut hint, &mut agent, &launcher, |_, id| panic!("gathered {id}")));
-        let cached = hint.get(&ctx.providers, agent, Form::Compact);
-        assert!(std::ptr::eq(cached.as_ref(), hint.get(&ctx.providers, agent, Form::Compact).as_ref()));
+        let cached = hint.get(&ctx.providers, agent, Some(400.0), 14.0);
+        assert!(std::ptr::eq(cached.as_ref(), hint.get(&ctx.providers, agent, Some(400.0), 14.0).as_ref()));
 
         // The agent switched on: every form gains its `!`.
         launcher.agent.enabled = true;

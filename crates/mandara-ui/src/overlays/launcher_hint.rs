@@ -3,42 +3,37 @@
 //! Classic, Grid and Beacon all show the same list of what a query can
 //! start with: `/` slash commands, `=` arithmetic, the AI Shell Agent's
 //! `!` while it is switched on, then each provider that is on and has a
-//! prefix (`:` emoji, `@` windows…), with the prefix you configured. The
-//! wide looks lead with what plain text searches; Beacon's larger type
-//! drops that lead ([`Form::Compact`]) so the prefixes come first, and the
-//! field ellipsizes whatever still doesn't fit. Built-in syntax and the
-//! agent come before the providers, so they stay visible in a narrow field.
+//! prefix (`:` emoji, `@` windows…), with the prefix you configured.
+//! Built-in syntax and the agent come before the providers, so they stay
+//! visible when the field ellipsizes the end. A field wide enough for all
+//! of it also leads with what plain text searches ([`Form::Full`]); a
+//! narrower one (any look at its default size, or larger type) starts
+//! with the prefixes ([`Form::Compact`]).
 //!
-//! The text is composed once per prefix-settings revision, language and
-//! form ([`PrefixHelp`]), never per frame. The launcher bumps the revision
-//! from its config observer when the provider settings or the agent switch
-//! change while it is open.
+//! Both forms are composed once per prefix-settings revision and language
+//! ([`PrefixHelp`]), never per frame; a frame only compares the field's
+//! width with the cached length. The launcher bumps the revision from its
+//! config observer when the provider settings or the agent switch change
+//! while it is open.
 
 use gpui::SharedString;
-use mandara_config::workflow::{LauncherProviders, LauncherStyle};
+use mandara_config::workflow::LauncherProviders;
 use mandara_i18n::{Lang, t, tf, tk};
 
 /// Between two entries of the help.
 const SEPARATOR: &str = " · ";
+/// Average advance of the help's characters, in ems: UI type averages
+/// about half an em, a little more keeps the lead for fields that surely
+/// fit it (a wrong guess only ellipsizes the end).
+const EM_PER_CHAR: f32 = 0.55;
 
-/// Which looks get which form of the help.
+/// With or without the lead.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(super) enum Form {
-    /// Leads with what plain text searches (Classic and Grid).
+    /// Leads with what plain text searches.
     Full,
-    /// The prefixes only (Beacon's large search bar).
+    /// The prefixes only.
     Compact,
-}
-
-impl Form {
-    /// The form a launcher style shows (Classic covers the list and the
-    /// grid layouts).
-    pub(super) fn of(style: LauncherStyle) -> Self {
-        match style {
-            LauncherStyle::Classic => Form::Full,
-            LauncherStyle::Beacon => Form::Compact,
-        }
-    }
 }
 
 /// Each provider's entry, in [`LauncherProviders::all`] order.
@@ -82,13 +77,28 @@ pub(super) fn compose(providers: &LauncherProviders, agent: bool, form: Form) ->
     out
 }
 
-/// The composed help, cached by prefix-settings revision, language and
-/// form.
+/// Whether text of `chars` characters at `font_px` fits a field `width`
+/// px wide (`None`: not laid out yet).
+fn fits(chars: usize, font_px: f32, width: Option<f32>) -> bool {
+    width.is_some_and(|w| chars as f32 * font_px * EM_PER_CHAR <= w)
+}
+
+/// Both forms for one revision and language.
+struct Composed {
+    revision: u64,
+    lang: Lang,
+    full: SharedString,
+    /// `full`'s length in characters (its fit is checked per frame).
+    full_chars: usize,
+    compact: SharedString,
+}
+
+/// The composed help, cached by prefix-settings revision and language.
 #[derive(Default)]
 pub(super) struct PrefixHelp {
     /// Bumped whenever the providers or the agent switch change.
     revision: u64,
-    cached: Option<(u64, Lang, Form, SharedString)>,
+    cached: Option<Composed>,
 }
 
 impl PrefixHelp {
@@ -98,23 +108,19 @@ impl PrefixHelp {
         self.revision = self.revision.wrapping_add(1);
     }
 
-    /// The help in `form` for the current language, composed only when the
-    /// revision, language or form differ from the cached one.
-    pub(super) fn get(&mut self, providers: &LauncherProviders, agent: bool, form: Form) -> SharedString {
+    /// The help for a field `width` px wide (as laid out last frame) at
+    /// `font_px`, in the current language. Composes only when the revision
+    /// or the language differ from the cached ones.
+    pub(super) fn get(&mut self, providers: &LauncherProviders, agent: bool, width: Option<f32>, font_px: f32) -> SharedString {
         let lang = mandara_i18n::language();
-        if let Some((rev, l, f, text)) = &self.cached
-            && (*rev, *l, *f) == (self.revision, lang, form)
-        {
-            return text.clone();
+        let stale = self.cached.as_ref().is_none_or(|c| (c.revision, c.lang) != (self.revision, lang));
+        if stale {
+            let full = compose(providers, agent, Form::Full);
+            let full_chars = full.chars().count();
+            self.cached = Some(Composed { revision: self.revision, lang, full: full.into(), full_chars, compact: compose(providers, agent, Form::Compact).into() });
         }
-        let text = SharedString::from(compose(providers, agent, form));
-        self.cached = Some((self.revision, lang, form, text.clone()));
-        text
-    }
-
-    #[cfg(test)]
-    pub(super) fn composed(&self) -> Option<&SharedString> {
-        self.cached.as_ref().map(|(.., text)| text)
+        let c = self.cached.as_ref().expect("composed above");
+        if fits(c.full_chars, font_px, width) { c.full.clone() } else { c.compact.clone() }
     }
 }
 
@@ -155,18 +161,33 @@ mod tests {
         assert!(text.find("“=”").unwrap() < agent && agent < text.find("“:”").unwrap(), "{text:?}");
     }
 
-    /// Every ready-made look (Classic, Grid, Beacon) shows the same
-    /// prefixes, the agent's included while it is on.
+    /// Every look shows the same prefixes, the agent's included while it
+    /// is on: the lead only joins them when the whole list fits the field.
     #[test]
-    fn every_look_shows_the_same_prefixes() {
+    fn every_look_shows_the_same_prefixes_and_the_lead_only_when_it_fits() {
+        use mandara_config::workflow::LauncherLook;
         let providers = LauncherProviders::default();
-        for look in &mandara_config::workflow::LAUNCHER_LOOKS {
-            let text = compose(&providers, true, Form::of(look.style));
+        let mut help = PrefixHelp::default();
+        let full_chars = compose(&providers, true, Form::Full).chars().count();
+        // Each look's default field: Classic and Grid at their width and
+        // body type, Beacon at its bar width and large type; then a field
+        // with room for everything.
+        let look = LauncherLook::default();
+        for (name, width, font) in [("classic", look.width, 14.0), ("beacon", look.beacon_width, 20.0), ("roomy", full_chars as f32 * 14.0, 14.0)] {
+            let text = help.get(&providers, true, Some(width), font);
             for prefix in prefixes(&providers).into_iter().chain(["/", "=", "!"]) {
-                assert!(text.contains(&format!("“{prefix}”")), "{}: {prefix} missing from {text:?}", look.id);
+                assert!(text.contains(&format!("“{prefix}”")), "{name}: {prefix} missing from {text:?}");
             }
-            assert!(!compose(&providers, false, Form::of(look.style)).contains("“!”"), "{}", look.id);
+            assert_eq!(text.starts_with("Apps, settings, commands"), name == "roomy", "{name}: {text:?}");
         }
+        assert!(!help.get(&providers, true, None, 14.0).starts_with("Apps"), "not laid out yet: the prefixes first");
+        // Few prefixes fit with the lead at the default width.
+        let mut few = LauncherProviders::default();
+        for p in [&mut few.emoji, &mut few.windows, &mut few.clipboard, &mut few.wallpapers, &mut few.files, &mut few.actions] {
+            p.enabled = false;
+        }
+        help.invalidate();
+        assert!(help.get(&few, false, Some(look.width), 14.0).starts_with("Apps, settings, commands"));
     }
 
     /// Both renderers draw their empty field from this module (Beacon's
@@ -177,26 +198,22 @@ mod tests {
         let classic = include_str!("../overlays.rs");
         let looks = include_str!("launcher_looks.rs");
         assert_eq!(classic.matches("self.query_field(").count() + looks.matches("self.query_field(").count(), 2, "one search field per renderer");
-        assert!(classic.contains("let hint = self.prefix_help(launcher_hint::Form::of(look.style));"));
-        assert!(looks.contains("None => self.prefix_help(super::launcher_hint::Form::of(LauncherStyle::Beacon)),"));
+        assert!(classic.contains("let hint = self.prefix_help(text::BODY + 1.0);"));
+        assert!(looks.contains("None => self.prefix_help(BAR_TEXT),"));
     }
 
-    /// Composed once per revision, language and form; an edit composes it
-    /// again.
+    /// Composed once per revision and language; an edit composes it again.
     #[test]
-    fn the_help_is_cached_until_the_settings_or_form_change() {
+    fn the_help_is_cached_until_the_settings_change() {
         let mut help = PrefixHelp::default();
         let mut providers = LauncherProviders::default();
-        let first = help.get(&providers, false, Form::Full);
+        let first = help.get(&providers, false, Some(400.0), 14.0);
         // An unannounced edit is not seen: nothing is composed per frame.
         providers.emoji.enabled = false;
-        let again = help.get(&providers, false, Form::Full);
+        let again = help.get(&providers, false, Some(400.0), 14.0);
         assert!(std::ptr::eq(first.as_ref(), again.as_ref()), "the cached text is shared, not composed again");
         help.invalidate();
-        let edited = help.get(&providers, true, Form::Full);
+        let edited = help.get(&providers, true, Some(400.0), 14.0);
         assert!(!edited.contains("emoji") && edited.contains("“!”"), "{edited:?}");
-        let compact = help.get(&providers, true, Form::Compact);
-        assert!(!compact.starts_with("Apps"), "{compact:?}");
-        assert_eq!(help.composed(), Some(&compact));
     }
 }

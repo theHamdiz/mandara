@@ -758,10 +758,10 @@ impl LauncherView {
         // ── The search bar ──
         self.field_px = BAR_TEXT;
         // A mode names what it searches; otherwise the prefix help every
-        // look shares, prefixes first for the large type.
+        // look shares.
         let placeholder = match self.mode {
             Some(mode) => SharedString::new_static(t(mode.placeholder())),
-            None => self.prefix_help(super::launcher_hint::Form::of(LauncherStyle::Beacon)),
+            None => self.prefix_help(BAR_TEXT),
         };
         let token = self.mode.map(|m| {
             div()
