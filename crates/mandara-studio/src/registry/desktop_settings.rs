@@ -43,6 +43,7 @@ const LOCATION_MODE: &[(&str, &str)] = &[("manual", tk("Manual")), ("geoclue", t
 const WIND: &[(&str, &str)] = &[("auto", tk("Follow units")), ("meters-per-second", "m/s"), ("knots", tk("Knots"))];
 const LOCK_CLOCK: &[(&str, &str)] = &[("classic", tk("Classic")), ("stacked", tk("Stacked")), ("compact", tk("Compact"))];
 const LOCK_BG: &[(&str, &str)] = &[("wallpaper", tk("Wallpaper")), ("image", tk("Image")), ("color", tk("Solid color"))];
+const LOCK_SYMBOLS: &[(&str, &str)] = &[("shapes", tk("Shapes")), ("dots", tk("Dots"))];
 const CORNER: &[(&str, &str)] = &[
     ("none", tk("Nothing")),
     ("launcher", tk("Launcher")),
@@ -174,6 +175,7 @@ pub(super) fn entries() -> Vec<Setting> {
         s(LockScreen, tk("Background"), "/lock/blur", tk("Blur"), tk("Softens the background"), slider(0.0, 64.0, 1.0, " px")),
         s(LockScreen, tk("Background"), "/lock/dim", tk("Dim"), tk("Darkens the background so text stays readable"), slider(0.0, 0.9, 0.05, "")),
         s(LockScreen, tk("Background"), "/lock/blank_other_outputs", tk("Blank other displays"), tk("Only the main display shows the lock screen; others stay black (OLED friendly)"), Toggle),
+        s(LockScreen, tk("Password"), "/lock/password_symbols", tk("Password symbols"), tk("Each character you type appears as a different small shape, or as a plain dot"), Choice(LOCK_SYMBOLS)),
         s(LockScreen, tk("Show"), "/lock/show_avatar", tk("Profile picture"), tk("Your avatar above the password field"), Toggle),
         s(LockScreen, tk("Show"), "/lock/show_media", tk("Now playing"), tk("The track that is playing"), Toggle),
         s(LockScreen, tk("Show"), "/lock/show_notifications", tk("Notification count"), tk("How many notifications are waiting (never their content)"), Toggle),

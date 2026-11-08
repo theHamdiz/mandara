@@ -202,6 +202,10 @@ impl AssetSource for MandaraAssets {
             let svg = crate::plugins::jannah::art::asset(name).or_else(|| crate::plugins::hadith::art::asset(name)).or_else(|| crate::plugins::quran::art::asset(name)).or_else(|| crate::plugins::main_menu::ornament::asset(name));
             return Ok(svg.map(|svg| Cow::Owned(svg.into_bytes())));
         }
+        // Masked password characters (built once, shared).
+        if path.starts_with("password-symbols/") {
+            return Ok(mandara_core::password_symbols::Symbol::from_asset_path(path).map(|s| Cow::Borrowed(s.svg().as_bytes())));
+        }
         let Some(name) = path.strip_prefix("icons/").and_then(|p| p.strip_suffix(".svg")) else {
             return Ok(None);
         };

@@ -287,10 +287,11 @@ pub enum SubmitButton {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PasswordMask {
-    #[default]
+    /// Identical dots.
     Dots,
-    /// A different small shape per character (circle, square, diamond,
-    /// triangle…), so the length is less obvious at a glance.
+    /// A different small soft shape per character (circle, square,
+    /// triangle, clover…), never derived from the character itself.
+    #[default]
     Shapes,
 }
 
@@ -322,7 +323,7 @@ impl Default for PasswordConfig {
         Self {
             style: FieldStyle::Glass,
             submit: SubmitButton::Inside,
-            mask: PasswordMask::Dots,
+            mask: PasswordMask::Shapes,
             accent_border: false,
             text_size: 15.0,
             width: L::FIELD_W,

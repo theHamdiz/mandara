@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **A different shape for every character.** The password field on the lock screen and on Mandara Login now shows each typed character as one of ten small, soft shapes (circles, rounded squares, triangles, diamonds, clovers and more) that pop in gently and shrink away when you delete them. Shapes never repeat side by side and never depend on what you typed, and each new attempt shuffles them. Prefer the classic look? Choose **Password symbols → Dots** in Studio → Lock appearance, or **Hide typing as → Dots** in Studio → Login screen. Reduced motion turns the animation off.
+
 ### Improved
 
 - **Notes keep edits made in other apps.** If another editor changes or removes a note's file while you are typing the same note in the Notes panel, Mandara no longer overwrites it. The panel keeps your text and says the note changed elsewhere, your other notes still save, and your next edit replaces the outside version on purpose. (#111)
@@ -28,6 +32,7 @@ About → What's new shows it too.
 - **Drop-down panels stay open while you use them.** A click inside a bar panel or the main menu now always counts as using it, so a short focus change right after it (switching light and dark, a keyboard or mouse coming or going, the compositor rearranging its layers) no longer closes the panel under your pointer. Pressing a key while you rest on a panel no longer reads as leaving it either. Moving away, clicking outside, Escape and switching to another app still close it.
 - **The machine card no longer looks broken.** Its gallery picture, and the moment before your machine had been read, showed a lone "@", a dash and "Uptime: 0 min". It now waits for the real values and leaves out anything it doesn't know yet instead of showing a zero. In demo mode it names the same made-up parts as the Resources panel, so screenshots never show your hardware.
 - **No more cut words or stranded vowel marks.** Shortened Arabic and translations, in the shell and on desktop widgets, now end after a whole word, and a letter never loses its tashkeel where a line is cut. The Qur'an's desktop widget always gets the ayah of the day whole.
+- **The password field holds still while you type.** On the lock screen every new character re-centred the whole row, so all the dots slid sideways with each key press; on Mandara Login the same happened in right-to-left languages, and long passwords hid their newest characters. Symbols now start from a fixed edge and keep their places as you type or delete, and a full field scrolls by one so the newest one stays in view, in every language and at fractional scales.
 
 ### Under the hood
 
