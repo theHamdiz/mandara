@@ -2869,7 +2869,7 @@
 "Left-handed" = "Thuận tay trái"
 "Let apps choose" = "Để ứng dụng tự chọn"
 "Letting go of Alt switches; off, Enter or a click does" = "Thả Alt thì chuyển; khi off thì Enter hoặc một nhấp mới chuyển"
-"Letting go of a region drag captures (no annotating)" = "Thả tay khi kéo vùng thì chụp luôn (không chú thích)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "Thả tay khi chọn vùng mới thì chụp luôn (đổi kích thước hay di chuyển thì không)"
 "Light & dark" = "Sáng và tối"
 "Light wallpaper" = "Hình nền sáng"
 "List" = "Danh sách"

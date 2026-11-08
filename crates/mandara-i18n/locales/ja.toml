@@ -2961,7 +2961,7 @@
 "Left-handed" = "左利き"
 "Let apps choose" = "アプリに任せる"
 "Letting go of Alt switches; off, Enter or a click does" = "Alt を離すと切り替え。オフの場合は Enter またはクリックで切り替え"
-"Letting go of a region drag captures (no annotating)" = "範囲をドラッグして離すとキャプチャ（注釈なし）"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "新しい範囲を離すとすぐキャプチャ（サイズ変更や移動ではキャプチャしません）"
 "Light & dark" = "ライトとダーク"
 "Light wallpaper" = "ライト用の壁紙"
 "List" = "リスト"

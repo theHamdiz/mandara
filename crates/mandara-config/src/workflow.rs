@@ -853,8 +853,9 @@ pub struct ScreenshotSettings {
     pub cursor: bool,
     /// Open the annotation editor after screen / window captures too.
     pub edit_after: bool,
-    /// Releasing a region drag captures at once (skips annotating; off:
-    /// Enter, Space or the toolbar captures).
+    /// Releasing a newly drawn region captures at once (skips annotating;
+    /// off: Enter, Space or the toolbar captures). Resizing or moving a
+    /// selection by its handles never captures.
     pub capture_on_release: bool,
     /// Start a new region selection where the last one was.
     pub remember_region: bool,

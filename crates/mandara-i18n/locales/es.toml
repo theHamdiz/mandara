@@ -2876,7 +2876,7 @@
 "Left-handed" = "Para zurdos"
 "Let apps choose" = "Dejar que elijan las apps"
 "Letting go of Alt switches; off, Enter or a click does" = "Soltar Alt cambia; si está desactivado, lo hace Enter o un clic"
-"Letting go of a region drag captures (no annotating)" = "Soltar un arrastre de región captura (sin anotar)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "Soltar una selección nueva la captura (cambiarla de tamaño o moverla, nunca)"
 "Light & dark" = "Claro y oscuro"
 "Light wallpaper" = "Fondo claro"
 "List" = "Lista"

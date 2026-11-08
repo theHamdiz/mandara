@@ -2869,7 +2869,7 @@
 "Left-handed" = "Mkono wa kushoto"
 "Let apps choose" = "Acha programu zichague"
 "Letting go of Alt switches; off, Enter or a click does" = "Kuachia Alt hubadili; off, Enter au bofya hufanya hivyo"
-"Letting go of a region drag captures (no annotating)" = "Kuachia kuburuta eneo hunasa (bila kuchora)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "Kuachia uteuzi mpya huunasa (kubadilisha ukubwa au kuusogeza hakunasi kamwe)"
 "Light & dark" = "Mwanga na giza"
 "Light wallpaper" = "Pazia la mwanga"
 "List" = "Orodha"

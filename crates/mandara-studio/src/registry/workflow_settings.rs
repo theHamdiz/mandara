@@ -243,7 +243,7 @@ pub fn entries() -> Vec<Setting> {
         shot("/plugins/settings/screenshot/quality", tk("JPEG quality"), tk("Higher is sharper and larger"), slider(40.0, 100.0, 1.0, ""), Value::from(90)),
         shot("/plugins/settings/screenshot/cursor", tk("Include the pointer"), tk("Paint the mouse pointer into captures"), Toggle, Value::from(false)),
         shot("/plugins/settings/screenshot/edit_after", tk("Edit window and screen captures"), tk("Open the annotation editor instead of saving at once"), Toggle, Value::from(false)),
-        shot("/plugins/settings/screenshot/capture_on_release", tk("Capture on release"), tk("Letting go of a region drag captures (no annotating)"), Toggle, Value::from(false)),
+        shot("/plugins/settings/screenshot/capture_on_release", tk("Capture on release"), tk("Letting go of a new selection captures it (resizing or moving one never does)"), Toggle, Value::from(false)),
         shot("/plugins/settings/screenshot/remember_region", tk("Remember the region"), tk("Start where the last region was"), Toggle, Value::from(false)),
         shot("/plugins/settings/screenshot/dim", tk("Dim while selecting"), tk("Darkness around the selection"), slider(0.0, 0.8, 0.05, ""), Value::from(0.45)),
         shot("/plugins/settings/screenshot/border", tk("Selection outline"), tk("Outline width"), slider(1.0, 6.0, 0.5, " px"), Value::from(2)),

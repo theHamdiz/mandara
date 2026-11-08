@@ -3110,7 +3110,7 @@ Letters to Lucilius, 1
 Letters to Lucilius, 13
 Letters, digits, - and _; used for the home folder
 Letting go of Alt switches; off, Enter or a click does
-Letting go of a region drag captures (no annotating)
+Letting go of a new selection captures it (resizing or moving one never does)
 Levels
 Lewis Carroll
 Libraries & fonts (shared files)

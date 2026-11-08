@@ -2876,7 +2876,7 @@
 "Left-handed" = "Linkshändig"
 "Let apps choose" = "Apps entscheiden lassen"
 "Letting go of Alt switches; off, Enter or a click does" = "Loslassen von Alt wechselt; bei aus tut es Enter oder ein Klick"
-"Letting go of a region drag captures (no annotating)" = "Loslassen nach dem Aufziehen eines Bereichs nimmt auf (ohne Beschriften)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "Loslassen einer neuen Auswahl nimmt sie auf (Größe ändern oder Verschieben nie)"
 "Light & dark" = "Hell & dunkel"
 "Light wallpaper" = "Heller Hintergrund"
 "List" = "Liste"

@@ -2876,7 +2876,7 @@
 "Left-handed" = "Для левши"
 "Let apps choose" = "Пусть решают приложения"
 "Letting go of Alt switches; off, Enter or a click does" = "Отпускание Alt переключает; если выключено — Enter или щелчок"
-"Letting go of a region drag captures (no annotating)" = "Отпускание выделения области сразу делает снимок (без пометок)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "Отпускание новой области сразу делает снимок (изменение размера или перемещение — никогда)"
 "Light & dark" = "Светлая и тёмная"
 "Light wallpaper" = "Светлые обои"
 "List" = "Список"

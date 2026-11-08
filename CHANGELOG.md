@@ -14,6 +14,7 @@ About → What's new shows it too.
 
 ### Fixed
 
+- **You can resize and move a screenshot selection.** In the screenshot tool, drag a corner or edge handle to resize the area you picked, or drag inside it to move it; only a press outside starts a new selection, and a stray click no longer throws your selection (and its annotations) away. The handles are easy to catch with the mouse or a finger, the pointer changes to show what a drag will do, and the selection stays on the screen. With "Capture on release" on, only letting go of a new selection captures; resizing or moving one never does. While an arrow, box or circle tool is active the handles hide and dragging draws, as before.
 - **Touchscreen taps now work in the shell and Studio.** Tapping a bar item, a panel control or anything in Studio, including its close button, works like a click. Swiping scrolls lists and pages, and a finger on a slider drags it. Your mouse keeps working exactly as before. (#130)
 - **The launcher follows search settings while it's open.** Turning a search provider on or off, or changing its prefix, in Studio or the config file now applies to an open launcher straight away. A Beacon mode whose provider you switch off closes back to plain search instead of staying stuck. (#111)
 - **Your theme's name is translated even when typed by hand.** Studio's current-theme heading now shows the translated name when the config names a built-in theme in another spelling, such as `Rosé Pine` or `tokyo_night`. Your own themes keep the titles you gave them. (#111)

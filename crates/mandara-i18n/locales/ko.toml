@@ -2495,7 +2495,7 @@
 "Letter spacing" = "자간"
 "Letters, digits, - and _; used for the home folder" = "문자, 숫자, -, _만 사용 가능. 홈 폴더 이름으로 쓰입니다"
 "Letting go of Alt switches; off, Enter or a click does" = "Alt를 떼면 전환합니다. 끄면 Enter나 클릭으로 전환합니다"
-"Letting go of a region drag captures (no annotating)" = "영역 드래그를 놓으면 바로 캡처(주석 없음)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "새 영역을 놓으면 바로 캡처(크기 조절이나 이동으로는 캡처하지 않음)"
 "Libraries & fonts (shared files)" = "라이브러리 및 글꼴(공유 파일)"
 "Light" = "라이트"
 "Light & dark" = "라이트 및 다크"

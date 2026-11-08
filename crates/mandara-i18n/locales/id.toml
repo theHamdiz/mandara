@@ -2495,7 +2495,7 @@
 "Letter spacing" = "Jarak huruf"
 "Letters, digits, - and _; used for the home folder" = "Huruf, angka, - dan _; dipakai untuk folder rumah"
 "Letting go of Alt switches; off, Enter or a click does" = "Melepas Alt akan beralih; jika nonaktif, Enter atau klik yang beralih"
-"Letting go of a region drag captures (no annotating)" = "Melepas seretan area langsung menangkap (tanpa anotasi)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "Melepas pilihan baru langsung menangkapnya (mengubah ukuran atau memindahkannya tidak pernah)"
 "Libraries & fonts (shared files)" = "Pustaka & font (file bersama)"
 "Light" = "Terang"
 "Light & dark" = "Terang & gelap"

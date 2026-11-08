@@ -2877,7 +2877,7 @@
 "Left-handed" = "Solak"
 "Let apps choose" = "Uygulamalar seçsin"
 "Letting go of Alt switches; off, Enter or a click does" = "Alt'ı bırakmak geçiş yapar; kapalıyken Enter veya tıklama yapar"
-"Letting go of a region drag captures (no annotating)" = "Bölge sürüklemesini bırakmak yakalar (işaretleme yok)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "Yeni bir seçimi bırakmak onu yakalar (boyutlandırmak veya taşımak asla yakalamaz)"
 "Light & dark" = "Açık ve koyu"
 "Light wallpaper" = "Açık duvar kağıdı"
 "List" = "Liste"

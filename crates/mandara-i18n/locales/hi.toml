@@ -2962,7 +2962,7 @@
 "Left-handed" = "बाएं हाथ के लिए"
 "Let apps choose" = "ऐप्स को चुनने दें"
 "Letting go of Alt switches; off, Enter or a click does" = "Alt छोड़ने पर स्विच होता है; बंद होने पर Enter या क्लिक से"
-"Letting go of a region drag captures (no annotating)" = "क्षेत्र का ड्रैग छोड़ते ही कैप्चर होता है (बिना एनोटेशन)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "नया चयन छोड़ते ही कैप्चर होता है (आकार बदलने या खिसकाने पर कभी नहीं)"
 "Light & dark" = "लाइट और डार्क"
 "Light wallpaper" = "लाइट वॉलपेपर"
 "List" = "सूची"

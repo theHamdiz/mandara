@@ -2495,7 +2495,7 @@
 "Letter spacing" = "অক্ষরের ব্যবধান"
 "Letters, digits, - and _; used for the home folder" = "অক্ষর, অঙ্ক, - এবং _; হোম ফোল্ডারের জন্য ব্যবহৃত হয়"
 "Letting go of Alt switches; off, Enter or a click does" = "Alt ছেড়ে দিলে স্যুইচ হয়; বন্ধ থাকলে Enter বা ক্লিকে স্যুইচ হয়"
-"Letting go of a region drag captures (no annotating)" = "অংশ টেনে ছেড়ে দিলেই ক্যাপচার হয় (কোনো টীকা ছাড়া)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "নতুন নির্বাচন ছেড়ে দিলেই ক্যাপচার হয় (আকার বদলানো বা সরানো কখনো ক্যাপচার করে না)"
 "Libraries & fonts (shared files)" = "লাইব্রেরি ও ফন্ট (শেয়ার করা ফাইল)"
 "Light" = "লাইট"
 "Light & dark" = "লাইট ও ডার্ক"

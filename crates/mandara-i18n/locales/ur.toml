@@ -2495,7 +2495,7 @@
 "Letter spacing" = "حروف کا درمیانی فاصلہ"
 "Letters, digits, - and _; used for the home folder" = "حروف، ہندسے، - اور _؛ ہوم فولڈر کے لیے استعمال ہوتا ہے"
 "Letting go of Alt switches; off, Enter or a click does" = "Alt چھوڑنے سے سوئچ ہوتا ہے؛ آف ہو تو Enter یا کلک سے"
-"Letting go of a region drag captures (no annotating)" = "حصہ کھینچ کر چھوڑنے سے کیپچر ہوتا ہے (نشانات کے بغیر)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "نیا انتخاب چھوڑنے سے کیپچر ہوتا ہے (سائز بدلنے یا ہلانے سے کبھی نہیں)"
 "Libraries & fonts (shared files)" = "لائبریریز اور فونٹس (مشترکہ فائلیں)"
 "Light" = "لائٹ"
 "Light & dark" = "لائٹ اور ڈارک"

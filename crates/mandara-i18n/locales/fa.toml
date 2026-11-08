@@ -2495,7 +2495,7 @@
 "Letter spacing" = "فاصلهٔ حروف"
 "Letters, digits, - and _; used for the home folder" = "حروف، ارقام، - و _؛ برای پوشهٔ خانگی استفاده می‌شود"
 "Letting go of Alt switches; off, Enter or a click does" = "رها کردن Alt جابه‌جا می‌کند؛ در حالت خاموش، Enter یا یک کلیک این کار را می‌کند"
-"Letting go of a region drag captures (no annotating)" = "رها کردن کشیدن ناحیه، تصویر را می‌گیرد (بدون حاشیه‌نویسی)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "رها کردن یک انتخاب تازه آن را می‌گیرد (تغییر اندازه یا جابه‌جایی هرگز)"
 "Libraries & fonts (shared files)" = "کتابخانه‌ها و قلم‌ها (فایل‌های مشترک)"
 "Light" = "روشن"
 "Light & dark" = "روشن و تیره"

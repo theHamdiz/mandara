@@ -2885,7 +2885,7 @@
 "Left-handed" = "للأعسر"
 "Let apps choose" = "ترك الاختيار للتطبيقات"
 "Letting go of Alt switches; off, Enter or a click does" = "إفلات Alt يبدّل؛ وعند الإيقاف يبدّل Enter أو النقر"
-"Letting go of a region drag captures (no annotating)" = "إفلات سحب المنطقة يلتقط (دون تعليقات)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "إفلات تحديد جديد يلتقطه فورًا (تغيير حجم التحديد أو تحريكه لا يلتقط أبدًا)"
 "Light & dark" = "فاتح وداكن"
 "Light wallpaper" = "خلفية فاتحة"
 "List" = "قائمة"

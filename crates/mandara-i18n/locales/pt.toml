@@ -2869,7 +2869,7 @@
 "Left-handed" = "Canhoto"
 "Let apps choose" = "Deixar os apps escolherem"
 "Letting go of Alt switches; off, Enter or a click does" = "Soltar Alt troca; desligado, Enter ou um clique faz isso"
-"Letting go of a region drag captures (no annotating)" = "Soltar o arraste da região captura (sem anotar)"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "Soltar uma nova seleção a captura (redimensionar ou mover nunca captura)"
 "Light & dark" = "Claro e escuro"
 "Light wallpaper" = "Papel de parede claro"
 "List" = "Lista"

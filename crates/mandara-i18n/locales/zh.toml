@@ -2959,7 +2959,7 @@
 "Left-handed" = "左手模式"
 "Let apps choose" = "由应用决定"
 "Letting go of Alt switches; off, Enter or a click does" = "松开 Alt 即切换；关闭时需按 Enter 或点击"
-"Letting go of a region drag captures (no annotating)" = "松开区域拖选即截图（不进行标注）"
+"Letting go of a new selection captures it (resizing or moving one never does)" = "松开新的选区即截图（调整大小或移动选区不会截图）"
 "Light & dark" = "浅色与深色"
 "Light wallpaper" = "浅色壁纸"
 "List" = "列表"
