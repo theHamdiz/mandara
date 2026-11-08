@@ -4,7 +4,9 @@ Mandara Studio (`mandara studio`, app id `org.mandara.studio`) is the one
 place where Mandara is configured. It runs as its own process, so its CPU and
 memory never count against the shell, and every change is mirrored to the
 running shell over IPC: drag a slider and the bar follows on the very next frame.
-Settings never live in bar dropdowns.
+Settings never live in bar dropdowns. Pages decode their pictures (plugin
+covers and icons, the login-screen preview, cursor previews) at the size they
+are drawn and hand them back, textures included, when you leave the page.
 
 Studio draws its own title bar. If KWin requires native window
 decorations, Studio uses those controls so there is only one set of buttons.

@@ -739,6 +739,18 @@ impl GreeterView {
         }
     }
 
+    /// Every picture a preview drew (backdrop, widgets, avatars, the shared
+    /// grain), for its host to drop from the atlas right before it drops
+    /// the view (avatars are not loaded again).
+    pub fn take_images(&mut self) -> Vec<Arc<RenderImage>> {
+        let mut images = self.background.take_images();
+        self.widgets.clear();
+        images.extend(self.widgets.take_trash());
+        images.extend(self.users.iter_mut().filter_map(|u| u.avatar.take()));
+        images.extend(crate::background::take_grain());
+        images
+    }
+
     pub fn set_preview_idle(&mut self, idle: bool, cx: &mut Context<Self>) {
         self.preview_idle = idle;
         cx.notify();

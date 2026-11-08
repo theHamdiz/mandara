@@ -345,16 +345,16 @@ impl StudioView {
     /// an item inserts before it); click for the plugin menu.
     fn zone_item(&self, id: &str, lane: Lane, index: usize, len: usize, scale: f32, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let registry = cx.global::<PluginRegistry>();
-        let manifest = registry.manifests().find(|m| m.id == id).cloned();
-        let name = manifest.as_ref().map(|m| m.display_name()).unwrap_or_else(|| id.to_string());
         let enabled = {
             let cfg = mandara_ui::state::config(cx).read(cx).snapshot();
-            cx.global::<PluginRegistry>().is_enabled(id, &cfg.plugins)
+            registry.is_enabled(id, &cfg.plugins)
         };
+        let manifest = registry.manifest(id);
+        let name = manifest.map_or_else(|| id.to_string(), |m| m.display_name());
         let ic = plugin_icon(id);
         let drag = DragChip { id: id.to_string(), from: lane, label: name.clone().into(), icon: ic, bg: p.primary, fg: p.on_primary };
         let (id_rm, id_drop, id_menu, name_menu) = (id.to_string(), id.to_string(), id.to_string(), name.clone());
-        let tile = match &manifest {
+        let tile = match manifest {
             Some(m) => plugin_tile(m, ZONE_TILE_PX, enabled, scale, p),
             None => div().size(px(ZONE_TILE_PX)).flex_none().row().items_center().justify_center().child(icon(ic, ICON_13_PX, p.on_surface_variant)).into_any_element(),
         };

@@ -328,7 +328,8 @@ impl StudioView {
         let have = self.wallpaper_seeds.as_ref().is_some_and(|(p, _)| p == path);
         if !have && self.seeds_loading.as_ref() != Some(path) {
             self.seeds_loading = Some(path.clone());
-            let job = path.clone();
+            // `~/…` is how configs often name it.
+            let job = mandara_config::paths::expand_tilde(&path.to_string_lossy());
             let done = path.clone();
             let task = cx.background_executor().spawn(async move {
                 let thumb = mandara_ui::wallpaper::thumbnail(&job).ok();
@@ -342,9 +343,10 @@ impl StudioView {
                     if let Some(thumb) = thumb {
                         this.wallpaper_thumb = Some((done.clone(), thumb));
                     }
-                    if let Ok(seeds) = result {
-                        this.wallpaper_seeds = Some((done, Rc::from(seeds)));
-                    }
+                    // A wallpaper without seeds (unreadable, or no colors to
+                    // take) is remembered too: asking again on every frame
+                    // kept Home and Themes redrawing at full rate forever.
+                    this.wallpaper_seeds = Some((done, result.map(Rc::from).unwrap_or_else(|_| Rc::from([]))));
                     cx.notify();
                 });
             })

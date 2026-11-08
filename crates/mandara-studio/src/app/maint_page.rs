@@ -187,7 +187,7 @@ impl StudioView {
         // Pointless without a compositor; skip checks that can't be fixed here.
         for id in broken {
             if id == CheckId::Icons { continue; }
-            if matches!(id, CheckId::CompositorInclude | CheckId::CompositorDropIn | CheckId::CompositorConflicts) && mandara_compositor::detect().is_none() {
+            if matches!(id, CheckId::CompositorInclude | CheckId::CompositorDropIn | CheckId::CompositorConflicts) && mandara_compositor::detected().is_none() {
                 continue;
             }
             self.maint_fix(id, cx);
@@ -291,7 +291,7 @@ impl StudioView {
         // ── Overview ──────────────────────────────────────────────────────
         let missing_models = models::MODELS.iter().filter(|m| !m.on_demand && !m.installed()).count();
         let issues = self.maint.results.values().filter(|h| !h.is_ok()).count() + missing_models;
-        let can_repair = self.maint.can_repair(mandara_compositor::detect().is_some(), missing_models > 0);
+        let can_repair = self.maint.can_repair(mandara_compositor::detected().is_some(), missing_models > 0);
         let all_good = !self.maint.results.is_empty() && issues == 0;
         let hero = card()
             .flex_row()
@@ -347,7 +347,7 @@ impl StudioView {
         for id in CheckId::ALL {
             let h = self.maint.results.get(&id).cloned();
             let key = format!("check:{id:?}");
-            let fixable = h.as_ref().is_some_and(|h| !h.is_ok()) && !(matches!(id, CheckId::CompositorInclude | CheckId::CompositorDropIn | CheckId::CompositorConflicts) && mandara_compositor::detect().is_none());
+            let fixable = h.as_ref().is_some_and(|h| !h.is_ok()) && !(matches!(id, CheckId::CompositorInclude | CheckId::CompositorDropIn | CheckId::CompositorConflicts) && mandara_compositor::detected().is_none());
             checks = checks.child(
                 div()
                     .row()

@@ -227,6 +227,25 @@ struct Covers {
 }
 
 impl Covers {
+    /// Stores a finished decode in its slot, then trims to the budget;
+    /// returns the view to repaint and the evicted covers for the atlas. A
+    /// slot that is gone (evicted, or the pages were left) drops the result.
+    fn landed(&mut self, key: &CoverKey, image: Option<Arc<RenderImage>>) -> (Option<WeakEntity<StudioView>>, Vec<Arc<RenderImage>>) {
+        if let Some(slot) = self.slots.get_mut(key) {
+            let bytes = image.as_ref().map_or(0, |i| {
+                let size = i.size(0);
+                size.width.0.max(0) as usize * size.height.0.max(0) as usize * BGRA_BYTES
+            });
+            slot.bytes = bytes;
+            slot.state = match image {
+                Some(i) => CoverState::Ready(i),
+                None => CoverState::Missing,
+            };
+            self.bytes += bytes;
+        }
+        (self.view.clone(), self.evict())
+    }
+
     /// Drops the least recently shown covers until the cache fits its
     /// budget (never one shown this frame); returns them for the atlas.
     fn evict(&mut self) -> Vec<Arc<RenderImage>> {
@@ -260,6 +279,25 @@ pub(super) fn covers_begin(view: WeakEntity<StudioView>) {
         c.tick += 1;
         c.view = Some(view);
     });
+}
+
+/// Leaving the plugin pages: every decoded cover leaves the cache and the
+/// atlas (call it outside window updates), with the cache's spare capacity.
+/// A decode still running finds its slot gone and drops its picture; the
+/// next visit decodes what it shows again.
+pub(super) fn covers_release(cx: &mut App) {
+    for image in take_covers() {
+        cx.drop_image(image, None);
+    }
+}
+
+/// Empties the cover cache, handing over its decoded covers.
+fn take_covers() -> impl Iterator<Item = Arc<RenderImage>> {
+    let covers = COVERS.with(|c| std::mem::take(&mut *c.borrow_mut()));
+    covers.slots.into_values().filter_map(|slot| match slot.state {
+        CoverState::Ready(image) => Some(image),
+        CoverState::Loading | CoverState::Missing => None,
+    })
 }
 
 /// A plugin's cover, when it has one.
@@ -336,25 +374,7 @@ fn want_cover(key: CoverKey, bounds: Bounds<Pixels>, window: &mut Window, cx: &m
     });
     cx.spawn(async move |cx| {
         let image = task.await;
-        let (view, evicted) = COVERS.with(|c| {
-            let mut c = c.borrow_mut();
-            // The slot may be gone (evicted while decoding): drop the result.
-            if c.slots.contains_key(&key) {
-                let bytes = image.as_ref().map_or(0, |i| {
-                    let size = i.size(0);
-                    size.width.0.max(0) as usize * size.height.0.max(0) as usize * BGRA_BYTES
-                });
-                c.bytes += bytes;
-                if let Some(slot) = c.slots.get_mut(&key) {
-                    slot.bytes = bytes;
-                    slot.state = match image {
-                        Some(i) => CoverState::Ready(i),
-                        None => CoverState::Missing,
-                    };
-                }
-            }
-            (c.view.clone(), c.evict())
-        });
+        let (view, evicted) = COVERS.with(|c| c.borrow_mut().landed(&key, image));
         cx.update(|cx| {
             for image in evicted {
                 cx.drop_image(image, None);
@@ -1913,6 +1933,35 @@ const HERO_TITLE_LEADING: f32 = 1.15;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn cover_image(side: u32) -> Arc<RenderImage> {
+        Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(image::RgbaImage::new(side, side))]))
+    }
+
+    /// Leaving the plugin pages empties the cover cache; a decode that lands
+    /// afterwards is dropped instead of refilling it.
+    #[test]
+    fn released_covers_stay_released() {
+        let key = |id: &str| CoverKey { art: Art::Builtin(id.into()), w: 64, h: 36 };
+        COVERS.with(|c| {
+            let mut c = c.borrow_mut();
+            c.slots.insert(key("shown"), CoverSlot { state: CoverState::Loading, used: 0, bytes: 0 });
+            c.slots.insert(key("pending"), CoverSlot { state: CoverState::Loading, used: 0, bytes: 0 });
+        });
+        let (_, evicted) = COVERS.with(|c| c.borrow_mut().landed(&key("shown"), Some(cover_image(4))));
+        assert!(evicted.is_empty());
+        assert_eq!(COVERS.with(|c| c.borrow().bytes), 4 * 4 * BGRA_BYTES);
+
+        let released: Vec<_> = take_covers().collect();
+        assert_eq!(released.len(), 1, "the decoded cover goes to the atlas release");
+        COVERS.with(|c| {
+            let c = c.borrow();
+            assert!(c.slots.is_empty() && c.slots.capacity() == 0 && c.bytes == 0);
+        });
+        let (view, evicted) = COVERS.with(|c| c.borrow_mut().landed(&key("pending"), Some(cover_image(4))));
+        assert!(view.is_none() && evicted.is_empty());
+        assert!(COVERS.with(|c| c.borrow().slots.is_empty()), "a late decode doesn't refill the cache");
+    }
 
     #[test]
     fn every_category_lands_on_a_shelf() {

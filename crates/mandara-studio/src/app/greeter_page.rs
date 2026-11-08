@@ -229,7 +229,12 @@ pub(super) fn release(cx: &mut gpui::App) {
         let page = h.0.read(cx);
         page.applying || page.dirty || page.manager.busy()
     });
-    if !busy && cx.has_global::<PageHandle>() {
+    if !busy && let Some(handle) = cx.try_global::<PageHandle>().map(|h| h.0.clone()) {
+        // Its pictures leave the atlas too (called outside window updates).
+        let preview = handle.read(cx).preview.clone();
+        for image in preview.update(cx, |view, _| view.take_images()) {
+            cx.drop_image(image, None);
+        }
         cx.remove_global::<PageHandle>();
     }
 }

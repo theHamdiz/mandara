@@ -3346,7 +3346,11 @@ pub(crate) fn decode_static_image_from_decoder(
         pixel.swap(0, 2);
     }
 
-    Ok(SmallVec::from_elem(Frame::new(data), 1))
+    // Mandara patch 8: move the one frame in. `SmallVec::from_elem` clones
+    // its element, so every decode briefly held two full-size copies.
+    let mut frames = SmallVec::new();
+    frames.push(Frame::new(data));
+    Ok(frames)
 }
 
 impl Hash for Image {

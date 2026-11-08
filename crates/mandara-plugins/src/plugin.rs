@@ -507,6 +507,9 @@ impl std::fmt::Debug for DesktopWidgetType {
 #[derive(Default)]
 pub struct PluginRegistry {
     factories: Vec<PluginFactory>,
+    /// Each plugin id's position in `factories`, rebuilt on (un)registration
+    /// so lookups by id don't scan every plugin on every frame.
+    by_id: std::collections::HashMap<Box<str>, usize>,
     pub commands: CommandRegistry,
     /// Bumped on every (re)registration or removal.
     pub generation: u64,
@@ -528,6 +531,13 @@ impl PluginRegistry {
         self.widgets.retain(|w| w.plugin != manifest.id);
         self.generation += 1;
         self.factories.push(PluginFactory { manifest, build: Rc::new(build), generation: self.generation });
+        self.reindex();
+    }
+
+    /// Rebuilds the id index after `factories` changed.
+    fn reindex(&mut self) {
+        self.by_id.clear();
+        self.by_id.extend(self.factories.iter().enumerate().map(|(i, f)| (f.manifest.id.as_str().into(), i)));
     }
 
     /// Removes a plugin (hot unload) and the desktop widgets it offered.
@@ -539,6 +549,7 @@ impl PluginRegistry {
         let removed = self.factories.len() != before;
         if removed {
             self.generation += 1;
+            self.reindex();
         }
         removed
     }
@@ -562,7 +573,9 @@ impl PluginRegistry {
 
     /// The desktop widget kind with `key` (`plugin/id`).
     pub fn desktop_widget_type(&self, key: &str) -> Option<&DesktopWidgetType> {
-        self.widgets.iter().find(|w| w.key() == key)
+        // Compares the parts instead of formatting every widget's key.
+        let (plugin, id) = key.split_once('/')?;
+        self.widgets.iter().find(|w| w.plugin == plugin && w.id == id)
     }
 
     /// The widgets `key` adds: a kind (`plugin/id`), or one style of a
@@ -581,7 +594,12 @@ impl PluginRegistry {
     }
 
     pub fn get(&self, id: &str) -> Option<&PluginFactory> {
-        self.factories.iter().find(|f| f.manifest.id == id)
+        self.by_id.get(id).map(|&i| &self.factories[i])
+    }
+
+    /// The manifest of plugin `id`, without scanning the registry.
+    pub fn manifest(&self, id: &str) -> Option<&PluginManifest> {
+        self.get(id).map(|f| &f.manifest)
     }
 
     pub fn manifests(&self) -> impl Iterator<Item = &PluginManifest> {

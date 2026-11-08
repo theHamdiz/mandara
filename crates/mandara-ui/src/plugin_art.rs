@@ -86,6 +86,26 @@ pub fn has_art(id: &str) -> bool {
 /// Bytes per decoded RGBA / BGRA pixel.
 const BGRA_CHANNELS: usize = 4;
 
+/// Releases the art handed out so far: each icon and cover decode and its
+/// texture (see `gpui::ImageSource::evict`) and the embedded bytes' copies.
+/// The next draw decodes again. Studio calls it, from `App::defer`, when it
+/// leaves the pages that show plugin art.
+pub fn release(cx: &mut gpui::App) {
+    for image in take_handed_out() {
+        gpui::ImageSource::Image(image).evict(cx);
+    }
+}
+
+/// Empties the cache of handed-out art (capacity included).
+fn take_handed_out() -> impl Iterator<Item = Arc<Image>> {
+    CACHE.with(|c| std::mem::take(&mut *c.borrow_mut())).into_values()
+}
+
+/// Releases the brand icon's decode and texture (its 256 px source stays).
+pub fn release_brand(cx: &mut gpui::App) {
+    gpui::ImageSource::Image(brand_icon()).evict(cx);
+}
+
 /// Built-in `id`'s cover cropped to fill `w × h` pixels, ready to draw
 /// (BGRA): decoded at the size it is shown, never upscaled past the
 /// source (a larger box keeps the aspect at the source's resolution).
@@ -106,7 +126,8 @@ fn fill(picture: image::DynamicImage, w: u32, h: u32) -> Arc<RenderImage> {
     // Never upscale: shrink the box until it fits inside the source.
     let k = (picture.width() as f32 / w as f32).min(picture.height() as f32 / h as f32).min(1.0);
     let (w, h) = (((w as f32 * k).round() as u32).max(1), ((h as f32 * k).round() as u32).max(1));
-    let mut rgba = picture.resize_to_fill(w, h, image::imageops::FilterType::Triangle).into_rgba8();
+    // Cropped and shrunk in place: no float copy of the whole cover.
+    let mut rgba = crate::wallpaper::cover(&picture, w, h).into_rgba8();
     drop(picture);
     for px in rgba.as_chunks_mut::<BGRA_CHANNELS>().0 {
         px.swap(0, 2);
@@ -160,6 +181,20 @@ mod tests {
         assert!(Arc::ptr_eq(&a, &b));
         assert!(!Arc::ptr_eq(&icon("weather", 1.0).unwrap(), &icon("weather", 2.0).unwrap()));
         assert!(icon("no-such-plugin", 1.0).is_none());
+    }
+
+    /// Releasing hands every cached image over (for eviction) and frees the
+    /// table; the next use wraps the bytes afresh, with the same GPUI id.
+    #[test]
+    fn released_art_is_handed_over_and_rebuilt_on_use() {
+        let before = icon("weather", 1.0).unwrap();
+        let _ = cover("weather").unwrap();
+        let taken: Vec<_> = take_handed_out().collect();
+        assert!(taken.len() >= 2 && taken.iter().any(|i| Arc::ptr_eq(i, &before)));
+        assert!(CACHE.with(|c| c.borrow().is_empty() && c.borrow().capacity() == 0));
+        let after = icon("weather", 1.0).unwrap();
+        assert!(!Arc::ptr_eq(&before, &after));
+        assert_eq!(before.id(), after.id(), "same bytes, same decode key");
     }
 
     #[test]

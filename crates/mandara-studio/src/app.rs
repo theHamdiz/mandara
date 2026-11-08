@@ -94,6 +94,12 @@ use crate::registry::{self, Control, Section, Setting};
 use crate::text_field::TextField;
 use crate::tokens::*;
 
+/// Pages that draw built-in plugins' artwork (tiles, the bar designer's
+/// pool); leaving the last of them releases it.
+fn shows_plugin_art(section: Section) -> bool {
+    matches!(section, Section::Plugins | Section::Bars)
+}
+
 /// Drags the window: the compositor's own grab where the standard
 /// `xdg_toplevel.move` is ignored (MangoWM), the standard request otherwise.
 /// Not for a touchscreen tap: GPUI delivers its press only once the finger
@@ -262,16 +268,32 @@ impl StudioView {
             // The recorder's device and display lists are read afresh.
             self.recorder_row.new_visit();
             plugin_art_cache_clear();
-            if self.section == Section::LoginScreen {
-                greeter_page::release(cx);
-            }
-            if self.section == Section::Themes {
-                cursor_page::release(cx);
-            }
-            if self.section == Section::Wallpaper {
-                wallgen_page::release(cx);
-                wallpaper_page::release(cx);
-            }
+            let leaving = self.section;
+            let modal = self.modal.showing();
+            let covers = leaving == Section::Plugins && !modal;
+            let art = shows_plugin_art(leaving) && !shows_plugin_art(section) && !modal;
+            // Deferred past this window update, so the pictures leave
+            // Studio's own atlas too (an updating window is out of reach).
+            cx.defer(move |cx| {
+                match leaving {
+                    Section::LoginScreen => greeter_page::release(cx),
+                    Section::Themes => cursor_page::release(cx),
+                    Section::Wallpaper => {
+                        wallgen_page::release(cx);
+                        wallpaper_page::release(cx);
+                    }
+                    Section::About => mandara_ui::plugin_art::release_brand(cx),
+                    _ => {}
+                }
+                if covers {
+                    store_page::covers_release(cx);
+                }
+                if art {
+                    mandara_ui::plugin_art::release(cx);
+                }
+                // Freed pages go back to the system, off the UI thread.
+                mandara_services::memory::request_trim();
+            });
         }
         self.section = section;
         self.query.clear();
@@ -793,7 +815,7 @@ impl StudioView {
     /// conflict detection, actions and quick-add suggestions.
     fn shortcuts(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         use mandara_config::compositor::{BindAction, Keybind, Target, existing_chords};
-        let target: Option<Target> = mandara_compositor::detect().map(mandara_compositor::CompositorKind::target);
+        let target: Option<Target> = mandara_compositor::detected().map(mandara_compositor::CompositorKind::target);
         let _ = existing_chords;
         let taken = keybind_conflicts::user_binds(target, &cfg.compositor, cx);
         let binds = &cfg.compositor.keybinds;
@@ -1525,7 +1547,7 @@ impl StudioView {
         let registry = cx.global::<PluginRegistry>();
         let commands = registry.commands.all().len();
         let first_party = registry.manifests().filter(|m| m.origin == PluginOrigin::Builtin && !HIDDEN_PLUGINS.contains(&m.id.as_str())).count();
-        let compositor = mandara_compositor::detect().map(|k| format!("{k:?}")).unwrap_or_else(|| t("none").into());
+        let compositor = mandara_compositor::detected().map(|k| format!("{k:?}")).unwrap_or_else(|| t("none").into());
         let fonts = mandara_ui::fonts::fonts(cx);
         let link = |id: &'static str, glyph: &'static str, label: SharedString, url: &'static str| {
             div()
@@ -1727,7 +1749,8 @@ impl Render for StudioView {
         self.fold_keys.clear();
         let (title, body) = if !self.query.is_empty() {
             let q = self.query.clone();
-            let matches: Vec<&Setting> = registry::settings().iter().filter(|s| s.matches(&q)).collect();
+            let all = registry::settings();
+            let matches: Vec<&Setting> = registry::search(&q).iter().map(|&i| &all[usize::from(i)]).collect();
             // Pages whose name or topics match (VPN, autostart, cursor…),
             // including pages built from bespoke editors.
             let pages = form::page_matches(&q, &p, cx);
