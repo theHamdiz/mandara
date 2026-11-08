@@ -202,6 +202,11 @@ gpui_wgpu = { path = "vendor/gpui_wgpu" }
 # clips children to the rounded shape, and `.hover()` that repaints on pointer
 # motion without an `.id()`: vendor/gpui/MANDARA-PATCHES.md.
 gpui = { path = "vendor/gpui" }
+# GPUI's Linux platform with touchscreen input: the Wayland client asks the
+# seat for `wl_touch` and feeds GPUI's own touch recognizer, so taps click and
+# swipes scroll on the bar, panels and Studio (#130):
+# vendor/gpui_linux/MANDARA-PATCHES.md.
+gpui_linux = { path = "vendor/gpui_linux" }
 
 [profile.dev]
 # GPUI is painfully slow unoptimized; keep our code debuggable but deps fast.
