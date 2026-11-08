@@ -4426,6 +4426,7 @@ dependencies = [
  "tiny-skia",
  "toml 1.2.0+spec-1.1.0",
  "tracing",
+ "unicode-segmentation",
  "usvg",
  "zeroize",
 ]
