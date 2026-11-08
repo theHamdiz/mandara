@@ -494,6 +494,12 @@ pub(super) fn tracked(mut s: TextStyle, tracking: f32) -> TextStyle {
 /// longer than a line is cut), at most `max` lines, the last one ending in
 /// `…` when text was left over.
 pub fn wrap(text: &str, st: &TextStyle, width: f32, max: usize, m: &mut dyn Measure) -> Vec<String> {
+    wrap_cut(text, st, width, max, m).0
+}
+
+/// [`wrap`], and whether text was left out (the last line was cut short
+/// at a whole word with `…`).
+pub fn wrap_cut(text: &str, st: &TextStyle, width: f32, max: usize, m: &mut dyn Measure) -> (Vec<String>, bool) {
     let mut lines: Vec<String> = Vec::new();
     for para in text.lines() {
         let mut cur = String::new();
@@ -516,16 +522,41 @@ pub fn wrap(text: &str, st: &TextStyle, width: f32, max: usize, m: &mut dyn Meas
     while lines.last().is_some_and(String::is_empty) {
         lines.pop();
     }
-    if lines.len() > max {
+    let cut = lines.len() > max;
+    if cut {
         lines.truncate(max);
         if let Some(last) = lines.last_mut() {
-            *last = fit(&format!("{last} …"), st, width, m);
-            if !last.ends_with('…') {
-                last.push('…');
-            }
+            *last = ellipsize(last, st, width, m);
         }
     }
-    lines
+    (lines, cut)
+}
+
+const ELLIPSIS: char = '…';
+
+/// Trailing characters a cut line drops before its ellipsis.
+fn cut_trim(c: char) -> bool {
+    c.is_whitespace() || matches!(c, ',' | ';' | ':' | '.' | '،' | '؛' | '-' | '–' | '—')
+}
+
+/// `line`, ending in `…` within `width`: after its last whole word that
+/// leaves room (never inside a word); a single word too wide for that is
+/// cut between graphemes ([`fit`]).
+pub fn ellipsize(line: &str, st: &TextStyle, width: f32, m: &mut dyn Measure) -> String {
+    let mut ends: Vec<usize> = line.char_indices().filter(|(_, c)| *c == ' ').map(|(i, _)| i).collect();
+    ends.push(line.len());
+    for end in ends.into_iter().rev() {
+        let head = line[..end].trim_end_matches(cut_trim);
+        if head.is_empty() {
+            continue;
+        }
+        let cand = format!("{head}{ELLIPSIS}");
+        if m.measure(&cand, st).0 <= width {
+            return cand;
+        }
+    }
+    let cut = fit(line, st, width, m);
+    if cut.ends_with(ELLIPSIS) { cut } else { format!("{}{ELLIPSIS}", cut.trim_end_matches(cut_trim)) }
 }
 
 /// Whether `text` reads right to left: its first letter is Arabic,
@@ -534,19 +565,22 @@ pub fn reads_rtl(text: &str) -> Option<bool> {
     text.chars().find(|c| c.is_alphabetic()).map(|c| matches!(u32::from(c), 0x0590..=0x08FF | 0xFB1D..=0xFDFF | 0xFE70..=0xFEFF))
 }
 
-/// `text` cut (with `…`) to fit `width`.
+/// `text` cut (with `…`) to fit `width`, between graphemes: a letter never
+/// loses its marks.
 pub fn fit(text: &str, st: &TextStyle, width: f32, m: &mut dyn Measure) -> String {
+    use unicode_segmentation::UnicodeSegmentation as _;
     if m.measure(text, st).0 <= width {
         return text.to_string();
     }
-    let chars: Vec<char> = text.chars().collect();
-    let (mut lo, mut hi) = (0, chars.len());
+    let ends: Vec<usize> = text.grapheme_indices(true).map(|(i, g)| i + g.len()).collect();
+    let (mut lo, mut hi) = (0, ends.len());
+    let head = |n: usize| if n == 0 { "" } else { &text[..ends[n - 1]] };
     while lo < hi {
         let mid = (lo + hi).div_ceil(2);
-        let cand: String = chars[..mid].iter().collect::<String>() + "…";
+        let cand = format!("{}{ELLIPSIS}", head(mid));
         if m.measure(&cand, st).0 <= width { lo = mid } else { hi = mid - 1 }
     }
-    chars[..lo].iter().collect::<String>().trim_end().to_string() + "…"
+    format!("{}{ELLIPSIS}", head(lo).trim_end())
 }
 
 /// Upper-cases Latin text (scripts without case are unchanged).
@@ -1593,5 +1627,44 @@ pub(crate) mod tests {
         assert_eq!(waves.marks.len(), 3);
         let text = decoration(&Decoration { text: "المندرة".into(), ..Default::default() }, 1.0, true, 0.5, &mut Fixed);
         assert_eq!(text.marks.len(), 1);
+    }
+
+    /// One unit per character.
+    fn unit() -> TextStyle {
+        style(FontRole::default(), 1.0 / 0.6, face::REGULAR)
+    }
+
+    #[test]
+    fn a_cut_line_ends_on_a_whole_word() {
+        let text = "one two three four five six seven";
+        let (lines, cut) = wrap_cut(text, &unit(), 10.0, 2, &mut Fixed);
+        assert!(cut);
+        // "three four" fills the second line; its ellipsis needs room, so
+        // the whole word "four" goes, never a part of it.
+        assert_eq!(lines, ["one two", "three…"]);
+        let (lines, cut) = wrap_cut("one two", &unit(), 10.0, 2, &mut Fixed);
+        assert!(!cut && lines == ["one two"]);
+        // Separators before the ellipsis go.
+        assert_eq!(ellipsize("alpha, beta", &unit(), 7.0, &mut Fixed), "alpha…");
+    }
+
+    #[test]
+    fn voweled_arabic_keeps_letters_with_their_marks() {
+        let text = "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى";
+        let mark = |c: char| matches!(c, '\u{064B}'..='\u{065F}');
+        for width in 6..30 {
+            let (lines, _) = wrap_cut(text, &unit(), width as f32, 2, &mut Fixed);
+            for l in &lines {
+                let body = l.trim_end_matches('…');
+                let at = text.find(body).unwrap_or_else(|| panic!("width {width}: {l:?} is not the text's"));
+                // A cut never strands a mark from its letter.
+                assert!(!text[at + body.len()..].starts_with(mark), "width {width}: {l:?}");
+            }
+        }
+        // A single word too wide is cut between graphemes.
+        let word = "بِالنِّيَّاتِ";
+        let one = fit(word, &unit(), 5.0, &mut Fixed);
+        assert!(one.ends_with('…'));
+        assert!(!word[one.trim_end_matches('…').len()..].starts_with(mark), "{one:?}");
     }
 }

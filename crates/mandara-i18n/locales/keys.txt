@@ -4286,6 +4286,7 @@ Open in Files
 Open in Mandara Studio
 Open in Studio
 Open in editor
+Open in the reader
 Open notes as preview
 Open on hover
 Open or close the main menu

@@ -59,6 +59,8 @@ pub mod soundscapes;
 pub mod hadith;
 pub mod jannah;
 pub mod quran;
+/// Folded reading text for the Jannah, Qur'an and Hadith surfaces.
+pub(crate) mod reading;
 pub mod system_admin;
 pub mod ports;
 pub mod git_repos;

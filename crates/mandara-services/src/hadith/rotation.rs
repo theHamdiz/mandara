@@ -36,14 +36,17 @@ pub fn pool(libs: &[(Collection, &Library)]) -> Vec<(Collection, u32)> {
     libs.into_iter().flat_map(|(c, l)| eligible(l).into_iter().map(move |i| (*c, i))).collect()
 }
 
-/// The place in a pool of `n` for `slot` (a period).
+/// The place in a pool of `n` for `slot` (a period). Consecutive slots
+/// never show the same hadith, not even where one round of the order ends
+/// and the next begins ([`crate::jannah::rotation::round_order`]).
 pub fn pick(n: usize, slot: i64) -> Option<usize> {
-    if n == 0 {
-        return None;
-    }
-    let len = n as i64;
-    let order = crate::jannah::rotation::order(n, SEED, slot.div_euclid(len));
-    order.get(slot.rem_euclid(len) as usize).copied()
+    crate::jannah::rotation::nth_index(n, SEED, slot)
+}
+
+/// Where `slot`'s hadith stands in the pool's current round: `(place,
+/// pool size)`.
+pub fn place(n: usize, slot: i64) -> Option<(usize, usize)> {
+    crate::jannah::rotation::round_place(n, slot)
 }
 
 /// What a cached "today" was picked from: the collections and the
@@ -70,6 +73,22 @@ mod tests {
         assert_eq!(pick(n, 5), pick(n, 5));
         assert_eq!(pick(0, 5), None);
         assert!(pick(n, -3).is_some());
+    }
+
+    #[test]
+    fn peeking_on_never_lands_on_the_hadith_just_shown() {
+        // Across several round boundaries, and for the tiniest pools.
+        for n in [1usize, 2, 3, 4, 37, 500] {
+            let len = n as i64;
+            let seq: Vec<usize> = (-2 * len - 3..3 * len + 3).filter_map(|s| pick(n, s)).collect();
+            if n > 1 {
+                assert!(seq.windows(2).all(|w| w[0] != w[1]), "n {n}");
+            } else {
+                assert!(seq.iter().all(|i| *i == 0));
+            }
+        }
+        assert_eq!(place(37, 37 * 9 + 4), Some((5, 37)));
+        assert_eq!(place(0, 1), None);
     }
 
     #[test]

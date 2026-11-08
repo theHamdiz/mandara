@@ -8867,3 +8867,6 @@
 "“{prefix}” actions" = "“{prefix}” 操作"
 "Keep the launcher in the Dock" = "在停靠栏中保留启动器"
 "Add the launcher" = "添加启动器"
+
+# Reading folds
+"Open in the reader" = "在阅读器中打开"

@@ -105,6 +105,9 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "chevron-right" => r#"<path d="M9 6l6 6-6 6"/>"#.into(),
         // Mirror of chevron-right for right-to-left layouts (`bidi::dir_icon`).
         "chevron-left" => r#"<path d="M15 6l-6 6 6 6"/>"#.into(),
+        // Read more / show less on folded reading cards.
+        "chevron-down" => r#"<path d="M6 9l6 6 6-6"/>"#.into(),
+        "chevron-up" => r#"<path d="M6 15l6-6 6 6"/>"#.into(),
         "refresh" => r#"<path d="M20.5 12a8.5 8.5 0 0 1-14.9 5.6M3.5 12A8.5 8.5 0 0 1 18.4 6.4"/><path d="M18.5 2.5v4h-4M5.5 21.5v-4h4"/>"#.into(),
         "translate" => r#"<path d="m5 8 6 6m-7 0 6-6 2-3M2 5h12M7 2h1m14 20-5-11-5 11m2-4h6"/>"#.into(),
         "lock-open" => r#"<rect x="4.5" y="10.5" width="15" height="10.5" rx="2.8"/><path d="M8 10.5V7a4 4 0 0 1 7.7-1.5"/>"#.into(),
@@ -220,7 +223,7 @@ pub const ICON_NAMES: &[&str] = &[
     "volume-high", "volume-low", "volume-mute", "volume-off", "mic", "mic-off", "power", "restart", "logout", "lock", "lock-open",
     "moon", "sun", "hibernate", "play", "pause", "next", "previous", "music", "cpu", "memory", "disk", "crescent",
     "calendar", "grid", "search", "bell", "coffee", "window", "sidebar", "headphones", "check", "chevron-right", "chevron-left",
-    "refresh", "translate", "camera", "clipboard", "crop", "monitor", "trash", "timer", "pin", "pin-off", "close", "plus", "note", "quote",
+    "chevron-down", "chevron-up", "refresh", "translate", "camera", "clipboard", "crop", "monitor", "trash", "timer", "pin", "pin-off", "close", "plus", "note", "quote",
     "list-check", "circle", "skip", "cloud", "cloud-sun", "cloud-moon", "rain", "snow", "fog", "bolt", "droplet", "wind",
     "sunset", "thermometer", "image", "minus", "maximize", "arrow", "undo", "pointer", "keyboard", "text-scan", "crosshair", "sliders", "globe",
     "eject", "usb", "box", "package", "gauge", "leaf", "download", "server", "terminal", "battery", "plug", "external", "github", "discord", "rss", "folder",

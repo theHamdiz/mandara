@@ -8872,3 +8872,6 @@
 "“{prefix}” actions" = "Actions « {prefix} »"
 "Keep the launcher in the Dock" = "Garder le lanceur dans le Dock"
 "Add the launcher" = "Ajouter le lanceur"
+
+# Reading folds
+"Open in the reader" = "Ouvrir dans le lecteur"

@@ -153,7 +153,7 @@ fn slide(c: &Ctx, window: &mut Window) -> (f32, f32) {
 }
 
 /// The reading card.
-pub(super) fn card(c: &Ctx, s: &Shown, mode: Mode, window: &mut Window) -> AnyElement {
+pub(super) fn card(c: &Ctx, s: &Shown, mode: Mode, window: &mut Window, cx: &mut App) -> AnyElement {
     let palette = c.palette;
     let g = gold(palette);
     let (a, b) = ground(palette);
@@ -225,10 +225,14 @@ pub(super) fn card(c: &Ctx, s: &Shown, mode: Mode, window: &mut Window) -> AnyEl
             .line_height(gpui::relative(MEANING_LINE_EM))
             .text_color(palette.on_surface.hsla())
             .when(centred, |el| el.text_center())
-            .when(!centred, |el| el.text_start())
-            .when(hero, |el| el.line_clamp(HERO_MEANING_LINES))
-            .child(crate::bidi::paragraph(m.to_string()));
-        body = body.child(para);
+            .when(!centred, |el| el.text_start());
+        // The hero folds a long meaning (Read more unfolds it in place);
+        // the reader shows all of it.
+        body = body.child(if hero {
+            super::super::reading::fold("hadith-hero-meaning", s.key, [super::super::reading::Block::new(para, m.to_string(), HERO_MEANING_LINES)], 0.0, g, None, window, cx)
+        } else {
+            para.child(crate::bidi::paragraph(m.to_string())).into_any_element()
+        });
         let credit: Option<String> = if s.english { Some(t("Meaning in English").into()) } else { s.translator.map(|w| format!("— {w}")) };
         if let Some(credit) = credit.filter(|_| !hero) {
             body = body.child(caption(credit, palette));
