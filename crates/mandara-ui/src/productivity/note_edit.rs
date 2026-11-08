@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use crate::notes_store::{Note, NoteStore};
+use crate::notes_store::{Note, NoteStore, body_hash};
 
 /// Start byte → (end byte, desired checked state), coalesced per marker.
 pub(super) type TaskPatches = BTreeMap<usize, (usize, bool)>;
@@ -11,13 +11,48 @@ pub(super) struct PendingNote {
     pub note: Arc<Note>,
     pub generation: u64,
     pub tasks: Option<TaskPatches>,
+    /// [`body_hash`] of the file body a whole-text draft replaces: what the
+    /// panel showed when the edit began. `None` skips the check (a draft
+    /// with no file yet).
+    pub base: Option<u64>,
 }
+
+/// Whole-text drafts the worker would not write because their file changed
+/// elsewhere (or disappeared) since the edit began. The other drafts of the
+/// same batch are still written; the panel keeps these as conflicts.
+#[derive(Debug)]
+pub(super) struct BodyConflicts(pub Vec<u64>);
+
+impl std::fmt::Display for BodyConflicts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(mandara_i18n::t("This item changed elsewhere. Your text is still here."))
+    }
+}
+
+impl std::error::Error for BodyConflicts {}
 
 impl PendingNote {
     /// The exact generation this receipt may acknowledge.
     pub fn token(&self) -> (u64, u64) { (self.note.id, self.generation) }
 
-    /// Marker edits preserve unrelated text appended before the intent executes.
+    /// Whether writing this whole-text draft replaces nothing unseen. It
+    /// re-reads the file (on the worker) and accepts the draft's base, the
+    /// store's own last write of this note (so coalesced drafts queued
+    /// behind an earlier write, or after a failed one, still save in order)
+    /// or the draft itself. `false` means another program changed or
+    /// removed the file. It never locks the file: a changed file only
+    /// stops this one write.
+    fn base_holds(&self, store: &mut NoteStore) -> anyhow::Result<bool> {
+        let id = self.note.id;
+        let Some(base) = self.base else { return Ok(true) };
+        if store.note(id).is_none_or(|current| current.path.is_none()) { return Ok(true); }
+        if !store.refresh_note(id)? { return Ok(false); }
+        Ok(store.note(id).is_some_and(|current| current.text == self.note.text || body_hash(&current.text) == base || store.wrote(id, &current.text)))
+    }
+
+    /// Marker edits preserve unrelated text appended before the intent
+    /// executes; whole-text drafts first check their base
+    /// ([`BodyConflicts`] when the file changed elsewhere).
     pub fn apply(&self, store: &mut NoteStore) -> anyhow::Result<()> {
         store.ensure_writable(self.note.id)?;
         if let Some(tasks) = &self.tasks {
@@ -31,9 +66,13 @@ impl PendingNote {
                 }
             }
             if text != current.text { store.write(self.note.id, &text)?; }
-        } else if !(self.note.text.trim().is_empty() && self.note.path.is_none())
-            && store.note(self.note.id).is_none_or(|current| current.text != self.note.text || current.path.is_none()) {
-            store.write(self.note.id, &self.note.text)?;
+        } else if !(self.note.text.trim().is_empty() && self.note.path.is_none()) {
+            if !self.base_holds(store)? {
+                return Err(BodyConflicts(vec![self.note.id]).into());
+            }
+            if store.note(self.note.id).is_none_or(|current| current.text != self.note.text || current.path.is_none()) {
+                store.write(self.note.id, &self.note.text)?;
+            }
         }
         Ok(())
     }
@@ -52,7 +91,7 @@ mod tests {
         let original = store.snapshot().notes[0].clone();
         // The UI prepared the click while an append was still queued.
         store.write(id, "- [ ] First\n- [ ] Second\nAppended elsewhere").unwrap();
-        let mut pending = PendingNote { note: original, generation: 1, tasks: Some(BTreeMap::from([(2, (5, true)), (14, (17, true))])) };
+        let mut pending = PendingNote { note: original, generation: 1, base: None, tasks: Some(BTreeMap::from([(2, (5, true)), (14, (17, true))])) };
         pending.apply(&mut store).unwrap();
         assert_eq!(store.note(id).unwrap().text, "- [x] First\n- [x] Second\nAppended elsewhere");
         pending.tasks.as_mut().unwrap().insert(2, (5, false));
@@ -67,7 +106,7 @@ mod tests {
         let id = store.create(DEFAULT_TOPIC, "- [ ] Task").unwrap();
         let original = store.snapshot().notes[0].clone();
         store.write(id, "A rewritten note").unwrap();
-        let pending = PendingNote { note: original, generation: 1, tasks: Some(BTreeMap::from([(2, (5, true))])) };
+        let pending = PendingNote { note: original, generation: 1, base: None, tasks: Some(BTreeMap::from([(2, (5, true))])) };
         assert!(pending.apply(&mut store).is_err());
         assert_eq!(store.note(id).unwrap().text, "A rewritten note");
     }

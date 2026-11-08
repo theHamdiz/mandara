@@ -192,6 +192,11 @@ pub struct Productivity {
     notes_generation: u64,
     notes_submitted: BTreeMap<u64, u64>,
     notes_tasks: BTreeMap<u64, note_edit::TaskPatches>,
+    /// [`crate::notes_store::body_hash`] of the file body each typed draft
+    /// replaces, from its first unsaved edit until its write is
+    /// acknowledged; after a conflict, the body found elsewhere, so the next
+    /// edit replaces that deliberately.
+    notes_base: BTreeMap<u64, u64>,
     /// Conflicting drafts stay recoverable per folder without becoming write prerequisites.
     notes_conflicts: BTreeMap<(std::path::PathBuf, u64), note_conflict::RetainedDraft>,
     notes_flush: note_flush::NoteFlush,
@@ -220,20 +225,25 @@ pub struct Productivity {
     tick_task: Option<Task<()>>,
 }
 
+/// `productivity.json` under the data dir: lists, tasks, the filter and
+/// any legacy notes not yet written out.
 fn store_path() -> std::path::PathBuf {
     mandara_config::paths::data_dir().join("productivity.json")
 }
 
+/// The current time in Unix seconds (edit timestamps).
 fn now_unix() -> i64 {
     chrono::Local::now().timestamp()
 }
 
 impl Productivity {
+    /// The model before anything is loaded: no tasks, the notes folder
+    /// `root` not yet scanned and no notes worker, so edits wait for the load.
     fn empty(rules: PomodoroRules, root: std::path::PathBuf, changes: async_channel::Sender<()>) -> Self {
         Self {
             book: TodoBook::new(Vec::new(), Vec::new()), filter: Filter::All,
             notes: NotesSnapshot::empty(root), notes_dirty: BTreeMap::new(),
-            notes_generation: 0, notes_submitted: BTreeMap::new(), notes_tasks: BTreeMap::new(), notes_conflicts: BTreeMap::new(), notes_flush: note_flush::NoteFlush::default(), notes_rescan: note_rescan::NoteRescan::default(), notes_sequence: 0, notes_applied: 0,
+            notes_generation: 0, notes_submitted: BTreeMap::new(), notes_tasks: BTreeMap::new(), notes_base: BTreeMap::new(), notes_conflicts: BTreeMap::new(), notes_flush: note_flush::NoteFlush::default(), notes_rescan: note_rescan::NoteRescan::default(), notes_sequence: 0, notes_applied: 0,
             notes_worker: None, notes_changes: changes, notes_switching: false, ready: false, notes_ready: false, load_error: None, todo_error: None, notes_error: None,
             notes_task: None, legacy_notes: Vec::new(), notes_watch: None, notes_topic: None,
             pomodoro: Pomodoro { phase: Phase::Focus, ends_at: None, paused_left: rules.focus, length: rules.focus, completed: 0 },
@@ -241,6 +251,7 @@ impl Productivity {
         }
     }
 
+    /// The next task id.
     fn id(&mut self) -> u64 {
         self.next_id += 1;
         self.next_id - 1
@@ -449,6 +460,10 @@ pub fn notes_root(cfg: &mandara_config::ShellConfig) -> std::path::PathBuf {
     if folder.trim().is_empty() { crate::notes_store::default_root() } else { mandara_config::paths::expand_tilde(folder.trim()) }
 }
 
+/// Creates the shared model and loads the to-dos and notes folder on the
+/// blocking pool; the notes worker starts with the loaded store. Folder
+/// changes are coalesced into one rescan per settle period, and config
+/// edits move the notes folder and the timer lengths.
 pub fn init(cx: &mut App) -> Entity<Productivity> {
     let rules = PomodoroRules::from_config(cx);
     let root = notes_root(&config(cx).read(cx).snapshot());
@@ -507,6 +522,7 @@ pub fn init(cx: &mut App) -> Entity<Productivity> {
     entity
 }
 
+/// The shared model ([`init`] must have run).
 pub fn productivity(cx: &App) -> Entity<Productivity> {
     cx.global::<GlobalProductivity>().0.clone()
 }
