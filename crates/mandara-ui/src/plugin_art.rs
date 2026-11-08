@@ -86,6 +86,22 @@ pub fn has_art(id: &str) -> bool {
 /// Bytes per decoded RGBA / BGRA pixel.
 const BGRA_CHANNELS: usize = 4;
 
+/// Releases the art handed out so far: each icon and cover decode and its
+/// texture (see `gpui::ImageSource::evict`) and the embedded bytes' copies.
+/// The next draw decodes again. Studio calls it, from `App::defer`, when it
+/// leaves the pages that show plugin art.
+pub fn release(cx: &mut gpui::App) {
+    let images = CACHE.with(|c| std::mem::take(&mut *c.borrow_mut()));
+    for image in images.into_values() {
+        gpui::ImageSource::Image(image).evict(cx);
+    }
+}
+
+/// Releases the brand icon's decode and texture (its 256 px source stays).
+pub fn release_brand(cx: &mut gpui::App) {
+    gpui::ImageSource::Image(brand_icon()).evict(cx);
+}
+
 /// Built-in `id`'s cover cropped to fill `w × h` pixels, ready to draw
 /// (BGRA): decoded at the size it is shown, never upscaled past the
 /// source (a larger box keeps the aspect at the source's resolution).
@@ -106,7 +122,8 @@ fn fill(picture: image::DynamicImage, w: u32, h: u32) -> Arc<RenderImage> {
     // Never upscale: shrink the box until it fits inside the source.
     let k = (picture.width() as f32 / w as f32).min(picture.height() as f32 / h as f32).min(1.0);
     let (w, h) = (((w as f32 * k).round() as u32).max(1), ((h as f32 * k).round() as u32).max(1));
-    let mut rgba = picture.resize_to_fill(w, h, image::imageops::FilterType::Triangle).into_rgba8();
+    // Cropped and shrunk in place: no float copy of the whole cover.
+    let mut rgba = crate::wallpaper::cover(&picture, w, h).into_rgba8();
     drop(picture);
     for px in rgba.as_chunks_mut::<BGRA_CHANNELS>().0 {
         px.swap(0, 2);
