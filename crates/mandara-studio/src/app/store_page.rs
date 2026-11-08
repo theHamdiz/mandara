@@ -262,6 +262,19 @@ pub(super) fn covers_begin(view: WeakEntity<StudioView>) {
     });
 }
 
+/// Leaving the plugin pages: every decoded cover leaves the cache and the
+/// atlas (call it outside window updates), with the cache's spare capacity.
+/// A decode still running finds its slot gone and drops its picture; the
+/// next visit decodes what it shows again.
+pub(super) fn covers_release(cx: &mut App) {
+    let covers = COVERS.with(|c| std::mem::take(&mut *c.borrow_mut()));
+    for slot in covers.slots.into_values() {
+        if let CoverState::Ready(image) = slot.state {
+            cx.drop_image(image, None);
+        }
+    }
+}
+
 /// A plugin's cover, when it has one.
 pub(super) fn art_of(m: &PluginManifest) -> Option<Art> {
     match &m.origin {

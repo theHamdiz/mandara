@@ -151,9 +151,15 @@ pub(super) fn release(cx: &mut gpui::App) {
     let s = st(cx);
     s.installed = None;
     s.ours = None;
-    s.previews.clear();
+    let previews = std::mem::take(&mut s.previews);
     s.loading.clear();
     s.confirm_remove = None;
+    // Their textures go too (Studio calls this outside window updates).
+    for set in previews.into_values() {
+        for preview in set.iter().flatten() {
+            cx.drop_image(preview.image.clone(), None);
+        }
+    }
 }
 
 fn swatch(v: &CursorVariant) -> Color {
@@ -249,11 +255,20 @@ impl StudioView {
             let images = task.await;
             let _ = this.update(cx, |_, cx| {
                 let s = st(cx);
-                s.loading.remove(&key);
+                // Leaving the page cancelled the request: its late result
+                // must not refill the released cache.
+                if !s.loading.remove(&key) {
+                    return;
+                }
                 // One live size per theme besides the strip's: dragging the
                 // size slider doesn't pile up every step.
-                s.previews.retain(|(t, size), _| *t != key.0 || *size == STRIP_CURSOR_PX);
+                let dropped: Vec<Previews> = s.previews.extract_if(|(t, size), _| *t == key.0 && *size != STRIP_CURSOR_PX).map(|(_, set)| set).collect();
                 s.previews.insert(key, Rc::from(images));
+                for set in dropped {
+                    for preview in set.iter().flatten() {
+                        cx.drop_image(preview.image.clone(), None);
+                    }
+                }
                 cx.notify();
             });
         })

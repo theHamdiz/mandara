@@ -94,6 +94,12 @@ use crate::registry::{self, Control, Section, Setting};
 use crate::text_field::TextField;
 use crate::tokens::*;
 
+/// Pages that draw built-in plugins' artwork (tiles, the bar designer's
+/// pool); leaving the last of them releases it.
+fn shows_plugin_art(section: Section) -> bool {
+    matches!(section, Section::Plugins | Section::Bars)
+}
+
 /// Drags the window: the compositor's own grab where the standard
 /// `xdg_toplevel.move` is ignored (MangoWM), the standard request otherwise.
 /// Not for a touchscreen tap: GPUI delivers its press only once the finger
@@ -262,16 +268,32 @@ impl StudioView {
             // The recorder's device and display lists are read afresh.
             self.recorder_row.new_visit();
             plugin_art_cache_clear();
-            if self.section == Section::LoginScreen {
-                greeter_page::release(cx);
-            }
-            if self.section == Section::Themes {
-                cursor_page::release(cx);
-            }
-            if self.section == Section::Wallpaper {
-                wallgen_page::release(cx);
-                wallpaper_page::release(cx);
-            }
+            let leaving = self.section;
+            let modal = self.modal.showing();
+            let covers = leaving == Section::Plugins && !modal;
+            let art = shows_plugin_art(leaving) && !shows_plugin_art(section) && !modal;
+            // Deferred past this window update, so the pictures leave
+            // Studio's own atlas too (an updating window is out of reach).
+            cx.defer(move |cx| {
+                match leaving {
+                    Section::LoginScreen => greeter_page::release(cx),
+                    Section::Themes => cursor_page::release(cx),
+                    Section::Wallpaper => {
+                        wallgen_page::release(cx);
+                        wallpaper_page::release(cx);
+                    }
+                    Section::About => mandara_ui::plugin_art::release_brand(cx),
+                    _ => {}
+                }
+                if covers {
+                    store_page::covers_release(cx);
+                }
+                if art {
+                    mandara_ui::plugin_art::release(cx);
+                }
+                // Freed pages go back to the system, off the UI thread.
+                mandara_services::memory::request_trim();
+            });
         }
         self.section = section;
         self.query.clear();

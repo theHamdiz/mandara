@@ -82,6 +82,13 @@ impl Default for PluginModal {
     }
 }
 
+impl PluginModal {
+    /// Whether the modal is on screen (open, or still animating out).
+    pub(super) fn showing(&self) -> bool {
+        self.target.is_some()
+    }
+}
+
 /// Entrance: lively, a touch of overshoot. Exit: critically damped so the
 /// card never flashes back past zero.
 const APPEAR_SPRING: SpringConfig = SpringConfig::new(420.0, 30.0, 1.0);
