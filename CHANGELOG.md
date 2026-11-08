@@ -6,6 +6,21 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **Notes keep edits made in other apps.** If another editor changes or removes a note's file while you are typing the same note in the Notes panel, Mandara no longer overwrites it. The panel keeps your text and says the note changed elsewhere, your other notes still save, and your next edit replaces the outside version on purpose. (#111)
+- **Clearer Copy feedback on the website.** Screen readers now announce "Copied" again each time you press Copy, the message clears after a few seconds, and the instructions shown when copying is blocked stay until you try again. (#111)
+
+### Fixed
+
+- **The launcher follows search settings while it's open.** Turning a search provider on or off, or changing its prefix, in Studio or the config file now applies to an open launcher straight away. A Beacon mode whose provider you switch off closes back to plain search instead of staying stuck. (#111)
+- **Your theme's name is translated even when typed by hand.** Studio's current-theme heading now shows the translated name when the config names a built-in theme in another spelling, such as `Rosé Pine` or `tokyo_night`. Your own themes keep the titles you gave them. (#111)
+
+### Under the hood
+
+- **Fewer needless rebuilds in git worktrees.** The build no longer treats every build in a linked worktree as changed, which rebuilt most of the workspace each time. It now watches the checkout's real `HEAD` and branch, so the embedded revision also follows new commits. (#111)
+- **Documented helpers and test rules.** The background workers, saving and image-rendering code have fuller explanations, and the development guide describes how the desktop tests own, tear down and stop restoring their private desktop. (#111)
+
 ## 0.22.0 — 2026-11-07
 
 Copy any panel as an image. Motion that suits you. Swipe notification
