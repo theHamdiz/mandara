@@ -27,8 +27,6 @@ const DISK_MAX_BYTES: u64 = 64 * 1024 * 1024;
 /// Decoded pictures are never larger than this on either side.
 const MAX_SIDE_PX: u32 = 2048;
 /// Decoder limits for untrusted files (dimensions and allocation).
-const DECODE_MAX_DIM: u32 = 12_000;
-const DECODE_MAX_ALLOC: u64 = 256 * 1024 * 1024;
 /// Results waiting for the UI while the worker continues.
 const RESULTS_QUEUED: usize = 1;
 const BGRA: usize = 4;
@@ -216,15 +214,7 @@ fn load(url: &str, w: u32, h: u32, fit: Fit) -> Option<Arc<RenderImage>> {
     Some(prepared.finish(rgba))
 }
 
-fn decode(bytes: &[u8]) -> Option<image::DynamicImage> {
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?;
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(DECODE_MAX_DIM);
-    limits.max_image_height = Some(DECODE_MAX_DIM);
-    limits.max_alloc = Some(DECODE_MAX_ALLOC);
-    reader.limits(limits);
-    reader.decode().ok()
-}
+fn decode(bytes: &[u8]) -> Option<image::DynamicImage> { crate::plugins::render_image::decode_limited(bytes) }
 
 #[cfg(test)]
 mod tests {

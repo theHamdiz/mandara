@@ -577,11 +577,26 @@ enum UpdateAction {
     Terminal(String),
 }
 
+/// Whether Mandara's own update job updates `kind` on `system`: Flatpak
+/// always, a package manager only when it is the system's own (so `dnf` on
+/// a Debian system goes to the terminal), the AUR never.
+fn job_covers(kind: SourceKind, system: Option<System>) -> bool {
+    use mandara_services::sysupdate::plan::BackendId as B;
+    match (kind, system) {
+        (SourceKind::Flatpak, _) => true,
+        (_, Some(System::Managed(backend))) => matches!(
+            (kind, backend),
+            (SourceKind::Pacman, B::Pacman) | (SourceKind::Apt, B::Apt) | (SourceKind::Dnf, B::Dnf) | (SourceKind::Zypper, B::ZypperDup | B::ZypperUpdate) | (SourceKind::Xbps, B::Xbps) | (SourceKind::Apk, B::Apk)
+        ),
+        _ => false,
+    }
+}
+
 /// The action of one source's Update button.
 fn source_action(kind: SourceKind, command: &str, system: Option<System>, in_mandara: bool) -> UpdateAction {
-    match (kind, system) {
-        (SourceKind::Flatpak, _) if in_mandara => UpdateAction::Job(Request::Flatpak),
-        (SourceKind::Pacman | SourceKind::Apt | SourceKind::Dnf | SourceKind::Zypper | SourceKind::Xbps | SourceKind::Apk, Some(System::Managed(_))) if in_mandara => UpdateAction::Job(Request::System { flatpak: false }),
+    match kind {
+        SourceKind::Flatpak if in_mandara => UpdateAction::Job(Request::Flatpak),
+        _ if in_mandara && job_covers(kind, system) => UpdateAction::Job(Request::System { flatpak: false }),
         _ => UpdateAction::Terminal(command.to_string()),
     }
 }
@@ -591,12 +606,7 @@ fn source_action(kind: SourceKind, command: &str, system: Option<System>, in_man
 /// AUR packages, or an image-based system's own update, aren't skipped).
 fn all_action(kinds: &[SourceKind], helper: Option<&str>, system: Option<System>, in_mandara: bool) -> UpdateAction {
     let flatpak = kinds.contains(&SourceKind::Flatpak);
-    let managed = matches!(system, Some(System::Managed(_)));
-    let covered = kinds.iter().all(|k| match k {
-        SourceKind::Flatpak => true,
-        SourceKind::Aur => false,
-        _ => managed,
-    });
+    let covered = kinds.iter().all(|&k| job_covers(k, system));
     match system.filter(|_| in_mandara && covered).and_then(|s| system::system_request(s, flatpak)) {
         Some(r) => UpdateAction::Job(r),
         None => UpdateAction::Terminal(updates::combined_command(kinds, helper)),
@@ -1573,6 +1583,19 @@ mod tests {
         assert_eq!(all_action(&pending, None, ostree, true), UpdateAction::Terminal(updates::combined_command(&pending, None)));
         assert_eq!(all_action(&[Flatpak], None, ostree, true), UpdateAction::Job(Request::Flatpak));
         assert!(matches!(all_action(&[Pacman], None, pacman, false), UpdateAction::Terminal(_)), "the Terminal setting");
+    }
+
+    #[test]
+    fn only_the_systems_own_package_manager_runs_in_mandara() {
+        use mandara_services::sysupdate::plan::BackendId;
+        let debian = Some(System::Managed(BackendId::Apt));
+        assert_eq!(source_action(SourceKind::Apt, "sudo apt upgrade", debian, true), UpdateAction::Job(Request::System { flatpak: false }));
+        assert_eq!(source_action(SourceKind::Dnf, "sudo dnf upgrade", debian, true), UpdateAction::Terminal("sudo dnf upgrade".into()), "dnf on Debian isn't the system's manager");
+        assert_eq!(source_action(SourceKind::Flatpak, "flatpak update", debian, true), UpdateAction::Job(Request::Flatpak));
+        let pending = [SourceKind::Apt, SourceKind::Dnf];
+        assert_eq!(all_action(&pending, None, debian, true), UpdateAction::Terminal(updates::combined_command(&pending, None)));
+        let suse = Some(System::Managed(BackendId::ZypperDup));
+        assert_eq!(source_action(SourceKind::Zypper, "sudo zypper dup", suse, true), UpdateAction::Job(Request::System { flatpak: false }));
     }
 
     #[test]

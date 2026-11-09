@@ -122,7 +122,7 @@ impl Images {
 /// request. The retained handle is allocated before the decoder's buffers.
 pub(super) fn decode(bytes: Vec<u8>, width: u32, height: u32, blur: bool) -> Option<(Arc<RenderImage>, usize)> {
     let rendered = PreparedImage::new();
-    let picture = image::load_from_memory(&bytes).ok()?;
+    let picture = crate::plugins::render_image::decode_limited(&bytes)?;
     drop(bytes);
     let rgba = if blur {
         let small = picture.resize_to_fill((width / BLUR_FACTOR).max(1), (height / BLUR_FACTOR).max(1), image::imageops::FilterType::Triangle);
@@ -198,5 +198,10 @@ mod tests {
         let spread = pixels.chunks(4).map(|p| p[0]).max().unwrap() - pixels.chunks(4).map(|p| p[0]).min().unwrap();
         assert!(spread < 64, "a blurred preview has no hard stripes ({spread})");
         assert!(decode(b"not an image".to_vec(), 4, 4, false).is_none());
+        // The decoder runs with Feeds' limits: a picture wider than they
+        // allow is refused before its pixels are allocated.
+        let mut wide = Vec::new();
+        image::DynamicImage::ImageRgba8(image::RgbaImage::new(13_000, 1)).write_to(&mut std::io::Cursor::new(&mut wide), image::ImageFormat::Png).unwrap();
+        assert!(decode(wide, 4, 4, false).is_none(), "a 13000-pixel-wide picture is over the decode limit");
     }
 }

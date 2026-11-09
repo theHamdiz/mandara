@@ -175,10 +175,12 @@ pub fn flush_in_background<T: Persist>(this: &mut T, cx: &mut Context<T>) {
     .detach();
 }
 
-/// Writes now, if anything changed (the shell is restarting): blocking, a
-/// few hundred bytes, like the config's own flush beside it.
+/// Writes now, if anything changed or a write is still under way (the shell
+/// is restarting): blocking, a few hundred bytes, like the config's own flush
+/// beside it. A write in flight may not finish before the process exits, so a
+/// fresh snapshot is written too; its newer ticket keeps the order.
 pub fn flush<T: Persist>(this: &mut T) {
-    if !this.saver().dirty {
+    if !this.saver().dirty && this.saver().task.is_none() {
         return;
     }
     let (file, n, bytes) = (this.file(), ticket(), this.snapshot());
@@ -195,6 +197,29 @@ pub fn flush<T: Persist>(this: &mut T) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct Model { saver: Saver, file: PathBuf, state: Vec<u8> }
+
+    impl Persist for Model {
+        fn saver(&mut self) -> &mut Saver { &mut self.saver }
+        fn snapshot(&self) -> Vec<u8> { self.state.clone() }
+        fn file(&self) -> PathBuf { self.file.clone() }
+    }
+
+    /// A restart while the debounced write is still running (its snapshot
+    /// taken, so nothing reads as dirty) still writes the latest state.
+    #[test]
+    fn a_flush_during_a_write_in_flight_still_writes() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("games").join("2048.json");
+        let mut model = Model { saver: Saver::default(), file: file.clone(), state: b"latest".to_vec() };
+        flush(&mut model);
+        assert_eq!(read(&file), Read::Missing, "nothing changed, nothing in flight: no write");
+        model.saver.task = Some(Task::ready(()));
+        flush(&mut model);
+        assert_eq!(read(&file), Read::Bytes(b"latest".to_vec()));
+        assert!(model.saver.task.is_none() && !model.saver.dirty());
+    }
 
     #[test]
     fn files_round_trip_and_corrupt_ones_are_set_aside() {
