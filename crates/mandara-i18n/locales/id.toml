@@ -8079,7 +8079,6 @@
 
 "Add your Home Assistant token in Studio" = "Tambahkan token Home Assistant di Studio"
 
-"Add your favourite feeds in Studio" = "Tambahkan feed favorit di Studio"
 
 "Add your translation API key in Studio" = "Tambahkan kunci API terjemahan di Studio"
 
@@ -8109,7 +8108,6 @@
 
 "Could not read this feed: {error}" = "Tidak dapat membaca feed ini: {error}"
 
-"Could not refresh this feed: {error}" = "Tidak dapat menyegarkan feed ini: {error}"
 
 "Could not save or read feed history: {error}" = "Tidak dapat menyimpan atau membaca riwayat feed: {error}"
 
@@ -8131,11 +8129,9 @@
 
 "Favourite entities" = "Entitas favorit"
 
-"Feed addresses" = "Alamat feed"
 
 "Feeds" = "Feed"
 
-"Fetching headlines…" = "Mengambil judul…"
 
 "Forget device" = "Lupakan perangkat"
 
@@ -8163,7 +8159,6 @@
 
 "Keep a translation under 5,000 characters" = "Batasi terjemahan di bawah 5.000 karakter"
 
-"Keep up to 16 feed subscriptions" = "Simpan maksimal 16 langganan feed"
 
 "LibreTranslate" = "LibreTranslate"
 
@@ -8177,9 +8172,7 @@
 
 "No entities to show" = "Tidak ada entitas untuk ditampilkan"
 
-"No headlines yet" = "Belum ada judul"
 
-"Only the selected feed refreshes while its panel is open" = "Hanya feed terpilih yang disegarkan selama panelnya terbuka"
 
 "Opening the keyring…" = "Membuka penyimpanan kunci…"
 
@@ -8201,7 +8194,6 @@
 
 "Provider" = "Penyedia"
 
-"RSS, Atom and JSON subscriptions with local read history" = "Langganan RSS, Atom dan JSON dengan riwayat baca lokal"
 
 "RSS, Atom or JSON feed address" = "Alamat feed RSS, Atom atau JSON"
 
@@ -8211,13 +8203,11 @@
 
 "Reading your home…" = "Membaca kondisi rumah…"
 
-"Refresh a feed and return its headlines and read history" = "Segarkan feed dan kembalikan judul beserta riwayat bacanya"
 
 "Refresh interval" = "Interval penyegaran"
 
 "Refresh this feed before marking it read" = "Segarkan feed ini sebelum menandainya dibaca"
 
-"Refreshing…" = "Menyegarkan…"
 
 "Reject" = "Tolak"
 
@@ -8241,7 +8231,6 @@
 
 "Send text to a paired, connected device" = "Kirim teks ke perangkat yang dipasangkan dan tersambung"
 
-"Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "Pisahkan alamat feed RSS, Atom atau JSON dengan spasi; hingga 16 langganan"
 
 "Separate up to 24 entity ids with spaces; empty shows the first available entities" = "Pisahkan hingga 24 ID entitas dengan spasi; kosong menampilkan entitas pertama yang tersedia"
 
@@ -8347,7 +8336,6 @@
 
 "Your home favourites, sensors and scenes" = "Favorit rumah, sensor dan adegan"
 
-"Your subscriptions, together" = "Semua langganan Anda"
 
 "Your translation appears here" = "Terjemahan akan muncul di sini"
 
@@ -8649,3 +8637,133 @@
 "A gentle wave along the fill that flows while you drag" = "Gelombang lembut di sepanjang isian yang mengalir saat Anda menyeret"
 "Ten rounded steps that fill one after another" = "Sepuluh langkah membulat yang terisi satu per satu"
 "How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it" = "Tampilan kontrol shell. Setiap pratinjau adalah kontrol sungguhan: seret untuk mencoba desain, klik desain untuk memakainya"
+
+# ── Feeds reader ─────────────────────────────────────────────
+"A reader for RSS, Atom and JSON feeds" = "Pembaca untuk feed RSS, Atom, dan JSON"
+"A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view" = "Pembaca untuk feed RSS, Atom, dan JSON: satu lini masa, folder, artikel tersimpan, pencarian, dan tampilan baca yang bersih"
+"A website or feed address" = "Alamat situs web atau feed"
+"Add a feed" = "Tambah feed"
+"Add a site and its feed is found for you. Order, folders and colours here are how the panel shows them." = "Tambahkan situs dan feed-nya akan ditemukan untuk Anda. Urutan, folder, dan warna di sini sama seperti yang ditampilkan panel."
+"Add feeds" = "Tambah feed"
+"Add the subscriptions of an OPML file (from another feed reader)" = "Tambahkan langganan dari berkas OPML (dari pembaca feed lain)"
+"All articles" = "Semua artikel"
+"All caught up" = "Semua sudah dibaca"
+"Also inside articles" = "Juga di dalam artikel"
+"Arabic news" = "Berita Arab"
+"Articles per feed" = "Artikel per feed"
+"Articles you already have show at once; new ones follow." = "Artikel yang sudah Anda miliki tampil seketika; yang baru menyusul."
+"Background interval" = "Interval latar belakang"
+"Badge" = "Lencana"
+"Check its address in Studio, or try again in a moment." = "Periksa alamatnya di Studio, atau coba lagi sebentar lagi."
+"Could not download it: {error}" = "Tidak dapat mengunduhnya: {error}"
+"Could not reach the server: {error}" = "Tidak dapat menjangkau server: {error}"
+"Days an article stays after it has left its feed; saved articles stay until you remove them" = "Berapa hari artikel bertahan setelah keluar dari feed-nya; artikel tersimpan bertahan sampai Anda menghapusnya"
+"Design & fun" = "Desain dan hiburan"
+"Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them" = "Ikon dan gambar mini feed ikut bersama feed. Gambar di dalam artikel dimuat dari situsnya hanya jika Anda mengizinkan"
+"Feeds older than this refresh when you open the panel; the Refresh button fetches all of them at once" = "Feed yang lebih lama dari ini disegarkan saat Anda membuka panel; tombol Segarkan mengambil semuanya sekaligus"
+"Feeds · Bar" = "Feed · Bilah"
+"Feeds · History" = "Feed · Riwayat"
+"Feeds · Reading" = "Feed · Membaca"
+"Feeds · Refreshing" = "Feed · Penyegaran"
+"Fetch the latest articles of every feed" = "Ambil artikel terbaru dari setiap feed"
+"Find the feeds a website offers" = "Temukan feed yang ditawarkan sebuah situs web"
+"Folder (empty for none)" = "Folder (kosongkan jika tidak perlu)"
+"Folder to put it in" = "Folder tujuan"
+"Follow sites you like: add their addresses or pick from tested starter feeds in Studio." = "Ikuti situs yang Anda suka: tambahkan alamatnya atau pilih dari feed awal yang sudah diuji di Studio."
+"How often the background refresh runs; feeds that failed wait longer before trying again" = "Seberapa sering penyegaran latar belakang berjalan; feed yang gagal menunggu lebih lama sebelum dicoba lagi"
+"How the bar item shows unread articles" = "Cara item bilah menampilkan artikel yang belum dibaca"
+"Icons and thumbnails" = "Ikon dan gambar mini"
+"Import and export" = "Impor dan ekspor"
+"Imported {added} of {total} feeds" = "{added} dari {total} feed diimpor"
+"Keep old articles for" = "Simpan artikel lama selama"
+"Keep the unread count current while the panel is closed, at a low interval; off, nothing downloads until you open Feeds" = "Jaga jumlah belum dibaca tetap terbaru saat panel tertutup, dengan interval rendah; jika mati, tidak ada yang diunduh sampai Anda membuka Feed"
+"Linux & open source" = "Linux & sumber terbuka"
+"Mark all feeds read" = "Tandai semua feed sudah dibaca"
+"Mark an article read" = "Tandai artikel sudah dibaca"
+"Mark an article unread" = "Tandai artikel belum dibaca"
+"Mark every article of a feed read, or of every feed when no address is given" = "Tandai semua artikel sebuah feed sudah dibaca, atau semua feed jika tidak ada alamat"
+"Mark every article of every feed read" = "Tandai semua artikel dari semua feed sudah dibaca"
+"Mark read when opened" = "Tandai sudah dibaca saat dibuka"
+"Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders." = "Pindahkan langganan Anda antarpembaca feed sebagai berkas OPML. Impor menambahkan feed yang belum Anda ikuti, beserta foldernya."
+"Name (empty uses the feed's own)" = "Nama (kosong memakai nama feed itu sendiri)"
+"No articles yet" = "Belum ada artikel"
+"No feed found at this address" = "Tidak ada feed di alamat ini"
+"No feeds yet" = "Belum ada feed"
+"No feeds yet. Add one above or pick from the starter feeds below." = "Belum ada feed. Tambahkan satu di atas atau pilih dari feed awal di bawah."
+"No unread articles here." = "Tidak ada artikel yang belum dibaca di sini."
+"Nothing here matches “{query}”" = "Tidak ada yang cocok dengan “{query}”"
+"Notify about new articles" = "Beri tahu tentang artikel baru"
+"One notification for what is new, at most every 30 minutes, and never while the panel is open" = "Satu notifikasi untuk yang baru, paling sering setiap 30 menit, dan tidak pernah saat panel terbuka"
+"Open articles in" = "Buka artikel di"
+"Opening an article marks it read; you can always mark it unread again" = "Membuka artikel menandainya sudah dibaca; Anda selalu bisa menandainya belum dibaca lagi"
+"Opening the article…" = "Membuka artikel…"
+"Opening your feeds…" = "Membuka feed Anda…"
+"Or type a site's address in the launcher and choose Subscribe in Feeds." = "Atau ketik alamat situs di peluncur dan pilih Berlangganan di Feed."
+"Picture: {alt}" = "Gambar: {alt}"
+"Pictures" = "Gambar"
+"Popular feeds by topic, each checked to download and read correctly on {date}." = "Feed populer menurut topik, masing-masing sudah diperiksa dapat diunduh dan dibaca dengan benar pada {date}."
+"Programming" = "Pemrograman"
+"Read on the website" = "Baca di situs web"
+"Refresh a feed now and return its articles, or every feed when no address is given" = "Segarkan feed sekarang dan kembalikan artikelnya, atau semua feed jika tidak ada alamat"
+"Refresh feeds" = "Segarkan feed"
+"Refresh in the background" = "Segarkan di latar belakang"
+"Refresh to fetch the latest articles." = "Segarkan untuk mengambil artikel terbaru."
+"Refresh while open" = "Segarkan saat terbuka"
+"Refreshing {done} of {total}…" = "Menyegarkan {done} dari {total}…"
+"Remove a subscription (its saved history stays until you subscribe again)" = "Hapus langganan (riwayat tersimpannya tetap ada sampai Anda berlangganan lagi)"
+"Remove an article from your saved ones" = "Hapus artikel dari artikel tersimpan Anda"
+"Save an article to read it later" = "Simpan artikel untuk dibaca nanti"
+"Save articles to read them later; they stay even after they leave their feed." = "Simpan artikel untuk dibaca nanti; artikel tetap ada meski sudah keluar dari feed-nya."
+"Save your subscriptions as an OPML file" = "Simpan langganan Anda sebagai berkas OPML"
+"Saved articles" = "Artikel tersimpan"
+"Saved articles of one feed or every feed, newest first, with their read and saved flags" = "Artikel tersimpan dari satu feed atau semua feed, terbaru dulu, beserta tanda sudah dibaca dan tersimpan"
+"Saved {count} feeds to {path}" = "{count} feed disimpan ke {path}"
+"Science" = "Sains"
+"Search articles…" = "Cari artikel…"
+"Starter feeds" = "Feed awal"
+"Subscribe in Feeds: {site}" = "Berlangganan di Feed: {site}"
+"Subscribe to a feed, or to the feed a website offers (turns Feeds on)" = "Berlangganan sebuah feed, atau feed yang ditawarkan sebuah situs web (mengaktifkan Feed)"
+"Subscribe to a site or pick from tested starter feeds" = "Berlangganan sebuah situs atau pilih dari feed awal yang sudah diuji"
+"Subscribed to {feed}" = "Berlangganan {feed}"
+"Technology" = "Teknologi"
+"The OPML file" = "Berkas OPML"
+"The article's link" = "Tautan artikel"
+"The feed address" = "Alamat feed"
+"The full article is on its website." = "Artikel lengkap ada di situsnya."
+"The newest articles kept for each feed; saved articles are kept on top of these" = "Artikel terbaru yang disimpan untuk setiap feed; artikel tersimpan ditambahkan di atas jumlah ini"
+"The reader" = "Pembaca"
+"The reader shows a clean copy of the article, without scripts, frames or trackers" = "Pembaca menampilkan salinan artikel yang bersih, tanpa skrip, bingkai, atau pelacak"
+"The server answered HTTP {status}" = "Server menjawab HTTP {status}"
+"The server is busy (HTTP {status}); trying again later" = "Server sedang sibuk (HTTP {status}); mencoba lagi nanti"
+"The server redirected from a secure address to an insecure one" = "Server mengalihkan dari alamat aman ke alamat tidak aman"
+"The server redirected to an address that is not valid" = "Server mengalihkan ke alamat yang tidak valid"
+"The server redirected too many times" = "Server mengalihkan terlalu banyak kali"
+"The server redirected without saying where" = "Server mengalihkan tanpa menyebutkan tujuannya"
+"This OPML file is too large" = "Berkas OPML ini terlalu besar"
+"This OPML file lists no feeds" = "Berkas OPML ini tidak memuat feed"
+"This address is a web page without a feed; find its RSS or Atom link" = "Alamat ini adalah halaman web tanpa feed; cari tautan RSS atau Atom-nya"
+"This download is too large" = "Unduhan ini terlalu besar"
+"This feed already has 200 saved articles" = "Feed ini sudah memiliki 200 artikel tersimpan"
+"This feed could not be read" = "Feed ini tidak dapat dibaca"
+"This is not an OPML file" = "Ini bukan berkas OPML"
+"This site offers several feeds:" = "Situs ini menawarkan beberapa feed:"
+"Trying again at {time}" = "Mencoba lagi pada {time}"
+"Turn on Feeds" = "Aktifkan Feed"
+"Turn on Refresh in the background first" = "Aktifkan Segarkan di latar belakang dulu"
+"Unread" = "Belum dibaca"
+"Unread count" = "Jumlah belum dibaca"
+"World news" = "Berita dunia"
+"You already follow this feed" = "Anda sudah mengikuti feed ini"
+"Your feeds" = "Feed Anda"
+"Your news, together" = "Berita Anda, dalam satu tempat"
+"Your subscriptions with their folders and unread counts" = "Langganan Anda beserta folder dan jumlah belum dibaca"
+"Your web browser" = "Peramban web Anda"
+"the feed's structure is broken" = "struktur feed rusak"
+"{count} new articles" = "{count} artikel baru"
+"{count} of {max} feeds" = "{count} dari {max} feed"
+"{feed} and {more} more feeds" = "{feed} dan {more} feed lainnya"
+"{n}d" = "{n}h"
+"Could not refresh {feeds}; trying again later" = "Tidak dapat memuat ulang {feeds}; akan dicoba lagi nanti"
+"Feeds · Sidebar card" = "Feed · Kartu bilah samping"
+"Card folder" = "Folder kartu"
+"The sidebar card lists the newest unread articles of this folder; empty lists every feed" = "Kartu bilah samping menampilkan artikel belum dibaca terbaru dari folder ini; kosong menampilkan semua feed"

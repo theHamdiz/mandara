@@ -197,6 +197,8 @@ A progress bar, value from 0 to 1
 A public GitHub repository tagged mandara-plugin with a release is all it takes.
 A public repository with this topic (About → Topics).
 A random style
+A reader for RSS, Atom and JSON feeds
+A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view
 A round knob on the end of the fill that stretches into a pill while you hold it
 A rounded surface around its children
 A saying that changes every day, or your own
@@ -236,6 +238,7 @@ A video wallpaper keeps its current frame while windows hide the desktop
 A view is a list of nodes; nodes[root] is the top one and children are indices. Mandara draws them natively.
 A volume this full turns its ring amber
 A wallpaper is already being generated
+A website or feed address
 A “Mandara” Kvantum theme in ~/.cache/mandara/themes/kvantum
 A “Mandara” color scheme in ~/.config/wezterm/colors
 A “Mandara” color scheme in ~/.local/share/color-schemes
@@ -305,6 +308,7 @@ Add a city or time zone (best search match)
 Add a city or time zone…
 Add a color to the history and select it
 Add a command
+Add a feed
 Add a folder, e.g. ~/Documents — Enter
 Add a hook
 Add a layout to manage them here; the first one is the default.
@@ -314,6 +318,7 @@ Add a match
 Add a rule for an app: mute, silent, no-history, allow-dnd, low, critical
 Add a shortcut
 Add a sidebar tab (--icon name)
+Add a site and its feed is found for you. Order, folders and colours here are how the panel shows them.
 Add a task
 Add a task; a leading #List files it there (the list is created if missing)
 Add a task…
@@ -336,6 +341,7 @@ Add back
 Add checks in Studio → Plugins → Uptime monitor
 Add color
 Add command
+Add feeds
 Add include
 Add link
 Add one from an otpauth:// link or a QR code
@@ -346,6 +352,7 @@ Add slash command
 Add the WebAssembly target
 Add the command {name} to {dir}
 Add the launcher
+Add the subscriptions of an OPML file (from another feed reader)
 Add the sunnah prayers
 Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way.
 Add to PATH as {name}
@@ -359,7 +366,6 @@ Add widget
 Add widgets
 Add your GitHub user name to see your year
 Add your Home Assistant token in Studio
-Add your favourite feeds in Studio
 Add your translation API key in Studio
 Add yourself to the {group} group (`sudo usermod -aG {group} $USER`), then log out and back in.
 Add {app} to your apps (~/.local/share/applications)
@@ -406,6 +412,8 @@ Alice's Adventures in Wonderland
 Align to the launcher button
 Alignment
 All
+All articles
+All caught up
 All clear
 All collections
 All day
@@ -447,6 +455,7 @@ Also check Flatpak apps and runtimes
 Also checks the plugins you installed from the marketplace (Mandara's own plugins update with the shell)
 Also fire while a fullscreen app is shown (on MangoWM the bar must show over fullscreen windows too)
 Also here: {places}
+Also inside articles
 Also installed
 Also installs {count} packages
 Also list boot, EFI and other internal system partitions
@@ -580,6 +589,7 @@ Apps, settings, commands
 Apps, settings, commands, “/” slash commands and skills, “=” calculator; off disables the keybind, edge and menu entry
 Arabic
 Arabic font
+Arabic news
 Arabic proverb
 Arabic script
 Arabic size
@@ -608,6 +618,8 @@ Aristotle
 Arithmetic error
 Arrangement
 Arrow of God
+Articles per feed
+Articles you already have show at once; new ones follow.
 As
 As a solid rock is not shaken by the wind, wise people falter not amidst blame and praise.
 Ask a window to close
@@ -697,6 +709,7 @@ Backed up to {folder}
 Background
 Background blur
 Background blur behind translucent windows (MangoWM, Hyprland, Niri 26.04+)
+Background interval
 Background opacity
 Backlight devices and levels
 Backspace
@@ -704,6 +717,7 @@ Backup restored
 Backups & factory reset
 Backups copy ~/.config/mandara. Factory reset backs up first, then restores every default.
 Bad system call
+Badge
 Badges 1–9; pressing a number runs that entry
 Balanced
 Band
@@ -937,6 +951,7 @@ Capture on release
 Capture: region/pick-window open the snipping tool; window/screen capture immediately; --delay [N] counts down first (Esc cancels)
 Captures screens, windows and regions
 Capturing…
+Card folder
 Card padding
 Card radius
 Card spacing
@@ -1015,6 +1030,7 @@ Check everything now and answer with the results (JSON)
 Check failed
 Check for failed units every
 Check for updates automatically
+Check its address in Studio, or try again in a moment.
 Check now
 Check that the shell is running
 Check that {device} shows the same code.
@@ -1321,6 +1337,7 @@ Cosmic neon green and cyan on deep indigo (light variant derived).
 Could not copy the image: {error}
 Could not create a temporary download folder.
 Could not create {path}: {error}
+Could not download it: {error}
 Could not download the signed release. Nothing was installed. Check your connection and try again.
 Could not encode the wallpaper: {error}
 Could not keep the screen awake: {error}
@@ -1332,10 +1349,11 @@ Could not open {uri}: {error}
 Could not prepare the request
 Could not reach KDE Connect: {error}
 Could not reach the engine: {error}
+Could not reach the server: {error}
 Could not read the logs
 Could not read this feed: {error}
 Could not read {path}: {error}. Left it unchanged.
-Could not refresh this feed: {error}
+Could not refresh {feeds}; trying again later
 Could not remove {path}: {error}
 Could not restart into the firmware setup: {error}
 Could not run journalctl: {error}
@@ -1496,6 +1514,7 @@ Day {n}
 Daylight
 Days
 Days ahead
+Days an article stays after it has left its feed; saved articles stay until you remove them
 Days must be a whole number
 Days of screen time kept
 Days since
@@ -1585,6 +1604,7 @@ Depth · classic
 Depth · stacked
 Describe the active theme
 Desert
+Design & fun
 Design a wallpaper, then generate it at full size. Every file remembers its recipe, so you can remix it later.
 Design capacity
 Designed theme
@@ -2062,9 +2082,15 @@ Favorites
 Favourite entities
 Fear is inevitable, I have to accept that, but I cannot allow it to paralyze me.
 Featured
-Feed addresses
 Feed and visit
+Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them
 Feeds
+Feeds older than this refresh when you open the panel; the Refresh button fetches all of them at once
+Feeds · Bar
+Feeds · History
+Feeds · Reading
+Feeds · Refreshing
+Feeds · Sidebar card
 Feels
 Feels like {temp}
 Feet, what do I need them for if I have wings to fly.
@@ -2075,10 +2101,10 @@ Fetch forecasts from Open-Meteo (off: no weather requests at all)
 Fetch fresh weather now
 Fetch from GitHub
 Fetch rates
+Fetch the latest articles of every feed
 Fetched {repo}
 Fetches forecasts from open-meteo.com
 Fetches synced lyrics from lrclib.net while the panel is open
-Fetching headlines…
 Fetching the weather…
 Fetching {repo} failed
 Fetching…
@@ -2120,6 +2146,7 @@ Find my location with
 Find running processes by name or PID and end them
 Find the current wallpaper's subject again (skipped when it isn't confident)
 Find the current wallpaper's subject again with the chosen mode
+Find the feeds a website offers
 Find the subject with
 Find your location now (GeoClue, or one IP lookup) and share it with weather and prayer times
 Finding the latest release…
@@ -2205,8 +2232,10 @@ Fog out there. Take it slow.
 Fold repeats
 Fold the chain of narrators
 Folder
+Folder (empty for none)
 Folder (empty: Generated in your wallpaper folder)
 Folder for AppImages and portable apps; empty uses ~/.local/share/mandara/apps
+Folder to put it in
 Folders
 Folders on the right side of the dock. Click one for its newest files; drag it along the dock to reorder or away to remove it.
 Folders to search
@@ -2214,6 +2243,7 @@ Folders, comma separated (empty: your home folders)
 Follow Mandara
 Follow Mandara, or a language of its own: its panel, bar item, sidebar card, widgets and the meanings it shows; the rest of Mandara keeps its language
 Follow Quick start above: your plugin shows up here, and in Installed, as soon as you copy it in.
+Follow sites you like: add their addresses or pick from tested starter feeds in Studio.
 Follow system
 Follow system preference
 Follow the desktop's light/dark preference, or switch at set times every day
@@ -2639,6 +2669,7 @@ How often every check runs in the background
 How often failed units are counted for the chip's badge
 How often filesystem usage is read again while the panel is open
 How often subscriptions are downloaded again
+How often the background refresh runs; feeds that failed wait longer before trying again
 How often the container list updates while the panel is closed (the open panel refreshes every 2 s)
 How often the hadith of the day changes, the same everywhere
 How often the process table is sampled while the panel is open
@@ -2653,6 +2684,7 @@ How slideshow changes look: the desktop's transition or their own, with a length
 How strong the shadow under Home cards and action tiles is (0 for none)
 How strongly the capsules stand out from the bar
 How strongly the pills and islands behind items stand out
+How the bar item shows unread articles
 How the critical warning appears
 How the media panel draws the live audio spectrum
 How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it
@@ -2701,6 +2733,7 @@ Icon theme
 Icon theme {theme} is installed
 Icon theme {theme} is missing; install it or choose another in Themes → Icons
 Icons
+Icons and thumbnails
 Icons bounce until the app's first window appears
 Icons only
 Icons swell as the pointer passes (spring-animated)
@@ -2750,6 +2783,8 @@ Import
 Import a WireGuard (.conf) or OpenVPN (.ovpn) file below — it becomes a NetworkManager connection.
 Import a WireGuard (.conf) or OpenVPN (.ovpn) profile
 Import a profile
+Import and export
+Imported {added} of {total} feeds
 Imported {name} — switch it on above
 Imported — the previous settings are in {folder}
 Importing…
@@ -2974,6 +3009,7 @@ Keep in Dock
 Keep in Dock on / off for an app
 Keep it visible
 Keep low-urgency ones
+Keep old articles for
 Keep passive (idle) tray icons in the bar; they're always listed in the tray panel
 Keep split direction
 Keep the computer awake for N minutes (0 stops; no number = until turned off)
@@ -2986,12 +3022,12 @@ Keep the launcher in the Dock
 Keep the newest
 Keep the pointer inside the window (games)
 Keep the screen awake
+Keep the unread count current while the panel is closed, at a low interval; off, nothing downloads until you open Feeds
 Keep the wallpaper while a fullscreen app is open
 Keep the wallpaper while running on battery
 Keep these display settings? Reverting in {seconds} s
 Keep ticked tasks
 Keep ties of kinship
-Keep up to 16 feed subscriptions
 Keep windows clear of the dock
 Keep your tongue
 Keeps Mandara running if anything ever takes it down. Turn off to let it stay stopped after a crash or kill
@@ -3163,6 +3199,7 @@ Link copied
 Link tiles
 Links
 Links it into ~/.config/Kvantum and runs kvantummanager --set Mandara
+Linux & open source
 Liquid
 Liquid wave
 List
@@ -3445,7 +3482,13 @@ Mark a task failed (posts a notification)
 Mark a task finished (posts a notification)
 Mark a task open again
 Mark all as seen
+Mark all feeds read
+Mark an article read
+Mark an article unread
+Mark every article of a feed read, or of every feed when no address is given
+Mark every article of every feed read
 Mark every crash as seen (clears the bar badge)
+Mark read when opened
 Mark today's step done
 Markdown
 Markdown notes in topics, saved as .md files
@@ -3654,6 +3697,7 @@ Move today's reminder forward one item (every surface follows)
 Move up
 Move window to {place} {n}
 Move window {direction}
+Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders.
 Moves with the music
 Moving clouds, rain and stars (off with reduced motion)
 Muhammad Ayyub
@@ -3685,6 +3729,7 @@ NVMe {n}
 NW
 Naguib Mahfouz
 Name
+Name (empty uses the feed's own)
 Name (optional)
 Name a VPN: no VPN was used yet
 Name a folder, e.g. ~/Documents
@@ -3834,6 +3879,7 @@ No apps are playing sound
 No apps here
 No apps in the tray
 No apps match “{query}”
+No articles yet
 No audio server
 No battery
 No blur
@@ -3878,13 +3924,15 @@ No environment variables or arguments
 No exit node matches {query}
 No external monitor answers DDC/CI
 No failed units
+No feed found at this address
+No feeds yet
+No feeds yet. Add one above or pick from the starter feeds below.
 No files match “{query}”
 No filesystem access
 No folder to write into
 No fonts match
 No frames yet — the shell only draws while something changes. Open a panel to see it work.
 No hadith {reference} in {collection}
-No headlines yet
 No hotspot has been set up yet
 No icon theme is selected; standard fallbacks are in use
 No icons named like “{query}” in your theme
@@ -4014,6 +4062,7 @@ No tray item matching "{query}"
 No tray menu is open
 No unit matches “{query}”
 No units here
+No unread articles here.
 No upcoming events
 No verse or hadith {reference} in Jannah
 No visible volumes
@@ -4083,6 +4132,7 @@ Nothing else is removed.
 Nothing from the file runs while installing, and no password is needed
 Nothing generated yet. Your wallpapers appear here.
 Nothing great was ever achieved without enthusiasm.
+Nothing here matches “{query}”
 Nothing here matches “{query}”.
 Nothing here yet
 Nothing in this session starts these yet: turn on “Mandara starts these at login”, or start them from your compositor config.
@@ -4136,6 +4186,7 @@ Notifications kept
 Notifications tab
 Notify
 Notify about crashes
+Notify about new articles
 Notify about updates
 Notify on changes
 Notify when done
@@ -4245,6 +4296,7 @@ One line per result
 One lookup with the method above; IP lookups send your address to ipapi.co
 One never notices what has been done; one can only see what remains to be done.
 One note's full Markdown text
+One notification for what is new, at most every 30 minutes, and never while the panel is open
 One of choices: plain strings or { value, label } tables
 One of your settings as JSON: the user's value, or the declared default.
 One path with its evidence
@@ -4264,7 +4316,6 @@ Only tags and workspaces with windows (plus the one you are on)
 Only the built-in encoder uses this; the others follow Resolution
 Only the first {count} checks run
 Only the main display shows the lock screen; others stay black (OLED friendly)
-Only the selected feed refreshes while its panel is open
 Only the thin sliders use it now: the Pill and Segmented designs mark the value without a handle
 Only this display's windows
 Only used when the system can't report camera use instantly
@@ -4288,6 +4339,7 @@ Open a terminal running the update command (all sources with updates, or one)
 Open a verse or hadith in the Jannah panel and return it
 Open a volume in the file manager (mounting it first if needed)
 Open animation
+Open articles in
 Open as a floating window
 Open at Login
 Open folder
@@ -4338,8 +4390,11 @@ Open, close or toggle the wallpaper picker
 Open-source cursors in the style of macOS, with the spinning wait wheel
 Opened {path}
 Opened {terminal}: {command}
+Opening an article marks it read; you can always mark it unread again
 Opening the Qur'an…
+Opening the article…
 Opening the keyring…
+Opening your feeds…
 Opening your keyring…
 Opening {collection}…
 Opening {url}
@@ -4362,6 +4417,7 @@ Optional, e.g. SYS.CLOCK // الساعة
 Optional: clean up leftovers
 Options
 Or right-click the desktop and choose Edit desktop
+Or type a site's address in the launcher and choose Subscribe in Feeds.
 Orbit
 Order
 Order inside each list (open tasks stay above done ones)
@@ -4560,6 +4616,8 @@ Picker
 Picture
 Picture shape
 Picture-in-picture floats on every workspace
+Picture: {alt}
+Pictures
 Pictures from a folder, a new one every so often
 Pill
 Pill labels
@@ -4649,6 +4707,7 @@ Pomodoro
 Poor Richard's Almanack
 Pop a plugin's panel out of the bar into a floating card you can drag anywhere on the output its panel is open on (else the focused one): at x y when given (logical px from the output's top-left), else where it last floated there. A floating card moves to x y
 Pop up for
+Popular feeds by topic, each checked to download and read correctly on {date}.
 Popup
 Popup content
 Popup time
@@ -4754,6 +4813,7 @@ Profiles & backup
 Program
 Program file
 Program, e.g. ghostty
+Programming
 Progress
 Progress bars
 Progress reported by an app's notifications, on its icon
@@ -4823,7 +4883,6 @@ Qur'an and hadith
 RAM
 RECENT
 RPM
-RSS, Atom and JSON subscriptions with local read history
 RSS, Atom or JSON feed address
 RTL
 Rabi al-Awwal
@@ -4859,6 +4918,7 @@ Read
 Read Claude Code's logs
 Read a setting by JSON pointer (whole config when omitted)
 Read more
+Read on the website
 Read the configured Home Assistant favourites
 Read the folder again
 Read the text in an image file (PP-OCRv5; auto, latin or arabic)
@@ -4961,13 +5021,17 @@ Reduce motion
 References and links follow sunnah.com. Muwatta Malik is numbered as in the dataset and links to its book.
 Refraction
 Refresh
-Refresh a feed and return its headlines and read history
+Refresh a feed now and return its articles, or every feed when no address is given
 Refresh calendars
 Refresh every
+Refresh feeds
+Refresh in the background
 Refresh interval
 Refresh rate
 Refresh this feed before marking it read
-Refreshing…
+Refresh to fetch the latest articles.
+Refresh while open
+Refreshing {done} of {total}…
 Refusing to move {path} to the Trash
 Refusing to signal init (PID 1)
 Regenerate
@@ -5014,10 +5078,12 @@ Remove a cursor theme Mandara installed (never one from a package or your own fo
 Remove a paired device
 Remove a rule by its position (from 1)
 Remove a saved verse or hadith
+Remove a subscription (its saved history stays until you subscribe again)
 Remove a task from the bar and the panel
 Remove all
 Remove an account (by id from `authenticator list`) from the keyring
 Remove an app from the dock
+Remove an article from your saved ones
 Remove an autostart entry Mandara added
 Remove duplicates ({n})
 Remove every finished task
@@ -5252,6 +5318,8 @@ Saturday
 Saturday and Sunday
 Save
 Save a verse or hadith
+Save an article to read it later
+Save articles to read them later; they stay even after they leave their feed.
 Save as profile
 Save how things look now — say “Work” and “Night” — and switch with one click or `mandara msg profile apply Night`.
 Save key
@@ -5262,10 +5330,13 @@ Save the current arrangement; when the same monitors connect again the shell swi
 Save the current settings as a profile (look = appearance only)
 Save the screen recording
 Save to disk
+Save your subscriptions as an OPML file
 Saved
 Saved VPNs and which are connected
 Saved Wi-Fi networks
 Saved Wi-Fi networks with autoconnect and priority
+Saved articles
+Saved articles of one feed or every feed, newest first, with their read and saved flags
 Saved as monitor lines in Mandara's {file} drop-in (your own config isn't touched)
 Saved colors: {n}
 Saved display profiles and which one matches the connected monitors
@@ -5276,6 +5347,7 @@ Saved now; applied the next time Mandara runs under a supported compositor ({com
 Saved now; {file} is generated the next time Mandara runs under {compositor}.
 Saved profiles
 Saved settings profiles
+Saved {count} feeds to {path}
 Saved {name}
 Saved {when}
 Saved — reconnect to apply
@@ -5304,6 +5376,7 @@ Schedule, tuning, style and icons
 Scheduled
 Scheduled: switch to dark at this time
 Scheduled: switch to light at this time
+Science
 Screen
 Screen backlight
 Screen capture
@@ -5366,6 +5439,7 @@ Search and download wallpapers from wallhaven.cc right in the wallpaper picker
 Search apps
 Search apps by name or id
 Search apps, files and more
+Search articles…
 Search bar width
 Search below to add a city or time zone
 Search by service or account name
@@ -5461,7 +5535,6 @@ Sent to KeePassXC. It can't confirm the result without its Secret Service integr
 Sentence
 Sentences, 358
 Sentences, 439
-Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions
 Separate side bars: a glass pill per group, one island, or a slab along the whole edge
 Separate up to 24 entity ids with spaces; empty shows the first available entities
 Separators
@@ -5845,6 +5918,7 @@ Start with “Add to PATH” switched on: a command in ~/.local/bin (never repla
 Started {count} containers
 Started {name}
 Started {unit}
+Starter feeds
 Starting KeePassXC…
 Starting a private link on your network
 Starting apps
@@ -5932,7 +6006,11 @@ Studio shows them in your plugin's settings modal
 Study
 Style
 Styles
+Subscribe in Feeds: {site}
+Subscribe to a feed, or to the feed a website offers (turns Feeds on)
+Subscribe to a site or pick from tested starter feeds
 Subscribe to an ICS calendar (https / webcal URL, .ics file or folder)
+Subscribed to {feed}
 Subtle
 Success
 Sun
@@ -6090,6 +6168,7 @@ Tasks on lined paper with square boxes
 Tasks, focus timer and system load
 Tasks, notes, focus timers and sign-in codes
 Technical details
+Technology
 Tell me about config problems
 Tell me what company thou keepest, and I'll tell thee what thou art.
 Tell me when charged
@@ -6165,6 +6244,7 @@ The Inbox can be renamed but not deleted
 The Little Prince
 The Mediterranean horizon with waves and sun glitter
 The Narrow Road to the Interior
+The OPML file
 The Pomodoro timer; click to start or pause
 The Prophet
 The Prophet's sayings ﷺ, collection by collection
@@ -6203,6 +6283,7 @@ The archive contains unsafe paths
 The archive has no {path}
 The archive has too many files
 The archive is too large to install
+The article's link
 The audio server is unavailable
 The audio server isn't reachable
 The authentication helper is not available
@@ -6285,6 +6366,7 @@ The endpoint did not answer with an IP address: {reply}
 The engine refused ({status}): {error}
 The entries of a collection, optionally matching a search
 The entry Enter runs right after opening the menu
+The feed address
 The feed belongs to another address
 The feed server returned no content
 The file chooser failed: {error}
@@ -6295,6 +6377,7 @@ The first principle is that you must not fool yourself, and you are the easiest 
 The floating panels with their output, position and size, and every remembered position
 The focused wallpaper's name under the picker
 The focused window
+The full article is on its website.
 The full coredumpctl report of a crash (with a stack trace when the core is stored)
 The generator's curated palettes
 The generator's styles with their parameters
@@ -6350,6 +6433,7 @@ The new track when music changes
 The new version is the same size
 The new version is {size} larger
 The new version is {size} smaller
+The newest articles kept for each feed; saved articles are kept on top of these
 The newest one saved
 The next prayer and the time to it (needs the Prayer times plugin)
 The next prayer and time remaining
@@ -6374,6 +6458,8 @@ The prayer times of another day (days after today, or before it when negative)
 The provider returned no language list
 The provider returned no translation
 The public IP endpoint must be an http(s) URL
+The reader
+The reader shows a clean copy of the article, without scripts, frames or trackers
 The reader shows the Prophet's words first; the chain opens with a tap
 The ready-made launcher looks (Classic, Grid, Beacon) and which one is applied
 The recitation download is incomplete or is not an MP3 file
@@ -6409,9 +6495,15 @@ The screen frame already joins the bar to the edges
 The screen recorded; Focused display follows the focused window
 The secret is too short
 The sending app's name above the title
+The server answered HTTP {status}
 The server did not return valid JSON
+The server is busy (HTTP {status}); trying again later
 The server is receiving too many requests; try again later
+The server redirected from a secure address to an insecure one
 The server redirected this request; enter its final address in Studio
+The server redirected to an address that is not valid
+The server redirected too many times
+The server redirected without saying where
 The server rejected the API key
 The server's response was too large
 The service did not reply
@@ -6425,6 +6517,7 @@ The shell isn't running
 The shell restarts on the new version. Reopen Studio to use it here too.
 The shell's folder watcher waits {ms} ms for writes to settle
 The side bars' switches, pins and plugins
+The sidebar card lists the newest unread articles of this folder; empty lists every feed
 The sidebar keeps at least one tab
 The sidebar's tabs and their widgets
 The signed release has no unique checksum for this archive.
@@ -6511,8 +6604,11 @@ Third-party plugins
 Thiruvalluvar
 This AppImage's runtime isn't a valid program
 This Flatpak file doesn't name an app
+This OPML file is too large
+This OPML file lists no feeds
 This above all: to thine own self be true.
 This account has no password.
+This address is a web page without a feed; find its RSS or Atom link
 This app doesn't share a menu with the shell
 This app has no command to run
 This app is already installed
@@ -6537,11 +6633,14 @@ This database uses a hardware key (YubiKey challenge-response), which Mandara ca
 This device
 This device is asking to pair. Check the name on your phone before accepting.
 This device, the exit node in use and every peer (JSON)
+This download is too large
 This driver doesn't report per-process GPU memory.
 This entity cannot run that action right now
 This entry is no longer available
 This entry is too large to copy as one image
 This executable path cannot be used in a desktop entry
+This feed already has 200 saved articles
+This feed could not be read
 This feed is too large to read
 This file looks damaged, or isn't an app. Try downloading it again.
 This file {version}
@@ -6550,6 +6649,7 @@ This is a {family} package ({extension}).
 This is an old (type 1) AppImage, which Mandara can't read safely. Download a newer build of the app.
 This is an older version ({new}) than the one installed ({old}).
 This is how the screen fades before locking
+This is not an OPML file
 This item changed elsewhere. Your text is still here.
 This item has no menu
 This item was removed. Your text is still here.
@@ -6574,6 +6674,7 @@ This request is too large
 This restarts the computer; repeat as `session reboot-to {target} confirm`
 This session
 This sign-in method needs more than a password
+This site offers several feeds:
 This style uses Compact height
 This tab is empty
 This text is too large to send to a phone
@@ -6735,6 +6836,7 @@ Try it
 Try other words or another theme
 Try other words, another collection or any grade
 Try part of a unit name or its description
+Trying again at {time}
 Tue
 Tuning
 Turbulence
@@ -6752,7 +6854,9 @@ Turn off
 Turn off for now
 Turn on
 Turn on Custom spring first
+Turn on Feeds
 Turn on Only at certain times first
+Turn on Refresh in the background first
 Turn on Rim light first
 Turn on Screen frame (side bar) first
 Turn on Shadow first
@@ -6929,6 +7033,8 @@ Unpinned entries are forgotten when Mandara starts
 Unpinned entries are forgotten when the session locks
 Unpinned entries older than this are dropped (0 = never)
 Unpushed
+Unread
+Unread count
 Unread notification count on the app's icon
 Unset
 Unset keeps your compositor's value
@@ -7339,6 +7445,7 @@ Workspace not found
 Workspaces
 World clock
 World clock row
+World news
 Worship
 Worship Him alone
 Would remove {path}
@@ -7365,6 +7472,7 @@ Yes, remove it anyway
 Yesterday
 Yoshida Kenkō
 You
+You already follow this feed
 You can't delete the account you're signed in with
 You can't lock the account you're signed in with.
 You can't use up creativity. The more you use, the more you have.
@@ -7404,6 +7512,7 @@ Your cursor
 Your devices
 Your devices, within reach
 Your dock's apps, or any apps and links, as tiles
+Your feeds
 Your graphics card can't encode this with GPU Screen Recorder
 Your hadith library
 Your home favourites, sensors and scenes
@@ -7422,6 +7531,7 @@ Your machine at a glance, screen time, the next prayer, a search field, your Git
 Your marketplace plugins are current
 Your name for this device (empty: its own name)
 Your names & icons
+Your news, together
 Your own
 Your own config also sets {outputs}; your line may win over the drop-in
 Your own plugins while you build them: enabled automatically and reloaded on every change.
@@ -7435,7 +7545,7 @@ Your saved verses and hadith, newest first
 Your session starts these (systemd's xdg-autostart).
 Your session's units
 Your status (empty: Online / Do not disturb)
-Your subscriptions, together
+Your subscriptions with their folders and unread counts
 Your system's location service (GeoClue) couldn't find you. Many Linux systems ship it without a lookup service. Choose IP lookup, or type your city and press Find.
 Your tailnet: this device, exit node and peers with their paths
 Your tasks; click one to tick it
@@ -7446,6 +7556,7 @@ Your to-dos, a sticky note, the focus timer, a quote and notebook tabs on the de
 Your translation appears here
 Your wallpaper, an image of your choice or a solid color
 Your wallpaper, frosted, behind the side bars; lower the opacity to see it
+Your web browser
 Your words in the field (optional)
 Yours
 Zhuangzi
@@ -7855,6 +7966,7 @@ that backup doesn't parse: {error}
 the check crashed
 the compositor did not report a focused window geometry
 the compositor returned an unexpected frame size
+the feed's structure is broken
 the file to share
 the installed copy isn't the published {version} build
 the new name
@@ -8008,7 +8120,9 @@ your default
 {count} listening · {exposed} reachable from the network
 {count} min
 {count} modified
+{count} new articles
 {count} notifications
+{count} of {max} feeds
 {count} of {total} down
 {count} on
 {count} open
@@ -8074,6 +8188,7 @@ your default
 {expression} · Enter copies
 {failed} of {count} could not be ended: {error}
 {failed} of {count} failed: {error}
+{feed} and {more} more feeds
 {file} already exists
 {file} doesn't compile: {error}
 {file} doesn't include {drop_in}
@@ -8190,6 +8305,7 @@ your default
 {n} verses
 {n} windows
 {n} · {name} · {count} ayahs
+{n}d
 {n}h
 {n}m
 {on} of {total} plugins on

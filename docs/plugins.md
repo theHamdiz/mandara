@@ -14,7 +14,8 @@ may access, its settings and where it fits. **Installed**, **Updates**,
 **Community** (the GitHub marketplace) and **Develop** (the authoring
 handbook) sit beside it.
 
-Feeds, Home Assistant and Phone Connect keep their data cached while enabled.
+Home Assistant and Phone Connect keep their data cached while enabled; Feeds
+keeps only unread counts and loads its history while its panel is open.
 Switching one off clears its snapshots, and a late refresh cannot restore them.
 Article read history stays on disk. An explicit home or device action already
 running can finish; disabling the plugin prevents a follow-up refresh.
@@ -83,7 +84,7 @@ The 77 first-party plugins (41 of them ship switched off, marked *opt-in*):
 | **Presentation mode** | One switch for talks and screen sharing: do not disturb, keep awake and hidden desktop widgets, all put back afterwards *(opt-in)* |
 | **Translator** | Translate text with DeepL or your own LibreTranslate server; text is sent only when you ask *(opt-in)* |
 | **Phone Connect** | Paired KDE Connect devices: battery, ring, ping and explicitly send clipboard text *(opt-in)* |
-| **Feeds** | Read RSS, Atom and JSON feeds with cached headlines and local read history *(opt-in)* |
+| **Feeds** | A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search, a clean reader view, starter feeds and OPML *(opt-in)* |
 | **Home Assistant** | Your real home states and favourites, with controls for lights, switches, fans, scenes, scripts and buttons *(opt-in)* |
 | **Share to phone** | Clipboard text, a screenshot or a file, served once on your network behind a QR code *(opt-in)* |
 | **Tailscale** | Your tailnet: this device, peers, direct or relayed paths, exit nodes, connect and disconnect *(opt-in)* |

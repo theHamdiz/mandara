@@ -8326,7 +8326,6 @@
 
 "Add your Home Assistant token in Studio" = "Studio में अपना Home Assistant टोकन जोड़ें"
 
-"Add your favourite feeds in Studio" = "Studio में अपनी पसंदीदा फ़ीड जोड़ें"
 
 "Add your translation API key in Studio" = "Studio में अनुवाद की API कुंजी जोड़ें"
 
@@ -8356,7 +8355,6 @@
 
 "Could not read this feed: {error}" = "यह फ़ीड नहीं पढ़ी जा सकी: {error}"
 
-"Could not refresh this feed: {error}" = "यह फ़ीड ताज़ा नहीं हो सकी: {error}"
 
 "Could not save or read feed history: {error}" = "फ़ीड का इतिहास सहेजा या पढ़ा नहीं जा सका: {error}"
 
@@ -8378,11 +8376,9 @@
 
 "Favourite entities" = "पसंदीदा एंटिटी"
 
-"Feed addresses" = "फ़ीड पते"
 
 "Feeds" = "फ़ीड"
 
-"Fetching headlines…" = "सुर्खियाँ लाई जा रही हैं…"
 
 "Forget device" = "डिवाइस भूलें"
 
@@ -8410,7 +8406,6 @@
 
 "Keep a translation under 5,000 characters" = "अनुवाद 5,000 अक्षरों से छोटा रखें"
 
-"Keep up to 16 feed subscriptions" = "अधिकतम 16 फ़ीड सदस्यताएँ रखें"
 
 "LibreTranslate" = "LibreTranslate"
 
@@ -8424,9 +8419,7 @@
 
 "No entities to show" = "दिखाने के लिए कोई एंटिटी नहीं"
 
-"No headlines yet" = "अभी कोई सुर्खियाँ नहीं"
 
-"Only the selected feed refreshes while its panel is open" = "पैनल खुला होने पर केवल चुनी गई फ़ीड ताज़ा होती है"
 
 "Opening the keyring…" = "कीरिंग खोली जा रही है…"
 
@@ -8448,7 +8441,6 @@
 
 "Provider" = "प्रदाता"
 
-"RSS, Atom and JSON subscriptions with local read history" = "स्थानीय पठन इतिहास के साथ RSS, Atom और JSON सदस्यताएँ"
 
 "RSS, Atom or JSON feed address" = "RSS, Atom या JSON फ़ीड पता"
 
@@ -8458,13 +8450,11 @@
 
 "Reading your home…" = "घर की स्थिति पढ़ी जा रही है…"
 
-"Refresh a feed and return its headlines and read history" = "फ़ीड ताज़ा करें और सुर्खियाँ तथा पठन इतिहास लौटाएँ"
 
 "Refresh interval" = "ताज़ा करने का अंतराल"
 
 "Refresh this feed before marking it read" = "पढ़ा हुआ चिह्नित करने से पहले यह फ़ीड ताज़ा करें"
 
-"Refreshing…" = "ताज़ा किया जा रहा है…"
 
 "Reject" = "अस्वीकार करें"
 
@@ -8488,7 +8478,6 @@
 
 "Send text to a paired, connected device" = "युग्मित और जुड़े डिवाइस पर पाठ भेजें"
 
-"Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "RSS, Atom या JSON फ़ीड पते खाली जगह से अलग करें; अधिकतम 16 सदस्यताएँ"
 
 "Separate up to 24 entity ids with spaces; empty shows the first available entities" = "अधिकतम 24 एंटिटी ID खाली जगह से अलग करें; खाली छोड़ने पर पहली उपलब्ध एंटिटी दिखेंगी"
 
@@ -8594,7 +8583,6 @@
 
 "Your home favourites, sensors and scenes" = "घर के पसंदीदा, सेंसर और दृश्य"
 
-"Your subscriptions, together" = "आपकी सदस्यताएँ एक साथ"
 
 "Your translation appears here" = "आपका अनुवाद यहाँ दिखेगा"
 
@@ -8896,3 +8884,133 @@
 "A gentle wave along the fill that flows while you drag" = "भराव के साथ एक हल्की लहर जो खींचते समय बहती है"
 "Ten rounded steps that fill one after another" = "दस गोल चरण जो एक के बाद एक भरते हैं"
 "How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it" = "शेल के कंट्रोल कैसे दिखते हैं। हर पूर्वावलोकन असली कंट्रोल है: डिज़ाइन आज़माने के लिए उसे खींचें, इस्तेमाल करने के लिए डिज़ाइन पर क्लिक करें"
+
+# ── Feeds reader ─────────────────────────────────────────────
+"A reader for RSS, Atom and JSON feeds" = "RSS, Atom और JSON फ़ीड के लिए रीडर"
+"A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view" = "RSS, Atom और JSON फ़ीड के लिए रीडर: एक टाइमलाइन, फ़ोल्डर, सेव किए लेख, खोज और साफ़ रीडर व्यू"
+"A website or feed address" = "वेबसाइट या फ़ीड का पता"
+"Add a feed" = "फ़ीड जोड़ें"
+"Add a site and its feed is found for you. Order, folders and colours here are how the panel shows them." = "कोई साइट जोड़ें, उसकी फ़ीड अपने आप मिल जाएगी। क्रम, फ़ोल्डर और रंग यहाँ से तय होते हैं कि पैनल उन्हें कैसे दिखाए।"
+"Add feeds" = "फ़ीड जोड़ें"
+"Add the subscriptions of an OPML file (from another feed reader)" = "OPML फ़ाइल की सदस्यताएँ जोड़ें (किसी दूसरे फ़ीड रीडर से)"
+"All articles" = "सभी लेख"
+"All caught up" = "सब पढ़ लिया"
+"Also inside articles" = "लेखों के अंदर भी"
+"Arabic news" = "अरबी समाचार"
+"Articles per feed" = "प्रति फ़ीड लेख"
+"Articles you already have show at once; new ones follow." = "जो लेख पहले से हैं वे तुरंत दिखते हैं; नए बाद में आते हैं।"
+"Background interval" = "बैकग्राउंड अंतराल"
+"Badge" = "बैज"
+"Check its address in Studio, or try again in a moment." = "इसका पता Studio में जाँचें, या थोड़ी देर बाद फिर कोशिश करें।"
+"Could not download it: {error}" = "इसे डाउनलोड नहीं किया जा सका: {error}"
+"Could not reach the server: {error}" = "सर्वर तक नहीं पहुँचा जा सका: {error}"
+"Days an article stays after it has left its feed; saved articles stay until you remove them" = "फ़ीड से हटने के बाद लेख कितने दिन रहता है; सेव किए लेख आपके हटाने तक रहते हैं"
+"Design & fun" = "डिज़ाइन और मज़ा"
+"Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them" = "फ़ीड के आइकन और थंबनेल फ़ीड के साथ आते हैं। लेखों के अंदर की तस्वीरें उनकी वेबसाइट से तभी लोड होती हैं जब आप अनुमति दें"
+"Feeds older than this refresh when you open the panel; the Refresh button fetches all of them at once" = "इससे पुरानी फ़ीड पैनल खोलने पर रीफ़्रेश होती हैं; रीफ़्रेश बटन सभी को एक साथ लाता है"
+"Feeds · Bar" = "फ़ीड · बार"
+"Feeds · History" = "फ़ीड · इतिहास"
+"Feeds · Reading" = "फ़ीड · पढ़ना"
+"Feeds · Refreshing" = "फ़ीड · रीफ़्रेश"
+"Fetch the latest articles of every feed" = "हर फ़ीड के नवीनतम लेख लाएं"
+"Find the feeds a website offers" = "किसी वेबसाइट की दी हुई फ़ीड खोजें"
+"Folder (empty for none)" = "फ़ोल्डर (न हो तो खाली छोड़ें)"
+"Folder to put it in" = "किस फ़ोल्डर में रखें"
+"Follow sites you like: add their addresses or pick from tested starter feeds in Studio." = "पसंदीदा साइटें फ़ॉलो करें: उनके पते जोड़ें या Studio में जाँची-परखी शुरुआती फ़ीड चुनें।"
+"How often the background refresh runs; feeds that failed wait longer before trying again" = "बैकग्राउंड रीफ़्रेश कितनी बार चलता है; विफल फ़ीड दोबारा कोशिश से पहले ज़्यादा इंतज़ार करती हैं"
+"How the bar item shows unread articles" = "बार का आइटम अपठित लेख कैसे दिखाए"
+"Icons and thumbnails" = "आइकन और थंबनेल"
+"Import and export" = "आयात और निर्यात"
+"Imported {added} of {total} feeds" = "{total} में से {added} फ़ीड आयात हुईं"
+"Keep old articles for" = "पुराने लेख कितने समय रखें"
+"Keep the unread count current while the panel is closed, at a low interval; off, nothing downloads until you open Feeds" = "पैनल बंद होने पर भी अपठित गिनती ताज़ा रखें, कम अंतराल पर; बंद होने पर Feeds खोलने तक कुछ डाउनलोड नहीं होगा"
+"Linux & open source" = "Linux और ओपन सोर्स"
+"Mark all feeds read" = "सभी फ़ीड पढ़ी हुई चिह्नित करें"
+"Mark an article read" = "किसी लेख को पढ़ा हुआ चिह्नित करें"
+"Mark an article unread" = "किसी लेख को अपठित चिह्नित करें"
+"Mark every article of a feed read, or of every feed when no address is given" = "किसी फ़ीड के सभी लेख पढ़ा हुआ चिह्नित करें, या पता न देने पर सभी फ़ीड के"
+"Mark every article of every feed read" = "सभी फ़ीड के सभी लेख पढ़ा हुआ चिह्नित करें"
+"Mark read when opened" = "खोलने पर पढ़ा हुआ चिह्नित करें"
+"Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders." = "अपनी सदस्यताएँ OPML फ़ाइल के रूप में एक फ़ीड रीडर से दूसरे में ले जाएं। आयात करने पर वे फ़ीड फ़ोल्डर समेत जुड़ती हैं जिन्हें आप अभी फ़ॉलो नहीं करते।"
+"Name (empty uses the feed's own)" = "नाम (खाली हो तो फ़ीड का अपना नाम)"
+"No articles yet" = "अभी कोई लेख नहीं"
+"No feed found at this address" = "इस पते पर कोई फ़ीड नहीं मिली"
+"No feeds yet" = "अभी कोई फ़ीड नहीं"
+"No feeds yet. Add one above or pick from the starter feeds below." = "अभी कोई फ़ीड नहीं। ऊपर से जोड़ें या नीचे दी गई शुरुआती फ़ीड में से चुनें।"
+"No unread articles here." = "यहाँ कोई अपठित लेख नहीं।"
+"Nothing here matches “{query}”" = "“{query}” से कुछ मेल नहीं खाता"
+"Notify about new articles" = "नए लेखों की सूचना दें"
+"One notification for what is new, at most every 30 minutes, and never while the panel is open" = "नई चीज़ों के लिए एक सूचना, ज़्यादा से ज़्यादा हर 30 मिनट में, और पैनल खुला होने पर कभी नहीं"
+"Open articles in" = "लेख खोलें"
+"Opening an article marks it read; you can always mark it unread again" = "लेख खोलने पर वह पढ़ा हुआ चिह्नित हो जाता है; आप उसे फिर अपठित कर सकते हैं"
+"Opening the article…" = "लेख खोला जा रहा है…"
+"Opening your feeds…" = "आपकी फ़ीड खोली जा रही हैं…"
+"Or type a site's address in the launcher and choose Subscribe in Feeds." = "या लॉन्चर में किसी साइट का पता लिखें और Feeds में सदस्यता लें चुनें।"
+"Picture: {alt}" = "तस्वीर: {alt}"
+"Pictures" = "तस्वीरें"
+"Popular feeds by topic, each checked to download and read correctly on {date}." = "विषय के अनुसार लोकप्रिय फ़ीड, हर एक {date} को डाउनलोड और पढ़ने के लिए जाँची गई।"
+"Programming" = "प्रोग्रामिंग"
+"Read on the website" = "वेबसाइट पर पढ़ें"
+"Refresh a feed now and return its articles, or every feed when no address is given" = "किसी फ़ीड को अभी रीफ़्रेश करके उसके लेख लौटाएं, या पता न देने पर सभी फ़ीड के"
+"Refresh feeds" = "फ़ीड रीफ़्रेश करें"
+"Refresh in the background" = "बैकग्राउंड में रीफ़्रेश करें"
+"Refresh to fetch the latest articles." = "नवीनतम लेख लाने के लिए रीफ़्रेश करें।"
+"Refresh while open" = "खुला होने पर रीफ़्रेश करें"
+"Refreshing {done} of {total}…" = "{total} में से {done} रीफ़्रेश हो रही हैं…"
+"Remove a subscription (its saved history stays until you subscribe again)" = "कोई सदस्यता हटाएं (दोबारा सदस्यता लेने तक उसका सेव किया इतिहास रहता है)"
+"Remove an article from your saved ones" = "किसी लेख को अपने सेव किए लेखों से हटाएं"
+"Save an article to read it later" = "किसी लेख को बाद में पढ़ने के लिए सेव करें"
+"Save articles to read them later; they stay even after they leave their feed." = "लेखों को बाद में पढ़ने के लिए सेव करें; फ़ीड से हटने के बाद भी वे रहते हैं।"
+"Save your subscriptions as an OPML file" = "अपनी सदस्यताएँ OPML फ़ाइल के रूप में सेव करें"
+"Saved articles" = "सेव किए लेख"
+"Saved articles of one feed or every feed, newest first, with their read and saved flags" = "एक या सभी फ़ीड के सेव किए लेख, नए से पुराने, उनके पढ़े और सेव के निशान के साथ"
+"Saved {count} feeds to {path}" = "{count} फ़ीड {path} में सेव हुईं"
+"Science" = "विज्ञान"
+"Search articles…" = "लेख खोजें…"
+"Starter feeds" = "शुरुआती फ़ीड"
+"Subscribe in Feeds: {site}" = "Feeds में सदस्यता लें: {site}"
+"Subscribe to a feed, or to the feed a website offers (turns Feeds on)" = "किसी फ़ीड, या वेबसाइट की दी हुई फ़ीड की सदस्यता लें (Feeds चालू करता है)"
+"Subscribe to a site or pick from tested starter feeds" = "किसी साइट की सदस्यता लें या जाँची-परखी शुरुआती फ़ीड में से चुनें"
+"Subscribed to {feed}" = "{feed} की सदस्यता ली गई"
+"Technology" = "तकनीक"
+"The OPML file" = "OPML फ़ाइल"
+"The article's link" = "लेख का लिंक"
+"The feed address" = "फ़ीड का पता"
+"The full article is on its website." = "पूरा लेख उसकी वेबसाइट पर है।"
+"The newest articles kept for each feed; saved articles are kept on top of these" = "हर फ़ीड के सबसे नए लेख रखे जाते हैं; सेव किए लेख इनके अलावा रखे जाते हैं"
+"The reader" = "रीडर"
+"The reader shows a clean copy of the article, without scripts, frames or trackers" = "रीडर लेख की साफ़ प्रति दिखाता है, बिना स्क्रिप्ट, फ़्रेम या ट्रैकर के"
+"The server answered HTTP {status}" = "सर्वर ने HTTP {status} दिया"
+"The server is busy (HTTP {status}); trying again later" = "सर्वर व्यस्त है (HTTP {status}); बाद में फिर कोशिश होगी"
+"The server redirected from a secure address to an insecure one" = "सर्वर ने सुरक्षित पते से असुरक्षित पते पर भेज दिया"
+"The server redirected to an address that is not valid" = "सर्वर ने ऐसे पते पर भेजा जो मान्य नहीं है"
+"The server redirected too many times" = "सर्वर ने बहुत बार रीडायरेक्ट किया"
+"The server redirected without saying where" = "सर्वर ने बिना बताए कि कहाँ, रीडायरेक्ट किया"
+"This OPML file is too large" = "यह OPML फ़ाइल बहुत बड़ी है"
+"This OPML file lists no feeds" = "इस OPML फ़ाइल में कोई फ़ीड नहीं है"
+"This address is a web page without a feed; find its RSS or Atom link" = "यह पता बिना फ़ीड वाला वेब पेज है; उसका RSS या Atom लिंक ढूँढें"
+"This download is too large" = "यह डाउनलोड बहुत बड़ा है"
+"This feed already has 200 saved articles" = "इस फ़ीड के पहले से 200 सेव किए लेख हैं"
+"This feed could not be read" = "इस फ़ीड को पढ़ा नहीं जा सका"
+"This is not an OPML file" = "यह OPML फ़ाइल नहीं है"
+"This site offers several feeds:" = "यह साइट कई फ़ीड देती है:"
+"Trying again at {time}" = "{time} पर फिर कोशिश होगी"
+"Turn on Feeds" = "Feeds चालू करें"
+"Turn on Refresh in the background first" = "पहले बैकग्राउंड में रीफ़्रेश चालू करें"
+"Unread" = "अपठित"
+"Unread count" = "अपठित गिनती"
+"World news" = "विश्व समाचार"
+"You already follow this feed" = "आप यह फ़ीड पहले से फ़ॉलो करते हैं"
+"Your feeds" = "आपकी फ़ीड"
+"Your news, together" = "आपकी खबरें, एक जगह"
+"Your subscriptions with their folders and unread counts" = "आपकी सदस्यताएँ, फ़ोल्डर और अपठित गिनती के साथ"
+"Your web browser" = "आपका वेब ब्राउज़र"
+"the feed's structure is broken" = "फ़ीड की बनावट बिगड़ी हुई है"
+"{count} new articles" = "{count} नए लेख"
+"{count} of {max} feeds" = "{max} में से {count} फ़ीड"
+"{feed} and {more} more feeds" = "{feed} और {more} और फ़ीड"
+"{n}d" = "{n} दि पहले"
+"Could not refresh {feeds}; trying again later" = "{feeds} रीफ़्रेश नहीं हो सका; बाद में फिर कोशिश होगी"
+"Feeds · Sidebar card" = "फ़ीड · साइडबार कार्ड"
+"Card folder" = "कार्ड फ़ोल्डर"
+"The sidebar card lists the newest unread articles of this folder; empty lists every feed" = "साइडबार कार्ड इस फ़ोल्डर के नवीनतम अपठित लेख दिखाता है; खाली छोड़ने पर सभी फ़ीड"

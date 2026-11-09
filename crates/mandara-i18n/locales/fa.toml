@@ -8079,7 +8079,6 @@
 
 "Add your Home Assistant token in Studio" = "توکن Home Assistant را در استودیو اضافه کنید"
 
-"Add your favourite feeds in Studio" = "خوراک‌های دلخواهتان را در استودیو اضافه کنید"
 
 "Add your translation API key in Studio" = "کلید سرویس ترجمه را در استودیو اضافه کنید"
 
@@ -8109,7 +8108,6 @@
 
 "Could not read this feed: {error}" = "خواندن این خوراک ممکن نشد: {error}"
 
-"Could not refresh this feed: {error}" = "تازه‌سازی این خوراک ممکن نشد: {error}"
 
 "Could not save or read feed history: {error}" = "ذخیره یا خواندن تاریخچهٔ خوراک ممکن نشد: {error}"
 
@@ -8131,11 +8129,9 @@
 
 "Favourite entities" = "موجودیت‌های دلخواه"
 
-"Feed addresses" = "نشانی خوراک‌ها"
 
 "Feeds" = "خوراک‌ها"
 
-"Fetching headlines…" = "در حال دریافت عنوان‌ها…"
 
 "Forget device" = "حذف جفت‌سازی دستگاه"
 
@@ -8163,7 +8159,6 @@
 
 "Keep a translation under 5,000 characters" = "متن ترجمه را زیر ۵٬۰۰۰ نویسه نگه دارید"
 
-"Keep up to 16 feed subscriptions" = "حداکثر ۱۶ اشتراک خوراک نگه دارید"
 
 "LibreTranslate" = "LibreTranslate"
 
@@ -8177,9 +8172,7 @@
 
 "No entities to show" = "موجودیتی برای نمایش نیست"
 
-"No headlines yet" = "هنوز عنوانی نیست"
 
-"Only the selected feed refreshes while its panel is open" = "فقط خوراک انتخاب‌شده هنگام باز بودن پنل تازه می‌شود"
 
 "Opening the keyring…" = "در حال باز کردن دسته‌کلید…"
 
@@ -8201,7 +8194,6 @@
 
 "Provider" = "ارائه‌دهنده"
 
-"RSS, Atom and JSON subscriptions with local read history" = "اشتراک‌های RSS، Atom و JSON با تاریخچهٔ خواندن محلی"
 
 "RSS, Atom or JSON feed address" = "نشانی خوراک RSS، Atom یا JSON"
 
@@ -8211,13 +8203,11 @@
 
 "Reading your home…" = "در حال خواندن وضعیت خانه…"
 
-"Refresh a feed and return its headlines and read history" = "خوراکی را تازه کن و عنوان‌ها و تاریخچهٔ خواندنش را برگردان"
 
 "Refresh interval" = "فاصلهٔ تازه‌سازی"
 
 "Refresh this feed before marking it read" = "پیش از علامت‌گذاری به‌عنوان خوانده‌شده این خوراک را تازه کنید"
 
-"Refreshing…" = "در حال تازه‌سازی…"
 
 "Reject" = "رد کردن"
 
@@ -8241,7 +8231,6 @@
 
 "Send text to a paired, connected device" = "متن را به دستگاه جفت‌شده و متصل بفرست"
 
-"Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "نشانی خوراک‌های RSS، Atom یا JSON را با فاصله جدا کنید؛ حداکثر ۱۶ اشتراک"
 
 "Separate up to 24 entity ids with spaces; empty shows the first available entities" = "حداکثر ۲۴ شناسهٔ موجودیت را با فاصله جدا کنید؛ خالی باشد اولین موجودیت‌های موجود را نشان می‌دهد"
 
@@ -8347,7 +8336,6 @@
 
 "Your home favourites, sensors and scenes" = "دلخواه‌ها، حسگرها و صحنه‌های خانه"
 
-"Your subscriptions, together" = "اشتراک‌های شما کنار هم"
 
 "Your translation appears here" = "ترجمهٔ شما اینجا نمایش داده می‌شود"
 
@@ -8650,3 +8638,133 @@
 "A gentle wave along the fill that flows while you drag" = "موجی آرام در طول پرشدگی که هنگام کشیدن روان می‌شود"
 "Ten rounded steps that fill one after another" = "ده پلهٔ گرد که یکی پس از دیگری پر می‌شوند"
 "How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it" = "ظاهر کنترل‌های پوسته. هر پیش‌نمایش همان کنترل واقعی است: برای امتحان یک طرح آن را بکشید و برای استفاده روی طرح کلیک کنید"
+
+# ── Feeds reader ─────────────────────────────────────────────
+"A reader for RSS, Atom and JSON feeds" = "خوانندهٔ خوراک‌های RSS، Atom و JSON"
+"A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view" = "خوانندهٔ خوراک‌های RSS، Atom و JSON: یک خط زمانی، پوشه‌ها، مقاله‌های ذخیره‌شده، جستجو و نمای خواندن تمیز"
+"A website or feed address" = "نشانی وب‌سایت یا خوراک"
+"Add a feed" = "افزودن خوراک"
+"Add a site and its feed is found for you. Order, folders and colours here are how the panel shows them." = "یک وب‌سایت اضافه کنید تا خوراکش برایتان پیدا شود. ترتیب، پوشه‌ها و رنگ‌ها در اینجا همان چیزی است که پنل نشان می‌دهد."
+"Add feeds" = "افزودن خوراک‌ها"
+"Add the subscriptions of an OPML file (from another feed reader)" = "اشتراک‌های یک فایل OPML را اضافه کنید (از خوانندهٔ خوراک دیگر)"
+"All articles" = "همهٔ مقاله‌ها"
+"All caught up" = "همه را خوانده‌اید"
+"Also inside articles" = "درون مقاله‌ها هم"
+"Arabic news" = "اخبار عربی"
+"Articles per feed" = "تعداد مقاله در هر خوراک"
+"Articles you already have show at once; new ones follow." = "مقاله‌هایی که از قبل دارید فوراً نمایش داده می‌شوند؛ تازه‌ها بعداً می‌رسند."
+"Background interval" = "فاصلهٔ زمانی پس‌زمینه"
+"Badge" = "نشان"
+"Check its address in Studio, or try again in a moment." = "نشانی آن را در استودیو بررسی کنید یا کمی بعد دوباره تلاش کنید."
+"Could not download it: {error}" = "بارگیری آن ممکن نشد: {error}"
+"Could not reach the server: {error}" = "دسترسی به کارساز ممکن نشد: {error}"
+"Days an article stays after it has left its feed; saved articles stay until you remove them" = "چند روز مقاله پس از خروج از خوراکش می‌ماند؛ مقاله‌های ذخیره‌شده تا وقتی حذفشان نکنید می‌مانند"
+"Design & fun" = "طراحی و سرگرمی"
+"Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them" = "نمادها و تصویرهای بندانگشتی خوراک همراه خود خوراک می‌آیند. تصویرهای درون مقاله‌ها فقط وقتی اجازه دهید از وب‌سایتشان بارگیری می‌شوند"
+"Feeds older than this refresh when you open the panel; the Refresh button fetches all of them at once" = "خوراک‌های قدیمی‌تر از این مدت هنگام باز کردن پنل تازه می‌شوند؛ دکمهٔ تازه‌سازی همهٔ آن‌ها را یک‌جا می‌گیرد"
+"Feeds · Bar" = "خوراک‌ها · نوار"
+"Feeds · History" = "خوراک‌ها · تاریخچه"
+"Feeds · Reading" = "خوراک‌ها · خواندن"
+"Feeds · Refreshing" = "خوراک‌ها · تازه‌سازی"
+"Fetch the latest articles of every feed" = "تازه‌ترین مقاله‌های هر خوراک را بگیرید"
+"Find the feeds a website offers" = "خوراک‌هایی را که یک وب‌سایت ارائه می‌دهد پیدا کنید"
+"Folder (empty for none)" = "پوشه (برای نداشتن خالی بگذارید)"
+"Folder to put it in" = "پوشه‌ای که در آن قرار می‌گیرد"
+"Follow sites you like: add their addresses or pick from tested starter feeds in Studio." = "سایت‌های موردعلاقه‌تان را دنبال کنید: نشانی‌شان را اضافه کنید یا از خوراک‌های آغازین آزموده در استودیو انتخاب کنید."
+"How often the background refresh runs; feeds that failed wait longer before trying again" = "هر چند وقت یک‌بار تازه‌سازی پس‌زمینه اجرا شود؛ خوراک‌های ناموفق پیش از تلاش دوباره بیشتر صبر می‌کنند"
+"How the bar item shows unread articles" = "نوار چگونه مقاله‌های خوانده‌نشده را نشان دهد"
+"Icons and thumbnails" = "نمادها و تصویرهای بندانگشتی"
+"Import and export" = "درون‌ریزی و برون‌بری"
+"Imported {added} of {total} feeds" = "{added} از {total} خوراک درون‌ریزی شد"
+"Keep old articles for" = "نگه‌داری مقاله‌های قدیمی به مدت"
+"Keep the unread count current while the panel is closed, at a low interval; off, nothing downloads until you open Feeds" = "تعداد خوانده‌نشده‌ها را هنگام بسته بودن پنل با فاصلهٔ زمانی کم به‌روز نگه دارید؛ اگر خاموش باشد تا باز کردن خوراک‌ها چیزی بارگیری نمی‌شود"
+"Linux & open source" = "لینوکس و متن‌باز"
+"Mark all feeds read" = "علامت‌گذاری همهٔ خوراک‌ها به‌عنوان خوانده‌شده"
+"Mark an article read" = "علامت‌گذاری یک مقاله به‌عنوان خوانده‌شده"
+"Mark an article unread" = "علامت‌گذاری یک مقاله به‌عنوان خوانده‌نشده"
+"Mark every article of a feed read, or of every feed when no address is given" = "همهٔ مقاله‌های یک خوراک، یا اگر نشانی داده نشود همهٔ خوراک‌ها را خوانده‌شده علامت بزنید"
+"Mark every article of every feed read" = "همهٔ مقاله‌های همهٔ خوراک‌ها را خوانده‌شده علامت بزنید"
+"Mark read when opened" = "با باز شدن، خوانده‌شده علامت بخورد"
+"Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders." = "اشتراک‌هایتان را به‌صورت فایل OPML میان خوانندگان خوراک جابه‌جا کنید. درون‌ریزی خوراک‌هایی را که هنوز دنبال نمی‌کنید با پوشه‌هایشان اضافه می‌کند."
+"Name (empty uses the feed's own)" = "نام (اگر خالی باشد نام خود خوراک)"
+"No articles yet" = "هنوز مقاله‌ای نیست"
+"No feed found at this address" = "در این نشانی خوراکی پیدا نشد"
+"No feeds yet" = "هنوز خوراکی نیست"
+"No feeds yet. Add one above or pick from the starter feeds below." = "هنوز خوراکی نیست. یکی را بالا اضافه کنید یا از خوراک‌های آغازین زیر انتخاب کنید."
+"No unread articles here." = "مقالهٔ خوانده‌نشده‌ای اینجا نیست."
+"Nothing here matches “{query}”" = "چیزی با «{query}» مطابقت ندارد"
+"Notify about new articles" = "اعلان دربارهٔ مقاله‌های تازه"
+"One notification for what is new, at most every 30 minutes, and never while the panel is open" = "یک اعلان برای تازه‌ها، حداکثر هر ۳۰ دقیقه و هرگز هنگام باز بودن پنل"
+"Open articles in" = "باز کردن مقاله‌ها در"
+"Opening an article marks it read; you can always mark it unread again" = "باز کردن مقاله آن را خوانده‌شده علامت می‌زند؛ همیشه می‌توانید دوباره آن را خوانده‌نشده کنید"
+"Opening the article…" = "در حال باز کردن مقاله…"
+"Opening your feeds…" = "در حال باز کردن خوراک‌هایتان…"
+"Or type a site's address in the launcher and choose Subscribe in Feeds." = "یا نشانی یک سایت را در راه‌انداز بنویسید و اشتراک در خوراک‌ها را برگزینید."
+"Picture: {alt}" = "تصویر: {alt}"
+"Pictures" = "تصویرها"
+"Popular feeds by topic, each checked to download and read correctly on {date}." = "خوراک‌های محبوب بر اساس موضوع که هرکدام در {date} از نظر بارگیری و خواندن درست آزموده شده‌اند."
+"Programming" = "برنامه‌نویسی"
+"Read on the website" = "خواندن در وب‌سایت"
+"Refresh a feed now and return its articles, or every feed when no address is given" = "یک خوراک را همین حالا تازه کنید و مقاله‌هایش را برگردانید، یا اگر نشانی داده نشود همهٔ خوراک‌ها را"
+"Refresh feeds" = "تازه‌سازی خوراک‌ها"
+"Refresh in the background" = "تازه‌سازی در پس‌زمینه"
+"Refresh to fetch the latest articles." = "برای گرفتن تازه‌ترین مقاله‌ها تازه‌سازی کنید."
+"Refresh while open" = "تازه‌سازی هنگام باز بودن"
+"Refreshing {done} of {total}…" = "در حال تازه‌سازی {done} از {total}…"
+"Remove a subscription (its saved history stays until you subscribe again)" = "حذف یک اشتراک (تاریخچهٔ ذخیره‌شده‌اش تا اشتراک دوباره می‌ماند)"
+"Remove an article from your saved ones" = "حذف یک مقاله از مقاله‌های ذخیره‌شده"
+"Save an article to read it later" = "ذخیرهٔ مقاله برای خواندن در وقت دیگر"
+"Save articles to read them later; they stay even after they leave their feed." = "مقاله‌ها را برای بعداً ذخیره کنید؛ حتی پس از خروج از خوراکشان می‌مانند."
+"Save your subscriptions as an OPML file" = "ذخیرهٔ اشتراک‌هایتان به‌صورت فایل OPML"
+"Saved articles" = "مقاله‌های ذخیره‌شده"
+"Saved articles of one feed or every feed, newest first, with their read and saved flags" = "مقاله‌های ذخیره‌شدهٔ یک خوراک یا همهٔ خوراک‌ها، تازه‌ترین نخست، همراه با نشان‌های خوانده‌شدن و ذخیره"
+"Saved {count} feeds to {path}" = "{count} خوراک در {path} ذخیره شد"
+"Science" = "علوم"
+"Search articles…" = "جستجوی مقاله‌ها…"
+"Starter feeds" = "خوراک‌های آغازین"
+"Subscribe in Feeds: {site}" = "اشتراک در خوراک‌ها: {site}"
+"Subscribe to a feed, or to the feed a website offers (turns Feeds on)" = "در یک خوراک، یا در خوراکی که یک وب‌سایت ارائه می‌دهد مشترک شوید (خوراک‌ها را روشن می‌کند)"
+"Subscribe to a site or pick from tested starter feeds" = "در یک سایت مشترک شوید یا از خوراک‌های آغازین آزموده انتخاب کنید"
+"Subscribed to {feed}" = "در {feed} مشترک شدید"
+"Technology" = "فناوری"
+"The OPML file" = "فایل OPML"
+"The article's link" = "پیوند مقاله"
+"The feed address" = "نشانی خوراک"
+"The full article is on its website." = "مقالهٔ کامل در وب‌سایتش است."
+"The newest articles kept for each feed; saved articles are kept on top of these" = "تازه‌ترین مقاله‌هایی که برای هر خوراک نگه داشته می‌شوند؛ مقاله‌های ذخیره‌شده علاوه بر این‌ها می‌مانند"
+"The reader" = "خواننده"
+"The reader shows a clean copy of the article, without scripts, frames or trackers" = "خواننده نسخهٔ تمیزی از مقاله را بدون اسکریپت، قاب یا ردیاب نشان می‌دهد"
+"The server answered HTTP {status}" = "کارساز با HTTP {status} پاسخ داد"
+"The server is busy (HTTP {status}); trying again later" = "کارساز مشغول است (HTTP {status})؛ بعداً دوباره تلاش می‌شود"
+"The server redirected from a secure address to an insecure one" = "کارساز از نشانی امن به نشانی ناامن هدایت کرد"
+"The server redirected to an address that is not valid" = "کارساز به نشانی نامعتبری هدایت کرد"
+"The server redirected too many times" = "کارساز بیش از حد هدایت کرد"
+"The server redirected without saying where" = "کارساز بدون گفتن مقصد هدایت کرد"
+"This OPML file is too large" = "این فایل OPML بیش از حد بزرگ است"
+"This OPML file lists no feeds" = "این فایل OPML هیچ خوراکی ندارد"
+"This address is a web page without a feed; find its RSS or Atom link" = "این نشانی یک صفحهٔ وب بدون خوراک است؛ پیوند RSS یا Atom آن را پیدا کنید"
+"This download is too large" = "این بارگیری بیش از حد بزرگ است"
+"This feed already has 200 saved articles" = "این خوراک از قبل ۲۰۰ مقالهٔ ذخیره‌شده دارد"
+"This feed could not be read" = "خواندن این خوراک ممکن نشد"
+"This is not an OPML file" = "این فایل OPML نیست"
+"This site offers several feeds:" = "این سایت چند خوراک ارائه می‌دهد:"
+"Trying again at {time}" = "تلاش دوباره در {time}"
+"Turn on Feeds" = "روشن کردن خوراک‌ها"
+"Turn on Refresh in the background first" = "نخست تازه‌سازی در پس‌زمینه را روشن کنید"
+"Unread" = "خوانده‌نشده"
+"Unread count" = "تعداد خوانده‌نشده"
+"World news" = "اخبار جهان"
+"You already follow this feed" = "این خوراک را از قبل دنبال می‌کنید"
+"Your feeds" = "خوراک‌های شما"
+"Your news, together" = "اخبار شما، یک‌جا"
+"Your subscriptions with their folders and unread counts" = "اشتراک‌هایتان با پوشه‌ها و تعداد خوانده‌نشده‌ها"
+"Your web browser" = "مرورگر وب شما"
+"the feed's structure is broken" = "ساختار خوراک خراب است"
+"{count} new articles" = "{count} مقالهٔ تازه"
+"{count} of {max} feeds" = "{count} از {max} خوراک"
+"{feed} and {more} more feeds" = "{feed} و {more} خوراک دیگر"
+"{n}d" = "{n} روز"
+"Could not refresh {feeds}; trying again later" = "به‌روزرسانی {feeds} ممکن نشد؛ بعداً دوباره تلاش می‌شود"
+"Feeds · Sidebar card" = "خوراک‌ها · کارت نوار کناری"
+"Card folder" = "پوشهٔ کارت"
+"The sidebar card lists the newest unread articles of this folder; empty lists every feed" = "کارت نوار کناری تازه‌ترین مقاله‌های خوانده‌نشدهٔ این پوشه را نشان می‌دهد؛ خالی یعنی همهٔ خوراک‌ها"

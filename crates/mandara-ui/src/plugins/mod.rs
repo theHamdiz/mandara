@@ -23,6 +23,7 @@ pub mod external;
 pub mod main_menu;
 pub mod media;
 mod render_image;
+mod decode_queue;
 pub mod mini_stats;
 pub mod network;
 pub mod notes;

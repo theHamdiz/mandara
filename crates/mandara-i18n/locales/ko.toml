@@ -8078,7 +8078,6 @@
 
 "Add your Home Assistant token in Studio" = "Studio에서 Home Assistant 토큰을 추가하세요"
 
-"Add your favourite feeds in Studio" = "Studio에서 즐겨찾는 피드를 추가하세요"
 
 "Add your translation API key in Studio" = "Studio에서 번역 API 키를 추가하세요"
 
@@ -8108,7 +8107,6 @@
 
 "Could not read this feed: {error}" = "피드를 읽을 수 없습니다: {error}"
 
-"Could not refresh this feed: {error}" = "피드를 새로 고칠 수 없습니다: {error}"
 
 "Could not save or read feed history: {error}" = "피드 기록을 저장하거나 읽을 수 없습니다: {error}"
 
@@ -8130,11 +8128,9 @@
 
 "Favourite entities" = "즐겨찾는 엔티티"
 
-"Feed addresses" = "피드 주소"
 
 "Feeds" = "피드"
 
-"Fetching headlines…" = "제목을 가져오는 중…"
 
 "Forget device" = "기기 삭제"
 
@@ -8162,7 +8158,6 @@
 
 "Keep a translation under 5,000 characters" = "번역은 5,000자 미만으로 유지하세요"
 
-"Keep up to 16 feed subscriptions" = "피드 구독은 최대 16개까지 유지하세요"
 
 "LibreTranslate" = "LibreTranslate"
 
@@ -8176,9 +8171,7 @@
 
 "No entities to show" = "표시할 엔티티가 없습니다"
 
-"No headlines yet" = "아직 제목이 없습니다"
 
-"Only the selected feed refreshes while its panel is open" = "패널이 열려 있을 때 선택한 피드만 새로 고칩니다"
 
 "Opening the keyring…" = "키 모음을 여는 중…"
 
@@ -8200,7 +8193,6 @@
 
 "Provider" = "제공업체"
 
-"RSS, Atom and JSON subscriptions with local read history" = "로컬 읽기 기록이 있는 RSS, Atom 및 JSON 구독"
 
 "RSS, Atom or JSON feed address" = "RSS, Atom 또는 JSON 피드 주소"
 
@@ -8210,13 +8202,11 @@
 
 "Reading your home…" = "집 상태를 읽는 중…"
 
-"Refresh a feed and return its headlines and read history" = "피드를 새로 고치고 제목과 읽기 기록 반환"
 
 "Refresh interval" = "새로 고침 간격"
 
 "Refresh this feed before marking it read" = "읽음으로 표시하기 전에 피드를 새로 고치세요"
 
-"Refreshing…" = "새로 고치는 중…"
 
 "Reject" = "거절"
 
@@ -8240,7 +8230,6 @@
 
 "Send text to a paired, connected device" = "페어링되고 연결된 기기로 텍스트 보내기"
 
-"Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "RSS, Atom 또는 JSON 피드 주소를 공백으로 구분하세요; 최대 16개 구독"
 
 "Separate up to 24 entity ids with spaces; empty shows the first available entities" = "엔티티 ID를 공백으로 구분하여 최대 24개 입력하세요; 비워 두면 처음 사용 가능한 엔티티를 표시합니다"
 
@@ -8346,7 +8335,6 @@
 
 "Your home favourites, sensors and scenes" = "집 즐겨찾기, 센서와 장면"
 
-"Your subscriptions, together" = "구독을 한곳에"
 
 "Your translation appears here" = "번역이 여기에 표시됩니다"
 
@@ -8649,3 +8637,133 @@
 "A gentle wave along the fill that flows while you drag" = "채움을 따라 흐르는 잔잔한 물결로, 드래그하는 동안 움직입니다"
 "Ten rounded steps that fill one after another" = "하나씩 차례로 채워지는 둥근 열 칸"
 "How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it" = "셸 컨트롤의 모양입니다. 각 미리보기는 실제 컨트롤입니다. 드래그해서 디자인을 시험하고, 디자인을 클릭해 사용하세요"
+
+# ── Feeds reader ─────────────────────────────────────────────
+"A reader for RSS, Atom and JSON feeds" = "RSS, Atom, JSON 피드 리더"
+"A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view" = "RSS, Atom, JSON 피드 리더: 하나의 타임라인, 폴더, 저장한 글, 검색, 깔끔한 리더 보기"
+"A website or feed address" = "웹사이트 또는 피드 주소"
+"Add a feed" = "피드 추가"
+"Add a site and its feed is found for you. Order, folders and colours here are how the panel shows them." = "사이트를 추가하면 해당 피드를 자동으로 찾아 줍니다. 여기서의 순서, 폴더, 색상이 패널에 표시되는 방식입니다."
+"Add feeds" = "피드 추가"
+"Add the subscriptions of an OPML file (from another feed reader)" = "OPML 파일의 구독 추가(다른 피드 리더에서 가져온 것)"
+"All articles" = "모든 글"
+"All caught up" = "모두 읽었습니다"
+"Also inside articles" = "글 안에서도"
+"Arabic news" = "아랍어 뉴스"
+"Articles per feed" = "피드당 글 수"
+"Articles you already have show at once; new ones follow." = "이미 있는 글은 바로 표시되고 새 글이 이어서 표시됩니다."
+"Background interval" = "백그라운드 간격"
+"Badge" = "배지"
+"Check its address in Studio, or try again in a moment." = "Studio에서 주소를 확인하거나 잠시 후 다시 시도하세요."
+"Could not download it: {error}" = "다운로드할 수 없습니다: {error}"
+"Could not reach the server: {error}" = "서버에 연결할 수 없습니다: {error}"
+"Days an article stays after it has left its feed; saved articles stay until you remove them" = "글이 피드에서 사라진 뒤 보관하는 일수. 저장한 글은 직접 지울 때까지 남습니다"
+"Design & fun" = "디자인과 재미"
+"Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them" = "피드 아이콘과 썸네일은 피드에 포함되어 있습니다. 글 속 사진은 허용한 경우에만 해당 웹사이트에서 불러옵니다"
+"Feeds older than this refresh when you open the panel; the Refresh button fetches all of them at once" = "이 기간보다 오래된 피드는 패널을 열 때 새로 고칩니다. 새로 고침 버튼은 모든 피드를 한 번에 가져옵니다"
+"Feeds · Bar" = "피드 · 바"
+"Feeds · History" = "피드 · 기록"
+"Feeds · Reading" = "피드 · 읽기"
+"Feeds · Refreshing" = "피드 · 새로 고침"
+"Fetch the latest articles of every feed" = "모든 피드의 최신 글 가져오기"
+"Find the feeds a website offers" = "웹사이트가 제공하는 피드 찾기"
+"Folder (empty for none)" = "폴더(비우면 없음)"
+"Folder to put it in" = "넣을 폴더"
+"Follow sites you like: add their addresses or pick from tested starter feeds in Studio." = "좋아하는 사이트를 팔로우하세요. 주소를 추가하거나 Studio에서 검증된 시작용 피드 중에서 고르세요."
+"How often the background refresh runs; feeds that failed wait longer before trying again" = "백그라운드 새로 고침 실행 빈도. 실패한 피드는 더 오래 기다렸다가 다시 시도합니다"
+"How the bar item shows unread articles" = "바 항목이 읽지 않은 글을 표시하는 방식"
+"Icons and thumbnails" = "아이콘과 썸네일"
+"Import and export" = "가져오기 및 내보내기"
+"Imported {added} of {total} feeds" = "피드 {total}개 중 {added}개를 가져왔습니다"
+"Keep old articles for" = "오래된 글 보관 기간"
+"Keep the unread count current while the panel is closed, at a low interval; off, nothing downloads until you open Feeds" = "패널이 닫혀 있는 동안 낮은 빈도로 읽지 않은 글 수를 최신으로 유지합니다. 끄면 피드를 열 때까지 아무것도 내려받지 않습니다"
+"Linux & open source" = "Linux 및 오픈 소스"
+"Mark all feeds read" = "모든 피드 읽음으로 표시"
+"Mark an article read" = "글을 읽음으로 표시"
+"Mark an article unread" = "글을 읽지 않음으로 표시"
+"Mark every article of a feed read, or of every feed when no address is given" = "피드의 모든 글을 읽음으로 표시합니다. 주소를 지정하지 않으면 모든 피드가 대상입니다"
+"Mark every article of every feed read" = "모든 피드의 모든 글을 읽음으로 표시"
+"Mark read when opened" = "열면 읽음으로 표시"
+"Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders." = "OPML 파일로 피드 리더 간에 구독을 옮기세요. 가져오기는 아직 팔로우하지 않은 피드를 폴더와 함께 추가합니다."
+"Name (empty uses the feed's own)" = "이름(비우면 피드 자체 이름 사용)"
+"No articles yet" = "아직 글이 없습니다"
+"No feed found at this address" = "이 주소에서 피드를 찾을 수 없습니다"
+"No feeds yet" = "아직 피드가 없습니다"
+"No feeds yet. Add one above or pick from the starter feeds below." = "아직 피드가 없습니다. 위에서 추가하거나 아래의 시작용 피드에서 고르세요."
+"No unread articles here." = "여기에는 읽지 않은 글이 없습니다."
+"Nothing here matches “{query}”" = "“{query}”와(과) 일치하는 항목이 없습니다"
+"Notify about new articles" = "새 글 알림"
+"One notification for what is new, at most every 30 minutes, and never while the panel is open" = "새 소식을 알림 하나로 전달하며, 최대 30분에 한 번이고 패널이 열려 있는 동안에는 보내지 않습니다"
+"Open articles in" = "글 열기 위치"
+"Opening an article marks it read; you can always mark it unread again" = "글을 열면 읽음으로 표시됩니다. 언제든 다시 읽지 않음으로 바꿀 수 있습니다"
+"Opening the article…" = "글을 여는 중…"
+"Opening your feeds…" = "피드를 여는 중…"
+"Or type a site's address in the launcher and choose Subscribe in Feeds." = "또는 런처에 사이트 주소를 입력하고 ‘피드에서 구독’을 선택하세요."
+"Picture: {alt}" = "사진: {alt}"
+"Pictures" = "사진"
+"Popular feeds by topic, each checked to download and read correctly on {date}." = "주제별 인기 피드이며, 모두 {date}에 정상적으로 다운로드되고 읽히는 것을 확인했습니다."
+"Programming" = "프로그래밍"
+"Read on the website" = "웹사이트에서 읽기"
+"Refresh a feed now and return its articles, or every feed when no address is given" = "피드를 지금 새로 고치고 글을 반환합니다. 주소를 지정하지 않으면 모든 피드가 대상입니다"
+"Refresh feeds" = "피드 새로 고침"
+"Refresh in the background" = "백그라운드에서 새로 고침"
+"Refresh to fetch the latest articles." = "새로 고쳐서 최신 글을 가져오세요."
+"Refresh while open" = "열려 있는 동안 새로 고침"
+"Refreshing {done} of {total}…" = "{total}개 중 {done}개 새로 고치는 중…"
+"Remove a subscription (its saved history stays until you subscribe again)" = "구독 삭제(저장된 기록은 다시 구독할 때까지 남습니다)"
+"Remove an article from your saved ones" = "저장한 글에서 글 제거"
+"Save an article to read it later" = "글을 저장해 나중에 읽기"
+"Save articles to read them later; they stay even after they leave their feed." = "글을 저장해 나중에 읽으세요. 피드에서 사라져도 남아 있습니다."
+"Save your subscriptions as an OPML file" = "구독을 OPML 파일로 저장"
+"Saved articles" = "저장한 글"
+"Saved articles of one feed or every feed, newest first, with their read and saved flags" = "한 피드 또는 모든 피드의 저장한 글을 최신순으로, 읽음 및 저장 표시와 함께"
+"Saved {count} feeds to {path}" = "피드 {count}개를 {path}에 저장했습니다"
+"Science" = "과학"
+"Search articles…" = "글 검색…"
+"Starter feeds" = "시작용 피드"
+"Subscribe in Feeds: {site}" = "피드에서 구독: {site}"
+"Subscribe to a feed, or to the feed a website offers (turns Feeds on)" = "피드 또는 웹사이트가 제공하는 피드를 구독합니다(피드를 켭니다)"
+"Subscribe to a site or pick from tested starter feeds" = "사이트를 구독하거나 검증된 시작용 피드에서 고르기"
+"Subscribed to {feed}" = "{feed} 구독함"
+"Technology" = "기술"
+"The OPML file" = "OPML 파일"
+"The article's link" = "글 링크"
+"The feed address" = "피드 주소"
+"The full article is on its website." = "전체 글은 해당 웹사이트에 있습니다."
+"The newest articles kept for each feed; saved articles are kept on top of these" = "각 피드에 보관할 최신 글 수. 저장한 글은 이와 별도로 보관됩니다"
+"The reader" = "리더"
+"The reader shows a clean copy of the article, without scripts, frames or trackers" = "리더는 스크립트, 프레임, 추적기가 없는 깔끔한 글 사본을 보여 줍니다"
+"The server answered HTTP {status}" = "서버가 HTTP {status}(으)로 응답했습니다"
+"The server is busy (HTTP {status}); trying again later" = "서버가 바쁩니다(HTTP {status}). 나중에 다시 시도합니다"
+"The server redirected from a secure address to an insecure one" = "서버가 보안 주소에서 보안되지 않은 주소로 리디렉션했습니다"
+"The server redirected to an address that is not valid" = "서버가 올바르지 않은 주소로 리디렉션했습니다"
+"The server redirected too many times" = "서버가 너무 많이 리디렉션했습니다"
+"The server redirected without saying where" = "서버가 이동할 곳을 알리지 않고 리디렉션했습니다"
+"This OPML file is too large" = "이 OPML 파일이 너무 큽니다"
+"This OPML file lists no feeds" = "이 OPML 파일에 피드가 없습니다"
+"This address is a web page without a feed; find its RSS or Atom link" = "이 주소는 피드가 없는 웹 페이지입니다. RSS 또는 Atom 링크를 찾아 보세요"
+"This download is too large" = "다운로드 크기가 너무 큽니다"
+"This feed already has 200 saved articles" = "이 피드에는 이미 저장한 글이 200개 있습니다"
+"This feed could not be read" = "이 피드를 읽을 수 없습니다"
+"This is not an OPML file" = "OPML 파일이 아닙니다"
+"This site offers several feeds:" = "이 사이트는 여러 피드를 제공합니다:"
+"Trying again at {time}" = "{time}에 다시 시도합니다"
+"Turn on Feeds" = "피드 켜기"
+"Turn on Refresh in the background first" = "먼저 백그라운드 새로 고침을 켜세요"
+"Unread" = "읽지 않음"
+"Unread count" = "읽지 않은 수"
+"World news" = "세계 뉴스"
+"You already follow this feed" = "이미 이 피드를 팔로우하고 있습니다"
+"Your feeds" = "내 피드"
+"Your news, together" = "내 뉴스를 한곳에"
+"Your subscriptions with their folders and unread counts" = "폴더와 읽지 않은 수가 있는 내 구독"
+"Your web browser" = "웹 브라우저"
+"the feed's structure is broken" = "피드의 구조가 손상되었습니다"
+"{count} new articles" = "새 글 {count}개"
+"{count} of {max} feeds" = "피드 {count}/{max}개"
+"{feed} and {more} more feeds" = "{feed} 외 피드 {more}개"
+"{n}d" = "{n}일"
+"Could not refresh {feeds}; trying again later" = "{feeds}을(를) 새로 고칠 수 없습니다. 나중에 다시 시도합니다"
+"Feeds · Sidebar card" = "피드 · 사이드바 카드"
+"Card folder" = "카드 폴더"
+"The sidebar card lists the newest unread articles of this folder; empty lists every feed" = "사이드바 카드에 이 폴더의 읽지 않은 최신 글을 보여 줍니다. 비워 두면 모든 피드"

@@ -33,6 +33,7 @@ mod plugin_updates;
 mod updates_card;
 mod about_links;
 mod plugin_credentials;
+mod feeds_editor;
 mod whats_new;
 mod designer;
 mod bars_page;
@@ -164,6 +165,8 @@ pub struct StudioView {
     updates: updates_card::Updates,
     about_links: about_links::Links,
     credentials: plugin_credentials::Editor,
+    /// Plugins → Feeds → settings: the subscription manager.
+    feeds: feeds_editor::Editor,
     /// Each language card's download fill (Studio → General → Language).
     lang_fills: mandara_ui::progress_fill::LanguageFills,
     /// Plugins page: the plugin detail / settings modal.
@@ -248,7 +251,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE }
+        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from

@@ -8326,7 +8326,6 @@
 
 "Add your Home Assistant token in Studio" = "Ajoutez votre jeton Home Assistant dans Studio"
 
-"Add your favourite feeds in Studio" = "Ajoutez vos flux favoris dans Studio"
 
 "Add your translation API key in Studio" = "Ajoutez votre clé de traduction dans Studio"
 
@@ -8356,7 +8355,6 @@
 
 "Could not read this feed: {error}" = "Impossible de lire ce flux : {error}"
 
-"Could not refresh this feed: {error}" = "Impossible d’actualiser ce flux : {error}"
 
 "Could not save or read feed history: {error}" = "Impossible d’enregistrer ou de lire l’historique du flux : {error}"
 
@@ -8378,11 +8376,9 @@
 
 "Favourite entities" = "Entités favorites"
 
-"Feed addresses" = "Adresses des flux"
 
 "Feeds" = "Flux"
 
-"Fetching headlines…" = "Chargement des titres…"
 
 "Forget device" = "Oublier l’appareil"
 
@@ -8410,7 +8406,6 @@
 
 "Keep a translation under 5,000 characters" = "Limitez la traduction à moins de 5 000 caractères"
 
-"Keep up to 16 feed subscriptions" = "Conservez au maximum 16 abonnements aux flux"
 
 "LibreTranslate" = "LibreTranslate"
 
@@ -8424,9 +8419,7 @@
 
 "No entities to show" = "Aucune entité à afficher"
 
-"No headlines yet" = "Aucun titre pour le moment"
 
-"Only the selected feed refreshes while its panel is open" = "Seul le flux sélectionné s’actualise quand son panneau est ouvert"
 
 "Opening the keyring…" = "Ouverture du trousseau…"
 
@@ -8448,7 +8441,6 @@
 
 "Provider" = "Fournisseur"
 
-"RSS, Atom and JSON subscriptions with local read history" = "Abonnements RSS, Atom et JSON avec historique de lecture local"
 
 "RSS, Atom or JSON feed address" = "Adresse d’un flux RSS, Atom ou JSON"
 
@@ -8458,13 +8450,11 @@
 
 "Reading your home…" = "Lecture de votre maison…"
 
-"Refresh a feed and return its headlines and read history" = "Actualiser un flux et renvoyer ses titres et son historique de lecture"
 
 "Refresh interval" = "Intervalle d’actualisation"
 
 "Refresh this feed before marking it read" = "Actualisez ce flux avant de le marquer comme lu"
 
-"Refreshing…" = "Actualisation…"
 
 "Reject" = "Refuser"
 
@@ -8488,7 +8478,6 @@
 
 "Send text to a paired, connected device" = "Envoyer du texte à un appareil associé et connecté"
 
-"Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "Séparez les adresses RSS, Atom ou JSON par des espaces ; jusqu’à 16 abonnements"
 
 "Separate up to 24 entity ids with spaces; empty shows the first available entities" = "Séparez jusqu’à 24 identifiants d’entité par des espaces ; vide, affiche les premières entités disponibles"
 
@@ -8594,7 +8583,6 @@
 
 "Your home favourites, sensors and scenes" = "Vos favoris de la maison, capteurs et scènes"
 
-"Your subscriptions, together" = "Vos abonnements réunis"
 
 "Your translation appears here" = "Votre traduction apparaîtra ici"
 
@@ -8895,3 +8883,132 @@
 "A gentle wave along the fill that flows while you drag" = "Une douce vague le long du remplissage qui ondule pendant que vous faites glisser"
 "Ten rounded steps that fill one after another" = "Dix pas arrondis qui se remplissent l'un après l'autre"
 "How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it" = "L'apparence des commandes du shell. Chaque aperçu est la vraie commande : faites-la glisser pour essayer un style, cliquez sur un style pour l'utiliser"
+# ── Feeds reader ─────────────────────────────────────────────
+"A reader for RSS, Atom and JSON feeds" = "Un lecteur de flux RSS, Atom et JSON"
+"A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view" = "Un lecteur de flux RSS, Atom et JSON : une chronologie, des dossiers, des articles enregistrés, la recherche et une vue de lecture épurée"
+"A website or feed address" = "Une adresse de site ou de flux"
+"Add a feed" = "Ajouter un flux"
+"Add a site and its feed is found for you. Order, folders and colours here are how the panel shows them." = "Ajoutez un site et son flux est trouvé pour vous. L'ordre, les dossiers et les couleurs définis ici sont ceux du panneau."
+"Add feeds" = "Ajouter des flux"
+"Add the subscriptions of an OPML file (from another feed reader)" = "Ajouter les abonnements d'un fichier OPML (venant d'un autre lecteur de flux)"
+"All articles" = "Tous les articles"
+"All caught up" = "Tout est lu"
+"Also inside articles" = "Aussi dans les articles"
+"Arabic news" = "Actualités arabes"
+"Articles per feed" = "Articles par flux"
+"Articles you already have show at once; new ones follow." = "Les articles déjà récupérés s'affichent aussitôt ; les nouveaux suivent."
+"Background interval" = "Intervalle en arrière-plan"
+"Badge" = "Pastille"
+"Check its address in Studio, or try again in a moment." = "Vérifiez son adresse dans Studio, ou réessayez dans un instant."
+"Could not download it: {error}" = "Impossible de le télécharger : {error}"
+"Could not reach the server: {error}" = "Impossible de joindre le serveur : {error}"
+"Days an article stays after it has left its feed; saved articles stay until you remove them" = "Jours pendant lesquels un article reste après avoir quitté son flux ; les articles enregistrés restent jusqu'à ce que vous les retiriez"
+"Design & fun" = "Design et divertissement"
+"Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them" = "Les icônes et miniatures des flux viennent avec le flux. Les images dans les articles ne se chargent depuis leurs sites que si vous l'autorisez"
+"Feeds older than this refresh when you open the panel; the Refresh button fetches all of them at once" = "Les flux plus anciens sont actualisés à l'ouverture du panneau ; le bouton Actualiser les récupère tous d'un coup"
+"Feeds · Bar" = "Flux · Barre"
+"Feeds · History" = "Flux · Historique"
+"Feeds · Reading" = "Flux · Lecture"
+"Feeds · Refreshing" = "Flux · Actualisation"
+"Fetch the latest articles of every feed" = "Récupérer les derniers articles de chaque flux"
+"Find the feeds a website offers" = "Trouver les flux proposés par un site"
+"Folder (empty for none)" = "Dossier (vide pour aucun)"
+"Folder to put it in" = "Dossier où le ranger"
+"Follow sites you like: add their addresses or pick from tested starter feeds in Studio." = "Suivez les sites que vous aimez : ajoutez leurs adresses ou choisissez des flux de départ testés dans Studio."
+"How often the background refresh runs; feeds that failed wait longer before trying again" = "Fréquence de l'actualisation en arrière-plan ; les flux en échec attendent plus longtemps avant de réessayer"
+"How the bar item shows unread articles" = "Comment l'élément de la barre affiche les articles non lus"
+"Icons and thumbnails" = "Icônes et miniatures"
+"Import and export" = "Import et export"
+"Imported {added} of {total} feeds" = "{added} flux importés sur {total}"
+"Keep old articles for" = "Conserver les anciens articles pendant"
+"Keep the unread count current while the panel is closed, at a low interval; off, nothing downloads until you open Feeds" = "Garde le nombre d'articles non lus à jour quand le panneau est fermé, à faible fréquence ; désactivé, rien n'est téléchargé avant l'ouverture de Flux"
+"Linux & open source" = "Linux et open source"
+"Mark all feeds read" = "Marquer tous les flux comme lus"
+"Mark an article read" = "Marquer un article comme lu"
+"Mark an article unread" = "Marquer un article comme non lu"
+"Mark every article of a feed read, or of every feed when no address is given" = "Marquer comme lus tous les articles d'un flux, ou de tous les flux si aucune adresse n'est donnée"
+"Mark every article of every feed read" = "Marquer comme lus tous les articles de tous les flux"
+"Mark read when opened" = "Marquer comme lu à l'ouverture"
+"Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders." = "Déplacez vos abonnements d'un lecteur de flux à l'autre avec un fichier OPML. L'import ajoute les flux que vous ne suivez pas encore, avec leurs dossiers."
+"Name (empty uses the feed's own)" = "Nom (vide pour utiliser celui du flux)"
+"No articles yet" = "Aucun article pour l'instant"
+"No feed found at this address" = "Aucun flux trouvé à cette adresse"
+"No feeds yet" = "Aucun flux pour l'instant"
+"No feeds yet. Add one above or pick from the starter feeds below." = "Aucun flux pour l'instant. Ajoutez-en un ci-dessus ou choisissez parmi les flux de départ ci-dessous."
+"No unread articles here." = "Aucun article non lu ici."
+"Nothing here matches “{query}”" = "Rien ne correspond à « {query} »"
+"Notify about new articles" = "Notifier les nouveaux articles"
+"One notification for what is new, at most every 30 minutes, and never while the panel is open" = "Une notification pour les nouveautés, au plus toutes les 30 minutes, et jamais quand le panneau est ouvert"
+"Open articles in" = "Ouvrir les articles dans"
+"Opening an article marks it read; you can always mark it unread again" = "L'ouverture d'un article le marque comme lu ; vous pouvez toujours le marquer de nouveau comme non lu"
+"Opening the article…" = "Ouverture de l'article…"
+"Opening your feeds…" = "Ouverture de vos flux…"
+"Or type a site's address in the launcher and choose Subscribe in Feeds." = "Ou saisissez l'adresse d'un site dans le lanceur et choisissez S'abonner dans Flux."
+"Picture: {alt}" = "Image : {alt}"
+"Pictures" = "Images"
+"Popular feeds by topic, each checked to download and read correctly on {date}." = "Flux populaires par thème, chacun vérifié comme se téléchargeant et se lisant correctement le {date}."
+"Programming" = "Programmation"
+"Read on the website" = "Lire sur le site"
+"Refresh a feed now and return its articles, or every feed when no address is given" = "Actualiser un flux maintenant et renvoyer ses articles, ou tous les flux si aucune adresse n'est donnée"
+"Refresh feeds" = "Actualiser les flux"
+"Refresh in the background" = "Actualiser en arrière-plan"
+"Refresh to fetch the latest articles." = "Actualisez pour récupérer les derniers articles."
+"Refresh while open" = "Actualiser à l'ouverture"
+"Refreshing {done} of {total}…" = "Actualisation de {done} sur {total}…"
+"Remove a subscription (its saved history stays until you subscribe again)" = "Retirer un abonnement (son historique enregistré reste jusqu'à ce que vous vous réabonniez)"
+"Remove an article from your saved ones" = "Retirer un article de vos articles enregistrés"
+"Save an article to read it later" = "Enregistrer un article pour le lire plus tard"
+"Save articles to read them later; they stay even after they leave their feed." = "Enregistrez des articles pour les lire plus tard ; ils restent même après avoir quitté leur flux."
+"Save your subscriptions as an OPML file" = "Enregistrer vos abonnements dans un fichier OPML"
+"Saved articles" = "Articles enregistrés"
+"Saved articles of one feed or every feed, newest first, with their read and saved flags" = "Articles enregistrés d'un flux ou de tous les flux, du plus récent au plus ancien, avec leurs indicateurs lu et enregistré"
+"Saved {count} feeds to {path}" = "{count} flux enregistrés dans {path}"
+"Science" = "Science"
+"Search articles…" = "Rechercher des articles…"
+"Starter feeds" = "Flux de départ"
+"Subscribe in Feeds: {site}" = "S'abonner dans Flux : {site}"
+"Subscribe to a feed, or to the feed a website offers (turns Feeds on)" = "S'abonner à un flux, ou au flux proposé par un site (active Flux)"
+"Subscribe to a site or pick from tested starter feeds" = "S'abonner à un site ou choisir parmi des flux de départ testés"
+"Subscribed to {feed}" = "Abonné à {feed}"
+"Technology" = "Technologie"
+"The OPML file" = "Le fichier OPML"
+"The article's link" = "Le lien de l'article"
+"The feed address" = "L'adresse du flux"
+"The full article is on its website." = "L'article complet se trouve sur son site."
+"The newest articles kept for each feed; saved articles are kept on top of these" = "Les articles les plus récents conservés pour chaque flux ; les articles enregistrés s'y ajoutent"
+"The reader" = "Le lecteur"
+"The reader shows a clean copy of the article, without scripts, frames or trackers" = "Le lecteur affiche une copie épurée de l'article, sans scripts, cadres ni traqueurs"
+"The server answered HTTP {status}" = "Le serveur a répondu HTTP {status}"
+"The server is busy (HTTP {status}); trying again later" = "Le serveur est occupé (HTTP {status}) ; nouvel essai plus tard"
+"The server redirected from a secure address to an insecure one" = "Le serveur a redirigé d'une adresse sécurisée vers une adresse non sécurisée"
+"The server redirected to an address that is not valid" = "Le serveur a redirigé vers une adresse non valide"
+"The server redirected too many times" = "Le serveur a redirigé trop de fois"
+"The server redirected without saying where" = "Le serveur a redirigé sans indiquer où"
+"This OPML file is too large" = "Ce fichier OPML est trop volumineux"
+"This OPML file lists no feeds" = "Ce fichier OPML ne contient aucun flux"
+"This address is a web page without a feed; find its RSS or Atom link" = "Cette adresse est une page web sans flux ; trouvez son lien RSS ou Atom"
+"This download is too large" = "Ce téléchargement est trop volumineux"
+"This feed already has 200 saved articles" = "Ce flux compte déjà 200 articles enregistrés"
+"This feed could not be read" = "Ce flux n'a pas pu être lu"
+"This is not an OPML file" = "Ce n'est pas un fichier OPML"
+"This site offers several feeds:" = "Ce site propose plusieurs flux :"
+"Trying again at {time}" = "Nouvel essai à {time}"
+"Turn on Feeds" = "Activer Flux"
+"Turn on Refresh in the background first" = "Activez d'abord Actualiser en arrière-plan"
+"Unread" = "Non lus"
+"Unread count" = "Nombre de non lus"
+"World news" = "Actualités du monde"
+"You already follow this feed" = "Vous suivez déjà ce flux"
+"Your feeds" = "Vos flux"
+"Your news, together" = "Vos actualités, réunies"
+"Your subscriptions with their folders and unread counts" = "Vos abonnements avec leurs dossiers et leurs nombres de non lus"
+"Your web browser" = "Votre navigateur web"
+"the feed's structure is broken" = "la structure du flux est défectueuse"
+"{count} new articles" = "{count} nouveaux articles"
+"{count} of {max} feeds" = "{count} flux sur {max}"
+"{feed} and {more} more feeds" = "{feed} et {more} autres flux"
+"{n}d" = "{n} j"
+"Could not refresh {feeds}; trying again later" = "Impossible d’actualiser {feeds} ; nouvel essai plus tard"
+"Feeds · Sidebar card" = "Flux · Carte de la barre latérale"
+"Card folder" = "Dossier de la carte"
+"The sidebar card lists the newest unread articles of this folder; empty lists every feed" = "La carte de la barre latérale affiche les articles non lus les plus récents de ce dossier ; vide, elle affiche tous les flux"

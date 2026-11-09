@@ -50,6 +50,8 @@ libc.workspace = true
 cosmic-text = "0.19"
 # Software wallpaper renderer: bundled SVG icons (same resvg as GPUI).
 resvg = { version = "0.46", default-features = false }
+# Feed picture cache file names (already linked by the services crate).
+sha2.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

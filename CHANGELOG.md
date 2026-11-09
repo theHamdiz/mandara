@@ -6,6 +6,13 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **Feeds is a real news reader now.** The panel opens as two panes: a sidebar with all your articles, the ones you saved, your folders and every feed with its unread count, and one timeline of article cards with the feed's icon and colour, how long ago each came out, an unread dot, a short excerpt and its thumbnail. Search and an **All | Unread** filter narrow it down, and the keyboard works throughout. Open an article to read a clean copy right in the panel (no scripts, frames or trackers; pictures inside articles only when you allow them), save it for later, mark it read or unread, copy its link or open it in your browser. The bar shows your unread count as a badge, a number or a dot.
+- **Feeds in the sidebar.** A new Feeds card for the sidebar lists your newest unread articles, from every feed or one folder you choose, with each feed's colour, how long ago it came out and an unread dot. Click one to read it in the Feeds panel. The card uses what Feeds already fetched, so it never downloads anything on its own.
+- **Adding feeds is easy.** In Studio → Plugins → Feeds → Settings, type a site's address and Mandara finds its feed for you; rename feeds, file them into folders, give them colours, reorder or remove them, import and export OPML from other readers, or pick from 26 starter feeds by topic, each checked to work today. In the launcher, searching "rss", "news" or "feeds" finds Feeds and its actions, and typing a web address offers **Subscribe in Feeds**.
+- **Feeds that just work.** RSS 1.0 and 2.0, Atom and JSON Feed all read the same way, including feeds with odd encodings, stray text before the XML, HTML entities, missing or impossible dates and relative links. Downloads are compressed, follow safe redirects and remember when a feed moved; a feed that fails waits longer before trying again instead of hammering its server, and its last articles stay readable. Nothing downloads while nothing shows your feeds, unless you turn on the new background refresh (at most every 15 minutes), with optional, rate-limited notifications for new articles. Your existing feed list and read history carry over.
+
 ## 0.23.0 — 2026-11-09
 
 A different shape for every character. Mandara Studio uses less memory.

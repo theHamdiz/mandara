@@ -8329,7 +8329,6 @@
 
 "Add your Home Assistant token in Studio" = "أضف رمز Home Assistant في الاستوديو"
 
-"Add your favourite feeds in Studio" = "أضف خلاصاتك المفضلة في الاستوديو"
 
 "Add your translation API key in Studio" = "أضف مفتاح خدمة الترجمة في الاستوديو"
 
@@ -8359,7 +8358,6 @@
 
 "Could not read this feed: {error}" = "تعذرت قراءة هذه الخلاصة: {error}"
 
-"Could not refresh this feed: {error}" = "تعذر تحديث هذه الخلاصة: {error}"
 
 "Could not save or read feed history: {error}" = "تعذر حفظ سجل الخلاصة أو قراءته: {error}"
 
@@ -8381,11 +8379,9 @@
 
 "Favourite entities" = "الكيانات المفضلة"
 
-"Feed addresses" = "عناوين الخلاصات"
 
 "Feeds" = "الخلاصات"
 
-"Fetching headlines…" = "جارٍ جلب العناوين…"
 
 "Forget device" = "إلغاء إقران الجهاز"
 
@@ -8413,7 +8409,6 @@
 
 "Keep a translation under 5,000 characters" = "اجعل الترجمة أقل من 5,000 حرف"
 
-"Keep up to 16 feed subscriptions" = "احتفظ بما لا يزيد على 16 اشتراكًا في الخلاصات"
 
 "LibreTranslate" = "LibreTranslate"
 
@@ -8427,9 +8422,7 @@
 
 "No entities to show" = "لا توجد كيانات لعرضها"
 
-"No headlines yet" = "لا توجد عناوين بعد"
 
-"Only the selected feed refreshes while its panel is open" = "تُحدَّث الخلاصة المحددة فقط أثناء فتح لوحتها"
 
 "Opening the keyring…" = "جارٍ فتح حلقة المفاتيح…"
 
@@ -8451,7 +8444,6 @@
 
 "Provider" = "الخدمة"
 
-"RSS, Atom and JSON subscriptions with local read history" = "اشتراكات RSS وAtom وJSON مع سجل قراءة محلي"
 
 "RSS, Atom or JSON feed address" = "عنوان خلاصة RSS أو Atom أو JSON"
 
@@ -8461,13 +8453,11 @@
 
 "Reading your home…" = "جارٍ قراءة حالة منزلك…"
 
-"Refresh a feed and return its headlines and read history" = "حدّث خلاصة وأرجع عناوينها وسجل قراءتها"
 
 "Refresh interval" = "الفاصل بين التحديثات"
 
 "Refresh this feed before marking it read" = "حدّث هذه الخلاصة قبل تعليمها كمقروءة"
 
-"Refreshing…" = "جارٍ التحديث…"
 
 "Reject" = "رفض"
 
@@ -8491,7 +8481,6 @@
 
 "Send text to a paired, connected device" = "أرسل نصًا إلى جهاز مقترن ومتصل"
 
-"Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "افصل عناوين خلاصات RSS أو Atom أو JSON بمسافات؛ حتى 16 اشتراكًا"
 
 "Separate up to 24 entity ids with spaces; empty shows the first available entities" = "افصل معرّفات الكيانات بمسافات، حتى 24؛ اترك الحقل فارغًا لعرض أول الكيانات المتاحة"
 
@@ -8597,7 +8586,6 @@
 
 "Your home favourites, sensors and scenes" = "مفضلات منزلك وأجهزة الاستشعار والمشاهد"
 
-"Your subscriptions, together" = "اشتراكاتك في مكان واحد"
 
 "Your translation appears here" = "ستظهر ترجمتك هنا"
 
@@ -8899,3 +8887,133 @@
 "A gentle wave along the fill that flows while you drag" = "موجة هادئة على طول التعبئة تنساب أثناء السحب"
 "Ten rounded steps that fill one after another" = "عشر خطوات مستديرة تمتلئ واحدة تلو الأخرى"
 "How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it" = "شكل عناصر التحكم في الواجهة. كل معاينة هي العنصر الحقيقي: اسحبها لتجربة تصميم، وانقر على تصميم لاستخدامه"
+
+# ── Feeds reader ─────────────────────────────────────────────
+"A reader for RSS, Atom and JSON feeds" = "قارئ لخلاصات RSS وAtom وJSON"
+"A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view" = "قارئ لخلاصات RSS وAtom وJSON: جدول زمني واحد، ومجلدات، ومقالات محفوظة، وبحث، وعرض قراءة نظيف"
+"A website or feed address" = "عنوان موقع أو خلاصة"
+"Add a feed" = "إضافة خلاصة"
+"Add a site and its feed is found for you. Order, folders and colours here are how the panel shows them." = "أضف موقعًا وسنعثر لك على خلاصته. الترتيب والمجلدات والألوان هنا هي ما تعرضه اللوحة."
+"Add feeds" = "إضافة خلاصات"
+"Add the subscriptions of an OPML file (from another feed reader)" = "أضف اشتراكات ملف OPML (من قارئ خلاصات آخر)"
+"All articles" = "كل المقالات"
+"All caught up" = "لا جديد"
+"Also inside articles" = "وداخل المقالات أيضًا"
+"Arabic news" = "أخبار عربية"
+"Articles per feed" = "عدد المقالات لكل خلاصة"
+"Articles you already have show at once; new ones follow." = "تظهر المقالات الموجودة لديك فورًا، ثم تتبعها الجديدة."
+"Background interval" = "الفاصل الزمني في الخلفية"
+"Badge" = "شارة"
+"Check its address in Studio, or try again in a moment." = "تحقق من عنوانها في الستوديو، أو حاول مجددًا بعد قليل."
+"Could not download it: {error}" = "تعذّر تنزيله: {error}"
+"Could not reach the server: {error}" = "تعذّر الوصول إلى الخادم: {error}"
+"Days an article stays after it has left its feed; saved articles stay until you remove them" = "عدد الأيام التي يبقى فيها المقال بعد خروجه من خلاصته؛ أما المقالات المحفوظة فتبقى حتى تزيلها"
+"Design & fun" = "تصميم ومرح"
+"Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them" = "أيقونات الخلاصات وصورها المصغرة تأتي مع الخلاصة. أما الصور داخل المقالات فتُحمَّل من مواقعها فقط عندما تسمح بذلك"
+"Feeds older than this refresh when you open the panel; the Refresh button fetches all of them at once" = "الخلاصات الأقدم من هذا تُحدَّث عند فتح اللوحة؛ وزر التحديث يجلبها كلها دفعة واحدة"
+"Feeds · Bar" = "الخلاصات · الشريط"
+"Feeds · History" = "الخلاصات · السجل"
+"Feeds · Reading" = "الخلاصات · القراءة"
+"Feeds · Refreshing" = "الخلاصات · التحديث"
+"Fetch the latest articles of every feed" = "اجلب أحدث مقالات كل خلاصة"
+"Find the feeds a website offers" = "اعثر على الخلاصات التي يقدّمها موقع"
+"Folder (empty for none)" = "مجلد (اتركه فارغًا لعدم التصنيف)"
+"Folder to put it in" = "المجلد الذي سيوضع فيه"
+"Follow sites you like: add their addresses or pick from tested starter feeds in Studio." = "تابع المواقع التي تعجبك: أضف عناوينها أو اختر من خلاصات البداية المجرَّبة في الستوديو."
+"How often the background refresh runs; feeds that failed wait longer before trying again" = "عدد مرات تشغيل التحديث في الخلفية؛ والخلاصات التي فشلت تنتظر وقتًا أطول قبل المحاولة مجددًا"
+"How the bar item shows unread articles" = "كيف يعرض عنصر الشريط المقالات غير المقروءة"
+"Icons and thumbnails" = "أيقونات وصور مصغرة"
+"Import and export" = "استيراد وتصدير"
+"Imported {added} of {total} feeds" = "تم استيراد {added} من {total} خلاصة"
+"Keep old articles for" = "الاحتفاظ بالمقالات القديمة لمدة"
+"Keep the unread count current while the panel is closed, at a low interval; off, nothing downloads until you open Feeds" = "أبقِ عدد غير المقروء محدّثًا أثناء إغلاق اللوحة بفاصل زمني قصير؛ وعند الإيقاف لا يُنزَّل شيء حتى تفتح الخلاصات"
+"Linux & open source" = "لينكس والمصادر المفتوحة"
+"Mark all feeds read" = "تعليم كل الخلاصات كمقروءة"
+"Mark an article read" = "تعليم مقال كمقروء"
+"Mark an article unread" = "تعليم مقال كغير مقروء"
+"Mark every article of a feed read, or of every feed when no address is given" = "علّم كل مقالات خلاصة كمقروءة، أو مقالات كل الخلاصات إن لم يُحدَّد عنوان"
+"Mark every article of every feed read" = "علّم كل مقالات كل الخلاصات كمقروءة"
+"Mark read when opened" = "تعليم المقال كمقروء عند فتحه"
+"Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders." = "انقل اشتراكاتك بين قارئات الخلاصات كملف OPML. يضيف الاستيراد الخلاصات التي لا تتابعها بعد مع مجلداتها."
+"Name (empty uses the feed's own)" = "الاسم (إن تُرك فارغًا فاسم الخلاصة نفسها)"
+"No articles yet" = "لا توجد مقالات بعد"
+"No feed found at this address" = "لم يُعثر على خلاصة في هذا العنوان"
+"No feeds yet" = "لا توجد خلاصات بعد"
+"No feeds yet. Add one above or pick from the starter feeds below." = "لا توجد خلاصات بعد. أضف واحدة بالأعلى أو اختر من خلاصات البداية أدناه."
+"No unread articles here." = "لا مقالات غير مقروءة هنا."
+"Nothing here matches “{query}”" = "لا شيء هنا يطابق «{query}»"
+"Notify about new articles" = "إشعار بالمقالات الجديدة"
+"One notification for what is new, at most every 30 minutes, and never while the panel is open" = "إشعار واحد بما هو جديد، مرة كل 30 دقيقة على الأكثر، ولا يظهر أبدًا أثناء فتح اللوحة"
+"Open articles in" = "فتح المقالات في"
+"Opening an article marks it read; you can always mark it unread again" = "فتح المقال يعلّمه كمقروء؛ ويمكنك دائمًا تعليمه كغير مقروء مجددًا"
+"Opening the article…" = "جارٍ فتح المقال…"
+"Opening your feeds…" = "جارٍ فتح خلاصاتك…"
+"Or type a site's address in the launcher and choose Subscribe in Feeds." = "أو اكتب عنوان موقع في المشغّل واختر الاشتراك في الخلاصات."
+"Picture: {alt}" = "صورة: {alt}"
+"Pictures" = "الصور"
+"Popular feeds by topic, each checked to download and read correctly on {date}." = "خلاصات شائعة حسب الموضوع، وقد جُرِّب تنزيل كل منها وقراءته بشكل صحيح بتاريخ {date}."
+"Programming" = "البرمجة"
+"Read on the website" = "القراءة على الموقع"
+"Refresh a feed now and return its articles, or every feed when no address is given" = "حدّث خلاصة الآن وأعد مقالاتها، أو كل الخلاصات إن لم يُحدَّد عنوان"
+"Refresh feeds" = "تحديث الخلاصات"
+"Refresh in the background" = "التحديث في الخلفية"
+"Refresh to fetch the latest articles." = "حدّث لجلب أحدث المقالات."
+"Refresh while open" = "التحديث أثناء الفتح"
+"Refreshing {done} of {total}…" = "جارٍ تحديث {done} من {total}…"
+"Remove a subscription (its saved history stays until you subscribe again)" = "إزالة اشتراك (يبقى سجله المحفوظ حتى تشترك مجددًا)"
+"Remove an article from your saved ones" = "إزالة مقال من المقالات المحفوظة لديك"
+"Save an article to read it later" = "احفظ مقالًا لقراءته لاحقًا"
+"Save articles to read them later; they stay even after they leave their feed." = "احفظ المقالات لقراءتها لاحقًا؛ وتبقى حتى بعد خروجها من خلاصتها."
+"Save your subscriptions as an OPML file" = "احفظ اشتراكاتك كملف OPML"
+"Saved articles" = "المقالات المحفوظة"
+"Saved articles of one feed or every feed, newest first, with their read and saved flags" = "المقالات المحفوظة لخلاصة واحدة أو لكل الخلاصات، الأحدث أولًا، مع علامات القراءة والحفظ"
+"Saved {count} feeds to {path}" = "تم حفظ {count} خلاصة في {path}"
+"Science" = "العلوم"
+"Search articles…" = "ابحث في المقالات…"
+"Starter feeds" = "خلاصات البداية"
+"Subscribe in Feeds: {site}" = "الاشتراك في الخلاصات: {site}"
+"Subscribe to a feed, or to the feed a website offers (turns Feeds on)" = "اشترك في خلاصة، أو في الخلاصة التي يقدّمها موقع (يُفعّل الخلاصات)"
+"Subscribe to a site or pick from tested starter feeds" = "اشترك في موقع أو اختر من خلاصات البداية المجرَّبة"
+"Subscribed to {feed}" = "تم الاشتراك في {feed}"
+"Technology" = "التقنية"
+"The OPML file" = "ملف OPML"
+"The article's link" = "رابط المقال"
+"The feed address" = "عنوان الخلاصة"
+"The full article is on its website." = "المقال الكامل على موقعه."
+"The newest articles kept for each feed; saved articles are kept on top of these" = "أحدث المقالات المحفوظة لكل خلاصة؛ والمقالات المحفوظة تُبقى فوق هذا العدد"
+"The reader" = "القارئ"
+"The reader shows a clean copy of the article, without scripts, frames or trackers" = "يعرض القارئ نسخة نظيفة من المقال، بلا سكربتات أو إطارات أو متتبّعات"
+"The server answered HTTP {status}" = "أجاب الخادم بـ HTTP {status}"
+"The server is busy (HTTP {status}); trying again later" = "الخادم مشغول (HTTP {status})؛ ستُعاد المحاولة لاحقًا"
+"The server redirected from a secure address to an insecure one" = "أعاد الخادم التوجيه من عنوان آمن إلى عنوان غير آمن"
+"The server redirected to an address that is not valid" = "أعاد الخادم التوجيه إلى عنوان غير صالح"
+"The server redirected too many times" = "أعاد الخادم التوجيه مرات كثيرة جدًا"
+"The server redirected without saying where" = "أعاد الخادم التوجيه دون أن يحدد الوجهة"
+"This OPML file is too large" = "ملف OPML هذا كبير جدًا"
+"This OPML file lists no feeds" = "ملف OPML هذا لا يضم أي خلاصات"
+"This address is a web page without a feed; find its RSS or Atom link" = "هذا العنوان صفحة ويب بلا خلاصة؛ ابحث عن رابط RSS أو Atom الخاص بها"
+"This download is too large" = "هذا التنزيل كبير جدًا"
+"This feed already has 200 saved articles" = "لدى هذه الخلاصة بالفعل 200 مقال محفوظ"
+"This feed could not be read" = "تعذّرت قراءة هذه الخلاصة"
+"This is not an OPML file" = "هذا ليس ملف OPML"
+"This site offers several feeds:" = "يقدّم هذا الموقع عدة خلاصات:"
+"Trying again at {time}" = "ستُعاد المحاولة عند {time}"
+"Turn on Feeds" = "تفعيل الخلاصات"
+"Turn on Refresh in the background first" = "فعّل التحديث في الخلفية أولًا"
+"Unread" = "غير المقروءة"
+"Unread count" = "عدد غير المقروء"
+"World news" = "أخبار العالم"
+"You already follow this feed" = "أنت تتابع هذه الخلاصة بالفعل"
+"Your feeds" = "خلاصاتك"
+"Your news, together" = "أخبارك في مكان واحد"
+"Your subscriptions with their folders and unread counts" = "اشتراكاتك مع مجلداتها وأعداد غير المقروء"
+"Your web browser" = "متصفح الويب"
+"the feed's structure is broken" = "بنية الخلاصة معطوبة"
+"{count} new articles" = "{count} مقالات جديدة"
+"{count} of {max} feeds" = "{count} من {max} خلاصة"
+"{feed} and {more} more feeds" = "{feed} و{more} خلاصات أخرى"
+"{n}d" = "{n} ي"
+"Could not refresh {feeds}; trying again later" = "تعذّر تحديث {feeds}؛ ستُعاد المحاولة لاحقًا"
+"Feeds · Sidebar card" = "الخلاصات · بطاقة الشريط الجانبي"
+"Card folder" = "مجلد البطاقة"
+"The sidebar card lists the newest unread articles of this folder; empty lists every feed" = "تعرض بطاقة الشريط الجانبي أحدث المقالات غير المقروءة في هذا المجلد؛ اتركه فارغًا لعرض كل الخلاصات"

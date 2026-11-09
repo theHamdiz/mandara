@@ -38,6 +38,11 @@ async-channel.workspace = true
 ureq.workspace = true
 # RSS, Atom and JSON Feed share one parser and link-resolution model.
 feed-rs = "3"
+# Feeds: relative links in articles and discovery pages, and feeds whose
+# bytes contradict their declared encoding. Both already in the tree
+# (feed-rs uses url, its quick-xml uses encoding_rs).
+url = "2.5"
+encoding_rs = "0.8"
 pure-onnx-ocr.workspace = true
 tract-onnx.workspace = true
 image.workspace = true
