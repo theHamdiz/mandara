@@ -26,6 +26,9 @@ wallpaper depth is controlled by the **Wallpaper depth** plugin.
 Mandara's springs can change target halfway through a transition while keeping
 their velocity. Damping controls overshoot and Animation speed controls timing;
 fixed durations, easing curves and artificial delays are not applied to springs.
+Drop-down panels and the sidebar bounce only as they open: closing, they move
+at the same pace but stop as soon as they reach the bar or screen edge, so they
+never swing back into view.
 Accessibility and per-surface choices are preserved when you select a preset.
 
 The config lives under `[motion]`, with `follow_system = false` and
