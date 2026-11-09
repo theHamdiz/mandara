@@ -2,10 +2,14 @@
 //! per game under `~/.local/state/mandara/games/`, read once off the UI
 //! thread, written whole and atomically on the blocking pool, coalesced
 //! (one write per pause in play, never per frame or per key) and with one
-//! write in flight at a time. An unreadable or corrupted file is moved
-//! aside as `<name>.corrupt` and never read again.
+//! write in flight at a time. Writes to one file happen one after another
+//! in the order their snapshots were taken, so a write still running when
+//! a flush starts can never put an older game back. An unreadable or
+//! corrupted file is moved aside as `<name>.corrupt` and never read again.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
 use gpui::{Context, Task};
@@ -56,6 +60,35 @@ pub fn write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     mandara_config::store::write_atomic(path, bytes).map_err(|e| format!("{}: {e:#}", path.display()))
 }
 
+/// A snapshot's place in line, taken on the UI thread together with the
+/// snapshot: a later snapshot always has a larger one.
+fn ticket() -> u64 {
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    NEXT.fetch_add(1, Ordering::Relaxed)
+}
+
+/// Writes snapshot `ticket` of `path` (blocking), unless a later snapshot
+/// of the same file is already on disk. Writes are serialised, so the
+/// check and the write can't interleave with another write.
+fn write_in_order(path: &Path, ticket: u64, bytes: &[u8]) -> Result<(), String> {
+    /// The newest snapshot written to each file (a game or two).
+    static WRITTEN: Mutex<Vec<(PathBuf, u64)>> = Mutex::new(Vec::new());
+    let mut written = WRITTEN.lock().unwrap_or_else(PoisonError::into_inner);
+    let i = match written.iter().position(|(p, _)| p == path) {
+        Some(i) => i,
+        None => {
+            written.push((path.to_path_buf(), 0));
+            written.len() - 1
+        }
+    };
+    if written[i].1 >= ticket {
+        return Ok(());
+    }
+    write(path, bytes)?;
+    written[i].1 = ticket;
+    Ok(())
+}
+
 /// A model that saves itself.
 pub trait Persist: Sized + 'static {
     fn saver(&mut self) -> &mut Saver;
@@ -89,17 +122,18 @@ pub fn changed<T: Persist>(this: &mut T, cx: &mut Context<T>) {
     let task = cx.spawn(async move |weak, cx| {
         loop {
             cx.background_executor().timer(SAVE_DEBOUNCE).await;
-            let Ok(Some((file, bytes))) = weak.update(cx, |t, _| {
+            let Ok(Some(snap)) = weak.update(cx, |t, _| {
                 let s = t.saver();
                 if !s.dirty {
                     return None;
                 }
                 s.dirty = false;
-                Some((t.file(), t.snapshot()))
+                Some((t.file(), ticket(), t.snapshot()))
             }) else {
                 break;
             };
-            let result = mandara_services::runtime::unblock(move || write(&file, &bytes)).await;
+            let (file, n, bytes) = snap;
+            let result = mandara_services::runtime::unblock(move || write_in_order(&file, n, &bytes)).await;
             let again = weak
                 .update(cx, |t, _| {
                     let s = t.saver();
@@ -129,12 +163,12 @@ pub fn flush_in_background<T: Persist>(this: &mut T, cx: &mut Context<T>) {
     if !this.saver().dirty {
         return;
     }
-    let (file, bytes) = (this.file(), this.snapshot());
+    let (file, n, bytes) = (this.file(), ticket(), this.snapshot());
     let saver = this.saver();
     saver.dirty = false;
     saver.task = None;
     cx.spawn(async move |_, _| {
-        if let Err(e) = mandara_services::runtime::unblock(move || write(&file, &bytes)).await {
+        if let Err(e) = mandara_services::runtime::unblock(move || write_in_order(&file, n, &bytes)).await {
             tracing::warn!("games: saving: {e}");
         }
     })
@@ -147,8 +181,8 @@ pub fn flush<T: Persist>(this: &mut T) {
     if !this.saver().dirty {
         return;
     }
-    let (file, bytes) = (this.file(), this.snapshot());
-    let result = write(&file, &bytes);
+    let (file, n, bytes) = (this.file(), ticket(), this.snapshot());
+    let result = write_in_order(&file, n, &bytes);
     let saver = this.saver();
     saver.task = None;
     saver.dirty = result.is_err();
@@ -172,5 +206,24 @@ mod tests {
         quarantine(&file);
         assert_eq!(read(&file), Read::Missing);
         assert_eq!(std::fs::read(dir.path().join("games").join("sudoku.json.corrupt")).unwrap(), b"{}");
+    }
+
+    /// A debounced write that is still running when a flush writes a newer
+    /// snapshot finishes last without putting the older game back.
+    #[test]
+    fn an_older_snapshot_never_overwrites_a_newer_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("games").join("2048.json");
+        let (older, newer) = (ticket(), ticket());
+        write_in_order(&file, newer, b"newer").unwrap();
+        write_in_order(&file, older, b"older").unwrap();
+        assert_eq!(read(&file), Read::Bytes(b"newer".to_vec()));
+        // Another file keeps its own order.
+        let other = dir.path().join("games").join("sudoku.json");
+        write_in_order(&other, older, b"older").unwrap();
+        assert_eq!(read(&other), Read::Bytes(b"older".to_vec()));
+        let latest = ticket();
+        write_in_order(&file, latest, b"latest").unwrap();
+        assert_eq!(read(&file), Read::Bytes(b"latest".to_vec()));
     }
 }
