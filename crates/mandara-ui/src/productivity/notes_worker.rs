@@ -6,9 +6,14 @@ use crate::notes_store::{NoteStore, NotesSnapshot};
 /// Bounded intents keep a stalled disk from retaining an unbounded edit queue.
 pub(super) const QUEUED_EDITS: usize = 32;
 
+/// What one queued edit produced, sent back once it ran on the worker.
 pub(super) struct Completion<T> {
+    /// The store's view right after this edit (shared bodies, no copies).
     pub snapshot: NotesSnapshot,
     pub value: anyhow::Result<T>,
+    /// Drafts kept back as body conflicts by the pending writes that ran
+    /// ahead of this edit (the edit itself still ran).
+    pub conflicts: Vec<u64>,
     /// Separate metadata failure lets an editor retain a newly committed id.
     pub index_error: Option<String>,
 }
@@ -29,10 +34,14 @@ impl<T> NoteReply<T> {
     }
 }
 
+/// A type-erased queued edit, so one bounded queue carries every reply type.
 trait Edit: Send {
+    /// Runs on the worker's blocking thread with exclusive use of the store.
     fn run(self: Box<Self>, store: &mut NoteStore);
 }
 
+/// An edit for the notes folder `root`, with the channel its completion
+/// goes to and the change signal a newly opened folder's watcher uses.
 struct EditWithReply<F, T> {
     edit: F,
     reply: Sender<Completion<T>>,
@@ -45,6 +54,10 @@ where
     F: FnOnce(&mut NoteStore) -> anyhow::Result<T> + Send,
     T: Send,
 {
+    /// Opens `root` first when the store holds another folder (flushing the
+    /// old index; a failure replies without running the edit), then runs
+    /// the edit and retries the index. The reply never blocks: its channel
+    /// holds exactly one completion.
     fn run(self: Box<Self>, store: &mut NoteStore) {
         let Self { edit, reply, root, changed } = *self;
         if store.root != root {
@@ -58,18 +71,21 @@ where
             match replacement {
                 Ok(replacement) => *store = replacement,
                 Err(error) => {
-                    let _ = reply.try_send(Completion { snapshot: store.snapshot(), value: Err(error), index_error: None });
+                    let _ = reply.try_send(Completion { snapshot: store.snapshot(), value: Err(error), conflicts: Vec::new(), index_error: None });
                     return;
                 }
             }
         }
         let value = edit(store);
+        let conflicts = std::mem::take(&mut store.deferred_conflicts);
         // A retry also repairs metadata after a previous partial body/rename write.
         let index_error = store.persist_index().err().map(|error| format!("{error:#}"));
-        let _ = reply.try_send(Completion { snapshot: store.snapshot(), value, index_error });
+        let _ = reply.try_send(Completion { snapshot: store.snapshot(), value, conflicts, index_error });
     }
 }
 
+/// The handle the panel model keeps: dropping it closes the queue, and the
+/// worker task ends after the edits already queued.
 pub(super) struct NotesWorker {
     edits: Sender<Box<dyn Edit>>,
 }

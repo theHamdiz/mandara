@@ -59,7 +59,10 @@ fn main() {
     println!("cargo:rerun-if-changed={}", root.join(manifest::RECORD).display());
     println!("cargo:rerun-if-changed={}", root.join("Cargo.lock").display());
     println!("cargo:rerun-if-changed={}", root.join("Cargo.toml").display());
-    println!("cargo:rerun-if-changed={}", root.join(".git/HEAD").display());
+    let git_dirs = git(&["rev-parse", "--git-dir", "--git-common-dir"], &root);
+    for input in manifest::revision_inputs(&root, git_dirs.as_deref()) {
+        println!("cargo:rerun-if-changed={}", input.display());
+    }
     for c in &components {
         println!("cargo:rerun-if-changed={}", root.join(&c.dir).display());
     }

@@ -24,9 +24,13 @@ pub const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15)
 /// Explicit setup can build the whole catalog before interactive inference.
 pub const INDEX_SETUP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
 
+/// What a launcher query starts with to go to the agent (not configurable;
+/// the launcher's prefix help shows it while the agent is on).
+pub const PREFIX: char = '!';
+
 /// The strict trigger accepts either `!command` or `! command`.
 pub fn query(input: &str) -> Option<&str> {
-    input.trim_start().strip_prefix('!').map(str::trim)
+    input.trim_start().strip_prefix(PREFIX).map(str::trim)
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]

@@ -10,9 +10,12 @@ const REQUESTED: u8 = 1;
 /// The blocking worker is executing the hook.
 const RUNNING: u8 = 2;
 
+/// The trim request state shared by every caller: `IDLE`, `REQUESTED` or
+/// `RUNNING` (with `REQUESTED` set again by releases during a trim).
 struct Requests(AtomicU8);
 
 impl Requests {
+    /// Idle (a `const`, for the static).
     const fn new() -> Self {
         Self(AtomicU8::new(IDLE))
     }
@@ -22,6 +25,7 @@ impl Requests {
         self.0.fetch_or(REQUESTED, Ordering::AcqRel) == IDLE
     }
 
+    /// Marks a trim pass as running, absorbing the requests so far.
     fn begin(&self) {
         self.0.store(RUNNING, Ordering::Release);
     }

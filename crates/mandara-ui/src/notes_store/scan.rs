@@ -5,12 +5,18 @@ use anyhow::{Context as _, Result};
 use super::{DEFAULT_TOPIC, EXTENSION, Note, NoteStore, ReadError, Topic, rel, unix};
 use crate::todo_lists::{ListColor, SWATCH_HUES};
 
+/// A file found by a scan: an unchanged entry shared from the previous
+/// snapshot (same path, topic, text and time), or newly read text.
 enum ScannedNote {
     Reused(Arc<Note>),
     Read { path: String, topic: u64, text: String, updated: i64 },
 }
 
 impl NoteStore {
+    /// Reads the whole folder (topics from sub-folders, notes from `.md`
+    /// files) and only then replaces the snapshot, so a failed directory read
+    /// leaves the previous one and the index untouched. An unreadable file
+    /// keeps its previous entry and id and is listed in `read_errors`.
     pub(super) fn scan(&mut self) -> Result<()> {
         let mut topics = self.view.topics.clone();
         if !topics.iter().any(|topic| topic.id == DEFAULT_TOPIC) { topics.insert(0, Topic::default()); }

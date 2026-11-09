@@ -40,6 +40,8 @@ fn sparkle_icons_only_represent_ai() {
                 }
                 "crates/mandara-ui/src/plugins/local_ai.rs" => true,
                 "crates/mandara-ui/src/desktop_plugins.rs" => line.contains("WidgetKind::AiUsage"),
+                // The AI usage widget's empty state.
+                "crates/mandara-ui/src/backdrop/widgets/feeds.rs" => line.contains("tk(\"AI usage\")"),
                 "crates/mandara-studio/src/app/store_page.rs" => {
                     line.trim() == "\"local-ai\" => \"sparkles\","
                 }

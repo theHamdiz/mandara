@@ -30,6 +30,7 @@ use gpui::{
     SharedString, Size, StyledText, TextAlign, TextRun, TextStyle, WhiteSpace, Window, point, px,
 };
 use smallvec::SmallVec;
+use unicode_segmentation::UnicodeSegmentation as _;
 
 /// Right-to-left / left-to-right marks (zero width, strong direction).
 const RLM: char = '\u{200F}';
@@ -51,7 +52,36 @@ pub fn styled_paragraph(text: impl Into<SharedString>, highlights: Vec<(Range<us
     if !super::has_rtl(&text) {
         return StyledText::new(text).with_highlights(highlights).into_any_element();
     }
-    Paragraph { text, highlights, families: Vec::new(), links: None, layout: Rc::default(), handle: None }.into_any_element()
+    Paragraph { text, highlights, families: Vec::new(), links: None, layout: Rc::default(), handle: None, clip: None }.into_any_element()
+}
+
+/// Whether a clamped paragraph left text out, as its last layout found
+/// (`None` until it has been laid out clamped). Shared between renders so
+/// a "Read more" appears only when there is more to read.
+#[derive(Clone, Default, Debug)]
+pub struct Clip(Rc<Cell<Option<bool>>>);
+
+impl Clip {
+    /// Whether the paragraph's last layout cut text off (`None` before it
+    /// has been laid out).
+    pub fn clipped(&self) -> Option<bool> {
+        self.0.get()
+    }
+
+    /// Records an answer (the paragraph's own layout does this).
+    pub(crate) fn set(&self, clipped: Option<bool>) {
+        self.0.set(clipped);
+    }
+}
+
+/// A reading paragraph: [`paragraph`]'s own layout whatever the direction
+/// (a translation reads like the Arabic beside it), so a clamped one ends
+/// on a whole word with an ellipsis, never inside a word or between a
+/// letter and its marks, and reports through `clip` whether it was cut.
+/// A change of that answer redraws the view once.
+pub fn reading_paragraph(text: impl Into<SharedString>, clip: &Clip) -> AnyElement {
+    let seen = clip.clipped();
+    Paragraph { text: text.into(), highlights: Vec::new(), families: Vec::new(), links: None, layout: Rc::default(), handle: None, clip: Some((clip.clone(), seen)) }.into_any_element()
 }
 
 /// The laid-out rows of an editable paragraph, shared with its editor:
@@ -66,7 +96,7 @@ pub struct ParagraphLayout {
 /// An editor's text: always this module's own layout (whatever the
 /// direction), reporting its rows through `layout`.
 pub fn editable_paragraph(text: impl Into<SharedString>, layout: &ParagraphLayout) -> AnyElement {
-    Paragraph { text: text.into(), highlights: Vec::new(), families: Vec::new(), links: None, layout: layout.rows.clone(), handle: Some(layout.clone()) }.into_any_element()
+    Paragraph { text: text.into(), highlights: Vec::new(), families: Vec::new(), links: None, layout: layout.rows.clone(), handle: Some(layout.clone()), clip: None }.into_any_element()
 }
 
 impl ParagraphLayout {
@@ -109,7 +139,7 @@ pub fn linked_paragraph_with_layout(
     layout: &ParagraphLayout,
 ) -> AnyElement {
     let links = (!links.is_empty()).then_some((links, on_click));
-    Paragraph { text: text.into(), highlights, families: Vec::new(), links, layout: layout.rows.clone(), handle: Some(layout.clone()) }.into_any_element()
+    Paragraph { text: text.into(), highlights, families: Vec::new(), links, layout: layout.rows.clone(), handle: Some(layout.clone()), clip: None }.into_any_element()
 }
 
 /// [`styled_paragraph`] with font families for byte ranges (`families`,
@@ -135,7 +165,7 @@ pub fn linked_paragraph(
         return InteractiveText::new(id, styled).on_click(links, move |ix, window, cx| on_click(ix, window, cx)).into_any_element();
     }
     let links = (!links.is_empty()).then_some((links, on_click));
-    Paragraph { text, highlights, families, links, layout: Rc::default(), handle: None }.into_any_element()
+    Paragraph { text, highlights, families, links, layout: Rc::default(), handle: None, clip: None }.into_any_element()
 }
 
 /// The element behind [`paragraph`] for text with right-to-left characters.
@@ -147,6 +177,9 @@ pub struct Paragraph {
     layout: Rc<RefCell<Option<Rows>>>,
     /// Set for an editor's text ([`editable_paragraph`]).
     handle: Option<ParagraphLayout>,
+    /// A reading paragraph's cut report and what the render last saw of it
+    /// ([`reading_paragraph`]).
+    clip: Option<(Clip, Option<bool>)>,
 }
 
 /// What a layout pass needs to (re)wrap the paragraph.
@@ -173,6 +206,9 @@ struct Rows {
     line_height: Pixels,
     align: TextAlign,
     size: Size<Pixels>,
+    /// A clamp left text out (more rows than allowed, or a last row that
+    /// had to end early).
+    clipped: bool,
 }
 
 impl IntoElement for Paragraph {
@@ -236,6 +272,17 @@ impl Element for Paragraph {
         if stale {
             let rewrapped = layout_rows(&rows.inputs.clone(), Some(bounds.size.width), rows.line_height, rows.align, window);
             *state = Some(rewrapped);
+        }
+        // A reading paragraph tells its fold whether it was cut; the view
+        // draws once more when that changed since its render (only a
+        // clamped layout answers: an expanded one keeps the last answer).
+        if let (Some((clip, seen)), Some(rows)) = (&self.clip, state.as_ref())
+            && rows.inputs.max_lines.is_some()
+        {
+            clip.set(Some(rows.clipped));
+            if *seen != Some(rows.clipped) {
+                window.request_animation_frame();
+            }
         }
     }
 
@@ -501,9 +548,11 @@ fn layout_rows(inputs: &Rc<Inputs>, width: Option<Pixels>, line_height: Pixels, 
     let mut ends = Vec::with_capacity(ranges.len());
     let mut widest = Pixels::ZERO;
     let last = ranges.len().saturating_sub(1);
+    let mut clipped = clipped_last;
     for (i, range) in ranges.into_iter().enumerate() {
         let overflows = limit.is_some_and(|l| measure(range.clone()) > l + REWRAP_EPSILON_PX);
         let ellipsis = inputs.ellipsize && i == last && (clipped_last || overflows);
+        clipped |= ellipsis;
         let (body, suffix) = if ellipsis {
             let room = limit.map_or(f32::INFINITY, |l| l - measure_str(&ts, ELLIPSIS, &inputs.runs, range.end, font_size));
             (fit_prefix(text, range, room, &mut measure), ELLIPSIS)
@@ -517,7 +566,7 @@ fn layout_rows(inputs: &Rc<Inputs>, width: Option<Pixels>, line_height: Pixels, 
         lines.push(line);
     }
     let size = Size { width: widest.ceil(), height: line_height * lines.len().max(1) as f32 };
-    Rows { inputs: inputs.clone(), wrap_width, lines, starts, ends, line_height, align, size }
+    Rows { inputs: inputs.clone(), wrap_width, lines, starts, ends, line_height, align, size, clipped }
 }
 
 /// Width of `s` styled like the text at byte `at`.
@@ -538,13 +587,41 @@ fn run_at(runs: &[TextRun], at: usize) -> TextRun {
     runs.last().cloned().expect("a paragraph has at least one run")
 }
 
-/// The longest prefix of `range` (ending on a char boundary, trailing
-/// spaces dropped) whose width fits `room`.
+/// Trailing characters a cut row drops before its ellipsis: spaces and
+/// the separators that would sit oddly against it (`word,…`).
+fn cut_trim(c: char) -> bool {
+    c.is_whitespace() || matches!(c, ',' | ';' | ':' | '.' | '،' | '؛' | '-' | '–' | '—')
+}
+
+/// The longest prefix of `range` whose width fits `room`, for a row that
+/// ends in an ellipsis: it ends after a whole word (never inside one);
+/// only a single word wider than the room is cut, and then between
+/// graphemes (a letter keeps its marks: tashkeel never loses its letter).
+/// Trailing spaces and separators are dropped.
 fn fit_prefix(text: &str, range: Range<usize>, room: f32, measure: &mut impl FnMut(Range<usize>) -> f32) -> Range<usize> {
-    let ends: Vec<usize> = text[range.clone()].char_indices().skip(1).map(|(i, _)| range.start + i).chain([range.end]).collect();
-    let n = ends.partition_point(|&end| measure(range.start..end) <= room);
-    let end = if n == 0 { range.start } else { ends[n - 1] };
-    range.start..range.start + text[range.start..end].trim_end().len()
+    let row = &text[range.clone()];
+    // Word ends: before each space that follows a word, then the row's end.
+    let mut words: Vec<usize> = Vec::new();
+    let mut prev_space = true;
+    for (i, c) in row.char_indices() {
+        let space = c == ' ' || c == '\t';
+        if space && !prev_space {
+            words.push(range.start + i);
+        }
+        prev_space = space;
+    }
+    words.push(range.end);
+    let n = words.partition_point(|&end| measure(range.start..end) <= room);
+    let end = if n > 0 {
+        words[n - 1]
+    } else {
+        // The first word alone is wider than the room: whole graphemes.
+        let first = words[0];
+        let ends: Vec<usize> = text[range.start..first].grapheme_indices(true).skip(1).map(|(i, _)| range.start + i).chain([first]).collect();
+        let n = ends.partition_point(|&end| measure(range.start..end) <= room);
+        if n == 0 { range.start } else { ends[n - 1] }
+    };
+    range.start..range.start + text[range.start..end].trim_end_matches(cut_trim).len()
 }
 
 /// Shapes `body` (+ `suffix`) as one row, opening it with a direction mark
@@ -684,10 +761,11 @@ fn words(line: &str, offset: usize) -> Vec<Word> {
     out
 }
 
-/// The end of the longest run of whole characters from `range.start` that
-/// fits `max` (at least one character, so wrapping always advances).
+/// The end of the longest run of whole graphemes from `range.start` that
+/// fits `max` (at least one, so wrapping always advances; a letter never
+/// leaves its marks behind on the next row).
 fn fit_chars(text: &str, range: Range<usize>, max: f32, measure: &mut impl FnMut(Range<usize>) -> f32) -> usize {
-    let ends: Vec<usize> = text[range.clone()].char_indices().skip(1).map(|(i, _)| range.start + i).chain([range.end]).collect();
+    let ends: Vec<usize> = text[range.clone()].grapheme_indices(true).skip(1).map(|(i, _)| range.start + i).chain([range.end]).collect();
     let n = ends.partition_point(|&end| measure(range.start..end) <= max);
     ends[n.max(1) - 1]
 }
@@ -735,9 +813,36 @@ mod tests {
     #[test]
     fn prefixes_fit_the_room() {
         let text = "hello world";
-        assert_eq!(&text[fit_prefix(text, 0..text.len(), 7.0, &mut chars(text))], "hello w");
+        // A cut row ends after a whole word, never inside the next one.
+        assert_eq!(&text[fit_prefix(text, 0..text.len(), 7.0, &mut chars(text))], "hello");
         assert_eq!(&text[fit_prefix(text, 0..text.len(), 6.0, &mut chars(text))], "hello");
+        assert_eq!(&text[fit_prefix(text, 0..text.len(), 11.0, &mut chars(text))], "hello world");
         assert_eq!(&text[fit_prefix(text, 0..text.len(), 0.0, &mut chars(text))], "");
+        // Only one word wider than the room is cut, between graphemes.
+        assert_eq!(&text[fit_prefix(text, 0..text.len(), 3.0, &mut chars(text))], "hel");
+        // A separator before the ellipsis goes.
+        let text = "first, second";
+        assert_eq!(&text[fit_prefix(text, 0..text.len(), 9.0, &mut chars(text))], "first");
+    }
+
+    #[test]
+    fn arabic_cuts_keep_words_and_their_marks_whole() {
+        // Fully voweled: every letter carries combining marks.
+        let text = "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ";
+        let words: Vec<&str> = text.split(' ').collect();
+        for room in 1..text.chars().count() {
+            let cut = &text[fit_prefix(text, 0..text.len(), room as f32, &mut chars(text))];
+            // Whole words when one fits…
+            if cut.chars().count() >= words[0].chars().count() {
+                assert!(text.starts_with(cut) && (cut.len() == text.len() || text[cut.len()..].starts_with(' ')), "room {room}: {cut:?}");
+            }
+            // …and never a letter without its marks.
+            assert!(!text[cut.len()..].chars().next().is_some_and(|c| matches!(c, '\u{064B}'..='\u{065F}' | '\u{0670}')), "room {room}: {cut:?}");
+        }
+        // A long voweled word split across rows keeps marks on their letter.
+        for row in rows("بِالنِّيَّاتِ", Some(3.0)) {
+            assert!(!row.chars().next().is_some_and(|c| matches!(c, '\u{064B}'..='\u{065F}')), "{row:?}");
+        }
     }
 
     #[test]

@@ -309,6 +309,44 @@ pub fn closure_dirs(name: &str, components: &[Component]) -> Vec<PathBuf> {
     components.iter().filter(|c| names.contains(&c.name)).map(|c| c.dir.clone()).collect()
 }
 
+/// The files the build script watches so the embedded git revision follows
+/// commits and checkouts, and nothing else reruns it: `HEAD`, the branch
+/// ref it names and `packed-refs`. `git_dirs` is the output of
+/// `git rev-parse --git-dir --git-common-dir` run in `root` (relative
+/// lines are relative to `root`); `None` (no git, a source archive)
+/// watches nothing. In a linked worktree `.git` is a file pointing at the
+/// worktree's own git directory, which holds `HEAD`, while branches live in
+/// the common directory. Only existing paths are returned: Cargo treats a
+/// missing one as changed on every build, as `<root>/.git/HEAD` was in a
+/// worktree.
+pub fn revision_inputs(root: &Path, git_dirs: Option<&str>) -> Vec<PathBuf> {
+    let mut lines = git_dirs.unwrap_or_default().lines().map(|line| root.join(line));
+    let (Some(git_dir), Some(common)) = (lines.next(), lines.next()) else { return Vec::new() };
+    let head = git_dir.join("HEAD");
+    let mut inputs = Vec::new();
+    if let Ok(text) = std::fs::read_to_string(&head) {
+        if let Some(name) = text.strip_prefix("ref: ").map(str::trim) {
+            // The loose ref, or the nearest folder under `refs` that exists:
+            // a branch kept only in packed-refs gets its loose file there
+            // when it moves.
+            let refs = common.join("refs");
+            let mut loose = common.join(name);
+            while !loose.exists() && loose.starts_with(&refs) && loose != refs {
+                loose.pop();
+            }
+            if loose.exists() && loose.starts_with(&refs) {
+                inputs.push(loose);
+            }
+        }
+        inputs.push(head);
+    }
+    let packed = common.join("packed-refs");
+    if packed.exists() {
+        inputs.push(packed);
+    }
+    inputs
+}
+
 /// Reads `versions.toml`: `[name] version = "…" hash = "…"`.
 pub fn read_record(root: &Path) -> BTreeMap<String, Recorded> {
     table(&read(&root.join(RECORD)))
@@ -419,6 +457,43 @@ mod tests {
         assert_eq!(dirs, [PathBuf::from("crates/mandara-app"), PathBuf::from("crates/mandara-services"), PathBuf::from("tools/mandara-delta")]);
         assert_eq!(closure_dirs("mandara-studio", &comps), [PathBuf::from("crates/mandara-studio")]);
         assert!(closure_dirs("missing", &comps).is_empty());
+    }
+
+    /// A linked worktree's `.git` is a file: the build script watches the
+    /// worktree's own `HEAD` and the branch in the common directory, never a
+    /// missing `<root>/.git/HEAD` that would rerun it on every build (#111).
+    #[test]
+    fn revision_inputs_follow_worktrees_and_only_name_existing_files() {
+        let base = std::env::temp_dir().join(format!("mandara-version-git-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (checkout, worktree) = (base.join("main"), base.join("linked"));
+        let common = checkout.join(".git");
+        let own = common.join("worktrees/linked");
+        std::fs::create_dir_all(common.join("refs/heads/fix")).unwrap();
+        std::fs::create_dir_all(&own).unwrap();
+        std::fs::create_dir_all(&worktree).unwrap();
+        std::fs::write(worktree.join(".git"), format!("gitdir: {}\n", own.display())).unwrap();
+        std::fs::write(common.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+        std::fs::write(common.join("refs/heads/main"), "0123\n").unwrap();
+        std::fs::write(own.join("HEAD"), "ref: refs/heads/fix/branch\n").unwrap();
+        std::fs::write(common.join("packed-refs"), "").unwrap();
+
+        // The main checkout: `git rev-parse` prints relative directories.
+        assert_eq!(revision_inputs(&checkout, Some(".git\n.git")), [common.join("refs/heads/main"), common.join("HEAD"), common.join("packed-refs")]);
+        // The linked worktree: absolute directories; its branch is still
+        // only packed, so its folder is watched for the loose file.
+        let dirs = format!("{}\n{}", own.display(), common.display());
+        let inputs = revision_inputs(&worktree, Some(&dirs));
+        assert_eq!(inputs, [common.join("refs/heads/fix"), own.join("HEAD"), common.join("packed-refs")]);
+        assert!(!inputs.contains(&worktree.join(".git/HEAD")));
+        std::fs::write(common.join("refs/heads/fix/branch"), "4567\n").unwrap();
+        assert_eq!(revision_inputs(&worktree, Some(&dirs))[0], common.join("refs/heads/fix/branch"));
+        // A detached HEAD and a source archive.
+        std::fs::write(own.join("HEAD"), "89ab\n").unwrap();
+        assert_eq!(revision_inputs(&worktree, Some(&dirs)), [own.join("HEAD"), common.join("packed-refs")]);
+        assert!(revision_inputs(&worktree, None).is_empty());
+        assert!(revision_inputs(&base.join("missing"), Some(".git\n.git")).iter().all(|path| path.exists()));
+        std::fs::remove_dir_all(&base).unwrap();
     }
 
     #[test]

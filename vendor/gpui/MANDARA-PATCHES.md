@@ -178,6 +178,26 @@ live allocating control, empty and configured wire values, hash equality,
 and independent edits. Release frame and memory measurements remain a separate
 acceptance step; operation allocation counts are not whole-frame counts.
 
+## 8. Releasing decoded images (`app.rs`, `elements/img.rs`, `platform.rs`)
+
+Upstream can drop an image's texture only through a `&mut Window` that is
+being updated, and `remove_asset` alone leaves the texture in every atlas.
+Views that release a page's pictures when it closes (Studio) run inside a
+window update, so their own atlas kept every texture.
+
+* `App::loaded_asset::<A>(source)` returns a finished asset's result without
+  starting a load (`fetch_asset` starts one for an uncached source).
+* `ImageSource::evict(cx)` drops the decoded image from every window's atlas
+  that is not leased at the moment, then removes the asset. It never starts a
+  decode; a pending load is forgotten, so its result is never uploaded. Call
+  it from `App::defer` to reach the window that is updating.
+* `decode_static_image_from_decoder` moves its one frame into the frame list.
+  `SmallVec::from_elem(frame, 1)` cloned it, so every static decode (PNG,
+  JPEG, WebP, BMP, TIFF, ICO) briefly held two full-size BGRA copies.
+
+`elements::img` tests cover eviction of loaded and uncached images and the
+single moved frame.
+
 ## Packaging changes
 
 `Cargo.toml` spells out the workspace-inherited fields and dependencies with

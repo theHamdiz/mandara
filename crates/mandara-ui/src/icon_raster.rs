@@ -96,15 +96,20 @@ pub fn forget_edge(path: &Path, edge: u32, window: &mut Window, cx: &mut App) {
     cx.remove_asset::<SizedIcon>(&key);
 }
 
-/// [`forget_edge`] without a window (its atlas went with it).
+/// [`forget_edge`] without a window: the bitmap and its texture in every
+/// window that is not being updated right now. Never starts a decode.
 pub fn forget_cached_edge(path: &Path, edge: u32, cx: &mut App) {
-    cx.remove_asset::<SizedIcon>(&IconKey { path: Arc::from(path), edge });
+    let key = IconKey { path: Arc::from(path), edge };
+    if let Some(Ok(image)) = cx.loaded_asset::<SizedIcon>(&key) {
+        cx.drop_image(image, None);
+    }
+    cx.remove_asset::<SizedIcon>(&key);
 }
 
 /// [`forget`] without a window (the window and its atlas are gone): drops
 /// the decoded bitmap drawn at `size` on a `scale` output.
 pub fn forget_cached(path: &Path, size: f32, scale: f32, cx: &mut App) {
-    cx.remove_asset::<SizedIcon>(&IconKey { path: Arc::from(path), edge: edge_for(size, scale) });
+    forget_cached_edge(path, edge_for(size, scale), cx);
 }
 
 /// Borrows embedded artwork or owns file bytes for this decode, then returns

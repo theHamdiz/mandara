@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 use gpui::Context;
-use crate::notes_store::{Note, NoteStore, NotesSnapshot};
+use crate::notes_store::{Note, NoteStore, NotesSnapshot, body_hash};
 use crate::todo_lists::parse_quick_add;
 use crate::state::config;
 use super::{Productivity, NoteReply, SAVE_DEBOUNCE, notes_worker, notes_root, now_unix};
-use super::note_edit::{PendingNote, TaskPatches};
+use super::note_edit::{BodyConflicts, PendingNote, TaskPatches};
 use super::note_conflict::{Recovery, RetainedDraft};
 
 struct NotesCompletion {
@@ -15,6 +15,9 @@ struct NotesCompletion {
     acknowledged: Vec<(u64, u64)>,
     successful: bool,
     error: Option<String>,
+    /// Drafts the worker kept back because their file changed elsewhere
+    /// ([`BodyConflicts`]); the batch's other bodies were written.
+    conflicts: Vec<u64>,
 }
 
 impl Productivity {
@@ -53,11 +56,16 @@ impl Productivity {
         let (reply, result) = async_channel::bounded(1);
         cx.spawn(async move |this, cx| {
             let Ok(done) = incoming.recv().await else { return };
-            let notes_worker::Completion { snapshot, value, index_error } = done;
-            let successful = value.is_ok() && index_error.is_none();
+            let notes_worker::Completion { snapshot, value, conflicts: deferred, index_error } = done;
+            // Body conflicts leave the batch's other writes done; they are
+            // shown as retained conflicts, not as a failed save.
+            let failed_on_conflict = value.as_ref().err().and_then(|error| error.downcast_ref::<BodyConflicts>());
+            let mut conflicts = failed_on_conflict.map(|c| c.0.clone()).unwrap_or_default();
+            conflicts.extend(deferred);
+            let successful = (value.is_ok() || failed_on_conflict.is_some()) && index_error.is_none();
             let _ = this.update(cx, |p, cx| {
-                let error = value.as_ref().err().map(|error| format!("{error:#}")).or_else(|| index_error.clone());
-                if p.apply_notes_completion(NotesCompletion { sequence, snapshot, acknowledged, successful, error }) { cx.notify(); }
+                let error = value.as_ref().err().filter(|error| !error.is::<BodyConflicts>()).map(|error| format!("{error:#}")).or_else(|| index_error.clone());
+                if p.apply_notes_completion(NotesCompletion { sequence, snapshot, acknowledged, successful, error, conflicts }) { cx.notify(); }
                 p.follow_notes_completion(cx);
             });
             let _ = reply.try_send(NoteReply { value: value.map_err(|error| format!("{error:#}")), index_error });
@@ -67,13 +75,19 @@ impl Productivity {
 
     /// Error status and snapshots share the same completion sequence boundary.
     fn apply_notes_completion(&mut self, update: NotesCompletion) -> bool {
-        let NotesCompletion { sequence, mut snapshot, acknowledged, successful, error } = update;
+        let NotesCompletion { sequence, mut snapshot, mut acknowledged, successful, error, conflicts } = update;
+        if !conflicts.is_empty() {
+            // Each conflict belongs to the draft generation this save sent.
+            let attempts: Vec<(u64, u64)> = acknowledged.iter().filter(|(id, _)| conflicts.contains(id)).copied().collect();
+            acknowledged.retain(|(id, _)| !conflicts.contains(id));
+            self.retain_body_conflicts(&attempts, &snapshot);
+        }
         if successful && sequence >= self.notes_applied {
             for &(id, generation) in &acknowledged {
                 self.notes_conflicts.retain(|(root, note), draft| root != &self.notes.root || *note != id || draft.generation != generation);
             }
         }
-        acknowledge(&mut self.notes_dirty, &mut self.notes_submitted, acknowledged, successful, |id| { self.notes_tasks.remove(&id); });
+        acknowledge(&mut self.notes_dirty, &mut self.notes_submitted, acknowledged, successful, |id| { self.notes_tasks.remove(&id); self.notes_base.remove(&id); });
         if sequence < self.notes_applied { return false; }
         self.retain_conflicts(&snapshot);
         self.notes_error = error;
@@ -88,6 +102,8 @@ impl Productivity {
                     else { *note = Arc::new(Note { id: note.id, topic: note.topic, path: note.path.clone(), text: draft.text.clone(), updated: draft.updated }); }
                 } else { snapshot.notes.push(draft.clone()); }
             }
+            // Ids belong to their folder; nothing is dirty when it changes.
+            if snapshot.root != self.notes.root { self.notes_base.clear(); }
             self.notes = snapshot;
             for (id, recovery) in recovered {
                 let key = (self.notes.root.clone(), id);
@@ -125,7 +141,37 @@ impl Productivity {
             self.notes_dirty.remove(&id);
             self.notes_submitted.remove(&id);
             let tasks = self.notes_tasks.remove(&id);
+            self.rebase_conflict(id, snapshot);
             self.notes_conflicts.insert((self.notes.root.clone(), id), RetainedDraft { generation, note, tasks, original });
+        }
+    }
+
+    /// Whole-text drafts whose file changed elsewhere stay visible as
+    /// conflicts instead of overwriting it, and stop being write
+    /// prerequisites for the other notes.
+    fn retain_body_conflicts(&mut self, attempts: &[(u64, u64)], snapshot: &NotesSnapshot) {
+        if snapshot.root != self.notes.root { return; }
+        for &(id, attempt) in attempts {
+            // A newer draft typed since this save stays dirty with its own
+            // base; its own save is checked again, never rebased to this
+            // older snapshot.
+            if self.notes_dirty.get(&id) != Some(&attempt) { continue; }
+            let Some(generation) = self.notes_dirty.remove(&id) else { continue };
+            self.notes_submitted.remove(&id);
+            self.notes_tasks.remove(&id);
+            self.rebase_conflict(id, snapshot);
+            let Some(note) = self.notes.notes.iter().find(|note| note.id == id).cloned() else { continue };
+            self.notes_conflicts.insert((self.notes.root.clone(), id), RetainedDraft { generation, note, tasks: None, original: None });
+        }
+    }
+
+    /// A conflict's draft replaces the body found elsewhere once you edit
+    /// it again, so a conflict never locks the note; a further outside
+    /// change before that edit is a new conflict.
+    fn rebase_conflict(&mut self, id: u64, snapshot: &NotesSnapshot) {
+        match snapshot.note(id) {
+            Some(current) => { self.notes_base.insert(id, body_hash(&current.text)); }
+            None => { self.notes_base.remove(&id); }
         }
     }
 
@@ -148,7 +194,7 @@ impl Productivity {
     fn pending_notes(&self, except: Option<u64>, unsubmitted_only: bool) -> Vec<PendingNote> {
         self.notes_dirty.iter()
             .filter(|&(&id, &generation)| except != Some(id) && (!unsubmitted_only || self.notes_submitted.get(&id) != Some(&generation)))
-            .filter_map(|(&id, &generation)| self.notes.notes.iter().find(|note| note.id == id).map(|note| PendingNote { note: note.clone(), generation, tasks: self.notes_tasks.get(&id).cloned() }))
+            .filter_map(|(&id, &generation)| self.notes.notes.iter().find(|note| note.id == id).map(|note| PendingNote { note: note.clone(), generation, tasks: self.notes_tasks.get(&id).cloned(), base: self.notes_base.get(&id).copied() }))
             .collect()
     }
 
@@ -183,10 +229,7 @@ impl Productivity {
     ) -> Result<async_channel::Receiver<NoteReply<T>>, String> {
         let pending = self.pending_notes(None, false);
         let acknowledged = pending.iter().map(PendingNote::token).collect();
-        self.queue_notes(cx, acknowledged, move |store| {
-            write_pending(store, &pending)?;
-            edit(store)
-        })
+        self.queue_notes(cx, acknowledged, move |store| pending_then(store, &pending, edit))
     }
 
     /// Resolves quick-add topics on the worker, returning the committed note id.
@@ -227,6 +270,9 @@ impl Productivity {
         let Some(note) = self.notes.notes.iter_mut().find(|note| note.id == id) else { return };
         if note.text == text { return; }
         self.notes_conflicts.retain(|(root, note), _| root != &self.notes.root || *note != id);
+        // The body this edit run replaces: what the panel showed when it
+        // began (a conflict already set the body found elsewhere).
+        if note.path.is_some() && !self.notes_base.contains_key(&id) { self.notes_base.insert(id, body_hash(&note.text)); }
         *note = Arc::new(Note { id, topic: note.topic, path: note.path.clone(), text: text.to_owned(), updated: now_unix() });
         self.notes_generation += 1;
         self.notes_dirty.insert(id, self.notes_generation);
@@ -248,10 +294,7 @@ impl Productivity {
         let mut acknowledged: Vec<_> = pending.iter().map(PendingNote::token).collect();
         let local_draft = self.notes_dirty.get(&id).copied().or_else(|| self.notes_conflicts.iter().find(|((root, note), _)| root == &self.notes.root && *note == id).map(|(_, draft)| draft.generation));
         if let Some(generation) = local_draft { acknowledged.push((id, generation)); }
-        self.queue_notes(cx, acknowledged, move |store| {
-            write_pending(store, &pending)?;
-            store.delete(id).map(|removed| removed || local_draft.is_some())
-        })
+        self.queue_notes(cx, acknowledged, move |store| pending_then(store, &pending, |store| store.delete(id).map(|removed| removed || local_draft.is_some())))
     }
 
     /// Detached UI actions still observe and report their eventual filesystem result.
@@ -334,10 +377,32 @@ impl Productivity {
 }
 
 /// A structural edit must not pass a failed prerequisite body or index write.
+/// A draft whose file changed elsewhere does not stop the others: they are
+/// written, and [`BodyConflicts`] names the drafts kept back.
 fn write_pending(store: &mut NoteStore, pending: &[PendingNote]) -> anyhow::Result<()> {
     if store.scan_result().is_err() { store.rescan(&[]); store.scan_result()?; }
-    for note in pending { note.apply(store)?; }
-    store.persist_index()
+    let mut conflicts = Vec::new();
+    for note in pending {
+        match note.apply(store) {
+            Err(error) if error.is::<BodyConflicts>() => conflicts.push(note.note.id),
+            result => result?,
+        }
+    }
+    store.persist_index()?;
+    if conflicts.is_empty() { Ok(()) } else { Err(BodyConflicts(conflicts).into()) }
+}
+
+/// Writes the pending drafts, then runs `edit`. A draft whose file changed
+/// elsewhere is kept back for its own note (handed to the completion through
+/// the store) and never cancels this different edit; other write failures do.
+fn pending_then<T>(store: &mut NoteStore, pending: &[PendingNote], edit: impl FnOnce(&mut NoteStore) -> anyhow::Result<T>) -> anyhow::Result<T> {
+    if let Err(error) = write_pending(store, pending) {
+        match error.downcast::<BodyConflicts>() {
+            Ok(BodyConflicts(ids)) => store.deferred_conflicts.extend(ids),
+            Err(error) => return Err(error),
+        }
+    }
+    edit(store)
 }
 
 /// Only the matching successful generation clears a draft or its marker intentions.
@@ -383,7 +448,7 @@ mod tests {
         store.rescan(&[]);
         assert!(write_pending(&mut store, &model.pending_notes(None, false)).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), [0xff, 0, 0xfe]);
-        model.apply_notes_completion(NotesCompletion { sequence: 1, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None });
+        model.apply_notes_completion(NotesCompletion { sequence: 1, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None, conflicts: Vec::new() });
         assert!(model.notes_dirty.is_empty());
         assert!(model.note_pending(id));
         assert!(write_pending(&mut store, &model.pending_notes(None, false)).is_ok());
@@ -397,7 +462,7 @@ mod tests {
             let (_root, mut store, mut model, id, path, desired) = unreadable_draft(checkbox);
             std::fs::write(&path, "- [ ] Original task").unwrap();
             store.rescan(&[]);
-            model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None });
+            model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None, conflicts: Vec::new() });
             assert!(!model.has_note_conflicts());
             assert_eq!(model.notes_dirty.get(&id), Some(&3));
             let pending = model.pending_notes(None, false);
@@ -405,7 +470,7 @@ mod tests {
             assert_eq!(pending[0].tasks.is_some(), checkbox);
             write_pending(&mut store, &pending).unwrap();
             assert_eq!(std::fs::read_to_string(&path).unwrap(), desired);
-            model.apply_notes_completion(NotesCompletion { sequence: 3, snapshot: store.snapshot(), acknowledged: vec![(id, 3)], successful: true, error: None });
+            model.apply_notes_completion(NotesCompletion { sequence: 3, snapshot: store.snapshot(), acknowledged: vec![(id, 3)], successful: true, error: None, conflicts: Vec::new() });
             assert!(!model.note_pending(id));
         }
     }
@@ -416,7 +481,7 @@ mod tests {
         let external = "# Recovered externally\nDo not replace this";
         std::fs::write(&path, external).unwrap();
         store.rescan(&[]);
-        model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None });
+        model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None, conflicts: Vec::new() });
         assert!(model.has_note_conflicts());
         assert!(model.notes_dirty.is_empty());
         assert_eq!(model.notes.note(id).unwrap().text, desired);
@@ -472,7 +537,7 @@ mod tests {
             assert!(scanned.index_error.is_none());
             assert!(scanned.snapshot.read_errors.is_none());
             assert_eq!(scanned.snapshot.note(id).unwrap().text, recovered);
-            model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: scanned.snapshot, acknowledged: Vec::new(), successful: true, error: None });
+            model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: scanned.snapshot, acknowledged: Vec::new(), successful: true, error: None, conflicts: Vec::new() });
             assert_eq!(model.notes.note(id).unwrap().text, desired);
             assert_eq!(model.has_note_conflicts(), changed_externally);
             let pending = model.pending_notes(None, false);
@@ -497,23 +562,23 @@ mod tests {
         model.notes_tasks.insert(id, BTreeMap::from([(2, (5, true))]));
         store.write(id, "Rewritten externally").unwrap();
         assert!(write_pending(&mut store, &model.pending_notes(None, false)).is_err());
-        model.apply_notes_completion(NotesCompletion { sequence: 1, snapshot: store.snapshot(), acknowledged: vec![(id, 1)], successful: false, error: Some("changed marker".into()) });
+        model.apply_notes_completion(NotesCompletion { sequence: 1, snapshot: store.snapshot(), acknowledged: vec![(id, 1)], successful: false, error: Some("changed marker".into()), conflicts: Vec::new() });
         assert!(model.notes_dirty.is_empty());
         assert!(model.note_pending(id));
         assert_eq!(model.notes.note(id).unwrap().text, "- [x] Original task");
         assert!(write_pending(&mut store, &model.pending_notes(None, false)).is_ok());
         let added = store.create(DEFAULT_TOPIC, "An unrelated note").unwrap();
-        model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None });
+        model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None, conflicts: Vec::new() });
         assert!(model.notes.note(added).is_some());
         let other = root.path().join("other");
-        model.apply_notes_completion(NotesCompletion { sequence: 3, snapshot: NotesSnapshot::empty(other.clone()), acknowledged: Vec::new(), successful: true, error: None });
+        model.apply_notes_completion(NotesCompletion { sequence: 3, snapshot: NotesSnapshot::empty(other.clone()), acknowledged: Vec::new(), successful: true, error: None, conflicts: Vec::new() });
         assert_eq!(model.notes.root, other);
         assert!(!model.has_note_conflicts());
-        model.apply_notes_completion(NotesCompletion { sequence: 4, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None });
+        model.apply_notes_completion(NotesCompletion { sequence: 4, snapshot: store.snapshot(), acknowledged: Vec::new(), successful: true, error: None, conflicts: Vec::new() });
         assert!(model.has_note_conflicts());
         assert_eq!(model.notes.note(id).unwrap().text, "- [x] Original task");
         assert_eq!(store.note(id).unwrap().text, "Rewritten externally");
-        assert!(!model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: vec![(id, 1)], successful: true, error: None }));
+        assert!(!model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: vec![(id, 1)], successful: true, error: None, conflicts: Vec::new() }));
         assert!(model.has_note_conflicts(), "an older successful write cannot clear a newer quarantined conflict");
         assert_eq!(model.notes.note(id).unwrap().text, "- [x] Original task");
     }
@@ -524,11 +589,11 @@ mod tests {
         model.notes_applied = 2;
         model.notes_error = Some("newer index failure".into());
         let old = NotesSnapshot::empty(std::path::PathBuf::from("old"));
-        assert!(!model.apply_notes_completion(NotesCompletion { sequence: 1, snapshot: old, acknowledged: Vec::new(), successful: true, error: None }));
+        assert!(!model.apply_notes_completion(NotesCompletion { sequence: 1, snapshot: old, acknowledged: Vec::new(), successful: true, error: None, conflicts: Vec::new() }));
         assert_eq!(model.notes_error.as_deref(), Some("newer index failure"));
         assert_eq!(model.notes.root, std::path::PathBuf::new());
         let current = NotesSnapshot::empty(std::path::PathBuf::from("current"));
-        assert!(model.apply_notes_completion(NotesCompletion { sequence: 3, snapshot: current, acknowledged: Vec::new(), successful: true, error: None }));
+        assert!(model.apply_notes_completion(NotesCompletion { sequence: 3, snapshot: current, acknowledged: Vec::new(), successful: true, error: None, conflicts: Vec::new() }));
         assert!(model.notes_error.is_none());
         assert_eq!(model.notes.root, std::path::PathBuf::from("current"));
     }
@@ -570,6 +635,164 @@ mod tests {
         assert!(write_pending(&mut store, &pending).is_ok());
         assert!(!store.delete(deleted).unwrap());
         assert_eq!(store.note(other).unwrap().text, "Other original");
+    }
+
+    /// Types `text` into note `id` as [`Productivity::edit_note`] does
+    /// (without a window): the first edit of a run remembers the body it
+    /// replaces.
+    fn type_body(model: &mut Productivity, id: u64, text: &str) {
+        let pos = model.notes.notes.iter().position(|note| note.id == id).unwrap();
+        let note = model.notes.notes[pos].clone();
+        model.notes_conflicts.retain(|(_, note), _| *note != id);
+        model.notes_base.entry(id).or_insert_with(|| body_hash(&note.text));
+        model.notes.notes[pos] = Arc::new(Note { id, topic: note.topic, path: note.path.clone(), text: text.into(), updated: note.updated });
+        model.notes_generation += 1;
+        model.notes_dirty.insert(id, model.notes_generation);
+    }
+
+    /// Runs the model's pending bodies as the worker would and applies the
+    /// completion as `observe_notes` does.
+    fn save(model: &mut Productivity, store: &mut NoteStore, sequence: u64) -> Option<Vec<u64>> {
+        let pending = model.pending_notes(None, false);
+        let acknowledged = pending.iter().map(PendingNote::token).collect();
+        let result = write_pending(store, &pending);
+        let conflicts = result.as_ref().err().and_then(|error| error.downcast_ref::<BodyConflicts>()).map(|c| c.0.clone());
+        assert!(result.is_ok() || conflicts.is_some(), "only conflicts fail here: {result:?}");
+        model.apply_notes_completion(NotesCompletion { sequence, snapshot: store.snapshot(), acknowledged, successful: true, error: None, conflicts: conflicts.clone().unwrap_or_default() });
+        conflicts
+    }
+
+    /// An ordinary panel body save checks the file against the body the
+    /// edit began from: a change made in another editor is kept, the draft
+    /// stays visible as a conflict, the batch's other notes still save, and
+    /// editing again replaces the outside body deliberately (#111).
+    #[test]
+    fn a_body_save_keeps_an_outside_edit_without_blocking_other_notes_or_locking_the_note() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = NoteStore::open(root.path());
+        let id = store.create(DEFAULT_TOPIC, "# Plan\nOriginal").unwrap();
+        let other = store.create(DEFAULT_TOPIC, "# Other\nOriginal").unwrap();
+        let path = root.path().join(store.note(id).unwrap().path.as_ref().unwrap());
+        let mut model = model(root.path().into());
+        model.notes = store.snapshot();
+        type_body(&mut model, id, "# Plan\nMy draft");
+        type_body(&mut model, other, "# Other\nSaved alongside");
+        // Another editor saves while the draft is still unsaved.
+        std::fs::write(&path, "# Plan\nWritten in another editor").unwrap();
+        assert_eq!(save(&mut model, &mut store, 1), Some(vec![id]));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "# Plan\nWritten in another editor", "the outside edit is not replaced");
+        assert_eq!(store.note(other).unwrap().text, "# Other\nSaved alongside");
+        assert!(!model.notes_dirty.contains_key(&other), "the other note's write was acknowledged");
+        assert!(model.has_note_conflicts() && model.note_pending(id));
+        assert_eq!(model.notes.note(id).unwrap().text, "# Plan\nMy draft", "the draft is still shown");
+        assert!(model.notes_error.is_none(), "shown as a conflict, not a failed save");
+        assert!(model.pending_notes(None, false).is_empty(), "a conflict is not a write prerequisite");
+
+        // The other editor is never locked out; editing again here replaces
+        // what it wrote, on purpose.
+        std::fs::write(&path, "# Plan\nWritten in another editor").unwrap();
+        type_body(&mut model, id, "# Plan\nMy draft, after reading the warning");
+        assert_eq!(save(&mut model, &mut store, 2), None);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "# Plan\nMy draft, after reading the warning");
+        assert!(!model.has_note_conflicts() && !model.note_pending(id));
+        assert!(model.notes_base.is_empty(), "acknowledged drafts forget their base");
+    }
+
+    /// A note whose file was removed elsewhere is first a conflict; the kept
+    /// draft, edited again, recreates it under the same id instead of
+    /// conflicting forever.
+    #[test]
+    fn an_edited_draft_recreates_a_note_removed_elsewhere() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = NoteStore::open(root.path());
+        let id = store.create(DEFAULT_TOPIC, "# Trip\nPack").unwrap();
+        let path = root.path().join(store.note(id).unwrap().path.as_ref().unwrap());
+        let mut model = model(root.path().into());
+        model.notes = store.snapshot();
+        let note = (*model.notes.notes[0]).clone();
+        std::fs::remove_file(&path).unwrap();
+        store.rescan(&[]);
+        let first = PendingNote { note: Arc::new(Note { text: "# Trip\nPack socks".into(), ..note.clone() }), generation: 1, tasks: None, base: Some(body_hash("# Trip\nPack")) };
+        assert!(write_pending(&mut store, &[first]).unwrap_err().is::<BodyConflicts>(), "the removal is a conflict first");
+        let again = PendingNote { note: Arc::new(Note { text: "# Trip\nPack socks and a hat".into(), ..note }), generation: 2, tasks: None, base: None };
+        write_pending(&mut store, &[again]).expect("the edited draft recreates the note");
+        let restored = store.note(id).expect("same id");
+        assert_eq!(restored.text, "# Trip\nPack socks and a hat");
+        let file = root.path().join(restored.path.as_ref().unwrap());
+        assert_eq!(std::fs::read_to_string(file).unwrap(), "# Trip\nPack socks and a hat");
+    }
+
+    /// A conflict from an older save attempt never takes over the newer draft
+    /// typed since: it stays dirty, with its own base, for its own save.
+    #[test]
+    fn a_stale_conflict_leaves_the_newer_draft_dirty() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = NoteStore::open(root.path());
+        let id = store.create(DEFAULT_TOPIC, "# Plan\nOne").unwrap();
+        let mut model = model(root.path().into());
+        model.notes = store.snapshot();
+        model.notes_dirty.insert(id, 2);
+        model.apply_notes_completion(NotesCompletion { sequence: 1, snapshot: store.snapshot(), acknowledged: vec![(id, 1)], successful: true, error: None, conflicts: vec![id] });
+        assert_eq!(model.notes_dirty.get(&id), Some(&2), "the newer draft is still waiting to be saved");
+        assert!(!model.has_note_conflicts(), "the older attempt's conflict is not applied to it");
+        // The same generation's conflict is retained as before.
+        model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: vec![(id, 2)], successful: true, error: None, conflicts: vec![id] });
+        assert!(model.has_note_conflicts() && !model.notes_dirty.contains_key(&id));
+    }
+
+    /// A draft that conflicts with an outside edit is kept back for its own
+    /// note, and the different edit queued behind it still runs (#132 review).
+    #[test]
+    fn a_body_conflict_does_not_cancel_the_edit_queued_behind_it() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = NoteStore::open(root.path());
+        let id = store.create(DEFAULT_TOPIC, "# Log\nOne").unwrap();
+        let path = root.path().join(store.note(id).unwrap().path.as_ref().unwrap());
+        let mut model = model(root.path().into());
+        model.notes = store.snapshot();
+        let draft = PendingNote { note: Arc::new(Note { text: "# Log\nMine".into(), ..(*model.notes.notes[0]).clone() }), generation: 1, tasks: None, base: Some(body_hash("# Log\nOne")) };
+        std::fs::write(&path, "# Log\nChanged outside").unwrap();
+        let added = pending_then(&mut store, &[draft], |store| store.create(DEFAULT_TOPIC, "# Other\nNew")).expect("the queued edit runs");
+        assert!(store.note(added).is_some(), "the other note was created");
+        assert_eq!(std::mem::take(&mut store.deferred_conflicts), [id], "the conflicting draft is kept back for its own note");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "# Log\nChanged outside", "the outside edit is untouched");
+        // With nothing pending, the edit just runs.
+        assert!(pending_then(&mut store, &[], |_| anyhow::Ok(())).is_ok());
+    }
+
+    /// Coalesced drafts queued behind the note's own earlier write, or
+    /// after a failed one, save in order; an outside edit between them is
+    /// still caught.
+    #[test]
+    fn queued_body_drafts_follow_their_own_writes_but_not_outside_ones() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = NoteStore::open(root.path());
+        let id = store.create(DEFAULT_TOPIC, "# Log\nOne").unwrap();
+        let path = root.path().join(store.note(id).unwrap().path.as_ref().unwrap());
+        let mut model = model(root.path().into());
+        model.notes = store.snapshot();
+        let base = body_hash("# Log\nOne");
+        let draft = |text: &str, generation| PendingNote { note: Arc::new(Note { text: text.into(), ..(*model.notes.notes[0]).clone() }), generation, tasks: None, base: Some(base) };
+        // Two flushes of one edit run: the second sees the first's write.
+        write_pending(&mut store, &[draft("# Log\nOne\nTwo", 1)]).unwrap();
+        write_pending(&mut store, &[draft("# Log\nOne\nTwo\nThree", 2)]).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "# Log\nOne\nTwo\nThree");
+        // Re-sending the same generation (a structural edit's prerequisite) is a no-op.
+        write_pending(&mut store, &[draft("# Log\nOne\nTwo\nThree", 2)]).unwrap();
+        // An outside edit after the store's own write is caught.
+        std::fs::write(&path, "# Log\nRewritten outside").unwrap();
+        let error = write_pending(&mut store, &[draft("# Log\nFour", 3)]).unwrap_err();
+        assert_eq!(error.downcast_ref::<BodyConflicts>().map(|c| c.0.as_slice()), Some([id].as_slice()));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "# Log\nRewritten outside");
+        // A file removed elsewhere is a conflict too, never recreated silently.
+        std::fs::remove_file(&path).unwrap();
+        assert!(write_pending(&mut store, &[draft("# Log\nFive", 4)]).unwrap_err().is::<BodyConflicts>());
+        assert!(!path.exists());
+        // Without a base (a note with no file yet), nothing is compared.
+        let fresh = store.create(DEFAULT_TOPIC, "").unwrap();
+        let unsaved = PendingNote { note: Arc::new(Note { id: fresh, topic: DEFAULT_TOPIC, path: None, text: "# New\nBody".into(), updated: 0 }), generation: 5, tasks: None, base: None };
+        write_pending(&mut store, &[unsaved]).unwrap();
+        assert_eq!(store.note(fresh).unwrap().text, "# New\nBody");
     }
 
     #[test]

@@ -2,16 +2,21 @@
 
 use super::super::text::{Quran, Ref};
 
+/// Each surah's first global ayah number and ayah count: all the audio
+/// fetcher keeps of the loaded text.
 #[derive(Clone, Debug)]
 pub struct AyahIndex {
     chapters: Box<[(u16, u16)]>,
 }
 
 impl AyahIndex {
+    /// Copies the surah boundaries out of the loaded text.
     pub fn new(quran: &Quran) -> Self {
         Self { chapters: quran.surahs.iter().map(|s| (s.first, s.ayahs)).collect() }
     }
 
+    /// The surah/ayah of global ayah `global` and that surah's ayah count
+    /// (`None` outside the text).
     pub fn locate(&self, global: u16) -> Option<(Ref, u16)> {
         let i = self.chapters.partition_point(|s| s.0 <= global).checked_sub(1)?;
         let (first, count) = self.chapters[i];

@@ -77,6 +77,7 @@ mod looks_page;
 mod app_themes_page;
 mod themes_page;
 mod cursor_page;
+mod component_designs;
 mod plugin_offer;
 mod swatch_list;
 mod wallgen_logic;
@@ -94,9 +95,21 @@ use crate::registry::{self, Control, Section, Setting};
 use crate::text_field::TextField;
 use crate::tokens::*;
 
+/// Pages that draw built-in plugins' artwork (tiles, the bar designer's
+/// pool); leaving the last of them releases it.
+fn shows_plugin_art(section: Section) -> bool {
+    matches!(section, Section::Plugins | Section::Bars)
+}
+
 /// Drags the window: the compositor's own grab where the standard
 /// `xdg_toplevel.move` is ignored (MangoWM), the standard request otherwise.
+/// Not for a touchscreen tap: GPUI delivers its press only once the finger
+/// has lifted, so a move started then would follow the mouse pointer (the
+/// compositor's grab ends with a button that is no longer held) instead.
 fn begin_move(window: &mut Window) {
+    if window.last_input_was_touch() {
+        return;
+    }
     if !mandara_compositor::begin_interactive_move() {
         window.start_window_move();
     }
@@ -171,6 +184,9 @@ pub struct StudioView {
     /// The folds on the page being built, in order, with whether each
     /// starts open ([`fold`]).
     fold_keys: Vec<(String, bool)>,
+    /// Themes → Components: the value the design previews show (drag one
+    /// and every preview follows; it is never saved).
+    component_preview: f32,
 }
 
 impl StudioView {
@@ -232,7 +248,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default() }
+        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -256,16 +272,32 @@ impl StudioView {
             // The recorder's device and display lists are read afresh.
             self.recorder_row.new_visit();
             plugin_art_cache_clear();
-            if self.section == Section::LoginScreen {
-                greeter_page::release(cx);
-            }
-            if self.section == Section::Themes {
-                cursor_page::release(cx);
-            }
-            if self.section == Section::Wallpaper {
-                wallgen_page::release(cx);
-                wallpaper_page::release(cx);
-            }
+            let leaving = self.section;
+            let modal = self.modal.showing();
+            let covers = leaving == Section::Plugins && !modal;
+            let art = shows_plugin_art(leaving) && !shows_plugin_art(section) && !modal;
+            // Deferred past this window update, so the pictures leave
+            // Studio's own atlas too (an updating window is out of reach).
+            cx.defer(move |cx| {
+                match leaving {
+                    Section::LoginScreen => greeter_page::release(cx),
+                    Section::Themes => cursor_page::release(cx),
+                    Section::Wallpaper => {
+                        wallgen_page::release(cx);
+                        wallpaper_page::release(cx);
+                    }
+                    Section::About => mandara_ui::plugin_art::release_brand(cx),
+                    _ => {}
+                }
+                if covers {
+                    store_page::covers_release(cx);
+                }
+                if art {
+                    mandara_ui::plugin_art::release(cx);
+                }
+                // Freed pages go back to the system, off the UI thread.
+                mandara_services::memory::request_trim();
+            });
         }
         self.section = section;
         self.query.clear();
@@ -351,6 +383,10 @@ impl StudioView {
     /// choice turns into a balanced grid that fits it) and whether it sits
     /// under its label.
     fn control(&mut self, setting: &Setting, room: choice::Room, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        // A component's design: its choices drawn as live previews.
+        if let Some(component) = component_designs::by_path(setting.path) {
+            return self.design_picker(component, setting, room.width, cfg, p, cx);
+        }
         let value = registry::get(cfg, setting);
         match setting.control.clone() {
             Control::Time => {
@@ -663,10 +699,14 @@ impl StudioView {
         let beside = (under - SPACE_24_PX - ROW_LABEL_MIN_PX).max(0.0);
             for s in list.iter() {
                 let locked = registry::locked(s, cfg);
+                let help = registry::note(s, cfg).unwrap_or(s.help);
                 // A choice too long for one line beside its label goes under
                 // it, where its grid gets the whole row (fewer, wider rows)
-                // and the label and help keep their measure.
-                let stack = self.stack_rows || (locked.is_none() && self.choice_labels(s, cfg, cx).is_some_and(|labels| !choice::fits_line(&labels, beside, &choice::SETTING_CHOICE)));
+                // and the label and help keep their measure; so do the
+                // design pickers with their previews.
+                let stack = self.stack_rows
+                    || component_designs::by_path(s.path).is_some()
+                    || (locked.is_none() && self.choice_labels(s, cfg, cx).is_some_and(|labels| !choice::fits_line(&labels, beside, &choice::SETTING_CHOICE)));
                 let room = if stack { choice::Room::under(under) } else { choice::Room::beside(beside) };
                 // A control that does nothing in the current setup shows why
                 // instead (toggles render their own locked state).
@@ -705,7 +745,7 @@ impl StudioView {
                                 .flex_col()
                                 .gap(px(SPACE_3_PX))
                                 .child(div().text_size(px(TEXT_13_5_PX)).font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(tr(s.label))))
-                                .when(!s.help.is_empty(), |el| el.child(div().text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(s.help))))),
+                                .when(!help.is_empty(), |el| el.child(div().text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(help))))),
                         )
                         .child(control),
                 );
@@ -787,7 +827,7 @@ impl StudioView {
     /// conflict detection, actions and quick-add suggestions.
     fn shortcuts(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         use mandara_config::compositor::{BindAction, Keybind, Target, existing_chords};
-        let target: Option<Target> = mandara_compositor::detect().map(mandara_compositor::CompositorKind::target);
+        let target: Option<Target> = mandara_compositor::detected().map(mandara_compositor::CompositorKind::target);
         let _ = existing_chords;
         let taken = keybind_conflicts::user_binds(target, &cfg.compositor, cx);
         let binds = &cfg.compositor.keybinds;
@@ -1519,7 +1559,7 @@ impl StudioView {
         let registry = cx.global::<PluginRegistry>();
         let commands = registry.commands.all().len();
         let first_party = registry.manifests().filter(|m| m.origin == PluginOrigin::Builtin && !HIDDEN_PLUGINS.contains(&m.id.as_str())).count();
-        let compositor = mandara_compositor::detect().map(|k| format!("{k:?}")).unwrap_or_else(|| t("none").into());
+        let compositor = mandara_compositor::detected().map(|k| format!("{k:?}")).unwrap_or_else(|| t("none").into());
         let fonts = mandara_ui::fonts::fonts(cx);
         let link = |id: &'static str, glyph: &'static str, label: SharedString, url: &'static str| {
             div()
@@ -1721,7 +1761,8 @@ impl Render for StudioView {
         self.fold_keys.clear();
         let (title, body) = if !self.query.is_empty() {
             let q = self.query.clone();
-            let matches: Vec<&Setting> = registry::settings().iter().filter(|s| s.matches(&q)).collect();
+            let all = registry::settings();
+            let matches: Vec<&Setting> = registry::search(&q).iter().map(|&i| &all[usize::from(i)]).collect();
             // Pages whose name or topics match (VPN, autostart, cursor…),
             // including pages built from bespoke editors.
             let pages = form::page_matches(&q, &p, cx);
@@ -2007,7 +2048,7 @@ fn group_order(section: Section) -> Option<&'static [&'static str]> {
     Some(match section {
         Section::Bars => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", SIDE_BARS, SIDE_BAR_SHAPE, SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL, PANELS, PANEL_MOTION],
         Section::Launcher => &["Size & placement", "Button", "Results", "Grid", "Beacon search bar", "Search providers", "Ranking", "General", "Starting apps", "Pinned & hidden apps"],
-        Section::Themes => &["Mode", "Style", "Tuning", "Accessibility", "Wallpaper colors", "Icons", "Cursor", "App themes"],
+        Section::Themes => &["Mode", "Style", "Components", "Tuning", "Accessibility", "Wallpaper colors", "Icons", "Cursor", "App themes"],
         Section::Wallpaper => &["Desktop", "Light & dark", "Video", "Depth clock", "Picker", "Slideshow", "Source", "When to change", "Slideshow transition", "Displays", "Wallhaven"],
         _ => return None,
     })

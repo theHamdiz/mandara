@@ -38,6 +38,36 @@ fn copy_controls_are_shared_and_leave_commands_readable_without_scripts() {
     }
 }
 
+/// Copy feedback reaches screen readers as a polite status that exists
+/// before its first message. A repeated press clears it and writes the
+/// message in a later task, so identical words are announced again. Success
+/// clears after a fixed lifetime; blocked-copy instructions have none, so
+/// they stay while someone follows them (#111).
+#[test]
+fn copy_feedback_is_a_polite_status_that_repeats_and_keeps_blocked_instructions() {
+    let script = std::fs::read_to_string(crate::root().join("assets/js/copy-code.js")).unwrap();
+    for attribute in [r#"setAttribute("role", "status")"#, r#"setAttribute("aria-live", "polite")"#, r#"setAttribute("aria-atomic", "true")"#] {
+        assert!(script.contains(attribute), "{attribute}");
+    }
+    assert!(!script.contains("assertive") && !script.contains(r#""alert""#), "copy feedback must not interrupt");
+    let constant = |name: &str| -> u32 {
+        let line = script.lines().find(|line| line.trim_start().starts_with(&format!("const {name} = "))).unwrap_or_else(|| panic!("{name}"));
+        line.split('=').nth(1).unwrap().trim().trim_end_matches(';').parse().unwrap()
+    };
+    let (success, delay) = (constant("SUCCESS_MS"), constant("ANNOUNCE_DELAY_MS"));
+    assert!((2000..=10_000).contains(&success), "long enough to be read, short enough not to describe an older press: {success}");
+    assert!(delay > 0 && delay < 500, "a later task than the clearing, still prompt: {delay}");
+    // Each press clears first and stops the previous success timer.
+    let click = script.split(r#"addEventListener("click""#).nth(1).unwrap();
+    let clear = click.find(r#"status.textContent = """#).unwrap();
+    assert!(click.find("clearTimeout(clearTimer)").unwrap() < clear && clear < click.find("writeText").unwrap());
+    assert!(click.contains(r#"announce(current, "Copied to clipboard.", SUCCESS_MS)"#));
+    assert!(click.contains(r#"announce(current, "Copy blocked. Select and copy the command manually.", 0)"#), "blocked instructions never expire");
+    // Messages are written only through the delayed announcement, for the latest press.
+    assert_eq!(script.matches("status.textContent = message").count(), 1);
+    assert!(script.contains("if (current !== press) return;"));
+}
+
 fn luminance(hex: &str) -> f64 {
     let bytes: Vec<_> = (1..7).step_by(2).map(|i| f64::from(u8::from_str_radix(&hex[i..i + 2], 16).unwrap()) / 255.0)
         .map(|v| if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }).collect();

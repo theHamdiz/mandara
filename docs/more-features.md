@@ -128,7 +128,9 @@ The rest of what's built in.
   never move under the pointer.
 - **Screenshot studio**: region, window, screen, or **All displays** in
   one image with monitor positions and different scales preserved. KWin
-  uses its native ScreenShot2 service. Capture tools also offer arrows, boxes and
+  uses its native ScreenShot2 service. Drag a corner or edge handle of a
+  region to resize it, or inside it to move it (mouse or finger); a press
+  outside starts a new one. Capture tools also offer arrows, boxes and
   circles; copy, save or clipboard-only; **copy text (OCR)**, offline and pure
   Rust (PP-OCRv5); and **screen recording** (below). **Esc pauses
   snipping without closing the tool**: the frozen frame goes away and a

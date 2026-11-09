@@ -62,6 +62,8 @@ pub(crate) fn input_ready(cx: &mut App) -> Option<bool> {
     }).ok()
 }
 
+/// Whether the editor takes keys: its window is active and one of its
+/// controls (field, Save, Cancel) has focus.
 fn receives_keys(active: bool, controls: [bool; 3]) -> bool {
     active && controls.into_iter().any(|focused| focused)
 }
@@ -84,6 +86,9 @@ pub(crate) fn open(widget: String, action: Action, placement: Placement, cx: &mu
     after_save(cx, move |cx| open_new(widget, action, placement, cx));
 }
 
+/// Opens an editor for the widget's task or note over its hit geometry,
+/// once any previous editor has saved. Does nothing while locked, while
+/// arranging widgets, or when the widget or its item is gone.
 fn open_new(widget: String, action: Action, placement: Placement, cx: &mut App) {
     if crate::lock::is_locked() || crate::desktop_edit::active(cx) { return; }
     let cfg = config(cx).read(cx).snapshot();
@@ -140,6 +145,8 @@ fn open_new(widget: String, action: Action, placement: Placement, cx: &mut App) 
     }
 }
 
+/// One open desktop text editor: its target, the draft with the text it
+/// opened, and the save in flight. One at most, held in `Open`.
 struct Editor {
     widget: String,
     target: Target,
@@ -156,6 +163,9 @@ struct Editor {
 }
 
 impl Editor {
+    /// Builds the field and saves (then closes) when the widget is hidden,
+    /// the editor loses activation for longer than the settle time, or
+    /// another window takes focus.
     fn new(widget: String, target: Target, draft: Draft, note_title: Option<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let weak = cx.weak_entity();
         let value = draft.text().to_owned();
@@ -221,6 +231,10 @@ impl Editor {
         Self { widget, target, draft, note_title, field, save_focus: cx.focus_handle(), cancel_focus: cx.focus_handle(), error: None, settle: None, saving: false, notes_root, next: continuation::Continuation::new() }
     }
 
+    /// Saves the draft (checked against the text it opened, on the worker)
+    /// and closes on success. Returns `true` only when nothing needed saving;
+    /// otherwise the result arrives later and a conflict keeps the editor
+    /// open with its text.
     fn finish(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if self.saving { return false; }
         let value = self.field.read(cx).value.clone();
@@ -275,6 +289,7 @@ impl Editor {
         false
     }
 
+    /// Keeps the editor open with the error, cancelling any queued follow-up.
     fn show_error(&mut self, error: SaveError<String>, cx: &mut Context<Self>) {
         let _ = self.next.complete(false);
         self.error = Some(match error {
@@ -285,6 +300,8 @@ impl Editor {
         cx.notify();
     }
 
+    /// After a save: a note widget that named the note follows its new
+    /// title, the editor closes and a queued follow-up runs.
     fn finish_saved(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Target::Note { id: Some(id), .. } = self.target {
             let title = productivity(cx).read(cx).notes.note(id).map(|note| note.title());
@@ -303,6 +320,8 @@ impl Editor {
         if let Some(action) = next { action(cx); }
     }
 
+    /// Removes the editor window without saving and clears the open-editor
+    /// state if it is still this one.
     fn close(&self, window: &mut Window, cx: &mut App) {
         if cx.try_global::<Open>().and_then(|open| open.0).is_some_and(|handle| gpui::AnyWindowHandle::from(handle) == window.window_handle()) {
             cx.set_global(Open::default());
@@ -311,6 +330,8 @@ impl Editor {
         window.remove_window();
     }
 
+    /// Tab cycles field, Save and Cancel; Escape cancels; Ctrl+Enter (or
+    /// Enter in a one-line task) and Enter/Space on Save save.
     fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let key = &event.keystroke;
         if key.key == "tab" && !key.modifiers.control && !key.modifiers.alt && !key.modifiers.platform {

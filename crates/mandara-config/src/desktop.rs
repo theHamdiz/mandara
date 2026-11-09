@@ -353,6 +353,18 @@ pub enum LockBackground {
     Color,
 }
 
+/// How typed password characters are hidden on the lock screen.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PasswordSymbols {
+    /// A different small soft shape per character (never derived from the
+    /// character itself).
+    #[default]
+    Shapes,
+    /// Identical dots.
+    Dots,
+}
+
 /// The lock screen's look (`[lock]`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -384,6 +396,8 @@ pub struct LockConfig {
     pub blank_other_outputs: bool,
     /// The battery reading turns coral at or below this charge, percent.
     pub low_battery_percent: u8,
+    /// How typed password characters are hidden.
+    pub password_symbols: PasswordSymbols,
 }
 
 impl LockConfig {
@@ -411,6 +425,7 @@ impl Default for LockConfig {
             show_battery: true,
             blank_other_outputs: false,
             low_battery_percent: defaults::LOCK_LOW_BATTERY_PERCENT,
+            password_symbols: PasswordSymbols::Shapes,
         }
     }
 }
@@ -596,11 +611,13 @@ pub struct StyleConfig {
     pub backdrop_dim: f32,
     /// The upright handle between every slider's fill and its track.
     pub slider_handle: SliderHandle,
+    /// How the thick volume, brightness and mixer sliders are drawn.
+    pub slider_design: SliderDesign,
 }
 
 impl Default for StyleConfig {
     fn default() -> Self {
-        Self { radius_scale: 1.0, shadows: true, borders: true, backdrop_dim: 0.0, slider_handle: SliderHandle::Line }
+        Self { radius_scale: 1.0, shadows: true, borders: true, backdrop_dim: 0.0, slider_handle: SliderHandle::Line, slider_design: SliderDesign::Classic }
     }
 }
 
@@ -614,6 +631,39 @@ pub enum SliderHandle {
     Line,
     /// Nothing: the fill's rounded end alone.
     None,
+}
+
+/// The design of the thick volume, brightness and mixer sliders
+/// (`style.slider_design`). Thin sliders keep the classic look.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SliderDesign {
+    /// The fill, a gap, the upright handle, another gap, then the rest of
+    /// the track with a stop dot at its end (with `slider_handle = "line"`).
+    #[default]
+    Classic,
+    /// One continuous track; the handle is a short grip inside the fill's
+    /// end.
+    Continuous,
+    /// One continuous track with a rounded pill knob on it that grows
+    /// while pressed.
+    Pill,
+    /// The classic layout with a gentle wave along the fill, which flows
+    /// while the slider is dragged.
+    Wavy,
+    /// The track split into ten rounded steps that fill one after another.
+    Segmented,
+}
+
+impl SliderDesign {
+    /// Every design, in the order Studio offers them.
+    pub const ALL: [SliderDesign; 5] = [SliderDesign::Classic, SliderDesign::Continuous, SliderDesign::Pill, SliderDesign::Wavy, SliderDesign::Segmented];
+
+    /// Whether `style.slider_handle` changes this design (Pill draws its
+    /// own knob and Segmented marks the value with its steps).
+    pub const fn uses_handle(self) -> bool {
+        matches!(self, SliderDesign::Classic | SliderDesign::Continuous | SliderDesign::Wavy)
+    }
 }
 
 // ── Bar extras ───────────────────────────────────────────────────────────
@@ -1035,6 +1085,28 @@ pub fn newest_first(images: &mut [PathBuf]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A v0.22.0 config has no `slider_design`: it keeps the classic look
+    /// with its own handle choice, and every design reads back as written.
+    #[test]
+    fn v0_22_slider_configs_keep_the_classic_design() {
+        let fresh: crate::ShellConfig = toml::from_str("").unwrap();
+        assert_eq!((fresh.style.slider_design, fresh.style.slider_handle), (SliderDesign::Classic, SliderHandle::Line));
+        let old: crate::ShellConfig = toml::from_str("[style]\nradius_scale = 1.2\nslider_handle = \"none\"").unwrap();
+        assert_eq!((old.style.slider_design, old.style.slider_handle), (SliderDesign::Classic, SliderHandle::None), "a saved handle choice stays");
+        // Saving it again writes the design without touching anything else.
+        let saved = toml::to_string(&old.style).unwrap();
+        let back: StyleConfig = toml::from_str(&saved).unwrap();
+        assert_eq!(back, old.style);
+        assert!(saved.contains("slider_design = \"classic\"") && saved.contains("slider_handle = \"none\""), "{saved}");
+        for (design, raw) in SliderDesign::ALL.into_iter().zip(["classic", "continuous", "pill", "wavy", "segmented"]) {
+            let style: StyleConfig = toml::from_str(&format!("slider_design = \"{raw}\"")).unwrap();
+            assert_eq!(style.slider_design, design);
+            assert_eq!(style.slider_handle, SliderHandle::Line, "{raw}: the handle default stays");
+        }
+        assert!(toml::from_str::<StyleConfig>("slider_design = \"zigzag\"").is_err(), "an unknown design is reported, not guessed");
+        assert_eq!(SliderDesign::ALL.iter().filter(|d| d.uses_handle()).count(), 3);
+    }
 
     #[test]
     fn screen_corners_are_rounded_by_default_and_a_saved_choice_stays() {

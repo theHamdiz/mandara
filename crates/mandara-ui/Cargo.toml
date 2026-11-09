@@ -21,6 +21,9 @@ mandara-compositor.workspace = true
 serde.workspace = true
 toml = { workspace = true, features = ["display"] }
 smallvec.workspace = true
+# Already built for GPUI: clamped reading text ends between graphemes, so a
+# letter never loses its marks.
+unicode-segmentation = "1.13"
 chrono.workspace = true
 tracing.workspace = true
 anyhow.workspace = true

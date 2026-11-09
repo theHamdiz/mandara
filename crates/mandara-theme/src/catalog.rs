@@ -150,8 +150,7 @@ pub fn all() -> Vec<ThemeDef> {
 
 /// Looks a theme up by id (case-insensitive; spaces/underscores ≈ dashes).
 pub fn find(id: &str) -> Option<ThemeDef> {
-    let needle = id.trim().to_ascii_lowercase().replace([' ', '_'], "-").replace('é', "e");
-    all().into_iter().find(|t| t.id == needle || t.name.to_ascii_lowercase().replace(' ', "-").replace('é', "e") == needle)
+    all().into_iter().find(|t| t.answers_to(id))
 }
 
 /// The id after `id` in catalog order (wrapping).
@@ -200,7 +199,25 @@ fn derive_light(d: &Seeds) -> Seeds {
     }
 }
 
+/// `s` as [`find`] compares it: ASCII case folded, spaces and underscores
+/// as dashes, `é` as `e`.
+fn folded(s: &str) -> impl Iterator<Item = char> + '_ {
+    s.chars().map(|c| match c {
+        ' ' | '_' => '-',
+        'é' => 'e',
+        c => c.to_ascii_lowercase(),
+    })
+}
+
 impl ThemeDef {
+    /// Whether `id` (a configured preset, perhaps typed by hand as
+    /// `Rosé Pine` or `tokyo_night`) names this theme, by id or by name,
+    /// as [`find`] resolves it. It compares in place, without allocating.
+    pub fn answers_to(&self, id: &str) -> bool {
+        let id = id.trim();
+        folded(id).eq(self.id.chars()) || folded(id).eq(folded(&self.name))
+    }
+
     /// Whether the theme provides (rather than derives) this appearance.
     pub fn has_mode(&self, dark: bool) -> bool {
         if dark { self.dark.is_some() } else { self.light.is_some() }
@@ -346,7 +363,12 @@ mod tests {
     fn lookup_and_cycling() {
         assert_eq!(find("Rosé Pine").unwrap().id, "rose-pine");
         assert_eq!(find("tokyo_night").unwrap().id, "tokyo-night");
+        assert_eq!(find("  Tokyo Night ").unwrap().id, "tokyo-night");
+        assert_eq!(find("ROSE-PINE").unwrap().id, "rose-pine");
         assert!(find("nope").is_none());
+        let rose = builtin().iter().find(|t| t.id == "rose-pine").unwrap();
+        assert!(rose.answers_to("Rosé Pine") && rose.answers_to("rose_pine") && rose.answers_to("rose-pine"));
+        assert!(!rose.answers_to("rose") && !rose.answers_to("rose-pine-dawn") && !rose.answers_to(""));
         assert_ne!(next_id(DEFAULT_THEME), DEFAULT_THEME);
     }
 

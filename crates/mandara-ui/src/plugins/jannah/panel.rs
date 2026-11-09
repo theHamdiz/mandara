@@ -84,6 +84,10 @@ const LINE_GAP: f32 = 2.0;
 /// Corner buttons (previous / next) and the action buttons.
 const NAV_BTN: f32 = 28.0;
 const ACTION_BTN: f32 = 30.0;
+/// A corner button at the end of its list rests this faint, its glyph
+/// this share of the button (as an icon button draws it).
+const NAV_REST_ALPHA: f32 = 0.3;
+const NAV_GLYPH_SHARE: f32 = crate::kit::metrics::ICON_BUTTON_GLYPH;
 /// The reference chip.
 const CHIP_H: f32 = 26.0;
 const CHIP_PAD_X: f32 = 10.0;
@@ -107,8 +111,8 @@ const DOT_PX: f32 = 9.0;
 const DOT_TODAY_PX: f32 = 13.0;
 const DOT_GAP: f32 = 14.0;
 const DOT_OFF: (f32, f32) = (0.16, 0.14);
-/// Arabic evidence excerpts are cut to this many characters.
-const ARABIC_EXCERPT: usize = 140;
+/// Lines of the step's evidence shown folded (Read more unfolds it).
+const EVIDENCE_LINES: usize = 3;
 
 // Lists.
 const LIST_ARABIC_PX: f32 = 16.5;
@@ -420,10 +424,10 @@ impl View {
 fn today(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
     let s = settings(cx);
     let peek = c.ui.borrow().peek;
-    let item = super::peek(c.shared, &s, None, peek).and_then(|id| catalog().get(id));
+    let placed = super::peek_placed(c.shared, &s, None, peek).and_then(|(id, place)| Some((catalog().get(id)?, place)));
     let mut col = div().flex().flex_col().gap(px(GAP));
-    match item {
-        Some(item) => {
+    match placed {
+        Some((item, (at, of))) => {
             let (prev, next) = {
                 let (shared, ui) = (c.shared.clone(), c.ui.clone());
                 let (shared2, ui2) = (c.shared.clone(), c.ui.clone());
@@ -437,7 +441,10 @@ fn today(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
                 });
                 (prev, next)
             };
-            col = col.child(hero(c, item, false, Some((prev, next)), window));
+            // Where today's reminder stands in this round of its kind
+            // (nothing comes back before the round is through).
+            let place = place_label(at, of);
+            col = col.child(hero(c, item, false, Some((Some(prev), Some(next))), Some(place), window));
             col = col.child(peek_bar(c, "jannah-peek", peek, t("Peek at what comes next"), |u| &mut u.peek));
         }
         None => col = col.child(empty_state("arch", t("Nothing to show"), t("Choose Qur'an, hadith or both in Studio"), BODY_MIN, c.palette)),
@@ -462,6 +469,21 @@ fn peek_bar(c: &Ctx, id: &'static str, offset: i64, here: &'static str, field: f
     super::plugin_lang::peek_bar(id, offset, here.into(), None, tk("Back to today"), gold(c.palette), c.palette, step)
 }
 
+/// Previous / next of a hero (`None` for a side: that end of a list).
+type Nav = Option<(Option<Rc<dyn Fn(&mut App)>>, Option<Rc<dyn Fn(&mut App)>>)>;
+
+/// `12 / 230`, in the interface's digits.
+pub(crate) fn place_label(at: usize, of: usize) -> String {
+    let s = format!("{at} / {of}");
+    if arabic_ui() { super::super::panel_fx::arabic_digits(&s) } else { s }
+}
+
+/// The step to `at + step` in a list of `len`, or `None` past either end
+/// (paging stops there; it never wraps round to what you just read).
+pub(crate) fn step_within(at: usize, step: isize, len: usize) -> Option<usize> {
+    at.checked_add_signed(step).filter(|n| *n < len)
+}
+
 /// The verse's or hadith's words with a verse's ornate number.
 pub(super) fn words(item: &Item) -> String {
     match item.verse_ref() {
@@ -473,7 +495,7 @@ pub(super) fn words(item: &Item) -> String {
 /// The hero card: the arch with its crown, sides and base, dawn light and
 /// the lattice; the Arabic, its meaning and the reference row. `nav` adds
 /// previous / next in the top corners; `full` shows a hadith's chain too.
-fn hero(c: &Ctx, item: &Item, full: bool, nav: Option<(Rc<dyn Fn(&mut App)>, Rc<dyn Fn(&mut App)>)>, window: &mut Window) -> AnyElement {
+fn hero(c: &Ctx, item: &Item, full: bool, nav: Nav, place: Option<String>, window: &mut Window) -> AnyElement {
     let palette = c.palette;
     let g = gold(palette);
     let tones = if palette.is_dark { HERO_DARK } else { HERO_LIGHT };
@@ -544,6 +566,9 @@ fn hero(c: &Ctx, item: &Item, full: bool, nav: Option<(Rc<dyn Fn(&mut App)>, Rc<
         .flex_col()
         .items_center()
         .gap(px(BLOCK_GAP))
+        // Where this reminder stands in its round ("104 / 123"), a quiet
+        // kicker over the words.
+        .when_some(place, |el, p| el.child(caption(p, palette).font_features(tabular_nums())))
         .child(arabic)
         .when_some(meaning_el, |el, m| el.child(m))
         .when_some(chain, |el, ch| el.child(ch))
@@ -577,11 +602,17 @@ fn hero(c: &Ctx, item: &Item, full: bool, nav: Option<(Rc<dyn Fn(&mut App)>, Rc<
         .child(content);
     if let Some((prev, next)) = nav {
         let ink = palette.on_surface_variant;
-        // Reading order: "previous" sits at the start corner.
-        let (start, end) = (crate::bidi::dir_icon("chevron-left"), crate::bidi::dir_icon("chevron-right"));
+        // Reading order: "previous" sits at the start corner. At either end
+        // of a list the button rests, dimmed: paging never wraps back.
+        let corner = |id: &'static str, glyph: &'static str, go: Option<Rc<dyn Fn(&mut App)>>| -> AnyElement {
+            match go {
+                Some(go) => icon_button(id, glyph, NAV_BTN, ink, None, move |_, cx| go(cx)).into_any_element(),
+                None => div().size(px(NAV_BTN)).flex().items_center().justify_center().opacity(NAV_REST_ALPHA).child(icon(glyph, NAV_BTN * NAV_GLYPH_SHARE, ink)).into_any_element(),
+            }
+        };
         card = card
-            .child(div().absolute().top(px(ARCH_INSET)).inset_start(px(ARCH_INSET)).child(icon_button("jannah-prev", start, NAV_BTN, ink, None, move |_, cx| prev(cx))))
-            .child(div().absolute().top(px(ARCH_INSET)).inset_end(px(ARCH_INSET)).child(icon_button("jannah-next", end, NAV_BTN, ink, None, move |_, cx| next(cx))));
+            .child(div().absolute().top(px(ARCH_INSET)).inset_start(px(ARCH_INSET)).child(corner("jannah-prev", crate::bidi::dir_icon("chevron-left"), prev)))
+            .child(div().absolute().top(px(ARCH_INSET)).inset_end(px(ARCH_INSET)).child(corner("jannah-next", crate::bidi::dir_icon("chevron-right"), next)));
     }
     card.into_any_element()
 }
@@ -707,23 +738,16 @@ pub(super) fn check(done: bool, side: f32, palette: &MandaraPalette) -> AnyEleme
         .into_any_element()
 }
 
-/// The first words of a path's first evidence: its meaning in your
-/// language, or the Arabic in Arabic (or when the meaning isn't there).
-fn evidence_excerpt(c: &Ctx, p: &Path) -> Option<(String, bool, String)> {
+/// A path's first evidence, whole: its meaning in your language, or the
+/// Arabic in Arabic (or when the meaning isn't there); the card folds it.
+fn evidence_text(c: &Ctx, p: &Path) -> Option<(&'static Item, String, bool, String)> {
     let id = catalog::evidence(p).into_iter().next()?;
     let item = catalog().get(id)?;
     let reference = catalog::reference(item, arabic_ui());
     let meaning = if c.show_meaning { meaning_of(&c.shared.borrow(), item) } else { None };
     Some(match meaning {
-        Some(m) => (meanings::excerpt(&m.text), false, reference),
-        None => {
-            let mut a: String = item.arabic.chars().take(ARABIC_EXCERPT).collect();
-            if item.arabic.chars().count() > ARABIC_EXCERPT {
-                a = a.rsplit_once(' ').map(|(head, _)| head.to_string()).unwrap_or(a);
-                a.push_str(" …");
-            }
-            (a, true, reference)
-        }
+        Some(m) => (item, m.text, false, reference),
+        None => (item, words(item), true, reference),
     })
 }
 
@@ -742,7 +766,23 @@ fn step_card(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
         }
     };
     let (_, group) = catalog::group_label(&p.group);
-    let excerpt = evidence_excerpt(c, p);
+    let evidence = evidence_text(c, p).map(|(item, text_, is_arabic, reference)| {
+        use super::super::reading::{Block, fold, link};
+        let style = if is_arabic {
+            div().font_family(c.scripture.clone()).text_size(px(text::BODY + 2.0)).line_height(gpui::relative(ARABIC_LINE_EM)).text_right()
+        } else {
+            div().italic().text_size(px(text::BODY_S)).text_color(palette.on_surface.hsla())
+        };
+        let ids: Rc<[ItemId]> = catalog::evidence(p).into();
+        let at = ids.iter().position(|x| *x == item.id).unwrap_or_default();
+        let (ui, shared) = (c.ui.clone(), c.shared.clone());
+        let open = link("jannah-step-evidence", t("Open in the reader"), g, move |cx| {
+            ui.borrow_mut().stack.push(Sheet::Reader { list: ids.clone(), at });
+            refresh(&shared, cx);
+        });
+        let folded = fold("jannah-step-fold", &item.key, [Block::new(style, text_, EVIDENCE_LINES)], 0.0, g, Some(open), window, cx);
+        (folded, reference)
+    });
     // The calm glow after ticking it.
     let glow_shadow = c.ui.borrow().glow.and_then(|at| {
         let k = 1.0 - at.elapsed().as_secs_f32() / STEP_GLOW_FOR.as_secs_f32();
@@ -805,21 +845,7 @@ fn step_card(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
         )
         .child(div().text_size(px(text::TITLE)).font_weight(FontWeight::SEMIBOLD).child(t(p.title)))
         .child(div().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(crate::bidi::paragraph(t(p.line))))
-        .when_some(excerpt, |el, (text_, is_arabic, reference)| {
-            el.child(
-                div()
-                    .pl(px(tokens::SM))
-                    .flex()
-                    .flex_col()
-                    .gap(px(LINE_GAP))
-                    .child(if is_arabic {
-                        div().font_family(c.scripture.clone()).text_size(px(text::BODY + 2.0)).line_height(gpui::relative(ARABIC_LINE_EM)).text_right().child(crate::bidi::paragraph(text_))
-                    } else {
-                        div().italic().text_size(px(text::BODY_S)).text_color(palette.on_surface.hsla()).child(crate::bidi::paragraph(format!("“{text_}”")))
-                    })
-                    .child(caption(reference, palette)),
-            )
-        })
+        .when_some(evidence, |el, (folded, reference)| el.child(div().pl(px(tokens::SM)).flex().flex_col().gap(px(LINE_GAP)).child(caption(reference, palette)).child(folded)))
         .child(div().pt(px(tokens::XS)).child(action))
         .child(peek_bar(c, "jannah-step-peek", peek, t("Peek at the coming days' steps"), |u| &mut u.step_peek))
         .child(div().pt(px(tokens::SM)).row().items_center().justify_between().child(dots).child(caption(week_line, palette).font_features(tabular_nums())));
@@ -1148,14 +1174,18 @@ fn reader(c: &Ctx, list: Rc<[ItemId]>, at: usize, window: &mut Window) -> AnyEle
     let n = list.len();
     let position = (n > 1).then(|| caption(tf("{n} of {total}", &[("n", &(at + 1)), ("total", &n)]), c.palette).font_features(tabular_nums()).into_any_element());
     let nav = (n > 1).then(|| {
-        let go = |step: isize, ui: Rc<RefCell<Ui>>, shared: Shared| -> Rc<dyn Fn(&mut App)> {
-            Rc::new(move |cx| {
-                if let Some(Sheet::Reader { list, at }) = ui.borrow_mut().stack.last_mut() {
-                    *at = (*at as isize + step).rem_euclid(list.len() as isize) as usize;
+        // Paging stops at either end: Next never wraps round to the first.
+        let go = |step: isize, ui: Rc<RefCell<Ui>>, shared: Shared| -> Option<Rc<dyn Fn(&mut App)>> {
+            step_within(at, step, n)?;
+            Some(Rc::new(move |cx| {
+                if let Some(Sheet::Reader { list, at }) = ui.borrow_mut().stack.last_mut()
+                    && let Some(to) = step_within(*at, step, list.len())
+                {
+                    *at = to;
                 }
                 ui.borrow_mut().slide = Some((Instant::now(), step as f32));
                 refresh(&shared, cx);
-            })
+            }))
         };
         (go(-1, c.ui.clone(), c.shared.clone()), go(1, c.ui.clone(), c.shared.clone()))
     });
@@ -1164,7 +1194,7 @@ fn reader(c: &Ctx, list: Rc<[ItemId]>, at: usize, window: &mut Window) -> AnyEle
         .flex_col()
         .gap(px(GAP))
         .child(sheet_head(c, catalog::reference(item, arabic_ui()).into(), position))
-        .child(hero(c, item, true, nav, window))
+        .child(hero(c, item, true, nav, None, window))
         .into_any_element()
 }
 
@@ -1269,5 +1299,33 @@ mod tests {
         const { assert!(LIST_H > CHIPS_H + CONTROL_H + GAP * 2.0 + ROW_H * 4.0) };
         assert_eq!(THEMES.len(), Theme::ALL.len());
         assert!(Theme::ALL.iter().all(|th| THEMES.iter().any(|(id, _)| *id == th.id())));
+    }
+
+    #[test]
+    fn readers_page_without_wrapping_back() {
+        // Next from the last item and Previous from the first stop there.
+        assert_eq!(step_within(0, -1, 3), None);
+        assert_eq!(step_within(2, 1, 3), None);
+        assert_eq!(step_within(1, 1, 3), Some(2));
+        assert_eq!(step_within(1, -1, 3), Some(0));
+        // One item, or none: nowhere to go, nothing panics.
+        assert_eq!(step_within(0, 1, 1), None);
+        assert_eq!(step_within(0, -1, 1), None);
+        assert_eq!(step_within(0, 1, 0), None);
+        // Walking the whole list visits every item once and never the one
+        // just shown.
+        let (mut at, mut seen) = (0, vec![0]);
+        while let Some(next) = step_within(at, 1, 5) {
+            assert_ne!(next, at);
+            at = next;
+            seen.push(at);
+        }
+        assert_eq!(seen, [0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn places_read_like_the_interface() {
+        let _en = mandara_i18n::scoped(Some(mandara_i18n::Lang::En));
+        assert_eq!(place_label(12, 230), "12 / 230");
     }
 }

@@ -32,6 +32,8 @@ pub(super) struct Clip {
 }
 
 impl Clip {
+    /// Opens the prepared file (gapless decoding for timed chapters) and
+    /// positions it `skip` frames into its interval.
     pub(super) fn open(prepared: &Prepared, skip: u64, observer: &dyn Observer) -> Result<Self, String> {
         let path = &prepared.path;
         let file = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -50,6 +52,8 @@ impl Clip {
         Ok(clip)
     }
 
+    /// Whether `prepared` is another interval of this open chapter file, so
+    /// [`Clip::select`] can reuse the decoder instead of reopening it.
     pub(super) fn same_file(&self, prepared: &Prepared) -> bool {
         self.path == prepared.path && prepared.interval.is_some()
     }
@@ -81,6 +85,7 @@ impl Clip {
         self.advance_to(start, observer)
     }
 
+    /// Decodes forward, discarding frames, until the position is `start`.
     fn advance_to(&mut self, start: u64, observer: &dyn Observer) -> Result<(), String> {
         while self.position < start {
             observer.check()?;
@@ -157,11 +162,14 @@ impl Clip {
     }
 }
 
+/// A packet timestamp as a frame index at `rate` (`None` on overflow).
 fn packet_frame(timestamp: u64, time_base: TimeBase, rate: u32) -> Option<u64> {
     let value = u128::from(timestamp).checked_mul(u128::from(time_base.numer))?.checked_mul(u128::from(rate))? / u128::from(time_base.denom);
     u64::try_from(value).ok()
 }
 
+/// The first frame (after `skip`, never past the end) and the end frame
+/// of the prepared interval; a whole file has no end.
 fn bounds(prepared: &Prepared, rate: u32, skip: u64) -> Result<(u64, Option<u64>), String> {
     let frames = |ms: u64| ms.checked_mul(u64::from(rate)).map(|n| n / 1000).ok_or_else(|| t("The recitation timing could not be matched to the recording").to_string());
     match prepared.interval {

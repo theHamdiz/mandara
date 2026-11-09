@@ -11,7 +11,7 @@
 //! and z-order) and animated with springs: a staggered entrance (the avatar
 //! pops with overshoot, the password pill unfolds), an idle state with a big
 //! clock that wakes on any key or pointer move, rolling clock digits, a
-//! breathing ring around the avatar, keystroke dots that pop in with a
+//! breathing ring around the avatar, keystroke shapes that pop in with a
 //! spring and ripple the pill, a shake + coral flash on a wrong password, a
 //! cinematic push-in on success, and pointer parallax on the backdrop. With
 //! reduced motion every spring snaps and nothing drifts.
@@ -25,9 +25,10 @@ use std::time::{Duration, Instant};
 use gpui::{
     AnyElement, Bounds, BoxShadow, ClickEvent, Context, EventEmitter, FocusHandle, FontWeight, Hsla, ImageSource, InteractiveElement,
     IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit, ParentElement, Pixels, Point, Render,
-    RenderImage, SharedString, StatefulInteractiveElement, Styled, StyledImage as _, Window, canvas, div, img, point, prelude::FluentBuilder as _,
+    RenderImage, SharedString, StatefulInteractiveElement, Styled, StyledImage as _, Transformation, Window, canvas, div, img, point, prelude::FluentBuilder as _,
     px, svg,
 };
+use mandara_core::password_symbols::{self as symbols, Fades, Row, Symbol};
 use mandara_core::{FrameClock, SpringConfig, SpringValue, ToGpui, oklab_gradient};
 use mandara_theme::{Color, MandaraPalette};
 use mandara_ui::fonts::{Fonts, tabular_nums};
@@ -104,6 +105,22 @@ const BARE_ICON_SCALE: f32 = 0.78;
 const BESIDE_RADIUS: f32 = 0.22;
 /// Gap between the field and the button beside it.
 const BESIDE_GAP: f32 = 8.0;
+/// Password field padding before the text and after the trailing buttons,
+/// and the gap between them (times the layout scale).
+const PILL_PAD_START: f32 = 16.0;
+const PILL_PAD_END: f32 = 5.0;
+const PILL_GAP: f32 = 6.0;
+/// Gap between the reveal and submit buttons inside the field.
+const TRAIL_GAP: f32 = 2.0;
+/// Reveal button, submit button and spinner, as shares of the field height.
+const REVEAL_SHARE: f32 = 0.62;
+const SUBMIT_SHARE: f32 = 0.72;
+const SPINNER_SHARE: f32 = 0.62;
+/// The field's left and right borders, logical px (kept out of the text room).
+const FIELD_BORDERS: f32 = 2.0;
+/// Text caret: width (logical px) and height (share of the field height).
+const CARET_W: f32 = 1.5;
+const CARET_SHARE: f32 = 0.46;
 
 /// Studio preview: how long background edits that rescan folders or reload
 /// pictures (folders typed, the softening slider dragged) wait for the
@@ -238,9 +255,11 @@ pub struct GreeterView {
     sessions: Vec<Session>,
     session_ix: usize,
     session_menu: bool,
-    /// Picks the mask shapes (fresh per start, so they say nothing about
+    /// Picks the mask shapes (fresh per entry, so they say nothing about
     /// the characters).
     mask_seed: u64,
+    /// Deleted password symbols fading out.
+    fades: Fades,
     state: GreeterState,
     password: String,
     reveal: bool,
@@ -538,7 +557,8 @@ impl GreeterView {
             sessions,
             session_ix,
             session_menu: false,
-            mask_seed: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) | 1,
+            mask_seed: symbols::seed_from_clock(),
+            fades: Fades::default(),
             state,
             password: String::new(),
             reveal: false,
@@ -719,6 +739,18 @@ impl GreeterView {
         }
     }
 
+    /// Every picture a preview drew (backdrop, widgets, avatars, the shared
+    /// grain), for its host to drop from the atlas right before it drops
+    /// the view (avatars are not loaded again).
+    pub fn take_images(&mut self) -> Vec<Arc<RenderImage>> {
+        let mut images = self.background.take_images();
+        self.widgets.clear();
+        images.extend(self.widgets.take_trash());
+        images.extend(self.users.iter_mut().filter_map(|u| u.avatar.take()));
+        images.extend(crate::background::take_grain());
+        images
+    }
+
     pub fn set_preview_idle(&mut self, idle: bool, cx: &mut Context<Self>) {
         self.preview_idle = idle;
         cx.notify();
@@ -743,7 +775,7 @@ impl GreeterView {
             }
             Simulate::Typing => {
                 self.password.clear();
-                self.dots.clear();
+                self.clear_dots();
                 for i in 0..8u64 {
                     self.password.push('x');
                     self.dots.push(now + Duration::from_millis(i * 90));
@@ -754,7 +786,7 @@ impl GreeterView {
             }
             Simulate::Error => {
                 self.password.clear();
-                self.dots.clear();
+                self.clear_dots();
                 let msg = self.playful_error();
                 self.fail(msg, cx);
                 self.sim_reset = Some(now + DEMO_ERROR_RESET);
@@ -817,7 +849,7 @@ impl GreeterView {
             let secret = std::mem::take(&mut self.password);
             auth.send(AuthCommand::Begin { user, secret });
         }
-        self.dots.clear();
+        self.clear_dots();
         self.phase = Phase::Busy;
         self.status = Status::None;
         cx.notify();
@@ -831,7 +863,7 @@ impl GreeterView {
 
     fn fail(&mut self, message: String, cx: &mut Context<Self>) {
         wipe(&mut self.password);
-        self.dots.clear();
+        self.clear_dots();
         self.prompt = None;
         self.phase = Phase::Idle;
         self.status = Status::Error(message);
@@ -863,7 +895,7 @@ impl GreeterView {
                 self.phase = Phase::Idle;
                 self.status = notes_status(&notes).unwrap_or(Status::None);
                 wipe(&mut self.password);
-                self.dots.clear();
+                self.clear_dots();
                 self.prompt = Some((secret, message));
                 self.field = Field::Password;
             }
@@ -899,7 +931,7 @@ impl GreeterView {
             auth.send(AuthCommand::Cancel);
         }
         wipe(&mut self.password);
-        self.dots.clear();
+        self.clear_dots();
         self.prompt = None;
         self.status = Status::None;
         if ix >= self.users.len() {
@@ -956,12 +988,23 @@ impl GreeterView {
         cx.notify();
     }
 
+    /// The password field emptied: no symbols, and no fades either.
+    fn clear_dots(&mut self) {
+        self.dots.clear();
+        self.fades.clear();
+    }
+
     fn type_char(&mut self, ch: &str) {
         let pw = self.field != Field::Username;
         let text = if pw { &mut self.password } else { self.manual.get_or_insert_with(String::new) };
         if text.len() < 512 {
             text.push_str(ch);
             if pw {
+                if self.dots.is_empty() {
+                    // A new entry: a new sequence of shapes.
+                    self.mask_seed = symbols::next_seed(self.mask_seed);
+                }
+                self.fades.typed(self.dots.len());
                 self.dots.push(Instant::now());
                 self.ripple_at = Some(Instant::now());
             }
@@ -996,7 +1039,7 @@ impl GreeterView {
                     self.phase = Phase::Idle;
                 }
                 wipe(&mut self.password);
-                self.dots.clear();
+                self.clear_dots();
                 if self.prompt.take().is_some()
                     && let Some(auth) = &self.auth
                 {
@@ -1057,18 +1100,18 @@ impl GreeterView {
                         if k.modifiers.control {
                             wipe(text);
                             if pw {
-                                self.dots.clear();
+                                self.clear_dots();
                             }
                         } else {
                             text.pop();
-                            if pw {
-                                self.dots.pop();
+                            if pw && self.dots.pop().is_some() {
+                                self.fades.push(self.dots.len(), Instant::now());
                             }
                         }
                     }
                     "u" if k.modifiers.control => {
                         wipe(&mut self.password);
-                        self.dots.clear();
+                        self.clear_dots();
                     }
                     _ => {
                         if let Some(ch) = k.key_char.clone().filter(|_| !k.modifiers.control && !k.modifiers.alt && !k.modifiers.platform) {
@@ -1208,24 +1251,6 @@ fn icon(name: &str, size: f32, color: Hsla) -> impl IntoElement {
     }
 }
 
-/// One masked character for [`PasswordMask::Shapes`]: circle, square,
-/// diamond, ring, bar or plus, chosen from the position and a per-start
-/// seed (never the character).
-fn mask_shape(seed: u64, ix: usize, d: f32, ink: Hsla) -> gpui::Div {
-    let mut x = seed ^ (ix as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    x ^= x >> 31;
-    x = x.wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    x ^= x >> 29;
-    match x % 6 {
-        0 => div().size(px(d)).rounded_full().bg(ink),
-        1 => div().size(px(d * 0.86)).rounded(px(d * 0.18)).bg(ink),
-        2 => div().size(px(d * 0.72)).rounded(px(d * 0.12)).bg(ink).mt(px(d * 0.1)),
-        3 => div().size(px(d)).rounded_full().border_2().border_color(ink),
-        4 => div().w(px(d)).h(px(d * 0.42)).rounded_full().bg(ink),
-        _ => div().relative().size(px(d)).child(div().absolute().left(px(d * 0.36)).top_0().w(px(d * 0.28)).h(px(d)).rounded(px(d * 0.1)).bg(ink)).child(div().absolute().top(px(d * 0.36)).left_0().h(px(d * 0.28)).w(px(d)).rounded(px(d * 0.1)).bg(ink)),
-    }
-}
-
 fn soft_shadow(blur: f32, alpha: f32, y: f32) -> BoxShadow {
     BoxShadow { color: gpui::black().opacity(alpha), offset: point(px(0.0), px(y)), blur_radius: px(blur), spread_radius: px(0.0), inset: false }
 }
@@ -1274,6 +1299,8 @@ struct Frame {
     ui_font: SharedString,
     display_font: SharedString,
     rtl: bool,
+    /// Device pixels per logical pixel.
+    scale: f32,
     success: f32,
     reduced: bool,
     /// No ambient motion (drifting orbs, parallax, breathing glow): reduced
@@ -1501,7 +1528,7 @@ impl GreeterView {
         {
             self.sim_reset = None;
             self.password.clear();
-            self.dots.clear();
+            self.clear_dots();
             self.status = Status::None;
             self.phase = Phase::Idle;
             self.success.snap_to(0.0);
@@ -1754,48 +1781,36 @@ impl GreeterView {
         let empty = text.is_empty();
         let caret_on = focused && !busy && !self.is_preview() && ((self.started.elapsed().as_millis() / 530).is_multiple_of(2) || self.last_key.elapsed() < CARET_HOLD);
         let field = if is_pw { Field::Password } else { Field::Username };
-        // Keystroke dots pop in with a spring.
-        let pop = SpringConfig::new(520.0, 14.0, 1.0);
-        let content: AnyElement = if secret && !empty && !(self.reveal && is_pw) {
-            let mut row = div().flex().items_center().gap(px(5.0 * k));
-            let n = text.chars().count().min(24);
-            for i in 0..n {
-                let born = self.dots.get(self.dots.len().saturating_sub(n) + i).copied();
-                let s = if pc.keystroke_ripple && !f.reduced { born.map(|b| pop_at(pop, f.now.saturating_duration_since(b).as_secs_f32())).unwrap_or(1.0) } else { 1.0 };
-                let d = 8.0 * k * s.max(0.0);
-                let ink = white.opacity(0.95);
-                let glyph = match pc.mask {
-                    PasswordMask::Dots => div().size(px(d)).rounded_full().bg(ink),
-                    PasswordMask::Shapes => mask_shape(self.mask_seed, self.dots.len().saturating_sub(n) + i, d, ink),
-                };
-                row = row.child(div().w(px(8.0 * k)).h(px(8.0 * k)).flex().items_center().justify_center().child(glyph));
-            }
-            row.into_any_element()
-        } else if empty {
-            div().text_color(white.opacity(0.72)).child(placeholder).into_any_element()
-        } else {
-            div().text_color(white.opacity(0.96)).child(text).into_any_element()
-        };
+        // Room for the text, left of the trailing buttons. Their box keeps
+        // one width whether it holds the buttons or the spinner, so the room
+        // (and every symbol's slot) holds still while typing and checking.
+        let reveal_w = if pc.reveal_toggle { h * REVEAL_SHARE } else { 0.0 };
+        let submit_w = if pc.submit == SubmitButton::Inside { h * SUBMIT_SHARE } else { 0.0 };
+        let buttons_w = reveal_w + submit_w + if reveal_w > 0.0 && submit_w > 0.0 { TRAIL_GAP * k } else { 0.0 };
+        let trail_w = buttons_w.max(h * SPINNER_SHARE);
+        let has_trailing = busy || (is_pw && !empty);
+        let room = (w - (PILL_PAD_START + PILL_PAD_END) * k - FIELD_BORDERS - if has_trailing { PILL_GAP * k + trail_w } else { 0.0 }).max(0.0);
         let caret = |el: gpui::Div, before: bool| {
             el.when(caret_on, |el| {
-                let c = div().w(px(1.5)).h(px(h * 0.46)).rounded_full().bg(white.opacity(0.95));
+                let c = div().w(px(CARET_W)).h(px(h * CARET_SHARE)).rounded_full().bg(white.opacity(0.95));
                 el.child(if before { c.mr(px(4.0 * k)) } else { c.ml(px(4.0 * k)) })
             })
         };
-        let mut inner = div().flex_1().flex().items_center().overflow_hidden().font_family(f.ui_font.clone()).text_size(px(pc.text_size * k)).when(f.rtl, |el| el.flex_row_reverse());
-        if empty {
-            inner = caret(inner, true).child(content);
+        let inner = if secret && !empty && !(self.reveal && is_pw) {
+            self.symbol_row(f, k, h, room, &text, is_pw, caret_on)
         } else {
-            inner = caret(inner.child(content), false);
-        }
+            let content = if empty { div().text_color(white.opacity(0.72)).child(placeholder) } else { div().text_color(white.opacity(0.96)).child(text) };
+            let inner = div().flex_1().flex().items_center().overflow_hidden().font_family(f.ui_font.clone()).text_size(px(pc.text_size * k)).when(f.rtl, |el| el.flex_row_reverse());
+            if empty { caret(inner, true).child(content) } else { caret(inner.child(content), false) }.into_any_element()
+        };
         let trailing: Option<AnyElement> = if busy {
-            Some(spinner(h * 0.62, k, self.started.elapsed().as_secs_f32()))
+            Some(spinner(h * SPINNER_SHARE, k, self.started.elapsed().as_secs_f32()))
         } else if is_pw && !empty {
             let inside = pc.submit == SubmitButton::Inside;
             let reveal = pc.reveal_toggle.then(|| {
                 div()
                     .id("reveal")
-                    .size(px(h * 0.62))
+                    .size(px(h * REVEAL_SHARE))
                     .rounded_full()
                     .flex()
                     .items_center()
@@ -1812,12 +1827,12 @@ impl GreeterView {
                 div()
                     .flex()
                     .items_center()
-                    .gap(px(2.0 * k))
+                    .gap(px(TRAIL_GAP * k))
                     .children(reveal)
                     .when(inside, |el| el.child(
                         div()
                             .id("submit")
-                            .size(px(h * 0.72))
+                            .size(px(h * SUBMIT_SHARE))
                             .rounded_full()
                             .bg(p.primary.with_alpha(0.9).hsla())
                             .hover(|s| s.bg(p.primary.hsla()))
@@ -1859,11 +1874,11 @@ impl GreeterView {
             .ml(px(shake))
             .w(px(w))
             .h(px(h))
-            .pl(px(16.0 * k))
-            .pr(px(5.0 * k))
+            .pl(px(PILL_PAD_START * k))
+            .pr(px(PILL_PAD_END * k))
             .flex()
             .items_center()
-            .gap(px(6.0 * k))
+            .gap(px(PILL_GAP * k))
             .cursor_text()
             .shadow(shadows)
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
@@ -1883,7 +1898,57 @@ impl GreeterView {
             FieldStyle::Inset => pill.rounded(px(radius)).bg(fill).border_1().border_color(edge(p.outline.with_alpha(0.9).hsla())),
             _ => pill.rounded(px(radius)).bg(fill).border_1().border_color(edge(if focused { white.opacity(0.3) } else { gpui::transparent_black() })),
         };
+        let trailing = trailing.map(|t| div().flex_none().w(px(trail_w)).flex().items_center().justify_end().child(t));
         pill.when(unfold > 0.6, |el| el.child(inner).children(trailing)).into_any_element()
+    }
+
+    /// The masked password: one symbol per character in fixed slots from
+    /// the field's start edge (mirrored right-to-left), so earlier symbols
+    /// never move; a full row scrolls one slot per character.
+    #[allow(clippy::too_many_arguments)]
+    fn symbol_row(&self, f: &Frame, k: f32, h: f32, room: f32, text: &str, is_pw: bool, caret_on: bool) -> AnyElement {
+        let pc = &self.config.password;
+        let text_size = pc.text_size * k;
+        let row = Row::new(room, text_size, f.scale);
+        let n = text.chars().count();
+        let snap = |v: f32| (v * f.scale).round() / f.scale;
+        let caret_h = h * CARET_SHARE;
+        let box_h = snap(caret_h.max(row.size));
+        let top = snap((box_h - row.size) / 2.0);
+        let ink = f.white.opacity(0.95);
+        let dots = pc.mask == PasswordMask::Dots;
+        let dot = snap(text_size * symbols::DOT_EM);
+        let animate = pc.keystroke_ripple && !f.reduced;
+        let mirrored = f.rtl;
+        let slot = |o: f32| {
+            let el = div().absolute().top(px(top)).size(px(row.size)).flex().items_center().justify_center();
+            if mirrored { el.right(px(o)) } else { el.left(px(o)) }
+        };
+        let glyph = |ix: usize, scale: f32, opacity: f32| {
+            let (shape, d) = if dots { (Symbol::Circle, dot) } else { (symbols::symbol_at(self.mask_seed, ix), row.size) };
+            svg().path(shape.asset_path()).size(px(d)).flex_none().text_color(ink.opacity(opacity)).with_transformation(Transformation::scale(gpui::size(scale, scale)))
+        };
+        let mut el = div().relative().flex_none().w(px(room)).h(px(box_h)).overflow_hidden();
+        // The newest `n` arrival times belong to these characters.
+        let born = self.dots.len().saturating_sub(n);
+        for ix in row.first_shown(n)..n {
+            let Some(o) = row.offset(ix, n) else { continue };
+            let (scale, opacity) = self.dots.get(born + ix).map_or((1.0, 1.0), |at| symbols::appear(f.now.saturating_duration_since(*at), animate));
+            el = el.child(slot(o).child(glyph(ix, scale, opacity)));
+        }
+        if is_pw {
+            for (ix, scale, opacity) in self.fades.live(f.now, animate) {
+                if let Some(o) = row.offset(ix, n) {
+                    el = el.child(slot(o).child(glyph(ix, scale, opacity)));
+                }
+            }
+        }
+        if caret_on {
+            let o = (row.caret_offset(n) - CARET_W / 2.0).clamp(0.0, (room - CARET_W).max(0.0));
+            let c = div().absolute().top(px(snap((box_h - caret_h) / 2.0))).w(px(CARET_W)).h(px(caret_h)).rounded_full().bg(ink);
+            el = el.child(if mirrored { c.right(px(o)) } else { c.left(px(o)) });
+        }
+        el.into_any_element()
     }
 
     fn password_el(&self, f: &Frame, k: f32, caps: bool, cx: &mut Context<Self>) -> AnyElement {
@@ -2404,6 +2469,7 @@ impl Render for GreeterView {
             },
             display_font: fonts.display.clone(),
             rtl,
+            scale: window.scale_factor(),
             success,
             reduced: a11y.reduced_motion,
             still: a11y.reduced_motion || preview,

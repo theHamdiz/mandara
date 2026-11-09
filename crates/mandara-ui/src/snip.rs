@@ -11,6 +11,7 @@
 
 mod dock;
 mod flow;
+mod grab;
 mod session;
 
 pub(crate) use session::{Job, begin};
@@ -19,9 +20,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use gpui::{
-    App, ClickEvent, Context, FocusHandle, FontWeight, ImageSource, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, ObjectFit, ParentElement, Pixels, Render, RenderImage, StatefulInteractiveElement, Styled, StyledImage as _, Window, div, img, point,
-    prelude::FluentBuilder as _, px,
+    App, ClickEvent, Context, CursorStyle, DispatchPhase, FocusHandle, FontWeight, HitboxBehavior, ImageSource, InteractiveElement, IntoElement, KeyDownEvent, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit, ParentElement, Pixels, Render, RenderImage, StatefulInteractiveElement, Styled, StyledImage as _, TouchDragEvent,
+    TouchPhase, Window, div, img, point, prelude::FluentBuilder as _, px,
 };
 use mandara_core::{FrameClock, SpringConfig, SpringValue, ToGpui};
 use mandara_services::screencopy::Capture;
@@ -67,8 +68,10 @@ const DIM_MAX: f32 = 0.8;
 const BORDER_RANGE: (f32, f32) = (1.0, 6.0);
 /// Corner radius of the selection outline (before the radius scale).
 const SELECTION_RADIUS_PX: f32 = 6.0;
-/// Region-mode corner handle diameter.
+/// Region-mode handle diameter (the grip reaches further: `grab`).
 const HANDLE_PX: f32 = 10.0;
+/// Edges shorter than this show no middle handle (it would crowd the corners).
+const EDGE_HANDLE_MIN_PX: f32 = HANDLE_PX * 4.0;
 /// Size badge: height, side padding, gap to the selection, and how much
 /// room above the selection it needs before it moves below.
 const BADGE_H_PX: f32 = 24.0;
@@ -187,7 +190,11 @@ pub struct SnipView {
     /// Window rects in this output's logical coordinates.
     windows: Vec<(String, Rect)>,
     mode: SnipMode,
-    drag_start: Option<(f32, f32)>,
+    /// The region drag in progress: a new selection, a handle or a move.
+    drag: Option<grab::Drag>,
+    /// The drag or shape in progress follows a finger (GPUI's touch drag),
+    /// not the mouse button.
+    touch: bool,
     selection: Option<Rect>,
     pointer: (f32, f32),
     tool: Tool,
@@ -268,7 +275,8 @@ impl SnipView {
             capture: Arc::new(capture),
             windows,
             mode,
-            drag_start: None,
+            drag: None,
+            touch: false,
             selection,
             pointer: (0.0, 0.0),
             tool: Tool::Select,
@@ -305,19 +313,103 @@ impl SnipView {
         }
     }
 
-    /// The left button came up: keeps a drawn shape, or finishes a
-    /// selection drag (capturing at once with "capture on release").
+    /// A left press (or a finger landing, `touch`) at `p`. In region mode
+    /// a drawing tool starts a shape inside the selection; otherwise a
+    /// handle resizes the selection, a press inside moves it, and only a
+    /// press elsewhere starts a new one.
+    fn press(&mut self, p: (f32, f32), touch: bool, cx: &mut Context<Self>) {
+        if self.closing {
+            return;
+        }
+        self.pointer = p;
+        self.touch = touch;
+        match self.mode {
+            // Drawing tool + a selection: start a shape inside it.
+            SnipMode::Region if matches!(self.tool, Tool::Draw(_)) && self.selection.is_some_and(grab::usable) => {
+                let Tool::Draw(kind) = self.tool else { return };
+                let r = self.selection.unwrap_or(Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 });
+                let p = (p.0.clamp(r.x, r.x + r.w), p.1.clamp(r.y, r.y + r.h));
+                self.draft = Some(Annotation { kind, from: p, to: p, color: self.ink, width: INK_WIDTH });
+            }
+            SnipMode::Region => {
+                let reach = if touch { grab::GRIP_TOUCH_PX } else { grab::GRIP_MOUSE_PX };
+                self.drag = Some(grab::Drag::begin(self.selection, p, reach));
+            }
+            // First click picks a window (then choose an action);
+            // clicking the picked window again captures it.
+            SnipMode::Window => {
+                if let Some(r) = self.window_at(p) {
+                    if self.selection == Some(r) {
+                        self.confirm(cx);
+                    } else {
+                        self.selection = Some(r);
+                    }
+                }
+            }
+            SnipMode::Screen => self.confirm(cx),
+        }
+        cx.notify();
+    }
+
+    /// The pointer (or finger) moved to `p` while pressed.
+    fn drag_to(&mut self, p: (f32, f32), cx: &mut Context<Self>) {
+        self.pointer = p;
+        let full = self.full();
+        if let (Some(draft), Some(r)) = (self.draft.as_mut(), self.selection) {
+            draft.to = (p.0.clamp(r.x, r.x + r.w), p.1.clamp(r.y, r.y + r.h));
+        } else if let Some(r) = self.drag.as_mut().and_then(|d| d.update(p, full)) {
+            self.selection = Some(r);
+        }
+        cx.notify();
+    }
+
+    /// The left button came up (or the finger lifted): keeps a drawn
+    /// shape, or finishes a selection drag. Only a newly drawn selection
+    /// captures at once with "capture on release"; resizing or moving one
+    /// never does.
     fn end_drag(&mut self, cx: &mut Context<Self>) {
-        let dragged = self.drag_start.take().is_some();
+        let drag = self.drag.take();
+        self.touch = false;
         if let Some(d) = self.draft.take() {
             // Ignore accidental clicks.
             if (d.to.0 - d.from.0).abs() + (d.to.1 - d.from.1).abs() > 6.0 {
                 self.shapes.push(d);
             }
-        } else if dragged && self.mode == SnipMode::Region && self.shot.capture_on_release && self.candidate().is_some() {
-            self.confirm(cx);
+        } else if let Some(drag) = drag {
+            let done = drag.release(self.selection);
+            self.selection = done.selection;
+            if done.fresh {
+                // A new region starts a clean canvas.
+                self.shapes.clear();
+                if self.mode == SnipMode::Region && self.shot.capture_on_release && self.candidate().is_some() {
+                    self.confirm(cx);
+                }
+            }
         }
         cx.notify();
+    }
+
+    /// The system took the finger: drop the shape and put the selection
+    /// back as it was before the press.
+    fn cancel_drag(&mut self, cx: &mut Context<Self>) {
+        self.touch = false;
+        self.draft = None;
+        if let Some(drag) = self.drag.take() {
+            self.selection = drag.cancel();
+        }
+        cx.notify();
+    }
+
+    /// The pointer shape for where it rests (or what it drags).
+    fn cursor(&self) -> CursorStyle {
+        if self.mode != SnipMode::Region || self.tool != Tool::Select {
+            return CursorStyle::Crosshair;
+        }
+        let grip = match &self.drag {
+            Some(d) => d.grip(self.pointer),
+            None => self.candidate().and_then(|r| grab::hit(r, self.pointer, grab::GRIP_MOUSE_PX)),
+        };
+        cursor_for(grip, self.drag.is_some())
     }
 
     fn confirm(&mut self, cx: &mut Context<Self>) {
@@ -518,6 +610,112 @@ fn pos(e: gpui::Point<Pixels>) -> (f32, f32) {
     (f32::from(e.x), f32::from(e.y))
 }
 
+/// The cursor for a grip (`held`: being dragged).
+fn cursor_for(grip: Option<grab::Grip>, held: bool) -> CursorStyle {
+    use grab::Grip;
+    match grip {
+        None | Some(Grip::Resize { x: None, y: None }) => CursorStyle::Crosshair,
+        Some(Grip::Move) if held => CursorStyle::ClosedHand,
+        Some(Grip::Move) => CursorStyle::OpenHand,
+        // Top-left / bottom-right, or the other diagonal.
+        Some(Grip::Resize { x: Some(a), y: Some(b) }) if a == b => CursorStyle::ResizeUpLeftDownRight,
+        Some(Grip::Resize { x: Some(_), y: Some(_) }) => CursorStyle::ResizeUpRightDownLeft,
+        Some(Grip::Resize { x: Some(_), y: None }) => CursorStyle::ResizeLeftRight,
+        Some(Grip::Resize { x: None, y: Some(_) }) => CursorStyle::ResizeUpDown,
+    }
+}
+
+/// Window-wide drag input for the overlay. Pointer moves and the release
+/// reach the drag wherever they happen (over the toolbar, past the screen
+/// edge). In region mode a finger claims GPUI's touch drag where it lands
+/// on the overlay (not on the toolbar, which occludes it), so it selects,
+/// resizes, moves and draws like the mouse instead of scrolling; in window
+/// and screen mode fingers tap.
+fn drag_listeners(view: gpui::Entity<SnipView>) -> impl IntoElement {
+    gpui::canvas(
+        |bounds, window, _| window.insert_hitbox(bounds, HitboxBehavior::Normal),
+        move |_, hitbox, window, _| {
+            let moved = view.clone();
+            window.on_mouse_event(move |e: &MouseMoveEvent, phase, _, cx| {
+                if phase != DispatchPhase::Capture {
+                    return;
+                }
+                moved.update(cx, |this, cx| {
+                    let p = pos(e.position);
+                    let pressed = this.drag.is_some() || this.draft.is_some();
+                    if this.touch && pressed {
+                        // A finger owns the drag.
+                    } else if pressed && e.pressed_button != Some(MouseButton::Left) {
+                        // The button came up where the overlay never heard
+                        // it (past the screen edge): finish the drag now, or
+                        // the selection stays stuck to the pointer.
+                        this.pointer = p;
+                        this.end_drag(cx);
+                    } else if pressed {
+                        this.drag_to(p, cx);
+                    } else {
+                        // Hover: the cursor follows the handle under it.
+                        this.pointer = p;
+                        cx.notify();
+                    }
+                });
+            });
+            let released = view.clone();
+            window.on_mouse_event(move |e: &MouseUpEvent, phase, _, cx| {
+                // Capture phase: a drag ending over the toolbar or the hints
+                // still ends, before their buttons see the release.
+                if phase == DispatchPhase::Capture && e.button == MouseButton::Left {
+                    released.update(cx, |this, cx| {
+                        if !this.touch {
+                            this.end_drag(cx);
+                        }
+                    });
+                }
+            });
+            window.on_mouse_event(move |e: &TouchDragEvent, phase, window, cx| {
+                if phase != DispatchPhase::Bubble {
+                    return;
+                }
+                match e.phase {
+                    TouchPhase::Started => {
+                        if !hitbox.is_hovered(window) || window.default_prevented() {
+                            return;
+                        }
+                        let claimed = view.update(cx, |this, cx| {
+                            let claim = this.mode == SnipMode::Region && !this.closing;
+                            if claim {
+                                this.press(pos(e.start_position), true, cx);
+                            }
+                            claim
+                        });
+                        if claimed {
+                            window.prevent_default();
+                            cx.stop_propagation();
+                        }
+                    }
+                    TouchPhase::Moved => view.update(cx, |this, cx| {
+                        if this.touch {
+                            this.drag_to(pos(e.position), cx);
+                        }
+                    }),
+                    TouchPhase::Ended => view.update(cx, |this, cx| {
+                        if this.touch {
+                            this.end_drag(cx);
+                        }
+                    }),
+                    TouchPhase::Cancelled => view.update(cx, |this, cx| {
+                        if this.touch {
+                            this.cancel_drag(cx);
+                        }
+                    }),
+                }
+            });
+        },
+    )
+    .absolute()
+    .inset_0()
+}
+
 impl Render for SnipView {
     /// Draw the frozen frame and selection controls until the closing fade removes the overlay.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -555,7 +753,7 @@ impl Render for SnipView {
             .size_full()
             .relative()
             .track_focus(&self.focus)
-            .cursor(gpui::CursorStyle::Crosshair)
+            .cursor(self.cursor())
             .font_family(f.ui.clone())
             .text_size(px(text::BODY))
             .text_color(palette.on_surface.hsla())
@@ -582,66 +780,11 @@ impl Render for SnipView {
                 "c" | "o" => this.tool = Tool::Draw(AnnotationKind::Ellipse),
                 _ => {}
             }))
-            .on_mouse_down(MouseButton::Left, cx.listener(|this, e: &MouseDownEvent, _, cx| {
-                if this.closing {
-                    return;
-                }
-                let p = pos(e.position);
-                match this.mode {
-                    // Drawing tool + a selection: start a shape inside it.
-                    SnipMode::Region if matches!(this.tool, Tool::Draw(_)) && this.selection.is_some_and(|r| r.w >= 2.0 && r.h >= 2.0) => {
-                        let Tool::Draw(kind) = this.tool else { return };
-                        let r = this.selection.unwrap_or(Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 });
-                        let p = (p.0.clamp(r.x, r.x + r.w), p.1.clamp(r.y, r.y + r.h));
-                        this.draft = Some(Annotation { kind, from: p, to: p, color: this.ink, width: INK_WIDTH });
-                    }
-                    SnipMode::Region => {
-                        this.drag_start = Some(p);
-                        this.selection = Some(Rect { x: p.0, y: p.1, w: 0.0, h: 0.0 });
-                        // A new region starts a clean canvas.
-                        this.shapes.clear();
-                    }
-                    // First click picks a window (then choose an action);
-                    // clicking the picked window again captures it.
-                    SnipMode::Window => {
-                        if let Some(r) = this.window_at(p) {
-                            if this.selection == Some(r) {
-                                this.confirm(cx);
-                            } else {
-                                this.selection = Some(r);
-                            }
-                        }
-                    }
-                    SnipMode::Screen => this.confirm(cx),
-                }
-                cx.notify();
-            }))
-            .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| {
-                this.pointer = pos(e.position);
-                // The button came up where the overlay never heard it (past
-                // the screen edge): finish the drag now, or the selection
-                // stays stuck to the pointer's last press.
-                if (this.drag_start.is_some() || this.draft.is_some()) && e.pressed_button != Some(MouseButton::Left) {
-                    this.end_drag(cx);
-                    return;
-                }
-                if let (Some(draft), Some(r)) = (this.draft.as_mut(), this.selection) {
-                    draft.to = (this.pointer.0.clamp(r.x, r.x + r.w), this.pointer.1.clamp(r.y, r.y + r.h));
-                } else if let (SnipMode::Region, Some(start), true) = (this.mode, this.drag_start, e.pressed_button == Some(MouseButton::Left)) {
-                    this.selection = Some(Rect::from_points(start, this.pointer));
-                }
-                cx.notify();
-            }))
-            // Capture phase: a drag ending over the toolbar or the hints
-            // (dragging to the screen's edge) still ends, before their
-            // buttons see the release.
-            .capture_any_mouse_up(cx.listener(|this, e: &MouseUpEvent, _, cx| {
-                if e.button == MouseButton::Left {
-                    this.end_drag(cx);
-                }
-            }))
+            // Moves, the release and touch drags: `drag_listeners`.
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, e: &MouseDownEvent, _, cx| this.press(pos(e.position), false, cx)))
             .on_mouse_down(MouseButton::Right, cx.listener(|this, _, _, cx| this.pause(Input::Escape, cx)))
-            .child(img(ImageSource::Render(self.frozen.clone())).absolute().top_0().left_0().size_full().object_fit(ObjectFit::Fill));
+            .child(img(ImageSource::Render(self.frozen.clone())).absolute().top_0().left_0().size_full().object_fit(ObjectFit::Fill))
+            .child(drag_listeners(cx.entity()));
         for (x, y, w, h) in bands {
             if w > 0.0 && h > 0.0 {
                 root = root.child(div().absolute().left(px(x)).top(px(y)).w(px(w)).h(px(h)).bg(dim));
@@ -661,9 +804,23 @@ impl Render for SnipView {
                     .border(px(border))
                     .border_color(accent.with_alpha(0.95 * fade).hsla()),
             );
-            // Corner handles for region mode.
-            if self.mode == SnipMode::Region {
-                for (hx, hy) in [(r.x, r.y), (r.x + r.w, r.y), (r.x, r.y + r.h), (r.x + r.w, r.y + r.h)] {
+            // Region-mode handles: corners, and the middle of edges long
+            // enough. Hidden while a drawing tool is active, since presses
+            // then draw instead of resizing.
+            if self.mode == SnipMode::Region && self.tool == Tool::Select {
+                let (mx, my) = (r.x + r.w / 2.0, r.y + r.h / 2.0);
+                let (wide, tall) = (r.w >= EDGE_HANDLE_MIN_PX, r.h >= EDGE_HANDLE_MIN_PX);
+                let handles = [
+                    (r.x, r.y, true),
+                    (r.x + r.w, r.y, true),
+                    (r.x, r.y + r.h, true),
+                    (r.x + r.w, r.y + r.h, true),
+                    (mx, r.y, wide),
+                    (mx, r.y + r.h, wide),
+                    (r.x, my, tall),
+                    (r.x + r.w, my, tall),
+                ];
+                for (hx, hy, _) in handles.into_iter().filter(|h| h.2) {
                     root = root.child(
                         div().absolute().left(px(hx - HANDLE_PX / 2.0)).top(px(hy - HANDLE_PX / 2.0)).size(px(HANDLE_PX)).rounded_full().bg(accent.hsla()).border_2().border_color(gpui::white()),
                     );
@@ -692,7 +849,10 @@ impl Render for SnipView {
         }
 
         // Annotations (and the one being drawn), painted live.
-        let mut inked: Vec<Annotation> = self.shapes.clone();
+        // A new selection being drawn hides the old one's shapes (they go
+        // when it is let go, and come back if it turns out a click).
+        let new_drawn = self.drag.as_ref().is_some_and(grab::Drag::drawing_new);
+        let mut inked: Vec<Annotation> = if new_drawn { Vec::new() } else { self.shapes.clone() };
         inked.extend(self.draft);
         if !inked.is_empty() {
             root = root.child(
@@ -864,7 +1024,10 @@ impl Render for SnipView {
                         })),
                 )
         });
+        // The toolbar is solid: a press between its buttons never starts a
+        // selection, and a finger on it taps its buttons.
         let toolbar = dock::frame(&palette, ts, fade)
+            .occlude()
             .child(mode_btn("snip-region", SnipMode::Region, cx))
             .child(mode_btn("snip-window", SnipMode::Window, cx))
             .child(mode_btn("snip-screen", SnipMode::Screen, cx))
@@ -1035,5 +1198,20 @@ mod tests {
         assert_eq!(r, Rect { x: 10.0, y: 40.0, w: 40.0, h: 60.0 });
         assert!(r.contains((20.0, 50.0)));
         assert!(!r.contains((5.0, 50.0)));
+    }
+
+    #[test]
+    fn cursors_match_the_grip() {
+        use grab::{Grip, Side::*};
+        let corner = |x, y| Some(Grip::Resize { x: Some(x), y: Some(y) });
+        assert_eq!(cursor_for(corner(Start, Start), false), CursorStyle::ResizeUpLeftDownRight);
+        assert_eq!(cursor_for(corner(End, End), true), CursorStyle::ResizeUpLeftDownRight);
+        assert_eq!(cursor_for(corner(End, Start), false), CursorStyle::ResizeUpRightDownLeft);
+        assert_eq!(cursor_for(corner(Start, End), false), CursorStyle::ResizeUpRightDownLeft);
+        assert_eq!(cursor_for(Some(Grip::Resize { x: Some(End), y: None }), false), CursorStyle::ResizeLeftRight);
+        assert_eq!(cursor_for(Some(Grip::Resize { x: None, y: Some(Start) }), false), CursorStyle::ResizeUpDown);
+        assert_eq!(cursor_for(Some(Grip::Move), false), CursorStyle::OpenHand);
+        assert_eq!(cursor_for(Some(Grip::Move), true), CursorStyle::ClosedHand);
+        assert_eq!(cursor_for(None, false), CursorStyle::Crosshair);
     }
 }

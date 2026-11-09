@@ -340,8 +340,7 @@ impl StudioView {
 
     /// The plugin is off: a compact card to turn it on or read about it.
     fn wallgen_promo(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let manifest = cx.global::<mandara_plugins::PluginRegistry>().manifests().find(|m| m.id == wg::ID).cloned();
-        let tile = manifest.as_ref().map(|m| super::plugin_tile(m, PROMO_TILE_PX, false, 1.0, p));
+        let tile = cx.global::<mandara_plugins::PluginRegistry>().manifest(wg::ID).map(|m| super::plugin_tile(m, PROMO_TILE_PX, false, 1.0, p));
         div()
             .id("wallgen-promo")
             .clip_rounded()

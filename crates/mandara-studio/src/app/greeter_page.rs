@@ -229,7 +229,12 @@ pub(super) fn release(cx: &mut gpui::App) {
         let page = h.0.read(cx);
         page.applying || page.dirty || page.manager.busy()
     });
-    if !busy && cx.has_global::<PageHandle>() {
+    if !busy && let Some(handle) = cx.try_global::<PageHandle>().map(|h| h.0.clone()) {
+        // Its pictures leave the atlas too (called outside window updates).
+        let preview = handle.read(cx).preview.clone();
+        for image in preview.update(cx, |view, _| view.take_images()) {
+            cx.drop_image(image, None);
+        }
         cx.remove_global::<PageHandle>();
     }
 }
@@ -792,7 +797,7 @@ impl GreeterPage {
         let password = vec![
             self.choice(p, "pw-style", tl("Style"), pw.style, vec![(tl("Glass"), FieldStyle::Glass), (tl("Solid"), FieldStyle::Solid), (tl("Inset"), FieldStyle::Inset), (tl("Outline"), FieldStyle::Outline), (tl("Underline"), FieldStyle::Underline)], |c, v| c.password.style = v, cx),
             self.choice(p, "pw-submit", tl("Sign-in button"), pw.submit, vec![(tl("In the field"), SubmitButton::Inside), (tl("Beside it"), SubmitButton::Beside), (tl("None (Enter)"), SubmitButton::Hidden)], |c, v| c.password.submit = v, cx),
-            self.choice(p, "pw-mask", tl("Hide typing as"), pw.mask, vec![(tl("Dots"), PasswordMask::Dots), (tl("Shapes"), PasswordMask::Shapes)], |c, v| c.password.mask = v, cx),
+            self.choice(p, "pw-mask", tl("Hide typing as"), pw.mask, vec![(tl("Shapes"), PasswordMask::Shapes), (tl("Dots"), PasswordMask::Dots)], |c, v| c.password.mask = v, cx),
             self.toggle(p, "pw-accent", tl("Accent border while focused"), pw.accent_border, |c, v| c.password.accent_border = v, cx),
             self.slider(p, "pw-w", tl("Width"), pw.width, 180.0, 560.0, 1.0, " px", |c, v| c.password.width = v, cx),
             self.slider(p, "pw-h", tl("Height"), pw.height, 30.0, 72.0, 1.0, " px", |c, v| c.password.height = v, cx),

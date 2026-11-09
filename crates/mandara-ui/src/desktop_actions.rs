@@ -76,11 +76,19 @@ pub fn perform(widget: &str, action: &Action, cx: &mut App) -> Result<(), String
             crate::backdrop::refresh(cx);
         }
         Action::Panel(id) => open_panel(id, cx),
+        Action::Read(plugin, reference) => match plugin.as_str() {
+            crate::plugins::jannah::ID => crate::plugins::jannah::open_reference(reference, cx)?,
+            crate::plugins::quran::ID => crate::plugins::quran::open_reference(reference, cx)?,
+            crate::plugins::hadith::ID => crate::plugins::hadith::open_reference(reference, cx)?,
+            // A plugin without a reader: its panel.
+            other => open_panel(other, cx),
+        },
         Action::Refresh => crate::desktop_feeds::refresh(cx),
         Action::JannahStep => {
             crate::plugins::jannah::mark_step_done(cx);
         }
         Action::QuranContinue => crate::plugins::quran::continue_reading(cx),
+        Action::Studio(target) => crate::state::open_studio_at(Some(target.clone()), cx),
     }
     Ok(())
 }

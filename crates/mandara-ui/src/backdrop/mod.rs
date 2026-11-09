@@ -648,7 +648,11 @@ fn widget_data(items: &[mandara_config::desktop_widgets::DesktopWidget], cfg: &m
             d.palette = theme_palette(cx);
         }
     }
-    if let Some(days) = items.iter().find_map(|w| if let K::ScreenTime(s) = &w.kind { Some(s.days) } else { None }) {
+    // Only while the Screen time plugin records: otherwise the widget says
+    // it's off (and how to turn it on) instead of showing stale days.
+    if let Some(days) = items.iter().find_map(|w| if let K::ScreenTime(s) = &w.kind { Some(s.days) } else { None })
+        && crate::desktop_plugins::enabled(crate::plugins::screen_time::ID, cfg, cx)
+    {
         d.screen = crate::desktop_info::screen(days.clamp(mandara_config::widget_kinds::ranges::SCREEN_DAYS.0, mandara_config::widget_kinds::ranges::SCREEN_DAYS.1), cx);
     }
     let prayer_on = crate::desktop_plugins::enabled(crate::plugins::prayer::ID, cfg, cx);

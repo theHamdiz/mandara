@@ -11,9 +11,12 @@ use mandara_i18n::Lang;
 pub(super) trait ConfigSettings: Sized {
     type Scope: Copy + Eq;
 
+    /// Resolves the settings from `config` in `language` for `scope`; runs
+    /// only on a cache miss.
     fn resolve(config: &ShellConfig, language: Lang, scope: Self::Scope) -> Self;
 }
 
+/// The one cached value with every key it depends on.
 struct Entry<T: ConfigSettings> {
     config: Weak<ShellConfig>,
     language: Lang,
@@ -35,6 +38,7 @@ impl<T: ConfigSettings> Default for SettingsCache<T> {
 }
 
 impl<T: ConfigSettings> SettingsCache<T> {
+    /// An empty cache (a `const`, for statics and thread-locals).
     pub const fn new() -> Self {
         Self { entry: None }
     }

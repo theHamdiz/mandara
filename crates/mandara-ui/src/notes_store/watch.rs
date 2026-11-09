@@ -13,6 +13,9 @@ impl NoteStore {
     }
 }
 
+/// Turns a watcher event into at most one queued rescan request: access
+/// events are ignored (reading notes must not loop), errors request a
+/// reconciling scan.
 fn forward(event: notify::Result<notify::Event>, changed: &async_channel::Sender<()>) {
     let needs_scan = match event {
         Ok(event) => !event.kind.is_access(),

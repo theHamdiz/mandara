@@ -10,7 +10,7 @@
 //! ([`paint`]) because GPUI cannot host lock surfaces: the blurred,
 //! palette-scrimmed wallpaper with anti-banding grain, a big tabular clock
 //! and localized date, the avatar with an accent-gradient rim, and a
-//! chromatic-glass password pill whose dots pop in on a spring. A wrong
+//! chromatic-glass password pill whose shapes pop in on a spring. A wrong
 //! password shakes the pill (damped spring impulse) and flashes its rim
 //! coral; success fades everything up and away before unlocking.
 //!
@@ -34,6 +34,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use mandara_core::session_lock::{AppControl, KeyInput, KeyboardState, LockApp, LockMode, LockOutcome, SurfaceInfo};
+use mandara_core::password_symbols::{self as symbols, Fades, Row, Symbol};
 use mandara_core::{FrameClock, SpringConfig, SpringValue};
 use mandara_i18n::{t, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginRegistry};
@@ -49,8 +50,6 @@ use self::pam::{AuthResult, AuthWorker, Authenticator, DemoAuthenticator, PamAut
 const DEMO_AUTH_DELAY: Duration = Duration::from_millis(450);
 /// The lock-screen preview closes itself after this long unless the caller sets a timeout.
 const DEMO_TIMEOUT: Duration = Duration::from_secs(60);
-/// A password dot pops for this long after its key press (part of the dot animation).
-const DOT_POP: Duration = Duration::from_millis(260);
 /// Wake-up period while animating (~120 Hz frame pacing).
 const ANIMATION_TICK: Duration = Duration::from_millis(8);
 /// Crash-loop guard: restarts counted within this window.
@@ -74,6 +73,8 @@ pub struct LockOptions {
     pub timeout: Option<Duration>,
 }
 
+/// Text size inside the password field (placeholder and symbols), logical px.
+const PASSWORD_TEXT_PX: f32 = 15.0;
 /// The longest password accepted (keeps a stuck key from growing forever).
 const MAX_PASSWORD: usize = 512;
 // Layout: Mandara Login's proportions (`mandara_config::login_layout`),
@@ -249,8 +250,14 @@ pub struct LockScreen {
     text: TextPainter,
     auth: AuthWorker,
     password: String,
-    /// When each typed character arrived (dot pop-in); also its count.
+    /// When each typed character arrived (symbol pop-in); also its count.
     typed: Vec<Instant>,
+    /// Picks the symbols' shapes; renewed when a new entry starts.
+    symbol_seed: u64,
+    /// Deleted symbols fading out.
+    fades: Fades,
+    /// Right-to-left language: symbols start at the field's right.
+    rtl: bool,
     /// Dots shown while checking (the password itself is gone already).
     checking_len: usize,
     phase: Phase,
@@ -310,6 +317,9 @@ impl LockScreen {
             auth,
             password: String::with_capacity(MAX_PASSWORD),
             typed: Vec::new(),
+            symbol_seed: symbols::seed_from_clock(),
+            fades: Fades::default(),
+            rtl: mandara_i18n::language().is_rtl(),
             checking_len: 0,
             phase: Phase::Idle,
             note: None,
@@ -353,6 +363,12 @@ impl LockScreen {
     fn clear_password(&mut self) {
         wipe(&mut self.password);
         self.typed.clear();
+        self.fades.clear();
+    }
+
+    /// Pops and fades play unless motion is reduced.
+    fn animate_symbols(&self) -> bool {
+        !self.look.reduced_motion
     }
 
     fn submit(&mut self) {
@@ -461,14 +477,6 @@ impl LockScreen {
     }
 }
 
-/// Back-out easing for the dots' pop (slight overshoot).
-fn ease_out_back(p: f32) -> f32 {
-    let p = p.clamp(0.0, 1.0);
-    let c1 = 1.70158;
-    let c3 = c1 + 1.0;
-    1.0 + c3 * (p - 1.0).powi(3) + c1 * (p - 1.0).powi(2)
-}
-
 impl LockApp for LockScreen {
     fn key(&mut self, key: KeyInput) {
         if self.phase != Phase::Idle {
@@ -493,6 +501,7 @@ impl LockApp for LockScreen {
                     self.clear_password();
                 } else if self.password.pop().is_some() {
                     self.typed.pop();
+                    self.fades.push(self.typed.len(), Instant::now());
                 }
             }
             _ if key.ctrl && key.utf8 == "\u{15}" || key.ctrl && key.utf8.eq_ignore_ascii_case("u") => self.clear_password(),
@@ -504,6 +513,11 @@ impl LockApp for LockScreen {
                         break;
                     }
                     self.password.push(c);
+                    if self.typed.is_empty() {
+                        // A new entry: a new sequence of shapes.
+                        self.symbol_seed = symbols::next_seed(self.symbol_seed);
+                    }
+                    self.fades.typed(self.typed.len());
                     self.typed.push(Instant::now());
                     if matches!(self.note, Some(Note::Info(_))) {
                         self.note = None;
@@ -561,7 +575,8 @@ impl LockApp for LockScreen {
         for s in [&mut self.reveal, &mut self.shake, &mut self.exit, &mut self.flash] {
             moving |= s.step(dt);
         }
-        let popping = self.typed.last().is_some_and(|t| now.duration_since(*t) < DOT_POP);
+        let animate = self.animate_symbols();
+        let popping = animate && (self.typed.last().is_some_and(|t| now.duration_since(*t) < symbols::POP) || self.fades.active(now, animate));
         self.animating = moving || popping || self.phase == Phase::Checking;
         if !self.animating {
             self.clock.idle();
@@ -782,30 +797,48 @@ impl LockScreen {
             Phase::Idle => draw_padlock(pm, bx, by, br * 0.5, ink, alpha * 0.85, s),
         }
 
-        // Dots (or placeholder).
+        // Symbols (or placeholder).
         let field_l = px + 22.0 * s;
         let field_r = bx - br - 12.0 * s;
         let field_c = (field_l + field_r) / 2.0;
+        let text_px = PASSWORD_TEXT_PX * s;
         if n == 0 && self.phase == Phase::Idle {
-            let ph_font = Font { family: &self.fonts.ui, size: 15.0 * s, weight: 400, tabular: false, tracking: 0.0 };
+            let ph_font = Font { family: &self.fonts.ui, size: text_px, weight: 400, tabular: false, tracking: 0.0 };
             let label = t("Enter password");
             let (_, lh) = self.text.measure(label, &ph_font);
             self.text.draw_centered(pm, label, &ph_font, field_c, by - lh / 2.0, p.on_surface_variant, 0.75 * alpha);
-        } else {
-            let gap = 15.0 * s;
-            let max_dots = (((field_r - field_l) / gap) as usize).max(1);
-            let shown = n.min(max_dots);
-            let start = field_c - (shown.saturating_sub(1)) as f32 * gap / 2.0;
-            let t = now.duration_since(self.started).as_secs_f32();
-            for i in 0..shown {
-                let idx = n - shown + i;
-                let pop = match (self.phase, self.typed.get(idx)) {
-                    (Phase::Idle, Some(at)) => ease_out_back(now.duration_since(*at).as_secs_f32() / 0.22),
-                    _ => 1.0,
-                };
-                let wave = if self.phase == Phase::Checking { 0.45 + 0.55 * ((t * 6.0 - i as f32 * 0.55).sin() * 0.5 + 0.5) } else { 1.0 };
-                let dr = 4.6 * s * pop.max(0.0);
-                paint::fill(pm, &paint::circle(start + i as f32 * gap, by, dr), &paint::solid(p.on_surface, alpha * wave));
+        }
+        // Laid out in device pixels from a fixed start edge (the right in
+        // right-to-left languages), so typing never moves earlier symbols.
+        let left = field_l.round();
+        let width = field_r.round() - left;
+        let row = Row::new(width, text_px, 1.0);
+        let dots = self.look.cfg.password_symbols == mandara_config::desktop::PasswordSymbols::Dots;
+        let animate = self.animate_symbols();
+        let elapsed = now.duration_since(self.started).as_secs_f32();
+        let checking = self.phase == Phase::Checking;
+        let symbol = |pm: &mut PixmapMut<'_>, ix: usize, x: f32, scale: f32, opacity: f32, slot: usize| {
+            let (shape, d) = if dots { (Symbol::Circle, (text_px * symbols::DOT_EM).round()) } else { (symbols::symbol_at(self.symbol_seed, ix), row.size) };
+            let Some(path) = shape.skia_path() else { return };
+            let wave = if checking { 0.45 + 0.55 * ((elapsed * 6.0 - slot as f32 * 0.55).sin() * 0.5 + 0.5) } else { 1.0 };
+            let k = d * scale.max(0.0);
+            let (cx, cy) = (x + row.size / 2.0, by.round());
+            let tr = tiny_skia::Transform::from_row(k, 0.0, 0.0, k, cx - k / 2.0, cy - k / 2.0);
+            pm.fill_path(path, &paint::solid(p.on_surface, alpha * opacity * wave), tiny_skia::FillRule::Winding, tr, None);
+        };
+        for ix in row.first_shown(n)..n {
+            let Some(x) = row.left(ix, n, left, width, self.rtl) else { continue };
+            let (scale, opacity) = match (self.phase, self.typed.get(ix)) {
+                (Phase::Idle, Some(at)) => symbols::appear(now.saturating_duration_since(*at), animate),
+                _ => (1.0, 1.0),
+            };
+            symbol(pm, ix, x, scale, opacity, ix - row.first_shown(n));
+        }
+        if self.phase == Phase::Idle {
+            for (ix, scale, opacity) in self.fades.live(now, animate) {
+                if let Some(x) = row.left(ix, n, left, width, self.rtl) {
+                    symbol(pm, ix, x, scale, opacity, 0);
+                }
             }
         }
 
@@ -1273,6 +1306,83 @@ mod tests {
         assert_eq!(s.phase, Phase::Idle);
     }
 
+    /// A settled frame (pops finished) at `scale`.
+    fn frame(s: &mut LockScreen, scale: f32, at: Instant) -> Pixmap {
+        let (w, h) = (640u32, 400u32);
+        let mut pm = Pixmap::new((w as f32 * scale) as u32, (h as f32 * scale) as u32).unwrap();
+        let info = SurfaceInfo { output: "TEST-1".into(), width: w, height: h, scale, focused: true };
+        s.draw(&info, &mut pm.as_mut(), at);
+        pm
+    }
+
+    /// Bounding box `(x0, y0, x1, y1)` of the pixels that differ.
+    fn diff_box(a: &Pixmap, b: &Pixmap) -> Option<(u32, u32, u32, u32)> {
+        let w = a.width();
+        let mut found: Option<(u32, u32, u32, u32)> = None;
+        for (i, (pa, pb)) in a.pixels().iter().zip(b.pixels()).enumerate() {
+            if pa != pb {
+                let (x, y) = (i as u32 % w, i as u32 / w);
+                found = Some(found.map_or((x, y, x, y), |(x0, y0, x1, y1)| (x0.min(x), y0.min(y), x1.max(x), y1.max(y))));
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn typing_and_deleting_never_move_the_other_symbols() {
+        for rtl in [false, true] {
+            for scale in [1.0, 1.5, 1.75] {
+                let mut s = screen(false);
+                s.reveal.snap_to(1.0);
+                s.rtl = rtl;
+                let later = Instant::now() + Duration::from_secs(1);
+                type_text(&mut s, "abc");
+                let three = frame(&mut s, scale, later);
+                type_text(&mut s, "d");
+                let four = frame(&mut s, scale, later);
+                // Only the new symbol's box changed: no re-centring.
+                let (x0, y0, x1, y1) = diff_box(&three, &four).expect("the fourth symbol is drawn");
+                let row = Row::new(1000.0, PASSWORD_TEXT_PX * scale, 1.0);
+                assert!(x1 - x0 < row.advance as u32, "{} px changed at scale {scale}, rtl {rtl}", x1 - x0 + 1);
+                assert!(y1 - y0 <= row.size as u32 + 1);
+                // Deleting it (once its fade is over) restores the first frame exactly.
+                press(&mut s, keys::BACKSPACE);
+                let back = frame(&mut s, scale, later);
+                assert_eq!(diff_box(&three, &back), None, "scale {scale}, rtl {rtl}");
+            }
+        }
+    }
+
+    #[test]
+    fn reduced_motion_shows_symbols_at_once() {
+        let mut s = screen(false);
+        s.reveal.snap_to(1.0);
+        s.look.reduced_motion = true;
+        let now = Instant::now();
+        type_text(&mut s, "ab");
+        let at_once = frame(&mut s, 1.0, now);
+        let settled = frame(&mut s, 1.0, now + Duration::from_secs(1));
+        assert_eq!(diff_box(&at_once, &settled), None);
+        // A deletion leaves nothing to fade.
+        press(&mut s, keys::BACKSPACE);
+        assert!(!s.fades.active(now, s.animate_symbols()));
+        assert_eq!(s.update(now), AppControl::Continue);
+        assert!(!s.animating);
+    }
+
+    #[test]
+    fn a_new_entry_gets_new_shapes_and_one_entry_keeps_them() {
+        let mut s = screen(false);
+        type_text(&mut s, "abc");
+        let seed = s.symbol_seed;
+        press(&mut s, keys::BACKSPACE);
+        type_text(&mut s, "x");
+        assert_eq!(s.symbol_seed, seed, "same entry, same shapes");
+        press(&mut s, keys::ESCAPE);
+        type_text(&mut s, "y");
+        assert_ne!(s.symbol_seed, seed);
+    }
+
     /// Renders typing / error / Caps Lock states to PNGs for a visual check:
     /// `MANDARA_LOCK_SNAPSHOTS=/tmp/x cargo test -p mandara-ui lock_snapshots -- --ignored`.
     #[test]
@@ -1280,14 +1390,39 @@ mod tests {
     fn lock_snapshots() {
         let Some(dir) = std::env::var_os("MANDARA_LOCK_SNAPSHOTS").map(PathBuf::from) else { return };
         std::fs::create_dir_all(&dir).unwrap();
-        let save = |s: &mut LockScreen, name: &str| {
+        let save_at = |s: &mut LockScreen, name: &str, at: Instant| {
             let (w, h) = (1280u32, 800u32);
             let mut pm = Pixmap::new(w * 3 / 2, h * 3 / 2).unwrap();
             let info = SurfaceInfo { output: "TEST-1".into(), width: w, height: h, scale: 1.5, focused: true };
-            s.draw(&info, &mut pm.as_mut(), Instant::now() + Duration::from_secs(1));
+            s.draw(&info, &mut pm.as_mut(), at);
             let rgba: Vec<u8> = pm.pixels().iter().flat_map(|p| { let c = p.demultiply(); [c.red(), c.green(), c.blue(), c.alpha()] }).collect();
             image::RgbaImage::from_raw(pm.width(), pm.height(), rgba).unwrap().save(dir.join(format!("{name}.png"))).unwrap();
         };
+        let save = |s: &mut LockScreen, name: &str| save_at(s, name, Instant::now() + Duration::from_secs(1));
+        for (rtl, dots, tag) in [(false, false, ""), (true, false, "-rtl"), (false, true, "-dots")] {
+            let mut s = screen(false);
+            s.reveal.snap_to(1.0);
+            s.rtl = rtl;
+            if dots {
+                s.look.cfg.password_symbols = mandara_config::desktop::PasswordSymbols::Dots;
+            }
+            for (i, c) in "correcthorsebattery".chars().enumerate() {
+                type_text(&mut s, &c.to_string());
+                if matches!(i + 1, 1 | 4 | 8 | 16 | 19) {
+                    save(&mut s, &format!("chars-{:02}{tag}", i + 1));
+                }
+                if i + 1 == 5 && tag.is_empty() {
+                    // Mid-pop of the fifth symbol.
+                    let born = *s.typed.last().unwrap();
+                    save_at(&mut s, "chars-05-pop", born + Duration::from_millis(45));
+                }
+            }
+            if tag.is_empty() {
+                press(&mut s, keys::BACKSPACE);
+                let gone = Instant::now();
+                save_at(&mut s, "delete-fade", gone + Duration::from_millis(60));
+            }
+        }
         let mut s = screen(false);
         s.reveal.snap_to(1.0);
         type_text(&mut s, "secret");

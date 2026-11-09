@@ -1,6 +1,7 @@
 //! Studio → Dock: turn the dock on, a live preview, then the settings in
 //! five groups — Layout, Behaviour, Apps (the apps kept in the dock with
-//! the searchable "Add app…" picker, drag to reorder, remove), Stacks &
+//! the searchable "Add app…" picker and the launcher button, drag to
+//! reorder, remove), Stacks &
 //! Trash (the folders on the right side) and Appearance — each with its
 //! own reset.
 
@@ -9,6 +10,7 @@ use std::rc::Rc;
 
 use gpui::{AnyElement, App, AppContext as _, ClickEvent, Context, Entity, FontWeight, Global, InteractiveElement, IntoElement, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px};
 use mandara_config::ShellConfig;
+use mandara_config::dock::LAUNCHER_PIN;
 use mandara_config::workflow::{DockAutoHide, DockConfig, DockIndicator, StackDisplay, StackSort, StackView};
 use mandara_core::ToGpui;
 use mandara_i18n::{t, tf, tr};
@@ -79,6 +81,16 @@ struct PinDrag {
     index: usize,
     id: String,
     name: String,
+    /// The launcher button's icon (`None` for apps).
+    launcher_icon: Option<String>,
+}
+
+/// A pinned entry's icon: the launcher button's tile, or the app's icon.
+fn pin_icon(id: &str, launcher_icon: Option<&str>, size: f32, p: &MandaraPalette) -> AnyElement {
+    match launcher_icon {
+        Some(spec) => mandara_ui::plugins::dock::launcher_tile(spec, size, p, mandara_ui::plugins::panel_fx::readable(p.primary, p)),
+        None => mandara_ui::plugins::workspaces::app_icon(id, size, p.on_surface, false, p).into_any_element(),
+    }
 }
 
 struct PinGhost(PinDrag, MandaraPalette);
@@ -94,7 +106,7 @@ impl Render for PinGhost {
             .row()
             .items_center()
             .gap(px(SPACE_10_PX))
-            .child(mandara_ui::plugins::workspaces::app_icon(&self.0.id, PIN_ICON_PX, p.on_surface, false, p))
+            .child(pin_icon(&self.0.id, self.0.launcher_icon.as_deref(), PIN_ICON_PX, p))
             .child(self.0.name.clone())
     }
 }
@@ -127,7 +139,7 @@ pub(super) fn plugin_switch(id: &'static str, title: &'static str, detail: &'sta
 
 /// A static rendering of the dock with the current settings: pinned apps,
 /// a separator and the right side (a stack, the Trash).
-fn preview(d: &DockConfig, p: &MandaraPalette) -> AnyElement {
+fn preview(d: &DockConfig, launcher_icon: &str, p: &MandaraPalette) -> AnyElement {
     let ids: Vec<String> = if d.pinned.is_empty() { SAMPLE_APPS.iter().map(|s| s.to_string()).collect() } else { d.pinned.clone() };
     let base = d.icon_size * PREVIEW_SCALE;
     let accent = mandara_ui::plugins::panel_fx::readable(p.primary, p);
@@ -140,7 +152,8 @@ fn preview(d: &DockConfig, p: &MandaraPalette) -> AnyElement {
             let dist = i as f32 - PREVIEW_HOVER as f32;
             let scale = if d.magnification { mandara_ui::plugins::dock::magnification(dist, d.magnify, d.magnify_spread) } else { 1.0 };
             let size = base * scale;
-            let running = i % 2 == 0;
+            let launcher = id == LAUNCHER_PIN;
+            let running = !launcher && i % 2 == 0;
             let marks = div()
                 .h(px(DOT_PX))
                 .row()
@@ -156,8 +169,8 @@ fn preview(d: &DockConfig, p: &MandaraPalette) -> AnyElement {
                 .items_center()
                 .justify_end()
                 .gap(px(d.padding * 0.3))
-                .opacity(if running { 1.0 } else { d.inactive_opacity })
-                .child(mandara_ui::plugins::workspaces::app_icon(id, size, p.on_surface, false, p))
+                .opacity(if running || launcher { 1.0 } else { d.inactive_opacity })
+                .child(pin_icon(id, launcher.then_some(launcher_icon), size, p))
                 .child(marks)
                 .into_any_element()
         })
@@ -318,7 +331,7 @@ impl StudioView {
             .gap(px(SPACE_26_PX))
             .child(toggle)
             .children(hidden_note)
-            .child(card(p).child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(t("Preview"))).child(preview(&cfg.dock, p)))
+            .child(card(p).child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(t("Preview"))).child(preview(&cfg.dock, &cfg.appearance.launcher_icon, p)))
             .child(displays)
             .child(layout)
             .child(behaviour)
@@ -336,10 +349,19 @@ impl StudioView {
         let apps = mandara_ui::apps::discover();
         let mut list = div().row().flex_col().gap(px(SPACE_4_PX));
         for (i, id) in cfg.dock.pinned.iter().enumerate() {
+            let launcher = id == LAUNCHER_PIN;
             let entry = apps.iter().find(|a| a.id.eq_ignore_ascii_case(id));
-            let name = entry.map(|a| a.name.clone()).unwrap_or_else(|| id.clone());
+            let name = if launcher { t("Launcher").to_string() } else { entry.map(|a| a.name.clone()).unwrap_or_else(|| id.clone()) };
             let icon_id = entry.and_then(|a| a.wm_class.clone()).unwrap_or_else(|| id.clone());
-            let drag = PinDrag { index: i, id: icon_id.clone(), name: name.clone() };
+            let launcher_icon = launcher.then(|| cfg.appearance.launcher_icon.clone());
+            let detail = if launcher {
+                t("Opens the launcher").to_string()
+            } else if entry.is_some() {
+                id.clone()
+            } else {
+                tf("{id} · not installed", &[("id", id)])
+            };
+            let drag = PinDrag { index: i, id: icon_id.clone(), name: name.clone(), launcher_icon: launcher_icon.clone() };
             let palette = p.clone();
             let remove_id = id.clone();
             list = list.child(
@@ -368,7 +390,7 @@ impl StudioView {
                         });
                     }))
                     .child(icon("tiles", HANDLE_ICON_PX, p.on_surface_variant))
-                    .child(mandara_ui::plugins::workspaces::app_icon(&icon_id, PIN_ICON_PX, p.on_surface, false, p))
+                    .child(pin_icon(&icon_id, launcher_icon.as_deref(), PIN_ICON_PX, p))
                     .child(
                         div()
                             .flex_1()
@@ -376,7 +398,7 @@ impl StudioView {
                             .row()
                             .flex_col()
                             .child(div().truncate().text_size(px(TEXT_13_PX)).child(name))
-                            .child(div().truncate().text_size(px(TEXT_11_PX)).text_color(p.on_surface_variant.hsla()).child(if entry.is_some() { id.clone() } else { tf("{id} · not installed", &[("id", id)]) })),
+                            .child(div().truncate().text_size(px(TEXT_11_PX)).text_color(p.on_surface_variant.hsla()).child(detail)),
                     )
                     .child(
                         div()
@@ -408,6 +430,14 @@ impl StudioView {
                     .items_center()
                     .gap(px(SPACE_12_PX))
                     .child(div().flex_1().min_w(px(0.0)).child(heading(t("Kept in the Dock"), t("Drag to reorder. Running apps you keep from the dock's right-click menu show up here too."), p)))
+                    // The launcher button goes first; drag it anywhere.
+                    .when(!cfg.dock.launcher_pinned(), |el| {
+                        el.child(button("dock-add-launcher", "search", t("Add the launcher"), false, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
+                            update_config(cx, |c| {
+                                c.dock.pin_at(LAUNCHER_PIN, 0);
+                            });
+                        })))
+                    })
                     .child(button("dock-add-app", "plus", t("Add app…"), true, p).on_click(cx.listener(|_, _: &ClickEvent, window, cx| open_picker(window, cx)))),
             )
             .child(list)

@@ -45,12 +45,18 @@ pub enum Action {
     Next,
     /// Open a plugin's panel.
     Panel(String),
+    /// Open one item in a plugin's reader: `jannah` and an item key
+    /// (`quran-2:25`), `quran` and `2:255`, `hadith` and `bukhari:1`.
+    Read(String, String),
     /// Fetch the widget's feed again now (rates, GitHub, AI usage, games).
     Refresh,
     /// Mark today's Jannah step done.
     JannahStep,
     /// Open the Qur'an reader where you left off.
     QuranContinue,
+    /// Open Studio on a page (`desktop-widgets/<id>`, `plugins/<id>`): an
+    /// empty widget's "Set up in Studio" button.
+    Studio(String),
 }
 
 impl Action {
@@ -80,9 +86,11 @@ impl fmt::Display for Action {
             Action::Step(w, d) => write!(f, "step:{w}:{d}"),
             Action::Next => f.write_str("next"),
             Action::Panel(p) => write!(f, "panel:{p}"),
+            Action::Read(p, r) => write!(f, "read:{p}:{r}"),
             Action::Refresh => f.write_str("refresh"),
             Action::JannahStep => f.write_str("jannah-step"),
             Action::QuranContinue => f.write_str("quran-continue"),
+            Action::Studio(target) => write!(f, "studio:{target}"),
         }
     }
 }
@@ -118,9 +126,14 @@ impl std::str::FromStr for Action {
             }
             "next" => Action::Next,
             "panel" => Action::Panel(need(arg)?),
+            "read" => {
+                let (plugin, reference) = need(arg)?.split_once(':').map(|(p, r)| (p.to_string(), r.to_string())).filter(|(p, r)| !p.is_empty() && !r.is_empty()).ok_or_else(|| "read:<plugin>:<reference>".to_string())?;
+                Action::Read(plugin, reference)
+            }
             "refresh" => Action::Refresh,
             "jannah-step" => Action::JannahStep,
             "quran-continue" => Action::QuranContinue,
+            "studio" => Action::Studio(need(arg)?),
             other => return Err(format!("unknown action {other:?}")),
         })
     }
@@ -151,13 +164,18 @@ mod tests {
             Action::Step("brightness".into(), -1),
             Action::Next,
             Action::Panel("prayer".into()),
+            Action::Read("quran".into(), "2:255".into()),
+            Action::Read("hadith".into(), "bukhari:1".into()),
+            Action::Read("jannah".into(), "quran-2:25".into()),
             Action::Refresh,
             Action::JannahStep,
             Action::QuranContinue,
+            Action::Studio("desktop-widgets/github-1".into()),
         ];
         for a in all {
             assert_eq!(a.to_string().parse::<Action>(), Ok(a.clone()), "{a}");
         }
         assert!("toggle".parse::<Action>().is_err() && "dance".parse::<Action>().is_err());
+        assert!("read:quran".parse::<Action>().is_err() && "read".parse::<Action>().is_err() && "read::2:255".parse::<Action>().is_err());
     }
 }

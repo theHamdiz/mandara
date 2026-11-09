@@ -26,6 +26,8 @@ pub(super) enum Source {
     },
 }
 
+/// The shown hadith's text and grading, borrowed only while the card's
+/// document is built.
 struct Entry<'a> {
     reference: &'a str,
     words: &'a str,
@@ -39,6 +41,8 @@ struct Entry<'a> {
 }
 
 impl Source {
+    /// Builds from the entry the button was made for, if it is still the one
+    /// shown (`None` once the panel moved on or its library was released).
     fn resolve<R>(&self, build: impl FnOnce(Entry<'_>) -> R) -> Option<R> {
         match self {
             Self::Daily { model, key } => {
@@ -95,6 +99,8 @@ impl Source {
     }
 }
 
+/// The panel's "Copy as image" button for the shown hadith. It keeps
+/// weak references only; the card is built when it is pressed.
 pub(super) fn button(
     c: &super::panel::Ctx<'_>,
     shown: &super::reader::Shown<'_>,
@@ -151,6 +157,8 @@ pub(super) fn button(
     )
 }
 
+/// The look a card is exported with: theme, fonts and sizes, and which
+/// parts (meaning, chain) to include.
 struct Design {
     palette: MandaraPalette,
     fonts: FontNames,
@@ -165,6 +173,7 @@ struct Design {
     scale: f32,
 }
 
+/// The reading card for `entry` as an export document.
 fn document(entry: Entry<'_>, design: Design) -> Document {
     let Design {
         palette,
@@ -332,6 +341,8 @@ fn document(entry: Entry<'_>, design: Design) -> Document {
     doc
 }
 
+/// `hadith copy-image <reference>`: finds the hadith on the export worker and
+/// copies its card, as the button does.
 pub(super) fn command(
     reference: &str,
     cx: &mut gpui::App,

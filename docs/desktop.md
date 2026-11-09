@@ -74,6 +74,14 @@ How Mandara looks and feels, and how much of it you can shape.
   <sub>Right-click empty bar space for the <b>main menu</b>.</sub>
 </p>
 
+The rail on its side switches the menu's own pages (**Home**, **Apps &
+tools** and **Look**). Below a divider, under **Panels** in the full rail,
+come shortcuts that open Sound, Network, Bluetooth, the system monitor,
+weather, the calendar or notifications in the menu's place. Studio and the
+power menu are the buttons at the top, so the rail doesn't repeat them;
+**Reload config** is on Apps & tools. **Rail** (Studio → Bars → Drop-down
+panels, under Main menu) shows each entry's name or icons only.
+
 Open **Look** in the main menu to pick a theme. The cards fill the
 available height; longer catalogs use compact scrolling rows. Built-in
 names follow your language in the menu and Studio, while custom theme
@@ -209,7 +217,11 @@ existing widgets. Eligible kinds can also be added to
   cat, the bubbles, a playing record and a seconds hand animate, and only
   while the desktop is in sight. GitHub and exchange rates go online only
   once you switch that on, and the AI usage widget reads its logs only
-  once you allow it.
+  once you allow it. A widget that needs setting up (no GitHub user,
+  fetching off, its plugin off) or has nothing yet shows its icon, a short
+  line saying why and, where a setting fixes it, a **Set up in Studio**
+  button that opens exactly that setting. Studio's gallery shows each
+  widget with sample data, marked *Preview*.
 - **Any shape, any frame:** every painted widget can sit on a circle, a
   squircle, a scalloped cookie, a flower, a pentagon, chamfered corners, a
   slanted card or torn paper, with an outline, a soft or hard directional
@@ -305,7 +317,10 @@ anything that must stay fixed is a named, documented constant.
   you had muted yourself.
 - **Per-app volume**: every app playing sound gets a row with its icon,
   what it's playing, a volume slider (to 150 %), mute and a button that moves
-  it to another output. Several streams of one app fold into one row.
+  it to another output. Several streams of one app fold into one row. The
+  row of the player the media panel controls sets that player's own volume
+  (0–100 %, like its own slider) when the player allows it, because such a
+  player puts its level back on its sound whenever you play or pause.
 - **Shell sounds** from your freedesktop sound theme, decoded in pure Rust,
   quiet while media plays.
 
@@ -357,10 +372,15 @@ desktop editor, make the file readable and press **Done** again.
 
 Changing the notes folder waits for pending saves; retained conflicts are
 available when you return. Desktop note saves compare the file with the text
-the editor opened. Ordinary Notes plugin body saves do not make that comparison
-and may replace external edits; recovery scans check retained baselines separately.
-None of these operations locks out another editor. Even a desktop save can
-replace an edit made after its comparison.
+the editor opened. Notes plugin body saves compare it with the text the panel
+showed when you started typing, or with Mandara's own last save of that note,
+so quick edits still save in order. If another program changed or removed the
+file in the meantime, that note isn't saved: the panel keeps your text and says
+it changed elsewhere, other notes still save, and your next edit replaces the
+outside version on purpose, or recreates the note if its file was removed.
+Recovery scans check retained baselines separately.
+None of these operations locks out another editor. A save can still replace an
+edit made in the instant between its comparison and its write.
 
 The widget gallery fits each preview to its card and renders at the display’s
 pixel density, with larger calendar and sky miniatures. Media previews use a

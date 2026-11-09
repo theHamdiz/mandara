@@ -121,7 +121,7 @@ pub(crate) fn cover(img: &image::DynamicImage, w: u32, h: u32) -> image::Dynamic
 const BOX_SHRINK: f32 = 1.25;
 
 /// `img` resized to exactly `w × h` (see [`shrink_region`]).
-pub(crate) fn shrink(img: &image::DynamicImage, w: u32, h: u32) -> image::DynamicImage {
+pub fn shrink(img: &image::DynamicImage, w: u32, h: u32) -> image::DynamicImage {
     shrink_region(img, (0, 0, img.width(), img.height()), w, h)
 }
 
@@ -144,7 +144,7 @@ pub(crate) fn shrink_region(img: &image::DynamicImage, (x, y, cw, ch): (u32, u32
 
 /// `img` scaled to fit within `max_w × max_h`, keeping its shape (like
 /// [`image::DynamicImage::resize`], through [`shrink`]).
-pub(crate) fn fit_within(img: &image::DynamicImage, max_w: u32, max_h: u32) -> image::DynamicImage {
+pub fn fit_within(img: &image::DynamicImage, max_w: u32, max_h: u32) -> image::DynamicImage {
     let scale = (max_w as f32 / img.width().max(1) as f32).min(max_h as f32 / img.height().max(1) as f32);
     shrink(img, (img.width() as f32 * scale).round() as u32, (img.height() as f32 * scale).round() as u32)
 }

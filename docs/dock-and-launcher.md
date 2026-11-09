@@ -25,6 +25,14 @@
   - **Add app…** (Studio → Dock, or right-click the dock) searches your
     installed apps. Drag icons to reorder, drag a running app in to keep
     it, or drag one away from the dock to remove it with a poof.
+  - **The launcher button** is kept like a pinned app: first by default,
+    drag it anywhere among your pinned apps (or `mandara msg dock move
+    launcher 2`), remove it from its right-click menu or by dragging it
+    away, and bring it back with **Keep the launcher in the Dock** in the
+    dock's own right-click menu or **Add the launcher** in Studio → Dock.
+    It opens the launcher and wears the bar's launcher icon. Docks from
+    before 0.23 keep their button where it was (first, or after the pinned
+    apps when it sat at the end).
   - **Applications folder:** a dock folder beside Downloads opens a
     Launchpad-style grid of every app (search, category chips, A–Z / Most
     used / Categories, right-click Keep in Dock / Open at Login /
@@ -47,6 +55,10 @@
   `/gh`, `/todo`, `/note` and your own) and **skills** (named routines).
   **Providers** with their own prefixes: `:` emoji (English or Arabic
   names), `@` open windows, `#` clipboard history, `*` wallpapers, `~` files.
+  The empty search field lists what a query can start with, the same in
+  every look: `/`, `=`, the AI Shell Agent's `!` while it is switched on
+  ([Local shell commands](command-agent.md)), then each provider that is on
+  with the prefix you gave it. It follows Studio while the launcher is open.
   It learns what you open (frecency, kept on this computer), shows pinned
   and recent apps first, and lists desktop actions (*New Private Window*).
   **Put it anywhere:** float it in the middle of the screen or attach it to

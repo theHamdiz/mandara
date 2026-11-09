@@ -13,7 +13,7 @@ use mandara_i18n::{t, tf, tk, tr};
 use serde_json::Value;
 
 pub mod alert_settings;
-mod desktop_settings;
+pub mod desktop_settings;
 mod motion_settings;
 #[cfg(test)]
 mod look_tests;
@@ -353,19 +353,84 @@ pub struct Setting {
     pub label: &'static str,
     pub help: &'static str,
     pub control: Control,
-    /// Value used when the key is absent (plugin settings tables).
-    pub default: Option<Value>,
+    /// Value used when the key is absent (plugin settings tables). Boxed:
+    /// few settings have one, and an inline JSON value would add 64 bytes
+    /// to every one of the ~860 entries.
+    pub default: Option<Box<Value>>,
 }
 
 impl Setting {
     /// Matches the English text and its translation.
     pub fn matches(&self, query: &str) -> bool {
-        let q = query.to_lowercase();
-        let tab = (self.section == Section::Bars).then(|| bars::BarsTab::for_path(self.path)).flatten();
-        let english = [self.label, self.help, self.group, self.section.title(), tab.map_or("", bars::BarsTab::title)];
-        english.iter().chain(std::iter::once(&self.path)).any(|s| s.to_lowercase().contains(&q))
-            || (mandara_i18n::language() != mandara_i18n::Lang::En && english.iter().any(|s| !s.is_empty() && tr(s).to_lowercase().contains(&q)))
+        search_text(self, mandara_i18n::language()).contains(&query.to_lowercase())
     }
+}
+
+/// Separates the fields of a setting's search text, so a query never
+/// matches across two of them.
+const SEARCH_FIELD_SEP: char = '\u{1f}';
+
+/// One setting's lowercase search text: its label, help, group, page and
+/// Bars tab in English, its config path, and the translated fields when
+/// the language isn't English.
+fn search_text(s: &Setting, lang: mandara_i18n::Lang) -> String {
+    let tab = (s.section == Section::Bars).then(|| bars::BarsTab::for_path(s.path)).flatten();
+    let english = [s.label, s.help, s.group, s.section.title(), tab.map_or("", bars::BarsTab::title)];
+    let mut text = String::new();
+    for field in english.iter().chain(std::iter::once(&s.path)) {
+        text.push_str(&field.to_lowercase());
+        text.push(SEARCH_FIELD_SEP);
+    }
+    if lang != mandara_i18n::Lang::En {
+        for field in english.iter().filter(|f| !f.is_empty()) {
+            text.push_str(&tr(field).to_lowercase());
+            text.push(SEARCH_FIELD_SEP);
+        }
+    }
+    text
+}
+
+/// Every setting's search text for one language, built on the first search
+/// and rebuilt only when the language changes, so typing allocates nothing
+/// per setting.
+struct SearchIndex {
+    lang: mandara_i18n::Lang,
+    texts: Box<[Box<str>]>,
+}
+
+/// The last query's hits (indices into [`settings`]): Studio's sidebar and
+/// page both ask for them on every frame while the query is unchanged.
+struct LastSearch {
+    lang: mandara_i18n::Lang,
+    query: Box<str>,
+    hits: Rc<[u16]>,
+}
+
+thread_local! {
+    static SEARCH_INDEX: RefCell<Option<SearchIndex>> = const { RefCell::new(None) };
+    static LAST_SEARCH: RefCell<Option<LastSearch>> = const { RefCell::new(None) };
+}
+
+/// The settings matching `query` (case-insensitive, English and the current
+/// language), as indices into [`settings`] in registry order. Repeated
+/// calls with the same query and language return the cached hits.
+pub fn search(query: &str) -> Rc<[u16]> {
+    let lang = mandara_i18n::language();
+    let cached = LAST_SEARCH.with(|l| l.borrow().as_ref().filter(|l| l.lang == lang && &*l.query == query).map(|l| l.hits.clone()));
+    if let Some(hits) = cached {
+        return hits;
+    }
+    let q = query.to_lowercase();
+    let hits: Rc<[u16]> = SEARCH_INDEX.with(|index| {
+        let mut index = index.borrow_mut();
+        if !index.as_ref().is_some_and(|i| i.lang == lang) {
+            *index = Some(SearchIndex { lang, texts: settings().iter().map(|s| search_text(s, lang).into_boxed_str()).collect() });
+        }
+        let texts = &index.as_ref().expect("built above").texts;
+        texts.iter().enumerate().filter(|(_, text)| text.contains(&q)).filter_map(|(i, _)| u16::try_from(i).ok()).collect()
+    });
+    LAST_SEARCH.with(|l| *l.borrow_mut() = Some(LastSearch { lang, query: query.into(), hits: hits.clone() }));
+    hits
 }
 
 fn s(section: Section, group: &'static str, path: &'static str, label: &'static str, help: &'static str, control: Control) -> Setting {
@@ -373,7 +438,7 @@ fn s(section: Section, group: &'static str, path: &'static str, label: &'static 
 }
 
 fn sd(section: Section, group: &'static str, path: &'static str, label: &'static str, help: &'static str, control: Control, default: Value) -> Setting {
-    Setting { section, group, path, label, help, control, default: Some(default) }
+    Setting { section, group, path, label, help, control, default: Some(Box::new(default)) }
 }
 
 /// Choice labels are `tk()`-marked English; display them with `tr()`.
@@ -538,6 +603,16 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     }
 }
 
+/// A line shown in place of `setting`'s help while only part of it applies
+/// under `cfg` (`tk` text): the slider handle while the thick sliders' design
+/// draws no handle (it still shapes the thin sliders, so it stays editable).
+pub fn note(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
+    match setting.path {
+        "/style/slider_handle" if !cfg.style.slider_design.uses_handle() => Some(tk("Only the thin sliders use it now: the Pill and Segmented designs mark the value without a handle")),
+        _ => None,
+    }
+}
+
 /// Window-look settings Mandara's sway drop-in leaves out: sway has no
 /// rounded corners, blur, shadows or animations, and its opacity is a
 /// per-window command, not a focused / unfocused setting.
@@ -576,7 +651,7 @@ pub fn running_compositor() -> Option<mandara_config::compositor::Target> {
     use mandara_compositor::CompositorKind;
     use mandara_config::compositor::Target;
     static RUNNING: OnceLock<Option<Target>> = OnceLock::new();
-    *RUNNING.get_or_init(|| mandara_compositor::detect().map(CompositorKind::target))
+    *RUNNING.get_or_init(|| mandara_compositor::detected().map(CompositorKind::target))
 }
 
 thread_local! {
@@ -995,7 +1070,7 @@ static NULL: Value = Value::Null;
 /// `setting`'s value in the JSON tree `root`, borrowed: what [`get`]
 /// returns, without cloning it.
 fn resolve<'a>(root: &'a Value, setting: &'a Setting) -> &'a Value {
-    root.pointer(setting.path).filter(|v| !v.is_null() || setting.default.is_none()).or(setting.default.as_ref()).unwrap_or(&NULL)
+    root.pointer(setting.path).filter(|v| !v.is_null() || setting.default.is_none()).or(setting.default.as_deref()).unwrap_or(&NULL)
 }
 
 /// Reads a setting's current value.
@@ -1240,5 +1315,30 @@ mod tests {
         let all = settings();
         assert!(all.iter().any(|s| s.matches("vivid")));
         assert!(all.iter().filter(|s| s.matches("prayer")).count() >= 4);
+    }
+
+    /// The cached index finds exactly what matching each setting finds, and
+    /// a repeated query reuses its hits.
+    #[test]
+    fn search_index_agrees_with_matching_each_setting() {
+        let all = settings();
+        assert!(all.len() <= usize::from(u16::MAX), "search hits are u16 indices");
+        for q in ["vivid", "Prayer", "bar", "/theme/mode", "zzz-nothing"] {
+            let naive: Vec<u16> = all.iter().enumerate().filter(|(_, s)| s.matches(q)).map(|(i, _)| u16::try_from(i).unwrap()).collect();
+            assert_eq!(&*search(q), naive.as_slice(), "{q}");
+        }
+        assert!(Rc::ptr_eq(&search("vivid"), &search("vivid")));
+    }
+}
+
+#[cfg(test)]
+mod layout {
+    /// Every one of the ~860 settings carries these bytes for the whole
+    /// session: the rare JSON default stays boxed (an inline `Value` would
+    /// add 64 bytes to each).
+    #[test]
+    fn a_setting_stays_compact() {
+        assert!(std::mem::size_of::<super::Setting>() <= 136, "{}", std::mem::size_of::<super::Setting>());
+        assert_eq!(std::mem::size_of::<super::Section>(), 1);
     }
 }

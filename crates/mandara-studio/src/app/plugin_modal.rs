@@ -63,6 +63,9 @@ pub struct PluginModal {
     message: Option<(bool, String)>,
     /// Window scale factor of the last frame (icon resolution).
     pub(super) scale: f32,
+    /// The shown plugin's manifest, copied once per registry generation
+    /// instead of on every frame of the modal.
+    manifest: Option<(u64, std::rc::Rc<mandara_plugins::plugin::PluginManifest>)>,
 }
 
 impl Default for PluginModal {
@@ -78,7 +81,15 @@ impl Default for PluginModal {
             removed_open: false,
             message: None,
             scale: 1.0,
+            manifest: None,
         }
+    }
+}
+
+impl PluginModal {
+    /// Whether the modal is on screen (open, or still animating out).
+    pub(super) fn showing(&self) -> bool {
+        self.target.is_some()
     }
 }
 
@@ -339,7 +350,7 @@ fn declared_settings(m: &PluginManifest) -> Vec<Setting> {
                 label: if s.label.is_empty() { leak(s.key.clone()) } else { tr_plugin(&s.label) },
                 help: if s.help.is_empty() { "" } else { tr_plugin(&s.help) },
                 control,
-                default: Some(s.default_json()),
+                default: Some(Box::new(s.default_json())),
             }
         })
         .collect();
@@ -535,7 +546,7 @@ pub(super) fn always_on_chip(p: &MandaraPalette) -> gpui::Div {
 impl StudioView {
     /// Opens `id`'s detail or settings modal (Plugins page underneath).
     pub fn open_plugin(&mut self, id: &str, view: ModalView, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(manifest) = cx.global::<PluginRegistry>().manifests().find(|m| m.id == id).cloned() else {
+        let Some(manifest) = cx.global::<PluginRegistry>().manifest(id).cloned() else {
             tracing::warn!("Studio: no plugin `{id}`");
             return;
         };
@@ -620,9 +631,20 @@ impl StudioView {
             self.modal.target = None;
             return None;
         }
-        let Some(m) = cx.global::<PluginRegistry>().manifests().find(|m| m.id == id).cloned() else {
-            self.modal.target = None;
-            return None;
+        let generation = cx.global::<PluginRegistry>().generation;
+        let cached = self.modal.manifest.as_ref().filter(|(g, m)| *g == generation && m.id == id).map(|(_, m)| m.clone());
+        let m = match cached {
+            Some(m) => m,
+            None => {
+                let Some(m) = cx.global::<PluginRegistry>().manifest(&id).cloned() else {
+                    self.modal.target = None;
+                    self.modal.manifest = None;
+                    return None;
+                };
+                let m = std::rc::Rc::new(m);
+                self.modal.manifest = Some((generation, m.clone()));
+                m
+            }
         };
         let viewport = window.viewport_size();
         let (vw, vh) = (f32::from(viewport.width), f32::from(viewport.height));

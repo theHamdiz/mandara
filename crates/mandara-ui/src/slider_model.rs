@@ -18,7 +18,9 @@
 //!   server never falls behind and the last position always lands.
 //! - **Capture.** Once pressed, the slider follows the pointer anywhere in
 //!   the window (above, below or past its ends) until the button is
-//!   released; a press on the track jumps straight to that value.
+//!   released; a press on the track jumps straight to that value. A finger
+//!   on a touchscreen does the same: it claims GPUI's touch drag where it
+//!   lands on the track, so it drags the slider instead of scrolling.
 //! - **Geometry.** [`Track`] maps a pointer position to a value with the
 //!   track's insets, so the drawn handle sits under the pointer. Positions
 //!   are logical pixels, the space GPUI reports both bounds and pointer
@@ -29,7 +31,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use gpui::{AnyWindowHandle, App, AppContext as _, DispatchPhase, ElementId, EntityId, InteractiveElement as _, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Styled as _, Window, canvas};
+use gpui::{AnyWindowHandle, App, AppContext as _, DispatchPhase, ElementId, EntityId, HitboxBehavior, InteractiveElement as _, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Styled as _, TouchDragEvent, TouchPhase, Window, canvas};
 
 /// After the release, the slider keeps your value this long after its last
 /// write finished: long enough for the owner to report the final value back
@@ -432,9 +434,37 @@ pub fn bind<R: IntoWrite>(el: gpui::Stateful<gpui::Div>, key: ElementId, track: 
     let (paint_key, paint_writer, paint_bounds, paint_view) = (key.clone(), writer.clone(), bounds.clone(), view.clone());
     el.child(
         canvas(
-            move |b, _, _| paint_bounds.set(b),
-            move |b, _, window, _| {
+            move |b, window, _| {
+                paint_bounds.set(b);
+                // Lets a touch claim the slider only where it is visible
+                // (not under a menu or dialog drawn over it).
+                window.insert_hitbox(b, HitboxBehavior::Normal)
+            },
+            move |b, hitbox, window, _| {
                 paint_view.set(Some(window.current_view()));
+                // Touch: GPUI offers every new finger as a touch drag before
+                // it can become a tap or a scroll. A finger that lands on the
+                // track claims it, so the slider jumps to it and follows it
+                // like a held mouse button (no tap or scroll follows); fingers
+                // elsewhere tap and scroll as usual.
+                let (touch_key, touch_writer, touch_view) = (paint_key.clone(), paint_writer.clone(), paint_view.clone());
+                window.on_mouse_event(move |e: &TouchDragEvent, phase, window, cx| {
+                    if phase != DispatchPhase::Bubble {
+                        return;
+                    }
+                    match e.phase {
+                        TouchPhase::Started if hitbox.is_hovered(window) && !window.default_prevented() => {
+                            window.prevent_default();
+                            cx.stop_propagation();
+                            press(&touch_key, value_at(e.start_position.x, b), touch_view.get(), touch_writer.clone(), window, cx);
+                        }
+                        TouchPhase::Moved if dragging(&touch_key) => {
+                            pointer_moved(&touch_key, value_at(e.position.x, b), true, touch_writer.clone(), window, cx);
+                        }
+                        TouchPhase::Ended | TouchPhase::Cancelled if dragging(&touch_key) => release(&touch_key, window, cx),
+                        _ => {}
+                    }
+                });
                 // Window-wide listeners: the drag keeps following the pointer
                 // after it leaves the track.
                 let (move_key, up_key) = (paint_key.clone(), paint_key);

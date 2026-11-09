@@ -144,7 +144,7 @@ was, and cursor themes stay on if you had picked a cursor.
 
 ## Jannah, Qur'an, Hadith and Prayer times
 
-These four opt-in plugins share two things:
+These four opt-in plugins share these things (the last two are for Jannah, the Qur'an and Hadith):
 
 - **Their own language.** Each has a *Language* setting in Studio →
   Plugins (`language`: *Follow Mandara*, or one of Mandara's twenty
@@ -163,6 +163,24 @@ These four opt-in plugins share two things:
   *Back to today* returns; a peek is forgotten when the shell restarts.
   From the command line: `jannah peek`, `jannah step peek`, `quran peek`,
   `hadith peek`, `prayer peek`.
+- **Nothing you just read comes straight back.** *Next* never shows the
+  item you were on. Jannah's and Hadith's rotation walks every item once
+  per round in a shuffled order, and a new round never starts with any of
+  the previous round's last eight (a third of the items for a very small
+  list; two items simply alternate). Jannah's reminder shows its place in
+  the round (12 / 230). A Jannah desktop widget, which skips items too
+  long for it, walks its own list of the ones that fit. The Jannah and
+  Hadith readers stop at either end of a list instead of wrapping round.
+- **Every word, one click away.** The sidebar cards, the Hadith panel's
+  hadith of the day and Jannah's step evidence fold long text to a few
+  lines, ending after a whole word (never inside one, never between a
+  letter and its vowel marks). *Read more*, or a click on the text,
+  unfolds the card in place, and *Show less* folds it back; both work from
+  the keyboard (Tab, then Enter or Space). *Open in the reader* opens the
+  item itself, with a hadith's chain and grades. On the desktop, a widget
+  that had to shorten its item says *Read more*, and a click opens that
+  item in its plugin's reader (`mandara msg desktop widgets press <widget>
+  read:<jannah|quran|hadith>:<ref>` does the same).
 
 **Copy a complete card.** In Qur’an, Hadith and Jannah, the **Image** button
 beside text copy puts the current entry on the clipboard as a PNG, using its

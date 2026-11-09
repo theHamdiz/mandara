@@ -2911,7 +2911,6 @@ dependencies = [
 [[package]]
 name = "gpui_linux"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed?rev=ec86047d67acd6fddd81392f44ed6ebcc6e7f531#ec86047d67acd6fddd81392f44ed6ebcc6e7f531"
 dependencies = [
  "accesskit",
  "accesskit_unix",
@@ -4427,6 +4426,7 @@ dependencies = [
  "tiny-skia",
  "toml 1.2.0+spec-1.1.0",
  "tracing",
+ "unicode-segmentation",
  "usvg",
  "zeroize",
 ]

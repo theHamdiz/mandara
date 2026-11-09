@@ -3,10 +3,11 @@
 //! (cards, elevation, panel edges) follow it without threading the config
 //! through every call.
 
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 
 use gpui::{App, FontWeight};
 use mandara_config::ShellConfig;
+use mandara_config::desktop::SliderDesign;
 use mandara_config::surfaces;
 
 /// Corner-radius multiplier bounds.
@@ -29,6 +30,8 @@ static SHADOWS: AtomicBool = AtomicBool::new(true);
 static BORDERS: AtomicBool = AtomicBool::new(true);
 /// `style.slider_handle` is `line`.
 static SLIDER_HANDLE: AtomicBool = AtomicBool::new(true);
+/// `style.slider_design`, as its index in [`SliderDesign::ALL`].
+static SLIDER_DESIGN: AtomicU8 = AtomicU8::new(0);
 /// Body text weight, CSS scale.
 static WEIGHT: AtomicU32 = AtomicU32::new(mandara_config::defaults::FONT_WEIGHT_REGULAR as u32);
 
@@ -120,6 +123,11 @@ pub fn slider_handle() -> bool {
     SLIDER_HANDLE.load(Ordering::Relaxed)
 }
 
+/// The design of the thick sliders (`style.slider_design`).
+pub fn slider_design() -> SliderDesign {
+    SliderDesign::ALL.get(usize::from(SLIDER_DESIGN.load(Ordering::Relaxed))).copied().unwrap_or_default()
+}
+
 /// Body text weight.
 pub fn body_weight() -> FontWeight {
     FontWeight(WEIGHT.load(Ordering::Relaxed) as f32)
@@ -136,6 +144,8 @@ pub fn apply(cfg: &ShellConfig) {
     SHADOWS.store(cfg.style.shadows, Ordering::Relaxed);
     BORDERS.store(cfg.style.borders, Ordering::Relaxed);
     SLIDER_HANDLE.store(cfg.style.slider_handle == mandara_config::desktop::SliderHandle::Line, Ordering::Relaxed);
+    let design = SliderDesign::ALL.iter().position(|d| *d == cfg.style.slider_design).unwrap_or(0);
+    SLIDER_DESIGN.store(design as u8, Ordering::Relaxed);
     WEIGHT.store(u32::from(cfg.typography.weight.clamp(MIN_WEIGHT, MAX_WEIGHT)), Ordering::Relaxed);
     mandara_core::spring::set_time_scale(cfg.motion.speed);
     mandara_core::spring::set_motion_profile(motion_profile(cfg));
@@ -251,6 +261,13 @@ mod tests {
         assert_eq!(radius(10.0), 10.0);
         assert!(shadows());
         assert_eq!(mandara_core::spring::time_scale(), 1.0);
+        assert_eq!(slider_design(), SliderDesign::Classic, "the default design is the classic one");
+        for design in SliderDesign::ALL {
+            cfg.style.slider_design = design;
+            apply(&cfg);
+            assert_eq!(slider_design(), design);
+        }
+        apply(&ShellConfig::default());
     }
 
     #[test]

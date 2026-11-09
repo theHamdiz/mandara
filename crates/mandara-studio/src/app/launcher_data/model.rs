@@ -16,6 +16,8 @@ const MIN_REFRESH: f64 = 1.0;
 const MAX_REFRESH: f64 = 60.0;
 const SECONDS_PER_DAY: f64 = 86_400.0;
 
+/// The settings a prepared snapshot depends on: language, usage half-life
+/// (stored as its bits, so equality is exact) and icon theme.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Key {
     pub language: Lang,
@@ -24,10 +26,13 @@ pub(super) struct Key {
 }
 
 impl Key {
+    /// A key for these settings (allocates the icon theme name once).
     pub fn new(language: Lang, half_life: f32, icon_theme: Option<&str>) -> Self { Self { language, half_life: half_life.to_bits(), icon_theme: icon_theme.map(Arc::from) } }
+    /// Compares with borrowed settings, so an unchanged frame allocates nothing.
     pub fn matches(&self, language: Lang, half_life: f32, icon_theme: Option<&str>) -> bool {
         self.language == language && self.half_life == half_life.to_bits() && self.icon_theme.as_deref() == icon_theme
     }
+    /// The half-life in days, at least 0.1 (so ageing never divides by zero).
     fn days(&self) -> f64 { f64::from(f32::from_bits(self.half_life).max(0.1)) }
 }
 
@@ -40,9 +45,14 @@ pub(super) struct Roots {
     pub preferences: Vec<PathBuf>,
 }
 
+/// Where prepared data comes from: the real files, or a fixture in tests.
+/// Every call runs on the blocking worker.
 pub(super) trait Source: Send + Sync + 'static {
+    /// The paths to watch for changes.
     fn roots(&self) -> &Roots;
+    /// The installed apps, in the key's language and icon theme.
     fn catalog(&self, key: &Key) -> Vec<mandara_ui::apps::App>;
+    /// The launch history.
     fn usage(&self) -> Usage;
 }
 
@@ -54,12 +64,15 @@ pub(in crate::app) struct AppInfo {
     pub icon: Option<SharedString>,
 }
 
+/// One ranking row: its label, current score and that score as shown.
 pub(in crate::app) struct Row {
     pub label: SharedString,
     pub score: f64,
     pub display: SharedString,
 }
 
+/// What the page draws, shared by `Arc` (never copied per frame), tagged
+/// with the key and revisions it was made for.
 pub(in crate::app) struct Snapshot {
     pub(super) key: Key,
     pub(super) revisions: (u64, u64),
@@ -73,11 +86,13 @@ impl Snapshot {
     pub fn resolve(&self, name: &str) -> Option<&AppInfo> { resolve(&self.apps, name) }
 }
 
+/// The app whose id, then whose name, equals `name` (ASCII case ignored).
 fn resolve<'a>(apps: &'a [AppInfo], name: &str) -> Option<&'a AppInfo> {
     let name = name.trim();
     apps.iter().find(|app| app.id.eq_ignore_ascii_case(name)).or_else(|| apps.iter().find(|app| app.name.eq_ignore_ascii_case(name)))
 }
 
+/// A retained top entry: its usage key and score at `scored_at`.
 struct Ranked {
     key: String,
     score: f64,
@@ -95,6 +110,7 @@ pub(super) struct Prepared<S: Source> {
 }
 
 impl<S: Source> Prepared<S> {
+    /// Nothing prepared yet: the first snapshot reads the catalog and history.
     pub fn new(source: Arc<S>) -> Self {
         Self { source, catalog_key: None, usage_key: None, apps: Arc::from([]), top: Vec::new(), scored_at: 0, future_entries: false }
     }
@@ -148,10 +164,14 @@ impl<S: Source> Prepared<S> {
     }
 }
 
+/// `score` halved for every half-life in `elapsed` seconds (negative
+/// elapsed time counts as none).
 fn age(score: f64, elapsed: i64, key: &Key) -> f64 {
     score * 0.5_f64.powf(elapsed.max(0) as f64 / (key.days() * SECONDS_PER_DAY))
 }
 
+/// How a usage key reads in the ranking: the app's name for `app:`, the
+/// command line for `cmd:`, otherwise the key without its kind.
 fn label(key: &str, apps: &[AppInfo]) -> SharedString {
     match key.split_once(':') {
         Some(("app", id)) => resolve(apps, id).map(|app| app.name.clone()).unwrap_or_else(|| id.to_owned().into()),

@@ -40,11 +40,25 @@ pub fn focus_loss_dismisses(last_press: Option<Instant>, now: Instant) -> bool {
     last_press.is_none_or(|t| now.saturating_duration_since(t) >= PRESS_GRACE)
 }
 
-/// A layer surface can lose activation during a theme change without a
-/// client taking focus. Keep the panel under the pointer in that case;
-/// an actual client focus or a pointer outside still uses the normal grace.
-pub fn deactivation_dismisses(last_press: Option<Instant>, now: Instant, pointer_inside: bool, client_focused: bool) -> bool {
-    (!pointer_inside || client_focused) && focus_loss_dismisses(last_press, now)
+/// Whether losing keyboard focus at `now` may dismiss: never while the
+/// pointer is on the panel or sidebar, and otherwise not within the press
+/// grace.
+///
+/// A layer surface loses activation without the user going anywhere: during
+/// a theme change, when the compositor rearranges its layers, when an input
+/// device comes or goes. Whether a client is focused tells nothing here,
+/// because the compositor keeps reporting the last window as focused while
+/// Mandara's surface holds the keyboard; another window really taking focus
+/// is caught by the focused window changing instead.
+pub fn deactivation_dismisses(last_press: Option<Instant>, now: Instant, pointer_inside: bool) -> bool {
+    !pointer_inside && focus_loss_dismisses(last_press, now)
+}
+
+/// Whether a pointer at `at` lies on any of `zones` (exactly: these are
+/// the rects the zones were drawn in). `at` is `None` when the pointer is
+/// not on the surface at all, where its last position is stale.
+pub fn pointer_over(at: Option<(f32, f32)>, zones: &[Option<Rect>]) -> bool {
+    at.is_some_and(|(x, y)| zones.iter().flatten().any(|r| r.contains(x, y, 0.0)))
 }
 
 /// Where the command being executed came from.
@@ -228,14 +242,36 @@ mod tests {
     }
 
     #[test]
-    fn theme_activation_blips_do_not_close_the_panel_under_the_pointer() {
+    fn activation_blips_never_close_the_panel_under_the_pointer() {
         let press = Instant::now();
         let later = press + PRESS_GRACE + DEACTIVATE_SETTLE;
         assert!(focus_loss_dismisses(Some(press), later), "the ordinary press grace has expired");
-        assert!(!deactivation_dismisses(Some(press), later, true, false));
-        assert!(deactivation_dismisses(Some(press), later, true, true), "another client really took focus");
-        assert!(deactivation_dismisses(Some(press), later, false, false), "the pointer really left");
-        assert!(!deactivation_dismisses(Some(press), press + DEACTIVATE_SETTLE, false, true), "a recent click still gets its normal grace");
+        // The pointer on the panel keeps it, however long ago the last press
+        // was (MangoWM still reports the last window as focused meanwhile,
+        // so a focused client is no evidence of anyone taking focus).
+        assert!(!deactivation_dismisses(Some(press), later, true));
+        assert!(!deactivation_dismisses(None, later, true), "opened by keybind, never pressed");
+        assert!(deactivation_dismisses(Some(press), later, false), "the pointer really left");
+        assert!(deactivation_dismisses(None, later, false));
+        assert!(!deactivation_dismisses(Some(press), press + DEACTIVATE_SETTLE, false), "a recent click still gets its normal grace");
+    }
+
+    /// The leave timer and the focus check ask where the pointer is, not
+    /// whether GPUI still reports the panel hovered: it stops after any key
+    /// press, under an occluding child and on a stale exit.
+    #[test]
+    fn the_pointer_is_on_the_panel_where_the_panel_or_its_tab_or_bridge_was_drawn() {
+        let panel = Some(Rect::new(1100.0, 30.0, 420.0, 560.0));
+        let tab = Some(Rect::new(1440.0, 590.0, 80.0, 24.0));
+        let bridge = None;
+        let zones = [panel, tab, bridge];
+        assert!(pointer_over(Some((1300.0, 300.0)), &zones), "inside the panel");
+        assert!(pointer_over(Some((1100.0, 30.0)), &zones), "on its edge");
+        assert!(pointer_over(Some((1460.0, 600.0)), &zones), "on the corner tab below it");
+        assert!(!pointer_over(Some((1300.0, 600.0)), &zones), "below the panel, beside the tab");
+        assert!(!pointer_over(Some((852.0, 480.0)), &zones), "out on the desktop");
+        assert!(!pointer_over(None, &zones), "off the surface: its last position is stale");
+        assert!(!pointer_over(Some((1300.0, 300.0)), &[None, None]), "nothing drawn");
     }
 
     #[test]

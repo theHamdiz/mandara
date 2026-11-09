@@ -3,6 +3,7 @@
 //! recent apps and opening files with an app. No GPUI state here, so all
 //! of it is unit-tested.
 
+use mandara_config::dock::LAUNCHER_PIN;
 use mandara_config::workflow::{DockConfig, DockPosition};
 use mandara_services::notifications::{Notification, Urgency};
 use mandara_services::toplevels::Toplevel;
@@ -25,6 +26,8 @@ pub const HOP_FRAC: f32 = 0.42;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Kind {
     App,
+    /// The launcher button: kept in `pinned` as [`LAUNCHER_PIN`], so it
+    /// sits, moves and goes like a pinned app.
     Launcher,
     Separator,
     /// A minimized window on the right side (when windows don't minimize
@@ -81,6 +84,12 @@ impl Item {
     pub fn is_app(&self) -> bool {
         self.kind == Kind::App
     }
+
+    /// Pinned slots (apps and the launcher button) are dragged to
+    /// reorder, and away to remove; stacks reorder among themselves.
+    pub fn movable(&self) -> bool {
+        self.is_app() || matches!(self.kind, Kind::Launcher | Kind::Stack(_))
+    }
 }
 
 /// An install in progress, as the dock draws it.
@@ -121,10 +130,10 @@ fn app_name(id: &str) -> String {
     crate::plugins::window::app_name(id)
 }
 
-/// The dock's slots, macOS order: launcher, pinned apps (with their
-/// windows), other running apps, installs in progress | recent apps |
-/// minimized windows, Applications, stacks, trash. Separators sit between
-/// non-empty sections.
+/// The dock's slots, macOS order: pinned apps (with their windows) and the
+/// launcher button where it is pinned, other running apps, installs in
+/// progress | recent apps | minimized windows, Applications, stacks,
+/// trash. Separators sit between non-empty sections.
 pub fn items(input: &Inputs) -> Vec<Item> {
     let cfg = input.cfg;
     let windows: Vec<&Toplevel> = input
@@ -135,10 +144,11 @@ pub fn items(input: &Inputs) -> Vec<Item> {
         .collect();
     let mut used = vec![false; windows.len()];
     let mut out = Vec::new();
-    if cfg.launcher_button && !cfg.launcher_at_end {
-        out.push(Item::fixed(Kind::Launcher, "@launcher"));
-    }
     for id in &cfg.pinned {
+        if id == LAUNCHER_PIN {
+            out.push(Item { pinned: true, ..Item::fixed(Kind::Launcher, LAUNCHER_PIN) });
+            continue;
+        }
         let entry = input.apps.iter().find(|a| a.id.eq_ignore_ascii_case(id)).cloned();
         let mut mine: Vec<Toplevel> = Vec::new();
         for (i, w) in windows.iter().enumerate() {
@@ -186,9 +196,6 @@ pub fn items(input: &Inputs) -> Vec<Item> {
             seen += 1;
             seen <= cfg.max_apps as usize
         });
-    }
-    if cfg.launcher_button && cfg.launcher_at_end {
-        out.push(Item::fixed(Kind::Launcher, "@launcher"));
     }
 
     // Recent apps.
@@ -620,7 +627,7 @@ mod tests {
 
     #[test]
     fn items_follow_the_macos_order() {
-        let cfg = DockConfig { pinned: vec!["org.gnome.Nautilus".into(), "firefox".into()], launcher_button: true, trash: true, ..bare() };
+        let cfg = DockConfig { pinned: vec![LAUNCHER_PIN.into(), "org.gnome.Nautilus".into(), "firefox".into()], trash: true, ..bare() };
         let apps = vec![app("org.gnome.Nautilus", None), app("firefox", None), app("org.demo.alpha", None)];
         let windows = vec![win(5, "nautilus"), win(3, "zed"), win(7, "zed"), win(1, mandara_core::SHELL_APP_ID)];
         let list = items(&inputs(&cfg, &windows, &apps));
@@ -640,7 +647,7 @@ mod tests {
 
     #[test]
     fn missing_pinned_apps_stay_saved_without_showing_dead_launchers() {
-        let cfg = DockConfig { pinned: vec!["not-installed".into(), "running-without-entry".into(), "installed".into()], launcher_button: false, ..bare() };
+        let cfg = DockConfig { pinned: vec!["not-installed".into(), "running-without-entry".into(), "installed".into()], ..bare() };
         let apps = vec![app("installed", None)];
         let windows = vec![win(1, "running-without-entry")];
         let list = items(&inputs(&cfg, &windows, &apps));
@@ -653,7 +660,7 @@ mod tests {
 
     #[test]
     fn unpinned_running_apps_linger_until_they_quit() {
-        let cfg = DockConfig { show_running: false, launcher_button: false, ..bare() };
+        let cfg = DockConfig { show_running: false, ..bare() };
         let apps = vec![app("org.demo.beta", None)];
         let windows = vec![win(2, "org.demo.beta")];
         assert!(items(&inputs(&cfg, &windows, &apps)).is_empty(), "running apps hidden");
@@ -669,7 +676,7 @@ mod tests {
         minimized.minimized = true;
         let windows = vec![minimized, win(6, "org.demo.gamma")];
         let apps = vec![app("org.demo.gamma", None)];
-        let cfg = DockConfig { launcher_button: false, minimize_to_app: false, trash: true, ..bare() };
+        let cfg = DockConfig { minimize_to_app: false, trash: true, ..bare() };
         let list = items(&inputs(&cfg, &windows, &apps));
         assert_eq!(keys(&list), ["org.demo.gamma", "@separator-right", "@min-4", "@trash"]);
         assert_eq!(list[0].windows.len(), 2, "the app keeps counting it");
@@ -677,9 +684,35 @@ mod tests {
         assert!(!into_icon.iter().any(|i| matches!(i.kind, Kind::Minimized(_))));
     }
 
+    /// The launcher button sits where it is pinned: first, between apps or
+    /// last, and drags like a pinned app.
+    #[test]
+    fn the_launcher_button_shows_where_it_is_pinned() {
+        let apps = vec![app("a", None), app("b", None)];
+        let windows = vec![win(3, "zed")];
+        for (pinned, want) in [
+            (vec![LAUNCHER_PIN, "a", "b"], vec![LAUNCHER_PIN, "a", "b", "zed"]),
+            (vec!["a", LAUNCHER_PIN, "b"], vec!["a", LAUNCHER_PIN, "b", "zed"]),
+            (vec!["a", "b", LAUNCHER_PIN], vec!["a", "b", LAUNCHER_PIN, "zed"]),
+            (vec!["a", "b"], vec!["a", "b", "zed"]),
+        ] {
+            let cfg = DockConfig { pinned: pinned.iter().map(|p| p.to_string()).collect(), ..bare() };
+            let list = items(&inputs(&cfg, &windows, &apps));
+            assert_eq!(keys(&list), want);
+            if let Some(button) = list.iter().find(|i| i.key == LAUNCHER_PIN) {
+                assert_eq!(button.kind, Kind::Launcher);
+                assert!(button.pinned && button.movable() && !button.is_app(), "kept, dragged and removed like a pin");
+                assert_eq!(button.pin_key(), LAUNCHER_PIN);
+            }
+        }
+        // Not an app: the app cap never hides it.
+        let cfg = DockConfig { pinned: vec!["a".into(), "b".into(), LAUNCHER_PIN.into()], max_apps: 1, ..bare() };
+        assert_eq!(keys(&items(&inputs(&cfg, &[], &apps))), ["a", LAUNCHER_PIN]);
+    }
+
     #[test]
     fn installs_show_after_the_apps() {
-        let cfg = DockConfig { launcher_button: false, pinned: vec!["a".into()], ..bare() };
+        let cfg = DockConfig { pinned: vec!["a".into()], ..bare() };
         let jobs = vec![InstallSlot { id: 9, name: "Thing".into(), icon: String::new(), progress: 0.4, failed: None }];
         let apps = vec![app("a", None)];
         let list = items(&Inputs { installing: &jobs, ..inputs(&cfg, &[], &apps) });

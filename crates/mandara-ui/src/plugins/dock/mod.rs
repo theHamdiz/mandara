@@ -499,7 +499,7 @@ impl DockView {
             let next = store.read(cx).get();
             // Rescan apps only when it can matter: launcher customizations,
             // or a pin of an app not seen yet (just installed).
-            let unknown = next.dock.pinned.iter().any(|p| !this.apps.iter().any(|a| a.id.eq_ignore_ascii_case(p)));
+            let unknown = next.dock.pinned.iter().any(|p| p != mandara_config::dock::LAUNCHER_PIN && !this.apps.iter().any(|a| a.id.eq_ignore_ascii_case(p)));
             if unknown || next.launcher.overrides.len() != this.cfg_launcher_overrides {
                 this.apps = crate::apps::discover().into();
                 this.cfg_launcher_overrides = next.launcher.overrides.len();
@@ -771,7 +771,7 @@ impl DockView {
         match e.button {
             MouseButton::Left => {
                 // A click is a press and a release on the same slot.
-                let movable = self.item(key).is_some_and(|i| i.is_app() || matches!(i.kind, Kind::Stack(_)));
+                let movable = self.item(key).is_some_and(|i| i.movable());
                 self.drag = Some(Drag { key: key.to_string(), start: at, at, active: false, remove: false, movable });
             }
             MouseButton::Middle => {
@@ -1274,7 +1274,7 @@ impl Render for DockView {
                 t("Remove from Dock").into()
             } else {
                 match &item.kind {
-                    Kind::Launcher => t("Apps").into(),
+                    Kind::Launcher => t("Launcher").into(),
                     Kind::Applications => t("Applications").into(),
                     Kind::Trash => t("Trash").into(),
                     Kind::Media => media_label(cx),
@@ -1468,8 +1468,9 @@ impl DockView {
 
 static EPOCH: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 
-/// The launcher button: the configured launcher icon on a soft tile.
-fn launcher_tile(spec: &str, size_px: f32, palette: &MandaraPalette, tint: Color) -> gpui::AnyElement {
+/// The launcher button: the configured launcher icon (`spec`, Studio →
+/// Launcher → Button icon) on a soft tile.
+pub fn launcher_tile(spec: &str, size_px: f32, palette: &MandaraPalette, tint: Color) -> gpui::AnyElement {
     div()
         .size(px(size_px))
         .rounded(px(crate::style::radius(size_px * TILE_RADIUS_FRAC)))
@@ -1773,7 +1774,16 @@ fn resolve_app(name: &str, pinned: &[String], fuzzy: bool) -> Result<String, Str
     if name.is_empty() {
         return Err(t("Name an app (desktop id or name)").to_string());
     }
+    // The launcher button: `@launcher`, or `launcher` unless an app goes
+    // by that name.
+    let launcher = mandara_config::dock::LAUNCHER_PIN;
+    if name.eq_ignore_ascii_case(launcher) {
+        return Ok(launcher.to_string());
+    }
     let apps = crate::apps::discover();
+    if name.eq_ignore_ascii_case(&launcher[1..]) && !apps.iter().any(|x| x.id.eq_ignore_ascii_case(name) || x.name.eq_ignore_ascii_case(name)) {
+        return Ok(launcher.to_string());
+    }
     let id = mandara_config::dock::pin_id(name);
     let by_name = |n: &str| apps.iter().find(|x| x.name.eq_ignore_ascii_case(n)).map(|x| x.id.clone());
     if let Some(p) = pinned.iter().find(|p| p.eq_ignore_ascii_case(&id) || by_name(name).is_some_and(|i| i.eq_ignore_ascii_case(p))) {
@@ -1860,7 +1870,7 @@ pub fn register(r: &mut PluginRegistry) {
                         _ => c.dock.toggle_pin(&id),
                     };
                 });
-                if !pinned {
+                if !pinned && id != mandara_config::dock::LAUNCHER_PIN {
                     linger(&id, cx);
                 }
                 Ok(json!({ "app": out, "pinned": pinned, "dock": config(cx).read(cx).get().dock.pinned }))
@@ -1883,6 +1893,7 @@ pub fn register(r: &mut PluginRegistry) {
         })
         .arg(ArgSpec::required("app", ArgKind::String, tk("desktop id or app name")))
         .arg(ArgSpec::required("index", ArgKind::Integer, tk("new position, 0 = first")))
+        .example("dock move launcher 2")
         .works_when_off(),
     );
     r.command(

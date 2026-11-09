@@ -43,6 +43,14 @@ pub fn detect() -> Option<CompositorKind> {
     detect_from(|name| std::env::var_os(name)).or_else(|| (std::env::var_os("WAYLAND_DISPLAY").is_some() && river::running()).then_some(CompositorKind::River))
 }
 
+/// [`detect`], answered once per process: the compositor a process runs
+/// under can't change, and render paths ask on every frame (each [`detect`]
+/// reads several environment variables, and may probe for River).
+pub fn detected() -> Option<CompositorKind> {
+    static KIND: std::sync::OnceLock<Option<CompositorKind>> = std::sync::OnceLock::new();
+    *KIND.get_or_init(detect)
+}
+
 /// [`detect`] over any environment.
 pub fn detect_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<CompositorKind> {
     let set = |name: &str| var(name).is_some_and(|v| !v.is_empty());

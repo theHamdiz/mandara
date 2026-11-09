@@ -234,7 +234,7 @@ const INCLUDE_REFRESH: Duration = Duration::from_secs(3);
 const SAME_WIDTH_EPSILON: f32 = 0.01;
 
 fn running() -> Option<Target> {
-    mandara_compositor::detect().map(mandara_compositor::CompositorKind::target)
+    mandara_compositor::detected().map(mandara_compositor::CompositorKind::target)
 }
 
 pub(super) fn target_name(t: Target) -> &'static str {

@@ -17,9 +17,13 @@ pub use index::AyahIndex;
 
 /// The player cancels a download when its queue changes or is paused.
 pub trait Observer {
+    /// Whether the request is still wanted (checked between steps and while
+    /// downloading).
     fn current(&self) -> bool;
+    /// Download progress in bytes (`total` is 0 when unknown).
     fn progress(&self, done: u64, total: u64);
 
+    /// `Err` ("Recitation cancelled") once the request is no longer current.
     fn check(&self) -> Result<(), String> {
         if self.current() { Ok(()) } else { Err(t("Recitation cancelled").into()) }
     }
@@ -33,6 +37,7 @@ pub struct Prepared {
 }
 
 impl Prepared {
+    /// A whole file to play, with no interval.
     pub fn file(path: PathBuf) -> Self {
         Self { path, interval: None }
     }
@@ -44,6 +49,8 @@ pub struct FetchCache {
     timing: Option<(u16, u16, Box<[Interval]>)>,
 }
 
+/// One ayah to prepare: the reciter, its global number (1..=6236), the
+/// index that maps it to surah and ayah, and who to report to.
 pub struct Request<'a> {
     pub voice: &'a str,
     pub global: u16,
@@ -56,6 +63,7 @@ pub trait AudioSource: Send + Sync {
     fn prepare(&self, request: &Request<'_>, cache: &mut FetchCache) -> Result<Prepared, String>;
 }
 
+/// The real sources: HTTPS downloads into the Qur'an cache folder.
 pub struct Recitations;
 
 impl AudioSource for Recitations {
@@ -64,10 +72,15 @@ impl AudioSource for Recitations {
     }
 }
 
+/// The request's surah/ayah and that surah's ayah count, from the index.
 fn reference(request: &Request<'_>) -> Result<(super::text::Ref, u16), String> {
     request.index.and_then(|index| index.locate(request.global)).ok_or_else(|| t("The recitation needs the downloaded Qur'an index").to_string())
 }
 
+/// Resolves the reciter's file for the request under `root`, downloading
+/// it (and, for chapter recitations, the surah's timing table) only when
+/// no valid cached copy exists. Runs on the fetch worker; the observer can
+/// cancel between every step.
 fn prepare(request: &Request<'_>, cache: &mut FetchCache, transport: &dyn Transport, root: &Path) -> Result<Prepared, String> {
     request.observer.check()?;
     if !(1..=super::text::AYAHS).contains(&request.global) {
@@ -115,6 +128,8 @@ fn prepare(request: &Request<'_>, cache: &mut FetchCache, transport: &dyn Transp
     Ok(Prepared { path, interval })
 }
 
+/// A cached timing table, if it is within `MAX_TIMING` bytes and parses
+/// for `count` ayahs (otherwise it is fetched again).
 fn read_timing(path: &Path, count: u16) -> Option<Box<[Interval]>> {
     let file = std::fs::File::open(path).ok()?;
     if file.metadata().ok()?.len() > transport::MAX_TIMING {
@@ -134,6 +149,8 @@ pub fn cached(voice: &str, global: u16, index: &AyahIndex) -> bool {
     cached_at(&super::store::cache_dir(), voice, global, index)
 }
 
+/// [`cached`] under `root`: the audio (and timing) files exist with a
+/// plausible size; contents are checked later, on the worker.
 fn cached_at(root: &Path, voice: &str, global: u16, index: &AyahIndex) -> bool {
     let who = reciter_or_default(voice);
     let dir = root.join("audio").join(who.id);
@@ -149,6 +166,7 @@ fn cached_at(root: &Path, voice: &str, global: u16, index: &AyahIndex) -> bool {
     }
 }
 
+/// Whether `path` is a file of `min..=max` bytes.
 fn cached_size(path: &Path, min: u64, max: u64) -> bool {
     std::fs::metadata(path).is_ok_and(|m| m.is_file() && (min..=max).contains(&m.len()))
 }

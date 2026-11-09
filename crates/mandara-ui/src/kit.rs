@@ -62,6 +62,9 @@ const SECS_PER_HOUR: u64 = 3600;
 
 /// Text sizes.
 pub mod text {
+    /// A quick-toggle tile's detail line (an SSID, a device): a touch
+    /// smaller than a label, so more of it fits before it ellipsizes.
+    pub const CAPTION: f32 = 10.5;
     pub const LABEL: f32 = 11.0;
     pub const BODY_S: f32 = 12.0;
     pub const BODY: f32 = 13.0;
@@ -106,7 +109,10 @@ pub fn toggle_tile(
         .flex_1()
         .min_w(px(0.0))
         .h(px(metrics::TILE_H))
-        .px(px(tokens::MD))
+        // Less room past the text than before the icon: the detail line
+        // (a network or device name) keeps as much width as it can.
+        .pad_start(px(tokens::MD))
+        .pad_end(px(tokens::SM))
         .rounded(px(crate::style::radius(tokens::LG)))
         .bg(bg.hsla())
         .hover(move |s| s.bg(bg.mix(fg, alpha::HOVER_FILLED).hsla()))
@@ -118,12 +124,13 @@ pub fn toggle_tile(
         .child(icon(icon_name, metrics::TILE_ICON, fg))
         .child(
             div()
+                .flex_1()
                 .flex()
                 .flex_col()
                 .min_w(px(0.0))
                 .child(div().text_size(px(text::BODY_S)).font_weight(FontWeight::MEDIUM).text_color(fg.hsla()).truncate().child(label.into()))
                 .when_some(detail, |el, d| {
-                    el.child(div().text_size(px(text::LABEL)).text_color(fg.with_alpha(alpha::SECONDARY_TEXT).hsla()).truncate().child(d))
+                    el.child(div().text_size(px(text::CAPTION)).text_color(fg.with_alpha(alpha::SECONDARY_TEXT).hsla()).truncate().child(d))
                 }),
         )
         .on_click(move |_, window, cx| on_click(window, cx))

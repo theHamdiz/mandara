@@ -20,6 +20,7 @@ pub fn skia(c: Color, opacity: f32) -> tiny_skia::Color {
     tiny_skia::Color::from_rgba8(r, g, b, ((a as f32) * opacity.clamp(0.0, 1.0)).round() as u8)
 }
 
+/// An antialiased solid paint of `c` at `opacity`.
 pub fn solid(c: Color, opacity: f32) -> Paint<'static> {
     let mut p = Paint::default();
     p.set_color(skia(c, opacity));
@@ -45,16 +46,19 @@ pub fn rounded_rect(x: f32, y: f32, w: f32, h: f32, r: f32) -> Option<Path> {
     pb.finish()
 }
 
+/// A circle path (the radius is at least 0.1 px, so it always exists).
 pub fn circle(cx: f32, cy: f32, r: f32) -> Option<Path> {
     PathBuilder::from_circle(cx, cy, r.max(0.1))
 }
 
+/// Fills `path` (nothing when it couldn't be built).
 pub fn fill(pm: &mut PixmapMut<'_>, path: &Option<Path>, paint: &Paint<'_>) {
     if let Some(p) = path {
         pm.fill_path(p, paint, FillRule::Winding, Transform::identity(), None);
     }
 }
 
+/// Strokes `path` at `width` px (nothing when it couldn't be built).
 pub fn stroke(pm: &mut PixmapMut<'_>, path: &Option<Path>, paint: &Paint<'_>, width: f32) {
     if let Some(p) = path {
         pm.stroke_path(p, paint, &Stroke { width, ..Stroke::default() }, Transform::identity(), None);
@@ -223,6 +227,9 @@ impl Default for TextPainter {
 }
 
 impl TextPainter {
+    /// Loads the system fonts and the fallback chain for the current interface
+    /// language. Loading the font database is the expensive part; it happens
+    /// once per painter, which then serves a whole surface or export.
     pub fn new() -> Self {
         let fonts = FontSystem::new();
         let mut installed: Vec<String> =
@@ -263,6 +270,7 @@ impl TextPainter {
         })
     }
 
+    /// Whether face `id` has a glyph for `ch`.
     fn covers(&mut self, id: cosmic_text::fontdb::ID, ch: char) -> bool {
         self.fonts.get_font(id, Weight::NORMAL).is_some_and(|font| font.as_swash().charmap().map(ch) != 0)
     }
@@ -346,6 +354,8 @@ impl TextPainter {
         &mut self.fonts
     }
 
+    /// The shaped-text cache key: the text and every font parameter that
+    /// changes shaping (size and tracking quantized).
     fn key(text: &str, font: &Font<'_>) -> Key {
         Key {
             text: text.to_string(),
@@ -371,6 +381,8 @@ impl TextPainter {
         key
     }
 
+    /// Shapes `text` into a new buffer, wrapping to `width` when given, with
+    /// each script run in the first family of the chain that covers it.
     fn shape_buffer(&mut self, text: &str, font: &Font<'_>, width: Option<f32>, line_height: f32, alignment: Option<cosmic_text::Align>) -> Buffer {
         let primary = self.face(font.family, font.weight);
         let runs = self.script_runs(text, primary);

@@ -68,6 +68,15 @@ fn wallpaper_tab_target(target: &str) -> Option<app::wallpaper_page::WallpaperTa
     app::wallpaper_page::WallpaperTab::parse(tab.split('/').next()?)
 }
 
+/// A desktop widget to select: `desktop-widgets/<id>`, as an empty
+/// widget's "Set up in Studio" button asks.
+fn desktop_widget_target(target: &str) -> Option<String> {
+    let (section, id) = target.split_once('/')?;
+    (resolve_section(section) == Some(registry::Section::DesktopWidgets)).then_some(())?;
+    let id = id.trim();
+    (!id.is_empty()).then(|| id.to_string())
+}
+
 /// Former page names and their existing title prefixes select the same
 /// destination within Bars, preserving command-line shortcuts.
 fn former_bars_tab(name: &str) -> Option<registry::bars::BarsTab> {
@@ -129,6 +138,7 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
     let apps_tab = section.and_then(apps_tab_target);
     let wallpaper_tab = section.and_then(wallpaper_tab_target);
     let bars_tab = section.and_then(bars_tab_target);
+    let desktop_widget = section.and_then(desktop_widget_target);
     // `power/<part>` scrolls the Power & idle page to that part.
     let power_part = section.and_then(|t| t.strip_prefix("power/")).map(str::to_string);
     let cursor = section.is_some_and(cursor_target);
@@ -154,6 +164,9 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
         }
         if let Some(tab) = bars_tab {
             view.show_bars_tab(tab, cx);
+        }
+        if let Some(id) = &desktop_widget {
+            view.show_desktop_widget(id, cx);
         }
         if let Some((id, which)) = &plugin {
             view.open_plugin(id, *which, window, cx);
@@ -293,6 +306,17 @@ mod tests {
                 assert_eq!(bars_tab_target(name), Some(BarsTab::Sidebar));
             });
         }
+    }
+
+    #[test]
+    fn a_desktop_widget_target_selects_that_widget() {
+        mandara_i18n::with_language(Some(mandara_i18n::Lang::En), || {
+            assert_eq!(desktop_widget_target("desktop-widgets/github-1").as_deref(), Some("github-1"));
+            assert_eq!(resolve_section("desktop-widgets/github-1"), Some(Section::DesktopWidgets));
+            assert_eq!(desktop_widget_target("desktop-widgets"), None);
+            assert_eq!(desktop_widget_target("desktop-widgets/"), None);
+            assert_eq!(desktop_widget_target("plugins/github-1"), None);
+        });
     }
 
     #[test]

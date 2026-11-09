@@ -51,7 +51,7 @@ pub fn quran(w: &QuranWidget, info: &QuranInfo, l: &Lingo, k: f32, align: f32, m
 }
 
 /// The ayah of the day through Jannah's painter (arch or quote card); a
-/// click opens the Qur'an panel instead of Jannah's.
+/// click opens this ayah in the Qur'an reader instead of Jannah's.
 fn ayah(w: &QuranWidget, info: &QuranInfo, l: &Lingo, k: f32, align: f32, m: &mut dyn Measure) -> Composition {
     let jw = JannahWidget { layout: if w.layout == QuranLayout::Quote { JannahLayout::Quote } else { JannahLayout::Verse }, width: w.width, text_size: w.text_size, mark: w.mark, look: w.look.clone(), locale: w.locale.clone() };
     let ji = JannahInfo {
@@ -65,7 +65,7 @@ fn ayah(w: &QuranWidget, info: &QuranInfo, l: &Lingo, k: f32, align: f32, m: &mu
     };
     let mut c = super::jannah::jannah(&jw, &ji, l, k, align, m);
     for h in &mut c.hits {
-        h.action = Action::Panel(crate::plugins::quran::ID.into());
+        h.action = super::jannah::open_action(crate::plugins::quran::ID, &info.open);
     }
     c
 }
@@ -148,6 +148,7 @@ mod tests {
             meaning: Some("A meaning in the reader's language, long enough to wrap.".into()),
             reference: "Al-Baqara 2:255".into(),
             reference_ar: "البقرة ٢:٢٥٥".into(),
+            open: "2:255".into(),
             progress: 0.42,
             khatms: 1,
             surah_ar: "البقرة".into(),
@@ -171,8 +172,8 @@ mod tests {
                 let c = quran(&QuranWidget { layout, ..Default::default() }, &info(), &lingo(rtl), 1.0, 0.0, &mut Fixed);
                 assert!(c.size.0 > 100.0 && c.size.1 > 100.0, "{layout:?} {:?}", c.size);
                 assert!(!c.hits.is_empty());
-                // Every click opens the Qur'an, never Jannah.
-                assert!(c.hits.iter().all(|h| matches!(&h.action, Action::QuranContinue) || h.action == Action::Panel(crate::plugins::quran::ID.into())), "{layout:?}");
+                // Every click opens the Qur'an (this ayah in its reader), never Jannah.
+                assert!(c.hits.iter().all(|h| matches!(&h.action, Action::QuranContinue) || h.action == Action::Read(crate::plugins::quran::ID.into(), "2:255".into())), "{layout:?}");
             }
         }
     }
