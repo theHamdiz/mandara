@@ -49,7 +49,8 @@ fn inline(rich: &Rich) -> markdown::Inline {
         range: mark.start as usize..mark.end as usize,
         style: markdown::Style { bold: mark.style & html::BOLD != 0, italic: mark.style & html::ITALIC != 0, strike: mark.style & html::STRIKE != 0, code: mark.style & html::CODE != 0 },
         link: mark.link.clone(),
-    }).filter(|span| rich.text.is_char_boundary(span.range.start) && rich.text.is_char_boundary(span.range.end)).collect();
+    // Marks come from the disk cache too: a reversed or out-of-text one is dropped, never sliced.
+    }).filter(|span| span.range.start <= span.range.end && rich.text.is_char_boundary(span.range.start) && rich.text.is_char_boundary(span.range.end)).collect();
     markdown::Inline { text: rich.text.clone(), spans }
 }
 
@@ -123,7 +124,7 @@ pub fn body(b: Body<'_>, images: &Shared, mono: SharedString, palette: &MandaraP
             column = column.child(div().w(px(b.width)).h(px(HERO_H_PX)).rounded(px(crate::style::radius(IMAGE_RADIUS_PX))).bg(wash(WASH_SOFT, palette).hsla()));
         }
     }
-    let rcx = markdown::RenderCx { id: SharedString::from(format!("feed-article-{}", b.entry.id.len())), on_toggle: None, mono };
+    let rcx = markdown::RenderCx { id: article_id(b.entry), on_toggle: None, mono };
     match b.doc {
         Some(doc) if !doc.parts.is_empty() => {
             for (index, part) in doc.parts.iter().enumerate() {
@@ -175,9 +176,34 @@ fn placeholder(alt: &str, width: f32, palette: &MandaraPalette) -> AnyElement {
 }
 
 
+/// The element id of an article's text: from the entry's identity, so one
+/// article's element state never carries over to the next.
+fn article_id(entry: &Entry) -> SharedString {
+    use std::hash::{Hash as _, Hasher as _};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    (&entry.id, &entry.link).hash(&mut hasher);
+    SharedString::from(format!("feed-article-{:x}", hasher.finish()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reversed_or_outside_marks_are_dropped() {
+        let mark = |start, end| html::Mark { start, end, style: html::BOLD, link: None };
+        let rich = Rich { text: "hello".into(), marks: vec![mark(4, 1), mark(0, 9), mark(1, 3)] };
+        let inline = inline(&rich);
+        assert_eq!(inline.spans.iter().map(|s| s.range.clone()).collect::<Vec<_>>(), [1..3]);
+    }
+
+    #[test]
+    fn article_ids_follow_the_entry_not_its_id_length() {
+        let entry = |id: &str, link: &str| Entry { id: id.into(), title: String::new(), link: link.into(), published: None, summary: String::new(), image: None, author: None, seen: 0 };
+        let (a, b) = (entry("guid-0001", "https://example.org/a"), entry("guid-0002", "https://example.org/b"));
+        assert_ne!(article_id(&a), article_id(&b), "same-length ids no longer collide");
+        assert_eq!(article_id(&a), article_id(&a.clone()), "stable for one article");
+    }
 
     #[test]
     fn articles_group_into_text_runs_lists_quotes_and_images() {
