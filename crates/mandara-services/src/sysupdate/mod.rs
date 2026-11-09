@@ -39,9 +39,20 @@ use serde::{Deserialize, Serialize};
 
 /// Folders the root side looks for programs in, in order. Only root-owned
 /// files there are run as root; `$PATH` is never consulted.
-pub const SAFE_DIRS: [&str; 5] = ["/run/current-system/sw/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"];
+#[cfg(not(target_os = "freebsd"))]
+pub const SAFE_DIRS: &[&str] = &["/run/current-system/sw/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"];
+/// FreeBSD: packages live in `/usr/local` (`/usr/local/sbin/pkg`; the
+/// `/usr/sbin/pkg` in base only bootstraps it, so it comes second), the
+/// base system's tools (`freebsd-update`) in `/usr/sbin`.
+#[cfg(target_os = "freebsd")]
+pub const SAFE_DIRS: &[&str] = &["/usr/local/sbin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"];
 /// `PATH` given to every program the root side runs.
+#[cfg(not(target_os = "freebsd"))]
 pub const SAFE_PATH: &str = "/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin";
+/// FreeBSD root's own default `PATH` (package scripts call tools from
+/// `/usr/local/bin`).
+#[cfg(target_os = "freebsd")]
+pub const SAFE_PATH: &str = "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin";
 /// Where `os-release` is read from (the first that exists).
 const OS_RELEASE: [&str; 2] = ["/etc/os-release", "/usr/lib/os-release"];
 /// Present on rpm-ostree (Fedora Atomic) systems.
@@ -108,6 +119,7 @@ impl System {
             Family::Suse => plan::BackendId::ZypperUpdate,
             Family::Void => plan::BackendId::Xbps,
             Family::Alpine => plan::BackendId::Apk,
+            Family::FreeBSD => plan::BackendId::Pkg,
             Family::NixOS => return System::NixOs,
             Family::Gentoo | Family::Solus | Family::Unknown => return System::Unsupported,
         };
@@ -344,8 +356,23 @@ pub fn kernel_modules_missing(release: &str, modules_root: &Path) -> bool {
 }
 
 /// The running kernel release (`uname -r`).
+#[cfg(not(target_os = "freebsd"))]
 pub fn kernel_release() -> String {
     std::fs::read_to_string("/proc/sys/kernel/osrelease").map(|s| s.trim().to_string()).unwrap_or_default()
+}
+
+/// The running kernel release (`uname -r`, `kern.osrelease`).
+#[cfg(target_os = "freebsd")]
+pub fn kernel_release() -> String {
+    // SAFETY: uname fills the zeroed struct it is given; its fields are
+    // NUL-terminated within their fixed size.
+    unsafe {
+        let mut u: libc::utsname = std::mem::zeroed();
+        if libc::uname(&mut u) != 0 {
+            return String::new();
+        }
+        std::ffi::CStr::from_ptr(u.release.as_ptr()).to_string_lossy().into_owned()
+    }
 }
 
 #[cfg(test)]
@@ -369,6 +396,8 @@ mod tests {
         assert_eq!(detect("ID=void", &[], false), System::Managed(Xbps));
         assert_eq!(detect("ID=alpine", &[], false), System::Managed(Apk));
         assert_eq!(detect("ID=nixos", &[], false), System::NixOs);
+        assert_eq!(detect("NAME=FreeBSD\nVERSION=\"14.4-RELEASE\"\nVERSION_ID=\"14.4\"\nID=freebsd\nANSI_COLOR=\"0;31\"\nPRETTY_NAME=\"FreeBSD 14.4-RELEASE\"\n", &[], false), System::Managed(Pkg));
+        assert_eq!(System::Managed(Pkg).label(), "pkg");
         assert_eq!(detect("ID=gentoo", &[], false), System::Unsupported);
         assert_eq!(detect("ID=mystery", &["xbps-install"], false), System::Managed(Xbps));
         assert_eq!(detect("", &[], false), System::Unsupported);

@@ -18,6 +18,7 @@
 //! | openSUSE Leap | `zypper -n refresh` | `zypper -n update --download-only` | `zypper -n update` |
 //! | Void | `xbps-install -S` | `xbps-install -uyD` | `xbps-install -uy` |
 //! | Alpine | `apk update` | — | `apk upgrade` |
+//! | FreeBSD | `pkg update` | `pkg upgrade -U -F -y`, then `freebsd-update fetch` | `pkg upgrade -U -y`, then `freebsd-update install` |
 //!
 //! Splitting refresh and download from the install step makes the safe
 //! point explicit: cancelling is offered until the install step starts,
@@ -178,10 +179,13 @@ pub enum BackendId {
     Apk,
     /// NixOS generations (planned by [`super::nixos::plan`]).
     Nix,
+    /// FreeBSD: packages with pkg, then the base system with
+    /// freebsd-update.
+    Pkg,
 }
 
 impl BackendId {
-    pub const ALL: [BackendId; 8] = [BackendId::Pacman, BackendId::Apt, BackendId::Dnf, BackendId::ZypperDup, BackendId::ZypperUpdate, BackendId::Xbps, BackendId::Apk, BackendId::Nix];
+    pub const ALL: [BackendId; 9] = [BackendId::Pacman, BackendId::Apt, BackendId::Dnf, BackendId::ZypperDup, BackendId::ZypperUpdate, BackendId::Xbps, BackendId::Apk, BackendId::Nix, BackendId::Pkg];
 
     pub fn id(self) -> &'static str {
         match self {
@@ -193,6 +197,7 @@ impl BackendId {
             BackendId::Xbps => "xbps",
             BackendId::Apk => "apk",
             BackendId::Nix => "nix",
+            BackendId::Pkg => "pkg",
         }
     }
 
@@ -210,6 +215,7 @@ impl BackendId {
             BackendId::Xbps => "XBPS",
             BackendId::Apk => "apk",
             BackendId::Nix => "Nix",
+            BackendId::Pkg => "pkg",
         }
     }
 }
@@ -586,6 +592,92 @@ impl SystemBackend for Apk {
     }
 }
 
+// ── FreeBSD ──────────────────────────────────────────────────────────────
+
+/// `freebsd-update`, the base system's updater.
+pub const FREEBSD_UPDATE: &str = "freebsd-update";
+/// freebsd-update refuses to `fetch` without a terminal unless told it
+/// runs unattended (it would otherwise ask to be run from cron).
+const FREEBSD_UPDATE_UNATTENDED: &str = "--not-running-from-cron";
+/// freebsd-update pages its file lists through `$PAGER` (`less` when
+/// unset): `cat` prints them straight into the log.
+const FREEBSD_UPDATE_ENV: &[(&str, &str)] = &[("PAGER", "cat")];
+/// freebsd-update's exit code for "nothing was fetched to install".
+pub const FREEBSD_UPDATE_NOTHING: i32 = 2;
+
+/// FreeBSD: third-party packages with pkg (refreshed, downloaded, then
+/// installed; `-U` because the catalogue was just refreshed), then the
+/// base system's security and errata patches with freebsd-update. The
+/// steps are interleaved so every download happens before anything is
+/// installed: cancelling stays possible until `pkg upgrade` installs.
+pub struct Pkg;
+
+impl Pkg {
+    fn freebsd_update(kind: StepKind, verb: &'static str) -> Step {
+        Step::new(kind, FREEBSD_UPDATE, &[FREEBSD_UPDATE_UNATTENDED, verb]).env(FREEBSD_UPDATE_ENV)
+    }
+}
+
+impl SystemBackend for Pkg {
+    fn id(&self) -> BackendId {
+        BackendId::Pkg
+    }
+
+    fn steps(&self) -> Vec<Step> {
+        vec![
+            Step::new(StepKind::Refresh, "pkg", &["update"]),
+            Step::new(StepKind::Download, "pkg", &["upgrade", "-U", "-F", "-y"]),
+            Pkg::freebsd_update(StepKind::Download, "fetch"),
+            Step::new(StepKind::Install, "pkg", &["upgrade", "-U", "-y"]),
+            Pkg::freebsd_update(StepKind::Install, "install"),
+        ]
+    }
+
+    fn parse(&self, step: StepKind, line: &str, t: &mut Tracker) {
+        // Both programs run in download and install steps; their output
+        // never overlaps, so each parser ignores the other's lines.
+        parse::pkg(step, line, t);
+        parse::freebsd_update(step, line, t);
+    }
+
+    fn failure_patterns(&self) -> &'static [(&'static str, FailureKind)] {
+        &[
+            ("cannot get an advisory lock", FailureKind::Locked),
+            ("locked by another process", FailureKind::Locked),
+            ("not enough space in", FailureKind::DiskFull),
+            ("conflicts with", FailureKind::Conflict),
+            ("conflicting", FailureKind::Conflict),
+            ("is locked and may not be modified", FailureKind::Conflict),
+            ("missing dependency", FailureKind::Conflict),
+            ("no trusted public keys found", FailureKind::Keyring),
+            ("invalid signature", FailureKind::Keyring),
+            ("signature verification failed", FailureKind::Keyring),
+            ("checksum mismatch", FailureKind::Keyring),
+            ("no address record", FailureKind::Network),
+            ("unable to update repository", FailureKind::Network),
+            ("error updating repositories", FailureKind::Network),
+            ("mirrors... none found", FailureKind::Network),
+            ("operation timed out", FailureKind::Network),
+        ]
+    }
+
+    fn after(&self, step: &Step, code: Option<i32>, t: &Tracker) -> Next {
+        let base = step.program == FREEBSD_UPDATE;
+        match (step.kind, code) {
+            // Nothing to fetch for the base system (or freebsd-update
+            // doesn't manage it: a -STABLE system, packaged base): the
+            // packages are all that was to do.
+            (StepKind::Download, _) if base && t.nothing_to_do => Next::Finish,
+            // Past its end of life, freebsd-update still fetches what was
+            // published, then exits 1 with a warning: install that.
+            (StepKind::Download, Some(1)) if base && t.end_of_life => Next::Continue,
+            (StepKind::Install, Some(FREEBSD_UPDATE_NOTHING)) if base && t.nothing_to_do => Next::Continue,
+            (_, Some(0)) => Next::Continue,
+            _ => Next::Fail(FailureKind::Other),
+        }
+    }
+}
+
 /// The backend of `id`.
 pub fn backend(id: BackendId) -> &'static dyn SystemBackend {
     match id {
@@ -597,6 +689,7 @@ pub fn backend(id: BackendId) -> &'static dyn SystemBackend {
         BackendId::Xbps => &Xbps,
         BackendId::Apk => &Apk,
         BackendId::Nix => &super::nixos::NixBackend,
+        BackendId::Pkg => &Pkg,
     }
 }
 
@@ -635,6 +728,17 @@ mod tests {
         assert_eq!(shown(BackendId::ZypperUpdate)[2], "install: zypper --non-interactive --no-color update");
         assert_eq!(shown(BackendId::Xbps), ["refresh: xbps-install -S", "download: xbps-install -uyD", "install: xbps-install -uy"]);
         assert_eq!(shown(BackendId::Apk), ["refresh: apk update", "install: apk upgrade --no-progress"]);
+        assert_eq!(
+            shown(BackendId::Pkg),
+            [
+                "refresh: pkg update",
+                "download: pkg upgrade -U -F -y",
+                "download: freebsd-update --not-running-from-cron fetch",
+                "install: pkg upgrade -U -y",
+                "install: freebsd-update --not-running-from-cron install"
+            ]
+        );
+        assert!(backend(BackendId::Pkg).steps().iter().filter(|s| s.program == FREEBSD_UPDATE).all(|s| s.env == [("PAGER", "cat")]), "freebsd-update's lists never wait in a pager");
         assert_eq!(flatpak_step().display(), "flatpak update -y --noninteractive");
     }
 

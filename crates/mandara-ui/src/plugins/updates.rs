@@ -586,7 +586,7 @@ fn job_covers(kind: SourceKind, system: Option<System>) -> bool {
         (SourceKind::Flatpak, _) => true,
         (_, Some(System::Managed(backend))) => matches!(
             (kind, backend),
-            (SourceKind::Pacman, B::Pacman) | (SourceKind::Apt, B::Apt) | (SourceKind::Dnf, B::Dnf) | (SourceKind::Zypper, B::ZypperDup | B::ZypperUpdate) | (SourceKind::Xbps, B::Xbps) | (SourceKind::Apk, B::Apk)
+            (SourceKind::Pacman, B::Pacman) | (SourceKind::Apt, B::Apt) | (SourceKind::Dnf, B::Dnf) | (SourceKind::Zypper, B::ZypperDup | B::ZypperUpdate) | (SourceKind::Xbps, B::Xbps) | (SourceKind::Apk, B::Apk) | (SourceKind::Pkg, B::Pkg)
         ),
         _ => false,
     }

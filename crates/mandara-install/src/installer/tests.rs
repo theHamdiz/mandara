@@ -253,6 +253,10 @@ fn dry_run_prints_every_package_per_family_and_changes_nothing() {
         // Login screen: greetd + cage, then the switch and the keyring offer.
         if set.greeter.is_empty() {
             assert!(text.contains("install greetd and cage with your package manager"), "{family}\n{text}");
+        } else if family == Family::FreeBSD {
+            // greetd isn't packaged for FreeBSD: built by hand, then switched.
+            assert!(text.contains("greetd isn't packaged for FreeBSD yet"), "{family}\n{text}");
+            assert!(text.contains("docs/login-manager.md#freebsd"), "{family}\n{text}");
         } else {
             assert!(text.contains(&format!("would run: sudo {}", pm.install_argv(set.greeter).join(" "))), "{family}\n{text}");
             assert!(text.contains("Login screen — switch plan (after packages)"));
@@ -263,7 +267,7 @@ fn dry_run_prints_every_package_per_family_and_changes_nothing() {
         assert!(text.contains("then run: mandara setup --autostart"));
         assert!(text.contains("dry run: nothing will be changed"));
         // Nothing ran as root, nothing was written.
-        assert!(host.ran().iter().all(|c| c.starts_with("systemctl list-unit-files") || c.starts_with("systemctl is-")), "{family}: {:?}", host.ran());
+        assert!(host.ran().iter().all(|c| c.starts_with("systemctl list-unit-files") || c.starts_with("systemctl is-") || c.starts_with("sysrc -n -i ") || c.starts_with("service ") && c.ends_with(" status")), "{family}: {:?}", host.ran());
         assert!(f.home_files().is_empty(), "{family}: {:?}", f.home_files());
     }
 }
@@ -423,6 +427,44 @@ fn cancelling_the_compositor_picker_changes_nothing() {
     assert!(host.text().contains("Cancelled — nothing was changed."));
     assert!(host.ran().is_empty());
     assert!(fixture.home_files().is_empty());
+}
+
+/// FreeBSD: pkg installs everything, D-Bus and seatd are enabled with
+/// sysrc and started, you join seatd's group, the admin helper's folder is
+/// made first (no GNU `install -D`, root's group is `wheel`), and greetd
+/// (not packaged) is left to its build guide.
+#[test]
+fn freebsd_install_uses_pkg_rc_conf_and_wheel() {
+    let f = Fixture::new();
+    std::fs::create_dir_all(f.root().join("etc")).unwrap();
+    std::fs::write(f.root().join("etc/group"), "wheel:*:0:root\nvideo:*:44:\n").unwrap();
+    std::fs::write(f.root().join("etc/passwd"), "layla:*:1001:1001:Layla:/home/layla:/bin/sh\n").unwrap();
+    let mut host = FakeHost::with(&["pkg", "sudo", "sway", "cage"]);
+    // dbus is already on; seatd isn't.
+    host.stdout.insert("sysrc -n -i dbus_enable".into(), "YES\n".into());
+    host.stdout.insert("sysrc -n -i seatd_enable".into(), "NO\n".into());
+    let mut facts = f.facts(Family::FreeBSD);
+    facts.user = "layla".into();
+    run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    let pos = |needle: &str| ran.iter().position(|c| c == needle).unwrap_or_else(|| panic!("{needle} not run: {ran:#?}"));
+    let required = pos("sudo env ASSUME_ALWAYS_YES=yes pkg install -y libxkbcommon wayland vulkan-loader mesa-libs mesa-dri fontconfig freetype2 ca_root_nss");
+    pos("sudo env ASSUME_ALWAYS_YES=yes pkg install -y seatd");
+    let enable = pos("sudo sysrc seatd_enable=YES");
+    let start = pos("sudo service seatd start");
+    assert!(required < enable && enable < start);
+    assert!(!ran.iter().any(|c| c.contains("dbus_enable=YES") || c == "sudo service dbus start"), "dbus was on already: {ran:#?}");
+    pos("sudo pw groupmod video -m layla");
+    assert!(!ran.iter().any(|c| c.contains("systemctl")), "no systemd on FreeBSD: {ran:#?}");
+    let dir = pos("sudo install -d -o root -g wheel -m 0755 /usr/local/lib/mandara");
+    let helper = ran.iter().position(|c| c.starts_with("sudo install -o root -g wheel -m 0755 ") && c.ends_with(super::ADMIN_EXE)).unwrap_or_else(|| panic!("{ran:#?}"));
+    assert!(dir < helper);
+    assert!(!ran.iter().any(|c| c.contains("modprobe") || c.contains("modules-load.d")), "no Linux modules: {ran:#?}");
+    let text = host.text();
+    assert!(text.contains("seatd enabled and started"), "{text}");
+    assert!(text.contains("greetd isn't packaged for FreeBSD yet"), "{text}");
+    assert!(text.contains("External monitor brightness (DDC/CI) isn't available on FreeBSD yet"), "{text}");
+    assert!(!ran.iter().any(|c| c.contains("greeter use mandara")), "no switch without greetd: {ran:#?}");
 }
 
 #[test]

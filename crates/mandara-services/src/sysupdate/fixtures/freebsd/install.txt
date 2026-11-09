@@ -1,0 +1,30 @@
+Checking for upgrades (6 candidates): .......... done
+Processing candidates (6 candidates): .......... done
+The following 6 package(s) will be affected (of 0 checked):
+
+Installed packages to be UPGRADED:
+	curl: 8.22.0 -> 8.23.0 [FreeBSD]
+	drm-61-kmod: 6.1.128.1404000_10 -> 6.1.128.1404000_11 [FreeBSD-kmods]
+	git: 2.55.1 -> 2.56.0 [FreeBSD]
+	libnghttp2: 1.69.0 -> 1.70.0 [FreeBSD]
+	pipewire: 1.6.8 -> 1.6.9 [FreeBSD]
+	sqlite3: 3.54.0,1 -> 3.54.1,1 [FreeBSD]
+
+Number of packages to be upgraded: 6
+Checking integrity... done (0 conflicting)
+[1/6] Upgrading libnghttp2 from 1.69.0 to 1.70.0...
+[1/6] Extracting libnghttp2-1.70.0: .......... done
+[2/6] Upgrading curl from 8.22.0 to 8.23.0...
+[2/6] Extracting curl-8.23.0: .......... done
+[3/6] Upgrading sqlite3 from 3.54.0,1 to 3.54.1,1...
+[3/6] Extracting sqlite3-3.54.1,1: .......... done
+[4/6] Upgrading git from 2.55.1 to 2.56.0...
+===> Creating groups
+Using existing group 'git_daemon'.
+===> Creating users
+Using existing user 'git_daemon'.
+[4/6] Extracting git-2.56.0: .......... done
+[5/6] Upgrading pipewire from 1.6.8 to 1.6.9...
+[5/6] Extracting pipewire-1.6.9: .......... done
+[6/6] Upgrading drm-61-kmod from 6.1.128.1404000_10 to 6.1.128.1404000_11...
+[6/6] Extracting drm-61-kmod-6.1.128.1404000_11: .......... done

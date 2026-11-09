@@ -16,7 +16,7 @@ use std::time::Duration;
 use super::helper::{self, Action, CancelSignal, Out, Runner};
 use super::job::{Launcher, RootProc};
 use super::nixos::{self, NixPaths};
-use super::plan::{BackendId, Step, StepKind};
+use super::plan::{BackendId, FREEBSD_UPDATE, Step, StepKind};
 use super::{Failure, System};
 
 macro_rules! fixture {
@@ -90,6 +90,26 @@ pub fn recording(backend: BackendId, kind: StepKind, scenario: Scenario) -> (&'s
         (B::Nix, K::DeleteGenerations, _) => (NIXOS_DELETE, 0),
         (B::Nix, K::CollectGarbage, _) => (fixture!("nix/gc.txt"), 0),
         (B::Nix, _, _) => (NIXOS_ACTIVATE, 0),
+        (B::Pkg, K::Refresh, S::Locked) => (fixture!("freebsd/locked.txt"), 1),
+        (B::Pkg, K::Refresh, _) => (fixture!("freebsd/refresh.txt"), 0),
+        (B::Pkg, _, S::UpToDate) => (fixture!("freebsd/uptodate.txt"), 0),
+        (B::Pkg, K::Download, _) => (fixture!("freebsd/download.txt"), 0),
+        (B::Pkg, _, _) => (fixture!("freebsd/install.txt"), 0),
+    }
+}
+
+/// The recording of `step`: FreeBSD's base-system steps (freebsd-update)
+/// have their own, the rest follow [`recording`].
+pub fn recording_of(backend: BackendId, step: &Step, scenario: Scenario) -> (&'static str, i32) {
+    if backend != BackendId::Pkg || step.program != FREEBSD_UPDATE {
+        return recording(backend, step.kind, scenario);
+    }
+    match (step.kind, scenario) {
+        (StepKind::Download, Scenario::UpToDate) => (fixture!("freebsd/base-uptodate.txt"), 0),
+        (StepKind::Download, Scenario::Fails) => (fixture!("freebsd/base-not-release.txt"), 1),
+        (StepKind::Download, _) => (fixture!("freebsd/base-fetch.txt"), 0),
+        (_, Scenario::UpToDate) => ("No updates are available to install.\nRun 'freebsd-update [options] fetch' first.\n", super::plan::FREEBSD_UPDATE_NOTHING),
+        _ => (fixture!("freebsd/base-install.txt"), 0),
     }
 }
 
@@ -136,7 +156,7 @@ impl Replay {
 
 impl Runner for Replay {
     fn run(&self, step: &Step, line: &mut dyn FnMut(&str), cancel: &CancelSignal) -> std::io::Result<Option<i32>> {
-        let (text, code) = recording(self.backend, step.kind, self.scenario);
+        let (text, code) = recording_of(self.backend, step, self.scenario);
         for (i, l) in text.lines().enumerate() {
             if step.kind.cancellable() && cancel.requested() {
                 return Ok(Some(130));

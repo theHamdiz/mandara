@@ -10,6 +10,7 @@
 //! | zypper  | `zypper -q list-updates`                          | `sudo zypper update`      |
 //! | xbps    | `xbps-install -Mun` (in-memory repository sync)   | `sudo xbps-install -Su`   |
 //! | apk     | `apk list -u` (the cached index)                  | `sudo apk upgrade -U`     |
+//! | pkg     | `pkg version -vRUl '<'` (the cached catalogue)    | `sudo pkg upgrade`        |
 //! | flatpak | `flatpak remote-ls --updates` + `flatpak list`    | `flatpak update`          |
 //!
 //! Without `checkupdates` the pacman source reports a hint instead of
@@ -44,6 +45,13 @@ const CHECKUPDATES_NONE: i32 = 2;
 /// Present on Alpine (apk's list of wanted packages); an `apk` binary
 /// alone may be another tool.
 const APK_WORLD: &str = "/etc/apk/world";
+/// Where pkg keeps its local package database: a `pkg` binary elsewhere
+/// (Termux has one) is another tool.
+const PKG_DB: &str = "/var/db/pkg/local.sqlite";
+/// `pkg version`'s arguments: verbose, against the remote catalogue as
+/// last fetched (`-U`: no catalogue update, which needs root), only
+/// packages older than it.
+const PKG_VERSION_ARGS: [&str; 4] = ["version", "-vRU", "-l", "<"];
 /// `dnf check-update` exit status meaning "updates available".
 const DNF_UPDATES: i32 = 100;
 /// Terminals tried, in order, when none is configured.
@@ -59,11 +67,13 @@ pub enum SourceKind {
     Zypper,
     Xbps,
     Apk,
+    /// FreeBSD's packages.
+    Pkg,
     Flatpak,
 }
 
 impl SourceKind {
-    pub const ALL: [SourceKind; 8] = [SourceKind::Pacman, SourceKind::Aur, SourceKind::Apt, SourceKind::Dnf, SourceKind::Zypper, SourceKind::Xbps, SourceKind::Apk, SourceKind::Flatpak];
+    pub const ALL: [SourceKind; 9] = [SourceKind::Pacman, SourceKind::Aur, SourceKind::Apt, SourceKind::Dnf, SourceKind::Zypper, SourceKind::Xbps, SourceKind::Apk, SourceKind::Pkg, SourceKind::Flatpak];
 
     /// Command-line name (`updates run pacman`).
     pub fn id(self) -> &'static str {
@@ -76,6 +86,7 @@ impl SourceKind {
             SourceKind::Xbps => "xbps",
             SourceKind::Apk => "apk",
             SourceKind::Flatpak => "flatpak",
+            SourceKind::Pkg => "pkg",
         }
     }
 
@@ -94,6 +105,7 @@ impl SourceKind {
             SourceKind::Xbps => "XBPS",
             SourceKind::Apk => "apk",
             SourceKind::Flatpak => "Flatpak",
+            SourceKind::Pkg => "pkg",
         }
     }
 }
@@ -195,6 +207,7 @@ pub fn update_command(kind: SourceKind, helper: Option<&str>) -> String {
         SourceKind::Xbps => "sudo xbps-install -Su".into(),
         SourceKind::Apk => "sudo apk upgrade -U".into(),
         SourceKind::Flatpak => "flatpak update".into(),
+        SourceKind::Pkg => "sudo pkg upgrade".into(),
     }
 }
 
@@ -242,6 +255,9 @@ pub fn detect(opts: CheckOptions) -> Vec<Source> {
     }
     if has("apk") && Path::new(APK_WORLD).exists() {
         out.push(Source { kind: SourceKind::Apk, tool: Some("apk".into()), command: update_command(SourceKind::Apk, None) });
+    }
+    if has("pkg") && Path::new(PKG_DB).exists() {
+        out.push(Source { kind: SourceKind::Pkg, tool: Some("pkg".into()), command: update_command(SourceKind::Pkg, None) });
     }
     if opts.flatpak && has("flatpak") {
         out.push(Source { kind: SourceKind::Flatpak, tool: Some("flatpak".into()), command: update_command(SourceKind::Flatpak, None) });
@@ -343,6 +359,10 @@ fn check_source(source: &Source) -> SourceReport {
         }),
         SourceKind::Apk => run(tool, &["list", "-u"], CHECK_TIMEOUT).and_then(|(code, out, err)| match code {
             Some(0) => Ok(parse_apk(&out)),
+            _ => Err(failed(tool, code, &err)),
+        }),
+        SourceKind::Pkg => run(tool, &PKG_VERSION_ARGS, CHECK_TIMEOUT).and_then(|(code, out, err)| match code {
+            Some(0) => Ok(parse_pkg_version(&out)),
             _ => Err(failed(tool, code, &err)),
         }),
         SourceKind::Flatpak => {
@@ -498,6 +518,21 @@ pub fn parse_apk(text: &str) -> Vec<Package> {
             let (name, new) = apk_split(head.split_whitespace().next()?)?;
             let old = apk_split(from.trim().trim_end_matches(']')).map_or("", |(_, v)| v);
             Some(Package::new(name, old, new, None))
+        })
+        .collect()
+}
+
+/// `pkg version -vRUl '<'`: `name-1.2.3_1   <   needs updating (remote
+/// has 1.2.4)`, one line per outdated package (pkg versions never contain
+/// `-`, so the last one ends the name).
+pub fn parse_pkg_version(text: &str) -> Vec<Package> {
+    text.lines()
+        .filter_map(|line| {
+            let (head, rest) = line.split_once(" needs updating (")?;
+            let pkgver = head.split_whitespace().next()?;
+            let (name, old) = pkgver.rsplit_once('-')?;
+            let (repo, new) = rest.trim_end().trim_end_matches(')').split_once(" has ")?;
+            Some(Package::new(name, old, new.trim(), Some(repo.trim())))
         })
         .collect()
 }
@@ -738,6 +773,24 @@ mod tests {
         let a = parse_apk("busybox-binsh-1.36.1-r21 x86_64 {busybox} (GPL-2.0-only) [upgradable from: busybox-binsh-1.36.1-r15]\nmusl-1.2.4_git20230717-r6 x86_64 {musl} (MIT) [upgradable from: musl-1.2.4_git20230717-r4]\nnoise\n");
         assert_eq!(a, vec![Package::new("busybox-binsh", "1.36.1-r15", "1.36.1-r21", None), Package::new("musl", "1.2.4_git20230717-r4", "1.2.4_git20230717-r6", None)]);
         assert_eq!(SourceKind::from_id("xbps"), Some(SourceKind::Xbps));
+    }
+
+    /// `pkg version -vRUl '<'` as pkg 2.x prints it (name and version
+    /// padded to 35 columns, the status character, the verbose note).
+    const PKG_VERSION: &str = "curl-8.22.0                        <   needs updating (remote has 8.23.0)\ndrm-61-kmod-6.1.128.1404000_10     <   needs updating (remote has 6.1.128.1404000_11)\npy311-setuptools-63.1.0_3          <   needs updating (remote has 80.9.0)\nsqlite3-3.54.0,1                   <   needs updating (remote has 3.54.1,1)\n";
+
+    #[test]
+    fn parses_pkg_version() {
+        let p = parse_pkg_version(PKG_VERSION);
+        assert_eq!(p.len(), 4);
+        assert_eq!(p[0], Package::new("curl", "8.22.0", "8.23.0", Some("remote")));
+        assert_eq!(p[1], Package::new("drm-61-kmod", "6.1.128.1404000_10", "6.1.128.1404000_11", Some("remote")), "dashes in the name");
+        assert_eq!(p[2].name, "py311-setuptools");
+        assert_eq!((p[3].old.as_str(), p[3].new.as_str()), ("3.54.0,1", "3.54.1,1"), "epochs stay in the version");
+        assert!(parse_pkg_version("pkg-2.9.0                          =   up-to-date with remote\n").is_empty());
+        assert_eq!(SourceKind::from_id("pkg"), Some(SourceKind::Pkg));
+        assert_eq!(update_command(SourceKind::Pkg, None), "sudo pkg upgrade");
+        assert_eq!(combined_command(&[SourceKind::Flatpak, SourceKind::Pkg], None), "sudo pkg upgrade && flatpak update");
     }
 
     #[test]
