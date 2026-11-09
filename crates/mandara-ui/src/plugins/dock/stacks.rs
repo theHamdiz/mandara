@@ -672,7 +672,11 @@ impl StackPopover {
                 .child(label);
             let w = s + FAN_LABEL_GAP + label_w;
             let x = if labels_left { c.0 + s / 2.0 - w } else { c.0 - s / 2.0 };
-            let mut row = div().id(("stack-fan", k)).absolute().left(px(x)).top(px(c.1 - s / 2.0)).h(px(s)).w(px(w)).flex().items_center().gap(px(FAN_LABEL_GAP)).opacity(item_alpha).cursor_pointer();
+            // `occlude`: the full-screen dismiss catcher behind must not see
+            // a press on a row. It closed the fan on mouse down, the rows
+            // folded back towards the icon, and the click (on mouse up)
+            // missed every row but the one next to the icon.
+            let mut row = div().id(("stack-fan", k)).occlude().absolute().left(px(x)).top(px(c.1 - s / 2.0)).h(px(s)).w(px(w)).flex().items_center().gap(px(FAN_LABEL_GAP)).opacity(item_alpha).cursor_pointer();
             row = if labels_left { row.flex_row().justify_end().child(label_el).child(tile) } else { row.flex_row().child(tile).child(label_el) };
             if is_folder_row {
                 let dir = stack_dir(&self.stack);

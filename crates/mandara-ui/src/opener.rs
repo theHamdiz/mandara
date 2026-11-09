@@ -51,7 +51,7 @@ fn start(job: Job, cx: &mut App) {
             cx.update(|cx| {
                 crate::plugins::notifications::send(
                     cx,
-                    mandara_services::NotificationCommand::Post { app: t("Files").into(), icon: "folder".into(), summary: tf("Can't open {file}", &[("file", &failure.what)]), body: failure.why },
+                    mandara_services::NotificationCommand::Post { app: t("Mandara").into(), icon: "folder".into(), summary: tf("Can't open {file}", &[("file", &failure.what)]), body: failure.why },
                 );
             });
         }
@@ -67,7 +67,11 @@ fn run(job: &Job, file_manager: &str, options: &LaunchOptions) -> Result<(), Fai
         Job::Trash => (t("Trash").to_string(), open::plan_trash(&env, file_manager, crate::apps::on_path, &open::trash_files_dir())),
     };
     let fail = |why: String| Failure { what: what.clone(), why };
-    let plan = plan.map_err(|e| fail(reason(&e)))?;
+    let file = match job {
+        Job::Path(path) => Some(path.as_path()),
+        Job::Trash => None,
+    };
+    let plan = plan.map_err(|e| fail(reason(&e, file)))?;
     if let (Job::Trash, OpenTarget::Path(files)) = (job, &plan.target) {
         open::ensure_trash_files(files).map_err(|e| fail(tf("{path}: {error}", &[("path", &files.display()), ("error", &e)])))?;
     }
@@ -85,10 +89,14 @@ fn app_for(plan: &OpenPlan) -> crate::apps::App {
     crate::apps::App { id: id.to_string(), name: h.name.clone(), exec, terminal: h.terminal, ..Default::default() }
 }
 
-/// What the notification says when nothing can open it.
-fn reason(e: &OpenError) -> String {
+/// What the notification says when nothing can open it: the kind of file
+/// by its extension (`.xlsx`), else its MIME type.
+fn reason(e: &OpenError, file: Option<&Path>) -> String {
     match e {
-        OpenError::NoApp { mime } => tf("No app opens {type} files — choose one in Studio → Applications → Defaults", &[("type", mime)]),
+        OpenError::NoApp { mime } => {
+            let ext = file.and_then(Path::extension).map(|x| format!(".{}", x.to_string_lossy()));
+            tf("No app opens {type} files — choose one in Studio → Applications → Defaults", &[("type", &ext.as_deref().unwrap_or(mime.as_str()))])
+        }
         OpenError::NoFileManager => t("No file manager found — choose one in Studio → Applications").to_string(),
     }
 }
@@ -132,7 +140,9 @@ mod tests {
 
     #[test]
     fn failures_say_what_to_do() {
-        assert!(reason(&OpenError::NoApp { mime: "application/pdf".into() }).contains("application/pdf"));
-        assert!(reason(&OpenError::NoFileManager).contains("Studio"));
+        let no_app = OpenError::NoApp { mime: "application/vnd.ms-excel".into() };
+        assert!(reason(&no_app, Some(Path::new("/d/Budget.xlsx"))).starts_with("No app opens .xlsx files"));
+        assert!(reason(&no_app, Some(Path::new("/d/LICENSE"))).contains("application/vnd.ms-excel"));
+        assert!(reason(&OpenError::NoFileManager, None).contains("Studio"));
     }
 }
