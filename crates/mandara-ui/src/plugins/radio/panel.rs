@@ -758,7 +758,7 @@ fn stations(shared: &Shared, s: &Settings, search: &Entity<TextField>, palette: 
         .flex()
         .flex_col()
         .gap(px(tokens::SM))
-        .child(div().row().child(search_box("radio-search-clear", search, &query, palette)))
+        .child(div().row().child(search_box("radio-search-clear", search, &query, palette, cx)))
         .child(shelves)
         .child(list)
         .into_any_element()

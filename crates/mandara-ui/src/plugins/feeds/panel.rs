@@ -228,7 +228,7 @@ impl View {
             label: label.into(), icon: None, active: filter == value,
             on_click: Rc::new(move |_, cx| { let hub = super::hub(); { let mut h = hub.borrow_mut(); h.ui.filter = value; h.ui.selected = None; } let views = hub.borrow().views.clone(); views.notify(cx); }),
         }).collect(), palette);
-        let controls = div().row().items_center().gap(px(tokens::SM)).child(search_box("feeds-search-clear", &self.search, query, palette)).child(div().w(px(SEGMENT_W)).flex_none().child(filters));
+        let controls = div().row().items_center().gap(px(tokens::SM)).child(search_box("feeds-search-clear", &self.search, query, palette, cx)).child(div().w(px(SEGMENT_W)).flex_none().child(filters));
         let mut pane = div().size_full().flex().flex_col().gap(px(tokens::SM)).child(controls);
         let (items, loading, problem) = {
             let mut h = hub.borrow_mut();
