@@ -1626,15 +1626,22 @@ impl ProgressWidget {
 
 // ── System monitor ───────────────────────────────────────────────────────
 
-/// One reading of the system monitor column.
+/// One reading of the system monitor column. Each is an option the user
+/// switches on or off; the GPU readings show one line per GPU when there
+/// are several, and none at all on a machine without one.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MonitorRow {
     Cpu,
     /// CPU load history graph.
     CpuGraph,
+    /// GPU load.
     Gpu,
+    /// Video memory used / total.
+    Vram,
     Memory,
+    /// Swap used / total (hidden without swap).
+    Swap,
     GpuPower,
     CpuTemp,
     GpuTemp,
@@ -1649,7 +1656,30 @@ pub enum MonitorRow {
 }
 
 impl MonitorRow {
-    pub const ALL: [MonitorRow; 13] = [
+    /// Every reading, in display order.
+    pub const ALL: [MonitorRow; 15] = [
+        Self::Cpu,
+        Self::CpuGraph,
+        Self::Gpu,
+        Self::Vram,
+        Self::Memory,
+        Self::Swap,
+        Self::GpuPower,
+        Self::CpuTemp,
+        Self::GpuTemp,
+        Self::Fan,
+        Self::Battery,
+        Self::Disk,
+        Self::Download,
+        Self::Upload,
+        Self::NetGraph,
+    ];
+
+    /// The rows a new monitor (or one whose config names none) shows:
+    /// every reading but VRAM and swap, which came later and stay opt-in
+    /// so existing monitors look the same. The GPU rows only show where a
+    /// GPU reports them.
+    pub const DEFAULT: [MonitorRow; 13] = [
         Self::Cpu,
         Self::CpuGraph,
         Self::Gpu,
@@ -1664,6 +1694,21 @@ impl MonitorRow {
         Self::Upload,
         Self::NetGraph,
     ];
+
+    /// A reading of the GPU (locked where no GPU reports it).
+    pub fn is_gpu(self) -> bool {
+        matches!(self, Self::Gpu | Self::Vram | Self::GpuPower | Self::GpuTemp)
+    }
+
+    /// Switches `self` in `rows` on or off, keeping the display order.
+    pub fn toggle_in(self, rows: &mut Vec<MonitorRow>) {
+        if let Some(i) = rows.iter().position(|r| *r == self) {
+            rows.remove(i);
+        } else {
+            rows.push(self);
+            rows.sort_by_key(|r| Self::ALL.iter().position(|a| a == r));
+        }
+    }
 }
 
 /// A conky-style column of readings.
@@ -1713,7 +1758,7 @@ pub enum MonitorStyle {
 impl Default for MonitorWidget {
     fn default() -> Self {
         Self {
-            rows: MonitorRow::ALL.to_vec(),
+            rows: MonitorRow::DEFAULT.to_vec(),
             interval_s: ranges::MONITOR_INTERVAL_DEFAULT_S,
             width: ranges::MONITOR_WIDTH_DEFAULT_PX,
             title: String::new(),
@@ -2231,6 +2276,35 @@ mod tests {
         let mut w = w;
         w.normalize();
         assert_eq!((w.items[0].id.as_str(), w.items[1].id.as_str()), ("clock-1", "monitor-2"));
+    }
+
+    #[test]
+    fn monitor_options_keep_their_defaults_and_round_trip() {
+        // A monitor saved before VRAM and swap existed shows what it did.
+        let m = MonitorWidget::default();
+        assert_eq!(m.rows, MonitorRow::DEFAULT);
+        assert!(!m.rows.contains(&MonitorRow::Vram) && !m.rows.contains(&MonitorRow::Swap), "the new readings are opt-in");
+        assert!([MonitorRow::Cpu, MonitorRow::Memory, MonitorRow::Gpu, MonitorRow::GpuTemp, MonitorRow::GpuPower, MonitorRow::CpuTemp, MonitorRow::Disk, MonitorRow::Download, MonitorRow::Upload, MonitorRow::Battery].iter().all(|r| m.rows.contains(r)));
+        assert!(MonitorRow::DEFAULT.iter().all(|r| MonitorRow::ALL.contains(r)));
+        let old: MonitorWidget = toml::from_str("style = \"gauges\"\n").unwrap();
+        assert_eq!(old.rows, MonitorRow::DEFAULT, "no rows key: the old defaults");
+        let listed: MonitorWidget = toml::from_str("rows = [\"cpu\", \"gpu-temp\"]\n").unwrap();
+        assert_eq!(listed.rows, [MonitorRow::Cpu, MonitorRow::GpuTemp], "an old list loads unchanged");
+        // Every option survives a save and load.
+        let all = MonitorWidget { rows: MonitorRow::ALL.to_vec(), ..MonitorWidget::default() };
+        let text = toml::to_string(&all).unwrap();
+        assert!(text.contains("\"vram\"") && text.contains("\"swap\""));
+        assert_eq!(toml::from_str::<MonitorWidget>(&text).unwrap(), all);
+        let one = MonitorWidget { rows: vec![MonitorRow::Vram], ..MonitorWidget::default() };
+        assert_eq!(toml::from_str::<MonitorWidget>(&toml::to_string(&one).unwrap()).unwrap(), one);
+        // Toggling keeps the display order.
+        let mut rows = vec![MonitorRow::Cpu, MonitorRow::Disk];
+        MonitorRow::Vram.toggle_in(&mut rows);
+        MonitorRow::Swap.toggle_in(&mut rows);
+        assert_eq!(rows, [MonitorRow::Cpu, MonitorRow::Vram, MonitorRow::Swap, MonitorRow::Disk]);
+        MonitorRow::Cpu.toggle_in(&mut rows);
+        assert_eq!(rows, [MonitorRow::Vram, MonitorRow::Swap, MonitorRow::Disk]);
+        assert_eq!(MonitorRow::ALL.iter().filter(|r| r.is_gpu()).count(), 4);
     }
 
     #[test]
