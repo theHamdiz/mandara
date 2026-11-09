@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.24.0 — 2026-11-09
+
 Update your whole system right from the Updates panel. Pick how every
 control looks, or set them all at once with a preset. Mandara Login and the
 lock screen get a Material You design, the power menu can float as cards in
