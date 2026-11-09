@@ -32,6 +32,8 @@ pub mod ranges {
     /// out, and the wait after the pointer leaves before it slides away, ms.
     pub const REVEAL_DELAY_MS: Span = Span::new(0.0, 1500.0, 10.0);
     pub const HIDE_DELAY_MS: Span = Span::new(0.0, 3000.0, 20.0);
+    /// One bar's item inset from its long edges.
+    pub const ITEM_INSET: Span = Span::new(0.0, 20.0, 1.0);
 }
 
 /// Defaults of the side bar settings.
@@ -104,6 +106,38 @@ pub struct SideBarConfig {
     pub top: Vec<String>,
     pub middle: Vec<String>,
     pub bottom: Vec<String>,
+    /// This bar's own item look; unset, it follows the side bars' shared
+    /// one (`chips`, `icon_shape`) and the bar's (`item_shape`,
+    /// `icon_fill`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chips: Option<SideBarChips>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub item_shape: Option<crate::surfaces::BarItemShape>,
+    /// `match` here draws icon items like the other items.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_shape: Option<crate::surfaces::BarIconShape>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_fill: Option<crate::surfaces::BarIconFill>,
+    /// Space between the items and the bar's long edges (sets the items'
+    /// size across the bar).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub item_inset: Option<f32>,
+    /// The bar style preset that shaped this bar (`side-bar style`);
+    /// another one, or none, clears what it set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<crate::bar_styles::BarStyle>,
+}
+
+/// How one side bar draws its items, resolved: its own look over the
+/// shared one ([`SideBarsConfig::items`]).
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct SideItems {
+    pub chips: SideBarChips,
+    pub item_shape: crate::surfaces::BarItemShape,
+    pub icon_shape: crate::surfaces::BarIconShape,
+    pub icon_fill: crate::surfaces::BarIconFill,
+    /// The items' extent across the bar.
+    pub chip_size: f32,
 }
 
 impl SideBarConfig {
@@ -122,7 +156,7 @@ impl SideBarConfig {
 
     fn with(top: &[&str], middle: &[&str], bottom: &[&str]) -> Self {
         let ids = |l: &[&str]| l.iter().map(|s| s.to_string()).collect();
-        Self { enabled: true, pinned: true, accent: SideBarAccent::Theme, top: ids(top), middle: ids(middle), bottom: ids(bottom) }
+        Self { enabled: true, pinned: true, accent: SideBarAccent::Theme, top: ids(top), middle: ids(middle), bottom: ids(bottom), chips: None, item_shape: None, icon_shape: None, icon_fill: None, item_inset: None, style: None }
     }
 }
 
@@ -163,6 +197,9 @@ pub struct SideBarsConfig {
     pub chip_padding: f32,
     pub chip_spacing: f32,
     pub chips: SideBarChips,
+    /// The shape of icon-sized pill items (`match`: the bar's
+    /// `icon_shape`).
+    pub icon_shape: crate::surfaces::BarIconShape,
     /// Strength of the pill / island wash behind items.
     pub chip_fill: f32,
     /// Where the middle group sits.
@@ -196,6 +233,7 @@ impl Default for SideBarsConfig {
             chip_padding: defaults::CHIP_PADDING_PX,
             chip_spacing: defaults::CHIP_SPACING_PX,
             chips: SideBarChips::Icons,
+            icon_shape: crate::surfaces::BarIconShape::Match,
             chip_fill: defaults::CHIP_FILL,
             align: BarCenterAlign::Screen,
             corner_radius: defaults::CORNER_RADIUS_PX,
@@ -243,6 +281,29 @@ impl SideBarsConfig {
 
     pub fn chip_spacing(&self) -> f32 {
         ranges::CHIP_SPACING.clamp(self.chip_spacing, defaults::CHIP_SPACING_PX)
+    }
+
+    /// How the left (`false`) or right side bar draws its items: its own
+    /// look where it has one, else the shared side bar settings and the
+    /// bar's item shape and icon colour.
+    pub fn items(&self, right: bool, bar: &crate::BarConfig) -> SideItems {
+        let own = self.side(right);
+        let chip_size = match own.item_inset {
+            Some(inset) => (self.width() - 2.0 * ranges::ITEM_INSET.clamp(inset, 0.0)).max(ranges::CHIP_SIZE.min).min(self.width()),
+            None => self.chip_size(),
+        };
+        SideItems {
+            chips: own.chips.unwrap_or(self.chips),
+            item_shape: own.item_shape.unwrap_or(bar.item_shape),
+            icon_shape: own.icon_shape.unwrap_or_else(|| self.icon_shape(bar)),
+            icon_fill: own.icon_fill.unwrap_or(bar.icon_fill),
+            chip_size,
+        }
+    }
+
+    /// The icon shape the side bars draw: their own, or the bar's.
+    pub fn icon_shape(&self, bar: &crate::BarConfig) -> crate::surfaces::BarIconShape {
+        if self.icon_shape == crate::surfaces::BarIconShape::Match { bar.icon_shape } else { self.icon_shape }
     }
 
     pub fn chip_fill(&self) -> f32 {

@@ -24,6 +24,7 @@ pub mod cut;
 pub mod inputs;
 pub mod motion;
 pub mod progress;
+pub mod shapes;
 pub mod surfaces;
 pub mod tonal;
 pub mod toggles;

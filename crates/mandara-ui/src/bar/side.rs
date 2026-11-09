@@ -46,7 +46,15 @@ pub fn metrics(cfg: &ShellConfig, right: bool, radius_scale: f32) -> Metrics {
         panel_pad: cfg.panels.padding_for(layout.is_attached()),
         vertical: true,
         screen_frame: 0.0,
+        frame_strips: 0.0,
+        // Side bars size their items themselves (`side_bars.chip_size`).
+        item_inset: mandara_config::surfaces::defaults::BAR_ITEM_INSET_PX,
         accent_line: false,
+        // Pill items drawn as round shapes are made square.
+        min_chip: {
+            let items = sb.items(right, &cfg.bar);
+            if items.chips == mandara_config::side_bars::SideBarChips::Pills && items.icon_shape != mandara_config::surfaces::BarIconShape::Match { items.chip_size } else { 0.0 }
+        },
         ..base
     }
 }
@@ -116,7 +124,7 @@ pub fn chip_rects(m: &Metrics, group: Bounds<Pixels>, extents: &[f32], chip: f32
             if w < 1.0 {
                 return None;
             }
-            let along = w + m.chip_padding * 2.0;
+            let along = m.chip_length(w);
             let r = rect(x, y, along, chip);
             x += along + m.chip_gap;
             Some(r)
@@ -245,7 +253,7 @@ mod tests {
         let (y0, len) = span(&Metrics::of(cfg, 1.0), SURFACE.1);
         let widths: [f32; 3] = std::array::from_fn(|z| layout::zone_width(extents[z], &m));
         let geo = layout::compute(&m, len, widths);
-        (0..3).flat_map(|z| chip_rects(&m, geo.pills[z], extents[z], cfg.side_bars.chip_size())).flatten().map(|r| to_screen(right, r, SURFACE, y0)).collect()
+        (0..3).flat_map(|z| chip_rects(&m, geo.pills[z], extents[z], cfg.side_bars.items(right, &cfg.bar).chip_size)).flatten().map(|r| to_screen(right, r, SURFACE, y0)).collect()
     }
 
     #[test]
@@ -269,7 +277,7 @@ mod tests {
                         assert!(y_of(c) >= y0 && y_of(c) + h_of(c) <= SURFACE.1, "{what}: {c:?} stays beside the top bar");
                         let (from_edge, to_edge) = if right { (SURFACE.0 - x_of(c) - w_of(c), SURFACE.0 - x_of(c)) } else { (x_of(c), x_of(c) + w_of(c)) };
                         assert!(from_edge >= 0.0 && to_edge <= depth + 0.01, "{what}: {c:?} sits on the bar");
-                        assert_eq!(w_of(c), cfg.side_bars.chip_size());
+                        assert_eq!(w_of(c), cfg.side_bars.items(right, &cfg.bar).chip_size);
                     }
                 }
             }

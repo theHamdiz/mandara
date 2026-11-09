@@ -21,6 +21,11 @@ const MOTION: &str = tk("Motion");
 pub const CAPSULES: &str = tk("Capsules");
 
 const CAPSULE_FILLS: &[(&str, &str)] = &[("soft", tk("Soft wash")), ("container", tk("Raised card")), ("accent", tk("Accent tint"))];
+const ITEM_SHAPES: &[(&str, &str)] = &[("capsule", tk("Capsule")), ("tile", tk("Rounded tile")), ("squircle", tk("Squircle")), ("connected", tk("Connected group"))];
+const ICON_SHAPES: &[(&str, &str)] = &[("match", tk("Same as items")), ("circle", tk("Circle")), ("cookie", tk("Cookie")), ("clover", tk("Clover")), ("flower", tk("Flower")), ("burst", tk("Burst")), ("squircle", tk("Squircle"))];
+/// The side bars' icon shapes: the bar's, or their own.
+pub const SIDE_ICON_SHAPES: &[(&str, &str)] = &[("match", tk("Same as the bar")), ("circle", tk("Circle")), ("cookie", tk("Cookie")), ("clover", tk("Clover")), ("flower", tk("Flower")), ("burst", tk("Burst")), ("squircle", tk("Squircle"))];
+const ICON_FILLS: &[(&str, &str)] = &[("match", tk("Capsule colour")), ("accent", tk("Accent")), ("tertiary", tk("Tertiary"))];
 /// `bar.font_weight`: 0 follows Typography's weight.
 const BAR_WEIGHTS: &[(&str, &str)] = &[("0", tk("Interface weight")), ("300", tk("Light")), ("400", tk("Regular")), ("500", tk("Medium")), ("600", tk("Semibold")), ("700", tk("Bold"))];
 
@@ -48,7 +53,10 @@ const ATTACHED_ONLY: &str = tk("Edge frame, hairline and notch only");
 const SIDE_BAR_WIDTH_INSTEAD: &str = tk("A side bar uses Side bar width");
 const COMPACT_HEIGHT_INSTEAD: &str = tk("This style uses Compact height");
 const SIDE_BAR_ONLY: &str = tk("Left or right bar only");
-const FRAME_FIRST: &str = tk("Turn on Screen frame (side bar) first");
+const FRAME_FIRST: &str = tk("Turn on Screen frame first");
+const FRAMED_STYLES: &str = tk("Side bar, edge frame and hairline only");
+const ITEM_CAPSULES_FIRST: &str = tk("Turn on Item capsules first");
+const COMPACT_INSET: &str = tk("The hairline and the micro pill keep a fine inset");
 const SIDE_BAR_STAYS: &str = tk("A side bar always stays on screen");
 const FRAME_FIRST_OFF: &str = tk("The screen frame already joins the bar to the edges");
 const CLICKS_PASS_THROUGH: &str = tk("Empty bar space clicks through to windows");
@@ -68,13 +76,17 @@ pub fn entries() -> Vec<Setting> {
         s(Bars, CAPSULES, "/bar/capsule_fill", tk("Capsule colour"), tk("A faint wash, the raised tone of cards, or a tint of the accent"), Choice(CAPSULE_FILLS)),
         s(Bars, CAPSULES, "/bar/capsule_strength", tk("Capsule strength"), tk("How strongly the capsules stand out from the bar"), span(ranges::INTENSITY, "×")),
         s(Bars, CAPSULES, "/bar/capsule_outline", tk("Capsule outline"), tk("A hairline edge around each capsule"), Toggle),
+        s(Bars, CAPSULES, "/bar/item_shape", tk("Item shape"), tk("Capsules, tiles with Material corners, squircles, or connected groups whose items touch with small inner corners"), Choice(ITEM_SHAPES)),
+        s(Bars, CAPSULES, "/bar/icon_shape", tk("Icon shape"), tk("Icon-sized items as round buttons: a circle, a Material 3 Expressive shape or a squircle (they become square), or the item shape"), Choice(ICON_SHAPES)),
+        s(Bars, CAPSULES, "/bar/icon_fill", tk("Icon colour"), tk("Icon-sized items in the capsule colour, or a solid accent or tertiary tone"), Choice(ICON_FILLS)),
         s(Bars, APPEARANCE, "/bar/accent_line", tk("Accent line"), tk("A 1 px accent line along the hairline's inner edge"), Toggle),
         s(Bars, LAYOUT, "/bar/vertical_width", tk("Side bar width"), tk("Width of a left or right bar"), span(ranges::BAR_VERTICAL_WIDTH, " px")),
-        s(Bars, tk("Screen frame"), "/bar/screen_frame", tk("Screen frame"), tk("A thin border round the whole display, joined to the side bar; it reserves no space of its own"), Toggle),
+        s(Bars, tk("Screen frame"), "/bar/screen_frame", tk("Screen frame"), tk("A thin border round the whole display, joined to a side bar or a flush edge frame or hairline; it reserves no space of its own"), Toggle),
         s(Bars, tk("Screen frame"), "/bar/frame_thickness", tk("Frame thickness"), tk("Width of the screen frame's border"), span(ranges::SCREEN_FRAME, " px")),
         s(Bars, tk("Screen frame"), "/bar/floating_frame", tk("Float the edge frame"), tk("Inset the edge frame by the edge gap and side inset, with rounded ends; panels still pour out of it"), Toggle),
         s(Bars, LAYOUT, "/bar/center_align", tk("Center group"), tk("Where the middle group sits"), Choice(CENTER_ALIGN)),
         s(Bars, tk("Spacing"), "/bar/chip_padding", tk("Item padding"), tk("Space inside each bar item, around its content"), span(ranges::BAR_CHIP_PADDING, " px")),
+        s(Bars, tk("Spacing"), "/bar/item_inset", tk("Item inset"), tk("Space between the items and the bar's long edges; larger turns items into tiles on the bar"), span(ranges::BAR_ITEM_INSET, " px")),
         s(Bars, tk("Spacing"), "/bar/chip_spacing", tk("Item spacing"), tk("Gap between neighbouring bar items"), span(ranges::BAR_CHIP_SPACING, " px")),
         s(Bars, tk("Spacing"), "/bar/separator", tk("Separators"), tk("A mark between neighbouring bar items"), Choice(SEPARATORS)),
         s(Bars, tk("Spacing"), "/bar/window_gap", tk("Gap to windows"), tk("Extra space between the bar and your windows (the bar keeps it free)"), span(ranges::BAR_WINDOW_GAP, " px")),
@@ -150,10 +162,13 @@ pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
         "/bar/accent_line" if vertical || cfg.bar.layout != BarLayout::Hairline => Some(HAIRLINE_ONLY),
         "/bar/height" if vertical => Some(SIDE_BAR_WIDTH_INSTEAD),
         "/bar/height" if compact => Some(COMPACT_HEIGHT_INSTEAD),
-        "/bar/vertical_width" | "/bar/screen_frame" if !vertical => Some(SIDE_BAR_ONLY),
-        "/bar/frame_thickness" if !vertical || !cfg.bar.screen_frame => Some(FRAME_FIRST),
+        "/bar/vertical_width" if !vertical => Some(SIDE_BAR_ONLY),
+        "/bar/screen_frame" | "/bar/frame_thickness" if !vertical && !cfg.bar_layout().is_full_width() => Some(FRAMED_STYLES),
+        "/bar/frame_thickness" if !cfg.bar.screen_frame => Some(FRAME_FIRST),
         "/bar/auto_hide/mode" if vertical => Some(SIDE_BAR_STAYS),
-        "/bar/floating_frame" if cfg.bar.screen_frame && vertical => Some(FRAME_FIRST_OFF),
+        "/bar/floating_frame" if cfg.bar.screen_frame => Some(FRAME_FIRST_OFF),
+        "/bar/item_shape" | "/bar/icon_shape" | "/bar/icon_fill" if !cfg.bar.item_capsules => Some(ITEM_CAPSULES_FIRST),
+        "/bar/item_inset" if compact => Some(COMPACT_INSET),
         "/bar/notch_width" if !notch => Some(NOTCH_ONLY),
         "/bar/capsules" if !attached => Some(ATTACHED_ONLY),
         "/bar/floating_frame" if notch => Some(EDGE_FRAME_ONLY),

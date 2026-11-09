@@ -32,7 +32,7 @@ impl Span {
 pub mod ranges {
     use super::Span;
 
-    pub const BAR_HEIGHT: Span = Span::new(24.0, 44.0, 1.0);
+    pub const BAR_HEIGHT: Span = Span::new(24.0, 60.0, 1.0);
     pub const BAR_EDGE_GAP: Span = Span::new(0.0, 24.0, 1.0);
     pub const BAR_SIDE_GAP: Span = Span::new(0.0, 48.0, 1.0);
     pub const BAR_PILL_RADIUS: Span = Span::new(0.0, 22.0, 1.0);
@@ -60,6 +60,8 @@ pub mod ranges {
     pub const OPACITY: Span = Span::new(0.0, 1.0, 0.05);
     /// Extra space a bar keeps between itself and windows.
     pub const BAR_WINDOW_GAP: Span = Span::new(0.0, 32.0, 1.0);
+    /// Space between the bar's items and its long edges (the tiles' inset).
+    pub const BAR_ITEM_INSET: Span = Span::new(0.0, 14.0, 1.0);
 
     pub const SIDEBAR_WIDTH: Span = Span::new(280.0, 520.0, 4.0);
     pub const SIDE_PANEL_RADIUS: Span = Span::new(0.0, 40.0, 1.0);
@@ -93,6 +95,8 @@ pub mod defaults {
     /// Bar chip padding / spacing (the original `SLOT_PADDING` / `SLOT_GAP`).
     pub const BAR_CHIP_PADDING_PX: f32 = 9.0;
     pub const BAR_CHIP_SPACING_PX: f32 = 2.0;
+    /// The items' inset from the bar's long edges (the original `CHIP_INSET`).
+    pub const BAR_ITEM_INSET_PX: f32 = 3.0;
     pub const BAR_RIM_WIDTH_PX: f32 = 1.0;
     pub const BAR_COMPACT_HEIGHT_PX: f32 = 24.0;
     /// The notch spans this share of its screen edge.
@@ -162,6 +166,70 @@ pub enum BarCapsuleFill {
     Container,
     /// A tint of the theme accent.
     Accent,
+}
+
+/// The shape of the bar's item capsules (`bar.item_capsules`, side bars
+/// with pill items) for items wider than they are tall.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BarItemShape {
+    /// Fully rounded capsules (the shipped look).
+    #[default]
+    Capsule,
+    /// Rounded tiles with Material 3's medium corners.
+    Tile,
+    /// Tiles with continuous superellipse corners.
+    Squircle,
+    /// Material 3 Expressive's connected group: the items of a group touch
+    /// with small inner corners and fully rounded outer ends.
+    Connected,
+}
+
+impl BarItemShape {
+    pub const ALL: [BarItemShape; 4] = [BarItemShape::Capsule, BarItemShape::Tile, BarItemShape::Squircle, BarItemShape::Connected];
+}
+
+/// The shape of icon-sized bar items (about as wide as they are tall): the
+/// item shape, or one of Material 3 Expressive's shapes. Any shape but
+/// *Match* also makes icon items square, so they read as round buttons.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BarIconShape {
+    /// Drawn like every other item (`bar.item_shape`).
+    #[default]
+    Match,
+    Circle,
+    /// A scalloped cookie of nine soft lobes.
+    Cookie,
+    /// Four round leaves on the diagonals.
+    Clover,
+    /// Eight round petals.
+    Flower,
+    /// A badge of twelve small scallops.
+    Burst,
+    /// A square with continuous superellipse corners.
+    Squircle,
+}
+
+impl BarIconShape {
+    pub const ALL: [BarIconShape; 7] = [BarIconShape::Match, BarIconShape::Circle, BarIconShape::Cookie, BarIconShape::Clover, BarIconShape::Flower, BarIconShape::Burst, BarIconShape::Squircle];
+}
+
+/// The colour of icon-sized bar items.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BarIconFill {
+    /// The capsule colour (`bar.capsule_fill`).
+    #[default]
+    Match,
+    /// A vivid accent tone, solid.
+    Accent,
+    /// The tertiary colour's container tone, solid.
+    Tertiary,
+}
+
+impl BarIconFill {
+    pub const ALL: [BarIconFill; 3] = [BarIconFill::Match, BarIconFill::Accent, BarIconFill::Tertiary];
 }
 
 /// What scrolling over empty bar space does.

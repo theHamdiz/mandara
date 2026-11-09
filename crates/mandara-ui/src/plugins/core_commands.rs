@@ -144,6 +144,27 @@ fn side_bar_commands(r: &mut PluginRegistry) {
         .arg(state_arg())
         .example("side-bar show left off"),
     );
+    r.command(
+        core,
+        CommandSpec::new("side-bar style", mandara_i18n::tk("Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look"), |a, cx| {
+            use mandara_config::bar_styles::{self, BarStyle};
+            let right = side_arg(a.str(0)?)?;
+            let style = match a.str(1)? {
+                "none" => None,
+                other => Some(BarStyle::from_id(other).ok_or_else(|| format!("unknown bar style {other:?}"))?),
+            };
+            update_config(cx, |c| match style {
+                Some(style) => style.apply_to_side(c, right),
+                None => bar_styles::clear_side(c, right),
+            });
+            let cfg = config(cx).read(cx).snapshot();
+            let items = cfg.side_bars.items(right, &cfg.bar);
+            Ok(json!({ "side": if right { "right" } else { "left" }, "style": cfg.side_bars.side(right).style, "chips": items.chips, "item_shape": items.item_shape, "icon_shape": items.icon_shape, "icon_fill": items.icon_fill, "chip_size": items.chip_size }))
+        })
+        .arg(side())
+        .arg(ArgSpec::required("style", ArgKind::Enum, mandara_i18n::tk("bar style")).choices(&["expressive", "tile-dock", "rail", "segmented", "none"]))
+        .example("side-bar style right tile-dock"),
+    );
 }
 
 /// Register shell controls and delegate long model operations to background work.
@@ -510,6 +531,26 @@ pub fn register(r: &mut PluginRegistry) {
         })
         .arg(ArgSpec::required("layout", ArgKind::Enum, mandara_i18n::tk("layout")).choices(&["edge-frame", "glass-pills", "island", "hairline", "micro", "notch", "next"]))
         .example("bar layout hairline"),
+    );
+
+    r.command(
+        core,
+        CommandSpec::new("bar style", mandara_i18n::tk("Give the bar a style preset's look (your items stay), or none for the plain bar"), |a, cx| {
+            use mandara_config::bar_styles::{self, BarStyle};
+            let id = a.str(0)?;
+            let style = match id {
+                "none" => None,
+                other => Some(BarStyle::from_id(other).ok_or_else(|| format!("unknown bar style {other:?}"))?),
+            };
+            update_config(cx, |c| match style {
+                Some(style) => style.apply(c),
+                None => bar_styles::clear(c),
+            });
+            let cfg = config(cx).read(cx).get().bar.clone();
+            Ok(json!({ "style": cfg.style, "layout": cfg.layout, "position": cfg.position, "item_shape": cfg.item_shape, "icon_shape": cfg.icon_shape }))
+        })
+        .arg(ArgSpec::required("style", ArgKind::Enum, mandara_i18n::tk("bar style")).choices(&["expressive", "tile-dock", "rail", "segmented", "none"]))
+        .example("bar style expressive"),
     );
 
     r.command(

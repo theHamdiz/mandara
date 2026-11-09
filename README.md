@@ -186,9 +186,10 @@ around, each one measured or shipped today:
 
 - **It's light.** Plugins load data when needed, and hidden panels stop
   their refresh work. [Measurements and setup](docs/performance.md)
-- **It looks the way you want.** Six bar styles (now including a notch that
-  hangs from the top edge), side bars of icons and pills that join the top
-  bar into one frame, one-click Looks, desktop widgets, a hundred dials for
+- **It looks the way you want.** Six bar styles, four presets that reshape
+  the bar completely (a framed bar with a rail of scalloped buttons, a dock
+  of squircle tiles, a flower rail, rows of connected tiles), side bars of
+  icons and pills that join the top bar into one frame, one-click Looks, desktop widgets, a hundred dials for
   corners, glass and motion, and themes made from your wallpaper.
   [Your desktop](docs/desktop.md)
 - **Everything is a click away in Studio.** 30 pages of settings, all
@@ -219,6 +220,26 @@ around, each one measured or shipped today:
 <tr>
 <td width="50%" valign="top"><img src="docs/screenshots/weather.png" alt="Weather" width="100%"/><br/><sub><b>Weather</b>: an animated sky, hourly and five-day forecasts.</sub></td>
 <td width="50%" valign="top"><img src="docs/screenshots/notifications.png" alt="The notification center: notifications grouped by app (Mail with Reply and Archive actions, Corniche Radio, Calendar), do not disturb and clear" width="100%"/><br/><sub><b>Notifications</b>: grouped by app, with do not disturb.</sub></td>
+</tr>
+</table>
+
+### Bar styles
+
+Four presets reshape the whole bar in one click: pick one in **Studio →
+Bars → Presets**, or run `mandara msg bar style <name>`. Each side bar can
+take one of its own (`mandara msg side-bar style right <name>`).
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-expressive.webp" alt="The Expressive bar style: a tall bottom bar inside a thin frame round the screen, joined to a rail on the left, with round accent buttons, tonal tiles and scalloped badges" width="100%"/><br/><sub><b>Expressive</b> (<code>expressive</code>): round buttons and tonal tiles in a framed bar, with a scalloped rail.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-tile-dock.webp" alt="The Tile dock bar style: one floating island of large squircle tiles at the bottom of the screen" width="100%"/><br/><sub><b>Tile dock</b> (<code>tile-dock</code>): one floating island of large squircle tiles.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-rail.webp" alt="The Rail bar style: a wide rail on the left edge with flower-shaped buttons and tiles, inside a thin screen frame" width="100%"/><br/><sub><b>Rail</b> (<code>rail</code>): a wide left rail of flower buttons in a screen frame.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-segmented.webp" alt="The Segmented bar style: no bar, just rows of connected tiles under the top edge" width="100%"/><br/><sub><b>Segmented</b> (<code>segmented</code>): no bar, just rows of connected tiles.</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/screenshots/bar-style-side-bars.webp" alt="A Segmented top bar of connected tiles beside a right side bar styled as a Tile dock, with squircle tiles" width="50%"/><br/><sub><b>Side bars</b> take a style of their own: here a Tile dock rail beside a Segmented bar.</sub></td>
 </tr>
 </table>
 

@@ -30,8 +30,6 @@ impl Group {
 
 /// Inset of slot chips inside a floating pill.
 pub const PILL_INSET: f32 = 3.0;
-/// Vertical inset of chips inside the edge frame.
-pub const CHIP_INSET: f32 = 3.0;
 /// Gap between groups inside a contiguous island.
 pub const ISLAND_GAP: f32 = 12.0;
 /// Gap between groups inside the micro pill (tighter: it is one tiny pill).
@@ -88,6 +86,15 @@ pub struct Metrics {
     pub accent_line: bool,
     /// Notch: the share of the edge it spans.
     pub notch_width: f32,
+    /// Inset of the items from the bar's long edges (`bar.item_inset`).
+    pub item_inset: f32,
+    /// The shortest an item is along the bar: its thickness across while
+    /// icon-sized items are drawn as round shapes (they're made square),
+    /// else 0.
+    pub min_chip: f32,
+    /// The screen frame of a flush top or bottom edge frame: the thin
+    /// border on the edges the bar doesn't cover (0 = none).
+    pub frame_strips: f32,
 }
 
 impl Metrics {
@@ -100,7 +107,13 @@ impl Metrics {
         let layout = cfg.bar_layout();
         let joined = cfg.side_bars_join();
         let vertical = bar.position.is_vertical();
-        let screen_frame = bar.frame_thickness();
+        let frame = bar.frame_thickness();
+        // A side bar frames the display (`screen_frame`); a flush,
+        // full-width top or bottom bar draws thin strips on the other
+        // edges (`frame_strips`). The other styles have no frame.
+        let screen_frame = if vertical { frame } else { 0.0 };
+        let frame_strips = if !vertical && layout.is_full_width() { frame } else { 0.0 };
+        let item_inset = bar.item_inset();
         let height = if vertical {
             bar.vertical_width()
         } else if layout.is_compact() {
@@ -121,7 +134,7 @@ impl Metrics {
             chip_padding: bar.chip_padding(),
             chip_gap: if bar.separator == BarSeparator::None { spacing } else { spacing.max(SEPARATOR_MIN_GAP) },
             center: bar.center_align,
-            floating_frame: layout.is_full_width() && bar.floating_frame && screen_frame <= 0.0 && !joined,
+            floating_frame: layout.is_full_width() && bar.floating_frame && frame <= 0.0 && !joined,
             panel_gap: cfg.panels.gap(),
             panel_pad: cfg.panels.padding_for(layout.is_attached()),
             panel_width_scale: cfg.panels.width_scale(),
@@ -131,12 +144,38 @@ impl Metrics {
             screen_frame,
             accent_line: layout == BarLayout::Hairline && bar.accent_line,
             notch_width: bar.notch_width(),
+            item_inset,
+            min_chip: if bar.item_capsules && bar.icon_shape != mandara_config::surfaces::BarIconShape::Match {
+                let inset = if layout.is_compact() { COMPACT_CHIP_INSET } else { item_inset };
+                (height - inset * 2.0).max(0.0)
+            } else {
+                0.0
+            },
+            frame_strips,
         }
     }
 
     /// Inset of chips from the bar's edges (smaller in the compact styles).
     pub fn chip_inset(&self) -> f32 {
-        if self.layout.is_compact() { COMPACT_CHIP_INSET } else { CHIP_INSET }
+        if self.layout.is_compact() { COMPACT_CHIP_INSET } else { self.item_inset }
+    }
+
+    /// Inset of items inside a floating pill or the island (the item
+    /// inset; the shipped 3 px by default).
+    pub fn pill_inset(&self) -> f32 {
+        self.item_inset
+    }
+
+    /// An item's length along the bar for content `w` long: the content
+    /// and its padding, at least [`Self::min_chip`].
+    pub fn chip_length(&self, w: f32) -> f32 {
+        (w + self.chip_padding * 2.0).max(self.min_chip)
+    }
+
+    /// Where an item's content (`w` long) starts inside its chip: centred
+    /// in a squared-up item, after the padding otherwise.
+    pub fn content_inset(&self, w: f32) -> f32 {
+        (self.chip_length(w) - w) / 2.0
     }
 
     /// Metrics of the default config at roundness 1 (tests, first frame).
@@ -188,7 +227,7 @@ pub fn zone_width(slot_widths: &[f32], m: &Metrics) -> f32 {
     let mut total = 0.0;
     let mut visible = 0usize;
     for w in slot_widths.iter().copied().filter(|w| *w >= 1.0) {
-        total += w + m.chip_padding * 2.0;
+        total += m.chip_length(w);
         visible += 1;
     }
     if visible == 0 { 0.0 } else { total + m.chip_gap * (visible - 1) as f32 }
@@ -216,7 +255,7 @@ fn edge_inset(m: &Metrics, surface_width: f32) -> f32 {
 
 /// The island's (and micro pill's) gap between groups and inset of chips.
 fn island_spacing(m: &Metrics) -> (f32, f32) {
-    if m.layout == BarLayout::Micro { (MICRO_GAP, COMPACT_CHIP_INSET) } else { (ISLAND_GAP, PILL_INSET) }
+    if m.layout == BarLayout::Micro { (MICRO_GAP, COMPACT_CHIP_INSET) } else { (ISLAND_GAP, m.pill_inset()) }
 }
 
 /// [`zone_limits`] for groups placed apart between `start` and `end`
@@ -255,7 +294,7 @@ pub fn zone_limits(m: &Metrics, surface_width: f32, content: [f32; 3]) -> [f32; 
             spread_limits(m.center, m.notch(), surface_width, (inset, surface_width - inset), content)
         }
         BarLayout::FloatingPills => {
-            let pad = PILL_INSET * 2.0;
+            let pad = m.pill_inset() * 2.0;
             let pills = content.map(|c| if c > 0.0 { c + pad } else { 0.0 });
             spread_limits(m.center, false, surface_width, (m.side_gap, surface_width - m.side_gap), pills).map(|l| (l - pad).max(0.0))
         }
@@ -294,12 +333,13 @@ pub fn fit_slots(slot_widths: &[f32], m: &Metrics, limit: f32, from_end: bool) -
         }
         let gap = if first { 0.0 } else { m.chip_gap };
         let room = (limit - used - gap - m.chip_padding * 2.0).floor();
-        if w > room && room < MIN_SQUEEZED_SLOT {
+        // (A squared-up item needs its whole square.)
+        if (w > room && room < MIN_SQUEEZED_SLOT) || m.chip_length(w.min(room).max(0.0)) > limit - used - gap {
             // Full: this slot and every one inside it stay out.
             break;
         }
         out[i] = Some(room);
-        used += gap + w.min(room) + m.chip_padding * 2.0;
+        used += gap + m.chip_length(w.min(room));
         first = false;
     }
     out
@@ -372,7 +412,7 @@ pub fn compute(m: &Metrics, surface_width: f32, content: [f32; 3]) -> BarGeometr
             BarGeometry { pills: [left, center, right], backdrop: frame, separate_pills: false, pill_radius: px(m.radius.min(chip_h / 2.0)) }
         }
         BarLayout::FloatingPills => {
-            let pill_w = |i: usize| if content[i] > 0.0 { content[i] + PILL_INSET * 2.0 } else { 0.0 };
+            let pill_w = |i: usize| if content[i] > 0.0 { content[i] + m.pill_inset() * 2.0 } else { 0.0 };
             let y = m.edge_gap;
             let left = rect(m.side_gap, y, pill_w(0), h);
             let right = rect(surface_width - m.side_gap - pill_w(2), y, pill_w(2), h);
@@ -582,6 +622,50 @@ pub fn screen_frame(m: &Metrics, surface: (f32, f32)) -> Option<([Bounds<Pixels>
     let strips = [rect(0.0, zone, t, away - zone), rect(along - t, zone, t, away - zone), rect(t, away - t, (along - t * 2.0).max(0.0), t)];
     let inner = rect(t, zone, (along - t * 2.0).max(0.0), (away - zone - t).max(0.0));
     Some((strips.map(|r| orient(m.position, r, surface)), orient(m.position, inner, surface)))
+}
+
+/// A rect as plain numbers `(x, y, w, h)`.
+pub type Strip = (f32, f32, f32, f32);
+
+/// The thin screen frame of a flush top or bottom bar
+/// ([`Metrics::frame_strips`]): its strips and fillets, surface px.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct EdgeFrame {
+    /// The strip along the far edge, then the left and right ones (none on
+    /// a side a joined side bar covers).
+    pub strips: [Option<Strip>; 3],
+    /// Fillets in the opening's two far corners, `(x, y, r, centre)`: the
+    /// `r × r` square at `(x, y)` and its arc's centre.
+    pub flares: [Option<(f32, f32, f32, FlareCenter)>; 2],
+    /// How far in from the screen's sides the bar's own fillets sit.
+    pub inset: f32,
+}
+
+/// The screen frame of the flush top or bottom bar `m` on a `surface`
+/// whose inner edge is at `bar_edge` (surface y: the bar's bottom for a top
+/// bar, its top for a bottom one), with fillets of radius `flare`.
+/// `covered` says which sides (left, right) a joined side bar covers: it
+/// draws that side's strip and far fillet itself. `None` without a frame.
+pub fn edge_frame(m: &Metrics, surface: (f32, f32), bar_edge: f32, flare: f32, covered: [bool; 2]) -> Option<EdgeFrame> {
+    let t = m.frame_strips;
+    if t <= 0.0 || m.vertical || !m.attached() || m.floating_frame || m.notch() {
+        return None;
+    }
+    let (w, h) = surface;
+    let r = flare.max(0.0);
+    let bottom = m.position == BarPosition::Bottom;
+    // The opening between the bar and the far strip.
+    let (open_y0, open_y1) = if bottom { (t, bar_edge) } else { (bar_edge, h - t) };
+    let far = if bottom { (0.0, 0.0, w, t) } else { (0.0, h - t, w, t) };
+    let side = |x: f32| (x, open_y0, t, (open_y1 - open_y0).max(0.0));
+    let (left_c, right_c) = if bottom { (FlareCenter::BottomRight, FlareCenter::BottomLeft) } else { (FlareCenter::TopRight, FlareCenter::TopLeft) };
+    let flare_y = if bottom { open_y0 } else { open_y1 - r };
+    let fillet = |x: f32, c: FlareCenter| (r > 0.0).then_some((x, flare_y, r, c));
+    Some(EdgeFrame {
+        strips: [Some(far), (!covered[0]).then(|| side(0.0)), (!covered[1]).then(|| side(w - t))],
+        flares: [if covered[0] { None } else { fillet(t, left_c) }, if covered[1] { None } else { fillet(w - t - r, right_c) }],
+        inset: t,
+    })
 }
 
 /// [`morph_progress`] for rects on the screen: a side bar's panels morph
@@ -833,7 +917,7 @@ mod tests {
         assert_eq!(y_of(&backdrop), sh - c.height);
         // Chips keep their inset from the bar's edges.
         let chip = orient(c.position, g.pills[0], (1920.0, sh));
-        assert_eq!(y_of(&chip), sh - c.height + CHIP_INSET);
+        assert_eq!(y_of(&chip), sh - c.height + c.chip_inset());
         assert_eq!(reserved_band(&c, sh), (sh - c.height, c.height));
         assert_eq!(reserved_band(&edge(), sh), (0.0, edge().height));
     }
@@ -918,7 +1002,7 @@ mod tests {
         assert_eq!(exclusive_zone(&f), f.edge_gap + f.height);
         assert!(f.frame_radius() > 0.0);
         let chip = g.pills[1];
-        assert_eq!(y_of(&chip), f.edge_gap + CHIP_INSET);
+        assert_eq!(y_of(&chip), f.edge_gap + f.chip_inset());
         let d = dashboard_rect(&f, chip, size(px(420.0), px(520.0)), 1920.0, FREE);
         assert_eq!(y_of(&d), f.edge_gap + f.height, "panels still pour out of the frame");
         // Off for the other styles.
@@ -1280,5 +1364,86 @@ mod tests {
         assert!(w_of(&g.backdrop) < w_of(&island.backdrop), "tighter than the island");
         assert!((x_of(&g.backdrop) + w_of(&g.backdrop) / 2.0 - 960.0).abs() < 0.5, "centred");
         assert!(h_of(&g.backdrop) < h_of(&island.backdrop));
+    }
+
+    fn styled(style: mandara_config::bar_styles::BarStyle) -> Metrics {
+        let mut cfg = ShellConfig::default();
+        style.apply(&mut cfg);
+        Metrics::of(&cfg, 1.0)
+    }
+
+    #[test]
+    fn round_icon_items_are_squared_and_their_content_centred() {
+        use mandara_config::bar_styles::BarStyle;
+        let m = styled(BarStyle::Expressive);
+        let across = m.height - m.chip_inset() * 2.0;
+        assert_eq!(m.min_chip, across, "icon items are as long as they are thick");
+        // A small icon becomes a square, its content in the middle.
+        let icon = across - m.chip_padding * 2.0 - 4.0;
+        assert_eq!(m.chip_length(icon), across);
+        assert!((m.content_inset(icon) - (across - icon) / 2.0).abs() < 1e-4);
+        // Wide items keep their padding.
+        assert_eq!(m.chip_length(120.0), 120.0 + m.chip_padding * 2.0);
+        assert_eq!(m.content_inset(120.0), m.chip_padding);
+        // Zones and fitting count the squares.
+        assert_eq!(zone_width(&[icon, icon], &m), across * 2.0 + m.chip_gap);
+        let fit = fit_slots(&[icon, icon, icon], &m, across * 2.0 + m.chip_gap + 1.0, false);
+        assert_eq!(fit.iter().filter(|f| f.is_some()).count(), 2, "a square that doesn't fit stays out");
+        let kept: smallvec::SmallVec<[f32; 4]> = fit.iter().map(|f| f.map_or(0.0, |l| icon.min(l))).collect();
+        assert!(zone_width(&kept, &m) <= across * 2.0 + m.chip_gap + 1.0);
+        // The shipped bar squares nothing and keeps its 3 px inset.
+        let plain = edge();
+        assert_eq!((plain.min_chip, plain.chip_inset()), (0.0, mandara_config::surfaces::defaults::BAR_ITEM_INSET_PX));
+        assert_eq!(plain.chip_length(16.0), 16.0 + plain.chip_padding * 2.0);
+        // The tile inset follows the setting.
+        let mut cfg = ShellConfig::default();
+        cfg.bar.item_inset = 9.0;
+        assert_eq!(Metrics::of(&cfg, 1.0).chip_inset(), 9.0);
+        cfg.bar.layout = BarLayout::Hairline;
+        assert_eq!(Metrics::of(&cfg, 1.0).chip_inset(), COMPACT_CHIP_INSET, "the compact styles keep theirs");
+    }
+
+    #[test]
+    fn a_framed_top_or_bottom_bar_borders_the_other_three_edges() {
+        use mandara_config::bar_styles::BarStyle;
+        let surface = (1920.0, 1080.0);
+        let m = styled(BarStyle::Expressive);
+        assert_eq!(m.position, BarPosition::Bottom);
+        let t = m.frame_strips;
+        assert!(t > 0.0 && m.screen_frame == 0.0, "a horizontal bar frames with strips");
+        let bar_edge = surface.1 - m.height;
+        for covered in [[false, false], [true, false], [false, true], [true, true]] {
+            let f = edge_frame(&m, surface, bar_edge, m.flare, covered).expect("framed");
+            assert_eq!(f.inset, t);
+            assert_eq!(f.strips[0], Some((0.0, 0.0, surface.0, t)), "the far (top) edge");
+            for (i, side) in [f.strips[1], f.strips[2]].into_iter().enumerate() {
+                assert_eq!(side.is_none(), covered[i], "a covered side keeps no strip");
+                assert_eq!(f.flares[i].is_none(), covered[i], "nor its fillet");
+                if let Some((x, y, w, h)) = side {
+                    assert_eq!((y, y + h, w), (t, bar_edge, t), "between the far strip and the bar, no overlap");
+                    assert!(x == 0.0 || x + w == surface.0);
+                }
+                if let Some((x, y, r, _)) = f.flares[i] {
+                    assert!(x >= t && x + r <= surface.0 - t && y == t, "inside the opening, against the far strip");
+                }
+            }
+        }
+        // A top bar's frame is the same, mirrored.
+        let mut top = m;
+        top.position = BarPosition::Top;
+        let f = edge_frame(&top, surface, top.height, top.flare, [false, false]).unwrap();
+        assert_eq!(f.strips[0], Some((0.0, surface.1 - t, surface.0, t)));
+        assert_eq!(f.strips[1], Some((0.0, top.height, t, surface.1 - t - top.height)));
+        assert_eq!(f.flares[0].map(|f| f.1 + f.2), Some(surface.1 - t));
+        // No frame: off, or a style without full-width strips.
+        assert!(edge_frame(&edge(), surface, 30.0, 18.0, [false, false]).is_none());
+        let mut cfg = ShellConfig::default();
+        cfg.bar.screen_frame = true;
+        cfg.bar.layout = BarLayout::FloatingPills;
+        assert_eq!(Metrics::of(&cfg, 1.0).frame_strips, 0.0);
+        cfg.bar.layout = BarLayout::MinimalEdge;
+        cfg.bar.floating_frame = true;
+        let framed = Metrics::of(&cfg, 1.0);
+        assert!(framed.frame_strips > 0.0 && !framed.floating_frame, "the frame wins over floating, as beside a side bar");
     }
 }

@@ -146,6 +146,13 @@ pub(super) struct ZoneLook {
     pub accent: Color,
     pub hover: Color,
     pub separator: BarSeparator,
+    /// The shapes of item capsules.
+    pub items: crate::bar::items::ItemLook,
+    /// The colour of icon-sized items.
+    pub icon_fill: Color,
+    /// The bar's own colour under the items (round shapes are composited
+    /// over it).
+    pub under: Color,
 }
 
 impl ShellView {
@@ -191,7 +198,7 @@ impl ShellView {
                 continue;
             }
             let m = side::metrics(cfg, right, scale);
-            let chip = cfg.side_bars.chip_size();
+            let chip = cfg.side_bars.items(right, &cfg.bar).chip_size;
             bar.on = true;
             bar.metrics = m;
             bar.span = span;
@@ -297,17 +304,23 @@ impl ShellView {
     pub(super) fn side_look(&self, cfg: &ShellConfig, s: usize, palette: &MandaraPalette) -> ZoneLook {
         let sb = &cfg.side_bars;
         let accent = accent_color(sb.side(s == 1).accent, palette);
+        // This bar's own item look, or the shared one.
+        let items = sb.items(s == 1, &cfg.bar);
         ZoneLook {
             m: self.sides[s].metrics,
             pill_radius: self.sides[s].pill_radius(),
             room: self.sides[s].chip,
-            group_capsule: sb.chips == SideBarChips::Island,
-            item_capsules: sb.chips == SideBarChips::Pills,
+            group_capsule: items.chips == SideBarChips::Island,
+            item_capsules: items.chips == SideBarChips::Pills,
             fill: accent.with_alpha(CHIP_WASH_ALPHA * sb.chip_fill()),
             edge: None,
             accent,
             hover: accent.with_alpha(if cfg.bar.hover_highlight { HOVER_WASH_ALPHA } else { 0.0 }),
             separator: BarSeparator::None,
+            items: crate::bar::items::ItemLook { item: items.item_shape, icon: items.icon_shape, radius: self.sides[s].metrics.radius, vertical: true },
+            icon_fill: crate::bar::items::icon_color(items.icon_fill, accent.with_alpha(CHIP_WASH_ALPHA * sb.chip_fill()), palette),
+            // Joined, the side bar is the main bar's material.
+            under: if cfg.side_bars_join() { frame_color(palette).with_alpha(frame_color(palette).alpha() * ranges::OPACITY.clamp(cfg.bar.opacity, 1.0)) } else { self.side_fill(cfg, s, palette) },
         }
     }
 

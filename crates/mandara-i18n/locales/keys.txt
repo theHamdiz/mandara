@@ -1,3 +1,4 @@
+  {suggestions}
  +{count} more
 "English" = "Translation" pairs, one file per language
 "{value}" isn't a duration like 30m, 2h or 1h30m
@@ -126,6 +127,7 @@ A design-first Wayland desktop shell, written entirely in Rust.
 A device battery this low turns amber; Power → peripheral alerts sets when it turns coral
 A digit removes its pencil marks from the cells it sees
 A distinct alert sound
+A dock on the screen edge or a centered grid
 A dock on the screen edge, a centered grid, or separate cards floating in the middle of the screen
 A dot per window
 A drag continues briefly after lifting the finger
@@ -139,6 +141,7 @@ A fixed light or dark wallpaper is set under Fit & effects; it shows instead of 
 A floating bar has no edge to hang from; popups on its edge stay cards
 A floating bar has no edge to join, so the dock opens as a card next to it
 A floating card under the bar, the panels' gap away from it.
+A floating island of large squircle tiles at the bottom
 A folder
 A folder in /usr/share/sounds; empty follows your GTK setting
 A folder of pictures (empty: ~/Pictures)
@@ -243,6 +246,7 @@ A tab needs a name
 A talent is formed in stillness, a character in the world's torrent.
 A tall pill with the track down its side
 A task needs text after its list name.
+A thin border round the whole display, joined to a side bar or a flush edge frame or hairline; it reserves no space of its own
 A thin border round the whole display, joined to the side bar; it reserves no space of its own
 A thin line along a popup's edge shows the time left
 A thin specular highlight around the glass
@@ -260,6 +264,7 @@ A view is a list of nodes; nodes[root] is the top one and children are indices. 
 A volume this full turns its ring amber
 A wallpaper is already being generated
 A website or feed address
+A wide rail of flower buttons and tiles inside a screen frame
 A “Mandara” Kvantum theme in ~/.cache/mandara/themes/kvantum
 A “Mandara” color scheme in ~/.config/wezterm/colors
 A “Mandara” color scheme in ~/.local/share/color-schemes
@@ -393,6 +398,7 @@ Add widgets
 Add your GitHub user name to see your year
 Add your Home Assistant token in Studio
 Add your Reddit app's client id in Studio to start reading
+Add your favourite feeds in Studio
 Add your translation API key in Studio
 Add yourself to the {group} group (`sudo usermod -aG {group} $USER`), then log out and back in.
 Add {app} to your apps (~/.local/share/applications)
@@ -867,6 +873,7 @@ Border width
 Both
 Both Shift keys
 Both buttons together click the middle one (MangoWM, Niri, Sway, River)
+Both take turns: a verse, then a hadith
 Both: picked at random from the verses and hadith together
 Bottom
 Bottom center
@@ -926,6 +933,7 @@ Built-in encoder width
 Built-in ids can't be overridden: a plugin whose id matches a built-in plugin is skipped.
 Bukhari
 Bundled, your distro's logo, any icon from your theme, or your own image
+Burst
 Bus error
 Busiest apps
 Busy
@@ -997,10 +1005,12 @@ Capped at a full pill; follows Themes → Corner roundness
 Caps Lock
 Caps Lock is on
 Caps Lock, Num Lock and Scroll Lock
+Capsule
 Capsule colour
 Capsule outline
 Capsule strength
 Capsules
+Capsules, tiles with Material corners, squircles, or connected groups whose items touch with small inner corners
 Caption
 Capture
 Capture in {seconds} s
@@ -1236,6 +1246,7 @@ Closing a popup keeps it
 Closing the lid, the session menu or systemctl suspend lock the screen first; the computer waits until the lock is up
 Clouds
 Cloudy
+Clover
 Code
 Code and numbers
 Code copied
@@ -1343,6 +1354,7 @@ Connect your home in Studio
 Connect your own Reddit app
 Connected
 Connected displays with modes, position, scale and rotation (wlr-output-management)
+Connected group
 Connected · Wi-Fi
 Connected · Wired
 Connecting to the engine…
@@ -1446,6 +1458,7 @@ Could not reach the server: {error}
 Could not read the logs
 Could not read this feed: {error}
 Could not read {path}: {error}. Left it unchanged.
+Could not refresh this feed: {error}
 Could not refresh {feeds}; trying again later
 Could not remove {path}: {error}
 Could not restart into the firmware setup: {error}
@@ -2203,6 +2216,7 @@ Favourite entities
 Favourites
 Fear is inevitable, I have to accept that, but I cannot allow it to paralyze me.
 Featured
+Feed addresses
 Feed and visit
 Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them
 Feeds
@@ -2226,6 +2240,7 @@ Fetch the latest articles of every feed
 Fetched {repo}
 Fetches forecasts from open-meteo.com
 Fetches synced lyrics from lrclib.net while the panel is open
+Fetching headlines…
 Fetching posts…
 Fetching the weather…
 Fetching {repo} failed
@@ -2548,6 +2563,8 @@ GitHub's rate limit was reached; checking again in {minutes} min
 Give an app your own icon (theme icon name or image path; empty restores it)
 Give generously
 Give one display its own wallpaper (clear = follow the main one)
+Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look
+Give the bar a style preset's look (your items stay), or none for the plain bar
 Give the file's full path
 Give the profile a name
 Give the station a name
@@ -2834,6 +2851,7 @@ How often the process table is sampled while the panel is open
 How often the unit list is reloaded while the panel is open
 How often to look for updates while the chip is in the bar
 How often to re-render, in milliseconds (0 = only after events).
+How often today's verse or hadith changes, the same everywhere
 How often transfer rates are measured
 How panels appear
 How see-through the main menu's glass is
@@ -2885,12 +2903,16 @@ Ibn Khaldun
 Ibn Majah
 Ibn Sina
 Ice
+Icon colour
 Icon name or image path
+Icon shape
 Icon size
 Icon spacing
 Icon theme
 Icon theme {theme} is installed
 Icon theme {theme} is missing; install it or choose another in Themes → Icons
+Icon-sized items as round buttons: a circle, a Material 3 Expressive shape or a squircle (they become square), or the item shape
+Icon-sized items in the capsule colour, or a solid accent or tertiary tone
 Icons
 Icons and thumbnails
 Icons bounce until the app's first window appears
@@ -3100,7 +3122,9 @@ It's Mandara's {example} example, republished unchanged
 It's the unchanged plugin template (still named {name})
 It's time for {prayer}
 Item capsules
+Item inset
 Item padding
+Item shape
 Item size
 Item spacing
 Item style
@@ -3197,6 +3221,7 @@ Keep the wallpaper while running on battery
 Keep these display settings? Reverting in {seconds} s
 Keep ticked tasks
 Keep ties of kinship
+Keep up to 16 feed subscriptions
 Keep up to {count} communities
 Keep windows clear of the dock
 Keep your tongue
@@ -3302,6 +3327,11 @@ Left (vertical)
 Left / top
 Left accent
 Left click
+Left icon colour
+Left icon shape
+Left item inset
+Left item shape
+Left item style
 Left or right bar only
 Left side bar
 Left-handed
@@ -3500,6 +3530,7 @@ Look at something 6 metres away
 Look at something 6 metres away for {n} seconds
 Look at the ayah of another day (days after today, or before it when negative) without moving your place
 Look at the hadith a few days (or hours) after today's, or before it when negative, without marking anything read
+Look at the reminder a few items after today's (before it when negative) without moving today's
 Look at the step of a day after today (before it when negative) without marking anything
 Look far away
 Look for this app as a Flatpak (Flathub) or an AppImage instead.
@@ -3889,6 +3920,8 @@ Move the toolbar to the top · M
 Move to
 Move to Trash
 Move to {zone}
+Move today's reminder back one item
+Move today's reminder forward one item (every surface follows)
 Move up
 Move window to {place} {n}
 Move window {direction}
@@ -4088,6 +4121,7 @@ No apps in the tray
 No apps match “{query}”
 No articles yet
 No audio server
+No bar, just rows of connected tiles under the top edge
 No battery
 No blur
 No bookmarks yet
@@ -4142,6 +4176,7 @@ No folder to write into
 No fonts match
 No frames yet — the shell only draws while something changes. Open a panel to see it work.
 No hadith {reference} in {collection}
+No headlines yet
 No hotspot has been set up yet
 No icon theme is selected; standard fallbacks are in use
 No icons named like “{query}” in your theme
@@ -4549,6 +4584,7 @@ Only tags and workspaces with windows (plus the one you are on)
 Only the built-in encoder uses this; the others follow Resolution
 Only the first {count} checks run
 Only the main display shows the lock screen; others stay black (OLED friendly)
+Only the selected feed refreshes while its panel is open
 Only the thin sliders use it now: the Pill and Segmented designs mark the value without a handle
 Only this display's windows
 Only used when the system can't report camera use instantly
@@ -4803,8 +4839,10 @@ Peek at the coming days' ayahs
 Peek at the coming days' hadith
 Peek at the coming days' steps
 Peek at the next ayahs
+Peek at what comes next
 Peek on workspace switch
 Pen
+Pending package updates from pacman, the AUR, APT, DNF, Zypper and Flatpak
 Pending package updates from pacman, the AUR, APT, DNF, Zypper, XBPS, apk and Flatpak, installed with live progress; NixOS generations
 Pending updates by source (the last check; runs one if there is none)
 Pentagon
@@ -4857,6 +4895,7 @@ Pick a window to make a rule for
 Pick any pixel on screen
 Pick colors from the screen, with formats, tonal ramps and contrast
 Pick one from your folder below; it fades in on the desktop.
+Pick pill items first
 Pick pills or islands for the items first
 Pick running window
 Pick the displays each part of the shell appears on. Main display follows the one marked as main above.
@@ -4873,6 +4912,7 @@ Pictures
 Pictures from a folder, a new one every so often
 Pill
 Pill labels
+Pills
 Pin a plugin's panel open in the bar: outside clicks, focus changes and the launcher leave it open (its chip, Esc or panel close still close it). A floating panel docks back pinned
 Pin a side bar (it stays and windows tile beside it) or let it slide away until the pointer touches its edge
 Pin an app to the top of the launcher
@@ -5151,6 +5191,7 @@ RAM
 RECENT
 RECONNECTING · {n}
 RPM
+RSS, Atom and JSON subscriptions with local read history
 RSS, Atom or JSON feed address
 RTL
 Rabi al-Awwal
@@ -5312,6 +5353,7 @@ Reduce motion
 References and links follow sunnah.com. Muwatta Malik is numbered as in the dataset and links to its book.
 Refraction
 Refresh
+Refresh a feed and return its headlines and read history
 Refresh a feed now and return its articles, or every feed when no address is given
 Refresh an open list
 Refresh calendars
@@ -5325,6 +5367,7 @@ Refresh to fetch the latest articles.
 Refresh while open
 Refreshing package databases
 Refreshing {done} of {total}…
+Refreshing…
 Refusing to move {path} to the Trash
 Refusing to signal init (PID 1)
 Regenerate
@@ -5513,6 +5556,11 @@ Right (vertical)
 Right / bottom
 Right accent
 Right click
+Right icon colour
+Right icon shape
+Right item inset
+Right item shape
+Right item style
 Right side bar
 Right tile
 Right-click empty bar space
@@ -5547,9 +5595,11 @@ Rotates every hue of the palette
 Rotation
 Round
 Round at rest; the corners square off while you press and spring back
+Round buttons, tonal tiles and a scalloped rail inside a frame round the screen
 Rounded
 Rounded screen corners
 Rounded squares with soft corners
+Rounded tile
 Rounded window corners
 Rounded, material-inspired cursors: the most installed theme in ricing setups
 Roundness
@@ -5597,6 +5647,7 @@ Runs after a warning when the charge reaches the action level; plugging in cance
 Runs once after loading. Return an error to refuse to load.
 Runs sandboxed: no files, network or devices, with a time limit on every call
 Runs updates and the resource monitor; empty detects one
+Runs “Update now”; empty detects ghostty, kitty, foot, alacritty or wezterm
 Rust crate
 S
 SD card
@@ -5614,6 +5665,8 @@ Safely remove a drive: unmount and lock its volumes, then eject or power it off
 Sahih
 Sahih Muslim
 Sahih al-Bukhari
+Same as items
+Same as the bar
 Same as the desktop
 Same time
 Sample levels — play something to see it live
@@ -5860,6 +5913,7 @@ Sent to KeePassXC. It can't confirm the result without its Secret Service integr
 Sentence
 Sentences, 358
 Sentences, 439
+Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions
 Separate buttons close together; the chosen one fills and rounds fully
 Separate side bars: a glass pill per group, one island, or a slab along the whole edge
 Separate up to 24 entity ids with spaces; empty shows the first available entities
@@ -5951,6 +6005,7 @@ Share this computer's connection over Wi-Fi
 Share to phone
 Share what the clipboard holds: text, an image or a copied file (JSON with the link)
 Share your food with the needy and sit a while with the sick.
+Shared
 Shared from Mandara
 Shared memory
 Sharing as {name}
@@ -6082,6 +6137,7 @@ Side bar items
 Side bar material
 Side bar shape
 Side bar width
+Side bar, edge frame and hairline only
 Side bars
 Side by side
 Side inset
@@ -6204,6 +6260,9 @@ Space above and below each item's content
 Space between a floating bar and its panels
 Space between a panel's edge and its content (unset: none for the edge frame, a little for floating styles)
 Space between a separate side bar and the screen edge, and around the groups at its ends
+Space between the items and the bar's long edges; larger turns items into tiles on the bar
+Space between the left bar's items and its long edges (unset: Item size)
+Space between the right bar's items and its long edges (unset: Item size)
 Space inside cards
 Space inside each bar item, around its content
 Spacing
@@ -6405,6 +6464,7 @@ Super+Space
 Superscript
 Supported by:
 Supported interface languages
+Supports pacman, AUR helpers, APT, DNF, Zypper and Flatpak
 Supports pacman, AUR helpers, APT, DNF, Zypper, XBPS, apk and Flatpak
 Surah {n} has {got} ayahs, expected {want}
 Surah {n} is out of order
@@ -6788,6 +6848,7 @@ The grid always opens in the middle
 The hadith of the day (or the hour), the same as every surface shows
 The hadith of the day couldn't be picked
 The hadith of the day is on its way
+The hairline and the micro pill keep a fine inset
 The heart
 The hint strip under the toolbar
 The hotspot's name, password and Wi-Fi QR payload
@@ -6810,6 +6871,10 @@ The knowledge of anything, since all things have causes, is not acquired or comp
 The laptop panel and external monitors move together
 The last log lines of a container
 The last one played
+The left bar's own icon colour, or the bar's
+The left bar's own icon shape, or the shared one
+The left bar's own item shape, or the bar's
+The left bar's own items: bare icons, pills or islands, or the shared item style
 The less reason someone has, the more he fancies himself the most rational and most discerning of all.
 The link has no account name
 The link has no secret
@@ -6886,6 +6951,10 @@ The release has no plugin archive
 The release has no {suffix} file
 The release mirror must use HTTPS.
 The release signature could not be verified. Nothing was installed.
+The right bar's own icon colour, or the bar's
+The right bar's own icon shape, or the shared one
+The right bar's own item shape, or the bar's
+The right bar's own items: bare icons, pills or islands, or the shared item style
 The roots below the earth claim no rewards for making the branches fruitful.
 The roots of education are bitter, but the fruit is sweet.
 The running job (progress, time), the last result and the schedule
@@ -6921,6 +6990,7 @@ The service did not reply
 The service is not running
 The session menu's entries in order, with labels and icons (JSON)
 The shape and motion of buttons in panels, the sidebar, the main menu and Studio
+The shape of icon-sized pill items; the bar's own shape, or a round Material 3 Expressive shape
 The share expired
 The shared location used by weather and prayer times
 The shell did not start the job
@@ -7145,6 +7215,7 @@ Thunderstorm
 Thunderstorms around. Better stay in.
 Ticks
 Tile
+Tile dock
 Tile patterns
 Tile shadow
 Tile shape
@@ -7207,6 +7278,7 @@ Today's step
 Today's step and this week's done days
 Today's step · done
 Today's total, the last days and your top apps (needs the Screen time plugin)
+Today's verse or hadith and today's step
 Today's verse or hadith in calligraphy under an arch, with its meaning
 Today's verse or hadith in the quote card's style
 Toggle a home control or run a scene, script or button
@@ -7316,10 +7388,12 @@ Turn off for now
 Turn on
 Turn on Custom spring first
 Turn on Feeds
+Turn on Item capsules first
 Turn on Only at certain times first
 Turn on Refresh in the background first
 Turn on Rim light first
 Turn on Screen frame (side bar) first
+Turn on Screen frame first
 Turn on Shadow first
 Turn on Side bars first
 Turn on group or item capsules first
@@ -7427,7 +7501,6 @@ Unknown category
 Unknown city or time zone {name}
 Unknown code type {kind}
 Unknown command {command}; did you mean:
-  {suggestions}
 Unknown command {command}; run `mandara commands` for the catalog
 Unknown effect "{effect}"
 Unknown event
@@ -8040,6 +8113,7 @@ Your session starts these (systemd's xdg-autostart).
 Your session's units
 Your status (empty: Online / Do not disturb)
 Your subscriptions with their folders and unread counts
+Your subscriptions, together
 Your system's location service (GeoClue) couldn't find you. Many Linux systems ship it without a lookup service. Choose IP lookup, or type your city and press Find.
 Your tailnet: this device, exit node and peers with their paths
 Your tasks; click one to tick it
@@ -8110,6 +8184,7 @@ auto (DHCP) or manual
 auto or a language code
 autostart entry id
 backup to {folder}: {error}
+bar style
 boot entry id (see `session boot-entries`) or firmware
 boot entry id, e.g. windows.conf
 by {author}
@@ -8230,6 +8305,7 @@ how long, in minutes
 how many (default 50)
 how many ahead (1 when left out; negative looks back)
 how many days ahead (1 when left out; negative looks back)
+how many items ahead (1 when left out; negative looks back)
 how many lines (default from Studio)
 how many recent lines
 how to go through the wallpapers
