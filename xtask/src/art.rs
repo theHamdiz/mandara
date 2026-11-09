@@ -103,6 +103,10 @@ const PACKAGE_MOTIF: &str = r#"<path d="M750 365l260 130 260-130M750 365v280l260
 const HOURGLASS_MOTIF: &str = r#"<path d="M770 145h480M770 785h480M805 145c0 175 35 205 205 320-170 115-205 145-205 320M1215 145c0 175-35 205-205 320 170 115 205 145 205 320"/><path d="M850 195c0 130 45 170 160 250 115-80 160-120 160-250M850 735c0-130 45-170 160-250 115 80 160 120 160 250M875 685h270"/>"#;
 /// Flowing contours suggest light and terrain.
 const AURORA_MOTIF: &str = r#"<path d="M420 730C730 820 690 160 1030 320S1300 760 1570 270M420 690C710 780 710 130 1050 290S1320 720 1570 230M420 650C690 740 730 100 1070 260S1340 680 1570 190M420 610C670 700 750 70 1090 230S1360 640 1570 150"/>"#;
+/// A tilted puzzle box keeps the title clear of its three-by-three lattice.
+const LATTICE_MOTIF: &str = r#"<g transform="rotate(-8 1010 450)"><rect x="650" y="126" width="720" height="648" rx="42"/><path d="M890 126v648m240-648v648M650 342h720M650 558h720"/><rect x="686" y="594" width="168" height="144" rx="22"/></g>"#;
+/// Spaced tiles and a horizontal arrow trace a merge across the lower cover.
+const SLIDE_MOTIF: &str = r#"<rect x="650" y="570" width="170" height="170" rx="28"/><rect x="890" y="570" width="170" height="170" rx="28"/><rect x="1130" y="550" width="210" height="210" rx="34"/><rect x="890" y="270" width="170" height="170" rx="28"/><rect x="1130" y="270" width="170" height="170" rx="28"/><path d="M590 485h310m-44-44 44 44-44 44M690 525h100"/>"#;
 
 // ── Checks ───────────────────────────────────────────────────────────────
 
@@ -374,6 +378,8 @@ pub fn motif_svg(motif: &str, palette: &str) -> Result<String> {
         "package" => push(PACKAGE_MOTIF.into()),
         "hourglass" => push(HOURGLASS_MOTIF.into()),
         "aurora" => push(AURORA_MOTIF.into()),
+        "lattice" => push(LATTICE_MOTIF.into()),
+        "slide" => push(SLIDE_MOTIF.into()),
         "waves" | "sound" => {
             for j in 0..5 {
                 let points: Vec<String> = (40..1550)
@@ -1157,7 +1163,7 @@ mod tests {
     const DISTINCT_GLYPH_MAX_OVERLAP: f64 = 0.4;
     /// New tiles use the same outer glass geometry as their siblings.
     const HOUSE_TILE_GEOMETRY: [(&str, &str); 5] = [("x", "16"), ("y", "16"), ("width", "480"), ("height", "480"), ("rx", "108")];
-    const NEW_PLUGIN_IDS: &[&str] = &["privacy", "tray", "dock", "app-installer", "screen-time", "mini-stats", "wallpaper-generator", "wallhaven", "cursors"];
+    const NEW_PLUGIN_IDS: &[&str] = &["privacy", "tray", "dock", "app-installer", "screen-time", "mini-stats", "wallpaper-generator", "wallhaven", "cursors", "sudoku", "2048"];
     const UTILITY_PLUGIN_IDS: &[&str] = &[
         "ports", "git-repos", "ci", "crashes", "tailscale", "uptime", "local-ai", "share", "keybinds", "progress", "breaks", "presentation",
     ];
@@ -1219,7 +1225,7 @@ mod tests {
     fn new_motifs_render_distinct_linework_in_every_palette() {
         for palette in ["corniche", "twilight", "obsidian"] {
             let mut hashes = BTreeSet::new();
-            for motif in ["watch", "shelf", "package", "hourglass", "aurora"] {
+            for motif in ["watch", "shelf", "package", "hourglass", "aurora", "lattice", "slide"] {
                 let svg = motif_svg(motif, palette).unwrap();
                 let image = render_svg(svg.as_bytes(), MOTIF_PREVIEW.0, MOTIF_PREVIEW.1).unwrap();
                 assert!(image.pixels().any(|p| p[3] > 0), "{motif}: empty in {palette}");
