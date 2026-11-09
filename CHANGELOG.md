@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.23.0 — 2026-11-09
+
+A different shape for every character. Mandara Studio uses less memory.
+Notes keep edits made in other apps. Clearer Copy feedback on the website.
+
 ### New
 
 - **A different shape for every character.** The password field on the lock screen and on Mandara Login now shows each typed character as one of ten small, soft shapes (circles, rounded squares, triangles, diamonds, clovers and more) that pop in gently and shrink away when you delete them. Shapes never repeat side by side and never depend on what you typed, and each new attempt shuffles them. Prefer the classic look? Choose **Password symbols → Dots** in Studio → Lock appearance, or **Hide typing as → Dots** in Studio → Login screen. Reduced motion turns the animation off.
