@@ -1210,9 +1210,13 @@ mod tests {
         }
     }
 
+    /// The symbol seed of every test screen, so the shapes never depend on
+    /// the clock a test happens to start at.
+    const TEST_SYMBOL_SEED: u64 = 0x5EED_5AFE_AB1E_0001;
+
     fn screen(demo: bool) -> LockScreen {
         let user = User { name: "amira".into(), display: "Amira Said".into(), home: PathBuf::from("/nonexistent") };
-        LockScreen::new(
+        let mut s = LockScreen::new(
             demo,
             mandara_theme::engine::default_palette(true),
             Fonts { display: "Inter".into(), ui: "Inter".into() },
@@ -1221,7 +1225,24 @@ mod tests {
             AuthWorker::spawn(Box::new(Accept)).unwrap(),
             None,
             None,
-        )
+        );
+        s.symbol_seed = TEST_SYMBOL_SEED;
+        s
+    }
+
+    /// Pins what the wall clock would change between two frames: a fixed
+    /// clock face and no date, so frames compare pixel for pixel even
+    /// across a minute or midnight.
+    fn still_face(s: &mut LockScreen) {
+        s.look.time_pattern = "12:00".into();
+        s.look.custom_time = true;
+        s.look.cfg.show_date = false;
+    }
+
+    /// A moment after every pop and fade so far is over (they start at the
+    /// real time of each key press, however slowly the test runs).
+    fn settled() -> Instant {
+        Instant::now() + symbols::POP.max(symbols::FADE) + Duration::from_millis(100)
     }
 
     fn type_text(s: &mut LockScreen, text: &str) {
@@ -1387,11 +1408,11 @@ mod tests {
                 let mut s = screen(false);
                 s.reveal.snap_to(1.0);
                 s.rtl = rtl;
-                let later = Instant::now() + Duration::from_secs(1);
+                still_face(&mut s);
                 type_text(&mut s, "abc");
-                let three = frame(&mut s, scale, later);
+                let three = frame(&mut s, scale, settled());
                 type_text(&mut s, "d");
-                let four = frame(&mut s, scale, later);
+                let four = frame(&mut s, scale, settled());
                 // Only the new symbol's box changed: no re-centring.
                 let (x0, y0, x1, y1) = diff_box(&three, &four).expect("the fourth symbol is drawn");
                 let row = Row::new(1000.0, PASSWORD_TEXT_PX * scale, 1.0);
@@ -1399,7 +1420,7 @@ mod tests {
                 assert!(y1 - y0 <= row.size as u32 + 1);
                 // Deleting it (once its fade is over) restores the first frame exactly.
                 press(&mut s, keys::BACKSPACE);
-                let back = frame(&mut s, scale, later);
+                let back = frame(&mut s, scale, settled());
                 assert_eq!(diff_box(&three, &back), None, "scale {scale}, rtl {rtl}");
             }
         }
@@ -1410,6 +1431,7 @@ mod tests {
         let mut s = screen(false);
         s.reveal.snap_to(1.0);
         s.look.reduced_motion = true;
+        still_face(&mut s);
         let now = Instant::now();
         type_text(&mut s, "ab");
         let at_once = frame(&mut s, 1.0, now);
