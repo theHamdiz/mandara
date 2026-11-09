@@ -400,12 +400,12 @@ const GPUI_WORKERS: usize = 4;
 /// CPUs (GPUI reads the affinity mask to size the pool), then every thread
 /// gets the full mask back, so nothing is pinned.
 fn application() -> gpui::Application {
-    use std::mem::{size_of, zeroed};
+    use std::mem::zeroed;
     // SAFETY: the CPU set is plain data; the libc calls get valid pointers and
     // its exact size, and only change scheduling affinity.
     unsafe {
         let mut full: affinity::CpuSet = zeroed();
-        if libc::sched_getaffinity(0, size_of::<affinity::CpuSet>(), &mut full) != 0 {
+        if !affinity::get(&mut full) {
             return gpui_platform::application();
         }
         let mut capped: affinity::CpuSet = zeroed();
@@ -415,7 +415,7 @@ fn application() -> gpui::Application {
             libc::CPU_SET(cpu, &mut capped);
             count += 1;
         }
-        if count < GPUI_WORKERS || libc::sched_setaffinity(0, size_of::<affinity::CpuSet>(), &capped) != 0 {
+        if count < GPUI_WORKERS || !affinity::cap(&capped) {
             return gpui_platform::application();
         }
         let app = gpui_platform::application();
@@ -425,8 +425,10 @@ fn application() -> gpui::Application {
     }
 }
 
-/// The CPU affinity calls that differ between kernels. `sched_getaffinity`
-/// and `sched_setaffinity` with pid 0 act on the calling thread on both.
+/// The CPU affinity calls behind [`application`], which differ between
+/// kernels: the mask GPUI sizes its pool by is the calling thread's on Linux
+/// (`sched_getaffinity(0)`) and the whole process's on FreeBSD (Rust's
+/// `available_parallelism` reads `CPU_WHICH_PID`).
 mod affinity {
     use std::mem::size_of;
 
@@ -434,6 +436,26 @@ mod affinity {
     pub type CpuSet = libc::cpu_set_t;
     #[cfg(target_os = "freebsd")]
     pub type CpuSet = libc::cpuset_t;
+
+    /// Reads the mask the pool is sized by into `mask`; false on failure.
+    ///
+    /// # Safety
+    /// Only reads scheduling affinity into a valid set.
+    #[cfg(target_os = "linux")]
+    pub unsafe fn get(mask: &mut CpuSet) -> bool {
+        // SAFETY: valid pointer and exact size.
+        unsafe { libc::sched_getaffinity(0, size_of::<CpuSet>(), mask) == 0 }
+    }
+
+    /// Limits the mask the pool is sized by to `mask`; false on failure.
+    ///
+    /// # Safety
+    /// Only changes scheduling affinity; `mask` is a valid set.
+    #[cfg(target_os = "linux")]
+    pub unsafe fn cap(mask: &CpuSet) -> bool {
+        // SAFETY: valid pointer and exact size.
+        unsafe { libc::sched_setaffinity(0, size_of::<CpuSet>(), mask) == 0 }
+    }
 
     /// Gives every thread of this process `mask`.
     ///
@@ -448,16 +470,36 @@ mod affinity {
         }
     }
 
-    /// Gives every thread of this process `mask`: FreeBSD's
-    /// `CPU_WHICH_PID` applies a mask to all of a process's threads, and id
-    /// -1 is the calling process (cpuset_setaffinity(2)).
+    /// The process's mask (`CPU_WHICH_PID`, id -1: this process,
+    /// cpuset_getaffinity(2)); false on failure.
+    ///
+    /// # Safety
+    /// Only reads scheduling affinity into a valid set.
+    #[cfg(target_os = "freebsd")]
+    pub unsafe fn get(mask: &mut CpuSet) -> bool {
+        // SAFETY: valid pointer and exact size.
+        unsafe { libc::cpuset_getaffinity(libc::CPU_LEVEL_WHICH, libc::CPU_WHICH_PID, -1, size_of::<CpuSet>(), mask) == 0 }
+    }
+
+    /// Limits the process's mask, every thread's, to `mask`; false on failure.
+    ///
+    /// # Safety
+    /// Only changes scheduling affinity; `mask` is a valid set.
+    #[cfg(target_os = "freebsd")]
+    pub unsafe fn cap(mask: &CpuSet) -> bool {
+        // SAFETY: valid pointer and exact size.
+        unsafe { libc::cpuset_setaffinity(libc::CPU_LEVEL_WHICH, libc::CPU_WHICH_PID, -1, size_of::<CpuSet>(), mask) == 0 }
+    }
+
+    /// Gives every thread of this process `mask`: `CPU_WHICH_PID` applies
+    /// it to all of them.
     ///
     /// # Safety
     /// Only changes scheduling affinity; `mask` is a valid set.
     #[cfg(target_os = "freebsd")]
     pub unsafe fn restore_every_thread(mask: &CpuSet) {
         // SAFETY: valid pointer and exact size, per the caller.
-        unsafe { libc::cpuset_setaffinity(libc::CPU_LEVEL_WHICH, libc::CPU_WHICH_PID, -1, size_of::<CpuSet>(), mask) };
+        unsafe { cap(mask) };
     }
 }
 
