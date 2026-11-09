@@ -27,7 +27,7 @@ use super::super::extras::{CONTROL_H, Flash, Segment, caption, search_box, segme
 use super::super::fn_view;
 use super::super::panel_fx::{HEADER_H, PanelShape, alpha, empty_state, glass_card, glow, header, pill_button, readable, rim, section, wash, WASH_SOFT};
 use super::art;
-use super::{ARABIC_LINE_EM, Fetch, Shared, arabic_ui, chip_text, ensure_meanings, ensure_timer, gold, meaning_of, model, nudge, open_link, settings, toggle_saved, wants_meaning};
+use super::{ARABIC_LINE_EM, Fetch, Shared, arabic_ui, chip_text, ensure_meanings, ensure_timer, gold, meaning_of, model, open_link, settings, toggle_saved, wants_meaning};
 use crate::bidi::Bidi as _;
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
@@ -168,9 +168,8 @@ struct Ui {
     slide: Option<(Instant, f32)>,
     /// The step's glow after a tick.
     glow: Option<Instant>,
-    /// Peeking: the hero's item and the step this many places / days from
-    /// today's (a look only, never saved).
-    peek: i64,
+    /// Peeking: the step this many days from today's (a look only, never
+    /// saved).
     step_peek: i64,
     flash: Flash,
     share: super::super::design_share::View,
@@ -203,7 +202,7 @@ pub(super) fn build(p: PanelCx, window: &mut Window, cx: &mut App) -> PanelSpec 
     let views = shared.borrow().views.clone();
     let field = cx.new(|cx| TextField::new(String::new(), t("Search Arabic or meaning…"), true, Rc::new(move |_, _, cx| views.notify(cx)), cx));
     let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(CHROME_H + BODY_GUESS))));
-    let ui = Rc::new(RefCell::new(Ui { tab: Tab::Today, stack: Vec::new(), theme: None, collection: None, searched: None, search_gen: 0, slide: None, glow: None, peek: 0, step_peek: 0, flash: Flash::default(), share: super::super::design_share::View::new(p.clone()), chips_q: Default::default(), chips_h: Default::default() }));
+    let ui = Rc::new(RefCell::new(Ui { tab: Tab::Today, stack: Vec::new(), theme: None, collection: None, searched: None, search_gen: 0, slide: None, glow: None, step_peek: 0, flash: Flash::default(), share: super::super::design_share::View::new(p.clone()), chips_q: Default::default(), chips_h: Default::default() }));
     let view = View { p, field, ui, size: size_cell.clone() };
     PanelSpec { view: fn_view(None, super::plugin_lang::in_language(super::own_lang, move |palette, window, cx| view.render(palette, window, cx)), window, cx), size: size_cell }
 }
@@ -423,29 +422,30 @@ impl View {
 
 fn today(c: &Ctx, window: &mut Window, cx: &mut App) -> AnyElement {
     let s = settings(cx);
-    let peek = c.ui.borrow().peek;
-    let placed = super::peek_placed(c.shared, &s, None, peek).and_then(|(id, place)| Some((catalog().get(id)?, place)));
+    // A fresh reminder each time the panel opens; Previous walks back
+    // through what was shown, Next forward again and then to a fresh one.
+    let item = super::current(c.shared, &s, cx).and_then(|id| catalog().get(id));
     let mut col = div().flex().flex_col().gap(px(GAP));
-    match placed {
-        Some((item, (at, of))) => {
-            let (prev, next) = {
+    match item {
+        Some(item) => {
+            let prev = super::has_prev(c.shared).then(|| {
                 let (shared, ui) = (c.shared.clone(), c.ui.clone());
-                let (shared2, ui2) = (c.shared.clone(), c.ui.clone());
-                let prev: Rc<dyn Fn(&mut App)> = Rc::new(move |cx| {
+                Rc::new(move |cx: &mut App| {
                     ui.borrow_mut().slide = Some((Instant::now(), -1.0));
-                    nudge(&shared, -1, cx);
-                });
-                let next: Rc<dyn Fn(&mut App)> = Rc::new(move |cx| {
-                    ui2.borrow_mut().slide = Some((Instant::now(), 1.0));
-                    nudge(&shared2, 1, cx);
-                });
-                (prev, next)
+                    super::prev(&shared, cx);
+                }) as Rc<dyn Fn(&mut App)>
+            });
+            let next: Rc<dyn Fn(&mut App)> = {
+                let (shared, ui) = (c.shared.clone(), c.ui.clone());
+                Rc::new(move |cx| {
+                    ui.borrow_mut().slide = Some((Instant::now(), 1.0));
+                    super::next(&shared, cx);
+                })
             };
-            // Where today's reminder stands in this round of its kind
-            // (nothing comes back before the round is through).
-            let place = place_label(at, of);
-            col = col.child(hero(c, item, false, Some((Some(prev), Some(next))), Some(place), window));
-            col = col.child(peek_bar(c, "jannah-peek", peek, t("Peek at what comes next"), |u| &mut u.peek));
+            // The reminder's own fixed number among the ones it is drawn
+            // from (the same item always shows the same one).
+            let place = super::number(&s, item.id).map(|(n, of)| number_label(n, of));
+            col = col.child(hero(c, item, false, Some((prev, Some(next))), place, window));
         }
         None => col = col.child(empty_state("arch", t("Nothing to show"), t("Choose Qur'an, hadith or both in Studio"), BODY_MIN, c.palette)),
     }
@@ -460,9 +460,6 @@ fn peek_bar(c: &Ctx, id: &'static str, offset: i64, here: &'static str, field: f
         {
             let mut u = ui.borrow_mut();
             *field(&mut u) += by;
-            if id == "jannah-peek" {
-                u.slide = Some((Instant::now(), if by < 0 { -1.0 } else { 1.0 }));
-            }
         }
         refresh(&shared, cx);
     });
@@ -472,9 +469,10 @@ fn peek_bar(c: &Ctx, id: &'static str, offset: i64, here: &'static str, field: f
 /// Previous / next of a hero (`None` for a side: that end of a list).
 type Nav = Option<(Option<Rc<dyn Fn(&mut App)>>, Option<Rc<dyn Fn(&mut App)>>)>;
 
-/// `12 / 230`, in the interface's digits.
-pub(crate) fn place_label(at: usize, of: usize) -> String {
-    let s = format!("{at} / {of}");
+/// `#104 of 230`, in the interface's words and digits: which item this
+/// is, not a place in any order.
+pub(crate) fn number_label(n: usize, of: usize) -> String {
+    let s = tf("#{n} of {total}", &[("n", &n), ("total", &of)]);
     if arabic_ui() { super::super::panel_fx::arabic_digits(&s) } else { s }
 }
 
@@ -566,8 +564,8 @@ fn hero(c: &Ctx, item: &Item, full: bool, nav: Nav, place: Option<String>, windo
         .flex_col()
         .items_center()
         .gap(px(BLOCK_GAP))
-        // Where this reminder stands in its round ("104 / 123"), a quiet
-        // kicker over the words.
+        // The reminder's number ("#104 of 230"), a quiet kicker over the
+        // words.
         .when_some(place, |el, p| el.child(caption(p, palette).font_features(tabular_nums())))
         .child(arabic)
         .when_some(meaning_el, |el, m| el.child(m))
@@ -1324,8 +1322,8 @@ mod tests {
     }
 
     #[test]
-    fn places_read_like_the_interface() {
+    fn numbers_read_like_the_interface() {
         let _en = mandara_i18n::scoped(Some(mandara_i18n::Lang::En));
-        assert_eq!(place_label(12, 230), "12 / 230");
+        assert_eq!(number_label(104, 230), "#104 of 230");
     }
 }

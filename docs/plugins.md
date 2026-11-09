@@ -156,21 +156,35 @@ These four opt-in plugins share these things (the last two are for Jannah, the Q
   translation, a hadith collection's meaning); what was downloaded for
   another language stays.
 - **A peek.** *Previous* / *Next* under today's item shows another one
-  without marking anything: Jannah's reminder and the coming days' steps
-  (only today's step can be marked done), the Qur'an's ayah of the day and
-  the ayahs after your place (your place and khatm don't move), Hadith's
-  coming hadith (nothing is marked read), and Prayer times' other days.
-  *Back to today* returns; a peek is forgotten when the shell restarts.
-  From the command line: `jannah peek`, `jannah step peek`, `quran peek`,
-  `hadith peek`, `prayer peek`.
+  without marking anything: the coming days' Jannah steps (only today's
+  step can be marked done), the Qur'an's ayah of the day and the ayahs
+  after your place (your place and khatm don't move), Hadith's coming
+  hadith (nothing is marked read), and Prayer times' other days. *Back to
+  today* returns; a peek is forgotten when the shell restarts. From the
+  command line: `jannah step peek`, `quran peek`, `hadith peek`,
+  `prayer peek`.
+- **A fresh Jannah reminder every time you open it.** Each time the
+  Jannah panel or the sidebar opens, it shows a verse or hadith picked at
+  random from the ones you chose (Studio → Plugins → Jannah → *Reminders
+  from*); a panel and a sidebar card open together show the same one.
+  *Next* on the reminder shows another fresh one, and *Previous* goes back
+  through the ones you saw (`jannah next`, `jannah prev`; `jannah peek`
+  looks at another without changing it, `jannah peek -1` at the one
+  before). The reminder shows its own number among the ones it is drawn
+  from, such as *#104 of 230*: the same verse or hadith always has the
+  same number (`jannah today` reports it as `number` and `of`). The
+  desktop widgets keep theirs for the day (or the hour, with *New
+  reminder*). Today's step stays one step a day.
 - **Nothing you just read comes straight back.** *Next* never shows the
-  item you were on. Jannah's and Hadith's rotation walks every item once
-  per round in a shuffled order, and a new round never starts with any of
-  the previous round's last eight (a third of the items for a very small
-  list; two items simply alternate). Jannah's reminder shows its place in
-  the round (12 / 230). A Jannah desktop widget, which skips items too
-  long for it, walks its own list of the ones that fit. The Jannah and
-  Hadith readers stop at either end of a list instead of wrapping round.
+  item you were on. A fresh Jannah reminder is never one of the last 16
+  you saw (a third of the items for a very small choice; two items simply
+  alternate, one stays), and Jannah remembers them in
+  `~/.local/state/mandara/jannah-recent.json`, so a restart doesn't bring
+  them back either. Its desktop widgets, which skip items too long for
+  them, avoid those too. Hadith's rotation walks every hadith once per
+  round in a shuffled order, and a new round never starts with any of the
+  previous round's last eight. The Jannah and Hadith readers stop at
+  either end of a list instead of wrapping round.
 - **Every word, one click away.** The sidebar cards, the Hadith panel's
   hadith of the day and Jannah's step evidence fold long text to a few
   lines, ending after a whole word (never inside one, never between a

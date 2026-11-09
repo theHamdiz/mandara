@@ -1,6 +1,7 @@
  +{count} more
 "English" = "Translation" pairs, one file per language
 "{value}" isn't a duration like 30m, 2h or 1h30m
+#{n} of {total}
 %-d %B
 %-d %B %Y
 %-d %b
@@ -50,6 +51,7 @@
 1 star
 1 thing to look at
 1 update
+1 when left out: another at random; negative: that many back through what was shown
 100% CPU
 100% GPU
 100% Rust
@@ -807,7 +809,7 @@ Border width
 Both
 Both Shift keys
 Both buttons together click the middle one (MangoWM, Niri, Sway, River)
-Both take turns: a verse, then a hadith
+Both: picked at random from the verses and hadith together
 Bottom
 Bottom center
 Bottom edge
@@ -2399,6 +2401,7 @@ Glow
 Glowing wave
 Glyph and today's reference
 Glyph only
+Go back to the reminder shown before
 Go back to the wallpaper shown before
 Go to {place} {n}
 Good
@@ -2640,12 +2643,12 @@ How often failed units are counted for the chip's badge
 How often filesystem usage is read again while the panel is open
 How often subscriptions are downloaded again
 How often the container list updates while the panel is closed (the open panel refreshes every 2 s)
+How often the desktop widgets show a new verse or hadith; the panel and sidebar show a fresh one each time they open
 How often the hadith of the day changes, the same everywhere
 How often the process table is sampled while the panel is open
 How often the unit list is reloaded while the panel is open
 How often to look for updates while the chip is in the bar
 How often to re-render, in milliseconds (0 = only after events).
-How often today's verse or hadith changes, the same everywhere
 How often transfer rates are measured
 How panels appear
 How see-through the main menu's glass is
@@ -3272,11 +3275,11 @@ Longer titles are cut short with an ellipsis
 Longitude
 Look
 Look & feel
+Look at another reminder without changing the one shown (negative: the ones shown before)
 Look at something 6 metres away
 Look at something 6 metres away for {n} seconds
 Look at the ayah of another day (days after today, or before it when negative) without moving your place
 Look at the hadith a few days (or hours) after today's, or before it when negative, without marking anything read
-Look at the reminder a few items after today's (before it when negative) without moving today's
 Look at the step of a day after today (before it when negative) without marking anything
 Look far away
 Look for this app as a Flatpak (Flathub) or an AppImage instead.
@@ -3649,8 +3652,6 @@ Move the toolbar to the top · M
 Move to
 Move to Trash
 Move to {zone}
-Move today's reminder back one item
-Move today's reminder forward one item (every surface follows)
 Move up
 Move window to {place} {n}
 Move window {direction}
@@ -4497,7 +4498,6 @@ Peek at the coming days' ayahs
 Peek at the coming days' hadith
 Peek at the coming days' steps
 Peek at the next ayahs
-Peek at what comes next
 Peek on workspace switch
 Pen
 Pending package updates from pacman, the AUR, APT, DNF, Zypper and Flatpak
@@ -5577,6 +5577,7 @@ Show a badge on the chip when units have failed
 Show a colour temperature for a few seconds (default 3, at most 10)
 Show a custom on-screen display (scripts, plugins)
 Show a filter in the clipboard panel (all, pinned, a kind or a collection), with an optional search
+Show a fresh reminder at random (every surface follows)
 Show a sample low or critical battery alert (nothing else happens)
 Show again
 Show all {count} apps
@@ -6454,6 +6455,7 @@ The unlock password was incorrect
 The update didn't install
 The upright line between a slider's fill and its track; None shows the fill alone
 The uptime monitor stopped
+The verse or hadith on screen now and today's step
 The volume beside the speaker icon
 The volume, brightness and mixer sliders in the main menu, panels and the sidebar
 The wallpaper Mandara is drawing
@@ -6652,7 +6654,6 @@ Today's step
 Today's step and this week's done days
 Today's step · done
 Today's total, the last days and your top apps (needs the Screen time plugin)
-Today's verse or hadith and today's step
 Today's verse or hadith in calligraphy under an arch, with its meaning
 Today's verse or hadith in the quote card's style
 Toggle a home control or run a scene, script or button
@@ -7618,7 +7619,6 @@ how long, in minutes
 how many (default 50)
 how many ahead (1 when left out; negative looks back)
 how many days ahead (1 when left out; negative looks back)
-how many items ahead (1 when left out; negative looks back)
 how many lines (default from Studio)
 how many recent lines
 how to go through the wallpapers

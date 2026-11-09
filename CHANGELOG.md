@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **Jannah shows something new each time you open it.** Opening the Jannah panel or the sidebar used to bring back the same verse or hadith all day. Now every open picks a fresh one at random from the Qur'an and hadith you chose, never the one you just read or one of the last 16 you saw, and Jannah remembers them across restarts. A panel and a sidebar card open together still show the same reminder. *Next* on the reminder brings another fresh one and *Previous* goes back through the ones you saw. Each reminder shows its own number, such as #104 of 230, which stays the same for that verse or hadith. The desktop widgets keep theirs for the day (or the hour) and avoid what you saw lately, and today's step still changes once a day. The Qur'an's ayah of the day and Hadith's hadith of the day stay as they were.
+
 ## 0.23.0 — 2026-11-09
 
 A different shape for every character. Mandara Studio uses less memory.

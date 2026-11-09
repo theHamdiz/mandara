@@ -1,8 +1,8 @@
 //! What Jannah remembers between sessions, in
 //! `~/.local/state/mandara/jannah.json`: saved reminders (newest first),
-//! the days a step was done, the user's nudges of "today" (`shift`, from
-//! next / previous) and the last day the morning reminder went out.
-//! Small and written whole (atomically) off the UI thread.
+//! the days a step was done and the last day the morning reminder went
+//! out. Small and written whole (atomically) off the UI thread. (What was
+//! shown lately lives in its own small file: [`super::recent`].)
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -33,8 +33,6 @@ pub struct State {
     pub saved: Vec<Saved>,
     /// Days a step was done (`YYYY-MM-DD`).
     pub done: BTreeSet<String>,
-    /// Added to the period: next / previous move every surface's "today".
-    pub shift: i64,
     /// The last day the morning reminder was sent.
     pub reminded: Option<String>,
 }
@@ -171,7 +169,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nested").join("jannah.json");
         assert_eq!(State::load(&path), State::default());
-        let mut s = State { shift: -3, ..State::default() };
+        let mut s = State::default();
         s.save_item("muslim-2699", 7);
         s.mark_done(day(3));
         s.set_reminded(day(3));
@@ -181,8 +179,9 @@ mod tests {
         assert!(back.reminded_on(day(3)) && !back.reminded_on(day(4)));
         std::fs::write(&path, "not json").unwrap();
         assert_eq!(State::load(&path), State::default());
-        // Unknown and missing fields are fine.
-        std::fs::write(&path, r#"{"shift": 2, "future": true}"#).unwrap();
-        assert_eq!(State::load(&path).shift, 2);
+        // Unknown and missing fields are fine (`shift` is from before
+        // reminders were picked at random).
+        std::fs::write(&path, r#"{"shift": 2, "future": true, "reminded": "2026-11-03"}"#).unwrap();
+        assert!(State::load(&path).reminded_on(day(3)));
     }
 }
