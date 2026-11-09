@@ -187,7 +187,9 @@ impl SudokuView {
         if self.card_like() && k.key != "escape" {
             self.model.update(cx, |s, cx| s.desktop_input(cx));
         }
-        let action = key_action(&k.key, m.control || m.platform, m.shift);
+        // GPUI clears the keystroke's Shift for digits and symbols; the
+        // window's own modifiers say whether Shift is really down.
+        let action = key_action(&k.key, m.control || m.platform, m.shift, m.shift || window.modifiers().shift);
         let handled = action != KeyAction::Ignore && action != KeyAction::Release;
         self.model.update(cx, |s, cx| match action {
             KeyAction::Move(dx, dy) => s.step(dx, dy, cx),
@@ -236,8 +238,10 @@ pub enum KeyAction {
     Ignore,
 }
 
-/// The board's keys (`command`: Ctrl or Super held).
-pub fn key_action(key: &str, command: bool, shift: bool) -> KeyAction {
+/// The board's keys (`command`: Ctrl or Super held; `shift`: the
+/// keystroke's Shift; `shift_held`: Shift is down on the keyboard, which
+/// the keystroke doesn't say for symbols).
+pub fn key_action(key: &str, command: bool, shift: bool, shift_held: bool) -> KeyAction {
     if command {
         return match key {
             "z" if shift => KeyAction::Redo,
@@ -255,10 +259,11 @@ pub fn key_action(key: &str, command: bool, shift: bool) -> KeyAction {
         "n" => KeyAction::Notes,
         "h" => KeyAction::Hint,
         "escape" => KeyAction::Release,
-        // Shifted digits arrive as their symbols on many layouts.
+        // Shifted digits arrive as their symbols on many layouts; the same
+        // symbols unshifted (AZERTY's `&` on the 1 key) are no digit.
         key => match key.parse::<u8>().ok().filter(|d| (1..=9).contains(d)) {
             Some(d) => KeyAction::Digit(d, shift),
-            None => shifted_digit(key).map_or(KeyAction::Ignore, |d| KeyAction::Digit(d, true)),
+            None => shifted_digit(key).filter(|_| shift_held).map_or(KeyAction::Ignore, |d| KeyAction::Digit(d, true)),
         },
     }
 }
@@ -708,21 +713,26 @@ mod tests {
 
     #[test]
     fn keys_map_to_moves_digits_notes_and_history() {
-        assert_eq!(key_action("left", false, false), KeyAction::Move(-1, 0));
-        assert_eq!(key_action("down", false, false), KeyAction::Move(0, 1));
-        assert_eq!(key_action("7", false, false), KeyAction::Digit(7, false));
-        assert_eq!(key_action("7", false, true), KeyAction::Digit(7, true));
-        assert_eq!(key_action("&", false, true), KeyAction::Digit(7, true));
-        assert_eq!(key_action("0", false, false), KeyAction::Erase);
-        assert_eq!(key_action("backspace", false, false), KeyAction::Erase);
-        assert_eq!(key_action("n", false, false), KeyAction::Notes);
-        assert_eq!(key_action("h", false, false), KeyAction::Hint);
-        assert_eq!(key_action("z", true, false), KeyAction::Undo);
-        assert_eq!(key_action("z", true, true), KeyAction::Redo);
-        assert_eq!(key_action("y", true, false), KeyAction::Redo);
-        assert_eq!(key_action("7", true, false), KeyAction::Ignore, "Ctrl+digit is the compositor's");
-        assert_eq!(key_action("escape", false, false), KeyAction::Release);
-        assert_eq!(key_action("q", false, false), KeyAction::Ignore);
+        assert_eq!(key_action("left", false, false, false), KeyAction::Move(-1, 0));
+        assert_eq!(key_action("down", false, false, false), KeyAction::Move(0, 1));
+        assert_eq!(key_action("7", false, false, false), KeyAction::Digit(7, false));
+        assert_eq!(key_action("7", false, true, true), KeyAction::Digit(7, true));
+        // US Shift+7 arrives as `&` with the keystroke's Shift cleared.
+        assert_eq!(key_action("&", false, false, true), KeyAction::Digit(7, true));
+        // AZERTY: the 1 key alone is `&`, and Shift on it gives a plain 1.
+        assert_eq!(key_action("&", false, false, false), KeyAction::Ignore);
+        assert_eq!(key_action("(", false, false, false), KeyAction::Ignore);
+        assert_eq!(key_action("1", false, false, true), KeyAction::Digit(1, false));
+        assert_eq!(key_action("0", false, false, false), KeyAction::Erase);
+        assert_eq!(key_action("backspace", false, false, false), KeyAction::Erase);
+        assert_eq!(key_action("n", false, false, false), KeyAction::Notes);
+        assert_eq!(key_action("h", false, false, false), KeyAction::Hint);
+        assert_eq!(key_action("z", true, false, false), KeyAction::Undo);
+        assert_eq!(key_action("z", true, true, true), KeyAction::Redo);
+        assert_eq!(key_action("y", true, false, false), KeyAction::Redo);
+        assert_eq!(key_action("7", true, false, false), KeyAction::Ignore, "Ctrl+digit is the compositor's");
+        assert_eq!(key_action("escape", false, false, false), KeyAction::Release);
+        assert_eq!(key_action("q", false, false, false), KeyAction::Ignore);
     }
 
     #[test]

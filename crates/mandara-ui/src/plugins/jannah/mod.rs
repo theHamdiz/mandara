@@ -303,9 +303,11 @@ fn load_memory(shared: &Shared, cx: &mut App) {
 
 /// Tells the picking rules when the panel or the sidebar opens, so the
 /// next look draws a fresh reminder (the sidebar's card follows the
-/// panel's while both are open).
+/// panel's while both are open). The shell's state is installed before
+/// any plugin runs (`init_state`, in the shell and in Studio), and the
+/// model is built only once, so there is no later chance to register.
 fn follow_surfaces(shared: &Shared, cx: &mut App) {
-    let Some(state) = cx.try_global::<crate::state::GlobalShell>().map(|g| g.0.clone()) else { return };
+    let state = crate::state::shell(cx);
     let weak = Rc::downgrade(shared);
     cx.observe(&state, move |state, cx| {
         let Some(shared) = weak.upgrade() else { return };
