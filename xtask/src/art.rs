@@ -61,6 +61,9 @@ const PALETTE_COLORS: usize = 256;
 /// NeuQuant sampling factor (1 = every pixel, slowest and best; 10 is the
 /// library's recommended balance).
 const NEUQUANT_SAMPLE_FACTOR: i32 = 10;
+/// Bounds propagated RGB error so a poorly represented color cannot build up
+/// into dark contours across a smooth gradient.
+const MAX_DITHER_ERROR: f32 = 8.0;
 /// Title color.
 const INK: [u8; 3] = [0xFF, 0xF3, 0xDB];
 /// The floating layers' drop shadow.
@@ -580,7 +583,7 @@ pub fn save_cover_png(img: &RgbaImage, path: &Path) -> Result<()> {
                 let c = work[i].map(|v| v.round().clamp(0.0, 255.0) as u8);
                 let idx = nq.index_of(&[c[0], c[1], c[2], 255]);
                 indices[i] = idx as u8;
-                let err: [f32; 3] = std::array::from_fn(|k| work[i][k] - palette[idx * 3 + k] as f32);
+                let err: [f32; 3] = std::array::from_fn(|k| (work[i][k] - palette[idx * 3 + k] as f32).clamp(-MAX_DITHER_ERROR, MAX_DITHER_ERROR));
                 let mut spread = |dx: isize, dy: usize, f: f32| {
                     let nx = x as isize + dx;
                     if nx < 0 || nx >= w as isize || y + dy >= h as usize {
@@ -1142,6 +1145,10 @@ pub fn art(args: &[String]) -> Result<()> {
     }
     embed_all()
 }
+
+#[cfg(test)]
+#[path = "art/game_2048_tests.rs"]
+mod game_2048_tests;
 
 #[cfg(test)]
 mod tests {
