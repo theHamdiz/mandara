@@ -266,6 +266,14 @@ const BUILTIN_ACCESS: &[(&str, &[(Access, &str)])] = &[
             (Access::Files, tk("Keeps your stations and favourites in Mandara's state folder")),
         ],
     ),
+    (
+        "feeds",
+        &[
+            (Access::Network, tk("Downloads the feeds you follow and their pictures")),
+            (Access::Files, tk("Keeps your feeds and saved articles in Mandara's state folder")),
+        ],
+    ),
+    ("reddit", &[(Access::Network, tk("Reads communities, threads and their pictures from reddit.com"))]),
     ("network", &[(Access::DBus, tk("Lists and joins networks through NetworkManager"))]),
     ("bluetooth", &[(Access::DBus, tk("Pairs and connects devices through BlueZ"))]),
     ("notifications", &[(Access::DBus, tk("Receives notifications as the desktop notification server"))]),
@@ -1319,6 +1327,15 @@ mod tests {
         assert_eq!(next.plugins.setting("moon-test", "hemisphere", String::new()), "south");
         // Cached: the same leaked settings come back.
         assert_eq!(plugin_settings(&m)[0].path.as_ptr(), list[0].path.as_ptr());
+    }
+
+    /// The plugin detail tells you which built-ins go online.
+    #[test]
+    fn online_builtins_declare_network_access() {
+        for id in ["radio", "feeds", "reddit"] {
+            let access = BUILTIN_ACCESS.iter().find(|(entry, _)| *entry == id).map(|(_, access)| *access).unwrap_or_default();
+            assert!(access.iter().any(|(kind, _)| *kind == Access::Network), "{id}");
+        }
     }
 
     #[test]

@@ -1903,6 +1903,7 @@ Downloading…
 Downloading… {done} of {total} MB
 Downloads
 Downloads the cursor themes you pick from their GitHub releases
+Downloads the feeds you follow and their pictures
 Downloads {size} from speed.cloudflare.com
 Dracula
 Drag a history card left or right to remove it
@@ -3219,6 +3220,7 @@ Keeps Mandara running if anything ever takes it down. Turn off to let it stay st
 Keeps a history of what you copy
 Keeps daily totals in Mandara's state folder
 Keeps the bar and its panels above fullscreen apps; applies after a shell restart
+Keeps your feeds and saved articles in Mandara's state folder
 Keeps your stations and favourites in Mandara's state folder
 Kept
 Kept awake
@@ -5262,6 +5264,7 @@ Reads English, Spanish, French and other Latin-script text
 Reads and controls players over MPRIS
 Reads and switches keyboard layouts
 Reads and switches tags or workspaces
+Reads communities, threads and their pictures from reddit.com
 Reads images from your wallpaper folder
 Reads installed applications
 Reads the focused window's title

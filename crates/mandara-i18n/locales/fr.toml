@@ -9618,3 +9618,6 @@
 "Pills" = "Pilules"
 "Shared" = "Partagé"
 "Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look" = "Donne à une barre latérale l'apparence d'éléments d'un style de barre (formes, couleur et retrait), ou none pour l'apparence partagée"
+"Downloads the feeds you follow and their pictures" = "Télécharge les flux que vous suivez et leurs images"
+"Keeps your feeds and saved articles in Mandara's state folder" = "Garde vos flux et articles enregistrés dans le dossier d'état de Mandara"
+"Reads communities, threads and their pictures from reddit.com" = "Lit les communautés, les fils et leurs images sur reddit.com"
