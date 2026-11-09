@@ -53,19 +53,30 @@ pub(super) fn agent() -> ureq::Agent {
     ureq::Agent::config_builder().timeout_global(Some(REQUEST_TIMEOUT)).max_redirects(0).http_status_as_error(false).build().into()
 }
 
-/// One GET with conditional headers. Redirects are followed by hand, at
-/// most [`MAX_REDIRECTS`] times, only to web addresses and never from
-/// https down to http. The body is read up to `limit` bytes, decompressed
-/// when the server gzipped it.
-pub(super) fn get(agent: &ureq::Agent, url: &str, accept: &str, validators: (Option<&str>, Option<&str>), limit: usize) -> Result<Fetched, Failure> {
+/// A cached copy's ETag and Last-Modified, with the address that issued them.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct Validators<'a> {
+    pub url: &'a str,
+    pub etag: Option<&'a str>,
+    pub modified: Option<&'a str>,
+}
+
+/// One GET with conditional headers, sent only to the address that issued
+/// them (on the first request or a redirect hop that leads back to it).
+/// Redirects are followed by hand, at most [`MAX_REDIRECTS`] times, only to
+/// web addresses and never from https down to http. The body is read up to
+/// `limit` bytes, decompressed when the server gzipped it.
+pub(super) fn get(agent: &ureq::Agent, url: &str, accept: &str, validators: Option<Validators<'_>>, limit: usize) -> Result<Fetched, Failure> {
     crate::offline::check()?;
     let mut current = url.to_owned();
     let mut moved = true;
     for _ in 0..=MAX_REDIRECTS {
         if !web_url(&current) { return Err(t("Use an http:// or https:// feed address without a password").into()); }
         let mut request = agent.get(&current).header("User-Agent", USER_AGENT).header("Accept", accept).header("Accept-Encoding", "gzip");
-        if let Some(etag) = validators.0 { request = request.header("If-None-Match", etag); }
-        if let Some(modified) = validators.1 { request = request.header("If-Modified-Since", modified); }
+        if let Some(v) = validators.filter(|v| v.url == current) {
+            if let Some(etag) = v.etag { request = request.header("If-None-Match", etag); }
+            if let Some(modified) = v.modified { request = request.header("If-Modified-Since", modified); }
+        }
         let mut response = request.call().map_err(|error| Failure::from(tf("Could not reach the server: {error}", &[("error", &error)]).to_string()))?;
         let status = response.status();
         let header = |name: &str| response.headers().get(name).and_then(|value| value.to_str().ok()).map(str::to_owned);

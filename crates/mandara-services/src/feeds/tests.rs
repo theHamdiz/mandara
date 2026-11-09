@@ -154,6 +154,28 @@ fn conditional_requests_keep_the_cached_content() {
     assert!(requests[0].contains("accept-encoding: gzip"));
 }
 
+/// Validators go only to the address that issued them: after a temporary
+/// redirect the first hop gets none, the address that sent them does.
+#[test]
+fn validators_go_only_to_the_address_that_issued_them() {
+    let hop = b"HTTP/1.1 302 Found\r\nLocation: /today\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec();
+    let (base, worker) = serve(vec![hop.clone(), ok("ETag: \"b-1\"\r\n", RSS2), hop, b"HTTP/1.1 304 Not Modified\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec()]);
+    let url = format!("{base}/feed");
+    let source = local();
+    let feed = source.fetch_online(&url, None).unwrap().unwrap();
+    assert_eq!(feed.validated.as_deref(), Some(format!("{base}/today").as_str()));
+    assert!(source.fetch_online(&url, Some(&feed)).unwrap().is_none(), "the issuing address answered 304");
+    let requests = worker.join().unwrap();
+    assert!(requests[2].starts_with("get /feed ") && !requests[2].contains("if-none-match"), "not to the redirecting address");
+    assert!(requests[3].starts_with("get /today ") && requests[3].contains("if-none-match: \"b-1\""), "to the one that issued them");
+    // A snapshot from before validators were bound sends none.
+    let unbound = Feed { validated: None, ..feed };
+    let (base, worker) = serve(vec![ok("", RSS2)]);
+    let url = format!("{base}/feed");
+    source.fetch_online(&url, Some(&Feed { url: url.clone(), ..unbound })).unwrap();
+    assert!(!worker.join().unwrap()[0].contains("if-none-match"));
+}
+
 #[test]
 fn gzipped_feeds_decompress() {
     let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());

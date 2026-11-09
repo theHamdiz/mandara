@@ -66,6 +66,10 @@ pub struct Feed {
     pub entries: Vec<Entry>,
     pub etag: Option<String>,
     pub modified: Option<String>,
+    /// The address that issued `etag` and `modified`; they are sent only
+    /// there. Older snapshots have none, so theirs aren't sent at all.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validated: Option<String>,
     /// The site's home page.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub site: Option<String>,
@@ -129,7 +133,7 @@ impl HttpSource {
         if !web_url(url) { return Err(t("Use an http:// or https:// feed address without a password").into()); }
         let previous = previous.filter(|feed| feed.url == url);
         let address = previous.and_then(|feed| feed.resolved.as_deref()).unwrap_or(url);
-        let validators = previous.map_or((None, None), |feed| (feed.etag.as_deref(), feed.modified.as_deref()));
+        let validators = previous.and_then(|feed| Some(http::Validators { url: feed.validated.as_deref()?, etag: feed.etag.as_deref(), modified: feed.modified.as_deref() }));
         let body = match http::get(&self.agent, address, ACCEPT_FEEDS, validators, MAX_FEED_BYTES)? {
             http::Fetched::NotModified => return previous.map(|_| None).ok_or_else(|| t("The feed server returned no content").into()),
             http::Fetched::Body(body) => body,
@@ -140,6 +144,7 @@ impl HttpSource {
         match parse_full(&body.final_url, &body.bytes, body.charset.as_deref()) {
             Ok(mut parsed) => {
                 parsed.feed.url = url.to_owned();
+                parsed.feed.validated = (body.etag.is_some() || body.modified.is_some()).then(|| body.final_url.clone());
                 parsed.feed.etag = body.etag;
                 parsed.feed.modified = body.modified;
                 parsed.feed.resolved = resolved;
@@ -152,11 +157,12 @@ impl HttpSource {
                     return Err(t("This address is a web page without a feed; find its RSS or Atom link").into());
                 };
                 drop(page);
-                let http::Fetched::Body(feed_body) = http::get(&self.agent, &found.url, ACCEPT_FEEDS, (None, None), MAX_FEED_BYTES)? else {
+                let http::Fetched::Body(feed_body) = http::get(&self.agent, &found.url, ACCEPT_FEEDS, None, MAX_FEED_BYTES)? else {
                     return Err(t("The feed server returned no content").into());
                 };
                 let mut parsed = parse_full(&feed_body.final_url, &feed_body.bytes, feed_body.charset.as_deref()).map_err(|_| Failure::from(error))?;
                 parsed.feed.url = url.to_owned();
+                parsed.feed.validated = (feed_body.etag.is_some() || feed_body.modified.is_some()).then(|| feed_body.final_url.clone());
                 parsed.feed.etag = feed_body.etag;
                 parsed.feed.modified = feed_body.modified;
                 parsed.feed.resolved = Some(found.url);
@@ -182,7 +188,7 @@ pub fn discover(input: &str) -> Result<Vec<Candidate>, String> {
     let url = normalize_address(input)?;
     let agent = http::agent();
     let failure = |error: Failure| error.message;
-    let body = match http::get(&agent, &url, ACCEPT_PAGES, (None, None), MAX_FEED_BYTES).map_err(failure)? {
+    let body = match http::get(&agent, &url, ACCEPT_PAGES, None, MAX_FEED_BYTES).map_err(failure)? {
         http::Fetched::Body(body) => body,
         http::Fetched::NotModified => return Err(t("The feed server returned no content").into()),
     };
@@ -196,7 +202,7 @@ pub fn discover(input: &str) -> Result<Vec<Candidate>, String> {
     }
     drop(body);
     for candidate in discover::common(&url) {
-        if let Ok(http::Fetched::Body(body)) = http::get(&agent, &candidate, ACCEPT_FEEDS, (None, None), MAX_FEED_BYTES)
+        if let Ok(http::Fetched::Body(body)) = http::get(&agent, &candidate, ACCEPT_FEEDS, None, MAX_FEED_BYTES)
             && let Ok(parsed) = parse_full(&candidate, &body.bytes, body.charset.as_deref())
             && !parsed.feed.entries.is_empty()
         {
@@ -208,7 +214,7 @@ pub fn discover(input: &str) -> Result<Vec<Candidate>, String> {
 
 /// Download a picture (a thumbnail, an icon or an article image).
 pub fn download_image(url: &str) -> Result<Vec<u8>, String> {
-    match http::get(&http::agent(), url, ACCEPT_IMAGES, (None, None), MAX_IMAGE_BYTES).map_err(|error| error.message)? {
+    match http::get(&http::agent(), url, ACCEPT_IMAGES, None, MAX_IMAGE_BYTES).map_err(|error| error.message)? {
         http::Fetched::Body(body) => Ok(body.bytes),
         http::Fetched::NotModified => Err(t("The feed server returned no content").into()),
     }
