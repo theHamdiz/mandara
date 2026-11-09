@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Under the hood
+
+- **Mandara compiles for FreeBSD.** The whole workspace, its tests included, now builds for FreeBSD 14 (amd64) without a single warning, and the FreeBSD check in CI is a required one: a change that breaks the FreeBSD build can't land. The bar, panels and Studio use the same Wayland layer surfaces there as on Linux.
+
 ## 0.24.0 — 2026-11-09
 
 Update your whole system right from the Updates panel. Pick how every

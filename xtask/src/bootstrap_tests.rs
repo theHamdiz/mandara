@@ -250,7 +250,7 @@ fn terminal_progress_shows_transfer_totals_and_the_completed_byte_count() {
     let (mut master, mut slave) = (-1, -1);
     // SAFETY: openpty writes two distinct descriptors; default terminal
     // attributes are enough for curl's isatty-based progress meter.
-    assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null(), std::ptr::null()) }, 0);
+    assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()) }, 0);
     // SAFETY: ownership transfers once; each File closes its descriptor.
     let (mut master, slave) = unsafe { (std::fs::File::from_raw_fd(master), std::fs::File::from_raw_fd(slave)) };
     let functions = SCRIPT.strip_suffix("main \"$@\"\n").unwrap();
@@ -315,7 +315,7 @@ fn installer_input_uses_the_terminal_or_preserves_an_unattended_pipe() {
         let (mut master, mut slave) = (-1, -1);
         // SAFETY: openpty initializes two distinct descriptors; null attributes
         // retain canonical input, so the fixture reads complete terminal lines.
-        assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null(), std::ptr::null()) }, 0);
+        assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()) }, 0);
         // SAFETY: each descriptor is transferred once and closed by its File.
         let (mut master, slave) = unsafe { (std::fs::File::from_raw_fd(master), std::fs::File::from_raw_fd(slave)) };
         for fd in [master.as_raw_fd(), slave.as_raw_fd()] {

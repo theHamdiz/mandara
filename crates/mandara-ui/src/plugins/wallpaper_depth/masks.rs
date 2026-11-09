@@ -234,7 +234,8 @@ fn model(wallpaper: &Path, request: Request) -> Result<Made, String> {
         if !depth_model::installed() {
             return Err(MODEL_MISSING.into());
         }
-        let report = depth_model::run_worker(Path::new(SELF_EXE), wallpaper, &depth_file)?;
+        let exe = mandara_config::paths::running_image().map_err(|e| format!("the running binary: {e}"))?;
+        let report = depth_model::run_worker(&exe, wallpaper, &depth_file)?;
         tracing::info!("depth model for {}: {} ms, {} ms CPU, peak {} KiB", wallpaper.display(), report.ms, report.cpu_ms, report.peak_rss_kib);
         detail = format!("model run {} ms, peak {} MiB; ", report.ms, report.peak_rss_kib / KIB_PER_MIB);
         *LAST_RUN.lock().unwrap_or_else(|e| e.into_inner()) = Some((wallpaper.to_path_buf(), report));
@@ -245,11 +246,6 @@ fn model(wallpaper: &Path, request: Request) -> Result<Made, String> {
     drop(img);
     Ok(depth_model::subject_alpha(&depth, &photo, request.split_fraction()).map(|(alpha, split)| (alpha, format!("{detail}{}", split.describe()))))
 }
-
-/// The running shell's own binary image: the helper is always the same
-/// build, even after an update replaced (or a rebuild deleted) the file the
-/// shell was started from.
-const SELF_EXE: &str = "/proc/self/exe";
 
 /// KiB in a MiB (report formatting).
 const KIB_PER_MIB: u64 = 1024;

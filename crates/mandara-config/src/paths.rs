@@ -175,6 +175,21 @@ pub fn self_exe() -> PathBuf {
     if exe.is_file() { exe } else { PathBuf::from("mandara") }
 }
 
+/// The running binary image, for starting a helper from this same build.
+/// Linux's procfs link keeps naming it after an update replaced (or a
+/// rebuild deleted) the file the process was started from. Elsewhere it's
+/// the path the kernel reports (FreeBSD: `kern.proc.pathname`).
+pub fn running_image() -> std::io::Result<PathBuf> {
+    #[cfg(target_os = "linux")]
+    {
+        Ok(PathBuf::from("/proc/self/exe"))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        std::env::current_exe()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

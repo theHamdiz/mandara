@@ -1,5 +1,9 @@
 //! Native editing uses only a recorded, isolated resource desktop.
 
+// The private desktop it drives identifies the shell through procfs and
+// SO_PEERCRED, which are Linux interfaces.
+#![cfg(target_os = "linux")]
+
 use std::io::{self, Read as _};
 use std::path::Path;
 use std::process::{Child, Stdio};

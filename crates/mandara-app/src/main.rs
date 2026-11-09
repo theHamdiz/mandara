@@ -327,11 +327,17 @@ fn supervise() -> Result<()> {
     loop {
         let mut cmd = std::process::Command::new(&exe);
         cmd.arg("run").env("MANDARA_SUPERVISED", "1");
-        // SAFETY: prctl in the forked child before exec; no allocation.
+        // SAFETY: prctl/procctl in the forked child before exec; no allocation.
         unsafe {
             cmd.pre_exec(|| {
                 // The shell dies with its supervisor.
+                #[cfg(target_os = "linux")]
                 libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+                #[cfg(target_os = "freebsd")]
+                {
+                    let mut signal = libc::SIGTERM;
+                    libc::procctl(libc::P_PID, 0, libc::PROC_PDEATHSIG_CTL, (&raw mut signal).cast());
+                }
                 Ok(())
             });
         }
@@ -395,30 +401,63 @@ const GPUI_WORKERS: usize = 4;
 /// gets the full mask back, so nothing is pinned.
 fn application() -> gpui::Application {
     use std::mem::{size_of, zeroed};
-    // SAFETY: cpu_set_t is plain data; the libc calls get valid pointers and
+    // SAFETY: the CPU set is plain data; the libc calls get valid pointers and
     // its exact size, and only change scheduling affinity.
     unsafe {
-        let mut full: libc::cpu_set_t = zeroed();
-        if libc::sched_getaffinity(0, size_of::<libc::cpu_set_t>(), &mut full) != 0 {
+        let mut full: affinity::CpuSet = zeroed();
+        if libc::sched_getaffinity(0, size_of::<affinity::CpuSet>(), &mut full) != 0 {
             return gpui_platform::application();
         }
-        let mut capped: libc::cpu_set_t = zeroed();
+        let mut capped: affinity::CpuSet = zeroed();
         let cpus = (0..libc::CPU_SETSIZE as usize).filter(|cpu| libc::CPU_ISSET(*cpu, &full)).take(GPUI_WORKERS);
         let mut count = 0;
         for cpu in cpus {
             libc::CPU_SET(cpu, &mut capped);
             count += 1;
         }
-        if count < GPUI_WORKERS || libc::sched_setaffinity(0, size_of::<libc::cpu_set_t>(), &capped) != 0 {
+        if count < GPUI_WORKERS || libc::sched_setaffinity(0, size_of::<affinity::CpuSet>(), &capped) != 0 {
             return gpui_platform::application();
         }
         let app = gpui_platform::application();
         // Threads started meanwhile inherited the capped mask: restore all.
+        affinity::restore_every_thread(&full);
+        app
+    }
+}
+
+/// The CPU affinity calls that differ between kernels. `sched_getaffinity`
+/// and `sched_setaffinity` with pid 0 act on the calling thread on both.
+mod affinity {
+    use std::mem::size_of;
+
+    #[cfg(target_os = "linux")]
+    pub type CpuSet = libc::cpu_set_t;
+    #[cfg(target_os = "freebsd")]
+    pub type CpuSet = libc::cpuset_t;
+
+    /// Gives every thread of this process `mask`.
+    ///
+    /// # Safety
+    /// Only changes scheduling affinity; `mask` is a valid set.
+    #[cfg(target_os = "linux")]
+    pub unsafe fn restore_every_thread(mask: &CpuSet) {
         let tids = std::fs::read_dir("/proc/self/task").into_iter().flatten().flatten().filter_map(|e| e.file_name().to_str()?.parse::<libc::pid_t>().ok());
         for tid in tids {
-            libc::sched_setaffinity(tid, size_of::<libc::cpu_set_t>(), &full);
+            // SAFETY: valid pointer and exact size, per the caller.
+            unsafe { libc::sched_setaffinity(tid, size_of::<CpuSet>(), mask) };
         }
-        app
+    }
+
+    /// Gives every thread of this process `mask`: FreeBSD's
+    /// `CPU_WHICH_PID` applies a mask to all of a process's threads, and id
+    /// -1 is the calling process (cpuset_setaffinity(2)).
+    ///
+    /// # Safety
+    /// Only changes scheduling affinity; `mask` is a valid set.
+    #[cfg(target_os = "freebsd")]
+    pub unsafe fn restore_every_thread(mask: &CpuSet) {
+        // SAFETY: valid pointer and exact size, per the caller.
+        unsafe { libc::cpuset_setaffinity(libc::CPU_LEVEL_WHICH, libc::CPU_WHICH_PID, -1, size_of::<CpuSet>(), mask) };
     }
 }
 

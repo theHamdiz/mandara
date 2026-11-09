@@ -156,14 +156,7 @@ pub fn worker_main(settings: impl FnOnce() -> Vec<super::catalog::Command>) -> R
 
 /// Linux procfs keeps the running inode executable after an atomic update.
 fn worker_executable() -> Result<std::path::PathBuf> {
-    #[cfg(target_os = "linux")]
-    {
-        Ok("/proc/self/exe".into())
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        Ok(std::env::current_exe()?)
-    }
+    Ok(mandara_config::paths::running_image()?)
 }
 
 struct Child(std::process::Child);

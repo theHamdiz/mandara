@@ -17,7 +17,7 @@
 
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -248,7 +248,8 @@ fn spawn_mic(shared: Arc<Shared>) -> Watcher {
 
 // ── Camera ───────────────────────────────────────────────────────────────
 
-fn video_devices() -> Vec<PathBuf> {
+#[cfg(target_os = "linux")]
+fn video_devices() -> Vec<std::path::PathBuf> {
     let Ok(dir) = std::fs::read_dir(DEV) else { return Vec::new() };
     dir.flatten().filter(|e| e.file_name().to_string_lossy().starts_with(VIDEO_PREFIX)).map(|e| e.path()).collect()
 }
@@ -299,14 +300,22 @@ fn spawn_camera(shared: Arc<Shared>, poll: Duration) -> Watcher {
     Watcher(alive)
 }
 
+/// Device-node open notifications are inotify's; elsewhere the watcher
+/// falls back to scanning on a timer.
+#[cfg(not(target_os = "linux"))]
+fn camera_inotify(_shared: &Shared, _alive: &AtomicBool, _scan: &dyn Fn(&Shared)) -> Result<(), String> {
+    Err("device open notifications need inotify".into())
+}
+
 /// Follows open / close of every `/dev/video*` (and devices appearing).
+#[cfg(target_os = "linux")]
 fn camera_inotify(shared: &Shared, alive: &AtomicBool, scan: &dyn Fn(&Shared)) -> Result<(), String> {
     use rustix::event::{PollFd, PollFlags, Timespec, poll};
     use rustix::fs::inotify::{self, CreateFlags, ReadFlags, WatchFlags};
     let fd = inotify::init(CreateFlags::CLOEXEC | CreateFlags::NONBLOCK).map_err(|e| e.to_string())?;
     let device_flags = WatchFlags::OPEN | WatchFlags::CLOSE_WRITE | WatchFlags::CLOSE_NOWRITE;
-    let mut watched: HashMap<PathBuf, i32> = HashMap::new();
-    let rewatch = |watched: &mut HashMap<PathBuf, i32>| {
+    let mut watched: HashMap<std::path::PathBuf, i32> = HashMap::new();
+    let rewatch = |watched: &mut HashMap<std::path::PathBuf, i32>| {
         let now = video_devices();
         watched.retain(|p, _| now.contains(p));
         for dev in now {
@@ -510,6 +519,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn device_node_inotify_reports_opens() {
         // The mechanism the camera watcher relies on, shown on /dev/null.
         use rustix::fs::inotify::{self, CreateFlags, WatchFlags};

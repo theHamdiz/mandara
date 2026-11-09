@@ -215,6 +215,30 @@ own rounded mask too, so the cut corners and squircles came out rounded.
 Mandara's `components::surfaces` tests cover the mask (a card flush with a
 rounded panel's corner keeps that corner and loses only its own rounding).
 
+## 10. FreeBSD uses the Linux platform's layer shell and queue (`gpui.rs`, `platform.rs`, `window.rs`)
+
+Upstream's Linux platform (`gpui_linux`, chosen by `gpui_platform` for
+`any(target_os = "linux", target_os = "freebsd")`) also serves FreeBSD, but a
+few items it needs from this crate were gated on `target_os = "linux"` alone,
+so a FreeBSD build of `gpui_linux` failed: the priority queue its dispatcher
+uses, and the Wayland layer-shell types its Wayland client creates layer
+surfaces with. Each cfg now reads `any(target_os = "linux", target_os =
+"freebsd")`:
+
+* `mod queue` and `pub use queue::{PriorityQueueReceiver, PriorityQueueSender}`
+  (`gpui.rs`);
+* `pub mod layer_shell`, `PlatformWindow::set_exclusive_edge` and
+  `WindowKind::LayerShell` (`platform.rs`), still behind `feature = "wayland"`;
+* `Window::set_exclusive_edge` (`window.rs`);
+* `PlatformScreenCaptureFrame` with `screen-capture` (`platform.rs`), whose
+  `scap_screen_capture` module upstream already builds on FreeBSD.
+
+Linux is unchanged: every item keeps its Linux cfg. Nothing in `gpui_linux`
+or `gpui_wgpu` needed changing; both already treat FreeBSD like Linux
+(Wayland client, `wl_touch`, fonts, input, the wgpu renderer). The FreeBSD
+check in CI (`cargo clippy --workspace --all-targets --target
+x86_64-unknown-freebsd`) covers this patch.
+
 ## Packaging changes
 
 `Cargo.toml` spells out the workspace-inherited fields and dependencies with
