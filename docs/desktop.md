@@ -262,6 +262,11 @@ existing widgets. Eligible kinds can also be added to
 - **Desktop cards:** a now-playing card (art, wavy progress, synced lyrics)
   and a calendar card, each on its own tiny surface that exists only while
   shown.
+- **Games on the desktop:** with the opt-in Sudoku and 2048 plugins on,
+  their boards are widgets you play right on the desktop. Click one to give
+  it the keyboard and click anywhere else to give it back. Studio →
+  Desktop widgets sets each one's width and style (Glass, Solid or
+  Minimal). See [Games](plugins.md#games-sudoku-and-2048).
 - **Visualizers:** a glowing wave along a screen edge, framed bars or a
   mirrored strip. They listen only while music plays and drop to zero CPU
   after a few seconds of silence.

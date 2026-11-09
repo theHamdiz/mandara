@@ -437,6 +437,11 @@ fn s(section: Section, group: &'static str, path: &'static str, label: &'static 
     Setting { section, group, path, label, help, control, default: None }
 }
 
+/// The Sudoku levels.
+const SUDOKU_LEVELS: &[(&str, &str)] = &[("easy", tk("Easy")), ("medium", tk("Medium")), ("hard", tk("Hard")), ("expert", tk("Expert"))];
+/// Which theme colour a game leans on.
+const GAME_ACCENTS: &[(&str, &str)] = &[("primary", tk("Primary")), ("secondary", tk("Secondary")), ("tertiary", tk("Tertiary"))];
+
 fn sd(section: Section, group: &'static str, path: &'static str, label: &'static str, help: &'static str, control: Control, default: Value) -> Setting {
     Setting { section, group, path, label, help, control, default: Some(Box::new(default)) }
 }
@@ -910,6 +915,21 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Pomodoro"), "/plugins/settings/pomodoro/long_break_minutes", tk("Long break"), tk("After several sessions"), slider(5.0, 60.0, 5.0, " min"), Value::from(15)),
         sd(Plugins, tk("Pomodoro"), "/plugins/settings/pomodoro/long_break_every", tk("Long break every"), tk("Sessions before a long break"), slider(2.0, 8.0, 1.0, ""), Value::from(4)),
         sd(Plugins, tk("Pomodoro"), "/plugins/settings/pomodoro/auto_continue", tk("Auto-continue"), tk("Start the next phase automatically"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/difficulty", tk("Level"), tk("What a new game deals; the game's New button can pick another"), Choice(SUDOKU_LEVELS), Value::from("medium")),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/highlight_peers", tk("Highlight row, column and box"), tk("Shade the cells the selected cell sees"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/highlight_same", tk("Highlight the same digits"), tk("Shade every cell holding the selected cell's digit"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/conflicts", tk("Show conflicts"), tk("Digits that clash with their row, column or box turn red"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/mistakes", tk("Count mistakes"), tk("Count the digits that aren't the solution's"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/timer", tk("Timer"), tk("Show the time played; it runs only while the game is open or its desktop widget has the keyboard"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/hints", tk("Hints"), tk("A Hint button that fills in one cell (hints are counted)"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/clear_notes", tk("Clear notes automatically"), tk("A digit removes its pencil marks from the cells it sees"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/accent", tk("Accent colour"), tk("The theme colour your digits and highlights use"), Choice(GAME_ACCENTS), Value::from("primary")),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/bar_time", tk("Time in the bar"), tk("The bar item shows the clock while you play"), Toggle, Value::from(false)),
+        sd(Plugins, "2048", "/plugins/settings/2048/size", tk("Board size"), tk("Tiles per side for a new game (a game in play keeps its size)"), slider(3.0, 6.0, 1.0, ""), Value::from(4)),
+        sd(Plugins, "2048", "/plugins/settings/2048/animations", tk("Animations"), tk("Tiles slide and pop (they jump with reduced motion)"), Toggle, Value::from(true)),
+        sd(Plugins, "2048", "/plugins/settings/2048/undo", tk("Undo"), tk("Take back your last move"), Toggle, Value::from(true)),
+        sd(Plugins, "2048", "/plugins/settings/2048/accent", tk("Accent colour"), tk("The theme colour the tiles ripen toward"), Choice(GAME_ACCENTS), Value::from("primary")),
+        sd(Plugins, "2048", "/plugins/settings/2048/bar_score", tk("Score in the bar"), tk("The bar item shows your score while you play"), Toggle, Value::from(false)),
         sd(Plugins, tk("Drives"), "/plugins/settings/drives/notify_on_plug", tk("Announce new drives"), tk("A notification and a pulse on the chip when a drive is plugged in"), Toggle, Value::from(true)),
         sd(Plugins, tk("Drives"), "/plugins/settings/drives/show_system", tk("Show system partitions"), tk("Also list boot, EFI and other internal system partitions"), Toggle, Value::from(false)),
         sd(Plugins, tk("Containers"), "/plugins/settings/containers/engine", tk("Engine"), tk("Which container engine the panel talks to"), Choice(const { &[("auto", tk("Automatic")), ("docker", "Docker"), ("podman", "Podman")] }), Value::from("auto")),

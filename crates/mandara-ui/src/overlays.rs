@@ -383,7 +383,7 @@ const SNIP_WORDS: &str = "screen capture snip snipping tool snippet sniptool pri
 
 /// Extra search words for built-in plugins, by id: what people call them
 /// when they don't know Mandara's name.
-const PLUGIN_SYNONYMS: &[(&str, &str)] = &[(crate::plugins::screenshot::ID, SNIP_WORDS), (crate::plugins::feeds::ID, FEEDS_WORDS), (crate::plugins::reddit::ID, REDDIT_WORDS), (crate::plugins::radio::ID, RADIO_WORDS)];
+const PLUGIN_SYNONYMS: &[(&str, &str)] = &[(crate::plugins::screenshot::ID, SNIP_WORDS), (crate::plugins::feeds::ID, FEEDS_WORDS), (crate::plugins::reddit::ID, REDDIT_WORDS), (crate::plugins::radio::ID, RADIO_WORDS), (crate::plugins::sudoku::ID, GAME_WORDS), (crate::plugins::tiles::ID, GAME_WORDS)];
 
 /// Words people type for a feed reader.
 const FEEDS_WORDS: &str = "rss feeds feed news atom reader subscriptions subscribe headlines articles blogs opml";
@@ -417,6 +417,12 @@ fn reddit_entry(q: &str, index: &[Item]) -> Option<Item> {
 /// Words people type for the radio.
 const RADIO_WORDS: &str = "fm am internet radio stations station stream streaming live broadcast tune music news";
 
+/// Words people type for a game.
+const GAME_WORDS: &str = "game games puzzle puzzles play number numbers tiles";
+/// Opt-in plugins the launcher offers to switch on when they're off and
+/// searched for (the games: nobody guesses they ship).
+const OFFER_WHEN_OFF: &[&str] = &[crate::plugins::sudoku::ID, crate::plugins::tiles::ID];
+
 fn build_index(cx: &App) -> Vec<Item> {
     let cfg = config(cx).read(cx).snapshot();
     let registry = cx.global::<mandara_plugins::PluginRegistry>();
@@ -448,7 +454,21 @@ fn build_index_with(registry: &mandara_plugins::PluginRegistry, cfg: &mandara_co
         out.push(entry(t("Generate wallpaper"), t("A new procedural wallpaper from the generator"), "brush", tk("Action"), "wallpaper generate generator procedural new art background random", line("wallgen generate random")));
     }
     for m in registry.manifests() {
-        if m.id == crate::plugins::session::LAUNCHER_ID || !registry.is_enabled(&m.id, &cfg.plugins) {
+        if m.id == crate::plugins::session::LAUNCHER_ID {
+            continue;
+        }
+        if !registry.is_enabled(&m.id, &cfg.plugins) {
+            if OFFER_WHEN_OFF.contains(&m.id.as_str()) && !cfg.plugins.is_removed(&m.id) {
+                let synonyms = PLUGIN_SYNONYMS.iter().find(|(id, _)| *id == m.id).map_or("", |(_, words)| words);
+                out.push(entry(
+                    tf("Turn on {name}", &[("name", &m.display_name())]),
+                    m.display_description(),
+                    "zap",
+                    tk("Plugin"),
+                    &format!("plugin enable {} {synonyms}", m.id),
+                    line(&format!("plugins enable {}", m.id)),
+                ));
+            }
             continue;
         }
         let synonyms = PLUGIN_SYNONYMS.iter().find(|(id, _)| *id == m.id).map_or("", |(_, words)| words);
@@ -2498,6 +2518,34 @@ mod tests {
         cfg.plugins.disabled.push(crate::plugins::reddit::ID.into());
         let off = build_index_with(&registry, &cfg);
         assert!(search("r/linux", &[], &off).iter().all(|item| !matches!(item, Item::Entry(e) if e.label.starts_with("Open r/"))));
+    }
+
+    #[test]
+    fn the_games_are_found_by_name_and_offered_when_off() {
+        let (registry, mut cfg, _) = fixture();
+        let label_of = |index: &[Item], q: &str| match search(q, &[], index).first() {
+            Some(Item::Entry(e)) => (e.label.to_string(), describe(&plan(&Item::Entry(e.clone()), q))),
+            _ => panic!("nothing for {q:?}"),
+        };
+        // On: the plugin itself.
+        let index = build_index_with(&registry, &cfg);
+        for q in ["sudoku", "2048"] {
+            let (label, _) = label_of(&index, q);
+            assert!(label.to_lowercase().contains(q), "{q}: {label}");
+        }
+        assert!(search("games", &[], &index).iter().filter(|i| matches!(i, Item::Entry(e) if e.label.contains("Sudoku") || e.label.contains("2048"))).count() >= 2);
+        // Off (as shipped): an offer to switch it on, for the names and the words.
+        cfg.plugins.enabled.retain(|p| p != crate::plugins::sudoku::ID && p != crate::plugins::tiles::ID);
+        cfg.plugins.disabled.extend([crate::plugins::sudoku::ID.to_string(), crate::plugins::tiles::ID.to_string()]);
+        let index = build_index_with(&registry, &cfg);
+        for (q, id) in [("sudoku", "sudoku"), ("2048", "2048"), ("puzzle", ""), ("game", "")] {
+            let offers: Vec<String> = search(q, &[], &index).iter().filter_map(|i| match i {
+                Item::Entry(e) => Some(describe(&plan(&Item::Entry(e.clone()), q))),
+                _ => None,
+            }).filter(|d| d.contains("plugins enable")).collect();
+            assert!(!offers.is_empty(), "{q}: no offer to turn it on");
+            assert!(offers.iter().any(|d| d.contains(id)), "{q}: {offers:?}");
+        }
     }
 
     #[test]

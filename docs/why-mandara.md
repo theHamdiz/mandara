@@ -15,7 +15,7 @@ process, rendered on the GPU and animated with real spring physics.
 <table>
 <tr><td><b>Light</b></td><td>bounded workers, lazy plugin data and explicit cache release; <a href="performance.md">measurements and current resource limits</a></td></tr>
 <tr><td><b>Native</b></td><td>100 % Rust in one binary; the exact line count and hashes of this build are in the <a href="building.md#build-fingerprint">build fingerprint</a></td></tr>
-<tr><td><b>Extensible</b></td><td>78 first-party plugins built in; third-party plugins in sandboxed WebAssembly, from a GitHub marketplace or a folder</td></tr>
+<tr><td><b>Extensible</b></td><td>81 first-party plugins built in; third-party plugins in sandboxed WebAssembly, from a GitHub marketplace or a folder</td></tr>
 <tr><td><b>Compositors</b></td><td>MangoWM (tags), Niri, Hyprland, Umbriel, Sway, River (tags) and KWin, all first-class, configured non-destructively</td></tr>
 <tr><td><b>Complete</b></td><td>bar, dock, launcher, notifications, sound mixer, lock screen, login manager, wallpaper engine, drag-and-drop app installer and uninstaller, and more</td></tr>
 <tr><td><b>Generative</b></td><td>a built-in <a href="wallpapers.md#wallpaper-generator">wallpaper generator</a>: twelve styles, up to 8K, the smallest lossless files and seamless video loops, all in pure Rust</td></tr>

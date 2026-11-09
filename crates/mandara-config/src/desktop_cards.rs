@@ -37,8 +37,12 @@ pub const CALENDAR: &str = "calendar";
 pub const WAVE: &str = "wave";
 pub const FRAMED_BARS: &str = "framed-bars";
 pub const MIRRORED_BARS: &str = "mirrored-bars";
+/// The games, playable on the desktop (their plugins' ids too).
+pub const SUDOKU: &str = "sudoku";
+pub const TILES: &str = "2048";
+pub const GAMES: [&str; 2] = [SUDOKU, TILES];
 /// Every card the shell's card host draws.
-pub const ALL: [&str; 5] = [NOW_PLAYING, CALENDAR, WAVE, FRAMED_BARS, MIRRORED_BARS];
+pub const ALL: [&str; 7] = [NOW_PLAYING, CALENDAR, WAVE, FRAMED_BARS, MIRRORED_BARS, SUDOKU, TILES];
 
 /// Bounds of every numeric option (logical px unless noted).
 pub mod ranges {
@@ -67,6 +71,8 @@ pub mod ranges {
     /// A plugin's desktop widget.
     pub const PLUGIN_CARD_WIDTH: Span = Span::new(120.0, 720.0, 4.0);
     pub const PLUGIN_CARD_HEIGHT: Span = Span::new(60.0, 640.0, 4.0);
+    /// A game's width (its height follows).
+    pub const GAME_WIDTH: Span = Span::new(260.0, 640.0, 4.0);
 }
 
 /// Shipped defaults.
@@ -90,6 +96,8 @@ pub mod defaults {
     /// A plugin's desktop widget until the plugin or the user sizes it.
     pub const PLUGIN_CARD_WIDTH_PX: f32 = 320.0;
     pub const PLUGIN_CARD_HEIGHT_PX: f32 = 180.0;
+    pub const SUDOKU_WIDTH_PX: f32 = 360.0;
+    pub const TILES_WIDTH_PX: f32 = 320.0;
 }
 
 fn count(v: u32, span: Span, fallback: u32) -> u32 {
@@ -148,6 +156,47 @@ impl Default for CalendarOptions {
 impl CalendarOptions {
     pub fn width(&self) -> f32 {
         ranges::CALENDAR_WIDTH.clamp(self.width, defaults::CALENDAR_WIDTH_PX)
+    }
+}
+
+/// How a game is drawn on the desktop.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GameStyle {
+    /// Frosted glass, like the other cards.
+    #[default]
+    Glass,
+    /// An opaque card in the theme's surface colour.
+    Solid,
+    /// No card: the board and its controls float on the wallpaper.
+    Minimal,
+}
+
+impl GameStyle {
+    pub const ALL: [GameStyle; 3] = [Self::Glass, Self::Solid, Self::Minimal];
+}
+
+/// `card = "sudoku"` / `card = "2048"`: the game, played right on the
+/// desktop. Width (the height follows the game's layout) and look.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GameCardOptions {
+    /// 0 (or missing): the game's own default width.
+    pub width: f32,
+    pub style: GameStyle,
+}
+
+impl Default for GameCardOptions {
+    fn default() -> Self {
+        Self { width: 0.0, style: GameStyle::Glass }
+    }
+}
+
+impl GameCardOptions {
+    /// The width of `card`'s board card.
+    pub fn width(&self, card: &str) -> f32 {
+        let default = if card == TILES { defaults::TILES_WIDTH_PX } else { defaults::SUDOKU_WIDTH_PX };
+        if self.width <= 0.0 { default } else { ranges::GAME_WIDTH.clamp(self.width, default) }
     }
 }
 
@@ -294,6 +343,7 @@ pub fn new_card(card: &str, anchor: Anchor) -> DesktopWidget {
         WAVE => set_options(&mut c, &WaveOptions::default()),
         FRAMED_BARS => set_options(&mut c, &FramedBarsOptions::default()),
         MIRRORED_BARS => set_options(&mut c, &MirroredBarsOptions::default()),
+        SUDOKU | TILES => set_options(&mut c, &GameCardOptions::default()),
         _ => {}
     }
     let strip = matches!(card, WAVE | MIRRORED_BARS);
@@ -351,6 +401,8 @@ pub fn card_plugin(card: &str) -> &str {
         NOW_PLAYING => plugin_ids::NOW_PLAYING,
         CALENDAR => plugin_ids::CALENDAR,
         WAVE | FRAMED_BARS | MIRRORED_BARS => plugin_ids::VISUALIZERS,
+        // Each game is its own plugin.
+        SUDOKU | TILES => card,
         other => parse_plugin_card(other).map_or("", |(p, _)| p),
     }
 }
@@ -448,6 +500,21 @@ mod tests {
         set_card(&mut w, CALENDAR, None);
         assert_eq!(enabled_cards(&w).count(), 0);
         assert!(strip_on_top(Anchor::Top) && !strip_on_top(Anchor::Bottom));
+    }
+
+    #[test]
+    fn game_cards_belong_to_their_plugins_and_clamp_their_width() {
+        assert_eq!(card_plugin(SUDOKU), "sudoku");
+        assert_eq!(card_plugin(TILES), "2048");
+        let w = new_card(SUDOKU, Anchor::Center);
+        let WidgetKind::Card(c) = &w.kind else { unreachable!() };
+        let o: GameCardOptions = options(c);
+        assert_eq!(o.width(SUDOKU), defaults::SUDOKU_WIDTH_PX);
+        assert_eq!(o.width(TILES), defaults::TILES_WIDTH_PX);
+        assert_eq!(GameCardOptions { width: 5000.0, style: GameStyle::Solid }.width(TILES), ranges::GAME_WIDTH.max);
+        let mut cfg = DesktopWidgetsConfig::default();
+        cfg.add(w);
+        assert_eq!(enabled_cards(&cfg).count(), 1);
     }
 
     #[test]

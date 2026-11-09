@@ -69,6 +69,7 @@ pub(crate) const PLUGIN_CATEGORIES: &[(&str, &[&str])] = &[
     (tk("Desktop widgets"), &["desktop-clocks", "desktop-monitor", "desktop-decorations", "desktop-visualizers", "desktop-now-playing", "desktop-calendar", "desktop-weather", "desktop-world-clock", "desktop-countdown", "desktop-productivity", "desktop-sky", "desktop-identity", "desktop-fun", "desktop-info"]),
     (tk("Productivity"), &["todo", "notes", "translator", "pomodoro", "authenticator", "screen-time", "keybinds", "breaks", "presentation"]),
     (tk("Everyday info"), &["weather", "feeds", "reddit", "prayer-times", "jannah", "quran", "hadith", "world-clock", "net-speed"]),
+    (tk("Games"), &["sudoku", "2048"]),
     (tk("Third-party"), &[]),
 ];
 
@@ -90,6 +91,7 @@ const SHELVES: &[Shelf] = &[
     Shelf { key: "look", title: tk("Look & feel"), line: tk("Wallpapers, generated art, online galleries and cursor themes"), categories: &[tk("Look & feel")] },
     Shelf { key: "desktop", title: tk("Desktop widgets"), line: tk("Clocks, weather, gauges and more, right on your wallpaper"), categories: &[tk("Desktop widgets")] },
     Shelf { key: "system", title: tk("System tools"), line: tk("Network, sound, power and upkeep, one click away"), categories: &[tk("System"), tk("Maintenance")] },
+    Shelf { key: "games", title: tk("Games"), line: tk("Puzzles to play in the bar or right on the desktop"), categories: &[tk("Games")] },
     Shelf { key: "developer", title: tk("For developers"), line: tk("Ports, repositories, CI, local AI models and progress from your scripts"), categories: &[tk("Developer tools")] },
 ];
 
@@ -439,6 +441,8 @@ pub(crate) fn plugin_icon(id: &str) -> &'static str {
         "todo" => "list-check",
         "notes" => "note",
         "pomodoro" => "timer",
+        "sudoku" => "sudoku",
+        "2048" => "game-2048",
         "weather" => "cloud-sun",
         "prayer-times" => "crescent",
         "jannah" => "arch",

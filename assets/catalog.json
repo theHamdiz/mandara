@@ -712,5 +712,21 @@
     "motif": "signal",
     "angle": -4,
     "panel": null
+  },
+  {
+    "id": "sudoku",
+    "name": "Sudoku",
+    "palette": "obsidian",
+    "motif": "lattice",
+    "angle": -4,
+    "panel": null
+  },
+  {
+    "id": "2048",
+    "name": "2048",
+    "palette": "twilight",
+    "motif": "slide",
+    "angle": 5,
+    "panel": null
   }
 ]

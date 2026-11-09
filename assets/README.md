@@ -24,7 +24,7 @@ so small lettering stays clean.
 
 ## Plugins
 
-The 79 plugins below include 78 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
+The 82 plugins below include 81 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
 
 | Preview | Files | Notes |
 | --- | --- | --- |
@@ -108,6 +108,8 @@ The 79 plugins below include 78 built-ins and the Moon phase example. Each SVG h
 | <img src="plugins/feeds/icon.png" width="40" alt="Feeds icon"> <img src="plugins/feeds/cover.png" width="128" alt="Feeds cover"> | **Feeds** · [SVG](plugins/feeds/icon.svg) · [256 PNG](plugins/feeds/icon.png) · [Cover](plugins/feeds/cover.png) | Obsidian · illustration |
 | <img src="plugins/reddit/icon.png" width="40" alt="Reddit icon"> <img src="plugins/reddit/cover.png" width="128" alt="Reddit cover"> | **Reddit** · [SVG](plugins/reddit/icon.svg) · [256 PNG](plugins/reddit/icon.png) · [Cover](plugins/reddit/cover.png) | Corniche · threaded conversation with a gold upvote arrow · illustration |
 | <img src="plugins/home-assistant/icon.png" width="40" alt="Home Assistant icon"> <img src="plugins/home-assistant/cover.png" width="128" alt="Home Assistant cover"> | **Home Assistant** · [SVG](plugins/home-assistant/icon.svg) · [256 PNG](plugins/home-assistant/icon.png) · [Cover](plugins/home-assistant/cover.png) | Corniche · illustration |
+| <img src="plugins/sudoku/icon.png" width="40" alt="Sudoku icon"> <img src="plugins/sudoku/cover.png" width="128" alt="Sudoku cover"> | **Sudoku** · [SVG](plugins/sudoku/icon.svg) · [256 PNG](plugins/sudoku/icon.png) · [Cover](plugins/sudoku/cover.png) | Obsidian · cream puzzle lattice and gold selected cell · illustration |
+| <img src="plugins/2048/icon.png" width="40" alt="2048 icon"> <img src="plugins/2048/cover.png" width="128" alt="2048 cover"> | **2048** · [SVG](plugins/2048/icon.svg) · [256 PNG](plugins/2048/icon.png) · [Cover](plugins/2048/cover.png) | Twilight · sliding tiles and a gold merged tile · illustration |
 
 ## Launcher alternatives
 
@@ -152,14 +154,16 @@ SVGs store sRGB values for desktop renderer compatibility. Use the OKLCH anchors
 | Sky | `#30265E` → `#7063B5` | Prayer times, Weather, Wallpaper, Moon phase, Soundscapes, Eye breaks, Presentation mode, Jannah |
 | Reading | Qur'an: `#30265E` → `#7063B5`; Hadith: `#103C63` → `#286B91` | Qur'an, Hadith |
 | Creation | `#185D54` → `#40C8BD` | Wallpaper generator |
+| Games | Sudoku: `#19483E` → `#101C23`; 2048: `#543675` → `#25244A` | Sudoku, 2048 |
 | Maintenance | `#14303A` → `#2F6C70` | Updates, Services, Containers, App installer, Listening ports, Git repositories, Crash reports |
 
 - App tiles: 1024-unit square; tile inset 32, radius 216, primary shoreline stroke 88, rim 8. The main mark was checked at 16 px. Symbolic artwork fills its own 704-unit viewBox.
 - Plugin tiles: 512-unit square; tile inset 16, radius 108, primary stroke 28. Use rounded caps and joins, a centered glyph around 112–400, cream `#FFF2D5`, and sand `#FFD58A`.
-- Glass: one quiet diagonal gradient, a top-left highlight, a thin inner rim, and a translucent lower shoreline. Keep the glyph dominant. Language cards use simple letter-shaped paths; other icons contain no lettering or borrowed project marks; Bluetooth uses two wireless peers.
+- Glass: one quiet diagonal gradient, a top-left highlight, a thin inner rim, and a translucent lower shoreline. Keep the glyph dominant. Language cards use simple letter-shaped paths; puzzle tiles use path-drawn numerals. Icons contain no text elements or borrowed project marks; Bluetooth uses two wireless peers.
 - Covers: name at the upper left in Inter; a large icon; restrained thematic linework; a floating real panel where supplied. Preserve panel proportions and use a soft shadow. UI appears only in the 21 real captures linked through the catalog; captures never show private data (demo accounts, blurred addresses, or a crop to non-identifying parts). The dock retains its full transparent capture and source corner shape, with no desktop background. The other new covers use illustrations because no suitable isolated capture is available. The desktop widget plugins and Wallpaper depth have painted scenes of their own (`assets/artwork/scenes/`, the catalog's `scene`) behind the name and icon; screenshots of the widgets themselves are in [docs/desktop.md](../docs/desktop.md#desktop-widgets).
-- The added cover motifs are `watch` (eye contours), `shelf` (dock rails), `package` (open carton), `hourglass` and `aurora` (flowing contours). System tray and Mini stats reuse `peers` and `bars` respectively. Mini stats is visible in Studio's uncategorized store group; the internal Compositor commands are hidden and have no marketplace art.
+- The added cover motifs are `watch` (eye contours), `shelf` (dock rails), `package` (open carton), `hourglass`, `aurora` (flowing contours), `lattice` (a tilted puzzle box) and `slide` (spaced tiles and a merge arrow). System tray and Mini stats reuse `peers` and `bars` respectively. Mini stats is visible in Studio's uncategorized store group; the internal Compositor commands are hidden and have no marketplace art.
 - Listening ports, Git repositories, CI status, Crash reports, Tailscale, Uptime monitor, Local AI, Share to phone, Shortcuts cheatsheet, Task progress, Eye breaks and Presentation mode reuse the existing motifs and palette backgrounds. Their covers are illustrations with no panel capture. Their glyph and motif notes are in `artwork/prompts.json`.
+- Sudoku pairs the Obsidian background with the `lattice` motif and a deep emerald-to-onyx tile. Its cream puzzle box holds a path-drawn 9 and a gold selected cell. 2048 pairs the Twilight background with the `slide` motif and a dusk violet-to-indigo tile: three cream tiles lead into a larger gold tile with an indigo 8. Both covers are illustrations with no panel capture; glyph notes are in `artwork/prompts.json`.
 - Jannah uses the Twilight background and existing `dawn` motif. Its cream pointed doorway frames a gold eight-pointed star and a soft glow, suggesting a gate opening onto light. The cover is an illustration with no panel capture; the glyph note is in `artwork/prompts.json`.
 - Qur'an uses the Twilight background and existing `paper` motif: a cream open book rests on a gold X-shaped rahle beneath a small eight-pointed star. Hadith uses the Corniche background and existing `tiles` motif: a closed manuscript has a gold cover medallion and page edge. Both use broad contours that remain readable at 32 px, with no text, calligraphy or figures. Their covers are illustrations with no panel capture; glyph notes are in `artwork/prompts.json`.
 

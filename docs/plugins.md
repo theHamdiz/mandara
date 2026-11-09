@@ -29,7 +29,7 @@ running can finish; disabling the plugin prevents a follow-up refresh.
 </tr>
 </table>
 
-The 78 first-party plugins (42 of them ship switched off, marked *opt-in*):
+The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -65,6 +65,8 @@ The 78 first-party plugins (42 of them ship switched off, marked *opt-in*):
 | **To-do** | Tasks grouped into lists, for the sidebar and bar | *(opt-in)*
 | **Notes** | Markdown notes in topics, saved as .md files | *(opt-in)*
 | **Pomodoro** | Focus timer with breaks and session tracking | *(opt-in)*
+| **Sudoku** | The number puzzle at four levels, with notes, highlights, hints, undo and a timer, in the bar and on the desktop *(opt-in)* |
+| **2048** | Slide and merge tiles to 2048 on a 3 × 3 to 6 × 6 board, with smooth tiles, best scores and undo, in the bar and on the desktop *(opt-in)* |
 | **Weather** | Animated current conditions, hourly and 5-day forecast |
 | **Wallpaper** | Wallpaper picker and desktop background |
 | **Wallpaper depth** | Draws the wallpaper's subject over the desktop clock and widgets: hand-tuned, or with a small depth model downloaded on demand *(core)* |
@@ -140,12 +142,56 @@ the process hunter, the authenticator, soundscapes, the radio, world clock, netw
 speed, the color picker, Pomodoro, notes, to-do, privacy, the app
 installer, the shortcuts cheatsheet, task progress, eye breaks,
 presentation mode, share to phone, Tailscale, the uptime monitor, local
-AI, listening ports, Git repositories, CI status, crash reports, Reddit, Jannah, the Qur'an and Hadith.
+AI, listening ports, Git repositories, CI status, crash reports, Reddit, Sudoku, 2048, Jannah, the Qur'an and Hadith.
 Turn any of them on in Studio → Plugins or with
 `mandara msg plugins enable <id>`. **Upgrading from 0.1 changes nothing you
 had:** a config written before these defaults keeps every plugin it had on
 (the upgrade writes them into `[plugins] enabled`), Wallhaven stays on if it
 was, and cursor themes stay on if you had picked a cursor.
+
+## Games: Sudoku and 2048
+
+Two opt-in games (Studio → Plugins, `mandara msg plugins enable sudoku` /
+`2048`, or type *sudoku*, *2048*, *games* or *puzzle* in the launcher and
+pick **Turn on**). Each has a bar item with a drop-down panel (put it
+in a bar group from its page in Studio → Plugins), a playable sidebar card
+(Studio → Bars → Sidebar, or `mandara msg sidebar tab widget add Overview
+sudoku`) and a desktop widget (Studio → Desktop widgets → Add, or
+right-click the desktop → Add widget) that you play right on the desktop:
+click the board to give it the keyboard, click a window or the desktop to
+give it back, and Escape lets go too. One game is shared by the panel, the
+sidebar card and the widget, on every display.
+
+- **Sudoku** deals a puzzle with exactly one solution at Easy, Medium,
+  Hard or Expert. Levels follow the techniques a puzzle needs: Easy needs
+  only singles, Medium also pointing and claiming, Hard pairs and triples,
+  Expert more than that. The same seed always deals the same puzzle
+  (`mandara msg sudoku new hard 42`). Arrows move, 1–9 write, Shift+digit
+  or **N** switches to pencil marks, Backspace erases, **H** gives a hint,
+  Ctrl+Z / Ctrl+Y undo and redo; the mouse and touch work with the number
+  pad and tools under the board. The timer counts only while the panel is
+  open, or while you play on the widget or the sidebar card (it stops after
+  a minute and a half without a key or click there, or when the widget lets
+  go of the keyboard). Settings: level, highlights (row,
+  column and box; the same digit), conflicts, the mistake counter, timer,
+  hints, clearing notes automatically, the accent colour and the time in
+  the bar.
+- **2048** slides with the arrows or WASD, a mouse drag or a finger swipe;
+  U or Ctrl+Z takes back one move. Tiles glide and pop on the shell's
+  springs only while they move (they jump with reduced motion or
+  Animations off). Reach 2048 to win, then keep going or start again.
+  Settings: board size (3–6, used for the next game), animations, undo,
+  the accent colour and the score in the bar.
+
+Both keep the game in progress (with Sudoku's notes and undo history),
+your best times, scores and statistics in
+`~/.local/state/mandara/games/`, written a moment after you play, never on
+every move. A file that can't be read is moved aside as `*.corrupt` and
+the game starts fresh. Nothing runs while neither game is on screen; the
+widgets use the cards' small surfaces and draw only when something
+changes. `mandara msg sudoku status|new|select|digit|note|erase|hint|undo|redo`
+and `mandara msg 2048 status|new|move|undo|continue` play them from a
+script.
 
 ## Jannah, Qur'an, Hadith and Prayer times
 

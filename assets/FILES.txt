@@ -49,6 +49,9 @@ assets/launcher-icons/teal-hourglass.svg
 assets/launcher-icons/turquoise-weave.svg
 assets/launcher-icons/violet-clover.svg
 assets/launcher-icons/violet-woven-diamond.svg
+assets/plugins/2048/cover.png
+assets/plugins/2048/icon.png
+assets/plugins/2048/icon.svg
 assets/plugins/active-window/cover.png
 assets/plugins/active-window/icon.png
 assets/plugins/active-window/icon.svg
@@ -250,6 +253,9 @@ assets/plugins/share/icon.svg
 assets/plugins/soundscapes/cover.png
 assets/plugins/soundscapes/icon.png
 assets/plugins/soundscapes/icon.svg
+assets/plugins/sudoku/cover.png
+assets/plugins/sudoku/icon.png
+assets/plugins/sudoku/icon.svg
 assets/plugins/tailscale/cover.png
 assets/plugins/tailscale/icon.png
 assets/plugins/tailscale/icon.svg
