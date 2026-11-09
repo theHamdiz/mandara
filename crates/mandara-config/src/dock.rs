@@ -560,6 +560,8 @@ impl DockConfig {
     /// stays removed. Returns whether anything changed.
     pub fn upgrade_launcher_button(&mut self) -> bool {
         let (button, at_end) = (self.launcher_button.take(), self.launcher_at_end.take());
+        // A table without `pinned` loads the default list, launcher first.
+        let default_list = self.pinned == Self::default().pinned;
         if self.pins_version >= crate::upgrade::DOCK_PINS_VERSION {
             return button.is_some() || at_end.is_some();
         }
@@ -570,6 +572,10 @@ impl DockConfig {
             self.pinned.retain(|p| p != LAUNCHER_PIN);
         } else if !self.launcher_pinned() {
             self.pin_at(LAUNCHER_PIN, if at_end.unwrap_or(false) { usize::MAX } else { 0 });
+        } else if default_list && at_end == Some(true) {
+            // The default list's launcher goes where the old setting put it.
+            self.pinned.retain(|p| p != LAUNCHER_PIN);
+            self.pin_at(LAUNCHER_PIN, usize::MAX);
         }
         true
     }
@@ -698,6 +704,10 @@ mod tests {
         let mut off_default = old("launcher_button = false\n");
         assert!(off_default.upgrade_launcher_button());
         assert!(!off_default.launcher_pinned(), "{:?}", off_default.pinned);
+        // At the end in a table without `pinned`: after the default apps.
+        let mut end_default = old("launcher_at_end = true\n");
+        assert!(end_default.upgrade_launcher_button());
+        assert_eq!(end_default.pinned.last().map(String::as_str), Some(LAUNCHER_PIN), "{:?}", end_default.pinned);
         // Only the position saved: the button was on (its old default).
         let mut only_end = old("pinned = [\"firefox\"]\nlauncher_at_end = true\n");
         assert!(only_end.upgrade_launcher_button());

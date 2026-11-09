@@ -77,8 +77,10 @@ impl Productivity {
     fn apply_notes_completion(&mut self, update: NotesCompletion) -> bool {
         let NotesCompletion { sequence, mut snapshot, mut acknowledged, successful, error, conflicts } = update;
         if !conflicts.is_empty() {
+            // Each conflict belongs to the draft generation this save sent.
+            let attempts: Vec<(u64, u64)> = acknowledged.iter().filter(|(id, _)| conflicts.contains(id)).copied().collect();
             acknowledged.retain(|(id, _)| !conflicts.contains(id));
-            self.retain_body_conflicts(&conflicts, &snapshot);
+            self.retain_body_conflicts(&attempts, &snapshot);
         }
         if successful && sequence >= self.notes_applied {
             for &(id, generation) in &acknowledged {
@@ -147,9 +149,13 @@ impl Productivity {
     /// Whole-text drafts whose file changed elsewhere stay visible as
     /// conflicts instead of overwriting it, and stop being write
     /// prerequisites for the other notes.
-    fn retain_body_conflicts(&mut self, ids: &[u64], snapshot: &NotesSnapshot) {
+    fn retain_body_conflicts(&mut self, attempts: &[(u64, u64)], snapshot: &NotesSnapshot) {
         if snapshot.root != self.notes.root { return; }
-        for &id in ids {
+        for &(id, attempt) in attempts {
+            // A newer draft typed since this save stays dirty with its own
+            // base; its own save is checked again, never rebased to this
+            // older snapshot.
+            if self.notes_dirty.get(&id) != Some(&attempt) { continue; }
             let Some(generation) = self.notes_dirty.remove(&id) else { continue };
             self.notes_submitted.remove(&id);
             self.notes_tasks.remove(&id);
@@ -690,6 +696,24 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "# Plan\nMy draft, after reading the warning");
         assert!(!model.has_note_conflicts() && !model.note_pending(id));
         assert!(model.notes_base.is_empty(), "acknowledged drafts forget their base");
+    }
+
+    /// A conflict from an older save attempt never takes over the newer draft
+    /// typed since: it stays dirty, with its own base, for its own save.
+    #[test]
+    fn a_stale_conflict_leaves_the_newer_draft_dirty() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = NoteStore::open(root.path());
+        let id = store.create(DEFAULT_TOPIC, "# Plan\nOne").unwrap();
+        let mut model = model(root.path().into());
+        model.notes = store.snapshot();
+        model.notes_dirty.insert(id, 2);
+        model.apply_notes_completion(NotesCompletion { sequence: 1, snapshot: store.snapshot(), acknowledged: vec![(id, 1)], successful: true, error: None, conflicts: vec![id] });
+        assert_eq!(model.notes_dirty.get(&id), Some(&2), "the newer draft is still waiting to be saved");
+        assert!(!model.has_note_conflicts(), "the older attempt's conflict is not applied to it");
+        // The same generation's conflict is retained as before.
+        model.apply_notes_completion(NotesCompletion { sequence: 2, snapshot: store.snapshot(), acknowledged: vec![(id, 2)], successful: true, error: None, conflicts: vec![id] });
+        assert!(model.has_note_conflicts() && !model.notes_dirty.contains_key(&id));
     }
 
     /// A draft that conflicts with an outside edit is kept back for its own

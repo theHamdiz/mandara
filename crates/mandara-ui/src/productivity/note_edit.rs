@@ -45,7 +45,10 @@ impl PendingNote {
     fn base_holds(&self, store: &mut NoteStore) -> anyhow::Result<bool> {
         let id = self.note.id;
         let Some(base) = self.base else { return Ok(true) };
-        if store.note(id).is_none_or(|current| current.path.is_none()) { return Ok(true); }
+        // A note a rescan removed is a conflict too, so the edit queued
+        // behind this draft isn't failed by a later "no such note".
+        let Some(current) = store.note(id) else { return Ok(false) };
+        if current.path.is_none() { return Ok(true); }
         if !store.refresh_note(id)? { return Ok(false); }
         Ok(store.note(id).is_some_and(|current| current.text == self.note.text || body_hash(&current.text) == base || store.wrote(id, &current.text)))
     }
