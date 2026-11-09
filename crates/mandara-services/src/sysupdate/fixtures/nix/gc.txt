@@ -1,0 +1,21 @@
+finding garbage collector roots...
+removing stale link from "/nix/var/nix/gcroots/auto/x0m4a0bldww6g6rqmbgyrjx38scvasdb" to "/tmp/nix-build-213-2250510764/result"
+removing stale link from "/nix/var/nix/gcroots/auto/3pgjxk288s510l8xhmivfqyz40hymfz8" to "/nix/var/nix/profiles/system-2-link"
+removing stale temporary roots file "/nix/var/nix/temproots/35"
+removing stale temporary roots file "/nix/var/nix/temproots/76"
+removing stale temporary roots file "/nix/var/nix/temproots/124"
+removing stale temporary roots file "/nix/var/nix/temproots/170"
+deleting garbage...
+deleting '/nix/store/6pvijh9hqrhyxc8lgc43xv13pjbmmnr9-source'
+deleting '/nix/store/x6gazilvv4yrxizqm82n6l8zvqsxarj7-source'
+deleting '/nix/store/2r503wg0x2pn13jgdhf383fh7fiw0lj7-source'
+deleting '/nix/store/hn5llczzmvdza3r2wb73bblv8b9ka33d-source'
+deleting '/nix/store/67f6srw3y84fj99b75zgsff0ivznh870-mandara-demo'
+deleting '/nix/store/4vamsg393v3yj3q4cmj68l0124km0saa-mandara-demo.drv'
+deleting '/nix/store/wim097v97613f2nzs1hk71rbk16nbimg-mandara-dep'
+deleting '/nix/store/dz0a7n6nfa0xib04d36aa49aazfqbqgm-mandara-dep.drv'
+deleting '/nix/store/5xxvjmhsmklbpd1x50vxyiwm02rfr00m-mandara-fail.drv'
+deleting '/nix/store/z8cacwsxrwk209py5qdzn0xv0kb95h8x-mandara-fail.lock'
+deleting unused links...
+note: hard linking is currently saving 0.0 KiB
+10 store paths deleted, 15.4 KiB freed

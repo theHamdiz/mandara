@@ -1,6 +1,7 @@
 # Apps and updates
 
-Installing and removing apps, and how Mandara updates itself.
+Installing and removing apps, updating your system, and how Mandara
+updates itself.
 
 ## App Installer: drag, drop, done
 
@@ -68,6 +69,92 @@ app left in your home folder are listed with their sizes, all unchecked, and
 whatever you tick moves to the Trash; nothing is deleted outright. It's
 scriptable too: `mandara msg apps owner <id>` and
 `mandara msg apps uninstall <id> [--purge-data] [--dry-run]`.
+
+## System updates
+
+The **Updates** panel (an opt-in plugin: Studio → Plugins → Updates) checks
+your package managers every few hours and installs what it finds right in
+the panel. Press **Update all**, or **Update** on one source:
+
+- **Your password, in Mandara.** The update runs as administrator through
+  polkit, so Mandara's own password dialog asks for it, never a terminal,
+  and nothing stores it. The privileged part is Mandara's root-owned admin
+  helper (`/usr/local/lib/mandara/mandara-admin`, or your package's
+  `mandara`), which accepts only a handful of fixed actions and runs only
+  the fixed commands below: no command line ever crosses over. The first
+  time, or after an update brought a newer protocol, setting up the helper
+  asks for one more approval.
+- **Live progress.** The card in the panel shows the phase (refreshing
+  databases, downloading 3/46, checking packages, installing 12/46, running
+  hooks), a progress bar, the step, the elapsed time and the latest lines of
+  the package manager's output (*Show log*; *Full log* opens
+  `~/.cache/mandara/system-update.log`). Close the panel and the update
+  carries on; open it again to see where it is.
+- **Cancel when it's safe.** *Cancel* is offered while databases refresh
+  and packages download, and never once installing has started.
+- **A clear ending.** The summary says how many packages changed and how
+  long it took, and suggests a restart when the kernel, the init system,
+  the C library or the graphics driver changed (or the package manager asks
+  for one). *Restart…* opens the session menu.
+- **Problems explained.** Another program holding the package database, no
+  network, a conflict that needs your decision, a full disk or a signature
+  problem each get their own message. Mandara never forces anything
+  (no `--overwrite` or similar): a conflict stops the update and shows the
+  output, so you can finish it in a terminal.
+- **Flatpak** updates afterwards as you (`flatpak update -y
+  --noninteractive`), no password needed for your own apps.
+
+| Family | Refresh | Download | Install |
+|---|---|---|---|
+| Arch and derivatives | `pacman -Syuw --noconfirm` (sync and download) | | `pacman -Su --noconfirm` |
+| Debian, Ubuntu | `apt-get update` | `apt-get -y -d dist-upgrade` | `apt-get -y dist-upgrade`, keeping your changed config files |
+| Fedora (dnf or dnf5) | | `dnf -y upgrade --refresh --downloadonly` | `dnf -y upgrade` |
+| openSUSE Tumbleweed / Slowroll | `zypper -n refresh` | `zypper -n dup --download-only` | `zypper -n dup` |
+| openSUSE Leap | `zypper -n refresh` | `zypper -n update --download-only` | `zypper -n update` |
+| Void | `xbps-install -S` | `xbps-install -uyD` | `xbps-install -uy` (xbps updates itself first when it must) |
+| Alpine | `apk update` | | `apk upgrade` |
+
+The AUR is left to your AUR helper (its *Update* button opens your
+terminal: AUR packages are never built as root). Image-based systems
+(Fedora Atomic's `rpm-ostree`, openSUSE MicroOS / Aeon's
+`transactional-update`) update with their own tool, and the panel says so.
+Prefer a terminal anyway? Set **Run updates → In a terminal** in the
+plugin's settings. Scriptable: `mandara msg updates apply [all|system|flatpak]`,
+`updates job` (phase, progress, recent log lines, summary) and
+`updates cancel`.
+
+**If no password dialog appears**, polkit is missing or its agent isn't
+running: install your distribution's polkit package (`polkit`, `polkitd`
+and `pkexec` on Debian), and keep Studio → General → Security → *Authentication dialogs* on.
+`mandara install` installs both.
+
+### NixOS: generations
+
+NixOS updates through its own configuration, so on NixOS the panel manages
+**generations** instead of packages:
+
+- **Generations list:** every system generation with its number, date,
+  NixOS version, kernel and configuration revision, which one is running
+  and which one booted, plus your home-manager generations.
+- **Update or rebuild:** *Update* refreshes your flake's inputs
+  (`/etc/nixos/flake.nix`, followed when it links to your own folder) or
+  your channels, then builds; *Rebuild* builds the configuration as it is.
+  Pick what happens to the result: **Switch** (now and at boot), **Next
+  boot**, **Test** (now, not at boot) or **Build only**. The build's own
+  structured progress (paths copied, derivations built) drives the bar, and
+  the summary lists the inputs that changed (old → new revision). A flake
+  in your home folder is updated as you; root only builds and switches.
+- **Roll back or switch** to any generation, after a clear confirmation.
+- **Compare** a generation with the running one: the packages that changed
+  (old → new version) and how much the closure grew or shrank.
+- **Clean up:** keep the newest N generations (5 by default, Studio →
+  Plugins → Updates → *Generations to keep*), delete the rest and collect
+  garbage, showing the space freed. The running and the booted generation
+  are never deleted.
+- Scriptable: `mandara msg updates nixos generations`,
+  `updates nixos diff 41 44` and `updates nixos run update switch`
+  (`rebuild boot`, `rollback`, `switch-to 41`, `clean keep 5`,
+  `clean older-than 30`).
 
 ## Updates by binary patch
 

@@ -1,0 +1,52 @@
+Loading repository data...
+Reading installed packages...
+Warning: You are about to do a distribution upgrade with all enabled repositories. Make sure these repositories are compatible before you continue. See 'man zypper' for more information about this command.
+Computing distribution upgrade...
+The following package is going to be upgraded:
+  openSUSE-build-key
+The following 11 NEW packages are going to be installed:
+  krb5 libbrotlicommon1 libbrotlidec1 libcom_err2 libcurl4 libkeyutils1 libldap2 libsasl2-3 libssh-config libssh4 libverto1
+The following package is going to be REMOVED:
+  libcurl-mini4
+1 package to upgrade, 11 new, 1 to remove.
+Package download size:     2.0 MiB
+Download only.
+Backend:  classic_rpmtrans --download-only
+Continue? [y/n/v/...? shows all options] (y): y
+Preloading Packages [..
+Preloading: libcom_err2-1.47.4-2.1.x86_64.rpm [done]
+.
+Preloading: libssh-config-0.11.5-3.1.noarch.rpm [done]
+.
+Preloading: libkeyutils1-1.6.3-7.9.x86_64.rpm [done]
+.
+Preloading: libsasl2-3-2.1.28-13.1.x86_64.rpm [done]
+.
+Preloading: libbrotlicommon1-1.2.1-1.1.x86_64.rpm [done]
+..
+Preloading: libverto1-0.3.2-3.9.x86_64.rpm [done]
+.
+Preloading: libbrotlidec1-1.2.1-1.1.x86_64.rpm [done]
+..
+Preloading: openSUSE-build-key-1.0-69.1.x86_64.rpm [done]
+..
+Preloading: libldap2-2.6.13-1.6.x86_64.rpm [done]
+.
+Preloading: libssh4-0.11.5-3.1.x86_64.rpm [done]
+...
+Preloading: krb5-1.22.2-6.1.x86_64.rpm [done]
+..
+Preloading: libcurl4-8.23.0-3.1.x86_64.rpm [done]
+.done]
+Retrieving: libbrotlicommon1-1.2.1-1.1.x86_64 (openSUSE-Tumbleweed-Oss) (1/12),  66.2 KiB    
+Retrieving: libcom_err2-1.47.4-2.1.x86_64 (openSUSE-Tumbleweed-Oss) (2/12),  29.1 KiB    
+Retrieving: libkeyutils1-1.6.3-7.9.x86_64 (openSUSE-Tumbleweed-Oss) (3/12),  26.4 KiB    
+Retrieving: libsasl2-3-2.1.28-13.1.x86_64 (openSUSE-Tumbleweed-Oss) (4/12),  63.4 KiB    
+Retrieving: libssh-config-0.11.5-3.1.noarch (openSUSE-Tumbleweed-Oss) (5/12),  16.3 KiB    
+Retrieving: libverto1-0.3.2-3.9.x86_64 (openSUSE-Tumbleweed-Oss) (6/12),  19.8 KiB    
+Retrieving: libbrotlidec1-1.2.1-1.1.x86_64 (openSUSE-Tumbleweed-Oss) (7/12),  32.1 KiB    
+Retrieving: libldap2-2.6.13-1.6.x86_64 (openSUSE-Tumbleweed-Oss) (8/12), 200.0 KiB    
+Retrieving: krb5-1.22.2-6.1.x86_64 (openSUSE-Tumbleweed-Oss) (9/12), 747.8 KiB    
+Retrieving: libssh4-0.11.5-3.1.x86_64 (openSUSE-Tumbleweed-Oss) (10/12), 243.4 KiB    
+Retrieving: libcurl4-8.23.0-3.1.x86_64 (openSUSE-Tumbleweed-Oss) (11/12), 586.6 KiB    
+Retrieving: openSUSE-build-key-1.0-69.1.x86_64 (openSUSE-Tumbleweed-Update) (12/12),  43.7 KiB    

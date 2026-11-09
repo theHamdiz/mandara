@@ -249,10 +249,11 @@ The rest of what's built in.
   requests of its own (weather, lyrics, album art, Wallhaven, marketplace,
   public IP, update news, downloads).
 - **Updates**: pacman (`checkupdates`), the AUR (paru / yay), APT, DNF,
-  Zypper and Flatpak checked read-only every few hours (3 h by default) with a
-  count badge, old → new versions by source and the latest Arch news.
-  *Update now* opens your terminal with the right command; Mandara never runs
-  privileged updates itself.
+  Zypper, XBPS, apk and Flatpak checked read-only every few hours (3 h by
+  default) with a count badge, old → new versions by source and the latest
+  Arch news. *Update* installs them right in the panel, with live progress and
+  Mandara's own password dialog; on NixOS the panel manages generations
+  ([System updates](apps-and-updates.md#system-updates)).
 - **Resources**: CPU, memory and every GPU (load, VRAM, temperature, clock),
   plus component temperatures in °C or °F, set by the global *Units* setting
   that the weather follows too.

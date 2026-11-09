@@ -76,6 +76,7 @@ pub mod systemd;
 pub mod toplevels;
 pub mod vpointer;
 pub mod tray;
+pub mod sysupdate;
 pub mod updates;
 pub mod wallhaven;
 pub mod weather;

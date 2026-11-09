@@ -11,6 +11,10 @@ authors.workspace = true
 # in MANDARA_MOCK_RELEASE_KEYS, so a mock release can be signed locally
 # (screenshots of updates and language-pack downloads).
 mock-release = []
+# Sandbox screenshots only, never in a shipped build (also gated on
+# debug_assertions): MANDARA_FAKE_SYSTEM_UPDATE replays recorded package
+# manager output instead of running pkexec (sysupdate/fake.rs).
+fake-system-update = []
 
 [dependencies]
 # CPU inference only. The short-lived command worker owns all model state.
@@ -90,6 +94,8 @@ hound = "3.5"
 mandara-delta.workspace = true
 semver.workspace = true
 mandara-version.workspace = true
+# System updates (sysupdate/): the installer's distribution families.
+mandara-install.workspace = true
 # Keyring prompter (keyring_prompt/exchange.rs): gcr's sx-aes-1 secret
 # exchange — DH (num-bigint-dig: zeroizable big integers), HKDF-SHA256,
 # AES-128-CBC. All already in the lock tree via gpui's oo7.

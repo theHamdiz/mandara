@@ -1,0 +1,155 @@
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Calculating upgrade...
+The following packages will be upgraded:
+  apt base-files bash bsdutils debian-archive-keyring dpkg e2fsprogs
+  gcc-12-base gpgv init-system-helpers libapt-pkg6.0 libblkid1 libc-bin libc6
+  libcap2 libcom-err2 libext2fs2 libgcc-s1 libgcrypt20 libgnutls30 liblzma5
+  libmount1 libpam-modules libpam-modules-bin libpam-runtime libpam0g
+  libpcre2-8-0 libseccomp2 libsmartcols1 libss2 libstdc++6 libsystemd0
+  libtasn1-6 libudev1 libuuid1 login logsave mount passwd perl-base sed tar
+  tzdata usr-is-merged util-linux util-linux-extra
+dlstatus:1:0.0000:Retrieving file 1 of 46
+dlstatus:1:0.0000:Retrieving file 1 of 46
+46 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+Need to get 21.6 MB of archives.
+After this operation, 70.7 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian bookworm/main amd64 base-files amd64 12.4+deb12u15 [70.9 kB]
+Get:2 http://deb.debian.org/debian bookworm/main amd64 bash amd64 5.2.15-2+b13 [1491 kB]
+dlstatus:2:1.7504:Retrieving file 2 of 46
+dlstatus:2:4.8664:Retrieving file 2 of 46
+dlstatus:3:6.6574:Retrieving file 3 of 46 (1min 20s remaining)
+Get:3 http://deb.debian.org/debian bookworm/main amd64 bsdutils amd64 1:2.38.1-5+deb12u3 [94.4 kB]
+Get:4 http://deb.debian.org/debian bookworm/main amd64 gcc-12-base amd64 12.2.0-14+deb12u1 [37.6 kB]
+dlstatus:4:7.4488:Retrieving file 4 of 46 (1min 19s remaining)
+Get:5 http://deb.debian.org/debian bookworm/main amd64 libgcc-s1 amd64 12.2.0-14+deb12u1 [49.9 kB]
+dlstatus:6:8.6358:Retrieving file 6 of 46 (1min 19s remaining)
+Get:6 http://deb.debian.org/debian bookworm/main amd64 libstdc++6 amd64 12.2.0-14+deb12u1 [613 kB]
+dlstatus:6:9.1581:Retrieving file 6 of 46 (1min 18s remaining)
+dlstatus:6:9.9027:Retrieving file 6 of 46 (4min 0s remaining)
+dlstatus:6:10.6779:Retrieving file 6 of 46 (3min 57s remaining)
+Get:7 http://deb.debian.org/debian bookworm/main amd64 libc6 amd64 2.36-9+deb12u14 [2759 kB]
+dlstatus:7:11.5196:Retrieving file 7 of 46 (3min 56s remaining)
+dlstatus:7:12.1418:Retrieving file 7 of 46 (3min 57s remaining)
+dlstatus:7:12.6212:Retrieving file 7 of 46 (3min 55s remaining)
+dlstatus:7:13.5188:Retrieving file 7 of 46 (3min 52s remaining)
+dlstatus:7:14.3501:Retrieving file 7 of 46 (4min 36s remaining)
+dlstatus:7:15.1252:Retrieving file 7 of 46 (4min 33s remaining)
+dlstatus:7:16.0024:Retrieving file 7 of 46 (3min 24s remaining)
+dlstatus:7:16.9459:Retrieving file 7 of 46 (3min 22s remaining)
+dlstatus:7:18.0781:Retrieving file 7 of 46 (2min 36s remaining)
+dlstatus:7:19.4092:Retrieving file 7 of 46 (2min 33s remaining)
+dlstatus:7:20.5261:Retrieving file 7 of 46 (2min 30s remaining)
+dlstatus:7:21.4747:Retrieving file 7 of 46 (2min 7s remaining)
+Get:8 http://deb.debian.org/debian bookworm/main amd64 libgcrypt20 amd64 1.10.1-3+deb12u1 [696 kB]
+dlstatus:8:22.4132:Retrieving file 8 of 46 (2min 6s remaining)
+dlstatus:8:23.9584:Retrieving file 8 of 46 (2min 3s remaining)
+Get:9 http://deb.debian.org/debian-security bookworm-security/main amd64 liblzma5 amd64 5.4.1-1+deb12u2 [206 kB]
+dlstatus:9:25.0691:Retrieving file 9 of 46 (1min 58s remaining)
+Get:10 http://deb.debian.org/debian bookworm/main amd64 libcap2 amd64 1:2.66-4+deb12u3+b1 [27.7 kB]
+dlstatus:10:26.2250:Retrieving file 10 of 46 (1min 57s remaining)
+Get:11 http://deb.debian.org/debian bookworm/main amd64 libsystemd0 amd64 252.39-1~deb12u2 [332 kB]
+dlstatus:11:27.6411:Retrieving file 11 of 46 (1min 55s remaining)
+Get:12 http://deb.debian.org/debian bookworm/main amd64 libudev1 amd64 252.39-1~deb12u2 [109 kB]
+dlstatus:12:28.7614:Retrieving file 12 of 46 (1min 54s remaining)
+Get:13 http://deb.debian.org/debian-security bookworm-security/main amd64 libapt-pkg6.0 amd64 2.6.2 [907 kB]
+dlstatus:13:29.7732:Retrieving file 13 of 46 (1min 52s remaining)
+dlstatus:13:31.1961:Retrieving file 13 of 46 (1min 33s remaining)
+dlstatus:13:32.5578:Retrieving file 13 of 46 (1min 31s remaining)
+Get:14 http://deb.debian.org/debian bookworm/main amd64 tar amd64 1.34+dfsg-1.2+deb12u1 [836 kB]
+dlstatus:14:33.4114:Retrieving file 14 of 46 (1min 30s remaining)
+dlstatus:14:33.8704:Retrieving file 14 of 46 (1min 57s remaining)
+dlstatus:14:34.2121:Retrieving file 14 of 46 (1min 57s remaining)
+dlstatus:14:34.6252:Retrieving file 14 of 46 (5min 38s remaining)
+dlstatus:14:35.1607:Retrieving file 14 of 46 (5min 35s remaining)
+dlstatus:14:35.6707:Retrieving file 14 of 46 (5min 31s remaining)
+dlstatus:15:36.5888:Retrieving file 15 of 46 (3min 57s remaining)
+Get:15 http://deb.debian.org/debian bookworm/main amd64 dpkg amd64 1.21.23 [1568 kB]
+dlstatus:15:36.8561:Retrieving file 15 of 46 (3min 56s remaining)
+dlstatus:15:37.6568:Retrieving file 15 of 46 (3min 24s remaining)
+dlstatus:15:38.1209:Retrieving file 15 of 46 (3min 22s remaining)
+dlstatus:15:38.9318:Retrieving file 15 of 46 (3min 19s remaining)
+dlstatus:15:40.2322:Retrieving file 15 of 46 (2min 37s remaining)
+dlstatus:15:42.0223:Retrieving file 15 of 46 (2min 31s remaining)
+Get:16 http://deb.debian.org/debian bookworm/main amd64 login amd64 1:4.13+dfsg1-1+deb12u2 [616 kB]
+dlstatus:16:43.6606:Retrieving file 16 of 46 (2min 27s remaining)
+dlstatus:16:44.9509:Retrieving file 16 of 46 (1min 2s remaining)
+Get:17 http://deb.debian.org/debian-security bookworm-security/main amd64 perl-base amd64 5.36.0-7+deb12u4 [1610 kB]
+dlstatus:17:45.9933:Retrieving file 17 of 46 (1min 1s remaining)
+dlstatus:17:47.0439:Retrieving file 17 of 46 (59s remaining)
+dlstatus:17:48.0639:Retrieving file 17 of 46 (1min 26s remaining)
+dlstatus:17:49.1961:Retrieving file 17 of 46 (1min 24s remaining)
+dlstatus:17:50.1702:Retrieving file 17 of 46 (1min 26s remaining)
+dlstatus:17:51.2310:Retrieving file 17 of 46 (1min 24s remaining)
+Get:18 http://deb.debian.org/debian bookworm/main amd64 sed amd64 4.9-1+deb12u1 [329 kB]
+dlstatus:18:52.1338:Retrieving file 18 of 46 (1min 23s remaining)
+dlstatus:18:52.9242:Retrieving file 18 of 46 (1min 35s remaining)
+Get:19 http://deb.debian.org/debian bookworm/main amd64 libsmartcols1 amd64 2.38.1-5+deb12u3 [107 kB]
+dlstatus:19:53.8203:Retrieving file 19 of 46 (1min 34s remaining)
+Get:20 http://deb.debian.org/debian bookworm/main amd64 util-linux-extra amd64 2.38.1-5+deb12u3 [111 kB]
+dlstatus:20:54.6601:Retrieving file 20 of 46 (1min 33s remaining)
+Get:21 http://deb.debian.org/debian bookworm/main amd64 util-linux amd64 2.38.1-5+deb12u3 [1177 kB]
+dlstatus:21:55.6986:Retrieving file 21 of 46 (1min 31s remaining)
+dlstatus:21:56.9073:Retrieving file 21 of 46 (1min 14s remaining)
+dlstatus:21:57.5957:Retrieving file 21 of 46 (1min 13s remaining)
+dlstatus:21:58.2485:Retrieving file 21 of 46 (1min 46s remaining)
+dlstatus:21:59.1920:Retrieving file 21 of 46 (1min 43s remaining)
+Get:22 http://deb.debian.org/debian bookworm/main amd64 gpgv amd64 2.2.40-1.1+deb12u2 [649 kB]
+dlstatus:22:60.0816:Retrieving file 22 of 46 (1min 41s remaining)
+dlstatus:22:61.4841:Retrieving file 22 of 46 (1min 1s remaining)
+dlstatus:23:62.9209:Retrieving file 23 of 46 (59s remaining)
+Get:23 http://deb.debian.org/debian bookworm/main amd64 debian-archive-keyring all 2023.3+deb12u2 [179 kB]
+dlstatus:24:64.0176:Retrieving file 24 of 46 (57s remaining)
+Get:24 http://deb.debian.org/debian bookworm/main amd64 libtasn1-6 amd64 4.19.0-2+deb12u1 [48.6 kB]
+Get:25 http://deb.debian.org/debian bookworm/main amd64 libgnutls30 amd64 3.7.9-2+deb12u7 [1409 kB]
+dlstatus:25:64.8773:Retrieving file 25 of 46 (56s remaining)
+dlstatus:25:66.1624:Retrieving file 25 of 46 (52s remaining)
+dlstatus:25:67.5853:Retrieving file 25 of 46 (49s remaining)
+dlstatus:25:69.8446:Retrieving file 25 of 46 (29s remaining)
+Get:26 http://deb.debian.org/debian bookworm/main amd64 libseccomp2 amd64 2.5.4-1+deb12u1 [46.8 kB]
+Get:27 http://deb.debian.org/debian-security bookworm-security/main amd64 apt amd64 2.6.2 [1373 kB]
+dlstatus:27:71.5345:Retrieving file 27 of 46 (28s remaining)
+dlstatus:27:72.9319:Retrieving file 27 of 46 (26s remaining)
+dlstatus:27:73.8142:Retrieving file 27 of 46 (25s remaining)
+dlstatus:27:74.6455:Retrieving file 27 of 46 (31s remaining)
+dlstatus:27:75.4156:Retrieving file 27 of 46 (29s remaining)
+Get:28 http://deb.debian.org/debian bookworm/main amd64 usr-is-merged all 37~deb12u1 [5616 B]
+dlstatus:29:76.8777:Retrieving file 29 of 46 (46s remaining)
+Get:29 http://deb.debian.org/debian bookworm/main amd64 init-system-helpers all 1.65.2+deb12u1 [39.0 kB]
+Get:30 http://deb.debian.org/debian bookworm/main amd64 libc-bin amd64 2.36-9+deb12u14 [609 kB]
+dlstatus:30:77.4657:Retrieving file 30 of 46 (45s remaining)
+dlstatus:30:78.6234:Retrieving file 30 of 46 (42s remaining)
+dlstatus:31:80.1496:Retrieving file 31 of 46 (39s remaining)
+Get:31 http://deb.debian.org/debian bookworm/main amd64 libpam0g amd64 1.5.2-6+deb12u2 [92.1 kB]
+dlstatus:32:80.9256:Retrieving file 32 of 46 (38s remaining)
+Get:32 http://deb.debian.org/debian bookworm/main amd64 libpam-modules-bin amd64 1.5.2-6+deb12u2 [75.7 kB]
+Get:33 http://deb.debian.org/debian bookworm/main amd64 libpam-modules amd64 1.5.2-6+deb12u2 [291 kB]
+dlstatus:33:81.6409:Retrieving file 33 of 46 (24s remaining)
+dlstatus:34:83.1544:Retrieving file 34 of 46 (22s remaining)
+Get:34 http://deb.debian.org/debian bookworm/main amd64 logsave amd64 1.47.0-2+b2 [19.9 kB]
+Get:35 http://deb.debian.org/debian bookworm/main amd64 libext2fs2 amd64 1.47.0-2+b2 [205 kB]
+dlstatus:35:83.9734:Retrieving file 35 of 46 (21s remaining)
+Get:36 http://deb.debian.org/debian bookworm/main amd64 e2fsprogs amd64 1.47.0-2+b2 [572 kB]
+dlstatus:36:85.1653:Retrieving file 36 of 46 (20s remaining)
+dlstatus:36:86.6494:Retrieving file 36 of 46 (15s remaining)
+Get:37 http://deb.debian.org/debian bookworm/main amd64 mount amd64 2.38.1-5+deb12u3 [134 kB]
+dlstatus:38:88.3432:Retrieving file 38 of 46 (14s remaining)
+Get:38 http://deb.debian.org/debian bookworm/main amd64 libpam-runtime all 1.5.2-6+deb12u2 [161 kB]
+dlstatus:39:89.3745:Retrieving file 39 of 46 (12s remaining)
+Get:39 http://deb.debian.org/debian bookworm/main amd64 passwd amd64 1:4.13+dfsg1-1+deb12u2 [972 kB]
+dlstatus:39:90.4426:Retrieving file 39 of 46 (11s remaining)
+dlstatus:39:91.7686:Retrieving file 39 of 46 (8s remaining)
+Get:40 http://deb.debian.org/debian bookworm/main amd64 libblkid1 amd64 2.38.1-5+deb12u3 [147 kB]
+dlstatus:40:93.4176:Retrieving file 40 of 46 (6s remaining)
+Get:41 http://deb.debian.org/debian bookworm/main amd64 libmount1 amd64 2.38.1-5+deb12u3 [166 kB]
+dlstatus:42:95.4426:Retrieving file 42 of 46 (4s remaining)
+Get:42 http://deb.debian.org/debian-security bookworm-security/main amd64 libpcre2-8-0 amd64 10.42-1+deb12u2 [262 kB]
+Get:43 http://deb.debian.org/debian bookworm/main amd64 libuuid1 amd64 2.38.1-5+deb12u3 [28.8 kB]
+dlstatus:43:96.8535:Retrieving file 43 of 46 (2s remaining)
+Get:44 http://deb.debian.org/debian-security bookworm-security/main amd64 tzdata all 2026f-0+deb12u1 [308 kB]
+dlstatus:45:98.9642:Retrieving file 45 of 46
+Get:45 http://deb.debian.org/debian bookworm/main amd64 libcom-err2 amd64 1.47.0-2+b2 [20.0 kB]
+Get:46 http://deb.debian.org/debian bookworm/main amd64 libss2 amd64 1.47.0-2+b2 [24.8 kB]
+Fetched 21.6 MB in 2min 59s (120 kB/s)
+Download complete and in download only mode

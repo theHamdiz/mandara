@@ -89,6 +89,7 @@ A + at the end of the tab strip makes a tab in place
 A .tar.gz of your plugin folder, named after its id.
 A 1 px accent line along the hairline's inner edge
 A Breath of Life
+A NixOS action through Mandara's password dialog: update|rebuild <switch|boot|test|build>, rollback, switch-to <n>, clean keep <n>, clean older-than <days>
 A Question of Power
 A Room of One's Own
 A Vindication of the Rights of Woman
@@ -181,6 +182,7 @@ A notification when an app crashes
 A notification when an install finishes in the background or from the command line
 A notification when new updates appear
 A notification, or a soft dimmed screen with a countdown (it never takes the keyboard)
+A package signature couldn't be verified. Update your distribution's keyring, then try again.
 A password is set.
 A permission this version of Mandara doesn't know; it has no effect
 A picture file (PNG with a transparent background looks best)
@@ -208,6 +210,7 @@ A side bar holds this edge now; turn side bars off (Bar page) to use the sidebar
 A side bar is always an edge frame
 A side bar shares no edge with the launcher: it opens from the bare screen edge, beside the bar.
 A side bar uses Side bar width
+A signature couldn't be verified
 A single TOML file you can keep, share or import on another machine. Existing files are never overwritten.
 A single column sits in the middle instead of at the left edge
 A slide and fade using your current spring. Replay after adjusting the controls.
@@ -375,6 +378,7 @@ Adds a window rule (edit or remove it below)
 Adds one import line to gtk.css (backed up first)
 Adhan at prayer times
 Adjusts mid-tones at night (1 = unchanged)
+Admin helper unavailable
 Administrator
 Administrator rights needed, but no authentication agent answered
 Administrators can install software, change system settings and manage other users.
@@ -481,6 +485,7 @@ An app wants to create a new keyring called “Mandara”. Choose the password y
 An image is already being prepared
 An interactive card — its own settings are with the cards.
 An island per group
+An update is already running
 An-Nawawi's Forty
 Analects 1.1
 Analects 13.17
@@ -503,6 +508,7 @@ Anne Frank
 Announce new drives
 Anonymous: public repositories, 60 requests an hour
 Another notification daemon (e.g. mako) is running. Mandara takes over app notifications as soon as it exits.
+Another program is using the package manager. Wait for it to finish (or close it), then try again.
 Another translation in your language, by its identifier (`mandara msg quran editions` lists them); empty uses the default. Arabic shows no translation
 Answer a notification that offers an inline reply
 Answered in {ms} ms
@@ -801,6 +807,8 @@ Bookmark an ayah
 Bookmark removed
 Bookmarked
 Bookmarks
+Booted
+Booted: {n}
 Border
 Border grab area
 Border width
@@ -844,13 +852,19 @@ Browser
 Bubble
 Bubbles
 Build
+Build and boot it next time; the running system stays
+Build and switch now, without making it the boot default
+Build only
 Build the component
 Build the semantic index for the current command catalog
 Build time p50
 Build your own
 Build your own plugins
+Build, switch now and boot it next time
+Building the new generation
 Built for {arch}, but this computer is {host}: it probably won't start.
 Built in
+Built the new generation
 Built-in
 Built-in encoder
 Built-in encoder width
@@ -911,6 +925,7 @@ Can't open {path}: {error}
 Can't reach systemd
 Can't read {path}: {error}
 Can't read {reference}: try `bukhari 1` or `muslim 2699a`
+Can't stop now
 Cancel
 Cancel an install job (rootless installs roll back)
 Cancel download
@@ -987,6 +1002,8 @@ Changes are picked up live: add, rebuild or delete a plugin and the shell and th
 Changes start at this time
 Changes the bar's style, position and height. Your items stay unless you choose to replace them.
 Changes volumes and devices (PipeWire / PulseAudio)
+Channels
+Channels · {channel}
 Chapter II
 Character
 Characters per second while a key is held
@@ -1029,6 +1046,7 @@ Checking
 Checking Tailscale…
 Checking every surah and saving
 Checking for updates…
+Checking packages
 Checking the files
 Checking the plugin…
 Checking the release signature…
@@ -1083,7 +1101,9 @@ Classic: profile cards above the battery card. Modern: the battery first with a 
 Claude Code today
 Claude Code's tokens today and this week, read from its local logs once you switch it on
 Clean
+Clean up
 Clean, slightly stylized cursors with a finger-shaped pointer
+Cleaning up
 Clear
 Clear all
 Clear all, or one app's notifications
@@ -1190,6 +1210,8 @@ Community plugins
 Compact
 Compact height
 Compact rows
+Compare with {n}
+Comparing generations…
 Compile a local shell command without executing it
 Compiled in {time} ms
 Compiled once to native code, cached in {path}
@@ -1369,6 +1391,7 @@ Couldn't preview what else gets removed: {error}
 Couldn't preview what gets installed: {error}
 Couldn't reach GitHub: {error}
 Couldn't reach lrclib.net
+Couldn't reach the package servers
 Couldn't read Tailscale
 Couldn't read the app inside this AppImage: {error}
 Couldn't read the clipboard: {error}
@@ -1565,6 +1588,7 @@ Delete the topic “{name}”? It has {count} notes.
 Delete this VPN
 Delete user
 Delete user…
+Delete {count} old generations and collect garbage?
 Delete {name}?
 Delete “{name}”? It has {count} tasks.
 Delete?
@@ -1744,6 +1768,7 @@ Downloaded recitations stay available offline. Abdulrashid Sufi downloads a comp
 Downloaded {count} times
 Downloaded:
 Downloaded: sharing stopped
+Downloading
 Downloading Mandara…
 Downloading in the Hadith panel
 Downloading languages for the new version…
@@ -1992,6 +2017,7 @@ Everything is up to date
 Everything looks healthy
 Everything runs locally on your CPU
 Everything started cleanly
+Everything was already up to date
 Example
 Example artist
 Example plugin on GitHub
@@ -2128,6 +2154,7 @@ Finds what is near and far in a wallpaper for the depth clock (Depth Anything V2
 Fine-tune
 Finger count
 Finish logging in in your browser
+Finished
 Fire tries gold, misfortune tries brave men.
 Firefox / Zen
 Firefox would start as:
@@ -2156,6 +2183,7 @@ Fixed
 Fixed schedule: end of the night
 Fixed schedule: start of the night
 Fixed times
+Flake · {path}
 Flare radius
 Flat
 Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass
@@ -2307,6 +2335,7 @@ Full
 Full HD (1080p)
 Full WIT
 Full in {time}
+Full log
 Full moon
 Full name
 Full name, e.g. Salma Adel
@@ -2360,6 +2389,10 @@ Generated wallpapers in the output folder, newest first
 Generated wallpapers in {folder}; the picker lists them too.
 Generating…
 Generating… {percent}%
+Generation {a} → {b}
+Generation {n} · NixOS {version} · kernel {kernel}
+Generations
+Generations to keep
 Generator
 Gentle 20-20-20 reminders to rest your eyes
 Geometric set
@@ -2511,6 +2544,7 @@ Hide finished events
 Hide from lists and switching
 Hide from the launcher
 Hide generated file
+Hide log
 Hide message text in popups
 Hide on touch
 Hide other desktops' entries
@@ -2551,6 +2585,7 @@ Home Assistant
 Home Assistant could not find this entity
 Home Assistant entity id
 Home Assistant returned no entity list
+Home Manager
 Home cards and action tiles in the main menu wear faint geometric patterns
 Homepage
 Honour your parents
@@ -2754,6 +2789,9 @@ Imported {name} — switch it on above
 Imported — the previous settings are in {folder}
 Importing…
 Improved
+In Mandara
+In Mandara: progress in the panel and Mandara's password dialog. In a terminal: the update command opens there
+In a terminal
 In front
 In logical pixels; apps and the compositor scale it on HiDPI screens
 In the bar
@@ -2878,6 +2916,7 @@ It can read and change any file
 It can read and change your files
 It can talk to other apps and services directly
 It can use your SSH or GPG keys
+It can't be stopped now: packages are being installed
 It comes from your daily collections once one is downloaded
 It crashes or runs past its time budget: {error}
 It draws the wallpaper's subject over the desktop clock; switch the depth effect off in Studio → Wallpaper instead
@@ -3388,6 +3427,7 @@ Mandara asks for your keyring password when an app needs a saved secret (gnome-k
 Mandara asks for your password when an app needs administrator rights (polkit). Skipped if another agent is already running
 Mandara can't set this on Sway
 Mandara can't uninstall itself from here
+Mandara can't update this distribution itself yet; use its own package manager
 Mandara command, e.g. launcher toggle
 Mandara couldn't write where this app goes.
 Mandara fonts
@@ -3425,6 +3465,7 @@ Mandara {version} is available
 Mandara {version} is the latest version
 Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed
 Mandara's KeePassXC dialog is off (Studio → General → Keyrings & passwords)
+Mandara's admin helper isn't set up, so the update can't run as administrator.
 Mandara's drop-in
 Mandara's shortcuts and your compositor's appear here
 MangoWM
@@ -3780,6 +3821,7 @@ Newest first
 News headlines
 News unavailable
 Next
+Next boot
 Next theme
 Next to the edge
 Next track
@@ -3806,6 +3848,10 @@ Night temperature
 Nine
 Niri
 Niri, Umbriel
+NixOS
+NixOS system generations (and home-manager's), newest first
+NixOS {version}
+NixOS: how many of the newest generations a clean-up keeps (the running and booted ones always stay)
 No API key saved for this server
 No Bluetooth adapter
 No Docker or Podman socket found
@@ -3937,6 +3983,8 @@ No package manager found
 No package manager on this computer can install it.
 No package manager on this system says it installed this app
 No package matches “{query}”
+No password prompt available
+No password prompt is available: make sure polkit (pkexec) is installed and Mandara's polkit agent is running.
 No path {key}
 No permission to talk to your monitors
 No pictures in {folder}
@@ -4002,6 +4050,8 @@ No supported compositor is installed ({compositors}).
 No surah matches
 No surah or ayah {reference}
 No surah or ayah {reference} (try 2, 2:255, 2:255-260 or al-baqara)
+No system generations found
+No system update is running
 No task {id}
 No tasks yet
 No terminal found — choose one in Studio → Applications
@@ -4040,6 +4090,7 @@ Not a plugin
 Not a tar archive
 Not a valid unit name: {name}
 Not an otpauth:// link
+Not authorized
 Not authorized (the administrator password was refused or no authentication agent answered)
 Not authorized to do that
 Not authorized — the authentication was cancelled or refused
@@ -4048,6 +4099,7 @@ Not checked yet
 Not connected
 Not downloaded yet: open the Hadith panel
 Not enough arguments; usage: {usage}
+Not enough disk space
 Not enough space in {dir}.
 Not exported yet — Ghostty, GTK, Qt, Zed and btop follow Mandara once exported
 Not found
@@ -4120,6 +4172,7 @@ Nothing to set up
 Nothing to show
 Nothing to watch yet
 Nothing was changed; your files are as they were
+Nothing was installed
 Nothing yet today
 Notification
 Notification + OSD
@@ -4191,6 +4244,7 @@ Offline mode is on: nothing is downloaded until you turn it off (Studio → Priv
 Offline mode is on: the Arabic only
 Offline mode is on: the Qur'an downloads once you're online
 Okakura Kakuzō
+Old generations cleaned up
 Oldest first
 Ollama
 Ollama address
@@ -4206,6 +4260,7 @@ On Arch-based systems it may also be in the AUR.
 On Benefits, Book II
 On Medicine
 On NixOS, install Mandara through your flake.
+On NixOS, use `updates nixos update`
 On Oscar Wilde
 On Providence
 On a click
@@ -4257,6 +4312,7 @@ Only HOTP accounts have a counter
 Only Mandara's own plugins are removed this way; uninstall third-party plugins from their page in Studio → Plugins
 Only a top or bottom bar joins the side bars
 Only at certain times
+Only build it, to see that it works
 Only each app's most recent window
 Only in {desktops}
 Only on this display
@@ -4344,6 +4400,7 @@ Opening your keyring…
 Opening {collection}…
 Opening {url}
 Opening…
+Opens AUR updates, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm
 Opens drives and folders from Mandara; empty uses your default
 Opens files and links
 Opens links from Mandara; empty uses your default
@@ -4500,7 +4557,7 @@ Peek at the next ayahs
 Peek at what comes next
 Peek on workspace switch
 Pen
-Pending package updates from pacman, the AUR, APT, DNF, Zypper and Flatpak
+Pending package updates from pacman, the AUR, APT, DNF, Zypper, XBPS, apk and Flatpak, installed with live progress; NixOS generations
 Pending updates by source (the last check; runs one if there is none)
 Pentagon
 People around you
@@ -4874,6 +4931,7 @@ Reading audio devices…
 Reading desktop entries and where each one came from.
 Reading displays…
 Reading drives…
+Reading generations…
 Reading history…
 Reading it from this computer
 Reading maketh a full man; conference a ready man; and writing an exact man.
@@ -4910,6 +4968,7 @@ Ready to present
 Ready, with a warning
 Ready. Opening Mandara’s installer…
 Real kindness seeks no return; what return can the world make to rain clouds?
+Rebuild
 Receives notifications as the desktop notification server
 Recent
 Recent apps
@@ -4967,6 +5026,7 @@ Refresh every
 Refresh interval
 Refresh rate
 Refresh this feed before marking it read
+Refreshing package databases
 Refreshing…
 Refusing to move {path} to the Trash
 Refusing to signal init (PID 1)
@@ -5107,11 +5167,13 @@ Restart reloads everything from scratch. Quit stops Mandara completely (the supe
 Restart shell
 Restart targets: firmware setup support and boot-loader entries (JSON)
 Restart the shell process (config and plugins reload from scratch)
+Restart to finish: {reason}
 Restarted {count} containers
 Restarted {name}
 Restarted {unit}
 Restarting
 Restarting…
+Restart…
 Resting icon size
 Restore
 Restore my look
@@ -5165,6 +5227,9 @@ River runs {file} as a program, but it isn't executable, so River starts without
 River {version} runs window management in a separate program and no longer has the river-control and river-status protocols, so Mandara can't show or switch its tags, send its binds or follow its windows. Mandara works with River's classic line (0.3, packaged as river-classic).
 River's config is your init program, which Mandara never edits: Mandara sends River its colours, rules, input settings and keys when the shell starts and on every change. To start Mandara with River, add this line to your init: {line}
 River's init controls startup; add or remove Mandara there
+Roll back
+Roll back to the previous generation now?
+Rolled back to the previous generation
 Room around the icons
 Rose
 Rose Gold
@@ -5204,11 +5269,13 @@ Run it from a terminal by that name
 Run test
 Run the marketplace's compliance check on a plugin folder: ok, or broken / malicious / placeholder with the reason
 Run these shell actions
+Run updates
 Run with sh -c when the action is Command
 Run {command}
 Run {program}
 Running
 Running apps count only windows on the dock's own display
+Running hooks
 Running hot — performance is limited
 Running processes matching a name, command or PID (CPU order)
 Running · locked
@@ -5217,7 +5284,6 @@ Runs after a warning when the charge reaches the action level; plugging in cance
 Runs once after loading. Return an error to refuse to load.
 Runs sandboxed: no files, network or devices, with a time limit on every call
 Runs updates and the resource monitor; empty detects one
-Runs “Update now”; empty detects ghostty, kitty, foot, alacritty or wezterm
 Rust crate
 S
 SD card
@@ -5602,6 +5668,7 @@ Show in the launcher
 Show indicators for open applications
 Show it now
 Show less
+Show log
 Show more
 Show names
 Show names on hover
@@ -5868,6 +5935,7 @@ Stay humble
 Stays for
 Step by step walk the thousand-mile road.
 Step must be a number
+Step {n} of {total}
 Sticker
 Sticky note
 Stiffness
@@ -5894,6 +5962,7 @@ Stop sharing?
 Stop the adhan
 Stop the hotspot
 Stop the recitation
+Stop the running system update (only while it is refreshing, downloading or building)
 Stop the wallpaper being generated
 Stop unlocking keyrings at login?
 Stop writing display settings to the compositor drop-in (your own config decides again)
@@ -5957,7 +6026,7 @@ Super+Space
 Superscript
 Supported by:
 Supported interface languages
-Supports pacman, AUR helpers, APT, DNF, Zypper and Flatpak
+Supports pacman, AUR helpers, APT, DNF, Zypper, XBPS, apk and Flatpak
 Surah {n} has {got} ayahs, expected {want}
 Surah {n} is out of order
 Surah {n} · {count} ayahs
@@ -5987,6 +6056,8 @@ Switch the login screen to {name}?
 Switch to a saved profile
 Switch to a theme preset (OKLCH crossfade)
 Switch to dark mode
+Switch to generation {n} now?
+Switch to it
 Switch to power-saver at the low threshold and back when charging
 Switch to the next input device (skips hidden ones)
 Switch to the next output device (skips hidden ones)
@@ -5995,10 +6066,13 @@ Switch to the next tiling layout
 Switch to this profile when running on battery
 Switch to this profile when the charger is plugged in
 Switch workspace
+Switched to generation {n}
+Switched to the new generation
 Switched to {name} — Undo is under Recent changes
 Switched to {name}.
 Switching input languages
 Switching speakers / headphones
+Switching to it
 Switching…
 Sync border colors
 Synced lyrics
@@ -6109,6 +6183,7 @@ Tertiary
 Test
 Test bench
 Test load
+Testing the new generation until you restart
 Testing…
 Testing… {percent}%
 Text
@@ -6345,6 +6420,7 @@ The meaning in your language under the Arabic; the Qur'an's is downloaded once f
 The meaning {edition} is incomplete
 The name is empty
 The network name is empty
+The new generation starts at the next boot
 The new release is plugin {new}, not {old}; reinstall it from the marketplace
 The new track when music changes
 The new version is the same size
@@ -6355,6 +6431,10 @@ The next prayer and the time to it (needs the Prayer times plugin)
 The next prayer and time remaining
 The old pond: a frog jumps in — the sound of the water.
 The oldest go first
+The package manager asks for a restart
+The package manager is busy
+The package manager needs a decision from you (a conflict or broken dependency). Nothing was forced; read the log and finish it in a terminal.
+The package servers couldn't be reached. Check your connection and try again.
 The panel is not visible
 The panel that drops from the bar item, or none.
 The password is empty
@@ -6395,6 +6475,8 @@ The release signature could not be verified. Nothing was installed.
 The roots below the earth claim no rewards for making the branches fruitful.
 The roots of education are bitter, but the fruit is sweet.
 The running job (progress, time), the last result and the schedule
+The running kernel was replaced
+The running or last system update: phase, progress, recent log lines and summary
 The sages were not ashamed to find themselves convinced; for they knew, being wise, that their knowledge was not infinite.
 The same as a grid of tiles
 The same message from the same app replaces the earlier one with a ×2 badge
@@ -6452,6 +6534,10 @@ The tray service is not running
 The unit is masked
 The unlock password was incorrect
 The update didn't install
+The update needs an administrator's password, and it wasn't given.
+The update needs your decision
+The update stopped
+The update stopped with an error. The log shows what the package manager said.
 The upright line between a slider's fill and its track; None shows the fill alone
 The uptime monitor stopped
 The volume beside the speaker icon
@@ -6489,6 +6575,7 @@ There is no rule {n}
 There is no text to send
 There is no text to share
 There is nothing either good or bad, but thinking makes it so.
+There isn't enough free disk space. Free some space, then try again.
 There isn't enough free space on this disk.
 Thermals
 Thermometer
@@ -6550,6 +6637,8 @@ This is a {family} package ({extension}).
 This is an old (type 1) AppImage, which Mandara can't read safely. Download a newer build of the app.
 This is an older version ({new}) than the one installed ({old}).
 This is how the screen fades before locking
+This is the running configuration
+This isn't NixOS
 This item changed elsewhere. Your text is still here.
 This item has no menu
 This item was removed. Your text is still here.
@@ -6575,6 +6664,7 @@ This restarts the computer; repeat as `session reboot-to {target} confirm`
 This session
 This sign-in method needs more than a password
 This style uses Compact height
+This system is image-based: it updates with {command}, which Mandara leaves to it
 This tab is empty
 This text is too large to send to a phone
 This update wasn't checked against Mandara's signature; check for updates again
@@ -6951,17 +7041,22 @@ Upcoming events listed under the calendar
 Update
 Update all
 Update available
+Update cancelled
 Update installed
 Update it from Studio → Plugins.
 Update now
+Update the system in Mandara, with progress and Mandara's password dialog (system and Flatpak, or one)
 Update to v{version}
 Update to v{version} · {size}
 Update to v{version} · {size} patch
+Updated 1 package
 Updated to {version} with a binary patch: {sizes}
 Updated to {version} with the full download: {sizes}
+Updated {count} packages
 Updates
 Updates install as small binary patches against the version you have, checked byte for byte. If a patch can't be used, Mandara falls back to the full download automatically. Mandara's own plugins are built in and update with the shell.
 Updates: Studio → About → Update now
+Updating Flatpak apps
 Updating Mandara…
 Updating…
 Upload
@@ -7106,6 +7201,7 @@ Waiting for admin approval
 Waiting for authorization…
 Waiting for its hours: next change at {time}
 Waiting for you
+Waiting for your password…
 Waiting to discharge
 Waiting…
 Walden
@@ -7194,6 +7290,7 @@ Well done is better than well said.
 Were the diver to think on the jaws of the shark, he would never lay hands on the precious pearl.
 Western (123)
 What a middle click between and around the bar's items does
+What changed between two NixOS generations (packages and closure size)
 What changed in each release, in plain words. Run mandara changelog to see it in a terminal.
 What clicking an entry does
 What do we live for, if it is not to make life less difficult to each other?
@@ -7483,6 +7580,7 @@ activating
 active
 add or remove
 after
+all (default), system or flatpak
 all sahih
 all, pinned, a kind (code, color, …) or a collection id or name
 already recording
@@ -7646,6 +7744,7 @@ job id from apps jobs
 journalctl failed
 just now
 keep yours
+kernel {kernel}
 key=value pairs, or a TOML recipe
 khatm
 khatm {n}
@@ -7680,6 +7779,7 @@ minimized
 minutes
 minutes, or 30m, 2h, 1d
 minutes, or off
+mode, generation, keep or older-than
 model id
 model id from `models list` (default: all)
 n/a
@@ -7694,6 +7794,7 @@ new label
 new name
 new name (rest of the line)
 new position, 0 = first
+newer generation
 no
 no address
 no commits yet
@@ -7713,6 +7814,7 @@ not recording
 note id
 note id from `notes list`
 note text (rest of the line), optionally starting with #Topic
+nothing to delete
 notification id
 now
 of one core · avg {average}% · {cores} cores
@@ -7728,6 +7830,7 @@ of {limit} daily limit
 of {total}
 of {total} loaded
 off, or HH:MM-HH:MM
+older generation
 on (default) or off
 on / off
 on / off / toggle
@@ -7767,6 +7870,7 @@ percent, default: Studio → Audio & media → Volume step
 picker
 pid {pid} · {threads} threads
 pin state
+pkexec is not installed
 plugin error
 plugin failed
 plugin id
@@ -7855,6 +7959,7 @@ that backup doesn't parse: {error}
 the check crashed
 the compositor did not report a focused window geometry
 the compositor returned an unexpected frame size
+the count for clean
 the file to share
 the installed copy isn't the published {version} build
 the new name
@@ -7899,6 +8004,7 @@ up
 up {span}
 up {time}
 update available
+update, rebuild, rollback, switch-to or clean
 updating…
 use the user manager
 used today
@@ -8012,6 +8118,8 @@ your default
 {count} of {total} down
 {count} on
 {count} open
+{count} packages changed
+{count} packages changed · closure {size}
 {count} packages from {sources} sources
 {count} pages
 {count} plugin updates
@@ -8027,6 +8135,7 @@ your default
 {count} stars
 {count} stopped containers — show All to start one
 {count} themes · add your own in {folder}
+{count} to delete
 {count} unread
 {count} unread notifications
 {count} untracked
@@ -8216,6 +8325,7 @@ your default
 {percent}% of today left
 {percent}% · charging
 {percent}% — you can unplug the charger
+{phase} · {manager}
 {plugin} failed to start
 {plugin} has no panel
 {plugin} is not floating
