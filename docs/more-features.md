@@ -222,7 +222,9 @@ The rest of what's built in.
 - **Power menu editor**: pick and order the entries (lock, log out, sleep,
   hibernate, restart, shut down, soft restart, firmware setup, any
   boot-loader entry, restart Mandara, your own commands), rename them, show
-  them as the edge dock or a grid, number-key shortcuts and hold-to-confirm
+  them as the edge dock, a grid or separate cards floating in the middle of
+  the screen (in a row or a column that wraps when there are many,
+  `session_menu.cards_layout`), number-key shortcuts and hold-to-confirm
   for everything that ends the session. The dock opens on either screen side
   (by default the one opposite the sidebar) or at the top or bottom center,
   where it joins an edge-frame bar, opens as a card beside a floating bar,

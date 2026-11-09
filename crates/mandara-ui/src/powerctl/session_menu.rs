@@ -1,8 +1,10 @@
 //! The power / session menu (`[session_menu]`): your entries in your order
 //! (lock, log out, sleep, hibernate, restart, shut down, soft restart,
 //! firmware setup, a boot-loader entry, restart Mandara, or any command),
-//! shown as the edge dock or a centered grid, with optional hold-to-confirm
-//! for everything that ends the session and number-key shortcuts. The dock
+//! shown as the edge dock, a centered grid or separate floating cards in the
+//! middle of the screen ([`super::session_cards`]), with optional
+//! hold-to-confirm for everything that ends the session (a press and hold
+//! of the mouse, a finger, Enter or a number key) and number-key shortcuts. The dock
 //! opens on a screen side, or hangs from the top or bottom centre
 //! (`[session_menu] position`): from the bar on that edge, one piece with
 //! it in the edge-frame styles, the way the launcher and the drop-down
@@ -14,11 +16,13 @@
 use std::time::{Duration, Instant};
 
 use gpui::{
-    App, ClickEvent, Context, Entity, FocusHandle, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, KeyUpEvent, MouseButton, ParentElement, Render,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px,
+    App, ClickEvent, Context, DispatchPhase, Entity, FocusHandle, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, KeyUpEvent, MouseButton, ParentElement, Render,
+    SharedString, StatefulInteractiveElement, Styled, TouchDragEvent, TouchPhase, Window, canvas, div, prelude::FluentBuilder as _, px,
 };
 use mandara_config::ShellConfig;
 use mandara_config::power::{HookEvent, SessionEntry, SessionEntryKind, SessionMenuConfig, SessionMenuPosition, SessionMenuStyle, SuspendMode};
+
+use super::session_cards::{self, CardsGrid, Nav};
 use mandara_config::workflow::{LauncherEdge, LauncherPosition};
 use mandara_core::{Edge, FrameClock, SpringConfig, SpringValue, ToGpui, edge_drawer_snapped};
 use mandara_i18n::{t, tf, tk};
@@ -28,6 +32,8 @@ use mandara_theme::Color;
 use serde_json::json;
 
 use crate::bar::layout::Metrics;
+use crate::components::surfaces::{CardSurface as _, Fill, Surface as _};
+use crate::style::ClipRounded as _;
 use crate::first_frame::{self, FirstFrame, Settle};
 use crate::launcher_place::{self, Join, Placement, Rect};
 use crate::fonts::{fonts, tabular_nums};
@@ -87,6 +93,34 @@ const SLIDE_OVERSHOOT: f32 = 1.2;
 const OPEN_SPRING: SpringConfig = SpringConfig::new(280.0, 22.0, 1.0);
 const CLOSE_STIFFNESS: f32 = 420.0;
 const RADIUS_SPRING: SpringConfig = SpringConfig::new(420.0, 26.0, 1.0);
+// Cards (logical px at full size; `CardsGrid::fit` shrinks them on small
+// screens). Corner radii pressed, resting and selected, before the corner
+// scale and the corner family of Themes → Components.
+const CARD_RADIUS_PRESSED_PX: f32 = 14.0;
+const CARD_RADIUS_REST_PX: f32 = 22.0;
+const CARD_RADIUS_FOCUSED_PX: f32 = 30.0;
+/// The round plate behind a card's icon, the icon, and the label under it.
+const CARD_PLATE_PX: f32 = 56.0;
+const CARD_ICON_PX: f32 = 28.0;
+const CARD_LABEL_GAP_PX: f32 = 14.0;
+const CARD_LABEL_PAD_PX: f32 = 10.0;
+/// The number-key hint sits this far into a card's corner (clear of its
+/// larger, selected curve).
+const CARD_BADGE_INSET_PX: f32 = 11.0;
+/// The selected card rises this far (a pressed one sinks as far).
+const CARD_LIFT_PX: f32 = 5.0;
+/// Each card rises this far into place as it enters.
+const CARD_RISE_PX: f32 = 28.0;
+/// Cards enter one after another this far apart, the last at most this
+/// late after the first (seconds at the normal animation speed).
+const CARD_STAGGER_S: f32 = 0.045;
+const CARD_STAGGER_MAX_S: f32 = 0.3;
+/// A card's entrance: a quick pop that overshoots a little.
+const CARD_SPRING: SpringConfig = SpringConfig::new(340.0, 21.0, 1.0);
+/// The selected card's icon plate over its fill, and a resting card's
+/// elevation (a share of the panels', only while shadows are on).
+const CARD_PLATE_ALPHA: f32 = 0.18;
+const CARD_ELEVATION: f32 = 0.55;
 
 /// The built-in name of an entry kind (English key; display with `t`).
 pub fn kind_label(kind: SessionEntryKind) -> &'static str {
@@ -307,16 +341,106 @@ fn edge_attached(on_left: bool, x: f32, w: f32, screen_w: f32) -> (f32, f32) {
     }
 }
 
+/// The room the cards centre in on a `screen`-sized output: all of it but
+/// the bar's band (when the bar shows here, `bar_here`) and a bottom dock.
+fn free_area(cfg: &ShellConfig, bar_here: bool, screen: (f32, f32)) -> Rect {
+    use mandara_config::BarPosition;
+    let m = Metrics::of(cfg, crate::style::radius_scale());
+    let band = if bar_here { crate::bar::layout::exclusive_zone(&m) } else { 0.0 };
+    let edge = |at: BarPosition| if m.position == at { band } else { 0.0 };
+    let (top, left, right) = (edge(BarPosition::Top), edge(BarPosition::Left), edge(BarPosition::Right));
+    let bottom = edge(BarPosition::Bottom).max(cfg.dock_bottom_clearance().unwrap_or(0.0));
+    Rect::new(left, top, (screen.0 - left - right).max(1.0), (screen.1 - top - bottom).max(1.0))
+}
+
+/// The number-key hint `inset` into an entry's top trailing corner (top
+/// left right to left, for the cards that mirror).
+fn badge(i: usize, fg: Color, inset: f32, rtl: bool) -> gpui::Div {
+    div()
+        .absolute()
+        .top(px(inset))
+        .when(rtl, |el| el.left(px(inset)))
+        .when(!rtl, |el| el.right(px(inset)))
+        .size(px(BADGE_PX))
+        .rounded_full()
+        .bg(fg.with_alpha(0.14).hsla())
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_size(px(text::LABEL))
+        .font_features(tabular_nums())
+        .text_color(fg.with_alpha(0.8).hsla())
+        .child(SharedString::new_static(DIGITS[i.min(DIGITS.len() - 1)]))
+}
+
+/// The number-key hints (no string formatted per frame).
+const DIGITS: [&str; 9] = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+/// The pointer side of entry `i`: hover selects it, a press holds it when
+/// it needs holding, a click runs it otherwise. A hold lasts while the
+/// button stays down: GPUI reports an element as not hovered while a
+/// button is held on it, so that alone never ends the hold (a mouse that
+/// moved a pixel used to give up); moving onto another entry or letting go
+/// anywhere does.
+fn wire(el: gpui::Stateful<gpui::Div>, i: usize, cx: &mut Context<SessionView>) -> gpui::Stateful<gpui::Div> {
+    el.on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+        let held = this.holding.map(|(h, _)| h);
+        if *hovered {
+            this.selected = i;
+            if held.is_some_and(|h| h != i) && !this.touch_hold {
+                this.pressed = None;
+                this.release(cx);
+            }
+            cx.notify();
+        } else if held == Some(i) && this.pressed != Some(i) {
+            this.release(cx);
+        }
+    }))
+    .on_mouse_up_out(MouseButton::Left, cx.listener(|this, _, _, cx| {
+        if this.pressed.is_some() && !this.touch_hold {
+            this.pressed = None;
+            this.release(cx);
+        }
+    }))
+    .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, _, cx| {
+        this.pressed = Some(i);
+        if this.needs_hold(i, cx) {
+            this.activate(i, cx);
+        }
+        cx.notify();
+    }))
+    .on_mouse_up(MouseButton::Left, cx.listener(move |this, _, _, cx| {
+        this.pressed = None;
+        this.release(cx);
+    }))
+    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+        this.pressed = None;
+        if !this.needs_hold(i, cx) {
+            this.activate(i, cx);
+        }
+    }))
+}
+
 pub struct SessionView {
     shell: Entity<ShellState>,
     focus: FocusHandle,
     entries: Vec<SessionEntry>,
+    /// Each entry's label and icon, resolved once when the menu opens
+    /// (the menu lives for one opening; a new one reads them again).
+    labels: Vec<SharedString>,
+    icons: Vec<SharedString>,
     selected: usize,
     pressed: Option<usize>,
     /// Hold-to-confirm in progress: entry and when it started.
     holding: Option<(usize, Instant)>,
+    /// The hold was started by a finger (its lift or slide-off ends it).
+    touch_hold: bool,
     slide: SpringValue<f32>,
     radii: Vec<SpringValue<f32>>,
+    /// The cards style: each card's entrance (0 hidden, 1 in place), and
+    /// when the menu first drew (the cards enter one after another from it).
+    appear: Vec<SpringValue<f32>>,
+    shown_at: Option<Instant>,
     clock: FrameClock,
     closing: bool,
     entered: bool,
@@ -345,6 +469,8 @@ impl SessionView {
             if !this.closing {
                 this.entered = false;
                 this.leave_task = None;
+                // Reopened while closing: the cards enter again.
+                this.shown_at = None;
             }
             cx.notify();
         })
@@ -368,16 +494,22 @@ impl SessionView {
         focus.focus(window, cx);
         first_frame::guard("session menu", window, cx, |this| this.first.drawn(), |this, cx| this.close(cx));
         let (entries, selected) = visible(&config(cx).read(cx).get().session_menu);
+        let rest = if config(cx).read(cx).get().session_menu.style == SessionMenuStyle::Cards { CARD_RADIUS_REST_PX } else { RADIUS_REST_PX };
         Self {
             last_press: None,
             deactivate_task: None,
             shell,
             focus,
-            radii: entries.iter().map(|_| SpringValue::new(RADIUS_REST_PX, RADIUS_SPRING)).collect(),
+            radii: entries.iter().map(|_| SpringValue::new(rest, RADIUS_SPRING)).collect(),
+            appear: entries.iter().map(|_| SpringValue::new(0.0, CARD_SPRING)).collect(),
+            shown_at: None,
+            labels: entries.iter().map(|e| SharedString::from(entry_label(e))).collect(),
+            icons: entries.iter().map(|e| SharedString::from(entry_icon(e))).collect(),
             entries,
             selected,
             pressed: None,
             holding: None,
+            touch_hold: false,
             slide: SpringValue::new(0.0, OPEN_SPRING),
             clock: FrameClock::new(),
             closing: false,
@@ -431,8 +563,49 @@ impl SessionView {
     }
 
     fn release(&mut self, cx: &mut Context<Self>) {
+        self.touch_hold = false;
         if self.holding.take().is_some() {
             cx.notify();
+        }
+    }
+
+    /// The mouse, its button held, moved over card `at` (or between cards):
+    /// a hold it started on another card ends.
+    fn slid_to(&mut self, at: Option<usize>, cx: &mut Context<Self>) {
+        if self.touch_hold || self.pressed.is_none() || self.pressed == at {
+            return;
+        }
+        self.pressed = None;
+        self.release(cx);
+        cx.notify();
+    }
+
+    /// A finger on the cards: one landing on an entry that needs holding
+    /// claims the touch and holds it until the finger lifts or slides off
+    /// (a tap on any other entry stays a tap, which clicks it). Returns
+    /// whether the touch was claimed.
+    fn touch(&mut self, e: &TouchDragEvent, grid: &CardsGrid, rtl: bool, cx: &mut Context<Self>) -> bool {
+        let at = |p: gpui::Point<gpui::Pixels>| grid.hit(f32::from(p.x), f32::from(p.y), rtl);
+        match e.phase {
+            TouchPhase::Started => {
+                let Some(i) = at(e.start_position).filter(|&i| self.needs_hold(i, cx)) else { return false };
+                self.last_press = Some(Instant::now());
+                self.pressed = Some(i);
+                self.touch_hold = true;
+                self.activate(i, cx);
+                true
+            }
+            TouchPhase::Moved if self.touch_hold && at(e.position) != self.holding.map(|(i, _)| i) => {
+                self.pressed = None;
+                self.release(cx);
+                true
+            }
+            TouchPhase::Ended | TouchPhase::Cancelled if self.touch_hold => {
+                self.pressed = None;
+                self.release(cx);
+                true
+            }
+            _ => false,
         }
     }
 
@@ -459,26 +632,49 @@ impl Render for SessionView {
         let palette = mandara_core::frame_palette(window, cx);
         let f = fonts(cx);
         let cfg = config(cx).read(cx).snapshot();
-        let menu = cfg.session_menu.clone();
+        let menu = &cfg.session_menu;
         let hold = Duration::from_millis(menu.hold_ms.max(1));
         let n = self.entries.len();
+        let cards = menu.style == SessionMenuStyle::Cards;
 
         // Springs.
         self.slide.set_config(if self.closing { SpringConfig::critical(CLOSE_STIFFNESS) } else { OPEN_SPRING });
         self.slide.set_target(if self.closing { 0.0 } else { 1.0 });
+        let (pressed_r, rest_r, focused_r) = if cards { (CARD_RADIUS_PRESSED_PX, CARD_RADIUS_REST_PX, CARD_RADIUS_FOCUSED_PX) } else { (RADIUS_PRESSED_PX, RADIUS_REST_PX, RADIUS_FOCUSED_PX) };
         for (i, r) in self.radii.iter_mut().enumerate() {
             r.set_target(if self.pressed == Some(i) || self.holding.is_some_and(|(h, _)| h == i) {
-                RADIUS_PRESSED_PX
+                pressed_r
             } else if self.selected == i {
-                RADIUS_FOCUSED_PX
+                focused_r
             } else {
-                RADIUS_REST_PX
+                rest_r
             });
         }
-        let dt = self.clock.tick(Instant::now());
+        let now = Instant::now();
+        let dt = self.clock.tick(now);
         let mut moving = self.slide.step(dt);
         for r in &mut self.radii {
             moving |= r.step(dt);
+        }
+        if cards {
+            // One after another from the first frame drawn; all at once
+            // with reduced motion, and together on the way out.
+            let shown = *self.shown_at.get_or_insert(now);
+            let since = now.saturating_duration_since(shown).as_secs_f32() * mandara_core::spring::time_scale();
+            let reduce = mandara_core::spring::motion_profile().reduce;
+            for (i, a) in self.appear.iter_mut().enumerate() {
+                if self.closing {
+                    a.set_config(SpringConfig::critical(CLOSE_STIFFNESS));
+                    a.set_target(0.0);
+                } else if since >= session_cards::entrance_delay(i, CARD_STAGGER_S, CARD_STAGGER_MAX_S, reduce) {
+                    a.set_config(CARD_SPRING);
+                    a.set_target(1.0);
+                } else {
+                    // Still waiting for its turn.
+                    moving = true;
+                }
+                moving |= a.step(dt);
+            }
         }
         if let Some((i, _)) = self.holding {
             if self.hold_progress(i, hold) >= HOLD_DONE {
@@ -500,7 +696,8 @@ impl Render for SessionView {
 
         // One button / tile.
         let grid = menu.style == SessionMenuStyle::Grid;
-        let button = |i: usize, entry: &SessionEntry, this: &Self, cx: &mut Context<Self>| {
+        let shortcuts = menu.show_shortcuts;
+        let button = |i: usize, entry: &SessionEntry, this: &Self| {
             let focused = this.selected == i;
             let destructive = entry.kind.is_destructive();
             let (bg, fg) = if focused {
@@ -529,62 +726,22 @@ impl Render for SessionView {
                 .when(progress > 0.0, |el| {
                     el.child(div().absolute().left_0().bottom_0().w_full().h(px(side * progress)).bg(fg.with_alpha(HOLD_FILL_ALPHA).hsla()))
                 })
-                .child(any_icon(&entry_icon(entry), if grid { TILE_ICON_PX } else { DOCK_ICON_PX }, fg))
+                .child(any_icon(&this.icons[i], if grid { TILE_ICON_PX } else { DOCK_ICON_PX }, fg))
                 .when(grid, |el| {
-                    el.child(div().px(px(BADGE_INSET_PX)).text_size(px(text::BODY_S)).font_weight(FontWeight::MEDIUM).text_color(fg.hsla()).truncate().max_w(px(side - 2.0 * BADGE_INSET_PX)).child(entry_label(entry)))
+                    el.child(div().px(px(BADGE_INSET_PX)).text_size(px(text::BODY_S)).font_weight(FontWeight::MEDIUM).text_color(fg.hsla()).truncate().max_w(px(side - 2.0 * BADGE_INSET_PX)).child(this.labels[i].clone()))
                 })
-                .when(menu.show_shortcuts && i < 9, |el| {
-                    el.child(
-                        div()
-                            .absolute()
-                            .top(px(BADGE_INSET_PX))
-                            .right(px(BADGE_INSET_PX))
-                            .size(px(BADGE_PX))
-                            .rounded_full()
-                            .bg(fg.with_alpha(0.14).hsla())
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_size(px(text::LABEL))
-                            .font_features(tabular_nums())
-                            .text_color(fg.with_alpha(0.8).hsla())
-                            .child((i + 1).to_string()),
-                    )
-                })
-                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                    if *hovered {
-                        this.selected = i;
-                        cx.notify();
-                    } else if this.holding.is_some_and(|(h, _)| h == i) {
-                        this.release(cx);
-                    }
-                }))
-                .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, _, cx| {
-                    this.pressed = Some(i);
-                    if this.needs_hold(i, cx) {
-                        this.activate(i, cx);
-                    }
-                    cx.notify();
-                }))
-                .on_mouse_up(MouseButton::Left, cx.listener(move |this, _, _, cx| {
-                    this.pressed = None;
-                    this.release(cx);
-                }))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    this.pressed = None;
-                    if !this.needs_hold(i, cx) {
-                        this.activate(i, cx);
-                    }
-                }))
+                .when(shortcuts && i < 9, |el| el.child(badge(i, fg, BADGE_INSET_PX, false)))
         };
-        let buttons: Vec<_> = self.entries.clone().iter().enumerate().map(|(i, e)| button(i, e, self, cx).into_any_element()).collect();
-        let label = self.entries.get(self.selected).map(entry_label).unwrap_or_default();
-        let hint = match (&self.error, self.holding) {
-            (Some(e), _) => e.clone(),
-            (None, Some(_)) => t("Keep holding to confirm").to_string(),
-            (None, None) if self.needs_hold(self.selected, cx) => tf("{action} — press and hold", &[("action", &label)]),
-            _ => label.clone(),
+        let buttons: Vec<_> = if cards { Vec::new() } else { self.entries.iter().enumerate().map(|(i, e)| wire(button(i, e, self), i, cx).into_any_element()).collect() };
+        let label = self.labels.get(self.selected).cloned().unwrap_or_default();
+        let hint: SharedString = match (&self.error, self.holding) {
+            (Some(e), _) => e.clone().into(),
+            (None, Some(_)) => t("Keep holding to confirm").into(),
+            (None, None) if self.needs_hold(self.selected, cx) => tf("{action} — press and hold", &[("action", &label)]).into(),
+            _ => label,
         };
+        let rtl = crate::bidi::rtl();
+        let cards_grid = cards.then(|| CardsGrid::within(menu.cards_layout, n, free_area(&cfg, self.bar_here, (sw, sh))));
 
         // The dock's place (the grid always opens in the middle).
         let dock_w = BTN_PX + DOCK_PAD_PX * 2.0;
@@ -593,7 +750,7 @@ impl Render for SessionView {
         // Hanging from the bar, the scrim leaves the bar bright (it
         // still closes the menu when clicked).
         let keep_bright = match place {
-            DockPlace::Hang(pl) if !grid => pl.keep_bright,
+            DockPlace::Hang(pl) if !grid && !cards => pl.keep_bright,
             _ => None,
         };
         let dim = crate::bar::scrim::element((sw, sh), &Metrics::of(&cfg, crate::style::radius_scale()), keep_bright, gpui::black().opacity(SCRIM_ALPHA * p.min(1.0)), window.scale_factor());
@@ -614,6 +771,15 @@ impl Render for SessionView {
                 let n = this.entries.len().max(1);
                 let cols = if grid { grid_columns(&config(cx).read(cx).get().session_menu, n) } else { 1 };
                 let key = e.keystroke.key.as_str();
+                // Cards: the arrows move the way they point over the
+                // rows (or columns) as laid out, in either reading direction.
+                if let Some(grid) = cards_grid
+                    && let Some(nav) = Nav::from_key(key, e.keystroke.modifiers.shift)
+                {
+                    this.selected = grid.step(this.selected, nav, rtl);
+                    cx.notify();
+                    return;
+                }
                 match key {
                     "escape" => this.close(cx),
                     "down" | "j" => this.selected = (this.selected + cols).min(n - 1),
@@ -643,8 +809,133 @@ impl Render for SessionView {
                     .on_mouse_down(MouseButton::Right, cx.listener(|this, _, _, cx| this.close(cx))),
             );
 
+        if let Some(g) = cards_grid {
+            // Separate cards floating over the dim, centred: each one its
+            // own surface in the card design of Themes → Components.
+            let view = cx.entity().downgrade();
+            let fit = g.fit;
+            let mut root = root.child(
+                // A finger on an entry that needs holding claims the touch
+                // (taps on the others click them as usual).
+                canvas(|_, _, _| {}, move |_, _, window, _| {
+                    // A held mouse button that slides off its card lets go.
+                    let slid = view.clone();
+                    window.on_mouse_event(move |e: &gpui::MouseMoveEvent, phase, _, cx| {
+                        if phase == DispatchPhase::Bubble && e.pressed_button == Some(MouseButton::Left) {
+                            let at = g.hit(f32::from(e.position.x), f32::from(e.position.y), rtl);
+                            let _ = slid.update(cx, |this, cx| this.slid_to(at, cx));
+                        }
+                    });
+                    window.on_mouse_event(move |e: &TouchDragEvent, phase, window, cx| {
+                        if phase != DispatchPhase::Bubble || (e.phase == TouchPhase::Started && window.default_prevented()) {
+                            return;
+                        }
+                        if view.update(cx, |this, cx| this.touch(e, &g, rtl, cx)).unwrap_or(false) {
+                            window.prevent_default();
+                            cx.stop_propagation();
+                        }
+                    });
+                })
+                .absolute()
+                .size_full(),
+            );
+            for (i, entry) in self.entries.iter().enumerate() {
+                let r = g.rect(i, rtl);
+                let focused = self.selected == i;
+                let destructive = entry.kind.is_destructive();
+                let (bg, fg) = if focused {
+                    if destructive { (palette.urgent_coral, palette.urgent_coral.best_on(Color::hex("#ffffff"), Color::hex("#1a0d0b"))) } else { (palette.primary, palette.on_primary) }
+                } else {
+                    (frame_color(&palette), palette.on_surface)
+                };
+                // The icon in a tonal plate: the entry's accent at rest.
+                let (plate, tint) = if focused { (fg.with_alpha(CARD_PLATE_ALPHA), fg) } else { (palette.surface_container_high, if destructive { palette.urgent_coral } else { palette.primary }) };
+                let a = self.appear.get(i).map_or(1.0, |s| s.value());
+                let radius = self.radii.get(i).map_or(CARD_RADIUS_REST_PX, |s| s.value());
+                // Selected cards rise, pressed ones sink, following the corner morph.
+                let lift = ((radius - CARD_RADIUS_REST_PX) / (CARD_RADIUS_FOCUSED_PX - CARD_RADIUS_REST_PX)).clamp(-1.0, 1.0) * CARD_LIFT_PX;
+                let y = r.y + (1.0 - a) * CARD_RISE_PX - lift;
+                let progress = self.hold_progress(i, hold);
+                let mut rim = crate::plugins::panel_fx::rim(&palette);
+                if crate::components::CardStyle::Raised != crate::style::card_style() {
+                    rim.extend(crate::plugins::panel_fx::elevation_scaled(&palette, a.clamp(0.0, 1.0), CARD_ELEVATION));
+                }
+                let corner = crate::style::radius(radius).max(0.0) * fit;
+                let card = div()
+                    .id(("session-card", i))
+                    .card_surface(corner, Fill(bg, None), rim, &palette)
+                    // After the surface: the cut and squircle designs make
+                    // their card `relative` to hold the drawn shape.
+                    .absolute()
+                    .left(px(r.x))
+                    .top(px(y))
+                    .w(px(r.w))
+                    .h(px(r.h))
+                    .opacity(a.clamp(0.0, 1.0))
+                    .occlude()
+                    .cursor_pointer()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(CARD_LABEL_GAP_PX * fit))
+                    // Hold-to-confirm: a tide rising from the bottom, clipped
+                    // inside the card's shape (a layer of its own, so the
+                    // cut and squircle outlines themselves stay unclipped).
+                    .when(progress > 0.0, |el| {
+                        el.child(
+                            div()
+                                .absolute()
+                                .inset_0()
+                                .surface_corners(corner)
+                                .clip_rounded()
+                                .child(div().absolute().left_0().bottom_0().w_full().h(px(r.h * progress)).bg(fg.with_alpha(HOLD_FILL_ALPHA).hsla())),
+                        )
+                    })
+                    .child(div().size(px(CARD_PLATE_PX * fit)).flex_none().rounded_full().bg(plate.hsla()).flex().items_center().justify_center().child(any_icon(&self.icons[i], CARD_ICON_PX * fit, tint)))
+                    .child(
+                        div()
+                            .max_w(px((r.w - 2.0 * CARD_LABEL_PAD_PX * fit).max(0.0)))
+                            .truncate()
+                            .text_size(px(text::BODY_S))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(fg.hsla())
+                            .child(self.labels[i].clone()),
+                    )
+                    .when(shortcuts && i < 9, |el| el.child(badge(i, fg, CARD_BADGE_INSET_PX * fit, rtl)));
+                root = root.child(wire(card, i, cx));
+            }
+            let error = self.error.is_some();
+            return root
+                .child(
+                    div()
+                        .absolute()
+                        .left(px(g.hint.x))
+                        .top(px(g.hint.y))
+                        .w(px(g.hint.w))
+                        .h(px(g.hint.h))
+                        .flex()
+                        .justify_center()
+                        .opacity(ramp(LABEL_FADE))
+                        .child(
+                            div()
+                                .id("session-label")
+                                .occlude()
+                                .px(px(LABEL_PAD_X_PX))
+                                .rounded_full()
+                                .bg(fill)
+                                .flex()
+                                .items_center()
+                                .font_weight(FontWeight::MEDIUM)
+                                .when(error, |el| el.text_color(palette.urgent_coral.hsla()))
+                                .child(hint),
+                        ),
+                )
+                .into_any_element();
+        }
+
         if grid {
-            let cols = grid_columns(&menu, n);
+            let cols = grid_columns(menu, n);
             let rows = n.div_ceil(cols);
             let inner_w = cols as f32 * TILE_PX + (cols.saturating_sub(1)) as f32 * GRID_GAP_PX;
             let w = inner_w + GRID_PAD_PX * 2.0;
@@ -838,7 +1129,7 @@ pub fn register(r: &mut PluginRegistry) {
                 .iter()
                 .map(|e| json!({ "kind": e.kind.id(), "enabled": e.enabled, "label": entry_label(e), "icon": entry_icon(e), "destructive": e.kind.is_destructive(), "command": e.command, "boot_entry": e.boot_entry }))
                 .collect();
-            Ok(json!({ "style": cfg.session_menu.style, "position": cfg.session_menu.position, "hold_to_confirm": cfg.session_menu.hold_to_confirm, "hold_ms": cfg.session_menu.hold_ms, "entries": entries }))
+            Ok(json!({ "style": cfg.session_menu.style, "position": cfg.session_menu.position, "cards_layout": cfg.session_menu.cards_layout, "hold_to_confirm": cfg.session_menu.hold_to_confirm, "hold_ms": cfg.session_menu.hold_ms, "entries": entries }))
         })
         .example("session entries"),
     );
@@ -981,6 +1272,27 @@ mod tests {
         assert_eq!(dock_place(SessionMenuPosition::Side, true, m, true, None, screen, size), DockPlace::Side { on_left: true });
         assert_eq!(dock_place(SessionMenuPosition::Left, false, m, true, None, screen, size), DockPlace::Side { on_left: true });
         assert_eq!(dock_place(SessionMenuPosition::Right, true, m, true, None, screen, size), DockPlace::Side { on_left: false });
+    }
+
+    #[test]
+    fn the_cards_centre_in_the_room_the_bar_and_dock_leave() {
+        use mandara_config::{BarPosition, ShellConfig};
+        let screen = (1920.0, 1080.0);
+        let mut cfg = ShellConfig::default();
+        cfg.bar.position = BarPosition::Top;
+        let band = crate::bar::layout::exclusive_zone(&Metrics::of(&cfg, crate::style::radius_scale()));
+        let area = free_area(&cfg, true, screen);
+        assert_eq!((area.x, area.y, area.w), (0.0, band, screen.0));
+        assert_eq!(area.bottom(), screen.1 - cfg.dock_bottom_clearance().unwrap_or(0.0));
+        // The bar on another display: the whole height.
+        assert_eq!(free_area(&cfg, false, screen).y, 0.0);
+        // A side bar narrows it instead.
+        cfg.bar.position = BarPosition::Left;
+        let band = crate::bar::layout::exclusive_zone(&Metrics::of(&cfg, crate::style::radius_scale()));
+        let side = free_area(&cfg, true, screen);
+        assert_eq!((side.x, side.y), (band, 0.0));
+        let g = CardsGrid::within(mandara_config::power::SessionCardsLayout::Row, 9, side);
+        assert!(g.block.x >= band && g.block.right() <= screen.0);
     }
 
     #[test]

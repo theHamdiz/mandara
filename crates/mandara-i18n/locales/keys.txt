@@ -128,6 +128,7 @@ A device battery this low turns amber; Power → peripheral alerts sets when it 
 A digit removes its pencil marks from the cells it sees
 A distinct alert sound
 A dock on the screen edge or a centered grid
+A dock on the screen edge, a centered grid, or separate cards floating in the middle of the screen
 A dot per window
 A drag continues briefly after lifting the finger
 A faceted, lit triangle mesh
@@ -1015,6 +1016,7 @@ Captures screens, windows and regions
 Capturing…
 Card corners
 Card folder
+Card layout
 Card padding
 Card radius
 Card spacing
@@ -1022,6 +1024,7 @@ Card style
 Cards
 Cards keep clear of the bar's edge automatically.
 Cards show bigger thumbnails and flair, compact fits more posts and the grid puts pictures first; the panel's layout button switches too
+Cards side by side, wrapping onto more rows when they don't fit, or one above the other, wrapping into more columns
 Care for an orphan
 Cargo Cult Science
 Carousel
@@ -2393,6 +2396,7 @@ For me (--user)
 For scores, comment counts, reply threads and more requests, connect a free app you create. It stays on this computer and reads public posts only.
 For sessions that don't start them (MangoWM, Niri, Hyprland without uwsm). Skipped when systemd's xdg-autostart does; leave off if your compositor config starts the same apps
 For terminal apps; empty uses your preferred terminal (Applications), then $TERMINAL, then the first installed one
+For the Cards style
 For the Custom quality
 For the Model mode
 For the things we have to learn before we can do, we learn by doing.
@@ -5571,6 +5575,7 @@ Rounded, material-inspired cursors: the most installed theme in ricing setups
 Roundness
 Roundness of the pills, island, slab and items
 Route traffic through a peer, or stop with none
+Row
 Rows
 Rows shown before the list scrolls
 Royal indigo dusk over the palace gardens, coral sky and an amber lighthouse.
@@ -6724,6 +6729,7 @@ The built-in encoder records at most 60 fps
 The built-in encoder records no sound
 The built-in encoder scales recordings down to at most this width
 The built-in encoder writes WebM only
+The cards always open in the middle of the screen
 The carousel opened from the bar, the main menu or `mandara msg wallpaper picker toggle`
 The checker rejected the config without saying why.
 The clipboard holds a password, so it isn't shared

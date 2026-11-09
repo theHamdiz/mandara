@@ -450,9 +450,36 @@ pub enum SessionMenuStyle {
     Dock,
     /// A centered grid of large tiles.
     Grid,
+    /// Separate floating cards, centred on the screen (`cards_layout`).
+    Cards,
 }
 
-/// Where the edge dock style opens (the grid always opens in the middle).
+/// How the cards style lines its cards up.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SessionCardsLayout {
+    /// Side by side, wrapping onto more rows when they don't fit (the
+    /// default).
+    #[default]
+    Row,
+    /// One above the other, wrapping into more columns when they don't fit.
+    Column,
+}
+
+impl SessionCardsLayout {
+    pub const ALL: [SessionCardsLayout; 2] = [Self::Row, Self::Column];
+
+    /// The config id (`row`, `column`).
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Row => "row",
+            Self::Column => "column",
+        }
+    }
+}
+
+/// Where the edge dock style opens (the grid and the cards always open in
+/// the middle).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SessionMenuPosition {
@@ -505,6 +532,8 @@ pub struct SessionMenuConfig {
     /// Where the edge dock opens.
     pub position: SessionMenuPosition,
     pub grid_columns: u8,
+    /// How the cards style lines its cards up.
+    pub cards_layout: SessionCardsLayout,
     /// Destructive entries need a press-and-hold (`hold_ms`).
     pub hold_to_confirm: bool,
     pub hold_ms: u64,
@@ -524,6 +553,7 @@ impl Default for SessionMenuConfig {
             style: SessionMenuStyle::Dock,
             position: SessionMenuPosition::Side,
             grid_columns: defaults::GRID_COLUMNS,
+            cards_layout: SessionCardsLayout::Row,
             hold_to_confirm: false,
             hold_ms: defaults::HOLD_MS,
             default_action: Lock.id().into(),
@@ -772,6 +802,23 @@ mod tests {
             assert!(toml::to_string(&menu).unwrap().contains(&format!("position = \"{}\"", p.id())));
         }
         assert!(SessionMenuPosition::Top.is_centred() && !SessionMenuPosition::Right.is_centred());
+    }
+
+    #[test]
+    fn session_menu_cards_style_round_trips() {
+        let old: SessionMenuConfig = toml::from_str("style = \"grid\"\n").unwrap();
+        assert_eq!(old.cards_layout, SessionCardsLayout::Row, "configs from before the cards style line cards up in a row");
+        for layout in SessionCardsLayout::ALL {
+            let menu = SessionMenuConfig { style: SessionMenuStyle::Cards, cards_layout: layout, hold_to_confirm: true, ..Default::default() };
+            let text = toml::to_string(&menu).unwrap();
+            assert!(text.contains("style = \"cards\"") && text.contains(&format!("cards_layout = \"{}\"", layout.id())), "{text}");
+            let back: SessionMenuConfig = toml::from_str(&text).unwrap();
+            assert_eq!(back, menu);
+        }
+        let hand: SessionMenuConfig = toml::from_str("style = \"cards\"\ncards_layout = \"column\"\nhold_to_confirm = true\n").unwrap();
+        assert_eq!((hand.style, hand.cards_layout, hand.hold_to_confirm), (SessionMenuStyle::Cards, SessionCardsLayout::Column, true));
+        assert_eq!(hand.default_action, "lock", "the other settings keep their defaults");
+        assert!(toml::from_str::<SessionMenuConfig>("cards_layout = \"diagonal\"\n").is_err(), "an unknown layout is refused, not guessed");
     }
 
     #[test]
