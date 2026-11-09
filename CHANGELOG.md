@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **A new website.** Mandara's homepage is rebuilt as one board of tiles in the shell's own colours. Pick a Look and the whole page takes on its palette, in light or dark. Flip through the four new bar styles, drag a slider through all five Studio designs, search every default shortcut, browse the seven compositors and all the plugins, and copy the install command or the NixOS one-liner. It works without JavaScript, follows reduced motion, and has a place ready for a short film of Mandara in motion.
+
 ## 0.23.0 — 2026-11-09
 
 A different shape for every character. Mandara Studio uses less memory.

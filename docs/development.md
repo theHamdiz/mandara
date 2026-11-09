@@ -12,18 +12,35 @@ system programs it starts are MangoWM, `dbus-daemon`, `bwrap`, PipeWire
 ## Website
 
 GitHub Pages serves `index.html` as the homepage and the Markdown guides as
-documentation. The homepage uses `assets/css/landing.css`; the shared
-`_includes/head-custom.html` supplies its phoenix favicon and light/dark
-colours. On the homepage, keep root-relative asset and guide links behind
-Jekyll's `relative_url` filter so they work under the repository's `/mandara/`
-path. Markdown guides use file-relative links, which preserve that base path
-and also work when reading the files on GitHub.
+documentation. The guides share `_includes/head-custom.html` (phoenix favicon,
+light/dark colours, `assets/css/pages.css`). The homepage is plain static
+HTML with no front matter or Liquid: Pages copies it as is, its links are
+file-relative (so they work under the repository's `/mandara/` path and when
+opened from disk), and it loads only `assets/css/site.css`,
+`assets/js/site.js` and `assets/js/copy-code.js`. Open `index.html` in a
+browser to preview it; no build step or server is needed.
 
-The Look selector uses native radio controls and the FAQ uses `details`,
-so both work without JavaScript. Preview both colour schemes and narrow
-screens, including keyboard selection and reduced motion. Run
-`cargo test -p xtask pages_tests` to check the linked files, preview controls,
-contrast, installation command and plugin count against the guides.
+The page is one board of tiles in the shell's own colours. Its default
+palette is Mandara Corniche; picking a Look swaps the colour tokens for that
+Look's palette. Both come from the theme engine: after changing a theme or a
+Look, run `MANDARA_PAGES_DUMP=1 cargo test -p xtask pages` to rewrite the
+palette block in `site.css` and the JSON in `index.html`. The shortcut
+browser lists `default_keybinds()`, the plugin shelf follows
+`docs/plugins.md` (without the opt-in faith plugins, which stay in their own
+guide section) and the language tiles follow the locale catalogs; the tests
+fail when any of them drift.
+
+Everything works without JavaScript: the Looks are native radio controls,
+the compositor board and the FAQ use `details`, and every shortcut is listed.
+The script adds the palette switch, the slider designs, shortcut search, the
+footer's Alexandria time and the hero film. The film slot loads
+`assets/video/mandara-promo.webm` (then `.mp4`) only after the page has
+loaded, never autoplays with reduced motion, and shows its Play and Sound
+buttons only once a frame has arrived, so the poster stands in until the
+video file is added. Preview both colour schemes, phone width, keyboard
+selection and reduced motion. `cargo test -p xtask pages` checks the links,
+image sizes, palettes and their contrast, Looks, shortcuts, plugins,
+compositors, languages and the installation command against their sources.
 
 The shared `assets/js/copy-code.js` adds Copy buttons to the homepage's
 installation command and fenced examples in the guides. It copies the code's
