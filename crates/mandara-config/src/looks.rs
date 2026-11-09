@@ -473,7 +473,8 @@ pub fn restore(cfg: &ShellConfig, before: &crate::profiles::Profile) -> anyhow::
             c.plugins.enabled.push(id.clone());
         }
     }
-    c.looks = LooksState::default();
+    // Keeping your component designs is your choice, not the look's.
+    c.looks = LooksState { keep_components: cfg.looks.keep_components, ..LooksState::default() };
     Ok(c)
 }
 
@@ -555,6 +556,24 @@ mod tests {
         let mut expect = mine.side_bars.clone();
         expect.opacity = 0.5;
         assert_eq!(back.side_bars, expect, "the rail comes back exactly");
+    }
+
+    /// Restoring your setup keeps the switch for keeping your component
+    /// designs as it is now, whatever the snapshot held.
+    #[test]
+    fn restoring_keeps_the_keep_components_choice() {
+        let mine = ShellConfig::default();
+        let before = before_snapshot(&mine, "2026-11-09 12:00").expect("own setup is snapshotted");
+        let mut look = find("night-frame").unwrap().apply(&mine, LookOptions::default());
+        look.looks.keep_components = true;
+        let back = restore(&look, &before).unwrap();
+        assert!(back.looks.keep_components, "switched on during the look, kept after restoring");
+        assert!(back.looks.active.is_empty());
+        look.looks.keep_components = false;
+        let mut mine_kept = mine.clone();
+        mine_kept.looks.keep_components = true;
+        let before = before_snapshot(&mine_kept, "later").unwrap();
+        assert!(!restore(&look, &before).unwrap().looks.keep_components, "switched off since: the snapshot doesn't switch it back on");
     }
 
     /// Picking a look brings its component designs; a design picked
