@@ -188,7 +188,7 @@ The whole pipeline is Rust (`xtask/src/art.rs`): SVGs render with [resvg](https:
 
 `cargo xtask art` turns every built-in plugin's art into the compact set the shell and Studio embed, in [`crates/mandara-ui/assets/plugin-art/<id>/`](../crates/mandara-ui/assets/plugin-art): `icon.webp` (128 px, rendered from the SVG), `icon@2x.webp` (256 px) and `cover.jpg` (960×540, JPEG quality 82; lossless `cover.webp` when the cover has transparency), plus the generated `index.rs` table. The generated files are committed — they are build inputs. Example plugins in `plugins/examples/` ship their own `icon.png` / `cover.png` inside their package instead.
 
-The embedded-art ceiling is **8,050,000 bytes (7.68 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 78-plugin set uses **7,806,759 bytes (7.45 MiB)**, leaving **243,241 bytes (238 KiB)** of headroom for artwork revisions and small additions.
+The embedded-art ceiling is **8,050,000 bytes (7.68 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 81-plugin set uses **8,046,210 bytes (7.67 MiB)**, leaving **3,790 bytes (3.7 KiB)** of headroom: the next new plugin's art needs a smaller set or a raised ceiling.
 
 ```sh
 cargo xtask art --compose            # render source icons and compose covers (--only ID)
