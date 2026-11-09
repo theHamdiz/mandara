@@ -223,6 +223,9 @@ assets/plugins/quick-settings/icon.svg
 assets/plugins/quran/cover.png
 assets/plugins/quran/icon.png
 assets/plugins/quran/icon.svg
+assets/plugins/reddit/cover.png
+assets/plugins/reddit/icon.png
+assets/plugins/reddit/icon.svg
 assets/plugins/resources/cover.png
 assets/plugins/resources/icon.png
 assets/plugins/resources/icon.svg
