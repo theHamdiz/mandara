@@ -191,13 +191,13 @@ fn summary_text(request: &Request, f: &Finished) -> (String, String) {
         };
         return (headline, freed());
     }
+    let updated = || if f.changed == 1 { t("Updated 1 package").to_string() } else { tf("Updated {count} packages", &[("count", &f.changed)]) };
     match &f.outcome {
         JobOutcome::Done { nothing_to_do: true } => (t("Everything was already up to date").to_string(), String::new()),
-        JobOutcome::Done { .. } if f.changed > 0 => (
-            if f.changed == 1 { t("Updated 1 package").to_string() } else { tf("Updated {count} packages", &[("count", &f.changed)]) },
-            f.restart.as_ref().map(|r| tf("Restart to finish: {reason}", &[("reason", r)])).unwrap_or_default(),
-        ),
+        JobOutcome::Done { .. } if f.changed > 0 => (updated(), f.restart.as_ref().map(|r| tf("Restart to finish: {reason}", &[("reason", r)])).unwrap_or_default()),
         JobOutcome::Done { .. } => (t("Done").to_string(), freed()),
+        // Stopped later (during Flatpak, after the system's packages).
+        JobOutcome::Cancelled if f.changed > 0 => (t("Update cancelled").to_string(), updated()),
         JobOutcome::Cancelled => (t("Update cancelled").to_string(), t("Nothing was installed").to_string()),
         JobOutcome::Failed(failure) => (failure_title(failure.kind).to_string(), failure.kind.advice().to_string()),
     }
@@ -700,6 +700,16 @@ fn confirm_text(action: NixAction, deletes: usize) -> String {
     }
 }
 
+/// How many generations the confirmed `action` deletes: what Delete will
+/// run, not what the stepper (still live under the bar) shows now.
+/// `deletes` is the stepper's count for `keep`, reused when they agree.
+fn confirm_deletes(action: NixAction, keep: u32, deletes: usize, gens: &[Generation], now: i64) -> usize {
+    match action {
+        NixAction::Clean(cleanup) if cleanup != Cleanup::KeepLatest(keep) => nixos::to_delete(gens, cleanup, now).len(),
+        _ => deletes,
+    }
+}
+
 fn run_nix(m: &Shared, action: NixAction, cx: &mut App) {
     m.borrow_mut().nix.confirm = None;
     if let Err(e) = start(Request::Nix { action }, cx) {
@@ -811,8 +821,10 @@ pub(super) fn nix_view(m: &Shared, card_r: f32, row_r: f32, palette: &MandaraPal
     h += MODE_HINT_H;
 
     // ── Confirmation ─────────────────────────────────────────────────────
-    let deletes = nixos::to_delete(&gens, Cleanup::KeepLatest(keep), chrono::Utc::now().timestamp()).len();
+    let now = chrono::Utc::now().timestamp();
+    let deletes = nixos::to_delete(&gens, Cleanup::KeepLatest(keep), now).len();
     if let Some(action) = confirm {
+        let confirm_deletes = confirm_deletes(action, keep, deletes, &gens, now);
         let (mc, mk) = (m.clone(), m.clone());
         let danger = readable(palette.urgent_coral, palette);
         let label = match action {
@@ -829,7 +841,7 @@ pub(super) fn nix_view(m: &Shared, card_r: f32, row_r: f32, palette: &MandaraPal
             .items_center()
             .gap(px(CARD_GAP_PX))
             .child(icon("alert", SMALL_ICON_PX, danger))
-            .child(div().flex_1().min_w(px(0.0)).text_size(px(text::BODY_S)).font_weight(FontWeight::MEDIUM).truncate().child(confirm_text(action, deletes)))
+            .child(div().flex_1().min_w(px(0.0)).text_size(px(text::BODY_S)).font_weight(FontWeight::MEDIUM).truncate().child(confirm_text(action, confirm_deletes)))
             .child(pill_button("nix-confirm-no", None, t("Cancel"), palette.on_surface_variant, palette, move |_, cx| {
                 mc.borrow_mut().nix.confirm = None;
                 notify(&mc, cx);
@@ -1093,5 +1105,37 @@ pub(super) fn system_request(system: System, flatpak_pending: bool) -> Option<Re
         System::NixOs if flatpak_pending => Some(Request::Flatpak),
         _ if flatpak_pending => Some(Request::Flatpak),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn finished(outcome: JobOutcome, changed: u32) -> Finished {
+        Finished { outcome, elapsed_secs: 1, changed, restart: None, freed: None, inputs: Vec::new(), warnings: 0 }
+    }
+
+    #[test]
+    fn a_cancel_after_packages_changed_says_how_many() {
+        let request = Request::System { flatpak: true };
+        assert_eq!(summary_text(&request, &finished(JobOutcome::Cancelled, 0)), (t("Update cancelled").to_string(), t("Nothing was installed").to_string()));
+        assert_eq!(summary_text(&request, &finished(JobOutcome::Cancelled, 1)).1, t("Updated 1 package"));
+        assert_eq!(summary_text(&request, &finished(JobOutcome::Cancelled, 12)).1, tf("Updated {count} packages", &[("count", &12)]));
+    }
+
+    #[test]
+    fn the_clean_up_confirmation_counts_what_delete_runs() {
+        let now = 100 * 86_400;
+        let gens: Vec<Generation> = (1..=8).map(|n| Generation { number: n, date: now - i64::from(9 - n) * 86_400, current: n == 8, ..Generation::default() }).collect();
+        let shown = nixos::to_delete(&gens, Cleanup::KeepLatest(10), now).len();
+        assert_eq!(shown, 0, "the stepper, raised to 10 after Clean up");
+        // Clean up was pressed with 3: Delete still deletes all but the newest 3.
+        let confirmed = confirm_deletes(NixAction::Clean(Cleanup::KeepLatest(3)), 10, shown, &gens, now);
+        assert_eq!(confirmed, 5);
+        assert_eq!(confirm_text(NixAction::Clean(Cleanup::KeepLatest(3)), confirmed), tf("Delete {count} old generations and collect garbage?", &[("count", &5)]));
+        assert_eq!(confirm_deletes(NixAction::Clean(Cleanup::KeepLatest(10)), 10, shown, &gens, now), 0);
+        assert_eq!(confirm_deletes(NixAction::Clean(Cleanup::OlderThanDays(4)), 10, shown, &gens, now), 4);
+        assert_eq!(confirm_deletes(NixAction::Rollback, 10, shown, &gens, now), shown);
     }
 }

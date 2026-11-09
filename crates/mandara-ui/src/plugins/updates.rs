@@ -1444,17 +1444,8 @@ pub fn register(r: &mut PluginRegistry) {
         ID,
         CommandSpec::new("updates apply", tk("Update the system in Mandara, with progress and Mandara's password dialog (system and Flatpak, or one)"), |a, cx| {
             let s = settings(cx);
-            let system = sysupdate::current_system();
             let flatpak = s.opts.flatpak && updates::find_program("flatpak").is_some();
-            let request = match a.get(0).unwrap_or("all") {
-                "flatpak" => Request::Flatpak,
-                "system" | "all" if system == System::NixOs => return Err(t("On NixOS, use `updates nixos update`").into()),
-                "system" => Request::System { flatpak: false },
-                _ => match system {
-                    System::Managed(_) => Request::System { flatpak },
-                    other => return Err(other.explanation().unwrap_or_default()),
-                },
-            };
+            let request = apply_request(a.get(0).unwrap_or("all"), sysupdate::current_system(), flatpak)?;
             system::start(request.clone(), cx)?;
             if let Some(m) = alive() {
                 notify(&m, cx);
@@ -1544,9 +1535,37 @@ pub fn register(r: &mut PluginRegistry) {
     );
 }
 
+/// What `updates apply <what>` starts on `system`. Systems Mandara doesn't
+/// update are explained here, before the helper is prepared or a password
+/// is asked for.
+fn apply_request(what: &str, system: System, flatpak: bool) -> Result<Request, String> {
+    match (what, system) {
+        ("flatpak", _) => Ok(Request::Flatpak),
+        ("system" | "all", System::NixOs) => Err(t("On NixOS, use `updates nixos update`").into()),
+        (_, System::Managed(_)) => Ok(Request::System { flatpak: flatpak && what != "system" }),
+        (_, other) => Err(other.explanation().unwrap_or_default()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn apply_asks_for_no_password_on_systems_mandara_doesnt_update() {
+        use mandara_services::sysupdate::ImageTool;
+        let pacman = System::Managed(mandara_services::sysupdate::plan::BackendId::Pacman);
+        assert_eq!(apply_request("system", pacman, true), Ok(Request::System { flatpak: false }));
+        assert_eq!(apply_request("all", pacman, true), Ok(Request::System { flatpak: true }));
+        assert_eq!(apply_request("all", pacman, false), Ok(Request::System { flatpak: false }));
+        for other in [System::ImageBased(ImageTool::RpmOstree), System::Unsupported] {
+            for what in ["system", "all"] {
+                assert_eq!(apply_request(what, other, true), Err(other.explanation().unwrap()), "{what} on {other:?}");
+            }
+            assert_eq!(apply_request("flatpak", other, true), Ok(Request::Flatpak), "Flatpak needs no root");
+        }
+        assert!(apply_request("system", System::NixOs, true).is_err());
+    }
 
     fn report(kind: SourceKind, names: &[&str]) -> SourceReport {
         SourceReport {
