@@ -139,6 +139,10 @@ pub enum Action {
     /// Shows the widget on one output only (`None`: on every one).
     ShowOn(String, Option<String>),
     WidgetSettings,
+    /// Opens a system monitor's list of readings.
+    Readings(String),
+    /// Switches one reading of a system monitor on or off.
+    ToggleReading(String, mandara_config::desktop_widgets::MonitorRow),
 }
 
 /// What sits right-aligned on a row.
@@ -441,7 +445,7 @@ pub fn run(action: &Action, output: &str, at: (f32, f32), size: (f32, f32), cx: 
             })
             .detach();
         }
-        Action::AddMenu | Action::Remove(_) | Action::Duplicate(_) | Action::Hide(_) | Action::ShowOn(..) | Action::WidgetSettings => {}
+        Action::AddMenu | Action::Remove(_) | Action::Duplicate(_) | Action::Hide(_) | Action::ShowOn(..) | Action::WidgetSettings | Action::Readings(_) | Action::ToggleReading(..) => {}
     }
 }
 
