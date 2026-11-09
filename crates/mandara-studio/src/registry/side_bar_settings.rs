@@ -29,6 +29,7 @@ const JOINED_IS_FRAME: &str = tk("Joined side bars hang from the bar as one fram
 const FLARES_ONLY: &str = tk("Joined side bars and the slab only");
 const RIM_FIRST: &str = tk("Turn on Rim light first");
 const WASH_FIRST: &str = tk("Pick pills or islands for the items first");
+const PILLS_FIRST: &str = tk("Pick pill items first");
 const UNPIN_FIRST: &str = tk("Unpin a side bar first");
 const SIDE_OFF: &str = tk("Turn on this side bar first");
 const JOINED_EDGE_FRAME: &str = tk("Joined side bars draw the bar as the edge frame; your style comes back when they're separate");
@@ -59,6 +60,7 @@ pub fn entries() -> Vec<Setting> {
         s(Bars, SIDE_BAR_SHAPE, "/side_bars/align", tk("Middle group"), tk("Where the middle group sits along the edge"), Choice(ALIGN)),
         // Bar → Side bar items
         s(Bars, SIDE_BAR_ITEMS, "/side_bars/chips", tk("Item style"), tk("Bare icons, every item on its own pill, or each group on one island"), Choice(CHIPS)),
+        s(Bars, SIDE_BAR_ITEMS, "/side_bars/icon_shape", tk("Icon shape"), tk("The shape of icon-sized pill items; the bar's own shape, or a round Material 3 Expressive shape"), Choice(super::surface_settings::SIDE_ICON_SHAPES)),
         s(Bars, SIDE_BAR_ITEMS, "/side_bars/chip_size", tk("Item size"), tk("How wide each item is across the side bar"), span(ranges::CHIP_SIZE, " px")),
         s(Bars, SIDE_BAR_ITEMS, "/side_bars/chip_padding", tk("Item padding"), tk("Space above and below each item's content"), span(ranges::CHIP_PADDING, " px")),
         s(Bars, SIDE_BAR_ITEMS, "/side_bars/chip_spacing", tk("Item spacing"), tk("Gap between neighbouring items"), span(ranges::CHIP_SPACING, " px")),
@@ -96,6 +98,7 @@ pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
         "flare_radius" if !joined && sb.shape != SideBarShape::Slab => Some(FLARES_ONLY),
         "rim_intensity" if !sb.rim => Some(RIM_FIRST),
         "chip_fill" if sb.chips == SideBarChips::Icons => Some(WASH_FIRST),
+        "icon_shape" if sb.chips != SideBarChips::Pills => Some(PILLS_FIRST),
         "reveal_delay_ms" | "hide_delay_ms" if sb.left.pinned && sb.right.pinned => Some(UNPIN_FIRST),
         "left/pinned" | "left/accent" if !sb.left.enabled => Some(SIDE_OFF),
         "right/pinned" | "right/accent" if !sb.right.enabled => Some(SIDE_OFF),

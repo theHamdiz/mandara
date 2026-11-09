@@ -1289,6 +1289,19 @@ pub struct BarConfig {
     pub scroll: crate::surfaces::BarScrollAction,
     /// What a middle click on empty bar space does (the hot-corner actions).
     pub middle_click: crate::desktop::Corner,
+    /// The shape of item capsules (wider-than-tall items).
+    pub item_shape: crate::surfaces::BarItemShape,
+    /// The shape of icon-sized items (`match`: the item shape); any other
+    /// shape also makes them square.
+    pub icon_shape: crate::surfaces::BarIconShape,
+    /// The colour of icon-sized items (`match`: the capsule colour).
+    pub icon_fill: crate::surfaces::BarIconFill,
+    /// Space between the items and the bar's long edges.
+    pub item_inset: f32,
+    /// The bar style preset that set this look (Studio → Bars → Presets,
+    /// `bar style`); picking another preset puts back what it changed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<crate::bar_styles::BarStyle>,
 }
 
 impl BarConfig {
@@ -1354,10 +1367,16 @@ impl BarConfig {
         surfaces::ranges::BAR_VERTICAL_WIDTH.clamp(self.vertical_width, surfaces::defaults::BAR_VERTICAL_WIDTH_PX)
     }
 
-    /// Thickness of the screen frame (0 when it is off or the bar is not
-    /// on a side).
+    /// The items' inset from the bar's long edges, clamped.
+    pub fn item_inset(&self) -> f32 {
+        surfaces::ranges::BAR_ITEM_INSET.clamp(self.item_inset, surfaces::defaults::BAR_ITEM_INSET_PX)
+    }
+
+    /// Thickness of the screen frame (0 when it is off). A side bar frames
+    /// the other three edges; a flush top or bottom edge frame frames the
+    /// edges it doesn't cover (drawn only by the full-width styles).
     pub fn frame_thickness(&self) -> f32 {
-        if self.screen_frame && self.position.is_vertical() {
+        if self.screen_frame {
             surfaces::ranges::SCREEN_FRAME.clamp(self.frame_thickness, surfaces::defaults::SCREEN_FRAME_PX)
         } else {
             0.0
@@ -1414,6 +1433,11 @@ impl Default for BarConfig {
             window_gap: 0.0,
             scroll: crate::surfaces::BarScrollAction::default(),
             middle_click: crate::desktop::Corner::default(),
+            item_shape: crate::surfaces::BarItemShape::default(),
+            icon_shape: crate::surfaces::BarIconShape::default(),
+            icon_fill: crate::surfaces::BarIconFill::default(),
+            item_inset: surfaces::defaults::BAR_ITEM_INSET_PX,
+            style: None,
         }
     }
 }

@@ -1,13 +1,14 @@
 //! Centered preset thumbnails use the same compact geometry as the bar.
 
-use gpui::{Div, ParentElement, Styled, div, px};
+use gpui::{Div, ParentElement, Styled, div, prelude::FluentBuilder as _, px};
 use mandara_config::ShellConfig;
+use mandara_config::bar_styles::BarStyle;
 use mandara_core::ToGpui;
 use mandara_theme::MandaraPalette;
 use mandara_ui::bar::layout::{Metrics, compute};
 
 use super::Preset;
-use crate::tokens::ALPHA_75;
+use crate::tokens::{ALPHA_75, RADIUS_1_5_PX, RADIUS_3_PX, RADIUS_4_PX, RADIUS_6_PX};
 
 /// A uniform item width makes the preset's arrangement readable in miniature.
 const ITEM_WIDTH: f32 = 24.0;
@@ -49,6 +50,109 @@ pub(super) fn centered(preset: &Preset, palette: &MandaraPalette) -> Div {
         .children(picture.items.into_iter().map(|x| div().absolute().left(px(x)).top(px((picture.height - item_height) / 2.0))
             .w(px(ITEM_WIDTH * SCALE / 2.0)).h(px(item_height)).rounded_full().bg(palette.primary.with_alpha(ALPHA_75).hsla())))
 }
+
+/// A style preset's miniature: its frame and bars, round buttons and
+/// tiles, as small marks in the card's mock area.
+pub(super) fn styled(style: BarStyle, palette: &MandaraPalette) -> Div {
+    let bar = palette.surface_container_high.hsla();
+    let tile = palette.surface_container.hsla();
+    let button = palette.primary_container.hsla();
+    let accent = palette.primary.with_alpha(ALPHA_75).hsla();
+    let dot = |d: f32, fill| div().flex_none().size(px(d)).rounded_full().bg(fill);
+    let block = |w: f32, h: f32, r: f32, fill| div().flex_none().w(px(w)).h(px(h)).rounded(px(r)).bg(fill);
+    let frame = || div().absolute().inset_0().rounded(px(RADIUS_6_PX)).border(px(MOCK_FRAME_PX)).border_color(bar);
+    match style {
+        BarStyle::Expressive => div()
+            .relative()
+            .size_full()
+            .child(frame())
+            // The rail down the left edge, its scalloped badges.
+            .child(div().absolute().left_0().top_0().bottom_0().w(px(MOCK_RAIL_PX)).rounded_l(px(RADIUS_6_PX)).bg(bar).flex().flex_col().items_center().justify_center().gap(px(MOCK_GAP_PX)).child(dot(MOCK_DOT_PX, accent)).child(dot(MOCK_DOT_PX, button)))
+            // The tall bar along the bottom: round buttons, then tiles.
+            .child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .right_0()
+                    .bottom_0()
+                    .h(px(MOCK_BAR_PX))
+                    .rounded_b(px(RADIUS_6_PX))
+                    .bg(bar)
+                    .flex()
+                    .items_center()
+                    .gap(px(MOCK_GAP_PX))
+                    .pl(px(MOCK_RAIL_PX + MOCK_GAP_PX))
+                    .child(dot(MOCK_BUTTON_PX, button))
+                    .child(dot(MOCK_BUTTON_PX, button))
+                    .child(dot(MOCK_BUTTON_PX, button))
+                    .child(block(MOCK_TILE_W_PX, MOCK_BUTTON_PX, RADIUS_1_5_PX, tile))
+                    .child(block(MOCK_TILE_W_PX, MOCK_BUTTON_PX, RADIUS_1_5_PX, tile)),
+            ),
+        BarStyle::TileDock => div().size_full().flex().flex_col().justify_end().items_center().child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(MOCK_GAP_PX))
+                .p(px(MOCK_GAP_PX))
+                .rounded(px(RADIUS_4_PX))
+                .bg(bar)
+                .children((0..MOCK_DOCK_TILES).map(|_| block(MOCK_SQUARE_PX, MOCK_SQUARE_PX, RADIUS_3_PX, button))),
+        ),
+        BarStyle::Rail => div()
+            .relative()
+            .size_full()
+            .child(frame())
+            .child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .top_0()
+                    .bottom_0()
+                    .w(px(MOCK_WIDE_RAIL_PX))
+                    .rounded_l(px(RADIUS_6_PX))
+                    .bg(bar)
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_between()
+                    .py(px(MOCK_GAP_PX))
+                    .child(dot(MOCK_BUTTON_PX, palette.tertiary.hsla()))
+                    .child(block(MOCK_BUTTON_PX, MOCK_TILE_W_PX / 2.0, RADIUS_1_5_PX, tile))
+                    .child(dot(MOCK_BUTTON_PX, palette.tertiary.hsla())),
+            ),
+        BarStyle::Segmented => {
+            // Three groups of connected tiles: round outer ends, small inner corners.
+            let group = |n: usize| {
+                div().flex().gap(px(MOCK_SEGMENT_GAP_PX)).children((0..n).map(move |i| {
+                    let (first, last) = (i == 0, i + 1 == n);
+                    div()
+                        .w(px(MOCK_SEGMENT_PX))
+                        .h(px(MOCK_BUTTON_PX))
+                        .bg(bar)
+                        .rounded(px(MOCK_SEGMENT_INNER_PX))
+                        .when(first, |el| el.rounded_l(px(MOCK_BUTTON_PX / 2.0)))
+                        .when(last, |el| el.rounded_r(px(MOCK_BUTTON_PX / 2.0)))
+                }))
+            };
+            div().size_full().flex().items_start().justify_between().child(group(3)).child(group(2)).child(group(4))
+        }
+    }
+}
+
+/// Sizes of the style miniatures.
+const MOCK_FRAME_PX: f32 = 2.0;
+const MOCK_RAIL_PX: f32 = 9.0;
+const MOCK_WIDE_RAIL_PX: f32 = 13.0;
+const MOCK_BAR_PX: f32 = 12.0;
+const MOCK_DOT_PX: f32 = 5.0;
+const MOCK_BUTTON_PX: f32 = 7.0;
+const MOCK_SQUARE_PX: f32 = 8.0;
+const MOCK_TILE_W_PX: f32 = 16.0;
+const MOCK_GAP_PX: f32 = 3.0;
+const MOCK_DOCK_TILES: usize = 5;
+const MOCK_SEGMENT_PX: f32 = 9.0;
+const MOCK_SEGMENT_GAP_PX: f32 = 1.0;
+const MOCK_SEGMENT_INNER_PX: f32 = 1.5;
 
 #[cfg(test)]
 mod tests {

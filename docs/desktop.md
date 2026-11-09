@@ -26,6 +26,20 @@ How Mandara looks and feels, and how much of it you can shape.
   bar space do (main menu or desktop menu; any hot-corner action;
   workspaces or volume). `mandara msg bar hide` / `show` / `toggle` puts
   the bar away until you want it back.
+- **Bars that look nothing alike.** Four style presets in Studio → Bars
+  reshape the whole bar: **Expressive** (a tall bottom bar inside a frame
+  round the screen, joined to a rail on the left: round accent buttons,
+  tonal tiles for the widgets and scalloped badges down the rail),
+  **Tile dock** (one floating island of large squircle tiles at the
+  bottom), **Rail** (a wide left rail of flower-shaped buttons in a screen
+  frame) and **Segmented** (no bar at all, just rows of connected tiles
+  under the top edge). They're built from settings you can keep tuning:
+  items as capsules, tiles, squircles or connected groups; icon items as
+  circles or Material 3 Expressive cookies, clovers, flowers and bursts in
+  the accent or tertiary tone; the items' inset from the bar's edges; and
+  a screen frame round a top or bottom bar too. Panels still pour out of
+  the bar and morph back into the item they came from.
+  `mandara msg bar style expressive` scripts it.
 - **Bar items show what you want:** workspace pills with numbers, short
   names or dots, with or without app icons, and empty ones hidden; the
   active window as its app, its title or both, up to a width you pick; the

@@ -129,6 +129,7 @@ A fixed light or dark wallpaper is set under Fit & effects; it shows instead of 
 A floating bar has no edge to hang from; popups on its edge stay cards
 A floating bar has no edge to join, so the dock opens as a card next to it
 A floating card under the bar, the panels' gap away from it.
+A floating island of large squircle tiles at the bottom
 A folder
 A folder in /usr/share/sounds; empty follows your GTK setting
 A folder of pictures (empty: ~/Pictures)
@@ -226,7 +227,7 @@ A tab needs a name
 A talent is formed in stillness, a character in the world's torrent.
 A tall pill with the track down its side
 A task needs text after its list name.
-A thin border round the whole display, joined to the side bar; it reserves no space of its own
+A thin border round the whole display, joined to a side bar or a flush edge frame or hairline; it reserves no space of its own
 A thin line along a popup's edge shows the time left
 A thin specular highlight around the glass
 A thin strip dense with live stats
@@ -242,6 +243,7 @@ A video wallpaper keeps its current frame while windows hide the desktop
 A view is a list of nodes; nodes[root] is the top one and children are indices. Mandara draws them natively.
 A volume this full turns its ring amber
 A wallpaper is already being generated
+A wide rail of flower buttons and tiles inside a screen frame
 A “Mandara” Kvantum theme in ~/.cache/mandara/themes/kvantum
 A “Mandara” color scheme in ~/.config/wezterm/colors
 A “Mandara” color scheme in ~/.local/share/color-schemes
@@ -867,6 +869,7 @@ Built-in encoder width
 Built-in ids can't be overridden: a plugin whose id matches a built-in plugin is skipped.
 Bukhari
 Bundled, your distro's logo, any icon from your theme, or your own image
+Burst
 Bus error
 Busiest apps
 Busy
@@ -936,10 +939,12 @@ Capped at a full pill; follows Themes → Corner roundness
 Caps Lock
 Caps Lock is on
 Caps Lock, Num Lock and Scroll Lock
+Capsule
 Capsule colour
 Capsule outline
 Capsule strength
 Capsules
+Capsules, tiles with Material corners, squircles, or connected groups whose items touch with small inner corners
 Caption
 Capture
 Capture in {seconds} s
@@ -1159,6 +1164,7 @@ Closing a popup keeps it
 Closing the lid, the session menu or systemctl suspend lock the screen first; the computer waits until the lock is up
 Clouds
 Cloudy
+Clover
 Code
 Code and numbers
 Code copied
@@ -1258,6 +1264,7 @@ Connect to the tailnet (answers with a login link when the device must log in)
 Connect your home in Studio
 Connected
 Connected displays with modes, position, scale and rotation (wlr-output-management)
+Connected group
 Connected · Wi-Fi
 Connected · Wired
 Connecting to the engine…
@@ -2408,6 +2415,7 @@ GitHub's rate limit was reached; checking again in {minutes} min
 Give an app your own icon (theme icon name or image path; empty restores it)
 Give generously
 Give one display its own wallpaper (clear = follow the main one)
+Give the bar a style preset's look (your items stay), or none for the plain bar
 Give the file's full path
 Give the profile a name
 Give time to those who owe you, and let go when you can.
@@ -2727,12 +2735,16 @@ Ibn Khaldun
 Ibn Majah
 Ibn Sina
 Ice
+Icon colour
 Icon name or image path
+Icon shape
 Icon size
 Icon spacing
 Icon theme
 Icon theme {theme} is installed
 Icon theme {theme} is missing; install it or choose another in Themes → Icons
+Icon-sized items as round buttons: a circle, a Material 3 Expressive shape or a squircle (they become square), or the item shape
+Icon-sized items in the capsule colour, or a solid accent or tertiary tone
 Icons
 Icons bounce until the app's first window appears
 Icons only
@@ -2933,7 +2945,9 @@ It's Mandara's {example} example, republished unchanged
 It's the unchanged plugin template (still named {name})
 It's time for {prayer}
 Item capsules
+Item inset
 Item padding
+Item shape
 Item size
 Item spacing
 Item style
@@ -3875,6 +3889,7 @@ No apps here
 No apps in the tray
 No apps match “{query}”
 No audio server
+No bar, just rows of connected tiles under the top edge
 No battery
 No blur
 No bookmarks yet
@@ -4594,6 +4609,7 @@ Pick a window to make a rule for
 Pick any pixel on screen
 Pick colors from the screen, with formats, tonal ramps and contrast
 Pick one from your folder below; it fades in on the desktop.
+Pick pill items first
 Pick pills or islands for the items first
 Pick running window
 Pick the displays each part of the shell appears on. Main display follows the one marked as main above.
@@ -5223,9 +5239,11 @@ Rotates every hue of the palette
 Rotation
 Round
 Round at rest; the corners square off while you press and spring back
+Round buttons, tonal tiles and a scalloped rail inside a frame round the screen
 Rounded
 Rounded screen corners
 Rounded squares with soft corners
+Rounded tile
 Rounded window corners
 Rounded, material-inspired cursors: the most installed theme in ricing setups
 Roundness
@@ -5288,6 +5306,8 @@ Safely remove a drive: unmount and lock its volumes, then eject or power it off
 Sahih
 Sahih Muslim
 Sahih al-Bukhari
+Same as items
+Same as the bar
 Same as the desktop
 Same time
 Sample levels — play something to see it live
@@ -5724,6 +5744,7 @@ Side bar items
 Side bar material
 Side bar shape
 Side bar width
+Side bar, edge frame and hairline only
 Side bars
 Side by side
 Side inset
@@ -5839,6 +5860,7 @@ Space above and below each item's content
 Space between a floating bar and its panels
 Space between a panel's edge and its content (unset: none for the edge frame, a little for floating styles)
 Space between a separate side bar and the screen edge, and around the groups at its ends
+Space between the items and the bar's long edges; larger turns items into tiles on the bar
 Space inside cards
 Space inside each bar item, around its content
 Spacing
@@ -6374,6 +6396,7 @@ The grid always opens in the middle
 The hadith of the day (or the hour), the same as every surface shows
 The hadith of the day couldn't be picked
 The hadith of the day is on its way
+The hairline and the micro pill keep a fine inset
 The heart
 The hint strip under the toolbar
 The hotspot's name, password and Wi-Fi QR payload
@@ -6488,6 +6511,7 @@ The service did not reply
 The service is not running
 The session menu's entries in order, with labels and icons (JSON)
 The shape and motion of buttons in panels, the sidebar, the main menu and Studio
+The shape of icon-sized pill items; the bar's own shape, or a round Material 3 Expressive shape
 The share expired
 The shared location used by weather and prayer times
 The shell did not start the job
@@ -6666,6 +6690,7 @@ Thunderstorm
 Thunderstorms around. Better stay in.
 Ticks
 Tile
+Tile dock
 Tile patterns
 Tile shadow
 Tile shape
@@ -6826,9 +6851,10 @@ Turn off
 Turn off for now
 Turn on
 Turn on Custom spring first
+Turn on Item capsules first
 Turn on Only at certain times first
 Turn on Rim light first
-Turn on Screen frame (side bar) first
+Turn on Screen frame first
 Turn on Shadow first
 Turn on Side bars first
 Turn on group or item capsules first
@@ -7577,6 +7603,7 @@ auto (DHCP) or manual
 auto or a language code
 autostart entry id
 backup to {folder}: {error}
+bar style
 boot entry id (see `session boot-entries`) or firmware
 boot entry id, e.g. windows.conf
 by {author}

@@ -146,6 +146,13 @@ pub(super) struct ZoneLook {
     pub accent: Color,
     pub hover: Color,
     pub separator: BarSeparator,
+    /// The shapes of item capsules.
+    pub items: crate::bar::items::ItemLook,
+    /// The colour of icon-sized items.
+    pub icon_fill: Color,
+    /// The bar's own colour under the items (round shapes are composited
+    /// over it).
+    pub under: Color,
 }
 
 impl ShellView {
@@ -308,6 +315,10 @@ impl ShellView {
             accent,
             hover: accent.with_alpha(if cfg.bar.hover_highlight { HOVER_WASH_ALPHA } else { 0.0 }),
             separator: BarSeparator::None,
+            items: crate::bar::items::ItemLook { item: cfg.bar.item_shape, icon: sb.icon_shape(&cfg.bar), radius: self.sides[s].metrics.radius, vertical: true },
+            icon_fill: crate::bar::items::icon_color(cfg.bar.icon_fill, accent.with_alpha(CHIP_WASH_ALPHA * sb.chip_fill()), palette),
+            // Joined, the side bar is the main bar's material.
+            under: if cfg.side_bars_join() { frame_color(palette).with_alpha(frame_color(palette).alpha() * ranges::OPACITY.clamp(cfg.bar.opacity, 1.0)) } else { self.side_fill(cfg, s, palette) },
         }
     }
 

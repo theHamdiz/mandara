@@ -46,7 +46,12 @@ pub fn metrics(cfg: &ShellConfig, right: bool, radius_scale: f32) -> Metrics {
         panel_pad: cfg.panels.padding_for(layout.is_attached()),
         vertical: true,
         screen_frame: 0.0,
+        frame_strips: 0.0,
+        // Side bars size their items themselves (`side_bars.chip_size`).
+        item_inset: mandara_config::surfaces::defaults::BAR_ITEM_INSET_PX,
         accent_line: false,
+        // Pill items drawn as round shapes are made square.
+        min_chip: if sb.chips == mandara_config::side_bars::SideBarChips::Pills && sb.icon_shape(&cfg.bar) != mandara_config::surfaces::BarIconShape::Match { sb.chip_size() } else { 0.0 },
         ..base
     }
 }
@@ -116,7 +121,7 @@ pub fn chip_rects(m: &Metrics, group: Bounds<Pixels>, extents: &[f32], chip: f32
             if w < 1.0 {
                 return None;
             }
-            let along = w + m.chip_padding * 2.0;
+            let along = m.chip_length(w);
             let r = rect(x, y, along, chip);
             x += along + m.chip_gap;
             Some(r)

@@ -307,6 +307,8 @@ impl LookDef {
     /// `cfg` with this look applied (the wallpaper image is never changed).
     pub fn apply(&self, cfg: &ShellConfig, opts: LookOptions) -> ShellConfig {
         let mut c = cfg.clone();
+        // A bar style preset gives way to the look's own bar.
+        crate::bar_styles::clear(&mut c);
         c.theme.source = self.theme_source(cfg, opts);
         c.theme.mode = if self.dark { ThemeMode::Dark } else { ThemeMode::Light };
         let bar = &mut c.bar;

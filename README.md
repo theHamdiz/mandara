@@ -184,9 +184,10 @@ around, each one measured or shipped today:
 
 - **It's light.** Plugins load data when needed, and hidden panels stop
   their refresh work. [Measurements and setup](docs/performance.md)
-- **It looks the way you want.** Six bar styles (now including a notch that
-  hangs from the top edge), side bars of icons and pills that join the top
-  bar into one frame, one-click Looks, desktop widgets, a hundred dials for
+- **It looks the way you want.** Six bar styles, four presets that reshape
+  the bar completely (a framed bar with a rail of scalloped buttons, a dock
+  of squircle tiles, a flower rail, rows of connected tiles), side bars of
+  icons and pills that join the top bar into one frame, one-click Looks, desktop widgets, a hundred dials for
   corners, glass and motion, and themes made from your wallpaper.
   [Your desktop](docs/desktop.md)
 - **Everything is a click away in Studio.** 30 pages of settings, all

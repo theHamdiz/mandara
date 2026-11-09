@@ -163,6 +163,9 @@ pub struct SideBarsConfig {
     pub chip_padding: f32,
     pub chip_spacing: f32,
     pub chips: SideBarChips,
+    /// The shape of icon-sized pill items (`match`: the bar's
+    /// `icon_shape`).
+    pub icon_shape: crate::surfaces::BarIconShape,
     /// Strength of the pill / island wash behind items.
     pub chip_fill: f32,
     /// Where the middle group sits.
@@ -196,6 +199,7 @@ impl Default for SideBarsConfig {
             chip_padding: defaults::CHIP_PADDING_PX,
             chip_spacing: defaults::CHIP_SPACING_PX,
             chips: SideBarChips::Icons,
+            icon_shape: crate::surfaces::BarIconShape::Match,
             chip_fill: defaults::CHIP_FILL,
             align: BarCenterAlign::Screen,
             corner_radius: defaults::CORNER_RADIUS_PX,
@@ -243,6 +247,11 @@ impl SideBarsConfig {
 
     pub fn chip_spacing(&self) -> f32 {
         ranges::CHIP_SPACING.clamp(self.chip_spacing, defaults::CHIP_SPACING_PX)
+    }
+
+    /// The icon shape the side bars draw: their own, or the bar's.
+    pub fn icon_shape(&self, bar: &crate::BarConfig) -> crate::surfaces::BarIconShape {
+        if self.icon_shape == crate::surfaces::BarIconShape::Match { bar.icon_shape } else { self.icon_shape }
     }
 
     pub fn chip_fill(&self) -> f32 {

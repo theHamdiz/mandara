@@ -628,7 +628,10 @@ and the main menu grow sideways out of the bar (the same morph, turned
 `bar.screen_frame` draws a thin border (`bar.frame_thickness`, 2–16,
 default 6) round the rest of the display, joined to the bar with concave
 corners. It reserves no space of its own (keep the compositor's outer
-gaps at least that wide) and never takes clicks.
+gaps at least that wide) and never takes clicks. A flush top or bottom
+edge frame or hairline can have it too: strips on the three edges the bar
+doesn't cover, with the bar's corner curves moved in to them, and a side
+bar joined to the bar replaces the strip on its edge.
 
 Interplay: auto-hide doesn't apply to a side bar; the dock can't share its
 edge (it moves to the bottom there); the sidebar slides out beside the
@@ -659,6 +662,38 @@ Glass pills, the island, the micro pill and a floating frame leave nothing
 to join, so the sidebar floats there, `sidebar.look.margin` clear of the
 screen edges and the bar.
 
+### Item shapes and bar styles
+
+With `bar.item_capsules` on, every bar item sits on a shape of its own:
+
+```toml
+[bar]
+item_capsules = true
+item_shape = "tile"      # capsule | tile (Material corners) | squircle | connected (a group whose items touch)
+icon_shape = "circle"    # match (the item shape) | circle | cookie | clover | flower | burst | squircle
+icon_fill = "accent"     # match (capsule_fill) | accent | tertiary: solid tones icon items are drawn in
+item_inset = 6           # 0–14: space between the items and the bar's long edges (default 3)
+```
+
+An icon-sized item (about as long as it is thick) takes `icon_shape`; any
+shape but `match` also makes it square, so it reads as a round button. The
+round Material 3 Expressive shapes are painted from overlapping circles,
+so over a see-through bar (`bar.opacity` below 1) they draw as plain
+circles. `side_bars.icon_shape` does the same for a side bar's pill items
+(`match` follows the bar). `bar.height` goes up to 60 for the taller
+styles.
+
+**Bar styles** set all of this at once: Studio → Bars → Presets
+(*Expressive*, *Tile dock*, *Rail*, *Segmented*) or
+`mandara msg bar style expressive|tile-dock|rail|segmented|none`. A style
+sets the layout, edge and height, the item and icon shapes and colours,
+insets and spacing, the screen frame, and for *Expressive* a rail of
+scalloped buttons joined to the bar (`[side_bars]`, left side on, right
+side off). The bar remembers it as `bar.style`; picking any other preset
+or a Look, or `bar style none`, first puts every field the style changed
+back to its default. Studio's presets can replace your items too; `bar
+style` never does.
+
 ### Bar commands
 
 `mandara msg bar hide` puts the bar away and frees its space until
@@ -688,6 +723,7 @@ chip_size = 34           # 16–72: an item's extent across the bar (at most the
 chip_padding = 7         # 0–20: space above and below an item's content
 chip_spacing = 4         # 0–24: gap between items
 chips = "icons"          # icons | pills (a pill per item) | island (one per group)
+icon_shape = "match"     # pill items about as long as they're thick: match (the bar's icon_shape) | circle | cookie | clover | flower | burst | squircle
 chip_fill = 1.0          # 0–3: strength of the pill / island wash
 align = "screen"         # middle group: screen (middle of the edge) | between | start | end
 corner_radius = 16       # 0–36: pills, island, slab and items (times Style → roundness)

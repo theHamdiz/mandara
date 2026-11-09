@@ -1,6 +1,7 @@
 //! Bar geometry shared by the shell host.
 
 pub mod layout;
+pub mod items;
 pub mod autohide;
 pub mod side;
 pub(crate) mod scrim;

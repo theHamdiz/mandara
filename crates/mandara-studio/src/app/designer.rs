@@ -9,6 +9,7 @@
 
 use mandara_ui::bidi::Bidi as _;
 use gpui::{AnyElement, App, AppContext as _, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px};
+use mandara_config::bar_styles::BarStyle;
 use mandara_config::side_bars::SideZone;
 use mandara_config::{BarLayout, BarPosition, ShellConfig};
 use mandara_core::ToGpui;
@@ -35,24 +36,31 @@ struct ChosenPreset {
     index: usize,
     layout: BarLayout,
     position: BarPosition,
+    style: Option<BarStyle>,
     items: [Vec<String>; 3],
 }
 
 impl PresetSelection {
     fn remember(&mut self, index: usize, config: &ShellConfig) {
         let bar = &config.bar;
-        self.chosen = Some(ChosenPreset { index, layout: bar.layout, position: bar.position, items: [bar.left.clone(), bar.center.clone(), bar.right.clone()] });
+        self.chosen = Some(ChosenPreset { index, layout: bar.layout, position: bar.position, style: bar.style, items: [bar.left.clone(), bar.center.clone(), bar.right.clone()] });
     }
 
     fn active(&mut self, config: &ShellConfig) -> Option<usize> {
         let bar = &config.bar;
         if let Some(chosen) = &self.chosen {
-            if chosen.layout == bar.layout && chosen.position == bar.position && chosen.items.iter().zip([&bar.left, &bar.center, &bar.right]).all(|(saved, current)| saved == current) {
+            if chosen.layout == bar.layout && chosen.position == bar.position && chosen.style == bar.style && chosen.items.iter().zip([&bar.left, &bar.center, &bar.right]).all(|(saved, current)| saved == current) {
                 return Some(chosen.index);
             }
             self.chosen = None;
         }
-        PRESETS.iter().position(|preset| bar.layout == preset.layout && bar.position == preset.position && bar.center.iter().map(String::as_str).eq(preset.center.iter().copied()))
+        PRESETS.iter().position(|preset| {
+            let look = match preset.style {
+                Some(style) => bar.style == Some(style) && style.matches(config),
+                None => bar.style.is_none(),
+            };
+            look && bar.layout == preset.layout && bar.position == preset.position && bar.center.iter().map(String::as_str).eq(preset.center.iter().copied())
+        })
     }
 }
 
@@ -198,6 +206,16 @@ struct Preset {
     left: &'static [&'static str],
     center: &'static [&'static str],
     right: &'static [&'static str],
+    /// A bar style preset: it sets the bar's look too (and Expressive's
+    /// rail), and any other preset puts that look back.
+    style: Option<BarStyle>,
+}
+
+/// A style preset's card: its layout, edge and height (kept equal to the
+/// style's, see the tests) and the style's own items.
+const fn styled(name: &'static str, blurb: &'static str, style: BarStyle, layout: BarLayout, position: BarPosition, height: f32) -> Preset {
+    let [left, center, right] = style.zones();
+    Preset { name, blurb, layout, position, height, left, center, right, style: Some(style) }
 }
 
 const PRESETS: &[Preset] = &[
@@ -210,6 +228,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces"],
         center: &["mini-stats", "processes"],
         right: &["resources", "net-speed", "drives", "clock", "audio", "session"],
+        style: None,
     },
     Preset {
         name: tk("Classic"),
@@ -220,6 +239,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces", "active-window"],
         center: &["clock", "media"],
         right: &["weather", "resources", "clipboard", "screenshot", "network", "bluetooth", "audio", "notifications", "session"],
+        style: None,
     },
     Preset {
         name: tk("Notch"),
@@ -230,6 +250,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces", "active-window"],
         center: &["clock", "media"],
         right: &["weather", "tray", "network", "bluetooth", "audio", "notifications", "session"],
+        style: None,
     },
     Preset {
         name: tk("Glass pills"),
@@ -240,6 +261,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces"],
         center: &["clock", "media"],
         right: &["network", "bluetooth", "audio", "notifications", "session"],
+        style: None,
     },
     Preset {
         name: tk("Dynamic island"),
@@ -250,6 +272,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces"],
         center: &["clock"],
         right: &["media", "audio", "notifications", "session"],
+        style: None,
     },
     Preset {
         name: tk("Minimal"),
@@ -260,6 +283,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces"],
         center: &["clock"],
         right: &["audio", "notifications", "session"],
+        style: None,
     },
     Preset {
         name: tk("Productive"),
@@ -270,6 +294,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces", "active-window"],
         center: &["clock", "pomodoro"],
         right: &["todo", "notes", "resources", "audio", "notifications", "session"],
+        style: None,
     },
     Preset {
         name: tk("Hairline"),
@@ -280,6 +305,7 @@ const PRESETS: &[Preset] = &[
         left: &["workspaces", "mini-stats"],
         center: &["clock", "media"],
         right: &["tray", "network", "audio", "notifications", "session"],
+        style: None,
     },
     Preset {
         name: tk("Micro pill"),
@@ -290,6 +316,7 @@ const PRESETS: &[Preset] = &[
         left: &[],
         center: &["workspaces", "clock", "audio", "session"],
         right: &[],
+        style: None,
     },
     Preset {
         name: tk("Side bar"),
@@ -300,6 +327,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces"],
         center: &["clock"],
         right: &["tray", "audio", "network", "notifications", "session"],
+        style: None,
     },
     Preset {
         name: tk("Dock"),
@@ -310,7 +338,12 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces"],
         center: &["media"],
         right: &["clock", "network", "audio", "notifications", "session"],
+        style: None,
     },
+    styled(tk("Expressive"), tk("Round buttons, tonal tiles and a scalloped rail inside a frame round the screen"), BarStyle::Expressive, BarLayout::MinimalEdge, BarPosition::Bottom, 52.0),
+    styled(tk("Tile dock"), tk("A floating island of large squircle tiles at the bottom"), BarStyle::TileDock, BarLayout::ContiguousIsland, BarPosition::Bottom, 56.0),
+    styled(tk("Rail"), tk("A wide rail of flower buttons and tiles inside a screen frame"), BarStyle::Rail, BarLayout::MinimalEdge, BarPosition::Left, 30.0),
+    styled(tk("Segmented"), tk("No bar, just rows of connected tiles under the top edge"), BarStyle::Segmented, BarLayout::FloatingPills, BarPosition::Top, 36.0),
 ];
 
 fn apply_preset(p: &'static Preset, replace_items: bool, cx: &mut App) {
@@ -321,15 +354,30 @@ fn apply_preset(p: &'static Preset, replace_items: bool, cx: &mut App) {
 fn apply_preset_in(c: &mut ShellConfig, p: &Preset, replace_items: bool, known: &[String]) {
     let pick = |ids: &[&str]| ids.iter().filter(|i| known.iter().any(|k| k == *i)).map(|s| s.to_string()).collect::<Vec<_>>();
     let (left, center, right) = (pick(p.left), pick(p.center), pick(p.right));
-    c.bar.layout = p.layout;
-    c.bar.position = p.position;
-    c.bar.height = p.height;
+    match p.style {
+        // A style sets the layout, edge and height with its look.
+        Some(style) => style.apply(c),
+        None => {
+            // The last style's look goes; this preset's bar comes.
+            mandara_config::bar_styles::clear(c);
+            c.bar.layout = p.layout;
+            c.bar.position = p.position;
+            c.bar.height = p.height;
+        }
+    }
     if replace_items {
         c.bar.left.clear();
         c.bar.center.clear();
         c.bar.right.clear();
         for (ids, to) in [(left, Lane::Left), (center, Lane::Center), (right, Lane::Right)] {
             for id in ids { place_in(c, &id, Lane::Tray, to, None); }
+        }
+        // Expressive's rail: the left side bar's groups.
+        if let Some(rail) = p.style.and_then(BarStyle::rail) {
+            for (zone, ids) in SideZone::ALL.into_iter().zip(rail) {
+                c.side_bars.left.zone_mut(zone).clear();
+                for id in pick(ids) { place_in(c, &id, Lane::Tray, Lane::Side(false, zone), None); }
+            }
         }
     }
     // The notch look: grouped capsules and a soft shadow under it.
@@ -514,7 +562,7 @@ impl StudioView {
                 .flex_col()
                 .when(preset.position == BarPosition::Bottom, |el| el.justify_end())
                 .when(preset.position.is_vertical(), |el| el.ltr_row())
-                .child(match preset.layout {
+                .child(if let Some(style) = preset.style { previews::styled(style, p) } else { match preset.layout {
                     // A side bar: a slim strip down the left edge.
                     _ if preset.position.is_vertical() => div().w(px(DIM_10_PX)).h_full().rounded(px(RADIUS_4_PX)).bg(p.surface_container_high.hsla()).py(px(SPACE_3_PX)).row().flex_col().items_center().justify_between().child(div().size(px(DIM_6_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla())).child(div().size(px(DIM_6_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla())),
                     BarLayout::Hairline => div().h(px(DIM_6_PX)).rounded(px(RADIUS_1_5_PX)).bg(p.surface_container_high.hsla()).border_b_1().border_color(p.primary.hsla()),
@@ -522,7 +570,7 @@ impl StudioView {
                     BarLayout::MinimalEdge => div().h(px(DIM_12_PX)).rounded(px(RADIUS_4_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(MOCK_PILL_A_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_C_PX)),
                     BarLayout::Notch => div().h(px(DIM_12_PX)).mt(px(-SPACE_6_PX)).mx(px(SPACE_10_PX)).rounded_b(px(RADIUS_6_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(MOCK_PILL_A_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_C_PX)),
                     BarLayout::FloatingPills => div().h(px(DIM_12_PX)).ltr_row().items_center().justify_between().child(pill(MOCK_PILL_A_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_C_PX)),
-                });
+                } });
             presets.push(
                 div()
                     .id(("preset", i))
@@ -643,7 +691,8 @@ mod tests {
     fn presets_reference_real_plugins_and_layouts() {
         for p in PRESETS {
             assert!(!p.center.is_empty() || !p.left.is_empty());
-            assert!(p.height >= 24.0 && p.height <= 40.0);
+            let heights = mandara_config::surfaces::ranges::BAR_HEIGHT;
+            assert!(p.height >= heights.min && p.height <= heights.max);
         }
     }
 
@@ -722,5 +771,34 @@ mod tests {
         assert!(bar_capable("power"));
         assert!(bar_capable("processes"));
         assert!(bar_capable("third-party-example"));
+    }
+
+    #[test]
+    fn style_presets_show_their_style_and_put_it_back_when_you_move_on() {
+        let styles: Vec<&Preset> = PRESETS.iter().filter(|p| p.style.is_some()).collect();
+        assert_eq!(styles.len(), BarStyle::ALL.len(), "every style has a card");
+        for p in &styles {
+            let style = p.style.unwrap();
+            // The card draws what the style sets.
+            assert_eq!((p.layout, p.position, p.height), (style.layout(), style.position(), style.height()), "{}", p.name);
+        }
+        let known: Vec<String> = ["launcher", "clock", "workspaces", "audio", "network", "bluetooth", "weather", "media", "screenshot", "clipboard", "color-picker", "tray", "notifications", "session", "drives", "pomodoro", "wallpaper", "keybinds"].map(String::from).to_vec();
+        let expressive = styles.iter().find(|p| p.style == Some(BarStyle::Expressive)).unwrap();
+        let mut c = bar();
+        apply_preset_in(&mut c, expressive, true, &known);
+        assert!(BarStyle::Expressive.matches(&c) && c.side_bars.enabled && c.bar.screen_frame);
+        assert_eq!(c.side_bars.left.middle, ["clock", "workspaces"], "its rail is filled");
+        assert!(c.bar.center.iter().any(|id| id == "weather"));
+        let mut selection = PresetSelection::default();
+        let index = PRESETS.iter().position(|p| std::ptr::eq(p, *expressive)).unwrap();
+        assert_eq!(selection.active(&c), Some(index), "recognised without a click");
+        // Any other preset takes the style's look away, keeping your items.
+        let classic = PRESETS.iter().find(|p| p.name == "Classic").unwrap();
+        let items = c.bar.center.clone();
+        apply_preset_in(&mut c, classic, false, &known);
+        assert_eq!(c.bar.style, None);
+        assert!(!c.side_bars.enabled && !c.bar.screen_frame && !c.bar.item_capsules);
+        assert_eq!(c.bar.center, items);
+        assert_eq!(selection.active(&c), None, "Classic's own items differ");
     }
 }
