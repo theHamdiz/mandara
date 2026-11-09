@@ -8895,3 +8895,5 @@
 "A gentle wave along the fill that flows while you drag" = "Мягкая волна вдоль заливки, которая течёт, пока вы тянете"
 "Ten rounded steps that fill one after another" = "Десять скруглённых шагов, которые заполняются один за другим"
 "How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it" = "Как выглядят элементы управления оболочки. Каждый образец — настоящий элемент: потяните, чтобы попробовать вид, нажмите на вид, чтобы выбрать его"
+"Set the media player's own volume in percent (0-100)" = "Задать собственную громкость медиаплеера в процентах (0-100)"
+"This player doesn't let you change its volume" = "Этот плеер не позволяет менять свою громкость"

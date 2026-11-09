@@ -321,6 +321,8 @@ anything that must stay fixed is a named, documented constant.
   row of the player the media panel controls sets that player's own volume
   (0–100 %, like its own slider) when the player allows it, because such a
   player puts its level back on its sound whenever you play or pause.
+  Studio's mixer does the same, and `media volume set 40` sets it from a
+  terminal (`media status` reports it as `volume`, 0–1, or `null`).
 - **Shell sounds** from your freedesktop sound theme, decoded in pure Rust,
   quiet while media plays.
 

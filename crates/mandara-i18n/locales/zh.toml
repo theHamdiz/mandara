@@ -8890,3 +8890,5 @@
 "A gentle wave along the fill that flows while you drag" = "沿填充部分的柔和波浪，拖动时会流动"
 "Ten rounded steps that fill one after another" = "十个圆角格依次填满"
 "How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it" = "外壳控件的外观。每个预览都是真实控件：拖动以试用样式，点击样式即可使用"
+"Set the media player's own volume in percent (0-100)" = "以百分比设置媒体播放器自身的音量（0-100）"
+"This player doesn't let you change its volume" = "此播放器不允许更改其音量"

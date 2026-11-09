@@ -5489,6 +5489,7 @@ Set the bar layout
 Set the clock from internet time servers (asks for your password)
 Set the folders to search in Studio → Plugins → Git repositories
 Set the interface language (auto or an ISO code: en, ar, es, fr, de, tr, ru, hi, zh, ja)
+Set the media player's own volume in percent (0-100)
 Set the night colour temperature in kelvin (1000–10000)
 Set the screen brightness in percent
 Set the shared location by coordinates
@@ -6566,6 +6567,7 @@ This package is made for a different kind of Linux. The same app may be on Flath
 This pattern {problem}
 This phone does not support that action right now
 This phone is not connected
+This player doesn't let you change its volume
 This plugin has no published release yet
 This plugin works without settings.
 This recorder can't write that format here

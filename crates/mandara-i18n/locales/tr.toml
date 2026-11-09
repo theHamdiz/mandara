@@ -8894,3 +8894,5 @@
 "A gentle wave along the fill that flows while you drag" = "Dolgu boyunca, sürüklerken akan yumuşak bir dalga"
 "Ten rounded steps that fill one after another" = "Birbiri ardına dolan on yuvarlak adım"
 "How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it" = "Kabuk denetimlerinin görünümü. Her önizleme gerçek denetimdir: bir tasarımı denemek için sürükleyin, kullanmak için tasarıma tıklayın"
+"Set the media player's own volume in percent (0-100)" = "Medya oynatıcının kendi ses düzeyini yüzde olarak ayarla (0-100)"
+"This player doesn't let you change its volume" = "Bu oynatıcı ses düzeyini değiştirmene izin vermiyor"

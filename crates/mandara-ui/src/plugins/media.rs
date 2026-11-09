@@ -26,7 +26,7 @@ use gpui::{
 };
 use image::imageops::FilterType;
 use mandara_core::{ToGpui, oklab_gradient};
-use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
+use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, Output, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
 use mandara_i18n::{t, tf, tk};
 use mandara_services::{MediaCommand, MediaState, PlaybackStatus};
 use mandara_theme::{Color, MandaraPalette, MiniPalette, SeedColor};
@@ -73,6 +73,8 @@ const EMPTY_H: f32 = 216.0;
 const LYRICS_GAP: f32 = 12.0;
 /// Panel size changes smaller than this are ignored (no relayout jitter).
 const SIZE_EPSILON_PX: f32 = 0.5;
+/// A media player's full own volume (MPRIS `1.0`) in percent, for `media volume set`.
+const PLAYER_PERCENT: f64 = 100.0;
 
 /// Head: player pill padding / gap, its icon, and the level glyph.
 const HEAD_ROW_GAP_PX: f32 = 8.0;
@@ -1305,9 +1307,25 @@ pub fn register(r: &mut PluginRegistry) {
                 "position": m.position_now(Instant::now()).as_secs_f64(),
                 "length": m.length.map(|l| l.as_secs_f64()),
                 "art": m.art_path,
+                // The player's own volume (0–1) when it lets you change it.
+                "volume": m.volume,
             }),
         })
     }));
+    r.command(
+        ID,
+        CommandSpec::new_output("media volume set", tk("Set the media player's own volume in percent (0-100)"), |a, cx| {
+            let percent = a.number(0)?.clamp(0.0, PLAYER_PERCENT);
+            let h = hub(cx).read(cx);
+            if h.media.as_ref().and_then(|m| m.volume).is_none() {
+                return Err(t("This player doesn't let you change its volume").into());
+            }
+            let service = h.media_service.clone().ok_or_else(|| t("Nothing playing").to_string())?;
+            Ok(Output::Pending(service.request(MediaCommand::SetVolume(percent / PLAYER_PERCENT))))
+        })
+        .arg(ArgSpec::required("percent", ArgKind::Number, "0-100").range(0.0, PLAYER_PERCENT))
+        .example("media volume set 40"),
+    );
 }
 
 #[cfg(test)]

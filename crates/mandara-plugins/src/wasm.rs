@@ -107,6 +107,7 @@ pub const PLUGIN_COMMANDS: &[&str] = &[
     "media previous",
     "media play-pause",
     "media seek",
+    "media volume set",
     "audio volume up",
     "audio volume down",
     "audio volume set",

@@ -41,6 +41,9 @@ struct AudioStudio {
     smoothed: Vec<f32>,
     /// Volume being dragged per stream (shown until the server confirms).
     dragging: Option<(u32, f32)>,
+    /// The media player the shell follows, when it lets you change its own
+    /// volume: its streams' sliders set that level ([`player_volume`]).
+    player: Option<PlayerLevel>,
     /// The device (server name) whose label is being edited.
     renaming: Option<String>,
 }
@@ -57,6 +60,67 @@ fn run(f: impl FnOnce() -> Result<(), String> + Send + 'static) {
             tracing::warn!("audio: {err}");
         }
     });
+}
+
+/// [`run`] for a slider: the write ends when the call returns, so the
+/// slider keeps one write in flight and sends only your latest value next
+/// ([`mandara_ui::slider_model`]).
+fn run_write(f: impl FnOnce() -> Result<(), String> + Send + 'static) -> mandara_ui::slider_model::Write {
+    let (done, rx) = async_channel::bounded(1);
+    std::thread::spawn(move || {
+        let result = f();
+        if let Err(err) = &result {
+            tracing::warn!("audio: {err}");
+        }
+        let _ = done.try_send(result.map(|()| String::new()));
+    });
+    Some(rx)
+}
+
+/// The media player the shell follows (`media status`) when it lets you
+/// change its own volume.
+#[derive(Clone, Debug, PartialEq)]
+struct PlayerLevel {
+    /// Its identity, lowercase (matched against the mixer's apps).
+    identity: String,
+    /// Its own volume, `0..=1`.
+    volume: f32,
+}
+
+/// The player in a `media status` reply whose own volume you can change:
+/// the shell reports `volume` only when the player accepts control and
+/// declares it writable.
+fn player_level(status: &serde_json::Value) -> Option<PlayerLevel> {
+    let volume = status.get("volume")?.as_f64().filter(|v| v.is_finite())?;
+    let identity = status.get("player")?.as_str()?.to_lowercase();
+    (!identity.is_empty()).then_some(PlayerLevel { identity, volume: (volume as f32).max(0.0) })
+}
+
+/// The player's own volume when `s` is the followed player's stream. Such
+/// a player puts its own level back on its stream whenever it plays or
+/// pauses, undoing a change to the stream's volume, so its slider sets the
+/// player's level instead (as the shell's sound panel does).
+fn player_volume(s: &Stream, player: Option<&PlayerLevel>) -> Option<f32> {
+    player.filter(|p| mandara_ui::plugins::audio::stream_is_players(s, &p.identity)).map(|p| p.volume)
+}
+
+/// The top of a player's own volume (MPRIS: `1.0` is its full level).
+const PLAYER_LIMIT: f32 = 1.0;
+/// Volumes in `mandara msg` commands are percents.
+const PERCENT: f32 = 100.0;
+
+/// A slider position (`0..=1`) as a volume up to `limit`, snapped to
+/// hundredths.
+fn snap_volume(frac: f32, limit: f32) -> f32 {
+    ((frac.clamp(0.0, 1.0) * limit * VOLUME_STEPS).round() / VOLUME_STEPS).clamp(0.0, limit)
+}
+
+/// Sets the followed player's own volume through the shell, which is the
+/// one following it (`media volume set`); `None` without the shell.
+fn set_player_volume(level: f32, cx: &gpui::App) -> mandara_ui::slider_model::Write {
+    let ipc = cx.try_global::<crate::perf::ShellIpc>()?.clone();
+    let words = vec!["media".to_string(), "volume".to_string(), "set".to_string(), format!("{:.0}", level * PERCENT)];
+    run_write(move || (ipc.0)(words))
 }
 
 /// Preview spectrum when nothing plays: two Gaussian bumps (height,
@@ -128,10 +192,18 @@ impl StudioView {
                 }
                 // Safety net: refresh every few seconds even without events.
                 if dirty.swap(false, Ordering::Relaxed) || tick.is_multiple_of(SAFETY_REFRESH_TICKS) {
+                    // The player the shell follows, read alongside the mixer
+                    // (none when Studio runs without the shell).
+                    let media = this.update(cx, |_, cx| crate::perf::query(&["media", "status"], cx)).ok().flatten();
                     let result = cx.background_executor().spawn(async { audio::mixer() }).await;
+                    let player = match media {
+                        Some(task) => task.await.ok().as_ref().and_then(player_level),
+                        None => None,
+                    };
                     let _ = this.update(cx, |_, cx| {
                         let st = state(cx);
                         st.mixer = Some(result);
+                        st.player = player;
                         st.dragging = None;
                         cx.notify();
                     });
@@ -459,13 +531,36 @@ impl StudioView {
         if list.is_empty() {
             return card(p).child(heading(t("No apps are playing sound"), t("Apps appear here with their own volume while they play."), p)).into_any_element();
         }
-        let dragging = state(cx).dragging;
+        let (dragging, player) = {
+            let st = state(cx);
+            (st.dragging, st.player.clone())
+        };
         // "Allow above 100 %" sets the slider's top, as in the shell.
         let limit = mandara_ui::state::config(cx).read(cx).get().audio.volume_limit();
         let mut col = card(p).gap(px(SPACE_4_PX)).p(px(SPACE_8_PX));
         for s in list {
             let index = s.index;
-            let volume = dragging.filter(|(i, _)| *i == index).map(|(_, v)| v).unwrap_or(s.volume);
+            // The followed player's stream sets the player's own volume
+            // (which lasts across play and pause); every other one its own.
+            let (slider, volume) = match player_volume(s, player.as_ref()) {
+                Some(level) => {
+                    // Its own id: a player's level and a stream's are
+                    // different scales and never share a held value.
+                    let id = gpui::ElementId::from(SharedString::from(format!("stream-pvol-{index}")));
+                    let shown = mandara_ui::slider_model::held(&id).map_or(level, |f| snap_volume(f, PLAYER_LIMIT));
+                    let slider = mandara_ui::kit::slider(id, (level / PLAYER_LIMIT).min(1.0), p, |f, _, cx| set_player_volume(snap_volume(f, PLAYER_LIMIT), cx));
+                    (slider.into_any_element(), shown)
+                }
+                None => {
+                    let volume = dragging.filter(|(i, _)| *i == index).map(|(_, v)| v).unwrap_or(s.volume);
+                    let slider = mandara_ui::kit::slider(SharedString::from(format!("stream-{index}")), (volume / limit).min(1.0), p, move |f, _, cx| {
+                        let v = snap_volume(f, limit);
+                        state(cx).dragging = Some((index, v));
+                        run_write(move || audio::set_stream_volume(index, v))
+                    });
+                    (slider.into_any_element(), volume)
+                }
+            };
             // The stream's own icon name, else its app id / binary / name as
             // a window app id would be resolved; a monogram otherwise.
             let candidates: Vec<String> = [s.app_id.clone(), s.binary.clone(), Some(s.app.clone()), Some(s.app.to_lowercase())].into_iter().flatten().filter(|k| !k.is_empty()).collect();
@@ -480,11 +575,6 @@ impl StudioView {
                 None => mandara_ui::plugins::workspaces::app_icon(candidates.first().map(String::as_str).unwrap_or("audio"), APP_ICON_PX, p.on_surface, false, p),
             };
             let muted = s.muted;
-            let slider = mandara_ui::kit::slider(SharedString::from(format!("stream-{index}")), (volume / limit).min(1.0), p, move |f, _, cx| {
-                let v = ((f * limit * VOLUME_STEPS).round() / VOLUME_STEPS).clamp(0.0, limit);
-                state(cx).dragging = Some((index, v));
-                run(move || audio::set_stream_volume(index, v));
-            });
             col = col.child(
                 div()
                     .px(px(SPACE_12_PX))
@@ -583,5 +673,31 @@ mod tests {
         assert_eq!(v.len(), 32);
         assert!(v.iter().all(|x| (0.0..=1.0).contains(x)));
         assert!(v[5] > v[31], "a bass-heavy shape");
+    }
+
+    /// A player that keeps its own volume (Rufin) puts it back on its
+    /// stream at every play or pause, undoing what the mixer had set on the
+    /// stream: in Studio too, its row shows and sets the player's own
+    /// level, paused or playing, while every other app keeps its stream.
+    #[test]
+    fn the_followed_players_stream_sets_the_players_own_volume() {
+        let stream = |index: u32, app: &str, app_id: Option<&str>, corked: bool| Stream { index, app: app.into(), app_id: app_id.map(Into::into), volume: 0.51, corked, ..Default::default() };
+        let (effects, firefox, rufin) = (stream(1, "Easy Effects", Some("com.github.wwmm.easyeffects"), false), stream(2, "Firefox", None, false), stream(3, "Rufin", None, true));
+        let status = serde_json::json!({ "player": "Rufin", "status": "paused", "volume": 0.25 });
+        let level = player_level(&status);
+        assert_eq!(level, Some(PlayerLevel { identity: "rufin".into(), volume: 0.25 }));
+        assert_eq!(player_volume(&rufin, level.as_ref()), Some(0.25), "paused too: the row shows the player's 25 %, not the stream's 51 %");
+        assert_eq!(player_volume(&firefox, level.as_ref()), None, "other apps keep their stream volume");
+        let by_id = Stream { app_id: Some("io.github.rufin".into()), app: "audio-out".into(), ..rufin.clone() };
+        assert_eq!(player_volume(&by_id, level.as_ref()), Some(0.25), "matched by app id too");
+        let effects_status = serde_json::json!({ "player": "Easy Effects", "volume": 1.0 });
+        assert_eq!(player_volume(&effects, player_level(&effects_status).as_ref()), None, "never an effects processor's row");
+        // The shell reports `volume` only when the player lets you change it.
+        assert_eq!(player_level(&serde_json::json!({ "player": "Rufin", "volume": null })), None);
+        assert_eq!(player_level(&serde_json::json!({ "player": "", "volume": 0.5 })), None);
+        assert_eq!(player_level(&serde_json::Value::Null), None, "nothing playing, or no shell");
+        assert_eq!(player_volume(&rufin, None), None);
+        assert_eq!(snap_volume(0.254, PLAYER_LIMIT), 0.25);
+        assert_eq!(snap_volume(2.0, PLAYER_LIMIT), PLAYER_LIMIT, "never past the player's full level");
     }
 }

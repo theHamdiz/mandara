@@ -8553,3 +8553,5 @@
 "A gentle wave along the fill that flows while you drag" = "Một làn sóng nhẹ dọc phần tô, chuyển động khi bạn kéo"
 "Ten rounded steps that fill one after another" = "Mười bậc bo tròn lần lượt được tô đầy"
 "How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it" = "Giao diện các điều khiển của shell. Mỗi bản xem trước là điều khiển thật: kéo để thử một kiểu, nhấp vào kiểu để dùng"
+"Set the media player's own volume in percent (0-100)" = "Đặt âm lượng riêng của trình phát theo phần trăm (0-100)"
+"This player doesn't let you change its volume" = "Trình phát này không cho phép đổi âm lượng của nó"

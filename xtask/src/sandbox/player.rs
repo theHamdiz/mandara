@@ -63,18 +63,24 @@ impl Status {
     }
 }
 
-/// Playback state: track, status and position.
+/// Playback state: track, status, position and the player's own volume.
 #[derive(Debug)]
 struct Playback {
     index: usize,
     status: Status,
     started: Instant,
     offset: f64,
+    /// The player's own volume (MPRIS `Volume`, writable like a real
+    /// player's, so the shell's and Studio's player sliders can be tried).
+    volume: f64,
 }
+
+/// The demo player's own volume when it starts.
+const START_VOLUME: f64 = 0.8;
 
 impl Playback {
     fn new() -> Self {
-        Self { index: 0, status: Status::Playing, started: Instant::now(), offset: 0.0 }
+        Self { index: 0, status: Status::Playing, started: Instant::now(), offset: 0.0, volume: START_VOLUME }
     }
 
     /// Seconds into the current track.
@@ -248,7 +254,11 @@ impl Player {
     }
     #[zbus(property)]
     fn volume(&self) -> f64 {
-        1.0
+        lock(&self.shared).volume
+    }
+    #[zbus(property)]
+    fn set_volume(&self, volume: f64) {
+        lock(&self.shared).volume = if volume.is_finite() { volume.max(0.0) } else { 0.0 };
     }
     #[zbus(property)]
     fn can_go_next(&self) -> bool {

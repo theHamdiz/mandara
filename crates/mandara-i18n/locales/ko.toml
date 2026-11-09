@@ -8649,3 +8649,5 @@
 "A gentle wave along the fill that flows while you drag" = "채움을 따라 흐르는 잔잔한 물결로, 드래그하는 동안 움직입니다"
 "Ten rounded steps that fill one after another" = "하나씩 차례로 채워지는 둥근 열 칸"
 "How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it" = "셸 컨트롤의 모양입니다. 각 미리보기는 실제 컨트롤입니다. 드래그해서 디자인을 시험하고, 디자인을 클릭해 사용하세요"
+"Set the media player's own volume in percent (0-100)" = "미디어 플레이어 자체 볼륨을 퍼센트로 설정(0-100)"
+"This player doesn't let you change its volume" = "이 플레이어는 볼륨을 바꿀 수 없습니다"

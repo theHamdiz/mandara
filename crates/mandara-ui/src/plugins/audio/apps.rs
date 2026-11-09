@@ -92,7 +92,7 @@ impl AppGroup {
 /// The key that folds streams of one app together: its app id, else its
 /// name. Never the executable alone: Electron apps, Python scripts and
 /// players launched through wrappers share one.
-fn group_key(s: &Stream) -> String {
+pub(super) fn group_key(s: &Stream) -> String {
     s.app_id.as_deref().filter(|k| !k.is_empty()).unwrap_or(&s.app).to_lowercase()
 }
 
