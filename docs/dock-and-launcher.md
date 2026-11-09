@@ -41,8 +41,10 @@
   - **macOS stacks:** Downloads and any folder you add open as a fan of the
     newest files on an arc that pops up out of the icon as one piece, with
     *Open Downloads · N more* on top for the rest; or as a glass grid with
-    keyboard navigation, type-to-filter and a right-click menu. The
-    **Trash** takes dropped files.
+    keyboard navigation, type-to-filter and a right-click menu. A file
+    opens in the app you picked for its type in Studio → Applications →
+    Defaults (else your system's default), a folder in your file manager.
+    The **Trash** takes dropped files and opens in your file manager too.
   - **The dock stays put** while a stack, menu or the Applications grid is
     open, and auto-hide resumes cleanly when you close it.
   - **Auto-hide** (off, on, or only when a window overlaps) reveals at the

@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **Files in the dock's Downloads open again.** Clicking a file in a stack's fan, grid or list did nothing: Mandara handed it to the desktop portal, which shows its own app chooser for files instead of using your default app, and never said when that failed. Files now open straight in the app you picked for their type in Studio → Applications → Defaults, then your system's defaults (a type without an app of its own uses its parent's, so a `.log` opens in your text editor). Folders open in your file manager. If no app opens a file, or the app can't start, a notification says so and where to pick one.
+- **The Trash opens in your file manager.** Opening the Trash from the dock handed `trash:///` to whatever claims that address. It now opens in your own file manager (the one in Studio → Applications, or your default for folders): Nautilus, Nemo, Caja, Thunar, PCManFM and PCManFM-Qt get `trash:///`, Dolphin gets `trash:/`, and COSMIC Files and any other manager get the Trash folder itself (`~/.local/share/Trash/files`, created if it's missing). A desktop widget that opens `trash:///` does the same.
+
 ## 0.24.0 — 2026-11-09
 
 Update your whole system right from the Updates panel. Pick how every

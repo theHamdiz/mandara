@@ -262,14 +262,14 @@ pub(super) fn recent(p: &PanelCx, index: usize, palette: &MandaraPalette, cx: &m
             // The row opens the file: a button's click stops there.
             .child(icon_button(("rec-folder", i), "folder", ROW_BUTTON_PX, palette.on_surface_variant, None, move |_, cx| {
                 cx.stop_propagation();
-                recorder::reveal(&folder);
+                recorder::reveal(&folder, cx);
             }))
             .child(icon_button(("rec-trash", i), "trash", ROW_BUTTON_PX, palette.on_surface_variant, None, move |_, cx| {
                 cx.stop_propagation();
                 recorder::trash(trash.clone(), cx);
             }))
             .into_any_element();
-        rows = rows.child(list_row(("rec-recent", i), icon("play", metrics::TILE_ICON, palette.primary), r.name(), Some(recent_detail(&r)), Some(buttons), false, palette, move |_, _| recorder::open(&open)));
+        rows = rows.child(list_row(("rec-recent", i), icon("play", metrics::TILE_ICON, palette.primary), r.name(), Some(recent_detail(&r)), Some(buttons), false, palette, move |_, cx| recorder::open(&open, cx)));
     }
     col = col.child(rows);
     Some((reveal(p, index, col), height))

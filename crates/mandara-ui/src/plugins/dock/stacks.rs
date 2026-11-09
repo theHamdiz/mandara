@@ -473,7 +473,7 @@ impl StackPopover {
 
     fn open_file(&mut self, i: usize, cx: &mut Context<Self>) {
         if let Some(e) = self.files.get(i) {
-            open_path(&e.path);
+            open_path(&e.path, cx);
         }
         self.close(cx);
     }
@@ -556,7 +556,7 @@ impl StackPopover {
         let Some(e) = self.files.get(i).cloned() else { return };
         match row {
             0 => return self.open_file(i, cx),
-            1 => open_path(e.path.parent().unwrap_or(&e.path)),
+            1 => open_path(e.path.parent().unwrap_or(&e.path), cx),
             _ => match move_to_trash(std::slice::from_ref(&e.path)) {
                 Ok(_) => {
                     self.files.remove(i);
@@ -677,7 +677,7 @@ impl StackPopover {
             if is_folder_row {
                 let dir = stack_dir(&self.stack);
                 row = row.on_click(cx.listener(move |this, _, _, cx| {
-                    open_path(&dir);
+                    open_path(&dir, cx);
                     this.close(cx);
                 }));
             } else {
@@ -873,7 +873,7 @@ impl Render for StackPopover {
                         .child(icon(crate::bidi::dir_icon("external"), text::BODY_S, accent))
                         .child(t("Open in Files"))
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            open_path(&dir);
+                            open_path(&dir, cx);
                             this.close(cx);
                         })),
                 );
@@ -925,14 +925,10 @@ impl Render for StackPopover {
 struct Popover(Option<(usize, WindowHandle<StackPopover>)>);
 impl Global for Popover {}
 
-/// Opens a file or folder with its default app, off the UI thread.
-pub fn open_path(path: &Path) {
-    let uri = format!("file://{}", mandara_services::app_uninstall::percent_encode(path));
-    std::thread::spawn(move || {
-        if let Err(err) = mandara_services::session::open_uri(&uri) {
-            tracing::warn!("dock: opening {uri}: {err}");
-        }
-    });
+/// Opens a file with the app for its type, or a folder in the file
+/// manager ([`crate::opener`]: off the UI thread, failures notified).
+pub fn open_path(path: &Path, cx: &mut App) {
+    crate::opener::open_path(path, cx);
 }
 
 /// Whether stack `index`'s popover is open (and not closing).

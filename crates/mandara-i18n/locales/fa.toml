@@ -9377,3 +9377,5 @@
 "Keeps your feeds and saved articles in Mandara's state folder" = "خوراک‌ها و مقاله‌های ذخیره‌شدهٔ شما را در پوشهٔ وضعیت Mandara نگه می‌دارد"
 "Reads communities, threads and their pictures from reddit.com" = "انجمن‌ها، رشته‌گفتگوها و تصاویرشان را از reddit.com می‌خواند"
 "Saves your game and best scores in Mandara's state folder" = "بازی و بهترین امتیازهای شما را در پوشهٔ وضعیت Mandara ذخیره می‌کند"
+"No app opens {type} files — choose one in Studio → Applications → Defaults" = "هیچ برنامه‌ای فایل‌های {type} را باز نمی‌کند — یکی را در استودیو ← برنامه‌ها ← پیش‌فرض‌ها انتخاب کنید"
+"No file manager found — choose one in Studio → Applications" = "هیچ مدیر فایلی پیدا نشد — یکی را در استودیو ← برنامه‌ها انتخاب کنید"

@@ -48,7 +48,7 @@ pub fn perform(widget: &str, action: &Action, cx: &mut App) -> Result<(), String
         Action::PomodoroSkip => crate::productivity::productivity(cx).update(cx, |p, cx| p.skip(cx)),
         Action::PomodoroReset => crate::productivity::productivity(cx).update(cx, |p, cx| p.reset(cx)),
         Action::Launch(id) => crate::plugins::app_installer::open_app(id, cx)?,
-        Action::Open(target) => open(target),
+        Action::Open(target) => open(target, cx),
         Action::Toggle(what) => toggle(what, cx)?,
         Action::Copy(text) => cx.write_to_clipboard(gpui::ClipboardItem::new_string(text.clone())),
         Action::Media(verb) => {
@@ -105,10 +105,15 @@ fn open_panel(id: &str, cx: &mut App) {
     shell(cx).update(cx, |s, cx| s.set_panel(Some(id), cx));
 }
 
-/// Opens a folder, file or web address with its default app.
-fn open(target: &str) {
+/// Opens a folder, file or web address with its default app; the Trash
+/// (`trash:///`) and files (`file://…`) open like the dock's.
+fn open(target: &str, cx: &mut App) {
     let target = target.trim();
-    if target.contains("://") {
+    if target.starts_with("trash:") {
+        crate::opener::open_trash(cx);
+    } else if let Some(path) = target.strip_prefix("file://") {
+        crate::opener::open_path(std::path::Path::new(&mandara_services::mpris::percent_decode(path)), cx);
+    } else if target.contains("://") {
         let uri = target.to_string();
         std::thread::spawn(move || {
             if let Err(err) = mandara_services::session::open_uri(&uri) {
@@ -116,7 +121,7 @@ fn open(target: &str) {
             }
         });
     } else {
-        crate::plugins::dock::stacks::open_path(&mandara_config::paths::expand_tilde(target));
+        crate::opener::open_path(&mandara_config::paths::expand_tilde(target), cx);
     }
 }
 

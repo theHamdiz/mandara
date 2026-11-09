@@ -9377,3 +9377,5 @@
 "Keeps your feeds and saved articles in Mandara's state folder" = "Menyimpan feed dan artikel tersimpan Anda di folder status Mandara"
 "Reads communities, threads and their pictures from reddit.com" = "Membaca komunitas, utas, dan gambarnya dari reddit.com"
 "Saves your game and best scores in Mandara's state folder" = "Menyimpan permainan dan skor terbaik Anda di folder status Mandara"
+"No app opens {type} files — choose one in Studio → Applications → Defaults" = "Tidak ada aplikasi yang membuka berkas {type} — pilih di Studio → Aplikasi → Bawaan"
+"No file manager found — choose one in Studio → Applications" = "Pengelola berkas tidak ditemukan — pilih di Studio → Aplikasi"
