@@ -76,6 +76,7 @@ The 78 first-party plugins (42 of them ship switched off, marked *opt-in*):
 | **Color picker** | Pick colors from the screen, with formats, tonal ramps and contrast | *(opt-in)*
 | **Authenticator** | Two-factor codes (TOTP / HOTP) stored in your keyring | *(opt-in)*
 | **Soundscapes** | Ambient sea, rain, wind, café, fire and noise — synthesized live | *(opt-in)*
+| **Radio** | Internet radio: curated stations by genre, your own stations and favourites, with live now-playing | *(opt-in)*
 | **Dock** | A macOS-style dock: pinned, running and recent apps, stacks and the Trash, with magnification and auto-hide *(opt-in)* |
 | **App installer** | Install apps by dropping AppImages, Flatpaks, archives or packages on the dock or Studio | *(opt-in)*
 | **Screen time** | How long you spend in each app, per day, with limits *(opt-in)* |
@@ -135,7 +136,7 @@ quick settings, media, weather, wallpaper, screenshot and clipboard, plus
 the core launcher, session and main menus) and everything else ships
 switched off: the dock, mini stats, screen time, prayer times, the wallpaper
 generator, Wallhaven, cursor themes, containers, services, drives, updates,
-the process hunter, the authenticator, soundscapes, world clock, network
+the process hunter, the authenticator, soundscapes, the radio, world clock, network
 speed, the color picker, Pomodoro, notes, to-do, privacy, the app
 installer, the shortcuts cheatsheet, task progress, eye breaks,
 presentation mode, share to phone, Tailscale, the uptime monitor, local
@@ -246,6 +247,58 @@ panel or `mandara msg prayer adhan stop`. The recording is
 by Adam-synagda, released into the public domain (CC0 1.0) on Wikimedia
 Commons, fetched as Commons' MP3 rendering; the same recording plays at
 Fajr.
+
+## Radio
+
+The **Radio** plugin (opt-in) plays internet radio in pure Rust: MP3, AAC
+and Ogg Vorbis streams, `.pls` and `.m3u` playlists and redirects, with the
+song title the station sends (ICY metadata). It plays to your sound server
+as "Mandara Radio" and offers itself to media keys, the media panel and
+other apps' controls (MPRIS), so the media island and the lock screen show
+what plays.
+
+- **Stations.** It ships about seventy stations on thirteen shelves (News,
+  Talk, Pop, Rock, Jazz, Classical, Electronic, Lo-fi & chill, Ambient,
+  World, Arabic, Qur'an recitation and Kids). Every one is a public, free
+  stream, and each was checked to connect and play on the date in the
+  source (`mandara-services/src/radio/station.rs`). Search them by name,
+  shelf, country or language, tap the heart to keep favourites (reorder
+  them with *Reorder*), and add your own by address in the *Add* tab:
+  Mandara listens for a moment first, so a station that wouldn't play is
+  never saved.
+- **The panel.** A large now-playing card (the station's art, a live
+  badge, the title, format, bitrate and buffer health, and a level meter),
+  previous / play / next, a favourite button, a sleep timer that fades the
+  sound out, and the volume slider in your chosen slider design.
+- **The bar** shows the station's art, a live dot and the title, which
+  scrolls only when it doesn't fit and stays still with reduced motion.
+  Right-click it to play or pause.
+- **The sidebar card** is a compact player: the station's art, what plays
+  with a live dot, a favourite heart, previous / play / next through your
+  favourites and the volume in your slider design. Put it on any sidebar tab
+  in Studio → Bars → Sidebar → **Tabs** (or
+  `mandara msg sidebar tab …`).
+- **The directory** (off until you switch it on) searches
+  [radio-browser.info](https://www.radio-browser.info) from the *Stations*
+  tab. Nothing is sent until you press its search button; results are kept
+  for ten minutes, then forgotten.
+- **When it drops.** A stream that drops reconnects on its own, waiting a
+  little longer each time, up to the number of tries you set; a wrong
+  address or an unsupported stream says why instead of retrying.
+- **Resources.** Nothing runs until you press play. While a station plays,
+  two threads stream and decode it through a buffer of a few seconds
+  (sized from the station's bitrate, so it never grows); pausing or
+  stopping ends them and frees the buffer. HLS (`.m3u8`) and Opus streams
+  aren't supported yet.
+
+Its settings (Studio → Plugins → Radio) cover the usual station and
+resuming at login, volume per station, reconnecting and the buffer, the
+sleep timer's length, notifications when the song changes, media keys, the
+bar item's style, the scrolling title's speed and width, the station art's
+colours, the level meter and stream details, which shelves appear, and the
+directory. Your favourites and stations live in
+`~/.local/state/mandara/radio.toml`. Commands: `mandara msg radio …`
+([commands](commands.md)).
 
 ## Wallpaper depth
 

@@ -34,6 +34,7 @@ pub mod idle;
 pub mod hadith;
 pub mod jannah;
 pub mod quran;
+pub mod radio;
 pub mod keepassxc;
 pub mod keyring_prompt;
 pub mod location;

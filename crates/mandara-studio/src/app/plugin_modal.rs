@@ -257,6 +257,15 @@ const BUILTIN_ACCESS: &[(&str, &[(Access, &str)])] = &[
         ],
     ),
     ("audio", &[(Access::Audio, tk("Changes volumes and devices (PipeWire / PulseAudio)"))]),
+    (
+        "radio",
+        &[
+            (Access::Network, tk("Streams the stations you play; searches radio-browser.info only when you ask")),
+            (Access::Audio, tk("Plays the stream (PipeWire / PulseAudio)")),
+            (Access::DBus, tk("Offers itself to media keys and controls over MPRIS")),
+            (Access::Files, tk("Keeps your stations and favourites in Mandara's state folder")),
+        ],
+    ),
     ("network", &[(Access::DBus, tk("Lists and joins networks through NetworkManager"))]),
     ("bluetooth", &[(Access::DBus, tk("Pairs and connects devices through BlueZ"))]),
     ("notifications", &[(Access::DBus, tk("Receives notifications as the desktop notification server"))]),

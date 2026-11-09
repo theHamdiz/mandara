@@ -4284,6 +4284,7 @@ dependencies = [
  "hkdf",
  "hmac",
  "hound",
+ "httparse",
  "image",
  "lewton",
  "libc",
@@ -4308,6 +4309,7 @@ dependencies = [
  "rqrr",
  "rustfft",
  "rustix",
+ "rustls",
  "ruzstd",
  "semver",
  "serde",
@@ -4331,6 +4333,7 @@ dependencies = [
  "wayland-protocols-misc",
  "wayland-protocols-plasma",
  "wayland-protocols-wlr",
+ "webpki-roots",
  "wl-clipboard-rs",
  "zbus",
  "zeroize",
@@ -7215,7 +7218,10 @@ checksum = "5773a4c030a19d9bfaa090f49746ff35c75dfddfa700df7a5939d5e076a57039"
 dependencies = [
  "lazy_static",
  "symphonia-bundle-mp3",
+ "symphonia-codec-aac",
+ "symphonia-codec-vorbis",
  "symphonia-core",
+ "symphonia-format-ogg",
  "symphonia-metadata",
 ]
 
@@ -7232,6 +7238,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "symphonia-codec-aac"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c263845aa86881416849c1729a54c7f55164f8b96111dba59de46849e73a790"
+dependencies = [
+ "lazy_static",
+ "log",
+ "symphonia-core",
+]
+
+[[package]]
+name = "symphonia-codec-vorbis"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f025837c309cd69ffef572750b4a2257b59552c5399a5e49707cc5b1b85d1c73"
+dependencies = [
+ "log",
+ "symphonia-core",
+ "symphonia-utils-xiph",
+]
+
+[[package]]
 name = "symphonia-core"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7245,6 +7273,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "symphonia-format-ogg"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b4955c67c1ed3aa8ae8428d04ca8397fbef6a19b2b051e73b5da8b1435639cb"
+dependencies = [
+ "log",
+ "symphonia-core",
+ "symphonia-metadata",
+ "symphonia-utils-xiph",
+]
+
+[[package]]
 name = "symphonia-metadata"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7254,6 +7294,16 @@ dependencies = [
  "lazy_static",
  "log",
  "symphonia-core",
+]
+
+[[package]]
+name = "symphonia-utils-xiph"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee27c85ab799a338446b68eec77abf42e1a6f1bb490656e121c6e27bfbab9f16"
+dependencies = [
+ "symphonia-core",
+ "symphonia-metadata",
 ]
 
 [[package]]

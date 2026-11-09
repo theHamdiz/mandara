@@ -43,6 +43,7 @@
 1 = top (default: bottom)
 1 app
 1 day
+1 hour
 1 plugin
 1 plugin folder checked
 1 plugin update
@@ -61,9 +62,11 @@
 12-hour
 12-hour clock: 09:05 instead of 9:05
 12:00
+15 minutes
 1600×900 cover on top of the detail modal
 17:00
 180°
+1½ hours
 2.4 GHz (range)
 2.4 GHz reaches farther and every device; 5 GHz is faster nearby
 22:00
@@ -77,7 +80,9 @@
 2:255, 2:255-257, 2:255- (to the surah's end), 36 or yaseen
 2K
 2K (1440p)
+30 minutes
 3D
+45 minutes
 4K
 5 GHz (speed)
 5K
@@ -205,6 +210,7 @@ A profile card, launch tiles for apps, folders and links, quick toggles, volume 
 A progress bar, value from 0 to 1
 A public GitHub repository tagged mandara-plugin with a release is all it takes.
 A public repository with this topic (About → Topics).
+A quiet notification when the song changes
 A random style
 A reader for RSS, Atom and JSON feeds
 A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view
@@ -336,6 +342,7 @@ Add a rule for an app: mute, silent, no-history, allow-dnd, low, critical
 Add a shortcut
 Add a sidebar tab (--icon name)
 Add a site and its feed is found for you. Order, folders and colours here are how the panel shows them.
+Add a station by its stream address; Mandara listens for a moment to check it plays
 Add a task
 Add a task; a leading #List files it there (the list is created if missing)
 Add a task…
@@ -362,6 +369,7 @@ Add feeds
 Add include
 Add link
 Add one from an otpauth:// link or a QR code
+Add or remove a favourite station
 Add owner/name repositories in Studio → Plugins → CI status
 Add rule
 Add skill
@@ -396,6 +404,7 @@ Adding to apps
 Adding to your apps…
 Address
 Address, e.g. 192.168.1.20/24
+Addresses with a user name or password aren't supported
 Adds a window rule (edit or remove it below)
 Adds one import line to gtk.css (backed up first)
 Adhan at prayer times
@@ -498,6 +507,7 @@ Always clear of the bar; left and right draw a vertical pill
 Always on
 Always open on the first tab
 Amber
+Ambient
 Ambient sea, rain, wind, café, fire and noise — synthesized live
 Amplitude
 An API key is saved for this server
@@ -643,6 +653,8 @@ Aristotle
 Arithmetic error
 Arrangement
 Arrow of God
+Art and live dot
+Art, live dot and title
 Articles per feed
 Articles you already have show at once; new ones follow.
 As
@@ -680,6 +692,7 @@ Attention
 Attention is the rarest and purest form of generosity.
 Audio
 Audio & media
+Audio held ahead of what you hear: longer rides out a shaky connection, shorter starts sooner
 Audio ring
 Audio server unavailable
 Audio streaming
@@ -724,6 +737,7 @@ BEGIN YOUR KHATM
 BOOKMARKS
 BOOKS
 BREAKS TODAY
+BUFFERING
 Back
 Back to before this
 Back to daylight at {time}
@@ -765,6 +779,7 @@ Bar, dock, launcher and popups
 Bare icons
 Bare icons, every item on its own pill, or each group on one island
 Bars
+Bars that move with the sound in the now-playing card
 Base currency
 Batt.
 Batteries
@@ -888,6 +903,7 @@ Browser
 Brutalist soft
 Bubble
 Bubbles
+Buffer
 Build
 Build and boot it next time; the running system stays
 Build and switch now, without making it the boot default
@@ -927,6 +943,7 @@ CI status
 CITIES
 COLLECTIONS
 COMING NEXT
+CONNECTING
 CONTAINER
 CONTINUE READING
 CONTRAST · WCAG 2
@@ -1037,6 +1054,7 @@ Change wallpaper
 Change wallpapers only between the two times below
 Change wallpapers only between two times of day, or always (off)
 Change wallpaper…
+Change your station
 Changed display settings come back unless you press Keep within this time
 Changed plugins get a fresh instance; removed ones are unloaded
 Changes
@@ -1146,6 +1164,7 @@ Classic
 Classic analog
 Classic: one surface with the search field and results. Beacon: a centred search bar with results under it once you type
 Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away
+Classical
 Claude Code today
 Claude Code's tokens today and this week, read from its local logs once you switch it on
 Clean
@@ -1237,6 +1256,7 @@ Colour
 Colour must be a tone (primary, secondary, tertiary, success, warning, urgent) or hue:<0-359>
 Colour row
 Colourful tiles
+Colours of the art drawn for each station
 Column
 Columns
 Columns & outputs
@@ -1439,9 +1459,11 @@ Could not update PATH: {error}. Add {line} to your shell profile.
 Could not verify this binary: {reason}. Mandara was not installed. Check your connection and try again.
 Could not write {path}: {error}
 Couldn't change the microphone: {error}
+Couldn't connect to {host}
 Couldn't create {path}: {error}
 Couldn't download {collection}
 Couldn't download {language}: {error}
+Couldn't find the server {host}
 Couldn't install
 Couldn't install {app}
 Couldn't install {app}: {error}
@@ -1739,6 +1761,7 @@ Dim the screen
 Dim unfocused windows
 Dim while selecting
 Dimmed screen
+Directory results
 Disable
 Disable a unit and reload systemd
 Disable while typing
@@ -1920,6 +1943,7 @@ Each note is a Markdown file, each topic a folder in here — point it at a sync
 Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence.
 Each repair is safe: your compositor config only ever gets one include line, with a backup.
 Each sets the launcher's style, layout and placement together; change any setting below afterwards.
+Each station remembers its own volume
 Each surface
 Each walk to the mosque, morning or evening, is a welcome being prepared.
 Ease someone's hardship
@@ -1956,6 +1980,7 @@ Egyptian
 Eight
 Eject
 Eldritch
+Electronic
 Elevated
 Elevation tint
 Eleven
@@ -2018,6 +2043,7 @@ Enter some text to translate
 Enter the PIN
 Enter the passkey
 Enter the passphrase
+Enter the stream's address
 Enter this code on {device}, then press Enter on it.
 Enter unlocks · Esc cancels
 Entries in collections
@@ -2157,10 +2183,12 @@ Families
 Family
 Family and kin
 Fan
+Fast
 Fast for His sake
 Faster blur on static backgrounds
 Favorites
 Favourite entities
+Favourites
 Fear is inevitable, I have to accept that, but I cannot allow it to paralyze me.
 Featured
 Feed addresses
@@ -2380,6 +2408,7 @@ Forget…
 Forgot {name}
 Format
 Format copied when a color is picked
+Format, bitrate and buffer health in the now-playing card
 Formats
 Formats, tonal ramp and WCAG contrast of a color
 Forty Hadith Qudsi
@@ -2470,6 +2499,7 @@ Gaps, corner radius and border width in one click; fine-tune them under Window l
 Gateway
 Gateway, e.g. 192.168.1.1
 Gauges
+Gave up after {n} tries: {why}
 General
 Generate
 Generate a wallpaper (the current recipe, random, a variation or a style) and save it; JSON with the path, size and time
@@ -2509,6 +2539,7 @@ Give generously
 Give one display its own wallpaper (clear = follow the main one)
 Give the file's full path
 Give the profile a name
+Give the station a name
 Give time to those who owe you, and let go when you can.
 Give, and give again, in every good cause you can reach.
 Glass
@@ -2565,6 +2596,7 @@ H {high}  L {low}
 H.264 plays everywhere; HEVC and AV1 are smaller at the same quality
 HADITH OF THE DAY
 HISTORY
+HLS streams aren't supported yet
 HTTP {code}
 Hadith
 Hadith library
@@ -2736,6 +2768,7 @@ How dark the bar's shadow is
 How far a history card travels before it is dismissed
 How far back the clock sits in the picture: low lets everything but the far background pass in front, high only the nearest things
 How far you have read through a hadith collection
+How fast a long title scrolls in the bar (it stays still with reduced motion)
 How fast the dock slides in and out
 How images that don't match the screen are placed
 How large the hadith are set
@@ -2749,6 +2782,7 @@ How long hover-opened panels, the launcher and the session menu wait after the p
 How long popups stay
 How long the bar stays after the pointer leaves
 How long the fade after each change takes
+How long the panel's sleep timer runs before the radio fades out
 How long the pointer must rest in the corner
 How long the pointer must rest on an edge first
 How long the pointer rests on the edge before an unpinned side bar slides out
@@ -2997,6 +3031,7 @@ Interface
 Interface font
 Interface weight
 Internet
+Internet radio: curated stations by genre, your own stations and favourites, with live now-playing
 Interview, 1929
 Invalid PID
 Invalid character {char} in the secret
@@ -3042,6 +3077,7 @@ It is the on-screen way to lock, log out, restart and shut down
 It lost its connection to the compositor ({error}). Turn night light off and on again to retry.
 It moves only while the desktop shows, a few frames a second.
 It opens apps and runs Mandara's commands, including the one that turns plugins back on
+It plays: {details}
 It poses as Mandara's built-in {plugin} plugin
 It runs commands without being asked ({command})
 It shows nothing: its bar item, panel and sidebar card are all empty
@@ -3068,6 +3104,7 @@ Jannah
 Jannah quote
 Jannah verse
 Japanese proverb
+Jazz
 Johann Wolfgang von Goethe
 Join
 Join a hidden network
@@ -3152,6 +3189,7 @@ Keeps Mandara running if anything ever takes it down. Turn off to let it stay st
 Keeps a history of what you copy
 Keeps daily totals in Mandara's state folder
 Keeps the bar and its panels above fullscreen apps; applies after a shell restart
+Keeps your stations and favourites in Mandara's state folder
 Kept
 Kept awake
 Kept awake for an hour
@@ -3180,6 +3218,7 @@ Keyrings & passwords
 Khatm complete
 Khatm progress
 Khufu's Wisdom
+Kids
 Killed {name} ({pid})
 Kind
 Knots
@@ -3188,6 +3227,7 @@ Kufic calligraphy
 LAST 7 DAYS
 LAYERS
 LED meter
+LIVE
 LUKS passphrase (visible in the process list — prefer the panel)
 Labels
 Landscape
@@ -3280,6 +3320,7 @@ Letters to Lucilius, 13
 Letters, digits, - and _; used for the home folder
 Letting go of Alt switches; off, Enter or a click does
 Letting go of a new selection captures it (resizing or moving one never does)
+Level meter
 Levels
 Lewis Carroll
 Libraries & fonts (shared files)
@@ -3333,6 +3374,7 @@ List mice, keyboards and headsets that report a battery
 List minimized windows too (switching restores them)
 List name
 List plugins with origin and enablement
+List stations, all or of one shelf
 List the configured translation provider's languages
 List the one-click looks
 List themes (built-in and ~/.config/mandara/themes)
@@ -3358,6 +3400,7 @@ Live upload and download rates, public IP and a speed test
 Live window previews or app icons
 Live — what's playing now
 Living to Tell the Tale
+Lo-fi & chill
 Load
 Load a generated wallpaper's recipe as the current one
 Load a model into memory to warm it up (kept for 10 minutes)
@@ -3670,6 +3713,7 @@ Measuring…
 Media
 Media & capture
 Media & system
+Media keys and controls
 Media players
 Media remote control
 Meditations VII.29
@@ -3850,6 +3894,7 @@ Mute all sound
 Mute all sound: every output and app at once; off restores your own mutes
 Mute mic
 Mute or unmute one app stream
+Mute or unmute the radio
 Mute the microphone
 Mute the recorded microphone
 Muted
@@ -3961,11 +4006,13 @@ New windows become master
 New-tab button
 Newest
 Newest first
+News
 News & ideas
 News headlines
 News unavailable
 Next
 Next boot
+Next favourite station
 Next theme
 Next to the edge
 Next track
@@ -4070,6 +4117,7 @@ No environment variables or arguments
 No exit node matches {query}
 No external monitor answers DDC/CI
 No failed units
+No favourites yet
 No feed found at this address
 No feeds yet
 No feeds yet. Add one above or pick from the starter feeds below.
@@ -4184,6 +4232,8 @@ No skill named “{name}”
 No sound for "{event}" in this theme
 No sound server (PulseAudio / PipeWire) found
 No stack named “{name}” (see `mandara msg dock stack list`)
+No station matches
+No station matches {query}
 No subprocesses
 No such app
 No such battery
@@ -4353,6 +4403,7 @@ Now playing
 Now playing card
 Now-playing chip
 Now-playing information
+Now-playing notifications
 Nudge the current recipe into a variation (amount 0–1, default from the settings)
 Num Lock
 Num Lock on at login
@@ -4364,6 +4415,7 @@ Numbers
 Numbers, dates and language
 Numerals
 Numerals strength
+OFF AIR
 OK
 OP
 OS
@@ -4390,6 +4442,7 @@ Off: stay with the current player until it closes
 Off: the clock keeps its own time
 Off: the compositor's own config decides at the next start
 Off: your wallpaper stays until you change it
+Offers itself to media keys and controls over MPRIS
 Office
 Offline mode
 Offline mode is on (Studio → Privacy)
@@ -4476,6 +4529,7 @@ Only build it, to see that it works
 Only each app's most recent window
 Only in {desktops}
 Only on this display
+Only stations you added can be removed
 Only tags and workspaces with windows (plus the one you are on)
 Only the built-in encoder uses this; the others follow Resolution
 Only the first {count} checks run
@@ -4569,6 +4623,7 @@ Opening the keyring…
 Opening the post…
 Opening your feeds…
 Opening your keyring…
+Opening your stations…
 Opening {collection}…
 Opening {url}
 Opening…
@@ -4593,6 +4648,7 @@ Optional. Without it Mandara reads Reddit's public feeds in limited mode (one re
 Optional: clean up leftovers
 Options
 Options as pills on one soft track
+Opus streams aren't supported yet
 Or right-click the desktop and choose Edit desktop
 Or type a site's address in the launcher and choose Subscribe in Feeds.
 Orbit
@@ -4631,6 +4687,7 @@ Own systemd scope per app
 Owned by another user
 PAIRED
 PAM is not available on this system (libpam.so.0 not found)
+PAUSED
 PID of the crashed process
 PID {pid}
 PID {pid} is no longer running
@@ -4714,6 +4771,7 @@ Pause or resume recording
 Pause or resume recording screen time
 Pause or resume recording what you copy
 Pause recording
+Pause the radio
 Pause the recitation
 Pause while locked
 Paused
@@ -4776,6 +4834,7 @@ Pick a pixel anywhere on screen — it lands here
 Pick a plate or an outline to see the shape.
 Pick a random image from your wallpaper folder
 Pick a random image or video from the wallpaper folder
+Pick a station below, or press play
 Pick a tag, then its layout, master share and scroller width. Tags without a rule keep MangoWM's default.
 Pick a wallpaper (bar → wallpaper button, or `mandara msg wallpaper picker open`) to theme Mandara from its colors.
 Pick a wallpaper first: wallpaper schemes take their colors from it
@@ -4844,9 +4903,11 @@ Play / pause
 Play a shell sound even while sounds are off
 Play a shell sound if sounds and that event are on (or any theme sound name)
 Play a sound for
+Play a station (by id or name), or the usual one
 Play from here
 Play music or video in any MPRIS player
 Play or pause
+Play or pause the radio
 Play the adhan now (to hear it; it must be downloaded)
 Playback speed for this surface; zero applies transitions instantly
 Playback state, levels, preset and sleep timer
@@ -4856,6 +4917,7 @@ Playlist
 Plays each sound from your theme at the volume above (even while shell sounds are off). Your own files: `[sounds.files]` in config.toml.
 Plays every animation faster or slower with the same feel
 Plays the call to prayer at each of the five prayers, with a notification to stop it; silent during do not disturb and presentations. The recording (about 1.8 MB, public domain, from Wikimedia Commons) is downloaded once when you turn this on
+Plays the stream (PipeWire / PulseAudio)
 Plays until you pause it
 Please confirm
 Plug in a USB drive or SD card to see it here
@@ -4885,6 +4947,7 @@ Polaroid
 Polkit agent status; demo previews the authentication dialog; close cancels it
 Pomodoro
 Poor Richard's Almanack
+Pop
 Pop a plugin's panel out of the bar into a floating card you can drag anywhere on the output its panel is open on (else the focused one): at x y when given (logical px from the output's top-left), else where it last floated there. A floating card moves to x y
 Pop up for
 Popular feeds by topic, each checked to download and read correctly on {date}.
@@ -4946,6 +5009,8 @@ Presets
 Press Check now to look for updates
 Press Enter to close
 Press keys…
+Press play for your usual station
+Press play to listen
 Preview
 Preview after download
 Preview generated file
@@ -4960,6 +5025,7 @@ Preview — any password unlocks · Esc closes
 Previews per row
 Previews use sample data.
 Previous
+Previous favourite station
 Previous track
 Previous window
 Pride, even a grain of it, stands in the way; choose humility.
@@ -5062,8 +5128,10 @@ Quote card
 Quotes
 Qur'an
 Qur'an and hadith
+Qur'an recitation
 RAM
 RECENT
+RECONNECTING · {n}
 RPM
 RSS, Atom and JSON subscriptions with local read history
 RSS, Atom or JSON feed address
@@ -5072,6 +5140,12 @@ Rabi al-Awwal
 Rabi al-Thani
 Rabindranath Tagore
 Radial
+Radio
+Radio icon
+Radio look
+Radio playback
+Radio stations
+Radio · {shelf}
 Radius
 Rail
 Rain
@@ -5185,6 +5259,8 @@ Recolour a topic
 Recommended · default
 Reconnect trusted devices
 Reconnect trusted devices when Bluetooth turns on
+Reconnect when a stream drops
+Reconnection attempts
 Record
 Record a region
 Record a window
@@ -5299,6 +5375,7 @@ Remove harm from the road
 Remove key
 Remove line
 Remove one entry
+Remove one of your stations
 Remove photo
 Remove the downloaded text, meanings and cached recitations
 Remove the last line
@@ -5328,6 +5405,7 @@ Render count and build cost per plugin view since the last reset
 Render the desktop canvas (wallpaper, clock, subject) to a PNG
 Rendering at full size…
 Reopen with what you typed last (selected, so typing replaces it)
+Reorder
 Repair
 Repair all
 Repeat delay
@@ -5392,6 +5470,7 @@ Results for “{words}”
 Resume
 Resume a paused container
 Resume a paused recitation where it stopped
+Resume on login
 Resume reminders after a pause
 Resumed {count} containers
 Resumed {name}
@@ -5438,10 +5517,12 @@ River runs {file} as a program, but it isn't executable, so River starts without
 River {version} runs window management in a separate program and no longer has the river-control and river-status protocols, so Mandara can't show or switch its tags, send its binds or follow its windows. Mandara works with River's classic line (0.3, packaged as river-classic).
 River's config is your init program, which Mandara never edits: Mandara sends River its colours, rules, input settings and keys when the shell starts and on every change. To start Mandara with River, add this line to your init: {line}
 River's init controls startup; add or remove Mandara there
+Rock
 Roll back
 Roll back to the previous generation now?
 Rolled back to the previous generation
 Room around the icons
+Room for the title in the bar
 Rose
 Rose Gold
 Rose evening glass: headline clock, system monitor, media card and glass pills.
@@ -5644,6 +5725,7 @@ Scroller
 Scroller column width
 Scrolling
 Scrolling between and around the bar's items switches workspace or changes the volume
+Scrolling title
 Sea glass
 Seamless AV1 loop at {size}
 Search
@@ -5675,8 +5757,11 @@ Search looks at names, ids and descriptions.
 Search places by name (Open-Meteo geocoding)
 Search plugins…
 Search providers
+Search radio-browser.info for “{q}”
+Search radio-browser.info from the panel; nothing is sent until you search
 Search settings
 Search shortcuts…
+Search stations, shelves, countries…
 Search text, kinds, collections…
 Search the Arabic (without diacritics) and the meaning; every word must match
 Search the community for “{query}”
@@ -5697,6 +5782,7 @@ Searches wallhaven.cc and downloads the wallpapers you pick
 Searching GitHub…
 Searching Wallhaven…
 Searching for devices…
+Searching the directory…
 Searching — new devices appear below; Pair shows a code to compare.
 Searching…
 Second line
@@ -5786,6 +5872,7 @@ Set the folders to search in Studio → Plugins → Git repositories
 Set the interface language (auto or an ISO code: en, ar, es, fr, de, tr, ru, hi, zh, ja)
 Set the media player's own volume in percent (0-100)
 Set the night colour temperature in kelvin (1000–10000)
+Set the radio's volume (0–100)
 Set the screen brightness in percent
 Set the shared location by coordinates
 Set the slideshow order
@@ -5851,6 +5938,7 @@ Sharing stopped
 Shawwal
 Sheet
 Sheet colour
+Shelf
 Shell
 Shell memory by category: heap, file-mapped, shared, GPU, caches and plugins
 Shell not running: file checks only
@@ -5862,6 +5950,8 @@ Shell sounds
 Shell status
 Shell surfaces
 Shell text language
+Shelves
+Shelves shown: news, talk, pop, rock, jazz, classical, electronic, chill, ambient, world, arabic, quran, kids
 Shift
 Shifts every token's lightness
 Short break
@@ -5936,6 +6026,7 @@ Show the minutes left next to the playing indicator
 Show the next slideshow wallpaper now
 Show the next wallpaper each time Mandara starts
 Show the power profile, or switch to one (polkit may ask)
+Show the radio to media keys, the media panel and other apps' controls
 Show the rendered Markdown first; the pencil switches to the editor
 Show the shortcuts overlay
 Show the upload rate next to download in the bar chip
@@ -6021,6 +6112,7 @@ Slash commands
 Sleep
 Sleep after
 Sleep means
+Sleep timer
 Sleep timer in the bar
 Slices
 Slices: slanted strips around a big preview (Omarchy-style). Carousel: floating cards
@@ -6148,6 +6240,7 @@ Start recording
 Start the Docker or Podman service (for Podman: systemctl --user enable --now podman.socket)
 Start the ambient mix
 Start the next phase automatically
+Start the usual station when Mandara starts
 Start when sharing the screen
 Start where the last region was
 Start with a lowercase letter or an underscore
@@ -6172,6 +6265,12 @@ Starts the apps you click
 Startup
 State
 State and unit-file state of one unit
+Station
+Station art
+Station directory
+Station name
+Stations
+Stations shown per directory search
 Status
 Status icons and menus of background apps
 Status text
@@ -6206,6 +6305,8 @@ Stop sharing now
 Stop sharing?
 Stop the adhan
 Stop the hotspot
+Stop the radio after N minutes (fading out), or `off`
+Stop the radio and release everything
 Stop the recitation
 Stop the running system update (only while it is refreshing, downloading or building)
 Stop the wallpaper being generated
@@ -6231,6 +6332,9 @@ Stray Birds 134
 Stray Birds 184
 Stray Birds 57
 Stray Birds 6
+Stream addresses start with http:// or https://
+Stream details
+Streams the stations you play; searches radio-browser.info only when you ask
 Strength
 Strength of glass edge highlights
 Strength of the glass edge highlight and shade
@@ -6387,6 +6491,7 @@ Take an orphan under your wing and you will be close to the Prophet ﷺ.
 Take screenshot
 Takes effect the next time you log in or restart. Your current session isn't touched.
 Taking a short break
+Talk
 Tallest it grows; fewer rows show when this is low
 Tallest panel, as a share of the screen height the bar leaves free
 Tallest the floating card grows
@@ -6399,6 +6504,7 @@ Tao Te Ching 64
 Tap an ayah in the reader and bookmark it to keep it here
 Tap and drag
 Tap the heart on a verse or hadith to keep it here
+Tap the heart on any station to keep it here
 Tap the ribbon on a hadith to keep it here
 Tap to click
 Tap, then slide to drag
@@ -6435,6 +6541,9 @@ Terminals
 Terrain scale
 Tertiary
 Test
+Test a stream address and add it as your station
+Test and add
+Test and save
 Test bench
 Test load
 Testing the new generation until you restart
@@ -6469,13 +6578,16 @@ Text with placeholders
 Text, an image or a file
 Texture
 Tgmix
+That address is too long
 That didn't work — try again
+That doesn't look like a web address
 That doesn't look like an e-mail address
 That entry is not an image
 That file includes personal values ({keys}); turn on “Redact personal values” before sharing it.
 That hadith isn't in the collection
 That local time does not exist today
 That made {compositor} report more problems, so it was undone.
+That station isn't in your list
 That user no longer exists
 That widget is already on this tab
 That widget is not on this tab
@@ -6522,6 +6634,7 @@ The Tanzil text and its meaning, for the Qur'an plugin (api.alquran.cloud)
 The Trash: count its items, or empty it (asks for --yes)
 The XCursor theme name, e.g. Bibata-Modern-Ice; pick one from the gallery above
 The active keyboard layout; click to switch
+The address has no server name
 The adhan for {prayer} is playing
 The adhan is playing
 The adhan isn't downloaded
@@ -6584,6 +6697,7 @@ The compositor connection closed
 The compositor did not answer
 The compositor did not respond in time
 The compositor rejected this display configuration
+The connection to the station dropped
 The contract (WIT)
 The corner family of cards in panels, the sidebar and Studio; Corner roundness still sets their size
 The corner family of cards; Corner roundness still sets their size
@@ -6666,6 +6780,7 @@ The keyring is locked
 The knowledge of anything, since all things have causes, is not acquired or complete unless it is known by its causes.
 The laptop panel and external monitors move together
 The last log lines of a container
+The last one played
 The less reason someone has, the more he fancies himself the most rational and most discerning of all.
 The link has no account name
 The link has no secret
@@ -6770,6 +6885,7 @@ The server redirected to an address that is not valid
 The server redirected too many times
 The server redirected without saying where
 The server rejected the API key
+The server's answer couldn't be read
 The server's response was too large
 The service did not reply
 The service is not running
@@ -6793,6 +6909,22 @@ The soft overcomes the hard; and the weak the strong.
 The sound server closed the stream
 The speed test server sent no data
 The speed test stopped
+The station answered with error {code}
+The station didn't answer in time
+The station directory didn't answer: {error}
+The station ended the stream
+The station is full or down right now
+The station redirected too many times
+The station refused to play here (it may be limited to its own country)
+The station sent no audio
+The station stopped sending audio
+The station's address moved without saying where
+The station's address no longer works
+The station's audio couldn't be decoded
+The station's playlist is empty
+The station's playlist points at another playlist
+The stream has no audio
+The stream is damaged
 The sun doesn't rise today
 The sun doesn't set today
 The sun on its path, sunrise, sunset and what comes next
@@ -6883,6 +7015,7 @@ This OPML file lists no feeds
 This above all: to thine own self be true.
 This account has no password.
 This address is a web page without a feed; find its RSS or Atom link
+This address is a web page, not an audio stream
 This app doesn't share a menu with the shell
 This app has no command to run
 This app is already installed
@@ -6952,9 +7085,11 @@ This recorder can't write that format here
 This recording has no microphone
 This request is too large
 This restarts the computer; repeat as `session reboot-to {target} confirm`
+This server sends its stream in a way Mandara can't play yet
 This session
 This sign-in method needs more than a password
 This site offers several feeds:
+This station uses a format Mandara can't play
 This style uses Compact height
 This system is image-based: it updates with {command}, which Mandara leaves to it
 This tab is empty
@@ -7014,6 +7149,7 @@ Tirukkural 211
 Title
 Title (optional)
 Title contains (optional)
+Title width
 Title, e.g. Picture-in-Picture
 Titles
 Titles on group tabs
@@ -7100,6 +7236,7 @@ Translator
 Translucency
 Trash
 Tray items (role, status, icons, menus)
+Tries before giving up on a station that dropped
 Trigger size
 True OLED onyx with precious warm gold and emerald speculars.
 Trust a device (it may connect by itself and is auto-connected)
@@ -7113,11 +7250,13 @@ Try a number, a name or its meaning
 Try a port number or a process name
 Try a shell command…
 Try again
+Try again, waiting a little longer each time
 Try another name or repository
 Try another sort or community
 Try another source, or show hidden and helper entries.
 Try another word or another filter.
 Try another word or filter
+Try another word or shelf
 Try another word, or look in the community marketplace.
 Try fewer or other words
 Try it
@@ -7272,6 +7411,7 @@ Unknown phone action
 Unknown preset
 Unknown profile “{profile}” (available: {names})
 Unknown session action
+Unknown shelf {name}
 Unknown size {size}: use display, 1080p, 1440p, 4k, 5k, 8k, uw1440, portrait4k or WIDTHxHEIGHT
 Unknown source `{source}`
 Unknown state
@@ -7422,6 +7562,7 @@ Uses your GPU
 Uses your location from Studio → Date, time & location. Nothing is fetched from the network.
 Uses your sound theme (Studio → Audio & media → Sounds)
 Using the GITHUB_TOKEN variable
+Usual station
 Usually 6500 K (untinted)
 Usually silent
 Utilities
@@ -7484,6 +7625,7 @@ Visual window rule builder
 Visualizer
 Visualizer preview
 Visualizer style
+Vivid
 Voltage
 Voltaire
 Volume
@@ -7494,6 +7636,7 @@ Volume control floats
 Volume down
 Volume in the bar
 Volume keys, the bar's scroll and `audio volume up / down`
+Volume per station
 Volume step
 Volume up
 W
@@ -7618,12 +7761,15 @@ What it is like
 What keeps from it
 What one unit of your currency buys (fetched twice a day once you switch it on)
 What opens when you right-click the bar between and around its items
+What plays: station, title, format, buffer, volume
 What scripts can show
+What the bar item shows while a station plays
 What the bar shows for this layout, e.g. EN or ع
 What the idle stage, the critical battery action and the session menu's Sleep do
 What the launcher has learnt
 What the launcher searches, how results look and how they are ranked
 What the launcher shows for a query (apps, settings, commands, slash commands, skills)
+What the play button starts when no station is chosen yet
 What the record shortcut and `record start` capture
 What you do not want done to yourself, do not do to others.
 What's in {version}
@@ -7744,6 +7890,7 @@ Works and Days
 Works in the background
 Workspace not found
 Workspaces
+World
 World clock
 World clock row
 World news
@@ -7774,6 +7921,7 @@ Yesterday
 Yoshida Kenkō
 You
 You already follow this feed
+You already have this station
 You can't delete the account you're signed in with
 You can't lock the account you're signed in with.
 You can't use up creativity. The more you use, the more you have.
@@ -7782,6 +7930,7 @@ You copy a new plugin.wasm, plugin.toml or translation into the folder
 You could not step twice into the same river.
 You declare [[settings]] in plugin.toml
 You give but little when you give of your possessions. It is when you give of yourself that you truly give.
+You have the most stations Mandara keeps; remove one first
 You have {version}
 You'll be asked once, by the system, before anything changes
 You're all caught up
@@ -7818,6 +7967,7 @@ Your devices
 Your devices, within reach
 Your dock's apps, or any apps and links, as tiles
 Your feeds
+Your first favourite
 Your graphics card can't encode this with GPU Screen Recorder
 Your hadith library
 Your home favourites, sensors and scenes
@@ -8044,6 +8194,8 @@ how many items ahead (1 when left out; negative looks back)
 how many lines (default from Studio)
 how many recent lines
 how to go through the wallpapers
+http(s) stream or playlist address
+https://… stream, .pls or .m3u address
 icon name or image path
 id must be a number (see `clipboard list`)
 id must be a number (see `window list`)
@@ -8119,6 +8271,7 @@ new name
 new name (rest of the line)
 new position, 0 = first
 newer generation
+news, talk, pop, rock, jazz, classical, electronic, chill, ambient, world, arabic, quran, kids or other
 no
 no address
 no commits yet
@@ -8251,6 +8404,8 @@ slash command /{trigger}: unknown action {action} (use url:, mandara: or exec:)
 start at boot or login
 start: screen, region or window; screen: a display name; mic: on, off or toggle
 starting
+station id or name
+station name (else the server's)
 status or empty
 stays loaded
 steps
@@ -8541,7 +8696,11 @@ your default
 {from}–{to} of {count}
 {gpu}% GPU / {cpu}% CPU
 {group} (continued)
+{host} closed the connection
+{host} didn't answer
+{host} has an invalid security certificate
 {host} has no address
+{host} refused the connection
 {hours} h ago
 {hours} h {minutes} min
 {hours} h {minutes} min left
@@ -8598,13 +8757,17 @@ your default
 {n} connected
 {n} days
 {n} days ago
+{n} favourites
 {n} finished
 {n} found
+{n} from radio-browser.info
 {n} good steps this week
 {n} hadith
 {n} items
 {n} items · right-click copies
 {n} items · right-click pastes
+{n} kHz
+{n} kbit/s
 {n} khatms completed
 {n} lines
 {n} matches

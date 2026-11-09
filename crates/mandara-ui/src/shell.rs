@@ -188,6 +188,12 @@ const SLOT_ID_STRIDE: usize = 100;
 const ANCHOR_CHIP_W_PX: f32 = 40.0;
 /// Base UI text size before the typography scale, in px.
 const BASE_TEXT_PX: f32 = 12.5;
+
+/// The bar's text size (typography scale × the bar's own text scale), for
+/// bar items that measure their text (marquees).
+pub(crate) fn bar_text_px(cfg: &mandara_config::ShellConfig) -> f32 {
+    BASE_TEXT_PX * cfg.typography.scale * cfg.bar.text_scale()
+}
 /// Bar opacity at or above which fills count as opaque (overlap seams).
 const OPAQUE_ALPHA: f32 = 0.999;
 /// Specular rim highlight / shade alphas of the floating glass pills.
@@ -1911,7 +1917,7 @@ impl Render for ShellView {
         let active_slot = if panel_open { self.panel_slot } else { None };
         // A floating panel's chip stays lit like an open one.
         let floating_ids = crate::floating::live_ids(cx);
-        let bar_text_px = BASE_TEXT_PX * cfg.typography.scale * cfg.bar.text_scale();
+        let bar_text_px = bar_text_px(&cfg);
         let bar_weight = gpui::FontWeight(f32::from(cfg.bar.font_weight(cfg.typography.weight)));
         let (capsule_fill, capsule_edge) = capsule_colors(&cfg.bar, &palette);
         let hover_k = if cfg.bar.hover_highlight { HOVER_CHIP_TINT_ALPHA } else { 0.0 };

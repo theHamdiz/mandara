@@ -60,6 +60,7 @@ pub mod soundscapes;
 pub mod hadith;
 pub mod jannah;
 pub mod quran;
+pub mod radio;
 /// Folded reading text for the Jannah, Qur'an and Hadith surfaces.
 pub(crate) mod reading;
 pub mod system_admin;
@@ -164,6 +165,7 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     color_picker::register(registry);
     authenticator::register(registry);
     soundscapes::register(registry);
+    radio::register(registry);
     tailscale::register(registry);
     local_ai::register(registry);
     uptime::register(registry);

@@ -55,6 +55,7 @@ The 79 plugins below include 78 built-ins and the Moon phase example. Each SVG h
 | <img src="plugins/moon-phase/icon.png" width="40" alt="Moon phase icon"> <img src="plugins/moon-phase/cover.png" width="128" alt="Moon phase cover"> | **Moon phase** · [SVG](plugins/moon-phase/icon.svg) · [256 PNG](plugins/moon-phase/icon.png) · [Cover](plugins/moon-phase/cover.png) | Twilight · illustration |
 | <img src="plugins/color-picker/icon.png" width="40" alt="Color picker icon"> <img src="plugins/color-picker/cover.png" width="128" alt="Color picker cover"> | **Color picker** · [SVG](plugins/color-picker/icon.svg) · [256 PNG](plugins/color-picker/icon.png) · [Cover](plugins/color-picker/cover.png) | Twilight · real panel |
 | <img src="plugins/soundscapes/icon.png" width="40" alt="Soundscapes icon"> <img src="plugins/soundscapes/cover.png" width="128" alt="Soundscapes cover"> | **Soundscapes** · [SVG](plugins/soundscapes/icon.svg) · [256 PNG](plugins/soundscapes/icon.png) · [Cover](plugins/soundscapes/cover.png) | Twilight · real panel (paused) |
+| <img src="plugins/radio/icon.png" width="40" alt="Radio icon"> <img src="plugins/radio/cover.png" width="128" alt="Radio cover"> | **Radio** · [SVG](plugins/radio/icon.svg) · [256 PNG](plugins/radio/icon.png) · [Cover](plugins/radio/cover.png) | Twilight · illustration |
 | <img src="plugins/world-clock/icon.png" width="40" alt="World clock icon"> <img src="plugins/world-clock/cover.png" width="128" alt="World clock cover"> | **World clock** · [SVG](plugins/world-clock/icon.svg) · [256 PNG](plugins/world-clock/icon.png) · [Cover](plugins/world-clock/cover.png) | Twilight · real panel |
 | <img src="plugins/net-speed/icon.png" width="40" alt="Network speed icon"> <img src="plugins/net-speed/cover.png" width="128" alt="Network speed cover"> | **Network speed** · [SVG](plugins/net-speed/icon.svg) · [256 PNG](plugins/net-speed/icon.png) · [Cover](plugins/net-speed/cover.png) | Corniche · real panel (IP addresses blurred) |
 | <img src="plugins/authenticator/icon.png" width="40" alt="Authenticator icon"> <img src="plugins/authenticator/cover.png" width="128" alt="Authenticator cover"> | **Authenticator** · [SVG](plugins/authenticator/icon.svg) · [256 PNG](plugins/authenticator/icon.png) · [Cover](plugins/authenticator/cover.png) | Obsidian · real panel (demo accounts) |
@@ -145,7 +146,7 @@ SVGs store sRGB values for desktop renderer compatibility. Use the OKLCH anchors
 | Navigation | `#103C63` → `#286B91` | Session, Launcher, Workspaces, Active window, Keyboard layout, Language, Main menu, System tray, Dock, CI status, Shortcuts cheatsheet |
 | System | `#124D4B` → `#268878` | Resources, Process hunter, Quick settings, Drives, Power, Privacy, Mini stats, Task progress |
 | Connections | `#125477` → `#329DA7` | Network, Bluetooth, Network speed, Tailscale, Uptime monitor |
-| Media | `#40316F` → `#8666AA` | Media, Audio, Screenshot, Color picker, Local AI, Share to phone |
+| Media | `#40316F` → `#8666AA` | Media, Audio, Radio, Screenshot, Color picker, Local AI, Share to phone |
 | Productivity | `#843D58` → `#C47268` | Clipboard, Notifications, To-do, Notes, Pomodoro, Authenticator, Screen time |
 | Time | `#765323` → `#B78D47` | Clock, World clock |
 | Sky | `#30265E` → `#7063B5` | Prayer times, Weather, Wallpaper, Moon phase, Soundscapes, Eye breaks, Presentation mode, Jannah |

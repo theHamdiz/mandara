@@ -63,6 +63,8 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "next" => r#"<path d="M4.5 6v12a1 1 0 0 0 1.55.83l8.6-6a1 1 0 0 0 0-1.66l-8.6-6A1 1 0 0 0 4.5 6z" fill="black"/><path d="M19 5v14"/>"#.into(),
         "previous" => r#"<path d="M19.5 6v12a1 1 0 0 1-1.55.83l-8.6-6a1 1 0 0 1 0-1.66l8.6-6A1 1 0 0 1 19.5 6z" fill="black"/><path d="M5 5v14"/>"#.into(),
         "music" => r#"<path d="M9 18V5.5l11-2v12.5"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>"#.into(),
+        // A radio set: antenna, body, speaker and dial.
+        "radio" => r#"<path d="M6 8.5L17.5 3"/><rect x="3" y="8.5" width="18" height="12" rx="3"/><circle cx="15.5" cy="14.5" r="2.8"/><path d="M6.5 12.5h3.5M6.5 16.5h3.5"/>"#.into(),
         "cpu" => r#"<rect x="5" y="5" width="14" height="14" rx="3"/><rect x="9.25" y="9.25" width="5.5" height="5.5" rx="1.2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>"#.into(),
         "memory" => r#"<rect x="2.5" y="6.5" width="19" height="11" rx="2.5"/><path d="M7 10.5v3M11 10.5v3M15 10.5v3M7 17.5v2M12 17.5v2M17 17.5v2"/>"#.into(),
         "disk" => r#"<ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.66 3.6 3 8 3s8-1.34 8-3v-13"/><path d="M4 12c0 1.66 3.6 3 8 3s8-1.34 8-3"/>"#.into(),
@@ -244,7 +246,7 @@ pub const ICON_NAMES: &[&str] = &[
     "user", "user-plus", "key", "tiles", "eye", "eye-off", "pencil", "sparkles", "brush", "dice", "release-notes", "home", "phone", "palette",
     "git-branch", "workflow", "bug",
     "arch", "book", "info",
-    "hadith", "bookmark", "message", "messages",
+    "hadith", "bookmark", "message", "messages", "radio",
 ];
 
 /// An icon element tinted with `color`.
