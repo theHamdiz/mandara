@@ -142,6 +142,10 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "external" => r#"<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>"#.into(),
         "github" => r#"<path d="M8 20.5v-3c-3 .8-3-1.5-4.3-2M16 21v-4.2c0-1-.3-1.6-.7-2 2.7-.3 5.5-1.3 5.5-6a4.8 4.8 0 0 0-1.3-3.3c.1-.5.6-2-.2-3.5 0 0-1.1-.3-3.6 1.3a12.3 12.3 0 0 0-6.5 0C6.7 1.7 5.6 2 5.6 2c-.8 1.5-.3 3-.2 3.5a4.8 4.8 0 0 0-1.3 3.3c0 4.7 2.8 5.7 5.5 6-.4.4-.7 1.2-.7 2V21"/>"#.into(),
         "rss" => r#"<path d="M5 4a15 15 0 0 1 15 15M5 10a9 9 0 0 1 9 9"/><circle cx="6" cy="18" r="2" fill="black" stroke="none"/>"#.into(),
+        // A speech bubble: comments and replies.
+        "message" => r#"<path d="M5.5 4.5h13a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H11l-4.5 3.5v-3.5h-1a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/>"#.into(),
+        // Two bubbles in conversation: discussion communities.
+        "messages" => r#"<path d="M4.5 3.5h9a2 2 0 0 1 2 2v5.5a2 2 0 0 1-2 2H9l-3.5 3v-3h-1a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2z"/><path d="M18 8.5h1.5a2 2 0 0 1 2 2V16a2 2 0 0 1-2 2h-1v3L15 18h-3.5a2 2 0 0 1-1.6-.8"/>"#.into(),
         "discord" => r#"<path d="M8 5.4a15 15 0 0 0-3.4 1.2C2.8 9.4 2.2 12.2 2.5 15.1a14 14 0 0 0 4.2 2.4l1.2-1.8M16 5.4a15 15 0 0 1 3.4 1.2c1.8 2.8 2.4 5.6 2.1 8.5a14 14 0 0 1-4.2 2.4l-1.2-1.8M6.8 14.7c3.5 1.8 6.9 1.8 10.4 0M8 5.4l.6-1.6M16 5.4l-.6-1.6M8 5.4a21 21 0 0 1 8 0"/><ellipse cx="8.6" cy="11.5" rx="1" ry="1.4" fill="black" stroke="none"/><ellipse cx="15.4" cy="11.5" rx="1" ry="1.4" fill="black" stroke="none"/>"#.into(),
         "folder" => r#"<path d="M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>"#.into(),
         "stop" => r#"<rect x="6" y="6" width="12" height="12" rx="2.5"/>"#.into(),
@@ -236,7 +240,7 @@ pub const ICON_NAMES: &[&str] = &[
     "user", "user-plus", "key", "tiles", "eye", "eye-off", "pencil", "sparkles", "brush", "dice", "release-notes", "home", "phone", "palette",
     "git-branch", "workflow", "bug",
     "arch", "book", "info",
-    "hadith", "bookmark",
+    "hadith", "bookmark", "message", "messages",
 ];
 
 /// An icon element tinted with `color`.

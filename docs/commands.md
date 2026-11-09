@@ -480,6 +480,11 @@ The UI stays responsive while the request runs.
 mandara msg translate languages
 mandara msg translate text ar Good morning
 mandara msg feeds refresh https://example.org/feed.xml
+mandara msg reddit open r/linux
+mandara msg reddit posts linux top week
+mandara msg reddit thread https://www.reddit.com/r/linux/comments/abc123/
+mandara msg reddit subscribe r/rust
+mandara msg reddit status
 mandara msg phone devices
 mandara msg phone action DEVICE_ID ring
 mandara msg phone send DEVICE_ID Hello from my desktop

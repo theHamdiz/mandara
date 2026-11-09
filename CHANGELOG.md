@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Read Reddit in a panel.** The new Reddit plugin (Studio → Plugins, off until you switch it on) shows your communities, their posts and whole comment threads right from the bar: hot, new, top rated or rising, search within a community, galleries and pictures sized for the panel, comments you can fold and expand, more replies loaded in place, and a button to open a post in your browser or copy its link. Discover has a starter list of communities by topic, and you add, remove and reorder yours there. NSFW posts stay hidden and spoilers covered unless you choose otherwise, and nothing refreshes while the panel is closed. It works right away in a clearly labelled limited mode on Reddit's public feeds (one request a minute, no scores or reply threads); add a free "installed app" you create once on Reddit for full mode, and the panel walks you through it. Its token never leaves memory and renews by itself. Pick cards, compact rows or a picture-first grid from the panel's header, and add a sidebar card with a community's top posts. Type `reddit`, `subreddit` or `r/linux` in the launcher to get there.
+
 ## 0.23.0 — 2026-11-09
 
 A different shape for every character. Mandara Studio uses less memory.

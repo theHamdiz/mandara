@@ -154,6 +154,10 @@ eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual c
   yourself and serve locally can be installed. `sandbox up` passes that
   variable and `MANDARA_UPDATE_API` through, so a slow local server shows
   the language cards and Studio → About filling with real progress.
+- **Reddit against a local server:** `sandbox up` also passes
+  `MANDARA_REDDIT_API` through, so the Reddit plugin can read a loopback
+  stand-in for Reddit's API (token, listings, threads, `morechildren`
+  and pictures under `/media/<host>/…`) instead of the real service.
 - **Matte:** `matte` cuts out the open surfaces as a transparent PNG. It
   shoots once over a black wallpaper and once over a white one, then
   difference-mattes the pair. Give it a region (physical pixels) that leaves

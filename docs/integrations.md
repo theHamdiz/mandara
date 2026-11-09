@@ -1,6 +1,6 @@
 # Connected plugins
 
-Translator, Phone Connect, Feeds and Home Assistant are bundled with
+Translator, Phone Connect, Feeds, Reddit and Home Assistant are bundled with
 Mandara and start switched off. Turn them on in Studio → Plugins; open
 a plugin’s Settings to configure it. They load data when you open their
 panels. Closing a panel stops its refresh timer.
@@ -62,6 +62,93 @@ Click a headline to open its web address in your browser. It is marked
 read after the browser opens successfully. A feed keeps its latest 100
 entries, and read flags are kept for those entries. Subscriptions and
 read history stay on this computer.
+
+## Reddit
+
+Read your communities, their posts and comment threads in a panel.
+
+**Two modes.** Reddit stopped answering anonymous `.json` requests in
+2026 (they return 403). The plugin works either way:
+
+- **Limited mode** needs nothing: it reads Reddit's public Atom feeds
+  (`/r/<name>/<sort>/.rss` and each post's comments feed). Reddit allows
+  about one anonymous feed request a minute, so Mandara asks at most once
+  a minute for the whole shell, waits longer when Reddit's
+  `X-Ratelimit-*` headers or a 429 `Retry-After` say so, and never sends
+  a burst. One queue serves the panel and the sidebar card: the view you
+  asked for last goes first, and an older waiting request is replaced
+  instead of piling up. Every feed is kept five minutes. The feeds carry
+  titles, authors, links, times and the post or comment text (a picture
+  post links to its picture, which shows); they carry no scores, comment
+  counts or reply structure, so those are left out and comments read as
+  one list. A banner says so, with the steps to full mode.
+- **Full mode** reads Reddit's official OAuth API with a free app you
+  create once:
+
+1. Open [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) and
+   choose *create another app*.
+2. Pick **installed app**, give it any name and use `http://localhost` as
+   the redirect address.
+3. Copy the id shown under the app's name into Studio → Plugins → Reddit
+   → **Client id**.
+
+Installed apps have no secret, and Mandara never signs in as you: it asks
+for an application-only token (Reddit's documented `installed_client`
+grant, with the anonymous device id), keeps it in memory for at most an
+hour and never writes it to disk. This grant has no refresh token: a
+new token is simply requested a minute before the old one expires, and
+once more if Reddit answers 401, with nothing for you to do. If Reddit
+refuses the client id, the plugin switches to limited mode until you
+change it; if a renewal fails for another reason, that request reads the
+public feeds and the app is tried again next time, so you never get an
+error wall. Reddit may ask new apps to be approved under its Responsible
+Builder Policy. The optional **Your Reddit user name** only goes into the
+request's user agent, as Reddit asks of developers.
+
+**Opening it.** Add Reddit to a bar in Studio → Bars for a bar button, or
+type `reddit`, `subreddit` or `r/linux` in the launcher
+(`mandara msg reddit open r/linux`); without a bar button the panel
+opens as a floating card.
+
+**Browsing.** Your communities sit along the top (add, remove and
+reorder them in Discover, which also has a starter list by topic). Sort
+by hot, new, top rated (with its time range) or rising, search within a
+community, and load more pages as you reach the end of the list; posts
+already shown are never fetched again and never repeated. Cards show the
+title, score, comment count, flair, author and age with a thumbnail;
+the compact layout fits more, and the grid puts pictures first in two
+or three columns (the panel widens for it). The layout button in the
+panel's header switches between them, and remembers your choice. Opening a post shows its picture or
+gallery, its link or a button for videos (which play in your browser),
+its text and its comments: fold a reply chain by its header, load hidden
+replies and continue long threads in place. Every post can be opened in
+the browser, and its link copied.
+
+**Sidebar card.** Add Reddit to a sidebar tab (Studio → Bars) for the
+first five posts of a community (Studio → Plugins → Reddit → **Sidebar
+card community**, or your first community), with scores where available.
+A click opens the post in the panel. The card asks only while it is
+shown, at most every ten minutes, through the same queue as the panel,
+and forgets its posts when the sidebar hides.
+
+**Safety.** NSFW posts are hidden by default (Studio can blur them
+instead, or show them). Spoilers are covered, pictures blurred and
+`>!spoiler!<` text masked, until you reveal them. Post and comment text
+is Reddit's Markdown drawn as the shell's own text: raw HTML stays plain
+text, and only web links (and Reddit's own `/r/` and `/u/` links) open.
+Pictures come only from Reddit's image hosts.
+
+**Requests.** One worker serves the panel, one request at a time; a new
+sort or community replaces a waiting request, and leaving a post drops
+its result. Every reply's `X-Ratelimit-*` headers are tracked: when the
+window is used up, or after a 429, the panel waits (honouring
+`Retry-After`, longer after repeated 429s, at most five minutes) and
+says so instead of retrying. A page you just read is reused for two
+minutes. Nothing refreshes while the panel is closed; **Refresh an open
+list** (off by default) refreshes only the list on screen.
+
+`MANDARA_REDDIT_API=http://127.0.0.1:PORT` points the plugin at a local
+test server (loopback only), as the sandbox screenshots do.
 
 ## Home Assistant
 
