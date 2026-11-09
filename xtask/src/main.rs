@@ -588,3 +588,5 @@ mod workflow_tests;
 mod package_inputs_tests;
 #[cfg(test)]
 mod x11_guard_tests;
+#[cfg(test)]
+mod count_drift_tests;

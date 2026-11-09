@@ -1,4 +1,3 @@
-  {suggestions}
  +{count} more
 "English" = "Translation" pairs, one file per language
 "{value}" isn't a duration like 30m, 2h or 1h30m
@@ -127,7 +126,6 @@ A design-first Wayland desktop shell, written entirely in Rust.
 A device battery this low turns amber; Power → peripheral alerts sets when it turns coral
 A digit removes its pencil marks from the cells it sees
 A distinct alert sound
-A dock on the screen edge or a centered grid
 A dock on the screen edge, a centered grid, or separate cards floating in the middle of the screen
 A dot per window
 A drag continues briefly after lifting the finger
@@ -395,7 +393,6 @@ Add widgets
 Add your GitHub user name to see your year
 Add your Home Assistant token in Studio
 Add your Reddit app's client id in Studio to start reading
-Add your favourite feeds in Studio
 Add your translation API key in Studio
 Add yourself to the {group} group (`sudo usermod -aG {group} $USER`), then log out and back in.
 Add {app} to your apps (~/.local/share/applications)
@@ -870,7 +867,6 @@ Border width
 Both
 Both Shift keys
 Both buttons together click the middle one (MangoWM, Niri, Sway, River)
-Both take turns: a verse, then a hadith
 Both: picked at random from the verses and hadith together
 Bottom
 Bottom center
@@ -1450,7 +1446,6 @@ Could not reach the server: {error}
 Could not read the logs
 Could not read this feed: {error}
 Could not read {path}: {error}. Left it unchanged.
-Could not refresh this feed: {error}
 Could not refresh {feeds}; trying again later
 Could not remove {path}: {error}
 Could not restart into the firmware setup: {error}
@@ -2208,7 +2203,6 @@ Favourite entities
 Favourites
 Fear is inevitable, I have to accept that, but I cannot allow it to paralyze me.
 Featured
-Feed addresses
 Feed and visit
 Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them
 Feeds
@@ -2232,7 +2226,6 @@ Fetch the latest articles of every feed
 Fetched {repo}
 Fetches forecasts from open-meteo.com
 Fetches synced lyrics from lrclib.net while the panel is open
-Fetching headlines…
 Fetching posts…
 Fetching the weather…
 Fetching {repo} failed
@@ -2841,7 +2834,6 @@ How often the process table is sampled while the panel is open
 How often the unit list is reloaded while the panel is open
 How often to look for updates while the chip is in the bar
 How often to re-render, in milliseconds (0 = only after events).
-How often today's verse or hadith changes, the same everywhere
 How often transfer rates are measured
 How panels appear
 How see-through the main menu's glass is
@@ -2854,7 +2846,6 @@ How text fields and search boxes are drawn
 How the bar item shows unread articles
 How the critical warning appears
 How the media panel draws the live audio spectrum
-How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it
 How the shell's controls look. Pick a preset to set them all at once, or a design per component: each preview is the real control, so try it, then click a design to use it
 How the volume, brightness and mixer sliders look; thin sliders keep the classic look
 How the warning appears
@@ -3206,7 +3197,6 @@ Keep the wallpaper while running on battery
 Keep these display settings? Reverting in {seconds} s
 Keep ticked tasks
 Keep ties of kinship
-Keep up to 16 feed subscriptions
 Keep up to {count} communities
 Keep windows clear of the dock
 Keep your tongue
@@ -3510,7 +3500,6 @@ Look at something 6 metres away
 Look at something 6 metres away for {n} seconds
 Look at the ayah of another day (days after today, or before it when negative) without moving your place
 Look at the hadith a few days (or hours) after today's, or before it when negative, without marking anything read
-Look at the reminder a few items after today's (before it when negative) without moving today's
 Look at the step of a day after today (before it when negative) without marking anything
 Look far away
 Look for this app as a Flatpak (Flathub) or an AppImage instead.
@@ -3900,8 +3889,6 @@ Move the toolbar to the top · M
 Move to
 Move to Trash
 Move to {zone}
-Move today's reminder back one item
-Move today's reminder forward one item (every surface follows)
 Move up
 Move window to {place} {n}
 Move window {direction}
@@ -4155,7 +4142,6 @@ No folder to write into
 No fonts match
 No frames yet — the shell only draws while something changes. Open a panel to see it work.
 No hadith {reference} in {collection}
-No headlines yet
 No hotspot has been set up yet
 No icon theme is selected; standard fallbacks are in use
 No icons named like “{query}” in your theme
@@ -4563,7 +4549,6 @@ Only tags and workspaces with windows (plus the one you are on)
 Only the built-in encoder uses this; the others follow Resolution
 Only the first {count} checks run
 Only the main display shows the lock screen; others stay black (OLED friendly)
-Only the selected feed refreshes while its panel is open
 Only the thin sliders use it now: the Pill and Segmented designs mark the value without a handle
 Only this display's windows
 Only used when the system can't report camera use instantly
@@ -4818,10 +4803,8 @@ Peek at the coming days' ayahs
 Peek at the coming days' hadith
 Peek at the coming days' steps
 Peek at the next ayahs
-Peek at what comes next
 Peek on workspace switch
 Pen
-Pending package updates from pacman, the AUR, APT, DNF, Zypper and Flatpak
 Pending package updates from pacman, the AUR, APT, DNF, Zypper, XBPS, apk and Flatpak, installed with live progress; NixOS generations
 Pending updates by source (the last check; runs one if there is none)
 Pentagon
@@ -5168,7 +5151,6 @@ RAM
 RECENT
 RECONNECTING · {n}
 RPM
-RSS, Atom and JSON subscriptions with local read history
 RSS, Atom or JSON feed address
 RTL
 Rabi al-Awwal
@@ -5330,7 +5312,6 @@ Reduce motion
 References and links follow sunnah.com. Muwatta Malik is numbered as in the dataset and links to its book.
 Refraction
 Refresh
-Refresh a feed and return its headlines and read history
 Refresh a feed now and return its articles, or every feed when no address is given
 Refresh an open list
 Refresh calendars
@@ -5344,7 +5325,6 @@ Refresh to fetch the latest articles.
 Refresh while open
 Refreshing package databases
 Refreshing {done} of {total}…
-Refreshing…
 Refusing to move {path} to the Trash
 Refusing to signal init (PID 1)
 Regenerate
@@ -5617,7 +5597,6 @@ Runs after a warning when the charge reaches the action level; plugging in cance
 Runs once after loading. Return an error to refuse to load.
 Runs sandboxed: no files, network or devices, with a time limit on every call
 Runs updates and the resource monitor; empty detects one
-Runs “Update now”; empty detects ghostty, kitty, foot, alacritty or wezterm
 Rust crate
 S
 SD card
@@ -5881,7 +5860,6 @@ Sent to KeePassXC. It can't confirm the result without its Secret Service integr
 Sentence
 Sentences, 358
 Sentences, 439
-Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions
 Separate buttons close together; the chosen one fills and rounds fully
 Separate side bars: a glass pill per group, one island, or a slab along the whole edge
 Separate up to 24 entity ids with spaces; empty shows the first available entities
@@ -6427,7 +6405,6 @@ Super+Space
 Superscript
 Supported by:
 Supported interface languages
-Supports pacman, AUR helpers, APT, DNF, Zypper and Flatpak
 Supports pacman, AUR helpers, APT, DNF, Zypper, XBPS, apk and Flatpak
 Surah {n} has {got} ayahs, expected {want}
 Surah {n} is out of order
@@ -7230,7 +7207,6 @@ Today's step
 Today's step and this week's done days
 Today's step · done
 Today's total, the last days and your top apps (needs the Screen time plugin)
-Today's verse or hadith and today's step
 Today's verse or hadith in calligraphy under an arch, with its meaning
 Today's verse or hadith in the quote card's style
 Toggle a home control or run a scene, script or button
@@ -7451,6 +7427,7 @@ Unknown category
 Unknown city or time zone {name}
 Unknown code type {kind}
 Unknown command {command}; did you mean:
+  {suggestions}
 Unknown command {command}; run `mandara commands` for the catalog
 Unknown effect "{effect}"
 Unknown event
@@ -8063,7 +8040,6 @@ Your session starts these (systemd's xdg-autostart).
 Your session's units
 Your status (empty: Online / Do not disturb)
 Your subscriptions with their folders and unread counts
-Your subscriptions, together
 Your system's location service (GeoClue) couldn't find you. Many Linux systems ship it without a lookup service. Choose IP lookup, or type your city and press Find.
 Your tailnet: this device, exit node and peers with their paths
 Your tasks; click one to tick it
@@ -8254,7 +8230,6 @@ how long, in minutes
 how many (default 50)
 how many ahead (1 when left out; negative looks back)
 how many days ahead (1 when left out; negative looks back)
-how many items ahead (1 when left out; negative looks back)
 how many lines (default from Studio)
 how many recent lines
 how to go through the wallpapers

@@ -21,7 +21,7 @@ Strengths:
 Key facts:
 
 - Repository: https://github.com/theHamdiz/mandara (author: Ahmad Hamdi, `theHamdiz`).
-- Compositors: MangoWM (tags), Niri (scrollable tiling), Hyprland, Umbriel, Sway River (0.3, tags) and KWin (virtual desktops), all first-class. Mandara never edits the user's own compositor config. It writes drop-in files to `~/.config/mandara/generated/` and adds one include line; on River, whose config is an init program, it sends its settings over River's control protocol instead.
+- Compositors: MangoWM (tags), Niri (scrollable tiling), Hyprland, Umbriel, Sway, River (0.3, tags) and KWin (virtual desktops), all first-class. Mandara never edits the user's own compositor config. It writes drop-in files to `~/.config/mandara/generated/` and adds one include line; on River, whose config is an init program, it sends its settings over River's control protocol instead.
 - Install: one command that downloads the signed release and runs `mandara install` (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo, Solus). Update from Studio → About → Update now.
 - Configuration: `~/.config/mandara/config.toml`, watched live. Mandara Studio (`mandara studio`) edits the same file, with 32 pages of settings.
 - Command line: almost everything the interface does is a documented command with JSON replies (`mandara msg <command>`, catalog via `mandara commands --json`), so scripts and AI agents can drive and inspect the desktop.
