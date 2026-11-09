@@ -1,30 +1,54 @@
 // The homepage's interactive pieces. Everything here is an enhancement:
-// without the script the page shows every Look, shortcut and answer, and
-// keeps the default Mandara Corniche palette.
+// without the script the page shows every Look, shortcut and answer, follows
+// the system's light or dark setting and keeps the Mandara Corniche palette.
 (() => {
   const root = document.documentElement;
   root.classList.add("js");
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const lightScheme = window.matchMedia("(prefers-color-scheme: light)");
+  const store = {
+    get: (key) => { try { return window.localStorage.getItem(key); } catch { return null; } },
+    set: (key, value) => { try { window.localStorage.setItem(key, value); } catch { /* private window */ } },
+  };
+
+  // Light or dark: the system's choice unless the visitor picks one here.
+  let scheme = ["light", "dark"].includes(store.get("mandara-scheme")) ? store.get("mandara-scheme") : "auto";
+  const isLight = () => (scheme === "auto" ? lightScheme.matches : scheme === "light");
 
   // Looks: the chosen Look's palette replaces the page's colour tokens, in
   // the visitor's light or dark scheme. The palettes come from the shell's
   // own theme engine (checked by `cargo test -p xtask pages`).
   const ROLES = ["ground", "tile", "tile-2", "soft", "on-soft", "ink", "muted", "accent", "on-accent", "second", "on-second", "third", "on-third"];
   const data = document.getElementById("look-palettes");
-  const palettes = data ? JSON.parse(data.textContent).palettes : {};
+  const parsed = data ? JSON.parse(data.textContent) : { palettes: {} };
+  const palettes = parsed.palettes;
   const reset = document.querySelector("[data-look-reset]");
   const status = document.querySelector(".looks-status");
   const themeColors = document.querySelectorAll('meta[name="theme-color"]');
   let worn = null;
 
+  // Screenshots follow the page's scheme: a forced scheme turns each light
+  // source on or off; "auto" gives the media query back to the browser.
+  const lightSources = [...document.querySelectorAll('source[media="(prefers-color-scheme: light)"]')];
+  const showPictures = () => {
+    for (const source of lightSources) source.media = scheme === "auto" ? "(prefers-color-scheme: light)" : (scheme === "light" ? "all" : "not all");
+    const video = document.querySelector(".film-video");
+    if (video && video.poster) video.poster = video.dataset[isLight() ? "posterLight" : "posterDark"];
+  };
+
   const paint = () => {
-    const palette = worn && palettes[worn];
+    // With no Look worn and the system's scheme, the stylesheet's own tokens apply.
+    const id = worn || (scheme === "auto" ? null : parsed.default);
+    const palette = id && palettes[id];
+    const mode = isLight() ? "light" : "dark";
     for (const role of ROLES) {
-      if (palette) root.style.setProperty(`--${role}`, palette[lightScheme.matches ? "light" : "dark"][role]);
+      if (palette) root.style.setProperty(`--${role}`, palette[mode][role]);
       else root.style.removeProperty(`--${role}`);
     }
-    if (palette) for (const meta of themeColors) meta.setAttribute("content", palette[meta.media.includes("light") ? "light" : "dark"].ground);
+    root.style.colorScheme = scheme === "auto" ? "" : mode;
+    for (const meta of themeColors) {
+      if (palette) meta.setAttribute("content", scheme === "auto" ? palette[meta.media.includes("light") ? "light" : "dark"].ground : palette[mode].ground);
+    }
   };
   const wear = (id) => {
     worn = id;
@@ -39,7 +63,44 @@
     wear(null);
     document.querySelector(".look-input:checked")?.focus();
   });
-  lightScheme.addEventListener("change", paint);
+  lightScheme.addEventListener("change", () => { paint(); showPictures(); });
+
+  const schemeGroup = document.querySelector(".scheme");
+  if (schemeGroup) {
+    schemeGroup.hidden = false;
+    const buttons = [...schemeGroup.querySelectorAll("button")];
+    const press = () => { for (const button of buttons) button.setAttribute("aria-pressed", String(button.dataset.scheme === scheme)); };
+    for (const button of buttons) {
+      button.addEventListener("click", () => {
+        scheme = button.dataset.scheme;
+        store.set("mandara-scheme", scheme);
+        press(); paint(); showPictures();
+      });
+    }
+    press();
+  }
+  if (scheme !== "auto") { paint(); showPictures(); }
+
+  // Words that breathe: each letter of a .wave word swells in turn. The
+  // word stays whole for screen readers.
+  if (!reduceMotion.matches) {
+    for (const word of document.querySelectorAll(".wave")) {
+      const text = word.textContent;
+      const from = word.matches(".d-accent") ? 500 : 200;
+      word.setAttribute("aria-label", text);
+      word.textContent = "";
+      [...text].forEach((letter, index) => {
+        const span = document.createElement("span");
+        span.className = "ch";
+        span.setAttribute("aria-hidden", "true");
+        span.style.setProperty("--i", String(index));
+        span.textContent = letter;
+        word.append(span);
+      });
+      word.style.setProperty("--from", String(from));
+      word.classList.add("wave-ready");
+    }
+  }
 
   // The slider preview: a native range input drawn in each Studio design.
   const preview = document.querySelector(".slider-preview");
@@ -109,7 +170,7 @@
       sound.setAttribute("aria-pressed", String(!video.muted));
     };
     const attach = () => {
-      video.poster = video.dataset[lightScheme.matches ? "posterLight" : "posterDark"];
+      video.poster = video.dataset[isLight() ? "posterLight" : "posterDark"];
       if (reduceMotion.matches) video.removeAttribute("autoplay");
       for (const source of video.querySelectorAll("source[data-src]")) source.src = source.dataset.src;
       video.load();
@@ -134,7 +195,7 @@
   }
 
   // Entrances: each section's parts rise in turn as it arrives.
-  if (!reduceMotion.matches && "IntersectionObserver" in window) {
+  if ("IntersectionObserver" in window) {
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
@@ -142,18 +203,18 @@
         observer.unobserve(entry.target);
       }
     }, { rootMargin: "0px 0px -8% 0px" });
-    for (const section of document.querySelectorAll("main > section:not(.hero), footer")) {
-      // Lists and the Looks picker reveal their own items instead of themselves.
-      const parts = [...section.children].filter((child) => !child.matches("script")).flatMap((child) =>
-        child.matches(".looks-picker, .departures, .keybinds, .shelf, .language-grid, .questions")
-          ? [...child.children].filter((item) => !item.matches("input, legend"))
-          : [child]);
-      parts.forEach((part, index) => {
-          part.classList.add("reveal");
-          part.style.setProperty("--i", String(Math.min(index, 8)));
-          observer.observe(part);
-        });
+    const facts = document.querySelector(".facts");
+    if (facts) observer.observe(facts);
+    if (!reduceMotion.matches) {
+      for (const part of document.querySelectorAll(".section-head, .gallery .surface, .looks-picker, .bars-picker, .bento .piece, .studio-grid > *, .departure, .language-cloud, .arabic-shot, .shelf-group, .keys-panel, .install-grid > *, .question, .foot-cta")) {
+        const siblings = [...part.parentElement.children];
+        part.classList.add("reveal");
+        part.style.setProperty("--i", String(Math.min(siblings.indexOf(part), 6)));
+        observer.observe(part);
+      }
     }
+  } else {
+    document.querySelector(".facts")?.classList.add("is-in");
   }
 
   // Alexandria's local time, for the footer.

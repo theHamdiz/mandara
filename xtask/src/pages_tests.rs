@@ -206,6 +206,16 @@ fn homepage_links_resolve_and_pictures_reserve_their_space() {
         }
     }
     assert!(pictures >= 10, "a page of real screenshots: {pictures}");
+    // Every screenshot comes as a pair: the light one is shown in light mode
+    // and the dark one in dark mode, never the other way round.
+    for img in page.descendants().filter(|n| n.has_tag_name("img")) {
+        let src = img.attribute("src").unwrap();
+        if !src.starts_with("docs/screenshots/") { continue; }
+        let picture = img.parent().filter(|p| p.has_tag_name("picture")).unwrap_or_else(|| panic!("{src}: a screenshot sits in a <picture> with its light partner"));
+        let light = picture.children().find(|n| n.has_tag_name("source") && n.attribute("media") == Some("(prefers-color-scheme: light)")).unwrap_or_else(|| panic!("{src}: no light partner"));
+        let (stem, ext) = src.rsplit_once('.').unwrap();
+        assert_eq!(light.attribute("srcset"), Some(format!("{stem}-light.{ext}").as_str()), "{src}: the light partner is named after the dark shot");
+    }
     let lower = source.to_lowercase();
     for tracker in ["google-analytics", "googletagmanager", "gtag(", "plausible", "umami", "fonts.googleapis"] {
         assert!(!lower.contains(tracker), "{tracker}: no tracking or third-party requests");
@@ -373,6 +383,8 @@ fn every_look_has_a_control_previews_and_its_real_palette() {
         let expected: Vec<_> = [dark.primary, dark.secondary, dark.primary_container].iter().map(|c| format!("background: {}", c.to_hex())).collect();
         assert_eq!(swatches, expected, "{id}: swatches show the Look's palette");
         assert!(css.contains(&format!("#{id}:checked ~ .look-stage .{id}")), "{id}: selection shows its preview");
+        assert!(css.contains(&format!("#{id}:checked ~ .looks-list .look-choice[for=\"{id}\"]")), "{id}: the picked Look is marked");
+        assert!(css.contains(&format!("#{id}:focus-visible ~ .looks-list .look-choice[for=\"{id}\"]")), "{id}: keyboard focus shows on its label");
         let figure = page.descendants().find(|node| node.has_tag_name("figure") && has_class(*node, &id)).unwrap();
         let light = figure.descendants().find(|node| node.has_tag_name("source")).unwrap();
         assert_eq!(light.attribute("media"), Some("(prefers-color-scheme: light)"));
@@ -386,7 +398,6 @@ fn every_look_has_a_control_previews_and_its_real_palette() {
     }
     assert!(css.contains("@media (prefers-reduced-motion: no-preference)"));
     assert!(css.contains("@media (prefers-reduced-motion: reduce)"));
-    assert!(css.contains(".look-input:focus-visible + .look-choice { outline: 3px solid var(--ink)"));
 }
 
 /// The bar styles: a keyboard control, a full-size screenshot at its fixed
@@ -409,7 +420,7 @@ fn every_bar_style_has_a_control_a_shot_and_its_command() {
         assert!(css.contains(&format!("#{class}:focus-visible ~ .bar-tabs label[for=\"{class}\"]")));
         let figure = page.descendants().find(|n| n.has_tag_name("figure") && has_class(*n, &class)).unwrap();
         let img = figure.descendants().find(|n| n.has_tag_name("img")).unwrap();
-        assert_eq!(img.attribute("src"), Some(format!("docs/screenshots/bar-style-{id}.png").as_str()));
+        assert_eq!(img.attribute("src"), Some(format!("docs/screenshots/bar-style-{id}.webp").as_str()));
         assert_eq!(img.attribute("loading"), Some("lazy"));
         if id != "side-bars" {
             let command = label.descendants().find(|n| n.has_tag_name("code")).unwrap();

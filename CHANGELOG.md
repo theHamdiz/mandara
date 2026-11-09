@@ -8,7 +8,7 @@ About → What's new shows it too.
 
 ### Improved
 
-- **A new website.** Mandara's homepage is rebuilt as one board of tiles in the shell's own colours. Pick a Look and the whole page takes on its palette, in light or dark. Flip through the four new bar styles, drag a slider through all five Studio designs, search every default shortcut, browse the seven compositors and all the plugins, and copy the install command or the NixOS one-liner. It works without JavaScript, follows reduced motion, and has a place ready for a short film of Mandara in motion.
+- **A new website.** Mandara's homepage is redesigned in the shell's own Material You language: expressive shapes, tonal surfaces and Alexandria type that breathes from hairline to black. Every screenshot now comes in a light and a dark version and follows your colour scheme, and an Auto / Light / Dark switch sits in the floating top bar. Pick a Look and the whole page takes on its palette. See the built-in surfaces side by side, flip through the four new bar styles, drag a slider through all five Studio designs, search every default shortcut, and browse the seven compositors and all 81 plugins. It works without JavaScript, follows reduced motion, and has a place ready for a short film of Mandara in motion.
 
 ## 0.23.0 — 2026-11-09
 
