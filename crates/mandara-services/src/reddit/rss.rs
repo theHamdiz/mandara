@@ -48,7 +48,8 @@ impl Pacer {
 
     /// Reddit's reply: a used-up window or a 429 holds the queue longer.
     pub fn observe(&mut self, status: u16, limits: Limits, now: Instant) {
-        let hint = |secs: Option<f32>| secs.map(|secs| Duration::from_secs_f32(secs).min(MAX_PAUSE));
+        // Clamped before the conversion, which panics past `Duration::MAX`.
+        let hint = |secs: Option<f32>| secs.map(|secs| Duration::from_secs_f32(secs.min(MAX_PAUSE.as_secs_f32())));
         let mut until = None;
         if limits.remaining.is_some_and(|left| left < 1.0) && let Some(reset) = hint(limits.reset) { until = Some(now + reset); }
         if status == 429 {
@@ -91,7 +92,8 @@ fn entities(text: &str) -> String {
     while let Some(at) = rest.find('&') {
         out.push_str(&rest[..at]);
         rest = &rest[at..];
-        let Some(end) = rest[..rest.len().min(12)].find(';') else { out.push('&'); rest = &rest[1..]; continue };
+        // Bytes: byte 12 may fall inside a character; `;` is ASCII, so `end` is a boundary.
+        let Some(end) = rest.as_bytes()[..rest.len().min(12)].iter().position(|&b| b == b';') else { out.push('&'); rest = &rest[1..]; continue };
         let name = &rest[1..end];
         let decoded = match name {
             "amp" => Some('&'), "lt" => Some('<'), "gt" => Some('>'), "quot" => Some('"'), "apos" => Some('\''), "nbsp" => Some(' '),

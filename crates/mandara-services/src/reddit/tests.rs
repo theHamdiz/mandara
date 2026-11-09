@@ -206,6 +206,8 @@ fn the_budget_waits_for_the_window_and_backs_off_after_429() {
     assert!(budget.wait(now).unwrap() >= Duration::from_secs(200), "Retry-After is honoured");
     budget.observe(429, Limits { retry_after: Some(1e9), ..Limits::default() }, now);
     assert!(budget.wait(now).unwrap() <= Duration::from_secs(300), "never longer than five minutes");
+    budget.observe(429, Limits { reset: Some(1e30), retry_after: Some(f32::MAX), ..Limits::default() }, now);
+    assert!(budget.wait(now).unwrap() <= Duration::from_secs(300), "hints past `Duration::MAX` are clamped, not a panic");
     budget.observe(200, Limits { remaining: Some(50.0), ..Limits::default() }, now);
     assert_eq!(budget.wait(now), None, "a success clears the pause");
     let headers = Limits::from_headers(|name| match name { "x-ratelimit-remaining" => Some("99.0"), "x-ratelimit-reset" => Some(" 412 "), "retry-after" => Some("NaN"), _ => None });
@@ -358,6 +360,8 @@ fn feed_html_becomes_safe_markdown() {
     assert!(text.contains("[a link](https://example.org/a?b=1&c=2)") && text.contains(">!secret!<"), "{text}");
     assert!(text.contains("2\\*3") && !text.contains("<script>") && text.contains("alert(1)"), "tags are dropped, text kept and escaped: {text}");
     assert!(text.contains("```\nlet a = 1;\n```"), "{text}");
+    // Non-ASCII text right after `&` (byte 12 inside a character) is kept, not a panic.
+    assert!(rss::markdown("<p>a & xمرحبا</p>").contains("a & xمرحبا"));
 }
 
 #[test]
@@ -390,6 +394,9 @@ fn the_feed_queue_allows_one_request_a_minute_and_honours_pauses() {
     pacer.sent(now + Duration::from_secs(152));
     assert!(pacer.wait(now + Duration::from_secs(152)).unwrap() >= Duration::from_secs(59), "a second send never shortens the wait");
     pacer.observe(429, Limits { retry_after: Some(1e9), ..Limits::default() }, now);
+    assert!(pacer.wait(now).unwrap() <= Duration::from_secs(600));
+    // Past `Duration::MAX`: clamped, not a panic.
+    pacer.observe(429, Limits { remaining: Some(0.0), reset: Some(1e30), retry_after: Some(f32::MAX), ..Limits::default() }, now);
     assert!(pacer.wait(now).unwrap() <= Duration::from_secs(600));
 }
 
@@ -448,6 +455,22 @@ fn tokens_renew_before_expiry_and_a_failed_renewal_uses_limited_mode() {
     other.sort = Sort::Top;
     assert!(!session.listing(&other, None, 0, WANT, now + Duration::from_secs(620)).unwrap().limited);
     assert_eq!(script.calls.lock().unwrap().iter().filter(|call| call.starts_with("TOKEN")).count(), 3);
+}
+
+/// A token lifetime past `Duration::MAX` is clamped, not a panic.
+#[test]
+fn a_huge_token_lifetime_is_clamped() {
+    let script = Script::default();
+    let huge = Response { status: 200, limits: Limits::default(), body: br#"{"access_token":"fixture-token","expires_in":1e300}"#.to_vec() };
+    script.tokens.lock().unwrap().extend([huge, token_reply()]);
+    script.replies.lock().unwrap().extend([reply(200, LISTING, 90.0), reply(200, LISTING, 89.0)]);
+    let mut session = session(&script);
+    let now = Instant::now();
+    session.listing(&query(), None, 0, WANT, now).unwrap();
+    let mut other = query();
+    other.sort = Sort::New;
+    session.listing(&other, None, 0, WANT, now + Duration::from_secs(7200)).unwrap();
+    assert_eq!(script.calls.lock().unwrap().iter().filter(|call| call.starts_with("TOKEN")).count(), 2, "renewed within the hour");
 }
 
 #[test]
